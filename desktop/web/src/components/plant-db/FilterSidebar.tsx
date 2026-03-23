@@ -32,7 +32,7 @@ export function FilterSidebar() {
   }, []);
 
   function update(patch: Partial<SpeciesFilter>): void {
-    activeFilters.value = { ...filters, ...patch };
+    activeFilters.value = { ...activeFilters.value, ...patch };
   }
 
   return (

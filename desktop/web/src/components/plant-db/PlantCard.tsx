@@ -1,6 +1,6 @@
 import { t } from '../../i18n';
 import { locale } from '../../state/app';
-import { toggleFavoriteAction } from '../../state/plant-db';
+import { toggleFavoriteAction, selectedCanonicalName } from '../../state/plant-db';
 import type { SpeciesListItem } from '../../types/species';
 import styles from './PlantDb.module.css';
 
@@ -12,8 +12,22 @@ export function PlantCard({ plant }: Props) {
   void locale.value;
 
   const handleDragStart = (e: DragEvent) => {
-    e.dataTransfer!.setData('text/plain', plant.canonical_name);
+    e.dataTransfer!.setData('application/json', JSON.stringify({
+      canonical_name: plant.canonical_name,
+      common_name: plant.common_name,
+    }));
     e.dataTransfer!.effectAllowed = 'copy';
+  };
+
+  const handleClick = () => {
+    selectedCanonicalName.value = plant.canonical_name;
+  };
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      selectedCanonicalName.value = plant.canonical_name;
+    }
   };
 
   const handleFavClick = (e: MouseEvent) => {
@@ -30,6 +44,8 @@ export function PlantCard({ plant }: Props) {
       className={styles.plantCard}
       draggable={true}
       onDragStart={handleDragStart}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
       tabIndex={0}
       role="listitem"
       aria-label={plant.canonical_name}

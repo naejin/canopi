@@ -27,6 +27,7 @@
     "sortHardiness": "Rusticité",
     "sortGrowthRate": "Croissance",
     "sortRelevance": "Pertinence",
+    "viewMode": "Mode d'affichage",
     "viewList": "Vue liste",
     "viewCard": "Vue cartes",
     "filterHardiness": "Zone de rusticité",

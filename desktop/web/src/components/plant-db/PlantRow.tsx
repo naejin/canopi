@@ -6,10 +6,9 @@ import styles from './PlantDb.module.css';
 
 interface Props {
   plant: SpeciesListItem;
-  style?: string | Record<string, string | number>;
 }
 
-export function PlantRow({ plant, style }: Props) {
+export function PlantRow({ plant }: Props) {
   void locale.value;
 
   const handleDragStart = (e: DragEvent) => {
@@ -61,7 +60,7 @@ export function PlantRow({ plant, style }: Props) {
       tabIndex={0}
       role="listitem"
       aria-label={plant.canonical_name}
-      style={style as never}
+
     >
       <span
         className={styles.dragHandle}

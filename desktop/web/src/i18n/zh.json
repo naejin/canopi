@@ -27,6 +27,7 @@
     "sortHardiness": "耐寒性",
     "sortGrowthRate": "生长速率",
     "sortRelevance": "相关性",
+    "viewMode": "视图模式",
     "viewList": "列表视图",
     "viewCard": "卡片视图",
     "filterHardiness": "耐寒区",

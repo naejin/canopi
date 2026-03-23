@@ -19,7 +19,7 @@ export function ViewModeToggle() {
   const current = viewMode.value;
 
   return (
-    <div className={styles.viewToggle} role="group" aria-label={t('plantDb.viewList')}>
+    <div className={styles.viewToggle} role="group" aria-label={t('plantDb.viewMode')}>
       {VIEW_OPTIONS.map(({ mode, labelKey, icon }) => (
         <button
           key={mode}

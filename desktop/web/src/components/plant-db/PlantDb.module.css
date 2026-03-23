@@ -113,10 +113,18 @@
 }
 
 .resultCount {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
   font-size: var(--text-sm);
   color: var(--color-text-muted);
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+.resultCountShifted {
+  right: 32px;
 }
 
 /* ── Sort select ─────────────────────────────────────────────────────────── */
@@ -390,7 +398,7 @@
 
 .chipStratum {
   color: var(--color-primary);
-  background: rgba(45, 95, 63, 0.08);
+  background: var(--color-primary-bg);
   border-color: var(--color-primary);
   text-transform: capitalize;
 }

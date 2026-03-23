@@ -169,50 +169,6 @@ def filter_orphaned_relationships(dst: sqlite3.Connection):
         print(f"  -> Removed {removed:,} orphaned relationships ({after:,} remaining)")
 
 
-def create_fts5_indexes(dst: sqlite3.Connection):
-    """Create FTS5 virtual tables for full-text search."""
-    # Main species FTS5 — content table synced to species
-    print("  Creating species_fts...")
-    dst.execute("""
-        CREATE VIRTUAL TABLE species_fts USING fts5(
-            canonical_name,
-            common_name,
-            family,
-            genus,
-            edible_uses,
-            medicinal_uses,
-            other_uses,
-            content='species',
-            content_rowid='rowid',
-            tokenize='unicode61 remove_diacritics 2'
-        )
-    """)
-    dst.execute("INSERT INTO species_fts(species_fts) VALUES('rebuild')")
-
-    # Verify FTS5
-    test = dst.execute(
-        "SELECT canonical_name FROM species_fts WHERE species_fts MATCH 'lavender' LIMIT 3"
-    ).fetchall()
-    print(f"  -> species_fts built, test query 'lavender': {len(test)} results")
-
-    # Common names FTS5 — for multilingual search
-    print("  Creating common_names_fts...")
-    dst.execute("""
-        CREATE VIRTUAL TABLE common_names_fts USING fts5(
-            common_name,
-            content='species_common_names',
-            content_rowid='rowid',
-            tokenize='unicode61 remove_diacritics 2'
-        )
-    """)
-    dst.execute("INSERT INTO common_names_fts(common_names_fts) VALUES('rebuild')")
-
-    cn_test = dst.execute(
-        "SELECT common_name FROM common_names_fts WHERE common_names_fts MATCH 'lavande' LIMIT 3"
-    ).fetchall()
-    print(f"  -> common_names_fts built, test query 'lavande': {len(cn_test)} results")
-
-
 def create_btree_indexes(dst: sqlite3.Connection):
     """Create B-tree indexes on filter columns and foreign keys."""
     indexes = [
@@ -347,14 +303,14 @@ def main():
     dst.execute("PRAGMA synchronous=OFF")   # Safe: we rebuild on failure
     dst.execute(f"ATTACH DATABASE 'file:{export_path}?mode=ro' AS export_db")
 
-    print("[1/7] Creating core species table...")
+    print("[1/8] Creating core species table...")
     # Use attached DB for direct SQL copy
     cols_str = ", ".join(CORE_COLUMNS)
     dst.execute(f"CREATE TABLE species AS SELECT {cols_str} FROM export_db.species")
     count = dst.execute("SELECT COUNT(*) FROM species").fetchone()[0]
     print(f"  -> {count:,} species rows ({len(CORE_COLUMNS)} columns)")
 
-    print("[2/7] Copying supporting tables...")
+    print("[2/8] Copying supporting tables...")
     # Copy each supporting table from attached DB
     support_tables = [
         "species_common_names",
@@ -392,7 +348,7 @@ def main():
     dst.commit()
     dst.execute("DETACH DATABASE export_db")
 
-    print("[3/9] Building unified search index...")
+    print("[3/8] Building unified search index...")
     # Step 1: Pre-aggregate common names per species (fast GROUP BY, no correlated subquery)
     dst.execute("""
         CREATE TEMP TABLE _cn_agg AS
@@ -445,7 +401,7 @@ def main():
     print(f"  -> Unified FTS5 built, 'pommier' matches: {test}")
     dst.commit()
 
-    print("[4/9] Building best_common_names lookup table...")
+    print("[4/8] Building best_common_names lookup table...")
     dst.execute("""
         CREATE TABLE best_common_names (
             species_id TEXT NOT NULL,
@@ -469,21 +425,18 @@ def main():
     print(f"  -> {bcn_count:,} best common names across all languages")
     dst.commit()
 
-    print("[4/9] Filtering orphaned relationships...")
+    print("[5/8] Filtering orphaned relationships...")
     filter_orphaned_relationships(dst)
 
-    print("[5/9] Populating translations...")
+    print("[6/8] Populating translations...")
     populate_translations(dst)
     dst.commit()
 
-    print("[6/9] Creating FTS5 indexes...")
-    create_fts5_indexes(dst)
-
-    print("[7/9] Creating B-tree indexes...")
+    print("[7/8] Creating B-tree indexes...")
     create_btree_indexes(dst)
     dst.commit()
 
-    print("[9/9] Optimizing (ANALYZE + VACUUM)...")
+    print("[8/8] Optimizing (ANALYZE + VACUUM)...")
     optimize_db(dst)
     # Switch to DELETE journal mode — the DB is read-only at runtime
     # and WAL creates -shm/-wal files that trigger Tauri's file watcher

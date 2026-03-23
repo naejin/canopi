@@ -311,7 +311,7 @@
 
 .ecoChipStratum {
   color: var(--color-primary);
-  background: rgba(45, 95, 63, 0.08);
+  background: var(--color-primary-bg);
   border-color: var(--color-primary);
   text-transform: capitalize;
 }
@@ -365,13 +365,13 @@
 
 .relTypeCompanion {
   color: var(--color-success);
-  background: rgba(34, 197, 94, 0.08);
+  background: var(--color-success-bg);
   border-color: var(--color-success);
 }
 
 .relTypeAntagonist {
   color: var(--color-danger);
-  background: rgba(239, 68, 68, 0.08);
+  background: var(--color-danger-bg);
   border-color: var(--color-danger);
 }
 

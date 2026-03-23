@@ -37,10 +37,9 @@ export function SearchBar() {
       )}
       {!searching && (
         <span
-          className={styles.resultCount}
+          className={`${styles.resultCount} ${text.length > 0 ? styles.resultCountShifted : ''}`}
           aria-live="polite"
           aria-atomic="true"
-          style={{ position: 'absolute', right: text.length > 0 ? 32 : 8, top: '50%', transform: 'translateY(-50%)' }}
         >
           {count > 0
             ? t('plantDb.resultsCount', { count })

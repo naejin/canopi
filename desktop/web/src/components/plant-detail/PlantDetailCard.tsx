@@ -58,32 +58,21 @@ export function PlantDetailCard({ canonicalName }: Props) {
     };
   });
 
-  const isFavorite = favoriteNames.value.includes(canonicalName);
+  const effectiveName = selectedCanonicalName.value ?? canonicalName;
+  const isFavorite = favoriteNames.value.includes(effectiveName);
 
   const handleBack = () => {
     selectedCanonicalName.value = null;
   };
 
   const handleFav = () => {
-    void toggleFavoriteAction(canonicalName);
+    void toggleFavoriteAction(effectiveName);
   };
 
   const handleRetry = () => {
-    // Nudge loadState to re-trigger the effect by re-assigning locale (safe),
-    // but simpler: just re-invoke directly.
-    detail.value = null;
-    loadState.value = 'loading';
-    errorMsg.value = null;
-
-    getSpeciesDetail(canonicalName, locale.value)
-      .then((data) => {
-        detail.value = data;
-        loadState.value = 'loaded';
-      })
-      .catch((err: unknown) => {
-        errorMsg.value = err instanceof Error ? err.message : String(err);
-        loadState.value = 'error';
-      });
+    // Re-trigger the useSignalEffect by reassigning the signal
+    const current = selectedCanonicalName.peek();
+    selectedCanonicalName.value = current;
   };
 
   const favLabel = isFavorite
@@ -277,7 +266,7 @@ export function PlantDetailCard({ canonicalName }: Props) {
             <div className={styles.sunRow}>
               {d.nitrogen_fixation !== null && d.nitrogen_fixation.toLowerCase() !== 'none' && d.nitrogen_fixation.toLowerCase() !== 'no' && (
                 <span className={`${styles.ecoChip} ${styles.ecoChipNitrogen}`}>
-                  ⚡ N-fixer: {d.nitrogen_fixation}
+                  ⚡ {t('plantDetail.nitrogenFixation')}: {d.nitrogen_fixation}
                 </span>
               )}
               {d.stratum !== null && (
