@@ -35,6 +35,7 @@ Invoke the relevant canopi skill: `/canopi-rust`, `/canopi-ux`, `/canopi-db`, `/
 - **No connection pools** (r2d2, deadpool, sqlx): `Mutex<Connection>` only — rusqlite Connection is not Sync, Arc alone is unsound
 - **No typeshare**: Use `specta::Type`
 - **No string-formatted SQL**: Use prepared statements with `?1`, `?2`
+- **No raw rgba() in CSS Modules**: Always use `var(--color-*)` tokens — raw values break dark mode
 
 ### IPC Commands
 - Return `Result<T, String>` — Tauri serializes errors to frontend
@@ -60,8 +61,8 @@ Invoke the relevant canopi skill: `/canopi-rust`, `/canopi-ux`, `/canopi-db`, `/
 # Frontend dev
 cd desktop/web && npm run dev
 
-# Full app dev (from desktop/)
-cd desktop && cargo tauri dev
+# Full app dev (from project root — NOT desktop/)
+cargo tauri dev
 
 # Check workspace
 cargo check --workspace
@@ -71,6 +72,9 @@ npx tsc --noEmit
 
 # Frontend build (from desktop/web/)
 npm run build
+
+# Generate plant DB (run before first `cargo tauri dev`)
+python3 scripts/prepare-db.py
 
 # Build
 cargo build --release
@@ -86,6 +90,12 @@ cargo build --release
 - **HMR safety**: Module-level `effect()` and `addEventListener` must store disposers and clean up via `import.meta.hot.dispose()`
 - **Signals + hooks**: Use `useSignalEffect` (not `useEffect`) when subscribing to signals inside components — avoids fragile implicit subscriptions
 - **Migration versioning**: User DB uses `PRAGMA user_version` to track schema version — check before adding migrations
+- **rusqlite feature**: Use `bundled-full` (not `bundled`) — enables FTS5 full-text search
+- **Plant DB PRAGMAs**: On read-only connections, do NOT set `journal_mode=WAL` (creates sidecar files triggering dev watcher loops) or `query_only=true` (breaks FTS5 shadow table updates). Only set `mmap_size` and `cache_size`.
+- **FTS5 MATCH syntax**: Always use full table name (`species_search_fts MATCH ?1`), never an alias — SQLite treats aliases as column names. Sanitize user input: strip `"()*+-^:` before MATCH.
+- **Tauri resource path in dev**: `resolve_resource()` may not find bundled files during `cargo tauri dev`. Fall back to `env!("CARGO_MANIFEST_DIR")` path. Always register a fallback in-memory DB so `State<PlantDb>` doesn't panic.
+- **No blocking dialogs in setup()**: `tauri_plugin_dialog` `.blocking_show()` in `setup()` hangs — the window hasn't been created yet. Log errors instead.
+- **Species table name**: The export table is `species` (NOT `silver_species` as in the architecture draft)
 
 ## Quality Process
 - After completing a phase or significant feature, run Craft skill review (`/craft`) with two parallel code-reviewer agents (backend + frontend)
