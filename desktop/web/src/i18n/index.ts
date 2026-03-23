@@ -25,8 +25,13 @@ i18n.init({
 });
 
 // Sync locale signal → i18next
-effect(() => {
+const disposeLocaleSync = effect(() => {
   i18n.changeLanguage(locale.value);
 });
+
+// Clean up on Vite HMR to prevent duplicate effects
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => disposeLocaleSync());
+}
 
 export const t = i18n.t.bind(i18n);

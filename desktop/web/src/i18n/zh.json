@@ -5,7 +5,8 @@
   "worldMap": { "emptyTitle": "世界地图", "emptyText": "成为第一个在您所在地区分享设计的人！" },
   "learning": { "emptyTitle": "学习", "emptyText": "学习从土壤准备到共生农业的技术" },
   "saved": { "title": "已保存的设计", "emptyText": "您的设计将显示在这里" },
-  "status": { "version": "Canopi v0.1.0" },
-  "commands": { "plantDb": "前往植物数据库", "canvas": "前往设计画布", "worldMap": "前往世界地图", "learning": "前往学习", "toggleTheme": "切换主题", "commandPalette": "命令面板" },
+  "status": { "version": "Canopi v0.1.0", "language": "语言", "theme": "主题" },
+  "theme": { "light": "浅色", "dark": "深色", "system": "跟随系统" },
+  "commands": { "plantDb": "前往植物数据库", "canvas": "前往设计画布", "worldMap": "前往世界地图", "learning": "前往学习", "toggleTheme": "切换主题", "commandPalette": "命令面板", "searchPlaceholder": "输入命令...", "noResults": "未找到命令" },
   "chips": { "fruitTrees": "果树", "nitrogenFixers": "固氮植物", "shadeTolerant": "耐阴植物", "edible": "可食用" }
 }

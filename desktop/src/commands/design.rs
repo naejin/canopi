@@ -1,7 +1,7 @@
 use common_types::design::CanopiFile;
 
 #[tauri::command]
-pub fn save_design(_path: Option<String>, _content: String) -> Result<String, String> {
+pub fn save_design(_path: Option<String>, _content: CanopiFile) -> Result<String, String> {
     // TODO: implement in Phase 2
     Err("Not yet implemented".into())
 }

@@ -1,4 +1,5 @@
 import { locale, theme } from "../../state/app";
+import { t } from "../../i18n";
 import styles from "./StatusBar.module.css";
 
 const localeLabels: Record<string, string> = {
@@ -10,17 +11,13 @@ const localeLabels: Record<string, string> = {
   zh: "中文",
 };
 
-const themeLabels: Record<string, string> = {
-  light: "Light",
-  dark: "Dark",
-  system: "System",
-};
-
 export function StatusBar() {
+  const themeLabel = t(`theme.${theme.value}`);
+
   return (
     <footer className={styles.bar}>
       <div className={styles.left}>
-        <span>Canopi v0.1.0</span>
+        <span>{t("status.version")}</span>
       </div>
       <div className={styles.right}>
         <select
@@ -29,7 +26,7 @@ export function StatusBar() {
           onChange={(e) => {
             locale.value = (e.target as HTMLSelectElement).value as typeof locale.value;
           }}
-          aria-label="Language"
+          aria-label={t("status.language")}
         >
           {Object.entries(localeLabels).map(([code, label]) => (
             <option key={code} value={code}>{label}</option>
@@ -42,10 +39,10 @@ export function StatusBar() {
             const idx = order.indexOf(theme.value);
             theme.value = order[(idx + 1) % order.length]!;
           }}
-          aria-label={`Theme: ${themeLabels[theme.value]}`}
-          title={`Theme: ${themeLabels[theme.value]}`}
+          aria-label={`${t("status.theme")}: ${themeLabel}`}
+          title={`${t("status.theme")}: ${themeLabel}`}
         >
-          {theme.value === "dark" ? "Dark" : theme.value === "light" ? "Light" : "System"}
+          {themeLabel}
         </button>
       </div>
     </footer>

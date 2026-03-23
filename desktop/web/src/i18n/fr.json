@@ -30,7 +30,14 @@
     "emptyText": "Vos designs apparaîtront ici"
   },
   "status": {
-    "version": "Canopi v0.1.0"
+    "version": "Canopi v0.1.0",
+    "language": "Langue",
+    "theme": "Thème"
+  },
+  "theme": {
+    "light": "Clair",
+    "dark": "Sombre",
+    "system": "Système"
   },
   "commands": {
     "plantDb": "Aller à la base de plantes",
@@ -38,7 +45,9 @@
     "worldMap": "Aller à la carte du monde",
     "learning": "Aller à l'apprentissage",
     "toggleTheme": "Changer le thème",
-    "commandPalette": "Palette de commandes"
+    "commandPalette": "Palette de commandes",
+    "searchPlaceholder": "Entrez une commande...",
+    "noResults": "Aucune commande trouvée"
   },
   "chips": {
     "fruitTrees": "Arbres fruitiers",

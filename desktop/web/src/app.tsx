@@ -25,6 +25,8 @@ function ActivePanel() {
       return <WorldMapPanel />;
     case "learning":
       return <LearningPanel />;
+    default:
+      return null;
   }
 }
 

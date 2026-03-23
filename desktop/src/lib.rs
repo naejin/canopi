@@ -6,7 +6,7 @@ mod platform;
 
 use std::sync::Mutex;
 use rusqlite::Connection;
-use tauri::{Emitter, Manager};
+use tauri::Manager;
 
 pub fn run() {
     tauri::Builder::default()
@@ -40,8 +40,9 @@ pub fn run() {
 
             tracing::info!("User DB initialized at {}", user_db_path.display());
 
-            // Emit ready event
-            app.handle().emit("db_ready", ()).ok();
+            // Note: db_ready event is not emitted here because the frontend
+            // JS listener hasn't registered yet during setup. The DB is ready
+            // synchronously before any IPC command can be invoked.
 
             Ok(())
         })

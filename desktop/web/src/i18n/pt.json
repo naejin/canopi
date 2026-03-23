@@ -5,7 +5,8 @@
   "worldMap": { "emptyTitle": "Mapa mundial", "emptyText": "Seja o primeiro a compartilhar um design na sua região!" },
   "learning": { "emptyTitle": "Aprendizado", "emptyText": "Aprenda técnicas desde o preparo do solo até a sintropia" },
   "saved": { "title": "Designs salvos", "emptyText": "Seus designs aparecerão aqui" },
-  "status": { "version": "Canopi v0.1.0" },
-  "commands": { "plantDb": "Ir para base de plantas", "canvas": "Ir para tela de design", "worldMap": "Ir para mapa mundial", "learning": "Ir para aprendizado", "toggleTheme": "Alternar tema", "commandPalette": "Paleta de comandos" },
+  "status": { "version": "Canopi v0.1.0", "language": "Idioma", "theme": "Tema" },
+  "theme": { "light": "Claro", "dark": "Escuro", "system": "Sistema" },
+  "commands": { "plantDb": "Ir para base de plantas", "canvas": "Ir para tela de design", "worldMap": "Ir para mapa mundial", "learning": "Ir para aprendizado", "toggleTheme": "Alternar tema", "commandPalette": "Paleta de comandos", "searchPlaceholder": "Digite um comando...", "noResults": "Nenhum comando encontrado" },
   "chips": { "fruitTrees": "Árvores frutíferas", "nitrogenFixers": "Fixadores de nitrogênio", "shadeTolerant": "Tolerante à sombra", "edible": "Comestível" }
 }

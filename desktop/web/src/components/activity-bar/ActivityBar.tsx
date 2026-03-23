@@ -1,13 +1,18 @@
 import { activePanel, savedDesignsOpen, type Panel } from "../../state/app";
+import { t } from "../../i18n";
 import { LeafIcon, PencilIcon, GlobeIcon, BookIcon, FolderIcon } from "./icons";
 import styles from "./ActivityBar.module.css";
 
-const panels: { id: Panel | "saved"; icon: () => preact.JSX.Element; label: string }[] = [
-  { id: "plant-db", icon: LeafIcon, label: "Plant Database" },
-  { id: "canvas", icon: PencilIcon, label: "Design Canvas" },
-  { id: "world-map", icon: GlobeIcon, label: "World Map" },
-  { id: "learning", icon: BookIcon, label: "Learning" },
-  { id: "saved", icon: FolderIcon, label: "Saved Designs" },
+type NavItem =
+  | { id: Panel; icon: () => preact.JSX.Element; labelKey: string }
+  | { id: "saved"; icon: () => preact.JSX.Element; labelKey: string };
+
+const panels: NavItem[] = [
+  { id: "plant-db", icon: LeafIcon, labelKey: "nav.plantDb" },
+  { id: "canvas", icon: PencilIcon, labelKey: "nav.canvas" },
+  { id: "world-map", icon: GlobeIcon, labelKey: "nav.worldMap" },
+  { id: "learning", icon: BookIcon, labelKey: "nav.learning" },
+  { id: "saved", icon: FolderIcon, labelKey: "nav.savedDesigns" },
 ];
 
 export function ActivityBar() {
@@ -18,6 +23,8 @@ export function ActivityBar() {
           p.id === "saved"
             ? savedDesignsOpen.value
             : activePanel.value === p.id && !savedDesignsOpen.value;
+
+        const label = t(p.labelKey);
 
         return (
           <button
@@ -31,8 +38,8 @@ export function ActivityBar() {
                 savedDesignsOpen.value = false;
               }
             }}
-            title={p.label}
-            aria-label={p.label}
+            title={label}
+            aria-label={label}
             aria-pressed={isActive}
           >
             <p.icon />

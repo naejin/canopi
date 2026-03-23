@@ -1,7 +1,18 @@
 use rusqlite::Connection;
 
+const CURRENT_SCHEMA_VERSION: i32 = 1;
+
+/// Initialize user database with schema, using PRAGMA user_version for migration tracking.
 pub fn init(conn: &Connection) -> Result<(), rusqlite::Error> {
-    conn.execute_batch(include_str!("../../migrations/init.sql"))
+    let version: i32 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
+
+    if version < CURRENT_SCHEMA_VERSION {
+        // DDL with IF NOT EXISTS is idempotent; pragma_update is atomic
+        conn.execute_batch(include_str!("../../migrations/init.sql"))?;
+        conn.pragma_update(None, "user_version", CURRENT_SCHEMA_VERSION)?;
+    }
+
+    Ok(())
 }
 
 pub fn get_setting(conn: &Connection, key: &str) -> Result<Option<String>, rusqlite::Error> {

@@ -1,24 +1,29 @@
-import { useRef, useState, useEffect } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
+import { useSignalEffect } from "@preact/signals";
 import { commandPaletteOpen } from "../../shortcuts/manager";
 import { commands } from "../../commands/registry";
+import { t } from "../../i18n";
 import styles from "./CommandPalette.module.css";
 
 export function CommandPalette() {
-  if (!commandPaletteOpen.value) return null;
-
   const [query, setQuery] = useState("");
   const [activeIdx, setActiveIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listId = "command-palette-list";
+
+  useSignalEffect(() => {
+    if (!commandPaletteOpen.value) return;
+    // Focus and reset when palette opens — signal subscription is explicit
+    inputRef.current?.focus();
+    setQuery("");
+    setActiveIdx(0);
+  });
+
+  if (!commandPaletteOpen.value) return null;
 
   const filtered = commands.filter((cmd) =>
     cmd.label().toLowerCase().includes(query.toLowerCase())
   );
-
-  useEffect(() => {
-    inputRef.current?.focus();
-    setQuery("");
-    setActiveIdx(0);
-  }, []);
 
   function execute(idx: number) {
     const cmd = filtered[idx];
@@ -43,6 +48,10 @@ export function CommandPalette() {
     }
   }
 
+  const activeItemId = filtered[activeIdx]
+    ? `cmd-${filtered[activeIdx]!.id}`
+    : undefined;
+
   return (
     <div
       className={styles.overlay}
@@ -50,28 +59,34 @@ export function CommandPalette() {
         if (e.target === e.currentTarget) commandPaletteOpen.value = false;
       }}
       role="dialog"
-      aria-label="Command Palette"
+      aria-modal="true"
+      aria-label={t("commands.commandPalette")}
     >
       <div className={styles.palette}>
         <input
           ref={inputRef}
           className={styles.input}
           type="text"
-          placeholder="Type a command..."
+          placeholder={t("commands.searchPlaceholder") || "Type a command..."}
           value={query}
           onInput={(e) => {
             setQuery((e.target as HTMLInputElement).value);
             setActiveIdx(0);
           }}
           onKeyDown={onKeyDown}
+          role="combobox"
+          aria-controls={listId}
+          aria-expanded="true"
+          aria-activedescendant={activeItemId}
         />
-        <div className={styles.list} role="listbox">
+        <div className={styles.list} role="listbox" id={listId}>
           {filtered.length === 0 ? (
-            <div className={styles.empty}>No commands found</div>
+            <div className={styles.empty}>{t("commands.noResults") || "No commands found"}</div>
           ) : (
             filtered.map((cmd, i) => (
               <div
                 key={cmd.id}
+                id={`cmd-${cmd.id}`}
                 className={`${styles.item} ${i === activeIdx ? styles.active : ""}`}
                 onClick={() => execute(i)}
                 role="option"
