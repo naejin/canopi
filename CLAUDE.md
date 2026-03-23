@@ -46,6 +46,10 @@ Invoke the relevant canopi skill: `/canopi-rust`, `/canopi-ux`, `/canopi-db`, `/
 - All reactive state as `@preact/signals` at module level
 - Canvas state syncs with Konva imperatively via `effect()`
 
+### i18n
+- ALL user-visible strings must go through `t()` from `../i18n` — no hardcoded text in components
+- Add keys to all 6 locale files (en, fr, es, pt, it, zh) when adding new strings
+
 ### CSS
 - Design tokens in `global.css` as CSS variables
 - Components use CSS Modules, reference tokens (never raw values)
@@ -62,6 +66,12 @@ cd desktop && cargo tauri dev
 # Check workspace
 cargo check --workspace
 
+# TypeScript check (from desktop/web/)
+npx tsc --noEmit
+
+# Frontend build (from desktop/web/)
+npm run build
+
 # Build
 cargo build --release
 ```
@@ -76,6 +86,11 @@ cargo build --release
 - **HMR safety**: Module-level `effect()` and `addEventListener` must store disposers and clean up via `import.meta.hot.dispose()`
 - **Signals + hooks**: Use `useSignalEffect` (not `useEffect`) when subscribing to signals inside components — avoids fragile implicit subscriptions
 - **Migration versioning**: User DB uses `PRAGMA user_version` to track schema version — check before adding migrations
+
+## Quality Process
+- After completing a phase or significant feature, run Craft skill review (`/craft`) with two parallel code-reviewer agents (backend + frontend)
+- Fix all issues, re-review until convergence (typically 2 rounds)
+- Run `/canopi:canopi-retro` at session end to update skills with learnings
 
 ## Context7 Library IDs
 - Tauri v2: `/websites/v2_tauri_app`
