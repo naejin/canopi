@@ -1,0 +1,10 @@
+{
+  "identifier": "main-window",
+  "description": "Main window capabilities for Canopi",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "dialog:default",
+    "shell:default"
+  ]
+}

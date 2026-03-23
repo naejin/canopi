@@ -1,0 +1,49 @@
+{
+  "nav": {
+    "plantDb": "Base de plantes",
+    "canvas": "Zone de dessin",
+    "worldMap": "Carte du monde",
+    "learning": "Apprentissage",
+    "savedDesigns": "Designs sauvegardés"
+  },
+  "plantDb": {
+    "title": "Base de plantes",
+    "searchPlaceholder": "Rechercher des plantes...",
+    "emptyTitle": "Base de plantes",
+    "emptyText": "Recherchez parmi plus de 175 000 plantes par nom, famille ou usage",
+    "noResults": "Aucune plante ne correspond. Essayez de supprimer un filtre."
+  },
+  "canvas": {
+    "emptyTitle": "Zone de dessin",
+    "emptyText": "Définissez un emplacement pour activer les couches de carte, ou commencez à dessiner"
+  },
+  "worldMap": {
+    "emptyTitle": "Carte du monde",
+    "emptyText": "Soyez le premier à partager un design dans votre région !"
+  },
+  "learning": {
+    "emptyTitle": "Apprentissage",
+    "emptyText": "Apprenez les techniques de la préparation du sol à la syntropie"
+  },
+  "saved": {
+    "title": "Designs sauvegardés",
+    "emptyText": "Vos designs apparaîtront ici"
+  },
+  "status": {
+    "version": "Canopi v0.1.0"
+  },
+  "commands": {
+    "plantDb": "Aller à la base de plantes",
+    "canvas": "Aller à la zone de dessin",
+    "worldMap": "Aller à la carte du monde",
+    "learning": "Aller à l'apprentissage",
+    "toggleTheme": "Changer le thème",
+    "commandPalette": "Palette de commandes"
+  },
+  "chips": {
+    "fruitTrees": "Arbres fruitiers",
+    "nitrogenFixers": "Fixateurs d'azote",
+    "shadeTolerant": "Tolérant à l'ombre",
+    "edible": "Comestible"
+  }
+}

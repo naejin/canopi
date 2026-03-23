@@ -1,0 +1,41 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Tauri
+desktop/web/src/bindings.ts
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Tauri generated
+desktop/gen/
+
+# Claude / plugin caches
+.cache/
+.claude-plugins/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.*
+
+# Build artifacts
+*.dmg
+*.msi
+*.AppImage
+*.deb

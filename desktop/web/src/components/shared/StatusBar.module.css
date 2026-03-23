@@ -1,0 +1,48 @@
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--status-bar-height);
+  min-height: var(--status-bar-height);
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  padding: 0 var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  user-select: none;
+}
+
+.left, .right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.select {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-family: var(--font-sans);
+  cursor: pointer;
+  padding: 0 var(--space-1);
+}
+
+.select:hover {
+  color: var(--color-text);
+}
+
+.themeBtn {
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  font-family: var(--font-sans);
+  padding: 0 var(--space-1);
+}
+
+.themeBtn:hover {
+  color: var(--color-text);
+}

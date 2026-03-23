@@ -1,0 +1,29 @@
+[package]
+name = "canopi-desktop"
+version.workspace = true
+edition.workspace = true
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-shell = "2"
+rusqlite = { version = "0.37", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+tracing-appender = "0.2"
+common-types = { path = "../common-types" }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+lib-swift = { path = "../lib-swift" }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+lib-cpp = { path = "../lib-cpp" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+lib-c = { path = "../lib-c" }

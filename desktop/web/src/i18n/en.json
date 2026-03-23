@@ -1,0 +1,49 @@
+{
+  "nav": {
+    "plantDb": "Plant Database",
+    "canvas": "Design Canvas",
+    "worldMap": "World Map",
+    "learning": "Learning",
+    "savedDesigns": "Saved Designs"
+  },
+  "plantDb": {
+    "title": "Plant Database",
+    "searchPlaceholder": "Search plants...",
+    "emptyTitle": "Plant Database",
+    "emptyText": "Search 175,000+ plants by name, family, or use",
+    "noResults": "No plants match. Try removing a filter."
+  },
+  "canvas": {
+    "emptyTitle": "Design Canvas",
+    "emptyText": "Set a location to enable map layers, or start drawing"
+  },
+  "worldMap": {
+    "emptyTitle": "World Map",
+    "emptyText": "Be the first to share a design in your area!"
+  },
+  "learning": {
+    "emptyTitle": "Learning",
+    "emptyText": "Learn techniques from soil prep to syntropy"
+  },
+  "saved": {
+    "title": "Saved Designs",
+    "emptyText": "Your designs will appear here"
+  },
+  "status": {
+    "version": "Canopi v0.1.0"
+  },
+  "commands": {
+    "plantDb": "Go to Plant Database",
+    "canvas": "Go to Design Canvas",
+    "worldMap": "Go to World Map",
+    "learning": "Go to Learning",
+    "toggleTheme": "Toggle Theme",
+    "commandPalette": "Command Palette"
+  },
+  "chips": {
+    "fruitTrees": "Fruit trees",
+    "nitrogenFixers": "Nitrogen fixers",
+    "shadeTolerant": "Shade tolerant",
+    "edible": "Edible"
+  }
+}

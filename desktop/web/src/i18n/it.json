@@ -1,0 +1,11 @@
+{
+  "nav": { "plantDb": "Database piante", "canvas": "Tela di progettazione", "worldMap": "Mappa mondiale", "learning": "Apprendimento", "savedDesigns": "Design salvati" },
+  "plantDb": { "title": "Database piante", "searchPlaceholder": "Cerca piante...", "emptyTitle": "Database piante", "emptyText": "Cerca tra più di 175.000 piante per nome, famiglia o uso", "noResults": "Nessuna pianta trovata. Prova a rimuovere un filtro." },
+  "canvas": { "emptyTitle": "Tela di progettazione", "emptyText": "Imposta una posizione per attivare i livelli mappa, o inizia a disegnare" },
+  "worldMap": { "emptyTitle": "Mappa mondiale", "emptyText": "Sii il primo a condividere un design nella tua zona!" },
+  "learning": { "emptyTitle": "Apprendimento", "emptyText": "Impara le tecniche dalla preparazione del suolo alla sintropia" },
+  "saved": { "title": "Design salvati", "emptyText": "I tuoi design appariranno qui" },
+  "status": { "version": "Canopi v0.1.0" },
+  "commands": { "plantDb": "Vai al database piante", "canvas": "Vai alla tela", "worldMap": "Vai alla mappa mondiale", "learning": "Vai all'apprendimento", "toggleTheme": "Cambia tema", "commandPalette": "Tavolozza comandi" },
+  "chips": { "fruitTrees": "Alberi da frutto", "nitrogenFixers": "Fissatori di azoto", "shadeTolerant": "Tollerante all'ombra", "edible": "Commestibile" }
+}

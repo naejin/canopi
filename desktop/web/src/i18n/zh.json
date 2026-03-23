@@ -1,0 +1,11 @@
+{
+  "nav": { "plantDb": "植物数据库", "canvas": "设计画布", "worldMap": "世界地图", "learning": "学习", "savedDesigns": "已保存的设计" },
+  "plantDb": { "title": "植物数据库", "searchPlaceholder": "搜索植物...", "emptyTitle": "植物数据库", "emptyText": "按名称、科属或用途搜索超过175,000种植物", "noResults": "未找到匹配的植物。请尝试移除筛选条件。" },
+  "canvas": { "emptyTitle": "设计画布", "emptyText": "设置位置以启用地图图层，或开始绘制" },
+  "worldMap": { "emptyTitle": "世界地图", "emptyText": "成为第一个在您所在地区分享设计的人！" },
+  "learning": { "emptyTitle": "学习", "emptyText": "学习从土壤准备到共生农业的技术" },
+  "saved": { "title": "已保存的设计", "emptyText": "您的设计将显示在这里" },
+  "status": { "version": "Canopi v0.1.0" },
+  "commands": { "plantDb": "前往植物数据库", "canvas": "前往设计画布", "worldMap": "前往世界地图", "learning": "前往学习", "toggleTheme": "切换主题", "commandPalette": "命令面板" },
+  "chips": { "fruitTrees": "果树", "nitrogenFixers": "固氮植物", "shadeTolerant": "耐阴植物", "edible": "可食用" }
+}

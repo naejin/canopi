@@ -1,0 +1,6 @@
+[package]
+name = "lib-cpp"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

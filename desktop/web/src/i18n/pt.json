@@ -1,0 +1,11 @@
+{
+  "nav": { "plantDb": "Base de plantas", "canvas": "Tela de design", "worldMap": "Mapa mundial", "learning": "Aprendizado", "savedDesigns": "Designs salvos" },
+  "plantDb": { "title": "Base de plantas", "searchPlaceholder": "Pesquisar plantas...", "emptyTitle": "Base de plantas", "emptyText": "Pesquise entre mais de 175.000 plantas por nome, família ou uso", "noResults": "Nenhuma planta encontrada. Tente remover um filtro." },
+  "canvas": { "emptyTitle": "Tela de design", "emptyText": "Defina um local para ativar camadas do mapa, ou comece a desenhar" },
+  "worldMap": { "emptyTitle": "Mapa mundial", "emptyText": "Seja o primeiro a compartilhar um design na sua região!" },
+  "learning": { "emptyTitle": "Aprendizado", "emptyText": "Aprenda técnicas desde o preparo do solo até a sintropia" },
+  "saved": { "title": "Designs salvos", "emptyText": "Seus designs aparecerão aqui" },
+  "status": { "version": "Canopi v0.1.0" },
+  "commands": { "plantDb": "Ir para base de plantas", "canvas": "Ir para tela de design", "worldMap": "Ir para mapa mundial", "learning": "Ir para aprendizado", "toggleTheme": "Alternar tema", "commandPalette": "Paleta de comandos" },
+  "chips": { "fruitTrees": "Árvores frutíferas", "nitrogenFixers": "Fixadores de nitrogênio", "shadeTolerant": "Tolerante à sombra", "edible": "Comestível" }
+}

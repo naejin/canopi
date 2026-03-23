@@ -1,0 +1,6 @@
+[package]
+name = "lib-c"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
