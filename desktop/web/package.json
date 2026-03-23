@@ -9,13 +9,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "preact": "^10.25.0",
     "@preact/signals": "^2.0.0",
+    "@tanstack/virtual-core": "^3.13.23",
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-dialog": "^2.0.0",
     "@tauri-apps/plugin-shell": "^2.0.0",
     "i18next": "^24.0.0",
-    "konva": "^9.3.0"
+    "konva": "^9.3.0",
+    "preact": "^10.25.0"
   },
   "devDependencies": {
     "@preact/preset-vite": "^2.9.0",

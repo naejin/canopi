@@ -5,7 +5,7 @@ mod logging;
 mod platform;
 
 use std::sync::Mutex;
-use rusqlite::Connection;
+use rusqlite::{Connection, OpenFlags};
 use tauri::Manager;
 
 pub fn run() {
@@ -17,6 +17,12 @@ pub fn run() {
             commands::settings::get_settings,
             commands::settings::set_settings,
             commands::species::search_species,
+            commands::species::get_species_detail,
+            commands::species::get_species_relationships,
+            commands::species::get_filter_options,
+            commands::favorites::toggle_favorite,
+            commands::favorites::get_favorites,
+            commands::favorites::get_recently_viewed,
             commands::design::save_design,
             commands::design::load_design,
             commands::content::list_learning_topics,
@@ -39,6 +45,53 @@ pub fn run() {
             app.manage(db::UserDb(Mutex::new(user_conn)));
 
             tracing::info!("User DB initialized at {}", user_db_path.display());
+
+            // Plant DB (read-only, bundled resource)
+            // In dev mode, the resource resolver may not find bundled files,
+            // so fall back to the source path in the repo.
+            let plant_db_path = app
+                .path()
+                .resolve("canopi-core.db", tauri::path::BaseDirectory::Resource)
+                .ok()
+                .filter(|p| p.exists())
+                .or_else(|| {
+                    // Dev fallback: look in desktop/resources/ relative to the manifest dir
+                    let dev_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                        .join("resources")
+                        .join("canopi-core.db");
+                    if dev_path.exists() { Some(dev_path) } else { None }
+                });
+
+            match plant_db_path {
+                Some(path) => {
+                    match Connection::open_with_flags(
+                        &path,
+                        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+                    ) {
+                        Ok(plant_conn) => {
+                            if let Err(e) = plant_conn.pragma_update(None, "mmap_size", 268435456_i64) {
+                                tracing::warn!("Failed to set plant DB mmap_size: {e}");
+                            }
+                            if let Err(e) = plant_conn.pragma_update(None, "cache_size", -64000_i64) {
+                                tracing::warn!("Failed to set plant DB cache_size: {e}");
+                            }
+                            app.manage(db::PlantDb(Mutex::new(plant_conn)));
+                            tracing::info!("Plant DB opened at {}", path.display());
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to open plant DB at {}: {e}. Species search unavailable.", path.display());
+                            // Register an empty in-memory DB so State<PlantDb> doesn't panic
+                            let fallback = Connection::open_in_memory().expect("in-memory DB");
+                            app.manage(db::PlantDb(Mutex::new(fallback)));
+                        }
+                    }
+                }
+                None => {
+                    tracing::error!("Plant DB not found. Run scripts/prepare-db.py first. Species search unavailable.");
+                    let fallback = Connection::open_in_memory().expect("in-memory DB");
+                    app.manage(db::PlantDb(Mutex::new(fallback)));
+                }
+            }
 
             // Note: db_ready event is not emitted here because the frontend
             // JS listener hasn't registered yet during setup. The DB is ready

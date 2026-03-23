@@ -17,6 +17,24 @@
   --color-warning: #EAB308;
   --color-danger: #EF4444;
 
+  /* Semantic — plant attributes */
+  --color-edible: #558B2F;           /* olive green — food */
+  --color-edible-bg: #F1F8E9;
+  --color-medicinal: #6A1B9A;        /* deep purple — healing */
+  --color-medicinal-bg: #F3E5F5;
+  --color-nitrogen: #00838F;          /* teal — nutrient cycling */
+  --color-nitrogen-bg: #E0F7FA;
+  --color-sun: #E65100;               /* warm orange — full sun */
+  --color-sun-bg: #FFF3E0;
+  --color-shade: #37474F;             /* blue-grey — shade */
+  --color-shade-bg: #ECEFF1;
+  --color-hardiness: #1565C0;         /* blue — cold hardiness */
+  --color-hardiness-bg: #E3F2FD;
+  --color-family: #5D4037;            /* brown — taxonomy */
+  --color-family-bg: #EFEBE9;
+  --color-height: #546E7A;            /* grey-blue — dimensions */
+  --color-height-bg: #ECEFF1;
+
   /* Shadows */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
   --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
@@ -71,6 +89,24 @@
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.5);
+
+  /* Semantic — plant attributes (dark) */
+  --color-edible: #8BC34A;
+  --color-edible-bg: rgba(139, 195, 74, 0.12);
+  --color-medicinal: #CE93D8;
+  --color-medicinal-bg: rgba(206, 147, 216, 0.12);
+  --color-nitrogen: #4DD0E1;
+  --color-nitrogen-bg: rgba(77, 208, 225, 0.10);
+  --color-sun: #FFB74D;
+  --color-sun-bg: rgba(255, 183, 77, 0.10);
+  --color-shade: #90A4AE;
+  --color-shade-bg: rgba(144, 164, 174, 0.10);
+  --color-hardiness: #64B5F6;
+  --color-hardiness-bg: rgba(100, 181, 246, 0.10);
+  --color-family: #A1887F;
+  --color-family-bg: rgba(161, 136, 127, 0.10);
+  --color-height: #90A4AE;
+  --color-height-bg: rgba(144, 164, 174, 0.10);
 }
 
 /* ============================================

@@ -1,0 +1,641 @@
+/* ── Layout ──────────────────────────────────────────────────────────────── */
+
+.panel {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.sidebar {
+  width: 220px;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  overflow: hidden;
+}
+
+.sidebarCollapsed {
+  width: 0;
+  min-width: 0;
+  border-right: none;
+}
+
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* ── Toolbar row ─────────────────────────────────────────────────────────── */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  flex-shrink: 0;
+}
+
+.toolbarRight {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+/* ── Search bar ──────────────────────────────────────────────────────────── */
+
+.searchWrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.searchInput {
+  width: 100%;
+  padding: var(--space-1) var(--space-3);
+  padding-right: 28px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--text-base);
+  font-family: var(--font-sans);
+  line-height: var(--line-height);
+  min-height: 32px;
+}
+
+.searchInput:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+.searchInput::placeholder {
+  color: var(--color-text-muted);
+}
+
+.searchClear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  border-radius: var(--radius-sm);
+  padding: 0;
+  line-height: 1;
+  font-size: var(--text-md);
+}
+
+.searchClear:hover {
+  color: var(--color-text);
+  background: var(--color-border);
+}
+
+.searchClear:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.resultCount {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Sort select ─────────────────────────────────────────────────────────── */
+
+.sortSelect {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-family: var(--font-sans);
+  cursor: pointer;
+  min-height: 32px;
+}
+
+.sortSelect:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+/* ── View mode toggle ────────────────────────────────────────────────────── */
+
+.viewToggle {
+  display: flex;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.viewBtn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  border-right: 1px solid var(--color-border);
+  cursor: pointer;
+  color: var(--color-text-muted);
+  padding: 0;
+}
+
+.viewBtn:last-child {
+  border-right: none;
+}
+
+.viewBtn:hover {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.viewBtnActive {
+  background: var(--color-primary);
+  color: var(--color-surface);
+}
+
+.viewBtnActive:hover {
+  background: var(--color-primary-hover);
+  color: var(--color-surface);
+}
+
+.viewBtn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+/* ── Sidebar toggle button ───────────────────────────────────────────────── */
+
+.sidebarToggle {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  color: var(--color-text-muted);
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.sidebarToggle:hover {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.sidebarToggle:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+/* ── Results list ────────────────────────────────────────────────────────── */
+
+.listContainer {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
+}
+
+.listInner {
+  position: relative;
+  width: 100%;
+}
+
+.listEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-12) var(--space-6);
+  text-align: center;
+  color: var(--color-text-muted);
+  gap: var(--space-3);
+}
+
+.listEmptyText {
+  font-size: var(--text-md);
+}
+
+.listLoader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.listError {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  color: var(--color-danger);
+  text-align: center;
+}
+
+.retryBtn {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  min-height: 32px;
+}
+
+.retryBtn:hover {
+  background: var(--color-danger);
+  color: var(--color-surface);
+}
+
+.retryBtn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+/* ── Plant row ───────────────────────────────────────────────────────────── */
+
+.plantRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+  background: var(--color-surface);
+  min-height: 72px;
+  user-select: none;
+}
+
+.plantRow:hover {
+  background: var(--color-bg);
+}
+
+.plantRow:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.dragHandle {
+  color: var(--color-text-muted);
+  cursor: grab;
+  padding: var(--space-1);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  font-size: var(--text-lg);
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.dragHandle:active {
+  cursor: grabbing;
+}
+
+.plantRowContent {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.plantNames {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.botanicalName {
+  font-style: italic;
+  font-weight: 600;
+  font-size: var(--text-base);
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.commonName {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.plantMeta {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.metaChip {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  padding: 1px var(--space-2);
+  white-space: nowrap;
+  line-height: 1.6;
+}
+
+.chipFamily {
+  color: var(--color-family);
+  background: var(--color-family-bg);
+  border-color: var(--color-family);
+  font-weight: 500;
+}
+
+.chipHardiness {
+  color: var(--color-hardiness);
+  background: var(--color-hardiness-bg);
+  border-color: var(--color-hardiness);
+}
+
+.chipHeight {
+  color: var(--color-height);
+  background: var(--color-height-bg);
+  border-color: var(--color-height);
+}
+
+.chipStratum {
+  color: var(--color-primary);
+  background: rgba(45, 95, 63, 0.08);
+  border-color: var(--color-primary);
+  text-transform: capitalize;
+}
+
+.chipEdible {
+  color: var(--color-edible);
+  background: var(--color-edible-bg);
+  border-color: var(--color-edible);
+}
+
+.chipMedicinal {
+  color: var(--color-medicinal);
+  background: var(--color-medicinal-bg);
+  border-color: var(--color-medicinal);
+}
+
+.favBtn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  border-radius: var(--radius-md);
+  padding: 0;
+  flex-shrink: 0;
+  font-size: var(--text-lg);
+  line-height: 1;
+}
+
+.favBtn:hover {
+  color: var(--color-accent);
+  background: var(--color-bg);
+}
+
+.favBtn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.favBtnActive {
+  color: var(--color-accent);
+}
+
+/* ── Plant card ──────────────────────────────────────────────────────────── */
+
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--space-3);
+  padding: var(--space-3);
+}
+
+.plantCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  user-select: none;
+}
+
+.plantCard:hover {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.plantCard:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.cardBotanical {
+  font-style: italic;
+  font-weight: 600;
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+.cardCommon {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.cardFamily {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+.cardMeta {
+  display: flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+  margin-top: auto;
+}
+
+.cardFavRow {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ── Filter sidebar ──────────────────────────────────────────────────────── */
+
+.filterHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.filterTitle {
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.clearBtn {
+  font-size: var(--text-xs);
+  color: var(--color-primary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  min-height: 28px;
+}
+
+.clearBtn:hover {
+  text-decoration: underline;
+}
+
+.clearBtn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.filterScroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-2) 0;
+}
+
+/* ── Filter section ──────────────────────────────────────────────────────── */
+
+.filterSection {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.filterSectionBtn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text);
+  text-align: left;
+  min-height: 36px;
+}
+
+.filterSectionBtn:hover {
+  background: var(--color-bg);
+}
+
+.filterSectionBtn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.filterSectionChevron {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  transition: transform 80ms;
+}
+
+.filterSectionChevronOpen {
+  transform: rotate(90deg);
+}
+
+.filterSectionContent {
+  padding: var(--space-1) var(--space-3) var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.filterCheckRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 28px;
+}
+
+.filterCheckRow input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-primary);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.filterCheckLabel {
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.filterRangeRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.filterRangeInput {
+  width: 60px;
+  padding: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-family: var(--font-sans);
+  text-align: center;
+  min-height: 28px;
+}
+
+.filterRangeInput:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.filterRangeSep {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
