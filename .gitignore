@@ -39,3 +39,4 @@ Thumbs.db
 *.msi
 *.AppImage
 *.deb
+desktop/resources/
