@@ -7,6 +7,8 @@ import {
   hasActiveFilters,
   loadFilterOptions,
   clearFilters,
+  totalEstimate,
+  isSearching,
 } from '../../state/plant-db';
 import type { SpeciesFilter } from '../../types/species';
 import { FilterSection } from './FilterSection';
@@ -26,6 +28,8 @@ export function FilterSidebar() {
   const opts = filterOptions.value;
   const filters = activeFilters.value;
   const showClear = hasActiveFilters.value;
+  const count = totalEstimate.value;
+  const searching = isSearching.value;
 
   useEffect(() => {
     void loadFilterOptions();
@@ -38,7 +42,18 @@ export function FilterSidebar() {
   return (
     <>
       <div className={styles.filterHeader}>
-        <span className={styles.filterTitle}>{t('plantDb.filters')}</span>
+        <div className={styles.filterHeaderLeft}>
+          <span className={styles.filterTitle}>{t('plantDb.filters')}</span>
+          {!searching && count > 0 && (
+            <span
+              className={styles.filterCount}
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              {t('plantDb.resultsCount', { count })}
+            </span>
+          )}
+        </div>
         {showClear && (
           <button
             type="button"

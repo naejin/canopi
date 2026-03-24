@@ -1,4 +1,5 @@
-import { locale, theme } from "../../state/app";
+import { locale, theme, activePanel } from "../../state/app";
+import { zoomLevel } from "../../state/canvas";
 import { t } from "../../i18n";
 import styles from "./StatusBar.module.css";
 
@@ -12,13 +13,22 @@ const localeLabels: Record<string, string> = {
 };
 
 export function StatusBar() {
+  void locale.value;
+
   const themeLabel = t(`theme.${theme.value}`);
+  const isCanvas = activePanel.value === "canvas";
+  const zoom = zoomLevel.value;
 
   return (
     <footer className={styles.bar}>
       <div className={styles.left}>
-        <span>{t("status.version")}</span>
+        {isCanvas && (
+          <span className={styles.zoomLevel} aria-label={t("canvas.grid.zoom")}>
+            {Math.round(zoom * 100)}%
+          </span>
+        )}
       </div>
+
       <div className={styles.right}>
         <select
           className={styles.select}

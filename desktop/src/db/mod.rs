@@ -1,5 +1,6 @@
 pub mod plant_db;
 pub mod query_builder;
+pub mod recent_files;
 pub mod user_db;
 
 use std::sync::Mutex;

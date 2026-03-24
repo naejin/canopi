@@ -158,6 +158,11 @@ if (import.meta.hot) {
 
 // ── Public actions ────────────────────────────────────────────────────────────
 
+/** Force a fresh search — used when the initial search may have failed due to IPC not being ready. */
+export function retrySearch(): void {
+  scheduleSearch(0)
+}
+
 /** Load the next page using the current cursor (infinite scroll). */
 export async function loadNextPage(): Promise<void> {
   const cursor = nextCursor.value;

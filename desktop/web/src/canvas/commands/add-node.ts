@@ -1,0 +1,39 @@
+import Konva from 'konva'
+import type { Command } from '../history'
+import type { CanvasEngine } from '../engine'
+import { serializeNode, recreateNode, type SerializedNode } from './node-serialization'
+
+/**
+ * AddNodeCommand — records a shape creation.
+ * execute: add (or re-add on redo) the node to the named layer.
+ * undo: remove the node from whatever layer contains it.
+ *
+ * Accepts either a live Konva.Node (first execute) or re-serializes on each
+ * subsequent redo so the node is always fresh and not shared.
+ */
+export class AddNodeCommand implements Command {
+  readonly type = 'add-node'
+
+  private _layerName: string
+  private _serialized: SerializedNode
+
+  constructor(layerName: string, node: Konva.Node) {
+    this._layerName = layerName
+    this._serialized = serializeNode(node)
+  }
+
+  execute(engine: CanvasEngine): void {
+    const node = recreateNode(this._serialized)
+    const layer = engine.layers.get(this._layerName)
+    if (layer) {
+      layer.add(node as unknown as Konva.Shape)
+      layer.batchDraw()
+    }
+  }
+
+  undo(engine: CanvasEngine): void {
+    const id = this._serialized.attrs.id as string | undefined
+    if (!id) return
+    engine.removeNode(id)
+  }
+}

@@ -103,6 +103,7 @@ fn hydrate_species_list(
                         s.stratum,
                         s.edibility_rating,
                         s.medicinal_rating,
+                        s.width_max_m,
                         s.id
                  FROM species s
                  WHERE s.canonical_name = ?1
@@ -123,9 +124,10 @@ fn hydrate_species_list(
                             stratum: row.get(9)?,
                             edibility_rating: row.get(10)?,
                             medicinal_rating: row.get(11)?,
+                            width_max_m: row.get(12)?,
                             is_favorite: all_favorites,
                         },
-                        row.get::<_, String>(12)?, // species_id for common name lookup
+                        row.get::<_, String>(13)?, // species_id for common name lookup
                     ))
                 },
             )

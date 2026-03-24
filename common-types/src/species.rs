@@ -15,6 +15,7 @@ pub struct SpeciesListItem {
     pub stratum: Option<String>,
     pub edibility_rating: Option<i32>,
     pub medicinal_rating: Option<i32>,
+    pub width_max_m: Option<f32>,
     pub is_favorite: bool,
 }
 

@@ -2,7 +2,13 @@ import { useEffect } from 'preact/hooks';
 import { useSignal } from '@preact/signals';
 import { t } from '../../i18n';
 import { locale } from '../../state/app';
-import { loadSidebarLists, selectedCanonicalName } from '../../state/plant-db';
+import {
+  loadSidebarLists,
+  selectedCanonicalName,
+  searchResults,
+  isSearching,
+  retrySearch,
+} from '../../state/plant-db';
 import { SearchBar } from '../plant-db/SearchBar';
 import { FilterSidebar } from '../plant-db/FilterSidebar';
 import { ResultsList } from '../plant-db/ResultsList';
@@ -19,6 +25,11 @@ export function PlantDbPanel() {
 
   useEffect(() => {
     void loadSidebarLists();
+    // Trigger a fresh search when the panel mounts — by this point Tauri IPC
+    // is ready (the user clicked the leaf icon after the app loaded).
+    if (searchResults.value.length === 0 && !isSearching.value) {
+      retrySearch();
+    }
   }, []);
 
   return (

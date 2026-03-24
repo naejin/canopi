@@ -11,6 +11,7 @@ export interface SpeciesListItem {
   stratum: string | null;
   edibility_rating: number | null;
   medicinal_rating: number | null;
+  width_max_m: number | null;
   is_favorite: boolean;
 }
 

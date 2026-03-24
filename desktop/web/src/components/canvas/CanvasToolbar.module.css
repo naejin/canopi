@@ -1,0 +1,143 @@
+.toolbar {
+  width: var(--canvas-toolbar-width);
+  min-width: var(--canvas-toolbar-width);
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-1) 0;
+  /* Must be above the ruler overlay (zIndex 15) so tooltips are not clipped. */
+  z-index: 20;
+  /* Tooltips overflow — do NOT add overflow:hidden here */
+  position: relative;
+}
+
+.toolButton {
+  width: 100%;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  position: relative;
+  transition: background-color 100ms ease;
+  /* min touch target */
+  min-height: 32px;
+}
+
+.toolButton:hover {
+  background: var(--color-primary-bg);
+  color: var(--color-text);
+}
+
+.toolButton[aria-checked="true"] {
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+}
+
+/* Active left accent bar */
+.toolButton[aria-checked="true"]::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  background: var(--color-primary);
+  border-radius: 0 2px 2px 0;
+}
+
+/* Toggle buttons (aria-pressed) share the same active appearance */
+.toolButton[aria-pressed="true"] {
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+}
+
+.toolButton[aria-pressed="true"]::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  background: var(--color-primary);
+  border-radius: 0 2px 2px 0;
+}
+
+.toolButton:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.toolIcon {
+  width: 20px;
+  height: 20px;
+  /* Prevent icon from shrinking */
+  flex-shrink: 0;
+}
+
+/* Separator between tool groups */
+.separator {
+  height: 1px;
+  margin: var(--space-1) var(--space-2);
+  background: var(--color-border);
+  flex-shrink: 0;
+}
+
+/* Rich tooltip */
+.tooltip {
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  box-shadow: var(--shadow-md);
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 100;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 100ms ease, visibility 100ms ease;
+}
+
+.toolButton:hover .tooltip,
+.toolButton:focus-visible .tooltip {
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 500ms;
+}
+
+.tooltipName {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.tooltipShortcut {
+  color: var(--color-text-muted);
+  margin-left: var(--space-1);
+  font-size: var(--text-sm);
+}
+
+.tooltipDesc {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toolButton {
+    transition-duration: 0ms;
+  }
+
+  .tooltip {
+    transition-duration: 0ms;
+  }
+}

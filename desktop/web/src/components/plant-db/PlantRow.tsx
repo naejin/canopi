@@ -15,8 +15,36 @@ export function PlantRow({ plant }: Props) {
     e.dataTransfer!.setData('text/plain', JSON.stringify({
       canonical_name: plant.canonical_name,
       common_name: plant.common_name,
+      stratum: plant.stratum,
+      width_max_m: plant.width_max_m,
     }));
     e.dataTransfer!.effectAllowed = 'copy';
+
+    // Create a compact drag preview showing the plant name, positioned at cursor.
+    // Without this, the browser uses a snapshot of the entire row — too large and
+    // positioned inconsistently depending on where the user grabbed.
+    const preview = document.createElement('div');
+    preview.textContent = plant.common_name || plant.canonical_name;
+    Object.assign(preview.style, {
+      position: 'absolute',
+      top: '-1000px',
+      left: '-1000px',
+      padding: '4px 10px',
+      background: '#2D5F3F',
+      color: '#FFFFFF',
+      fontSize: '12px',
+      fontFamily: 'Inter, sans-serif',
+      borderRadius: '4px',
+      whiteSpace: 'nowrap',
+      pointerEvents: 'none',
+    });
+    document.body.appendChild(preview);
+    // Position: cursor at top-left of preview with a small offset,
+    // so the pill appears below-right of the cursor — the cursor tip
+    // stays visible and the preview doesn't obscure the drop target.
+    e.dataTransfer!.setDragImage(preview, -12, -12);
+    // Clean up after the browser has captured the image
+    requestAnimationFrame(() => preview.remove());
   };
 
   const handleRowClick = () => {

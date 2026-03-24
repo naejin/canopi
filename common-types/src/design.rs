@@ -16,6 +16,11 @@ pub struct CanopiFile {
     pub budget: Vec<BudgetItem>,
     pub created_at: String,
     pub updated_at: String,
+    /// Preserves unknown fields for forward compatibility — round-trips fields
+    /// from newer file versions that this build doesn't know about yet.
+    #[serde(flatten)]
+    #[specta(skip)]
+    pub extra: std::collections::HashMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -36,6 +41,7 @@ pub struct Layer {
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct PlacedPlant {
     pub canonical_name: String,
+    pub common_name: Option<String>,
     pub position: Position,
     pub rotation: Option<f64>,
     pub scale: Option<f64>,
@@ -96,4 +102,11 @@ pub struct DesignSummary {
     pub name: String,
     pub updated_at: String,
     pub plant_count: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct AutosaveEntry {
+    pub path: String,
+    pub name: String,
+    pub saved_at: String,
 }

@@ -96,6 +96,17 @@ pub fn get_species_relationships(
     crate::db::plant_db::get_relationships(&conn, &species_id)
 }
 
+/// Batch lookup: returns common names for a list of canonical names in the given locale.
+#[tauri::command]
+pub fn get_common_names(
+    plant_db: tauri::State<'_, crate::db::PlantDb>,
+    canonical_names: Vec<String>,
+    locale: String,
+) -> Result<std::collections::HashMap<String, String>, String> {
+    let conn = plant_db.0.lock().unwrap_or_else(|e| e.into_inner());
+    crate::db::plant_db::get_common_names_batch(&conn, &canonical_names, &locale)
+}
+
 /// Returns all distinct values for populating filter UI dropdowns.
 #[tauri::command]
 pub fn get_filter_options(

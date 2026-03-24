@@ -83,6 +83,8 @@ cargo build --release
 ## Gotchas
 - **tauri-specta**: Deferred — specta rc ecosystem has version conflicts. Using plain `generate_handler![]` until stable
 - **Tauri v2 emit in setup**: Events fired in `setup()` are lost — frontend JS hasn't loaded yet. DB is ready synchronously before any IPC call
+- **Tauri v2 blocking dialogs on Linux**: `blocking_save_file()` / `blocking_pick_file()` from `tauri_plugin_dialog` deadlock on Linux/GTK. Use `@tauri-apps/plugin-dialog` JS API (`save()`, `open()`) from the frontend instead. Rust commands only handle file I/O, never show dialogs.
+- **Tauri v2 window permissions**: `decorations: false` + `startDragging()` requires `core:window:allow-start-dragging`, `core:window:allow-minimize`, `core:window:allow-toggle-maximize`, `core:window:allow-close` in `capabilities/main-window.json`
 - **Tauri v2 Emitter trait**: `app.handle().emit()` requires `use tauri::Emitter`
 - **Tauri icons**: `generate_context!()` panics if icon files in tauri.conf.json don't exist on disk
 - **Preact Vite plugin**: Package is `@preact/preset-vite` (not `@preactjs/preset-vite`)
@@ -92,10 +94,27 @@ cargo build --release
 - **Migration versioning**: User DB uses `PRAGMA user_version` to track schema version — check before adding migrations
 - **rusqlite feature**: Use `bundled-full` (not `bundled`) — enables FTS5 full-text search
 - **Plant DB PRAGMAs**: On read-only connections, do NOT set `journal_mode=WAL` (creates sidecar files triggering dev watcher loops) or `query_only=true` (breaks FTS5 shadow table updates). Only set `mmap_size` and `cache_size`.
-- **FTS5 MATCH syntax**: Always use full table name (`species_search_fts MATCH ?1`), never an alias — SQLite treats aliases as column names. Sanitize user input: strip `"()*+-^:` before MATCH.
+- **FTS5 MATCH syntax**: Always use full table name (`species_search_fts MATCH ?1`), never an alias — SQLite treats aliases as column names.
+- **FTS5 sanitization must strip ALL metacharacters**: `"()*+-^:\` — not just quotes. Incomplete sanitization causes FTS5 syntax errors. If input reduces to empty after sanitization, skip FTS entirely.
 - **Tauri resource path in dev**: `resolve_resource()` may not find bundled files during `cargo tauri dev`. Fall back to `env!("CARGO_MANIFEST_DIR")` path. Always register a fallback in-memory DB so `State<PlantDb>` doesn't panic.
 - **No blocking dialogs in setup()**: `tauri_plugin_dialog` `.blocking_show()` in `setup()` hangs — the window hasn't been created yet. Log errors instead.
 - **Species table name**: The export table is `species` (NOT `silver_species` as in the architecture draft)
+- **@preact/signals effect subscription**: Effects only subscribe to signals **read during execution**. An early `return` before reading a signal = the effect never subscribes to it and never re-runs. Always read ALL signal dependencies BEFORE any conditional returns.
+- **Konva Transformer must be on same layer as targets**: Cross-layer Transformer (e.g. Transformer on annotations, shape on zones) breaks drag/transform. Move Transformer to the target's layer in `_syncTransformer`.
+- **Konva `name: 'shape'` only on top-level selectable nodes**: Children inside Groups (e.g. plant circle, measure label) must NOT have `name: 'shape'` — it makes them independently draggable/selectable, separating them from their parent group.
+- **Konva screen-space overlays**: Use HTML `<canvas>` elements (not Konva layers) for rulers and other screen-space UI. Konva layers are subject to stage transforms — counter-transforming them causes 1-frame lag.
+- **Konva `strokeScaleEnabled: false`**: Built-in property that keeps stroke width constant in screen pixels regardless of zoom. Use on all zone/annotation shapes. Don't write custom zoom-scaling systems.
+- **Konva group-level counter-scale for plants**: Set `group.scale({x: 1/stageScale, y: 1/stageScale})` on the group, not individual children. Children use plain screen-pixel values. One scale update per group on zoom = zero lag.
+- **Canvas `stage.on('dragmove')` fires for shape drags too**: Filter by `e.target !== this.stage` to avoid heavy overlay redraws during shape drag. Only sync overlays for stage-level pans.
+
+## Canvas Architecture
+- Zone shapes: world-unit geometry, `strokeScaleEnabled: false` for constant-pixel strokes
+- Plant symbols: fixed screen-pixel circles (8px radius), group-level counter-scale, common name primary label
+- Annotations (text, measures): counter-scaled at creation + on zoom via `updateAnnotationsForZoom()`
+- Grid: single `Konva.Shape` with custom `sceneFunc`, adaptive density via "nice distances" ladder
+- Rulers: HTML `<canvas>` elements, NOT Konva — always in screen space
+- File dialogs: JS `@tauri-apps/plugin-dialog` API, NOT Rust `blocking_*`
+- `_chromeEnabled` signal: controls grid/ruler/compass visibility — must be a signal (not plain boolean) so effects track it
 
 ## Quality Process
 - After completing a phase or significant feature, run Craft skill review (`/craft`) with two parallel code-reviewer agents (backend + frontend)

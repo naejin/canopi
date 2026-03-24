@@ -41,11 +41,15 @@ pub fn search(
                 stratum: row.get(9)?,
                 edibility_rating: row.get(10)?,
                 medicinal_rating: row.get(11)?,
+                width_max_m: row.get(12)?,
                 is_favorite: false,
             })
         })
         .map_err(|e| format!("Failed to execute species search: {e}"))?
-        .filter_map(|r| r.ok())
+        .filter_map(|r| match r {
+            Ok(item) => Some(item),
+            Err(e) => { tracing::warn!("Skipped species search row: {e}"); None }
+        })
         .collect();
 
     // We fetched limit+1 rows to detect a next page.
@@ -175,7 +179,10 @@ pub fn get_detail(
             })
         })
         .map_err(|e| format!("Failed to fetch uses: {e}"))?
-        .filter_map(|r| r.ok())
+        .filter_map(|r| match r {
+            Ok(item) => Some(item),
+            Err(e) => { tracing::warn!("Skipped uses row: {e}"); None }
+        })
         .collect()
     };
 
@@ -191,7 +198,10 @@ pub fn get_detail(
             .map_err(|e| format!("Failed to prepare soil types query: {e}"))?;
         s.query_map([&species_id], |row| row.get::<_, String>(0))
             .map_err(|e| format!("Failed to fetch soil types: {e}"))?
-            .filter_map(|r| r.ok())
+            .filter_map(|r| match r {
+                Ok(item) => Some(item),
+                Err(e) => { tracing::warn!("Skipped soil type row: {e}"); None }
+            })
             .collect()
     };
 
@@ -225,7 +235,10 @@ pub fn get_relationships(
             })
         })
         .map_err(|e| format!("Failed to fetch relationships: {e}"))?
-        .filter_map(|r| r.ok())
+        .filter_map(|r| match r {
+            Ok(item) => Some(item),
+            Err(e) => { tracing::warn!("Skipped relationship row: {e}"); None }
+        })
         .collect();
 
     Ok(relationships)
@@ -241,7 +254,10 @@ pub fn get_filter_options(conn: &Connection) -> Result<FilterOptions, String> {
             .map_err(|e| format!("Failed to prepare families query: {e}"))?;
         s.query_map([], |row| row.get(0))
             .map_err(|e| format!("Failed to fetch families: {e}"))?
-            .filter_map(|r| r.ok())
+            .filter_map(|r| match r {
+                Ok(item) => Some(item),
+                Err(e) => { tracing::warn!("Skipped family row: {e}"); None }
+            })
             .collect()
     };
 
@@ -253,7 +269,10 @@ pub fn get_filter_options(conn: &Connection) -> Result<FilterOptions, String> {
             .map_err(|e| format!("Failed to prepare growth rates query: {e}"))?;
         s.query_map([], |row| row.get(0))
             .map_err(|e| format!("Failed to fetch growth rates: {e}"))?
-            .filter_map(|r| r.ok())
+            .filter_map(|r| match r {
+                Ok(item) => Some(item),
+                Err(e) => { tracing::warn!("Skipped growth rate row: {e}"); None }
+            })
             .collect()
     };
 
@@ -265,7 +284,10 @@ pub fn get_filter_options(conn: &Connection) -> Result<FilterOptions, String> {
             .map_err(|e| format!("Failed to prepare strata query: {e}"))?;
         s.query_map([], |row| row.get(0))
             .map_err(|e| format!("Failed to fetch strata: {e}"))?
-            .filter_map(|r| r.ok())
+            .filter_map(|r| match r {
+                Ok(item) => Some(item),
+                Err(e) => { tracing::warn!("Skipped stratum row: {e}"); None }
+            })
             .collect()
     };
 
@@ -277,7 +299,10 @@ pub fn get_filter_options(conn: &Connection) -> Result<FilterOptions, String> {
             .map_err(|e| format!("Failed to prepare life cycles query: {e}"))?;
         s.query_map([], |row| row.get(0))
             .map_err(|e| format!("Failed to fetch life cycles: {e}"))?
-            .filter_map(|r| r.ok())
+            .filter_map(|r| match r {
+                Ok(item) => Some(item),
+                Err(e) => { tracing::warn!("Skipped life cycle row: {e}"); None }
+            })
             .collect()
     };
 
@@ -289,7 +314,10 @@ pub fn get_filter_options(conn: &Connection) -> Result<FilterOptions, String> {
             .map_err(|e| format!("Failed to prepare soil types query: {e}"))?;
         s.query_map([], |row| row.get(0))
             .map_err(|e| format!("Failed to fetch soil types: {e}"))?
-            .filter_map(|r| r.ok())
+            .filter_map(|r| match r {
+                Ok(item) => Some(item),
+                Err(e) => { tracing::warn!("Skipped soil type row (filter options): {e}"); None }
+            })
             .collect()
     };
 
@@ -380,6 +408,65 @@ pub fn get_common_name(conn: &Connection, species_id: &str, locale: &str) -> Opt
     .optional()
     .ok()
     .flatten()
+}
+
+/// Batch lookup: given a list of canonical names and a locale, return a map
+/// of canonical_name → common_name. One SQL query using JOIN + IN clause.
+/// Falls back to English if the requested locale has no entry.
+pub fn get_common_names_batch(
+    conn: &Connection,
+    canonical_names: &[String],
+    locale: &str,
+) -> Result<std::collections::HashMap<String, String>, String> {
+    if canonical_names.is_empty() {
+        return Ok(std::collections::HashMap::new());
+    }
+
+    if canonical_names.len() > 500 {
+        return Err("Batch size exceeds maximum of 500 names".into());
+    }
+
+    // Params: ?1 = locale, ?2..?N+1 = canonical names
+    let name_placeholders: Vec<String> = (2..=canonical_names.len() + 1)
+        .map(|i| format!("?{i}"))
+        .collect();
+    let in_clause = name_placeholders.join(", ");
+
+    let sql = format!(
+        "SELECT s.canonical_name,
+                COALESCE(loc.common_name, en.common_name, s.common_name) AS resolved_name
+         FROM species s
+         LEFT JOIN species_common_names loc
+           ON loc.species_id = s.id AND loc.language = ?1 AND loc.is_primary = 1
+         LEFT JOIN species_common_names en
+           ON en.species_id = s.id AND en.language = 'en' AND en.is_primary = 1
+         WHERE s.canonical_name IN ({in_clause})",
+    );
+
+    let mut stmt = conn.prepare(&sql)
+        .map_err(|e| format!("Failed to prepare batch common name query: {e}"))?;
+
+    // Build params: locale first, then all canonical names
+    let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::with_capacity(canonical_names.len() + 1);
+    params.push(Box::new(locale.to_string()));
+    for name in canonical_names {
+        params.push(Box::new(name.clone()));
+    }
+    let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+
+    let rows = stmt.query_map(&*param_refs, |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
+    }).map_err(|e| format!("Batch common name query failed: {e}"))?;
+
+    let mut result = std::collections::HashMap::new();
+    for row in rows {
+        if let Ok((canonical, Some(name))) = row {
+            if !name.is_empty() {
+                result.insert(canonical, name);
+            }
+        }
+    }
+    Ok(result)
 }
 
 /// Looks up a translated display value from the `translated_values` table.

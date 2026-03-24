@@ -1287,60 +1287,56 @@ Git tag v1.2.3 → triggers release workflow:
 - [ ] Favorites: star/bookmark plants (stored in user DB)
 - [ ] Recently viewed: auto-tracked last 50 plants
 
-### Phase 2 — Design Canvas (Core)
-- [ ] Konva.js Stage + Layer setup via imperative CanvasEngine (not react-konva)
-- [ ] Canvas navigation: zoom (Ctrl+scroll), pan (Space+drag / Hand tool), zoom to fit (Ctrl+0)
-- [ ] Grid overlay: configurable size (0.5m/1m/2m/5m), snap-to-grid toggle
-- [ ] Rulers: horizontal + vertical, scaled to zoom level, in meters
-- [ ] Scale bar: always-visible real-world distance indicator
-- [ ] Canvas toolbar (vertical, left of canvas):
-  - [ ] Pointer/Select (V) — click, Shift+click multi-select, rubber band area select
-  - [ ] Hand/Pan (H)
-  - [ ] Rectangle (R), Ellipse (E), Polygon (P), Freeform (F)
-  - [ ] Line/Polyline (L)
-  - [ ] Text (T)
-  - [ ] Measure (M) — distance + area display
-  - [ ] Plant stamp — select plant from DB, click to place
-- [ ] Object operations: copy/paste, duplicate, delete, rotate (15° snap), scale, flip
-- [ ] Lock/unlock objects
-- [ ] Z-ordering: bring to front, send to back
-- [ ] Layer system: 7 toggleable layers, visibility + reorder in layer panel
-- [ ] **Drag-and-drop** plants from DB panel onto canvas (DOM→Konva via setPointersPositions)
-- [ ] Plant placement: icon on canvas, label below, draggable, rotatable
-- [ ] **Multi-select**: Shift+click, rubber band drag-select, move/delete/group selected
-- [ ] **Undo/Redo**: True command pattern (canvas/history.ts). Each action = command object with execute/undo. Unlimited depth. Ctrl+Z / Ctrl+Shift+Z.
-- [ ] **Right side panel**: Click plant on canvas → opens PlantDetailCard. Escape to close.
-- [ ] .canopi file format v1:
-  - [ ] Save (Ctrl+S) — native file dialog via Tauri for first save, direct write after
-  - [ ] Save As (Ctrl+Shift+S) — always shows file dialog
-  - [ ] Open (Ctrl+O) — native file dialog, load .canopi JSON
-  - [ ] Forward-compatible loading: unknown fields preserved (serde `flatten` / JSON spread)
-  - [ ] Plant ID by `canonical_name` (TNRS scientific name)
-  - [ ] Recent files list in user DB
-- [ ] Export: PNG via native rendering (Core Graphics/Direct2D/Cairo — configurable DPI up to 300), SVG
-- [ ] Export: Plant list CSV (all placed plants with quantities)
-- [ ] Import: Background image (PNG/JPG) as base layer — scale, position, opacity
-- [ ] Native file watching: detect external .canopi file changes (FSEvents/ReadDirectoryChanges/inotify)
-- [ ] **North arrow**: Draggable/rotatable compass widget. Stored as `north_bearing_deg`.
-- [ ] **Sun direction**: Auto-computed from lat/lon + date (solar position math). Manual override via drag. Sun rise/set arrows + peak angle indicator.
-- [ ] Bottom panel (collapsible, resizable, VSCode terminal style):
-  - [ ] Timeline tab — Interactive Gantt-like timeline:
-    - [ ] Horizontal month/season view with draggable action bars
-    - [ ] Add action: type, description, start/end date, plants, recurrence
-    - [ ] Drag to reschedule, resize for duration, reorder rows
-    - [ ] Edit/delete actions, mark complete (strikethrough)
-    - [ ] Auto-suggest actions based on placed plant species data
-    - [ ] Season color bands based on hemisphere
-    - [ ] Dependency arrows between actions (optional)
-    - [ ] Conflict warnings for overlapping incompatible actions
-  - [ ] Consortium tab — plant consortium display. Auto-detect consortiums from placed plants using species_relationships data. Show synergies (green) and conflicts (red).
-  - [ ] Budget tab — cost items: category, description, quantity, unit cost, currency. Auto-total. Per-zone breakdown.
-- [ ] Dark/light canvas theme adaptation
-- [ ] Level-of-detail rendering: dots → icons → icons+labels based on zoom
-- [ ] **Plant symbols**: Strata-based silhouettes (emergent/high/medium/low/vine/root), scaled to real canopy spread
-- [ ] **Auto-save**: 60-second silent save to autosave dir, crash recovery on next launch
-- [ ] **Unsaved changes indicator**: dot in title bar, "Save before closing?" dialog
-- [ ] **.canopi.prev backup**: Keep one previous version on each save
+### Phase 2 — Design Canvas (Core) — COMPLETED
+- [x] Konva.js Stage + Layer setup via imperative CanvasEngine (not react-konva)
+- [x] Canvas navigation: scroll-up zoom in (Figma convention), pan (Space+drag / Hand tool), zoom to fit
+- [x] Grid overlay: adaptive density via "nice distances" ladder, snap-to-grid toggle. Custom `sceneFunc` for performance.
+- [x] Rulers: HTML `<canvas>` elements (NOT Konva layers) — always in screen space, zero transform lag
+- [x] Scale bar: always-visible, auto-picks round distance, counter-scaled on UI layer
+- [x] Canvas toolbar (vertical, left of canvas):
+  - [x] Pointer/Select (V) — click, Shift+click multi-select, rubber band area select. Parent-walk for groups.
+  - [x] Hand/Pan (H)
+  - [x] Rectangle (R), Ellipse (E), Polygon (P), Freeform (F) — all with `strokeScaleEnabled: false`
+  - [x] Line/Polyline (L)
+  - [x] Text (T) — HTML textarea overlay, counter-scaled Konva.Text on commit
+  - [x] Measure (M) — distance with counter-scaled label pills
+  - ~~Plant stamp~~ → **Deferred to Phase 3** (needs species picker UI)
+- [x] Object operations: copy/paste (recursive Group serialization), duplicate, delete, rotate (15° snap), scale, flip
+- [x] Lock/unlock objects
+- [x] Z-ordering: bring to front, send to back
+- [x] Layer system: 7 layers, visibility + lock toggle in layer panel. Water/contours/climate greyed out (Phase 3).
+- [x] **Drag-and-drop** plants from DB panel onto canvas (DOM→Konva via setPointersPositions). Compact green pill drag preview via `setDragImage()`.
+- [x] Plant placement: fixed-size screen-pixel circles (8px radius) with strata colors. Common name + botanical abbreviation labels. Counter-scaled at group level — zero zoom lag.
+- [x] **Multi-select**: Shift+click, rubber band drag-select, Transformer on same layer as targets.
+- [x] **Undo/Redo**: True command pattern (500 command cap). AddNode/RemoveNode/MoveNode/TransformNode/Batch commands. `record()` for post-drag logging.
+- ~~Right side panel~~ → **Removed** (redundant with Plant DB sidebar; Phase 3: highlight plant in DB on canvas click)
+- [x] .canopi file format v1:
+  - [x] Save (Ctrl+S) — JS `save()` dialog (NOT Rust `blocking_save_file` — deadlocks on Linux GTK)
+  - [x] Save As (Ctrl+Shift+S) — JS `save()` dialog
+  - [x] Open (Ctrl+O) — JS `open()` dialog
+  - [x] Forward-compatible loading: `#[serde(flatten)] extra: HashMap<String, Value>`
+  - [x] Plant ID by `canonical_name` + `common_name` stored in file
+  - [x] Recent files in user DB
+- [x] Export: PNG (Konva `toDataURL`, native rendering deferred to Phase 3), SVG (manual Konva→SVG mapping), CSV plant list
+- [x] Import: Background image (PNG/JPG) on zones layer — scaled to 50m, centered in viewport, draggable
+- ~~Native file watching~~ → **Deferred to Phase 3**
+- [x] **North arrow**: Compass rose widget (red/grey needle triangles), draggable, scroll-wheel rotatable
+- ~~Sun direction~~ → **Deferred to Phase 3**
+- [x] Bottom panel (collapsible, resizable):
+  - [x] Timeline tab — table-based CRUD for TimelineAction items
+  - [x] Consortium tab — manual consortium CRUD + companion/antagonist display
+  - [x] Budget tab — table CRUD with auto-total, currency selector
+  - (Full Gantt-like interactive timeline deferred to Phase 3)
+- [x] Dark/light canvas theme adaptation — CSS token-driven, grid/ruler colors cached and refreshed on theme change
+- [x] Level-of-detail rendering: dot → icon → icon+label based on zoom. Group-level counter-scale for zero-lag zoom.
+- [x] **Plant symbols**: Fixed screen-pixel circles with strata colors. Common name primary, botanical abbreviation secondary. Locale-aware labels (batch IPC lookup on language change).
+- [x] **Auto-save**: 60-second timer, silent IPC to autosave dir
+- [x] **Unsaved changes indicator**: amber dot in custom title bar + "Save before closing?" dialog
+- [x] **.canopi.prev backup**: atomic write (tmp → rename) + .prev copy before overwrite
+- [x] **Custom title bar**: Canopi logo + file name + window controls (minimize/maximize/close). `decorations: false` + `startDragging()` API.
+- [x] **Canvas locked before design**: no tools, grid, rulers, or chrome until New Design or Open. Clean welcome state with Canopi logo.
+- [x] **Plant DB as sidebar**: opens alongside canvas (not replacing it) for drag-and-drop. Resizable via drag handle (320-800px).
+- ~~Saved Designs panel~~ → **Removed** (redundant with OS file dialog; recent files in empty state for Phase 3)
 
 ### Phase 3 — Canvas Advanced + Location
 - [ ] Guide lines: drag from rulers, snap-to-guides toggle
@@ -1348,6 +1344,7 @@ Git tag v1.2.3 → triggers release workflow:
 - [ ] Align: left/center/right/top/middle/bottom for selected objects
 - [ ] Distribute: even horizontal/vertical distribution
 - [ ] Group/Ungroup (Ctrl+G / Ctrl+Shift+G)
+- [ ] **Plant stamp tool**: Select a species from the DB, then click repeatedly on canvas to place multiple instances. Requires a species picker UI (toolbar dropdown or DB sidebar "Set as stamp" button) that writes to a `plantStampSpecies` signal. Currently plants are placed via drag-and-drop only.
 - [ ] Pattern fill: select area + species → fill with plants at configurable spacing (grid/hex/offset)
 - [ ] Spacing tool: distribute plants evenly along line or within area
 - [ ] Consortium builder: select plants → group as consortium with visual boundary
@@ -1361,6 +1358,15 @@ Git tag v1.2.3 → triggers release workflow:
 - [ ] Climate data overlay (temperature zones, rainfall heatmap)
 - [ ] Layer toggle UI for all map data layers
 - [ ] Shadow projection: compute and display shadow cast by placed plants at given time/date
+- [ ] **Plant display modes ("Display by")**: Dropdown in canvas toolbar to change how plants render:
+  - Default (current): Fixed-size screen-pixel circles with strata colors — optimized for readability
+  - **Canopy spread**: Circles sized to real `width_max_m` from the plant DB — shows actual canopy coverage and overlap. Uses the `data-canopy-spread` attr already stored on each plant group.
+  - **Thematic coloring ("Color by")**: Recolor circles by attribute — stratum (default), hardiness zone (blue gradient), life cycle, soil type, edibility, nitrogen fixation, sun tolerance. Requires batch SpeciesDetail lookup (cache results), color legend panel.
+  Architecture: `plantDisplayMode` signal, `width_max_m` already in SpeciesListItem and PlantRow drag data, `updatePlantDisplay()` function.
+- [ ] **Canvas rotation**: Allow rotating the viewport (not just the compass bearing). Requires updating all coordinate transforms (drawing, selection, snap-to-grid, rulers, serialization). Best implemented alongside MapLibre integration which handles rotation natively.
+- [ ] **Native file watching**: Detect external .canopi file changes (FSEvents/ReadDirectoryChanges/inotify) and prompt reload.
+- [ ] **Sun direction widget**: Auto-computed from lat/lon + date using solar position math. Manual override via drag. Sunrise/set arrows + peak angle indicator.
+- [ ] **Native high-DPI PNG export**: Core Graphics (macOS) / Direct2D (Windows) / Cairo (Linux) — configurable DPI up to 300.
 - [ ] **Growth timeline slider**: Year 0→1→2→5→10→20→Mature. Plant symbols scale dynamically. Canopy coverage visualization. Succession progression for syntropy.
 - [ ] **PDF export via native libs**: PDFKit (macOS) / DirectWrite (Windows) / Cairo (Linux) — print layout with title block, legend, scale bar, north arrow, plant schedule. Vector output, proper typography.
 - [ ] GeoJSON export (zones + plants as features with properties, requires location)

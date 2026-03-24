@@ -1,0 +1,42 @@
+/* ============================================
+   App root layout
+   ============================================ */
+
+.appRoot {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.appBody {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Resizable side panel */
+.sidePanel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Drag handle between side panel and main content */
+.dragHandle {
+  width: 5px;
+  cursor: col-resize;
+  background: var(--color-border);
+  flex-shrink: 0;
+  transition: background-color 100ms ease;
+}
+
+.dragHandle:hover,
+.dragHandle--active {
+  background: var(--color-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dragHandle {
+    transition: none;
+  }
+}

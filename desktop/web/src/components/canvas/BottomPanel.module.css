@@ -1,0 +1,136 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  flex-shrink: 0;
+  overflow: hidden;
+  /* Slide-in animation */
+  animation: slideUp 200ms ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel {
+    animation: none;
+  }
+}
+
+.resizeHandle {
+  height: 4px;
+  flex-shrink: 0;
+  cursor: row-resize;
+  background: transparent;
+  transition: background-color 150ms ease;
+  position: relative;
+  z-index: 1;
+}
+
+.resizeHandle::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 32px;
+  height: 2px;
+  border-radius: var(--radius-full);
+  background: var(--color-border);
+  transition: background-color 150ms ease;
+}
+
+.resizeHandle:hover {
+  background: var(--color-primary-bg);
+}
+
+.resizeHandle:hover::after {
+  background: var(--color-primary);
+}
+
+.tabBar {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  flex-shrink: 0;
+  height: 32px;
+  padding: 0 var(--space-1);
+  gap: 2px;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  transition: color 100ms ease, border-color 100ms ease;
+  min-width: 32px;
+  min-height: 32px;
+}
+
+.tab:hover {
+  color: var(--color-text);
+  background: var(--color-primary-bg);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.tabActive {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
+.tabBarSpacer {
+  flex: 1;
+}
+
+.collapseBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.collapseBtn:hover {
+  background: var(--color-primary-bg);
+  color: var(--color-text);
+}
+
+.collapseBtn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.tabContent {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}

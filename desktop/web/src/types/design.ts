@@ -1,0 +1,95 @@
+// Mirror of common-types/src/design.rs — keep in sync with Rust types
+
+export interface CanopiFile {
+  version: number
+  name: string
+  description: string | null
+  location: Location | null
+  north_bearing_deg: number | null
+  layers: Layer[]
+  plants: PlacedPlant[]
+  zones: Zone[]
+  consortiums: Consortium[]
+  timeline: TimelineAction[]
+  budget: BudgetItem[]
+  created_at: string
+  updated_at: string
+}
+
+export interface Location {
+  lat: number
+  lon: number
+  altitude_m: number | null
+}
+
+export interface Layer {
+  name: string
+  visible: boolean
+  locked: boolean
+  opacity: number
+}
+
+export interface PlacedPlant {
+  canonical_name: string
+  common_name: string | null
+  position: Position
+  rotation: number | null
+  scale: number | null
+  notes: string | null
+  planted_date: string | null
+  quantity: number | null
+}
+
+export interface Position {
+  x: number
+  y: number
+}
+
+export interface Zone {
+  name: string
+  zone_type: string
+  points: Position[]
+  fill_color: string | null
+  notes: string | null
+}
+
+export interface Consortium {
+  name: string
+  plants: string[]
+  notes: string | null
+}
+
+export interface TimelineAction {
+  id: string
+  action_type: string
+  description: string
+  start_date: string | null
+  end_date: string | null
+  recurrence: string | null
+  plants: string[] | null
+  zone: string | null
+  depends_on: string[] | null
+  completed: boolean
+  order: number
+}
+
+export interface BudgetItem {
+  category: string
+  description: string
+  quantity: number
+  unit_cost: number
+  currency: string
+}
+
+export interface DesignSummary {
+  path: string
+  name: string
+  updated_at: string
+  plant_count: number
+}
+
+export interface AutosaveEntry {
+  path: string
+  name: string
+  saved_at: string
+}

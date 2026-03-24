@@ -35,6 +35,7 @@
 
 .toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
@@ -48,6 +49,7 @@
   align-items: center;
   gap: var(--space-2);
   margin-left: auto;
+  flex-shrink: 0;
 }
 
 /* ── Search bar ──────────────────────────────────────────────────────────── */
@@ -55,21 +57,26 @@
 .searchWrap {
   position: relative;
   flex: 1;
-  min-width: 0;
+  min-width: 120px;
 }
 
 .searchInput {
   width: 100%;
   padding: var(--space-1) var(--space-3);
   padding-right: 28px;
-  border: 1px solid var(--color-border);
+  border: 1.5px solid var(--color-border);
   border-radius: var(--radius-md);
-  background: var(--color-bg);
+  background: var(--color-surface);
   color: var(--color-text);
   font-size: var(--text-base);
   font-family: var(--font-sans);
   line-height: var(--line-height);
   min-height: 32px;
+  transition: border-color 100ms ease;
+}
+
+.searchInput:hover {
+  border-color: var(--color-text-muted);
 }
 
 .searchInput:focus {
@@ -167,13 +174,15 @@
   cursor: pointer;
   color: var(--color-text-muted);
   padding: 0;
+  font-size: var(--text-md);
+  transition: background-color 100ms ease, color 100ms ease;
 }
 
 .viewBtn:last-child {
   border-right: none;
 }
 
-.viewBtn:hover {
+.viewBtn:hover:not(.viewBtnActive) {
   background: var(--color-bg);
   color: var(--color-text);
 }
@@ -362,8 +371,12 @@
 
 .plantMeta {
   display: flex;
-  gap: var(--space-2);
-  flex-wrap: wrap;
+  gap: var(--space-1);
+  flex-wrap: nowrap;
+  overflow: hidden;
+  /* Fade out overflow chips instead of hard clip */
+  mask-image: linear-gradient(to right, black calc(100% - 16px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, black calc(100% - 16px), transparent 100%);
 }
 
 .metaChip {
@@ -372,9 +385,10 @@
   background: var(--color-bg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-full);
-  padding: 1px var(--space-2);
+  padding: 0 var(--space-2);
   white-space: nowrap;
-  line-height: 1.6;
+  line-height: 1.8;
+  flex-shrink: 0;
 }
 
 .chipFamily {
@@ -513,9 +527,23 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--space-2);
   padding: var(--space-3);
   border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
+}
+
+.filterHeaderLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.filterCount {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
 }
 
 .filterTitle {

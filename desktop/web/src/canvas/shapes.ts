@@ -1,0 +1,191 @@
+import Konva from 'konva'
+
+function generateId(): string {
+  return crypto.randomUUID()
+}
+
+// Style constants — kept in sync with CSS tokens in global.css.
+// Raw rgba/hex values are required here because Konva operates outside the DOM
+// and cannot read CSS custom properties.
+const ZONE_FILL = 'rgba(45, 95, 63, 0.1)'
+const ZONE_STROKE = '#2D5F3F'
+const ZONE_STROKE_WIDTH = 2          // screen pixels — constant because strokeScaleEnabled: false
+const ANNOTATION_STROKE = '#64748B'
+const ANNOTATION_FILL = '#1A1A1A'
+
+export const PREVIEW_DASH = [6, 3]
+
+export interface ShapeDefaults {
+  fill: string
+  stroke: string
+  strokeWidth: number
+}
+
+export const ZONE_DEFAULTS: ShapeDefaults = {
+  fill: ZONE_FILL,
+  stroke: ZONE_STROKE,
+  strokeWidth: ZONE_STROKE_WIDTH,
+}
+
+export function createRect(attrs: {
+  x: number
+  y: number
+  width: number
+  height: number
+}): Konva.Rect {
+  return new Konva.Rect({
+    ...attrs,
+    id: generateId(),
+    fill: ZONE_FILL,
+    stroke: ZONE_STROKE,
+    strokeWidth: ZONE_STROKE_WIDTH,
+    strokeScaleEnabled: false,
+    draggable: true,
+    name: 'shape',
+  })
+}
+
+export function createEllipse(attrs: {
+  x: number
+  y: number
+  radiusX: number
+  radiusY: number
+}): Konva.Ellipse {
+  return new Konva.Ellipse({
+    ...attrs,
+    id: generateId(),
+    fill: ZONE_FILL,
+    stroke: ZONE_STROKE,
+    strokeWidth: ZONE_STROKE_WIDTH,
+    strokeScaleEnabled: false,
+    draggable: true,
+    name: 'shape',
+  })
+}
+
+export function createPolygon(points: number[]): Konva.Line {
+  return new Konva.Line({
+    points,
+    id: generateId(),
+    fill: ZONE_FILL,
+    stroke: ZONE_STROKE,
+    strokeWidth: ZONE_STROKE_WIDTH,
+    strokeScaleEnabled: false,
+    closed: true,
+    draggable: true,
+    name: 'shape',
+  })
+}
+
+export function createFreeform(points: number[], closed: boolean): Konva.Line {
+  return new Konva.Line({
+    points,
+    id: generateId(),
+    fill: closed ? ZONE_FILL : undefined,
+    stroke: ZONE_STROKE,
+    strokeWidth: ZONE_STROKE_WIDTH,
+    strokeScaleEnabled: false,
+    closed,
+    draggable: true,
+    name: 'shape',
+    tension: 0.3,
+  })
+}
+
+export function createPolyline(points: number[]): Konva.Line {
+  return new Konva.Line({
+    points,
+    id: generateId(),
+    stroke: ANNOTATION_STROKE,
+    strokeWidth: 2,
+    strokeScaleEnabled: false,
+    draggable: true,
+    name: 'shape',
+  })
+}
+
+export function createText(attrs: {
+  x: number
+  y: number
+  text: string
+}): Konva.Text {
+  // fontSize 16 is in screen pixels — caller must counter-scale with 1/stageScale
+  // so the text stays at a constant 16px visual size regardless of zoom.
+  return new Konva.Text({
+    ...attrs,
+    id: generateId(),
+    fontSize: 16,
+    fontFamily: 'Inter, sans-serif',
+    fill: ANNOTATION_FILL,
+    draggable: true,
+    name: 'shape annotation-text',
+  })
+}
+
+// Measurement line — solid, annotation colour.
+export function createMeasureLine(points: number[]): Konva.Line {
+  return new Konva.Line({
+    points,
+    id: generateId(),
+    stroke: ANNOTATION_STROKE,
+    strokeWidth: 1.5,
+    strokeScaleEnabled: false,
+    name: 'shape',
+  })
+}
+
+// Label pill group for measurements: background rect + text, pre-positioned.
+// Caller must set position on the returned group.
+// fontSize is in screen pixels — caller must counter-scale the group with
+// 1/stageScale so the pill stays at a constant visual size regardless of zoom.
+export function createMeasureLabel(text: string): Konva.Group {
+  const label = new Konva.Text({
+    text,
+    fontSize: 12,
+    fontFamily: 'Inter, sans-serif',
+    fill: '#FFFFFF',
+    padding: 4,
+  })
+
+  const w = label.width()
+  const h = label.height()
+
+  const pill = new Konva.Rect({
+    x: -w / 2 - 4,
+    y: -h / 2,
+    width: w + 8,
+    height: h,
+    fill: ANNOTATION_STROKE,
+    cornerRadius: 4,
+  })
+
+  // Re-centre the text over the pill
+  label.x(-w / 2)
+  label.y(-h / 2)
+
+  const group = new Konva.Group({ name: 'measure-label' })  // NO 'shape' — parent measure group is the selectable entity
+  group.add(pill)
+  group.add(label)
+  return group
+}
+
+/**
+ * Counter-scale all annotation nodes (measure label groups, text nodes) so they
+ * stay at a fixed screen-pixel size regardless of zoom.
+ * Called on every zoom change alongside updatePlantsLOD.
+ */
+export function updateAnnotationsForZoom(annotationsLayer: Konva.Layer, stageScale: number): void {
+  const inv = 1 / stageScale
+
+  // Counter-scale measure label groups (pill + text inside a Group with name 'measure-label')
+  annotationsLayer.find('.measure-label').forEach((node: Konva.Node) => {
+    node.scale({ x: inv, y: inv })
+  })
+
+  // Counter-scale standalone text nodes created by the text tool
+  annotationsLayer.find('.annotation-text').forEach((node: Konva.Node) => {
+    node.scale({ x: inv, y: inv })
+  })
+
+  annotationsLayer.batchDraw()
+}

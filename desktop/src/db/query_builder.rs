@@ -81,15 +81,24 @@ impl QueryBuilder {
         // text (canonical names, common names in all languages, family, genus, uses).
         // Single JOIN, no subqueries — fast for any query.
         let fts_join = if let Some(ref text) = self.text {
-            let search_term = format!("{}*", text.replace('"', ""));
-            let join = "JOIN species_search_fts ON species_search_fts.rowid = s.rowid"
-                .to_string();
-            where_clauses.push(format!(
-                "species_search_fts MATCH ?{}",
-                params.len() + 1
-            ));
-            params.push(Value::Text(search_term));
-            Some(join)
+            // Strip all FTS5 metacharacters to prevent query syntax errors.
+            // Characters with special meaning in FTS5 queries: " ( ) * + - ^ : \
+            let sanitized = text.replace(|c: char| r#""()*+-^:\"#.contains(c), "");
+            if sanitized.trim().is_empty() {
+                // Input reduced to nothing after sanitization — skip FTS entirely
+                // and return unfiltered results rather than a syntax error.
+                None
+            } else {
+                let search_term = format!("{}*", sanitized.trim());
+                let join = "JOIN species_search_fts ON species_search_fts.rowid = s.rowid"
+                    .to_string();
+                where_clauses.push(format!(
+                    "species_search_fts MATCH ?{}",
+                    params.len() + 1
+                ));
+                params.push(Value::Text(search_term));
+                Some(join)
+            }
         } else {
             None
         };
@@ -298,7 +307,8 @@ impl QueryBuilder {
                     s.growth_rate,
                     s.stratum,
                     s.edibility_rating,
-                    s.medicinal_rating
+                    s.medicinal_rating,
+                    s.width_max_m
              FROM species s
              {fts_join}
              {cn_join}
@@ -350,9 +360,9 @@ mod tests {
         );
         let (sql, params) = qb.build();
         assert!(sql.contains("FROM species s"));
-        assert!(!sql.contains("species_fts"));
-        // locale param + limit param
-        assert_eq!(params.len(), 2);
+        assert!(!sql.contains("species_search_fts"));
+        // locale param + "en" fallback param + limit param
+        assert_eq!(params.len(), 3);
     }
 
     #[test]
@@ -366,8 +376,8 @@ mod tests {
             "en".to_owned(),
         );
         let (sql, _params) = qb.build();
-        assert!(sql.contains("species_fts"));
-        assert!(sql.contains("fts MATCH"));
+        assert!(sql.contains("species_search_fts"));
+        assert!(sql.contains("species_search_fts MATCH"));
     }
 
     #[test]
@@ -381,8 +391,8 @@ mod tests {
             "en".to_owned(),
         );
         let (_sql, params) = qb.build();
-        // locale is first, search term is second
-        let search_term = match &params[1] {
+        // params[0] = locale, params[1] = "en" fallback, params[2] = search term
+        let search_term = match &params[2] {
             Value::Text(s) => s.clone(),
             _ => panic!("expected text"),
         };

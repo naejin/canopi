@@ -43,3 +43,11 @@ export async function getSpeciesRelationships(
 export async function getFilterOptions(): Promise<FilterOptions> {
   return invoke('get_filter_options');
 }
+
+/** Batch lookup: returns canonical_name → common_name map for the given locale. */
+export async function getCommonNames(
+  canonicalNames: string[],
+  locale: string,
+): Promise<Record<string, string>> {
+  return invoke('get_common_names', { canonicalNames, locale });
+}

@@ -72,6 +72,22 @@
   /* Layout */
   --activity-bar-width: 48px;
   --status-bar-height: 24px;
+
+  /* Dirty indicator */
+  --color-dirty-indicator: #E59400;
+
+  /* Window close button (Windows/Linux style — red on hover) */
+  --color-close-hover: #E81123;
+  --color-close-active: #C50F1F;
+
+  /* Canvas */
+  --canvas-bg: #F5F3F0;
+  --canvas-grid: rgba(0, 0, 0, 0.06);
+  --canvas-grid-major: rgba(0, 0, 0, 0.12);
+  --canvas-ruler-bg: var(--color-surface);
+  --canvas-ruler-text: var(--color-text-muted);
+  --canvas-selection: rgba(45, 95, 63, 0.15);
+  --canvas-toolbar-width: 40px;
 }
 
 /* ============================================
@@ -96,6 +112,13 @@
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.5);
+
+  --color-dirty-indicator: #FFB74D;
+
+  --canvas-bg: #1E2126;
+  --canvas-grid: rgba(255, 255, 255, 0.05);
+  --canvas-grid-major: rgba(255, 255, 255, 0.10);
+  --canvas-selection: rgba(74, 155, 106, 0.15);
 
   /* Semantic — plant attributes (dark) */
   --color-edible: #8BC34A;

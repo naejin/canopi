@@ -19,13 +19,22 @@ pub fn run() {
             commands::species::search_species,
             commands::species::get_species_detail,
             commands::species::get_species_relationships,
+            commands::species::get_common_names,
             commands::species::get_filter_options,
             commands::favorites::toggle_favorite,
             commands::favorites::get_favorites,
             commands::favorites::get_recently_viewed,
+            commands::design::new_design,
             commands::design::save_design,
             commands::design::load_design,
+            commands::design::get_recent_files,
+            commands::design::autosave_design,
+            commands::design::list_autosaves,
+            commands::design::recover_autosave,
             commands::content::list_learning_topics,
+            commands::export::export_file,
+            commands::export::export_binary,
+            commands::export::read_file_bytes,
         ])
         .setup(|app| {
             // Logging
