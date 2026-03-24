@@ -106,6 +106,22 @@ cargo build --release
 - **Konva `strokeScaleEnabled: false`**: Built-in property that keeps stroke width constant in screen pixels regardless of zoom. Use on all zone/annotation shapes. Don't write custom zoom-scaling systems.
 - **Konva group-level counter-scale for plants**: Set `group.scale({x: 1/stageScale, y: 1/stageScale})` on the group, not individual children. Children use plain screen-pixel values. One scale update per group on zoom = zero lag.
 - **Canvas `stage.on('dragmove')` fires for shape drags too**: Filter by `e.target !== this.stage` to avoid heavy overlay redraws during shape drag. Only sync overlays for stage-level pans.
+- **Plant DB in-memory fallback hides failure**: If plant DB is missing/corrupt, `lib.rs` silently falls back to empty in-memory DB. FTS5 `MATCH` queries will throw errors (not just return empty). This is a known issue pending Phase D fix — do not add more silent fallbacks.
+
+## Document Lifecycle (enforced — see docs/reviews/)
+- **`toCanopi()` is the sole save composition point** — all save paths (manual, save-as, autosave) go through it. Never construct a `CanopiFile` from canvas state alone.
+- **Never regenerate `created_at`** — preserve from loaded file. Only update `updated_at` intentionally on actual save.
+- **Preserve all loaded document sections on save** — timeline, budget, consortiums, description, location, extra fields. Do not hardcode empty arrays.
+- **Preserve per-object non-visual fields** — plant notes/planted_date/quantity and zone notes must survive load-save via Konva custom attrs (same pattern as `data-canonical-name`).
+- **Preserve unknown `extra` fields** — the Rust `#[serde(flatten)]` forward-compatibility guarantee must hold through the TS layer too.
+- **`designDirty` is document-scoped** — canvas history stack depth (`_past.length`) is not the sole authority. Non-canvas edits (timeline/budget/consortium tabs) also set dirty and must not be cleared by canvas undo.
+- **Autosave must checkpoint the same document as manual save** — same composition path, same fields preserved. Autosave failures must not be silently swallowed.
+- **One canonical document owner** — `currentDesign` signal is the runtime authority for non-canvas sections. `CanvasEngine` is a projection/editor for canvas data only.
+
+## Architecture Review
+- Full review and analysis: `docs/reviews/2026-03-24-architecture-review.md` and `2026-03-24-architecture-review-analysis.md`
+- Implementation plan: Phase A (fix save composition) → B (document ownership) → C (dirty/autosave) → D (startup degradation) → E (settings/contracts)
+- Phase A is frontend-only (zero Rust changes), centered on `serializer.ts` and 3 `toCanopi()` call sites
 
 ## Canvas Architecture
 - Zone shapes: world-unit geometry, `strokeScaleEnabled: false` for constant-pixel strokes
