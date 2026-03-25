@@ -49,6 +49,7 @@
     "addFavorite": "Ajouter aux favoris",
     "removeFavorite": "Retirer des favoris",
     "dragToCanvas": "Glisser sur la zone de dessin",
+    "setAsStamp": "Utiliser comme tampon",
     "error": "Erreur",
     "retry": "Réessayer",
     "filterMedicinal": "Médicinal"
@@ -86,20 +87,72 @@
       "measure": "Mesure",
       "measureDesc": "Mesurer des distances",
       "plantStamp": "Tampon plante",
-      "plantStampDesc": "Placer des plantes depuis la base de données"
+      "plantStampDesc": "Placer des plantes depuis la base de données",
+      "dimension": "Cote",
+      "dimensionDesc": "Mesurer la distance entre points ou formes",
+      "patternFill": "Remplissage motif",
+      "patternFillDesc": "Remplir une zone avec des plantes",
+      "spacing": "Espacement",
+      "spacingDesc": "Distribuer des plantes le long d'une ligne",
+      "arrow": "Flèche",
+      "arrowDesc": "Dessiner une annotation fléchée",
+      "callout": "Bulle",
+      "calloutDesc": "Ajouter une bulle de texte"
     },
     "grid": {
       "grid": "Grille",
       "gridDesc": "Afficher/masquer la grille",
       "snapToGrid": "Aimanter à la grille",
       "snapToGridDesc": "Aligner les formes sur la grille",
+      "snapToGuides": "Aimanter aux guides",
+      "snapToGuidesDesc": "Aligner les formes sur les lignes de guide",
       "rulers": "Règles",
       "rulersDesc": "Afficher/masquer les règles",
       "scaleBar": "Échelle",
       "compass": "Boussole",
       "north": "N",
       "gridSize": "Taille de la grille",
-      "zoom": "Zoom"
+      "zoom": "Zoom",
+      "minimap": "Mini-carte",
+      "minimapDesc": "Afficher/masquer la mini-carte"
+    },
+    "display": {
+      "label": "Mode d'affichage",
+      "default": "Par défaut",
+      "canopy": "Canopée",
+      "stratum": "Par strate",
+      "hardiness": "Par rusticité",
+      "lifecycle": "Par cycle",
+      "nitrogen": "Par fixation N",
+      "edibility": "Par comestibilité"
+    },
+    "group": {
+      "group": "Grouper",
+      "ungroup": "Dégrouper"
+    },
+    "align": {
+      "left": "Aligner à gauche",
+      "center": "Centrer horizontalement",
+      "right": "Aligner à droite",
+      "top": "Aligner en haut",
+      "middle": "Centrer verticalement",
+      "bottom": "Aligner en bas",
+      "distributeH": "Distribuer horizontalement",
+      "distributeV": "Distribuer verticalement"
+    },
+    "location": {
+      "title": "Emplacement du design",
+      "latitude": "Latitude",
+      "longitude": "Longitude",
+      "altitude": "Altitude (m)",
+      "optional": "Optionnel",
+      "save": "Définir l'emplacement",
+      "clear": "Effacer",
+      "current": "Actuel",
+      "showMap": "Afficher la carte",
+      "required": "Définissez d'abord un emplacement",
+      "mapStreet": "Plan",
+      "mapTerrain": "Relief"
     },
     "file": {
       "new": "Nouveau design",
@@ -211,6 +264,8 @@
       "exportPng": "Exporter en PNG",
       "exportSvg": "Exporter en SVG",
       "exportCsv": "Exporter la liste de plantes (CSV)",
+      "exportGeoJSON": "Exporter en GeoJSON",
+      "exportBudgetCsv": "Exporter le budget (CSV)",
       "importImage": "Importer une image de fond",
       "exportSuccess": "Exporté vers {{path}}",
       "exportFailed": "Échec de l'exportation",

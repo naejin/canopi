@@ -12,6 +12,8 @@ export interface HtmlRulers {
   vCanvas: HTMLCanvasElement
   corner: HTMLDivElement
   destroy(): void
+  /** Set a callback to be invoked when the user drags from a ruler to create a guide. */
+  onGuideCreate: ((axis: 'h' | 'v', worldPosition: number) => void) | null
 }
 
 // ---------------------------------------------------------------------------
@@ -48,7 +50,8 @@ export function createHtmlRulers(containerDiv: HTMLElement): HtmlRulers {
     width: calc(100% - ${RULER_SIZE}px);
     height: ${RULER_SIZE}px;
     z-index: 15;
-    pointer-events: none;
+    pointer-events: auto;
+    cursor: s-resize;
     display: block;
   `
 
@@ -61,7 +64,8 @@ export function createHtmlRulers(containerDiv: HTMLElement): HtmlRulers {
     width: ${RULER_SIZE}px;
     height: calc(100% - ${RULER_SIZE}px);
     z-index: 15;
-    pointer-events: none;
+    pointer-events: auto;
+    cursor: e-resize;
     display: block;
   `
 
@@ -86,13 +90,61 @@ export function createHtmlRulers(containerDiv: HTMLElement): HtmlRulers {
   containerDiv.appendChild(vCanvas)
   containerDiv.appendChild(corner)
 
+  const result: HtmlRulers = { hCanvas, vCanvas, corner, destroy, onGuideCreate: null }
+
+  // Drag-from-ruler to create a guide line.
+  // Horizontal ruler drag → horizontal guide (axis='h')
+  // Vertical ruler drag → vertical guide (axis='v')
+  function setupRulerDrag(
+    canvas: HTMLCanvasElement,
+    axis: 'h' | 'v',
+  ): void {
+    canvas.addEventListener('mousedown', (e) => {
+      e.preventDefault()
+      // We don't create the guide on mousedown — we wait for mouseup on the
+      // main canvas area. This means the user "drags" from the ruler.
+      // Use the mouseup position to determine the world coordinate.
+      const onMouseUp = (upEvent: MouseEvent) => {
+        document.removeEventListener('mouseup', onMouseUp)
+        document.removeEventListener('mousemove', onMouseMove)
+        containerDiv.style.cursor = ''
+
+        // Only create if the mouse ended outside the ruler area
+        const rect = containerDiv.getBoundingClientRect()
+        const mx = upEvent.clientX - rect.left
+        const my = upEvent.clientY - rect.top
+
+        if (axis === 'h' && my <= RULER_SIZE) return  // Dropped back on ruler
+        if (axis === 'v' && mx <= RULER_SIZE) return
+
+        if (result.onGuideCreate) {
+          // Convert screen position to world coordinate
+          // The engine will set this callback with proper stage reference
+          if (axis === 'h') {
+            result.onGuideCreate('h', my)
+          } else {
+            result.onGuideCreate('v', mx)
+          }
+        }
+      }
+      const onMouseMove = (_moveEvent: MouseEvent) => {
+        containerDiv.style.cursor = axis === 'h' ? 's-resize' : 'e-resize'
+      }
+      document.addEventListener('mouseup', onMouseUp)
+      document.addEventListener('mousemove', onMouseMove)
+    })
+  }
+
+  setupRulerDrag(hCanvas, 'h')
+  setupRulerDrag(vCanvas, 'v')
+
   function destroy(): void {
     hCanvas.remove()
     vCanvas.remove()
     corner.remove()
   }
 
-  return { hCanvas, vCanvas, corner, destroy }
+  return result
 }
 
 // ---------------------------------------------------------------------------

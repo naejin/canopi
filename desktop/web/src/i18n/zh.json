@@ -49,6 +49,7 @@
     "addFavorite": "添加收藏",
     "removeFavorite": "取消收藏",
     "dragToCanvas": "拖拽到画布",
+    "setAsStamp": "设为印章",
     "error": "错误",
     "retry": "重试",
     "filterMedicinal": "药用"
@@ -86,20 +87,72 @@
       "measure": "测量",
       "measureDesc": "测量距离",
       "plantStamp": "植物图章",
-      "plantStampDesc": "从数据库放置植物"
+      "plantStampDesc": "从数据库放置植物",
+      "dimension": "标注尺寸",
+      "dimensionDesc": "测量点或形状之间的距离",
+      "patternFill": "图案填充",
+      "patternFillDesc": "用植物填充区域",
+      "spacing": "间距",
+      "spacingDesc": "沿直线均匀分布植物",
+      "arrow": "箭头",
+      "arrowDesc": "绘制箭头注释",
+      "callout": "标注",
+      "calloutDesc": "添加文字标注框"
     },
     "grid": {
       "grid": "网格",
       "gridDesc": "显示/隐藏网格",
       "snapToGrid": "吸附网格",
       "snapToGridDesc": "将图形对齐到网格交叉点",
+      "snapToGuides": "吸附参考线",
+      "snapToGuidesDesc": "将图形对齐到参考线",
       "rulers": "标尺",
       "rulersDesc": "显示/隐藏标尺",
       "scaleBar": "比例尺",
       "compass": "指南针",
       "north": "北",
       "gridSize": "网格大小",
-      "zoom": "缩放"
+      "zoom": "缩放",
+      "minimap": "小地图",
+      "minimapDesc": "显示/隐藏小地图"
+    },
+    "display": {
+      "label": "显示模式",
+      "default": "默认",
+      "canopy": "冠幅",
+      "stratum": "按层级",
+      "hardiness": "按耐寒性",
+      "lifecycle": "按生命周期",
+      "nitrogen": "按固氮",
+      "edibility": "按可食性"
+    },
+    "group": {
+      "group": "编组",
+      "ungroup": "取消编组"
+    },
+    "align": {
+      "left": "左对齐",
+      "center": "水平居中",
+      "right": "右对齐",
+      "top": "顶部对齐",
+      "middle": "垂直居中",
+      "bottom": "底部对齐",
+      "distributeH": "水平均匀分布",
+      "distributeV": "垂直均匀分布"
+    },
+    "location": {
+      "title": "设计位置",
+      "latitude": "纬度",
+      "longitude": "经度",
+      "altitude": "海拔 (m)",
+      "optional": "可选",
+      "save": "设置位置",
+      "clear": "清除",
+      "current": "当前",
+      "showMap": "显示地图图层",
+      "required": "请先设置设计位置",
+      "mapStreet": "街道",
+      "mapTerrain": "地形"
     },
     "file": {
       "new": "新建设计",
@@ -211,6 +264,8 @@
       "exportPng": "导出为 PNG",
       "exportSvg": "导出为 SVG",
       "exportCsv": "导出植物列表（CSV）",
+      "exportGeoJSON": "导出为 GeoJSON",
+      "exportBudgetCsv": "导出预算（CSV）",
       "importImage": "导入背景图片",
       "exportSuccess": "已导出至 {{path}}",
       "exportFailed": "导出失败",

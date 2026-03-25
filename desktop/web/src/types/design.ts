@@ -10,6 +10,7 @@ export interface CanopiFile {
   plants: PlacedPlant[]
   zones: Zone[]
   consortiums: Consortium[]
+  groups?: ObjectGroup[]
   timeline: TimelineAction[]
   budget: BudgetItem[]
   created_at: string
@@ -31,6 +32,7 @@ export interface Layer {
 }
 
 export interface PlacedPlant {
+  id: string
   canonical_name: string
   common_name: string | null
   position: Position
@@ -54,9 +56,19 @@ export interface Zone {
   notes: string | null
 }
 
+export interface ObjectGroup {
+  id: string
+  name: string | null
+  layer: string
+  position: Position
+  rotation: number | null
+  member_ids: string[]
+}
+
 export interface Consortium {
+  id: string
   name: string
-  plants: string[]
+  plant_ids: string[]
   notes: string | null
 }
 

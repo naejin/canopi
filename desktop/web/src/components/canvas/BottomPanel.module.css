@@ -134,3 +134,21 @@
   overflow: auto;
   min-height: 0;
 }
+
+.timelineSplit {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.timelineGantt {
+  flex: 1;
+  min-height: 60px;
+  overflow: hidden;
+}
+
+.timelineDetail {
+  max-height: 50%;
+  overflow: auto;
+  border-top: 1px solid var(--color-border);
+}

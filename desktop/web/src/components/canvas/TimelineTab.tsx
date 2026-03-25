@@ -2,6 +2,7 @@ import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale } from '../../state/app'
 import { currentDesign, nonCanvasRevision } from '../../state/document'
+import { celestialDate } from '../../state/canvas'
 import type { TimelineAction } from '../../types/design'
 import styles from './TimelineTab.module.css'
 
@@ -217,7 +218,15 @@ export function TimelineTab() {
             </thead>
             <tbody>
               {actions.map((action) => (
-                <tr key={action.id} className={action.completed ? styles.rowCompleted : ''}>
+                <tr
+                  key={action.id}
+                  className={action.completed ? styles.rowCompleted : ''}
+                  onClick={() => {
+                    if (action.start_date) {
+                      celestialDate.value = new Date(action.start_date)
+                    }
+                  }}
+                >
                   <td className={styles.tdCheck}>
                     <input
                       type="checkbox"

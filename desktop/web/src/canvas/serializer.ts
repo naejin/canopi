@@ -2,7 +2,9 @@ import Konva from 'konva'
 import type { CanvasEngine } from './engine'
 import type { CanopiFile, PlacedPlant, Zone, Layer } from '../types/design'
 import { createPlantNode } from './plants'
-import { layerVisibility, layerLockState, northBearingDeg } from '../state/canvas'
+import { layerVisibility, layerLockState, northBearingDeg, guides, designLocation, currentConsortiums } from '../state/canvas'
+import type { Guide } from './guides'
+import { renderConsortiumBoundaries } from './consortium-visual'
 
 const LAYER_NAMES = ['base', 'contours', 'climate', 'zones', 'water', 'plants', 'annotations'] as const
 
@@ -12,7 +14,7 @@ const LAYER_NAMES = ['base', 'contours', 'climate', 'zones', 'water', 'plants', 
 
 const KNOWN_CANOPI_KEYS = new Set([
   'version', 'name', 'description', 'location', 'north_bearing_deg',
-  'layers', 'plants', 'zones', 'consortiums', 'timeline', 'budget',
+  'layers', 'plants', 'zones', 'consortiums', 'groups', 'timeline', 'budget',
   'created_at', 'updated_at',
 ])
 
@@ -106,9 +108,17 @@ export function toCanopi(
 
   const now = new Date().toISOString()
 
+  // Persist guides into extra (forward-compatible — older versions ignore it)
+  const extra: Record<string, unknown> = { ...(doc?.extra ?? {}) }
+  if (guides.value.length > 0) {
+    extra.guides = guides.value
+  } else {
+    delete extra.guides
+  }
+
   return {
     // Spread extra FIRST — canonical keys below always win over unknown fields
-    ...(doc?.extra ?? {}),
+    ...extra,
     version: 1,
     name: metadata.name,
     description: metadata.description ?? doc?.description ?? null,
@@ -124,6 +134,7 @@ export function toCanopi(
     plants,
     zones,
     consortiums: doc?.consortiums ?? [],
+    groups: engine.getObjectGroups(),
     timeline: doc?.timeline ?? [],
     budget: doc?.budget ?? [],
     created_at: doc?.created_at ?? now,
@@ -152,7 +163,7 @@ export function fromCanopi(file: CanopiFile, engine: CanvasEngine): void {
   if (plantsLayer) {
     for (const plant of file.plants) {
       const node = createPlantNode({
-        id: crypto.randomUUID(),
+        id: plant.id || crypto.randomUUID(),
         canonicalName: plant.canonical_name,
         commonName: plant.common_name ?? null,
         stratum: null,
@@ -253,8 +264,35 @@ export function fromCanopi(file: CanopiFile, engine: CanvasEngine): void {
     layerLockState.value = locks
   }
 
+  // Restore groups (must happen after plants and zones are loaded)
+  if (file.groups && file.groups.length > 0) {
+    engine.restoreObjectGroups(file.groups)
+  }
+
   // Restore compass bearing — always reset to prevent leaking from previous document
   northBearingDeg.value = file.north_bearing_deg ?? 0
+
+  // Restore guides from extra field (forward-compatible)
+  const rawGuides = (file.extra?.guides ?? []) as Guide[]
+  guides.value = Array.isArray(rawGuides)
+    ? rawGuides.filter(
+        (g): g is Guide =>
+          typeof g === 'object' && g !== null &&
+          typeof g.id === 'string' &&
+          (g.axis === 'h' || g.axis === 'v') &&
+          typeof g.position === 'number',
+      )
+    : []
+  engine.restoreGuides()
+
+  // Sync consortium signal and render boundaries
+  currentConsortiums.value = file.consortiums
+  if (file.consortiums.length > 0) {
+    renderConsortiumBoundaries(engine, file.consortiums)
+  }
+
+  // Sync designLocation signal for map layer
+  designLocation.value = file.location ? { lat: file.location.lat, lon: file.location.lon } : null
 
   // One batchDraw per layer
   for (const name of LAYER_NAMES) {

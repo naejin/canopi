@@ -108,6 +108,7 @@ pub fn create_default() -> CanopiFile {
         plants: Vec::<PlacedPlant>::new(),
         zones: Vec::<Zone>::new(),
         consortiums: Vec::<Consortium>::new(),
+        groups: Vec::new(),
         timeline: Vec::<TimelineAction>::new(),
         budget: Vec::<BudgetItem>::new(),
         created_at: now.clone(),

@@ -107,6 +107,25 @@ pub fn get_common_names(
     crate::db::plant_db::get_common_names_batch(&conn, &canonical_names, &locale)
 }
 
+/// Batch-fetch detail records for multiple species by canonical name.
+/// Used for thematic coloring (plant display modes) — one IPC call for all placed plants.
+#[tauri::command]
+pub fn get_species_batch(
+    plant_db: tauri::State<'_, crate::db::PlantDb>,
+    canonical_names: Vec<String>,
+    locale: String,
+) -> Result<Vec<SpeciesDetail>, String> {
+    let conn = plant_db.0.lock().unwrap_or_else(|e| e.into_inner());
+    let mut results = Vec::with_capacity(canonical_names.len());
+    for name in &canonical_names {
+        match crate::db::plant_db::get_detail(&conn, name, &locale) {
+            Ok(detail) => results.push(detail),
+            Err(_) => {} // Skip unknown species silently
+        }
+    }
+    Ok(results)
+}
+
 /// Returns all distinct values for populating filter UI dropdowns.
 #[tauri::command]
 pub fn get_filter_options(

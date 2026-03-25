@@ -49,6 +49,7 @@
     "addFavorite": "Add to favorites",
     "removeFavorite": "Remove from favorites",
     "dragToCanvas": "Drag to canvas",
+    "setAsStamp": "Set as stamp",
     "error": "Error",
     "retry": "Retry",
     "filterMedicinal": "Medicinal"
@@ -86,20 +87,72 @@
       "measure": "Measure",
       "measureDesc": "Measure distances",
       "plantStamp": "Plant Stamp",
-      "plantStampDesc": "Place plants from database"
+      "plantStampDesc": "Place plants from database",
+      "dimension": "Dimension",
+      "dimensionDesc": "Measure distance between points or shapes",
+      "patternFill": "Pattern Fill",
+      "patternFillDesc": "Fill a zone with plants in a pattern",
+      "spacing": "Spacing",
+      "spacingDesc": "Distribute plants along a line",
+      "arrow": "Arrow",
+      "arrowDesc": "Draw an arrow annotation",
+      "callout": "Callout",
+      "calloutDesc": "Add a text callout box"
     },
     "grid": {
       "grid": "Grid",
       "gridDesc": "Toggle grid overlay",
       "snapToGrid": "Snap to Grid",
       "snapToGridDesc": "Snap shapes to grid intersections",
+      "snapToGuides": "Snap to Guides",
+      "snapToGuidesDesc": "Snap shapes to guide lines",
       "rulers": "Rulers",
       "rulersDesc": "Toggle horizontal and vertical rulers",
       "scaleBar": "Scale Bar",
       "compass": "Compass",
       "north": "N",
       "gridSize": "Grid Size",
-      "zoom": "Zoom"
+      "zoom": "Zoom",
+      "minimap": "Minimap",
+      "minimapDesc": "Toggle overview minimap"
+    },
+    "display": {
+      "label": "Display Mode",
+      "default": "Default",
+      "canopy": "Canopy",
+      "stratum": "By Stratum",
+      "hardiness": "By Hardiness",
+      "lifecycle": "By Lifecycle",
+      "nitrogen": "By N-Fixation",
+      "edibility": "By Edibility"
+    },
+    "group": {
+      "group": "Group",
+      "ungroup": "Ungroup"
+    },
+    "align": {
+      "left": "Align Left",
+      "center": "Align Center",
+      "right": "Align Right",
+      "top": "Align Top",
+      "middle": "Align Middle",
+      "bottom": "Align Bottom",
+      "distributeH": "Distribute Horizontally",
+      "distributeV": "Distribute Vertically"
+    },
+    "location": {
+      "title": "Design Location",
+      "latitude": "Latitude",
+      "longitude": "Longitude",
+      "altitude": "Altitude (m)",
+      "optional": "Optional",
+      "save": "Set Location",
+      "clear": "Clear",
+      "current": "Current",
+      "showMap": "Show map layer",
+      "required": "Set a design location first",
+      "mapStreet": "Street",
+      "mapTerrain": "Terrain"
     },
     "file": {
       "new": "New Design",
@@ -211,6 +264,8 @@
       "exportPng": "Export as PNG",
       "exportSvg": "Export as SVG",
       "exportCsv": "Export Plant List (CSV)",
+      "exportGeoJSON": "Export as GeoJSON",
+      "exportBudgetCsv": "Export Budget (CSV)",
       "importImage": "Import Background Image",
       "exportSuccess": "Exported to {{path}}",
       "exportFailed": "Export failed",

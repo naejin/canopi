@@ -5,6 +5,7 @@ import { selectedObjectIds, lockedObjectIds } from '../../state/canvas'
 import { computeSelectionRect, nodesInRect } from '../operations'
 import { MoveNodeCommand, TransformNodeCommand, BatchCommand } from '../commands'
 import type { TransformAttrs } from '../commands'
+import { updateDimensionsForNode } from '../dimensions'
 
 // Konva hex values matching the --canvas-selection CSS token (rgba(45, 95, 63, 0.15))
 // and --color-primary (#2D5F3F). Raw values are required — Konva cannot read CSS vars.
@@ -511,6 +512,11 @@ export class SelectTool implements CanvasTool {
         engine.history.record(cmds[0]!)
       } else {
         engine.history.record(new BatchCommand(cmds))
+      }
+
+      // Update attached dimensions for all transformed nodes
+      for (const node of this._transformer!.nodes()) {
+        updateDimensionsForNode(node.id(), engine.layers, engine.stage.scaleX())
       }
     }
 

@@ -115,6 +115,12 @@ cargo build --release
 - **Konva custom attrs: use `?? null` not `|| null`**: `getAttr()` can return `0` or `''` which are legitimate values. `|| null` collapses them; `?? null` preserves them.
 - **Canvas dirty must not use bounded stack length**: `_past.length` caps at `MAX_HISTORY=500`. Use `_savedPosition` checkpoint in `CanvasHistory` instead. `history.clear()` must NOT trigger dirty state changes.
 - **Vitest with Konva requires `canvas` npm package**: Install `canvas` as devDependency — Konva's Node.js entry point requires it.
+- **Grouped node coordinates**: Always use `node.getAbsolutePosition(layer)` when serializing positions of nodes that may be inside a `Konva.Group`. Never use `node.x()/y()` directly — those are group-relative after grouping.
+- **Every new canvas module must be wired into runtime**: Creating a file is not enough — it must be imported and called from `engine.ts` or `serializer.ts`. Verify with grep that every exported function has at least one call site outside its own file.
+- **`state/canvas.ts` mirror signals**: `engine.ts` cannot import from `state/design.ts` (circular via `design.ts` → `engine.ts`). Use mirror signals in `state/canvas.ts` (e.g., `designLocation`, `currentConsortiums`) and sync them in `serializer.ts` on load and in UI components on edit.
+- **MapLibre lazy loading**: Never top-level import `map-layer.ts` or `maplibre-gl`. Use dynamic `import('./map-layer')` on first map activation. Store the module reference for synchronous use on subsequent pan/zoom frames.
+- **`Command` interface requires `readonly type: string`**: Every new undo/redo command class must include a `readonly type = 'commandName'` property.
+- **`CanvasTool` event signatures**: Tool methods use `Konva.KonvaEventObject<MouseEvent>`, not raw `MouseEvent`. Import Konva and use the correct event type.
 
 ## Document Lifecycle (enforced — Phase 2.1 implemented)
 - **`toCanopi(engine, metadata, doc)` is the sole save composition point** — all save paths go through it. The `doc` parameter provides non-canvas sections from `currentDesign`. Never construct a `CanopiFile` from canvas state alone.

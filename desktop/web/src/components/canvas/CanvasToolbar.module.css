@@ -132,6 +132,22 @@
   margin-top: 2px;
 }
 
+.displaySelect {
+  width: 100%;
+  height: 28px;
+  font-size: 10px;
+  padding: 2px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  text-align: center;
+}
+
+.displaySelect:hover {
+  background: var(--color-surface-hover);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .toolButton {
     transition-duration: 0ms;

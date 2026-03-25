@@ -11,6 +11,15 @@ import {
   snapToGridEnabled,
   selectedObjectIds,
   lockedObjectIds,
+  guides,
+  snapToGuidesEnabled,
+  plantDisplayMode,
+  plantColorByAttr,
+  mapLayerVisible,
+  mapStyle,
+  designLocation,
+  celestialDate,
+  currentConsortiums,
 } from '../state/canvas'
 import { theme, locale, persistCurrentSettings } from '../state/app'
 import { serializeNode, recreateNode } from './commands/node-serialization'
@@ -27,11 +36,28 @@ import { FreeformTool } from './tools/freeform'
 import { LineTool } from './tools/line'
 import { TextTool } from './tools/text'
 import { MeasureTool } from './tools/measure'
+import { PlantStampTool } from './tools/plant-stamp'
+import { ArrowTool } from './tools/arrow'
+import { CalloutTool } from './tools/callout'
+import { PatternFillTool } from './tools/pattern-fill'
+import { SpacingTool } from './tools/spacing'
+import { DimensionTool } from './tools/dimension'
+import { updateDimensionsForNode } from './dimensions'
 import { createGridShape, snapToGrid, refreshGridColors } from './grid'
 import { createHtmlRulers, updateHtmlRulers, refreshRulerColors, type HtmlRulers } from './rulers'
 import { createScaleBar, type ScaleBar } from './scale-bar'
 import { createCompass, type Compass } from './compass'
 import { createPlantNode, updatePlantsLOD, getPlantLOD, updatePlantLabelsForLocale } from './plants'
+import { snapToGuides, updateGuideLines, clearSmartGuides, computeSmartGuides, createGuideLine } from './guides'
+import { AddGuideCommand } from './commands/guide'
+import { alignNodes, distributeNodes, type Alignment, type DistributeAxis } from './alignment'
+import { updatePlantDisplay } from './display-modes'
+import { createMinimap, type Minimap } from './minimap'
+import type { MapLayerState } from './map-layer'
+import { computeCelestialData, createCelestialDial, updateCelestialDial } from './celestial'
+import { updateConsortiumForPlant } from './consortium-visual'
+import { extractGroups, restoreGroups } from './grouping'
+import { GroupCommand, UngroupCommand } from './commands/group'
 import { updateAnnotationsForZoom } from './shapes'
 import type { PlacedPlant } from '../types/design'
 
@@ -70,6 +96,12 @@ export class CanvasEngine {
   private _htmlRulers: HtmlRulers | null = null
   private _scaleBar: ScaleBar | null = null
   private _compass: Compass | null = null
+  private _minimap: Minimap | null = null
+  private _mapLayer: MapLayerState | null = null
+  private _mapModule: typeof import('./map-layer') | null = null
+  private _disposeMapEffect: (() => void) | null = null
+  private _celestialDial: import('konva').default.Group | null = null
+  private _disposeCelestialEffect: (() => void) | null = null
   // Shared RAF token for overlay redraws (grid + rulers + ui elements)
   private _overlayRafId: number | null = null
 
@@ -84,6 +116,9 @@ export class CanvasEngine {
   private _disposeRulerVisEffect: (() => void) | null = null
   private _disposeThemeEffect: (() => void) | null = null
   private _disposeLocaleEffect: (() => void) | null = null
+  private _disposeDisplayModeEffect: (() => void) | null = null
+  /** Cache of species details for thematic coloring — keyed by canonical name */
+  private _speciesCache = new Map<string, Record<string, unknown>>()
 
   // Bound handlers stored for cleanup
   private _boundKeyDown: (e: KeyboardEvent) => void
@@ -150,6 +185,12 @@ export class CanvasEngine {
     this._registerTool(new LineTool())
     this._registerTool(new TextTool())
     this._registerTool(new MeasureTool())
+    this._registerTool(new PlantStampTool())
+    this._registerTool(new ArrowTool())
+    this._registerTool(new CalloutTool())
+    this._registerTool(new PatternFillTool())
+    this._registerTool(new SpacingTool())
+    this._registerTool(new DimensionTool())
 
     // Wire up interaction
     this._setupZoom()
@@ -226,6 +267,38 @@ export class CanvasEngine {
       }
     })
 
+    // Plant display mode effect — update plant rendering when mode changes
+    this._disposeDisplayModeEffect = effect(() => {
+      const mode = plantDisplayMode.value
+      const colorBy = plantColorByAttr.value
+      const plantsLayer = this.layers.get('plants')
+      if (!plantsLayer) return
+      updatePlantDisplay(plantsLayer, mode, colorBy, this.stage.scaleX(), this._speciesCache)
+    })
+
+    // Celestial dial effect — update sun/moon display when date or location changes
+    this._disposeCelestialEffect = effect(() => {
+      const date = celestialDate.value
+      const loc = designLocation.value
+      if (!date || !loc || !this._compass) {
+        // Hide dial
+        if (this._celestialDial) {
+          this._celestialDial.visible(false)
+          this.layers.get('ui')?.batchDraw()
+        }
+        return
+      }
+      // Create dial if needed
+      if (!this._celestialDial) {
+        this._celestialDial = createCelestialDial()
+        this._compass.group.add(this._celestialDial)
+      }
+      this._celestialDial.visible(true)
+      const data = computeCelestialData(date, loc.lat, loc.lon)
+      updateCelestialDial(this._celestialDial, data)
+      this.layers.get('ui')?.batchDraw()
+    })
+
     // Global keyboard events
     window.addEventListener('keydown', this._boundKeyDown)
     window.addEventListener('keyup', this._boundKeyUp)
@@ -276,6 +349,22 @@ export class CanvasEngine {
     this._syncOverlayTransforms()
     this.layers.get('base')?.batchDraw()
     this.layers.get('ui')?.batchDraw()
+    // Update guide line extents to cover the new viewport
+    const annLayer = this.layers.get('annotations')
+    if (annLayer && guides.value.length > 0) {
+      updateGuideLines(annLayer, this.stage)
+    }
+    // Update minimap
+    this._minimap?.update(this.stage, this.layers)
+    // Sync map viewport
+    this._syncMapViewport()
+  }
+
+  /** Sync MapLibre viewport with current Konva stage position/zoom. */
+  private _syncMapViewport(): void {
+    if (this._mapLayer && this._mapModule && mapLayerVisible.value) {
+      void this._mapModule.syncMap(this._mapLayer, this.stage, designLocation.value)
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -371,6 +460,9 @@ export class CanvasEngine {
 
         zoomLevel.value = newScale
 
+        // Sync map viewport on zoom
+        this._syncMapViewport()
+
         // Debounced: LOD visibility changes (label show/hide) — less urgent
         this._scheduleLODUpdate()
       })
@@ -384,6 +476,8 @@ export class CanvasEngine {
       if (e.target !== this.stage) return  // shape drag — skip overlay sync
       this._syncOverlayTransforms()
       this.layers.get('ui')?.batchDraw()
+      // Sync map viewport on pan
+      this._syncMapViewport()
     })
   }
 
@@ -393,12 +487,57 @@ export class CanvasEngine {
 
   private _setupSnapToDrag(): void {
     this.stage.on('dragmove', (e) => {
-      if (!snapToGridEnabled.value) return
       const target = e.target
       // Don't snap stage pans
       if (target === this.stage) return
-      const snapped = snapToGrid(target.x(), target.y(), gridSize.value)
-      target.position(snapped)
+
+      let { x, y } = { x: target.x(), y: target.y() }
+
+      // Snap to grid
+      if (snapToGridEnabled.value) {
+        const snapped = snapToGrid(x, y, gridSize.value)
+        x = snapped.x
+        y = snapped.y
+      }
+
+      // Snap to guides (guides take priority over grid)
+      if (snapToGuidesEnabled.value && guides.value.length > 0) {
+        const snapped = snapToGuides(x, y, this.stage.scaleX())
+        x = snapped.x
+        y = snapped.y
+      }
+
+      target.position({ x, y })
+
+      // Smart guides — show alignment indicators during drag
+      const layer = target.getLayer()
+      if (layer) {
+        clearSmartGuides(layer)
+        const candidates = layer.find('.shape').filter(
+          (n: Konva.Node) => n !== target && n.id() !== target.id(),
+        )
+        const result = computeSmartGuides(target, candidates, this.stage.scaleX())
+        if (result.snappedX !== x || result.snappedY !== y) {
+          target.position({ x: result.snappedX, y: result.snappedY })
+        }
+        for (const line of result.lines) {
+          layer.add(line as unknown as Konva.Shape)
+        }
+        layer.batchDraw()
+      }
+    })
+
+    // Clean up smart guides on drag end + update attached dimensions + consortium hulls
+    this.stage.on('dragend', (e) => {
+      if (e.target === this.stage) return
+      const layer = e.target.getLayer()
+      if (layer) clearSmartGuides(layer)
+      // Update any dimension lines attached to the moved node
+      updateDimensionsForNode(e.target.id(), this.layers, this.stage.scaleX())
+      // Update consortium hull if a plant was moved
+      if (e.target.hasName('plant-group') && currentConsortiums.value.length > 0) {
+        updateConsortiumForPlant(e.target.id(), this, currentConsortiums.value)
+      }
     })
   }
 
@@ -520,6 +659,55 @@ export class CanvasEngine {
     this._htmlRulers?.destroy()
     refreshRulerColors(element)
     this._htmlRulers = createHtmlRulers(element)
+
+    // Wire up drag-from-ruler to create guides
+    this._htmlRulers.onGuideCreate = (axis: 'h' | 'v', screenPos: number) => {
+      const scale = this.stage.scaleX()
+      const stagePos = this.stage.position()
+      let worldPos: number
+      if (axis === 'h') {
+        worldPos = (screenPos - stagePos.y) / scale
+      } else {
+        worldPos = (screenPos - stagePos.x) / scale
+      }
+      this.addGuide(axis, worldPos)
+    }
+
+    // Create minimap in the same container
+    this._minimap?.destroy()
+    this._minimap = createMinimap(element, this.stage, this.layers)
+
+    // Map visibility + style effects — lazy-load map-layer.ts only when toggled on
+    this._disposeMapEffect?.()
+    this._disposeMapEffect = effect(() => {
+      const visible = mapLayerVisible.value
+      const style = mapStyle.value
+      if (!visible) {
+        // Hide map container if it exists
+        if (this._mapLayer) this._mapLayer.container.style.display = 'none'
+        this.stage.container().style.background = ''
+        return
+      }
+      // Lazy init: dynamically import map module on first activation
+      if (!this._mapModule) {
+        void import('./map-layer').then((mod) => {
+          this._mapModule = mod
+          this._mapLayer?.destroy()
+          this._mapLayer = mod.createMapLayer(this.stage.container())
+          void mod.syncMap(this._mapLayer, this.stage, designLocation.value)
+          this.stage.container().style.background = 'transparent'
+        })
+        return
+      }
+      // Already loaded — sync immediately
+      if (this._mapLayer) {
+        this._mapLayer.container.style.display = 'block'
+        void this._mapModule.syncMap(this._mapLayer, this.stage, designLocation.value)
+        if (this._mapLayer.map) this._mapModule.setMapStyle(this._mapLayer, style)
+        this.stage.container().style.background = 'transparent'
+      }
+    })
+
     // Apply current visibility — rulers are created with display:block by default,
     // but if chrome is disabled (no design yet) they should be hidden immediately.
     const visible = this._chromeEnabled.value && rulersVisible.value
@@ -569,6 +757,27 @@ export class CanvasEngine {
   toggleRulers(): void {
     rulersVisible.value = !rulersVisible.value
     // The _disposeRulerVisEffect signal effect handles visibility + batchDraw
+  }
+
+  toggleSnapToGuides(): void {
+    snapToGuidesEnabled.value = !snapToGuidesEnabled.value
+  }
+
+  addGuide(axis: 'h' | 'v', position: number): void {
+    const guide = { id: crypto.randomUUID(), axis, position }
+    const cmd = new AddGuideCommand(guide)
+    this.history.execute(cmd, this)
+  }
+
+  /** Restore guide visuals after loading a design. */
+  restoreGuides(): void {
+    const layer = this.layers.get('annotations')
+    if (!layer) return
+    for (const guide of guides.value) {
+      const line = createGuideLine(guide, this.stage)
+      layer.add(line as unknown as Konva.Shape)
+    }
+    layer.batchDraw()
   }
 
   setLayerVisibility(name: string, visible: boolean): void {
@@ -999,6 +1208,62 @@ export class CanvasEngine {
   }
 
   // -------------------------------------------------------------------------
+  // Align & Distribute
+  // -------------------------------------------------------------------------
+
+  alignSelected(alignment: Alignment): void {
+    const nodes = this.getSelectedNodes()
+    const cmd = alignNodes(nodes, alignment)
+    if (cmd) {
+      this.history.record(cmd)
+      for (const layer of this.layers.values()) layer.batchDraw()
+    }
+  }
+
+  distributeSelected(axis: DistributeAxis): void {
+    const nodes = this.getSelectedNodes()
+    const cmd = distributeNodes(nodes, axis)
+    if (cmd) {
+      this.history.record(cmd)
+      for (const layer of this.layers.values()) layer.batchDraw()
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Group / Ungroup
+  // -------------------------------------------------------------------------
+
+  groupSelectedNodes(): void {
+    const cmd = new GroupCommand()
+    this.history.execute(cmd, this)
+  }
+
+  ungroupSelectedNodes(): void {
+    const cmd = new UngroupCommand()
+    this.history.execute(cmd, this)
+  }
+
+  /** Load species details for thematic coloring. Call before switching to color-by mode. */
+  async loadSpeciesCache(locale: string): Promise<void> {
+    const plantsLayer = this.layers.get('plants')
+    if (!plantsLayer) return
+    const names: string[] = []
+    plantsLayer.find('.plant-group').forEach((node: Konva.Node) => {
+      const name = (node as Konva.Group).getAttr('data-canonical-name') as string
+      if (name && !this._speciesCache.has(name)) names.push(name)
+    })
+    if (names.length === 0) return
+    const { getSpeciesBatch } = await import('../ipc/species')
+    const details = await getSpeciesBatch(names, locale)
+    for (const d of details) {
+      this._speciesCache.set(d.canonical_name, d as unknown as Record<string, unknown>)
+    }
+  }
+
+  getObjectGroups() { return extractGroups(this) }
+  restoreObjectGroups(groups: import('../types/design').ObjectGroup[]) { restoreGroups(groups, this) }
+
+  // -------------------------------------------------------------------------
   // Plant serialization
   // -------------------------------------------------------------------------
 
@@ -1012,9 +1277,10 @@ export class CanvasEngine {
       const group = node as Konva.Group
       const commonName = group.getAttr('data-common-name') as string || null
       result.push({
+        id: group.id(),
         canonical_name: group.getAttr('data-canonical-name') as string || '',
         common_name: commonName || null,
-        position: { x: group.x(), y: group.y() },
+        position: group.getAbsolutePosition(plantsLayer),
         rotation: group.rotation() !== 0 ? group.rotation() : null,
         scale: group.scaleX() !== 1 ? group.scaleX() : null,
         notes: group.getAttr('data-notes') ?? null,
@@ -1049,6 +1315,7 @@ export class CanvasEngine {
     this._disposeRulerVisEffect?.()
     this._disposeThemeEffect?.()
     this._disposeLocaleEffect?.()
+    this._disposeDisplayModeEffect?.()
     this._disposeActiveToolEffect = null
     this._disposeLayerVisEffect = null
     this._disposeLayerOpacityEffect = null
@@ -1056,6 +1323,7 @@ export class CanvasEngine {
     this._disposeRulerVisEffect = null
     this._disposeThemeEffect = null
     this._disposeLocaleEffect = null
+    this._disposeDisplayModeEffect = null
 
     if (this._overlayRafId !== null) {
       cancelAnimationFrame(this._overlayRafId)
@@ -1098,6 +1366,15 @@ export class CanvasEngine {
 
     this._htmlRulers?.destroy()
     this._htmlRulers = null
+    this._minimap?.destroy()
+    this._minimap = null
+    this._mapLayer?.destroy()
+    this._mapLayer = null
+    this._disposeMapEffect?.()
+    this._disposeMapEffect = null
+    this._disposeCelestialEffect?.()
+    this._disposeCelestialEffect = null
+    this._celestialDial = null
 
     this.stage.destroy()
     this.layers.clear()

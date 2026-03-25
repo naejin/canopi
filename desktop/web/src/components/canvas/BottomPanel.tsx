@@ -3,6 +3,7 @@ import { t } from '../../i18n'
 import { locale } from '../../state/app'
 import { bottomPanelOpen, bottomPanelTab, bottomPanelHeight } from '../../state/canvas'
 import { TimelineTab } from './TimelineTab'
+import { InteractiveTimeline } from './InteractiveTimeline'
 import { ConsortiumTab } from './ConsortiumTab'
 import { BudgetTab } from './BudgetTab'
 import styles from './BottomPanel.module.css'
@@ -84,7 +85,16 @@ export function BottomPanel() {
         id={`bottom-tabpanel-${activeTab}`}
         aria-labelledby={`bottom-tab-${activeTab}`}
       >
-        {activeTab === 'timeline' && <TimelineTab />}
+        {activeTab === 'timeline' && (
+          <div className={styles.timelineSplit}>
+            <div className={styles.timelineGantt}>
+              <InteractiveTimeline />
+            </div>
+            <div className={styles.timelineDetail}>
+              <TimelineTab />
+            </div>
+          </div>
+        )}
         {activeTab === 'consortium' && <ConsortiumTab />}
         {activeTab === 'budget' && <BudgetTab />}
       </div>

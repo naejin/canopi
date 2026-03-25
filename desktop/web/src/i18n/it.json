@@ -49,6 +49,7 @@
     "addFavorite": "Aggiungi ai preferiti",
     "removeFavorite": "Rimuovi dai preferiti",
     "dragToCanvas": "Trascina sulla tela",
+    "setAsStamp": "Usa come timbro",
     "error": "Errore",
     "retry": "Riprova",
     "filterMedicinal": "Medicinale"
@@ -86,20 +87,72 @@
       "measure": "Misura",
       "measureDesc": "Misurare distanze",
       "plantStamp": "Timbro pianta",
-      "plantStampDesc": "Posizionare piante dal database"
+      "plantStampDesc": "Posizionare piante dal database",
+      "dimension": "Quota",
+      "dimensionDesc": "Misurare la distanza tra punti o forme",
+      "patternFill": "Riempimento a motivo",
+      "patternFillDesc": "Riempire una zona con piante",
+      "spacing": "Spaziatura",
+      "spacingDesc": "Distribuire piante lungo una linea",
+      "arrow": "Freccia",
+      "arrowDesc": "Disegna un'annotazione con freccia",
+      "callout": "Fumetto",
+      "calloutDesc": "Aggiungi un fumetto di testo"
     },
     "grid": {
       "grid": "Griglia",
       "gridDesc": "Mostra/nascondi la griglia",
       "snapToGrid": "Aggancia alla griglia",
       "snapToGridDesc": "Allinea le forme alla griglia",
+      "snapToGuides": "Aggancia alle guide",
+      "snapToGuidesDesc": "Allinea le forme alle linee guida",
       "rulers": "Righelli",
       "rulersDesc": "Mostra/nascondi i righelli",
       "scaleBar": "Scala",
       "compass": "Bussola",
       "north": "N",
       "gridSize": "Dimensione griglia",
-      "zoom": "Zoom"
+      "zoom": "Zoom",
+      "minimap": "Minimappa",
+      "minimapDesc": "Mostra/nascondi la minimappa"
+    },
+    "display": {
+      "label": "Modalità di visualizzazione",
+      "default": "Predefinito",
+      "canopy": "Chioma",
+      "stratum": "Per strato",
+      "hardiness": "Per rusticità",
+      "lifecycle": "Per ciclo vitale",
+      "nitrogen": "Per fissazione N",
+      "edibility": "Per commestibilità"
+    },
+    "group": {
+      "group": "Raggruppa",
+      "ungroup": "Separa"
+    },
+    "align": {
+      "left": "Allinea a sinistra",
+      "center": "Centra orizzontalmente",
+      "right": "Allinea a destra",
+      "top": "Allinea in alto",
+      "middle": "Centra verticalmente",
+      "bottom": "Allinea in basso",
+      "distributeH": "Distribuisci orizzontalmente",
+      "distributeV": "Distribuisci verticalmente"
+    },
+    "location": {
+      "title": "Posizione del progetto",
+      "latitude": "Latitudine",
+      "longitude": "Longitudine",
+      "altitude": "Altitudine (m)",
+      "optional": "Opzionale",
+      "save": "Imposta posizione",
+      "clear": "Cancella",
+      "current": "Attuale",
+      "showMap": "Mostra mappa",
+      "required": "Imposta prima una posizione",
+      "mapStreet": "Strade",
+      "mapTerrain": "Terreno"
     },
     "file": {
       "new": "Nuovo design",
@@ -211,6 +264,8 @@
       "exportPng": "Esporta come PNG",
       "exportSvg": "Esporta come SVG",
       "exportCsv": "Esporta elenco piante (CSV)",
+      "exportGeoJSON": "Esporta come GeoJSON",
+      "exportBudgetCsv": "Esporta budget (CSV)",
       "importImage": "Importa immagine di sfondo",
       "exportSuccess": "Esportato in {{path}}",
       "exportFailed": "Esportazione non riuscita",

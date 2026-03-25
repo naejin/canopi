@@ -3,6 +3,9 @@ import { t } from '../../i18n'
 import { locale } from '../../state/app'
 import { currentDesign, nonCanvasRevision } from '../../state/document'
 import type { Consortium } from '../../types/design'
+import { currentConsortiums } from '../../state/canvas'
+import { canvasEngine } from '../../canvas/engine'
+import { renderConsortiumBoundaries } from '../../canvas/consortium-visual'
 import styles from './ConsortiumTab.module.css'
 
 interface FormState {
@@ -35,7 +38,7 @@ export function ConsortiumTab() {
   function openEdit(consortium: Consortium, index: number) {
     form.value = {
       name: consortium.name,
-      plants: consortium.plants.join(', '),
+      plants: consortium.plant_ids.join(', '),
       notes: consortium.notes ?? '',
     }
     editingIndex.value = index
@@ -63,16 +66,19 @@ export function ConsortiumTab() {
 
     if (idx !== null) {
       const updated = [...design.consortiums]
+      const existing = design.consortiums[idx]!
       updated[idx] = {
+        id: existing.id,
         name: f.name.trim(),
-        plants,
+        plant_ids: plants,
         notes: f.notes.trim() || null,
       }
       currentDesign.value = { ...design, consortiums: updated }
     } else {
       const newConsortium: Consortium = {
+        id: crypto.randomUUID(),
         name: f.name.trim(),
-        plants,
+        plant_ids: plants,
         notes: f.notes.trim() || null,
       }
       currentDesign.value = {
@@ -82,6 +88,7 @@ export function ConsortiumTab() {
     }
 
     nonCanvasRevision.value++
+    _syncConsortiumVisuals()
     cancelForm()
   }
 
@@ -93,6 +100,13 @@ export function ConsortiumTab() {
       consortiums: design.consortiums.filter((_, i) => i !== index),
     }
     nonCanvasRevision.value++
+    _syncConsortiumVisuals()
+  }
+
+  function _syncConsortiumVisuals() {
+    const c = currentDesign.value?.consortiums ?? []
+    currentConsortiums.value = c
+    if (canvasEngine) renderConsortiumBoundaries(canvasEngine, c)
   }
 
   const isEditing = showAddForm.value
@@ -178,9 +192,9 @@ export function ConsortiumTab() {
                   </button>
                 </div>
               </div>
-              {c.plants.length > 0 && (
+              {c.plant_ids.length > 0 && (
                 <div className={styles.plantChips}>
-                  {c.plants.map((p) => (
+                  {c.plant_ids.map((p) => (
                     <span key={p} className={styles.plantChip}>
                       {p}
                     </span>

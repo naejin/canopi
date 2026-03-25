@@ -6,10 +6,12 @@ import {
   saveAsCurrentDesign,
   openDesign,
   newDesignAction,
+  currentDesign,
 } from "../state/document";
 import { canvasEngine } from "../canvas/engine";
 import { exportPNG, exportSVG, exportPlantCSV } from "../canvas/export";
 import { exportFile, exportBinary } from "../ipc/design";
+import { buildGeoJSON, buildBudgetCSV } from "../canvas/geojson";
 
 export interface Command {
   id: string;
@@ -67,6 +69,29 @@ async function doExportCSV(): Promise<void> {
   }
 }
 
+async function doExportGeoJSON(): Promise<void> {
+  if (!canvasEngine) return;
+  const design = currentDesign.value;
+  if (!design?.location) { alert(t("canvas.location.required")); return; }
+  try {
+    const geojson = buildGeoJSON(canvasEngine, design.location);
+    await exportFile(geojson, "design.geojson", "GeoJSON", ["geojson", "json"]);
+  } catch (e) {
+    if (e !== "Dialog cancelled") console.error("GeoJSON export failed:", e);
+  }
+}
+
+async function doExportBudgetCSV(): Promise<void> {
+  const design = currentDesign.value;
+  if (!design) return;
+  try {
+    const csv = buildBudgetCSV(design.budget);
+    await exportFile(csv, "budget.csv", "CSV Spreadsheet", ["csv"]);
+  } catch (e) {
+    if (e !== "Dialog cancelled") console.error("Budget CSV export failed:", e);
+  }
+}
+
 export const commands: Command[] = [
   // File operations
   { id: "file.new",    label: () => t("canvas.file.new"),    shortcut: "Ctrl+N",       action: () => { void newDesignAction() } },
@@ -93,11 +118,28 @@ export const commands: Command[] = [
   { id: "canvas.tool.line",       label: () => t("canvas.tools.line"),       shortcut: "L", action: switchTool("line") },
   { id: "canvas.tool.text",       label: () => t("canvas.tools.text"),       shortcut: "T", action: switchTool("text") },
   { id: "canvas.tool.measure",    label: () => t("canvas.tools.measure"),    shortcut: "M", action: switchTool("measure") },
+  { id: "canvas.tool.plantStamp", label: () => t("canvas.tools.plantStamp"), shortcut: "P", action: switchTool("plant-stamp") },
+
+  // Group / Ungroup
+  { id: "canvas.group",   label: () => t("canvas.group.group"),   shortcut: "Ctrl+G",       action: () => canvasEngine?.groupSelectedNodes() },
+  { id: "canvas.ungroup", label: () => t("canvas.group.ungroup"), shortcut: "Ctrl+Shift+G", action: () => canvasEngine?.ungroupSelectedNodes() },
+
+  // Align & Distribute
+  { id: "canvas.align.left",    label: () => t("canvas.align.left"),    action: () => canvasEngine?.alignSelected('left') },
+  { id: "canvas.align.center",  label: () => t("canvas.align.center"),  action: () => canvasEngine?.alignSelected('center') },
+  { id: "canvas.align.right",   label: () => t("canvas.align.right"),   action: () => canvasEngine?.alignSelected('right') },
+  { id: "canvas.align.top",     label: () => t("canvas.align.top"),     action: () => canvasEngine?.alignSelected('top') },
+  { id: "canvas.align.middle",  label: () => t("canvas.align.middle"),  action: () => canvasEngine?.alignSelected('middle') },
+  { id: "canvas.align.bottom",  label: () => t("canvas.align.bottom"),  action: () => canvasEngine?.alignSelected('bottom') },
+  { id: "canvas.distribute.h",  label: () => t("canvas.align.distributeH"), action: () => canvasEngine?.distributeSelected('horizontal') },
+  { id: "canvas.distribute.v",  label: () => t("canvas.align.distributeV"), action: () => canvasEngine?.distributeSelected('vertical') },
 
   // Export / Import
   { id: "canvas.export.png",   label: () => t("canvas.export.exportPng"),   action: () => { void doExportPNG() } },
   { id: "canvas.export.svg",   label: () => t("canvas.export.exportSvg"),   action: () => { void doExportSVG() } },
   { id: "canvas.export.csv",   label: () => t("canvas.export.exportCsv"),   action: () => { void doExportCSV() } },
+  { id: "canvas.export.geojson", label: () => t("canvas.export.exportGeoJSON"), action: () => { void doExportGeoJSON() } },
+  { id: "canvas.export.budgetCsv", label: () => t("canvas.export.exportBudgetCsv"), action: () => { void doExportBudgetCSV() } },
   // Background-image import gated — not persisted in .canopi yet. Re-enable when persistence is implemented.
   // { id: "canvas.import.image", label: () => t("canvas.export.importImage"), action: () => { void doImportBackgroundImage() } },
 ];

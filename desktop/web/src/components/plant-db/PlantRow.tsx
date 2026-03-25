@@ -1,6 +1,8 @@
 import { t } from '../../i18n';
 import { locale } from '../../state/app';
 import { toggleFavoriteAction, selectedCanonicalName } from '../../state/plant-db';
+import { plantStampSpecies } from '../../state/canvas';
+import { canvasEngine } from '../../canvas/engine';
 import type { SpeciesListItem } from '../../types/species';
 import styles from './PlantDb.module.css';
 
@@ -150,6 +152,25 @@ export function PlantRow({ plant }: Props) {
           )}
         </div>
       </div>
+
+      <button
+        type="button"
+        className={styles.favBtn}
+        onClick={(e: MouseEvent) => {
+          e.stopPropagation();
+          plantStampSpecies.value = {
+            canonical_name: plant.canonical_name,
+            common_name: plant.common_name,
+            stratum: plant.stratum,
+            width_max_m: plant.width_max_m,
+          };
+          canvasEngine?.setActiveTool('plant-stamp');
+        }}
+        aria-label={t('plantDb.setAsStamp')}
+        title={t('plantDb.setAsStamp')}
+      >
+        +
+      </button>
 
       <button
         type="button"

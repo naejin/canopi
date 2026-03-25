@@ -23,6 +23,7 @@ pub fn run() {
             commands::species::get_species_detail,
             commands::species::get_species_relationships,
             commands::species::get_common_names,
+            commands::species::get_species_batch,
             commands::species::get_filter_options,
             commands::favorites::toggle_favorite,
             commands::favorites::get_favorites,

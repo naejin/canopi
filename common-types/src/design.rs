@@ -12,6 +12,8 @@ pub struct CanopiFile {
     pub plants: Vec<PlacedPlant>,
     pub zones: Vec<Zone>,
     pub consortiums: Vec<Consortium>,
+    #[serde(default)]
+    pub groups: Vec<ObjectGroup>,
     pub timeline: Vec<TimelineAction>,
     pub budget: Vec<BudgetItem>,
     pub created_at: String,
@@ -40,6 +42,8 @@ pub struct Layer {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct PlacedPlant {
+    #[serde(default)]
+    pub id: String,
     pub canonical_name: String,
     pub common_name: Option<String>,
     pub position: Position,
@@ -67,8 +71,12 @@ pub struct Zone {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct Consortium {
+    #[serde(default)]
+    pub id: String,
     pub name: String,
-    pub plants: Vec<String>,
+    /// Placed-plant IDs (from 3-pre). Legacy files may have canonical names here instead.
+    #[serde(alias = "plants")]
+    pub plant_ids: Vec<String>,
     pub notes: Option<String>,
 }
 
@@ -94,6 +102,16 @@ pub struct BudgetItem {
     pub quantity: f64,
     pub unit_cost: f64,
     pub currency: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct ObjectGroup {
+    pub id: String,
+    pub name: Option<String>,
+    pub layer: String,
+    pub position: Position,
+    pub rotation: Option<f64>,
+    pub member_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]

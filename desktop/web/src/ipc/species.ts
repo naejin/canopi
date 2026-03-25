@@ -62,3 +62,12 @@ export async function getCommonNames(
   if (isDegraded()) return {};
   return invoke('get_common_names', { canonicalNames, locale });
 }
+
+/** Batch-fetch full detail records for multiple species. */
+export async function getSpeciesBatch(
+  canonicalNames: string[],
+  locale: string,
+): Promise<SpeciesDetail[]> {
+  if (isDegraded()) return [];
+  return invoke('get_species_batch', { canonicalNames, locale });
+}

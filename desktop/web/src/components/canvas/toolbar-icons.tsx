@@ -344,3 +344,133 @@ export function PlantStampIcon({ className }: IconProps) {
     </svg>
   )
 }
+
+export function DimensionIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <line x1="4" y1="10" x2="16" y2="10" stroke="currentColor" strokeWidth="1.5" />
+      <line x1="4" y1="6" x2="4" y2="14" stroke="currentColor" strokeWidth="1.5" />
+      <line x1="16" y1="6" x2="16" y2="14" stroke="currentColor" strokeWidth="1.5" />
+      <text x="10" y="8" textAnchor="middle" fill="currentColor" fontSize="6" fontFamily="system-ui">m</text>
+    </svg>
+  )
+}
+
+export function PatternFillIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="3" y="3" width="14" height="14" rx="1" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" />
+      <circle cx="7" cy="7" r="1.5" fill="currentColor" opacity="0.6" />
+      <circle cx="13" cy="7" r="1.5" fill="currentColor" opacity="0.6" />
+      <circle cx="10" cy="10" r="1.5" fill="currentColor" opacity="0.6" />
+      <circle cx="7" cy="13" r="1.5" fill="currentColor" opacity="0.6" />
+      <circle cx="13" cy="13" r="1.5" fill="currentColor" opacity="0.6" />
+    </svg>
+  )
+}
+
+export function SpacingIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <line x1="3" y1="10" x2="17" y2="10" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" />
+      <circle cx="3" cy="10" r="2" fill="currentColor" opacity="0.6" />
+      <circle cx="7.5" cy="10" r="2" fill="currentColor" opacity="0.8" />
+      <circle cx="12.5" cy="10" r="2" fill="currentColor" opacity="0.8" />
+      <circle cx="17" cy="10" r="2" fill="currentColor" opacity="0.6" />
+    </svg>
+  )
+}
+
+export function ArrowIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <line x1="4" y1="16" x2="14" y2="6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <polyline points="9,5 15,5 15,11" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+export function CalloutIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="2" y="3" width="16" height="11" rx="2" stroke="currentColor" strokeWidth="1.5" />
+      <polyline points="6,14 8,18 10,14" fill="currentColor" opacity="0.6" />
+      <line x1="5" y1="7" x2="15" y2="7" stroke="currentColor" strokeWidth="1" opacity="0.5" />
+      <line x1="5" y1="10" x2="12" y2="10" stroke="currentColor" strokeWidth="1" opacity="0.5" />
+    </svg>
+  )
+}
+
+export function AlignLeftIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <line x1="3" y1="2" x2="3" y2="18" stroke="currentColor" strokeWidth="1.5" />
+      <rect x="5" y="4" width="12" height="4" rx="1" fill="currentColor" opacity="0.7" />
+      <rect x="5" y="12" width="8" height="4" rx="1" fill="currentColor" opacity="0.7" />
+    </svg>
+  )
+}
+
+export function AlignCenterIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <line x1="10" y1="2" x2="10" y2="18" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" />
+      <rect x="3" y="4" width="14" height="4" rx="1" fill="currentColor" opacity="0.7" />
+      <rect x="5" y="12" width="10" height="4" rx="1" fill="currentColor" opacity="0.7" />
+    </svg>
+  )
+}
+
+export function AlignRightIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <line x1="17" y1="2" x2="17" y2="18" stroke="currentColor" strokeWidth="1.5" />
+      <rect x="3" y="4" width="12" height="4" rx="1" fill="currentColor" opacity="0.7" />
+      <rect x="7" y="12" width="8" height="4" rx="1" fill="currentColor" opacity="0.7" />
+    </svg>
+  )
+}
+
+export function DistributeHIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="2" y="5" width="4" height="10" rx="1" fill="currentColor" opacity="0.5" />
+      <rect x="8" y="7" width="4" height="6" rx="1" fill="currentColor" opacity="0.7" />
+      <rect x="14" y="4" width="4" height="12" rx="1" fill="currentColor" opacity="0.5" />
+    </svg>
+  )
+}
+
+export function DistributeVIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="5" y="2" width="10" height="4" rx="1" fill="currentColor" opacity="0.5" />
+      <rect x="7" y="8" width="6" height="4" rx="1" fill="currentColor" opacity="0.7" />
+      <rect x="4" y="14" width="12" height="4" rx="1" fill="currentColor" opacity="0.5" />
+    </svg>
+  )
+}
+
+export function MinimapIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="2" y="2" width="16" height="16" rx="2" stroke="currentColor" strokeWidth="1.5" />
+      <rect x="10" y="10" width="6" height="5" rx="0.5" stroke="currentColor" strokeWidth="1" fill="currentColor" opacity="0.2" />
+      <circle cx="6" cy="7" r="1.5" fill="currentColor" opacity="0.4" />
+      <circle cx="9" cy="5" r="1" fill="currentColor" opacity="0.4" />
+    </svg>
+  )
+}
+
+export function GuideIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* Vertical guide line */}
+      <line x1="7" y1="1" x2="7" y2="19" stroke="currentColor" strokeWidth="1.5" strokeDasharray="3 2" />
+      {/* Horizontal guide line */}
+      <line x1="1" y1="13" x2="19" y2="13" stroke="currentColor" strokeWidth="1.5" strokeDasharray="3 2" />
+      {/* Snap indicator dot at intersection */}
+      <circle cx="7" cy="13" r="2" fill="currentColor" opacity="0.6" />
+    </svg>
+  )
+}

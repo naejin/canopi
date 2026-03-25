@@ -179,6 +179,18 @@ export function initShortcuts() {
         else canvasEngine.unlockSelected();
         return;
       }
+      // Ctrl+G — group
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "g") {
+        e.preventDefault();
+        canvasEngine.groupSelectedNodes();
+        return;
+      }
+      // Ctrl+Shift+G — ungroup
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "G") {
+        e.preventDefault();
+        canvasEngine.ungroupSelectedNodes();
+        return;
+      }
     }
   }
 

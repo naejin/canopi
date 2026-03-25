@@ -49,6 +49,7 @@
     "addFavorite": "Añadir a favoritos",
     "removeFavorite": "Quitar de favoritos",
     "dragToCanvas": "Arrastrar al lienzo",
+    "setAsStamp": "Usar como sello",
     "error": "Error",
     "retry": "Reintentar",
     "filterMedicinal": "Medicinal"
@@ -86,20 +87,72 @@
       "measure": "Medida",
       "measureDesc": "Medir distancias",
       "plantStamp": "Sello de planta",
-      "plantStampDesc": "Colocar plantas desde la base de datos"
+      "plantStampDesc": "Colocar plantas desde la base de datos",
+      "dimension": "Cota",
+      "dimensionDesc": "Medir distancia entre puntos o formas",
+      "patternFill": "Relleno de patrón",
+      "patternFillDesc": "Rellenar una zona con plantas",
+      "spacing": "Espaciado",
+      "spacingDesc": "Distribuir plantas a lo largo de una línea",
+      "arrow": "Flecha",
+      "arrowDesc": "Dibujar una anotación con flecha",
+      "callout": "Globo de texto",
+      "calloutDesc": "Agregar un cuadro de texto"
     },
     "grid": {
       "grid": "Cuadrícula",
       "gridDesc": "Mostrar/ocultar la cuadrícula",
       "snapToGrid": "Ajustar a la cuadrícula",
       "snapToGridDesc": "Alinear formas a la cuadrícula",
+      "snapToGuides": "Ajustar a guías",
+      "snapToGuidesDesc": "Alinear formas a las líneas guía",
       "rulers": "Reglas",
       "rulersDesc": "Mostrar/ocultar reglas",
       "scaleBar": "Escala",
       "compass": "Brújula",
       "north": "N",
       "gridSize": "Tamaño de cuadrícula",
-      "zoom": "Zoom"
+      "zoom": "Zoom",
+      "minimap": "Minimapa",
+      "minimapDesc": "Mostrar/ocultar el minimapa"
+    },
+    "display": {
+      "label": "Modo de visualización",
+      "default": "Predeterminado",
+      "canopy": "Dosel",
+      "stratum": "Por estrato",
+      "hardiness": "Por rusticidad",
+      "lifecycle": "Por ciclo de vida",
+      "nitrogen": "Por fijación N",
+      "edibility": "Por comestibilidad"
+    },
+    "group": {
+      "group": "Agrupar",
+      "ungroup": "Desagrupar"
+    },
+    "align": {
+      "left": "Alinear a la izquierda",
+      "center": "Centrar horizontalmente",
+      "right": "Alinear a la derecha",
+      "top": "Alinear arriba",
+      "middle": "Centrar verticalmente",
+      "bottom": "Alinear abajo",
+      "distributeH": "Distribuir horizontalmente",
+      "distributeV": "Distribuir verticalmente"
+    },
+    "location": {
+      "title": "Ubicación del diseño",
+      "latitude": "Latitud",
+      "longitude": "Longitud",
+      "altitude": "Altitud (m)",
+      "optional": "Opcional",
+      "save": "Establecer ubicación",
+      "clear": "Borrar",
+      "current": "Actual",
+      "showMap": "Mostrar mapa",
+      "required": "Establezca una ubicación primero",
+      "mapStreet": "Calles",
+      "mapTerrain": "Terreno"
     },
     "file": {
       "new": "Nuevo diseño",
@@ -211,6 +264,8 @@
       "exportPng": "Exportar como PNG",
       "exportSvg": "Exportar como SVG",
       "exportCsv": "Exportar lista de plantas (CSV)",
+      "exportGeoJSON": "Exportar como GeoJSON",
+      "exportBudgetCsv": "Exportar presupuesto (CSV)",
       "importImage": "Importar imagen de fondo",
       "exportSuccess": "Exportado a {{path}}",
       "exportFailed": "Error al exportar",

@@ -1,6 +1,6 @@
 import type { ComponentChildren } from 'preact'
 import { useRef } from 'preact/hooks'
-import { activeTool, gridVisible, rulersVisible, snapToGridEnabled } from '../../state/canvas'
+import { activeTool, gridVisible, rulersVisible, snapToGridEnabled, snapToGuidesEnabled, selectedObjectIds, plantDisplayMode, plantColorByAttr, minimapVisible, type PlantDisplayMode, type ColorByAttribute } from '../../state/canvas'
 import { locale } from '../../state/app'
 import { t } from '../../i18n'
 import { canvasEngine } from '../../canvas/engine'
@@ -17,6 +17,18 @@ import {
   GridIcon,
   SnapIcon,
   RulerIcon,
+  DimensionIcon,
+  PatternFillIcon,
+  SpacingIcon,
+  ArrowIcon,
+  CalloutIcon,
+  GuideIcon,
+  AlignLeftIcon,
+  AlignCenterIcon,
+  AlignRightIcon,
+  DistributeHIcon,
+  DistributeVIcon,
+  MinimapIcon,
 } from './toolbar-icons'
 import styles from './CanvasToolbar.module.css'
 
@@ -43,6 +55,11 @@ const SHAPE_TOOLS: ToolDef[] = [
   { id: 'line',        labelKey: 'canvas.tools.line',        descKey: 'canvas.tools.lineDesc',        shortcut: 'L', Icon: LineIcon },
   { id: 'text',        labelKey: 'canvas.tools.text',        descKey: 'canvas.tools.textDesc',        shortcut: 'T', Icon: TextIcon },
   { id: 'measure',     labelKey: 'canvas.tools.measure',     descKey: 'canvas.tools.measureDesc',     shortcut: 'M', Icon: MeasureIcon },
+  { id: 'pattern-fill', labelKey: 'canvas.tools.patternFill', descKey: 'canvas.tools.patternFillDesc',               Icon: PatternFillIcon },
+  { id: 'spacing',     labelKey: 'canvas.tools.spacing',     descKey: 'canvas.tools.spacingDesc',                   Icon: SpacingIcon },
+  { id: 'dimension',   labelKey: 'canvas.tools.dimension',   descKey: 'canvas.tools.dimensionDesc',                 Icon: DimensionIcon },
+  { id: 'arrow',       labelKey: 'canvas.tools.arrow',       descKey: 'canvas.tools.arrowDesc',                    Icon: ArrowIcon },
+  { id: 'callout',     labelKey: 'canvas.tools.callout',     descKey: 'canvas.tools.calloutDesc',                  Icon: CalloutIcon },
 ]
 
 // All tool groups in order for keyboard navigation
@@ -190,12 +207,81 @@ export function CanvasToolbar() {
         () => canvasEngine?.toggleSnapToGrid(),
       )}
       {renderToggle(
+        'guides',
+        'canvas.grid.snapToGuides',
+        'canvas.grid.snapToGuidesDesc',
+        snapToGuidesEnabled.value,
+        GuideIcon,
+        () => canvasEngine?.toggleSnapToGuides(),
+      )}
+      {renderToggle(
         'rulers',
         'canvas.grid.rulers',
         'canvas.grid.rulersDesc',
         rulersVisible.value,
         RulerIcon,
         () => canvasEngine?.toggleRulers(),
+      )}
+
+      {renderToggle(
+        'minimap',
+        'canvas.grid.minimap',
+        'canvas.grid.minimapDesc',
+        minimapVisible.value,
+        MinimapIcon,
+        () => { minimapVisible.value = !minimapVisible.value },
+      )}
+
+      <div className={styles.separator} role="separator" aria-hidden="true" />
+
+      <select
+        className={styles.displaySelect}
+        value={plantDisplayMode.value === 'color-by' ? `color-${plantColorByAttr.value}` : plantDisplayMode.value}
+        onChange={(e) => {
+          const val = (e.target as HTMLSelectElement).value
+          if (val === 'default' || val === 'canopy') {
+            plantDisplayMode.value = val as PlantDisplayMode
+          } else if (val.startsWith('color-')) {
+            plantColorByAttr.value = val.replace('color-', '') as ColorByAttribute
+            plantDisplayMode.value = 'color-by'
+            void canvasEngine?.loadSpeciesCache(locale.value)
+          }
+        }}
+        aria-label={t('canvas.display.label')}
+        title={t('canvas.display.label')}
+      >
+        <option value="default">{t('canvas.display.default')}</option>
+        <option value="canopy">{t('canvas.display.canopy')}</option>
+        <option value="color-stratum">{t('canvas.display.stratum')}</option>
+        <option value="color-hardiness">{t('canvas.display.hardiness')}</option>
+        <option value="color-lifecycle">{t('canvas.display.lifecycle')}</option>
+        <option value="color-nitrogen">{t('canvas.display.nitrogen')}</option>
+        <option value="color-edibility">{t('canvas.display.edibility')}</option>
+      </select>
+
+      {selectedObjectIds.value.size >= 2 && (
+        <>
+          <div className={styles.separator} role="separator" aria-hidden="true" />
+          <button type="button" className={styles.toolButton} aria-label={t('canvas.align.left')} onClick={() => canvasEngine?.alignSelected('left')}>
+            <AlignLeftIcon className={styles.toolIcon} />
+          </button>
+          <button type="button" className={styles.toolButton} aria-label={t('canvas.align.center')} onClick={() => canvasEngine?.alignSelected('center')}>
+            <AlignCenterIcon className={styles.toolIcon} />
+          </button>
+          <button type="button" className={styles.toolButton} aria-label={t('canvas.align.right')} onClick={() => canvasEngine?.alignSelected('right')}>
+            <AlignRightIcon className={styles.toolIcon} />
+          </button>
+          {selectedObjectIds.value.size >= 3 && (
+            <>
+              <button type="button" className={styles.toolButton} aria-label={t('canvas.align.distributeH')} onClick={() => canvasEngine?.distributeSelected('horizontal')}>
+                <DistributeHIcon className={styles.toolIcon} />
+              </button>
+              <button type="button" className={styles.toolButton} aria-label={t('canvas.align.distributeV')} onClick={() => canvasEngine?.distributeSelected('vertical')}>
+                <DistributeVIcon className={styles.toolIcon} />
+              </button>
+            </>
+          )}
+        </>
       )}
     </div>
   )

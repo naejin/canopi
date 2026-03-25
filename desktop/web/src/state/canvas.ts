@@ -1,4 +1,6 @@
 import { signal } from '@preact/signals'
+import type { Guide } from '../canvas/guides'
+import type { Consortium } from '../types/design'
 
 export const activeTool = signal<string>('select')
 export const zoomLevel = signal<number>(1)
@@ -23,6 +25,8 @@ export const snapToGridEnabled = signal<boolean>(false)
 export const gridVisible = signal<boolean>(true)
 export const rulersVisible = signal<boolean>(true)
 export const northBearingDeg = signal<number>(0)
+export const snapToGuidesEnabled = signal<boolean>(true)
+export const guides = signal<Guide[]>([])
 
 // Lock state — nodes in this set cannot be selected or transformed
 export const lockedObjectIds = signal<Set<string>>(new Set())
@@ -52,6 +56,40 @@ export const layerOpacity = signal<Record<string, number>>({
   plants: 1,
   annotations: 1,
 })
+
+// Plant display modes
+export type PlantDisplayMode = 'default' | 'canopy' | 'color-by'
+export type ColorByAttribute = 'stratum' | 'hardiness' | 'lifecycle' | 'nitrogen' | 'edibility'
+export const plantDisplayMode = signal<PlantDisplayMode>('default')
+export const plantColorByAttr = signal<ColorByAttribute>('stratum')
+
+// Plant stamp tool
+export interface PlantStampSpecies {
+  canonical_name: string
+  common_name: string | null
+  stratum: string | null
+  width_max_m: number | null
+}
+export const plantStampSpecies = signal<PlantStampSpecies | null>(null)
+
+// Design location — mirror of currentDesign.location for canvas modules
+// (avoids circular import from state/design.ts)
+export const designLocation = signal<{ lat: number; lon: number } | null>(null)
+
+// Celestial dial
+export const celestialDate = signal<Date | null>(null)
+
+// Map layer
+export type MapStyle = 'street' | 'terrain'
+export const mapLayerVisible = signal<boolean>(false)
+export const mapStyle = signal<MapStyle>('street')
+
+// Consortium — mirror of currentDesign.consortiums for canvas modules
+export const currentConsortiums = signal<Consortium[]>([])
+export const highlightedConsortium = signal<string | null>(null)
+
+// Minimap
+export const minimapVisible = signal<boolean>(false)
 
 // Bottom panel
 export const bottomPanelOpen = signal<boolean>(false)
