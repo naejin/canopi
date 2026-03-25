@@ -233,7 +233,9 @@
       "save": "Salva",
       "cancel": "Annulla",
       "edit": "Modifica",
-      "delete": "Elimina"
+      "delete": "Elimina",
+      "matrixTitle": "Matrice strato-successione",
+      "matrixHint": "In arrivo — vista matriciale delle piante per strato sintropico e fase di successione"
     },
     "budget": {
       "title": "Budget",

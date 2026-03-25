@@ -233,7 +233,9 @@
       "save": "保存",
       "cancel": "取消",
       "edit": "编辑",
-      "delete": "删除"
+      "delete": "删除",
+      "matrixTitle": "层级演替矩阵",
+      "matrixHint": "即将推出 — 按协同种植层级和演替阶段排列的植物矩阵视图"
     },
     "budget": {
       "title": "预算",

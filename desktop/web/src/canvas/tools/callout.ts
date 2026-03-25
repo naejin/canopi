@@ -60,11 +60,6 @@ export class CalloutTool implements CanvasTool {
     group.add(bg)
     group.add(text)
 
-    // Double-click to edit text (same pattern as TextTool)
-    group.on('dblclick', () => {
-      _editCalloutText(group, text, bg, engine)
-    })
-
     const cmd = new AddNodeCommand('annotations', group)
     engine.history.execute(cmd, engine)
   }
@@ -76,7 +71,7 @@ export class CalloutTool implements CanvasTool {
 }
 
 /** Open an HTML textarea overlay to edit callout text, then update the Konva nodes. */
-function _editCalloutText(
+export function _editCalloutText(
   group: Konva.Group,
   textNode: Konva.Text,
   bgNode: Konva.Rect,

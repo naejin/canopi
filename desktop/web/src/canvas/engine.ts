@@ -18,6 +18,7 @@ import {
   mapLayerVisible,
   mapStyle,
   designLocation,
+  minimapVisible,
   celestialDate,
   currentConsortiums,
 } from '../state/canvas'
@@ -102,6 +103,7 @@ export class CanvasEngine {
   private _disposeMapEffect: (() => void) | null = null
   private _celestialDial: import('konva').default.Group | null = null
   private _disposeCelestialEffect: (() => void) | null = null
+  private _disposeMinimapEffect: (() => void) | null = null
   // Shared RAF token for overlay redraws (grid + rulers + ui elements)
   private _overlayRafId: number | null = null
 
@@ -274,6 +276,12 @@ export class CanvasEngine {
       const plantsLayer = this.layers.get('plants')
       if (!plantsLayer) return
       updatePlantDisplay(plantsLayer, mode, colorBy, this.stage.scaleX(), this._speciesCache)
+      // If switching to color-by mode and cache is empty, load species data then re-render
+      if (mode === 'color-by' && this._speciesCache.size === 0) {
+        void this.loadSpeciesCache('en').then(() => {
+          updatePlantDisplay(plantsLayer, mode, colorBy, this.stage.scaleX(), this._speciesCache)
+        })
+      }
     })
 
     // Celestial dial effect — update sun/moon display when date or location changes
@@ -595,6 +603,27 @@ export class CanvasEngine {
       const tool = this.toolRegistry.get(activeTool.value)
       tool?.onMouseUp(e, this)
     })
+
+    // Double-click on callout → edit text. Handled at stage level because
+    // AddNodeCommand serializes/recreates nodes, which strips event handlers.
+    this.stage.on('dblclick', (e) => {
+      let target: Konva.Node | null = e.target
+      // Walk up to find the callout group
+      while (target && target !== this.stage) {
+        if (target.hasName('annotation-callout')) {
+          const group = target as Konva.Group
+          const textNode = group.findOne('Text') as Konva.Text | undefined
+          const bgNode = group.findOne('Rect') as Konva.Rect | undefined
+          if (textNode && bgNode) {
+            void import('./tools/callout').then((mod) => {
+              mod._editCalloutText(group, textNode, bgNode, this)
+            })
+          }
+          return
+        }
+        target = target.parent
+      }
+    })
   }
 
   // -------------------------------------------------------------------------
@@ -677,34 +706,39 @@ export class CanvasEngine {
     this._minimap?.destroy()
     this._minimap = createMinimap(element, this.stage, this.layers)
 
+    // Minimap visibility — react to signal toggle immediately
+    this._disposeMinimapEffect?.()
+    this._disposeMinimapEffect = effect(() => {
+      void minimapVisible.value // subscribe
+      this._minimap?.update(this.stage, this.layers)
+    })
+
     // Map visibility + style effects — lazy-load map-layer.ts only when toggled on
+    // NOTE: Map integration is incomplete. The toggle controls the MapLibre container
+    // visibility but does NOT make the Konva canvas transparent (that caused blank
+    // canvas bugs). Full map integration requires solving the transparency/compositing
+    // model properly — deferred to a focused map sub-phase.
     this._disposeMapEffect?.()
     this._disposeMapEffect = effect(() => {
       const visible = mapLayerVisible.value
       const style = mapStyle.value
       if (!visible) {
-        // Hide map container if it exists
         if (this._mapLayer) this._mapLayer.container.style.display = 'none'
-        this.stage.container().style.background = ''
         return
       }
-      // Lazy init: dynamically import map module on first activation
       if (!this._mapModule) {
         void import('./map-layer').then((mod) => {
           this._mapModule = mod
           this._mapLayer?.destroy()
           this._mapLayer = mod.createMapLayer(this.stage.container())
           void mod.syncMap(this._mapLayer, this.stage, designLocation.value)
-          this.stage.container().style.background = 'transparent'
-        })
+        }).catch(() => { /* map load failed silently */ })
         return
       }
-      // Already loaded — sync immediately
       if (this._mapLayer) {
         this._mapLayer.container.style.display = 'block'
         void this._mapModule.syncMap(this._mapLayer, this.stage, designLocation.value)
         if (this._mapLayer.map) this._mapModule.setMapStyle(this._mapLayer, style)
-        this.stage.container().style.background = 'transparent'
       }
     })
 
@@ -1375,6 +1409,8 @@ export class CanvasEngine {
     this._disposeCelestialEffect?.()
     this._disposeCelestialEffect = null
     this._celestialDial = null
+    this._disposeMinimapEffect?.()
+    this._disposeMinimapEffect = null
 
     this.stage.destroy()
     this.layers.clear()

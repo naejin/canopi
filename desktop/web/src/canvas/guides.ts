@@ -15,7 +15,7 @@ export interface Guide {
 const SNAP_THRESHOLD_PX = 8
 
 // Smart guide snap threshold in screen pixels
-const SMART_SNAP_THRESHOLD_PX = 6
+const SMART_SNAP_THRESHOLD_PX = 12
 
 // Guide line visual style
 const GUIDE_COLOR = 'rgba(45, 95, 63, 0.6)'

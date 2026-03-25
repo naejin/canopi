@@ -11,7 +11,7 @@ import {
 import { canvasEngine } from "../canvas/engine";
 import { exportPNG, exportSVG, exportPlantCSV } from "../canvas/export";
 import { exportFile, exportBinary } from "../ipc/design";
-import { buildGeoJSON, buildBudgetCSV } from "../canvas/geojson";
+import { buildGeoJSON } from "../canvas/geojson";
 
 export interface Command {
   id: string;
@@ -81,16 +81,6 @@ async function doExportGeoJSON(): Promise<void> {
   }
 }
 
-async function doExportBudgetCSV(): Promise<void> {
-  const design = currentDesign.value;
-  if (!design) return;
-  try {
-    const csv = buildBudgetCSV(design.budget);
-    await exportFile(csv, "budget.csv", "CSV Spreadsheet", ["csv"]);
-  } catch (e) {
-    if (e !== "Dialog cancelled") console.error("Budget CSV export failed:", e);
-  }
-}
 
 export const commands: Command[] = [
   // File operations
@@ -139,7 +129,7 @@ export const commands: Command[] = [
   { id: "canvas.export.svg",   label: () => t("canvas.export.exportSvg"),   action: () => { void doExportSVG() } },
   { id: "canvas.export.csv",   label: () => t("canvas.export.exportCsv"),   action: () => { void doExportCSV() } },
   { id: "canvas.export.geojson", label: () => t("canvas.export.exportGeoJSON"), action: () => { void doExportGeoJSON() } },
-  { id: "canvas.export.budgetCsv", label: () => t("canvas.export.exportBudgetCsv"), action: () => { void doExportBudgetCSV() } },
+  // Budget CSV removed — redesign as plant-based pricing from canvas
   // Background-image import gated — not persisted in .canopi yet. Re-enable when persistence is implemented.
   // { id: "canvas.import.image", label: () => t("canvas.export.importImage"), action: () => { void doImportBackgroundImage() } },
 ];

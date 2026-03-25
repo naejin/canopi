@@ -40,8 +40,9 @@ export function groupSelected(engine: CanvasEngine): Konva.Group | null {
     const absY = node.y()
     node.moveTo(group)
     node.position({ x: absX - minX, y: absY - minY })
-    // Remove 'shape' name from children so they're not independently selectable
+    // Remove 'shape' name and disable dragging so children aren't independent
     _removeShapeName(node)
+    node.draggable(false)
   }
 
   layer.add(group)
@@ -78,8 +79,9 @@ export function ungroupSelected(engine: CanvasEngine): Konva.Node[] | null {
         y: child.y() + groupPos.y,
       })
       child.moveTo(layer)
-      // Restore 'shape' name so the node is selectable
+      // Restore 'shape' name and draggable so the node is selectable again
       _addShapeName(child)
+      child.draggable(true)
       extracted.push(child)
     }
 
@@ -167,6 +169,7 @@ export function restoreGroups(
       node.moveTo(group)
       node.position({ x: absX - def.position.x, y: absY - def.position.y })
       _removeShapeName(node)
+      node.draggable(false)
     }
 
     layer.add(group)
@@ -183,9 +186,9 @@ function _removeShapeName(node: Konva.Node): void {
 }
 
 function _addShapeName(node: Konva.Node): void {
-  const names = node.name().split(' ')
+  const names = node.name().split(' ').filter(Boolean)
   if (!names.includes('shape')) {
     names.push('shape')
-    node.name(names.join(' '))
   }
+  node.name(names.join(' '))
 }

@@ -63,7 +63,8 @@ export function createDimensionGroup(
     points: [-halfLen, 0, halfLen, 0],
     stroke: DIMENSION_STROKE,
     strokeWidth: 1,
-    listening: false,
+    hitStrokeWidth: 10,
+    listening: true,
     rotation: (angle * 180) / Math.PI,
   })
   group.add(line)

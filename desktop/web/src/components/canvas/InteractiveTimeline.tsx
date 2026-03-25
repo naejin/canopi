@@ -32,15 +32,23 @@ export function InteractiveTimeline() {
     const canvas = canvasRef.current
     if (!canvas) return
 
-    const dpr = window.devicePixelRatio || 1
-    const rect = canvas.getBoundingClientRect()
-    canvas.width = rect.width * dpr
-    canvas.height = rect.height * dpr
+    function redraw() {
+      const dpr = window.devicePixelRatio || 1
+      const rect = canvas!.getBoundingClientRect()
+      if (rect.width === 0 || rect.height === 0) return
+      canvas!.width = rect.width * dpr
+      canvas!.height = rect.height * dpr
+      const ctx = canvas!.getContext('2d')
+      if (!ctx) return
+      renderTimeline(ctx, rect.width, rect.height, actions, state)
+    }
 
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
+    redraw()
 
-    renderTimeline(ctx, rect.width, rect.height, actions, state)
+    // Re-render on container resize (e.g., bottom panel drag)
+    const observer = new ResizeObserver(() => redraw())
+    observer.observe(canvas)
+    return () => observer.disconnect()
   })
 
   function handleWheel(e: WheelEvent) {

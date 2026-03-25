@@ -18,8 +18,6 @@ import {
   SnapIcon,
   RulerIcon,
   DimensionIcon,
-  PatternFillIcon,
-  SpacingIcon,
   ArrowIcon,
   CalloutIcon,
   GuideIcon,
@@ -55,8 +53,7 @@ const SHAPE_TOOLS: ToolDef[] = [
   { id: 'line',        labelKey: 'canvas.tools.line',        descKey: 'canvas.tools.lineDesc',        shortcut: 'L', Icon: LineIcon },
   { id: 'text',        labelKey: 'canvas.tools.text',        descKey: 'canvas.tools.textDesc',        shortcut: 'T', Icon: TextIcon },
   { id: 'measure',     labelKey: 'canvas.tools.measure',     descKey: 'canvas.tools.measureDesc',     shortcut: 'M', Icon: MeasureIcon },
-  { id: 'pattern-fill', labelKey: 'canvas.tools.patternFill', descKey: 'canvas.tools.patternFillDesc',               Icon: PatternFillIcon },
-  { id: 'spacing',     labelKey: 'canvas.tools.spacing',     descKey: 'canvas.tools.spacingDesc',                   Icon: SpacingIcon },
+  // Pattern Fill and Spacing removed — need Preact modal redesign (window.prompt blocked in Tauri)
   { id: 'dimension',   labelKey: 'canvas.tools.dimension',   descKey: 'canvas.tools.dimensionDesc',                 Icon: DimensionIcon },
   { id: 'arrow',       labelKey: 'canvas.tools.arrow',       descKey: 'canvas.tools.arrowDesc',                    Icon: ArrowIcon },
   { id: 'callout',     labelKey: 'canvas.tools.callout',     descKey: 'canvas.tools.calloutDesc',                  Icon: CalloutIcon },

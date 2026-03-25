@@ -233,7 +233,9 @@
       "save": "Guardar",
       "cancel": "Cancelar",
       "edit": "Editar",
-      "delete": "Eliminar"
+      "delete": "Eliminar",
+      "matrixTitle": "Matriz estrato-sucesión",
+      "matrixHint": "Próximamente — vista matricial de plantas por estrato sintrópico y etapa de sucesión"
     },
     "budget": {
       "title": "Presupuesto",

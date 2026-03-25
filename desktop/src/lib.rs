@@ -12,10 +12,17 @@ use common_types::health::{SubsystemHealth, PlantDbStatus};
 pub struct AppHealth(pub Mutex<SubsystemHealth>);
 
 pub fn run() {
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|_app, _args, _cwd| {}))
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_shell::init());
+
+    #[cfg(debug_assertions)]
+    {
+        builder = builder.plugin(tauri_plugin_mcp_bridge::init());
+    }
+
+    builder
         .invoke_handler(tauri::generate_handler![
             commands::settings::get_settings,
             commands::settings::set_settings,

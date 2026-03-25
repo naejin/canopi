@@ -59,6 +59,14 @@ The architecture draft (lines 1341-1381) lists ~40 features under Phase 3. This 
 
 All deferred features are buildable — they sequence after their foundation features exist.
 
+Additionally deferred from Phase 3 review recommendations:
+
+| Feature | Reason |
+|---------|--------|
+| Playwright E2E test suite | Requires `tauri-driver` setup, `data-testid` attributes on all interactive components, debug build pipeline, and CI integration. Manual testing covers Phase 3 validation for now. |
+| CI asset size budget checks | Valuable for catching chunk growth regressions but not blocking. Post-build size script needed. |
+| Plant DB sidebar enhancements (collections, comparison, search presets) | Independent of canvas work — belongs in a separate future phase. |
+
 ---
 
 ## Architectural Decisions

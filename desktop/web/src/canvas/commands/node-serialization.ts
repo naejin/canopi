@@ -43,6 +43,7 @@ export function recreateNode(data: SerializedNode): Konva.Node {
     case 'Line':    return new Konva.Line(a)
     case 'Text':    return new Konva.Text(a)
     case 'Circle':  return new Konva.Circle(a)
+    case 'Arrow':   return new Konva.Arrow(a)
     default:        return new Konva.Shape(a)
   }
 }

@@ -233,7 +233,9 @@
       "save": "Enregistrer",
       "cancel": "Annuler",
       "edit": "Modifier",
-      "delete": "Supprimer"
+      "delete": "Supprimer",
+      "matrixTitle": "Matrice strates-succession",
+      "matrixHint": "Bientôt disponible — une vue matricielle de vos plantes par strate syntropique et stade de succession"
     },
     "budget": {
       "title": "Budget",

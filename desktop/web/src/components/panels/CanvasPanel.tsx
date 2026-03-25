@@ -47,8 +47,14 @@ export function CanvasPanel() {
     if (rulerOverlayRef.current) {
       engine.attachRulersTo(rulerOverlayRef.current)
     }
-    // Hide all canvas chrome until a design is created/loaded
-    engine.hideCanvasChrome()
+    // If a design is already loaded (e.g., panel switch back), restore it
+    // into the fresh engine. Otherwise hide chrome until new/open.
+    if (currentDesign.value) {
+      loadCanvasFromDocument(currentDesign.value, engine)
+      engine.showCanvasChrome()
+    } else {
+      engine.hideCanvasChrome()
+    }
 
     // Load a file queued by SavedDesignsPanel before canvas was mounted
     const queued = pendingDesignPath.value

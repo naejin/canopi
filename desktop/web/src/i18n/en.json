@@ -230,6 +230,8 @@
       "antagonist": "Antagonist",
       "emptyState": "No consortiums yet",
       "emptyHint": "Place companion plants to see relationships, or add a consortium manually",
+      "matrixTitle": "Strata-Succession Matrix",
+      "matrixHint": "Coming soon — a matrix view of your plants organized by syntropic strata and succession stages",
       "save": "Save",
       "cancel": "Cancel",
       "edit": "Edit",

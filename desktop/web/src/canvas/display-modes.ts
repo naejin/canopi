@@ -83,10 +83,16 @@ export function updatePlantDisplay(
       // Reset size to default
       circle.radius(CIRCLE_SCREEN_PX)
 
-      // Color by attribute from species cache
-      const detail = speciesCache.get(canonicalName)
-      const color = _getColorForAttribute(colorByAttr, detail)
-      circle.fill(color)
+      // Stratum can be read directly from the node attr (no cache needed)
+      if (colorByAttr === 'stratum') {
+        const stratum = g.getAttr('data-stratum') as string || null
+        circle.fill(getStratumColor(stratum))
+      } else {
+        // Other attributes need species detail from cache
+        const detail = speciesCache.get(canonicalName)
+        const color = _getColorForAttribute(colorByAttr, detail)
+        circle.fill(color)
+      }
     }
   })
 

@@ -11,6 +11,7 @@
     "core:window:allow-close",
     "core:window:allow-destroy",
     "dialog:default",
-    "shell:default"
+    "shell:default",
+    "mcp-bridge:default"
   ]
 }
