@@ -7,7 +7,7 @@ import {
   saveAsCurrentDesign,
   openDesign,
   newDesignAction,
-} from "../state/design";
+} from "../state/document";
 
 export const commandPaletteOpen = signal(false);
 

@@ -1,9 +1,13 @@
 import { useRef, useEffect } from 'preact/hooks'
 import { t } from '../../i18n'
-import { locale } from '../../state/app'
+import { locale, autoSaveIntervalMs } from '../../state/app'
 import { canvasReady, layerPanelOpen, bottomPanelOpen, zoomLevel } from '../../state/canvas'
-import { currentDesign, designName, designPath, designDirty, newDesignAction, openDesign, pendingDesignPath } from '../../state/design'
-import { toCanopi, fromCanopi } from '../../canvas/serializer'
+import {
+  currentDesign, designName, designPath, designDirty,
+  newDesignAction, openDesign, pendingDesignPath,
+  writeCanvasIntoDocument, loadCanvasFromDocument, extractExtra,
+  resetDirtyBaselines, autosaveFailed,
+} from '../../state/document'
 import { autosaveDesign, loadDesign } from '../../ipc/design'
 import { CanvasEngine, setCanvasEngine, canvasEngine } from '../../canvas/engine'
 import { CanvasToolbar } from '../canvas/CanvasToolbar'
@@ -11,7 +15,7 @@ import { LayerPanel } from '../canvas/LayerPanel'
 import { BottomPanel } from '../canvas/BottomPanel'
 import styles from './Panels.module.css'
 
-const AUTOSAVE_INTERVAL_MS = 60_000
+// Autosave interval is now configurable via Rust settings (autoSaveIntervalMs signal)
 
 export function CanvasPanel() {
   // Subscribe to locale so the component re-renders when language changes
@@ -51,34 +55,44 @@ export function CanvasPanel() {
     if (queued) {
       pendingDesignPath.value = null
       void loadDesign(queued).then((file) => {
-        fromCanopi(file, engine)
+        file.extra = extractExtra(file as unknown as Record<string, unknown>)
+        loadCanvasFromDocument(file, engine)
         currentDesign.value = file
         designName.value = file.name
         designPath.value = queued
-        designDirty.value = false
+        resetDirtyBaselines()
         engine.history.clear()
       }).catch(() => {
         // File no longer exists or failed to load — ignore, canvas stays empty
       })
     }
 
-    // Auto-save timer — fires every 60 s when the design has unsaved changes
-    const autoSaveTimer = setInterval(() => {
-      if (!designDirty.value) return
-      const eng = canvasEngine
-      if (!eng) return
-      const content = toCanopi(eng, { name: designName.value })
-      void autosaveDesign(content, designPath.value)
-    }, AUTOSAVE_INTERVAL_MS)
-
     return () => {
-      clearInterval(autoSaveTimer)
       engine.destroy()
       engineRef.current = null
       setCanvasEngine(null)
       canvasReady.value = false
     }
   }, [])
+
+  // Autosave timer — reactive to autoSaveIntervalMs changes.
+  // Separate from engine mount so the interval recreates when settings change.
+  const intervalMs = autoSaveIntervalMs.value
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (!designDirty.value) return
+      const eng = canvasEngine
+      if (!eng) return
+      const content = writeCanvasIntoDocument(eng, designName.value)
+      autosaveDesign(content, designPath.value)
+        .then(() => { autosaveFailed.value = false })
+        .catch((err) => {
+          console.error('Autosave failed:', err)
+          autosaveFailed.value = true
+        })
+    }, intervalMs)
+    return () => clearInterval(timer)
+  }, [intervalMs])
 
   const hasDesign = currentDesign.value !== null
 

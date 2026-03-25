@@ -1,7 +1,7 @@
 import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale } from '../../state/app'
-import { currentDesign, designDirty } from '../../state/design'
+import { currentDesign, nonCanvasRevision } from '../../state/document'
 import type { Consortium } from '../../types/design'
 import styles from './ConsortiumTab.module.css'
 
@@ -81,7 +81,7 @@ export function ConsortiumTab() {
       }
     }
 
-    designDirty.value = true
+    nonCanvasRevision.value++
     cancelForm()
   }
 
@@ -92,7 +92,7 @@ export function ConsortiumTab() {
       ...design,
       consortiums: design.consortiums.filter((_, i) => i !== index),
     }
-    designDirty.value = true
+    nonCanvasRevision.value++
   }
 
   const isEditing = showAddForm.value

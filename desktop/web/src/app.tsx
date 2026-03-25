@@ -4,10 +4,13 @@ import { t } from "./i18n";
 import { initTheme } from "./utils/theme";
 import { initShortcuts } from "./shortcuts/manager";
 import { useCallback, useRef } from "preact/hooks";
-import { activePanel, sidePanel, sidePanelWidth } from "./state/app";
-import { designDirty, saveCurrentDesign } from "./state/design";
+import { activePanel, sidePanel, sidePanelWidth, plantDbStatus, locale, theme, autoSaveIntervalMs, setBootstrappedSettings } from "./state/app";
+import { designDirty, saveCurrentDesign } from "./state/document";
+import { invoke } from "@tauri-apps/api/core";
+import type { SubsystemHealth } from "./types/health";
 import { ActivityBar } from "./components/activity-bar/ActivityBar";
 import { TitleBar } from "./components/shared/TitleBar";
+import { DegradedBanner } from "./components/shared/DegradedBanner";
 import { StatusBar } from "./components/shared/StatusBar";
 import { CommandPalette } from "./components/shared/CommandPalette";
 import { PlantDbPanel } from "./components/panels/PlantDbPanel";
@@ -16,8 +19,28 @@ import { WorldMapPanel } from "./components/panels/WorldMapPanel";
 import { LearningPanel } from "./components/panels/LearningPanel";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
+import type { Settings } from "./types/settings";
+import { gridSize, snapToGridEnabled } from "./state/canvas";
+
+// Synchronous init — applies local defaults immediately (no theme flicker)
 initTheme();
 initShortcuts();
+
+// Async bootstrap — hydrate from persisted Rust settings, reconcile on arrival
+invoke<SubsystemHealth>('get_health')
+  .then((h) => { plantDbStatus.value = h.plant_db })
+  .catch((e) => console.error('Failed to query health:', e));
+
+invoke<Settings>('get_settings')
+  .then((s) => {
+    locale.value = s.locale;
+    theme.value = s.theme;
+    gridSize.value = s.grid_size_m;
+    snapToGridEnabled.value = s.snap_to_grid;
+    autoSaveIntervalMs.value = s.auto_save_interval_s * 1000;
+    setBootstrappedSettings(s);
+  })
+  .catch((e) => console.error('Failed to bootstrap settings:', e));
 
 // Save-before-close guard — runs once at module init, not inside a component.
 // We keep a reference to the unlisten function so Vite HMR can remove the
@@ -52,8 +75,10 @@ let _unlistenClose: unknown = null
       }
     }
 
-    // User chose "Don't save" (shouldSave=false) or save succeeded — close now
-    await getCurrentWindow().close()
+    // User chose "Don't save" (shouldSave=false) or save succeeded — close now.
+    // Must use destroy() instead of close() because close() re-emits
+    // closeRequested, re-entering this handler while designDirty is still true.
+    await getCurrentWindow().destroy()
   }).then(unlisten => { _unlistenClose = unlisten })
 })()
 
@@ -114,6 +139,7 @@ export function App() {
   return (
     <div className={styles.appRoot}>
       <TitleBar />
+      <DegradedBanner />
       <div className={styles.appBody}>
         <ActivityBar />
 

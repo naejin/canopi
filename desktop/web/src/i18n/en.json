@@ -53,6 +53,10 @@
     "retry": "Retry",
     "filterMedicinal": "Medicinal"
   },
+  "health": {
+    "plantDbMissing": "Plant database not found. Run prepare-db.py to generate it. Plant search is unavailable.",
+    "plantDbCorrupt": "Plant database is corrupt. Reinstall or regenerate with prepare-db.py. Plant search is unavailable."
+  },
   "canvas": {
     "emptyTitle": "Design Canvas",
     "emptyText": "Set a location to enable map layers, or start drawing",
@@ -244,7 +248,8 @@
   "status": {
     "version": "Canopi v0.1.0",
     "language": "Language",
-    "theme": "Theme"
+    "theme": "Theme",
+    "autosaveFailed": "Autosave failed"
   },
   "theme": {
     "light": "Light",

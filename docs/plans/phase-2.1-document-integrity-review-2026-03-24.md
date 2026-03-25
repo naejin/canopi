@@ -8,405 +8,277 @@ Subject: Review of `docs/plans/phase-2.1-document-integrity.md`
 
 ## Executive Summary
 
-The Phase 2.1 plan is directionally strong. It correctly centers the work on document integrity, stages the effort sensibly, and keeps the first phase narrowly focused on stopping active data loss.
+The updated Phase 2.1 plan is strong and much closer to implementation-ready.
 
-The plan should proceed, but not exactly as written.
+It successfully fixes the two biggest flaws from the earlier draft:
 
-There are two important issues that should be fixed in the plan before implementation:
+- no serializer/state module cycle in Phase A
+- no broken monotonic dirty model in Phase C
 
-1. Phase A introduces a likely module cycle by importing `currentDesign` into `serializer.ts` while `state/design.ts` already imports `serializer.ts`.
-2. Phase C’s revision-based dirty model is semantically wrong for undo-to-saved-state behavior. As written, undoing back to the saved state would still leave the document dirty.
+It also correctly incorporates:
 
-There are also a few medium-importance gaps:
+- defensive `extra` merge ordering
+- `?? null` semantics for custom attrs
+- degraded-mode feature gating in Phase D
+- bootstrap restructuring in Phase E
 
-1. the `extra`-field merge strategy should avoid letting unknown keys override canonical keys
-2. per-object field preservation should use `null`/`undefined` semantics, not `0`/empty-string sentinels with `||`
-3. Phase D should include explicit feature gating for degraded plant DB mode, not just a banner
-4. Phase E’s settings bootstrap sequence is incompatible with the current module-scope `initTheme()` / `initShortcuts()` setup
-5. Vitest is not currently in `desktop/web/package.json`, so the testing phase needs an explicit dependency step
+The main remaining problem is scope, not sequencing:
 
-With those corrections, the plan becomes a strong implementation document.
+- the plan still does not account for imported background images, which are currently a user-facing feature and are not preserved through save/load
 
-## What The Plan Gets Right
+That means the plan is almost ready, but it should not be presented as a full “document integrity” fix unless it either:
 
-### 1. The sequencing is mostly correct
-
-The A -> B -> C -> D -> E structure is the right order.
-
-Why:
-
-- A stops active destructive saves immediately
-- B establishes ownership after the fire is out
-- C builds on B’s ownership model
-- D is important but independent of document integrity
-- E is consolidation work and belongs last
-
-That overall flow matches the actual dependency graph.
-
-### 2. Phase A is appropriately narrow
-
-The plan correctly treats the first phase as:
-
-- frontend only
-- zero Rust changes
-- minimal surface area
-- focused on serializer/composition and three save call sites
-
-That is exactly the right posture. The current bug is too severe to hide inside a broader refactor.
-
-### 3. The plan correctly includes per-object and layer schema fields
-
-It is good that the plan includes:
-
-- plant notes
-- plant planted date
-- plant quantity
-- zone notes
-- layer locked state
-
-This avoids “fixing only the user-visible losses” while leaving the same bug class in place for future-version files.
-
-### 4. The plan uses an implementation path that fits the existing code
-
-Using Konva custom attrs for non-visual per-object fields is a good fit because:
-
-- plant nodes already use custom attrs
-- Konva supports this cleanly
-- history serialization already captures attrs
-- it avoids a larger side-map or projection refactor in Phase A
-
-That is the right tactical move.
-
-## Major Findings
-
-### 1. Phase A likely introduces a module cycle
-
-This is the most important plan issue.
-
-The plan proposes:
-
-- `state/design.ts` continues importing `toCanopi()` / `fromCanopi()` from `canvas/serializer.ts`
-- `canvas/serializer.ts` imports `currentDesign` from `state/design.ts`
-
-That creates a bidirectional dependency.
-
-Current direction:
-
-- `state/design.ts` -> `canvas/serializer.ts`
-
-Planned direction:
-
-- `canvas/serializer.ts` -> `state/design.ts`
-
-That is a classic module cycle and should be avoided even if the bundler tolerates it, because:
-
-- evaluation order becomes fragile
-- HMR behavior gets harder to reason about
-- it weakens the ownership boundary the plan is trying to clarify
-
-### Recommendation
-
-Do not import `currentDesign` directly into `serializer.ts` in Phase A.
-
-Safer alternatives:
-
-1. Change `toCanopi()` to accept the current canonical document explicitly:
-   - `toCanopi(engine, metadata, doc)`
-   - save/autosave callers pass `currentDesign.value`
-
-2. Pull the composition boundary forward:
-   - introduce a minimal `state/document.ts` in Phase A, not Phase B
-   - let `document.ts` own the call to `toCanopi()`
-   - keep `serializer.ts` free of state-store imports
-
-My recommendation is option 1 for Phase A because it is the smallest change.
-
-Then Phase B can still introduce `state/document.ts` as the formal boundary.
-
-### 2. Phase C’s revision model is semantically wrong
-
-The plan proposes:
-
-- `documentRevision` monotonic counter
-- `lastSavedRevision`
-- `designDirty = documentRevision !== lastSavedRevision`
-- undo increments `documentRevision`
-
-That model does not preserve the expected “undo back to saved state means clean” behavior.
-
-Example:
-
-1. save document -> `documentRevision = 5`, `lastSavedRevision = 5`
-2. make canvas edit -> `documentRevision = 6`, dirty = true
-3. undo edit back to saved state -> `documentRevision = 7`, dirty still true
-
-But the document content is back at the saved baseline.
-
-The plan text says “Undo is a document change relative to last save,” which is technically true in an event log sense, but it is not the right user-facing save semantic.
-
-The user expectation is:
-
-- if the document matches the last saved state, it is clean
-
-### Recommendation
-
-Do not use a purely monotonic revision counter as the sole dirty model.
-
-Better options:
-
-1. Split canvas and non-canvas baselines
-   - canvas side: history tracks a saved marker or saved stack position
-   - non-canvas side: own revision counter + saved revision
-   - dirty if either side differs from its saved baseline
-
-2. Use a document snapshot/hash baseline
-   - more expensive
-   - probably unnecessary right now
-
-The most practical option for this codebase is option 1.
-
-Concretely:
-
-- `CanvasHistory` should remember a saved checkpoint marker
-- non-canvas edits should increment a separate revision counter
-- save should update both baselines
-- dirty should be computed as:
-  - `canvasDirty || nonCanvasDirty`
-
-That fixes the mixed-source bug without breaking undo-to-clean behavior.
-
-### 3. The `extra` merge should be defensive
-
-The plan suggests:
-
-```ts
-...(doc?.extra ?? {})
-```
-
-spread into the returned `CanopiFile`.
-
-That is directionally right, but the placement matters.
-
-If unknown fields are spread after canonical fields, they can override known keys if:
-
-- `extractExtra()` misclassifies a key
-- a malformed file includes a conflicting key
-
-### Recommendation
-
-Either:
-
-1. spread `extra` first, then write canonical keys after it
+1. adds background-image persistence to the plan
 
 or:
 
-2. guarantee collision filtering before merge and document that invariant explicitly
+2. explicitly gates/disables background-image import until persistence exists
 
-Option 1 is safer and simpler.
+Everything else is secondary to that scope gap.
 
-### 4. Per-object attr storage should avoid sentinel values
+## What The Updated Plan Gets Right
 
-The plan currently proposes:
+### 1. The sequencing is correct
 
-- `notes ?? ''`
-- `plantedDate ?? ''`
-- `quantity ?? 0`
-
-and then reading back with `|| null`.
-
-That works for some cases, but it is semantically weak:
-
-- `0` is a legitimate numeric value in some schemas, even if uncommon here
-- `|| null` collapses multiple falsy states together
-- the serializer should preserve exact optional semantics where possible
-
-### Recommendation
-
-Prefer:
-
-- store `null`/`undefined` semantics faithfully in custom attrs
-- read back with `?? null`, not `|| null`, when the distinction matters
-
-Examples:
-
-```ts
-group.setAttr('data-quantity', opts.quantity ?? null)
-quantity: group.getAttr('data-quantity') ?? null
-```
-
-This is cleaner and avoids unnecessary sentinel logic.
-
-### 5. Phase D should include degraded-mode behavior, not just visibility
-
-The plan’s startup health work is good, but the frontend piece is incomplete if it stops at:
-
-- querying health
-- showing a banner
-
-That is not enough for a degraded plant DB state.
-
-The review correctly established that the fallback DB can lead to actual query errors, not just empty states.
-
-### Recommendation
-
-Phase D should explicitly include:
-
-- disabling or gating plant DB actions when status is not `Available`
-- making search failure graceful and expected in degraded mode
-- preventing the UI from pretending plant search is available when it is not
-
-Examples:
-
-- disable search input
-- show plant DB unavailable empty state
-- block or short-circuit species IPC calls when health is degraded
-
-The banner should be one part of the degraded-mode UX, not the whole thing.
-
-## Medium Findings
-
-### 6. Phase B’s ownership module should become real authority, not a re-export shim
-
-The plan says `state/document.ts` will:
-
-- re-export fields from `state/design.ts`
-- provide composition helpers
-
-That is acceptable as a transition, but if the goal is explicit ownership, it should not stop there for long.
-
-### Recommendation
-
-Phase B should state more clearly:
-
-- `state/document.ts` is the canonical document API
-- `state/design.ts` becomes either:
-  - a compatibility wrapper
-  - or is merged away later
-
-Otherwise the ownership story remains conceptually split even if the import graph improves.
-
-### 7. Phase E settings bootstrap conflicts with current module-scope initialization
-
-The plan says:
-
-- call `bootstrapSettings()` in `app.tsx` before `initTheme()`
-
-But currently `app.tsx` calls:
-
-- `initTheme()` at module scope
-- `initShortcuts()` at module scope
-
-That means there is no “before `initTheme()`” at runtime without restructuring module initialization.
-
-### Recommendation
-
-Phase E should explicitly include:
-
-- moving theme/shortcut/bootstrap initialization out of module top-level execution
-- creating an app bootstrap sequence
-
-Without that, the settings bootstrap step is underspecified.
-
-### 8. Vitest is not currently installed
-
-The plan adds a Vitest suite, but `desktop/web/package.json` currently does not include:
-
-- `vitest`
-
-or related test scripts.
-
-### Recommendation
-
-Phase E should explicitly include:
-
-- adding test dependencies
-- adding a test script to `package.json`
-
-and should use `/canopi-test` conventions when that work starts.
-
-### 9. Rust tests in Phase E should not be treated as sufficient for document integrity
-
-Expanding Rust tests in `design/format.rs` is fine, but it will not catch the class of bugs that caused the current problem.
+The A -> B -> C -> D -> E structure remains the right order.
 
 Why:
 
-- current destructive behavior lives in the TS serializer/composition path
-- Rust-only round-trip tests already passed while the app still destroyed data
+- A stops active save-path destruction immediately
+- B formalizes ownership after the immediate bug is contained
+- C fixes dirty/autosave semantics on top of explicit ownership
+- D is important but can be developed independently
+- E is consolidation work and belongs last
+
+That dependency structure is sound.
+
+### 2. Phase A is now technically safer
+
+The updated plan correctly changes Phase A to:
+
+- pass `currentDesign.value` into `toCanopi()` as a parameter
+- avoid importing state into `serializer.ts`
+
+That removes the likely module cycle and keeps the serializer more reusable.
+
+### 3. Phase C is now semantically stronger
+
+The two-baseline dirty model is a major improvement over the earlier monotonic revision proposal.
+
+It correctly preserves:
+
+- mixed edit-source tracking
+- undo-back-to-saved-state behavior
+
+This is the right shape for the current codebase.
+
+### 4. Phase D now treats degraded mode as behavior, not decoration
+
+The plan no longer stops at “show a banner.”
+
+It now includes:
+
+- sidebar empty state
+- disabled/hidden search
+- frontend short-circuiting for species IPC
+- drag-and-drop disablement
+
+That is the right product-level interpretation of degraded mode.
+
+### 5. Phase E now acknowledges bootstrap reality
+
+The updated plan correctly recognizes that settings bootstrap requires:
+
+- moving `initTheme()` and `initShortcuts()` out of module-scope execution
+- establishing an explicit bootstrap sequence
+
+That is an important correction.
+
+## Remaining Major Finding
+
+### 1. Background-image persistence is still outside the plan
+
+This is now the main unresolved issue.
+
+Current verified behavior in `desktop/web/src/canvas/import.ts`:
+
+- background image import is a user-facing feature
+- imported images are added directly to the canvas as `Konva.Image`
+- the code explicitly notes they are not serialized through the command system
+- the current `.canopi` path does not preserve them on save/load
+
+This means a user can:
+
+1. import a background image
+2. save the design
+3. reopen the design
+4. lose the imported image
+
+That is a document-integrity problem.
+
+It differs from the current Phase A data-loss set in one important way:
+
+- background images are not just missing from composition
+- they are missing from the file schema and runtime serialization strategy entirely
+
+But from the user’s perspective, it is the same class of failure: saved work does not survive save/load.
 
 ### Recommendation
 
-Phase E should treat TS or end-to-end document tests as the primary safeguard for this feature area.
+The plan must make an explicit product decision before implementation starts.
 
-Rust tests are supplementary here, not primary.
+Two valid options:
+
+1. Include background-image persistence in Phase A or an explicit Phase A.x
+   - extend the file format
+   - serialize enough image metadata to recreate the node
+   - define how file bytes are stored or referenced
+   - test round-trip
+
+2. Explicitly gate/disable background-image import until persistence exists
+   - remove or disable the import command
+   - show clear UI messaging that the feature is not yet persisted
+
+What should not happen:
+
+- shipping or declaring “document integrity fixed” while a current user-facing save-loss case remains outside scope
+
+## Important Clarifications
+
+### 2. Background-image import is canvas state, not non-canvas state
+
+The updated plan still says:
+
+- `import.ts:72` -> `nonCanvasRevision.value++`
+- background image is “non-canvas state”
+
+That is incorrect.
+
+Imported background images are:
+
+- canvas content
+- visually part of the design workspace
+- represented by Konva nodes
+
+They are not non-canvas document state.
+
+### Recommendation
+
+If background-image import remains enabled before persistence is implemented:
+
+- do not classify it as non-canvas dirty
+
+Instead, choose one of these:
+
+1. treat it as canvas-side dirty and include it in persisted canvas state
+
+or:
+
+2. gate the feature so it is not part of persisted workflows yet
+
+The current wording in Phase C should be corrected either way.
+
+### 3. Phase B should still be treated as transitional
+
+The updated plan says `state/document.ts` is the canonical document API. That is good.
+
+But the implementation outline still leaves `state/design.ts` as an internal participant in the composition path.
+
+That is acceptable for now, but it should be understood as transitional.
+
+### Recommendation
+
+The plan should keep the current implementation approach, but make explicit that:
+
+- long term, `state/document.ts` is intended to become the document authority boundary
+- `state/design.ts` is not the final public ownership surface
+
+This is a documentation clarity issue, not a blocker.
+
+## Medium Findings
+
+### 4. TS tests are still the primary safeguard for this feature area
+
+The updated plan now installs Vitest and adds TS tests, which is correct.
+
+It is worth preserving the priority rule explicitly:
+
+- Rust tests are helpful
+- TS/end-to-end document tests are the primary guardrail here
+
+Why:
+
+- the current destructive bug lived entirely in the TS serializer/composition path
+- Rust tests already passed while the app still destroyed data
+
+The plan mostly reflects this already. I would keep emphasizing it during implementation.
+
+### 5. Phase E bootstrap should avoid startup flicker if possible
+
+The plan correctly restructures bootstrap, but there is one implementation nuance worth calling out:
+
+- if settings bootstrap is asynchronous and theme application waits on it, the app may flash the wrong theme on startup
+
+This is not a planning flaw, but it is an implementation detail to watch.
+
+### Recommendation
+
+Prefer one of these:
+
+1. keep a synchronous fallback theme path using existing local defaults or cached preference
+2. or hide theme-sensitive rendering until bootstrap completes
+
+This is not a blocker for the plan, but it is worth capturing for execution quality.
 
 ## Recommended Changes To The Plan
 
 ### Phase A
 
-Change A.8 from:
+Keep the current fixes:
 
-- import `currentDesign` inside `serializer.ts`
+- `doc` parameter to `toCanopi()`
+- defensive `extra` spread ordering
+- `?? null` semantics
+- layer `locked` preservation
 
-To:
+But add one explicit decision for background images:
 
-- pass `currentDesign.value` explicitly into `toCanopi()` as a parameter
+1. persist them now
 
 or:
 
-- move a minimal `document.ts` composition helper into Phase A
+2. gate/disable the feature until persistence exists
 
-Also:
+### Phase C
 
-- spread `extra` before canonical keys
-- use `null`/`??` semantics for custom attrs instead of `0`/`''` plus `||`
+Remove the classification of background-image import as non-canvas state.
+
+If the feature remains enabled before persistence exists, it should be called out as a separate unresolved document-integrity issue.
 
 ### Phase B
 
 Clarify that:
 
 - `state/document.ts` is intended to become the canonical document API
-- re-exporting from `design.ts` is transitional, not the end state
-
-### Phase C
-
-Replace the monotonic single revision plan with a two-baseline model:
-
-- canvas saved checkpoint marker
-- non-canvas revision + saved revision
-- `designDirty = canvasDirty || nonCanvasDirty`
-
-This preserves undo-to-saved-state semantics and still fixes the mixed-source bug.
-
-### Phase D
-
-Add explicit degraded-mode behavior:
-
-- gate plant DB UI/actions
-- define graceful search behavior when degraded
+- `state/design.ts` remains transitional/internal
 
 ### Phase E
 
-Add:
-
-- bootstrap restructuring for theme/shortcuts/settings
-- explicit test dependency additions
+Keep the bootstrap restructuring, but note the implementation concern around theme flicker and startup ordering.
 
 ## Proposed Acceptance Criteria
 
 The plan is ready to implement once these conditions are true:
 
-1. Phase A no longer introduces a serializer/state cycle.
-2. Phase C dirty semantics allow undo back to the saved baseline to become clean.
-3. Phase D includes degraded-mode feature gating, not just a banner.
-4. Phase E includes the bootstrap restructuring needed for settings load order.
+1. the plan explicitly decides whether background-image import is persisted now or gated off
+2. Phase C no longer describes background-image import as non-canvas state
+3. `state/document.ts` is explicitly described as the intended long-term document API boundary
+4. Phase E bootstrap notes include startup ordering expectations
 
 ## Final Assessment
 
-This is a strong implementation plan. It is close to ready as written, and the execution order is correct.
+This is now a strong implementation plan.
 
-The important thing is not to let a good roadmap smuggle in two avoidable regressions:
+The sequencing is right. The earlier design issues have been corrected. The remaining risk is not architectural confusion, but leaving one current save-loss case outside scope and then calling the work complete.
 
-- a module cycle in Phase A
-- a broken dirty model in Phase C
-
-Fix those in the plan first, then proceed.
+Fix that scope issue first, then proceed.

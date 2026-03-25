@@ -1,7 +1,7 @@
 import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale } from '../../state/app'
-import { currentDesign, designDirty } from '../../state/design'
+import { currentDesign, nonCanvasRevision } from '../../state/document'
 import type { TimelineAction } from '../../types/design'
 import styles from './TimelineTab.module.css'
 
@@ -102,7 +102,7 @@ export function TimelineTab() {
       }
     }
 
-    designDirty.value = true
+    nonCanvasRevision.value++
     cancelForm()
   }
 
@@ -115,7 +115,7 @@ export function TimelineTab() {
         a.id === id ? { ...a, completed: !a.completed } : a
       ),
     }
-    designDirty.value = true
+    nonCanvasRevision.value++
   }
 
   function deleteAction(id: string) {
@@ -125,7 +125,7 @@ export function TimelineTab() {
       ...design,
       timeline: design.timeline.filter((a) => a.id !== id),
     }
-    designDirty.value = true
+    nonCanvasRevision.value++
   }
 
   const isEditing = showAddForm.value

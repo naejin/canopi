@@ -31,8 +31,8 @@ pub fn save_to_file(path: &Path, content: &CanopiFile) -> Result<(), String> {
         return Err(format!("Failed to write {}: {e}", tmp_path.display()));
     }
 
-    // Atomic rename .tmp → final path.
-    if let Err(e) = std::fs::rename(&tmp_path, path) {
+    // Atomic replace .tmp → final path (cross-platform safe).
+    if let Err(e) = super::atomic_replace(&tmp_path, path) {
         let _ = std::fs::remove_file(&tmp_path);
         return Err(format!(
             "Failed to finalise save at {}: {e}",

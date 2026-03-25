@@ -7,6 +7,9 @@ mod platform;
 use std::sync::Mutex;
 use rusqlite::{Connection, OpenFlags};
 use tauri::Manager;
+use common_types::health::{SubsystemHealth, PlantDbStatus};
+
+pub struct AppHealth(pub Mutex<SubsystemHealth>);
 
 pub fn run() {
     tauri::Builder::default()
@@ -35,6 +38,7 @@ pub fn run() {
             commands::export::export_file,
             commands::export::export_binary,
             commands::export::read_file_bytes,
+            commands::health::get_health,
         ])
         .setup(|app| {
             // Logging
@@ -71,7 +75,7 @@ pub fn run() {
                     if dev_path.exists() { Some(dev_path) } else { None }
                 });
 
-            match plant_db_path {
+            let plant_db_status = match plant_db_path {
                 Some(path) => {
                     match Connection::open_with_flags(
                         &path,
@@ -86,12 +90,14 @@ pub fn run() {
                             }
                             app.manage(db::PlantDb(Mutex::new(plant_conn)));
                             tracing::info!("Plant DB opened at {}", path.display());
+                            PlantDbStatus::Available
                         }
                         Err(e) => {
                             tracing::error!("Failed to open plant DB at {}: {e}. Species search unavailable.", path.display());
                             // Register an empty in-memory DB so State<PlantDb> doesn't panic
                             let fallback = Connection::open_in_memory().expect("in-memory DB");
                             app.manage(db::PlantDb(Mutex::new(fallback)));
+                            PlantDbStatus::Corrupt
                         }
                     }
                 }
@@ -99,8 +105,13 @@ pub fn run() {
                     tracing::error!("Plant DB not found. Run scripts/prepare-db.py first. Species search unavailable.");
                     let fallback = Connection::open_in_memory().expect("in-memory DB");
                     app.manage(db::PlantDb(Mutex::new(fallback)));
+                    PlantDbStatus::Missing
                 }
-            }
+            };
+
+            app.manage(AppHealth(Mutex::new(SubsystemHealth {
+                plant_db: plant_db_status,
+            })));
 
             // Note: db_ready event is not emitted here because the frontend
             // JS listener hasn't registered yet during setup. The DB is ready

@@ -53,6 +53,10 @@
     "retry": "Tentar novamente",
     "filterMedicinal": "Medicinal"
   },
+  "health": {
+    "plantDbMissing": "Banco de dados de plantas não encontrado. Execute prepare-db.py. A pesquisa de plantas está indisponível.",
+    "plantDbCorrupt": "Banco de dados de plantas corrompido. Reinstale ou regenere com prepare-db.py. A pesquisa de plantas está indisponível."
+  },
   "canvas": {
     "emptyTitle": "Tela de design",
     "emptyText": "Defina um local para ativar camadas do mapa, ou comece a desenhar",
@@ -244,7 +248,8 @@
   "status": {
     "version": "Canopi v0.1.0",
     "language": "Idioma",
-    "theme": "Tema"
+    "theme": "Tema",
+    "autosaveFailed": "Salvamento automático falhou"
   },
   "theme": {
     "light": "Claro",

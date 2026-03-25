@@ -1,4 +1,8 @@
 import { signal, batch } from "@preact/signals";
+import type { PlantDbStatus } from "../types/health";
+import type { Settings } from "../types/settings";
+import { setSettings } from "../ipc/settings";
+import { gridSize, snapToGridEnabled } from "./canvas";
 
 export type Panel = "plant-db" | "canvas" | "world-map" | "learning";
 
@@ -12,6 +16,36 @@ export const activePanel = signal<Panel>("canvas");
 export const locale = signal<"en" | "fr" | "es" | "pt" | "it" | "zh">("en");
 export const theme = signal<"light" | "dark" | "system">("system");
 export const dbReady = signal(false);
+
+/** Plant DB subsystem health — queried from Rust on startup. */
+export const plantDbStatus = signal<PlantDbStatus>('available');
+
+/** Autosave interval in milliseconds — hydrated from Rust settings on startup. */
+export const autoSaveIntervalMs = signal<number>(60_000);
+
+/** Snapshot of the last settings received from Rust, used to build the full
+ *  object when persisting a partial change back. */
+let _lastSettings: Settings | null = null;
+
+/** Called by app.tsx after bootstrap to store the initial settings snapshot. */
+export function setBootstrappedSettings(s: Settings): void {
+  _lastSettings = s;
+}
+
+/** Persist the current signal values back to Rust. Call after user changes. */
+export function persistCurrentSettings(): void {
+  if (!_lastSettings) return;
+  const updated: Settings = {
+    ..._lastSettings,
+    locale: locale.value,
+    theme: theme.value,
+    grid_size_m: gridSize.value,
+    snap_to_grid: snapToGridEnabled.value,
+    auto_save_interval_s: Math.round(autoSaveIntervalMs.value / 1000),
+  };
+  _lastSettings = updated;
+  setSettings(updated).catch((e) => console.error('Failed to persist settings:', e));
+}
 
 // Which sidebar panel is open alongside the canvas. null = none.
 // Starts closed — the user opens Plant DB when they need it (by then IPC is ready).

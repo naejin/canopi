@@ -1,4 +1,4 @@
-import { navigateTo, theme, type Panel } from "../state/app";
+import { navigateTo, theme, persistCurrentSettings, type Panel } from "../state/app";
 import { activeTool } from "../state/canvas";
 import { t } from "../i18n";
 import {
@@ -6,11 +6,10 @@ import {
   saveAsCurrentDesign,
   openDesign,
   newDesignAction,
-} from "../state/design";
+} from "../state/document";
 import { canvasEngine } from "../canvas/engine";
 import { exportPNG, exportSVG, exportPlantCSV } from "../canvas/export";
-import { importBackgroundImage } from "../canvas/import";
-import { exportFile, exportBinary, importFileDialog } from "../ipc/design";
+import { exportFile, exportBinary } from "../ipc/design";
 
 export interface Command {
   id: string;
@@ -34,6 +33,7 @@ function cycleTheme() {
   const order = ["system", "light", "dark"] as const;
   const idx = order.indexOf(theme.value);
   theme.value = order[(idx + 1) % order.length]!;
+  persistCurrentSettings();
 }
 
 async function doExportPNG(): Promise<void> {
@@ -64,33 +64,6 @@ async function doExportCSV(): Promise<void> {
     await exportFile(csv, "plant-list.csv", "CSV Spreadsheet", ["csv"]);
   } catch (e) {
     if (e !== "Dialog cancelled") console.error("CSV export failed:", e);
-  }
-}
-
-async function doImportBackgroundImage(): Promise<void> {
-  if (!canvasEngine) return;
-  try {
-    const [bytes, filename] = await importFileDialog("Image", [
-      "png",
-      "jpg",
-      "jpeg",
-      "webp",
-      "gif",
-    ]);
-    const uint8 = new Uint8Array(bytes);
-    const ext = filename.split(".").pop()?.toLowerCase() ?? "png";
-    const mimeMap: Record<string, string> = {
-      png: "image/png",
-      jpg: "image/jpeg",
-      jpeg: "image/jpeg",
-      webp: "image/webp",
-      gif: "image/gif",
-    };
-    const mime = mimeMap[ext] ?? "image/png";
-    const file = new File([uint8], filename, { type: mime });
-    await importBackgroundImage(canvasEngine, file);
-  } catch (e) {
-    if (e !== "Dialog cancelled") console.error("Background import failed:", e);
   }
 }
 
@@ -125,5 +98,6 @@ export const commands: Command[] = [
   { id: "canvas.export.png",   label: () => t("canvas.export.exportPng"),   action: () => { void doExportPNG() } },
   { id: "canvas.export.svg",   label: () => t("canvas.export.exportSvg"),   action: () => { void doExportSVG() } },
   { id: "canvas.export.csv",   label: () => t("canvas.export.exportCsv"),   action: () => { void doExportCSV() } },
-  { id: "canvas.import.image", label: () => t("canvas.export.importImage"), action: () => { void doImportBackgroundImage() } },
+  // Background-image import gated — not persisted in .canopi yet. Re-enable when persistence is implemented.
+  // { id: "canvas.import.image", label: () => t("canvas.export.importImage"), action: () => { void doImportBackgroundImage() } },
 ];

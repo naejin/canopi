@@ -12,7 +12,7 @@ import {
   selectedObjectIds,
   lockedObjectIds,
 } from '../state/canvas'
-import { theme, locale } from '../state/app'
+import { theme, locale, persistCurrentSettings } from '../state/app'
 import { serializeNode, recreateNode } from './commands/node-serialization'
 import { CanvasHistory } from './history'
 import { AddNodeCommand, RemoveNodeCommand, BatchCommand, TransformNodeCommand } from './commands'
@@ -558,6 +558,7 @@ export class CanvasEngine {
 
   toggleSnapToGrid(): void {
     snapToGridEnabled.value = !snapToGridEnabled.value
+    persistCurrentSettings()
   }
 
   toggleGrid(): void {
@@ -1016,9 +1017,9 @@ export class CanvasEngine {
         position: { x: group.x(), y: group.y() },
         rotation: group.rotation() !== 0 ? group.rotation() : null,
         scale: group.scaleX() !== 1 ? group.scaleX() : null,
-        notes: null,
-        planted_date: null,
-        quantity: null,
+        notes: group.getAttr('data-notes') ?? null,
+        planted_date: group.getAttr('data-planted-date') ?? null,
+        quantity: group.getAttr('data-quantity') ?? null,
       })
     })
     return result

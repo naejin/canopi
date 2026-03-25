@@ -1,7 +1,7 @@
 import { useSignal, computed } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale } from '../../state/app'
-import { currentDesign, designDirty } from '../../state/design'
+import { currentDesign, nonCanvasRevision } from '../../state/document'
 import type { BudgetItem } from '../../types/design'
 import styles from './BudgetTab.module.css'
 
@@ -114,7 +114,7 @@ export function BudgetTab() {
       }
     }
 
-    designDirty.value = true
+    nonCanvasRevision.value++
     cancelForm()
   }
 
@@ -125,7 +125,7 @@ export function BudgetTab() {
       ...design,
       budget: design.budget.filter((_, i) => i !== index),
     }
-    designDirty.value = true
+    nonCanvasRevision.value++
   }
 
   const isEditing = showAddForm.value

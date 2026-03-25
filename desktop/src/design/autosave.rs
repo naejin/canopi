@@ -64,7 +64,7 @@ pub fn autosave(
     let tmp = dest.with_extension("tmp");
     std::fs::write(&tmp, &json)
         .map_err(|e| format!("Failed to write autosave tmp {}: {e}", tmp.display()))?;
-    std::fs::rename(&tmp, &dest)
+    super::atomic_replace(&tmp, &dest)
         .map_err(|e| format!("Failed to commit autosave to {}: {e}", dest.display()))?;
 
     prune_autosaves(&dir, 5);

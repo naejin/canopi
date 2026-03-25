@@ -53,6 +53,10 @@
     "retry": "Riprova",
     "filterMedicinal": "Medicinale"
   },
+  "health": {
+    "plantDbMissing": "Database piante non trovato. Esegui prepare-db.py. La ricerca piante non è disponibile.",
+    "plantDbCorrupt": "Database piante corrotto. Reinstalla o rigenera con prepare-db.py. La ricerca piante non è disponibile."
+  },
   "canvas": {
     "emptyTitle": "Tela di progettazione",
     "emptyText": "Imposta una posizione per attivare i livelli mappa, o inizia a disegnare",
@@ -244,7 +248,8 @@
   "status": {
     "version": "Canopi v0.1.0",
     "language": "Lingua",
-    "theme": "Tema"
+    "theme": "Tema",
+    "autosaveFailed": "Salvataggio automatico fallito"
   },
   "theme": {
     "light": "Chiaro",

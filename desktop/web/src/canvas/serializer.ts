@@ -2,9 +2,30 @@ import Konva from 'konva'
 import type { CanvasEngine } from './engine'
 import type { CanopiFile, PlacedPlant, Zone, Layer } from '../types/design'
 import { createPlantNode } from './plants'
-import { layerVisibility, northBearingDeg } from '../state/canvas'
+import { layerVisibility, layerLockState, northBearingDeg } from '../state/canvas'
 
 const LAYER_NAMES = ['base', 'contours', 'climate', 'zones', 'water', 'plants', 'annotations'] as const
+
+// ---------------------------------------------------------------------------
+// Forward-compatibility: capture unknown top-level keys from Rust serde(flatten)
+// ---------------------------------------------------------------------------
+
+const KNOWN_CANOPI_KEYS = new Set([
+  'version', 'name', 'description', 'location', 'north_bearing_deg',
+  'layers', 'plants', 'zones', 'consortiums', 'timeline', 'budget',
+  'created_at', 'updated_at',
+])
+
+/** Extract unknown top-level keys from a raw IPC-deserialized object. */
+export function extractExtra(raw: Record<string, unknown>): Record<string, unknown> {
+  const extra: Record<string, unknown> = {}
+  for (const key of Object.keys(raw)) {
+    if (!KNOWN_CANOPI_KEYS.has(key)) {
+      extra[key] = raw[key]
+    }
+  }
+  return extra
+}
 
 // ---------------------------------------------------------------------------
 // Serialize canvas state → CanopiFile
@@ -18,6 +39,7 @@ export function toCanopi(
     location?: { lat: number; lon: number; altitude_m?: number | null } | null
     northBearingDeg?: number | null
   },
+  doc: CanopiFile | null,
 ): CanopiFile {
   const plants: PlacedPlant[] = engine.getPlacedPlants()
 
@@ -64,19 +86,20 @@ export function toCanopi(
         zone_type: className.toLowerCase(),
         points,
         fill_color: typeof fill === 'string' ? fill : null,
-        notes: null,
+        notes: (node as Konva.Shape).getAttr('data-notes') ?? null,
       })
     })
   }
 
-  // Collect layer state from signals (source of truth for visibility)
+  // Collect layer state from signals (source of truth for visibility/lock)
   const vis = layerVisibility.value
+  const locks = layerLockState.value
   const layers: Layer[] = LAYER_NAMES.map((name) => {
     const layer = engine.layers.get(name)
     return {
       name,
       visible: vis[name] ?? true,
-      locked: false,
+      locked: locks[name] ?? false,
       opacity: layer?.opacity() ?? 1,
     }
   })
@@ -84,24 +107,26 @@ export function toCanopi(
   const now = new Date().toISOString()
 
   return {
+    // Spread extra FIRST — canonical keys below always win over unknown fields
+    ...(doc?.extra ?? {}),
     version: 1,
     name: metadata.name,
-    description: metadata.description ?? null,
+    description: metadata.description ?? doc?.description ?? null,
     location: metadata.location
       ? {
           lat: metadata.location.lat,
           lon: metadata.location.lon,
           altitude_m: metadata.location.altitude_m ?? null,
         }
-      : null,
+      : (doc?.location ?? null),
     north_bearing_deg: metadata.northBearingDeg ?? northBearingDeg.value,
     layers,
     plants,
     zones,
-    consortiums: [],
-    timeline: [],
-    budget: [],
-    created_at: now,
+    consortiums: doc?.consortiums ?? [],
+    timeline: doc?.timeline ?? [],
+    budget: doc?.budget ?? [],
+    created_at: doc?.created_at ?? now,
     updated_at: now,
   }
 }
@@ -134,6 +159,9 @@ export function fromCanopi(file: CanopiFile, engine: CanvasEngine): void {
         canopySpreadM: plant.scale ?? null,
         position: plant.position,
         stageScale: engine.stage.scaleX(),
+        notes: plant.notes,
+        plantedDate: plant.planted_date,
+        quantity: plant.quantity,
       })
       if (plant.rotation != null) node.rotation(plant.rotation)
       if (plant.scale != null) node.scale({ x: plant.scale, y: plant.scale })
@@ -202,16 +230,19 @@ export function fromCanopi(file: CanopiFile, engine: CanvasEngine): void {
       }
 
       if (shape) {
+        shape.setAttr('data-notes', zone.notes ?? null)
         zonesLayer.add(shape)
       }
     }
   }
 
-  // Restore layer visibility from file
+  // Restore layer visibility and lock state from file
   if (file.layers.length > 0) {
     const vis: Record<string, boolean> = { ...layerVisibility.value }
+    const locks: Record<string, boolean> = { ...layerLockState.value }
     for (const l of file.layers) {
       vis[l.name] = l.visible
+      locks[l.name] = l.locked
       const layer = engine.layers.get(l.name)
       if (layer) {
         layer.visible(l.visible)
@@ -219,12 +250,11 @@ export function fromCanopi(file: CanopiFile, engine: CanvasEngine): void {
       }
     }
     layerVisibility.value = vis
+    layerLockState.value = locks
   }
 
-  // Restore compass bearing
-  if (file.north_bearing_deg != null) {
-    northBearingDeg.value = file.north_bearing_deg
-  }
+  // Restore compass bearing — always reset to prevent leaking from previous document
+  northBearingDeg.value = file.north_bearing_deg ?? 0
 
   // One batchDraw per layer
   for (const name of LAYER_NAMES) {

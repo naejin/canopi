@@ -56,6 +56,9 @@ export function createPlantNode(opts: {
   canopySpreadM: number | null
   position: { x: number; y: number }
   stageScale?: number
+  notes?: string | null
+  plantedDate?: string | null
+  quantity?: number | null
 }): Konva.Group {
   const color = getStratumColor(opts.stratum)
   const inv = opts.stageScale ? 1 / opts.stageScale : 1
@@ -87,6 +90,9 @@ export function createPlantNode(opts: {
   group.setAttr('data-common-name', opts.commonName ?? '')
   group.setAttr('data-stratum', opts.stratum ?? '')
   group.setAttr('data-canopy-spread', opts.canopySpreadM ?? 0)
+  group.setAttr('data-notes', opts.notes ?? null)
+  group.setAttr('data-planted-date', opts.plantedDate ?? null)
+  group.setAttr('data-quantity', opts.quantity ?? null)
 
   // Circle — all values in screen pixels (group counter-scale handles world mapping)
   const circle = new Konva.Circle({

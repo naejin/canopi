@@ -1,5 +1,5 @@
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import { designName, designDirty } from '../../state/design'
+import { designName, designDirty } from '../../state/document'
 import { activePanel, locale } from '../../state/app'
 import { t } from '../../i18n'
 import styles from './TitleBar.module.css'

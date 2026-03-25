@@ -53,6 +53,10 @@
     "retry": "重试",
     "filterMedicinal": "药用"
   },
+  "health": {
+    "plantDbMissing": "未找到植物数据库。请运行 prepare-db.py 生成。植物搜索不可用。",
+    "plantDbCorrupt": "植物数据库已损坏。请重新安装或使用 prepare-db.py 重新生成。植物搜索不可用。"
+  },
   "canvas": {
     "emptyTitle": "设计画布",
     "emptyText": "设置位置以启用地图图层，或开始绘制",
@@ -244,7 +248,8 @@
   "status": {
     "version": "Canopi v0.1.0",
     "language": "语言",
-    "theme": "主题"
+    "theme": "主题",
+    "autosaveFailed": "自动保存失败"
   },
   "theme": {
     "light": "浅色",

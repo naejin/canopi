@@ -74,3 +74,8 @@
   font-variant-numeric: tabular-nums;
   min-width: 36px;
 }
+
+.autosaveWarning {
+  color: var(--color-warning);
+  font-weight: 500;
+}

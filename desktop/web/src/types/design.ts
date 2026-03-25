@@ -14,6 +14,7 @@ export interface CanopiFile {
   budget: BudgetItem[]
   created_at: string
   updated_at: string
+  extra?: Record<string, unknown>
 }
 
 export interface Location {

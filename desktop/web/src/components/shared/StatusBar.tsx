@@ -1,5 +1,6 @@
-import { locale, theme, activePanel } from "../../state/app";
+import { locale, theme, activePanel, persistCurrentSettings } from "../../state/app";
 import { zoomLevel } from "../../state/canvas";
+import { autosaveFailed } from "../../state/document";
 import { t } from "../../i18n";
 import styles from "./StatusBar.module.css";
 
@@ -27,6 +28,11 @@ export function StatusBar() {
             {Math.round(zoom * 100)}%
           </span>
         )}
+        {autosaveFailed.value && (
+          <span className={styles.autosaveWarning} role="alert">
+            {t("status.autosaveFailed")}
+          </span>
+        )}
       </div>
 
       <div className={styles.right}>
@@ -35,6 +41,7 @@ export function StatusBar() {
           value={locale.value}
           onChange={(e) => {
             locale.value = (e.target as HTMLSelectElement).value as typeof locale.value;
+            persistCurrentSettings();
           }}
           aria-label={t("status.language")}
         >
@@ -48,6 +55,7 @@ export function StatusBar() {
             const order = ["system", "light", "dark"] as const;
             const idx = order.indexOf(theme.value);
             theme.value = order[(idx + 1) % order.length]!;
+            persistCurrentSettings();
           }}
           aria-label={`${t("status.theme")}: ${themeLabel}`}
           title={`${t("status.theme")}: ${themeLabel}`}

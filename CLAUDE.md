@@ -73,6 +73,9 @@ npx tsc --noEmit
 # Frontend build (from desktop/web/)
 npm run build
 
+# Frontend tests (from desktop/web/)
+npm test
+
 # Generate plant DB (run before first `cargo tauri dev`)
 python3 scripts/prepare-db.py
 
@@ -106,22 +109,38 @@ cargo build --release
 - **Konva `strokeScaleEnabled: false`**: Built-in property that keeps stroke width constant in screen pixels regardless of zoom. Use on all zone/annotation shapes. Don't write custom zoom-scaling systems.
 - **Konva group-level counter-scale for plants**: Set `group.scale({x: 1/stageScale, y: 1/stageScale})` on the group, not individual children. Children use plain screen-pixel values. One scale update per group on zoom = zero lag.
 - **Canvas `stage.on('dragmove')` fires for shape drags too**: Filter by `e.target !== this.stage` to avoid heavy overlay redraws during shape drag. Only sync overlays for stage-level pans.
-- **Plant DB in-memory fallback hides failure**: If plant DB is missing/corrupt, `lib.rs` silently falls back to empty in-memory DB. FTS5 `MATCH` queries will throw errors (not just return empty). This is a known issue pending Phase D fix — do not add more silent fallbacks.
+- **Plant DB degraded mode**: If plant DB is missing/corrupt, `lib.rs` falls back to in-memory DB and reports `PlantDbStatus::Missing`/`Corrupt` via `get_health` IPC. Frontend short-circuits all species IPC calls when degraded and shows a banner. Do not add more silent fallbacks.
+- **Tauri v2 `close()` re-emits `closeRequested`**: `getCurrentWindow().close()` triggers the close guard again. Use `destroy()` for discard-without-save. Requires `core:window:allow-destroy` in capabilities.
+- **`std::fs::rename` on Windows with locked files**: Fails if destination held by antivirus/file watcher. Use `design::atomic_replace()` with rollback sidecar — never raw `rename` for overwriting existing files.
+- **Konva custom attrs: use `?? null` not `|| null`**: `getAttr()` can return `0` or `''` which are legitimate values. `|| null` collapses them; `?? null` preserves them.
+- **Canvas dirty must not use bounded stack length**: `_past.length` caps at `MAX_HISTORY=500`. Use `_savedPosition` checkpoint in `CanvasHistory` instead. `history.clear()` must NOT trigger dirty state changes.
+- **Vitest with Konva requires `canvas` npm package**: Install `canvas` as devDependency — Konva's Node.js entry point requires it.
 
-## Document Lifecycle (enforced — see docs/reviews/)
-- **`toCanopi()` is the sole save composition point** — all save paths (manual, save-as, autosave) go through it. Never construct a `CanopiFile` from canvas state alone.
+## Document Lifecycle (enforced — Phase 2.1 implemented)
+- **`toCanopi(engine, metadata, doc)` is the sole save composition point** — all save paths go through it. The `doc` parameter provides non-canvas sections from `currentDesign`. Never construct a `CanopiFile` from canvas state alone.
+- **`state/document.ts` is the canonical document API** — external consumers import from here. `state/design.ts` is internal/transitional.
 - **Never regenerate `created_at`** — preserve from loaded file. Only update `updated_at` intentionally on actual save.
 - **Preserve all loaded document sections on save** — timeline, budget, consortiums, description, location, extra fields. Do not hardcode empty arrays.
-- **Preserve per-object non-visual fields** — plant notes/planted_date/quantity and zone notes must survive load-save via Konva custom attrs (same pattern as `data-canonical-name`).
-- **Preserve unknown `extra` fields** — the Rust `#[serde(flatten)]` forward-compatibility guarantee must hold through the TS layer too.
-- **`designDirty` is document-scoped** — canvas history stack depth (`_past.length`) is not the sole authority. Non-canvas edits (timeline/budget/consortium tabs) also set dirty and must not be cleared by canvas undo.
-- **Autosave must checkpoint the same document as manual save** — same composition path, same fields preserved. Autosave failures must not be silently swallowed.
-- **One canonical document owner** — `currentDesign` signal is the runtime authority for non-canvas sections. `CanvasEngine` is a projection/editor for canvas data only.
+- **Preserve per-object non-visual fields** — plant notes/planted_date/quantity and zone notes stored as Konva custom attrs (`data-notes`, `data-planted-date`, `data-quantity`). Read back with `?? null`.
+- **Preserve unknown `extra` fields** — `extractExtra()` captures unknown top-level keys from Rust `#[serde(flatten)]`. Spread extra FIRST in `toCanopi()` return, canonical keys always win.
+- **Two-baseline dirty model** — Canvas: `CanvasHistory` tracks a `_savedPosition` checkpoint; `canvasClean` signal is true when `_past.length === _savedPosition`. Safe against 500-cap (truncation shifts `_savedPosition`; if it goes negative, canvas stays dirty). Supports undo-to-clean. Non-canvas: `nonCanvasRevision` vs `nonCanvasSavedRevision`. `designDirty = !canvasClean || nonCanvasRevision !== nonCanvasSavedRevision`. Never write to `designDirty` directly. `history.clear()` must NOT mark canvas dirty.
+- **Autosave must checkpoint the same document as manual save** — same composition path, same fields preserved. Autosave failures surface via `autosaveFailed` signal and StatusBar.
+- **Background-image import is gated** — not persisted in `.canopi` yet. Command disabled in `registry.ts`. Re-enable when persistence is implemented.
+- **No serializer/state module cycle** — `serializer.ts` must NOT import from `state/design.ts`. The `doc` parameter breaks the cycle.
+- **Close guard uses `destroy()` not `close()`** — `close()` re-emits `closeRequested` causing infinite loop. Always `destroy()` after user confirms discard.
+- **Cross-platform file replace** — `atomic_replace()` in `design/mod.rs` handles Windows file-lock failures. Never use raw `std::fs::rename` for overwriting existing files.
+
+## Settings Persistence Contract
+- **Rust `Settings` (user DB) is the single source of truth** for all user preferences: locale, theme, grid, snap, autosave interval.
+- **`localStorage` is a sync cache only, not a source of truth** — `initTheme()` reads from localStorage for instant first-paint (avoids flash), but Rust settings overwrite it when bootstrap resolves. The effect writes back to localStorage so the cache stays current.
+- **Frontend signals are runtime projections** — hydrated from Rust on startup via `get_settings` IPC, persisted back via `set_settings` on user change.
+- **`persistCurrentSettings()` in `state/app.ts`** is the write path — must include ALL user-editable settings that are part of the Rust `Settings` struct.
+- **Startup ordering**: `initTheme()` (sync, applies default) → `get_settings` IPC (async, reconciles with persisted values). No flicker because the effect reactively applies the Rust value when it arrives.
 
 ## Architecture Review
 - Full review and analysis: `docs/reviews/2026-03-24-architecture-review.md` and `2026-03-24-architecture-review-analysis.md`
-- Implementation plan: Phase A (fix save composition) → B (document ownership) → C (dirty/autosave) → D (startup degradation) → E (settings/contracts)
-- Phase A is frontend-only (zero Rust changes), centered on `serializer.ts` and 3 `toCanopi()` call sites
+- Phase 2.1 implementation plan: `docs/plans/phase-2.1-document-integrity.md`
+- Code review rounds: `docs/reviews/code/` — 3 rounds, all findings resolved
 
 ## Canvas Architecture
 - Zone shapes: world-unit geometry, `strokeScaleEnabled: false` for constant-pixel strokes

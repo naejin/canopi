@@ -1,6 +1,8 @@
+// Gated: re-enable when .canopi background-image persistence is implemented.
+// The command entry in commands/registry.ts is commented out.
 import Konva from 'konva'
 import type { CanvasEngine } from './engine'
-import { designDirty } from '../state/design'
+import { canvasClean } from '../state/design'
 
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024 // 10 MB
 const TARGET_IMAGE_SIZE_M = 50 // Scale image to fit ~50 meters on its longest side
@@ -69,7 +71,9 @@ export async function importBackgroundImage(
           layer.add(konvaImage)
           layer.batchDraw()
         }
-        designDirty.value = true
+        // When persistence is implemented, this should be canvas-side dirty
+        // (background images are Konva nodes, not non-canvas state).
+        canvasClean.value = false
 
         resolve()
       }
