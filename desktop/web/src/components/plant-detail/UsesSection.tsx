@@ -7,6 +7,7 @@ interface Props {
   uses: SpeciesUse[];
   edibilityRating: number | null;
   medicinalRating: number | null;
+  otherUsesRating?: number | null;
 }
 
 const MAX_RATING = 5;
@@ -33,7 +34,7 @@ function RatingDots({ rating, dotClass }: { rating: number | null; dotClass: str
   );
 }
 
-export function UsesSection({ uses, edibilityRating, medicinalRating }: Props) {
+export function UsesSection({ uses, edibilityRating, medicinalRating, otherUsesRating }: Props) {
   void locale.value;
 
   const edibleUses = uses.filter((u) => u.use_category.toLowerCase().includes('edible'));
@@ -47,10 +48,10 @@ export function UsesSection({ uses, edibilityRating, medicinalRating }: Props) {
   const categories: CategoryGroup[] = [
     { labelKey: 'plantDetail.edible', nameClass: styles.usesCategoryNameEdible, dotClass: styles.usesRatingDotEdible, rating: edibilityRating, items: edibleUses },
     { labelKey: 'plantDetail.medicinal', nameClass: styles.usesCategoryNameMedicinal, dotClass: styles.usesRatingDotMedicinal, rating: medicinalRating, items: medicinalUses },
-    { labelKey: 'plantDetail.otherUses', nameClass: '', dotClass: styles.usesRatingDotFilled, rating: null, items: otherUses },
+    { labelKey: 'plantDetail.otherUses', nameClass: '', dotClass: styles.usesRatingDotFilled, rating: otherUsesRating ?? null, items: otherUses },
   ];
 
-  const hasAny = uses.length > 0 || edibilityRating !== null || medicinalRating !== null;
+  const hasAny = uses.length > 0 || edibilityRating !== null || medicinalRating !== null || (otherUsesRating ?? null) !== null;
 
   if (!hasAny) {
     return <p className={styles.usesEmpty}>{t('plantDetail.unknown')}</p>;

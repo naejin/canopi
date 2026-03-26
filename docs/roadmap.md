@@ -199,6 +199,41 @@ Active "More" filters display as removable chips below the always-visible filter
 
 ---
 
+### 3.5.5 — Plant Photos
+
+**Why**: A plant photo is the single highest-value element in the detail card. 50% of species have image URLs in canopi-data. Showing a photo (or slideshow for multiple) dramatically improves plant identification and card usefulness.
+
+**Prerequisite**: canopi-data ships a `species_images` table (replaces the messy `image_urls` JSON column):
+```
+species_images (
+  id TEXT PRIMARY KEY,
+  species_id TEXT REFERENCES species(id),
+  url TEXT NOT NULL,           -- direct HTTPS image URL (no relative paths, no placeholders)
+  source TEXT,                 -- "pfaf", "floristic", "cloudfront"
+  license TEXT,                -- "cc-by-sa", "unknown", etc.
+  attribution TEXT,            -- photographer/source credit
+  sort_order INTEGER DEFAULT 0
+)
+```
+
+**Design**:
+- Detail card header: photo area above the botanical name. Placeholder silhouette when no image or offline
+- Multiple images: horizontal dot indicators, swipe/click to browse
+- Attribution: small text overlay on photo (source + license)
+- Offline: Rust backend fetches and caches images in app data dir (`~/.local/share/canopi/image-cache/`). Serve cached images via Tauri asset protocol. Cache eviction: LRU, max 500MB
+- Privacy: all image fetches go through Rust (no direct browser requests to external CDNs)
+- Licensing filter: only display images with known permissive licenses by default. Setting to show all
+
+**Sub-phases**:
+- **3.5.5a**: Schema contract + prepare-db.py: add `species_images` to supporting tables. Rust backend: `SpeciesImage` struct, IPC command `get_species_images(canonical_name)` returning `Vec<SpeciesImage>`. Frontend type
+- **3.5.5b**: Rust image cache: fetch URL → save to app data dir → serve via `asset:` protocol or localhost. Cache lookup before fetch. Background fetch (don't block detail card render)
+- **3.5.5c**: Frontend: photo component in detail card header. Placeholder → fade-in on load. Dot indicators for multiple images. Click to cycle. Attribution overlay
+- **3.5.5d**: Offline mode: serve from cache when no network. Cache warming: on first detail view, fetch all images for that species. Eviction policy
+
+**Verification gate**: Open detail card for Malus domestica — photo loads from cache after first fetch. Disconnect network — cached photo still shows. Species with no images shows placeholder. Switch between multiple images. Attribution visible.
+
+---
+
 ### 3.6 — Display Modes (Color by Value, Size by Value)
 
 **Why**: Visual guild analysis. Color plants by stratum/moisture/nitrogen/growth-rate to instantly see ecological patterns. Size by height/width to visualize mature canopy.

@@ -140,6 +140,63 @@
       "secondary_ii": {"fr": "Secondaire II", "es": "Secundaria II", "pt": "Secundaria II", "it": "Secondaria II"},
       "secondary_iii": {"fr": "Secondaire III", "es": "Secundaria III", "pt": "Secundaria III", "it": "Secondaria III"},
       "climax": {"fr": "Climax", "es": "Climax", "pt": "Climax", "it": "Climax"}
+    },
+    "habit": {
+      "Annual": {"fr": "Annuelle", "es": "Anual", "pt": "Anual", "it": "Annuale", "zh": "一年生"},
+      "Bamboo": {"fr": "Bambou", "es": "Bambú", "pt": "Bambu", "it": "Bambù", "zh": "竹"},
+      "Biennial": {"fr": "Bisannuelle", "es": "Bienal", "pt": "Bienal", "it": "Biennale", "zh": "二年生"},
+      "Bulb": {"fr": "Bulbe", "es": "Bulbo", "pt": "Bulbo", "it": "Bulbo", "zh": "球茎"},
+      "Climber": {"fr": "Grimpante", "es": "Trepadora", "pt": "Trepadeira", "it": "Rampicante", "zh": "攀援"},
+      "Corm": {"fr": "Corme", "es": "Cormo", "pt": "Cormo", "it": "Cormo", "zh": "球茎"},
+      "Fern": {"fr": "Fougère", "es": "Helecho", "pt": "Samambaia", "it": "Felce", "zh": "蕨类"},
+      "Lichen": {"fr": "Lichen", "es": "Liquen", "pt": "Líquen", "it": "Lichene", "zh": "地衣"},
+      "Perennial": {"fr": "Vivace", "es": "Perenne", "pt": "Perene", "it": "Perenne", "zh": "多年生"},
+      "Shrub": {"fr": "Arbuste", "es": "Arbusto", "pt": "Arbusto", "it": "Arbusto", "zh": "灌木"},
+      "Tree": {"fr": "Arbre", "es": "Árbol", "pt": "Árvore", "it": "Albero", "zh": "乔木"}
+    },
+    "bloom_period": {
+      "Spring": {"fr": "Printemps", "es": "Primavera", "pt": "Primavera", "it": "Primavera", "zh": "春季"},
+      "Summer": {"fr": "Été", "es": "Verano", "pt": "Verão", "it": "Estate", "zh": "夏季"},
+      "Fall": {"fr": "Automne", "es": "Otoño", "pt": "Outono", "it": "Autunno", "zh": "秋季"},
+      "Winter": {"fr": "Hiver", "es": "Invierno", "pt": "Inverno", "it": "Inverno", "zh": "冬季"},
+      "Early Spring": {"fr": "Début printemps", "es": "Inicio primavera", "pt": "Início primavera", "it": "Inizio primavera", "zh": "早春"},
+      "Mid Spring": {"fr": "Mi-printemps", "es": "Mediados primavera", "pt": "Meados primavera", "it": "Metà primavera", "zh": "仲春"},
+      "Late Spring": {"fr": "Fin printemps", "es": "Final primavera", "pt": "Final primavera", "it": "Fine primavera", "zh": "晚春"},
+      "Early Summer": {"fr": "Début été", "es": "Inicio verano", "pt": "Início verão", "it": "Inizio estate", "zh": "初夏"},
+      "Mid Summer": {"fr": "Mi-été", "es": "Mediados verano", "pt": "Meados verão", "it": "Metà estate", "zh": "盛夏"},
+      "Late Summer": {"fr": "Fin été", "es": "Final verano", "pt": "Final verão", "it": "Fine estate", "zh": "晚夏"},
+      "Early Fall": {"fr": "Début automne", "es": "Inicio otoño", "pt": "Início outono", "it": "Inizio autunno", "zh": "初秋"},
+      "Late Fall": {"fr": "Fin automne", "es": "Final otoño", "pt": "Final outono", "it": "Fine autunno", "zh": "晚秋"},
+      "Late Winter": {"fr": "Fin hiver", "es": "Final invierno", "pt": "Final inverno", "it": "Fine inverno", "zh": "晚冬"},
+      "Indeterminate": {"fr": "Indéterminée", "es": "Indeterminada", "pt": "Indeterminada", "it": "Indeterminata", "zh": "不确定"},
+      "Year Round": {"fr": "Toute l'année", "es": "Todo el año", "pt": "O ano todo", "it": "Tutto l'anno", "zh": "全年"},
+      "Spring-Summer": {"fr": "Printemps-Été", "es": "Primavera-Verano", "pt": "Primavera-Verão", "it": "Primavera-Estate", "zh": "春夏"},
+      "Winter-Spring": {"fr": "Hiver-Printemps", "es": "Invierno-Primavera", "pt": "Inverno-Primavera", "it": "Inverno-Primavera", "zh": "冬春"}
+    },
+    "flower_color": {
+      "Black": {"fr": "Noir", "es": "Negro", "pt": "Preto", "it": "Nero", "zh": "黑色"},
+      "Blue": {"fr": "Bleu", "es": "Azul", "pt": "Azul", "it": "Blu", "zh": "蓝色"},
+      "Brown": {"fr": "Brun", "es": "Marrón", "pt": "Marrom", "it": "Marrone", "zh": "棕色"},
+      "Green": {"fr": "Vert", "es": "Verde", "pt": "Verde", "it": "Verde", "zh": "绿色"},
+      "Orange": {"fr": "Orange", "es": "Naranja", "pt": "Laranja", "it": "Arancione", "zh": "橙色"},
+      "Pink": {"fr": "Rose", "es": "Rosa", "pt": "Rosa", "it": "Rosa", "zh": "粉色"},
+      "Purple": {"fr": "Violet", "es": "Púrpura", "pt": "Roxo", "it": "Viola", "zh": "紫色"},
+      "Red": {"fr": "Rouge", "es": "Rojo", "pt": "Vermelho", "it": "Rosso", "zh": "红色"},
+      "Violet": {"fr": "Violet", "es": "Violeta", "pt": "Violeta", "it": "Violetto", "zh": "紫罗兰"},
+      "White": {"fr": "Blanc", "es": "Blanco", "pt": "Branco", "it": "Bianco", "zh": "白色"},
+      "Yellow": {"fr": "Jaune", "es": "Amarillo", "pt": "Amarelo", "it": "Giallo", "zh": "黄色"}
+    },
+    "active_growth_period": {
+      "Spring": {"fr": "Printemps", "es": "Primavera", "pt": "Primavera", "it": "Primavera", "zh": "春季"},
+      "Summer": {"fr": "Été", "es": "Verano", "pt": "Verão", "it": "Estate", "zh": "夏季"},
+      "Fall": {"fr": "Automne", "es": "Otoño", "pt": "Outono", "it": "Autunno", "zh": "秋季"},
+      "Year Round": {"fr": "Toute l'année", "es": "Todo el año", "pt": "O ano todo", "it": "Tutto l'anno", "zh": "全年"},
+      "Spring and Summer": {"fr": "Printemps et été", "es": "Primavera y verano", "pt": "Primavera e verão", "it": "Primavera e estate", "zh": "春夏"},
+      "Spring and Fall": {"fr": "Printemps et automne", "es": "Primavera y otoño", "pt": "Primavera e outono", "it": "Primavera e autunno", "zh": "春秋"},
+      "Summer and Fall": {"fr": "Été et automne", "es": "Verano y otoño", "pt": "Verão e outono", "it": "Estate e autunno", "zh": "夏秋"},
+      "Fall, Winter and Spring": {"fr": "Automne, hiver et printemps", "es": "Otoño, invierno y primavera", "pt": "Outono, inverno e primavera", "it": "Autunno, inverno e primavera", "zh": "秋冬春"},
+      "Spring, Summer, Fall": {"fr": "Printemps, été, automne", "es": "Primavera, verano, otoño", "pt": "Primavera, verão, outono", "it": "Primavera, estate, autunno", "zh": "春夏秋"},
+      "Spring, Summer, and Fall": {"fr": "Printemps, été et automne", "es": "Primavera, verano y otoño", "pt": "Primavera, verão e outono", "it": "Primavera, estate e autunno", "zh": "春夏秋"}
     }
   }
 }

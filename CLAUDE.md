@@ -82,6 +82,7 @@ These features are **disabled in UI but code stays on disk**:
 - Design tokens in `global.css` as CSS variables (field notebook palette)
 - Components use CSS Modules, reference tokens (never raw values)
 - Dark theme via `[data-theme="dark"]` on `<html>`
+- **Dark mode token audit**: When adding CSS that uses `--color-*` tokens as foreground text/border, verify the token has a dark mode override in `global.css` `[data-theme="dark"]`. Check contrast ratio ≥ 4.5:1 against `--color-bg`
 
 ## Development
 ```bash
@@ -171,6 +172,7 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 - **HMR safety**: Module-level `effect()` and `addEventListener` must store disposers and clean up via `import.meta.hot.dispose()`
 - **Signals + hooks**: Use `useSignalEffect` (not `useEffect`) when subscribing to signals inside components
 - **Effect subscription**: Effects only subscribe to signals **read during execution**. An early `return` before reading a signal = never re-runs. Read ALL dependencies BEFORE conditional returns
+- **Signal retry pattern**: Setting a signal to its current value is a no-op (`Object.is` equality). To force a re-fetch, use a dedicated `retryCount` signal: read it in the effect, increment it in the retry handler
 
 ### Database / SQLite
 - **Plant DB schema contract**: `scripts/schema-contract.json` maps canopi-data export columns to canopi-core.db columns. `prepare-db.py` reads from this contract, not hardcoded lists. When canopi-data changes column names, update the contract — not the Rust code
@@ -187,6 +189,10 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 - **Species table name**: `species` (NOT `silver_species` as in the architecture draft)
 - **Migration versioning**: User DB uses `PRAGMA user_version` — check before adding migrations
 - **Plant DB degraded mode**: If missing/corrupt, `lib.rs` falls back to in-memory DB. Frontend short-circuits all species IPC calls when degraded
+- **Common name lookup order**: `best_common_names` (built by prepare-db.py) → `species_common_names` → `species.common_name` column. Always use `best_common_names` first — `species_common_names` has gaps (e.g., no French entries for many species)
+- **`species_soil_types` is deprecated for display**: Overlaps with boolean columns (`well_drained`, `heavy_clay`). Show soil characteristics from booleans (translated via i18n) not from soil_types table (untranslatable legacy strings). Table kept for backward compatibility until canopi-data ships boolean replacements
+- **`translated_values` coverage**: Only fields WITH entries in this table get translated. Check `SELECT DISTINCT field_name FROM translated_values` before assuming a field is translatable. Missing fields need entries added to `schema-contract.json` translations section + DB population
+- **DB hot-patching**: Can INSERT/UPDATE `translated_values` in the running app's DB files — changes visible on next IPC call without app restart. Rust-side code changes require restart
 
 ### Canvas Engine / Architecture
 - **Every new canvas module must be wired into runtime**: Must be imported and called from `engine.ts` or `serializer.ts`
@@ -239,6 +245,7 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 - For UI work: run `/interface-design:critique` to verify design system adherence
 - Verify interactive features via Tauri MCP (screenshot + interact) — do not rely solely on `tsc`/`npm test`
 - Max 3 sub-phases between live app verification runs
+- Detail card expansion pattern: Rust struct → SQL query → translate_value() → frontend types → collapsible sections → i18n keys × 6 locales → schema-contract.json translations → DB population
 
 ## Key Documents
 - Roadmap: `docs/roadmap.md`

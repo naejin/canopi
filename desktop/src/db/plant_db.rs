@@ -95,31 +95,62 @@ pub fn get_detail(
 ) -> Result<SpeciesDetail, String> {
     let mut stmt = conn
         .prepare(
-            "SELECT s.id,
-                    s.canonical_name,
-                    s.family,
-                    s.genus,
-                    s.height_min_m,
-                    s.height_max_m,
-                    s.width_max_m,
-                    s.hardiness_zone_min,
-                    s.hardiness_zone_max,
-                    s.soil_ph_min,
-                    s.soil_ph_max,
-                    s.growth_rate,
-                    s.edibility_rating,
-                    s.medicinal_rating,
-                    s.habit,
-                    s.deciduous_evergreen,
-                    s.stratum,
-                    s.nitrogen_fixer,
-                    s.is_annual,
-                    s.is_biennial,
-                    s.is_perennial,
-                    s.tolerates_full_sun,
-                    s.tolerates_semi_shade,
-                    s.tolerates_full_shade,
-                    s.common_name
+            "SELECT s.id,                          -- 0
+                    s.canonical_name,               -- 1
+                    s.family,                       -- 2
+                    s.genus,                        -- 3
+                    s.height_min_m,                 -- 4
+                    s.height_max_m,                 -- 5
+                    s.width_max_m,                  -- 6
+                    s.hardiness_zone_min,           -- 7
+                    s.hardiness_zone_max,           -- 8
+                    s.growth_rate,                  -- 9
+                    s.is_annual,                    -- 10
+                    s.is_biennial,                  -- 11
+                    s.is_perennial,                 -- 12
+                    s.lifespan,                     -- 13
+                    s.deciduous_evergreen,          -- 14
+                    s.habit,                        -- 15
+                    s.active_growth_period,         -- 16
+                    s.bloom_period,                 -- 17
+                    s.flower_color,                 -- 18
+                    s.tolerates_full_sun,           -- 19
+                    s.tolerates_semi_shade,         -- 20
+                    s.tolerates_full_shade,         -- 21
+                    s.frost_tender,                 -- 22
+                    s.drought_tolerance,            -- 23
+                    s.soil_ph_min,                  -- 24
+                    s.soil_ph_max,                  -- 25
+                    s.well_drained,                 -- 26
+                    s.heavy_clay,                   -- 27
+                    s.tolerates_acid,               -- 28
+                    s.tolerates_alkaline,           -- 29
+                    s.tolerates_saline,             -- 30
+                    s.tolerates_wind,               -- 31
+                    s.tolerates_pollution,          -- 32
+                    s.tolerates_nutritionally_poor, -- 33
+                    s.stratum,                      -- 34
+                    s.succession_stage,             -- 35
+                    s.nitrogen_fixer,               -- 36
+                    s.attracts_wildlife,            -- 37
+                    s.scented,                      -- 38
+                    s.stratum_confidence,           -- 39
+                    s.succession_confidence,        -- 40
+                    s.edibility_rating,             -- 41
+                    s.medicinal_rating,             -- 42
+                    s.other_uses_rating,            -- 43
+                    s.edible_uses,                  -- 44
+                    s.medicinal_uses,               -- 45
+                    s.other_uses,                   -- 46
+                    s.toxicity,                     -- 47
+                    s.known_hazards,                -- 48
+                    s.summary,                      -- 49
+                    s.cultivation_notes,            -- 50
+                    s.propagation_notes,            -- 51
+                    s.native_range,                 -- 52
+                    s.carbon_farming,               -- 53
+                    s.data_quality_tier,            -- 54
+                    s.common_name                   -- 55
              FROM species s
              WHERE s.canonical_name = ?1
              LIMIT 1",
@@ -129,7 +160,7 @@ pub fn get_detail(
     let (species_id, mut detail) = stmt
         .query_row([canonical_name], |row| {
             let id: String = row.get(0)?;
-            let fallback_common: Option<String> = row.get(24)?;
+            let fallback_common: Option<String> = row.get(55)?;
             Ok((
                 id,
                 SpeciesDetail {
@@ -142,21 +173,52 @@ pub fn get_detail(
                     width_max_m: row.get(6)?,
                     hardiness_zone_min: row.get(7)?,
                     hardiness_zone_max: row.get(8)?,
-                    soil_ph_min: row.get(9)?,
-                    soil_ph_max: row.get(10)?,
-                    growth_rate: row.get(11)?,
-                    edibility_rating: row.get(12)?,
-                    medicinal_rating: row.get(13)?,
-                    habit: row.get(14)?,
-                    deciduous_evergreen: row.get(15)?,
-                    stratum: row.get(16)?,
-                    nitrogen_fixer: row.get::<_, Option<i32>>(17)?.map(|v| v != 0),
-                    is_annual: row.get::<_, Option<i32>>(18)?.map(|v| v != 0),
-                    is_biennial: row.get::<_, Option<i32>>(19)?.map(|v| v != 0),
-                    is_perennial: row.get::<_, Option<i32>>(20)?.map(|v| v != 0),
-                    tolerates_full_sun: row.get::<_, Option<i32>>(21)?.map(|v| v != 0),
-                    tolerates_semi_shade: row.get::<_, Option<i32>>(22)?.map(|v| v != 0),
-                    tolerates_full_shade: row.get::<_, Option<i32>>(23)?.map(|v| v != 0),
+                    growth_rate: row.get(9)?,
+                    is_annual: row.get::<_, Option<i32>>(10)?.map(|v| v != 0),
+                    is_biennial: row.get::<_, Option<i32>>(11)?.map(|v| v != 0),
+                    is_perennial: row.get::<_, Option<i32>>(12)?.map(|v| v != 0),
+                    lifespan: row.get(13)?,
+                    deciduous_evergreen: row.get(14)?,
+                    habit: row.get(15)?,
+                    active_growth_period: row.get(16)?,
+                    bloom_period: row.get(17)?,
+                    flower_color: row.get(18)?,
+                    tolerates_full_sun: row.get::<_, Option<i32>>(19)?.map(|v| v != 0),
+                    tolerates_semi_shade: row.get::<_, Option<i32>>(20)?.map(|v| v != 0),
+                    tolerates_full_shade: row.get::<_, Option<i32>>(21)?.map(|v| v != 0),
+                    frost_tender: row.get::<_, Option<i32>>(22)?.map(|v| v != 0),
+                    drought_tolerance: row.get(23)?,
+                    soil_ph_min: row.get(24)?,
+                    soil_ph_max: row.get(25)?,
+                    well_drained: row.get::<_, Option<i32>>(26)?.map(|v| v != 0),
+                    heavy_clay: row.get::<_, Option<i32>>(27)?.map(|v| v != 0),
+                    tolerates_acid: row.get::<_, Option<i32>>(28)?.map(|v| v != 0),
+                    tolerates_alkaline: row.get::<_, Option<i32>>(29)?.map(|v| v != 0),
+                    tolerates_saline: row.get::<_, Option<i32>>(30)?.map(|v| v != 0),
+                    tolerates_wind: row.get::<_, Option<i32>>(31)?.map(|v| v != 0),
+                    tolerates_pollution: row.get::<_, Option<i32>>(32)?.map(|v| v != 0),
+                    tolerates_nutritionally_poor: row.get::<_, Option<i32>>(33)?.map(|v| v != 0),
+                    stratum: row.get(34)?,
+                    succession_stage: row.get(35)?,
+                    nitrogen_fixer: row.get::<_, Option<i32>>(36)?.map(|v| v != 0),
+                    attracts_wildlife: row.get::<_, Option<i32>>(37)?.map(|v| v != 0),
+                    scented: row.get::<_, Option<i32>>(38)?.map(|v| v != 0),
+                    stratum_confidence: row.get(39)?,
+                    succession_confidence: row.get(40)?,
+                    edibility_rating: row.get(41)?,
+                    medicinal_rating: row.get(42)?,
+                    other_uses_rating: row.get(43)?,
+                    edible_uses: row.get(44)?,
+                    medicinal_uses: row.get(45)?,
+                    other_uses: row.get(46)?,
+                    toxicity: row.get(47)?,
+                    known_hazards: row.get(48)?,
+                    summary: row.get(49)?,
+                    cultivation_notes: row.get(50)?,
+                    propagation_notes: row.get(51)?,
+                    native_range: row.get(52)?,
+                    carbon_farming: row.get(53)?,
+                    data_quality_tier: row.get(54)?,
                     uses: vec![],
                     soil_types: vec![],
                     relationships: vec![],
@@ -167,6 +229,26 @@ pub fn get_detail(
 
     // Override common_name with the locale-aware lookup.
     detail.common_name = get_common_name(conn, &species_id, locale).or(detail.common_name);
+
+    // Translate categorical fields for the requested locale.
+    // translate_value returns the English value unchanged if no translation exists.
+    for (field, getter, setter) in [
+        ("growth_rate", detail.growth_rate.clone(), &mut detail.growth_rate as &mut Option<String>),
+        ("deciduous_evergreen", detail.deciduous_evergreen.clone(), &mut detail.deciduous_evergreen),
+        ("drought_tolerance", detail.drought_tolerance.clone(), &mut detail.drought_tolerance),
+        ("stratum", detail.stratum.clone(), &mut detail.stratum),
+        ("succession_stage", detail.succession_stage.clone(), &mut detail.succession_stage),
+        ("habit", detail.habit.clone(), &mut detail.habit),
+        ("bloom_period", detail.bloom_period.clone(), &mut detail.bloom_period),
+        ("flower_color", detail.flower_color.clone(), &mut detail.flower_color),
+        ("active_growth_period", detail.active_growth_period.clone(), &mut detail.active_growth_period),
+        ("lifespan", detail.lifespan.clone(), &mut detail.lifespan),
+        ("toxicity", detail.toxicity.clone(), &mut detail.toxicity),
+    ] {
+        if let Some(ref v) = getter {
+            *setter = Some(translate_value(conn, field, v, locale));
+        }
+    }
 
     // Fetch uses.
     detail.uses = {
@@ -379,12 +461,14 @@ pub fn get_filter_options(conn: &Connection) -> Result<FilterOptions, String> {
 
 /// Returns the best available common name for a species, preferring the
 /// requested locale and falling back to English.
+/// Uses `best_common_names` (pre-aggregated by prepare-db.py) first, then
+/// falls back to `species_common_names` for broader coverage.
 pub fn get_common_name(conn: &Connection, species_id: &str, locale: &str) -> Option<String> {
-    // Try the requested locale first.
-    let locale_name: Option<String> = conn
+    // Try best_common_names first (most reliable, one entry per species+language).
+    let best: Option<String> = conn
         .query_row(
-            "SELECT common_name FROM species_common_names
-             WHERE species_id = ?1 AND language = ?2 AND is_primary = 1
+            "SELECT common_name FROM best_common_names
+             WHERE species_id = ?1 AND language = ?2
              LIMIT 1",
             [species_id, locale],
             |row| row.get(0),
@@ -393,11 +477,28 @@ pub fn get_common_name(conn: &Connection, species_id: &str, locale: &str) -> Opt
         .ok()
         .flatten();
 
-    if locale_name.is_some() {
-        return locale_name;
+    if best.is_some() {
+        return best;
     }
 
-    // Fall back to English.
+    // Fall back to best_common_names English.
+    let best_en: Option<String> = conn
+        .query_row(
+            "SELECT common_name FROM best_common_names
+             WHERE species_id = ?1 AND language = 'en'
+             LIMIT 1",
+            [species_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .ok()
+        .flatten();
+
+    if best_en.is_some() {
+        return best_en;
+    }
+
+    // Final fallback to species_common_names.
     conn.query_row(
         "SELECT common_name FROM species_common_names
          WHERE species_id = ?1 AND language = 'en' AND is_primary = 1
@@ -520,19 +621,50 @@ mod tests {
                 hardiness_zone_max INTEGER,
                 soil_ph_min REAL,
                 soil_ph_max REAL,
+                drought_tolerance TEXT,
+                frost_tender INTEGER,
                 growth_rate TEXT,
-                edibility_rating INTEGER,
-                medicinal_rating INTEGER,
-                habit TEXT,
-                deciduous_evergreen TEXT,
-                stratum TEXT,
-                nitrogen_fixer INTEGER,
                 is_annual INTEGER,
                 is_biennial INTEGER,
                 is_perennial INTEGER,
+                lifespan TEXT,
+                habit TEXT,
+                deciduous_evergreen TEXT,
+                active_growth_period TEXT,
+                bloom_period TEXT,
+                flower_color TEXT,
                 tolerates_full_sun INTEGER,
                 tolerates_semi_shade INTEGER,
-                tolerates_full_shade INTEGER
+                tolerates_full_shade INTEGER,
+                well_drained INTEGER,
+                heavy_clay INTEGER,
+                tolerates_acid INTEGER,
+                tolerates_alkaline INTEGER,
+                tolerates_saline INTEGER,
+                tolerates_wind INTEGER,
+                tolerates_pollution INTEGER,
+                tolerates_nutritionally_poor INTEGER,
+                nitrogen_fixer INTEGER,
+                stratum TEXT,
+                succession_stage TEXT,
+                stratum_confidence REAL,
+                succession_confidence REAL,
+                edibility_rating INTEGER,
+                medicinal_rating INTEGER,
+                other_uses_rating INTEGER,
+                edible_uses TEXT,
+                medicinal_uses TEXT,
+                other_uses TEXT,
+                summary TEXT,
+                cultivation_notes TEXT,
+                propagation_notes TEXT,
+                known_hazards TEXT,
+                carbon_farming TEXT,
+                native_range TEXT,
+                toxicity TEXT,
+                attracts_wildlife INTEGER,
+                scented INTEGER,
+                data_quality_tier TEXT
             );
             CREATE VIRTUAL TABLE species_fts USING fts5(
                 canonical_name, common_name,
@@ -574,20 +706,46 @@ mod tests {
                 value_it TEXT,
                 value_zh TEXT
             );
+            CREATE TABLE best_common_names (
+                species_id TEXT NOT NULL,
+                language TEXT NOT NULL,
+                common_name TEXT NOT NULL,
+                PRIMARY KEY (species_id, language)
+            );
 
-            INSERT INTO species VALUES (
+            INSERT INTO species (id, slug, canonical_name, common_name, family, genus,
+                height_min_m, height_max_m, width_max_m, hardiness_zone_min, hardiness_zone_max,
+                soil_ph_min, soil_ph_max, drought_tolerance, frost_tender, growth_rate,
+                is_annual, is_biennial, is_perennial, lifespan, habit, deciduous_evergreen,
+                bloom_period, flower_color, tolerates_full_sun, tolerates_semi_shade, tolerates_full_shade,
+                well_drained, nitrogen_fixer, stratum, edibility_rating, medicinal_rating,
+                scented, toxicity, known_hazards, summary)
+            VALUES (
                 'uuid-lav', 'lavandula-angustifolia', 'Lavandula angustifolia',
                 'Lavender', 'Lamiaceae', 'Lavandula',
                 0.3, 0.6, 0.9, 5, 9, 6.0, 8.0,
-                'Slow', 3, 2, 'Shrub', 'Evergreen', 'Low',
-                0, 0, 0, 1, 1, 1, 0
+                'Medium', 0, 'Slow',
+                0, 0, 1, 'Short-lived perennial', 'Shrub', 'Evergreen',
+                'Summer', 'Purple', 1, 1, 0,
+                1, 0, 'Low', 3, 2,
+                1, NULL, NULL, 'A popular aromatic herb'
             );
-            INSERT INTO species VALUES (
+            INSERT INTO species (id, slug, canonical_name, common_name, family, genus,
+                height_min_m, height_max_m, width_max_m, hardiness_zone_min, hardiness_zone_max,
+                soil_ph_min, soil_ph_max, growth_rate,
+                is_annual, is_biennial, is_perennial, habit, deciduous_evergreen,
+                tolerates_full_sun, tolerates_semi_shade, tolerates_full_shade,
+                nitrogen_fixer, stratum, edibility_rating, medicinal_rating,
+                succession_stage, known_hazards)
+            VALUES (
                 'uuid-ald', 'alnus-glutinosa', 'Alnus glutinosa',
                 'Alder', 'Betulaceae', 'Alnus',
                 5.0, 20.0, 8.0, 1, 8, 5.5, 7.5,
-                'Fast', 0, 0, 'Tree', 'Deciduous', 'Canopy',
-                1, 0, 0, 1, 1, 0, 0
+                'Fast',
+                0, 0, 1, 'Tree', 'Deciduous',
+                1, 0, 0,
+                1, 'Canopy', 0, 0,
+                'secondary_i', 'None known'
             );
 
             INSERT INTO species_common_names VALUES
@@ -610,6 +768,11 @@ mod tests {
 
             INSERT INTO translated_values VALUES
                 ('t1', 'growth_rate', 'Slow', 'Lent', NULL, NULL, NULL, NULL);
+
+            INSERT INTO best_common_names VALUES
+                ('uuid-lav', 'en', 'Lavender'),
+                ('uuid-lav', 'fr', 'Lavande'),
+                ('uuid-ald', 'en', 'Common Alder');
         ",
         )
         .unwrap();
@@ -623,6 +786,13 @@ mod tests {
         assert_eq!(detail.canonical_name, "Lavandula angustifolia");
         assert_eq!(detail.family, "Lamiaceae");
         assert_eq!(detail.common_name.as_deref(), Some("Lavender"));
+        // New fields
+        assert_eq!(detail.drought_tolerance.as_deref(), Some("Medium"));
+        assert_eq!(detail.bloom_period.as_deref(), Some("Summer"));
+        assert_eq!(detail.flower_color.as_deref(), Some("Purple"));
+        assert_eq!(detail.scented, Some(true));
+        assert_eq!(detail.well_drained, Some(true));
+        assert_eq!(detail.summary.as_deref(), Some("A popular aromatic herb"));
     }
 
     #[test]
@@ -674,6 +844,19 @@ mod tests {
         assert_eq!(detail.nitrogen_fixer, Some(true));
         assert_eq!(detail.is_perennial, Some(true));
         assert_eq!(detail.is_annual, Some(false));
+        assert_eq!(detail.succession_stage.as_deref(), Some("secondary_i"));
+        assert_eq!(detail.known_hazards.as_deref(), Some("None known"));
+    }
+
+    #[test]
+    fn test_get_detail_translates_categorical_fields() {
+        let conn = test_db();
+        let detail = get_detail(&conn, "Lavandula angustifolia", "fr").unwrap();
+        // growth_rate "Slow" should be translated to "Lent" in French
+        assert_eq!(detail.growth_rate.as_deref(), Some("Lent"));
+        // deciduous_evergreen has no French translation in test data,
+        // so it stays as English
+        assert_eq!(detail.deciduous_evergreen.as_deref(), Some("Evergreen"));
     }
 
     #[test]
