@@ -250,15 +250,52 @@ Active "More" filters display as removable chips below the always-visible filter
 
 ---
 
+### 3.9 — Favorites Panel
+
+**Why**: A permaculture designer has 20-30 go-to plants they use across every design. Searching 175K species each time is wasteful. The star button already exists on plant rows but there's no dedicated view to access starred plants quickly.
+
+**Design**: A third tab in the right panel bar (alongside Plant Database and Learning). Shows only favorited plants in a compact list. Drag-to-canvas works the same as from the search panel. Favorites persist in the user DB across sessions.
+
+**Sub-phases**:
+- **3.9a**: Rust backend: `favorites` table in user DB (species_id, added_at). IPC commands: `add_favorite`, `remove_favorite`, `get_favorites`. Return full species data for each favorite so the list is self-contained
+- **3.9b**: Frontend: Favorites panel component in PanelBar. Same compact row format as plant search. Star button toggles filled/unfilled. Drag-to-canvas support. Empty state: "Star plants from the search panel to add them here"
+- **3.9c**: Wire existing star buttons in PlantRow and PlantDetailCard to the favorites IPC. Visual feedback on toggle (filled star = favorited)
+
+**Verification gate**: Star 5 plants from search. Switch to Favorites tab — all 5 appear. Drag one to canvas — plant appears. Unstar one — disappears from favorites. Restart app — favorites persist.
+
+---
+
+### 3.10 — Copy-Paste (Ctrl+C/V/D)
+
+**Why**: Table stakes for any design tool. Users expect to copy a plant or zone and paste it elsewhere. Currently missing entirely.
+
+**Design**:
+- Ctrl+C: copy selected nodes to an internal clipboard (serialized Konva node data)
+- Ctrl+V: paste at mouse position (or offset from original if mouse hasn't moved). Pasted nodes get new IDs
+- Ctrl+D: duplicate in place (paste with small offset, no clipboard involvement)
+- Multi-select copy: copy a group of nodes, paste preserves relative positions
+- Cross-design paste is out of scope for MVP (would need `.canopi` fragment format)
+
+**Sub-phases**:
+- **3.10a**: Internal clipboard — serialize selected nodes to a portable format (reuse `serializeNode` from serializer.ts). Store in module-level signal, not system clipboard (avoids browser API issues in WebView)
+- **3.10b**: Paste command — deserialize clipboard, assign new IDs, position at cursor or offset. Implement as `PasteCommand` for undo/redo. Handle plant nodes (need species_id reference) and zone/text nodes
+- **3.10c**: Ctrl+D duplicate shortcut. Wire keyboard shortcuts in engine. Verify undo/redo works for paste and duplicate
+
+**Verification gate**: Select a plant, Ctrl+C, click elsewhere, Ctrl+V — plant appears at new position. Undo — pasted plant removed. Select 3 objects, Ctrl+D — duplicates appear offset. Verify pasted objects have new IDs (don't conflict with originals on save).
+
+---
+
 ### MVP Completion Checklist
 
-All of Phase 3 (3.0 through 3.8) constitutes the MVP. After completion:
+All of Phase 3 (3.0 through 3.10) constitutes the MVP. After completion:
 
 - [ ] End-to-end flow: Launch, welcome screen, New Design, search plants, apply filters (visible + "More"), drag plants to canvas, draw zones, display modes (color/size by value), save, reopen
 - [ ] All 6 languages: translated categorical values, common names, UI strings
 - [ ] Both themes: light and dark mode fully functional including canvas elements
 - [ ] Plant density: clean dots at overview, labels on zoom, hover tooltips, stacked badges
 - [ ] Detail card: all 170 columns organized in collapsible sections
+- [ ] Favorites: star plants, access from dedicated panel, drag to canvas
+- [ ] Copy-paste: Ctrl+C/V/D for all canvas objects with undo/redo
 - [ ] Dirty indicator: visible in title bar, prompt on close with unsaved changes
 - [ ] DB resilience: schema contract validated, forward/backward compatible
 
@@ -533,9 +570,111 @@ Conditional compilation selects the right implementation:
 
 ---
 
-## Phase 6+: Future Features (unordered, to be prioritized)
+## Phase 6: Bottom Panel — Timeline & Budget
 
-These features are built on the Phase 3-5 foundation.
+Goal: Expandable bottom panel with productivity tabs that connect canvas objects to time and cost planning.
+
+**Layout**: Bottom panel slides up from the canvas bottom edge. Collapsed by default (thin grab bar). Drag to resize. Tabs along the top: Timeline, Budget. Same field notebook styling as right panel.
+
+### 6.0 — Bottom Panel Shell
+
+**Why**: Infrastructure for the tabs. The bottom panel was in the original UI (pruned during overhaul). Reactivate with the new design system.
+
+**Sub-phases**:
+- **6.0a**: Bottom panel component — collapsible, resizable via drag handle, tab bar. Persists open/closed state and height in user settings. Doesn't interfere with canvas pointer events when collapsed
+- **6.0b**: Wire into app layout. Canvas viewport adjusts when panel opens (canvas area shrinks, no overlap). Keyboard shortcut to toggle
+
+**Verification gate**: Toggle bottom panel open/closed. Resize by dragging. `webview_screenshot` in both states. Verify canvas shapes don't jump or clip.
+
+---
+
+### 6.1 — Timeline Tab (Gantt Chart)
+
+**Why**: Permaculture design is temporal — plants have sowing windows, growth stages, harvest periods. A timeline connects the spatial design on the canvas to the temporal plan.
+
+**Design**: Professional-grade interactive Gantt chart. Must feel like a real Gantt tool, not a CRUD table.
+- **Rows**: One row per plant species on the canvas (auto-populated from canvas objects, grouped by species)
+- **Columns**: Time axis — months or weeks, scrollable
+- **Bars**: Drag to set start/end dates for actions (sow, transplant, prune, harvest). Color-coded by action type
+- **Interactions**: Click bar to expand details, drag bar to move in time, drag bar edges to resize duration, right-click for action menu
+- **Data source**: `sowing_period`, `harvest_period`, `bloom_period`, `fruit_seed_period_begin/end` from the plant DB pre-populate suggested timelines. User adjusts for their local conditions
+- **Persistence**: Timeline data stored in the `.canopi` file's `timeline` section (already in document schema)
+
+**Sub-phases**:
+- **6.1a**: Timeline data model — action types (sow, transplant, prune, harvest, custom), per-species action bars with start/end dates. Rust backend: CRUD IPC for timeline entries. Wire to document save/load (timeline section already exists in `.canopi` schema)
+- **6.1b**: Gantt rendering — Konva-based or HTML canvas in the bottom panel. Time axis with month/week grid. Species rows auto-populated from canvas. Bars positioned by date, colored by action type
+- **6.1c**: Gantt interactions — drag bar to move, drag edges to resize, click to expand details, right-click menu (edit, delete, duplicate). Undo/redo integration
+- **6.1d**: Pre-population — when a plant is added to canvas, suggest timeline bars from its DB fields (sowing_period, harvest_period). User can accept, adjust, or dismiss suggestions
+- **6.1e**: Polish — smooth scrolling, zoom on time axis (year/month/week views), today marker, print-friendly layout for PDF export (Phase 5 integration)
+
+**Verification gate**: Add 5 different plants to canvas. Open Timeline tab — all species appear as rows. Drag to create a "sow" bar for one species. Resize it. Save, reload — bar persists. `webview_screenshot` of the Gantt at month and week zoom levels.
+
+---
+
+### 6.2 — Budget Tab
+
+**Why**: Planning a food forest or farm has real costs. Knowing "I need 12 apple trees at $25 each" helps scope the project. The canvas already knows how many of each plant are placed.
+
+**Design**: Auto-generated table from canvas contents.
+- **Rows**: One row per species on the canvas (auto-populated, grouped)
+- **Columns**: Species name, quantity (auto-counted from canvas), unit price (user-editable), subtotal (computed)
+- **Footer**: Grand total
+- **Unit price persistence**: Prices stored per-design in the `.canopi` file's `budget` section. Prices can also be saved as defaults in user DB (so you don't re-enter for common plants)
+- **Export**: CSV download of the budget table
+
+**Sub-phases**:
+- **6.2a**: Budget data model — per-species unit price, stored in `.canopi` budget section. Rust backend: IPC to get plant counts from the current document (group canvas plants by species_id, count). IPC to get/set unit prices
+- **6.2b**: Budget table component — auto-populated rows with species name (translated), quantity (live from canvas), editable price field, computed subtotal. Grand total footer. Styled with field notebook tokens
+- **6.2c**: Live updates — when plants are added/removed on canvas, budget quantities update in real time (via signal). CSV export button
+
+**Verification gate**: Place 3 apple trees and 5 comfrey plants on canvas. Open Budget tab — see "Malus domestica: 3" and "Symphytum officinale: 5". Enter prices. Verify subtotals and total compute correctly. Add another apple tree on canvas — quantity updates to 4 live. Save, reload — prices persist.
+
+---
+
+## Phase 7: World Map & Community
+
+Goal: A discovery surface where users explore featured designs from around the world and use them as templates.
+
+**Why**: "See what others built" is the fastest way to onboard new users. A world map of food forests, permaculture gardens, and farm designs provides both inspiration and practical starting points.
+
+### Architecture
+
+- **Frontend**: MapLibre world map (reuses Phase 4 infrastructure) with design markers. Click a marker → preview card with screenshot, description, climate zone, plant count
+- **Backend**: Curated design repository — initially a git repo or static JSON + `.canopi` files hosted on a CDN. No user accounts or uploads for v1
+- **Template import**: Download a `.canopi` file, open as a new design. Optionally adapt plant selections to local hardiness zone (flag incompatible plants, suggest alternatives)
+- **Content curation**: Maintained by the team, updated based on user feedback
+
+### Sub-phases
+
+**7.0 — Featured Designs Repository**
+- Define the template format: `.canopi` file + metadata (title, description, author, location, screenshot, tags, climate zone)
+- Host as a git repo or static API. Start with 10-20 curated designs covering different climates, scales (balcony, garden, farm), and styles (food forest, syntropic rows, herb spiral)
+- Rust backend: IPC to fetch the design catalog (JSON index), download individual `.canopi` files
+
+**7.1 — World Map Discovery UI**
+- MapLibre map showing design markers at their locations. Cluster markers when zoomed out
+- Click marker → preview card (screenshot, title, description, plant count, climate zone)
+- "Use as template" button → downloads `.canopi` file, opens as new untitled design
+- Filter by: climate zone, design style, scale
+
+**7.2 — Template Adaptation**
+- On import, compare template's plant hardiness zones against the user's design location
+- Flag incompatible plants (too cold/hot for the user's zone)
+- Suggest replacements from the plant DB with similar characteristics but compatible hardiness
+- User can accept suggestions or keep originals
+
+**7.3 — Knowledge Section**
+- Curated agroecology content in the Learning panel (right panel bar, book icon — currently placeholder)
+- Content categories: design principles, companion planting guides, soil building, water management, succession planting
+- Content format: Markdown articles rendered in-app, curated and updated by the team based on user feedback
+- Searchable, tagged by topic
+- Future: link knowledge articles to relevant plants in the DB ("learn more about nitrogen fixation" from a nitrogen-fixing plant's detail card)
+
+---
+
+## Phase 8+: Future Features (unordered, to be prioritized)
+
+These features are built on the Phase 3-7 foundation.
 
 ### Canvas Tools
 - Ellipse + Polygon zone tools
@@ -567,11 +706,8 @@ These features are built on the Phase 3-5 foundation.
 - Plant list export (CSV with all characteristics)
 
 ### Panel & UI
-- Learning panel (agroecology education content)
 - Plant collections (saved filter presets / plant lists)
 - Plant comparison (side-by-side detail cards)
-- Timeline tab (planting/harvest calendar)
-- Budget tab
 - Layer panel (named layer management)
 
 ---
