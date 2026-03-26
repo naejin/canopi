@@ -54,6 +54,15 @@
 
 ## What Needs to Be Done Next
 
+### Priority 0: Plant Symbol Density (start here next session)
+Dense plantings (guilds, ground cover rows, stacked plants) produce unreadable label overlap. Solution: **labels are earned, not default.**
+- [ ] Default view: colored dot only, no labels — clean at any density
+- [ ] Hover tooltip: common name, scientific name, key attributes on mouseover
+- [ ] Zoom threshold: labels fade in when nearest-neighbor distance > ~40px screen space
+- [ ] Selected plant: always shows label regardless of density
+- [ ] Stacked plants: count badge (`×4`) on the dot, hover shows plant list
+- Files: `canvas/plants.ts` (LOD system, label creation), `canvas/engine.ts` (hover handler)
+
 ### Priority 1: Plant Panel Polish
 - [ ] Row heights still slightly inconsistent — test with varied data
 - [ ] Filter drawer UX — test expanding/collapsing, ensure filters actually work
