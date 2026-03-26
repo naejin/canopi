@@ -5,8 +5,8 @@
 - **Frontend**: Preact + @preact/signals + TypeScript + Vite + CSS Modules
 - **Canvas**: Konva.js (imperative API, NOT react-konva)
 - **i18n**: i18next core (NOT react-i18next), 6 languages
-- **Maps**: MapLibre GL JS (Phase 3+)
-- **Native**: lib-swift (macOS), lib-cpp (Windows), lib-c (Linux) — Phase 3+
+- **Maps**: MapLibre GL JS (disabled for MVP, code on disk)
+- **Native**: lib-swift (macOS), lib-cpp (Windows), lib-c (Linux) — stubs only
 
 ## Project Structure
 ```
@@ -16,6 +16,7 @@ canopi/
 │   ├── web/          # Preact frontend
 │   └── tauri.conf.json
 ├── common-types/     # Shared Rust ↔ TS types
+├── .interface-design/ # Design system (system.md)
 ├── lib-swift/        # macOS native (stub)
 ├── lib-cpp/          # Windows native (stub)
 └── lib-c/            # Linux native (stub)
@@ -42,12 +43,13 @@ These features are **disabled in UI but code stays on disk**:
 - Overlays: Minimap, Celestial dial, Consortium visual, MapLibre/location, Display modes
 - Panels: Bottom panel (Timeline/Budget/Consortium tabs), Layer panel, World Map, Learning (placeholder only)
 - Export: GeoJSON, PNG/SVG export commands
+- Compass: import commented out in `engine.ts`
 - Re-enable plan: `docs/plans/ui-overhaul-next-steps.md` Priority 6
 
 ## Key Conventions
 
 ### Before Writing Code
-Invoke the relevant canopi skill: `/canopi-rust`, `/canopi-ux`, `/canopi-db`, `/canopi-canvas`, `/canopi-i18n`, `/canopi-native`, `/canopi-test`. Query Context7 for library API docs.
+Invoke the relevant canopi skill: `/canopi-rust`, `/canopi-ux`, `/canopi-db`, `/canopi-canvas`, `/canopi-i18n`, `/canopi-native`, `/canopi-test`. Query Context7 for library API docs. For UI work, load `/interface-design:init` and read `.interface-design/system.md`.
 
 ### Banned Patterns (enforced by plugin hooks)
 - **No React**: Import from `preact`, `preact/hooks`, `preact/compat` — never `react`
@@ -75,17 +77,17 @@ Invoke the relevant canopi skill: `/canopi-rust`, `/canopi-ux`, `/canopi-db`, `/
 - Add keys to all 6 locale files (en, fr, es, pt, it, zh) when adding new strings
 
 ### CSS
-- Design tokens in `global.css` as CSS variables
+- Design tokens in `global.css` as CSS variables (field notebook palette)
 - Components use CSS Modules, reference tokens (never raw values)
 - Dark theme via `[data-theme="dark"]` on `<html>`
 
 ## Development
 ```bash
-# Frontend dev
-cd desktop/web && npm run dev
-
 # Full app dev (from project root — NOT desktop/)
 cargo tauri dev
+
+# Frontend dev only (from desktop/web/)
+npm run dev
 
 # Check workspace
 cargo check --workspace
@@ -102,97 +104,117 @@ npm test
 # Generate plant DB (run before first `cargo tauri dev`)
 python3 scripts/prepare-db.py
 
-# Build
+# Build release
 cargo build --release
 ```
 
+### Tauri MCP Development Workflow
+The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot-driven UI iteration:
+1. `cargo tauri dev` — launches app with MCP bridge on port 9223
+2. `driver_session start` — connect to the running app
+3. `webview_screenshot` — capture current state
+4. `webview_execute_js` — interact with the app programmatically
+5. `webview_dom_snapshot` — inspect accessibility tree
+
 ## Gotchas
+
+### Tauri v2
+- **`tauri.conf.json` beforeDevCommand path**: Runs from project root. Uses `npm run --prefix desktop/web dev`, NOT `npm run dev`
 - **tauri-specta**: Deferred — specta rc ecosystem has version conflicts. Using plain `generate_handler![]` until stable
-- **Tauri v2 emit in setup**: Events fired in `setup()` are lost — frontend JS hasn't loaded yet. DB is ready synchronously before any IPC call
-- **Tauri v2 blocking dialogs on Linux**: `blocking_save_file()` / `blocking_pick_file()` from `tauri_plugin_dialog` deadlock on Linux/GTK. Use `@tauri-apps/plugin-dialog` JS API (`save()`, `open()`) from the frontend instead. Rust commands only handle file I/O, never show dialogs.
-- **Tauri v2 window permissions**: `decorations: false` + `startDragging()` requires `core:window:allow-start-dragging`, `core:window:allow-minimize`, `core:window:allow-toggle-maximize`, `core:window:allow-close` in `capabilities/main-window.json`
-- **Tauri v2 Emitter trait**: `app.handle().emit()` requires `use tauri::Emitter`
-- **Tauri icons**: `generate_context!()` panics if icon files in tauri.conf.json don't exist on disk
+- **Emit in setup**: Events fired in `setup()` are lost — frontend JS hasn't loaded yet
+- **Blocking dialogs on Linux**: `blocking_save_file()` / `blocking_pick_file()` deadlock on GTK. Use `@tauri-apps/plugin-dialog` JS API from the frontend. Rust commands only handle file I/O, never show dialogs
+- **Window permissions**: `decorations: false` + `startDragging()` requires `core:window:allow-start-dragging`, `core:window:allow-minimize`, `core:window:allow-toggle-maximize`, `core:window:allow-close` in `capabilities/main-window.json`
+- **Emitter trait**: `app.handle().emit()` requires `use tauri::Emitter`
+- **Icons**: `generate_context!()` panics if icon files in tauri.conf.json don't exist on disk
+- **Resource path in dev**: `resolve_resource()` may not find bundled files during `cargo tauri dev`. Fall back to `env!("CARGO_MANIFEST_DIR")` path. Always register a fallback in-memory DB so `State<PlantDb>` doesn't panic
+- **No blocking dialogs in setup()**: `.blocking_show()` in `setup()` hangs — window hasn't been created. Log errors instead
+- **`close()` re-emits `closeRequested`**: Use `destroy()` for discard-without-save. Requires `core:window:allow-destroy`
+- **No `window.prompt()`/`confirm()`/`alert()`**: Silently blocked in WebView. Use Preact components for all user input
+
+### Konva.js / Canvas
+- **Shapes don't react to CSS theme changes**: Colors hardcoded at creation time. Theme switch requires walking nodes and updating `fill`/`stroke` from computed CSS variables
+- **Transformer must be on same layer as targets**: Cross-layer Transformer breaks drag/transform
+- **`name: 'shape'` only on top-level selectable nodes**: Children inside Groups must NOT have it — causes independent selection
+- **Screen-space overlays**: Use HTML `<canvas>` (not Konva layers) for rulers. Konva layers are subject to stage transforms
+- **`strokeScaleEnabled: false`**: Keeps stroke width constant in screen pixels. Use on all zone/annotation shapes
+- **Group-level counter-scale for plants**: Set `group.scale({x: 1/stageScale, y: 1/stageScale})` on the group, not children
+- **`stage.on('dragmove')` fires for shape drags too**: Filter by `e.target !== this.stage`
+- **Custom attrs: use `?? null` not `|| null`**: `getAttr()` can return `0` or `''` which are legitimate values
+- **Grouped node coordinates**: Always use `node.getAbsolutePosition(layer)` when serializing. `node.x()/y()` are group-relative after grouping
+- **`recreateNode` must handle every shape class**: Missing cases fall through to generic `Konva.Shape` which doesn't render
+- **AddNodeCommand strips event handlers**: Attach interaction handlers at the stage level, not on individual nodes
+- **Zoom display is relative**: `zoomLevel` is raw stage scale. Display as `Math.round((zoomLevel / zoomReference) * 100)%`
+- **Compass disabled for MVP**: Import commented out in `engine.ts`
+- **Ruler corner uses CSS vars**: `var(--canvas-ruler-bg)` inline so it updates on theme change
+
+### Preact / Signals
 - **Preact Vite plugin**: Package is `@preact/preset-vite` (not `@preactjs/preset-vite`)
-- **Linux deps**: `sudo apt-get install libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev patchelf` — do NOT install `libappindicator3-dev` (conflicts with ayatana)
 - **HMR safety**: Module-level `effect()` and `addEventListener` must store disposers and clean up via `import.meta.hot.dispose()`
-- **Signals + hooks**: Use `useSignalEffect` (not `useEffect`) when subscribing to signals inside components — avoids fragile implicit subscriptions
-- **Migration versioning**: User DB uses `PRAGMA user_version` to track schema version — check before adding migrations
+- **Signals + hooks**: Use `useSignalEffect` (not `useEffect`) when subscribing to signals inside components
+- **Effect subscription**: Effects only subscribe to signals **read during execution**. An early `return` before reading a signal = never re-runs. Read ALL dependencies BEFORE conditional returns
+
+### Database / SQLite
 - **rusqlite feature**: Use `bundled-full` (not `bundled`) — enables FTS5 full-text search
-- **Plant DB PRAGMAs**: On read-only connections, do NOT set `journal_mode=WAL` (creates sidecar files triggering dev watcher loops) or `query_only=true` (breaks FTS5 shadow table updates). Only set `mmap_size` and `cache_size`.
-- **FTS5 MATCH syntax**: Always use full table name (`species_search_fts MATCH ?1`), never an alias — SQLite treats aliases as column names.
-- **FTS5 sanitization must strip ALL metacharacters**: `"()*+-^:\` — not just quotes. Incomplete sanitization causes FTS5 syntax errors. If input reduces to empty after sanitization, skip FTS entirely.
-- **Tauri resource path in dev**: `resolve_resource()` may not find bundled files during `cargo tauri dev`. Fall back to `env!("CARGO_MANIFEST_DIR")` path. Always register a fallback in-memory DB so `State<PlantDb>` doesn't panic.
-- **No blocking dialogs in setup()**: `tauri_plugin_dialog` `.blocking_show()` in `setup()` hangs — the window hasn't been created yet. Log errors instead.
-- **Species table name**: The export table is `species` (NOT `silver_species` as in the architecture draft)
-- **@preact/signals effect subscription**: Effects only subscribe to signals **read during execution**. An early `return` before reading a signal = the effect never subscribes to it and never re-runs. Always read ALL signal dependencies BEFORE any conditional returns.
-- **Konva Transformer must be on same layer as targets**: Cross-layer Transformer (e.g. Transformer on annotations, shape on zones) breaks drag/transform. Move Transformer to the target's layer in `_syncTransformer`.
-- **Konva `name: 'shape'` only on top-level selectable nodes**: Children inside Groups (e.g. plant circle, measure label) must NOT have `name: 'shape'` — it makes them independently draggable/selectable, separating them from their parent group.
-- **Konva screen-space overlays**: Use HTML `<canvas>` elements (not Konva layers) for rulers and other screen-space UI. Konva layers are subject to stage transforms — counter-transforming them causes 1-frame lag.
-- **Konva `strokeScaleEnabled: false`**: Built-in property that keeps stroke width constant in screen pixels regardless of zoom. Use on all zone/annotation shapes. Don't write custom zoom-scaling systems.
-- **Konva group-level counter-scale for plants**: Set `group.scale({x: 1/stageScale, y: 1/stageScale})` on the group, not individual children. Children use plain screen-pixel values. One scale update per group on zoom = zero lag.
-- **Canvas `stage.on('dragmove')` fires for shape drags too**: Filter by `e.target !== this.stage` to avoid heavy overlay redraws during shape drag. Only sync overlays for stage-level pans.
-- **Plant DB degraded mode**: If plant DB is missing/corrupt, `lib.rs` falls back to in-memory DB and reports `PlantDbStatus::Missing`/`Corrupt` via `get_health` IPC. Frontend short-circuits all species IPC calls when degraded and shows a banner. Do not add more silent fallbacks.
-- **Tauri v2 `close()` re-emits `closeRequested`**: `getCurrentWindow().close()` triggers the close guard again. Use `destroy()` for discard-without-save. Requires `core:window:allow-destroy` in capabilities.
-- **`std::fs::rename` on Windows with locked files**: Fails if destination held by antivirus/file watcher. Use `design::atomic_replace()` with rollback sidecar — never raw `rename` for overwriting existing files.
-- **Konva custom attrs: use `?? null` not `|| null`**: `getAttr()` can return `0` or `''` which are legitimate values. `|| null` collapses them; `?? null` preserves them.
-- **Canvas dirty must not use bounded stack length**: `_past.length` caps at `MAX_HISTORY=500`. Use `_savedPosition` checkpoint in `CanvasHistory` instead. `history.clear()` must NOT trigger dirty state changes.
-- **Vitest with Konva requires `canvas` npm package**: Install `canvas` as devDependency — Konva's Node.js entry point requires it.
-- **Grouped node coordinates**: Always use `node.getAbsolutePosition(layer)` when serializing positions of nodes that may be inside a `Konva.Group`. Never use `node.x()/y()` directly — those are group-relative after grouping.
-- **Every new canvas module must be wired into runtime**: Creating a file is not enough — it must be imported and called from `engine.ts` or `serializer.ts`. Verify with grep that every exported function has at least one call site outside its own file.
-- **`state/canvas.ts` mirror signals**: `engine.ts` cannot import from `state/design.ts` (circular via `design.ts` → `engine.ts`). Use mirror signals in `state/canvas.ts` (e.g., `designLocation`, `currentConsortiums`) and sync them in `serializer.ts` on load and in UI components on edit.
-- **MapLibre lazy loading**: Never top-level import `map-layer.ts` or `maplibre-gl`. Use dynamic `import('./map-layer')` on first map activation. Store the module reference for synchronous use on subsequent pan/zoom frames.
-- **`Command` interface requires `readonly type: string`**: Every new undo/redo command class must include a `readonly type = 'commandName'` property.
-- **`CanvasTool` event signatures**: Tool methods use `Konva.KonvaEventObject<MouseEvent>`, not raw `MouseEvent`. Import Konva and use the correct event type.
-- **No `window.prompt()`/`confirm()`/`alert()` in Tauri WebView**: These are silently blocked — no error, no dialog, no return value. Use Preact components (modals, inline forms) for all user input.
-- **`recreateNode` must handle every Konva shape class**: `AddNodeCommand` serializes nodes and `recreateNode` rebuilds them by className. Missing cases fall through to generic `Konva.Shape` which doesn't render. When adding a new Konva type (Arrow, Star, etc.), add its case to `commands/node-serialization.ts`.
-- **AddNodeCommand strips event handlers**: `serializeNode` → `recreateNode` produces a fresh Konva node without `.on()` handlers. Attach interaction handlers (dblclick, contextmenu) at the stage level, not on individual nodes, so they survive serialization.
-- **Panel switching recreates CanvasEngine**: When the user switches away from the canvas panel and back, CanvasPanel unmounts and remounts, creating a fresh engine. The current design must be re-loaded via `loadCanvasFromDocument()` and chrome restored via `showCanvasChrome()` on remount.
-- **`tauri.conf.json` beforeDevCommand path**: Runs from project root. Use `npm run --prefix desktop/web dev`, NOT `npm run dev`.
-- **Konva shapes don't react to CSS theme changes**: Colors are hardcoded at creation time. Theme switch requires walking nodes and updating `fill`/`stroke` from computed CSS variables.
-- **Zoom display is relative**: `zoomLevel` is raw stage scale. Display as `Math.round((zoomLevel / zoomReference) * 100)%` where `zoomReference` is set on init.
-- **Compass disabled for MVP**: Import commented out in `engine.ts`. Re-enable when location features return.
-- **Ruler corner uses CSS vars**: Uses `var(--canvas-ruler-bg)` inline so it updates on theme change without rebuild.
+- **Plant DB PRAGMAs**: On read-only connections, do NOT set `journal_mode=WAL` or `query_only=true`. Only `mmap_size` and `cache_size`
+- **FTS5 MATCH syntax**: Always use full table name (`species_search_fts MATCH ?1`), never an alias
+- **FTS5 sanitization**: Strip ALL metacharacters `"()*+-^:\` — not just quotes. Empty after sanitization → skip FTS
+- **Species table name**: `species` (NOT `silver_species` as in the architecture draft)
+- **Migration versioning**: User DB uses `PRAGMA user_version` — check before adding migrations
+- **Plant DB degraded mode**: If missing/corrupt, `lib.rs` falls back to in-memory DB. Frontend short-circuits all species IPC calls when degraded
+
+### Canvas Engine / Architecture
+- **Every new canvas module must be wired into runtime**: Must be imported and called from `engine.ts` or `serializer.ts`
+- **`state/canvas.ts` mirror signals**: `engine.ts` cannot import from `state/design.ts` (circular). Use mirror signals in `state/canvas.ts`
+- **MapLibre lazy loading**: Never top-level import. Use dynamic `import('./map-layer')` on first activation
+- **`Command` interface**: Every undo/redo command class must include `readonly type = 'commandName'`
+- **`CanvasTool` event signatures**: Tool methods use `Konva.KonvaEventObject<MouseEvent>`, not raw `MouseEvent`
+- **Panel switching recreates CanvasEngine**: CanvasPanel unmounts/remounts. Re-load via `loadCanvasFromDocument()` + `showCanvasChrome()`
+- **Canvas dirty tracking**: `_past.length` caps at 500. Use `_savedPosition` checkpoint. `history.clear()` must NOT trigger dirty
+- **Vitest with Konva**: Requires `canvas` npm package as devDependency
+
+### Platform / Build
+- **Linux deps**: `sudo apt-get install libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev patchelf` — do NOT install `libappindicator3-dev`
+- **`std::fs::rename` on Windows**: Fails with locked files. Use `design::atomic_replace()` with rollback sidecar
 
 ## Document Lifecycle (enforced — Phase 2.1 implemented)
-- **`toCanopi(engine, metadata, doc)` is the sole save composition point** — all save paths go through it. The `doc` parameter provides non-canvas sections from `currentDesign`. Never construct a `CanopiFile` from canvas state alone.
-- **`state/document.ts` is the canonical document API** — external consumers import from here. `state/design.ts` is internal/transitional.
-- **Never regenerate `created_at`** — preserve from loaded file. Only update `updated_at` intentionally on actual save.
-- **Preserve all loaded document sections on save** — timeline, budget, consortiums, description, location, extra fields. Do not hardcode empty arrays.
-- **Preserve per-object non-visual fields** — plant notes/planted_date/quantity and zone notes stored as Konva custom attrs (`data-notes`, `data-planted-date`, `data-quantity`). Read back with `?? null`.
-- **Preserve unknown `extra` fields** — `extractExtra()` captures unknown top-level keys from Rust `#[serde(flatten)]`. Spread extra FIRST in `toCanopi()` return, canonical keys always win.
-- **Two-baseline dirty model** — Canvas: `CanvasHistory` tracks a `_savedPosition` checkpoint; `canvasClean` signal is true when `_past.length === _savedPosition`. Safe against 500-cap (truncation shifts `_savedPosition`; if it goes negative, canvas stays dirty). Supports undo-to-clean. Non-canvas: `nonCanvasRevision` vs `nonCanvasSavedRevision`. `designDirty = !canvasClean || nonCanvasRevision !== nonCanvasSavedRevision`. Never write to `designDirty` directly. `history.clear()` must NOT mark canvas dirty.
-- **Autosave must checkpoint the same document as manual save** — same composition path, same fields preserved. Autosave failures surface via `autosaveFailed` signal and StatusBar.
-- **Background-image import is gated** — not persisted in `.canopi` yet. Command disabled in `registry.ts`. Re-enable when persistence is implemented.
-- **No serializer/state module cycle** — `serializer.ts` must NOT import from `state/design.ts`. The `doc` parameter breaks the cycle.
-- **Close guard uses `destroy()` not `close()`** — `close()` re-emits `closeRequested` causing infinite loop. Always `destroy()` after user confirms discard.
-- **Cross-platform file replace** — `atomic_replace()` in `design/mod.rs` handles Windows file-lock failures. Never use raw `std::fs::rename` for overwriting existing files.
+- **`toCanopi(engine, metadata, doc)` is the sole save composition point** — all save paths go through it
+- **`state/document.ts` is the canonical document API** — external consumers import from here. `state/design.ts` is internal
+- **Never regenerate `created_at`** — preserve from loaded file
+- **Preserve all loaded document sections on save** — timeline, budget, consortiums, description, location, extra fields
+- **Preserve per-object non-visual fields** — plant notes/planted_date/quantity and zone notes as Konva custom attrs
+- **Preserve unknown `extra` fields** — `extractExtra()` captures unknown top-level keys. Spread extra FIRST in `toCanopi()`
+- **Two-baseline dirty model** — Canvas: `_savedPosition` checkpoint in `CanvasHistory`. Non-canvas: `nonCanvasRevision` vs `nonCanvasSavedRevision`. Never write to `designDirty` directly
+- **Autosave** checkpoints same document as manual save. Failures surface via `autosaveFailed` signal
+- **Background-image import is gated** — not persisted in `.canopi` yet
+- **No serializer/state module cycle** — `serializer.ts` must NOT import from `state/design.ts`
+- **Close guard uses `destroy()` not `close()`** — avoids re-entry loop
+- **Cross-platform file replace** — `atomic_replace()` in `design/mod.rs`
 
 ## Settings Persistence Contract
-- **Rust `Settings` (user DB) is the single source of truth** for all user preferences: locale, theme, grid, snap, autosave interval.
-- **`localStorage` is a sync cache only, not a source of truth** — `initTheme()` reads from localStorage for instant first-paint (avoids flash), but Rust settings overwrite it when bootstrap resolves. The effect writes back to localStorage so the cache stays current.
-- **Frontend signals are runtime projections** — hydrated from Rust on startup via `get_settings` IPC, persisted back via `set_settings` on user change.
-- **`persistCurrentSettings()` in `state/app.ts`** is the write path — must include ALL user-editable settings that are part of the Rust `Settings` struct.
-- **Startup ordering**: `initTheme()` (sync, applies default) → `get_settings` IPC (async, reconciles with persisted values). No flicker because the effect reactively applies the Rust value when it arrives.
-
-## Architecture Review
-- Full review and analysis: `docs/reviews/2026-03-24-architecture-review.md` and `2026-03-24-architecture-review-analysis.md`
-- Phase 2.1 implementation plan: `docs/plans/phase-2.1-document-integrity.md`
-- Code review rounds: `docs/reviews/code/` — 3 rounds, all findings resolved
+- **Rust `Settings` (user DB) is the single source of truth** for all user preferences: locale, theme, grid, snap, autosave interval
+- **`localStorage` is a sync cache only** — `initTheme()` reads it for instant first-paint, Rust settings overwrite on bootstrap
+- **Frontend signals are runtime projections** — hydrated from Rust on startup via `get_settings` IPC
+- **`persistCurrentSettings()` in `state/app.ts`** — must include ALL settings in the Rust `Settings` struct
+- **Theme**: light/dark only (no system option). Toggle in title bar cycles between the two
 
 ## Canvas Architecture
 - Zone shapes: world-unit geometry, `strokeScaleEnabled: false` for constant-pixel strokes
-- Plant symbols: fixed screen-pixel circles (8px radius), group-level counter-scale, common name primary label
-- Annotations (text, measures): counter-scaled at creation + on zoom via `updateAnnotationsForZoom()`
+- Plant symbols: fixed screen-pixel circles, group-level counter-scale. Labels pending density rework (see `docs/plans/ui-overhaul-next-steps.md` Priority 0)
 - Grid: single `Konva.Shape` with custom `sceneFunc`, adaptive density via "nice distances" ladder
 - Rulers: HTML `<canvas>` elements, NOT Konva — always in screen space
+- Scale bar: uses `--color-text-muted` for theme-aware rendering
 - File dialogs: JS `@tauri-apps/plugin-dialog` API, NOT Rust `blocking_*`
-- `_chromeEnabled` signal: controls grid/ruler/compass visibility — must be a signal (not plain boolean) so effects track it
+- `_chromeEnabled` signal: controls grid/ruler visibility — must be a signal so effects track it
 
 ## Quality Process
-- After completing a phase or significant feature, run Craft skill review (`/craft`) with two parallel code-reviewer agents (backend + frontend)
+- After completing a phase or significant feature, run Craft skill review (`/craft`) with two parallel code-reviewer agents
 - Fix all issues, re-review until convergence (typically 2 rounds)
 - Run `/canopi:canopi-retro` at session end to update skills with learnings
+
+## Architecture Review
+- Full review and analysis: `docs/reviews/2026-03-24-architecture-review.md`
+- Phase 2.1 implementation plan: `docs/plans/phase-2.1-document-integrity.md`
+- UI overhaul next steps: `docs/plans/ui-overhaul-next-steps.md`
 
 ## Context7 Library IDs
 - Tauri v2: `/websites/v2_tauri_app`
