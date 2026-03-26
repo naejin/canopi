@@ -21,6 +21,29 @@ canopi/
 └── lib-c/            # Linux native (stub)
 ```
 
+## Current Layout (Post UI Overhaul)
+- **Left**: Canvas toolbar (38px) — drawing tools only (Select, Hand, Rectangle, Text + Grid/Snap/Rulers toggles)
+- **Center**: Canvas workspace
+- **Right**: PanelBar (36px, always visible) + sliding panels (plant search, learning)
+- **Title bar**: Logo + file name + lang/theme toggle + window controls
+- **No activity bar** — removed, navigation via PanelBar
+- **No status bar** — removed, controls moved to title bar
+- Design system: `.interface-design/system.md` (field notebook direction)
+
+## Design Direction
+- **Field notebook** aesthetic: parchment, ink, ochre palette. See `.interface-design/system.md`
+- **Green NEVER in UI chrome** — green lives only on the canvas (plant symbols). UI uses ochre `#A06B1F` as primary accent.
+- Theme toggle: light/dark only (no system option)
+- Depth: borders-only (no dramatic shadows)
+
+## MVP Feature Pruning (active)
+These features are **disabled in UI but code stays on disk**:
+- Tools: Ellipse, Polygon, Freeform, Line, Measure, Dimension, Arrow, Callout, Pattern Fill, Spacing
+- Overlays: Minimap, Celestial dial, Consortium visual, MapLibre/location, Display modes
+- Panels: Bottom panel (Timeline/Budget/Consortium tabs), Layer panel, World Map, Learning (placeholder only)
+- Export: GeoJSON, PNG/SVG export commands
+- Re-enable plan: `docs/plans/ui-overhaul-next-steps.md` Priority 6
+
 ## Key Conventions
 
 ### Before Writing Code
@@ -125,6 +148,11 @@ cargo build --release
 - **`recreateNode` must handle every Konva shape class**: `AddNodeCommand` serializes nodes and `recreateNode` rebuilds them by className. Missing cases fall through to generic `Konva.Shape` which doesn't render. When adding a new Konva type (Arrow, Star, etc.), add its case to `commands/node-serialization.ts`.
 - **AddNodeCommand strips event handlers**: `serializeNode` → `recreateNode` produces a fresh Konva node without `.on()` handlers. Attach interaction handlers (dblclick, contextmenu) at the stage level, not on individual nodes, so they survive serialization.
 - **Panel switching recreates CanvasEngine**: When the user switches away from the canvas panel and back, CanvasPanel unmounts and remounts, creating a fresh engine. The current design must be re-loaded via `loadCanvasFromDocument()` and chrome restored via `showCanvasChrome()` on remount.
+- **`tauri.conf.json` beforeDevCommand path**: Runs from project root. Use `npm run --prefix desktop/web dev`, NOT `npm run dev`.
+- **Konva shapes don't react to CSS theme changes**: Colors are hardcoded at creation time. Theme switch requires walking nodes and updating `fill`/`stroke` from computed CSS variables.
+- **Zoom display is relative**: `zoomLevel` is raw stage scale. Display as `Math.round((zoomLevel / zoomReference) * 100)%` where `zoomReference` is set on init.
+- **Compass disabled for MVP**: Import commented out in `engine.ts`. Re-enable when location features return.
+- **Ruler corner uses CSS vars**: Uses `var(--canvas-ruler-bg)` inline so it updates on theme change without rebuild.
 
 ## Document Lifecycle (enforced — Phase 2.1 implemented)
 - **`toCanopi(engine, metadata, doc)` is the sole save composition point** — all save paths go through it. The `doc` parameter provides non-canvas sections from `currentDesign`. Never construct a `CanopiFile` from canvas state alone.
