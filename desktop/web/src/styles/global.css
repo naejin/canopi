@@ -3,48 +3,56 @@
    ============================================ */
 
 :root {
-  /* Colors — Light Theme */
-  --color-primary: #2D5F3F;
-  --color-primary-hover: #245233;
-  --color-secondary: #64748B;
-  --color-accent: #D4A843;
-  --color-bg: #F8F6F3;
-  --color-surface: #FFFFFF;
-  --color-border: #E2E0DD;
-  --color-text: #1A1A1A;
-  --color-text-muted: #64748B;
-  --color-success: #22C55E;
-  --color-success-bg: #F0FDF4;
-  --color-warning: #EAB308;
-  --color-warning-bg: rgba(234, 179, 8, 0.08);
-  --color-danger: #EF4444;
-  --color-danger-bg: #FEF2F2;
-  --color-primary-bg: rgba(45, 95, 63, 0.08);
+  /* ── Field Notebook — Light Theme ──
+     Parchment surfaces, ink text, pencil borders.
+     Green lives on the canvas, not the chrome.         */
 
-  /* Semantic — plant attributes */
-  --color-edible: #558B2F;           /* olive green — food */
-  --color-edible-bg: #F1F8E9;
-  --color-medicinal: #6A1B9A;        /* deep purple — healing */
-  --color-medicinal-bg: #F3E5F5;
-  --color-nitrogen: #00838F;          /* teal — nutrient cycling */
-  --color-nitrogen-bg: #E0F7FA;
-  --color-sun: #E65100;               /* warm orange — full sun */
-  --color-sun-bg: #FFF3E0;
-  --color-shade: #37474F;             /* blue-grey — shade */
-  --color-shade-bg: #ECEFF1;
-  --color-hardiness: #1565C0;         /* blue — cold hardiness */
-  --color-hardiness-bg: #E3F2FD;
-  --color-family: #5D4037;            /* brown — taxonomy */
-  --color-family-bg: #EFEBE9;
-  --color-height: #546E7A;            /* grey-blue — dimensions */
-  --color-height-bg: #ECEFF1;
+  /* Primary — ochre: the highlight color in a notebook */
+  --color-primary: #A06B1F;
+  --color-primary-hover: #8B5C18;
+  --color-primary-bg: rgba(160, 107, 31, 0.08);
 
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
-  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.12);
+  /* Structure */
+  --color-secondary: #7D6F5E;        /* graphite — pencil marks */
+  --color-accent: #A06B1F;           /* ochre — brass, golden oak */
+  --color-bg: #F0EBE1;              /* parchment — aged paper */
+  --color-surface: #FAF7F2;         /* linen — fresh page */
+  --color-border: rgba(60, 45, 30, 0.12); /* ruled line — warm pencil */
+  --color-text: #2C2418;            /* ink — warm near-black */
+  --color-text-muted: #7D6F5E;      /* graphite — faded pencil */
 
-  /* Spacing — 4px base */
+  /* Semantic */
+  --color-success: #5A7D3A;         /* moss green — living, growing */
+  --color-success-bg: rgba(90, 125, 58, 0.08);
+  --color-warning: #B8860B;         /* dark goldenrod — caution */
+  --color-warning-bg: rgba(184, 134, 11, 0.08);
+  --color-danger: #B5432A;          /* terracotta red — alert */
+  --color-danger-bg: rgba(181, 67, 42, 0.07);
+
+  /* Plant attributes — earthy tones, not neon */
+  --color-edible: #5A7D3A;           /* moss — food plants */
+  --color-edible-bg: rgba(90, 125, 58, 0.08);
+  --color-medicinal: #7B5090;        /* dried lavender */
+  --color-medicinal-bg: rgba(123, 80, 144, 0.08);
+  --color-nitrogen: #3A7D7D;         /* pond teal — nutrient cycling */
+  --color-nitrogen-bg: rgba(58, 125, 125, 0.08);
+  --color-sun: #C27830;              /* amber — full sun */
+  --color-sun-bg: rgba(194, 120, 48, 0.08);
+  --color-shade: #5C6B6B;            /* stone — shade tolerance */
+  --color-shade-bg: rgba(92, 107, 107, 0.08);
+  --color-hardiness: #3A6B8C;        /* winter sky — cold hardiness */
+  --color-hardiness-bg: rgba(58, 107, 140, 0.08);
+  --color-family: #6B4F3A;           /* bark — taxonomy */
+  --color-family-bg: rgba(107, 79, 58, 0.08);
+  --color-height: #5C6B6B;           /* stone — dimensions */
+  --color-height-bg: rgba(92, 107, 107, 0.08);
+
+  /* Shadows — warm, minimal (notebooks are flat) */
+  --shadow-sm: 0 1px 2px rgba(44, 36, 24, 0.06);
+  --shadow-md: 0 2px 6px rgba(44, 36, 24, 0.08);
+  --shadow-lg: 0 4px 12px rgba(44, 36, 24, 0.10);
+
+  /* Spacing — 4px base, used tight for density */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -53,13 +61,13 @@
   --space-8: 32px;
   --space-12: 48px;
 
-  /* Border Radius */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
+  /* Radius — slightly sharper: technical, precise */
+  --radius-sm: 3px;
+  --radius-md: 5px;
+  --radius-lg: 7px;
   --radius-full: 9999px;
 
-  /* Typography */
+  /* Typography — Inter, but tighter */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
   --text-xs: 11px;
@@ -68,27 +76,27 @@
   --text-md: 14px;
   --text-lg: 16px;
   --text-xl: 20px;
-  --line-height: 1.5;
+  --line-height: 1.45;
 
-  /* Layout */
-  --activity-bar-width: 48px;
-  --status-bar-height: 24px;
+  /* Layout — compact */
+  --activity-bar-width: 44px;
+  --status-bar-height: 26px;
 
-  /* Dirty indicator */
-  --color-dirty-indicator: #E59400;
+  /* State indicators */
+  --color-dirty-indicator: #B8860B;  /* goldenrod — unsaved mark */
 
-  /* Window close button (Windows/Linux style — red on hover) */
-  --color-close-hover: #E81123;
-  --color-close-active: #C50F1F;
+  /* Window close */
+  --color-close-hover: #B5432A;
+  --color-close-active: #943525;
 
-  /* Canvas */
-  --canvas-bg: #F5F3F0;
-  --canvas-grid: rgba(0, 0, 0, 0.06);
-  --canvas-grid-major: rgba(0, 0, 0, 0.12);
-  --canvas-ruler-bg: var(--color-surface);
-  --canvas-ruler-text: var(--color-text-muted);
-  --canvas-selection: rgba(45, 95, 63, 0.15);
-  --canvas-toolbar-width: 40px;
+  /* Canvas — the garden (separate from the tool chrome) */
+  --canvas-bg: #EDE8DE;
+  --canvas-grid: rgba(60, 45, 30, 0.04);
+  --canvas-grid-major: rgba(60, 45, 30, 0.08);
+  --canvas-ruler-bg: #E8E3D9;
+  --canvas-ruler-text: rgba(60, 45, 30, 0.4);
+  --canvas-selection: rgba(160, 107, 31, 0.18);
+  --canvas-toolbar-width: 38px;
 }
 
 /* ============================================
@@ -96,48 +104,55 @@
    ============================================ */
 
 [data-theme="dark"] {
-  --color-primary: #4A9B6A;
-  --color-primary-hover: #5AAF7A;
-  --color-secondary: #8B95A5;
-  --color-accent: #E0B94E;
-  --color-bg: #1A1D21;
-  --color-surface: #252830;
-  --color-border: #3A3F4B;
-  --color-text: #E1E4E8;
-  --color-text-muted: #8B95A5;
+  /* ── Field Notebook — Dark Theme ──
+     Charcoal parchment, cream ink, warm borders.
+     Same warmth, inverted — like writing by lamplight.  */
 
-  --color-success-bg: rgba(34, 197, 94, 0.10);
-  --color-danger-bg: rgba(239, 68, 68, 0.10);
-  --color-primary-bg: rgba(74, 155, 106, 0.12);
+  --color-primary: #C89B4A;
+  --color-primary-hover: #D4A85A;
+  --color-primary-bg: rgba(200, 155, 74, 0.12);
+
+  --color-secondary: #A89A88;
+  --color-accent: #C89B4A;
+  --color-bg: #1E1B17;              /* charcoal parchment */
+  --color-surface: #282420;         /* dark linen */
+  --color-border: rgba(200, 180, 150, 0.12); /* warm ruled line */
+  --color-text: #E5DFD4;           /* cream ink */
+  --color-text-muted: #A89A88;     /* faded graphite — slightly brighter for dark */
+
+  --color-success-bg: rgba(90, 125, 58, 0.12);
+  --color-danger-bg: rgba(181, 67, 42, 0.10);
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.4);
 
-  --color-dirty-indicator: #FFB74D;
+  --color-dirty-indicator: #C89B4A;
 
-  --canvas-bg: #1E2126;
-  --canvas-grid: rgba(255, 255, 255, 0.05);
-  --canvas-grid-major: rgba(255, 255, 255, 0.10);
-  --canvas-selection: rgba(74, 155, 106, 0.15);
+  --canvas-bg: #1A1714;
+  --canvas-grid: rgba(200, 180, 150, 0.03);
+  --canvas-grid-major: rgba(200, 180, 150, 0.07);
+  --canvas-ruler-bg: #1E1A16;
+  --canvas-ruler-text: rgba(200, 180, 150, 0.4);
+  --canvas-selection: rgba(200, 155, 74, 0.18);
 
-  /* Semantic — plant attributes (dark) */
-  --color-edible: #8BC34A;
-  --color-edible-bg: rgba(139, 195, 74, 0.12);
-  --color-medicinal: #CE93D8;
-  --color-medicinal-bg: rgba(206, 147, 216, 0.12);
-  --color-nitrogen: #4DD0E1;
-  --color-nitrogen-bg: rgba(77, 208, 225, 0.10);
-  --color-sun: #FFB74D;
-  --color-sun-bg: rgba(255, 183, 77, 0.10);
-  --color-shade: #90A4AE;
-  --color-shade-bg: rgba(144, 164, 174, 0.10);
-  --color-hardiness: #64B5F6;
-  --color-hardiness-bg: rgba(100, 181, 246, 0.10);
-  --color-family: #A1887F;
-  --color-family-bg: rgba(161, 136, 127, 0.10);
-  --color-height: #90A4AE;
-  --color-height-bg: rgba(144, 164, 174, 0.10);
+  /* Plant attributes — desaturated for dark */
+  --color-edible: #8BAA5E;
+  --color-edible-bg: rgba(139, 170, 94, 0.10);
+  --color-medicinal: #B88BC4;
+  --color-medicinal-bg: rgba(184, 139, 196, 0.10);
+  --color-nitrogen: #6BA3A3;
+  --color-nitrogen-bg: rgba(107, 163, 163, 0.10);
+  --color-sun: #D4A060;
+  --color-sun-bg: rgba(212, 160, 96, 0.10);
+  --color-shade: #8A9A9A;
+  --color-shade-bg: rgba(138, 154, 154, 0.10);
+  --color-hardiness: #6A9AC0;
+  --color-hardiness-bg: rgba(106, 154, 192, 0.10);
+  --color-family: #A08870;
+  --color-family-bg: rgba(160, 136, 112, 0.10);
+  --color-height: #8A9A9A;
+  --color-height-bg: rgba(138, 154, 154, 0.10);
 }
 
 /* ============================================

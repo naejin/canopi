@@ -6,12 +6,7 @@ import {
   saveAsCurrentDesign,
   openDesign,
   newDesignAction,
-  currentDesign,
 } from "../state/document";
-import { canvasEngine } from "../canvas/engine";
-import { exportPNG, exportSVG, exportPlantCSV } from "../canvas/export";
-import { exportFile, exportBinary } from "../ipc/design";
-import { buildGeoJSON } from "../canvas/geojson";
 
 export interface Command {
   id: string;
@@ -38,50 +33,6 @@ function cycleTheme() {
   persistCurrentSettings();
 }
 
-async function doExportPNG(): Promise<void> {
-  if (!canvasEngine) return;
-  try {
-    const blob = await exportPNG(canvasEngine, { pixelRatio: 2 });
-    const bytes = Array.from(new Uint8Array(await blob.arrayBuffer()));
-    await exportBinary(bytes, "design.png", "PNG Image", ["png"]);
-  } catch (e) {
-    if (e !== "Dialog cancelled") console.error("PNG export failed:", e);
-  }
-}
-
-async function doExportSVG(): Promise<void> {
-  if (!canvasEngine) return;
-  try {
-    const svg = exportSVG(canvasEngine);
-    await exportFile(svg, "design.svg", "SVG Image", ["svg"]);
-  } catch (e) {
-    if (e !== "Dialog cancelled") console.error("SVG export failed:", e);
-  }
-}
-
-async function doExportCSV(): Promise<void> {
-  if (!canvasEngine) return;
-  try {
-    const csv = exportPlantCSV(canvasEngine);
-    await exportFile(csv, "plant-list.csv", "CSV Spreadsheet", ["csv"]);
-  } catch (e) {
-    if (e !== "Dialog cancelled") console.error("CSV export failed:", e);
-  }
-}
-
-async function doExportGeoJSON(): Promise<void> {
-  if (!canvasEngine) return;
-  const design = currentDesign.value;
-  if (!design?.location) { alert(t("canvas.location.required")); return; }
-  try {
-    const geojson = buildGeoJSON(canvasEngine, design.location);
-    await exportFile(geojson, "design.geojson", "GeoJSON", ["geojson", "json"]);
-  } catch (e) {
-    if (e !== "Dialog cancelled") console.error("GeoJSON export failed:", e);
-  }
-}
-
-
 export const commands: Command[] = [
   // File operations
   { id: "file.new",    label: () => t("canvas.file.new"),    shortcut: "Ctrl+N",       action: () => { void newDesignAction() } },
@@ -92,44 +43,13 @@ export const commands: Command[] = [
   // Navigation
   { id: "nav.plantDb",  label: () => t("commands.plantDb"),  shortcut: "Ctrl+1", action: switchPanel("plant-db") },
   { id: "nav.canvas",   label: () => t("commands.canvas"),   shortcut: "Ctrl+2", action: switchPanel("canvas") },
-  { id: "nav.worldMap", label: () => t("commands.worldMap"), shortcut: "Ctrl+3", action: switchPanel("world-map") },
-  { id: "nav.learning", label: () => t("commands.learning"), shortcut: "Ctrl+4", action: switchPanel("learning") },
 
   // Theme
   { id: "view.toggleTheme", label: () => t("commands.toggleTheme"), action: cycleTheme },
 
-  // Canvas tools
+  // Canvas tools (MVP set)
   { id: "canvas.tool.select",     label: () => t("canvas.tools.select"),     shortcut: "V", action: switchTool("select") },
   { id: "canvas.tool.hand",       label: () => t("canvas.tools.hand"),       shortcut: "H", action: switchTool("hand") },
   { id: "canvas.tool.rectangle",  label: () => t("canvas.tools.rectangle"),  shortcut: "R", action: switchTool("rectangle") },
-  { id: "canvas.tool.ellipse",    label: () => t("canvas.tools.ellipse"),    shortcut: "E", action: switchTool("ellipse") },
-  { id: "canvas.tool.polygon",    label: () => t("canvas.tools.polygon"),    shortcut: "P", action: switchTool("polygon") },
-  { id: "canvas.tool.freeform",   label: () => t("canvas.tools.freeform"),   shortcut: "F", action: switchTool("freeform") },
-  { id: "canvas.tool.line",       label: () => t("canvas.tools.line"),       shortcut: "L", action: switchTool("line") },
   { id: "canvas.tool.text",       label: () => t("canvas.tools.text"),       shortcut: "T", action: switchTool("text") },
-  { id: "canvas.tool.measure",    label: () => t("canvas.tools.measure"),    shortcut: "M", action: switchTool("measure") },
-  { id: "canvas.tool.plantStamp", label: () => t("canvas.tools.plantStamp"), shortcut: "P", action: switchTool("plant-stamp") },
-
-  // Group / Ungroup
-  { id: "canvas.group",   label: () => t("canvas.group.group"),   shortcut: "Ctrl+G",       action: () => canvasEngine?.groupSelectedNodes() },
-  { id: "canvas.ungroup", label: () => t("canvas.group.ungroup"), shortcut: "Ctrl+Shift+G", action: () => canvasEngine?.ungroupSelectedNodes() },
-
-  // Align & Distribute
-  { id: "canvas.align.left",    label: () => t("canvas.align.left"),    action: () => canvasEngine?.alignSelected('left') },
-  { id: "canvas.align.center",  label: () => t("canvas.align.center"),  action: () => canvasEngine?.alignSelected('center') },
-  { id: "canvas.align.right",   label: () => t("canvas.align.right"),   action: () => canvasEngine?.alignSelected('right') },
-  { id: "canvas.align.top",     label: () => t("canvas.align.top"),     action: () => canvasEngine?.alignSelected('top') },
-  { id: "canvas.align.middle",  label: () => t("canvas.align.middle"),  action: () => canvasEngine?.alignSelected('middle') },
-  { id: "canvas.align.bottom",  label: () => t("canvas.align.bottom"),  action: () => canvasEngine?.alignSelected('bottom') },
-  { id: "canvas.distribute.h",  label: () => t("canvas.align.distributeH"), action: () => canvasEngine?.distributeSelected('horizontal') },
-  { id: "canvas.distribute.v",  label: () => t("canvas.align.distributeV"), action: () => canvasEngine?.distributeSelected('vertical') },
-
-  // Export / Import
-  { id: "canvas.export.png",   label: () => t("canvas.export.exportPng"),   action: () => { void doExportPNG() } },
-  { id: "canvas.export.svg",   label: () => t("canvas.export.exportSvg"),   action: () => { void doExportSVG() } },
-  { id: "canvas.export.csv",   label: () => t("canvas.export.exportCsv"),   action: () => { void doExportCSV() } },
-  { id: "canvas.export.geojson", label: () => t("canvas.export.exportGeoJSON"), action: () => { void doExportGeoJSON() } },
-  // Budget CSV removed — redesign as plant-based pricing from canvas
-  // Background-image import gated — not persisted in .canopi yet. Re-enable when persistence is implemented.
-  // { id: "canvas.import.image", label: () => t("canvas.export.importImage"), action: () => { void doImportBackgroundImage() } },
 ];

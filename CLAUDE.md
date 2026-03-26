@@ -121,6 +121,10 @@ cargo build --release
 - **MapLibre lazy loading**: Never top-level import `map-layer.ts` or `maplibre-gl`. Use dynamic `import('./map-layer')` on first map activation. Store the module reference for synchronous use on subsequent pan/zoom frames.
 - **`Command` interface requires `readonly type: string`**: Every new undo/redo command class must include a `readonly type = 'commandName'` property.
 - **`CanvasTool` event signatures**: Tool methods use `Konva.KonvaEventObject<MouseEvent>`, not raw `MouseEvent`. Import Konva and use the correct event type.
+- **No `window.prompt()`/`confirm()`/`alert()` in Tauri WebView**: These are silently blocked — no error, no dialog, no return value. Use Preact components (modals, inline forms) for all user input.
+- **`recreateNode` must handle every Konva shape class**: `AddNodeCommand` serializes nodes and `recreateNode` rebuilds them by className. Missing cases fall through to generic `Konva.Shape` which doesn't render. When adding a new Konva type (Arrow, Star, etc.), add its case to `commands/node-serialization.ts`.
+- **AddNodeCommand strips event handlers**: `serializeNode` → `recreateNode` produces a fresh Konva node without `.on()` handlers. Attach interaction handlers (dblclick, contextmenu) at the stage level, not on individual nodes, so they survive serialization.
+- **Panel switching recreates CanvasEngine**: When the user switches away from the canvas panel and back, CanvasPanel unmounts and remounts, creating a fresh engine. The current design must be re-loaded via `loadCanvasFromDocument()` and chrome restored via `showCanvasChrome()` on remount.
 
 ## Document Lifecycle (enforced — Phase 2.1 implemented)
 - **`toCanopi(engine, metadata, doc)` is the sole save composition point** — all save paths go through it. The `doc` parameter provides non-canvas sections from `currentDesign`. Never construct a `CanopiFile` from canvas state alone.

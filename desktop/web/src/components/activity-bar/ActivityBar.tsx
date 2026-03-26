@@ -1,6 +1,6 @@
 import { sidePanel, navigateTo, activePanel, type Panel } from "../../state/app";
 import { t } from "../../i18n";
-import { LeafIcon, PencilIcon, GlobeIcon, BookIcon } from "./icons";
+import { LeafIcon, PencilIcon } from "./icons";
 import styles from "./ActivityBar.module.css";
 
 interface NavItem {
@@ -10,10 +10,8 @@ interface NavItem {
 }
 
 const panels: NavItem[] = [
-  { id: "plant-db", icon: LeafIcon, labelKey: "nav.plantDb" },
   { id: "canvas", icon: PencilIcon, labelKey: "nav.canvas" },
-  { id: "world-map", icon: GlobeIcon, labelKey: "nav.worldMap" },
-  { id: "learning", icon: BookIcon, labelKey: "nav.learning" },
+  { id: "plant-db", icon: LeafIcon, labelKey: "nav.plantDb" },
 ];
 
 const SIDE_PANELS = new Set<string>(["plant-db", "learning"]);

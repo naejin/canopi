@@ -4,6 +4,8 @@ import type { Consortium } from '../types/design'
 
 export const activeTool = signal<string>('select')
 export const zoomLevel = signal<number>(1)
+/** The stage scale that represents 100% zoom (set on init to fit ~100m in viewport). */
+export const zoomReference = signal<number>(1)
 export const canvasReady = signal<boolean>(false)
 export const selectedObjectIds = signal<Set<string>>(new Set())
 

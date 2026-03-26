@@ -22,6 +22,7 @@ export {
   saveCurrentDesign,
   saveAsCurrentDesign,
   openDesign,
+  openDesignFromPath,
   newDesignAction,
   nonCanvasRevision,
   autosaveFailed,

@@ -20,9 +20,9 @@ export interface HtmlRulers {
 // Cached ruler colors — refreshed on theme change, not every frame
 // ---------------------------------------------------------------------------
 
-let _rulerBg = '#fff'
-let _rulerText = '#64748b'
-let _rulerBorder = '#e2e0dd'
+let _rulerBg = '#E8E3D9'
+let _rulerText = 'rgba(60, 45, 30, 0.4)'
+let _rulerBorder = 'rgba(60, 45, 30, 0.12)'
 
 /** Call once after init and on every theme change. */
 export function refreshRulerColors(container: HTMLElement): void {
@@ -71,6 +71,7 @@ export function createHtmlRulers(containerDiv: HTMLElement): HtmlRulers {
 
   // Corner square — opaque box that covers the ruler intersection at top-left.
   // Must sit above both ruler canvases (z-index 17 > 15).
+  // Uses CSS variables directly so it updates on theme change without rebuild.
   const corner = document.createElement('div')
   corner.style.cssText = `
     position: absolute;
@@ -80,9 +81,9 @@ export function createHtmlRulers(containerDiv: HTMLElement): HtmlRulers {
     height: ${RULER_SIZE}px;
     z-index: 17;
     pointer-events: none;
-    background: ${_rulerBg};
-    border-right: 1px solid ${_rulerBorder};
-    border-bottom: 1px solid ${_rulerBorder};
+    background: var(--canvas-ruler-bg, ${_rulerBg});
+    border-right: 1px solid var(--color-border, ${_rulerBorder});
+    border-bottom: 1px solid var(--color-border, ${_rulerBorder});
     box-sizing: border-box;
   `
 

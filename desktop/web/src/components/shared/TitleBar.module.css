@@ -1,8 +1,8 @@
 .titleBar {
   display: flex;
   align-items: center;
-  height: 32px;
-  background: var(--color-surface);
+  height: 36px;
+  background: var(--color-bg);
   border-bottom: 1px solid var(--color-border);
   user-select: none;
   flex-shrink: 0;
@@ -12,8 +12,8 @@
 .left {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  padding-left: var(--space-3);
+  gap: 8px;
+  padding-left: 12px;
   flex-shrink: 0;
 }
 
@@ -24,25 +24,85 @@
   pointer-events: none;
 }
 
-.fileName {
-  font-size: var(--text-sm);
+.appName {
+  font-size: 12px;
   color: var(--color-text-muted);
-  font-weight: 400;
-  max-width: 240px;
+  font-weight: 500;
+}
+
+.fileName {
+  font-size: 12px;
+  color: var(--color-text);
+  font-weight: 500;
+  max-width: 280px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .dirtyDot {
-  color: var(--color-dirty-indicator, #E59400);
-  margin-right: 4px;
-  font-size: 10px;
+  color: var(--color-dirty-indicator);
+  margin-right: 3px;
+  font-size: 9px;
 }
 
 .dragRegion {
   flex: 1;
   height: 100%;
+}
+
+.settings {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.langSelect {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: 10px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  letter-spacing: 0.05em;
+  transition: color 80ms ease;
+}
+
+.langSelect:hover {
+  color: var(--color-text);
+}
+
+.langSelect:focus {
+  outline: none;
+}
+
+.themeBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  transition: color 80ms ease;
+}
+
+.themeBtn:hover {
+  color: var(--color-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .langSelect, .themeBtn { transition: none; }
 }
 
 .controls {
@@ -53,7 +113,7 @@
 }
 
 .controlBtn {
-  width: 46px;
+  width: 44px;
   height: 100%;
   display: flex;
   align-items: center;
@@ -71,16 +131,16 @@
   color: var(--color-text);
 }
 
-.controlBtn:active {
-  background: var(--color-border);
-}
-
 .closeBtn:hover {
   background: var(--color-close-hover);
-  color: var(--color-surface);
+  color: #fff;
 }
 
 .closeBtn:active {
   background: var(--color-close-active);
-  color: var(--color-surface);
+  color: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .controlBtn { transition: none; }
 }

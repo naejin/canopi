@@ -133,6 +133,22 @@ export async function openDesign(): Promise<void> {
   }
 }
 
+/** Open a design from a known path (e.g. recent files). */
+export async function openDesignFromPath(path: string): Promise<void> {
+  const engine = canvasEngine
+  if (!engine) return
+
+  const file = await designIpc.loadDesign(path)
+  file.extra = extractExtra(file as unknown as Record<string, unknown>)
+  fromCanopi(file, engine)
+  currentDesign.value = file
+  designName.value = file.name
+  designPath.value = path
+  resetDirtyBaselines()
+  engine.history.clear()
+  engine.showCanvasChrome()
+}
+
 /** Create a blank design (Ctrl+N). */
 export async function newDesignAction(): Promise<void> {
   const engine = canvasEngine

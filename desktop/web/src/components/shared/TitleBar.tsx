@@ -1,8 +1,10 @@
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { designName, designDirty } from '../../state/document'
-import { activePanel, locale } from '../../state/app'
+import { activePanel, locale, theme, persistCurrentSettings } from '../../state/app'
 import { t } from '../../i18n'
 import styles from './TitleBar.module.css'
+
+const LOCALES = ['en', 'fr', 'es', 'pt', 'it', 'zh'] as const
 
 const appWindow = getCurrentWindow()
 
@@ -39,7 +41,7 @@ export function TitleBar() {
           alt="Canopi"
           draggable={false}
         />
-        {isCanvas && name && (
+        {isCanvas && name && name !== 'Untitled' && (
           <span className={styles.fileName}>
             {dirty && <span className={styles.dirtyDot}>●</span>}
             {name}
@@ -50,7 +52,41 @@ export function TitleBar() {
       {/* Center: Spacer — draggable via parent onMouseDown */}
       <div className={styles.dragRegion} />
 
-      {/* Right: Window controls */}
+      {/* Right controls: language + theme */}
+      <div className={styles.settings}>
+        <select
+          className={styles.langSelect}
+          value={locale.value}
+          onChange={(e) => {
+            locale.value = (e.target as HTMLSelectElement).value as typeof locale.value
+            persistCurrentSettings()
+          }}
+          aria-label={t('status.language')}
+        >
+          {LOCALES.map((code) => (
+            <option key={code} value={code}>{code.toUpperCase()}</option>
+          ))}
+        </select>
+        <button
+          className={styles.themeBtn}
+          onClick={() => {
+            theme.value = theme.value === 'dark' ? 'light' : 'dark'
+            persistCurrentSettings()
+          }}
+          aria-label={t('status.theme')}
+          title={theme.value === 'dark' ? 'Light mode' : 'Dark mode'}
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            {theme.value === 'dark' ? (
+              <circle cx="8" cy="8" r="4" stroke="currentColor" strokeWidth="1.5" />
+            ) : (
+              <path d="M13 8.5a5.5 5.5 0 0 1-7.5-7.5 6 6 0 1 0 7.5 7.5Z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+            )}
+          </svg>
+        </button>
+      </div>
+
+      {/* Window controls */}
       <div className={styles.controls}>
         <button
           className={styles.controlBtn}

@@ -6,10 +6,10 @@ import { northBearingDeg } from '../state/canvas'
 // Draggable, rotatable (scroll wheel), double-click to reset to 0°.
 // ---------------------------------------------------------------------------
 
-const MARGIN = 48         // px from viewport edge
-const OUTER_R = 16        // outer circle radius (screen px)
-const NEEDLE_LEN = 10     // needle half-length from center (screen px)
-const NEEDLE_W = 5        // needle base width (screen px)
+const MARGIN = 40         // px from viewport edge
+const OUTER_R = 12        // outer circle radius (screen px)
+const NEEDLE_LEN = 8      // needle half-length from center (screen px)
+const NEEDLE_W = 4        // needle base width (screen px)
 
 export interface Compass {
   group: Konva.Group
@@ -17,54 +17,51 @@ export interface Compass {
 }
 
 export function createCompass(stage: Konva.Stage): Compass {
-  // Outer ring — subtle, clean circle
+  // Outer ring — warm, subtle
   const ring = new Konva.Circle({
     radius: OUTER_R,
-    fill: 'rgba(255,255,255,0.92)',
-    stroke: 'rgba(0,0,0,0.12)',
+    fill: 'rgba(240, 235, 225, 0.85)',
+    stroke: 'rgba(60, 45, 30, 0.15)',
     strokeWidth: 1,
     strokeScaleEnabled: false,
-    shadowColor: 'rgba(0,0,0,0.12)',
-    shadowBlur: 6,
-    shadowOffsetY: 1,
     listening: true,
   })
 
-  // North needle — filled red triangle pointing up
+  // North needle — warm terracotta
   const northNeedle = new Konva.Line({
     points: [0, -NEEDLE_LEN, -NEEDLE_W / 2, 0, NEEDLE_W / 2, 0],
-    fill: '#D32F2F',
+    fill: '#B5432A',
     closed: true,
     listening: false,
   })
 
-  // South needle — filled light grey triangle pointing down
+  // South needle — muted parchment
   const southNeedle = new Konva.Line({
     points: [0, NEEDLE_LEN, -NEEDLE_W / 2, 0, NEEDLE_W / 2, 0],
-    fill: '#E0E0E0',
+    fill: 'rgba(60, 45, 30, 0.15)',
     closed: true,
     listening: false,
   })
 
-  // Center dot — small circle at the pivot
+  // Center dot
   const centerDot = new Konva.Circle({
-    radius: 2,
-    fill: '#666666',
+    radius: 1.5,
+    fill: 'rgba(60, 45, 30, 0.4)',
     listening: false,
   })
 
-  // "N" label — small, positioned above the ring
+  // "N" label — small, warm
   const nLabel = new Konva.Text({
     text: 'N',
-    fontSize: 9,
+    fontSize: 8,
     fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-    fontStyle: 'bold',
-    fill: '#D32F2F',
+    fontStyle: '600',
+    fill: '#B5432A',
     listening: false,
     align: 'center',
   })
   nLabel.offsetX(nLabel.width() / 2)
-  nLabel.y(-OUTER_R - 12)
+  nLabel.y(-OUTER_R - 10)
 
   // Inner group carries the bearing rotation (needle + N label rotate together)
   const arrowGroup = new Konva.Group({ listening: false })

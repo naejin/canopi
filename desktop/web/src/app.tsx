@@ -8,15 +8,12 @@ import { activePanel, sidePanel, sidePanelWidth, plantDbStatus, locale, theme, a
 import { designDirty, saveCurrentDesign } from "./state/document";
 import { invoke } from "@tauri-apps/api/core";
 import type { SubsystemHealth } from "./types/health";
-import { ActivityBar } from "./components/activity-bar/ActivityBar";
 import { TitleBar } from "./components/shared/TitleBar";
 import { DegradedBanner } from "./components/shared/DegradedBanner";
-import { StatusBar } from "./components/shared/StatusBar";
 import { CommandPalette } from "./components/shared/CommandPalette";
 import { PlantDbPanel } from "./components/panels/PlantDbPanel";
 import { CanvasPanel } from "./components/panels/CanvasPanel";
-import { WorldMapPanel } from "./components/panels/WorldMapPanel";
-import { LearningPanel } from "./components/panels/LearningPanel";
+import { PanelBar } from "./components/panels/PanelBar";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import type { Settings } from "./types/settings";
@@ -94,9 +91,30 @@ if (import.meta.hot) {
 const MIN_SIDEBAR_WIDTH = 320;
 const MAX_SIDEBAR_WIDTH = 800;
 
+function LearningPlaceholder() {
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      height: '100%', padding: '32px 24px', textAlign: 'center', gap: '12px',
+      background: 'var(--color-bg)',
+    }}>
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.5 }}>
+        <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
+        <path d="M8 7h6M8 11h4" />
+      </svg>
+      <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text)' }}>
+        Coming soon
+      </span>
+      <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', maxWidth: '220px', lineHeight: 1.5 }}>
+        Companion planting guides, design patterns, and permaculture principles — all searchable from here.
+      </span>
+    </div>
+  )
+}
+
 function SidePanelContent({ side }: { side: string }) {
   if (side === "plant-db") return <PlantDbPanel />;
-  if (side === "learning") return <LearningPanel />;
+  if (side === "learning") return <LearningPlaceholder />;
   return null;
 }
 
@@ -106,7 +124,6 @@ export function App() {
   const width = sidePanelWidth.value;
 
   const showCanvas = panel === "canvas";
-  const showWorldMap = panel === "world-map";
   const showSidebar = showCanvas && side !== null;
 
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
@@ -117,7 +134,8 @@ export function App() {
 
     const onMove = (ev: MouseEvent) => {
       if (!dragRef.current) return;
-      const delta = ev.clientX - dragRef.current.startX;
+      // Right-side panel: dragging left = wider (negative delta = larger)
+      const delta = dragRef.current.startX - ev.clientX;
       const newW = Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, dragRef.current.startW + delta));
       sidePanelWidth.value = newW;
     };
@@ -141,11 +159,21 @@ export function App() {
       <TitleBar />
       <DegradedBanner />
       <div className={styles.appBody}>
-        <ActivityBar />
+        {/* Canvas — always fills available space */}
+        {showCanvas && <CanvasPanel />}
 
-        {/* Resizable side panel */}
+        {/* Right side panel (plant search, etc.) */}
         {showSidebar && (
           <>
+            <div
+              onMouseDown={handleDragStart}
+              className={styles.dragHandle}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--color-accent)"; }}
+              onMouseLeave={(e) => { if (!dragRef.current) (e.currentTarget as HTMLElement).style.background = ""; }}
+              role="separator"
+              aria-orientation="vertical"
+              aria-label={t('sidebar.resize')}
+            />
             <div
               className={styles.sidePanel}
               style={{
@@ -156,24 +184,12 @@ export function App() {
             >
               <SidePanelContent side={side!} />
             </div>
-            {/* Drag handle */}
-            <div
-              onMouseDown={handleDragStart}
-              className={styles.dragHandle}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--color-primary)"; }}
-              onMouseLeave={(e) => { if (!dragRef.current) (e.currentTarget as HTMLElement).style.background = ""; }}
-              role="separator"
-              aria-orientation="vertical"
-              aria-label={t('sidebar.resize')}
-            />
           </>
         )}
 
-        {/* Main content area */}
-        {showCanvas && <CanvasPanel />}
-        {showWorldMap && <WorldMapPanel />}
+        {/* Right panel bar — always visible */}
+        {showCanvas && <PanelBar />}
       </div>
-      <StatusBar />
       <CommandPalette />
     </div>
   );

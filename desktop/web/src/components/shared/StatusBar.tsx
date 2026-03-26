@@ -1,5 +1,4 @@
-import { locale, theme, activePanel, persistCurrentSettings } from "../../state/app";
-import { zoomLevel } from "../../state/canvas";
+import { locale, theme, persistCurrentSettings } from "../../state/app";
 import { autosaveFailed } from "../../state/document";
 import { t } from "../../i18n";
 import styles from "./StatusBar.module.css";
@@ -17,17 +16,10 @@ export function StatusBar() {
   void locale.value;
 
   const themeLabel = t(`theme.${theme.value}`);
-  const isCanvas = activePanel.value === "canvas";
-  const zoom = zoomLevel.value;
 
   return (
     <footer className={styles.bar}>
       <div className={styles.left}>
-        {isCanvas && (
-          <span className={styles.zoomLevel} aria-label={t("canvas.grid.zoom")}>
-            {Math.round(zoom * 100)}%
-          </span>
-        )}
         {autosaveFailed.value && (
           <span className={styles.autosaveWarning} role="alert">
             {t("status.autosaveFailed")}

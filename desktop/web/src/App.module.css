@@ -14,25 +14,34 @@
   overflow: hidden;
 }
 
-/* Resizable side panel */
+/* Resizable side panel (right side) */
 .sidePanel {
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-/* Drag handle between side panel and main content */
+/* Drag handle — doubles as the panel left border */
 .dragHandle {
-  width: 5px;
+  width: 1px;
   cursor: col-resize;
   background: var(--color-border);
   flex-shrink: 0;
-  transition: background-color 100ms ease;
+  transition: background-color 80ms ease;
+  position: relative;
+}
+
+/* Wider hit target without visual width */
+.dragHandle::before {
+  content: '';
+  position: absolute;
+  inset: 0 -4px;
 }
 
 .dragHandle:hover,
 .dragHandle--active {
-  background: var(--color-primary);
+  background: var(--color-accent);
+  width: 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {

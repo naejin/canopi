@@ -29,7 +29,7 @@ function useForceUpdate(): () => void {
   return dispatch as () => void;
 }
 
-const ESTIMATED_ROW_HEIGHT = 72;
+const ESTIMATED_ROW_HEIGHT = 38;
 
 // Helper: build Virtualizer options object
 function makeVirtOpts(

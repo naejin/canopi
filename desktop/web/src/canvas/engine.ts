@@ -47,7 +47,9 @@ import { updateDimensionsForNode } from './dimensions'
 import { createGridShape, snapToGrid, refreshGridColors } from './grid'
 import { createHtmlRulers, updateHtmlRulers, refreshRulerColors, type HtmlRulers } from './rulers'
 import { createScaleBar, type ScaleBar } from './scale-bar'
-import { createCompass, type Compass } from './compass'
+// Compass disabled for MVP
+// import { createCompass, type Compass } from './compass'
+import type { Compass } from './compass'
 import { createPlantNode, updatePlantsLOD, getPlantLOD, updatePlantLabelsForLocale } from './plants'
 import { snapToGuides, updateGuideLines, clearSmartGuides, computeSmartGuides, createGuideLine } from './guides'
 import { AddGuideCommand } from './commands/guide'
@@ -174,8 +176,9 @@ export class CanvasEngine {
     this._scaleBar = createScaleBar(this.stage)
     uiLayer.add(this._scaleBar.group as unknown as Konva.Shape)
 
-    this._compass = createCompass(this.stage)
-    uiLayer.add(this._compass.group as unknown as Konva.Shape)
+    // Compass disabled for MVP — re-enable when location/bearing features return
+    // this._compass = createCompass(this.stage)
+    // uiLayer.add(this._compass.group as unknown as Konva.Shape)
 
     // Register built-in tools
     this._registerTool(new SelectTool())
@@ -624,6 +627,37 @@ export class CanvasEngine {
         target = target.parent
       }
     })
+  }
+
+  // -------------------------------------------------------------------------
+  // Programmatic zoom (for zoom controls)
+  // -------------------------------------------------------------------------
+
+  zoomIn(): void {
+    this._zoomCenter(ZOOM_FACTOR)
+  }
+
+  zoomOut(): void {
+    this._zoomCenter(1 / ZOOM_FACTOR)
+  }
+
+  private _zoomCenter(factor: number): void {
+    const oldScale = this.stage.scaleX()
+    const newScale = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, oldScale * factor))
+    const centerX = this.stage.width() / 2
+    const centerY = this.stage.height() / 2
+    const mousePointTo = {
+      x: (centerX - this.stage.x()) / oldScale,
+      y: (centerY - this.stage.y()) / oldScale,
+    }
+    this.stage.setAttrs({
+      scaleX: newScale,
+      scaleY: newScale,
+      x: centerX - mousePointTo.x * newScale,
+      y: centerY - mousePointTo.y * newScale,
+    })
+    zoomLevel.value = newScale
+    this._redrawOverlays()
   }
 
   // -------------------------------------------------------------------------

@@ -23,7 +23,7 @@ export function createScaleBar(stage: Konva.Stage): ScaleBar {
   // stay constant regardless of stage zoom.
   const line = new Konva.Line({
     points: [0, 0, TARGET_PX, 0],
-    stroke: '#1A1A1A',
+    stroke: 'rgba(60, 45, 30, 0.6)',
     strokeWidth: 2,
     strokeScaleEnabled: false,
     lineCap: 'square',
@@ -32,14 +32,14 @@ export function createScaleBar(stage: Konva.Stage): ScaleBar {
 
   const capLeft = new Konva.Line({
     points: [0, -4, 0, 4],
-    stroke: '#1A1A1A',
+    stroke: 'rgba(60, 45, 30, 0.6)',
     strokeWidth: 2,
     strokeScaleEnabled: false,
     listening: false,
   })
   const capRight = new Konva.Line({
     points: [TARGET_PX, -4, TARGET_PX, 4],
-    stroke: '#1A1A1A',
+    stroke: 'rgba(60, 45, 30, 0.6)',
     strokeWidth: 2,
     strokeScaleEnabled: false,
     listening: false,
@@ -51,7 +51,7 @@ export function createScaleBar(stage: Konva.Stage): ScaleBar {
     text: '',
     fontSize: 11,
     fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-    fill: '#1A1A1A',
+    fill: 'rgba(60, 45, 30, 0.6)',
     listening: false,
     align: 'center',
   })
@@ -97,9 +97,9 @@ export function createScaleBar(stage: Konva.Stage): ScaleBar {
     label.x(barScreenPx / 2 - label.width() / 2)
     label.y(-18)
 
-    // Update stroke colors for dark/light mode
+    // Update stroke colors for dark/light mode — use ruler text color for subtlety
     const cs = getComputedStyle(s.container())
-    const color = cs.getPropertyValue('--color-text').trim() || '#1A1A1A'
+    const color = cs.getPropertyValue('--color-text-muted').trim() || 'rgba(60, 45, 30, 0.6)'
     line.stroke(color)
     capLeft.stroke(color)
     capRight.stroke(color)

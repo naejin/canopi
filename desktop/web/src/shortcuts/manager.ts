@@ -12,13 +12,11 @@ import {
 export const commandPaletteOpen = signal(false);
 
 const panelKeys: Record<string, Panel> = {
-  "1": "plant-db",
-  "2": "canvas",
-  "3": "world-map",
-  "4": "learning",
+  "1": "canvas",
+  "2": "plant-db",
 };
 
-// Single-key tool shortcuts — only fire when canvas panel is active
+// Single-key tool shortcuts — only fire when canvas panel is active (MVP set)
 const canvasToolKeys: Record<string, string> = {
   v: "select",
   V: "select",
@@ -26,18 +24,8 @@ const canvasToolKeys: Record<string, string> = {
   H: "hand",
   r: "rectangle",
   R: "rectangle",
-  e: "ellipse",
-  E: "ellipse",
-  p: "polygon",
-  P: "polygon",
-  f: "freeform",
-  F: "freeform",
-  l: "line",
-  L: "line",
   t: "text",
   T: "text",
-  m: "measure",
-  M: "measure",
 };
 
 // Module-level reference so HMR can remove the old handler before re-adding.
