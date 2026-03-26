@@ -117,6 +117,8 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 1. `cargo tauri dev` — launches app with MCP bridge on port 9223
 2. `driver_session start` — connect to the running app
 
+**Gotcha:** If MCP tools error with `resolveRef is not a function`, the session is stale. Run `driver_session stop` then `driver_session start` to reconnect.
+
 **Verification tools:**
 - `webview_screenshot` — capture current visual state
 - `webview_interact` — click, scroll, drag to test user flows
@@ -168,6 +170,9 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 - **Effect subscription**: Effects only subscribe to signals **read during execution**. An early `return` before reading a signal = never re-runs. Read ALL dependencies BEFORE conditional returns
 
 ### Database / SQLite
+- **Plant DB schema contract**: `scripts/schema-contract.json` maps canopi-data export columns to canopi-core.db columns. `prepare-db.py` reads from this contract, not hardcoded lists. When canopi-data changes column names, update the contract — not the Rust code
+- **canopi-data column renames**: `life_cycle` → `is_annual`/`is_biennial`/`is_perennial` (booleans), `nitrogen_fixation` → `nitrogen_fixer` (integer). These are breaking changes that require updating prepare-db.py, Rust types, and frontend types together
+- **No `sqlite3` CLI on this machine**: Use `python3 -c "import sqlite3; ..."` for DB inspection
 - **rusqlite feature**: Use `bundled-full` (not `bundled`) — enables FTS5 full-text search
 - **Plant DB PRAGMAs**: On read-only connections, do NOT set `journal_mode=WAL` or `query_only=true`. Only `mmap_size` and `cache_size`
 - **FTS5 MATCH syntax**: Always use full table name (`species_search_fts MATCH ?1`), never an alias
@@ -188,6 +193,7 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 
 ### Platform / Build
 - **Linux deps**: `sudo apt-get install libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev patchelf` — do NOT install `libappindicator3-dev`
+- **Dev environment is Linux-only**: No macOS or Windows access. Cross-platform native libs (lib-swift, lib-cpp) require CI (GitHub Actions) + beta testers for validation
 - **`std::fs::rename` on Windows**: Fails with locked files. Use `design::atomic_replace()` with rollback sidecar
 
 ## Document Lifecycle (enforced — Phase 2.1 implemented)
