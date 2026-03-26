@@ -46,6 +46,7 @@ import { DimensionTool } from './tools/dimension'
 import { updateDimensionsForNode } from './dimensions'
 import { createGridShape, snapToGrid, refreshGridColors } from './grid'
 import { createHtmlRulers, updateHtmlRulers, refreshRulerColors, type HtmlRulers } from './rulers'
+import { refreshCanvasTheme } from './theme-refresh'
 import { createScaleBar, type ScaleBar } from './scale-bar'
 // Compass disabled for MVP
 // import { createCompass, type Compass } from './compass'
@@ -255,6 +256,9 @@ export class CanvasEngine {
         requestAnimationFrame(() => {
           refreshGridColors(container)
           refreshRulerColors(container)
+          const transformer = this.stage.findOne('Transformer') as Konva.Transformer | undefined
+          refreshCanvasTheme(container, this.layers, transformer ?? null)
+          if (this._scaleBar) this._scaleBar.update(this.stage)
           this._redrawOverlays()
         })
       }

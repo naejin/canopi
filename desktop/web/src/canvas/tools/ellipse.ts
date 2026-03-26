@@ -1,7 +1,7 @@
 import Konva from 'konva'
 import type { CanvasTool } from './base'
 import type { CanvasEngine } from '../engine'
-import { createEllipse, PREVIEW_DASH, ZONE_DEFAULTS } from '../shapes'
+import { createEllipse, PREVIEW_DASH, zoneDefaults } from '../shapes'
 import { AddNodeCommand } from '../commands'
 
 export class EllipseTool implements CanvasTool {
@@ -38,9 +38,9 @@ export class EllipseTool implements CanvasTool {
       y: pos.y,
       radiusX: 0,
       radiusY: 0,
-      fill: ZONE_DEFAULTS.fill,
-      stroke: ZONE_DEFAULTS.stroke,
-      strokeWidth: ZONE_DEFAULTS.strokeWidth,
+      fill: zoneDefaults().fill,
+      stroke: zoneDefaults().stroke,
+      strokeWidth: zoneDefaults().strokeWidth,
       strokeScaleEnabled: false,
       dash: PREVIEW_DASH,
       listening: false,

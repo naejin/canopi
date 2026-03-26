@@ -15,23 +15,18 @@ const HARDINESS_COLORS: Record<number, string> = {
   9: '#FDD835', 10: '#FFB300', 11: '#FF8F00', 12: '#E65100', 13: '#BF360C',
 }
 
-// Lifecycle colors
-const LIFECYCLE_COLORS: Record<string, string> = {
-  'Annual': '#FF9800',
-  'Biennial': '#8BC34A',
-  'Perennial': '#2E7D32',
-  'Short-lived perennial': '#558B2F',
-}
+// Lifecycle colors (derived from boolean fields)
+const LIFECYCLE_COLORS = {
+  annual: '#FF9800',
+  biennial: '#8BC34A',
+  perennial: '#2E7D32',
+  multi: '#558B2F',
+} as const
 
-// Nitrogen fixation colors
-const NITROGEN_COLORS: Record<string, string> = {
-  'Yes': '#1B5E20',
-  'High': '#2E7D32',
-  'Medium': '#4CAF50',
-  'Low': '#8BC34A',
-  'No': '#9E9E9E',
-  'None': '#9E9E9E',
-}
+// Nitrogen fixer colors (boolean, with unknown for null)
+const NITROGEN_FIXER_COLOR = '#1B5E20'
+const NITROGEN_NON_FIXER_COLOR = '#9E9E9E'
+const NITROGEN_UNKNOWN_COLOR = '#BDBDBD'
 
 // Edibility colors (0-5 rating)
 const EDIBILITY_COLORS: string[] = [
@@ -115,11 +110,18 @@ export function getLegendEntries(attr: ColorByAttribute): LegendEntry[] {
         label: `Zone ${z}`, color,
       }))
     case 'lifecycle':
-      return Object.entries(LIFECYCLE_COLORS).map(([label, color]) => ({ label, color }))
+      return [
+        { label: 'Perennial', color: LIFECYCLE_COLORS.perennial },
+        { label: 'Biennial', color: LIFECYCLE_COLORS.biennial },
+        { label: 'Annual', color: LIFECYCLE_COLORS.annual },
+        { label: 'Multiple', color: LIFECYCLE_COLORS.multi },
+      ]
     case 'nitrogen':
-      return Object.entries(NITROGEN_COLORS)
-        .filter(([k]) => k !== 'None') // avoid duplicate for No/None
-        .map(([label, color]) => ({ label, color }))
+      return [
+        { label: 'Nitrogen fixer', color: NITROGEN_FIXER_COLOR },
+        { label: 'Non-fixer', color: NITROGEN_NON_FIXER_COLOR },
+        { label: 'Unknown', color: NITROGEN_UNKNOWN_COLOR },
+      ]
     case 'edibility':
       return EDIBILITY_COLORS.map((color, i) => ({
         label: i === 0 ? 'Not edible' : `Rating ${i}/5`,
@@ -142,10 +144,23 @@ function _getColorForAttribute(
       if (zone === null) return '#9E9E9E'
       return HARDINESS_COLORS[zone] ?? '#9E9E9E'
     }
-    case 'lifecycle':
-      return LIFECYCLE_COLORS[(detail.life_cycle as string) ?? ''] ?? '#9E9E9E'
-    case 'nitrogen':
-      return NITROGEN_COLORS[(detail.nitrogen_fixation as string) ?? ''] ?? '#9E9E9E'
+    case 'lifecycle': {
+      const isAnnual = (detail.is_annual as boolean) ?? false
+      const isBiennial = (detail.is_biennial as boolean) ?? false
+      const isPerennial = (detail.is_perennial as boolean) ?? false
+      const count = [isAnnual, isBiennial, isPerennial].filter(Boolean).length
+      if (count > 1) return LIFECYCLE_COLORS.multi
+      if (isPerennial) return LIFECYCLE_COLORS.perennial
+      if (isBiennial) return LIFECYCLE_COLORS.biennial
+      if (isAnnual) return LIFECYCLE_COLORS.annual
+      return '#9E9E9E'
+    }
+    case 'nitrogen': {
+      const fixer = detail.nitrogen_fixer as boolean | null | undefined
+      if (fixer === true) return NITROGEN_FIXER_COLOR
+      if (fixer === false) return NITROGEN_NON_FIXER_COLOR
+      return NITROGEN_UNKNOWN_COLOR
+    }
     case 'edibility': {
       const rating = (detail.edibility_rating as number) ?? 0
       return EDIBILITY_COLORS[Math.min(rating, 5)] ?? '#9E9E9E'

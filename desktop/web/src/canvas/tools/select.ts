@@ -6,13 +6,13 @@ import { computeSelectionRect, nodesInRect } from '../operations'
 import { MoveNodeCommand, TransformNodeCommand, BatchCommand } from '../commands'
 import type { TransformAttrs } from '../commands'
 import { updateDimensionsForNode } from '../dimensions'
+import { getCanvasColor } from '../theme-refresh'
 
-// Konva hex values matching the --canvas-selection CSS token (rgba(45, 95, 63, 0.15))
-// and --color-primary (#2D5F3F). Raw values are required — Konva cannot read CSS vars.
-const SELECTION_FILL = 'rgba(45, 95, 63, 0.15)'
-const SELECTION_STROKE = 'rgba(45, 95, 63, 0.6)'
-const TRANSFORMER_STROKE = '#2D5F3F'
-const HOVER_SHADOW_COLOR = '#2D5F3F'
+// Selection UI colors — read from theme-refresh cache so they match active theme.
+// The rubber-band rect is ephemeral (created on mousedown), so getCanvasColor()
+// gives the correct color at creation time. Transformer is long-lived and gets
+// updated in refreshCanvasTheme().
+const HOVER_SHADOW_COLOR = '#2D5F3F' // shadow doesn't need theme swap — subtle in both
 const HOVER_SHADOW_BLUR = 6
 const HOVER_SHADOW_OPACITY = 0.45
 
@@ -209,9 +209,9 @@ export class SelectTool implements CanvasTool {
     this._transformer = new Konva.Transformer({
       rotationSnaps: ROTATION_SNAPS,
       keepRatio: true,
-      borderStroke: TRANSFORMER_STROKE,
+      borderStroke: getCanvasColor('selection-stroke'),
       borderStrokeWidth: 1,
-      anchorStroke: TRANSFORMER_STROKE,
+      anchorStroke: getCanvasColor('selection-stroke'),
       anchorFill: '#FFFFFF',
       anchorSize: 8,
       anchorCornerRadius: 2,
@@ -305,7 +305,7 @@ export class SelectTool implements CanvasTool {
 
     this._boundingRect = new Konva.Rect({
       x, y, width, height,
-      stroke: TRANSFORMER_STROKE,
+      stroke: getCanvasColor('selection-stroke'),
       strokeWidth: 1,
       strokeScaleEnabled: false,
       dash: [6, 3],
@@ -337,8 +337,8 @@ export class SelectTool implements CanvasTool {
       y: pos.y,
       width: 0,
       height: 0,
-      fill: SELECTION_FILL,
-      stroke: SELECTION_STROKE,
+      fill: getCanvasColor('selection-fill'),
+      stroke: getCanvasColor('selection-stroke'),
       strokeWidth: 1,
       strokeScaleEnabled: false,
       listening: false,

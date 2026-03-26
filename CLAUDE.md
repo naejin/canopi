@@ -119,6 +119,8 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 
 **Gotcha:** If MCP tools error with `resolveRef is not a function`, the session is stale. Run `driver_session stop` then `driver_session start` to reconnect.
 
+**Gotcha:** MCP tools disconnect from Claude Code when the Tauri app restarts (e.g. after `cargo tauri dev` relaunch). Must `driver_session stop` then `start` to reconnect. If tools show as "no longer available", they need the app running first.
+
 **Verification tools:**
 - `webview_screenshot` — capture current visual state
 - `webview_interact` — click, scroll, drag to test user flows
@@ -149,6 +151,7 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 
 ### Konva.js / Canvas
 - **Shapes don't react to CSS theme changes**: Colors hardcoded at creation time. Theme switch requires walking nodes and updating `fill`/`stroke` from computed CSS variables
+- **Canvas colors must use `getCanvasColor()` from `theme-refresh.ts`**: Never hardcode fill/stroke on Konva nodes. Add CSS variable to `global.css` (both themes) + cache entry in `theme-refresh.ts`. `refreshCanvasTheme()` in the engine's theme effect walks all layers on toggle
 - **Transformer must be on same layer as targets**: Cross-layer Transformer breaks drag/transform
 - **`name: 'shape'` only on top-level selectable nodes**: Children inside Groups must NOT have it — causes independent selection
 - **Screen-space overlays**: Use HTML `<canvas>` (not Konva layers) for rulers. Konva layers are subject to stage transforms
@@ -171,10 +174,14 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 
 ### Database / SQLite
 - **Plant DB schema contract**: `scripts/schema-contract.json` maps canopi-data export columns to canopi-core.db columns. `prepare-db.py` reads from this contract, not hardcoded lists. When canopi-data changes column names, update the contract — not the Rust code
-- **canopi-data column renames**: `life_cycle` → `is_annual`/`is_biennial`/`is_perennial` (booleans), `nitrogen_fixation` → `nitrogen_fixer` (integer). These are breaking changes that require updating prepare-db.py, Rust types, and frontend types together
+- **canopi-data column renames (completed 3.0)**: `life_cycle` replaced by `is_annual`/`is_biennial`/`is_perennial` (booleans), `nitrogen_fixation` replaced by `nitrogen_fixer` (integer). All layers updated: prepare-db.py, Rust types, query builder, frontend types, display-modes, detail card. Filter UI keeps `life_cycle: string[]` for OR-semantics, mapped to boolean columns in `query_builder.rs`
+- **Schema version**: `PRAGMA user_version = 2` in canopi-core.db. Rust backend warns if < 2 at startup
+- **Filter-to-column mapping**: `SpeciesFilter.life_cycle: Vec<String>` maps to boolean columns via `query_builder.rs` (e.g. `"Annual"` → `is_annual = 1`). This preserves OR-semantics in the UI while the DB uses boolean columns. Don't change the filter type — change the query mapping
 - **No `sqlite3` CLI on this machine**: Use `python3 -c "import sqlite3; ..."` for DB inspection
+- **No `pip`/`pip3` on this machine**: Use `python3 -c "import ..."` for ad-hoc checks. Only stdlib modules available
 - **rusqlite feature**: Use `bundled-full` (not `bundled`) — enables FTS5 full-text search
 - **Plant DB PRAGMAs**: On read-only connections, do NOT set `journal_mode=WAL` or `query_only=true`. Only `mmap_size` and `cache_size`
+- **`translated_values` table is wide format**: Columns are `field_name`, `value_en`, `value_fr`, `value_es`, `value_pt`, `value_it`, `value_zh`. NOT a normalized table with `language`/`translated` columns. `translate_value()` in `plant_db.rs` maps locale to column name via allowlist
 - **FTS5 MATCH syntax**: Always use full table name (`species_search_fts MATCH ?1`), never an alias
 - **FTS5 sanitization**: Strip ALL metacharacters `"()*+-^:\` — not just quotes. Empty after sanitization → skip FTS
 - **Species table name**: `species` (NOT `silver_species` as in the architecture draft)

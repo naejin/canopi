@@ -112,7 +112,10 @@ pub fn get_detail(
                     s.habit,
                     s.deciduous_evergreen,
                     s.stratum,
-                    s.nitrogen_fixation,
+                    s.nitrogen_fixer,
+                    s.is_annual,
+                    s.is_biennial,
+                    s.is_perennial,
                     s.tolerates_full_sun,
                     s.tolerates_semi_shade,
                     s.tolerates_full_shade,
@@ -126,7 +129,7 @@ pub fn get_detail(
     let (species_id, mut detail) = stmt
         .query_row([canonical_name], |row| {
             let id: String = row.get(0)?;
-            let fallback_common: Option<String> = row.get(21)?;
+            let fallback_common: Option<String> = row.get(24)?;
             Ok((
                 id,
                 SpeciesDetail {
@@ -147,10 +150,13 @@ pub fn get_detail(
                     habit: row.get(14)?,
                     deciduous_evergreen: row.get(15)?,
                     stratum: row.get(16)?,
-                    nitrogen_fixation: row.get(17)?,
-                    tolerates_full_sun: row.get::<_, Option<i32>>(18)?.map(|v| v != 0),
-                    tolerates_semi_shade: row.get::<_, Option<i32>>(19)?.map(|v| v != 0),
-                    tolerates_full_shade: row.get::<_, Option<i32>>(20)?.map(|v| v != 0),
+                    nitrogen_fixer: row.get::<_, Option<i32>>(17)?.map(|v| v != 0),
+                    is_annual: row.get::<_, Option<i32>>(18)?.map(|v| v != 0),
+                    is_biennial: row.get::<_, Option<i32>>(19)?.map(|v| v != 0),
+                    is_perennial: row.get::<_, Option<i32>>(20)?.map(|v| v != 0),
+                    tolerates_full_sun: row.get::<_, Option<i32>>(21)?.map(|v| v != 0),
+                    tolerates_semi_shade: row.get::<_, Option<i32>>(22)?.map(|v| v != 0),
+                    tolerates_full_shade: row.get::<_, Option<i32>>(23)?.map(|v| v != 0),
                     uses: vec![],
                     soil_types: vec![],
                     relationships: vec![],
@@ -291,20 +297,14 @@ pub fn get_filter_options(conn: &Connection) -> Result<FilterOptions, String> {
             .collect()
     };
 
-    let life_cycles: Vec<String> = {
-        let mut s = conn
-            .prepare(
-                "SELECT DISTINCT life_cycle FROM species WHERE life_cycle IS NOT NULL ORDER BY life_cycle",
-            )
-            .map_err(|e| format!("Failed to prepare life cycles query: {e}"))?;
-        s.query_map([], |row| row.get(0))
-            .map_err(|e| format!("Failed to fetch life cycles: {e}"))?
-            .filter_map(|r| match r {
-                Ok(item) => Some(item),
-                Err(e) => { tracing::warn!("Skipped life cycle row: {e}"); None }
-            })
-            .collect()
-    };
+    // Life cycles are now boolean columns (is_annual, is_biennial, is_perennial).
+    // Return a fixed list — the frontend renders these as checkboxes and the
+    // query builder maps them to the boolean column checks.
+    let life_cycles: Vec<String> = vec![
+        "Annual".to_owned(),
+        "Biennial".to_owned(),
+        "Perennial".to_owned(),
+    ];
 
     let soil_types: Vec<String> = {
         let mut s = conn
@@ -470,6 +470,7 @@ pub fn get_common_names_batch(
 }
 
 /// Looks up a translated display value from the `translated_values` table.
+/// The table uses a wide format: field_name, value_en, value_fr, value_es, etc.
 /// Returns the original English value if no translation is found.
 pub fn translate_value(
     conn: &Connection,
@@ -477,17 +478,24 @@ pub fn translate_value(
     value_en: &str,
     locale: &str,
 ) -> String {
-    conn.query_row(
-        "SELECT translated FROM translated_values
-         WHERE field = ?1 AND value_en = ?2 AND language = ?3
-         LIMIT 1",
-        [field, value_en, locale],
-        |row| row.get::<_, String>(0),
-    )
-    .optional()
-    .ok()
-    .flatten()
-    .unwrap_or_else(|| value_en.to_owned())
+    // Validate locale to prevent SQL injection — only known locale columns allowed
+    let col = match locale {
+        "fr" => "value_fr",
+        "es" => "value_es",
+        "pt" => "value_pt",
+        "it" => "value_it",
+        "zh" => "value_zh",
+        _ => return value_en.to_owned(), // "en" or unknown → return English
+    };
+    let sql = format!(
+        "SELECT COALESCE({col}, value_en) FROM translated_values \
+         WHERE field_name = ?1 AND value_en = ?2 LIMIT 1"
+    );
+    conn.query_row(&sql, [field, value_en], |row| row.get::<_, String>(0))
+        .optional()
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| value_en.to_owned())
 }
 
 #[cfg(test)]
@@ -518,11 +526,13 @@ mod tests {
                 habit TEXT,
                 deciduous_evergreen TEXT,
                 stratum TEXT,
-                nitrogen_fixation TEXT,
+                nitrogen_fixer INTEGER,
+                is_annual INTEGER,
+                is_biennial INTEGER,
+                is_perennial INTEGER,
                 tolerates_full_sun INTEGER,
                 tolerates_semi_shade INTEGER,
-                tolerates_full_shade INTEGER,
-                life_cycle TEXT
+                tolerates_full_shade INTEGER
             );
             CREATE VIRTUAL TABLE species_fts USING fts5(
                 canonical_name, common_name,
@@ -556,10 +566,13 @@ mod tests {
             );
             CREATE TABLE translated_values (
                 id TEXT PRIMARY KEY,
-                field TEXT NOT NULL,
+                field_name TEXT NOT NULL,
                 value_en TEXT NOT NULL,
-                language TEXT NOT NULL,
-                translated TEXT NOT NULL
+                value_fr TEXT,
+                value_es TEXT,
+                value_pt TEXT,
+                value_it TEXT,
+                value_zh TEXT
             );
 
             INSERT INTO species VALUES (
@@ -567,14 +580,14 @@ mod tests {
                 'Lavender', 'Lamiaceae', 'Lavandula',
                 0.3, 0.6, 0.9, 5, 9, 6.0, 8.0,
                 'Slow', 3, 2, 'Shrub', 'Evergreen', 'Low',
-                'Low', 1, 1, 0, 'Perennial'
+                0, 0, 0, 1, 1, 1, 0
             );
             INSERT INTO species VALUES (
                 'uuid-ald', 'alnus-glutinosa', 'Alnus glutinosa',
                 'Alder', 'Betulaceae', 'Alnus',
                 5.0, 20.0, 8.0, 1, 8, 5.5, 7.5,
                 'Fast', 0, 0, 'Tree', 'Deciduous', 'Canopy',
-                'Yes', 1, 0, 0, 'Perennial'
+                1, 0, 0, 1, 1, 0, 0
             );
 
             INSERT INTO species_common_names VALUES
@@ -596,7 +609,7 @@ mod tests {
                 ('r1', 'uuid-lav', 'alnus-glutinosa', 'companion', 'Attracts pollinators');
 
             INSERT INTO translated_values VALUES
-                ('t1', 'growth_rate', 'Slow', 'fr', 'Lent');
+                ('t1', 'growth_rate', 'Slow', 'Lent', NULL, NULL, NULL, NULL);
         ",
         )
         .unwrap();
@@ -655,10 +668,12 @@ mod tests {
     }
 
     #[test]
-    fn test_get_detail_nitrogen_fixation_is_string() {
+    fn test_get_detail_nitrogen_fixer() {
         let conn = test_db();
         let detail = get_detail(&conn, "Alnus glutinosa", "en").unwrap();
-        assert_eq!(detail.nitrogen_fixation.as_deref(), Some("Yes"));
+        assert_eq!(detail.nitrogen_fixer, Some(true));
+        assert_eq!(detail.is_perennial, Some(true));
+        assert_eq!(detail.is_annual, Some(false));
     }
 
     #[test]
@@ -667,7 +682,10 @@ mod tests {
         let opts = get_filter_options(&conn).unwrap();
         assert!(opts.families.contains(&"Lamiaceae".to_owned()));
         assert!(opts.families.contains(&"Betulaceae".to_owned()));
+        // life_cycles is now a hardcoded list (boolean columns replaced the string column)
         assert!(opts.life_cycles.contains(&"Perennial".to_owned()));
+        assert!(opts.life_cycles.contains(&"Annual".to_owned()));
+        assert!(opts.life_cycles.contains(&"Biennial".to_owned()));
         assert!(opts.soil_types.contains(&"Clay".to_owned()));
         assert!(opts.sun_tolerances.contains(&"full_sun".to_owned()));
         assert!(opts.hardiness_range.0 <= 1);

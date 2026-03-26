@@ -1,0 +1,145 @@
+{
+  "schema_version": 2,
+  "min_export_schema_version": 5,
+  "description": "Maps canopi-data export columns to canopi-core.db species table. Update this file when canopi-data changes column names.",
+  "columns": [
+    {"name": "id", "type": "TEXT", "required": true},
+    {"name": "slug", "type": "TEXT", "required": true},
+    {"name": "canonical_name", "type": "TEXT", "required": true},
+    {"name": "common_name", "type": "TEXT"},
+    {"name": "family", "type": "TEXT"},
+    {"name": "genus", "type": "TEXT"},
+    {"name": "height_min_m", "type": "REAL"},
+    {"name": "height_max_m", "type": "REAL"},
+    {"name": "width_max_m", "type": "REAL"},
+    {"name": "hardiness_zone_min", "type": "INTEGER"},
+    {"name": "hardiness_zone_max", "type": "INTEGER"},
+    {"name": "soil_ph_min", "type": "REAL"},
+    {"name": "soil_ph_max", "type": "REAL"},
+    {"name": "drought_tolerance", "type": "TEXT"},
+    {"name": "frost_tender", "type": "INTEGER"},
+    {"name": "growth_rate", "type": "TEXT"},
+    {"name": "is_annual", "type": "INTEGER"},
+    {"name": "is_biennial", "type": "INTEGER"},
+    {"name": "is_perennial", "type": "INTEGER"},
+    {"name": "lifespan", "type": "TEXT"},
+    {"name": "habit", "type": "TEXT"},
+    {"name": "deciduous_evergreen", "type": "TEXT"},
+    {"name": "active_growth_period", "type": "TEXT"},
+    {"name": "bloom_period", "type": "TEXT"},
+    {"name": "flower_color", "type": "TEXT"},
+    {"name": "tolerates_full_sun", "type": "INTEGER"},
+    {"name": "tolerates_semi_shade", "type": "INTEGER"},
+    {"name": "tolerates_full_shade", "type": "INTEGER"},
+    {"name": "well_drained", "type": "INTEGER"},
+    {"name": "heavy_clay", "type": "INTEGER"},
+    {"name": "tolerates_acid", "type": "INTEGER"},
+    {"name": "tolerates_alkaline", "type": "INTEGER"},
+    {"name": "tolerates_saline", "type": "INTEGER"},
+    {"name": "tolerates_wind", "type": "INTEGER"},
+    {"name": "tolerates_pollution", "type": "INTEGER"},
+    {"name": "tolerates_nutritionally_poor", "type": "INTEGER"},
+    {"name": "nitrogen_fixer", "type": "INTEGER"},
+    {"name": "stratum", "type": "TEXT"},
+    {"name": "succession_stage", "type": "TEXT"},
+    {"name": "stratum_confidence", "type": "REAL"},
+    {"name": "succession_confidence", "type": "REAL"},
+    {"name": "edibility_rating", "type": "INTEGER"},
+    {"name": "medicinal_rating", "type": "INTEGER"},
+    {"name": "other_uses_rating", "type": "INTEGER"},
+    {"name": "edible_uses", "type": "TEXT"},
+    {"name": "medicinal_uses", "type": "TEXT"},
+    {"name": "other_uses", "type": "TEXT"},
+    {"name": "summary", "type": "TEXT"},
+    {"name": "cultivation_notes", "type": "TEXT"},
+    {"name": "propagation_notes", "type": "TEXT"},
+    {"name": "known_hazards", "type": "TEXT"},
+    {"name": "carbon_farming", "type": "TEXT"},
+    {"name": "native_range", "type": "TEXT"},
+    {"name": "toxicity", "type": "TEXT"},
+    {"name": "attracts_wildlife", "type": "INTEGER"},
+    {"name": "scented", "type": "INTEGER"},
+    {"name": "data_quality_tier", "type": "TEXT"}
+  ],
+  "supporting_tables": [
+    "species_common_names",
+    "species_relationships",
+    "species_uses",
+    "species_soil_types",
+    "synonym_lookup",
+    "translated_values"
+  ],
+  "indexes": {
+    "species": [
+      {"name": "idx_species_canonical", "columns": "canonical_name"},
+      {"name": "idx_species_slug", "columns": "slug"},
+      {"name": "idx_species_family", "columns": "family"},
+      {"name": "idx_species_genus", "columns": "genus"},
+      {"name": "idx_species_hardiness_min", "columns": "hardiness_zone_min"},
+      {"name": "idx_species_hardiness_max", "columns": "hardiness_zone_max"},
+      {"name": "idx_species_height_max", "columns": "height_max_m"},
+      {"name": "idx_species_growth_rate", "columns": "growth_rate"},
+      {"name": "idx_species_is_annual", "columns": "is_annual"},
+      {"name": "idx_species_is_biennial", "columns": "is_biennial"},
+      {"name": "idx_species_is_perennial", "columns": "is_perennial"},
+      {"name": "idx_species_nitrogen_fixer", "columns": "nitrogen_fixer"},
+      {"name": "idx_species_stratum", "columns": "stratum"},
+      {"name": "idx_species_edibility", "columns": "edibility_rating"},
+      {"name": "idx_species_habit", "columns": "habit"},
+      {"name": "idx_species_sun", "columns": "tolerates_full_sun"}
+    ],
+    "species_common_names": [
+      {"name": "idx_cn_species_lang", "columns": "species_id, language"},
+      {"name": "idx_cn_primary", "columns": "species_id, language, is_primary"}
+    ],
+    "species_relationships": [
+      {"name": "idx_rel_species", "columns": "species_id"},
+      {"name": "idx_rel_related", "columns": "related_species_slug"}
+    ],
+    "species_uses": [
+      {"name": "idx_uses_species", "columns": "species_id"}
+    ],
+    "species_soil_types": [
+      {"name": "idx_soil_species", "columns": "species_id"}
+    ],
+    "synonym_lookup": [
+      {"name": "idx_synonym_canonical", "columns": "canonical_id"}
+    ],
+    "best_common_names": [
+      {"name": "idx_bcn_species_lang", "columns": "species_id, language"}
+    ]
+  },
+  "translations": {
+    "growth_rate": {
+      "Fast": {"fr": "Rapide", "es": "Rapido", "pt": "Rapido", "it": "Rapido"},
+      "Medium": {"fr": "Moyen", "es": "Medio", "pt": "Medio", "it": "Medio"},
+      "Slow": {"fr": "Lent", "es": "Lento", "pt": "Lento", "it": "Lento"}
+    },
+    "deciduous_evergreen": {
+      "Deciduous": {"fr": "Caduc", "es": "Caducifolio", "pt": "Caduco", "it": "Deciduo"},
+      "Evergreen": {"fr": "Persistant", "es": "Perenne", "pt": "Perene", "it": "Sempreverde"},
+      "Semi-evergreen": {"fr": "Semi-persistant", "es": "Semi-perenne", "pt": "Semi-perene", "it": "Semi-sempreverde"}
+    },
+    "drought_tolerance": {
+      "High": {"fr": "Elevee", "es": "Alta", "pt": "Alta", "it": "Alta"},
+      "Medium": {"fr": "Moyenne", "es": "Media", "pt": "Media", "it": "Media"},
+      "Low": {"fr": "Faible", "es": "Baja", "pt": "Baixa", "it": "Bassa"},
+      "None": {"fr": "Aucune", "es": "Ninguna", "pt": "Nenhuma", "it": "Nessuna"}
+    },
+    "stratum": {
+      "emergent": {"fr": "Emergent", "es": "Emergente", "pt": "Emergente", "it": "Emergente"},
+      "high": {"fr": "Haut", "es": "Alto", "pt": "Alto", "it": "Alto"},
+      "medium": {"fr": "Moyen", "es": "Medio", "pt": "Medio", "it": "Medio"},
+      "low": {"fr": "Bas", "es": "Bajo", "pt": "Baixo", "it": "Basso"}
+    },
+    "succession_stage": {
+      "placenta_i": {"fr": "Placenta I", "es": "Placenta I", "pt": "Placenta I", "it": "Placenta I"},
+      "placenta_ii": {"fr": "Placenta II", "es": "Placenta II", "pt": "Placenta II", "it": "Placenta II"},
+      "placenta_iii": {"fr": "Placenta III", "es": "Placenta III", "pt": "Placenta III", "it": "Placenta III"},
+      "secondary_i": {"fr": "Secondaire I", "es": "Secundaria I", "pt": "Secundaria I", "it": "Secondaria I"},
+      "secondary_ii": {"fr": "Secondaire II", "es": "Secundaria II", "pt": "Secundaria II", "it": "Secondaria II"},
+      "secondary_iii": {"fr": "Secondaire III", "es": "Secundaria III", "pt": "Secundaria III", "it": "Secondaria III"},
+      "climax": {"fr": "Climax", "es": "Climax", "pt": "Climax", "it": "Climax"}
+    }
+  }
+}

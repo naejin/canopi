@@ -1,7 +1,7 @@
 import Konva from 'konva'
 import type { CanvasTool } from './base'
 import type { CanvasEngine } from '../engine'
-import { createFreeform, ZONE_DEFAULTS } from '../shapes'
+import { createFreeform, zoneDefaults } from '../shapes'
 import { AddNodeCommand } from '../commands'
 
 interface Point {
@@ -103,8 +103,8 @@ export class FreeformTool implements CanvasTool {
 
     this._preview = new Konva.Line({
       points: this._points,
-      stroke: ZONE_DEFAULTS.stroke,
-      strokeWidth: ZONE_DEFAULTS.strokeWidth,
+      stroke: zoneDefaults().stroke,
+      strokeWidth: zoneDefaults().strokeWidth,
       strokeScaleEnabled: false,
       lineCap: 'round',
       lineJoin: 'round',

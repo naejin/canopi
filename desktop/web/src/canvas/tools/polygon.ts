@@ -1,7 +1,7 @@
 import Konva from 'konva'
 import type { CanvasTool } from './base'
 import type { CanvasEngine } from '../engine'
-import { createPolygon, PREVIEW_DASH, ZONE_DEFAULTS } from '../shapes'
+import { createPolygon, PREVIEW_DASH, zoneDefaults } from '../shapes'
 import { AddNodeCommand } from '../commands'
 
 // Distance threshold for snapping to the first vertex to close the polygon.
@@ -60,11 +60,11 @@ export class PolygonTool implements CanvasTool {
     if (!this._previewLine) {
       this._previewLine = new Konva.Line({
         points: [...this._points, pos.x, pos.y], // trailing cursor point
-        stroke: ZONE_DEFAULTS.stroke,
-        strokeWidth: ZONE_DEFAULTS.strokeWidth,
+        stroke: zoneDefaults().stroke,
+        strokeWidth: zoneDefaults().strokeWidth,
         strokeScaleEnabled: false,
         dash: PREVIEW_DASH,
-        fill: 'rgba(45, 95, 63, 0.05)',
+        fill: zoneDefaults().fill,
         listening: false,
       })
       layer.add(this._previewLine)
@@ -79,7 +79,7 @@ export class PolygonTool implements CanvasTool {
       x: pos.x,
       y: pos.y,
       radius: 4 * inv,
-      fill: ZONE_DEFAULTS.stroke,
+      fill: zoneDefaults().stroke,
       stroke: '#FFFFFF',
       strokeWidth: 1,
       strokeScaleEnabled: false,

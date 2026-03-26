@@ -1,5 +1,6 @@
 import Konva from 'konva'
 import { getCommonNames } from '../ipc/species'
+import { getCanvasColor } from './theme-refresh'
 
 // Strata color map — raw hex values required; Konva cannot read CSS vars.
 const STRATA_COLORS: Record<string, string> = {
@@ -113,7 +114,7 @@ export function createPlantNode(opts: {
     fontSize: LABEL_FONT_SIZE,
     fontFamily: 'Inter, sans-serif',
     fontStyle: opts.commonName ? 'normal' : 'italic',
-    fill: '#444444',
+    fill: getCanvasColor('plant-label'),
     listening: false,
     name: 'plant-label',
   })
@@ -128,7 +129,7 @@ export function createPlantNode(opts: {
       fontSize: LABEL_FONT_SIZE - 2,
       fontFamily: 'Inter, sans-serif',
       fontStyle: 'italic',
-      fill: '#888888',
+      fill: getCanvasColor('plant-label-muted'),
       listening: false,
       name: 'plant-botanical',
     })
@@ -234,7 +235,7 @@ export async function updatePlantLabelsForLocale(
         fontSize: LABEL_FONT_SIZE - 2,
         fontFamily: 'Inter, sans-serif',
         fontStyle: 'italic',
-        fill: '#888888',
+        fill: getCanvasColor('plant-label-muted'),
         listening: false,
         name: 'plant-botanical',
       })

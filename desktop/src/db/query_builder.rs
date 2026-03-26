@@ -184,17 +184,19 @@ impl QueryBuilder {
 
         if let Some(ref cycles) = f.life_cycle {
             if !cycles.is_empty() {
-                let placeholders: Vec<String> = cycles
-                    .iter()
-                    .enumerate()
-                    .map(|(i, _)| format!("?{}", params.len() + 1 + i))
-                    .collect();
-                where_clauses.push(format!(
-                    "s.life_cycle IN ({})",
-                    placeholders.join(", ")
-                ));
-                for v in cycles {
-                    params.push(Value::Text(v.clone()));
+                // Map string values to boolean column checks with OR logic.
+                // e.g. ["Annual", "Perennial"] → (s.is_annual = 1 OR s.is_perennial = 1)
+                let mut cycle_clauses: Vec<String> = Vec::new();
+                for cycle in cycles {
+                    match cycle.as_str() {
+                        "Annual" => cycle_clauses.push("s.is_annual = 1".to_owned()),
+                        "Biennial" => cycle_clauses.push("s.is_biennial = 1".to_owned()),
+                        "Perennial" => cycle_clauses.push("s.is_perennial = 1".to_owned()),
+                        _ => {}
+                    }
+                }
+                if !cycle_clauses.is_empty() {
+                    where_clauses.push(format!("({})", cycle_clauses.join(" OR ")));
                 }
             }
         }
@@ -229,12 +231,10 @@ impl QueryBuilder {
 
         if let Some(fixer) = f.nitrogen_fixer {
             if fixer {
-                where_clauses.push(
-                    "s.nitrogen_fixation IN ('Yes', 'High', 'Medium', 'Low')".to_owned(),
-                );
+                where_clauses.push("s.nitrogen_fixer = 1".to_owned());
             } else {
                 where_clauses.push(
-                    "s.nitrogen_fixation IN ('No', 'None')".to_owned(),
+                    "(s.nitrogen_fixer = 0 OR s.nitrogen_fixer IS NULL)".to_owned(),
                 );
             }
         }
@@ -405,7 +405,7 @@ mod tests {
         f.nitrogen_fixer = Some(true);
         let qb = QueryBuilder::new(None, f, None, Sort::Name, 20, "en".to_owned());
         let (sql, _) = qb.build();
-        assert!(sql.contains("nitrogen_fixation IN ('Yes', 'High', 'Medium', 'Low')"));
+        assert!(sql.contains("nitrogen_fixer = 1"));
     }
 
     #[test]
@@ -414,7 +414,18 @@ mod tests {
         f.nitrogen_fixer = Some(false);
         let qb = QueryBuilder::new(None, f, None, Sort::Name, 20, "en".to_owned());
         let (sql, _) = qb.build();
-        assert!(sql.contains("nitrogen_fixation IN ('No', 'None')"));
+        assert!(sql.contains("nitrogen_fixer = 0 OR s.nitrogen_fixer IS NULL"));
+    }
+
+    #[test]
+    fn test_life_cycle_filter_maps_to_boolean_columns() {
+        let mut f = default_filter();
+        f.life_cycle = Some(vec!["Annual".to_owned(), "Perennial".to_owned()]);
+        let qb = QueryBuilder::new(None, f, None, Sort::Name, 20, "en".to_owned());
+        let (sql, _) = qb.build();
+        assert!(sql.contains("is_annual = 1"));
+        assert!(sql.contains("is_perennial = 1"));
+        assert!(sql.contains(" OR "));
     }
 
     #[test]

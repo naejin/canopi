@@ -1,17 +1,14 @@
 import Konva from 'konva'
+import { getCanvasColor } from './theme-refresh'
 
 function generateId(): string {
   return crypto.randomUUID()
 }
 
-// Style constants — kept in sync with CSS tokens in global.css.
-// Raw rgba/hex values are required here because Konva operates outside the DOM
-// and cannot read CSS custom properties.
-const ZONE_FILL = 'rgba(45, 95, 63, 0.1)'
-const ZONE_STROKE = '#2D5F3F'
+// Style constants — zone/annotation colors are read from the theme-refresh cache
+// so newly created shapes match the active theme. Stroke width is theme-independent.
 const ZONE_STROKE_WIDTH = 2          // screen pixels — constant because strokeScaleEnabled: false
 const ANNOTATION_STROKE = '#64748B'
-const ANNOTATION_FILL = '#1A1A1A'
 
 export const PREVIEW_DASH = [6, 3]
 
@@ -21,10 +18,12 @@ export interface ShapeDefaults {
   strokeWidth: number
 }
 
-export const ZONE_DEFAULTS: ShapeDefaults = {
-  fill: ZONE_FILL,
-  stroke: ZONE_STROKE,
-  strokeWidth: ZONE_STROKE_WIDTH,
+export function zoneDefaults(): ShapeDefaults {
+  return {
+    fill: getCanvasColor('zone-fill'),
+    stroke: getCanvasColor('zone-stroke'),
+    strokeWidth: ZONE_STROKE_WIDTH,
+  }
 }
 
 export function createRect(attrs: {
@@ -36,8 +35,8 @@ export function createRect(attrs: {
   return new Konva.Rect({
     ...attrs,
     id: generateId(),
-    fill: ZONE_FILL,
-    stroke: ZONE_STROKE,
+    fill: getCanvasColor('zone-fill'),
+    stroke: getCanvasColor('zone-stroke'),
     strokeWidth: ZONE_STROKE_WIDTH,
     strokeScaleEnabled: false,
     draggable: true,
@@ -54,8 +53,8 @@ export function createEllipse(attrs: {
   return new Konva.Ellipse({
     ...attrs,
     id: generateId(),
-    fill: ZONE_FILL,
-    stroke: ZONE_STROKE,
+    fill: getCanvasColor('zone-fill'),
+    stroke: getCanvasColor('zone-stroke'),
     strokeWidth: ZONE_STROKE_WIDTH,
     strokeScaleEnabled: false,
     draggable: true,
@@ -67,8 +66,8 @@ export function createPolygon(points: number[]): Konva.Line {
   return new Konva.Line({
     points,
     id: generateId(),
-    fill: ZONE_FILL,
-    stroke: ZONE_STROKE,
+    fill: getCanvasColor('zone-fill'),
+    stroke: getCanvasColor('zone-stroke'),
     strokeWidth: ZONE_STROKE_WIDTH,
     strokeScaleEnabled: false,
     closed: true,
@@ -81,8 +80,8 @@ export function createFreeform(points: number[], closed: boolean): Konva.Line {
   return new Konva.Line({
     points,
     id: generateId(),
-    fill: closed ? ZONE_FILL : undefined,
-    stroke: ZONE_STROKE,
+    fill: closed ? getCanvasColor('zone-fill') : undefined,
+    stroke: getCanvasColor('zone-stroke'),
     strokeWidth: ZONE_STROKE_WIDTH,
     strokeScaleEnabled: false,
     closed,
@@ -116,7 +115,7 @@ export function createText(attrs: {
     id: generateId(),
     fontSize: 16,
     fontFamily: 'Inter, sans-serif',
-    fill: ANNOTATION_FILL,
+    fill: getCanvasColor('annotation-text'),
     draggable: true,
     name: 'shape annotation-text',
   })

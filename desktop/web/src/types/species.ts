@@ -44,7 +44,10 @@ export interface SpeciesDetail {
   habit: string | null;
   deciduous_evergreen: string | null;
   stratum: string | null;
-  nitrogen_fixation: string | null;
+  nitrogen_fixer: boolean | null;
+  is_annual: boolean | null;
+  is_biennial: boolean | null;
+  is_perennial: boolean | null;
   tolerates_full_sun: boolean | null;
   tolerates_semi_shade: boolean | null;
   tolerates_full_shade: boolean | null;

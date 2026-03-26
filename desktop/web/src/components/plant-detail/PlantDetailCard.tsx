@@ -264,9 +264,9 @@ export function PlantDetailCard({ canonicalName }: Props) {
           <div className={styles.sectionBody}>
             {/* Ecology chips for key indicators */}
             <div className={styles.sunRow}>
-              {d.nitrogen_fixation !== null && d.nitrogen_fixation.toLowerCase() !== 'none' && d.nitrogen_fixation.toLowerCase() !== 'no' && (
+              {d.nitrogen_fixer === true && (
                 <span className={`${styles.ecoChip} ${styles.ecoChipNitrogen}`}>
-                  ⚡ {t('plantDetail.nitrogenFixation')}: {d.nitrogen_fixation}
+                  ⚡ {t('plantDetail.nitrogenFixer')}
                 </span>
               )}
               {d.stratum !== null && (
@@ -278,8 +278,10 @@ export function PlantDetailCard({ canonicalName }: Props) {
 
             <div className={styles.attrGrid}>
               <div className={styles.attrItem}>
-                <span className={styles.attrLabel}>{t('plantDetail.nitrogenFixation')}</span>
-                <span className={styles.attrValue}>{d.nitrogen_fixation ?? t('plantDetail.unknown')}</span>
+                <span className={styles.attrLabel}>{t('plantDetail.nitrogenFixer')}</span>
+                <span className={styles.attrValue}>
+                  {d.nitrogen_fixer === true ? t('plantDetail.yes') : d.nitrogen_fixer === false ? t('plantDetail.no') : t('plantDetail.unknown')}
+                </span>
               </div>
               <div className={styles.attrItem}>
                 <span className={styles.attrLabel}>{t('plantDetail.stratum')}</span>
@@ -290,7 +292,7 @@ export function PlantDetailCard({ canonicalName }: Props) {
                 <span className={styles.attrValue}>{d.habit ?? t('plantDetail.unknown')}</span>
               </div>
               <div className={styles.attrItem}>
-                <span className={styles.attrLabel}>{t('plantDetail.successionStage')}</span>
+                <span className={styles.attrLabel}>{t('plantDetail.deciduousEvergreen')}</span>
                 <span className={styles.attrValue}>{d.deciduous_evergreen ?? t('plantDetail.unknown')}</span>
               </div>
             </div>

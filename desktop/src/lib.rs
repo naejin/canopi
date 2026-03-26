@@ -96,8 +96,18 @@ pub fn run() {
                             if let Err(e) = plant_conn.pragma_update(None, "cache_size", -64000_i64) {
                                 tracing::warn!("Failed to set plant DB cache_size: {e}");
                             }
+                            // Check schema version — warn if outdated
+                            let user_version: i32 = plant_conn
+                                .pragma_query_value(None, "user_version", |row| row.get(0))
+                                .unwrap_or(0);
+                            if user_version < 2 {
+                                tracing::warn!(
+                                    "Plant DB schema version {user_version} is outdated (expected >= 2). \
+                                     Run scripts/prepare-db.py to rebuild."
+                                );
+                            }
                             app.manage(db::PlantDb(Mutex::new(plant_conn)));
-                            tracing::info!("Plant DB opened at {}", path.display());
+                            tracing::info!("Plant DB opened at {} (schema v{user_version})", path.display());
                             PlantDbStatus::Available
                         }
                         Err(e) => {

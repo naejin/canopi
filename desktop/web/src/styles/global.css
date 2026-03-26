@@ -96,6 +96,12 @@
   --canvas-ruler-bg: #E8E3D9;
   --canvas-ruler-text: rgba(60, 45, 30, 0.4);
   --canvas-selection: rgba(160, 107, 31, 0.18);
+  --canvas-selection-stroke: rgba(160, 107, 31, 0.6);
+  --canvas-plant-label: #444444;
+  --canvas-plant-label-muted: #888888;
+  --canvas-annotation-text: #1A1A1A;
+  --canvas-zone-stroke: #2D5F3F;
+  --canvas-zone-fill: rgba(45, 95, 63, 0.1);
   --canvas-toolbar-width: 38px;
 }
 
@@ -135,6 +141,12 @@
   --canvas-ruler-bg: #1E1A16;
   --canvas-ruler-text: rgba(200, 180, 150, 0.4);
   --canvas-selection: rgba(200, 155, 74, 0.18);
+  --canvas-selection-stroke: rgba(200, 155, 74, 0.6);
+  --canvas-plant-label: #D4CFC4;
+  --canvas-plant-label-muted: #A89A88;
+  --canvas-annotation-text: #E5DFD4;
+  --canvas-zone-stroke: rgba(200, 180, 150, 0.5);
+  --canvas-zone-fill: rgba(200, 180, 150, 0.06);
 
   /* Plant attributes — desaturated for dark */
   --color-edible: #8BAA5E;
