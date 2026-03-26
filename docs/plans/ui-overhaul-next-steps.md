@@ -72,6 +72,8 @@
 - [ ] Plant symbol colors — verify stratum colors work with new palette
 - [ ] Grid line colors — test at different zoom levels
 - [ ] Ruler text readability in dark mode
+- [ ] **Dark mode canvas text** — Konva shapes use hardcoded colors at creation time, not CSS variables. Plant labels (common name, scientific name) and zone labels are invisible or faint in dark mode. Needs a theme-refresh pass that walks all text nodes and updates `fill` from `--color-text` / `--color-text-muted`. Affects: `plants.ts` label creation, `shapes.ts` text tool, annotation labels.
+- [ ] **Scale bar in dark mode** — uses `--color-text-muted` on update but initial paint may use stale fallback. Verify after engine reload.
 - [ ] Ruler corner color on fresh app launch (before theme refresh)
 
 ### Priority 4: Dark Mode Audit
@@ -120,3 +122,23 @@ Features to bring back once MVP is solid, in order of user value:
 | `desktop/web/src/components/plant-db/PlantRow.tsx` | Plant list row |
 | `desktop/web/src/components/plant-db/PlantDb.module.css` | Plant panel styles |
 | `desktop/web/src/components/shared/TitleBar.tsx` | Title bar (lang/theme) |
+
+---
+
+## Shape Testing Results (2026-03-26)
+
+Tested zones (rect, ellipse), plants (circles + labels), text annotations at 50%, 100%, 200% zoom in both themes.
+
+| Element | Light 50% | Light 100% | Light 200% | Dark 100% |
+|---------|-----------|------------|------------|-----------|
+| Zone fills | pass | pass | pass | pass |
+| Zone borders (strokeScaleEnabled: false) | pass | pass | pass | pass |
+| Zone labels | pass | pass | pass | **faint** |
+| Plant circles | pass | pass | pass | pass |
+| Plant labels | pass | readable | pass | **invisible** |
+| Scale bar | pass | pass | pass | **faint** |
+| Grid lines | pass | pass | pass | pass |
+| Rulers | pass | pass | pass | pass |
+| Zoom controls | pass | pass | pass | pass |
+
+**Root cause of dark mode text issues:** Konva shapes are painted with hardcoded color values at creation time. They don't react to CSS theme changes. Fix requires a canvas-wide color refresh function that walks text nodes and updates `fill` from computed CSS variables on theme toggle.
