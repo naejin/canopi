@@ -44,12 +44,14 @@ These features are **disabled in UI but code stays on disk**:
 - Panels: Bottom panel (Timeline/Budget/Consortium tabs), Layer panel, World Map, Learning (placeholder only)
 - Export: GeoJSON, PNG/SVG export commands
 - Compass: import commented out in `engine.ts`
-- Re-enable plan: `docs/plans/ui-overhaul-next-steps.md` Priority 6
+- Re-enable plan: see `docs/roadmap.md`
 
 ## Key Conventions
 
 ### Before Writing Code
-Invoke the relevant canopi skill: `/canopi-rust`, `/canopi-ux`, `/canopi-db`, `/canopi-canvas`, `/canopi-i18n`, `/canopi-native`, `/canopi-test`. Query Context7 for library API docs. For UI work, load `/interface-design:init` and read `.interface-design/system.md`.
+1. Query **Context7** for up-to-date library API docs (see Context7 Library IDs below)
+2. For UI work: read `.interface-design/system.md` for design tokens and patterns. Load `/interface-design:init` only for major new UI surfaces (new panels, new workflows, new component patterns)
+3. Use taoki `xray`/`ripple` to understand file structure and blast radius before modifying
 
 ### Banned Patterns (enforced by plugin hooks)
 - **No React**: Import from `preact`, `preact/hooks`, `preact/compat` — never `react`
@@ -109,12 +111,24 @@ cargo build --release
 ```
 
 ### Tauri MCP Development Workflow
-The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot-driven UI iteration:
+The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot-driven development and interactive verification:
+
+**Setup:**
 1. `cargo tauri dev` — launches app with MCP bridge on port 9223
 2. `driver_session start` — connect to the running app
-3. `webview_screenshot` — capture current state
-4. `webview_execute_js` — interact with the app programmatically
-5. `webview_dom_snapshot` — inspect accessibility tree
+
+**Verification tools:**
+- `webview_screenshot` — capture current visual state
+- `webview_interact` — click, scroll, drag to test user flows
+- `webview_keyboard` — type text, press keys to test input
+- `webview_execute_js` — run JS in app context (access `window.__TAURI__`)
+- `webview_dom_snapshot` — inspect accessibility tree or DOM structure
+- `webview_get_styles` — check computed CSS (catch dark mode issues without manual toggling)
+- `webview_find_element` — locate elements by CSS selector, XPath, or text
+- `ipc_execute_command` — call Rust backend commands directly (test DB queries, settings)
+- `ipc_monitor` / `ipc_get_captured` — watch frontend↔backend IPC traffic for serialization mismatches
+
+**After UI changes:** run `/interface-design:audit` to check design system compliance. Run `/interface-design:critique` after building major new components
 
 ## Gotchas
 
@@ -199,7 +213,7 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 
 ## Canvas Architecture
 - Zone shapes: world-unit geometry, `strokeScaleEnabled: false` for constant-pixel strokes
-- Plant symbols: fixed screen-pixel circles, group-level counter-scale. Labels pending density rework (see `docs/plans/ui-overhaul-next-steps.md` Priority 0)
+- Plant symbols: fixed screen-pixel circles, group-level counter-scale. Labels pending density rework (see `docs/roadmap.md`)
 - Grid: single `Konva.Shape` with custom `sceneFunc`, adaptive density via "nice distances" ladder
 - Rulers: HTML `<canvas>` elements, NOT Konva — always in screen space
 - Scale bar: uses `--color-text-muted` for theme-aware rendering
@@ -207,14 +221,16 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 - `_chromeEnabled` signal: controls grid/ruler visibility — must be a signal so effects track it
 
 ## Quality Process
-- After completing a phase or significant feature, run Craft skill review (`/craft`) with two parallel code-reviewer agents
+- After completing a phase or significant feature, run `/craft` with two parallel code-reviewer agents
 - Fix all issues, re-review until convergence (typically 2 rounds)
-- Run `/canopi:canopi-retro` at session end to update skills with learnings
+- For UI work: run `/interface-design:critique` to verify design system adherence
+- Verify interactive features via Tauri MCP (screenshot + interact) — do not rely solely on `tsc`/`npm test`
+- Max 3 sub-phases between live app verification runs
 
-## Architecture Review
-- Full review and analysis: `docs/reviews/2026-03-24-architecture-review.md`
-- Phase 2.1 implementation plan: `docs/plans/phase-2.1-document-integrity.md`
-- UI overhaul next steps: `docs/plans/ui-overhaul-next-steps.md`
+## Key Documents
+- Roadmap: `docs/roadmap.md`
+- Design system: `.interface-design/system.md`
+- Completed phase plans + reviews: `docs/archive/`
 
 ## Context7 Library IDs
 - Tauri v2: `/websites/v2_tauri_app`
