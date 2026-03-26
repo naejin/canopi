@@ -22,7 +22,7 @@ A permaculture designer at their desk, planning a food forest. The interface fee
 | `--color-bg` | `#F0EBE1` parchment | `#1E1B17` charcoal parchment | Aged paper, not clinical white |
 | `--color-surface` | `#FAF7F2` linen | `#282420` dark linen | Fresh page — one step lighter than parchment |
 | `--color-text` | `#2C2418` ink | `#E5DFD4` cream ink | Warm dark brown, not black |
-| `--color-text-muted` | `#7D6F5E` graphite | `#9A8D7D` | Pencil marks, faded |
+| `--color-text-muted` | `#7D6F5E` graphite | `#A89A88` | Pencil marks, faded (brighter in dark for icon visibility) |
 | `--color-border` | `rgba(60,45,30,0.12)` | `rgba(200,180,150,0.12)` | Ruled pencil lines, warm and transparent |
 | `--canvas-bg` | `#EDE8DE` | `#1A1714` | Slightly warmer than chrome — the garden surface |
 
@@ -51,10 +51,18 @@ Slightly sharper than typical — technical, precise.
 
 ## Layout
 
-- Activity bar: 44px wide (compact)
-- Status bar: 26px tall
-- Canvas toolbar: 38px wide
-- Toolbar active indicator: ochre left bar (not green)
+```
+[toolbar 38px] [───── canvas ─────] [panel?] [bar 36px]
+   left              center          slides in   right
+   tools            workspace        plant DB    leaf + book
+```
+
+- **Left toolbar**: 38px, drawing tools only (Select, Hand, Rectangle, Text + Grid/Snap/Rulers toggles). Active: 2px ochre left bar.
+- **Right panel bar**: 36px, always visible. Icons toggle sliding panels. Active: 2px ochre right bar.
+- **Right panels**: plant search, learning (future). Slide in between canvas and panel bar. Resizable via drag handle.
+- **Title bar**: 36px. Logo left, file name center-left, lang/theme controls + window buttons right.
+- **No activity bar** — merged into panel bar.
+- **No status bar** — lang/theme moved to title bar.
 
 ## Signature
 
@@ -70,16 +78,47 @@ Earthy, not neon:
 
 ## Patterns
 
+### Title Bar
+- 36px tall, background `--color-bg` (blends with canvas area)
+- Left: logo (16px) + file name (when saved)
+- Right: language select (10px uppercase) + theme toggle (sun/moon SVG) + window controls
+- Theme: light/dark only (no system option) — simple toggle
+
 ### Welcome Screen
-- Logo (96px), no text, two action buttons + recent files
-- Primary button: ochre with warm shadow
-- Recent files: compact list with document icon, name, relative date
+- Logo (96px), no text headings, centered vertically
+- Two action buttons: primary (ochre) + secondary (surface with border)
+- Recent files section below with document icon, name, relative date
+- Buttons have warm shadow, subtle lift on hover
 
 ### Canvas Workspace
-- Minimal toolbar (4 tools + 3 toggles)
-- Zoom controls floating bottom-right
-- No bottom panel, no layer panel (pruned for MVP)
+- Toolbar left (38px): 4 tools + separator + 3 view toggles
+- Zoom controls floating bottom-right: semi-transparent, fades in on hover
+- Scale bar bottom-left: uses `--color-text-muted` for subtlety
+- No compass for MVP (disabled, code on disk)
+- Zoom displays relative to initial view (100% = fit 100m in viewport)
+- Rulers: background `--canvas-ruler-bg` (close to canvas bg, no harsh L-frame)
 
-### Activity Bar
-- 2 items: Canvas (pencil), Plant DB (leaf)
-- Active: ochre left border + ink-colored icon + subtle warm bg
+### Panel Bar (right edge)
+- 36px wide, always visible when canvas is active
+- Two icons: leaf (plant DB), book (learning/knowledge)
+- Active state: ochre right border + ochre icon color
+- Clicking toggles the corresponding panel
+
+### Plant Search Panel
+- Search-first: full-width search input at top, filter toggle icon (funnel) right
+- Filter drawer: collapsible below search, max-height 280px, scrollable
+- Plant rows: compact (38px estimated), two lines:
+  - Line 1: *botanical name* + common name (inline, baseline-aligned)
+  - Line 2: colored tags separated by `·` (family=brown, hardiness=blue, height=stone, stratum=ochre, edible=moss)
+- Row actions (+, star) appear on hover only
+- Whole row is draggable to canvas
+- Background: `--color-bg` (parchment, matches canvas area)
+
+### Learning Panel
+- Placeholder: centered book icon + "Coming soon" + description
+- Background: `--color-bg`
+
+### Drag Handle (panel resize)
+- 1px wide, uses `--color-border` — IS the border between canvas and panel
+- Hover: expands to 2px, shows `--color-accent`
+- Hit target: 9px wide via `::before` pseudo-element
