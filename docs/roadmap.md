@@ -1,7 +1,7 @@
 # Canopi Roadmap
 
-**Last updated**: 2026-03-26
-**Current state**: Phases 0-2.1 complete (scaffold, plant DB, canvas, document integrity, UI overhaul). Phase 3.0 + 3.5 + 3.0b complete (data contract sync, dark mode canvas fix, schema v7 sync). Phase 3.1 (detail card expansion) in progress.
+**Last updated**: 2026-03-27
+**Current state**: Phases 0-2.1 complete (scaffold, plant DB, canvas, document integrity, UI overhaul). Phase 3.0 + 3.5 + 3.0b + 3.0c complete (data contract sync, dark mode canvas fix, schema v7 sync, schema v8 sync). Phase 3.1 (detail card expansion) in progress.
 
 ---
 
@@ -43,7 +43,7 @@ Context7 Library IDs: Tauri v2 (`/websites/v2_tauri_app`), rusqlite (`/rusqlite/
 
 ---
 
-## What's Built (Phases 0-2.1, 3.0, 3.5, 3.0b)
+## What's Built (Phases 0-2.1, 3.0, 3.5, 3.0b, 3.0c)
 
 - Tauri v2 + Preact shell with custom title bar, frameless window
 - 175K-species plant DB with FTS5 full-text search, 173 contracted columns (schema v7)
@@ -58,9 +58,10 @@ Context7 Library IDs: Tauri v2 (`/websites/v2_tauri_app`), rusqlite (`/rusqlite/
 - Dark/light theme, 11-language i18n (en, fr, es, pt, it, zh, de, ja, ko, nl, ru)
 - Field notebook design system (`.interface-design/system.md`)
 - Welcome screen, zoom controls, panel bar
-- Schema contract v3 (`scripts/schema-contract.json`) — 173 columns from schema v7, 8 supporting tables
+- Schema contract v4 (`scripts/schema-contract.json`) — 173 columns from schema v8, 8 supporting tables
 - Species images (105K), external links (3.6K), species_uses (55K) tables contracted
 - Soil filtering migrated from species_soil_types table to boolean tolerance columns
+- `translated_values` carries 22 language columns (11 active in app UI, 11 reserved for future expansion)
 
 ---
 
@@ -92,6 +93,23 @@ Goal: Make the plant database genuinely useful for design decisions, fix visual 
 - `ellenberg_inferences` table skipped (468K ML predictions — will add when confidence improves)
 
 **Verification gate**: `cargo tauri dev` + `ipc_execute_command` — species queries return new columns. Soil filtering works with boolean columns. `get_species_images` returns image URLs. `webview_interact` to verify plant search, filters, and detail card still work.
+
+---
+
+### 3.0c — Schema v8 Sync ✅
+
+**Status**: Complete (2026-03-27). Non-breaking version bump for canopi-data v8 export.
+
+**What was done**:
+- Schema contract bumped to v4 (`min_export_schema_version` = 8)
+- DB rebuilt from v8 export (175,473 species, 173 columns unchanged)
+- `translated_values` now carries 22 language columns (11 new: fi, cs, pl, sv, da, ca, uk, hr, hu) and 48 field_names — extra languages carried in DB, not yet active in app UI
+- `ellenberg_inferences` table (468K ML predictions) acknowledged but still skipped — observed values only
+- Rust version check bumped to warn if `PRAGMA user_version < 4`
+
+**No code changes** to types, queries, UI, or display modes — species table schema is identical to v7.
+
+**Verification gate**: `prepare-db.py` succeeds, output DB has `user_version = 4`, 22-column `translated_values`, no `ellenberg_inferences` table. `cargo check` passes.
 
 ---
 
@@ -163,7 +181,7 @@ Active "More" filters display as removable chips below the always-visible filter
 
 ### 3.3 — Translated Values
 
-**Why**: 6-language support is a differentiator. The `translated_values` table has 245+ translated values across 46 categorical fields in all 6 languages (42 from canopi-data export + 4 populated by our contract: active_growth_period, bloom_period, flower_color, habit). Common names have coverage from 62K (zh) to 211K (en).
+**Why**: 11-language support is a differentiator. The `translated_values` table has 687 translated values across 48 field_names in 22 language columns (11 active in app UI, 11 reserved). Includes 6 `use:*` prefixed field_names for use-category translations (not yet wired). Common names have coverage from 62K (zh) to 211K (en).
 
 **Approach**: This is partially delivered in 3.1a (detail card translations) and 3.2a (filter value translations). This sub-phase ensures complete coverage:
 

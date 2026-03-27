@@ -180,16 +180,16 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 ### Database / SQLite
 - **Plant DB schema contract**: `scripts/schema-contract.json` maps canopi-data export columns to canopi-core.db columns. `prepare-db.py` reads from this contract, not hardcoded lists. When canopi-data changes column names, update the contract — not the Rust code
 - **canopi-data column renames (completed 3.0)**: `life_cycle` replaced by `is_annual`/`is_biennial`/`is_perennial` (booleans), `nitrogen_fixation` replaced by `nitrogen_fixer` (integer). All layers updated: prepare-db.py, Rust types, query builder, frontend types, display-modes, detail card. Filter UI keeps `life_cycle: string[]` for OR-semantics, mapped to boolean columns in `query_builder.rs`
-- **Schema version**: `PRAGMA user_version = 3` in canopi-core.db. Rust backend warns if < 3 at startup. Export schema version 7 (`min_export_schema_version` in contract). Contract version 3 = 173 species columns
+- **Schema version**: `PRAGMA user_version = 4` in canopi-core.db. Rust backend warns if < 4 at startup. Export schema version 8 (`min_export_schema_version` in contract). Contract version 4 = 173 species columns
 - **`species_soil_types` removed (schema v7)**: Soil filtering uses boolean tolerance columns (`tolerates_light_soil`, `tolerates_medium_soil`, `tolerates_heavy_soil`, `well_drained`, `heavy_clay`). `SpeciesFilter.soil_tolerances` maps to these columns in `query_builder.rs`
 - **canopi-data export location**: `~/projects/canopi-data/data/exports/canopi-export-YYYY-MM-DD.db` — use the latest dated file
-- **Regenerate plant DB**: `python3 scripts/prepare-db.py ~/projects/canopi-data/data/exports/<latest>.db` (outputs to `desktop/resources/canopi-core.db`)
+- **Regenerate plant DB**: `python3 scripts/prepare-db.py --export-path ~/projects/canopi-data/data/exports/<latest>.db` (outputs to `desktop/resources/canopi-core.db`). Omit `--export-path` to auto-discover latest export
 - **Filter-to-column mapping**: `SpeciesFilter.life_cycle: Vec<String>` maps to boolean columns via `query_builder.rs` (e.g. `"Annual"` → `is_annual = 1`). This preserves OR-semantics in the UI while the DB uses boolean columns. Don't change the filter type — change the query mapping
 - **No `sqlite3` CLI on this machine**: Use `python3 -c "import sqlite3; ..."` for DB inspection
 - **No `pip`/`pip3` on this machine**: Use `python3 -c "import ..."` for ad-hoc checks. Only stdlib modules available
 - **rusqlite feature**: Use `bundled-full` (not `bundled`) — enables FTS5 full-text search
 - **Plant DB PRAGMAs**: On read-only connections, do NOT set `journal_mode=WAL` or `query_only=true`. Only `mmap_size` and `cache_size`
-- **`translated_values` table is wide format**: Columns are `field_name`, `value_en`, `value_fr`, `value_es`, `value_pt`, `value_it`, `value_zh`, `value_de`, `value_ja`, `value_ko`, `value_nl`, `value_ru` (11 languages). NOT a normalized table with `language`/`translated` columns. `translate_value()` in `plant_db.rs` maps locale to column name via allowlist
+- **`translated_values` table is wide format**: 22 language columns (`value_en`, `value_fr`, `value_es`, `value_pt`, `value_it`, `value_zh`, `value_de`, `value_ja`, `value_ko`, `value_nl`, `value_ru`, `value_fi`, `value_cs`, `value_pl`, `value_sv`, `value_da`, `value_ca`, `value_uk`, `value_hr`, `value_hu`). App UI supports 11 languages; extra 11 carried in DB for future expansion. NOT a normalized table with `language`/`translated` columns. `translate_value()` in `plant_db.rs` maps locale to column name via allowlist
 - **FTS5 MATCH syntax**: Always use full table name (`species_search_fts MATCH ?1`), never an alias
 - **FTS5 sanitization**: Strip ALL metacharacters `"()*+-^:\` — not just quotes. Empty after sanitization → skip FTS
 - **Species table name**: `species` (NOT `silver_species` as in the architecture draft)
@@ -201,8 +201,8 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 - **`translated_values` coverage**: Only fields WITH entries in this table get translated. Check `SELECT DISTINCT field_name FROM translated_values` before assuming a field is translatable. Missing fields need entries added to `schema-contract.json` translations section + DB population
 - **DB hot-patching**: Can INSERT/UPDATE `translated_values` in the running app's DB files — changes visible on next IPC call without app restart. Rust-side code changes require restart
 - **Adding translations**: Two steps required — (1) add entries to `schema-contract.json` `translations` section, (2) run `populate_translations()` from prepare-db.py or use python to INSERT directly into both `desktop/resources/canopi-core.db` and `target/debug/resources/canopi-core.db`. The contract alone doesn't update the running DB
-- **translated_values pipeline order**: Export ships 42 field_names. Our contract adds 4 more (`active_growth_period`, `bloom_period`, `flower_color`, `habit`) that export v6 dropped. prepare-db copies export translations first, then contract populates missing ones — order matters
-- **`ellenberg_inferences` table skipped**: 468K rows of ML-predicted Ellenberg values. Not contracted — will add when model confidence improves. The 6 `ellenberg_*` columns on the species table ARE contracted (these are observed values, not predictions)
+- **translated_values pipeline order**: Export ships 48 field_names (including 6 `use:*` prefixed for use-category translations). Our contract adds 4 more (`active_growth_period`, `bloom_period`, `flower_color`, `habit`) that earlier exports dropped. prepare-db copies export translations first, then contract populates missing ones — order matters
+- **`ellenberg_inferences` table skipped**: 468K rows of ML-predicted Ellenberg values (v8 export). Not contracted — using observed values only from the 6 `ellenberg_*` columns on the species table
 
 ### Canvas Engine / Architecture
 - **Every new canvas module must be wired into runtime**: Must be imported and called from `engine.ts` or `serializer.ts`

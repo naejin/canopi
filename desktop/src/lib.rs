@@ -102,9 +102,9 @@ pub fn run() {
                             let user_version: i32 = plant_conn
                                 .pragma_query_value(None, "user_version", |row| row.get(0))
                                 .unwrap_or(0);
-                            if user_version < 3 {
+                            if user_version < 4 {
                                 tracing::warn!(
-                                    "Plant DB schema version {user_version} is outdated (expected >= 3). \
+                                    "Plant DB schema version {user_version} is outdated (expected >= 4). \
                                      Run scripts/prepare-db.py to rebuild."
                                 );
                             }
