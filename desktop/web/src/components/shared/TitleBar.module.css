@@ -59,8 +59,14 @@
   flex-shrink: 0;
 }
 
-.langSelect {
-  appearance: none;
+.localePicker {
+  position: relative;
+}
+
+.localeBtn {
+  display: flex;
+  align-items: center;
+  gap: 2px;
   background: transparent;
   border: none;
   color: var(--color-text-muted);
@@ -74,12 +80,67 @@
   transition: color 80ms ease;
 }
 
-.langSelect:hover {
+.localeBtn:hover {
   color: var(--color-text);
 }
 
-.langSelect:focus {
-  outline: none;
+.localeChevron {
+  font-size: 9px;
+  line-height: 1;
+  transition: transform 0.15s ease;
+}
+
+.localeBtn[aria-expanded="true"] .localeChevron {
+  transform: rotate(90deg);
+}
+
+.localeMenu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: 4px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  z-index: 100;
+  min-width: 108px;
+}
+
+.localeItem {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: 10px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  padding: 5px 4px;
+  border-radius: var(--radius-sm);
+  transition: background-color 80ms ease, color 80ms ease;
+}
+
+.localeItem:hover {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.localeItemActive {
+  color: var(--color-primary);
+  background: var(--color-primary-bg);
+}
+
+.localeItemActive:hover {
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
 }
 
 .themeBtn {
@@ -102,7 +163,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .langSelect, .themeBtn { transition: none; }
+  .localeBtn, .localeChevron, .localeItem, .themeBtn { transition: none; }
 }
 
 .controls {

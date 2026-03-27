@@ -49,6 +49,13 @@ export function AttributeGrid({ detail }: Props) {
         <span className={styles.attrLabel}>{t('plantDetail.growthRate')}</span>
         <span className={styles.attrValue}>{growthStr}</span>
       </div>
+
+      {detail.age_of_maturity_years !== null && (
+        <div className={styles.attrItem}>
+          <span className={styles.attrLabel}>{t('plantDetail.ageOfMaturity')}</span>
+          <span className={styles.attrValue}>{detail.age_of_maturity_years} {t('plantDetail.yearUnit')}</span>
+        </div>
+      )}
     </div>
   );
 }

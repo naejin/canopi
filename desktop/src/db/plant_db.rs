@@ -555,23 +555,37 @@ pub fn get_detail(
         ("photosynthesis_pathway", detail.photosynthesis_pathway.clone(), &mut detail.photosynthesis_pathway),
         ("clonal_growth_form", detail.clonal_growth_form.clone(), &mut detail.clonal_growth_form),
         ("mating_system", detail.mating_system.clone(), &mut detail.mating_system),
+        // Phase 3.1 — new/expanded sections
+        ("conservation_status", detail.conservation_status.clone(), &mut detail.conservation_status),
+        ("fruit_type", detail.fruit_type.clone(), &mut detail.fruit_type),
+        ("fruit_seed_color", detail.fruit_seed_color.clone(), &mut detail.fruit_seed_color),
+        ("fruit_seed_period_begin", detail.fruit_seed_period_begin.clone(), &mut detail.fruit_seed_period_begin),
+        ("fruit_seed_period_end", detail.fruit_seed_period_end.clone(), &mut detail.fruit_seed_period_end),
+        ("growth_form_shape", detail.growth_form_shape.clone(), &mut detail.growth_form_shape),
+        ("propagation_method", detail.propagation_method.clone(), &mut detail.propagation_method),
+        ("sowing_period", detail.sowing_period.clone(), &mut detail.sowing_period),
+        ("harvest_period", detail.harvest_period.clone(), &mut detail.harvest_period),
+        ("dormancy_conditions", detail.dormancy_conditions.clone(), &mut detail.dormancy_conditions),
+        ("management_types", detail.management_types.clone(), &mut detail.management_types),
+        ("pollinators", detail.pollinators.clone(), &mut detail.pollinators),
     ] {
         if let Some(ref v) = getter {
             *setter = Some(translate_value(conn, field, v, locale));
         }
     }
 
-    // Fetch uses.
+    // Fetch uses and translate descriptions for the requested locale.
+    // translated_values uses "use:edible_uses" field names; species_uses has "edible uses" categories.
     detail.uses = {
         let mut s = conn
             .prepare(
-                "SELECT use_category, use_description
+                "SELECT DISTINCT use_category, use_description
                  FROM species_uses
                  WHERE species_id = ?1
                  ORDER BY use_category",
             )
             .map_err(|e| format!("Failed to prepare uses query: {e}"))?;
-        s.query_map([&species_id], |row| {
+        let rows: Vec<SpeciesUse> = s.query_map([&species_id], |row| {
             Ok(SpeciesUse {
                 use_category: row.get(0)?,
                 use_description: row.get(1)?,
@@ -582,7 +596,15 @@ pub fn get_detail(
             Ok(item) => Some(item),
             Err(e) => { tracing::warn!("Skipped uses row: {e}"); None }
         })
-        .collect()
+        .collect();
+        // Translate use descriptions: map category "edible uses" → field "use:edible_uses"
+        rows.into_iter().map(|mut u| {
+            let field = format!("use:{}", u.use_category.replace(' ', "_"));
+            if let Some(ref desc) = u.use_description {
+                u.use_description = Some(translate_value(conn, &field, desc, locale));
+            }
+            u
+        }).collect()
     };
 
     // Fetch relationships.
@@ -983,8 +1005,10 @@ pub fn translate_value(
         "SELECT COALESCE({col}, value_en) FROM translated_values \
          WHERE field_name = ?1 AND value_en = ?2 LIMIT 1"
     );
-    conn.query_row(&sql, [field, value_en], |row| row.get::<_, String>(0))
-        .optional()
+    // prepare_cached reuses the statement handle across calls with the same SQL,
+    // avoiding repeated parsing for the ~57 fields translated per detail load.
+    conn.prepare_cached(&sql)
+        .and_then(|mut stmt| stmt.query_row([field, value_en], |row| row.get::<_, String>(0)).optional())
         .ok()
         .flatten()
         .unwrap_or_else(|| value_en.to_owned())

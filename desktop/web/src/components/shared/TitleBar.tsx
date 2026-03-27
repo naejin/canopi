@@ -1,3 +1,5 @@
+import { useRef, useEffect } from 'preact/hooks'
+import { useSignal } from '@preact/signals'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { designName, designDirty } from '../../state/document'
 import { activePanel, locale, theme, persistCurrentSettings } from '../../state/app'
@@ -7,6 +9,59 @@ import styles from './TitleBar.module.css'
 const LOCALES = ['en', 'fr', 'es', 'pt', 'it', 'zh', 'de', 'ja', 'ko', 'nl', 'ru'] as const
 
 const appWindow = getCurrentWindow()
+
+function LocalePicker() {
+  const open = useSignal(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  // Close on click outside
+  useEffect(() => {
+    if (!open.value) return
+    const handler = (e: Event) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        open.value = false
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open.value])
+
+  const select = (code: string) => {
+    locale.value = code as typeof locale.value
+    persistCurrentSettings()
+    open.value = false
+  }
+
+  return (
+    <div className={styles.localePicker} ref={ref}>
+      <button
+        className={styles.localeBtn}
+        onClick={() => { open.value = !open.value }}
+        aria-expanded={open.value}
+        aria-haspopup="listbox"
+        aria-label={t('status.language')}
+      >
+        {locale.value.toUpperCase()}
+        <span className={styles.localeChevron} aria-hidden="true">›</span>
+      </button>
+      {open.value && (
+        <div className={styles.localeMenu} role="listbox" aria-label={t('status.language')}>
+          {LOCALES.map((code) => (
+            <button
+              key={code}
+              className={`${styles.localeItem} ${code === locale.value ? styles.localeItemActive : ''}`}
+              role="option"
+              aria-selected={code === locale.value}
+              onClick={() => select(code)}
+            >
+              {code.toUpperCase()}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export function TitleBar() {
   const isCanvas = activePanel.value === 'canvas'
@@ -54,19 +109,7 @@ export function TitleBar() {
 
       {/* Right controls: language + theme */}
       <div className={styles.settings}>
-        <select
-          className={styles.langSelect}
-          value={locale.value}
-          onChange={(e) => {
-            locale.value = (e.target as HTMLSelectElement).value as typeof locale.value
-            persistCurrentSettings()
-          }}
-          aria-label={t('status.language')}
-        >
-          {LOCALES.map((code) => (
-            <option key={code} value={code}>{code.toUpperCase()}</option>
-          ))}
-        </select>
+        <LocalePicker />
         <button
           className={styles.themeBtn}
           onClick={() => {

@@ -76,7 +76,8 @@ These features are **disabled in UI but code stays on disk**:
 
 ### i18n
 - ALL user-visible strings must go through `t()` from `../i18n` — no hardcoded text in components
-- Add keys to all 6 locale files (en, fr, es, pt, it, zh) when adding new strings
+- Add keys to all 11 locale files (en, fr, es, pt, it, zh, de, ja, ko, nl, ru) when adding new strings
+- **Unit strings must be i18n keys**: Never hardcode "yr", "d", "in" etc. in NumAttr/formatters. Use `t('plantDetail.yearUnit')` pattern. Scientific units (mg, mm, cm, g/g) are universal and don't need translation
 
 ### CSS
 - Design tokens in `global.css` as CSS variables (field notebook palette)
@@ -150,6 +151,8 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 - **`close()` re-emits `closeRequested`**: Use `destroy()` for discard-without-save. Requires `core:window:allow-destroy`
 - **No `window.prompt()`/`confirm()`/`alert()`**: Silently blocked in WebView. Use `ask()` from `@tauri-apps/plugin-dialog` for confirms, Preact components for other input. `dialog:default` capability includes `allow-ask`
 - **Theme: light/dark only, no system**: `Theme` enum has only `Light`/`Dark`. `get_settings` migrates stale `"system"` values to `"light"` via JSON patching before deserialization
+- **TitleBar drag handler**: `handleMouseDown` in `TitleBar.tsx` calls `startDragging()` on the title bar. Interactive elements must be caught by `target.closest('button')` — if adding non-button interactive elements, wrap in a button or update the guard
+- **No native `<select>` in UI chrome**: Native dropdowns break the field notebook aesthetic. Use custom dropdown components (see `LocalePicker` in `TitleBar.tsx`). Must include click-outside-to-close, `aria-expanded`, keyboard support
 
 ### Konva.js / Canvas
 - **Shapes don't react to CSS theme changes**: Colors hardcoded at creation time. Theme switch requires walking nodes and updating `fill`/`stroke` from computed CSS variables
@@ -168,6 +171,7 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 - **Zoom display is relative**: `zoomLevel` is raw stage scale. Display as `Math.round((zoomLevel / zoomReference) * 100)%`
 - **Compass disabled for MVP**: Import commented out in `engine.ts`
 - **Ruler corner uses CSS vars**: `var(--canvas-ruler-bg)` inline so it updates on theme change
+- **Detail card sections use `CollapsibleSection` wrapper**: New sections go inline in `PlantDetailCard.tsx` using `<CollapsibleSection>`. Shared field helpers (`Attr`, `BoolChip`, `NumAttr`, `TextBlock`) in `section-helpers.tsx`. Every rendered field MUST appear in the section's `has*` visibility check — missing fields cause silent data hiding
 
 ### Preact / Signals
 - **Preact Vite plugin**: Package is `@preact/preset-vite` (not `@preactjs/preset-vite`)
@@ -176,6 +180,7 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 - **Effect subscription**: Effects only subscribe to signals **read during execution**. An early `return` before reading a signal = never re-runs. Read ALL dependencies BEFORE conditional returns
 - **Signal retry pattern**: Setting a signal to its current value is a no-op (`Object.is` equality). To force a re-fetch, use a dedicated `retryCount` signal: read it in the effect, increment it in the retry handler
 - **`CanvasHistory` truncation must mirror in both paths**: `execute()` and `record()` both trim `_past` at 500-cap. Both must set `_savedPosition = -1` when truncation passes the saved point, or dirty tracking breaks
+- **`useEffect` needs a dependency array**: Omitting `[]` or `[dep]` runs the effect every render — causes listener leaks and duplicate subscriptions. Always provide explicit deps, even in Preact
 
 ### Database / SQLite
 - **Plant DB schema contract**: `scripts/schema-contract.json` maps canopi-data export columns to canopi-core.db columns. `prepare-db.py` reads from this contract, not hardcoded lists. When canopi-data changes column names, update the contract — not the Rust code
@@ -184,6 +189,7 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 - **`species_soil_types` removed (schema v7)**: Soil filtering uses boolean tolerance columns (`tolerates_light_soil`, `tolerates_medium_soil`, `tolerates_heavy_soil`, `well_drained`, `heavy_clay`). `SpeciesFilter.soil_tolerances` maps to these columns in `query_builder.rs`
 - **canopi-data export location**: `~/projects/canopi-data/data/exports/canopi-export-YYYY-MM-DD.db` — use the latest dated file
 - **Regenerate plant DB**: `python3 scripts/prepare-db.py --export-path ~/projects/canopi-data/data/exports/<latest>.db` (outputs to `desktop/resources/canopi-core.db`). Omit `--export-path` to auto-discover latest export
+- **`prepare-db.py` fails if Tauri app is running**: The `PRAGMA journal_mode=DELETE` at finalization hits a lock. Stop the app before regenerating, or ignore the error — the DB is already built, just not optimized
 - **Filter-to-column mapping**: `SpeciesFilter.life_cycle: Vec<String>` maps to boolean columns via `query_builder.rs` (e.g. `"Annual"` → `is_annual = 1`). This preserves OR-semantics in the UI while the DB uses boolean columns. Don't change the filter type — change the query mapping
 - **No `sqlite3` CLI on this machine**: Use `python3 -c "import sqlite3; ..."` for DB inspection
 - **No `pip`/`pip3` on this machine**: Use `python3 -c "import ..."` for ad-hoc checks. Only stdlib modules available
@@ -196,13 +202,18 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 - **Migration versioning**: User DB uses `PRAGMA user_version` — check before adding migrations
 - **Plant DB degraded mode**: If missing/corrupt, `lib.rs` falls back to in-memory DB. Frontend short-circuits all species IPC calls when degraded
 - **Common name lookup order**: `best_common_names` → `species_common_names` → `species.common_name`. Both `get_common_name` (single) and `get_common_names_batch` (batch) follow this order. Always use `best_common_names` first — `species_common_names` has gaps (e.g., no French entries for many species)
+- **`best_common_names` selection**: Uses `is_primary` flag from `species_common_names` (preferred), falls back to shortest non-canonical name. `prepare-db.py` uses `ROW_NUMBER()` with `is_primary DESC, LENGTH ASC`
 - **`SpeciesListItem.family/genus` are `Option<String>`**: DB columns are nullable. Non-optional `String` causes silent row drops in search and hard errors in favorites hydration
 - **Cursor pagination typed values**: Height/Hardiness sort values must be pushed as `Value::Real`/`Value::Integer`, not `Value::Text`. SQLite type affinity makes text-vs-numeric comparisons silently wrong
 - **`translated_values` coverage**: Only fields WITH entries in this table get translated. Check `SELECT DISTINCT field_name FROM translated_values` before assuming a field is translatable. Missing fields need entries added to `schema-contract.json` translations section + DB population
 - **DB hot-patching**: Can INSERT/UPDATE `translated_values` in the running app's DB files — changes visible on next IPC call without app restart. Rust-side code changes require restart
 - **Adding translations**: Two steps required — (1) add entries to `schema-contract.json` `translations` section, (2) run `populate_translations()` from prepare-db.py or use python to INSERT directly into both `desktop/resources/canopi-core.db` and `target/debug/resources/canopi-core.db`. The contract alone doesn't update the running DB
-- **translated_values pipeline order**: Export ships 48 field_names (including 6 `use:*` prefixed for use-category translations). Our contract adds 4 more (`active_growth_period`, `bloom_period`, `flower_color`, `habit`) that earlier exports dropped. prepare-db copies export translations first, then contract populates missing ones — order matters
+- **translated_values pipeline order**: Export ships 55 field_names (including 6 `use:*` prefixed for use-category translations + `pollinators`). Our contract adds 4 more (`active_growth_period`, `bloom_period`, `flower_color`, `habit`) that earlier exports dropped. prepare-db copies export translations first, then contract populates missing ones — order matters
+- **`species_common_names` has `is_primary` and `source` columns**: `is_primary=1` marks the preferred common name per species+language. Source is typically `wikidata`, `plantatlas`, `pfaf`, or `unknown`
 - **`ellenberg_inferences` table skipped**: 468K rows of ML-predicted Ellenberg values (v8 export). Not contracted — using observed values only from the 6 `ellenberg_*` columns on the species table
+- **`species_uses` descriptions are translatable**: `translated_values` has `use:*` prefixed field names (e.g., `use:edible_uses`). Map `use_category` "edible uses" → field "use:edible_uses" via `category.replace(' ', '_')`. Query must use `SELECT DISTINCT` — the table has massive row duplication from prepare-db.py joins
+- **`best_common_names` returns one name per locale**: Uses `is_primary` flag to select the best name (e.g., "Maïs" for Zea mays in French, not "Blé d'Inde"). `species_common_names` has multiple names per species — multiple-name display planned for 3.3b
+- **FTS5 index is a single unweighted `all_text` blob**: Common name matches rank the same as habitat text. Weighted column restructure planned for 3.3a
 
 ### Canvas Engine / Architecture
 - **Every new canvas module must be wired into runtime**: Must be imported and called from `engine.ts` or `serializer.ts`
