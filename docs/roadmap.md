@@ -179,23 +179,39 @@ Active "More" filters display as removable chips below the always-visible filter
 
 ---
 
-### 3.3 — Translated Values
+### 3.3 — Search Quality & Translated Values
 
-**Why**: 11-language support is a differentiator. The `translated_values` table has 687 translated values across 48 field_names in 22 language columns (11 active in app UI, 11 reserved). Includes 6 `use:*` prefixed field_names for use-category translations (not yet wired). Common names have coverage from 62K (zh) to 211K (en).
+**Why**: 11-language support is a differentiator. The `translated_values` table has 659 entries across 55 field_names in 22 language columns (11 active, 11 reserved). Use-category and pollinators translations wired in 3.1. `best_common_names` now uses `is_primary` flag (fixed in 3.1). Common names expanded to 2.4M rows with Wikidata sources. However, search ranking is poor for non-English queries (FTS5 uses a single unweighted blob), and the app only shows one "best" common name per locale when multiple exist.
 
-**Approach**: This is partially delivered in 3.1a (detail card translations) and 3.2a (filter value translations). This sub-phase ensures complete coverage:
+**Prerequisite**: Phase 3.1 ✅ — `is_primary` selection in `best_common_names`, pollinators translated, `species_uses` deduplicated, use descriptions translated.
 
-- **3.3a**: Plant list rows: show best common name for current locale (using `best_common_names` table). Show translated categorical tags (stratum, growth_rate, etc.)
-- **3.3b**: Filter value labels: all dropdown/chip values show translated strings. "More filters" field names translated via i18n keys
-- **3.3c**: Audit: switch through all 6 languages, screenshot each. Verify no untranslated categorical values leak through
+**Approach**: Two remaining concerns — search ranking and common name visibility.
 
-**Verification gate**: `webview_screenshot` in each of the 6 languages. Use `webview_execute_js` to switch locale programmatically and compare.
+**Search ranking (FTS5 column weighting)**:
+- Current FTS index is a single `all_text` blob — no way to prioritize common name matches over habitat text matches
+- Restructure `species_search_fts` to use multiple columns: `canonical_name`, `common_names` (all languages), `family_genus`, `uses_text`, `other_text`
+- Rank with `ORDER BY bm25(species_search_fts, 10, 8, 5, 1, 1)` — common name match on "maïs" outranks habitat text match on "mais"
+- Requires `prepare-db.py` change + `query_builder.rs` ORDER BY update
+
+**Common name visibility**:
+- Search list rows: show primary common name prominently, then additional locale names as secondary text (e.g., "*Zea mays* — Maïs · Blé d'Inde"). Fetch from `species_common_names` for current locale, not just `best_common_names`
+- Detail card header: show primary common name + additional names expandable
+- Requires new IPC or expanding `get_species_detail` to return all locale common names
+- `species_common_names` has data: avg 14.2 names per species, `is_primary` flag for ranking
+
+**Sub-phases**:
+- **3.3a**: FTS5 restructure — split into weighted columns in `prepare-db.py`, update `query_builder.rs` bm25 ranking. Regenerate DB
+- **3.3b**: Multiple common names — fetch all locale common names for search results (batch) and detail card. Show in UI with primary + secondary pattern
+- **3.3c**: Filter value labels — all dropdown/chip values show translated strings. "More filters" field names translated via i18n keys
+- **3.3d**: Audit — switch through all 11 languages, screenshot each. Verify no untranslated categorical values leak through
+
+**Verification gate**: Search "maïs" in French — Zea mays appears first. Search "Kukuruz" in German — Zea mays appears. Detail card for Zea mays in French shows "Maïs" as primary. `webview_screenshot` in each of the 11 languages.
 
 ---
 
 ### 3.4 — Plant Density Fix
 
-**Why**: Dense plantings (guilds, ground cover rows, stacked plants) produce unreadable label overlap. Labels must be earned, not default.
+**Why**: Dense plantings (guilds, ground cover rows, stacked plants) produce unreadable label overlap. Labels must be earned, not default. Additionally, permaculture practitioners designing herb spirals, salad beds, and ground cover layers commonly place plants at 5–10cm spacing — the current fixed screen-pixel circles and zoom range don't support this workflow.
 
 **Design**:
 - Default view: colored dot only, no labels — clean at any density
@@ -204,12 +220,20 @@ Active "More" filters display as removable chips below the always-visible filter
 - Selected plant: always shows label regardless of density
 - Stacked plants: count badge on the dot, hover shows plant list
 
+**Dense planting UX (5–10cm spacing)**:
+- **Max zoom increase**: Current max zoom is insufficient for distinguishing plants at 10cm intervals in a 20m garden. Increase max zoom to allow viewing a ~0.5m area at full resolution
+- **World-space plant size mode**: Add an option where circle diameter represents actual ground coverage (canopy spread or spacing diameter) instead of a fixed screen-pixel size. At dense zoom, circles should show actual spacing relationships. Counter-scale remains default for overview; world-space activates when zoomed past a threshold or as a user toggle
+- **Bed/mass planting tool** (future — Pattern Fill): For 200 lettuce at 10cm spacing, individual circle placement is impractical. A region-based tool that says "fill this area with species X at Y spacing" is the real solution. This is the disabled Pattern Fill tool — re-enable as part of this phase or track separately
+- **Grid snap granularity**: Ensure grid snap supports 1cm increments at high zoom levels. Current "nice distances" ladder may bottom out too early
+
 **Sub-phases**:
 - **3.4a**: Remove default labels from plant creation. Add hover tooltip (HTML overlay positioned at plant coordinates, not Konva text)
 - **3.4b**: LOD label system — on zoom/pan, compute nearest-neighbor distances. Show labels only where space permits. Use spatial index for performance
 - **3.4c**: Stacked plant detection + count badge. Selection always shows label
+- **3.4d**: Dense planting support — increase max zoom, add world-space circle sizing mode, verify grid snap at fine granularity
+- **3.4e**: (Optional) Bed planting tool prototype — region + species + spacing → auto-fill with plants. May move to a later phase if scope is too large
 
-**Verification gate**: Place 20+ plants in a tight cluster. `webview_screenshot` at different zoom levels. Verify clean dots at overview, labels appearing as you zoom in. Test hover tooltip.
+**Verification gate**: Place 20+ plants in a tight cluster. `webview_screenshot` at different zoom levels. Verify clean dots at overview, labels appearing as you zoom in. Test hover tooltip. Additionally: create a 1m×1m bed with plants at 10cm spacing — verify individual plants are distinguishable at max zoom, circles don't overlap, and grid snap allows precise 10cm placement.
 
 ---
 
@@ -336,12 +360,29 @@ Note: no `license` or `attribution` columns in the current export. Source field 
 
 ---
 
+### 3.11 — OS Locale Auto-Detection
+
+**Why**: Non-technical users shouldn't have to hunt for a language picker on first launch. A French user on a French OS should see French immediately.
+
+**Approach**: On first launch (no saved `locale` in user settings), detect the OS locale via the `sys_locale` crate in Rust, map to our 11 supported codes (e.g., `fr_FR.UTF-8` → `fr`), and set as the initial locale. Once the user changes language manually, their choice is persisted and the OS locale is never checked again.
+
+**Implementation**:
+- Add `sys_locale` crate to `desktop/Cargo.toml`
+- In `get_settings` IPC: if `locale` is null/missing (fresh install), call `sys_locale::get_locale()`, extract the 2-letter code, match against `["en","fr","es","pt","it","zh","de","ja","ko","nl","ru"]`, fall back to `"en"`
+- Write the detected locale to user DB so subsequent launches use it directly
+- Works on Linux (`$LANG`), macOS (`NSLocale`), Windows (`GetUserDefaultLocaleName`) — all via `sys_locale`
+
+**Verification gate**: Delete user DB, set OS locale to French, launch app — UI appears in French without any user interaction. Change to German via the locale picker — restart app — stays German (user choice persists).
+
+---
+
 ### MVP Completion Checklist
 
 All of Phase 3 (3.0 through 3.10) constitutes the MVP. After completion:
 
 - [ ] End-to-end flow: Launch, welcome screen, New Design, search plants, apply filters (visible + "More"), drag plants to canvas, draw zones, display modes (color/size by value), save, reopen
-- [ ] All 6 languages: translated categorical values, common names, UI strings
+- [ ] All 11 languages: translated categorical values, common names, UI strings
+- [ ] OS locale auto-detection on first launch
 - [ ] Both themes: light and dark mode fully functional including canvas elements
 - [ ] Plant density: clean dots at overview, labels on zoom, hover tooltips, stacked badges
 - [ ] Detail card: all 173 columns organized in collapsible sections, with plant photos

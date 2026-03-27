@@ -129,6 +129,8 @@
 
   --color-success: #8BAA5E;
   --color-success-bg: rgba(90, 125, 58, 0.12);
+  --color-warning: #D4A843;
+  --color-warning-bg: rgba(212, 168, 67, 0.15);
   --color-danger: #D4765A;
   --color-danger-bg: rgba(181, 67, 42, 0.10);
 

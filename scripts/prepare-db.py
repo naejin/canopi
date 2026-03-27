@@ -212,7 +212,10 @@ def build_search_index(dst: sqlite3.Connection):
 
 
 def build_best_common_names(dst: sqlite3.Connection):
-    """Build best_common_names lookup table."""
+    """Build best_common_names lookup table.
+
+    Prefers is_primary=1 names, falls back to shortest non-canonical name.
+    """
     dst.execute("""
         CREATE TABLE best_common_names (
             species_id TEXT NOT NULL,
@@ -221,14 +224,22 @@ def build_best_common_names(dst: sqlite3.Connection):
             PRIMARY KEY (species_id, language)
         )
     """)
+    # Pick the primary name (is_primary=1) that isn't the canonical name.
+    # If no primary exists, fall back to the shortest non-canonical name.
+    # ORDER BY: is_primary DESC (1 before 0), then LENGTH ASC (prefer concise).
     dst.execute("""
         INSERT INTO best_common_names (species_id, language, common_name)
-        SELECT scn.species_id, scn.language,
-               MIN(CASE WHEN scn.common_name != s.canonical_name THEN scn.common_name END)
-        FROM species_common_names scn
-        JOIN species s ON s.id = scn.species_id
-        GROUP BY scn.species_id, scn.language
-        HAVING MIN(CASE WHEN scn.common_name != s.canonical_name THEN scn.common_name END) IS NOT NULL
+        SELECT species_id, language, common_name FROM (
+            SELECT scn.species_id, scn.language, scn.common_name,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY scn.species_id, scn.language
+                       ORDER BY scn.is_primary DESC, LENGTH(scn.common_name) ASC
+                   ) AS rn
+            FROM species_common_names scn
+            JOIN species s ON s.id = scn.species_id
+            WHERE scn.common_name != s.canonical_name
+        )
+        WHERE rn = 1
     """)
     bcn_count = dst.execute("SELECT COUNT(*) FROM best_common_names").fetchone()[0]
     print(f"  -> {bcn_count:,} best common names across all languages")

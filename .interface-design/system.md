@@ -81,7 +81,7 @@ Earthy, not neon:
 ### Title Bar
 - 36px tall, background `--color-bg` (blends with canvas area)
 - Left: logo (16px) + file name (when saved)
-- Right: language select (10px uppercase) + theme toggle (sun/moon SVG) + window controls
+- Right: locale picker (custom dropdown, 3-column grid) + theme toggle (sun/moon SVG) + window controls
 - Theme: light/dark only (no system option) — simple toggle
 
 ### Welcome Screen
@@ -113,6 +113,33 @@ Earthy, not neon:
 - Row actions (+, star) appear on hover only
 - Whole row is draggable to canvas
 - Background: `--color-bg` (parchment, matches canvas area)
+
+### Plant Detail Card
+- Header: botanical name (italic), common name, family · genus, back button, favorite star
+- Dimensions section always open (h3 title, no toggle)
+- 14 collapsible sections below, ordered by designer decision flow: Life Cycle → Uses → Light → Soil → Ecology → Growth Form → Propagation → Fruit & Seed → Risk → Leaf → Reproduction → Notes → Related Species → Identity
+- Each section: 3px left accent border (semantic color), uppercase 10px title with icon + chevron, `--color-bg` header, content in `--color-surface` body
+- Accent color zones: taxonomy=bark brown, physical form=teal, cultivation=moss green, harvest=amber, biology=lavender, caution=terracotta, reference=graphite
+- Null fields hidden — empty sections don't render
+- Field types: `Attr` (label + value), `BoolChip` (✓/✗ pill), `NumAttr` (value + unit), `TextBlock` (label + paragraph)
+- All categorical values translated via `translated_values` table. All labels via i18n keys
+
+### Custom Dropdown
+- No native `<select>` — breaks the field notebook aesthetic
+- Trigger: button with current value + `›` chevron (rotates 90° on open)
+- Menu: `--color-surface` background, `--color-border` border, `--radius-md`, `--shadow-md`
+- Items: `--color-text-muted`, hover `--color-bg`, active `--color-primary` with `--color-primary-bg`
+- Close: click outside (mousedown listener with cleanup) or item selection
+- ARIA: `aria-expanded`, `aria-haspopup="listbox"`, `role="option"`, `aria-selected`
+- See `LocalePicker` in `TitleBar.tsx` as reference implementation
+
+### Collapsible Section
+- Toggle button: uppercase 10px label, 600 weight, `--color-text-muted`, 0.06em letter-spacing
+- Icon before label (single character/emoji), chevron `›` after (right-aligned, rotates 90° on open)
+- Header: `--color-bg` background, border-bottom on open
+- Body: `--color-surface`, padding `--space-3`, flex column with `--space-3` gap
+- Animation: chevron `transition: transform 0.15s ease`
+- Used in: detail card sections, filter drawer sections
 
 ### Learning Panel
 - Placeholder: centered book icon + "Coming soon" + description
