@@ -7,8 +7,17 @@ pub fn get_settings(user_db: tauri::State<'_, UserDb>) -> Result<Settings, Strin
     let json = db::user_db::get_setting(&conn, "settings")
         .map_err(|e| format!("Failed to read settings: {e}"))?;
     match json {
-        Some(s) => serde_json::from_str(&s)
-            .map_err(|e| format!("Failed to parse settings: {e}")),
+        Some(s) => {
+            // Migrate stale values before deserializing — old DBs may have
+            // "system" for theme which was removed from the Theme enum.
+            let mut v: serde_json::Value = serde_json::from_str(&s)
+                .map_err(|e| format!("Failed to parse settings: {e}"))?;
+            if v.get("theme").and_then(|t| t.as_str()) == Some("system") {
+                v["theme"] = serde_json::json!("light");
+            }
+            serde_json::from_value(v)
+                .map_err(|e| format!("Failed to parse settings: {e}"))
+        }
         None => Ok(Settings::default()),
     }
 }

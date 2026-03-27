@@ -54,7 +54,7 @@ export function PlantCard({ plant }: Props) {
       {plant.common_name !== null && (
         <span className={styles.cardCommon}>{plant.common_name}</span>
       )}
-      <span className={styles.cardFamily}>{plant.family}</span>
+      {plant.family && <span className={styles.cardFamily}>{plant.family}</span>}
 
       <div className={styles.cardMeta}>
         {plant.stratum !== null && (

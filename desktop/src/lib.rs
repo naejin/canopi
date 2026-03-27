@@ -32,6 +32,8 @@ pub fn run() {
             commands::species::get_common_names,
             commands::species::get_species_batch,
             commands::species::get_filter_options,
+            commands::species::get_species_images,
+            commands::species::get_species_external_links,
             commands::favorites::toggle_favorite,
             commands::favorites::get_favorites,
             commands::favorites::get_recently_viewed,
@@ -100,9 +102,9 @@ pub fn run() {
                             let user_version: i32 = plant_conn
                                 .pragma_query_value(None, "user_version", |row| row.get(0))
                                 .unwrap_or(0);
-                            if user_version < 2 {
+                            if user_version < 3 {
                                 tracing::warn!(
-                                    "Plant DB schema version {user_version} is outdated (expected >= 2). \
+                                    "Plant DB schema version {user_version} is outdated (expected >= 3). \
                                      Run scripts/prepare-db.py to rebuild."
                                 );
                             }

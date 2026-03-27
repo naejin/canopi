@@ -35,9 +35,9 @@ export class CanvasHistory {
       // If the saved position was in the truncated portion, it's gone forever
       if (this._savedPosition > 0) {
         this._savedPosition--
+      } else {
+        this._savedPosition = -1  // saved state permanently truncated away
       }
-      // savedPosition of 0 when _past.length > 0 means we can't match saved state
-      // unless we happen to be at exactly 0 (empty), which we're not after execute
     }
 
     this._updateSignals()
@@ -55,6 +55,8 @@ export class CanvasHistory {
       this._past.shift()
       if (this._savedPosition > 0) {
         this._savedPosition--
+      } else {
+        this._savedPosition = -1  // saved state permanently truncated away
       }
     }
 

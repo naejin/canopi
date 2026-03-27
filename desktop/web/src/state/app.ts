@@ -13,8 +13,8 @@ export type SidePanel = "plant-db" | "learning";
 const SIDE_PANELS = new Set<Panel>(["plant-db", "learning"]);
 
 export const activePanel = signal<Panel>("canvas");
-export const locale = signal<"en" | "fr" | "es" | "pt" | "it" | "zh">("en");
-export const theme = signal<"light" | "dark" | "system">("system");
+export const locale = signal<"en" | "fr" | "es" | "pt" | "it" | "zh" | "de" | "ja" | "ko" | "nl" | "ru">("en");
+export const theme = signal<"light" | "dark">("light");
 export const dbReady = signal(false);
 
 /** Plant DB subsystem health — queried from Rust on startup. */

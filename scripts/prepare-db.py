@@ -145,11 +145,12 @@ def copy_supporting_tables(dst: sqlite3.Connection, tables: list[str]):
         tcount = dst.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
         print(f"  -> {table}: {tcount:,} rows")
 
-    # Ensure value_zh column exists on translated_values
-    cols = [c[1] for c in dst.execute("PRAGMA table_info(translated_values)").fetchall()]
-    if "value_zh" not in cols:
-        dst.execute("ALTER TABLE translated_values ADD COLUMN value_zh TEXT")
-        print("  -> Added value_zh column to translated_values")
+    # Ensure all language columns exist on translated_values
+    cols = {c[1] for c in dst.execute("PRAGMA table_info(translated_values)").fetchall()}
+    for lang_col in ["value_zh", "value_de", "value_ja", "value_ko", "value_nl", "value_ru"]:
+        if lang_col not in cols:
+            dst.execute(f"ALTER TABLE translated_values ADD COLUMN {lang_col} TEXT")
+            print(f"  -> Added {lang_col} column to translated_values")
 
 
 def build_search_index(dst: sqlite3.Connection):
@@ -180,6 +181,10 @@ def build_search_index(dst: sqlite3.Connection):
             COALESCE(s.edible_uses, '') || ' ' ||
             COALESCE(s.medicinal_uses, '') || ' ' ||
             COALESCE(s.other_uses, '') || ' ' ||
+            COALESCE(s.conservation_status, '') || ' ' ||
+            COALESCE(s.habitats, '') || ' ' ||
+            COALESCE(s.physical_characteristics, '') || ' ' ||
+            COALESCE(s.special_uses, '') || ' ' ||
             COALESCE(ca.all_names, '')
         FROM species s
         LEFT JOIN _cn_agg ca ON ca.species_id = s.id
@@ -266,8 +271,9 @@ def populate_translations(dst: sqlite3.Connection, translations: dict):
                 row_id = str(uuid.uuid4())
                 dst.execute(
                     """INSERT INTO translated_values
-                       (id, field_name, value_en, value_fr, value_es, value_pt, value_it, value_zh)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                       (id, field_name, value_en, value_fr, value_es, value_pt, value_it, value_zh,
+                        value_de, value_ja, value_ko, value_nl, value_ru)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         row_id,
                         field_name,
@@ -277,6 +283,11 @@ def populate_translations(dst: sqlite3.Connection, translations: dict):
                         lang_map.get("pt"),
                         lang_map.get("it"),
                         lang_map.get("zh"),
+                        lang_map.get("de"),
+                        lang_map.get("ja"),
+                        lang_map.get("ko"),
+                        lang_map.get("nl"),
+                        lang_map.get("ru"),
                     ),
                 )
                 updated += len(lang_map)

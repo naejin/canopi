@@ -25,7 +25,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             locale: Locale::En,
-            theme: Theme::System,
+            theme: Theme::Light,
             grid_size_m: 1.0,
             snap_to_grid: true,
             snap_to_guides: true,
@@ -53,6 +53,11 @@ pub enum Locale {
     Pt,
     It,
     Zh,
+    De,
+    Ja,
+    Ko,
+    Nl,
+    Ru,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
@@ -60,5 +65,4 @@ pub enum Locale {
 pub enum Theme {
     Light,
     Dark,
-    System,
 }

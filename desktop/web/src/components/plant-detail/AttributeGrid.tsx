@@ -15,8 +15,8 @@ function formatRange(min: number | null, max: number | null, unit: string): stri
 }
 
 function formatZone(min: number | null, max: number | null): string {
-  if (min !== null && max !== null && min !== max) return `Zone ${min}–${max}`;
-  if (min !== null) return `Zone ${min}`;
+  if (min !== null && max !== null && min !== max) return `${t('plantDetail.zone')} ${min}–${max}`;
+  if (min !== null) return `${t('plantDetail.zone')} ${min}`;
   return t('plantDetail.unknown');
 }
 

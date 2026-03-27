@@ -148,19 +148,20 @@ impl QueryBuilder {
             }
         }
 
-        if let Some(ref soil) = f.soil_types {
-            if !soil.is_empty() {
-                let placeholders: Vec<String> = soil
-                    .iter()
-                    .enumerate()
-                    .map(|(i, _)| format!("?{}", params.len() + 1 + i))
-                    .collect();
-                where_clauses.push(format!(
-                    "s.id IN (SELECT species_id FROM species_soil_types WHERE soil_type IN ({}))",
-                    placeholders.join(", ")
-                ));
-                for v in soil {
-                    params.push(Value::Text(v.clone()));
+        if let Some(ref soil_tols) = f.soil_tolerances {
+            if !soil_tols.is_empty() {
+                let conditions: Vec<String> = soil_tols.iter().filter_map(|s| {
+                    match s.as_str() {
+                        "light" => Some("s.tolerates_light_soil = 1".to_owned()),
+                        "medium" => Some("s.tolerates_medium_soil = 1".to_owned()),
+                        "heavy" => Some("s.tolerates_heavy_soil = 1".to_owned()),
+                        "well_drained" => Some("s.well_drained = 1".to_owned()),
+                        "heavy_clay" => Some("s.heavy_clay = 1".to_owned()),
+                        _ => None,
+                    }
+                }).collect();
+                if !conditions.is_empty() {
+                    where_clauses.push(format!("({})", conditions.join(" OR ")));
                 }
             }
         }
@@ -227,15 +228,13 @@ impl QueryBuilder {
             if edible {
                 where_clauses.push("s.edibility_rating > 0".to_owned());
             }
+            // false is a no-op: "not filtering by edibility" is the same as Some(false).
+            // There is no "non-edible only" filter in the UI.
         }
 
         if let Some(fixer) = f.nitrogen_fixer {
             if fixer {
                 where_clauses.push("s.nitrogen_fixer = 1".to_owned());
-            } else {
-                where_clauses.push(
-                    "(s.nitrogen_fixer = 0 OR s.nitrogen_fixer IS NULL)".to_owned(),
-                );
             }
         }
 
@@ -258,7 +257,16 @@ impl QueryBuilder {
                         params.len() + 1,
                         params.len() + 2
                     );
-                    params.push(Value::Text(sort_val));
+                    // Push typed value matching the column type so SQLite
+                    // comparisons use the correct affinity.
+                    let typed_val = match self.sort {
+                        Sort::Height => sort_val.parse::<f64>()
+                            .map(Value::Real).unwrap_or(Value::Null),
+                        Sort::Hardiness => sort_val.parse::<i64>()
+                            .map(Value::Integer).unwrap_or(Value::Null),
+                        _ => Value::Text(sort_val),
+                    };
+                    params.push(typed_val);
                     params.push(Value::Text(cursor_name));
                     Some(clause)
                 }
@@ -409,12 +417,12 @@ mod tests {
     }
 
     #[test]
-    fn test_nitrogen_fixer_false_filter() {
+    fn test_nitrogen_fixer_false_is_noop() {
         let mut f = default_filter();
         f.nitrogen_fixer = Some(false);
         let qb = QueryBuilder::new(None, f, None, Sort::Name, 20, "en".to_owned());
         let (sql, _) = qb.build();
-        assert!(sql.contains("nitrogen_fixer = 0 OR s.nitrogen_fixer IS NULL"));
+        assert!(!sql.contains("nitrogen_fixer"));
     }
 
     #[test]
@@ -438,13 +446,14 @@ mod tests {
     }
 
     #[test]
-    fn test_soil_types_filter_uses_subquery() {
+    fn test_soil_tolerances_filter_uses_boolean_columns() {
         let mut f = default_filter();
-        f.soil_types = Some(vec!["Clay".to_owned(), "Sandy".to_owned()]);
+        f.soil_tolerances = Some(vec!["light".to_owned(), "heavy_clay".to_owned()]);
         let qb = QueryBuilder::new(None, f, None, Sort::Name, 20, "en".to_owned());
         let (sql, _) = qb.build();
-        assert!(sql.contains("species_soil_types"));
-        assert!(sql.contains("soil_type IN"));
+        assert!(sql.contains("tolerates_light_soil = 1"));
+        assert!(sql.contains("heavy_clay = 1"));
+        assert!(sql.contains(" OR "));
     }
 
     #[test]

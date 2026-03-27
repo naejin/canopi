@@ -10,6 +10,11 @@ const localeLabels: Record<string, string> = {
   pt: "Português",
   it: "Italiano",
   zh: "中文",
+  de: "Deutsch",
+  ja: "日本語",
+  ko: "한국어",
+  nl: "Nederlands",
+  ru: "Русский",
 };
 
 export function StatusBar() {
@@ -44,9 +49,7 @@ export function StatusBar() {
         <button
           className={styles.themeBtn}
           onClick={() => {
-            const order = ["system", "light", "dark"] as const;
-            const idx = order.indexOf(theme.value);
-            theme.value = order[(idx + 1) % order.length]!;
+            theme.value = theme.value === 'dark' ? 'light' : 'dark';
             persistCurrentSettings();
           }}
           aria-label={`${t("status.theme")}: ${themeLabel}`}

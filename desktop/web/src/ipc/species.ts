@@ -50,7 +50,7 @@ export async function getSpeciesRelationships(
 }
 
 export async function getFilterOptions(): Promise<FilterOptions> {
-  if (isDegraded()) return { families: [], growth_rates: [], strata: [], hardiness_range: [0, 0], life_cycles: [], sun_tolerances: [], soil_types: [] };
+  if (isDegraded()) return { families: [], growth_rates: [], strata: [], hardiness_range: [0, 0], life_cycles: [], sun_tolerances: [], soil_tolerances: [] };
   return invoke('get_filter_options');
 }
 

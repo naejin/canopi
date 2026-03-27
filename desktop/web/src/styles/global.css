@@ -51,6 +51,7 @@
   --shadow-sm: 0 1px 2px rgba(44, 36, 24, 0.06);
   --shadow-md: 0 2px 6px rgba(44, 36, 24, 0.08);
   --shadow-lg: 0 4px 12px rgba(44, 36, 24, 0.10);
+  --color-scrim: rgba(0, 0, 0, 0.4);
 
   /* Spacing — 4px base, used tight for density */
   --space-1: 4px;
@@ -134,6 +135,7 @@
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.35);
   --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --color-scrim: rgba(0, 0, 0, 0.6);
 
   --color-dirty-indicator: #C89B4A;
 

@@ -26,6 +26,7 @@ pub fn get_favorites(
     let names = {
         let conn = user_db.0.lock().unwrap_or_else(|e| e.into_inner());
         crate::db::user_db::get_favorite_names(&conn)
+            .map_err(|e| format!("Failed to read favorites: {e}"))?
     };
 
     if names.is_empty() {
@@ -52,6 +53,7 @@ pub fn get_recently_viewed(
     let names = {
         let conn = user_db.0.lock().unwrap_or_else(|e| e.into_inner());
         crate::db::user_db::get_recently_viewed_names(&conn, limit)
+            .map_err(|e| format!("Failed to read recently viewed: {e}"))?
     };
 
     if names.is_empty() {

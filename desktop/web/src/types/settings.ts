@@ -19,5 +19,5 @@ export interface Settings {
   last_active_panel: string
 }
 
-export type Locale = 'en' | 'fr' | 'es' | 'pt' | 'it' | 'zh'
-export type Theme = 'light' | 'dark' | 'system'
+export type Locale = 'en' | 'fr' | 'es' | 'pt' | 'it' | 'zh' | 'de' | 'ja' | 'ko' | 'nl' | 'ru'
+export type Theme = 'light' | 'dark'

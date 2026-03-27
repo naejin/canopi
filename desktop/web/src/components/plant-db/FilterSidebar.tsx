@@ -127,14 +127,14 @@ export function FilterSidebar() {
         />
 
         <FilterSection
-          title={t('plantDb.filterSoilType')}
+          title={t('plantDb.filterSoilTolerances')}
           type="checkboxes"
           options={
-            opts?.soil_types.map((s) => ({ value: s, label: s })) ?? []
+            opts?.soil_tolerances.map((s) => ({ value: s, label: t(`plantDb.soilTolerance_${s}`) })) ?? []
           }
-          selected={filters.soil_types ?? []}
+          selected={filters.soil_tolerances ?? []}
           onToggleOption={(v) =>
-            update({ soil_types: toggleArrayValue(filters.soil_types, v) })
+            update({ soil_tolerances: toggleArrayValue(filters.soil_tolerances, v) })
           }
         />
 

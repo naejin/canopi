@@ -49,16 +49,14 @@ pub fn is_favorite(conn: &Connection, canonical_name: &str) -> bool {
 }
 
 /// Returns all favorited canonical names, ordered by most recently added.
-pub fn get_favorite_names(conn: &Connection) -> Vec<String> {
-    let mut stmt = match conn.prepare(
+pub fn get_favorite_names(conn: &Connection) -> Result<Vec<String>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
         "SELECT canonical_name FROM favorites ORDER BY added_at DESC",
-    ) {
-        Ok(s) => s,
-        Err(_) => return vec![],
-    };
-    stmt.query_map([], |row| row.get(0))
-        .map(|rows| rows.filter_map(|r| r.ok()).collect())
-        .unwrap_or_default()
+    )?;
+    let names = stmt.query_map([], |row| row.get(0))?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(names)
 }
 
 /// Toggles a favorite. Returns `true` if now favorited, `false` if unfavorited.
@@ -103,16 +101,14 @@ pub fn record_recently_viewed(
 }
 
 /// Returns the most recently viewed canonical names, newest first.
-pub fn get_recently_viewed_names(conn: &Connection, limit: u32) -> Vec<String> {
-    let mut stmt = match conn.prepare(
+pub fn get_recently_viewed_names(conn: &Connection, limit: u32) -> Result<Vec<String>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
         "SELECT canonical_name FROM recently_viewed ORDER BY viewed_at DESC LIMIT ?1",
-    ) {
-        Ok(s) => s,
-        Err(_) => return vec![],
-    };
-    stmt.query_map([limit], |row| row.get(0))
-        .map(|rows| rows.filter_map(|r| r.ok()).collect())
-        .unwrap_or_default()
+    )?;
+    let names = stmt.query_map([limit], |row| row.get(0))?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(names)
 }
 
 #[cfg(test)]
@@ -164,7 +160,7 @@ mod tests {
         let conn = test_db();
         toggle_favorite(&conn, "Alnus glutinosa").unwrap();
         toggle_favorite(&conn, "Lavandula angustifolia").unwrap();
-        let names = get_favorite_names(&conn);
+        let names = get_favorite_names(&conn).unwrap();
         assert_eq!(names.len(), 2);
         assert!(names.contains(&"Alnus glutinosa".to_owned()));
         assert!(names.contains(&"Lavandula angustifolia".to_owned()));
@@ -177,7 +173,7 @@ mod tests {
         record_recently_viewed(&conn, "Alnus glutinosa").unwrap();
         // Re-viewing should upsert without error.
         record_recently_viewed(&conn, "Lavandula angustifolia").unwrap();
-        let names = get_recently_viewed_names(&conn, 10);
+        let names = get_recently_viewed_names(&conn, 10).unwrap();
         assert_eq!(names.len(), 2);
     }
 
@@ -186,7 +182,7 @@ mod tests {
         let conn = test_db();
         record_recently_viewed(&conn, "Lavandula angustifolia").unwrap();
         record_recently_viewed(&conn, "Alnus glutinosa").unwrap();
-        let names = get_recently_viewed_names(&conn, 1);
+        let names = get_recently_viewed_names(&conn, 1).unwrap();
         assert_eq!(names.len(), 1);
     }
 

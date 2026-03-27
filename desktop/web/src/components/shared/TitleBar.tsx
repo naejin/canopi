@@ -4,7 +4,7 @@ import { activePanel, locale, theme, persistCurrentSettings } from '../../state/
 import { t } from '../../i18n'
 import styles from './TitleBar.module.css'
 
-const LOCALES = ['en', 'fr', 'es', 'pt', 'it', 'zh'] as const
+const LOCALES = ['en', 'fr', 'es', 'pt', 'it', 'zh', 'de', 'ja', 'ko', 'nl', 'ru'] as const
 
 const appWindow = getCurrentWindow()
 
@@ -74,7 +74,7 @@ export function TitleBar() {
             persistCurrentSettings()
           }}
           aria-label={t('status.theme')}
-          title={theme.value === 'dark' ? 'Light mode' : 'Dark mode'}
+          title={t(theme.value === 'dark' ? 'theme.light' : 'theme.dark')}
         >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             {theme.value === 'dark' ? (

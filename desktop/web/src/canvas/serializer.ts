@@ -175,7 +175,7 @@ export function fromCanopi(file: CanopiFile, engine: CanvasEngine): void {
         quantity: plant.quantity,
       })
       if (plant.rotation != null) node.rotation(plant.rotation)
-      if (plant.scale != null) node.scale({ x: plant.scale, y: plant.scale })
+      // plant.scale was previously the ephemeral counter-scale — ignore stale values
       plantsLayer.add(node as unknown as Konva.Shape)
     }
   }

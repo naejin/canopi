@@ -1,7 +1,7 @@
 # Canopi Roadmap
 
 **Last updated**: 2026-03-26
-**Current state**: Phases 0-2.1 complete (scaffold, plant DB, canvas, document integrity, UI overhaul). No code shipped for Phase 3+.
+**Current state**: Phases 0-2.1 complete (scaffold, plant DB, canvas, document integrity, UI overhaul). Phase 3.0 + 3.5 + 3.0b complete (data contract sync, dark mode canvas fix, schema v7 sync). Phase 3.1 (detail card expansion) in progress.
 
 ---
 
@@ -19,7 +19,7 @@ These are non-negotiable. Every implementation decision must pass through them.
 
 5. **UX is the product.** Every interaction must feel polished to Figma/Sketch level. 60fps canvas, smooth transitions, hover states, empty state guidance. Performance budget: all interactions <16ms, zoom/pan never below 30fps with 200+ plants.
 
-6. **The data is the differentiator.** 175K species with 170 columns of ecological, morphological, and agronomic data — translated into 6 languages. No other garden design tool has this. Every feature should leverage the data richness.
+6. **The data is the differentiator.** 175K species with 173 columns of ecological, morphological, and agronomic data — translated into 6 languages. No other garden design tool has this. Every feature should leverage the data richness.
 
 ---
 
@@ -43,21 +43,24 @@ Context7 Library IDs: Tauri v2 (`/websites/v2_tauri_app`), rusqlite (`/rusqlite/
 
 ---
 
-## What's Built (Phases 0-2.1)
+## What's Built (Phases 0-2.1, 3.0, 3.5, 3.0b)
 
 - Tauri v2 + Preact shell with custom title bar, frameless window
-- 175K-species plant DB with FTS5 full-text search
+- 175K-species plant DB with FTS5 full-text search, 173 contracted columns (schema v7)
 - Plant search panel with compact rows, virtual scrolling
-- Plant detail card (basic: dimensions, tolerances, uses, ecology, related species)
-- Filter drawer (8 filters: hardiness, sun, growth rate, life cycle, stratum, soil type, nitrogen fixer, edible)
+- Plant detail card (9 collapsible sections: identity, dimensions, life cycle, light & climate, soil, ecology, uses, text, related species)
+- Filter drawer (8 filters: hardiness, sun, growth rate, life cycle, stratum, soil tolerance, nitrogen fixer, edible)
 - Konva.js canvas with 4 MVP tools (Select, Hand, Rectangle, Text)
 - 7 named layers, plant drag-and-drop, zone drawing
 - Undo/redo (500-cap command pattern), grid + rulers, scale bar
 - Multi-select + Transformer
 - `.canopi` save/load with full document integrity, autosave
-- Dark/light theme, 6-language i18n
+- Dark/light theme, 11-language i18n (en, fr, es, pt, it, zh, de, ja, ko, nl, ru)
 - Field notebook design system (`.interface-design/system.md`)
 - Welcome screen, zoom controls, panel bar
+- Schema contract v3 (`scripts/schema-contract.json`) — 173 columns from schema v7, 8 supporting tables
+- Species images (105K), external links (3.6K), species_uses (55K) tables contracted
+- Soil filtering migrated from species_soil_types table to boolean tolerance columns
 
 ---
 
@@ -65,62 +68,69 @@ Context7 Library IDs: Tauri v2 (`/websites/v2_tauri_app`), rusqlite (`/rusqlite/
 
 Goal: Make the plant database genuinely useful for design decisions, fix visual bugs, and ship a complete vertical slice.
 
-### 3.0 — Data Contract Sync
+### 3.0 — Data Contract Sync ✅
 
-**Why first**: prepare-db.py, Rust backend, and frontend all reference columns that no longer exist in canopi-data. Nothing works until this is fixed.
+**Status**: Complete (2026-03-25). Schema contract pattern established, prepare-db.py rewritten, Rust backend adapted for `nitrogen_fixer`, `is_annual`/`is_biennial`/`is_perennial`, new succession stages. Frontend types updated. 57 columns contracted from schema v5 export.
 
-**Breaking changes in canopi-data export (2026-03-24)**:
-- `life_cycle` (string) removed. Replaced by `is_annual`, `is_biennial`, `is_perennial` (booleans)
-- `nitrogen_fixation` (string) removed. Replaced by `nitrogen_fixer` (integer/boolean)
-- Species table grew from ~50 to 170 columns
-- New tables: `ellenberg_inferences` (skip — ML values not reliable enough), `species_external_links`, `species_text_translations`
-- Succession stages changed: `pioneer`/`secondary`/`climax` became `placenta_i`/`placenta_ii`/`placenta_iii`/`secondary_i`/`secondary_ii`/`secondary_iii`/`climax`
+---
 
-**Schema contract (Option A)**:
-- Create `scripts/schema-contract.json` — defines the column mapping between canopi-data exports and canopi-core.db
-- `prepare-db.py` reads from the contract, not hardcoded column lists
-- Contract includes a `schema_version` field. The Rust backend checks the DB's schema version at startup and handles version N and N-1 gracefully
-- Unknown columns in the export are ignored (forward-compatible). Missing expected columns log a warning and use NULL defaults (backward-compatible)
+### 3.0b — Schema v7 Sync ✅
 
-**Sub-phases**:
-- **3.0a**: Schema contract file + prepare-db.py rewrite to consume it
-- **3.0b**: Rust backend: adapt `plant_db.rs` and `query_builder.rs` for new column names (`nitrogen_fixer`, `is_annual`/`is_biennial`/`is_perennial`, new succession values). Add schema version check at DB open
-- **3.0c**: Frontend types: update `types/species.ts`, `state/plant-db.ts`, display-modes references. Run new prepare-db.py and verify app launches
+**Status**: Complete (2026-03-26). Full pipeline updated for canopi-data schema v7 export.
 
-**Verification gate**: `cargo tauri dev` + `ipc_execute_command` to run species queries and confirm results match expected data.
+**What was done**:
+- Schema contract v3: 173 species columns (up from 57), 8 supporting tables, 35 B-tree indexes
+- `species_soil_types` table removed — soil filtering migrated to boolean tolerance columns (`tolerates_light_soil`/`tolerates_medium_soil`/`tolerates_heavy_soil`/`well_drained`/`heavy_clay`)
+- 5 new languages added: German (de), Japanese (ja), Korean (ko), Dutch (nl), Russian (ru) — total 11
+- `translated_values` expanded to 11 language columns, 42 field_names from export + 4 contract-only
+- `best_common_names` built for all 11 languages (111K entries)
+- New tables contracted: `species_images` (105K rows), `species_external_links` (3.6K), `species_text_translations` (empty, ready)
+- `SpeciesDetail` struct expanded to ~170 fields, 35+ categorical fields translated
+- `get_species_images` and `get_species_external_links` IPC commands added
+- FTS5 search text expanded with conservation_status, habitats, physical_characteristics, special_uses
+- Frontend types mirrored, 5 new locale files created, language switcher updated
+- `ellenberg_inferences` table skipped (468K ML predictions — will add when confidence improves)
+
+**Verification gate**: `cargo tauri dev` + `ipc_execute_command` — species queries return new columns. Soil filtering works with boolean columns. `get_species_images` returns image URLs. `webview_interact` to verify plant search, filters, and detail card still work.
 
 ---
 
 ### 3.1 — Plant Characteristics (Detail Card)
 
-**Why**: The detail card currently shows ~15 fields. The export has 170 columns. A permaculture designer choosing plants needs growth form, propagation methods, fruit/seed info, leaf traits, ecological indicators, hazards, cultivation notes, and more.
+**Why**: The detail card currently shows 9 sections covering ~30 fields. The DB now has 173 columns. A permaculture designer choosing plants needs growth form, propagation methods, fruit/seed info, leaf traits, ecological indicators, hazards, cultivation notes, and more.
 
 **Approach**: Expand the detail card with collapsible sections. All categorical values displayed using the `translated_values` table for the user's locale.
+
+**Prerequisite**: Phase 3.0b ✅ — all 173 columns contracted and available in the DB. `SpeciesDetail` struct already expanded with ~170 fields. 35+ categorical fields translated across 11 languages.
 
 **Sections**:
 | Section | Fields |
 |---------|--------|
-| Identity | canonical_name, common_name (best for locale), family, genus, is_hybrid |
-| Dimensions | height_min/max_m, width_max_m, hardiness_zone_min/max, growth_rate |
+| Identity | canonical_name, common_name (best for locale), family, genus, is_hybrid, taxonomic_order, taxonomic_class |
+| Dimensions | height_min/max_m, width_max_m, hardiness_zone_min/max, growth_rate, age_of_maturity_years |
 | Life cycle | is_annual, is_biennial, is_perennial, lifespan, deciduous_evergreen, leaf_retention |
-| Light & climate | tolerates_full_sun/semi_shade/full_shade, frost_tender, drought_tolerance, ellenberg_light (observed only) |
-| Soil | soil_ph_min/max, well_drained, heavy_clay, tolerates_acid/alkaline/saline, fertility_requirement, moisture_use, anaerobic_tolerance |
-| Growth form | habit, growth_form_type, growth_form_shape, growth_habit, woody, canopy_position |
-| Ecology | stratum, succession_stage, nitrogen_fixer, mycorrhizal_type, grime_strategy, raunkiaer_life_form, cn_ratio, allelopathic |
-| Uses & ratings | edibility_rating, medicinal_rating, other_uses_rating, edible_uses, medicinal_uses, other_uses, scented, attracts_wildlife |
-| Propagation | propagated_by_seed/cuttings/bare_root/container/sprigs/bulb/sod/tubers/corm, cold_stratification_required, vegetative_spread_rate, seed_spread_rate, sowing_period, harvest_period |
-| Fruit & seed | fruit_type, fruit_seed_color, fruit_seed_period_begin/end, fruit_seed_abundance, fruit_seed_persistence, seed_mass_mg, seed_dispersal_mechanism, seed_storage_behaviour, seed_dormancy_type |
-| Leaf | leaf_type, leaf_compoundness, leaf_shape, sla_mm2_mg |
-| Reproduction | pollination_syndrome, sexual_system, mating_system, self_fertile, reproductive_type |
-| Risk | toxicity, known_hazards, invasive_potential, noxious_status, invasive_usda, weed_potential, fire_resistant, fire_tolerance |
-| Text | summary, cultivation_notes, propagation_notes, habitats, native_range, conservation_status |
-| Related species | (existing — species_relationships) |
-| External links | species_external_links (when available) |
+| Light & climate | tolerates_full_sun/semi_shade/full_shade, frost_tender, frost_free_days_min, drought_tolerance, precip_min/max_inches, active_growth_period |
+| Soil | soil_ph_min/max, well_drained, heavy_clay, tolerates_light_soil/medium_soil/heavy_soil, tolerates_acid/alkaline/saline, fertility_requirement, moisture_use, anaerobic_tolerance, root_depth_min_cm |
+| Growth form | habit, growth_form_type, growth_form_shape, growth_habit, woody, canopy_position, resprout_ability, coppice_potential |
+| Ecology | stratum, succession_stage, ecological_system, nitrogen_fixer, mycorrhizal_type, grime_strategy, raunkiaer_life_form, cn_ratio, allelopathic, root_system_type, taproot_persistent |
+| Uses & ratings | edibility_rating, medicinal_rating, other_uses_rating, edible_uses, medicinal_uses, other_uses, special_uses, scented, attracts_wildlife |
+| Propagation | propagated_by_seed/cuttings/bare_root/container/sprigs/bulb/sod/tubers/corm, cold_stratification_required, vegetative_spread_rate, seed_spread_rate, propagation_method, sowing_period, harvest_period, dormancy_conditions, management_types |
+| Fruit & seed | fruit_type, fruit_seed_color, fruit_seed_period_begin/end, fruit_seed_abundance, fruit_seed_persistence, seed_mass_mg, seed_length_mm, seed_germination_rate, seed_dispersal_mechanism, seed_storage_behaviour, seed_dormancy_type, seedbank_type |
+| Leaf | leaf_type, leaf_compoundness, leaf_shape, sla_mm2_mg, ldmc_g_g, leaf_nitrogen/carbon/phosphorus_mg_g, leaf_dry_mass_mg |
+| Bloom & flower | bloom_period, flower_color, pollinators |
+| Reproduction | pollination_syndrome, sexual_system, mating_system, self_fertile, reproductive_type, clonal_growth_form, storage_organ |
+| Risk | toxicity, known_hazards, invasive_potential, noxious_status, invasive_usda, weed_potential, fire_resistant, fire_tolerance, hedge_tolerance, salinity_tolerance, pests_diseases |
+| Distribution | native_range, native_distribution (JSON), introduced_distribution (JSON), range_text, conservation_status |
+| Text | summary, physical_characteristics, cultivation_notes, propagation_notes, habitats, carbon_farming |
+| Photos | species_images (carousel — see 3.5.5) |
+| Related species | species_relationships |
+| External links | species_external_links (Wikipedia, TheFerns, Wikimedia) |
+| Data quality | data_quality_tier, wood_density_g_cm3, photosynthesis_pathway (science/metadata — collapsed by default, shown for power users) |
 
 **Sub-phases**:
-- **3.1a**: Rust backend: expand `SpeciesDetail` struct to include all new fields. Update `get_species_detail` query. Add `translated_values` lookup — load table into a HashMap at startup, apply translations based on locale in response
-- **3.1b**: Frontend types + detail card UI: update `types/species.ts`, build collapsible section components, style with field notebook tokens. Sections collapsed by default, expand on click. Empty/null fields hidden
-- **3.1c**: i18n: add section header keys and field label keys to all 6 locale files
+- **3.1a**: Detail card UI: add new collapsible sections for all fields above. Style with field notebook tokens. Sections collapsed by default, expand on click. Empty/null fields hidden. Note: Rust types and frontend types already expanded in 3.0b
+- **3.1b**: i18n: add section header keys and field label keys to all 6 locale files. Ensure all categorical values use `translated_values` for display
+- **3.1c**: Bloom & flower section, distribution section, data quality section — separate pass since these have special rendering (color chips for flower_color, JSON array parsing for distribution)
 
 **Verification gate**: `webview_screenshot` of detail card for Malus domestica. Verify all sections render, translations work when switching language, empty fields don't show.
 
@@ -128,7 +138,7 @@ Goal: Make the plant database genuinely useful for design decisions, fix visual 
 
 ### 3.2 — Filter UI Redesign
 
-**Why**: Current filter drawer has 8 dropdown buttons. The new schema has 60+ filterable variables. Need Option C hybrid: always-visible essentials + "More filters" picker.
+**Why**: Current filter drawer has 8 dropdown buttons. The DB now has 173 columns with 60+ filterable variables. Need Option C hybrid: always-visible essentials + "More filters" picker. Note: soil type filter migrated from `species_soil_types` table to boolean tolerance columns in 3.0b.
 
 **Always-visible filters** (initial set, iterate with user feedback):
 1. Stratum — multi-select chips (emergent, high, medium, low)
@@ -153,7 +163,7 @@ Active "More" filters display as removable chips below the always-visible filter
 
 ### 3.3 — Translated Values
 
-**Why**: 6-language support is a differentiator. The `translated_values` table has 245 translated values across 43 categorical fields in all 6 languages. Common names have coverage from 62K (zh) to 211K (en).
+**Why**: 6-language support is a differentiator. The `translated_values` table has 245+ translated values across 46 categorical fields in all 6 languages (42 from canopi-data export + 4 populated by our contract: active_growth_period, bloom_period, flower_color, habit). Common names have coverage from 62K (zh) to 211K (en).
 
 **Approach**: This is partially delivered in 3.1a (detail card translations) and 3.2a (filter value translations). This sub-phase ensures complete coverage:
 
@@ -185,52 +195,42 @@ Active "More" filters display as removable chips below the always-visible filter
 
 ---
 
-### 3.5 — Dark Mode Canvas Fix
+### 3.5 — Dark Mode Canvas Fix ✅
 
-**Why**: Konva shapes use hardcoded colors at creation time. Theme switch doesn't update them. Plant labels, zone labels, and scale bar are invisible/faint in dark mode.
-
-**Approach**: Canvas-wide color refresh function that walks all text nodes and updates `fill` from computed CSS variables on theme toggle. Register as an effect on the theme signal.
-
-**Sub-phases**:
-- **3.5a**: Build `refreshCanvasTheme()` function in engine. Walk all Konva text nodes (plant labels, zone labels, text annotations) and update `fill` from `getComputedStyle` CSS variables. Wire to theme signal via `effect()`
-- **3.5b**: Fix scale bar initial paint, ruler corner on fresh launch. Verify grid line colors in both themes
-
-**Verification gate**: Toggle theme via `webview_interact` (click Theme button). `webview_screenshot` in both modes. Verify all text is readable, scale bar visible, grid lines appropriate contrast.
+**Status**: Complete (2026-03-25). `refreshCanvasTheme()` built, `getCanvasColor()` pattern established, scale bar and ruler corner fixed for both themes.
 
 ---
 
 ### 3.5.5 — Plant Photos
 
-**Why**: A plant photo is the single highest-value element in the detail card. 50% of species have image URLs in canopi-data. Showing a photo (or slideshow for multiple) dramatically improves plant identification and card usefulness.
+**Why**: A plant photo is the single highest-value element in the detail card. 60% of species now have image URLs (105K images across 175K species). Showing a photo (or slideshow for multiple) dramatically improves plant identification and card usefulness.
 
-**Prerequisite**: canopi-data ships a `species_images` table (replaces the messy `image_urls` JSON column):
+**Prerequisite**: ~~canopi-data ships a `species_images` table~~ ✅ **MET** (schema v6, 2026-03-26). Table schema:
 ```
 species_images (
   id TEXT PRIMARY KEY,
   species_id TEXT REFERENCES species(id),
-  url TEXT NOT NULL,           -- direct HTTPS image URL (no relative paths, no placeholders)
-  source TEXT,                 -- "pfaf", "floristic", "cloudfront"
-  license TEXT,                -- "cc-by-sa", "unknown", etc.
-  attribution TEXT,            -- photographer/source credit
+  url TEXT NOT NULL,           -- direct HTTPS image URL
+  source TEXT,                 -- "pfaf", "trefle", "floristic"
   sort_order INTEGER DEFAULT 0
 )
 ```
+Note: no `license` or `attribution` columns in the current export. Source field ("pfaf", "trefle") is available for display. Licensing filter deferred until canopi-data adds license metadata.
 
 **Design**:
 - Detail card header: photo area above the botanical name. Placeholder silhouette when no image or offline
 - Multiple images: horizontal dot indicators, swipe/click to browse
-- Attribution: small text overlay on photo (source + license)
+- Source badge: small text overlay showing image source (pfaf, trefle, etc.)
 - Offline: Rust backend fetches and caches images in app data dir (`~/.local/share/canopi/image-cache/`). Serve cached images via Tauri asset protocol. Cache eviction: LRU, max 500MB
 - Privacy: all image fetches go through Rust (no direct browser requests to external CDNs)
-- Licensing filter: only display images with known permissive licenses by default. Setting to show all
 
 **Sub-phases**:
-- **3.5.5a**: Schema contract + prepare-db.py: add `species_images` to supporting tables. Rust backend: `SpeciesImage` struct, IPC command `get_species_images(canonical_name)` returning `Vec<SpeciesImage>`. Frontend type
+- **3.5.5a**: Schema contract + prepare-db.py already updated in 3.0b. Rust backend: `SpeciesImage` struct and `get_species_images` IPC command already added in 3.0b. Frontend type wired
 - **3.5.5b**: Rust image cache: fetch URL → save to app data dir → serve via `asset:` protocol or localhost. Cache lookup before fetch. Background fetch (don't block detail card render)
-- **3.5.5c**: Frontend: photo component in detail card header. Placeholder → fade-in on load. Dot indicators for multiple images. Click to cycle. Attribution overlay
+- **3.5.5c**: Frontend: photo component in detail card header. Placeholder → fade-in on load. Dot indicators for multiple images. Click to cycle. Source badge overlay
 - **3.5.5d**: Offline mode: serve from cache when no network. Cache warming: on first detail view, fetch all images for that species. Eviction policy
 
-**Verification gate**: Open detail card for Malus domestica — photo loads from cache after first fetch. Disconnect network — cached photo still shows. Species with no images shows placeholder. Switch between multiple images. Attribution visible.
+**Verification gate**: Open detail card for Malus domestica — photo loads from cache after first fetch. Disconnect network — cached photo still shows. Species with no images shows placeholder. Switch between multiple images. Source badge visible.
 
 ---
 
@@ -268,18 +268,16 @@ species_images (
 
 ### 3.8 — DB Upgrade Robustness
 
-**Why**: canopi-data evolves faster than the app. Column renames broke the pipeline. This must not happen again.
+**Why**: canopi-data evolves faster than the app. Column renames broke the pipeline once (3.0) and a table removal broke it again (3.0b). The contract pattern works — this phase hardens the remaining gaps.
 
-**Approach** (Option A — schema contract):
-- `scripts/schema-contract.json` (created in 3.0a) becomes the authoritative mapping
-- `prepare-db.py` validates the export against the contract: warns on missing columns, ignores unknown columns, fails on schema_version mismatch
-- Rust backend: `PlantDb::open()` reads `schema_version` from the DB. If it encounters version N+1 (newer than expected), it operates in degraded mode for unknown fields rather than crashing
-- Document the contract in a short `scripts/SCHEMA.md` so canopi-data contributors know what Canopi expects
+**Already done** (in 3.0 + 3.0b):
+- `scripts/schema-contract.json` is the authoritative mapping (173 columns, 6 supporting tables)
+- `prepare-db.py` validates export against contract: warns on missing columns, ignores unknown, fails on schema_version mismatch
+- Rust backend checks `PRAGMA user_version` at startup
 
-**Sub-phases**:
-- **3.8a**: Harden prepare-db.py with validation, graceful degradation for missing columns, clear error messages
-- **3.8b**: Rust backend: schema version check in `PlantDb::open()`, degraded-mode handling for unknown schema versions
-- **3.8c**: Write `scripts/SCHEMA.md` documenting the contract
+**Remaining**:
+- **3.8a**: Rust backend: `PlantDb::open()` — if it encounters version N+1 (newer than expected), operate in degraded mode for unknown fields rather than crashing
+- **3.8b**: Write `scripts/SCHEMA.md` documenting the contract so canopi-data contributors know what Canopi expects
 
 **Verification gate**: Run prepare-db.py against the current export — should succeed. Simulate a future export with an extra column — should succeed with warning. Simulate missing column — should succeed with NULL default and warning.
 
@@ -328,7 +326,8 @@ All of Phase 3 (3.0 through 3.10) constitutes the MVP. After completion:
 - [ ] All 6 languages: translated categorical values, common names, UI strings
 - [ ] Both themes: light and dark mode fully functional including canvas elements
 - [ ] Plant density: clean dots at overview, labels on zoom, hover tooltips, stacked badges
-- [ ] Detail card: all 170 columns organized in collapsible sections
+- [ ] Detail card: all 173 columns organized in collapsible sections, with plant photos
+- [ ] Plant photos: image carousel in detail card, offline cache, source badges
 - [ ] Favorites: star plants, access from dedicated panel, drag to canvas
 - [ ] Copy-paste: Ctrl+C/V/D for all canvas objects with undo/redo
 - [ ] Dirty indicator: visible in title bar, prompt on close with unsaved changes

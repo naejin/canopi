@@ -68,6 +68,7 @@ export function CanvasPanel() {
         designPath.value = queued
         resetDirtyBaselines()
         engine.history.clear()
+        engine.showCanvasChrome()
       }).catch(() => {
         // File no longer exists or failed to load — ignore, canvas stays empty
       })

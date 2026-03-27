@@ -4,7 +4,7 @@
 - **Backend**: Rust workspace (Tauri v2 + rusqlite + specta)
 - **Frontend**: Preact + @preact/signals + TypeScript + Vite + CSS Modules
 - **Canvas**: Konva.js (imperative API, NOT react-konva)
-- **i18n**: i18next core (NOT react-i18next), 6 languages
+- **i18n**: i18next core (NOT react-i18next), 11 languages (en, fr, es, pt, it, zh, de, ja, ko, nl, ru)
 - **Maps**: MapLibre GL JS (disabled for MVP, code on disk)
 - **Native**: lib-swift (macOS), lib-cpp (Windows), lib-c (Linux) — stubs only
 
@@ -148,7 +148,8 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 - **Resource path in dev**: `resolve_resource()` may not find bundled files during `cargo tauri dev`. Fall back to `env!("CARGO_MANIFEST_DIR")` path. Always register a fallback in-memory DB so `State<PlantDb>` doesn't panic
 - **No blocking dialogs in setup()**: `.blocking_show()` in `setup()` hangs — window hasn't been created. Log errors instead
 - **`close()` re-emits `closeRequested`**: Use `destroy()` for discard-without-save. Requires `core:window:allow-destroy`
-- **No `window.prompt()`/`confirm()`/`alert()`**: Silently blocked in WebView. Use Preact components for all user input
+- **No `window.prompt()`/`confirm()`/`alert()`**: Silently blocked in WebView. Use `ask()` from `@tauri-apps/plugin-dialog` for confirms, Preact components for other input. `dialog:default` capability includes `allow-ask`
+- **Theme: light/dark only, no system**: `Theme` enum has only `Light`/`Dark`. `get_settings` migrates stale `"system"` values to `"light"` via JSON patching before deserialization
 
 ### Konva.js / Canvas
 - **Shapes don't react to CSS theme changes**: Colors hardcoded at creation time. Theme switch requires walking nodes and updating `fill`/`stroke` from computed CSS variables
@@ -158,6 +159,7 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 - **Screen-space overlays**: Use HTML `<canvas>` (not Konva layers) for rulers. Konva layers are subject to stage transforms
 - **`strokeScaleEnabled: false`**: Keeps stroke width constant in screen pixels. Use on all zone/annotation shapes
 - **Group-level counter-scale for plants**: Set `group.scale({x: 1/stageScale, y: 1/stageScale})` on the group, not children
+- **Plant counter-scale is ephemeral**: `group.scaleX()` on plants is `1/stageScale`, recomputed every zoom. Never persist it — save `scale: null`. On load, skip restoring `plant.scale`; `updatePlantsLOD` sets the correct counter-scale
 - **`stage.on('dragmove')` fires for shape drags too**: Filter by `e.target !== this.stage`
 - **Custom attrs: use `?? null` not `|| null`**: `getAttr()` can return `0` or `''` which are legitimate values
 - **Grouped node coordinates**: Always use `node.getAbsolutePosition(layer)` when serializing. `node.x()/y()` are group-relative after grouping
@@ -173,26 +175,34 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 - **Signals + hooks**: Use `useSignalEffect` (not `useEffect`) when subscribing to signals inside components
 - **Effect subscription**: Effects only subscribe to signals **read during execution**. An early `return` before reading a signal = never re-runs. Read ALL dependencies BEFORE conditional returns
 - **Signal retry pattern**: Setting a signal to its current value is a no-op (`Object.is` equality). To force a re-fetch, use a dedicated `retryCount` signal: read it in the effect, increment it in the retry handler
+- **`CanvasHistory` truncation must mirror in both paths**: `execute()` and `record()` both trim `_past` at 500-cap. Both must set `_savedPosition = -1` when truncation passes the saved point, or dirty tracking breaks
 
 ### Database / SQLite
 - **Plant DB schema contract**: `scripts/schema-contract.json` maps canopi-data export columns to canopi-core.db columns. `prepare-db.py` reads from this contract, not hardcoded lists. When canopi-data changes column names, update the contract — not the Rust code
 - **canopi-data column renames (completed 3.0)**: `life_cycle` replaced by `is_annual`/`is_biennial`/`is_perennial` (booleans), `nitrogen_fixation` replaced by `nitrogen_fixer` (integer). All layers updated: prepare-db.py, Rust types, query builder, frontend types, display-modes, detail card. Filter UI keeps `life_cycle: string[]` for OR-semantics, mapped to boolean columns in `query_builder.rs`
-- **Schema version**: `PRAGMA user_version = 2` in canopi-core.db. Rust backend warns if < 2 at startup
+- **Schema version**: `PRAGMA user_version = 3` in canopi-core.db. Rust backend warns if < 3 at startup. Export schema version 7 (`min_export_schema_version` in contract). Contract version 3 = 173 species columns
+- **`species_soil_types` removed (schema v7)**: Soil filtering uses boolean tolerance columns (`tolerates_light_soil`, `tolerates_medium_soil`, `tolerates_heavy_soil`, `well_drained`, `heavy_clay`). `SpeciesFilter.soil_tolerances` maps to these columns in `query_builder.rs`
+- **canopi-data export location**: `~/projects/canopi-data/data/exports/canopi-export-YYYY-MM-DD.db` — use the latest dated file
+- **Regenerate plant DB**: `python3 scripts/prepare-db.py ~/projects/canopi-data/data/exports/<latest>.db` (outputs to `desktop/resources/canopi-core.db`)
 - **Filter-to-column mapping**: `SpeciesFilter.life_cycle: Vec<String>` maps to boolean columns via `query_builder.rs` (e.g. `"Annual"` → `is_annual = 1`). This preserves OR-semantics in the UI while the DB uses boolean columns. Don't change the filter type — change the query mapping
 - **No `sqlite3` CLI on this machine**: Use `python3 -c "import sqlite3; ..."` for DB inspection
 - **No `pip`/`pip3` on this machine**: Use `python3 -c "import ..."` for ad-hoc checks. Only stdlib modules available
 - **rusqlite feature**: Use `bundled-full` (not `bundled`) — enables FTS5 full-text search
 - **Plant DB PRAGMAs**: On read-only connections, do NOT set `journal_mode=WAL` or `query_only=true`. Only `mmap_size` and `cache_size`
-- **`translated_values` table is wide format**: Columns are `field_name`, `value_en`, `value_fr`, `value_es`, `value_pt`, `value_it`, `value_zh`. NOT a normalized table with `language`/`translated` columns. `translate_value()` in `plant_db.rs` maps locale to column name via allowlist
+- **`translated_values` table is wide format**: Columns are `field_name`, `value_en`, `value_fr`, `value_es`, `value_pt`, `value_it`, `value_zh`, `value_de`, `value_ja`, `value_ko`, `value_nl`, `value_ru` (11 languages). NOT a normalized table with `language`/`translated` columns. `translate_value()` in `plant_db.rs` maps locale to column name via allowlist
 - **FTS5 MATCH syntax**: Always use full table name (`species_search_fts MATCH ?1`), never an alias
 - **FTS5 sanitization**: Strip ALL metacharacters `"()*+-^:\` — not just quotes. Empty after sanitization → skip FTS
 - **Species table name**: `species` (NOT `silver_species` as in the architecture draft)
 - **Migration versioning**: User DB uses `PRAGMA user_version` — check before adding migrations
 - **Plant DB degraded mode**: If missing/corrupt, `lib.rs` falls back to in-memory DB. Frontend short-circuits all species IPC calls when degraded
-- **Common name lookup order**: `best_common_names` (built by prepare-db.py) → `species_common_names` → `species.common_name` column. Always use `best_common_names` first — `species_common_names` has gaps (e.g., no French entries for many species)
-- **`species_soil_types` is deprecated for display**: Overlaps with boolean columns (`well_drained`, `heavy_clay`). Show soil characteristics from booleans (translated via i18n) not from soil_types table (untranslatable legacy strings). Table kept for backward compatibility until canopi-data ships boolean replacements
+- **Common name lookup order**: `best_common_names` → `species_common_names` → `species.common_name`. Both `get_common_name` (single) and `get_common_names_batch` (batch) follow this order. Always use `best_common_names` first — `species_common_names` has gaps (e.g., no French entries for many species)
+- **`SpeciesListItem.family/genus` are `Option<String>`**: DB columns are nullable. Non-optional `String` causes silent row drops in search and hard errors in favorites hydration
+- **Cursor pagination typed values**: Height/Hardiness sort values must be pushed as `Value::Real`/`Value::Integer`, not `Value::Text`. SQLite type affinity makes text-vs-numeric comparisons silently wrong
 - **`translated_values` coverage**: Only fields WITH entries in this table get translated. Check `SELECT DISTINCT field_name FROM translated_values` before assuming a field is translatable. Missing fields need entries added to `schema-contract.json` translations section + DB population
 - **DB hot-patching**: Can INSERT/UPDATE `translated_values` in the running app's DB files — changes visible on next IPC call without app restart. Rust-side code changes require restart
+- **Adding translations**: Two steps required — (1) add entries to `schema-contract.json` `translations` section, (2) run `populate_translations()` from prepare-db.py or use python to INSERT directly into both `desktop/resources/canopi-core.db` and `target/debug/resources/canopi-core.db`. The contract alone doesn't update the running DB
+- **translated_values pipeline order**: Export ships 42 field_names. Our contract adds 4 more (`active_growth_period`, `bloom_period`, `flower_color`, `habit`) that export v6 dropped. prepare-db copies export translations first, then contract populates missing ones — order matters
+- **`ellenberg_inferences` table skipped**: 468K rows of ML-predicted Ellenberg values. Not contracted — will add when model confidence improves. The 6 `ellenberg_*` columns on the species table ARE contracted (these are observed values, not predictions)
 
 ### Canvas Engine / Architecture
 - **Every new canvas module must be wired into runtime**: Must be imported and called from `engine.ts` or `serializer.ts`

@@ -27,9 +27,7 @@ function switchTool(tool: string): () => void {
 }
 
 function cycleTheme() {
-  const order = ["system", "light", "dark"] as const;
-  const idx = order.indexOf(theme.value);
-  theme.value = order[(idx + 1) % order.length]!;
+  theme.value = theme.value === 'dark' ? 'light' : 'dark';
   persistCurrentSettings();
 }
 

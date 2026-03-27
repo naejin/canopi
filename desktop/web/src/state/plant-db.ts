@@ -12,7 +12,7 @@ export const activeFilters = signal<SpeciesFilter>({
   hardiness_max: null,
   height_max: null,
   sun_tolerances: null,
-  soil_types: null,
+  soil_tolerances: null,
   growth_rate: null,
   life_cycle: null,
   edible: null,
@@ -54,7 +54,7 @@ export const hasActiveFilters = computed(() => {
     f.hardiness_max !== null ||
     f.height_max !== null ||
     (f.sun_tolerances !== null && f.sun_tolerances.length > 0) ||
-    (f.soil_types !== null && f.soil_types.length > 0) ||
+    (f.soil_tolerances !== null && f.soil_tolerances.length > 0) ||
     (f.growth_rate !== null && f.growth_rate.length > 0) ||
     (f.life_cycle !== null && f.life_cycle.length > 0) ||
     f.edible !== null ||
@@ -250,7 +250,7 @@ export function clearFilters(): void {
     hardiness_max: null,
     height_max: null,
     sun_tolerances: null,
-    soil_types: null,
+    soil_tolerances: null,
     growth_rate: null,
     life_cycle: null,
     edible: null,

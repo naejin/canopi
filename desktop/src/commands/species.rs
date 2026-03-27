@@ -1,6 +1,6 @@
 use common_types::species::{
-    FilterOptions, PaginatedResult, Relationship, Sort, SpeciesDetail, SpeciesFilter,
-    SpeciesListItem,
+    FilterOptions, PaginatedResult, Relationship, Sort, SpeciesDetail, SpeciesExternalLink,
+    SpeciesFilter, SpeciesImage, SpeciesListItem,
 };
 
 /// Search species with optional full-text and structured filters.
@@ -120,7 +120,9 @@ pub fn get_species_batch(
     for name in &canonical_names {
         match crate::db::plant_db::get_detail(&conn, name, &locale) {
             Ok(detail) => results.push(detail),
-            Err(_) => {} // Skip unknown species silently
+            Err(e) => {
+                tracing::warn!("get_species_batch: skipping '{name}': {e}");
+            }
         }
     }
     Ok(results)
@@ -133,4 +135,24 @@ pub fn get_filter_options(
 ) -> Result<FilterOptions, String> {
     let conn = plant_db.0.lock().unwrap_or_else(|e| e.into_inner());
     crate::db::plant_db::get_filter_options(&conn)
+}
+
+/// Returns images for a species by canonical name.
+#[tauri::command]
+pub fn get_species_images(
+    plant_db: tauri::State<'_, crate::db::PlantDb>,
+    canonical_name: String,
+) -> Result<Vec<SpeciesImage>, String> {
+    let conn = plant_db.0.lock().unwrap_or_else(|e| e.into_inner());
+    crate::db::plant_db::get_species_images(&conn, &canonical_name)
+}
+
+/// Returns external links for a species by canonical name.
+#[tauri::command]
+pub fn get_species_external_links(
+    plant_db: tauri::State<'_, crate::db::PlantDb>,
+    canonical_name: String,
+) -> Result<Vec<SpeciesExternalLink>, String> {
+    let conn = plant_db.0.lock().unwrap_or_else(|e| e.into_inner());
+    crate::db::plant_db::get_species_external_links(&conn, &canonical_name)
 }

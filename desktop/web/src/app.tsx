@@ -7,6 +7,7 @@ import { useCallback, useRef } from "preact/hooks";
 import { activePanel, sidePanel, sidePanelWidth, plantDbStatus, locale, theme, autoSaveIntervalMs, setBootstrappedSettings } from "./state/app";
 import { designDirty, saveCurrentDesign } from "./state/document";
 import { invoke } from "@tauri-apps/api/core";
+import { ask } from "@tauri-apps/plugin-dialog";
 import type { SubsystemHealth } from "./types/health";
 import { TitleBar } from "./components/shared/TitleBar";
 import { DegradedBanner } from "./components/shared/DegradedBanner";
@@ -31,7 +32,7 @@ invoke<SubsystemHealth>('get_health')
 invoke<Settings>('get_settings')
   .then((s) => {
     locale.value = s.locale;
-    theme.value = s.theme;
+    theme.value = s.theme === 'dark' ? 'dark' : 'light';
     gridSize.value = s.grid_size_m;
     snapToGridEnabled.value = s.snap_to_grid;
     autoSaveIntervalMs.value = s.auto_save_interval_s * 1000;
@@ -58,9 +59,9 @@ let _unlistenClose: unknown = null
     // Prevent the default close so we can prompt the user
     event.preventDefault()
 
-    // Native confirm dialog (replace with Tauri dialog plugin in a future phase)
-    const shouldSave = window.confirm(
-      t('canvas.file.saveBeforeCloseMessage')
+    const shouldSave = await ask(
+      t('canvas.file.saveBeforeCloseMessage'),
+      { title: t('canvas.file.saveBeforeClose'), kind: 'warning' }
     )
 
     if (shouldSave) {

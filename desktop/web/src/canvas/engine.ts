@@ -1354,7 +1354,7 @@ export class CanvasEngine {
         common_name: commonName || null,
         position: group.getAbsolutePosition(plantsLayer),
         rotation: group.rotation() !== 0 ? group.rotation() : null,
-        scale: group.scaleX() !== 1 ? group.scaleX() : null,
+        scale: null, // counter-scale is ephemeral (1/stageScale) — never persist
         notes: group.getAttr('data-notes') ?? null,
         planted_date: group.getAttr('data-planted-date') ?? null,
         quantity: group.getAttr('data-quantity') ?? null,

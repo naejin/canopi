@@ -87,7 +87,7 @@ export function PlantRow({ plant }: Props) {
           {plant.height_max_m !== null && <span className={styles.tag} style={{ color: 'var(--color-height)' }}>↕{plant.height_max_m}m</span>}
           {plant.stratum && <span className={styles.tag} style={{ color: 'var(--color-accent)' }}>{plant.stratum}</span>}
           {plant.edibility_rating !== null && plant.edibility_rating > 0 && (
-            <span className={styles.tag} style={{ color: 'var(--color-edible)' }}>edible {plant.edibility_rating}/5</span>
+            <span className={styles.tag} style={{ color: 'var(--color-edible)' }}>{t('plantDb.edible')} {plant.edibility_rating}/5</span>
           )}
         </div>
       </div>

@@ -244,11 +244,11 @@ export function PlantDetailCard({ canonicalName }: Props) {
           {d.common_name !== null && (
             <span className={styles.commonName}>{d.common_name}</span>
           )}
-          <span className={styles.taxonomy}>
-            {d.family}
-            {' · '}
-            {d.genus}
-          </span>
+          {(d.family || d.genus) && (
+            <span className={styles.taxonomy}>
+              {d.family}{d.family && d.genus ? ' · ' : ''}{d.genus}
+            </span>
+          )}
         </div>
 
         <button

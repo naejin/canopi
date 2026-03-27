@@ -56,19 +56,19 @@
   background: var(--color-primary);
   border: 1.5px solid var(--color-primary);
   color: #fff;
-  box-shadow: 0 2px 8px rgba(160, 107, 31, 0.3);
+  box-shadow: var(--shadow-md);
 }
 
 .primaryBtn:hover {
   background: var(--color-primary-hover);
   border-color: var(--color-primary-hover);
-  box-shadow: 0 4px 14px rgba(160, 107, 31, 0.35);
+  box-shadow: var(--shadow-lg);
   transform: translateY(-1px);
 }
 
 .primaryBtn:active {
   transform: translateY(0);
-  box-shadow: 0 1px 3px rgba(160, 107, 31, 0.25);
+  box-shadow: var(--shadow-sm);
 }
 
 .secondaryBtn {

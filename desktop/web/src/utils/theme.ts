@@ -1,19 +1,11 @@
 import { effect } from "@preact/signals";
 import { theme } from "../state/app";
 
-function getSystemTheme(): "light" | "dark" {
-  return window.matchMedia("(prefers-color-scheme: dark)").matches
-    ? "dark"
-    : "light";
-}
-
 function applyTheme(resolved: "light" | "dark") {
   document.documentElement.setAttribute("data-theme", resolved);
 }
 
 let disposeThemeEffect: (() => void) | null = null;
-let mediaHandler: (() => void) | null = null;
-const mq = window.matchMedia("(prefers-color-scheme: dark)");
 
 /**
  * Initialize the theme reactive effect.
@@ -27,35 +19,24 @@ const mq = window.matchMedia("(prefers-color-scheme: dark)");
 export function initTheme() {
   // Clean up previous init (HMR safety)
   disposeThemeEffect?.();
-  if (mediaHandler) mq.removeEventListener("change", mediaHandler);
 
-  // Read the sync cache for instant first-paint (avoids system→saved flash)
+  // Read the sync cache for instant first-paint (avoids flash)
   const cached = localStorage.getItem("canopi-theme");
-  if (cached === "light" || cached === "dark" || cached === "system") {
+  if (cached === "light" || cached === "dark") {
     theme.value = cached;
   }
 
   // Apply theme reactively whenever the signal changes, and sync the cache
   disposeThemeEffect = effect(() => {
-    const resolved =
-      theme.value === "system" ? getSystemTheme() : theme.value;
-    applyTheme(resolved);
+    applyTheme(theme.value);
     // Keep the sync cache up to date (Rust bootstrap overwrites the signal,
     // which triggers this effect, which updates the cache for next startup)
     localStorage.setItem("canopi-theme", theme.value);
   });
-
-  mediaHandler = () => {
-    if (theme.value === "system") {
-      applyTheme(getSystemTheme());
-    }
-  };
-  mq.addEventListener("change", mediaHandler);
 }
 
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
     disposeThemeEffect?.();
-    if (mediaHandler) mq.removeEventListener("change", mediaHandler);
   });
 }

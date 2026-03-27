@@ -43,7 +43,7 @@
 
 .filterToggle:hover {
   color: var(--color-text);
-  border-color: rgba(60, 45, 30, 0.25);
+  border-color: var(--color-border);
 }
 
 .filterToggleActive {
@@ -84,7 +84,7 @@
 }
 
 .searchInput:hover {
-  border-color: rgba(60, 45, 30, 0.25);
+  border-color: var(--color-border);
 }
 
 .searchInput:focus {
