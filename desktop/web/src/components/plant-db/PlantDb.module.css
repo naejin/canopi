@@ -571,9 +571,8 @@
 .filterStrip {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
   padding: 6px 10px 4px;
-  border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
 }
 
@@ -640,7 +639,7 @@
   padding: 0 3px;
   border-radius: var(--radius-full);
   background: var(--color-primary);
-  color: white;
+  color: var(--color-bg);
   font-size: 9px;
   font-weight: 700;
   line-height: 1;
@@ -681,9 +680,9 @@
 
 .toggleTrack {
   display: inline-block;
-  width: 28px;
-  height: 16px;
-  border-radius: 8px;
+  width: 24px;
+  height: 14px;
+  border-radius: 7px;
   background: var(--color-border);
   position: relative;
   transition: background 80ms ease;
@@ -694,8 +693,8 @@
   position: absolute;
   left: 2px;
   top: 2px;
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   background: var(--color-text-muted);
   transition: transform 80ms ease, background 80ms ease;
@@ -706,7 +705,7 @@
 }
 
 .toggleSwitch input:checked + .toggleTrack::after {
-  transform: translateX(12px);
+  transform: translateX(10px);
   background: var(--color-primary);
 }
 
@@ -716,7 +715,8 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 10px;
+  padding: 4px 10px 4px 58px;
+  border-top: 1px solid var(--color-border);
   border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
   overflow-x: auto;

@@ -13,9 +13,9 @@
   line-height: 1;
   white-space: nowrap;
   user-select: none;
-  border: 1px solid var(--chip-color, var(--color-border));
-  color: var(--chip-color, var(--color-text-muted));
-  background: transparent;
+  border: 1px solid transparent;
+  color: var(--color-text-muted);
+  background: var(--color-surface);
   transition: background 80ms ease, border-color 80ms ease;
 }
 
