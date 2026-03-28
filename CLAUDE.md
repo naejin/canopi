@@ -52,6 +52,7 @@ These features are **disabled in UI but code stays on disk**:
 1. Query **Context7** for up-to-date library API docs (see Context7 Library IDs below)
 2. For UI work: read `.interface-design/system.md` for design tokens and patterns. Load `/interface-design:init` only for major new UI surfaces (new panels, new workflows, new component patterns)
 3. Use taoki `xray`/`ripple` to understand file structure and blast radius before modifying
+4. For multi-phase work with subagents: define a **file ownership matrix** (one writer per file at any time), keep **Tauri MCP in main context only** (single WebView session), and decide UI control types in the plan before building alternatives
 
 ### Banned Patterns (enforced by plugin hooks)
 - **No React**: Import from `preact`, `preact/hooks`, `preact/compat` — never `react`
@@ -84,6 +85,7 @@ These features are **disabled in UI but code stays on disk**:
 - Components use CSS Modules, reference tokens (never raw values)
 - Dark theme via `[data-theme="dark"]` on `<html>`
 - **Dark mode token audit**: When adding CSS that uses `--color-*` tokens as foreground text/border, verify the token has a dark mode override in `global.css` `[data-theme="dark"]`. Check contrast ratio ≥ 4.5:1 against `--color-bg`
+- **Click-outside-to-close pattern**: Use `pointerup` (not `mousedown`) to avoid catching the click that opened the panel. No `setTimeout` delays — they create race conditions on rapid toggle. See `MoreFiltersPanel.tsx`
 
 ## Development
 ```bash
@@ -134,6 +136,8 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 - `ipc_execute_command` — call Rust backend commands directly (test DB queries, settings)
 - `ipc_monitor` / `ipc_get_captured` — watch frontend↔backend IPC traffic for serialization mismatches
 
+**Visual debugging at zoom:** To inspect fine CSS details (thumb alignment, pixel offsets), isolate and zoom via JS: `el.style.transform = 'scale(3)'; el.style.transformOrigin = 'top left'`, then `webview_screenshot`. Reset with `el.style.cssText = ''`
+
 **After UI changes:** run `/interface-design:audit` to check design system compliance. Run `/interface-design:critique` after building major new components
 
 ## Gotchas
@@ -153,7 +157,7 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 - **Theme: light/dark only, no system**: `Theme` enum has only `Light`/`Dark`. `get_settings` migrates stale `"system"` values to `"light"` via JSON patching before deserialization
 - **TitleBar drag handler**: `handleMouseDown` in `TitleBar.tsx` calls `startDragging()` on the title bar. Interactive elements must be caught by `target.closest('button')` — if adding non-button interactive elements, wrap in a button or update the guard
 - **No native `<select>` in UI chrome**: Native dropdowns break the field notebook aesthetic. Use custom dropdown components (see `LocalePicker` in `TitleBar.tsx`). Must include click-outside-to-close, `aria-expanded`, keyboard support
-- **WebKitGTK range input thumb alignment**: On Linux (Tauri WebView = WebKitGTK), `<input type="range">` thumbs are NOT vertically centered by default. With a 0px-height runnable track, the thumb's TOP edge sits at the track center. Fix: set `::-webkit-slider-thumb { margin-top: -<halfThumbHeight>px }` (e.g., `-6px` for a 12px thumb). This is a WebKitGTK-specific behavior — Chrome/Safari center the thumb automatically
+- **WebKitGTK range input thumb alignment**: `<input type="range">` thumbs are NOT vertically centered. With a 0px-height runnable track, the thumb's TOP edge sits at the track center. Fix: `::-webkit-slider-thumb { margin-top: -<halfThumbHeight>px }` (e.g., `-6px` for 12px thumb). Injected `<style>` overrides for pseudo-elements are silently ignored by WebKitGTK — always modify the actual `.module.css` file
 - **Filter UI architecture**: Always-visible filters in `FilterStrip.tsx` use typed `SpeciesFilter` fields. "More filters" panel uses dynamic `Vec<DynamicFilter>` channel with `validated_column()` allowlist in `query_builder.rs`. Adding a new filterable field requires two additions: entry in `field-registry.ts` + entry in the Rust allowlist. `patchFilters()` in `state/plant-db.ts` is the single mutation point for filter state
 
 ### Konva.js / Canvas
