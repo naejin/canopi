@@ -105,14 +105,40 @@ Earthy, not neon:
 - Clicking toggles the corresponding panel
 
 ### Plant Search Panel
-- Search-first: full-width search input at top, filter toggle icon (funnel) right
-- Filter drawer: collapsible below search, max-height 280px, scrollable
-- Plant rows: compact (38px estimated), two lines:
+- Search-first: full-width search input at top
+- FilterStrip: always-visible compact controls below search. 6 rows:
+  - Stratum: multi-select `FilterChip` pills (teal `--color-nitrogen`)
+  - Sun: multi-select `FilterChip` pills (amber `--color-sun`)
+  - Hardiness: `RangeSlider` (1–13)
+  - Edibility: `ThresholdSlider` (0–5 with tick marks)
+  - Height: `RangeSlider` (0–50m)
+  - N₂ Fixer: toggle switch (24×14px)
+- Each row: label 52px right-aligned + control flex-1. All 24px min-height
+- "More filters ›" text link + badge count at bottom, 58px left indent
+- ActiveChips strip: horizontal wrap of dismissable `FilterChip` pills, 58px left indent matching controls. Shows all active filters from both strip and "More" panel. Border-top + border-bottom separation
+- "More Filters" panel: slides in as overlay over results. Header + search + 8 collapsible categories with 2px colored left borders matching detail card sections. Boolean fields: inline checkbox. Categorical: expandable chip picker (lazy-loaded). Numeric: expandable range slider. "Done ›" text link in footer
+- Plant rows: compact, two lines:
   - Line 1: *botanical name* + common name (inline, baseline-aligned)
   - Line 2: colored tags separated by `·` (family=brown, hardiness=blue, height=stone, stratum=ochre, edible=moss)
 - Row actions (+, star) appear on hover only
 - Whole row is draggable to canvas
 - Background: `--color-bg` (parchment, matches canvas area)
+
+### FilterChip
+- Pill shape (`--radius-full`), 20px height, 11px text, 500 weight
+- Inactive: `--color-surface` background, transparent border, `--color-text-muted` text
+- Active: category color 12% opacity background (via `color-mix`), category color border + text
+- Clickable: cursor pointer, hover shows active-style background
+- Dismissable: `×` button appears, 14px circle, opacity 0.6 → 1.0 on hover
+- Used everywhere: filter strip, active chips strip, "More Filters" value pickers
+
+### Slider Controls
+- Inline layout: value/bound label — track — value/bound label (all one 24px row)
+- Track: 2px `--color-border` line, fill in `--color-primary`
+- Thumb: 12px circle, `--color-primary`, 2px `--color-surface` border, `var(--shadow-sm)`
+- WebKitGTK: `margin-top: -6px` on thumb (browser places top edge at center, not center)
+- RangeSlider: two overlapping inputs, low z-index 1 / high z-index 2
+- ThresholdSlider: tick marks (1px × 8px) positioned in 6px-padded ticks container for thumb alignment
 
 ### Plant Detail Card
 - Header: botanical name (italic), common name, family · genus, back button, favorite star
@@ -129,7 +155,7 @@ Earthy, not neon:
 - Trigger: button with current value + `›` chevron (rotates 90° on open)
 - Menu: `--color-surface` background, `--color-border` border, `--radius-md`, `--shadow-md`
 - Items: `--color-text-muted`, hover `--color-bg`, active `--color-primary` with `--color-primary-bg`
-- Close: click outside (mousedown listener with cleanup) or item selection
+- Close: click outside (`pointerup` listener — not `mousedown`, avoids catching opening click) or item selection
 - ARIA: `aria-expanded`, `aria-haspopup="listbox"`, `role="option"`, `aria-selected`
 - See `LocalePicker` in `TitleBar.tsx` as reference implementation
 
