@@ -242,15 +242,18 @@ export interface SpeciesDetail {
 export interface SpeciesFilter {
   hardiness_min: number | null;
   hardiness_max: number | null;
+  height_min: number | null;
   height_max: number | null;
   sun_tolerances: string[] | null;
   soil_tolerances: string[] | null;
   growth_rate: string[] | null;
   life_cycle: string[] | null;
   edible: boolean | null;
+  edibility_min: number | null;
   nitrogen_fixer: boolean | null;
   stratum: string[] | null;
   family: string | null;
+  extra: DynamicFilter[] | null;
 }
 
 export type Sort = 'Name' | 'Family' | 'Height' | 'Hardiness' | 'GrowthRate' | 'Relevance';
@@ -269,4 +272,24 @@ export interface FilterOptions {
   life_cycles: string[];
   sun_tolerances: string[];
   soil_tolerances: string[];
+}
+
+export interface DynamicFilter {
+  field: string;
+  op: FilterOp;
+  values: string[];
+}
+
+export type FilterOp = 'Equals' | 'In' | 'Gte' | 'Lte' | 'Between' | 'IsTrue';
+
+export interface DynamicFilterOptions {
+  field: string;
+  field_type: string;
+  values: FilterValue[] | null;
+  range: [number, number] | null;
+}
+
+export interface FilterValue {
+  value: string;
+  label: string;
 }

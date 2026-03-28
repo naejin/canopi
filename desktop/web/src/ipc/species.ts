@@ -8,6 +8,7 @@ import type {
   FilterOptions,
   PaginatedResult,
   Sort,
+  DynamicFilterOptions,
 } from '../types/species';
 
 /** Returns true when plant DB is not available — all queries should short-circuit. */
@@ -52,6 +53,14 @@ export async function getSpeciesRelationships(
 export async function getFilterOptions(): Promise<FilterOptions> {
   if (isDegraded()) return { families: [], growth_rates: [], strata: [], hardiness_range: [0, 0], life_cycles: [], sun_tolerances: [], soil_tolerances: [] };
   return invoke('get_filter_options');
+}
+
+export async function getDynamicFilterOptions(
+  fields: string[],
+  locale: string,
+): Promise<DynamicFilterOptions[]> {
+  if (isDegraded()) return [];
+  return invoke('get_dynamic_filter_options', { fields, locale });
 }
 
 /** Batch lookup: returns canonical_name → common_name map for the given locale. */

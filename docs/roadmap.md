@@ -1,7 +1,7 @@
 # Canopi Roadmap
 
-**Last updated**: 2026-03-27
-**Current state**: Phases 0-2.1 complete (scaffold, plant DB, canvas, document integrity, UI overhaul). Phase 3.0 + 3.5 + 3.0b + 3.0c complete (data contract sync, dark mode canvas fix, schema v7 sync, schema v8 sync). Phase 3.1 (detail card expansion) in progress.
+**Last updated**: 2026-03-28
+**Current state**: Phases 0-2.1 complete. Phase 3.0/3.0b/3.0c/3.5 complete (data sync). Phase 3.1 complete (detail card). Phase 3.2 complete (filter UI redesign: FilterStrip + MoreFiltersPanel + dynamic filters). Phase 3.7 complete (dirty indicator). Phase 3.8 complete (DB robustness). Phase 3.11 complete (OS locale detection). Next: 3.3 (search quality), 3.4 (plant density), 3.5.5 (plant photos).
 
 ---
 
@@ -113,7 +113,9 @@ Goal: Make the plant database genuinely useful for design decisions, fix visual 
 
 ---
 
-### 3.1 — Plant Characteristics (Detail Card)
+### 3.1 — Plant Characteristics (Detail Card) ✅
+
+**Status**: Complete (2026-03-27). 15 collapsible sections, 11-language i18n, full field coverage.
 
 **Why**: The detail card currently shows 9 sections covering ~30 fields. The DB now has 173 columns. A permaculture designer choosing plants needs growth form, propagation methods, fruit/seed info, leaf traits, ecological indicators, hazards, cultivation notes, and more.
 
@@ -154,7 +156,9 @@ Goal: Make the plant database genuinely useful for design decisions, fix visual 
 
 ---
 
-### 3.2 — Filter UI Redesign
+### 3.2 — Filter UI Redesign ✅
+
+**Status**: Complete (2026-03-28). Always-visible FilterStrip (6 controls: stratum chips, sun chips, hardiness/height range sliders, edibility threshold, nitrogen toggle) + MoreFiltersPanel (8 categories, 56 filterable fields, lazy-loaded options). Hybrid architecture: typed always-visible filters + dynamic `Vec<DynamicFilter>` channel with 65-field Rust allowlist. FilterChip used consistently across all surfaces. i18n in all 11 locales. Dark mode verified.
 
 **Why**: Current filter drawer has 8 dropdown buttons. The DB now has 173 columns with 60+ filterable variables. Need Option C hybrid: always-visible essentials + "More filters" picker. Note: soil type filter migrated from `species_soil_types` table to boolean tolerance columns in 3.0b.
 

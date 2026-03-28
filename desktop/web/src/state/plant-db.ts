@@ -1,8 +1,9 @@
 import { signal, computed, effect, batch } from '@preact/signals';
 import { locale } from './app';
-import { searchSpecies, getFilterOptions } from '../ipc/species';
+import { searchSpecies, getFilterOptions, getDynamicFilterOptions } from '../ipc/species';
 import { toggleFavorite, getFavorites, getRecentlyViewed } from '../ipc/favorites';
 import type { SpeciesListItem, SpeciesFilter, FilterOptions, Sort } from '../types/species';
+import type { DynamicFilter, FilterOp, DynamicFilterOptions } from '../types/species';
 
 // ── Search state ──────────────────────────────────────────────────────────────
 
@@ -10,15 +11,18 @@ export const searchText = signal('');
 export const activeFilters = signal<SpeciesFilter>({
   hardiness_min: null,
   hardiness_max: null,
+  height_min: null,
   height_max: null,
   sun_tolerances: null,
   soil_tolerances: null,
   growth_rate: null,
   life_cycle: null,
   edible: null,
+  edibility_min: null,
   nitrogen_fixer: null,
   stratum: null,
   family: null,
+  extra: null,
 });
 export const sortField = signal<Sort>('Name');
 export const searchResults = signal<SpeciesListItem[]>([]);
@@ -30,6 +34,10 @@ export const searchError = signal<string | null>(null);
 // ── Filter options (loaded once) ─────────────────────────────────────────────
 
 export const filterOptions = signal<FilterOptions | null>(null);
+
+// ── Dynamic "More Filters" state ────────────────────────────────────────────
+export const extraFilters = signal<DynamicFilter[]>([]);
+export const dynamicOptionsCache = signal<Record<string, DynamicFilterOptions>>({});
 
 // ── View state ────────────────────────────────────────────────────────────────
 
@@ -52,16 +60,35 @@ export const hasActiveFilters = computed(() => {
   return (
     f.hardiness_min !== null ||
     f.hardiness_max !== null ||
+    f.height_min !== null ||
     f.height_max !== null ||
     (f.sun_tolerances !== null && f.sun_tolerances.length > 0) ||
     (f.soil_tolerances !== null && f.soil_tolerances.length > 0) ||
     (f.growth_rate !== null && f.growth_rate.length > 0) ||
     (f.life_cycle !== null && f.life_cycle.length > 0) ||
     f.edible !== null ||
+    f.edibility_min !== null ||
     f.nitrogen_fixer !== null ||
     (f.stratum !== null && f.stratum.length > 0) ||
-    f.family !== null
+    f.family !== null ||
+    (f.extra !== null && f.extra.length > 0) ||
+    extraFilters.value.length > 0
   );
+});
+
+export const hasExtraFilters = computed(() => extraFilters.value.length > 0);
+
+export const activeFilterCount = computed(() => {
+  const f = activeFilters.value;
+  let count = 0;
+  if (f.hardiness_min !== null || f.hardiness_max !== null) count++;
+  if (f.sun_tolerances !== null && f.sun_tolerances.length > 0) count++;
+  if (f.stratum !== null && f.stratum.length > 0) count++;
+  if (f.edibility_min !== null) count++;
+  if (f.height_min !== null || f.height_max !== null) count++;
+  if (f.nitrogen_fixer !== null) count++;
+  count += extraFilters.value.length;
+  return count;
 });
 
 // ── Race-condition guard ──────────────────────────────────────────────────────
@@ -69,13 +96,23 @@ export const hasActiveFilters = computed(() => {
 let searchGeneration = 0;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
+// ── Merge extra filters into SpeciesFilter for IPC calls ─────────────────────
+
+function mergedFilters(): SpeciesFilter {
+  const f = activeFilters.value;
+  const extras = extraFilters.value;
+  if (extras.length === 0) return f;
+  const existing = f.extra ?? [];
+  return { ...f, extra: [...existing, ...extras] };
+}
+
 // ── Internal search executor ─────────────────────────────────────────────────
 
 async function executeSearch(generation: number): Promise<void> {
   try {
     const result = await searchSpecies(
       searchText.value,
-      activeFilters.value,
+      mergedFilters(),
       null,
       50,
       sortField.value,
@@ -137,6 +174,7 @@ let lastText = searchText.peek();
 const disposeSearchEffect = effect(() => {
   const text = searchText.value;
   void activeFilters.value;
+  void extraFilters.value;
   void sortField.value;
   void locale.value;
 
@@ -174,7 +212,7 @@ export async function loadNextPage(): Promise<void> {
   try {
     const result = await searchSpecies(
       searchText.value,
-      activeFilters.value,
+      mergedFilters(),
       cursor,
       50,
       sortField.value,
@@ -206,6 +244,11 @@ export async function loadFilterOptions(): Promise<void> {
   } catch {
     // Non-fatal — filters will just be empty
   }
+}
+
+/** Patch active filters — shared by FilterStrip and ActiveChips. */
+export function patchFilters(patch: Partial<SpeciesFilter>): void {
+  activeFilters.value = { ...activeFilters.value, ...patch };
 }
 
 /** Toggle a favorite and keep favoriteNames in sync. */
@@ -243,19 +286,52 @@ export async function loadSidebarLists(): Promise<void> {
   }
 }
 
+/** Add or update a dynamic filter. */
+export function addExtraFilter(field: string, op: FilterOp, values: string[]): void {
+  const current = extraFilters.value;
+  const without = current.filter((f) => f.field !== field);
+  extraFilters.value = [...without, { field, op, values }];
+}
+
+/** Remove a dynamic filter by field name. */
+export function removeExtraFilter(field: string): void {
+  extraFilters.value = extraFilters.value.filter((f) => f.field !== field);
+}
+
+/** Load dynamic filter options for a set of fields (with caching). */
+export async function loadDynamicOptions(fields: string[]): Promise<void> {
+  const cache = dynamicOptionsCache.value;
+  const uncached = fields.filter((f) => !cache[f]);
+  if (uncached.length === 0) return;
+  try {
+    const options = await getDynamicFilterOptions(uncached, locale.value);
+    const next = { ...dynamicOptionsCache.value };
+    for (const opt of options) {
+      next[opt.field] = opt;
+    }
+    dynamicOptionsCache.value = next;
+  } catch {
+    // Non-fatal — dynamic options will just be unavailable
+  }
+}
+
 /** Clear all active filters. */
 export function clearFilters(): void {
   activeFilters.value = {
     hardiness_min: null,
     hardiness_max: null,
+    height_min: null,
     height_max: null,
     sun_tolerances: null,
     soil_tolerances: null,
     growth_rate: null,
     life_cycle: null,
     edible: null,
+    edibility_min: null,
     nitrogen_fixer: null,
     stratum: null,
     family: null,
+    extra: null,
   };
+  extraFilters.value = [];
 }

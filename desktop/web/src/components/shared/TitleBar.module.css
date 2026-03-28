@@ -41,9 +41,14 @@
 }
 
 .dirtyDot {
-  color: var(--color-dirty-indicator);
-  margin-right: 3px;
-  font-size: 9px;
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-danger);
+  margin-left: 6px;
+  flex-shrink: 0;
+  vertical-align: middle;
 }
 
 .dragRegion {

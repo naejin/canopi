@@ -1,7 +1,7 @@
 use rusqlite::{Connection, OptionalExtension, params_from_iter};
 use common_types::species::{
-    FilterOptions, PaginatedResult, Relationship, Sort, SpeciesDetail, SpeciesExternalLink,
-    SpeciesFilter, SpeciesImage, SpeciesListItem, SpeciesUse,
+    DynamicFilterOptions, FilterOptions, FilterValue, PaginatedResult, Relationship, Sort,
+    SpeciesDetail, SpeciesExternalLink, SpeciesFilter, SpeciesImage, SpeciesListItem, SpeciesUse,
 };
 use crate::db::query_builder::{encode_cursor, sort_column, QueryBuilder};
 
@@ -861,6 +861,118 @@ pub fn get_filter_options(conn: &Connection) -> Result<FilterOptions, String> {
         sun_tolerances,
         soil_tolerances,
     })
+}
+
+/// Returns filter options for dynamically-requested fields.
+/// Each field returns its type and available values or range.
+pub fn get_dynamic_filter_options(
+    conn: &Connection,
+    fields: &[String],
+    locale: &str,
+) -> Result<Vec<DynamicFilterOptions>, String> {
+    let mut results = Vec::with_capacity(fields.len());
+
+    for field in fields {
+        let col = match crate::db::query_builder::validated_column(field) {
+            Some(c) => c,
+            None => continue, // skip unknown fields
+        };
+
+        // Strip the "s." prefix for column name in query
+        let col_name = col.strip_prefix("s.").unwrap_or(col);
+
+        let is_bool = is_boolean_field(field);
+
+        if is_bool {
+            results.push(DynamicFilterOptions {
+                field: field.clone(),
+                field_type: "boolean".to_owned(),
+                values: None,
+                range: None,
+            });
+        } else if is_numeric_field(field) {
+            // Numeric: fetch min/max range
+            let range_result: Result<Option<(f64, f64)>, _> = conn.query_row(
+                &format!(
+                    "SELECT MIN(CAST({col_name} AS REAL)), MAX(CAST({col_name} AS REAL)) \
+                     FROM species WHERE {col_name} IS NOT NULL AND typeof({col_name}) IN ('integer', 'real')"
+                ),
+                [],
+                |row| {
+                    let min: Option<f64> = row.get(0)?;
+                    let max: Option<f64> = row.get(1)?;
+                    Ok(min.zip(max))
+                },
+            ).map_err(|e| format!("Failed to query range for {field}: {e}"));
+
+            if let Ok(Some((min, max))) = range_result {
+                results.push(DynamicFilterOptions {
+                    field: field.clone(),
+                    field_type: "numeric".to_owned(),
+                    values: None,
+                    range: Some((min, max)),
+                });
+            } else {
+                // No numeric data found — still report the field as numeric with no range
+                results.push(DynamicFilterOptions {
+                    field: field.clone(),
+                    field_type: "numeric".to_owned(),
+                    values: None,
+                    range: None,
+                });
+            }
+        } else {
+            // Categorical: fetch distinct values with translations
+            let sql = format!(
+                "SELECT DISTINCT {col_name} FROM species \
+                 WHERE {col_name} IS NOT NULL AND {col_name} != '' \
+                 ORDER BY {col_name} LIMIT 100"
+            );
+            let mut stmt = conn.prepare(&sql)
+                .map_err(|e| format!("Failed to prepare distinct query for {field}: {e}"))?;
+            let values: Vec<FilterValue> = stmt
+                .query_map([], |row| {
+                    let val: String = row.get(0)?;
+                    Ok(val)
+                })
+                .map_err(|e| format!("Failed to fetch values for {field}: {e}"))?
+                .filter_map(|r| r.ok())
+                .map(|val| {
+                    let label = translate_value(conn, field, &val, locale);
+                    FilterValue { value: val, label }
+                })
+                .collect();
+
+            results.push(DynamicFilterOptions {
+                field: field.clone(),
+                field_type: "categorical".to_owned(),
+                values: Some(values),
+                range: None,
+            });
+        }
+    }
+
+    Ok(results)
+}
+
+fn is_boolean_field(field: &str) -> bool {
+    matches!(field,
+        "woody" | "frost_tender" | "allelopathic" | "attracts_wildlife" |
+        "scented" | "self_fertile" | "noxious_status" | "invasive_usda" |
+        "weed_potential" | "fire_resistant" | "resprout_ability" |
+        "coppice_potential" | "tolerates_acid" | "tolerates_alkaline" |
+        "tolerates_saline" | "tolerates_wind" | "tolerates_pollution" |
+        "tolerates_nutritionally_poor" | "propagated_by_seed" |
+        "propagated_by_cuttings" | "cold_stratification_required"
+    )
+}
+
+fn is_numeric_field(field: &str) -> bool {
+    matches!(field,
+        "soil_ph_min" | "soil_ph_max" | "root_depth_min_cm" |
+        "frost_free_days_min" | "precip_min_inches" | "precip_max_inches" |
+        "medicinal_rating" | "other_uses_rating"
+    )
 }
 
 /// Returns the best available common name for a species, preferring the

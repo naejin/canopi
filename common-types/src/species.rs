@@ -253,14 +253,17 @@ pub struct SpeciesFilter {
     pub hardiness_min: Option<i32>,
     pub hardiness_max: Option<i32>,
     pub height_max: Option<f32>,
+    pub height_min: Option<f32>,
     pub sun_tolerances: Option<Vec<String>>,
     pub soil_tolerances: Option<Vec<String>>,
     pub growth_rate: Option<Vec<String>>,
     pub life_cycle: Option<Vec<String>>,
     pub edible: Option<bool>,
+    pub edibility_min: Option<i32>,
     pub nitrogen_fixer: Option<bool>,
     pub stratum: Option<Vec<String>>,
     pub family: Option<String>,
+    pub extra: Option<Vec<DynamicFilter>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -289,4 +292,35 @@ pub struct FilterOptions {
     pub life_cycles: Vec<String>,
     pub sun_tolerances: Vec<String>,
     pub soil_tolerances: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct DynamicFilter {
+    pub field: String,
+    pub op: FilterOp,
+    pub values: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub enum FilterOp {
+    Equals,
+    In,
+    Gte,
+    Lte,
+    Between,
+    IsTrue,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct DynamicFilterOptions {
+    pub field: String,
+    pub field_type: String,
+    pub values: Option<Vec<FilterValue>>,
+    pub range: Option<(f64, f64)>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct FilterValue {
+    pub value: String,
+    pub label: String,
 }

@@ -1,6 +1,5 @@
 import { useEffect } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
-import { t } from '../../i18n'
 import { locale } from '../../state/app'
 import {
   loadSidebarLists,
@@ -10,16 +9,18 @@ import {
   retrySearch,
 } from '../../state/plant-db'
 import { SearchBar } from '../plant-db/SearchBar'
-import { FilterSidebar } from '../plant-db/FilterSidebar'
+import { FilterStrip } from '../plant-db/FilterStrip'
+import { ActiveChips } from '../plant-db/ActiveChips'
 import { ResultsList } from '../plant-db/ResultsList'
+import { MoreFiltersPanel } from '../plant-db/MoreFiltersPanel'
 import { PlantDetailCard } from '../plant-detail/PlantDetailCard'
 import plantDetailStyles from '../plant-detail/PlantDetail.module.css'
 import styles from '../plant-db/PlantDb.module.css'
 
 export function PlantDbPanel() {
   void locale.value
-  const filtersOpen = useSignal(false)
   const selected = selectedCanonicalName.value
+  const moreFiltersOpen = useSignal(false)
 
   useEffect(() => {
     void loadSidebarLists()
@@ -38,28 +39,22 @@ export function PlantDbPanel() {
         {/* Search header */}
         <div className={styles.searchHeader}>
           <SearchBar />
-          <button
-            type="button"
-            className={`${styles.filterToggle} ${filtersOpen.value ? styles.filterToggleActive : ''}`}
-            onClick={() => { filtersOpen.value = !filtersOpen.value }}
-            aria-label={t('plantDb.filters')}
-            aria-expanded={filtersOpen.value}
-          >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
-              <path d="M2 3h12M4 7h8M6 11h4" />
-            </svg>
-          </button>
         </div>
 
-        {/* Collapsible filters — pushes results down when open */}
-        {filtersOpen.value && (
-          <div className={styles.filterDrawer}>
-            <FilterSidebar />
-          </div>
-        )}
+        {/* Always-visible filter strip */}
+        <FilterStrip onMoreFilters={() => { moreFiltersOpen.value = !moreFiltersOpen.value }} />
+
+        {/* Active filter chips */}
+        <ActiveChips />
 
         {/* Results */}
         <ResultsList />
+
+        {/* More Filters overlay */}
+        <MoreFiltersPanel
+          open={moreFiltersOpen.value}
+          onClose={() => { moreFiltersOpen.value = false }}
+        />
       </div>
 
       {/* Detail card */}

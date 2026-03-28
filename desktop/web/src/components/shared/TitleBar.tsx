@@ -98,8 +98,8 @@ export function TitleBar() {
         />
         {isCanvas && name && name !== 'Untitled' && (
           <span className={styles.fileName}>
-            {dirty && <span className={styles.dirtyDot}>●</span>}
             {name}
+            {dirty && <span className={styles.dirtyDot} aria-label={t('titleBar.unsavedChanges')} />}
           </span>
         )}
       </div>

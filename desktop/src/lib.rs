@@ -32,6 +32,7 @@ pub fn run() {
             commands::species::get_common_names,
             commands::species::get_species_batch,
             commands::species::get_filter_options,
+            commands::species::get_dynamic_filter_options,
             commands::species::get_species_images,
             commands::species::get_species_external_links,
             commands::favorites::toggle_favorite,
@@ -98,14 +99,20 @@ pub fn run() {
                             if let Err(e) = plant_conn.pragma_update(None, "cache_size", -64000_i64) {
                                 tracing::warn!("Failed to set plant DB cache_size: {e}");
                             }
-                            // Check schema version — warn if outdated
+                            // Check schema version — warn if outdated or newer than expected
+                            const EXPECTED_SCHEMA_VERSION: i32 = 4;
                             let user_version: i32 = plant_conn
                                 .pragma_query_value(None, "user_version", |row| row.get(0))
                                 .unwrap_or(0);
-                            if user_version < 4 {
+                            if user_version < EXPECTED_SCHEMA_VERSION {
                                 tracing::warn!(
-                                    "Plant DB schema version {user_version} is outdated (expected >= 4). \
+                                    "Plant DB schema version {user_version} is outdated (expected >= {EXPECTED_SCHEMA_VERSION}). \
                                      Run scripts/prepare-db.py to rebuild."
+                                );
+                            } else if user_version > EXPECTED_SCHEMA_VERSION {
+                                tracing::warn!(
+                                    "Plant DB schema version {user_version} is newer than expected ({EXPECTED_SCHEMA_VERSION}). \
+                                     Unknown columns will be ignored. Consider updating the app."
                                 );
                             }
                             app.manage(db::PlantDb(Mutex::new(plant_conn)));

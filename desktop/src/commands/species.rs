@@ -1,6 +1,6 @@
 use common_types::species::{
-    FilterOptions, PaginatedResult, Relationship, Sort, SpeciesDetail, SpeciesExternalLink,
-    SpeciesFilter, SpeciesImage, SpeciesListItem,
+    DynamicFilterOptions, FilterOptions, PaginatedResult, Relationship, Sort, SpeciesDetail,
+    SpeciesExternalLink, SpeciesFilter, SpeciesImage, SpeciesListItem,
 };
 
 /// Search species with optional full-text and structured filters.
@@ -135,6 +135,17 @@ pub fn get_filter_options(
 ) -> Result<FilterOptions, String> {
     let conn = plant_db.0.lock().unwrap_or_else(|e| e.into_inner());
     crate::db::plant_db::get_filter_options(&conn)
+}
+
+/// Returns dynamic filter options (distinct values, ranges) for requested fields.
+#[tauri::command]
+pub fn get_dynamic_filter_options(
+    plant_db: tauri::State<'_, crate::db::PlantDb>,
+    fields: Vec<String>,
+    locale: String,
+) -> Result<Vec<DynamicFilterOptions>, String> {
+    let conn = plant_db.0.lock().unwrap_or_else(|e| e.into_inner());
+    crate::db::plant_db::get_dynamic_filter_options(&conn, &fields, &locale)
 }
 
 /// Returns images for a species by canonical name.
