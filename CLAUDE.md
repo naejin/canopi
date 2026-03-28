@@ -86,6 +86,7 @@ These features are **disabled in UI but code stays on disk**:
 - Dark theme via `[data-theme="dark"]` on `<html>`
 - **Dark mode token audit**: When adding CSS that uses `--color-*` tokens as foreground text/border, verify the token has a dark mode override in `global.css` `[data-theme="dark"]`. Check contrast ratio ≥ 4.5:1 against `--color-bg`
 - **Click-outside-to-close pattern**: Use `pointerup` (not `mousedown`) to avoid catching the click that opened the panel. No `setTimeout` delays — they create race conditions on rapid toggle. See `MoreFiltersPanel.tsx`
+- **No raw `white`/`black` in CSS Modules**: Use `var(--color-bg)` for white-on-colored backgrounds (badges, pills). Raw color keywords break dark mode just like raw `rgba()` does
 
 ## Development
 ```bash
