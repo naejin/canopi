@@ -2,23 +2,36 @@ import Konva from 'konva'
 import { getCommonNames } from '../ipc/species'
 import { getCanvasColor } from './theme-refresh'
 
-// Strata color map — raw hex values required; Konva cannot read CSS vars.
+// Strata color map — keyed by RAW DB values (lowercase).
+// Konva cannot read CSS vars, so hex values are required.
 const STRATA_COLORS: Record<string, string> = {
-  'Emergent':     '#1B5E20',
-  'High canopy':  '#2E7D32',
-  'Low canopy':   '#388E3C',
-  'Understory':   '#558B2F',
-  'Shrub':        '#7CB342',
-  'Herbaceous':   '#C0CA33',
-  'Ground cover': '#D4A843',
-  'Vine':         '#7B1FA2',
-  'Root':         '#6D4C41',
+  'emergent':     '#1B5E20',
+  'high':         '#2E7D32',
+  'low':          '#388E3C',
+  'medium':       '#558B2F',
+}
+
+// Display-friendly labels for strata — maps raw DB values to i18n keys.
+// Used by PlantRow tags and legend entries.
+export const STRATUM_I18N_KEY: Record<string, string> = {
+  'emergent': 'filters.stratum_emergent',
+  'high':     'filters.stratum_high',
+  'low':      'filters.stratum_low',
+  'medium':   'filters.stratum_medium',
 }
 const DEFAULT_PLANT_COLOR = '#4CAF50'
 
 // All plant circles use a fixed screen-pixel radius for maximum readability.
 // Real canopy spread visualization is a Phase 3 toggle ("Display: Canopy spread").
-const CIRCLE_SCREEN_PX = 8       // radius in screen pixels — consistent for all plants
+export const CIRCLE_SCREEN_PX = 8       // radius in screen pixels — consistent for all plants
+
+/** "Lavandula angustifolia" → "L. ang." */
+function abbreviateCanonical(name: string): string {
+  const parts = name.split(' ')
+  return parts.length >= 2
+    ? `${parts[0]![0]}. ${parts[1]!.slice(0, 3)}.`
+    : name.slice(0, 6)
+}
 const LABEL_FONT_SIZE = 11       // screen pixels
 const LABEL_GAP = 4              // screen pixels below the circle
 
@@ -32,11 +45,11 @@ export type PlantLOD = 'dot' | 'icon' | 'icon+label'
 
 export function getPlantLOD(stageScale: number): PlantLOD {
   // stageScale = pixels per meter
-  // At 4.6 px/m (default 100m view): icon+label
-  // At 1 px/m: icon only (labels would overlap)
-  // At <0.5 px/m: dots only
+  // At 5+ px/m: icon+label (zoomed in close — labels readable without overlap)
+  // At 0.5–5 px/m: icon only (labels would overlap at normal zoom)
+  // At <0.5 px/m: dots only (far out overview)
   if (stageScale < 0.5) return 'dot'
-  if (stageScale < 2) return 'icon'
+  if (stageScale < 5) return 'icon'
   return 'icon+label'
 }
 
@@ -64,12 +77,7 @@ export function createPlantNode(opts: {
   const color = getStratumColor(opts.stratum)
   const inv = opts.stageScale ? 1 / opts.stageScale : 1
 
-  // Genus abbreviation: "Lavandula angustifolia" → "L. ang."
-  const parts = opts.canonicalName.split(' ')
-  const abbreviation =
-    parts.length >= 2
-      ? `${parts[0]![0]}. ${parts[1]!.slice(0, 3)}.`
-      : opts.canonicalName.slice(0, 6)
+  const abbreviation = abbreviateCanonical(opts.canonicalName)
 
   // The GROUP is counter-scaled (scale = 1/stageScale) so all children use
   // plain screen-pixel values for sizes and positions. The group's world-space
@@ -141,11 +149,20 @@ export function createPlantNode(opts: {
   return group
 }
 
+// Squared distance thresholds — compared against dx²+dy² to avoid sqrt
+const MIN_LABEL_DIST_SQ = 40 * 40   // labels suppressed when neighbor closer than 40px
+const STACK_THRESHOLD_SQ = 5 * 5    // plants within 5px are "stacked"
+
+// Badge colors — hardcoded hex because Konva can't read CSS vars
+const STACK_BADGE_BG = '#5A7D3A'   // moss green from semantic palette
+const STACK_BADGE_FG = '#FFFFFF'
+
 /**
  * Update all plant nodes for the current zoom level:
- * - Labels counter-scaled to constant screen size
+ * - Counter-scale groups to constant screen size
  * - LOD: hide labels at far zoom, show at close zoom
- * - Minimum circle visual size enforced
+ * - Nearest-neighbor density: suppress labels when plants are too close
+ * - Stacked plant badges: show count when plants overlap
  *
  * Called after zoom changes (debounced 150ms).
  */
@@ -153,11 +170,20 @@ export function updatePlantsLOD(
   plantsLayer: Konva.Layer,
   lod: PlantLOD,
   stageScale: number,
+  selectedIds?: Set<string>,
 ): void {
   const inv = 1 / stageScale
+  const groups = plantsLayer.find('.plant-group') as Konva.Group[]
 
-  plantsLayer.find('.plant-group').forEach((node: Konva.Node) => {
-    const g = node as Konva.Group
+  // Collect screen positions for neighbor distance computation
+  const positions: { group: Konva.Group; sx: number; sy: number }[] = []
+  for (const g of groups) {
+    const abs = g.getAbsolutePosition()
+    positions.push({ group: g, sx: abs.x, sy: abs.y })
+  }
+
+  for (let i = 0; i < positions.length; i++) {
+    const g = positions[i]!.group
 
     // Counter-scale the GROUP — all children (circle, labels) inherit the
     // scale automatically. This is the only per-plant operation needed on zoom.
@@ -166,16 +192,110 @@ export function updatePlantsLOD(
     // LOD: toggle label visibility based on zoom level
     const label = g.findOne('.plant-label') as Konva.Text | undefined
     const botLabel = g.findOne('.plant-botanical') as Konva.Text | undefined
+    const isSelected = selectedIds?.has(g.id()) ?? false
 
-    if (lod === 'dot') {
-      if (label) label.visible(false)
+    if (lod === 'dot' || lod === 'icon') {
+      // No labels at these zoom levels (unless selected)
+      if (label) label.visible(isSelected)
       if (botLabel) botLabel.visible(false)
     } else {
-      if (label) label.visible(true)
-      if (botLabel) botLabel.visible(lod === 'icon+label')
+      // icon+label: show label only if nearest neighbor > 40px (squared) or selected
+      let nearestDistSq = Infinity
+      for (let j = 0; j < positions.length; j++) {
+        if (i === j) continue
+        const dx = positions[i]!.sx - positions[j]!.sx
+        const dy = positions[i]!.sy - positions[j]!.sy
+        const dSq = dx * dx + dy * dy
+        if (dSq < nearestDistSq) nearestDistSq = dSq
+      }
+
+      const showLabel = isSelected || nearestDistSq > MIN_LABEL_DIST_SQ
+      if (label) label.visible(showLabel)
+      if (botLabel) botLabel.visible(showLabel)
     }
-  })
+  }
+
+  // Stacked plant detection — add/update count badges
+  updateStackedBadges(positions, stageScale)
+
   plantsLayer.batchDraw()
+}
+
+/**
+ * Find plants within STACK_THRESHOLD screen pixels of each other and add
+ * count badges to the topmost plant in each cluster.
+ */
+function updateStackedBadges(
+  positions: { group: Konva.Group; sx: number; sy: number }[],
+  _stageScale: number,
+): void {
+  // Remove all existing badges first
+  for (const p of positions) {
+    const existing = p.group.find('.stack-badge')
+    for (const node of existing) node.destroy()
+    // Clear stale stack data attr
+    p.group.setAttr('data-stack-count', null)
+  }
+
+  if (positions.length < 2) return
+
+  // Simple single-linkage clustering from the first (anchor) plant
+  const visited = new Set<number>()
+
+  for (let i = 0; i < positions.length; i++) {
+    if (visited.has(i)) continue
+
+    const stack: number[] = [i]
+    visited.add(i)
+
+    for (let j = i + 1; j < positions.length; j++) {
+      if (visited.has(j)) continue
+      const dx = positions[i]!.sx - positions[j]!.sx
+      const dy = positions[i]!.sy - positions[j]!.sy
+      if (dx * dx + dy * dy < STACK_THRESHOLD_SQ) {
+        stack.push(j)
+        visited.add(j)
+      }
+    }
+
+    if (stack.length < 2) continue
+
+    // Badge the anchor (first/topmost) plant in the cluster
+    const g = positions[i]!.group
+    g.setAttr('data-stack-count', stack.length)
+
+    // Badge background circle — positioned in screen-pixel space (group is
+    // already counter-scaled, so plain pixel values work)
+    const badgeRadius = 7
+    const offsetX = CIRCLE_SCREEN_PX + 2
+    const offsetY = -(CIRCLE_SCREEN_PX + 2)
+
+    const bgCircle = new Konva.Circle({
+      name: 'stack-badge',
+      x: offsetX,
+      y: offsetY,
+      radius: badgeRadius,
+      fill: STACK_BADGE_BG,
+      listening: false,
+    })
+
+    const badgeText = new Konva.Text({
+      name: 'stack-badge',
+      text: String(stack.length),
+      fontSize: 9,
+      fontFamily: 'Inter, system-ui, sans-serif',
+      fill: STACK_BADGE_FG,
+      listening: false,
+      align: 'center',
+      verticalAlign: 'middle',
+    })
+    // Center text on the badge circle
+    badgeText.x(offsetX - badgeText.width() / 2)
+    badgeText.y(offsetY - badgeText.height() / 2)
+
+    g.add(bgCircle)
+    g.add(badgeText)
+  }
 }
 
 /**
@@ -214,10 +334,7 @@ export async function updatePlantLabelsForLocale(
     const commonName = nameMap[canonical] ?? null
     g.setAttr('data-common-name', commonName ?? '')
 
-    const parts = canonical.split(' ')
-    const abbreviation = parts.length >= 2
-      ? `${parts[0]![0]}. ${parts[1]!.slice(0, 3)}.`
-      : canonical.slice(0, 6)
+    const abbreviation = abbreviateCanonical(canonical)
 
     // Update primary label
     const label = g.findOne('.plant-label') as Konva.Text | undefined

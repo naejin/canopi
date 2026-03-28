@@ -11,6 +11,8 @@ import { autosaveDesign, loadDesign } from '../../ipc/design'
 import { CanvasEngine, setCanvasEngine, canvasEngine } from '../../canvas/engine'
 import { CanvasToolbar } from '../canvas/CanvasToolbar'
 import { ZoomControls } from '../canvas/ZoomControls'
+import { DisplayModeControls } from '../canvas/DisplayModeControls'
+import { DisplayLegend } from '../canvas/DisplayLegend'
 import { WelcomeScreen } from '../shared/WelcomeScreen'
 import styles from './Panels.module.css'
 
@@ -112,6 +114,8 @@ export function CanvasPanel() {
         <div ref={rulerOverlayRef} className={styles.rulerOverlay} />
 
         {!hasDesign && <WelcomeScreen />}
+        {hasDesign && <DisplayModeControls />}
+        {hasDesign && <DisplayLegend />}
         {hasDesign && <ZoomControls />}
       </div>
     </div>

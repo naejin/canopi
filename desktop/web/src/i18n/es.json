@@ -4,7 +4,8 @@
     "canvas": "Lienzo de diseño",
     "worldMap": "Mapa mundial",
     "learning": "Aprendizaje",
-    "savedDesigns": "Diseños guardados"
+    "savedDesigns": "Diseños guardados",
+    "favorites": "Favoritos"
   },
   "plantDb": {
     "title": "Base de plantas",
@@ -58,7 +59,12 @@
     "setAsStamp": "Usar como sello",
     "error": "Error",
     "retry": "Reintentar",
-    "filterMedicinal": "Medicinal"
+    "filterMedicinal": "Medicinal",
+    "sunTolerance_full_sun": "Pleno sol",
+    "sunTolerance_semi_shade": "Semisombra",
+    "sunTolerance_full_shade": "Sombra completa",
+    "secondaryNames": "También conocido como",
+    "andMore": "+{{count}} más"
   },
   "health": {
     "plantDbMissing": "Base de datos de plantas no encontrada. Ejecute prepare-db.py. La búsqueda de plantas no está disponible.",
@@ -124,13 +130,23 @@
     },
     "display": {
       "label": "Modo de visualización",
+      "colorBy": "Colorear por",
+      "sizeBy": "Mostrar",
       "default": "Predeterminado",
       "canopy": "Dosel",
-      "stratum": "Por estrato",
-      "hardiness": "Por rusticidad",
-      "lifecycle": "Por ciclo de vida",
-      "nitrogen": "Por fijación N",
-      "edibility": "Por comestibilidad"
+      "canopySpread": "Extensión del dosel",
+      "legend": "Leyenda",
+      "stratum": "Estrato",
+      "hardiness": "Rusticidad",
+      "lifecycle": "Ciclo de vida",
+      "nitrogen": "Nitrógeno",
+      "edibility": "Comestibilidad",
+      "none": "Ninguno"
+    },
+    "plantTooltip": {
+      "stratum": "Estrato",
+      "height": "Altura",
+      "family": "Familia"
     },
     "group": {
       "group": "Agrupar",
@@ -499,7 +515,13 @@
     "ellenbergMoisture": "Humedad (E)",
     "ellenbergReaction": "Reacción (E)",
     "ellenbergNitrogen": "Nitrógeno (E)",
-    "ellenbergSalt": "Sal (E)"
+    "ellenbergSalt": "Sal (E)",
+    "photos": "Fotos",
+    "photoSource": "Fuente: {{source}}",
+    "noPhotos": "No hay fotos disponibles",
+    "photoCount": "{{current}} de {{total}}",
+    "photoNext": "Siguiente foto",
+    "photoPrev": "Foto anterior"
   },
   "chips": {
     "fruitTrees": "Árboles frutales",
@@ -593,6 +615,29 @@
     "field.scented": "Perfumado",
     "field.propagatedBySeed": "Propagado por semilla",
     "field.propagatedByCuttings": "Propagado por esqueje",
-    "field.coldStratificationRequired": "Estratificación fría"
+    "field.coldStratificationRequired": "Estratificación fría",
+    "stratum_emergent": "Emergente",
+    "stratum_high": "Dosel alto",
+    "stratum_low": "Bajo / suelo",
+    "stratum_medium": "Dosel medio",
+    "lifeCycle_Annual": "Anual",
+    "lifeCycle_Biennial": "Bienal",
+    "lifeCycle_Perennial": "Perenne",
+    "lifeCycle_Multiple": "Múltiple",
+    "nitrogenNonFixer": "No fijador",
+    "notEdible": "No comestible",
+    "growthRate_Fast": "Rápido",
+    "growthRate_Medium": "Medio",
+    "growthRate_Slow": "Lento",
+    "removeChip": "Quitar {{label}}",
+    "sliderMin": "mínimo",
+    "sliderMax": "máximo",
+    "sliderThreshold": "umbral mínimo",
+    "noMinimum": "Sin mínimo"
+  },
+  "favorites": {
+    "empty": "Aún no hay favoritos",
+    "emptyHint": "Marca plantas desde el panel de búsqueda para añadirlas aquí",
+    "dragHint": "Arrastra al lienzo para colocar"
   }
 }

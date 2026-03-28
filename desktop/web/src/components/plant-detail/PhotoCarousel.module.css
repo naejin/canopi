@@ -1,0 +1,160 @@
+/* ── Photo carousel ──────────────────────────────────────────────────────── */
+
+.carousel {
+  width: 100%;
+  margin-bottom: var(--space-2);
+}
+
+.imageContainer {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+}
+
+.image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+
+.imageLoaded {
+  opacity: 1;
+}
+
+/* ── Loading shimmer ─────────────────────────────────────────────────────── */
+
+.loading {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    100deg,
+    var(--color-surface) 30%,
+    var(--color-bg) 50%,
+    var(--color-surface) 70%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Placeholder (no photos) ─────────────────────────────────────────────── */
+
+.placeholder {
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  margin-bottom: var(--space-2);
+}
+
+.placeholderIcon {
+  color: var(--color-border);
+  opacity: 0.6;
+}
+
+/* ── Source badge — sits on the photo ────────────────────────────────────── */
+
+.sourceBadge {
+  position: absolute;
+  bottom: var(--space-2);
+  right: var(--space-2);
+  font-size: 9px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-bg);
+  background: var(--color-text);
+  opacity: 0.55;
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+}
+
+/* ── Nav arrows — clean chevrons, no circle background ───────────────────── */
+
+.navBtn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 48px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-bg);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+  padding: 0;
+  text-shadow: 0 1px 3px var(--color-text);
+}
+
+.imageContainer:hover .navBtn {
+  opacity: 0.8;
+}
+
+.navBtn:hover {
+  opacity: 1 !important;
+}
+
+.navBtn:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.navPrev { left: var(--space-1); }
+.navNext { right: var(--space-1); }
+
+/* ── Dot indicators ──────────────────────────────────────────────────────── */
+
+.dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: var(--space-2);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: none;
+  background: var(--color-border);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s, transform 0.15s;
+}
+
+.dot:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.dot:hover {
+  background: var(--color-text-muted);
+}
+
+.dotActive {
+  background: var(--color-primary);
+  transform: scale(1.15);
+}

@@ -44,7 +44,7 @@ export function FilterStrip({ onMoreFilters }: { onMoreFilters: () => void }) {
           {(opts?.strata ?? []).map((s) => (
             <FilterChip
               key={s}
-              label={s}
+              label={t(`filters.stratum_${s}`, s)}
               color="--color-nitrogen"
               active={filters.stratum?.includes(s) ?? false}
               onClick={() => patchFilters({ stratum: toggleArrayValue(filters.stratum, s) })}
@@ -111,7 +111,7 @@ export function FilterStrip({ onMoreFilters }: { onMoreFilters: () => void }) {
             onChangeLow={(v) => patchFilters({ height_min: v })}
             onChangeHigh={(v) => patchFilters({ height_max: v })}
             step={0.5}
-            formatLabel={(v) => `${v}m`}
+            formatLabel={(v) => `${v} m`}
             ariaLabel={t('filters.height')}
           />
         </div>

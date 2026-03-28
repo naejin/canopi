@@ -154,7 +154,7 @@ def copy_supporting_tables(dst: sqlite3.Connection, tables: list[str]):
 
 
 def build_search_index(dst: sqlite3.Connection):
-    """Build unified FTS5 search index."""
+    """Build weighted FTS5 search index with 5 columns for BM25 ranking."""
     # Step 1: Pre-aggregate common names per species
     dst.execute("""
         CREATE TEMP TABLE _cn_agg AS
@@ -164,28 +164,36 @@ def build_search_index(dst: sqlite3.Connection):
     """)
     print("  -> Common names aggregated")
 
-    # Step 2: Build search text table
+    # Step 2: Build search text table with separate weighted columns
     dst.execute("""
         CREATE TABLE species_search_text (
             species_rowid INTEGER PRIMARY KEY,
-            all_text TEXT NOT NULL
+            canonical_name TEXT NOT NULL DEFAULT '',
+            common_names TEXT NOT NULL DEFAULT '',
+            family_genus TEXT NOT NULL DEFAULT '',
+            uses_text TEXT NOT NULL DEFAULT '',
+            other_text TEXT NOT NULL DEFAULT ''
         )
     """)
     dst.execute("""
-        INSERT INTO species_search_text (species_rowid, all_text)
+        INSERT INTO species_search_text (
+            species_rowid, canonical_name, common_names, family_genus, uses_text, other_text
+        )
         SELECT s.rowid,
-            COALESCE(s.canonical_name, '') || ' ' ||
-            COALESCE(s.common_name, '') || ' ' ||
-            COALESCE(s.family, '') || ' ' ||
-            COALESCE(s.genus, '') || ' ' ||
-            COALESCE(s.edible_uses, '') || ' ' ||
-            COALESCE(s.medicinal_uses, '') || ' ' ||
-            COALESCE(s.other_uses, '') || ' ' ||
-            COALESCE(s.conservation_status, '') || ' ' ||
-            COALESCE(s.habitats, '') || ' ' ||
-            COALESCE(s.physical_characteristics, '') || ' ' ||
-            COALESCE(s.special_uses, '') || ' ' ||
-            COALESCE(ca.all_names, '')
+            COALESCE(s.canonical_name, ''),
+            TRIM(COALESCE(s.common_name, '') || ' ' || COALESCE(ca.all_names, '')),
+            TRIM(COALESCE(s.family, '') || ' ' || COALESCE(s.genus, '')),
+            TRIM(
+                COALESCE(s.edible_uses, '') || ' ' ||
+                COALESCE(s.medicinal_uses, '') || ' ' ||
+                COALESCE(s.other_uses, '') || ' ' ||
+                COALESCE(s.special_uses, '')
+            ),
+            TRIM(
+                COALESCE(s.conservation_status, '') || ' ' ||
+                COALESCE(s.habitats, '') || ' ' ||
+                COALESCE(s.physical_characteristics, '')
+            )
         FROM species s
         LEFT JOIN _cn_agg ca ON ca.species_id = s.id
     """)
@@ -193,10 +201,16 @@ def build_search_index(dst: sqlite3.Connection):
     sst_count = dst.execute("SELECT COUNT(*) FROM species_search_text").fetchone()[0]
     print(f"  -> {sst_count:,} species search text rows")
 
-    # Step 3: Build FTS5 on the search text
+    # Step 3: Build FTS5 with weighted columns for BM25 ranking
+    # Column order: canonical_name, common_names, family_genus, uses_text, other_text
+    # BM25 weights applied at query time: (10, 8, 5, 1, 1)
     dst.execute("""
         CREATE VIRTUAL TABLE species_search_fts USING fts5(
-            all_text,
+            canonical_name,
+            common_names,
+            family_genus,
+            uses_text,
+            other_text,
             content='species_search_text',
             content_rowid='species_rowid',
             tokenize='unicode61 remove_diacritics 2'
@@ -207,7 +221,7 @@ def build_search_index(dst: sqlite3.Connection):
     test = dst.execute(
         "SELECT COUNT(*) FROM species_search_fts WHERE species_search_fts MATCH 'pommier'"
     ).fetchone()[0]
-    print(f"  -> Unified FTS5 built, 'pommier' matches: {test}")
+    print(f"  -> Weighted FTS5 built (5 columns), 'pommier' matches: {test}")
     dst.commit()
 
 

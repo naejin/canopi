@@ -1,7 +1,7 @@
 # Canopi Roadmap
 
 **Last updated**: 2026-03-28
-**Current state**: Phases 0-2.1 complete. Phase 3.0/3.0b/3.0c/3.5 complete (data sync). Phase 3.1 complete (detail card). Phase 3.2 complete (filter UI redesign: FilterStrip + MoreFiltersPanel + dynamic filters). Phase 3.7 complete (dirty indicator). Phase 3.8 complete (DB robustness). Phase 3.11 complete (OS locale detection). Next: 3.3 (search quality), 3.4 (plant density), 3.5.5 (plant photos).
+**Current state**: Phases 0-2.1 complete. All Phase 3 complete (MVP). Phase 3.3 complete (FTS5 weighted columns + BM25 ranking, multiple common names, filter translation audit). Phase 3.4 complete (plant density: LOD labels, hover tooltip, stacked badges, dense planting zoom). Phase 3.5.5 complete (photo carousel + Rust image cache). Phase 3.6 complete (display mode controls + floating legend). Phase 3.9 complete (favorites panel). Phase 3.10 complete (copy-paste). Next: Tauri MCP live verification, then Phase 4 (terrain & location).
 
 ---
 
@@ -183,7 +183,9 @@ Active "More" filters display as removable chips below the always-visible filter
 
 ---
 
-### 3.3 — Search Quality & Translated Values
+### 3.3 — Search Quality & Translated Values ✅
+
+**Status**: Complete (2026-03-28). FTS5 restructured from single `all_text` blob to 5 weighted columns (canonical_name, common_names, family_genus, uses_text, other_text). BM25 ranking with weights 10/8/5/1/1. Multiple common names display in detail card header. Filter translation audit: 6 raw English leaks fixed across FilterStrip, ActiveChips, FilterChip, RangeSlider, ThresholdSlider. All i18n keys added to 11 locales.
 
 **Why**: 11-language support is a differentiator. The `translated_values` table has 659 entries across 55 field_names in 22 language columns (11 active, 11 reserved). Use-category and pollinators translations wired in 3.1. `best_common_names` now uses `is_primary` flag (fixed in 3.1). Common names expanded to 2.4M rows with Wikidata sources. However, search ranking is poor for non-English queries (FTS5 uses a single unweighted blob), and the app only shows one "best" common name per locale when multiple exist.
 
@@ -213,7 +215,9 @@ Active "More" filters display as removable chips below the always-visible filter
 
 ---
 
-### 3.4 — Plant Density Fix
+### 3.4 — Plant Density Fix ✅
+
+**Status**: Complete (2026-03-28). LOD threshold raised to stageScale >= 5. Nearest-neighbor label density (40px threshold, labels suppressed when crowded). HTML hover tooltip with common name, botanical name, stratum, height. Stacked plant badges (5px clustering with moss-green count badges). Grid snap extended to 1cm/2cm/5cm increments. Max zoom already at 200x. Selected plants always show labels.
 
 **Why**: Dense plantings (guilds, ground cover rows, stacked plants) produce unreadable label overlap. Labels must be earned, not default. Additionally, permaculture practitioners designing herb spirals, salad beds, and ground cover layers commonly place plants at 5–10cm spacing — the current fixed screen-pixel circles and zoom range don't support this workflow.
 
@@ -247,7 +251,9 @@ Active "More" filters display as removable chips below the always-visible filter
 
 ---
 
-### 3.5.5 — Plant Photos
+### 3.5.5 — Plant Photos ✅
+
+**Status**: Complete (2026-03-28). Rust image cache module (ureq HTTP + SHA256 filenames + 500MB LRU eviction). PhotoCarousel component with 3:2 aspect ratio, fade-in, shimmer loading, nav arrows, 8px dot indicators, source badges. Stale state guard for rapid species switching. Dark mode verified. `convertFileSrc()` for WebView-safe image URLs.
 
 **Why**: A plant photo is the single highest-value element in the detail card. 60% of species now have image URLs (105K images across 175K species). Showing a photo (or slideshow for multiple) dramatically improves plant identification and card usefulness.
 
@@ -280,7 +286,9 @@ Note: no `license` or `attribution` columns in the current export. Source field 
 
 ---
 
-### 3.6 — Display Modes (Color by Value, Size by Value)
+### 3.6 — Display Modes (Color by Value, Size by Value) ✅
+
+**Status**: Complete (2026-03-28). DisplayModeControls floating toolbar with custom dropdowns (Display: Default/Canopy Spread, Color by: None/Stratum/Hardiness/Life Cycle/Nitrogen/Edibility). DisplayLegend floating card. Visual cohesion with ZoomControls (matched surface treatment, opacity, transitions). Escape-to-close, keyboard nav. Rendering logic was already in display-modes.ts — this phase added the UI.
 
 **Why**: Visual guild analysis. Color plants by stratum/moisture/nitrogen/growth-rate to instantly see ecological patterns. Size by height/width to visualize mature canopy.
 
@@ -329,7 +337,9 @@ Note: no `license` or `attribution` columns in the current export. Source field 
 
 ---
 
-### 3.9 — Favorites Panel
+### 3.9 — Favorites Panel ✅
+
+**Status**: Complete (2026-03-28). Backend was already implemented (user_db favorites table, toggle/get/recently_viewed IPC). Added: `"favorites"` to Panel/SidePanel types, star icon in PanelBar, FavoritesPanel component with PlantRow reuse, detail card integration, empty state with warm ochre star icon, accessibility (aria-live, aria-busy, role=list). Critique pass refined typography, spacing, count badge to match design system.
 
 **Why**: A permaculture designer has 20-30 go-to plants they use across every design. Searching 175K species each time is wasteful. The star button already exists on plant rows but there's no dedicated view to access starred plants quickly.
 
@@ -344,7 +354,9 @@ Note: no `license` or `attribution` columns in the current export. Source field 
 
 ---
 
-### 3.10 — Copy-Paste (Ctrl+C/V/D)
+### 3.10 — Copy-Paste (Ctrl+C/V/D) ✅
+
+**Status**: Complete (discovered pre-existing implementation during 2026-03-28 MVP audit). Internal clipboard in engine.ts:1072-1176 (copyToClipboard, pasteFromClipboard with new UUIDs, duplicateSelected). Keyboard shortcuts in manager.ts:123-134 (Ctrl+C/V/D). Undoable via BatchCommand.
 
 **Why**: Table stakes for any design tool. Users expect to copy a plant or zone and paste it elsewhere. Currently missing entirely.
 
@@ -384,17 +396,18 @@ Note: no `license` or `attribution` columns in the current export. Source field 
 
 All of Phase 3 (3.0 through 3.10) constitutes the MVP. After completion:
 
-- [ ] End-to-end flow: Launch, welcome screen, New Design, search plants, apply filters (visible + "More"), drag plants to canvas, draw zones, display modes (color/size by value), save, reopen
-- [ ] All 11 languages: translated categorical values, common names, UI strings
-- [ ] OS locale auto-detection on first launch
-- [ ] Both themes: light and dark mode fully functional including canvas elements
-- [ ] Plant density: clean dots at overview, labels on zoom, hover tooltips, stacked badges
-- [ ] Detail card: all 173 columns organized in collapsible sections, with plant photos
-- [ ] Plant photos: image carousel in detail card, offline cache, source badges
-- [ ] Favorites: star plants, access from dedicated panel, drag to canvas
-- [ ] Copy-paste: Ctrl+C/V/D for all canvas objects with undo/redo
-- [ ] Dirty indicator: visible in title bar, prompt on close with unsaved changes
-- [ ] DB resilience: schema contract validated, forward/backward compatible
+- [x] End-to-end flow: Launch, welcome screen, New Design, search plants, apply filters (visible + "More"), drag plants to canvas, draw zones, display modes (color/size by value), save, reopen
+- [x] All 11 languages: translated categorical values, common names, UI strings
+- [x] OS locale auto-detection on first launch
+- [x] Both themes: light and dark mode fully functional including canvas elements
+- [x] Plant density: clean dots at overview, labels on zoom, hover tooltips, stacked badges
+- [x] Detail card: all 173 columns organized in collapsible sections, with plant photos
+- [x] Plant photos: image carousel in detail card, offline cache, source badges
+- [x] Favorites: star plants, access from dedicated panel, drag to canvas
+- [x] Copy-paste: Ctrl+C/V/D for all canvas objects with undo/redo
+- [x] Dirty indicator: visible in title bar, prompt on close with unsaved changes
+- [x] DB resilience: schema contract validated, forward/backward compatible
+- [ ] Tauri MCP live verification: visual + interaction testing across all features (pending reconnection)
 
 ---
 
@@ -806,6 +819,11 @@ These features are built on the Phase 3-7 foundation.
 - Plant collections (saved filter presets / plant lists)
 - Plant comparison (side-by-side detail cards)
 - Layer panel (named layer management)
+
+### Code Quality Debt
+- Move `STRATUM_I18N_KEY` from `canvas/plants.ts` to a shared constants module (`types/species.ts` or `constants/species.ts`) — PlantRow imports from the canvas layer purely for a data constant, creating a layer inversion
+- Extract shared dropdown component from `DisplayModeControls.tsx` and `TitleBar.tsx` `LocalePicker` — both implement the same ~20-line click-outside/Escape/aria pattern independently. Also fix `LocalePicker` to use `pointerup` (currently uses `mousedown`, violating CLAUDE.md convention)
+- Cache stacked plant badges in `updatePlantsLOD` instead of destroy/recreate on every zoom event — toggle visibility and update text when count changes, skip the destroy pass when no badges exist
 
 ---
 

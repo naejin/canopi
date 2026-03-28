@@ -4,7 +4,8 @@
     "canvas": "Ontwerpcanvas",
     "worldMap": "Wereldkaart",
     "learning": "Leren",
-    "savedDesigns": "Opgeslagen ontwerpen"
+    "savedDesigns": "Opgeslagen ontwerpen",
+    "favorites": "Favorieten"
   },
   "plantDb": {
     "title": "Plantendatabase",
@@ -58,7 +59,12 @@
     "setAsStamp": "Als stempel instellen",
     "error": "Fout",
     "retry": "Opnieuw proberen",
-    "filterMedicinal": "Medicinaal"
+    "filterMedicinal": "Medicinaal",
+    "sunTolerance_full_sun": "Volle zon",
+    "sunTolerance_semi_shade": "Halfschaduw",
+    "sunTolerance_full_shade": "Volle schaduw",
+    "secondaryNames": "Ook bekend als",
+    "andMore": "+{{count}} meer"
   },
   "health": {
     "plantDbMissing": "Plantendatabase niet gevonden. Voer prepare-db.py uit om deze te genereren. Planten zoeken is niet beschikbaar.",
@@ -124,13 +130,23 @@
     },
     "display": {
       "label": "Weergavemodus",
+      "colorBy": "Kleur op",
+      "sizeBy": "Weergave",
       "default": "Standaard",
       "canopy": "Kroonlaag",
-      "stratum": "Op stratum",
-      "hardiness": "Op winterhardheid",
-      "lifecycle": "Op levenscyclus",
-      "nitrogen": "Op N-binding",
-      "edibility": "Op eetbaarheid"
+      "canopySpread": "Kroonspreiding",
+      "legend": "Legenda",
+      "stratum": "Stratum",
+      "hardiness": "Winterhardheid",
+      "lifecycle": "Levenscyclus",
+      "nitrogen": "Stikstof",
+      "edibility": "Eetbaarheid",
+      "none": "Geen"
+    },
+    "plantTooltip": {
+      "stratum": "Stratum",
+      "height": "Hoogte",
+      "family": "Familie"
     },
     "group": {
       "group": "Groeperen",
@@ -499,7 +515,13 @@
     "ellenbergMoisture": "Vocht (E)",
     "ellenbergReaction": "Reactie (E)",
     "ellenbergNitrogen": "Stikstof (E)",
-    "ellenbergSalt": "Zout (E)"
+    "ellenbergSalt": "Zout (E)",
+    "photos": "Foto's",
+    "photoSource": "Bron: {{source}}",
+    "noPhotos": "Geen foto's beschikbaar",
+    "photoCount": "{{current}} van {{total}}",
+    "photoNext": "Volgende foto",
+    "photoPrev": "Vorige foto"
   },
   "chips": {
     "fruitTrees": "Fruitbomen",
@@ -593,6 +615,29 @@
     "field.scented": "Geurend",
     "field.propagatedBySeed": "Vermeerdering door zaad",
     "field.propagatedByCuttings": "Vermeerdering door stek",
-    "field.coldStratificationRequired": "Koudestratificatie"
+    "field.coldStratificationRequired": "Koudestratificatie",
+    "stratum_emergent": "Emergent",
+    "stratum_high": "Hoog bladerdak",
+    "stratum_low": "Laag / bodem",
+    "stratum_medium": "Midden bladerdak",
+    "lifeCycle_Annual": "Eenjarig",
+    "lifeCycle_Biennial": "Tweejarig",
+    "lifeCycle_Perennial": "Meerjarig",
+    "lifeCycle_Multiple": "Meervoudig",
+    "nitrogenNonFixer": "Geen stikstofbinder",
+    "notEdible": "Niet eetbaar",
+    "growthRate_Fast": "Snel",
+    "growthRate_Medium": "Gemiddeld",
+    "growthRate_Slow": "Langzaam",
+    "removeChip": "{{label}} verwijderen",
+    "sliderMin": "minimum",
+    "sliderMax": "maximum",
+    "sliderThreshold": "minimumdrempel",
+    "noMinimum": "Geen minimum"
+  },
+  "favorites": {
+    "empty": "Nog geen favorieten",
+    "emptyHint": "Markeer planten in het zoekpaneel om ze hier toe te voegen",
+    "dragHint": "Sleep naar canvas om te plaatsen"
   }
 }

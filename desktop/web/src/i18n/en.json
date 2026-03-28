@@ -4,7 +4,8 @@
     "canvas": "Design Canvas",
     "worldMap": "World Map",
     "learning": "Learning",
-    "savedDesigns": "Saved Designs"
+    "savedDesigns": "Saved Designs",
+    "favorites": "Favorites"
   },
   "plantDb": {
     "title": "Plant Database",
@@ -61,7 +62,9 @@
     "filterMedicinal": "Medicinal",
     "sunTolerance_full_sun": "Full sun",
     "sunTolerance_semi_shade": "Semi-shade",
-    "sunTolerance_full_shade": "Full shade"
+    "sunTolerance_full_shade": "Full shade",
+    "secondaryNames": "Also known as",
+    "andMore": "+{{count}} more"
   },
   "health": {
     "plantDbMissing": "Plant database not found. Run prepare-db.py to generate it. Plant search is unavailable.",
@@ -127,13 +130,23 @@
     },
     "display": {
       "label": "Display Mode",
+      "colorBy": "Color by",
+      "sizeBy": "Display",
       "default": "Default",
       "canopy": "Canopy",
-      "stratum": "By Stratum",
-      "hardiness": "By Hardiness",
-      "lifecycle": "By Lifecycle",
-      "nitrogen": "By N-Fixation",
-      "edibility": "By Edibility"
+      "canopySpread": "Canopy spread",
+      "legend": "Legend",
+      "stratum": "Stratum",
+      "hardiness": "Hardiness",
+      "lifecycle": "Life cycle",
+      "nitrogen": "Nitrogen",
+      "edibility": "Edibility",
+      "none": "None"
+    },
+    "plantTooltip": {
+      "stratum": "Stratum",
+      "height": "Height",
+      "family": "Family"
     },
     "group": {
       "group": "Group",
@@ -502,7 +515,13 @@
     "ellenbergMoisture": "Moisture (E)",
     "ellenbergReaction": "Reaction (E)",
     "ellenbergNitrogen": "Nitrogen (E)",
-    "ellenbergSalt": "Salt (E)"
+    "ellenbergSalt": "Salt (E)",
+    "photos": "Photos",
+    "photoSource": "Source: {{source}}",
+    "noPhotos": "No photos available",
+    "photoCount": "{{current}} of {{total}}",
+    "photoNext": "Next photo",
+    "photoPrev": "Previous photo"
   },
   "chips": {
     "fruitTrees": "Fruit trees",
@@ -585,7 +604,25 @@
     "field.scented": "Scented",
     "field.propagatedBySeed": "Propagated by seed",
     "field.propagatedByCuttings": "Propagated by cuttings",
-    "field.coldStratificationRequired": "Cold stratification"
+    "field.coldStratificationRequired": "Cold stratification",
+    "stratum_emergent": "Emergent",
+    "stratum_high": "High canopy",
+    "stratum_low": "Low / ground",
+    "stratum_medium": "Mid canopy",
+    "lifeCycle_Annual": "Annual",
+    "lifeCycle_Biennial": "Biennial",
+    "lifeCycle_Perennial": "Perennial",
+    "lifeCycle_Multiple": "Multiple",
+    "nitrogenNonFixer": "Non-fixer",
+    "notEdible": "Not edible",
+    "growthRate_Fast": "Fast",
+    "growthRate_Medium": "Medium",
+    "growthRate_Slow": "Slow",
+    "removeChip": "Remove {{label}}",
+    "sliderMin": "minimum",
+    "sliderMax": "maximum",
+    "sliderThreshold": "minimum threshold",
+    "noMinimum": "No minimum"
   },
   "titleBar": {
     "unsavedChanges": "Unsaved changes"
@@ -597,5 +634,10 @@
   },
   "sidebar": {
     "resize": "Resize sidebar"
+  },
+  "favorites": {
+    "empty": "No favorites yet",
+    "emptyHint": "Star plants from the search panel to add them here",
+    "dragHint": "Drag to canvas to place"
   }
 }

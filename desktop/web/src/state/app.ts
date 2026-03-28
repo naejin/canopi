@@ -4,13 +4,13 @@ import type { Settings } from "../types/settings";
 import { setSettings } from "../ipc/settings";
 import { gridSize, snapToGridEnabled } from "./canvas";
 
-export type Panel = "plant-db" | "canvas" | "world-map" | "learning";
+export type Panel = "plant-db" | "canvas" | "world-map" | "learning" | "favorites";
 
 // Panels that open as a sidebar alongside the canvas instead of replacing it.
 // World map is full-screen only.
-export type SidePanel = "plant-db" | "learning";
+export type SidePanel = "plant-db" | "learning" | "favorites";
 
-const SIDE_PANELS = new Set<Panel>(["plant-db", "learning"]);
+const SIDE_PANELS = new Set<Panel>(["plant-db", "learning", "favorites"]);
 
 export const activePanel = signal<Panel>("canvas");
 export const locale = signal<"en" | "fr" | "es" | "pt" | "it" | "zh" | "de" | "ja" | "ko" | "nl" | "ru">("en");

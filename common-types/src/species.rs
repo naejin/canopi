@@ -248,6 +248,12 @@ pub struct SpeciesExternalLink {
     pub url: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct CommonNameEntry {
+    pub name: String,
+    pub is_primary: bool,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
 pub struct SpeciesFilter {
     pub hardiness_min: Option<i32>,

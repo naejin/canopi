@@ -26,7 +26,7 @@ export function ActiveChips() {
     for (const s of filters.stratum) {
       chips.push({
         key: `stratum-${s}`,
-        label: s,
+        label: t(`filters.stratum_${s}`, s),
         color: '--color-nitrogen',
         onDismiss: () => {
           const next = (filters.stratum ?? []).filter((v) => v !== s);
@@ -98,7 +98,7 @@ export function ActiveChips() {
     for (const lc of filters.life_cycle) {
       chips.push({
         key: `lc-${lc}`,
-        label: lc,
+        label: t(`filters.lifeCycle_${lc}`, lc),
         color: '--color-family',
         onDismiss: () => {
           const next = (filters.life_cycle ?? []).filter((v) => v !== lc);
@@ -112,7 +112,7 @@ export function ActiveChips() {
     for (const gr of filters.growth_rate) {
       chips.push({
         key: `gr-${gr}`,
-        label: gr,
+        label: t(`filters.growthRate_${gr}`, gr),
         color: '--color-family',
         onDismiss: () => {
           const next = (filters.growth_rate ?? []).filter((v) => v !== gr);

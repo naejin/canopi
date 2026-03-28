@@ -443,9 +443,11 @@ impl QueryBuilder {
         }
 
         // ── ORDER BY ─────────────────────────────────────────────────────────
+        // BM25 weights: canonical_name=10, common_names=8, family_genus=5, uses_text=1, other_text=1
+        // BM25 returns negative values (more negative = more relevant), so ASC ordering is correct.
         let order_by = match self.sort {
             Sort::Relevance if fts_join.is_some() => {
-                "ORDER BY species_search_fts.rank, s.canonical_name".to_owned()
+                "ORDER BY bm25(species_search_fts, 10, 8, 5, 1, 1), s.canonical_name".to_owned()
             }
             _ => format!("ORDER BY {}, s.canonical_name", sort_column(&self.sort)),
         };

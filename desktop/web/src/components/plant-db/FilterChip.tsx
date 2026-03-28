@@ -1,3 +1,4 @@
+import { t } from '../../i18n'
 import styles from './FilterChip.module.css'
 
 interface FilterChipProps {
@@ -29,7 +30,7 @@ export function FilterChip({ label, color, active, onDismiss, onClick }: FilterC
           type="button"
           className={styles.chipDismiss}
           onClick={(e) => { e.stopPropagation(); onDismiss(); }}
-          aria-label={`Remove ${label}`}
+          aria-label={t('filters.removeChip', { label })}
           tabIndex={-1}
         >
           ×

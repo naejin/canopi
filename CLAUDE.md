@@ -25,7 +25,7 @@ canopi/
 ## Current Layout (Post UI Overhaul)
 - **Left**: Canvas toolbar (38px) — drawing tools only (Select, Hand, Rectangle, Text + Grid/Snap/Rulers toggles)
 - **Center**: Canvas workspace
-- **Right**: PanelBar (36px, always visible) + sliding panels (plant search, learning)
+- **Right**: PanelBar (36px, always visible) + sliding panels (plant search, favorites, learning)
 - **Title bar**: Logo + file name + lang/theme toggle + window controls
 - **No activity bar** — removed, navigation via PanelBar
 - **No status bar** — removed, controls moved to title bar
@@ -40,7 +40,7 @@ canopi/
 ## MVP Feature Pruning (active)
 These features are **disabled in UI but code stays on disk**:
 - Tools: Ellipse, Polygon, Freeform, Line, Measure, Dimension, Arrow, Callout, Pattern Fill, Spacing
-- Overlays: Minimap, Celestial dial, Consortium visual, MapLibre/location, Display modes
+- Overlays: Minimap, Celestial dial, Consortium visual, MapLibre/location
 - Panels: Bottom panel (Timeline/Budget/Consortium tabs), Layer panel, World Map, Learning (placeholder only)
 - Export: GeoJSON, PNG/SVG export commands
 - Compass: import commented out in `engine.ts`
@@ -53,6 +53,9 @@ These features are **disabled in UI but code stays on disk**:
 2. For UI work: read `.interface-design/system.md` for design tokens and patterns. Load `/interface-design:init` only for major new UI surfaces (new panels, new workflows, new component patterns)
 3. Use taoki `xray`/`ripple` to understand file structure and blast radius before modifying
 4. For multi-phase work with subagents: define a **file ownership matrix** (one writer per file at any time), keep **Tauri MCP in main context only** (single WebView session), and decide UI control types in the plan before building alternatives
+5. For multi-feature i18n work: **batch all i18n keys in one early phase** to prevent 11-file merge conflicts across parallel agents
+6. Before planning new features: **explore the codebase for existing implementations** — code may already exist (e.g., copy-paste, favorites backend, display mode rendering were all discovered pre-built during MVP planning)
+7. Run `/simplify` after implementation — converges in ~3 rounds: R1 structural, R2 duplication exposed by R1 fixes, R3 confirms convergence
 
 ### Banned Patterns (enforced by plugin hooks)
 - **No React**: Import from `preact`, `preact/hooks`, `preact/compat` — never `react`
@@ -144,6 +147,8 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 ## Gotchas
 
 ### Tauri v2
+- **No `convertFileSrc()` for local files**: The `asset://` protocol is not scoped in `capabilities/main-window.json`. Serving local files to the WebView requires base64 data URLs from Rust. Adding `fs:allow-read` scope would fix it properly but needs capability config work
+- **`ureq` for blocking HTTP in Tauri commands**: Use `ureq` (not `reqwest`) — lightweight, no async runtime needed, fits Tauri's sync command thread pool. Already in `desktop/Cargo.toml`
 - **`tauri.conf.json` beforeDevCommand path**: Runs from project root. Uses `npm run --prefix desktop/web dev`, NOT `npm run dev`
 - **tauri-specta**: Deferred — specta rc ecosystem has version conflicts. Using plain `generate_handler![]` until stable
 - **Emit in setup**: Events fired in `setup()` are lost — frontend JS hasn't loaded yet
@@ -198,16 +203,20 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 - **Regenerate plant DB**: `python3 scripts/prepare-db.py --export-path ~/projects/canopi-data/data/exports/<latest>.db` (outputs to `desktop/resources/canopi-core.db`). Omit `--export-path` to auto-discover latest export
 - **`prepare-db.py` fails if Tauri app is running**: The `PRAGMA journal_mode=DELETE` at finalization hits a lock. Stop the app before regenerating, or ignore the error — the DB is already built, just not optimized
 - **Filter-to-column mapping**: `SpeciesFilter.life_cycle: Vec<String>` maps to boolean columns via `query_builder.rs` (e.g. `"Annual"` → `is_annual = 1`). This preserves OR-semantics in the UI while the DB uses boolean columns. Don't change the filter type — change the query mapping
+- **Stratum DB values are lowercase**: DB stores `"emergent"`, `"high"`, `"low"`, `"medium"` — NOT `"Emergent"`, `"High canopy"`. The `STRATA_COLORS` map in `plants.ts` uses raw DB keys. Display labels come from `STRATUM_I18N_KEY` → `t()`. Never hardcode display-case stratum strings in color maps or comparisons
 - **No `sqlite3` CLI on this machine**: Use `python3 -c "import sqlite3; ..."` for DB inspection
 - **No `pip`/`pip3` on this machine**: Use `python3 -c "import ..."` for ad-hoc checks. Only stdlib modules available
 - **rusqlite feature**: Use `bundled-full` (not `bundled`) — enables FTS5 full-text search
 - **Plant DB PRAGMAs**: On read-only connections, do NOT set `journal_mode=WAL` or `query_only=true`. Only `mmap_size` and `cache_size`
 - **`translated_values` table is wide format**: 22 language columns (`value_en`, `value_fr`, `value_es`, `value_pt`, `value_it`, `value_zh`, `value_de`, `value_ja`, `value_ko`, `value_nl`, `value_ru`, `value_fi`, `value_cs`, `value_pl`, `value_sv`, `value_da`, `value_ca`, `value_uk`, `value_hr`, `value_hu`). App UI supports 11 languages; extra 11 carried in DB for future expansion. NOT a normalized table with `language`/`translated` columns. `translate_value()` in `plant_db.rs` maps locale to column name via allowlist
+- **FTS5 weighted columns**: `species_search_fts` has 5 columns: `canonical_name`, `common_names`, `family_genus`, `uses_text`, `other_text`. Ranked via `bm25(species_search_fts, 10, 8, 5, 1, 1)`. Built in `prepare-db.py build_search_index()`
 - **FTS5 MATCH syntax**: Always use full table name (`species_search_fts MATCH ?1`), never an alias
 - **FTS5 sanitization**: Strip ALL metacharacters `"()*+-^:\` — not just quotes. Empty after sanitization → skip FTS
 - **Species table name**: `species` (NOT `silver_species` as in the architecture draft)
 - **Migration versioning**: User DB uses `PRAGMA user_version` — check before adding migrations
 - **Plant DB degraded mode**: If missing/corrupt, `lib.rs` falls back to in-memory DB. Frontend short-circuits all species IPC calls when degraded
+- **`resolve_species_id()` helper**: Use `plant_db::resolve_species_id(conn, canonical_name)` for canonical→UUID lookup. Don't copy the inline pattern — it existed in 3 places before extraction
+- **Image cache**: `image_cache.rs` — `fetch_and_cache_bytes()` returns raw bytes (no redundant `fs::read`). Uses `AtomicU64` tracked size to skip dir scans. LRU eviction at 500MB. Cache dir: `~/.local/share/com.canopi.app/image-cache/`
 - **Common name lookup order**: `best_common_names` → `species_common_names` → `species.common_name`. Both `get_common_name` (single) and `get_common_names_batch` (batch) follow this order. Always use `best_common_names` first — `species_common_names` has gaps (e.g., no French entries for many species)
 - **`best_common_names` selection**: Uses `is_primary` flag from `species_common_names` (preferred), falls back to shortest non-canonical name. `prepare-db.py` uses `ROW_NUMBER()` with `is_primary DESC, LENGTH ASC`
 - **`SpeciesListItem.family/genus` are `Option<String>`**: DB columns are nullable. Non-optional `String` causes silent row drops in search and hard errors in favorites hydration
@@ -266,6 +275,9 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 - Scale bar: uses `--color-text-muted` for theme-aware rendering
 - File dialogs: JS `@tauri-apps/plugin-dialog` API, NOT Rust `blocking_*`
 - `_chromeEnabled` signal: controls grid/ruler visibility — must be a signal so effects track it
+- Display modes: `display-modes.ts` has `updatePlantDisplay()` + `getLegendEntries()`. Signals: `plantDisplayMode` (`'default'`/`'canopy'`/`'color-by'`) and `plantColorByAttr` in `state/canvas.ts`. UI controls in `DisplayModeControls.tsx` + `DisplayLegend.tsx`
+- Plant tooltip: HTML `<div>` overlay in `engine.ts` (not Konva text). `pointer-events: none`. Positioned via `stage.getAbsoluteTransform()`. Uses safe DOM methods (no innerHTML)
+- Plant LOD labels: threshold at `stageScale >= 5`. Nearest-neighbor density check (squared distances, no sqrt). Selected plants always show labels. Stacked plants get moss-green count badge
 
 ## Quality Process
 - After completing a phase or significant feature, run `/craft` with two parallel code-reviewer agents

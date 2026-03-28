@@ -1,4 +1,5 @@
 import { useCallback } from 'preact/hooks'
+import { t } from '../../i18n'
 import styles from './RangeSlider.module.css'
 
 interface RangeSliderProps {
@@ -59,7 +60,7 @@ export function RangeSlider({
           step={step}
           value={low}
           onInput={handleLow}
-          aria-label={ariaLabel ? `${ariaLabel} minimum` : 'Minimum'}
+          aria-label={ariaLabel ? `${ariaLabel} ${t('filters.sliderMin', 'minimum')}` : t('filters.sliderMin', 'minimum')}
         />
         <input
           type="range"
@@ -69,7 +70,7 @@ export function RangeSlider({
           step={step}
           value={high}
           onInput={handleHigh}
-          aria-label={ariaLabel ? `${ariaLabel} maximum` : 'Maximum'}
+          aria-label={ariaLabel ? `${ariaLabel} ${t('filters.sliderMax', 'maximum')}` : t('filters.sliderMax', 'maximum')}
         />
       </div>
       <span className={styles.bound}>{fmt(high)}</span>

@@ -1,6 +1,8 @@
+use tauri::State;
+
 use common_types::species::{
-    DynamicFilterOptions, FilterOptions, PaginatedResult, Relationship, Sort, SpeciesDetail,
-    SpeciesExternalLink, SpeciesFilter, SpeciesImage, SpeciesListItem,
+    CommonNameEntry, DynamicFilterOptions, FilterOptions, PaginatedResult, Relationship, Sort,
+    SpeciesDetail, SpeciesExternalLink, SpeciesFilter, SpeciesImage, SpeciesListItem,
 };
 
 /// Search species with optional full-text and structured filters.
@@ -166,4 +168,37 @@ pub fn get_species_external_links(
 ) -> Result<Vec<SpeciesExternalLink>, String> {
     let conn = plant_db.0.lock().unwrap_or_else(|e| e.into_inner());
     crate::db::plant_db::get_species_external_links(&conn, &canonical_name)
+}
+
+/// Returns all common names for a species in the given locale.
+#[tauri::command]
+pub fn get_locale_common_names(
+    plant_db: tauri::State<'_, crate::db::PlantDb>,
+    canonical_name: String,
+    locale: String,
+) -> Result<Vec<CommonNameEntry>, String> {
+    let conn = plant_db.0.lock().unwrap_or_else(|e| e.into_inner());
+    crate::db::plant_db::get_locale_common_names(&conn, &canonical_name, &locale)
+}
+
+/// Fetch an image from a URL, cache it to disk, and return as a base64 data URL.
+/// Uses fetch_and_cache_bytes to avoid a redundant fs::read after download.
+#[tauri::command]
+pub fn get_cached_image_url(
+    cache: State<'_, crate::image_cache::ImageCache>,
+    url: String,
+) -> Result<String, String> {
+    use base64::Engine;
+    let bytes = cache.fetch_and_cache_bytes(&url)?;
+    // Infer MIME from URL extension
+    let url_path = url.split('?').next().unwrap_or(&url);
+    let mime = match url_path.rsplit('.').next().unwrap_or("") {
+        "png" => "image/png",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "svg" => "image/svg+xml",
+        _ => "image/jpeg",
+    };
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    Ok(format!("data:{mime};base64,{b64}"))
 }

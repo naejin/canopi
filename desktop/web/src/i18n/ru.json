@@ -4,7 +4,8 @@
     "canvas": "Холст дизайна",
     "worldMap": "Карта мира",
     "learning": "Обучение",
-    "savedDesigns": "Сохранённые проекты"
+    "savedDesigns": "Сохранённые проекты",
+    "favorites": "Избранное"
   },
   "plantDb": {
     "title": "База растений",
@@ -58,7 +59,12 @@
     "setAsStamp": "Использовать как штамп",
     "error": "Ошибка",
     "retry": "Повторить",
-    "filterMedicinal": "Лекарственное"
+    "filterMedicinal": "Лекарственное",
+    "sunTolerance_full_sun": "Полное солнце",
+    "sunTolerance_semi_shade": "Полутень",
+    "sunTolerance_full_shade": "Полная тень",
+    "secondaryNames": "Также известно как",
+    "andMore": "+{{count}} ещё"
   },
   "health": {
     "plantDbMissing": "База растений не найдена. Запустите prepare-db.py для её создания. Поиск растений недоступен.",
@@ -124,13 +130,23 @@
     },
     "display": {
       "label": "Режим отображения",
+      "colorBy": "Окрасить по",
+      "sizeBy": "Отображение",
       "default": "По умолчанию",
       "canopy": "Полог",
-      "stratum": "По ярусу",
-      "hardiness": "По морозостойкости",
-      "lifecycle": "По жизненному циклу",
-      "nitrogen": "По азотофиксации",
-      "edibility": "По съедобности"
+      "canopySpread": "Проекция кроны",
+      "legend": "Легенда",
+      "stratum": "Ярус",
+      "hardiness": "Зимостойкость",
+      "lifecycle": "Жизненный цикл",
+      "nitrogen": "Азот",
+      "edibility": "Съедобность",
+      "none": "Нет"
+    },
+    "plantTooltip": {
+      "stratum": "Ярус",
+      "height": "Высота",
+      "family": "Семейство"
     },
     "group": {
       "group": "Группировать",
@@ -499,7 +515,13 @@
     "ellenbergMoisture": "Влажность (Э)",
     "ellenbergReaction": "Реакция (Э)",
     "ellenbergNitrogen": "Азот (Э)",
-    "ellenbergSalt": "Соль (Э)"
+    "ellenbergSalt": "Соль (Э)",
+    "photos": "Фотографии",
+    "photoSource": "Источник: {{source}}",
+    "noPhotos": "Фотографии недоступны",
+    "photoCount": "{{current}} из {{total}}",
+    "photoNext": "Следующее фото",
+    "photoPrev": "Предыдущее фото"
   },
   "chips": {
     "fruitTrees": "Плодовые деревья",
@@ -593,6 +615,29 @@
     "field.scented": "Ароматное",
     "field.propagatedBySeed": "Размножение семенами",
     "field.propagatedByCuttings": "Размножение черенками",
-    "field.coldStratificationRequired": "Холодная стратификация"
+    "field.coldStratificationRequired": "Холодная стратификация",
+    "stratum_emergent": "Сверхъярус",
+    "stratum_high": "Верхний ярус",
+    "stratum_low": "Нижний ярус / почвопокровные",
+    "stratum_medium": "Средний ярус",
+    "lifeCycle_Annual": "Однолетнее",
+    "lifeCycle_Biennial": "Двулетнее",
+    "lifeCycle_Perennial": "Многолетнее",
+    "lifeCycle_Multiple": "Несколько",
+    "nitrogenNonFixer": "Не фиксатор",
+    "notEdible": "Несъедобный",
+    "growthRate_Fast": "Быстрый",
+    "growthRate_Medium": "Средний",
+    "growthRate_Slow": "Медленный",
+    "removeChip": "Удалить {{label}}",
+    "sliderMin": "минимум",
+    "sliderMax": "максимум",
+    "sliderThreshold": "минимальный порог",
+    "noMinimum": "Без минимума"
+  },
+  "favorites": {
+    "empty": "Избранного пока нет",
+    "emptyHint": "Отметьте растения в панели поиска, чтобы добавить их сюда",
+    "dragHint": "Перетащите на холст для размещения"
   }
 }

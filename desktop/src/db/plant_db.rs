@@ -1,7 +1,8 @@
 use rusqlite::{Connection, OptionalExtension, params_from_iter};
 use common_types::species::{
-    DynamicFilterOptions, FilterOptions, FilterValue, PaginatedResult, Relationship, Sort,
-    SpeciesDetail, SpeciesExternalLink, SpeciesFilter, SpeciesImage, SpeciesListItem, SpeciesUse,
+    CommonNameEntry, DynamicFilterOptions, FilterOptions, FilterValue, PaginatedResult,
+    Relationship, Sort, SpeciesDetail, SpeciesExternalLink, SpeciesFilter, SpeciesImage,
+    SpeciesListItem, SpeciesUse,
 };
 use crate::db::query_builder::{encode_cursor, sort_column, QueryBuilder};
 
@@ -646,22 +647,24 @@ pub fn get_relationships(
     Ok(relationships)
 }
 
+/// Resolve a canonical name to its UUID species_id. Returns None if not found.
+fn resolve_species_id(conn: &Connection, canonical_name: &str) -> Result<Option<String>, String> {
+    conn.query_row(
+        "SELECT id FROM species WHERE canonical_name = ?1 LIMIT 1",
+        [canonical_name],
+        |row| row.get(0),
+    )
+    .optional()
+    .map_err(|e| format!("Failed to look up species id for '{canonical_name}': {e}"))
+}
+
 /// Returns images for a species by canonical name.
 /// Returns an empty list if the species is not found (e.g., renamed after DB rebuild).
 pub fn get_species_images(
     conn: &Connection,
     canonical_name: &str,
 ) -> Result<Vec<SpeciesImage>, String> {
-    let species_id: Option<String> = conn
-        .query_row(
-            "SELECT id FROM species WHERE canonical_name = ?1 LIMIT 1",
-            [canonical_name],
-            |row| row.get(0),
-        )
-        .optional()
-        .map_err(|e| format!("Failed to look up species id for '{canonical_name}': {e}"))?;
-
-    let Some(species_id) = species_id else {
+    let Some(species_id) = resolve_species_id(conn, canonical_name)? else {
         return Ok(vec![]);
     };
 
@@ -700,16 +703,7 @@ pub fn get_species_external_links(
     conn: &Connection,
     canonical_name: &str,
 ) -> Result<Vec<SpeciesExternalLink>, String> {
-    let species_id: Option<String> = conn
-        .query_row(
-            "SELECT id FROM species WHERE canonical_name = ?1 LIMIT 1",
-            [canonical_name],
-            |row| row.get(0),
-        )
-        .optional()
-        .map_err(|e| format!("Failed to look up species id for '{canonical_name}': {e}"))?;
-
-    let Some(species_id) = species_id else {
+    let Some(species_id) = resolve_species_id(conn, canonical_name)? else {
         return Ok(vec![]);
     };
 
@@ -1025,6 +1019,47 @@ pub fn get_common_name(conn: &Connection, species_id: &str, locale: &str) -> Opt
     .optional()
     .ok()
     .flatten()
+}
+
+/// Returns all common names for a species in a given locale, ordered by
+/// is_primary DESC then shortest name first. Limited to 10 entries.
+pub fn get_locale_common_names(
+    conn: &Connection,
+    canonical_name: &str,
+    locale: &str,
+) -> Result<Vec<CommonNameEntry>, String> {
+    let Some(species_id) = resolve_species_id(conn, canonical_name)? else {
+        return Ok(vec![]);
+    };
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT common_name, is_primary
+             FROM species_common_names
+             WHERE species_id = ?1 AND language = ?2
+             ORDER BY is_primary DESC, LENGTH(common_name) ASC
+             LIMIT 10",
+        )
+        .map_err(|e| format!("Failed to prepare locale common names query: {e}"))?;
+
+    let rows = stmt
+        .query_map([&species_id, &locale.to_string()], |row| {
+            Ok(CommonNameEntry {
+                name: row.get(0)?,
+                is_primary: row.get::<_, i32>(1).unwrap_or(0) == 1,
+            })
+        })
+        .map_err(|e| format!("Failed to query locale common names: {e}"))?
+        .filter_map(|r| match r {
+            Ok(entry) => Some(entry),
+            Err(e) => {
+                tracing::warn!("Skipped common name row: {e}");
+                None
+            }
+        })
+        .collect();
+
+    Ok(rows)
 }
 
 /// Batch lookup: given a list of canonical names and a locale, return a map

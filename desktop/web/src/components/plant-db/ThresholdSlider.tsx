@@ -1,4 +1,5 @@
 import { useCallback } from 'preact/hooks'
+import { t } from '../../i18n'
 import styles from './ThresholdSlider.module.css'
 
 interface ThresholdSliderProps {
@@ -60,9 +61,9 @@ export function ThresholdSlider({
           step={1}
           value={current}
           onInput={handleInput}
-          aria-label={ariaLabel ?? 'Minimum threshold'}
+          aria-label={ariaLabel ?? t('filters.sliderThreshold', 'minimum threshold')}
           aria-valuenow={current}
-          aria-valuetext={isActive ? fmt(current) : 'No minimum'}
+          aria-valuetext={isActive ? fmt(current) : t('filters.noMinimum', 'No minimum')}
         />
       </div>
       <span className={styles.bound}>{max}</span>

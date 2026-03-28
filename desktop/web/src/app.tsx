@@ -13,6 +13,7 @@ import { TitleBar } from "./components/shared/TitleBar";
 import { DegradedBanner } from "./components/shared/DegradedBanner";
 import { CommandPalette } from "./components/shared/CommandPalette";
 import { PlantDbPanel } from "./components/panels/PlantDbPanel";
+import { FavoritesPanel } from "./components/panels/FavoritesPanel";
 import { CanvasPanel } from "./components/panels/CanvasPanel";
 import { PanelBar } from "./components/panels/PanelBar";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -115,6 +116,7 @@ function LearningPlaceholder() {
 
 function SidePanelContent({ side }: { side: string }) {
   if (side === "plant-db") return <PlantDbPanel />;
+  if (side === "favorites") return <FavoritesPanel />;
   if (side === "learning") return <LearningPlaceholder />;
   return null;
 }

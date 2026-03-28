@@ -4,7 +4,8 @@
     "canvas": "설계 캔버스",
     "worldMap": "세계 지도",
     "learning": "학습",
-    "savedDesigns": "저장된 설계"
+    "savedDesigns": "저장된 설계",
+    "favorites": "즐겨찾기"
   },
   "plantDb": {
     "title": "식물 데이터베이스",
@@ -58,7 +59,12 @@
     "setAsStamp": "스탬프로 설정",
     "error": "오류",
     "retry": "재시도",
-    "filterMedicinal": "약용"
+    "filterMedicinal": "약용",
+    "sunTolerance_full_sun": "양지",
+    "sunTolerance_semi_shade": "반음지",
+    "sunTolerance_full_shade": "음지",
+    "secondaryNames": "다른 이름",
+    "andMore": "+{{count}}개 더"
   },
   "health": {
     "plantDbMissing": "식물 데이터베이스를 찾을 수 없습니다. prepare-db.py를 실행하여 생성하세요. 식물 검색을 사용할 수 없습니다.",
@@ -124,13 +130,23 @@
     },
     "display": {
       "label": "표시 모드",
+      "colorBy": "색상 구분",
+      "sizeBy": "표시",
       "default": "기본",
       "canopy": "수관",
-      "stratum": "층위별",
-      "hardiness": "내한성별",
-      "lifecycle": "생활주기별",
-      "nitrogen": "질소고정별",
-      "edibility": "식용성별"
+      "canopySpread": "수관 범위",
+      "legend": "범례",
+      "stratum": "층위",
+      "hardiness": "내한성",
+      "lifecycle": "생활주기",
+      "nitrogen": "질소",
+      "edibility": "식용성",
+      "none": "없음"
+    },
+    "plantTooltip": {
+      "stratum": "층위",
+      "height": "높이",
+      "family": "과"
     },
     "group": {
       "group": "그룹",
@@ -499,7 +515,13 @@
     "ellenbergMoisture": "수분 (E)",
     "ellenbergReaction": "반응 (E)",
     "ellenbergNitrogen": "질소 (E)",
-    "ellenbergSalt": "염 (E)"
+    "ellenbergSalt": "염 (E)",
+    "photos": "사진",
+    "photoSource": "출처: {{source}}",
+    "noPhotos": "사진 없음",
+    "photoCount": "{{total}}장 중 {{current}}장",
+    "photoNext": "다음 사진",
+    "photoPrev": "이전 사진"
   },
   "chips": {
     "fruitTrees": "과일 나무",
@@ -593,6 +615,29 @@
     "field.scented": "향기",
     "field.propagatedBySeed": "종자 번식",
     "field.propagatedByCuttings": "삽목 번식",
-    "field.coldStratificationRequired": "저온 처리"
+    "field.coldStratificationRequired": "저온 처리",
+    "stratum_emergent": "돌출층",
+    "stratum_high": "교목층",
+    "stratum_low": "저층 / 지피",
+    "stratum_medium": "아교목층",
+    "lifeCycle_Annual": "일년생",
+    "lifeCycle_Biennial": "이년생",
+    "lifeCycle_Perennial": "다년생",
+    "lifeCycle_Multiple": "복수",
+    "nitrogenNonFixer": "비고정",
+    "notEdible": "식용 불가",
+    "growthRate_Fast": "빠름",
+    "growthRate_Medium": "보통",
+    "growthRate_Slow": "느림",
+    "removeChip": "{{label}} 제거",
+    "sliderMin": "최소",
+    "sliderMax": "최대",
+    "sliderThreshold": "최소 기준값",
+    "noMinimum": "최소값 없음"
+  },
+  "favorites": {
+    "empty": "즐겨찾기가 없습니다",
+    "emptyHint": "검색 패널에서 식물에 별표를 눌러 여기에 추가하세요",
+    "dragHint": "캔버스로 드래그하여 배치"
   }
 }

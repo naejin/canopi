@@ -7,12 +7,13 @@ import {
   favoriteNames,
   toggleFavoriteAction,
 } from '../../state/plant-db';
-import { getSpeciesDetail } from '../../ipc/species';
-import type { SpeciesDetail } from '../../types/species';
+import { getSpeciesDetail, getLocaleCommonNames } from '../../ipc/species';
+import type { SpeciesDetail, CommonNameEntry } from '../../types/species';
 import { AttributeGrid } from './AttributeGrid';
 import { UsesSection } from './UsesSection';
 import { RelationshipList } from './RelationshipList';
 import { CollapsibleSection } from './CollapsibleSection';
+import { PhotoCarousel } from './PhotoCarousel';
 import { Attr, BoolChip, NumAttr, TextBlock, formatPrecipRange } from './section-helpers';
 import styles from './PlantDetail.module.css';
 
@@ -32,6 +33,7 @@ export function PlantDetailCard({ canonicalName }: Props) {
   const errorMsg = useSignal<string | null>(null);
   const expanded = useSignal<Set<string>>(new Set());
   const retryCount = useSignal(0);
+  const secondaryNames = useSignal<CommonNameEntry[]>([]);
 
   useSignalEffect(() => {
     const name = selectedCanonicalName.value ?? canonicalName;
@@ -41,6 +43,7 @@ export function PlantDetailCard({ canonicalName }: Props) {
     detail.value = null;
     loadState.value = 'loading';
     errorMsg.value = null;
+    secondaryNames.value = [];
 
     let cancelled = false;
 
@@ -54,6 +57,16 @@ export function PlantDetailCard({ canonicalName }: Props) {
         if (cancelled) return;
         errorMsg.value = err instanceof Error ? err.message : String(err);
         loadState.value = 'error';
+      });
+
+    // Fetch locale common names (non-blocking — detail card renders without them)
+    getLocaleCommonNames(name, loc)
+      .then((entries) => {
+        if (cancelled) return;
+        secondaryNames.value = entries;
+      })
+      .catch(() => {
+        // Silently ignore — secondary names are optional
       });
 
     return () => {
@@ -264,6 +277,22 @@ export function PlantDetailCard({ canonicalName }: Props) {
           {d.common_name !== null && (
             <span className={styles.commonName}>{d.common_name}</span>
           )}
+          {(() => {
+            // Filter out the primary name already displayed above
+            const others = secondaryNames.value.filter(
+              (entry) => entry.name !== d.common_name,
+            );
+            if (others.length === 0) return null;
+            const MAX_SHOWN = 2;
+            const shown = others.slice(0, MAX_SHOWN);
+            const remaining = others.length - MAX_SHOWN;
+            return (
+              <span className={styles.secondaryNames}>
+                {shown.map((e) => e.name).join(' · ')}
+                {remaining > 0 && ` ${t('plantDb.andMore', { count: remaining })}`}
+              </span>
+            );
+          })()}
           {(d.family || d.genus) && (
             <span className={styles.taxonomy}>
               {d.family}{d.family && d.genus ? ' · ' : ''}{d.genus}
@@ -285,6 +314,9 @@ export function PlantDetailCard({ canonicalName }: Props) {
 
       {/* ── Scrollable body ── */}
       <div className={styles.body}>
+
+        {/* 0. PHOTOS */}
+        <PhotoCarousel canonicalName={d.canonical_name} />
 
         {/* 1. DIMENSIONS — always open */}
         <section className={`${styles.section} ${styles.sectionDimensions}`} aria-label={t('plantDetail.dimensions')}>

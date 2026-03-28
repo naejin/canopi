@@ -4,7 +4,8 @@
     "canvas": "デザインキャンバス",
     "worldMap": "世界地図",
     "learning": "学習",
-    "savedDesigns": "保存済みデザイン"
+    "savedDesigns": "保存済みデザイン",
+    "favorites": "お気に入り"
   },
   "plantDb": {
     "title": "植物データベース",
@@ -58,7 +59,12 @@
     "setAsStamp": "スタンプに設定",
     "error": "エラー",
     "retry": "再試行",
-    "filterMedicinal": "薬用"
+    "filterMedicinal": "薬用",
+    "sunTolerance_full_sun": "日なた",
+    "sunTolerance_semi_shade": "半日陰",
+    "sunTolerance_full_shade": "日陰",
+    "secondaryNames": "別名",
+    "andMore": "+{{count}} 件"
   },
   "health": {
     "plantDbMissing": "植物データベースが見つかりません。prepare-db.py を実行して生成してください。植物検索は利用できません。",
@@ -124,13 +130,23 @@
     },
     "display": {
       "label": "表示モード",
+      "colorBy": "色分け",
+      "sizeBy": "表示",
       "default": "デフォルト",
       "canopy": "樹冠",
-      "stratum": "階層別",
-      "hardiness": "耐寒性別",
-      "lifecycle": "生活環別",
-      "nitrogen": "窒素固定別",
-      "edibility": "食用性別"
+      "canopySpread": "樹冠の広がり",
+      "legend": "凡例",
+      "stratum": "階層",
+      "hardiness": "耐寒性",
+      "lifecycle": "ライフサイクル",
+      "nitrogen": "窒素",
+      "edibility": "可食性",
+      "none": "なし"
+    },
+    "plantTooltip": {
+      "stratum": "階層",
+      "height": "高さ",
+      "family": "科"
     },
     "group": {
       "group": "グループ化",
@@ -499,7 +515,13 @@
     "ellenbergMoisture": "水分 (E)",
     "ellenbergReaction": "反応 (E)",
     "ellenbergNitrogen": "窒素 (E)",
-    "ellenbergSalt": "塩 (E)"
+    "ellenbergSalt": "塩 (E)",
+    "photos": "写真",
+    "photoSource": "出典：{{source}}",
+    "noPhotos": "写真はありません",
+    "photoCount": "{{total}} 枚中 {{current}} 枚目",
+    "photoNext": "次の写真",
+    "photoPrev": "前の写真"
   },
   "chips": {
     "fruitTrees": "果樹",
@@ -593,6 +615,29 @@
     "field.scented": "芳香性",
     "field.propagatedBySeed": "種子繁殖",
     "field.propagatedByCuttings": "挿し木繁殖",
-    "field.coldStratificationRequired": "低温処理"
+    "field.coldStratificationRequired": "低温処理",
+    "stratum_emergent": "超高木層",
+    "stratum_high": "高木層",
+    "stratum_low": "低木層 / 地被",
+    "stratum_medium": "亜高木層",
+    "lifeCycle_Annual": "一年生",
+    "lifeCycle_Biennial": "二年生",
+    "lifeCycle_Perennial": "多年生",
+    "lifeCycle_Multiple": "複数",
+    "nitrogenNonFixer": "非固定",
+    "notEdible": "食用不可",
+    "growthRate_Fast": "速い",
+    "growthRate_Medium": "普通",
+    "growthRate_Slow": "遅い",
+    "removeChip": "{{label}} を削除",
+    "sliderMin": "最小",
+    "sliderMax": "最大",
+    "sliderThreshold": "最小しきい値",
+    "noMinimum": "最小値なし"
+  },
+  "favorites": {
+    "empty": "お気に入りはまだありません",
+    "emptyHint": "検索パネルで植物にスターを付けてここに追加",
+    "dragHint": "キャンバスにドラッグして配置"
   }
 }

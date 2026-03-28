@@ -19,7 +19,7 @@ export function refreshGridColors(container: HTMLElement): void {
 
 // Nice distance ladder — used to pick a grid interval that keeps lines
 // ~20-40 screen pixels apart at any zoom level.
-const NICE_DISTANCES = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000]
+const NICE_DISTANCES = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000]
 const MIN_SCREEN_GAP = 20  // minimum pixels between minor gridlines
 const MAJOR_STEP = 2       // skip 2 steps in NICE_DISTANCES for major lines
 

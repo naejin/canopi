@@ -4,7 +4,8 @@
     "canvas": "设计画布",
     "worldMap": "世界地图",
     "learning": "学习",
-    "savedDesigns": "已保存的设计"
+    "savedDesigns": "已保存的设计",
+    "favorites": "收藏夹"
   },
   "plantDb": {
     "title": "植物数据库",
@@ -58,7 +59,12 @@
     "setAsStamp": "设为印章",
     "error": "错误",
     "retry": "重试",
-    "filterMedicinal": "药用"
+    "filterMedicinal": "药用",
+    "sunTolerance_full_sun": "全日照",
+    "sunTolerance_semi_shade": "半阴",
+    "sunTolerance_full_shade": "全阴",
+    "secondaryNames": "又名",
+    "andMore": "+{{count}} 个更多"
   },
   "health": {
     "plantDbMissing": "未找到植物数据库。请运行 prepare-db.py 生成。植物搜索不可用。",
@@ -124,13 +130,23 @@
     },
     "display": {
       "label": "显示模式",
+      "colorBy": "按颜色区分",
+      "sizeBy": "显示",
       "default": "默认",
       "canopy": "冠幅",
-      "stratum": "按层级",
-      "hardiness": "按耐寒性",
-      "lifecycle": "按生命周期",
-      "nitrogen": "按固氮",
-      "edibility": "按可食性"
+      "canopySpread": "冠幅范围",
+      "legend": "图例",
+      "stratum": "层次",
+      "hardiness": "耐寒性",
+      "lifecycle": "生命周期",
+      "nitrogen": "固氮",
+      "edibility": "可食性",
+      "none": "无"
+    },
+    "plantTooltip": {
+      "stratum": "层级",
+      "height": "高度",
+      "family": "科"
     },
     "group": {
       "group": "编组",
@@ -499,7 +515,13 @@
     "ellenbergMoisture": "水分 (E)",
     "ellenbergReaction": "酸碱 (E)",
     "ellenbergNitrogen": "氮 (E)",
-    "ellenbergSalt": "盐 (E)"
+    "ellenbergSalt": "盐 (E)",
+    "photos": "照片",
+    "photoSource": "来源：{{source}}",
+    "noPhotos": "暂无照片",
+    "photoCount": "第 {{current}} 张，共 {{total}} 张",
+    "photoNext": "下一张照片",
+    "photoPrev": "上一张照片"
   },
   "chips": {
     "fruitTrees": "果树",
@@ -593,6 +615,29 @@
     "field.scented": "有香味",
     "field.propagatedBySeed": "种子繁殖",
     "field.propagatedByCuttings": "扦插繁殖",
-    "field.coldStratificationRequired": "需要冷层化"
+    "field.coldStratificationRequired": "需要冷层化",
+    "stratum_emergent": "超冠层",
+    "stratum_high": "高冠层",
+    "stratum_low": "低层 / 地被",
+    "stratum_medium": "中冠层",
+    "lifeCycle_Annual": "一年生",
+    "lifeCycle_Biennial": "二年生",
+    "lifeCycle_Perennial": "多年生",
+    "lifeCycle_Multiple": "多种",
+    "nitrogenNonFixer": "非固氮",
+    "notEdible": "不可食",
+    "growthRate_Fast": "快速",
+    "growthRate_Medium": "中等",
+    "growthRate_Slow": "缓慢",
+    "removeChip": "移除 {{label}}",
+    "sliderMin": "最小值",
+    "sliderMax": "最大值",
+    "sliderThreshold": "最低阈值",
+    "noMinimum": "无最小值"
+  },
+  "favorites": {
+    "empty": "暂无收藏",
+    "emptyHint": "在搜索面板中标记植物以添加到此处",
+    "dragHint": "拖拽到画布以放置"
   }
 }

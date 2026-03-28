@@ -118,8 +118,8 @@ Earthy, not neon:
 - ActiveChips strip: horizontal wrap of dismissable `FilterChip` pills, 58px left indent matching controls. Shows all active filters from both strip and "More" panel. Border-top + border-bottom separation
 - "More Filters" panel: slides in as overlay over results. Header + search + 8 collapsible categories with 2px colored left borders matching detail card sections. Boolean fields: inline checkbox. Categorical: expandable chip picker (lazy-loaded). Numeric: expandable range slider. "Done ›" text link in footer
 - Plant rows: compact, two lines:
-  - Line 1: *botanical name* + common name (inline, baseline-aligned)
-  - Line 2: colored tags separated by `·` (family=brown, hardiness=blue, height=stone, stratum=ochre, edible=moss)
+  - Line 1: **common name** (12px, 500, `--color-text`) + *botanical name* (12px, 400, italic, `--color-text-muted`). Common name leads as the scan target. When no common name, botanical renders alone
+  - Line 2: colored tags separated by `·` (family=brown, hardiness=blue, height=stone, stratum=ochre, edible=moss). Heights rounded to 1 decimal max. Stratum values mapped via i18n keys
 - Row actions (+, star) appear on hover only
 - Whole row is draggable to canvas
 - Background: `--color-bg` (parchment, matches canvas area)
@@ -141,7 +141,8 @@ Earthy, not neon:
 - ThresholdSlider: tick marks (1px × 8px) positioned in 6px-padded ticks container for thumb alignment
 
 ### Plant Detail Card
-- Header: botanical name (italic), common name, family · genus, back button, favorite star
+- Header: botanical name (italic), common name, secondary names (10px, muted, 0.75 opacity, max 2 shown + "+N more"), family · genus, back button, favorite star
+- Photo carousel at top of scrollable body (see Photo Carousel pattern below)
 - Dimensions section always open (h3 title, no toggle)
 - 14 collapsible sections below, ordered by designer decision flow: Life Cycle → Uses → Light → Soil → Ecology → Growth Form → Propagation → Fruit & Seed → Risk → Leaf → Reproduction → Notes → Related Species → Identity
 - Each section: 3px left accent border (semantic color), uppercase 10px title with icon + chevron, `--color-bg` header, content in `--color-surface` body
@@ -170,6 +171,42 @@ Earthy, not neon:
 ### Learning Panel
 - Placeholder: centered book icon + "Coming soon" + description
 - Background: `--color-bg`
+
+### Favorites Panel
+- Header: uppercase 10px title (600 weight, `--color-text-muted`, 0.06em tracking) + ochre count badge (`--color-primary` bg, `--color-bg` text, `--radius-full`)
+- List: reuses `PlantRow` component. Clicking opens detail card inline (same `detailHidden`/`detailVisible` pattern as PlantDbPanel)
+- Empty state: star icon (`--color-primary`, 0.3 opacity), title + hint text, upper-third positioning (not dead-centered)
+- Background: `--color-bg`
+
+### Photo Carousel
+- 3:2 aspect ratio, `--radius-lg` border, `--color-border` outline
+- Shimmer loading state: gradient between `--color-surface` and `--color-bg`
+- Nav arrows: transparent 32×48px hit targets, chevron character via `text-shadow`, visible on container hover (0.8 → 1.0 opacity)
+- Dot indicators: 8px, 6px gap, `--color-border` inactive, `--color-primary` active with `scale(1.15)`. Minimum size for interactive elements
+- Source badge: bottom-right, 9px uppercase, `--color-text` with 0.55 opacity, `pointer-events: none`
+- Placeholder: subtle icon (`--color-border`, 0.6 opacity), same 3:2 aspect ratio
+- Images served as base64 data URLs from Rust image cache (asset protocol not scoped)
+
+### Display Mode Controls
+- Floating toolbar at bottom-left, matches ZoomControls surface treatment: `--canvas-ruler-bg` bg, `1px solid --color-border`, `--radius-md`, `opacity: 0.85` → `1` on hover, `100ms ease` transition
+- Two custom dropdowns (DISPLAY + COLOR BY) separated by 1px divider, `z-index: 20`
+- Dropdown menu opens upward (above controls), `menuIn` keyframe animation (120ms), Escape closes + returns focus
+- Options: bare noun labels (not "By Stratum", just "Stratum")
+
+### Display Legend
+- Floating card above display controls (`bottom: 44px`), `z-index: 19` (below controls)
+- Only visible when `plantDisplayMode === 'color-by'`
+- `legendIn` keyframe animation (150ms), `prefers-reduced-motion` respected
+- Entries: 10px color dots + 11px labels, `--space-1` gap, scrollable at 200px max-height
+- All labels use `t()` i18n calls — translates when locale changes
+
+### Plant Tooltip
+- HTML `<div>` overlay on Konva stage container (not a Konva node), `pointer-events: none`
+- `--color-surface` bg, `--color-border` border, `--radius-sm`, `--shadow-md`, `z-index: 50`
+- Content: common name (12px/600), botanical name (11px/italic/muted), stratum attribute (10px/muted)
+- Positioned via `stage.getAbsoluteTransform()` — world-to-screen coordinate conversion
+- Built with safe DOM methods (`createElement`, `textContent`) — no `innerHTML`
+- Appears immediately on `mouseover`, hides on `mouseout` with `e.target === stage` early return guard
 
 ### Drag Handle (panel resize)
 - 1px wide, uses `--color-border` — IS the border between canvas and panel

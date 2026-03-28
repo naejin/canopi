@@ -41,6 +41,11 @@ export interface SpeciesExternalLink {
   url: string;
 }
 
+export interface CommonNameEntry {
+  name: string;
+  is_primary: boolean;
+}
+
 export interface SpeciesDetail {
   canonical_name: string;
   common_name: string | null;

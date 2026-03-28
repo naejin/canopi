@@ -9,6 +9,8 @@ import type {
   PaginatedResult,
   Sort,
   DynamicFilterOptions,
+  CommonNameEntry,
+  SpeciesImage,
 } from '../types/species';
 
 /** Returns true when plant DB is not available — all queries should short-circuit. */
@@ -79,4 +81,21 @@ export async function getSpeciesBatch(
 ): Promise<SpeciesDetail[]> {
   if (isDegraded()) return [];
   return invoke('get_species_batch', { canonicalNames, locale });
+}
+
+/** Returns all common names for a species in the given locale. */
+export async function getLocaleCommonNames(
+  canonicalName: string,
+  locale: string,
+): Promise<CommonNameEntry[]> {
+  if (isDegraded()) return [];
+  return invoke('get_locale_common_names', { canonicalName, locale });
+}
+
+/** Returns images for a species by canonical name. */
+export async function getSpeciesImages(
+  canonicalName: string,
+): Promise<SpeciesImage[]> {
+  if (isDegraded()) return [];
+  return invoke('get_species_images', { canonicalName });
 }

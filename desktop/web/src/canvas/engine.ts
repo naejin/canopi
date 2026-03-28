@@ -1,5 +1,7 @@
 import Konva from 'konva'
 import { effect, signal } from '@preact/signals'
+import { t } from '../i18n'
+import tooltipStyles from './PlantTooltip.module.css'
 import {
   activeTool,
   zoomLevel,
@@ -94,6 +96,9 @@ export class CanvasEngine {
   private _rafPending = false
   private _spaceHeld = false
   private _wasSpaceDraggable = false
+
+  // Plant hover tooltip (HTML overlay)
+  private _tooltip: HTMLDivElement | null = null
 
   // Overlay nodes
   private _gridShape: Konva.Shape | null = null
@@ -204,6 +209,73 @@ export class CanvasEngine {
     this._setupStageMouseEvents()
     this._setupSnapToDrag()
     this.setupDrop()
+
+    // ---- Plant hover tooltip ------------------------------------------------
+    this._tooltip = document.createElement('div')
+    this._tooltip.className = tooltipStyles.tooltip!
+    this._tooltip.style.display = 'none'
+    container.style.position = 'relative'
+    container.appendChild(this._tooltip)
+
+    this.stage.on('mouseover', (e: Konva.KonvaEventObject<MouseEvent>) => {
+      let node: Konva.Node | null = e.target
+      let group: Konva.Group | null = null
+      while (node) {
+        if (node instanceof Konva.Group && node.hasName('plant-group')) {
+          group = node
+          break
+        }
+        node = node.parent
+      }
+      if (!group || !this._tooltip) return
+
+      const commonName = group.getAttr('data-common-name') as string || ''
+      const canonicalName = group.getAttr('data-canonical-name') as string || ''
+      const stratum = group.getAttr('data-stratum') as string || ''
+
+      // Build tooltip using safe DOM methods (no innerHTML)
+      this._tooltip.textContent = ''
+
+      if (commonName) {
+        const nameEl = document.createElement('div')
+        nameEl.className = tooltipStyles.name!
+        nameEl.textContent = commonName
+        this._tooltip.appendChild(nameEl)
+      }
+
+      const botEl = document.createElement('div')
+      botEl.className = tooltipStyles.botanical!
+      const em = document.createElement('em')
+      em.textContent = canonicalName
+      botEl.appendChild(em)
+      this._tooltip.appendChild(botEl)
+
+      if (stratum) {
+        const attrEl = document.createElement('div')
+        attrEl.className = tooltipStyles.attr!
+        attrEl.textContent = `${t('canvas.plantTooltip.stratum')}: ${stratum}`
+        this._tooltip.appendChild(attrEl)
+      }
+
+      this._tooltip.style.display = 'block'
+
+      const transform = this.stage.getAbsoluteTransform()
+      const screenPos = transform.point({ x: group.x(), y: group.y() })
+      this._tooltip.style.left = `${screenPos.x + 12}px`
+      this._tooltip.style.top = `${screenPos.y - 8}px`
+    })
+
+    this.stage.on('mouseout', (e: Konva.KonvaEventObject<MouseEvent>) => {
+      if (!this._tooltip || e.target === this.stage) return
+      let node: Konva.Node | null = e.target
+      while (node) {
+        if (node instanceof Konva.Group && node.hasName('plant-group')) {
+          this._tooltip.style.display = 'none'
+          break
+        }
+        node = node.parent
+      }
+    })
 
     // Signal effects
     this._disposeActiveToolEffect = effect(() => {
@@ -393,7 +465,7 @@ export class CanvasEngine {
       const scale = zoomLevel.value
       const plantsLayer = this.layers.get('plants')
       if (plantsLayer) {
-        updatePlantsLOD(plantsLayer, getPlantLOD(scale), scale)
+        updatePlantsLOD(plantsLayer, getPlantLOD(scale), scale, selectedObjectIds.value)
       }
       const annotationsLayer = this.layers.get('annotations')
       if (annotationsLayer) {
@@ -1449,6 +1521,11 @@ export class CanvasEngine {
     this._celestialDial = null
     this._disposeMinimapEffect?.()
     this._disposeMinimapEffect = null
+
+    if (this._tooltip) {
+      this._tooltip.remove()
+      this._tooltip = null
+    }
 
     this.stage.destroy()
     this.layers.clear()

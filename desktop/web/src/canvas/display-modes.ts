@@ -1,12 +1,12 @@
 import Konva from 'konva'
-import { getStratumColor } from './plants'
+import { getStratumColor, STRATUM_I18N_KEY, CIRCLE_SCREEN_PX } from './plants'
+import { t } from '../i18n'
 import type { PlantDisplayMode, ColorByAttribute } from '../state/canvas'
 
 // ---------------------------------------------------------------------------
 // Plant display modes — canopy spread + thematic coloring
 // ---------------------------------------------------------------------------
 
-const CIRCLE_SCREEN_PX = 8 // default radius (must match plants.ts)
 
 // Hardiness color gradient (zones 1-13)
 const HARDINESS_COLORS: Record<number, string> = {
@@ -100,31 +100,30 @@ export function updatePlantDisplay(
 export function getLegendEntries(attr: ColorByAttribute): LegendEntry[] {
   switch (attr) {
     case 'stratum':
-      return Object.entries({
-        'Emergent': '#1B5E20', 'High canopy': '#2E7D32', 'Low canopy': '#388E3C',
-        'Understory': '#558B2F', 'Shrub': '#7CB342', 'Herbaceous': '#C0CA33',
-        'Ground cover': '#D4A843', 'Vine': '#7B1FA2', 'Root': '#6D4C41',
-      }).map(([label, color]) => ({ label, color }))
+      return Object.entries(STRATUM_I18N_KEY).map(([dbValue, i18nKey]) => ({
+        label: t(i18nKey),
+        color: getStratumColor(dbValue),
+      }))
     case 'hardiness':
       return Object.entries(HARDINESS_COLORS).map(([z, color]) => ({
-        label: `Zone ${z}`, color,
+        label: `${t('filters.hardiness')} ${z}`, color,
       }))
     case 'lifecycle':
       return [
-        { label: 'Perennial', color: LIFECYCLE_COLORS.perennial },
-        { label: 'Biennial', color: LIFECYCLE_COLORS.biennial },
-        { label: 'Annual', color: LIFECYCLE_COLORS.annual },
-        { label: 'Multiple', color: LIFECYCLE_COLORS.multi },
+        { label: t('filters.lifeCycle_Perennial'), color: LIFECYCLE_COLORS.perennial },
+        { label: t('filters.lifeCycle_Biennial'), color: LIFECYCLE_COLORS.biennial },
+        { label: t('filters.lifeCycle_Annual'), color: LIFECYCLE_COLORS.annual },
+        { label: t('filters.lifeCycle_Multiple', 'Multiple'), color: LIFECYCLE_COLORS.multi },
       ]
     case 'nitrogen':
       return [
-        { label: 'Nitrogen fixer', color: NITROGEN_FIXER_COLOR },
-        { label: 'Non-fixer', color: NITROGEN_NON_FIXER_COLOR },
-        { label: 'Unknown', color: NITROGEN_UNKNOWN_COLOR },
+        { label: t('filters.nitrogenFixer', 'Nitrogen fixer'), color: NITROGEN_FIXER_COLOR },
+        { label: t('filters.nitrogenNonFixer', 'Non-fixer'), color: NITROGEN_NON_FIXER_COLOR },
+        { label: t('filters.unknown', 'Unknown'), color: NITROGEN_UNKNOWN_COLOR },
       ]
     case 'edibility':
       return EDIBILITY_COLORS.map((color, i) => ({
-        label: i === 0 ? 'Not edible' : `Rating ${i}/5`,
+        label: i === 0 ? t('filters.notEdible', 'Not edible') : `${t('plantDb.edible', 'Edible')} ${i}/5`,
         color,
       }))
   }

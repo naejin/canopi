@@ -1,6 +1,7 @@
 mod commands;
 mod db;
 mod design;
+mod image_cache;
 mod logging;
 mod platform;
 
@@ -35,6 +36,8 @@ pub fn run() {
             commands::species::get_dynamic_filter_options,
             commands::species::get_species_images,
             commands::species::get_species_external_links,
+            commands::species::get_locale_common_names,
+            commands::species::get_cached_image_url,
             commands::favorites::toggle_favorite,
             commands::favorites::get_favorites,
             commands::favorites::get_recently_viewed,
@@ -69,6 +72,16 @@ pub fn run() {
             app.manage(db::UserDb(Mutex::new(user_conn)));
 
             tracing::info!("User DB initialized at {}", user_db_path.display());
+
+            // Image cache (disk-backed, in app data dir)
+            let image_cache = image_cache::ImageCache::new(&data_dir)
+                .unwrap_or_else(|e| {
+                    tracing::warn!("Image cache init failed: {e}, using temp dir fallback");
+                    image_cache::ImageCache::new(&std::env::temp_dir())
+                        .expect("temp dir should work")
+                });
+            app.manage(image_cache);
+            tracing::info!("Image cache initialized");
 
             // Plant DB (read-only, bundled resource)
             // In dev mode, the resource resolver may not find bundled files,

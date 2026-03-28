@@ -3,8 +3,15 @@ import { locale } from '../../state/app'
 import { toggleFavoriteAction, selectedCanonicalName } from '../../state/plant-db'
 import { plantStampSpecies } from '../../state/canvas'
 import { canvasEngine } from '../../canvas/engine'
+import { STRATUM_I18N_KEY } from '../../canvas/plants'
 import type { SpeciesListItem } from '../../types/species'
 import styles from './PlantDb.module.css'
+
+/** Format height to 1 decimal place max, dropping trailing .0 */
+function fmtHeight(m: number): string {
+  const rounded = Math.round(m * 10) / 10
+  return rounded % 1 === 0 ? String(rounded) : rounded.toFixed(1)
+}
 
 interface Props {
   plant: SpeciesListItem
@@ -76,16 +83,23 @@ export function PlantRow({ plant }: Props) {
     >
       <div className={styles.plantRowContent}>
         <div className={styles.nameRow}>
-          <span className={styles.botanicalName}>{plant.canonical_name}</span>
-          {plant.common_name && (
-            <span className={styles.commonName}>{plant.common_name}</span>
+          {plant.common_name ? (
+            <>
+              <span className={styles.commonName}>{plant.common_name}</span>
+              <span className={styles.botanicalName}>{plant.canonical_name}</span>
+            </>
+          ) : (
+            <span className={styles.botanicalName}>{plant.canonical_name}</span>
           )}
         </div>
         <div className={styles.tagRow}>
           {plant.family && <span className={styles.tag} style={{ color: 'var(--color-family)' }}>{plant.family}</span>}
           {hardiness && <span className={styles.tag} style={{ color: 'var(--color-hardiness)' }}>{hardiness}</span>}
-          {plant.height_max_m !== null && <span className={styles.tag} style={{ color: 'var(--color-height)' }}>↕{plant.height_max_m}m</span>}
-          {plant.stratum && <span className={styles.tag} style={{ color: 'var(--color-accent)' }}>{plant.stratum}</span>}
+          {plant.height_max_m !== null && <span className={styles.tag} style={{ color: 'var(--color-height)' }}>↕{fmtHeight(plant.height_max_m)}m</span>}
+          {plant.stratum && (() => {
+            const key = STRATUM_I18N_KEY[plant.stratum]
+            return <span className={styles.tag} style={{ color: 'var(--color-accent)' }}>{key ? t(key) : plant.stratum}</span>
+          })()}
           {plant.edibility_rating !== null && plant.edibility_rating > 0 && (
             <span className={styles.tag} style={{ color: 'var(--color-edible)' }}>{t('plantDb.edible')} {plant.edibility_rating}/5</span>
           )}

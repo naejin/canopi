@@ -19,6 +19,8 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 tracing-appender = "0.2"
 common-types = { path = "../common-types" }
+sha2 = "0.10"
+ureq = "3"
 sys-locale = "0.3"
 tauri-plugin-mcp-bridge = "0.10"
 

@@ -4,7 +4,8 @@
     "canvas": "Entwurfsfläche",
     "worldMap": "Weltkarte",
     "learning": "Lernen",
-    "savedDesigns": "Gespeicherte Entwürfe"
+    "savedDesigns": "Gespeicherte Entwürfe",
+    "favorites": "Favoriten"
   },
   "plantDb": {
     "title": "Pflanzendatenbank",
@@ -58,7 +59,12 @@
     "setAsStamp": "Als Stempel setzen",
     "error": "Fehler",
     "retry": "Erneut versuchen",
-    "filterMedicinal": "Heilpflanze"
+    "filterMedicinal": "Heilpflanze",
+    "sunTolerance_full_sun": "Volle Sonne",
+    "sunTolerance_semi_shade": "Halbschatten",
+    "sunTolerance_full_shade": "Vollschatten",
+    "secondaryNames": "Auch bekannt als",
+    "andMore": "+{{count}} weitere"
   },
   "health": {
     "plantDbMissing": "Pflanzendatenbank nicht gefunden. Führen Sie prepare-db.py aus, um sie zu erzeugen. Pflanzensuche ist nicht verfügbar.",
@@ -124,13 +130,23 @@
     },
     "display": {
       "label": "Anzeigemodus",
+      "colorBy": "Einfärben nach",
+      "sizeBy": "Anzeige",
       "default": "Standard",
       "canopy": "Kronendach",
-      "stratum": "Nach Schicht",
-      "hardiness": "Nach Winterhärte",
-      "lifecycle": "Nach Lebenszyklus",
-      "nitrogen": "Nach N-Fixierung",
-      "edibility": "Nach Essbarkeit"
+      "canopySpread": "Kronenausbreitung",
+      "legend": "Legende",
+      "stratum": "Schicht",
+      "hardiness": "Winterhärte",
+      "lifecycle": "Lebenszyklus",
+      "nitrogen": "Stickstoff",
+      "edibility": "Essbarkeit",
+      "none": "Keine"
+    },
+    "plantTooltip": {
+      "stratum": "Schicht",
+      "height": "Höhe",
+      "family": "Familie"
     },
     "group": {
       "group": "Gruppieren",
@@ -499,7 +515,13 @@
     "ellenbergMoisture": "Feuchte (E)",
     "ellenbergReaction": "Reaktion (E)",
     "ellenbergNitrogen": "Stickstoff (E)",
-    "ellenbergSalt": "Salz (E)"
+    "ellenbergSalt": "Salz (E)",
+    "photos": "Fotos",
+    "photoSource": "Quelle: {{source}}",
+    "noPhotos": "Keine Fotos verfügbar",
+    "photoCount": "{{current}} von {{total}}",
+    "photoNext": "Nächstes Foto",
+    "photoPrev": "Vorheriges Foto"
   },
   "chips": {
     "fruitTrees": "Obstbäume",
@@ -593,6 +615,29 @@
     "field.scented": "Duftend",
     "field.propagatedBySeed": "Vermehrung durch Samen",
     "field.propagatedByCuttings": "Vermehrung durch Stecklinge",
-    "field.coldStratificationRequired": "Kaltstratifikation"
+    "field.coldStratificationRequired": "Kaltstratifikation",
+    "stratum_emergent": "Emergent",
+    "stratum_high": "Obere Kronenschicht",
+    "stratum_low": "Niedrig / Boden",
+    "stratum_medium": "Mittlere Kronenschicht",
+    "lifeCycle_Annual": "Einjährig",
+    "lifeCycle_Biennial": "Zweijährig",
+    "lifeCycle_Perennial": "Mehrjährig",
+    "lifeCycle_Multiple": "Mehrfach",
+    "nitrogenNonFixer": "Kein Stickstofffixierer",
+    "notEdible": "Nicht essbar",
+    "growthRate_Fast": "Schnell",
+    "growthRate_Medium": "Mittel",
+    "growthRate_Slow": "Langsam",
+    "removeChip": "{{label}} entfernen",
+    "sliderMin": "Minimum",
+    "sliderMax": "Maximum",
+    "sliderThreshold": "Mindestschwelle",
+    "noMinimum": "Kein Minimum"
+  },
+  "favorites": {
+    "empty": "Noch keine Favoriten",
+    "emptyHint": "Markieren Sie Pflanzen im Suchpanel, um sie hier hinzuzufügen",
+    "dragHint": "Auf die Fläche ziehen zum Platzieren"
   }
 }
