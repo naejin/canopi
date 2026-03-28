@@ -69,8 +69,48 @@ jobs:
       - name: Rust tests
         run: cargo test --workspace
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/web/package-lock.json
+
+      - name: Install frontend deps
+        run: npm ci --prefix desktop/web
+
+      - name: Frontend tests
+        run: npm test --prefix desktop/web
+
+  test-platform:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            package: lib-c
+          - os: macos-14
+            package: lib-swift
+          - os: windows-latest
+            package: lib-cpp
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Platform-specific tests (${{ matrix.package }})
+        continue-on-error: true
+        run: cargo test -p ${{ matrix.package }}
+
   build:
-    needs: [lint, test]
+    needs: [lint, test, test-platform]
     strategy:
       fail-fast: false
       matrix:
@@ -113,8 +153,17 @@ jobs:
       - name: Install frontend deps
         run: npm ci --prefix desktop/web
 
-      - name: Build frontend
-        run: npm run build --prefix desktop/web
-
       - name: Build Tauri app
-        run: cargo build --release --target ${{ matrix.target }}
+        run: npx --prefix desktop/web @tauri-apps/cli build --target ${{ matrix.target }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: canopi-${{ matrix.target }}
+          path: |
+            target/${{ matrix.target }}/release/bundle/**/*.deb
+            target/${{ matrix.target }}/release/bundle/**/*.AppImage
+            target/${{ matrix.target }}/release/bundle/**/*.dmg
+            target/${{ matrix.target }}/release/bundle/**/*.msi
+            target/${{ matrix.target }}/release/bundle/**/*.exe
+          if-no-files-found: ignore

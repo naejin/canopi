@@ -4,3 +4,5 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+# swift-bridge will be added when FFI to Core Graphics / PDFKit is implemented.
+# For now, this crate provides a Rust-only stub with the same API surface as lib-c.

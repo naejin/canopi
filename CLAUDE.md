@@ -5,8 +5,8 @@
 - **Frontend**: Preact + @preact/signals + TypeScript + Vite + CSS Modules
 - **Canvas**: Konva.js (imperative API, NOT react-konva)
 - **i18n**: i18next core (NOT react-i18next), 11 languages (en, fr, es, pt, it, zh, de, ja, ko, nl, ru)
-- **Maps**: MapLibre GL JS (disabled for MVP, code on disk)
-- **Native**: lib-swift (macOS), lib-cpp (Windows), lib-c (Linux) — stubs only
+- **Maps**: MapLibre GL JS + maplibre-contour (DEM contour generation)
+- **Native**: lib-c (Linux, Cairo PNG/PDF + inotify + XDG), lib-swift (macOS stub), lib-cpp (Windows stub)
 
 ## Project Structure
 ```
@@ -145,6 +145,20 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 **After UI changes:** run `/interface-design:audit` to check design system compliance. Run `/interface-design:critique` after building major new components
 
 ## Gotchas
+
+### MapLibre / Terrain
+- **MapLibre paint properties can't use CSS vars**: Hardcoded hex colors in MapLibre style objects are acceptable — they render on map tiles, not app chrome. Dark mode mismatch is negligible
+- **`maplibre-contour` for client-side DEM contours**: Generates isolines from raster-dem tiles via web worker. Use `DemSource` with AWS Terrain Tiles (Terrarium encoding). Register protocol once with `addProtocol()`
+- **MapLibre container opacity for map blending**: Apply opacity to the container div, NOT try to make Konva canvas transparent (causes blank canvas bugs)
+- **WorldMapPanel is a sidebar panel**: `'world-map'` is in `SIDE_PANELS` set in `state/app.ts`. Opens alongside canvas like plant-db and favorites
+- **DiscoveryMap reactivity**: Use `useEffect` with `[templates]` dependency, NOT `useSignalEffect`, when reacting to plain props (signals only track signal reads)
+- **`download_template` security**: HTTPS-only + domain allowlist (`templates.canopi.app`) + filename sanitization + path traversal check + 50MB size limit
+
+### Platform / Native
+- **Platform trait lives in `desktop/src/platform/mod.rs`**: NOT in `common-types` — `FileWatchHandle` contains closures (not serializable). Lib crates export marker structs, platform/mod.rs implements the trait via conditional modules
+- **`FileWatchHandle` must cancel on drop**: Uses `Option<Box<dyn FnOnce()>>` pattern with `Drop` impl that joins the watcher thread
+- **Cairo deps for lib-c**: `cairo-rs = "0.20"` with `png` + `pdf` features, `inotify = "0.11"`, `libc = "0.2"`
+- **macOS/Windows stubs**: All code `#[cfg(target_os = "...")]` gated. Compiles on Linux via conditional compilation. CI validates on actual platforms
 
 ### Tauri v2
 - **No `convertFileSrc()` for local files**: The `asset://` protocol is not scoped in `capabilities/main-window.json`. Serving local files to the WebView requires base64 data URLs from Rust. Adding `fs:allow-read` scope would fix it properly but needs capability config work

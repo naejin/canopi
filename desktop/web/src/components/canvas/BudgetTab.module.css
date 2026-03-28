@@ -5,143 +5,51 @@
   overflow: hidden;
 }
 
+/* ---- Header ---- */
+
 .header {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-4);
   border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
 }
 
+.autoCountLabel {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+
 .total {
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-primary);
-  margin-right: auto;
+  margin-left: auto;
 }
 
-.addBtn {
+.exportBtn {
   padding: var(--space-1) var(--space-3);
   font-size: var(--text-sm);
   font-weight: 500;
-  background: var(--color-primary);
-  color: var(--color-surface);
-  border: none;
-  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   white-space: nowrap;
-  min-height: 28px;
+  min-height: 24px;
 }
 
-.addBtn:hover {
-  background: var(--color-primary-hover);
-}
-
-.addBtn:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
-}
-
-/* ---- Inline form ---- */
-
-.formRow {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-4);
+.exportBtn:hover {
   background: var(--color-primary-bg);
-  border-bottom: 1px solid var(--color-border);
-  flex-shrink: 0;
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 
-.formSelect,
-.formSelectSm,
-.formInput,
-.formNumber {
-  height: 28px;
-  padding: 0 var(--space-2);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-size: var(--text-sm);
-  font-family: var(--font-sans);
-}
-
-.formSelect:focus,
-.formSelectSm:focus,
-.formInput:focus,
-.formNumber:focus {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 1px;
-}
-
-.formSelect {
-  min-width: 100px;
-}
-
-.formSelectSm {
-  width: 72px;
-}
-
-.formInput {
-  min-width: 120px;
-}
-
-.formInputWide {
-  flex: 1;
-}
-
-.formNumber {
-  width: 80px;
-  text-align: right;
-}
-
-.saveBtn {
-  padding: 0 var(--space-3);
-  height: 28px;
-  font-size: var(--text-sm);
-  font-weight: 500;
-  background: var(--color-primary);
-  color: var(--color-surface);
-  border: none;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  white-space: nowrap;
-  min-width: 32px;
-}
-
-.saveBtn:hover {
-  background: var(--color-primary-hover);
-}
-
-.saveBtn:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
-}
-
-.cancelBtn {
-  padding: 0 var(--space-3);
-  height: 28px;
-  font-size: var(--text-sm);
-  background: transparent;
-  color: var(--color-text-muted);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  white-space: nowrap;
-  min-width: 32px;
-}
-
-.cancelBtn:hover {
-  background: var(--color-surface);
-  color: var(--color-text);
-}
-
-.cancelBtn:focus-visible {
+.exportBtn:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
@@ -171,28 +79,6 @@
   max-width: 360px;
 }
 
-.emptyAddBtn {
-  margin-top: var(--space-2);
-  padding: var(--space-2) var(--space-4);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  background: var(--color-surface);
-  color: var(--color-primary);
-  border: 1px solid var(--color-primary);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  min-height: 32px;
-}
-
-.emptyAddBtn:hover {
-  background: var(--color-primary-bg);
-}
-
-.emptyAddBtn:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
-}
-
 /* ---- Table ---- */
 
 .tableWrapper {
@@ -204,7 +90,7 @@
 .table {
   width: 100%;
   border-collapse: collapse;
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
 }
 
 .table th {
@@ -212,7 +98,7 @@
   top: 0;
   background: var(--color-surface);
   font-weight: 600;
-  font-size: var(--text-xs);
+  font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--color-text-muted);
@@ -224,24 +110,50 @@
 }
 
 .table td {
-  padding: var(--space-1) var(--space-3);
-  border-bottom: 1px solid var(--color-border);
+  padding: 0 var(--space-3);
+  height: 24px;
   vertical-align: middle;
   color: var(--color-text);
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* Alternating rows */
+.rowEven {
+  background: var(--color-surface);
+}
+
+.rowOdd {
+  background: var(--color-bg);
 }
 
 .table tbody tr:hover {
   background: var(--color-primary-bg);
 }
 
-.thCat,
-.tdCat {
-  width: 110px;
+/* Column sizing */
+.thSpecies {
+  min-width: 200px;
 }
 
-.thDesc,
-.tdDesc {
-  min-width: 160px;
+.tdSpecies {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+
+.commonName {
+  font-weight: 500;
+  color: var(--color-text);
+  line-height: 1.2;
+}
+
+.canonical {
+  font-size: 10px;
+  font-style: italic;
+  color: var(--color-text-muted);
+  line-height: 1.2;
 }
 
 .thNum {
@@ -256,46 +168,50 @@
   color: var(--color-text);
 }
 
-.thActions {
-  width: 100px;
-}
+/* ---- Price input / button ---- */
 
-.tdRowActions {
-  display: flex;
-  gap: var(--space-1);
-  align-items: center;
-  padding: var(--space-1) var(--space-2);
-}
-
-/* Category badge */
-.badge {
-  display: inline-block;
-  padding: 1px var(--space-2);
-  border-radius: var(--radius-full);
+.priceInput {
+  width: 80px;
+  height: 20px;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
   font-size: var(--text-xs);
-  font-weight: 500;
-  background: var(--color-border);
+  font-family: var(--font-sans);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.priceInput:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.priceBtn {
+  padding: 1px var(--space-2);
+  font-size: var(--text-xs);
+  font-family: var(--font-sans);
+  background: transparent;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-sm);
   color: var(--color-text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  min-height: 20px;
+  font-variant-numeric: tabular-nums;
 }
 
-.badge_plants {
-  background: var(--color-edible-bg);
-  color: var(--color-edible);
+.priceBtn:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: var(--color-primary-bg);
 }
 
-.badge_materials {
-  background: var(--color-family-bg);
-  color: var(--color-family);
-}
-
-.badge_labor {
-  background: var(--color-shade-bg);
-  color: var(--color-shade);
-}
-
-.badge_tools {
-  background: var(--color-hardiness-bg);
-  color: var(--color-hardiness);
+.priceBtn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
 }
 
 /* ---- Total row ---- */
@@ -304,38 +220,11 @@
   background: var(--color-primary-bg);
   border-top: 2px solid var(--color-primary);
   font-weight: 600;
+  height: 28px;
 }
 
 .totalLabel {
   text-align: right;
   color: var(--color-text-muted);
   font-size: var(--text-sm);
-}
-
-.rowActionBtn {
-  padding: 1px var(--space-2);
-  font-size: var(--text-xs);
-  background: transparent;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-muted);
-  cursor: pointer;
-  white-space: nowrap;
-  min-height: 22px;
-}
-
-.rowActionBtn:hover {
-  background: var(--color-surface);
-  color: var(--color-text);
-}
-
-.rowActionBtn:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 1px;
-}
-
-.rowActionBtnDanger:hover {
-  background: var(--color-danger-bg);
-  border-color: var(--color-danger);
-  color: var(--color-danger);
 }

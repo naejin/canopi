@@ -19,7 +19,12 @@ import {
   plantColorByAttr,
   mapLayerVisible,
   mapStyle,
+  mapLayerOpacity,
   designLocation,
+  contourLayerVisible,
+  contourInterval,
+  hillshadeVisible,
+  hillshadeOpacity,
   minimapVisible,
   celestialDate,
   currentConsortiums,
@@ -112,6 +117,7 @@ export class CanvasEngine {
   private _celestialDial: import('konva').default.Group | null = null
   private _disposeCelestialEffect: (() => void) | null = null
   private _disposeMinimapEffect: (() => void) | null = null
+  private _disposeTerrainEffect: (() => void) | null = null
   // Shared RAF token for overlay redraws (grid + rulers + ui elements)
   private _overlayRafId: number | null = null
 
@@ -823,15 +829,16 @@ export class CanvasEngine {
       this._minimap?.update(this.stage, this.layers)
     })
 
-    // Map visibility + style effects — lazy-load map-layer.ts only when toggled on
-    // NOTE: Map integration is incomplete. The toggle controls the MapLibre container
-    // visibility but does NOT make the Konva canvas transparent (that caused blank
-    // canvas bugs). Full map integration requires solving the transparency/compositing
-    // model properly — deferred to a focused map sub-phase.
+    // Map visibility + style + opacity — lazy-load map-layer.ts only when toggled on.
+    // MapLibre renders in a div behind the Konva stage; opacity is applied to the
+    // container div so the canvas overlays remain crisp.
     this._disposeMapEffect?.()
     this._disposeMapEffect = effect(() => {
+      // Read ALL signals before any early return so the effect re-runs on any change
       const visible = mapLayerVisible.value
       const style = mapStyle.value
+      const opacity = mapLayerOpacity.value
+      const location = designLocation.value
       if (!visible) {
         if (this._mapLayer) this._mapLayer.container.style.display = 'none'
         return
@@ -841,15 +848,56 @@ export class CanvasEngine {
           this._mapModule = mod
           this._mapLayer?.destroy()
           this._mapLayer = mod.createMapLayer(this.stage.container())
-          void mod.syncMap(this._mapLayer, this.stage, designLocation.value)
+          mod.setMapOpacity(this._mapLayer, opacity)
+          void mod.syncMap(this._mapLayer, this.stage, location)
         }).catch(() => { /* map load failed silently */ })
         return
       }
       if (this._mapLayer) {
         this._mapLayer.container.style.display = 'block'
-        void this._mapModule.syncMap(this._mapLayer, this.stage, designLocation.value)
+        this._mapModule.setMapOpacity(this._mapLayer, opacity)
+        void this._mapModule.syncMap(this._mapLayer, this.stage, location)
         if (this._mapLayer.map) this._mapModule.setMapStyle(this._mapLayer, style)
       }
+    })
+
+    // Terrain layers (contours + hillshade) — reacts to visibility, opacity, and
+    // interval signals. Requires the map module to already be loaded (the map effect
+    // above handles lazy loading). This effect only mutates existing map layer
+    // properties; it never triggers a full style rebuild.
+    //
+    // updateContourInterval is expensive (tears down + rebuilds source+layers),
+    // so we track previous values and only call it when interval or theme changes.
+    let prevContourInterval = -1
+    let prevContourIsDark: boolean | null = null
+    this._disposeTerrainEffect?.()
+    this._disposeTerrainEffect = effect(() => {
+      // Read ALL signals before any early return (CLAUDE.md rule)
+      const contoursVisible = contourLayerVisible.value
+      const interval = contourInterval.value
+      const hsVisible = hillshadeVisible.value
+      const hsOpacity = hillshadeOpacity.value
+      const currentTheme = theme.value
+
+      // No-op until the map module and map instance are ready
+      if (!this._mapModule || !this._mapLayer?.map) return
+
+      const isDark = currentTheme === 'dark'
+      const mod = this._mapModule
+
+      // Contour visibility
+      mod.setContourVisibility(this._mapLayer, contoursVisible)
+
+      // Contour interval — rebuild contour source only when interval or theme changes
+      if (interval !== prevContourInterval || isDark !== prevContourIsDark) {
+        prevContourInterval = interval
+        prevContourIsDark = isDark
+        mod.updateContourInterval(this._mapLayer, interval, isDark)
+      }
+
+      // Hillshade visibility + opacity
+      mod.setHillshadeVisibility(this._mapLayer, hsVisible)
+      mod.setHillshadeOpacity(this._mapLayer, hsOpacity)
     })
 
     // Apply current visibility — rulers are created with display:block by default,
@@ -1516,6 +1564,8 @@ export class CanvasEngine {
     this._mapLayer = null
     this._disposeMapEffect?.()
     this._disposeMapEffect = null
+    this._disposeTerrainEffect?.()
+    this._disposeTerrainEffect = null
     this._disposeCelestialEffect?.()
     this._disposeCelestialEffect = null
     this._celestialDial = null

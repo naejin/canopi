@@ -82,9 +82,17 @@ export const designLocation = signal<{ lat: number; lon: number } | null>(null)
 export const celestialDate = signal<Date | null>(null)
 
 // Map layer
-export type MapStyle = 'street' | 'terrain'
+export type MapStyle = 'street' | 'terrain' | 'satellite'
 export const mapLayerVisible = signal<boolean>(false)
 export const mapStyle = signal<MapStyle>('street')
+export const mapLayerOpacity = signal<number>(1)
+
+// Terrain layers (Phase 4.2-4.4)
+export const contourLayerVisible = signal<boolean>(false)
+export const contourInterval = signal<number>(5)
+export const hillshadeVisible = signal<boolean>(false)
+export const hillshadeOpacity = signal<number>(0.3)
+export const offlineTilesAvailable = signal<boolean>(false)
 
 // Consortium — mirror of currentDesign.consortiums for canvas modules
 export const currentConsortiums = signal<Consortium[]>([])
@@ -95,5 +103,5 @@ export const minimapVisible = signal<boolean>(false)
 
 // Bottom panel
 export const bottomPanelOpen = signal<boolean>(false)
-export const bottomPanelTab = signal<'timeline' | 'consortium' | 'budget'>('timeline')
+export const bottomPanelTab = signal<'timeline' | 'budget'>('timeline')
 export const bottomPanelHeight = signal<number>(200)

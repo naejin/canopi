@@ -3,6 +3,9 @@
   height: 100%;
   display: block;
   cursor: default;
+  /* Prevent text selection during drag */
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .timeline:active {

@@ -13,6 +13,8 @@ import { CanvasToolbar } from '../canvas/CanvasToolbar'
 import { ZoomControls } from '../canvas/ZoomControls'
 import { DisplayModeControls } from '../canvas/DisplayModeControls'
 import { DisplayLegend } from '../canvas/DisplayLegend'
+import { BottomPanel } from '../canvas/BottomPanel'
+import { LayerPanel } from '../canvas/LayerPanel'
 import { WelcomeScreen } from '../shared/WelcomeScreen'
 import styles from './Panels.module.css'
 
@@ -109,14 +111,20 @@ export function CanvasPanel() {
     <div className={styles.canvasPanel}>
       {hasDesign && <CanvasToolbar />}
 
-      <div className={styles.canvasArea}>
-        <div ref={containerRef} className={styles.canvasContainer} />
-        <div ref={rulerOverlayRef} className={styles.rulerOverlay} />
+      <div className={styles.canvasColumn}>
+        <div className={styles.canvasRow}>
+          <div className={styles.canvasArea}>
+            <div ref={containerRef} className={styles.canvasContainer} />
+            <div ref={rulerOverlayRef} className={styles.rulerOverlay} />
 
-        {!hasDesign && <WelcomeScreen />}
-        {hasDesign && <DisplayModeControls />}
-        {hasDesign && <DisplayLegend />}
-        {hasDesign && <ZoomControls />}
+            {!hasDesign && <WelcomeScreen />}
+            {hasDesign && <DisplayModeControls />}
+            {hasDesign && <DisplayLegend />}
+            {hasDesign && <ZoomControls />}
+          </div>
+          {hasDesign && <LayerPanel />}
+        </div>
+        {hasDesign && <BottomPanel />}
       </div>
     </div>
   )

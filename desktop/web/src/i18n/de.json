@@ -174,7 +174,17 @@
       "showMap": "Kartenebene anzeigen",
       "required": "Legen Sie zuerst einen Entwurfsstandort fest",
       "mapStreet": "Straße",
-      "mapTerrain": "Gelände"
+      "mapTerrain": "Gelände",
+      "searchPlaceholder": "Standort suchen...",
+      "searching": "Suche...",
+      "noResults": "Keine Ergebnisse",
+      "selectResult": "Ergebnis auswählen",
+      "geocodeError": "Geokodierung fehlgeschlagen",
+      "changeWarning": "Standortänderung kann georeferenzierte Elemente verschieben",
+      "miniMapLabel": "Vorschau",
+      "addressLabel": "Adresse",
+      "opacity": "Kartendeckkraft",
+      "mapSatellite": "Satellit"
     },
     "file": {
       "new": "Neuer Entwurf",
@@ -195,7 +205,7 @@
       "layerPanel": "Ebenen",
       "collapse": "Ebenenpanel einklappen",
       "base": "Basis",
-      "contours": "Konturen",
+      "contours": "Höhenlinien",
       "climate": "Klima",
       "zones": "Zonen",
       "water": "Wasser",
@@ -203,7 +213,17 @@
       "annotations": "Anmerkungen",
       "visibility": "Sichtbarkeit umschalten",
       "lock": "Sperre umschalten",
-      "opacity": "Deckkraft"
+      "opacity": "Deckkraft",
+      "mapSection": "Kartenebenen",
+      "basemap": "Basiskarte",
+      "satellite": "Satellit",
+      "hillshade": "Schummerung",
+      "interval": "Intervall",
+      "setLocation": "Legen Sie einen Standort fest, um Kartenebenen zu aktivieren",
+      "styleStreet": "Straße",
+      "styleTerrain": "Gelände",
+      "styleSatellite": "Satellit",
+      "styleNone": "Keine"
     },
     "bottomPanel": {
       "ariaLabel": "Unteres Panel",
@@ -235,7 +255,16 @@
       "type_harvest": "Ernte",
       "type_watering": "Bewässerung",
       "type_fertilising": "Düngung",
-      "type_other": "Sonstiges"
+      "type_other": "Sonstiges",
+      "dragToMove": "Ziehen zum Verschieben",
+      "dragToResize": "Rand ziehen zum Ändern",
+      "prePopulate": "Aus Datenbank ausfüllen",
+      "acceptSuggestion": "Akzeptieren",
+      "dismissSuggestion": "Verwerfen",
+      "weekView": "Woche",
+      "monthView": "Monat",
+      "yearView": "Jahr",
+      "todayMarker": "Heute"
     },
     "consortium": {
       "title": "Konsortium",
@@ -282,7 +311,14 @@
       "category_materials": "Material",
       "category_labor": "Arbeit",
       "category_tools": "Werkzeuge",
-      "category_other": "Sonstiges"
+      "category_other": "Sonstiges",
+      "species": "Art",
+      "autoCount": "Automatische Zählung vom Canvas",
+      "setPrice": "Preis festlegen",
+      "defaultPrice": "Standardpreis",
+      "exportCSV": "CSV exportieren",
+      "emptyCanvas": "Platzieren Sie Pflanzen auf dem Canvas, um Kosten zu verfolgen",
+      "perUnit": "pro Einheit"
     },
     "export": {
       "exportPng": "Als PNG exportieren",
@@ -299,15 +335,56 @@
       "title": "Pflanzendetails",
       "plantDetail": "Pflanzendetails",
       "close": "Pflanzendetails schließen"
+    },
+    "terrain": {
+      "contours": "Höhenlinien",
+      "contourInterval": "Höhenlinienintervall",
+      "hillshade": "Schummerung",
+      "hillshadeOpacity": "Schummerungsdeckkraft",
+      "offlineTiles": "Offline-Kacheln",
+      "downloadTiles": "Kacheln herunterladen",
+      "downloadProgress": "Wird heruntergeladen...",
+      "downloadComplete": "Download abgeschlossen",
+      "tileRegion": "Kachelregion",
+      "zoomRange": "Zoombereich",
+      "offlineStatus": "Offline",
+      "removeOffline": "Offline-Kacheln entfernen"
     }
   },
   "worldMap": {
     "emptyTitle": "Weltkarte",
-    "emptyText": "Seien Sie der Erste, der einen Entwurf in Ihrer Gegend teilt!"
+    "emptyText": "Seien Sie der Erste, der einen Entwurf in Ihrer Gegend teilt!",
+    "title": "Weltkarte",
+    "discover": "Designs entdecken",
+    "featured": "Empfohlen",
+    "useTemplate": "Als Vorlage verwenden",
+    "downloading": "Vorlage wird heruntergeladen...",
+    "plantCount": "{{count}} Pflanzen",
+    "climateZone": "Klimazone",
+    "author": "Von {{author}}",
+    "noDesigns": "Keine Designs in dieser Region",
+    "zoomToExplore": "Zoomen Sie, um Designs zu erkunden",
+    "filterByClimate": "Nach Klima filtern",
+    "filterByStyle": "Nach Stil filtern",
+    "filterByScale": "Nach Maßstab filtern",
+    "preview": "Vorschau",
+    "openTemplate": "Als neues Design öffnen"
   },
   "learning": {
     "emptyTitle": "Lernen",
-    "emptyText": "Techniken von der Bodenvorbereitung bis zur Syntropie erlernen"
+    "emptyText": "Techniken von der Bodenvorbereitung bis zur Syntropie erlernen",
+    "title": "Wissen",
+    "search": "Artikel suchen...",
+    "topics": "Themen",
+    "noResults": "Keine Artikel gefunden",
+    "readMore": "Mehr lesen",
+    "relatedPlants": "Verwandte Pflanzen",
+    "articles": "Artikel",
+    "composting": "Kompostierung",
+    "waterManagement": "Wassermanagement",
+    "companionPlanting": "Mischkultur",
+    "soilHealth": "Bodengesundheit",
+    "permaculture": "Permakultur-Prinzipien"
   },
   "saved": {
     "title": "Gespeicherte Entwürfe",
@@ -546,7 +623,7 @@
     "hardiness": "Winterhärte",
     "edibility": "Essbarkeit",
     "height": "Höhe",
-    "nitrogen": "N\u2082-Fixierer",
+    "nitrogen": "N₂-Fixierer",
     "moreFilters": "Weitere Filter",
     "clearAll": "Alle löschen",
     "activeFilters": "Aktive Filter",
@@ -639,5 +716,17 @@
     "empty": "Noch keine Favoriten",
     "emptyHint": "Markieren Sie Pflanzen im Suchpanel, um sie hier hinzuzufügen",
     "dragHint": "Auf die Fläche ziehen zum Platzieren"
+  },
+  "adaptation": {
+    "title": "Vorlagenanpassung",
+    "incompatible": "Inkompatible Pflanzen",
+    "compatible": "Kompatibel",
+    "hardinessWarning": "Winterhärte-Abweichung ({{zones}} Zonen)",
+    "suggestReplacement": "Ersatz vorschlagen",
+    "acceptAll": "Alle akzeptieren",
+    "dismissAll": "Alle verwerfen",
+    "replacement": "Ersetzen durch",
+    "keepOriginal": "Original behalten",
+    "reviewPlants": "Pflanzen für Ihren Standort prüfen"
   }
 }

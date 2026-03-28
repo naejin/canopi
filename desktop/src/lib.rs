@@ -52,7 +52,19 @@ pub fn run() {
             commands::export::export_file,
             commands::export::export_binary,
             commands::export::read_file_bytes,
+            commands::export::export_native_png,
+            commands::export::export_native_pdf,
             commands::health::get_health,
+            commands::tiles::download_tiles,
+            commands::tiles::get_tile,
+            commands::tiles::get_offline_status,
+            commands::tiles::remove_offline_tiles,
+            commands::geocoding::geocode_address,
+            commands::adaptation::check_plant_compatibility,
+            commands::adaptation::suggest_replacements,
+            commands::community::get_template_catalog,
+            commands::community::get_template_preview,
+            commands::community::download_template,
         ])
         .setup(|app| {
             // Logging

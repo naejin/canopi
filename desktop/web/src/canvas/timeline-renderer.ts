@@ -3,159 +3,400 @@ import { dateToX, niceInterval, formatDateLabel } from './timeline-math'
 
 // ---------------------------------------------------------------------------
 // Timeline renderer — Canvas 2D drawing (not Konva)
-// Same pattern as rulers and minimap for 60fps performance.
+// Theme-aware: reads CSS variables from a container element at render time.
 // ---------------------------------------------------------------------------
 
-const LANE_HEIGHT = 28
-const RULER_HEIGHT = 24
+export const LANE_HEIGHT = 32
+export const RULER_HEIGHT = 28
 const BAR_RADIUS = 4
-const BAR_MARGIN = 3
-const TODAY_COLOR = 'rgba(239, 68, 68, 0.7)'
-const RULER_BG = 'rgba(0, 0, 0, 0.03)'
-const RULER_TEXT = '#64748b'
-const RULER_LINE = 'rgba(0, 0, 0, 0.1)'
-const SELECTED_OUTLINE = '#2D5F3F'
+const BAR_MARGIN = 4
+const EDGE_THRESHOLD = 6 // px from bar edge to trigger resize cursor
 
+/** Width of the species label sidebar in pixels. Shared with InteractiveTimeline. */
+export const LABEL_SIDEBAR_WIDTH = 140
+
+/** Action type colors — earthy field notebook palette */
 const ACTION_COLORS: Record<string, string> = {
-  planting: '#4CAF50',
-  pruning: '#FF9800',
-  harvest: '#FDD835',
-  watering: '#42A5F5',
-  fertilising: '#795548',
-  other: '#9E9E9E',
+  planting: '#5A7D3A',   // moss green
+  pruning: '#A06B1F',    // ochre
+  harvest: '#B8860B',    // dark goldenrod
+  watering: '#5B8FB9',   // pond teal
+  fertilising: '#7D6F5E', // graphite
+  other: '#7D6F5E',       // graphite
 }
-
-const LANE_ORDER = ['planting', 'pruning', 'harvest', 'watering', 'fertilising', 'other']
 
 export interface TimelineRenderState {
   originDate: Date
   pxPerDay: number
   scrollX: number
   selectedId: string | null
+  hoveredId: string | null
+}
+
+export interface SpeciesRow {
+  speciesName: string
+  actions: TimelineAction[]
 }
 
 /**
- * Render the full timeline onto a Canvas 2D context.
+ * Group actions by species (via plants[0] canonical name or ungrouped).
+ * Returns a flat list of rows: one per species, plus an "ungrouped" row.
  */
+export function groupActionsBySpecies(actions: TimelineAction[]): SpeciesRow[] {
+  const speciesMap = new Map<string, TimelineAction[]>()
+  const ungrouped: TimelineAction[] = []
+
+  for (const action of actions) {
+    const key = action.plants?.[0] ?? null
+    if (key) {
+      const existing = speciesMap.get(key)
+      if (existing) existing.push(action)
+      else speciesMap.set(key, [action])
+    } else {
+      ungrouped.push(action)
+    }
+  }
+
+  const rows: SpeciesRow[] = []
+  for (const [name, acts] of speciesMap) {
+    rows.push({ speciesName: name, actions: acts })
+  }
+  if (ungrouped.length > 0) {
+    rows.push({ speciesName: '', actions: ungrouped })
+  }
+  return rows
+}
+
+/**
+ * Compute lane layout: each action gets a lane index within its species row,
+ * stacking vertically when bars overlap in time.
+ * Returns a map of actionId -> { row index, sub-lane within row }.
+ */
+export interface ActionLayout {
+  /** Species row index (0-based) */
+  rowIndex: number
+  /** Sub-lane within the species row (0-based) for stacking overlapping bars */
+  subLane: number
+  /** Total number of sub-lanes in this species row */
+  totalSubLanes: number
+}
+
+export function computeLayout(rows: SpeciesRow[]): Map<string, ActionLayout> {
+  const layout = new Map<string, ActionLayout>()
+
+  for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+    const row = rows[rowIndex]!
+    // Sort actions by start date
+    const sorted = [...row.actions].sort((a, b) => {
+      const aStart = a.start_date ? new Date(a.start_date).getTime() : 0
+      const bStart = b.start_date ? new Date(b.start_date).getTime() : 0
+      return aStart - bStart
+    })
+
+    // Greedy lane packing — assign to the first sub-lane where the action doesn't overlap
+    const laneEnds: number[] = [] // end time of last action in each sub-lane
+
+    for (const action of sorted) {
+      const startMs = action.start_date ? new Date(action.start_date).getTime() : Date.now()
+      const endMs = action.end_date ? new Date(action.end_date).getTime() : startMs + 86400000
+
+      let assigned = -1
+      for (let i = 0; i < laneEnds.length; i++) {
+        if (startMs >= laneEnds[i]!) {
+          assigned = i
+          laneEnds[i] = endMs
+          break
+        }
+      }
+      if (assigned === -1) {
+        assigned = laneEnds.length
+        laneEnds.push(endMs)
+      }
+
+      layout.set(action.id, {
+        rowIndex,
+        subLane: assigned,
+        totalSubLanes: 0, // will be filled below
+      })
+    }
+
+    // Write total sub-lanes back
+    const totalSubLanes = Math.max(laneEnds.length, 1)
+    for (const action of sorted) {
+      const entry = layout.get(action.id)!
+      entry.totalSubLanes = totalSubLanes
+    }
+  }
+
+  return layout
+}
+
+/**
+ * Compute the pixel Y offset for a given species row.
+ */
+export function rowYOffset(rowIndex: number, rows: SpeciesRow[], layout: Map<string, ActionLayout>): number {
+  let y = RULER_HEIGHT
+  for (let i = 0; i < rowIndex; i++) {
+    y += rowHeight(rows[i]!, layout)
+  }
+  return y
+}
+
+/** Height of a species row in pixels. */
+export function rowHeight(row: SpeciesRow, layout: Map<string, ActionLayout>): number {
+  if (row.actions.length === 0) return LANE_HEIGHT
+  const firstEntry = layout.get(row.actions[0]!.id)
+  const totalSubLanes = firstEntry?.totalSubLanes ?? 1
+  return Math.max(LANE_HEIGHT, totalSubLanes * LANE_HEIGHT)
+}
+
+/** Total content height including ruler. */
+export function totalContentHeight(rows: SpeciesRow[], layout: Map<string, ActionLayout>): number {
+  let h = RULER_HEIGHT
+  for (const row of rows) {
+    h += rowHeight(row, layout)
+  }
+  return h
+}
+
+// ---------------------------------------------------------------------------
+// Theme color helper — reads CSS variables from the document.
+// Caches the CSSStyleDeclaration per frame to avoid repeated getComputedStyle
+// calls during drag-heavy render loops.
+// ---------------------------------------------------------------------------
+
+let _cachedStyle: CSSStyleDeclaration | null = null
+let _cachedStyleFrame = -1
+
+function _cssVar(name: string): string {
+  const frame = performance.now()
+  // Reuse the style declaration within the same frame (~16ms granularity)
+  if (!_cachedStyle || frame - _cachedStyleFrame > 16) {
+    _cachedStyle = getComputedStyle(document.documentElement)
+    _cachedStyleFrame = frame
+  }
+  return _cachedStyle.getPropertyValue(name).trim()
+}
+
+// ---------------------------------------------------------------------------
+// Main render
+// ---------------------------------------------------------------------------
+
 export function renderTimeline(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
-  actions: TimelineAction[],
+  rows: SpeciesRow[],
+  layout: Map<string, ActionLayout>,
   state: TimelineRenderState,
+  scrollY: number,
 ): void {
   const dpr = window.devicePixelRatio || 1
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
   ctx.clearRect(0, 0, width, height)
 
-  const { originDate, pxPerDay, scrollX, selectedId } = state
+  const { originDate, pxPerDay, scrollX, selectedId, hoveredId } = state
 
-  // -- Time ruler at top ---------------------------------------------------
-  ctx.fillStyle = RULER_BG
-  ctx.fillRect(0, 0, width, RULER_HEIGHT)
+  // Read theme tokens
+  const bgColor = _cssVar('--color-bg') || '#F0EBE1'
+  const surfaceColor = _cssVar('--color-surface') || '#FAF7F2'
+  const borderColor = _cssVar('--color-border') || 'rgba(60, 45, 30, 0.12)'
+  const textColor = _cssVar('--color-text') || '#2C2418'
+  const textMutedColor = _cssVar('--color-text-muted') || '#7D6F5E'
+  const primaryColor = _cssVar('--color-primary') || '#A06B1F'
+  const dangerColor = _cssVar('--color-danger') || '#B5432A'
+
+  const chartLeft = LABEL_SIDEBAR_WIDTH
+
+  // -- Label sidebar background -----------------------------------------------
+  ctx.fillStyle = surfaceColor
+  ctx.fillRect(0, 0, chartLeft, height)
+
+  // Sidebar border
+  ctx.strokeStyle = borderColor
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.moveTo(chartLeft, 0)
+  ctx.lineTo(chartLeft, height)
+  ctx.stroke()
+
+  // -- Time ruler at top (above chart area only) ------------------------------
+  ctx.fillStyle = bgColor
+  ctx.fillRect(chartLeft, 0, width - chartLeft, RULER_HEIGHT)
 
   const interval = niceInterval(pxPerDay)
   const intervalMs = interval * 24 * 60 * 60 * 1000
-
-  // First visible date (snapped to interval boundary)
-  const viewStartMs = originDate.getTime() + (scrollX / pxPerDay) * 24 * 60 * 60 * 1000
+  const viewStartMs = originDate.getTime() + (scrollX / pxPerDay) * 86400000
+  const viewEndMs = viewStartMs + ((width - chartLeft) / pxPerDay) * 86400000
   const firstTickMs = Math.floor(viewStartMs / intervalMs) * intervalMs
 
-  ctx.fillStyle = RULER_TEXT
-  ctx.font = '10px system-ui, sans-serif'
-  ctx.strokeStyle = RULER_LINE
+  ctx.fillStyle = textMutedColor
+  ctx.font = `500 10px ${_cssVar('--font-sans') || 'system-ui, sans-serif'}`
+  ctx.strokeStyle = borderColor
   ctx.lineWidth = 0.5
 
-  for (let ms = firstTickMs; ms < viewStartMs + (width / pxPerDay) * 24 * 60 * 60 * 1000; ms += intervalMs) {
+  for (let ms = firstTickMs; ms < viewEndMs + intervalMs; ms += intervalMs) {
     const date = new Date(ms)
-    const x = dateToX(date, originDate, pxPerDay) - scrollX
+    const x = chartLeft + dateToX(date, originDate, pxPerDay) - scrollX
 
+    if (x < chartLeft - 40 || x > width + 40) continue
+
+    // Tick mark
     ctx.beginPath()
     ctx.moveTo(x, RULER_HEIGHT - 6)
     ctx.lineTo(x, RULER_HEIGHT)
     ctx.stroke()
 
+    // Label
     const label = formatDateLabel(date, interval)
-    ctx.fillText(label, x + 3, RULER_HEIGHT - 8)
+    ctx.fillText(label, x + 3, RULER_HEIGHT - 10)
   }
 
   // Ruler bottom border
-  ctx.strokeStyle = RULER_LINE
+  ctx.strokeStyle = borderColor
   ctx.lineWidth = 1
   ctx.beginPath()
   ctx.moveTo(0, RULER_HEIGHT)
   ctx.lineTo(width, RULER_HEIGHT)
   ctx.stroke()
 
-  // -- Swim lane backgrounds -----------------------------------------------
-  for (let i = 0; i < LANE_ORDER.length; i++) {
-    const y = RULER_HEIGHT + i * LANE_HEIGHT
-    if (i % 2 === 1) {
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.02)'
-      ctx.fillRect(0, y, width, LANE_HEIGHT)
+  // Ruler top-left corner label
+  ctx.fillStyle = bgColor
+  ctx.fillRect(0, 0, chartLeft, RULER_HEIGHT)
+  ctx.strokeStyle = borderColor
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.moveTo(chartLeft, 0)
+  ctx.lineTo(chartLeft, RULER_HEIGHT)
+  ctx.stroke()
+
+  // -- Species rows -----------------------------------------------------------
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(0, RULER_HEIGHT, width, height - RULER_HEIGHT)
+  ctx.clip()
+
+  for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
+    const row = rows[rowIdx]!
+    const rY = rowYOffset(rowIdx, rows, layout) - scrollY
+    const rH = rowHeight(row, layout)
+
+    // Skip if out of view
+    if (rY + rH < RULER_HEIGHT || rY > height) continue
+
+    // Alternating row backgrounds
+    if (rowIdx % 2 === 1) {
+      ctx.fillStyle = borderColor
+      ctx.globalAlpha = 0.3
+      ctx.fillRect(chartLeft, rY, width - chartLeft, rH)
+      ctx.globalAlpha = 1
+    }
+
+    // Row separator line
+    ctx.strokeStyle = borderColor
+    ctx.lineWidth = 0.5
+    ctx.beginPath()
+    ctx.moveTo(0, rY + rH)
+    ctx.lineTo(width, rY + rH)
+    ctx.stroke()
+
+    // Species label in sidebar
+    ctx.fillStyle = textColor
+    ctx.font = `500 11px ${_cssVar('--font-sans') || 'system-ui, sans-serif'}`
+    const label = row.speciesName || 'General'
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(4, rY, chartLeft - 8, rH)
+    ctx.clip()
+    // Vertically center the text
+    const labelY = rY + rH / 2 + 4
+    ctx.fillText(label, 8, labelY)
+    ctx.restore()
+
+    // -- Action bars for this row -------------------------------------------
+    for (const action of row.actions) {
+      if (!action.start_date) continue
+
+      const entry = layout.get(action.id)
+      if (!entry) continue
+
+      const startDate = new Date(action.start_date)
+      const endDate = action.end_date
+        ? new Date(action.end_date)
+        : new Date(startDate.getTime() + 86400000)
+
+      const x1 = chartLeft + dateToX(startDate, originDate, pxPerDay) - scrollX
+      const x2 = chartLeft + dateToX(endDate, originDate, pxPerDay) - scrollX
+
+      const subLaneH = rH / entry.totalSubLanes
+      const barY = rY + entry.subLane * subLaneH + BAR_MARGIN
+      const barW = Math.max(x2 - x1, 6)
+      const barH = subLaneH - BAR_MARGIN * 2
+
+      // Skip if out of horizontal view
+      if (x1 + barW < chartLeft || x1 > width) continue
+
+      // Bar fill
+      const baseColor = ACTION_COLORS[action.action_type] ?? ACTION_COLORS.other!
+      if (action.completed) {
+        ctx.globalAlpha = 0.35
+        ctx.fillStyle = textMutedColor
+      } else {
+        ctx.globalAlpha = action.id === hoveredId ? 0.9 : 0.8
+        ctx.fillStyle = baseColor
+      }
+      _roundRect(ctx, x1, barY, barW, barH, BAR_RADIUS)
+      ctx.fill()
+      ctx.globalAlpha = 1
+
+      // Selected outline
+      if (action.id === selectedId) {
+        ctx.strokeStyle = primaryColor
+        ctx.lineWidth = 2
+        _roundRect(ctx, x1, barY, barW, barH, BAR_RADIUS)
+        ctx.stroke()
+      }
+
+      // Hover outline (lighter)
+      if (action.id === hoveredId && action.id !== selectedId) {
+        ctx.strokeStyle = primaryColor
+        ctx.lineWidth = 1
+        ctx.globalAlpha = 0.5
+        _roundRect(ctx, x1, barY, barW, barH, BAR_RADIUS)
+        ctx.stroke()
+        ctx.globalAlpha = 1
+      }
+
+      // Label inside bar
+      if (barW > 40) {
+        ctx.fillStyle = action.completed ? textMutedColor : surfaceColor
+        ctx.font = `500 10px ${_cssVar('--font-sans') || 'system-ui, sans-serif'}`
+        ctx.save()
+        ctx.beginPath()
+        ctx.rect(x1 + 2, barY, barW - 4, barH)
+        ctx.clip()
+        ctx.fillText(action.description, x1 + 6, barY + barH / 2 + 3.5)
+        ctx.restore()
+      }
+
+      // Completed strikethrough
+      if (action.completed && barW > 10) {
+        ctx.strokeStyle = textMutedColor
+        ctx.lineWidth = 1
+        ctx.beginPath()
+        ctx.moveTo(x1 + 4, barY + barH / 2)
+        ctx.lineTo(x1 + barW - 4, barY + barH / 2)
+        ctx.stroke()
+      }
     }
   }
 
-  // -- Action bars ----------------------------------------------------------
-  for (const action of actions) {
-    if (!action.start_date) continue
+  ctx.restore() // un-clip
 
-    const startDate = new Date(action.start_date)
-    const endDate = action.end_date ? new Date(action.end_date) : new Date(startDate.getTime() + 24 * 60 * 60 * 1000) // default 1 day
-
-    const x1 = dateToX(startDate, originDate, pxPerDay) - scrollX
-    const x2 = dateToX(endDate, originDate, pxPerDay) - scrollX
-
-    // Which lane?
-    const laneIdx = LANE_ORDER.indexOf(action.action_type)
-    const lane = laneIdx >= 0 ? laneIdx : LANE_ORDER.length - 1
-    const y = RULER_HEIGHT + lane * LANE_HEIGHT + BAR_MARGIN
-
-    const barW = Math.max(x2 - x1, 6) // min 6px wide
-    const barH = LANE_HEIGHT - BAR_MARGIN * 2
-
-    // Bar fill
-    ctx.fillStyle = action.completed
-      ? 'rgba(158, 158, 158, 0.4)'
-      : (ACTION_COLORS[action.action_type] ?? ACTION_COLORS.other!)
-    _roundRect(ctx, x1, y, barW, barH, BAR_RADIUS)
-    ctx.fill()
-
-    // Selected outline
-    if (action.id === selectedId) {
-      ctx.strokeStyle = SELECTED_OUTLINE
-      ctx.lineWidth = 2
-      _roundRect(ctx, x1, y, barW, barH, BAR_RADIUS)
-      ctx.stroke()
-    }
-
-    // Label inside bar
-    if (barW > 30) {
-      ctx.fillStyle = action.completed ? '#666' : '#fff'
-      ctx.font = '10px system-ui, sans-serif'
-      ctx.save()
-      ctx.beginPath()
-      ctx.rect(x1, y, barW, barH)
-      ctx.clip()
-      ctx.fillText(action.description, x1 + 4, y + barH / 2 + 3)
-      ctx.restore()
-    }
-
-    // Completed strikethrough
-    if (action.completed && barW > 10) {
-      ctx.strokeStyle = '#666'
-      ctx.lineWidth = 1
-      ctx.beginPath()
-      ctx.moveTo(x1 + 2, y + barH / 2)
-      ctx.lineTo(x1 + barW - 2, y + barH / 2)
-      ctx.stroke()
-    }
-  }
-
-  // -- Today marker ---------------------------------------------------------
-  const todayX = dateToX(new Date(), originDate, pxPerDay) - scrollX
-  if (todayX >= 0 && todayX <= width) {
-    ctx.strokeStyle = TODAY_COLOR
+  // -- Today marker -----------------------------------------------------------
+  const todayX = chartLeft + dateToX(new Date(), originDate, pxPerDay) - scrollX
+  if (todayX >= chartLeft && todayX <= width) {
+    ctx.strokeStyle = dangerColor
     ctx.lineWidth = 1.5
     ctx.setLineDash([4, 4])
     ctx.beginPath()
@@ -163,37 +404,81 @@ export function renderTimeline(
     ctx.lineTo(todayX, height)
     ctx.stroke()
     ctx.setLineDash([])
+
+    // Small triangle at top
+    ctx.fillStyle = dangerColor
+    ctx.beginPath()
+    ctx.moveTo(todayX - 4, 0)
+    ctx.lineTo(todayX + 4, 0)
+    ctx.lineTo(todayX, 6)
+    ctx.closePath()
+    ctx.fill()
   }
 }
 
-/**
- * Hit-test: which action bar (if any) is at the given pixel position?
- */
+// ---------------------------------------------------------------------------
+// Hit testing
+// ---------------------------------------------------------------------------
+
+export type HitEdge = 'left' | 'right' | 'body' | null
+
+export interface HitResult {
+  action: TimelineAction
+  edge: HitEdge
+}
+
 export function hitTestAction(
   x: number,
   y: number,
-  actions: TimelineAction[],
+  rows: SpeciesRow[],
+  layout: Map<string, ActionLayout>,
   state: TimelineRenderState,
-): TimelineAction | null {
+  scrollY: number,
+): HitResult | null {
   const { originDate, pxPerDay, scrollX } = state
+  const chartLeft = LABEL_SIDEBAR_WIDTH
 
-  for (const action of actions) {
-    if (!action.start_date) continue
-    const startDate = new Date(action.start_date)
-    const endDate = action.end_date ? new Date(action.end_date) : new Date(startDate.getTime() + 86400000)
-    const x1 = dateToX(startDate, originDate, pxPerDay) - scrollX
-    const x2 = dateToX(endDate, originDate, pxPerDay) - scrollX
-    const laneIdx = LANE_ORDER.indexOf(action.action_type)
-    const lane = laneIdx >= 0 ? laneIdx : LANE_ORDER.length - 1
-    const barY = RULER_HEIGHT + lane * LANE_HEIGHT + BAR_MARGIN
-    const barH = LANE_HEIGHT - BAR_MARGIN * 2
+  // Ignore clicks in the label sidebar or ruler
+  if (x < chartLeft || y < RULER_HEIGHT) return null
 
-    if (x >= x1 && x <= Math.max(x2, x1 + 6) && y >= barY && y <= barY + barH) {
-      return action
+  for (const row of rows) {
+    for (const action of row.actions) {
+      if (!action.start_date) continue
+
+      const entry = layout.get(action.id)
+      if (!entry) continue
+
+      const rowIdx = entry.rowIndex
+      const rY = rowYOffset(rowIdx, rows, layout) - scrollY
+      const rH = rowHeight(rows[rowIdx]!, layout)
+      const subLaneH = rH / entry.totalSubLanes
+
+      const startDate = new Date(action.start_date)
+      const endDate = action.end_date
+        ? new Date(action.end_date)
+        : new Date(startDate.getTime() + 86400000)
+
+      const x1 = chartLeft + dateToX(startDate, originDate, pxPerDay) - scrollX
+      const x2 = chartLeft + dateToX(endDate, originDate, pxPerDay) - scrollX
+      const barY = rY + entry.subLane * subLaneH + BAR_MARGIN
+      const barW = Math.max(x2 - x1, 6)
+      const barH = subLaneH - BAR_MARGIN * 2
+
+      if (x >= x1 && x <= x1 + barW && y >= barY && y <= barY + barH) {
+        // Determine edge
+        let edge: HitEdge = 'body'
+        if (x - x1 < EDGE_THRESHOLD) edge = 'left'
+        else if (x1 + barW - x < EDGE_THRESHOLD) edge = 'right'
+        return { action, edge }
+      }
     }
   }
   return null
 }
+
+// ---------------------------------------------------------------------------
+// Utils
+// ---------------------------------------------------------------------------
 
 function _roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
   ctx.beginPath()

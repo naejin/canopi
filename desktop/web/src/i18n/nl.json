@@ -174,7 +174,17 @@
       "showMap": "Kaartlaag tonen",
       "required": "Stel eerst een ontwerplocatie in",
       "mapStreet": "Straat",
-      "mapTerrain": "Terrein"
+      "mapTerrain": "Terrein",
+      "searchPlaceholder": "Locatie zoeken...",
+      "searching": "Zoeken...",
+      "noResults": "Geen resultaten",
+      "selectResult": "Selecteer een resultaat",
+      "geocodeError": "Geocodering mislukt",
+      "changeWarning": "Locatie wijzigen kan georeferentie-elementen verschuiven",
+      "miniMapLabel": "Voorbeeld",
+      "addressLabel": "Adres",
+      "opacity": "Kaartdekking",
+      "mapSatellite": "Satelliet"
     },
     "file": {
       "new": "Nieuw ontwerp",
@@ -195,7 +205,7 @@
       "layerPanel": "Lagen",
       "collapse": "Lagenpaneel inklappen",
       "base": "Basis",
-      "contours": "Contouren",
+      "contours": "Hoogtelijnen",
       "climate": "Klimaat",
       "zones": "Zones",
       "water": "Water",
@@ -203,7 +213,17 @@
       "annotations": "Annotaties",
       "visibility": "Zichtbaarheid in-/uitschakelen",
       "lock": "Vergrendeling in-/uitschakelen",
-      "opacity": "Dekking"
+      "opacity": "Dekking",
+      "mapSection": "Kaartlagen",
+      "basemap": "Basiskaart",
+      "satellite": "Satelliet",
+      "hillshade": "Reliëfschaduw",
+      "interval": "Interval",
+      "setLocation": "Stel een locatie in om kaartlagen te activeren",
+      "styleStreet": "Straat",
+      "styleTerrain": "Terrein",
+      "styleSatellite": "Satelliet",
+      "styleNone": "Geen"
     },
     "bottomPanel": {
       "ariaLabel": "Onderpaneel",
@@ -235,7 +255,16 @@
       "type_harvest": "Oogst",
       "type_watering": "Water geven",
       "type_fertilising": "Bemesten",
-      "type_other": "Overig"
+      "type_other": "Overig",
+      "dragToMove": "Sleep om te verplaatsen",
+      "dragToResize": "Sleep rand om grootte te wijzigen",
+      "prePopulate": "Automatisch invullen uit database",
+      "acceptSuggestion": "Accepteren",
+      "dismissSuggestion": "Negeren",
+      "weekView": "Week",
+      "monthView": "Maand",
+      "yearView": "Jaar",
+      "todayMarker": "Vandaag"
     },
     "consortium": {
       "title": "Consortium",
@@ -282,7 +311,14 @@
       "category_materials": "Materialen",
       "category_labor": "Arbeid",
       "category_tools": "Gereedschap",
-      "category_other": "Overig"
+      "category_other": "Overig",
+      "species": "Soort",
+      "autoCount": "Automatisch geteld van canvas",
+      "setPrice": "Prijs instellen",
+      "defaultPrice": "Standaardprijs",
+      "exportCSV": "CSV exporteren",
+      "emptyCanvas": "Plaats planten op het canvas om kosten bij te houden",
+      "perUnit": "per stuk"
     },
     "export": {
       "exportPng": "Exporteren als PNG",
@@ -299,15 +335,56 @@
       "title": "Plantdetail",
       "plantDetail": "Plantdetail",
       "close": "Plantdetail sluiten"
+    },
+    "terrain": {
+      "contours": "Hoogtelijnen",
+      "contourInterval": "Hoogtelijneninterval",
+      "hillshade": "Reliëfschaduw",
+      "hillshadeOpacity": "Schaduwdekking",
+      "offlineTiles": "Offline tegels",
+      "downloadTiles": "Tegels downloaden",
+      "downloadProgress": "Downloaden...",
+      "downloadComplete": "Download voltooid",
+      "tileRegion": "Tegelgebied",
+      "zoomRange": "Zoombereik",
+      "offlineStatus": "Offline",
+      "removeOffline": "Offline tegels verwijderen"
     }
   },
   "worldMap": {
     "emptyTitle": "Wereldkaart",
-    "emptyText": "Wees de eerste die een ontwerp deelt in jouw omgeving!"
+    "emptyText": "Wees de eerste die een ontwerp deelt in jouw omgeving!",
+    "title": "Wereldkaart",
+    "discover": "Ontwerpen ontdekken",
+    "featured": "Uitgelicht",
+    "useTemplate": "Gebruik als sjabloon",
+    "downloading": "Sjabloon downloaden...",
+    "plantCount": "{{count}} planten",
+    "climateZone": "Klimaatzone",
+    "author": "Door {{author}}",
+    "noDesigns": "Geen ontwerpen in dit gebied",
+    "zoomToExplore": "Zoom in om ontwerpen te verkennen",
+    "filterByClimate": "Filter op klimaat",
+    "filterByStyle": "Filter op stijl",
+    "filterByScale": "Filter op schaal",
+    "preview": "Voorbeeld",
+    "openTemplate": "Openen als nieuw ontwerp"
   },
   "learning": {
     "emptyTitle": "Leren",
-    "emptyText": "Leer technieken van bodemvoorbereiding tot syntropie"
+    "emptyText": "Leer technieken van bodemvoorbereiding tot syntropie",
+    "title": "Kennis",
+    "search": "Artikelen zoeken...",
+    "topics": "Onderwerpen",
+    "noResults": "Geen artikelen gevonden",
+    "readMore": "Lees meer",
+    "relatedPlants": "Gerelateerde planten",
+    "articles": "Artikelen",
+    "composting": "Composteren",
+    "waterManagement": "Waterbeheer",
+    "companionPlanting": "Mengteelt",
+    "soilHealth": "Bodemgezondheid",
+    "permaculture": "Permacultuurprincipes"
   },
   "saved": {
     "title": "Opgeslagen ontwerpen",
@@ -546,7 +623,7 @@
     "hardiness": "Winterhardheid",
     "edibility": "Eetbaarheid",
     "height": "Hoogte",
-    "nitrogen": "N\u2082-fixeerder",
+    "nitrogen": "N₂-fixeerder",
     "moreFilters": "Meer filters",
     "clearAll": "Alles wissen",
     "activeFilters": "Actieve filters",
@@ -639,5 +716,17 @@
     "empty": "Nog geen favorieten",
     "emptyHint": "Markeer planten in het zoekpaneel om ze hier toe te voegen",
     "dragHint": "Sleep naar canvas om te plaatsen"
+  },
+  "adaptation": {
+    "title": "Sjabloonaanpassing",
+    "incompatible": "Onverenigbare planten",
+    "compatible": "Verenigbaar",
+    "hardinessWarning": "Winterhardheid verschil ({{zones}} zones)",
+    "suggestReplacement": "Vervanging voorstellen",
+    "acceptAll": "Alles accepteren",
+    "dismissAll": "Alles negeren",
+    "replacement": "Vervangen door",
+    "keepOriginal": "Origineel behouden",
+    "reviewPlants": "Controleer planten voor uw locatie"
   }
 }

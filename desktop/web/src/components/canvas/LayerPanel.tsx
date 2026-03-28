@@ -1,12 +1,23 @@
 import { useCallback } from 'preact/hooks'
 import { t } from '../../i18n'
-import { locale } from '../../state/app'
+import { locale, persistCurrentSettings } from '../../state/app'
 import {
   layerVisibility,
   layerLockState,
   layerPanelOpen,
   activeLayerName,
+  designLocation,
+  mapLayerVisible,
+  mapStyle,
+  mapLayerOpacity,
+  contourLayerVisible,
+  contourInterval,
+  hillshadeVisible,
+  hillshadeOpacity,
 } from '../../state/canvas'
+import type { MapStyle } from '../../state/canvas'
+import { Dropdown } from '../shared/Dropdown'
+import type { DropdownItem } from '../shared/Dropdown'
 import styles from './LayerPanel.module.css'
 
 // Display order: top of stack first (annotations renders over everything)
@@ -238,6 +249,194 @@ function LayerRow({ name }: LayerRowProps) {
   )
 }
 
+// Style dropdown items — built once per render of MapLayersSection (locale-reactive)
+function buildStyleItems(): DropdownItem<MapStyle | 'none'>[] {
+  return [
+    { value: 'street', label: t('canvas.layers.styleStreet') },
+    { value: 'terrain', label: t('canvas.layers.styleTerrain') },
+    { value: 'satellite', label: t('canvas.layers.styleSatellite') },
+    { value: 'none', label: t('canvas.layers.styleNone') },
+  ]
+}
+
+function styleTriggerLabel(vis: boolean, style: MapStyle): string {
+  if (!vis) return t('canvas.layers.styleNone')
+  switch (style) {
+    case 'street': return t('canvas.layers.styleStreet')
+    case 'terrain': return t('canvas.layers.styleTerrain')
+    case 'satellite': return t('canvas.layers.styleSatellite')
+  }
+}
+
+function MapLayersSection() {
+  const hasLocation = designLocation.value !== null
+  const basemapVisible = mapLayerVisible.value
+  const currentStyle = mapStyle.value
+  const basemapOpacity = mapLayerOpacity.value
+  const contoursVisible = contourLayerVisible.value
+  const currentInterval = contourInterval.value
+  const hillVisible = hillshadeVisible.value
+  const hillOpacity = hillshadeOpacity.value
+
+  const handleStyleChange = useCallback((val: MapStyle | 'none') => {
+    if (val === 'none') {
+      mapLayerVisible.value = false
+    } else {
+      mapLayerVisible.value = true
+      mapStyle.value = val
+    }
+    persistCurrentSettings()
+  }, [])
+
+  const handleBasemapToggle = useCallback(() => {
+    mapLayerVisible.value = !mapLayerVisible.value
+    persistCurrentSettings()
+  }, [])
+
+  const handleBasemapOpacity = useCallback((e: Event) => {
+    mapLayerOpacity.value = parseInt((e.target as HTMLInputElement).value, 10) / 100
+    persistCurrentSettings()
+  }, [])
+
+  const handleContoursToggle = useCallback(() => {
+    contourLayerVisible.value = !contourLayerVisible.value
+    persistCurrentSettings()
+  }, [])
+
+  const handleIntervalChange = useCallback((e: Event) => {
+    contourInterval.value = parseInt((e.target as HTMLInputElement).value, 10)
+    persistCurrentSettings()
+  }, [])
+
+  const handleHillshadeToggle = useCallback(() => {
+    hillshadeVisible.value = !hillshadeVisible.value
+    persistCurrentSettings()
+  }, [])
+
+  const handleHillshadeOpacity = useCallback((e: Event) => {
+    hillshadeOpacity.value = parseInt((e.target as HTMLInputElement).value, 10) / 100
+    persistCurrentSettings()
+  }, [])
+
+  const dropdownValue: MapStyle | 'none' = basemapVisible ? currentStyle : 'none'
+
+  return (
+    <div className={styles.mapSection}>
+      <div className={styles.sectionHeader}>
+        {t('canvas.layers.mapSection')}
+      </div>
+
+      {!hasLocation ? (
+        <div className={styles.noLocationMsg}>
+          {t('canvas.layers.setLocation')}
+        </div>
+      ) : (
+        <>
+          {/* Basemap row */}
+          <div className={styles.mapRow}>
+            <label className={styles.mapCheckLabel}>
+              <input
+                type="checkbox"
+                className={styles.mapCheck}
+                checked={basemapVisible}
+                onChange={handleBasemapToggle}
+              />
+              {t('canvas.layers.basemap')}
+            </label>
+            <Dropdown<MapStyle | 'none'>
+              trigger={<span className={styles.dropdownTriggerText}>{styleTriggerLabel(basemapVisible, currentStyle)}</span>}
+              items={buildStyleItems()}
+              value={dropdownValue}
+              onChange={handleStyleChange}
+              ariaLabel={t('canvas.layers.basemap')}
+              className={styles.styleDropdown}
+              triggerClassName={styles.styleTrigger}
+              menuDirection="down"
+            />
+          </div>
+
+          {/* Basemap opacity — only when basemap is visible */}
+          {basemapVisible && (
+            <div className={styles.mapSliderRow}>
+              <span className={styles.mapSliderLabel}>{t('canvas.layers.opacity')}</span>
+              <input
+                type="range"
+                className={styles.mapSlider}
+                min={0}
+                max={100}
+                value={Math.round(basemapOpacity * 100)}
+                onInput={handleBasemapOpacity}
+                aria-label={`${t('canvas.layers.basemap')} ${t('canvas.layers.opacity')}`}
+              />
+              <span className={styles.mapSliderValue}>{Math.round(basemapOpacity * 100)}%</span>
+            </div>
+          )}
+
+          {/* Contours row */}
+          <div className={styles.mapRow}>
+            <label className={styles.mapCheckLabel}>
+              <input
+                type="checkbox"
+                className={styles.mapCheck}
+                checked={contoursVisible}
+                onChange={handleContoursToggle}
+              />
+              {t('canvas.layers.contours')}
+            </label>
+          </div>
+
+          {/* Contour interval — only when contours visible */}
+          {contoursVisible && (
+            <div className={styles.mapSliderRow}>
+              <span className={styles.mapSliderLabel}>{t('canvas.layers.interval')}</span>
+              <input
+                type="range"
+                className={styles.mapSlider}
+                min={1}
+                max={100}
+                value={currentInterval}
+                onInput={handleIntervalChange}
+                aria-label={`${t('canvas.layers.contours')} ${t('canvas.layers.interval')}`}
+              />
+              <span className={styles.mapSliderValue}>{currentInterval}m</span>
+            </div>
+          )}
+
+          {/* Hillshade row */}
+          <div className={styles.mapRow}>
+            <label className={styles.mapCheckLabel}>
+              <input
+                type="checkbox"
+                className={styles.mapCheck}
+                checked={hillVisible}
+                onChange={handleHillshadeToggle}
+              />
+              {t('canvas.layers.hillshade')}
+            </label>
+          </div>
+
+          {/* Hillshade opacity — only when hillshade visible */}
+          {hillVisible && (
+            <div className={styles.mapSliderRow}>
+              <span className={styles.mapSliderLabel}>{t('canvas.layers.opacity')}</span>
+              <input
+                type="range"
+                className={styles.mapSlider}
+                min={0}
+                max={100}
+                value={Math.round(hillOpacity * 100)}
+                onInput={handleHillshadeOpacity}
+                aria-label={`${t('canvas.layers.hillshade')} ${t('canvas.layers.opacity')}`}
+              />
+              <span className={styles.mapSliderValue}>{Math.round(hillOpacity * 100)}%</span>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 export function LayerPanel() {
   // Subscribe to locale so labels re-render on language change
   void locale.value
@@ -290,6 +489,8 @@ export function LayerPanel() {
       {LAYER_ORDER.map((name) => (
         <LayerRow key={name} name={name} />
       ))}
+
+      <MapLayersSection />
     </div>
   )
 }

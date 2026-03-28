@@ -174,7 +174,17 @@
       "showMap": "地図レイヤーを表示",
       "required": "先にデザインの位置を設定してください",
       "mapStreet": "道路",
-      "mapTerrain": "地形"
+      "mapTerrain": "地形",
+      "searchPlaceholder": "場所を検索...",
+      "searching": "検索中...",
+      "noResults": "結果なし",
+      "selectResult": "結果を選択",
+      "geocodeError": "ジオコーディング失敗",
+      "changeWarning": "位置を変更するとジオリファレンス要素がずれる可能性があります",
+      "miniMapLabel": "プレビュー",
+      "addressLabel": "住所",
+      "opacity": "地図の不透明度",
+      "mapSatellite": "衛星"
     },
     "file": {
       "new": "新規デザイン",
@@ -203,7 +213,17 @@
       "annotations": "注釈",
       "visibility": "表示/非表示を切替",
       "lock": "ロックを切替",
-      "opacity": "不透明度"
+      "opacity": "不透明度",
+      "mapSection": "地図レイヤー",
+      "basemap": "ベースマップ",
+      "satellite": "衛星",
+      "hillshade": "陰影起伏",
+      "interval": "間隔",
+      "setLocation": "地図レイヤーを有効にするには位置を設定してください",
+      "styleStreet": "道路",
+      "styleTerrain": "地形",
+      "styleSatellite": "衛星",
+      "styleNone": "なし"
     },
     "bottomPanel": {
       "ariaLabel": "下部パネル",
@@ -235,7 +255,16 @@
       "type_harvest": "収穫",
       "type_watering": "水やり",
       "type_fertilising": "施肥",
-      "type_other": "その他"
+      "type_other": "その他",
+      "dragToMove": "ドラッグして移動",
+      "dragToResize": "端をドラッグしてサイズ変更",
+      "prePopulate": "データベースから自動入力",
+      "acceptSuggestion": "承認",
+      "dismissSuggestion": "却下",
+      "weekView": "週",
+      "monthView": "月",
+      "yearView": "年",
+      "todayMarker": "今日"
     },
     "consortium": {
       "title": "コンソーシアム",
@@ -282,7 +311,14 @@
       "category_materials": "資材",
       "category_labor": "労務",
       "category_tools": "工具",
-      "category_other": "その他"
+      "category_other": "その他",
+      "species": "種",
+      "autoCount": "キャンバスから自動カウント",
+      "setPrice": "価格を設定",
+      "defaultPrice": "デフォルト価格",
+      "exportCSV": "CSVエクスポート",
+      "emptyCanvas": "キャンバスに植物を配置してコストを追跡",
+      "perUnit": "単位あたり"
     },
     "export": {
       "exportPng": "PNG として書き出し",
@@ -299,15 +335,56 @@
       "title": "植物の詳細",
       "plantDetail": "植物の詳細",
       "close": "植物の詳細を閉じる"
+    },
+    "terrain": {
+      "contours": "等高線",
+      "contourInterval": "等高線間隔",
+      "hillshade": "陰影起伏",
+      "hillshadeOpacity": "陰影の不透明度",
+      "offlineTiles": "オフラインタイル",
+      "downloadTiles": "タイルをダウンロード",
+      "downloadProgress": "ダウンロード中...",
+      "downloadComplete": "ダウンロード完了",
+      "tileRegion": "タイル地域",
+      "zoomRange": "ズーム範囲",
+      "offlineStatus": "オフライン",
+      "removeOffline": "オフラインタイルを削除"
     }
   },
   "worldMap": {
     "emptyTitle": "世界地図",
-    "emptyText": "あなたの地域で最初にデザインを共有しましょう！"
+    "emptyText": "あなたの地域で最初にデザインを共有しましょう！",
+    "title": "世界地図",
+    "discover": "デザインを発見",
+    "featured": "おすすめ",
+    "useTemplate": "テンプレートとして使用",
+    "downloading": "テンプレートをダウンロード中...",
+    "plantCount": "{{count}} 種の植物",
+    "climateZone": "気候帯",
+    "author": "{{author}} 作",
+    "noDesigns": "この地域にデザインはまだありません",
+    "zoomToExplore": "ズームしてデザインを探索",
+    "filterByClimate": "気候で絞り込み",
+    "filterByStyle": "スタイルで絞り込み",
+    "filterByScale": "規模で絞り込み",
+    "preview": "プレビュー",
+    "openTemplate": "新しいデザインとして開く"
   },
   "learning": {
     "emptyTitle": "学習",
-    "emptyText": "土壌準備からシントロピー農法までの技術を学ぶ"
+    "emptyText": "土壌準備からシントロピー農法までの技術を学ぶ",
+    "title": "ナレッジ",
+    "search": "記事を検索...",
+    "topics": "トピック",
+    "noResults": "記事が見つかりません",
+    "readMore": "続きを読む",
+    "relatedPlants": "関連する植物",
+    "articles": "記事",
+    "composting": "堆肥化",
+    "waterManagement": "水管理",
+    "companionPlanting": "コンパニオンプランティング",
+    "soilHealth": "土壌の健康",
+    "permaculture": "パーマカルチャーの原則"
   },
   "saved": {
     "title": "保存済みデザイン",
@@ -639,5 +716,17 @@
     "empty": "お気に入りはまだありません",
     "emptyHint": "検索パネルで植物にスターを付けてここに追加",
     "dragHint": "キャンバスにドラッグして配置"
+  },
+  "adaptation": {
+    "title": "テンプレート適応",
+    "incompatible": "互換性のない植物",
+    "compatible": "互換性あり",
+    "hardinessWarning": "耐寒性の不一致（{{zones}}ゾーン）",
+    "suggestReplacement": "代替を提案",
+    "acceptAll": "すべて承認",
+    "dismissAll": "すべて却下",
+    "replacement": "次に置換",
+    "keepOriginal": "元を維持",
+    "reviewPlants": "あなたの場所に合った植物を確認"
   }
 }

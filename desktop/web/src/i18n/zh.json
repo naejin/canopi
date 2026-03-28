@@ -174,7 +174,17 @@
       "showMap": "显示地图图层",
       "required": "请先设置设计位置",
       "mapStreet": "街道",
-      "mapTerrain": "地形"
+      "mapTerrain": "地形",
+      "searchPlaceholder": "搜索位置...",
+      "searching": "搜索中...",
+      "noResults": "没有结果",
+      "selectResult": "选择一个结果",
+      "geocodeError": "地理编码失败",
+      "changeWarning": "更改位置可能会移动地理参考要素",
+      "miniMapLabel": "预览",
+      "addressLabel": "地址",
+      "opacity": "地图透明度",
+      "mapSatellite": "卫星"
     },
     "file": {
       "new": "新建设计",
@@ -203,7 +213,17 @@
       "annotations": "注释",
       "visibility": "切换可见性",
       "lock": "切换锁定",
-      "opacity": "不透明度"
+      "opacity": "不透明度",
+      "mapSection": "地图图层",
+      "basemap": "底图",
+      "satellite": "卫星",
+      "hillshade": "山体阴影",
+      "interval": "间距",
+      "setLocation": "设置设计位置以启用地图图层",
+      "styleStreet": "街道",
+      "styleTerrain": "地形",
+      "styleSatellite": "卫星",
+      "styleNone": "无"
     },
     "bottomPanel": {
       "ariaLabel": "底部面板",
@@ -235,7 +255,16 @@
       "type_harvest": "收获",
       "type_watering": "浇水",
       "type_fertilising": "施肥",
-      "type_other": "其他"
+      "type_other": "其他",
+      "dragToMove": "拖动移动",
+      "dragToResize": "拖动边缘调整大小",
+      "prePopulate": "从数据库自动填充",
+      "acceptSuggestion": "接受",
+      "dismissSuggestion": "忽略",
+      "weekView": "周",
+      "monthView": "月",
+      "yearView": "年",
+      "todayMarker": "今天"
     },
     "consortium": {
       "title": "共生组合",
@@ -282,7 +311,14 @@
       "category_materials": "材料",
       "category_labor": "人工",
       "category_tools": "工具",
-      "category_other": "其他"
+      "category_other": "其他",
+      "species": "物种",
+      "autoCount": "从画布自动计数",
+      "setPrice": "设置价格",
+      "defaultPrice": "默认价格",
+      "exportCSV": "导出CSV",
+      "emptyCanvas": "在画布上放置植物以跟踪成本",
+      "perUnit": "每单位"
     },
     "export": {
       "exportPng": "导出为 PNG",
@@ -299,15 +335,56 @@
       "title": "植物详情",
       "plantDetail": "植物详情",
       "close": "关闭植物详情"
+    },
+    "terrain": {
+      "contours": "等高线",
+      "contourInterval": "等高线间距",
+      "hillshade": "山体阴影",
+      "hillshadeOpacity": "阴影透明度",
+      "offlineTiles": "离线地图",
+      "downloadTiles": "下载地图",
+      "downloadProgress": "下载中...",
+      "downloadComplete": "下载完成",
+      "tileRegion": "地图区域",
+      "zoomRange": "缩放范围",
+      "offlineStatus": "离线",
+      "removeOffline": "删除离线地图"
     }
   },
   "worldMap": {
     "emptyTitle": "世界地图",
-    "emptyText": "成为第一个在您所在地区分享设计的人！"
+    "emptyText": "成为第一个在您所在地区分享设计的人！",
+    "title": "世界地图",
+    "discover": "发现设计",
+    "featured": "精选",
+    "useTemplate": "用作模板",
+    "downloading": "正在下载模板...",
+    "plantCount": "{{count}} 种植物",
+    "climateZone": "气候带",
+    "author": "{{author}} 设计",
+    "noDesigns": "该区域暂无设计",
+    "zoomToExplore": "放大以探索设计",
+    "filterByClimate": "按气候筛选",
+    "filterByStyle": "按风格筛选",
+    "filterByScale": "按规模筛选",
+    "preview": "预览",
+    "openTemplate": "作为新设计打开"
   },
   "learning": {
     "emptyTitle": "学习",
-    "emptyText": "学习从土壤准备到共生农业的技术"
+    "emptyText": "学习从土壤准备到共生农业的技术",
+    "title": "知识库",
+    "search": "搜索文章...",
+    "topics": "主题",
+    "noResults": "未找到文章",
+    "readMore": "阅读更多",
+    "relatedPlants": "相关植物",
+    "articles": "文章",
+    "composting": "堆肥",
+    "waterManagement": "水资源管理",
+    "companionPlanting": "伴生种植",
+    "soilHealth": "土壤健康",
+    "permaculture": "朴门永续原则"
   },
   "saved": {
     "title": "已保存的设计",
@@ -639,5 +716,17 @@
     "empty": "暂无收藏",
     "emptyHint": "在搜索面板中标记植物以添加到此处",
     "dragHint": "拖拽到画布以放置"
+  },
+  "adaptation": {
+    "title": "模板适配",
+    "incompatible": "不兼容的植物",
+    "compatible": "兼容",
+    "hardinessWarning": "耐寒性不匹配（{{zones}}个区）",
+    "suggestReplacement": "建议替换",
+    "acceptAll": "全部接受",
+    "dismissAll": "全部忽略",
+    "replacement": "替换为",
+    "keepOriginal": "保留原始",
+    "reviewPlants": "检查适合您位置的植物"
   }
 }

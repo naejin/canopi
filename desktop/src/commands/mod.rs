@@ -4,4 +4,8 @@ pub mod favorites;
 pub mod design;
 pub mod content;
 pub mod export;
+pub mod geocoding;
+pub mod tiles;
 pub mod health;
+pub mod adaptation;
+pub mod community;

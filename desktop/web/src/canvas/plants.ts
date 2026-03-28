@@ -2,6 +2,9 @@ import Konva from 'konva'
 import { getCommonNames } from '../ipc/species'
 import { getCanvasColor } from './theme-refresh'
 
+// Re-export for canvas-internal consumers (display-modes.ts)
+export { STRATUM_I18N_KEY } from '../types/constants'
+
 // Strata color map — keyed by RAW DB values (lowercase).
 // Konva cannot read CSS vars, so hex values are required.
 const STRATA_COLORS: Record<string, string> = {
@@ -9,15 +12,6 @@ const STRATA_COLORS: Record<string, string> = {
   'high':         '#2E7D32',
   'low':          '#388E3C',
   'medium':       '#558B2F',
-}
-
-// Display-friendly labels for strata — maps raw DB values to i18n keys.
-// Used by PlantRow tags and legend entries.
-export const STRATUM_I18N_KEY: Record<string, string> = {
-  'emergent': 'filters.stratum_emergent',
-  'high':     'filters.stratum_high',
-  'low':      'filters.stratum_low',
-  'medium':   'filters.stratum_medium',
 }
 const DEFAULT_PLANT_COLOR = '#4CAF50'
 
@@ -221,80 +215,109 @@ export function updatePlantsLOD(
   plantsLayer.batchDraw()
 }
 
+// Badge positioning constants (screen pixels)
+const BADGE_RADIUS = 7
+const BADGE_OFFSET_X = CIRCLE_SCREEN_PX + 2
+const BADGE_OFFSET_Y = -(CIRCLE_SCREEN_PX + 2)
+
 /**
- * Find plants within STACK_THRESHOLD screen pixels of each other and add
- * count badges to the topmost plant in each cluster.
+ * Find plants within STACK_THRESHOLD screen pixels of each other and
+ * show/update count badges on the topmost plant in each cluster.
+ *
+ * Badges are cached as named children ('stackBadgeBg' / 'stackBadgeText')
+ * on each group. On subsequent calls we reuse existing Konva nodes —
+ * updating text and toggling visibility — instead of destroying and
+ * recreating them every zoom event.
  */
 function updateStackedBadges(
   positions: { group: Konva.Group; sx: number; sy: number }[],
   _stageScale: number,
 ): void {
-  // Remove all existing badges first
-  for (const p of positions) {
-    const existing = p.group.find('.stack-badge')
-    for (const node of existing) node.destroy()
-    // Clear stale stack data attr
-    p.group.setAttr('data-stack-count', null)
-  }
+  // Phase 1 — compute stack counts per anchor
+  const stackCounts = new Map<number, number>() // index → count
 
-  if (positions.length < 2) return
+  if (positions.length >= 2) {
+    const visited = new Set<number>()
 
-  // Simple single-linkage clustering from the first (anchor) plant
-  const visited = new Set<number>()
+    for (let i = 0; i < positions.length; i++) {
+      if (visited.has(i)) continue
 
-  for (let i = 0; i < positions.length; i++) {
-    if (visited.has(i)) continue
+      const stack: number[] = [i]
+      visited.add(i)
 
-    const stack: number[] = [i]
-    visited.add(i)
+      for (let j = i + 1; j < positions.length; j++) {
+        if (visited.has(j)) continue
+        const dx = positions[i]!.sx - positions[j]!.sx
+        const dy = positions[i]!.sy - positions[j]!.sy
+        if (dx * dx + dy * dy < STACK_THRESHOLD_SQ) {
+          stack.push(j)
+          visited.add(j)
+        }
+      }
 
-    for (let j = i + 1; j < positions.length; j++) {
-      if (visited.has(j)) continue
-      const dx = positions[i]!.sx - positions[j]!.sx
-      const dy = positions[i]!.sy - positions[j]!.sy
-      if (dx * dx + dy * dy < STACK_THRESHOLD_SQ) {
-        stack.push(j)
-        visited.add(j)
+      if (stack.length >= 2) {
+        stackCounts.set(i, stack.length)
       }
     }
+  }
 
-    if (stack.length < 2) continue
-
-    // Badge the anchor (first/topmost) plant in the cluster
+  // Phase 2 — reconcile badges on each group
+  for (let i = 0; i < positions.length; i++) {
     const g = positions[i]!.group
-    g.setAttr('data-stack-count', stack.length)
+    const count = stackCounts.get(i)
 
-    // Badge background circle — positioned in screen-pixel space (group is
-    // already counter-scaled, so plain pixel values work)
-    const badgeRadius = 7
-    const offsetX = CIRCLE_SCREEN_PX + 2
-    const offsetY = -(CIRCLE_SCREEN_PX + 2)
+    if (!count) {
+      // Only search for badge nodes if we know they were created before
+      if (g.getAttr('data-stack-count') != null) {
+        g.setAttr('data-stack-count', null)
+        const existingBg = g.findOne('.stackBadgeBg') as Konva.Circle | undefined
+        const existingText = g.findOne('.stackBadgeText') as Konva.Text | undefined
+        if (existingBg) existingBg.visible(false)
+        if (existingText) existingText.visible(false)
+      }
+      continue
+    }
 
-    const bgCircle = new Konva.Circle({
-      name: 'stack-badge',
-      x: offsetX,
-      y: offsetY,
-      radius: badgeRadius,
-      fill: STACK_BADGE_BG,
-      listening: false,
-    })
+    // Stack detected — update or create badge
+    g.setAttr('data-stack-count', count)
 
-    const badgeText = new Konva.Text({
-      name: 'stack-badge',
-      text: String(stack.length),
-      fontSize: 9,
-      fontFamily: 'Inter, system-ui, sans-serif',
-      fill: STACK_BADGE_FG,
-      listening: false,
-      align: 'center',
-      verticalAlign: 'middle',
-    })
-    // Center text on the badge circle
-    badgeText.x(offsetX - badgeText.width() / 2)
-    badgeText.y(offsetY - badgeText.height() / 2)
+    let bgCircle = g.findOne('.stackBadgeBg') as Konva.Circle | undefined
+    let badgeText = g.findOne('.stackBadgeText') as Konva.Text | undefined
 
-    g.add(bgCircle)
-    g.add(badgeText)
+    if (bgCircle && badgeText) {
+      // Reuse existing nodes — just update text and ensure visible
+      badgeText.text(String(count))
+      badgeText.x(BADGE_OFFSET_X - badgeText.width() / 2)
+      badgeText.y(BADGE_OFFSET_Y - badgeText.height() / 2)
+      bgCircle.visible(true)
+      badgeText.visible(true)
+    } else {
+      // First time — create badge nodes
+      bgCircle = new Konva.Circle({
+        name: 'stackBadgeBg',
+        x: BADGE_OFFSET_X,
+        y: BADGE_OFFSET_Y,
+        radius: BADGE_RADIUS,
+        fill: STACK_BADGE_BG,
+        listening: false,
+      })
+
+      badgeText = new Konva.Text({
+        name: 'stackBadgeText',
+        text: String(count),
+        fontSize: 9,
+        fontFamily: 'Inter, system-ui, sans-serif',
+        fill: STACK_BADGE_FG,
+        listening: false,
+        align: 'center',
+        verticalAlign: 'middle',
+      })
+      badgeText.x(BADGE_OFFSET_X - badgeText.width() / 2)
+      badgeText.y(BADGE_OFFSET_Y - badgeText.height() / 2)
+
+      g.add(bgCircle)
+      g.add(badgeText)
+    }
   }
 }
 

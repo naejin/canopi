@@ -3,7 +3,7 @@ import { locale } from '../../state/app'
 import { toggleFavoriteAction, selectedCanonicalName } from '../../state/plant-db'
 import { plantStampSpecies } from '../../state/canvas'
 import { canvasEngine } from '../../canvas/engine'
-import { STRATUM_I18N_KEY } from '../../canvas/plants'
+import { STRATUM_I18N_KEY } from '../../types/constants'
 import type { SpeciesListItem } from '../../types/species'
 import styles from './PlantDb.module.css'
 

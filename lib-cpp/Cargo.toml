@@ -4,3 +4,5 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+# cxx will be added when FFI to Direct2D / Windows Imaging Component is implemented.
+# For now, this crate provides a Rust-only stub with the same API surface as lib-c.

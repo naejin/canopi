@@ -1,28 +1,52 @@
-import { useSignal, computed } from '@preact/signals'
+import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale } from '../../state/app'
-import { currentDesign, nonCanvasRevision } from '../../state/document'
-import type { BudgetItem } from '../../types/design'
+import { currentDesign, nonCanvasRevision, designName } from '../../state/document'
+import { canvasEngine } from '../../canvas/engine'
+import { exportFile } from '../../ipc/design'
+import type { BudgetItem, PlacedPlant } from '../../types/design'
 import styles from './BudgetTab.module.css'
 
-type BudgetCategory = 'plants' | 'materials' | 'labor' | 'tools' | 'other'
-
-const CATEGORIES: BudgetCategory[] = ['plants', 'materials', 'labor', 'tools', 'other']
-
-interface FormState {
-  category: string
-  description: string
-  quantity: string
-  unit_cost: string
-  currency: string
+/** Group placed plants by canonical_name, returning count and best display name. */
+function countPlants(plants: PlacedPlant[]): { canonical: string; commonName: string; count: number }[] {
+  const map = new Map<string, { commonName: string; count: number }>()
+  for (const p of plants) {
+    const existing = map.get(p.canonical_name)
+    if (existing) {
+      existing.count++
+      // Prefer a non-null common name
+      if (!existing.commonName && p.common_name) {
+        existing.commonName = p.common_name
+      }
+    } else {
+      map.set(p.canonical_name, {
+        commonName: p.common_name ?? '',
+        count: 1,
+      })
+    }
+  }
+  const result: { canonical: string; commonName: string; count: number }[] = []
+  for (const [canonical, { commonName, count }] of map) {
+    result.push({ canonical, commonName, count })
+  }
+  // Sort alphabetically by display name
+  result.sort((a, b) => {
+    const nameA = a.commonName || a.canonical
+    const nameB = b.commonName || b.canonical
+    return nameA.localeCompare(nameB)
+  })
+  return result
 }
 
-const EMPTY_FORM: FormState = {
-  category: 'plants',
-  description: '',
-  quantity: '1',
-  unit_cost: '0',
-  currency: 'EUR',
+/** Build a price lookup map from budget items for O(1) access. */
+function buildPriceMap(budget: BudgetItem[]): Map<string, { unit_cost: number; currency: string }> {
+  const map = new Map<string, { unit_cost: number; currency: string }>()
+  for (const b of budget) {
+    if (b.category === 'plants') {
+      map.set(b.description, { unit_cost: b.unit_cost, currency: b.currency })
+    }
+  }
+  return map
 }
 
 function formatCurrency(amount: number, currency: string): string {
@@ -39,242 +63,213 @@ function formatCurrency(amount: number, currency: string): string {
 }
 
 export function BudgetTab() {
+  // Subscribe to locale for re-render on language change
   void locale.value
 
-  const showAddForm = useSignal(false)
-  const editingIndex = useSignal<number | null>(null)
-  const form = useSignal<FormState>({ ...EMPTY_FORM })
+  const editingCanonical = useSignal<string | null>(null)
+  const editPrice = useSignal<string>('')
 
-  const items = currentDesign.value?.budget ?? []
+  const design = currentDesign.value
+  const budget = design?.budget ?? []
 
-  const grandTotal = computed(() => {
-    const design = currentDesign.value
-    if (!design) return 0
-    return design.budget.reduce((sum, item) => sum + item.quantity * item.unit_cost, 0)
-  })
+  // Build price map once per render (O(n) build, O(1) lookup per row)
+  const priceMap = buildPriceMap(budget)
 
-  const defaultCurrency = items[0]?.currency ?? 'EUR'
+  // Get plant counts from the canvas engine (single call per render)
+  const plants = canvasEngine?.getPlacedPlants() ?? []
+  const grouped = countPlants(plants)
 
-  function openAdd() {
-    form.value = { ...EMPTY_FORM, currency: defaultCurrency }
-    editingIndex.value = null
-    showAddForm.value = true
+  // Compute grand total from the same grouped data (no second getPlacedPlants call)
+  const grandTotal = grouped.reduce((sum, row) => {
+    const price = priceMap.get(row.canonical)?.unit_cost ?? 0
+    return sum + row.count * price
+  }, 0)
+
+  // Determine default currency from first budget item
+  const defaultCurrency = priceMap.values().next().value?.currency ?? 'EUR'
+
+  function startEditPrice(canonical: string) {
+    const price = priceMap.get(canonical)?.unit_cost ?? 0
+    editPrice.value = price > 0 ? String(price) : ''
+    editingCanonical.value = canonical
   }
 
-  function openEdit(item: BudgetItem, index: number) {
-    form.value = {
-      category: item.category,
-      description: item.description,
-      quantity: String(item.quantity),
-      unit_cost: String(item.unit_cost),
-      currency: item.currency,
-    }
-    editingIndex.value = index
-    showAddForm.value = true
-  }
-
-  function cancelForm() {
-    showAddForm.value = false
-    editingIndex.value = null
-    form.value = { ...EMPTY_FORM }
-  }
-
-  function saveForm() {
-    const design = currentDesign.value
+  function commitPrice(canonical: string) {
     if (!design) return
-    const f = form.value
-    if (!f.description.trim()) return
+    const price = parseFloat(editPrice.value) || 0
+    const existingIdx = design.budget.findIndex(
+      (b) => b.category === 'plants' && b.description === canonical,
+    )
 
-    const quantity = parseFloat(f.quantity) || 0
-    const unit_cost = parseFloat(f.unit_cost) || 0
-
-    const idx = editingIndex.value
-
-    if (idx !== null) {
-      const updated = [...design.budget]
-      updated[idx] = {
-        category: f.category,
-        description: f.description.trim(),
-        quantity,
-        unit_cost,
-        currency: f.currency,
-      }
-      currentDesign.value = { ...design, budget: updated }
+    let newBudget: BudgetItem[]
+    if (existingIdx >= 0) {
+      newBudget = design.budget.map((b, i) =>
+        i === existingIdx ? { ...b, unit_cost: price } : b,
+      )
     } else {
-      const newItem: BudgetItem = {
-        category: f.category,
-        description: f.description.trim(),
-        quantity,
-        unit_cost,
-        currency: f.currency,
-      }
-      currentDesign.value = {
-        ...design,
-        budget: [...design.budget, newItem],
-      }
+      newBudget = [
+        ...design.budget,
+        {
+          category: 'plants',
+          description: canonical,
+          quantity: 0, // quantity is auto-counted, this field is informational
+          unit_cost: price,
+          currency: defaultCurrency,
+        },
+      ]
     }
 
+    currentDesign.value = { ...design, budget: newBudget }
     nonCanvasRevision.value++
-    cancelForm()
+    editingCanonical.value = null
   }
 
-  function deleteItem(index: number) {
-    const design = currentDesign.value
-    if (!design) return
-    currentDesign.value = {
-      ...design,
-      budget: design.budget.filter((_, i) => i !== index),
+  function handlePriceKeyDown(e: KeyboardEvent, canonical: string) {
+    if (e.key === 'Enter') {
+      commitPrice(canonical)
+    } else if (e.key === 'Escape') {
+      editingCanonical.value = null
     }
-    nonCanvasRevision.value++
   }
 
-  const isEditing = showAddForm.value
+  async function handleExportCSV() {
+    const rows: string[] = []
+    rows.push('Species,Quantity,Unit Price,Subtotal,Currency')
+    for (const row of grouped) {
+      const entry = priceMap.get(row.canonical)
+      const price = entry?.unit_cost ?? 0
+      const cur = entry?.currency ?? 'EUR'
+      const displayName = row.commonName || row.canonical
+      // Escape CSV fields that may contain commas or quotes
+      const escaped = displayName.includes(',') || displayName.includes('"')
+        ? `"${displayName.replace(/"/g, '""')}"`
+        : displayName
+      rows.push(`${escaped},${row.count},${price.toFixed(2)},${(row.count * price).toFixed(2)},${cur}`)
+    }
+    // Grand total row
+    rows.push(`${t('canvas.budget.grandTotal')},,,,${grandTotal.toFixed(2)}`)
+
+    const csv = rows.join('\n')
+    const fileName = `${designName.value || 'budget'}-budget.csv`
+
+    try {
+      await exportFile(csv, fileName, 'CSV', ['csv'])
+    } catch {
+      // User cancelled dialog — no action needed
+    }
+  }
+
+  // Empty state: no plants on canvas
+  if (grouped.length === 0) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.emptyState}>
+          <p className={styles.emptyTitle}>{t('canvas.budget.emptyCanvas')}</p>
+          <p className={styles.emptyHint}>{t('canvas.budget.emptyHint')}</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        {items.length > 0 && (
-          <span className={styles.total} aria-live="polite">
-            {t('canvas.budget.total')}: {formatCurrency(grandTotal.value, defaultCurrency)}
-          </span>
-        )}
+        <span className={styles.autoCountLabel}>
+          {t('canvas.budget.autoCount')}
+        </span>
+        <span className={styles.total} aria-live="polite">
+          {t('canvas.budget.grandTotal')}: {formatCurrency(grandTotal, defaultCurrency)}
+        </span>
         <button
           type="button"
-          className={styles.addBtn}
-          onClick={openAdd}
-          aria-label={t('canvas.budget.addItem')}
+          className={styles.exportBtn}
+          onClick={handleExportCSV}
+          aria-label={t('canvas.budget.exportCSV')}
         >
-          + {t('canvas.budget.addItem')}
+          {t('canvas.budget.exportCSV')}
         </button>
       </div>
 
-      {isEditing && (
-        <div className={styles.formRow} role="form" aria-label={editingIndex.value !== null ? t('canvas.budget.editItem') : t('canvas.budget.addItem')}>
-          <select
-            className={styles.formSelect}
-            value={form.value.category}
-            onChange={(e) => { form.value = { ...form.value, category: e.currentTarget.value } }}
-            aria-label={t('canvas.budget.category')}
-          >
-            {CATEGORIES.map((cat) => (
-              <option key={cat} value={cat}>
-                {t(`canvas.budget.category_${cat}`)}
-              </option>
-            ))}
-          </select>
-          <input
-            type="text"
-            className={`${styles.formInput} ${styles.formInputWide}`}
-            value={form.value.description}
-            onInput={(e) => { form.value = { ...form.value, description: e.currentTarget.value } }}
-            placeholder={t('canvas.budget.description')}
-            aria-label={t('canvas.budget.description')}
-          />
-          <input
-            type="number"
-            className={styles.formNumber}
-            value={form.value.quantity}
-            min="0"
-            step="1"
-            onInput={(e) => { form.value = { ...form.value, quantity: e.currentTarget.value } }}
-            aria-label={t('canvas.budget.quantity')}
-          />
-          <input
-            type="number"
-            className={styles.formNumber}
-            value={form.value.unit_cost}
-            min="0"
-            step="0.01"
-            onInput={(e) => { form.value = { ...form.value, unit_cost: e.currentTarget.value } }}
-            aria-label={t('canvas.budget.unitCost')}
-          />
-          <select
-            className={styles.formSelectSm}
-            value={form.value.currency}
-            onChange={(e) => { form.value = { ...form.value, currency: e.currentTarget.value } }}
-            aria-label={t('canvas.budget.currency')}
-          >
-            {['EUR', 'USD', 'GBP', 'BRL', 'CAD', 'CHF', 'CNY'].map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-          <button type="button" className={styles.saveBtn} onClick={saveForm}>
-            {t('canvas.budget.save')}
-          </button>
-          <button type="button" className={styles.cancelBtn} onClick={cancelForm}>
-            {t('canvas.budget.cancel')}
-          </button>
-        </div>
-      )}
+      <div className={styles.tableWrapper}>
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th className={styles.thSpecies}>{t('canvas.budget.species')}</th>
+              <th className={styles.thNum}>{t('canvas.budget.quantity')}</th>
+              <th className={styles.thNum}>{t('canvas.budget.unitCost')}</th>
+              <th className={styles.thNum}>{t('canvas.budget.lineTotal')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {grouped.map((row, i) => {
+              const entry = priceMap.get(row.canonical)
+              const price = entry?.unit_cost ?? 0
+              const currency = entry?.currency ?? 'EUR'
+              const subtotal = row.count * price
+              const isEditing = editingCanonical.value === row.canonical
 
-      {items.length === 0 && !isEditing ? (
-        <div className={styles.emptyState}>
-          <p className={styles.emptyTitle}>{t('canvas.budget.emptyState')}</p>
-          <p className={styles.emptyHint}>{t('canvas.budget.emptyHint')}</p>
-          <button type="button" className={styles.emptyAddBtn} onClick={openAdd}>
-            + {t('canvas.budget.addItem')}
-          </button>
-        </div>
-      ) : (
-        <div className={styles.tableWrapper}>
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th className={styles.thCat}>{t('canvas.budget.category')}</th>
-                <th className={styles.thDesc}>{t('canvas.budget.description')}</th>
-                <th className={styles.thNum}>{t('canvas.budget.quantity')}</th>
-                <th className={styles.thNum}>{t('canvas.budget.unitCost')}</th>
-                <th className={styles.thNum}>{t('canvas.budget.lineTotal')}</th>
-                <th className={styles.thActions} />
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item, i) => (
-                <tr key={`${item.description}-${i}`}>
-                  <td className={styles.tdCat}>
-                    <span className={`${styles.badge} ${styles[`badge_${item.category}`] ?? ''}`}>
-                      {t(`canvas.budget.category_${item.category}`, { defaultValue: item.category })}
+              return (
+                <tr
+                  key={row.canonical}
+                  className={i % 2 === 0 ? styles.rowEven : styles.rowOdd}
+                >
+                  <td className={styles.tdSpecies}>
+                    <span className={styles.commonName}>
+                      {row.commonName || row.canonical}
                     </span>
+                    {row.commonName && (
+                      <span className={styles.canonical}>{row.canonical}</span>
+                    )}
                   </td>
-                  <td className={styles.tdDesc}>{item.description}</td>
-                  <td className={styles.tdNum}>{item.quantity}</td>
-                  <td className={styles.tdNum}>{formatCurrency(item.unit_cost, item.currency)}</td>
-                  <td className={styles.tdNum}>{formatCurrency(item.quantity * item.unit_cost, item.currency)}</td>
-                  <td className={styles.tdRowActions}>
-                    <button
-                      type="button"
-                      className={styles.rowActionBtn}
-                      onClick={() => openEdit(item, i)}
-                      aria-label={t('canvas.budget.editItem')}
-                    >
-                      {t('canvas.budget.edit')}
-                    </button>
-                    <button
-                      type="button"
-                      className={`${styles.rowActionBtn} ${styles.rowActionBtnDanger}`}
-                      onClick={() => deleteItem(i)}
-                      aria-label={t('canvas.budget.deleteItem')}
-                    >
-                      {t('canvas.budget.delete')}
-                    </button>
+                  <td className={styles.tdNum}>{row.count}</td>
+                  <td className={styles.tdNum}>
+                    {isEditing ? (
+                      <input
+                        type="number"
+                        className={styles.priceInput}
+                        value={editPrice.value}
+                        min="0"
+                        step="0.01"
+                        onInput={(e) => {
+                          editPrice.value = (e.target as HTMLInputElement).value
+                        }}
+                        onBlur={() => commitPrice(row.canonical)}
+                        onKeyDown={(e) => handlePriceKeyDown(e, row.canonical)}
+                        autoFocus
+                        aria-label={`${t('canvas.budget.unitCost')} — ${row.commonName || row.canonical}`}
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        className={styles.priceBtn}
+                        onClick={() => startEditPrice(row.canonical)}
+                        aria-label={`${t('canvas.budget.setPrice')} — ${row.commonName || row.canonical}`}
+                      >
+                        {price > 0
+                          ? formatCurrency(price, currency)
+                          : t('canvas.budget.setPrice')}
+                      </button>
+                    )}
+                  </td>
+                  <td className={styles.tdNum}>
+                    {price > 0 ? formatCurrency(subtotal, currency) : '—'}
                   </td>
                 </tr>
-              ))}
-            </tbody>
-            {items.length > 0 && (
-              <tfoot>
-                <tr className={styles.totalRow}>
-                  <td colSpan={4} className={styles.totalLabel}>{t('canvas.budget.grandTotal')}</td>
-                  <td className={styles.tdNum} aria-live="polite">
-                    {formatCurrency(grandTotal.value, defaultCurrency)}
-                  </td>
-                  <td />
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
-      )}
+              )
+            })}
+          </tbody>
+          <tfoot>
+            <tr className={styles.totalRow}>
+              <td className={styles.totalLabel} colSpan={3}>
+                {t('canvas.budget.grandTotal')}
+              </td>
+              <td className={styles.tdNum} aria-live="polite">
+                {formatCurrency(grandTotal, defaultCurrency)}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
     </div>
   )
 }

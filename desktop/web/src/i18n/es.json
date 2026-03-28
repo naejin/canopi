@@ -174,7 +174,17 @@
       "showMap": "Mostrar mapa",
       "required": "Establezca una ubicación primero",
       "mapStreet": "Calles",
-      "mapTerrain": "Terreno"
+      "mapTerrain": "Terreno",
+      "searchPlaceholder": "Buscar ubicación...",
+      "searching": "Buscando...",
+      "noResults": "Sin resultados",
+      "selectResult": "Seleccione un resultado",
+      "geocodeError": "Error de geocodificación",
+      "changeWarning": "Cambiar la ubicación puede desplazar elementos georreferenciados",
+      "miniMapLabel": "Vista previa",
+      "addressLabel": "Dirección",
+      "opacity": "Opacidad del mapa",
+      "mapSatellite": "Satélite"
     },
     "file": {
       "new": "Nuevo diseño",
@@ -195,7 +205,7 @@
       "layerPanel": "Capas",
       "collapse": "Colapsar panel de capas",
       "base": "Base",
-      "contours": "Contornos",
+      "contours": "Curvas de nivel",
       "climate": "Clima",
       "zones": "Zonas",
       "water": "Agua",
@@ -203,7 +213,17 @@
       "annotations": "Anotaciones",
       "visibility": "Alternar visibilidad",
       "lock": "Alternar bloqueo",
-      "opacity": "Opacidad"
+      "opacity": "Opacidad",
+      "mapSection": "Capas de mapa",
+      "basemap": "Mapa base",
+      "satellite": "Satélite",
+      "hillshade": "Sombreado",
+      "interval": "Intervalo",
+      "setLocation": "Establezca una ubicación para activar las capas de mapa",
+      "styleStreet": "Calles",
+      "styleTerrain": "Terreno",
+      "styleSatellite": "Satélite",
+      "styleNone": "Ninguno"
     },
     "bottomPanel": {
       "ariaLabel": "Panel inferior",
@@ -235,7 +255,16 @@
       "type_harvest": "Cosecha",
       "type_watering": "Riego",
       "type_fertilising": "Fertilización",
-      "type_other": "Otro"
+      "type_other": "Otro",
+      "dragToMove": "Arrastrar para mover",
+      "dragToResize": "Arrastrar borde para redimensionar",
+      "prePopulate": "Rellenar desde la base de datos",
+      "acceptSuggestion": "Aceptar",
+      "dismissSuggestion": "Descartar",
+      "weekView": "Semana",
+      "monthView": "Mes",
+      "yearView": "Año",
+      "todayMarker": "Hoy"
     },
     "consortium": {
       "title": "Consorcio",
@@ -282,7 +311,14 @@
       "category_materials": "Materiales",
       "category_labor": "Mano de obra",
       "category_tools": "Herramientas",
-      "category_other": "Otro"
+      "category_other": "Otro",
+      "species": "Especie",
+      "autoCount": "Conteo automático desde el lienzo",
+      "setPrice": "Establecer precio",
+      "defaultPrice": "Precio predeterminado",
+      "exportCSV": "Exportar CSV",
+      "emptyCanvas": "Coloque plantas en el lienzo para rastrear costos",
+      "perUnit": "por unidad"
     },
     "export": {
       "exportPng": "Exportar como PNG",
@@ -299,15 +335,56 @@
       "title": "Detalle de planta",
       "plantDetail": "Detalle de planta",
       "close": "Cerrar detalle de planta"
+    },
+    "terrain": {
+      "contours": "Curvas de nivel",
+      "contourInterval": "Intervalo de curvas",
+      "hillshade": "Sombreado",
+      "hillshadeOpacity": "Opacidad del sombreado",
+      "offlineTiles": "Teselas sin conexión",
+      "downloadTiles": "Descargar teselas",
+      "downloadProgress": "Descargando...",
+      "downloadComplete": "Descarga completa",
+      "tileRegion": "Región de teselas",
+      "zoomRange": "Rango de zoom",
+      "offlineStatus": "Sin conexión",
+      "removeOffline": "Eliminar teselas sin conexión"
     }
   },
   "worldMap": {
     "emptyTitle": "Mapa mundial",
-    "emptyText": "¡Sé el primero en compartir un diseño en tu zona!"
+    "emptyText": "¡Sé el primero en compartir un diseño en tu zona!",
+    "title": "Mapa mundial",
+    "discover": "Descubrir diseños",
+    "featured": "Destacados",
+    "useTemplate": "Usar como plantilla",
+    "downloading": "Descargando plantilla...",
+    "plantCount": "{{count}} plantas",
+    "climateZone": "Zona climática",
+    "author": "Por {{author}}",
+    "noDesigns": "No hay diseños en esta zona",
+    "zoomToExplore": "Amplíe para explorar diseños",
+    "filterByClimate": "Filtrar por clima",
+    "filterByStyle": "Filtrar por estilo",
+    "filterByScale": "Filtrar por escala",
+    "preview": "Vista previa",
+    "openTemplate": "Abrir como nuevo diseño"
   },
   "learning": {
     "emptyTitle": "Aprendizaje",
-    "emptyText": "Aprende técnicas desde la preparación del suelo hasta la sintropía"
+    "emptyText": "Aprende técnicas desde la preparación del suelo hasta la sintropía",
+    "title": "Conocimiento",
+    "search": "Buscar artículos...",
+    "topics": "Temas",
+    "noResults": "No se encontraron artículos",
+    "readMore": "Leer más",
+    "relatedPlants": "Plantas relacionadas",
+    "articles": "Artículos",
+    "composting": "Compostaje",
+    "waterManagement": "Gestión del agua",
+    "companionPlanting": "Plantas compañeras",
+    "soilHealth": "Salud del suelo",
+    "permaculture": "Principios de permacultura"
   },
   "saved": {
     "title": "Diseños guardados",
@@ -546,7 +623,7 @@
     "hardiness": "Rusticidad",
     "edibility": "Comestibilidad",
     "height": "Altura",
-    "nitrogen": "Fijador N\u2082",
+    "nitrogen": "Fijador N₂",
     "moreFilters": "Más filtros",
     "clearAll": "Borrar todo",
     "activeFilters": "Filtros activos",
@@ -639,5 +716,17 @@
     "empty": "Aún no hay favoritos",
     "emptyHint": "Marca plantas desde el panel de búsqueda para añadirlas aquí",
     "dragHint": "Arrastra al lienzo para colocar"
+  },
+  "adaptation": {
+    "title": "Adaptación de plantilla",
+    "incompatible": "Plantas incompatibles",
+    "compatible": "Compatible",
+    "hardinessWarning": "Desajuste de rusticidad ({{zones}} zonas)",
+    "suggestReplacement": "Sugerir reemplazo",
+    "acceptAll": "Aceptar todo",
+    "dismissAll": "Descartar todo",
+    "replacement": "Reemplazar con",
+    "keepOriginal": "Mantener original",
+    "reviewPlants": "Revisar plantas para su ubicación"
   }
 }

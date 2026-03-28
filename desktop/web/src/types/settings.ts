@@ -17,6 +17,16 @@ export interface Settings {
   default_design_dir: string
   recent_files_max: number
   last_active_panel: string
+  bottom_panel_open: boolean
+  bottom_panel_height: number
+  bottom_panel_tab: string
+  map_layer_visible: boolean
+  map_style: string
+  map_opacity: number
+  contour_visible: boolean
+  contour_interval: number
+  hillshade_visible: boolean
+  hillshade_opacity: number
 }
 
 export type Locale = 'en' | 'fr' | 'es' | 'pt' | 'it' | 'zh' | 'de' | 'ja' | 'ko' | 'nl' | 'ru'

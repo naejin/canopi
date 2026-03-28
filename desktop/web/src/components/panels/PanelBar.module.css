@@ -35,6 +35,13 @@
   border-right-color: var(--color-accent);
 }
 
+.divider {
+  width: 20px;
+  height: 1px;
+  background: var(--color-border);
+  margin: var(--space-1) auto;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .button { transition: none; }
 }

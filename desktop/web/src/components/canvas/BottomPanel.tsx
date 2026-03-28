@@ -1,20 +1,17 @@
-import { useRef, useCallback } from 'preact/hooks'
+import { useCallback } from 'preact/hooks'
 import { t } from '../../i18n'
-import { locale } from '../../state/app'
+import { locale, persistCurrentSettings } from '../../state/app'
 import { bottomPanelOpen, bottomPanelTab, bottomPanelHeight } from '../../state/canvas'
 import { TimelineTab } from './TimelineTab'
-import { InteractiveTimeline } from './InteractiveTimeline'
-import { ConsortiumTab } from './ConsortiumTab'
 import { BudgetTab } from './BudgetTab'
 import styles from './BottomPanel.module.css'
 
-const TABS = ['timeline', 'consortium', 'budget'] as const
+const TABS = ['timeline', 'budget'] as const
 type BottomTab = typeof TABS[number]
 
 export function BottomPanel() {
+  // Subscribe to locale so the component re-renders when language changes
   void locale.value
-
-  const panelRef = useRef<HTMLDivElement>(null)
 
   const handleMouseDown = useCallback((e: MouseEvent) => {
     e.preventDefault()
@@ -23,7 +20,7 @@ export function BottomPanel() {
 
     const handleMouseMove = (e: MouseEvent) => {
       const delta = startY - e.clientY
-      const newHeight = Math.max(120, Math.min(window.innerHeight * 0.6, startHeight + delta))
+      const newHeight = Math.max(120, Math.min(window.innerHeight * 0.5, startHeight + delta))
       bottomPanelHeight.value = newHeight
     }
 
@@ -31,20 +28,22 @@ export function BottomPanel() {
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
       document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      persistCurrentSettings()
     }
 
     document.addEventListener('mousemove', handleMouseMove)
     document.addEventListener('mouseup', handleMouseUp)
     document.body.style.cursor = 'row-resize'
+    document.body.style.userSelect = 'none'
   }, [])
 
   if (!bottomPanelOpen.value) return null
 
-  const activeTab = bottomPanelTab.value
+  const activeTab = bottomPanelTab.value as BottomTab
 
   return (
     <div
-      ref={panelRef}
       className={styles.panel}
       style={{ height: `${bottomPanelHeight.value}px` }}
     >
@@ -62,7 +61,7 @@ export function BottomPanel() {
             aria-controls={`bottom-tabpanel-${tab}`}
             id={`bottom-tab-${tab}`}
             className={`${styles.tab}${activeTab === tab ? ` ${styles.tabActive}` : ''}`}
-            onClick={() => { bottomPanelTab.value = tab }}
+            onClick={() => { bottomPanelTab.value = tab; persistCurrentSettings() }}
           >
             {t(`canvas.bottomPanel.${tab}`)}
           </button>
@@ -70,7 +69,7 @@ export function BottomPanel() {
         <div className={styles.tabBarSpacer} aria-hidden="true" />
         <button
           className={styles.collapseBtn}
-          onClick={() => { bottomPanelOpen.value = false }}
+          onClick={() => { bottomPanelOpen.value = false; persistCurrentSettings() }}
           aria-label={t('canvas.bottomPanel.collapse')}
           type="button"
         >
@@ -85,17 +84,7 @@ export function BottomPanel() {
         id={`bottom-tabpanel-${activeTab}`}
         aria-labelledby={`bottom-tab-${activeTab}`}
       >
-        {activeTab === 'timeline' && (
-          <div className={styles.timelineSplit}>
-            <div className={styles.timelineGantt}>
-              <InteractiveTimeline />
-            </div>
-            <div className={styles.timelineDetail}>
-              <TimelineTab />
-            </div>
-          </div>
-        )}
-        {activeTab === 'consortium' && <ConsortiumTab />}
+        {activeTab === 'timeline' && <TimelineTab />}
         {activeTab === 'budget' && <BudgetTab />}
       </div>
     </div>

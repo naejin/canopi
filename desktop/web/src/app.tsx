@@ -16,10 +16,13 @@ import { PlantDbPanel } from "./components/panels/PlantDbPanel";
 import { FavoritesPanel } from "./components/panels/FavoritesPanel";
 import { CanvasPanel } from "./components/panels/CanvasPanel";
 import { PanelBar } from "./components/panels/PanelBar";
+import { WorldMapPanel } from "./components/panels/WorldMapPanel";
+import { LearningPanel } from "./components/panels/LearningPanel";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import type { Settings } from "./types/settings";
-import { gridSize, snapToGridEnabled } from "./state/canvas";
+import { gridSize, snapToGridEnabled, bottomPanelOpen, bottomPanelHeight, bottomPanelTab, mapLayerVisible, mapStyle, mapLayerOpacity, contourLayerVisible, contourInterval, hillshadeVisible, hillshadeOpacity } from "./state/canvas";
+import type { MapStyle } from "./state/canvas";
 
 // Synchronous init — applies local defaults immediately (no theme flicker)
 initTheme();
@@ -37,6 +40,17 @@ invoke<Settings>('get_settings')
     gridSize.value = s.grid_size_m;
     snapToGridEnabled.value = s.snap_to_grid;
     autoSaveIntervalMs.value = s.auto_save_interval_s * 1000;
+    bottomPanelOpen.value = s.bottom_panel_open;
+    bottomPanelHeight.value = s.bottom_panel_height;
+    bottomPanelTab.value = (s.bottom_panel_tab === 'budget' ? 'budget' : 'timeline') as typeof bottomPanelTab.value;
+    mapLayerVisible.value = s.map_layer_visible ?? false;
+    const validStyles: MapStyle[] = ['street', 'terrain', 'satellite'];
+    mapStyle.value = validStyles.includes(s.map_style as MapStyle) ? (s.map_style as MapStyle) : 'street';
+    mapLayerOpacity.value = s.map_opacity ?? 1;
+    contourLayerVisible.value = s.contour_visible ?? false;
+    contourInterval.value = s.contour_interval ?? 5;
+    hillshadeVisible.value = s.hillshade_visible ?? false;
+    hillshadeOpacity.value = s.hillshade_opacity ?? 0.3;
     setBootstrappedSettings(s);
   })
   .catch((e) => console.error('Failed to bootstrap settings:', e));
@@ -93,31 +107,12 @@ if (import.meta.hot) {
 const MIN_SIDEBAR_WIDTH = 320;
 const MAX_SIDEBAR_WIDTH = 800;
 
-function LearningPlaceholder() {
-  return (
-    <div style={{
-      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      height: '100%', padding: '32px 24px', textAlign: 'center', gap: '12px',
-      background: 'var(--color-bg)',
-    }}>
-      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.5 }}>
-        <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
-        <path d="M8 7h6M8 11h4" />
-      </svg>
-      <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text)' }}>
-        Coming soon
-      </span>
-      <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', maxWidth: '220px', lineHeight: 1.5 }}>
-        Companion planting guides, design patterns, and permaculture principles — all searchable from here.
-      </span>
-    </div>
-  )
-}
 
 function SidePanelContent({ side }: { side: string }) {
   if (side === "plant-db") return <PlantDbPanel />;
   if (side === "favorites") return <FavoritesPanel />;
-  if (side === "learning") return <LearningPlaceholder />;
+  if (side === "world-map") return <WorldMapPanel />;
+  if (side === "learning") return <LearningPanel />;
   return null;
 }
 

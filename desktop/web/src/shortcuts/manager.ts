@@ -1,6 +1,6 @@
 import { signal } from "@preact/signals";
-import { activePanel, navigateTo, type Panel } from "../state/app";
-import { activeTool, selectedObjectIds } from "../state/canvas";
+import { activePanel, navigateTo, persistCurrentSettings, type Panel } from "../state/app";
+import { activeTool, selectedObjectIds, bottomPanelOpen } from "../state/canvas";
 import { canvasEngine } from "../canvas/engine";
 import {
   saveCurrentDesign,
@@ -79,6 +79,14 @@ export function initShortcuts() {
     ) {
       e.preventDefault();
       activeTool.value = canvasToolKeys[e.key]!;
+      return;
+    }
+
+    // Ctrl+J — toggle bottom panel
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "j") {
+      e.preventDefault();
+      bottomPanelOpen.value = !bottomPanelOpen.value;
+      persistCurrentSettings();
       return;
     }
 

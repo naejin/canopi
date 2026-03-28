@@ -174,7 +174,17 @@
       "showMap": "지도 레이어 표시",
       "required": "먼저 설계 위치를 설정하세요",
       "mapStreet": "거리",
-      "mapTerrain": "지형"
+      "mapTerrain": "지형",
+      "searchPlaceholder": "위치 검색...",
+      "searching": "검색 중...",
+      "noResults": "결과 없음",
+      "selectResult": "결과 선택",
+      "geocodeError": "지오코딩 실패",
+      "changeWarning": "위치를 변경하면 지리참조 요소가 이동할 수 있습니다",
+      "miniMapLabel": "미리보기",
+      "addressLabel": "주소",
+      "opacity": "지도 불투명도",
+      "mapSatellite": "위성"
     },
     "file": {
       "new": "새 설계",
@@ -203,7 +213,17 @@
       "annotations": "주석",
       "visibility": "가시성 전환",
       "lock": "잠금 전환",
-      "opacity": "불투명도"
+      "opacity": "불투명도",
+      "mapSection": "지도 레이어",
+      "basemap": "기본 지도",
+      "satellite": "위성",
+      "hillshade": "음영기복",
+      "interval": "간격",
+      "setLocation": "지도 레이어를 활성화하려면 위치를 설정하세요",
+      "styleStreet": "거리",
+      "styleTerrain": "지형",
+      "styleSatellite": "위성",
+      "styleNone": "없음"
     },
     "bottomPanel": {
       "ariaLabel": "하단 패널",
@@ -235,7 +255,16 @@
       "type_harvest": "수확",
       "type_watering": "관수",
       "type_fertilising": "시비",
-      "type_other": "기타"
+      "type_other": "기타",
+      "dragToMove": "드래그하여 이동",
+      "dragToResize": "가장자리를 드래그하여 크기 조정",
+      "prePopulate": "데이터베이스에서 자동 채우기",
+      "acceptSuggestion": "수락",
+      "dismissSuggestion": "무시",
+      "weekView": "주",
+      "monthView": "월",
+      "yearView": "년",
+      "todayMarker": "오늘"
     },
     "consortium": {
       "title": "컨소시엄",
@@ -282,7 +311,14 @@
       "category_materials": "자재",
       "category_labor": "인건비",
       "category_tools": "도구",
-      "category_other": "기타"
+      "category_other": "기타",
+      "species": "종",
+      "autoCount": "캔버스에서 자동 계산",
+      "setPrice": "가격 설정",
+      "defaultPrice": "기본 가격",
+      "exportCSV": "CSV 내보내기",
+      "emptyCanvas": "비용을 추적하려면 캔버스에 식물을 배치하세요",
+      "perUnit": "단위당"
     },
     "export": {
       "exportPng": "PNG로 내보내기",
@@ -299,15 +335,56 @@
       "title": "식물 상세",
       "plantDetail": "식물 상세",
       "close": "식물 상세 닫기"
+    },
+    "terrain": {
+      "contours": "등고선",
+      "contourInterval": "등고선 간격",
+      "hillshade": "음영기복",
+      "hillshadeOpacity": "음영 불투명도",
+      "offlineTiles": "오프라인 타일",
+      "downloadTiles": "타일 다운로드",
+      "downloadProgress": "다운로드 중...",
+      "downloadComplete": "다운로드 완료",
+      "tileRegion": "타일 지역",
+      "zoomRange": "줌 범위",
+      "offlineStatus": "오프라인",
+      "removeOffline": "오프라인 타일 삭제"
     }
   },
   "worldMap": {
     "emptyTitle": "세계 지도",
-    "emptyText": "여러분의 지역에서 첫 번째로 설계를 공유하세요!"
+    "emptyText": "여러분의 지역에서 첫 번째로 설계를 공유하세요!",
+    "title": "세계 지도",
+    "discover": "설계 발견",
+    "featured": "추천",
+    "useTemplate": "템플릿으로 사용",
+    "downloading": "템플릿 다운로드 중...",
+    "plantCount": "{{count}}개 식물",
+    "climateZone": "기후대",
+    "author": "{{author}} 설계",
+    "noDesigns": "이 지역에 설계가 없습니다",
+    "zoomToExplore": "확대하여 설계를 탐색하세요",
+    "filterByClimate": "기후별 필터",
+    "filterByStyle": "스타일별 필터",
+    "filterByScale": "규모별 필터",
+    "preview": "미리보기",
+    "openTemplate": "새 설계로 열기"
   },
   "learning": {
     "emptyTitle": "학습",
-    "emptyText": "토양 준비부터 신트로피까지 기술을 배우세요"
+    "emptyText": "토양 준비부터 신트로피까지 기술을 배우세요",
+    "title": "지식",
+    "search": "기사 검색...",
+    "topics": "주제",
+    "noResults": "기사를 찾을 수 없습니다",
+    "readMore": "더 읽기",
+    "relatedPlants": "관련 식물",
+    "articles": "기사",
+    "composting": "퇴비",
+    "waterManagement": "수자원 관리",
+    "companionPlanting": "동반 식재",
+    "soilHealth": "토양 건강",
+    "permaculture": "퍼머컬처 원칙"
   },
   "saved": {
     "title": "저장된 설계",
@@ -639,5 +716,17 @@
     "empty": "즐겨찾기가 없습니다",
     "emptyHint": "검색 패널에서 식물에 별표를 눌러 여기에 추가하세요",
     "dragHint": "캔버스로 드래그하여 배치"
+  },
+  "adaptation": {
+    "title": "템플릿 적응",
+    "incompatible": "호환되지 않는 식물",
+    "compatible": "호환됨",
+    "hardinessWarning": "내한성 불일치 ({{zones}}개 구역)",
+    "suggestReplacement": "대체 제안",
+    "acceptAll": "모두 수락",
+    "dismissAll": "모두 무시",
+    "replacement": "다음으로 교체",
+    "keepOriginal": "원본 유지",
+    "reviewPlants": "위치에 맞는 식물 검토"
   }
 }

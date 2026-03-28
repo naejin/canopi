@@ -174,7 +174,17 @@
       "showMap": "Показать слой карты",
       "required": "Сначала задайте местоположение проекта",
       "mapStreet": "Улицы",
-      "mapTerrain": "Рельеф"
+      "mapTerrain": "Рельеф",
+      "searchPlaceholder": "Поиск местоположения...",
+      "searching": "Поиск...",
+      "noResults": "Нет результатов",
+      "selectResult": "Выберите результат",
+      "geocodeError": "Ошибка геокодирования",
+      "changeWarning": "Изменение местоположения может сместить геопривязанные элементы",
+      "miniMapLabel": "Предпросмотр",
+      "addressLabel": "Адрес",
+      "opacity": "Прозрачность карты",
+      "mapSatellite": "Спутник"
     },
     "file": {
       "new": "Новый проект",
@@ -195,7 +205,7 @@
       "layerPanel": "Слои",
       "collapse": "Свернуть панель слоёв",
       "base": "Основа",
-      "contours": "Контуры",
+      "contours": "Изолинии",
       "climate": "Климат",
       "zones": "Зоны",
       "water": "Вода",
@@ -203,7 +213,17 @@
       "annotations": "Аннотации",
       "visibility": "Переключить видимость",
       "lock": "Переключить блокировку",
-      "opacity": "Прозрачность"
+      "opacity": "Прозрачность",
+      "mapSection": "Слои карты",
+      "basemap": "Базовая карта",
+      "satellite": "Спутник",
+      "hillshade": "Отмывка рельефа",
+      "interval": "Интервал",
+      "setLocation": "Задайте местоположение для включения слоёв карты",
+      "styleStreet": "Улицы",
+      "styleTerrain": "Рельеф",
+      "styleSatellite": "Спутник",
+      "styleNone": "Нет"
     },
     "bottomPanel": {
       "ariaLabel": "Нижняя панель",
@@ -235,7 +255,16 @@
       "type_harvest": "Сбор урожая",
       "type_watering": "Полив",
       "type_fertilising": "Удобрение",
-      "type_other": "Другое"
+      "type_other": "Другое",
+      "dragToMove": "Перетащите для перемещения",
+      "dragToResize": "Перетащите край для изменения размера",
+      "prePopulate": "Заполнить из базы данных",
+      "acceptSuggestion": "Принять",
+      "dismissSuggestion": "Отклонить",
+      "weekView": "Неделя",
+      "monthView": "Месяц",
+      "yearView": "Год",
+      "todayMarker": "Сегодня"
     },
     "consortium": {
       "title": "Консорциум",
@@ -282,7 +311,14 @@
       "category_materials": "Материалы",
       "category_labor": "Труд",
       "category_tools": "Инструменты",
-      "category_other": "Другое"
+      "category_other": "Другое",
+      "species": "Вид",
+      "autoCount": "Автоподсчёт с холста",
+      "setPrice": "Установить цену",
+      "defaultPrice": "Цена по умолчанию",
+      "exportCSV": "Экспорт CSV",
+      "emptyCanvas": "Разместите растения на холсте для учёта расходов",
+      "perUnit": "за единицу"
     },
     "export": {
       "exportPng": "Экспорт в PNG",
@@ -299,15 +335,56 @@
       "title": "Карточка растения",
       "plantDetail": "Карточка растения",
       "close": "Закрыть карточку растения"
+    },
+    "terrain": {
+      "contours": "Изолинии",
+      "contourInterval": "Интервал изолиний",
+      "hillshade": "Отмывка рельефа",
+      "hillshadeOpacity": "Прозрачность отмывки",
+      "offlineTiles": "Офлайн-тайлы",
+      "downloadTiles": "Скачать тайлы",
+      "downloadProgress": "Загрузка...",
+      "downloadComplete": "Загрузка завершена",
+      "tileRegion": "Регион тайлов",
+      "zoomRange": "Диапазон масштаба",
+      "offlineStatus": "Офлайн",
+      "removeOffline": "Удалить офлайн-тайлы"
     }
   },
   "worldMap": {
     "emptyTitle": "Карта мира",
-    "emptyText": "Станьте первым, кто поделится проектом в вашем регионе!"
+    "emptyText": "Станьте первым, кто поделится проектом в вашем регионе!",
+    "title": "Карта мира",
+    "discover": "Откройте для себя дизайны",
+    "featured": "Рекомендуемые",
+    "useTemplate": "Использовать как шаблон",
+    "downloading": "Загрузка шаблона...",
+    "plantCount": "{{count}} растений",
+    "climateZone": "Климатическая зона",
+    "author": "Автор: {{author}}",
+    "noDesigns": "В этом районе пока нет дизайнов",
+    "zoomToExplore": "Приблизьте, чтобы исследовать дизайны",
+    "filterByClimate": "Фильтр по климату",
+    "filterByStyle": "Фильтр по стилю",
+    "filterByScale": "Фильтр по масштабу",
+    "preview": "Предпросмотр",
+    "openTemplate": "Открыть как новый дизайн"
   },
   "learning": {
     "emptyTitle": "Обучение",
-    "emptyText": "Изучайте техники от подготовки почвы до синтропии"
+    "emptyText": "Изучайте техники от подготовки почвы до синтропии",
+    "title": "Знания",
+    "search": "Поиск статей...",
+    "topics": "Темы",
+    "noResults": "Статьи не найдены",
+    "readMore": "Читать далее",
+    "relatedPlants": "Связанные растения",
+    "articles": "Статьи",
+    "composting": "Компостирование",
+    "waterManagement": "Управление водными ресурсами",
+    "companionPlanting": "Совместные посадки",
+    "soilHealth": "Здоровье почвы",
+    "permaculture": "Принципы пермакультуры"
   },
   "saved": {
     "title": "Сохранённые проекты",
@@ -546,7 +623,7 @@
     "hardiness": "Морозостойкость",
     "edibility": "Съедобность",
     "height": "Высота",
-    "nitrogen": "Фиксатор N\u2082",
+    "nitrogen": "Фиксатор N₂",
     "moreFilters": "Больше фильтров",
     "clearAll": "Очистить все",
     "activeFilters": "Активные фильтры",
@@ -639,5 +716,17 @@
     "empty": "Избранного пока нет",
     "emptyHint": "Отметьте растения в панели поиска, чтобы добавить их сюда",
     "dragHint": "Перетащите на холст для размещения"
+  },
+  "adaptation": {
+    "title": "Адаптация шаблона",
+    "incompatible": "Несовместимые растения",
+    "compatible": "Совместимо",
+    "hardinessWarning": "Несоответствие зимостойкости ({{zones}} зон)",
+    "suggestReplacement": "Предложить замену",
+    "acceptAll": "Принять все",
+    "dismissAll": "Отклонить все",
+    "replacement": "Заменить на",
+    "keepOriginal": "Оставить оригинал",
+    "reviewPlants": "Проверить растения для вашего местоположения"
   }
 }

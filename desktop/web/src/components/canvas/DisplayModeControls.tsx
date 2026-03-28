@@ -1,7 +1,6 @@
-import { useRef, useEffect } from 'preact/hooks'
-import { useSignal } from '@preact/signals'
 import { plantDisplayMode, plantColorByAttr, type PlantDisplayMode, type ColorByAttribute } from '../../state/canvas'
 import { t } from '../../i18n'
+import { Dropdown, type DropdownItem } from '../shared/Dropdown'
 import styles from './DisplayModeControls.module.css'
 
 const DISPLAY_OPTIONS: { value: PlantDisplayMode; labelKey: string }[] = [
@@ -18,87 +17,19 @@ const COLOR_BY_OPTIONS: { value: ColorByAttribute | null; labelKey: string }[] =
   { value: 'edibility', labelKey: 'canvas.display.edibility' },
 ]
 
-function Dropdown<T extends string | null>({
-  label,
-  options,
-  value,
-  onSelect,
-}: {
-  label: string
-  options: { value: T; labelKey: string }[]
-  value: T
-  onSelect: (v: T) => void
-}) {
-  const open = useSignal(false)
-  const ref = useRef<HTMLDivElement>(null)
-  const triggerRef = useRef<HTMLButtonElement>(null)
+function buildItems<T extends string | null>(
+  options: { value: T; labelKey: string }[],
+): DropdownItem<T>[] {
+  return options.map((o) => ({ value: o.value, label: t(o.labelKey) }))
+}
 
-  // Close on click-outside (pointerup, not mousedown — avoids catching opening click)
-  useEffect(() => {
-    if (!open.value) return
-    const handleOutside = (e: Event) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        open.value = false
-      }
-    }
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        open.value = false
-        triggerRef.current?.focus()
-      }
-    }
-    document.addEventListener('pointerup', handleOutside)
-    document.addEventListener('keydown', handleEscape)
-    return () => {
-      document.removeEventListener('pointerup', handleOutside)
-      document.removeEventListener('keydown', handleEscape)
-    }
-  }, [open.value])
-
-  const current = options.find((o) => o.value === value)
+function buildTrigger(labelKey: string, current: { labelKey: string } | undefined) {
   const displayLabel = current ? t(current.labelKey) : ''
-
   return (
-    <div className={styles.dropdown} ref={ref}>
-      <button
-        ref={triggerRef}
-        className={styles.trigger}
-        type="button"
-        onClick={() => { open.value = !open.value }}
-        aria-expanded={open.value}
-        aria-haspopup="listbox"
-        aria-label={label}
-      >
-        <span className={styles.label}>{label}</span>
-        {displayLabel}
-        <span
-          className={`${styles.chevron} ${open.value ? styles.chevronOpen : ''}`}
-          aria-hidden="true"
-        >
-          ›
-        </span>
-      </button>
-      {open.value && (
-        <div className={styles.menu} role="listbox" aria-label={label}>
-          {options.map((opt) => (
-            <button
-              key={String(opt.value)}
-              className={`${styles.option} ${opt.value === value ? styles.optionActive : ''}`}
-              role="option"
-              type="button"
-              aria-selected={opt.value === value}
-              onClick={() => {
-                onSelect(opt.value)
-                open.value = false
-                triggerRef.current?.focus()
-              }}
-            >
-              {t(opt.labelKey)}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <>
+      <span className={styles.label}>{t(labelKey)}</span>
+      {displayLabel}
+    </>
   )
 }
 
@@ -130,20 +61,29 @@ export function DisplayModeControls() {
     }
   }
 
+  const currentDisplay = DISPLAY_OPTIONS.find((o) => o.value === displayValue)
+  const currentColorBy = COLOR_BY_OPTIONS.find((o) => o.value === colorByValue)
+
   return (
     <div className={styles.container} role="group" aria-label={t('canvas.display.label')}>
       <Dropdown
-        label={t('canvas.display.sizeBy')}
-        options={DISPLAY_OPTIONS}
+        trigger={buildTrigger('canvas.display.sizeBy', currentDisplay)}
+        items={buildItems(DISPLAY_OPTIONS)}
         value={displayValue}
-        onSelect={handleDisplaySelect}
+        onChange={handleDisplaySelect}
+        menuDirection="up"
+        ariaLabel={t('canvas.display.sizeBy')}
+        triggerClassName={styles.trigger}
       />
       <div className={styles.divider} aria-hidden="true" />
       <Dropdown
-        label={t('canvas.display.colorBy')}
-        options={COLOR_BY_OPTIONS}
+        trigger={buildTrigger('canvas.display.colorBy', currentColorBy)}
+        items={buildItems(COLOR_BY_OPTIONS)}
         value={colorByValue}
-        onSelect={handleColorBySelect}
+        onChange={handleColorBySelect}
+        menuDirection="up"
+        ariaLabel={t('canvas.display.colorBy')}
+        triggerClassName={styles.trigger}
       />
     </div>
   )

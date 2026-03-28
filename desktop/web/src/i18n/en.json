@@ -174,7 +174,17 @@
       "showMap": "Show map layer",
       "required": "Set a design location first",
       "mapStreet": "Street",
-      "mapTerrain": "Terrain"
+      "mapTerrain": "Terrain",
+      "searchPlaceholder": "Search for a location...",
+      "searching": "Searching...",
+      "noResults": "No results found",
+      "selectResult": "Select a result",
+      "geocodeError": "Geocoding failed",
+      "changeWarning": "Changing location may shift geo-referenced features",
+      "miniMapLabel": "Preview",
+      "addressLabel": "Address",
+      "opacity": "Map opacity",
+      "mapSatellite": "Satellite"
     },
     "file": {
       "new": "New Design",
@@ -203,7 +213,17 @@
       "annotations": "Annotations",
       "visibility": "Toggle visibility",
       "lock": "Toggle lock",
-      "opacity": "Opacity"
+      "opacity": "Opacity",
+      "mapSection": "Map Layers",
+      "basemap": "Basemap",
+      "satellite": "Satellite",
+      "hillshade": "Hillshade",
+      "interval": "Interval",
+      "setLocation": "Set a design location to enable map layers",
+      "styleStreet": "Street",
+      "styleTerrain": "Terrain",
+      "styleSatellite": "Satellite",
+      "styleNone": "None"
     },
     "bottomPanel": {
       "ariaLabel": "Bottom panel",
@@ -235,7 +255,16 @@
       "type_harvest": "Harvest",
       "type_watering": "Watering",
       "type_fertilising": "Fertilising",
-      "type_other": "Other"
+      "type_other": "Other",
+      "dragToMove": "Drag to move",
+      "dragToResize": "Drag edge to resize",
+      "prePopulate": "Auto-populate from database",
+      "acceptSuggestion": "Accept",
+      "dismissSuggestion": "Dismiss",
+      "weekView": "Week",
+      "monthView": "Month",
+      "yearView": "Year",
+      "todayMarker": "Today"
     },
     "consortium": {
       "title": "Consortium",
@@ -282,7 +311,14 @@
       "category_materials": "Materials",
       "category_labor": "Labor",
       "category_tools": "Tools",
-      "category_other": "Other"
+      "category_other": "Other",
+      "species": "Species",
+      "autoCount": "Auto-counted from canvas",
+      "setPrice": "Set price",
+      "defaultPrice": "Default price",
+      "exportCSV": "Export CSV",
+      "emptyCanvas": "Place plants on the canvas to track costs",
+      "perUnit": "per unit"
     },
     "export": {
       "exportPng": "Export as PNG",
@@ -299,15 +335,56 @@
       "title": "Plant detail",
       "plantDetail": "Plant detail",
       "close": "Close plant detail"
+    },
+    "terrain": {
+      "contours": "Contour lines",
+      "contourInterval": "Contour interval",
+      "hillshade": "Hillshading",
+      "hillshadeOpacity": "Hillshade opacity",
+      "offlineTiles": "Offline tiles",
+      "downloadTiles": "Download tiles",
+      "downloadProgress": "Downloading...",
+      "downloadComplete": "Download complete",
+      "tileRegion": "Tile region",
+      "zoomRange": "Zoom range",
+      "offlineStatus": "Offline",
+      "removeOffline": "Remove offline tiles"
     }
   },
   "worldMap": {
     "emptyTitle": "World Map",
-    "emptyText": "Be the first to share a design in your area!"
+    "emptyText": "Be the first to share a design in your area!",
+    "title": "World Map",
+    "discover": "Discover designs",
+    "featured": "Featured",
+    "useTemplate": "Use as template",
+    "downloading": "Downloading template...",
+    "plantCount": "{{count}} plants",
+    "climateZone": "Climate zone",
+    "author": "By {{author}}",
+    "noDesigns": "No designs in this area yet",
+    "zoomToExplore": "Zoom in to explore designs",
+    "filterByClimate": "Filter by climate",
+    "filterByStyle": "Filter by style",
+    "filterByScale": "Filter by scale",
+    "preview": "Preview",
+    "openTemplate": "Open as new design"
   },
   "learning": {
     "emptyTitle": "Learning",
-    "emptyText": "Learn techniques from soil prep to syntropy"
+    "emptyText": "Learn techniques from soil prep to syntropy",
+    "title": "Knowledge",
+    "search": "Search articles...",
+    "topics": "Topics",
+    "noResults": "No articles found",
+    "readMore": "Read more",
+    "relatedPlants": "Related plants",
+    "articles": "Articles",
+    "composting": "Composting",
+    "waterManagement": "Water management",
+    "companionPlanting": "Companion planting",
+    "soilHealth": "Soil health",
+    "permaculture": "Permaculture principles"
   },
   "saved": {
     "title": "Saved Designs",
@@ -535,7 +612,7 @@
     "hardiness": "Hardiness",
     "edibility": "Edibility",
     "height": "Height",
-    "nitrogen": "N\u2082 Fixer",
+    "nitrogen": "N₂ Fixer",
     "moreFilters": "More filters",
     "clearAll": "Clear all",
     "activeFilters": "Active filters",
@@ -639,5 +716,17 @@
     "empty": "No favorites yet",
     "emptyHint": "Star plants from the search panel to add them here",
     "dragHint": "Drag to canvas to place"
+  },
+  "adaptation": {
+    "title": "Template Adaptation",
+    "incompatible": "Incompatible plants",
+    "compatible": "Compatible",
+    "hardinessWarning": "Hardiness mismatch ({{zones}} zones)",
+    "suggestReplacement": "Suggest replacement",
+    "acceptAll": "Accept all",
+    "dismissAll": "Dismiss all",
+    "replacement": "Replace with",
+    "keepOriginal": "Keep original",
+    "reviewPlants": "Review plants for your location"
   }
 }

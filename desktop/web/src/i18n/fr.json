@@ -174,7 +174,17 @@
       "showMap": "Afficher la carte",
       "required": "Définissez d'abord un emplacement",
       "mapStreet": "Plan",
-      "mapTerrain": "Relief"
+      "mapTerrain": "Relief",
+      "searchPlaceholder": "Rechercher un lieu...",
+      "searching": "Recherche...",
+      "noResults": "Aucun résultat",
+      "selectResult": "Sélectionnez un résultat",
+      "geocodeError": "Échec du géocodage",
+      "changeWarning": "Changer l'emplacement peut décaler les éléments géoréférencés",
+      "miniMapLabel": "Aperçu",
+      "addressLabel": "Adresse",
+      "opacity": "Opacité de la carte",
+      "mapSatellite": "Satellite"
     },
     "file": {
       "new": "Nouveau design",
@@ -195,7 +205,7 @@
       "layerPanel": "Calques",
       "collapse": "Réduire le panneau des calques",
       "base": "Base",
-      "contours": "Contours",
+      "contours": "Courbes de niveau",
       "climate": "Climat",
       "zones": "Zones",
       "water": "Eau",
@@ -203,7 +213,17 @@
       "annotations": "Annotations",
       "visibility": "Basculer la visibilité",
       "lock": "Basculer le verrouillage",
-      "opacity": "Opacité"
+      "opacity": "Opacité",
+      "mapSection": "Couches de carte",
+      "basemap": "Fond de carte",
+      "satellite": "Satellite",
+      "hillshade": "Ombrage",
+      "interval": "Intervalle",
+      "setLocation": "Définissez un emplacement pour activer les couches de carte",
+      "styleStreet": "Plan",
+      "styleTerrain": "Relief",
+      "styleSatellite": "Satellite",
+      "styleNone": "Aucun"
     },
     "bottomPanel": {
       "ariaLabel": "Panneau inférieur",
@@ -235,7 +255,16 @@
       "type_harvest": "Récolte",
       "type_watering": "Arrosage",
       "type_fertilising": "Fertilisation",
-      "type_other": "Autre"
+      "type_other": "Autre",
+      "dragToMove": "Glisser pour déplacer",
+      "dragToResize": "Glisser le bord pour redimensionner",
+      "prePopulate": "Pré-remplir depuis la base de données",
+      "acceptSuggestion": "Accepter",
+      "dismissSuggestion": "Ignorer",
+      "weekView": "Semaine",
+      "monthView": "Mois",
+      "yearView": "Année",
+      "todayMarker": "Aujourd'hui"
     },
     "consortium": {
       "title": "Consortium",
@@ -282,7 +311,14 @@
       "category_materials": "Matériaux",
       "category_labor": "Main-d'œuvre",
       "category_tools": "Outils",
-      "category_other": "Autre"
+      "category_other": "Autre",
+      "species": "Espèce",
+      "autoCount": "Comptage automatique depuis le canevas",
+      "setPrice": "Définir le prix",
+      "defaultPrice": "Prix par défaut",
+      "exportCSV": "Exporter CSV",
+      "emptyCanvas": "Placez des plantes sur le canevas pour suivre les coûts",
+      "perUnit": "par unité"
     },
     "export": {
       "exportPng": "Exporter en PNG",
@@ -299,15 +335,56 @@
       "title": "Détail de la plante",
       "plantDetail": "Détail de la plante",
       "close": "Fermer le détail de la plante"
+    },
+    "terrain": {
+      "contours": "Courbes de niveau",
+      "contourInterval": "Intervalle des courbes",
+      "hillshade": "Ombrage",
+      "hillshadeOpacity": "Opacité de l'ombrage",
+      "offlineTiles": "Tuiles hors ligne",
+      "downloadTiles": "Télécharger les tuiles",
+      "downloadProgress": "Téléchargement...",
+      "downloadComplete": "Téléchargement terminé",
+      "tileRegion": "Région des tuiles",
+      "zoomRange": "Plage de zoom",
+      "offlineStatus": "Hors ligne",
+      "removeOffline": "Supprimer les tuiles hors ligne"
     }
   },
   "worldMap": {
     "emptyTitle": "Carte du monde",
-    "emptyText": "Soyez le premier à partager un design dans votre région !"
+    "emptyText": "Soyez le premier à partager un design dans votre région !",
+    "title": "Carte du monde",
+    "discover": "Découvrir des designs",
+    "featured": "En vedette",
+    "useTemplate": "Utiliser comme modèle",
+    "downloading": "Téléchargement du modèle...",
+    "plantCount": "{{count}} plantes",
+    "climateZone": "Zone climatique",
+    "author": "Par {{author}}",
+    "noDesigns": "Aucun design dans cette zone",
+    "zoomToExplore": "Zoomez pour explorer les designs",
+    "filterByClimate": "Filtrer par climat",
+    "filterByStyle": "Filtrer par style",
+    "filterByScale": "Filtrer par échelle",
+    "preview": "Aperçu",
+    "openTemplate": "Ouvrir comme nouveau design"
   },
   "learning": {
     "emptyTitle": "Apprentissage",
-    "emptyText": "Apprenez les techniques de la préparation du sol à la syntropie"
+    "emptyText": "Apprenez les techniques de la préparation du sol à la syntropie",
+    "title": "Connaissances",
+    "search": "Rechercher des articles...",
+    "topics": "Sujets",
+    "noResults": "Aucun article trouvé",
+    "readMore": "Lire la suite",
+    "relatedPlants": "Plantes associées",
+    "articles": "Articles",
+    "composting": "Compostage",
+    "waterManagement": "Gestion de l'eau",
+    "companionPlanting": "Plantes compagnes",
+    "soilHealth": "Santé du sol",
+    "permaculture": "Principes de permaculture"
   },
   "saved": {
     "title": "Designs sauvegardés",
@@ -546,7 +623,7 @@
     "hardiness": "Rusticité",
     "edibility": "Comestibilité",
     "height": "Hauteur",
-    "nitrogen": "Fixateur N\u2082",
+    "nitrogen": "Fixateur N₂",
     "moreFilters": "Plus de filtres",
     "clearAll": "Tout effacer",
     "activeFilters": "Filtres actifs",
@@ -639,5 +716,17 @@
     "empty": "Aucun favori pour le moment",
     "emptyHint": "Marquez des plantes depuis le panneau de recherche pour les ajouter ici",
     "dragHint": "Glisser sur le canevas pour placer"
+  },
+  "adaptation": {
+    "title": "Adaptation du modèle",
+    "incompatible": "Plantes incompatibles",
+    "compatible": "Compatible",
+    "hardinessWarning": "Décalage de rusticité ({{zones}} zones)",
+    "suggestReplacement": "Suggérer un remplacement",
+    "acceptAll": "Tout accepter",
+    "dismissAll": "Tout ignorer",
+    "replacement": "Remplacer par",
+    "keepOriginal": "Garder l'original",
+    "reviewPlants": "Vérifier les plantes pour votre emplacement"
   }
 }

@@ -1,18 +1,28 @@
+import { useRef, useCallback } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale } from '../../state/app'
 import { currentDesign, nonCanvasRevision } from '../../state/document'
-import { celestialDate } from '../../state/canvas'
+import { toISODate } from '../../canvas/timeline-math'
 import type { TimelineAction } from '../../types/design'
+import { InteractiveTimeline, type Granularity } from './InteractiveTimeline'
 import styles from './TimelineTab.module.css'
 
-type ActionType = 'planting' | 'pruning' | 'harvest' | 'watering' | 'fertilising' | 'other'
+// ---------------------------------------------------------------------------
+// Action types
+// ---------------------------------------------------------------------------
 
+type ActionType = 'planting' | 'pruning' | 'harvest' | 'watering' | 'fertilising' | 'other'
 const ACTION_TYPES: ActionType[] = ['planting', 'pruning', 'harvest', 'watering', 'fertilising', 'other']
+const GRANULARITIES: Granularity[] = ['week', 'month', 'year']
 
 function generateId(): string {
   return `action-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
 }
+
+// ---------------------------------------------------------------------------
+// Form state
+// ---------------------------------------------------------------------------
 
 interface FormState {
   action_type: string
@@ -28,22 +38,40 @@ const EMPTY_FORM: FormState = {
   end_date: '',
 }
 
+// ---------------------------------------------------------------------------
+// TimelineTab
+// ---------------------------------------------------------------------------
+
 export function TimelineTab() {
   void locale.value
 
-  const showAddForm = useSignal(false)
+  const granularity = useSignal<Granularity>('month')
+  const selectedId = useSignal<string | null>(null)
+  const showForm = useSignal(false)
   const editingId = useSignal<string | null>(null)
   const form = useSignal<FormState>({ ...EMPTY_FORM })
+  const scrollToTodayRef = useRef<(() => void) | null>(null)
 
   const actions = currentDesign.value?.timeline ?? []
+  const hasActions = actions.length > 0
+
+  // ---- Form handlers --------------------------------------------------------
 
   function openAdd() {
-    form.value = { ...EMPTY_FORM }
+    const today = new Date()
+    const todayStr = toISODate(today)
+    const endStr = toISODate(new Date(today.getTime() + 14 * 86400000))
+
+    form.value = {
+      ...EMPTY_FORM,
+      start_date: todayStr,
+      end_date: endStr,
+    }
     editingId.value = null
-    showAddForm.value = true
+    showForm.value = true
   }
 
-  function openEdit(action: TimelineAction) {
+  const openEdit = useCallback((action: TimelineAction) => {
     form.value = {
       action_type: action.action_type,
       description: action.description,
@@ -51,11 +79,11 @@ export function TimelineTab() {
       end_date: action.end_date ?? '',
     }
     editingId.value = action.id
-    showAddForm.value = true
-  }
+    showForm.value = true
+  }, [])
 
   function cancelForm() {
-    showAddForm.value = false
+    showForm.value = false
     editingId.value = null
     form.value = { ...EMPTY_FORM }
   }
@@ -69,6 +97,7 @@ export function TimelineTab() {
     const id = editingId.value
 
     if (id) {
+      // Edit existing
       currentDesign.value = {
         ...design,
         timeline: design.timeline.map((a) =>
@@ -84,6 +113,7 @@ export function TimelineTab() {
         ),
       }
     } else {
+      // Add new
       const newAction: TimelineAction = {
         id: generateId(),
         action_type: f.action_type,
@@ -107,38 +137,132 @@ export function TimelineTab() {
     cancelForm()
   }
 
-  function toggleCompleted(id: string) {
+  // ---- Auto-populate --------------------------------------------------------
+
+  function autoPopulate() {
     const design = currentDesign.value
     if (!design) return
+    if (design.plants.length === 0) return
+
+    const existing = new Set(design.timeline.map((a) => `${a.plants?.[0] ?? ''}-${a.action_type}`))
+    const newActions: TimelineAction[] = []
+
+    const now = new Date()
+    const year = now.getFullYear()
+
+    for (const plant of design.plants) {
+      const key = plant.canonical_name
+
+      // Planting action
+      const plantingKey = `${key}-planting`
+      if (!existing.has(plantingKey)) {
+        newActions.push({
+          id: generateId(),
+          action_type: 'planting',
+          description: `${t('canvas.timeline.type_planting')} - ${plant.common_name || plant.canonical_name}`,
+          start_date: `${year}-03-15`,
+          end_date: `${year}-04-15`,
+          recurrence: null,
+          plants: [key],
+          zone: null,
+          depends_on: null,
+          completed: false,
+          order: design.timeline.length + newActions.length,
+        })
+        existing.add(plantingKey)
+      }
+
+      // Harvest action
+      const harvestKey = `${key}-harvest`
+      if (!existing.has(harvestKey)) {
+        newActions.push({
+          id: generateId(),
+          action_type: 'harvest',
+          description: `${t('canvas.timeline.type_harvest')} - ${plant.common_name || plant.canonical_name}`,
+          start_date: `${year}-08-01`,
+          end_date: `${year}-09-30`,
+          recurrence: null,
+          plants: [key],
+          zone: null,
+          depends_on: null,
+          completed: false,
+          order: design.timeline.length + newActions.length,
+        })
+        existing.add(harvestKey)
+      }
+    }
+
+    if (newActions.length === 0) return
+
     currentDesign.value = {
       ...design,
-      timeline: design.timeline.map((a) =>
-        a.id === id ? { ...a, completed: !a.completed } : a
-      ),
+      timeline: [...design.timeline, ...newActions],
     }
     nonCanvasRevision.value++
   }
 
-  function deleteAction(id: string) {
-    const design = currentDesign.value
-    if (!design) return
-    currentDesign.value = {
-      ...design,
-      timeline: design.timeline.filter((a) => a.id !== id),
-    }
-    nonCanvasRevision.value++
+  // ---- Today scroll ---------------------------------------------------------
+
+  function scrollToToday() {
+    scrollToTodayRef.current?.()
   }
 
-  const isEditing = showAddForm.value
+  // ---- Select handler -------------------------------------------------------
+
+  const handleSelect = useCallback((id: string | null) => {
+    selectedId.value = id
+  }, [])
+
+  // ---- Render ---------------------------------------------------------------
+
+  const isEditing = showForm.value
 
   return (
     <div className={styles.container}>
+      {/* Header toolbar */}
       <div className={styles.header}>
-        <span className={styles.count}>
-          {actions.length > 0
-            ? `${actions.filter((a) => a.completed).length} / ${actions.length}`
-            : ''}
-        </span>
+        {/* Granularity chips */}
+        <div className={styles.chipGroup} role="radiogroup" aria-label={t('canvas.timeline.title')}>
+          {GRANULARITIES.map((g) => (
+            <button
+              key={g}
+              type="button"
+              role="radio"
+              aria-checked={granularity.value === g}
+              className={`${styles.chip}${granularity.value === g ? ` ${styles.chipActive}` : ''}`}
+              onClick={() => { granularity.value = g }}
+            >
+              {t(`canvas.timeline.${g}View`)}
+            </button>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          className={styles.toolBtn}
+          onClick={scrollToToday}
+          aria-label={t('canvas.timeline.todayMarker')}
+        >
+          {t('canvas.timeline.todayMarker')}
+        </button>
+
+        <div className={styles.headerSpacer} />
+
+        {hasActions && (
+          <span className={styles.count}>
+            {actions.filter((a) => a.completed).length} / {actions.length}
+          </span>
+        )}
+
+        <button
+          type="button"
+          className={styles.toolBtn}
+          onClick={autoPopulate}
+          aria-label={t('canvas.timeline.prePopulate')}
+        >
+          {t('canvas.timeline.prePopulate')}
+        </button>
+
         <button
           type="button"
           className={styles.addBtn}
@@ -149,12 +273,13 @@ export function TimelineTab() {
         </button>
       </div>
 
+      {/* Inline edit/add form */}
       {isEditing && (
         <div className={styles.formRow} role="form" aria-label={editingId.value ? t('canvas.timeline.editAction') : t('canvas.timeline.addAction')}>
           <select
             className={styles.formSelect}
             value={form.value.action_type}
-            onChange={(e) => { form.value = { ...form.value, action_type: e.currentTarget.value } }}
+            onChange={(e) => { form.value = { ...form.value, action_type: (e.target as HTMLSelectElement).value } }}
             aria-label={t('canvas.timeline.actionType')}
           >
             {ACTION_TYPES.map((type) => (
@@ -167,7 +292,7 @@ export function TimelineTab() {
             type="text"
             className={styles.formInput}
             value={form.value.description}
-            onInput={(e) => { form.value = { ...form.value, description: e.currentTarget.value } }}
+            onInput={(e) => { form.value = { ...form.value, description: (e.target as HTMLInputElement).value } }}
             placeholder={t('canvas.timeline.description')}
             aria-label={t('canvas.timeline.description')}
           />
@@ -175,27 +300,28 @@ export function TimelineTab() {
             type="date"
             className={styles.formDate}
             value={form.value.start_date}
-            onInput={(e) => { form.value = { ...form.value, start_date: e.currentTarget.value } }}
+            onInput={(e) => { form.value = { ...form.value, start_date: (e.target as HTMLInputElement).value } }}
             aria-label={t('canvas.timeline.startDate')}
           />
-          <span className={styles.dateSep}>→</span>
+          <span className={styles.dateSep}>{'\u2192'}</span>
           <input
             type="date"
             className={styles.formDate}
             value={form.value.end_date}
-            onInput={(e) => { form.value = { ...form.value, end_date: e.currentTarget.value } }}
+            onInput={(e) => { form.value = { ...form.value, end_date: (e.target as HTMLInputElement).value } }}
             aria-label={t('canvas.timeline.endDate')}
           />
-          <button type="button" className={styles.saveBtn} onClick={saveForm} aria-label={t('canvas.timeline.save')}>
+          <button type="button" className={styles.saveBtn} onClick={saveForm}>
             {t('canvas.timeline.save')}
           </button>
-          <button type="button" className={styles.cancelBtn} onClick={cancelForm} aria-label={t('canvas.timeline.cancel')}>
+          <button type="button" className={styles.cancelBtn} onClick={cancelForm}>
             {t('canvas.timeline.cancel')}
           </button>
         </div>
       )}
 
-      {actions.length === 0 && !isEditing ? (
+      {/* Main content area */}
+      {!hasActions && !isEditing ? (
         <div className={styles.emptyState}>
           <p className={styles.emptyTitle}>{t('canvas.timeline.emptyState')}</p>
           <p className={styles.emptyHint}>{t('canvas.timeline.emptyHint')}</p>
@@ -204,68 +330,14 @@ export function TimelineTab() {
           </button>
         </div>
       ) : (
-        <div className={styles.tableWrapper}>
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th className={styles.thCheck}>{t('canvas.timeline.completed')}</th>
-                <th className={styles.thType}>{t('canvas.timeline.actionType')}</th>
-                <th className={styles.thDesc}>{t('canvas.timeline.description')}</th>
-                <th className={styles.thDate}>{t('canvas.timeline.startDate')}</th>
-                <th className={styles.thDate}>{t('canvas.timeline.endDate')}</th>
-                <th className={styles.thActions} />
-              </tr>
-            </thead>
-            <tbody>
-              {actions.map((action) => (
-                <tr
-                  key={action.id}
-                  className={action.completed ? styles.rowCompleted : ''}
-                  onClick={() => {
-                    if (action.start_date) {
-                      celestialDate.value = new Date(action.start_date)
-                    }
-                  }}
-                >
-                  <td className={styles.tdCheck}>
-                    <input
-                      type="checkbox"
-                      checked={action.completed}
-                      onChange={() => toggleCompleted(action.id)}
-                      aria-label={t('canvas.timeline.toggleCompleted')}
-                      className={styles.checkbox}
-                    />
-                  </td>
-                  <td className={styles.tdType}>
-                    <span className={`${styles.badge} ${styles[`badge_${action.action_type}`] ?? ''}`}>
-                      {t(`canvas.timeline.type_${action.action_type}`, { defaultValue: action.action_type })}
-                    </span>
-                  </td>
-                  <td className={styles.tdDesc}>{action.description}</td>
-                  <td className={styles.tdDate}>{action.start_date ?? '—'}</td>
-                  <td className={styles.tdDate}>{action.end_date ?? '—'}</td>
-                  <td className={styles.tdRowActions}>
-                    <button
-                      type="button"
-                      className={styles.rowActionBtn}
-                      onClick={() => openEdit(action)}
-                      aria-label={t('canvas.timeline.editAction')}
-                    >
-                      {t('canvas.timeline.edit')}
-                    </button>
-                    <button
-                      type="button"
-                      className={`${styles.rowActionBtn} ${styles.rowActionBtnDanger}`}
-                      onClick={() => deleteAction(action.id)}
-                      aria-label={t('canvas.timeline.deleteAction')}
-                    >
-                      {t('canvas.timeline.delete')}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className={styles.canvasArea}>
+          <InteractiveTimeline
+            granularity={granularity.value}
+            selectedId={selectedId.value}
+            onSelect={handleSelect}
+            onEditRequest={openEdit}
+            scrollToTodayRef={scrollToTodayRef}
+          />
         </div>
       )}
     </div>

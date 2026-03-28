@@ -5,7 +5,6 @@
   border-top: 1px solid var(--color-border);
   flex-shrink: 0;
   overflow: hidden;
-  /* Slide-in animation */
   animation: slideUp 200ms ease-out;
 }
 
@@ -26,64 +25,59 @@
   }
 }
 
+/* Resize handle — 1px border, expands to 2px on hover, 9px hit target via ::before */
 .resizeHandle {
-  height: 4px;
+  height: 1px;
   flex-shrink: 0;
   cursor: row-resize;
-  background: transparent;
-  transition: background-color 150ms ease;
+  background: var(--color-border);
+  transition: height 100ms ease, background-color 100ms ease;
   position: relative;
   z-index: 1;
 }
 
-.resizeHandle::after {
+.resizeHandle::before {
   content: '';
   position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: 32px;
-  height: 2px;
-  border-radius: var(--radius-full);
-  background: var(--color-border);
-  transition: background-color 150ms ease;
+  top: -4px;
+  left: 0;
+  right: 0;
+  height: 9px;
 }
 
 .resizeHandle:hover {
-  background: var(--color-primary-bg);
-}
-
-.resizeHandle:hover::after {
+  height: 2px;
   background: var(--color-primary);
 }
 
+/* Tab bar */
 .tabBar {
   display: flex;
   align-items: center;
   border-bottom: 1px solid var(--color-border);
-  background: var(--color-surface);
+  background: var(--color-bg);
   flex-shrink: 0;
   height: 32px;
-  padding: 0 var(--space-1);
-  gap: 2px;
+  padding: 0 var(--space-2);
+  gap: var(--space-1);
 }
 
+/* Chip-style tab buttons */
 .tab {
   display: flex;
   align-items: center;
-  height: 100%;
+  height: 22px;
   padding: 0 var(--space-3);
-  font-size: var(--text-sm);
+  font-size: 11px;
   font-weight: 500;
   color: var(--color-text-muted);
-  background: transparent;
-  border: none;
+  background: var(--color-surface);
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
   cursor: pointer;
   white-space: nowrap;
-  border-bottom: 2px solid transparent;
-  transition: color 100ms ease, border-color 100ms ease;
-  min-width: 32px;
-  min-height: 32px;
+  transition: color 100ms ease, background-color 100ms ease, border-color 100ms ease;
+  min-height: 22px;
 }
 
 .tab:hover {
@@ -98,19 +92,21 @@
 
 .tabActive {
   color: var(--color-primary);
-  border-bottom-color: var(--color-primary);
+  background: var(--color-primary-bg);
+  border-color: var(--color-primary);
 }
 
 .tabBarSpacer {
   flex: 1;
 }
 
+/* Collapse button */
 .collapseBtn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   border-radius: var(--radius-sm);
   border: none;
   background: transparent;
@@ -129,26 +125,23 @@
   outline-offset: 1px;
 }
 
+/* Tab content area */
 .tabContent {
   flex: 1;
   overflow: auto;
   min-height: 0;
 }
 
-.timelineSplit {
+/* Placeholder for empty tab content */
+.tabPlaceholder {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   height: 100%;
+  padding: var(--space-4);
 }
 
-.timelineGantt {
-  flex: 1;
-  min-height: 60px;
-  overflow: hidden;
-}
-
-.timelineDetail {
-  max-height: 50%;
-  overflow: auto;
-  border-top: 1px solid var(--color-border);
+.placeholderText {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }
