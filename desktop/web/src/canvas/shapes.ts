@@ -8,7 +8,6 @@ function generateId(): string {
 // Style constants — zone/annotation colors are read from the theme-refresh cache
 // so newly created shapes match the active theme. Stroke width is theme-independent.
 const ZONE_STROKE_WIDTH = 2          // screen pixels — constant because strokeScaleEnabled: false
-const ANNOTATION_STROKE = '#64748B'
 
 export const PREVIEW_DASH = [6, 3]
 
@@ -41,6 +40,7 @@ export function createRect(attrs: {
     strokeScaleEnabled: false,
     draggable: true,
     name: 'shape',
+    'data-theme-managed-fill': true,
   })
 }
 
@@ -59,6 +59,7 @@ export function createEllipse(attrs: {
     strokeScaleEnabled: false,
     draggable: true,
     name: 'shape',
+    'data-theme-managed-fill': true,
   })
 }
 
@@ -73,6 +74,7 @@ export function createPolygon(points: number[]): Konva.Line {
     closed: true,
     draggable: true,
     name: 'shape',
+    'data-theme-managed-fill': true,
   })
 }
 
@@ -88,6 +90,7 @@ export function createFreeform(points: number[], closed: boolean): Konva.Line {
     draggable: true,
     name: 'shape',
     tension: 0.3,
+    'data-theme-managed-fill': closed,
   })
 }
 
@@ -95,7 +98,7 @@ export function createPolyline(points: number[]): Konva.Line {
   return new Konva.Line({
     points,
     id: generateId(),
-    stroke: ANNOTATION_STROKE,
+    stroke: getCanvasColor('annotation-stroke'),
     strokeWidth: 2,
     strokeScaleEnabled: false,
     draggable: true,
@@ -126,7 +129,7 @@ export function createMeasureLine(points: number[]): Konva.Line {
   return new Konva.Line({
     points,
     id: generateId(),
-    stroke: ANNOTATION_STROKE,
+    stroke: getCanvasColor('annotation-stroke'),
     strokeWidth: 1.5,
     strokeScaleEnabled: false,
     name: 'shape',
@@ -142,7 +145,7 @@ export function createMeasureLabel(text: string): Konva.Group {
     text,
     fontSize: 12,
     fontFamily: 'Inter, sans-serif',
-    fill: '#FFFFFF',
+    fill: getCanvasColor('annotation-surface'),
     padding: 4,
   })
 
@@ -154,7 +157,7 @@ export function createMeasureLabel(text: string): Konva.Group {
     y: -h / 2,
     width: w + 8,
     height: h,
-    fill: ANNOTATION_STROKE,
+    fill: getCanvasColor('annotation-stroke'),
     cornerRadius: 4,
   })
 

@@ -231,7 +231,9 @@
       "expand": "패널 펼치기",
       "timeline": "타임라인",
       "consortium": "컨소시엄",
-      "budget": "예산"
+      "budget": "예산",
+      "open": "하단 패널 열기",
+      "tabs": "탭"
     },
     "timeline": {
       "title": "타임라인",

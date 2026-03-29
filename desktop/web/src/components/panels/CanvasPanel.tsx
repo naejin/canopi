@@ -1,19 +1,19 @@
 import { useRef, useEffect } from 'preact/hooks'
 import { locale, autoSaveIntervalMs } from '../../state/app'
-import { canvasReady, zoomLevel, zoomReference } from '../../state/canvas'
+import { bottomPanelOpen, canvasReady } from '../../state/canvas'
 import {
   currentDesign, designName, designPath, designDirty,
-  pendingDesignPath,
-  writeCanvasIntoDocument, loadCanvasFromDocument, extractExtra,
-  resetDirtyBaselines, autosaveFailed,
+  writeCanvasIntoDocument, loadCanvasFromDocument, autosaveFailed,
+  consumeQueuedDocumentLoad,
 } from '../../state/document'
-import { autosaveDesign, loadDesign } from '../../ipc/design'
+import { autosaveDesign } from '../../ipc/design'
 import { CanvasEngine, setCanvasEngine, canvasEngine } from '../../canvas/engine'
 import { CanvasToolbar } from '../canvas/CanvasToolbar'
 import { ZoomControls } from '../canvas/ZoomControls'
 import { DisplayModeControls } from '../canvas/DisplayModeControls'
 import { DisplayLegend } from '../canvas/DisplayLegend'
 import { BottomPanel } from '../canvas/BottomPanel'
+import { BottomPanelLauncher } from '../canvas/BottomPanelLauncher'
 import { LayerPanel } from '../canvas/LayerPanel'
 import { WelcomeScreen } from '../shared/WelcomeScreen'
 import styles from './Panels.module.css'
@@ -37,16 +37,7 @@ export function CanvasPanel() {
     setCanvasEngine(engine)
     canvasReady.value = true
 
-    // Set initial view to show ~100m × 100m centered on origin
-    const TARGET_M = 100
-    const w = container.clientWidth
-    const h = container.clientHeight
-    const initScale = Math.min(w, h) / TARGET_M
-    engine.stage.scale({ x: initScale, y: initScale })
-    // Center origin in the viewport
-    engine.stage.position({ x: w / 2 - (TARGET_M / 2) * initScale, y: h / 2 - (TARGET_M / 2) * initScale })
-    zoomLevel.value = initScale
-    zoomReference.value = initScale
+    engine.initializeViewport()
     // Attach HTML rulers to the overlay div (sits above the Konva canvas)
     if (rulerOverlayRef.current) {
       engine.attachRulersTo(rulerOverlayRef.current)
@@ -60,25 +51,10 @@ export function CanvasPanel() {
       engine.hideCanvasChrome()
     }
 
-    // Load a file queued by SavedDesignsPanel before canvas was mounted
-    const queued = pendingDesignPath.value
-    if (queued) {
-      pendingDesignPath.value = null
-      void loadDesign(queued).then((file) => {
-        file.extra = extractExtra(file as unknown as Record<string, unknown>)
-        loadCanvasFromDocument(file, engine)
-        currentDesign.value = file
-        designName.value = file.name
-        designPath.value = queued
-        resetDirtyBaselines()
-        engine.history.clear()
-        engine.showCanvasChrome()
-      }).catch(() => {
-        // File no longer exists or failed to load — ignore, canvas stays empty
-      })
-    }
+    const cancelQueuedLoad = consumeQueuedDocumentLoad(engine)
 
     return () => {
+      cancelQueuedLoad()
       engine.destroy()
       engineRef.current = null
       setCanvasEngine(null)
@@ -106,6 +82,7 @@ export function CanvasPanel() {
   }, [intervalMs])
 
   const hasDesign = currentDesign.value !== null
+  const bottomOpen = bottomPanelOpen.value
 
   return (
     <div className={styles.canvasPanel}>
@@ -121,6 +98,7 @@ export function CanvasPanel() {
             {hasDesign && <DisplayModeControls />}
             {hasDesign && <DisplayLegend />}
             {hasDesign && <ZoomControls />}
+            {hasDesign && !bottomOpen && <BottomPanelLauncher />}
           </div>
           {hasDesign && <LayerPanel />}
         </div>

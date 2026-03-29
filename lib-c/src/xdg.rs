@@ -38,10 +38,10 @@ const MIME_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 
 /// Return the XDG data home directory (`$XDG_DATA_HOME` or `~/.local/share`).
 fn xdg_data_home() -> Result<PathBuf, String> {
-    if let Ok(val) = std::env::var("XDG_DATA_HOME") {
-        if !val.is_empty() {
-            return Ok(PathBuf::from(val));
-        }
+    if let Ok(val) = std::env::var("XDG_DATA_HOME")
+        && !val.is_empty()
+    {
+        return Ok(PathBuf::from(val));
     }
     let home = std::env::var("HOME").map_err(|_| "$HOME is not set".to_string())?;
     Ok(PathBuf::from(home).join(".local").join("share"))
@@ -76,14 +76,16 @@ pub fn register_mime_type() -> Result<PathBuf, String> {
         .map_err(|e| format!("Failed to create mime packages dir: {e}"))?;
 
     let mime_path = mime_dir.join("canopi.xml");
-    let mut f = std::fs::File::create(&mime_path)
-        .map_err(|e| format!("Failed to create MIME XML: {e}"))?;
+    let mut f =
+        std::fs::File::create(&mime_path).map_err(|e| format!("Failed to create MIME XML: {e}"))?;
     f.write_all(MIME_XML.as_bytes())
         .map_err(|e| format!("Failed to write MIME XML: {e}"))?;
 
     // Update the MIME database (non-fatal if it fails).
     let mime_base = data_home.join("mime");
-    let _ = Command::new("update-mime-database").arg(&mime_base).status();
+    let _ = Command::new("update-mime-database")
+        .arg(&mime_base)
+        .status();
 
     Ok(mime_path)
 }

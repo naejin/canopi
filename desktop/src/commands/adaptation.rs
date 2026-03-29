@@ -83,14 +83,10 @@ pub fn check_plant_compatibility(
         let (species_id, canonical_name, hardiness_min, hardiness_max) =
             row_result.map_err(|e| format!("Failed to read row: {e}"))?;
 
-        let common_name =
-            crate::db::plant_db::get_common_name(&conn, &species_id, &locale);
+        let common_name = crate::db::plant_db::get_common_name(&conn, &species_id, &locale);
 
-        let (is_compatible, zone_diff) = compute_zone_diff(
-            hardiness_min,
-            hardiness_max,
-            target_hardiness,
-        );
+        let (is_compatible, zone_diff) =
+            compute_zone_diff(hardiness_min, hardiness_max, target_hardiness);
 
         results.push(CompatibilityResult {
             species_id,
@@ -141,10 +137,8 @@ pub fn suggest_replacements(
         format!("s.hardiness_zone_max >= ?2"),
     ];
 
-    let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = vec![
-        Box::new(canonical_name.clone()),
-        Box::new(target_hardiness),
-    ];
+    let mut params: Vec<Box<dyn rusqlite::types::ToSql>> =
+        vec![Box::new(canonical_name.clone()), Box::new(target_hardiness)];
 
     // Prefer same stratum
     if let Some(ref s) = stratum {
@@ -175,8 +169,10 @@ pub fn suggest_replacements(
         where_clauses.join(" AND ")
     );
 
-    let param_refs: Vec<&dyn rusqlite::types::ToSql> =
-        params.iter().map(|p| p.as_ref() as &dyn rusqlite::types::ToSql).collect();
+    let param_refs: Vec<&dyn rusqlite::types::ToSql> = params
+        .iter()
+        .map(|p| p.as_ref() as &dyn rusqlite::types::ToSql)
+        .collect();
 
     let mut stmt = conn
         .prepare(&sql)
@@ -190,7 +186,14 @@ pub fn suggest_replacements(
             let hardiness_max: Option<i32> = row.get(3)?;
             let stratum: Option<String> = row.get(4)?;
             let height_max_m: Option<f32> = row.get(5)?;
-            Ok((species_id, canonical_name, hardiness_min, hardiness_max, stratum, height_max_m))
+            Ok((
+                species_id,
+                canonical_name,
+                hardiness_min,
+                hardiness_max,
+                stratum,
+                height_max_m,
+            ))
         })
         .map_err(|e| format!("Failed to query replacements: {e}"))?;
 
@@ -200,8 +203,7 @@ pub fn suggest_replacements(
         let (species_id, cn, h_min, h_max, strat, height_m) =
             row_result.map_err(|e| format!("Failed to read replacement row: {e}"))?;
 
-        let common_name =
-            crate::db::plant_db::get_common_name(&conn, &species_id, &locale);
+        let common_name = crate::db::plant_db::get_common_name(&conn, &species_id, &locale);
 
         suggestions.push(ReplacementSuggestion {
             canonical_name: cn,

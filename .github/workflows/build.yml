@@ -81,6 +81,9 @@ jobs:
       - name: Frontend tests
         run: npm test --prefix desktop/web
 
+      - name: Frontend build
+        run: npm run build --prefix desktop/web
+
   test-platform:
     strategy:
       fail-fast: false
@@ -106,7 +109,6 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Platform-specific tests (${{ matrix.package }})
-        continue-on-error: true
         run: cargo test -p ${{ matrix.package }}
 
   build:

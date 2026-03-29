@@ -231,7 +231,9 @@
       "expand": "パネルを展開",
       "timeline": "タイムライン",
       "consortium": "コンソーシアム",
-      "budget": "予算"
+      "budget": "予算",
+      "open": "下部パネルを開く",
+      "tabs": "タブ"
     },
     "timeline": {
       "title": "タイムライン",

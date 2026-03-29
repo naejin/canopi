@@ -231,7 +231,9 @@
       "expand": "Expand panel",
       "timeline": "Timeline",
       "consortium": "Consortium",
-      "budget": "Budget"
+      "budget": "Budget",
+      "open": "Open bottom panel",
+      "tabs": "Tabs"
     },
     "timeline": {
       "title": "Timeline",

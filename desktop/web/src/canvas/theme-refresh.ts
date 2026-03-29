@@ -17,19 +17,41 @@ type CanvasColorName =
   | 'plant-label'
   | 'plant-label-muted'
   | 'annotation-text'
+  | 'annotation-stroke'
+  | 'annotation-surface'
   | 'zone-stroke'
   | 'zone-fill'
   | 'selection-fill'
   | 'selection-stroke'
+  | 'selection-anchor-fill'
 
 const _colors: { [K in CanvasColorName]: string } = {
   'plant-label': '#444444',
   'plant-label-muted': '#888888',
   'annotation-text': '#1A1A1A',
+  'annotation-stroke': '#6B6253',
+  'annotation-surface': '#FFFDF8',
   'zone-stroke': '#2D5F3F',
   'zone-fill': 'rgba(45, 95, 63, 0.1)',
   'selection-fill': 'rgba(160, 107, 31, 0.18)',
   'selection-stroke': 'rgba(160, 107, 31, 0.6)',
+  'selection-anchor-fill': '#FCF8F2',
+}
+
+const MANAGED_ZONE_FILL_VALUES = new Set([
+  'rgba(45,95,63,0.1)',
+  'rgba(200,180,150,0.06)',
+])
+
+function normalizeColor(value: string | null | undefined): string | null {
+  if (!value) return null
+  return value.replace(/\s+/g, '').toLowerCase()
+}
+
+export function isThemeManagedZoneFill(value: string | null | undefined): boolean {
+  const normalized = normalizeColor(value)
+  if (!normalized) return true
+  return MANAGED_ZONE_FILL_VALUES.has(normalized)
 }
 
 /**
@@ -55,10 +77,13 @@ export function refreshCanvasTheme(
   _colors['plant-label'] = cs.getPropertyValue('--canvas-plant-label').trim() || _colors['plant-label']
   _colors['plant-label-muted'] = cs.getPropertyValue('--canvas-plant-label-muted').trim() || _colors['plant-label-muted']
   _colors['annotation-text'] = cs.getPropertyValue('--canvas-annotation-text').trim() || _colors['annotation-text']
+  _colors['annotation-stroke'] = cs.getPropertyValue('--canvas-annotation-stroke').trim() || _colors['annotation-stroke']
+  _colors['annotation-surface'] = cs.getPropertyValue('--canvas-annotation-surface').trim() || _colors['annotation-surface']
   _colors['zone-stroke'] = cs.getPropertyValue('--canvas-zone-stroke').trim() || _colors['zone-stroke']
   _colors['zone-fill'] = cs.getPropertyValue('--canvas-zone-fill').trim() || _colors['zone-fill']
   _colors['selection-fill'] = cs.getPropertyValue('--canvas-selection').trim() || _colors['selection-fill']
   _colors['selection-stroke'] = cs.getPropertyValue('--canvas-selection-stroke').trim() || _colors['selection-stroke']
+  _colors['selection-anchor-fill'] = cs.getPropertyValue('--canvas-selection-anchor-fill').trim() || _colors['selection-anchor-fill']
 
   // ── Update plant labels ──
   const plantsLayer = layers.get('plants')
@@ -78,6 +103,24 @@ export function refreshCanvasTheme(
     annotationsLayer.find('.annotation-text').forEach((node: Konva.Node) => {
       ;(node as Konva.Text).fill(_colors['annotation-text'])
     })
+    annotationsLayer.find('.measure-label').forEach((node: Konva.Node) => {
+      const children = (node as Konva.Group).getChildren()
+      const pill = children[0]
+      const label = children[1]
+      if (pill && pill.getClassName() === 'Rect') {
+        ;(pill as Konva.Rect).fill(_colors['annotation-stroke'])
+      }
+      if (label && label.getClassName() === 'Text') {
+        ;(label as Konva.Text).fill(_colors['annotation-surface'])
+      }
+    })
+    annotationsLayer.find('.shape').forEach((node: Konva.Node) => {
+      if (node.getClassName() !== 'Line') return
+      const shape = node as Konva.Line
+      if (shape.closed()) return
+      if (shape.fillEnabled() && shape.fill()) return
+      shape.stroke(_colors['annotation-stroke'])
+    })
     annotationsLayer.batchDraw()
   }
 
@@ -88,8 +131,20 @@ export function refreshCanvasTheme(
       const shape = node as Konva.Shape
       // Only update zones (not other shapes on this layer) — zones have fill
       if (shape.fill() !== undefined && shape.fill() !== '') {
+        const currentFill = shape.fill()
         shape.stroke(_colors['zone-stroke'])
-        shape.fill(_colors['zone-fill'])
+        const managedFillAttr = shape.getAttr('data-theme-managed-fill')
+        const hasManagedFill =
+          typeof managedFillAttr === 'boolean'
+            ? managedFillAttr
+            : isThemeManagedZoneFill(typeof currentFill === 'string' ? currentFill : null)
+
+        if (hasManagedFill) {
+          shape.fill(_colors['zone-fill'])
+          shape.setAttr('data-theme-managed-fill', true)
+        } else {
+          shape.setAttr('data-theme-managed-fill', false)
+        }
       } else {
         // Stroke-only shapes (lines, polylines)
         shape.stroke(_colors['zone-stroke'])
@@ -102,6 +157,7 @@ export function refreshCanvasTheme(
   if (transformer) {
     transformer.borderStroke(_colors['selection-stroke'])
     transformer.anchorStroke(_colors['selection-stroke'])
+    transformer.anchorFill(_colors['selection-anchor-fill'])
     transformer.getLayer()?.batchDraw()
   }
 }

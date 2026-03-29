@@ -1,6 +1,6 @@
 use std::path::Path;
 use tracing_appender::rolling;
-use tracing_subscriber::{fmt, EnvFilter, prelude::*};
+use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
 pub fn init(log_dir: &Path) {
     let file_appender = rolling::daily(log_dir, "canopi");

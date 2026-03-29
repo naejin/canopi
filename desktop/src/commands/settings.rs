@@ -1,5 +1,5 @@
-use common_types::settings::{Locale, Settings};
 use crate::db::{self, UserDb};
+use common_types::settings::{Locale, Settings};
 
 #[tauri::command]
 pub fn get_settings(user_db: tauri::State<'_, UserDb>) -> Result<Settings, String> {
@@ -10,20 +10,19 @@ pub fn get_settings(user_db: tauri::State<'_, UserDb>) -> Result<Settings, Strin
         Some(s) => {
             // Migrate stale values before deserializing — old DBs may have
             // "system" for theme which was removed from the Theme enum.
-            let mut v: serde_json::Value = serde_json::from_str(&s)
-                .map_err(|e| format!("Failed to parse settings: {e}"))?;
+            let mut v: serde_json::Value =
+                serde_json::from_str(&s).map_err(|e| format!("Failed to parse settings: {e}"))?;
             if v.get("theme").and_then(|t| t.as_str()) == Some("system") {
                 v["theme"] = serde_json::json!("light");
             }
-            serde_json::from_value(v)
-                .map_err(|e| format!("Failed to parse settings: {e}"))
+            serde_json::from_value(v).map_err(|e| format!("Failed to parse settings: {e}"))
         }
         None => {
             let mut settings = Settings::default();
             // Detect OS locale on first launch
             if let Some(os_locale) = sys_locale::get_locale() {
                 let code = os_locale
-                    .split(|c: char| c == '_' || c == '-')
+                    .split(['_', '-'])
                     .next()
                     .unwrap_or("en")
                     .to_lowercase();
@@ -55,10 +54,7 @@ pub fn get_settings(user_db: tauri::State<'_, UserDb>) -> Result<Settings, Strin
 }
 
 #[tauri::command]
-pub fn set_settings(
-    user_db: tauri::State<'_, UserDb>,
-    settings: Settings,
-) -> Result<(), String> {
+pub fn set_settings(user_db: tauri::State<'_, UserDb>, settings: Settings) -> Result<(), String> {
     let conn = user_db.0.lock().unwrap_or_else(|e| e.into_inner());
     let json = serde_json::to_string(&settings)
         .map_err(|e| format!("Failed to serialize settings: {e}"))?;

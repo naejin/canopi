@@ -11,15 +11,19 @@ export const selectedObjectIds = signal<Set<string>>(new Set())
 
 // Layer visibility: all 7 layers defined.
 // water/contours/climate are off by default (empty until Phase 3).
-export const layerVisibility = signal<Record<string, boolean>>({
-  base: true,
-  contours: false,
-  climate: false,
-  zones: true,
-  water: false,
-  plants: true,
-  annotations: true,
-})
+export function createDefaultLayerVisibility(): Record<string, boolean> {
+  return {
+    base: true,
+    contours: false,
+    climate: false,
+    zones: true,
+    water: false,
+    plants: true,
+    annotations: true,
+  }
+}
+
+export const layerVisibility = signal<Record<string, boolean>>(createDefaultLayerVisibility())
 
 // Grid / overlay state
 export const gridSize = signal<number>(1)            // meters: 0.5, 1, 2, 5
@@ -38,26 +42,34 @@ export const layerPanelOpen = signal<boolean>(true)
 export const activeLayerName = signal<string>('zones')
 
 // Per-layer lock state (independent of object-level locks)
-export const layerLockState = signal<Record<string, boolean>>({
-  base: false,
-  contours: false,
-  climate: false,
-  zones: false,
-  water: false,
-  plants: false,
-  annotations: false,
-})
+export function createDefaultLayerLockState(): Record<string, boolean> {
+  return {
+    base: false,
+    contours: false,
+    climate: false,
+    zones: false,
+    water: false,
+    plants: false,
+    annotations: false,
+  }
+}
+
+export const layerLockState = signal<Record<string, boolean>>(createDefaultLayerLockState())
 
 // Per-layer opacity (0.0 – 1.0)
-export const layerOpacity = signal<Record<string, number>>({
-  base: 1,
-  contours: 1,
-  climate: 1,
-  zones: 1,
-  water: 1,
-  plants: 1,
-  annotations: 1,
-})
+export function createDefaultLayerOpacity(): Record<string, number> {
+  return {
+    base: 1,
+    contours: 1,
+    climate: 1,
+    zones: 1,
+    water: 1,
+    plants: 1,
+    annotations: 1,
+  }
+}
+
+export const layerOpacity = signal<Record<string, number>>(createDefaultLayerOpacity())
 
 // Plant display modes
 export type PlantDisplayMode = 'default' | 'canopy' | 'color-by'
@@ -78,30 +90,12 @@ export const plantStampSpecies = signal<PlantStampSpecies | null>(null)
 // (avoids circular import from state/design.ts)
 export const designLocation = signal<{ lat: number; lon: number } | null>(null)
 
-// Celestial dial
-export const celestialDate = signal<Date | null>(null)
-
-// Map layer
-export type MapStyle = 'street' | 'terrain' | 'satellite'
-export const mapLayerVisible = signal<boolean>(false)
-export const mapStyle = signal<MapStyle>('street')
-export const mapLayerOpacity = signal<number>(1)
-
-// Terrain layers (Phase 4.2-4.4)
-export const contourLayerVisible = signal<boolean>(false)
-export const contourInterval = signal<number>(5)
-export const hillshadeVisible = signal<boolean>(false)
-export const hillshadeOpacity = signal<number>(0.3)
-export const offlineTilesAvailable = signal<boolean>(false)
-
 // Consortium — mirror of currentDesign.consortiums for canvas modules
 export const currentConsortiums = signal<Consortium[]>([])
 export const highlightedConsortium = signal<string | null>(null)
 
-// Minimap
-export const minimapVisible = signal<boolean>(false)
-
 // Bottom panel
+export type BottomPanelTab = 'location' | 'timeline' | 'budget' | 'consortium'
 export const bottomPanelOpen = signal<boolean>(false)
-export const bottomPanelTab = signal<'timeline' | 'budget'>('timeline')
-export const bottomPanelHeight = signal<number>(200)
+export const bottomPanelTab = signal<BottomPanelTab>('timeline')
+export const bottomPanelHeight = signal<number>(240)

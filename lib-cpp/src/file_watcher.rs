@@ -4,8 +4,8 @@
 //! watch a single file for modifications. For now, returns a stub error.
 
 use std::path::Path;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 /// Start watching `path` for modifications.
 ///

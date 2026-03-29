@@ -37,7 +37,6 @@ fn timestamp_filename() -> String {
     format!("{secs}")
 }
 
-
 /// Save `content` to the autosave directory.
 ///
 /// - If `design_path` is `Some`, the filename is derived from a hash of the
@@ -77,7 +76,7 @@ fn prune_autosaves(dir: &std::path::Path, max_keep: usize) {
     let mut entries: Vec<(std::time::SystemTime, PathBuf)> = match std::fs::read_dir(dir) {
         Ok(rd) => rd
             .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().map_or(false, |x| x == "canopi"))
+            .filter(|e| e.path().extension().is_some_and(|x| x == "canopi"))
             .filter_map(|e| {
                 let mtime = e.metadata().ok()?.modified().ok()?;
                 Some((mtime, e.path()))
@@ -104,41 +103,40 @@ fn prune_autosaves(dir: &std::path::Path, max_keep: usize) {
 pub fn list_autosaves(app: &AppHandle) -> Result<Vec<AutosaveEntry>, String> {
     let dir = autosave_dir(app)?;
 
-    let mut entries: Vec<(std::time::SystemTime, AutosaveEntry)> =
-        match std::fs::read_dir(&dir) {
-            Ok(rd) => rd
-                .filter_map(|e| e.ok())
-                .filter(|e| e.path().extension().map_or(false, |x| x == "canopi"))
-                .filter_map(|e| {
-                    let path = e.path();
-                    let mtime = e.metadata().ok()?.modified().ok()?;
+    let mut entries: Vec<(std::time::SystemTime, AutosaveEntry)> = match std::fs::read_dir(&dir) {
+        Ok(rd) => rd
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().is_some_and(|x| x == "canopi"))
+            .filter_map(|e| {
+                let path = e.path();
+                let mtime = e.metadata().ok()?.modified().ok()?;
 
-                    // Try to read the name from the file; fall back to filename.
-                    let name = read_design_name(&path).unwrap_or_else(|| {
-                        path.file_stem()
-                            .map(|s| s.to_string_lossy().into_owned())
-                            .unwrap_or_else(|| "Unknown".into())
-                    });
+                // Try to read the name from the file; fall back to filename.
+                let name = read_design_name(&path).unwrap_or_else(|| {
+                    path.file_stem()
+                        .map(|s| s.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| "Unknown".into())
+                });
 
-                    let saved_at = mtime_to_iso(mtime);
+                let saved_at = mtime_to_iso(mtime);
 
-                    Some((
-                        mtime,
-                        AutosaveEntry {
-                            path: path.to_string_lossy().into_owned(),
-                            name,
-                            saved_at,
-                        },
-                    ))
-                })
-                .collect(),
-            Err(e) => {
-                return Err(format!(
-                    "Failed to read autosave dir {}: {e}",
-                    dir.display()
+                Some((
+                    mtime,
+                    AutosaveEntry {
+                        path: path.to_string_lossy().into_owned(),
+                        name,
+                        saved_at,
+                    },
                 ))
-            }
-        };
+            })
+            .collect(),
+        Err(e) => {
+            return Err(format!(
+                "Failed to read autosave dir {}: {e}",
+                dir.display()
+            ));
+        }
+    };
 
     // Sort newest first for display.
     entries.sort_by(|a, b| b.0.cmp(&a.0));
@@ -183,7 +181,6 @@ fn mtime_to_iso(t: std::time::SystemTime) -> String {
     let secs = t.duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
     crate::design::unix_to_iso8601(secs)
 }
-
 
 #[cfg(test)]
 mod tests {

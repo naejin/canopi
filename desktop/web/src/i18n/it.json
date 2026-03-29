@@ -231,7 +231,9 @@
       "expand": "Espandi pannello",
       "timeline": "Calendario",
       "consortium": "Consorzio",
-      "budget": "Budget"
+      "budget": "Budget",
+      "open": "Apri pannello inferiore",
+      "tabs": "Schede"
     },
     "timeline": {
       "title": "Calendario",

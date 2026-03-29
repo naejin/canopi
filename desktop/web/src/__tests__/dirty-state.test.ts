@@ -8,7 +8,7 @@
  * - R4#2: Undo to saved state must clear dirty (checkpoint-based model)
  * - Architecture review: Undo clears dirty even when non-canvas edits remain
  */
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { CanvasHistory, type Command } from '../canvas/history'
 import {
   nonCanvasRevision,
@@ -59,6 +59,16 @@ describe('canvas edits', () => {
   it('single edit makes dirty', () => {
     history.execute(noop(), mockEngine)
     expect(designDirty.value).toBe(true)
+  })
+
+  it('history execute/undo/redo reconcile materialized canvas state', () => {
+    mockEngine.reconcileMaterializedScene = vi.fn()
+
+    history.execute(noop(), mockEngine)
+    history.undo(mockEngine)
+    history.redo(mockEngine)
+
+    expect(mockEngine.reconcileMaterializedScene).toHaveBeenCalledTimes(3)
   })
 
   it('save clears dirty', () => {

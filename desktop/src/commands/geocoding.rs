@@ -23,21 +23,23 @@ fn de_f64_from_str<'de, D: serde::Deserializer<'de>>(d: D) -> Result<f64, D::Err
     s.parse::<f64>().map_err(serde::de::Error::custom)
 }
 
+const MAX_GEOCODING_BYTES: u64 = 1024 * 1024;
+
 #[tauri::command]
 pub fn geocode_address(query: String) -> Result<Vec<GeoResult>, String> {
-    let body = ureq::get("https://nominatim.openstreetmap.org/search")
-        .query("q", &query)
-        .query("format", "json")
-        .query("limit", "5")
-        .header("User-Agent", "Canopi/1.0")
-        .config()
-        .timeout_global(Some(std::time::Duration::from_secs(5)))
-        .build()
-        .call()
-        .map_err(|e| format!("Failed to geocode: {e}"))?
-        .body_mut()
-        .read_to_string()
-        .map_err(|e| format!("Failed to geocode: {e}"))?;
+    let mut response = crate::http::build_get_request(
+        "https://nominatim.openstreetmap.org/search",
+        "Canopi/1.0",
+        std::time::Duration::from_secs(5),
+    )
+    .query("q", &query)
+    .query("format", "json")
+    .query("limit", "5")
+    .call()
+    .map_err(|e| format!("Failed to geocode: {e}"))?;
+
+    let body =
+        crate::http::read_limited_string(&mut response, MAX_GEOCODING_BYTES, "geocoding response")?;
 
     let results: Vec<NominatimResult> =
         serde_json::from_str(&body).map_err(|e| format!("Failed to geocode: {e}"))?;

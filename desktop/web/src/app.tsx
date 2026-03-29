@@ -7,7 +7,6 @@ import { useCallback, useRef } from "preact/hooks";
 import { activePanel, sidePanel, sidePanelWidth, plantDbStatus, locale, theme, autoSaveIntervalMs, setBootstrappedSettings } from "./state/app";
 import { designDirty, saveCurrentDesign } from "./state/document";
 import { invoke } from "@tauri-apps/api/core";
-import { ask } from "@tauri-apps/plugin-dialog";
 import type { SubsystemHealth } from "./types/health";
 import { TitleBar } from "./components/shared/TitleBar";
 import { DegradedBanner } from "./components/shared/DegradedBanner";
@@ -17,12 +16,11 @@ import { FavoritesPanel } from "./components/panels/FavoritesPanel";
 import { CanvasPanel } from "./components/panels/CanvasPanel";
 import { PanelBar } from "./components/panels/PanelBar";
 import { WorldMapPanel } from "./components/panels/WorldMapPanel";
-import { LearningPanel } from "./components/panels/LearningPanel";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { confirmCloseWithUnsavedChanges } from "./state/close-guard";
 
 import type { Settings } from "./types/settings";
-import { gridSize, snapToGridEnabled, bottomPanelOpen, bottomPanelHeight, bottomPanelTab, mapLayerVisible, mapStyle, mapLayerOpacity, contourLayerVisible, contourInterval, hillshadeVisible, hillshadeOpacity } from "./state/canvas";
-import type { MapStyle } from "./state/canvas";
+import { gridSize, snapToGridEnabled } from "./state/canvas";
 
 // Synchronous init — applies local defaults immediately (no theme flicker)
 initTheme();
@@ -40,17 +38,6 @@ invoke<Settings>('get_settings')
     gridSize.value = s.grid_size_m;
     snapToGridEnabled.value = s.snap_to_grid;
     autoSaveIntervalMs.value = s.auto_save_interval_s * 1000;
-    bottomPanelOpen.value = s.bottom_panel_open;
-    bottomPanelHeight.value = s.bottom_panel_height;
-    bottomPanelTab.value = (s.bottom_panel_tab === 'budget' ? 'budget' : 'timeline') as typeof bottomPanelTab.value;
-    mapLayerVisible.value = s.map_layer_visible ?? false;
-    const validStyles: MapStyle[] = ['street', 'terrain', 'satellite'];
-    mapStyle.value = validStyles.includes(s.map_style as MapStyle) ? (s.map_style as MapStyle) : 'street';
-    mapLayerOpacity.value = s.map_opacity ?? 1;
-    contourLayerVisible.value = s.contour_visible ?? false;
-    contourInterval.value = s.contour_interval ?? 5;
-    hillshadeVisible.value = s.hillshade_visible ?? false;
-    hillshadeOpacity.value = s.hillshade_opacity ?? 0.3;
     setBootstrappedSettings(s);
   })
   .catch((e) => console.error('Failed to bootstrap settings:', e));
@@ -74,12 +61,13 @@ let _unlistenClose: unknown = null
     // Prevent the default close so we can prompt the user
     event.preventDefault()
 
-    const shouldSave = await ask(
-      t('canvas.file.saveBeforeCloseMessage'),
-      { title: t('canvas.file.saveBeforeClose'), kind: 'warning' }
-    )
+    const decision = await confirmCloseWithUnsavedChanges()
 
-    if (shouldSave) {
+    if (decision === 'cancel') {
+      return
+    }
+
+    if (decision === 'save') {
       try {
         await saveCurrentDesign()
       } catch {
@@ -112,7 +100,6 @@ function SidePanelContent({ side }: { side: string }) {
   if (side === "plant-db") return <PlantDbPanel />;
   if (side === "favorites") return <FavoritesPanel />;
   if (side === "world-map") return <WorldMapPanel />;
-  if (side === "learning") return <LearningPanel />;
   return null;
 }
 
@@ -166,8 +153,6 @@ export function App() {
             <div
               onMouseDown={handleDragStart}
               className={styles.dragHandle}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--color-accent)"; }}
-              onMouseLeave={(e) => { if (!dragRef.current) (e.currentTarget as HTMLElement).style.background = ""; }}
               role="separator"
               aria-orientation="vertical"
               aria-label={t('sidebar.resize')}

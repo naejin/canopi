@@ -1,6 +1,5 @@
 /// Platform-specific native operations.
 /// Each OS implements this via its native lib (lib-swift, lib-cpp, lib-c).
-
 use std::fmt;
 use std::path::Path;
 
@@ -28,11 +27,13 @@ pub struct PrintLayout {
 }
 
 /// Handle returned by `watch_file`. Dropping it cancels the watch.
+#[allow(dead_code)]
 pub struct FileWatchHandle {
     _cancel: Option<Box<dyn FnOnce() + Send>>,
 }
 
 impl FileWatchHandle {
+    #[allow(dead_code)]
     pub fn new(cancel: impl FnOnce() + Send + 'static) -> Self {
         Self {
             _cancel: Some(Box::new(cancel)),
@@ -40,6 +41,7 @@ impl FileWatchHandle {
     }
 
     /// Explicitly stop watching.
+    #[allow(dead_code)]
     pub fn cancel(mut self) {
         if let Some(f) = self._cancel.take() {
             f();
@@ -66,10 +68,12 @@ impl fmt::Debug for FileWatchHandle {
 #[derive(Debug)]
 pub enum PlatformError {
     /// Feature not available on this platform.
+    #[allow(dead_code)]
     NotImplemented,
     /// Export (PNG/PDF/thumbnail) failed.
     ExportFailed(String),
     /// File watch setup or operation failed.
+    #[allow(dead_code)]
     WatchFailed(String),
     /// File I/O error.
     Io(std::io::Error),
@@ -117,9 +121,11 @@ pub trait Platform: Send + Sync {
 
     /// Watch a file for external modifications.
     /// Returns a handle whose drop/cancel stops the watch.
+    #[allow(dead_code)]
     fn watch_file(&self, path: &Path) -> Result<FileWatchHandle, PlatformError>;
 
     /// Generate a small PNG thumbnail (e.g. for Quick Look / file browser).
+    #[allow(dead_code)]
     fn generate_thumbnail(
         &self,
         snapshot: &CanvasSnapshot,
@@ -131,6 +137,7 @@ pub trait Platform: Send + Sync {
 
 /// Compute the effective DPI for a thumbnail of `size` pixels on the longest side.
 /// Returns `Err` if the snapshot has zero dimensions or the computed DPI is zero.
+#[allow(dead_code)]
 fn thumbnail_dpi(snapshot: &CanvasSnapshot, size: u32) -> Result<u32, PlatformError> {
     let max_dim = snapshot.width.max(snapshot.height);
     if max_dim == 0 {
@@ -153,6 +160,7 @@ fn thumbnail_dpi(snapshot: &CanvasSnapshot, size: u32) -> Result<u32, PlatformEr
 // ── Stub (all platforms, fallback) ──────────────────────────────────────────
 
 /// Returns `PlatformError::NotImplemented` for every method.
+#[allow(dead_code)]
 pub struct StubPlatform;
 
 impl Platform for StubPlatform {
@@ -212,13 +220,15 @@ mod linux_impl {
                 &snapshot.png_data,
                 snapshot.width,
                 snapshot.height,
-                layout.page_width_mm,
-                layout.page_height_mm,
-                layout.margin_mm,
-                &layout.title,
-                &layout.scale_text,
-                layout.include_legend,
-                layout.include_plant_schedule,
+                lib_c::pdf_export::PdfPageLayout {
+                    page_width_mm: layout.page_width_mm,
+                    page_height_mm: layout.page_height_mm,
+                    margin_mm: layout.margin_mm,
+                    title: &layout.title,
+                    scale_text: &layout.scale_text,
+                    include_legend: layout.include_legend,
+                    include_plant_schedule: layout.include_plant_schedule,
+                },
             )
             .map_err(PlatformError::ExportFailed)
         }

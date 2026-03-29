@@ -50,20 +50,16 @@ pub fn is_favorite(conn: &Connection, canonical_name: &str) -> bool {
 
 /// Returns all favorited canonical names, ordered by most recently added.
 pub fn get_favorite_names(conn: &Connection) -> Result<Vec<String>, rusqlite::Error> {
-    let mut stmt = conn.prepare(
-        "SELECT canonical_name FROM favorites ORDER BY added_at DESC",
-    )?;
-    let names = stmt.query_map([], |row| row.get(0))?
+    let mut stmt = conn.prepare("SELECT canonical_name FROM favorites ORDER BY added_at DESC")?;
+    let names = stmt
+        .query_map([], |row| row.get(0))?
         .filter_map(|r| r.ok())
         .collect();
     Ok(names)
 }
 
 /// Toggles a favorite. Returns `true` if now favorited, `false` if unfavorited.
-pub fn toggle_favorite(
-    conn: &Connection,
-    canonical_name: &str,
-) -> Result<bool, rusqlite::Error> {
+pub fn toggle_favorite(conn: &Connection, canonical_name: &str) -> Result<bool, rusqlite::Error> {
     let exists: bool = conn.query_row(
         "SELECT EXISTS(SELECT 1 FROM favorites WHERE canonical_name = ?1)",
         [canonical_name],
@@ -101,11 +97,14 @@ pub fn record_recently_viewed(
 }
 
 /// Returns the most recently viewed canonical names, newest first.
-pub fn get_recently_viewed_names(conn: &Connection, limit: u32) -> Result<Vec<String>, rusqlite::Error> {
-    let mut stmt = conn.prepare(
-        "SELECT canonical_name FROM recently_viewed ORDER BY viewed_at DESC LIMIT ?1",
-    )?;
-    let names = stmt.query_map([limit], |row| row.get(0))?
+pub fn get_recently_viewed_names(
+    conn: &Connection,
+    limit: u32,
+) -> Result<Vec<String>, rusqlite::Error> {
+    let mut stmt = conn
+        .prepare("SELECT canonical_name FROM recently_viewed ORDER BY viewed_at DESC LIMIT ?1")?;
+    let names = stmt
+        .query_map([limit], |row| row.get(0))?
         .filter_map(|r| r.ok())
         .collect();
     Ok(names)

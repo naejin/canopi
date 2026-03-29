@@ -231,7 +231,9 @@
       "expand": "Panel ausklappen",
       "timeline": "Zeitachse",
       "consortium": "Konsortium",
-      "budget": "Budget"
+      "budget": "Budget",
+      "open": "Unteres Panel öffnen",
+      "tabs": "Tabs"
     },
     "timeline": {
       "title": "Zeitachse",

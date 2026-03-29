@@ -3,8 +3,8 @@ pub mod query_builder;
 pub mod recent_files;
 pub mod user_db;
 
-use std::sync::Mutex;
 use rusqlite::Connection;
+use std::sync::Mutex;
 
 /// Plant database — read-only, serialized access via Mutex
 /// (rusqlite::Connection is not Sync, so Arc alone would be unsound).

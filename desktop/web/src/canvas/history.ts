@@ -27,6 +27,7 @@ export class CanvasHistory {
   /** Execute a command, push to past stack, and clear redo stack. */
   execute(cmd: Command, engine: CanvasEngine): void {
     cmd.execute(engine)
+    engine.reconcileMaterializedScene?.()
     this._past.push(cmd)
     this._future = []
 
@@ -67,6 +68,7 @@ export class CanvasHistory {
     const cmd = this._past.pop()
     if (!cmd) return
     cmd.undo(engine)
+    engine.reconcileMaterializedScene?.()
     this._future.push(cmd)
     this._updateSignals()
   }
@@ -75,6 +77,7 @@ export class CanvasHistory {
     const cmd = this._future.pop()
     if (!cmd) return
     cmd.execute(engine)
+    engine.reconcileMaterializedScene?.()
     this._past.push(cmd)
     this._updateSignals()
   }

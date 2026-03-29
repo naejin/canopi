@@ -22,6 +22,17 @@ const TITLE_BLOCK_PT: f64 = 36.0;
 /// Footer (scale text + legend area) height in points.
 const FOOTER_BLOCK_PT: f64 = 24.0;
 
+#[derive(Debug, Clone, Copy)]
+pub struct PdfPageLayout<'a> {
+    pub page_width_mm: f32,
+    pub page_height_mm: f32,
+    pub margin_mm: f32,
+    pub title: &'a str,
+    pub scale_text: &'a str,
+    pub include_legend: bool,
+    pub include_plant_schedule: bool,
+}
+
 /// Render a PDF from the canvas snapshot and layout parameters.
 ///
 /// Returns the raw PDF bytes.
@@ -29,17 +40,12 @@ pub fn render_pdf(
     png_data: &[u8],
     src_width: u32,
     src_height: u32,
-    page_width_mm: f32,
-    page_height_mm: f32,
-    margin_mm: f32,
-    title: &str,
-    scale_text: &str,
-    _include_legend: bool,
-    _include_plant_schedule: bool,
+    layout: PdfPageLayout<'_>,
 ) -> Result<Vec<u8>, String> {
-    let page_w = page_width_mm as f64 * MM_TO_PT;
-    let page_h = page_height_mm as f64 * MM_TO_PT;
-    let margin = margin_mm as f64 * MM_TO_PT;
+    let page_w = layout.page_width_mm as f64 * MM_TO_PT;
+    let page_h = layout.page_height_mm as f64 * MM_TO_PT;
+    let margin = layout.margin_mm as f64 * MM_TO_PT;
+    let _ = (layout.include_legend, layout.include_plant_schedule);
 
     // Usable content area.
     let content_w = page_w - 2.0 * margin;
@@ -68,7 +74,7 @@ pub fn render_pdf(
     cr.set_source_rgb(0.1, 0.1, 0.1);
     cr.set_font_size(14.0);
     cr.move_to(margin, margin + 18.0); // baseline offset
-    cr.show_text(title)
+    cr.show_text(layout.title)
         .map_err(|e| format!("Failed to draw title: {e}"))?;
 
     // ── Canvas snapshot ─────────────────────────────────────────────────
@@ -89,7 +95,8 @@ pub fn render_pdf(
     // Centre the image horizontally.
     let image_x = margin + (content_w - draw_w) / 2.0;
 
-    cr.save().map_err(|e| format!("Failed to save state: {e}"))?;
+    cr.save()
+        .map_err(|e| format!("Failed to save state: {e}"))?;
     cr.translate(image_x, image_y);
 
     let sx = draw_w / src_width as f64;
@@ -98,7 +105,8 @@ pub fn render_pdf(
 
     cr.set_source_surface(&src_surface, 0.0, 0.0)
         .map_err(|e| format!("Failed to set source surface: {e}"))?;
-    cr.paint().map_err(|e| format!("Failed to paint image: {e}"))?;
+    cr.paint()
+        .map_err(|e| format!("Failed to paint image: {e}"))?;
     cr.restore()
         .map_err(|e| format!("Failed to restore state: {e}"))?;
 
@@ -107,7 +115,7 @@ pub fn render_pdf(
     cr.set_source_rgb(0.3, 0.3, 0.3);
     cr.set_font_size(10.0);
     cr.move_to(margin, footer_y);
-    cr.show_text(scale_text)
+    cr.show_text(layout.scale_text)
         .map_err(|e| format!("Failed to draw scale text: {e}"))?;
 
     // ── Finish ──────────────────────────────────────────────────────────
@@ -135,8 +143,7 @@ mod tests {
     use cairo::Format;
 
     fn tiny_png() -> Vec<u8> {
-        let surface =
-            ImageSurface::create(Format::ARgb32, 100, 80).expect("create surface");
+        let surface = ImageSurface::create(Format::ARgb32, 100, 80).expect("create surface");
         let cr = Context::new(&surface).expect("context");
         cr.set_source_rgb(0.2, 0.6, 0.3);
         cr.paint().expect("paint");
@@ -155,13 +162,15 @@ mod tests {
             &png,
             100,
             80,
-            297.0,  // A4 landscape width
-            210.0,  // A4 landscape height
-            15.0,   // margin
-            "Test Design",
-            "Scale: 1:100",
-            false,
-            false,
+            PdfPageLayout {
+                page_width_mm: 297.0,  // A4 landscape width
+                page_height_mm: 210.0, // A4 landscape height
+                margin_mm: 15.0,
+                title: "Test Design",
+                scale_text: "Scale: 1:100",
+                include_legend: false,
+                include_plant_schedule: false,
+            },
         )
         .unwrap();
 

@@ -3,9 +3,9 @@
   flex-direction: column;
   width: 36px;
   min-width: 36px;
-  background: var(--color-bg);
+  background: var(--panel-gradient);
   border-left: 1px solid var(--color-border);
-  padding: 6px 0;
+  padding: var(--space-2) 0;
   gap: 2px;
   user-select: none;
   flex-shrink: 0;
@@ -23,16 +23,23 @@
   cursor: pointer;
   position: relative;
   border-right: 2px solid transparent;
-  transition: color 80ms ease;
+  transition: color 80ms ease, background-color 80ms ease;
 }
 
 .button:hover {
+  background: var(--color-control-hover);
   color: var(--color-text);
 }
 
 .button.active {
   color: var(--color-accent);
   border-right-color: var(--color-accent);
+  background: var(--color-control-active);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
 }
 
 .divider {

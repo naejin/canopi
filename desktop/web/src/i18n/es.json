@@ -231,7 +231,9 @@
       "expand": "Expandir panel",
       "timeline": "Cronograma",
       "consortium": "Consorcio",
-      "budget": "Presupuesto"
+      "budget": "Presupuesto",
+      "open": "Abrir panel inferior",
+      "tabs": "Pestañas"
     },
     "timeline": {
       "title": "Cronograma",

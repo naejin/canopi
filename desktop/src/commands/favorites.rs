@@ -69,8 +69,7 @@ pub fn get_recently_viewed(
     {
         let user_conn = user_db.0.lock().unwrap_or_else(|e| e.into_inner());
         for item in &mut items {
-            item.is_favorite =
-                crate::db::user_db::is_favorite(&user_conn, &item.canonical_name);
+            item.is_favorite = crate::db::user_db::is_favorite(&user_conn, &item.canonical_name);
         }
     }
 
@@ -137,9 +136,8 @@ fn hydrate_species_list(
             .map_err(|e| format!("Failed to hydrate species '{name}': {e}"))?
             .map(|(mut item, species_id)| {
                 // Override common_name with locale-aware lookup.
-                item.common_name =
-                    crate::db::plant_db::get_common_name(conn, &species_id, locale)
-                        .or(item.common_name);
+                item.common_name = crate::db::plant_db::get_common_name(conn, &species_id, locale)
+                    .or(item.common_name);
                 item
             });
 

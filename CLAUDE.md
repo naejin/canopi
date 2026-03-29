@@ -5,7 +5,7 @@
 - **Frontend**: Preact + @preact/signals + TypeScript + Vite + CSS Modules
 - **Canvas**: Konva.js (imperative API, NOT react-konva)
 - **i18n**: i18next core (NOT react-i18next), 11 languages (en, fr, es, pt, it, zh, de, ja, ko, nl, ru)
-- **Maps**: MapLibre GL JS + maplibre-contour (DEM contour generation)
+- **Maps**: MapLibre GL JS + maplibre-contour (dependency retained, code deleted — rebuild in Wave 3)
 - **Native**: lib-c (Linux, Cairo PNG/PDF + inotify + XDG), lib-swift (macOS stub), lib-cpp (Windows stub)
 
 ## Project Structure
@@ -25,7 +25,7 @@ canopi/
 ## Current Layout (Post UI Overhaul)
 - **Left**: Canvas toolbar (38px) — drawing tools only (Select, Hand, Rectangle, Text + Grid/Snap/Rulers toggles)
 - **Center**: Canvas workspace
-- **Right**: PanelBar (36px, always visible) + sliding panels (plant search, favorites, learning)
+- **Right**: PanelBar (36px, always visible) + sliding panels (plant search, favorites)
 - **Title bar**: Logo + file name + lang/theme toggle + window controls
 - **No activity bar** — removed, navigation via PanelBar
 - **No status bar** — removed, controls moved to title bar
@@ -37,14 +37,15 @@ canopi/
 - Theme toggle: light/dark only (no system option)
 - Depth: borders-only (no dramatic shadows)
 
-## MVP Feature Pruning (active)
-These features are **disabled in UI but code stays on disk**:
-- Tools: Ellipse, Polygon, Freeform, Line, Measure, Dimension, Arrow, Callout, Pattern Fill, Spacing
-- Overlays: Minimap, Celestial dial, Consortium visual, MapLibre/location
-- Panels: Bottom panel (Timeline/Budget/Consortium tabs), Layer panel, World Map, Learning (placeholder only)
-- Export: GeoJSON, PNG/SVG export commands
-- Compass: import commented out in `engine.ts`
-- Re-enable plan: see `docs/roadmap.md`
+## Pruned Features (code deleted, git history preserves)
+These features were deleted during pre-rewrite cleanup. They will be rebuilt with split architecture during the rewrite (see `docs/rewrite.md`):
+- **Tools**: Ellipse, Polygon, Freeform, Line, Measure, Dimension, Arrow, Callout, Pattern Fill, Spacing
+- **Overlays**: Minimap, Celestial dial, Consortium visual, MapLibre/location, Compass
+- **Panels**: Bottom panel (Timeline/Budget/Consortium tabs), Layer panel, World Map, Learning
+- **Export**: GeoJSON, PNG/SVG export commands
+- **Support files**: dimensions.ts, pattern-math.ts, map-layer.ts, ipc/community.ts, ipc/tiles.ts, TileDownloadModal
+- **Required at rewrite exit**: WorldMapPanel, LayerPanel, Timeline, Budget (rebuilt in Wave 3 with split architecture)
+- **Wave 0 must classify**: geo/terrain, export, platform support, knowledge/learning
 
 ## Key Conventions
 
@@ -87,9 +88,12 @@ These features are **disabled in UI but code stays on disk**:
 - Design tokens in `global.css` as CSS variables (field notebook palette)
 - Components use CSS Modules, reference tokens (never raw values)
 - Dark theme via `[data-theme="dark"]` on `<html>`
+- **No hardcoded px values**: All spacing must use `var(--space-N)` tokens (4/8/12/16/24/28/32/48px). All font-sizes must use `var(--text-*)` tokens (xs=11/sm=12/base=13/md=14/lg=16/xl=20). All border-radius must use `var(--radius-*)` tokens (sm=3/md=5/lg=7/full=9999). No invented sizes (6px, 10px, 14px, 22px etc.) — see `.interface-design/system.md` for the allowed scales
+- **Transition timing**: `80ms ease` for color/bg/border hover states. `150ms ease` for transform/layout shifts. `200ms ease-out` for panel slide/fade enter. Always use `ms` units, never `s`
 - **Dark mode token audit**: When adding CSS that uses `--color-*` tokens as foreground text/border, verify the token has a dark mode override in `global.css` `[data-theme="dark"]`. Check contrast ratio ≥ 4.5:1 against `--color-bg`
 - **Click-outside-to-close pattern**: Use `pointerup` (not `mousedown`) to avoid catching the click that opened the panel. No `setTimeout` delays — they create race conditions on rapid toggle. See `MoreFiltersPanel.tsx`
 - **No raw `white`/`black` in CSS Modules**: Use `var(--color-bg)` for white-on-colored backgrounds (badges, pills). Raw color keywords break dark mode just like raw `rgba()` does
+- **Section headers**: Uppercase, `var(--text-xs)` (11px), weight 600, `0.06em` letter-spacing, `--color-text-muted`. One pattern everywhere — no 10px/12px/14px variations
 
 ## Development
 ```bash
@@ -146,12 +150,12 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 
 ## Gotchas
 
-### MapLibre / Terrain
-- **MapLibre paint properties can't use CSS vars**: Hardcoded hex colors in MapLibre style objects are acceptable — they render on map tiles, not app chrome. Dark mode mismatch is negligible
-- **`maplibre-contour` for client-side DEM contours**: Generates isolines from raster-dem tiles via web worker. Use `DemSource` with AWS Terrain Tiles (Terrarium encoding). Register protocol once with `addProtocol()`
+### MapLibre / Terrain (deleted — rebuild in Wave 3)
+MapLibre code (`map-layer.ts`, contour/hillshade effects, map sync) was deleted during pre-rewrite pruning. These gotchas apply when rebuilding in Wave 3:
+- **MapLibre paint properties can't use CSS vars**: Hardcoded hex colors in MapLibre style objects are acceptable — they render on map tiles, not app chrome
+- **`maplibre-contour` for client-side DEM contours**: Use `DemSource` with AWS Terrain Tiles (Terrarium encoding). Register protocol once with `addProtocol()`
 - **MapLibre container opacity for map blending**: Apply opacity to the container div, NOT try to make Konva canvas transparent (causes blank canvas bugs)
-- **WorldMapPanel is a sidebar panel**: `'world-map'` is in `SIDE_PANELS` set in `state/app.ts`. Opens alongside canvas like plant-db and favorites
-- **DiscoveryMap reactivity**: Use `useEffect` with `[templates]` dependency, NOT `useSignalEffect`, when reacting to plain props (signals only track signal reads)
+- **Map layer z-index**: Insert map div before `.canvasContainer`. Canvas container background must become transparent when map is active. Konva `<canvas>` elements are inherently transparent where no shapes are drawn
 - **`download_template` security**: HTTPS-only + domain allowlist (`templates.canopi.app`) + filename sanitization + path traversal check + 50MB size limit
 
 ### Platform / Native
@@ -183,6 +187,7 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 ### Konva.js / Canvas
 - **Shapes don't react to CSS theme changes**: Colors hardcoded at creation time. Theme switch requires walking nodes and updating `fill`/`stroke` from computed CSS variables
 - **Canvas colors must use `getCanvasColor()` from `theme-refresh.ts`**: Never hardcode fill/stroke on Konva nodes. Add CSS variable to `global.css` (both themes) + cache entry in `theme-refresh.ts`. `refreshCanvasTheme()` in the engine's theme effect walks all layers on toggle
+- **Non-Konva canvas elements too**: Guides, plant badges, and zone fallback colors all use `getCanvasColor()` — not module-level constants. Every color rendered on or near the canvas must be theme-refreshable. If adding a new canvas element with color, add a `--canvas-*` token + `getCanvasColor()` entry + refresh call
 - **Transformer must be on same layer as targets**: Cross-layer Transformer breaks drag/transform
 - **`name: 'shape'` only on top-level selectable nodes**: Children inside Groups must NOT have it — causes independent selection
 - **Screen-space overlays**: Use HTML `<canvas>` (not Konva layers) for rulers. Konva layers are subject to stage transforms
@@ -195,7 +200,6 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 - **`recreateNode` must handle every shape class**: Missing cases fall through to generic `Konva.Shape` which doesn't render
 - **AddNodeCommand strips event handlers**: Attach interaction handlers at the stage level, not on individual nodes
 - **Zoom display is relative**: `zoomLevel` is raw stage scale. Display as `Math.round((zoomLevel / zoomReference) * 100)%`
-- **Compass disabled for MVP**: Import commented out in `engine.ts`
 - **Ruler corner uses CSS vars**: `var(--canvas-ruler-bg)` inline so it updates on theme change
 - **Detail card sections use `CollapsibleSection` wrapper**: New sections go inline in `PlantDetailCard.tsx` using `<CollapsibleSection>`. Shared field helpers (`Attr`, `BoolChip`, `NumAttr`, `TextBlock`) in `section-helpers.tsx`. Every rendered field MUST appear in the section's `has*` visibility check — missing fields cause silent data hiding
 
@@ -230,7 +234,8 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 - **Migration versioning**: User DB uses `PRAGMA user_version` — check before adding migrations
 - **Plant DB degraded mode**: If missing/corrupt, `lib.rs` falls back to in-memory DB. Frontend short-circuits all species IPC calls when degraded
 - **`resolve_species_id()` helper**: Use `plant_db::resolve_species_id(conn, canonical_name)` for canonical→UUID lookup. Don't copy the inline pattern — it existed in 3 places before extraction
-- **Image cache**: `image_cache.rs` — `fetch_and_cache_bytes()` returns raw bytes (no redundant `fs::read`). Uses `AtomicU64` tracked size to skip dir scans. LRU eviction at 500MB. Cache dir: `~/.local/share/com.canopi.app/image-cache/`
+- **Image cache**: `image_cache.rs` — `fetch_and_cache_bytes()` returns raw bytes (no redundant `fs::read`). Uses `AtomicU64` tracked size to skip dir scans. LRU eviction at 500MB. Cache dir: `~/.local/share/com.canopi.app/image-cache/`. All downloads have 10s timeout + 10MB size limit via `ureq` config
+- **Network hardening convention**: All `ureq` calls must set `timeout_global` and response size limits. Image cache is the reference pattern. Geocoding uses 5s timeout
 - **Common name lookup order**: `best_common_names` → `species_common_names` → `species.common_name`. Both `get_common_name` (single) and `get_common_names_batch` (batch) follow this order. Always use `best_common_names` first — `species_common_names` has gaps (e.g., no French entries for many species)
 - **`best_common_names` selection**: Uses `is_primary` flag from `species_common_names` (preferred), falls back to shortest non-canonical name. `prepare-db.py` uses `ROW_NUMBER()` with `is_primary DESC, LENGTH ASC`
 - **`SpeciesListItem.family/genus` are `Option<String>`**: DB columns are nullable. Non-optional `String` causes silent row drops in search and hard errors in favorites hydration
@@ -248,7 +253,6 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 ### Canvas Engine / Architecture
 - **Every new canvas module must be wired into runtime**: Must be imported and called from `engine.ts` or `serializer.ts`
 - **`state/canvas.ts` mirror signals**: `engine.ts` cannot import from `state/design.ts` (circular). Use mirror signals in `state/canvas.ts`
-- **MapLibre lazy loading**: Never top-level import. Use dynamic `import('./map-layer')` on first activation
 - **`Command` interface**: Every undo/redo command class must include `readonly type = 'commandName'`
 - **`CanvasTool` event signatures**: Tool methods use `Konva.KonvaEventObject<MouseEvent>`, not raw `MouseEvent`
 - **Panel switching recreates CanvasEngine**: CanvasPanel unmounts/remounts. Re-load via `loadCanvasFromDocument()` + `showCanvasChrome()`
@@ -275,7 +279,7 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 - **Cross-platform file replace** — `atomic_replace()` in `design/mod.rs`
 
 ## Settings Persistence Contract
-- **Rust `Settings` (user DB) is the single source of truth** for all user preferences: locale, theme, grid, snap, autosave interval
+- **Rust `Settings` (user DB) is the single source of truth** for all user preferences: locale, theme, grid, snap, autosave interval. Rust struct retains map/terrain/bottom-panel fields for forward compatibility; frontend no longer reads/writes them (pruned features)
 - **`localStorage` is a sync cache only** — `initTheme()` reads it for instant first-paint, Rust settings overwrite on bootstrap
 - **Frontend signals are runtime projections** — hydrated from Rust on startup via `get_settings` IPC
 - **`persistCurrentSettings()` in `state/app.ts`** — must include ALL settings in the Rust `Settings` struct
@@ -302,6 +306,7 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 - Detail card expansion pattern: Rust struct → SQL query → translate_value() → frontend types → collapsible sections → i18n keys × 6 locales → schema-contract.json translations → DB population
 
 ## Key Documents
+- Rewrite reference: `docs/rewrite.md` (canonical implementation plan)
 - Roadmap: `docs/roadmap.md`
 - Design system: `.interface-design/system.md`
 - Completed phase plans + reviews: `docs/archive/`

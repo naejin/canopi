@@ -45,10 +45,7 @@ pub fn save_design(
 /// Load a design from `path`.
 /// The frontend shows the open dialog and passes the chosen path.
 #[tauri::command]
-pub fn load_design(
-    user_db: tauri::State<'_, UserDb>,
-    path: String,
-) -> Result<CanopiFile, String> {
+pub fn load_design(user_db: tauri::State<'_, UserDb>, path: String) -> Result<CanopiFile, String> {
     let dest = std::path::PathBuf::from(&path);
     let design = format::load_from_file(&dest)?;
     try_record_recent(&user_db, &path, &design.name);

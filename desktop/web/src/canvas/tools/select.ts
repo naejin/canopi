@@ -5,7 +5,6 @@ import { selectedObjectIds, lockedObjectIds } from '../../state/canvas'
 import { computeSelectionRect, nodesInRect } from '../operations'
 import { MoveNodeCommand, TransformNodeCommand, BatchCommand } from '../commands'
 import type { TransformAttrs } from '../commands'
-import { updateDimensionsForNode } from '../dimensions'
 import { getCanvasColor } from '../theme-refresh'
 
 // Selection UI colors — read from theme-refresh cache so they match active theme.
@@ -212,7 +211,7 @@ export class SelectTool implements CanvasTool {
       borderStroke: getCanvasColor('selection-stroke'),
       borderStrokeWidth: 1,
       anchorStroke: getCanvasColor('selection-stroke'),
-      anchorFill: '#FFFFFF',
+      anchorFill: getCanvasColor('selection-anchor-fill'),
       anchorSize: 8,
       anchorCornerRadius: 2,
       rotateEnabled: true,
@@ -514,10 +513,6 @@ export class SelectTool implements CanvasTool {
         engine.history.record(new BatchCommand(cmds))
       }
 
-      // Update attached dimensions for all transformed nodes
-      for (const node of this._transformer!.nodes()) {
-        updateDimensionsForNode(node.id(), engine.layers, engine.stage.scaleX())
-      }
     }
 
     // Transformer fires events on itself, not the stage

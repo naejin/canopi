@@ -29,9 +29,12 @@ pub fn atomic_replace(src: &Path, dest: &Path) -> std::io::Result<()> {
                 let _ = std::fs::remove_file(&old);
             }
             std::fs::rename(dest, &old).map_err(|e| {
-                std::io::Error::new(e.kind(), format!(
-                    "atomic_replace: failed to move dest aside: {e} (original: {first_err})"
-                ))
+                std::io::Error::new(
+                    e.kind(),
+                    format!(
+                        "atomic_replace: failed to move dest aside: {e} (original: {first_err})"
+                    ),
+                )
             })?;
 
             // Now try the real rename
@@ -44,9 +47,10 @@ pub fn atomic_replace(src: &Path, dest: &Path) -> std::io::Result<()> {
                 Err(e) => {
                     // Restore the original from .old
                     let _ = std::fs::rename(&old, dest);
-                    Err(std::io::Error::new(e.kind(), format!(
-                        "atomic_replace: rename failed, original restored: {e}"
-                    )))
+                    Err(std::io::Error::new(
+                        e.kind(),
+                        format!("atomic_replace: rename failed, original restored: {e}"),
+                    ))
                 }
             }
         }
@@ -117,7 +121,10 @@ mod tests {
         atomic_replace(&src, &dest).unwrap();
 
         assert_eq!(fs::read_to_string(&dest).unwrap(), "new content");
-        assert!(!tmp("canopi_ar_dest_ow.canopi.old").exists(), ".old cleaned up");
+        assert!(
+            !tmp("canopi_ar_dest_ow.canopi.old").exists(),
+            ".old cleaned up"
+        );
 
         let _ = fs::remove_file(&dest);
     }

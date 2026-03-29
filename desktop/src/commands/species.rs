@@ -9,6 +9,10 @@ use common_types::species::{
 ///
 /// Lock ordering: PlantDb is locked first, released before UserDb is locked.
 /// Both locks are never held simultaneously.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Tauri IPC currently exposes species search as flat named arguments"
+)]
 #[tauri::command]
 pub fn search_species(
     plant_db: tauri::State<'_, crate::db::PlantDb>,
@@ -36,8 +40,7 @@ pub fn search_species(
     {
         let conn = user_db.0.lock().unwrap_or_else(|e| e.into_inner());
         for item in &mut result.items {
-            item.is_favorite =
-                crate::db::user_db::is_favorite(&conn, &item.canonical_name);
+            item.is_favorite = crate::db::user_db::is_favorite(&conn, &item.canonical_name);
         }
     }
 
@@ -63,9 +66,7 @@ pub fn get_species_detail(
     // Step 2: record the view in user DB — plant lock is now released.
     {
         let conn = user_db.0.lock().unwrap_or_else(|e| e.into_inner());
-        if let Err(e) =
-            crate::db::user_db::record_recently_viewed(&conn, &canonical_name)
-        {
+        if let Err(e) = crate::db::user_db::record_recently_viewed(&conn, &canonical_name) {
             tracing::warn!(
                 "Failed to record recently viewed for '{}': {e}",
                 canonical_name
@@ -91,9 +92,7 @@ pub fn get_species_relationships(
             [&canonical_name],
             |row| row.get(0),
         )
-        .map_err(|e| {
-            format!("Failed to look up species id for '{canonical_name}': {e}")
-        })?;
+        .map_err(|e| format!("Failed to look up species id for '{canonical_name}': {e}"))?;
 
     crate::db::plant_db::get_relationships(&conn, &species_id)
 }

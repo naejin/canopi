@@ -1,18 +1,14 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter, Manager};
+
+const TILE_FETCH_TIMEOUT_SECS: u64 = 10;
+const MAX_TILE_BYTES: u64 = 10 * 1024 * 1024;
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TileDownloadRequest {
-    pub bbox: [f64; 4], // [west, south, east, north]
-    pub min_zoom: u32,
-    pub max_zoom: u32,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TileDownloadProgress {
@@ -56,19 +52,18 @@ fn tiles_dir(app: &AppHandle) -> Result<PathBuf, String> {
 }
 
 /// Read the manifest file if it exists.
-fn read_manifest(tiles_root: &PathBuf) -> Option<TileManifest> {
+fn read_manifest(tiles_root: &Path) -> Option<TileManifest> {
     let manifest_path = tiles_root.join("manifest.json");
     let data = fs::read_to_string(&manifest_path).ok()?;
     serde_json::from_str(&data).ok()
 }
 
 /// Write the manifest file.
-fn write_manifest(tiles_root: &PathBuf, manifest: &TileManifest) -> Result<(), String> {
+fn write_manifest(tiles_root: &Path, manifest: &TileManifest) -> Result<(), String> {
     let manifest_path = tiles_root.join("manifest.json");
     let data = serde_json::to_string_pretty(manifest)
         .map_err(|e| format!("Failed to serialize manifest: {e}"))?;
-    fs::write(&manifest_path, data)
-        .map_err(|e| format!("Failed to write manifest: {e}"))?;
+    fs::write(&manifest_path, data).map_err(|e| format!("Failed to write manifest: {e}"))?;
     Ok(())
 }
 
@@ -86,8 +81,10 @@ fn bbox_to_tile_range(bbox: &[f64; 4], zoom: u32) -> (u32, u32, u32, u32) {
     let lat_rad_south = bbox[1].to_radians();
     let lat_rad_north = bbox[3].to_radians();
 
-    let y_min = ((1.0 - lat_rad_north.tan().asinh() / std::f64::consts::PI) / 2.0 * nf).floor() as u32;
-    let y_max = ((1.0 - lat_rad_south.tan().asinh() / std::f64::consts::PI) / 2.0 * nf).floor() as u32;
+    let y_min =
+        ((1.0 - lat_rad_north.tan().asinh() / std::f64::consts::PI) / 2.0 * nf).floor() as u32;
+    let y_max =
+        ((1.0 - lat_rad_south.tan().asinh() / std::f64::consts::PI) / 2.0 * nf).floor() as u32;
 
     // Clamp
     let x_min = x_min.min(n.saturating_sub(1));
@@ -111,7 +108,7 @@ fn count_tiles(bbox: &[f64; 4], min_zoom: u32, max_zoom: u32) -> u32 {
 }
 
 /// Calculate total size of all files in the tiles directory (recursively).
-fn dir_size(path: &PathBuf) -> u64 {
+fn dir_size(path: &Path) -> u64 {
     let mut total = 0u64;
     if let Ok(entries) = fs::read_dir(path) {
         for entry in entries.flatten() {
@@ -164,11 +161,9 @@ pub fn download_tiles(
 
     // Clean existing tiles before a fresh download
     if tiles_root.exists() {
-        fs::remove_dir_all(&tiles_root)
-            .map_err(|e| format!("Failed to clear old tiles: {e}"))?;
+        fs::remove_dir_all(&tiles_root).map_err(|e| format!("Failed to clear old tiles: {e}"))?;
     }
-    fs::create_dir_all(&tiles_root)
-        .map_err(|e| format!("Failed to create tiles dir: {e}"))?;
+    fs::create_dir_all(&tiles_root).map_err(|e| format!("Failed to create tiles dir: {e}"))?;
 
     let tile_url_template = "https://tile.openstreetmap.org/{z}/{x}/{y}.png".to_string();
 
@@ -179,13 +174,11 @@ pub fn download_tiles(
 
         // Create zoom level directory
         let z_dir = tiles_root.join(z.to_string());
-        fs::create_dir_all(&z_dir)
-            .map_err(|e| format!("Failed to create zoom dir: {e}"))?;
+        fs::create_dir_all(&z_dir).map_err(|e| format!("Failed to create zoom dir: {e}"))?;
 
         for x in x_min..=x_max {
             let x_dir = z_dir.join(x.to_string());
-            fs::create_dir_all(&x_dir)
-                .map_err(|e| format!("Failed to create x dir: {e}"))?;
+            fs::create_dir_all(&x_dir).map_err(|e| format!("Failed to create x dir: {e}"))?;
 
             for y in y_min..=y_max {
                 let url = tile_url_template
@@ -196,35 +189,46 @@ pub fn download_tiles(
                 let tile_path = x_dir.join(format!("{y}.png"));
 
                 // Download the tile
-                match ureq::get(&url)
-                    .header("User-Agent", "Canopi/1.0")
-                    .config()
-                    .timeout_global(Some(std::time::Duration::from_secs(10)))
-                    .build()
-                    .call()
+                let persisted = match crate::http::build_get_request(
+                    &url,
+                    "Canopi/1.0",
+                    std::time::Duration::from_secs(TILE_FETCH_TIMEOUT_SECS),
+                )
+                .call()
                 {
                     Ok(mut response) => {
-                        match response.body_mut().read_to_vec() {
+                        match crate::http::read_limited_bytes(
+                            &mut response,
+                            MAX_TILE_BYTES,
+                            "tile body",
+                        ) {
                             Ok(bytes) => {
                                 if let Err(e) = fs::write(&tile_path, &bytes) {
                                     tracing::warn!("Failed to write tile z={z} x={x} y={y}: {e}");
+                                    false
+                                } else {
+                                    true
                                 }
                             }
                             Err(e) => {
                                 tracing::warn!("Failed to read tile z={z} x={x} y={y}: {e}");
+                                false
                             }
                         }
                     }
                     Err(e) => {
                         tracing::warn!("Failed to download tile z={z} x={x} y={y}: {e}");
                         // Continue with other tiles — partial download is acceptable
+                        false
                     }
+                };
+
+                if persisted {
+                    downloaded += 1;
                 }
 
-                downloaded += 1;
-
                 // Emit progress event every 10 tiles (or on first/last)
-                if downloaded == 1 || downloaded == total || downloaded % 10 == 0 {
+                if downloaded == 1 || downloaded == total || downloaded.is_multiple_of(10) {
                     let _ = app.emit(
                         "tile-download-progress",
                         TileDownloadProgress {
@@ -252,7 +256,7 @@ pub fn download_tiles(
     let _ = app.emit(
         "tile-download-progress",
         TileDownloadProgress {
-            downloaded: total,
+            downloaded,
             total,
             current_zoom: max_zoom,
         },

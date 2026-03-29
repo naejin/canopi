@@ -18,8 +18,7 @@ pub fn export_file(data: String, path: String) -> Result<String, String> {
 /// Write `data` (raw bytes) to `path`. Used for PNG export.
 #[tauri::command]
 pub fn export_binary(data: Vec<u8>, path: String) -> Result<String, String> {
-    std::fs::write(&path, &data)
-        .map_err(|e| format!("Failed to write to {path}: {e}"))?;
+    std::fs::write(&path, &data).map_err(|e| format!("Failed to write to {path}: {e}"))?;
     tracing::info!("Exported binary file to {path}");
     Ok(path)
 }
@@ -29,8 +28,7 @@ pub fn export_binary(data: Vec<u8>, path: String) -> Result<String, String> {
 #[tauri::command]
 pub fn read_file_bytes(path: String) -> Result<(Vec<u8>, String), String> {
     let p = std::path::Path::new(&path);
-    let data = std::fs::read(p)
-        .map_err(|e| format!("Failed to read {path}: {e}"))?;
+    let data = std::fs::read(p).map_err(|e| format!("Failed to read {path}: {e}"))?;
     let filename = p
         .file_name()
         .and_then(|n| n.to_str())
@@ -75,10 +73,12 @@ pub fn export_native_png(
         .export_png(&snapshot, dpi)
         .map_err(|e| format!("Failed to export PNG at {dpi} DPI: {e}"))?;
 
-    std::fs::write(&path, &result)
-        .map_err(|e| format!("Failed to write PNG to {path}: {e}"))?;
+    std::fs::write(&path, &result).map_err(|e| format!("Failed to write PNG to {path}: {e}"))?;
 
-    tracing::info!("Exported native PNG ({dpi} DPI, {} bytes) to {path}", result.len());
+    tracing::info!(
+        "Exported native PNG ({dpi} DPI, {} bytes) to {path}",
+        result.len()
+    );
     Ok(path)
 }
 
@@ -88,6 +88,10 @@ pub fn export_native_png(
 /// `width`, `height`: logical canvas dimensions in pixels
 /// Layout fields: page dimensions in mm, margins, title, etc.
 /// `path`: destination file path (chosen by frontend dialog)
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Tauri IPC currently exposes PDF export as flat named arguments"
+)]
 #[tauri::command]
 pub fn export_native_pdf(
     snapshot_base64: String,
@@ -129,8 +133,7 @@ pub fn export_native_pdf(
         .export_pdf(&snapshot, &layout)
         .map_err(|e| format!("Failed to export PDF: {e}"))?;
 
-    std::fs::write(&path, &result)
-        .map_err(|e| format!("Failed to write PDF to {path}: {e}"))?;
+    std::fs::write(&path, &result).map_err(|e| format!("Failed to write PDF to {path}: {e}"))?;
 
     tracing::info!("Exported native PDF ({} bytes) to {path}", result.len());
     Ok(path)

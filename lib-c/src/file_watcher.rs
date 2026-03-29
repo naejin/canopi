@@ -7,8 +7,8 @@
 use inotify::{Inotify, WatchMask};
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Start watching `path` for modifications.
 ///
@@ -24,8 +24,7 @@ pub fn watch_file<F>(
 where
     F: Fn(&Path) + Send + 'static,
 {
-    let mut inotify =
-        Inotify::init().map_err(|e| format!("Failed to init inotify: {e}"))?;
+    let mut inotify = Inotify::init().map_err(|e| format!("Failed to init inotify: {e}"))?;
 
     // Watch for content modifications and close-after-write.
     inotify

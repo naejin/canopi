@@ -11,9 +11,9 @@
 //! in `desktop/src/platform/mod.rs` (same pattern as lib-c) to avoid circular
 //! dependencies.
 
-pub mod png_export;
-pub mod pdf_export;
 pub mod file_watcher;
+pub mod pdf_export;
+pub mod png_export;
 
 /// Marker struct for macOS platform capabilities.
 ///

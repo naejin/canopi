@@ -82,8 +82,14 @@ mod tests {
 
         // Both entries must be present; plant_count is always 0.
         let names: Vec<&str> = files.iter().map(|f| f.name.as_str()).collect();
-        assert!(names.contains(&"Garden"), "Garden should be in recent files");
-        assert!(names.contains(&"Forest"), "Forest should be in recent files");
+        assert!(
+            names.contains(&"Garden"),
+            "Garden should be in recent files"
+        );
+        assert!(
+            names.contains(&"Forest"),
+            "Forest should be in recent files"
+        );
         assert!(files.iter().all(|f| f.plant_count == 0));
     }
 

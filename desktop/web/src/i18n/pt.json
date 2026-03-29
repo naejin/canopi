@@ -231,7 +231,9 @@
       "expand": "Expandir painel",
       "timeline": "Cronograma",
       "consortium": "Consórcio",
-      "budget": "Orçamento"
+      "budget": "Orçamento",
+      "open": "Abrir painel inferior",
+      "tabs": "Guias"
     },
     "timeline": {
       "title": "Cronograma",

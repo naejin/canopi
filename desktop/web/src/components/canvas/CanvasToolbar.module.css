@@ -3,9 +3,9 @@
   min-width: var(--canvas-toolbar-width);
   display: flex;
   flex-direction: column;
-  background: var(--color-bg);
+  background: var(--panel-gradient);
   border-right: 1px solid var(--color-border);
-  padding: 4px 0;
+  padding: var(--space-2) 0;
   z-index: 20;
   position: relative;
 }
@@ -21,16 +21,18 @@
   cursor: pointer;
   color: var(--color-text-muted);
   position: relative;
-  transition: color 80ms ease;
+  transition: color 80ms ease, background-color 80ms ease;
   min-height: 30px;
 }
 
 .toolButton:hover {
+  background: var(--color-control-hover);
   color: var(--color-text);
 }
 
 .toolButton[aria-checked="true"] {
   color: var(--color-primary);
+  background: var(--color-control-active);
 }
 
 .toolButton[aria-checked="true"]::before {
@@ -46,6 +48,7 @@
 
 .toolButton[aria-pressed="true"] {
   color: var(--color-primary);
+  background: var(--color-control-active);
 }
 
 .toolButton[aria-pressed="true"]::before {

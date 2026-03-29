@@ -7,7 +7,7 @@
  */
 import type { CanopiFile } from '../types/design'
 import type { CanvasEngine } from '../canvas/engine'
-import { toCanopi, fromCanopi, extractExtra } from '../canvas/serializer'
+import { toCanopi, extractExtra } from '../canvas/serializer'
 
 export { extractExtra }
 import { currentDesign } from './design'
@@ -19,15 +19,20 @@ export {
   designName,
   currentDesign,
   pendingDesignPath,
-  saveCurrentDesign,
-  saveAsCurrentDesign,
-  openDesign,
-  openDesignFromPath,
-  newDesignAction,
+  pendingTemplateImport,
   nonCanvasRevision,
   autosaveFailed,
   resetDirtyBaselines,
 } from './design'
+export {
+  consumeQueuedDocumentLoad,
+  saveCurrentDesign,
+  saveAsCurrentDesign,
+  openDesign,
+  openDesignAsTemplate,
+  openDesignFromPath,
+  newDesignAction,
+} from './document-actions'
 
 /**
  * Write canvas state back into a CanopiFile, merging with the canonical
@@ -48,5 +53,5 @@ export function loadCanvasFromDocument(
   file: CanopiFile,
   engine: CanvasEngine,
 ): void {
-  fromCanopi(file, engine)
+  engine.loadDocument(file)
 }

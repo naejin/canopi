@@ -1,92 +1,141 @@
-import { useCallback } from 'preact/hooks'
+import { useEffect, useState } from 'preact/hooks'
 import { t } from '../../i18n'
-import { locale, persistCurrentSettings } from '../../state/app'
-import { bottomPanelOpen, bottomPanelTab, bottomPanelHeight } from '../../state/canvas'
-import { TimelineTab } from './TimelineTab'
-import { BudgetTab } from './BudgetTab'
+import { locale } from '../../state/app'
+import { bottomPanelHeight, bottomPanelOpen, bottomPanelTab, type BottomPanelTab } from '../../state/canvas'
+import {
+  setBottomPanelHeight,
+  setBottomPanelOpen,
+  setBottomPanelTab,
+} from '../../state/canvas-actions'
 import styles from './BottomPanel.module.css'
 
-const TABS = ['timeline', 'budget'] as const
-type BottomTab = typeof TABS[number]
+type LocationComponent = typeof import('./LocationTab').LocationTab
+type TimelineComponent = typeof import('./TimelineTab').TimelineTab
+type BudgetComponent = typeof import('./BudgetTab').BudgetTab
+type ConsortiumComponent = typeof import('./ConsortiumTab').ConsortiumTab
+
+const TAB_ORDER: BottomPanelTab[] = ['location', 'timeline', 'budget', 'consortium']
+
+function getTabLabel(tab: BottomPanelTab): string {
+  if (tab === 'location') return t('canvas.location.title')
+  if (tab === 'consortium') return t('canvas.bottomPanel.consortium')
+  return t(`canvas.bottomPanel.${tab}`)
+}
 
 export function BottomPanel() {
-  // Subscribe to locale so the component re-renders when language changes
   void locale.value
 
-  const handleMouseDown = useCallback((e: MouseEvent) => {
-    e.preventDefault()
-    const startY = e.clientY
-    const startHeight = bottomPanelHeight.value
+  const [LocationTab, setLocationTab] = useState<LocationComponent | null>(null)
+  const [TimelineTab, setTimelineTab] = useState<TimelineComponent | null>(null)
+  const [BudgetTab, setBudgetTab] = useState<BudgetComponent | null>(null)
+  const [ConsortiumTab, setConsortiumTab] = useState<ConsortiumComponent | null>(null)
 
-    const handleMouseMove = (e: MouseEvent) => {
-      const delta = startY - e.clientY
-      const newHeight = Math.max(120, Math.min(window.innerHeight * 0.5, startHeight + delta))
-      bottomPanelHeight.value = newHeight
+  const open = bottomPanelOpen.value
+  const activeTab = bottomPanelTab.value
+  const height = bottomPanelHeight.value
+
+  useEffect(() => {
+    let cancelled = false
+
+    if (activeTab === 'location' && !LocationTab) {
+      void import('./LocationTab').then((module) => {
+        if (!cancelled) setLocationTab(() => module.LocationTab)
+      })
     }
 
-    const handleMouseUp = () => {
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-      persistCurrentSettings()
+    if (activeTab === 'timeline' && !TimelineTab) {
+      void import('./TimelineTab').then((module) => {
+        if (!cancelled) setTimelineTab(() => module.TimelineTab)
+      })
     }
 
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-    document.body.style.cursor = 'row-resize'
-    document.body.style.userSelect = 'none'
-  }, [])
+    if (activeTab === 'budget' && !BudgetTab) {
+      void import('./BudgetTab').then((module) => {
+        if (!cancelled) setBudgetTab(() => module.BudgetTab)
+      })
+    }
 
-  if (!bottomPanelOpen.value) return null
+    if (activeTab === 'consortium' && !ConsortiumTab) {
+      void import('./ConsortiumTab').then((module) => {
+        if (!cancelled) setConsortiumTab(() => module.ConsortiumTab)
+      })
+    }
 
-  const activeTab = bottomPanelTab.value as BottomTab
+    return () => {
+      cancelled = true
+    }
+  }, [activeTab, LocationTab, TimelineTab, BudgetTab, ConsortiumTab])
+
+  if (!open) return null
 
   return (
-    <div
-      className={styles.panel}
-      style={{ height: `${bottomPanelHeight.value}px` }}
-    >
-      <div
-        className={styles.resizeHandle}
-        onMouseDown={handleMouseDown}
-        aria-hidden="true"
-      />
+    <div className={styles.panel} style={{ height: `${height}px` }}>
+      <ResizeHandle />
       <div className={styles.tabBar} role="tablist" aria-label={t('canvas.bottomPanel.ariaLabel')}>
-        {TABS.map((tab: BottomTab) => (
+        {TAB_ORDER.map((tab) => (
           <button
             key={tab}
+            type="button"
             role="tab"
             aria-selected={activeTab === tab}
-            aria-controls={`bottom-tabpanel-${tab}`}
-            id={`bottom-tab-${tab}`}
-            className={`${styles.tab}${activeTab === tab ? ` ${styles.tabActive}` : ''}`}
-            onClick={() => { bottomPanelTab.value = tab; persistCurrentSettings() }}
+            className={`${styles.tab} ${activeTab === tab ? styles.tabActive : ''}`}
+            onClick={() => setBottomPanelTab(tab)}
           >
-            {t(`canvas.bottomPanel.${tab}`)}
+            {getTabLabel(tab)}
           </button>
         ))}
-        <div className={styles.tabBarSpacer} aria-hidden="true" />
+        <div className={styles.tabBarSpacer} />
         <button
-          className={styles.collapseBtn}
-          onClick={() => { bottomPanelOpen.value = false; persistCurrentSettings() }}
-          aria-label={t('canvas.bottomPanel.collapse')}
           type="button"
+          className={styles.collapseBtn}
+          onClick={() => setBottomPanelOpen(false)}
+          aria-label={t('canvas.bottomPanel.collapse')}
         >
-          <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" width="12" height="12">
-            <path d="M3 5L8 10L13 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
+          {t('canvas.bottomPanel.collapse')}
         </button>
       </div>
-      <div
-        className={styles.tabContent}
-        role="tabpanel"
-        id={`bottom-tabpanel-${activeTab}`}
-        aria-labelledby={`bottom-tab-${activeTab}`}
-      >
-        {activeTab === 'timeline' && <TimelineTab />}
-        {activeTab === 'budget' && <BudgetTab />}
+
+      <div className={styles.tabContent}>
+        {activeTab === 'location' && (LocationTab ? <LocationTab /> : <LoadingState />)}
+        {activeTab === 'timeline' && (TimelineTab ? <TimelineTab /> : <LoadingState />)}
+        {activeTab === 'budget' && (BudgetTab ? <BudgetTab /> : <LoadingState />)}
+        {activeTab === 'consortium' && (ConsortiumTab ? <ConsortiumTab /> : <LoadingState />)}
       </div>
     </div>
   )
+}
+
+function ResizeHandle() {
+  return (
+    <div
+      className={styles.resizeHandle}
+      onMouseDown={(event) => {
+        event.preventDefault()
+        const startY = event.clientY
+        const startHeight = bottomPanelHeight.value
+
+        const onMove = (moveEvent: MouseEvent) => {
+          const delta = startY - moveEvent.clientY
+          const maxHeight = Math.max(200, window.innerHeight * 0.55)
+          setBottomPanelHeight(Math.max(140, Math.min(maxHeight, startHeight + delta)))
+        }
+
+        const onUp = () => {
+          document.removeEventListener('mousemove', onMove)
+          document.removeEventListener('mouseup', onUp)
+          document.body.style.cursor = ''
+          document.body.style.userSelect = ''
+        }
+
+        document.addEventListener('mousemove', onMove)
+        document.addEventListener('mouseup', onUp)
+        document.body.style.cursor = 'row-resize'
+        document.body.style.userSelect = 'none'
+      }}
+    />
+  )
+}
+
+function LoadingState() {
+  return <div className={styles.tabPlaceholder}>{t('plantDb.loading')}</div>
 }

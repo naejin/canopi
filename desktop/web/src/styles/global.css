@@ -17,9 +17,17 @@
   --color-accent: #A06B1F;           /* ochre — brass, golden oak */
   --color-bg: #F0EBE1;              /* parchment — aged paper */
   --color-surface: #FAF7F2;         /* linen — fresh page */
+  --color-surface-alt: #F5F0E7;     /* soft card elevation */
+  --color-surface-muted: rgba(250, 247, 242, 0.78);
+  --color-surface-ring: rgba(250, 247, 242, 0.72);
   --color-border: rgba(60, 45, 30, 0.12); /* ruled line — warm pencil */
+  --color-border-strong: rgba(60, 45, 30, 0.2);
   --color-text: #2C2418;            /* ink — warm near-black */
   --color-text-muted: #7D6F5E;      /* graphite — faded pencil */
+  --color-primary-contrast: #FCF8F2;
+  --color-control-hover: rgba(160, 107, 31, 0.12);
+  --color-control-active: rgba(160, 107, 31, 0.18);
+  --panel-gradient: linear-gradient(180deg, #FAF7F2 0%, #F4EEE5 100%);
 
   /* Semantic */
   --color-success: #5A7D3A;         /* moss green — living, growing */
@@ -98,9 +106,12 @@
   --canvas-ruler-text: rgba(60, 45, 30, 0.4);
   --canvas-selection: rgba(160, 107, 31, 0.18);
   --canvas-selection-stroke: rgba(160, 107, 31, 0.6);
+  --canvas-selection-anchor-fill: #FCF8F2;
   --canvas-plant-label: #444444;
   --canvas-plant-label-muted: #888888;
   --canvas-annotation-text: #1A1A1A;
+  --canvas-annotation-stroke: #6B6253;
+  --canvas-annotation-surface: #FFFDF8;
   --canvas-zone-stroke: #2D5F3F;
   --canvas-zone-fill: rgba(45, 95, 63, 0.1);
   --canvas-toolbar-width: 38px;
@@ -123,9 +134,17 @@
   --color-accent: #C89B4A;
   --color-bg: #1E1B17;              /* charcoal parchment */
   --color-surface: #282420;         /* dark linen */
+  --color-surface-alt: #302B26;
+  --color-surface-muted: rgba(48, 43, 38, 0.82);
+  --color-surface-ring: rgba(40, 36, 32, 0.76);
   --color-border: rgba(200, 180, 150, 0.12); /* warm ruled line */
+  --color-border-strong: rgba(200, 180, 150, 0.22);
   --color-text: #E5DFD4;           /* cream ink */
   --color-text-muted: #A89A88;     /* faded graphite — slightly brighter for dark */
+  --color-primary-contrast: #1E1B17;
+  --color-control-hover: rgba(200, 155, 74, 0.16);
+  --color-control-active: rgba(200, 155, 74, 0.24);
+  --panel-gradient: linear-gradient(180deg, #282420 0%, #221E1A 100%);
 
   --color-success: #8BAA5E;
   --color-success-bg: rgba(90, 125, 58, 0.12);
@@ -148,9 +167,12 @@
   --canvas-ruler-text: rgba(200, 180, 150, 0.4);
   --canvas-selection: rgba(200, 155, 74, 0.18);
   --canvas-selection-stroke: rgba(200, 155, 74, 0.6);
+  --canvas-selection-anchor-fill: #1E1B17;
   --canvas-plant-label: #D4CFC4;
   --canvas-plant-label-muted: #A89A88;
   --canvas-annotation-text: #E5DFD4;
+  --canvas-annotation-stroke: #B8AA95;
+  --canvas-annotation-surface: #342E28;
   --canvas-zone-stroke: rgba(200, 180, 150, 0.5);
   --canvas-zone-fill: rgba(200, 180, 150, 0.06);
 

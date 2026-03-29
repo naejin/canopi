@@ -169,28 +169,52 @@ function scheduleSearch(debounceMs: number): void {
 
 // ── Module-level effects: separate text (debounced) from filters (instant) ───
 
+let controllerUsers = 0;
+let disposeSearchEffect: (() => void) | null = null;
 let lastText = searchText.peek();
 
-const disposeSearchEffect = effect(() => {
-  const text = searchText.value;
-  void activeFilters.value;
-  void extraFilters.value;
-  void sortField.value;
-  void locale.value;
+function startPlantDbController(): void {
+  if (disposeSearchEffect) return;
 
-  // Text typing gets 150ms debounce; filter/sort/locale changes are instant
-  const textChanged = text !== lastText;
-  lastText = text;
-  scheduleSearch(textChanged ? 150 : 0);
-});
+  lastText = searchText.peek();
+  disposeSearchEffect = effect(() => {
+    const text = searchText.value;
+    void activeFilters.value;
+    void extraFilters.value;
+    void sortField.value;
+    void locale.value;
+
+    const textChanged = text !== lastText;
+    lastText = text;
+    scheduleSearch(textChanged ? 150 : 0);
+  });
+}
+
+function stopPlantDbController(): void {
+  disposeSearchEffect?.();
+  disposeSearchEffect = null;
+  if (debounceTimer !== null) {
+    clearTimeout(debounceTimer);
+    debounceTimer = null;
+  }
+}
+
+export function mountPlantDbController(): () => void {
+  controllerUsers += 1;
+  startPlantDbController();
+
+  return () => {
+    controllerUsers = Math.max(0, controllerUsers - 1);
+    if (controllerUsers === 0) {
+      stopPlantDbController();
+    }
+  };
+}
 
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
-    disposeSearchEffect();
-    if (debounceTimer !== null) {
-      clearTimeout(debounceTimer);
-      debounceTimer = null;
-    }
+    controllerUsers = 0;
+    stopPlantDbController();
   });
 }
 

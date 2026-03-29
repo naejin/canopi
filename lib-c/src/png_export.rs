@@ -43,8 +43,8 @@ pub fn render_png_at_dpi(
         .map_err(|e| format!("Failed to create target surface: {e}"))?;
 
     // Paint the source scaled up.
-    let cr = Context::new(&dst_surface)
-        .map_err(|e| format!("Failed to create Cairo context: {e}"))?;
+    let cr =
+        Context::new(&dst_surface).map_err(|e| format!("Failed to create Cairo context: {e}"))?;
     cr.scale(scale, scale);
     cr.set_source_surface(&src_surface, 0.0, 0.0)
         .map_err(|e| format!("Failed to set source surface: {e}"))?;
@@ -71,8 +71,7 @@ mod tests {
 
     /// Build a minimal valid 1x1 PNG for testing.
     fn tiny_png() -> Vec<u8> {
-        let surface = ImageSurface::create(Format::ARgb32, 4, 4)
-            .expect("create 4x4 surface");
+        let surface = ImageSurface::create(Format::ARgb32, 4, 4).expect("create 4x4 surface");
         let cr = Context::new(&surface).expect("context");
         cr.set_source_rgb(1.0, 0.0, 0.0);
         cr.paint().expect("paint");

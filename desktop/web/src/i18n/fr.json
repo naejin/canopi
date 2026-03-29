@@ -231,7 +231,9 @@
       "expand": "Agrandir le panneau",
       "timeline": "Calendrier",
       "consortium": "Consortium",
-      "budget": "Budget"
+      "budget": "Budget",
+      "open": "Ouvrir le panneau inférieur",
+      "tabs": "Onglets"
     },
     "timeline": {
       "title": "Calendrier",

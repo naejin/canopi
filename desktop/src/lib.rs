@@ -1,14 +1,15 @@
 mod commands;
 mod db;
 mod design;
+mod http;
 mod image_cache;
 mod logging;
 mod platform;
 
-use std::sync::Mutex;
+use common_types::health::{PlantDbStatus, SubsystemHealth};
 use rusqlite::{Connection, OpenFlags};
+use std::sync::Mutex;
 use tauri::Manager;
-use common_types::health::{SubsystemHealth, PlantDbStatus};
 
 pub struct AppHealth(pub Mutex<SubsystemHealth>);
 

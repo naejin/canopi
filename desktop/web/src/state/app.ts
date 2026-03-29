@@ -2,14 +2,14 @@ import { signal, batch } from "@preact/signals";
 import type { PlantDbStatus } from "../types/health";
 import type { Settings } from "../types/settings";
 import { setSettings } from "../ipc/settings";
-import { gridSize, snapToGridEnabled, bottomPanelOpen, bottomPanelHeight, bottomPanelTab, mapLayerVisible, mapStyle, mapLayerOpacity, contourLayerVisible, contourInterval, hillshadeVisible, hillshadeOpacity } from "./canvas";
+import { gridSize, snapToGridEnabled } from "./canvas";
 
-export type Panel = "plant-db" | "canvas" | "world-map" | "learning" | "favorites";
+export type Panel = "plant-db" | "canvas" | "favorites" | "world-map";
 
 // Panels that open as a sidebar alongside the canvas instead of replacing it.
-export type SidePanel = "plant-db" | "learning" | "favorites" | "world-map";
+export type SidePanel = "plant-db" | "favorites" | "world-map";
 
-const SIDE_PANELS = new Set<Panel>(["plant-db", "learning", "favorites", "world-map"]);
+const SIDE_PANELS = new Set<Panel>(["plant-db", "favorites", "world-map"]);
 
 export const activePanel = signal<Panel>("canvas");
 export const locale = signal<"en" | "fr" | "es" | "pt" | "it" | "zh" | "de" | "ja" | "ko" | "nl" | "ru">("en");
@@ -41,16 +41,6 @@ export function persistCurrentSettings(): void {
     grid_size_m: gridSize.value,
     snap_to_grid: snapToGridEnabled.value,
     auto_save_interval_s: Math.round(autoSaveIntervalMs.value / 1000),
-    bottom_panel_open: bottomPanelOpen.value,
-    bottom_panel_height: bottomPanelHeight.value,
-    bottom_panel_tab: bottomPanelTab.value,
-    map_layer_visible: mapLayerVisible.value,
-    map_style: mapStyle.value,
-    map_opacity: mapLayerOpacity.value,
-    contour_visible: contourLayerVisible.value,
-    contour_interval: contourInterval.value,
-    hillshade_visible: hillshadeVisible.value,
-    hillshade_opacity: hillshadeOpacity.value,
   };
   _lastSettings = updated;
   setSettings(updated).catch((e) => console.error('Failed to persist settings:', e));

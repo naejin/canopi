@@ -3,28 +3,39 @@
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  background: var(--panel-gradient);
 }
 
 .header {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3);
   padding: var(--space-2) var(--space-4);
   border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
+  min-height: 44px;
+  background: var(--color-surface-muted);
+}
+
+.headerLabel {
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
 }
 
 .addBtn {
-  padding: var(--space-1) var(--space-3);
-  font-size: var(--text-sm);
+  min-height: 30px;
+  padding: 0 var(--space-3);
+  font-size: var(--text-xs);
   font-weight: 500;
   background: var(--color-primary);
-  color: var(--color-surface);
+  color: var(--color-primary-contrast);
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
   white-space: nowrap;
-  min-height: 28px;
 }
 
 .addBtn:hover {
@@ -36,15 +47,13 @@
   outline-offset: 2px;
 }
 
-/* ---- Inline form ---- */
-
 .formRow {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-4);
-  background: var(--color-primary-bg);
+  background: var(--color-surface-muted);
   border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
 }
@@ -52,18 +61,18 @@
 .formInput {
   height: 28px;
   padding: 0 var(--space-2);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-sm);
-  background: var(--color-surface);
+  background: var(--color-surface-alt);
   color: var(--color-text);
   font-size: var(--text-sm);
   font-family: var(--font-sans);
-  min-width: 100px;
+  min-width: 120px;
 }
 
 .formInputWide {
   flex: 1;
-  min-width: 140px;
+  min-width: 160px;
 }
 
 .formInput:focus {
@@ -77,7 +86,7 @@
   font-size: var(--text-sm);
   font-weight: 500;
   background: var(--color-primary);
-  color: var(--color-surface);
+  color: var(--color-primary-contrast);
   border: none;
   border-radius: var(--radius-sm);
   cursor: pointer;
@@ -98,7 +107,7 @@
   padding: 0 var(--space-3);
   height: 28px;
   font-size: var(--text-sm);
-  background: transparent;
+  background: var(--color-surface-alt);
   color: var(--color-text-muted);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -116,8 +125,6 @@
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
-
-/* ---- Empty state ---- */
 
 .emptyState {
   display: flex;
@@ -164,8 +171,6 @@
   outline-offset: 2px;
 }
 
-/* ---- Card list ---- */
-
 .listWrapper {
   flex: 1;
   overflow: auto;
@@ -176,13 +181,14 @@
 }
 
 .card {
-  background: var(--color-surface);
+  background: var(--color-surface-alt);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3);
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-2);
+  box-shadow: var(--shadow-sm);
 }
 
 .cardTop {
@@ -228,7 +234,7 @@
 .rowActionBtn {
   padding: 1px var(--space-2);
   font-size: var(--text-xs);
-  background: transparent;
+  background: var(--color-surface-muted);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   color: var(--color-text-muted);
@@ -238,7 +244,7 @@
 }
 
 .rowActionBtn:hover {
-  background: var(--color-surface);
+  background: var(--color-control-hover);
   color: var(--color-text);
 }
 

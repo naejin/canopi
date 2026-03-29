@@ -1,5 +1,5 @@
 use common_types::design::{
-    CanopiFile, Layer, PlacedPlant, Zone, Consortium, TimelineAction, BudgetItem,
+    BudgetItem, CanopiFile, Consortium, Layer, PlacedPlant, TimelineAction, Zone,
 };
 use std::path::Path;
 
@@ -57,14 +57,14 @@ pub fn load_from_file(path: &Path) -> Result<CanopiFile, String> {
         .map_err(|e| format!("Invalid JSON in {}: {e}", path.display()))?;
 
     // Log the version for diagnostics; migration hooks go here in the future.
-    if let Some(v) = value.get("version").and_then(|v| v.as_u64()) {
-        if v > 1 {
-            tracing::info!(
-                "Loading design version {} from {}; current app supports version 1",
-                v,
-                path.display()
-            );
-        }
+    if let Some(v) = value.get("version").and_then(|v| v.as_u64())
+        && v > 1
+    {
+        tracing::info!(
+            "Loading design version {} from {}; current app supports version 1",
+            v,
+            path.display()
+        );
     }
 
     // Deserialize — unknown fields survive in `extra`.
@@ -89,13 +89,48 @@ pub fn create_default() -> CanopiFile {
     let now = now_iso8601();
 
     let layers = vec![
-        Layer { name: "base".into(),        visible: true,  locked: false, opacity: 1.0 },
-        Layer { name: "contours".into(),    visible: false, locked: false, opacity: 1.0 },
-        Layer { name: "climate".into(),     visible: false, locked: false, opacity: 1.0 },
-        Layer { name: "zones".into(),       visible: true,  locked: false, opacity: 1.0 },
-        Layer { name: "water".into(),       visible: true,  locked: false, opacity: 1.0 },
-        Layer { name: "plants".into(),      visible: true,  locked: false, opacity: 1.0 },
-        Layer { name: "annotations".into(), visible: true,  locked: false, opacity: 1.0 },
+        Layer {
+            name: "base".into(),
+            visible: true,
+            locked: false,
+            opacity: 1.0,
+        },
+        Layer {
+            name: "contours".into(),
+            visible: false,
+            locked: false,
+            opacity: 1.0,
+        },
+        Layer {
+            name: "climate".into(),
+            visible: false,
+            locked: false,
+            opacity: 1.0,
+        },
+        Layer {
+            name: "zones".into(),
+            visible: true,
+            locked: false,
+            opacity: 1.0,
+        },
+        Layer {
+            name: "water".into(),
+            visible: true,
+            locked: false,
+            opacity: 1.0,
+        },
+        Layer {
+            name: "plants".into(),
+            visible: true,
+            locked: false,
+            opacity: 1.0,
+        },
+        Layer {
+            name: "annotations".into(),
+            visible: true,
+            locked: false,
+            opacity: 1.0,
+        },
     ];
 
     CanopiFile {
@@ -133,12 +168,15 @@ mod tests {
     #[test]
     fn test_create_default_layer_visibility() {
         let design = create_default();
-        let by_name: std::collections::HashMap<_, _> =
-            design.layers.iter().map(|l| (l.name.as_str(), l.visible)).collect();
+        let by_name: std::collections::HashMap<_, _> = design
+            .layers
+            .iter()
+            .map(|l| (l.name.as_str(), l.visible))
+            .collect();
         assert!(!by_name["contours"], "contours should be hidden");
-        assert!(!by_name["climate"],  "climate should be hidden");
-        assert!(by_name["base"],      "base should be visible");
-        assert!(by_name["plants"],    "plants should be visible");
+        assert!(!by_name["climate"], "climate should be hidden");
+        assert!(by_name["base"], "base should be visible");
+        assert!(by_name["plants"], "plants should be visible");
     }
 
     #[test]
@@ -191,7 +229,10 @@ mod tests {
         let design = create_default();
         // First save — no backup yet.
         save_to_file(&path, &design).expect("first save");
-        assert!(!prev_path.exists(), ".prev should not exist after first save");
+        assert!(
+            !prev_path.exists(),
+            ".prev should not exist after first save"
+        );
 
         // Second save — should create .prev.
         save_to_file(&path, &design).expect("second save");
@@ -210,7 +251,9 @@ mod tests {
 
         // Build a design with an unknown future field injected at JSON level.
         let mut design = create_default();
-        design.extra.insert("future_field".into(), json!("from_future"));
+        design
+            .extra
+            .insert("future_field".into(), json!("from_future"));
 
         save_to_file(&path, &design).expect("save");
         let loaded = load_from_file(&path).expect("load");

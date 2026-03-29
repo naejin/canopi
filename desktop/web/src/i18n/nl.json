@@ -231,7 +231,9 @@
       "expand": "Paneel uitklappen",
       "timeline": "Tijdlijn",
       "consortium": "Consortium",
-      "budget": "Budget"
+      "budget": "Budget",
+      "open": "Onderste paneel openen",
+      "tabs": "Tabbladen"
     },
     "timeline": {
       "title": "Tijdlijn",

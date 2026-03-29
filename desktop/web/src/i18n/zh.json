@@ -231,7 +231,9 @@
       "expand": "展开面板",
       "timeline": "时间轴",
       "consortium": "共生组合",
-      "budget": "预算"
+      "budget": "预算",
+      "open": "打开底部面板",
+      "tabs": "标签页"
     },
     "timeline": {
       "title": "时间轴",

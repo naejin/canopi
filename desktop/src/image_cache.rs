@@ -1,7 +1,10 @@
+use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use sha2::{Sha256, Digest};
+
+const IMAGE_FETCH_TIMEOUT_SECS: u64 = 10;
+const MAX_IMAGE_BYTES: u64 = 10 * 1024 * 1024;
 
 pub struct ImageCache {
     cache_dir: PathBuf,
@@ -37,21 +40,22 @@ impl ImageCache {
         // Cache hit — read from disk
         let filename = Self::url_to_filename(url);
         let path = self.cache_dir.join(&filename);
-        if path.exists() {
-            if let Ok(bytes) = fs::read(&path) {
-                if !bytes.is_empty() {
-                    return Ok(bytes);
-                }
-            }
+        if path.exists()
+            && let Ok(bytes) = fs::read(&path)
+            && !bytes.is_empty()
+        {
+            return Ok(bytes);
         }
 
-        // Cache miss — download
-        let bytes = ureq::get(url)
-            .call()
-            .map_err(|e| format!("Failed to fetch image: {e}"))?
-            .body_mut()
-            .read_to_vec()
-            .map_err(|e| format!("Failed to read image bytes: {e}"))?;
+        // Cache miss — download (10s timeout, 10MB max)
+        let mut response = crate::http::build_get_request(
+            url,
+            "Canopi/1.0",
+            std::time::Duration::from_secs(IMAGE_FETCH_TIMEOUT_SECS),
+        )
+        .call()
+        .map_err(|e| format!("Failed to fetch image: {e}"))?;
+        let bytes = crate::http::read_limited_bytes(&mut response, MAX_IMAGE_BYTES, "image bytes")?;
 
         // Write to disk (best-effort — don't fail the request if disk write fails)
         let byte_len = bytes.len() as u64;

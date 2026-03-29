@@ -3,6 +3,7 @@ import { useSignal } from '@preact/signals'
 import { locale } from '../../state/app'
 import {
   loadSidebarLists,
+  mountPlantDbController,
   selectedCanonicalName,
   searchResults,
   isSearching,
@@ -23,10 +24,12 @@ export function PlantDbPanel() {
   const moreFiltersOpen = useSignal(false)
 
   useEffect(() => {
+    const disposeController = mountPlantDbController()
     void loadSidebarLists()
     if (searchResults.value.length === 0 && !isSearching.value) {
       retrySearch()
     }
+    return disposeController
   }, [])
 
   return (

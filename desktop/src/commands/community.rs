@@ -154,44 +154,16 @@ pub fn download_template(url: String) -> Result<String, String> {
         return Err(format!("Downloads are restricted to {ALLOWED_HOST}"));
     }
 
-    let mut response = ureq::get(&url)
-        .header("User-Agent", "Canopi/1.0")
-        .config()
-        .timeout_global(Some(std::time::Duration::from_secs(30)))
-        .build()
-        .call()
-        .map_err(|e| format!("Failed to download template: {e}"))?;
+    let mut response =
+        crate::http::build_get_request(&url, "Canopi/1.0", std::time::Duration::from_secs(30))
+            .call()
+            .map_err(|e| format!("Failed to download template: {e}"))?;
 
-    // Check Content-Length header if present — reject obviously oversized responses
-    if let Some(cl) = response.headers().get("content-length") {
-        if let Ok(len_str) = cl.to_str() {
-            if let Ok(len) = len_str.parse::<u64>() {
-                if len > MAX_TEMPLATE_BYTES {
-                    return Err(format!(
-                        "Template too large ({len} bytes, max {MAX_TEMPLATE_BYTES})"
-                    ));
-                }
-            }
-        }
-    }
-
-    let bytes = response
-        .body_mut()
-        .read_to_vec()
-        .map_err(|e| format!("Failed to read template body: {e}"))?;
-
-    if bytes.len() as u64 > MAX_TEMPLATE_BYTES {
-        return Err(format!(
-            "Template too large ({} bytes, max {MAX_TEMPLATE_BYTES})",
-            bytes.len()
-        ));
-    }
+    let bytes =
+        crate::http::read_limited_bytes(&mut response, MAX_TEMPLATE_BYTES, "template body")?;
 
     // Sanitize filename — extract last path segment and strip path-traversal chars
-    let raw_name = url
-        .rsplit('/')
-        .next()
-        .unwrap_or("template.canopi");
+    let raw_name = url.rsplit('/').next().unwrap_or("template.canopi");
     // Keep only safe filename characters (alphanum, dash, underscore, dot)
     let safe_name: String = raw_name
         .chars()
@@ -206,19 +178,20 @@ pub fn download_template(url: String) -> Result<String, String> {
     let tmp_dir = std::env::temp_dir();
     let dest = tmp_dir.join(&file_name);
 
-    // Verify the resolved path is still inside tmp_dir (defense in depth)
-    let canonical_tmp = tmp_dir.canonicalize()
+    // Verify the resolved path is still inside tmp_dir (defense in depth).
+    // Check BEFORE writing so no bytes land outside the temp directory.
+    let canonical_tmp = tmp_dir
+        .canonicalize()
         .map_err(|e| format!("Failed to resolve temp dir: {e}"))?;
-    std::fs::write(&dest, &bytes)
-        .map_err(|e| format!("Failed to write template to disk: {e}"))?;
-    let canonical_dest = dest.canonicalize()
-        .map_err(|e| format!("Failed to resolve dest path: {e}"))?;
+    let canonical_dest = canonical_tmp.join(&file_name);
     if !canonical_dest.starts_with(&canonical_tmp) {
-        let _ = std::fs::remove_file(&canonical_dest);
         return Err("Path traversal detected — download aborted".into());
     }
 
-    canonical_dest.to_str()
+    std::fs::write(&dest, &bytes).map_err(|e| format!("Failed to write template to disk: {e}"))?;
+
+    canonical_dest
+        .to_str()
         .map(|s| s.to_string())
         .ok_or_else(|| "Invalid temp path encoding".into())
 }
