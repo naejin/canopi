@@ -59,7 +59,7 @@ export async function importBackgroundImage(
           y: centerWorldY - heightM / 2,
           width: widthM,
           height: heightM,
-          draggable: true,
+          draggable: false,
           opacity: 0.7,
           name: 'shape background-image',
         })

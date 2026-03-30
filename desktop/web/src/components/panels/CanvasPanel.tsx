@@ -95,13 +95,19 @@ export function CanvasPanel() {
             <div ref={rulerOverlayRef} className={styles.rulerOverlay} />
 
             {!hasDesign && <WelcomeScreen />}
-            {hasDesign && <DisplayModeControls />}
             {hasDesign && <DisplayLegend />}
-            {hasDesign && <ZoomControls />}
-            {hasDesign && !bottomOpen && <BottomPanelLauncher />}
           </div>
           {hasDesign && <LayerPanel />}
         </div>
+        {hasDesign && (
+          <div className={styles.canvasBar}>
+            {!bottomOpen && <BottomPanelLauncher />}
+            <div className={styles.canvasBarSpacer} />
+            <DisplayModeControls />
+            <div className={styles.canvasBarDivider} />
+            <ZoomControls />
+          </div>
+        )}
         {hasDesign && <BottomPanel />}
       </div>
     </div>

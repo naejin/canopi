@@ -7,13 +7,10 @@ import { MoveNodeCommand, TransformNodeCommand, BatchCommand } from '../commands
 import type { TransformAttrs } from '../commands'
 import { getCanvasColor } from '../theme-refresh'
 
-// Selection UI colors — read from theme-refresh cache so they match active theme.
-// The rubber-band rect is ephemeral (created on mousedown), so getCanvasColor()
-// gives the correct color at creation time. Transformer is long-lived and gets
-// updated in refreshCanvasTheme().
-const HOVER_SHADOW_COLOR = '#2D5F3F' // shadow doesn't need theme swap — subtle in both
-const HOVER_SHADOW_BLUR = 6
-const HOVER_SHADOW_OPACITY = 0.45
+// Hover highlight — uses the theme-aware highlight-glow color so it works
+// in both light and dark themes. Read at event time via getCanvasColor().
+const HOVER_SHADOW_BLUR = 10
+const HOVER_SHADOW_OPACITY = 0.7
 
 // Rotation snaps every 15 degrees — full 360
 const ROTATION_SNAPS = [
@@ -36,9 +33,16 @@ export class SelectTool implements CanvasTool {
   private _isDraggingBand = false
   private _bandStart: { x: number; y: number } | null = null
   private _bandRect: Konva.Rect | null = null
+  private _bandRafId: number | null = null
 
   // Bounding rect shown when >TRANSFORMER_NODE_LIMIT nodes are selected
   private _boundingRect: Konva.Rect | null = null
+
+  // Selection highlight: nodes with an active selection outline.
+  // _previewHighlightIds tracks nodes highlighted during rubber-band drag (ephemeral).
+  // _selectedHighlightIds tracks nodes highlighted after selection is committed (persistent).
+  private _previewHighlightIds: Set<string> = new Set()
+  private _selectedHighlightIds: Set<string> = new Set()
 
   // Track the last hovered node to restore its style on mouseout
   private _hoveredNode: Konva.Node | null = null
@@ -77,6 +81,7 @@ export class SelectTool implements CanvasTool {
     this._detachTransformListeners(engine)
     this._destroyBand(engine)
     this._destroyBoundingRect(engine)
+    this._clearAllHighlights(engine)
     this._detachTransformer()
     selectedObjectIds.value = new Set()
   }
@@ -89,6 +94,14 @@ export class SelectTool implements CanvasTool {
     // Space-pan takes over — let the engine handle it
     if (engine.stage.draggable()) return
 
+    // Cancel any in-progress band first — handles the case where mouseup
+    // was lost (e.g. pointer left canvas and clicked elsewhere).
+    if (this._isDraggingBand) {
+      this._isDraggingBand = false
+      this._bandStart = null
+      this._destroyBand(engine)
+    }
+
     const target = e.target
     const isStage = target === engine.stage || target === (engine.stage as unknown as { content: unknown }).content
 
@@ -100,6 +113,7 @@ export class SelectTool implements CanvasTool {
       // Deselect unless shift is held
       if (!e.evt.shiftKey) {
         selectedObjectIds.value = new Set()
+        this._syncSelectionHighlights(engine)
         this._detachTransformer()
       }
 
@@ -161,6 +175,38 @@ export class SelectTool implements CanvasTool {
     const rect = computeSelectionRect(this._bandStart, pos)
     this._bandRect.setAttrs(rect)
     this._bandRect.getLayer()?.batchDraw()
+
+    // Throttle intersection test to rAF — nodesInRect walks all layers.
+    // Capture rect now so the rAF callback uses the position from this frame,
+    // not a stale re-read (getRelativePointerPosition is a one-shot override
+    // when the cursor is outside the canvas).
+    if (this._bandRafId !== null) return
+    const bandRect = rect
+    this._bandRafId = requestAnimationFrame(() => {
+      this._bandRafId = null
+      if (!this._isDraggingBand) return
+      if (bandRect.width < 2 || bandRect.height < 2) return
+
+      const found = nodesInRect(engine, bandRect, lockedObjectIds.value)
+      const foundIds = new Set(found.map((n) => n.id()))
+
+      // Remove highlights from nodes no longer in the band
+      for (const id of this._previewHighlightIds) {
+        if (!foundIds.has(id)) {
+          this._removeHighlight(engine, id)
+          this._previewHighlightIds.delete(id)
+        }
+      }
+
+      // Add highlights to newly intersecting nodes
+      for (const node of found) {
+        const id = node.id()
+        if (!this._previewHighlightIds.has(id)) {
+          this._applyHighlight(node)
+          this._previewHighlightIds.add(id)
+        }
+      }
+    })
   }
 
   onMouseUp(_e: Konva.KonvaEventObject<MouseEvent>, engine: CanvasEngine): void {
@@ -171,14 +217,14 @@ export class SelectTool implements CanvasTool {
     this._isDraggingBand = false
     this._bandStart = null
 
+    // Clear preview highlights — they'll be replaced by persistent selection highlights
+    this._clearPreviewHighlights(engine)
+
     if (wasDragging && bandStart) {
       const pos = engine.stage.getRelativePointerPosition()
       if (pos) {
-        // Both the rubber band and nodesInRect work in world (canvas) coords —
-        // no coordinate conversion needed here.
         const rect = computeSelectionRect(bandStart, pos)
 
-        // Only perform intersection test if the band has meaningful size
         if (rect.width > 2 && rect.height > 2) {
           const found = nodesInRect(engine, rect, lockedObjectIds.value)
           const newIds = new Set(selectedObjectIds.value)
@@ -233,6 +279,9 @@ export class SelectTool implements CanvasTool {
   private _syncTransformer(engine: CanvasEngine): void {
     this._ensureTransformer(engine)
     this._destroyBoundingRect(engine)
+
+    // Sync persistent selection highlights: remove stale, add new
+    this._syncSelectionHighlights(engine)
 
     const ids = selectedObjectIds.value
     if (ids.size === 0) {
@@ -348,6 +397,10 @@ export class SelectTool implements CanvasTool {
   }
 
   private _destroyBand(engine: CanvasEngine): void {
+    if (this._bandRafId !== null) {
+      cancelAnimationFrame(this._bandRafId)
+      this._bandRafId = null
+    }
     if (this._bandRect) {
       this._bandRect.destroy()
       this._bandRect = null
@@ -577,14 +630,16 @@ export class SelectTool implements CanvasTool {
         container.style.cursor = selectedObjectIds.value.has(id) ? 'move' : 'pointer'
       }
 
-      // Apply shadow highlight to the selectable ancestor (not the child)
+      // Apply hover shadow to the visual target (child for plant groups)
       if (this._hoveredNode !== node) {
         this._clearHoverState()
         this._hoveredNode = node
-        node.setAttrs({
-          shadowColor: HOVER_SHADOW_COLOR,
+        const target = this._highlightTarget(node)
+        target.setAttrs({
+          shadowColor: getCanvasColor('highlight-glow'),
           shadowBlur: HOVER_SHADOW_BLUR,
           shadowOpacity: HOVER_SHADOW_OPACITY,
+          shadowForStrokeEnabled: false,
         })
         node.getLayer()?.batchDraw()
       }
@@ -613,13 +668,113 @@ export class SelectTool implements CanvasTool {
 
   private _clearHoverState(): void {
     if (this._hoveredNode) {
-      this._hoveredNode.setAttrs({
+      const target = this._highlightTarget(this._hoveredNode)
+      target.setAttrs({
         shadowColor: undefined,
         shadowBlur: 0,
         shadowOpacity: 0,
+        shadowForStrokeEnabled: undefined,
       })
       this._hoveredNode.getLayer()?.batchDraw()
       this._hoveredNode = null
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // Selection highlights — visual feedback for selected/about-to-be-selected
+  // -------------------------------------------------------------------------
+
+  /**
+   * Get the node to apply visual highlight effects to. For counter-scaled
+   * groups (plant groups), returns the first child so the shadow renders in
+   * screen-pixel space and stays visible at any zoom level.
+   */
+  private _highlightTarget(node: Konva.Node): Konva.Node {
+    if (node instanceof Konva.Group && node.hasName('plant-group')) {
+      const child = (node as Konva.Group).getChildren()[0]
+      if (child) return child
+    }
+    return node
+  }
+
+  /** Apply selection highlight to a node — visible ochre glow on all shape types. */
+  private _applyHighlight(node: Konva.Node): void {
+    const target = this._highlightTarget(node)
+    const color = getCanvasColor('highlight-glow')
+    // Mark the selectable node (not the child) so cleanup can find it by id
+    node.setAttr('data-highlight', true)
+    target.setAttrs({
+      shadowColor: color,
+      shadowBlur: 14,
+      shadowOpacity: 0.85,
+      shadowForStrokeEnabled: false,
+    })
+    node.getLayer()?.batchDraw()
+  }
+
+  /** Remove selection highlight from a node. */
+  private _removeHighlightFromNode(node: Konva.Node): void {
+    if (!node.getAttr('data-highlight')) return
+    const target = this._highlightTarget(node)
+    node.setAttr('data-highlight', undefined)
+    target.setAttrs({
+      shadowColor: undefined,
+      shadowBlur: 0,
+      shadowOpacity: 0,
+      shadowForStrokeEnabled: undefined,
+    })
+    node.getLayer()?.batchDraw()
+  }
+
+  /** Remove highlight from a node by ID (finds it across layers). */
+  private _removeHighlight(engine: CanvasEngine, id: string): void {
+    for (const layer of engine.layers.values()) {
+      const node = layer.findOne('#' + id)
+      if (node) {
+        this._removeHighlightFromNode(node)
+        return
+      }
+    }
+  }
+
+  /** Clear all preview highlights (during rubber-band drag). */
+  private _clearPreviewHighlights(engine: CanvasEngine): void {
+    for (const id of this._previewHighlightIds) {
+      this._removeHighlight(engine, id)
+    }
+    this._previewHighlightIds.clear()
+  }
+
+  /** Sync persistent selection highlights to match selectedObjectIds. */
+  private _syncSelectionHighlights(engine: CanvasEngine): void {
+    const ids = selectedObjectIds.value
+
+    // Remove highlights from nodes no longer selected
+    for (const id of this._selectedHighlightIds) {
+      if (!ids.has(id)) {
+        this._removeHighlight(engine, id)
+        this._selectedHighlightIds.delete(id)
+      }
+    }
+
+    // Add highlights to newly selected nodes
+    for (const layer of engine.layers.values()) {
+      layer.find('.shape').forEach((node) => {
+        const id = node.id()
+        if (ids.has(id) && !this._selectedHighlightIds.has(id)) {
+          this._applyHighlight(node)
+          this._selectedHighlightIds.add(id)
+        }
+      })
+    }
+  }
+
+  /** Clear all highlights (preview + persistent). */
+  private _clearAllHighlights(engine: CanvasEngine): void {
+    this._clearPreviewHighlights(engine)
+    for (const id of this._selectedHighlightIds) {
+      this._removeHighlight(engine, id)
+    }
+    this._selectedHighlightIds.clear()
   }
 }

@@ -10,20 +10,17 @@ import {
 import styles from './BottomPanel.module.css'
 
 type LocationComponent = typeof import('./LocationTab').LocationTab
-type ConsortiumComponent = typeof import('./ConsortiumTab').ConsortiumTab
 
-const TAB_ORDER: BottomPanelTab[] = ['location', 'consortium']
+const TAB_ORDER: BottomPanelTab[] = ['location']
 
-function getTabLabel(tab: BottomPanelTab): string {
-  if (tab === 'location') return t('canvas.location.title')
-  return t('canvas.bottomPanel.consortium')
+function getTabLabel(_tab: BottomPanelTab): string {
+  return t('canvas.location.title')
 }
 
 export function BottomPanel() {
   void locale.value
 
   const [LocationTab, setLocationTab] = useState<LocationComponent | null>(null)
-  const [ConsortiumTab, setConsortiumTab] = useState<ConsortiumComponent | null>(null)
 
   const open = bottomPanelOpen.value
   const activeTab = bottomPanelTab.value
@@ -38,16 +35,10 @@ export function BottomPanel() {
       })
     }
 
-    if (activeTab === 'consortium' && !ConsortiumTab) {
-      void import('./ConsortiumTab').then((module) => {
-        if (!cancelled) setConsortiumTab(() => module.ConsortiumTab)
-      })
-    }
-
     return () => {
       cancelled = true
     }
-  }, [activeTab, LocationTab, ConsortiumTab])
+  }, [activeTab, LocationTab])
 
   if (!open) return null
 
@@ -74,13 +65,14 @@ export function BottomPanel() {
           onClick={() => setBottomPanelOpen(false)}
           aria-label={t('canvas.bottomPanel.collapse')}
         >
-          {t('canvas.bottomPanel.collapse')}
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M3 6L8 11L13 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
         </button>
       </div>
 
       <div className={styles.tabContent}>
         {activeTab === 'location' && (LocationTab ? <LocationTab /> : <LoadingState />)}
-        {activeTab === 'consortium' && (ConsortiumTab ? <ConsortiumTab /> : <LoadingState />)}
       </div>
     </div>
   )

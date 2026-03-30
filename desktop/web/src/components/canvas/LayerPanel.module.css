@@ -45,6 +45,10 @@
   color: var(--color-text-muted);
   border-radius: var(--radius-sm);
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 80ms ease;
 }
 
 .collapseBtn:hover,
@@ -60,11 +64,14 @@
   gap: var(--space-1);
   padding: var(--space-1) var(--space-2);
   border-bottom: 1px solid var(--color-border);
+  border-left: 2px solid transparent;
   background: var(--color-surface-muted);
+  transition: background-color 80ms ease, border-color 80ms ease;
 }
 
 .layerRow[data-active="true"] {
   background: var(--color-control-active);
+  border-left-color: var(--color-primary);
 }
 
 .layerRow[data-hidden="true"] {
@@ -78,6 +85,7 @@
   color: var(--color-text);
   border-radius: var(--radius-sm);
   cursor: pointer;
+  transition: background-color 80ms ease;
 }
 
 .toggleBtn {
@@ -89,6 +97,7 @@
   text-align: left;
   padding: var(--space-1);
   font-size: var(--text-sm);
+  font-weight: 600;
 }
 
 .mapSection {
@@ -112,4 +121,22 @@
 
 .mapSlider {
   width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 2px;
+  background: var(--color-border-strong);
+  border-radius: var(--radius-full);
+  outline: none;
+}
+
+.mapSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 85%, black);
+  cursor: pointer;
+  margin-top: -5px;
 }

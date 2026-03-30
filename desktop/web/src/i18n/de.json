@@ -204,7 +204,7 @@
     "layers": {
       "layerPanel": "Ebenen",
       "collapse": "Ebenenpanel einklappen",
-      "base": "Basis",
+      "base": "Raster",
       "contours": "Höhenlinien",
       "climate": "Klima",
       "zones": "Zonen",

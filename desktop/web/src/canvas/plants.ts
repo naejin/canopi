@@ -83,7 +83,7 @@ export function createPlantNode(opts: {
     id: opts.id,
     x: opts.position.x,
     y: opts.position.y,
-    draggable: true,
+    draggable: false,
     name: 'plant-group shape',
     scaleX: inv,
     scaleY: inv,

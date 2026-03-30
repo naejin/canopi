@@ -19,12 +19,34 @@ A permaculture designer at their desk, planning a food forest. The interface fee
 | Token | Value (Light) | Value (Dark) | Why |
 |-------|--------------|-------------|-----|
 | `--color-primary` | `#A06B1F` ochre | `#C89B4A` | Brass highlight — the color you'd mark important things in a notebook |
-| `--color-bg` | `#F0EBE1` parchment | `#1E1B17` charcoal parchment | Aged paper, not clinical white |
-| `--color-surface` | `#FAF7F2` linen | `#282420` dark linen | Fresh page — one step lighter than parchment |
-| `--color-text` | `#2C2418` ink | `#E5DFD4` cream ink | Warm dark brown, not black |
-| `--color-text-muted` | `#7D6F5E` graphite | `#A89A88` | Pencil marks, faded (brighter in dark for icon visibility) |
-| `--color-border` | `rgba(60,45,30,0.12)` | `rgba(200,180,150,0.12)` | Ruled pencil lines, warm and transparent |
-| `--canvas-bg` | `#EDE8DE` | `#1A1714` | Slightly warmer than chrome — the garden surface |
+| `--color-bg` | `#E6E0D4` warm bark | `#1C1915` charcoal parchment | The desk surface — darker chrome that recedes behind the canvas |
+| `--color-surface` | `#EDE8DD` lighter desk | `#262220` dark linen | Panel interiors — one step lighter than bg |
+| `--color-text` | `#2C2418` ink | `#E8E2D8` cream ink | Warm dark brown, not black |
+| `--color-text-muted` | `#6B5F4E` graphite | `#B0A292` | Pencil marks — meets 4.5:1 contrast against surface in both themes |
+| `--color-border` | `rgba(60,45,30,0.16)` | `rgba(200,180,150,0.16)` | Ruled pencil lines — warm, subtle but perceptible |
+| `--canvas-bg` | `#F6F2EA` cream page | `#151210` deep charcoal | The brightest surface in light, the darkest in dark — the workspace paper |
+
+### Surface hierarchy (light theme)
+
+The canvas is the paper. The chrome is the desk. The desk is darker so the paper stands out.
+
+```
+brightest → canvas (#F6F2EA)  — the blank page
+           → rulers (#EDE8DD) — transition zone
+           → surface (#EDE8DD) — panel interiors
+           → bg (#E6E0D4)     — the desk frame
+darkest
+```
+
+Horizontal bars (title bar, canvas bar) use `--color-bg`. Vertical panels (toolbar, layer panel, panel bar) use `--panel-gradient`. The canvas is its own lightest surface.
+
+### Color design rules
+
+- **Text-muted must pass 4.5:1 contrast** against `--color-surface` (the lightest panel background). `#6B5F4E` on `#EDE8DD` is ~4.6:1
+- **Canvas is always the lightest surface** in light theme, darkest in dark theme — your eye should go to the workspace first
+- **Chrome recedes, canvas dominates** — this is the standard pattern in all professional design tools (Figma, Sketch, Illustrator)
+- **Borders at 0.16 opacity** — enough to perceive structure without harsh lines
+- **Dark theme zone strokes at 0.65 opacity** — zones must be clearly visible on the dark canvas
 
 ## Depth Strategy: Borders Only
 
@@ -35,19 +57,169 @@ Field notebooks are flat. No dramatic shadows. Structure comes from warm ruled l
 
 ## Typography
 
-Inter, but tighter than default.
-- `--line-height: 1.45` (not 1.5 — denser)
-- Labels at 11px for compact controls
-- Professional density throughout
+Inter, but tighter than default. `--line-height: 1.45` (not 1.5 — denser).
+
+### Size scale
+
+| Token | Value | Use |
+|-------|-------|-----|
+| `--text-xs` | 11px | Labels, controls, badges, section headers, compact UI |
+| `--text-sm` | 12px | Body text in panels, plant names, descriptions |
+| `--text-base` | 13px | Primary content, attribute values |
+| `--text-md` | 14px | Panel titles, emphasis |
+| `--text-lg` | 16px | Page-level headings |
+| `--text-xl` | 20px | Welcome screen, hero text |
+
+**No raw font-size values.** Every `font-size` in CSS must use a `--text-*` token. If a size doesn't fit the scale, use the nearest token — don't invent raw values.
+
+### Weight system: two weights only
+
+The app uses exactly two weights: **400** (regular) for reading, **600** (semibold) for scanning and interacting. Weight 500 is banned — it creates a mushy middle with no clear purpose.
+
+| Role | Size | Weight | Style | Extras | Example |
+|------|------|--------|-------|--------|---------|
+| **Label** | `--text-xs` | 600 | normal | uppercase, 0.06em tracking, `--color-text-muted` | LAYERS, ZONES, DISPLAY |
+| **Name** | `--text-sm` | 600 | normal | `--color-text` | Layer names, plant common names, buttons |
+| **Body** | `--text-sm` | 400 | normal | `--color-text` or `--color-text-muted` | Descriptions, tag text, secondary info |
+| **Caption** | `--text-xs` | 400 | italic | `--color-text-muted` | Botanical names, keyboard shortcuts |
+| **Value** | `--text-xs` | 600 | normal | `font-variant-numeric: tabular-nums` | Zoom %, coordinates, measurements |
+
+**The weight decision is always binary:** is this text something you scan/click (600) or something you read (400)?
+
+### Section Header Pattern
+
+The most-reused typographic pattern in the app. Used for panel headers, filter section titles, collapsible section toggles, layer panel header, and display control labels.
+
+```css
+font-size: var(--text-xs);
+font-weight: 600;
+text-transform: uppercase;
+letter-spacing: 0.06em;
+color: var(--color-text-muted);
+```
+
+**0.06em is canonical** — do not use 0.04em or 0.05em. The tracking is a design decision, not a guess.
 
 ## Spacing
 
 4px base, used aggressively tight. Dense but not cramped.
 
+| Token | Value | Use |
+|-------|-------|-----|
+| `--space-1` | 4px | Tight gaps, icon margins, inline padding |
+| `--space-2` | 8px | Standard control gaps, row padding |
+| `--space-3` | 12px | Section padding, panel insets |
+| `--space-4` | 16px | Card padding, generous insets |
+| `--space-6` | 24px | Large section breaks |
+| `--space-8` | 32px | Empty state padding |
+| `--space-12` | 48px | Hero spacing |
+
+**No raw spacing values.** Every `padding`, `margin`, and `gap` must use a `--space-*` token. The only exceptions are 1-2px structural values (borders, dividers, hit-target offsets) which are visual precision, not spacing.
+
 ## Radius
 
 Slightly sharper than typical — technical, precise.
-- `--radius-sm: 3px` / `--radius-md: 5px` / `--radius-lg: 7px`
+
+| Token | Value | Use |
+|-------|-------|-----|
+| `--radius-sm` | 3px | Buttons, inputs, small controls |
+| `--radius-md` | 5px | Cards, dropdowns, panels |
+| `--radius-lg` | 7px | Map cards, large surfaces |
+| `--radius-full` | 9999px | Pills, badges, slider thumbs |
+
+## Transitions
+
+Three timing tiers. Every interactive element must have a transition.
+
+| Duration | Easing | Use |
+|----------|--------|-----|
+| `80ms ease` | color, background-color, border-color | Hover states, icon color shifts |
+| `150ms ease` | transform, layout shifts | Button lift, panel slide, chevron rotation |
+| `200ms ease-out` | opacity, visibility | Panel fade-in, legend appear |
+
+Always use `ms` units, never `s`. `prefers-reduced-motion` must disable transitions.
+
+## Component Sizing (observed, not yet tokenized)
+
+These sizes are used consistently across the app. They are not CSS custom properties yet — that's Wave 4 work. Listed here so implementations stay consistent.
+
+| Element | Size | Where used |
+|---------|------|------------|
+| Title bar | 36px height | App shell |
+| Canvas toolbar | 38px width | Left edge |
+| Panel bar | 36px width | Right edge |
+| Side panel | 280px width | Plant DB, favorites |
+| Button (standard) | 28px height | Filter toggles, collapse buttons, window controls |
+| Button (large) | 34px height | Toolbar tools, panel bar buttons |
+| Input (standard) | 28–36px height | Search fields, filter inputs |
+| Tab bar | 48px height | Bottom panel |
+| Icon (inline) | 14px | Eye, lock, chevron icons inside controls |
+| Icon (button) | 16–20px | Toolbar icons, panel bar icons |
+| Slider thumb | 12px | Opacity, range, threshold sliders |
+| Slider track | 2px | All sliders |
+
+## Canvas Tool Behavior (Figma/Sketch standard)
+
+All canvas tools must follow these behaviors. They are not optional — they are what users expect from any design tool.
+
+### Drawing tools (Rectangle, Ellipse, Line, future shapes)
+- Click+drag creates a live preview shape → mouseup commits the shape
+- **Mouse leaves canvas**: shape sticks to the canvas edge, continues tracking the cursor direction along the boundary. Origin, cursor, and edge contact point stay aligned
+- **Mouseup outside canvas**: commits shape at the edge-clamped position (does not cancel)
+- **Escape during draw**: cancels, removes preview
+- **Shift during draw**: constrains proportions (square, circle, 45° angles)
+- Cannot select or move existing objects — only the select tool allows dragging. Shapes are created with `draggable: false`
+- After committing a shape: tool stays active for the next draw (does not auto-switch to select)
+- `onMouseDown` must cancel any in-progress operation before starting a new one (self-healing guard)
+
+### Select tool
+- Click empty canvas: deselects all, clears highlights
+- Click object: selects it, highlights it
+- Shift+click: toggles selection membership
+- Click+drag on empty canvas: rubber-band selection with real-time highlight preview
+- Click+drag on selected object: moves it (only works because select tool enables `draggable`)
+- Mouse leaving canvas during rubber-band or move: sticks to edge (same as drawing tools)
+- Escape during rubber-band: cancels band
+- Delete key: removes selected objects
+
+### Hand/Pan tool
+- Click+drag: pans canvas via Konva `stage.draggable(true)`
+- Space+drag from any tool: temporary pan, returns to previous tool on key release
+
+### Text tool
+- Click to place text insertion point (HTML textarea overlay)
+- Type to enter text
+- Click elsewhere, Enter, or Escape to commit
+- Empty text on commit: discarded
+
+### Plant stamp tool
+- Click to place plant at cursor position
+- Tool stays active for placing more plants
+- Escape clears the selected species (does not force-switch to another tool)
+
+### Event routing rules
+- **Tool affinity**: `external-input.ts` locks the tool reference on mousedown. All subsequent mousemove/mouseup events route to that same tool, even if `activeTool` changes mid-drag
+- **Window-level drag tracking**: on mousedown, window `pointermove`/`pointerup` listeners activate. When the cursor leaves the canvas, these clamp the position to the canvas edge and fire synthetic Konva events so the tool keeps updating
+- **No pointer capture**: we use window-level listeners, not `setPointerCapture`
+- **Draggable authority**: `_applyTool()` in `engine.ts` is the sole authority for `node.draggable()` state. All shapes are born with `draggable: false`. Only the select tool enables dragging
+
+## Selection Highlights
+
+Visual feedback for hover, rubber-band preview, and committed selection. Uses the `highlight-glow` canvas color — solid ochre (`--color-primary`) in both themes.
+
+| State | Shadow blur | Shadow opacity | When |
+|-------|------------|----------------|------|
+| Hover | 10px | 0.7 | Mouse over a shape in select mode, no click |
+| Preview | 14px | 0.85 | Shape touches or is inside the rubber-band rectangle during drag |
+| Selected | 14px | 0.85 | Shape is in `selectedObjectIds` after selection committed |
+
+### Plant group handling
+Plant groups are counter-scaled (`scaleX/scaleY = 1/stageScale`). Shadow effects applied to the group render at sub-pixel sizes. The highlight system uses `_highlightTarget()` to apply shadows to the **first child** (the plant circle in screen-pixel space) instead of the group.
+
+### Theme coherence
+- `highlight-glow` reads from `--color-primary` on theme switch via `refreshCanvasTheme()`
+- Active highlights (nodes with `data-highlight` attr) get their `shadowColor` updated during theme refresh
+- Ephemeral attrs (`shadowColor`, `shadowBlur`, `shadowOpacity`, `shadowForStrokeEnabled`, `data-highlight`) are stripped in both serialization paths (node-serialization.ts and operations.ts)
 
 ## Layout
 
@@ -145,7 +317,7 @@ Earthy, not neon:
 - Photo carousel at top of scrollable body (see Photo Carousel pattern below)
 - Dimensions section always open (h3 title, no toggle)
 - 14 collapsible sections below, ordered by designer decision flow: Life Cycle → Uses → Light → Soil → Ecology → Growth Form → Propagation → Fruit & Seed → Risk → Leaf → Reproduction → Notes → Related Species → Identity
-- Each section: 3px left accent border (semantic color), uppercase 10px title with icon + chevron, `--color-bg` header, content in `--color-surface` body
+- Each section: 3px left accent border (semantic color), section header pattern with icon + chevron, `--color-bg` header, content in `--color-surface` body
 - Accent color zones: taxonomy=bark brown, physical form=teal, cultivation=moss green, harvest=amber, biology=lavender, caution=terracotta, reference=graphite
 - Null fields hidden — empty sections don't render
 - Field types: `Attr` (label + value), `BoolChip` (✓/✗ pill), `NumAttr` (value + unit), `TextBlock` (label + paragraph)
@@ -161,7 +333,7 @@ Earthy, not neon:
 - See `LocalePicker` in `TitleBar.tsx` as reference implementation
 
 ### Collapsible Section
-- Toggle button: uppercase 10px label, 600 weight, `--color-text-muted`, 0.06em letter-spacing
+- Toggle button: section header pattern (`--text-xs`, uppercase, 600 weight, `--color-text-muted`, 0.06em letter-spacing)
 - Icon before label (single character/emoji), chevron `›` after (right-aligned, rotates 90° on open)
 - Header: `--color-bg` background, border-bottom on open
 - Body: `--color-surface`, padding `--space-3`, flex column with `--space-3` gap
@@ -173,7 +345,7 @@ Earthy, not neon:
 - Background: `--color-bg`
 
 ### Favorites Panel
-- Header: uppercase 10px title (600 weight, `--color-text-muted`, 0.06em tracking) + ochre count badge (`--color-primary` bg, `--color-bg` text, `--radius-full`)
+- Header: section header pattern + ochre count badge (`--color-primary` bg, `--color-bg` text, `--radius-full`)
 - List: reuses `PlantRow` component. Clicking opens detail card inline (same `detailHidden`/`detailVisible` pattern as PlantDbPanel)
 - Empty state: star icon (`--color-primary`, 0.3 opacity), title + hint text, upper-third positioning (not dead-centered)
 - Background: `--color-bg`
@@ -197,13 +369,13 @@ Earthy, not neon:
 - Floating card above display controls (`bottom: 44px`), `z-index: 19` (below controls)
 - Only visible when `plantDisplayMode === 'color-by'`
 - `legendIn` keyframe animation (150ms), `prefers-reduced-motion` respected
-- Entries: 10px color dots + 11px labels, `--space-1` gap, scrollable at 200px max-height
+- Entries: 10px color dots + `--text-xs` labels, `--space-1` gap, scrollable at 200px max-height
 - All labels use `t()` i18n calls — translates when locale changes
 
 ### Plant Tooltip
 - HTML `<div>` overlay on Konva stage container (not a Konva node), `pointer-events: none`
 - `--color-surface` bg, `--color-border` border, `--radius-sm`, `--shadow-md`, `z-index: 50`
-- Content: common name (12px/600), botanical name (11px/italic/muted), stratum attribute (10px/muted)
+- Content: common name (`--text-sm`/600), botanical name (`--text-xs`/italic/muted), stratum attribute (`--text-xs`/muted)
 - Positioned via `stage.getAbsoluteTransform()` — world-to-screen coordinate conversion
 - Built with safe DOM methods (`createElement`, `textContent`) — no `innerHTML`
 - Appears immediately on `mouseover`, hides on `mouseout` with `e.target === stage` early return guard

@@ -1,5 +1,5 @@
 import Konva from 'konva'
-import { lockedObjectIds, selectedObjectIds } from '../../state/canvas'
+import { activeTool, lockedObjectIds, selectedObjectIds } from '../../state/canvas'
 import { AddNodeCommand, BatchCommand, RemoveNodeCommand, TransformNodeCommand } from '../commands'
 import type { TransformAttrs } from '../commands'
 import { alignNodes, type Alignment, type DistributeAxis, distributeNodes } from '../alignment'
@@ -208,7 +208,7 @@ export class CanvasObjectOps {
       for (const layer of this._deps.layers.values()) {
         const node = layer.findOne('#' + id)
         if (node) {
-          node.draggable(true)
+          node.draggable(activeTool.value === 'select')
           break
         }
       }

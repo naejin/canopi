@@ -94,7 +94,10 @@ export interface SerializedNode {
 }
 
 // Attrs we always strip before serializing (re-generated or tool-specific)
-const STRIP_ATTRS = new Set(['id', 'shadowColor', 'shadowBlur', 'shadowOpacity'])
+const STRIP_ATTRS = new Set([
+  'id', 'shadowColor', 'shadowBlur', 'shadowOpacity', 'shadowForStrokeEnabled',
+  'data-highlight', 'data-orig-stroke', 'data-orig-strokeWidth',
+])
 
 export function serializeNodes(nodes: Konva.Node[]): string {
   const data: SerializedNode[] = nodes.map((node) => {

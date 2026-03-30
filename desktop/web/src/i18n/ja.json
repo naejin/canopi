@@ -204,7 +204,7 @@
     "layers": {
       "layerPanel": "レイヤー",
       "collapse": "レイヤーパネルを折りたたむ",
-      "base": "ベース",
+      "base": "グリッド",
       "contours": "等高線",
       "climate": "気候",
       "zones": "ゾーン",

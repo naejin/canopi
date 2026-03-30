@@ -1,8 +1,8 @@
 /* Legend card — quiet reference, floats above display controls */
 .legend {
   position: absolute;
-  bottom: 44px;
-  left: 10px;
+  bottom: var(--space-2);
+  left: 34px; /* past the 24px ruler gutter */
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -26,9 +26,9 @@
 }
 
 .title {
-  font-size: 10px;
+  font-size: var(--text-xs);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   color: var(--color-text-muted);
   font-weight: 600;
   margin-bottom: var(--space-1);
@@ -54,7 +54,7 @@
 }
 
 .entryLabel {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--color-text);
   line-height: 1.45;
 }

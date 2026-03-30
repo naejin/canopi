@@ -30,6 +30,12 @@ export class RectangleTool implements CanvasTool {
     // Only draw on left button, ignore right/middle
     if (e.evt.button !== 0) return
 
+    // Cancel any in-progress draw first — this handles the case where
+    // mouseup was lost (e.g. pointer left canvas and clicked elsewhere).
+    if (this._drawing) {
+      this._cancelDraw(engine)
+    }
+
     const pos = engine.stage.getRelativePointerPosition()
     if (!pos) return
 
@@ -104,11 +110,11 @@ export class RectangleTool implements CanvasTool {
       this._rafId = null
     }
 
+    // Use stage pointer position, falling back to the preview's current
+    // extent when the cursor is outside the canvas (the preview was already
+    // clamped to the canvas edge by the last mousemove from external-input).
     const pos = engine.stage.getRelativePointerPosition()
-    if (!pos) {
-      this._cancelDraw(engine)
-      return
-    }
+      ?? { x: this._preview.x() + this._preview.width(), y: this._preview.y() + this._preview.height() }
 
     let dx = pos.x - this._startX
     let dy = pos.y - this._startY

@@ -24,6 +24,7 @@ type CanvasColorName =
   | 'selection-fill'
   | 'selection-stroke'
   | 'selection-anchor-fill'
+  | 'highlight-glow'
 
 const _colors: { [K in CanvasColorName]: string } = {
   'plant-label': '#444444',
@@ -36,6 +37,7 @@ const _colors: { [K in CanvasColorName]: string } = {
   'selection-fill': 'rgba(160, 107, 31, 0.18)',
   'selection-stroke': 'rgba(160, 107, 31, 0.6)',
   'selection-anchor-fill': '#FCF8F2',
+  'highlight-glow': '#A06B1F',
 }
 
 const MANAGED_ZONE_FILL_VALUES = new Set([
@@ -84,6 +86,7 @@ export function refreshCanvasTheme(
   _colors['selection-fill'] = cs.getPropertyValue('--canvas-selection').trim() || _colors['selection-fill']
   _colors['selection-stroke'] = cs.getPropertyValue('--canvas-selection-stroke').trim() || _colors['selection-stroke']
   _colors['selection-anchor-fill'] = cs.getPropertyValue('--canvas-selection-anchor-fill').trim() || _colors['selection-anchor-fill']
+  _colors['highlight-glow'] = cs.getPropertyValue('--color-primary').trim() || _colors['highlight-glow']
 
   // ── Update plant labels ──
   const plantsLayer = layers.get('plants')
@@ -159,5 +162,25 @@ export function refreshCanvasTheme(
     transformer.anchorStroke(_colors['selection-stroke'])
     transformer.anchorFill(_colors['selection-anchor-fill'])
     transformer.getLayer()?.batchDraw()
+  }
+
+  // ── Update active selection/hover highlights ──
+  const glowColor = _colors['highlight-glow']
+  for (const [, layer] of layers) {
+    let dirty = false
+    layer.find('.shape').forEach((node: Konva.Node) => {
+      if (typeof node.getAttr !== 'function' || !node.getAttr('data-highlight')) return
+      // For plant groups, the shadow lives on the child
+      let target: Konva.Node = node
+      if (node instanceof Konva.Group && node.hasName('plant-group')) {
+        const child = (node as Konva.Group).getChildren()[0]
+        if (child) target = child
+      }
+      if (typeof target.getAttr === 'function' && target.getAttr('shadowColor') !== undefined) {
+        target.setAttr('shadowColor', glowColor)
+        dirty = true
+      }
+    })
+    if (dirty) layer.batchDraw()
   }
 }

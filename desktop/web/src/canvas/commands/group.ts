@@ -118,7 +118,7 @@ export class UngroupCommand implements Command {
         id: saved.id,
         x: saved.pos.x,
         y: saved.pos.y,
-        draggable: true,
+        draggable: false,
         name: 'shape object-group',
       })
       if (saved.rotation !== 0) group.rotation(saved.rotation)

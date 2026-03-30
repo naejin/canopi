@@ -1,7 +1,7 @@
 import Konva from 'konva'
 import type { CanvasEngine } from './engine'
 import type { ObjectGroup } from '../types/design'
-import { selectedObjectIds } from '../state/canvas'
+import { activeTool, selectedObjectIds } from '../state/canvas'
 
 // ---------------------------------------------------------------------------
 // Grouping — wraps selected nodes into a Konva.Group (same layer, one level)
@@ -24,7 +24,7 @@ export function groupSelected(engine: CanvasEngine): Konva.Group | null {
   const groupId = crypto.randomUUID()
   const group = new Konva.Group({
     id: groupId,
-    draggable: true,
+    draggable: false,
     name: 'shape object-group',
   })
 
@@ -79,9 +79,10 @@ export function ungroupSelected(engine: CanvasEngine): Konva.Node[] | null {
         y: child.y() + groupPos.y,
       })
       child.moveTo(layer)
-      // Restore 'shape' name and draggable so the node is selectable again
+      // Restore 'shape' name so the node is selectable again.
+      // Draggable is governed by the active tool — only the select tool allows dragging.
       _addShapeName(child)
-      child.draggable(true)
+      child.draggable(activeTool.value === 'select')
       extracted.push(child)
     }
 
@@ -156,7 +157,7 @@ export function restoreGroups(
       id: def.id,
       x: def.position.x,
       y: def.position.y,
-      draggable: true,
+      draggable: false,
       name: 'shape object-group',
     })
     if (def.rotation != null) group.rotation(def.rotation)

@@ -13,21 +13,21 @@
   --color-primary-bg: rgba(160, 107, 31, 0.08);
 
   /* Structure */
-  --color-secondary: #7D6F5E;        /* graphite — pencil marks */
+  --color-secondary: #6B5F4E;        /* graphite — pencil marks */
   --color-accent: #A06B1F;           /* ochre — brass, golden oak */
-  --color-bg: #F0EBE1;              /* parchment — aged paper */
-  --color-surface: #FAF7F2;         /* linen — fresh page */
-  --color-surface-alt: #F5F0E7;     /* soft card elevation */
-  --color-surface-muted: rgba(250, 247, 242, 0.78);
-  --color-surface-ring: rgba(250, 247, 242, 0.72);
-  --color-border: rgba(60, 45, 30, 0.12); /* ruled line — warm pencil */
-  --color-border-strong: rgba(60, 45, 30, 0.2);
+  --color-bg: #E6E0D4;              /* warm bark — the desk surface */
+  --color-surface: #EDE8DD;         /* lighter desk — panel interiors */
+  --color-surface-alt: #E8E2D7;     /* soft card elevation */
+  --color-surface-muted: rgba(237, 232, 221, 0.82);
+  --color-surface-ring: rgba(237, 232, 221, 0.76);
+  --color-border: rgba(60, 45, 30, 0.16); /* ruled line — warm pencil */
+  --color-border-strong: rgba(60, 45, 30, 0.26);
   --color-text: #2C2418;            /* ink — warm near-black */
-  --color-text-muted: #7D6F5E;      /* graphite — faded pencil */
-  --color-primary-contrast: #FCF8F2;
+  --color-text-muted: #6B5F4E;      /* graphite — darker for 4.5:1 contrast */
+  --color-primary-contrast: #F8F4ED;
   --color-control-hover: rgba(160, 107, 31, 0.12);
   --color-control-active: rgba(160, 107, 31, 0.18);
-  --panel-gradient: linear-gradient(180deg, #FAF7F2 0%, #F4EEE5 100%);
+  --panel-gradient: linear-gradient(180deg, #EDE8DD 0%, #E6E0D4 100%);
 
   /* Semantic */
   --color-success: #5A7D3A;         /* moss green — living, growing */
@@ -99,10 +99,10 @@
   --color-close-active: #943525;
 
   /* Canvas — the garden (separate from the tool chrome) */
-  --canvas-bg: #EDE8DE;
-  --canvas-grid: rgba(60, 45, 30, 0.04);
-  --canvas-grid-major: rgba(60, 45, 30, 0.08);
-  --canvas-ruler-bg: #E8E3D9;
+  --canvas-bg: #F6F2EA;
+  --canvas-grid: rgba(60, 45, 30, 0.05);
+  --canvas-grid-major: rgba(60, 45, 30, 0.10);
+  --canvas-ruler-bg: #EDE8DD;
   --canvas-ruler-text: rgba(60, 45, 30, 0.4);
   --canvas-selection: rgba(160, 107, 31, 0.18);
   --canvas-selection-stroke: rgba(160, 107, 31, 0.6);
@@ -111,7 +111,7 @@
   --canvas-plant-label-muted: #888888;
   --canvas-annotation-text: #1A1A1A;
   --canvas-annotation-stroke: #6B6253;
-  --canvas-annotation-surface: #FFFDF8;
+  --canvas-annotation-surface: #F8F4ED;
   --canvas-zone-stroke: #2D5F3F;
   --canvas-zone-fill: rgba(45, 95, 63, 0.1);
   --canvas-toolbar-width: 38px;
@@ -130,21 +130,21 @@
   --color-primary-hover: #D4A85A;
   --color-primary-bg: rgba(200, 155, 74, 0.12);
 
-  --color-secondary: #A89A88;
+  --color-secondary: #B0A292;
   --color-accent: #C89B4A;
-  --color-bg: #1E1B17;              /* charcoal parchment */
-  --color-surface: #282420;         /* dark linen */
-  --color-surface-alt: #302B26;
-  --color-surface-muted: rgba(48, 43, 38, 0.82);
-  --color-surface-ring: rgba(40, 36, 32, 0.76);
-  --color-border: rgba(200, 180, 150, 0.12); /* warm ruled line */
-  --color-border-strong: rgba(200, 180, 150, 0.22);
-  --color-text: #E5DFD4;           /* cream ink */
-  --color-text-muted: #A89A88;     /* faded graphite — slightly brighter for dark */
-  --color-primary-contrast: #1E1B17;
+  --color-bg: #1C1915;              /* charcoal parchment */
+  --color-surface: #262220;         /* dark linen */
+  --color-surface-alt: #2E2A26;
+  --color-surface-muted: rgba(46, 42, 38, 0.85);
+  --color-surface-ring: rgba(38, 34, 32, 0.80);
+  --color-border: rgba(200, 180, 150, 0.16); /* warm ruled line — slightly stronger */
+  --color-border-strong: rgba(200, 180, 150, 0.28);
+  --color-text: #E8E2D8;           /* cream ink */
+  --color-text-muted: #B0A292;     /* warmer graphite — brighter for readability */
+  --color-primary-contrast: #1C1915;
   --color-control-hover: rgba(200, 155, 74, 0.16);
   --color-control-active: rgba(200, 155, 74, 0.24);
-  --panel-gradient: linear-gradient(180deg, #282420 0%, #221E1A 100%);
+  --panel-gradient: linear-gradient(180deg, #262220 0%, #201C18 100%);
 
   --color-success: #8BAA5E;
   --color-success-bg: rgba(90, 125, 58, 0.12);
@@ -160,21 +160,21 @@
 
   --color-dirty-indicator: #C89B4A;
 
-  --canvas-bg: #1A1714;
-  --canvas-grid: rgba(200, 180, 150, 0.03);
-  --canvas-grid-major: rgba(200, 180, 150, 0.07);
-  --canvas-ruler-bg: #1E1A16;
-  --canvas-ruler-text: rgba(200, 180, 150, 0.4);
-  --canvas-selection: rgba(200, 155, 74, 0.18);
-  --canvas-selection-stroke: rgba(200, 155, 74, 0.6);
-  --canvas-selection-anchor-fill: #1E1B17;
-  --canvas-plant-label: #D4CFC4;
-  --canvas-plant-label-muted: #A89A88;
-  --canvas-annotation-text: #E5DFD4;
-  --canvas-annotation-stroke: #B8AA95;
-  --canvas-annotation-surface: #342E28;
-  --canvas-zone-stroke: rgba(200, 180, 150, 0.5);
-  --canvas-zone-fill: rgba(200, 180, 150, 0.06);
+  --canvas-bg: #151210;
+  --canvas-grid: rgba(200, 180, 150, 0.04);
+  --canvas-grid-major: rgba(200, 180, 150, 0.09);
+  --canvas-ruler-bg: #1A1714;
+  --canvas-ruler-text: rgba(200, 180, 150, 0.45);
+  --canvas-selection: rgba(200, 155, 74, 0.22);
+  --canvas-selection-stroke: rgba(200, 155, 74, 0.7);
+  --canvas-selection-anchor-fill: #1C1915;
+  --canvas-plant-label: #D8D3C8;
+  --canvas-plant-label-muted: #B0A292;
+  --canvas-annotation-text: #E8E2D8;
+  --canvas-annotation-stroke: #BEB0A0;
+  --canvas-annotation-surface: #362F28;
+  --canvas-zone-stroke: rgba(200, 180, 150, 0.65);
+  --canvas-zone-fill: rgba(200, 180, 150, 0.08);
 
   /* Plant attributes — desaturated for dark */
   --color-edible: #8BAA5E;

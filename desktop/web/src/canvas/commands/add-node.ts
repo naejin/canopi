@@ -1,4 +1,5 @@
 import Konva from 'konva'
+import { activeTool } from '../../state/canvas'
 import type { Command } from '../history'
 import type { CanvasEngine } from '../engine'
 import { serializeNode, recreateNode, type SerializedNode } from './node-serialization'
@@ -26,6 +27,11 @@ export class AddNodeCommand implements Command {
 
   execute(engine: CanvasEngine): void {
     const node = recreateNode(this._serialized)
+    // Draggable state is governed by the active tool — only the select tool
+    // allows dragging. Newly added nodes inherit the current tool's policy.
+    if (node.hasName('shape')) {
+      node.draggable(activeTool.value === 'select')
+    }
     const layer = engine.layers.get(this._layerName)
     if (layer) {
       layer.add(node as unknown as Konva.Shape)

@@ -3,6 +3,7 @@ import { activeTool } from '../../state/canvas'
 import { AddNodeCommand } from '../commands'
 import { createPlantNode } from '../plants'
 import { getCanvasColor } from '../theme-refresh'
+import type { CanvasTool } from '../tools/base'
 import type { ExternalInputDeps } from './types'
 
 export class CanvasExternalInput {
@@ -11,9 +12,16 @@ export class CanvasExternalInput {
   private _boundMouseDown: ((e: Konva.KonvaEventObject<MouseEvent>) => void) | null = null
   private _boundMouseMove: ((e: Konva.KonvaEventObject<MouseEvent>) => void) | null = null
   private _boundMouseUp: ((e: Konva.KonvaEventObject<MouseEvent>) => void) | null = null
+  private _boundWindowPointerMove: ((e: PointerEvent) => void) | null = null
+  private _boundWindowPointerUp: ((e: PointerEvent) => void) | null = null
   private _boundDragOver: ((e: DragEvent) => void) | null = null
   private _boundDragLeave: ((e: DragEvent) => void) | null = null
   private _boundDrop: ((e: DragEvent) => void) | null = null
+
+  // Drag-in-progress state: locks the tool that started the drag so
+  // mousemove/mouseup always route to the same tool, even if activeTool
+  // changes mid-drag.
+  private _dragTool: CanvasTool | null = null
 
   constructor(private readonly _deps: ExternalInputDeps) {
     this._boundKeyDown = this._onKeyDown.bind(this)
@@ -44,6 +52,8 @@ export class CanvasExternalInput {
       this._boundMouseUp = null
     }
 
+    this._endDrag()
+
     const container = this._deps.stage.container()
     if (this._boundDragOver) {
       container.removeEventListener('dragover', this._boundDragOver)
@@ -59,23 +69,134 @@ export class CanvasExternalInput {
     }
   }
 
+  // -------------------------------------------------------------------------
+  // Stage mouse events + window-level drag tracking
+  // -------------------------------------------------------------------------
+
   private _attachStageMouseEvents(): void {
+    // Konva mousedown/mousemove/mouseup fire when cursor is over the canvas.
+    // For drags that leave the canvas, window-level pointermove/pointerup
+    // take over and feed clamped positions back through the stage.
     this._boundMouseDown = (event) => {
-      this._deps.toolRegistry.get(activeTool.value)?.onMouseDown(event, this._deps.getEngine())
+      const tool = this._deps.toolRegistry.get(activeTool.value) ?? null
+      this._dragTool = tool
+      this._startWindowDragListeners()
+      tool?.onMouseDown(event, this._deps.getEngine())
     }
 
     this._boundMouseMove = (event) => {
-      this._deps.toolRegistry.get(activeTool.value)?.onMouseMove(event, this._deps.getEngine())
+      const tool = this._dragTool ?? this._deps.toolRegistry.get(activeTool.value)
+      tool?.onMouseMove(event, this._deps.getEngine())
     }
 
     this._boundMouseUp = (event) => {
-      this._deps.toolRegistry.get(activeTool.value)?.onMouseUp(event, this._deps.getEngine())
+      const tool = this._dragTool
+      this._endDrag()
+      tool?.onMouseUp(event, this._deps.getEngine())
     }
 
     this._deps.stage.on('mousedown', this._boundMouseDown)
     this._deps.stage.on('mousemove', this._boundMouseMove)
     this._deps.stage.on('mouseup', this._boundMouseUp)
   }
+
+  /**
+   * Attach window-level pointermove/pointerup for the duration of a drag.
+   * When the cursor is inside the canvas, Konva fires its own events and
+   * these are no-ops. When the cursor leaves, these kick in — converting
+   * the screen position to a canvas-edge-clamped world position and firing
+   * synthetic Konva events on the stage so the locked tool keeps updating.
+   */
+  private _startWindowDragListeners(): void {
+    const container = this._deps.stage.container()
+
+    this._boundWindowPointerMove = (e: PointerEvent) => {
+      if (!this._dragTool) return
+      // If the cursor is inside the canvas container, Konva handles it.
+      // Only intervene when outside.
+      if (this._isInsideContainer(e, container)) return
+
+      const clamped = this._clampToContainer(e, container)
+      this._injectClampedPosition(clamped)
+      this._deps.stage.fire('mousemove', { evt: e } as unknown as Konva.KonvaEventObject<MouseEvent>)
+    }
+
+    this._boundWindowPointerUp = (e: PointerEvent) => {
+      if (!this._dragTool) return
+
+      // If outside, inject a clamped position so the tool commits at the edge.
+      if (!this._isInsideContainer(e, container)) {
+        const clamped = this._clampToContainer(e, container)
+        this._injectClampedPosition(clamped)
+      }
+      this._deps.stage.fire('mouseup', { evt: e } as unknown as Konva.KonvaEventObject<MouseEvent>)
+    }
+
+    window.addEventListener('pointermove', this._boundWindowPointerMove)
+    window.addEventListener('pointerup', this._boundWindowPointerUp)
+  }
+
+  /** Remove window-level drag listeners and clear drag state. */
+  private _endDrag(): void {
+    if (this._boundWindowPointerMove) {
+      window.removeEventListener('pointermove', this._boundWindowPointerMove)
+      this._boundWindowPointerMove = null
+    }
+    if (this._boundWindowPointerUp) {
+      window.removeEventListener('pointerup', this._boundWindowPointerUp)
+      this._boundWindowPointerUp = null
+    }
+    this._dragTool = null
+  }
+
+  /** Check if a pointer event is inside the canvas container bounds. */
+  private _isInsideContainer(e: PointerEvent, container: HTMLDivElement): boolean {
+    const rect = container.getBoundingClientRect()
+    return (
+      e.clientX >= rect.left &&
+      e.clientX <= rect.right &&
+      e.clientY >= rect.top &&
+      e.clientY <= rect.bottom
+    )
+  }
+
+  /**
+   * Clamp a pointer event's screen coordinates to the canvas container edges,
+   * then convert to world (canvas) coordinates. The clamped point lies on the
+   * line from the container center to the cursor — so the shape edge stays
+   * aligned with the cursor direction.
+   */
+  private _clampToContainer(e: PointerEvent, container: HTMLDivElement): { x: number; y: number } {
+    const rect = container.getBoundingClientRect()
+    const clampedScreenX = Math.max(rect.left, Math.min(rect.right, e.clientX))
+    const clampedScreenY = Math.max(rect.top, Math.min(rect.bottom, e.clientY))
+
+    const localX = clampedScreenX - rect.left
+    const localY = clampedScreenY - rect.top
+    const scale = this._deps.stage.scaleX()
+    return {
+      x: (localX - this._deps.stage.x()) / scale,
+      y: (localY - this._deps.stage.y()) / scale,
+    }
+  }
+
+  /**
+   * Temporarily override `stage.getRelativePointerPosition()` so the next
+   * tool call sees the clamped position instead of the real (off-canvas) one.
+   * Restores the original method after one call.
+   */
+  private _injectClampedPosition(pos: { x: number; y: number }): void {
+    const stage = this._deps.stage
+    const original = stage.getRelativePointerPosition.bind(stage)
+    stage.getRelativePointerPosition = () => {
+      stage.getRelativePointerPosition = original
+      return pos
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Keyboard events
+  // -------------------------------------------------------------------------
 
   private _onKeyDown(event: KeyboardEvent): void {
     if (event.code === 'Space' && !this._deps.getSpaceHeld()) {
@@ -96,6 +217,10 @@ export class CanvasExternalInput {
     const container = this._deps.stage.container()
     if (container) container.style.cursor = this._deps.getActiveToolCursor()
   }
+
+  // -------------------------------------------------------------------------
+  // Drag-and-drop (plant placement from panel)
+  // -------------------------------------------------------------------------
 
   private _attachDropHandlers(): void {
     const container = this._deps.stage.container()

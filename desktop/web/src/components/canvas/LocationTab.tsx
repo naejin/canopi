@@ -15,14 +15,12 @@ const STYLE_URL = 'https://demotiles.maplibre.org/style.json'
 interface DraftLocation {
   lat: number
   lon: number
-  altitude_m: number | null
 }
 
 function locationsEqual(a: DraftLocation, b: DraftLocation | null): boolean {
   if (!b) return false
   return Math.abs(a.lat - b.lat) < 0.0001
     && Math.abs(a.lon - b.lon) < 0.0001
-    && a.altitude_m === b.altitude_m
 }
 
 function formatCoordinates(lat: number, lon: number): string {
@@ -36,9 +34,7 @@ export function LocationTab() {
   const draft = useSignal<DraftLocation>({
     lat: initialLocation?.lat ?? DEFAULT_CENTER.lat,
     lon: initialLocation?.lon ?? DEFAULT_CENTER.lon,
-    altitude_m: initialLocation?.altitude_m ?? null,
   })
-  const altitudeInput = useSignal(initialLocation?.altitude_m != null ? String(initialLocation.altitude_m) : '')
   const addressQuery = useSignal('')
   const searchResults = useSignal<GeoResult[]>([])
   const isSearching = useSignal(false)
@@ -53,9 +49,7 @@ export function LocationTab() {
     draft.value = {
       lat: location?.lat ?? DEFAULT_CENTER.lat,
       lon: location?.lon ?? DEFAULT_CENTER.lon,
-      altitude_m: location?.altitude_m ?? null,
     }
-    altitudeInput.value = location?.altitude_m != null ? String(location.altitude_m) : ''
   })
 
   useSignalEffect(() => {
@@ -120,7 +114,6 @@ export function LocationTab() {
     draft.value = {
       lat: result.lat,
       lon: result.lon,
-      altitude_m: draft.value.altitude_m,
     }
     addressQuery.value = ''
     searchResults.value = []
@@ -128,12 +121,11 @@ export function LocationTab() {
   }
 
   function commitDraft() {
-    const altitude = Number.parseFloat(altitudeInput.value)
     setDesignLocation({
       lat: draft.value.lat,
       lon: draft.value.lon,
-      altitude_m: Number.isFinite(altitude) ? altitude : null,
-      })
+      altitude_m: null,
+    })
   }
 
   const showChangeWarning = committedLocation !== null && hasDraftChanges
@@ -167,54 +159,40 @@ export function LocationTab() {
         </div>
       )}
 
-      <div className={styles.controlGrid}>
-        <div className={styles.searchSection} ref={dropdownRef}>
-          <label className={styles.label}>
-            {t('canvas.location.addressLabel')}
-            <input
-              type="text"
-              className={styles.searchInput}
-              value={addressQuery.value}
-              onInput={(event) => { addressQuery.value = event.currentTarget.value }}
-              placeholder={t('canvas.location.searchPlaceholder')}
-            />
-          </label>
-
-          {isSearching.value && <div className={styles.searchStatus}>{t('canvas.location.searching')}</div>}
-
-          {showDropdown.value && !isSearching.value && (
-            <div className={styles.dropdown}>
-              {searchError.value ? (
-                <div className={styles.dropdownError}>{searchError.value}</div>
-              ) : searchResults.value.length === 0 ? (
-                <div className={styles.dropdownEmpty}>{t('canvas.location.noResults')}</div>
-              ) : (
-                searchResults.value.map((result, index) => (
-                  <button
-                    key={`${result.lat}-${result.lon}-${index}`}
-                    type="button"
-                    className={styles.resultItem}
-                    onClick={() => selectResult(result)}
-                  >
-                    {result.display_name}
-                  </button>
-                ))
-              )}
-            </div>
-          )}
-        </div>
-
+      <div className={styles.searchSection} ref={dropdownRef}>
         <label className={styles.label}>
-          {t('canvas.location.altitude')}
+          {t('canvas.location.addressLabel')}
           <input
-            type="number"
-            className={styles.altitudeInput}
-            value={altitudeInput.value}
-            onInput={(event) => { altitudeInput.value = event.currentTarget.value }}
-            placeholder={t('canvas.location.optional')}
-            step="1"
+            type="text"
+            className={styles.searchInput}
+            value={addressQuery.value}
+            onInput={(event) => { addressQuery.value = event.currentTarget.value }}
+            placeholder={t('canvas.location.searchPlaceholder')}
           />
         </label>
+
+        {isSearching.value && <div className={styles.searchStatus}>{t('canvas.location.searching')}</div>}
+
+        {showDropdown.value && !isSearching.value && (
+          <div className={styles.dropdown}>
+            {searchError.value ? (
+              <div className={styles.dropdownError}>{searchError.value}</div>
+            ) : searchResults.value.length === 0 ? (
+              <div className={styles.dropdownEmpty}>{t('canvas.location.noResults')}</div>
+            ) : (
+              searchResults.value.map((result, index) => (
+                <button
+                  key={`${result.lat}-${result.lon}-${index}`}
+                  type="button"
+                  className={styles.resultItem}
+                  onClick={() => selectResult(result)}
+                >
+                  {result.display_name}
+                </button>
+              ))
+            )}
+          </div>
+        )}
       </div>
 
       <div className={styles.mapCard}>
@@ -226,7 +204,6 @@ export function LocationTab() {
           {committedCoordinates ? (
             <div className={styles.savedPill}>
               {committedCoordinates}
-              {committedLocation?.altitude_m != null && ` · ${committedLocation.altitude_m}m`}
             </div>
           ) : null}
         </div>
@@ -243,32 +220,6 @@ export function LocationTab() {
         />
       </div>
 
-      <div className={styles.footer}>
-        <div className={styles.footerCopy}>
-          {committedLocation ? (
-            <p className={styles.savedLocation}>
-              {t('canvas.location.current')}: {committedCoordinates}
-              {committedLocation.altitude_m != null && ` (${committedLocation.altitude_m}m)`}
-            </p>
-          ) : (
-            <p className={styles.savedLocation}>{t('canvas.layers.setLocation')}</p>
-          )}
-        </div>
-
-        <div className={styles.actions}>
-          <button type="button" className={styles.saveBtn} onClick={commitDraft} disabled={!hasDraftChanges}>
-            {t('canvas.location.save')}
-          </button>
-          <button
-            type="button"
-            className={styles.clearBtn}
-            onClick={() => clearDesignLocation()}
-            disabled={committedLocation === null}
-          >
-            {t('canvas.location.clear')}
-          </button>
-        </div>
-      </div>
     </div>
   )
 }

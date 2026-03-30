@@ -38,7 +38,7 @@ export function createRect(attrs: {
     stroke: getCanvasColor('zone-stroke'),
     strokeWidth: ZONE_STROKE_WIDTH,
     strokeScaleEnabled: false,
-    draggable: true,
+    draggable: false,
     name: 'shape',
     'data-theme-managed-fill': true,
   })
@@ -57,7 +57,7 @@ export function createEllipse(attrs: {
     stroke: getCanvasColor('zone-stroke'),
     strokeWidth: ZONE_STROKE_WIDTH,
     strokeScaleEnabled: false,
-    draggable: true,
+    draggable: false,
     name: 'shape',
     'data-theme-managed-fill': true,
   })
@@ -72,7 +72,7 @@ export function createPolygon(points: number[]): Konva.Line {
     strokeWidth: ZONE_STROKE_WIDTH,
     strokeScaleEnabled: false,
     closed: true,
-    draggable: true,
+    draggable: false,
     name: 'shape',
     'data-theme-managed-fill': true,
   })
@@ -87,7 +87,7 @@ export function createFreeform(points: number[], closed: boolean): Konva.Line {
     strokeWidth: ZONE_STROKE_WIDTH,
     strokeScaleEnabled: false,
     closed,
-    draggable: true,
+    draggable: false,
     name: 'shape',
     tension: 0.3,
     'data-theme-managed-fill': closed,
@@ -101,7 +101,7 @@ export function createPolyline(points: number[]): Konva.Line {
     stroke: getCanvasColor('annotation-stroke'),
     strokeWidth: 2,
     strokeScaleEnabled: false,
-    draggable: true,
+    draggable: false,
     name: 'shape',
   })
 }
@@ -119,7 +119,7 @@ export function createText(attrs: {
     fontSize: 16,
     fontFamily: 'Inter, sans-serif',
     fill: getCanvasColor('annotation-text'),
-    draggable: true,
+    draggable: false,
     name: 'shape annotation-text',
   })
 }

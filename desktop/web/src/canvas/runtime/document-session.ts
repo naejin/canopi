@@ -84,7 +84,7 @@ export function loadDocumentSession(file: CanopiFile, engine: DocumentSessionEng
           stroke: getCanvasColor('zone-stroke'),
           strokeWidth: 2,
           strokeScaleEnabled: false,
-          draggable: true,
+          draggable: false,
           name: 'shape',
           'data-theme-managed-fill': usesThemeFill,
         })
@@ -102,7 +102,7 @@ export function loadDocumentSession(file: CanopiFile, engine: DocumentSessionEng
           stroke: getCanvasColor('zone-stroke'),
           strokeWidth: 2,
           strokeScaleEnabled: false,
-          draggable: true,
+          draggable: false,
           name: 'shape',
           'data-theme-managed-fill': usesThemeFill,
         })
@@ -126,7 +126,7 @@ export function loadDocumentSession(file: CanopiFile, engine: DocumentSessionEng
           stroke: getCanvasColor('zone-stroke'),
           strokeWidth: 2,
           strokeScaleEnabled: false,
-          draggable: true,
+          draggable: false,
           name: 'shape',
           'data-theme-managed-fill': usesThemeFill,
         })

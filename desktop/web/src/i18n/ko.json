@@ -204,7 +204,7 @@
     "layers": {
       "layerPanel": "레이어",
       "collapse": "레이어 패널 접기",
-      "base": "기본",
+      "base": "격자",
       "contours": "등고선",
       "climate": "기후",
       "zones": "구역",

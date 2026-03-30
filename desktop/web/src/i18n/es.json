@@ -204,7 +204,7 @@
     "layers": {
       "layerPanel": "Capas",
       "collapse": "Colapsar panel de capas",
-      "base": "Base",
+      "base": "Cuadrícula",
       "contours": "Curvas de nivel",
       "climate": "Clima",
       "zones": "Zonas",

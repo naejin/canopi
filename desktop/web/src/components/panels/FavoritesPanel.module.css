@@ -36,7 +36,7 @@
 }
 
 .count {
-  font-size: 10px;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--color-bg);
   background: var(--color-primary);
@@ -78,7 +78,7 @@
 
 .emptyTitle {
   font-size: var(--text-sm);
-  font-weight: 500;
+  font-weight: 400;
   color: var(--color-text);
 }
 

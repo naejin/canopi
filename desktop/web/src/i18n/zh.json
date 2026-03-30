@@ -204,7 +204,7 @@
     "layers": {
       "layerPanel": "图层",
       "collapse": "折叠图层面板",
-      "base": "底图",
+      "base": "网格",
       "contours": "等高线",
       "climate": "气候",
       "zones": "区域",

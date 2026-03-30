@@ -15,11 +15,11 @@ describe('bottom panel actions', () => {
     expect(bottomPanelTab.value).toBe('location')
   })
 
-  it('switches to the consortium tab without closing the panel', () => {
+  it('keeps the panel open when setting the same tab', () => {
     openBottomPanel('location')
-    setBottomPanelTab('consortium')
+    setBottomPanelTab('location')
 
     expect(bottomPanelOpen.value).toBe(true)
-    expect(bottomPanelTab.value).toBe('consortium')
+    expect(bottomPanelTab.value).toBe('location')
   })
 })

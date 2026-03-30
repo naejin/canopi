@@ -41,10 +41,9 @@ export class PlantStampTool implements CanvasTool {
   onMouseMove(_e: Konva.KonvaEventObject<MouseEvent>, _engine: CanvasEngine): void {}
   onMouseUp(_e: Konva.KonvaEventObject<MouseEvent>, _engine: CanvasEngine): void {}
 
-  onKeyDown(e: KeyboardEvent, engine: CanvasEngine): void {
+  onKeyDown(e: KeyboardEvent, _engine: CanvasEngine): void {
     if (e.key === 'Escape') {
       plantStampSpecies.value = null
-      engine.setActiveTool('select')
     }
   }
 }

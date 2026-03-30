@@ -204,7 +204,7 @@
     "layers": {
       "layerPanel": "Livelli",
       "collapse": "Comprimi pannello livelli",
-      "base": "Base",
+      "base": "Griglia",
       "contours": "Curve di livello",
       "climate": "Clima",
       "zones": "Zone",

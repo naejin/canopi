@@ -16,8 +16,17 @@ import {
 } from '../../state/canvas-actions'
 import styles from './LayerPanel.module.css'
 
-const LAYER_ORDER = ['annotations', 'plants', 'water', 'zones', 'climate', 'contours', 'base'] as const
+const LAYER_ORDER = ['annotations', 'plants', 'zones', 'base'] as const
 type LayerName = typeof LAYER_ORDER[number]
+
+function ChevronIcon({ direction }: { direction: 'left' | 'right' }) {
+  const d = direction === 'left' ? 'M10 3L5 8L10 13' : 'M6 3L11 8L6 13'
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d={d} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
 
 function EyeIcon({ open }: { open: boolean }) {
   return (
@@ -61,7 +70,7 @@ export function LayerPanel() {
           aria-label={t('canvas.layers.layerPanel')}
           onClick={toggleLayerPanel}
         >
-          {'<'}
+          <ChevronIcon direction="left" />
         </button>
       </div>
     )
@@ -79,7 +88,7 @@ export function LayerPanel() {
           aria-label={t('canvas.layers.collapse')}
           onClick={toggleLayerPanel}
         >
-          {'>'}
+          <ChevronIcon direction="right" />
         </button>
       </div>
 
@@ -92,6 +101,7 @@ export function LayerPanel() {
           return (
             <div
               key={name}
+              role="listitem"
               className={styles.layerRow}
               data-active={active ? 'true' : 'false'}
               data-hidden={visible ? 'false' : 'true'}

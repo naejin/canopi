@@ -92,7 +92,7 @@ if (import.meta.hot) {
 }
 
 const MIN_SIDEBAR_WIDTH = 320;
-const MAX_SIDEBAR_WIDTH = 800;
+const MAX_SIDEBAR_RATIO = 0.9;
 
 
 function SidePanelContent({ side }: { side: string }) {
@@ -119,7 +119,8 @@ export function App() {
       if (!dragRef.current) return;
       // Right-side panel: dragging left = wider (negative delta = larger)
       const delta = dragRef.current.startX - ev.clientX;
-      const newW = Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, dragRef.current.startW + delta));
+      const maxW = Math.floor(window.innerWidth * MAX_SIDEBAR_RATIO);
+      const newW = Math.max(MIN_SIDEBAR_WIDTH, Math.min(maxW, dragRef.current.startW + delta));
       sidePanelWidth.value = newW;
     };
 
@@ -160,7 +161,7 @@ export function App() {
               style={{
                 width: `${width}px`,
                 minWidth: `${MIN_SIDEBAR_WIDTH}px`,
-                maxWidth: `${MAX_SIDEBAR_WIDTH}px`,
+                maxWidth: '90%',
               }}
             >
               <SidePanelContent side={side!} />

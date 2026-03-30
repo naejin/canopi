@@ -703,6 +703,7 @@ export class CanvasEngine {
     this._documentLoadEpoch += 1
     this._viewport?.resetViewport()
     loadDocumentSession(file, this)
+    this._applyTool(activeTool.value)
   }
 
   replaceDocument(file: CanopiFile): void {
@@ -710,6 +711,7 @@ export class CanvasEngine {
     resetTransientCanvasSession()
     this._viewport?.resetViewport()
     loadDocumentSession(file, this)
+    this._applyTool(activeTool.value)
   }
 
   reconcileMaterializedScene(): void {

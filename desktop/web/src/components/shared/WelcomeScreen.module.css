@@ -55,7 +55,7 @@
 .primaryBtn {
   background: var(--color-primary);
   border: 1.5px solid var(--color-primary);
-  color: #fff;
+  color: var(--color-primary-contrast);
   box-shadow: var(--shadow-md);
 }
 
@@ -156,8 +156,8 @@
 }
 
 .recentName {
-  font-size: 13px;
-  font-weight: 500;
+  font-size: var(--text-base);
+  font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

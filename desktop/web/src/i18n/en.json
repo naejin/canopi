@@ -204,7 +204,7 @@
     "layers": {
       "layerPanel": "Layers",
       "collapse": "Collapse layers panel",
-      "base": "Base",
+      "base": "Grid",
       "contours": "Contours",
       "climate": "Climate",
       "zones": "Zones",

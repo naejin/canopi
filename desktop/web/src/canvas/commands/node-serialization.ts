@@ -1,5 +1,12 @@
 import Konva from 'konva'
 
+// Ephemeral attrs set by tools (hover/selection highlights) that must never
+// be persisted in commands or saved to disk.
+const EPHEMERAL_ATTRS = new Set([
+  'shadowColor', 'shadowBlur', 'shadowOpacity', 'shadowForStrokeEnabled',
+  'data-highlight', 'data-orig-stroke', 'data-orig-strokeWidth',
+])
+
 export interface SerializedNode {
   className: string
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -9,9 +16,17 @@ export interface SerializedNode {
 }
 
 export function serializeNode(node: Konva.Node): SerializedNode {
+  const raw = node.getAttrs() as Record<string, unknown>
+  const attrs: Record<string, unknown> = {}
+  for (const key of Object.keys(raw)) {
+    if (!EPHEMERAL_ATTRS.has(key)) {
+      attrs[key] = raw[key]
+    }
+  }
+
   const base: SerializedNode = {
     className: node.getClassName(),
-    attrs: { ...node.getAttrs() },
+    attrs,
   }
 
   // Recursively serialize children for Group nodes
