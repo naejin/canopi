@@ -23,16 +23,18 @@ import styles from './Panels.module.css'
 export function CanvasPanel() {
   // Subscribe to locale so the component re-renders when language changes
   void locale.value
+  const canvasAreaRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const rulerOverlayRef = useRef<HTMLDivElement>(null)
   const engineRef = useRef<CanvasEngine | null>(null)
 
   useEffect(() => {
     const container = containerRef.current
-    if (!container) return
+    const canvasArea = canvasAreaRef.current
+    if (!container || !canvasArea) return
 
     const engine = new CanvasEngine()
-    engine.init(container, container.clientWidth, container.clientHeight)
+    engine.init(container, canvasArea.clientWidth, canvasArea.clientHeight, canvasArea)
     engineRef.current = engine
     setCanvasEngine(engine)
     canvasReady.value = true
@@ -89,7 +91,7 @@ export function CanvasPanel() {
 
       <div className={styles.canvasColumn}>
         <div className={styles.canvasRow}>
-          <div className={styles.canvasArea}>
+          <div ref={canvasAreaRef} className={styles.canvasArea}>
             <div ref={containerRef} className={styles.canvasContainer} />
             <div ref={rulerOverlayRef} className={styles.rulerOverlay} />
 

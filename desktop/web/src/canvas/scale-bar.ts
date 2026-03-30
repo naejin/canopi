@@ -12,6 +12,7 @@ const NICE_DISTANCES = [0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000]
 const TARGET_PX = 120
 const MARGIN_X = 40   // clear the 24px vertical ruler + padding
 const MARGIN_Y = 16
+export const SCALE_BAR_RESERVED_BOTTOM_PX = 40
 
 export interface ScaleBar {
   group: Konva.Group

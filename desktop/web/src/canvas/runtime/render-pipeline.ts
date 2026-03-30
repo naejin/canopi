@@ -1,7 +1,7 @@
 import Konva from 'konva'
 import { guides } from '../../state/canvas'
 import { locale, theme } from '../../state/app'
-import { plantColorByAttr, plantDisplayMode, selectedObjectIds } from '../../state/canvas'
+import { plantColorByAttr, plantDisplayMode, selectedObjectIds, zoomReference } from '../../state/canvas'
 import {
   updatePlantCounterScale,
   updatePlantDensity,
@@ -74,6 +74,7 @@ export class CanvasRenderPipeline {
       mode,
       colorBy,
       this._deps.stage.scaleX(),
+      zoomReference.value,
       this._deps.getSpeciesCache(),
     )
 
@@ -84,6 +85,7 @@ export class CanvasRenderPipeline {
           mode,
           colorBy,
           this._deps.stage.scaleX(),
+          zoomReference.value,
           this._deps.getSpeciesCache(),
         )
       })

@@ -50,7 +50,7 @@ vi.mock('../canvas/rulers', () => ({
   refreshRulerColors: mocks.refreshRulerColors,
 }))
 
-import { guides, plantColorByAttr, plantDisplayMode, zoomLevel } from '../state/canvas'
+import { guides, plantColorByAttr, plantDisplayMode, zoomLevel, zoomReference } from '../state/canvas'
 import { locale, theme } from '../state/app'
 import { CanvasRenderPipeline } from '../canvas/runtime/render-pipeline'
 import { RenderReconciler } from '../canvas/runtime/render-reconciler'
@@ -91,6 +91,7 @@ describe('Canvas renderer ownership', () => {
     plantDisplayMode.value = 'default'
     plantColorByAttr.value = 'stratum'
     zoomLevel.value = 2
+    zoomReference.value = 8
     locale.value = 'en'
     theme.value = 'light'
   })
@@ -134,6 +135,7 @@ describe('Canvas renderer ownership', () => {
       'default',
       'stratum',
       2,
+      8,
       expect.any(Map),
     )
     expect(mocks.getPlantLOD).toHaveBeenCalledWith(2)

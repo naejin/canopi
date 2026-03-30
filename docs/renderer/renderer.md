@@ -1,14 +1,13 @@
 # Reactive Canvas Renderer: Remaining Work
 
 **Date**: 2026-03-30  
-**Status**: phases 1-3 are landed in code; this file now tracks what is left to do for renderer stability and follow-up work
+**Status**: phases 1-3 are landed in code; targeted automated stability coverage, retained-surface Wave 3 live verification, and the post-fix renderer manual checklist all passed on 2026-03-30; no active renderer stability blocker remains
 
 Use this file for future renderer work.
 
 This file no longer plans phases 1-3 as future work. Those implementation details are now historical. The remaining active renderer work is:
-- stability-gate validation of the landed reconciler architecture
-- narrow follow-up fixes if that validation finds regressions
 - optional phase 4 viewport filtering only if measurement justifies it
+- deferred internal cleanup that does not reopen the stability gate
 
 ---
 
@@ -53,20 +52,21 @@ Deferred viewport-local passes:
 
 ### 2.1 Stability-Gate Validation
 
-This is the active renderer blocker.
+This is complete on the current build.
 
-What is left:
-- run the manual validation checklist below on the landed reconciler build
-- rerun the Wave 3 canvas-touched journeys against that build
-- fix any High-severity renderer regressions found there
+What landed:
+- targeted automated checks are green locally on 2026-03-30
+- retained-surface Wave 3 live verification was rerun with Claude Code on 2026-03-30
+- automated coverage explicitly includes same-session document hydration, dense-cluster label survival, and stack-badge reconciliation
+- the post-fix renderer manual checklist and the two additional overlay/resize scenarios passed on 2026-03-30
 
 Why this is still required:
 - phases 1-3 are architecturally landed, but rewrite blocking now depends on behavioral proof
 - the remaining risk is real-user correctness, not missing scaffolding
 
-Done only when:
+This is now satisfied because:
 1. targeted automated checks are green
-2. the manual checklist below passes
+2. the manual checklist below passed on the fixed build
 3. Wave 3 live verification is rerun against the reconciler build
 4. there are no open High-severity renderer regressions in:
    - canopy zoom behavior
@@ -76,10 +76,13 @@ Done only when:
 
 ### 2.2 Narrow Renderer Follow-Ups Found During Validation
 
-Allowed follow-up work:
-- fix renderer correctness regressions discovered during manual verification
-- add missing targeted tests that directly cover those regressions
-- tighten ownership seams if validation shows a remaining bypass
+This follow-up is also complete on the current build.
+
+Closed regressions from the 2026-03-30 manual pass:
+- canopy-mode fallback circles for plants without canopy spread data now scale coherently during wheel and button zoom
+- the bottom-left scale bar now stays above the bottom canvas bar/panel and the legend stays above the scale bar
+- vertical host growth now resizes the stage and rulers correctly without leaving blank canvas at the bottom
+- targeted renderer tests were updated in the same patch
 
 Not allowed in this track:
 - product-level visual redesign
@@ -162,6 +165,15 @@ Any renderer-affecting change must account for all relevant mutation entry point
 - density / stacking tests
 - frontend production build
 
+Current automated evidence in-tree:
+- `desktop/web/src/__tests__/viewport.test.ts`
+- `desktop/web/src/__tests__/dirty-state.test.ts`
+- `desktop/web/src/__tests__/document-session.test.ts`
+- `desktop/web/src/__tests__/render-pipeline.test.ts`
+- `desktop/web/src/__tests__/plant-density.test.ts`
+- `desktop/web/src/__tests__/theme-refresh.test.ts`
+- `npm run build --prefix desktop/web`
+
 ### 4.2 Required Manual Checks
 
 Run these on the landed reconciler build:
@@ -189,6 +201,17 @@ Expected: stratum color and canopy spread restore correctly after load
 
 8. Dense plant cluster
 Expected: at least one label remains visible and stack badges remain correct
+
+Manual findings recorded on 2026-03-30:
+- checks 1 and 2 failed on the pre-fix build because plants without canopy spread data stayed on a fixed fallback size instead of scaling coherently with canopy zoom
+- checks 3 through 8 passed on the pre-fix build
+- additional renderer regressions found outside the numbered list:
+  - the bottom-left scale bar could sit under the bottom canvas bar instead of staying above it
+  - vertical window growth could leave the stage height stale, stretching the vertical ruler and exposing blank canvas at the bottom
+- post-fix rerun result on 2026-03-30:
+  - checks 1 through 8 passed on the fixed build
+  - the additional scale-bar/legend stacking scenario passed
+  - the vertical resize / ruler / blank-bottom scenario passed
 
 Stop and fix the build if any of these regress:
 - stale canopy display during zoom
@@ -220,9 +243,7 @@ Hotspot rule:
 
 ## 6. Exit Condition For This Document
 
-This file stops being active renderer-follow-up guidance when:
-- the renderer stability gate in `docs/todo.md` is satisfied
-- any optional phase 4 work is either completed and validated or explicitly deferred
+The renderer stability gate in `docs/todo.md` is now satisfied.
 
 When that happens:
 - archive the completed renderer follow-up detail

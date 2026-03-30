@@ -1,5 +1,6 @@
 import { plantDisplayMode, plantColorByAttr } from '../../state/canvas'
 import { getLegendEntries } from '../../canvas/display-modes'
+import { SCALE_BAR_RESERVED_BOTTOM_PX } from '../../canvas/scale-bar'
 import { t } from '../../i18n'
 import styles from './DisplayLegend.module.css'
 
@@ -12,7 +13,7 @@ export function DisplayLegend() {
   const entries = getLegendEntries(attr)
 
   return (
-    <div className={styles.legend}>
+    <div className={styles.legend} style={{ bottom: `${SCALE_BAR_RESERVED_BOTTOM_PX}px` }}>
       <div className={styles.title}>{t('canvas.display.legend')}</div>
       <div className={styles.entries}>
         {entries.map((e) => (

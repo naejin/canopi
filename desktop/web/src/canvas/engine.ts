@@ -94,7 +94,7 @@ export class CanvasEngine {
   // Initialisation
   // -------------------------------------------------------------------------
 
-  init(container: HTMLDivElement, width: number, height: number): void {
+  init(container: HTMLDivElement, width: number, height: number, viewportHost: HTMLElement = container): void {
     this.stage = new Konva.Stage({
       container,
       width,
@@ -170,7 +170,7 @@ export class CanvasEngine {
     this._registerTool(new PlantStampTool())
 
     // Wire up interaction
-    this._viewport.init(container)
+    this._viewport.init(container, viewportHost)
     this._setupSnapToDrag()
     this._externalInput = new CanvasExternalInput({
       stage: this.stage,

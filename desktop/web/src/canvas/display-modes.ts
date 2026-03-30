@@ -47,6 +47,7 @@ export function updatePlantDisplay(
   mode: PlantDisplayMode,
   colorByAttr: ColorByAttribute,
   stageScale: number,
+  zoomReference: number,
   speciesCache: Map<string, Record<string, unknown>>,
 ): void {
   plantsLayer.find('.plant-group').forEach((node: Konva.Node) => {
@@ -69,7 +70,11 @@ export function updatePlantDisplay(
         // multiply by stageScale so the visual radius = canopyM/2 in world space.
         circle.radius((canopyM / 2) * stageScale)
       } else {
-        circle.radius(CIRCLE_SCREEN_PX) // fallback for plants without spread data
+        // Match the current default visual size at reference zoom, but keep the
+        // fallback in world space so it scales coherently with canopy zoom.
+        const referenceScale = zoomReference > 0 ? zoomReference : stageScale
+        const fallbackWorldRadius = CIRCLE_SCREEN_PX / referenceScale
+        circle.radius(fallbackWorldRadius * stageScale)
       }
       // Keep strata color in canopy mode
       const stratum = g.getAttr('data-stratum') as string || null

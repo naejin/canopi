@@ -34,12 +34,14 @@ Completed and archived:
 - Wave 3 high-priority boundary fixes
 - retained-surface Wave 3 closeout on the surviving architecture
 - renderer phases 1-3 implementation
+- renderer manual/live stability-gate closeout on the retained-surface build
 - automated frontend verification for the landed rewrite slice
+- targeted renderer automation rerun on the retained-surface build
+- release-blocking automated gates rerun locally
 
 Still active:
-- renderer stability-gate closeout on the retained-surface build
 - Wave 4 design coherence on the surviving structure
-- Wave 5 release hardening and rewrite-exit verification
+- Wave 5 packaged-app smoke verification and rewrite-exit closeout
 
 Deferred after live review:
 - featured-design world map / template import
@@ -89,7 +91,7 @@ Dedicated rendering ownership is now the rule:
 - all visual updates go through `reconciler.invalidate(...)`
 - stage transforms go through one engine-owned transform path
 
-The renderer split is not considered stable until the remaining validation work in `docs/renderer/renderer.md` is complete.
+The renderer stability gate is now satisfied on the current build; `docs/renderer/renderer.md` remains only for optional measured viewport filtering and deferred internal renderer cleanup.
 
 ### 2.4 Mutation Coverage Rules
 
@@ -118,18 +120,15 @@ Do not widen viewport filtering for other passes unless the renderer follow-up d
 
 ### 3.1 Renderer Stability Gate Closeout
 
-What is left:
-- rerun the renderer manual checklist on the landed reconciler architecture
-- rerun the retained Wave 3 canvas-touched journeys against that build
-- fix any High-severity regressions found there
-- add only targeted follow-up coverage that closes discovered gaps
+Status:
+- complete on 2026-03-30
 
-Why this is next:
+Why it mattered:
 - the remaining renderer risk is behavioral, not architectural
 - retained-surface Wave 3 closeout is now landed on the surviving architecture
 - the gate is now about correctness under real use on the final rewrite-exit feature set
 
-How to do it:
+How it was done:
 - use `docs/renderer/renderer.md` as the renderer-specific checklist
 - keep fixes narrow and tied to observed regressions
 - do not mix optional optimization or product redesign into stability closeout
@@ -139,10 +138,16 @@ Current rule:
 - do not reintroduce deferred features as part of renderer-gate work
 - update this file and `docs/renderer/renderer.md` when retained-surface fixes materially change the gate
 
-### 3.2 Wave 4 Design Coherence
+Current in-tree status:
+- targeted automated renderer checks are green locally on 2026-03-30
+- retained-surface Wave 3 live verification was rerun with Claude Code on 2026-03-30
+- added automated coverage for same-session document hydration, dense-cluster label survival, and stack-badge reconciliation on 2026-03-30
+- the 2026-03-30 manual renderer pass initially found narrow regressions in missing-canopy zoom fallback plus overlay/resize behavior
+- those regressions were fixed in the current code track with targeted test updates
+- the post-fix renderer manual checklist and the two additional overlay/resize scenarios passed on 2026-03-30
+- the renderer stability gate is closed; the next active rewrite step is Wave 4 coherence work
 
-Blocked until:
-- renderer phases 1-3 are stable per the gate below
+### 3.2 Wave 4 Design Coherence
 
 What is left:
 - design-system cleanup on the final surviving structure
@@ -156,6 +161,10 @@ How to do it:
 - land coherence work only on the reconciler architecture
 - batch shared token, i18n, and fixture churn
 - keep redesigns that depend on renderer behavior behind the stability gate
+
+Current in-tree status:
+- retained-surface keyboard focus-visible coherence cleanup landed on 2026-03-30
+- broader token/surface cleanup is now the next active rewrite track on the stable renderer architecture
 
 ### 3.3 Wave 5 Release Hardening
 
@@ -178,11 +187,12 @@ Current in-tree status:
   - `cargo fmt --all -- --check`
   - `cargo clippy --workspace -- -D warnings`
   - `cargo test --workspace`
+  - `npx --prefix desktop/web tsc --noEmit -p desktop/web/tsconfig.json`
   - `npm test --prefix desktop/web`
   - i18n completeness coverage against `en.json` via the frontend test suite
   - `npm run build --prefix desktop/web`
 - GitHub Actions already carries the release-build matrix and artifact upload
-- the remaining Wave 5 work is primarily packaged-app smoke verification plus rewrite-exit docs cleanup
+- the remaining Wave 5 work is packaged-app smoke verification plus rewrite-exit docs/archive cleanup
 
 ---
 
@@ -206,13 +216,15 @@ For rewrite planning purposes, renderer phases 1-3 are stable only when all of t
    - dense-cluster label visibility
 
 Current gate state:
-- condition 2 is green locally on 2026-03-30
-- retained-surface Wave 3 closeout is landed on 2026-03-30; conditions 3 and 4 still need the manual and live-validation rerun on that build
-- Wave 4 remains blocked until those results are recorded and any resulting High-severity regressions are closed
+- condition 2 is green locally on 2026-03-30, including document-session hydration and dense-cluster density/stacking coverage
+- retained-surface Wave 3 closeout is landed on 2026-03-30 and condition 4 was rerun with Claude Code on that build
+- condition 3 passed on the post-fix build on 2026-03-30, including the additional scale-bar/legend stacking and vertical resize scenarios recorded in `docs/renderer/renderer.md`
+- there are no open High-severity renderer regressions in the gate categories on the current build
+- all five gate conditions are now satisfied; Wave 4 coherence work is unblocked
 
-Until all five conditions are true:
-- Wave 4 stays blocked
-- renderer-tied product redesigns stay blocked
+With the gate satisfied:
+- Wave 4 may proceed on the current retained-surface architecture
+- renderer-tied product redesigns are no longer blocked by renderer stability, but they still must respect the scope and sequencing rules in this file
 
 ---
 
@@ -339,11 +351,9 @@ These are implementation rules, not optional style preferences.
 ## 7. Active Blockers And Deferred Items
 
 Pending immediate closeout after Wave 3 landing:
-- retained-surface live verification rerun on the current build
-- renderer stability-gate completion work that depends on retained-surface live findings
 - any rewrite-exit claim that depends on real-user verification rather than automated checks
 
-Blocked until the renderer stability gate is satisfied:
+Now unblocked after renderer stability closeout:
 - Wave 4 design coherence
 - renderer-tied product-level visual redesigns:
   - per-species default colors
@@ -390,9 +400,9 @@ Use this file as the canonical operational reference.
 
 Use archived docs only for historical context.
 
-With retained-surface Wave 3 closeout landed on 2026-03-30, the next required step is the retained-surface live verification rerun:
-- record the findings in this file and the renderer/release follow-up docs before broad new work starts
-- turn discovered regressions into narrow fixes with targeted tests
+With retained-surface Wave 3 closeout landed on 2026-03-30, the live verification rerun completed with Claude Code, and the renderer stability gate now closed, the next required step is Wave 4 design coherence on the surviving architecture:
+- keep the work on the reconciler-backed structure only
+- continue to separate design coherence from release hardening
 - remove any stale scope language if the surviving rewrite-exit surface changes again
 
 If a future change affects:

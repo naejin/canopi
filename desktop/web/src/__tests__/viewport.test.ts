@@ -213,8 +213,9 @@ describe('CanvasViewport', () => {
 
   it('resizes the stage and schedules overlay redraws through the observer', () => {
     const container = document.createElement('div')
-    Object.defineProperty(container, 'clientWidth', { configurable: true, value: 640 })
-    Object.defineProperty(container, 'clientHeight', { configurable: true, value: 480 })
+    const viewportHost = document.createElement('div')
+    Object.defineProperty(viewportHost, 'clientWidth', { configurable: true, value: 640 })
+    Object.defineProperty(viewportHost, 'clientHeight', { configurable: true, value: 480 })
     const stage = createStageStub(container)
     const invalidateRender = vi.fn()
     const deps = createViewportDeps(stage, new Map([
@@ -223,10 +224,36 @@ describe('CanvasViewport', () => {
     ]), { invalidateRender })
     const viewport = new CanvasViewport(deps as any)
 
-    viewport.init(container)
-    ResizeObserverStub.instances[0]!.callback([] as ResizeObserverEntry[], {} as ResizeObserver)
+    viewport.init(container, viewportHost)
+    ResizeObserverStub.instances[0]!.callback([{
+      contentRect: { width: 640, height: 480 } as DOMRectReadOnly,
+    }] as ResizeObserverEntry[], {} as ResizeObserver)
 
     expect(stage.size).toHaveBeenCalledWith({ width: 640, height: 480 })
+    expect(invalidateRender).toHaveBeenCalledWith('overlays')
+    expect(ResizeObserverStub.instances[0]!.observe).toHaveBeenCalledWith(viewportHost)
+  })
+
+  it('uses the viewport host height when the window grows vertically', () => {
+    const container = document.createElement('div')
+    const viewportHost = document.createElement('div')
+    Object.defineProperty(viewportHost, 'clientWidth', { configurable: true, value: 1000 })
+    Object.defineProperty(viewportHost, 'clientHeight', { configurable: true, value: 900 })
+    const stage = createStageStub(container)
+    const invalidateRender = vi.fn()
+    const deps = createViewportDeps(stage, new Map([
+      ['ui', createLayerStub() as any],
+      ['plants', createLayerStub() as any],
+    ]), { invalidateRender })
+    const viewport = new CanvasViewport(deps as any)
+
+    viewport.init(container, viewportHost)
+    ResizeObserverStub.instances[0]!.callback([{
+      contentRect: { width: 1000, height: 900 } as DOMRectReadOnly,
+    }] as ResizeObserverEntry[], {} as ResizeObserver)
+
+    expect(stage.height()).toBe(900)
+    expect(stage.size).toHaveBeenLastCalledWith({ width: 1000, height: 900 })
     expect(invalidateRender).toHaveBeenCalledWith('overlays')
   })
 

@@ -19,23 +19,27 @@ export class CanvasViewport {
 
   constructor(private readonly _deps: ViewportDeps) {}
 
-  init(container: HTMLDivElement): void {
+  init(container: HTMLDivElement, viewportHost: HTMLElement = container): void {
     this._attachWheelHandlers()
     this._attachStagePanHandler()
 
-    this._resizeObserver = new ResizeObserver(() => {
+    this._resizeObserver = new ResizeObserver((entries) => {
       if (this._resizeRafPending) return
       this._resizeRafPending = true
       requestAnimationFrame(() => {
         this._resizeRafPending = false
+        const contentRect = entries[0]?.contentRect
+        const width = Math.round(contentRect?.width ?? viewportHost.clientWidth)
+        const height = Math.round(contentRect?.height ?? viewportHost.clientHeight)
+        if (width <= 0 || height <= 0) return
         this._deps.stage.size({
-          width: container.clientWidth,
-          height: container.clientHeight,
+          width,
+          height,
         })
         this._deps.invalidateRender('overlays')
       })
     })
-    this._resizeObserver.observe(container)
+    this._resizeObserver.observe(viewportHost)
   }
 
   initializeViewport(): void {
