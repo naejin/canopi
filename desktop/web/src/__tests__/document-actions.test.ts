@@ -97,6 +97,12 @@ function makeFile(name: string): CanopiFile {
 function makeEngine() {
   return {
     loadDocument: vi.fn(),
+    replaceDocument: vi.fn(() => {
+      activeTool.value = 'select'
+      selectedObjectIds.value = new Set()
+      lockedObjectIds.value = new Set()
+      highlightedConsortium.value = null
+    }),
     history: {
       clear: vi.fn(),
       markSaved: vi.fn(),
@@ -162,7 +168,7 @@ describe('document replacement actions', () => {
 
     expect(mocks.saveDesign).not.toHaveBeenCalled()
     expect(mocks.loadDesign).toHaveBeenCalledWith('/designs/next.canopi')
-    expect(mocks.canvasEngine.loadDocument).toHaveBeenCalledWith(
+    expect(mocks.canvasEngine.replaceDocument).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'Next', extra: { imported: true } }),
     )
     expect(currentDesign.value?.name).toBe('Next')
@@ -220,7 +226,7 @@ describe('document replacement actions', () => {
 
     await expect(openDesignFromPath('/designs/bad.canopi')).rejects.toThrow('Disk read failed')
 
-    expect(mocks.canvasEngine.loadDocument).not.toHaveBeenCalled()
+    expect(mocks.canvasEngine.replaceDocument).not.toHaveBeenCalled()
     expect(currentDesign.value?.name).toBe('Current')
   })
 
@@ -234,7 +240,7 @@ describe('document replacement actions', () => {
     queued.resolve(makeFile('Queued'))
     await flushMicrotasks()
 
-    expect(mocks.canvasEngine.loadDocument).not.toHaveBeenCalled()
+    expect(mocks.canvasEngine.replaceDocument).not.toHaveBeenCalled()
     expect(currentDesign.value?.name).toBe('Current')
   })
 
@@ -247,7 +253,7 @@ describe('document replacement actions', () => {
     queued.reject(new Error('Disk read failed'))
     await flushMicrotasks()
 
-    expect(mocks.canvasEngine.loadDocument).not.toHaveBeenCalled()
+    expect(mocks.canvasEngine.replaceDocument).not.toHaveBeenCalled()
     expect(pendingDesignPath.value).toBe('/designs/broken.canopi')
     expect(mocks.message).toHaveBeenCalledWith(
       expect.stringContaining('Failed to open broken'),
@@ -288,7 +294,7 @@ describe('document replacement actions', () => {
     await flushMicrotasks()
 
     expect(mocks.loadDesign).toHaveBeenCalledWith('/tmp/template.canopi')
-    expect(nextEngine.loadDocument).toHaveBeenCalledWith(
+    expect(nextEngine.replaceDocument).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'Downloaded Template', extra: { imported: true } }),
     )
     expect(designName.value).toBe('Forest Edge')

@@ -10,6 +10,7 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { CanvasHistory, type Command } from '../canvas/history'
+import { DEFAULT_RENDER_PASSES } from '../canvas/runtime/render-passes'
 import {
   nonCanvasRevision,
   designDirty,
@@ -24,6 +25,7 @@ const mockEngine = {} as any
 function noop(): Command {
   return {
     type: 'test',
+    dirtyPasses: DEFAULT_RENDER_PASSES,
     execute() {},
     undo() {},
   }
@@ -62,13 +64,28 @@ describe('canvas edits', () => {
   })
 
   it('history execute/undo/redo reconcile materialized canvas state', () => {
-    mockEngine.reconcileMaterializedScene = vi.fn()
+    mockEngine.invalidateRender = vi.fn()
 
     history.execute(noop(), mockEngine)
     history.undo(mockEngine)
     history.redo(mockEngine)
 
-    expect(mockEngine.reconcileMaterializedScene).toHaveBeenCalledTimes(3)
+    expect(mockEngine.invalidateRender).toHaveBeenCalledTimes(3)
+  })
+
+  it('history record invalidates the command dirty passes', () => {
+    const cmd: Command = {
+      type: 'recorded-test',
+      dirtyPasses: ['annotations', 'overlays'],
+      execute() {},
+      undo() {},
+    }
+    mockEngine.invalidateRender = vi.fn()
+
+    history.record(cmd, mockEngine)
+
+    expect(mockEngine.invalidateRender).toHaveBeenCalledWith('annotations', 'overlays')
+    expect(designDirty.value).toBe(true)
   })
 
   it('save clears dirty', () => {

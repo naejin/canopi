@@ -93,6 +93,34 @@ function createLayerStub(options: {
   }
 }
 
+function createViewportDeps(
+  stage: ReturnType<typeof createStageStub>,
+  layers: Map<string, any>,
+  overrides: Record<string, unknown> = {},
+) {
+  const applyStageTransform = vi.fn((
+    scale: number,
+    position: { x: number; y: number },
+    _options?: { invalidateDeferred?: boolean },
+  ) => {
+    stage.setAttrs({
+      scaleX: scale,
+      scaleY: scale,
+      x: position.x,
+      y: position.y,
+    })
+    zoomLevel.value = scale
+  })
+
+  return {
+    stage: stage as any,
+    layers,
+    applyStageTransform,
+    invalidateRender: vi.fn(),
+    ...overrides,
+  }
+}
+
 describe('CanvasViewport', () => {
   beforeEach(() => {
     ResizeObserverStub.instances = []
@@ -112,22 +140,15 @@ describe('CanvasViewport', () => {
     const stage = createStageStub(container)
     const uiLayer = createLayerStub()
     const plantsLayer = createLayerStub()
-    const viewport = new CanvasViewport({
-      stage: stage as any,
-      layers: new Map([
-        ['ui', uiLayer as any],
-        ['plants', plantsLayer as any],
-      ]),
-      syncOverlayTransforms: vi.fn(),
-      scheduleOverlayRedraw: vi.fn(),
-      scheduleLODUpdate: vi.fn(),
-      reconcileMaterializedScene: vi.fn(),
-    })
+    const deps = createViewportDeps(stage, new Map([
+      ['ui', uiLayer as any],
+      ['plants', plantsLayer as any],
+    ]))
+    const viewport = new CanvasViewport(deps as any)
 
     viewport.initializeViewport()
 
-    expect(stage.scale).toHaveBeenCalledWith({ x: 8, y: 8 })
-    expect(stage.position).toHaveBeenCalledWith({ x: 100, y: 0 })
+    expect(deps.applyStageTransform).toHaveBeenCalledWith(8, { x: 100, y: 0 }, { invalidateDeferred: true })
     expect(zoomLevel.value).toBe(8)
     expect(zoomReference.value).toBe(8)
   })
@@ -138,18 +159,11 @@ describe('CanvasViewport', () => {
     const plantNode = { scale: vi.fn() }
     const uiLayer = createLayerStub()
     const plantsLayer = createLayerStub({ plantNodes: [plantNode] })
-    const reconcileMaterializedScene = vi.fn()
-    const viewport = new CanvasViewport({
-      stage: stage as any,
-      layers: new Map([
-        ['ui', uiLayer as any],
-        ['plants', plantsLayer as any],
-      ]),
-      syncOverlayTransforms: vi.fn(),
-      scheduleOverlayRedraw: vi.fn(),
-      scheduleLODUpdate: vi.fn(),
-      reconcileMaterializedScene,
-    })
+    const deps = createViewportDeps(stage, new Map([
+      ['ui', uiLayer as any],
+      ['plants', plantsLayer as any],
+    ]))
+    const viewport = new CanvasViewport(deps as any)
 
     viewport.initializeViewport()
     viewport.zoomIn()
@@ -158,9 +172,12 @@ describe('CanvasViewport', () => {
     expect(stage.scaleY()).toBeCloseTo(8.8)
     expect(stage.x()).toBeCloseTo(60)
     expect(stage.y()).toBeCloseTo(-40)
-    expect(plantNode.scale).toHaveBeenCalledWith({ x: 1 / 8.8, y: 1 / 8.8 })
     expect(zoomLevel.value).toBe(8.8)
-    expect(reconcileMaterializedScene).toHaveBeenCalled()
+    const [scale, position, options] = deps.applyStageTransform.mock.lastCall!
+    expect(scale).toBe(8.8)
+    expect(position.x).toBeCloseTo(60)
+    expect(position.y).toBeCloseTo(-40)
+    expect(options).toEqual({ invalidateDeferred: true })
   })
 
   it('fits visible content into the viewport bounds', () => {
@@ -177,19 +194,13 @@ describe('CanvasViewport', () => {
     const uiLayer = createLayerStub()
     const annotationsLayer = createLayerStub({ shapeNodes: [contentNode] })
     const baseLayer = createLayerStub({ shapeNodes: [overlayNode] })
-    const viewport = new CanvasViewport({
-      stage: stage as any,
-      layers: new Map([
-        ['base', baseLayer as any],
-        ['ui', uiLayer as any],
-        ['annotations', annotationsLayer as any],
-        ['plants', createLayerStub() as any],
-      ]),
-      syncOverlayTransforms: vi.fn(),
-      scheduleOverlayRedraw: vi.fn(),
-      scheduleLODUpdate: vi.fn(),
-      reconcileMaterializedScene: vi.fn(),
-    })
+    const deps = createViewportDeps(stage, new Map([
+      ['base', baseLayer as any],
+      ['ui', uiLayer as any],
+      ['annotations', annotationsLayer as any],
+      ['plants', createLayerStub() as any],
+    ]))
+    const viewport = new CanvasViewport(deps as any)
 
     viewport.zoomToFit()
 
@@ -205,24 +216,18 @@ describe('CanvasViewport', () => {
     Object.defineProperty(container, 'clientWidth', { configurable: true, value: 640 })
     Object.defineProperty(container, 'clientHeight', { configurable: true, value: 480 })
     const stage = createStageStub(container)
-    const scheduleOverlayRedraw = vi.fn()
-    const viewport = new CanvasViewport({
-      stage: stage as any,
-      layers: new Map([
-        ['ui', createLayerStub() as any],
-        ['plants', createLayerStub() as any],
-      ]),
-      syncOverlayTransforms: vi.fn(),
-      scheduleOverlayRedraw,
-      scheduleLODUpdate: vi.fn(),
-      reconcileMaterializedScene: vi.fn(),
-    })
+    const invalidateRender = vi.fn()
+    const deps = createViewportDeps(stage, new Map([
+      ['ui', createLayerStub() as any],
+      ['plants', createLayerStub() as any],
+    ]), { invalidateRender })
+    const viewport = new CanvasViewport(deps as any)
 
     viewport.init(container)
     ResizeObserverStub.instances[0]!.callback([] as ResizeObserverEntry[], {} as ResizeObserver)
 
     expect(stage.size).toHaveBeenCalledWith({ width: 640, height: 480 })
-    expect(scheduleOverlayRedraw).toHaveBeenCalled()
+    expect(invalidateRender).toHaveBeenCalledWith('overlays')
   })
 
   it('handles wheel zoom with immediate overlay sync and deferred lod scheduling', () => {
@@ -231,21 +236,13 @@ describe('CanvasViewport', () => {
     stage.position({ x: 100, y: 0 })
     stage.scale({ x: 8, y: 8 })
     const plantNode = { scale: vi.fn() }
-    const syncOverlayTransforms = vi.fn()
-    const scheduleLODUpdate = vi.fn()
     const uiLayer = createLayerStub()
     const plantsLayer = createLayerStub({ plantNodes: [plantNode] })
-    const viewport = new CanvasViewport({
-      stage: stage as any,
-      layers: new Map([
-        ['ui', uiLayer as any],
-        ['plants', plantsLayer as any],
-      ]),
-      syncOverlayTransforms,
-      scheduleOverlayRedraw: vi.fn(),
-      scheduleLODUpdate,
-      reconcileMaterializedScene: vi.fn(),
-    })
+    const deps = createViewportDeps(stage, new Map([
+      ['ui', uiLayer as any],
+      ['plants', plantsLayer as any],
+    ]))
+    const viewport = new CanvasViewport(deps as any)
 
     viewport.init(container)
     stage.emit('wheel', {
@@ -256,10 +253,11 @@ describe('CanvasViewport', () => {
     expect(stage.scaleY()).toBeCloseTo(8.8)
     expect(stage.x()).toBeCloseTo(85)
     expect(stage.y()).toBeCloseTo(-20)
-    expect(syncOverlayTransforms).toHaveBeenCalled()
-    expect(uiLayer.batchDraw).toHaveBeenCalled()
-    expect(plantNode.scale).toHaveBeenCalledWith({ x: 1 / 8.8, y: 1 / 8.8 })
-    expect(scheduleLODUpdate).toHaveBeenCalled()
+    const [scale, position, options] = deps.applyStageTransform.mock.lastCall!
+    expect(scale).toBe(8.8)
+    expect(position.x).toBeCloseTo(85)
+    expect(position.y).toBeCloseTo(-20)
+    expect(options).toEqual({ invalidateDeferred: true })
     expect(zoomLevel.value).toBe(8.8)
   })
 })

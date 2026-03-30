@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   updatePlantDisplay: vi.fn(),
   getPlantLOD: vi.fn(() => 'icon+label'),
-  updatePlantsLOD: vi.fn(),
+  updatePlantCounterScale: vi.fn(),
+  updatePlantDensity: vi.fn(),
+  updatePlantLOD: vi.fn(),
+  updatePlantStacking: vi.fn(),
   updatePlantLabelsForLocale: vi.fn(() => Promise.resolve()),
   updateAnnotationsForZoom: vi.fn(),
   updateGuideLines: vi.fn(),
@@ -19,7 +22,10 @@ vi.mock('../canvas/display-modes', () => ({
 
 vi.mock('../canvas/plants', () => ({
   getPlantLOD: mocks.getPlantLOD,
-  updatePlantsLOD: mocks.updatePlantsLOD,
+  updatePlantCounterScale: mocks.updatePlantCounterScale,
+  updatePlantDensity: mocks.updatePlantDensity,
+  updatePlantLOD: mocks.updatePlantLOD,
+  updatePlantStacking: mocks.updatePlantStacking,
   updatePlantLabelsForLocale: mocks.updatePlantLabelsForLocale,
 }))
 
@@ -44,9 +50,10 @@ vi.mock('../canvas/rulers', () => ({
   refreshRulerColors: mocks.refreshRulerColors,
 }))
 
-import { guides, plantColorByAttr, plantDisplayMode, selectedObjectIds, zoomLevel } from '../state/canvas'
+import { guides, plantColorByAttr, plantDisplayMode, zoomLevel } from '../state/canvas'
 import { locale, theme } from '../state/app'
 import { CanvasRenderPipeline } from '../canvas/runtime/render-pipeline'
+import { RenderReconciler } from '../canvas/runtime/render-reconciler'
 
 function makeLayer() {
   return {
@@ -54,7 +61,18 @@ function makeLayer() {
   } as any
 }
 
-describe('CanvasRenderPipeline', () => {
+function makeStage() {
+  return {
+    scaleX: () => zoomLevel.value,
+    container: () => ({ id: 'canvas-container' }),
+    findOne: vi.fn(() => null),
+    setAttrs: vi.fn((attrs: Record<string, number>) => {
+      if (typeof attrs.scaleX === 'number') zoomLevel.value = attrs.scaleX
+    }),
+  } as any
+}
+
+describe('Canvas renderer ownership', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((cb: FrameRequestCallback) => {
@@ -63,39 +81,27 @@ describe('CanvasRenderPipeline', () => {
     })
     vi.spyOn(globalThis, 'cancelAnimationFrame').mockImplementation(() => {})
 
-    mocks.updatePlantDisplay.mockClear()
-    mocks.getPlantLOD.mockClear()
-    mocks.updatePlantsLOD.mockClear()
-    mocks.updatePlantLabelsForLocale.mockClear()
-    mocks.updateAnnotationsForZoom.mockClear()
-    mocks.updateGuideLines.mockClear()
-    mocks.refreshGridColors.mockClear()
-    mocks.refreshCanvasTheme.mockClear()
-    mocks.updateHtmlRulers.mockClear()
-    mocks.refreshRulerColors.mockClear()
+    Object.values(mocks).forEach((mock) => {
+      if ('mockClear' in mock) {
+        ;(mock as ReturnType<typeof vi.fn>).mockClear()
+      }
+    })
 
     guides.value = []
     plantDisplayMode.value = 'default'
     plantColorByAttr.value = 'stratum'
-    selectedObjectIds.value = new Set(['plant-1'])
     zoomLevel.value = 2
     locale.value = 'en'
     theme.value = 'light'
   })
 
-  it('reconciles display, zoom-dependent state, theme, and overlay redraw after materialization', () => {
+  it('reconciler flushes display, zoom-dependent state, theme, and overlays after invalidation', () => {
     const plantsLayer = makeLayer()
     const annotationsLayer = makeLayer()
     const baseLayer = makeLayer()
     const uiLayer = makeLayer()
-    const stage = {
-      scaleX: () => 2,
-      container: () => ({ id: 'canvas-container' }),
-      findOne: vi.fn(() => null),
-    } as any
-
     const pipeline = new CanvasRenderPipeline({
-      stage,
+      stage: makeStage(),
       layers: new Map([
         ['plants', plantsLayer],
         ['annotations', annotationsLayer],
@@ -107,9 +113,22 @@ describe('CanvasRenderPipeline', () => {
       getSpeciesCache: () => new Map(),
       loadSpeciesCache: vi.fn(async () => {}),
     })
+    const reconciler = new RenderReconciler({
+      stage: makeStage(),
+      pipeline,
+      getVisiblePlantsForDeferredPasses: () => [],
+    })
 
-    pipeline.reconcileAfterMaterialization()
+    reconciler.invalidate(
+      'counter-scale',
+      'plant-display',
+      'lod',
+      'annotations',
+      'theme',
+      'overlays',
+    )
 
+    expect(mocks.updatePlantCounterScale).toHaveBeenCalledWith(plantsLayer, 2)
     expect(mocks.updatePlantDisplay).toHaveBeenCalledWith(
       plantsLayer,
       'default',
@@ -118,10 +137,10 @@ describe('CanvasRenderPipeline', () => {
       expect.any(Map),
     )
     expect(mocks.getPlantLOD).toHaveBeenCalledWith(2)
-    expect(mocks.updatePlantsLOD).toHaveBeenCalledWith(plantsLayer, 'icon+label', 2, selectedObjectIds.value)
+    expect(mocks.updatePlantLOD).toHaveBeenCalledWith(plantsLayer, 'icon+label', expect.any(Set))
     expect(mocks.updateAnnotationsForZoom).toHaveBeenCalledWith(annotationsLayer, 2)
     expect(mocks.refreshCanvasTheme).toHaveBeenCalledWith(
-      stage.container(),
+      expect.anything(),
       expect.any(Map),
       null,
     )
@@ -151,35 +170,27 @@ describe('CanvasRenderPipeline', () => {
     expect(mocks.updatePlantLabelsForLocale).toHaveBeenCalledWith(plantsLayer, 'fr')
   })
 
-  it('schedules a single deferred zoom reconciliation pass', () => {
-    const plantsLayer = makeLayer()
-    const annotationsLayer = makeLayer()
-
+  it('coalesces repeated deferred density and stacking invalidations', () => {
+    const group = { getAbsolutePosition: () => ({ x: 10, y: 20 }) } as any
     const pipeline = new CanvasRenderPipeline({
-      stage: {
-        scaleX: () => 3,
-        container: () => null,
-        findOne: vi.fn(() => null),
-      } as any,
-      layers: new Map([
-        ['plants', plantsLayer],
-        ['annotations', annotationsLayer],
-      ]),
+      stage: makeStage(),
+      layers: new Map([['plants', makeLayer()]]),
       getHtmlRulers: () => null,
       getScaleBar: () => null,
       getSpeciesCache: () => new Map(),
       loadSpeciesCache: vi.fn(async () => {}),
     })
+    const reconciler = new RenderReconciler({
+      stage: makeStage(),
+      pipeline,
+      getVisiblePlantsForDeferredPasses: () => [group],
+    })
 
-    zoomLevel.value = 3
-    pipeline.scheduleLODUpdate()
-    pipeline.scheduleLODUpdate()
-
+    reconciler.invalidate('density')
+    reconciler.invalidate('stacking')
     vi.runAllTimers()
 
-    expect(mocks.getPlantLOD).toHaveBeenCalledTimes(1)
-    expect(mocks.getPlantLOD).toHaveBeenCalledWith(3)
-    expect(mocks.updatePlantsLOD).toHaveBeenCalledWith(plantsLayer, 'icon+label', 3, selectedObjectIds.value)
-    expect(mocks.updateAnnotationsForZoom).toHaveBeenCalledWith(annotationsLayer, 3)
+    expect(mocks.updatePlantDensity).toHaveBeenCalledTimes(1)
+    expect(mocks.updatePlantStacking).toHaveBeenCalledTimes(1)
   })
 })
