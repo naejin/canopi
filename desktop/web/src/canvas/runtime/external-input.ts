@@ -112,21 +112,20 @@ export class CanvasExternalInput {
 
     this._boundWindowPointerMove = (e: PointerEvent) => {
       if (!this._dragTool) return
-      // If the cursor is inside the canvas container, Konva handles it.
-      // Only intervene when outside.
-      if (this._isInsideContainer(e, container)) return
+      const rect = container.getBoundingClientRect()
+      if (this._isInsideRect(e, rect)) return
 
-      const clamped = this._clampToContainer(e, container)
+      const clamped = this._clampToRect(e, rect)
       this._injectClampedPosition(clamped)
       this._deps.stage.fire('mousemove', { evt: e } as unknown as Konva.KonvaEventObject<MouseEvent>)
     }
 
     this._boundWindowPointerUp = (e: PointerEvent) => {
       if (!this._dragTool) return
+      const rect = container.getBoundingClientRect()
 
-      // If outside, inject a clamped position so the tool commits at the edge.
-      if (!this._isInsideContainer(e, container)) {
-        const clamped = this._clampToContainer(e, container)
+      if (!this._isInsideRect(e, rect)) {
+        const clamped = this._clampToRect(e, rect)
         this._injectClampedPosition(clamped)
       }
       this._deps.stage.fire('mouseup', { evt: e } as unknown as Konva.KonvaEventObject<MouseEvent>)
@@ -149,9 +148,8 @@ export class CanvasExternalInput {
     this._dragTool = null
   }
 
-  /** Check if a pointer event is inside the canvas container bounds. */
-  private _isInsideContainer(e: PointerEvent, container: HTMLDivElement): boolean {
-    const rect = container.getBoundingClientRect()
+  /** Check if a pointer event is inside a pre-computed DOMRect. */
+  private _isInsideRect(e: PointerEvent, rect: DOMRect): boolean {
     return (
       e.clientX >= rect.left &&
       e.clientX <= rect.right &&
@@ -160,14 +158,8 @@ export class CanvasExternalInput {
     )
   }
 
-  /**
-   * Clamp a pointer event's screen coordinates to the canvas container edges,
-   * then convert to world (canvas) coordinates. The clamped point lies on the
-   * line from the container center to the cursor — so the shape edge stays
-   * aligned with the cursor direction.
-   */
-  private _clampToContainer(e: PointerEvent, container: HTMLDivElement): { x: number; y: number } {
-    const rect = container.getBoundingClientRect()
+  /** Clamp pointer to a pre-computed DOMRect, convert to world coordinates. */
+  private _clampToRect(e: PointerEvent, rect: DOMRect): { x: number; y: number } {
     const clampedScreenX = Math.max(rect.left, Math.min(rect.right, e.clientX))
     const clampedScreenY = Math.max(rect.top, Math.min(rect.bottom, e.clientY))
 

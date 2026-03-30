@@ -1,5 +1,18 @@
 import Konva from 'konva'
 
+/**
+ * Get the node to apply visual highlight effects to. For counter-scaled
+ * plant groups, returns the first child so the shadow renders in
+ * screen-pixel space and stays visible at any zoom level.
+ */
+export function highlightTargetFor(node: Konva.Node): Konva.Node {
+  if (node instanceof Konva.Group && node.hasName('plant-group')) {
+    const child = (node as Konva.Group).getChildren()[0]
+    if (child) return child
+  }
+  return node
+}
+
 // ---------------------------------------------------------------------------
 // Canvas theme refresh — keeps Konva nodes in sync with CSS theme variables.
 //
@@ -170,12 +183,7 @@ export function refreshCanvasTheme(
     let dirty = false
     layer.find('.shape').forEach((node: Konva.Node) => {
       if (typeof node.getAttr !== 'function' || !node.getAttr('data-highlight')) return
-      // For plant groups, the shadow lives on the child
-      let target: Konva.Node = node
-      if (node instanceof Konva.Group && node.hasName('plant-group')) {
-        const child = (node as Konva.Group).getChildren()[0]
-        if (child) target = child
-      }
+      const target = highlightTargetFor(node)
       if (typeof target.getAttr === 'function' && target.getAttr('shadowColor') !== undefined) {
         target.setAttr('shadowColor', glowColor)
         dirty = true

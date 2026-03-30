@@ -32,12 +32,12 @@ Completed and archived:
 - Wave 2 structural split
 - Wave 3 implementation slice in the current tree
 - Wave 3 high-priority boundary fixes
+- retained-surface Wave 3 closeout on the surviving architecture
 - renderer phases 1-3 implementation
 - automated frontend verification for the landed rewrite slice
 
 Still active:
-- retained-surface Wave 3 closeout on the surviving architecture
-- renderer stability-gate closeout after retained-surface fixes land
+- renderer stability-gate closeout on the retained-surface build
 - Wave 4 design coherence on the surviving structure
 - Wave 5 release hardening and rewrite-exit verification
 
@@ -45,6 +45,7 @@ Deferred after live review:
 - featured-design world map / template import
 - timeline workflows
 - budget workflows
+- consortium flows
 
 The rewrite is not complete until the required product journeys pass end to end on the final surviving architecture.
 
@@ -115,31 +116,7 @@ Do not widen viewport filtering for other passes unless the renderer follow-up d
 
 ## 3. Remaining Work In Order
 
-### 3.1 Wave 3 Retained-Surface Closeout
-
-What is left:
-- layer controls
-- location tab search / drag / zoom / confirm
-- consortium flows
-- hide deferred `world-map`, `timeline`, and `budget` entry points from the live UI
-- improve retained-surface UI/UX, with design location as the primary follow-up
-
-Why this is next:
-- these are the surviving rewrite-exit product journeys after the live review
-- the live review already showed that `world-map`, `timeline`, and `budget` should move out of rewrite-exit scope
-- retained surfaces must be polished before renderer stability and release hardening can be called done
-
-How to do it:
-- hide deferred feature entry points without removing underlying persistence fields
-- keep fixes on the surviving architecture only
-- use narrow UX and behavior improvements rather than reopening broad product scope
-
-Current outcome from live review:
-- `world-map`, `timeline`, and `budget` are postponed and no longer part of rewrite exit
-- retained-surface UX work is now the active Wave 3 follow-up track
-- design location is the highest-priority user-facing improvement area
-
-### 3.2 Renderer Stability Gate Closeout
+### 3.1 Renderer Stability Gate Closeout
 
 What is left:
 - rerun the renderer manual checklist on the landed reconciler architecture
@@ -147,9 +124,10 @@ What is left:
 - fix any High-severity regressions found there
 - add only targeted follow-up coverage that closes discovered gaps
 
-Why this is blocked behind retained-surface closeout:
+Why this is next:
 - the remaining renderer risk is behavioral, not architectural
-- the code split is landed, but the gate is about correctness under real use on the surviving feature set
+- retained-surface Wave 3 closeout is now landed on the surviving architecture
+- the gate is now about correctness under real use on the final rewrite-exit feature set
 
 How to do it:
 - use `docs/renderer/renderer.md` as the renderer-specific checklist
@@ -157,11 +135,11 @@ How to do it:
 - do not mix optional optimization or product redesign into stability closeout
 
 Current rule:
-- validate retained surfaces only: core canvas flows, layer controls, design location, and consortium
+- validate retained surfaces only: core canvas flows, layer controls, and design location
 - do not reintroduce deferred features as part of renderer-gate work
 - update this file and `docs/renderer/renderer.md` when retained-surface fixes materially change the gate
 
-### 3.3 Wave 4 Design Coherence
+### 3.2 Wave 4 Design Coherence
 
 Blocked until:
 - renderer phases 1-3 are stable per the gate below
@@ -179,7 +157,7 @@ How to do it:
 - batch shared token, i18n, and fixture churn
 - keep redesigns that depend on renderer behavior behind the stability gate
 
-### 3.4 Wave 5 Release Hardening
+### 3.3 Wave 5 Release Hardening
 
 What is left:
 - rewrite-exit checklist and docs cleanup
@@ -229,7 +207,7 @@ For rewrite planning purposes, renderer phases 1-3 are stable only when all of t
 
 Current gate state:
 - condition 2 is green locally on 2026-03-30
-- conditions 3 and 4 still need a retained-surface rerun after the current UX/location follow-up work
+- retained-surface Wave 3 closeout is landed on 2026-03-30; conditions 3 and 4 still need the manual and live-validation rerun on that build
 - Wave 4 remains blocked until those results are recorded and any resulting High-severity regressions are closed
 
 Until all five conditions are true:
@@ -360,8 +338,8 @@ These are implementation rules, not optional style preferences.
 
 ## 7. Active Blockers And Deferred Items
 
-Blocked until retained-surface Wave 3 closeout:
-- Wave 3 completion call
+Pending immediate closeout after Wave 3 landing:
+- retained-surface live verification rerun on the current build
 - renderer stability-gate completion work that depends on retained-surface live findings
 - any rewrite-exit claim that depends on real-user verification rather than automated checks
 
@@ -383,6 +361,7 @@ Still deferred until post-rewrite product definition:
 - featured-design world map / template import
 - timeline workflows
 - budget workflows
+- consortium flows
 - geo / terrain workflows
 - export workflows
 - learning content
@@ -398,11 +377,10 @@ The rewrite is not complete until these journeys pass end to end:
 3. Edit canvas objects, undo/redo them, and preserve them through save/load roundtrip
 4. Use `LayerPanel` for required display/layer configuration
 5. Use bottom-bar `location` search / drag / zoom / confirm flows correctly
-6. Use `consortium` flows without lifecycle or persistence regressions
-7. Recover gracefully from network failure, disk failure, and invalid external data
-8. Use the app in light and dark themes without broken surfaces
-9. Use supported locales without missing keys or broken labels
-10. Meet release criteria on each supported platform at rewrite exit
+6. Recover gracefully from network failure, disk failure, and invalid external data
+7. Use the app in light and dark themes without broken surfaces
+8. Use supported locales without missing keys or broken labels
+9. Meet release criteria on each supported platform at rewrite exit
 
 ---
 
@@ -412,7 +390,7 @@ Use this file as the canonical operational reference.
 
 Use archived docs only for historical context.
 
-When retained-surface live verification is rerun after the current UX/location follow-up work:
+With retained-surface Wave 3 closeout landed on 2026-03-30, the next required step is the retained-surface live verification rerun:
 - record the findings in this file and the renderer/release follow-up docs before broad new work starts
 - turn discovered regressions into narrow fixes with targeted tests
 - remove any stale scope language if the surviving rewrite-exit surface changes again

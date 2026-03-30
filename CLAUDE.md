@@ -5,7 +5,7 @@
 - **Frontend**: Preact + @preact/signals + TypeScript + Vite + CSS Modules
 - **Canvas**: Konva.js (imperative API, NOT react-konva)
 - **i18n**: i18next core (NOT react-i18next), 11 languages (en, fr, es, pt, it, zh, de, ja, ko, nl, ru)
-- **Maps**: MapLibre GL JS + maplibre-contour (dependency retained, code deleted — rebuild in Wave 3)
+- **Maps**: MapLibre GL JS + maplibre-contour (dependency retained, code deleted — deferred post-rewrite)
 - **Native**: lib-c (Linux, Cairo PNG/PDF + inotify + XDG), lib-swift (macOS stub), lib-cpp (Windows stub)
 
 ## Project Structure
@@ -38,14 +38,83 @@ canopi/
 - Depth: borders-only (no dramatic shadows)
 
 ## Pruned Features (code deleted, git history preserves)
-These features were deleted during pre-rewrite cleanup. They will be rebuilt with split architecture during the rewrite (see `docs/rewrite.md`):
+These features were deleted during pre-rewrite cleanup. See `docs/todo.md` for current status:
 - **Tools**: Ellipse, Polygon, Freeform, Line, Measure, Dimension, Arrow, Callout, Pattern Fill, Spacing
 - **Overlays**: Minimap, Celestial dial, Consortium visual, MapLibre/location, Compass
 - **Panels**: Bottom panel (Timeline/Budget/Consortium tabs), Layer panel, World Map, Learning
 - **Export**: GeoJSON, PNG/SVG export commands
 - **Support files**: dimensions.ts, pattern-math.ts, map-layer.ts, ipc/community.ts, ipc/tiles.ts, TileDownloadModal
-- **Required at rewrite exit**: WorldMapPanel, LayerPanel, Timeline, Budget (rebuilt in Wave 3 with split architecture)
-- **Wave 0 must classify**: geo/terrain, export, platform support, knowledge/learning
+- **Retained for rewrite exit**: LayerPanel, location flows (Wave 3 retained-surface closeout)
+- **Deferred post-rewrite**: WorldMapPanel, Timeline, Budget, Consortium, geo/terrain, export, learning content
+
+## Architecture Rules (from rewrite — enforced)
+
+These rules are non-negotiable. They come from `docs/todo.md` and protect the architectural boundaries established during the rewrite.
+
+### Document Mutation Rule
+- **No component may replace the active document directly** — only `state/document-actions.ts` performs destructive session replacement
+- **No panel may call document replacement directly** — panels request document changes through the document-actions boundary
+- All document-replacing flows use one shared guard path (dirty check → confirm → replace)
+
+### Action-Layer Rule
+- **Action modules must not import other action modules** — `state/*-actions.ts` files are leaf modules
+- Cross-cutting flows should compose actions at a higher boundary (e.g., a workflow module)
+- If repeated orchestration appears, create a small explicit workflow module (see `state/template-import-workflow.ts`)
+- Import direction: **components → actions → state** (never backwards)
+
+### Canvas Runtime Rule
+- **No shared runtime service locator** — runtime modules take only the dependencies they need via typed `*Deps` interfaces
+- `CanvasEngine` is the public facade — external code imports from `engine.ts`, never from `runtime/*.ts` directly
+- Runtime modules own their domain exclusively:
+  - `runtime/viewport.ts` — zoom, pan, resize, counter-scale
+  - `runtime/document-session.ts` — document load/hydration, layer state reset
+  - `runtime/object-ops.ts` — selection, delete, duplicate, clipboard, z-order
+  - `runtime/external-input.ts` — keyboard, mouse, drag-drop event routing
+  - `runtime/render-pipeline.ts` — LOD scheduling, theme reconciliation, display mode refresh, post-materialization reconciliation
+- Do not move domain logic back into `engine.ts` — if new canvas behavior is needed, add it to the appropriate runtime module or create a new one
+
+### Canvas Drag & Off-Canvas Behavior
+- **No pointer capture**: Use window-level `pointermove`/`pointerup` listeners during drag, not `setPointerCapture` (Konva listens on internal canvas elements, not the container div)
+- **Edge clamping**: When cursor leaves canvas during draw/select, clamp position to container edge via `_clampToRect()` in `external-input.ts`. Inject clamped position via one-shot `getRelativePointerPosition()` override
+- **Tool affinity**: `external-input.ts` locks the tool reference on mousedown — all subsequent events route to that tool even if `activeTool` changes mid-drag
+- **Shapes born inert**: All shapes created with `draggable: false`. `_applyTool()` in engine.ts is the sole authority for draggable state. `AddNodeCommand.execute()` also sets draggable based on active tool
+
+### Selection Highlights
+- Shadow effects on counter-scaled plant groups must target the **first child** (screen-pixel space), not the group. Use `highlightTargetFor()` from `theme-refresh.ts`
+- Ephemeral highlight attrs (`shadowColor`, `shadowBlur`, etc.) stripped via shared `EPHEMERAL_CANVAS_ATTRS` in `node-serialization.ts` — imported by `operations.ts` STRIP_ATTRS
+- `_applyHighlight`/`_removeHighlightFromNode` do NOT call `batchDraw()` — caller must batch after bulk operations via `_redrawHighlightedLayers()`
+- `highlight-glow` canvas color reads from `--color-primary` on theme switch
+
+### Signal Performance in Hot Paths
+- **Never write signals unconditionally at 60fps** (e.g. map `move` events). New object literals always fail `Object.is` equality, triggering unnecessary rerenders. Use `.peek()` to read without subscribing, compare before writing
+- **`getBoundingClientRect()` in hot loops**: Cache the DOMRect — don't call twice per pointermove event
+
+### Resource Ownership Rule
+- Every resource-owning surface must have **one explicit lifecycle owner** for setup, update, and teardown
+- Applies to: canvas engine, map instances, timers, listeners, async cancellation tokens, DOM overlays
+- HMR cleanup: module-level `effect()` and `addEventListener` must store disposers and clean up via `import.meta.hot.dispose()`
+
+### Hotspot File Protection
+These files have concentrated authority. **One writer at a time** — do not assign multiple concurrent writers. Create seam files first, then move ownership:
+- `desktop/web/src/canvas/engine.ts`
+- `desktop/src/db/plant_db.rs`
+- `desktop/src/db/query_builder.rs`
+- `desktop/web/src/state/design.ts`
+- `desktop/web/src/state/plant-db.ts`
+
+### Renderer Ownership (landed — in stability-gate validation)
+`RenderReconciler` owns render invalidation, batching, deferred scheduling, and stage-transform invalidation. `render-pipeline.ts` is the execution delegate behind the reconciler, not the scheduler. See `docs/renderer/renderer.md` for the validation checklist. Rules:
+- All visual updates go through `reconciler.invalidate(...)` — no scattered `batchDraw()` / manual reconcile calls
+- All stage transforms go through the engine-owned stage-transform path
+- Do not reintroduce direct renderer scheduling from viewport, tools, or action code
+- Do not treat `zoomLevel` as transform authority
+- Keep full-layer passes full-layer until a real sublinear index exists
+- Use viewport filtering only for deferred passes where stale off-screen state is acceptable
+
+Blocked behind renderer stability gate (per `docs/todo.md` §4):
+- Per-species default colors (100-color palette)
+- Labels hidden by default with smart cartographic placement
+- `loadSpeciesCache` extraction from `engine.ts`
 
 ## Key Conventions
 
@@ -68,6 +137,7 @@ These features were deleted during pre-rewrite cleanup. They will be rebuilt wit
 - **No typeshare**: Use `specta::Type`
 - **No string-formatted SQL**: Use prepared statements with `?1`, `?2`
 - **No raw rgba() in CSS Modules**: Always use `var(--color-*)` tokens — raw values break dark mode
+- **No `font-weight: 500`**: Two weights only — `400` (body/reading) and `600` (name/label/interactive). Weight 500 creates a mushy middle with no clear purpose. See `.interface-design/system.md` for the five typography roles (Label, Name, Body, Caption, Value)
 
 ### IPC Commands
 - Return `Result<T, String>` — Tauri serializes errors to frontend
@@ -150,8 +220,8 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 
 ## Gotchas
 
-### MapLibre / Terrain (deleted — rebuild in Wave 3)
-MapLibre code (`map-layer.ts`, contour/hillshade effects, map sync) was deleted during pre-rewrite pruning. These gotchas apply when rebuilding in Wave 3:
+### MapLibre / Terrain (deleted — deferred post-rewrite)
+MapLibre code (`map-layer.ts`, contour/hillshade effects, map sync) was deleted during pre-rewrite pruning. These gotchas apply when rebuilding:
 - **MapLibre paint properties can't use CSS vars**: Hardcoded hex colors in MapLibre style objects are acceptable — they render on map tiles, not app chrome
 - **`maplibre-contour` for client-side DEM contours**: Use `DemSource` with AWS Terrain Tiles (Terrarium encoding). Register protocol once with `addProtocol()`
 - **MapLibre container opacity for map blending**: Apply opacity to the container div, NOT try to make Konva canvas transparent (causes blank canvas bugs)
@@ -222,8 +292,6 @@ MapLibre code (`map-layer.ts`, contour/hillshade effects, map sync) was deleted 
 - **`prepare-db.py` fails if Tauri app is running**: The `PRAGMA journal_mode=DELETE` at finalization hits a lock. Stop the app before regenerating, or ignore the error — the DB is already built, just not optimized
 - **Filter-to-column mapping**: `SpeciesFilter.life_cycle: Vec<String>` maps to boolean columns via `query_builder.rs` (e.g. `"Annual"` → `is_annual = 1`). This preserves OR-semantics in the UI while the DB uses boolean columns. Don't change the filter type — change the query mapping
 - **Stratum DB values are lowercase**: DB stores `"emergent"`, `"high"`, `"low"`, `"medium"` — NOT `"Emergent"`, `"High canopy"`. The `STRATA_COLORS` map in `plants.ts` uses raw DB keys. Display labels come from `STRATUM_I18N_KEY` → `t()`. Never hardcode display-case stratum strings in color maps or comparisons
-- **No `sqlite3` CLI on this machine**: Use `python3 -c "import sqlite3; ..."` for DB inspection
-- **No `pip`/`pip3` on this machine**: Use `python3 -c "import ..."` for ad-hoc checks. Only stdlib modules available
 - **rusqlite feature**: Use `bundled-full` (not `bundled`) — enables FTS5 full-text search
 - **Plant DB PRAGMAs**: On read-only connections, do NOT set `journal_mode=WAL` or `query_only=true`. Only `mmap_size` and `cache_size`
 - **`translated_values` table is wide format**: 22 language columns (`value_en`, `value_fr`, `value_es`, `value_pt`, `value_it`, `value_zh`, `value_de`, `value_ja`, `value_ko`, `value_nl`, `value_ru`, `value_fi`, `value_cs`, `value_pl`, `value_sv`, `value_da`, `value_ca`, `value_uk`, `value_hr`, `value_hu`). App UI supports 11 languages; extra 11 carried in DB for future expansion. NOT a normalized table with `language`/`translated` columns. `translate_value()` in `plant_db.rs` maps locale to column name via allowlist
@@ -248,25 +316,26 @@ MapLibre code (`map-layer.ts`, contour/hillshade effects, map sync) was deleted 
 - **`ellenberg_inferences` table skipped**: 468K rows of ML-predicted Ellenberg values (v8 export). Not contracted — using observed values only from the 6 `ellenberg_*` columns on the species table
 - **`species_uses` descriptions are translatable**: `translated_values` has `use:*` prefixed field names (e.g., `use:edible_uses`). Map `use_category` "edible uses" → field "use:edible_uses" via `category.replace(' ', '_')`. Query must use `SELECT DISTINCT` — the table has massive row duplication from prepare-db.py joins
 - **`best_common_names` returns one name per locale**: Uses `is_primary` flag to select the best name (e.g., "Maïs" for Zea mays in French, not "Blé d'Inde"). `species_common_names` has multiple names per species — multiple-name display planned for 3.3b
-- **FTS5 index is a single unweighted `all_text` blob**: Common name matches rank the same as habitat text. Weighted column restructure planned for 3.3a
 
 ### Canvas Engine / Architecture
-- **Every new canvas module must be wired into runtime**: Must be imported and called from `engine.ts` or `serializer.ts`
+- **`CanvasEngine` is the public facade**: External code must use `engine.ts` methods — never import from `runtime/*.ts` directly. Internal behavior lives in runtime modules (see Canvas Architecture section above)
+- **Every new canvas module must be wired into runtime**: Must be imported and called from `engine.ts`, the appropriate `runtime/*.ts` module, or `serializer.ts`
 - **`state/canvas.ts` mirror signals**: `engine.ts` cannot import from `state/design.ts` (circular). Use mirror signals in `state/canvas.ts`
 - **`Command` interface**: Every undo/redo command class must include `readonly type = 'commandName'`
 - **`CanvasTool` event signatures**: Tool methods use `Konva.KonvaEventObject<MouseEvent>`, not raw `MouseEvent`
 - **Panel switching recreates CanvasEngine**: CanvasPanel unmounts/remounts. Re-load via `loadCanvasFromDocument()` + `showCanvasChrome()`
 - **Canvas dirty tracking**: `_past.length` caps at 500. Use `_savedPosition` checkpoint. `history.clear()` must NOT trigger dirty
+- **Visual updates go through the reconciler**: Do not call `layer.batchDraw()` for plant/annotation visual changes from outside the render pipeline. Use `reconciler.invalidate(...)` — the reconciler schedules the appropriate pipeline method
 - **Vitest with Konva**: Requires `canvas` npm package as devDependency
 
 ### Platform / Build
 - **Linux deps**: `sudo apt-get install libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev patchelf` — do NOT install `libappindicator3-dev`
-- **Dev environment is Linux-only**: No macOS or Windows access. Cross-platform native libs (lib-swift, lib-cpp) require CI (GitHub Actions) + beta testers for validation
 - **`std::fs::rename` on Windows**: Fails with locked files. Use `design::atomic_replace()` with rollback sidecar
 
-## Document Lifecycle (enforced — Phase 2.1 implemented)
-- **`toCanopi(engine, metadata, doc)` is the sole save composition point** — all save paths go through it
+## Document Lifecycle (enforced — Wave 1 + Wave 2)
+- **`state/document-actions.ts` is the sole document replacement authority** — no component or panel may replace the active document directly. All destructive flows (new, open, template import) go through document-actions
 - **`state/document.ts` is the canonical document API** — external consumers import from here. `state/design.ts` is internal
+- **`toCanopi(engine, metadata, doc)` is the sole save composition point** — all save paths go through it
 - **Never regenerate `created_at`** — preserve from loaded file
 - **Preserve all loaded document sections on save** — timeline, budget, consortiums, description, location, extra fields
 - **Preserve per-object non-visual fields** — plant notes/planted_date/quantity and zone notes as Konva custom attrs
@@ -277,6 +346,7 @@ MapLibre code (`map-layer.ts`, contour/hillshade effects, map sync) was deleted 
 - **No serializer/state module cycle** — `serializer.ts` must NOT import from `state/design.ts`
 - **Close guard uses `destroy()` not `close()`** — avoids re-entry loop
 - **Cross-platform file replace** — `atomic_replace()` in `design/mod.rs`
+- **Queued-load handoff** — `consumeQueuedDocumentLoad` routes through document-actions without the dirty guard (file was just opened from OS, no unsaved work to protect)
 
 ## Settings Persistence Contract
 - **Rust `Settings` (user DB) is the single source of truth** for all user preferences: locale, theme, grid, snap, autosave interval. Rust struct retains map/terrain/bottom-panel fields for forward compatibility; frontend no longer reads/writes them (pruned features)
@@ -286,8 +356,23 @@ MapLibre code (`map-layer.ts`, contour/hillshade effects, map sync) was deleted 
 - **Theme**: light/dark only (no system option). Toggle in title bar cycles between the two
 
 ## Canvas Architecture
+
+### Runtime Module Split (Wave 2) + Reconciler (Wave 3)
+`CanvasEngine` is the public facade. Internal behavior is split into runtime modules with narrow `*Deps` interfaces. `RenderReconciler` owns scheduling; `render-pipeline.ts` is the execution delegate:
+```
+CanvasEngine (engine.ts) — facade + signal effects
+  ├── RenderReconciler             — render invalidation, batching, deferred scheduling, stage-transform invalidation
+  ├── runtime/render-pipeline.ts   — LOD, display modes, theme refresh (execution delegate, not scheduler)
+  ├── runtime/viewport.ts          — zoom, pan, resize, counter-scale
+  ├── runtime/object-ops.ts        — selection, delete, duplicate, clipboard, z-order
+  ├── runtime/external-input.ts    — keyboard, mouse, drag-drop routing
+  └── runtime/document-session.ts  — document load/hydration, layer state reset
+```
+External code uses `CanvasEngine` methods only. Never import from `runtime/*.ts` directly.
+
+### Canvas Rendering
 - Zone shapes: world-unit geometry, `strokeScaleEnabled: false` for constant-pixel strokes
-- Plant symbols: fixed screen-pixel circles, group-level counter-scale. Labels pending density rework (see `docs/roadmap.md`)
+- Plant symbols: fixed screen-pixel circles, group-level counter-scale
 - Grid: single `Konva.Shape` with custom `sceneFunc`, adaptive density via "nice distances" ladder
 - Rulers: HTML `<canvas>` elements, NOT Konva — always in screen space
 - Scale bar: uses `--color-text-muted` for theme-aware rendering
@@ -296,6 +381,15 @@ MapLibre code (`map-layer.ts`, contour/hillshade effects, map sync) was deleted 
 - Display modes: `display-modes.ts` has `updatePlantDisplay()` + `getLegendEntries()`. Signals: `plantDisplayMode` (`'default'`/`'canopy'`/`'color-by'`) and `plantColorByAttr` in `state/canvas.ts`. UI controls in `DisplayModeControls.tsx` + `DisplayLegend.tsx`
 - Plant tooltip: HTML `<div>` overlay in `engine.ts` (not Konva text). `pointer-events: none`. Positioned via `stage.getAbsoluteTransform()`. Uses safe DOM methods (no innerHTML)
 - Plant LOD labels: threshold at `stageScale >= 5`. Nearest-neighbor density check (squared distances, no sqrt). Selected plants always show labels. Stacked plants get moss-green count badge
+
+### Render Pipeline Ownership
+`RenderReconciler` owns all render scheduling. `render-pipeline.ts` is the execution delegate — other runtime modules must not call `batchDraw()` or walk plant nodes for visual updates. Go through `reconciler.invalidate(...)`:
+- `reconcileAfterMaterialization()` — full visual sync after any scene mutation (add/remove/undo/redo/load)
+- `refreshPlantDisplay()` — display mode color/radius update
+- `reconcileZoomDependentState()` — LOD + counter-scale + annotation zoom (called via `scheduleLODUpdate` or after button zoom)
+- `refreshTheme()` — CSS variable color refresh on all canvas nodes
+- `refreshLocale()` — plant label text update from species DB
+- **Renderer stability gate**: Phases 1-3 landed but gate not yet satisfied — see `docs/renderer/renderer.md` for the validation checklist and `docs/todo.md` §4 for gate conditions
 
 ## Quality Process
 - After completing a phase or significant feature, run `/craft` with two parallel code-reviewer agents
@@ -306,9 +400,13 @@ MapLibre code (`map-layer.ts`, contour/hillshade effects, map sync) was deleted 
 - Detail card expansion pattern: Rust struct → SQL query → translate_value() → frontend types → collapsible sections → i18n keys × 6 locales → schema-contract.json translations → DB population
 
 ## Key Documents
-- Rewrite reference: `docs/rewrite.md` (canonical implementation plan)
+- Rewrite reference: `docs/todo.md` (canonical operational reference — remaining work, blockers, guardrails)
+- Renderer validation: `docs/renderer/renderer.md` (stability-gate checklist for landed reconciler)
+- Product scope lock: `docs/product-definition.md`
+- Release hardening: `docs/release-verification.md`
 - Roadmap: `docs/roadmap.md`
 - Design system: `.interface-design/system.md`
+- Rewrite history: `docs/archive/rewrite-history-2026-03.md`
 - Completed phase plans + reviews: `docs/archive/`
 
 ## Context7 Library IDs

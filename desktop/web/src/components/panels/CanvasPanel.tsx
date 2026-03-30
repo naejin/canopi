@@ -1,6 +1,6 @@
 import { useRef, useEffect } from 'preact/hooks'
 import { locale, autoSaveIntervalMs } from '../../state/app'
-import { bottomPanelOpen, canvasReady } from '../../state/canvas'
+import { canvasReady } from '../../state/canvas'
 import {
   currentDesign, designName, designPath, designDirty,
   writeCanvasIntoDocument, loadCanvasFromDocument, autosaveFailed,
@@ -82,7 +82,6 @@ export function CanvasPanel() {
   }, [intervalMs])
 
   const hasDesign = currentDesign.value !== null
-  const bottomOpen = bottomPanelOpen.value
 
   return (
     <div className={styles.canvasPanel}>
@@ -101,7 +100,7 @@ export function CanvasPanel() {
         </div>
         {hasDesign && (
           <div className={styles.canvasBar}>
-            {!bottomOpen && <BottomPanelLauncher />}
+            <BottomPanelLauncher />
             <div className={styles.canvasBarSpacer} />
             <DisplayModeControls />
             <div className={styles.canvasBarDivider} />

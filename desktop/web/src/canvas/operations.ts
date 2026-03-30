@@ -1,5 +1,6 @@
 import Konva from 'konva'
 import type { CanvasEngine } from './engine'
+import { EPHEMERAL_CANVAS_ATTRS } from './commands/node-serialization'
 
 // ---------------------------------------------------------------------------
 // Geometry helpers
@@ -94,10 +95,7 @@ export interface SerializedNode {
 }
 
 // Attrs we always strip before serializing (re-generated or tool-specific)
-const STRIP_ATTRS = new Set([
-  'id', 'shadowColor', 'shadowBlur', 'shadowOpacity', 'shadowForStrokeEnabled',
-  'data-highlight', 'data-orig-stroke', 'data-orig-strokeWidth',
-])
+const STRIP_ATTRS = new Set(['id', ...EPHEMERAL_CANVAS_ATTRS])
 
 export function serializeNodes(nodes: Konva.Node[]): string {
   const data: SerializedNode[] = nodes.map((node) => {

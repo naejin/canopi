@@ -47,7 +47,13 @@ export function setBottomPanelOpen(open: boolean): void {
   bottomPanelOpen.value = open
 }
 
+let _heightInitialized = false
+
 export function openBottomPanel(tab: BottomPanelTab): void {
+  if (!_heightInitialized) {
+    bottomPanelHeight.value = Math.round(window.innerHeight * 0.5)
+    _heightInitialized = true
+  }
   bottomPanelTab.value = tab
   bottomPanelOpen.value = true
 }

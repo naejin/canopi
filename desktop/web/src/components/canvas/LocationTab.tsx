@@ -7,51 +7,100 @@ import { locale } from '../../state/app'
 import { geocodeAddress, type GeoResult } from '../../ipc/geocoding'
 import { currentDesign } from '../../state/document'
 import { clearDesignLocation, setDesignLocation } from '../../state/location-actions'
+import { setBottomPanelOpen } from '../../state/canvas-actions'
+import { buildLocationCommit, computeSavedPinState } from './location-tab-logic'
 import styles from './LocationTab.module.css'
 
-const DEFAULT_CENTER = { lat: 20, lon: 0 }
+const DEFAULT_CENTER: [number, number] = [0, 20] // [lon, lat]
 const STYLE_URL = 'https://demotiles.maplibre.org/style.json'
-
-interface DraftLocation {
-  lat: number
-  lon: number
-}
-
-function locationsEqual(a: DraftLocation, b: DraftLocation | null): boolean {
-  if (!b) return false
-  return Math.abs(a.lat - b.lat) < 0.0001
-    && Math.abs(a.lon - b.lon) < 0.0001
-}
-
-function formatCoordinates(lat: number, lon: number): string {
-  return `${lat.toFixed(4)}, ${lon.toFixed(4)}`
-}
 
 export function LocationTab() {
   void locale.value
 
-  const initialLocation = currentDesign.value?.location
-  const draft = useSignal<DraftLocation>({
-    lat: initialLocation?.lat ?? DEFAULT_CENTER.lat,
-    lon: initialLocation?.lon ?? DEFAULT_CENTER.lon,
-  })
+  const mapContainerRef = useRef<HTMLDivElement>(null)
+  const mapRef = useRef<maplibregl.Map | null>(null)
+  const searchRef = useRef<HTMLDivElement>(null)
+
+  // Search state
   const addressQuery = useSignal('')
   const searchResults = useSignal<GeoResult[]>([])
   const isSearching = useSignal(false)
   const showDropdown = useSignal(false)
   const searchError = useSignal('')
-  const dropdownRef = useRef<HTMLDivElement>(null)
+  const pendingResult = useSignal<{ lat: number; lon: number } | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const requestIdRef = useRef(0)
 
-  useSignalEffect(() => {
-    const location = currentDesign.value?.location ?? null
-    draft.value = {
-      lat: location?.lat ?? DEFAULT_CENTER.lat,
-      lon: location?.lon ?? DEFAULT_CENTER.lon,
+  // Saved pin state
+  const pinState = useSignal<{
+    visible: boolean
+    x: number
+    y: number
+    clamped: boolean
+    angle: number
+  }>({ visible: false, x: 0, y: 0, clamped: false, angle: 0 })
+  const committedLocation = currentDesign.value?.location ?? null
+
+  // Initialize map
+  useEffect(() => {
+    const container = mapContainerRef.current
+    if (!container || mapRef.current) return
+
+    const savedLoc = currentDesign.value?.location
+    const center: [number, number] = savedLoc
+      ? [savedLoc.lon, savedLoc.lat]
+      : DEFAULT_CENTER
+
+    const map = new maplibregl.Map({
+      container,
+      style: STYLE_URL,
+      center,
+      zoom: savedLoc ? 10 : 3.2,
+      attributionControl: false,
+    })
+
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), 'bottom-right')
+    const onMove = () => updatePinPosition(map)
+    const onDragStart = () => { pendingResult.value = null }
+    map.on('move', onMove)
+    map.on('moveend', onMove)
+    map.on('dragstart', onDragStart)
+
+    mapRef.current = map
+    updatePinPosition(map)
+
+    return () => {
+      map.off('move', onMove)
+      map.off('moveend', onMove)
+      map.off('dragstart', onDragStart)
+      map.remove()
+      mapRef.current = null
     }
+  }, [])
+
+  // Resize observer — reads mapRef inside callback to avoid stale capture
+  useEffect(() => {
+    const container = mapContainerRef.current
+    if (!container) return
+
+    const observer = new ResizeObserver(() => {
+      const map = mapRef.current
+      if (!map) return
+      map.resize()
+      updatePinPosition(map)
+    })
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [])
+
+  // Update pin when saved location changes
+  useSignalEffect(() => {
+    void currentDesign.value?.location
+    const map = mapRef.current
+    if (map) updatePinPosition(map)
   })
 
+  // Debounced geocoding
   useSignalEffect(() => {
     const query = addressQuery.value.trim()
 
@@ -89,9 +138,10 @@ export function LocationTab() {
     }, 300)
   })
 
+  // Click outside to close dropdown
   useEffect(() => {
     function handlePointerUp(event: PointerEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
         showDropdown.value = false
       }
     }
@@ -103,75 +153,92 @@ export function LocationTab() {
     }
   }, [])
 
-  const committedLocation = currentDesign.value?.location ?? null
-  const hasDraftChanges = !locationsEqual(draft.value, committedLocation)
-  const draftCoordinates = formatCoordinates(draft.value.lat, draft.value.lon)
-  const committedCoordinates = committedLocation
-    ? formatCoordinates(committedLocation.lat, committedLocation.lon)
-    : null
-
   function selectResult(result: GeoResult) {
-    draft.value = {
-      lat: result.lat,
-      lon: result.lon,
-    }
     addressQuery.value = ''
     searchResults.value = []
     showDropdown.value = false
+    pendingResult.value = { lat: result.lat, lon: result.lon }
+
+    const map = mapRef.current
+    if (map) {
+      map.easeTo({
+        center: [result.lon, result.lat],
+        zoom: 14,
+        duration: 600,
+        essential: true,
+      })
+    }
   }
 
-  function commitDraft() {
-    setDesignLocation({
-      lat: draft.value.lat,
-      lon: draft.value.lon,
-      altitude_m: null,
-    })
+  function handleSet() {
+    const pending = pendingResult.value
+    if (pending) {
+      setDesignLocation(buildLocationCommit(pending, committedLocation))
+      pendingResult.value = null
+    } else {
+      const map = mapRef.current
+      if (!map) return
+      const center = map.getCenter()
+      setDesignLocation(buildLocationCommit({ lat: center.lat, lon: center.lng }, committedLocation))
+    }
   }
 
-  const showChangeWarning = committedLocation !== null && hasDraftChanges
+  function handleClear() {
+    clearDesignLocation()
+    pendingResult.value = null
+  }
+
+  function updatePinPosition(map: maplibregl.Map) {
+    const loc = currentDesign.value?.location ?? null
+    const container = map.getContainer()
+    const next = computeSavedPinState(
+      loc,
+      { width: container.clientWidth, height: container.clientHeight },
+      loc ? map.project([loc.lon, loc.lat]) : { x: 0, y: 0 },
+    )
+
+    // Only write if position actually changed — avoids 60fps signal churn during pan
+    const prev = pinState.peek()
+    if (
+      prev.visible !== next.visible ||
+      prev.clamped !== next.clamped ||
+      Math.abs(prev.x - next.x) > 0.5 ||
+      Math.abs(prev.y - next.y) > 0.5 ||
+      Math.abs(prev.angle - next.angle) > 0.001
+    ) {
+      pinState.value = next
+    }
+  }
+
+  const pin = pinState.value
 
   return (
     <div className={styles.container}>
-      <div className={styles.header}>
-        <div className={styles.headerCopy}>
-          <h3 className={styles.title}>{t('canvas.location.title')}</h3>
-          <p className={styles.current}>{t('canvas.location.current')}: {draftCoordinates}</p>
-        </div>
+      <div ref={mapContainerRef} className={styles.map} />
 
-        <div className={styles.actions}>
-          <button type="button" className={styles.saveBtn} onClick={commitDraft} disabled={!hasDraftChanges}>
-            {t('canvas.location.save')}
-          </button>
-          <button
-            type="button"
-            className={styles.clearBtn}
-            onClick={() => clearDesignLocation()}
-            disabled={committedLocation === null}
-          >
-            {t('canvas.location.clear')}
-          </button>
-        </div>
-      </div>
-
-      {showChangeWarning && (
-        <div className={styles.warningCard}>
-          {t('canvas.location.changeWarning')}
-        </div>
-      )}
-
-      <div className={styles.searchSection} ref={dropdownRef}>
-        <label className={styles.label}>
-          {t('canvas.location.addressLabel')}
+      {/* Floating search bar */}
+      <div className={styles.searchOverlay} ref={searchRef}>
+        <div className={styles.searchRow}>
           <input
             type="text"
             className={styles.searchInput}
             value={addressQuery.value}
-            onInput={(event) => { addressQuery.value = event.currentTarget.value }}
+            onInput={(e) => { addressQuery.value = e.currentTarget.value }}
             placeholder={t('canvas.location.searchPlaceholder')}
           />
-        </label>
+          <button type="button" className={styles.setBtn} onClick={handleSet}>
+            {t('canvas.location.save')}
+          </button>
+          {committedLocation && (
+            <button type="button" className={styles.clearBtn} onClick={handleClear}>
+              {t('canvas.location.clear')}
+            </button>
+          )}
+        </div>
 
-        {isSearching.value && <div className={styles.searchStatus}>{t('canvas.location.searching')}</div>}
+        {isSearching.value && (
+          <div className={styles.searchStatus}>{t('canvas.location.searching')}</div>
+        )}
 
         {showDropdown.value && !isSearching.value && (
           <div className={styles.dropdown}>
@@ -195,109 +262,38 @@ export function LocationTab() {
         )}
       </div>
 
-      <div className={styles.mapCard}>
-        <div className={styles.mapHeader}>
-          <div className={styles.mapSummary}>
-            <span className={styles.summaryLabel}>{t('canvas.location.current')}</span>
-            <strong className={styles.summaryValue}>{draftCoordinates}</strong>
-          </div>
-          {committedCoordinates ? (
-            <div className={styles.savedPill}>
-              {committedCoordinates}
-            </div>
-          ) : null}
-        </div>
+      {/* Collapse button */}
+      <button
+        type="button"
+        className={styles.collapseBtn}
+        onClick={() => setBottomPanelOpen(false)}
+        aria-label={t('canvas.bottomPanel.collapse')}
+      >
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M3 6L8 11L13 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
 
-        <LocationMapSurface
-          center={draft.value}
-          onCenterChange={(center) => {
-            draft.value = {
-              ...draft.value,
-              lat: center.lat,
-              lon: center.lon,
-            }
+      {/* Center crosshair — always visible, shows where "Set" will place the pin */}
+      <div className={styles.centerCrosshair} aria-hidden="true" />
+
+      {/* Saved location pin — shows committed design location */}
+      {pin.visible && !pin.clamped && (
+        <div
+          className={styles.savedPin}
+          style={{ left: `${pin.x}px`, top: `${pin.y}px` }}
+        />
+      )}
+      {pin.visible && pin.clamped && (
+        <div
+          className={styles.savedPinClamped}
+          style={{
+            left: `${pin.x}px`,
+            top: `${pin.y}px`,
+            transform: `translate(-50%, -50%) rotate(${pin.angle}rad)`,
           }}
         />
-      </div>
-
-    </div>
-  )
-}
-
-function LocationMapSurface({
-  center,
-  onCenterChange,
-}: {
-  center: DraftLocation
-  onCenterChange: (center: { lat: number; lon: number }) => void
-}) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const mapRef = useRef<maplibregl.Map | null>(null)
-  const onCenterChangeRef = useRef(onCenterChange)
-  onCenterChangeRef.current = onCenterChange
-
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container || mapRef.current) return
-
-    const map = new maplibregl.Map({
-      container,
-      style: STYLE_URL,
-      center: [center.lon, center.lat],
-      zoom: 3.2,
-      attributionControl: false,
-    })
-
-    map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), 'top-right')
-    map.on('moveend', () => {
-      const nextCenter = map.getCenter()
-      onCenterChangeRef.current({
-        lat: nextCenter.lat,
-        lon: nextCenter.lng,
-      })
-    })
-
-    mapRef.current = map
-
-    return () => {
-      map.remove()
-      mapRef.current = null
-    }
-  }, [])
-
-  useEffect(() => {
-    const container = containerRef.current
-    const map = mapRef.current
-    if (!container || !map) return
-
-    const observer = new ResizeObserver(() => map.resize())
-    observer.observe(container)
-    return () => observer.disconnect()
-  }, [])
-
-  useEffect(() => {
-    const map = mapRef.current
-    if (!map) return
-
-    const currentCenter = map.getCenter()
-    if (
-      Math.abs(currentCenter.lat - center.lat) < 0.0001
-      && Math.abs(currentCenter.lng - center.lon) < 0.0001
-    ) {
-      return
-    }
-
-    map.easeTo({
-      center: [center.lon, center.lat],
-      duration: 300,
-      essential: true,
-    })
-  }, [center.lat, center.lon])
-
-  return (
-    <div className={styles.mapShell}>
-      <div ref={containerRef} className={styles.map} aria-label={t('canvas.location.title')} />
-      <div className={styles.centerPin} aria-hidden="true" />
+      )}
     </div>
   )
 }

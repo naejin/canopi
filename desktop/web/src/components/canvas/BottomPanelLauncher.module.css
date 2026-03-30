@@ -21,8 +21,9 @@
   background: var(--color-control-hover);
 }
 
-.tabActive {
+.tabOpen {
   color: var(--color-text);
+  background: var(--color-control-active);
 }
 
 .tab:focus-visible {

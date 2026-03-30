@@ -26,6 +26,7 @@ desktop/gen/
 # Claude / plugin caches
 .cache/
 .claude-plugins/
+.claude.local.md
 
 # OS
 .DS_Store

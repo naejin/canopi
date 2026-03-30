@@ -5,7 +5,7 @@ import { selectedObjectIds, lockedObjectIds } from '../../state/canvas'
 import { computeSelectionRect, nodesInRect } from '../operations'
 import { MoveNodeCommand, TransformNodeCommand, BatchCommand } from '../commands'
 import type { TransformAttrs } from '../commands'
-import { getCanvasColor } from '../theme-refresh'
+import { getCanvasColor, highlightTargetFor } from '../theme-refresh'
 
 // Hover highlight — uses the theme-aware highlight-glow color so it works
 // in both light and dark themes. Read at event time via getCanvasColor().
@@ -206,6 +206,9 @@ export class SelectTool implements CanvasTool {
           this._previewHighlightIds.add(id)
         }
       }
+
+      // Single redraw after all highlight changes
+      this._redrawHighlightedLayers(engine)
     })
   }
 
@@ -634,7 +637,7 @@ export class SelectTool implements CanvasTool {
       if (this._hoveredNode !== node) {
         this._clearHoverState()
         this._hoveredNode = node
-        const target = this._highlightTarget(node)
+        const target = highlightTargetFor(node)
         target.setAttrs({
           shadowColor: getCanvasColor('highlight-glow'),
           shadowBlur: HOVER_SHADOW_BLUR,
@@ -668,14 +671,19 @@ export class SelectTool implements CanvasTool {
 
   private _clearHoverState(): void {
     if (this._hoveredNode) {
-      const target = this._highlightTarget(this._hoveredNode)
-      target.setAttrs({
-        shadowColor: undefined,
-        shadowBlur: 0,
-        shadowOpacity: 0,
-        shadowForStrokeEnabled: undefined,
-      })
-      this._hoveredNode.getLayer()?.batchDraw()
+      const hoveredNode = this._hoveredNode
+      if (this._selectedHighlightIds.has(hoveredNode.id())) {
+        this._applyHighlight(hoveredNode)
+      } else {
+        const target = highlightTargetFor(hoveredNode)
+        target.setAttrs({
+          shadowColor: undefined,
+          shadowBlur: 0,
+          shadowOpacity: 0,
+          shadowForStrokeEnabled: undefined,
+        })
+      }
+      hoveredNode.getLayer()?.batchDraw()
       this._hoveredNode = null
     }
   }
@@ -684,22 +692,9 @@ export class SelectTool implements CanvasTool {
   // Selection highlights — visual feedback for selected/about-to-be-selected
   // -------------------------------------------------------------------------
 
-  /**
-   * Get the node to apply visual highlight effects to. For counter-scaled
-   * groups (plant groups), returns the first child so the shadow renders in
-   * screen-pixel space and stays visible at any zoom level.
-   */
-  private _highlightTarget(node: Konva.Node): Konva.Node {
-    if (node instanceof Konva.Group && node.hasName('plant-group')) {
-      const child = (node as Konva.Group).getChildren()[0]
-      if (child) return child
-    }
-    return node
-  }
-
   /** Apply selection highlight to a node — visible ochre glow on all shape types. */
   private _applyHighlight(node: Konva.Node): void {
-    const target = this._highlightTarget(node)
+    const target = highlightTargetFor(node)
     const color = getCanvasColor('highlight-glow')
     // Mark the selectable node (not the child) so cleanup can find it by id
     node.setAttr('data-highlight', true)
@@ -709,13 +704,12 @@ export class SelectTool implements CanvasTool {
       shadowOpacity: 0.85,
       shadowForStrokeEnabled: false,
     })
-    node.getLayer()?.batchDraw()
   }
 
-  /** Remove selection highlight from a node. */
+  /** Remove selection highlight from a node (no redraw — caller must batch). */
   private _removeHighlightFromNode(node: Konva.Node): void {
     if (!node.getAttr('data-highlight')) return
-    const target = this._highlightTarget(node)
+    const target = highlightTargetFor(node)
     node.setAttr('data-highlight', undefined)
     target.setAttrs({
       shadowColor: undefined,
@@ -723,7 +717,13 @@ export class SelectTool implements CanvasTool {
       shadowOpacity: 0,
       shadowForStrokeEnabled: undefined,
     })
-    node.getLayer()?.batchDraw()
+  }
+
+  /** Flush all dirty layers that contain highlighted nodes. */
+  private _redrawHighlightedLayers(engine: CanvasEngine): void {
+    for (const layer of engine.layers.values()) {
+      layer.batchDraw()
+    }
   }
 
   /** Remove highlight from a node by ID (finds it across layers). */
@@ -743,13 +743,13 @@ export class SelectTool implements CanvasTool {
       this._removeHighlight(engine, id)
     }
     this._previewHighlightIds.clear()
+    this._redrawHighlightedLayers(engine)
   }
 
   /** Sync persistent selection highlights to match selectedObjectIds. */
   private _syncSelectionHighlights(engine: CanvasEngine): void {
     const ids = selectedObjectIds.value
 
-    // Remove highlights from nodes no longer selected
     for (const id of this._selectedHighlightIds) {
       if (!ids.has(id)) {
         this._removeHighlight(engine, id)
@@ -757,7 +757,6 @@ export class SelectTool implements CanvasTool {
       }
     }
 
-    // Add highlights to newly selected nodes
     for (const layer of engine.layers.values()) {
       layer.find('.shape').forEach((node) => {
         const id = node.id()
@@ -767,6 +766,8 @@ export class SelectTool implements CanvasTool {
         }
       })
     }
+
+    this._redrawHighlightedLayers(engine)
   }
 
   /** Clear all highlights (preview + persistent). */
