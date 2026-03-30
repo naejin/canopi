@@ -18,6 +18,17 @@ interface DraftLocation {
   altitude_m: number | null
 }
 
+function locationsEqual(a: DraftLocation, b: DraftLocation | null): boolean {
+  if (!b) return false
+  return Math.abs(a.lat - b.lat) < 0.0001
+    && Math.abs(a.lon - b.lon) < 0.0001
+    && a.altitude_m === b.altitude_m
+}
+
+function formatCoordinates(lat: number, lon: number): string {
+  return `${lat.toFixed(4)}, ${lon.toFixed(4)}`
+}
+
 export function LocationTab() {
   void locale.value
 
@@ -99,6 +110,11 @@ export function LocationTab() {
   }, [])
 
   const committedLocation = currentDesign.value?.location ?? null
+  const hasDraftChanges = !locationsEqual(draft.value, committedLocation)
+  const draftCoordinates = formatCoordinates(draft.value.lat, draft.value.lon)
+  const committedCoordinates = committedLocation
+    ? formatCoordinates(committedLocation.lat, committedLocation.lon)
+    : null
 
   function selectResult(result: GeoResult) {
     draft.value = {
@@ -117,21 +133,21 @@ export function LocationTab() {
       lat: draft.value.lat,
       lon: draft.value.lon,
       altitude_m: Number.isFinite(altitude) ? altitude : null,
-    })
+      })
   }
+
+  const showChangeWarning = committedLocation !== null && hasDraftChanges
 
   return (
     <div className={styles.container}>
       <div className={styles.header}>
         <div className={styles.headerCopy}>
           <h3 className={styles.title}>{t('canvas.location.title')}</h3>
-          <p className={styles.current}>
-            {t('canvas.location.current')}: {draft.value.lat.toFixed(4)}, {draft.value.lon.toFixed(4)}
-          </p>
+          <p className={styles.current}>{t('canvas.location.current')}: {draftCoordinates}</p>
         </div>
 
         <div className={styles.actions}>
-          <button type="button" className={styles.saveBtn} onClick={commitDraft}>
+          <button type="button" className={styles.saveBtn} onClick={commitDraft} disabled={!hasDraftChanges}>
             {t('canvas.location.save')}
           </button>
           <button
@@ -145,43 +161,76 @@ export function LocationTab() {
         </div>
       </div>
 
-      <div className={styles.searchSection} ref={dropdownRef}>
+      {showChangeWarning && (
+        <div className={styles.warningCard}>
+          {t('canvas.location.changeWarning')}
+        </div>
+      )}
+
+      <div className={styles.controlGrid}>
+        <div className={styles.searchSection} ref={dropdownRef}>
+          <label className={styles.label}>
+            {t('canvas.location.addressLabel')}
+            <input
+              type="text"
+              className={styles.searchInput}
+              value={addressQuery.value}
+              onInput={(event) => { addressQuery.value = event.currentTarget.value }}
+              placeholder={t('canvas.location.searchPlaceholder')}
+            />
+          </label>
+
+          {isSearching.value && <div className={styles.searchStatus}>{t('canvas.location.searching')}</div>}
+
+          {showDropdown.value && !isSearching.value && (
+            <div className={styles.dropdown}>
+              {searchError.value ? (
+                <div className={styles.dropdownError}>{searchError.value}</div>
+              ) : searchResults.value.length === 0 ? (
+                <div className={styles.dropdownEmpty}>{t('canvas.location.noResults')}</div>
+              ) : (
+                searchResults.value.map((result, index) => (
+                  <button
+                    key={`${result.lat}-${result.lon}-${index}`}
+                    type="button"
+                    className={styles.resultItem}
+                    onClick={() => selectResult(result)}
+                  >
+                    {result.display_name}
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+
         <label className={styles.label}>
-          {t('canvas.location.addressLabel')}
+          {t('canvas.location.altitude')}
           <input
-            type="text"
-            className={styles.searchInput}
-            value={addressQuery.value}
-            onInput={(event) => { addressQuery.value = event.currentTarget.value }}
-            placeholder={t('canvas.location.searchPlaceholder')}
+            type="number"
+            className={styles.altitudeInput}
+            value={altitudeInput.value}
+            onInput={(event) => { altitudeInput.value = event.currentTarget.value }}
+            placeholder={t('canvas.location.optional')}
+            step="1"
           />
         </label>
-
-        {isSearching.value && <div className={styles.searchStatus}>{t('canvas.location.searching')}</div>}
-
-        {showDropdown.value && !isSearching.value && (
-          <div className={styles.dropdown}>
-            {searchError.value ? (
-              <div className={styles.dropdownError}>{searchError.value}</div>
-            ) : searchResults.value.length === 0 ? (
-              <div className={styles.dropdownEmpty}>{t('canvas.location.noResults')}</div>
-            ) : (
-              searchResults.value.map((result, index) => (
-                <button
-                  key={`${result.lat}-${result.lon}-${index}`}
-                  type="button"
-                  className={styles.resultItem}
-                  onClick={() => selectResult(result)}
-                >
-                  {result.display_name}
-                </button>
-              ))
-            )}
-          </div>
-        )}
       </div>
 
       <div className={styles.mapCard}>
+        <div className={styles.mapHeader}>
+          <div className={styles.mapSummary}>
+            <span className={styles.summaryLabel}>{t('canvas.location.current')}</span>
+            <strong className={styles.summaryValue}>{draftCoordinates}</strong>
+          </div>
+          {committedCoordinates ? (
+            <div className={styles.savedPill}>
+              {committedCoordinates}
+              {committedLocation?.altitude_m != null && ` · ${committedLocation.altitude_m}m`}
+            </div>
+          ) : null}
+        </div>
+
         <LocationMapSurface
           center={draft.value}
           onCenterChange={(center) => {
@@ -195,26 +244,30 @@ export function LocationTab() {
       </div>
 
       <div className={styles.footer}>
-        <label className={styles.label}>
-          {t('canvas.location.altitude')}
-          <input
-            type="number"
-            className={styles.altitudeInput}
-            value={altitudeInput.value}
-            onInput={(event) => { altitudeInput.value = event.currentTarget.value }}
-            placeholder={t('canvas.location.optional')}
-            step="1"
-          />
-        </label>
+        <div className={styles.footerCopy}>
+          {committedLocation ? (
+            <p className={styles.savedLocation}>
+              {t('canvas.location.current')}: {committedCoordinates}
+              {committedLocation.altitude_m != null && ` (${committedLocation.altitude_m}m)`}
+            </p>
+          ) : (
+            <p className={styles.savedLocation}>{t('canvas.layers.setLocation')}</p>
+          )}
+        </div>
 
-        {committedLocation ? (
-          <p className={styles.savedLocation}>
-            {t('canvas.location.current')}: {committedLocation.lat.toFixed(4)}, {committedLocation.lon.toFixed(4)}
-            {committedLocation.altitude_m != null && ` (${committedLocation.altitude_m}m)`}
-          </p>
-        ) : (
-          <p className={styles.savedLocation}>{t('canvas.layers.setLocation')}</p>
-        )}
+        <div className={styles.actions}>
+          <button type="button" className={styles.saveBtn} onClick={commitDraft} disabled={!hasDraftChanges}>
+            {t('canvas.location.save')}
+          </button>
+          <button
+            type="button"
+            className={styles.clearBtn}
+            onClick={() => clearDesignLocation()}
+            disabled={committedLocation === null}
+          >
+            {t('canvas.location.clear')}
+          </button>
+        </div>
       </div>
     </div>
   )

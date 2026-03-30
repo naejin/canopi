@@ -10,24 +10,19 @@ import {
 import styles from './BottomPanel.module.css'
 
 type LocationComponent = typeof import('./LocationTab').LocationTab
-type TimelineComponent = typeof import('./TimelineTab').TimelineTab
-type BudgetComponent = typeof import('./BudgetTab').BudgetTab
 type ConsortiumComponent = typeof import('./ConsortiumTab').ConsortiumTab
 
-const TAB_ORDER: BottomPanelTab[] = ['location', 'timeline', 'budget', 'consortium']
+const TAB_ORDER: BottomPanelTab[] = ['location', 'consortium']
 
 function getTabLabel(tab: BottomPanelTab): string {
   if (tab === 'location') return t('canvas.location.title')
-  if (tab === 'consortium') return t('canvas.bottomPanel.consortium')
-  return t(`canvas.bottomPanel.${tab}`)
+  return t('canvas.bottomPanel.consortium')
 }
 
 export function BottomPanel() {
   void locale.value
 
   const [LocationTab, setLocationTab] = useState<LocationComponent | null>(null)
-  const [TimelineTab, setTimelineTab] = useState<TimelineComponent | null>(null)
-  const [BudgetTab, setBudgetTab] = useState<BudgetComponent | null>(null)
   const [ConsortiumTab, setConsortiumTab] = useState<ConsortiumComponent | null>(null)
 
   const open = bottomPanelOpen.value
@@ -43,18 +38,6 @@ export function BottomPanel() {
       })
     }
 
-    if (activeTab === 'timeline' && !TimelineTab) {
-      void import('./TimelineTab').then((module) => {
-        if (!cancelled) setTimelineTab(() => module.TimelineTab)
-      })
-    }
-
-    if (activeTab === 'budget' && !BudgetTab) {
-      void import('./BudgetTab').then((module) => {
-        if (!cancelled) setBudgetTab(() => module.BudgetTab)
-      })
-    }
-
     if (activeTab === 'consortium' && !ConsortiumTab) {
       void import('./ConsortiumTab').then((module) => {
         if (!cancelled) setConsortiumTab(() => module.ConsortiumTab)
@@ -64,7 +47,7 @@ export function BottomPanel() {
     return () => {
       cancelled = true
     }
-  }, [activeTab, LocationTab, TimelineTab, BudgetTab, ConsortiumTab])
+  }, [activeTab, LocationTab, ConsortiumTab])
 
   if (!open) return null
 
@@ -97,8 +80,6 @@ export function BottomPanel() {
 
       <div className={styles.tabContent}>
         {activeTab === 'location' && (LocationTab ? <LocationTab /> : <LoadingState />)}
-        {activeTab === 'timeline' && (TimelineTab ? <TimelineTab /> : <LoadingState />)}
-        {activeTab === 'budget' && (BudgetTab ? <BudgetTab /> : <LoadingState />)}
         {activeTab === 'consortium' && (ConsortiumTab ? <ConsortiumTab /> : <LoadingState />)}
       </div>
     </div>

@@ -4,12 +4,11 @@ import { bottomPanelTab, type BottomPanelTab } from '../../state/canvas'
 import { openBottomPanel } from '../../state/canvas-actions'
 import styles from './BottomPanelLauncher.module.css'
 
-const TABS: BottomPanelTab[] = ['location', 'timeline', 'budget', 'consortium']
+const TABS: BottomPanelTab[] = ['location', 'consortium']
 
 function getLabel(tab: BottomPanelTab): string {
   if (tab === 'location') return t('canvas.location.title')
-  if (tab === 'consortium') return t('canvas.bottomPanel.consortium')
-  return t(`canvas.bottomPanel.${tab}`)
+  return t('canvas.bottomPanel.consortium')
 }
 
 export function BottomPanelLauncher() {

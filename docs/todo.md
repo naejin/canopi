@@ -36,10 +36,15 @@ Completed and archived:
 - automated frontend verification for the landed rewrite slice
 
 Still active:
-- Wave 3 live verification closeout on the reconciler build via the pending Claude Code pass
-- renderer stability-gate closeout after the live verification findings return
+- retained-surface Wave 3 closeout on the surviving architecture
+- renderer stability-gate closeout after retained-surface fixes land
 - Wave 4 design coherence on the surviving structure
 - Wave 5 release hardening and rewrite-exit verification
+
+Deferred after live review:
+- featured-design world map / template import
+- timeline workflows
+- budget workflows
 
 The rewrite is not complete until the required product journeys pass end to end on the final surviving architecture.
 
@@ -110,52 +115,51 @@ Do not widen viewport filtering for other passes unless the renderer follow-up d
 
 ## 3. Remaining Work In Order
 
-### 3.1 Wave 3 Live Verification Closeout
+### 3.1 Wave 3 Retained-Surface Closeout
 
 What is left:
-- featured-design world-map discovery and template import
 - layer controls
 - location tab search / drag / zoom / confirm
-- timeline flows
-- budget flows
 - consortium flows
+- hide deferred `world-map`, `timeline`, and `budget` entry points from the live UI
+- improve retained-surface UI/UX, with design location as the primary follow-up
 
 Why this is next:
-- these are required rewrite-exit product journeys
-- the implementation is landed, but rewrite completion cannot be called from code structure alone
-- renderer stability must be judged against real user flows, not only tests
+- these are the surviving rewrite-exit product journeys after the live review
+- the live review already showed that `world-map`, `timeline`, and `budget` should move out of rewrite-exit scope
+- retained surfaces must be polished before renderer stability and release hardening can be called done
 
 How to do it:
-- run the manual desktop verification pass on the reconciler build
-- capture defects as narrow follow-up fixes
-- do not bundle polish work with defect fixes
+- hide deferred feature entry points without removing underlying persistence fields
+- keep fixes on the surviving architecture only
+- use narrow UX and behavior improvements rather than reopening broad product scope
 
-Current handoff:
-- Claude Code owns the next live desktop verification pass
-- keep the tree on narrow defect-fix standby until that pass returns concrete findings
-- do not treat this wave as complete until the live results are written back into the rewrite docs
+Current outcome from live review:
+- `world-map`, `timeline`, and `budget` are postponed and no longer part of rewrite exit
+- retained-surface UX work is now the active Wave 3 follow-up track
+- design location is the highest-priority user-facing improvement area
 
 ### 3.2 Renderer Stability Gate Closeout
 
 What is left:
 - rerun the renderer manual checklist on the landed reconciler architecture
-- rerun the Wave 3 canvas-touched live journeys against that build
+- rerun the retained Wave 3 canvas-touched journeys against that build
 - fix any High-severity regressions found there
 - add only targeted follow-up coverage that closes discovered gaps
 
-Why this is blocked behind live verification:
+Why this is blocked behind retained-surface closeout:
 - the remaining renderer risk is behavioral, not architectural
-- the code split is landed, but the gate is about correctness under real use
+- the code split is landed, but the gate is about correctness under real use on the surviving feature set
 
 How to do it:
 - use `docs/renderer/renderer.md` as the renderer-specific checklist
 - keep fixes narrow and tied to observed regressions
 - do not mix optional optimization or product redesign into stability closeout
 
-Current handoff:
-- do not start renderer stability fixes speculatively while the Wave 3 live pass is still pending
-- when Claude Code returns findings, convert only confirmed High-severity regressions into narrow follow-up fixes
-- update this file and `docs/renderer/renderer.md` before calling the renderer gate closer to done
+Current rule:
+- validate retained surfaces only: core canvas flows, layer controls, design location, and consortium
+- do not reintroduce deferred features as part of renderer-gate work
+- update this file and `docs/renderer/renderer.md` when retained-surface fixes materially change the gate
 
 ### 3.3 Wave 4 Design Coherence
 
@@ -197,7 +201,7 @@ Current in-tree status:
   - `cargo clippy --workspace -- -D warnings`
   - `cargo test --workspace`
   - `npm test --prefix desktop/web`
-  - explicit i18n completeness coverage against `en.json`
+  - i18n completeness coverage against `en.json` via the frontend test suite
   - `npm run build --prefix desktop/web`
 - GitHub Actions already carries the release-build matrix and artifact upload
 - the remaining Wave 5 work is primarily packaged-app smoke verification plus rewrite-exit docs cleanup
@@ -216,7 +220,7 @@ For rewrite planning purposes, renderer phases 1-3 are stable only when all of t
    - reconciler / rendering-owner tests
    - density / stacking tests
 3. The manual validation checklist in `docs/renderer/renderer.md` passes
-4. Wave 3 live verification is rerun against the reconciler build for canvas-touched flows
+4. Retained Wave 3 live verification is rerun against the reconciler build for canvas-touched flows
 5. There are no open High-severity renderer regressions in:
    - canopy zoom behavior
    - document-load stratum/canopy hydration
@@ -225,7 +229,7 @@ For rewrite planning purposes, renderer phases 1-3 are stable only when all of t
 
 Current gate state:
 - condition 2 is green locally on 2026-03-30
-- conditions 3 and 4 are still pending the Claude Code live verification pass and renderer checklist rerun
+- conditions 3 and 4 still need a retained-surface rerun after the current UX/location follow-up work
 - Wave 4 remains blocked until those results are recorded and any resulting High-severity regressions are closed
 
 Until all five conditions are true:
@@ -356,9 +360,9 @@ These are implementation rules, not optional style preferences.
 
 ## 7. Active Blockers And Deferred Items
 
-Blocked until Wave 3 live verification closeout:
+Blocked until retained-surface Wave 3 closeout:
 - Wave 3 completion call
-- renderer stability-gate completion work that depends on live desktop findings
+- renderer stability-gate completion work that depends on retained-surface live findings
 - any rewrite-exit claim that depends on real-user verification rather than automated checks
 
 Blocked until the renderer stability gate is satisfied:
@@ -376,6 +380,9 @@ Can be fixed independently if needed:
 - deferred-pass data-shape cleanup in renderer internals
 
 Still deferred until post-rewrite product definition:
+- featured-design world map / template import
+- timeline workflows
+- budget workflows
 - geo / terrain workflows
 - export workflows
 - learning content
@@ -389,14 +396,13 @@ The rewrite is not complete until these journeys pass end to end:
 1. Create, edit, save, load, and switch designs without losing work
 2. Search/filter the plant DB, inspect detail, favorite plants, and place them on canvas
 3. Edit canvas objects, undo/redo them, and preserve them through save/load roundtrip
-4. Use `WorldMapPanel` / featured designs discovery without bypassing document safety
-5. Use `LayerPanel` for required display/layer configuration
-6. Use bottom-bar `location` search / drag / zoom / confirm flows correctly
-7. Use `timeline`, `budget`, and `consortium` flows without lifecycle or persistence regressions
-8. Recover gracefully from network failure, disk failure, and invalid external data
-9. Use the app in light and dark themes without broken surfaces
-10. Use supported locales without missing keys or broken labels
-11. Meet release criteria on each supported platform at rewrite exit
+4. Use `LayerPanel` for required display/layer configuration
+5. Use bottom-bar `location` search / drag / zoom / confirm flows correctly
+6. Use `consortium` flows without lifecycle or persistence regressions
+7. Recover gracefully from network failure, disk failure, and invalid external data
+8. Use the app in light and dark themes without broken surfaces
+9. Use supported locales without missing keys or broken labels
+10. Meet release criteria on each supported platform at rewrite exit
 
 ---
 
@@ -406,10 +412,10 @@ Use this file as the canonical operational reference.
 
 Use archived docs only for historical context.
 
-When the pending Claude Code live verification pass completes:
+When retained-surface live verification is rerun after the current UX/location follow-up work:
 - record the findings in this file and the renderer/release follow-up docs before broad new work starts
 - turn discovered regressions into narrow fixes with targeted tests
-- remove any stale “pending Claude Code pass” language once the handoff is no longer active
+- remove any stale scope language if the surviving rewrite-exit surface changes again
 
 If a future change affects:
 - remaining wave order

@@ -4,7 +4,7 @@ import { openBottomPanel, setBottomPanelTab } from '../state/canvas-actions'
 
 beforeEach(() => {
   bottomPanelOpen.value = false
-  bottomPanelTab.value = 'timeline'
+  bottomPanelTab.value = 'location'
 })
 
 describe('bottom panel actions', () => {
@@ -16,7 +16,7 @@ describe('bottom panel actions', () => {
   })
 
   it('switches to the consortium tab without closing the panel', () => {
-    openBottomPanel('budget')
+    openBottomPanel('location')
     setBottomPanelTab('consortium')
 
     expect(bottomPanelOpen.value).toBe(true)

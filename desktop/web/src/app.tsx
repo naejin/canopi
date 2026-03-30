@@ -15,7 +15,6 @@ import { PlantDbPanel } from "./components/panels/PlantDbPanel";
 import { FavoritesPanel } from "./components/panels/FavoritesPanel";
 import { CanvasPanel } from "./components/panels/CanvasPanel";
 import { PanelBar } from "./components/panels/PanelBar";
-import { WorldMapPanel } from "./components/panels/WorldMapPanel";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { confirmCloseWithUnsavedChanges } from "./state/close-guard";
 
@@ -99,7 +98,6 @@ const MAX_SIDEBAR_WIDTH = 800;
 function SidePanelContent({ side }: { side: string }) {
   if (side === "plant-db") return <PlantDbPanel />;
   if (side === "favorites") return <FavoritesPanel />;
-  if (side === "world-map") return <WorldMapPanel />;
   return null;
 }
 

@@ -15,6 +15,9 @@ Not release targets:
 - iOS / Android
 
 Explicitly deferred until post-rewrite:
+- featured-design world-map discovery and template import
+- timeline workflows
+- budget workflows
 - geo / terrain workflows
 - export workflows
 - knowledge / learning surfaces
@@ -28,7 +31,7 @@ These checks must pass before rewrite completion:
 - `cargo test --workspace`
 - `npm test --prefix desktop/web`
 - `npm run build --prefix desktop/web`
-- GitHub Actions 3-platform Tauri build matrix with artifact upload for Linux, macOS, and Windows
+- GitHub Actions Tauri build matrix with artifact upload for Linux, macOS Apple Silicon, macOS Intel, and Windows
 - i18n completeness test for all supported locales against `en.json`
 
 Current status in this tree:
@@ -48,11 +51,10 @@ These journeys must remain green at rewrite exit:
 1. Create a design, edit it, and switch documents without losing work.
 2. Search the plant database, inspect detail, favorite plants, and place plants on the canvas.
 3. Edit canvas content, undo/redo, save, reload, and preserve roundtrip parity.
-4. Use featured-design discovery and template import without bypassing the document boundary.
-5. Use layer controls, location selection, timeline, budget, and consortium without lifecycle or persistence regressions.
-6. Recover gracefully from network failure, disk failure, and invalid external data.
-7. Use the app in supported themes and locales without broken labels or unreadable surfaces.
-8. Build release artifacts for Linux, macOS, and Windows.
+4. Use layer controls, location selection, and consortium without lifecycle or persistence regressions.
+5. Recover gracefully from network failure, disk failure, and invalid external data.
+6. Use the app in supported themes and locales without broken labels or unreadable surfaces.
+7. Build release artifacts for Linux, macOS, and Windows.
 
 ## Supported-Platform Smoke Verification
 
@@ -82,11 +84,8 @@ These are review items, not automatic blockers unless they become release-impact
 This checklist intentionally does not include live Tauri MCP execution.
 
 Claude Code should run the manual desktop verification pass for:
-- featured-design world-map discovery and template import
 - layer controls
 - location search / drag / zoom / confirm
-- timeline flows
-- budget flows
 - consortium flows
 
 Any defects found there should be fixed as narrow follow-up patches.

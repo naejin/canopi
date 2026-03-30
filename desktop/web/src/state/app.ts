@@ -4,12 +4,12 @@ import type { Settings } from "../types/settings";
 import { setSettings } from "../ipc/settings";
 import { gridSize, snapToGridEnabled } from "./canvas";
 
-export type Panel = "plant-db" | "canvas" | "favorites" | "world-map";
+export type Panel = "plant-db" | "canvas" | "favorites";
 
 // Panels that open as a sidebar alongside the canvas instead of replacing it.
-export type SidePanel = "plant-db" | "favorites" | "world-map";
+export type SidePanel = "plant-db" | "favorites";
 
-const SIDE_PANELS = new Set<Panel>(["plant-db", "favorites", "world-map"]);
+const SIDE_PANELS = new Set<Panel>(["plant-db", "favorites"]);
 
 export const activePanel = signal<Panel>("canvas");
 export const locale = signal<"en" | "fr" | "es" | "pt" | "it" | "zh" | "de" | "ja" | "ko" | "nl" | "ru">("en");
@@ -55,7 +55,7 @@ export const sidePanelWidth = signal<number>(560);
 
 /**
  * Navigate to a panel using the correct routing model:
- * - plant-db / learning / favorites / world-map: open as sidebar alongside canvas (toggle if already open)
+ * - plant-db / favorites: open as sidebar alongside canvas (toggle if already open)
  * - canvas: close any sidebar, show canvas only
  */
 export function navigateTo(panel: Panel): void {
