@@ -36,8 +36,8 @@ Completed and archived:
 - automated frontend verification for the landed rewrite slice
 
 Still active:
-- Wave 3 live verification closeout on the reconciler build
-- renderer stability-gate closeout
+- Wave 3 live verification closeout on the reconciler build via the pending Claude Code pass
+- renderer stability-gate closeout after the live verification findings return
 - Wave 4 design coherence on the surviving structure
 - Wave 5 release hardening and rewrite-exit verification
 
@@ -130,6 +130,11 @@ How to do it:
 - capture defects as narrow follow-up fixes
 - do not bundle polish work with defect fixes
 
+Current handoff:
+- Claude Code owns the next live desktop verification pass
+- keep the tree on narrow defect-fix standby until that pass returns concrete findings
+- do not treat this wave as complete until the live results are written back into the rewrite docs
+
 ### 3.2 Renderer Stability Gate Closeout
 
 What is left:
@@ -146,6 +151,11 @@ How to do it:
 - use `docs/renderer/renderer.md` as the renderer-specific checklist
 - keep fixes narrow and tied to observed regressions
 - do not mix optional optimization or product redesign into stability closeout
+
+Current handoff:
+- do not start renderer stability fixes speculatively while the Wave 3 live pass is still pending
+- when Claude Code returns findings, convert only confirmed High-severity regressions into narrow follow-up fixes
+- update this file and `docs/renderer/renderer.md` before calling the renderer gate closer to done
 
 ### 3.3 Wave 4 Design Coherence
 
@@ -168,10 +178,9 @@ How to do it:
 ### 3.4 Wave 5 Release Hardening
 
 What is left:
-- release-blocking CI gates
-- i18n completeness checks
 - rewrite-exit checklist and docs cleanup
 - supported-platform build and smoke verification
+- keep the release-blocking CI gates green on the final branch
 
 Why it stays last:
 - release hardening should validate the finished product shape
@@ -181,6 +190,17 @@ How to do it:
 - use `docs/release-verification.md`
 - keep Wave 5 narrow
 - fix release-impacting regressions only
+
+Current in-tree status:
+- automated release gates are landed and green locally on 2026-03-30:
+  - `cargo fmt --all -- --check`
+  - `cargo clippy --workspace -- -D warnings`
+  - `cargo test --workspace`
+  - `npm test --prefix desktop/web`
+  - explicit i18n completeness coverage against `en.json`
+  - `npm run build --prefix desktop/web`
+- GitHub Actions already carries the release-build matrix and artifact upload
+- the remaining Wave 5 work is primarily packaged-app smoke verification plus rewrite-exit docs cleanup
 
 ---
 
@@ -202,6 +222,11 @@ For rewrite planning purposes, renderer phases 1-3 are stable only when all of t
    - document-load stratum/canopy hydration
    - drag / transform / `history.record()` paths
    - dense-cluster label visibility
+
+Current gate state:
+- condition 2 is green locally on 2026-03-30
+- conditions 3 and 4 are still pending the Claude Code live verification pass and renderer checklist rerun
+- Wave 4 remains blocked until those results are recorded and any resulting High-severity regressions are closed
 
 Until all five conditions are true:
 - Wave 4 stays blocked
@@ -333,6 +358,8 @@ These are implementation rules, not optional style preferences.
 
 Blocked until Wave 3 live verification closeout:
 - Wave 3 completion call
+- renderer stability-gate completion work that depends on live desktop findings
+- any rewrite-exit claim that depends on real-user verification rather than automated checks
 
 Blocked until the renderer stability gate is satisfied:
 - Wave 4 design coherence
@@ -378,6 +405,11 @@ The rewrite is not complete until these journeys pass end to end:
 Use this file as the canonical operational reference.
 
 Use archived docs only for historical context.
+
+When the pending Claude Code live verification pass completes:
+- record the findings in this file and the renderer/release follow-up docs before broad new work starts
+- turn discovered regressions into narrow fixes with targeted tests
+- remove any stale “pending Claude Code pass” language once the handoff is no longer active
 
 If a future change affects:
 - remaining wave order
