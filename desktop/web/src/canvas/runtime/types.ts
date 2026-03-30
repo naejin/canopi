@@ -4,6 +4,7 @@ import type { HtmlRulers } from '../rulers'
 import type { ScaleBar } from '../scale-bar'
 import type { CanvasTool } from '../tools/base'
 import type { CanvasEngine } from '../engine'
+import type { RenderPass } from './render-passes'
 
 export type CanvasLayers = Map<string, Konva.Layer>
 
@@ -19,10 +20,12 @@ export interface RenderPipelineDeps {
 export interface ViewportDeps {
   stage: Konva.Stage
   layers: CanvasLayers
-  syncOverlayTransforms: () => void
-  scheduleOverlayRedraw: () => void
-  scheduleLODUpdate: () => void
-  reconcileMaterializedScene: () => void
+  applyStageTransform: (
+    scale: number,
+    position: { x: number; y: number },
+    options?: { invalidateDeferred?: boolean },
+  ) => void
+  invalidateRender: (...passes: RenderPass[]) => void
 }
 
 export interface ObjectOpsDeps {
@@ -38,7 +41,8 @@ export interface DocumentSessionEngine {
   layers: CanvasLayers
   restoreGuides: () => void
   restoreObjectGroups: (groups: import('../../types/design').ObjectGroup[]) => void
-  reconcileMaterializedScene: () => void
+  invalidateRender: (...passes: RenderPass[]) => void
+  getDocumentLoadEpoch: () => number
 }
 
 export interface ExternalInputDeps {
@@ -52,5 +56,5 @@ export interface ExternalInputDeps {
   getWasSpaceDraggable: () => boolean
   setWasSpaceDraggable: (value: boolean) => void
   getActiveToolCursor: () => string
-  reconcileMaterializedScene: () => void
+  invalidateRender: (...passes: RenderPass[]) => void
 }

@@ -1,9 +1,11 @@
 import { signal } from '@preact/signals'
 import { canvasClean } from '../state/design'
 import type { CanvasEngine } from './engine'
+import type { RenderPass } from './runtime/render-passes'
 
 export interface Command {
   readonly type: string
+  readonly dirtyPasses: readonly RenderPass[]
   execute(engine: CanvasEngine): void
   undo(engine: CanvasEngine): void
 }
@@ -27,7 +29,7 @@ export class CanvasHistory {
   /** Execute a command, push to past stack, and clear redo stack. */
   execute(cmd: Command, engine: CanvasEngine): void {
     cmd.execute(engine)
-    engine.reconcileMaterializedScene?.()
+    engine.invalidateRender?.(...this._getDirtyPasses(cmd))
     this._past.push(cmd)
     this._future = []
 
@@ -48,7 +50,8 @@ export class CanvasHistory {
    * Record a command that has ALREADY been executed (e.g. drag, transform).
    * Pushes to past stack without calling execute() again.
    */
-  record(cmd: Command): void {
+  record(cmd: Command, engine: CanvasEngine): void {
+    engine.invalidateRender?.(...this._getDirtyPasses(cmd))
     this._past.push(cmd)
     this._future = []
 
@@ -68,7 +71,7 @@ export class CanvasHistory {
     const cmd = this._past.pop()
     if (!cmd) return
     cmd.undo(engine)
-    engine.reconcileMaterializedScene?.()
+    engine.invalidateRender?.(...this._getDirtyPasses(cmd))
     this._future.push(cmd)
     this._updateSignals()
   }
@@ -77,7 +80,7 @@ export class CanvasHistory {
     const cmd = this._future.pop()
     if (!cmd) return
     cmd.execute(engine)
-    engine.reconcileMaterializedScene?.()
+    engine.invalidateRender?.(...this._getDirtyPasses(cmd))
     this._past.push(cmd)
     this._updateSignals()
   }
@@ -109,5 +112,9 @@ export class CanvasHistory {
     // If _savedPosition is -1, the saved state was truncated away — never clean.
     canvasClean.value =
       this._savedPosition >= 0 && this._past.length === this._savedPosition
+  }
+
+  private _getDirtyPasses(cmd: Command): RenderPass[] {
+    return [...cmd.dirtyPasses]
   }
 }

@@ -1,4 +1,5 @@
 import Konva from 'konva'
+import { getSpeciesBatch } from '../../ipc/species'
 import { locale } from '../../state/app'
 import {
   activeTool,
@@ -33,13 +34,16 @@ export function resetTransientCanvasSession(): void {
 }
 
 export function loadDocumentSession(file: CanopiFile, engine: DocumentSessionEngine): void {
+  const loadEpoch = engine.getDocumentLoadEpoch()
   for (const name of CONTENT_LAYERS) {
     engine.layers.get(name)?.destroyChildren()
   }
 
   const plantsLayer = engine.layers.get('plants')
   if (plantsLayer) {
+    const canonicalNames: string[] = []
     for (const plant of file.plants) {
+      canonicalNames.push(plant.canonical_name)
       const node = createPlantNode({
         id: plant.id || crypto.randomUUID(),
         canonicalName: plant.canonical_name,
@@ -54,6 +58,10 @@ export function loadDocumentSession(file: CanopiFile, engine: DocumentSessionEng
       })
       if (plant.rotation != null) node.rotation(plant.rotation)
       plantsLayer.add(node as unknown as Konva.Shape)
+    }
+
+    if (canonicalNames.length > 0) {
+      void backfillPlantDisplayAttrs(plantsLayer, canonicalNames, engine, loadEpoch).catch(() => {})
     }
   }
 
@@ -169,10 +177,57 @@ export function loadDocumentSession(file: CanopiFile, engine: DocumentSessionEng
     void updatePlantLabelsForLocale(plantsLayer, locale.value)
   }
 
-  engine.reconcileMaterializedScene()
+  engine.invalidateRender(
+    'counter-scale',
+    'plant-display',
+    'lod',
+    'annotations',
+    'theme',
+    'overlays',
+    'density',
+    'stacking',
+  )
 
   for (const name of LAYER_NAMES) {
     engine.layers.get(name)?.batchDraw()
+  }
+}
+
+async function backfillPlantDisplayAttrs(
+  plantsLayer: Konva.Layer,
+  canonicalNames: string[],
+  engine: DocumentSessionEngine,
+  loadEpoch: number,
+): Promise<void> {
+  const details = await getSpeciesBatch(canonicalNames, locale.value)
+  if (details.length === 0) return
+  if (engine.getDocumentLoadEpoch() !== loadEpoch) return
+
+  const byCanonicalName = new Map(details.map((detail) => [detail.canonical_name, detail]))
+  let updated = false
+
+  plantsLayer.find('.plant-group').forEach((node: Konva.Node) => {
+    const group = node as Konva.Group
+    const canonicalName = group.getAttr('data-canonical-name') as string | undefined
+    if (!canonicalName) return
+
+    const detail = byCanonicalName.get(canonicalName)
+    if (!detail) return
+
+    if (detail.stratum != null) {
+      group.setAttr('data-stratum', detail.stratum)
+      updated = true
+    }
+
+    const currentCanopySpread = group.getAttr('data-canopy-spread') as number | null
+    if ((currentCanopySpread == null || currentCanopySpread <= 0) && detail.width_max_m != null) {
+      group.setAttr('data-canopy-spread', detail.width_max_m)
+      updated = true
+    }
+  })
+
+  if (updated) {
+    engine.invalidateRender('plant-display', 'lod', 'density', 'stacking')
   }
 }
 

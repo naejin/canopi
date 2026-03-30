@@ -1,8 +1,15 @@
 import Konva from 'konva'
 import { guides } from '../../state/canvas'
 import { locale, theme } from '../../state/app'
-import { plantColorByAttr, plantDisplayMode, selectedObjectIds, zoomLevel } from '../../state/canvas'
-import { updatePlantsLOD, getPlantLOD, updatePlantLabelsForLocale } from '../plants'
+import { plantColorByAttr, plantDisplayMode, selectedObjectIds } from '../../state/canvas'
+import {
+  updatePlantCounterScale,
+  updatePlantDensity,
+  updatePlantLabelsForLocale,
+  updatePlantLOD,
+  updatePlantStacking,
+  getPlantLOD,
+} from '../plants'
 import { updatePlantDisplay } from '../display-modes'
 import { updateAnnotationsForZoom } from '../shapes'
 import { updateGuideLines } from '../guides'
@@ -10,26 +17,16 @@ import { refreshGridColors } from '../grid'
 import { refreshCanvasTheme } from '../theme-refresh'
 import { updateHtmlRulers } from '../rulers'
 import { refreshRulerColors } from '../rulers'
+import type { ScreenGrid } from './screen-grid'
 import type { RenderPipelineDeps } from './types'
 
 export class CanvasRenderPipeline {
-  private _overlayRafId: number | null = null
-  private _lodTimeout: number | null = null
-
   constructor(private readonly _deps: RenderPipelineDeps) {}
 
   syncOverlayTransforms(): void {
     const htmlRulers = this._deps.getHtmlRulers()
     if (htmlRulers) updateHtmlRulers(htmlRulers, this._deps.stage)
     this._deps.getScaleBar()?.update(this._deps.stage)
-  }
-
-  scheduleOverlayRedraw(): void {
-    if (this._overlayRafId !== null) return
-    this._overlayRafId = requestAnimationFrame(() => {
-      this._overlayRafId = null
-      this.redrawOverlays()
-    })
   }
 
   redrawOverlays(): void {
@@ -42,26 +39,15 @@ export class CanvasRenderPipeline {
     }
   }
 
-  scheduleLODUpdate(): void {
-    if (this._lodTimeout !== null) clearTimeout(this._lodTimeout)
-    this._lodTimeout = window.setTimeout(() => {
-      this._lodTimeout = null
-      this.reconcileZoomDependentState()
-    }, 150)
-  }
-
   refreshTheme(): void {
     const container = this._deps.stage.container()
     if (!container) return
-    requestAnimationFrame(() => {
-      void theme.value
-      refreshGridColors(container)
-      refreshRulerColors(container)
-      const transformer = this._deps.stage.findOne('Transformer') as Konva.Transformer | undefined
-      refreshCanvasTheme(container, this._deps.layers, transformer ?? null)
-      this._deps.getScaleBar()?.update(this._deps.stage)
-      this.redrawOverlays()
-    })
+    void theme.value
+    refreshGridColors(container)
+    refreshRulerColors(container)
+    const transformer = this._deps.stage.findOne('Transformer') as Konva.Transformer | undefined
+    refreshCanvasTheme(container, this._deps.layers, transformer ?? null)
+    this._deps.getScaleBar()?.update(this._deps.stage)
   }
 
   refreshLocale(newLocale: string): void {
@@ -69,6 +55,12 @@ export class CanvasRenderPipeline {
     if (plantsLayer) {
       void updatePlantLabelsForLocale(plantsLayer, newLocale)
     }
+  }
+
+  updatePlantCounterScale(scale: number): void {
+    const plantsLayer = this._deps.layers.get('plants')
+    if (!plantsLayer) return
+    updatePlantCounterScale(plantsLayer, scale)
   }
 
   refreshPlantDisplay(): void {
@@ -98,41 +90,29 @@ export class CanvasRenderPipeline {
     }
   }
 
-  reconcileAfterMaterialization(): void {
-    this.refreshPlantDisplay()
-    this.reconcileZoomDependentState()
-
-    const container = this._deps.stage.container()
-    if (container) {
-      const transformer = this._deps.stage.findOne('Transformer') as Konva.Transformer | undefined
-      refreshCanvasTheme(container, this._deps.layers, transformer ?? null)
-    }
-
-    this.redrawOverlays()
-  }
-
-  dispose(): void {
-    if (this._overlayRafId !== null) {
-      cancelAnimationFrame(this._overlayRafId)
-      this._overlayRafId = null
-    }
-
-    if (this._lodTimeout !== null) {
-      clearTimeout(this._lodTimeout)
-      this._lodTimeout = null
-    }
-  }
-
-  private reconcileZoomDependentState(): void {
-    const scale = zoomLevel.value
+  updateLOD(scale: number): void {
     const plantsLayer = this._deps.layers.get('plants')
-    if (plantsLayer) {
-      updatePlantsLOD(plantsLayer, getPlantLOD(scale), scale, selectedObjectIds.value)
-    }
-
-    const annotationsLayer = this._deps.layers.get('annotations')
-    if (annotationsLayer) {
-      updateAnnotationsForZoom(annotationsLayer, scale)
-    }
+    if (!plantsLayer) return
+    updatePlantLOD(plantsLayer, getPlantLOD(scale), selectedObjectIds.value)
   }
+
+  updateAnnotations(scale: number): void {
+    const annotationsLayer = this._deps.layers.get('annotations')
+    if (!annotationsLayer) return
+    updateAnnotationsForZoom(annotationsLayer, scale)
+  }
+
+  updateDeferredPlantPasses(
+    plants: Konva.Group[],
+    grid: ScreenGrid,
+    scale: number,
+  ): void {
+    const plantsLayer = this._deps.layers.get('plants')
+    if (!plantsLayer) return
+    updatePlantDensity(plants, getPlantLOD(scale), selectedObjectIds.value, grid)
+    updatePlantStacking(plants, grid)
+    plantsLayer.batchDraw()
+  }
+
+  dispose(): void {}
 }

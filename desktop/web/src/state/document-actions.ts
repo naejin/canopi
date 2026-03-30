@@ -3,7 +3,6 @@ import type { CanopiFile } from '../types/design'
 import type { CanvasEngine } from '../canvas/engine'
 import { canvasEngine } from '../canvas/engine'
 import { extractExtra, toCanopi } from '../canvas/serializer'
-import { resetTransientCanvasSession } from '../canvas/runtime/document-session'
 import * as designIpc from '../ipc/design'
 import { t } from '../i18n'
 import {
@@ -263,8 +262,7 @@ function applyDocumentReplacement(
   name: string,
   engine: CanvasEngine,
 ): void {
-  resetTransientCanvasSession()
-  engine.loadDocument(file)
+  engine.replaceDocument(file)
   replaceCurrentDesignState(file, path, name)
   resetDirtyBaselines()
   engine.history.clear()

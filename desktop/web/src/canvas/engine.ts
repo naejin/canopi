@@ -31,10 +31,12 @@ import { AddGuideCommand } from './commands/guide'
 import type { Alignment, DistributeAxis } from './alignment'
 import type { CanopiFile, ObjectGroup, PlacedPlant } from '../types/design'
 import { CanvasRenderPipeline } from './runtime/render-pipeline'
+import type { RenderPass } from './runtime/render-passes'
 import { CanvasViewport } from './runtime/viewport'
 import { CanvasObjectOps } from './runtime/object-ops'
 import { CanvasExternalInput } from './runtime/external-input'
-import { loadDocumentSession } from './runtime/document-session'
+import { loadDocumentSession, resetTransientCanvasSession } from './runtime/document-session'
+import { RenderReconciler } from './runtime/render-reconciler'
 import { getSpeciesBatch } from '../ipc/species'
 
 // The 7 named layers in render order (bottom → top)
@@ -68,6 +70,7 @@ export class CanvasEngine {
   private _htmlRulers: HtmlRulers | null = null
   private _scaleBar: ScaleBar | null = null
   private _renderPipeline: CanvasRenderPipeline | null = null
+  private _renderReconciler: RenderReconciler | null = null
   private _viewport: CanvasViewport | null = null
   private _objectOps: CanvasObjectOps | null = null
   private _externalInput: CanvasExternalInput | null = null
@@ -83,6 +86,7 @@ export class CanvasEngine {
   private _disposeDisplayModeEffect: (() => void) | null = null
   /** Cache of species details for thematic coloring — keyed by canonical name */
   private _speciesCache = new Map<string, Record<string, unknown>>()
+  private _documentLoadEpoch = 0
 
   private _lastLocale = locale.peek()
 
@@ -131,14 +135,21 @@ export class CanvasEngine {
       getSpeciesCache: () => this._speciesCache,
       loadSpeciesCache: (activeLocale) => this.loadSpeciesCache(activeLocale),
     })
+    this._renderReconciler = new RenderReconciler({
+      stage: this.stage,
+      pipeline: this._renderPipeline,
+      getVisiblePlantsForDeferredPasses: () => {
+        const plantsLayer = this.layers.get('plants')
+        return (plantsLayer?.find('.plant-group') as Konva.Group[]) ?? []
+      },
+    })
 
     this._viewport = new CanvasViewport({
       stage: this.stage,
       layers: this.layers,
-      syncOverlayTransforms: () => this._renderPipeline?.syncOverlayTransforms(),
-      scheduleOverlayRedraw: () => this._renderPipeline?.scheduleOverlayRedraw(),
-      scheduleLODUpdate: () => this._renderPipeline?.scheduleLODUpdate(),
-      reconcileMaterializedScene: () => this.reconcileMaterializedScene(),
+      applyStageTransform: (scale, position, options) =>
+        this.applyStageTransform(scale, position, options),
+      invalidateRender: (...passes) => this.invalidateRender(...passes),
     })
 
     this._objectOps = new CanvasObjectOps({
@@ -176,7 +187,7 @@ export class CanvasEngine {
         this._wasSpaceDraggable = value
       },
       getActiveToolCursor: () => this.toolRegistry.get(activeTool.value)?.cursor ?? 'default',
-      reconcileMaterializedScene: () => this.reconcileMaterializedScene(),
+      invalidateRender: (...passes) => this.invalidateRender(...passes),
     })
     this._externalInput.init()
 
@@ -276,7 +287,7 @@ export class CanvasEngine {
       const visible = this._chromeEnabled.value && gridVisible.value
       if (!this._gridShape) return
       this._gridShape.visible(visible)
-      this.layers.get('base')?.batchDraw()
+      this.invalidateRender('overlays')
     })
 
     this._disposeRulerVisEffect = effect(() => {
@@ -292,7 +303,7 @@ export class CanvasEngine {
     // Theme effect — refresh cached CSS token colors and redraw overlays
     this._disposeThemeEffect = effect(() => {
       void theme.value
-      this._renderPipeline?.refreshTheme()
+      this.invalidateRender('theme', 'overlays')
     })
 
     // Locale effect — update plant common names when language changes
@@ -301,13 +312,14 @@ export class CanvasEngine {
       if (newLocale === this._lastLocale) return
       this._lastLocale = newLocale
       this._renderPipeline?.refreshLocale(newLocale)
+      this.invalidateRender('density', 'stacking')
     })
 
     // Plant display mode effect — update plant rendering when mode changes
     this._disposeDisplayModeEffect = effect(() => {
       void plantDisplayMode.value
       void plantColorByAttr.value
-      this._renderPipeline?.refreshPlantDisplay()
+      this.invalidateRender('plant-display', 'lod', 'density', 'stacking')
     })
   }
 
@@ -428,7 +440,7 @@ export class CanvasEngine {
     this._htmlRulers.hCanvas.style.display = display
     this._htmlRulers.vCanvas.style.display = display
     this._htmlRulers.corner.style.display = display
-    this._renderPipeline?.syncOverlayTransforms()
+    this.invalidateRender('overlays')
   }
 
   /** Show grid, rulers, compass, scale bar — call when a design is created or loaded. */
@@ -442,7 +454,7 @@ export class CanvasEngine {
     this._chromeEnabled.value = true  // Effects auto-fire, showing grid/rulers
     const uiLayer = this.layers.get('ui')
     if (uiLayer) { uiLayer.visible(true); uiLayer.batchDraw() }
-    this._renderPipeline?.syncOverlayTransforms()
+    this.invalidateRender('overlays')
   }
 
   /** Hide ALL canvas chrome — called when no design is active. */
@@ -454,7 +466,7 @@ export class CanvasEngine {
 
   setGridSize(size: number): void {
     gridSize.value = size
-    this._renderPipeline?.redrawOverlays()
+    this.invalidateRender('overlays')
   }
 
   toggleSnapToGrid(): void {
@@ -598,12 +610,12 @@ export class CanvasEngine {
 
   /** Rotate all selected nodes by the given number of degrees. */
   rotateSelected(degrees: number): void {
-    this._objectOps!.rotateSelected(degrees)
+    this._objectOps!.rotateSelected(degrees, this)
   }
 
   /** Flip selected nodes along the given axis. */
   flipSelected(axis: 'h' | 'v'): void {
-    this._objectOps!.flipSelected(axis)
+    this._objectOps!.flipSelected(axis, this)
   }
 
   /** Move selected nodes to the top of their layer's z-order.
@@ -644,11 +656,11 @@ export class CanvasEngine {
   // -------------------------------------------------------------------------
 
   alignSelected(alignment: Alignment): void {
-    this._objectOps!.alignSelected(alignment)
+    this._objectOps!.alignSelected(alignment, this)
   }
 
   distributeSelected(axis: DistributeAxis): void {
-    this._objectOps!.distributeSelected(axis)
+    this._objectOps!.distributeSelected(axis, this)
   }
 
   // -------------------------------------------------------------------------
@@ -688,12 +700,45 @@ export class CanvasEngine {
   }
 
   loadDocument(file: CanopiFile): void {
+    this._documentLoadEpoch += 1
+    this._viewport?.resetViewport()
+    loadDocumentSession(file, this)
+  }
+
+  replaceDocument(file: CanopiFile): void {
+    this._documentLoadEpoch += 1
+    resetTransientCanvasSession()
     this._viewport?.resetViewport()
     loadDocumentSession(file, this)
   }
 
   reconcileMaterializedScene(): void {
-    this._renderPipeline?.reconcileAfterMaterialization()
+    this.invalidateRender(
+      'counter-scale',
+      'plant-display',
+      'lod',
+      'annotations',
+      'theme',
+      'overlays',
+      'density',
+      'stacking',
+    )
+  }
+
+  invalidateRender(...passes: RenderPass[]): void {
+    this._renderReconciler?.invalidate(...passes)
+  }
+
+  applyStageTransform(
+    scale: number,
+    position: { x: number; y: number },
+    options: { invalidateDeferred?: boolean } = {},
+  ): void {
+    this._renderReconciler?.applyStageTransform(scale, position, options)
+  }
+
+  getDocumentLoadEpoch(): number {
+    return this._documentLoadEpoch
   }
 
   // -------------------------------------------------------------------------
@@ -739,6 +784,8 @@ export class CanvasEngine {
     this._disposeLocaleEffect = null
     this._disposeDisplayModeEffect = null
 
+    this._renderReconciler?.dispose()
+    this._renderReconciler = null
     this._renderPipeline?.dispose()
     this._renderPipeline = null
     this._viewport?.destroy()

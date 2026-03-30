@@ -1,6 +1,7 @@
 import Konva from 'konva'
 import { getCommonNames } from '../ipc/species'
 import { getCanvasColor } from './theme-refresh'
+import type { ScreenGrid, ScreenPlant } from './runtime/screen-grid'
 
 // Re-export for canvas-internal consumers (display-modes.ts)
 export { STRATUM_I18N_KEY } from '../types/constants'
@@ -151,68 +152,82 @@ const STACK_THRESHOLD_SQ = 5 * 5    // plants within 5px are "stacked"
 const STACK_BADGE_BG = '#5A7D3A'   // moss green from semantic palette
 const STACK_BADGE_FG = '#FFFFFF'
 
-/**
- * Update all plant nodes for the current zoom level:
- * - Counter-scale groups to constant screen size
- * - LOD: hide labels at far zoom, show at close zoom
- * - Nearest-neighbor density: suppress labels when plants are too close
- * - Stacked plant badges: show count when plants overlap
- *
- * Called after zoom changes (debounced 150ms).
- */
-export function updatePlantsLOD(
+export function updatePlantCounterScale(
   plantsLayer: Konva.Layer,
-  lod: PlantLOD,
   stageScale: number,
-  selectedIds?: Set<string>,
 ): void {
   const inv = 1 / stageScale
   const groups = plantsLayer.find('.plant-group') as Konva.Group[]
-
-  // Collect screen positions for neighbor distance computation
-  const positions: { group: Konva.Group; sx: number; sy: number }[] = []
-  for (const g of groups) {
-    const abs = g.getAbsolutePosition()
-    positions.push({ group: g, sx: abs.x, sy: abs.y })
+  for (const group of groups) {
+    group.scale({ x: inv, y: inv })
   }
+  plantsLayer.batchDraw()
+}
 
-  for (let i = 0; i < positions.length; i++) {
-    const g = positions[i]!.group
+export function updatePlantLOD(
+  plantsLayer: Konva.Layer,
+  lod: PlantLOD,
+  selectedIds?: Set<string>,
+): void {
+  const groups = plantsLayer.find('.plant-group') as Konva.Group[]
 
-    // Counter-scale the GROUP — all children (circle, labels) inherit the
-    // scale automatically. This is the only per-plant operation needed on zoom.
-    g.scale({ x: inv, y: inv })
-
-    // LOD: toggle label visibility based on zoom level
-    const label = g.findOne('.plant-label') as Konva.Text | undefined
-    const botLabel = g.findOne('.plant-botanical') as Konva.Text | undefined
-    const isSelected = selectedIds?.has(g.id()) ?? false
+  for (const group of groups) {
+    const label = group.findOne('.plant-label') as Konva.Text | undefined
+    const botanicalLabel = group.findOne('.plant-botanical') as Konva.Text | undefined
+    const isSelected = selectedIds?.has(group.id()) ?? false
 
     if (lod === 'dot' || lod === 'icon') {
-      // No labels at these zoom levels (unless selected)
       if (label) label.visible(isSelected)
-      if (botLabel) botLabel.visible(false)
-    } else {
-      // icon+label: show label only if nearest neighbor > 40px (squared) or selected
-      let nearestDistSq = Infinity
-      for (let j = 0; j < positions.length; j++) {
-        if (i === j) continue
-        const dx = positions[i]!.sx - positions[j]!.sx
-        const dy = positions[i]!.sy - positions[j]!.sy
-        const dSq = dx * dx + dy * dy
-        if (dSq < nearestDistSq) nearestDistSq = dSq
-      }
-
-      const showLabel = isSelected || nearestDistSq > MIN_LABEL_DIST_SQ
-      if (label) label.visible(showLabel)
-      if (botLabel) botLabel.visible(showLabel)
+      if (botanicalLabel) botanicalLabel.visible(false)
+      continue
     }
+
+    if (label) label.visible(true)
+    if (botanicalLabel) botanicalLabel.visible(true)
   }
 
-  // Stacked plant detection — add/update count badges
-  updateStackedBadges(positions, stageScale)
-
   plantsLayer.batchDraw()
+}
+
+export function updatePlantDensity(
+  groups: Konva.Group[],
+  lod: PlantLOD,
+  selectedIds: Set<string> | undefined,
+  grid: ScreenGrid,
+): void {
+  if (lod !== 'icon+label') return
+
+  const positions = collectScreenPlants(groups)
+  const anchors = positions
+    .slice()
+    .sort((left, right) => (left.sy - right.sy) || (left.sx - right.sx))
+  const shown = new Set<string>()
+
+  for (const plant of anchors) {
+    const label = plant.group.findOne('.plant-label') as Konva.Text | undefined
+    const botanicalLabel = plant.group.findOne('.plant-botanical') as Konva.Text | undefined
+    const isSelected = selectedIds?.has(plant.group.id()) ?? false
+
+    if (isSelected) {
+      label?.visible(true)
+      botanicalLabel?.visible(true)
+      shown.add(plant.group.id())
+      continue
+    }
+
+    const neighbors = grid.queryNeighbors(plant.sx, plant.sy, Math.sqrt(MIN_LABEL_DIST_SQ))
+    const blocked = neighbors.some((neighbor) => {
+      if (neighbor.group.id() === plant.group.id()) return false
+      const dx = plant.sx - neighbor.sx
+      const dy = plant.sy - neighbor.sy
+      return shown.has(neighbor.group.id()) && (dx * dx + dy * dy) < MIN_LABEL_DIST_SQ
+    })
+
+    const visible = !blocked
+    label?.visible(visible)
+    botanicalLabel?.visible(visible)
+    if (visible) shown.add(plant.group.id())
+  }
 }
 
 // Badge positioning constants (screen pixels)
@@ -229,42 +244,43 @@ const BADGE_OFFSET_Y = -(CIRCLE_SCREEN_PX + 2)
  * updating text and toggling visibility — instead of destroying and
  * recreating them every zoom event.
  */
-function updateStackedBadges(
-  positions: { group: Konva.Group; sx: number; sy: number }[],
-  _stageScale: number,
+export function updatePlantStacking(
+  groups: Konva.Group[],
+  grid: ScreenGrid,
 ): void {
+  const positions = collectScreenPlants(groups)
   // Phase 1 — compute stack counts per anchor
-  const stackCounts = new Map<number, number>() // index → count
+  const stackCounts = new Map<string, number>()
 
   if (positions.length >= 2) {
-    const visited = new Set<number>()
+    const visited = new Set<string>()
 
-    for (let i = 0; i < positions.length; i++) {
-      if (visited.has(i)) continue
+    for (const plant of positions) {
+      if (visited.has(plant.group.id())) continue
 
-      const stack: number[] = [i]
-      visited.add(i)
+      const stack = [plant]
+      visited.add(plant.group.id())
 
-      for (let j = i + 1; j < positions.length; j++) {
-        if (visited.has(j)) continue
-        const dx = positions[i]!.sx - positions[j]!.sx
-        const dy = positions[i]!.sy - positions[j]!.sy
+      for (const neighbor of grid.queryNeighbors(plant.sx, plant.sy, Math.sqrt(STACK_THRESHOLD_SQ))) {
+        if (visited.has(neighbor.group.id()) || neighbor.group.id() === plant.group.id()) continue
+        const dx = plant.sx - neighbor.sx
+        const dy = plant.sy - neighbor.sy
         if (dx * dx + dy * dy < STACK_THRESHOLD_SQ) {
-          stack.push(j)
-          visited.add(j)
+          stack.push(neighbor)
+          visited.add(neighbor.group.id())
         }
       }
 
       if (stack.length >= 2) {
-        stackCounts.set(i, stack.length)
+        stackCounts.set(plant.group.id(), stack.length)
       }
     }
   }
 
   // Phase 2 — reconcile badges on each group
-  for (let i = 0; i < positions.length; i++) {
-    const g = positions[i]!.group
-    const count = stackCounts.get(i)
+  for (const plant of positions) {
+    const g = plant.group
+    const count = stackCounts.get(g.id())
 
     if (!count) {
       // Only search for badge nodes if we know they were created before
@@ -319,6 +335,17 @@ function updateStackedBadges(
       g.add(badgeText)
     }
   }
+}
+
+function collectScreenPlants(groups: Konva.Group[]): ScreenPlant[] {
+  return groups.map((group) => {
+    const abs = group.getAbsolutePosition()
+    return {
+      group,
+      sx: abs.x,
+      sy: abs.y,
+    }
+  })
 }
 
 /**

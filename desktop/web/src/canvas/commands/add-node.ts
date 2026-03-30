@@ -13,6 +13,7 @@ import { serializeNode, recreateNode, type SerializedNode } from './node-seriali
  */
 export class AddNodeCommand implements Command {
   readonly type = 'add-node'
+  readonly dirtyPasses
 
   private _layerName: string
   private _serialized: SerializedNode
@@ -20,6 +21,7 @@ export class AddNodeCommand implements Command {
   constructor(layerName: string, node: Konva.Node) {
     this._layerName = layerName
     this._serialized = serializeNode(node)
+    this.dirtyPasses = getLayerDirtyPasses(layerName)
   }
 
   execute(engine: CanvasEngine): void {
@@ -36,4 +38,14 @@ export class AddNodeCommand implements Command {
     if (!id) return
     engine.removeNode(id)
   }
+}
+
+function getLayerDirtyPasses(layerName: string) {
+  if (layerName === 'plants') {
+    return ['plant-display', 'lod', 'density', 'stacking'] as const
+  }
+  if (layerName === 'annotations') {
+    return ['annotations', 'overlays'] as const
+  }
+  return ['overlays'] as const
 }

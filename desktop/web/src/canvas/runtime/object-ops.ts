@@ -127,7 +127,7 @@ export class CanvasObjectOps {
     selectedObjectIds.value = newIds
   }
 
-  rotateSelected(degrees: number): void {
+  rotateSelected(degrees: number, engine: CanvasEngine): void {
     const nodes = this.getSelectedNodes()
     if (nodes.length === 0) return
 
@@ -138,11 +138,11 @@ export class CanvasObjectOps {
       return new TransformNodeCommand(node.id(), oldAttrs, newAttrs)
     })
 
-    this._deps.history.record(new BatchCommand(cmds))
+    this._deps.history.record(new BatchCommand(cmds), engine)
     this.batchDrawAllLayers()
   }
 
-  flipSelected(axis: 'h' | 'v'): void {
+  flipSelected(axis: 'h' | 'v', engine: CanvasEngine): void {
     const nodes = this.getSelectedNodes()
     if (nodes.length === 0) return
 
@@ -154,7 +154,7 @@ export class CanvasObjectOps {
       return new TransformNodeCommand(node.id(), oldAttrs, newAttrs)
     })
 
-    this._deps.history.record(new BatchCommand(cmds))
+    this._deps.history.record(new BatchCommand(cmds), engine)
     this.batchDrawAllLayers()
   }
 
@@ -228,17 +228,17 @@ export class CanvasObjectOps {
     selectedObjectIds.value = ids
   }
 
-  alignSelected(alignment: Alignment): void {
+  alignSelected(alignment: Alignment, engine: CanvasEngine): void {
     const cmd = alignNodes(this.getSelectedNodes(), alignment)
     if (!cmd) return
-    this._deps.history.record(cmd)
+    this._deps.history.record(cmd, engine)
     this.batchDrawAllLayers()
   }
 
-  distributeSelected(axis: DistributeAxis): void {
+  distributeSelected(axis: DistributeAxis, engine: CanvasEngine): void {
     const cmd = distributeNodes(this.getSelectedNodes(), axis)
     if (!cmd) return
-    this._deps.history.record(cmd)
+    this._deps.history.record(cmd, engine)
     this.batchDrawAllLayers()
   }
 

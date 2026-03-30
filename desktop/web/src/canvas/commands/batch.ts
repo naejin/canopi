@@ -1,5 +1,6 @@
 import type { Command } from '../history'
 import type { CanvasEngine } from '../engine'
+import { DEFAULT_RENDER_PASSES } from '../runtime/render-passes'
 
 /**
  * BatchCommand — wraps multiple commands for atomic multi-select operations.
@@ -10,11 +11,13 @@ import type { CanvasEngine } from '../engine'
  */
 export class BatchCommand implements Command {
   readonly type = 'batch'
+  readonly dirtyPasses
 
   private _commands: Command[]
 
   constructor(commands: Command[]) {
     this._commands = commands
+    this.dirtyPasses = [...new Set(commands.flatMap((command) => command.dirtyPasses ?? DEFAULT_RENDER_PASSES))]
   }
 
   execute(engine: CanvasEngine): void {

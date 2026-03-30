@@ -10,6 +10,7 @@ import { selectedObjectIds } from '../../state/canvas'
  */
 export class GroupCommand implements Command {
   readonly type = 'group'
+  readonly dirtyPasses = ['overlays', 'density', 'stacking'] as const
   private _groupId: string | null = null
   private _memberIds: string[] = []
   private _memberPositions: Map<string, { x: number; y: number }> = new Map()
@@ -64,6 +65,7 @@ export class GroupCommand implements Command {
  */
 export class UngroupCommand implements Command {
   readonly type = 'ungroup'
+  readonly dirtyPasses = ['overlays', 'density', 'stacking'] as const
   private _groups: Array<{
     id: string
     pos: { x: number; y: number }

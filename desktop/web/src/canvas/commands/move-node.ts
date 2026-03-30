@@ -14,6 +14,7 @@ interface Position {
  */
 export class MoveNodeCommand implements Command {
   readonly type = 'move-node'
+  readonly dirtyPasses = ['overlays', 'density', 'stacking'] as const
 
   private _nodeId: string
   private _from: Position

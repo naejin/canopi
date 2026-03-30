@@ -456,9 +456,9 @@ export class SelectTool implements CanvasTool {
 
       // Use record() — the drag already happened, we just need to log it
       if (cmds.length === 1) {
-        engine.history.record(cmds[0]!)
+        engine.history.record(cmds[0]!, engine)
       } else {
-        engine.history.record(new BatchCommand(cmds))
+        engine.history.record(new BatchCommand(cmds), engine)
       }
     }
 
@@ -508,9 +508,9 @@ export class SelectTool implements CanvasTool {
 
       // Use record() — the transform already happened
       if (cmds.length === 1) {
-        engine.history.record(cmds[0]!)
+        engine.history.record(cmds[0]!, engine)
       } else {
-        engine.history.record(new BatchCommand(cmds))
+        engine.history.record(new BatchCommand(cmds), engine)
       }
 
     }

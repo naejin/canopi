@@ -19,6 +19,7 @@ export interface TransformAttrs {
  */
 export class TransformNodeCommand implements Command {
   readonly type = 'transform-node'
+  readonly dirtyPasses = ['overlays', 'density', 'stacking'] as const
 
   private _nodeId: string
   private _oldAttrs: TransformAttrs

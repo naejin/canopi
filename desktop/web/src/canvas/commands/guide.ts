@@ -7,6 +7,7 @@ import { createGuideLine, type Guide } from '../guides'
 /** Add a guide line — undoable. */
 export class AddGuideCommand implements Command {
   readonly type = 'addGuide'
+  readonly dirtyPasses = ['annotations', 'overlays'] as const
   private _guide: Guide
 
   constructor(guide: Guide) {
@@ -38,6 +39,7 @@ export class AddGuideCommand implements Command {
 /** Remove a guide line — undoable. */
 export class RemoveGuideCommand implements Command {
   readonly type = 'removeGuide'
+  readonly dirtyPasses = ['annotations', 'overlays'] as const
   private _guide: Guide
 
   constructor(guide: Guide) {

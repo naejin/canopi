@@ -2,10 +2,11 @@ import { useSignal, useSignalEffect } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
 import { t } from '../../i18n'
 import { locale } from '../../state/app'
-import { currentDesign, nonCanvasRevision } from '../../state/document'
+import { currentDesign } from '../../state/document'
 import { designLocation } from '../../state/canvas'
 import { geocodeAddress } from '../../ipc/geocoding'
 import type { GeoResult } from '../../ipc/geocoding'
+import { clearDesignLocation, setDesignLocation } from '../../state/location-actions'
 import styles from './LocationInput.module.css'
 
 export function LocationInput() {
@@ -99,10 +100,7 @@ export function LocationInput() {
     // Auto-save the selected location
     if (!design) return
     const alt = parseFloat(altInput.value)
-    const newLoc = { lat: result.lat, lon: result.lon, altitude_m: isNaN(alt) ? null : alt }
-    currentDesign.value = { ...design, location: newLoc }
-    designLocation.value = { lat: result.lat, lon: result.lon }
-    nonCanvasRevision.value++
+    setDesignLocation({ lat: result.lat, lon: result.lon, altitude_m: isNaN(alt) ? null : alt })
   }
 
   function save() {
@@ -114,20 +112,15 @@ export function LocationInput() {
 
     const alt = parseFloat(altInput.value)
 
-    const newLoc = { lat, lon, altitude_m: isNaN(alt) ? null : alt }
-    currentDesign.value = { ...design, location: newLoc }
-    designLocation.value = { lat, lon }
-    nonCanvasRevision.value++
+    setDesignLocation({ lat, lon, altitude_m: isNaN(alt) ? null : alt })
   }
 
   function clear() {
     if (!design) return
-    currentDesign.value = { ...design, location: null }
-    designLocation.value = null
+    clearDesignLocation()
     latInput.value = ''
     lonInput.value = ''
     altInput.value = ''
-    nonCanvasRevision.value++
   }
 
   return (

@@ -1,5 +1,5 @@
 import Konva from 'konva'
-import { zoomLevel, zoomReference } from '../../state/canvas'
+import { zoomReference } from '../../state/canvas'
 import type { ViewportDeps } from './types'
 
 const DEFAULT_VIEWPORT_METERS = 100
@@ -32,7 +32,7 @@ export class CanvasViewport {
           width: container.clientWidth,
           height: container.clientHeight,
         })
-        this._deps.scheduleOverlayRedraw()
+        this._deps.invalidateRender('overlays')
       })
     })
     this._resizeObserver.observe(container)
@@ -129,15 +129,13 @@ export class CanvasViewport {
     if (stageWidth <= 0 || stageHeight <= 0) return
 
     const scale = Math.min(stageWidth, stageHeight) / DEFAULT_VIEWPORT_METERS
-    this._deps.stage.scale({ x: scale, y: scale })
-    this._deps.stage.position({
+    const position = {
       x: stageWidth / 2 - (DEFAULT_VIEWPORT_METERS / 2) * scale,
       y: stageHeight / 2 - (DEFAULT_VIEWPORT_METERS / 2) * scale,
-    })
+    }
 
-    zoomLevel.value = scale
+    this._deps.applyStageTransform(scale, position, { invalidateDeferred: true })
     zoomReference.value = scale
-    this._deps.scheduleOverlayRedraw()
   }
 
   private _attachWheelHandlers(): void {
@@ -172,7 +170,7 @@ export class CanvasViewport {
           y: pointer.y - worldPoint.y * newScale,
         }
 
-        this._applyViewportTransform(newScale, position, { scheduleLod: true })
+        this._applyViewportTransform(newScale, position, { invalidateDeferred: true })
       })
     }
 
@@ -182,8 +180,7 @@ export class CanvasViewport {
   private _attachStagePanHandler(): void {
     this._boundStageDragMove = (event) => {
       if (event.target !== this._deps.stage) return
-      this._deps.syncOverlayTransforms()
-      this._deps.layers.get('ui')?.batchDraw()
+      this._deps.invalidateRender('overlays')
     }
 
     this._deps.stage.on('dragmove', this._boundStageDragMove)
@@ -203,48 +200,15 @@ export class CanvasViewport {
       x: centerX - worldPoint.x * newScale,
       y: centerY - worldPoint.y * newScale,
     }, {
-      reconcileMaterializedScene: true,
+      invalidateDeferred: true,
     })
   }
 
   private _applyViewportTransform(
     scale: number,
     position: { x: number; y: number },
-    options: {
-      reconcileMaterializedScene?: boolean
-      scheduleLod?: boolean
-    } = {},
+    options: { invalidateDeferred?: boolean } = {},
   ): void {
-    this._deps.stage.setAttrs({
-      scaleX: scale,
-      scaleY: scale,
-      x: position.x,
-      y: position.y,
-    })
-
-    this._deps.syncOverlayTransforms()
-    this._deps.layers.get('ui')?.batchDraw()
-    this._updatePlantCounterScale(scale)
-    zoomLevel.value = scale
-
-    if (options.reconcileMaterializedScene) {
-      this._deps.reconcileMaterializedScene()
-      return
-    }
-
-    if (options.scheduleLod) {
-      this._deps.scheduleLODUpdate()
-    }
-  }
-
-  private _updatePlantCounterScale(scale: number): void {
-    const inverseScale = 1 / scale
-    const plantsLayer = this._deps.layers.get('plants')
-    if (!plantsLayer) return
-
-    plantsLayer.find('.plant-group').forEach((node: Konva.Node) => {
-      ;(node as Konva.Group).scale({ x: inverseScale, y: inverseScale })
-    })
-    plantsLayer.batchDraw()
+    this._deps.applyStageTransform(scale, position, options)
   }
 }
