@@ -1,7 +1,7 @@
 # Rewrite Product Definition
 
 Date: 2026-03-29
-Status: Wave 0 lightweight scope lock derived from `docs/rewrite.md`
+Status: Wave 0 lightweight scope lock derived from `docs/todo.md`
 
 ## Scope Matrix
 
