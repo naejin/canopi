@@ -21,7 +21,7 @@ Status: scope lock updated after live-app review
 | mobile support (iOS / Android) | No active product surface or rewrite plan | intentionally removed | n/a | Keep rewrite scope anchored on the desktop product | No rewrite wave depends on mobile delivery |
 | browser-only product target | Web frontend exists as the Tauri shell UI, not as a supported standalone product | intentionally removed | n/a | Avoid implicit browser-release scope during the rewrite | No rewrite-exit acceptance requires a standalone browser deployment |
 | knowledge / learning content | Article content exists, but the dedicated learning surface was deleted | deferred after rewrite exit | Post-rewrite | Teach users through in-product learning content after core parity is restored | Learning content is not required for rewrite exit and remains explicitly deferred |
-| consortium editing surface | Active | required at rewrite exit | Wave 3 | Restore consortium workflows as a bottom-bar tab in the rebuilt panel shell | Consortium tab is rebuilt as part of the bottom bar and its final required behavior passes lifecycle and persistence checks |
+| consortium editing surface | Active, but deferred from rewrite exit | deferred after rewrite exit | Post-rewrite | Restore consortium workflows as a bottom-bar tab once core rewrite parity is closed | No rewrite-exit acceptance depends on consortium workflows |
 
 ## Initial Journeys
 
@@ -30,4 +30,3 @@ Status: scope lock updated after live-app review
 3. Edit canvas content, undo/redo, save, reload, and preserve roundtrip parity.
 4. Use rebuilt layer controls for the required display and visibility flows.
 5. Use the bottom-bar `location` tab to search, drag, zoom, and confirm the design location.
-6. Use the surviving `consortium` surface without lifecycle regressions.

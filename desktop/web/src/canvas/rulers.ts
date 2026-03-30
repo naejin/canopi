@@ -1,5 +1,12 @@
 import Konva from 'konva'
 import { gridSize } from '../state/canvas'
+import {
+  SCALE_BAR_CANVAS_WIDTH,
+  SCALE_BAR_MARGIN_X,
+  SCALE_BAR_MARGIN_Y,
+  SCALE_BAR_RESERVED_BOTTOM_PX,
+  getScaleBarDisplay,
+} from './scale-bar'
 
 const RULER_SIZE = 24 // pixels — thickness of horizontal and vertical rulers
 
@@ -10,6 +17,7 @@ const RULER_SIZE = 24 // pixels — thickness of horizontal and vertical rulers
 export interface HtmlRulers {
   hCanvas: HTMLCanvasElement
   vCanvas: HTMLCanvasElement
+  scaleCanvas: HTMLCanvasElement
   corner: HTMLDivElement
   destroy(): void
   /** Set a callback to be invoked when the user drags from a ruler to create a guide. */
@@ -23,6 +31,7 @@ export interface HtmlRulers {
 let _rulerBg = '#E8E3D9'
 let _rulerText = 'rgba(60, 45, 30, 0.4)'
 let _rulerBorder = 'rgba(60, 45, 30, 0.12)'
+let _scaleBarColor = 'rgba(60, 45, 30, 0.4)'
 
 /** Call once after init and on every theme change. */
 export function refreshRulerColors(container: HTMLElement): void {
@@ -30,6 +39,7 @@ export function refreshRulerColors(container: HTMLElement): void {
   _rulerBg = cs.getPropertyValue('--canvas-ruler-bg').trim() || '#fff'
   _rulerText = cs.getPropertyValue('--canvas-ruler-text').trim() || '#64748b'
   _rulerBorder = cs.getPropertyValue('--color-border').trim() || '#e2e0dd'
+  _scaleBarColor = cs.getPropertyValue('--color-text-muted').trim() || _rulerText
 }
 
 // ---------------------------------------------------------------------------
@@ -69,6 +79,18 @@ export function createHtmlRulers(containerDiv: HTMLElement): HtmlRulers {
     display: block;
   `
 
+  const scaleCanvas = document.createElement('canvas')
+  scaleCanvas.style.cssText = `
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: ${SCALE_BAR_CANVAS_WIDTH}px;
+    height: ${SCALE_BAR_RESERVED_BOTTOM_PX}px;
+    z-index: 18;
+    pointer-events: none;
+    display: block;
+  `
+
   // Corner square — opaque box that covers the ruler intersection at top-left.
   // Must sit above both ruler canvases (z-index 17 > 15).
   // Uses CSS variables directly so it updates on theme change without rebuild.
@@ -89,9 +111,17 @@ export function createHtmlRulers(containerDiv: HTMLElement): HtmlRulers {
 
   containerDiv.appendChild(hCanvas)
   containerDiv.appendChild(vCanvas)
+  containerDiv.appendChild(scaleCanvas)
   containerDiv.appendChild(corner)
 
-  const result: HtmlRulers = { hCanvas, vCanvas, corner, destroy, onGuideCreate: null }
+  const result: HtmlRulers = {
+    hCanvas,
+    vCanvas,
+    scaleCanvas,
+    corner,
+    destroy,
+    onGuideCreate: null,
+  }
 
   // Drag-from-ruler to create a guide line.
   // Horizontal ruler drag → horizontal guide (axis='h')
@@ -142,10 +172,24 @@ export function createHtmlRulers(containerDiv: HTMLElement): HtmlRulers {
   function destroy(): void {
     hCanvas.remove()
     vCanvas.remove()
+    scaleCanvas.remove()
     corner.remove()
   }
 
   return result
+}
+
+export function setHtmlOverlayVisibility(
+  rulers: HtmlRulers,
+  options: { chromeVisible: boolean; rulersVisible: boolean },
+): void {
+  const rulerDisplay = options.chromeVisible && options.rulersVisible ? 'block' : 'none'
+  const scaleDisplay = options.chromeVisible ? 'block' : 'none'
+
+  rulers.hCanvas.style.display = rulerDisplay
+  rulers.vCanvas.style.display = rulerDisplay
+  rulers.corner.style.display = rulerDisplay
+  rulers.scaleCanvas.style.display = scaleDisplay
 }
 
 // ---------------------------------------------------------------------------
@@ -156,6 +200,7 @@ export function createHtmlRulers(containerDiv: HTMLElement): HtmlRulers {
 export function updateHtmlRulers(rulers: HtmlRulers, stage: Konva.Stage): void {
   _drawHorizontalRuler(rulers.hCanvas, stage)
   _drawVerticalRuler(rulers.vCanvas, stage)
+  _drawScaleBar(rulers.scaleCanvas, stage)
 }
 
 // ---------------------------------------------------------------------------
@@ -170,13 +215,15 @@ function _drawHorizontalRuler(canvas: HTMLCanvasElement, stage: Konva.Stage): vo
 
   if (cssWidth <= 0) return
 
-  canvas.width = cssWidth * dpr
-  canvas.height = cssHeight * dpr
+  const newW = cssWidth * dpr
+  const newH = cssHeight * dpr
+  if (canvas.width !== newW) canvas.width = newW
+  if (canvas.height !== newH) canvas.height = newH
 
   const ctx = canvas.getContext('2d')
   if (!ctx) return
 
-  ctx.scale(dpr, dpr)
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
 
   const scale = stage.scaleX()
   const stagePos = stage.position()
@@ -239,13 +286,15 @@ function _drawVerticalRuler(canvas: HTMLCanvasElement, stage: Konva.Stage): void
 
   if (cssHeight <= 0) return
 
-  canvas.width = cssWidth * dpr
-  canvas.height = cssHeight * dpr
+  const newW = cssWidth * dpr
+  const newH = cssHeight * dpr
+  if (canvas.width !== newW) canvas.width = newW
+  if (canvas.height !== newH) canvas.height = newH
 
   const ctx = canvas.getContext('2d')
   if (!ctx) return
 
-  ctx.scale(dpr, dpr)
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
 
   const scale = stage.scaleY()
   const stagePos = stage.position()
@@ -303,19 +352,67 @@ function _drawVerticalRuler(canvas: HTMLCanvasElement, stage: Konva.Stage): void
   }
 }
 
+function _drawScaleBar(canvas: HTMLCanvasElement, stage: Konva.Stage): void {
+  const dpr = window.devicePixelRatio || 1
+  const cssWidth = canvas.offsetWidth
+  const cssHeight = canvas.offsetHeight
+
+  if (cssWidth <= 0 || cssHeight <= 0) return
+
+  const newW = cssWidth * dpr
+  const newH = cssHeight * dpr
+  if (canvas.width !== newW) canvas.width = newW
+  if (canvas.height !== newH) canvas.height = newH
+
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  ctx.clearRect(0, 0, cssWidth, cssHeight)
+
+  const { barScreenPx, label } = getScaleBarDisplay(stage.scaleX())
+  const startX = SCALE_BAR_MARGIN_X
+  const endX = startX + barScreenPx
+  const lineY = cssHeight - SCALE_BAR_MARGIN_Y
+
+  const color = _scaleBarColor
+
+  ctx.strokeStyle = color
+  ctx.fillStyle = color
+  ctx.lineWidth = 2
+  ctx.lineCap = 'square'
+
+  ctx.beginPath()
+  ctx.moveTo(startX, lineY)
+  ctx.lineTo(endX, lineY)
+  ctx.stroke()
+
+  ctx.beginPath()
+  ctx.moveTo(startX, lineY - 4)
+  ctx.lineTo(startX, lineY + 4)
+  ctx.moveTo(endX, lineY - 4)
+  ctx.lineTo(endX, lineY + 4)
+  ctx.stroke()
+
+  ctx.font = `11px Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'bottom'
+  ctx.fillText(label, startX + barScreenPx / 2, lineY - 8)
+}
+
 // ---------------------------------------------------------------------------
 // Tick interval calculation
 // Aim for ~60px between label ticks and ~15px between minor ticks
 // ---------------------------------------------------------------------------
 
-const NICE_DISTANCES = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000]
+const RULER_NICE_DISTANCES = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000]
 
 function _calcTickIntervals(
   scale: number,
   _gridSizeMeters: number,
 ): { tickInterval: number; labelInterval: number } {
-  let tickInterval = NICE_DISTANCES[0]!
-  for (const d of NICE_DISTANCES) {
+  let tickInterval = RULER_NICE_DISTANCES[0]!
+  for (const d of RULER_NICE_DISTANCES) {
     if (d * scale >= 15) {
       tickInterval = d
       break
@@ -323,9 +420,9 @@ function _calcTickIntervals(
   }
 
   let labelInterval = tickInterval
-  const idx = NICE_DISTANCES.indexOf(tickInterval)
-  if (idx >= 0 && idx + 2 < NICE_DISTANCES.length) {
-    labelInterval = NICE_DISTANCES[idx + 2]!
+  const idx = RULER_NICE_DISTANCES.indexOf(tickInterval)
+  if (idx >= 0 && idx + 2 < RULER_NICE_DISTANCES.length) {
+    labelInterval = RULER_NICE_DISTANCES[idx + 2]!
   }
 
   return { tickInterval, labelInterval }

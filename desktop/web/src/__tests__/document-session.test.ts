@@ -223,4 +223,87 @@ describe('document session reset', () => {
     expect(group.setAttr).not.toHaveBeenCalledWith('data-stratum', 'high')
     expect(invalidateRender).not.toHaveBeenCalledWith('plant-display', 'lod', 'density', 'stacking')
   })
+
+  it('backfills stratum and canopy attrs for the active document session', async () => {
+    ;(mocks.getSpeciesBatch as any).mockResolvedValueOnce([
+      { canonical_name: 'Malus domestica', stratum: 'high', width_max_m: 4 },
+    ])
+
+    const group = {
+      getAttr: vi.fn((name: string) => {
+        if (name === 'data-canonical-name') return 'Malus domestica'
+        if (name === 'data-canopy-spread') return 0
+        return null
+      }),
+      setAttr: vi.fn(),
+    }
+    const plantsLayer = {
+      destroyChildren: vi.fn(),
+      add: vi.fn(),
+      batchDraw: vi.fn(),
+      find: vi.fn((selector: string) => (selector === '.plant-group' ? [group] : [])),
+      visible: vi.fn(),
+      opacity: vi.fn(),
+    }
+    const layerNames = ['base', 'contours', 'climate', 'zones', 'water', 'plants', 'annotations']
+    const layers = new Map(
+      layerNames.map((name) => [
+        name,
+        name === 'plants'
+          ? plantsLayer
+          : {
+              destroyChildren: vi.fn(),
+              batchDraw: vi.fn(),
+              find: vi.fn(() => []),
+              visible: vi.fn(),
+              opacity: vi.fn(),
+              add: vi.fn(),
+            },
+      ]),
+    ) as any
+    const invalidateRender = vi.fn()
+
+    const file: CanopiFile = {
+      version: 1,
+      name: 'Loaded',
+      description: null,
+      location: null,
+      north_bearing_deg: 0,
+      layers: [],
+      plants: [{
+        id: 'plant-1',
+        canonical_name: 'Malus domestica',
+        common_name: 'Apple',
+        position: { x: 0, y: 0 },
+        rotation: null,
+        scale: null,
+        notes: null,
+        planted_date: null,
+        quantity: null,
+      }],
+      zones: [],
+      consortiums: [],
+      timeline: [],
+      budget: [],
+      created_at: '',
+      updated_at: '',
+      extra: {},
+    }
+
+    loadDocumentSession(file, {
+      stage: { scaleX: () => 1 } as any,
+      layers,
+      restoreGuides: vi.fn(),
+      restoreObjectGroups: vi.fn(),
+      invalidateRender,
+      getDocumentLoadEpoch: () => 1,
+    })
+
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(group.setAttr).toHaveBeenCalledWith('data-stratum', 'high')
+    expect(group.setAttr).toHaveBeenCalledWith('data-canopy-spread', 4)
+    expect(invalidateRender).toHaveBeenCalledWith('plant-display', 'lod', 'density', 'stacking')
+  })
 })

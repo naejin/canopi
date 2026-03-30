@@ -23,14 +23,13 @@ export class CanvasViewport {
     this._attachWheelHandlers()
     this._attachStagePanHandler()
 
-    this._resizeObserver = new ResizeObserver((entries) => {
+    this._resizeObserver = new ResizeObserver(() => {
       if (this._resizeRafPending) return
       this._resizeRafPending = true
       requestAnimationFrame(() => {
         this._resizeRafPending = false
-        const contentRect = entries[0]?.contentRect
-        const width = Math.round(contentRect?.width ?? viewportHost.clientWidth)
-        const height = Math.round(contentRect?.height ?? viewportHost.clientHeight)
+        const width = Math.round(viewportHost.clientWidth)
+        const height = Math.round(viewportHost.clientHeight)
         if (width <= 0 || height <= 0) return
         this._deps.stage.size({
           width,

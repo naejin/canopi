@@ -24,8 +24,7 @@ import { RectangleTool } from './tools/rectangle'
 import { TextTool } from './tools/text'
 import { PlantStampTool } from './tools/plant-stamp'
 import { createGridShape, snapToGrid } from './grid'
-import { createHtmlRulers, refreshRulerColors, type HtmlRulers } from './rulers'
-import { createScaleBar, type ScaleBar } from './scale-bar'
+import { createHtmlRulers, refreshRulerColors, setHtmlOverlayVisibility, type HtmlRulers } from './rulers'
 import { snapToGuides, clearSmartGuides, computeSmartGuides, createGuideLine } from './guides'
 import { AddGuideCommand } from './commands/guide'
 import type { Alignment, DistributeAxis } from './alignment'
@@ -68,7 +67,6 @@ export class CanvasEngine {
   // Overlay nodes
   private _gridShape: Konva.Shape | null = null
   private _htmlRulers: HtmlRulers | null = null
-  private _scaleBar: ScaleBar | null = null
   private _renderPipeline: CanvasRenderPipeline | null = null
   private _renderReconciler: RenderReconciler | null = null
   private _viewport: CanvasViewport | null = null
@@ -119,19 +117,15 @@ export class CanvasEngine {
     // ---- Rulers --------------------------------------------------------------
     this._htmlRulers = null  // Created later via attachRulersTo()
 
-    // ---- UI overlay layer (scale bar + compass) — hidden until design exists
+    // ---- UI overlay layer (reserved for future Konva-owned chrome) ----------
     const uiLayer = new Konva.Layer({ listening: true, id: 'ui', visible: false })
     this.stage.add(uiLayer)
     this.layers.set('ui', uiLayer)
-
-    this._scaleBar = createScaleBar(this.stage)
-    uiLayer.add(this._scaleBar.group as unknown as Konva.Shape)
 
     this._renderPipeline = new CanvasRenderPipeline({
       stage: this.stage,
       layers: this.layers,
       getHtmlRulers: () => this._htmlRulers,
-      getScaleBar: () => this._scaleBar,
       getSpeciesCache: () => this._speciesCache,
       loadSpeciesCache: (activeLocale) => this.loadSpeciesCache(activeLocale),
     })
@@ -292,12 +286,13 @@ export class CanvasEngine {
 
     this._disposeRulerVisEffect = effect(() => {
       // Read ALL signals FIRST (same reason as above)
-      const visible = this._chromeEnabled.value && rulersVisible.value
+      const chromeVisible = this._chromeEnabled.value
+      const rulersAreVisible = rulersVisible.value
       if (!this._htmlRulers) return
-      const display = visible ? 'block' : 'none'
-      this._htmlRulers.hCanvas.style.display = display
-      this._htmlRulers.vCanvas.style.display = display
-      this._htmlRulers.corner.style.display = display
+      setHtmlOverlayVisibility(this._htmlRulers, {
+        chromeVisible,
+        rulersVisible: rulersAreVisible,
+      })
     })
 
     // Theme effect — refresh cached CSS token colors and redraw overlays
@@ -435,11 +430,10 @@ export class CanvasEngine {
 
     // Apply current visibility — rulers are created with display:block by default,
     // but if chrome is disabled (no design yet) they should be hidden immediately.
-    const visible = this._chromeEnabled.value && rulersVisible.value
-    const display = visible ? 'block' : 'none'
-    this._htmlRulers.hCanvas.style.display = display
-    this._htmlRulers.vCanvas.style.display = display
-    this._htmlRulers.corner.style.display = display
+    setHtmlOverlayVisibility(this._htmlRulers, {
+      chromeVisible: this._chromeEnabled.value,
+      rulersVisible: rulersVisible.value,
+    })
     this.invalidateRender('overlays')
   }
 
@@ -813,7 +807,6 @@ export class CanvasEngine {
     this.toolRegistry.clear()
     this.history.clear()
     this._gridShape = null
-    this._scaleBar = null
     this._objectOps = null
   }
 }

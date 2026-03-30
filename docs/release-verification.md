@@ -1,7 +1,7 @@
 # Rewrite Exit Release Verification
 
 Date: 2026-03-30
-Status: Wave 5 release hardening checklist for the landed reconciler tree
+Status: automated Wave 5 gates are green locally on the landed reconciler tree; packaged-app smoke verification is still pending
 
 ## Rewrite-Exit Scope
 
@@ -18,6 +18,7 @@ Explicitly deferred until post-rewrite:
 - featured-design world-map discovery and template import
 - timeline workflows
 - budget workflows
+- consortium workflows
 - geo / terrain workflows
 - export workflows
 - knowledge / learning surfaces
@@ -29,6 +30,7 @@ These checks must pass before rewrite completion:
 - `cargo fmt --all -- --check`
 - `cargo clippy --workspace -- -D warnings`
 - `cargo test --workspace`
+- `npx --prefix desktop/web tsc --noEmit -p desktop/web/tsconfig.json`
 - `npm test --prefix desktop/web`
 - `npm run build --prefix desktop/web`
 - GitHub Actions Tauri build matrix with artifact upload for Linux, macOS Apple Silicon, macOS Intel, and Windows
@@ -39,10 +41,11 @@ Current status in this tree:
 - `cargo fmt --all -- --check`: passing locally on 2026-03-30
 - `cargo clippy --workspace -- -D warnings`: passing locally on 2026-03-30
 - `cargo test --workspace`: passing locally on 2026-03-30
-- frontend tests: passing
-- frontend i18n completeness: passing via the frontend test suite
-- frontend production build: passing
-- GitHub Actions workflow: includes rust fmt, clippy, workspace tests, frontend tests, frontend build, and 4-target Tauri artifact builds
+- `npx --prefix desktop/web tsc --noEmit -p desktop/web/tsconfig.json`: passing locally on 2026-03-30
+- frontend tests: passing locally on 2026-03-30
+- frontend i18n completeness: passing via the frontend test suite on 2026-03-30
+- frontend production build: passing locally on 2026-03-30
+- GitHub Actions workflow: includes rust fmt, clippy, TypeScript check, workspace tests, frontend tests, frontend build, and 4-target Tauri artifact builds
 
 ## Required Product Journeys
 
@@ -51,7 +54,7 @@ These journeys must remain green at rewrite exit:
 1. Create a design, edit it, and switch documents without losing work.
 2. Search the plant database, inspect detail, favorite plants, and place plants on the canvas.
 3. Edit canvas content, undo/redo, save, reload, and preserve roundtrip parity.
-4. Use layer controls, location selection, and consortium without lifecycle or persistence regressions.
+4. Use layer controls and location selection without lifecycle or persistence regressions.
 5. Recover gracefully from network failure, disk failure, and invalid external data.
 6. Use the app in supported themes and locales without broken labels or unreadable surfaces.
 7. Build release artifacts for Linux, macOS, and Windows.
@@ -70,6 +73,7 @@ Use the packaged artifact produced by CI for each target and record the result h
 | Windows desktop | GitHub Actions Windows Tauri build artifact | Pending | Launch app, create/edit/save/reload a design, open plant search/detail, place a plant, switch theme/locale, confirm no startup or save-path regressions |
 
 This smoke pass is release-hardening work. It does not replace the separate live verification and renderer validation flows tracked elsewhere.
+This repo change intentionally did not perform those packaged-app/manual smoke passes.
 
 ## Known Accepted Warnings
 
@@ -86,7 +90,6 @@ This checklist intentionally does not include live Tauri MCP execution.
 Claude Code should run the manual desktop verification pass for:
 - layer controls
 - location search / drag / zoom / confirm
-- consortium flows
 
 Any defects found there should be fixed as narrow follow-up patches.
 

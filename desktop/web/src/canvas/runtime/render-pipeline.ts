@@ -26,7 +26,6 @@ export class CanvasRenderPipeline {
   syncOverlayTransforms(): void {
     const htmlRulers = this._deps.getHtmlRulers()
     if (htmlRulers) updateHtmlRulers(htmlRulers, this._deps.stage)
-    this._deps.getScaleBar()?.update(this._deps.stage)
   }
 
   redrawOverlays(): void {
@@ -47,7 +46,6 @@ export class CanvasRenderPipeline {
     refreshRulerColors(container)
     const transformer = this._deps.stage.findOne('Transformer') as Konva.Transformer | undefined
     refreshCanvasTheme(container, this._deps.layers, transformer ?? null)
-    this._deps.getScaleBar()?.update(this._deps.stage)
   }
 
   refreshLocale(newLocale: string): void {

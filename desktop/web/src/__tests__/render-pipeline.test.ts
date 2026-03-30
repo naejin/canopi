@@ -110,7 +110,6 @@ describe('Canvas renderer ownership', () => {
         ['ui', uiLayer],
       ]),
       getHtmlRulers: () => null,
-      getScaleBar: () => null,
       getSpeciesCache: () => new Map(),
       loadSpeciesCache: vi.fn(async () => {}),
     })
@@ -161,7 +160,6 @@ describe('Canvas renderer ownership', () => {
       } as any,
       layers: new Map([['plants', plantsLayer]]),
       getHtmlRulers: () => null,
-      getScaleBar: () => null,
       getSpeciesCache: () => new Map(),
       loadSpeciesCache: vi.fn(async () => {}),
     })
@@ -178,7 +176,6 @@ describe('Canvas renderer ownership', () => {
       stage: makeStage(),
       layers: new Map([['plants', makeLayer()]]),
       getHtmlRulers: () => null,
-      getScaleBar: () => null,
       getSpeciesCache: () => new Map(),
       loadSpeciesCache: vi.fn(async () => {}),
     })

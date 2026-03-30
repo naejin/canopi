@@ -1,7 +1,6 @@
 import Konva from 'konva'
 import type { CanvasHistory } from '../history'
 import type { HtmlRulers } from '../rulers'
-import type { ScaleBar } from '../scale-bar'
 import type { CanvasTool } from '../tools/base'
 import type { CanvasEngine } from '../engine'
 import type { RenderPass } from './render-passes'
@@ -12,7 +11,6 @@ export interface RenderPipelineDeps {
   stage: Konva.Stage
   layers: CanvasLayers
   getHtmlRulers: () => HtmlRulers | null
-  getScaleBar: () => ScaleBar | null
   getSpeciesCache: () => Map<string, Record<string, unknown>>
   loadSpeciesCache: (locale: string) => Promise<void>
 }

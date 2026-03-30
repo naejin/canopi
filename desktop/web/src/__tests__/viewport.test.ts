@@ -225,9 +225,7 @@ describe('CanvasViewport', () => {
     const viewport = new CanvasViewport(deps as any)
 
     viewport.init(container, viewportHost)
-    ResizeObserverStub.instances[0]!.callback([{
-      contentRect: { width: 640, height: 480 } as DOMRectReadOnly,
-    }] as ResizeObserverEntry[], {} as ResizeObserver)
+    ResizeObserverStub.instances[0]!.callback([] as ResizeObserverEntry[], {} as ResizeObserver)
 
     expect(stage.size).toHaveBeenCalledWith({ width: 640, height: 480 })
     expect(invalidateRender).toHaveBeenCalledWith('overlays')
@@ -248,9 +246,7 @@ describe('CanvasViewport', () => {
     const viewport = new CanvasViewport(deps as any)
 
     viewport.init(container, viewportHost)
-    ResizeObserverStub.instances[0]!.callback([{
-      contentRect: { width: 1000, height: 900 } as DOMRectReadOnly,
-    }] as ResizeObserverEntry[], {} as ResizeObserver)
+    ResizeObserverStub.instances[0]!.callback([] as ResizeObserverEntry[], {} as ResizeObserver)
 
     expect(stage.height()).toBe(900)
     expect(stage.size).toHaveBeenLastCalledWith({ width: 1000, height: 900 })

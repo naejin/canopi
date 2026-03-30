@@ -1,116 +1,38 @@
-import Konva from 'konva'
-
 // ---------------------------------------------------------------------------
-// Scale bar — fixed bottom-left of viewport.
-// Lives on the Konva UI layer but uses per-node world-coord positioning and
-// per-node counter-scale so the UI layer itself stays at identity transform.
-// Shows a horizontal bar whose length represents a "round" real-world distance.
+// Shared scale-bar metrics for screen-space overlay rendering.
+// The bar is drawn in the HTML overlay layer, but these constants are also
+// consumed by the DOM legend so both reserve the same bottom band.
 // ---------------------------------------------------------------------------
 
-// Candidate distances in meters. Pick the one whose screen length is ~120px.
 const NICE_DISTANCES = [0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000]
 const TARGET_PX = 120
-const MARGIN_X = 40   // clear the 24px vertical ruler + padding
-const MARGIN_Y = 16
-export const SCALE_BAR_RESERVED_BOTTOM_PX = 40
 
-export interface ScaleBar {
-  group: Konva.Group
-  update(stage: Konva.Stage): void
+export const SCALE_BAR_MARGIN_X = 40
+export const SCALE_BAR_MARGIN_Y = 16
+export const SCALE_BAR_RESERVED_BOTTOM_PX = 40
+export const SCALE_BAR_CANVAS_WIDTH = 240
+
+export interface ScaleBarDisplay {
+  barScreenPx: number
+  label: string
 }
 
-export function createScaleBar(stage: Konva.Stage): ScaleBar {
-  // All child sizes are in screen pixels; the group is counter-scaled so they
-  // stay constant regardless of stage zoom.
-  const line = new Konva.Line({
-    points: [0, 0, TARGET_PX, 0],
-    stroke: 'rgba(60, 45, 30, 0.6)',
-    strokeWidth: 2,
-    strokeScaleEnabled: false,
-    lineCap: 'square',
-    listening: false,
-  })
+export function getScaleBarDisplay(scale: number): ScaleBarDisplay {
+  const safeScale = scale > 0 ? scale : 1
 
-  const capLeft = new Konva.Line({
-    points: [0, -4, 0, 4],
-    stroke: 'rgba(60, 45, 30, 0.6)',
-    strokeWidth: 2,
-    strokeScaleEnabled: false,
-    listening: false,
-  })
-  const capRight = new Konva.Line({
-    points: [TARGET_PX, -4, TARGET_PX, 4],
-    stroke: 'rgba(60, 45, 30, 0.6)',
-    strokeWidth: 2,
-    strokeScaleEnabled: false,
-    listening: false,
-  })
-
-  const label = new Konva.Text({
-    x: 0,
-    y: -18,
-    text: '',
-    fontSize: 11,
-    fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-    fill: 'rgba(60, 45, 30, 0.6)',
-    listening: false,
-    align: 'center',
-  })
-
-  const group = new Konva.Group({ listening: false })
-  group.add(line, capLeft, capRight, label)
-
-  function update(s: Konva.Stage): void {
-    const scale = s.scaleX()
-    const stagePos = s.position()
-    const stageH = s.height()
-    const inv = 1 / scale
-
-    // Find the best-fit distance
-    let bestDist = NICE_DISTANCES[0]!
-    for (const d of NICE_DISTANCES) {
-      if (d * scale <= TARGET_PX * 1.5) {
-        bestDist = d
-      } else {
-        break
-      }
+  let bestDist = NICE_DISTANCES[0]!
+  for (const d of NICE_DISTANCES) {
+    if (d * safeScale <= TARGET_PX * 1.5) {
+      bestDist = d
+    } else {
+      break
     }
-
-    // Bar width in screen pixels
-    const barScreenPx = bestDist * scale
-
-    // Position the group at bottom-left in world coordinates.
-    // screen position → world position via inverse stage transform.
-    const worldX = (MARGIN_X - stagePos.x) * inv
-    const worldY = (stageH - MARGIN_Y - stagePos.y) * inv
-
-    group.position({ x: worldX, y: worldY })
-    // Counter-scale the group so its children stay at screen-pixel sizes
-    group.scale({ x: inv, y: inv })
-
-    // Update bar width (in screen pixels, since group is counter-scaled)
-    line.points([0, 0, barScreenPx, 0])
-    capLeft.points([0, -4, 0, 4])
-    capRight.points([barScreenPx, -4, barScreenPx, 4])
-
-    const distLabel = _formatDist(bestDist)
-    label.text(distLabel)
-    label.x(barScreenPx / 2 - label.width() / 2)
-    label.y(-18)
-
-    // Update stroke colors for dark/light mode — use ruler text color for subtlety
-    const cs = getComputedStyle(s.container())
-    const color = cs.getPropertyValue('--color-text-muted').trim() || 'rgba(60, 45, 30, 0.6)'
-    line.stroke(color)
-    capLeft.stroke(color)
-    capRight.stroke(color)
-    label.fill(color)
   }
 
-  // Initial paint
-  update(stage)
-
-  return { group, update }
+  return {
+    barScreenPx: bestDist * safeScale,
+    label: _formatDist(bestDist),
+  }
 }
 
 function _formatDist(meters: number): string {
