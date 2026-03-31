@@ -416,6 +416,7 @@ External code uses `CanvasEngine` methods only. Never import from `runtime/*.ts`
 - Roadmap: `docs/roadmap.md`
 - Design system: `.interface-design/system.md`
 - Rewrite history: `docs/archive/rewrite-history-2026-03.md`
+- Data quality audit: `docs/db/codex-review.md` (filter value audit — scientific correctness, translation coverage, app vs canopi-data ownership)
 - Completed phase plans + reviews: `docs/archive/`
 
 ## Context7 Library IDs
