@@ -22,7 +22,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 8px 6px;
+  padding: var(--space-2) var(--space-2) calc(var(--space-2) - 2px);
   border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
 }
@@ -40,9 +40,9 @@
   font-weight: 600;
   color: var(--color-bg);
   background: var(--color-primary);
-  min-width: 14px;
-  height: 14px;
-  padding: 0 4px;
+  min-width: calc(var(--space-3) + 2px);
+  height: calc(var(--space-3) + 2px);
+  padding: 0 var(--space-1);
   border-radius: var(--radius-full);
   display: inline-flex;
   align-items: center;
@@ -67,7 +67,7 @@
   padding: var(--space-8) var(--space-6) var(--space-6);
   text-align: center;
   gap: var(--space-1);
-  animation: fadeInEmpty 200ms ease-out both;
+  animation: fadeInEmpty var(--transition-enter) both;
 }
 
 .emptyIcon {

@@ -108,7 +108,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  height: 28px;
+  height: var(--control-size-md);
   padding: 0 var(--space-3);
   border-top: 1px solid var(--color-border);
   background: var(--color-bg);
@@ -137,7 +137,7 @@
   justify-content: center;
   z-index: 10;
   pointer-events: none;
-  animation: fadeIn 100ms ease-out both;
+  animation: fadeIn var(--transition-enter) both;
 }
 
 @keyframes fadeIn {
@@ -186,8 +186,8 @@
   font-size: var(--text-sm);
   color: var(--color-text);
   cursor: pointer;
-  transition: background-color 100ms ease, border-color 100ms ease, color 100ms ease;
-  min-height: 36px;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+  min-height: var(--title-bar-height);
 }
 
 .emptyAction:hover {
@@ -229,8 +229,8 @@
    ============================================ */
 
 .sidebar {
-  width: 280px;
-  min-width: 280px;
+  width: var(--panel-width);
+  min-width: var(--panel-width);
   background: var(--color-surface);
   border-right: 1px solid var(--color-border);
   padding: var(--space-4);

@@ -12,7 +12,7 @@
 
 .toolButton {
   width: 100%;
-  height: 34px;
+  height: var(--control-size-xl);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -21,8 +21,8 @@
   cursor: pointer;
   color: var(--color-text-muted);
   position: relative;
-  transition: color 80ms ease, background-color 80ms ease;
-  min-height: 30px;
+  transition: color var(--transition-fast), background-color var(--transition-fast);
+  min-height: var(--control-size-lg);
 }
 
 .toolButton:hover {
@@ -68,14 +68,14 @@
 }
 
 .toolIcon {
-  width: 16px;
-  height: 16px;
+  width: var(--icon-size-md);
+  height: var(--icon-size-md);
   flex-shrink: 0;
 }
 
 .separator {
   height: 1px;
-  margin: 3px 8px;
+  margin: calc(var(--space-1) - 1px) var(--space-2);
   background: var(--color-border);
   flex-shrink: 0;
 }
@@ -93,21 +93,21 @@
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  padding: 6px 10px;
+  padding: calc(var(--space-1) + 2px) calc(var(--space-2) + 2px);
   box-shadow: var(--shadow-md);
   white-space: nowrap;
   pointer-events: none;
   z-index: 100;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 80ms ease, visibility 80ms ease;
+  transition: opacity var(--transition-fast), visibility var(--transition-fast);
 }
 
 .toolButton:hover .tooltip,
 .toolButton:focus-visible .tooltip {
   opacity: 1;
   visibility: visible;
-  transition-delay: 400ms;
+  transition-delay: var(--transition-delay-tooltip);
 }
 
 .tooltipName {
@@ -125,7 +125,7 @@
 .tooltipDesc {
   font-size: var(--text-xs);
   color: var(--color-text-muted);
-  margin-top: 1px;
+  margin-top: calc(var(--space-1) - 3px);
 }
 
 @media (prefers-reduced-motion: reduce) {

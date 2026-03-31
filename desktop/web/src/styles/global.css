@@ -67,6 +67,7 @@
   --space-3: 12px;
   --space-4: 16px;
   --space-6: 24px;
+  --space-7: 28px;
   --space-8: 32px;
   --space-12: 48px;
 
@@ -88,8 +89,26 @@
   --line-height: 1.45;
 
   /* Layout — compact */
+  --title-bar-height: 36px;
+  --panel-bar-width: 36px;
+  --panel-width: 280px;
   --activity-bar-width: 44px;
   --status-bar-height: 26px;
+  --control-size-xs: 20px;
+  --control-size-sm: 24px;
+  --control-size-md: 28px;
+  --control-size-lg: 32px;
+  --control-size-xl: 34px;
+  --control-size-window: 44px;
+  --icon-size-sm: 12px;
+  --icon-size-md: 16px;
+  --icon-size-lg: 20px;
+  --slider-thumb-size: 12px;
+  --slider-track-size: 2px;
+  --transition-fast: 80ms ease;
+  --transition-normal: 150ms ease;
+  --transition-enter: 200ms ease-out;
+  --transition-delay-tooltip: 400ms;
 
   /* State indicators */
   --color-dirty-indicator: #B8860B;  /* goldenrod — unsaved mark */
@@ -107,6 +126,10 @@
   --canvas-selection: rgba(160, 107, 31, 0.18);
   --canvas-selection-stroke: rgba(160, 107, 31, 0.6);
   --canvas-selection-anchor-fill: #FCF8F2;
+  --canvas-guide-line: rgba(45, 95, 63, 0.6);
+  --canvas-guide-smart: rgba(181, 67, 42, 0.72);
+  --canvas-stack-badge-bg: #5A7D3A;
+  --canvas-stack-badge-text: #FCF8F2;
   --canvas-plant-label: #444444;
   --canvas-plant-label-muted: #888888;
   --canvas-annotation-text: #1A1A1A;
@@ -168,6 +191,10 @@
   --canvas-selection: rgba(200, 155, 74, 0.22);
   --canvas-selection-stroke: rgba(200, 155, 74, 0.7);
   --canvas-selection-anchor-fill: #1C1915;
+  --canvas-guide-line: rgba(200, 180, 150, 0.72);
+  --canvas-guide-smart: rgba(212, 118, 90, 0.8);
+  --canvas-stack-badge-bg: #8BAA5E;
+  --canvas-stack-badge-text: #1C1915;
   --canvas-plant-label: #D8D3C8;
   --canvas-plant-label-muted: #B0A292;
   --canvas-annotation-text: #E8E2D8;

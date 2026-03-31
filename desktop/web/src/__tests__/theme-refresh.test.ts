@@ -21,6 +21,10 @@ describe('refreshCanvasTheme', () => {
     const container = document.createElement('div')
     container.style.setProperty('--canvas-plant-label', '#101010')
     container.style.setProperty('--canvas-plant-label-muted', '#202020')
+    container.style.setProperty('--canvas-guide-line', '#2f4f4f')
+    container.style.setProperty('--canvas-guide-smart', '#b5432a')
+    container.style.setProperty('--canvas-stack-badge-bg', '#5a7d3a')
+    container.style.setProperty('--canvas-stack-badge-text', '#f8f4ed')
     container.style.setProperty('--canvas-annotation-text', '#303030')
     container.style.setProperty('--canvas-annotation-stroke', '#404040')
     container.style.setProperty('--canvas-annotation-surface', '#faf9f6')
@@ -33,7 +37,11 @@ describe('refreshCanvasTheme', () => {
 
     const plantLabel = { fill: vi.fn() }
     const botanicalLabel = { fill: vi.fn() }
+    const stackBadgeBg = { fill: vi.fn() }
+    const stackBadgeText = { fill: vi.fn() }
     const annotationText = { fill: vi.fn() }
+    const guideLine = { stroke: vi.fn() }
+    const smartGuide = { stroke: vi.fn() }
     const measurePill = { getClassName: () => 'Rect', fill: vi.fn() }
     const measureText = { getClassName: () => 'Text', fill: vi.fn() }
     const measureGroup = {
@@ -61,11 +69,15 @@ describe('refreshCanvasTheme', () => {
     const plantsLayer = makeLayer({
       '.plant-label': [plantLabel],
       '.plant-botanical': [botanicalLabel],
+      '.stackBadgeBg': [stackBadgeBg],
+      '.stackBadgeText': [stackBadgeText],
     })
     const annotationsLayer = makeLayer({
       '.annotation-text': [annotationText],
       '.measure-label': [measureGroup],
       '.shape': [annotationLine],
+      '.guide-line': [guideLine],
+      '.smart-guide': [smartGuide],
     })
     const zonesLayer = makeLayer({
       '.shape': [zoneShape],
@@ -88,10 +100,16 @@ describe('refreshCanvasTheme', () => {
     )
 
     expect(getCanvasColor('annotation-stroke')).toBe('#404040')
+    expect(getCanvasColor('guide-line')).toBe('#2f4f4f')
+    expect(getCanvasColor('stack-badge-text')).toBe('#f8f4ed')
     expect(getCanvasColor('selection-anchor-fill')).toBe('#f5f4f0')
     expect(plantLabel.fill).toHaveBeenCalledWith('#101010')
     expect(botanicalLabel.fill).toHaveBeenCalledWith('#202020')
+    expect(stackBadgeBg.fill).toHaveBeenCalledWith('#5a7d3a')
+    expect(stackBadgeText.fill).toHaveBeenCalledWith('#f8f4ed')
     expect(annotationText.fill).toHaveBeenCalledWith('#303030')
+    expect(guideLine.stroke).toHaveBeenCalledWith('#2f4f4f')
+    expect(smartGuide.stroke).toHaveBeenCalledWith('#b5432a')
     expect(measurePill.fill).toHaveBeenCalledWith('#404040')
     expect(measureText.fill).toHaveBeenCalledWith('#faf9f6')
     expect(annotationLine.stroke).toHaveBeenCalledWith('#404040')

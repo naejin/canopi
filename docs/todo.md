@@ -1,6 +1,6 @@
 # Canopi Rewrite Operational Reference
 
-**Date**: 2026-03-30  
+**Date**: 2026-03-31  
 **Status**: canonical operational reference for active rewrite work
 
 Use this file for future coding and planning work.
@@ -37,10 +37,10 @@ Completed and archived:
 - renderer manual/live stability-gate closeout on the retained-surface build
 - automated frontend verification for the landed rewrite slice
 - targeted renderer automation rerun on the retained-surface build
+- Wave 4 design coherence on the surviving structure
 - release-blocking automated gates rerun locally
 
 Still active:
-- Wave 4 design coherence on the surviving structure
 - Wave 5 packaged-app smoke verification and rewrite-exit closeout
 
 Deferred after live review:
@@ -90,6 +90,7 @@ Dedicated rendering ownership is now the rule:
 - `render-pipeline.ts` is the execution delegate behind the reconciler, not the scheduler
 - all visual updates go through `reconciler.invalidate(...)`
 - stage transforms go through one engine-owned transform path
+- screen-space canvas chrome may be owned by the renderer-managed HTML overlay seam when it is more stable than Konva-backed UI nodes
 
 The renderer stability gate is now satisfied on the current build; `docs/renderer/renderer.md` remains only for optional measured viewport filtering and deferred internal renderer cleanup.
 
@@ -145,13 +146,12 @@ Current in-tree status:
 - the 2026-03-30 manual renderer pass initially found narrow regressions in missing-canopy zoom fallback plus overlay/resize behavior
 - those regressions were fixed in the current code track with targeted test updates
 - the post-fix renderer manual checklist and the two additional overlay/resize scenarios passed on 2026-03-30
-- the renderer stability gate is closed; the next active rewrite step is Wave 4 coherence work
+- the renderer stability gate is closed; Wave 4 coherence work was unblocked on 2026-03-30
 
 ### 3.2 Wave 4 Design Coherence
 
-What is left:
-- design-system cleanup on the final surviving structure
-- CSS/token/surface coherence work on Wave 3 and reconciler-backed surfaces
+Status:
+- complete on 2026-03-31
 
 Why this stays later:
 - design cleanup on unstable structure creates rework
@@ -164,7 +164,13 @@ How to do it:
 
 Current in-tree status:
 - retained-surface keyboard focus-visible coherence cleanup landed on 2026-03-30
-- broader token/surface cleanup is now the next active rewrite track on the stable renderer architecture
+- broader retained-surface token/surface cleanup landed on 2026-03-31
+- the Wave 4 patch added retained-surface coherence guard coverage for CSS modules plus theme-refresh coverage for guide and stack-badge canvas tokens on 2026-03-31
+- frontend retained-surface verification is green locally on 2026-03-31:
+  - `npx --prefix desktop/web tsc --noEmit -p desktop/web/tsconfig.json`
+  - `npm test --prefix desktop/web`
+  - `npm run build --prefix desktop/web`
+- the next active rewrite step is now Wave 5 packaged-app smoke verification and rewrite-exit closeout
 
 ### 3.3 Wave 5 Release Hardening
 
@@ -220,11 +226,12 @@ Current gate state:
 - retained-surface Wave 3 closeout is landed on 2026-03-30 and condition 4 was rerun with Claude Code on that build
 - condition 3 passed on the post-fix build on 2026-03-30, including the additional scale-bar/legend stacking and vertical resize scenarios recorded in `docs/renderer/renderer.md`
 - there are no open High-severity renderer regressions in the gate categories on the current build
-- all five gate conditions are now satisfied; Wave 4 coherence work is unblocked
+- all five gate conditions are now satisfied; Wave 4 coherence work landed on the stable renderer architecture on 2026-03-31
 
 With the gate satisfied:
-- Wave 4 may proceed on the current retained-surface architecture
+- Wave 4 landed on the current retained-surface architecture on 2026-03-31
 - renderer-tied product redesigns are no longer blocked by renderer stability, but they still must respect the scope and sequencing rules in this file
+- the only remaining active rewrite wave is Wave 5 release hardening
 
 ---
 
@@ -257,6 +264,7 @@ With the gate satisfied:
 - do not treat `zoomLevel` as transform authority
 - keep full-layer passes full-layer until a real sublinear index exists
 - use viewport filtering only for deferred passes where stale off-screen state is acceptable
+- keep HTML overlay chrome under one renderer-owned seam instead of scattering standalone DOM overlays
 
 ### 5.5 Resource Ownership Rule
 
@@ -400,9 +408,9 @@ Use this file as the canonical operational reference.
 
 Use archived docs only for historical context.
 
-With retained-surface Wave 3 closeout landed on 2026-03-30, the live verification rerun completed with Claude Code, and the renderer stability gate now closed, the next required step is Wave 4 design coherence on the surviving architecture:
-- keep the work on the reconciler-backed structure only
-- continue to separate design coherence from release hardening
+With retained-surface Wave 3 closeout landed on 2026-03-30, the live verification rerun completed with Claude Code, the renderer stability gate closed, and Wave 4 design coherence landed on 2026-03-31, the next required step is Wave 5 release hardening on the surviving architecture:
+- use `docs/release-verification.md`
+- keep the work narrow to packaged-app smoke verification and rewrite-exit closeout
 - remove any stale scope language if the surviving rewrite-exit surface changes again
 
 If a future change affects:

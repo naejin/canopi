@@ -1,7 +1,7 @@
 # Rewrite Exit Release Verification
 
-Date: 2026-03-30
-Status: automated Wave 5 gates are green locally on the landed reconciler tree; packaged-app smoke verification is still pending
+Date: 2026-03-31
+Status: Wave 4 coherence is landed, automated Wave 5 gates are green locally on the landed reconciler tree, and packaged-app smoke verification is still pending
 
 ## Rewrite-Exit Scope
 
@@ -41,10 +41,10 @@ Current status in this tree:
 - `cargo fmt --all -- --check`: passing locally on 2026-03-30
 - `cargo clippy --workspace -- -D warnings`: passing locally on 2026-03-30
 - `cargo test --workspace`: passing locally on 2026-03-30
-- `npx --prefix desktop/web tsc --noEmit -p desktop/web/tsconfig.json`: passing locally on 2026-03-30
-- frontend tests: passing locally on 2026-03-30
-- frontend i18n completeness: passing via the frontend test suite on 2026-03-30
-- frontend production build: passing locally on 2026-03-30
+- `npx --prefix desktop/web tsc --noEmit -p desktop/web/tsconfig.json`: passing locally on 2026-03-31
+- frontend tests: passing locally on 2026-03-31
+- frontend i18n completeness: passing via the frontend test suite on 2026-03-31
+- frontend production build: passing locally on 2026-03-31
 - GitHub Actions workflow: includes rust fmt, clippy, TypeScript check, workspace tests, frontend tests, frontend build, and 4-target Tauri artifact builds
 
 ## Required Product Journeys

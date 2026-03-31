@@ -10,8 +10,8 @@
 }
 
 .panelCollapsed {
-  width: 28px;
-  min-width: 28px;
+  width: var(--control-size-md);
+  min-width: var(--control-size-md);
   display: flex;
   justify-content: center;
   padding-top: var(--space-2);
@@ -38,8 +38,8 @@
 }
 
 .collapseBtn {
-  width: 28px;
-  height: 28px;
+  width: var(--control-size-md);
+  height: var(--control-size-md);
   border: 1px solid transparent;
   background: var(--color-surface-muted);
   color: var(--color-text-muted);
@@ -48,7 +48,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: background-color 80ms ease;
+  transition: background-color var(--transition-fast);
 }
 
 .collapseBtn:hover,
@@ -74,7 +74,7 @@
   border-bottom: 1px solid var(--color-border);
   border-left: 2px solid transparent;
   background: var(--color-surface-muted);
-  transition: background-color 80ms ease, border-color 80ms ease;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast);
 }
 
 .layerRow[data-active="true"] {
@@ -93,12 +93,12 @@
   color: var(--color-text);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: background-color 80ms ease;
+  transition: background-color var(--transition-fast);
 }
 
 .toggleBtn {
-  width: 24px;
-  height: 24px;
+  width: var(--control-size-sm);
+  height: var(--control-size-sm);
 }
 
 .layerName {
@@ -140,11 +140,11 @@
 .mapSlider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 12px;
-  height: 12px;
+  width: var(--slider-thumb-size);
+  height: var(--slider-thumb-size);
   border-radius: var(--radius-full);
   background: var(--color-primary);
   border: 1px solid color-mix(in srgb, var(--color-primary) 85%, black);
   cursor: pointer;
-  margin-top: -5px;
+  margin-top: calc((var(--slider-thumb-size) - var(--slider-track-size)) / -2);
 }

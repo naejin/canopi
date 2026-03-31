@@ -30,7 +30,7 @@
   cursor: col-resize;
   background: var(--color-border-strong);
   flex-shrink: 0;
-  transition: background-color 80ms ease;
+  transition: background-color var(--transition-fast);
   position: relative;
 }
 

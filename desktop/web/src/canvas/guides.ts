@@ -1,5 +1,6 @@
 import Konva from 'konva'
 import { guides, snapToGuidesEnabled } from '../state/canvas'
+import { getCanvasColor } from './theme-refresh'
 
 // ---------------------------------------------------------------------------
 // Guide lines — dragged from rulers, persisted in .canopi `extra.guides`
@@ -18,9 +19,7 @@ const SNAP_THRESHOLD_PX = 8
 const SMART_SNAP_THRESHOLD_PX = 12
 
 // Guide line visual style
-const GUIDE_COLOR = 'rgba(45, 95, 63, 0.6)'
 const GUIDE_WIDTH = 1
-const SMART_GUIDE_COLOR = 'rgba(255, 90, 90, 0.7)'
 const SMART_GUIDE_WIDTH = 1
 
 // ---------------------------------------------------------------------------
@@ -128,7 +127,7 @@ function _buildLine(guide: Guide, stage: Konva.Stage): Konva.Line {
 
   return new Konva.Line({
     points,
-    stroke: GUIDE_COLOR,
+    stroke: getCanvasColor('guide-line'),
     strokeWidth: GUIDE_WIDTH,
     strokeScaleEnabled: false,
     dash: [6, 4],
@@ -234,13 +233,14 @@ export function computeSmartGuides(
 
   // Build visual indicator lines
   const lines: Konva.Line[] = []
+  const smartColor = getCanvasColor('guide-smart')
 
   if (bestSnapX !== null && snapTargetX) {
     const gx = rect.x + (bestSnapX - draggedNode.x())
     lines.push(
       new Konva.Line({
         points: [gx, snapTargetX.from - 20 / stageScale, gx, snapTargetX.to + 20 / stageScale],
-        stroke: SMART_GUIDE_COLOR,
+        stroke: smartColor,
         strokeWidth: SMART_GUIDE_WIDTH,
         strokeScaleEnabled: false,
         listening: false,
@@ -255,7 +255,7 @@ export function computeSmartGuides(
     lines.push(
       new Konva.Line({
         points: [snapTargetY.from - 20 / stageScale, gy, snapTargetY.to + 20 / stageScale, gy],
-        stroke: SMART_GUIDE_COLOR,
+        stroke: smartColor,
         strokeWidth: SMART_GUIDE_WIDTH,
         strokeScaleEnabled: false,
         listening: false,

@@ -139,24 +139,53 @@ Three timing tiers. Every interactive element must have a transition.
 
 Always use `ms` units, never `s`. `prefers-reduced-motion` must disable transitions.
 
-## Component Sizing (observed, not yet tokenized)
+These timings are tokenized in CSS and must be referenced as:
+- `--transition-fast`
+- `--transition-normal`
+- `--transition-enter`
 
-These sizes are used consistently across the app. They are not CSS custom properties yet — that's Wave 4 work. Listed here so implementations stay consistent.
+## Controls
 
-| Element | Size | Where used |
+All retained rewrite-exit surfaces use four control patterns only:
+- **Primary**: filled `--color-primary`, `--color-primary-contrast` text, `--radius-md`, `var(--space-2) var(--space-3)` padding, hover via `--color-primary-hover`
+- **Secondary**: `--color-surface` fill, `--color-border` border, `--color-text` text, `--radius-md`, `var(--space-2) var(--space-3)` padding
+- **Ghost**: transparent fill, muted text, hover via `--color-control-hover`, `--radius-sm`
+- **Icon**: square control using shared `--control-size-*` tokens, transparent fill, `--radius-sm`
+
+Section headers use exactly:
+- `font-size: var(--text-xs)`
+- `font-weight: 600`
+- `text-transform: uppercase`
+- `letter-spacing: 0.06em`
+- `color: var(--color-text-muted)`
+
+Inputs use exactly:
+- `min-height: var(--control-size-md)` unless the context is explicitly compact
+- `padding: var(--space-1) var(--space-2)` for compact fields or `0 var(--space-3)` for toolbar/search overlays
+- `background: var(--color-surface)`
+- `border: 1px solid var(--color-border)` or `var(--color-border-strong)` when the overlay needs stronger separation
+- `border-radius: var(--radius-md)`
+
+## Component Sizing
+
+These sizes are tokenized and must be reused across retained surfaces.
+
+| Token | Value | Where used |
 |---------|------|------------|
-| Title bar | 36px height | App shell |
-| Canvas toolbar | 38px width | Left edge |
-| Panel bar | 36px width | Right edge |
-| Side panel | 280px width | Plant DB, favorites |
-| Button (standard) | 28px height | Filter toggles, collapse buttons, window controls |
-| Button (large) | 34px height | Toolbar tools, panel bar buttons |
-| Input (standard) | 28–36px height | Search fields, filter inputs |
-| Tab bar | 48px height | Bottom panel |
-| Icon (inline) | 14px | Eye, lock, chevron icons inside controls |
-| Icon (button) | 16–20px | Toolbar icons, panel bar icons |
-| Slider thumb | 12px | Opacity, range, threshold sliders |
-| Slider track | 2px | All sliders |
+| `--title-bar-height` | 36px | App shell |
+| `--panel-bar-width` | 36px | Right edge |
+| `--panel-width` | 280px | Plant DB, favorites |
+| `--control-size-xs` | 20px | compact badges and close buttons |
+| `--control-size-sm` | 24px | zoom buttons, sliders, compact icon controls |
+| `--control-size-md` | 28px | standard buttons and inputs |
+| `--control-size-lg` | 32px | map overlay actions |
+| `--control-size-xl` | 34px | toolbar and panel-bar buttons |
+| `--control-size-window` | 44px | window controls |
+| `--icon-size-sm` | 12px | inline action icons |
+| `--icon-size-md` | 16px | toolbar icons |
+| `--icon-size-lg` | 20px | panel-bar icons |
+| `--slider-thumb-size` | 12px | opacity, range, threshold sliders |
+| `--slider-track-size` | 2px | all sliders |
 
 ## Canvas Tool Behavior (Figma/Sketch standard)
 

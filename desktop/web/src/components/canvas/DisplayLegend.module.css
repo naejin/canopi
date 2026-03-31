@@ -13,8 +13,8 @@
   pointer-events: auto;
   /* enter animation */
   opacity: 0;
-  transform: translateY(4px);
-  animation: legendIn 150ms ease forwards;
+  transform: translateY(var(--space-1));
+  animation: legendIn var(--transition-normal) forwards;
 }
 
 @keyframes legendIn {

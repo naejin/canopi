@@ -1,14 +1,14 @@
 .container {
   display: flex;
   align-items: center;
-  gap: 1px;
+  gap: calc(var(--space-1) - 3px);
 }
 
 .trigger {
   padding: var(--space-1) var(--space-2);
   font-size: var(--text-xs);
   font-weight: 600;
-  height: 24px;
+  height: var(--control-size-sm);
 }
 
 .label {
@@ -22,7 +22,7 @@
 
 .divider {
   width: 1px;
-  height: 16px;
+  height: var(--icon-size-md);
   background: var(--color-border);
   flex-shrink: 0;
 }

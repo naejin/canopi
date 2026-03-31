@@ -148,10 +148,6 @@ export function createPlantNode(opts: {
 const MIN_LABEL_DIST_SQ = 40 * 40   // labels suppressed when neighbor closer than 40px
 const STACK_THRESHOLD_SQ = 5 * 5    // plants within 5px are "stacked"
 
-// Badge colors — hardcoded hex because Konva can't read CSS vars
-const STACK_BADGE_BG = '#5A7D3A'   // moss green from semantic palette
-const STACK_BADGE_FG = '#FFFFFF'
-
 export function updatePlantCounterScale(
   plantsLayer: Konva.Layer,
   stageScale: number,
@@ -314,7 +310,7 @@ export function updatePlantStacking(
         x: BADGE_OFFSET_X,
         y: BADGE_OFFSET_Y,
         radius: BADGE_RADIUS,
-        fill: STACK_BADGE_BG,
+        fill: getCanvasColor('stack-badge-bg'),
         listening: false,
       })
 
@@ -323,7 +319,7 @@ export function updatePlantStacking(
         text: String(count),
         fontSize: 9,
         fontFamily: 'Inter, system-ui, sans-serif',
-        fill: STACK_BADGE_FG,
+        fill: getCanvasColor('stack-badge-text'),
         listening: false,
         align: 'center',
         verticalAlign: 'middle',

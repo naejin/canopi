@@ -160,22 +160,21 @@ export function ResultsList() {
             <p className={styles.listEmptyText}>{t('plantDb.noResults')}</p>
           ) : (
             <>
-              <svg width="48" height="48" viewBox="0 0 48 48" fill="none" style={{ opacity: 0.4, marginBottom: '8px' }}>
+              <svg width="48" height="48" viewBox="0 0 48 48" fill="none" className={styles.listEmptyIcon}>
                 <circle cx="20" cy="20" r="16" stroke="currentColor" strokeWidth="2" />
                 <path d="M32 32L44 44" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                 <path d="M20 12C15.6 12 12 15.6 12 20" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.5" />
               </svg>
-              <p className={styles.listEmptyText} style={{ fontWeight: 500 }}>
+              <p className={styles.listEmptyTitle}>
                 {t('plantDb.searchPlaceholder')}
               </p>
-              <p className={styles.listEmptyText} style={{ fontSize: 'var(--text-xs)', marginTop: '4px' }}>
+              <p className={styles.listEmptyHint}>
                 {t('plantDb.emptyHint')}
               </p>
               <button
                 type="button"
-                className={styles.retryBtn}
+                className={`${styles.retryBtn} ${styles.listEmptyAction}`}
                 onClick={() => retrySearch()}
-                style={{ marginTop: '12px' }}
               >
                 {t('plantDb.loadPlants')}
               </button>
@@ -232,12 +231,9 @@ export function ResultsList() {
           return (
             <div
               key={virtualRow.key}
+              className={styles.virtualRow}
               data-index={virtualRow.index}
               style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
                 height: `${virtualRow.size}px`,
                 transform: `translateY(${virtualRow.start}px)`,
               }}

@@ -29,6 +29,10 @@ export function highlightTargetFor(node: Konva.Node): Konva.Node {
 type CanvasColorName =
   | 'plant-label'
   | 'plant-label-muted'
+  | 'guide-line'
+  | 'guide-smart'
+  | 'stack-badge-bg'
+  | 'stack-badge-text'
   | 'annotation-text'
   | 'annotation-stroke'
   | 'annotation-surface'
@@ -42,6 +46,10 @@ type CanvasColorName =
 const _colors: { [K in CanvasColorName]: string } = {
   'plant-label': '#444444',
   'plant-label-muted': '#888888',
+  'guide-line': 'rgba(45, 95, 63, 0.6)',
+  'guide-smart': 'rgba(181, 67, 42, 0.72)',
+  'stack-badge-bg': '#5A7D3A',
+  'stack-badge-text': '#FCF8F2',
   'annotation-text': '#1A1A1A',
   'annotation-stroke': '#6B6253',
   'annotation-surface': '#FFFDF8',
@@ -91,6 +99,10 @@ export function refreshCanvasTheme(
   // Update cache from CSS variables
   _colors['plant-label'] = cs.getPropertyValue('--canvas-plant-label').trim() || _colors['plant-label']
   _colors['plant-label-muted'] = cs.getPropertyValue('--canvas-plant-label-muted').trim() || _colors['plant-label-muted']
+  _colors['guide-line'] = cs.getPropertyValue('--canvas-guide-line').trim() || _colors['guide-line']
+  _colors['guide-smart'] = cs.getPropertyValue('--canvas-guide-smart').trim() || _colors['guide-smart']
+  _colors['stack-badge-bg'] = cs.getPropertyValue('--canvas-stack-badge-bg').trim() || _colors['stack-badge-bg']
+  _colors['stack-badge-text'] = cs.getPropertyValue('--canvas-stack-badge-text').trim() || _colors['stack-badge-text']
   _colors['annotation-text'] = cs.getPropertyValue('--canvas-annotation-text').trim() || _colors['annotation-text']
   _colors['annotation-stroke'] = cs.getPropertyValue('--canvas-annotation-stroke').trim() || _colors['annotation-stroke']
   _colors['annotation-surface'] = cs.getPropertyValue('--canvas-annotation-surface').trim() || _colors['annotation-surface']
@@ -109,6 +121,12 @@ export function refreshCanvasTheme(
     })
     plantsLayer.find('.plant-botanical').forEach((node: Konva.Node) => {
       ;(node as Konva.Text).fill(_colors['plant-label-muted'])
+    })
+    plantsLayer.find('.stackBadgeBg').forEach((node: Konva.Node) => {
+      ;(node as Konva.Circle).fill(_colors['stack-badge-bg'])
+    })
+    plantsLayer.find('.stackBadgeText').forEach((node: Konva.Node) => {
+      ;(node as Konva.Text).fill(_colors['stack-badge-text'])
     })
     plantsLayer.batchDraw()
   }
@@ -136,6 +154,12 @@ export function refreshCanvasTheme(
       if (shape.closed()) return
       if (shape.fillEnabled() && shape.fill()) return
       shape.stroke(_colors['annotation-stroke'])
+    })
+    annotationsLayer.find('.guide-line').forEach((node: Konva.Node) => {
+      ;(node as Konva.Line).stroke(_colors['guide-line'])
+    })
+    annotationsLayer.find('.smart-guide').forEach((node: Konva.Node) => {
+      ;(node as Konva.Line).stroke(_colors['guide-smart'])
     })
     annotationsLayer.batchDraw()
   }
