@@ -69,6 +69,22 @@ export function FilterStrip({ onMoreFilters }: { onMoreFilters: () => void }) {
         </div>
       </div>
 
+      {/* Life cycle — multi-select chips */}
+      <div className={styles.filterRow}>
+        <span className={styles.filterLabel}>{t('filters.lifecycle')}</span>
+        <div className={styles.filterControl}>
+          {(opts?.life_cycles ?? []).map((lc) => (
+            <FilterChip
+              key={lc}
+              label={t(`filters.lifeCycle_${lc}`, lc)}
+              color="--color-family"
+              active={filters.life_cycle?.includes(lc) ?? false}
+              onClick={() => patchFilters({ life_cycle: toggleArrayValue(filters.life_cycle, lc) })}
+            />
+          ))}
+        </div>
+      </div>
+
       {/* Hardiness zone — range slider */}
       <div className={styles.filterRow}>
         <span className={styles.filterLabel}>{t('filters.hardiness')}</span>

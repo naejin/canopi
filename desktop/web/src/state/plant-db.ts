@@ -37,7 +37,8 @@ export const filterOptions = signal<FilterOptions | null>(null);
 
 // ── Dynamic "More Filters" state ────────────────────────────────────────────
 export const extraFilters = signal<DynamicFilter[]>([]);
-export const dynamicOptionsCache = signal<Record<string, DynamicFilterOptions>>({});
+export const dynamicOptionsCache = signal<Record<string, Record<string, DynamicFilterOptions>>>({});
+export const dynamicOptionsPending = signal<Record<string, Record<string, boolean>>>({});
 
 // ── View state ────────────────────────────────────────────────────────────────
 
@@ -86,6 +87,7 @@ export const activeFilterCount = computed(() => {
   if (f.stratum !== null && f.stratum.length > 0) count++;
   if (f.edibility_min !== null) count++;
   if (f.height_min !== null || f.height_max !== null) count++;
+  if (f.life_cycle !== null && f.life_cycle.length > 0) count++;
   if (f.nitrogen_fixer !== null) count++;
   count += extraFilters.value.length;
   return count;
@@ -324,18 +326,35 @@ export function removeExtraFilter(field: string): void {
 
 /** Load dynamic filter options for a set of fields (with caching). */
 export async function loadDynamicOptions(fields: string[]): Promise<void> {
-  const cache = dynamicOptionsCache.value;
-  const uncached = fields.filter((f) => !cache[f]);
+  const loc = locale.value;
+  const cacheForLocale = dynamicOptionsCache.value[loc] ?? {};
+  const pendingForLocale = dynamicOptionsPending.value[loc] ?? {};
+  const uncached = fields.filter((f) => !cacheForLocale[f] && !pendingForLocale[f]);
   if (uncached.length === 0) return;
+
+  dynamicOptionsPending.value = {
+    ...dynamicOptionsPending.value,
+    [loc]: {
+      ...pendingForLocale,
+      ...Object.fromEntries(uncached.map((field) => [field, true])),
+    },
+  };
+
   try {
-    const options = await getDynamicFilterOptions(uncached, locale.value);
-    const next = { ...dynamicOptionsCache.value };
+    const options = await getDynamicFilterOptions(uncached, loc);
+    const updatedLocale = { ...(dynamicOptionsCache.value[loc] ?? {}) };
     for (const opt of options) {
-      next[opt.field] = opt;
+      updatedLocale[opt.field] = opt;
     }
-    dynamicOptionsCache.value = next;
+    dynamicOptionsCache.value = { ...dynamicOptionsCache.value, [loc]: updatedLocale };
   } catch {
     // Non-fatal — dynamic options will just be unavailable
+  } finally {
+    const localePending = { ...(dynamicOptionsPending.value[loc] ?? {}) };
+    for (const field of uncached) {
+      delete localePending[field];
+    }
+    dynamicOptionsPending.value = { ...dynamicOptionsPending.value, [loc]: localePending };
   }
 }
 

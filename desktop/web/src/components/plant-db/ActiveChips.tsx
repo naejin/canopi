@@ -1,9 +1,12 @@
+import { useSignalEffect } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale } from '../../state/app'
 import {
   activeFilters,
+  dynamicOptionsCache,
   extraFilters,
   hasActiveFilters,
+  loadDynamicOptions,
   patchFilters,
   removeExtraFilter,
 } from '../../state/plant-db'
@@ -12,10 +15,31 @@ import { FilterChip } from './FilterChip'
 import styles from './PlantDb.module.css'
 
 export function ActiveChips() {
-  void locale.value;
+  const loc = locale.value;
   const filters = activeFilters.value;
   const extras = extraFilters.value;
   const hasAny = hasActiveFilters.value;
+  const localeOptions = dynamicOptionsCache.value[loc] ?? {};
+
+  useSignalEffect(() => {
+    const currentLoc = locale.value;
+    const currentExtras = extraFilters.value;
+    const cache = dynamicOptionsCache.value[currentLoc] ?? {};
+
+    const seen = new Set<string>();
+    const uncachedFields: string[] = [];
+    for (const ef of currentExtras) {
+      const fieldDef = FIELD_REGISTRY.find((f) => f.key === ef.field);
+      if (fieldDef?.type === 'categorical' && !seen.has(fieldDef.key) && !cache[fieldDef.key]) {
+        seen.add(fieldDef.key);
+        uncachedFields.push(fieldDef.key);
+      }
+    }
+
+    if (uncachedFields.length > 0) {
+      void loadDynamicOptions(uncachedFields);
+    }
+  })
 
   if (!hasAny) return null;
 
@@ -93,7 +117,7 @@ export function ActiveChips() {
     });
   }
 
-  // Legacy filters (life_cycle, growth_rate)
+  // Life cycle (also in FilterStrip, chips here for dismissal)
   if (filters.life_cycle) {
     for (const lc of filters.life_cycle) {
       chips.push({
@@ -127,7 +151,11 @@ export function ActiveChips() {
     const cat = categoryForField(ef.field);
     const fieldDef = FIELD_REGISTRY.find((f) => f.key === ef.field);
     const label = fieldDef ? t(fieldDef.i18nKey, ef.field) : ef.field;
-    const display = ef.values.length > 0 ? `${label}: ${ef.values.join(', ')}` : label;
+    const cachedValues = localeOptions[ef.field]?.values;
+    const localizedValues = fieldDef?.type === 'categorical' && cachedValues
+      ? ef.values.map((v) => cachedValues.find((cv) => cv.value === v)?.label ?? v)
+      : ef.values;
+    const display = localizedValues.length > 0 ? `${label}: ${localizedValues.join(', ')}` : label;
     chips.push({
       key: `extra-${ef.field}`,
       label: display,

@@ -32,6 +32,7 @@ function LocalePicker() {
       triggerClassName={styles.localeBtn}
       menuClassName={styles.localeMenu}
       optionClassName={styles.localeItem}
+      preserveOverlays
     />
   )
 }

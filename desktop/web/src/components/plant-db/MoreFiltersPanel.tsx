@@ -1,4 +1,4 @@
-import { useSignal } from '@preact/signals'
+import { useSignal, useSignalEffect } from '@preact/signals'
 import { useRef, useEffect } from 'preact/hooks'
 import { t } from '../../i18n'
 import { locale } from '../../state/app'
@@ -38,6 +38,10 @@ export function MoreFiltersPanel({ open, onClose }: Props) {
   useEffect(() => {
     if (!open) return
     const handler = (e: PointerEvent) => {
+      const target = e.target
+      if (target instanceof Element && target.closest('[data-preserve-overlays="true"]')) {
+        return
+      }
       if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
         onClose()
       }
@@ -143,9 +147,9 @@ function CategorySection({ category, searchQuery }: {
 }
 
 function FieldRow({ field }: { field: FieldDef }) {
-  void locale.value
+  const loc = locale.value
   const extras = extraFilters.value
-  const cache = dynamicOptionsCache.value
+  const cache = dynamicOptionsCache.value[loc] ?? {}
   const expanded = useSignal(false)
   const activeFilter = extras.find((ef) => ef.field === field.key)
   const label = t(field.i18nKey, field.key)
@@ -175,10 +179,15 @@ function FieldRow({ field }: { field: FieldDef }) {
   // Categorical or numeric — expandable
   const opts = cache[field.key]
 
-  const handleExpand = () => {
-    if (!expanded.value && !opts) {
+  // Re-fetch when locale changes while expanded (cache miss for new locale)
+  useSignalEffect(() => {
+    const localeCache = dynamicOptionsCache.value[locale.value] ?? {}
+    if (expanded.value && !localeCache[field.key]) {
       void loadDynamicOptions([field.key])
     }
+  })
+
+  const handleExpand = () => {
     expanded.value = !expanded.value
   }
 

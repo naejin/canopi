@@ -102,7 +102,7 @@ These files have concentrated authority. **One writer at a time** — do not ass
 - `desktop/web/src/state/design.ts`
 - `desktop/web/src/state/plant-db.ts`
 
-### Renderer Ownership (landed — in stability-gate validation)
+### Renderer Ownership (landed — stability gate satisfied 2026-03-30)
 `RenderReconciler` owns render invalidation, batching, deferred scheduling, and stage-transform invalidation. `render-pipeline.ts` is the execution delegate behind the reconciler, not the scheduler. See `docs/renderer/renderer.md` for the validation checklist. Rules:
 - All visual updates go through `reconciler.invalidate(...)` — no scattered `batchDraw()` / manual reconcile calls
 - All stage transforms go through the engine-owned stage-transform path
@@ -111,7 +111,7 @@ These files have concentrated authority. **One writer at a time** — do not ass
 - Keep full-layer passes full-layer until a real sublinear index exists
 - Use viewport filtering only for deferred passes where stale off-screen state is acceptable
 
-Blocked behind renderer stability gate (per `docs/todo.md` §4):
+Deferred (no longer gate-blocked, per `docs/todo.md` §4):
 - Per-species default colors (100-color palette)
 - Labels hidden by default with smart cartographic placement
 - `loadSpeciesCache` extraction from `engine.ts`
@@ -158,10 +158,10 @@ Blocked behind renderer stability gate (per `docs/todo.md` §4):
 - Design tokens in `global.css` as CSS variables (field notebook palette)
 - Components use CSS Modules, reference tokens (never raw values)
 - Dark theme via `[data-theme="dark"]` on `<html>`
-- **No hardcoded px values**: All spacing must use `var(--space-N)` tokens (4/8/12/16/24/28/32/48px). All font-sizes must use `var(--text-*)` tokens (xs=11/sm=12/base=13/md=14/lg=16/xl=20). All border-radius must use `var(--radius-*)` tokens (sm=3/md=5/lg=7/full=9999). No invented sizes (6px, 10px, 14px, 22px etc.) — see `.interface-design/system.md` for the allowed scales
-- **Transition timing**: `80ms ease` for color/bg/border hover states. `150ms ease` for transform/layout shifts. `200ms ease-out` for panel slide/fade enter. Always use `ms` units, never `s`
+- **No hardcoded px values**: All spacing must use `var(--space-N)` tokens (4/8/12/16/24/28/32/48px). All font-sizes must use `var(--text-*)` tokens (xs=11/sm=12/base=13/md=14/lg=16/xl=20). All border-radius must use `var(--radius-*)` tokens (sm=3/md=5/lg=7/full=9999). Control sizes must use `var(--control-size-*)` tokens (xs=20/sm=24/md=28/lg=32/xl=34/window=44). Slider dimensions must use `var(--slider-thumb-size)` (12px) and `var(--slider-track-size)` (2px). No invented sizes (6px, 10px, 14px, 22px etc.) — see `.interface-design/system.md` for the allowed scales
+- **Transition timing**: Use `var(--transition-fast)` (80ms ease) for color/bg/border hover states, `var(--transition-normal)` (150ms ease) for transform/layout shifts, `var(--transition-enter)` (200ms ease-out) for panel slide/fade enter. Always use `ms` units, never `s`
 - **Dark mode token audit**: When adding CSS that uses `--color-*` tokens as foreground text/border, verify the token has a dark mode override in `global.css` `[data-theme="dark"]`. Check contrast ratio ≥ 4.5:1 against `--color-bg`
-- **Click-outside-to-close pattern**: Use `pointerup` (not `mousedown`) to avoid catching the click that opened the panel. No `setTimeout` delays — they create race conditions on rapid toggle. See `MoreFiltersPanel.tsx`
+- **Click-outside-to-close pattern**: Use `pointerup` (not `mousedown`) to avoid catching the click that opened the panel. No `setTimeout` delays — they create race conditions on rapid toggle. Controls that shouldn't dismiss open panels (e.g., locale picker) use `data-preserve-overlays="true"` — the handler checks `target.closest('[data-preserve-overlays="true"]')` before closing. See `MoreFiltersPanel.tsx`, `Dropdown.tsx`
 - **No raw `white`/`black` in CSS Modules**: Use `var(--color-bg)` for white-on-colored backgrounds (badges, pills). Raw color keywords break dark mode just like raw `rgba()` does
 - **Section headers**: Uppercase, `var(--text-xs)` (11px), weight 600, `0.06em` letter-spacing, `--color-text-muted`. One pattern everywhere — no 10px/12px/14px variations
 
@@ -251,10 +251,13 @@ MapLibre code (`map-layer.ts`, contour/hillshade effects, map sync) was deleted 
 - **Theme: light/dark only, no system**: `Theme` enum has only `Light`/`Dark`. `get_settings` migrates stale `"system"` values to `"light"` via JSON patching before deserialization
 - **TitleBar drag handler**: `handleMouseDown` in `TitleBar.tsx` calls `startDragging()` on the title bar. Interactive elements must be caught by `target.closest('button')` — if adding non-button interactive elements, wrap in a button or update the guard
 - **No native `<select>` in UI chrome**: Native dropdowns break the field notebook aesthetic. Use custom dropdown components (see `LocalePicker` in `TitleBar.tsx`). Must include click-outside-to-close, `aria-expanded`, keyboard support
-- **WebKitGTK range input thumb alignment**: `<input type="range">` thumbs are NOT vertically centered. With a 0px-height runnable track, the thumb's TOP edge sits at the track center. Fix: `::-webkit-slider-thumb { margin-top: -<halfThumbHeight>px }` (e.g., `-6px` for 12px thumb). Injected `<style>` overrides for pseudo-elements are silently ignored by WebKitGTK — always modify the actual `.module.css` file
-- **Filter UI architecture**: Always-visible filters in `FilterStrip.tsx` use typed `SpeciesFilter` fields. "More filters" panel uses dynamic `Vec<DynamicFilter>` channel with `validated_column()` allowlist in `query_builder.rs`. Adding a new filterable field requires two additions: entry in `field-registry.ts` + entry in the Rust allowlist. `patchFilters()` in `state/plant-db.ts` is the single mutation point for filter state
+- **WebKitGTK range input thumb alignment**: `<input type="range">` thumbs are NOT vertically centered. With a 0px-height runnable track, the thumb's TOP edge sits at the track center. Fix: `::-webkit-slider-thumb { margin-top: calc(var(--slider-thumb-size) / -2) }`. Injected `<style>` overrides for pseudo-elements are silently ignored by WebKitGTK — always modify the actual `.module.css` file
+- **Filter UI architecture**: Always-visible filters in `FilterStrip.tsx` use typed `SpeciesFilter` fields. "More filters" panel uses dynamic `Vec<DynamicFilter>` channel with `validated_column()` allowlist in `query_builder.rs`. Adding a new filterable field requires two additions: entry in `field-registry.ts` + entry in the Rust allowlist. `patchFilters()` in `state/plant-db.ts` is the single mutation point for filter state. `dynamicOptionsCache` is locale-scoped (`Record<locale, Record<field, DynamicFilterOptions>>`); `dynamicOptionsPending` deduplicates concurrent IPC requests per locale+field
 
 ### Konva.js / Canvas
+- **Never assign `canvas.width`/`canvas.height` unconditionally in draw loops**: Assignment resets the backing buffer and triggers GPU texture reallocation even when the value is unchanged. Guard with `if (canvas.width !== newW) canvas.width = newW`. See `rulers.ts` draw functions
+- **Use `ctx.setTransform(dpr,0,0,dpr,0,0)` not `ctx.scale(dpr,dpr)` for HiDPI canvas**: `scale()` is cumulative — if the canvas buffer isn't reallocated every frame (per the guard above), the transform compounds. `setTransform()` is absolute and always safe
+- **ResizeObserver + RAF: read live DOM dimensions at RAF time**: Don't close over the `entries` parameter — by the time the RAF callback fires, the entries may be stale (especially when the coalescing guard drops intermediate observations). Read `element.clientWidth/clientHeight` inside the RAF callback instead
 - **Shapes don't react to CSS theme changes**: Colors hardcoded at creation time. Theme switch requires walking nodes and updating `fill`/`stroke` from computed CSS variables
 - **Canvas colors must use `getCanvasColor()` from `theme-refresh.ts`**: Never hardcode fill/stroke on Konva nodes. Add CSS variable to `global.css` (both themes) + cache entry in `theme-refresh.ts`. `refreshCanvasTheme()` in the engine's theme effect walks all layers on toggle
 - **Non-Konva canvas elements too**: Guides, plant badges, and zone fallback colors all use `getCanvasColor()` — not module-level constants. Every color rendered on or near the canvas must be theme-refreshable. If adding a new canvas element with color, add a `--canvas-*` token + `getCanvasColor()` entry + refresh call
@@ -277,14 +280,16 @@ MapLibre code (`map-layer.ts`, contour/hillshade effects, map sync) was deleted 
 - **Preact Vite plugin**: Package is `@preact/preset-vite` (not `@preactjs/preset-vite`)
 - **HMR safety**: Module-level `effect()` and `addEventListener` must store disposers and clean up via `import.meta.hot.dispose()`
 - **Signals + hooks**: Use `useSignalEffect` (not `useEffect`) when subscribing to signals inside components
+- **Never put `signal.value` in a `useEffect` dependency array**: It captures the value at render time, not a live reference. It may work incidentally if `void signal.value` elsewhere triggers re-renders, but breaks silently when that line is removed. Use `useSignalEffect` instead
 - **Effect subscription**: Effects only subscribe to signals **read during execution**. An early `return` before reading a signal = never re-runs. Read ALL dependencies BEFORE conditional returns
+- **`void signal.value` in parent components**: Unnecessary when all child components subscribe to the signal independently. Safe to remove — children re-render on their own signal subscriptions
 - **Signal retry pattern**: Setting a signal to its current value is a no-op (`Object.is` equality). To force a re-fetch, use a dedicated `retryCount` signal: read it in the effect, increment it in the retry handler
 - **`CanvasHistory` truncation must mirror in both paths**: `execute()` and `record()` both trim `_past` at 500-cap. Both must set `_savedPosition = -1` when truncation passes the saved point, or dirty tracking breaks
 - **`useEffect` needs a dependency array**: Omitting `[]` or `[dep]` runs the effect every render — causes listener leaks and duplicate subscriptions. Always provide explicit deps, even in Preact
 
 ### Database / SQLite
 - **Plant DB schema contract**: `scripts/schema-contract.json` maps canopi-data export columns to canopi-core.db columns. `prepare-db.py` reads from this contract, not hardcoded lists. When canopi-data changes column names, update the contract — not the Rust code
-- **canopi-data column renames (completed 3.0)**: `life_cycle` replaced by `is_annual`/`is_biennial`/`is_perennial` (booleans), `nitrogen_fixation` replaced by `nitrogen_fixer` (integer). All layers updated: prepare-db.py, Rust types, query builder, frontend types, display-modes, detail card. Filter UI keeps `life_cycle: string[]` for OR-semantics, mapped to boolean columns in `query_builder.rs`
+- **Life cycle / nitrogen columns are booleans**: `is_annual`/`is_biennial`/`is_perennial` (not `life_cycle`), `nitrogen_fixer` (not `nitrogen_fixation`). Filter UI keeps `life_cycle: string[]` for OR-semantics, mapped to boolean columns in `query_builder.rs`
 - **Schema version**: `PRAGMA user_version = 4` in canopi-core.db. Rust backend warns if < 4 at startup. Export schema version 8 (`min_export_schema_version` in contract). Contract version 4 = 173 species columns
 - **`species_soil_types` removed (schema v7)**: Soil filtering uses boolean tolerance columns (`tolerates_light_soil`, `tolerates_medium_soil`, `tolerates_heavy_soil`, `well_drained`, `heavy_clay`). `SpeciesFilter.soil_tolerances` maps to these columns in `query_builder.rs`
 - **canopi-data export location**: `~/projects/canopi-data/data/exports/canopi-export-YYYY-MM-DD.db` — use the latest dated file
@@ -327,6 +332,7 @@ MapLibre code (`map-layer.ts`, contour/hillshade effects, map sync) was deleted 
 - **Canvas dirty tracking**: `_past.length` caps at 500. Use `_savedPosition` checkpoint. `history.clear()` must NOT trigger dirty
 - **Visual updates go through the reconciler**: Do not call `layer.batchDraw()` for plant/annotation visual changes from outside the render pipeline. Use `reconciler.invalidate(...)` — the reconciler schedules the appropriate pipeline method
 - **Vitest with Konva**: Requires `canvas` npm package as devDependency
+- **i18n in Vitest**: The i18n module eagerly loads all 11 locale files at import time — `t()` returns real translations in tests without mocking. `locale.value` changes trigger `i18n.changeLanguage()` synchronously via module-level `effect()`
 
 ### Platform / Build
 - **Linux deps**: `sudo apt-get install libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev patchelf` — do NOT install `libappindicator3-dev`
@@ -375,7 +381,7 @@ External code uses `CanvasEngine` methods only. Never import from `runtime/*.ts`
 - Plant symbols: fixed screen-pixel circles, group-level counter-scale
 - Grid: single `Konva.Shape` with custom `sceneFunc`, adaptive density via "nice distances" ladder
 - Rulers: HTML `<canvas>` elements, NOT Konva — always in screen space
-- Scale bar: uses `--color-text-muted` for theme-aware rendering
+- Scale bar: drawn in `rulers.ts` `_drawScaleBar()`, color sourced from `--color-text-muted` via `refreshRulerColors()`; `scale-bar.ts` is pure metrics only
 - File dialogs: JS `@tauri-apps/plugin-dialog` API, NOT Rust `blocking_*`
 - `_chromeEnabled` signal: controls grid/ruler visibility — must be a signal so effects track it
 - Display modes: `display-modes.ts` has `updatePlantDisplay()` + `getLegendEntries()`. Signals: `plantDisplayMode` (`'default'`/`'canopy'`/`'color-by'`) and `plantColorByAttr` in `state/canvas.ts`. UI controls in `DisplayModeControls.tsx` + `DisplayLegend.tsx`
@@ -389,7 +395,7 @@ External code uses `CanvasEngine` methods only. Never import from `runtime/*.ts`
 - `reconcileZoomDependentState()` — LOD + counter-scale + annotation zoom (called via `scheduleLODUpdate` or after button zoom)
 - `refreshTheme()` — CSS variable color refresh on all canvas nodes
 - `refreshLocale()` — plant label text update from species DB
-- **Renderer stability gate**: Phases 1-3 landed but gate not yet satisfied — see `docs/renderer/renderer.md` for the validation checklist and `docs/todo.md` §4 for gate conditions
+- **Renderer stability gate**: Gate satisfied 2026-03-30; Wave 4 unblocked. See `docs/renderer/renderer.md` for the validation record and `docs/todo.md` §4 for gate conditions
 
 ## Quality Process
 - After completing a phase or significant feature, run `/craft` with two parallel code-reviewer agents
@@ -397,11 +403,11 @@ External code uses `CanvasEngine` methods only. Never import from `runtime/*.ts`
 - For UI work: run `/interface-design:critique` to verify design system adherence
 - Verify interactive features via Tauri MCP (screenshot + interact) — do not rely solely on `tsc`/`npm test`
 - Max 3 sub-phases between live app verification runs
-- Detail card expansion pattern: Rust struct → SQL query → translate_value() → frontend types → collapsible sections → i18n keys × 6 locales → schema-contract.json translations → DB population
+- Detail card expansion pattern: Rust struct → SQL query → translate_value() → frontend types → collapsible sections → i18n keys × 11 locales → schema-contract.json translations → DB population
 
 ## Key Documents
 - Rewrite reference: `docs/todo.md` (canonical operational reference — remaining work, blockers, guardrails)
-- Renderer validation: `docs/renderer/renderer.md` (stability-gate checklist for landed reconciler)
+- Renderer validation: `docs/renderer/renderer.md` (gate satisfied; retained for optional viewport filtering and historical reference)
 - Product scope lock: `docs/product-definition.md`
 - Release hardening: `docs/release-verification.md`
 - Roadmap: `docs/roadmap.md`

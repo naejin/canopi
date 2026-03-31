@@ -1,5 +1,5 @@
 import { useEffect } from 'preact/hooks'
-import { useSignal } from '@preact/signals'
+import { useSignal, useSignalEffect } from '@preact/signals'
 import { locale } from '../../state/app'
 import {
   loadSidebarLists,
@@ -19,18 +19,22 @@ import plantDetailStyles from '../plant-detail/PlantDetail.module.css'
 import styles from '../plant-db/PlantDb.module.css'
 
 export function PlantDbPanel() {
-  void locale.value
   const selected = selectedCanonicalName.value
   const moreFiltersOpen = useSignal(false)
 
   useEffect(() => {
     const disposeController = mountPlantDbController()
-    void loadSidebarLists()
     if (searchResults.value.length === 0 && !isSearching.value) {
       retrySearch()
     }
     return disposeController
   }, [])
+
+  // Reload favorites/recent when locale changes (names are locale-dependent)
+  useSignalEffect(() => {
+    void locale.value
+    void loadSidebarLists()
+  })
 
   return (
     <div className={styles.panel}>
