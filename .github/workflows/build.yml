@@ -30,9 +30,7 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Install Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev patchelf
+        uses: ./.github/actions/install-linux-deps
 
       - name: Check formatting
         run: cargo fmt --all -- --check
@@ -68,9 +66,7 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Install Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev patchelf
+        uses: ./.github/actions/install-linux-deps
 
       - name: Rust tests
         run: cargo test --workspace
@@ -114,6 +110,10 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/install-linux-deps
+
       - name: Platform-specific tests (${{ matrix.package }})
         run: cargo test -p ${{ matrix.package }}
 
@@ -148,9 +148,7 @@ jobs:
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev patchelf
+        uses: ./.github/actions/install-linux-deps
 
       - uses: actions/setup-node@v4
         with:
@@ -186,4 +184,4 @@ jobs:
             target/${{ matrix.target }}/release/bundle/**/*.dmg
             target/${{ matrix.target }}/release/bundle/**/*.msi
             target/${{ matrix.target }}/release/bundle/**/*.exe
-          if-no-files-found: ignore
+          if-no-files-found: error

@@ -1,9 +1,11 @@
-# Rewrite Exit Release Verification
+# Beta Release Verification
 
 Date: 2026-03-31
-Status: Wave 4 coherence is landed, automated Wave 5 gates are green locally on the landed reconciler tree, and packaged-app smoke verification is still pending
+Status: Wave 4 coherence is landed, automated Wave 5 gates are green locally on the landed reconciler tree, and packaged-app beta smoke verification is still pending
 
-## Rewrite-Exit Scope
+Wave 5 is a beta-release gate on the current retained-surface architecture. It does not claim the broader roadmap is complete.
+
+## Wave 5 Beta Scope
 
 Supported release targets:
 - Linux desktop via Tauri
@@ -14,8 +16,12 @@ Not release targets:
 - browser-only product
 - iOS / Android
 
-Explicitly deferred until post-rewrite:
-- featured-design world-map discovery and template import
+Explicitly deferred beyond Wave 5 beta:
+- color by plants
+- frontend lazy loading / performance improvements
+- detail-card photo fit polish
+- map layers
+- world map with featured designs / template import
 - timeline workflows
 - budget workflows
 - consortium workflows
@@ -25,7 +31,7 @@ Explicitly deferred until post-rewrite:
 
 ## Required Automated Gates
 
-These checks must pass before rewrite completion:
+These checks must pass before a beta release candidate is declared ready:
 
 - `cargo fmt --all -- --check`
 - `cargo clippy --workspace -- -D warnings`
@@ -34,6 +40,7 @@ These checks must pass before rewrite completion:
 - `npm test --prefix desktop/web`
 - `npm run build --prefix desktop/web`
 - GitHub Actions Tauri build matrix with artifact upload for Linux, macOS Apple Silicon, macOS Intel, and Windows
+- manual `Release Candidate` GitHub Actions workflow preflight for app version, bundled DB asset availability, bundled DB schema version, and checksum manifest generation
 - i18n completeness test for all supported locales against `en.json`
 
 Current status in this tree:
@@ -46,10 +53,11 @@ Current status in this tree:
 - frontend i18n completeness: passing via the frontend test suite on 2026-03-31
 - frontend production build: passing locally on 2026-03-31
 - GitHub Actions workflow: includes rust fmt, clippy, TypeScript check, workspace tests, frontend tests, frontend build, and 4-target Tauri artifact builds
+- `Release Candidate` workflow: lands manual preflight validation for `desktop/tauri.conf.json` version, bundled DB asset availability, bundled DB schema compatibility, and packaged-artifact checksum manifest upload
 
 ## Required Product Journeys
 
-These journeys must remain green at rewrite exit:
+These journeys must remain green for the beta release:
 
 1. Create a design, edit it, and switch documents without losing work.
 2. Search the plant database, inspect detail, favorite plants, and place plants on the canvas.
@@ -61,19 +69,58 @@ These journeys must remain green at rewrite exit:
 
 ## Supported-Platform Smoke Verification
 
-Artifact builds are automated in CI, but rewrite exit still requires one packaged-app smoke pass per supported release artifact.
+Artifact builds are automated in CI, but the beta release still requires one packaged-app smoke pass per supported release artifact.
 
-Use the packaged artifact produced by CI for each target and record the result here.
+Use the packaged artifact produced by the manual `Release Candidate` workflow for each target and record the result here.
 
-| Platform / target | Artifact source | Status | Minimum smoke pass |
-| --- | --- | --- | --- |
-| Linux desktop | GitHub Actions Linux Tauri build artifact | Pending | Launch app, create/edit/save/reload a design, open plant search/detail, place a plant, switch theme/locale, confirm no startup or save-path regressions |
-| macOS Apple Silicon (`aarch64-apple-darwin`) | GitHub Actions macOS 14 Tauri build artifact | Pending | Launch app, create/edit/save/reload a design, open plant search/detail, place a plant, switch theme/locale, confirm no startup or save-path regressions |
-| macOS Intel (`x86_64-apple-darwin`) | GitHub Actions macOS 13 Tauri build artifact | Pending | Launch app, create/edit/save/reload a design, open plant search/detail, place a plant, switch theme/locale, confirm no startup or save-path regressions |
-| Windows desktop | GitHub Actions Windows Tauri build artifact | Pending | Launch app, create/edit/save/reload a design, open plant search/detail, place a plant, switch theme/locale, confirm no startup or save-path regressions |
+| Platform / target | Artifact source | Tester / owner | Test date | Status | Defects / follow-up |
+| --- | --- | --- | --- | --- | --- |
+| Linux desktop | GitHub Actions Linux Tauri build artifact | TBD | TBD | Pending | TBD |
+| macOS Apple Silicon (`aarch64-apple-darwin`) | GitHub Actions macOS 14 Tauri build artifact | TBD | TBD | Pending | TBD |
+| macOS Intel (`x86_64-apple-darwin`) | GitHub Actions macOS 13 Tauri build artifact | TBD | TBD | Pending | TBD |
+| Windows desktop | GitHub Actions Windows Tauri build artifact | TBD | TBD | Pending | TBD |
 
 This smoke pass is release-hardening work. It does not replace the separate live verification and renderer validation flows tracked elsewhere.
 This repo change intentionally did not perform those packaged-app/manual smoke passes.
+
+## Release Operator Sequence
+
+The beta-release operator flow is:
+
+1. Publish or verify the bundled DB asset with `scripts/publish-db-release.sh`.
+2. Run the `Release Candidate` GitHub Actions workflow for the exact candidate ref and release version.
+3. Use the artifacts from that run for manual smoke verification on each supported platform.
+4. Record tester, date, result, and any follow-up in the table above.
+5. Promote the exact verified run artifacts to a draft or final GitHub Release with `scripts/promote-release.sh`.
+
+Do not rebuild artifacts locally for promotion unless the release process is explicitly being run in emergency/manual-only mode.
+See [`docs/release-operations.md`](/home/daylon/projects/canopi/docs/release-operations.md) for the operator runbook and command examples.
+
+## Artifact Provenance Requirements
+
+Before promoting a beta-release candidate, capture and retain all of the following from the `Release Candidate` workflow run:
+
+- workflow run ID
+- source commit SHA
+- requested release version
+- bundled DB release tag and asset name
+- bundled DB SHA256
+- packaged artifact checksum manifest (`SHA256SUMS.txt`)
+
+Promotion should only upload the exact artifacts whose checksums were produced by that run.
+
+## Minimum Packaged-App Smoke Script
+
+Run this script against each packaged artifact:
+
+1. Launch the app and confirm clean startup with no bundled-resource failure.
+2. Create a design, edit it, save it, reload it, and switch documents without data loss.
+3. Open plant search, inspect plant detail, favorite a plant if available, and place a plant on canvas.
+4. Edit canvas content and verify undo/redo still works in the packaged build.
+5. Open layer controls and confirm required display/layer flows still function.
+6. Open the bottom-bar `location` tab, perform search, drag, zoom, and confirm the selected location updates correctly.
+7. Switch theme and locale and confirm there are no missing labels or unreadable retained surfaces.
+8. Confirm there is no startup-path, save-path, or packaged-resource regression.
 
 ## Known Accepted Warnings
 
@@ -83,21 +130,32 @@ These are review items, not automatic blockers unless they become release-impact
 - dynamic+static import warning around `desktop/web/src/ipc/species.ts`
 - Rust dead-code warnings in platform/tile-related types
 
-## Manual Follow-Up Owned By Claude Code
+## Wave 5 Blocking Defects
 
-This checklist intentionally does not include live Tauri MCP execution.
+Fix only defects that block the beta release:
 
-Claude Code should run the manual desktop verification pass for:
-- layer controls
-- location search / drag / zoom / confirm
+- app fails to launch
+- packaged resources needed for core retained-surface flows are missing or inaccessible
+- create/save/load/switch loses work
+- plant search/detail/placement is broken
+- undo/redo or roundtrip persistence regresses
+- layer controls or `location` retained-surface flows are broken
+- supported theme/locale usage has missing labels or unreadable surfaces
 
-Any defects found there should be fixed as narrow follow-up patches.
+## Smoke Verification Ownership
+
+Packaged-app smoke execution is owned by external platform testers or release operators.
+
+Repo follow-up from smoke feedback should stay narrow:
+- capture the evidence in the table above
+- fix only beta-blocking defects
+- rerun the affected target smoke pass after a fix lands
 
 ## Remaining Wave 5 Work
 
 What is still left after the current automated checks:
 
-- keep the CI workflow green on the release branch
+- keep the CI workflow green on the candidate branch
 - complete the supported-platform smoke table above using packaged artifacts
-- rerun the rewrite-exit checklist once product and renderer blockers are cleared
-- archive or remove stale future-tense instructions after rewrite exit is actually reached
+- fix only defects that block beta usability or packaging on supported targets
+- archive or remove stale future-tense instructions after the beta release is actually shipped

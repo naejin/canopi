@@ -1,0 +1,310 @@
+name: Release Candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to build
+        required: true
+        default: main
+        type: string
+      release_version:
+        description: Expected version from desktop/tauri.conf.json
+        required: true
+        type: string
+      db_release_tag:
+        description: GitHub release tag containing the bundled DB asset
+        required: true
+        default: canopi-core-db
+        type: string
+      db_asset_name:
+        description: Bundled DB asset filename
+        required: true
+        default: canopi-core.db
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      head_sha: ${{ steps.head.outputs.head_sha }}
+      db_sha256: ${{ steps.db.outputs.db_sha256 }}
+      expected_schema_version: ${{ steps.schema.outputs.expected_schema_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - id: head
+        name: Capture build commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Resolving commit for ref '${{ inputs.ref }}'"
+          echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - id: version
+        name: Verify requested release version
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_version="$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+          print(json.loads(Path("desktop/tauri.conf.json").read_text())["version"])
+          PY
+          )"
+          requested_version="${{ inputs.release_version }}"
+          echo "Requested release version: $requested_version"
+          echo "App version from desktop/tauri.conf.json: $actual_version"
+          if [[ "$actual_version" != "$requested_version" ]]; then
+            echo "::error::desktop/tauri.conf.json version '$actual_version' does not match workflow input '$requested_version'."
+            exit 1
+          fi
+
+      - id: schema
+        name: Read expected plant DB schema version
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_schema_version="$(python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          text = Path("desktop/src/db/schema_contract.rs").read_text()
+          match = re.search(r"EXPECTED_PLANT_SCHEMA_VERSION:\s*i32\s*=\s*(\d+);", text)
+          if not match:
+              raise SystemExit("Failed to locate EXPECTED_PLANT_SCHEMA_VERSION")
+          print(match.group(1))
+          PY
+          )"
+          echo "Expected bundled DB schema version: $expected_schema_version"
+          echo "expected_schema_version=$expected_schema_version" >> "$GITHUB_OUTPUT"
+
+      - name: Download bundled plant DB
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p preflight
+          echo "Downloading bundled DB '${{ inputs.db_asset_name }}' from release tag '${{ inputs.db_release_tag }}'"
+          gh release download "${{ inputs.db_release_tag }}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "${{ inputs.db_asset_name }}" \
+            --dir preflight
+          db_path="preflight/${{ inputs.db_asset_name }}"
+          if [[ ! -s "$db_path" ]]; then
+            echo "::error::Bundled DB asset '$db_path' was not downloaded or is empty."
+            exit 1
+          fi
+          echo "Downloaded bundled DB to $db_path"
+
+      - id: db
+        name: Verify bundled DB schema and checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          db_path="preflight/${{ inputs.db_asset_name }}"
+          actual_schema_version="$(python3 - "$db_path" <<'PY'
+          import sqlite3
+          import sys
+
+          conn = sqlite3.connect(sys.argv[1])
+          try:
+              row = conn.execute("PRAGMA user_version").fetchone()
+              print(0 if row is None else row[0])
+          finally:
+              conn.close()
+          PY
+          )"
+          expected_schema_version="${{ steps.schema.outputs.expected_schema_version }}"
+          echo "Bundled DB schema version: $actual_schema_version"
+          if [[ "$actual_schema_version" != "$expected_schema_version" ]]; then
+            echo "::error::Bundled DB schema version '$actual_schema_version' does not match expected '$expected_schema_version'."
+            exit 1
+          fi
+          db_sha256="$(sha256sum "$db_path" | awk '{print $1}')"
+          echo "Bundled DB sha256: $db_sha256"
+          echo "db_sha256=$db_sha256" >> "$GITHUB_OUTPUT"
+
+      - name: Write preflight summary
+        shell: bash
+        run: |
+          {
+            echo "## Release Candidate Preflight"
+            echo
+            echo "- Ref: \`${{ inputs.ref }}\`"
+            echo "- Commit: \`${{ steps.head.outputs.head_sha }}\`"
+            echo "- Release version: \`${{ inputs.release_version }}\`"
+            echo "- DB tag: \`${{ inputs.db_release_tag }}\`"
+            echo "- DB asset: \`${{ inputs.db_asset_name }}\`"
+            echo "- Expected DB schema: \`${{ steps.schema.outputs.expected_schema_version }}\`"
+            echo "- DB sha256: \`${{ steps.db.outputs.db_sha256 }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  build:
+    needs: preflight
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-14
+            target: aarch64-apple-darwin
+          - os: macos-13
+            target: x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/install-linux-deps
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/web/package-lock.json
+
+      - name: Install frontend deps
+        run: npm ci --prefix desktop/web
+
+      - name: Download bundled plant DB
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p desktop/resources
+          echo "Fetching bundled DB '${{ inputs.db_asset_name }}' for target '${{ matrix.target }}'"
+          gh release download "${{ inputs.db_release_tag }}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "${{ inputs.db_asset_name }}" \
+            --dir desktop/resources
+          db_path="desktop/resources/${{ inputs.db_asset_name }}"
+          if [[ ! -s "$db_path" ]]; then
+            echo "::error::Bundled DB asset '$db_path' is missing or empty before packaging target '${{ matrix.target }}'."
+            exit 1
+          fi
+
+      - name: Build Tauri app
+        run: npx --prefix desktop/web @tauri-apps/cli build --target ${{ matrix.target }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: canopi-${{ matrix.target }}
+          path: |
+            target/${{ matrix.target }}/release/bundle/**/*.deb
+            target/${{ matrix.target }}/release/bundle/**/*.AppImage
+            target/${{ matrix.target }}/release/bundle/**/*.dmg
+            target/${{ matrix.target }}/release/bundle/**/*.msi
+            target/${{ matrix.target }}/release/bundle/**/*.exe
+          if-no-files-found: error
+          retention-days: 30
+
+  manifest:
+    needs: [preflight, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download packaged artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: canopi-*
+          path: artifacts
+
+      - name: Generate checksum manifest
+        shell: bash
+        env:
+          BUILD_REF: ${{ inputs.ref }}
+          BUILD_VERSION: ${{ inputs.release_version }}
+          DB_ASSET_NAME: ${{ inputs.db_asset_name }}
+          DB_RELEASE_TAG: ${{ inputs.db_release_tag }}
+          DB_SHA256: ${{ needs.preflight.outputs.db_sha256 }}
+          EXPECTED_SCHEMA_VERSION: ${{ needs.preflight.outputs.expected_schema_version }}
+          HEAD_SHA: ${{ needs.preflight.outputs.head_sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          (
+            cd artifacts
+            find . -type f \( \
+              -name '*.deb' -o \
+              -name '*.AppImage' -o \
+              -name '*.dmg' -o \
+              -name '*.msi' -o \
+              -name '*.exe' \
+            \) -print | sort | xargs sha256sum
+          ) > SHA256SUMS.txt
+
+          if [[ ! -s SHA256SUMS.txt ]]; then
+            echo "::error::No packaged artifacts were found when generating SHA256SUMS.txt."
+            exit 1
+          fi
+
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          metadata = {
+              "repository": os.environ["REPOSITORY"],
+              "ref": os.environ["BUILD_REF"],
+              "head_sha": os.environ["HEAD_SHA"],
+              "release_version": os.environ["BUILD_VERSION"],
+              "db_release_tag": os.environ["DB_RELEASE_TAG"],
+              "db_asset_name": os.environ["DB_ASSET_NAME"],
+              "db_sha256": os.environ["DB_SHA256"],
+              "expected_db_schema_version": int(os.environ["EXPECTED_SCHEMA_VERSION"]),
+          }
+          Path("release-metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
+          PY
+
+      - name: Write manifest summary
+        shell: bash
+        run: |
+          {
+            echo "## Release Candidate Artifacts"
+            echo
+            echo "- Commit: \`${{ needs.preflight.outputs.head_sha }}\`"
+            echo "- Version: \`${{ inputs.release_version }}\`"
+            echo "- Packaged artifact checksums: \`SHA256SUMS.txt\`"
+            echo "- Bundled DB checksum: \`${{ needs.preflight.outputs.db_sha256 }}\`"
+            echo "- Promotion command: \`scripts/promote-release.sh --run-id ${{ github.run_id }} --tag <tag> --title <title>\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload release-candidate manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: canopi-release-candidate-manifest
+          path: |
+            SHA256SUMS.txt
+            release-metadata.json
+          if-no-files-found: error
+          retention-days: 30
