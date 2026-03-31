@@ -62,13 +62,9 @@ DB `habit` column contains `Annual`, `Biennial`, `Perennial` alongside growth-fo
 
 **Key learning**: Always verify actual DB values with `SELECT DISTINCT` before changing translation keys. The canopi-data enum case does not necessarily match the export DB case.
 
-### Issue C: deciduous_evergreen has a case mismatch for one value (canopi-data)
+### ~~Issue C~~: deciduous_evergreen translations
 
-DB has `Semi-Evergreen` (capital E). `translated_values` has `Semi-evergreen` (lowercase e). `translate_value()` exact match fails for this one value — it falls back to raw English.
-
-**Root cause**: canopi-data export has `"Semi-Evergreen"` but the schema-contract key is `"Semi-evergreen"`.
-
-**Fix**: Either fix in schema-contract.json (change key to `"Semi-Evergreen"`) or fix in canopi-data (normalize to `"Semi-evergreen"`). Schema-contract fix is simpler and immediate.
+**Status: Fixed** — added `deciduous_evergreen` translations to `schema-contract.json` with correct keys (`Deciduous`, `Evergreen`, `Semi-Evergreen`) matching actual DB values. All 3 values now have translations in 10 languages.
 
 ### Issue D: bloom_period has duplicate case variants (canopi-data)
 
@@ -78,23 +74,13 @@ DB has 22 distinct values but 5 appear in both Title Case and lowercase: `Early 
 
 **Fix**: canopi-data — normalize all `bloom_period` values to consistent Title Case during export.
 
-### Issue E: flower_color has composite values without translations (canopi-data + app)
+### ~~Issue E~~: flower_color composite values
 
-DB has 25 distinct values. 11 are single colors with translations. 14 are composites like `Blue/Purple`, `White/Yellow/Purple` with no translations.
+**Status: Fixed** — added `translate_composite_value()` in `lookup.rs` that splits slash-separated values, translates each part individually, and rejoins with `/`. Used in both `filters.rs` (filter options) and `detail.rs` (detail card). Includes `.trim()` on split parts for robustness against space-padded slashes.
 
-**Root cause**: canopi-data exports multi-value colors as slash-separated strings. The schema-contract only defines translations for individual colors.
+### ~~Issue F~~: fruit_type translations
 
-**Fix (two options)**:
-1. **canopi-data**: Split composite values into a normalized form, or store as a separate `species_flower_colors` table
-2. **App-side workaround**: `translate_value()` could split on `/`, translate each part, and rejoin. This is a display-layer fix, not ideal
-
-### Issue F: fruit_type has zero translations (app-side)
-
-16 distinct values (`Berry`, `Capsule`, `Drupe`, `Legume`, `Nut`, `Pome`, etc.) — all scientifically meaningful. Zero entries in `translated_values`.
-
-**Root cause**: `fruit_type` was never added to `schema-contract.json` translations section.
-
-**Fix**: app-side — add `fruit_type` translations to `schema-contract.json` for all 16 values across 11 locales, then regenerate DB.
+**Status: Fixed** — added all 16 fruit_type values to `schema-contract.json` with translations in 10 languages.
 
 ### Issue G: root_system_type has translations but zero DB values (canopi-data)
 
@@ -104,29 +90,15 @@ DB has 25 distinct values. 11 are single colors with translations. 14 are compos
 
 **Fix**: canopi-data — either populate from PFAF/TRY data sources or remove the column from the schema contract.
 
-### Issue H: 92% of categorical fields have no translations
+### ~~Issue H~~: categorical field translation coverage
 
-Only 4 of 48 categorical fields have translation entries: `habit`, `bloom_period`, `flower_color`, `active_growth_period`. The remaining 44 fields display raw English values in all locales.
+**Status: Fixed** — added translations for 11 high-priority categorical fields to `schema-contract.json`: `deciduous_evergreen`, `drought_tolerance`, `fertility_requirement`, `moisture_use`, `anaerobic_tolerance`, `fruit_seed_abundance`, `toxicity`, `invasive_potential`, `seed_dispersal_mechanism`, `reproductive_type`, `fruit_type`. Total translated fields: 15 (up from 4). 1050 translation entries in DB (up from 490).
 
-**Classification**: Accepted limitation. `translate_value()` falls back to `value_en` gracefully. Most values are scientific terms (e.g., `Hermaphrodite`, `AM/ECM`, `CSR`) that are universal or untranslatable. Priority fields for future translation:
-
-**High priority** (user-facing, non-scientific terms):
-- `fruit_type` (Issue F above)
-- `drought_tolerance` (High/Low/Medium/None)
-- `fertility_requirement` (High/Low/Medium)
-- `moisture_use` (High/Low/Medium)
-- `anaerobic_tolerance` (High/Low/Medium/None)
-- `fruit_seed_abundance` (High/Low/Medium/None)
-- `toxicity` (Moderate/None/Severe/Slight)
-- `invasive_potential` (Introduced/Invasive/Native/Naturalized/Potentially Invasive)
-- `seed_dispersal_mechanism` (Animal/Ant/Ballistic/Gravity/Self/Water/Wind)
-- `reproductive_type` (Seed/Seed and Vegetative/Vegetative)
-
-**Low priority** (scientific terms, mostly universal):
+**Remaining untranslated** (low priority — scientific terms, mostly universal):
 - `mycorrhizal_type` (AM/ECM/NM — abbreviations)
 - `grime_strategy` (C/R/S/CSR — Grime's universal codes)
 - `sexual_system` (Hermaphrodite/Dioecious — Latin-derived, widely understood)
-- `succession_stage` (already uses internal codes like `placenta_i`)
+- `succession_stage` (syntropic agriculture internal codes)
 - `leaf_shape`, `leaf_compoundness`, `leaf_type` (botanical terms)
 
 ### Issue I: noxious_status and weed_potential are boolean INTs, not categoricals
@@ -313,15 +285,18 @@ DB values: `Epiphyte, Forb, Graminoid, Herb, Shrub, Subshrub, Tree, Vine`
 | 5 | Stale locale pattern affects all fields | **Fixed** — same locale-scoped cache |
 | 6 | Inconsistent locale refresh | **Partially fixed** — sidebar lists reload on locale change |
 | 9 | Life cycle filter section missing | **Fixed** — FilterStrip row added |
+| C | deciduous_evergreen translations missing | **Fixed** — added to schema-contract.json |
+| E | flower_color composite values untranslated | **Fixed** — `translate_composite_value()` splits on `/` |
+| F | fruit_type zero translations | **Fixed** — 16 values added to schema-contract.json |
+| H | 92% categorical fields untranslated | **Fixed** — 11 high-priority fields added (1050 total entries) |
 
 ## Recommended Next Actions
 
 ### App-side (this repo)
 
-1. **Fix deciduous_evergreen case** (Issue C): change `schema-contract.json` key from `"Semi-evergreen"` to `"Semi-Evergreen"`, regenerate DB
-2. **Add fruit_type translations** (Issue F): add 16 entries to `schema-contract.json`, regenerate DB
-3. **Add high-priority categorical translations** (Issue H): add entries for the 10 fields listed above
-4. **Consider flower_color split** (Issue E): display-layer split of composite values before translation
+All high-priority app-side issues (C, E, F, H) have been fixed. Remaining app-side work:
+- Monitor for new categorical fields that need translations as canopi-data evolves
+- Consider adding low-priority scientific term translations if user feedback warrants it
 
 ### canopi-data side
 

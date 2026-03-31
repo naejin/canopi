@@ -315,6 +315,84 @@
       "Fall, Winter and Spring": {"fr": "Automne, hiver et printemps", "es": "Otoño, invierno y primavera", "pt": "Outono, inverno e primavera", "it": "Autunno, inverno e primavera", "zh": "秋冬春", "de": "Herbst, Winter und Frühling", "ja": "秋冬春", "ko": "가을, 겨울, 봄", "nl": "Herfst, winter en lente", "ru": "Осень, зима и весна"},
       "Spring, Summer, Fall": {"fr": "Printemps, été, automne", "es": "Primavera, verano, otoño", "pt": "Primavera, verão, outono", "it": "Primavera, estate, autunno", "zh": "春夏秋", "de": "Frühling, Sommer, Herbst", "ja": "春夏秋", "ko": "봄, 여름, 가을", "nl": "Lente, zomer, herfst", "ru": "Весна, лето, осень"},
       "Spring, Summer, and Fall": {"fr": "Printemps, été et automne", "es": "Primavera, verano y otoño", "pt": "Primavera, verão e outono", "it": "Primavera, estate e autunno", "zh": "春夏秋", "de": "Frühling, Sommer und Herbst", "ja": "春夏秋", "ko": "봄, 여름, 가을", "nl": "Lente, zomer en herfst", "ru": "Весна, лето и осень"}
+    },
+    "deciduous_evergreen": {
+      "Deciduous": {"fr": "Caduc", "es": "Caducifolio", "pt": "Caduco", "it": "Deciduo", "zh": "落叶", "de": "Laubabwerfend", "ja": "落葉", "ko": "낙엽", "nl": "Bladverliezend", "ru": "Листопадное"},
+      "Evergreen": {"fr": "Persistant", "es": "Perenne", "pt": "Perene", "it": "Sempreverde", "zh": "常绿", "de": "Immergrün", "ja": "常緑", "ko": "상록", "nl": "Groenblijvend", "ru": "Вечнозелёное"},
+      "Semi-Evergreen": {"fr": "Semi-persistant", "es": "Semicaducifolio", "pt": "Semi-perene", "it": "Semi-sempreverde", "zh": "半常绿", "de": "Halbimmergrün", "ja": "半常緑", "ko": "반상록", "nl": "Half-groenblijvend", "ru": "Полувечнозелёное"}
+    },
+    "drought_tolerance": {
+      "High": {"fr": "Élevée", "es": "Alta", "pt": "Alta", "it": "Alta", "zh": "高", "de": "Hoch", "ja": "高", "ko": "높음", "nl": "Hoog", "ru": "Высокая"},
+      "Low": {"fr": "Faible", "es": "Baja", "pt": "Baixa", "it": "Bassa", "zh": "低", "de": "Niedrig", "ja": "低", "ko": "낮음", "nl": "Laag", "ru": "Низкая"},
+      "Medium": {"fr": "Moyenne", "es": "Media", "pt": "Média", "it": "Media", "zh": "中", "de": "Mittel", "ja": "中", "ko": "보통", "nl": "Gemiddeld", "ru": "Средняя"},
+      "None": {"fr": "Aucune", "es": "Ninguna", "pt": "Nenhuma", "it": "Nessuna", "zh": "无", "de": "Keine", "ja": "なし", "ko": "없음", "nl": "Geen", "ru": "Отсутствует"}
+    },
+    "fertility_requirement": {
+      "High": {"fr": "Élevée", "es": "Alta", "pt": "Alta", "it": "Alta", "zh": "高", "de": "Hoch", "ja": "高", "ko": "높음", "nl": "Hoog", "ru": "Высокая"},
+      "Low": {"fr": "Faible", "es": "Baja", "pt": "Baixa", "it": "Bassa", "zh": "低", "de": "Niedrig", "ja": "低", "ko": "낮음", "nl": "Laag", "ru": "Низкая"},
+      "Medium": {"fr": "Moyenne", "es": "Media", "pt": "Média", "it": "Media", "zh": "中", "de": "Mittel", "ja": "中", "ko": "보통", "nl": "Gemiddeld", "ru": "Средняя"}
+    },
+    "moisture_use": {
+      "High": {"fr": "Élevée", "es": "Alta", "pt": "Alta", "it": "Alta", "zh": "高", "de": "Hoch", "ja": "高", "ko": "높음", "nl": "Hoog", "ru": "Высокая"},
+      "Low": {"fr": "Faible", "es": "Baja", "pt": "Baixa", "it": "Bassa", "zh": "低", "de": "Niedrig", "ja": "低", "ko": "낮음", "nl": "Laag", "ru": "Низкая"},
+      "Medium": {"fr": "Moyenne", "es": "Media", "pt": "Média", "it": "Media", "zh": "中", "de": "Mittel", "ja": "中", "ko": "보통", "nl": "Gemiddeld", "ru": "Средняя"}
+    },
+    "anaerobic_tolerance": {
+      "High": {"fr": "Élevée", "es": "Alta", "pt": "Alta", "it": "Alta", "zh": "高", "de": "Hoch", "ja": "高", "ko": "높음", "nl": "Hoog", "ru": "Высокая"},
+      "Low": {"fr": "Faible", "es": "Baja", "pt": "Baixa", "it": "Bassa", "zh": "低", "de": "Niedrig", "ja": "低", "ko": "낮음", "nl": "Laag", "ru": "Низкая"},
+      "Medium": {"fr": "Moyenne", "es": "Media", "pt": "Média", "it": "Media", "zh": "中", "de": "Mittel", "ja": "中", "ko": "보통", "nl": "Gemiddeld", "ru": "Средняя"},
+      "None": {"fr": "Aucune", "es": "Ninguna", "pt": "Nenhuma", "it": "Nessuna", "zh": "无", "de": "Keine", "ja": "なし", "ko": "없음", "nl": "Geen", "ru": "Отсутствует"}
+    },
+    "fruit_seed_abundance": {
+      "High": {"fr": "Élevée", "es": "Alta", "pt": "Alta", "it": "Alta", "zh": "高", "de": "Hoch", "ja": "高", "ko": "높음", "nl": "Hoog", "ru": "Высокая"},
+      "Low": {"fr": "Faible", "es": "Baja", "pt": "Baixa", "it": "Bassa", "zh": "低", "de": "Niedrig", "ja": "低", "ko": "낮음", "nl": "Laag", "ru": "Низкая"},
+      "Medium": {"fr": "Moyenne", "es": "Media", "pt": "Média", "it": "Media", "zh": "中", "de": "Mittel", "ja": "中", "ko": "보통", "nl": "Gemiddeld", "ru": "Средняя"},
+      "None": {"fr": "Aucune", "es": "Ninguna", "pt": "Nenhuma", "it": "Nessuna", "zh": "无", "de": "Keine", "ja": "なし", "ko": "없음", "nl": "Geen", "ru": "Отсутствует"}
+    },
+    "toxicity": {
+      "Moderate": {"fr": "Modérée", "es": "Moderada", "pt": "Moderada", "it": "Moderata", "zh": "中等", "de": "Mäßig", "ja": "中程度", "ko": "보통", "nl": "Matig", "ru": "Умеренная"},
+      "None": {"fr": "Aucune", "es": "Ninguna", "pt": "Nenhuma", "it": "Nessuna", "zh": "无", "de": "Keine", "ja": "なし", "ko": "없음", "nl": "Geen", "ru": "Отсутствует"},
+      "Severe": {"fr": "Sévère", "es": "Severa", "pt": "Severa", "it": "Severa", "zh": "严重", "de": "Schwer", "ja": "重度", "ko": "심각", "nl": "Ernstig", "ru": "Тяжёлая"},
+      "Slight": {"fr": "Légère", "es": "Leve", "pt": "Leve", "it": "Leggera", "zh": "轻微", "de": "Leicht", "ja": "軽度", "ko": "경미", "nl": "Licht", "ru": "Лёгкая"}
+    },
+    "invasive_potential": {
+      "Introduced": {"fr": "Introduite", "es": "Introducida", "pt": "Introduzida", "it": "Introdotta", "zh": "引入", "de": "Eingeführt", "ja": "外来", "ko": "도입", "nl": "Geïntroduceerd", "ru": "Интродуцированное"},
+      "Invasive": {"fr": "Invasive", "es": "Invasora", "pt": "Invasora", "it": "Invasiva", "zh": "入侵", "de": "Invasiv", "ja": "侵略的", "ko": "침입", "nl": "Invasief", "ru": "Инвазивное"},
+      "Native": {"fr": "Indigène", "es": "Nativa", "pt": "Nativa", "it": "Autoctona", "zh": "原生", "de": "Einheimisch", "ja": "在来", "ko": "자생", "nl": "Inheems", "ru": "Аборигенное"},
+      "Naturalized": {"fr": "Naturalisée", "es": "Naturalizada", "pt": "Naturalizada", "it": "Naturalizzata", "zh": "归化", "de": "Eingebürgert", "ja": "帰化", "ko": "귀화", "nl": "Genaturaliseerd", "ru": "Натурализованное"},
+      "Potentially Invasive": {"fr": "Potentiellement invasive", "es": "Potencialmente invasora", "pt": "Potencialmente invasora", "it": "Potenzialmente invasiva", "zh": "潜在入侵", "de": "Potenziell invasiv", "ja": "潜在的侵略", "ko": "잠재적 침입", "nl": "Potentieel invasief", "ru": "Потенциально инвазивное"}
+    },
+    "seed_dispersal_mechanism": {
+      "Animal": {"fr": "Animal", "es": "Animal", "pt": "Animal", "it": "Animale", "zh": "动物", "de": "Tier", "ja": "動物", "ko": "동물", "nl": "Dier", "ru": "Животное"},
+      "Ant": {"fr": "Fourmi", "es": "Hormiga", "pt": "Formiga", "it": "Formica", "zh": "蚂蚁", "de": "Ameise", "ja": "アリ", "ko": "개미", "nl": "Mier", "ru": "Муравей"},
+      "Ballistic": {"fr": "Balistique", "es": "Balística", "pt": "Balística", "it": "Balistica", "zh": "弹射", "de": "Ballistisch", "ja": "弾道", "ko": "탄도", "nl": "Ballistisch", "ru": "Баллистическое"},
+      "Gravity": {"fr": "Gravité", "es": "Gravedad", "pt": "Gravidade", "it": "Gravità", "zh": "重力", "de": "Schwerkraft", "ja": "重力", "ko": "중력", "nl": "Zwaartekracht", "ru": "Гравитация"},
+      "Self": {"fr": "Autochorie", "es": "Autocoria", "pt": "Autocoria", "it": "Autocoria", "zh": "自播", "de": "Selbstausbreitung", "ja": "自力", "ko": "자가", "nl": "Zelfverspreiding", "ru": "Самораспространение"},
+      "Water": {"fr": "Eau", "es": "Agua", "pt": "Água", "it": "Acqua", "zh": "水", "de": "Wasser", "ja": "水", "ko": "물", "nl": "Water", "ru": "Вода"},
+      "Wind": {"fr": "Vent", "es": "Viento", "pt": "Vento", "it": "Vento", "zh": "风", "de": "Wind", "ja": "風", "ko": "바람", "nl": "Wind", "ru": "Ветер"}
+    },
+    "reproductive_type": {
+      "Seed": {"fr": "Graine", "es": "Semilla", "pt": "Semente", "it": "Seme", "zh": "种子", "de": "Samen", "ja": "種子", "ko": "종자", "nl": "Zaad", "ru": "Семена"},
+      "Seed and Vegetative": {"fr": "Graine et végétatif", "es": "Semilla y vegetativa", "pt": "Semente e vegetativa", "it": "Seme e vegetativa", "zh": "种子和营养", "de": "Samen und vegetativ", "ja": "種子と栄養", "ko": "종자 및 영양", "nl": "Zaad en vegetatief", "ru": "Семена и вегетативное"},
+      "Vegetative": {"fr": "Végétatif", "es": "Vegetativa", "pt": "Vegetativa", "it": "Vegetativa", "zh": "营养", "de": "Vegetativ", "ja": "栄養", "ko": "영양", "nl": "Vegetatief", "ru": "Вегетативное"}
+    },
+    "fruit_type": {
+      "Aggregate Drupelets": {"fr": "Drupéoles agrégées", "es": "Drupas agregadas", "pt": "Drupas agregadas", "it": "Drupeole aggregate", "zh": "聚合核果", "de": "Sammelsteinfrucht", "ja": "集合核果", "ko": "집합핵과", "nl": "Samengestelde steenvruchtjes", "ru": "Сборная костянка"},
+      "Aggregate Follicles": {"fr": "Follicules agrégés", "es": "Folículos agregados", "pt": "Folículos agregados", "it": "Follicoli aggregati", "zh": "聚合蓇葖果", "de": "Sammelbalgfrucht", "ja": "集合袋果", "ko": "집합골돌과", "nl": "Samengestelde kokervruchtjes", "ru": "Сборная листовка"},
+      "Aggregate Nutlets": {"fr": "Nucules agrégées", "es": "Núculas agregadas", "pt": "Núculas agregadas", "it": "Nucule aggregate", "zh": "聚合小坚果", "de": "Sammelnüsschen", "ja": "集合小堅果", "ko": "집합소견과", "nl": "Samengestelde nootjes", "ru": "Сборный орешек"},
+      "Apocarpous": {"fr": "Apocarpe", "es": "Apocárpico", "pt": "Apocárpico", "it": "Apocarpico", "zh": "离心皮", "de": "Apokarp", "ja": "離心皮", "ko": "이심피", "nl": "Apocarp", "ru": "Апокарпный"},
+      "Berry": {"fr": "Baie", "es": "Baya", "pt": "Baga", "it": "Bacca", "zh": "浆果", "de": "Beere", "ja": "液果", "ko": "장과", "nl": "Bes", "ru": "Ягода"},
+      "Capsule": {"fr": "Capsule", "es": "Cápsula", "pt": "Cápsula", "it": "Capsula", "zh": "蒴果", "de": "Kapsel", "ja": "蒴果", "ko": "삭과", "nl": "Doosvrucht", "ru": "Коробочка"},
+      "Drupe": {"fr": "Drupe", "es": "Drupa", "pt": "Drupa", "it": "Drupa", "zh": "核果", "de": "Steinfrucht", "ja": "核果", "ko": "핵과", "nl": "Steenvrucht", "ru": "Костянка"},
+      "Dry": {"fr": "Sec", "es": "Seco", "pt": "Seco", "it": "Secco", "zh": "干果", "de": "Trockenfrucht", "ja": "乾果", "ko": "건과", "nl": "Droog", "ru": "Сухой"},
+      "Fleshy": {"fr": "Charnu", "es": "Carnoso", "pt": "Carnoso", "it": "Carnoso", "zh": "肉质果", "de": "Fleischfrucht", "ja": "多肉果", "ko": "다육과", "nl": "Vlezige vrucht", "ru": "Сочный"},
+      "Follicle": {"fr": "Follicule", "es": "Folículo", "pt": "Folículo", "it": "Follicolo", "zh": "蓇葖果", "de": "Balgfrucht", "ja": "袋果", "ko": "골돌과", "nl": "Kokervrucht", "ru": "Листовка"},
+      "Legume": {"fr": "Gousse", "es": "Legumbre", "pt": "Legume", "it": "Legume", "zh": "荚果", "de": "Hülse", "ja": "豆果", "ko": "협과", "nl": "Peulvrucht", "ru": "Боб"},
+      "Lomentum": {"fr": "Loment", "es": "Lomento", "pt": "Lomento", "it": "Lomento", "zh": "节荚", "de": "Gliederhülse", "ja": "節果", "ko": "절과", "nl": "Ledige peul", "ru": "Членистый боб"},
+      "Nut": {"fr": "Noix", "es": "Nuez", "pt": "Noz", "it": "Noce", "zh": "坚果", "de": "Nuss", "ja": "堅果", "ko": "견과", "nl": "Noot", "ru": "Орех"},
+      "Pome": {"fr": "Pomme", "es": "Pomo", "pt": "Pomo", "it": "Pomo", "zh": "梨果", "de": "Apfelfrucht", "ja": "仁果", "ko": "이과", "nl": "Appelvrucht", "ru": "Яблоко"},
+      "Schizocarp": {"fr": "Schizocarpe", "es": "Esquizocarpo", "pt": "Esquizocarpo", "it": "Schizocarpo", "zh": "分果", "de": "Spaltfrucht", "ja": "分果", "ko": "분과", "nl": "Splitvrucht", "ru": "Дробный плод"},
+      "Silique": {"fr": "Silique", "es": "Silicua", "pt": "Síliqua", "it": "Siliqua", "zh": "长角果", "de": "Schote", "ja": "長角果", "ko": "장각과", "nl": "Hauw", "ru": "Стручок"}
     }
   }
 }

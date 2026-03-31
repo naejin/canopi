@@ -3,7 +3,7 @@ use common_types::species::{
 };
 use rusqlite::{Connection, OptionalExtension};
 
-use super::lookup::{get_common_name, translate_value};
+use super::lookup::{get_common_name, translate_composite_value, translate_value};
 
 pub fn get_detail(
     conn: &Connection,
@@ -646,7 +646,7 @@ pub fn get_detail(
         ),
     ] {
         if let Some(ref value) = getter {
-            *setter = Some(translate_value(conn, field, value, locale));
+            *setter = Some(translate_composite_value(conn, field, value, locale));
         }
     }
 
