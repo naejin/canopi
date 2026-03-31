@@ -26,6 +26,8 @@ interface Props<T> {
   menuClassName?: string
   /** Extra class on each option button. */
   optionClassName?: string
+  /** Prevent parent overlays from treating this dropdown as an outside click. */
+  preserveOverlays?: boolean
 }
 
 export function Dropdown<T>({
@@ -39,6 +41,7 @@ export function Dropdown<T>({
   triggerClassName,
   menuClassName,
   optionClassName,
+  preserveOverlays = false,
 }: Props<T>) {
   const open = useSignal(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -70,7 +73,11 @@ export function Dropdown<T>({
   const menuDirClass = menuDirection === 'up' ? styles.menuUp : styles.menuDown
 
   return (
-    <div className={`${styles.dropdown}${className ? ` ${className}` : ''}`} ref={ref}>
+    <div
+      className={`${styles.dropdown}${className ? ` ${className}` : ''}`}
+      ref={ref}
+      data-preserve-overlays={preserveOverlays ? 'true' : undefined}
+    >
       <button
         ref={triggerRef}
         className={`${styles.trigger}${triggerClassName ? ` ${triggerClassName}` : ''}`}

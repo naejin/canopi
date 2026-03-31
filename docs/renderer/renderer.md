@@ -20,6 +20,7 @@ These are the current canonical seams and must be preserved unless this file is 
 - `RenderReconciler` owns render invalidation, RAF batching, deferred scheduling, and stage-transform invalidation
 - `render-pipeline.ts` is the execution delegate behind the reconciler
 - `CanvasViewport` routes stage transforms through the engine-owned transform path
+- `canvas/rulers.ts` owns the renderer-managed HTML overlay chrome seam for screen-space rulers and scale bar
 - `CanvasHistory.execute/record/undo/redo` invalidate render passes instead of forcing generic full reconcile
 - command classes declare `dirtyPasses`
 - `document-session.ts` backfills plant display attrs after load and guards stale async completions with a document-load epoch
@@ -81,6 +82,7 @@ This follow-up is also complete on the current build.
 Closed regressions from the 2026-03-30 manual pass:
 - canopy-mode fallback circles for plants without canopy spread data now scale coherently during wheel and button zoom
 - the bottom-left scale bar now stays above the bottom canvas bar/panel and the legend stays above the scale bar
+- the scale bar is now rendered through the HTML overlay chrome seam instead of a Konva UI node, removing drag-time jitter while preserving renderer-owned redraw control
 - vertical host growth now resizes the stage and rulers correctly without leaving blank canvas at the bottom
 - targeted renderer tests were updated in the same patch
 
@@ -231,6 +233,7 @@ Current write ownership for renderer follow-up work:
 | `canvas/runtime/render-reconciler.ts` | scheduling, pass invalidation, deferred timing |
 | `canvas/runtime/render-pipeline.ts` | pass execution helpers |
 | `canvas/runtime/viewport.ts` | transform routing only |
+| `canvas/rulers.ts` | renderer-managed HTML overlay chrome for rulers and scale bar |
 | `canvas/history.ts` | mutation-to-pass invalidation contract |
 | `canvas/plants.ts` | density / stacking / plant LOD helpers |
 | `canvas/runtime/document-session.ts` | load hydration and async session safety |

@@ -1,7 +1,7 @@
 use common_types::species::{DynamicFilterOptions, FilterOptions, FilterValue};
 use rusqlite::Connection;
 
-use super::lookup::translate_value;
+use super::lookup::translate_composite_value;
 
 pub fn get_filter_options(conn: &Connection) -> Result<FilterOptions, String> {
     let families: Vec<String> = distinct_text_values(
@@ -128,7 +128,7 @@ pub fn get_dynamic_filter_options(
             .map_err(|e| format!("Failed to fetch values for {field}: {e}"))?
             .filter_map(|result| result.ok())
             .map(|value| FilterValue {
-                label: translate_value(conn, field, &value, locale),
+                label: translate_composite_value(conn, field, &value, locale),
                 value,
             })
             .collect();
