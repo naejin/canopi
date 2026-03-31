@@ -8,10 +8,14 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  CANOPI_CORE_DB_RELEASE_TAG: canopi-core-db
+  CANOPI_CORE_DB_ASSET_NAME: canopi-core.db
 
 jobs:
   lint:
     runs-on: ubuntu-latest
+    env:
+      CANOPI_SKIP_BUNDLED_DB: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -50,6 +54,8 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    env:
+      CANOPI_SKIP_BUNDLED_DB: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -154,6 +160,18 @@ jobs:
 
       - name: Install frontend deps
         run: npm ci --prefix desktop/web
+
+      - name: Download bundled plant DB
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          mkdir -p desktop/resources
+          gh release download "$CANOPI_CORE_DB_RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "$CANOPI_CORE_DB_ASSET_NAME" \
+            --dir desktop/resources
+          test -s "desktop/resources/$CANOPI_CORE_DB_ASSET_NAME"
 
       - name: Build Tauri app
         run: npx --prefix desktop/web @tauri-apps/cli build --target ${{ matrix.target }}
