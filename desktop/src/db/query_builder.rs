@@ -182,6 +182,29 @@ mod tests {
     }
 
     #[test]
+    fn test_newly_exposed_filter_fields_are_allowlisted() {
+        for field in [
+            "tolerates_nutritionally_poor",
+            "raunkiaer_life_form",
+            "photosynthesis_pathway",
+            "ellenberg_light",
+            "ellenberg_temperature",
+            "ellenberg_moisture",
+            "ellenberg_reaction",
+            "ellenberg_nitrogen",
+            "ellenberg_salt",
+            "mating_system",
+            "clonal_growth_form",
+            "storage_organ",
+        ] {
+            assert!(
+                validated_column(field).is_some(),
+                "expected '{field}' to be allowlisted for dynamic filters"
+            );
+        }
+    }
+
+    #[test]
     fn test_relevance_sort_uses_offset_pagination() {
         let qb = QueryBuilder::new(
             Some("lavender".to_owned()),

@@ -52,6 +52,7 @@ export const FIELD_REGISTRY: FieldDef[] = [
   { key: 'fertility_requirement', type: 'categorical', category: 'climate', i18nKey: 'filters.field.fertilityRequirement', color: '--color-sun' },
   { key: 'moisture_use', type: 'categorical', category: 'climate', i18nKey: 'filters.field.moistureUse', color: '--color-sun' },
   { key: 'anaerobic_tolerance', type: 'categorical', category: 'climate', i18nKey: 'filters.field.anaerobicTolerance', color: '--color-sun' },
+  { key: 'tolerates_nutritionally_poor', type: 'boolean', category: 'climate', i18nKey: 'filters.field.toleratesNutritionallyPoor', color: '--color-sun' },
 
   // Ecology
   { key: 'succession_stage', type: 'categorical', category: 'ecology', i18nKey: 'filters.field.successionStage', color: '--color-nitrogen' },
@@ -62,6 +63,14 @@ export const FIELD_REGISTRY: FieldDef[] = [
   { key: 'root_system_type', type: 'categorical', category: 'ecology', i18nKey: 'filters.field.rootSystemType', color: '--color-nitrogen' },
   { key: 'attracts_wildlife', type: 'boolean', category: 'ecology', i18nKey: 'filters.field.attractsWildlife', color: '--color-nitrogen' },
   { key: 'cn_ratio', type: 'categorical', category: 'ecology', i18nKey: 'filters.field.cnRatio', color: '--color-nitrogen' },
+  { key: 'raunkiaer_life_form', type: 'categorical', category: 'ecology', i18nKey: 'filters.field.raunkiaerLifeForm', color: '--color-nitrogen' },
+  { key: 'photosynthesis_pathway', type: 'categorical', category: 'ecology', i18nKey: 'filters.field.photosynthesisPathway', color: '--color-nitrogen' },
+  { key: 'ellenberg_light', type: 'numeric', category: 'ecology', i18nKey: 'filters.field.ellenbergLight', color: '--color-nitrogen' },
+  { key: 'ellenberg_temperature', type: 'numeric', category: 'ecology', i18nKey: 'filters.field.ellenbergTemperature', color: '--color-nitrogen' },
+  { key: 'ellenberg_moisture', type: 'numeric', category: 'ecology', i18nKey: 'filters.field.ellenbergMoisture', color: '--color-nitrogen' },
+  { key: 'ellenberg_reaction', type: 'numeric', category: 'ecology', i18nKey: 'filters.field.ellenbergReaction', color: '--color-nitrogen' },
+  { key: 'ellenberg_nitrogen', type: 'numeric', category: 'ecology', i18nKey: 'filters.field.ellenbergNitrogen', color: '--color-nitrogen' },
+  { key: 'ellenberg_salt', type: 'numeric', category: 'ecology', i18nKey: 'filters.field.ellenbergSalt', color: '--color-nitrogen' },
 
   // Reproduction
   { key: 'pollination_syndrome', type: 'categorical', category: 'reproduce', i18nKey: 'filters.field.pollinationSyndrome', color: '--color-medicinal' },
@@ -70,6 +79,9 @@ export const FIELD_REGISTRY: FieldDef[] = [
   { key: 'sexual_system', type: 'categorical', category: 'reproduce', i18nKey: 'filters.field.sexualSystem', color: '--color-medicinal' },
   { key: 'vegetative_spread_rate', type: 'categorical', category: 'reproduce', i18nKey: 'filters.field.vegetativeSpreadRate', color: '--color-medicinal' },
   { key: 'seed_spread_rate', type: 'categorical', category: 'reproduce', i18nKey: 'filters.field.seedSpreadRate', color: '--color-medicinal' },
+  { key: 'mating_system', type: 'categorical', category: 'reproduce', i18nKey: 'filters.field.matingSystem', color: '--color-medicinal' },
+  { key: 'clonal_growth_form', type: 'categorical', category: 'reproduce', i18nKey: 'filters.field.clonalGrowthForm', color: '--color-medicinal' },
+  { key: 'storage_organ', type: 'categorical', category: 'reproduce', i18nKey: 'filters.field.storageOrgan', color: '--color-medicinal' },
 
   // Fruit & Seed
   { key: 'fruit_type', type: 'categorical', category: 'fruit', i18nKey: 'filters.field.fruitType', color: '--color-edible' },

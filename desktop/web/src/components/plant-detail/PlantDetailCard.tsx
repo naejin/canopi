@@ -195,11 +195,13 @@ export function PlantDetailCard({ canonicalName }: Props) {
     || d.root_system_type !== null || d.taproot_persistent !== null
     || d.ellenberg_light !== null || d.ellenberg_temperature !== null
     || d.ellenberg_moisture !== null || d.ellenberg_reaction !== null
-    || d.ellenberg_nitrogen !== null || d.ellenberg_salt !== null;
+    || d.ellenberg_nitrogen !== null || d.ellenberg_salt !== null
+    || d.photosynthesis_pathway !== null;
 
   const hasGrowthForm = d.growth_form_type !== null || d.growth_form_shape !== null
     || d.growth_habit !== null || d.woody !== null || d.canopy_position !== null
-    || d.resprout_ability !== null || d.coppice_potential !== null;
+    || d.resprout_ability !== null || d.coppice_potential !== null
+    || d.wood_density_g_cm3 !== null;
 
   const hasPropagation = d.propagated_by_seed !== null || d.propagated_by_cuttings !== null
     || d.propagated_by_bare_root !== null || d.propagated_by_container !== null
@@ -237,7 +239,8 @@ export function PlantDetailCard({ canonicalName }: Props) {
 
   const hasNotes = d.summary !== null || d.cultivation_notes !== null
     || d.propagation_notes !== null || d.native_range !== null || d.carbon_farming !== null
-    || d.physical_characteristics !== null || d.habitats !== null;
+    || d.physical_characteristics !== null || d.habitats !== null
+    || d.native_distribution !== null || d.introduced_distribution !== null;
 
   const hasRelated = d.relationships.length > 0;
 
@@ -457,6 +460,7 @@ export function PlantDetailCard({ canonicalName }: Props) {
               <Attr label={t('plantDetail.raunkiaerLifeForm')} value={d.raunkiaer_life_form} />
               <Attr label={t('plantDetail.cnRatio')} value={d.cn_ratio} />
               <Attr label={t('plantDetail.rootSystemType')} value={d.root_system_type} />
+              <Attr label={t('plantDetail.photosynthesisPathway')} value={d.photosynthesis_pathway} />
             </div>
             <div className={styles.boolRow}>
               <BoolChip label={t('plantDetail.nitrogenFixer')} value={d.nitrogen_fixer} />
@@ -488,6 +492,7 @@ export function PlantDetailCard({ canonicalName }: Props) {
               <Attr label={t('plantDetail.growthFormShape')} value={d.growth_form_shape} />
               <Attr label={t('plantDetail.growthHabit')} value={d.growth_habit} />
               <Attr label={t('plantDetail.canopyPosition')} value={d.canopy_position} />
+              <NumAttr label={t('plantDetail.woodDensity')} value={d.wood_density_g_cm3} unit=" g/cm³" />
             </div>
             <div className={styles.boolRow}>
               <BoolChip label={t('plantDetail.woody')} value={d.woody} />
@@ -621,6 +626,8 @@ export function PlantDetailCard({ canonicalName }: Props) {
             <TextBlock label={t('plantDetail.propagationNotes')} text={d.propagation_notes} />
             <TextBlock label={t('plantDetail.habitats')} text={d.habitats} />
             <TextBlock label={t('plantDetail.nativeRange')} text={d.native_range} />
+            <TextBlock label={t('plantDetail.nativeDistribution')} text={d.native_distribution} />
+            <TextBlock label={t('plantDetail.introducedDistribution')} text={d.introduced_distribution} />
             <TextBlock label={t('plantDetail.carbonFarming')} text={d.carbon_farming} />
           </CollapsibleSection>
         )}
