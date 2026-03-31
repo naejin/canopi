@@ -73,6 +73,9 @@ pub fn get_dynamic_filter_options(
 
     for field in fields {
         let Some(column) = crate::db::query_builder::validated_column(field) else {
+            tracing::warn!(
+                "Dynamic filter field is not allowlisted in this backend build: {field}"
+            );
             continue;
         };
         let column_name = column.strip_prefix("s.").unwrap_or(column);

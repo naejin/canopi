@@ -46,7 +46,7 @@ jobs:
         run: npm ci --prefix desktop/web
 
       - name: TypeScript check
-        run: npx --prefix desktop/web tsc --noEmit
+        run: npx --prefix desktop/web tsc --noEmit -p desktop/web/tsconfig.json
 
   test:
     runs-on: ubuntu-latest
