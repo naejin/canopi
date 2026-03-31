@@ -174,6 +174,8 @@ export interface SpeciesDetail {
   seed_dispersal_mechanism: string | null;
   seed_storage_behaviour: string | null;
   seed_dormancy_type: string | null;
+  seed_dormancy_depth: string | null;
+  serotinous: boolean | null;
   seedbank_type: string | null;
   // Leaf
   leaf_type: string | null;
@@ -198,6 +200,7 @@ export interface SpeciesDetail {
   toxicity: string | null;
   known_hazards: string | null;
   invasive_potential: string | null;
+  biogeographic_status: string | null;
   noxious_status: boolean | null;
   invasive_usda: boolean | null;
   weed_potential: boolean | null;

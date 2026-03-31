@@ -294,6 +294,7 @@ Rules:
 - one writer per hotspot at a time
 - do not parallelize through a hotspot file
 - split authority before splitting execution
+- plant DB detail query order must have one local owner; do not spread positional mapping across multiple edit sites
 
 ### 5.7 Shared-Asset Batching Rule
 
@@ -340,6 +341,7 @@ These are implementation rules, not optional style preferences.
 - add or update targeted tests with the implementation change
 - run targeted checks before broader suites
 - do not claim stability from architecture work without verification evidence
+- plant DB schema/field changes must land with contract-alignment tests and the matching doc updates
 
 ### 6.4 Do Not Mix Tracks
 

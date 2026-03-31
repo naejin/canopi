@@ -149,6 +149,8 @@ pub struct SpeciesDetail {
     pub seed_dispersal_mechanism: Option<String>,
     pub seed_storage_behaviour: Option<String>,
     pub seed_dormancy_type: Option<String>,
+    pub seed_dormancy_depth: Option<String>,
+    pub serotinous: Option<bool>,
     pub seedbank_type: Option<String>,
     // Leaf
     pub leaf_type: Option<String>,
@@ -172,6 +174,7 @@ pub struct SpeciesDetail {
     pub toxicity: Option<String>,
     pub known_hazards: Option<String>,
     pub invasive_potential: Option<String>,
+    pub biogeographic_status: Option<String>,
     pub noxious_status: Option<bool>,
     pub invasive_usda: Option<bool>,
     pub weed_potential: Option<bool>,

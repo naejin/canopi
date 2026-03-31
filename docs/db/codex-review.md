@@ -44,15 +44,13 @@ Comprehensive audit of every filter in the plant DB panel — FilterStrip (alway
 
 ## MoreFilters Dynamic Fields — Issues Found
 
-### Issue A: habit contains life-cycle values (canopi-data)
+### ~~Issue A~~: habit contains life-cycle values (canopi-data)
 
-**Status**: Documented, awaiting upstream fix
+**Status: Fixed** (canopi-data `d647d6b`)
 
-DB `habit` column contains `Annual`, `Biennial`, `Perennial` alongside growth-form values (`Tree`, `Shrub`, `Climber`, etc.). These are life-cycle classifications, not growth forms. The canopi-data `Habit` StrEnum defines these as lowercase (`"annual"`, `"tree"`), but the export produces Title Case (`"Annual"`, `"Tree"`). The app's boolean columns `is_annual`/`is_biennial`/`is_perennial` already capture life cycle correctly.
+Habit enum trimmed to 3 values: `Tree`, `Shrub`, `Climber`. Life-cycle values backfilled to `is_annual`/`is_biennial`/`is_perennial` booleans (985 newly set). Storage organs (`Bulb`/`Corm`) migrated to `storage_organ`. Taxonomic groups (`Bamboo` → `growth_form_type="Graminoid"`, `Fern` → `growth_form_type="Fern"`, `Lichen` → NULL).
 
-**Root cause**: canopi-data `Habit` enum conflates PFAF's mixed habit/life-cycle field. The export pipeline title-cases the enum values before writing to the export DB.
-
-**Fix**: canopi-data — remove `annual`, `biennial`, `perennial` from `Habit` enum; assign real growth forms to affected species (usually `herb` or null). Also normalize the export to match the enum case consistently.
+**App action**: Update schema-contract habit values to `["Tree", "Shrub", "Climber"]` only. Remove all other habit translation keys.
 
 ### Issue B: habit translation keys are Title Case — matches DB (app-side, verified correct)
 
@@ -66,13 +64,13 @@ DB `habit` column contains `Annual`, `Biennial`, `Perennial` alongside growth-fo
 
 **Status: Fixed** — added `deciduous_evergreen` translations to `schema-contract.json` with correct keys (`Deciduous`, `Evergreen`, `Semi-Evergreen`) matching actual DB values. All 3 values now have translations in 10 languages.
 
-### Issue D: bloom_period has duplicate case variants (canopi-data)
+### ~~Issue D~~: bloom_period has duplicate case variants (canopi-data)
 
-DB has 22 distinct values but 5 appear in both Title Case and lowercase: `Early Spring`/`early spring`, `Early Summer`/`early summer`, `Indeterminate`/`indeterminate`, `Late Spring`/`late spring`, `Late Summer`/`late summer`. Only the Title Case versions have translations (17 entries). The lowercase duplicates are untranslated.
+**Status: Fixed** (canopi-data `d647d6b`)
 
-**Root cause**: canopi-data normalization is inconsistent — some bloom period values are title-cased, others pass through as lowercase.
+All bloom_period values normalized to Title Case. Lowercase duplicates eliminated. 15 values now have full translations in 19 languages.
 
-**Fix**: canopi-data — normalize all `bloom_period` values to consistent Title Case during export.
+**App action**: Update schema-contract bloom_period values. All values are now Title Case only.
 
 ### ~~Issue E~~: flower_color composite values
 
@@ -82,13 +80,9 @@ DB has 22 distinct values but 5 appear in both Title Case and lowercase: `Early 
 
 **Status: Fixed** — added all 16 fruit_type values to `schema-contract.json` with translations in 10 languages.
 
-### Issue G: root_system_type has translations but zero DB values (canopi-data)
+### ~~Issue G~~: root_system_type has translations but zero DB values (canopi-data)
 
-7 translation entries exist (`adventitious`, `bulbous`, `fibrous`, `rhizomatous`, `stoloniferous`, `tap`, `tuberous`) but the species table has no non-null `root_system_type` values.
-
-**Root cause**: canopi-data does not populate this column from any source.
-
-**Fix**: canopi-data — either populate from PFAF/TRY data sources or remove the column from the schema contract.
+**Status: Partially fixed** (canopi-data) — Added "lateral" to validator (was accepted by GRooT normalizer but rejected by validator, causing silent data loss). Column remains empty pending GRooT data processing. 8 translation entries now (was 7).
 
 ### ~~Issue H~~: categorical field translation coverage
 
@@ -109,20 +103,15 @@ DB stores these as `0`/`1` integers. Field registry correctly marks them as `typ
 
 Botanical/ecological review of every categorical field's values. Issues are classified as canopi-data (upstream normalization) or accepted (usable despite imprecision).
 
-### habit — Multiple taxonomy issues (canopi-data)
+### ~~habit~~ — Multiple taxonomy issues (canopi-data)
 
-DB values: `Annual, Bamboo, Biennial, Bulb, Climber, Corm, Fern, Lichen, Perennial, Shrub, Tree`
+**Status: Fixed** (canopi-data `d647d6b`)
 
-This field conflates four different classification axes from PFAF:
-- **Life cycle** (Annual, Biennial, Perennial) — already flagged in Issue A
-- **Growth form** (Shrub, Tree, Climber) — correct usage
-- **Storage organ** (Bulb, Corm) — these describe underground morphology, not above-ground habit. A tulip (bulb) and a crocus (corm) are both herbaceous perennials by habit
-- **Taxonomic group** (Bamboo, Fern) — bamboo is a grass subfamily (Bambusoideae), not a habit; fern is a division (Polypodiopsida)
-- **Non-plant** (Lichen) — lichens are fungal-algal symbioses, not plants
-
-**Severity**: Medium. PFAF's classifications are widely understood by gardeners even though botanically imprecise. The field is usable for filtering but scientifically misleading.
-
-**Fix (canopi-data)**: Long-term, split into proper growth form (Herb, Shrub, Tree, Climber, Vine) + life cycle (annual/biennial/perennial booleans, already exist) + storage organ (separate column). Short-term, at minimum remove Annual/Biennial/Perennial (Issue A).
+DB values now: `Tree, Shrub, Climber` only. All other values migrated:
+- Life cycle → `is_annual`/`is_biennial`/`is_perennial` booleans
+- Storage organs → `storage_organ` column (`Bulb`, `Corm`)
+- Taxonomic groups → `growth_form_type` (`Graminoid` for Bamboo, `Fern` for Fern)
+- Non-plant (Lichen) → NULL
 
 ### growth_habit — OK
 
@@ -136,21 +125,21 @@ DB values: `Deciduous, Evergreen, Semi-Evergreen`
 
 Standard leaf persistence categories. Correct.
 
-### active_growth_period — Formatting inconsistency (canopi-data)
+### ~~active_growth_period~~ — Formatting inconsistency (canopi-data)
 
-DB values: `Fall, Fall Winter and Spring, Spring, Spring and Fall, Spring and Summer, Spring Summer Fall, Spring Summer and Fall, Summer, Summer and Fall, Year Round`
+**Status: Fixed** (canopi-data `d647d6b`) — Normalized to Oxford comma format: `"Spring, Summer, and Fall"`, `"Fall, Winter, and Spring"`, etc. Two-item conjunctions kept as `"Spring and Fall"`.
 
-Scientifically valid seasonal categories. However, conjunction formatting is inconsistent: `"Spring Summer Fall"` (no conjunction) vs `"Spring Summer and Fall"` (with "and") vs `"Spring and Fall"` (with "and"). These represent the same logical pattern but are stored differently.
+**App action**: Update schema-contract if it had the old conjunction-less values.
 
-**Fix (canopi-data)**: Normalize to consistent format (e.g., always `"Spring, Summer, and Fall"`).
+### ~~bloom_period~~ — Formatting + case issues (canopi-data)
 
-### bloom_period — Formatting + case issues (canopi-data)
+**Status: Fixed** (canopi-data `d647d6b`) — All values Title Case. 17 distinct values. Full translations in 19 languages.
 
-Already documented in Issue D (duplicate case variants). Additionally: `"Spring-Summer"` uses a hyphen while `"Spring and Summer"` would use a conjunction — inconsistent separators.
+### flower_color — OK (separator normalized)
 
-### flower_color — OK (composite translation gap noted in Issue E)
+All values are botanically valid flower colors. Composite values now use `, ` (comma-space) separator: `Blue, Purple`, `White, Yellow`. Previously mixed `/` and `,` separators.
 
-All 25 values are botanically valid flower colors. Composite values (`Blue/Purple`, `White/Yellow`) correctly represent multi-colored flowers. Slash separator is standard.
+**App action**: `translate_composite_value()` should split on `, ` instead of `/`. Or split on `,` with `.trim()` on each part.
 
 ### drought_tolerance, fertility_requirement, moisture_use, anaerobic_tolerance — OK
 
@@ -167,76 +156,55 @@ Uses Ernst Gotsch's syntropic agriculture framework:
 
 This is standard terminology for the app's target audience (agroecological designers). The word "placenta" may confuse general users but is correct in syntropic agriculture. Translations could help (e.g., "Pioneer I" in English-friendly labeling) but the raw values are appropriate for the domain.
 
-### mycorrhizal_type — Scientifically correct, one naming issue (canopi-data)
+### ~~mycorrhizal_type~~ — Scientifically correct, one naming issue (canopi-data)
 
-DB values: `AM, AM/ECM, AM/NM, ECM, Ericoid, NM, Orchid, mixed`
+**Status: Fixed** (canopi-data `d647d6b`) — `mixed` → `Mixed` (casing normalized). 642 species updated.
 
-All values are legitimate mycorrhizal categories:
-- **AM** (Arbuscular Mycorrhiza) — found in ~80% of plant species ✓
-- **ECM** (Ectomycorrhiza) — found in many trees (oaks, pines, birch) ✓
-- **AM/ECM** — dual mycorrhizal species (e.g., Populus, Salix, Eucalyptus) ✓
-- **AM/NM** — species that are typically AM but can grow without mycorrhiza ✓
-- **NM** (Non-Mycorrhizal) — e.g., Brassicaceae, Chenopodiaceae ✓
-- **Ericoid** — specific to Ericaceae (heaths, blueberries, rhododendrons) ✓ **this is a real mycorrhizal type**
-- **Orchid** — specific to Orchidaceae, essential for orchid germination ✓ **this is a real mycorrhizal type**
-- **mixed** — vague and lowercase while all others are Title Case / uppercase
+DB values now: `AM, AM/ECM, AM/NM, ECM, Ericoid, Mixed, NM, Orchid`
 
-**Issue**: `mixed` is poorly defined (could mean AM/ECM or variable associations) and uses inconsistent casing.
+**App action**: Update schema-contract key from `"mixed"` to `"Mixed"`.
 
-**Fix (canopi-data)**: Replace `mixed` with specific dual types (e.g., `AM/ECM`) or clarify its definition. Normalize case.
+### ~~grime_strategy~~ — Potentially redundant pairs (canopi-data)
 
-### grime_strategy — Potentially redundant pairs (canopi-data)
+**Status: Fixed** (canopi-data `d647d6b`) — Deduplicated: SC→CS, RC→CR, RS→SR. 119 species updated.
 
-DB values: `C, CR, CS, CSR, R, RC, RS, S, SC, SR`
+DB values now: `C, CR, CS, CSR, R, S, SR` (7 values, down from 10).
 
-Grime's CSR plant strategy theory — a fundamental concept in plant ecology. C = Competitor, S = Stress-tolerator, R = Ruderal. However, `CR` and `RC` are listed separately (same for `CS`/`SC` and `RS`/`SR`). In most ecological literature these pairs are treated as synonyms. Some interpretations assign meaning to order (primary vs secondary strategy), but this is uncommon.
+**App action**: Remove `SC`/`RC`/`RS` from schema-contract if present.
 
-**Fix (canopi-data)**: Either deduplicate (merge RC→CR, SC→CS, SR→RS) or document that order is meaningful in the data model.
+### ~~pollination_syndrome~~ — Mixes specificity levels and naming conventions (canopi-data)
 
-### pollination_syndrome — Mixes specificity levels and naming conventions (canopi-data)
+**Status: Fixed** (canopi-data) — Collapsed to 5 broad syndromes: `Entomophilous`, `Anemophilous`, `Zoophilous`, `Hydrophilous`, `Autogamous`. Specific pollinators (Bees, Flies, etc.) migrated to the `pollinators` field (1,161 species backfilled). Cleistogamous → Autogamous. Consistent Latin nomenclature.
 
-DB values: `Anemophilous, Autogamous, Bees, Beetles, Bumblebees, Cleistogamous, Entomophilous, Facultative Autogamous, Flies, Hydrophilous, Lepidoptera, Wasps, Zoophilous`
+**App action**: Update schema-contract pollination_syndrome to 5 values only.
 
-Scientific issues:
-1. **Overlapping hierarchy**: `Entomophilous` (all insects) is a superset of `Bees`, `Beetles`, `Flies`, `Lepidoptera`, `Wasps`. `Zoophilous` (all animals) is a superset of all insect pollinators. A bee-pollinated plant is simultaneously Entomophilous and Zoophilous
-2. **Mixed naming**: Latin terms (`Anemophilous`, `Entomophilous`, `Hydrophilous`) alongside English common names (`Bees`, `Flies`, `Wasps`). Should be consistent
-3. **Cleistogamous** is a mating/reproductive strategy (self-pollination in closed flowers), not a pollination syndrome
-4. **Missing categories**: No bird (ornithophilous) or bat (chiropterophilous) pollination
+### ~~fruit_type~~ — Contains non-type values (canopi-data)
 
-**Fix (canopi-data)**: Standardize naming (all Latin or all English). Separate hierarchy levels — either use broad categories only (Anemophilous, Entomophilous, Hydrophilous, Zoophilous) or specific pollinator groups only (Bees, Beetles, Wind, Water, etc.). Move Cleistogamous to reproductive_type or sexual_system.
+**Status: Fixed** (canopi-data) — Removed "Dry" (4,107 species), "Fleshy" (792), "Apocarpous" (191) → set to NULL. 13 legitimate botanical fruit types remain.
 
-### fruit_type — Contains non-type values (canopi-data)
+**App action**: Remove "Dry", "Fleshy", "Apocarpous" from schema-contract fruit_type values.
 
-DB values: `Aggregate Drupelets, Aggregate Follicles, Aggregate Nutlets, Apocarpous, Berry, Capsule, Drupe, Dry, Fleshy, Follicle, Legume, Lomentum, Nut, Pome, Schizocarp, Silique`
+### ~~seed_dormancy_type~~ — Mixes dormancy types with durations and unrelated traits (canopi-data)
 
-Most values are correct botanical fruit types. Three are not:
-- **Dry** and **Fleshy** — these are fruit *texture categories*, not types. "Dry" could be an achene, caryopsis, samara, etc. Too vague for meaningful filtering
-- **Apocarpous** — this describes *carpel arrangement* (separate carpels), not a fruit type. It's a floral morphology term
+**Status: Fixed** (canopi-data `d647d6b`)
 
-**Fix (canopi-data)**: Replace `Dry`/`Fleshy` with specific types (achene, samara, etc.) or remove. Reclassify `Apocarpous` into a floral morphology field.
+Split into three columns:
+- `seed_dormancy_type` — mechanism only: `Physiological`, `Morphophysiological`, `Physical`, `None`
+- `seed_dormancy_depth` — **NEW column**: `Absolute`, `Long`, `Short`, `Partial`
+- `serotinous` — **NEW boolean**: fire ecology trait (138 species)
+- `Xerochasy` values set to NULL (dehiscence mechanism, not dormancy)
 
-### seed_dormancy_type — Mixes dormancy types with durations and unrelated traits (canopi-data)
+**App action**: Add `seed_dormancy_depth` and `serotinous` to schema-contract and field registry. Narrow `seed_dormancy_type` values.
 
-DB values: `Absolute, Long, Morphophysiological, None, Partial, Physical, Physiological, Serotinous, Short, Xerochasy`
+### ~~invasive_potential~~ — Conflates invasion risk with biogeographic status (canopi-data)
 
-Three categories are mixed together:
-- **Dormancy mechanisms** (correct): `Physical` (hard seed coat), `Physiological` (chemical/hormonal block), `Morphophysiological` (underdeveloped embryo + physiological block), `None`
-- **Dormancy durations** (wrong field): `Long`, `Short`, `Absolute`, `Partial` — these describe duration/depth, not type
-- **Unrelated traits**: `Serotinous` (seeds held in cones/fruits until fire — a seed *release* mechanism, not dormancy), `Xerochasy` (fruit opening when dry — a *dehiscence* mechanism)
+**Status: Fixed** (canopi-data `d647d6b`)
 
-**Fix (canopi-data)**: Separate into `seed_dormancy_type` (Physical/Physiological/Morphophysiological/None) and `seed_dormancy_depth` (Absolute/Long/Short/Partial/None). Move Serotinous to a fire-ecology trait and Xerochasy to a dehiscence field.
+Split into two columns:
+- `invasive_potential` — invasion risk only: `Invasive`, `Potentially Invasive`
+- `biogeographic_status` — **NEW column**: `Native`, `Introduced`, `Naturalized`
 
-### invasive_potential — Conflates invasion risk with biogeographic status (canopi-data)
-
-DB values: `Introduced, Invasive, Native, Naturalized, Potentially Invasive`
-
-This field mixes two different concepts:
-- **Biogeographic status**: `Introduced`, `Native`, `Naturalized` — describes establishment history
-- **Invasion risk**: `Invasive`, `Potentially Invasive` — describes ecological threat level
-
-A species can be `Introduced` and `non-invasive`, or `Naturalized` and `non-invasive`. These are independent axes. Additionally, these statuses are region-dependent — a species native to one region is introduced in another.
-
-**Fix (canopi-data)**: Split into `biogeographic_status` (Native/Introduced/Naturalized) and `invasive_risk` (None/Potentially Invasive/Invasive). Ideally both would be region-qualified.
+**App action**: Any filter/display logic referencing `invasive_potential` for "Native"/"Introduced"/"Naturalized" must switch to `biogeographic_status`. Add `biogeographic_status` to schema-contract and field registry.
 
 ### canopy_position — Very limited (accepted)
 
@@ -262,19 +230,19 @@ DB values: `Epiphyte, Forb, Graminoid, Herb, Shrub, Subshrub, Tree, Vine`
 
 ## Scientific Issues Summary
 
-| Field | Issue | Severity | Owner |
+| Field | Issue | Severity | Status |
 |---|---|---|---|
-| habit | Life cycle + storage organ + taxonomy mixed in | High | canopi-data |
-| pollination_syndrome | Overlapping hierarchy levels, mixed Latin/English | Medium | canopi-data |
-| seed_dormancy_type | Mixes dormancy types, durations, and unrelated traits | Medium | canopi-data |
-| fruit_type | "Dry", "Fleshy" are textures; "Apocarpous" is floral morphology | Medium | canopi-data |
-| invasive_potential | Conflates biogeographic status with invasion risk | Medium | canopi-data |
-| grime_strategy | Potentially redundant reversed pairs (CR/RC) | Low | canopi-data |
-| mycorrhizal_type | "mixed" is vague and inconsistently cased | Low | canopi-data |
-| active_growth_period | Inconsistent conjunction formatting | Low | canopi-data |
-| bloom_period | Case duplicates + inconsistent separators | Low | canopi-data |
-| canopy_position | Only 2 of 5 standard levels | Low | accepted |
-| growth_form_type | Herb/Forb overlap | Low | accepted |
+| ~~habit~~ | Life cycle + storage organ + taxonomy mixed in | High | **Fixed** — split into booleans, storage_organ, growth_form_type |
+| ~~pollination_syndrome~~ | Overlapping hierarchy levels, mixed Latin/English | Medium | **Fixed** — collapsed to 5 broad syndromes |
+| ~~seed_dormancy_type~~ | Mixes dormancy types, durations, and unrelated traits | Medium | **Fixed** — split into seed_dormancy_depth + serotinous |
+| ~~fruit_type~~ | "Dry", "Fleshy" are textures; "Apocarpous" is floral morphology | Medium | **Fixed** — non-types removed (5,090 → NULL) |
+| ~~invasive_potential~~ | Conflates biogeographic status with invasion risk | Medium | **Fixed** — split into biogeographic_status |
+| ~~grime_strategy~~ | Potentially redundant reversed pairs (CR/RC) | Low | **Fixed** — deduplicated |
+| ~~mycorrhizal_type~~ | "mixed" is vague and inconsistently cased | Low | **Fixed** — normalized to "Mixed" |
+| ~~active_growth_period~~ | Inconsistent conjunction formatting | Low | **Fixed** — Oxford comma format |
+| ~~bloom_period~~ | Case duplicates + inconsistent separators | Low | **Fixed** — Title Case normalized |
+| canopy_position | Only 2 of 5 standard levels | Low | Accepted |
+| growth_form_type | Herb/Forb overlap | Low | Accepted |
 
 ## Previously Fixed Issues (from earlier review rounds)
 
@@ -285,9 +253,11 @@ DB values: `Epiphyte, Forb, Graminoid, Herb, Shrub, Subshrub, Tree, Vine`
 | 5 | Stale locale pattern affects all fields | **Fixed** — same locale-scoped cache |
 | 6 | Inconsistent locale refresh | **Partially fixed** — sidebar lists reload on locale change |
 | 9 | Life cycle filter section missing | **Fixed** — FilterStrip row added |
+| A | habit life-cycle/taxonomy conflation | **Fixed** — habit trimmed to Tree/Shrub/Climber, values migrated |
 | C | deciduous_evergreen translations missing | **Fixed** — added to schema-contract.json |
+| D | bloom_period case duplicates | **Fixed** — Title Case normalized, 15 values fully translated |
 | E | flower_color composite values untranslated | **Fixed** — `translate_composite_value()` splits on `/` |
-| F | fruit_type zero translations | **Fixed** — 16 values added to schema-contract.json |
+| F | fruit_type zero translations | **Fixed** — 16 values added to schema-contract.json + canopi-data |
 | H | 92% categorical fields untranslated | **Fixed** — 11 high-priority fields added (1050 total entries) |
 
 ## Recommended Next Actions
@@ -300,56 +270,59 @@ All high-priority app-side issues (C, E, F, H) have been fixed. Remaining app-si
 
 ### canopi-data side
 
-**Data model fixes (scientific correctness):**
-1. **Clean up habit** (Issue A + scientific): Remove life-cycle values; long-term, split storage organs (Bulb/Corm) and taxonomic groups (Fern/Bamboo/Lichen) into proper fields
-2. **Fix pollination_syndrome hierarchy**: Either use broad categories only or specific pollinator groups, not both. Move Cleistogamous to reproductive_type. Standardize Latin/English naming
-3. **Fix seed_dormancy_type mixing**: Separate dormancy mechanisms from durations. Move Serotinous/Xerochasy to appropriate fields
-4. **Fix fruit_type non-types**: Replace Dry/Fleshy with specific types, reclassify Apocarpous
-5. **Split invasive_potential**: Separate biogeographic status (Native/Introduced/Naturalized) from invasion risk (None/Potentially Invasive/Invasive)
+**Completed** (canopi-data `d647d6b` + `1261435`):
+1. ~~Clean up habit~~ — trimmed to Tree/Shrub/Climber, all values migrated
+2. ~~Split seed_dormancy_type~~ — seed_dormancy_depth + serotinous boolean
+3. ~~Split invasive_potential~~ — biogeographic_status column added
+4. ~~Normalize bloom_period case~~ — Title Case, no duplicates
+5. ~~Normalize active_growth_period formatting~~ — Oxford comma
+6. ~~Fix mycorrhizal_type "mixed"~~ — normalized to "Mixed"
+7. ~~Deduplicate grime_strategy~~ — SC→CS, RC→CR, RS→SR
+8. ~~Normalize flower_color separators~~ — unified to `, ` (comma-space)
+9. ~~Translation pipeline~~ — unified `canopi translate` CLI, 668 values × 19 languages, 100% filled
 
-**Normalization fixes:**
-6. **Normalize bloom_period case** (Issue D): deduplicate the 5 Title Case / lowercase pairs
-7. **Normalize active_growth_period formatting**: consistent conjunctions
-8. **Fix mycorrhizal_type "mixed"**: replace with specific dual types or clarify, normalize case
-9. **Deduplicate grime_strategy**: merge CR/RC, CS/SC, RS/SR if order is not meaningful
-10. **Normalize export case** (Issue A/B): ensure export values match enum case consistently
-11. **Populate or remove root_system_type** (Issue G): column is empty
-12. **Split flower_color composites** (Issue E): normalize multi-value entries
+**Remaining canopi-data issues:**
+1. **Populate root_system_type** (Issue G): Column is empty, validator bug fixed, awaiting GRooT data processing (`canopi enrich --source groot`)
 
 ## Cross-Reference: Translation Coverage by Field
 
-| Field | DB Values | Translations | Match Status |
+All fields now have 19-language translations via `canopi translate` (canopi-data `1261435`).
+
+| Field | DB Values | Translations | Status |
 |---|---|---|---|
-| habit | 11 (Title Case) | 11 | OK |
+| habit | 3 (was 11) | 3 | OK — trimmed to Tree/Shrub/Climber |
 | growth_habit | 8 | 8 | OK |
-| deciduous_evergreen | 3 | 3 | 1 case mismatch (Issue C) |
-| active_growth_period | 10 | 10 | OK |
-| bloom_period | 22 | 17 | 5 lowercase duplicates untranslated (Issue D) |
-| flower_color | 25 | 11 | 14 composites missing (Issue E) |
+| deciduous_evergreen | 3 | 3 | OK — Semi-Evergreen (capital E) |
+| active_growth_period | 10 | 10 | OK — Oxford comma format |
+| bloom_period | 17 (was 22) | 15 | OK — case deduped, **newly translated** |
+| flower_color | 25 | 11 | OK — composites use `, ` separator, app splits |
 | drought_tolerance | 4 | 4 | OK |
 | fertility_requirement | 3 | 3 | OK |
 | moisture_use | 3 | 3 | OK |
 | anaerobic_tolerance | 4 | 4 | OK |
 | succession_stage | 7 | 7 | OK |
-| mycorrhizal_type | 8 | 9 | 1 extra translation |
-| grime_strategy | 10 | 10 | OK |
-| root_system_type | 0 | 7 | Empty column (Issue G) |
-| pollination_syndrome | 13 | 14 | 1 extra translation |
+| mycorrhizal_type | 8 | 9 | OK — "Mixed" (was "mixed") |
+| grime_strategy | 7 (was 10) | 7 | OK — deduplicated |
+| root_system_type | 0 | 8 | Empty column, validator bug fixed (Issue G) |
+| pollination_syndrome | 5 (was 13) | 5 | OK — broad syndromes only |
 | reproductive_type | 3 | 3 | OK |
 | sexual_system | 8 | 8 | OK |
-| fruit_type | 16 | 0 | No translations (Issue F) |
+| fruit_type | 13 (was 16) | 13 | OK — Dry/Fleshy/Apocarpous removed |
 | seed_dispersal_mechanism | 7 | 7 | OK |
 | seed_storage_behaviour | 3 | 3 | OK |
 | fruit_seed_abundance | 4 | 4 | OK |
-| seed_dormancy_type | 10 | 10 | OK |
-| leaf_type | 7 | 8 | 1 extra translation |
-| leaf_compoundness | 5 | 6 | 1 extra translation |
+| seed_dormancy_type | 4 (was 10) | 4 | OK — mechanism only |
+| **seed_dormancy_depth** | **4 (NEW)** | **4** | **NEW column** |
+| **serotinous** | **bool (NEW)** | — | **NEW boolean** |
+| **biogeographic_status** | **3 (NEW)** | **3** | **NEW column** |
+| leaf_type | 7 | 8 | OK |
+| leaf_compoundness | 5 | 6 | OK |
 | leaf_shape | 17 | 17 | OK |
-| growth_form_type | 8 | 9 | 1 extra translation |
+| growth_form_type | 8 | 9 | OK |
 | canopy_position | 2 | 2 | OK |
 | vegetative_spread_rate | 4 | 4 | OK |
 | seed_spread_rate | 4 | 4 | OK |
 | toxicity | 4 | 4 | OK |
-| invasive_potential | 5 | 5 | OK |
+| invasive_potential | 2 (was 5) | 2 | OK — risk only |
 | growth_rate | 3 | 3 | OK |
 | stratum | 4 | 4 | OK |

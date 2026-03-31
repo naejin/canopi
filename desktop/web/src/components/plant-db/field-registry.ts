@@ -77,6 +77,8 @@ export const FIELD_REGISTRY: FieldDef[] = [
   { key: 'seed_storage_behaviour', type: 'categorical', category: 'fruit', i18nKey: 'filters.field.seedStorageBehaviour', color: '--color-edible' },
   { key: 'fruit_seed_abundance', type: 'categorical', category: 'fruit', i18nKey: 'filters.field.fruitSeedAbundance', color: '--color-edible' },
   { key: 'seed_dormancy_type', type: 'categorical', category: 'fruit', i18nKey: 'filters.field.seedDormancyType', color: '--color-edible' },
+  { key: 'seed_dormancy_depth', type: 'categorical', category: 'fruit', i18nKey: 'filters.field.seedDormancyDepth', color: '--color-edible' },
+  { key: 'serotinous', type: 'boolean', category: 'fruit', i18nKey: 'filters.field.serotinous', color: '--color-edible' },
 
   // Leaf
   { key: 'leaf_type', type: 'categorical', category: 'leaf', i18nKey: 'filters.field.leafType', color: '--color-height' },
@@ -90,6 +92,7 @@ export const FIELD_REGISTRY: FieldDef[] = [
   // Risk
   { key: 'toxicity', type: 'categorical', category: 'risk', i18nKey: 'filters.field.toxicity', color: '--color-danger' },
   { key: 'invasive_potential', type: 'categorical', category: 'risk', i18nKey: 'filters.field.invasivePotential', color: '--color-danger' },
+  { key: 'biogeographic_status', type: 'categorical', category: 'risk', i18nKey: 'filters.field.biogeographicStatus', color: '--color-danger' },
   { key: 'noxious_status', type: 'boolean', category: 'risk', i18nKey: 'filters.field.noxiousStatus', color: '--color-danger' },
   { key: 'weed_potential', type: 'boolean', category: 'risk', i18nKey: 'filters.field.weedPotential', color: '--color-danger' },
   { key: 'fire_resistant', type: 'boolean', category: 'risk', i18nKey: 'filters.field.fireResistant', color: '--color-danger' },

@@ -1,6 +1,7 @@
 pub mod plant_db;
 pub mod query_builder;
 pub mod recent_files;
+pub(crate) mod schema_contract;
 pub mod user_db;
 
 use rusqlite::Connection;

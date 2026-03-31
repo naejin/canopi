@@ -1,7 +1,7 @@
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "min_export_schema_version": 8,
-  "description": "Maps canopi-data export columns to canopi-core.db species table. Update this file when canopi-data changes column names. v4: bumped for canopi-data v8 export (22-language translated_values, 48 field_names, ellenberg_inferences available but not contracted).",
+  "description": "Maps canopi-data export columns to canopi-core.db species table. Update this file when canopi-data changes column names. v5: canopi-data 2026-03-31 export — invasive_potential split (+ biogeographic_status), seed_dormancy_type split (+ seed_dormancy_depth, serotinous), habit narrowed to 3, flower_color separator /→comma-space, value normalization.",
   "columns": [
     {"name": "id", "type": "TEXT", "required": true},
     {"name": "slug", "type": "TEXT", "required": true},
@@ -126,6 +126,8 @@
     {"name": "seed_dispersal_mechanism", "type": "TEXT"},
     {"name": "seed_storage_behaviour", "type": "TEXT"},
     {"name": "seed_dormancy_type", "type": "TEXT"},
+    {"name": "seed_dormancy_depth", "type": "TEXT"},
+    {"name": "serotinous", "type": "INTEGER"},
     {"name": "seedbank_type", "type": "TEXT"},
 
     {"name": "leaf_type", "type": "TEXT"},
@@ -153,6 +155,7 @@
     {"name": "toxicity", "type": "TEXT"},
     {"name": "known_hazards", "type": "TEXT"},
     {"name": "invasive_potential", "type": "TEXT"},
+    {"name": "biogeographic_status", "type": "TEXT"},
     {"name": "noxious_status", "type": "INTEGER"},
     {"name": "invasive_usda", "type": "INTEGER"},
     {"name": "weed_potential", "type": "INTEGER"},
@@ -232,7 +235,8 @@
       {"name": "idx_species_self_fertile", "columns": "self_fertile"},
       {"name": "idx_species_light_soil", "columns": "tolerates_light_soil"},
       {"name": "idx_species_medium_soil", "columns": "tolerates_medium_soil"},
-      {"name": "idx_species_heavy_soil", "columns": "tolerates_heavy_soil"}
+      {"name": "idx_species_heavy_soil", "columns": "tolerates_heavy_soil"},
+      {"name": "idx_species_biogeographic", "columns": "biogeographic_status"}
     ],
     "species_common_names": [
       {"name": "idx_cn_species_lang", "columns": "species_id, language"},
@@ -260,15 +264,7 @@
   },
   "translations": {
     "habit": {
-      "Annual": {"fr": "Annuelle", "es": "Anual", "pt": "Anual", "it": "Annuale", "zh": "一年生", "de": "Einjährig", "ja": "一年生", "ko": "일년생", "nl": "Eenjarig", "ru": "Однолетнее"},
-      "Bamboo": {"fr": "Bambou", "es": "Bambú", "pt": "Bambu", "it": "Bambù", "zh": "竹", "de": "Bambus", "ja": "竹", "ko": "대나무", "nl": "Bamboe", "ru": "Бамбук"},
-      "Biennial": {"fr": "Bisannuelle", "es": "Bienal", "pt": "Bienal", "it": "Biennale", "zh": "二年生", "de": "Zweijährig", "ja": "二年生", "ko": "이년생", "nl": "Tweejarig", "ru": "Двулетнее"},
-      "Bulb": {"fr": "Bulbe", "es": "Bulbo", "pt": "Bulbo", "it": "Bulbo", "zh": "球茎", "de": "Zwiebel", "ja": "球根", "ko": "구근", "nl": "Bol", "ru": "Луковица"},
       "Climber": {"fr": "Grimpante", "es": "Trepadora", "pt": "Trepadeira", "it": "Rampicante", "zh": "攀援", "de": "Kletterpflanze", "ja": "つる性", "ko": "덩굴", "nl": "Klimplant", "ru": "Лиана"},
-      "Corm": {"fr": "Corme", "es": "Cormo", "pt": "Cormo", "it": "Cormo", "zh": "球茎", "de": "Knolle", "ja": "球茎", "ko": "구경", "nl": "Knol", "ru": "Клубнелуковица"},
-      "Fern": {"fr": "Fougère", "es": "Helecho", "pt": "Samambaia", "it": "Felce", "zh": "蕨类", "de": "Farn", "ja": "シダ", "ko": "양치류", "nl": "Varen", "ru": "Папоротник"},
-      "Lichen": {"fr": "Lichen", "es": "Liquen", "pt": "Líquen", "it": "Lichene", "zh": "地衣", "de": "Flechte", "ja": "地衣類", "ko": "지의류", "nl": "Korstmos", "ru": "Лишайник"},
-      "Perennial": {"fr": "Vivace", "es": "Perenne", "pt": "Perene", "it": "Perenne", "zh": "多年生", "de": "Staude", "ja": "多年生", "ko": "다년생", "nl": "Vaste plant", "ru": "Многолетнее"},
       "Shrub": {"fr": "Arbuste", "es": "Arbusto", "pt": "Arbusto", "it": "Arbusto", "zh": "灌木", "de": "Strauch", "ja": "低木", "ko": "관목", "nl": "Struik", "ru": "Кустарник"},
       "Tree": {"fr": "Arbre", "es": "Árbol", "pt": "Árvore", "it": "Albero", "zh": "乔木", "de": "Baum", "ja": "高木", "ko": "교목", "nl": "Boom", "ru": "Дерево"}
     },
@@ -356,11 +352,13 @@
       "Slight": {"fr": "Légère", "es": "Leve", "pt": "Leve", "it": "Leggera", "zh": "轻微", "de": "Leicht", "ja": "軽度", "ko": "경미", "nl": "Licht", "ru": "Лёгкая"}
     },
     "invasive_potential": {
-      "Introduced": {"fr": "Introduite", "es": "Introducida", "pt": "Introduzida", "it": "Introdotta", "zh": "引入", "de": "Eingeführt", "ja": "外来", "ko": "도입", "nl": "Geïntroduceerd", "ru": "Интродуцированное"},
       "Invasive": {"fr": "Invasive", "es": "Invasora", "pt": "Invasora", "it": "Invasiva", "zh": "入侵", "de": "Invasiv", "ja": "侵略的", "ko": "침입", "nl": "Invasief", "ru": "Инвазивное"},
-      "Native": {"fr": "Indigène", "es": "Nativa", "pt": "Nativa", "it": "Autoctona", "zh": "原生", "de": "Einheimisch", "ja": "在来", "ko": "자생", "nl": "Inheems", "ru": "Аборигенное"},
-      "Naturalized": {"fr": "Naturalisée", "es": "Naturalizada", "pt": "Naturalizada", "it": "Naturalizzata", "zh": "归化", "de": "Eingebürgert", "ja": "帰化", "ko": "귀화", "nl": "Genaturaliseerd", "ru": "Натурализованное"},
       "Potentially Invasive": {"fr": "Potentiellement invasive", "es": "Potencialmente invasora", "pt": "Potencialmente invasora", "it": "Potenzialmente invasiva", "zh": "潜在入侵", "de": "Potenziell invasiv", "ja": "潜在的侵略", "ko": "잠재적 침입", "nl": "Potentieel invasief", "ru": "Потенциально инвазивное"}
+    },
+    "biogeographic_status": {
+      "Introduced": {"fr": "Introduite", "es": "Introducida", "pt": "Introduzida", "it": "Introdotta", "zh": "引入", "de": "Eingeführt", "ja": "外来", "ko": "도입", "nl": "Geïntroduceerd", "ru": "Интродуцированное"},
+      "Native": {"fr": "Indigène", "es": "Nativa", "pt": "Nativa", "it": "Autoctona", "zh": "原生", "de": "Einheimisch", "ja": "在来", "ko": "자생", "nl": "Inheems", "ru": "Аборигенное"},
+      "Naturalized": {"fr": "Naturalisée", "es": "Naturalizada", "pt": "Naturalizada", "it": "Naturalizzata", "zh": "归化", "de": "Eingebürgert", "ja": "帰化", "ko": "귀화", "nl": "Genaturaliseerd", "ru": "Натурализованное"}
     },
     "seed_dispersal_mechanism": {
       "Animal": {"fr": "Animal", "es": "Animal", "pt": "Animal", "it": "Animale", "zh": "动物", "de": "Tier", "ja": "動物", "ko": "동물", "nl": "Dier", "ru": "Животное"},
@@ -393,6 +391,18 @@
       "Pome": {"fr": "Pomme", "es": "Pomo", "pt": "Pomo", "it": "Pomo", "zh": "梨果", "de": "Apfelfrucht", "ja": "仁果", "ko": "이과", "nl": "Appelvrucht", "ru": "Яблоко"},
       "Schizocarp": {"fr": "Schizocarpe", "es": "Esquizocarpo", "pt": "Esquizocarpo", "it": "Schizocarpo", "zh": "分果", "de": "Spaltfrucht", "ja": "分果", "ko": "분과", "nl": "Splitvrucht", "ru": "Дробный плод"},
       "Silique": {"fr": "Silique", "es": "Silicua", "pt": "Síliqua", "it": "Siliqua", "zh": "长角果", "de": "Schote", "ja": "長角果", "ko": "장각과", "nl": "Hauw", "ru": "Стручок"}
+    },
+    "seed_dormancy_type": {
+      "Physiological": {"fr": "Physiologique", "es": "Fisiológica", "pt": "Fisiológica", "it": "Fisiologica", "zh": "生理性", "de": "Physiologisch", "ja": "生理的", "ko": "생리적", "nl": "Fysiologisch", "ru": "Физиологический"},
+      "Morphophysiological": {"fr": "Morphophysiologique", "es": "Morfofisiológica", "pt": "Morfofisiológica", "it": "Morfofisiologica", "zh": "形态生理性", "de": "Morphophysiologisch", "ja": "形態生理的", "ko": "형태생리적", "nl": "Morfofysiologisch", "ru": "Морфофизиологический"},
+      "Physical": {"fr": "Physique", "es": "Física", "pt": "Física", "it": "Fisica", "zh": "物理性", "de": "Physikalisch", "ja": "物理的", "ko": "물리적", "nl": "Fysiek", "ru": "Физический"},
+      "None": {"fr": "Aucune", "es": "Ninguna", "pt": "Nenhuma", "it": "Nessuna", "zh": "无", "de": "Keine", "ja": "なし", "ko": "없음", "nl": "Geen", "ru": "Отсутствует"}
+    },
+    "seed_dormancy_depth": {
+      "Absolute": {"fr": "Absolue", "es": "Absoluta", "pt": "Absoluta", "it": "Assoluta", "zh": "绝对", "de": "Absolut", "ja": "絶対", "ko": "절대", "nl": "Absoluut", "ru": "Абсолютная"},
+      "Long": {"fr": "Longue", "es": "Larga", "pt": "Longa", "it": "Lunga", "zh": "深", "de": "Lang", "ja": "長期", "ko": "장기", "nl": "Lang", "ru": "Длительная"},
+      "Short": {"fr": "Courte", "es": "Corta", "pt": "Curta", "it": "Corta", "zh": "浅", "de": "Kurz", "ja": "短期", "ko": "단기", "nl": "Kort", "ru": "Короткая"},
+      "Partial": {"fr": "Partielle", "es": "Parcial", "pt": "Parcial", "it": "Parziale", "zh": "部分", "de": "Teilweise", "ja": "部分的", "ko": "부분", "nl": "Gedeeltelijk", "ru": "Частичная"}
     }
   }
 }

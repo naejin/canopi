@@ -66,6 +66,8 @@ pub(crate) fn validated_column(field: &str) -> Option<&'static str> {
         "seed_storage_behaviour" => Some("s.seed_storage_behaviour"),
         "fruit_seed_abundance" => Some("s.fruit_seed_abundance"),
         "seed_dormancy_type" => Some("s.seed_dormancy_type"),
+        "seed_dormancy_depth" => Some("s.seed_dormancy_depth"),
+        "serotinous" => Some("s.serotinous"),
         // Leaf
         "leaf_type" => Some("s.leaf_type"),
         "leaf_compoundness" => Some("s.leaf_compoundness"),
@@ -76,6 +78,7 @@ pub(crate) fn validated_column(field: &str) -> Option<&'static str> {
         // Risk
         "toxicity" => Some("s.toxicity"),
         "invasive_potential" => Some("s.invasive_potential"),
+        "biogeographic_status" => Some("s.biogeographic_status"),
         "noxious_status" => Some("s.noxious_status"),
         "invasive_usda" => Some("s.invasive_usda"),
         "weed_potential" => Some("s.weed_potential"),

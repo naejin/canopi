@@ -114,7 +114,7 @@ Context7 Library IDs: Tauri v2 (`/websites/v2_tauri_app`), rusqlite (`/rusqlite/
 ## What's Built (Phases 0–7)
 
 - Tauri v2 + Preact shell with custom title bar, frameless window
-- 175K-species plant DB with FTS5 full-text search (5 weighted columns, BM25 ranking), 173 contracted columns (schema v8)
+- 175K-species plant DB with FTS5 full-text search (5 weighted columns, BM25 ranking), 176 contracted columns (schema v8 export, contract v5)
 - Plant search panel with compact rows, virtual scrolling, multiple common names
 - Plant detail card (19 collapsible sections, ~170 fields, plant photo carousel)
 - Filter system: always-visible FilterStrip (6 controls) + MoreFiltersPanel (8 categories, 56 fields, dynamic `Vec<DynamicFilter>`)

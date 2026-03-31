@@ -195,6 +195,7 @@ fn is_boolean_field(field: &str) -> bool {
             | "propagated_by_seed"
             | "propagated_by_cuttings"
             | "cold_stratification_required"
+            | "serotinous"
     )
 }
 

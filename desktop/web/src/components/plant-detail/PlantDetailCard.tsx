@@ -217,10 +217,11 @@ export function PlantDetailCard({ canonicalName }: Props) {
     || d.seed_mass_mg !== null || d.seed_length_mm !== null
     || d.seed_germination_rate !== null || d.seed_dispersal_mechanism !== null
     || d.seed_storage_behaviour !== null || d.seed_dormancy_type !== null
+    || d.seed_dormancy_depth !== null || d.serotinous !== null
     || d.seedbank_type !== null;
 
   const hasRisk = d.toxicity !== null || d.known_hazards !== null
-    || d.invasive_potential !== null || d.noxious_status !== null
+    || d.invasive_potential !== null || d.biogeographic_status !== null || d.noxious_status !== null
     || d.invasive_usda !== null || d.weed_potential !== null
     || d.fire_resistant !== null || d.fire_tolerance !== null || d.hedge_tolerance !== null
     || d.pests_diseases !== null;
@@ -540,11 +541,13 @@ export function PlantDetailCard({ canonicalName }: Props) {
               <Attr label={t('plantDetail.seedDispersalMechanism')} value={d.seed_dispersal_mechanism} />
               <Attr label={t('plantDetail.seedStorageBehaviour')} value={d.seed_storage_behaviour} />
               <Attr label={t('plantDetail.seedDormancyType')} value={d.seed_dormancy_type} />
+              <Attr label={t('plantDetail.seedDormancyDepth')} value={d.seed_dormancy_depth} />
               <Attr label={t('plantDetail.seedbankType')} value={d.seedbank_type} />
             </div>
-            {d.fruit_seed_persistence !== null && (
+            {(d.fruit_seed_persistence !== null || d.serotinous !== null) && (
               <div className={styles.boolRow}>
                 <BoolChip label={t('plantDetail.fruitSeedPersistence')} value={d.fruit_seed_persistence} />
+                <BoolChip label={t('plantDetail.serotinous')} value={d.serotinous} />
               </div>
             )}
           </CollapsibleSection>
@@ -559,6 +562,7 @@ export function PlantDetailCard({ canonicalName }: Props) {
             <TextBlock label={t('plantDetail.pestsDiseases')} text={d.pests_diseases} />
             <div className={styles.attrGrid}>
               <Attr label={t('plantDetail.invasivePotential')} value={d.invasive_potential} />
+              <Attr label={t('plantDetail.biogeographicStatus')} value={d.biogeographic_status} />
               <Attr label={t('plantDetail.fireTolerance')} value={d.fire_tolerance} />
               <Attr label={t('plantDetail.hedgeTolerance')} value={d.hedge_tolerance} />
             </div>

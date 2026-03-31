@@ -14,6 +14,25 @@ pub use search::search;
 mod tests {
     use super::*;
     use rusqlite::Connection;
+    use serde::Deserialize;
+    use std::{collections::HashSet, fs, path::Path};
+
+    #[derive(Deserialize)]
+    struct SchemaContractFixture {
+        schema_version: i32,
+        columns: Vec<SchemaColumnFixture>,
+        translations: serde_json::Map<String, serde_json::Value>,
+    }
+
+    #[derive(Deserialize)]
+    struct SchemaColumnFixture {
+        name: String,
+    }
+
+    fn load_schema_contract_fixture() -> SchemaContractFixture {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../scripts/schema-contract.json");
+        serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap()
+    }
 
     fn test_db() -> Connection {
         let conn = Connection::open_in_memory().unwrap();
@@ -136,6 +155,8 @@ mod tests {
                 seed_dispersal_mechanism TEXT,
                 seed_storage_behaviour TEXT,
                 seed_dormancy_type TEXT,
+                seed_dormancy_depth TEXT,
+                serotinous INTEGER,
                 seedbank_type TEXT,
                 leaf_type TEXT,
                 leaf_compoundness TEXT,
@@ -156,6 +177,7 @@ mod tests {
                 toxicity TEXT,
                 known_hazards TEXT,
                 invasive_potential TEXT,
+                biogeographic_status TEXT,
                 noxious_status INTEGER,
                 invasive_usda INTEGER,
                 weed_potential INTEGER,
@@ -277,18 +299,22 @@ mod tests {
                 height_min_m, height_max_m, width_max_m, hardiness_zone_min, hardiness_zone_max,
                 soil_ph_min, soil_ph_max, growth_rate,
                 is_annual, is_biennial, is_perennial, habit, deciduous_evergreen,
+                bloom_period, flower_color,
                 tolerates_full_sun, tolerates_semi_shade, tolerates_full_shade,
                 nitrogen_fixer, stratum, edibility_rating, medicinal_rating,
-                succession_stage, known_hazards)
+                succession_stage, seed_dormancy_depth, serotinous, invasive_potential,
+                biogeographic_status, known_hazards)
             VALUES (
                 'uuid-ald', 'alnus-glutinosa', 'Alnus glutinosa',
                 'Alder', 'Betulaceae', 'Alnus',
                 5.0, 20.0, 8.0, 1, 8, 5.5, 7.5,
                 'Fast',
                 0, 0, 1, 'Tree', 'Deciduous',
+                'Spring', 'Blue/Purple',
                 1, 0, 0,
                 1, 'Canopy', 0, 0,
-                'secondary_i', 'None known'
+                'secondary_i', 'Absolute', 1, 'Potentially Invasive',
+                'Native', 'None known'
             );
 
             INSERT INTO species_common_names VALUES
@@ -310,7 +336,12 @@ mod tests {
                 ('el1', 'uuid-lav', 'wikipedia', 'https://en.wikipedia.org/wiki/Lavandula_angustifolia');
 
             INSERT INTO translated_values VALUES
-                ('t1', 'growth_rate', 'Slow', 'Lent', NULL, NULL, NULL, NULL, 'Langsam', NULL, NULL, NULL, NULL);
+                ('t1', 'growth_rate', 'Slow', 'Lent', NULL, NULL, NULL, NULL, 'Langsam', NULL, NULL, NULL, NULL),
+                ('t2', 'flower_color', 'Blue', 'Bleu', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+                ('t3', 'flower_color', 'Purple', 'Violet', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+                ('t4', 'seed_dormancy_depth', 'Absolute', 'Absolue', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+                ('t5', 'invasive_potential', 'Potentially Invasive', 'Potentiellement invasive', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+                ('t6', 'biogeographic_status', 'Native', 'Indigène', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 
             INSERT INTO best_common_names VALUES
                 ('uuid-lav', 'en', 'Lavender'),
@@ -411,6 +442,20 @@ mod tests {
         let detail = get_detail(&conn, "Lavandula angustifolia", "de").unwrap();
         // growth_rate "Slow" should be translated to "Langsam" in German
         assert_eq!(detail.growth_rate.as_deref(), Some("Langsam"));
+    }
+
+    #[test]
+    fn test_get_detail_maps_new_split_fields() {
+        let conn = test_db();
+        let detail = get_detail(&conn, "Alnus glutinosa", "fr").unwrap();
+        assert_eq!(detail.flower_color.as_deref(), Some("Bleu/Violet"));
+        assert_eq!(detail.seed_dormancy_depth.as_deref(), Some("Absolue"));
+        assert_eq!(detail.serotinous, Some(true));
+        assert_eq!(
+            detail.invasive_potential.as_deref(),
+            Some("Potentiellement invasive")
+        );
+        assert_eq!(detail.biogeographic_status.as_deref(), Some("Indigène"));
     }
 
     #[test]
@@ -520,6 +565,61 @@ mod tests {
         );
         // Japanese has no translation — returns English
         assert_eq!(translate_value(&conn, "growth_rate", "Slow", "ja"), "Slow");
+    }
+
+    #[test]
+    fn test_translate_composite_value_supports_canonical_and_legacy_separators() {
+        let conn = test_db();
+        assert_eq!(
+            super::lookup::translate_composite_value(&conn, "flower_color", "Blue, Purple", "fr"),
+            "Bleu, Violet"
+        );
+        assert_eq!(
+            super::lookup::translate_composite_value(&conn, "flower_color", "Blue,Purple", "fr"),
+            "Bleu, Violet"
+        );
+        assert_eq!(
+            super::lookup::translate_composite_value(&conn, "flower_color", "Blue/Purple", "fr"),
+            "Bleu/Violet"
+        );
+    }
+
+    #[test]
+    fn test_expected_schema_version_matches_contract() {
+        let contract = load_schema_contract_fixture();
+        assert_eq!(
+            contract.schema_version,
+            crate::db::schema_contract::EXPECTED_PLANT_SCHEMA_VERSION
+        );
+    }
+
+    #[test]
+    fn test_detail_projection_columns_exist_in_contract() {
+        let contract = load_schema_contract_fixture();
+        let contract_columns: HashSet<String> = contract
+            .columns
+            .into_iter()
+            .map(|column| column.name)
+            .collect();
+
+        for column in super::detail::detail_contract_columns() {
+            assert!(
+                contract_columns.contains(*column),
+                "detail projection column '{column}' missing from schema contract"
+            );
+        }
+    }
+
+    #[test]
+    fn test_required_app_translation_fields_exist_in_contract() {
+        let contract = load_schema_contract_fixture();
+
+        for field in crate::db::schema_contract::REQUIRED_APP_TRANSLATION_FIELDS {
+            assert!(
+                contract.translations.contains_key(*field),
+                "required contract translation field '{field}' missing from schema contract"
+            );
+        }
     }
 
     #[test]

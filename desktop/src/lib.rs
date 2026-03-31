@@ -126,19 +126,20 @@ pub fn run() {
                                 tracing::warn!("Failed to set plant DB cache_size: {e}");
                             }
                             // Check schema version — warn if outdated or newer than expected
-                            const EXPECTED_SCHEMA_VERSION: i32 = 4;
                             let user_version: i32 = plant_conn
                                 .pragma_query_value(None, "user_version", |row| row.get(0))
                                 .unwrap_or(0);
-                            if user_version < EXPECTED_SCHEMA_VERSION {
+                            if user_version < db::schema_contract::EXPECTED_PLANT_SCHEMA_VERSION {
                                 tracing::warn!(
-                                    "Plant DB schema version {user_version} is outdated (expected >= {EXPECTED_SCHEMA_VERSION}). \
+                                    "Plant DB schema version {user_version} is outdated (expected >= {}). \
                                      Run scripts/prepare-db.py to rebuild."
+                                    , db::schema_contract::EXPECTED_PLANT_SCHEMA_VERSION
                                 );
-                            } else if user_version > EXPECTED_SCHEMA_VERSION {
+                            } else if user_version > db::schema_contract::EXPECTED_PLANT_SCHEMA_VERSION {
                                 tracing::warn!(
-                                    "Plant DB schema version {user_version} is newer than expected ({EXPECTED_SCHEMA_VERSION}). \
+                                    "Plant DB schema version {user_version} is newer than expected ({}). \
                                      Unknown columns will be ignored. Consider updating the app."
+                                    , db::schema_contract::EXPECTED_PLANT_SCHEMA_VERSION
                                 );
                             }
                             app.manage(db::PlantDb(Mutex::new(plant_conn)));

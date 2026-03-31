@@ -145,17 +145,35 @@ pub fn get_common_names_batch(
     Ok(result)
 }
 
-/// Translate a value that may contain slash-separated parts (e.g. "Blue/Purple").
-/// Each part is translated individually and rejoined with "/".
-pub fn translate_composite_value(conn: &Connection, field: &str, value_en: &str, locale: &str) -> String {
-    if !value_en.contains('/') {
+/// Translate a value that may contain canonical comma-separated parts
+/// (e.g. "Blue, Purple") or legacy slash-separated parts (e.g. "Blue/Purple").
+/// Each part is translated individually and rejoined with the original separator style.
+pub fn translate_composite_value(
+    conn: &Connection,
+    field: &str,
+    value_en: &str,
+    locale: &str,
+) -> String {
+    let (parts, joiner): (Vec<&str>, &str) = if value_en.contains(", ") {
+        (value_en.split(", ").collect(), ", ")
+    } else if value_en.contains('/') {
+        (value_en.split('/').map(str::trim).collect(), "/")
+    } else if value_en.contains(',') {
+        (value_en.split(',').map(str::trim).collect(), ", ")
+    } else {
+        return translate_value(conn, field, value_en, locale);
+    };
+
+    if parts.len() <= 1 {
         return translate_value(conn, field, value_en, locale);
     }
-    value_en
-        .split('/')
-        .map(|part| translate_value(conn, field, part.trim(), locale))
+
+    parts
+        .into_iter()
+        .filter(|part| !part.is_empty())
+        .map(|part| translate_value(conn, field, part, locale))
         .collect::<Vec<_>>()
-        .join("/")
+        .join(joiner)
 }
 
 pub fn translate_value(conn: &Connection, field: &str, value_en: &str, locale: &str) -> String {
