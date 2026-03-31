@@ -133,6 +133,177 @@ Only 4 of 48 categorical fields have translation entries: `habit`, `bloom_period
 
 DB stores these as `0`/`1` integers. Field registry correctly marks them as `type: 'boolean'`. No issue — just confirming the types are correct.
 
+## Scientific Value Assessment
+
+Botanical/ecological review of every categorical field's values. Issues are classified as canopi-data (upstream normalization) or accepted (usable despite imprecision).
+
+### habit — Multiple taxonomy issues (canopi-data)
+
+DB values: `Annual, Bamboo, Biennial, Bulb, Climber, Corm, Fern, Lichen, Perennial, Shrub, Tree`
+
+This field conflates four different classification axes from PFAF:
+- **Life cycle** (Annual, Biennial, Perennial) — already flagged in Issue A
+- **Growth form** (Shrub, Tree, Climber) — correct usage
+- **Storage organ** (Bulb, Corm) — these describe underground morphology, not above-ground habit. A tulip (bulb) and a crocus (corm) are both herbaceous perennials by habit
+- **Taxonomic group** (Bamboo, Fern) — bamboo is a grass subfamily (Bambusoideae), not a habit; fern is a division (Polypodiopsida)
+- **Non-plant** (Lichen) — lichens are fungal-algal symbioses, not plants
+
+**Severity**: Medium. PFAF's classifications are widely understood by gardeners even though botanically imprecise. The field is usable for filtering but scientifically misleading.
+
+**Fix (canopi-data)**: Long-term, split into proper growth form (Herb, Shrub, Tree, Climber, Vine) + life cycle (annual/biennial/perennial booleans, already exist) + storage organ (separate column). Short-term, at minimum remove Annual/Biennial/Perennial (Issue A).
+
+### growth_habit — OK
+
+DB values: `Bunch, Colonizing, Multiple Stem, Rhizomatous, Single Crown, Single Stem, Stoloniferous, Thicket Forming`
+
+All standard USDA PLANTS database growth habit categories. Scientifically sound.
+
+### deciduous_evergreen — OK
+
+DB values: `Deciduous, Evergreen, Semi-Evergreen`
+
+Standard leaf persistence categories. Correct.
+
+### active_growth_period — Formatting inconsistency (canopi-data)
+
+DB values: `Fall, Fall Winter and Spring, Spring, Spring and Fall, Spring and Summer, Spring Summer Fall, Spring Summer and Fall, Summer, Summer and Fall, Year Round`
+
+Scientifically valid seasonal categories. However, conjunction formatting is inconsistent: `"Spring Summer Fall"` (no conjunction) vs `"Spring Summer and Fall"` (with "and") vs `"Spring and Fall"` (with "and"). These represent the same logical pattern but are stored differently.
+
+**Fix (canopi-data)**: Normalize to consistent format (e.g., always `"Spring, Summer, and Fall"`).
+
+### bloom_period — Formatting + case issues (canopi-data)
+
+Already documented in Issue D (duplicate case variants). Additionally: `"Spring-Summer"` uses a hyphen while `"Spring and Summer"` would use a conjunction — inconsistent separators.
+
+### flower_color — OK (composite translation gap noted in Issue E)
+
+All 25 values are botanically valid flower colors. Composite values (`Blue/Purple`, `White/Yellow`) correctly represent multi-colored flowers. Slash separator is standard.
+
+### drought_tolerance, fertility_requirement, moisture_use, anaerobic_tolerance — OK
+
+Standard USDA ordinal scales (High/Medium/Low/None). Scientifically appropriate.
+
+### succession_stage — Domain-specific terminology, readable to target audience (accepted)
+
+DB values: `climax, placenta_i, placenta_ii, placenta_iii, secondary_i, secondary_ii, secondary_iii`
+
+Uses Ernst Gotsch's syntropic agriculture framework:
+- `placenta_i/ii/iii` = pioneer/nurse species of increasing lifespan (short-lived annuals → medium-lived → longer-lived pioneers)
+- `secondary_i/ii/iii` = secondary succession species
+- `climax` = climax community species
+
+This is standard terminology for the app's target audience (agroecological designers). The word "placenta" may confuse general users but is correct in syntropic agriculture. Translations could help (e.g., "Pioneer I" in English-friendly labeling) but the raw values are appropriate for the domain.
+
+### mycorrhizal_type — Scientifically correct, one naming issue (canopi-data)
+
+DB values: `AM, AM/ECM, AM/NM, ECM, Ericoid, NM, Orchid, mixed`
+
+All values are legitimate mycorrhizal categories:
+- **AM** (Arbuscular Mycorrhiza) — found in ~80% of plant species ✓
+- **ECM** (Ectomycorrhiza) — found in many trees (oaks, pines, birch) ✓
+- **AM/ECM** — dual mycorrhizal species (e.g., Populus, Salix, Eucalyptus) ✓
+- **AM/NM** — species that are typically AM but can grow without mycorrhiza ✓
+- **NM** (Non-Mycorrhizal) — e.g., Brassicaceae, Chenopodiaceae ✓
+- **Ericoid** — specific to Ericaceae (heaths, blueberries, rhododendrons) ✓ **this is a real mycorrhizal type**
+- **Orchid** — specific to Orchidaceae, essential for orchid germination ✓ **this is a real mycorrhizal type**
+- **mixed** — vague and lowercase while all others are Title Case / uppercase
+
+**Issue**: `mixed` is poorly defined (could mean AM/ECM or variable associations) and uses inconsistent casing.
+
+**Fix (canopi-data)**: Replace `mixed` with specific dual types (e.g., `AM/ECM`) or clarify its definition. Normalize case.
+
+### grime_strategy — Potentially redundant pairs (canopi-data)
+
+DB values: `C, CR, CS, CSR, R, RC, RS, S, SC, SR`
+
+Grime's CSR plant strategy theory — a fundamental concept in plant ecology. C = Competitor, S = Stress-tolerator, R = Ruderal. However, `CR` and `RC` are listed separately (same for `CS`/`SC` and `RS`/`SR`). In most ecological literature these pairs are treated as synonyms. Some interpretations assign meaning to order (primary vs secondary strategy), but this is uncommon.
+
+**Fix (canopi-data)**: Either deduplicate (merge RC→CR, SC→CS, SR→RS) or document that order is meaningful in the data model.
+
+### pollination_syndrome — Mixes specificity levels and naming conventions (canopi-data)
+
+DB values: `Anemophilous, Autogamous, Bees, Beetles, Bumblebees, Cleistogamous, Entomophilous, Facultative Autogamous, Flies, Hydrophilous, Lepidoptera, Wasps, Zoophilous`
+
+Scientific issues:
+1. **Overlapping hierarchy**: `Entomophilous` (all insects) is a superset of `Bees`, `Beetles`, `Flies`, `Lepidoptera`, `Wasps`. `Zoophilous` (all animals) is a superset of all insect pollinators. A bee-pollinated plant is simultaneously Entomophilous and Zoophilous
+2. **Mixed naming**: Latin terms (`Anemophilous`, `Entomophilous`, `Hydrophilous`) alongside English common names (`Bees`, `Flies`, `Wasps`). Should be consistent
+3. **Cleistogamous** is a mating/reproductive strategy (self-pollination in closed flowers), not a pollination syndrome
+4. **Missing categories**: No bird (ornithophilous) or bat (chiropterophilous) pollination
+
+**Fix (canopi-data)**: Standardize naming (all Latin or all English). Separate hierarchy levels — either use broad categories only (Anemophilous, Entomophilous, Hydrophilous, Zoophilous) or specific pollinator groups only (Bees, Beetles, Wind, Water, etc.). Move Cleistogamous to reproductive_type or sexual_system.
+
+### fruit_type — Contains non-type values (canopi-data)
+
+DB values: `Aggregate Drupelets, Aggregate Follicles, Aggregate Nutlets, Apocarpous, Berry, Capsule, Drupe, Dry, Fleshy, Follicle, Legume, Lomentum, Nut, Pome, Schizocarp, Silique`
+
+Most values are correct botanical fruit types. Three are not:
+- **Dry** and **Fleshy** — these are fruit *texture categories*, not types. "Dry" could be an achene, caryopsis, samara, etc. Too vague for meaningful filtering
+- **Apocarpous** — this describes *carpel arrangement* (separate carpels), not a fruit type. It's a floral morphology term
+
+**Fix (canopi-data)**: Replace `Dry`/`Fleshy` with specific types (achene, samara, etc.) or remove. Reclassify `Apocarpous` into a floral morphology field.
+
+### seed_dormancy_type — Mixes dormancy types with durations and unrelated traits (canopi-data)
+
+DB values: `Absolute, Long, Morphophysiological, None, Partial, Physical, Physiological, Serotinous, Short, Xerochasy`
+
+Three categories are mixed together:
+- **Dormancy mechanisms** (correct): `Physical` (hard seed coat), `Physiological` (chemical/hormonal block), `Morphophysiological` (underdeveloped embryo + physiological block), `None`
+- **Dormancy durations** (wrong field): `Long`, `Short`, `Absolute`, `Partial` — these describe duration/depth, not type
+- **Unrelated traits**: `Serotinous` (seeds held in cones/fruits until fire — a seed *release* mechanism, not dormancy), `Xerochasy` (fruit opening when dry — a *dehiscence* mechanism)
+
+**Fix (canopi-data)**: Separate into `seed_dormancy_type` (Physical/Physiological/Morphophysiological/None) and `seed_dormancy_depth` (Absolute/Long/Short/Partial/None). Move Serotinous to a fire-ecology trait and Xerochasy to a dehiscence field.
+
+### invasive_potential — Conflates invasion risk with biogeographic status (canopi-data)
+
+DB values: `Introduced, Invasive, Native, Naturalized, Potentially Invasive`
+
+This field mixes two different concepts:
+- **Biogeographic status**: `Introduced`, `Native`, `Naturalized` — describes establishment history
+- **Invasion risk**: `Invasive`, `Potentially Invasive` — describes ecological threat level
+
+A species can be `Introduced` and `non-invasive`, or `Naturalized` and `non-invasive`. These are independent axes. Additionally, these statuses are region-dependent — a species native to one region is introduced in another.
+
+**Fix (canopi-data)**: Split into `biogeographic_status` (Native/Introduced/Naturalized) and `invasive_risk` (None/Potentially Invasive/Invasive). Ideally both would be region-qualified.
+
+### canopy_position — Very limited (accepted)
+
+DB values: `Canopy, Understory`
+
+Only two levels. Standard forest ecology recognizes at least 5 (emergent, canopy, subcanopy, understory, ground). However, PFAF data may only distinguish these two. Usable for basic filtering.
+
+### sexual_system — OK
+
+DB values: `Androdioecious, Andromonoecious, Dioecious, Gynodioecious, Gynomonoecious, Hermaphrodite, Monoecious, Polygamodioecious`
+
+All standard botanical sexual system classifications. Scientifically correct and complete.
+
+### reproductive_type, seed_dispersal_mechanism, seed_storage_behaviour, leaf_type, leaf_compoundness, leaf_shape, growth_form_type, vegetative_spread_rate, seed_spread_rate, toxicity, growth_rate, fruit_seed_abundance — OK
+
+All values are standard botanical/ecological terms. No scientific issues.
+
+### growth_form_type — Minor overlap (accepted)
+
+DB values: `Epiphyte, Forb, Graminoid, Herb, Shrub, Subshrub, Tree, Vine`
+
+`Herb` and `Forb` overlap — a forb is a non-grass herbaceous plant, which is a subset of herbs. Both are retained in USDA PLANTS. Usable for filtering despite the overlap.
+
+## Scientific Issues Summary
+
+| Field | Issue | Severity | Owner |
+|---|---|---|---|
+| habit | Life cycle + storage organ + taxonomy mixed in | High | canopi-data |
+| pollination_syndrome | Overlapping hierarchy levels, mixed Latin/English | Medium | canopi-data |
+| seed_dormancy_type | Mixes dormancy types, durations, and unrelated traits | Medium | canopi-data |
+| fruit_type | "Dry", "Fleshy" are textures; "Apocarpous" is floral morphology | Medium | canopi-data |
+| invasive_potential | Conflates biogeographic status with invasion risk | Medium | canopi-data |
+| grime_strategy | Potentially redundant reversed pairs (CR/RC) | Low | canopi-data |
+| mycorrhizal_type | "mixed" is vague and inconsistently cased | Low | canopi-data |
+| active_growth_period | Inconsistent conjunction formatting | Low | canopi-data |
+| bloom_period | Case duplicates + inconsistent separators | Low | canopi-data |
+| canopy_position | Only 2 of 5 standard levels | Low | accepted |
+| growth_form_type | Herb/Forb overlap | Low | accepted |
+
 ## Previously Fixed Issues (from earlier review rounds)
 
 | # | Issue | Status |
@@ -154,11 +325,21 @@ DB stores these as `0`/`1` integers. Field registry correctly marks them as `typ
 
 ### canopi-data side
 
-1. **Remove life-cycle values from Habit enum** (Issue A): `annual`, `biennial`, `perennial` are not growth forms
-2. **Normalize bloom_period case** (Issue D): deduplicate the 5 Title Case / lowercase pairs
-3. **Normalize export case** (Issue A/B): ensure export values match enum case consistently
-4. **Populate or remove root_system_type** (Issue G): column is empty
-5. **Split flower_color composites** (Issue E): normalize multi-value entries
+**Data model fixes (scientific correctness):**
+1. **Clean up habit** (Issue A + scientific): Remove life-cycle values; long-term, split storage organs (Bulb/Corm) and taxonomic groups (Fern/Bamboo/Lichen) into proper fields
+2. **Fix pollination_syndrome hierarchy**: Either use broad categories only or specific pollinator groups, not both. Move Cleistogamous to reproductive_type. Standardize Latin/English naming
+3. **Fix seed_dormancy_type mixing**: Separate dormancy mechanisms from durations. Move Serotinous/Xerochasy to appropriate fields
+4. **Fix fruit_type non-types**: Replace Dry/Fleshy with specific types, reclassify Apocarpous
+5. **Split invasive_potential**: Separate biogeographic status (Native/Introduced/Naturalized) from invasion risk (None/Potentially Invasive/Invasive)
+
+**Normalization fixes:**
+6. **Normalize bloom_period case** (Issue D): deduplicate the 5 Title Case / lowercase pairs
+7. **Normalize active_growth_period formatting**: consistent conjunctions
+8. **Fix mycorrhizal_type "mixed"**: replace with specific dual types or clarify, normalize case
+9. **Deduplicate grime_strategy**: merge CR/RC, CS/SC, RS/SR if order is not meaningful
+10. **Normalize export case** (Issue A/B): ensure export values match enum case consistently
+11. **Populate or remove root_system_type** (Issue G): column is empty
+12. **Split flower_color composites** (Issue E): normalize multi-value entries
 
 ## Cross-Reference: Translation Coverage by Field
 
