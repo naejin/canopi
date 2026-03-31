@@ -210,5 +210,11 @@ fn is_numeric_field(field: &str) -> bool {
             | "precip_max_inches"
             | "medicinal_rating"
             | "other_uses_rating"
+            | "ellenberg_light"
+            | "ellenberg_temperature"
+            | "ellenberg_moisture"
+            | "ellenberg_reaction"
+            | "ellenberg_nitrogen"
+            | "ellenberg_salt"
     )
 }

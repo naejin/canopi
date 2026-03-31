@@ -52,12 +52,23 @@ pub(crate) fn validated_column(field: &str) -> Option<&'static str> {
         "root_system_type" => Some("s.root_system_type"),
         "attracts_wildlife" => Some("s.attracts_wildlife"),
         "cn_ratio" => Some("s.cn_ratio"),
+        "raunkiaer_life_form" => Some("s.raunkiaer_life_form"),
+        "photosynthesis_pathway" => Some("s.photosynthesis_pathway"),
+        // Ellenberg indicators
+        "ellenberg_light" => Some("s.ellenberg_light"),
+        "ellenberg_temperature" => Some("s.ellenberg_temperature"),
+        "ellenberg_moisture" => Some("s.ellenberg_moisture"),
+        "ellenberg_reaction" => Some("s.ellenberg_reaction"),
+        "ellenberg_nitrogen" => Some("s.ellenberg_nitrogen"),
+        "ellenberg_salt" => Some("s.ellenberg_salt"),
         // Reproduction
+        "storage_organ" => Some("s.storage_organ"),
         "pollination_syndrome" => Some("s.pollination_syndrome"),
         "self_fertile" => Some("s.self_fertile"),
         "reproductive_type" => Some("s.reproductive_type"),
         "sexual_system" => Some("s.sexual_system"),
         "mating_system" => Some("s.mating_system"),
+        "clonal_growth_form" => Some("s.clonal_growth_form"),
         "vegetative_spread_rate" => Some("s.vegetative_spread_rate"),
         "seed_spread_rate" => Some("s.seed_spread_rate"),
         // Fruit & Seed
