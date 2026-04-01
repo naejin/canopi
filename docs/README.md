@@ -6,9 +6,9 @@ This directory is split into three layers:
 - subsystem docs for specialized areas
 - archived history and reviews
 
-If you are using this repo with agents, start with [`Agent Guide`](./agents.md).
+If you are using this repo with agents, start with [`Agent Guide`](./agents.md) and [`Docs Maintenance`](./maintenance.md).
 
-## Start Here
+## Active Docs
 
 - [Product Definition](./product-definition.md)
 - [Roadmap](./roadmap.md)
@@ -16,13 +16,8 @@ If you are using this repo with agents, start with [`Agent Guide`](./agents.md).
 - [Development](./development.md)
 - [Release Operations](./release-operations.md)
 - [Release Verification](./release-verification.md)
-
-## Agent Workflow
-
 - [Agent Guide](./agents.md)
-- Read `todo.md` first for active rewrite work.
-- Read `release-verification.md` and `release-operations.md` first for release work.
-- Read `renderer/renderer.md` or `db/README.md` first for subsystem-specific work.
+- [Docs Maintenance](./maintenance.md)
 
 ## Subsystem Docs
 

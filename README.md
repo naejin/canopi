@@ -46,6 +46,7 @@ cd desktop/web && npm test
 ```
 
 See [`docs/development.md`](docs/development.md) for the desktop dev command, frontend hook behavior, and common local checks.
+For documentation navigation, start at [`docs/README.md`](docs/README.md).
 
 ## Project structure
 

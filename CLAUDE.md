@@ -176,6 +176,7 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 ## Key Documents
 - Docs entry point: `docs/README.md`
 - Agent reading order: `docs/agents.md`
+- Docs maintenance protocol: `docs/maintenance.md`
 - Beta-release reference: `docs/todo.md`
 - Release hardening: `docs/release-verification.md`
 - Release operations: `docs/release-operations.md`
