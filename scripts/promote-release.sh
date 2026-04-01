@@ -123,11 +123,11 @@ trap 'rm -rf "$tmpdir"' EXIT
 log "Downloading artifacts from run $run_id in $repo"
 artifact_json="$(gh api "repos/$repo/actions/runs/$run_id/artifacts")"
 mapfile -t artifact_lines < <(
-  python3 - <<'PY' <<<"$artifact_json"
+  ARTIFACT_JSON="$artifact_json" python3 - <<'PY'
 import json
-import sys
+import os
 
-payload = json.load(sys.stdin)
+payload = json.loads(os.environ["ARTIFACT_JSON"])
 for artifact in payload.get("artifacts", []):
     if artifact.get("expired"):
         continue
