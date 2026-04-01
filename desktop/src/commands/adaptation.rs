@@ -1,3 +1,4 @@
+use crate::db::acquire;
 use serde::{Deserialize, Serialize};
 
 /// Result of checking a single species against a target hardiness zone.
@@ -43,7 +44,7 @@ pub fn check_plant_compatibility(
         return Err("Batch size exceeds maximum of 500 names".into());
     }
 
-    let conn = plant_db.0.lock().unwrap_or_else(|e| e.into_inner());
+    let conn = acquire(&plant_db.0, "PlantDb");
 
     let placeholders: String = canonical_names
         .iter()
@@ -68,7 +69,7 @@ pub fn check_plant_compatibility(
         .collect();
 
     let rows = stmt
-        .query_map(params.as_slice(), |row| {
+        .query_map(params.as_slice(), |row| -> rusqlite::Result<_> {
             let species_id: String = row.get(0)?;
             let canonical_name: String = row.get(1)?;
             let hardiness_min: Option<i32> = row.get(2)?;
@@ -114,14 +115,14 @@ pub fn suggest_replacements(
     limit: u32,
     locale: String,
 ) -> Result<Vec<ReplacementSuggestion>, String> {
-    let conn = plant_db.0.lock().unwrap_or_else(|e| e.into_inner());
+    let conn = acquire(&plant_db.0, "PlantDb");
 
     // First, look up the original species to get its stratum and height
     let source: Option<(Option<String>, Option<f32>)> = conn
         .query_row(
             "SELECT s.stratum, s.height_max_m FROM species s WHERE s.canonical_name = ?1",
             [&canonical_name],
-            |row| Ok((row.get(0)?, row.get(1)?)),
+            |row| -> rusqlite::Result<_> { Ok((row.get(0)?, row.get(1)?)) },
         )
         .map_err(|e| format!("Failed to look up source species: {e}"))
         .ok();
@@ -179,7 +180,7 @@ pub fn suggest_replacements(
         .map_err(|e| format!("Failed to prepare replacements query: {e}"))?;
 
     let rows = stmt
-        .query_map(param_refs.as_slice(), |row| {
+        .query_map(param_refs.as_slice(), |row| -> rusqlite::Result<_> {
             let species_id: String = row.get(0)?;
             let canonical_name: String = row.get(1)?;
             let hardiness_min: Option<i32> = row.get(2)?;

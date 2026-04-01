@@ -1,3 +1,4 @@
+use crate::db::acquire;
 use tauri::State;
 
 use common_types::species::{
@@ -32,13 +33,13 @@ pub fn search_species(
     };
 
     let mut result = {
-        let conn = plant_db.0.lock().unwrap_or_else(|e| e.into_inner());
+        let conn = acquire(&plant_db.0, "PlantDb");
         crate::db::plant_db::search(&conn, text_opt, filters, cursor, sort, limit, locale)?
     };
 
     // Step 2: check favorites for each item — plant lock is now released.
     {
-        let conn = user_db.0.lock().unwrap_or_else(|e| e.into_inner());
+        let conn = acquire(&user_db.0, "UserDb");
         for item in &mut result.items {
             item.is_favorite = crate::db::user_db::is_favorite(&conn, &item.canonical_name);
         }
@@ -59,13 +60,13 @@ pub fn get_species_detail(
 ) -> Result<SpeciesDetail, String> {
     // Step 1: fetch detail from plant DB.
     let detail = {
-        let conn = plant_db.0.lock().unwrap_or_else(|e| e.into_inner());
+        let conn = acquire(&plant_db.0, "PlantDb");
         crate::db::plant_db::get_detail(&conn, &canonical_name, &locale)?
     };
 
     // Step 2: record the view in user DB — plant lock is now released.
     {
-        let conn = user_db.0.lock().unwrap_or_else(|e| e.into_inner());
+        let conn = acquire(&user_db.0, "UserDb");
         if let Err(e) = crate::db::user_db::record_recently_viewed(&conn, &canonical_name) {
             tracing::warn!(
                 "Failed to record recently viewed for '{}': {e}",
@@ -83,14 +84,14 @@ pub fn get_species_relationships(
     plant_db: tauri::State<'_, crate::db::PlantDb>,
     canonical_name: String,
 ) -> Result<Vec<Relationship>, String> {
-    let conn = plant_db.0.lock().unwrap_or_else(|e| e.into_inner());
+    let conn = acquire(&plant_db.0, "PlantDb");
 
     // Resolve the UUID for the given canonical name, then fetch relationships.
     let species_id: String = conn
         .query_row(
             "SELECT id FROM species WHERE canonical_name = ?1 LIMIT 1",
             [&canonical_name],
-            |row| row.get(0),
+            |row| -> rusqlite::Result<_> { row.get(0) },
         )
         .map_err(|e| format!("Failed to look up species id for '{canonical_name}': {e}"))?;
 
@@ -104,7 +105,7 @@ pub fn get_common_names(
     canonical_names: Vec<String>,
     locale: String,
 ) -> Result<std::collections::HashMap<String, String>, String> {
-    let conn = plant_db.0.lock().unwrap_or_else(|e| e.into_inner());
+    let conn = acquire(&plant_db.0, "PlantDb");
     crate::db::plant_db::get_common_names_batch(&conn, &canonical_names, &locale)
 }
 
@@ -116,7 +117,7 @@ pub fn get_species_batch(
     canonical_names: Vec<String>,
     locale: String,
 ) -> Result<Vec<SpeciesDetail>, String> {
-    let conn = plant_db.0.lock().unwrap_or_else(|e| e.into_inner());
+    let conn = acquire(&plant_db.0, "PlantDb");
     let mut results = Vec::with_capacity(canonical_names.len());
     for name in &canonical_names {
         match crate::db::plant_db::get_detail(&conn, name, &locale) {
@@ -134,7 +135,7 @@ pub fn get_species_batch(
 pub fn get_filter_options(
     plant_db: tauri::State<'_, crate::db::PlantDb>,
 ) -> Result<FilterOptions, String> {
-    let conn = plant_db.0.lock().unwrap_or_else(|e| e.into_inner());
+    let conn = acquire(&plant_db.0, "PlantDb");
     crate::db::plant_db::get_filter_options(&conn)
 }
 
@@ -145,7 +146,7 @@ pub fn get_dynamic_filter_options(
     fields: Vec<String>,
     locale: String,
 ) -> Result<Vec<DynamicFilterOptions>, String> {
-    let conn = plant_db.0.lock().unwrap_or_else(|e| e.into_inner());
+    let conn = acquire(&plant_db.0, "PlantDb");
     crate::db::plant_db::get_dynamic_filter_options(&conn, &fields, &locale)
 }
 
@@ -155,7 +156,7 @@ pub fn get_species_images(
     plant_db: tauri::State<'_, crate::db::PlantDb>,
     canonical_name: String,
 ) -> Result<Vec<SpeciesImage>, String> {
-    let conn = plant_db.0.lock().unwrap_or_else(|e| e.into_inner());
+    let conn = acquire(&plant_db.0, "PlantDb");
     crate::db::plant_db::get_species_images(&conn, &canonical_name)
 }
 
@@ -165,7 +166,7 @@ pub fn get_species_external_links(
     plant_db: tauri::State<'_, crate::db::PlantDb>,
     canonical_name: String,
 ) -> Result<Vec<SpeciesExternalLink>, String> {
-    let conn = plant_db.0.lock().unwrap_or_else(|e| e.into_inner());
+    let conn = acquire(&plant_db.0, "PlantDb");
     crate::db::plant_db::get_species_external_links(&conn, &canonical_name)
 }
 
@@ -176,7 +177,7 @@ pub fn get_locale_common_names(
     canonical_name: String,
     locale: String,
 ) -> Result<Vec<CommonNameEntry>, String> {
-    let conn = plant_db.0.lock().unwrap_or_else(|e| e.into_inner());
+    let conn = acquire(&plant_db.0, "PlantDb");
     crate::db::plant_db::get_locale_common_names(&conn, &canonical_name, &locale)
 }
 

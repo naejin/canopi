@@ -1,3 +1,4 @@
+use crate::db::acquire;
 use common_types::species::SpeciesListItem;
 
 /// Toggle a species in the favorites list.
@@ -8,7 +9,7 @@ pub fn toggle_favorite(
     user_db: tauri::State<'_, crate::db::UserDb>,
     canonical_name: String,
 ) -> Result<bool, String> {
-    let conn = user_db.0.lock().unwrap_or_else(|e| e.into_inner());
+    let conn = acquire(&user_db.0, "UserDb");
     crate::db::user_db::toggle_favorite(&conn, &canonical_name)
         .map_err(|e| format!("Failed to toggle favorite for '{canonical_name}': {e}"))
 }
@@ -24,7 +25,7 @@ pub fn get_favorites(
 ) -> Result<Vec<SpeciesListItem>, String> {
     // Step 1: get canonical names from user DB, then release.
     let names = {
-        let conn = user_db.0.lock().unwrap_or_else(|e| e.into_inner());
+        let conn = acquire(&user_db.0, "UserDb");
         crate::db::user_db::get_favorite_names(&conn)
             .map_err(|e| format!("Failed to read favorites: {e}"))?
     };
@@ -34,7 +35,7 @@ pub fn get_favorites(
     }
 
     // Step 2: hydrate from plant DB.
-    let conn = plant_db.0.lock().unwrap_or_else(|e| e.into_inner());
+    let conn = acquire(&plant_db.0, "PlantDb");
     let items = hydrate_species_list(&conn, &names, &locale, true)?;
     Ok(items)
 }
@@ -51,7 +52,7 @@ pub fn get_recently_viewed(
 ) -> Result<Vec<SpeciesListItem>, String> {
     // Step 1: get recently viewed names from user DB, then release.
     let names = {
-        let conn = user_db.0.lock().unwrap_or_else(|e| e.into_inner());
+        let conn = acquire(&user_db.0, "UserDb");
         crate::db::user_db::get_recently_viewed_names(&conn, limit)
             .map_err(|e| format!("Failed to read recently viewed: {e}"))?
     };
@@ -61,13 +62,13 @@ pub fn get_recently_viewed(
     }
 
     // Step 2: hydrate from plant DB, then check favorites.
-    let plant_conn = plant_db.0.lock().unwrap_or_else(|e| e.into_inner());
+    let plant_conn = acquire(&plant_db.0, "PlantDb");
     let mut items = hydrate_species_list(&plant_conn, &names, &locale, false)?;
     drop(plant_conn);
 
     // Step 3: mark favorites — plant lock is now released.
     {
-        let user_conn = user_db.0.lock().unwrap_or_else(|e| e.into_inner());
+        let user_conn = acquire(&user_db.0, "UserDb");
         for item in &mut items {
             item.is_favorite = crate::db::user_db::is_favorite(&user_conn, &item.canonical_name);
         }

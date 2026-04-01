@@ -16,8 +16,7 @@ pub struct AppHealth(pub Mutex<SubsystemHealth>);
 pub fn run() {
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|_app, _args, _cwd| {}))
-        .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_shell::init());
+        .plugin(tauri_plugin_dialog::init());
 
     #[cfg(debug_assertions)]
     {

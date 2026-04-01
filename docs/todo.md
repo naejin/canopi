@@ -179,7 +179,7 @@ Status:
 
 What is left:
 - keep the release operator docs accurate for future beta patches
-- Tauri platform hardening: enable CSP (13.1), remove unused shell plugin (13.2), add poison lock logging (13.5)
+- preserve the landed Tauri platform hardening: CSP (13.1), shell-plugin removal (13.2), poison lock logging (13.5)
 - keep the release-blocking CI gates green on the candidate branch
 - keep the deferred backlog explicit so it does not leak into Wave 5
 
@@ -238,7 +238,7 @@ Current gate state:
 With the gate satisfied:
 - Wave 4 landed on the current retained-surface architecture on 2026-03-31
 - renderer-tied product redesigns are no longer blocked by renderer stability, but they still must respect the scope and sequencing rules in this file
-- the only remaining active rewrite wave is Wave 5 beta release hardening
+- there is no remaining active rewrite wave; post-beta follow-up is patch hardening only if new release-blocking defects appear
 
 ---
 
@@ -383,10 +383,10 @@ Can be fixed independently if needed:
 - resource ownership cleanup in rulers, text tool, and `WorldMapSurface`
 - deferred-pass data-shape cleanup in renderer internals
 
-In scope for Wave 5 (from Tauri platform audit — section 13):
-- enable CSP (section 13.1)
-- remove unused shell plugin (section 13.2)
-- add poison lock logging (section 13.5)
+Completed in the post-beta hardening patch (see section 13):
+- enabled CSP (section 13.1)
+- removed unused shell plugin (section 13.2)
+- added poison lock logging (section 13.5)
 
 Still deferred beyond Wave 5 beta:
 - plant color assignment (see section 9)
@@ -1017,7 +1017,7 @@ The Konva viewport moves continuously during pan/zoom. Re-rendering MapLibre on 
 5. If not cached + online: let MapLibre fetch normally, optionally cache the response
 
 **Gotcha**: MapLibre runs in the WebView and can't read local files directly. Cached tile serving options:
-- **Asset protocol** (preferred, same as section 10): scope `$APPDATA/dem-tiles/**` in asset protocol config. MapLibre `transformRequest` rewrites DEM URLs to `http://asset.localhost/...` paths via `convertFileSrc(cachePath)`. CSP is currently `null` (no restriction), so no CSP update needed unless CSP is later enabled (would need `img-src asset: http://asset.localhost`)
+- **Asset protocol** (preferred, same as section 10): scope `$APPDATA/dem-tiles/**` in asset protocol config. MapLibre `transformRequest` rewrites DEM URLs to `http://asset.localhost/...` paths via `convertFileSrc(cachePath)`. The current CSP is already enabled, so when this lands `img-src` must be widened to include `asset: http://asset.localhost`
 - **Optimized IPC binary transfer** (fallback): use `tauri::ipc::Response` to return raw tile bytes without JSON serialization overhead. This avoids the base64 bottleneck documented in section 10 — Tauri v2 can return `Response::new(bytes)` as an ArrayBuffer directly to JS. Frontend creates a Blob URL from the ArrayBuffer for MapLibre consumption
 - **IPC streaming** (for bulk tile pre-fetch): use `tauri::ipc::Channel<&[u8]>` to stream tile data chunk-by-chunk during download, enabling real-time progress without blocking the main thread
 
@@ -1213,7 +1213,7 @@ The entire pipeline is async. The user can interact with the canvas at every ste
 | `desktop/web/src/ipc/tiles.ts` | New — IPC stubs for tile download/status | 3 |
 | `desktop/src/commands/tiles.rs` | Add DEM tile download support | 3 |
 | `desktop/src/lib.rs` | Register new tile commands | 3 |
-| `desktop/tauri.conf.json` | Enable asset protocol + scope `dem-tiles` (pairs with S10). CSP is `null` — no restriction on external tile fetches | 3 |
+| `desktop/tauri.conf.json` | Extend the existing CSP/asset config with `dem-tiles` scope and `img-src asset: http://asset.localhost` (pairs with S10) | 3 |
 | `desktop/capabilities/main-window.json` | Add `dem-tiles` to fs:allow-read scope | 3 |
 | `desktop/web/src/i18n/locales/*.json` | Layer names, contour settings labels (11 locales) | 1 |
 
@@ -1247,7 +1247,16 @@ Findings from a Tauri v2 feature audit (2026-04-01). These items address securit
 
 ### 13.1 Content Security Policy (CSP)
 
-**Problem**: CSP is `null` (disabled) in `tauri.conf.json`. No restrictions on script sources, image sources, connect origins, or style sources. For a shipping desktop app, this removes a key XSS defense layer.
+**Status**: landed in the current tree after the 2026-04-01 beta closeout.
+
+`tauri.conf.json` now carries a restrictive CSP:
+- `default-src 'self'`
+- `script-src 'self'`
+- `style-src 'self' 'unsafe-inline'`
+- `img-src 'self' blob: data: https:`
+- `connect-src ipc: http://ipc.localhost https:`
+- `worker-src 'self' blob:`
+- `font-src 'self' data:`
 
 **Current external origins used by the app**:
 - `connect-src`: Nominatim OSM API (`nominatim.openstreetmap.org`), template downloads (`templates.canopi.app`), species image fetches (various domains)
@@ -1255,7 +1264,7 @@ Findings from a Tauri v2 feature audit (2026-04-01). These items address securit
 - Future (S10): `asset: http://asset.localhost` when asset protocol is enabled
 - Future (S12): OSM tile servers (`*.tile.openstreetmap.org`), AWS DEM tiles (`s3.amazonaws.com`)
 
-**Recommendation**: Enable CSP before beta release. Start restrictive, loosen only for documented needs:
+**Landed config**:
 
 ```json
 "csp": {
@@ -1264,36 +1273,39 @@ Findings from a Tauri v2 feature audit (2026-04-01). These items address securit
   "style-src": "'self' 'unsafe-inline'",
   "img-src": "'self' blob: data: https:",
   "connect-src": "ipc: http://ipc.localhost https:",
-  "font-src": "'self'"
+  "worker-src": "'self' blob:",
+  "font-src": "'self' data:"
 }
 ```
 
 Notes:
 - `'unsafe-inline'` for `style-src` is required — CSS Modules inject `<style>` tags at runtime
 - `img-src https:` is broad but necessary — species images come from many domains (iNaturalist, USDA, Wikimedia, etc.)
+- `worker-src blob:` is required for current MapLibre worker usage in the retained surface
 - When asset protocol is enabled (S10/S12), add `asset: http://asset.localhost` to `img-src`
 - `connect-src https:` covers Nominatim, template server, image downloads, and future tile servers
 - Can be tightened to explicit domains later once the full set of image/tile origins is catalogued
 
 **Files changed**: `desktop/tauri.conf.json`
 
-**Risk**: Low — CSP is additive security. If a valid origin is missed, the browser console shows a clear CSP violation error with the blocked URL. Fix by adding the origin. Test by opening a plant detail card (loads external species images) and running through save/load/export flows.
+**Current validation**: passed repo gates (`cargo fmt`, `cargo clippy`, `cargo test`, frontend typecheck/tests/build) after landing. A packaged-app smoke rerun is still the right check if a future beta patch promotes this exact config.
 
-**When**: Wave 5 beta hardening — easy to land, high security value.
+**When**: landed in the post-beta hardening patch after Wave 5 closeout.
 
 ### 13.2 Remove Unused Shell Plugin
 
-**Problem**: `tauri-plugin-shell` is initialized in `lib.rs` (line 20), listed in `desktop/Cargo.toml`, has `shell:default` permission in `capabilities/main-window.json`, and `@tauri-apps/plugin-shell` is in `desktop/web/package.json` — but no code in the app invokes any shell command. The plugin grants the ability to execute arbitrary shell commands, which is unnecessary attack surface for a design app.
+**Status**: landed in the current tree after the 2026-04-01 beta closeout.
 
-**Fix** (pure deletion, 4 files):
-1. Remove `.plugin(tauri_plugin_shell::init())` from `desktop/src/lib.rs`
-2. Remove `tauri-plugin-shell = "2"` from `desktop/Cargo.toml`
-3. Remove `"shell:default"` from `desktop/capabilities/main-window.json`
-4. Remove `@tauri-apps/plugin-shell` from `desktop/web/package.json`
+The shell plugin has been removed from:
+1. `desktop/src/lib.rs`
+2. `desktop/Cargo.toml`
+3. `desktop/capabilities/main-window.json`
+4. `desktop/web/package.json`
+5. lockfiles (`Cargo.lock`, `desktop/web/package-lock.json`)
 
-**Risk**: None — grep confirms zero shell API usage in the entire codebase. The only matches are the plugin init line and unrelated string occurrences ("surfaceShell" CSS class, "shell command" comment in export.ts).
+**Risk**: None observed — repo verification passed and no shell API usage remains in the codebase.
 
-**When**: Wave 5 beta hardening (trivial, 5-minute change).
+**When**: landed in the post-beta hardening patch after Wave 5 closeout.
 
 ### 13.3 Binary IPC for Tile Commands
 
@@ -1351,14 +1363,14 @@ Tauri v2 provides `tauri-plugin-updater` with:
 
 ### 13.5 Mutex Poison Recovery Logging
 
-**Problem**: 25+ instances of `.unwrap_or_else(|e| e.into_inner())` across all command files silently recover from mutex poisoning. If a panic occurs in a command that holds a lock (e.g., a rusqlite error that unwraps instead of mapping), subsequent commands continue with potentially corrupted state — with zero log trail. This makes debugging intermittent state corruption nearly impossible.
+**Status**: landed in the current tree after the 2026-04-01 beta closeout.
 
-**Current pattern** (every lock acquisition in `desktop/src/commands/`):
+Previous pattern:
 ```rust
 let conn = db.0.lock().unwrap_or_else(|e| e.into_inner());
 ```
 
-**Fix**: Extract a helper and add `tracing::warn!`:
+Landed fix:
 
 ```rust
 // In desktop/src/db/mod.rs or a shared util
@@ -1370,7 +1382,7 @@ pub fn acquire<T>(mutex: &std::sync::Mutex<T>, name: &str) -> std::sync::MutexGu
 }
 ```
 
-Then replace all 25+ call sites:
+Call sites now use the helper instead of inlining poison recovery:
 ```rust
 // Before
 let conn = user_db.0.lock().unwrap_or_else(|e| e.into_inner());
@@ -1378,29 +1390,29 @@ let conn = user_db.0.lock().unwrap_or_else(|e| e.into_inner());
 let conn = acquire(&user_db.0, "UserDb");
 ```
 
-**Files changed**: `desktop/src/commands/favorites.rs`, `species.rs`, `settings.rs`, `design.rs`, `health.rs`, `adaptation.rs` (all files that lock `PlantDb`, `UserDb`, or `AppHealth`)
+**Files changed**: `desktop/src/db/mod.rs`, plus `desktop/src/commands/favorites.rs`, `species.rs`, `settings.rs`, `design.rs`, `health.rs`, and `adaptation.rs`
 
 **Risk**: None — behavior is unchanged (still recovers from poison). Just adds observability. The helper also reduces boilerplate at each call site.
 
-**When**: Wave 5 beta hardening or any convenient moment. Can be done in a single small PR.
+**When**: landed in the post-beta hardening patch after Wave 5 closeout.
 
 ### Implementation Priority
 
 | # | Item | Impact | Effort | When |
 |---|------|--------|--------|------|
-| 13.2 | Remove shell plugin | Security (attack surface) | 5 min | Wave 5 |
-| 13.5 | Poison lock logging | Observability | 30 min | Wave 5 |
-| 13.1 | Enable CSP | Security (XSS defense) | 1 hr + testing | Wave 5 |
+| 13.2 | Remove shell plugin | Security (attack surface) | Done | Landed post-beta |
+| 13.5 | Poison lock logging | Observability | Done | Landed post-beta |
+| 13.1 | Enable CSP | Security (XSS defense) | Done | Landed post-beta |
 | 13.3 | Binary IPC for tiles | Performance | 30 min | With S12 |
 | 13.4 | Auto-updater | Distribution | Days | Post-beta |
 
-Items 13.2, 13.5, and 13.1 are good Wave 5 candidates — they're small, low-risk, and improve the shipping quality of the beta. Items 13.3 and 13.4 are deferred to their natural implementation moments.
+Items 13.2, 13.5, and 13.1 are already landed in the current tree. Items 13.3 and 13.4 remain deferred to their natural implementation moments.
 
 ### Interaction With Other Sections
 
 - **Section 10 (Image Loading Performance)**: S10 enables the asset protocol for image cache. When CSP (13.1) is later enabled, `img-src` must include `asset: http://asset.localhost`. The S10 spec already notes this.
 - **Section 12 (Map Layers)**: S12 phase 3 needs the same asset protocol for DEM tile cache. Binary IPC (13.3) is the fallback if asset protocol isn't available. S12 already documents both paths.
-- **Wave 5 beta hardening**: Items 13.1, 13.2, and 13.5 fit naturally into Wave 5's "fix beta-blocking regressions only" scope — they're security and observability improvements, not feature work.
+- **Post-beta hardening**: Items 13.1, 13.2, and 13.5 are now landed and should stay landed on future beta patches unless there is an explicit reason to reopen those decisions.
 
 ---
 
@@ -1413,7 +1425,7 @@ Use archived docs only for historical context.
 With retained-surface Wave 3 closeout landed on 2026-03-30, the live verification rerun completed with Claude Code, the renderer stability gate closed, Wave 4 design coherence landed on 2026-03-31, and Wave 5 beta hardening closed on 2026-04-01, the current operating rule is:
 - use `docs/release-verification.md`
 - treat Wave 5 as complete unless a new beta-blocking defect reopens release hardening
-- Tauri platform hardening items 13.1 (CSP), 13.2 (shell removal), 13.5 (poison logging) remain valid follow-up candidates for the next beta patch wave
+- Tauri platform hardening items 13.1 (CSP), 13.2 (shell removal), 13.5 (poison logging) are already landed and should be preserved in future beta patches
 - remove any stale scope language if the surviving beta-release surface changes again
 
 If a future change affects:

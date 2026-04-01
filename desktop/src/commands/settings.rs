@@ -3,7 +3,7 @@ use common_types::settings::{Locale, Settings};
 
 #[tauri::command]
 pub fn get_settings(user_db: tauri::State<'_, UserDb>) -> Result<Settings, String> {
-    let conn = user_db.0.lock().unwrap_or_else(|e| e.into_inner());
+    let conn = db::acquire(&user_db.0, "UserDb");
     let json = db::user_db::get_setting(&conn, "settings")
         .map_err(|e| format!("Failed to read settings: {e}"))?;
     match json {
@@ -55,7 +55,7 @@ pub fn get_settings(user_db: tauri::State<'_, UserDb>) -> Result<Settings, Strin
 
 #[tauri::command]
 pub fn set_settings(user_db: tauri::State<'_, UserDb>, settings: Settings) -> Result<(), String> {
-    let conn = user_db.0.lock().unwrap_or_else(|e| e.into_inner());
+    let conn = db::acquire(&user_db.0, "UserDb");
     let json = serde_json::to_string(&settings)
         .map_err(|e| format!("Failed to serialize settings: {e}"))?;
     db::user_db::set_setting(&conn, "settings", &json)

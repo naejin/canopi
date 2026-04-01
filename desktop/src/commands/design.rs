@@ -10,7 +10,7 @@ use crate::design::{autosave, format};
 
 /// Record a file in recent_files, converting errors to warnings (non-fatal).
 fn try_record_recent(user_db: &tauri::State<'_, UserDb>, path: &str, name: &str) {
-    let conn = user_db.0.lock().unwrap_or_else(|e| e.into_inner());
+    let conn = crate::db::acquire(&user_db.0, "UserDb");
     if let Err(e) = crate::db::recent_files::record_recent_file(&conn, path, name) {
         tracing::warn!("Failed to record recent file '{}': {e}", path);
     }
@@ -56,7 +56,7 @@ pub fn load_design(user_db: tauri::State<'_, UserDb>, path: String) -> Result<Ca
 /// Return up to 20 recently opened files, most recent first.
 #[tauri::command]
 pub fn get_recent_files(user_db: tauri::State<'_, UserDb>) -> Result<Vec<DesignSummary>, String> {
-    let conn = user_db.0.lock().unwrap_or_else(|e| e.into_inner());
+    let conn = crate::db::acquire(&user_db.0, "UserDb");
     crate::db::recent_files::get_recent_files(&conn, 20)
         .map_err(|e| format!("Failed to get recent files: {e}"))
 }
