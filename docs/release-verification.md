@@ -40,6 +40,7 @@ These checks must pass before a beta release candidate is declared ready:
 - `npm test --prefix desktop/web`
 - `npm run build --prefix desktop/web`
 - GitHub Actions Tauri build matrix with artifact upload for Linux, macOS Apple Silicon, macOS Intel, and Windows
+- Linux CI packaging is intentionally constrained to the Debian bundle in GitHub Actions to avoid non-essential RPM packaging hangs during release-candidate assembly
 - manual `Release Candidate` GitHub Actions workflow preflight for app version, bundled DB asset availability, bundled DB schema version, and checksum manifest generation
 - i18n completeness test for all supported locales against `en.json`
 
@@ -75,7 +76,7 @@ Use the packaged artifact produced by the manual `Release Candidate` workflow fo
 
 | Platform / target | Artifact source | Tester / owner | Test date | Status | Defects / follow-up |
 | --- | --- | --- | --- | --- | --- |
-| Linux desktop | GitHub Actions Linux Tauri build artifact | TBD | TBD | Pending | TBD |
+| Linux desktop (`.deb`) | GitHub Actions Linux Tauri build artifact | TBD | TBD | Pending | TBD |
 | macOS Apple Silicon (`aarch64-apple-darwin`) | GitHub Actions macOS 14 Tauri build artifact | TBD | TBD | Pending | TBD |
 | macOS Intel (`x86_64-apple-darwin`) | GitHub Actions macOS 13 Tauri build artifact | TBD | TBD | Pending | TBD |
 | Windows desktop | GitHub Actions Windows Tauri build artifact | TBD | TBD | Pending | TBD |

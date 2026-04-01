@@ -151,18 +151,23 @@ jobs:
 
   build:
     needs: preflight
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
+            bundle_args: --bundles deb
           - os: macos-14
             target: aarch64-apple-darwin
+            bundle_args: ""
           - os: macos-15-intel
             target: x86_64-apple-darwin
+            bundle_args: ""
           - os: windows-latest
             target: x86_64-pc-windows-msvc
+            bundle_args: ""
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -214,7 +219,7 @@ jobs:
           fi
 
       - name: Build Tauri app
-        run: npx --prefix desktop/web @tauri-apps/cli build --target ${{ matrix.target }}
+        run: npx --prefix desktop/web @tauri-apps/cli build --target ${{ matrix.target }} ${{ matrix.bundle_args }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
