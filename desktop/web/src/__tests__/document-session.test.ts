@@ -14,6 +14,7 @@ import {
   layerOpacity,
   layerVisibility,
   lockedObjectIds,
+  plantSpeciesColors,
   selectedObjectIds,
 } from '../state/canvas'
 import { loadDocumentSession, resetTransientCanvasSession } from '../canvas/runtime/document-session'
@@ -84,6 +85,7 @@ describe('document session reset', () => {
       description: null,
       location: null,
       north_bearing_deg: 0,
+      plant_species_colors: {},
       layers: [
         { name: 'plants', visible: false, locked: true, opacity: 0.35 },
       ],
@@ -133,6 +135,53 @@ describe('document session reset', () => {
       plants: 0.35,
       annotations: 1,
     })
+    expect(plantSpeciesColors.value).toEqual({})
+  })
+
+  it('loads document species color defaults into the canvas mirror state', () => {
+    const layerNames = ['base', 'contours', 'climate', 'zones', 'water', 'plants', 'annotations']
+    const layers = new Map(
+      layerNames.map((name) => {
+        const layer = {
+          visible: vi.fn(),
+          opacity: vi.fn(),
+          destroyChildren: vi.fn(),
+          batchDraw: vi.fn(),
+          add: vi.fn(),
+          find: vi.fn(() => []),
+        }
+        return [name, layer]
+      }),
+    ) as any
+
+    const file: CanopiFile = {
+      version: 1,
+      name: 'Loaded',
+      description: null,
+      location: null,
+      north_bearing_deg: 0,
+      plant_species_colors: { 'Malus domestica': '#C44230' },
+      layers: [],
+      plants: [],
+      zones: [],
+      consortiums: [],
+      timeline: [],
+      budget: [],
+      created_at: '',
+      updated_at: '',
+      extra: {},
+    }
+
+    loadDocumentSession(file, {
+      stage: { scaleX: () => 1 } as any,
+      layers,
+      restoreGuides: vi.fn(),
+      restoreObjectGroups: vi.fn(),
+      invalidateRender: vi.fn(),
+      getDocumentLoadEpoch: () => 1,
+    })
+
+    expect(plantSpeciesColors.value).toEqual({ 'Malus domestica': '#C44230' })
   })
 
   it('ignores stale async backfill after a newer document load starts', async () => {
@@ -185,6 +234,7 @@ describe('document session reset', () => {
       description: null,
       location: null,
       north_bearing_deg: 0,
+      plant_species_colors: {},
       layers: [],
       plants: [{
         id: 'plant-1',
@@ -270,6 +320,7 @@ describe('document session reset', () => {
       description: null,
       location: null,
       north_bearing_deg: 0,
+      plant_species_colors: {},
       layers: [],
       plants: [{
         id: 'plant-1',

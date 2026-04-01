@@ -164,7 +164,9 @@
       "customHex": "Aangepaste hex",
       "setColor": "Kleur instellen",
       "setColorForSpecies": "Instellen voor alle {{species}}",
+      "speciesDefaultHint": "Toekomstige plaatsingen van deze soort gebruiken deze kleur.",
       "clearColor": "Kleur wissen",
+      "clearSpeciesColor": "Standaardkleur van soort wissen",
       "names": {
         "red": "Rood",
         "orange": "Oranje",

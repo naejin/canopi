@@ -8,6 +8,7 @@ pub struct CanopiFile {
     pub description: Option<String>,
     pub location: Option<Location>,
     pub north_bearing_deg: Option<f64>,
+    pub plant_species_colors: std::collections::HashMap<String, String>,
     pub layers: Vec<Layer>,
     pub plants: Vec<PlacedPlant>,
     pub zones: Vec<Zone>,

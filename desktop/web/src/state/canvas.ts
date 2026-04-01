@@ -77,6 +77,7 @@ export type ColorByAttribute = 'stratum' | 'hardiness' | 'lifecycle' | 'nitrogen
 export const plantDisplayMode = signal<PlantDisplayMode>('default')
 export const plantColorByAttr = signal<ColorByAttribute>('stratum')
 export const plantColorMenuOpen = signal<boolean>(false)
+export const plantSpeciesColors = signal<Record<string, string>>({})
 
 // Plant stamp tool
 export interface PlantStampSpecies {

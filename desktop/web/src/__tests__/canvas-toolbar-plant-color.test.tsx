@@ -23,6 +23,7 @@ describe('CanvasToolbar plant color action', () => {
           singleSpeciesCommonName: null,
           sharedCurrentColor: null,
           suggestedColor: null,
+          singleSpeciesDefaultColor: null,
         }
       }
       return {
@@ -31,6 +32,7 @@ describe('CanvasToolbar plant color action', () => {
         singleSpeciesCommonName: 'Apple',
         sharedCurrentColor: null,
         suggestedColor: '#C8A51E',
+        singleSpeciesDefaultColor: null,
       }
     })
     setCanvasEngine({
@@ -41,6 +43,7 @@ describe('CanvasToolbar plant color action', () => {
       toggleRulers: vi.fn(),
       setSelectedPlantColor: vi.fn(),
       setPlantColorForSpecies: vi.fn(),
+      clearPlantSpeciesColor: vi.fn(),
     } as any)
   })
 

@@ -138,11 +138,9 @@ fn collect_group_dominant_colors(
                 return None;
             }
 
-            let dominant = color_counts.iter().max_by(|left, right| {
-                left.1
-                    .cmp(right.1)
-                    .then_with(|| right.0.cmp(left.0))
-            })?;
+            let dominant = color_counts
+                .iter()
+                .max_by(|left, right| left.1.cmp(right.1).then_with(|| right.0.cmp(left.0)))?;
             let ratio = *dominant.1 as f32 / total as f32;
             if ratio < threshold {
                 return None;
@@ -162,7 +160,10 @@ fn normalize_primary_flower_color(value: Option<&str>) -> Option<String> {
 }
 
 fn repeat_vars(count: usize) -> String {
-    std::iter::repeat("?").take(count).collect::<Vec<_>>().join(",")
+    std::iter::repeat("?")
+        .take(count)
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 fn dedupe(values: &[String]) -> Vec<String> {

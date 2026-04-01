@@ -164,7 +164,9 @@
       "customHex": "Пользовательский hex",
       "setColor": "Задать цвет",
       "setColorForSpecies": "Задать для всех {{species}}",
+      "speciesDefaultHint": "Будущие размещения этого вида будут использовать этот цвет.",
       "clearColor": "Очистить цвет",
+      "clearSpeciesColor": "Очистить цвет вида по умолчанию",
       "names": {
         "red": "Красный",
         "orange": "Оранжевый",

@@ -164,7 +164,9 @@
       "customHex": "Benutzerdefiniertes Hex",
       "setColor": "Farbe setzen",
       "setColorForSpecies": "Für alle {{species}} setzen",
+      "speciesDefaultHint": "Künftige Platzierungen dieser Art verwenden diese Farbe.",
       "clearColor": "Farbe löschen",
+      "clearSpeciesColor": "Artstandardfarbe löschen",
       "names": {
         "red": "Rot",
         "orange": "Orange",

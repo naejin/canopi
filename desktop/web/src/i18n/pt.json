@@ -164,7 +164,9 @@
       "customHex": "Hex personalizado",
       "setColor": "Definir cor",
       "setColorForSpecies": "Definir para todos os {{species}}",
+      "speciesDefaultHint": "As futuras plantas desta espécie usarão esta cor.",
       "clearColor": "Limpar cor",
+      "clearSpeciesColor": "Limpar cor padrão da espécie",
       "names": {
         "red": "Vermelho",
         "orange": "Laranja",

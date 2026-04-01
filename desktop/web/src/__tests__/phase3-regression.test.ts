@@ -18,7 +18,7 @@ describe('persistent plant IDs', () => {
   it('extractExtra preserves groups field', () => {
     const raw = {
       version: 1, name: 'test', description: null, location: null,
-      north_bearing_deg: 0, layers: [], plants: [], zones: [],
+      north_bearing_deg: 0, plant_species_colors: {}, layers: [], plants: [], zones: [],
       consortiums: [], groups: [{ id: 'g1', name: null, layer: 'zones', position: { x: 0, y: 0 }, rotation: null, member_ids: ['a', 'b'] }],
       timeline: [], budget: [], created_at: '', updated_at: '',
     }
@@ -62,4 +62,3 @@ describe('projection', () => {
     expect(geo.lat).toBeLessThan(originLat)
   })
 })
-

@@ -2,7 +2,6 @@ import Konva from 'konva'
 import type { CanvasTool } from './base'
 import type { CanvasEngine } from '../engine'
 import { plantStampSpecies } from '../../state/canvas'
-import { createPlantNode } from '../plants'
 import { AddNodeCommand } from '../commands'
 
 export class PlantStampTool implements CanvasTool {
@@ -24,14 +23,12 @@ export class PlantStampTool implements CanvasTool {
     const pos = engine.stage.getRelativePointerPosition()
     if (!pos) return
 
-    const plantNode = createPlantNode({
-      id: crypto.randomUUID(),
+    const plantNode = engine.createPlantPlacementNode({
       canonicalName: species.canonical_name,
       commonName: species.common_name,
       stratum: species.stratum,
       canopySpreadM: species.width_max_m,
       position: pos,
-      stageScale: engine.stage.scaleX(),
     })
 
     const cmd = new AddNodeCommand('plants', plantNode)

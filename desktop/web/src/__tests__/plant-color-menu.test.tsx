@@ -9,6 +9,7 @@ describe('PlantColorMenu', () => {
   let container: HTMLDivElement
   const setSelectedPlantColor = vi.fn()
   const setPlantColorForSpecies = vi.fn()
+  const clearPlantSpeciesColor = vi.fn()
   const ensureSpeciesCacheEntries = vi.fn().mockResolvedValue(false)
   const getSelectedPlantColorContext = vi.fn()
   const buttonRef = { current: null as HTMLButtonElement | null }
@@ -19,11 +20,13 @@ describe('PlantColorMenu', () => {
     document.body.appendChild(container)
     setSelectedPlantColor.mockReset()
     setPlantColorForSpecies.mockReset()
+    clearPlantSpeciesColor.mockReset()
     ensureSpeciesCacheEntries.mockClear()
     getSelectedPlantColorContext.mockReset()
     setCanvasEngine({
       setSelectedPlantColor,
       setPlantColorForSpecies,
+      clearPlantSpeciesColor,
       ensureSpeciesCacheEntries,
       getSelectedPlantColorContext,
     } as any)
@@ -47,6 +50,7 @@ describe('PlantColorMenu', () => {
       singleSpeciesCommonName: 'Apple',
       sharedCurrentColor: null,
       suggestedColor: '#C8A51E',
+      singleSpeciesDefaultColor: null,
     })
 
     await act(async () => {
@@ -80,6 +84,7 @@ describe('PlantColorMenu', () => {
       singleSpeciesCommonName: 'Apple',
       sharedCurrentColor: null,
       suggestedColor: '#C8A51E',
+      singleSpeciesDefaultColor: null,
     })
 
     await act(async () => {
@@ -107,6 +112,7 @@ describe('PlantColorMenu', () => {
       singleSpeciesCommonName: null,
       sharedCurrentColor: 'mixed',
       suggestedColor: null,
+      singleSpeciesDefaultColor: null,
     })
 
     await act(async () => {
@@ -126,6 +132,7 @@ describe('PlantColorMenu', () => {
       singleSpeciesCommonName: 'Apple',
       sharedCurrentColor: null,
       suggestedColor: '#C8A51E',
+      singleSpeciesDefaultColor: null,
     })
 
     await act(async () => {
@@ -157,6 +164,7 @@ describe('PlantColorMenu', () => {
       singleSpeciesCommonName: 'Apple',
       sharedCurrentColor: null,
       suggestedColor: '#C8A51E',
+      singleSpeciesDefaultColor: null,
     })
 
     await act(async () => {
@@ -182,6 +190,7 @@ describe('PlantColorMenu', () => {
       singleSpeciesCommonName: 'Apple',
       sharedCurrentColor: null,
       suggestedColor: '#C8A51E',
+      singleSpeciesDefaultColor: null,
     })
 
     await act(async () => {
@@ -219,5 +228,33 @@ describe('PlantColorMenu', () => {
     })
 
     expect(setSelectedPlantColor).toHaveBeenCalledWith('#123ABC')
+  })
+
+  it('clears the species default separately from selected plant overrides', async () => {
+    getSelectedPlantColorContext.mockReturnValue({
+      plantIds: ['plant-1'],
+      singleSpeciesCanonicalName: 'Malus domestica',
+      singleSpeciesCommonName: 'Apple',
+      sharedCurrentColor: '#C8A51E',
+      suggestedColor: '#C8A51E',
+      singleSpeciesDefaultColor: '#C8A51E',
+    })
+
+    await act(async () => {
+      render(<PlantColorMenu buttonRef={buttonRef} />, container)
+      await Promise.resolve()
+    })
+
+    const clearSpeciesButton = [...container.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('Clear species default'),
+    ) as HTMLButtonElement
+
+    await act(async () => {
+      clearSpeciesButton.click()
+      await Promise.resolve()
+    })
+
+    expect(clearPlantSpeciesColor).toHaveBeenCalledWith('Malus domestica')
+    expect(plantColorMenuOpen.value).toBe(false)
   })
 })

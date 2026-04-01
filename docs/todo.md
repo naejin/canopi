@@ -461,8 +461,9 @@ Three layers, from least to most user effort:
 
 2. **User color override** (the main feature): a left-toolbar plant-color button opens a picker for the current plant selection. The button is disabled unless one or more plants are selected. Stored per-instance in the document. Options:
    - "Set color" — applies to all selected plant instances
-   - "Set color for all [species]" — bulk-applies to every instance of that species in the document when the current selection resolves to exactly one species
-   - "Clear color" — removes overrides from the current selected plants and reverts them to default green
+   - "Set color for all [species]" — applies to every current instance of that species and stores a document-scoped default so future placements inherit the same color
+   - "Clear color" — removes per-instance overrides from the current selected plants
+   - "Clear species default" — removes the document-scoped default for future placements when the current selection resolves to exactly one species
    - When `flower_color` data exists for a single-species selection, the picker pre-selects the matching palette color as a suggestion
 
 3. **Flower color display mode**: new `color-by` attribute `'flower'` in the existing display mode system. Maps `flower_color` DB text values to a fixed hex palette. Uses genus/family inference for the 93% without direct data. Falls back to gray (`#9E9E9E`) for species with no data at any level. This is an analytical overlay — it overrides user colors when active, same as hardiness/lifecycle modes do.
@@ -532,11 +533,18 @@ export interface PlacedPlant {
   // ... existing fields ...
   color: string | null  // hex color override
 }
+
+export interface CanopiFile {
+  // ... existing fields ...
+  plant_species_colors: Record<string, string>  // document-scoped species color defaults
+}
 ```
 
 **Konva attr**: `data-color-override` on plant groups. Read by `getStratumColor()` replacement logic.
 
 **Serialization**: `color` field round-trips through `.canopi` file save/load. `null` omitted from JSON via `#[serde(skip_serializing_if = "Option::is_none")]`.
+
+**Species-wide color behavior**: `Set color for all [species]` is document-scoped. It updates all currently placed instances of that species and stores a design-level default so future placements of that species inherit the same color.
 
 ### Landed Slices
 
@@ -549,7 +557,8 @@ export interface PlacedPlant {
 **Slice 2 — Toolbar picker**
 - Added a toolbar-anchored HTML popover for selected plant groups
 - Added the 4x3 palette plus an inline `More colors` advanced picker
-- Landed "Set color", "Set color for all [species]", and "Clear color"
+- Landed "Set color", "Set color for all [species]", "Clear color", and "Clear species default"
+- Added document-scoped species color defaults so future placements inherit the same-species color
 - Added flower-color suggestion when DB data resolves
 - Added undo/redo support via `SetPlantColorCommand`
 
@@ -564,6 +573,7 @@ export interface PlacedPlant {
 
 - Plant color editing is a toolbar-owned HTML popover surface, not a Konva surface
 - `SetPlantColorCommand` is a new undo/redo command; follows existing `Command` interface pattern
+- Species-wide color defaults are document state, not reconciler state — new placements must read the document default before node creation
 - Flower color inference (genus/family propagation) should be computed once at species cache load, not per-render
 - The `color` field on `PlacedPlant` is purely a document-level override — it does not modify the species DB
 - The toolbar picker is selection-driven — it must derive state from the current selected plant groups rather than holding clicked-plant metadata outside the engine/document seams

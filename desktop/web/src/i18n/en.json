@@ -164,7 +164,9 @@
       "customHex": "Custom hex",
       "setColor": "Set color",
       "setColorForSpecies": "Set for all {{species}}",
+      "speciesDefaultHint": "Future placements of this species will use this color.",
       "clearColor": "Clear color",
+      "clearSpeciesColor": "Clear species default",
       "names": {
         "red": "Red",
         "orange": "Orange",

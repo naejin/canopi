@@ -13,6 +13,7 @@ beforeEach(() => {
     description: null,
     location: null,
     north_bearing_deg: 0,
+    plant_species_colors: {},
     layers: [],
     plants: [
       {

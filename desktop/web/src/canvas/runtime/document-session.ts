@@ -16,6 +16,7 @@ import {
   lockedObjectIds,
   northBearingDeg,
   plantColorMenuOpen,
+  plantSpeciesColors,
   selectedObjectIds,
 } from '../../state/canvas'
 import type { CanopiFile } from '../../types/design'
@@ -170,6 +171,7 @@ export function loadDocumentSession(file: CanopiFile, engine: DocumentSessionEng
   }
 
   northBearingDeg.value = file.north_bearing_deg ?? 0
+  plantSpeciesColors.value = { ...file.plant_species_colors }
   guides.value = normalizeGuides(file.extra?.guides)
   engine.restoreGuides()
 

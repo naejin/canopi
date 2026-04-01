@@ -139,6 +139,7 @@ pub fn create_default() -> CanopiFile {
         description: None,
         location: None,
         north_bearing_deg: None,
+        plant_species_colors: std::collections::HashMap::new(),
         layers,
         plants: Vec::<PlacedPlant>::new(),
         zones: Vec::<Zone>::new(),

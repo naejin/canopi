@@ -36,7 +36,7 @@
 - Use viewport filtering only for deferred passes where stale off-screen state is acceptable
 
 Landed post-beta product slice:
-- Plant color assignment — per-instance document color overrides, same-species batch apply, and `color-by: flower` display mode (see `docs/todo.md` S9)
+- Plant color assignment — per-instance document color overrides, document-scoped same-species defaults for future placements, and `color-by: flower` display mode (see `docs/todo.md` S9)
 
 Deferred follow-up work:
 - Plant label improvements — single-line, color-aware density, priority ordering (see `docs/todo.md` S9.1)
@@ -103,6 +103,7 @@ External code uses `CanvasEngine` methods only. Never import from `runtime/*.ts`
 - **`CanvasEngine` is the public facade**: External code must use `engine.ts` methods — never import from `runtime/*.ts` directly. Internal behavior lives in runtime modules (see Canvas Architecture section above)
 - **Every new canvas module must be wired into runtime**: Must be imported and called from `engine.ts`, the appropriate `runtime/*.ts` module, or `serializer.ts`
 - **`state/canvas.ts` mirror signals**: `engine.ts` cannot import from `state/design.ts` (circular). Use mirror signals in `state/canvas.ts`
+- **Species-wide plant colors are document state**: future placements must read the document-scoped species default through the engine facade before node creation; do not try to solve this in the reconciler
 - **`Command` interface**: Every undo/redo command class must include `readonly type = 'commandName'`
 - **`CanvasTool` event signatures**: Tool methods use `Konva.KonvaEventObject<MouseEvent>`, not raw `MouseEvent`
 - **Panel switching recreates CanvasEngine**: CanvasPanel unmounts/remounts. Re-load via `loadCanvasFromDocument()` + `showCanvasChrome()`

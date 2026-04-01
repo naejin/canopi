@@ -164,7 +164,9 @@
       "customHex": "自定义 Hex",
       "setColor": "设置颜色",
       "setColorForSpecies": "为所有 {{species}} 设置",
+      "speciesDefaultHint": "该物种后续放置的植物将使用此颜色。",
       "clearColor": "清除颜色",
+      "clearSpeciesColor": "清除物种默认颜色",
       "names": {
         "red": "红色",
         "orange": "橙色",

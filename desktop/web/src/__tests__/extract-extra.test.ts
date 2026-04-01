@@ -15,6 +15,7 @@ describe('extractExtra', () => {
       description: null,
       location: null,
       north_bearing_deg: 0,
+      plant_species_colors: {},
       layers: [],
       plants: [],
       zones: [],
@@ -31,6 +32,7 @@ describe('extractExtra', () => {
     const raw = {
       version: 1,
       name: 'test',
+      plant_species_colors: {},
       future_field: 'hello',
       another_unknown: { nested: true },
       created_at: '2026-01-01T00:00:00Z',
@@ -47,6 +49,7 @@ describe('extractExtra', () => {
     const raw = {
       version: 1,
       name: 'test',
+      plant_species_colors: {},
       plants: [{ canonical_name: 'x' }],
       custom_key: 42,
       created_at: '2026-01-01T00:00:00Z',

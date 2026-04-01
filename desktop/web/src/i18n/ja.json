@@ -164,7 +164,9 @@
       "customHex": "カスタム Hex",
       "setColor": "色を設定",
       "setColorForSpecies": "すべての {{species}} に設定",
+      "speciesDefaultHint": "この種を今後配置すると、この色が使われます。",
       "clearColor": "色をクリア",
+      "clearSpeciesColor": "種の既定色をクリア",
       "names": {
         "red": "赤",
         "orange": "オレンジ",

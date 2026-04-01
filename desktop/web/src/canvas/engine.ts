@@ -13,6 +13,7 @@ import {
   guides,
   snapToGuidesEnabled,
   plantColorMenuOpen,
+  plantSpeciesColors,
   plantDisplayMode,
   plantColorByAttr,
 } from '../state/canvas'
@@ -28,9 +29,10 @@ import { createGridShape, snapToGrid } from './grid'
 import { createHtmlRulers, refreshRulerColors, setHtmlOverlayVisibility, type HtmlRulers } from './rulers'
 import { snapToGuides, clearSmartGuides, computeSmartGuides, createGuideLine } from './guides'
 import { AddGuideCommand } from './commands/guide'
-import { BatchCommand, SetPlantColorCommand } from './commands'
+import { BatchCommand, SetPlantColorCommand, SetPlantSpeciesColorCommand } from './commands'
 import type { Alignment, DistributeAxis } from './alignment'
 import type { CanopiFile, ObjectGroup, PlacedPlant } from '../types/design'
+import type { Command } from './history'
 import { CanvasRenderPipeline } from './runtime/render-pipeline'
 import type { RenderPass } from './runtime/render-passes'
 import { CanvasViewport } from './runtime/viewport'
@@ -40,6 +42,7 @@ import { loadDocumentSession, resetTransientCanvasSession } from './runtime/docu
 import { RenderReconciler } from './runtime/render-reconciler'
 import { getFlowerColorBatch, getSpeciesBatch } from '../ipc/species'
 import { getFlowerColorHex, normalizeHexColor } from './plant-colors'
+import { createPlantNode } from './plants'
 
 // The 7 named layers in render order (bottom → top)
 const LAYER_NAMES = [
@@ -61,6 +64,7 @@ export interface SelectedPlantColorContext {
   singleSpeciesCommonName: string | null
   sharedCurrentColor: string | null | 'mixed'
   suggestedColor: string | null
+  singleSpeciesDefaultColor: string | null
 }
 
 export class CanvasEngine {
@@ -687,25 +691,68 @@ export class CanvasEngine {
   }
 
   setPlantColorForSpecies(canonicalName: string, color: string | null): number {
+    const nextColor = normalizeHexColor(color)
+    const currentDefaultColor = this.getPlantSpeciesColor(canonicalName)
     const plantsLayer = this.layers.get('plants')
-    if (!plantsLayer) return 0
+    const groups = plantsLayer
+      ? (plantsLayer.find('.plant-group') as Konva.Group[])
+          .filter((group) => (group.getAttr('data-canonical-name') as string) === canonicalName)
+      : []
+    const commands: Command[] = this._createPlantColorCommands(groups, nextColor)
 
-    const groups = (plantsLayer.find('.plant-group') as Konva.Group[])
-      .filter((group) => (group.getAttr('data-canonical-name') as string) === canonicalName)
-    return this._applyPlantColorToGroups(groups, color)
+    if (currentDefaultColor !== nextColor) {
+      commands.push(new SetPlantSpeciesColorCommand(canonicalName, currentDefaultColor, nextColor))
+    }
+    if (commands.length === 0) return 0
+
+    this.history.execute(commands.length === 1 ? commands[0]! : new BatchCommand(commands), this)
+    return groups.length
+  }
+
+  clearPlantSpeciesColor(canonicalName: string): boolean {
+    const currentDefaultColor = this.getPlantSpeciesColor(canonicalName)
+    if (!currentDefaultColor) return false
+
+    this.history.execute(new SetPlantSpeciesColorCommand(canonicalName, currentDefaultColor, null), this)
+    return true
+  }
+
+  getPlantSpeciesColor(canonicalName: string): string | null {
+    return normalizeHexColor(plantSpeciesColors.value[canonicalName] ?? null)
+  }
+
+  createPlantPlacementNode(plant: {
+    canonicalName: string
+    commonName: string | null
+    stratum: string | null
+    canopySpreadM: number | null
+    position: { x: number; y: number }
+  }): Konva.Group {
+    return createPlantNode({
+      id: crypto.randomUUID(),
+      canonicalName: plant.canonicalName,
+      commonName: plant.commonName,
+      color: this.getPlantSpeciesColor(plant.canonicalName),
+      stratum: plant.stratum,
+      canopySpreadM: plant.canopySpreadM,
+      position: plant.position,
+      stageScale: this.stage.scaleX(),
+    })
   }
 
   private _applyPlantColorToGroups(groups: Konva.Group[], color: string | null): number {
-    const nextColor = normalizeHexColor(color)
-    const commands = groups.flatMap((group) => {
+    const commands = this._createPlantColorCommands(groups, normalizeHexColor(color))
+    if (commands.length === 0) return 0
+    this.history.execute(commands.length === 1 ? commands[0]! : new BatchCommand(commands), this)
+    return commands.length
+  }
+
+  private _createPlantColorCommands(groups: Konva.Group[], nextColor: string | null): Command[] {
+    return groups.flatMap((group) => {
       const currentColor = normalizeHexColor(group.getAttr('data-color-override') as string | null | undefined)
       if (currentColor === nextColor) return []
       return [new SetPlantColorCommand(group.id(), currentColor, nextColor)]
     })
-
-    if (commands.length === 0) return 0
-    this.history.execute(commands.length === 1 ? commands[0]! : new BatchCommand(commands), this)
-    return commands.length
   }
 
   getSelectedPlantColorContext(): SelectedPlantColorContext {
@@ -717,6 +764,7 @@ export class CanvasEngine {
         singleSpeciesCommonName: null,
         sharedCurrentColor: null,
         suggestedColor: null,
+        singleSpeciesDefaultColor: null,
       }
     }
 
@@ -755,6 +803,10 @@ export class CanvasEngine {
       suggestedColor:
         singleSpeciesCanonicalName !== null
           ? this.getSuggestedPlantColor(singleSpeciesCanonicalName)
+          : null,
+      singleSpeciesDefaultColor:
+        singleSpeciesCanonicalName !== null
+          ? this.getPlantSpeciesColor(singleSpeciesCanonicalName)
           : null,
     }
   }

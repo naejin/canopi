@@ -1,7 +1,6 @@
 import Konva from 'konva'
 import { activeTool } from '../../state/canvas'
 import { AddNodeCommand } from '../commands'
-import { createPlantNode } from '../plants'
 import { getCanvasColor } from '../theme-refresh'
 import type { CanvasTool } from '../tools/base'
 import type { ExternalInputDeps } from './types'
@@ -309,14 +308,12 @@ export class CanvasExternalInput {
       if (!data) return
 
       const pos = domToCanvas(event)
-      const plantNode = createPlantNode({
-        id: crypto.randomUUID(),
+      const plantNode = this._deps.getEngine().createPlantPlacementNode({
         canonicalName: data.canonical_name,
         commonName: data.common_name,
         stratum: data.stratum,
         canopySpreadM: data.width_max_m,
         position: pos,
-        stageScale: this._deps.stage.scaleX(),
       })
 
       this._deps.history.execute(new AddNodeCommand('plants', plantNode), this._deps.getEngine())

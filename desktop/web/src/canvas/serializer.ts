@@ -1,7 +1,7 @@
 import Konva from 'konva'
 import type { CanvasEngine } from './engine'
 import type { CanopiFile, PlacedPlant, Zone, Layer } from '../types/design'
-import { layerVisibility, layerLockState, northBearingDeg, guides } from '../state/canvas'
+import { layerVisibility, layerLockState, northBearingDeg, guides, plantSpeciesColors } from '../state/canvas'
 import { loadDocumentSession } from './runtime/document-session'
 
 const LAYER_NAMES = ['base', 'contours', 'climate', 'zones', 'water', 'plants', 'annotations'] as const
@@ -12,7 +12,7 @@ const LAYER_NAMES = ['base', 'contours', 'climate', 'zones', 'water', 'plants', 
 
 const KNOWN_CANOPI_KEYS = new Set([
   'version', 'name', 'description', 'location', 'north_bearing_deg',
-  'layers', 'plants', 'zones', 'consortiums', 'groups', 'timeline', 'budget',
+  'plant_species_colors', 'layers', 'plants', 'zones', 'consortiums', 'groups', 'timeline', 'budget',
   'created_at', 'updated_at',
 ])
 
@@ -128,6 +128,7 @@ export function toCanopi(
         }
       : (doc?.location ?? null),
     north_bearing_deg: metadata.northBearingDeg ?? northBearingDeg.value,
+    plant_species_colors: { ...plantSpeciesColors.value },
     layers,
     plants,
     zones,

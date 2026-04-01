@@ -1,5 +1,5 @@
 import { locale } from '../../state/app'
-import { plantColorMenuOpen, selectedObjectIds } from '../../state/canvas'
+import { plantColorMenuOpen, plantSpeciesColors, selectedObjectIds } from '../../state/canvas'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { canvasEngine } from '../../canvas/engine'
 import {
@@ -40,6 +40,7 @@ function closeMenu(buttonRef?: { current: HTMLButtonElement | null }) {
 
 export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
   void selectedObjectIds.value
+  void plantSpeciesColors.value
   const activeLocale = locale.value
   const menuOpen = plantColorMenuOpen.value
   const context = canvasEngine?.getSelectedPlantColorContext() ?? {
@@ -48,6 +49,7 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
     singleSpeciesCommonName: null,
     sharedCurrentColor: null,
     suggestedColor: null,
+    singleSpeciesDefaultColor: null,
   }
 
   const [activeColor, setActiveColor] = useState<string | null>(DEFAULT_PLANT_COLOR)
@@ -121,8 +123,11 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
 
     const initialColor =
       context.sharedCurrentColor === 'mixed'
-        ? context.suggestedColor ?? DEFAULT_PLANT_COLOR
-        : context.sharedCurrentColor ?? context.suggestedColor ?? DEFAULT_PLANT_COLOR
+        ? context.singleSpeciesDefaultColor ?? context.suggestedColor ?? DEFAULT_PLANT_COLOR
+        : context.sharedCurrentColor
+          ?? context.singleSpeciesDefaultColor
+          ?? context.suggestedColor
+          ?? DEFAULT_PLANT_COLOR
 
     const initialHsl = hexToHsl(initialColor) ?? DEFAULT_HSL
     pickerColorRef.current = initialHsl
@@ -131,7 +136,7 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
     setCustomInput(initialColor)
     setCustomColorHex(null)
     setAdvancedOpen(false)
-  }, [menuOpen, selectionKey, context.sharedCurrentColor, context.suggestedColor])
+  }, [menuOpen, selectionKey, context.sharedCurrentColor, context.singleSpeciesDefaultColor, context.suggestedColor])
 
   useEffect(() => {
     if (!menuOpen || !context.singleSpeciesCanonicalName || context.suggestedColor) return
@@ -179,7 +184,13 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
     singleSpeciesLabel
       ? singleSpeciesLabel
       : t('canvas.plantColor.selectedCount', { count: context.plantIds.length })
-  const previewColor = normalizedActiveColor ?? customColorHex ?? context.suggestedColor ?? DEFAULT_PLANT_COLOR
+  const previewColor =
+    normalizedActiveColor
+    ?? customColorHex
+    ?? context.singleSpeciesDefaultColor
+    ?? context.suggestedColor
+    ?? DEFAULT_PLANT_COLOR
+  const canClearSelected = context.sharedCurrentColor !== null
 
   const applyToSelection = () => {
     if (!normalizedActiveColor) return
@@ -195,6 +206,12 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
 
   const clearSelectedPlantColors = () => {
     canvasEngine?.setSelectedPlantColor(null)
+    closeMenu(buttonRef)
+  }
+
+  const clearSpeciesColor = () => {
+    if (!context.singleSpeciesCanonicalName) return
+    canvasEngine?.clearPlantSpeciesColor(context.singleSpeciesCanonicalName)
     closeMenu(buttonRef)
   }
 
@@ -365,15 +382,23 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
           {t('canvas.plantColor.setColor')}
         </button>
         {context.singleSpeciesCanonicalName && singleSpeciesLabel && (
-          <button type="button" className={styles.secondaryAction} disabled={!canApply} onClick={applyToSpecies}>
-            {t('canvas.plantColor.setColorForSpecies', { species: singleSpeciesLabel })}
-          </button>
+          <>
+            <button type="button" className={styles.secondaryAction} disabled={!canApply} onClick={applyToSpecies}>
+              {t('canvas.plantColor.setColorForSpecies', { species: singleSpeciesLabel })}
+            </button>
+            <div className={styles.helpText}>{t('canvas.plantColor.speciesDefaultHint')}</div>
+          </>
         )}
       </div>
 
-      <button type="button" className={styles.clearAction} onClick={clearSelectedPlantColors}>
+      <button type="button" className={styles.clearAction} disabled={!canClearSelected} onClick={clearSelectedPlantColors}>
         {t('canvas.plantColor.clearColor')}
       </button>
+      {context.singleSpeciesCanonicalName && context.singleSpeciesDefaultColor && (
+        <button type="button" className={styles.clearAction} onClick={clearSpeciesColor}>
+          {t('canvas.plantColor.clearSpeciesColor')}
+        </button>
+      )}
     </div>
   )
 }

@@ -6,6 +6,7 @@ export interface CanopiFile {
   description: string | null
   location: Location | null
   north_bearing_deg: number | null
+  plant_species_colors: Record<string, string>
   layers: Layer[]
   plants: PlacedPlant[]
   zones: Zone[]
