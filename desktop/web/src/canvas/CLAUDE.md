@@ -23,6 +23,7 @@
 - Shadow effects on counter-scaled plant groups must target the **first child** (screen-pixel space), not the group. Use `highlightTargetFor()` from `theme-refresh.ts`
 - Ephemeral highlight attrs (`shadowColor`, `shadowBlur`, etc.) stripped via shared `EPHEMERAL_CANVAS_ATTRS` in `node-serialization.ts` — imported by `operations.ts` STRIP_ATTRS
 - `_applyHighlight`/`_removeHighlightFromNode` do NOT call `batchDraw()` — caller must batch after bulk operations via `_redrawHighlightedLayers()`
+- `_clearAllHighlights` must call `_redrawHighlightedLayers()` after clearing persistent highlights — preview and persistent highlights are flushed separately
 - `highlight-glow` canvas color reads from `--color-primary` on theme switch
 
 ### Renderer Ownership (landed — stability gate satisfied 2026-03-30)
@@ -79,7 +80,7 @@ External code uses `CanvasEngine` methods only. Never import from `runtime/*.ts`
 - **Shapes don't react to CSS theme changes**: Colors hardcoded at creation time. Theme switch requires walking nodes and updating `fill`/`stroke` from computed CSS variables
 - **Canvas colors must use `getCanvasColor()` from `theme-refresh.ts`**: Never hardcode fill/stroke on Konva nodes. Add CSS variable to `global.css` (both themes) + cache entry in `theme-refresh.ts`. `refreshCanvasTheme()` in the engine's theme effect walks all layers on toggle
 - **Non-Konva canvas elements too**: Guides, plant badges, and zone fallback colors all use `getCanvasColor()` — not module-level constants. Every color rendered on or near the canvas must be theme-refreshable. If adding a new canvas element with color, add a `--canvas-*` token + `getCanvasColor()` entry + refresh call
-- **Transformer must be on same layer as targets**: Cross-layer Transformer breaks drag/transform
+- **No Konva Transformer**: Resize/rotate was removed — objects are position-only. Selection uses highlight glows only, move uses native `draggable`. Do not re-add Transformer
 - **`name: 'shape'` only on top-level selectable nodes**: Children inside Groups must NOT have it — causes independent selection
 - **Screen-space overlays**: Use HTML `<canvas>` (not Konva layers) for rulers. Konva layers are subject to stage transforms
 - **`strokeScaleEnabled: false`**: Keeps stroke width constant in screen pixels. Use on all zone/annotation shapes

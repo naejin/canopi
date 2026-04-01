@@ -52,6 +52,7 @@ These features were deleted during pre-rewrite cleanup. See `docs/todo.md` for c
 - **Support files**: dimensions.ts, pattern-math.ts, map-layer.ts, ipc/community.ts, ipc/tiles.ts, TileDownloadModal
 - **Retained for beta release**: LayerPanel, location flows (Wave 3 retained-surface closeout)
 - **Deferred beyond beta**: WorldMapPanel, Timeline, Budget, Consortium, geo/terrain, export, learning content
+- **Selection**: No resize/rotate — objects are position-only (highlight + move). Konva Transformer, TransformNodeCommand, rotateSelected, flipSelected all deleted
 
 ## Architecture Rules (from rewrite — enforced)
 
