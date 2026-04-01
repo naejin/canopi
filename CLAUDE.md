@@ -174,20 +174,18 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 - Adding a new filterable species field (end-to-end): (1) `columns.rs` → `validated_column()` match arm, (2) `filters.rs` → `is_numeric_field()` or `is_boolean_field()` if applicable, (3) `field-registry.ts` → `FIELD_REGISTRY` entry (key must match columns.rs exactly), (4) `i18n/*.json` → `filters.field.<key>` label in all 11 locales, (5) if also adding to detail card: update `PlantDetailCard.tsx` `has*` check + render + `plantDetail.*` i18n key
 
 ## Key Documents
-- Beta-release reference: `docs/todo.md` (canonical operational reference — remaining work, blockers, guardrails)
-- Renderer validation: `docs/renderer/renderer.md` (gate satisfied; retained for optional viewport filtering and historical reference)
-- Product scope lock: `docs/product-definition.md`
+- Docs entry point: `docs/README.md`
+- Agent reading order: `docs/agents.md`
+- Beta-release reference: `docs/todo.md`
 - Release hardening: `docs/release-verification.md`
+- Release operations: `docs/release-operations.md`
+- Renderer validation: `docs/renderer/renderer.md`
+- Database guidance: `docs/db/README.md`
+- Product scope lock: `docs/product-definition.md`
 - Roadmap: `docs/roadmap.md`
 - Design system: `.interface-design/system.md`
-- Release operations: `docs/release-operations.md` (CI workflows, promotion scripts, DB publishing)
-- Image loading performance: `docs/todo.md` section 10 (asset protocol migration — scoped, not yet implemented)
-- Photo fit polish: `docs/todo.md` section 11 (object-fit contain — scoped, not yet implemented)
-- Map layers design spec: `docs/todo.md` section 12 (hidden MapLibre → rasterize → Konva, offline DEM caching, non-blocking pipeline)
-- Tauri platform hardening: `docs/todo.md` section 13 (CSP landed, shell removed, poison recovery via `acquire()` — remaining: binary IPC, auto-updater)
 - Rewrite history: `docs/archive/rewrite-history-2026-03.md`
-- Data quality audit: `docs/db/codex-review.md` (filter value audit — scientific correctness, translation coverage, app vs canopi-data ownership)
-- Completed phase plans + reviews: `docs/archive/`
+- Archive root: `docs/archive/`
 
 ## Context7 Library IDs
 - Tauri v2: `/websites/v2_tauri_app`

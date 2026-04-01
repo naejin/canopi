@@ -8,7 +8,7 @@ Canopi is a desktop design tool that combines a 175,000-species plant database w
 
 ### Key features
 
-- **Plant database** -- 175K species with 170 columns of ecological, morphological, and agronomic data. Full-text search, structured filters, 6-language support (English, French, Spanish, Portuguese, Italian, Chinese)
+- **Plant database** -- 175K species with 173 columns of ecological, morphological, and agronomic data. Full-text search, structured filters, 11-language support
 - **Design canvas** -- Konva.js-based workspace with zone drawing, plant placement via drag-and-drop, undo/redo, grid, rulers, and scale bar
 - **File format** -- `.canopi` JSON files with full document integrity, autosave, and dirty tracking
 - **Field notebook aesthetic** -- Parchment, ink, and ochre palette. Light and dark themes
@@ -20,7 +20,7 @@ Canopi is a desktop design tool that combines a 175,000-species plant database w
 | Backend | Rust (Tauri v2 + rusqlite + specta) |
 | Frontend | Preact + @preact/signals + TypeScript + Vite |
 | Canvas | Konva.js (imperative API) |
-| i18n | i18next (6 languages) |
+| i18n | i18next (11 languages) |
 | Styling | CSS Modules with design tokens |
 | Maps | MapLibre GL JS (planned, Phase 4) |
 
@@ -63,7 +63,7 @@ canopi/
 
 ## Status
 
-Pre-release (`0.1.0`). Phases 0--3 in progress. See [docs/roadmap.md](docs/roadmap.md) for the full plan.
+Beta `0.1.0` is published. See [docs/README.md](docs/README.md) for the current doc map and [docs/roadmap.md](docs/roadmap.md) for the roadmap.
 
 ## License
 

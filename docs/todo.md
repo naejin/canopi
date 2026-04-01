@@ -206,9 +206,7 @@ Current in-tree status:
   - i18n completeness coverage against `en.json` via the frontend test suite
   - `npm run build --prefix desktop/web`
 - GitHub Actions already carries the release-build matrix and artifact upload
-- supported-platform packaged-app smoke verification was signed off in `docs/release-verification.md` on 2026-04-01
-- the `v0.1.0` desktop beta release was published on 2026-04-01
-- remaining follow-up is post-beta patch hardening only if new release-blocking defects appear
+- supported-platform packaged-app smoke verification, release publication, and promotion timing live in `docs/release-verification.md` and `docs/release-operations.md`
 
 ---
 
@@ -387,9 +385,9 @@ Can be fixed independently if needed:
 - deferred-pass data-shape cleanup in renderer internals
 
 Completed in the post-beta hardening patch (see section 13):
-- enabled CSP (section 13.1)
-- removed unused shell plugin (section 13.2)
-- added poison lock logging (section 13.5)
+  - enabled CSP (section 13.1)
+  - removed unused shell plugin (section 13.2)
+  - added poison lock logging (section 13.5)
 
 Still deferred beyond Wave 5 beta:
 - plant color assignment (see section 9)
@@ -410,7 +408,7 @@ Still deferred beyond Wave 5 beta:
 
 ## 8. Beta-Release Core Journeys
 
-Wave 5 beta required these journeys to pass end to end on the packaged app, and the signed-off result lives in `docs/release-verification.md`:
+Wave 5 beta required these journeys to pass end to end on the packaged app. The signed-off record lives in `docs/release-verification.md`:
 
 1. Create, edit, save, load, and switch designs without losing work
 2. Search/filter the plant DB, inspect detail, favorite plants, and place them on canvas
