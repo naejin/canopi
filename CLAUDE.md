@@ -47,11 +47,12 @@ Domain-specific instructions in subdirectory CLAUDE.md files:
 These features were deleted during pre-rewrite cleanup. See `docs/todo.md` for current status:
 - **Tools**: Ellipse, Polygon, Freeform, Line, Measure, Dimension, Arrow, Callout, Pattern Fill, Spacing
 - **Overlays**: Minimap, Celestial dial, Consortium visual, MapLibre/location, Compass
-- **Panels**: Bottom panel (Timeline/Budget/Consortium tabs), Layer panel, World Map, Learning
+- **Panels**: Layer panel, World Map, Learning
 - **Export**: GeoJSON, PNG/SVG export commands
 - **Support files**: dimensions.ts, pattern-math.ts, map-layer.ts, ipc/community.ts, ipc/tiles.ts, TileDownloadModal
 - **Retained for beta release**: LayerPanel, location flows (Wave 3 retained-surface closeout)
-- **Deferred beyond beta**: WorldMapPanel, Timeline, Budget, Consortium, geo/terrain, export, learning content
+- **Bottom panel re-added**: Location tab visible. Timeline/Budget/Consortium tabs staged behind `VISIBLE_BOTTOM_PANEL_TABS` guard in `state/canvas.ts` — add tab to the array to reveal
+- **Deferred beyond beta**: WorldMapPanel, geo/terrain, export, learning content
 - **Selection**: No resize/rotate — objects are position-only (highlight + move). Konva Transformer, TransformNodeCommand, rotateSelected, flipSelected all deleted
 
 ## Architecture Rules (from rewrite — enforced)
@@ -183,7 +184,7 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 - Image loading performance: `docs/todo.md` section 10 (asset protocol migration — scoped, not yet implemented)
 - Photo fit polish: `docs/todo.md` section 11 (object-fit contain — scoped, not yet implemented)
 - Map layers design spec: `docs/todo.md` section 12 (hidden MapLibre → rasterize → Konva, offline DEM caching, non-blocking pipeline)
-- Tauri platform hardening: `docs/todo.md` section 13 (CSP, shell removal, binary IPC, auto-updater, poison logging)
+- Tauri platform hardening: `docs/todo.md` section 13 (CSP landed, shell removed, poison recovery via `acquire()` — remaining: binary IPC, auto-updater)
 - Rewrite history: `docs/archive/rewrite-history-2026-03.md`
 - Data quality audit: `docs/db/codex-review.md` (filter value audit — scientific correctness, translation coverage, app vs canopi-data ownership)
 - Completed phase plans + reviews: `docs/archive/`

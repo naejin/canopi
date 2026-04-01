@@ -4,7 +4,7 @@
 - Return `Result<T, String>` — Tauri serializes errors to frontend
 - Use types from `common-types` crate
 - Map errors: `.map_err(|e| format!("Failed to <action>: {e}"))`
-- Mutex locks: `db.0.lock().unwrap_or_else(|e| e.into_inner())` — recover from poison, don't propagate
+- Mutex locks: use `db::acquire(&db.0, "PlantDb")` helper — recovers from poison with `tracing::warn`, don't use inline `lock().unwrap_or_else()` anymore
 
 ## Document Lifecycle (enforced — Wave 1 + Wave 2)
 - **`state/document-actions.ts` is the sole document replacement authority** — no component or panel may replace the active document directly. All destructive flows (new, open, template import) go through document-actions
@@ -34,14 +34,16 @@
 - **Image base64 bottleneck**: `get_cached_image_url` encodes images as base64 data URLs (~2.7MB IPC payload per 2MB image), freezing the UI. Planned fix: enable scoped asset protocol + `convertFileSrc()`. See `docs/todo.md` section 10. Do not extend the base64 pattern to new image surfaces
 - **Optimized binary IPC**: For returning large binary data (tiles, images), use `tauri::ipc::Response::new(bytes)` instead of JSON serialization — arrives as `ArrayBuffer` in JS, no base64 overhead. For streaming chunks, use `tauri::ipc::Channel<&[u8]>`
 - **`ureq` for blocking HTTP in Tauri commands**: Use `ureq` (not `reqwest`) — lightweight, no async runtime needed, fits Tauri's sync command thread pool. Already in `desktop/Cargo.toml`
-- **`tauri.conf.json` beforeDevCommand path**: Runs from project root. Uses `npm run --prefix desktop/web dev`, NOT `npm run dev`
+- **`tauri.conf.json` beforeDevCommand path**: Uses `{ script: "npm run dev", cwd: "web" }` object format (relative to `desktop/`). NOT a bare `npm run dev` at project root
+- **CSP configured**: `tauri.conf.json` has a strict CSP policy (`default-src 'self'`, `connect-src ipc: http://ipc.localhost https:`, etc.). No longer `null`. When adding new resource origins (e.g., tile servers), update CSP directives
+- **`tauri-plugin-shell` removed**: No shell capability. If external process spawning is needed in the future, use Rust `std::process::Command` from a Tauri command, not the shell plugin
 - **tauri-specta**: Deferred — specta rc ecosystem has version conflicts. Using plain `generate_handler![]` until stable
 - **Emit in setup**: Events fired in `setup()` are lost — frontend JS hasn't loaded yet
 - **Blocking dialogs on Linux**: `blocking_save_file()` / `blocking_pick_file()` deadlock on GTK. Use `@tauri-apps/plugin-dialog` JS API from the frontend. Rust commands only handle file I/O, never show dialogs
 - **Window permissions**: `decorations: false` + `startDragging()` requires `core:window:allow-start-dragging`, `core:window:allow-minimize`, `core:window:allow-toggle-maximize`, `core:window:allow-close` in `capabilities/main-window.json`
 - **Emitter trait**: `app.handle().emit()` requires `use tauri::Emitter`
 - **Icons**: `generate_context!()` panics if icon files in tauri.conf.json don't exist on disk
-- **Resource path in dev**: `resolve_resource()` may not find bundled files during `cargo tauri dev`. Fall back to `env!("CARGO_MANIFEST_DIR")` path. Always register a fallback in-memory DB so `State<PlantDb>` doesn't panic
+- **Resource path resolution**: `resolve_plant_db_path()` in `lib.rs` tries `PLANT_DB_BUNDLED_PATHS` (`resources/canopi-core.db`, `canopi-core.db`) via Tauri resource resolver, then falls back to `CARGO_MANIFEST_DIR/resources/` for dev. Always register a fallback in-memory DB so `State<PlantDb>` doesn't panic
 - **No blocking dialogs in setup()**: `.blocking_show()` in `setup()` hangs — window hasn't been created. Log errors instead
 - **`close()` re-emits `closeRequested`**: Use `destroy()` for discard-without-save. Requires `core:window:allow-destroy`
 - **No `window.prompt()`/`confirm()`/`alert()`**: Silently blocked in WebView. Use `ask()` from `@tauri-apps/plugin-dialog` for confirms, Preact components for other input. `dialog:default` capability includes `allow-ask`

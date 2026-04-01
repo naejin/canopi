@@ -20,6 +20,7 @@
 - **`ellenberg_inferences` table skipped**: 468K rows of ML-predicted Ellenberg values (v8 export). Not contracted — using observed values only from the 6 `ellenberg_*` columns on the species table
 
 ## rusqlite
+- **`db::acquire()` helper**: All Mutex lock acquisition uses `acquire(&db.0, "PlantDb")` from `db/mod.rs` — recovers from poison with `tracing::warn`. Do not use inline `lock().unwrap_or_else(|e| e.into_inner())` in commands
 - **rusqlite feature**: Use `bundled-full` (not `bundled`) — enables FTS5 full-text search
 - **Plant DB PRAGMAs**: On read-only connections, do NOT set `journal_mode=WAL` or `query_only=true`. Only `mmap_size` and `cache_size`
 - **Plant DB degraded mode**: If missing/corrupt, `lib.rs` falls back to in-memory DB. Frontend short-circuits all species IPC calls when degraded
