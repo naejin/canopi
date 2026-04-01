@@ -141,12 +141,43 @@
       "lifecycle": "생활주기",
       "nitrogen": "질소",
       "edibility": "식용성",
+      "flower": "꽃색",
       "none": "없음"
     },
     "plantTooltip": {
       "stratum": "층위",
       "height": "높이",
       "family": "과"
+    },
+    "plantColor": {
+      "label": "식물 색상",
+      "toolbarDesc": "선택한 식물 색상 편집",
+      "selectedCount": "{{count}}개 선택됨",
+      "suggested": "꽃 색상 기반 추천",
+      "moreColors": "더 많은 색상",
+      "advanced": "고급 색상",
+      "customSwatch": "사용자 지정 색상",
+      "customSwatchEmpty": "선택한 사용자 지정 색상이 없습니다",
+      "hue": "색조",
+      "saturationLightness": "채도 및 명도",
+      "preview": "미리보기",
+      "customHex": "사용자 Hex",
+      "setColor": "색상 설정",
+      "setColorForSpecies": "모든 {{species}}에 적용",
+      "clearColor": "색상 지우기",
+      "names": {
+        "red": "빨강",
+        "orange": "주황",
+        "yellow": "노랑",
+        "green": "초록",
+        "blue": "파랑",
+        "purple": "보라",
+        "violet": "자주",
+        "pink": "분홍",
+        "white": "흰색",
+        "brown": "갈색",
+        "black": "검정"
+      }
     },
     "group": {
       "group": "그룹",

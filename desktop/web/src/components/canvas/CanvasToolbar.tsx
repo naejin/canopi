@@ -1,6 +1,14 @@
+import { useSignalEffect } from '@preact/signals'
 import type { ComponentChildren } from 'preact'
 import { useRef } from 'preact/hooks'
-import { activeTool, gridVisible, rulersVisible, snapToGridEnabled } from '../../state/canvas'
+import {
+  activeTool,
+  gridVisible,
+  plantColorMenuOpen,
+  rulersVisible,
+  selectedObjectIds,
+  snapToGridEnabled,
+} from '../../state/canvas'
 import { locale } from '../../state/app'
 import { t } from '../../i18n'
 import { canvasEngine } from '../../canvas/engine'
@@ -12,7 +20,9 @@ import {
   GridIcon,
   SnapIcon,
   RulerIcon,
+  PaletteIcon,
 } from './toolbar-icons'
+import { PlantColorMenu } from './PlantColorMenu'
 
 import styles from './CanvasToolbar.module.css'
 
@@ -42,8 +52,26 @@ const ALL_TOOLS: ToolDef[] = [...TOOLS, ...SHAPE_TOOLS]
 export function CanvasToolbar() {
   // Subscribe to locale so labels re-render on language change
   void locale.value
+  void selectedObjectIds.value
 
   const toolbarRef = useRef<HTMLDivElement>(null)
+  const plantColorButtonRef = useRef<HTMLButtonElement>(null)
+  const plantColorContext = canvasEngine?.getSelectedPlantColorContext() ?? {
+    plantIds: [],
+    singleSpeciesCanonicalName: null,
+    singleSpeciesCommonName: null,
+    sharedCurrentColor: null,
+    suggestedColor: null,
+  }
+  const hasSelectedPlants = plantColorContext.plantIds.length > 0
+
+  useSignalEffect(() => {
+    if (!plantColorMenuOpen.value) return
+    selectedObjectIds.value
+    if (!canvasEngine || canvasEngine.getSelectedPlantColorContext().plantIds.length === 0) {
+      plantColorMenuOpen.value = false
+    }
+  })
 
   // Arrow key navigation within the toolbar (roving tabindex pattern)
   function handleKeyDown(e: KeyboardEvent) {
@@ -107,6 +135,38 @@ export function CanvasToolbar() {
     )
   }
 
+  function renderActionButton(
+    id: string,
+    label: string,
+    desc: string,
+    Icon: IconComponent,
+    pressed: boolean,
+    disabled: boolean,
+    onClick: () => void,
+  ) {
+    return (
+      <button
+        ref={id === 'plant-color' ? plantColorButtonRef : undefined}
+        key={id}
+        type="button"
+        aria-pressed={pressed}
+        aria-label={label}
+        aria-disabled={disabled}
+        disabled={disabled}
+        tabIndex={0}
+        className={`${styles.toolButton}${disabled ? ` ${styles.toolButtonDisabled}` : ''}`}
+        onClick={onClick}
+      >
+        <Icon className={styles.toolIcon} />
+        <span className={styles.tooltip} role="tooltip">
+          <span className={styles.tooltipName}>{label}</span>
+          <br />
+          <span className={styles.tooltipDesc}>{desc}</span>
+        </span>
+      </button>
+    )
+  }
+
   function renderToggle(
     id: string,
     labelKey: string,
@@ -161,6 +221,24 @@ export function CanvasToolbar() {
       <div className={styles.separator} role="separator" aria-hidden="true" />
 
       {SHAPE_TOOLS.map(renderButton)}
+
+      <div className={styles.separator} role="separator" aria-hidden="true" />
+
+      <div className={styles.popoverAnchor} data-preserve-overlays="true">
+        {renderActionButton(
+          'plant-color',
+          t('canvas.plantColor.label'),
+          t('canvas.plantColor.toolbarDesc'),
+          PaletteIcon,
+          plantColorMenuOpen.value,
+          !hasSelectedPlants,
+          () => {
+            if (!hasSelectedPlants) return
+            plantColorMenuOpen.value = !plantColorMenuOpen.value
+          },
+        )}
+        {plantColorMenuOpen.value && hasSelectedPlants && <PlantColorMenu buttonRef={plantColorButtonRef} />}
+      </div>
 
       <div className={styles.separator} role="separator" aria-hidden="true" />
 

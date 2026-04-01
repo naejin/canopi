@@ -15,6 +15,7 @@ const COLOR_BY_OPTIONS: { value: ColorByAttribute | null; labelKey: string }[] =
   { value: 'lifecycle', labelKey: 'canvas.display.lifecycle' },
   { value: 'nitrogen', labelKey: 'canvas.display.nitrogen' },
   { value: 'edibility', labelKey: 'canvas.display.edibility' },
+  { value: 'flower', labelKey: 'canvas.display.flower' },
 ]
 
 function buildItems<T extends string | null>(

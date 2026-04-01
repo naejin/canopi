@@ -24,7 +24,7 @@ Not release targets:
 - browser-only product
 - iOS / Android
 
-Explicitly deferred beyond Wave 5 beta:
+Explicitly deferred beyond Wave 5 beta at beta-cut time:
 - color by plants
 - frontend lazy loading / performance improvements
 - detail-card photo fit polish
@@ -36,6 +36,8 @@ Explicitly deferred beyond Wave 5 beta:
 - geo / terrain workflows
 - export workflows
 - knowledge / learning surfaces
+
+`color by plants` landed later on 2026-04-01 as post-beta work. This section is a historical record of beta scope, not the current active backlog.
 
 ## Required Automated Gates
 

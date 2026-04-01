@@ -141,12 +141,43 @@
       "lifecycle": "Levenscyclus",
       "nitrogen": "Stikstof",
       "edibility": "Eetbaarheid",
+      "flower": "Bloem",
       "none": "Geen"
     },
     "plantTooltip": {
       "stratum": "Stratum",
       "height": "Hoogte",
       "family": "Familie"
+    },
+    "plantColor": {
+      "label": "Plantkleur",
+      "toolbarDesc": "Kleuren van geselecteerde planten bewerken",
+      "selectedCount": "{{count}} geselecteerd",
+      "suggested": "Voorgesteld op basis van bloemkleur",
+      "moreColors": "Meer kleuren",
+      "advanced": "Geavanceerde kleur",
+      "customSwatch": "Aangepaste kleur",
+      "customSwatchEmpty": "Geen aangepaste kleur geselecteerd",
+      "hue": "Tint",
+      "saturationLightness": "Verzadiging en lichtheid",
+      "preview": "Voorbeeld",
+      "customHex": "Aangepaste hex",
+      "setColor": "Kleur instellen",
+      "setColorForSpecies": "Instellen voor alle {{species}}",
+      "clearColor": "Kleur wissen",
+      "names": {
+        "red": "Rood",
+        "orange": "Oranje",
+        "yellow": "Geel",
+        "green": "Groen",
+        "blue": "Blauw",
+        "purple": "Paars",
+        "violet": "Violet",
+        "pink": "Roze",
+        "white": "Wit",
+        "brown": "Bruin",
+        "black": "Zwart"
+      }
     },
     "group": {
       "group": "Groeperen",

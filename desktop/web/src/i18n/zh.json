@@ -141,12 +141,43 @@
       "lifecycle": "生命周期",
       "nitrogen": "固氮",
       "edibility": "可食性",
+      "flower": "花色",
       "none": "无"
     },
     "plantTooltip": {
       "stratum": "层级",
       "height": "高度",
       "family": "科"
+    },
+    "plantColor": {
+      "label": "植物颜色",
+      "toolbarDesc": "编辑所选植物颜色",
+      "selectedCount": "已选择 {{count}} 个",
+      "suggested": "根据花色推荐",
+      "moreColors": "更多颜色",
+      "advanced": "高级颜色",
+      "customSwatch": "自定义颜色",
+      "customSwatchEmpty": "尚未选择自定义颜色",
+      "hue": "色相",
+      "saturationLightness": "饱和度和明度",
+      "preview": "预览",
+      "customHex": "自定义 Hex",
+      "setColor": "设置颜色",
+      "setColorForSpecies": "为所有 {{species}} 设置",
+      "clearColor": "清除颜色",
+      "names": {
+        "red": "红色",
+        "orange": "橙色",
+        "yellow": "黄色",
+        "green": "绿色",
+        "blue": "蓝色",
+        "purple": "紫色",
+        "violet": "紫罗兰色",
+        "pink": "粉色",
+        "white": "白色",
+        "brown": "棕色",
+        "black": "黑色"
+      }
     },
     "group": {
       "group": "编组",

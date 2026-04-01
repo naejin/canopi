@@ -2,6 +2,7 @@ import Konva from 'konva'
 import { getCommonNames } from '../ipc/species'
 import { getCanvasColor } from './theme-refresh'
 import type { ScreenGrid, ScreenPlant } from './runtime/screen-grid'
+import { DEFAULT_PLANT_COLOR, normalizeHexColor } from './plant-colors'
 
 // Re-export for canvas-internal consumers (display-modes.ts)
 export { STRATUM_I18N_KEY } from '../types/constants'
@@ -14,7 +15,6 @@ const STRATA_COLORS: Record<string, string> = {
   'low':          '#388E3C',
   'medium':       '#558B2F',
 }
-const DEFAULT_PLANT_COLOR = '#4CAF50'
 
 // All plant circles use a fixed screen-pixel radius for maximum readability.
 // Real canopy spread visualization is a Phase 3 toggle ("Display: Canopy spread").
@@ -61,6 +61,7 @@ export function createPlantNode(opts: {
   id: string
   canonicalName: string
   commonName: string | null
+  color?: string | null
   stratum: string | null
   canopySpreadM: number | null
   position: { x: number; y: number }
@@ -69,7 +70,7 @@ export function createPlantNode(opts: {
   plantedDate?: string | null
   quantity?: number | null
 }): Konva.Group {
-  const color = getStratumColor(opts.stratum)
+  const color = normalizeHexColor(opts.color) ?? getStratumColor(opts.stratum)
   const inv = opts.stageScale ? 1 / opts.stageScale : 1
 
   const abbreviation = abbreviateCanonical(opts.canonicalName)
@@ -92,6 +93,7 @@ export function createPlantNode(opts: {
   // Plant metadata for serialization
   group.setAttr('data-canonical-name', opts.canonicalName)
   group.setAttr('data-common-name', opts.commonName ?? '')
+  group.setAttr('data-color-override', normalizeHexColor(opts.color))
   group.setAttr('data-stratum', opts.stratum ?? '')
   group.setAttr('data-canopy-spread', opts.canopySpreadM ?? 0)
   group.setAttr('data-notes', opts.notes ?? null)

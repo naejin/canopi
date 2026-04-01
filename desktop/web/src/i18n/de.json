@@ -141,12 +141,43 @@
       "lifecycle": "Lebenszyklus",
       "nitrogen": "Stickstoff",
       "edibility": "Essbarkeit",
+      "flower": "Blüte",
       "none": "Keine"
     },
     "plantTooltip": {
       "stratum": "Schicht",
       "height": "Höhe",
       "family": "Familie"
+    },
+    "plantColor": {
+      "label": "Pflanzenfarbe",
+      "toolbarDesc": "Farben ausgewählter Pflanzen bearbeiten",
+      "selectedCount": "{{count}} ausgewählt",
+      "suggested": "Vorschlag aus der Blütenfarbe",
+      "moreColors": "Mehr Farben",
+      "advanced": "Erweiterte Farbe",
+      "customSwatch": "Benutzerdefinierte Farbe",
+      "customSwatchEmpty": "Keine benutzerdefinierte Farbe ausgewählt",
+      "hue": "Farbton",
+      "saturationLightness": "Sättigung und Helligkeit",
+      "preview": "Vorschau",
+      "customHex": "Benutzerdefiniertes Hex",
+      "setColor": "Farbe setzen",
+      "setColorForSpecies": "Für alle {{species}} setzen",
+      "clearColor": "Farbe löschen",
+      "names": {
+        "red": "Rot",
+        "orange": "Orange",
+        "yellow": "Gelb",
+        "green": "Grün",
+        "blue": "Blau",
+        "purple": "Lila",
+        "violet": "Violett",
+        "pink": "Rosa",
+        "white": "Weiß",
+        "brown": "Braun",
+        "black": "Schwarz"
+      }
     },
     "group": {
       "group": "Gruppieren",

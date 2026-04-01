@@ -141,12 +141,43 @@
       "lifecycle": "ライフサイクル",
       "nitrogen": "窒素",
       "edibility": "可食性",
+      "flower": "花色",
       "none": "なし"
     },
     "plantTooltip": {
       "stratum": "階層",
       "height": "高さ",
       "family": "科"
+    },
+    "plantColor": {
+      "label": "植物の色",
+      "toolbarDesc": "選択した植物の色を編集",
+      "selectedCount": "{{count}} 件を選択",
+      "suggested": "花色からの提案",
+      "moreColors": "その他の色",
+      "advanced": "詳細な色",
+      "customSwatch": "カスタム色",
+      "customSwatchEmpty": "カスタム色は未選択です",
+      "hue": "色相",
+      "saturationLightness": "彩度と明度",
+      "preview": "プレビュー",
+      "customHex": "カスタム Hex",
+      "setColor": "色を設定",
+      "setColorForSpecies": "すべての {{species}} に設定",
+      "clearColor": "色をクリア",
+      "names": {
+        "red": "赤",
+        "orange": "オレンジ",
+        "yellow": "黄",
+        "green": "緑",
+        "blue": "青",
+        "purple": "紫",
+        "violet": "菫色",
+        "pink": "ピンク",
+        "white": "白",
+        "brown": "茶",
+        "black": "黒"
+      }
     },
     "group": {
       "group": "グループ化",

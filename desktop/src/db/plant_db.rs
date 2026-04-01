@@ -1,10 +1,12 @@
 mod detail;
 mod filters;
+mod flower;
 mod lookup;
 mod search;
 
 pub use detail::{get_detail, get_relationships, get_species_external_links, get_species_images};
 pub use filters::{get_dynamic_filter_options, get_filter_options};
+pub use flower::get_flower_color_batch;
 #[allow(unused_imports)]
 pub use lookup::translate_value;
 pub use lookup::{get_common_name, get_common_names_batch, get_locale_common_names};

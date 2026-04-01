@@ -141,12 +141,43 @@
       "lifecycle": "Life cycle",
       "nitrogen": "Nitrogen",
       "edibility": "Edibility",
+      "flower": "Flower",
       "none": "None"
     },
     "plantTooltip": {
       "stratum": "Stratum",
       "height": "Height",
       "family": "Family"
+    },
+    "plantColor": {
+      "label": "Plant color",
+      "toolbarDesc": "Edit selected plant colors",
+      "selectedCount": "{{count}} selected",
+      "suggested": "Suggested from flower color",
+      "moreColors": "More colors",
+      "advanced": "Advanced color",
+      "customSwatch": "Custom color",
+      "customSwatchEmpty": "No custom color selected",
+      "hue": "Hue",
+      "saturationLightness": "Saturation and lightness",
+      "preview": "Preview",
+      "customHex": "Custom hex",
+      "setColor": "Set color",
+      "setColorForSpecies": "Set for all {{species}}",
+      "clearColor": "Clear color",
+      "names": {
+        "red": "Red",
+        "orange": "Orange",
+        "yellow": "Yellow",
+        "green": "Green",
+        "blue": "Blue",
+        "purple": "Purple",
+        "violet": "Violet",
+        "pink": "Pink",
+        "white": "White",
+        "brown": "Brown",
+        "black": "Black"
+      }
     },
     "group": {
       "group": "Group",

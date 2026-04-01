@@ -141,12 +141,43 @@
       "lifecycle": "Ciclo de vida",
       "nitrogen": "Nitrogênio",
       "edibility": "Comestibilidade",
+      "flower": "Flor",
       "none": "Nenhum"
     },
     "plantTooltip": {
       "stratum": "Estrato",
       "height": "Altura",
       "family": "Família"
+    },
+    "plantColor": {
+      "label": "Cor da planta",
+      "toolbarDesc": "Editar as cores das plantas selecionadas",
+      "selectedCount": "{{count}} selecionadas",
+      "suggested": "Sugestão baseada na cor da flor",
+      "moreColors": "Mais cores",
+      "advanced": "Cor avançada",
+      "customSwatch": "Cor personalizada",
+      "customSwatchEmpty": "Nenhuma cor personalizada selecionada",
+      "hue": "Matiz",
+      "saturationLightness": "Saturação e luminosidade",
+      "preview": "Pré-visualização",
+      "customHex": "Hex personalizado",
+      "setColor": "Definir cor",
+      "setColorForSpecies": "Definir para todos os {{species}}",
+      "clearColor": "Limpar cor",
+      "names": {
+        "red": "Vermelho",
+        "orange": "Laranja",
+        "yellow": "Amarelo",
+        "green": "Verde",
+        "blue": "Azul",
+        "purple": "Roxo",
+        "violet": "Violeta",
+        "pink": "Rosa",
+        "white": "Branco",
+        "brown": "Marrom",
+        "black": "Preto"
+      }
     },
     "group": {
       "group": "Agrupar",

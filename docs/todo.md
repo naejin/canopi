@@ -39,6 +39,10 @@ Completed and archived:
 - targeted renderer automation rerun on the retained-surface build
 - Wave 4 design coherence on the surviving structure
 - release-blocking automated gates rerun locally
+- post-beta plant color assignment slice:
+  - per-plant document color overrides
+  - document-local same-species batch apply
+  - `color-by: flower` display mode with cached DB-backed inference
 
 Still active:
 - post-beta patch hardening only if new release-blocking defects appear
@@ -374,7 +378,6 @@ Pending beta-release closeout:
 Now unblocked after renderer stability closeout:
 - Wave 4 design coherence
 - renderer-tied product-level visual redesigns:
-  - plant color assignment (see section 9)
   - plant label improvements (see section 9.1)
 - `loadSpeciesCache` extraction from `engine.ts`
 
@@ -389,8 +392,10 @@ Completed in the post-beta hardening patch (see section 13):
   - removed unused shell plugin (section 13.2)
   - added poison lock logging (section 13.5)
 
-Still deferred beyond Wave 5 beta:
+Completed in the post-beta product slice:
 - plant color assignment (see section 9)
+
+Still deferred beyond Wave 5 beta:
 - image loading performance — asset protocol migration (see section 10)
 - detail-card photo fit polish (see section 11)
 - map layers — contours, hillshade, raster base map on canvas (see section 12)
@@ -422,7 +427,9 @@ Wave 5 beta required these journeys to pass end to end on the packaged app. The 
 
 ---
 
-## 9. Plant Color Assignment (Design Spec)
+## 9. Plant Color Assignment
+
+**Status**: landed in the current tree on 2026-04-01 as a post-beta product slice.
 
 ### Problem
 
@@ -452,11 +459,11 @@ Three layers, from least to most user effort:
 
 1. **Default**: green (`#4CAF50`). Stays green when no user override. Green = plant — honest and recognizable when the DB has no better signal.
 
-2. **User color override** (the main feature): right-click a placed plant to assign a color from a curated palette. Stored per-instance in the document. Options:
-   - "Set color" — applies to the clicked plant instance
-   - "Set color for all [species]" — bulk-applies to every instance of that species in the document (stored per-instance, but applied in batch)
-   - "Clear color" — removes override, reverts to default green
-   - When `flower_color` data exists, the picker pre-selects the matching palette color as a suggestion
+2. **User color override** (the main feature): a left-toolbar plant-color button opens a picker for the current plant selection. The button is disabled unless one or more plants are selected. Stored per-instance in the document. Options:
+   - "Set color" — applies to all selected plant instances
+   - "Set color for all [species]" — bulk-applies to every instance of that species in the document when the current selection resolves to exactly one species
+   - "Clear color" — removes overrides from the current selected plants and reverts them to default green
+   - When `flower_color` data exists for a single-species selection, the picker pre-selects the matching palette color as a suggestion
 
 3. **Flower color display mode**: new `color-by` attribute `'flower'` in the existing display mode system. Maps `flower_color` DB text values to a fixed hex palette. Uses genus/family inference for the 93% without direct data. Falls back to gray (`#9E9E9E`) for species with no data at any level. This is an analytical overlay — it overrides user colors when active, same as hardiness/lifecycle modes do.
 
@@ -479,9 +486,9 @@ Curated for 8px circles at 50% opacity fill + full opacity 1.5px stroke on both 
 | 11 | Peony | `#C25B82` | 340 | Rose-pink — flowering ornamentals |
 | 12 | Flint | `#71716A` | 60 | Warm neutral gray — infrastructure, ground cover |
 
-Plus a custom hex input for users who need exact colors.
+Plus a `More colors` path for users who need exact colors. The advanced section stays inside the same toolbar popover and provides a hue strip, saturation/lightness square, and hex input.
 
-Palette layout in the context menu picker: 4 columns x 3 rows, matching the numbered order (left-to-right, top-to-bottom). Below the grid: a custom color input row.
+Palette layout in the toolbar popover picker: 4 columns x 3 rows, matching the numbered order (left-to-right, top-to-bottom). Below the grid: a custom color input row.
 
 Design rules for the palette:
 - No white or black — invisible on one of the two canvas themes at 50% opacity
@@ -531,39 +538,39 @@ export interface PlacedPlant {
 
 **Serialization**: `color` field round-trips through `.canopi` file save/load. `null` omitted from JSON via `#[serde(skip_serializing_if = "Option::is_none")]`.
 
-### Implementation Phases
+### Landed Slices
 
-**Phase 1 — Data model + rendering**
-- Add `color` field to `PlacedPlant` (Rust + TS)
-- Update `createPlantNode()` to use `color` override when present, fallback to current stratum logic
-- Update serializer to persist/restore the field
-- Update `updatePlantDisplay()` to respect overrides in default mode
+**Slice 1 — Data model + rendering**
+- Added `color` to `PlacedPlant` in Rust and TypeScript
+- Persisted the field through `.canopi` save/load roundtrip
+- Added `data-color-override` to plant groups
+- Updated default and canopy rendering to use the explicit override when present
 
-**Phase 2 — Context menu + picker**
-- Right-click context menu on plant groups (new UI surface)
-- Color picker: 4x3 palette grid + custom hex input
-- "Set color" / "Set color for all [species]" / "Clear color" actions
-- Flower color suggestion (pre-select in picker when DB has data)
-- Undo/redo support via new `SetPlantColorCommand`
+**Slice 2 — Toolbar picker**
+- Added a toolbar-anchored HTML popover for selected plant groups
+- Added the 4x3 palette plus an inline `More colors` advanced picker
+- Landed "Set color", "Set color for all [species]", and "Clear color"
+- Added flower-color suggestion when DB data resolves
+- Added undo/redo support via `SetPlantColorCommand`
 
-**Phase 3 — Flower color display mode**
-- Add `'flower'` to `ColorByAttribute` type
-- Implement `flower_color` text-to-hex mapping
-- Add genus/family inference lookup (can be computed at species cache load time)
-- Add legend entries for the flower color mode
-- Add "Flower" option to display mode dropdown + i18n keys
+**Slice 3 — Flower color display mode**
+- Added `'flower'` to `ColorByAttribute`
+- Implemented flower-color text-to-hex mapping
+- Added species/genus/family resolution in the DB command path
+- Cached resolved flower colors in the species cache load flow
+- Added legend entries, display-mode UI wiring, and i18n keys
 
 ### Architecture Notes
 
-- Context menu is a new canvas UI surface — use HTML overlay (like plant tooltip), not Konva nodes
+- Plant color editing is a toolbar-owned HTML popover surface, not a Konva surface
 - `SetPlantColorCommand` is a new undo/redo command; follows existing `Command` interface pattern
 - Flower color inference (genus/family propagation) should be computed once at species cache load, not per-render
 - The `color` field on `PlacedPlant` is purely a document-level override — it does not modify the species DB
-- Phase 2 context menu must not conflict with select tool drag — only trigger on right-click (`contextmenu` event), never on left-click
+- The toolbar picker is selection-driven — it must derive state from the current selected plant groups rather than holding clicked-plant metadata outside the engine/document seams
 
-### 9.1 Plant Label Improvements (Design Spec)
+### 9.1 Plant Label Improvements (Deferred Design Spec)
 
-Companion to section 9 — the plant color system changes what labels need to communicate. These improvements assume color assignment is landed (section 9 phase 1+2).
+Companion to section 9 — the plant color system is landed, but these label improvements remain deferred.
 
 #### Current System
 

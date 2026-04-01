@@ -29,7 +29,7 @@ Domain-specific instructions in subdirectory CLAUDE.md files:
 - `desktop/web/src/canvas/CLAUDE.md` — Canvas engine, Konva, rendering, runtime rules
 
 ## Current Layout (Post UI Overhaul)
-- **Left**: Canvas toolbar (38px) — drawing tools only (Select, Hand, Rectangle, Text + Grid/Snap/Rulers toggles)
+- **Left**: Canvas toolbar (38px) — drawing tools plus plant color action (Select, Hand, Rectangle, Text, Plant Color + Grid/Snap/Rulers toggles)
 - **Center**: Canvas workspace
 - **Right**: PanelBar (36px, always visible) + sliding panels (plant search, favorites)
 - **Title bar**: Logo + file name + lang/theme toggle + window controls

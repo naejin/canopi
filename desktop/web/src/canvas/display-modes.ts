@@ -2,6 +2,12 @@ import Konva from 'konva'
 import { getStratumColor, STRATUM_I18N_KEY, CIRCLE_SCREEN_PX } from './plants'
 import { t } from '../i18n'
 import type { PlantDisplayMode, ColorByAttribute } from '../state/canvas'
+import {
+  FLOWER_COLOR_ORDER,
+  getFlowerColorHex,
+  normalizeHexColor,
+  UNKNOWN_FLOWER_COLOR,
+} from './plant-colors'
 
 // ---------------------------------------------------------------------------
 // Plant display modes — canopy spread + thematic coloring
@@ -33,6 +39,12 @@ const EDIBILITY_COLORS: string[] = [
   '#9E9E9E', '#C0CA33', '#8BC34A', '#4CAF50', '#2E7D32', '#1B5E20',
 ]
 
+function getPlantBaseColor(group: Konva.Group): string {
+  const override = normalizeHexColor(group.getAttr('data-color-override') as string | null | undefined)
+  if (override) return override
+  return getStratumColor((group.getAttr('data-stratum') as string) || null)
+}
+
 export interface LegendEntry {
   label: string
   color: string
@@ -59,9 +71,8 @@ export function updatePlantDisplay(
 
     if (mode === 'default') {
       // Reset to fixed-size strata-colored circles
-      const stratum = g.getAttr('data-stratum') as string || null
       circle.radius(CIRCLE_SCREEN_PX)
-      circle.fill(getStratumColor(stratum))
+      circle.fill(getPlantBaseColor(g))
     } else if (mode === 'canopy') {
       // Size circle to real canopy spread in world meters
       const canopyM = (g.getAttr('data-canopy-spread') as number) || 0
@@ -77,8 +88,7 @@ export function updatePlantDisplay(
         circle.radius(fallbackWorldRadius * stageScale)
       }
       // Keep strata color in canopy mode
-      const stratum = g.getAttr('data-stratum') as string || null
-      circle.fill(getStratumColor(stratum))
+      circle.fill(getPlantBaseColor(g))
     } else if (mode === 'color-by') {
       // Reset size to default
       circle.radius(CIRCLE_SCREEN_PX)
@@ -131,6 +141,11 @@ export function getLegendEntries(attr: ColorByAttribute): LegendEntry[] {
         label: i === 0 ? t('filters.notEdible', 'Not edible') : `${t('plantDb.edible', 'Edible')} ${i}/5`,
         color,
       }))
+    case 'flower':
+      return FLOWER_COLOR_ORDER.map((name) => ({
+        label: t(`canvas.plantColor.names.${name.toLowerCase()}`, name),
+        color: getFlowerColorHex(name) ?? UNKNOWN_FLOWER_COLOR,
+      }))
   }
 }
 
@@ -168,6 +183,10 @@ function _getColorForAttribute(
     case 'edibility': {
       const rating = (detail.edibility_rating as number) ?? 0
       return EDIBILITY_COLORS[Math.min(rating, 5)] ?? '#9E9E9E'
+    }
+    case 'flower': {
+      const resolved = detail.resolved_flower_color as string | null | undefined
+      return getFlowerColorHex(resolved) ?? UNKNOWN_FLOWER_COLOR
     }
   }
 }

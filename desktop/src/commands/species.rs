@@ -2,8 +2,9 @@ use crate::db::acquire;
 use tauri::State;
 
 use common_types::species::{
-    CommonNameEntry, DynamicFilterOptions, FilterOptions, PaginatedResult, Relationship, Sort,
-    SpeciesDetail, SpeciesExternalLink, SpeciesFilter, SpeciesImage, SpeciesListItem,
+    CommonNameEntry, DynamicFilterOptions, FilterOptions, FlowerColorResolution, PaginatedResult,
+    Relationship, Sort, SpeciesDetail, SpeciesExternalLink, SpeciesFilter, SpeciesImage,
+    SpeciesListItem,
 };
 
 /// Search species with optional full-text and structured filters.
@@ -128,6 +129,15 @@ pub fn get_species_batch(
         }
     }
     Ok(results)
+}
+
+#[tauri::command]
+pub fn get_flower_color_batch(
+    plant_db: tauri::State<'_, crate::db::PlantDb>,
+    canonical_names: Vec<String>,
+) -> Result<Vec<FlowerColorResolution>, String> {
+    let conn = acquire(&plant_db.0, "PlantDb");
+    crate::db::plant_db::get_flower_color_batch(&conn, &canonical_names)
 }
 
 /// Returns all distinct values for populating filter UI dropdowns.

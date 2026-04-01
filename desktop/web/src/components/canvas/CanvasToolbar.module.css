@@ -25,9 +25,26 @@
   min-height: var(--control-size-lg);
 }
 
+.popoverAnchor {
+  position: relative;
+}
+
 .toolButton:hover {
   background: var(--color-control-hover);
   color: var(--color-text);
+}
+
+.toolButtonDisabled,
+.toolButton:disabled {
+  color: var(--color-text-muted);
+  cursor: default;
+  opacity: 0.5;
+}
+
+.toolButtonDisabled:hover,
+.toolButton:disabled:hover {
+  background: transparent;
+  color: var(--color-text-muted);
 }
 
 .toolButton[aria-checked="true"] {
@@ -49,6 +66,15 @@
 .toolButton[aria-pressed="true"] {
   color: var(--color-primary);
   background: var(--color-control-active);
+}
+
+.toolButton[aria-pressed="true"]:disabled {
+  background: transparent;
+  color: var(--color-text-muted);
+}
+
+.toolButton[aria-pressed="true"]:disabled::before {
+  content: none;
 }
 
 .toolButton[aria-pressed="true"]::before {

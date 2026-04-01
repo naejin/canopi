@@ -15,6 +15,7 @@ import {
   layerVisibility,
   lockedObjectIds,
   northBearingDeg,
+  plantColorMenuOpen,
   selectedObjectIds,
 } from '../../state/canvas'
 import type { CanopiFile } from '../../types/design'
@@ -31,6 +32,7 @@ export function resetTransientCanvasSession(): void {
   selectedObjectIds.value = new Set()
   lockedObjectIds.value = new Set()
   highlightedConsortium.value = null
+  plantColorMenuOpen.value = false
 }
 
 export function loadDocumentSession(file: CanopiFile, engine: DocumentSessionEngine): void {
@@ -48,6 +50,7 @@ export function loadDocumentSession(file: CanopiFile, engine: DocumentSessionEng
         id: plant.id || crypto.randomUUID(),
         canonicalName: plant.canonical_name,
         commonName: plant.common_name ?? null,
+        color: plant.color ?? null,
         stratum: null,
         canopySpreadM: plant.scale ?? null,
         position: plant.position,

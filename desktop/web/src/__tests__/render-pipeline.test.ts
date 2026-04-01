@@ -111,7 +111,7 @@ describe('Canvas renderer ownership', () => {
       ]),
       getHtmlRulers: () => null,
       getSpeciesCache: () => new Map(),
-      loadSpeciesCache: vi.fn(async () => {}),
+      loadSpeciesCache: vi.fn(async () => false),
     })
     const reconciler = new RenderReconciler({
       stage: makeStage(),
@@ -160,7 +160,7 @@ describe('Canvas renderer ownership', () => {
       layers: new Map([['plants', plantsLayer]]),
       getHtmlRulers: () => null,
       getSpeciesCache: () => new Map(),
-      loadSpeciesCache: vi.fn(async () => {}),
+      loadSpeciesCache: vi.fn(async () => false),
     })
 
     pipeline.refreshLocale('fr')
@@ -176,7 +176,7 @@ describe('Canvas renderer ownership', () => {
       layers: new Map([['plants', makeLayer()]]),
       getHtmlRulers: () => null,
       getSpeciesCache: () => new Map(),
-      loadSpeciesCache: vi.fn(async () => {}),
+      loadSpeciesCache: vi.fn(async () => false),
     })
     const reconciler = new RenderReconciler({
       stage: makeStage(),

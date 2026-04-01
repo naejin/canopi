@@ -75,8 +75,9 @@ export class CanvasRenderPipeline {
       this._deps.getSpeciesCache(),
     )
 
-    if (mode === 'color-by' && this._deps.getSpeciesCache().size === 0) {
-      void this._deps.loadSpeciesCache(locale.value).then(() => {
+    if (mode === 'color-by') {
+      void this._deps.loadSpeciesCache(locale.value).then((loaded) => {
+        if (!loaded) return
         updatePlantDisplay(
           plantsLayer,
           mode,

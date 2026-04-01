@@ -222,6 +222,13 @@ pub struct SpeciesDetail {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct FlowerColorResolution {
+    pub canonical_name: String,
+    pub flower_color: Option<String>,
+    pub source: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct SpeciesUse {
     pub use_category: String,
     pub use_description: Option<String>,

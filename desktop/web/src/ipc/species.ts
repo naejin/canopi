@@ -11,6 +11,7 @@ import type {
   DynamicFilterOptions,
   CommonNameEntry,
   SpeciesImage,
+  FlowerColorResolution,
 } from '../types/species';
 
 /** Returns true when plant DB is not available — all queries should short-circuit. */
@@ -81,6 +82,13 @@ export async function getSpeciesBatch(
 ): Promise<SpeciesDetail[]> {
   if (isDegraded()) return [];
   return invoke('get_species_batch', { canonicalNames, locale });
+}
+
+export async function getFlowerColorBatch(
+  canonicalNames: string[],
+): Promise<FlowerColorResolution[]> {
+  if (isDegraded()) return [];
+  return invoke('get_flower_color_batch', { canonicalNames });
 }
 
 /** Returns all common names for a species in the given locale. */

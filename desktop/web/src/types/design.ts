@@ -35,6 +35,7 @@ export interface PlacedPlant {
   id: string
   canonical_name: string
   common_name: string | null
+  color: string | null
   position: Position
   rotation: number | null
   scale: number | null

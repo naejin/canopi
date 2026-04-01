@@ -303,6 +303,32 @@ export function RulerIcon({ className }: IconProps) {
   )
 }
 
+export function PaletteIcon({ className }: IconProps) {
+  return (
+    <svg
+      className={className}
+      width="20"
+      height="20"
+      viewBox="0 0 20 20"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <path
+        d="M10 3C6.13 3 3 5.91 3 9.5C3 12.54 5.29 15 8.11 15H9.28C9.85 15 10.31 15.46 10.31 16.03C10.31 16.84 10.98 17.5 11.79 17.5C15.22 17.5 18 14.72 18 11.29C18 6.71 14.19 3 10 3Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="7" cy="9" r="1" fill="currentColor" />
+      <circle cx="10" cy="7" r="1" fill="currentColor" />
+      <circle cx="13" cy="9" r="1" fill="currentColor" />
+      <circle cx="8.5" cy="12" r="1" fill="currentColor" />
+    </svg>
+  )
+}
+
 export function PlantStampIcon({ className }: IconProps) {
   return (
     <svg

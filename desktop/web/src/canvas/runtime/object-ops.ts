@@ -230,6 +230,7 @@ export class CanvasObjectOps {
         id: group.id(),
         canonical_name: group.getAttr('data-canonical-name') as string || '',
         common_name: commonName || null,
+        color: group.getAttr('data-color-override') ?? null,
         position: group.getAbsolutePosition(plantsLayer),
         rotation: group.rotation() !== 0 ? group.rotation() : null,
         scale: null,

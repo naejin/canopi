@@ -190,6 +190,7 @@ describe('document session reset', () => {
         id: 'plant-1',
         canonical_name: 'Malus domestica',
         common_name: 'Apple',
+        color: null,
         position: { x: 0, y: 0 },
         rotation: null,
         scale: null,
@@ -274,6 +275,7 @@ describe('document session reset', () => {
         id: 'plant-1',
         canonical_name: 'Malus domestica',
         common_name: 'Apple',
+        color: '#C44230',
         position: { x: 0, y: 0 },
         rotation: null,
         scale: null,
@@ -302,6 +304,8 @@ describe('document session reset', () => {
     await Promise.resolve()
     await Promise.resolve()
 
+    const restoredPlant = plantsLayer.add.mock.calls[0]?.[0]
+    expect(restoredPlant?.getAttr('data-color-override')).toBe('#C44230')
     expect(group.setAttr).toHaveBeenCalledWith('data-stratum', 'high')
     expect(group.setAttr).toHaveBeenCalledWith('data-canopy-spread', 4)
     expect(invalidateRender).toHaveBeenCalledWith('plant-display', 'lod', 'density', 'stacking')

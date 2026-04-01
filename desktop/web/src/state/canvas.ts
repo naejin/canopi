@@ -73,9 +73,10 @@ export const layerOpacity = signal<Record<string, number>>(createDefaultLayerOpa
 
 // Plant display modes
 export type PlantDisplayMode = 'default' | 'canopy' | 'color-by'
-export type ColorByAttribute = 'stratum' | 'hardiness' | 'lifecycle' | 'nitrogen' | 'edibility'
+export type ColorByAttribute = 'stratum' | 'hardiness' | 'lifecycle' | 'nitrogen' | 'edibility' | 'flower'
 export const plantDisplayMode = signal<PlantDisplayMode>('default')
 export const plantColorByAttr = signal<ColorByAttribute>('stratum')
+export const plantColorMenuOpen = signal<boolean>(false)
 
 // Plant stamp tool
 export interface PlantStampSpecies {

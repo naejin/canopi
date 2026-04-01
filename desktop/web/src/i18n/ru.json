@@ -141,12 +141,43 @@
       "lifecycle": "Жизненный цикл",
       "nitrogen": "Азот",
       "edibility": "Съедобность",
+      "flower": "Цветок",
       "none": "Нет"
     },
     "plantTooltip": {
       "stratum": "Ярус",
       "height": "Высота",
       "family": "Семейство"
+    },
+    "plantColor": {
+      "label": "Цвет растения",
+      "toolbarDesc": "Изменить цвета выбранных растений",
+      "selectedCount": "Выбрано: {{count}}",
+      "suggested": "Подсказка по цвету цветка",
+      "moreColors": "Больше цветов",
+      "advanced": "Расширенный цвет",
+      "customSwatch": "Пользовательский цвет",
+      "customSwatchEmpty": "Пользовательский цвет не выбран",
+      "hue": "Оттенок",
+      "saturationLightness": "Насыщенность и светлота",
+      "preview": "Предпросмотр",
+      "customHex": "Пользовательский hex",
+      "setColor": "Задать цвет",
+      "setColorForSpecies": "Задать для всех {{species}}",
+      "clearColor": "Очистить цвет",
+      "names": {
+        "red": "Красный",
+        "orange": "Оранжевый",
+        "yellow": "Жёлтый",
+        "green": "Зелёный",
+        "blue": "Синий",
+        "purple": "Фиолетовый",
+        "violet": "Лиловый",
+        "pink": "Розовый",
+        "white": "Белый",
+        "brown": "Коричневый",
+        "black": "Чёрный"
+      }
     },
     "group": {
       "group": "Группировать",

@@ -19,6 +19,7 @@ beforeEach(() => {
         id: 'plant-1',
         canonical_name: 'malus-domestica',
         common_name: 'Apple',
+        color: null,
         position: { x: 0, y: 0 },
         rotation: null,
         scale: null,

@@ -12,7 +12,7 @@ export interface RenderPipelineDeps {
   layers: CanvasLayers
   getHtmlRulers: () => HtmlRulers | null
   getSpeciesCache: () => Map<string, Record<string, unknown>>
-  loadSpeciesCache: (locale: string) => Promise<void>
+  loadSpeciesCache: (locale: string) => Promise<boolean>
 }
 
 export interface ViewportDeps {

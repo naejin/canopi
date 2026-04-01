@@ -247,6 +247,12 @@ export interface SpeciesDetail {
   data_quality_tier: string | null;
 }
 
+export interface FlowerColorResolution {
+  canonical_name: string;
+  flower_color: string | null;
+  source: string;
+}
+
 export interface SpeciesFilter {
   hardiness_min: number | null;
   hardiness_max: number | null;

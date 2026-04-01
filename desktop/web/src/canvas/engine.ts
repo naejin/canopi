@@ -12,6 +12,7 @@ import {
   snapToGridEnabled,
   guides,
   snapToGuidesEnabled,
+  plantColorMenuOpen,
   plantDisplayMode,
   plantColorByAttr,
 } from '../state/canvas'
@@ -27,6 +28,7 @@ import { createGridShape, snapToGrid } from './grid'
 import { createHtmlRulers, refreshRulerColors, setHtmlOverlayVisibility, type HtmlRulers } from './rulers'
 import { snapToGuides, clearSmartGuides, computeSmartGuides, createGuideLine } from './guides'
 import { AddGuideCommand } from './commands/guide'
+import { BatchCommand, SetPlantColorCommand } from './commands'
 import type { Alignment, DistributeAxis } from './alignment'
 import type { CanopiFile, ObjectGroup, PlacedPlant } from '../types/design'
 import { CanvasRenderPipeline } from './runtime/render-pipeline'
@@ -36,7 +38,8 @@ import { CanvasObjectOps } from './runtime/object-ops'
 import { CanvasExternalInput } from './runtime/external-input'
 import { loadDocumentSession, resetTransientCanvasSession } from './runtime/document-session'
 import { RenderReconciler } from './runtime/render-reconciler'
-import { getSpeciesBatch } from '../ipc/species'
+import { getFlowerColorBatch, getSpeciesBatch } from '../ipc/species'
+import { getFlowerColorHex, normalizeHexColor } from './plant-colors'
 
 // The 7 named layers in render order (bottom → top)
 const LAYER_NAMES = [
@@ -51,6 +54,14 @@ const LAYER_NAMES = [
 
 // Layers that don't need hit-detection (decorative / future use)
 const NON_LISTENING_LAYERS = new Set(['base', 'contours', 'climate'])
+
+export interface SelectedPlantColorContext {
+  plantIds: string[]
+  singleSpeciesCanonicalName: string | null
+  singleSpeciesCommonName: string | null
+  sharedCurrentColor: string | null | 'mixed'
+  suggestedColor: string | null
+}
 
 export class CanvasEngine {
   stage!: Konva.Stage
@@ -659,20 +670,167 @@ export class CanvasEngine {
     this._objectOps!.ungroupSelectedNodes(this)
   }
 
-  /** Load species details for thematic coloring. Call before switching to color-by mode. */
-  async loadSpeciesCache(locale: string): Promise<void> {
+  setPlantColor(plantId: string, color: string | null): boolean {
+    const group = this._findPlantGroupById(plantId)
+    if (!group) return false
+
+    const nextColor = normalizeHexColor(color)
+    const currentColor = normalizeHexColor(group.getAttr('data-color-override') as string | null | undefined)
+    if (currentColor === nextColor) return false
+
+    this.history.execute(new SetPlantColorCommand(plantId, currentColor, nextColor), this)
+    return true
+  }
+
+  setSelectedPlantColor(color: string | null): number {
+    return this._applyPlantColorToGroups(this._getSelectedPlantGroups(), color)
+  }
+
+  setPlantColorForSpecies(canonicalName: string, color: string | null): number {
     const plantsLayer = this.layers.get('plants')
-    if (!plantsLayer) return
-    const names: string[] = []
+    if (!plantsLayer) return 0
+
+    const groups = (plantsLayer.find('.plant-group') as Konva.Group[])
+      .filter((group) => (group.getAttr('data-canonical-name') as string) === canonicalName)
+    return this._applyPlantColorToGroups(groups, color)
+  }
+
+  private _applyPlantColorToGroups(groups: Konva.Group[], color: string | null): number {
+    const nextColor = normalizeHexColor(color)
+    const commands = groups.flatMap((group) => {
+      const currentColor = normalizeHexColor(group.getAttr('data-color-override') as string | null | undefined)
+      if (currentColor === nextColor) return []
+      return [new SetPlantColorCommand(group.id(), currentColor, nextColor)]
+    })
+
+    if (commands.length === 0) return 0
+    this.history.execute(commands.length === 1 ? commands[0]! : new BatchCommand(commands), this)
+    return commands.length
+  }
+
+  getSelectedPlantColorContext(): SelectedPlantColorContext {
+    const groups = this._getSelectedPlantGroups()
+    if (groups.length === 0) {
+      return {
+        plantIds: [],
+        singleSpeciesCanonicalName: null,
+        singleSpeciesCommonName: null,
+        sharedCurrentColor: null,
+        suggestedColor: null,
+      }
+    }
+
+    const plantIds = groups.map((group) => group.id())
+    const canonicalNames = new Set<string>()
+    const commonNames = new Set<string>()
+    const currentColors = new Set<string>()
+    let hasNullColor = false
+
+    for (const group of groups) {
+      const canonicalName = (group.getAttr('data-canonical-name') as string | null) ?? ''
+      const commonName = (group.getAttr('data-common-name') as string | null) ?? null
+      const currentColor = normalizeHexColor(group.getAttr('data-color-override') as string | null | undefined)
+
+      if (canonicalName) canonicalNames.add(canonicalName)
+      if (commonName) commonNames.add(commonName)
+      if (currentColor) currentColors.add(currentColor)
+      else hasNullColor = true
+    }
+
+    const singleSpeciesCanonicalName = canonicalNames.size === 1 ? [...canonicalNames][0]! : null
+    const singleSpeciesCommonName =
+      singleSpeciesCanonicalName !== null && commonNames.size === 1 ? [...commonNames][0]! : null
+    const sharedCurrentColor =
+      currentColors.size > 1 || (currentColors.size === 1 && hasNullColor)
+        ? 'mixed'
+        : currentColors.size === 1
+          ? [...currentColors][0]!
+          : null
+
+    return {
+      plantIds,
+      singleSpeciesCanonicalName,
+      singleSpeciesCommonName,
+      sharedCurrentColor,
+      suggestedColor:
+        singleSpeciesCanonicalName !== null
+          ? this.getSuggestedPlantColor(singleSpeciesCanonicalName)
+          : null,
+    }
+  }
+
+  /** Load species details for thematic coloring. Call before switching to color-by mode. */
+  async loadSpeciesCache(activeLocale: string): Promise<boolean> {
+    const plantsLayer = this.layers.get('plants')
+    if (!plantsLayer) return false
+    const names = new Set<string>()
     plantsLayer.find('.plant-group').forEach((node: Konva.Node) => {
       const name = (node as Konva.Group).getAttr('data-canonical-name') as string
-      if (name && !this._speciesCache.has(name)) names.push(name)
+      if (name && !this._speciesCache.has(name)) names.add(name)
     })
-    if (names.length === 0) return
-    const details = await getSpeciesBatch(names, locale)
-    for (const d of details) {
-      this._speciesCache.set(d.canonical_name, d as unknown as Record<string, unknown>)
+    return this.ensureSpeciesCacheEntries([...names], activeLocale)
+  }
+
+  async ensureSpeciesCacheEntries(
+    canonicalNames: string[],
+    activeLocale: string,
+  ): Promise<boolean> {
+    const missingNames = [...new Set(canonicalNames.filter((name) => name && !this._speciesCache.has(name)))]
+    if (missingNames.length === 0) return false
+
+    const [details, flowerColors] = await Promise.all([
+      getSpeciesBatch(missingNames, activeLocale),
+      getFlowerColorBatch(missingNames),
+    ])
+    const detailByName = new Map(
+      details.map((detail) => [detail.canonical_name, detail as unknown as Record<string, unknown>]),
+    )
+    const flowerByName = new Map(flowerColors.map((entry) => [entry.canonical_name, entry]))
+
+    for (const canonicalName of missingNames) {
+      const detail = detailByName.get(canonicalName) ?? { canonical_name: canonicalName }
+      const flower = flowerByName.get(canonicalName)
+      this._speciesCache.set(canonicalName, {
+        ...detail,
+        resolved_flower_color: flower?.flower_color ?? null,
+        resolved_flower_color_source: flower?.source ?? 'none',
+      })
     }
+
+    return true
+  }
+
+  getSuggestedPlantColor(canonicalName: string): string | null {
+    const detail = this._speciesCache.get(canonicalName)
+    return getFlowerColorHex(
+      (detail?.resolved_flower_color as string | null | undefined)
+      ?? (detail?.flower_color as string | null | undefined),
+    )
+  }
+
+  private _getPlantGroupFromNode(node: Konva.Node | null): Konva.Group | null {
+    let current = node
+    while (current) {
+      if (current instanceof Konva.Group && current.hasName('plant-group')) {
+        return current
+      }
+      current = current.parent
+    }
+    return null
+  }
+
+  private _findPlantGroupById(plantId: string): Konva.Group | null {
+    const plantsLayer = this.layers.get('plants')
+    if (!plantsLayer) return null
+    const group = plantsLayer.findOne('#' + plantId)
+    return group instanceof Konva.Group && group.hasName('plant-group') ? group : null
+  }
+
+  private _getSelectedPlantGroups(): Konva.Group[] {
+    return this.getSelectedNodes().flatMap((node) => {
+      const group = this._getPlantGroupFromNode(node)
+      return group ? [group] : []
+    })
   }
 
   getObjectGroups(): ObjectGroup[] {
@@ -684,6 +842,7 @@ export class CanvasEngine {
   }
 
   loadDocument(file: CanopiFile): void {
+    plantColorMenuOpen.value = false
     this._documentLoadEpoch += 1
     this._viewport?.resetViewport()
     loadDocumentSession(file, this)
@@ -691,6 +850,7 @@ export class CanvasEngine {
   }
 
   replaceDocument(file: CanopiFile): void {
+    plantColorMenuOpen.value = false
     this._documentLoadEpoch += 1
     resetTransientCanvasSession()
     this._viewport?.resetViewport()
@@ -791,6 +951,7 @@ export class CanvasEngine {
       this._tooltip.remove()
       this._tooltip = null
     }
+    plantColorMenuOpen.value = false
 
     this.stage.destroy()
     this.layers.clear()

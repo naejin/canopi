@@ -46,6 +46,8 @@ pub struct PlacedPlant {
     pub id: String,
     pub canonical_name: String,
     pub common_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
     pub position: Position,
     pub rotation: Option<f64>,
     pub scale: Option<f64>,

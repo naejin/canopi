@@ -35,8 +35,10 @@
 - Keep full-layer passes full-layer until a real sublinear index exists
 - Use viewport filtering only for deferred passes where stale off-screen state is acceptable
 
-Deferred (no longer gate-blocked, per `docs/todo.md` S4):
-- Plant color assignment — user override + flower color display mode (see `docs/todo.md` S9 for full spec)
+Landed post-beta product slice:
+- Plant color assignment — per-instance document color overrides, same-species batch apply, and `color-by: flower` display mode (see `docs/todo.md` S9)
+
+Deferred follow-up work:
 - Plant label improvements — single-line, color-aware density, priority ordering (see `docs/todo.md` S9.1)
 - `loadSpeciesCache` extraction from `engine.ts`
 
