@@ -2,6 +2,18 @@
 
 This runbook covers the operator steps around the bundled DB asset, the manual `Release Candidate` workflow, and final GitHub Release promotion.
 
+## Recommended Dev Flow
+
+Use this sequence from feature work to published beta:
+
+1. Develop on a feature branch.
+2. Open a PR into `main`.
+3. Merge only after CI is green.
+4. Refresh the bundled DB release if the DB changed.
+5. Run the `Release Candidate` workflow from `main` for the exact version to ship.
+6. Smoke the packaged CI artifacts for Linux, macOS Apple Silicon, macOS Intel, and Windows.
+7. Promote the exact verified run to a GitHub Release with `scripts/promote-release.sh`.
+
 ## Prerequisites
 
 - `gh` installed and authenticated for the target repo

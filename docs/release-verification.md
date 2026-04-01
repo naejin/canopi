@@ -153,8 +153,8 @@ Repo follow-up from smoke feedback should stay narrow:
 
 ## Remaining Wave 5 Work
 
-What is still left after the current automated checks:
+What remains after the automated checks and shipped beta:
 
-- keep the CI workflow green on the candidate branch
+- keep the CI workflow green on `main`
 - fix only defects that block beta usability or packaging on supported targets
-- archive or remove stale future-tense instructions after the beta release is actually shipped
+- carry forward only the release-operator steps that still apply to future beta patches
