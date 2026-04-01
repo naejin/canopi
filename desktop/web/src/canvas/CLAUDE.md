@@ -36,8 +36,8 @@
 - Use viewport filtering only for deferred passes where stale off-screen state is acceptable
 
 Deferred (no longer gate-blocked, per `docs/todo.md` S4):
-- Per-species default colors (100-color palette)
-- Labels hidden by default with smart cartographic placement
+- Plant color assignment — user override + flower color display mode (see `docs/todo.md` S9 for full spec)
+- Plant label improvements — single-line, color-aware density, priority ordering (see `docs/todo.md` S9.1)
 - `loadSpeciesCache` extraction from `engine.ts`
 
 ## Runtime Module Split (Wave 2) + Reconciler (Wave 3)

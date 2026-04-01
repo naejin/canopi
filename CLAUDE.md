@@ -179,6 +179,7 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 - Roadmap: `docs/roadmap.md`
 - Design system: `.interface-design/system.md`
 - Release operations: `docs/release-operations.md` (CI workflows, promotion scripts, DB publishing)
+- Image loading performance: `docs/todo.md` section 10 (asset protocol migration — scoped, not yet implemented)
 - Rewrite history: `docs/archive/rewrite-history-2026-03.md`
 - Data quality audit: `docs/db/codex-review.md` (filter value audit — scientific correctness, translation coverage, app vs canopi-data ownership)
 - Completed phase plans + reviews: `docs/archive/`
