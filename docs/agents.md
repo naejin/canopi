@@ -2,10 +2,12 @@
 
 Use this as the default entry point when coding with agents in this repo.
 
+Token rule: search first, then read only the smallest set of owning docs needed to answer the task. Do not open `docs/archive/` unless the task explicitly needs history.
+
 ## Read Order
 
 1. [`Docs Index`](./README.md)
-2. [`Docs Maintenance`](./maintenance.md)
+2. [`Docs Maintenance`](./maintenance.md) when you are updating docs or changing the read path
 3. [`Rewrite Operational Reference`](./todo.md) for active rewrite work
 4. [`Release Verification`](./release-verification.md) and [`Release Operations`](./release-operations.md) when the task touches release or packaging
 5. [`Renderer`](./renderer/README.md) for canvas or retained-surface work
@@ -18,7 +20,7 @@ Use this as the default entry point when coding with agents in this repo.
 - `docs/release-verification.md` is the signed-off beta verification record
 - `docs/release-operations.md` is the operator runbook for DB publishing, release candidates, and promotion
 - `docs/renderer/renderer.md` is the renderer-specific validation checklist
-- `docs/db/README.md` points to the current database guidance and review material
+- `docs/db/README.md` points to the current database guidance and archived review notes
 - `docs/maintenance.md` explains how to update docs efficiently without rereading the archive
 
 ## What To Ignore First

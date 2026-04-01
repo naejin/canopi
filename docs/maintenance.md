@@ -12,7 +12,8 @@ Keep one active source of truth per topic and avoid rereading or rewriting the w
    - active rewrite and blockers: `docs/todo.md`
    - release operations: `docs/release-operations.md`
    - release verification: `docs/release-verification.md`
-   - roadmap and product scope: `docs/roadmap.md`, `docs/product-definition.md`
+   - historical roadmap: `docs/roadmap.md`
+   - product scope lock: `docs/product-definition.md`
    - subsystem guidance: `docs/renderer/`, `docs/db/`
    - history only: `docs/archive/`
 2. Search for the exact topic with `rg` before opening more files.

@@ -2,10 +2,10 @@
 
 Renderer-specific guidance lives here.
 
-Current contents:
+Reference:
 
 - [Renderer Guide](./renderer.md)
-- [Codex Review](./codex-review.md)
+- [Archived Review Notes](../archive/reviews/renderer-doc-review.md)
 
 Use this folder for:
 

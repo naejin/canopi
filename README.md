@@ -58,13 +58,13 @@ canopi/
 │   └── tauri.conf.json
 ├── common-types/     # Shared Rust <> TypeScript types
 ├── scripts/          # DB generation, schema contract
-├── docs/             # Roadmap, architecture, phase archives
+├── docs/             # Active docs, historical docs, archive
 └── .interface-design/# Design system (system.md)
 ```
 
 ## Status
 
-Beta `0.1.0` is published. See [docs/README.md](docs/README.md) for the current doc map and [docs/roadmap.md](docs/roadmap.md) for the roadmap.
+Beta `0.1.0` is published. See [docs/README.md](docs/README.md) for the current doc map and [docs/roadmap.md](docs/roadmap.md) for historical roadmap context.
 
 ## License
 

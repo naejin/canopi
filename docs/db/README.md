@@ -2,9 +2,9 @@
 
 Database-specific guidance lives here.
 
-Current contents:
+Reference:
 
-- [Codex Review](./codex-review.md)
+- [Archived Review Notes](../archive/reviews/plant-db-filter-audit.md)
 
 Use this folder for:
 

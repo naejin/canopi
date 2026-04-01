@@ -1,17 +1,17 @@
 # Docs Index
 
-This directory is split into three layers:
+This directory is split into four layers:
 
 - active project docs used for day-to-day work
 - subsystem docs for specialized areas
-- archived history and reviews
+- historical docs for completed planning or review material
+- archive for deeper history and retired guidance
 
 If you are using this repo with agents, start with [`Agent Guide`](./agents.md) and [`Docs Maintenance`](./maintenance.md).
 
 ## Active Docs
 
 - [Product Definition](./product-definition.md)
-- [Roadmap](./roadmap.md)
 - [Rewrite Operational Reference](./todo.md)
 - [Development](./development.md)
 - [Release Operations](./release-operations.md)
@@ -24,10 +24,10 @@ If you are using this repo with agents, start with [`Agent Guide`](./agents.md) 
 - [Database](./db/README.md)
 - [Renderer](./renderer/README.md)
 
-## Reviews
+## Historical Docs
 
-- [Claude Review](./claude-review.md)
-- [Codex Review](./codex-review.md)
+- [Roadmap](./roadmap.md)
+- [Archived Reviews](./archive/reviews/README.md)
 
 ## Archive
 

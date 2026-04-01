@@ -8,5 +8,6 @@ Key archived areas:
 
 - phase plans and writeups
 - rewrite history and retrospectives
+- archived review index: `docs/archive/reviews/README.md`
 - archived reviews and analyses
 - archived test notes
