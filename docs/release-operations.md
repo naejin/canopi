@@ -81,6 +81,19 @@ Required evidence:
 - `SHA256SUMS.txt`
 - tester, date, platform result, and any defects
 
+Observed timing on `2026-04-01` for run `23849252941`:
+
+- Linux `.deb` build completed in about 6m 25s
+- macOS Apple Silicon build completed in about 5m 25s
+- macOS Intel build completed in about 10m 32s
+- The full release-candidate run finished in about 13-14 minutes end to end before promotion
+- Release promotion can take an additional 10-20 minutes because the Windows artifact is large and GitHub upload latency dominates
+
+Operational rule:
+
+- Do not start re-checking the release every few minutes. Wait at least 20 minutes after kicking off promotion, then inspect the published release metadata once.
+- Verify the published `release-metadata.json` `head_sha` matches the promoted run instead of repeatedly polling the release page.
+
 ## 4. Promote The Verified Run
 
 After smoke verification passes, create or update the GitHub Release from that exact run:
