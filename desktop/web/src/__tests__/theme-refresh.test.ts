@@ -32,7 +32,6 @@ describe('refreshCanvasTheme', () => {
     container.style.setProperty('--canvas-zone-fill', 'rgba(1, 2, 3, 0.4)')
     container.style.setProperty('--canvas-selection', 'rgba(10, 20, 30, 0.2)')
     container.style.setProperty('--canvas-selection-stroke', 'rgba(20, 30, 40, 0.6)')
-    container.style.setProperty('--canvas-selection-anchor-fill', '#f5f4f0')
     document.body.appendChild(container)
 
     const plantLabel = { fill: vi.fn() }
@@ -82,13 +81,6 @@ describe('refreshCanvasTheme', () => {
     const zonesLayer = makeLayer({
       '.shape': [zoneShape],
     })
-    const transformer = {
-      borderStroke: vi.fn(),
-      anchorStroke: vi.fn(),
-      anchorFill: vi.fn(),
-      getLayer: () => ({ batchDraw: vi.fn() }),
-    }
-
     refreshCanvasTheme(
       container,
       new Map([
@@ -96,13 +88,11 @@ describe('refreshCanvasTheme', () => {
         ['annotations', annotationsLayer as any],
         ['zones', zonesLayer as any],
       ]),
-      transformer as any,
     )
 
     expect(getCanvasColor('annotation-stroke')).toBe('#404040')
     expect(getCanvasColor('guide-line')).toBe('#2f4f4f')
     expect(getCanvasColor('stack-badge-text')).toBe('#f8f4ed')
-    expect(getCanvasColor('selection-anchor-fill')).toBe('#f5f4f0')
     expect(plantLabel.fill).toHaveBeenCalledWith('#101010')
     expect(botanicalLabel.fill).toHaveBeenCalledWith('#202020')
     expect(stackBadgeBg.fill).toHaveBeenCalledWith('#5a7d3a')
@@ -115,7 +105,6 @@ describe('refreshCanvasTheme', () => {
     expect(annotationLine.stroke).toHaveBeenCalledWith('#404040')
     expect(zoneShape.stroke).toHaveBeenCalledWith('#505050')
     expect(zoneShape.fill).toHaveBeenCalledWith('rgba(1, 2, 3, 0.4)')
-    expect(transformer.anchorFill).toHaveBeenCalledWith('#f5f4f0')
   })
 
   it('preserves custom zone fills while still updating theme-managed fills', () => {

@@ -1,7 +1,6 @@
 import Konva from 'konva'
 import { activeTool, lockedObjectIds, selectedObjectIds } from '../../state/canvas'
-import { AddNodeCommand, BatchCommand, RemoveNodeCommand, TransformNodeCommand } from '../commands'
-import type { TransformAttrs } from '../commands'
+import { AddNodeCommand, BatchCommand, RemoveNodeCommand } from '../commands'
 import { alignNodes, type Alignment, type DistributeAxis, distributeNodes } from '../alignment'
 import { GroupCommand, UngroupCommand } from '../commands/group'
 import { serializeNode, recreateNode } from '../commands/node-serialization'
@@ -125,37 +124,6 @@ export class CanvasObjectOps {
     }
 
     selectedObjectIds.value = newIds
-  }
-
-  rotateSelected(degrees: number, engine: CanvasEngine): void {
-    const nodes = this.getSelectedNodes()
-    if (nodes.length === 0) return
-
-    const cmds = nodes.map((node) => {
-      const oldAttrs = { rotation: node.rotation() } as TransformAttrs
-      node.rotation(node.rotation() + degrees)
-      const newAttrs = { rotation: node.rotation() } as TransformAttrs
-      return new TransformNodeCommand(node.id(), oldAttrs, newAttrs)
-    })
-
-    this._deps.history.record(new BatchCommand(cmds), engine)
-    this.batchDrawAllLayers()
-  }
-
-  flipSelected(axis: 'h' | 'v', engine: CanvasEngine): void {
-    const nodes = this.getSelectedNodes()
-    if (nodes.length === 0) return
-
-    const cmds = nodes.map((node) => {
-      const oldAttrs = { scaleX: node.scaleX(), scaleY: node.scaleY() } as TransformAttrs
-      if (axis === 'h') node.scaleX(node.scaleX() * -1)
-      else node.scaleY(node.scaleY() * -1)
-      const newAttrs = { scaleX: node.scaleX(), scaleY: node.scaleY() } as TransformAttrs
-      return new TransformNodeCommand(node.id(), oldAttrs, newAttrs)
-    })
-
-    this._deps.history.record(new BatchCommand(cmds), engine)
-    this.batchDrawAllLayers()
   }
 
   bringToFront(): void {

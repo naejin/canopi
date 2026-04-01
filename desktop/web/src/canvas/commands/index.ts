@@ -1,8 +1,6 @@
 export { AddNodeCommand } from './add-node'
 export { RemoveNodeCommand } from './remove-node'
 export { MoveNodeCommand } from './move-node'
-export { TransformNodeCommand } from './transform-node'
-export type { TransformAttrs } from './transform-node'
 export { BatchCommand } from './batch'
 export { serializeNode, recreateNode } from './node-serialization'
 export type { SerializedNode } from './node-serialization'

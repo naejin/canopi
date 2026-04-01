@@ -125,7 +125,6 @@
   --canvas-ruler-text: rgba(60, 45, 30, 0.4);
   --canvas-selection: rgba(160, 107, 31, 0.18);
   --canvas-selection-stroke: rgba(160, 107, 31, 0.6);
-  --canvas-selection-anchor-fill: #FCF8F2;
   --canvas-guide-line: rgba(45, 95, 63, 0.6);
   --canvas-guide-smart: rgba(181, 67, 42, 0.72);
   --canvas-stack-badge-bg: #5A7D3A;
@@ -190,7 +189,6 @@
   --canvas-ruler-text: rgba(200, 180, 150, 0.45);
   --canvas-selection: rgba(200, 155, 74, 0.22);
   --canvas-selection-stroke: rgba(200, 155, 74, 0.7);
-  --canvas-selection-anchor-fill: #1C1915;
   --canvas-guide-line: rgba(200, 180, 150, 0.72);
   --canvas-guide-smart: rgba(212, 118, 90, 0.8);
   --canvas-stack-badge-bg: #8BAA5E;

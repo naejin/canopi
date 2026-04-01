@@ -602,16 +602,6 @@ export class CanvasEngine {
     this._objectOps!.pasteFromClipboard(this)
   }
 
-  /** Rotate all selected nodes by the given number of degrees. */
-  rotateSelected(degrees: number): void {
-    this._objectOps!.rotateSelected(degrees, this)
-  }
-
-  /** Flip selected nodes along the given axis. */
-  flipSelected(axis: 'h' | 'v'): void {
-    this._objectOps!.flipSelected(axis, this)
-  }
-
   /** Move selected nodes to the top of their layer's z-order.
    *  Note: z-order undo is a Phase 3 item — these operations are not undoable. */
   bringToFront(): void {

@@ -3,8 +3,7 @@ import type { CanvasTool } from './base'
 import type { CanvasEngine } from '../engine'
 import { selectedObjectIds, lockedObjectIds } from '../../state/canvas'
 import { computeSelectionRect, nodesInRect } from '../operations'
-import { MoveNodeCommand, TransformNodeCommand, BatchCommand } from '../commands'
-import type { TransformAttrs } from '../commands'
+import { MoveNodeCommand, BatchCommand } from '../commands'
 import { getCanvasColor, highlightTargetFor } from '../theme-refresh'
 
 // Hover highlight — uses the theme-aware highlight-glow color so it works
@@ -12,31 +11,15 @@ import { getCanvasColor, highlightTargetFor } from '../theme-refresh'
 const HOVER_SHADOW_BLUR = 10
 const HOVER_SHADOW_OPACITY = 0.7
 
-// Rotation snaps every 15 degrees — full 360
-const ROTATION_SNAPS = [
-  0, 15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165,
-  180, 195, 210, 225, 240, 255, 270, 285, 300, 315, 330, 345,
-]
-
-// Beyond this many selected nodes the Transformer is replaced by a plain
-// bounding-rect so Konva doesn't stall computing 51+ anchor positions.
-const TRANSFORMER_NODE_LIMIT = 50
-
 export class SelectTool implements CanvasTool {
   readonly name = 'select'
   readonly cursor = 'default'
-
-  // Single shared Transformer instance — reused across selections
-  private _transformer: Konva.Transformer | null = null
 
   // Rubber-band state
   private _isDraggingBand = false
   private _bandStart: { x: number; y: number } | null = null
   private _bandRect: Konva.Rect | null = null
   private _bandRafId: number | null = null
-
-  // Bounding rect shown when >TRANSFORMER_NODE_LIMIT nodes are selected
-  private _boundingRect: Konva.Rect | null = null
 
   // Selection highlight: nodes with an active selection outline.
   // _previewHighlightIds tracks nodes highlighted during rubber-band drag (ephemeral).
@@ -54,35 +37,25 @@ export class SelectTool implements CanvasTool {
   // Drag tracking: map from node id → position captured at dragstart
   private _dragStartPositions: Map<string, { x: number; y: number }> = new Map()
 
-  // Transform tracking: map from node id → attrs captured at transformstart
-  private _transformStartAttrs: Map<string, TransformAttrs> = new Map()
-
-  // Bound drag/transform handlers stored for cleanup
+  // Bound drag handlers stored for cleanup
   private _boundDragStart: ((e: Konva.KonvaEventObject<MouseEvent>) => void) | null = null
   private _boundDragEnd: ((e: Konva.KonvaEventObject<MouseEvent>) => void) | null = null
-  private _boundTransformStart: (() => void) | null = null
-  private _boundTransformEnd: (() => void) | null = null
 
   // -------------------------------------------------------------------------
   // Lifecycle
   // -------------------------------------------------------------------------
 
   activate(engine: CanvasEngine): void {
-    this._ensureTransformer(engine)
     this._attachHoverListeners(engine)
     this._attachDragListeners(engine)
-    this._attachTransformListeners(engine)
   }
 
   deactivate(engine: CanvasEngine): void {
     this._clearHoverState()
     this._detachHoverListeners(engine)
     this._detachDragListeners(engine)
-    this._detachTransformListeners(engine)
     this._destroyBand(engine)
-    this._destroyBoundingRect(engine)
     this._clearAllHighlights(engine)
-    this._detachTransformer()
     selectedObjectIds.value = new Set()
   }
 
@@ -114,7 +87,6 @@ export class SelectTool implements CanvasTool {
       if (!e.evt.shiftKey) {
         selectedObjectIds.value = new Set()
         this._syncSelectionHighlights(engine)
-        this._detachTransformer()
       }
 
       this._isDraggingBand = true
@@ -163,7 +135,7 @@ export class SelectTool implements CanvasTool {
     }
 
     selectedObjectIds.value = currentIds
-    this._syncTransformer(engine)
+    this._syncSelectionHighlights(engine)
   }
 
   onMouseMove(_e: Konva.KonvaEventObject<MouseEvent>, engine: CanvasEngine): void {
@@ -235,144 +207,13 @@ export class SelectTool implements CanvasTool {
             newIds.add(node.id())
           }
           selectedObjectIds.value = newIds
-          this._syncTransformer(engine)
+          this._syncSelectionHighlights(engine)
         }
       }
     }
 
     // Always destroy the band rect — even if selection logic was skipped.
     this._destroyBand(engine)
-  }
-
-  // -------------------------------------------------------------------------
-  // Transformer management
-  // -------------------------------------------------------------------------
-
-  private _ensureTransformer(_engine: CanvasEngine): void {
-    if (this._transformer) return
-
-    // Don't add to any layer yet — it will be added to the same layer
-    // as the selected nodes in _syncTransformer. Konva requires the
-    // Transformer to be on the same layer as its target nodes.
-    this._transformer = new Konva.Transformer({
-      rotationSnaps: ROTATION_SNAPS,
-      keepRatio: true,
-      borderStroke: getCanvasColor('selection-stroke'),
-      borderStrokeWidth: 1,
-      anchorStroke: getCanvasColor('selection-stroke'),
-      anchorFill: getCanvasColor('selection-anchor-fill'),
-      anchorSize: 8,
-      anchorCornerRadius: 2,
-      rotateEnabled: true,
-      enabledAnchors: [
-        'top-left', 'top-center', 'top-right',
-        'middle-right', 'middle-left',
-        'bottom-left', 'bottom-center', 'bottom-right',
-      ],
-    })
-  }
-
-  private _detachTransformer(): void {
-    if (this._transformer) {
-      this._transformer.nodes([])
-      this._transformer.getLayer()?.batchDraw()
-    }
-  }
-
-  private _syncTransformer(engine: CanvasEngine): void {
-    this._ensureTransformer(engine)
-    this._destroyBoundingRect(engine)
-
-    // Sync persistent selection highlights: remove stale, add new
-    this._syncSelectionHighlights(engine)
-
-    const ids = selectedObjectIds.value
-    if (ids.size === 0) {
-      this._detachTransformer()
-      return
-    }
-
-    // Collect nodes in one pass
-    const nodes: Konva.Node[] = []
-    for (const layer of engine.layers.values()) {
-      layer.find('.shape').forEach((node) => {
-        if (ids.has(node.id())) nodes.push(node)
-      })
-    }
-
-    if (nodes.length === 0) {
-      this._detachTransformer()
-      return
-    }
-
-    if (nodes.length > TRANSFORMER_NODE_LIMIT) {
-      this._detachTransformer()
-      this._showBoundingRect(engine, nodes)
-      return
-    }
-
-    // Move the Transformer to the SAME layer as the first selected node.
-    // Konva requires Transformer and its targets on the same layer for
-    // proper drag/transform coordination.
-    const targetLayer = nodes[0]!.getLayer()
-    const currentLayer = this._transformer!.getLayer()
-    if (targetLayer && targetLayer !== currentLayer) {
-      this._transformer!.remove()
-      targetLayer.add(this._transformer! as unknown as Konva.Shape)
-    }
-
-    this._transformer!.nodes(nodes)
-    this._transformer!.getLayer()?.batchDraw()
-  }
-
-  // -------------------------------------------------------------------------
-  // Bounding rect (fallback for >50 selected nodes)
-  // -------------------------------------------------------------------------
-
-  private _showBoundingRect(engine: CanvasEngine, nodes: Konva.Node[]): void {
-    const annotationsLayer = engine.layers.get('annotations')
-    if (!annotationsLayer) return
-
-    // Compute union bounding box in screen (client) coordinates, then convert
-    // to world (canvas) coordinates to handle any zoom/pan correctly.
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-    const scale = engine.stage.scaleX()
-    const stagePos = engine.stage.position()
-
-    for (const node of nodes) {
-      // getClientRect() with no argument returns screen-space coordinates
-      const r = node.getClientRect()
-      minX = Math.min(minX, r.x)
-      minY = Math.min(minY, r.y)
-      maxX = Math.max(maxX, r.x + r.width)
-      maxY = Math.max(maxY, r.y + r.height)
-    }
-
-    // Convert screen-space bbox to world (canvas) coordinates
-    const x = (minX - stagePos.x) / scale
-    const y = (minY - stagePos.y) / scale
-    const width = (maxX - minX) / scale
-    const height = (maxY - minY) / scale
-
-    this._boundingRect = new Konva.Rect({
-      x, y, width, height,
-      stroke: getCanvasColor('selection-stroke'),
-      strokeWidth: 1,
-      strokeScaleEnabled: false,
-      dash: [6, 3],
-      fill: 'transparent',
-      listening: false,
-    })
-    annotationsLayer.add(this._boundingRect as unknown as Konva.Shape)
-    annotationsLayer.batchDraw()
-  }
-
-  private _destroyBoundingRect(engine: CanvasEngine): void {
-    if (this._boundingRect) {
-      this._boundingRect.destroy()
-      this._boundingRect = null
-      engine.layers.get('annotations')?.batchDraw()
-    }
   }
 
   // -------------------------------------------------------------------------
@@ -414,18 +255,6 @@ export class SelectTool implements CanvasTool {
   // -------------------------------------------------------------------------
   // Drag tracking (for undo)
   // -------------------------------------------------------------------------
-
-  private _captureTransformAttrs(node: Konva.Node): TransformAttrs {
-    return {
-      x: node.x(),
-      y: node.y(),
-      scaleX: node.scaleX(),
-      scaleY: node.scaleY(),
-      rotation: node.rotation(),
-      width: (node as Konva.Rect).width?.() ?? undefined,
-      height: (node as Konva.Rect).height?.() ?? undefined,
-    }
-  }
 
   private _attachDragListeners(engine: CanvasEngine): void {
     this._boundDragStart = (e: Konva.KonvaEventObject<MouseEvent>) => {
@@ -532,73 +361,6 @@ export class SelectTool implements CanvasTool {
       this._boundDragEnd = null
     }
     this._dragStartPositions.clear()
-  }
-
-  // -------------------------------------------------------------------------
-  // Transform tracking (for undo)
-  // -------------------------------------------------------------------------
-
-  private _attachTransformListeners(engine: CanvasEngine): void {
-    this._boundTransformStart = () => {
-      if (!this._transformer) return
-      this._transformStartAttrs.clear()
-      for (const node of this._transformer.nodes()) {
-        this._transformStartAttrs.set(node.id(), this._captureTransformAttrs(node))
-      }
-    }
-
-    this._boundTransformEnd = () => {
-      if (!this._transformer) return
-      const cmds: TransformNodeCommand[] = []
-
-      for (const node of this._transformer.nodes()) {
-        const oldAttrs = this._transformStartAttrs.get(node.id())
-        if (!oldAttrs) continue
-        const newAttrs = this._captureTransformAttrs(node)
-        cmds.push(new TransformNodeCommand(node.id(), oldAttrs, newAttrs))
-      }
-
-      this._transformStartAttrs.clear()
-
-      if (cmds.length === 0) return
-
-      // Use record() — the transform already happened
-      if (cmds.length === 1) {
-        engine.history.record(cmds[0]!, engine)
-      } else {
-        engine.history.record(new BatchCommand(cmds), engine)
-      }
-
-    }
-
-    // Transformer fires events on itself, not the stage
-    // We wire these after the transformer is guaranteed to exist.
-    // Re-wiring happens lazily in _syncTransformer when we first have nodes.
-    this._wireTransformerEvents()
-  }
-
-  private _wireTransformerEvents(): void {
-    if (!this._transformer) return
-    if (this._boundTransformStart) {
-      this._transformer.on('transformstart', this._boundTransformStart)
-    }
-    if (this._boundTransformEnd) {
-      this._transformer.on('transformend', this._boundTransformEnd)
-    }
-  }
-
-  private _detachTransformListeners(_engine: CanvasEngine): void {
-    if (this._transformer) {
-      if (this._boundTransformStart) {
-        this._transformer.off('transformstart', this._boundTransformStart)
-      }
-      if (this._boundTransformEnd) {
-        this._transformer.off('transformend', this._boundTransformEnd)
-      }
-    }
-    this._boundTransformStart = null
-    this._boundTransformEnd = null
-    this._transformStartAttrs.clear()
   }
 
   // -------------------------------------------------------------------------
@@ -777,5 +539,6 @@ export class SelectTool implements CanvasTool {
       this._removeHighlight(engine, id)
     }
     this._selectedHighlightIds.clear()
+    this._redrawHighlightedLayers(engine)
   }
 }

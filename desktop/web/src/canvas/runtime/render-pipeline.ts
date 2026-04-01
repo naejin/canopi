@@ -44,8 +44,7 @@ export class CanvasRenderPipeline {
     void theme.value
     refreshGridColors(container)
     refreshRulerColors(container)
-    const transformer = this._deps.stage.findOne('Transformer') as Konva.Transformer | undefined
-    refreshCanvasTheme(container, this._deps.layers, transformer ?? null)
+    refreshCanvasTheme(container, this._deps.layers)
   }
 
   refreshLocale(newLocale: string): void {

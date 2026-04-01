@@ -143,7 +143,6 @@ describe('Canvas renderer ownership', () => {
     expect(mocks.refreshCanvasTheme).toHaveBeenCalledWith(
       expect.anything(),
       expect.any(Map),
-      null,
     )
     expect(baseLayer.batchDraw).toHaveBeenCalled()
     expect(uiLayer.batchDraw).toHaveBeenCalled()

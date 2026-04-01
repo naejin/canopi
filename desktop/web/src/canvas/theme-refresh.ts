@@ -40,7 +40,6 @@ type CanvasColorName =
   | 'zone-fill'
   | 'selection-fill'
   | 'selection-stroke'
-  | 'selection-anchor-fill'
   | 'highlight-glow'
 
 const _colors: { [K in CanvasColorName]: string } = {
@@ -57,7 +56,6 @@ const _colors: { [K in CanvasColorName]: string } = {
   'zone-fill': 'rgba(45, 95, 63, 0.1)',
   'selection-fill': 'rgba(160, 107, 31, 0.18)',
   'selection-stroke': 'rgba(160, 107, 31, 0.6)',
-  'selection-anchor-fill': '#FCF8F2',
   'highlight-glow': '#A06B1F',
 }
 
@@ -92,7 +90,6 @@ export function getCanvasColor(name: CanvasColorName): string {
 export function refreshCanvasTheme(
   container: HTMLElement,
   layers: Map<string, Konva.Layer>,
-  transformer?: Konva.Transformer | null,
 ): void {
   const cs = getComputedStyle(container)
 
@@ -110,7 +107,6 @@ export function refreshCanvasTheme(
   _colors['zone-fill'] = cs.getPropertyValue('--canvas-zone-fill').trim() || _colors['zone-fill']
   _colors['selection-fill'] = cs.getPropertyValue('--canvas-selection').trim() || _colors['selection-fill']
   _colors['selection-stroke'] = cs.getPropertyValue('--canvas-selection-stroke').trim() || _colors['selection-stroke']
-  _colors['selection-anchor-fill'] = cs.getPropertyValue('--canvas-selection-anchor-fill').trim() || _colors['selection-anchor-fill']
   _colors['highlight-glow'] = cs.getPropertyValue('--color-primary').trim() || _colors['highlight-glow']
 
   // ── Update plant labels ──
@@ -191,14 +187,6 @@ export function refreshCanvasTheme(
       }
     })
     zonesLayer.batchDraw()
-  }
-
-  // ── Update Transformer (long-lived selection handles) ──
-  if (transformer) {
-    transformer.borderStroke(_colors['selection-stroke'])
-    transformer.anchorStroke(_colors['selection-stroke'])
-    transformer.anchorFill(_colors['selection-anchor-fill'])
-    transformer.getLayer()?.batchDraw()
   }
 
   // ── Update active selection/hover highlights ──
