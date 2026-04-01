@@ -72,6 +72,13 @@ function makeStage() {
   } as any
 }
 
+function makeSpeciesCache() {
+  return {
+    getCache: () => new Map(),
+    loadVisiblePlantEntries: vi.fn(async () => false),
+  }
+}
+
 describe('Canvas renderer ownership', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -110,8 +117,7 @@ describe('Canvas renderer ownership', () => {
         ['ui', uiLayer],
       ]),
       getHtmlRulers: () => null,
-      getSpeciesCache: () => new Map(),
-      loadSpeciesCache: vi.fn(async () => false),
+      speciesCache: makeSpeciesCache(),
     })
     const reconciler = new RenderReconciler({
       stage: makeStage(),
@@ -159,8 +165,7 @@ describe('Canvas renderer ownership', () => {
       } as any,
       layers: new Map([['plants', plantsLayer]]),
       getHtmlRulers: () => null,
-      getSpeciesCache: () => new Map(),
-      loadSpeciesCache: vi.fn(async () => false),
+      speciesCache: makeSpeciesCache(),
     })
 
     pipeline.refreshLocale('fr')
@@ -175,8 +180,7 @@ describe('Canvas renderer ownership', () => {
       stage: makeStage(),
       layers: new Map([['plants', makeLayer()]]),
       getHtmlRulers: () => null,
-      getSpeciesCache: () => new Map(),
-      loadSpeciesCache: vi.fn(async () => false),
+      speciesCache: makeSpeciesCache(),
     })
     const reconciler = new RenderReconciler({
       stage: makeStage(),

@@ -1,7 +1,6 @@
 import Konva from 'konva'
 import { activeTool } from '../../state/canvas'
-import type { Command } from '../history'
-import type { CanvasEngine } from '../engine'
+import type { CanvasCommandEngine, Command } from '../contracts'
 import { serializeNode, recreateNode, type SerializedNode } from './node-serialization'
 
 /**
@@ -25,7 +24,7 @@ export class AddNodeCommand implements Command {
     this.dirtyPasses = getLayerDirtyPasses(layerName)
   }
 
-  execute(engine: CanvasEngine): void {
+  execute(engine: CanvasCommandEngine): void {
     const node = recreateNode(this._serialized)
     // Draggable state is governed by the active tool — only the select tool
     // allows dragging. Newly added nodes inherit the current tool's policy.
@@ -39,7 +38,7 @@ export class AddNodeCommand implements Command {
     }
   }
 
-  undo(engine: CanvasEngine): void {
+  undo(engine: CanvasCommandEngine): void {
     const id = this._serialized.attrs.id as string | undefined
     if (!id) return
     engine.removeNode(id)

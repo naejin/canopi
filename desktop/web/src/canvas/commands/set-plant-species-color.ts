@@ -1,5 +1,4 @@
-import type { CanvasEngine } from '../engine'
-import type { Command } from '../history'
+import type { CanvasCommandEngine, Command } from '../contracts'
 import { plantSpeciesColors } from '../../state/canvas'
 
 export class SetPlantSpeciesColorCommand implements Command {
@@ -12,11 +11,11 @@ export class SetPlantSpeciesColorCommand implements Command {
     private readonly _to: string | null,
   ) {}
 
-  execute(_engine: CanvasEngine): void {
+  execute(_engine: CanvasCommandEngine): void {
     this._apply(this._to)
   }
 
-  undo(_engine: CanvasEngine): void {
+  undo(_engine: CanvasCommandEngine): void {
     this._apply(this._from)
   }
 

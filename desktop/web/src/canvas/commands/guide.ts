@@ -1,6 +1,5 @@
 import Konva from 'konva'
-import type { Command } from '../history'
-import type { CanvasEngine } from '../engine'
+import type { CanvasCommandEngine, Command } from '../contracts'
 import { guides } from '../../state/canvas'
 import { createGuideLine, type Guide } from '../guides'
 
@@ -14,7 +13,7 @@ export class AddGuideCommand implements Command {
     this._guide = guide
   }
 
-  execute(engine: CanvasEngine): void {
+  execute(engine: CanvasCommandEngine): void {
     guides.value = [...guides.value, this._guide]
     const layer = engine.layers.get('annotations')
     if (layer) {
@@ -24,7 +23,7 @@ export class AddGuideCommand implements Command {
     }
   }
 
-  undo(engine: CanvasEngine): void {
+  undo(engine: CanvasCommandEngine): void {
     guides.value = guides.value.filter((g) => g.id !== this._guide.id)
     const layer = engine.layers.get('annotations')
     if (layer) {
@@ -46,7 +45,7 @@ export class RemoveGuideCommand implements Command {
     this._guide = guide
   }
 
-  execute(engine: CanvasEngine): void {
+  execute(engine: CanvasCommandEngine): void {
     guides.value = guides.value.filter((g) => g.id !== this._guide.id)
     const layer = engine.layers.get('annotations')
     if (layer) {
@@ -57,7 +56,7 @@ export class RemoveGuideCommand implements Command {
     }
   }
 
-  undo(engine: CanvasEngine): void {
+  undo(engine: CanvasCommandEngine): void {
     guides.value = [...guides.value, this._guide]
     const layer = engine.layers.get('annotations')
     if (layer) {

@@ -72,11 +72,11 @@ export class CanvasRenderPipeline {
       colorBy,
       this._deps.stage.scaleX(),
       zoomReference.value,
-      this._deps.getSpeciesCache(),
+      this._deps.speciesCache.getCache(),
     )
 
     if (mode === 'color-by') {
-      void this._deps.loadSpeciesCache(locale.value).then((loaded) => {
+      void this._deps.speciesCache.loadVisiblePlantEntries(plantsLayer, locale.value).then((loaded) => {
         if (!loaded) return
         updatePlantDisplay(
           plantsLayer,
@@ -84,7 +84,7 @@ export class CanvasRenderPipeline {
           colorBy,
           this._deps.stage.scaleX(),
           zoomReference.value,
-          this._deps.getSpeciesCache(),
+          this._deps.speciesCache.getCache(),
         )
       })
     }

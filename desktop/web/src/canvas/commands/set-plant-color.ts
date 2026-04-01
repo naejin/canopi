@@ -1,6 +1,5 @@
 import Konva from 'konva'
-import type { CanvasEngine } from '../engine'
-import type { Command } from '../history'
+import type { CanvasCommandEngine, Command } from '../contracts'
 
 export class SetPlantColorCommand implements Command {
   readonly type = 'set-plant-color'
@@ -12,15 +11,15 @@ export class SetPlantColorCommand implements Command {
     private readonly _to: string | null,
   ) {}
 
-  execute(engine: CanvasEngine): void {
+  execute(engine: CanvasCommandEngine): void {
     this._apply(engine, this._to)
   }
 
-  undo(engine: CanvasEngine): void {
+  undo(engine: CanvasCommandEngine): void {
     this._apply(engine, this._from)
   }
 
-  private _apply(engine: CanvasEngine, color: string | null): void {
+  private _apply(engine: CanvasCommandEngine, color: string | null): void {
     const plantsLayer = engine.layers.get('plants')
     if (!plantsLayer) return
     const group = plantsLayer.findOne('#' + this._plantId)

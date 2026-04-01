@@ -18,6 +18,9 @@
 - **Edge clamping**: When cursor leaves canvas during draw/select, clamp position to container edge via `_clampToRect()` in `external-input.ts`. Inject clamped position via one-shot `getRelativePointerPosition()` override
 - **Tool affinity**: `external-input.ts` locks the tool reference on mousedown — all subsequent events route to that tool even if `activeTool` changes mid-drag
 - **Shapes born inert**: All shapes created with `draggable: false`. `_applyTool()` in engine.ts is the sole authority for draggable state. `AddNodeCommand.execute()` also sets draggable based on active tool
+- **Multi-select modifiers**: Additive/toggle selection accepts `Shift`, `Ctrl`, and `Cmd` (`metaKey`). Use the shared modifier check in `SelectTool`; do not fork platform-specific logic in multiple places
+- **Multi-select drag is live**: Dragging one selected node must move the full selected set during `dragmove`, not only record a batch move on `dragend`
+- **No smart-guide auto-alignment**: Do not reintroduce red smart-guide lines or peer-node auto-alignment during drag. Explicit guide snapping from ruler-created guides remains allowed
 
 ### Selection Highlights
 - Shadow effects on counter-scaled plant groups must target the **first child** (screen-pixel space), not the group. Use `highlightTargetFor()` from `theme-refresh.ts`
@@ -39,20 +42,22 @@ Landed post-beta product slice:
 - Plant color assignment — per-instance document color overrides, document-scoped same-species defaults for future placements, and `color-by: flower` display mode (see `docs/todo.md` S9)
 - Plant label improvements — single-line labels, color-aware density suppression, and priority ordering for user-colored plants (see `docs/todo.md` S9.1)
 
-Deferred follow-up work:
-- `loadSpeciesCache` extraction from `engine.ts`
-
 ## Runtime Module Split (Wave 2) + Reconciler (Wave 3)
 ```
 CanvasEngine (engine.ts) — facade + signal effects
   ├── RenderReconciler             — render invalidation, batching, deferred scheduling, stage-transform invalidation
   ├── runtime/render-pipeline.ts   — LOD, display modes, theme refresh (execution delegate, not scheduler)
+  ├── runtime/species-cache.ts     — species detail + resolved flower-color cache loading for display modes and suggestions
   ├── runtime/viewport.ts          — zoom, pan, resize, counter-scale
   ├── runtime/object-ops.ts        — selection, delete, duplicate, clipboard, z-order
   ├── runtime/external-input.ts    — keyboard, mouse, drag-drop routing
   └── runtime/document-session.ts  — document load/hydration, layer state reset
 ```
 External code uses `CanvasEngine` methods only. Never import from `runtime/*.ts` directly.
+
+Interaction boundary:
+- Tools and `external-input.ts` depend on the narrowed engine contract in `contracts.ts`, not the full `CanvasEngine` type
+- `CanvasEngine` still owns the public facade and implements the internal interaction contract
 
 ## Canvas Rendering
 - Zone shapes: world-unit geometry, `strokeScaleEnabled: false` for constant-pixel strokes
@@ -78,6 +83,8 @@ External code uses `CanvasEngine` methods only. Never import from `runtime/*.ts`
 - **Renderer stability gate**: Gate satisfied 2026-03-30; Wave 4 unblocked. See `docs/renderer/renderer.md` for the validation record and `docs/todo.md` S4 for gate conditions
 
 ## Konva.js Gotchas
+- **Selectable-ancestor walk**: Use `SelectTool._findSelectableAncestor()` to resolve a click/event target to its nearest selectable shape (has `id()` + `hasName('shape')`). Do not inline the while-loop — it was duplicated 5 times before extraction
+- **Cache node refs for multi-drag**: `_dragStartPositions` stores `{ x, y, node }` — the node reference captured at dragstart. Hot-path `dragmove` must iterate the cached map, never re-scan layers with `layer.find('.shape')` per frame
 - **Never assign `canvas.width`/`canvas.height` unconditionally in draw loops**: Assignment resets the backing buffer and triggers GPU texture reallocation even when the value is unchanged. Guard with `if (canvas.width !== newW) canvas.width = newW`. See `rulers.ts` draw functions
 - **Use `ctx.setTransform(dpr,0,0,dpr,0,0)` not `ctx.scale(dpr,dpr)` for HiDPI canvas**: `scale()` is cumulative — if the canvas buffer isn't reallocated every frame (per the guard above), the transform compounds. `setTransform()` is absolute and always safe
 - **ResizeObserver + RAF: read live DOM dimensions at RAF time**: Don't close over the `entries` parameter — by the time the RAF callback fires, the entries may be stale (especially when the coalescing guard drops intermediate observations). Read `element.clientWidth/clientHeight` inside the RAF callback instead
@@ -88,6 +95,7 @@ External code uses `CanvasEngine` methods only. Never import from `runtime/*.ts`
 - **`_cssVarMap` in `theme-refresh.ts`**: Adding a new canvas color requires entries in both `_cssVarMap` (CSS variable name) and `_colors` (fallback). Two special-case mappings: `selection-fill` → `--canvas-selection`, `highlight-glow` → `--color-primary`
 - **No Konva Transformer**: Resize/rotate was removed — objects are position-only. Selection uses highlight glows only, move uses native `draggable`. Do not re-add Transformer
 - **`name: 'shape'` only on top-level selectable nodes**: Children inside Groups must NOT have it — causes independent selection
+- **Plain click on an already-selected node should preserve the current multi-selection**: That lets users drag the full selected set without having to reselect first
 - **Screen-space overlays**: Use HTML `<canvas>` (not Konva layers) for rulers. Konva layers are subject to stage transforms
 - **`strokeScaleEnabled: false`**: Keeps stroke width constant in screen pixels. Use on all zone/annotation shapes
 - **Group-level counter-scale for plants**: Set `group.scale({x: 1/stageScale, y: 1/stageScale})` on the group, not children

@@ -27,12 +27,12 @@ import { TextTool } from './tools/text'
 import { PlantStampTool } from './tools/plant-stamp'
 import { createGridShape, snapToGrid } from './grid'
 import { createHtmlRulers, refreshRulerColors, setHtmlOverlayVisibility, type HtmlRulers } from './rulers'
-import { snapToGuides, clearSmartGuides, computeSmartGuides, createGuideLine } from './guides'
+import { snapToGuides, createGuideLine } from './guides'
 import { AddGuideCommand } from './commands/guide'
 import { BatchCommand, SetPlantColorCommand, SetPlantSpeciesColorCommand } from './commands'
 import type { Alignment, DistributeAxis } from './alignment'
 import type { CanopiFile, ObjectGroup, PlacedPlant } from '../types/design'
-import type { Command } from './history'
+import type { CanvasToolEngine, Command, PlantPlacementSpec } from './contracts'
 import { CanvasRenderPipeline } from './runtime/render-pipeline'
 import type { RenderPass } from './runtime/render-passes'
 import { CanvasViewport } from './runtime/viewport'
@@ -40,8 +40,8 @@ import { CanvasObjectOps } from './runtime/object-ops'
 import { CanvasExternalInput } from './runtime/external-input'
 import { loadDocumentSession, resetTransientCanvasSession } from './runtime/document-session'
 import { RenderReconciler } from './runtime/render-reconciler'
-import { getFlowerColorBatch, getSpeciesBatch } from '../ipc/species'
-import { getFlowerColorHex, normalizeHexColor } from './plant-colors'
+import { CanvasSpeciesCache } from './runtime/species-cache'
+import { normalizeHexColor } from './plant-colors'
 import { createPlantNode } from './plants'
 
 // The 7 named layers in render order (bottom → top)
@@ -67,7 +67,7 @@ export interface SelectedPlantColorContext {
   singleSpeciesDefaultColor: string | null
 }
 
-export class CanvasEngine {
+export class CanvasEngine implements CanvasToolEngine {
   stage!: Konva.Stage
   layers: Map<string, Konva.Layer> = new Map()
   toolRegistry: Map<string, CanvasTool> = new Map()
@@ -98,7 +98,7 @@ export class CanvasEngine {
   private _disposeLocaleEffect: (() => void) | null = null
   private _disposeDisplayModeEffect: (() => void) | null = null
   /** Cache of species details for thematic coloring — keyed by canonical name */
-  private _speciesCache = new Map<string, Record<string, unknown>>()
+  private _speciesCache = new CanvasSpeciesCache()
   private _documentLoadEpoch = 0
 
   private _lastLocale = locale.peek()
@@ -141,8 +141,11 @@ export class CanvasEngine {
       stage: this.stage,
       layers: this.layers,
       getHtmlRulers: () => this._htmlRulers,
-      getSpeciesCache: () => this._speciesCache,
-      loadSpeciesCache: (activeLocale) => this.loadSpeciesCache(activeLocale),
+      speciesCache: {
+        getCache: () => this._speciesCache.getCache(),
+        loadVisiblePlantEntries: (plantsLayer, activeLocale) =>
+          this._speciesCache.loadVisiblePlantEntries(plantsLayer, activeLocale),
+      },
     })
     this._renderReconciler = new RenderReconciler({
       stage: this.stage,
@@ -184,9 +187,8 @@ export class CanvasEngine {
     this._externalInput = new CanvasExternalInput({
       stage: this.stage,
       layers: this.layers,
-      history: this.history,
       toolRegistry: this.toolRegistry,
-      getEngine: () => this,
+      engine: this,
       getSpaceHeld: () => this._spaceHeld,
       setSpaceHeld: (value) => {
         this._spaceHeld = value
@@ -361,29 +363,7 @@ export class CanvasEngine {
 
       target.position({ x, y })
 
-      // Smart guides — show alignment indicators during drag
-      const layer = target.getLayer()
-      if (layer) {
-        clearSmartGuides(layer)
-        const candidates = layer.find('.shape').filter(
-          (n: Konva.Node) => n !== target && n.id() !== target.id(),
-        )
-        const result = computeSmartGuides(target, candidates, this.stage.scaleX())
-        if (result.snappedX !== x || result.snappedY !== y) {
-          target.position({ x: result.snappedX, y: result.snappedY })
-        }
-        for (const line of result.lines) {
-          layer.add(line as unknown as Konva.Shape)
-        }
-        layer.batchDraw()
-      }
-    })
-
-    // Clean up smart guides on drag end + update attached dimensions + consortium hulls
-    this.stage.on('dragend', (e) => {
-      if (e.target === this.stage) return
-      const layer = e.target.getLayer()
-      if (layer) clearSmartGuides(layer)
+      target.getLayer()?.batchDraw()
     })
   }
 
@@ -721,13 +701,7 @@ export class CanvasEngine {
     return normalizeHexColor(plantSpeciesColors.value[canonicalName] ?? null)
   }
 
-  createPlantPlacementNode(plant: {
-    canonicalName: string
-    commonName: string | null
-    stratum: string | null
-    canopySpreadM: number | null
-    position: { x: number; y: number }
-  }): Konva.Group {
+  createPlantPlacementNode(plant: PlantPlacementSpec): Konva.Group {
     return createPlantNode({
       id: crypto.randomUUID(),
       canonicalName: plant.canonicalName,
@@ -813,51 +787,18 @@ export class CanvasEngine {
 
   /** Load species details for thematic coloring. Call before switching to color-by mode. */
   async loadSpeciesCache(activeLocale: string): Promise<boolean> {
-    const plantsLayer = this.layers.get('plants')
-    if (!plantsLayer) return false
-    const names = new Set<string>()
-    plantsLayer.find('.plant-group').forEach((node: Konva.Node) => {
-      const name = (node as Konva.Group).getAttr('data-canonical-name') as string
-      if (name && !this._speciesCache.has(name)) names.add(name)
-    })
-    return this.ensureSpeciesCacheEntries([...names], activeLocale)
+    return this._speciesCache.loadVisiblePlantEntries(this.layers.get('plants'), activeLocale)
   }
 
   async ensureSpeciesCacheEntries(
     canonicalNames: string[],
     activeLocale: string,
   ): Promise<boolean> {
-    const missingNames = [...new Set(canonicalNames.filter((name) => name && !this._speciesCache.has(name)))]
-    if (missingNames.length === 0) return false
-
-    const [details, flowerColors] = await Promise.all([
-      getSpeciesBatch(missingNames, activeLocale),
-      getFlowerColorBatch(missingNames),
-    ])
-    const detailByName = new Map(
-      details.map((detail) => [detail.canonical_name, detail as unknown as Record<string, unknown>]),
-    )
-    const flowerByName = new Map(flowerColors.map((entry) => [entry.canonical_name, entry]))
-
-    for (const canonicalName of missingNames) {
-      const detail = detailByName.get(canonicalName) ?? { canonical_name: canonicalName }
-      const flower = flowerByName.get(canonicalName)
-      this._speciesCache.set(canonicalName, {
-        ...detail,
-        resolved_flower_color: flower?.flower_color ?? null,
-        resolved_flower_color_source: flower?.source ?? 'none',
-      })
-    }
-
-    return true
+    return this._speciesCache.ensureEntries(canonicalNames, activeLocale)
   }
 
   getSuggestedPlantColor(canonicalName: string): string | null {
-    const detail = this._speciesCache.get(canonicalName)
-    return getFlowerColorHex(
-      (detail?.resolved_flower_color as string | null | undefined)
-      ?? (detail?.flower_color as string | null | undefined),
-    )
+    return this._speciesCache.getSuggestedPlantColor(canonicalName)
   }
 
   private _getPlantGroupFromNode(node: Konva.Node | null): Konva.Group | null {

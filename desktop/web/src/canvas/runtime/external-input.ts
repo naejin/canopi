@@ -80,18 +80,18 @@ export class CanvasExternalInput {
       const tool = this._deps.toolRegistry.get(activeTool.value) ?? null
       this._dragTool = tool
       this._startWindowDragListeners()
-      tool?.onMouseDown(event, this._deps.getEngine())
+      tool?.onMouseDown(event, this._deps.engine)
     }
 
     this._boundMouseMove = (event) => {
       const tool = this._dragTool ?? this._deps.toolRegistry.get(activeTool.value)
-      tool?.onMouseMove(event, this._deps.getEngine())
+      tool?.onMouseMove(event, this._deps.engine)
     }
 
     this._boundMouseUp = (event) => {
       const tool = this._dragTool
       this._endDrag()
-      tool?.onMouseUp(event, this._deps.getEngine())
+      tool?.onMouseUp(event, this._deps.engine)
     }
 
     this._deps.stage.on('mousedown', this._boundMouseDown)
@@ -198,7 +198,7 @@ export class CanvasExternalInput {
       if (container) container.style.cursor = 'grab'
     }
 
-    this._deps.toolRegistry.get(activeTool.value)?.onKeyDown?.(event, this._deps.getEngine())
+    this._deps.toolRegistry.get(activeTool.value)?.onKeyDown?.(event, this._deps.engine)
   }
 
   private _onKeyUp(event: KeyboardEvent): void {
@@ -308,7 +308,7 @@ export class CanvasExternalInput {
       if (!data) return
 
       const pos = domToCanvas(event)
-      const plantNode = this._deps.getEngine().createPlantPlacementNode({
+      const plantNode = this._deps.engine.createPlantPlacementNode({
         canonicalName: data.canonical_name,
         commonName: data.common_name,
         stratum: data.stratum,
@@ -316,7 +316,7 @@ export class CanvasExternalInput {
         position: pos,
       })
 
-      this._deps.history.execute(new AddNodeCommand('plants', plantNode), this._deps.getEngine())
+      this._deps.engine.history.execute(new AddNodeCommand('plants', plantNode), this._deps.engine)
     }
 
     container.addEventListener('dragover', this._boundDragOver)

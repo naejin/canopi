@@ -1,6 +1,5 @@
 import Konva from 'konva'
-import type { Command } from '../history'
-import type { CanvasEngine } from '../engine'
+import type { CanvasCommandEngine, Command } from '../contracts'
 import { groupSelected, ungroupSelected } from '../grouping'
 import { selectedObjectIds } from '../../state/canvas'
 
@@ -16,7 +15,7 @@ export class GroupCommand implements Command {
   private _memberPositions: Map<string, { x: number; y: number }> = new Map()
   private _layerName: string | null = null
 
-  execute(engine: CanvasEngine): void {
+  execute(engine: CanvasCommandEngine): void {
     // Store pre-group positions for undo
     const nodes = engine.getSelectedNodes()
     for (const node of nodes) {
@@ -36,7 +35,7 @@ export class GroupCommand implements Command {
     }
   }
 
-  undo(engine: CanvasEngine): void {
+  undo(engine: CanvasCommandEngine): void {
     if (!this._groupId || !this._layerName) return
 
     const layer = engine.layers.get(this._layerName)
@@ -75,7 +74,7 @@ export class UngroupCommand implements Command {
     layerName: string
   }> = []
 
-  execute(engine: CanvasEngine): void {
+  execute(engine: CanvasCommandEngine): void {
     const nodes = engine.getSelectedNodes()
     const groups = nodes.filter((n) => n.hasName('object-group'))
 
@@ -109,7 +108,7 @@ export class UngroupCommand implements Command {
     ungroupSelected(engine)
   }
 
-  undo(engine: CanvasEngine): void {
+  undo(engine: CanvasCommandEngine): void {
     for (const saved of this._groups) {
       const layer = engine.layers.get(saved.layerName)
       if (!layer) continue

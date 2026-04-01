@@ -1,14 +1,7 @@
 import { signal } from '@preact/signals'
 import { canvasClean } from '../state/design'
-import type { CanvasEngine } from './engine'
+import type { CanvasCommandEngine, Command } from './contracts'
 import type { RenderPass } from './runtime/render-passes'
-
-export interface Command {
-  readonly type: string
-  readonly dirtyPasses: readonly RenderPass[]
-  execute(engine: CanvasEngine): void
-  undo(engine: CanvasEngine): void
-}
 
 const MAX_HISTORY = 500
 
@@ -27,7 +20,7 @@ export class CanvasHistory {
   readonly canRedo = signal(false)
 
   /** Execute a command, push to past stack, and clear redo stack. */
-  execute(cmd: Command, engine: CanvasEngine): void {
+  execute(cmd: Command, engine: CanvasCommandEngine): void {
     cmd.execute(engine)
     engine.invalidateRender?.(...this._getDirtyPasses(cmd))
     this._past.push(cmd)
@@ -50,7 +43,7 @@ export class CanvasHistory {
    * Record a command that has ALREADY been executed (e.g. drag, transform).
    * Pushes to past stack without calling execute() again.
    */
-  record(cmd: Command, engine: CanvasEngine): void {
+  record(cmd: Command, engine: CanvasCommandEngine): void {
     engine.invalidateRender?.(...this._getDirtyPasses(cmd))
     this._past.push(cmd)
     this._future = []
@@ -67,7 +60,7 @@ export class CanvasHistory {
     this._updateSignals()
   }
 
-  undo(engine: CanvasEngine): void {
+  undo(engine: CanvasCommandEngine): void {
     const cmd = this._past.pop()
     if (!cmd) return
     cmd.undo(engine)
@@ -76,7 +69,7 @@ export class CanvasHistory {
     this._updateSignals()
   }
 
-  redo(engine: CanvasEngine): void {
+  redo(engine: CanvasCommandEngine): void {
     const cmd = this._future.pop()
     if (!cmd) return
     cmd.execute(engine)

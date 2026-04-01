@@ -1,5 +1,5 @@
 import Konva from 'konva'
-import type { CanvasEngine } from './engine'
+import type { CanvasCommandEngine, CanvasGeometryEngine } from './contracts'
 import type { ObjectGroup } from '../types/design'
 import { activeTool, selectedObjectIds } from '../state/canvas'
 
@@ -12,7 +12,7 @@ import { activeTool, selectedObjectIds } from '../state/canvas'
  * Group the currently selected nodes into a Konva.Group.
  * All nodes must be on the same layer. Returns the new group node, or null.
  */
-export function groupSelected(engine: CanvasEngine): Konva.Group | null {
+export function groupSelected(engine: CanvasCommandEngine): Konva.Group | null {
   const nodes = engine.getSelectedNodes()
   if (nodes.length < 2) return null
 
@@ -58,7 +58,7 @@ export function groupSelected(engine: CanvasEngine): Konva.Group | null {
  * Ungroup a selected object group — extract children back to the layer.
  * Returns the extracted child nodes, or null.
  */
-export function ungroupSelected(engine: CanvasEngine): Konva.Node[] | null {
+export function ungroupSelected(engine: CanvasCommandEngine): Konva.Node[] | null {
   const nodes = engine.getSelectedNodes()
   const groups = nodes.filter((n) => n.hasName('object-group'))
   if (groups.length === 0) return null
@@ -101,7 +101,7 @@ export function ungroupSelected(engine: CanvasEngine): Konva.Node[] | null {
 /**
  * Extract ObjectGroup records from the canvas for serialization.
  */
-export function extractGroups(engine: CanvasEngine): ObjectGroup[] {
+export function extractGroups(engine: CanvasGeometryEngine): ObjectGroup[] {
   const groups: ObjectGroup[] = []
 
   for (const [layerName, layer] of engine.layers) {
@@ -138,7 +138,7 @@ export function extractGroups(engine: CanvasEngine): ObjectGroup[] {
  */
 export function restoreGroups(
   groupDefs: ObjectGroup[],
-  engine: CanvasEngine,
+  engine: CanvasGeometryEngine,
 ): void {
   for (const def of groupDefs) {
     const layer = engine.layers.get(def.layer)

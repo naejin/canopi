@@ -1,6 +1,6 @@
 import type Konva from 'konva'
 import type { CanvasTool } from './base'
-import type { CanvasEngine } from '../engine'
+import type { CanvasToolEngine } from '../contracts'
 import { createText } from '../shapes'
 import { AddNodeCommand } from '../commands'
 
@@ -12,13 +12,13 @@ export class TextTool implements CanvasTool {
   // Canvas-space position where the text node will be placed
   private _canvasPos: { x: number; y: number } | null = null
 
-  activate(_engine: CanvasEngine): void {}
+  activate(_engine: CanvasToolEngine): void {}
 
-  deactivate(engine: CanvasEngine): void {
+  deactivate(engine: CanvasToolEngine): void {
     this._removeTextarea(engine)
   }
 
-  onMouseDown(e: Konva.KonvaEventObject<MouseEvent>, engine: CanvasEngine): void {
+  onMouseDown(e: Konva.KonvaEventObject<MouseEvent>, engine: CanvasToolEngine): void {
     if (e.evt.button !== 0) return
 
     // If there's already an active textarea, commit it first
@@ -35,11 +35,11 @@ export class TextTool implements CanvasTool {
     this._spawnTextarea(pos, engine)
   }
 
-  onMouseMove(_e: Konva.KonvaEventObject<MouseEvent>, _engine: CanvasEngine): void {}
+  onMouseMove(_e: Konva.KonvaEventObject<MouseEvent>, _engine: CanvasToolEngine): void {}
 
-  onMouseUp(_e: Konva.KonvaEventObject<MouseEvent>, _engine: CanvasEngine): void {}
+  onMouseUp(_e: Konva.KonvaEventObject<MouseEvent>, _engine: CanvasToolEngine): void {}
 
-  onKeyDown(e: KeyboardEvent, engine: CanvasEngine): void {
+  onKeyDown(e: KeyboardEvent, engine: CanvasToolEngine): void {
     if (e.key === 'Escape') {
       this._removeTextarea(engine)
     }
@@ -56,7 +56,7 @@ export class TextTool implements CanvasTool {
 
   private _spawnTextarea(
     canvasPos: { x: number; y: number },
-    engine: CanvasEngine,
+    engine: CanvasToolEngine,
   ): void {
     const stage = engine.stage
     const container = stage.container()
@@ -146,7 +146,7 @@ export class TextTool implements CanvasTool {
     textarea.addEventListener('keydown', onKeydown)
   }
 
-  private _commitText(engine: CanvasEngine): void {
+  private _commitText(engine: CanvasToolEngine): void {
     const textarea = this._textarea
     const pos = this._canvasPos
 
@@ -168,7 +168,7 @@ export class TextTool implements CanvasTool {
     engine.history.execute(cmd, engine)
   }
 
-  private _removeTextarea(engine: CanvasEngine): void {
+  private _removeTextarea(engine: CanvasToolEngine): void {
     if (this._textarea) {
       this._textarea.remove()
       this._textarea = null

@@ -9,7 +9,8 @@
  * - Architecture review: Undo clears dirty even when non-canvas edits remain
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { CanvasHistory, type Command } from '../canvas/history'
+import { CanvasHistory } from '../canvas/history'
+import type { Command } from '../canvas/contracts'
 import { DEFAULT_RENDER_PASSES } from '../canvas/runtime/render-passes'
 import {
   nonCanvasRevision,

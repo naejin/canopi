@@ -1,6 +1,6 @@
 import Konva from 'konva'
 import type { CanvasTool } from './base'
-import type { CanvasEngine } from '../engine'
+import type { CanvasToolEngine } from '../contracts'
 import { selectedObjectIds, lockedObjectIds } from '../../state/canvas'
 import { computeSelectionRect, nodesInRect } from '../operations'
 import { MoveNodeCommand, BatchCommand } from '../commands'
@@ -34,23 +34,25 @@ export class SelectTool implements CanvasTool {
   private _boundMouseover: ((e: Konva.KonvaEventObject<MouseEvent>) => void) | null = null
   private _boundMouseout: ((e: Konva.KonvaEventObject<MouseEvent>) => void) | null = null
 
-  // Drag tracking: map from node id → position captured at dragstart
-  private _dragStartPositions: Map<string, { x: number; y: number }> = new Map()
+  // Drag tracking: map from node id → position + node ref captured at dragstart
+  private _dragStartPositions: Map<string, { x: number; y: number; node: Konva.Node }> = new Map()
+  private _activeDragTargetId: string | null = null
 
   // Bound drag handlers stored for cleanup
   private _boundDragStart: ((e: Konva.KonvaEventObject<MouseEvent>) => void) | null = null
+  private _boundDragMove: ((e: Konva.KonvaEventObject<MouseEvent>) => void) | null = null
   private _boundDragEnd: ((e: Konva.KonvaEventObject<MouseEvent>) => void) | null = null
 
   // -------------------------------------------------------------------------
   // Lifecycle
   // -------------------------------------------------------------------------
 
-  activate(engine: CanvasEngine): void {
+  activate(engine: CanvasToolEngine): void {
     this._attachHoverListeners(engine)
     this._attachDragListeners(engine)
   }
 
-  deactivate(engine: CanvasEngine): void {
+  deactivate(engine: CanvasToolEngine): void {
     this._clearHoverState()
     this._detachHoverListeners(engine)
     this._detachDragListeners(engine)
@@ -63,7 +65,7 @@ export class SelectTool implements CanvasTool {
   // Mouse events
   // -------------------------------------------------------------------------
 
-  onMouseDown(e: Konva.KonvaEventObject<MouseEvent>, engine: CanvasEngine): void {
+  onMouseDown(e: Konva.KonvaEventObject<MouseEvent>, engine: CanvasToolEngine): void {
     // Space-pan takes over — let the engine handle it
     if (engine.stage.draggable()) return
 
@@ -83,8 +85,8 @@ export class SelectTool implements CanvasTool {
       const pos = engine.stage.getRelativePointerPosition()
       if (!pos) return
 
-      // Deselect unless shift is held
-      if (!e.evt.shiftKey) {
+      // Deselect unless an additive selection modifier is held.
+      if (!this._hasAdditiveModifier(e.evt)) {
         selectedObjectIds.value = new Set()
         this._syncSelectionHighlights(engine)
       }
@@ -99,15 +101,7 @@ export class SelectTool implements CanvasTool {
     // (a node with an id and name 'shape'). This is needed because clicking
     // a child of a Group (e.g. a plant circle inside a plant-group) gives us
     // the child as target, not the group itself.
-    let selectable: Konva.Node | null = target
-    while (selectable && (!selectable.id() || !selectable.hasName('shape'))) {
-      selectable = selectable.getParent() as Konva.Node | null
-      // Stop if we've walked up to the stage or layer level
-      if (!selectable || selectable === engine.stage || selectable.getClassName() === 'Layer') {
-        selectable = null
-        break
-      }
-    }
+    const selectable = this._findSelectableAncestor(target, engine.stage)
     if (!selectable) return
 
     const id = selectable.id()
@@ -116,10 +110,10 @@ export class SelectTool implements CanvasTool {
     // Don't select locked nodes
     if (lockedObjectIds.value.has(id)) return
 
-    const shift = e.evt.shiftKey
+    const toggleSelection = this._hasAdditiveModifier(e.evt)
     const currentIds = new Set(selectedObjectIds.value)
 
-    if (shift) {
+    if (toggleSelection) {
       // Toggle membership
       if (currentIds.has(id)) {
         currentIds.delete(id)
@@ -138,7 +132,7 @@ export class SelectTool implements CanvasTool {
     this._syncSelectionHighlights(engine)
   }
 
-  onMouseMove(_e: Konva.KonvaEventObject<MouseEvent>, engine: CanvasEngine): void {
+  onMouseMove(_e: Konva.KonvaEventObject<MouseEvent>, engine: CanvasToolEngine): void {
     if (!this._isDraggingBand || !this._bandStart || !this._bandRect) return
 
     const pos = engine.stage.getRelativePointerPosition()
@@ -184,7 +178,7 @@ export class SelectTool implements CanvasTool {
     })
   }
 
-  onMouseUp(_e: Konva.KonvaEventObject<MouseEvent>, engine: CanvasEngine): void {
+  onMouseUp(_e: Konva.KonvaEventObject<MouseEvent>, engine: CanvasToolEngine): void {
     // Capture and clear band state before any early returns so the rect is
     // never left stranded on the canvas regardless of what goes wrong below.
     const wasDragging = this._isDraggingBand
@@ -220,7 +214,7 @@ export class SelectTool implements CanvasTool {
   // Rubber-band rectangle
   // -------------------------------------------------------------------------
 
-  private _createBand(engine: CanvasEngine, pos: { x: number; y: number }): void {
+  private _createBand(engine: CanvasToolEngine, pos: { x: number; y: number }): void {
     const annotationsLayer = engine.layers.get('annotations')
     if (!annotationsLayer) return
 
@@ -240,7 +234,7 @@ export class SelectTool implements CanvasTool {
     annotationsLayer.batchDraw()
   }
 
-  private _destroyBand(engine: CanvasEngine): void {
+  private _destroyBand(engine: CanvasToolEngine): void {
     if (this._bandRafId !== null) {
       cancelAnimationFrame(this._bandRafId)
       this._bandRafId = null
@@ -256,19 +250,11 @@ export class SelectTool implements CanvasTool {
   // Drag tracking (for undo)
   // -------------------------------------------------------------------------
 
-  private _attachDragListeners(engine: CanvasEngine): void {
+  private _attachDragListeners(engine: CanvasToolEngine): void {
     this._boundDragStart = (e: Konva.KonvaEventObject<MouseEvent>) => {
       if (e.target === engine.stage) return
 
-      // Walk up to find the selectable ancestor (same as onMouseDown)
-      let target: Konva.Node | null = e.target
-      while (target && (!target.id() || !target.hasName('shape'))) {
-        target = target.getParent() as Konva.Node | null
-        if (!target || target === engine.stage || target.getClassName() === 'Layer') {
-          target = null
-          break
-        }
-      }
+      const target = this._findSelectableAncestor(e.target, engine.stage)
       if (!target) return
 
       const id = target.id()
@@ -277,19 +263,44 @@ export class SelectTool implements CanvasTool {
       // Capture start positions for all currently selected nodes (multi-drag)
       const ids = selectedObjectIds.value
       if (ids.has(id)) {
-        // Multi-select drag: capture all selected nodes
+        // Multi-select drag: capture all selected nodes with their refs
         this._dragStartPositions.clear()
+        this._activeDragTargetId = id
         for (const layer of engine.layers.values()) {
           layer.find('.shape').forEach((node) => {
             if (ids.has(node.id())) {
-              this._dragStartPositions.set(node.id(), { x: node.x(), y: node.y() })
+              this._dragStartPositions.set(node.id(), { x: node.x(), y: node.y(), node })
             }
           })
         }
       } else {
         // Single node not yet in selection
         this._dragStartPositions.clear()
-        this._dragStartPositions.set(id, { x: target.x(), y: target.y() })
+        this._activeDragTargetId = id
+        this._dragStartPositions.set(id, { x: target.x(), y: target.y(), node: target })
+      }
+    }
+
+    this._boundDragMove = (e: Konva.KonvaEventObject<MouseEvent>) => {
+      if (e.target === engine.stage) return
+      if (this._dragStartPositions.size <= 1 || !this._activeDragTargetId) return
+
+      const anchor = this._dragStartPositions.get(this._activeDragTargetId)
+      if (!anchor) return
+
+      const dx = anchor.node.x() - anchor.x
+      const dy = anchor.node.y() - anchor.y
+      const dirtyLayers = new Set<Konva.Layer>()
+
+      for (const [id, start] of this._dragStartPositions) {
+        if (id === this._activeDragTargetId) continue
+        start.node.position({ x: start.x + dx, y: start.y + dy })
+        const nodeLayer = start.node.getLayer()
+        if (nodeLayer) dirtyLayers.add(nodeLayer)
+      }
+
+      for (const layer of dirtyLayers) {
+        layer.batchDraw()
       }
     }
 
@@ -297,45 +308,24 @@ export class SelectTool implements CanvasTool {
       if (e.target === engine.stage) return
       if (this._dragStartPositions.size === 0) return
 
-      // Walk up to selectable ancestor (consistent with dragstart)
-      let target: Konva.Node | null = e.target
-      while (target && (!target.id() || !target.hasName('shape'))) {
-        target = target.getParent() as Konva.Node | null
-        if (!target || target === engine.stage || target.getClassName() === 'Layer') {
-          target = null
-          break
-        }
+      const target = this._findSelectableAncestor(e.target, engine.stage)
+      if (!target) {
+        this._dragStartPositions.clear()
+        this._activeDragTargetId = null
+        return
       }
-      if (!target) { this._dragStartPositions.clear(); return }
 
       const cmds: MoveNodeCommand[] = []
 
-      if (this._dragStartPositions.size === 1) {
-        const id = target.id()
-        const from = this._dragStartPositions.get(id)
-        if (from) {
-          const to = { x: target.x(), y: target.y() }
-          // Only record if position actually changed
-          if (from.x !== to.x || from.y !== to.y) {
-            cmds.push(new MoveNodeCommand(id, from, to))
-          }
-        }
-      } else {
-        // Multi-drag: find each node's new position
-        for (const layer of engine.layers.values()) {
-          layer.find('.shape').forEach((node) => {
-            const from = this._dragStartPositions.get(node.id())
-            if (from) {
-              const to = { x: node.x(), y: node.y() }
-              if (from.x !== to.x || from.y !== to.y) {
-                cmds.push(new MoveNodeCommand(node.id(), from, to))
-              }
-            }
-          })
+      for (const [id, start] of this._dragStartPositions) {
+        const to = { x: start.node.x(), y: start.node.y() }
+        if (start.x !== to.x || start.y !== to.y) {
+          cmds.push(new MoveNodeCommand(id, { x: start.x, y: start.y }, to))
         }
       }
 
       this._dragStartPositions.clear()
+      this._activeDragTargetId = null
 
       if (cmds.length === 0) return
 
@@ -348,36 +338,34 @@ export class SelectTool implements CanvasTool {
     }
 
     engine.stage.on('dragstart', this._boundDragStart)
+    engine.stage.on('dragmove', this._boundDragMove)
     engine.stage.on('dragend', this._boundDragEnd)
   }
 
-  private _detachDragListeners(engine: CanvasEngine): void {
+  private _detachDragListeners(engine: CanvasToolEngine): void {
     if (this._boundDragStart) {
       engine.stage.off('dragstart', this._boundDragStart)
       this._boundDragStart = null
+    }
+    if (this._boundDragMove) {
+      engine.stage.off('dragmove', this._boundDragMove)
+      this._boundDragMove = null
     }
     if (this._boundDragEnd) {
       engine.stage.off('dragend', this._boundDragEnd)
       this._boundDragEnd = null
     }
     this._dragStartPositions.clear()
+    this._activeDragTargetId = null
   }
 
   // -------------------------------------------------------------------------
   // Hover effects
   // -------------------------------------------------------------------------
 
-  private _attachHoverListeners(engine: CanvasEngine): void {
+  private _attachHoverListeners(engine: CanvasToolEngine): void {
     this._boundMouseover = (e: Konva.KonvaEventObject<MouseEvent>) => {
-      // Walk up from hover target to find a selectable shape (has id + name 'shape')
-      let node: Konva.Node | null = e.target
-      while (node && (!node.id() || !node.hasName('shape'))) {
-        node = node.getParent() as Konva.Node | null
-        if (!node || node === engine.stage || node.getClassName() === 'Layer') {
-          node = null
-          break
-        }
-      }
+      const node = this._findSelectableAncestor(e.target, engine.stage)
       if (!node) return
 
       const id = node.id()
@@ -420,7 +408,7 @@ export class SelectTool implements CanvasTool {
     engine.stage.on('mouseout', this._boundMouseout)
   }
 
-  private _detachHoverListeners(engine: CanvasEngine): void {
+  private _detachHoverListeners(engine: CanvasToolEngine): void {
     if (this._boundMouseover) {
       engine.stage.off('mouseover', this._boundMouseover)
       this._boundMouseover = null
@@ -482,14 +470,14 @@ export class SelectTool implements CanvasTool {
   }
 
   /** Flush all dirty layers that contain highlighted nodes. */
-  private _redrawHighlightedLayers(engine: CanvasEngine): void {
+  private _redrawHighlightedLayers(engine: CanvasToolEngine): void {
     for (const layer of engine.layers.values()) {
       layer.batchDraw()
     }
   }
 
   /** Remove highlight from a node by ID (finds it across layers). */
-  private _removeHighlight(engine: CanvasEngine, id: string): void {
+  private _removeHighlight(engine: CanvasToolEngine, id: string): void {
     for (const layer of engine.layers.values()) {
       const node = layer.findOne('#' + id)
       if (node) {
@@ -500,7 +488,7 @@ export class SelectTool implements CanvasTool {
   }
 
   /** Clear all preview highlights (during rubber-band drag). */
-  private _clearPreviewHighlights(engine: CanvasEngine): void {
+  private _clearPreviewHighlights(engine: CanvasToolEngine): void {
     for (const id of this._previewHighlightIds) {
       this._removeHighlight(engine, id)
     }
@@ -509,7 +497,7 @@ export class SelectTool implements CanvasTool {
   }
 
   /** Sync persistent selection highlights to match selectedObjectIds. */
-  private _syncSelectionHighlights(engine: CanvasEngine): void {
+  private _syncSelectionHighlights(engine: CanvasToolEngine): void {
     const ids = selectedObjectIds.value
 
     for (const id of this._selectedHighlightIds) {
@@ -533,12 +521,26 @@ export class SelectTool implements CanvasTool {
   }
 
   /** Clear all highlights (preview + persistent). */
-  private _clearAllHighlights(engine: CanvasEngine): void {
+  private _clearAllHighlights(engine: CanvasToolEngine): void {
     this._clearPreviewHighlights(engine)
     for (const id of this._selectedHighlightIds) {
       this._removeHighlight(engine, id)
     }
     this._selectedHighlightIds.clear()
     this._redrawHighlightedLayers(engine)
+  }
+
+  private _hasAdditiveModifier(event: MouseEvent): boolean {
+    return event.shiftKey || event.ctrlKey || event.metaKey
+  }
+
+  /** Walk up the Konva tree from `start` to find the nearest selectable ancestor (has id + name 'shape'). */
+  private _findSelectableAncestor(start: Konva.Node, stage: Konva.Stage): Konva.Node | null {
+    let node: Konva.Node | null = start
+    while (node && (!node.id() || !node.hasName('shape'))) {
+      node = node.getParent() as Konva.Node | null
+      if (!node || node === stage || node.getClassName() === 'Layer') return null
+    }
+    return node
   }
 }

@@ -1,5 +1,4 @@
-import type { Command } from '../history'
-import type { CanvasEngine } from '../engine'
+import type { CanvasCommandEngine, Command } from '../contracts'
 import { DEFAULT_RENDER_PASSES } from '../runtime/render-passes'
 
 /**
@@ -20,13 +19,13 @@ export class BatchCommand implements Command {
     this.dirtyPasses = [...new Set(commands.flatMap((command) => command.dirtyPasses ?? DEFAULT_RENDER_PASSES))]
   }
 
-  execute(engine: CanvasEngine): void {
+  execute(engine: CanvasCommandEngine): void {
     for (const cmd of this._commands) {
       cmd.execute(engine)
     }
   }
 
-  undo(engine: CanvasEngine): void {
+  undo(engine: CanvasCommandEngine): void {
     for (let i = this._commands.length - 1; i >= 0; i--) {
       this._commands[i]!.undo(engine)
     }

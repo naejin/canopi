@@ -1,6 +1,6 @@
 import Konva from 'konva'
 import type { CanvasTool } from './base'
-import type { CanvasEngine } from '../engine'
+import type { CanvasToolEngine } from '../contracts'
 import { createRect, PREVIEW_DASH, zoneDefaults } from '../shapes'
 import { AddNodeCommand } from '../commands'
 
@@ -18,15 +18,15 @@ export class RectangleTool implements CanvasTool {
   private _rafId: number | null = null
   private _pendingPos: { x: number; y: number } | null = null
 
-  activate(_engine: CanvasEngine): void {
+  activate(_engine: CanvasToolEngine): void {
     // Nothing extra needed
   }
 
-  deactivate(engine: CanvasEngine): void {
+  deactivate(engine: CanvasToolEngine): void {
     this._cancelDraw(engine)
   }
 
-  onMouseDown(e: Konva.KonvaEventObject<MouseEvent>, engine: CanvasEngine): void {
+  onMouseDown(e: Konva.KonvaEventObject<MouseEvent>, engine: CanvasToolEngine): void {
     // Only draw on left button, ignore right/middle
     if (e.evt.button !== 0) return
 
@@ -63,7 +63,7 @@ export class RectangleTool implements CanvasTool {
     }
   }
 
-  onMouseMove(e: Konva.KonvaEventObject<MouseEvent>, engine: CanvasEngine): void {
+  onMouseMove(e: Konva.KonvaEventObject<MouseEvent>, engine: CanvasToolEngine): void {
     if (!this._drawing || !this._preview) return
 
     const pos = engine.stage.getRelativePointerPosition()
@@ -101,7 +101,7 @@ export class RectangleTool implements CanvasTool {
     })
   }
 
-  onMouseUp(e: Konva.KonvaEventObject<MouseEvent>, engine: CanvasEngine): void {
+  onMouseUp(e: Konva.KonvaEventObject<MouseEvent>, engine: CanvasToolEngine): void {
     if (!this._drawing || !this._preview) return
 
     // Cancel any pending rAF so we read the final position cleanly
@@ -148,13 +148,13 @@ export class RectangleTool implements CanvasTool {
     engine.history.execute(cmd, engine)
   }
 
-  onKeyDown(e: KeyboardEvent, engine: CanvasEngine): void {
+  onKeyDown(e: KeyboardEvent, engine: CanvasToolEngine): void {
     if (e.key === 'Escape') {
       this._cancelDraw(engine)
     }
   }
 
-  private _cancelDraw(_engine: CanvasEngine): void {
+  private _cancelDraw(_engine: CanvasToolEngine): void {
     if (this._rafId !== null) {
       cancelAnimationFrame(this._rafId)
       this._rafId = null

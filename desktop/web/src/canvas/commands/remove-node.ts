@@ -1,6 +1,5 @@
 import Konva from 'konva'
-import type { Command } from '../history'
-import type { CanvasEngine } from '../engine'
+import type { CanvasCommandEngine, Command } from '../contracts'
 import { serializeNode, recreateNode, type SerializedNode } from './node-serialization'
 
 /**
@@ -25,13 +24,13 @@ export class RemoveNodeCommand implements Command {
     this.dirtyPasses = getLayerDirtyPasses(layerName)
   }
 
-  execute(engine: CanvasEngine): void {
+  execute(engine: CanvasCommandEngine): void {
     const id = this._serialized.attrs.id as string | undefined
     if (!id) return
     engine.removeNode(id)
   }
 
-  undo(engine: CanvasEngine): void {
+  undo(engine: CanvasCommandEngine): void {
     const node = recreateNode(this._serialized)
     const layer = engine.layers.get(this._layerName)
     if (layer) {

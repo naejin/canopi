@@ -6,7 +6,7 @@ import { GroupCommand, UngroupCommand } from '../commands/group'
 import { serializeNode, recreateNode } from '../commands/node-serialization'
 import { extractGroups, restoreGroups } from '../grouping'
 import type { ObjectGroup, PlacedPlant } from '../../types/design'
-import type { CanvasEngine } from '../engine'
+import type { CanvasCommandEngine, CanvasGeometryEngine } from '../contracts'
 import type { ObjectOpsDeps } from './types'
 
 export class CanvasObjectOps {
@@ -46,7 +46,7 @@ export class CanvasObjectOps {
     return nodes
   }
 
-  deleteSelected(engine: CanvasEngine): void {
+  deleteSelected(engine: CanvasCommandEngine): void {
     const nodes = this.getSelectedNodes()
     if (nodes.length === 0) return
 
@@ -59,7 +59,7 @@ export class CanvasObjectOps {
     this._deps.history.execute(new BatchCommand(cmds), engine)
   }
 
-  duplicateSelected(engine: CanvasEngine): void {
+  duplicateSelected(engine: CanvasCommandEngine): void {
     const nodes = this.getSelectedNodes()
     if (nodes.length === 0) return
 
@@ -86,7 +86,7 @@ export class CanvasObjectOps {
     this._deps.setClipboard(JSON.stringify(nodes.map((node) => serializeNode(node))))
   }
 
-  pasteFromClipboard(engine: CanvasEngine): void {
+  pasteFromClipboard(engine: CanvasCommandEngine): void {
     const rawClipboard = this._deps.getClipboard()
     if (!rawClipboard) return
 
@@ -196,25 +196,25 @@ export class CanvasObjectOps {
     selectedObjectIds.value = ids
   }
 
-  alignSelected(alignment: Alignment, engine: CanvasEngine): void {
+  alignSelected(alignment: Alignment, engine: CanvasCommandEngine): void {
     const cmd = alignNodes(this.getSelectedNodes(), alignment)
     if (!cmd) return
     this._deps.history.record(cmd, engine)
     this.batchDrawAllLayers()
   }
 
-  distributeSelected(axis: DistributeAxis, engine: CanvasEngine): void {
+  distributeSelected(axis: DistributeAxis, engine: CanvasCommandEngine): void {
     const cmd = distributeNodes(this.getSelectedNodes(), axis)
     if (!cmd) return
     this._deps.history.record(cmd, engine)
     this.batchDrawAllLayers()
   }
 
-  groupSelectedNodes(engine: CanvasEngine): void {
+  groupSelectedNodes(engine: CanvasCommandEngine): void {
     this._deps.history.execute(new GroupCommand(), engine)
   }
 
-  ungroupSelectedNodes(engine: CanvasEngine): void {
+  ungroupSelectedNodes(engine: CanvasCommandEngine): void {
     this._deps.history.execute(new UngroupCommand(), engine)
   }
 
@@ -242,11 +242,11 @@ export class CanvasObjectOps {
     return result
   }
 
-  getObjectGroups(engine: CanvasEngine): ObjectGroup[] {
+  getObjectGroups(engine: CanvasGeometryEngine): ObjectGroup[] {
     return extractGroups(engine)
   }
 
-  restoreObjectGroups(groups: ObjectGroup[], engine: CanvasEngine): void {
+  restoreObjectGroups(groups: ObjectGroup[], engine: CanvasGeometryEngine): void {
     restoreGroups(groups, engine)
   }
 

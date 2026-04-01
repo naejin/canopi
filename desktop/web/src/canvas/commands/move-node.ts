@@ -1,5 +1,4 @@
-import type { Command } from '../history'
-import type { CanvasEngine } from '../engine'
+import type { CanvasCommandEngine, Command } from '../contracts'
 
 interface Position {
   x: number
@@ -26,15 +25,15 @@ export class MoveNodeCommand implements Command {
     this._to = { ...to }
   }
 
-  execute(engine: CanvasEngine): void {
+  execute(engine: CanvasCommandEngine): void {
     this._applyPosition(engine, this._to)
   }
 
-  undo(engine: CanvasEngine): void {
+  undo(engine: CanvasCommandEngine): void {
     this._applyPosition(engine, this._from)
   }
 
-  private _applyPosition(engine: CanvasEngine, pos: Position): void {
+  private _applyPosition(engine: CanvasCommandEngine, pos: Position): void {
     for (const layer of engine.layers.values()) {
       const node = layer.findOne('#' + this._nodeId)
       if (node) {

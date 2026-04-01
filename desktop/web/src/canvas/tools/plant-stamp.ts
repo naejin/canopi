@@ -1,6 +1,6 @@
 import Konva from 'konva'
 import type { CanvasTool } from './base'
-import type { CanvasEngine } from '../engine'
+import type { CanvasToolEngine } from '../contracts'
 import { plantStampSpecies } from '../../state/canvas'
 import { AddNodeCommand } from '../commands'
 
@@ -8,15 +8,15 @@ export class PlantStampTool implements CanvasTool {
   readonly name = 'plant-stamp'
   readonly cursor = 'crosshair'
 
-  activate(_engine: CanvasEngine): void {
+  activate(_engine: CanvasToolEngine): void {
     // Nothing — species is set via plantStampSpecies signal
   }
 
-  deactivate(_engine: CanvasEngine): void {
+  deactivate(_engine: CanvasToolEngine): void {
     plantStampSpecies.value = null
   }
 
-  onMouseDown(_e: Konva.KonvaEventObject<MouseEvent>, engine: CanvasEngine): void {
+  onMouseDown(_e: Konva.KonvaEventObject<MouseEvent>, engine: CanvasToolEngine): void {
     const species = plantStampSpecies.value
     if (!species) return
 
@@ -35,10 +35,10 @@ export class PlantStampTool implements CanvasTool {
     engine.history.execute(cmd, engine)
   }
 
-  onMouseMove(_e: Konva.KonvaEventObject<MouseEvent>, _engine: CanvasEngine): void {}
-  onMouseUp(_e: Konva.KonvaEventObject<MouseEvent>, _engine: CanvasEngine): void {}
+  onMouseMove(_e: Konva.KonvaEventObject<MouseEvent>, _engine: CanvasToolEngine): void {}
+  onMouseUp(_e: Konva.KonvaEventObject<MouseEvent>, _engine: CanvasToolEngine): void {}
 
-  onKeyDown(e: KeyboardEvent, _engine: CanvasEngine): void {
+  onKeyDown(e: KeyboardEvent, _engine: CanvasToolEngine): void {
     if (e.key === 'Escape') {
       plantStampSpecies.value = null
     }

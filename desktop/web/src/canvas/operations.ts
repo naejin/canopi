@@ -1,5 +1,5 @@
 import Konva from 'konva'
-import type { CanvasEngine } from './engine'
+import type { CanvasGeometryEngine } from './contracts'
 import { EPHEMERAL_CANVAS_ATTRS } from './commands/node-serialization'
 
 // ---------------------------------------------------------------------------
@@ -52,7 +52,7 @@ function rectsIntersect(a: SimpleRect, b: SimpleRect): boolean {
  * converted to world coords using the stage's current scale and position.
  */
 export function nodesInRect(
-  engine: CanvasEngine,
+  engine: CanvasGeometryEngine,
   rect: SimpleRect,
   lockedIds: Set<string>,
 ): Konva.Node[] {

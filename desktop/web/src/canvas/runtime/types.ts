@@ -1,18 +1,18 @@
 import Konva from 'konva'
 import type { CanvasHistory } from '../history'
 import type { HtmlRulers } from '../rulers'
+import type { CanvasLayers, CanvasToolEngine } from '../contracts'
 import type { CanvasTool } from '../tools/base'
-import type { CanvasEngine } from '../engine'
 import type { RenderPass } from './render-passes'
-
-export type CanvasLayers = Map<string, Konva.Layer>
 
 export interface RenderPipelineDeps {
   stage: Konva.Stage
   layers: CanvasLayers
   getHtmlRulers: () => HtmlRulers | null
-  getSpeciesCache: () => Map<string, Record<string, unknown>>
-  loadSpeciesCache: (locale: string) => Promise<boolean>
+  speciesCache: {
+    getCache: () => Map<string, Record<string, unknown>>
+    loadVisiblePlantEntries: (plantsLayer: Konva.Layer | undefined, locale: string) => Promise<boolean>
+  }
 }
 
 export interface ViewportDeps {
@@ -46,9 +46,8 @@ export interface DocumentSessionEngine {
 export interface ExternalInputDeps {
   stage: Konva.Stage
   layers: CanvasLayers
-  history: CanvasHistory
   toolRegistry: Map<string, CanvasTool>
-  getEngine: () => CanvasEngine
+  engine: CanvasToolEngine
   getSpaceHeld: () => boolean
   setSpaceHeld: (value: boolean) => void
   getWasSpaceDraggable: () => boolean

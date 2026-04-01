@@ -377,10 +377,8 @@ Pending beta-release closeout:
 
 Now unblocked after renderer stability closeout:
 - Wave 4 design coherence
-- `loadSpeciesCache` extraction from `engine.ts`
 
 Can be fixed independently if needed:
-- `ExternalInputDeps.getEngine` narrowing
 - tooltip DOM extraction from `engine.ts`
 - resource ownership cleanup in rulers, text tool, and `WorldMapSurface`
 - deferred-pass data-shape cleanup in renderer internals
