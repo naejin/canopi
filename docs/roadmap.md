@@ -1,7 +1,15 @@
 # Canopi Roadmap
 
-**Last updated**: 2026-03-28
-**Current state**: Phases 0–7 complete. Next: Phase DC (Design Coherence) → Phase SG (Safeguards) → Phase QA (Quality & Stabilization) before Phase 8+.
+**Last updated**: 2026-04-01
+**Status**: historical roadmap for the completed rewrite and deferred ideas, not the active work queue
+
+Use these docs for current work:
+
+- `docs/todo.md` for active rewrite and blocker tracking
+- `docs/product-definition.md` for scope lock and deferred surfaces
+- `docs/release-verification.md` for beta status and shipped release evidence
+- `docs/release-operations.md` for release workflow and promotion steps
+- `docs/agents.md` for the minimal agent reading order
 
 ---
 
@@ -179,6 +187,8 @@ Context7 Library IDs: Tauri v2 (`/websites/v2_tauri_app`), rusqlite (`/rusqlite/
 
 ## Dependency Graph
 
+Historical dependency graph for the completed rewrite. This is context, not the active work queue.
+
 ```
 Phase 3 (MVP) ✅
     ├── Phase 4 (Terrain & Location) ✅
@@ -188,11 +198,9 @@ Phase 3 (MVP) ✅
     │       ├── Phase 5.4 (Pen/Stylus) ← requires beta testers with hardware
     │       └── Phase 8 Export ← requires Phase 5 native rendering
     ├── Phase 6 (Timeline & Budget) ✅
-    └── Phase QA (Quality & Stabilization) ← YOU ARE HERE
+    └── Phase QA (Quality & Stabilization) ✅
             └── Phase 8+ (canvas tools, ecological intelligence, geo features, export)
 ```
-
-Next: **Phase QA** — start with QA.0 (bug catalog via parallel code-review agents + live Tauri MCP testing).
 
 ---
 
@@ -824,6 +832,8 @@ Goal: Harden everything built in Phases 0–7 + DC + SG before adding new featur
 **Estimated total**: 3–5 sessions depending on bug count from QA.0.
 
 ---
+
+The phase sections below are preserved rewrite-plan history. Use `docs/todo.md` and `docs/product-definition.md` for current work.
 
 ## Phase 4: Terrain & Location
 
