@@ -6,6 +6,24 @@ log() {
   printf '[promote-release] %s\n' "$*"
 }
 
+format_bytes() {
+  python3 - "$1" <<'PY'
+import sys
+
+value = int(sys.argv[1])
+units = ["B", "KB", "MB", "GB", "TB"]
+size = float(value)
+for unit in units:
+    if size < 1024 or unit == units[-1]:
+        if unit == "B":
+            print(f"{int(size)} {unit}")
+        else:
+            print(f"{size:.1f} {unit}")
+        break
+    size /= 1024
+PY
+}
+
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
     echo "ERROR: Required command '$1' is not installed or not on PATH." >&2
@@ -103,7 +121,31 @@ tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
 
 log "Downloading artifacts from run $run_id in $repo"
-gh run download "$run_id" --repo "$repo" --dir "$tmpdir"
+artifact_json="$(gh api "repos/$repo/actions/runs/$run_id/artifacts")"
+mapfile -t artifact_lines < <(
+  python3 - <<'PY' <<<"$artifact_json"
+import json
+import sys
+
+payload = json.load(sys.stdin)
+for artifact in payload.get("artifacts", []):
+    if artifact.get("expired"):
+        continue
+    print(f"{artifact['name']}\t{artifact['size_in_bytes']}")
+PY
+)
+
+if [[ "${#artifact_lines[@]}" -eq 0 ]]; then
+  echo "ERROR: No downloadable artifacts found for run $run_id." >&2
+  exit 1
+fi
+
+for artifact_line in "${artifact_lines[@]}"; do
+  artifact_name="${artifact_line%%$'\t'*}"
+  artifact_size="${artifact_line#*$'\t'}"
+  log "Downloading artifact '$artifact_name' ($(format_bytes "$artifact_size"))"
+  gh run download "$run_id" --repo "$repo" --dir "$tmpdir" -n "$artifact_name"
+done
 
 manifest_dir="$tmpdir/canopi-release-candidate-manifest"
 manifest_path="$manifest_dir/SHA256SUMS.txt"
