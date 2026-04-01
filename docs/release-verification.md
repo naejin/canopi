@@ -5,6 +5,14 @@ Status: Wave 4 coherence is landed, the `v0.1.0` desktop beta is published, and 
 
 Wave 5 is a beta-release gate on the current retained-surface architecture. It does not claim the broader roadmap is complete.
 
+## Packaged DB Root Cause
+
+The beta build initially showed `Plant database not found` even though the bundled DB asset existed in CI. Root cause: the desktop app resolved `BaseDirectory::Resource` as `canopi-core.db`, but Tauri bundles the resource under the relative path declared in `tauri.conf.json`.
+
+For this app, `bundle.resources` is `resources/canopi-core.db`, so the packaged runtime lookup must resolve `resources/canopi-core.db` first. On Linux that maps to `usr/lib/Canopi/resources/canopi-core.db`; on macOS and Windows the same relative path applies inside the app bundle / install root.
+
+This is a packaging-path issue, not a `prepare-db.py` generation issue.
+
 ## Wave 5 Beta Scope
 
 Supported release targets:

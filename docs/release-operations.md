@@ -47,6 +47,8 @@ This script fails if:
 - the target GitHub release tag does not exist
 - `gh release upload` fails
 
+Note: a successful DB upload does not guarantee the packaged app will find it at runtime. The desktop app must resolve the bundled resource using the same relative path that appears in `desktop/tauri.conf.json` (`resources/canopi-core.db`), not just the filename.
+
 ## 2. Run The Release Candidate Workflow
 
 From GitHub Actions, run `Release Candidate` with:
