@@ -9,7 +9,7 @@ Canopi is a desktop design tool that combines a 175,000-species plant database w
 ### Key features
 
 - **Plant database** -- 175K species with 173 columns of ecological, morphological, and agronomic data. Full-text search, structured filters, 11-language support
-- **Design canvas** -- Konva.js-based workspace with zone drawing, plant placement via drag-and-drop, undo/redo, grid, rulers, and scale bar
+- **Design canvas** -- Konva.js-based workspace with zone drawing, plant placement via drag-and-drop, undo/redo, grid, rulers, scale bar, document-scoped plant colors, and density-aware single-line labels
 - **File format** -- `.canopi` JSON files with full document integrity, autosave, and dirty tracking
 - **Field notebook aesthetic** -- Parchment, ink, and ochre palette. Light and dark themes
 

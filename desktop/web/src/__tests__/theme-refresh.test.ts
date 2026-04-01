@@ -20,7 +20,6 @@ describe('refreshCanvasTheme', () => {
   it('refreshes cached colors from CSS variables and updates live annotation nodes', () => {
     const container = document.createElement('div')
     container.style.setProperty('--canvas-plant-label', '#101010')
-    container.style.setProperty('--canvas-plant-label-muted', '#202020')
     container.style.setProperty('--canvas-guide-line', '#2f4f4f')
     container.style.setProperty('--canvas-guide-smart', '#b5432a')
     container.style.setProperty('--canvas-stack-badge-bg', '#5a7d3a')
@@ -35,7 +34,6 @@ describe('refreshCanvasTheme', () => {
     document.body.appendChild(container)
 
     const plantLabel = { fill: vi.fn() }
-    const botanicalLabel = { fill: vi.fn() }
     const stackBadgeBg = { fill: vi.fn() }
     const stackBadgeText = { fill: vi.fn() }
     const annotationText = { fill: vi.fn() }
@@ -67,7 +65,6 @@ describe('refreshCanvasTheme', () => {
 
     const plantsLayer = makeLayer({
       '.plant-label': [plantLabel],
-      '.plant-botanical': [botanicalLabel],
       '.stackBadgeBg': [stackBadgeBg],
       '.stackBadgeText': [stackBadgeText],
     })
@@ -94,7 +91,6 @@ describe('refreshCanvasTheme', () => {
     expect(getCanvasColor('guide-line')).toBe('#2f4f4f')
     expect(getCanvasColor('stack-badge-text')).toBe('#f8f4ed')
     expect(plantLabel.fill).toHaveBeenCalledWith('#101010')
-    expect(botanicalLabel.fill).toHaveBeenCalledWith('#202020')
     expect(stackBadgeBg.fill).toHaveBeenCalledWith('#5a7d3a')
     expect(stackBadgeText.fill).toHaveBeenCalledWith('#f8f4ed')
     expect(annotationText.fill).toHaveBeenCalledWith('#303030')

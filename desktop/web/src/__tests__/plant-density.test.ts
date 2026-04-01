@@ -2,15 +2,26 @@ import { describe, expect, it, vi } from 'vitest'
 import { updatePlantDensity, updatePlantStacking } from '../canvas/plants'
 import { ScreenGrid } from '../canvas/runtime/screen-grid'
 
-function createPlantGroup(id: string, initialPosition: { x: number; y: number }) {
+function createPlantGroup(
+  id: string,
+  initialPosition: { x: number; y: number },
+  options: {
+    circleFill?: string
+    colorOverride?: string | null
+    stratum?: string | null
+  } = {},
+) {
   let position = initialPosition
   const attrs = new Map<string, unknown>()
   const label = { visible: vi.fn() }
-  const botanicalLabel = { visible: vi.fn() }
+  const circle = { fill: vi.fn(() => options.circleFill ?? '#4CAF50') }
   const nodes = new Map<string, any>([
     ['.plant-label', label],
-    ['.plant-botanical', botanicalLabel],
+    ['.plant-circle', circle],
   ])
+
+  attrs.set('data-color-override', options.colorOverride ?? null)
+  attrs.set('data-stratum', options.stratum ?? 'low')
 
   const group = {
     id: () => id,
@@ -33,7 +44,7 @@ function createPlantGroup(id: string, initialPosition: { x: number; y: number })
   return {
     group: group as any,
     label,
-    botanicalLabel,
+    circle,
   }
 }
 
@@ -82,9 +93,64 @@ describe('plant density and stacking', () => {
       rebuildGrid(plants),
     )
 
+    expect(plants[0]!.label.visible).toHaveBeenLastCalledWith(false)
+    expect(plants[1]!.label.visible).toHaveBeenLastCalledWith(true)
+  })
+
+  it('allows differently colored neighbors to keep labels when only the relaxed threshold applies', () => {
+    const plants = [
+      createPlantGroup('plant-1', { x: 0, y: 0 }, { circleFill: '#4CAF50' }),
+      createPlantGroup('plant-2', { x: 30, y: 0 }, { circleFill: '#C44230' }),
+    ]
+
+    updatePlantDensity(
+      plants.map(({ group }) => group),
+      'icon+label',
+      undefined,
+      rebuildGrid(plants),
+    )
+
     expect(plants[0]!.label.visible).toHaveBeenLastCalledWith(true)
     expect(plants[1]!.label.visible).toHaveBeenLastCalledWith(true)
-    expect(plants[1]!.botanicalLabel.visible).toHaveBeenLastCalledWith(true)
+  })
+
+  it('prefers user-colored plants over default-color plants when labels compete', () => {
+    const plants = [
+      createPlantGroup('default', { x: 0, y: 0 }, { circleFill: '#4CAF50' }),
+      createPlantGroup('colored', { x: 10, y: 10 }, { circleFill: '#C44230', colorOverride: '#C44230' }),
+    ]
+
+    updatePlantDensity(
+      plants.map(({ group }) => group),
+      'icon+label',
+      undefined,
+      rebuildGrid(plants),
+    )
+
+    expect(plants[0]!.label.visible).toHaveBeenLastCalledWith(false)
+    expect(plants[1]!.label.visible).toHaveBeenLastCalledWith(true)
+  })
+
+  it('falls back to override colors when the circle fill cannot be read as a plain string', () => {
+    const plants = [
+      createPlantGroup('default', { x: 0, y: 0 }, { circleFill: '#4CAF50' }),
+      createPlantGroup('override-a', { x: 25, y: 0 }, { circleFill: '#4CAF50', colorOverride: '#C44230' }),
+      createPlantGroup('override-b', { x: 50, y: 0 }, { circleFill: '#4CAF50', colorOverride: '#C44230' }),
+    ]
+
+    plants[1]!.circle.fill.mockReturnValueOnce({} as any)
+    plants[2]!.circle.fill.mockReturnValueOnce({} as any)
+
+    updatePlantDensity(
+      plants.map(({ group }) => group),
+      'icon+label',
+      undefined,
+      rebuildGrid(plants),
+    )
+
+    expect(plants[0]!.label.visible).toHaveBeenLastCalledWith(true)
+    expect(plants[1]!.label.visible).toHaveBeenLastCalledWith(true)
+    expect(plants[2]!.label.visible).toHaveBeenLastCalledWith(false)
   })
 
   it('creates and later hides stack badges as clusters form and disperse', () => {

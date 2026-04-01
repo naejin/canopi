@@ -114,6 +114,24 @@ These are non-blocking internal follow-ups that may be done later if they help m
 - shrink or document renderer helpers that are now no-ops or forwarding shells
 - extract `loadSpeciesCache` from `engine.ts` only after renderer stability is complete
 
+### 2.5 Post-Beta Plant Label Patch
+
+The retained-surface plant label follow-up landed after beta closeout on 2026-04-01.
+
+What changed:
+- plant labels are now single-line only; persistent `.plant-botanical` nodes were removed
+- deferred density suppression is now color-aware: `40px` for same-color neighbors, `20px` for different-color neighbors
+- deferred density ordering is now priority-weighted so selected plants win first, then user-colored plants, then default-color plants
+- locale refresh removes any legacy botanical label nodes that still exist on older materialized groups
+
+Why it belongs here:
+- the behavior lives in deferred renderer-owned passes (`density`) plus plant-node materialization in `plants.ts`
+- it did not reopen renderer scheduling, pass ownership, or viewport filtering boundaries
+
+Guardrail:
+- keep future label work inside the current seams unless a broader product phase explicitly redefines label UX
+- the remaining deferred label idea is still “labels hidden by default”, not another structural rewrite of density ownership
+
 ---
 
 ## 3. Coding Rules For Future Renderer Work
@@ -173,6 +191,7 @@ Current automated evidence in-tree:
 - `desktop/web/src/__tests__/document-session.test.ts`
 - `desktop/web/src/__tests__/render-pipeline.test.ts`
 - `desktop/web/src/__tests__/plant-density.test.ts`
+- `desktop/web/src/__tests__/plants.test.ts`
 - `desktop/web/src/__tests__/theme-refresh.test.ts`
 - `npm run build --prefix desktop/web`
 
@@ -203,6 +222,9 @@ Expected: stratum color and canopy spread restore correctly after load
 
 8. Dense plant cluster
 Expected: at least one label remains visible and stack badges remain correct
+
+9. Dense colorful cluster
+Expected: differently-colored neighbors can keep labels more aggressively than same-color neighbors, and a user-colored plant keeps its label ahead of a competing default-color plant
 
 Manual findings recorded on 2026-03-30:
 - checks 1 and 2 failed on the pre-fix build because plants without canopy spread data stayed on a fixed fallback size instead of scaling coherently with canopy zoom

@@ -377,8 +377,6 @@ Pending beta-release closeout:
 
 Now unblocked after renderer stability closeout:
 - Wave 4 design coherence
-- renderer-tied product-level visual redesigns:
-  - plant label improvements (see section 9.1)
 - `loadSpeciesCache` extraction from `engine.ts`
 
 Can be fixed independently if needed:
@@ -394,6 +392,7 @@ Completed in the post-beta hardening patch (see section 13):
 
 Completed in the post-beta product slice:
 - plant color assignment (see section 9)
+- plant label improvements — single-line labels, color-aware density suppression, priority ordering (see section 9.1)
 - image loading performance — scoped asset protocol + cached image paths (see section 10)
 - detail-card photo fit polish (see section 11)
 
@@ -578,9 +577,9 @@ export interface CanopiFile {
 - The `color` field on `PlacedPlant` is purely a document-level override — it does not modify the species DB
 - The toolbar picker is selection-driven — it must derive state from the current selected plant groups rather than holding clicked-plant metadata outside the engine/document seams
 
-### 9.1 Plant Label Improvements (Deferred Design Spec)
+### 9.1 Plant Label Improvements
 
-Companion to section 9 — the plant color system is landed, but these label improvements remain deferred.
+**Status**: landed in the current tree on 2026-04-01 as a post-beta retained-surface patch.
 
 #### Current System
 
@@ -592,11 +591,14 @@ Three LOD tiers based on zoom (`stageScale` = pixels per meter):
 | 0.5–5 px/m | `icon` | Hidden (except selected) |
 | >= 5 px/m | `icon+label` | Density-suppressed at 40px spacing |
 
-Labels are two-line Konva.Text children of the plant group:
-- Line 1 (`.plant-label`): common name, or abbreviated botanical name if no common name
-- Line 2 (`.plant-botanical`): abbreviated botanical name (only when common name shown)
+Labels are now single-line Konva.Text children of the plant group:
+- `.plant-label`: common name when available, otherwise abbreviated botanical name in italic
 
-Density algorithm: greedy top-to-bottom spatial scan. First plant in each 40px neighborhood wins a label. Selected plants always show labels. No priority weighting.
+Density algorithm is priority-weighted and color-aware:
+- selected plants always keep labels
+- user-colored plants win before default-color plants
+- same-color neighbors suppress within 40px
+- different-color neighbors suppress within 20px
 
 #### Problem
 
@@ -605,56 +607,25 @@ With color-coded plants, the label system has three issues:
 2. **Color-blind density suppression** — two differently-colored plants 35px apart suppress each other's labels, even though their colors already distinguish them visually. Same-color neighbors are the real readability problem
 3. **No priority awareness** — a user-colored tomato (the user explicitly cares about it) loses its label to a generic green plant that happened to scan first in the top-to-bottom sweep
 
-#### Improvement 1: Single-Line Labels
+#### Landed Behavior
 
-Remove the secondary botanical label (`.plant-botanical`) from persistent display. Show only one line:
+1. **Single-line labels**
+   - Common name shows in normal style
+   - No-common-name fallback stays abbreviated botanical in italic
+   - Any legacy `.plant-botanical` node is removed during locale refresh/materialization
 
-- **Has common name** → display common name (normal weight)
-- **No common name** → display abbreviated botanical name (italic, as today)
-
-The botanical abbreviation moves to hover-only — the plant tooltip already shows full botanical name + common name + stratum. This recovers ~13px of vertical space per labeled plant, allowing tighter label packing and more labels visible at the same zoom level.
-
-Files affected:
-- `plants.ts`: `createPlantNode()` — stop creating `.plant-botanical` child node
-- `plants.ts`: `updatePlantLOD()` / `updatePlantDensity()` — remove botanical label visibility logic
-- `plants.ts`: `updatePlantLabelsForLocale()` — remove botanical label create/update/destroy logic
-
-This is a pure subtraction — no new code needed. The botanical abbreviation function `abbreviateCanonical()` stays for the no-common-name fallback.
-
-#### Improvement 2: Color-Aware Density Suppression
-
-Modify `updatePlantDensity()` to use two distance thresholds:
+2. **Color-aware density suppression**
+   - `updatePlantDensity()` uses two thresholds:
 
 | Neighbor relationship | Suppression distance |
 |---|---|
 | Same color | 40px (current) |
 | Different color | 20px |
 
-"Same color" means both plants resolve to the same fill hex (comparing `data-color-override` attrs, or both defaulting to `#4CAF50`). Different-colored plants are already visually distinct — their labels can overlap more without confusion.
+   Same color means the plants resolve to the same rendered fill. The helper reads the current circle fill first and falls back to the document override/default stratum color only when needed, so density stays aligned with what the user actually sees in the current display mode.
 
-Implementation in `updatePlantDensity()`:
-```
-const blocked = neighbors.some((neighbor) => {
-  if (neighbor.group.id() === plant.group.id()) return false
-  if (!shown.has(neighbor.group.id())) return false
-  const dx = plant.sx - neighbor.sx
-  const dy = plant.sy - neighbor.sy
-  const distSq = dx * dx + dy * dy
-  const sameColor = getPlantFill(plant.group) === getPlantFill(neighbor.group)
-  const threshold = sameColor ? SAME_COLOR_DIST_SQ : DIFF_COLOR_DIST_SQ
-  return distSq < threshold
-})
-```
-
-Where `SAME_COLOR_DIST_SQ = 40 * 40` (unchanged) and `DIFF_COLOR_DIST_SQ = 20 * 20`.
-
-`getPlantFill()` reads `data-color-override` attr from the group, falling back to the circle's current `fill()` value. This is a hot-path function — must be cheap (attr read, no DB lookup).
-
-Effect: in a colorful design (many user-assigned colors), significantly more labels survive density suppression. In an all-green design (no overrides), behavior is identical to today.
-
-#### Improvement 3: Priority-Based Label Ordering
-
-Replace the current top-to-bottom spatial sort with a priority-weighted sort in `updatePlantDensity()`. Plants with higher priority win label slots first:
+3. **Priority-based label ordering**
+   - `updatePlantDensity()` now sorts by:
 
 | Priority | Condition | Why |
 |---|---|---|
@@ -662,25 +633,9 @@ Replace the current top-to-bottom spatial sort with a priority-weighted sort in 
 | 1 | User-colored (has `data-color-override`) | User explicitly cares about this plant |
 | 2 | Default green (no override) | Generic — lower priority for label real estate |
 
-Within the same priority tier, maintain the current top-to-bottom spatial order for stable, predictable label placement.
+   Within a priority tier, ordering remains top-to-bottom then left-to-right for stable placement.
 
-Implementation: change the `anchors` sort in `updatePlantDensity()`:
-```
-const anchors = positions
-  .slice()
-  .sort((a, b) => {
-    const pa = labelPriority(a.group, selectedIds)
-    const pb = labelPriority(b.group, selectedIds)
-    if (pa !== pb) return pa - pb
-    return (a.sy - b.sy) || (a.sx - b.sx)
-  })
-```
-
-Where `labelPriority()` returns 0 for selected, 1 for user-colored, 2 for default.
-
-Effect: a user-colored tomato next to a default-green weed will keep its label while the weed's label gets suppressed. Creates a natural feedback loop — assigning a color to a plant also makes its label more persistent.
-
-#### Improvement 4: Labels Hidden by Default (Deferred)
+#### Still Deferred: Improvement 4
 
 With color assignment landed, labels become detail-on-demand rather than always-on. The colored dots carry enough identity for spatial orientation; labels add precision when needed.
 
@@ -692,16 +647,7 @@ Proposed behavior:
 
 Risk: for all-green designs (user hasn't assigned any colors), hidden labels makes every plant anonymous. Mitigation: only hide labels by default when the document contains at least one color-overridden plant. All-green documents keep current behavior.
 
-This is a larger UX shift. Defer until after improvements 1-3 are landed and validated. Listed here for design continuity.
-
-#### Implementation Order
-
-1. **Improvement 1** (single-line labels) — pure subtraction, no dependencies, immediate vertical space recovery
-2. **Improvement 3** (priority ordering) — small sort change, can land with or without color assignment
-3. **Improvement 2** (color-aware density) — requires color assignment phase 1 (needs `data-color-override` attr to exist)
-4. **Improvement 4** (hidden by default) — deferred, requires user validation of 1-3
-
-Improvements 1-3 can ship together as part of color assignment phase 1. They modify only `plants.ts` — no new files, no data model changes, no i18n keys.
+This is still a larger UX shift. Keep it deferred until the current single-line / color-aware / priority-based behavior has real usage feedback.
 
 ## 10. Image Loading Performance
 

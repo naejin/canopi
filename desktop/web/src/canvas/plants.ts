@@ -127,28 +127,15 @@ export function createPlantNode(opts: {
   label.y(CIRCLE_SCREEN_PX + LABEL_GAP)
   group.add(label)
 
-  // Secondary label — botanical abbreviation (only if common name is shown)
-  if (opts.commonName) {
-    const botLabel = new Konva.Text({
-      text: abbreviation,
-      fontSize: LABEL_FONT_SIZE - 2,
-      fontFamily: 'Inter, sans-serif',
-      fontStyle: 'italic',
-      fill: getCanvasColor('plant-label-muted'),
-      listening: false,
-      name: 'plant-botanical',
-    })
-    botLabel.offsetX(botLabel.width() / 2)
-    botLabel.y(CIRCLE_SCREEN_PX + LABEL_GAP + LABEL_FONT_SIZE + 2)
-    group.add(botLabel)
-  }
-
   return group
 }
 
-// Squared distance thresholds — compared against dx²+dy² to avoid sqrt
-const MIN_LABEL_DIST_SQ = 40 * 40   // labels suppressed when neighbor closer than 40px
-const STACK_THRESHOLD_SQ = 5 * 5    // plants within 5px are "stacked"
+// Distance thresholds — squared versions compared against dx²+dy² to avoid sqrt
+const SAME_COLOR_LABEL_DIST = 40
+const SAME_COLOR_LABEL_DIST_SQ = SAME_COLOR_LABEL_DIST * SAME_COLOR_LABEL_DIST
+const DIFFERENT_COLOR_LABEL_DIST_SQ = 20 * 20
+const STACK_THRESHOLD = 5
+const STACK_THRESHOLD_SQ = STACK_THRESHOLD * STACK_THRESHOLD
 
 export function updatePlantCounterScale(
   plantsLayer: Konva.Layer,
@@ -171,17 +158,14 @@ export function updatePlantLOD(
 
   for (const group of groups) {
     const label = group.findOne('.plant-label') as Konva.Text | undefined
-    const botanicalLabel = group.findOne('.plant-botanical') as Konva.Text | undefined
     const isSelected = selectedIds?.has(group.id()) ?? false
 
     if (lod === 'dot' || lod === 'icon') {
       if (label) label.visible(isSelected)
-      if (botanicalLabel) botanicalLabel.visible(false)
       continue
     }
 
     if (label) label.visible(true)
-    if (botanicalLabel) botanicalLabel.visible(true)
   }
 
   plantsLayer.batchDraw()
@@ -196,34 +180,52 @@ export function updatePlantDensity(
   if (lod !== 'icon+label') return
 
   const positions = collectScreenPlants(groups)
+
+  // Pre-compute priorities and colors to avoid repeated Konva tree walks in sort/loop
+  const priorities = new Map<string, number>()
+  const colors = new Map<string, string>()
+  for (const p of positions) {
+    const id = p.group.id()
+    priorities.set(id, getLabelPriority(p.group, selectedIds))
+    colors.set(id, getPlantLabelColor(p.group))
+  }
+
   const anchors = positions
     .slice()
-    .sort((left, right) => (left.sy - right.sy) || (left.sx - right.sx))
+    .sort((left, right) => {
+      const leftPriority = priorities.get(left.group.id())!
+      const rightPriority = priorities.get(right.group.id())!
+      if (leftPriority !== rightPriority) return leftPriority - rightPriority
+      return (left.sy - right.sy) || (left.sx - right.sx)
+    })
   const shown = new Set<string>()
 
   for (const plant of anchors) {
     const label = plant.group.findOne('.plant-label') as Konva.Text | undefined
-    const botanicalLabel = plant.group.findOne('.plant-botanical') as Konva.Text | undefined
     const isSelected = selectedIds?.has(plant.group.id()) ?? false
 
     if (isSelected) {
       label?.visible(true)
-      botanicalLabel?.visible(true)
       shown.add(plant.group.id())
       continue
     }
 
-    const neighbors = grid.queryNeighbors(plant.sx, plant.sy, Math.sqrt(MIN_LABEL_DIST_SQ))
+    const plantColor = colors.get(plant.group.id())!
+    const neighbors = grid.queryNeighbors(plant.sx, plant.sy, SAME_COLOR_LABEL_DIST)
     const blocked = neighbors.some((neighbor) => {
       if (neighbor.group.id() === plant.group.id()) return false
+      if (!shown.has(neighbor.group.id())) return false
       const dx = plant.sx - neighbor.sx
       const dy = plant.sy - neighbor.sy
-      return shown.has(neighbor.group.id()) && (dx * dx + dy * dy) < MIN_LABEL_DIST_SQ
+      const neighborColor = colors.get(neighbor.group.id()) ?? getPlantLabelColor(neighbor.group)
+      const threshold = plantColor === neighborColor
+        ? SAME_COLOR_LABEL_DIST_SQ
+        : DIFFERENT_COLOR_LABEL_DIST_SQ
+      return (dx * dx + dy * dy) < threshold
     })
 
     const visible = !blocked
     label?.visible(visible)
-    botanicalLabel?.visible(visible)
     if (visible) shown.add(plant.group.id())
   }
 }
@@ -259,7 +261,7 @@ export function updatePlantStacking(
       const stack = [plant]
       visited.add(plant.group.id())
 
-      for (const neighbor of grid.queryNeighbors(plant.sx, plant.sy, Math.sqrt(STACK_THRESHOLD_SQ))) {
+      for (const neighbor of grid.queryNeighbors(plant.sx, plant.sy, STACK_THRESHOLD)) {
         if (visited.has(neighbor.group.id()) || neighbor.group.id() === plant.group.id()) continue
         const dx = plant.sx - neighbor.sx
         const dy = plant.sy - neighbor.sy
@@ -346,6 +348,26 @@ function collectScreenPlants(groups: Konva.Group[]): ScreenPlant[] {
   })
 }
 
+function getLabelPriority(group: Konva.Group, selectedIds: Set<string> | undefined): number {
+  if (selectedIds?.has(group.id()) ?? false) return 0
+  return normalizeHexColor(group.getAttr('data-color-override') as string | null | undefined)
+    ? 1
+    : 2
+}
+
+function getPlantLabelColor(group: Konva.Group): string {
+  const circle = group.findOne('.plant-circle') as Konva.Circle | undefined
+  const fill = circle?.fill()
+  if (typeof fill === 'string' && fill) {
+    return normalizeHexColor(fill) ?? fill
+  }
+
+  const override = normalizeHexColor(group.getAttr('data-color-override') as string | null | undefined)
+  if (override) return override
+
+  return getStratumColor((group.getAttr('data-stratum') as string) || null)
+}
+
 /**
  * Update all plant labels to the current locale's common names.
  * Fetches common names in batch from the plant DB, then updates each
@@ -392,28 +414,9 @@ export async function updatePlantLabelsForLocale(
       label.offsetX(label.width() / 2)
     }
 
-    // Update or create secondary botanical label
     const botLabel = g.findOne('.plant-botanical') as Konva.Text | undefined
-    if (commonName && !botLabel) {
-      const newBot = new Konva.Text({
-        text: abbreviation,
-        fontSize: LABEL_FONT_SIZE - 2,
-        fontFamily: 'Inter, sans-serif',
-        fontStyle: 'italic',
-        fill: getCanvasColor('plant-label-muted'),
-        listening: false,
-        name: 'plant-botanical',
-      })
-      newBot.offsetX(newBot.width() / 2)
-      newBot.y(CIRCLE_SCREEN_PX + LABEL_GAP + LABEL_FONT_SIZE + 2)
-      g.add(newBot)
-    } else if (botLabel) {
-      if (commonName) {
-        botLabel.text(abbreviation)
-        botLabel.offsetX(botLabel.width() / 2)
-      } else {
-        botLabel.destroy()
-      }
+    if (botLabel) {
+      botLabel.destroy()
     }
   })
 

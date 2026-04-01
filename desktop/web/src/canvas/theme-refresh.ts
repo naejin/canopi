@@ -28,7 +28,6 @@ export function highlightTargetFor(node: Konva.Node): Konva.Node {
 
 type CanvasColorName =
   | 'plant-label'
-  | 'plant-label-muted'
   | 'guide-line'
   | 'guide-smart'
   | 'stack-badge-bg'
@@ -42,9 +41,26 @@ type CanvasColorName =
   | 'selection-stroke'
   | 'highlight-glow'
 
+// CSS variable name for each canvas color. Most follow `--canvas-{key}`;
+// the two exceptions are explicit here instead of hidden in procedural code.
+const _cssVarMap: { [K in CanvasColorName]: string } = {
+  'plant-label': '--canvas-plant-label',
+  'guide-line': '--canvas-guide-line',
+  'guide-smart': '--canvas-guide-smart',
+  'stack-badge-bg': '--canvas-stack-badge-bg',
+  'stack-badge-text': '--canvas-stack-badge-text',
+  'annotation-text': '--canvas-annotation-text',
+  'annotation-stroke': '--canvas-annotation-stroke',
+  'annotation-surface': '--canvas-annotation-surface',
+  'zone-stroke': '--canvas-zone-stroke',
+  'zone-fill': '--canvas-zone-fill',
+  'selection-fill': '--canvas-selection',
+  'selection-stroke': '--canvas-selection-stroke',
+  'highlight-glow': '--color-primary',
+}
+
 const _colors: { [K in CanvasColorName]: string } = {
   'plant-label': '#444444',
-  'plant-label-muted': '#888888',
   'guide-line': 'rgba(45, 95, 63, 0.6)',
   'guide-smart': 'rgba(181, 67, 42, 0.72)',
   'stack-badge-bg': '#5A7D3A',
@@ -94,29 +110,16 @@ export function refreshCanvasTheme(
   const cs = getComputedStyle(container)
 
   // Update cache from CSS variables
-  _colors['plant-label'] = cs.getPropertyValue('--canvas-plant-label').trim() || _colors['plant-label']
-  _colors['plant-label-muted'] = cs.getPropertyValue('--canvas-plant-label-muted').trim() || _colors['plant-label-muted']
-  _colors['guide-line'] = cs.getPropertyValue('--canvas-guide-line').trim() || _colors['guide-line']
-  _colors['guide-smart'] = cs.getPropertyValue('--canvas-guide-smart').trim() || _colors['guide-smart']
-  _colors['stack-badge-bg'] = cs.getPropertyValue('--canvas-stack-badge-bg').trim() || _colors['stack-badge-bg']
-  _colors['stack-badge-text'] = cs.getPropertyValue('--canvas-stack-badge-text').trim() || _colors['stack-badge-text']
-  _colors['annotation-text'] = cs.getPropertyValue('--canvas-annotation-text').trim() || _colors['annotation-text']
-  _colors['annotation-stroke'] = cs.getPropertyValue('--canvas-annotation-stroke').trim() || _colors['annotation-stroke']
-  _colors['annotation-surface'] = cs.getPropertyValue('--canvas-annotation-surface').trim() || _colors['annotation-surface']
-  _colors['zone-stroke'] = cs.getPropertyValue('--canvas-zone-stroke').trim() || _colors['zone-stroke']
-  _colors['zone-fill'] = cs.getPropertyValue('--canvas-zone-fill').trim() || _colors['zone-fill']
-  _colors['selection-fill'] = cs.getPropertyValue('--canvas-selection').trim() || _colors['selection-fill']
-  _colors['selection-stroke'] = cs.getPropertyValue('--canvas-selection-stroke').trim() || _colors['selection-stroke']
-  _colors['highlight-glow'] = cs.getPropertyValue('--color-primary').trim() || _colors['highlight-glow']
+  for (const key of Object.keys(_colors) as CanvasColorName[]) {
+    const value = cs.getPropertyValue(_cssVarMap[key]).trim()
+    if (value) _colors[key] = value
+  }
 
   // ── Update plant labels ──
   const plantsLayer = layers.get('plants')
   if (plantsLayer) {
     plantsLayer.find('.plant-label').forEach((node: Konva.Node) => {
       ;(node as Konva.Text).fill(_colors['plant-label'])
-    })
-    plantsLayer.find('.plant-botanical').forEach((node: Konva.Node) => {
-      ;(node as Konva.Text).fill(_colors['plant-label-muted'])
     })
     plantsLayer.find('.stackBadgeBg').forEach((node: Konva.Node) => {
       ;(node as Konva.Circle).fill(_colors['stack-badge-bg'])

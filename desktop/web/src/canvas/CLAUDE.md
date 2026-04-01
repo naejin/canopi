@@ -37,9 +37,9 @@
 
 Landed post-beta product slice:
 - Plant color assignment — per-instance document color overrides, document-scoped same-species defaults for future placements, and `color-by: flower` display mode (see `docs/todo.md` S9)
+- Plant label improvements — single-line labels, color-aware density suppression, and priority ordering for user-colored plants (see `docs/todo.md` S9.1)
 
 Deferred follow-up work:
-- Plant label improvements — single-line, color-aware density, priority ordering (see `docs/todo.md` S9.1)
 - `loadSpeciesCache` extraction from `engine.ts`
 
 ## Runtime Module Split (Wave 2) + Reconciler (Wave 3)
@@ -66,7 +66,7 @@ External code uses `CanvasEngine` methods only. Never import from `runtime/*.ts`
 - Plant tooltip: HTML `<div>` overlay in `engine.ts` (not Konva text). `pointer-events: none`. Positioned via `stage.getAbsoluteTransform()`. Uses safe DOM methods (no innerHTML)
 - Map layer rendering: `runtime/map-layer.ts` (deferred — see `docs/todo.md` S12). Hidden MapLibre → `createImageBitmap()` → Konva.Image on `contours` layer. Never use `toDataURL()` for canvas rasterization — it blocks main thread 20–80ms on GPU readback
 - `projection.ts` bridges Konva ↔ MapLibre coordinates: `stageScaleToMapZoom()`, `worldToGeo()`/`geoToWorld()`, `stageViewportCenter()`
-- Plant LOD labels: threshold at `stageScale >= 5`. Nearest-neighbor density check (squared distances, no sqrt). Selected plants always show labels. Stacked plants get moss-green count badge
+- Plant LOD labels: threshold at `stageScale >= 5`. Single-line labels only. Density is squared-distance based, color-aware (40px same-color / 20px different-color), and priority-weighted so selected and user-colored plants win first. Priority sort is load-bearing — selected plants must enter `shown` before non-selected neighbors process, or blocking is incorrect. Stacked plants get moss-green count badge
 
 ## Render Pipeline Ownership
 `RenderReconciler` owns all render scheduling. `render-pipeline.ts` is the execution delegate — other runtime modules must not call `batchDraw()` or walk plant nodes for visual updates. Go through `reconciler.invalidate(...)`:
@@ -84,6 +84,8 @@ External code uses `CanvasEngine` methods only. Never import from `runtime/*.ts`
 - **Shapes don't react to CSS theme changes**: Colors hardcoded at creation time. Theme switch requires walking nodes and updating `fill`/`stroke` from computed CSS variables
 - **Canvas colors must use `getCanvasColor()` from `theme-refresh.ts`**: Never hardcode fill/stroke on Konva nodes. Add CSS variable to `global.css` (both themes) + cache entry in `theme-refresh.ts`. `refreshCanvasTheme()` in the engine's theme effect walks all layers on toggle
 - **Non-Konva canvas elements too**: Guides, plant badges, and zone fallback colors all use `getCanvasColor()` — not module-level constants. Every color rendered on or near the canvas must be theme-refreshable. If adding a new canvas element with color, add a `--canvas-*` token + `getCanvasColor()` entry + refresh call
+- **Read rendered Konva properties, don't re-derive from attrs**: Plant circle fill is always set by `createPlantNode`/`updatePlantDisplay`. Helpers reading plant color should use `circle.fill()`, not re-derive from `data-color-override`/stratum attrs (that duplicates `getPlantBaseColor` and risks order inconsistency)
+- **`_cssVarMap` in `theme-refresh.ts`**: Adding a new canvas color requires entries in both `_cssVarMap` (CSS variable name) and `_colors` (fallback). Two special-case mappings: `selection-fill` → `--canvas-selection`, `highlight-glow` → `--color-primary`
 - **No Konva Transformer**: Resize/rotate was removed — objects are position-only. Selection uses highlight glows only, move uses native `draggable`. Do not re-add Transformer
 - **`name: 'shape'` only on top-level selectable nodes**: Children inside Groups must NOT have it — causes independent selection
 - **Screen-space overlays**: Use HTML `<canvas>` (not Konva layers) for rulers. Konva layers are subject to stage transforms
