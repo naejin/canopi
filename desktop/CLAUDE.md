@@ -30,10 +30,10 @@
 - **Theme**: light/dark only (no system option). Toggle in title bar cycles between the two
 
 ## Tauri v2 Gotchas
-- **No `convertFileSrc()` for local files**: The `asset://` protocol is not scoped in `capabilities/main-window.json`. Serving local files to the WebView requires base64 data URLs from Rust. Adding `fs:allow-read` scope would fix it properly but needs capability config work
-- **Image base64 bottleneck**: `get_cached_image_url` encodes images as base64 data URLs (~2.7MB IPC payload per 2MB image), freezing the UI. Planned fix: enable scoped asset protocol + `convertFileSrc()`. See `docs/todo.md` section 10. Do not extend the base64 pattern to new image surfaces
+- **Use `convertFileSrc()` for cached local images**: The app now enables `app.security.assetProtocol` with scope limited to `$APPDATA/image-cache/**`. Image surfaces should return a file path from Rust and convert it in the frontend instead of sending image bytes over IPC
+- **Do not reintroduce base64 image IPC**: The old `get_cached_image_url` pattern froze the UI with multi-megabyte JSON payloads. The current path is `get_cached_image_path` + `convertFileSrc()`. Do not extend the base64 pattern to new image or tile surfaces
 - **Optimized binary IPC**: For returning large binary data (tiles, images), use `tauri::ipc::Response::new(bytes)` instead of JSON serialization — arrives as `ArrayBuffer` in JS, no base64 overhead. For streaming chunks, use `tauri::ipc::Channel<&[u8]>`
-- **`ureq` for blocking HTTP in Tauri commands**: Use `ureq` (not `reqwest`) — lightweight, no async runtime needed, fits Tauri's sync command thread pool. Already in `desktop/Cargo.toml`
+- **Blocking HTTP/file work must stay off the main command thread**: `ureq` is acceptable, but only behind an async Tauri command boundary that moves the blocking work to `tauri::async_runtime::spawn_blocking`. Do not perform network fetches, large reads, or long writes directly inside synchronous `#[tauri::command]` handlers. For cacheable assets, also avoid concurrent same-path writes and publish completed files atomically
 - **`tauri.conf.json` beforeDevCommand path**: Uses `{ script: "npm run dev", cwd: "web" }` object format (relative to `desktop/`). NOT a bare `npm run dev` at project root
 - **CSP configured**: `tauri.conf.json` has a strict CSP policy (`default-src 'self'`, `connect-src ipc: http://ipc.localhost https:`, etc.). No longer `null`. When adding new resource origins (e.g., tile servers), update CSP directives
 - **`tauri-plugin-shell` removed**: No shell capability. If external process spawning is needed in the future, use Rust `std::process::Command` from a Tauri command, not the shell plugin
@@ -55,6 +55,7 @@
 
 ## Build
 - **`CANOPI_SKIP_BUNDLED_DB=1`**: Env var checked in `desktop/build.rs`. When set, overrides `tauri.conf.json` bundle resources to an empty list so the crate compiles without a locally generated `canopi-core.db`. Used by CI lint/test jobs. The runtime already degrades gracefully when the DB is missing; release packaging still requires the real DB
+- **Rust lint gate**: Match CI locally with `cargo clippy --workspace --all-targets -- -D warnings`. `--all-targets` matters; plain workspace clippy can miss test-only warnings
 - **CI release build downloads the DB**: The `build.yml` workflow downloads `canopi-core.db` from the `canopi-core-db` GitHub release tag into `desktop/resources/` before running `tauri build`
 - **Linux deps shared action**: `.github/actions/install-linux-deps/` — reusable composite action for `apt-get install` of GTK/WebKit/librsvg/patchelf. Used by lint, test, and build jobs
 - **Linux bundle**: `--bundles deb` only (no AppImage/RPM). Other platforms use Tauri defaults

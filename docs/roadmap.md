@@ -625,7 +625,7 @@ Goal: Harden everything built in Phases 0–7 + DC + SG before adding new featur
 
 - **QA.2a** [M] **Audit blocking operations**: Identify every frontend `await` of a slow IPC call that blocks rendering. Check:
   - `geocodeAddress()` in `LocationInput.tsx` — HTTP call to Nominatim
-  - `getSpeciesImages()` / image cache fetches in `PhotoCarousel.tsx` — network image download
+  - `getSpeciesImages()` / `getCachedImagePath()` in `PhotoCarousel.tsx` — image list lookup plus cached-image path resolution
   - `getSpeciesDetail()` in `PlantDetailCard.tsx` — DB query (fast, but verify)
   - `searchSpecies()` in `state/plant-db.ts` — FTS query (usually fast, but heavy filter combos?)
   - `getTemplateCatalog()` / `downloadTemplate()` in community features — HTTP calls
@@ -724,7 +724,7 @@ Goal: Harden everything built in Phases 0–7 + DC + SG before adding new featur
 
 - **QA.5a** [M] **Audit and fix network failure paths**: For each HTTP-dependent feature, verify behavior when network is unavailable or server returns error:
   - `geocodeAddress()`: timeout handling? User feedback on failure? Currently uses `ureq` — check if there's a timeout configured. Add 5s timeout if missing. Frontend: show "Could not find location" message
-  - Image cache (`fetch_and_cache_bytes`): timeout? Retry? What does frontend show on failure? Ensure `PhotoCarousel` shows placeholder on fetch error
+  - Image cache (`fetch_and_cache` / `getCachedImagePath()`): timeout? Retry? What does frontend show on failure? Ensure `PhotoCarousel` falls back from asset path to remote URL and then to placeholder on repeated failure
   - Template catalog (`getTemplateCatalog`): what happens when `templates.canopi.app` is unreachable? Show "Could not load templates" with retry button
   - Template download (`downloadTemplate`): partial download handling? Verify HTTPS + domain allowlist. Show error on failure
   - Tile download (`downloadTiles`): progress events on failure? Resume on retry?

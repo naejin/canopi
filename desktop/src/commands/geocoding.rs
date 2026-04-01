@@ -26,7 +26,11 @@ fn de_f64_from_str<'de, D: serde::Deserializer<'de>>(d: D) -> Result<f64, D::Err
 const MAX_GEOCODING_BYTES: u64 = 1024 * 1024;
 
 #[tauri::command]
-pub fn geocode_address(query: String) -> Result<Vec<GeoResult>, String> {
+pub async fn geocode_address(query: String) -> Result<Vec<GeoResult>, String> {
+    crate::blocking::run_blocking("geocoding", move || geocode_address_blocking(query)).await
+}
+
+fn geocode_address_blocking(query: String) -> Result<Vec<GeoResult>, String> {
     let mut response = crate::http::build_get_request(
         "https://nominatim.openstreetmap.org/search",
         "Canopi/1.0",

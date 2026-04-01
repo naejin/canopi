@@ -107,3 +107,8 @@ export async function getSpeciesImages(
   if (isDegraded()) return [];
   return invoke('get_species_images', { canonicalName });
 }
+
+/** Ensures an image is cached locally and returns the cache file path. */
+export async function getCachedImagePath(url: string): Promise<string> {
+  return invoke('get_cached_image_path', { url });
+}

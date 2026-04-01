@@ -191,24 +191,20 @@ pub fn get_locale_common_names(
     crate::db::plant_db::get_locale_common_names(&conn, &canonical_name, &locale)
 }
 
-/// Fetch an image from a URL, cache it to disk, and return as a base64 data URL.
-/// Uses fetch_and_cache_bytes to avoid a redundant fs::read after download.
 #[tauri::command]
-pub fn get_cached_image_url(
+pub async fn get_cached_image_path(
     cache: State<'_, crate::image_cache::ImageCache>,
     url: String,
 ) -> Result<String, String> {
-    use base64::Engine;
-    let bytes = cache.fetch_and_cache_bytes(&url)?;
-    // Infer MIME from URL extension
-    let url_path = url.split('?').next().unwrap_or(&url);
-    let mime = match url_path.rsplit('.').next().unwrap_or("") {
-        "png" => "image/png",
-        "gif" => "image/gif",
-        "webp" => "image/webp",
-        "svg" => "image/svg+xml",
-        _ => "image/jpeg",
-    };
-    let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
-    Ok(format!("data:{mime};base64,{b64}"))
+    if let Some(path) = cache.cached_path_if_present(&url) {
+        return Ok(path.to_string_lossy().to_string());
+    }
+
+    let cache = cache.inner().clone();
+    crate::blocking::run_blocking("image cache fetch", move || {
+        cache
+            .fetch_and_cache(&url)
+            .map(|path| path.to_string_lossy().to_string())
+    })
+    .await
 }

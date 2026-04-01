@@ -203,7 +203,7 @@ How to do it:
 Current in-tree status:
 - automated release gates are landed and green locally on 2026-03-30:
   - `cargo fmt --all -- --check`
-  - `cargo clippy --workspace -- -D warnings`
+  - `cargo clippy --workspace --all-targets -- -D warnings`
   - `cargo test --workspace`
   - `npx --prefix desktop/web tsc --noEmit -p desktop/web/tsconfig.json`
   - `npm test --prefix desktop/web`
@@ -394,10 +394,10 @@ Completed in the post-beta hardening patch (see section 13):
 
 Completed in the post-beta product slice:
 - plant color assignment (see section 9)
+- image loading performance — scoped asset protocol + cached image paths (see section 10)
+- detail-card photo fit polish (see section 11)
 
 Still deferred beyond Wave 5 beta:
-- image loading performance — asset protocol migration (see section 10)
-- detail-card photo fit polish (see section 11)
 - map layers — contours, hillshade, raster base map on canvas (see section 12)
 - binary IPC for tile commands (see section 13.3 — implement with S12)
 - auto-updater — `tauri-plugin-updater` with signed updates (see section 13.4)
@@ -703,7 +703,9 @@ This is a larger UX shift. Defer until after improvements 1-3 are landed and val
 
 Improvements 1-3 can ship together as part of color assignment phase 1. They modify only `plants.ts` — no new files, no data model changes, no i18n keys.
 
-## 10. Image Loading Performance (Design Spec)
+## 10. Image Loading Performance
+
+**Status**: landed in the current tree on 2026-04-01 as a post-beta retained-surface patch, including the follow-up freeze fix that moves photo fetch/cache work off the main command thread and makes cache hits path-only.
 
 ### Problem
 
@@ -722,7 +724,7 @@ The `loading="lazy"` attribute on the `<img>` tag doesn't help — the expensive
 
 ### Fix: Enable Tauri Asset Protocol (Scoped to Image Cache)
 
-The current CLAUDE.md notes: *"The asset:// protocol is not scoped in capabilities/main-window.json. Serving local files to the WebView requires base64 data URLs from Rust. Adding fs:allow-read scope would fix it properly but needs capability config work."*
+The old `desktop/CLAUDE.md` note about base64 image IPC is now historical. The landed fix uses Tauri v2's built-in asset protocol scoped directly in `tauri.conf.json`.
 
 Tauri v2 has a built-in `AssetProtocolConfig` that can serve local files to the WebView without base64. Scope it to the image cache directory only — no localhost HTTP server needed, no new dependencies.
 
@@ -733,56 +735,55 @@ Tauri v2 has a built-in `AssetProtocolConfig` that can serve local files to the 
 - Browser loads the image natively — streaming, progressive decode, proper memory management
 - No IPC bottleneck: the image bytes never cross the IPC bridge
 
-### Implementation
+### Implemented Shape
 
 **Phase 1 — Asset protocol config** (no code changes yet, just plumbing)
 
 1. `desktop/tauri.conf.json` — enable asset protocol with scoped access:
    ```json
    "security": {
-     "csp": null,
      "assetProtocol": {
        "enable": true,
        "scope": ["$APPDATA/image-cache/**"]
+     },
+     "csp": {
+       "img-src": "'self' asset: http://asset.localhost blob: data: https:"
      },
      "capabilities": ["main-window"]
    }
    ```
 
-2. `desktop/capabilities/main-window.json` — add fs read permission scoped to image cache:
-   ```json
-   "permissions": [
-     ...existing...,
-     {
-       "identifier": "fs:allow-read",
-       "allow": [{ "path": "$APPDATA/image-cache/**" }]
-     }
-   ]
-   ```
-
 **Phase 2 — Rust: return file path instead of base64**
 
-3. `desktop/src/image_cache.rs` — add `pub fn cache_dir(&self) -> &Path` accessor
+2. `desktop/src/image_cache.rs` — add cache-path helpers and single-flight cache writes
 
-4. `desktop/src/commands/species.rs` — new command `get_cached_image_path` that returns the cache file path as a string:
+3. `desktop/src/commands/species.rs` — `get_cached_image_path` returns the cache file path as a string:
    ```rust
    #[tauri::command]
-   pub fn get_cached_image_path(
+   pub async fn get_cached_image_path(
        cache: State<'_, ImageCache>,
        url: String,
    ) -> Result<String, String> {
-       cache.ensure_cached(&url)?;  // download if not cached, return ()
-       let path = cache.cached_path(&url);
-       Ok(path.to_string_lossy().to_string())
+       if let Some(path) = cache.cached_path_if_present(&url) {
+           return Ok(path.to_string_lossy().to_string());
+       }
+
+       let cache = cache.inner().clone();
+       crate::blocking::run_blocking("image cache fetch", move || {
+           cache
+               .fetch_and_cache(&url)
+               .map(|path| path.to_string_lossy().to_string())
+       })
+       .await
    }
    ```
-   Split `fetch_and_cache_bytes` into `ensure_cached` (download + cache, don't return bytes) and `cached_path` (return the file path). The bytes never need to enter Rust's return channel.
+   The cache split is `cached_path_if_present()` for fast hits and `fetch_and_cache()` for misses. `fetch_and_cache()` deduplicates same-URL fetches in-process and publishes files atomically so the asset loader never sees a partial image.
 
-5. Keep `get_cached_image_url` (base64 version) temporarily for fallback during rollout, remove once stable.
+4. `get_cached_image_url` (base64 version) is removed from the handler list and Rust command surface in the final state.
 
 **Phase 3 — Frontend: use convertFileSrc**
 
-6. `desktop/web/src/components/plant-detail/PhotoCarousel.tsx` — replace the `invoke('get_cached_image_url')` call:
+5. `desktop/web/src/components/plant-detail/PhotoCarousel.tsx` — replace the image-cache load path:
    ```typescript
    import { convertFileSrc } from '@tauri-apps/api/core';
 
@@ -795,26 +796,24 @@ Tauri v2 has a built-in `AssetProtocolConfig` that can serve local files to the 
    setLoadedSrc(convertFileSrc(cachePath));
    ```
 
-7. Add **adjacent image preloading** — when `currentIndex` changes, also trigger `invoke('get_cached_image_path')` for `currentIndex ± 1` (fire-and-forget, just warms the disk cache so the next swipe is instant).
+6. Add **adjacent image preloading** — when `currentIndex` changes, also trigger `invoke('get_cached_image_path')` for `currentIndex ± 1` (fire-and-forget, just warms the disk cache so the next swipe is instant).
 
 **Phase 4 — Cleanup**
 
-8. Remove `get_cached_image_url` command (base64 version) from `lib.rs` handler list and `commands/species.rs`
-9. Remove `base64` crate from `desktop/Cargo.toml` if no other consumer remains
-10. Update `desktop/CLAUDE.md` — remove the "No convertFileSrc()" gotcha, document the asset protocol scope
+7. The old `get_cached_image_url` command is removed from `lib.rs` and `commands/species.rs`
+8. `base64` remains only for commands that still need it elsewhere in the app
+9. `desktop/CLAUDE.md` now documents the asset-protocol path and the off-main-thread rule for blocking network/file work
 
 ### Files Changed
 
 | File | Change |
 |---|---|
 | `desktop/tauri.conf.json` | Enable `assetProtocol` with image-cache scope |
-| `desktop/capabilities/main-window.json` | Add scoped `fs:allow-read` |
-| `desktop/src/image_cache.rs` | Add `ensure_cached()`, `cached_path()`, `cache_dir()` |
-| `desktop/src/commands/species.rs` | Add `get_cached_image_path`, later remove `get_cached_image_url` |
-| `desktop/src/lib.rs` | Register new command, later remove old one |
+| `desktop/src/image_cache.rs` | Add `cached_path_if_present()`, `fetch_and_cache()`, and atomic/single-flight cache writes |
+| `desktop/src/commands/species.rs` | Add async `get_cached_image_path` and remove `get_cached_image_url` |
+| `desktop/src/lib.rs` | Register `get_cached_image_path` and remove the old base64 command |
 | `desktop/web/src/components/plant-detail/PhotoCarousel.tsx` | Use `convertFileSrc()` + adjacent preload |
 | `desktop/web/src/ipc/species.ts` | Add `getCachedImagePath()` wrapper |
-| `desktop/Cargo.toml` | Remove `base64` (cleanup phase) |
 | `desktop/CLAUDE.md` | Update asset protocol gotcha |
 
 ### Performance Impact
@@ -830,7 +829,7 @@ Tauri v2 has a built-in `AssetProtocolConfig` that can serve local files to the 
 
 - **Scope escape**: Asset protocol scope is limited to `$APPDATA/image-cache/**` — no access to arbitrary files. Only SHA256-hashed filenames exist in this directory (no user-controlled paths)
 - **Platform differences**: `convertFileSrc()` generates `http://asset.localhost` URLs on all platforms. Tested pattern in Tauri ecosystem
-- **Cache miss UX**: `ensure_cached()` still blocks on network download for uncached images. The shimmer loading state in PhotoCarousel already handles this. The improvement is that *cached* images load instantly instead of blocking on base64 encoding + IPC transfer
+- **Cache miss UX**: Uncached images still wait on a network download before the file is available, but that work now runs off the main command thread. The shimmer loading state in `PhotoCarousel` handles this, while cached images resolve by path without rereading image bytes.
 
 ### Future: Thumbnails (Not In Scope)
 
@@ -838,7 +837,9 @@ If the app ever shows multiple species photos simultaneously (e.g., search resul
 
 ---
 
-## 11. Detail Card Photo Fit (Design Spec)
+## 11. Detail Card Photo Fit
+
+**Status**: landed in the current tree on 2026-04-01 as a post-beta retained-surface patch.
 
 ### Problem
 
@@ -1306,7 +1307,7 @@ Notes:
 
 **Files changed**: `desktop/tauri.conf.json`
 
-**Current validation**: passed repo gates (`cargo fmt`, `cargo clippy`, `cargo test`, frontend typecheck/tests/build) after landing. A packaged-app smoke rerun is still the right check if a future beta patch promotes this exact config.
+**Current validation**: passed repo gates (`cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test`, frontend typecheck/tests/build) after landing. A packaged-app smoke rerun is still the right check if a future beta patch promotes this exact config.
 
 **When**: landed in the post-beta hardening patch after Wave 5 closeout.
 

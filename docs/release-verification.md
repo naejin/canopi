@@ -44,7 +44,7 @@ Explicitly deferred beyond Wave 5 beta at beta-cut time:
 These checks must pass before a beta release candidate is declared ready:
 
 - `cargo fmt --all -- --check`
-- `cargo clippy --workspace -- -D warnings`
+- `cargo clippy --workspace --all-targets -- -D warnings`
 - `cargo test --workspace`
 - `npx --prefix desktop/web tsc --noEmit -p desktop/web/tsconfig.json`
 - `npm test --prefix desktop/web`
@@ -57,7 +57,7 @@ These checks must pass before a beta release candidate is declared ready:
 Current status in this tree:
 
 - `cargo fmt --all -- --check`: passing locally on 2026-03-30
-- `cargo clippy --workspace -- -D warnings`: passing locally on 2026-03-30
+- `cargo clippy --workspace --all-targets -- -D warnings`: passing locally on 2026-03-30
 - `cargo test --workspace`: passing locally on 2026-03-30
 - `npx --prefix desktop/web tsc --noEmit -p desktop/web/tsconfig.json`: passing locally on 2026-03-31
 - frontend tests: passing locally on 2026-03-31

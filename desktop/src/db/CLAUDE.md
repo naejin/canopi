@@ -62,5 +62,5 @@
 - **CI bundled DB**: Release builds download `canopi-core.db` from the `canopi-core-db` GitHub release tag (env vars `CANOPI_CORE_DB_RELEASE_TAG` / `CANOPI_CORE_DB_ASSET_NAME` in `build.yml`). Lint/test jobs set `CANOPI_SKIP_BUNDLED_DB=1` to compile without it
 
 ## Image Cache & Network
-- **Image cache**: `image_cache.rs` — `fetch_and_cache_bytes()` returns raw bytes (no redundant `fs::read`). Uses `AtomicU64` tracked size to skip dir scans. LRU eviction at 500MB. Cache dir: `~/.local/share/com.canopi.app/image-cache/`. All downloads have 10s timeout + 10MB size limit via `ureq` config
-- **Network hardening convention**: All `ureq` calls must set `timeout_global` and response size limits. Image cache is the reference pattern. Geocoding uses 5s timeout
+- **Image cache**: `image_cache.rs` exposes `cached_path_if_present()` for path-only cache hits and `fetch_and_cache()` for misses. Cache hits must not reread image bytes if the caller only needs a path. Misses are single-flight per cache path and publish via temp-file + rename so the asset loader never sees a partial image. Uses shared `AtomicU64` tracked size to skip dir scans. LRU eviction at 500MB. Cache dir: `~/.local/share/com.canopi.app/image-cache/`
+- **Network hardening convention**: All `ureq` calls must set `timeout_global` and response size limits, and blocking network/file work must run behind an async command + `spawn_blocking` seam. Geocoding uses 5s timeout

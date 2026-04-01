@@ -160,8 +160,7 @@ fn normalize_primary_flower_color(value: Option<&str>) -> Option<String> {
 }
 
 fn repeat_vars(count: usize) -> String {
-    std::iter::repeat("?")
-        .take(count)
+    std::iter::repeat_n("?", count)
         .collect::<Vec<_>>()
         .join(",")
 }

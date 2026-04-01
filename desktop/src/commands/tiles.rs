@@ -133,7 +133,19 @@ fn dir_size(path: &Path) -> u64 {
 /// Uses OpenStreetMap raster tiles (same as the online source).
 /// Emits `tile-download-progress` events during download.
 #[tauri::command]
-pub fn download_tiles(
+pub async fn download_tiles(
+    app: AppHandle,
+    bbox: [f64; 4],
+    min_zoom: u32,
+    max_zoom: u32,
+) -> Result<(), String> {
+    crate::blocking::run_blocking("tile download", move || {
+        download_tiles_blocking(app, bbox, min_zoom, max_zoom)
+    })
+    .await
+}
+
+fn download_tiles_blocking(
     app: AppHandle,
     bbox: [f64; 4],
     min_zoom: u32,

@@ -137,7 +137,12 @@ const MAX_TEMPLATE_BYTES: u64 = 50 * 1024 * 1024;
 const ALLOWED_HOST: &str = "templates.canopi.app";
 
 #[tauri::command]
-pub fn download_template(url: String) -> Result<String, String> {
+pub async fn download_template(url: String) -> Result<String, String> {
+    crate::blocking::run_blocking("template download", move || download_template_blocking(url))
+        .await
+}
+
+fn download_template_blocking(url: String) -> Result<String, String> {
     // Validate URL — HTTPS only
     if !url.starts_with("https://") {
         return Err("Invalid URL: only HTTPS URLs are allowed".into());

@@ -1,3 +1,4 @@
+mod blocking;
 mod commands;
 mod db;
 mod design;
@@ -68,7 +69,7 @@ pub fn run() {
             commands::species::get_species_images,
             commands::species::get_species_external_links,
             commands::species::get_locale_common_names,
-            commands::species::get_cached_image_url,
+            commands::species::get_cached_image_path,
             commands::favorites::toggle_favorite,
             commands::favorites::get_favorites,
             commands::favorites::get_recently_viewed,

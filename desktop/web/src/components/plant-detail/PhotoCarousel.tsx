@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'preact/hooks';
 import { t } from '../../i18n';
-import { invoke } from '@tauri-apps/api/core';
-import { getSpeciesImages } from '../../ipc/species';
+import { convertFileSrc } from '@tauri-apps/api/core';
+import { getCachedImagePath, getSpeciesImages } from '../../ipc/species';
 import type { SpeciesImage } from '../../types/species';
 import styles from './PhotoCarousel.module.css';
 
@@ -14,19 +14,20 @@ export function PhotoCarousel({ canonicalName }: Props) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
   const [imageReady, setImageReady] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Track the canonical name that initiated the current image load
-  // to guard against stale setState from slow image cache responses
-  const activeSpeciesRef = useRef(canonicalName);
+  // Monotonic counter — guards against stale setState from slow image cache responses
+  const activeImageRequestRef = useRef(0);
 
   // Fetch image list when species changes
   useEffect(() => {
-    activeSpeciesRef.current = canonicalName;
+    activeImageRequestRef.current += 1;
     setImages([]);
     setCurrentIndex(0);
     setLoadedSrc(null);
     setImageReady(false);
+    setLoadFailed(false);
     setLoading(true);
 
     let cancelled = false;
@@ -53,21 +54,43 @@ export function PhotoCarousel({ canonicalName }: Props) {
     let cancelled = false;
     setLoadedSrc(null);
     setImageReady(false);
+    setLoadFailed(false);
 
-    const species = activeSpeciesRef.current;
+    const requestId = activeImageRequestRef.current + 1;
+    activeImageRequestRef.current = requestId;
+    const preloadIndices = [currentIndex - 1, currentIndex + 1]
+      .filter((index) => index >= 0 && index < images.length);
+    const preloadUrls = new Set(
+      preloadIndices.flatMap((index) => {
+        const preloadImage = images[index];
+        return preloadImage ? [preloadImage.url] : [];
+      }),
+    );
 
-    invoke<string>('get_cached_image_url', { url: img.url })
-      .then((dataUrl) => {
-        if (!cancelled && activeSpeciesRef.current === species) {
-          setLoadedSrc(dataUrl);
+    getCachedImagePath(img.url)
+      .then((cachePath) => {
+        if (
+          !cancelled
+          && activeImageRequestRef.current === requestId
+        ) {
+          setLoadedSrc(convertFileSrc(cachePath));
         }
       })
       .catch(() => {
         // Fallback: try loading URL directly
-        if (!cancelled && activeSpeciesRef.current === species) {
+        if (
+          !cancelled
+          && activeImageRequestRef.current === requestId
+        ) {
           setLoadedSrc(img.url);
         }
       });
+
+    for (const preloadUrl of preloadUrls) {
+      void getCachedImagePath(preloadUrl).catch(() => {
+        // Best-effort warmup only — keep the current image load path isolated.
+      });
+    }
 
     return () => { cancelled = true; };
   }, [images, currentIndex]);
@@ -84,6 +107,21 @@ export function PhotoCarousel({ canonicalName }: Props) {
     if (e.key === 'ArrowLeft') goPrev();
     else if (e.key === 'ArrowRight') goNext();
   }, [goPrev, goNext]);
+
+  const currentImage = images[currentIndex];
+  const handleImageError = () => {
+    if (!currentImage) return;
+    if (loadedSrc !== currentImage.url) {
+      setLoadedSrc(currentImage.url);
+      setImageReady(false);
+      setLoadFailed(false);
+      return;
+    }
+
+    setLoadedSrc(null);
+    setImageReady(false);
+    setLoadFailed(true);
+  };
 
   // No images available
   if (!loading && images.length === 0) {
@@ -107,8 +145,6 @@ export function PhotoCarousel({ canonicalName }: Props) {
     );
   }
 
-  const currentImage = images[currentIndex];
-
   return (
     <div
       className={styles.carousel}
@@ -124,7 +160,16 @@ export function PhotoCarousel({ canonicalName }: Props) {
             className={`${styles.image} ${imageReady ? styles.imageLoaded : ''}`}
             loading="lazy"
             onLoad={() => setImageReady(true)}
+            onError={handleImageError}
           />
+        ) : loadFailed ? (
+          <div className={styles.inlinePlaceholder}>
+            <svg className={styles.placeholderIcon} width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <path d="M21 15l-5-5L5 21" />
+            </svg>
+          </div>
         ) : (
           <div className={styles.loading} />
         )}
