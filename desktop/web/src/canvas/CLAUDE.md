@@ -104,7 +104,7 @@ External code uses `CanvasEngine` methods only. Never import from `runtime/*.ts`
 - **Every new canvas module must be wired into runtime**: Must be imported and called from `engine.ts`, the appropriate `runtime/*.ts` module, or `serializer.ts`
 - **`state/canvas.ts` mirror signals**: `engine.ts` cannot import from `state/design.ts` (circular). Use mirror signals in `state/canvas.ts`
 - **Species-wide plant colors are document state**: future placements must read the document-scoped species default through the engine facade before node creation; do not try to solve this in the reconciler
-- **`Command` interface**: Every undo/redo command class must include `readonly type = 'commandName'`
+- **`Command` interface**: Every undo/redo command class must include `readonly type = 'commandName'`. `dirtyPasses` must list the render passes the command invalidates — `[]` means no render update, which silently leaves visuals stale. Copy passes from a related command (e.g., `SetPlantSpeciesColorCommand` mirrors `SetPlantColorCommand`)
 - **`CanvasTool` event signatures**: Tool methods use `Konva.KonvaEventObject<MouseEvent>`, not raw `MouseEvent`
 - **Panel switching recreates CanvasEngine**: CanvasPanel unmounts/remounts. Re-load via `loadCanvasFromDocument()` + `showCanvasChrome()`
 - **Canvas dirty tracking**: `_past.length` caps at 500. Use `_savedPosition` checkpoint. `history.clear()` must NOT trigger dirty
