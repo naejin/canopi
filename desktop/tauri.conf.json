@@ -3,8 +3,14 @@
   "version": "0.1.0",
   "identifier": "com.canopi.app",
   "build": {
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build",
+    "beforeDevCommand": {
+      "script": "npm run dev",
+      "cwd": "web"
+    },
+    "beforeBuildCommand": {
+      "script": "npm run build",
+      "cwd": "web"
+    },
     "devUrl": "http://localhost:1420",
     "frontendDist": "web/dist"
   },

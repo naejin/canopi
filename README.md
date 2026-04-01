@@ -45,6 +45,8 @@ cd desktop/web && npx tsc --noEmit
 cd desktop/web && npm test
 ```
 
+See [`docs/development.md`](docs/development.md) for the desktop dev command, frontend hook behavior, and common local checks.
+
 ## Project structure
 
 ```
