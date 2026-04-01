@@ -1,6 +1,6 @@
 # Canopi Rewrite Operational Reference
 
-**Date**: 2026-03-31  
+**Date**: 2026-04-01  
 **Status**: canonical operational reference for active rewrite work
 
 Use this file for future coding and planning work.
@@ -41,7 +41,7 @@ Completed and archived:
 - release-blocking automated gates rerun locally
 
 Still active:
-- Wave 5 packaged-app smoke verification and beta-release closeout
+- post-beta patch hardening only if new release-blocking defects appear
 
 Deferred after live review:
 - featured-design world map / template import
@@ -49,7 +49,7 @@ Deferred after live review:
 - budget workflows
 - consortium flows
 
-Wave 5 is now a beta-release hardening wave on the surviving architecture. It does not claim that the broader product roadmap is complete.
+Wave 5 beta hardening is complete on the surviving architecture. It does not claim that the broader product roadmap is complete.
 
 ---
 
@@ -170,13 +170,16 @@ Current in-tree status:
   - `npx --prefix desktop/web tsc --noEmit -p desktop/web/tsconfig.json`
   - `npm test --prefix desktop/web`
   - `npm run build --prefix desktop/web`
-- the next active rewrite step is now Wave 5 packaged-app smoke verification and beta-release closeout
+- Wave 4 coherence handed off to Wave 5 beta hardening, which later closed on 2026-04-01
 
 ### 3.3 Wave 5 Beta Release Hardening
 
+Status:
+- complete on 2026-04-01
+
 What is left:
-- beta-release checklist and docs cleanup
-- supported-platform packaged-app smoke verification
+- keep the release operator docs accurate for future beta patches
+- Tauri platform hardening: enable CSP (13.1), remove unused shell plugin (13.2), add poison lock logging (13.5)
 - keep the release-blocking CI gates green on the candidate branch
 - keep the deferred backlog explicit so it does not leak into Wave 5
 
@@ -200,7 +203,9 @@ Current in-tree status:
   - i18n completeness coverage against `en.json` via the frontend test suite
   - `npm run build --prefix desktop/web`
 - GitHub Actions already carries the release-build matrix and artifact upload
-- the remaining Wave 5 work is packaged-app smoke verification plus beta-release docs cleanup and evidence capture
+- supported-platform packaged-app smoke verification was signed off in `docs/release-verification.md` on 2026-04-01
+- the `v0.1.0` desktop beta release was published on 2026-04-01
+- remaining follow-up is post-beta patch hardening only if new release-blocking defects appear
 
 ---
 
@@ -363,7 +368,7 @@ These are implementation rules, not optional style preferences.
 ## 7. Active Blockers And Deferred Items
 
 Pending beta-release closeout:
-- any beta-release claim that lacks supported-platform packaged-app smoke evidence
+- none; use `docs/release-verification.md` as the signed-off record for Wave 5 on 2026-04-01
 
 Now unblocked after renderer stability closeout:
 - Wave 4 design coherence
@@ -378,11 +383,18 @@ Can be fixed independently if needed:
 - resource ownership cleanup in rulers, text tool, and `WorldMapSurface`
 - deferred-pass data-shape cleanup in renderer internals
 
+In scope for Wave 5 (from Tauri platform audit — section 13):
+- enable CSP (section 13.1)
+- remove unused shell plugin (section 13.2)
+- add poison lock logging (section 13.5)
+
 Still deferred beyond Wave 5 beta:
 - plant color assignment (see section 9)
 - image loading performance — asset protocol migration (see section 10)
 - detail-card photo fit polish (see section 11)
 - map layers — contours, hillshade, raster base map on canvas (see section 12)
+- binary IPC for tile commands (see section 13.3 — implement with S12)
+- auto-updater — `tauri-plugin-updater` with signed updates (see section 13.4)
 - world map with featured designs / template import
 - timeline workflows
 - budget workflows
@@ -395,7 +407,7 @@ Still deferred beyond Wave 5 beta:
 
 ## 8. Beta-Release Core Journeys
 
-Wave 5 beta is not ready until these journeys pass end to end on the packaged app:
+Wave 5 beta required these journeys to pass end to end on the packaged app, and the signed-off result lives in `docs/release-verification.md`:
 
 1. Create, edit, save, load, and switch designs without losing work
 2. Search/filter the plant DB, inspect detail, favorite plants, and place them on canvas
@@ -1229,15 +1241,179 @@ The entire pipeline is async. The user can interact with the canvas at every ste
 
 ---
 
-## 13. Final Instruction
+## 13. Tauri Platform Hardening (Design Spec)
+
+Findings from a Tauri v2 feature audit (2026-04-01). These items address security gaps, unused attack surface, and IPC performance patterns that should be resolved before or shortly after beta.
+
+### 13.1 Content Security Policy (CSP)
+
+**Problem**: CSP is `null` (disabled) in `tauri.conf.json`. No restrictions on script sources, image sources, connect origins, or style sources. For a shipping desktop app, this removes a key XSS defense layer.
+
+**Current external origins used by the app**:
+- `connect-src`: Nominatim OSM API (`nominatim.openstreetmap.org`), template downloads (`templates.canopi.app`), species image fetches (various domains)
+- `img-src`: Species images from external URLs, base64 data URLs (`data:`), blob URLs (`blob:` for canvas export)
+- Future (S10): `asset: http://asset.localhost` when asset protocol is enabled
+- Future (S12): OSM tile servers (`*.tile.openstreetmap.org`), AWS DEM tiles (`s3.amazonaws.com`)
+
+**Recommendation**: Enable CSP before beta release. Start restrictive, loosen only for documented needs:
+
+```json
+"csp": {
+  "default-src": "'self'",
+  "script-src": "'self'",
+  "style-src": "'self' 'unsafe-inline'",
+  "img-src": "'self' blob: data: https:",
+  "connect-src": "ipc: http://ipc.localhost https:",
+  "font-src": "'self'"
+}
+```
+
+Notes:
+- `'unsafe-inline'` for `style-src` is required — CSS Modules inject `<style>` tags at runtime
+- `img-src https:` is broad but necessary — species images come from many domains (iNaturalist, USDA, Wikimedia, etc.)
+- When asset protocol is enabled (S10/S12), add `asset: http://asset.localhost` to `img-src`
+- `connect-src https:` covers Nominatim, template server, image downloads, and future tile servers
+- Can be tightened to explicit domains later once the full set of image/tile origins is catalogued
+
+**Files changed**: `desktop/tauri.conf.json`
+
+**Risk**: Low — CSP is additive security. If a valid origin is missed, the browser console shows a clear CSP violation error with the blocked URL. Fix by adding the origin. Test by opening a plant detail card (loads external species images) and running through save/load/export flows.
+
+**When**: Wave 5 beta hardening — easy to land, high security value.
+
+### 13.2 Remove Unused Shell Plugin
+
+**Problem**: `tauri-plugin-shell` is initialized in `lib.rs` (line 20), listed in `desktop/Cargo.toml`, has `shell:default` permission in `capabilities/main-window.json`, and `@tauri-apps/plugin-shell` is in `desktop/web/package.json` — but no code in the app invokes any shell command. The plugin grants the ability to execute arbitrary shell commands, which is unnecessary attack surface for a design app.
+
+**Fix** (pure deletion, 4 files):
+1. Remove `.plugin(tauri_plugin_shell::init())` from `desktop/src/lib.rs`
+2. Remove `tauri-plugin-shell = "2"` from `desktop/Cargo.toml`
+3. Remove `"shell:default"` from `desktop/capabilities/main-window.json`
+4. Remove `@tauri-apps/plugin-shell` from `desktop/web/package.json`
+
+**Risk**: None — grep confirms zero shell API usage in the entire codebase. The only matches are the plugin init line and unrelated string occurrences ("surfaceShell" CSS class, "shell command" comment in export.ts).
+
+**When**: Wave 5 beta hardening (trivial, 5-minute change).
+
+### 13.3 Binary IPC for Tile Commands
+
+**Problem**: `get_tile` in `commands/tiles.rs` returns `Result<Vec<u8>, String>`. In Tauri v2, `Vec<u8>` returned from commands goes through JSON serialization — a 30KB PNG tile becomes ~120KB of JSON array-of-numbers text. The Tauri v2 docs explicitly recommend `tauri::ipc::Response` for binary data: it bypasses JSON serialization and delivers raw `ArrayBuffer` to JS.
+
+This doesn't matter today (tile commands are unused — map layers deferred to S12). But it will be a performance bottleneck when S12 map layer rendering begins, especially for the offline tile cache serving path where dozens of tiles load per viewport.
+
+**Fix**: When S12 implementation begins, use `tauri::ipc::Response` for tile-returning commands:
+
+```rust
+use tauri::ipc::Response;
+
+#[tauri::command]
+fn get_tile(app: AppHandle, z: u32, x: u32, y: u32) -> Result<Response, String> {
+    let tile_path = tiles_dir(&app)?.join(format!("{z}/{x}/{y}.png"));
+    let bytes = std::fs::read(&tile_path)
+        .map_err(|e| format!("Tile {z}/{x}/{y} not found: {e}"))?;
+    Ok(Response::new(bytes))
+}
+```
+
+Frontend receives `ArrayBuffer` directly — use `new Blob([arrayBuffer], { type: 'image/png' })` → `URL.createObjectURL(blob)` for image sources.
+
+Similarly, `read_file_bytes` in `commands/export.rs` returns `(Vec<u8>, String)` where the bytes portion is JSON-serialized. If this command handles large files (background images can be multi-MB), consider splitting into a path-returning command + asset protocol, same as S10.
+
+**The `desktop/CLAUDE.md` already documents the `tauri::ipc::Response` pattern** (Tauri v2 Gotchas → Optimized binary IPC). The current code just doesn't use it yet because the tile commands are inactive.
+
+**When**: Implement alongside S12 (map layers) when tile commands become active. Also consider for `read_file_bytes` if background image import performance is an issue.
+
+### 13.4 Auto-Updater
+
+**Problem**: No update mechanism. Users must manually download new versions from GitHub Releases. For a beta app with active development, this creates friction — users stay on stale versions, bug reports become harder to triage.
+
+Tauri v2 provides `tauri-plugin-updater` with:
+- Mandatory code signing (prevents tampered updates)
+- Built-in GitHub Releases endpoint (no custom server needed)
+- Background update checks with user notification
+- Platform-specific update mechanisms (Windows NSIS, macOS DMG, Linux AppImage)
+- Configurable check interval and user-facing UI
+
+**Scope**: Post-beta. Requires:
+- Code signing infrastructure (Apple Developer ID, Windows Authenticode, Linux GPG)
+- Update manifest published alongside GitHub Releases (`latest.json`)
+- Frontend UX: update-available banner, manual "Check for updates" in settings, download progress
+- Decision: auto-install vs. notify-only (recommend notify-only for beta)
+
+**Files changed** (when implemented):
+- `desktop/Cargo.toml` — add `tauri-plugin-updater`
+- `desktop/src/lib.rs` — init updater plugin
+- `desktop/capabilities/main-window.json` — add updater permissions
+- `desktop/web/src/components/` — update notification UI
+- CI workflows — signing steps, manifest generation
+
+**When**: Post-beta roadmap. Not a beta blocker — the manual download flow via GitHub Releases works for initial beta testers. Becomes important once the user base grows beyond early adopters.
+
+### 13.5 Mutex Poison Recovery Logging
+
+**Problem**: 25+ instances of `.unwrap_or_else(|e| e.into_inner())` across all command files silently recover from mutex poisoning. If a panic occurs in a command that holds a lock (e.g., a rusqlite error that unwraps instead of mapping), subsequent commands continue with potentially corrupted state — with zero log trail. This makes debugging intermittent state corruption nearly impossible.
+
+**Current pattern** (every lock acquisition in `desktop/src/commands/`):
+```rust
+let conn = db.0.lock().unwrap_or_else(|e| e.into_inner());
+```
+
+**Fix**: Extract a helper and add `tracing::warn!`:
+
+```rust
+// In desktop/src/db/mod.rs or a shared util
+pub fn acquire<T>(mutex: &std::sync::Mutex<T>, name: &str) -> std::sync::MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(|e| {
+        tracing::warn!("Recovered poisoned {name} lock — a prior command panicked while holding this lock");
+        e.into_inner()
+    })
+}
+```
+
+Then replace all 25+ call sites:
+```rust
+// Before
+let conn = user_db.0.lock().unwrap_or_else(|e| e.into_inner());
+// After
+let conn = acquire(&user_db.0, "UserDb");
+```
+
+**Files changed**: `desktop/src/commands/favorites.rs`, `species.rs`, `settings.rs`, `design.rs`, `health.rs`, `adaptation.rs` (all files that lock `PlantDb`, `UserDb`, or `AppHealth`)
+
+**Risk**: None — behavior is unchanged (still recovers from poison). Just adds observability. The helper also reduces boilerplate at each call site.
+
+**When**: Wave 5 beta hardening or any convenient moment. Can be done in a single small PR.
+
+### Implementation Priority
+
+| # | Item | Impact | Effort | When |
+|---|------|--------|--------|------|
+| 13.2 | Remove shell plugin | Security (attack surface) | 5 min | Wave 5 |
+| 13.5 | Poison lock logging | Observability | 30 min | Wave 5 |
+| 13.1 | Enable CSP | Security (XSS defense) | 1 hr + testing | Wave 5 |
+| 13.3 | Binary IPC for tiles | Performance | 30 min | With S12 |
+| 13.4 | Auto-updater | Distribution | Days | Post-beta |
+
+Items 13.2, 13.5, and 13.1 are good Wave 5 candidates — they're small, low-risk, and improve the shipping quality of the beta. Items 13.3 and 13.4 are deferred to their natural implementation moments.
+
+### Interaction With Other Sections
+
+- **Section 10 (Image Loading Performance)**: S10 enables the asset protocol for image cache. When CSP (13.1) is later enabled, `img-src` must include `asset: http://asset.localhost`. The S10 spec already notes this.
+- **Section 12 (Map Layers)**: S12 phase 3 needs the same asset protocol for DEM tile cache. Binary IPC (13.3) is the fallback if asset protocol isn't available. S12 already documents both paths.
+- **Wave 5 beta hardening**: Items 13.1, 13.2, and 13.5 fit naturally into Wave 5's "fix beta-blocking regressions only" scope — they're security and observability improvements, not feature work.
+
+---
+
+## 14. Final Instruction
 
 Use this file as the canonical operational reference.
 
 Use archived docs only for historical context.
 
-With retained-surface Wave 3 closeout landed on 2026-03-30, the live verification rerun completed with Claude Code, the renderer stability gate closed, and Wave 4 design coherence landed on 2026-03-31, the next required step is Wave 5 beta release hardening on the surviving architecture:
+With retained-surface Wave 3 closeout landed on 2026-03-30, the live verification rerun completed with Claude Code, the renderer stability gate closed, Wave 4 design coherence landed on 2026-03-31, and Wave 5 beta hardening closed on 2026-04-01, the current operating rule is:
 - use `docs/release-verification.md`
-- keep the work narrow to packaged-app smoke verification and beta-release closeout
+- treat Wave 5 as complete unless a new beta-blocking defect reopens release hardening
+- Tauri platform hardening items 13.1 (CSP), 13.2 (shell removal), 13.5 (poison logging) remain valid follow-up candidates for the next beta patch wave
 - remove any stale scope language if the surviving beta-release surface changes again
 
 If a future change affects:

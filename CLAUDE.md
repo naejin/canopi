@@ -183,6 +183,7 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 - Image loading performance: `docs/todo.md` section 10 (asset protocol migration — scoped, not yet implemented)
 - Photo fit polish: `docs/todo.md` section 11 (object-fit contain — scoped, not yet implemented)
 - Map layers design spec: `docs/todo.md` section 12 (hidden MapLibre → rasterize → Konva, offline DEM caching, non-blocking pipeline)
+- Tauri platform hardening: `docs/todo.md` section 13 (CSP, shell removal, binary IPC, auto-updater, poison logging)
 - Rewrite history: `docs/archive/rewrite-history-2026-03.md`
 - Data quality audit: `docs/db/codex-review.md` (filter value audit — scientific correctness, translation coverage, app vs canopi-data ownership)
 - Completed phase plans + reviews: `docs/archive/`
