@@ -50,6 +50,7 @@ cd "$repo_root"
 require_cmd gh
 require_cmd python3
 require_cmd sha256sum
+require_cmd unzip
 
 detect_repo() {
   local remote
@@ -131,7 +132,7 @@ payload = json.loads(os.environ["ARTIFACT_JSON"])
 for artifact in payload.get("artifacts", []):
     if artifact.get("expired"):
         continue
-    print(f"{artifact['name']}\t{artifact['size_in_bytes']}")
+    print(f"{artifact['id']}\t{artifact['name']}\t{artifact['size_in_bytes']}")
 PY
 )
 
@@ -141,10 +142,17 @@ if [[ "${#artifact_lines[@]}" -eq 0 ]]; then
 fi
 
 for artifact_line in "${artifact_lines[@]}"; do
-  artifact_name="${artifact_line%%$'\t'*}"
-  artifact_size="${artifact_line#*$'\t'}"
+  artifact_id="${artifact_line%%$'\t'*}"
+  artifact_rest="${artifact_line#*$'\t'}"
+  artifact_name="${artifact_rest%%$'\t'*}"
+  artifact_size="${artifact_rest#*$'\t'}"
+  artifact_dir="$tmpdir/$artifact_name"
+  artifact_zip="$tmpdir/$artifact_name.zip"
   log "Downloading artifact '$artifact_name' ($(format_bytes "$artifact_size"))"
-  gh run download "$run_id" --repo "$repo" --dir "$tmpdir" -n "$artifact_name"
+  mkdir -p "$artifact_dir"
+  gh api "repos/$repo/actions/artifacts/$artifact_id/zip" > "$artifact_zip"
+  unzip -oq "$artifact_zip" -d "$artifact_dir"
+  rm -f "$artifact_zip"
 done
 
 manifest_dir="$tmpdir/canopi-release-candidate-manifest"
