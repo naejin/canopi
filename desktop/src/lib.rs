@@ -13,15 +13,45 @@ use tauri::Manager;
 
 pub struct AppHealth(pub Mutex<SubsystemHealth>);
 
+const PLANT_DB_BUNDLED_PATHS: &[&str] = &["resources/canopi-core.db", "canopi-core.db"];
+
+fn resolve_plant_db_path<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+) -> Option<std::path::PathBuf> {
+    // Tauri resource resolution must use the same relative path syntax as
+    // `tauri.conf.json > bundle > resources`. Because the config bundles
+    // `resources/canopi-core.db`, packaged apps must resolve that path first.
+    PLANT_DB_BUNDLED_PATHS
+        .iter()
+        .find_map(|resource_path| {
+            app.path()
+                .resolve(resource_path, tauri::path::BaseDirectory::Resource)
+                .ok()
+                .filter(|path| path.exists())
+        })
+        .or_else(|| {
+            // Dev fallback: look in desktop/resources/ relative to the manifest dir
+            let dev_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("resources")
+                .join("canopi-core.db");
+            if dev_path.exists() {
+                Some(dev_path)
+            } else {
+                None
+            }
+        })
+}
+
 pub fn run() {
-    let mut builder = tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|_app, _args, _cwd| {}))
         .plugin(tauri_plugin_dialog::init());
 
     #[cfg(debug_assertions)]
-    {
-        builder = builder.plugin(tauri_plugin_mcp_bridge::init());
-    }
+    let builder = builder.plugin(tauri_plugin_mcp_bridge::init());
+
+    #[cfg(not(debug_assertions))]
+    let builder = builder;
 
     builder
         .invoke_handler(tauri::generate_handler![
@@ -98,18 +128,7 @@ pub fn run() {
             // Plant DB (read-only, bundled resource)
             // In dev mode, the resource resolver may not find bundled files,
             // so fall back to the source path in the repo.
-            let plant_db_path = app
-                .path()
-                .resolve("canopi-core.db", tauri::path::BaseDirectory::Resource)
-                .ok()
-                .filter(|p| p.exists())
-                .or_else(|| {
-                    // Dev fallback: look in desktop/resources/ relative to the manifest dir
-                    let dev_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                        .join("resources")
-                        .join("canopi-core.db");
-                    if dev_path.exists() { Some(dev_path) } else { None }
-                });
+            let plant_db_path = resolve_plant_db_path(app.handle());
 
             let plant_db_status = match plant_db_path {
                 Some(path) => {
