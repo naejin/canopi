@@ -95,7 +95,9 @@ export const currentConsortiums = signal<Consortium[]>([])
 export const highlightedConsortium = signal<string | null>(null)
 
 // Bottom panel
-export type BottomPanelTab = 'location'
+export type BottomPanelTab = 'location' | 'timeline' | 'budget' | 'consortium'
+export const BOTTOM_PANEL_TABS: BottomPanelTab[] = ['location', 'timeline', 'budget', 'consortium']
+export const VISIBLE_BOTTOM_PANEL_TABS: BottomPanelTab[] = ['location']
 export const bottomPanelOpen = signal<boolean>(false)
 export const bottomPanelTab = signal<BottomPanelTab>('location')
 export const bottomPanelHeight = signal<number>(240)

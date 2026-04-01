@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { bottomPanelOpen, bottomPanelTab } from '../state/canvas'
+import { BOTTOM_PANEL_TABS, bottomPanelOpen, bottomPanelTab } from '../state/canvas'
 import { openBottomPanel, setBottomPanelTab } from '../state/canvas-actions'
 
 beforeEach(() => {
@@ -8,18 +8,20 @@ beforeEach(() => {
 })
 
 describe('bottom panel actions', () => {
-  it('opens the location tab directly from the launcher flow', () => {
-    openBottomPanel('location')
+  it('supports every bottom panel tab internally when opened directly', () => {
+    for (const tab of BOTTOM_PANEL_TABS) {
+      openBottomPanel(tab)
 
-    expect(bottomPanelOpen.value).toBe(true)
-    expect(bottomPanelTab.value).toBe('location')
+      expect(bottomPanelOpen.value).toBe(true)
+      expect(bottomPanelTab.value).toBe(tab)
+    }
   })
 
-  it('keeps the panel open when setting the same tab', () => {
+  it('keeps the panel open when switching tabs after opening', () => {
     openBottomPanel('location')
-    setBottomPanelTab('location')
+    setBottomPanelTab('timeline')
 
     expect(bottomPanelOpen.value).toBe(true)
-    expect(bottomPanelTab.value).toBe('location')
+    expect(bottomPanelTab.value).toBe('timeline')
   })
 })

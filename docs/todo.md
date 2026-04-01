@@ -49,6 +49,9 @@ Deferred after live review:
 - budget workflows
 - consortium flows
 
+Current implementation note:
+- keep internal tab plumbing if it helps future reactivation, but keep timeline, budget, and consortium hidden from the live bottom-panel launcher until a later product phase explicitly reopens them
+
 Wave 5 beta hardening is complete on the surviving architecture. It does not claim that the broader product roadmap is complete.
 
 ---

@@ -1,13 +1,25 @@
 import { t } from '../../i18n'
 import { locale } from '../../state/app'
-import { bottomPanelOpen, bottomPanelTab, type BottomPanelTab } from '../../state/canvas'
+import {
+  bottomPanelOpen,
+  bottomPanelTab,
+  type BottomPanelTab,
+  VISIBLE_BOTTOM_PANEL_TABS,
+} from '../../state/canvas'
 import { openBottomPanel, setBottomPanelOpen } from '../../state/canvas-actions'
 import styles from './BottomPanelLauncher.module.css'
 
-const TABS: BottomPanelTab[] = ['location']
-
-function getLabel(_tab: BottomPanelTab): string {
-  return t('canvas.location.title')
+function getLabel(tab: BottomPanelTab): string {
+  switch (tab) {
+    case 'location':
+      return t('canvas.location.title')
+    case 'timeline':
+      return t('canvas.bottomPanel.timeline')
+    case 'budget':
+      return t('canvas.bottomPanel.budget')
+    case 'consortium':
+      return t('canvas.bottomPanel.consortium')
+  }
 }
 
 export function BottomPanelLauncher() {
@@ -26,7 +38,7 @@ export function BottomPanelLauncher() {
 
   return (
     <div className={styles.launcher} role="tablist" aria-label={t('canvas.bottomPanel.ariaLabel')}>
-      {TABS.map((tab) => (
+      {VISIBLE_BOTTOM_PANEL_TABS.map((tab) => (
         <button
           key={tab}
           type="button"

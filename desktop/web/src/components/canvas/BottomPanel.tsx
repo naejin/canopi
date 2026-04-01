@@ -1,29 +1,43 @@
+import type * as preact from 'preact'
 import { useEffect, useState } from 'preact/hooks'
-import { bottomPanelHeight, bottomPanelOpen } from '../../state/canvas'
+import { bottomPanelHeight, bottomPanelOpen, bottomPanelTab, type BottomPanelTab } from '../../state/canvas'
 import { setBottomPanelHeight } from '../../state/canvas-actions'
 import styles from './BottomPanel.module.css'
 
-type LocationComponent = typeof import('./LocationTab').LocationTab
+type BottomPanelComponent = () => preact.JSX.Element
+
+async function loadBottomPanelTab(tab: BottomPanelTab): Promise<BottomPanelComponent> {
+  switch (tab) {
+    case 'location':
+      return (await import('./LocationTab')).LocationTab
+    case 'timeline':
+      return (await import('./TimelineTab')).TimelineTab
+    case 'budget':
+      return (await import('./BudgetTab')).BudgetTab
+    case 'consortium':
+      return (await import('./ConsortiumTab')).ConsortiumTab
+  }
+}
 
 export function BottomPanel() {
-  const [LocationTab, setLocationTab] = useState<LocationComponent | null>(null)
+  const [PanelContent, setPanelContent] = useState<BottomPanelComponent | null>(null)
 
   const open = bottomPanelOpen.value
   const height = bottomPanelHeight.value
+  const tab = bottomPanelTab.value
 
   useEffect(() => {
     let cancelled = false
 
-    if (!LocationTab) {
-      void import('./LocationTab').then((module) => {
-        if (!cancelled) setLocationTab(() => module.LocationTab)
-      })
-    }
+    setPanelContent(null)
+    void loadBottomPanelTab(tab).then((component) => {
+      if (!cancelled) setPanelContent(() => component)
+    })
 
     return () => {
       cancelled = true
     }
-  }, [LocationTab])
+  }, [tab])
 
   if (!open) return null
 
@@ -31,7 +45,7 @@ export function BottomPanel() {
     <div className={styles.panel} style={{ height: `${height}px` }}>
       <ResizeHandle />
       <div className={styles.content}>
-        {LocationTab ? <LocationTab /> : null}
+        {PanelContent ? <PanelContent /> : null}
       </div>
     </div>
   )
