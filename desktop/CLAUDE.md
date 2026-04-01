@@ -32,6 +32,7 @@
 ## Tauri v2 Gotchas
 - **No `convertFileSrc()` for local files**: The `asset://` protocol is not scoped in `capabilities/main-window.json`. Serving local files to the WebView requires base64 data URLs from Rust. Adding `fs:allow-read` scope would fix it properly but needs capability config work
 - **Image base64 bottleneck**: `get_cached_image_url` encodes images as base64 data URLs (~2.7MB IPC payload per 2MB image), freezing the UI. Planned fix: enable scoped asset protocol + `convertFileSrc()`. See `docs/todo.md` section 10. Do not extend the base64 pattern to new image surfaces
+- **Optimized binary IPC**: For returning large binary data (tiles, images), use `tauri::ipc::Response::new(bytes)` instead of JSON serialization — arrives as `ArrayBuffer` in JS, no base64 overhead. For streaming chunks, use `tauri::ipc::Channel<&[u8]>`
 - **`ureq` for blocking HTTP in Tauri commands**: Use `ureq` (not `reqwest`) — lightweight, no async runtime needed, fits Tauri's sync command thread pool. Already in `desktop/Cargo.toml`
 - **`tauri.conf.json` beforeDevCommand path**: Runs from project root. Uses `npm run --prefix desktop/web dev`, NOT `npm run dev`
 - **tauri-specta**: Deferred — specta rc ecosystem has version conflicts. Using plain `generate_handler![]` until stable

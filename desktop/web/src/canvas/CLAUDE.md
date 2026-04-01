@@ -62,6 +62,8 @@ External code uses `CanvasEngine` methods only. Never import from `runtime/*.ts`
 - `_chromeEnabled` signal: controls grid/ruler visibility — must be a signal so effects track it
 - Display modes: `display-modes.ts` has `updatePlantDisplay()` + `getLegendEntries()`. Signals: `plantDisplayMode` (`'default'`/`'canopy'`/`'color-by'`) and `plantColorByAttr` in `state/canvas.ts`. UI controls in `DisplayModeControls.tsx` + `DisplayLegend.tsx`
 - Plant tooltip: HTML `<div>` overlay in `engine.ts` (not Konva text). `pointer-events: none`. Positioned via `stage.getAbsoluteTransform()`. Uses safe DOM methods (no innerHTML)
+- Map layer rendering: `runtime/map-layer.ts` (deferred — see `docs/todo.md` S12). Hidden MapLibre → `createImageBitmap()` → Konva.Image on `contours` layer. Never use `toDataURL()` for canvas rasterization — it blocks main thread 20–80ms on GPU readback
+- `projection.ts` bridges Konva ↔ MapLibre coordinates: `stageScaleToMapZoom()`, `worldToGeo()`/`geoToWorld()`, `stageViewportCenter()`
 - Plant LOD labels: threshold at `stageScale >= 5`. Nearest-neighbor density check (squared distances, no sqrt). Selected plants always show labels. Stacked plants get moss-green count badge
 
 ## Render Pipeline Ownership

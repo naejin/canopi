@@ -96,6 +96,7 @@ These files have concentrated authority. **One writer at a time** — do not ass
 5. For multi-feature i18n work: **batch all i18n keys in one early phase** to prevent 11-file merge conflicts across parallel agents
 6. Before planning new features: **explore the codebase for existing implementations** — code may already exist (e.g., copy-paste, favorites backend, display mode rendering were all discovered pre-built during MVP planning)
 7. Run `/simplify` after implementation — converges in ~3 rounds: R1 structural, R2 duplication exposed by R1 fixes, R3 confirms convergence
+8. For async canvas features: audit every pipeline operation for main-thread blocking — use `createImageBitmap()` (never `toDataURL()`), epoch guards for cancellation, `requestIdleCallback` for deferred init. See `docs/todo.md` section 12 "Non-Blocking Guarantee" as the reference pattern
 
 ### Banned Patterns (enforced by plugin hooks)
 - **No React**: Import from `preact`, `preact/hooks`, `preact/compat` — never `react`
@@ -180,6 +181,8 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 - Design system: `.interface-design/system.md`
 - Release operations: `docs/release-operations.md` (CI workflows, promotion scripts, DB publishing)
 - Image loading performance: `docs/todo.md` section 10 (asset protocol migration — scoped, not yet implemented)
+- Photo fit polish: `docs/todo.md` section 11 (object-fit contain — scoped, not yet implemented)
+- Map layers design spec: `docs/todo.md` section 12 (hidden MapLibre → rasterize → Konva, offline DEM caching, non-blocking pipeline)
 - Rewrite history: `docs/archive/rewrite-history-2026-03.md`
 - Data quality audit: `docs/db/codex-review.md` (filter value audit — scientific correctness, translation coverage, app vs canopi-data ownership)
 - Completed phase plans + reviews: `docs/archive/`

@@ -381,13 +381,13 @@ Can be fixed independently if needed:
 Still deferred beyond Wave 5 beta:
 - plant color assignment (see section 9)
 - image loading performance — asset protocol migration (see section 10)
-- detail-card photo fit polish
-- map layers
+- detail-card photo fit polish (see section 11)
+- map layers — contours, hillshade, raster base map on canvas (see section 12)
 - world map with featured designs / template import
 - timeline workflows
 - budget workflows
 - consortium flows
-- geo / terrain workflows
+- geo / terrain workflows (offline DEM caching — see section 12 phase 3)
 - export workflows
 - knowledge / learning surfaces
 
@@ -808,7 +808,428 @@ If the app ever shows multiple species photos simultaneously (e.g., search resul
 
 ---
 
-## 11. Final Instruction
+## 11. Detail Card Photo Fit (Design Spec)
+
+### Problem
+
+Plant photos in `PhotoCarousel` use `object-fit: cover` inside a fixed 3:2 container. This crops images to fill the frame — losing edges, canopy shape, growth habit, and other identification-critical detail. Botanical source photos vary wildly in aspect ratio (portrait, landscape, square, macro), so the crop is unpredictable and often removes the most informative parts of the image.
+
+### Current Implementation
+
+```css
+.imageContainer {
+  aspect-ratio: 3 / 2;      /* fixed container */
+  overflow: hidden;
+}
+.image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;         /* scale + crop to fill */
+}
+```
+
+The container dimensions are stable — `aspect-ratio: 3 / 2` on a panel-width block. The panel width does not need to change.
+
+### Fix: `object-fit: contain`
+
+Switch to `object-fit: contain` so the full image is always visible. The container keeps its 3:2 aspect ratio — non-matching images get letterboxed (bars top/bottom) or pillarboxed (bars left/right) within the same box.
+
+**Why contain is better UX here:**
+- **Identification context** — users open the detail card to identify a plant. Cropping the leaf edges, canopy silhouette, or flower arrangement defeats that purpose
+- **Photo source diversity** — images come from multiple providers (iNaturalist, USDA, etc.) with no consistent aspect ratio. `cover` silently loses different content per image; `contain` is predictable
+- **Panel stability** — the container is already dimension-locked. No layout shift from the change
+
+**Tradeoff:** Visible background bars when the image doesn't match 3:2. Three options, in order of complexity:
+
+| Option | Approach | Complexity |
+|---|---|---|
+| A | Surface background (`var(--color-surface)`) | CSS-only, already set |
+| B | Subtle tinted background (e.g. `var(--color-surface-alt)`) | CSS-only, one token |
+| C | Blurred backdrop (duplicate `<img>` with `object-fit: cover` + `filter: blur(20px)` + low opacity behind the main image) | Extra DOM element + CSS |
+
+**Recommendation:** Start with **Option A** — the existing `background: var(--color-surface)` already handles this. The field notebook aesthetic favors clean, restrained surfaces over decorative blur. Option C can be revisited if the letterboxing feels too stark in practice, but it's likely unnecessary.
+
+### Implementation
+
+Single CSS change:
+
+```css
+/* PhotoCarousel.module.css */
+.image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;    /* was: cover */
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+```
+
+No component changes. No i18n. No data model. No Rust changes.
+
+### Files Changed
+
+| File | Change |
+|---|---|
+| `desktop/web/src/components/plant-detail/PhotoCarousel.module.css` | `object-fit: cover` → `object-fit: contain` |
+
+### Interaction With Section 10 (Image Loading Performance)
+
+This change is fully orthogonal to the asset protocol migration. Both improve the photo experience from different angles:
+- Section 10 fixes *when* the image appears (eliminating base64 IPC freeze)
+- Section 11 fixes *how* the image appears (showing the full photo instead of a crop)
+
+Either can ship independently. If both land, the combined effect is: photos load instantly *and* show the complete image.
+
+### Risk
+
+- **Minimal** — one CSS property change, no layout shift, no JS changes
+- **Placeholder unchanged** — the no-photo placeholder already uses `aspect-ratio: 3 / 2` with centered icon, unaffected by this change
+- **Nav arrows / source badge** — positioned absolutely within `.imageContainer`, unaffected by object-fit mode
+- **Dark mode** — `var(--color-surface)` already has a dark theme override, letterbox bars will match
+
+---
+
+## 12. Map Layers on Canvas (Design Spec)
+
+### Problem
+
+When a user sets or updates a design location via the bottom panel, nothing happens on the canvas — the `contours` and `climate` Konva layers remain empty stubs. The design's geographic context (terrain, elevation, surrounding features) is invisible. For agroecological design, elevation contours are critical — they determine water flow, microclimate zones, and planting strategy. This information should appear on the canvas as soon as a location is set, respecting the layer display settings that already exist.
+
+### Layer Scope
+
+Three map layer types, ordered by value and feasibility:
+
+| Layer | Konva target | Data source | Offline | Online | Priority |
+|---|---|---|---|---|---|
+| **Elevation contours** | `contours` | AWS Terrain Tiles (DEM, Terrarium) → `maplibre-contour` client-side generation | Yes — cached DEM tiles | Yes — live DEM fetch | P0 |
+| **Hillshade** | `contours` (same layer, rendered behind contour lines) | Same DEM source | Yes — same cached tiles | Yes | P1 |
+| **Raster base map** | `climate` (repurposed) | OSM raster tiles (street) or satellite provider | Yes — cached via `download_tiles` backend | Yes — live fetch | P2 |
+
+**Out of scope**: parcel/cadastral boundaries (requires country-specific data sources), climate zone overlays (no free global source), water features (insufficient open data at garden scale).
+
+The `contours` layer already exists in the 7-layer Konva stack and is non-listening (no pointer events). The `climate` layer is similarly stubbed. Both have visibility/opacity/lock controls wired through `LayerPanel.tsx` signals — they just need content.
+
+### Architecture: Hidden MapLibre → Rasterize → Konva Image
+
+Use a hidden (off-screen) MapLibre GL instance to render map tiles, then rasterize the result onto the appropriate Konva layer as a `Konva.Image` node. This approach was chosen over the alternative (MapLibre canvas behind Konva) because:
+
+- **Layer controls work natively** — Konva layer `visible()`, `opacity()`, and lock state apply without CSS workarounds
+- **Export-ready** — when PNG/PDF export is built, map layers are already part of the Konva stage
+- **Reconciler-compatible** — updates flow through `reconciler.invalidate('material')` like all other visual changes
+- **No compositing tricks** — no need to make Konva canvas transparent or manage z-index between two canvas systems
+
+**Rendering flow** (fully async — see Non-Blocking Guarantee section for freeze-risk audit):
+```
+1. Create hidden MapLibre instance (display:none div, fixed size e.g. 2048×2048)
+2. Configure with DEM source + contour/hillshade layers from contours.ts
+3. Set center/zoom to match Konva viewport (via projection.ts conversions)
+4. await MapLibre 'idle' event (tiles fetched + contours generated in Web Workers)
+5. await createImageBitmap(map.getCanvas()) — async pixel copy, off main thread
+6. Create/update Konva.Image on the `contours` layer with the ImageBitmap
+7. Position the Konva.Image in world coordinates to align with the viewport
+```
+**Never use `toDataURL()`** — it blocks the main thread for GPU readback + PNG encode (20–80ms on 2048×2048). `createImageBitmap()` does the same work asynchronously.
+
+**MapLibre container setup:**
+- Hidden div appended to document body: `position: absolute; left: -9999px; width: 2048px; height: 2048px`
+- `preserveDrawingBuffer: true` (required for `toDataURL()`)
+- Single instance, created on first location set, destroyed on engine teardown
+- Resource ownership: the map lifecycle owner is `CanvasEngine` (or a new `map-layer.ts` runtime module)
+
+### Zoom Mapping (Already Solved)
+
+`projection.ts` already provides the complete coordinate bridge:
+
+| Function | Purpose |
+|---|---|
+| `stageScaleToMapZoom(stageScale, lat)` | Konva px/m → MapLibre zoom level |
+| `worldToGeo(x, y, originLat, originLon)` | Canvas meters → lng/lat |
+| `geoToWorld(lng, lat, originLat, originLon)` | lng/lat → canvas meters |
+| `stageViewportCenter(stage, originLat, originLon)` | Viewport center in geographic coords |
+
+**Zoom range mapping** (at 45°N latitude):
+
+| Konva stageScale (px/m) | MapLibre zoom | Typical use |
+|---|---|---|
+| 0.1 (min) | ~13.4 | Regional overview — 100m contours |
+| 1 | ~16.8 | Neighborhood — 20m contours |
+| 5 | ~19.1 | Garden scale — 5m contours |
+| 50 | ~22.4 | Close detail — 5m contours (DEM max) |
+| 200 (max) | ~24.4 | Extreme close — beyond DEM resolution |
+
+The contour interval ladder in `contours.ts` already adapts to MapLibre zoom: 100m→50m→20m→10m→5m as zoom increases. The user can override with a fixed interval via the `contour_interval` setting (already in the Settings struct, currently unused).
+
+**DEM ceiling**: AWS Terrain Tiles max at zoom 15. Beyond that, `maplibre-contour` overzooms (interpolates), so contour detail plateaus. This is fine — at garden scale (stageScale > 5), the user is placing individual plants, not reading terrain. Contours are most useful at stageScale 0.1–5 (landscape-to-garden transition).
+
+### Viewport Sync Strategy
+
+The Konva viewport moves continuously during pan/zoom. Re-rendering MapLibre on every frame is too expensive. Strategy: **overscan render + deferred re-render**.
+
+1. **Overscan buffer**: render MapLibre at 2× the visible viewport (the hidden container is larger than the screen). The Konva.Image covers more world area than currently visible
+2. **Viewport guard**: on each `applyStageTransform`, check if the viewport center has moved more than 25% of the cached render extent. If not, do nothing — the existing Konva.Image still covers the visible area
+3. **Deferred re-render**: when the guard trips, schedule a MapLibre re-render after a debounce (300ms idle after last pan/zoom event). Don't re-render during active interaction
+4. **Zoom threshold**: if the zoom level changes by more than 2 MapLibre zoom levels from the cached render, trigger an immediate re-render (contour interval may have changed)
+
+**Alignment**: the Konva.Image is positioned in world coordinates using `geoToWorld()`. When the user pans, the image moves with the stage transform (it's a Konva node on a layer). Only when the viewport moves past the overscan boundary does a new render occur.
+
+**Render sizing**: the hidden MapLibre container renders at a fixed resolution (e.g., 2048×2048). The world extent covered depends on the MapLibre zoom level. At MapLibre zoom 16 (stageScale ~1), 2048px covers ~2048m. With 2× overscan on a 1920px screen, the cache covers ~4× the visible width — the user can pan significantly before triggering a re-render.
+
+### Tile Caching Strategy (Offline Support)
+
+**Online mode**: MapLibre fetches DEM tiles from AWS (`s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png`) on demand. No caching needed — tiles are small (~30KB each at zoom 12) and load fast.
+
+**Offline mode**: pre-download DEM tiles for the design's area so contours render without network.
+
+**Backend changes**: extend `tiles.rs` to support multiple tile sources. The existing `download_tiles` command downloads OSM raster tiles. Add a parallel `download_dem_tiles` command (or parameterize the existing one) that downloads from the DEM URL template.
+
+**Download trigger**: when the user confirms a location in the bottom panel, offer a "Download terrain for offline use" action. Calculate bbox from design location:
+- Default radius: 2km from design center → bbox of ~4km × 4km
+- User-adjustable radius (small garden: 500m, large farm: 5km)
+- Zoom range: 0–15 (full DEM resolution)
+- Tile count at 2km radius, z0–15: ~1,200 tiles, ~35MB (manageable)
+
+**Storage structure** (parallel to existing raster tiles):
+```
+~/.local/share/canopi/
+  tiles/          # existing — OSM raster tiles
+  dem-tiles/      # new — DEM terrain tiles
+    {z}/{x}/{y}.png
+    manifest.json
+```
+
+**MapLibre offline integration**: MapLibre supports custom `transformRequest` to intercept tile fetches. When offline (or when cached tiles exist):
+1. Intercept DEM tile requests via `transformRequest`
+2. Check `dem-tiles/{z}/{x}/{y}.png` on disk
+3. If cached: serve via asset protocol (`convertFileSrc()`) or base64 IPC
+4. If not cached + offline: return empty/transparent tile (contours degrade gracefully — gaps, not errors)
+5. If not cached + online: let MapLibre fetch normally, optionally cache the response
+
+**Gotcha**: MapLibre runs in the WebView and can't read local files directly. Cached tile serving options:
+- **Asset protocol** (preferred, same as section 10): scope `$APPDATA/dem-tiles/**` in asset protocol config. MapLibre `transformRequest` rewrites DEM URLs to `http://asset.localhost/...` paths via `convertFileSrc(cachePath)`. CSP is currently `null` (no restriction), so no CSP update needed unless CSP is later enabled (would need `img-src asset: http://asset.localhost`)
+- **Optimized IPC binary transfer** (fallback): use `tauri::ipc::Response` to return raw tile bytes without JSON serialization overhead. This avoids the base64 bottleneck documented in section 10 — Tauri v2 can return `Response::new(bytes)` as an ArrayBuffer directly to JS. Frontend creates a Blob URL from the ArrayBuffer for MapLibre consumption
+- **IPC streaming** (for bulk tile pre-fetch): use `tauri::ipc::Channel<&[u8]>` to stream tile data chunk-by-chunk during download, enabling real-time progress without blocking the main thread
+
+**Tauri v2 features that help** (from docs):
+- `convertFileSrc(filePath)` — converts local file path to `http://asset.localhost/...` URL loadable by WebView. Requires `assetProtocol.enable: true` + scope in `tauri.conf.json`
+- `tauri::ipc::Response` — optimized binary return from Rust commands, bypasses JSON serialization. Use for `get_dem_tile` if asset protocol isn't available
+- `tauri::ipc::Channel` — streaming IPC channel for sending data chunks from Rust to JS. Use for download progress + tile data streaming during bulk cache operations
+- `@tauri-apps/plugin-http` `fetch()` — scoped HTTP client with proxy support. Alternative to `ureq` for tile downloads if async is preferred, but current `ureq` approach in `tiles.rs` works fine for sync command thread pool
+
+### Non-Blocking Guarantee
+
+Every step in the map layer pipeline must be non-blocking. The user must be able to pan, zoom, draw, and interact with the canvas at all times — even while tiles are loading, contours are generating, or the rasterized image is being prepared. A loading indicator on the contours layer is acceptable; a frozen app is not.
+
+**Freeze-risk audit — every blocking operation and its mitigation:**
+
+| # | Operation | Risk | Mitigation |
+|---|---|---|---|
+| 1 | **MapLibre initialization** (WebGL context, shader compile) | 100–300ms sync on first call | Defer to `requestIdleCallback` or first `requestAnimationFrame` after location set. Show "Loading terrain..." placeholder on contours layer immediately. User can keep working on other layers |
+| 2 | **DEM tile network fetch** (MapLibre fetching `{z}/{x}/{y}.png` from AWS) | 200ms–5s per tile, network-dependent | MapLibre handles this internally via Web Workers + async fetch. Already non-blocking. The hidden map fires `idle` when done — no main-thread waiting. Show a loading state until `idle` fires |
+| 3 | **`maplibre-contour` isolines generation** (CPU-intensive DEM→vector conversion) | 50–200ms per tile, runs in MapLibre's Web Worker | `maplibre-contour` registers a custom protocol that processes DEM tiles inside MapLibre's built-in Web Worker pool. Main thread is not blocked. Verify with profiling — if a tile batch causes jank, consider limiting concurrent DEM protocol requests |
+| 4 | **`canvas.toDataURL()` on 2048×2048 MapLibre canvas** | 20–80ms sync, blocks main thread (GPU readback + PNG encode) | **Replace with `createImageBitmap()`**: use `map.getCanvas()` → `createImageBitmap(canvas)` which returns a `Promise<ImageBitmap>` and does the pixel copy off the main thread. `ImageBitmap` can be drawn directly to a Konva `<canvas>` via `drawImage()`. Avoids the PNG encode/decode round-trip entirely |
+| 5 | **Konva.Image node creation/update** | < 1ms (just sets a reference) | Not a concern. `new Konva.Image({ image: bitmap })` is synchronous but trivial |
+| 6 | **Bulk DEM tile download** (offline caching, ~1,200 tiles) | 30s–5min total, sequential HTTP | Already runs in Rust on Tauri's sync command thread pool — **not** the main thread. Frontend receives progress via `tile-download-progress` events. Add a cancel signal (`tauri::ipc::Channel` or abort flag) so the user can stop a long download. Show progress bar in the bottom panel, keep app fully interactive |
+| 7 | **`transformRequest` tile cache lookup** (checking disk for cached tile) | IPC round-trip per tile (5–15ms each) | For asset protocol path: `convertFileSrc()` is a pure string transform (no IPC), so the rewritten URL is instant. For IPC fallback: batch cache-status checks — `get_cached_dem_tile_paths(z, xRange, yRange)` returns a map of `{z/x/y → localPath | null}` in one call, then `transformRequest` reads from that map synchronously. Never do per-tile IPC inside `transformRequest` |
+| 8 | **Viewport sync re-render** (debounced MapLibre re-render on pan/zoom) | Combines risks 2+3+4 above | Debounce ensures this never fires during active interaction (300ms idle gate). The overscan buffer means most pans don't trigger a re-render at all. When it does fire, steps 2+3 are Web Worker-async and step 4 uses `createImageBitmap()` — no main-thread freeze |
+
+**Key implementation pattern — the async render pipeline:**
+
+```typescript
+// In map-layer.ts — all async, never blocks main thread
+
+async function renderContourTile(): Promise<void> {
+  // 1. Update MapLibre view (instant, just sets internal state)
+  hiddenMap.setCenter([lon, lat])
+  hiddenMap.setZoom(mapZoom)
+
+  // 2. Wait for tiles + contour generation (async — Web Workers)
+  await new Promise<void>(resolve => {
+    hiddenMap.once('idle', resolve)
+  })
+
+  // 3. Rasterize off main thread (async — no GPU readback stall)
+  const bitmap = await createImageBitmap(hiddenMap.getCanvas())
+
+  // 4. Apply to Konva (sync but trivial — < 1ms)
+  contourImage.image(bitmap)
+  contourImage.setAttrs({ /* world-coordinate position */ })
+
+  // 5. Invalidate through reconciler (batched, next rAF)
+  reconciler.invalidate('material')
+}
+```
+
+**Cancellation / epoch guard:**
+
+Multiple location changes or viewport moves can queue up render requests. Use an epoch counter to discard stale renders:
+
+```typescript
+let renderEpoch = 0
+
+async function requestRender(): Promise<void> {
+  const epoch = ++renderEpoch
+
+  // ... await MapLibre idle ...
+  if (epoch !== renderEpoch) return  // stale — newer request superseded this one
+
+  // ... await createImageBitmap ...
+  if (epoch !== renderEpoch) return  // stale — discard
+
+  // ... apply to Konva ...
+}
+```
+
+This prevents pile-up: if the user changes location 3 times quickly, only the last render completes. No wasted work, no race conditions.
+
+**Loading indicator:**
+
+While the async pipeline is in-flight (between location change and `idle` + rasterization complete):
+- Show a subtle loading state on the contours layer — e.g., a pulsing border or muted "Loading terrain..." text at the layer's center (Konva.Text node, removed on completion)
+- The rest of the canvas remains fully interactive
+- If the render fails (network error, WebGL context lost), show a brief toast and leave the contours layer empty — never block or retry in a loop
+
+**Offline download UX:**
+
+The bulk tile download (phase 3) must be:
+- Cancellable — abort button in the progress UI, sends cancel signal to Rust
+- Resumable — if cancelled or interrupted, the manifest records progress so the next attempt skips already-cached tiles
+- Non-modal — progress bar in the bottom panel, not a modal dialog. User continues working while tiles download in the background
+- Failure-tolerant — individual tile failures are logged and skipped (already the case in `tiles.rs`). Partial cache is usable — contours render where tiles exist, gaps where they don't
+
+### Location Change → Layer Update Flow
+
+The reactive chain when a user sets or updates location:
+
+```
+User confirms location in bottom panel
+  → setDesignLocation(lat, lon) in location-actions.ts
+    → designLocation signal updates
+    → effect() in map-layer runtime module detects change
+      → show loading indicator on contours layer (sync, instant)
+      → hiddenMap.setCenter/setZoom (sync, instant)
+      → await MapLibre 'idle' (async — tiles + contour generation in Web Workers)
+      → epoch guard check (discard if stale)
+      → await createImageBitmap(hiddenMap.getCanvas()) (async — off main thread)
+      → epoch guard check (discard if stale)
+      → update Konva.Image on `contours` layer (sync, < 1ms)
+      → remove loading indicator
+      → reconciler.invalidate('material')
+      → layer visibility/opacity apply automatically via existing effects
+```
+
+The entire pipeline is async. The user can interact with the canvas at every step. If they change location again before the pipeline completes, the epoch guard discards the stale render.
+
+**No location set**: `contours` layer stays empty. No MapLibre instance created. Zero overhead.
+
+**Location cleared**: destroy MapLibre instance, remove Konva.Image from `contours` layer, `reconciler.invalidate('material')`.
+
+**Location updated** (moved to different coordinates): re-center MapLibre, re-render, replace Konva.Image. Existing canvas objects (plants, zones) stay in their world-coordinate positions — they were placed relative to the old origin. The map tiles shift to show the new terrain. This is correct: the user is saying "this design is actually located *here*" — the terrain should update, but the design layout shouldn't move.
+
+### Layer Display Controls
+
+**Existing infrastructure** (already wired, just needs content on the layers):
+
+| Control | Signal | Location | Status |
+|---|---|---|---|
+| Contour visibility | `layerVisibility['contours']` | `state/canvas.ts` | Wired, default `false` |
+| Contour opacity | `layerOpacity['contours']` | `state/canvas.ts` | Wired, default `1.0` |
+| Contour lock | `layerLockState['contours']` | `state/canvas.ts` | Wired, default `false` |
+| Contour interval | `Settings.contour_interval` | `common-types/settings.rs` | In schema, unused |
+| Hillshade visibility | `Settings.hillshade_visible` | `common-types/settings.rs` | In schema, unused |
+| Hillshade opacity | `Settings.hillshade_opacity` | `common-types/settings.rs` | In schema, unused |
+| Map layer visibility | `Settings.map_layer_visible` | `common-types/settings.rs` | In schema, unused |
+| Map style | `Settings.map_style` | `common-types/settings.rs` | In schema, unused |
+| Map opacity | `Settings.map_opacity` | `common-types/settings.rs` | In schema, unused |
+
+**LayerPanel changes**: currently shows 4 layers (annotations, plants, zones, base). Add `contours` to the panel when location is set (conditionally visible — no point showing a contour layer toggle when there's no location). The `climate` layer (raster base map) can be added in phase 3.
+
+**Contour settings surface**: a small settings section (in the layer panel or bottom panel) exposing:
+- Contour interval override (adaptive / 5m / 10m / 20m / 50m / 100m)
+- Hillshade toggle + opacity slider
+- These read/write the existing Settings fields via `persistCurrentSettings()`
+
+### Implementation Phases
+
+**Phase 1 — Hidden MapLibre + contour rendering (P0, offline-capable)**
+- Create `desktop/web/src/canvas/runtime/map-layer.ts` runtime module
+- Lifecycle: create hidden MapLibre div, configure DEM source + contour layers from `contours.ts`
+- Fully async render pipeline: `setCenter/setZoom` → `await idle` → `await createImageBitmap()` → Konva.Image update (see Non-Blocking Guarantee)
+- Epoch guard for render cancellation — rapid location changes or viewport moves discard stale renders, only the latest completes
+- Loading indicator on contours layer while render is in-flight (Konva.Text, removed on completion)
+- React to `designLocation` signal: trigger async render pipeline on change
+- React to viewport changes with overscan guard (25% drift threshold) + debounced re-render (300ms idle gate)
+- MapLibre init deferred to `requestIdleCallback` — never blocks first paint or interaction
+- Wire into `CanvasEngine` teardown for cleanup (destroy MapLibre instance, remove hidden div)
+- Add `contours` to `LayerPanel` (conditional on location existence)
+- Auto-set `layerVisibility['contours'] = true` when first location is set
+
+**Phase 2 — Hillshade + contour settings**
+- Add hillshade layer to the hidden MapLibre instance (from `getHillshadeLayerConfig()`)
+- Render hillshade behind contour lines on the same Konva layer
+- Wire `contour_interval`, `hillshade_visible`, `hillshade_opacity` settings to MapLibre layer paint properties
+- Add contour/hillshade settings UI (small collapsible section in LayerPanel or bottom panel)
+- Theme support: re-render on theme change (contour colors differ light/dark per `contours.ts`). Re-render is async — theme toggle is not blocked by map re-render
+
+**Phase 3 — Offline DEM tile caching**
+- Add `download_dem_tiles` command to `tiles.rs` (or parameterize existing `download_tiles`)
+- Add `desktop/web/src/ipc/tiles.ts` IPC stubs for tile download/status/removal
+- Add `transformRequest` to hidden MapLibre: intercept DEM URLs, serve from cache when available
+- Batch cache-status check: `get_cached_dem_tile_paths(z, xRange, yRange)` returns a map in one IPC call — never per-tile IPC inside `transformRequest`
+- Add "Download terrain for offline use" action in bottom panel location tab
+- Download is cancellable (abort signal to Rust), resumable (manifest tracks progress), non-modal (progress bar in bottom panel, app stays interactive)
+- Progress UI: reuse existing `tile-download-progress` event pattern
+- Scope `$APPDATA/dem-tiles/**` in asset protocol config (pairs with section 10 asset protocol work)
+
+**Phase 4 — Raster base map (P2, online-only initially)**
+- Add raster tile layer to hidden MapLibre (OSM or configurable style)
+- Rasterize to Konva.Image on the `climate` layer (repurposed)
+- Wire `map_layer_visible`, `map_style`, `map_opacity` settings
+- Add `climate` layer (renamed to "Map" in UI) to LayerPanel
+- Offline raster map support via existing `download_tiles` backend (already downloads OSM tiles)
+
+### Files Changed
+
+| File | Change | Phase |
+|---|---|---|
+| `desktop/web/src/canvas/runtime/map-layer.ts` | New — hidden MapLibre lifecycle, rasterization, viewport sync | 1 |
+| `desktop/web/src/canvas/engine.ts` | Wire map-layer module, teardown, location effect | 1 |
+| `desktop/web/src/canvas/contours.ts` | No change — already provides complete config | — |
+| `desktop/web/src/canvas/projection.ts` | No change — already provides coordinate bridge | — |
+| `desktop/web/src/components/canvas/LayerPanel.tsx` | Add contours/climate to panel (conditional) | 1 |
+| `desktop/web/src/state/canvas.ts` | Flip contour default visibility on location set | 1 |
+| `desktop/web/src/state/canvas-actions.ts` | Add contour settings actions | 2 |
+| `desktop/web/src/ipc/tiles.ts` | New — IPC stubs for tile download/status | 3 |
+| `desktop/src/commands/tiles.rs` | Add DEM tile download support | 3 |
+| `desktop/src/lib.rs` | Register new tile commands | 3 |
+| `desktop/tauri.conf.json` | Enable asset protocol + scope `dem-tiles` (pairs with S10). CSP is `null` — no restriction on external tile fetches | 3 |
+| `desktop/capabilities/main-window.json` | Add `dem-tiles` to fs:allow-read scope | 3 |
+| `desktop/web/src/i18n/locales/*.json` | Layer names, contour settings labels (11 locales) | 1 |
+
+### Interaction With Other Sections
+
+- **Section 10 (Image Loading Performance)**: Phase 3 tile caching benefits from the same asset protocol enablement. If section 10 lands first, the `assetProtocol` config just needs an additional scope entry for `dem-tiles`. If this lands first, section 10 gets the asset protocol for free
+- **Section 9 (Plant Color Assignment)**: Independent — color assignment affects plant circles, map layers affect the terrain backdrop. Both improve canvas readability from different angles
+- **Section 9.1 (Plant Label Improvements)**: Contour label text (elevation numbers) occupies a different visual layer and doesn't interact with plant label density suppression (contours are non-listening, plant density only scans the `plants` layer)
+
+### Risk
+
+- **MapLibre WebGL context limits**: browsers typically allow 8–16 WebGL contexts. The hidden MapLibre instance consumes one. If the main canvas or other components also use WebGL, context limits could be hit. Mitigation: create the hidden instance lazily (only when location is set), destroy when not needed
+- **Memory**: a 2048×2048 RGBA bitmap is ~16MB. With overscan, the cached image consumes non-trivial memory. Mitigation: reduce hidden container to 1024×1024 on low-memory devices, accept more frequent re-renders
+- **Rasterization quality at extreme zoom**: at very high Konva zoom (stageScale > 50), the rasterized image upscales and pixelates. Mitigation: at extreme zoom, the contours are decorative context, not primary information — pixelation is acceptable. Could re-render at higher resolution if needed
+- **`preserveDrawingBuffer` performance**: this MapLibre option prevents buffer clearing between frames, slightly reducing rendering performance. Mitigation: the hidden instance only renders on demand (not continuously), so the cost is per-render, not per-frame. Note: `preserveDrawingBuffer` is required for `createImageBitmap()` — without it, the canvas may be cleared before the async bitmap copy completes
+- **Theme flicker**: contour colors are baked into the MapLibre style, not CSS vars. On theme toggle, the MapLibre instance must re-render with dark/light colors. Mitigation: listen to `theme` signal, update MapLibre paint properties + re-rasterize asynchronously. The old image stays visible until the new one is ready — no blank flash
+- **WebGL context lost**: the browser can reclaim the hidden MapLibre WebGL context under memory pressure. Mitigation: listen for `webglcontextlost` on the hidden canvas, set a `contextLost` flag, and re-create the MapLibre instance on next render request. Never retry in a tight loop — use exponential backoff (1s → 2s → 4s, max 3 retries)
+- **Network failure during online tile fetch**: MapLibre fires `error` events for failed tile loads but continues rendering what it has. Contours will show gaps where tiles failed — acceptable degradation. Show a non-blocking toast ("Some terrain tiles failed to load") rather than blocking the render pipeline
+
+### Future Considerations
+
+- **Vector contours on Konva** (alternative to rasterization): instead of rasterizing MapLibre, extract GeoJSON contour lines from `maplibre-contour` directly and draw them as Konva.Line nodes. Better zoom quality, lower memory, but more complex rendering (hundreds of polylines per viewport) and loses hillshade. Evaluate if rasterization quality proves insufficient
+- **3D terrain preview**: MapLibre supports `terrain` property for 3D DEM extrusion. Could offer a "3D preview" mode that temporarily shows the hidden MapLibre map in a modal/overlay, letting the user rotate and explore terrain before returning to the 2D canvas
+- **Print/export integration**: when PNG/PDF export is rebuilt (deferred), the Konva.Image on the contours layer exports naturally via `stage.toDataURL()`. No special handling needed. For higher-quality print, could re-render MapLibre at print resolution before export
+
+---
+
+## 13. Final Instruction
 
 Use this file as the canonical operational reference.
 
