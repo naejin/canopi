@@ -2,7 +2,7 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MoreFiltersPanel } from '../components/plant-db/MoreFiltersPanel'
-import { dynamicOptionsCache, extraFilters } from '../state/plant-db'
+import { dynamicOptionsCache, dynamicOptionsErrors, dynamicOptionsPending, extraFilters } from '../state/plant-db'
 import { locale } from '../state/app'
 
 async function flushEffects(): Promise<void> {
@@ -20,6 +20,8 @@ describe('MoreFiltersPanel outside-click behavior', () => {
     locale.value = 'en'
     extraFilters.value = []
     dynamicOptionsCache.value = {}
+    dynamicOptionsPending.value = {}
+    dynamicOptionsErrors.value = {}
   })
 
   afterEach(() => {

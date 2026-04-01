@@ -40,6 +40,7 @@ beforeEach(() => {
   mocks.toggleFavorite.mockClear()
   mocks.getFavorites.mockClear()
   mocks.getRecentlyViewed.mockClear()
+  vi.restoreAllMocks()
 })
 
 describe('plant DB controller lifecycle', () => {
@@ -133,5 +134,64 @@ describe('plant DB controller lifecycle', () => {
 
     expect(plantDb.dynamicOptionsPending.value.fr?.habit).toBeUndefined()
     expect(plantDb.dynamicOptionsCache.value.fr?.habit?.values?.[0]?.label).toBe('Arbuste')
+  })
+
+  it('records a field-level error when IPC returns no options for a requested field', async () => {
+    const plantDb = await import('../state/plant-db')
+    const appState = await import('../state/app')
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    appState.locale.value = 'en'
+    ;(mocks.getDynamicFilterOptions as ReturnType<typeof vi.fn>).mockResolvedValueOnce([])
+
+    await plantDb.loadDynamicOptions(['habit'])
+
+    expect(plantDb.dynamicOptionsCache.value.en?.habit).toBeUndefined()
+    expect(plantDb.dynamicOptionsErrors.value.en?.habit).toBe(
+      plantDb.DYNAMIC_OPTIONS_BACKEND_MISMATCH_ERROR,
+    )
+  })
+
+  it('clears field-level errors after a successful retry', async () => {
+    const plantDb = await import('../state/plant-db')
+    const appState = await import('../state/app')
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    appState.locale.value = 'en'
+    ;(mocks.getDynamicFilterOptions as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          field: 'habit',
+          field_type: 'categorical',
+          values: [{ value: 'Shrub', label: 'Shrub' }],
+          range: null,
+        },
+      ])
+
+    await plantDb.loadDynamicOptions(['habit'])
+    expect(plantDb.dynamicOptionsErrors.value.en?.habit).toBe(
+      plantDb.DYNAMIC_OPTIONS_BACKEND_MISMATCH_ERROR,
+    )
+
+    await plantDb.loadDynamicOptions(['habit'])
+
+    expect(plantDb.dynamicOptionsErrors.value.en?.habit).toBeUndefined()
+    expect(plantDb.dynamicOptionsCache.value.en?.habit?.values?.[0]?.label).toBe('Shrub')
+  })
+
+  it('records thrown IPC errors per field', async () => {
+    const plantDb = await import('../state/plant-db')
+    const appState = await import('../state/app')
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    appState.locale.value = 'en'
+    ;(mocks.getDynamicFilterOptions as ReturnType<typeof vi.fn>)
+      .mockRejectedValueOnce(new Error('backend exploded'))
+
+    await plantDb.loadDynamicOptions(['habit'])
+
+    expect(plantDb.dynamicOptionsErrors.value.en?.habit).toBe('backend exploded')
+    expect(plantDb.dynamicOptionsPending.value.en?.habit).toBeUndefined()
   })
 })

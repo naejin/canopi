@@ -20,7 +20,7 @@ Specialized active implementation guidance lives in:
 
 - renderer follow-up and stabilization: `docs/renderer/renderer.md`
 - product scope lock: `docs/product-definition.md`
-- release hardening and rewrite-exit checks: `docs/release-verification.md`
+- release hardening and beta verification: `docs/release-verification.md`
 
 ---
 
@@ -41,7 +41,7 @@ Completed and archived:
 - release-blocking automated gates rerun locally
 
 Still active:
-- Wave 5 packaged-app smoke verification and rewrite-exit closeout
+- Wave 5 packaged-app smoke verification and beta-release closeout
 
 Deferred after live review:
 - featured-design world map / template import
@@ -49,7 +49,7 @@ Deferred after live review:
 - budget workflows
 - consortium flows
 
-The rewrite is not complete until the required product journeys pass end to end on the final surviving architecture.
+Wave 5 is now a beta-release hardening wave on the surviving architecture. It does not claim that the broader product roadmap is complete.
 
 ---
 
@@ -127,7 +127,7 @@ Status:
 Why it mattered:
 - the remaining renderer risk is behavioral, not architectural
 - retained-surface Wave 3 closeout is now landed on the surviving architecture
-- the gate is now about correctness under real use on the final rewrite-exit feature set
+- the gate is now about correctness under real use on the final retained-surface feature set
 
 How it was done:
 - use `docs/renderer/renderer.md` as the renderer-specific checklist
@@ -170,23 +170,25 @@ Current in-tree status:
   - `npx --prefix desktop/web tsc --noEmit -p desktop/web/tsconfig.json`
   - `npm test --prefix desktop/web`
   - `npm run build --prefix desktop/web`
-- the next active rewrite step is now Wave 5 packaged-app smoke verification and rewrite-exit closeout
+- the next active rewrite step is now Wave 5 packaged-app smoke verification and beta-release closeout
 
-### 3.3 Wave 5 Release Hardening
+### 3.3 Wave 5 Beta Release Hardening
 
 What is left:
-- rewrite-exit checklist and docs cleanup
-- supported-platform build and smoke verification
-- keep the release-blocking CI gates green on the final branch
+- beta-release checklist and docs cleanup
+- supported-platform packaged-app smoke verification
+- keep the release-blocking CI gates green on the candidate branch
+- keep the deferred backlog explicit so it does not leak into Wave 5
 
 Why it stays last:
-- release hardening should validate the finished product shape
-- it should not be used as a substitute for unresolved product or renderer work
+- beta hardening should validate the current retained-surface product shape
+- it should not be used as a substitute for unresolved roadmap or renderer work
 
 How to do it:
 - use `docs/release-verification.md`
 - keep Wave 5 narrow
-- fix release-impacting regressions only
+- fix beta-blocking regressions only
+- keep deferred product improvements documented as out of scope for this wave
 
 Current in-tree status:
 - automated release gates are landed and green locally on 2026-03-30:
@@ -198,7 +200,7 @@ Current in-tree status:
   - i18n completeness coverage against `en.json` via the frontend test suite
   - `npm run build --prefix desktop/web`
 - GitHub Actions already carries the release-build matrix and artifact upload
-- the remaining Wave 5 work is packaged-app smoke verification plus rewrite-exit docs/archive cleanup
+- the remaining Wave 5 work is packaged-app smoke verification plus beta-release docs cleanup and evidence capture
 
 ---
 
@@ -231,7 +233,7 @@ Current gate state:
 With the gate satisfied:
 - Wave 4 landed on the current retained-surface architecture on 2026-03-31
 - renderer-tied product redesigns are no longer blocked by renderer stability, but they still must respect the scope and sequencing rules in this file
-- the only remaining active rewrite wave is Wave 5 release hardening
+- the only remaining active rewrite wave is Wave 5 beta release hardening
 
 ---
 
@@ -360,8 +362,8 @@ These are implementation rules, not optional style preferences.
 
 ## 7. Active Blockers And Deferred Items
 
-Pending immediate closeout after Wave 3 landing:
-- any rewrite-exit claim that depends on real-user verification rather than automated checks
+Pending beta-release closeout:
+- any beta-release claim that lacks supported-platform packaged-app smoke evidence
 
 Now unblocked after renderer stability closeout:
 - Wave 4 design coherence
@@ -377,20 +379,24 @@ Can be fixed independently if needed:
 - resource ownership cleanup in rulers, text tool, and `WorldMapSurface`
 - deferred-pass data-shape cleanup in renderer internals
 
-Still deferred until post-rewrite product definition:
-- featured-design world map / template import
+Still deferred beyond Wave 5 beta:
+- color by plants
+- frontend lazy loading / performance improvements
+- detail-card photo fit polish
+- map layers
+- world map with featured designs / template import
 - timeline workflows
 - budget workflows
 - consortium flows
 - geo / terrain workflows
 - export workflows
-- learning content
+- knowledge / learning surfaces
 
 ---
 
-## 8. Rewrite-Exit User Journeys
+## 8. Beta-Release Core Journeys
 
-The rewrite is not complete until these journeys pass end to end:
+Wave 5 beta is not ready until these journeys pass end to end on the packaged app:
 
 1. Create, edit, save, load, and switch designs without losing work
 2. Search/filter the plant DB, inspect detail, favorite plants, and place them on canvas
@@ -400,7 +406,7 @@ The rewrite is not complete until these journeys pass end to end:
 6. Recover gracefully from network failure, disk failure, and invalid external data
 7. Use the app in light and dark themes without broken surfaces
 8. Use supported locales without missing keys or broken labels
-9. Meet release criteria on each supported platform at rewrite exit
+9. Meet beta-release criteria on each supported platform
 
 ---
 
@@ -410,15 +416,15 @@ Use this file as the canonical operational reference.
 
 Use archived docs only for historical context.
 
-With retained-surface Wave 3 closeout landed on 2026-03-30, the live verification rerun completed with Claude Code, the renderer stability gate closed, and Wave 4 design coherence landed on 2026-03-31, the next required step is Wave 5 release hardening on the surviving architecture:
+With retained-surface Wave 3 closeout landed on 2026-03-30, the live verification rerun completed with Claude Code, the renderer stability gate closed, and Wave 4 design coherence landed on 2026-03-31, the next required step is Wave 5 beta release hardening on the surviving architecture:
 - use `docs/release-verification.md`
-- keep the work narrow to packaged-app smoke verification and rewrite-exit closeout
-- remove any stale scope language if the surviving rewrite-exit surface changes again
+- keep the work narrow to packaged-app smoke verification and beta-release closeout
+- remove any stale scope language if the surviving beta-release surface changes again
 
 If a future change affects:
 - remaining wave order
 - blocker definitions
 - ownership rules
-- or rewrite-exit scope
+- or beta-release scope
 
 update this file directly and archive the completed detail that was removed from the active path.

@@ -39,6 +39,10 @@ export const filterOptions = signal<FilterOptions | null>(null);
 export const extraFilters = signal<DynamicFilter[]>([]);
 export const dynamicOptionsCache = signal<Record<string, Record<string, DynamicFilterOptions>>>({});
 export const dynamicOptionsPending = signal<Record<string, Record<string, boolean>>>({});
+export const dynamicOptionsErrors = signal<Record<string, Record<string, string>>>({});
+
+export const DYNAMIC_OPTIONS_BACKEND_MISMATCH_ERROR =
+  'Filter not exposed by running desktop backend. Restart the app after rebuilding.'
 
 // ── View state ────────────────────────────────────────────────────────────────
 
@@ -332,6 +336,15 @@ export async function loadDynamicOptions(fields: string[]): Promise<void> {
   const uncached = fields.filter((f) => !cacheForLocale[f] && !pendingForLocale[f]);
   if (uncached.length === 0) return;
 
+  const errorsForLocale = { ...(dynamicOptionsErrors.value[loc] ?? {}) };
+  for (const field of uncached) {
+    delete errorsForLocale[field];
+  }
+  dynamicOptionsErrors.value = {
+    ...dynamicOptionsErrors.value,
+    [loc]: errorsForLocale,
+  };
+
   dynamicOptionsPending.value = {
     ...dynamicOptionsPending.value,
     [loc]: {
@@ -343,12 +356,42 @@ export async function loadDynamicOptions(fields: string[]): Promise<void> {
   try {
     const options = await getDynamicFilterOptions(uncached, loc);
     const updatedLocale = { ...(dynamicOptionsCache.value[loc] ?? {}) };
+    const updatedErrors = { ...(dynamicOptionsErrors.value[loc] ?? {}) };
     for (const opt of options) {
       updatedLocale[opt.field] = opt;
+      delete updatedErrors[opt.field];
     }
+
+    const returnedFields = new Set(options.map((opt) => opt.field));
+    const missingFields = uncached.filter((field) => !returnedFields.has(field));
+    if (missingFields.length > 0) {
+      console.error('Dynamic filter options missing from IPC response', {
+        locale: loc,
+        requested: uncached,
+        returned: [...returnedFields],
+        missing: missingFields,
+      });
+      for (const field of missingFields) {
+        updatedErrors[field] = DYNAMIC_OPTIONS_BACKEND_MISMATCH_ERROR;
+      }
+    }
+
     dynamicOptionsCache.value = { ...dynamicOptionsCache.value, [loc]: updatedLocale };
-  } catch {
-    // Non-fatal — dynamic options will just be unavailable
+    dynamicOptionsErrors.value = { ...dynamicOptionsErrors.value, [loc]: updatedErrors };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('Failed to load dynamic filter options', {
+      locale: loc,
+      fields: uncached,
+      error: message,
+    });
+    dynamicOptionsErrors.value = {
+      ...dynamicOptionsErrors.value,
+      [loc]: {
+        ...(dynamicOptionsErrors.value[loc] ?? {}),
+        ...Object.fromEntries(uncached.map((field) => [field, message])),
+      },
+    };
   } finally {
     const localePending = { ...(dynamicOptionsPending.value[loc] ?? {}) };
     for (const field of uncached) {

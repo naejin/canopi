@@ -2,7 +2,7 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ActiveChips } from '../components/plant-db/ActiveChips'
-import { dynamicOptionsCache, extraFilters, activeFilters } from '../state/plant-db'
+import { dynamicOptionsCache, dynamicOptionsErrors, dynamicOptionsPending, extraFilters, activeFilters } from '../state/plant-db'
 import { locale } from '../state/app'
 
 describe('ActiveChips', () => {
@@ -30,6 +30,8 @@ describe('ActiveChips', () => {
       extra: null,
     }
     extraFilters.value = [{ field: 'habit', op: 'In', values: ['Shrub'] }]
+    dynamicOptionsPending.value = {}
+    dynamicOptionsErrors.value = {}
     dynamicOptionsCache.value = {
       en: {
         habit: {

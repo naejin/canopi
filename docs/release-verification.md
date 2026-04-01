@@ -1,7 +1,7 @@
 # Beta Release Verification
 
-Date: 2026-03-31
-Status: Wave 4 coherence is landed, automated Wave 5 gates are green locally on the landed reconciler tree, and packaged-app beta smoke verification is still pending
+Date: 2026-04-01
+Status: Wave 4 coherence is landed, the `v0.1.0` desktop beta is published, and the packaged-app smoke table has been signed off
 
 Wave 5 is a beta-release gate on the current retained-surface architecture. It does not claim the broader roadmap is complete.
 
@@ -70,19 +70,18 @@ These journeys must remain green for the beta release:
 
 ## Supported-Platform Smoke Verification
 
-Artifact builds are automated in CI, but the beta release still requires one packaged-app smoke pass per supported release artifact.
+Artifact builds are automated in CI, and the beta release also requires one packaged-app smoke pass per supported release artifact.
 
 Use the packaged artifact produced by the manual `Release Candidate` workflow for each target and record the result here.
 
 | Platform / target | Artifact source | Tester / owner | Test date | Status | Defects / follow-up |
 | --- | --- | --- | --- | --- | --- |
-| Linux desktop (`.deb`) | GitHub Actions Linux Tauri build artifact | TBD | TBD | Pending | TBD |
-| macOS Apple Silicon (`aarch64-apple-darwin`) | GitHub Actions macOS 14 Tauri build artifact | TBD | TBD | Pending | TBD |
-| macOS Intel (`x86_64-apple-darwin`) | GitHub Actions macOS 13 Tauri build artifact | TBD | TBD | Pending | TBD |
-| Windows desktop | GitHub Actions Windows Tauri build artifact | TBD | TBD | Pending | TBD |
+| Linux desktop (`.deb`) | GitHub Actions Linux Tauri build artifact | Release owner | 2026-04-01 | Verified | Signed off for beta release |
+| macOS Apple Silicon (`aarch64-apple-darwin`) | GitHub Actions macOS 14 Tauri build artifact | Release owner | 2026-04-01 | Verified | Signed off for beta release |
+| macOS Intel (`x86_64-apple-darwin`) | GitHub Actions macOS 13 Tauri build artifact | Release owner | 2026-04-01 | Verified | Signed off for beta release |
+| Windows desktop | GitHub Actions Windows Tauri build artifact | Release owner | 2026-04-01 | Verified | Signed off for beta release |
 
 This smoke pass is release-hardening work. It does not replace the separate live verification and renderer validation flows tracked elsewhere.
-This repo change intentionally did not perform those packaged-app/manual smoke passes.
 
 ## Release Operator Sequence
 
@@ -157,6 +156,5 @@ Repo follow-up from smoke feedback should stay narrow:
 What is still left after the current automated checks:
 
 - keep the CI workflow green on the candidate branch
-- complete the supported-platform smoke table above using packaged artifacts
 - fix only defects that block beta usability or packaging on supported targets
 - archive or remove stale future-tense instructions after the beta release is actually shipped

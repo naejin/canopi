@@ -7,7 +7,10 @@ import {
   addExtraFilter,
   removeExtraFilter,
   loadDynamicOptions,
+  DYNAMIC_OPTIONS_BACKEND_MISMATCH_ERROR,
   dynamicOptionsCache,
+  dynamicOptionsErrors,
+  dynamicOptionsPending,
 } from '../../state/plant-db'
 import { CATEGORIES, fieldsForCategory, type FieldDef, type FilterCategory } from './field-registry'
 import { FilterChip } from './FilterChip'
@@ -150,6 +153,8 @@ function FieldRow({ field }: { field: FieldDef }) {
   const loc = locale.value
   const extras = extraFilters.value
   const cache = dynamicOptionsCache.value[loc] ?? {}
+  const pending = dynamicOptionsPending.value[loc] ?? {}
+  const errors = dynamicOptionsErrors.value[loc] ?? {}
   const expanded = useSignal(false)
   const activeFilter = extras.find((ef) => ef.field === field.key)
   const label = t(field.i18nKey, field.key)
@@ -176,13 +181,12 @@ function FieldRow({ field }: { field: FieldDef }) {
     )
   }
 
-  // Categorical or numeric — expandable
-  const opts = cache[field.key]
-
   // Re-fetch when locale changes while expanded (cache miss for new locale)
   useSignalEffect(() => {
     const localeCache = dynamicOptionsCache.value[locale.value] ?? {}
-    if (expanded.value && !localeCache[field.key]) {
+    const localePending = dynamicOptionsPending.value[locale.value] ?? {}
+    const localeErrors = dynamicOptionsErrors.value[locale.value] ?? {}
+    if (expanded.value && !localeCache[field.key] && !localePending[field.key] && !localeErrors[field.key]) {
       void loadDynamicOptions([field.key])
     }
   })
@@ -190,6 +194,11 @@ function FieldRow({ field }: { field: FieldDef }) {
   const handleExpand = () => {
     expanded.value = !expanded.value
   }
+
+  const opts = cache[field.key]
+  const isLoading = !!pending[field.key] || (!opts && !errors[field.key])
+  const error = errors[field.key]
+  const canRetry = error != null && error !== DYNAMIC_OPTIONS_BACKEND_MISMATCH_ERROR
 
   return (
     <div className={styles.fieldRow}>
@@ -257,7 +266,23 @@ function FieldRow({ field }: { field: FieldDef }) {
             />
           )}
 
-          {!opts && <span className={styles.loading}>{t('plantDb.loading', 'Loading...')}</span>}
+          {isLoading && <span className={styles.loading}>{t('plantDb.loading', 'Loading...')}</span>}
+          {!isLoading && error && (
+            <div className={styles.errorState}>
+              <span className={styles.errorText}>
+                {t('plantDb.error', 'Error')}: {error}
+              </span>
+              {canRetry && (
+                <button
+                  type="button"
+                  className={styles.retryBtn}
+                  onClick={() => { void loadDynamicOptions([field.key]) }}
+                >
+                  {t('plantDb.retry', 'Retry')}
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
