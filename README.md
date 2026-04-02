@@ -68,4 +68,4 @@ Beta `0.1.0` is published. See [docs/README.md](docs/README.md) for the current 
 
 ## License
 
-[MIT](LICENSE)
+[AGPL-3.0](LICENSE)
