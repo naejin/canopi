@@ -9,7 +9,7 @@ Canopi is a desktop design tool that combines a 175,000-species plant database w
 ### Key features
 
 - **Plant database** -- 175K species with 173 columns of ecological, morphological, and agronomic data. Full-text search, structured filters, 11-language support
-- **Design canvas** -- Konva.js-based workspace with zone drawing, plant placement via drag-and-drop, undo/redo, grid, rulers, scale bar, document-scoped plant colors, and density-aware single-line labels
+- **Design canvas** -- PixiJS-based workspace with zone drawing, plant placement via drag-and-drop, undo/redo, grid, rulers, scale bar, document-scoped plant colors, and density-aware single-line labels
 - **File format** -- `.canopi` JSON files with full document integrity, autosave, and dirty tracking
 - **Field notebook aesthetic** -- Parchment, ink, and ochre palette. Light and dark themes
 
@@ -19,10 +19,10 @@ Canopi is a desktop design tool that combines a 175,000-species plant database w
 |-------|------------|
 | Backend | Rust (Tauri v2 + rusqlite + specta) |
 | Frontend | Preact + @preact/signals + TypeScript + Vite |
-| Canvas | Konva.js (imperative API) |
+| Canvas | PixiJS (primary) + Canvas2D (fallback) |
 | i18n | i18next (11 languages) |
 | Styling | CSS Modules with design tokens |
-| Maps | MapLibre GL JS (planned, Phase 4) |
+| Maps | MapLibre GL JS (deferred) |
 
 ## Development
 
@@ -64,7 +64,7 @@ canopi/
 
 ## Status
 
-Beta `0.1.0` is published. See [docs/README.md](docs/README.md) for the current doc map and [docs/roadmap.md](docs/roadmap.md) for historical roadmap context.
+Release `0.2.0` is published. See [releases](https://github.com/naejin/canopi/releases) for downloads, [docs/README.md](docs/README.md) for the current doc map, and [docs/roadmap.md](docs/roadmap.md) for historical roadmap context.
 
 ## License
 

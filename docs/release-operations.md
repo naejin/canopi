@@ -112,6 +112,14 @@ This script:
 - creates or updates the GitHub Release
 - uploads the packaged artifacts, `SHA256SUMS.txt`, and `release-metadata.json`
 
+## 5. Publish The Draft Release
+
+The promote script creates a draft release. After verifying the release page and assets:
+
+```bash
+gh release edit v0.2.0 --draft=false
+```
+
 ## Failure Triage
 
 - Preflight version mismatch:

@@ -140,6 +140,15 @@ python3 scripts/prepare-db.py
 cargo build --release
 ```
 
+### Release Process
+- **Version bump files**: `Cargo.toml` (workspace version), `desktop/tauri.conf.json`, `desktop/web/package.json` — Cargo.lock auto-updates
+- **Trigger RC workflow**: `gh workflow run "Release Candidate" --ref main -f ref=main -f release_version=<ver> -f db_release_tag=canopi-core-db -f db_asset_name=canopi-core.db`
+- **RC timing**: ~15-20min total (macOS Intel ~10min, Windows ~10min are the slowest targets)
+- **Promote**: `scripts/promote-release.sh` creates a **draft** release — publish with `gh release edit <tag> --draft=false`
+- **Promotion upload timing**: 10-20min (Windows artifact ~500MB dominates)
+- **Tags are remote-only**: promote script creates the tag via `gh release create`, not locally — `git fetch --tags` to sync
+- **Release docs example**: `docs/release-operations.md` promote command has a hardcoded version — update it during version bump
+
 ### Tauri MCP Development Workflow
 The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot-driven development and interactive verification:
 
