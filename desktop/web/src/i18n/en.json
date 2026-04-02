@@ -266,7 +266,8 @@
       "consortium": "Consortium",
       "budget": "Budget",
       "open": "Open bottom panel",
-      "tabs": "Tabs"
+      "tabs": "Tabs",
+      "germinating": "Germinating..."
     },
     "timeline": {
       "title": "Timeline",

@@ -266,7 +266,8 @@
       "consortium": "Consorzio",
       "budget": "Budget",
       "open": "Apri pannello inferiore",
-      "tabs": "Schede"
+      "tabs": "Schede",
+      "germinating": "In germinazione..."
     },
     "timeline": {
       "title": "Calendario",

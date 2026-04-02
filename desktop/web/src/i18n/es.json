@@ -266,7 +266,8 @@
       "consortium": "Consorcio",
       "budget": "Presupuesto",
       "open": "Abrir panel inferior",
-      "tabs": "Pestañas"
+      "tabs": "Pestañas",
+      "germinating": "Germinando..."
     },
     "timeline": {
       "title": "Cronograma",

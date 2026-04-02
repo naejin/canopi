@@ -37,7 +37,6 @@
   color: var(--color-text-muted);
   min-width: var(--control-size-lg);
   text-align: center;
-  user-select: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

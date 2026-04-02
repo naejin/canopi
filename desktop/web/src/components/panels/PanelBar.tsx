@@ -1,4 +1,5 @@
 import { activePanel, sidePanel, navigateTo, type Panel } from '../../state/app'
+import { currentDesign } from '../../state/document'
 import { t } from '../../i18n'
 import styles from './PanelBar.module.css'
 
@@ -57,6 +58,7 @@ const sidePanels: PanelItem[] = [
 export function PanelBar() {
   const active = activePanel.value
   const activeSidePanel = sidePanel.value
+  const hasDesign = currentDesign.value !== null
 
   function isActive(panel: Panel): boolean {
     if (panel === 'canvas') {
@@ -78,6 +80,7 @@ export function PanelBar() {
             key={p.id}
             className={`${styles.button} ${isActive(p.id) ? styles.active : ''}`}
             onClick={() => navigateTo(p.id)}
+            disabled={p.id === 'location' && !hasDesign}
             title={label}
             aria-label={label}
             aria-pressed={isActive(p.id)}
@@ -97,6 +100,7 @@ export function PanelBar() {
             key={p.id}
             className={`${styles.button} ${isActive(p.id) ? styles.active : ''}`}
             onClick={() => navigateTo(p.id)}
+            disabled={!hasDesign}
             title={label}
             aria-label={label}
             aria-pressed={isActive(p.id)}

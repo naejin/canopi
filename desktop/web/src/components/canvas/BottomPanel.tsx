@@ -1,41 +1,14 @@
-import type * as preact from 'preact'
-import { useEffect, useState } from 'preact/hooks'
-import { bottomPanelHeight, bottomPanelOpen, bottomPanelTab, type BottomPanelTab } from '../../state/canvas'
+import { t } from '../../i18n'
+import { locale } from '../../state/app'
+import { bottomPanelHeight, bottomPanelOpen } from '../../state/canvas'
 import { setBottomPanelHeight } from '../../state/canvas-actions'
 import styles from './BottomPanel.module.css'
 
-type BottomPanelComponent = () => preact.JSX.Element
-
-async function loadBottomPanelTab(tab: BottomPanelTab): Promise<BottomPanelComponent> {
-  switch (tab) {
-    case 'timeline':
-      return (await import('./TimelineTab')).TimelineTab
-    case 'budget':
-      return (await import('./BudgetTab')).BudgetTab
-    case 'consortium':
-      return (await import('./ConsortiumTab')).ConsortiumTab
-  }
-}
-
 export function BottomPanel() {
-  const [PanelContent, setPanelContent] = useState<BottomPanelComponent | null>(null)
+  void locale.value
 
   const open = bottomPanelOpen.value
   const height = bottomPanelHeight.value
-  const tab = bottomPanelTab.value
-
-  useEffect(() => {
-    let cancelled = false
-
-    setPanelContent(null)
-    void loadBottomPanelTab(tab).then((component) => {
-      if (!cancelled) setPanelContent(() => component)
-    })
-
-    return () => {
-      cancelled = true
-    }
-  }, [tab])
 
   if (!open) return null
 
@@ -43,7 +16,7 @@ export function BottomPanel() {
     <div className={styles.panel} style={{ height: `${height}px` }}>
       <ResizeHandle />
       <div className={styles.content}>
-        {PanelContent ? <PanelContent /> : null}
+        <p className={styles.placeholder}>{t('canvas.bottomPanel.germinating')}</p>
       </div>
     </div>
   )

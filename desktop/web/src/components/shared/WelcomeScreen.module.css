@@ -29,7 +29,6 @@
   width: calc(var(--space-12) * 2);
   height: calc(var(--space-12) * 2);
   margin-bottom: calc(var(--space-6) + var(--space-4));
-  user-select: none;
   pointer-events: none;
 }
 

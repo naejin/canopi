@@ -2,7 +2,11 @@
 
 ## State
 - All reactive state as `@preact/signals` at module level
-- Canvas state syncs with Konva imperatively via `effect()`
+- `SceneStore` is the canvas source of truth — UI signals are mirrors, not authority
+- `CanvasSession` is the only app-facing canvas seam; components must not reach into runtime internals
+
+## PanelBar State
+- PanelBar is visible on the welcome screen (no design loaded) — location, plant-db, and favorites buttons are `disabled` when `currentDesign` is null. Only the canvas button is always active
 
 ## i18n
 - ALL user-visible strings must go through `t()` from `../i18n` — no hardcoded text in components
@@ -30,12 +34,12 @@
 - **Effect subscription**: Effects only subscribe to signals **read during execution**. An early `return` before reading a signal = never re-runs. Read ALL dependencies BEFORE conditional returns
 - **`void signal.value` in parent components**: Unnecessary when all child components subscribe to the signal independently. Safe to remove — children re-render on their own signal subscriptions
 - **Signal retry pattern**: Setting a signal to its current value is a no-op (`Object.is` equality). To force a re-fetch, use a dedicated `retryCount` signal: read it in the effect, increment it in the retry handler
-- **`CanvasHistory` truncation must mirror in both paths**: `execute()` and `record()` both trim `_past` at 500-cap. Both must set `_savedPosition = -1` when truncation passes the saved point, or dirty tracking breaks
+- **`SceneHistory` truncation must mirror in both paths**: `execute()` and `record()` both trim `_past` at 500-cap. Both must set `_savedPosition = -1` when truncation passes the saved point, or dirty tracking breaks
 - **`useEffect` needs a dependency array**: Omitting `[]` or `[dep]` runs the effect every render — causes listener leaks and duplicate subscriptions. Always provide explicit deps, even in Preact
 
 ## Dynamic Filter State
 - **Error tracking**: `dynamicOptionsErrors` signal tracks per-locale per-field IPC errors. `DYNAMIC_OPTIONS_BACKEND_MISMATCH_ERROR` distinguishes permanent backend mismatch (field not in running binary) from transient errors (network, timeout). Only transient errors show a retry button in the UI. Errors are cleared on successful retry
 
 ## Testing (Vitest)
-- **Vitest with Konva**: Requires `canvas` npm package as devDependency
+- **Vitest with canvas/Konva**: Requires `canvas` npm package as devDependency (still needed for legacy Konva helpers)
 - **i18n in Vitest**: The i18n module eagerly loads all 11 locale files at import time — `t()` returns real translations in tests without mocking. `locale.value` changes trigger `i18n.changeLanguage()` synchronously via module-level `effect()`

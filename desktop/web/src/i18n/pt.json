@@ -266,7 +266,8 @@
       "consortium": "Consórcio",
       "budget": "Orçamento",
       "open": "Abrir painel inferior",
-      "tabs": "Guias"
+      "tabs": "Guias",
+      "germinating": "Germinando..."
     },
     "timeline": {
       "title": "Cronograma",

@@ -12,7 +12,6 @@
   font-weight: 600;
   line-height: 1;
   white-space: nowrap;
-  user-select: none;
   border: 1px solid transparent;
   color: var(--color-text-muted);
   background: var(--color-surface);

@@ -16,7 +16,6 @@
   min-width: calc(var(--space-4) + 2px);
   text-align: center;
   flex-shrink: 0;
-  user-select: none;
 }
 
 .valueActive {
@@ -31,7 +30,6 @@
   min-width: calc(var(--space-4) + 2px);
   text-align: center;
   flex-shrink: 0;
-  user-select: none;
 }
 
 .track {

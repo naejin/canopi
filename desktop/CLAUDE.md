@@ -9,15 +9,15 @@
 ## Document Lifecycle (enforced — Wave 1 + Wave 2)
 - **`state/document-actions.ts` is the sole document replacement authority** — no component or panel may replace the active document directly. All destructive flows (new, open, template import) go through document-actions
 - **`state/document.ts` is the canonical document API** — external consumers import from here. `state/design.ts` is internal
-- **`toCanopi(engine, metadata, doc)` is the sole save composition point** — all save paths go through it
+- **`session.serializeDocument()` / `SceneStore.toCanopiFile()` is the sole save composition point** — all save paths go through it. The old `toCanopi(engine, ...)` serializer is deleted
 - **Never regenerate `created_at`** — preserve from loaded file
 - **Preserve all loaded document sections on save** — timeline, budget, consortiums, description, location, extra fields
 - **Preserve per-object non-visual fields** — plant notes/planted_date/quantity and zone notes as Konva custom attrs
 - **Preserve unknown `extra` fields** — `extractExtra()` captures unknown top-level keys. Spread extra FIRST in `toCanopi()`
-- **Two-baseline dirty model** — Canvas: `_savedPosition` checkpoint in `CanvasHistory`. Non-canvas: `nonCanvasRevision` vs `nonCanvasSavedRevision`. Never write to `designDirty` directly
+- **Two-baseline dirty model** — Canvas: `_savedPosition` checkpoint in `SceneHistory` (patch-based). Non-canvas: `nonCanvasRevision` vs `nonCanvasSavedRevision`. Never write to `designDirty` directly
 - **Autosave** checkpoints same document as manual save. Failures surface via `autosaveFailed` signal
 - **Background-image import is gated** — not persisted in `.canopi` yet
-- **No serializer/state module cycle** — `serializer.ts` must NOT import from `state/design.ts`
+- **No scene-store/state module cycle** — `SceneStore` and scene runtime must NOT import from `state/design.ts`
 - **Close guard uses `destroy()` not `close()`** — avoids re-entry loop
 - **Cross-platform file replace** — `atomic_replace()` in `design/mod.rs`
 - **Queued-load handoff** — `consumeQueuedDocumentLoad` routes through document-actions without the dirty guard (file was just opened from OS, no unsaved work to protect)

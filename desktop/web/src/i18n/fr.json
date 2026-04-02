@@ -266,7 +266,8 @@
       "consortium": "Consortium",
       "budget": "Budget",
       "open": "Ouvrir le panneau inférieur",
-      "tabs": "Onglets"
+      "tabs": "Onglets",
+      "germinating": "En germination..."
     },
     "timeline": {
       "title": "Calendrier",
