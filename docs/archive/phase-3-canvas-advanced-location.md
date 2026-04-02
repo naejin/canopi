@@ -1,5 +1,7 @@
 # Phase 3 — Canvas Advanced + Location
 
+Historical phase plan only. Its `CanvasEngine`-era implementation guidance is superseded by the live Scene runtime architecture.
+
 > **Target file**: `docs/plans/phase-3-canvas-advanced-location.md`
 
 ## Context

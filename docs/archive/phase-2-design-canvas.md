@@ -1,5 +1,7 @@
 # Phase 2 — Design Canvas (Core) — COMPLETED
 
+Historical design artifact only. The `CanvasEngine` architecture described here is superseded by the live `SceneCanvasRuntime` + `CanvasSession` path.
+
 > **Status**: All 13 sub-phases implemented and tested. This document was the original plan.
 > For the authoritative list of what was built (vs deferred), see `architecture-draft.md` Phase 2 checklist.
 

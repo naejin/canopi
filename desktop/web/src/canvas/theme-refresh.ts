@@ -99,6 +99,15 @@ export function getCanvasColor(name: CanvasColorName): string {
   return _colors[name]
 }
 
+export function refreshCanvasColorCache(container: HTMLElement): void {
+  const cs = getComputedStyle(container)
+
+  for (const key of Object.keys(_colors) as CanvasColorName[]) {
+    const value = cs.getPropertyValue(_cssVarMap[key]).trim()
+    if (value) _colors[key] = value
+  }
+}
+
 /**
  * Refresh cached colors from CSS variables and update all existing Konva nodes.
  * Called from the engine's theme effect after the DOM has applied [data-theme].
@@ -107,13 +116,7 @@ export function refreshCanvasTheme(
   container: HTMLElement,
   layers: Map<string, Konva.Layer>,
 ): void {
-  const cs = getComputedStyle(container)
-
-  // Update cache from CSS variables
-  for (const key of Object.keys(_colors) as CanvasColorName[]) {
-    const value = cs.getPropertyValue(_cssVarMap[key]).trim()
-    if (value) _colors[key] = value
-  }
+  refreshCanvasColorCache(container)
 
   // ── Update plant labels ──
   const plantsLayer = layers.get('plants')

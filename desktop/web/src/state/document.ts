@@ -3,11 +3,13 @@
  *
  * This module is the long-term document authority boundary. `state/design.ts`
  * is an internal/transitional module that this wraps. External consumers
- * should import from here, not from `design.ts` or `canvas/serializer.ts`.
+ * should import from here, not from `design.ts` or deleted legacy canvas
+ * persistence helpers.
  */
 import type { CanopiFile } from '../types/design'
-import type { CanvasEngine } from '../canvas/engine'
-import { toCanopi, extractExtra } from '../canvas/serializer'
+import type { CanvasSession } from '../canvas/session'
+import { extractExtra } from './document-extra'
+import { replaceCurrentDesignSnapshot } from './document-mutations'
 
 export { extractExtra }
 import { currentDesign } from './design'
@@ -39,10 +41,20 @@ export {
  * document for non-canvas sections. Called before save/autosave.
  */
 export function writeCanvasIntoDocument(
-  engine: CanvasEngine,
+  session: CanvasSession,
   name: string,
 ): CanopiFile {
-  return toCanopi(engine, { name }, currentDesign.value)
+  return session.serializeDocument({ name }, currentDesign.value)
+}
+
+export function snapshotCanvasIntoCurrentDocument(
+  session: CanvasSession,
+  name: string,
+): CanopiFile | null {
+  if (!currentDesign.value) return null
+  const file = writeCanvasIntoDocument(session, name)
+  replaceCurrentDesignSnapshot(file)
+  return file
 }
 
 /**
@@ -51,7 +63,7 @@ export function writeCanvasIntoDocument(
  */
 export function loadCanvasFromDocument(
   file: CanopiFile,
-  engine: CanvasEngine,
+  session: CanvasSession,
 ): void {
-  engine.loadDocument(file)
+  session.loadDocument(file)
 }

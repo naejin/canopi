@@ -1,5 +1,7 @@
 # Codex Review: `todo.md`
 
+Historical review artifact only. It refers to an older `CanvasEngine`-era `todo.md` and is superseded by the current live docs.
+
 ## Findings
 
 ### 1. High: the document is now self-contradictory about the target canvas architecture

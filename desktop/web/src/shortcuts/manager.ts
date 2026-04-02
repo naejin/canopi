@@ -1,7 +1,11 @@
 import { signal } from "@preact/signals";
-import { activePanel, navigateTo, type Panel } from "../state/app";
-import { activeTool, selectedObjectIds } from "../state/canvas";
-import { canvasEngine } from "../canvas/engine";
+import { activePanel, navigateTo } from "../state/app";
+import { currentCanvasHasSelection, getCurrentCanvasSession, setCurrentCanvasTool } from "../canvas/session";
+import {
+  COMMAND_PALETTE_SHORTCUT_KEY,
+  canvasToolKeys,
+  panelKeys,
+} from "./definitions";
 import {
   saveCurrentDesign,
   saveAsCurrentDesign,
@@ -10,23 +14,6 @@ import {
 } from "../state/document";
 
 export const commandPaletteOpen = signal(false);
-
-const panelKeys: Record<string, Panel> = {
-  "1": "canvas",
-  "2": "plant-db",
-};
-
-// Single-key tool shortcuts — only fire when canvas panel is active (MVP set)
-const canvasToolKeys: Record<string, string> = {
-  v: "select",
-  V: "select",
-  h: "hand",
-  H: "hand",
-  r: "rectangle",
-  R: "rectangle",
-  t: "text",
-  T: "text",
-};
 
 // Module-level reference so HMR can remove the old handler before re-adding.
 let _keydownHandler: ((e: KeyboardEvent) => void) | null = null
@@ -43,7 +30,7 @@ export function initShortcuts() {
     const isInput = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 
     // Ctrl+Shift+P — command palette
-    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "P") {
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === COMMAND_PALETTE_SHORTCUT_KEY) {
       e.preventDefault();
       commandPaletteOpen.value = !commandPaletteOpen.value;
       return;
@@ -78,7 +65,7 @@ export function initShortcuts() {
       canvasToolKeys[e.key]
     ) {
       e.preventDefault();
-      activeTool.value = canvasToolKeys[e.key]!;
+      setCurrentCanvasTool(canvasToolKeys[e.key]!);
       return;
     }
 
@@ -107,76 +94,77 @@ export function initShortcuts() {
     }
 
     // Canvas object operations — only when canvas panel is active and not in input
-    if (activePanel.value === "canvas" && !isInput && canvasEngine) {
+    const session = getCurrentCanvasSession()
+    if (activePanel.value === "canvas" && !isInput && session) {
       // Ctrl+Z — undo
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "z") {
         e.preventDefault();
-        canvasEngine.undo();
+        session.undo();
         return;
       }
       // Ctrl+Shift+Z — redo
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "z") {
         e.preventDefault();
-        canvasEngine.redo();
+        session.redo();
         return;
       }
       // Ctrl+C — copy
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "c") {
         e.preventDefault();
-        canvasEngine.copyToClipboard();
+        session.copy();
         return;
       }
       // Ctrl+V — paste
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "v") {
         e.preventDefault();
-        canvasEngine.pasteFromClipboard();
+        session.paste();
         return;
       }
       // Ctrl+D — duplicate
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "d") {
         e.preventDefault();
-        canvasEngine.duplicateSelected();
+        session.duplicateSelected();
         return;
       }
       // Delete or Backspace — delete selected
       if (e.key === "Delete" || e.key === "Backspace") {
         e.preventDefault();
-        canvasEngine.deleteSelected();
+        session.deleteSelected();
         return;
       }
       // Ctrl+A — select all
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "a") {
         e.preventDefault();
-        canvasEngine.selectAll();
+        session.selectAll();
         return;
       }
       // ] — bring to front
       if (!e.ctrlKey && !e.metaKey && e.key === "]") {
-        canvasEngine.bringToFront();
+        session.bringToFront();
         return;
       }
       // [ — send to back
       if (!e.ctrlKey && !e.metaKey && e.key === "[") {
-        canvasEngine.sendToBack();
+        session.sendToBack();
         return;
       }
       // Ctrl+L — lock/unlock toggle
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "l") {
         e.preventDefault();
-        if (selectedObjectIds.value.size > 0) canvasEngine.lockSelected();
-        else canvasEngine.unlockSelected();
+        if (currentCanvasHasSelection.value) session.lockSelected();
+        else session.unlockSelected();
         return;
       }
       // Ctrl+G — group
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "g") {
         e.preventDefault();
-        canvasEngine.groupSelectedNodes();
+        session.groupSelected();
         return;
       }
       // Ctrl+Shift+G — ungroup
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "G") {
         e.preventDefault();
-        canvasEngine.ungroupSelectedNodes();
+        session.ungroupSelected();
         return;
       }
     }

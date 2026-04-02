@@ -1,10 +1,10 @@
 import { message } from '@tauri-apps/plugin-dialog'
 import type { CanopiFile } from '../types/design'
-import type { CanvasEngine } from '../canvas/engine'
-import { canvasEngine } from '../canvas/engine'
-import { extractExtra, toCanopi } from '../canvas/serializer'
+import { getCurrentCanvasSession, type CanvasSession } from '../canvas/session'
 import * as designIpc from '../ipc/design'
 import { t } from '../i18n'
+import { extractExtra } from './document-extra'
+import { syncDocumentMirrors } from './document-mutations'
 import {
   currentDesign,
   designDirty,
@@ -18,19 +18,30 @@ import {
 } from './design'
 
 interface DocumentLoadOptions {
-  engine?: CanvasEngine | null
+  session?: CanvasSession | null
   isCancelled?: () => boolean
 }
 
 type ReplacementDecision = 'proceed' | 'cancel'
 export type TemplateOpenResult = 'opened' | 'queued' | 'cancelled'
 
+function buildPersistedContent(session: CanvasSession | null): CanopiFile {
+  if (session) {
+    return session.serializeDocument({ name: designName.value }, currentDesign.value)
+  }
+
+  const design = currentDesign.value
+  if (!design) throw new Error('No design loaded')
+  return {
+    ...design,
+    name: designName.value,
+  }
+}
+
 /** Save to the current path (Ctrl+S). Opens Save As if no path exists yet. */
 export async function saveCurrentDesign(): Promise<void> {
-  const engine = canvasEngine
-  if (!engine) throw new Error('Canvas engine not ready')
-
-  const content = toCanopi(engine, { name: designName.value }, currentDesign.value)
+  const session = getCurrentCanvasSession()
+  const content = buildPersistedContent(session)
 
   if (designPath.value) {
     await designIpc.saveDesign(designPath.value, content)
@@ -45,10 +56,8 @@ export async function saveCurrentDesign(): Promise<void> {
 
 /** Save As — always prompts for a new path (Ctrl+Shift+S). */
 export async function saveAsCurrentDesign(): Promise<void> {
-  const engine = canvasEngine
-  if (!engine) return
-
-  const content = toCanopi(engine, { name: designName.value }, currentDesign.value)
+  const session = getCurrentCanvasSession()
+  const content = buildPersistedContent(session)
 
   try {
     const path = await designIpc.saveDesignAs(content)
@@ -62,15 +71,15 @@ export async function saveAsCurrentDesign(): Promise<void> {
 
 /** Open file dialog and replace the active document through the shared guard. */
 export async function openDesign(): Promise<void> {
-  const engine = canvasEngine
-  if (!engine) return
+  const session = getCurrentCanvasSession()
+  if (!session) return
 
   const decision = await confirmReplacement()
   if (decision === 'cancel') return
 
   try {
     const { file, path } = await designIpc.openDesignDialog()
-    applyDocumentReplacement(normalizeLoadedDocument(file), path, file.name, engine)
+    applyDocumentReplacement(normalizeLoadedDocument(file), path, file.name, session)
   } catch (error) {
     if (isCancelled(error)) return
     throw error
@@ -82,8 +91,8 @@ export async function openDesignFromPath(
   path: string,
   options: DocumentLoadOptions = {},
 ): Promise<void> {
-  const engine = options.engine ?? canvasEngine
-  if (!engine) {
+  const session = options.session ?? getCurrentCanvasSession()
+  if (!session) {
     pendingDesignPath.value = path
     return
   }
@@ -94,7 +103,7 @@ export async function openDesignFromPath(
   const file = await designIpc.loadDesign(path)
   if (options.isCancelled?.()) return
 
-  applyDocumentReplacement(normalizeLoadedDocument(file), path, file.name, engine)
+  applyDocumentReplacement(normalizeLoadedDocument(file), path, file.name, session)
 }
 
 /** Open a downloaded template as a new unsaved design through the shared guard. */
@@ -103,8 +112,8 @@ export async function openDesignAsTemplate(
   name: string,
   options: DocumentLoadOptions = {},
 ): Promise<TemplateOpenResult> {
-  const engine = options.engine ?? canvasEngine
-  if (!engine) {
+  const session = options.session ?? getCurrentCanvasSession()
+  if (!session) {
     pendingTemplateImport.value = { path, name }
     return 'queued'
   }
@@ -115,31 +124,31 @@ export async function openDesignAsTemplate(
   const file = await designIpc.loadDesign(path)
   if (options.isCancelled?.()) return 'cancelled'
 
-  applyDocumentReplacement(normalizeLoadedDocument(file), null, name, engine)
+  applyDocumentReplacement(normalizeLoadedDocument(file), null, name, session)
   return 'opened'
 }
 
 /** Create a new blank design through the shared replacement guard. */
 export async function newDesignAction(): Promise<void> {
-  const engine = canvasEngine
-  if (!engine) return
+  const session = getCurrentCanvasSession()
+  if (!session) return
 
   const decision = await confirmReplacement()
   if (decision === 'cancel') return
 
   const file = await designIpc.newDesign()
-  applyDocumentReplacement(normalizeNewDocument(file), null, 'Untitled', engine)
+  applyDocumentReplacement(normalizeNewDocument(file), null, 'Untitled', session)
 }
 
 /** Consume a queued document load when CanvasPanel mounts a fresh engine.
  *  Bypasses the dirty guard — queued loads happen on fresh mount before the
  *  user has interacted, so prompting to save is semantically wrong. */
-export function consumeQueuedDocumentLoad(engine: CanvasEngine): () => void {
+export function consumeQueuedDocumentLoad(session: CanvasSession): () => void {
   const queuedTemplate = pendingTemplateImport.value
   if (queuedTemplate) {
     let cancelled = false
     void loadTemplateDirect(queuedTemplate.path, queuedTemplate.name, {
-      engine,
+      session,
       isCancelled: () => cancelled,
     }).then(() => {
       if (!cancelled && pendingTemplateImport.value?.path === queuedTemplate.path) {
@@ -168,7 +177,7 @@ export function consumeQueuedDocumentLoad(engine: CanvasEngine): () => void {
 
   let cancelled = false
   void loadDesignDirect(queuedPath, {
-    engine,
+    session,
     isCancelled: () => cancelled,
   }).then(() => {
     if (!cancelled && pendingDesignPath.value === queuedPath) {
@@ -227,8 +236,8 @@ async function loadDesignDirect(
   path: string,
   options: DocumentLoadOptions = {},
 ): Promise<void> {
-  const engine = options.engine ?? canvasEngine
-  if (!engine) {
+  const session = options.session ?? getCurrentCanvasSession()
+  if (!session) {
     pendingDesignPath.value = path
     return
   }
@@ -236,7 +245,7 @@ async function loadDesignDirect(
   const file = await designIpc.loadDesign(path)
   if (options.isCancelled?.()) return
 
-  applyDocumentReplacement(normalizeLoadedDocument(file), path, file.name, engine)
+  applyDocumentReplacement(normalizeLoadedDocument(file), path, file.name, session)
 }
 
 async function loadTemplateDirect(
@@ -244,8 +253,8 @@ async function loadTemplateDirect(
   name: string,
   options: DocumentLoadOptions = {},
 ): Promise<void> {
-  const engine = options.engine ?? canvasEngine
-  if (!engine) {
+  const session = options.session ?? getCurrentCanvasSession()
+  if (!session) {
     pendingTemplateImport.value = { path, name }
     return
   }
@@ -253,34 +262,33 @@ async function loadTemplateDirect(
   const file = await designIpc.loadDesign(path)
   if (options.isCancelled?.()) return
 
-  applyDocumentReplacement(normalizeLoadedDocument(file), null, name, engine)
+  applyDocumentReplacement(normalizeLoadedDocument(file), null, name, session)
 }
 
 function applyDocumentReplacement(
   file: CanopiFile,
   path: string | null,
   name: string,
-  engine: CanvasEngine,
+  session: CanvasSession,
 ): void {
-  engine.replaceDocument(file)
+  session.replaceDocument(file)
   replaceCurrentDesignState(file, path, name)
+  syncDocumentMirrors(file)
   resetDirtyBaselines()
-  engine.history.clear()
-  engine.showCanvasChrome()
+  session.clearHistory()
+  session.showCanvasChrome()
+}
+
+function normalizeDocument(file: CanopiFile, extra: Record<string, unknown>): CanopiFile {
+  return { ...file, annotations: file.annotations ?? [], extra }
 }
 
 function normalizeLoadedDocument(file: CanopiFile): CanopiFile {
-  return {
-    ...file,
-    extra: extractExtra(file as unknown as Record<string, unknown>),
-  }
+  return normalizeDocument(file, extractExtra(file as unknown as Record<string, unknown>))
 }
 
 function normalizeNewDocument(file: CanopiFile): CanopiFile {
-  return {
-    ...file,
-    extra: {},
-  }
+  return normalizeDocument(file, {})
 }
 
 function nameFromPath(path: string): string {

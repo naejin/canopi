@@ -1,14 +1,15 @@
-import { plantDisplayMode, plantColorByAttr } from '../../state/canvas'
+import { plantColorByAttr } from '../../state/canvas'
+import { locale } from '../../state/app'
 import { getLegendEntries } from '../../canvas/display-modes'
 import { SCALE_BAR_RESERVED_BOTTOM_PX } from '../../canvas/scale-bar'
 import { t } from '../../i18n'
 import styles from './DisplayLegend.module.css'
 
 export function DisplayLegend() {
-  const mode = plantDisplayMode.value
+  void locale.value
   const attr = plantColorByAttr.value
 
-  if (mode !== 'color-by') return null
+  if (attr === null) return null
 
   const entries = getLegendEntries(attr)
 

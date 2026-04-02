@@ -1,44 +1,25 @@
 import { batch } from '@preact/signals'
 import type { Consortium } from '../types/design'
-import {
-  currentConsortiums,
-  highlightedConsortium,
-} from './canvas'
-import { currentDesign, nonCanvasRevision } from './design'
+import { highlightedConsortium } from './canvas'
+import { mutateCurrentDesign } from './document-mutations'
 
 export function upsertConsortium(next: Consortium): void {
-  const design = currentDesign.value
-  if (!design) return
-
-  const consortiums = design.consortiums.some((consortium) => consortium.id === next.id)
-    ? design.consortiums.map((consortium) => (consortium.id === next.id ? next : consortium))
-    : [...design.consortiums, next]
-
-  batch(() => {
-    currentDesign.value = {
-      ...design,
-      consortiums,
-    }
-    currentConsortiums.value = consortiums
-    nonCanvasRevision.value += 1
+  mutateCurrentDesign((d) => {
+    const consortiums = d.consortiums.some((c) => c.id === next.id)
+      ? d.consortiums.map((c) => (c.id === next.id ? next : c))
+      : [...d.consortiums, next]
+    return { ...d, consortiums }
   })
 }
 
 export function deleteConsortium(consortiumId: string): void {
-  const design = currentDesign.value
-  if (!design) return
-
-  const consortiums = design.consortiums.filter((consortium) => consortium.id !== consortiumId)
-
   batch(() => {
-    currentDesign.value = {
-      ...design,
-      consortiums,
-    }
-    currentConsortiums.value = consortiums
+    mutateCurrentDesign((d) => ({
+      ...d,
+      consortiums: d.consortiums.filter((c) => c.id !== consortiumId),
+    }))
     if (highlightedConsortium.value === consortiumId) {
       highlightedConsortium.value = null
     }
-    nonCanvasRevision.value += 1
   })
 }

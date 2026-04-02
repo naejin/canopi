@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { toCanopi } from '../canvas/serializer'
+import { SceneCanvasRuntime } from '../canvas/runtime/scene-runtime'
 import { plantSpeciesColors } from '../state/canvas'
 import type { CanopiFile } from '../types/design'
 
@@ -29,14 +29,12 @@ describe('serializer species color defaults', () => {
     plantSpeciesColors.value = {}
   })
 
-  it('persists document species color defaults into the .canopi payload', () => {
-    plantSpeciesColors.value = { 'Malus domestica': '#C44230' }
+  it('persists document species color defaults into the canonical scene payload', () => {
+    const runtime = new SceneCanvasRuntime()
+    runtime.loadDocument(makeDoc())
+    runtime.setPlantColorForSpecies('Malus domestica', '#C44230')
 
-    const file = toCanopi({
-      getPlacedPlants: () => [],
-      getObjectGroups: () => [],
-      layers: new Map(),
-    } as any, { name: 'Test' }, makeDoc())
+    const file = runtime.serializeDocument({ name: 'Test' }, makeDoc())
 
     expect(file.plant_species_colors).toEqual({ 'Malus domestica': '#C44230' })
   })

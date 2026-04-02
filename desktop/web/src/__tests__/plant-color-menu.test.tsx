@@ -2,7 +2,7 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PlantColorMenu } from '../components/canvas/PlantColorMenu'
-import { setCanvasEngine } from '../canvas/engine'
+import { setCurrentCanvasSession } from '../canvas/session'
 import { plantColorMenuOpen, selectedObjectIds } from '../state/canvas'
 
 describe('PlantColorMenu', () => {
@@ -23,7 +23,7 @@ describe('PlantColorMenu', () => {
     clearPlantSpeciesColor.mockReset()
     ensureSpeciesCacheEntries.mockClear()
     getSelectedPlantColorContext.mockReset()
-    setCanvasEngine({
+    setCurrentCanvasSession({
       setSelectedPlantColor,
       setPlantColorForSpecies,
       clearPlantSpeciesColor,
@@ -40,7 +40,7 @@ describe('PlantColorMenu', () => {
     container.remove()
     selectedObjectIds.value = new Set()
     plantColorMenuOpen.value = false
-    setCanvasEngine(null)
+    setCurrentCanvasSession(null)
   })
 
   it('applies a selected palette color to the current plant selection', async () => {

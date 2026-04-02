@@ -1,5 +1,7 @@
 # Review: Renderer Refactor Implementation (Phases 1-3)
 
+Historical review artifact only. It reflects the earlier renderer refactor plan and is superseded by the live Scene runtime architecture.
+
 **Reviewer**: Claude Opus 4.6
 **Date**: 2026-03-30
 **Scope**: All unstaged changes on `main` — implementation of `docs/renderer/renderer.md` phases 1-3

@@ -7,6 +7,13 @@ beforeEach(() => {
 })
 
 describe('app navigation', () => {
+  it('opens the location shell as a full-screen panel', () => {
+    navigateTo('location')
+
+    expect(activePanel.value).toBe('location')
+    expect(sidePanel.value).toBe(null)
+  })
+
   it('opens the plant database as a sidebar panel', () => {
     navigateTo('plant-db')
 
@@ -28,5 +35,13 @@ describe('app navigation', () => {
 
     expect(activePanel.value).toBe('canvas')
     expect(sidePanel.value).toBe(null)
+  })
+
+  it('routes sidebar navigation back through the canvas shell from location', () => {
+    navigateTo('location')
+    navigateTo('plant-db')
+
+    expect(activePanel.value).toBe('canvas')
+    expect(sidePanel.value).toBe('plant-db')
   })
 })

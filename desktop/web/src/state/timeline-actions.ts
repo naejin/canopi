@@ -1,5 +1,5 @@
-import { currentDesign, nonCanvasRevision } from './design'
 import type { PlacedPlant, TimelineAction } from '../types/design'
+import { markDocumentDirty, mutateCurrentDesign } from './document-mutations'
 
 interface TimelineUpdateOptions {
   markDirty?: boolean
@@ -9,15 +9,10 @@ function updateTimeline(
   updater: (timeline: TimelineAction[]) => TimelineAction[],
   options: TimelineUpdateOptions = {},
 ): void {
-  const design = currentDesign.value
-  if (!design) return
-  currentDesign.value = {
+  mutateCurrentDesign((design) => ({
     ...design,
     timeline: updater(design.timeline),
-  }
-  if (options.markDirty !== false) {
-    nonCanvasRevision.value += 1
-  }
+  }), { markDirty: options.markDirty !== false })
 }
 
 export function addTimelineAction(action: TimelineAction): void {
@@ -74,7 +69,7 @@ export function appendAutoTimelineActions(actions: TimelineAction[]): void {
 }
 
 export function markTimelineDirty(): void {
-  nonCanvasRevision.value += 1
+  markDocumentDirty()
 }
 
 export function buildDefaultTimelineActions(

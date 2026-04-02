@@ -1,17 +1,20 @@
 import { zoomLevel, zoomReference } from '../../state/canvas'
-import { canvasEngine } from '../../canvas/engine'
+import { locale } from '../../state/app'
+import { currentCanvasSession } from '../../canvas/session'
 import { t } from '../../i18n'
 import styles from './ZoomControls.module.css'
 
 export function ZoomControls() {
+  void locale.value
   const zoom = zoomLevel.value
+  const session = currentCanvasSession.value
 
   return (
     <div className={styles.controls} role="group" aria-label={t('canvas.grid.zoom')}>
       <button
         className={styles.btn}
         type="button"
-        onClick={() => canvasEngine?.zoomOut()}
+        onClick={() => session?.zoomOut()}
         aria-label="Zoom out"
       >
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
@@ -22,7 +25,7 @@ export function ZoomControls() {
       <button
         className={styles.btn}
         type="button"
-        onClick={() => canvasEngine?.zoomIn()}
+        onClick={() => session?.zoomIn()}
         aria-label="Zoom in"
       >
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
@@ -32,7 +35,7 @@ export function ZoomControls() {
       <button
         className={styles.btn}
         type="button"
-        onClick={() => canvasEngine?.zoomToFit()}
+        onClick={() => session?.zoomToFit()}
         aria-label="Fit to content"
         title="Fit to content"
       >

@@ -3,6 +3,9 @@
 **Last updated**: 2026-04-01
 **Status**: historical roadmap for the completed rewrite and deferred ideas, not the active work queue
 
+Any `CanvasEngine` references in this file are historical context only. They are retained to explain the rewrite history, not to guide the current architecture.
+The location flow now lives in its own full-screen shell, and the remaining meaningful frontend perf follow-up is `maplibre-gl` chunk isolation around that location boundary; do not treat more canvas-runtime micro-splitting as the next optimization target.
+
 Use these docs for current work:
 
 - `docs/todo.md` for active rewrite and blocker tracking
@@ -10,6 +13,7 @@ Use these docs for current work:
 - `docs/release-verification.md` for beta status and shipped release evidence
 - `docs/release-operations.md` for release workflow and promotion steps
 - `docs/agents.md` for the minimal agent reading order
+- `docs/todo.md`, `docs/renderer/renderer.md`, and `desktop/web/src/canvas/CLAUDE.md` for the live scene-owned canvas path
 
 ---
 

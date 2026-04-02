@@ -1,5 +1,7 @@
 # Canopi Architecture Review
 
+Historical review artifact only. It describes the pre-cutover `CanvasEngine` architecture and is superseded by the live `SceneCanvasRuntime` + `CanvasSession` path.
+
 Date: 2026-03-24
 
 Reviewer: Codex

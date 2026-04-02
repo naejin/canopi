@@ -12,6 +12,8 @@ pub struct CanopiFile {
     pub layers: Vec<Layer>,
     pub plants: Vec<PlacedPlant>,
     pub zones: Vec<Zone>,
+    #[serde(default)]
+    pub annotations: Vec<Annotation>,
     pub consortiums: Vec<Consortium>,
     #[serde(default)]
     pub groups: Vec<ObjectGroup>,
@@ -70,6 +72,16 @@ pub struct Zone {
     pub points: Vec<Position>,
     pub fill_color: Option<String>,
     pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct Annotation {
+    pub id: String,
+    pub annotation_type: String,
+    pub position: Position,
+    pub text: String,
+    pub font_size: f64,
+    pub rotation: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]

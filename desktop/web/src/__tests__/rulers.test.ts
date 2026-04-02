@@ -82,9 +82,9 @@ describe('html rulers overlay', () => {
       lineCap: 'butt' as CanvasLineCap,
     }
 
-    vi.spyOn(rulers.scaleCanvas, 'getContext').mockReturnValue(ctx as unknown as CanvasRenderingContext2D)
-    vi.spyOn(rulers.hCanvas, 'getContext').mockReturnValue(ctx as unknown as CanvasRenderingContext2D)
-    vi.spyOn(rulers.vCanvas, 'getContext').mockReturnValue(ctx as unknown as CanvasRenderingContext2D)
+    vi.spyOn(rulers.scaleCanvas, 'getContext').mockReturnValue(ctx as never)
+    vi.spyOn(rulers.hCanvas, 'getContext').mockReturnValue(ctx as never)
+    vi.spyOn(rulers.vCanvas, 'getContext').mockReturnValue(ctx as never)
 
     updateHtmlRulers(rulers, stage)
 

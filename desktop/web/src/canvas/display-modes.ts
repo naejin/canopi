@@ -1,7 +1,7 @@
 import Konva from 'konva'
 import { getStratumColor, STRATUM_I18N_KEY, CIRCLE_SCREEN_PX } from './plants'
 import { t } from '../i18n'
-import type { PlantDisplayMode, ColorByAttribute } from '../state/canvas'
+import type { PlantSizeMode, ColorByAttribute } from '../state/canvas'
 import {
   FLOWER_COLOR_ORDER,
   getFlowerColorHex,
@@ -52,12 +52,12 @@ export interface LegendEntry {
 
 /**
  * Update all plant nodes for the current display mode.
- * Called when plantDisplayMode or plantColorByAttr changes.
+ * Called when plant size mode or color-by changes.
  */
 export function updatePlantDisplay(
   plantsLayer: Konva.Layer,
-  mode: PlantDisplayMode,
-  colorByAttr: ColorByAttribute,
+  sizeMode: PlantSizeMode,
+  colorByAttr: ColorByAttribute | null,
   stageScale: number,
   zoomReference: number,
   speciesCache: Map<string, Record<string, unknown>>,
@@ -69,11 +69,11 @@ export function updatePlantDisplay(
 
     const canonicalName = g.getAttr('data-canonical-name') as string
 
-    if (mode === 'default') {
+    if (sizeMode === 'default') {
       // Reset to fixed-size strata-colored circles
       circle.radius(CIRCLE_SCREEN_PX)
-      circle.fill(getPlantBaseColor(g))
-    } else if (mode === 'canopy') {
+      circle.fill(colorByAttr === null ? getPlantBaseColor(g) : resolveColorByValue(g, colorByAttr, canonicalName, speciesCache))
+    } else if (sizeMode === 'canopy') {
       // Size circle to real canopy spread in world meters
       const canopyM = (g.getAttr('data-canopy-spread') as number) || 0
       if (canopyM > 0) {
@@ -87,26 +87,25 @@ export function updatePlantDisplay(
         const fallbackWorldRadius = CIRCLE_SCREEN_PX / referenceScale
         circle.radius(fallbackWorldRadius * stageScale)
       }
-      // Keep strata color in canopy mode
-      circle.fill(getPlantBaseColor(g))
-    } else if (mode === 'color-by') {
-      // Reset size to default
-      circle.radius(CIRCLE_SCREEN_PX)
-
-      // Stratum can be read directly from the node attr (no cache needed)
-      if (colorByAttr === 'stratum') {
-        const stratum = g.getAttr('data-stratum') as string || null
-        circle.fill(getStratumColor(stratum))
-      } else {
-        // Other attributes need species detail from cache
-        const detail = speciesCache.get(canonicalName)
-        const color = _getColorForAttribute(colorByAttr, detail)
-        circle.fill(color)
-      }
+      circle.fill(colorByAttr === null ? getPlantBaseColor(g) : resolveColorByValue(g, colorByAttr, canonicalName, speciesCache))
     }
   })
 
   plantsLayer.batchDraw()
+}
+
+function resolveColorByValue(
+  group: Konva.Group,
+  colorByAttr: ColorByAttribute,
+  canonicalName: string,
+  speciesCache: Map<string, Record<string, unknown>>,
+): string {
+  if (colorByAttr === 'stratum') {
+    const stratum = group.getAttr('data-stratum') as string || null
+    return getStratumColor(stratum)
+  }
+  const detail = speciesCache.get(canonicalName)
+  return getColorForAttribute(colorByAttr, detail)
 }
 
 /**
@@ -149,7 +148,7 @@ export function getLegendEntries(attr: ColorByAttribute): LegendEntry[] {
   }
 }
 
-function _getColorForAttribute(
+export function getColorForAttribute(
   attr: ColorByAttribute,
   detail: Record<string, unknown> | undefined,
 ): string {

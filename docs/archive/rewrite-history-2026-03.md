@@ -8,6 +8,8 @@ The canonical active references are now:
 - `docs/todo.md`
 - `docs/renderer/renderer.md`
 
+The live canvas architecture is now `SceneCanvasRuntime` + `CanvasSession`; any `CanvasEngine` language below is superseded history.
+
 ---
 
 ## 1. Why This Archive Exists

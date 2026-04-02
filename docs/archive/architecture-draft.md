@@ -2,6 +2,8 @@
 
 ## Context
 
+Historical design draft only. It describes the pre-cutover `CanvasEngine` architecture and is superseded by the live `SceneCanvasRuntime` + `CanvasSession` path.
+
 Canopi is an offline-first, open-source, cross-platform desktop app that makes agroecological design accessible to everyone — from home gardeners to professional permaculture designers. It ships with a massive plant database (175,484 species) and provides a VSCode-like interface for designing food forests, polycultures, and regenerative landscapes.
 
 **Problem**: Existing tools are either too complex (QGIS), too shallow (garden planners), or too narrow (agroforestry-only). No single tool combines accessibility with scientific depth across the full agroecological design workflow.

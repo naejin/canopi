@@ -4,6 +4,7 @@ import { t } from "./i18n";
 import { initTheme } from "./utils/theme";
 import { initShortcuts } from "./shortcuts/manager";
 import { useCallback, useRef } from "preact/hooks";
+import { lazy, Suspense } from "preact/compat";
 import { activePanel, sidePanel, sidePanelWidth, plantDbStatus, locale, theme, autoSaveIntervalMs, setBootstrappedSettings } from "./state/app";
 import { designDirty, saveCurrentDesign } from "./state/document";
 import { invoke } from "@tauri-apps/api/core";
@@ -11,8 +12,6 @@ import type { SubsystemHealth } from "./types/health";
 import { TitleBar } from "./components/shared/TitleBar";
 import { DegradedBanner } from "./components/shared/DegradedBanner";
 import { CommandPalette } from "./components/shared/CommandPalette";
-import { PlantDbPanel } from "./components/panels/PlantDbPanel";
-import { FavoritesPanel } from "./components/panels/FavoritesPanel";
 import { CanvasPanel } from "./components/panels/CanvasPanel";
 import { PanelBar } from "./components/panels/PanelBar";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -94,11 +93,35 @@ if (import.meta.hot) {
 const MIN_SIDEBAR_WIDTH = 320;
 const MAX_SIDEBAR_RATIO = 0.9;
 
+const PlantDbPanel = lazy(async () => {
+  const module = await import("./components/panels/PlantDbPanel");
+  return { default: module.PlantDbPanel };
+});
+
+const FavoritesPanel = lazy(async () => {
+  const module = await import("./components/panels/FavoritesPanel");
+  return { default: module.FavoritesPanel };
+});
+
+const LocationPanel = lazy(async () => {
+  const module = await import("./components/panels/LocationPanel");
+  return { default: module.LocationPanel };
+});
 
 function SidePanelContent({ side }: { side: string }) {
-  if (side === "plant-db") return <PlantDbPanel />;
-  if (side === "favorites") return <FavoritesPanel />;
-  return null;
+  const Panel = side === "plant-db"
+    ? PlantDbPanel
+    : side === "favorites"
+      ? FavoritesPanel
+      : null;
+
+  if (!Panel) return null;
+
+  return (
+    <Suspense fallback={<div className={styles.sidePanelLoading} aria-hidden="true" />}>
+      <Panel />
+    </Suspense>
+  );
 }
 
 export function App() {
@@ -107,6 +130,7 @@ export function App() {
   const width = sidePanelWidth.value;
 
   const showCanvas = panel === "canvas";
+  const showLocation = panel === "location";
   const showSidebar = showCanvas && side !== null;
 
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
@@ -145,6 +169,11 @@ export function App() {
       <div className={styles.appBody}>
         {/* Canvas — always fills available space */}
         {showCanvas && <CanvasPanel />}
+        {showLocation && (
+          <Suspense fallback={<div className={styles.sidePanelLoading} aria-hidden="true" />}>
+            <LocationPanel />
+          </Suspense>
+        )}
 
         {/* Right side panel (plant search, etc.) */}
         {showSidebar && (
@@ -170,7 +199,7 @@ export function App() {
         )}
 
         {/* Right panel bar — always visible */}
-        {showCanvas && <PanelBar />}
+        {(showCanvas || showLocation) && <PanelBar />}
       </div>
       <CommandPalette />
     </div>

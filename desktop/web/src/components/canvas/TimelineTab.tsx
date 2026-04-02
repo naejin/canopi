@@ -3,7 +3,7 @@ import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale } from '../../state/app'
 import { currentDesign } from '../../state/document'
-import { canvasEngine } from '../../canvas/engine'
+import { currentCanvasSession } from '../../canvas/session'
 import { toISODate } from '../../canvas/timeline-math'
 import {
   addTimelineAction,
@@ -36,6 +36,7 @@ const EMPTY_FORM: FormState = {
 
 export function TimelineTab() {
   void locale.value
+  const session = currentCanvasSession.value
 
   const granularity = useSignal<Granularity>('month')
   const selectedId = useSignal<string | null>(null)
@@ -111,7 +112,7 @@ export function TimelineTab() {
     const design = currentDesign.value
     if (!design) return
 
-    const plants = canvasEngine?.getPlacedPlants() ?? design.plants
+    const plants = session?.getPlacedPlants() ?? design.plants
     const nextActions = buildDefaultTimelineActions(
       plants,
       design.timeline,

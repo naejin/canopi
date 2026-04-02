@@ -2,7 +2,7 @@ import { t } from '../../i18n'
 import { locale } from '../../state/app'
 import { toggleFavoriteAction, selectedCanonicalName } from '../../state/plant-db'
 import { plantStampSpecies } from '../../state/canvas'
-import { canvasEngine } from '../../canvas/engine'
+import { currentCanvasSession } from '../../canvas/session'
 import { STRATUM_I18N_KEY } from '../../types/constants'
 import type { SpeciesListItem } from '../../types/species'
 import styles from './PlantDb.module.css'
@@ -19,6 +19,7 @@ interface Props {
 
 export function PlantRow({ plant }: Props) {
   void locale.value
+  const session = currentCanvasSession.value
 
   const handleDragStart = (e: DragEvent) => {
     e.dataTransfer!.setData('text/plain', JSON.stringify({
@@ -50,7 +51,7 @@ export function PlantRow({ plant }: Props) {
       stratum: plant.stratum,
       width_max_m: plant.width_max_m,
     }
-    canvasEngine?.setActiveTool('plant-stamp')
+    session?.setTool('plant-stamp')
   }
 
   const handleRowClick = () => {

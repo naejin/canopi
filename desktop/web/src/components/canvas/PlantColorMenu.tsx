@@ -1,7 +1,7 @@
 import { locale } from '../../state/app'
-import { plantColorMenuOpen, plantSpeciesColors, selectedObjectIds } from '../../state/canvas'
+import { plantColorMenuOpen, plantSpeciesColors } from '../../state/canvas'
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { canvasEngine } from '../../canvas/engine'
+import { currentCanvasSelection, currentCanvasSession } from '../../canvas/session'
 import {
   DEFAULT_PLANT_COLOR,
   PLANT_COLOR_PALETTE,
@@ -39,11 +39,12 @@ function closeMenu(buttonRef?: { current: HTMLButtonElement | null }) {
 }
 
 export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
-  void selectedObjectIds.value
+  void currentCanvasSelection.value
   void plantSpeciesColors.value
+  const session = currentCanvasSession.value
   const activeLocale = locale.value
   const menuOpen = plantColorMenuOpen.value
-  const context = canvasEngine?.getSelectedPlantColorContext() ?? {
+  const context = session?.getSelectedPlantColorContext() ?? {
     plantIds: [],
     singleSpeciesCanonicalName: null,
     singleSpeciesCommonName: null,
@@ -141,7 +142,7 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
   useEffect(() => {
     if (!menuOpen || !context.singleSpeciesCanonicalName || context.suggestedColor) return
 
-    const pending = canvasEngine?.ensureSpeciesCacheEntries([context.singleSpeciesCanonicalName], activeLocale)
+    const pending = session?.ensureSpeciesCacheEntries([context.singleSpeciesCanonicalName], activeLocale)
     if (!pending) return
 
     void pending.then((loaded) => {
@@ -194,24 +195,24 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
 
   const applyToSelection = () => {
     if (!normalizedActiveColor) return
-    canvasEngine?.setSelectedPlantColor(normalizedActiveColor)
+    session?.setSelectedPlantColor(normalizedActiveColor)
     closeMenu(buttonRef)
   }
 
   const applyToSpecies = () => {
     if (!normalizedActiveColor || !context.singleSpeciesCanonicalName) return
-    canvasEngine?.setPlantColorForSpecies(context.singleSpeciesCanonicalName, normalizedActiveColor)
+    session?.setPlantColorForSpecies(context.singleSpeciesCanonicalName, normalizedActiveColor)
     closeMenu(buttonRef)
   }
 
   const clearSelectedPlantColors = () => {
-    canvasEngine?.setSelectedPlantColor(null)
+    session?.setSelectedPlantColor(null)
     closeMenu(buttonRef)
   }
 
   const clearSpeciesColor = () => {
     if (!context.singleSpeciesCanonicalName) return
-    canvasEngine?.clearPlantSpeciesColor(context.singleSpeciesCanonicalName)
+    session?.clearPlantSpeciesColor(context.singleSpeciesCanonicalName)
     closeMenu(buttonRef)
   }
 

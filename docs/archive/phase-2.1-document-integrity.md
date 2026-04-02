@@ -2,6 +2,8 @@
 
 ## Context
 
+Historical context only. The live canvas architecture has since moved to `SceneCanvasRuntime` + `CanvasSession`; do not treat the `CanvasEngine` references in this archive as current guidance.
+
 The architecture review (`docs/reviews/2026-03-24-architecture-review.md`) found that the save/autosave path is **actively destructive** — it drops document sections on every save. This is the top-priority defect. Phase 2.1 fixes document composition, ownership, dirty tracking, startup health, and contract consolidation — directly mapping to the review's Phases A→E.
 
 Reviews of the plan (`docs/plans/phase-2.1-document-integrity-review-2026-03-24.md`) identified corrections incorporated below: no module cycle in Phase A, two-baseline dirty model in Phase C, defensive `extra` spread ordering, `?? null` semantics for custom attrs, background-image import gated until persistence exists, degraded-mode feature gating in Phase D, bootstrap restructuring + theme flicker mitigation in Phase E, and `state/document.ts` explicitly marked as the long-term document API boundary.

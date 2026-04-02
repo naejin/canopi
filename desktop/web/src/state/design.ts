@@ -1,6 +1,6 @@
 import { signal, computed, batch } from '@preact/signals'
 import type { CanopiFile } from '../types/design'
-import { canvasEngine } from '../canvas/engine'
+import { getCurrentCanvasSession } from '../canvas/session'
 
 // ---------------------------------------------------------------------------
 // Signals
@@ -18,8 +18,8 @@ export const pendingTemplateImport = signal<{ path: string; name: string } | nul
 // ---------------------------------------------------------------------------
 // Two-baseline dirty model
 //
-// Canvas dirty: tracked by CanvasHistory via saved checkpoint position.
-//   history.canvasClean signal is the authority — true when _past.length
+// Canvas dirty: tracked by the active canvas runtime history via saved checkpoint position.
+//   canvasClean is the authority — true when _past.length
 //   matches _savedPosition and the checkpoint hasn't been truncated.
 //   Safe against the 500-cap: if truncation shifts past the saved position,
 //   canvasClean stays false permanently until the next save.
@@ -39,16 +39,24 @@ export const nonCanvasSavedRevision = signal<number>(0)
 export const autosaveFailed = signal<boolean>(false)
 
 /**
- * Canvas clean signal — written by CanvasHistory._updateCanvasClean().
+ * Canvas clean signal — written by the active canvas runtime history.
  * True when the canvas matches the last saved state.
  * This is a bridge signal so designDirty can be computed without
- * depending on the CanvasEngine instance directly.
+ * depending on a concrete canvas runtime instance directly.
  */
 export const canvasClean = signal<boolean>(true)
+/**
+ * Sticky canvas-dirty bridge for when the canvas session is torn down while
+ * unsaved canvas edits still exist in the canonical document snapshot.
+ */
+export const detachedCanvasDirty = signal<boolean>(false)
+export const canvasDirty = computed(() =>
+  detachedCanvasDirty.value || !canvasClean.value
+)
 
 /** Composite dirty — true if either canvas or non-canvas has unsaved changes. */
 export const designDirty = computed(() =>
-  !canvasClean.value
+  canvasDirty.value
   || nonCanvasRevision.value !== nonCanvasSavedRevision.value
 )
 
@@ -56,6 +64,7 @@ export const designDirty = computed(() =>
 export function resetDirtyBaselines(): void {
   batch(() => {
     canvasClean.value = true
+    detachedCanvasDirty.value = false
     nonCanvasRevision.value = 0
     nonCanvasSavedRevision.value = 0
     autosaveFailed.value = false
@@ -65,9 +74,14 @@ export function resetDirtyBaselines(): void {
 /** Mark save baseline as current state (used after successful save). */
 export function markSaved(): void {
   // Tell history to remember the current position as saved
-  canvasEngine?.history.markSaved()
+  getCurrentCanvasSession()?.markSaved()
+  detachedCanvasDirty.value = false
   nonCanvasSavedRevision.value = nonCanvasRevision.value
   autosaveFailed.value = false
+}
+
+export function markCanvasDetachedDirty(dirty: boolean): void {
+  detachedCanvasDirty.value = dirty
 }
 
 /** Apply the canonical document signals after a successful replacement/save. */

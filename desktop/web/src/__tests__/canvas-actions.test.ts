@@ -4,7 +4,7 @@ import { openBottomPanel, setBottomPanelTab } from '../state/canvas-actions'
 
 beforeEach(() => {
   bottomPanelOpen.value = false
-  bottomPanelTab.value = 'location'
+  bottomPanelTab.value = 'timeline'
 })
 
 describe('bottom panel actions', () => {
@@ -18,7 +18,7 @@ describe('bottom panel actions', () => {
   })
 
   it('keeps the panel open when switching tabs after opening', () => {
-    openBottomPanel('location')
+    openBottomPanel('timeline')
     setBottomPanelTab('timeline')
 
     expect(bottomPanelOpen.value).toBe(true)

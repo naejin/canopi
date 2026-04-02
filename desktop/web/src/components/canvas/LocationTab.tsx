@@ -7,7 +7,7 @@ import { locale } from '../../state/app'
 import { geocodeAddress, type GeoResult } from '../../ipc/geocoding'
 import { currentDesign } from '../../state/document'
 import { clearDesignLocation, setDesignLocation } from '../../state/location-actions'
-import { setBottomPanelOpen } from '../../state/canvas-actions'
+import { navigateTo } from '../../state/app'
 import { buildLocationCommit, computeSavedPinState } from './location-tab-logic'
 import styles from './LocationTab.module.css'
 
@@ -262,15 +262,15 @@ export function LocationTab() {
         )}
       </div>
 
-      {/* Collapse button */}
+      {/* Back to canvas */}
       <button
         type="button"
         className={styles.collapseBtn}
-        onClick={() => setBottomPanelOpen(false)}
-        aria-label={t('canvas.bottomPanel.collapse')}
+        onClick={() => navigateTo('canvas')}
+        aria-label={t('commands.canvas')}
       >
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <path d="M3 6L8 11L13 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M10.5 3.5L5.5 8L10.5 12.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
 

@@ -2,8 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => {
   return {
-    canvasEngine: null as any,
-    toCanopi: vi.fn(),
+    canvasSession: null as any,
     extractExtra: vi.fn(() => ({ imported: true })),
     saveDesign: vi.fn(),
     saveDesignAs: vi.fn(),
@@ -14,14 +13,13 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock('../canvas/engine', () => ({
-  get canvasEngine() {
-    return mocks.canvasEngine
+vi.mock('../canvas/session', () => ({
+  getCurrentCanvasSession() {
+    return mocks.canvasSession
   },
 }))
 
-vi.mock('../canvas/serializer', () => ({
-  toCanopi: mocks.toCanopi,
+vi.mock('../state/document-extra', () => ({
   extractExtra: mocks.extractExtra,
 }))
 
@@ -73,6 +71,7 @@ import {
   consumeQueuedDocumentLoad,
   openDesignAsTemplate,
   openDesignFromPath,
+  saveCurrentDesign,
 } from '../state/document-actions'
 import type { CanopiFile } from '../types/design'
 
@@ -87,6 +86,7 @@ function makeFile(name: string): CanopiFile {
     layers: [],
     plants: [],
     zones: [],
+    annotations: [],
     consortiums: [],
     timeline: [],
     budget: [],
@@ -98,17 +98,24 @@ function makeFile(name: string): CanopiFile {
 function makeEngine() {
   return {
     loadDocument: vi.fn(),
-    replaceDocument: vi.fn(() => {
-      activeTool.value = 'select'
-      selectedObjectIds.value = new Set()
-      lockedObjectIds.value = new Set()
-      highlightedConsortium.value = null
-    }),
+    replaceDocument: vi.fn(),
     history: {
       clear: vi.fn(),
       markSaved: vi.fn(),
     },
     showCanvasChrome: vi.fn(),
+  }
+}
+
+function makeSession() {
+  const engine = makeEngine()
+  return {
+    engine,
+    replaceDocument: engine.replaceDocument,
+    showCanvasChrome: engine.showCanvasChrome,
+    clearHistory: engine.history.clear,
+    markSaved: engine.history.markSaved,
+    serializeDocument: vi.fn((metadata: { name: string }) => makeFile(metadata.name)),
   }
 }
 
@@ -129,8 +136,7 @@ async function flushMicrotasks(): Promise<void> {
 }
 
 beforeEach(() => {
-  mocks.canvasEngine = makeEngine()
-  mocks.toCanopi.mockReset()
+  mocks.canvasSession = makeSession()
   mocks.extractExtra.mockReset()
   mocks.extractExtra.mockReturnValue({ imported: true })
   mocks.saveDesign.mockReset()
@@ -154,9 +160,7 @@ beforeEach(() => {
   lockedObjectIds.value = new Set(['locked-1'])
   highlightedConsortium.value = 'consortium-1'
 
-  mocks.toCanopi.mockImplementation((_engine: unknown, metadata: { name: string }) => {
-    return makeFile(metadata.name)
-  })
+  mocks.canvasSession.serializeDocument.mockClear()
 })
 
 describe('document replacement actions', () => {
@@ -169,18 +173,14 @@ describe('document replacement actions', () => {
 
     expect(mocks.saveDesign).not.toHaveBeenCalled()
     expect(mocks.loadDesign).toHaveBeenCalledWith('/designs/next.canopi')
-    expect(mocks.canvasEngine.replaceDocument).toHaveBeenCalledWith(
+    expect(mocks.canvasSession.replaceDocument).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'Next', extra: { imported: true } }),
     )
     expect(currentDesign.value?.name).toBe('Next')
     expect(designName.value).toBe('Next')
     expect(designPath.value).toBe('/designs/next.canopi')
-    expect(activeTool.value).toBe('select')
-    expect(selectedObjectIds.value.size).toBe(0)
-    expect(lockedObjectIds.value.size).toBe(0)
-    expect(highlightedConsortium.value).toBe(null)
-    expect(mocks.canvasEngine.history.clear).toHaveBeenCalled()
-    expect(mocks.canvasEngine.showCanvasChrome).toHaveBeenCalled()
+    expect(mocks.canvasSession.engine.history.clear).toHaveBeenCalled()
+    expect(mocks.canvasSession.showCanvasChrome).toHaveBeenCalled()
   })
 
   it('cancels replacement before loading when the user cancels', async () => {
@@ -205,7 +205,7 @@ describe('document replacement actions', () => {
       '/designs/current.canopi',
       expect.objectContaining({ name: 'Current' }),
     )
-    expect(mocks.canvasEngine.history.markSaved).toHaveBeenCalled()
+    expect(mocks.canvasSession.engine.history.markSaved).toHaveBeenCalled()
     expect(currentDesign.value?.name).toBe('Next')
   })
 
@@ -227,7 +227,7 @@ describe('document replacement actions', () => {
 
     await expect(openDesignFromPath('/designs/bad.canopi')).rejects.toThrow('Disk read failed')
 
-    expect(mocks.canvasEngine.replaceDocument).not.toHaveBeenCalled()
+    expect(mocks.canvasSession.replaceDocument).not.toHaveBeenCalled()
     expect(currentDesign.value?.name).toBe('Current')
   })
 
@@ -236,12 +236,12 @@ describe('document replacement actions', () => {
     pendingDesignPath.value = '/designs/queued.canopi'
     mocks.loadDesign.mockReturnValue(queued.promise)
 
-    const cancel = consumeQueuedDocumentLoad(mocks.canvasEngine)
+    const cancel = consumeQueuedDocumentLoad(mocks.canvasSession)
     cancel()
     queued.resolve(makeFile('Queued'))
     await flushMicrotasks()
 
-    expect(mocks.canvasEngine.replaceDocument).not.toHaveBeenCalled()
+    expect(mocks.canvasSession.replaceDocument).not.toHaveBeenCalled()
     expect(currentDesign.value?.name).toBe('Current')
   })
 
@@ -250,11 +250,11 @@ describe('document replacement actions', () => {
     pendingDesignPath.value = '/designs/broken.canopi'
     mocks.loadDesign.mockReturnValue(queued.promise)
 
-    consumeQueuedDocumentLoad(mocks.canvasEngine)
+    consumeQueuedDocumentLoad(mocks.canvasSession)
     queued.reject(new Error('Disk read failed'))
     await flushMicrotasks()
 
-    expect(mocks.canvasEngine.replaceDocument).not.toHaveBeenCalled()
+    expect(mocks.canvasSession.replaceDocument).not.toHaveBeenCalled()
     expect(pendingDesignPath.value).toBe('/designs/broken.canopi')
     expect(mocks.message).toHaveBeenCalledWith(
       expect.stringContaining('Failed to open broken'),
@@ -273,7 +273,7 @@ describe('document replacement actions', () => {
   })
 
   it('queues the path without loading when engine is null', async () => {
-    mocks.canvasEngine = null
+    mocks.canvasSession = null
 
     await openDesignFromPath('/designs/next.canopi')
 
@@ -284,23 +284,36 @@ describe('document replacement actions', () => {
   })
 
   it('queues template imports when the canvas engine is not ready, then applies them as unsaved designs', async () => {
-    mocks.canvasEngine = null
+    mocks.canvasSession = null
     mocks.loadDesign.mockResolvedValue(makeFile('Downloaded Template'))
 
     await expect(openDesignAsTemplate('/tmp/template.canopi', 'Forest Edge')).resolves.toBe('queued')
     expect(pendingTemplateImport.value).toEqual({ path: '/tmp/template.canopi', name: 'Forest Edge' })
 
-    const nextEngine = makeEngine()
-    const cancel = consumeQueuedDocumentLoad(nextEngine as any)
+    const nextSession = makeSession()
+    const cancel = consumeQueuedDocumentLoad(nextSession as any)
     await flushMicrotasks()
 
     expect(mocks.loadDesign).toHaveBeenCalledWith('/tmp/template.canopi')
-    expect(nextEngine.replaceDocument).toHaveBeenCalledWith(
+    expect(nextSession.replaceDocument).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'Downloaded Template', extra: { imported: true } }),
     )
     expect(designName.value).toBe('Forest Edge')
     expect(designPath.value).toBe(null)
     expect(pendingTemplateImport.value).toBe(null)
     cancel()
+  })
+
+  it('saves the canonical document snapshot when no canvas session is mounted', async () => {
+    mocks.canvasSession = null
+    designName.value = 'Detached'
+
+    await saveCurrentDesign()
+
+    expect(mocks.saveDesign).toHaveBeenCalledWith(
+      '/designs/current.canopi',
+      expect.objectContaining({ name: 'Detached' }),
+    )
+    expect(designName.value).toBe('Detached')
   })
 })

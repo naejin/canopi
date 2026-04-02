@@ -1,13 +1,14 @@
 import { useRef, useEffect } from 'preact/hooks'
 import { locale, autoSaveIntervalMs } from '../../state/app'
-import { canvasReady } from '../../state/canvas'
 import {
   currentDesign, designName, designPath, designDirty,
   writeCanvasIntoDocument, loadCanvasFromDocument, autosaveFailed,
   consumeQueuedDocumentLoad,
+  snapshotCanvasIntoCurrentDocument,
 } from '../../state/document'
 import { autosaveDesign } from '../../ipc/design'
-import { CanvasEngine, setCanvasEngine, canvasEngine } from '../../canvas/engine'
+import { CanvasSession, getCurrentCanvasSession, setCurrentCanvasSession } from '../../canvas/session'
+import { SceneCanvasRuntime } from '../../canvas/runtime/scene-runtime'
 import { CanvasToolbar } from '../canvas/CanvasToolbar'
 import { ZoomControls } from '../canvas/ZoomControls'
 import { DisplayModeControls } from '../canvas/DisplayModeControls'
@@ -16,6 +17,7 @@ import { BottomPanel } from '../canvas/BottomPanel'
 import { BottomPanelLauncher } from '../canvas/BottomPanelLauncher'
 import { LayerPanel } from '../canvas/LayerPanel'
 import { WelcomeScreen } from '../shared/WelcomeScreen'
+import { canvasDirty, markCanvasDetachedDirty } from '../../state/design'
 import styles from './Panels.module.css'
 
 // Autosave interval is now configurable via Rust settings (autoSaveIntervalMs signal)
@@ -26,41 +28,59 @@ export function CanvasPanel() {
   const canvasAreaRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const rulerOverlayRef = useRef<HTMLDivElement>(null)
-  const engineRef = useRef<CanvasEngine | null>(null)
+  const sessionRef = useRef<CanvasSession | null>(null)
 
   useEffect(() => {
     const container = containerRef.current
     const canvasArea = canvasAreaRef.current
     if (!container || !canvasArea) return
 
-    const engine = new CanvasEngine()
-    engine.init(container, canvasArea.clientWidth, canvasArea.clientHeight, canvasArea)
-    engineRef.current = engine
-    setCanvasEngine(engine)
-    canvasReady.value = true
+    const runtime = new SceneCanvasRuntime()
+    const session = new CanvasSession(runtime)
+    sessionRef.current = session
+    let cancelled = false
+    let cancelQueuedLoad = () => {}
+    let resizeObserver: ResizeObserver | null = null
 
-    engine.initializeViewport()
-    // Attach HTML rulers to the overlay div (sits above the Konva canvas)
-    if (rulerOverlayRef.current) {
-      engine.attachRulersTo(rulerOverlayRef.current)
-    }
-    // If a design is already loaded (e.g., panel switch back), restore it
-    // into the fresh engine. Otherwise hide chrome until new/open.
-    if (currentDesign.value) {
-      loadCanvasFromDocument(currentDesign.value, engine)
-      engine.showCanvasChrome()
-    } else {
-      engine.hideCanvasChrome()
-    }
+    void runtime.init(container).then(() => {
+      if (cancelled) return
 
-    const cancelQueuedLoad = consumeQueuedDocumentLoad(engine)
+      setCurrentCanvasSession(session)
+      session.initializeViewport()
+      if (rulerOverlayRef.current) {
+        session.attachRulersTo(rulerOverlayRef.current)
+      }
+      if (currentDesign.value) {
+        loadCanvasFromDocument(currentDesign.value, session)
+        session.showCanvasChrome()
+      } else {
+        session.hideCanvasChrome()
+      }
+
+      resizeObserver = new ResizeObserver(() => {
+        runtime.resize(canvasArea.clientWidth, canvasArea.clientHeight)
+      })
+      resizeObserver.observe(canvasArea)
+      cancelQueuedLoad = consumeQueuedDocumentLoad(session)
+    }).catch((error) => {
+      console.error('Failed to initialize scene canvas runtime:', error)
+    })
 
     return () => {
+      cancelled = true
+      resizeObserver?.disconnect()
       cancelQueuedLoad()
-      engine.destroy()
-      engineRef.current = null
-      setCanvasEngine(null)
-      canvasReady.value = false
+      if (currentDesign.value) {
+        try {
+          snapshotCanvasIntoCurrentDocument(session, designName.value)
+          markCanvasDetachedDirty(canvasDirty.value)
+        } catch (error) {
+          console.error('Failed to snapshot canvas before teardown:', error)
+        }
+      }
+      session.destroy()
+      sessionRef.current = null
+      setCurrentCanvasSession(null)
     }
   }, [])
 
@@ -70,9 +90,9 @@ export function CanvasPanel() {
   useEffect(() => {
     const timer = setInterval(() => {
       if (!designDirty.value) return
-      const eng = canvasEngine
-      if (!eng) return
-      const content = writeCanvasIntoDocument(eng, designName.value)
+      const session = getCurrentCanvasSession()
+      if (!session) return
+      const content = writeCanvasIntoDocument(session, designName.value)
       autosaveDesign(content, designPath.value)
         .then(() => { autosaveFailed.value = false })
         .catch((err) => {

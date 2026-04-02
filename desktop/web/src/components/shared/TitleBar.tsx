@@ -38,7 +38,7 @@ function LocalePicker() {
 }
 
 export function TitleBar() {
-  const isCanvas = activePanel.value === 'canvas'
+  const showsDocumentName = activePanel.value === 'canvas' || activePanel.value === 'location'
   const name = designName.value
   const dirty = designDirty.value
   // Subscribe to locale so aria-labels re-render on language change
@@ -70,7 +70,7 @@ export function TitleBar() {
           alt="Canopi"
           draggable={false}
         />
-        {isCanvas && name && name !== 'Untitled' && (
+        {showsDocumentName && name && name !== 'Untitled' && (
           <span className={styles.fileName}>
             {name}
             {dirty && <span className={styles.dirtyDot} aria-label={t('titleBar.unsavedChanges')} />}

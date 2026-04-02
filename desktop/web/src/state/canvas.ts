@@ -72,10 +72,10 @@ export function createDefaultLayerOpacity(): Record<string, number> {
 export const layerOpacity = signal<Record<string, number>>(createDefaultLayerOpacity())
 
 // Plant display modes
-export type PlantDisplayMode = 'default' | 'canopy' | 'color-by'
+export type PlantSizeMode = 'default' | 'canopy'
 export type ColorByAttribute = 'stratum' | 'hardiness' | 'lifecycle' | 'nitrogen' | 'edibility' | 'flower'
-export const plantDisplayMode = signal<PlantDisplayMode>('default')
-export const plantColorByAttr = signal<ColorByAttribute>('stratum')
+export const plantSizeMode = signal<PlantSizeMode>('default')
+export const plantColorByAttr = signal<ColorByAttribute | null>(null)
 export const plantColorMenuOpen = signal<boolean>(false)
 export const plantSpeciesColors = signal<Record<string, string>>({})
 
@@ -97,9 +97,9 @@ export const currentConsortiums = signal<Consortium[]>([])
 export const highlightedConsortium = signal<string | null>(null)
 
 // Bottom panel
-export type BottomPanelTab = 'location' | 'timeline' | 'budget' | 'consortium'
-export const BOTTOM_PANEL_TABS: BottomPanelTab[] = ['location', 'timeline', 'budget', 'consortium']
-export const VISIBLE_BOTTOM_PANEL_TABS: BottomPanelTab[] = ['location']
+export type BottomPanelTab = 'timeline' | 'budget' | 'consortium'
+export const BOTTOM_PANEL_TABS: BottomPanelTab[] = ['timeline', 'budget', 'consortium']
+export const VISIBLE_BOTTOM_PANEL_TABS: BottomPanelTab[] = ['timeline', 'budget', 'consortium']
 export const bottomPanelOpen = signal<boolean>(false)
-export const bottomPanelTab = signal<BottomPanelTab>('location')
+export const bottomPanelTab = signal<BottomPanelTab>('timeline')
 export const bottomPanelHeight = signal<number>(240)

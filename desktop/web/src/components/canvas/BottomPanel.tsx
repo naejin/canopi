@@ -8,8 +8,6 @@ type BottomPanelComponent = () => preact.JSX.Element
 
 async function loadBottomPanelTab(tab: BottomPanelTab): Promise<BottomPanelComponent> {
   switch (tab) {
-    case 'location':
-      return (await import('./LocationTab')).LocationTab
     case 'timeline':
       return (await import('./TimelineTab')).TimelineTab
     case 'budget':

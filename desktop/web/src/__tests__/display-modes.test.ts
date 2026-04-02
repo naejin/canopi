@@ -48,7 +48,7 @@ describe('updatePlantDisplay', () => {
       batchDraw: vi.fn(),
     } as any
 
-    updatePlantDisplay(plantsLayer, 'default', 'stratum', 8, 8, new Map())
+    updatePlantDisplay(plantsLayer, 'default', null, 8, 8, new Map())
 
     expect(circle.radius).toHaveBeenLastCalledWith(CIRCLE_SCREEN_PX)
     expect(circle.fill).toHaveBeenLastCalledWith('#C44230')
@@ -68,7 +68,7 @@ describe('updatePlantDisplay', () => {
       ['Malus domestica', { resolved_flower_color: 'Yellow' }],
     ])
 
-    updatePlantDisplay(plantsLayer, 'color-by', 'flower', 8, 8, speciesCache)
+    updatePlantDisplay(plantsLayer, 'default', 'flower', 8, 8, speciesCache)
 
     expect(circle.radius).toHaveBeenLastCalledWith(CIRCLE_SCREEN_PX)
     expect(circle.fill).toHaveBeenLastCalledWith('#C8A51E')
@@ -87,7 +87,7 @@ describe('updatePlantDisplay', () => {
       ['Malus domestica', { resolved_flower_color: null }],
     ])
 
-    updatePlantDisplay(plantsLayer, 'color-by', 'flower', 8, 8, speciesCache)
+    updatePlantDisplay(plantsLayer, 'default', 'flower', 8, 8, speciesCache)
 
     expect(circle.fill).toHaveBeenLastCalledWith(UNKNOWN_FLOWER_COLOR)
   })

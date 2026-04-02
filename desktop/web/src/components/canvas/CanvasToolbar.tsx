@@ -2,16 +2,14 @@ import { useSignalEffect } from '@preact/signals'
 import type { ComponentChildren } from 'preact'
 import { useRef } from 'preact/hooks'
 import {
-  activeTool,
   gridVisible,
   plantColorMenuOpen,
   rulersVisible,
-  selectedObjectIds,
   snapToGridEnabled,
 } from '../../state/canvas'
 import { locale } from '../../state/app'
 import { t } from '../../i18n'
-import { canvasEngine } from '../../canvas/engine'
+import { currentCanvasSelection, currentCanvasSession, currentCanvasTool } from '../../canvas/session'
 import {
   SelectIcon,
   HandIcon,
@@ -52,11 +50,12 @@ const ALL_TOOLS: ToolDef[] = [...TOOLS, ...SHAPE_TOOLS]
 export function CanvasToolbar() {
   // Subscribe to locale so labels re-render on language change
   void locale.value
-  void selectedObjectIds.value
+  void currentCanvasSelection.value
+  const session = currentCanvasSession.value
 
   const toolbarRef = useRef<HTMLDivElement>(null)
   const plantColorButtonRef = useRef<HTMLButtonElement>(null)
-  const plantColorContext = canvasEngine?.getSelectedPlantColorContext() ?? {
+  const plantColorContext = session?.getSelectedPlantColorContext() ?? {
     plantIds: [],
     singleSpeciesCanonicalName: null,
     singleSpeciesCommonName: null,
@@ -67,8 +66,8 @@ export function CanvasToolbar() {
 
   useSignalEffect(() => {
     if (!plantColorMenuOpen.value) return
-    selectedObjectIds.value
-    if (!canvasEngine || canvasEngine.getSelectedPlantColorContext().plantIds.length === 0) {
+    currentCanvasSelection.value
+    if (!session || session.getSelectedPlantColorContext().plantIds.length === 0) {
       plantColorMenuOpen.value = false
     }
   })
@@ -79,7 +78,7 @@ export function CanvasToolbar() {
 
     e.preventDefault()
 
-    const currentId = activeTool.value
+    const currentId = currentCanvasTool.value
     const currentIndex = ALL_TOOLS.findIndex((t) => t.id === currentId)
     if (currentIndex === -1) return
 
@@ -91,7 +90,7 @@ export function CanvasToolbar() {
     const nextTool = ALL_TOOLS[nextIndex]
     if (!nextTool) return
 
-    activeTool.value = nextTool.id
+    session?.setTool(nextTool.id)
 
     // Move DOM focus to the newly active button
     const toolbar = toolbarRef.current
@@ -103,7 +102,7 @@ export function CanvasToolbar() {
   }
 
   function renderButton(tool: ToolDef) {
-    const isActive = activeTool.value === tool.id
+    const isActive = currentCanvasTool.value === tool.id
     const label = t(tool.labelKey)
     const desc = t(tool.descKey)
     const shortcutLabel = tool.shortcut ? `(${tool.shortcut})` : ''
@@ -120,7 +119,7 @@ export function CanvasToolbar() {
         // Only the active button is in the tab sequence; arrow keys move focus
         tabIndex={isActive ? 0 : -1}
         className={styles.toolButton}
-        onClick={() => { activeTool.value = tool.id }}
+        onClick={() => { session?.setTool(tool.id) }}
       >
         <tool.Icon className={styles.toolIcon} />
         <span className={styles.tooltip} role="tooltip">
@@ -248,7 +247,7 @@ export function CanvasToolbar() {
         'canvas.grid.gridDesc',
         gridVisible.value,
         GridIcon,
-        () => canvasEngine?.toggleGrid(),
+        () => session?.toggleGrid(),
       )}
       {renderToggle(
         'snap',
@@ -256,7 +255,7 @@ export function CanvasToolbar() {
         'canvas.grid.snapToGridDesc',
         snapToGridEnabled.value,
         SnapIcon,
-        () => canvasEngine?.toggleSnapToGrid(),
+        () => session?.toggleSnapToGrid(),
       )}
       {renderToggle(
         'rulers',
@@ -264,7 +263,7 @@ export function CanvasToolbar() {
         'canvas.grid.rulersDesc',
         rulersVisible.value,
         RulerIcon,
-        () => canvasEngine?.toggleRulers(),
+        () => session?.toggleRulers(),
       )}
 
     </div>

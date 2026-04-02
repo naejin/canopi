@@ -4,7 +4,7 @@ import type { Settings } from "../types/settings";
 import { setSettings } from "../ipc/settings";
 import { gridSize, snapToGridEnabled } from "./canvas";
 
-export type Panel = "plant-db" | "canvas" | "favorites";
+export type Panel = "plant-db" | "canvas" | "favorites" | "location";
 
 // Panels that open as a sidebar alongside the canvas instead of replacing it.
 export type SidePanel = "plant-db" | "favorites";
@@ -56,7 +56,7 @@ export const sidePanelWidth = signal<number>(560);
 /**
  * Navigate to a panel using the correct routing model:
  * - plant-db / favorites: open as sidebar alongside canvas (toggle if already open)
- * - canvas: close any sidebar, show canvas only
+ * - canvas / location: full-screen primary panels
  */
 export function navigateTo(panel: Panel): void {
   batch(() => {

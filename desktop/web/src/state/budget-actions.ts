@@ -1,14 +1,11 @@
-import { currentDesign, nonCanvasRevision } from './design'
 import type { BudgetItem } from '../types/design'
+import { mutateCurrentDesign } from './document-mutations'
 
 function updateBudget(updater: (budget: BudgetItem[]) => BudgetItem[]): void {
-  const design = currentDesign.value
-  if (!design) return
-  currentDesign.value = {
+  mutateCurrentDesign((design) => ({
     ...design,
     budget: updater(design.budget),
-  }
-  nonCanvasRevision.value += 1
+  }))
 }
 
 export function upsertBudgetItem(predicate: (item: BudgetItem) => boolean, next: BudgetItem): void {

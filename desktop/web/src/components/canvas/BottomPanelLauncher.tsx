@@ -11,8 +11,6 @@ import styles from './BottomPanelLauncher.module.css'
 
 function getLabel(tab: BottomPanelTab): string {
   switch (tab) {
-    case 'location':
-      return t('canvas.location.title')
     case 'timeline':
       return t('canvas.bottomPanel.timeline')
     case 'budget':

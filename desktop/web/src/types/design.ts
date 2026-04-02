@@ -10,6 +10,7 @@ export interface CanopiFile {
   layers: Layer[]
   plants: PlacedPlant[]
   zones: Zone[]
+  annotations?: Annotation[]
   consortiums: Consortium[]
   groups?: ObjectGroup[]
   timeline: TimelineAction[]
@@ -56,6 +57,15 @@ export interface Zone {
   points: Position[]
   fill_color: string | null
   notes: string | null
+}
+
+export interface Annotation {
+  id: string
+  annotation_type: string
+  position: Position
+  text: string
+  font_size: number
+  rotation: number | null
 }
 
 export interface ObjectGroup {

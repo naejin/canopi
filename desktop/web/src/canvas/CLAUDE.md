@@ -1,123 +1,110 @@
-# Canvas Engine & Konva.js
+# Canvas Runtime: Scene-Owned Production Path
 
-## Architecture Rules (enforced)
+## Current Status (2026-04-02)
 
-### Canvas Runtime Rule
-- **No shared runtime service locator** — runtime modules take only the dependencies they need via typed `*Deps` interfaces
-- `CanvasEngine` is the public facade — external code imports from `engine.ts`, never from `runtime/*.ts` directly
-- Runtime modules own their domain exclusively:
-  - `runtime/viewport.ts` — zoom, pan, resize, counter-scale
-  - `runtime/document-session.ts` — document load/hydration, layer state reset
-  - `runtime/object-ops.ts` — selection, delete, duplicate, clipboard, z-order
-  - `runtime/external-input.ts` — keyboard, mouse, drag-drop event routing
-  - `runtime/render-pipeline.ts` — LOD scheduling, theme reconciliation, display mode refresh, post-materialization reconciliation
-- Do not move domain logic back into `engine.ts` — if new canvas behavior is needed, add it to the appropriate runtime module or create a new one
+The live canvas now runs through `SceneCanvasRuntime`.
 
-### Canvas Drag & Off-Canvas Behavior
-- **No pointer capture**: Use window-level `pointermove`/`pointerup` listeners during drag, not `setPointerCapture` (Konva listens on internal canvas elements, not the container div)
-- **Edge clamping**: When cursor leaves canvas during draw/select, clamp position to container edge via `_clampToRect()` in `external-input.ts`. Inject clamped position via one-shot `getRelativePointerPosition()` override
-- **Tool affinity**: `external-input.ts` locks the tool reference on mousedown — all subsequent events route to that tool even if `activeTool` changes mid-drag
-- **Shapes born inert**: All shapes created with `draggable: false`. `_applyTool()` in engine.ts is the sole authority for draggable state. `AddNodeCommand.execute()` also sets draggable based on active tool
-- **Multi-select modifiers**: Additive/toggle selection accepts `Shift`, `Ctrl`, and `Cmd` (`metaKey`). Use the shared modifier check in `SelectTool`; do not fork platform-specific logic in multiple places
-- **Multi-select drag is live**: Dragging one selected node must move the full selected set during `dragmove`, not only record a batch move on `dragend`
-- **No smart-guide auto-alignment**: Do not reintroduce red smart-guide lines or peer-node auto-alignment during drag. Explicit guide snapping from ruler-created guides remains allowed
+Production ownership is:
+- `CanvasPanel` mounts `SceneCanvasRuntime`
+- `CanvasSession` is the only app-facing canvas seam
+- `SceneStore` is the only source of truth for canvas/document state
+- `RendererHost` owns backend selection, startup fallback, and runtime recovery
+- `PixiJS` is the primary world renderer
+- `Canvas2D` is the fallback renderer
+- the location/map flow is handled by a separate location shell and should not be treated as part of the canvas panel contract
 
-### Selection Highlights
-- Shadow effects on counter-scaled plant groups must target the **first child** (screen-pixel space), not the group. Use `highlightTargetFor()` from `theme-refresh.ts`
-- Ephemeral highlight attrs (`shadowColor`, `shadowBlur`, etc.) stripped via shared `EPHEMERAL_CANVAS_ATTRS` in `node-serialization.ts` — imported by `operations.ts` STRIP_ATTRS
-- `_applyHighlight`/`_removeHighlightFromNode` do NOT call `batchDraw()` — caller must batch after bulk operations via `_redrawHighlightedLayers()`
-- `_clearAllHighlights` must call `_redrawHighlightedLayers()` after clearing persistent highlights — preview and persistent highlights are flushed separately
-- `highlight-glow` canvas color reads from `--color-primary` on theme switch
+Landed in the live path:
+- scene-owned load/replace/save flows
+- scene-owned selection, drag, rectangle creation, text annotations, plant-stamp placement, and drag-drop placement
+- command/patch history in `scene-history.ts` and `scene-commands.ts`
+- first-class top-level document `annotations`
 
-### Renderer Ownership (landed — stability gate satisfied 2026-03-30)
-`RenderReconciler` owns render invalidation, batching, deferred scheduling, and stage-transform invalidation. `render-pipeline.ts` is the execution delegate behind the reconciler, not the scheduler. See `docs/renderer/renderer.md` for the validation checklist. Rules:
-- All visual updates go through `reconciler.invalidate(...)` — no scattered `batchDraw()` / manual reconcile calls
-- All stage transforms go through the engine-owned stage-transform path
-- Do not reintroduce direct renderer scheduling from viewport, tools, or action code
-- Do not treat `zoomLevel` as transform authority
-- Keep full-layer passes full-layer until a real sublinear index exists
-- Use viewport filtering only for deferred passes where stale off-screen state is acceptable
+Legacy Konva / `CanvasEngine` code may still exist in-tree as superseded history, but it is no longer the live canvas authority for rendering, interaction, or persistence.
 
-Landed post-beta product slice:
-- Plant color assignment — per-instance document color overrides, document-scoped same-species defaults for future placements, and `color-by: flower` display mode (see `docs/todo.md` S9)
-- Plant label improvements — single-line labels, color-aware density suppression, and priority ordering for user-colored plants (see `docs/todo.md` S9.1)
+## Architecture Rules
 
-## Runtime Module Split (Wave 2) + Reconciler (Wave 3)
+### Public Seams
+- `CanvasSession` is the only app-facing canvas authority
+- `CanvasRuntime` is the execution seam behind `CanvasSession`
+- app code must not reach into renderer implementations or old engine internals
+
+### State Ownership
+- `SceneStore` owns persisted document state and ephemeral session state
+- commands, tools, save/load, and document replacement mutate scene state, not renderer objects
+- canvas-owned document fields serialize from the live scene, not from stale document input copies
+- top-level `annotations` belong in the schema; do not put live annotations back under `extra`
+- plant presentation state lives in `SceneStore.session`, not in standalone canvas signals
+- the only active presentation fields are `plantSizeMode` and `plantColorByAttr`
+- selection truth lives in `SceneStore.session.selectedEntityIds`
+- `CanvasSession.getSelection()/setSelection()/clearSelection()` are runtime-backed; canvas signals such as `selectedObjectIds`, `plantSizeMode`, and `plantColorByAttr` are UI mirrors, not runtime authority
+
+### Rendering Ownership
+- `RendererHost` owns backend lifecycle, capability probing, and fallback
+- renderers are projections of scene state, never the source of truth
+- camera transforms go through `CameraController`; do not invent a second transform authority
+- screen-space chrome such as rulers stays outside the world renderer
+- renderers may cache scene state internally, but viewport-only updates must not require a fresh runtime scene snapshot
+- `renderScene()` is for scene/presentation/selection rebuilds; `setViewport()` is for camera-only updates
+- Pixi keeps retained per-entity world objects across viewport changes; viewport updates may only retune transform- or scale-sensitive overlay details
+
+### Interaction Ownership
+- `SceneInteractionController` owns live pointer and drag behavior
+- location/map UI state stays in the location shell; do not pull `maplibre-gl` back into the canvas path
+- hit testing and selection geometry must stay scene-side
+- do not reintroduce Konva-node queries into live interaction paths
+- off-canvas drag continuation, multi-drag, and additive selection behavior are part of the contract
+- plant hit testing must use the same shared presentation context as renderers and fit/bounds logic
+- interaction selection writes must go through the runtime-owned selection seam; runtime logic must read authoritative selection from scene session
+
+### Annotation Rules
+- annotation geometry must come from shared helpers in `runtime/annotation-layout.ts`
+- use the same annotation bounds for hit testing, band select, grouping, zoom-to-fit, and selection outlines
+- visible text should win hit testing over underlying zones/plants when it is on top
+
+### Plant Presentation Rules
+- plant geometry, color, LOD, label suppression, and stack badges come from `runtime/plant-presentation.ts`
+- size mode and color mode are independent axes; do not reintroduce a combined `plantDisplayMode`
+- bounds, zoom-to-fit, grouping, renderers, and interaction must all consume the same resolved presentation state
+- species-cache backfill may enrich plant metadata, but production geometry should never depend on ad hoc empty-cache fallbacks
+
+### Invalidation Rules
+- use scene invalidation for content, selection, presentation, locale, and theme changes
+- use viewport invalidation for pan, zoom, and fit operations
+- use chrome invalidation for rulers, grid, and guide-only changes
+- do not route viewport-only work through the full scene render path
+
+## Runtime Split
+
 ```
-CanvasEngine (engine.ts) — facade + signal effects
-  ├── RenderReconciler             — render invalidation, batching, deferred scheduling, stage-transform invalidation
-  ├── runtime/render-pipeline.ts   — LOD, display modes, theme refresh (execution delegate, not scheduler)
-  ├── runtime/species-cache.ts     — species detail + resolved flower-color cache loading for display modes and suggestions
-  ├── runtime/viewport.ts          — zoom, pan, resize, counter-scale
-  ├── runtime/object-ops.ts        — selection, delete, duplicate, clipboard, z-order
-  ├── runtime/external-input.ts    — keyboard, mouse, drag-drop routing
-  └── runtime/document-session.ts  — document load/hydration, layer state reset
+CanvasSession
+  └── CanvasRuntime
+      └── SceneCanvasRuntime
+          ├── SceneStore
+          ├── SceneInteractionController
+          ├── CameraController
+          ├── SceneHistory / SceneCommands
+          ├── RendererHost
+          │   ├── Pixi scene renderer
+          │   └── Canvas2D scene renderer
+          └── HTML rulers / overlay chrome
 ```
-External code uses `CanvasEngine` methods only. Never import from `runtime/*.ts` directly.
 
-Interaction boundary:
-- Tools and `external-input.ts` depend on the narrowed engine contract in `contracts.ts`, not the full `CanvasEngine` type
-- `CanvasEngine` still owns the public facade and implements the internal interaction contract
+## Active Cleanup Work
 
-## Canvas Rendering
-- Zone shapes: world-unit geometry, `strokeScaleEnabled: false` for constant-pixel strokes
-- Plant symbols: fixed screen-pixel circles, group-level counter-scale
-- Grid: single `Konva.Shape` with custom `sceneFunc`, adaptive density via "nice distances" ladder
-- Rulers: HTML `<canvas>` elements, NOT Konva — always in screen space
-- Scale bar: drawn in `rulers.ts` `_drawScaleBar()`, color sourced from `--color-text-muted` via `refreshRulerColors()`; `scale-bar.ts` is pure metrics only
-- File dialogs: JS `@tauri-apps/plugin-dialog` API, NOT Rust `blocking_*`
-- `_chromeEnabled` signal: controls grid/ruler visibility — must be a signal so effects track it
-- Display modes: `display-modes.ts` has `updatePlantDisplay()` + `getLegendEntries()`. Signals: `plantDisplayMode` (`'default'`/`'canopy'`/`'color-by'`) and `plantColorByAttr` in `state/canvas.ts`. UI controls in `DisplayModeControls.tsx` + `DisplayLegend.tsx`
-- Plant tooltip: HTML `<div>` overlay in `engine.ts` (not Konva text). `pointer-events: none`. Positioned via `stage.getAbsoluteTransform()`. Uses safe DOM methods (no innerHTML)
-- Map layer rendering: `runtime/map-layer.ts` (deferred — see `docs/todo.md` S12). Hidden MapLibre → `createImageBitmap()` → Konva.Image on `contours` layer. Never use `toDataURL()` for canvas rasterization — it blocks main thread 20–80ms on GPU readback
-- `projection.ts` bridges Konva ↔ MapLibre coordinates: `stageScaleToMapZoom()`, `worldToGeo()`/`geoToWorld()`, `stageViewportCenter()`
-- Plant LOD labels: threshold at `stageScale >= 5`. Single-line labels only. Density is squared-distance based, color-aware (40px same-color / 20px different-color), and priority-weighted so selected and user-colored plants win first. Priority sort is load-bearing — selected plants must enter `shown` before non-selected neighbors process, or blocking is incorrect. Stacked plants get moss-green count badge
+The rewrite cutover is complete. Remaining work is cleanup and hardening:
+- keep save/load strictly scene-authoritative
+- keep annotation geometry consistent across runtime, interaction, and renderers
+- keep plant presentation state scene-session-owned and geometry consistent across all consumers
+- keep the location shell isolated from the canvas runtime and preserve the current lazy boundary around `maplibre-gl`
+- delete or quarantine dead legacy seams that still imply `CanvasEngine` ownership; treat any remaining mentions as historical only
+- keep docs synchronized with the live scene runtime
 
-## Render Pipeline Ownership
-`RenderReconciler` owns all render scheduling. `render-pipeline.ts` is the execution delegate — other runtime modules must not call `batchDraw()` or walk plant nodes for visual updates. Go through `reconciler.invalidate(...)`:
-- `reconcileAfterMaterialization()` — full visual sync after any scene mutation (add/remove/undo/redo/load)
-- `refreshPlantDisplay()` — display mode color/radius update
-- `reconcileZoomDependentState()` — LOD + counter-scale + annotation zoom (called via `scheduleLODUpdate` or after button zoom)
-- `refreshTheme()` — CSS variable color refresh on all canvas nodes
-- `refreshLocale()` — plant label text update from species DB
-- **Renderer stability gate**: Gate satisfied 2026-03-30; Wave 4 unblocked. See `docs/renderer/renderer.md` for the validation record and `docs/todo.md` S4 for gate conditions
+## Gotchas
 
-## Konva.js Gotchas
-- **Selectable-ancestor walk**: Use `SelectTool._findSelectableAncestor()` to resolve a click/event target to its nearest selectable shape (has `id()` + `hasName('shape')`). Do not inline the while-loop — it was duplicated 5 times before extraction
-- **Cache node refs for multi-drag**: `_dragStartPositions` stores `{ x, y, node }` — the node reference captured at dragstart. Hot-path `dragmove` must iterate the cached map, never re-scan layers with `layer.find('.shape')` per frame
-- **Never assign `canvas.width`/`canvas.height` unconditionally in draw loops**: Assignment resets the backing buffer and triggers GPU texture reallocation even when the value is unchanged. Guard with `if (canvas.width !== newW) canvas.width = newW`. See `rulers.ts` draw functions
-- **Use `ctx.setTransform(dpr,0,0,dpr,0,0)` not `ctx.scale(dpr,dpr)` for HiDPI canvas**: `scale()` is cumulative — if the canvas buffer isn't reallocated every frame (per the guard above), the transform compounds. `setTransform()` is absolute and always safe
-- **ResizeObserver + RAF: read live DOM dimensions at RAF time**: Don't close over the `entries` parameter — by the time the RAF callback fires, the entries may be stale (especially when the coalescing guard drops intermediate observations). Read `element.clientWidth/clientHeight` inside the RAF callback instead
-- **Shapes don't react to CSS theme changes**: Colors hardcoded at creation time. Theme switch requires walking nodes and updating `fill`/`stroke` from computed CSS variables
-- **Canvas colors must use `getCanvasColor()` from `theme-refresh.ts`**: Never hardcode fill/stroke on Konva nodes. Add CSS variable to `global.css` (both themes) + cache entry in `theme-refresh.ts`. `refreshCanvasTheme()` in the engine's theme effect walks all layers on toggle
-- **Non-Konva canvas elements too**: Guides, plant badges, and zone fallback colors all use `getCanvasColor()` — not module-level constants. Every color rendered on or near the canvas must be theme-refreshable. If adding a new canvas element with color, add a `--canvas-*` token + `getCanvasColor()` entry + refresh call
-- **Read rendered Konva properties, don't re-derive from attrs**: Plant circle fill is always set by `createPlantNode`/`updatePlantDisplay`. Helpers reading plant color should use `circle.fill()`, not re-derive from `data-color-override`/stratum attrs (that duplicates `getPlantBaseColor` and risks order inconsistency)
-- **`_cssVarMap` in `theme-refresh.ts`**: Adding a new canvas color requires entries in both `_cssVarMap` (CSS variable name) and `_colors` (fallback). Two special-case mappings: `selection-fill` → `--canvas-selection`, `highlight-glow` → `--color-primary`
-- **No Konva Transformer**: Resize/rotate was removed — objects are position-only. Selection uses highlight glows only, move uses native `draggable`. Do not re-add Transformer
-- **`name: 'shape'` only on top-level selectable nodes**: Children inside Groups must NOT have it — causes independent selection
-- **Plain click on an already-selected node should preserve the current multi-selection**: That lets users drag the full selected set without having to reselect first
-- **Screen-space overlays**: Use HTML `<canvas>` (not Konva layers) for rulers. Konva layers are subject to stage transforms
-- **`strokeScaleEnabled: false`**: Keeps stroke width constant in screen pixels. Use on all zone/annotation shapes
-- **Group-level counter-scale for plants**: Set `group.scale({x: 1/stageScale, y: 1/stageScale})` on the group, not children
-- **Plant counter-scale is ephemeral**: `group.scaleX()` on plants is `1/stageScale`, recomputed every zoom. Never persist it — save `scale: null`. On load, skip restoring `plant.scale`; `updatePlantsLOD` sets the correct counter-scale
-- **`stage.on('dragmove')` fires for shape drags too**: Filter by `e.target !== this.stage`
-- **Custom attrs: use `?? null` not `|| null`**: `getAttr()` can return `0` or `''` which are legitimate values
-- **Grouped node coordinates**: Always use `node.getAbsolutePosition(layer)` when serializing. `node.x()/y()` are group-relative after grouping
-- **`recreateNode` must handle every shape class**: Missing cases fall through to generic `Konva.Shape` which doesn't render
-- **AddNodeCommand strips event handlers**: Attach interaction handlers at the stage level, not on individual nodes
-- **Zoom display is relative**: `zoomLevel` is raw stage scale. Display as `Math.round((zoomLevel / zoomReference) * 100)%`
-- **Ruler corner uses CSS vars**: `var(--canvas-ruler-bg)` inline so it updates on theme change
-- **Detail card sections use `CollapsibleSection` wrapper**: New sections go inline in `PlantDetailCard.tsx` using `<CollapsibleSection>`. Shared field helpers (`Attr`, `BoolChip`, `NumAttr`, `TextBlock`) in `section-helpers.tsx`. Every rendered field MUST appear in the section's `has*` visibility check — missing fields cause silent data hiding
-
-## Canvas Engine Gotchas
-- **`CanvasEngine` is the public facade**: External code must use `engine.ts` methods — never import from `runtime/*.ts` directly. Internal behavior lives in runtime modules (see Canvas Architecture section above)
-- **Every new canvas module must be wired into runtime**: Must be imported and called from `engine.ts`, the appropriate `runtime/*.ts` module, or `serializer.ts`
-- **`state/canvas.ts` mirror signals**: `engine.ts` cannot import from `state/design.ts` (circular). Use mirror signals in `state/canvas.ts`
-- **Species-wide plant colors are document state**: future placements must read the document-scoped species default through the engine facade before node creation; do not try to solve this in the reconciler
-- **`Command` interface**: Every undo/redo command class must include `readonly type = 'commandName'`. `dirtyPasses` must list the render passes the command invalidates — `[]` means no render update, which silently leaves visuals stale. Copy passes from a related command (e.g., `SetPlantSpeciesColorCommand` mirrors `SetPlantColorCommand`)
-- **`CanvasTool` event signatures**: Tool methods use `Konva.KonvaEventObject<MouseEvent>`, not raw `MouseEvent`
-- **Panel switching recreates CanvasEngine**: CanvasPanel unmounts/remounts. Re-load via `loadCanvasFromDocument()` + `showCanvasChrome()`
-- **Canvas dirty tracking**: `_past.length` caps at 500. Use `_savedPosition` checkpoint. `history.clear()` must NOT trigger dirty
-- **Visual updates go through the reconciler**: Do not call `layer.batchDraw()` for plant/annotation visual changes from outside the render pipeline. Use `reconciler.invalidate(...)` — the reconciler schedules the appropriate pipeline method
-- **Vitest with Konva**: Requires `canvas` npm package as devDependency
-- **i18n in Vitest**: The i18n module eagerly loads all 11 locale files at import time — `t()` returns real translations in tests without mocking. `locale.value` changes trigger `i18n.changeLanguage()` synchronously via module-level `effect()`
+- `CanvasRuntime` no longer exposes `getEngine()`; do not add escape hatches back
+- command history is patch-based, not snapshot-based
+- selection/order/group logic works on scene entity IDs; preserve stable IDs
+- `SceneStore.toCanopiFile()` is the canonical serialization path for canvas state
+- `computeSceneBounds()` must include annotation extents, not only annotation anchor points
+- `computeSceneBounds()` and grouping bounds must use the runtime plant presentation context, not raw `plant.scale`
+- species-wide plant colors are document state and must survive save/reload

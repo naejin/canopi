@@ -2,7 +2,7 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CanvasToolbar } from '../components/canvas/CanvasToolbar'
-import { setCanvasEngine } from '../canvas/engine'
+import { setCurrentCanvasSession } from '../canvas/session'
 import { plantColorMenuOpen, selectedObjectIds } from '../state/canvas'
 
 describe('CanvasToolbar plant color action', () => {
@@ -35,7 +35,8 @@ describe('CanvasToolbar plant color action', () => {
         singleSpeciesDefaultColor: null,
       }
     })
-    setCanvasEngine({
+    setCurrentCanvasSession({
+      setTool: vi.fn(),
       getSelectedPlantColorContext,
       ensureSpeciesCacheEntries: vi.fn().mockResolvedValue(false),
       toggleGrid: vi.fn(),
@@ -52,7 +53,7 @@ describe('CanvasToolbar plant color action', () => {
     container.remove()
     selectedObjectIds.value = new Set()
     plantColorMenuOpen.value = false
-    setCanvasEngine(null)
+    setCurrentCanvasSession(null)
   })
 
   it('disables the plant color button until a plant is selected, then opens the popover', async () => {

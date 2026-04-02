@@ -2,7 +2,7 @@ import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale } from '../../state/app'
 import { currentDesign, designName } from '../../state/document'
-import { canvasEngine } from '../../canvas/engine'
+import { currentCanvasSession } from '../../canvas/session'
 import { exportFile } from '../../ipc/design'
 import { setPlantBudgetPrice } from '../../state/budget-actions'
 import type { BudgetItem, PlacedPlant } from '../../types/design'
@@ -58,13 +58,14 @@ function escapeCsvField(value: string): string {
 
 export function BudgetTab() {
   void locale.value
+  const session = currentCanvasSession.value
 
   const editingCanonical = useSignal<string | null>(null)
   const editPrice = useSignal('')
 
   const design = currentDesign.value
   const budget = design?.budget ?? []
-  const plants = canvasEngine?.getPlacedPlants() ?? design?.plants ?? []
+  const plants = session?.getPlacedPlants() ?? design?.plants ?? []
   const groupedPlants = countPlants(plants)
   const priceMap = buildPriceMap(budget)
   const defaultCurrency = priceMap.values().next().value?.currency ?? 'EUR'

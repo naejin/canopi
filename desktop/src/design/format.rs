@@ -1,5 +1,5 @@
 use common_types::design::{
-    BudgetItem, CanopiFile, Consortium, Layer, PlacedPlant, TimelineAction, Zone,
+    Annotation, BudgetItem, CanopiFile, Consortium, Layer, PlacedPlant, TimelineAction, Zone,
 };
 use std::path::Path;
 
@@ -115,7 +115,7 @@ pub fn create_default() -> CanopiFile {
         },
         Layer {
             name: "water".into(),
-            visible: true,
+            visible: false,
             locked: false,
             opacity: 1.0,
         },
@@ -143,6 +143,7 @@ pub fn create_default() -> CanopiFile {
         layers,
         plants: Vec::<PlacedPlant>::new(),
         zones: Vec::<Zone>::new(),
+        annotations: Vec::<Annotation>::new(),
         consortiums: Vec::<Consortium>::new(),
         groups: Vec::new(),
         timeline: Vec::<TimelineAction>::new(),
@@ -174,10 +175,18 @@ mod tests {
             .iter()
             .map(|l| (l.name.as_str(), l.visible))
             .collect();
-        assert!(!by_name["contours"], "contours should be hidden");
-        assert!(!by_name["climate"], "climate should be hidden");
-        assert!(by_name["base"], "base should be visible");
-        assert!(by_name["plants"], "plants should be visible");
+        assert_eq!(
+            by_name,
+            std::collections::HashMap::from([
+                ("base", true),
+                ("contours", false),
+                ("climate", false),
+                ("zones", true),
+                ("water", false),
+                ("plants", true),
+                ("annotations", true),
+            ]),
+        );
     }
 
     #[test]

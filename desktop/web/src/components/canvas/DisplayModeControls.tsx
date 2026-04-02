@@ -1,9 +1,11 @@
-import { plantDisplayMode, plantColorByAttr, type PlantDisplayMode, type ColorByAttribute } from '../../state/canvas'
+import { plantColorByAttr, plantSizeMode, type PlantSizeMode, type ColorByAttribute } from '../../state/canvas'
 import { t } from '../../i18n'
+import { locale } from '../../state/app'
+import { getCurrentCanvasSession } from '../../canvas/session'
 import { Dropdown, type DropdownItem } from '../shared/Dropdown'
 import styles from './DisplayModeControls.module.css'
 
-const DISPLAY_OPTIONS: { value: PlantDisplayMode; labelKey: string }[] = [
+const DISPLAY_OPTIONS: { value: PlantSizeMode; labelKey: string }[] = [
   { value: 'default', labelKey: 'canvas.display.default' },
   { value: 'canopy', labelKey: 'canvas.display.canopySpread' },
 ]
@@ -35,42 +37,31 @@ function buildTrigger(labelKey: string, current: { labelKey: string } | undefine
 }
 
 export function DisplayModeControls() {
-  const mode = plantDisplayMode.value
+  void locale.value
+  const sizeMode = plantSizeMode.value
   const colorAttr = plantColorByAttr.value
 
-  // Derive the effective display value: if mode is 'color-by', show as default/canopy based
-  // on the underlying size mode. Display dropdown only controls default vs canopy.
-  const displayValue: PlantDisplayMode = mode === 'color-by' ? 'default' : mode
-
-  // Derive the effective color-by value: null if not in color-by mode
-  const colorByValue: ColorByAttribute | null = mode === 'color-by' ? colorAttr : null
-
-  const handleDisplaySelect = (v: PlantDisplayMode) => {
-    plantDisplayMode.value = v
+  const handleDisplaySelect = (v: PlantSizeMode) => {
+    const session = getCurrentCanvasSession()
+    if (session) session.setPlantSizeMode(v)
+    else plantSizeMode.value = v
   }
 
   const handleColorBySelect = (v: ColorByAttribute | null) => {
-    if (v === null) {
-      // "None" selected — revert to whatever display mode makes sense
-      // If currently color-by, go back to default
-      if (mode === 'color-by') {
-        plantDisplayMode.value = 'default'
-      }
-    } else {
-      plantDisplayMode.value = 'color-by'
-      plantColorByAttr.value = v
-    }
+    const session = getCurrentCanvasSession()
+    if (session) session.setPlantColorByAttr(v)
+    else plantColorByAttr.value = v
   }
 
-  const currentDisplay = DISPLAY_OPTIONS.find((o) => o.value === displayValue)
-  const currentColorBy = COLOR_BY_OPTIONS.find((o) => o.value === colorByValue)
+  const currentDisplay = DISPLAY_OPTIONS.find((o) => o.value === sizeMode)
+  const currentColorBy = COLOR_BY_OPTIONS.find((o) => o.value === colorAttr)
 
   return (
     <div className={styles.container} role="group" aria-label={t('canvas.display.label')}>
       <Dropdown
         trigger={buildTrigger('canvas.display.sizeBy', currentDisplay)}
         items={buildItems(DISPLAY_OPTIONS)}
-        value={displayValue}
+        value={sizeMode}
         onChange={handleDisplaySelect}
         menuDirection="up"
         ariaLabel={t('canvas.display.sizeBy')}
@@ -80,7 +71,7 @@ export function DisplayModeControls() {
       <Dropdown
         trigger={buildTrigger('canvas.display.colorBy', currentColorBy)}
         items={buildItems(COLOR_BY_OPTIONS)}
-        value={colorByValue}
+        value={colorAttr}
         onChange={handleColorBySelect}
         menuDirection="up"
         ariaLabel={t('canvas.display.colorBy')}

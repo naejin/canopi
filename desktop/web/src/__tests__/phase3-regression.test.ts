@@ -12,7 +12,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { worldToGeo, geoToWorld, stageScaleToMapZoom } from '../canvas/projection'
-import { extractExtra } from '../canvas/serializer'
+import { extractExtra } from '../state/document-extra'
 
 describe('persistent plant IDs', () => {
   it('extractExtra preserves groups field', () => {
