@@ -1,7 +1,7 @@
 # Beta Release Verification
 
-Date: 2026-04-01
-Status: Wave 4 coherence is landed, the `v0.1.0` desktop beta is published, and the packaged-app smoke table has been signed off
+Date: 2026-04-02
+Status: v0.2.0 release cycle — scene-owned canvas rewrite is cut over, post-beta improvements landed
 
 Wave 5 is a beta-release gate on the current retained-surface architecture. It does not claim the broader roadmap is complete.
 
@@ -86,10 +86,10 @@ Use the packaged artifact produced by the manual `Release Candidate` workflow fo
 
 | Platform / target | Artifact source | Tester / owner | Test date | Status | Defects / follow-up |
 | --- | --- | --- | --- | --- | --- |
-| Linux desktop (`.deb`) | GitHub Actions Linux Tauri build artifact | Release owner | 2026-04-01 | Verified | Signed off for beta release |
-| macOS Apple Silicon (`aarch64-apple-darwin`) | GitHub Actions macOS 14 Tauri build artifact | Release owner | 2026-04-01 | Verified | Signed off for beta release |
-| macOS Intel (`x86_64-apple-darwin`) | GitHub Actions macOS 13 Tauri build artifact | Release owner | 2026-04-01 | Verified | Signed off for beta release |
-| Windows desktop | GitHub Actions Windows Tauri build artifact | Release owner | 2026-04-01 | Verified | Signed off for beta release |
+| Linux desktop (`.deb`) | GitHub Actions Linux Tauri build artifact | Release owner | — | Pending | — |
+| macOS Apple Silicon (`aarch64-apple-darwin`) | GitHub Actions macOS 14 Tauri build artifact | Release owner | — | Pending | — |
+| macOS Intel (`x86_64-apple-darwin`) | GitHub Actions macOS 13 Tauri build artifact | Release owner | — | Pending | — |
+| Windows desktop | GitHub Actions Windows Tauri build artifact | Release owner | — | Pending | — |
 
 This smoke pass is release-hardening work. It does not replace the separate live verification and renderer validation flows tracked elsewhere.
 

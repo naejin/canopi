@@ -101,7 +101,7 @@ Operational rule:
 After smoke verification passes, create or update the GitHub Release from that exact run:
 
 ```bash
-scripts/promote-release.sh --run-id <run-id> --tag v0.1.0 --title "Canopi 0.1.0"
+scripts/promote-release.sh --run-id <run-id> --tag v0.2.0 --title "Canopi 0.2.0"
 ```
 
 This script:

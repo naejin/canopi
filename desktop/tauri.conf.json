@@ -1,6 +1,6 @@
 {
   "productName": "Canopi",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "identifier": "com.canopi.app",
   "build": {
     "beforeDevCommand": {
