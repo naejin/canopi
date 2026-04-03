@@ -1,7 +1,7 @@
 # Beta Release Verification
 
-Date: 2026-04-02
-Status: v0.2.0 release cycle — scene-owned canvas rewrite is cut over, post-beta improvements landed
+Date: 2026-04-03
+Status: v0.2.0 shipped — scene-owned canvas rewrite is cut over, post-beta improvements landed
 
 Wave 5 is a beta-release gate on the current retained-surface architecture. It does not claim the broader roadmap is complete.
 
@@ -56,13 +56,13 @@ These checks must pass before a beta release candidate is declared ready:
 
 Current status in this tree:
 
-- `cargo fmt --all -- --check`: passing locally on 2026-03-30
-- `cargo clippy --workspace --all-targets -- -D warnings`: passing locally on 2026-03-30
-- `cargo test --workspace`: passing locally on 2026-03-30
-- `npx --prefix desktop/web tsc --noEmit -p desktop/web/tsconfig.json`: passing locally on 2026-03-31
-- frontend tests: passing locally on 2026-03-31
-- frontend i18n completeness: passing via the frontend test suite on 2026-03-31
-- frontend production build: passing locally on 2026-03-31
+- `cargo fmt --all -- --check`: passing locally on 2026-04-02
+- `cargo clippy --workspace --all-targets -- -D warnings`: passing locally on 2026-04-02
+- `cargo test --workspace`: passing locally on 2026-04-02
+- `npx --prefix desktop/web tsc --noEmit -p desktop/web/tsconfig.json`: passing locally on 2026-04-02
+- frontend tests: passing locally on 2026-04-02
+- frontend i18n completeness: passing via the frontend test suite on 2026-04-02
+- frontend production build: passing locally on 2026-04-02
 - GitHub Actions workflow: includes rust fmt, clippy, TypeScript check, workspace tests, frontend tests, frontend build, and 4-target Tauri artifact builds
 - `Release Candidate` workflow: lands manual preflight validation for `desktop/tauri.conf.json` version, bundled DB asset availability, bundled DB schema compatibility, and packaged-artifact checksum manifest upload
 
@@ -136,9 +136,7 @@ Run this script against each packaged artifact:
 
 These are review items, not automatic blockers unless they become release-impacting:
 
-- Vite chunk-size warnings for the main bundle and `maplibre-gl`
-- dynamic+static import warning around `desktop/web/src/ipc/species.ts`
-- Rust dead-code warnings in platform/tile-related types
+- Vite chunk-size warnings for the main bundle and `maplibre-gl` (konva chunk removed after dependency deletion)
 
 ## Wave 5 Blocking Defects
 

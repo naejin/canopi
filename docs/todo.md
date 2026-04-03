@@ -1,7 +1,7 @@
 # Canopi Canvas: Current Work
 
-**Date**: 2026-04-02  
-**Status**: scene-owned canvas rewrite is cut over
+**Date**: 2026-04-03  
+**Status**: v0.2.0 shipped — scene-owned canvas rewrite is cut over
 
 This file tracks what is still left after the runtime cutover.
 The only live canvas architecture is `SceneCanvasRuntime` + `CanvasSession`.
@@ -33,9 +33,9 @@ The following architectural work is done:
 - keep signal mirrors thin and one-way; do not let them regain runtime authority
 - keep `CanvasSession` selection APIs runtime-backed and prevent direct UI-mirror writes from reclaiming authority
 
-### 2. Legacy cleanup
-- remove or quarantine dead Konva/engine code that still implies live ownership
-- delete stale adapters and comments that describe the old dual-runtime transition
+### 2. Legacy cleanup — done
+- ~~remove or quarantine dead Konva/engine code that still implies live ownership~~ — Konva dependency fully removed
+- ~~delete stale adapters and comments that describe the old dual-runtime transition~~ — all Konva factories, typed interfaces, and the `konva` package deleted
 - keep any surviving legacy code clearly marked as non-live
 - the old `CanvasEngine` / serializer-era seams are historical only and must not regain live authority
 

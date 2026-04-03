@@ -15,7 +15,6 @@
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-dialog": "^2.0.0",
     "i18next": "^24.0.0",
-    "konva": "^9.3.0",
     "maplibre-contour": "^0.1.0",
     "maplibre-gl": "^5.21.1",
     "pixi.js": "^8.17.1",
@@ -25,7 +24,6 @@
   "devDependencies": {
     "@preact/preset-vite": "^2.9.0",
     "@types/suncalc": "^1.9.2",
-    "canvas": "^3.2.2",
     "jsdom": "^29.0.1",
     "typescript": "^5.7.0",
     "vite": "^6.0.0",

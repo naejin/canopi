@@ -3,7 +3,7 @@
 ## Tech Stack
 - **Backend**: Rust workspace (Tauri v2 + rusqlite + specta)
 - **Frontend**: Preact + @preact/signals + TypeScript + Vite + CSS Modules
-- **Canvas**: PixiJS (primary renderer) + Canvas2D (fallback) — scene-owned runtime via `SceneCanvasRuntime`. Konva dependency retained for legacy utility helpers during migration
+- **Canvas**: PixiJS (primary renderer) + Canvas2D (fallback) — scene-owned runtime via `SceneCanvasRuntime`
 - **i18n**: i18next core (NOT react-i18next), 11 languages (en, fr, es, pt, it, zh, de, ja, ko, nl, ru)
 - **Maps**: MapLibre GL JS + maplibre-contour (dependency retained, code deleted — deferred post-rewrite)
 - **Native**: lib-c (Linux, Cairo PNG/PDF + inotify + XDG), lib-swift (macOS stub), lib-cpp (Windows stub)
@@ -54,7 +54,7 @@ These features were deleted during pre-rewrite cleanup. See `docs/todo.md` for c
 - **Bottom panel re-added**: Location tab visible. Timeline/Budget/Consortium tabs staged behind `VISIBLE_BOTTOM_PANEL_TABS` guard in `state/canvas.ts` — add tab to the array to reveal
 - **Deferred beyond beta**: WorldMapPanel, geo/terrain, export, learning content
 - **Selection**: No resize/rotate — objects are position-only (highlight + move). Resize/rotate commands all deleted
-- **Konva engine**: Entire `CanvasEngine` + old command/tool/serializer/history/import/export system deleted. Replaced by scene-owned runtime (PixiJS + Canvas2D)
+- **Konva engine**: Entire `CanvasEngine` + old command/tool/serializer/history/import/export system deleted. Konva dependency fully removed. Replaced by scene-owned runtime (PixiJS + Canvas2D)
 
 ## Architecture Rules (from rewrite — enforced)
 
@@ -103,7 +103,7 @@ These files have concentrated authority. **One writer at a time** — do not ass
 
 ### Banned Patterns (enforced by plugin hooks)
 - **No React**: Import from `preact`, `preact/hooks`, `preact/compat` — never `react`
-- **No Konva in new code**: Canvas rendering goes through `SceneCanvasRuntime` + `RendererHost` (PixiJS/Canvas2D). Do not add new Konva imports or create new Konva nodes — legacy Konva helpers exist only for migration
+- **No Konva**: Konva has been fully removed. Canvas rendering goes through `SceneCanvasRuntime` + `RendererHost` (PixiJS/Canvas2D). Do not reintroduce Konva
 - **No Tailwind**: Use CSS Modules (`.module.css`)
 - **No Zustand/Redux/MobX**: Use `@preact/signals`
 - **No react-i18next**: Use `import { t } from '../i18n'`

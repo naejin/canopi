@@ -1,7 +1,7 @@
 # Rewrite Product Definition
 
-Date: 2026-03-30
-Status: scope lock updated after live-app review
+Date: 2026-04-03
+Status: scope lock — v0.2.0 shipped, rewrite cut over
 
 ## Scope Matrix
 

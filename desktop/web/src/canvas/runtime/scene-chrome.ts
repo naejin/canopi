@@ -87,9 +87,7 @@ export class SceneChromeOverlay {
       scaleX: () => snapshot.viewport.scale,
       scaleY: () => snapshot.viewport.scale,
       position: () => ({ x: snapshot.viewport.x, y: snapshot.viewport.y }),
-      width: () => snapshot.width,
-      height: () => snapshot.height,
-    } as never)
+    })
     this._drawGrid(snapshot)
   }
 
@@ -181,6 +179,8 @@ export class SceneChromeOverlay {
   }
 
   private _drawGuideLines(ctx: CanvasRenderingContext2D, snapshot: SceneChromeSnapshot): void {
+    const rulerInset = snapshot.rulersVisible ? RULER_SIZE : 0
+
     ctx.save()
     ctx.strokeStyle = getCanvasColor('guide-line')
     ctx.lineWidth = 1
@@ -190,13 +190,13 @@ export class SceneChromeOverlay {
       if (guide.axis === 'v') {
         const x = snapshot.viewport.x + guide.position * snapshot.viewport.scale
         ctx.beginPath()
-        ctx.moveTo(Math.round(x) + 0.5, RULER_SIZE)
+        ctx.moveTo(Math.round(x) + 0.5, rulerInset)
         ctx.lineTo(Math.round(x) + 0.5, snapshot.height)
         ctx.stroke()
       } else {
         const y = snapshot.viewport.y + guide.position * snapshot.viewport.scale
         ctx.beginPath()
-        ctx.moveTo(RULER_SIZE, Math.round(y) + 0.5)
+        ctx.moveTo(rulerInset, Math.round(y) + 0.5)
         ctx.lineTo(snapshot.width, Math.round(y) + 0.5)
         ctx.stroke()
       }

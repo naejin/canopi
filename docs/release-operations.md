@@ -101,8 +101,10 @@ Operational rule:
 After smoke verification passes, create or update the GitHub Release from that exact run:
 
 ```bash
-scripts/promote-release.sh --run-id <run-id> --tag v0.2.0 --title "Canopi 0.2.0"
+scripts/promote-release.sh --run-id <run-id> --tag v<version> --title "Canopi <version>"
 ```
+
+Example for v0.2.0: `scripts/promote-release.sh --run-id 23849252941 --tag v0.2.0 --title "Canopi 0.2.0"`
 
 This script:
 
@@ -117,7 +119,7 @@ This script:
 The promote script creates a draft release. After verifying the release page and assets:
 
 ```bash
-gh release edit v0.2.0 --draft=false
+gh release edit v<version> --draft=false
 ```
 
 ## Failure Triage

@@ -91,12 +91,11 @@ CanvasSession
 
 ## Active Cleanup Work
 
-The rewrite cutover is complete. Remaining work is cleanup and hardening:
+The rewrite cutover is complete. Konva dependency has been fully removed — all legacy factory functions, Konva-typed interfaces, and the `konva` package itself are gone. Remaining work is hardening:
 - keep save/load strictly scene-authoritative
 - keep annotation geometry consistent across runtime, interaction, and renderers
 - keep plant presentation state scene-session-owned and geometry consistent across all consumers
 - keep the location shell isolated from the canvas runtime and preserve the current lazy boundary around `maplibre-gl`
-- delete or quarantine dead legacy seams that still imply `CanvasEngine` ownership; treat any remaining mentions as historical only
 - keep docs synchronized with the live scene runtime
 
 ## Gotchas

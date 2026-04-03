@@ -12,7 +12,7 @@
 - **`session.serializeDocument()` / `SceneStore.toCanopiFile()` is the sole save composition point** — all save paths go through it. The old `toCanopi(engine, ...)` serializer is deleted
 - **Never regenerate `created_at`** — preserve from loaded file
 - **Preserve all loaded document sections on save** — timeline, budget, consortiums, description, location, extra fields
-- **Preserve per-object non-visual fields** — plant notes/planted_date/quantity and zone notes as Konva custom attrs
+- **Preserve per-object non-visual fields** — plant notes/planted_date/quantity and zone notes
 - **Preserve unknown `extra` fields** — `extractExtra()` captures unknown top-level keys. Spread extra FIRST in `toCanopi()`
 - **Two-baseline dirty model** — Canvas: `_savedPosition` checkpoint in `SceneHistory` (patch-based). Non-canvas: `nonCanvasRevision` vs `nonCanvasSavedRevision`. Never write to `designDirty` directly
 - **Autosave** checkpoints same document as manual save. Failures surface via `autosaveFailed` signal
@@ -74,6 +74,6 @@
 MapLibre code (`map-layer.ts`, contour/hillshade effects, map sync) was deleted during pre-rewrite pruning. These gotchas apply when rebuilding:
 - **MapLibre paint properties can't use CSS vars**: Hardcoded hex colors in MapLibre style objects are acceptable — they render on map tiles, not app chrome
 - **`maplibre-contour` for client-side DEM contours**: Use `DemSource` with AWS Terrain Tiles (Terrarium encoding). Register protocol once with `addProtocol()`
-- **MapLibre container opacity for map blending**: Apply opacity to the container div, NOT try to make Konva canvas transparent (causes blank canvas bugs)
-- **Map layer z-index**: Insert map div before `.canvasContainer`. Canvas container background must become transparent when map is active. Konva `<canvas>` elements are inherently transparent where no shapes are drawn
+- **MapLibre container opacity for map blending**: Apply opacity to the container div; do not make the renderer canvas transparent via renderer internals
+- **Map layer z-index**: Insert map div before `.canvasContainer`. Canvas container background must become transparent when map is active
 - **`download_template` security**: HTTPS-only + domain allowlist (`templates.canopi.app`) + filename sanitization + path traversal check + 50MB size limit

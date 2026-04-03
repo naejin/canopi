@@ -62,25 +62,4 @@ describe('CanvasSpeciesCache', () => {
     expect(mocks.getSpeciesBatch).toHaveBeenCalledTimes(1)
     expect(mocks.getFlowerColorBatch).toHaveBeenCalledTimes(1)
   })
-
-  it('loads only uncached visible plant entries from the layer', async () => {
-    const cache = new CanvasSpeciesCache()
-    await cache.ensureEntries(['Malus domestica'], 'en')
-
-    mocks.getSpeciesBatch.mockResolvedValueOnce([{ canonical_name: 'Pyrus communis' }] as any)
-
-    const plantsLayer = {
-      find: vi.fn(() => [
-        { getAttr: vi.fn(() => 'Malus domestica') },
-        { getAttr: vi.fn(() => 'Pyrus communis') },
-        { getAttr: vi.fn(() => 'Pyrus communis') },
-      ]),
-    } as any
-
-    const loaded = await cache.loadVisiblePlantEntries(plantsLayer, 'fr')
-
-    expect(loaded).toBe(true)
-    expect(mocks.getSpeciesBatch).toHaveBeenLastCalledWith(['Pyrus communis'], 'fr')
-    expect(mocks.getFlowerColorBatch).toHaveBeenLastCalledWith(['Pyrus communis'])
-  })
 })

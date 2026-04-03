@@ -1,4 +1,3 @@
-import Konva from 'konva'
 import { getFlowerColorBatch, getSpeciesBatch } from '../../ipc/species'
 import { getFlowerColorHex } from '../plant-colors'
 
@@ -9,21 +8,6 @@ export class CanvasSpeciesCache {
 
   getCache(): Map<string, SpeciesCacheEntry> {
     return this._cache
-  }
-
-  async loadVisiblePlantEntries(
-    plantsLayer: Konva.Layer | undefined,
-    activeLocale: string,
-  ): Promise<boolean> {
-    if (!plantsLayer) return false
-
-    const names = new Set<string>()
-    plantsLayer.find('.plant-group').forEach((node: Konva.Node) => {
-      const name = (node as Konva.Group).getAttr('data-canonical-name') as string
-      if (name && !this._cache.has(name)) names.add(name)
-    })
-
-    return this.ensureEntries([...names], activeLocale)
   }
 
   async ensureEntries(

@@ -1,4 +1,3 @@
-import Konva from 'konva'
 import { gridSize } from '../state/canvas'
 import {
   SCALE_BAR_CANVAS_WIDTH,
@@ -9,6 +8,13 @@ import {
 } from './scale-bar'
 
 const RULER_SIZE = 24 // pixels — thickness of horizontal and vertical rulers
+
+/** Minimal stage view contract — decoupled from any renderer library. */
+export interface StageView {
+  scaleX(): number
+  scaleY(): number
+  position(): { x: number; y: number }
+}
 
 // ---------------------------------------------------------------------------
 // Ruler state returned from createHtmlRulers()
@@ -44,8 +50,8 @@ export function refreshRulerColors(container: HTMLElement): void {
 
 // ---------------------------------------------------------------------------
 // Create two <canvas> elements and a corner <div> inside containerDiv.
-// These are positioned absolutely over the Konva stage and are always in
-// screen space — no Konva layer transforms involved.
+// These are positioned absolutely over the canvas stage and are always in
+// screen space — no renderer layer transforms involved.
 // ---------------------------------------------------------------------------
 
 export function createHtmlRulers(containerDiv: HTMLElement): HtmlRulers {
@@ -197,7 +203,7 @@ export function setHtmlOverlayVisibility(
 // Call this after every zoom, pan, resize, and theme change.
 // ---------------------------------------------------------------------------
 
-export function updateHtmlRulers(rulers: HtmlRulers, stage: Konva.Stage): void {
+export function updateHtmlRulers(rulers: HtmlRulers, stage: StageView): void {
   _drawHorizontalRuler(rulers.hCanvas, stage)
   _drawVerticalRuler(rulers.vCanvas, stage)
   _drawScaleBar(rulers.scaleCanvas, stage)
@@ -207,7 +213,7 @@ export function updateHtmlRulers(rulers: HtmlRulers, stage: Konva.Stage): void {
 // Internal drawing functions
 // ---------------------------------------------------------------------------
 
-function _drawHorizontalRuler(canvas: HTMLCanvasElement, stage: Konva.Stage): void {
+function _drawHorizontalRuler(canvas: HTMLCanvasElement, stage: StageView): void {
   // Match physical canvas size to CSS layout size (account for device pixel ratio)
   const dpr = window.devicePixelRatio || 1
   const cssWidth = canvas.offsetWidth
@@ -279,7 +285,7 @@ function _drawHorizontalRuler(canvas: HTMLCanvasElement, stage: Konva.Stage): vo
   }
 }
 
-function _drawVerticalRuler(canvas: HTMLCanvasElement, stage: Konva.Stage): void {
+function _drawVerticalRuler(canvas: HTMLCanvasElement, stage: StageView): void {
   const dpr = window.devicePixelRatio || 1
   const cssWidth = RULER_SIZE
   const cssHeight = canvas.offsetHeight
@@ -352,7 +358,7 @@ function _drawVerticalRuler(canvas: HTMLCanvasElement, stage: Konva.Stage): void
   }
 }
 
-function _drawScaleBar(canvas: HTMLCanvasElement, stage: Konva.Stage): void {
+function _drawScaleBar(canvas: HTMLCanvasElement, stage: StageView): void {
   const dpr = window.devicePixelRatio || 1
   const cssWidth = canvas.offsetWidth
   const cssHeight = canvas.offsetHeight

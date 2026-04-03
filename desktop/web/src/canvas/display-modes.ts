@@ -1,11 +1,9 @@
-import Konva from 'konva'
-import { getStratumColor, STRATUM_I18N_KEY, CIRCLE_SCREEN_PX } from './plants'
+import { getStratumColor, STRATUM_I18N_KEY } from './plants'
 import { t } from '../i18n'
-import type { PlantSizeMode, ColorByAttribute } from '../state/canvas'
+import type { ColorByAttribute } from '../state/canvas'
 import {
   FLOWER_COLOR_ORDER,
   getFlowerColorHex,
-  normalizeHexColor,
   UNKNOWN_FLOWER_COLOR,
 } from './plant-colors'
 
@@ -39,73 +37,9 @@ const EDIBILITY_COLORS: string[] = [
   '#9E9E9E', '#C0CA33', '#8BC34A', '#4CAF50', '#2E7D32', '#1B5E20',
 ]
 
-function getPlantBaseColor(group: Konva.Group): string {
-  const override = normalizeHexColor(group.getAttr('data-color-override') as string | null | undefined)
-  if (override) return override
-  return getStratumColor((group.getAttr('data-stratum') as string) || null)
-}
-
 export interface LegendEntry {
   label: string
   color: string
-}
-
-/**
- * Update all plant nodes for the current display mode.
- * Called when plant size mode or color-by changes.
- */
-export function updatePlantDisplay(
-  plantsLayer: Konva.Layer,
-  sizeMode: PlantSizeMode,
-  colorByAttr: ColorByAttribute | null,
-  stageScale: number,
-  zoomReference: number,
-  speciesCache: Map<string, Record<string, unknown>>,
-): void {
-  plantsLayer.find('.plant-group').forEach((node: Konva.Node) => {
-    const g = node as Konva.Group
-    const circle = g.findOne('Circle') as Konva.Circle | undefined
-    if (!circle) return
-
-    const canonicalName = g.getAttr('data-canonical-name') as string
-
-    if (sizeMode === 'default') {
-      // Reset to fixed-size strata-colored circles
-      circle.radius(CIRCLE_SCREEN_PX)
-      circle.fill(colorByAttr === null ? getPlantBaseColor(g) : resolveColorByValue(g, colorByAttr, canonicalName, speciesCache))
-    } else if (sizeMode === 'canopy') {
-      // Size circle to real canopy spread in world meters
-      const canopyM = (g.getAttr('data-canopy-spread') as number) || 0
-      if (canopyM > 0) {
-        // Group is counter-scaled (scale = 1/stageScale). To show world meters,
-        // multiply by stageScale so the visual radius = canopyM/2 in world space.
-        circle.radius((canopyM / 2) * stageScale)
-      } else {
-        // Match the current default visual size at reference zoom, but keep the
-        // fallback in world space so it scales coherently with canopy zoom.
-        const referenceScale = zoomReference > 0 ? zoomReference : stageScale
-        const fallbackWorldRadius = CIRCLE_SCREEN_PX / referenceScale
-        circle.radius(fallbackWorldRadius * stageScale)
-      }
-      circle.fill(colorByAttr === null ? getPlantBaseColor(g) : resolveColorByValue(g, colorByAttr, canonicalName, speciesCache))
-    }
-  })
-
-  plantsLayer.batchDraw()
-}
-
-function resolveColorByValue(
-  group: Konva.Group,
-  colorByAttr: ColorByAttribute,
-  canonicalName: string,
-  speciesCache: Map<string, Record<string, unknown>>,
-): string {
-  if (colorByAttr === 'stratum') {
-    const stratum = group.getAttr('data-stratum') as string || null
-    return getStratumColor(stratum)
-  }
-  const detail = speciesCache.get(canonicalName)
-  return getColorForAttribute(colorByAttr, detail)
 }
 
 /**

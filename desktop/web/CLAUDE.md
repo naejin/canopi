@@ -41,5 +41,4 @@
 - **Error tracking**: `dynamicOptionsErrors` signal tracks per-locale per-field IPC errors. `DYNAMIC_OPTIONS_BACKEND_MISMATCH_ERROR` distinguishes permanent backend mismatch (field not in running binary) from transient errors (network, timeout). Only transient errors show a retry button in the UI. Errors are cleared on successful retry
 
 ## Testing (Vitest)
-- **Vitest with canvas/Konva**: Requires `canvas` npm package as devDependency (still needed for legacy Konva helpers)
 - **i18n in Vitest**: The i18n module eagerly loads all 11 locale files at import time — `t()` returns real translations in tests without mocking. `locale.value` changes trigger `i18n.changeLanguage()` synchronously via module-level `effect()`
