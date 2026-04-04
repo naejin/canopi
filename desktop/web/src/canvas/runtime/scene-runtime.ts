@@ -12,6 +12,7 @@ import type { ColorByAttribute, PlantSizeMode } from '../../state/canvas'
 import type { CanopiFile, PlacedPlant } from '../../types/design'
 import type { SelectedPlantColorContext } from '../plant-color-context'
 import { normalizeHexColor } from '../plant-colors'
+import { computeSelectionLabels } from './selection-labels'
 import { clearCanvasSelection, setCanvasSelection } from '../session-state'
 import { refreshCanvasColorCache } from '../theme-refresh'
 import { CameraController } from './camera'
@@ -114,6 +115,12 @@ export class SceneCanvasRuntime implements CanvasRuntime {
       setTool: (name) => this.setTool(name),
       render: (kind) => this._invalidate(kind),
       markDirty: (before) => this._markCanvasDirty(before, 'interaction'),
+      getLocalizedCommonNames: () => this._plantLabels.getLocaleSnapshot(locale.value),
+      setHoveredEntityId: (id) => {
+        if (this._sceneStore.session.hoveredEntityId === id) return
+        this._sceneStore.updateSession((s) => { s.hoveredEntityId = id })
+        this._invalidate('scene')
+      },
     })
     await this._render()
   }
@@ -845,6 +852,9 @@ export class SceneCanvasRuntime implements CanvasRuntime {
   private _buildRendererSnapshot(): SceneRendererSnapshot {
     const scene = this._sceneStore.persisted
     const session = this._sceneStore.session
+    const hoveredPlant = session.hoveredEntityId
+      ? scene.plants.find((p) => p.id === session.hoveredEntityId)
+      : null
     return {
       scene,
       viewport: this._camera.viewport,
@@ -855,6 +865,13 @@ export class SceneCanvasRuntime implements CanvasRuntime {
       colorByAttr: session.plantColorByAttr,
       speciesCache: this._speciesCache.getCache(),
       localizedCommonNames: this._plantLabels.getLocaleSnapshot(locale.value),
+      hoveredCanonicalName: hoveredPlant?.canonicalName ?? null,
+      selectionLabels: computeSelectionLabels(
+        scene.plants,
+        session.selectedEntityIds,
+        this._camera.viewport,
+        this._plantLabels.getLocaleSnapshot(locale.value),
+      ),
     }
   }
 

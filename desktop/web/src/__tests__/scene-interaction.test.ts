@@ -45,6 +45,8 @@ function createInteractionDeps(
     })) as SceneInteractionDeps['setTool'],
     render: (overrides.render ?? (() => {})) as SceneInteractionDeps['render'],
     markDirty: (overrides.markDirty ?? (() => {})) as SceneInteractionDeps['markDirty'],
+    setHoveredEntityId: () => {},
+    getLocalizedCommonNames: () => new Map(),
   } as SceneInteractionDeps
 }
 

@@ -7,6 +7,7 @@ import {
   STACK_BADGE_OFFSET_Y_PX,
   STACK_BADGE_RADIUS_PX,
 } from '../plant-presentation'
+import { computeSelectionLabels } from '../selection-labels'
 import {
   getAnnotationTextColor,
   getPlantLabelColor,
@@ -59,16 +60,18 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
       world.addChild(plantsOverlayLayer)
       world.addChild(annotationTextLayer)
       world.addChild(annotationHighlightLayer)
+      const selectionLabelLayer = new Container()
       app.stage.addChild(world)
+      app.stage.addChild(selectionLabelLayer)
 
       let snapshot: SceneRendererSnapshot | null = null
       const zoneGraphicsByName = new Map<string, Graphics>()
       const plantGraphicsById = new Map<string, Graphics>()
-      const plantLabelById = new Map<string, Text>()
       const plantBadgeGraphicsById = new Map<string, Graphics>()
       const plantBadgeTextById = new Map<string, Text>()
       const annotationTextById = new Map<string, Text>()
       const annotationHighlightById = new Map<string, Graphics>()
+      const selectionLabelBySpecies = new Map<string, Text>()
 
       const instance: SceneRendererInstance = {
         id: 'pixi',
@@ -91,7 +94,6 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
             plantsLayer,
             plantsOverlayLayer,
             plantGraphicsById,
-            plantLabelById,
             plantBadgeGraphicsById,
             plantBadgeTextById,
             nextSnapshot,
@@ -105,18 +107,24 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
             nextSnapshot,
             true,
           )
+          syncSelectionLabels(selectionLabelLayer, selectionLabelBySpecies, nextSnapshot)
           world.position.set(nextSnapshot.viewport.x, nextSnapshot.viewport.y)
           world.scale.set(nextSnapshot.viewport.scale)
           app.render()
         },
         setViewport(viewport) {
           if (!snapshot) return
-          snapshot = { ...snapshot, viewport }
+          const labels = computeSelectionLabels(
+            snapshot.scene.plants,
+            snapshot.selectedPlantIds,
+            viewport,
+            snapshot.localizedCommonNames,
+          )
+          snapshot = { ...snapshot, viewport, selectionLabels: labels }
           syncPlants(
             plantsLayer,
             plantsOverlayLayer,
             plantGraphicsById,
-            plantLabelById,
             plantBadgeGraphicsById,
             plantBadgeTextById,
             snapshot,
@@ -130,6 +138,7 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
             snapshot,
             false,
           )
+          syncSelectionLabels(selectionLabelLayer, selectionLabelBySpecies, snapshot)
           world.position.set(viewport.x, viewport.y)
           world.scale.set(viewport.scale)
           app.render()
@@ -219,7 +228,6 @@ function syncPlants(
   world: Container,
   overlay: Container,
   plantGraphicsById: Map<string, Graphics>,
-  plantLabelById: Map<string, Text>,
   plantBadgeGraphicsById: Map<string, Graphics>,
   plantBadgeTextById: Map<string, Text>,
   snapshot: SceneRendererSnapshot,
@@ -248,29 +256,8 @@ function syncPlants(
       plantGraphicsById.set(entry.plant.id, circle)
       world.addChild(circle)
     }
-    drawPlant(circle, entry)
+    drawPlant(circle, entry, snapshot.hoveredCanonicalName)
     circle.visible = true
-
-    const labelVisible = layout.visibleLabelIds.has(entry.plant.id)
-    if (labelVisible) {
-      const label = plantLabelById.get(entry.plant.id) ?? new Text()
-      if (!plantLabelById.has(entry.plant.id)) {
-        plantLabelById.set(entry.plant.id, label)
-        overlay.addChild(label)
-      }
-      drawPlantLabel(label, entry, snapshot.viewport.scale)
-      label.visible = true
-    } else if (reconcileRemoved && plantLabelById.has(entry.plant.id)) {
-      const label = plantLabelById.get(entry.plant.id)
-      if (label) {
-        label.removeFromParent()
-        label.destroy()
-      }
-      plantLabelById.delete(entry.plant.id)
-    } else {
-      const label = plantLabelById.get(entry.plant.id)
-      if (label) label.visible = false
-    }
 
     const stackCount = layout.stackCounts.get(entry.plant.id)
     if (stackCount) {
@@ -317,12 +304,6 @@ function syncPlants(
     graphics.destroy()
     plantGraphicsById.delete(plantId)
   }
-  for (const [plantId, label] of plantLabelById) {
-    if (nextIds.has(plantId)) continue
-    label.removeFromParent()
-    label.destroy()
-    plantLabelById.delete(plantId)
-  }
   for (const [plantId, badge] of plantBadgeGraphicsById) {
     if (nextIds.has(plantId)) continue
     badge.removeFromParent()
@@ -337,32 +318,32 @@ function syncPlants(
   }
 }
 
-function drawPlant(graphics: Graphics, entry: ReturnType<typeof buildPlantPresentationEntries>[number]): void {
+function drawPlant(
+  graphics: Graphics,
+  entry: ReturnType<typeof buildPlantPresentationEntries>[number],
+  hoveredCanonicalName: string | null,
+): void {
   const color = toPixiColor(entry.color, 0)
   const selected = entry.selected
+  const x = entry.plant.position.x
+  const y = entry.plant.position.y
+  const r = entry.radiusWorld
   graphics.clear()
-  graphics.circle(entry.plant.position.x, entry.plant.position.y, entry.radiusWorld)
+  graphics.circle(x, y, r)
     .fill({ color, alpha: 0.55 })
     .stroke({
       color: toPixiColor(selected ? getSelectionStrokeColor() : entry.color, color),
       width: selected ? 0.35 : 0.15,
       alpha: 1,
     })
-}
-
-function drawPlantLabel(
-  label: Text,
-  entry: ReturnType<typeof buildPlantPresentationEntries>[number],
-  viewportScale: number,
-): void {
-  label.text = entry.labelText
-  label.style = new TextStyle({
-    fontSize: 11 / viewportScale,
-    fill: toPixiColor(getPlantLabelColor(), 0),
-    fontStyle: entry.labelFontStyle,
-  })
-  label.position.set(entry.plant.position.x, entry.plant.position.y + (12 / viewportScale))
-  label.anchor.set(0.5, 0)
+  if (hoveredCanonicalName && entry.plant.canonicalName === hoveredCanonicalName) {
+    graphics.circle(x, y, r * 1.4)
+      .stroke({
+        color: toPixiColor(getSelectionStrokeColor(), 0),
+        width: 0.2,
+        alpha: 0.5,
+      })
+  }
 }
 
 function drawStackBadge(
@@ -489,6 +470,40 @@ function drawAnnotationHighlight(
       bounds.height + 4 / viewportScale,
     )
     .stroke({ color: toPixiColor(getSelectionStrokeColor(), 0), width: 1 / viewportScale, alpha: 1 })
+}
+
+function syncSelectionLabels(
+  layer: Container,
+  labelBySpecies: Map<string, Text>,
+  snapshot: SceneRendererSnapshot,
+): void {
+  const nextSpecies = new Set(snapshot.selectionLabels.map((l) => l.canonicalName))
+
+  for (const label of snapshot.selectionLabels) {
+    let text = labelBySpecies.get(label.canonicalName)
+    if (!text) {
+      text = new Text()
+      labelBySpecies.set(label.canonicalName, text)
+      layer.addChild(text)
+    }
+    text.text = label.text
+    text.style = new TextStyle({
+      fontSize: 12,
+      fontWeight: '600',
+      fontStyle: label.fontStyle,
+      fill: toPixiColor(getPlantLabelColor(), 0),
+    })
+    text.position.set(label.screenPoint.x, label.screenPoint.y)
+    text.anchor.set(0.5, 0)
+    text.visible = true
+  }
+
+  for (const [species, text] of labelBySpecies) {
+    if (nextSpecies.has(species)) continue
+    text.removeFromParent()
+    text.destroy()
+    labelBySpecies.delete(species)
+  }
 }
 
 function toPixiColor(color: string | null | undefined, fallback: string | number): number {

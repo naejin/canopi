@@ -6,6 +6,7 @@ import {
   STACK_BADGE_OFFSET_Y_PX,
   STACK_BADGE_RADIUS_PX,
 } from '../plant-presentation'
+import { computeSelectionLabels } from '../selection-labels'
 import type {
   SceneAnnotationEntity,
   SceneViewportState,
@@ -62,7 +63,13 @@ export function createCanvas2DSceneRenderer(): SceneRendererDefinition {
         },
         setViewport(viewport) {
           if (!snapshot) return
-          snapshot = { ...snapshot, viewport }
+          const labels = computeSelectionLabels(
+            snapshot.scene.plants,
+            snapshot.selectedPlantIds,
+            viewport,
+            snapshot.localizedCommonNames,
+          )
+          snapshot = { ...snapshot, viewport, selectionLabels: labels }
           redraw()
         },
       }
@@ -77,6 +84,7 @@ export function createCanvas2DSceneRenderer(): SceneRendererDefinition {
         applyViewport(ctx, snapshot.viewport)
         renderZones(ctx, snapshot)
         renderPlants(ctx, snapshot)
+        renderSelectionLabels(ctx, snapshot)
         renderAnnotations(ctx, snapshot)
       }
 
@@ -159,9 +167,15 @@ function renderPlants(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnap
     ctx.lineWidth = selected ? worldLineWidth * 2.5 : worldLineWidth
     ctx.stroke()
 
-    if (layout.visibleLabelIds.has(entry.plant.id)) {
-      drawLabel(ctx, entry.labelText, entry.labelScreenPoint, entry.labelFontStyle === 'normal', layer.opacity)
+    if (snapshot.hoveredCanonicalName && entry.plant.canonicalName === snapshot.hoveredCanonicalName) {
+      ctx.beginPath()
+      ctx.arc(entry.plant.position.x, entry.plant.position.y, entry.radiusWorld * 1.4, 0, Math.PI * 2)
+      ctx.strokeStyle = getSelectionStrokeColor()
+      ctx.globalAlpha = 0.5 * layer.opacity
+      ctx.lineWidth = worldLineWidth * 1.5
+      ctx.stroke()
     }
+
     const stackCount = layout.stackCounts.get(entry.plant.id)
     if (stackCount) {
       drawStackBadge(ctx, entry.screenPoint, stackCount, layer.opacity)
@@ -169,24 +183,6 @@ function renderPlants(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnap
   }
 
   ctx.globalAlpha = 1
-}
-
-function drawLabel(
-  ctx: CanvasRenderingContext2D,
-  labelText: string,
-  labelPoint: { x: number; y: number },
-  isCommonName: boolean,
-  opacity: number,
-): void {
-  ctx.save()
-  ctx.setTransform(1, 0, 0, 1, 0, 0)
-  ctx.fillStyle = getPlantLabelColor()
-  ctx.globalAlpha = opacity
-  ctx.font = `${isCommonName ? '400' : 'italic'} 11px Inter, sans-serif`
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'top'
-  ctx.fillText(labelText, labelPoint.x, labelPoint.y)
-  ctx.restore()
 }
 
 function drawStackBadge(
@@ -250,6 +246,21 @@ function drawAnnotationText(
   lines.forEach((line, index) => {
     ctx.fillText(line, screenBounds.x, screenBounds.y + index * metrics.lineHeightPx)
   })
+  ctx.restore()
+}
+
+function renderSelectionLabels(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnapshot): void {
+  if (snapshot.selectionLabels.length === 0) return
+  ctx.save()
+  ctx.setTransform(1, 0, 0, 1, 0, 0)
+  for (const label of snapshot.selectionLabels) {
+    ctx.fillStyle = getPlantLabelColor()
+    ctx.globalAlpha = 1
+    ctx.font = `${label.fontStyle === 'italic' ? 'italic ' : ''}600 12px Inter, sans-serif`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'top'
+    ctx.fillText(label.text, label.screenPoint.x, label.screenPoint.y)
+  }
   ctx.restore()
 }
 

@@ -184,6 +184,8 @@ describe('createPixiSceneRenderer', () => {
       sizeMode: 'default' as const,
       colorByAttr: null,
       localizedCommonNames: new Map(),
+      hoveredCanonicalName: null,
+      selectionLabels: [],
       speciesCache: new Map(),
     }
 

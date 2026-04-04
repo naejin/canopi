@@ -55,6 +55,7 @@ These features were deleted during pre-rewrite cleanup. See `docs/todo.md` for c
 - **Deferred beyond beta**: WorldMapPanel, geo/terrain, export, learning content
 - **Selection**: No resize/rotate — objects are position-only (highlight + move). Resize/rotate commands all deleted
 - **Konva engine**: Entire `CanvasEngine` + old command/tool/serializer/history/import/export system deleted. Konva dependency fully removed. Replaced by scene-owned runtime (PixiJS + Canvas2D)
+- **Per-plant labels**: Label rendering, collision detection, dedup, and adaptive placement all deleted. Replaced by hover tooltip (common name + scientific name), hover species highlight (ring on same-species), and selection labels (one per species at centroid). See `desktop/web/src/canvas/CLAUDE.md` Plant Presentation Rules
 
 ## Architecture Rules (from rewrite — enforced)
 
@@ -83,6 +84,7 @@ These rules are non-negotiable. They come from `docs/todo.md` and protect the ar
 ### Hotspot File Protection
 These files have concentrated authority. **One writer at a time** — do not assign multiple concurrent writers. Create seam files first, then move ownership:
 - `desktop/web/src/canvas/runtime/scene-runtime.ts`
+- `desktop/web/src/canvas/runtime/scene-interaction.ts`
 - `desktop/web/src/canvas/session.ts`
 - `desktop/src/db/plant_db.rs`
 - `desktop/src/db/query_builder.rs`

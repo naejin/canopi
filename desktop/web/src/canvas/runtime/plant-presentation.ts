@@ -11,10 +11,6 @@ import { worldToScreen } from './annotation-layout'
 import type { ScenePlantEntity, ScenePoint, SceneViewportState } from './scene'
 import type { SpeciesCacheEntry } from './species-cache'
 
-const LABEL_GAP_PX = 4
-const SAME_COLOR_LABEL_DIST_PX = 40
-const SAME_COLOR_LABEL_DIST_SQ = SAME_COLOR_LABEL_DIST_PX * SAME_COLOR_LABEL_DIST_PX
-const DIFFERENT_COLOR_LABEL_DIST_SQ = 20 * 20
 const STACK_THRESHOLD_PX = 5
 const STACK_THRESHOLD_SQ = STACK_THRESHOLD_PX * STACK_THRESHOLD_PX
 export const STACK_BADGE_RADIUS_PX = 7
@@ -36,12 +32,8 @@ export interface PlantPresentationEntry {
   radiusScreenPx: number
   color: string
   baseColor: string
-  labelText: string
-  labelFontStyle: 'normal' | 'italic'
-  labelScreenPoint: ScenePoint
-  labelPriority: number
+  stackPriority: number
   lod: PlantLOD
-  labelVisibleAtCurrentLod: boolean
   screenPoint: ScenePoint
   hitBoundsScreen: PlantScreenHitBounds
   selected: boolean
@@ -49,7 +41,6 @@ export interface PlantPresentationEntry {
 
 export interface PlantLayoutResult {
   lod: PlantLOD
-  visibleLabelIds: ReadonlySet<string>
   stackCounts: ReadonlyMap<string, number>
 }
 
@@ -98,8 +89,6 @@ export function buildPlantPresentationEntries(
     const baseColor = resolvePlantBaseColor(plant, context.speciesCache)
     const color = resolvePlantDisplayColor(plant, context.colorByAttr, context.speciesCache)
     const selected = selectedPlantIds.has(plant.id)
-    const localizedCommonName = context.localizedCommonNames?.get(plant.canonicalName) ?? plant.commonName
-    const labelText = localizedCommonName || abbreviateCanonical(plant.canonicalName)
     const screenPoint = worldToScreen(plant.position, context.viewport)
     const hitBoundsScreen = getPlantScreenHitBounds(plant, context)
     return {
@@ -108,15 +97,8 @@ export function buildPlantPresentationEntries(
       radiusScreenPx,
       color,
       baseColor,
-      labelText,
-      labelFontStyle: localizedCommonName ? 'normal' : 'italic',
-      labelScreenPoint: {
-        x: screenPoint.x,
-        y: screenPoint.y + CIRCLE_SCREEN_PX + LABEL_GAP_PX,
-      },
-      labelPriority: getLabelPriority(plant, selected),
+      stackPriority: getStackPriority(plant, selected),
       lod,
-      labelVisibleAtCurrentLod: selected || lod === 'icon+label',
       screenPoint,
       hitBoundsScreen,
       selected,
@@ -129,58 +111,10 @@ export function layoutPlantPresentation(
   viewportScale: number,
 ): PlantLayoutResult {
   const lod = getPlantLOD(viewportScale)
-  const visibleLabelIds = new Set<string>()
   const stackCounts = new Map(
     resolveStackBadgeDecisions(entries).map((badge) => [badge.anchorPlantId, badge.count]),
   )
-
-  if (lod !== 'icon+label') {
-    for (const entry of entries) {
-      if (entry.selected) visibleLabelIds.add(entry.plant.id)
-    }
-    return { lod, visibleLabelIds, stackCounts }
-  }
-
-  const index = new ScreenBucketIndex(SAME_COLOR_LABEL_DIST_PX, (entry) => entry.labelScreenPoint)
-  index.rebuild(entries)
-
-  const shown = new Set<string>()
-  const ordered = [...entries].sort((left, right) => {
-    if (left.labelPriority !== right.labelPriority) {
-      return left.labelPriority - right.labelPriority
-    }
-    return (left.labelScreenPoint.y - right.labelScreenPoint.y)
-      || (left.labelScreenPoint.x - right.labelScreenPoint.x)
-  })
-
-  for (const entry of ordered) {
-    if (entry.selected) {
-      visibleLabelIds.add(entry.plant.id)
-      shown.add(entry.plant.id)
-      continue
-    }
-
-    const blocked = index.queryNeighbors(
-      entry.labelScreenPoint.x,
-      entry.labelScreenPoint.y,
-      SAME_COLOR_LABEL_DIST_PX,
-    ).some((neighbor) => {
-      if (neighbor.plant.id === entry.plant.id) return false
-      if (!shown.has(neighbor.plant.id)) return false
-      const dx = entry.labelScreenPoint.x - neighbor.labelScreenPoint.x
-      const dy = entry.labelScreenPoint.y - neighbor.labelScreenPoint.y
-      const threshold = neighbor.color === entry.color
-        ? SAME_COLOR_LABEL_DIST_SQ
-        : DIFFERENT_COLOR_LABEL_DIST_SQ
-      return dx * dx + dy * dy < threshold
-    })
-
-    if (blocked) continue
-    visibleLabelIds.add(entry.plant.id)
-    shown.add(entry.plant.id)
-  }
-
-  return { lod, visibleLabelIds, stackCounts }
+  return { lod, stackCounts }
 }
 
 export function getPlantWorldBounds(
@@ -309,8 +243,8 @@ export function resolveStackBadgeDecisions(
       .map((memberId) => byId.get(memberId))
       .filter((value): value is PlantPresentationEntry => value !== undefined)
       .sort((left, right) => {
-        if (left.labelPriority !== right.labelPriority) {
-          return left.labelPriority - right.labelPriority
+        if (left.stackPriority !== right.stackPriority) {
+          return left.stackPriority - right.stackPriority
         }
         return (left.screenPoint.y - right.screenPoint.y)
           || (left.screenPoint.x - right.screenPoint.x)
@@ -377,16 +311,9 @@ function getFallbackWorldRadius(referenceScaleOverride?: number): number {
   return CIRCLE_SCREEN_PX / referenceScale
 }
 
-function getLabelPriority(plant: ScenePlantEntity, selected: boolean): number {
+function getStackPriority(plant: ScenePlantEntity, selected: boolean): number {
   if (selected) return 0
   return normalizeHexColor(plant.color) ? 1 : 2
-}
-
-function abbreviateCanonical(name: string): string {
-  const parts = name.split(' ')
-  return parts.length >= 2
-    ? `${parts[0]![0]}. ${parts[1]!.slice(0, 3)}.`
-    : name.slice(0, 6)
 }
 
 class ScreenBucketIndex {

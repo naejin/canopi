@@ -62,13 +62,25 @@ Legacy Konva / `CanvasEngine` code may still exist in-tree as superseded history
 - visible text should win hit testing over underlying zones/plants when it is on top
 
 ### Plant Presentation Rules
-- plant geometry, color, LOD, label suppression, and stack badges come from `runtime/plant-presentation.ts`
+- plant geometry, color, and stack badges come from `runtime/plant-presentation.ts`
+- **no per-plant labels on canvas** — plant identification is via hover tooltip (common name + scientific name) and selection labels (one per species at centroid)
+- hover tooltip is an HTML overlay managed by `SceneInteractionController` via `runtime/interaction/hover-tooltip.ts`
+- hover species highlight (ring on all same-species plants) flows through `hoveredCanonicalName` in the renderer snapshot
+- selection labels are computed by `runtime/selection-labels.ts`, separate from the presentation pipeline; both renderers recompute labels on viewport change
 - size mode and color mode are independent axes; do not reintroduce a combined `plantDisplayMode`
 - bounds, zoom-to-fit, grouping, renderers, and interaction must all consume the same resolved presentation state
 - species-cache backfill may enrich plant metadata, but production geometry should never depend on ad hoc empty-cache fallbacks
 
+### Hover & Tooltip Rules
+- `SceneInteractionController._updateHover()` hit-tests on idle `pointermove` (when `_pointerId === null`)
+- `_onPointerMove` is on `window`, not container — hover path must bounds-check via `getBoundingClientRect()` (single call, CLAUDE.md hot-path rule)
+- hover tooltip is a plain `.ts` module using inline styles with CSS custom properties — no CSS Module (no project precedent for CSS Module imports from `.ts` files)
+- `hoveredEntityId` flows: interaction controller → session state → renderer snapshot (`hoveredCanonicalName`) → highlight ring
+- selection labels are computed per-species at centroid by `selection-labels.ts`; both renderers must recompute labels in `setViewport()` for pan/zoom tracking
+- **do not reintroduce per-plant labels** — the label collision/dedup/placement system was deleted because it is fundamentally unreadable at dense planting scales
+
 ### Invalidation Rules
-- use scene invalidation for content, selection, presentation, locale, and theme changes
+- use scene invalidation for content, selection, presentation, locale, theme, and hover changes
 - use viewport invalidation for pan, zoom, and fit operations
 - use chrome invalidation for rulers, grid, and guide-only changes
 - do not route viewport-only work through the full scene render path

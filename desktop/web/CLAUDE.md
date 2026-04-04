@@ -25,6 +25,9 @@
 - **Section headers**: Uppercase, `var(--text-xs)` (11px), weight 600, `0.06em` letter-spacing, `--color-text-muted`. One pattern everywhere — no 10px/12px/14px variations
 - **Non-token sizes**: When a component genuinely needs a size not in the token scale (e.g., 22px swatches), define a scoped CSS custom property on the component root (e.g., `--swatch-size: 22px`) and reference it everywhere. Never scatter raw px values
 
+## Canvas Overlay Styling
+- Canvas runtime overlay modules (`.ts`, not `.tsx`) use **inline styles with CSS custom properties** — no CSS Module imports from plain `.ts` files (only `.tsx` components use CSS Modules in this project)
+
 ## Preact / Signals Gotchas
 - **Stale async guard: one monotonic counter ref is enough**: For async effects that fire-and-forget (image loads, IPC calls), a single `useRef` counter incremented on each effect run guards against all staleness — across both prop changes and internal state changes. Don't layer a second ref tracking the prop value; the counter already subsumes it
 - **Preact Vite plugin**: Package is `@preact/preset-vite` (not `@preactjs/preset-vite`)

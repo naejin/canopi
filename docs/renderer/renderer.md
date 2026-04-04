@@ -51,7 +51,9 @@ Both backends must stay aligned on:
 - marquee / transient previews
 - camera transforms
 - plant size/color presentation
-- dense-scene label suppression and stack badges
+- stack badges for overlapping plants
+- hover species highlight ring (from `hoveredCanonicalName` in snapshot)
+- selection labels (one per species, from `selectionLabels` in snapshot)
 
 Shared geometry and layout rules should live outside backend implementations whenever possible.
 

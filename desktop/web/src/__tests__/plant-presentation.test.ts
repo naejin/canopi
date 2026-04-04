@@ -94,81 +94,6 @@ describe('plant presentation service', () => {
     expect(fallbackPresentation.radiusScreenPx).toBe(16)
   })
 
-  it('derives label text, style, and selected priority from presentation state', () => {
-    const plant = createPlant({
-      commonName: null,
-      canonicalName: 'Lavandula angustifolia',
-    })
-
-    const presentation = buildPlantPresentationEntries([plant], {
-      viewport: createViewport({ scale: 1 }),
-      zoomReference: 8,
-      sizeMode: 'default',
-      colorByAttr: null,
-      speciesCache: new Map(),
-    }, new Set(['plant-1']))[0]!
-
-    expect(presentation.labelText).toBe('L. ang.')
-    expect(presentation.labelFontStyle).toBe('italic')
-    expect(presentation.labelPriority).toBe(0)
-    expect(presentation.labelVisibleAtCurrentLod).toBe(true)
-    expect(presentation.lod).toBe('icon')
-  })
-
-  it('prefers localized common-name overrides without mutating persisted plant data', () => {
-    const plant = createPlant({
-      commonName: 'Apple',
-      canonicalName: 'Malus domestica',
-    })
-
-    const presentation = buildPlantPresentationEntries([plant], {
-      viewport: createViewport({ scale: 1 }),
-      zoomReference: 8,
-      sizeMode: 'default',
-      colorByAttr: null,
-      speciesCache: new Map(),
-      localizedCommonNames: new Map([['Malus domestica', 'Pommier']]),
-    }, new Set())[0]!
-
-    expect(plant.commonName).toBe('Apple')
-    expect(presentation.labelText).toBe('Pommier')
-    expect(presentation.labelFontStyle).toBe('normal')
-  })
-
-  it('prefers selected and user-colored plants during density suppression', () => {
-    const snapshot = buildPlantPresentationSnapshot([
-      createPlant({ id: 'default', position: { x: 0, y: 0 } }),
-      createPlant({ id: 'colored', position: { x: 1.25, y: 1.25 }, color: '#C44230' }),
-      createPlant({ id: 'selected', position: { x: 5, y: 5 } }),
-    ], {
-      viewport: createViewport({ scale: 8 }),
-      zoomReference: 8,
-      sizeMode: 'default',
-      colorByAttr: null,
-      speciesCache: new Map(),
-    }, new Set(['selected']))
-
-    expect(snapshot.layout.visibleLabelIds.has('default')).toBe(false)
-    expect(snapshot.layout.visibleLabelIds.has('colored')).toBe(true)
-    expect(snapshot.layout.visibleLabelIds.has('selected')).toBe(true)
-  })
-
-  it('keeps differently colored neighbors visible when only the relaxed threshold would apply', () => {
-    const snapshot = buildPlantPresentationSnapshot([
-      createPlant({ id: 'green', position: { x: 0, y: 0 } }),
-      createPlant({ id: 'red', position: { x: 3.75, y: 0 }, color: '#C44230' }),
-    ], {
-      viewport: createViewport({ scale: 8 }),
-      zoomReference: 8,
-      sizeMode: 'default',
-      colorByAttr: null,
-      speciesCache: new Map(),
-    }, new Set())
-
-    expect(snapshot.layout.visibleLabelIds.has('green')).toBe(true)
-    expect(snapshot.layout.visibleLabelIds.has('red')).toBe(true)
-  })
-
   it('computes screen hit bounds from the resolved radius', () => {
     const hitBounds = getPlantScreenHitBounds(createPlant(), {
       viewport: createViewport({ x: 5, y: 7, scale: 8 }),
@@ -220,5 +145,35 @@ describe('plant presentation service', () => {
     )
 
     expect(color).toBe('#C8A51E')
+  })
+
+  it('returns entries without label fields', () => {
+    const entry = buildPlantPresentationEntries([createPlant()], {
+      viewport: createViewport(),
+      zoomReference: 8,
+      sizeMode: 'default',
+      colorByAttr: null,
+      speciesCache: new Map(),
+    }, new Set())[0]!
+
+    expect(entry).toHaveProperty('radiusWorld')
+    expect(entry).toHaveProperty('color')
+    expect(entry).toHaveProperty('screenPoint')
+    expect(entry).not.toHaveProperty('labelText')
+    expect(entry).not.toHaveProperty('labelScreenPoint')
+  })
+
+  it('returns layout with only lod and stackCounts', () => {
+    const snapshot = buildPlantPresentationSnapshot([createPlant()], {
+      viewport: createViewport(),
+      zoomReference: 8,
+      sizeMode: 'default',
+      colorByAttr: null,
+      speciesCache: new Map(),
+    }, new Set())
+
+    expect(snapshot.layout).toHaveProperty('lod')
+    expect(snapshot.layout).toHaveProperty('stackCounts')
+    expect(snapshot.layout).not.toHaveProperty('visibleLabelIds')
   })
 })

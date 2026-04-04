@@ -1,5 +1,6 @@
 import type { RendererBackendContext, RendererBackendDefinition, RendererBackendInstance } from './types'
 import type { ScenePersistedState, SceneViewportState } from '../scene'
+import type { SelectionLabel } from '../selection-labels'
 import type { ColorByAttribute, PlantSizeMode } from '../../../state/canvas'
 
 export interface SceneRendererSnapshot {
@@ -12,6 +13,8 @@ export interface SceneRendererSnapshot {
   readonly colorByAttr: ColorByAttribute | null
   readonly speciesCache: ReadonlyMap<string, Record<string, unknown>>
   readonly localizedCommonNames: ReadonlyMap<string, string | null>
+  readonly hoveredCanonicalName: string | null
+  readonly selectionLabels: readonly SelectionLabel[]
 }
 
 export interface SceneRendererContext {

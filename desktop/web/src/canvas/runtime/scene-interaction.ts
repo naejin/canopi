@@ -22,6 +22,7 @@ import {
   resetSceneDragState,
 } from './interaction/drag-ops'
 import { hitTestTopLevel, queryRectTopLevel } from './interaction/hit-testing'
+import { createHoverTooltip, type HoverTooltipController } from './interaction/hover-tooltip'
 import {
   createInteractionPreview,
   hideInteractionPreview,
@@ -50,10 +51,13 @@ export interface SceneInteractionDeps {
   setTool: (name: string) => void
   render: (kind: 'scene' | 'viewport') => void
   markDirty: (before: SceneCommandSnapshot) => void
+  setHoveredEntityId: (id: string | null) => void
+  getLocalizedCommonNames: () => ReadonlyMap<string, string | null>
 }
 
 export class SceneInteractionController {
   private readonly _preview: HTMLDivElement
+  private readonly _tooltip: HoverTooltipController
   private _tool: InteractionTool = 'select'
   private _mode: 'idle' | 'panning' | 'dragging' | 'band' | 'rectangle' = 'idle'
   private _pointerId: number | null = null
@@ -68,6 +72,7 @@ export class SceneInteractionController {
 
   constructor(private readonly _deps: SceneInteractionDeps) {
     this._preview = createInteractionPreview(this._deps.container)
+    this._tooltip = createHoverTooltip(this._deps.container)
     this.setTool(getCanvasTool())
     this._attach()
   }
@@ -89,10 +94,12 @@ export class SceneInteractionController {
     this._detach()
     this._removeTextarea()
     this._preview.remove()
+    this._tooltip.dispose()
   }
 
   private _attach(): void {
     this._deps.container.addEventListener('pointerdown', this._onPointerDown)
+    this._deps.container.addEventListener('pointerleave', this._onPointerLeave)
     window.addEventListener('pointermove', this._onPointerMove)
     window.addEventListener('pointerup', this._onPointerUp)
     window.addEventListener('keydown', this._onKeyDown)
@@ -105,6 +112,7 @@ export class SceneInteractionController {
 
   private _detach(): void {
     this._deps.container.removeEventListener('pointerdown', this._onPointerDown)
+    this._deps.container.removeEventListener('pointerleave', this._onPointerLeave)
     window.removeEventListener('pointermove', this._onPointerMove)
     window.removeEventListener('pointerup', this._onPointerUp)
     window.removeEventListener('keydown', this._onKeyDown)
@@ -193,8 +201,47 @@ export class SceneInteractionController {
     captureSceneDragState(this._dragState, scene, this._deps.getSelection())
   }
 
+  private readonly _onPointerLeave = (): void => {
+    this._deps.setHoveredEntityId(null)
+    this._tooltip.hide()
+  }
+
+  private _updateHover(event: PointerEvent): void {
+    const rect = this._deps.container.getBoundingClientRect()
+    if (event.clientX < rect.left || event.clientX > rect.right
+      || event.clientY < rect.top || event.clientY > rect.bottom) {
+      this._deps.setHoveredEntityId(null)
+      this._tooltip.hide()
+      return
+    }
+    const screen = { x: event.clientX - rect.left, y: event.clientY - rect.top }
+    const world = this._deps.camera.screenToWorld(screen)
+    const hit = hitTestTopLevel(
+      this._deps.getSceneStore().persisted,
+      world,
+      this._deps.camera.viewport.scale,
+      this._deps.getSpeciesCache(),
+      this._deps.getPlantPresentationContext,
+    )
+    if (hit?.kind === 'plant') {
+      this._deps.setHoveredEntityId(hit.id)
+      const plant = this._deps.getSceneStore().persisted.plants.find((p) => p.id === hit.id)
+      if (plant) {
+        const commonName = this._deps.getLocalizedCommonNames().get(plant.canonicalName) ?? plant.commonName
+        this._tooltip.show(screen.x, screen.y, commonName, plant.canonicalName)
+      }
+    } else {
+      this._deps.setHoveredEntityId(null)
+      this._tooltip.hide()
+    }
+  }
+
   private readonly _onPointerMove = (event: PointerEvent): void => {
-    if (this._pointerId !== null && event.pointerId !== this._pointerId) return
+    if (this._pointerId === null) {
+      this._updateHover(event)
+      return
+    }
+    if (event.pointerId !== this._pointerId) return
     if (!this._startScreen || !this._startWorld) return
 
     const screen = this._screenPoint(event)
