@@ -6,6 +6,17 @@ use std::sync::OnceLock;
 
 use super::lookup::{get_common_name, translate_composite_value, translate_value};
 
+/// Parse a JSON array string (e.g. `["China", "India"]`) into a
+/// comma-separated display string. Returns `None` for empty arrays,
+/// passes through non-JSON strings unchanged.
+fn parse_json_array_to_display(json_str: &str) -> Option<String> {
+    match serde_json::from_str::<Vec<String>>(json_str) {
+        Ok(items) if !items.is_empty() => Some(items.join(", ")),
+        Ok(_) => None,
+        Err(_) => Some(json_str.to_owned()),
+    }
+}
+
 const DETAIL_CONTRACT_COLUMNS: &[&str] = &[
     "id",
     "canonical_name",
@@ -409,6 +420,16 @@ pub fn get_detail(
         .map_err(|e| format!("Failed to fetch species detail for '{canonical_name}': {e}"))?;
 
     detail.common_name = get_common_name(conn, &species_id, locale).or(detail.common_name);
+
+    // Parse distribution JSON arrays into readable comma-separated text
+    detail.native_distribution = detail
+        .native_distribution
+        .as_deref()
+        .and_then(parse_json_array_to_display);
+    detail.introduced_distribution = detail
+        .introduced_distribution
+        .as_deref()
+        .and_then(parse_json_array_to_display);
 
     for (field, getter, setter) in [
         (

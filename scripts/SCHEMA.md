@@ -6,8 +6,8 @@ This document describes the schema contract between canopi-data exports and the 
 
 | Parameter                  | Value | Location                          |
 |----------------------------|-------|-----------------------------------|
-| `PRAGMA user_version`      | 6     | Set by `prepare-db.py` at build   |
-| `min_export_schema_version`| 9     | Validated against canopi-data `_metadata.schema_version` |
+| `PRAGMA user_version`      | 7     | Set by `prepare-db.py` at build   |
+| `min_export_schema_version`| 10    | Validated against canopi-data `_metadata.schema_version` |
 
 The contract is defined in `scripts/schema-contract.json`.
 
@@ -36,6 +36,7 @@ The Rust backend checks `PRAGMA user_version` at startup:
 | `species_relationships` | Companion/antagonist relationships between species. |
 | `translated_values` | Wide-format translations table. 22 language columns (`value_en` through `value_hu`). Keyed by `field_name` + English source value. |
 | `species_text_translations` | Text-level translations from canopi-data export. |
+| `species_distributions` | Junction table for native/introduced distribution regions. Columns: `species_id`, `distribution_type` (`native`/`introduced`), `region`, `source`. |
 | `synonym_lookup` | Maps synonym names to canonical species IDs. |
 
 ## Regenerating the DB

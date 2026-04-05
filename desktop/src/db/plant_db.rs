@@ -262,6 +262,13 @@ mod tests {
                 common_name TEXT NOT NULL,
                 PRIMARY KEY (species_id, language)
             );
+            CREATE TABLE species_distributions (
+                id TEXT PRIMARY KEY,
+                species_id TEXT NOT NULL,
+                distribution_type TEXT NOT NULL,
+                region TEXT NOT NULL,
+                source TEXT
+            );
 
             INSERT INTO species (id, slug, canonical_name, common_name, family, genus,
                 height_min_m, height_max_m, width_max_m, hardiness_zone_min, hardiness_zone_max,
@@ -270,7 +277,8 @@ mod tests {
                 bloom_period, flower_color, tolerates_full_sun, tolerates_semi_shade, tolerates_full_shade,
                 well_drained, tolerates_light_soil, tolerates_medium_soil, tolerates_heavy_soil,
                 nitrogen_fixer, stratum, edibility_rating, medicinal_rating,
-                scented, toxicity)
+                scented, toxicity,
+                native_distribution, introduced_distribution)
             VALUES (
                 'uuid-lav', 'lavandula-angustifolia', 'Lavandula angustifolia',
                 'Lavender', 'Lamiaceae', 'Lavandula',
@@ -280,7 +288,8 @@ mod tests {
                 'Summer', 'Purple', 1, 1, 0,
                 1, 1, 1, 0,
                 0, 'Low', 3, 2,
-                1, NULL
+                1, NULL,
+                '[]', 'Europe, Western Asia'
             );
             INSERT INTO species (id, slug, canonical_name, common_name, family, genus,
                 height_min_m, height_max_m, width_max_m, hardiness_zone_min, hardiness_zone_max,
@@ -290,7 +299,7 @@ mod tests {
                 tolerates_full_sun, tolerates_semi_shade, tolerates_full_shade,
                 nitrogen_fixer, stratum, edibility_rating, medicinal_rating,
                 succession_stage, seed_dormancy_depth, serotinous, invasive_potential,
-                biogeographic_status)
+                biogeographic_status, native_distribution)
             VALUES (
                 'uuid-ald', 'alnus-glutinosa', 'Alnus glutinosa',
                 'Alder', 'Betulaceae', 'Alnus',
@@ -301,7 +310,7 @@ mod tests {
                 1, 0, 0,
                 1, 'Canopy', 0, 0,
                 'secondary_i', 'Absolute', 1, 'Potentially Invasive',
-                'Native'
+                'Native', '[\"Asia\", \"Europe\"]'
             );
 
             INSERT INTO species_common_names VALUES
@@ -408,6 +417,24 @@ mod tests {
         assert_eq!(detail.is_perennial, Some(true));
         assert_eq!(detail.is_annual, Some(false));
         assert_eq!(detail.succession_stage.as_deref(), Some("secondary_i"));
+    }
+
+    #[test]
+    fn test_get_detail_parses_distribution_json() {
+        let conn = test_db();
+        // JSON array → comma-separated
+        let alder = get_detail(&conn, "Alnus glutinosa", "en").unwrap();
+        assert_eq!(alder.native_distribution.as_deref(), Some("Asia, Europe"));
+        assert_eq!(alder.introduced_distribution, None); // NULL in fixture
+
+        // Empty JSON array → None (suppressed)
+        let lav = get_detail(&conn, "Lavandula angustifolia", "en").unwrap();
+        assert_eq!(lav.native_distribution, None);
+        // Non-JSON plain text → passed through unchanged
+        assert_eq!(
+            lav.introduced_distribution.as_deref(),
+            Some("Europe, Western Asia")
+        );
     }
 
     #[test]

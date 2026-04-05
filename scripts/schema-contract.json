@@ -1,7 +1,7 @@
 {
-  "schema_version": 6,
-  "min_export_schema_version": 9,
-  "description": "Maps canopi-data export columns to canopi-core.db species table. Update this file when canopi-data changes column names. v6: canopi-data export v9 — removed 15 prose text columns (edible_uses, medicinal_uses, other_uses, special_uses, known_hazards, pests_diseases, native_range, range_text, summary, physical_characteristics, cultivation_notes, propagation_notes, habitats, carbon_farming, reasoning). Uses now sourced from species_uses table.",
+  "schema_version": 7,
+  "min_export_schema_version": 10,
+  "description": "Maps canopi-data export columns to canopi-core.db species table. Update this file when canopi-data changes column names. v7: canopi-data export v10 — species_distributions junction table added, fruit_seed_color/period translations added, stratum/succession_stage translations improved.",
   "columns": [
     {"name": "id", "type": "TEXT", "required": true},
     {"name": "slug", "type": "TEXT", "required": true},
@@ -190,7 +190,8 @@
     "species_external_links",
     "species_text_translations",
     "synonym_lookup",
-    "translated_values"
+    "translated_values",
+    "species_distributions"
   ],
   "indexes": {
     "species": [
@@ -241,6 +242,9 @@
     ],
     "synonym_lookup": [
       {"name": "idx_synonym_canonical", "columns": "canonical_id"}
+    ],
+    "species_distributions": [
+      {"name": "idx_dist_species_type", "columns": "species_id, distribution_type"}
     ],
     "best_common_names": [
       {"name": "idx_bcn_species_lang", "columns": "species_id, language"}
