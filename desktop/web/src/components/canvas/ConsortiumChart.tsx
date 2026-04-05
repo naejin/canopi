@@ -4,6 +4,7 @@ import { t } from '../../i18n'
 import { locale } from '../../state/app'
 import { plantSpeciesColors, hoveredConsortiumSpecies } from '../../state/canvas'
 import { currentDesign } from '../../state/document'
+import { currentCanvasSession } from '../../canvas/session'
 import { upsertConsortiumEntry, deleteConsortiumEntry, moveConsortiumEntry } from '../../state/consortium-actions'
 import { markDocumentDirty } from '../../state/document-mutations'
 import {
@@ -49,8 +50,9 @@ export function ConsortiumChart() {
   const dragState = useRef<DragState>(null)
   const lastCanonicalNamesRef = useRef<Set<string>>(new Set())
 
+  const session = currentCanvasSession.value
   const design = currentDesign.value
-  const plants = design?.plants ?? []
+  const plants = session?.getPlacedPlants() ?? design?.plants ?? []
   const consortiums = design?.consortiums ?? []
   const colors = plantSpeciesColors.value
 
@@ -66,7 +68,8 @@ export function ConsortiumChart() {
     const d = currentDesign.value
     if (!d) return
 
-    const currentPlants = d.plants ?? []
+    const s = currentCanvasSession.value
+    const currentPlants = s?.getPlacedPlants() ?? d.plants ?? []
     const currentConsortiums = d.consortiums ?? []
     const currentNames = new Set(currentPlants.map((p) => p.canonical_name))
     const lastNames = lastCanonicalNamesRef.current
