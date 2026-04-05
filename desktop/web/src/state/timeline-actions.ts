@@ -11,7 +11,7 @@ function updateTimeline(
 ): void {
   mutateCurrentDesign((design) => ({
     ...design,
-    timeline: updater(design.timeline),
+    timeline: updater(design.timeline ?? []),
   }), { markDirty: options.markDirty !== false })
 }
 

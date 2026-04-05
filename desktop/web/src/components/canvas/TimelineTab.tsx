@@ -101,7 +101,7 @@ export function TimelineTab() {
         zone: null,
         depends_on: null,
         completed: false,
-        order: design.timeline.length,
+        order: (design.timeline ?? []).length,
       })
     }
 
@@ -115,7 +115,7 @@ export function TimelineTab() {
     const plants = session?.getPlacedPlants() ?? design.plants
     const nextActions = buildDefaultTimelineActions(
       plants,
-      design.timeline,
+      design.timeline ?? [],
       t('canvas.timeline.type_planting'),
       t('canvas.timeline.type_harvest'),
     )

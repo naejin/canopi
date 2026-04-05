@@ -46,8 +46,6 @@ function createScene(): ScenePersistedState {
     annotations: [],
     consortiums: [],
     groups: [],
-    timeline: [],
-    budget: [],
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     extra: {},

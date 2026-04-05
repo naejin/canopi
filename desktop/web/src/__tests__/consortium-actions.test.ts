@@ -68,7 +68,7 @@ describe('consortium actions', () => {
       notes: 'Updated',
     })
 
-    expect(currentDesign.value?.consortiums[0]?.name).toBe('Updated guild')
+    expect(currentDesign.value?.consortiums?.[0]?.name).toBe('Updated guild')
     expect(nonCanvasRevision.value).toBe(2)
   })
 

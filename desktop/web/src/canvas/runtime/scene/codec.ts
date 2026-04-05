@@ -1,18 +1,15 @@
 import type {
   Annotation,
-  BudgetItem,
   CanopiFile,
   Consortium,
   Layer,
   Location,
   ObjectGroup,
   PlacedPlant,
-  TimelineAction,
   Zone,
 } from '../../../types/design'
 import type {
   SceneAnnotationEntity,
-  SceneBudgetItemEntity,
   SceneConsortiumEntity,
   SceneLayerEntity,
   SceneLocation,
@@ -20,7 +17,6 @@ import type {
   ScenePersistedState,
   ScenePlantEntity,
   SceneSessionState,
-  SceneTimelineActionEntity,
   SceneZoneEntity,
 } from './types'
 
@@ -40,10 +36,8 @@ export function hydrateScenePersistedState(file: CanopiFile): ScenePersistedStat
     plants: file.plants.map(hydratePlantEntity),
     zones: file.zones.map(hydrateZoneEntity),
     annotations: (file.annotations ?? []).map(hydrateAnnotationEntity),
-    consortiums: file.consortiums.map(hydrateConsortiumEntity),
+    consortiums: (file.consortiums ?? []).map(hydrateConsortiumEntity),
     groups: (file.groups ?? []).map(hydrateGroupEntity),
-    timeline: file.timeline.map(hydrateTimelineEntity),
-    budget: file.budget.map(hydrateBudgetEntity),
     createdAt: file.created_at,
     updatedAt: file.updated_at,
     extra: { ...(file.extra ?? {}) },
@@ -69,8 +63,6 @@ export function serializeScenePersistedState(
     annotations: state.annotations.map(serializeAnnotationEntity),
     consortiums: state.consortiums.map(serializeConsortiumEntity),
     groups: state.groups.map(serializeGroupEntity),
-    timeline: state.timeline.map(serializeTimelineEntity),
-    budget: state.budget.map(serializeBudgetEntity),
     created_at: state.createdAt,
     updated_at: now.toISOString(),
     extra: { ...state.extra },
@@ -88,8 +80,6 @@ export function cloneScenePersistedState(state: ScenePersistedState): ScenePersi
     annotations: state.annotations.map(cloneAnnotationEntity),
     consortiums: state.consortiums.map(cloneConsortiumEntity),
     groups: state.groups.map(cloneGroupEntity),
-    timeline: state.timeline.map(cloneTimelineEntity),
-    budget: state.budget.map(cloneBudgetEntity),
     extra: { ...state.extra },
   }
 }
@@ -309,74 +299,6 @@ function cloneConsortiumEntity(consortium: SceneConsortiumEntity): SceneConsorti
   return {
     ...consortium,
     plantIds: [...consortium.plantIds],
-  }
-}
-
-function hydrateTimelineEntity(action: TimelineAction): SceneTimelineActionEntity {
-  return {
-    kind: 'timeline-action',
-    id: action.id,
-    actionType: action.action_type,
-    description: action.description,
-    startDate: action.start_date,
-    endDate: action.end_date,
-    recurrence: action.recurrence,
-    plantIds: action.plants ? [...action.plants] : null,
-    zoneName: action.zone,
-    dependsOn: action.depends_on ? [...action.depends_on] : null,
-    completed: action.completed,
-    order: action.order,
-  }
-}
-
-function serializeTimelineEntity(action: SceneTimelineActionEntity): TimelineAction {
-  return {
-    id: action.id,
-    action_type: action.actionType,
-    description: action.description,
-    start_date: action.startDate,
-    end_date: action.endDate,
-    recurrence: action.recurrence,
-    plants: action.plantIds ? [...action.plantIds] : null,
-    zone: action.zoneName,
-    depends_on: action.dependsOn ? [...action.dependsOn] : null,
-    completed: action.completed,
-    order: action.order,
-  }
-}
-
-function cloneTimelineEntity(action: SceneTimelineActionEntity): SceneTimelineActionEntity {
-  return {
-    ...action,
-    plantIds: action.plantIds ? [...action.plantIds] : null,
-    dependsOn: action.dependsOn ? [...action.dependsOn] : null,
-  }
-}
-
-function hydrateBudgetEntity(item: BudgetItem): SceneBudgetItemEntity {
-  return {
-    kind: 'budget-item',
-    category: item.category,
-    description: item.description,
-    quantity: item.quantity,
-    unitCost: item.unit_cost,
-    currency: item.currency,
-  }
-}
-
-function serializeBudgetEntity(item: SceneBudgetItemEntity): BudgetItem {
-  return {
-    category: item.category,
-    description: item.description,
-    quantity: item.quantity,
-    unit_cost: item.unitCost,
-    currency: item.currency,
-  }
-}
-
-function cloneBudgetEntity(item: SceneBudgetItemEntity): SceneBudgetItemEntity {
-  return {
-    ...item,
   }
 }
 

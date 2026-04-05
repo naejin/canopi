@@ -610,48 +610,22 @@ export class SceneCanvasRuntime implements CanvasRuntime {
           }
         : hydrateLocationFromDoc(doc?.location ?? null, persisted.location)
       persisted.northBearingDeg = metadata.northBearingDeg ?? doc?.north_bearing_deg ?? persisted.northBearingDeg
-      persisted.consortiums = doc
-        ? doc.consortiums.map((consortium) => ({
-            kind: 'consortium',
-            id: consortium.id,
-            name: consortium.name,
-            plantIds: [...consortium.plant_ids],
-            notes: consortium.notes,
-          }))
-        : persisted.consortiums
-      persisted.timeline = doc
-        ? doc.timeline.map((action) => ({
-            kind: 'timeline-action',
-            id: action.id,
-            actionType: action.action_type,
-            description: action.description,
-            startDate: action.start_date,
-            endDate: action.end_date,
-            recurrence: action.recurrence,
-            plantIds: action.plants ? [...action.plants] : null,
-            zoneName: action.zone,
-            dependsOn: action.depends_on ? [...action.depends_on] : null,
-            completed: action.completed,
-            order: action.order,
-          }))
-        : persisted.timeline
-      persisted.budget = doc
-        ? doc.budget.map((item) => ({
-            kind: 'budget-item',
-            category: item.category,
-            description: item.description,
-            quantity: item.quantity,
-            unitCost: item.unit_cost,
-            currency: item.currency,
-          }))
-        : persisted.budget
       persisted.createdAt = doc?.created_at ?? persisted.createdAt
       persisted.extra = { ...(doc?.extra ?? persisted.extra ?? {}) }
     })
     this._applySignalBackedSceneState({ recordHistory: false, syncGuides: shouldSyncGuides })
-    return this._sceneStore.toCanopiFile({
-      now: new Date(),
-    })
+
+    // Canvas-only output from scene store
+    const canvasOutput = this._sceneStore.toCanopiFile({ now: new Date() })
+
+    // Compose final document: canvas state + non-canvas sections from document store
+    return {
+      ...canvasOutput,
+      description: metadata.description ?? doc?.description ?? canvasOutput.description,
+      consortiums: doc?.consortiums ?? [],
+      timeline: doc?.timeline ?? [],
+      budget: doc?.budget ?? [],
+    }
   }
 
   markSaved(): void {

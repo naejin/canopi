@@ -91,30 +91,6 @@ export interface SceneConsortiumEntity {
   notes: string | null
 }
 
-export interface SceneTimelineActionEntity {
-  kind: 'timeline-action'
-  id: string
-  actionType: string
-  description: string
-  startDate: string | null
-  endDate: string | null
-  recurrence: string | null
-  plantIds: string[] | null
-  zoneName: string | null
-  dependsOn: string[] | null
-  completed: boolean
-  order: number
-}
-
-export interface SceneBudgetItemEntity {
-  kind: 'budget-item'
-  category: string
-  description: string
-  quantity: number
-  unitCost: number
-  currency: string
-}
-
 export type SceneEntity =
   | SceneLayerEntity
   | ScenePlantEntity
@@ -122,8 +98,6 @@ export type SceneEntity =
   | SceneAnnotationEntity
   | SceneObjectGroupEntity
   | SceneConsortiumEntity
-  | SceneTimelineActionEntity
-  | SceneBudgetItemEntity
 
 export interface ScenePersistedState {
   version: number
@@ -138,8 +112,6 @@ export interface ScenePersistedState {
   annotations: SceneAnnotationEntity[]
   consortiums: SceneConsortiumEntity[]
   groups: SceneObjectGroupEntity[]
-  timeline: SceneTimelineActionEntity[]
-  budget: SceneBudgetItemEntity[]
   createdAt: string
   updatedAt: string
   extra: Record<string, unknown>

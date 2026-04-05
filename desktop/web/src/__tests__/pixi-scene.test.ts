@@ -171,8 +171,6 @@ describe('createPixiSceneRenderer', () => {
         layers: [],
         plantSpeciesColors: {},
         consortiums: [],
-        timeline: [],
-        budget: [],
         createdAt: '2026-04-02T00:00:00.000Z',
         updatedAt: '2026-04-02T00:00:00.000Z',
         extra: {},

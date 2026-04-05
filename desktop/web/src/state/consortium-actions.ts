@@ -5,9 +5,10 @@ import { mutateCurrentDesign } from './document-mutations'
 
 export function upsertConsortium(next: Consortium): void {
   mutateCurrentDesign((d) => {
-    const consortiums = d.consortiums.some((c) => c.id === next.id)
-      ? d.consortiums.map((c) => (c.id === next.id ? next : c))
-      : [...d.consortiums, next]
+    const existing = d.consortiums ?? []
+    const consortiums = existing.some((c) => c.id === next.id)
+      ? existing.map((c) => (c.id === next.id ? next : c))
+      : [...existing, next]
     return { ...d, consortiums }
   })
 }
@@ -16,7 +17,7 @@ export function deleteConsortium(consortiumId: string): void {
   batch(() => {
     mutateCurrentDesign((d) => ({
       ...d,
-      consortiums: d.consortiums.filter((c) => c.id !== consortiumId),
+      consortiums: (d.consortiums ?? []).filter((c) => c.id !== consortiumId),
     }))
     if (highlightedConsortium.value === consortiumId) {
       highlightedConsortium.value = null

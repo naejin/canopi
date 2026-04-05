@@ -11,10 +11,10 @@ export interface CanopiFile {
   plants: PlacedPlant[]
   zones: Zone[]
   annotations?: Annotation[]
-  consortiums: Consortium[]
+  consortiums?: Consortium[]
   groups?: ObjectGroup[]
-  timeline: TimelineAction[]
-  budget: BudgetItem[]
+  timeline?: TimelineAction[]
+  budget?: BudgetItem[]
   created_at: string
   updated_at: string
   extra?: Record<string, unknown>

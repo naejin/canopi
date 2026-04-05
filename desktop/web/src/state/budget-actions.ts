@@ -4,7 +4,7 @@ import { mutateCurrentDesign } from './document-mutations'
 function updateBudget(updater: (budget: BudgetItem[]) => BudgetItem[]): void {
   mutateCurrentDesign((design) => ({
     ...design,
-    budget: updater(design.budget),
+    budget: updater(design.budget ?? []),
   }))
 }
 

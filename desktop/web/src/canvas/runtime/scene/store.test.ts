@@ -54,14 +54,7 @@ describe('scene store', () => {
         },
       ],
       annotations: [],
-      consortiums: [
-        {
-          id: 'consortium-1',
-          name: 'North bed',
-          plant_ids: ['plant-1'],
-          notes: null,
-        },
-      ],
+      consortiums: [],
       groups: [
         {
           id: 'group-1',
@@ -70,30 +63,6 @@ describe('scene store', () => {
           position: { x: 4, y: 5 },
           rotation: 0,
           member_ids: ['plant-1'],
-        },
-      ],
-      timeline: [
-        {
-          id: 'task-1',
-          action_type: 'mulch',
-          description: 'Apply mulch',
-          start_date: '2026-04-01',
-          end_date: null,
-          recurrence: null,
-          plants: ['plant-1'],
-          zone: 'zone-a',
-          depends_on: null,
-          completed: false,
-          order: 1,
-        },
-      ],
-      budget: [
-        {
-          category: 'materials',
-          description: 'Mulch',
-          quantity: 3,
-          unit_cost: 24.5,
-          currency: 'EUR',
         },
       ],
       created_at: '2026-04-01T10:00:00.000Z',
