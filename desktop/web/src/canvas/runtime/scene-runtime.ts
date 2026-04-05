@@ -780,6 +780,9 @@ export class SceneCanvasRuntime implements CanvasRuntime {
         const changed = this._applySignalBackedSceneState({ recordHistory: true, syncGuides: true })
         if (changed) this._invalidate('scene')
       },
+      onConsortiumHover: () => {
+        this._invalidate('scene')
+      },
     }))
   }
 

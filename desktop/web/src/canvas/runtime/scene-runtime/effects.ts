@@ -3,6 +3,7 @@ import { locale, theme } from '../../../state/app'
 import {
   gridVisible,
   guides,
+  hoveredConsortiumSpecies,
   layerLockState,
   layerOpacity,
   layerVisibility,
@@ -14,6 +15,7 @@ interface SceneRuntimeEffectsDeps {
   onLocale: () => void
   onChromeOverlay: () => void
   onLayerSignals: () => void
+  onConsortiumHover: () => void
 }
 
 export function installSceneRuntimeEffects(deps: SceneRuntimeEffectsDeps): Array<() => void> {
@@ -38,6 +40,10 @@ export function installSceneRuntimeEffects(deps: SceneRuntimeEffectsDeps): Array
       void layerOpacity.value
       void guides.value
       deps.onLayerSignals()
+    }),
+    effect(() => {
+      void hoveredConsortiumSpecies.value
+      deps.onConsortiumHover()
     }),
   ]
 }

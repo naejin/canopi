@@ -124,9 +124,14 @@ export function ConsortiumChart() {
     renderConsortium(ctx, rect.width, rect.height, barsRef.current, state, t)
   }
 
+  useSignalEffect(() => {
+    void hoveredCanonical.value
+    redrawRef.current()
+  })
+
   useEffect(() => {
     redrawRef.current()
-  }, [bars, hoveredCanonical.value])
+  }, [bars])
 
   useEffect(() => {
     const canvas = canvasRef.current

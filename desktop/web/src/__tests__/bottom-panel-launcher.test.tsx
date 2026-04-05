@@ -22,7 +22,7 @@ describe('BottomPanelLauncher', () => {
     container.remove()
   })
 
-  it('renders only the visible bottom-panel tab and toggles it open', async () => {
+  it('renders all visible bottom-panel tabs and toggles open on click', async () => {
     await act(async () => {
       render(<BottomPanelLauncher />, container)
     })
