@@ -51,26 +51,49 @@ These align with the core risks identified in the architecture review.
 - **MapLibre chunk isolation**: Verify `maplibre-gl` is in a separate Vite chunk (dynamic import → code split), `maplibre-contour` in same chunk. Flag any chunk >500KB. If MapLibre is in the main bundle, fix the import to use dynamic `import()`. See roadmap QA.6b
 - Verify timeline renderer is NOT in the main chunk (bottom panel is toggled)
 
-### 4. Moderate-priority cleanup
+### 4. Safeguards
+- **ErrorBoundary**: Add a Preact ErrorBoundary wrapping `main.tsx` — blank-screen crash protection. Small, no dependencies (see roadmap SG.0)
+- **Pre-commit hooks**: Add husky + lint-staged (`tsc --noEmit`, `eslint`) — prevents broken commits during parallel agent work (see roadmap SG.1)
+
+### 5. Moderate-priority cleanup
 - Add real Rust → frontend → Rust round-trip test for file-format contract (see review Finding 3)
 - Add `migrateDocument()` step in load path before the first breaking schema change
 - Remove `suncalc` dependency (celestial dial was pruned, no code references it)
 - Watch `JSON.stringify` diff cost in `scene-commands.ts` as designs grow
+- Hardcoded `rgba()` colors remain in `rulers.ts`, `scene-interaction.ts` (textarea), `overlay-ui.ts` (selection band), `timeline-renderer.ts` (action type colors). Migrate to CSS variables or `getCanvasColor()` for dark-mode correctness
 
-### 5. Documentation
+### 6. Documentation
 - Keep canvas/runtime/renderer docs aligned with the live architecture
 - Move historical migration detail into archive docs
 
 ## Deferred Product Work
 
+**MapLibre / geo:**
 - In-canvas MapLibre layers (via dedicated `MapLibreController` — see root `CLAUDE.md` MapLibre Integration Rule)
+- Local tangent plane projection math in `canvas/projection.ts` (`lngLatToMeters` / `metersToLngLat`) — prerequisite for MapLibre viewport sync (see roadmap 4.0c)
 - PMTiles offline tiles: Rust reader + Tauri custom protocol + download manager UI (see roadmap 4.2)
 - Contour/hillshade layers via `maplibre-contour` + DEM tiles (see roadmap 4.3/4.4)
-- Bottom-panel timeline workflows (requires identity semantics convergence first — see also `docs/timeline/timeline-plan.md` for MVP trim plan)
-- Bottom-panel budget workflows (requires identity semantics convergence first)
+
+**Bottom panels:**
+- Timeline MVP: trim plan is ready and convergence-independent — 6 targeted removals + BottomPanel routing enables all three tabs. See `docs/timeline/timeline-plan.md`. Identity semantics convergence is needed for full panel↔canvas sync but not for shipping the trimmed timeline
+- Bottom-panel budget workflows (requires identity semantics convergence for canvas highlighting)
 - Bottom-panel consortium workflows
+
+**Other:**
 - Featured-design world map / template import
+- Template adaptation (hardiness comparison, replacement suggestions — see roadmap 7.2, distinct from import)
 - Export (PNG/SVG/CSV/GeoJSON)
+- Knowledge / learning content surface
+- Pen/stylus input support (requires hardware testers — see roadmap 5.4)
+
+## Deferred Quality Work
+
+- **Async/blocking UX audit**: Identify every frontend `await` of a slow IPC call that blocks rendering — geocoding in `LocationInput.tsx`, photo carousel in detail card, filter options on first mount (see roadmap QA.2)
+- **Memory leak audit**: Review resource lifecycle for MapLibre instances, module-level effects, autosave timers, panel mount/unmount (see roadmap QA.4)
+- **Network/disk resilience**: Audit failure paths — geocoding timeout, image cache fallback, disk-full autosave, template download validation (see roadmap QA.5)
+- **Security surface review**: Markdown sanitization in `markdown.ts`, `validated_column()` allowlist completeness, geocoding URL encoding (see roadmap QA.6c)
+- **Design coherence (DC) phase**: Systematic CSS token migration across 34 modules — see roadmap Phase DC. Most canvas dark-mode bugs (BUG-002–006) are already fixed via `theme-refresh.ts` + CSS variables; remaining hardcoded colors listed in active work section 5
+- **Test foundation**: Signal state tests, canvas operation tests, CI coverage reporting (see roadmap SG.2)
 
 ## Guardrails
 
