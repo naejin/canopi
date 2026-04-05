@@ -1,6 +1,7 @@
 import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale } from '../../state/app'
+import { sceneEntityRevision } from '../../state/canvas'
 import { currentDesign, designName } from '../../state/document'
 import { currentCanvasSession } from '../../canvas/session'
 import { exportFile } from '../../ipc/design'
@@ -58,6 +59,7 @@ function escapeCsvField(value: string): string {
 
 export function BudgetTab() {
   void locale.value
+  void sceneEntityRevision.value
   const session = currentCanvasSession.value
 
   const editingCanonical = useSignal<string | null>(null)

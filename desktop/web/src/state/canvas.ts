@@ -91,6 +91,11 @@ export const plantStampSpecies = signal<PlantStampSpecies | null>(null)
 // (avoids circular import from state/design.ts)
 export const designLocation = signal<{ lat: number; lon: number } | null>(null)
 
+// Canvas entity revision — incremented on every scene mutation (plant/zone/annotation
+// changes) so bottom-panel components can subscribe to canvas-store changes. Parallel
+// to nonCanvasRevision in state/design.ts which tracks document-store changes.
+export const sceneEntityRevision = signal<number>(0)
+
 // Bottom panel
 export type BottomPanelTab = 'timeline' | 'budget' | 'consortium'
 export const BOTTOM_PANEL_TABS: BottomPanelTab[] = ['timeline', 'budget', 'consortium']

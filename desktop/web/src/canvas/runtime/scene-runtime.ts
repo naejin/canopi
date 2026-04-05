@@ -7,6 +7,7 @@ import {
   lockedObjectIds,
   plantSpeciesColors,
   rulersVisible,
+  sceneEntityRevision,
   snapToGridEnabled,
 } from '../../state/canvas'
 import type { ColorByAttribute, PlantSizeMode } from '../../state/canvas'
@@ -198,12 +199,14 @@ export class SceneCanvasRuntime implements CanvasRuntime {
   undo(): void {
     this._history.undo(this._historyRuntime())
     this._syncCanvasSignalsFromScene()
+    sceneEntityRevision.value += 1
     this._invalidate('scene')
   }
 
   redo(): void {
     this._history.redo(this._historyRuntime())
     this._syncCanvasSignalsFromScene()
+    sceneEntityRevision.value += 1
     this._invalidate('scene')
   }
 
@@ -664,6 +667,7 @@ export class SceneCanvasRuntime implements CanvasRuntime {
     this._sceneStore.updateSession((session) => {
       session.documentRevision += 1
     })
+    sceneEntityRevision.value += 1
   }
 
   private _invalidate(kind: RuntimeInvalidationKind = 'scene'): void {
