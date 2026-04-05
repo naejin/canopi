@@ -11,10 +11,11 @@ import { getSpeciesDetail, getLocaleCommonNames } from '../../ipc/species';
 import type { SpeciesDetail, CommonNameEntry } from '../../types/species';
 import { AttributeGrid } from './AttributeGrid';
 import { UsesSection } from './UsesSection';
+import { RiskDistributionSection } from './RiskDistributionSection';
 import { RelationshipList } from './RelationshipList';
 import { CollapsibleSection } from './CollapsibleSection';
 import { PhotoCarousel } from './PhotoCarousel';
-import { Attr, BoolChip, NumAttr, TextBlock, formatPrecipRange } from './section-helpers';
+import { Attr, BoolChip, NumAttr, formatPrecipRange } from './section-helpers';
 import styles from './PlantDetail.module.css';
 
 interface Props {
@@ -172,8 +173,7 @@ export function PlantDetailCard({ canonicalName }: Props) {
     || d.leaf_retention !== null || d.pollinators !== null;
 
   const hasUses = d.uses.length > 0 || d.edibility_rating !== null || d.medicinal_rating !== null
-    || d.other_uses_rating !== null || d.edible_uses !== null || d.medicinal_uses !== null
-    || d.other_uses !== null || d.special_uses !== null;
+    || d.other_uses_rating !== null;
 
   const hasLight = d.tolerates_full_sun !== null || d.tolerates_semi_shade !== null
     || d.tolerates_full_shade !== null || d.frost_tender !== null || d.drought_tolerance !== null
@@ -222,12 +222,6 @@ export function PlantDetailCard({ canonicalName }: Props) {
     || d.seed_dormancy_depth !== null || d.serotinous !== null
     || d.seedbank_type !== null;
 
-  const hasRisk = d.toxicity !== null || d.known_hazards !== null
-    || d.invasive_potential !== null || d.biogeographic_status !== null || d.noxious_status !== null
-    || d.invasive_usda !== null || d.weed_potential !== null
-    || d.fire_resistant !== null || d.fire_tolerance !== null || d.hedge_tolerance !== null
-    || d.pests_diseases !== null;
-
   const hasLeaf = d.leaf_type !== null || d.leaf_compoundness !== null
     || d.leaf_shape !== null || d.sla_mm2_mg !== null || d.ldmc_g_g !== null
     || d.leaf_nitrogen_mg_g !== null || d.leaf_carbon_mg_g !== null
@@ -236,11 +230,6 @@ export function PlantDetailCard({ canonicalName }: Props) {
   const hasReproduction = d.pollination_syndrome !== null || d.sexual_system !== null
     || d.mating_system !== null || d.self_fertile !== null
     || d.reproductive_type !== null || d.clonal_growth_form !== null || d.storage_organ !== null;
-
-  const hasNotes = d.summary !== null || d.cultivation_notes !== null
-    || d.propagation_notes !== null || d.native_range !== null || d.carbon_farming !== null
-    || d.physical_characteristics !== null || d.habitats !== null
-    || d.native_distribution !== null || d.introduced_distribution !== null;
 
   const hasRelated = d.relationships.length > 0;
 
@@ -370,10 +359,6 @@ export function PlantDetailCard({ canonicalName }: Props) {
               medicinalRating={d.medicinal_rating}
               otherUsesRating={d.other_uses_rating}
             />
-            <TextBlock label={t('plantDetail.edibleUses')} text={d.edible_uses} />
-            <TextBlock label={t('plantDetail.medicinalUses')} text={d.medicinal_uses} />
-            <TextBlock label={t('plantDetail.otherUsesText')} text={d.other_uses} />
-            <TextBlock label={t('plantDetail.specialUses')} text={d.special_uses} />
           </CollapsibleSection>
         )}
 
@@ -558,27 +543,8 @@ export function PlantDetailCard({ canonicalName }: Props) {
           </CollapsibleSection>
         )}
 
-        {/* 10. RISK */}
-        {hasRisk && (
-          <CollapsibleSection id="risk" icon="⚠" titleKey="plantDetail.risk"
-            accentClass={styles.sectionRisk} expanded={expanded.value} onToggle={toggle}>
-            <TextBlock label={t('plantDetail.toxicity')} text={d.toxicity} />
-            <TextBlock label={t('plantDetail.knownHazards')} text={d.known_hazards} />
-            <TextBlock label={t('plantDetail.pestsDiseases')} text={d.pests_diseases} />
-            <div className={styles.attrGrid}>
-              <Attr label={t('plantDetail.invasivePotential')} value={d.invasive_potential} />
-              <Attr label={t('plantDetail.biogeographicStatus')} value={d.biogeographic_status} />
-              <Attr label={t('plantDetail.fireTolerance')} value={d.fire_tolerance} />
-              <Attr label={t('plantDetail.hedgeTolerance')} value={d.hedge_tolerance} />
-            </div>
-            <div className={styles.boolRow}>
-              <BoolChip label={t('plantDetail.noxiousStatus')} value={d.noxious_status} />
-              <BoolChip label={t('plantDetail.weedPotential')} value={d.weed_potential} />
-              <BoolChip label={t('plantDetail.invasiveUsda')} value={d.invasive_usda} />
-              <BoolChip label={t('plantDetail.fireResistant')} value={d.fire_resistant} />
-            </div>
-          </CollapsibleSection>
-        )}
+        {/* 10. RISK & DISTRIBUTION */}
+        <RiskDistributionSection d={d} expanded={expanded.value} onToggle={toggle} />
 
         {/* 11. LEAF */}
         {hasLeaf && (
@@ -616,23 +582,7 @@ export function PlantDetailCard({ canonicalName }: Props) {
           </CollapsibleSection>
         )}
 
-        {/* 13. NOTES */}
-        {hasNotes && (
-          <CollapsibleSection id="notes" icon="✎" titleKey="plantDetail.notes"
-            accentClass={styles.sectionNotes} expanded={expanded.value} onToggle={toggle}>
-            <TextBlock label={t('plantDetail.summary')} text={d.summary} />
-            <TextBlock label={t('plantDetail.physicalCharacteristics')} text={d.physical_characteristics} />
-            <TextBlock label={t('plantDetail.cultivationNotes')} text={d.cultivation_notes} />
-            <TextBlock label={t('plantDetail.propagationNotes')} text={d.propagation_notes} />
-            <TextBlock label={t('plantDetail.habitats')} text={d.habitats} />
-            <TextBlock label={t('plantDetail.nativeRange')} text={d.native_range} />
-            <TextBlock label={t('plantDetail.nativeDistribution')} text={d.native_distribution} />
-            <TextBlock label={t('plantDetail.introducedDistribution')} text={d.introduced_distribution} />
-            <TextBlock label={t('plantDetail.carbonFarming')} text={d.carbon_farming} />
-          </CollapsibleSection>
-        )}
-
-        {/* 14. RELATED SPECIES */}
+        {/* 13. RELATED SPECIES */}
         {hasRelated && (
           <CollapsibleSection id="related" icon="⇄" titleKey="plantDetail.relatedSpecies"
             accentClass={styles.sectionRelated} expanded={expanded.value} onToggle={toggle}

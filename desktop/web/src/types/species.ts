@@ -139,10 +139,6 @@ export interface SpeciesDetail {
   edibility_rating: number | null;
   medicinal_rating: number | null;
   other_uses_rating: number | null;
-  edible_uses: string | null;
-  medicinal_uses: string | null;
-  other_uses: string | null;
-  special_uses: string | null;
   // Propagation
   propagated_by_seed: boolean | null;
   propagated_by_cuttings: boolean | null;
@@ -198,7 +194,6 @@ export interface SpeciesDetail {
   uses: SpeciesUse[];
   // Risk
   toxicity: string | null;
-  known_hazards: string | null;
   invasive_potential: string | null;
   biogeographic_status: string | null;
   noxious_status: boolean | null;
@@ -207,21 +202,10 @@ export interface SpeciesDetail {
   fire_resistant: boolean | null;
   fire_tolerance: string | null;
   hedge_tolerance: string | null;
-  pests_diseases: string | null;
-  // Notes
-  summary: string | null;
-  cultivation_notes: string | null;
-  propagation_notes: string | null;
-  native_range: string | null;
   // Distribution
   native_distribution: string | null;
   introduced_distribution: string | null;
-  range_text: string | null;
   conservation_status: string | null;
-  // Text
-  carbon_farming: string | null;
-  physical_characteristics: string | null;
-  habitats: string | null;
   // Ellenberg
   ellenberg_light: number | null;
   ellenberg_temperature: number | null;
@@ -235,7 +219,6 @@ export interface SpeciesDetail {
   classification_source: string | null;
   model_version: string | null;
   prompt_version: string | null;
-  reasoning: string | null;
   classified_at: string | null;
   validation_flags: string | null;
   overall_confidence: number | null;

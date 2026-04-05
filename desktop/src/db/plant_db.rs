@@ -122,10 +122,6 @@ mod tests {
                 edibility_rating INTEGER,
                 medicinal_rating INTEGER,
                 other_uses_rating INTEGER,
-                edible_uses TEXT,
-                medicinal_uses TEXT,
-                other_uses TEXT,
-                special_uses TEXT,
                 attracts_wildlife INTEGER,
                 scented INTEGER,
                 propagated_by_seed INTEGER,
@@ -177,7 +173,6 @@ mod tests {
                 clonal_growth_form TEXT,
                 storage_organ TEXT,
                 toxicity TEXT,
-                known_hazards TEXT,
                 invasive_potential TEXT,
                 biogeographic_status TEXT,
                 noxious_status INTEGER,
@@ -186,18 +181,9 @@ mod tests {
                 fire_resistant INTEGER,
                 fire_tolerance TEXT,
                 hedge_tolerance TEXT,
-                pests_diseases TEXT,
-                native_range TEXT,
                 native_distribution TEXT,
                 introduced_distribution TEXT,
-                range_text TEXT,
                 conservation_status TEXT,
-                summary TEXT,
-                physical_characteristics TEXT,
-                cultivation_notes TEXT,
-                propagation_notes TEXT,
-                habitats TEXT,
-                carbon_farming TEXT,
                 image_urls TEXT,
                 ellenberg_light REAL,
                 ellenberg_temperature REAL,
@@ -208,7 +194,6 @@ mod tests {
                 classification_source TEXT,
                 model_version TEXT,
                 prompt_version TEXT,
-                reasoning TEXT,
                 classified_at TEXT,
                 validation_flags TEXT,
                 overall_confidence REAL,
@@ -285,7 +270,7 @@ mod tests {
                 bloom_period, flower_color, tolerates_full_sun, tolerates_semi_shade, tolerates_full_shade,
                 well_drained, tolerates_light_soil, tolerates_medium_soil, tolerates_heavy_soil,
                 nitrogen_fixer, stratum, edibility_rating, medicinal_rating,
-                scented, toxicity, known_hazards, summary)
+                scented, toxicity)
             VALUES (
                 'uuid-lav', 'lavandula-angustifolia', 'Lavandula angustifolia',
                 'Lavender', 'Lamiaceae', 'Lavandula',
@@ -295,7 +280,7 @@ mod tests {
                 'Summer', 'Purple', 1, 1, 0,
                 1, 1, 1, 0,
                 0, 'Low', 3, 2,
-                1, NULL, NULL, 'A popular aromatic herb'
+                1, NULL
             );
             INSERT INTO species (id, slug, canonical_name, common_name, family, genus,
                 height_min_m, height_max_m, width_max_m, hardiness_zone_min, hardiness_zone_max,
@@ -305,7 +290,7 @@ mod tests {
                 tolerates_full_sun, tolerates_semi_shade, tolerates_full_shade,
                 nitrogen_fixer, stratum, edibility_rating, medicinal_rating,
                 succession_stage, seed_dormancy_depth, serotinous, invasive_potential,
-                biogeographic_status, known_hazards)
+                biogeographic_status)
             VALUES (
                 'uuid-ald', 'alnus-glutinosa', 'Alnus glutinosa',
                 'Alder', 'Betulaceae', 'Alnus',
@@ -316,7 +301,7 @@ mod tests {
                 1, 0, 0,
                 1, 'Canopy', 0, 0,
                 'secondary_i', 'Absolute', 1, 'Potentially Invasive',
-                'Native', 'None known'
+                'Native'
             );
 
             INSERT INTO species_common_names VALUES
@@ -368,7 +353,6 @@ mod tests {
         assert_eq!(detail.flower_color.as_deref(), Some("Purple"));
         assert_eq!(detail.scented, Some(true));
         assert_eq!(detail.well_drained, Some(true));
-        assert_eq!(detail.summary.as_deref(), Some("A popular aromatic herb"));
         // New soil tolerance booleans
         assert_eq!(detail.tolerates_light_soil, Some(true));
         assert_eq!(detail.tolerates_medium_soil, Some(true));
@@ -424,7 +408,6 @@ mod tests {
         assert_eq!(detail.is_perennial, Some(true));
         assert_eq!(detail.is_annual, Some(false));
         assert_eq!(detail.succession_stage.as_deref(), Some("secondary_i"));
-        assert_eq!(detail.known_hazards.as_deref(), Some("None known"));
     }
 
     #[test]

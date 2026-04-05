@@ -1,7 +1,7 @@
 {
-  "schema_version": 5,
-  "min_export_schema_version": 8,
-  "description": "Maps canopi-data export columns to canopi-core.db species table. Update this file when canopi-data changes column names. v5: canopi-data 2026-03-31 export — invasive_potential split (+ biogeographic_status), seed_dormancy_type split (+ seed_dormancy_depth, serotinous), habit narrowed to 3, flower_color separator /→comma-space, value normalization.",
+  "schema_version": 6,
+  "min_export_schema_version": 9,
+  "description": "Maps canopi-data export columns to canopi-core.db species table. Update this file when canopi-data changes column names. v6: canopi-data export v9 — removed 15 prose text columns (edible_uses, medicinal_uses, other_uses, special_uses, known_hazards, pests_diseases, native_range, range_text, summary, physical_characteristics, cultivation_notes, propagation_notes, habitats, carbon_farming, reasoning). Uses now sourced from species_uses table.",
   "columns": [
     {"name": "id", "type": "TEXT", "required": true},
     {"name": "slug", "type": "TEXT", "required": true},
@@ -89,10 +89,6 @@
     {"name": "edibility_rating", "type": "INTEGER"},
     {"name": "medicinal_rating", "type": "INTEGER"},
     {"name": "other_uses_rating", "type": "INTEGER"},
-    {"name": "edible_uses", "type": "TEXT"},
-    {"name": "medicinal_uses", "type": "TEXT"},
-    {"name": "other_uses", "type": "TEXT"},
-    {"name": "special_uses", "type": "TEXT"},
     {"name": "attracts_wildlife", "type": "INTEGER"},
     {"name": "scented", "type": "INTEGER"},
 
@@ -153,7 +149,6 @@
     {"name": "storage_organ", "type": "TEXT"},
 
     {"name": "toxicity", "type": "TEXT"},
-    {"name": "known_hazards", "type": "TEXT"},
     {"name": "invasive_potential", "type": "TEXT"},
     {"name": "biogeographic_status", "type": "TEXT"},
     {"name": "noxious_status", "type": "INTEGER"},
@@ -162,20 +157,10 @@
     {"name": "fire_resistant", "type": "INTEGER"},
     {"name": "fire_tolerance", "type": "TEXT"},
     {"name": "hedge_tolerance", "type": "TEXT"},
-    {"name": "pests_diseases", "type": "TEXT"},
 
-    {"name": "native_range", "type": "TEXT"},
     {"name": "native_distribution", "type": "TEXT"},
     {"name": "introduced_distribution", "type": "TEXT"},
-    {"name": "range_text", "type": "TEXT"},
     {"name": "conservation_status", "type": "TEXT"},
-
-    {"name": "summary", "type": "TEXT"},
-    {"name": "physical_characteristics", "type": "TEXT"},
-    {"name": "cultivation_notes", "type": "TEXT"},
-    {"name": "propagation_notes", "type": "TEXT"},
-    {"name": "habitats", "type": "TEXT"},
-    {"name": "carbon_farming", "type": "TEXT"},
 
     {"name": "image_urls", "type": "TEXT"},
 
@@ -192,7 +177,6 @@
     {"name": "classification_source", "type": "TEXT"},
     {"name": "model_version", "type": "TEXT"},
     {"name": "prompt_version", "type": "TEXT"},
-    {"name": "reasoning", "type": "TEXT"},
     {"name": "classified_at", "type": "TEXT"},
     {"name": "validation_flags", "type": "TEXT"},
     {"name": "overall_confidence", "type": "REAL"},

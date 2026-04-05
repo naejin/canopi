@@ -102,6 +102,7 @@ These files have concentrated authority. **One writer at a time** — do not ass
 6. Before planning new features: **explore the codebase for existing implementations** — code may already exist (e.g., copy-paste, favorites backend, display mode rendering were all discovered pre-built during MVP planning)
 7. Run `/simplify` after implementation — converges in ~3 rounds: R1 structural, R2 duplication exposed by R1 fixes, R3 confirms convergence
 8. For async canvas features: audit every pipeline operation for main-thread blocking — use `createImageBitmap()` (never `toDataURL()`), epoch guards for cancellation, `requestIdleCallback` for deferred init
+9. For multi-phase work: **implement → `tsc` + `npm test` → craft code review → fix → re-review until convergence** per phase. Don't batch reviews across phases — bugs compound
 
 ### Banned Patterns (enforced by plugin hooks)
 - **No React**: Import from `preact`, `preact/hooks`, `preact/compat` — never `react`

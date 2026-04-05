@@ -5,6 +5,11 @@ import { getCachedImagePath, getSpeciesImages } from '../../ipc/species';
 import type { SpeciesImage } from '../../types/species';
 import styles from './PhotoCarousel.module.css';
 
+const IMAGE_SOURCE_DISPLAY: Record<string, string> = {
+  wikidata_p18: 'Wikimedia Commons',
+  inaturalist: 'iNaturalist',
+};
+
 interface Props {
   canonicalName: string;
 }
@@ -177,7 +182,7 @@ export function PhotoCarousel({ canonicalName }: Props) {
         {/* Source badge */}
         {currentImage?.source && imageReady && (
           <span className={styles.sourceBadge}>
-            {currentImage.source}
+            {IMAGE_SOURCE_DISPLAY[currentImage.source] ?? currentImage.source}
           </span>
         )}
 

@@ -79,6 +79,9 @@ Legacy Konva / `CanvasEngine` code may still exist in-tree as superseded history
 - selection labels are computed per-species at centroid by `selection-labels.ts`; both renderers must recompute labels in `setViewport()` for pan/zoom tracking
 - **do not reintroduce per-plant labels** — the label collision/dedup/placement system was deleted because it is fundamentally unreadable at dense planting scales
 
+### Known Cleanup
+- `PlantLOD = 'icon+label'` is a dead value — labels were removed but the LOD type still produces this value. Neither renderer reads `entry.lod`. Clean up when next touching `plants.ts` or `plant-presentation.ts`
+
 ### Invalidation Rules
 - use scene invalidation for content, selection, presentation, locale, theme, and hover changes
 - use viewport invalidation for pan, zoom, and fit operations

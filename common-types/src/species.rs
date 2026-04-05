@@ -111,10 +111,6 @@ pub struct SpeciesDetail {
     pub edibility_rating: Option<i32>,
     pub medicinal_rating: Option<i32>,
     pub other_uses_rating: Option<i32>,
-    pub edible_uses: Option<String>,
-    pub medicinal_uses: Option<String>,
-    pub other_uses: Option<String>,
-    pub special_uses: Option<String>,
     pub attracts_wildlife: Option<bool>,
     pub scented: Option<bool>,
     pub uses: Vec<SpeciesUse>,
@@ -172,7 +168,6 @@ pub struct SpeciesDetail {
     pub storage_organ: Option<String>,
     // Risk
     pub toxicity: Option<String>,
-    pub known_hazards: Option<String>,
     pub invasive_potential: Option<String>,
     pub biogeographic_status: Option<String>,
     pub noxious_status: Option<bool>,
@@ -181,20 +176,10 @@ pub struct SpeciesDetail {
     pub fire_resistant: Option<bool>,
     pub fire_tolerance: Option<String>,
     pub hedge_tolerance: Option<String>,
-    pub pests_diseases: Option<String>,
     // Distribution
-    pub native_range: Option<String>,
     pub native_distribution: Option<String>,
     pub introduced_distribution: Option<String>,
-    pub range_text: Option<String>,
     pub conservation_status: Option<String>,
-    // Text / notes
-    pub summary: Option<String>,
-    pub physical_characteristics: Option<String>,
-    pub cultivation_notes: Option<String>,
-    pub propagation_notes: Option<String>,
-    pub habitats: Option<String>,
-    pub carbon_farming: Option<String>,
     // Media
     pub image_urls: Option<String>,
     // Ellenberg indicators
@@ -208,7 +193,6 @@ pub struct SpeciesDetail {
     pub classification_source: Option<String>,
     pub model_version: Option<String>,
     pub prompt_version: Option<String>,
-    pub reasoning: Option<String>,
     pub classified_at: Option<String>,
     pub validation_flags: Option<String>,
     pub overall_confidence: Option<f32>,

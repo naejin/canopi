@@ -6,8 +6,8 @@ This document describes the schema contract between canopi-data exports and the 
 
 | Parameter                  | Value | Location                          |
 |----------------------------|-------|-----------------------------------|
-| `PRAGMA user_version`      | 5     | Set by `prepare-db.py` at build   |
-| `min_export_schema_version`| 8     | Validated against canopi-data `_metadata.schema_version` |
+| `PRAGMA user_version`      | 6     | Set by `prepare-db.py` at build   |
+| `min_export_schema_version`| 9     | Validated against canopi-data `_metadata.schema_version` |
 
 The contract is defined in `scripts/schema-contract.json`.
 
@@ -21,7 +21,7 @@ The Rust backend checks `PRAGMA user_version` at startup:
 
 | Table | Description |
 |-------|-------------|
-| `species` | Main species table (176 contracted columns). One row per species. |
+| `species` | Main species table (161 contracted columns). One row per species. |
 | `species_search_fts` | FTS5 virtual table for full-text search over species names and text fields. |
 
 ### Supporting

@@ -219,7 +219,6 @@
 .sectionEcology { border-left: 3px solid var(--color-nitrogen); }
 .sectionUses { border-left: 3px solid var(--color-edible); }
 .sectionRisk { border-left: 3px solid var(--color-danger); }
-.sectionNotes { border-left: 3px solid var(--color-text-muted); }
 .sectionRelated { border-left: 3px solid var(--color-primary); }
 .sectionIdentity { border-left: 3px solid var(--color-family); }
 .sectionGrowthForm { border-left: 3px solid var(--color-nitrogen); }

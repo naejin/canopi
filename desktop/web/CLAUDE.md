@@ -43,5 +43,9 @@
 ## Dynamic Filter State
 - **Error tracking**: `dynamicOptionsErrors` signal tracks per-locale per-field IPC errors. `DYNAMIC_OPTIONS_BACKEND_MISMATCH_ERROR` distinguishes permanent backend mismatch (field not in running binary) from transient errors (network, timeout). Only transient errors show a retry button in the UI. Errors are cleared on successful retry
 
+## Plant Detail Sections
+- **Extracted section components**: `UsesSection.tsx` and `RiskDistributionSection.tsx` are standalone components extracted from `PlantDetailCard.tsx`. Each owns its visibility guard, takes `d: SpeciesDetail` + `expanded: Set<string>` + `onToggle` props, imports `PlantDetail.module.css`. Follow this pattern when extracting more sections to reduce the monolith
+- **Image source display**: `PhotoCarousel.tsx` maps raw `species_images.source` values to display names via `IMAGE_SOURCE_DISPLAY` constant (proper nouns, not i18n). Add new sources there when canopi-data introduces them
+
 ## Testing (Vitest)
 - **i18n in Vitest**: The i18n module eagerly loads all 11 locale files at import time — `t()` returns real translations in tests without mocking. `locale.value` changes trigger `i18n.changeLanguage()` synchronously via module-level `effect()`

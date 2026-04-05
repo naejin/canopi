@@ -164,6 +164,14 @@ def build_search_index(dst: sqlite3.Connection):
     """)
     print("  -> Common names aggregated")
 
+    dst.execute("""
+        CREATE TEMP TABLE _uses_agg AS
+        SELECT species_id, GROUP_CONCAT(use_category || ' ' || COALESCE(use_description, ''), ' ') AS all_uses
+        FROM species_uses
+        GROUP BY species_id
+    """)
+    print("  -> Uses aggregated")
+
     # Step 2: Build search text table with separate weighted columns
     dst.execute("""
         CREATE TABLE species_search_text (
@@ -183,21 +191,14 @@ def build_search_index(dst: sqlite3.Connection):
             COALESCE(s.canonical_name, ''),
             TRIM(COALESCE(s.common_name, '') || ' ' || COALESCE(ca.all_names, '')),
             TRIM(COALESCE(s.family, '') || ' ' || COALESCE(s.genus, '')),
-            TRIM(
-                COALESCE(s.edible_uses, '') || ' ' ||
-                COALESCE(s.medicinal_uses, '') || ' ' ||
-                COALESCE(s.other_uses, '') || ' ' ||
-                COALESCE(s.special_uses, '')
-            ),
-            TRIM(
-                COALESCE(s.conservation_status, '') || ' ' ||
-                COALESCE(s.habitats, '') || ' ' ||
-                COALESCE(s.physical_characteristics, '')
-            )
+            COALESCE(ua.all_uses, ''),
+            COALESCE(s.conservation_status, '')
         FROM species s
         LEFT JOIN _cn_agg ca ON ca.species_id = s.id
+        LEFT JOIN _uses_agg ua ON ua.species_id = s.id
     """)
     dst.execute("DROP TABLE _cn_agg")
+    dst.execute("DROP TABLE _uses_agg")
     sst_count = dst.execute("SELECT COUNT(*) FROM species_search_text").fetchone()[0]
     print(f"  -> {sst_count:,} species search text rows")
 
