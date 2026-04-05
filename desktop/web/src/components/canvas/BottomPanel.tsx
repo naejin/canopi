@@ -3,6 +3,7 @@ import { bottomPanelHeight, bottomPanelOpen, bottomPanelTab } from '../../state/
 import { setBottomPanelHeight } from '../../state/canvas-actions'
 import { TimelineTab } from './TimelineTab'
 import { BudgetTab } from './BudgetTab'
+import { ConsortiumChart } from './ConsortiumChart'
 import styles from './BottomPanel.module.css'
 
 export function BottomPanel() {
@@ -19,6 +20,7 @@ export function BottomPanel() {
       <div className={styles.content}>
         {bottomPanelTab.value === 'timeline' && <TimelineTab />}
         {bottomPanelTab.value === 'budget' && <BudgetTab />}
+        {bottomPanelTab.value === 'consortium' && <ConsortiumChart />}
       </div>
     </div>
   )
