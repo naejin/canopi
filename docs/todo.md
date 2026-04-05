@@ -48,12 +48,13 @@ These align with the core risks identified in the architecture review.
 - Keep viewport-only updates on the renderer fast path
 - Keep Pixi retained across pan/zoom; avoid per-tick scene-tree rebuilds
 - Add scene-side spatial indexing only when profiling shows hit-testing or marquee is the bottleneck
-- `maplibre-gl` is still the dominant large chunk — preserve lazy import boundary
+- **MapLibre chunk isolation**: Verify `maplibre-gl` is in a separate Vite chunk (dynamic import → code split), `maplibre-contour` in same chunk. Flag any chunk >500KB. If MapLibre is in the main bundle, fix the import to use dynamic `import()`. See roadmap QA.6b
+- Verify timeline renderer is NOT in the main chunk (bottom panel is toggled)
 
 ### 4. Moderate-priority cleanup
 - Add real Rust → frontend → Rust round-trip test for file-format contract (see review Finding 3)
 - Add `migrateDocument()` step in load path before the first breaking schema change
-- Remove dead dependencies (`maplibre-gl`, `maplibre-contour`, `suncalc`) if not needed in the immediate next phase
+- Remove `suncalc` dependency (celestial dial was pruned, no code references it)
 - Watch `JSON.stringify` diff cost in `scene-commands.ts` as designs grow
 
 ### 5. Documentation
@@ -63,7 +64,9 @@ These align with the core risks identified in the architecture review.
 ## Deferred Product Work
 
 - In-canvas MapLibre layers (via dedicated `MapLibreController` — see root `CLAUDE.md` MapLibre Integration Rule)
-- Bottom-panel timeline workflows (requires identity semantics convergence first)
+- PMTiles offline tiles: Rust reader + Tauri custom protocol + download manager UI (see roadmap 4.2)
+- Contour/hillshade layers via `maplibre-contour` + DEM tiles (see roadmap 4.3/4.4)
+- Bottom-panel timeline workflows (requires identity semantics convergence first — see also `docs/timeline/timeline-plan.md` for MVP trim plan)
 - Bottom-panel budget workflows (requires identity semantics convergence first)
 - Bottom-panel consortium workflows
 - Featured-design world map / template import
