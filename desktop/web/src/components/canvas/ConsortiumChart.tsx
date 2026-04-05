@@ -270,16 +270,6 @@ export function ConsortiumChart() {
     }
   }, [handleMouseMove, handleMouseUp])
 
-  if (bars.length === 0) {
-    return (
-      <div className={styles.container}>
-        <div className={styles.emptyState}>
-          {t('canvas.consortium.empty')}
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className={styles.container}>
       <canvas
@@ -290,6 +280,11 @@ export function ConsortiumChart() {
         onMouseUp={handleMouseUp}
         aria-label={t('canvas.consortium.title')}
       />
+      {bars.length === 0 && (
+        <div className={styles.emptyOverlay}>
+          {t('canvas.consortium.empty')}
+        </div>
+      )}
     </div>
   )
 }

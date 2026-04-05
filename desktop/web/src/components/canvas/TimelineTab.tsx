@@ -182,15 +182,7 @@ export function TimelineTab() {
         </div>
       )}
 
-      {!hasActions && !showForm.value ? (
-        <div className={styles.emptyState}>
-          <p className={styles.emptyTitle}>{t('canvas.timeline.emptyState')}</p>
-          <p className={styles.emptyHint}>{t('canvas.timeline.emptyHint')}</p>
-          <button type="button" className={styles.emptyAddBtn} onClick={openAdd}>
-            + {t('canvas.timeline.addAction')}
-          </button>
-        </div>
-      ) : (
+      {hasActions ? (
         <div className={styles.canvasArea}>
           <InteractiveTimeline
             granularity={granularity.value}
@@ -199,6 +191,16 @@ export function TimelineTab() {
             onEditRequest={openEdit}
             scrollToTodayRef={scrollToTodayRef}
           />
+        </div>
+      ) : (
+        <div className={styles.emptyState}>
+          <p className={styles.emptyTitle}>{t('canvas.timeline.emptyState')}</p>
+          <p className={styles.emptyHint}>{t('canvas.timeline.emptyHint')}</p>
+          {!showForm.value && (
+            <button type="button" className={styles.emptyAddBtn} onClick={openAdd}>
+              + {t('canvas.timeline.addAction')}
+            </button>
+          )}
         </div>
       )}
     </div>
