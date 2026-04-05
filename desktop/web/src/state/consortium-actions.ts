@@ -15,7 +15,7 @@ function updateConsortiums(
   }), { markDirty: options.markDirty !== false })
 }
 
-export function upsertConsortiumEntry(entry: Consortium): void {
+export function upsertConsortiumEntry(entry: Consortium, options: ConsortiumUpdateOptions = {}): void {
   updateConsortiums((consortiums) => {
     const idx = consortiums.findIndex((c) => c.canonical_name === entry.canonical_name)
     if (idx >= 0) {
@@ -24,11 +24,11 @@ export function upsertConsortiumEntry(entry: Consortium): void {
       return updated
     }
     return [...consortiums, entry]
-  })
+  }, options)
 }
 
-export function deleteConsortiumEntry(canonicalName: string): void {
-  updateConsortiums((consortiums) => consortiums.filter((c) => c.canonical_name !== canonicalName))
+export function deleteConsortiumEntry(canonicalName: string, options: ConsortiumUpdateOptions = {}): void {
+  updateConsortiums((consortiums) => consortiums.filter((c) => c.canonical_name !== canonicalName), options)
 }
 
 export function moveConsortiumEntry(
@@ -41,7 +41,7 @@ export function moveConsortiumEntry(
   updateConsortiums(
     (consortiums) => consortiums.map((c) =>
       c.canonical_name === canonicalName
-        ? { ...c, stratum, start_phase: startPhase, end_phase: endPhase }
+        ? { ...c, stratum: stratum || c.stratum, start_phase: startPhase, end_phase: endPhase }
         : c,
     ),
     options,

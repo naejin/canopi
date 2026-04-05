@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'preact/hooks'
+import { useCallback, useEffect, useMemo, useRef } from 'preact/hooks'
 import { useSignal, useSignalEffect } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale } from '../../state/app'
@@ -37,6 +37,7 @@ type DragState =
       startMouseX: number
       originalStartPhase: number
       originalEndPhase: number
+      currentStratum: string
     }
   | null
 
@@ -52,9 +53,15 @@ export function ConsortiumChart() {
   const plants = design?.plants ?? []
   const consortiums = design?.consortiums ?? []
   const colors = plantSpeciesColors.value
-  const bars = buildConsortiumBars(consortiums, plants, colors)
 
-  // Auto-sync: add/remove consortium entries when species are added/removed from canvas
+  const bars = useMemo(
+    () => buildConsortiumBars(consortiums, plants, colors),
+    [consortiums, plants, colors],
+  )
+  const barsRef = useRef(bars)
+  barsRef.current = bars
+
+  // Auto-sync: add/remove consortium entries when species change on canvas
   useSignalEffect(() => {
     const d = currentDesign.value
     if (!d) return
@@ -64,7 +71,6 @@ export function ConsortiumChart() {
     const currentNames = new Set(currentPlants.map((p) => p.canonical_name))
     const lastNames = lastCanonicalNamesRef.current
 
-    // Check if the set actually changed
     if (currentNames.size === lastNames.size) {
       let same = true
       for (const name of currentNames) {
@@ -73,7 +79,6 @@ export function ConsortiumChart() {
       if (same) return
     }
 
-    // Find new species
     for (const name of currentNames) {
       if (!lastNames.has(name) && !currentConsortiums.some((c) => c.canonical_name === name)) {
         upsertConsortiumEntry({
@@ -81,27 +86,23 @@ export function ConsortiumChart() {
           stratum: 'unassigned',
           start_phase: 0,
           end_phase: 0,
-        })
+        }, { markDirty: false })
       }
     }
 
-    // Find removed species
     const consortiumNames = new Set(currentConsortiums.map((c) => c.canonical_name))
     for (const name of consortiumNames) {
       if (!currentNames.has(name)) {
-        deleteConsortiumEntry(name)
+        deleteConsortiumEntry(name, { markDirty: false })
       }
     }
 
     lastCanonicalNamesRef.current = currentNames
   })
 
-  const renderState: ConsortiumRenderState = {
-    hoveredCanonical: hoveredCanonical.value,
-    selectedCanonical: null,
-  }
-
-  const redraw = useCallback(() => {
+  // Ref-based redraw to avoid re-registering ResizeObserver on data changes
+  const redrawRef = useRef<() => void>(() => {})
+  redrawRef.current = () => {
     const canvas = canvasRef.current
     if (!canvas) return
 
@@ -116,21 +117,25 @@ export function ConsortiumChart() {
     if (!ctx) return
 
     ctx.scale(dpr, dpr)
-    renderConsortium(ctx, rect.width, rect.height, bars, renderState, t)
-  }, [bars, renderState])
+    const state: ConsortiumRenderState = {
+      hoveredCanonical: hoveredCanonical.value,
+      selectedCanonical: null,
+    }
+    renderConsortium(ctx, rect.width, rect.height, barsRef.current, state, t)
+  }
 
   useEffect(() => {
-    redraw()
-  }, [redraw])
+    redrawRef.current()
+  }, [bars, hoveredCanonical.value])
 
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
 
-    const observer = new ResizeObserver(() => redraw())
+    const observer = new ResizeObserver(() => redrawRef.current())
     observer.observe(canvas)
     return () => observer.disconnect()
-  }, [redraw])
+  }, [])
 
   const handleMouseDown = useCallback((event: MouseEvent) => {
     const canvas = canvasRef.current
@@ -140,10 +145,10 @@ export function ConsortiumChart() {
     const mouseX = event.clientX - rect.left
     const mouseY = event.clientY - rect.top
 
-    const hit = hitTestBar(mouseX, mouseY, bars, rect.width, rect.height)
+    const hit = hitTestBar(mouseX, mouseY, barsRef.current, rect.width, rect.height)
     if (!hit) return
 
-    const bar = bars.find((b) => b.canonicalName === hit.canonicalName)
+    const bar = barsRef.current.find((b) => b.canonicalName === hit.canonicalName)
     if (!bar) return
 
     if (hit.edge === 'body') {
@@ -164,9 +169,10 @@ export function ConsortiumChart() {
         startMouseX: event.clientX,
         originalStartPhase: bar.startPhase,
         originalEndPhase: bar.endPhase,
+        currentStratum: bar.stratum,
       }
     }
-  }, [bars])
+  }, [])
 
   const handleMouseMove = useCallback((event: MouseEvent) => {
     const canvas = canvasRef.current
@@ -185,9 +191,12 @@ export function ConsortiumChart() {
       const newEnd = Math.min(CONSORTIUM_PHASES.length - 1, newStart + duration)
       const adjustedStart = newEnd - duration
 
-      // Compute stratum from mouse Y
       const rowIndex = Math.max(0, Math.min(STRATA_ROWS.length - 1, Math.floor((mouseY - HEADER_HEIGHT) / ROW_HEIGHT)))
       const newStratum = STRATA_ROWS[rowIndex] ?? 'unassigned'
+
+      // Skip no-op updates to avoid unconditional signal writes at 60fps
+      const bar = barsRef.current.find((b) => b.canonicalName === drag.canonicalName)
+      if (bar && bar.startPhase === adjustedStart && bar.endPhase === newEnd && bar.stratum === newStratum) return
 
       moveConsortiumEntry(drag.canonicalName, newStratum, adjustedStart, newEnd, { markDirty: false })
       return
@@ -199,24 +208,28 @@ export function ConsortiumChart() {
 
       if (drag.edge === 'left') {
         const newStart = Math.min(clampedPhase, drag.originalEndPhase)
-        moveConsortiumEntry(drag.canonicalName, '', newStart, drag.originalEndPhase, { markDirty: false })
+        const bar = barsRef.current.find((b) => b.canonicalName === drag.canonicalName)
+        if (bar && bar.startPhase === newStart) return
+        moveConsortiumEntry(drag.canonicalName, drag.currentStratum, newStart, drag.originalEndPhase, { markDirty: false })
       } else {
         const newEnd = Math.max(clampedPhase, drag.originalStartPhase)
-        moveConsortiumEntry(drag.canonicalName, '', drag.originalStartPhase, newEnd, { markDirty: false })
+        const bar = barsRef.current.find((b) => b.canonicalName === drag.canonicalName)
+        if (bar && bar.endPhase === newEnd) return
+        moveConsortiumEntry(drag.canonicalName, drag.currentStratum, drag.originalStartPhase, newEnd, { markDirty: false })
       }
       return
     }
 
     // Not dragging — update hover and cursor
-    const hit = hitTestBar(mouseX, mouseY, bars, rect.width, rect.height)
+    const hit = hitTestBar(mouseX, mouseY, barsRef.current, rect.width, rect.height)
     if (hit) {
-      hoveredCanonical.value = hit.canonicalName
+      if (hoveredCanonical.value !== hit.canonicalName) hoveredCanonical.value = hit.canonicalName
       canvas.style.cursor = hit.edge === 'body' ? 'grab' : 'ew-resize'
     } else {
-      hoveredCanonical.value = null
+      if (hoveredCanonical.value !== null) hoveredCanonical.value = null
       canvas.style.cursor = 'default'
     }
-  }, [bars])
+  }, [])
 
   const handleMouseUp = useCallback(() => {
     if (dragState.current) {

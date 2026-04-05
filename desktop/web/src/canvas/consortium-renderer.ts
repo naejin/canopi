@@ -1,11 +1,7 @@
 import type { Consortium, PlacedPlant } from '../types/design'
 import { getStratumColor } from './plants'
 import { DEFAULT_PLANT_COLOR } from './plant-colors'
-
-// ---------------------------------------------------------------------------
-// Consortium succession chart renderer — Canvas 2D drawing
-// Theme-aware: reads CSS variables from document.documentElement at render time.
-// ---------------------------------------------------------------------------
+import { cssVar, roundRect } from './canvas2d-utils'
 
 export const CONSORTIUM_PHASES = [
   { key: 'placenta1', labelKey: 'canvas.consortium.phase_placenta1', durationKey: 'canvas.consortium.duration_90d' },
@@ -59,41 +55,6 @@ export interface ConsortiumHitResult {
 // calls during drag-heavy render loops.
 // ---------------------------------------------------------------------------
 
-let _cachedStyle: CSSStyleDeclaration | null = null
-let _cachedStyleFrame = -1
-
-function _cssVar(name: string): string {
-  const frame = performance.now()
-  // Reuse the style declaration within the same frame (~16ms granularity)
-  if (!_cachedStyle || frame - _cachedStyleFrame > 16) {
-    _cachedStyle = getComputedStyle(document.documentElement)
-    _cachedStyleFrame = frame
-  }
-  return _cachedStyle.getPropertyValue(name).trim()
-}
-
-// ---------------------------------------------------------------------------
-// Rounded rectangle helper
-// ---------------------------------------------------------------------------
-
-function _roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
-  ctx.beginPath()
-  ctx.moveTo(x + r, y)
-  ctx.lineTo(x + w - r, y)
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r)
-  ctx.lineTo(x + w, y + h - r)
-  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h)
-  ctx.lineTo(x + r, y + h)
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r)
-  ctx.lineTo(x, y + r)
-  ctx.quadraticCurveTo(x, y, x + r, y)
-  ctx.closePath()
-}
-
-// ---------------------------------------------------------------------------
-// Coordinate helpers
-// ---------------------------------------------------------------------------
-
 /** Maps phase index [0..7] to x pixel within the content area (after LABEL_WIDTH). */
 export function phaseToX(phase: number, contentWidth: number): number {
   return LABEL_WIDTH + (phase / CONSORTIUM_PHASES.length) * contentWidth
@@ -125,7 +86,6 @@ export function buildConsortiumBars(
   plants: PlacedPlant[],
   speciesColors: Record<string, string>,
 ): ConsortiumBarLayout[] {
-  // Count plants by canonical_name
   const plantCounts = new Map<string, { count: number; commonName: string }>()
   for (const plant of plants) {
     const existing = plantCounts.get(plant.canonical_name)
@@ -139,7 +99,6 @@ export function buildConsortiumBars(
     }
   }
 
-  // Build raw bars
   const bars: ConsortiumBarLayout[] = entries.map((entry) => {
     const plantInfo = plantCounts.get(entry.canonical_name)
     return {
@@ -155,7 +114,6 @@ export function buildConsortiumBars(
     }
   })
 
-  // Group bars by stratum for sub-lane packing
   const byStratum = new Map<string, ConsortiumBarLayout[]>()
   for (const bar of bars) {
     const group = byStratum.get(bar.stratum)
@@ -163,12 +121,10 @@ export function buildConsortiumBars(
     else byStratum.set(bar.stratum, [bar])
   }
 
-  // Greedy lane packing within each stratum
   for (const group of byStratum.values()) {
-    // Sort by startPhase for greedy assignment
     group.sort((a, b) => a.startPhase - b.startPhase || a.endPhase - b.endPhase)
 
-    const laneEnds: number[] = [] // end phase of last bar in each sub-lane
+    const laneEnds: number[] = []
 
     for (const bar of group) {
       let assigned = -1
@@ -186,7 +142,6 @@ export function buildConsortiumBars(
       bar.subLane = assigned
     }
 
-    // Write totalSubLanes back
     const totalSubLanes = Math.max(laneEnds.length, 1)
     for (const bar of group) {
       bar.totalSubLanes = totalSubLanes
@@ -209,13 +164,13 @@ export function renderConsortium(
   t: (key: string) => string,
 ): void {
   // Read theme tokens
-  const bgColor = _cssVar('--color-bg') || '#F0EBE1'
-  const surfaceColor = _cssVar('--color-surface') || '#FAF7F2'
-  const borderColor = _cssVar('--color-border') || 'rgba(60, 45, 30, 0.12)'
-  const textColor = _cssVar('--color-text') || '#2C2418'
-  const textMutedColor = _cssVar('--color-text-muted') || '#7D6F5E'
-  const primaryColor = _cssVar('--color-primary') || '#A06B1F'
-  const fontSans = _cssVar('--font-sans') || 'system-ui, sans-serif'
+  const bgColor = cssVar('--color-bg') || '#F0EBE1'
+  const surfaceColor = cssVar('--color-surface') || '#FAF7F2'
+  const borderColor = cssVar('--color-border') || 'rgba(60, 45, 30, 0.12)'
+  const textColor = cssVar('--color-text') || '#2C2418'
+  const textMutedColor = cssVar('--color-text-muted') || '#7D6F5E'
+  const primaryColor = cssVar('--color-primary') || '#A06B1F'
+  const fontSans = cssVar('--font-sans') || 'system-ui, sans-serif'
 
   const contentWidth = width - LABEL_WIDTH
 
@@ -335,7 +290,7 @@ export function renderConsortium(
     const isSelected = bar.canonicalName === state.selectedCanonical
     ctx.globalAlpha = isHovered ? 0.9 : 0.8
     ctx.fillStyle = bar.color
-    _roundRect(ctx, x1, barY, barW, barH, BAR_RADIUS)
+    roundRect(ctx, x1, barY, barW, barH, BAR_RADIUS)
     ctx.fill()
     ctx.globalAlpha = 1
 
@@ -343,7 +298,7 @@ export function renderConsortium(
     if (isSelected) {
       ctx.strokeStyle = primaryColor
       ctx.lineWidth = 2
-      _roundRect(ctx, x1, barY, barW, barH, BAR_RADIUS)
+      roundRect(ctx, x1, barY, barW, barH, BAR_RADIUS)
       ctx.stroke()
     }
 
@@ -352,7 +307,7 @@ export function renderConsortium(
       ctx.strokeStyle = primaryColor
       ctx.lineWidth = 1
       ctx.globalAlpha = 0.5
-      _roundRect(ctx, x1, barY, barW, barH, BAR_RADIUS)
+      roundRect(ctx, x1, barY, barW, barH, BAR_RADIUS)
       ctx.stroke()
       ctx.globalAlpha = 1
     }

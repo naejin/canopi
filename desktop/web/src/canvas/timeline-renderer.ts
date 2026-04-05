@@ -1,5 +1,6 @@
 import type { TimelineAction } from '../types/design'
 import { dateToX, niceInterval, formatDateLabel } from './timeline-math'
+import { cssVar, roundRect } from './canvas2d-utils'
 
 // ---------------------------------------------------------------------------
 // Timeline renderer — Canvas 2D drawing (not Konva)
@@ -159,25 +160,6 @@ export function totalContentHeight(rows: SpeciesRow[], layout: Map<string, Actio
 }
 
 // ---------------------------------------------------------------------------
-// Theme color helper — reads CSS variables from the document.
-// Caches the CSSStyleDeclaration per frame to avoid repeated getComputedStyle
-// calls during drag-heavy render loops.
-// ---------------------------------------------------------------------------
-
-let _cachedStyle: CSSStyleDeclaration | null = null
-let _cachedStyleFrame = -1
-
-function _cssVar(name: string): string {
-  const frame = performance.now()
-  // Reuse the style declaration within the same frame (~16ms granularity)
-  if (!_cachedStyle || frame - _cachedStyleFrame > 16) {
-    _cachedStyle = getComputedStyle(document.documentElement)
-    _cachedStyleFrame = frame
-  }
-  return _cachedStyle.getPropertyValue(name).trim()
-}
-
-// ---------------------------------------------------------------------------
 // Main render
 // ---------------------------------------------------------------------------
 
@@ -197,13 +179,13 @@ export function renderTimeline(
   const { originDate, pxPerDay, scrollX, selectedId, hoveredId } = state
 
   // Read theme tokens
-  const bgColor = _cssVar('--color-bg') || '#F0EBE1'
-  const surfaceColor = _cssVar('--color-surface') || '#FAF7F2'
-  const borderColor = _cssVar('--color-border') || 'rgba(60, 45, 30, 0.12)'
-  const textColor = _cssVar('--color-text') || '#2C2418'
-  const textMutedColor = _cssVar('--color-text-muted') || '#7D6F5E'
-  const primaryColor = _cssVar('--color-primary') || '#A06B1F'
-  const dangerColor = _cssVar('--color-danger') || '#B5432A'
+  const bgColor = cssVar('--color-bg') || '#F0EBE1'
+  const surfaceColor = cssVar('--color-surface') || '#FAF7F2'
+  const borderColor = cssVar('--color-border') || 'rgba(60, 45, 30, 0.12)'
+  const textColor = cssVar('--color-text') || '#2C2418'
+  const textMutedColor = cssVar('--color-text-muted') || '#7D6F5E'
+  const primaryColor = cssVar('--color-primary') || '#A06B1F'
+  const dangerColor = cssVar('--color-danger') || '#B5432A'
 
   const chartLeft = LABEL_SIDEBAR_WIDTH
 
@@ -230,7 +212,7 @@ export function renderTimeline(
   const firstTickMs = Math.floor(viewStartMs / intervalMs) * intervalMs
 
   ctx.fillStyle = textMutedColor
-  ctx.font = `600 10px ${_cssVar('--font-sans') || 'system-ui, sans-serif'}`
+  ctx.font = `600 10px ${cssVar('--font-sans') || 'system-ui, sans-serif'}`
   ctx.strokeStyle = borderColor
   ctx.lineWidth = 0.5
 
@@ -301,7 +283,7 @@ export function renderTimeline(
 
     // Species label in sidebar
     ctx.fillStyle = textColor
-    ctx.font = `600 11px ${_cssVar('--font-sans') || 'system-ui, sans-serif'}`
+    ctx.font = `600 11px ${cssVar('--font-sans') || 'system-ui, sans-serif'}`
     const label = row.speciesName || 'General'
     ctx.save()
     ctx.beginPath()
@@ -339,7 +321,7 @@ export function renderTimeline(
       const baseColor = ACTION_COLORS[action.action_type] ?? ACTION_COLORS.other!
       ctx.globalAlpha = action.id === hoveredId ? 0.9 : 0.8
       ctx.fillStyle = baseColor
-      _roundRect(ctx, x1, barY, barW, barH, BAR_RADIUS)
+      roundRect(ctx, x1, barY, barW, barH, BAR_RADIUS)
       ctx.fill()
       ctx.globalAlpha = 1
 
@@ -347,7 +329,7 @@ export function renderTimeline(
       if (action.id === selectedId) {
         ctx.strokeStyle = primaryColor
         ctx.lineWidth = 2
-        _roundRect(ctx, x1, barY, barW, barH, BAR_RADIUS)
+        roundRect(ctx, x1, barY, barW, barH, BAR_RADIUS)
         ctx.stroke()
       }
 
@@ -356,7 +338,7 @@ export function renderTimeline(
         ctx.strokeStyle = primaryColor
         ctx.lineWidth = 1
         ctx.globalAlpha = 0.5
-        _roundRect(ctx, x1, barY, barW, barH, BAR_RADIUS)
+        roundRect(ctx, x1, barY, barW, barH, BAR_RADIUS)
         ctx.stroke()
         ctx.globalAlpha = 1
       }
@@ -364,7 +346,7 @@ export function renderTimeline(
       // Label inside bar
       if (barW > 40) {
         ctx.fillStyle = surfaceColor
-        ctx.font = `600 10px ${_cssVar('--font-sans') || 'system-ui, sans-serif'}`
+        ctx.font = `600 10px ${cssVar('--font-sans') || 'system-ui, sans-serif'}`
         ctx.save()
         ctx.beginPath()
         ctx.rect(x1 + 2, barY, barW - 4, barH)
@@ -457,20 +439,3 @@ export function hitTestAction(
   return null
 }
 
-// ---------------------------------------------------------------------------
-// Utils
-// ---------------------------------------------------------------------------
-
-function _roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
-  ctx.beginPath()
-  ctx.moveTo(x + r, y)
-  ctx.lineTo(x + w - r, y)
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r)
-  ctx.lineTo(x + w, y + h - r)
-  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h)
-  ctx.lineTo(x + r, y + h)
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r)
-  ctx.lineTo(x, y + r)
-  ctx.quadraticCurveTo(x, y, x + r, y)
-  ctx.closePath()
-}
