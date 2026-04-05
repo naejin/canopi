@@ -98,3 +98,6 @@ export const VISIBLE_BOTTOM_PANEL_TABS: BottomPanelTab[] = ['timeline', 'budget'
 export const bottomPanelOpen = signal<boolean>(false)
 export const bottomPanelTab = signal<BottomPanelTab>('timeline')
 export const bottomPanelHeight = signal<number>(240)
+
+// Consortium chart → canvas hover bridge
+export const hoveredConsortiumSpecies = signal<string | null>(null)

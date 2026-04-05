@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'preact/hooks'
 import { useSignal, useSignalEffect } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale } from '../../state/app'
-import { plantSpeciesColors } from '../../state/canvas'
+import { plantSpeciesColors, hoveredConsortiumSpecies } from '../../state/canvas'
 import { currentDesign } from '../../state/document'
 import { upsertConsortiumEntry, deleteConsortiumEntry, moveConsortiumEntry } from '../../state/consortium-actions'
 import { markDocumentDirty } from '../../state/document-mutations'
@@ -137,6 +137,11 @@ export function ConsortiumChart() {
     return () => observer.disconnect()
   }, [])
 
+  // Clear consortium hover bridge on unmount
+  useEffect(() => {
+    return () => { hoveredConsortiumSpecies.value = null }
+  }, [])
+
   const handleMouseDown = useCallback((event: MouseEvent) => {
     const canvas = canvasRef.current
     if (!canvas || event.button !== 0) return
@@ -223,10 +228,16 @@ export function ConsortiumChart() {
     // Not dragging — update hover and cursor
     const hit = hitTestBar(mouseX, mouseY, barsRef.current, rect.width, rect.height)
     if (hit) {
-      if (hoveredCanonical.value !== hit.canonicalName) hoveredCanonical.value = hit.canonicalName
+      if (hoveredCanonical.value !== hit.canonicalName) {
+        hoveredCanonical.value = hit.canonicalName
+        hoveredConsortiumSpecies.value = hit.canonicalName
+      }
       canvas.style.cursor = hit.edge === 'body' ? 'grab' : 'ew-resize'
     } else {
-      if (hoveredCanonical.value !== null) hoveredCanonical.value = null
+      if (hoveredCanonical.value !== null) {
+        hoveredCanonical.value = null
+        hoveredConsortiumSpecies.value = null
+      }
       canvas.style.cursor = 'default'
     }
   }, [])

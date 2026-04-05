@@ -2,6 +2,7 @@ import { locale } from '../../state/app'
 import {
   gridVisible,
   guides,
+  hoveredConsortiumSpecies,
   layerVisibility,
   lockedObjectIds,
   plantSpeciesColors,
@@ -840,7 +841,7 @@ export class SceneCanvasRuntime implements CanvasRuntime {
       colorByAttr: session.plantColorByAttr,
       speciesCache: this._speciesCache.getCache(),
       localizedCommonNames: this._plantLabels.getLocaleSnapshot(locale.value),
-      hoveredCanonicalName: hoveredPlant?.canonicalName ?? null,
+      hoveredCanonicalName: hoveredPlant?.canonicalName ?? hoveredConsortiumSpecies.value ?? null,
       selectionLabels: computeSelectionLabels(
         scene.plants,
         session.selectedEntityIds,
