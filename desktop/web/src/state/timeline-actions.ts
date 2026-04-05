@@ -1,5 +1,5 @@
 import type { TimelineAction } from '../types/design'
-import { markDocumentDirty, mutateCurrentDesign } from './document-mutations'
+import { mutateCurrentDesign } from './document-mutations'
 
 interface TimelineUpdateOptions {
   markDirty?: boolean
@@ -53,8 +53,4 @@ export function deleteTimelineAction(
   options: TimelineUpdateOptions = {},
 ): void {
   updateTimeline((timeline) => timeline.filter((action) => action.id !== actionId), options)
-}
-
-export function markTimelineDirty(): void {
-  markDocumentDirty()
 }

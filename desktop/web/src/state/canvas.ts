@@ -94,7 +94,7 @@ export const designLocation = signal<{ lat: number; lon: number } | null>(null)
 // Bottom panel
 export type BottomPanelTab = 'timeline' | 'budget' | 'consortium'
 export const BOTTOM_PANEL_TABS: BottomPanelTab[] = ['timeline', 'budget', 'consortium']
-export const VISIBLE_BOTTOM_PANEL_TABS: BottomPanelTab[] = ['timeline', 'budget', 'consortium']
+export const VISIBLE_BOTTOM_PANEL_TABS: BottomPanelTab[] = ['timeline', 'budget']
 export const bottomPanelOpen = signal<boolean>(false)
 export const bottomPanelTab = signal<BottomPanelTab>('timeline')
 export const bottomPanelHeight = signal<number>(240)

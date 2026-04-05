@@ -597,7 +597,8 @@ export class SceneCanvasRuntime implements CanvasRuntime {
   }
 
   serializeDocument(metadata: CanvasRuntimeDocumentMetadata, doc: CanopiFile | null): CanopiFile {
-    this._applySignalBackedSceneState({ recordHistory: false, syncGuides: true })
+    // Check before updatePersisted — if neither signal nor persisted has guides,
+    // skip guide sync so doc-provided guides in extra are preserved.
     const shouldSyncGuides = guides.value.length > 0 || Array.isArray(this._sceneStore.persisted.extra?.guides)
     this._sceneStore.updatePersisted((persisted) => {
       persisted.name = metadata.name

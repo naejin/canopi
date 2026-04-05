@@ -5,9 +5,9 @@ import { locale } from '../../state/app'
 import { currentDesign } from '../../state/document'
 import {
   deleteTimelineAction,
-  markTimelineDirty,
   updateTimelineAction,
 } from '../../state/timeline-actions'
+import { markDocumentDirty } from '../../state/document-mutations'
 import {
   LABEL_SIDEBAR_WIDTH,
   RULER_HEIGHT,
@@ -244,7 +244,7 @@ export function InteractiveTimeline({
   const handleMouseUp = useCallback(() => {
     const drag = dragState.current
     if (drag && drag.type !== 'pan') {
-      markTimelineDirty()
+      markDocumentDirty()
     }
     dragState.current = null
   }, [])

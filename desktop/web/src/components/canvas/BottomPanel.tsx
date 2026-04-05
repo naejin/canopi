@@ -32,10 +32,10 @@ function ResizeHandle() {
         event.preventDefault()
         const startY = event.clientY
         const startHeight = bottomPanelHeight.value
+        const maxHeight = Math.max(200, window.innerHeight * 0.8)
 
         const onMove = (moveEvent: MouseEvent) => {
           const delta = startY - moveEvent.clientY
-          const maxHeight = Math.max(200, window.innerHeight * 0.8)
           setBottomPanelHeight(Math.max(140, Math.min(maxHeight, startHeight + delta)))
         }
 
