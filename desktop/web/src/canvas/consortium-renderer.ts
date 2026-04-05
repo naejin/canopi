@@ -3,6 +3,10 @@ import { getStratumColor } from './plants'
 import { DEFAULT_PLANT_COLOR } from './plant-colors'
 import { cssVar, roundRect } from './canvas2d-utils'
 
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
 export const CONSORTIUM_PHASES = [
   { key: 'placenta1', labelKey: 'canvas.consortium.phase_placenta1', durationKey: 'canvas.consortium.duration_90d' },
   { key: 'placenta2', labelKey: 'canvas.consortium.phase_placenta2', durationKey: 'canvas.consortium.duration_2y' },
@@ -15,11 +19,11 @@ export const CONSORTIUM_PHASES = [
 
 export const STRATA_ROWS = ['emergent', 'high', 'medium', 'low', 'unassigned'] as const
 
-export const ROW_HEIGHT = 48
-export const HEADER_HEIGHT = 40
-export const LABEL_WIDTH = 100
-const BAR_HEIGHT = 24
-const BAR_MARGIN = 4
+export const ROW_HEIGHT = 52
+export const HEADER_HEIGHT = 36
+export const LABEL_WIDTH = 130
+const BAR_HEIGHT = 26
+const BAR_MARGIN = 3
 const BAR_RADIUS = 4
 const EDGE_THRESHOLD = 6
 
@@ -50,23 +54,18 @@ export interface ConsortiumHitResult {
 }
 
 // ---------------------------------------------------------------------------
-// Theme color helper — reads CSS variables from the document.
-// Caches the CSSStyleDeclaration per frame to avoid repeated getComputedStyle
-// calls during drag-heavy render loops.
+// Coordinate helpers
 // ---------------------------------------------------------------------------
 
-/** Maps phase index [0..7] to x pixel within the content area (after LABEL_WIDTH). */
 export function phaseToX(phase: number, contentWidth: number): number {
   return LABEL_WIDTH + (phase / CONSORTIUM_PHASES.length) * contentWidth
 }
 
-/** Inverse of phaseToX — returns fractional phase, clamped to [0..6]. */
 export function xToPhase(x: number, contentWidth: number): number {
   const fraction = (x - LABEL_WIDTH) / contentWidth
   return Math.max(0, Math.min(CONSORTIUM_PHASES.length - 1, fraction * CONSORTIUM_PHASES.length))
 }
 
-/** Returns row index in STRATA_ROWS, or 4 (unassigned) if not found. */
 export function stratumToRow(stratum: string): number {
   const idx = (STRATA_ROWS as readonly string[]).indexOf(stratum)
   return idx === -1 ? 4 : idx
@@ -76,11 +75,6 @@ export function stratumToRow(stratum: string): number {
 // Layout computation
 // ---------------------------------------------------------------------------
 
-/**
- * Build bar layouts from consortium entries and placed plants.
- * Counts plants by canonical_name, assigns colors, and packs overlapping
- * bars within the same stratum into sub-lanes.
- */
 export function buildConsortiumBars(
   entries: Consortium[],
   plants: PlacedPlant[],
@@ -123,7 +117,6 @@ export function buildConsortiumBars(
 
   for (const group of byStratum.values()) {
     group.sort((a, b) => a.startPhase - b.startPhase || a.endPhase - b.endPhase)
-
     const laneEnds: number[] = []
 
     for (const bar of group) {
@@ -163,168 +156,177 @@ export function renderConsortium(
   state: ConsortiumRenderState,
   t: (key: string) => string,
 ): void {
-  // Read theme tokens
-  const bgColor = cssVar('--color-bg') || '#F0EBE1'
-  const surfaceColor = cssVar('--color-surface') || '#FAF7F2'
-  const borderColor = cssVar('--color-border') || 'rgba(60, 45, 30, 0.12)'
+  const bgColor = cssVar('--color-bg') || '#E6E0D4'
+  const surfaceColor = cssVar('--color-surface') || '#EDE8DD'
+  const surfaceMuted = cssVar('--color-surface-muted') || '#E8E2D6'
+  const borderColor = cssVar('--color-border') || 'rgba(60, 45, 30, 0.16)'
   const textColor = cssVar('--color-text') || '#2C2418'
-  const textMutedColor = cssVar('--color-text-muted') || '#7D6F5E'
+  const textMutedColor = cssVar('--color-text-muted') || '#6B5F4E'
   const primaryColor = cssVar('--color-primary') || '#A06B1F'
-  const fontSans = cssVar('--font-sans') || 'system-ui, sans-serif'
+  const fontSans = cssVar('--font-sans') || 'Inter, system-ui, sans-serif'
 
   const contentWidth = width - LABEL_WIDTH
+  const gridHeight = STRATA_ROWS.length * ROW_HEIGHT
 
   ctx.clearRect(0, 0, width, height)
 
-  // -- Background fill -------------------------------------------------------
-  ctx.fillStyle = bgColor
+  // -- Full background --------------------------------------------------------
+  ctx.fillStyle = surfaceColor
   ctx.fillRect(0, 0, width, height)
 
-  // -- Label sidebar background -----------------------------------------------
-  ctx.fillStyle = surfaceColor
-  ctx.fillRect(0, 0, LABEL_WIDTH, height)
+  // -- Alternating row backgrounds --------------------------------------------
+  for (let r = 0; r < STRATA_ROWS.length; r++) {
+    const rowY = HEADER_HEIGHT + r * ROW_HEIGHT
+    ctx.fillStyle = r % 2 === 0 ? surfaceColor : surfaceMuted
+    ctx.fillRect(LABEL_WIDTH, rowY, contentWidth, ROW_HEIGHT)
+  }
 
-  // Sidebar border
-  ctx.strokeStyle = borderColor
-  ctx.lineWidth = 1
-  ctx.beginPath()
-  ctx.moveTo(LABEL_WIDTH, 0)
-  ctx.lineTo(LABEL_WIDTH, height)
-  ctx.stroke()
-
-  // -- Column headers (phases) ------------------------------------------------
+  // -- Label sidebar ----------------------------------------------------------
   ctx.fillStyle = bgColor
-  ctx.fillRect(LABEL_WIDTH, 0, contentWidth, HEADER_HEIGHT)
+  ctx.fillRect(0, 0, LABEL_WIDTH, HEADER_HEIGHT + gridHeight)
 
-  // Corner cell (top-left)
-  ctx.fillStyle = bgColor
-  ctx.fillRect(0, 0, LABEL_WIDTH, HEADER_HEIGHT)
-
-  ctx.strokeStyle = borderColor
-  ctx.lineWidth = 1
-
-  // Header bottom border
-  ctx.beginPath()
-  ctx.moveTo(0, HEADER_HEIGHT)
-  ctx.lineTo(width, HEADER_HEIGHT)
-  ctx.stroke()
-
+  // -- Column headers ---------------------------------------------------------
   for (let i = 0; i < CONSORTIUM_PHASES.length; i++) {
     const phase = CONSORTIUM_PHASES[i]!
     const x1 = phaseToX(i, contentWidth)
     const x2 = phaseToX(i + 1, contentWidth)
     const colW = x2 - x1
+    const cx = x1 + colW / 2
 
-    // Vertical grid line between phases
-    if (i > 0) {
-      ctx.strokeStyle = borderColor
-      ctx.lineWidth = 0.5
-      ctx.beginPath()
-      ctx.moveTo(x1, 0)
-      ctx.lineTo(x1, height)
-      ctx.stroke()
-    }
-
-    // Phase label
-    ctx.fillStyle = textColor
-    ctx.font = `600 10px ${fontSans}`
     ctx.textAlign = 'center'
-    ctx.fillText(t(phase.labelKey), x1 + colW / 2, HEADER_HEIGHT / 2 - 2, colW - 4)
 
-    // Duration label
+    // Phase name
+    ctx.fillStyle = textColor
+    ctx.font = `600 11px ${fontSans}`
+    ctx.fillText(t(phase.labelKey), cx, HEADER_HEIGHT / 2 - 1, colW - 8)
+
+    // Duration subtitle
     ctx.fillStyle = textMutedColor
     ctx.font = `400 10px ${fontSans}`
-    ctx.fillText(t(phase.durationKey), x1 + colW / 2, HEADER_HEIGHT / 2 + 10, colW - 4)
+    ctx.fillText(t(phase.durationKey), cx, HEADER_HEIGHT / 2 + 11, colW - 8)
   }
 
-  ctx.textAlign = 'left' // reset
+  ctx.textAlign = 'left'
 
-  // -- Row labels (strata) ---------------------------------------------------
+  // -- Row labels -------------------------------------------------------------
   for (let r = 0; r < STRATA_ROWS.length; r++) {
     const stratum = STRATA_ROWS[r]!
     const rowY = HEADER_HEIGHT + r * ROW_HEIGHT
+    const labelY = rowY + ROW_HEIGHT / 2
 
-    // Alternating row backgrounds
-    if (r % 2 === 1) {
-      ctx.fillStyle = borderColor
-      ctx.globalAlpha = 0.3
-      ctx.fillRect(LABEL_WIDTH, rowY, contentWidth, ROW_HEIGHT)
-      ctx.globalAlpha = 1
-    }
-
-    // Row separator line
-    ctx.strokeStyle = borderColor
-    ctx.lineWidth = 0.5
-    ctx.beginPath()
-    ctx.moveTo(0, rowY + ROW_HEIGHT)
-    ctx.lineTo(width, rowY + ROW_HEIGHT)
-    ctx.stroke()
-
-    // Stratum label in sidebar
     ctx.fillStyle = textColor
     ctx.font = `600 11px ${fontSans}`
     ctx.save()
     ctx.beginPath()
-    ctx.rect(4, rowY, LABEL_WIDTH - 8, ROW_HEIGHT)
+    ctx.rect(0, rowY, LABEL_WIDTH - 4, ROW_HEIGHT)
     ctx.clip()
-    ctx.fillText(t('canvas.consortium.' + stratum), 8, rowY + ROW_HEIGHT / 2 + 4)
+    ctx.fillText(t('canvas.consortium.' + stratum), 10, labelY + 4)
     ctx.restore()
   }
 
-  // -- Draw bars --------------------------------------------------------------
+  // -- Grid lines -------------------------------------------------------------
+  ctx.strokeStyle = borderColor
+  ctx.lineWidth = 1
+
+  // Header bottom border
+  ctx.beginPath()
+  ctx.moveTo(0, HEADER_HEIGHT + 0.5)
+  ctx.lineTo(width, HEADER_HEIGHT + 0.5)
+  ctx.stroke()
+
+  // Sidebar right border
+  ctx.beginPath()
+  ctx.moveTo(LABEL_WIDTH + 0.5, 0)
+  ctx.lineTo(LABEL_WIDTH + 0.5, HEADER_HEIGHT + gridHeight)
+  ctx.stroke()
+
+  // Horizontal row dividers
+  for (let r = 1; r <= STRATA_ROWS.length; r++) {
+    const y = HEADER_HEIGHT + r * ROW_HEIGHT + 0.5
+    ctx.beginPath()
+    ctx.moveTo(0, y)
+    ctx.lineTo(width, y)
+    ctx.stroke()
+  }
+
+  // Vertical phase dividers (lighter)
+  ctx.globalAlpha = 0.5
+  for (let i = 1; i < CONSORTIUM_PHASES.length; i++) {
+    const x = phaseToX(i, contentWidth) + 0.5
+    ctx.beginPath()
+    ctx.moveTo(x, HEADER_HEIGHT)
+    ctx.lineTo(x, HEADER_HEIGHT + gridHeight)
+    ctx.stroke()
+  }
+  ctx.globalAlpha = 1
+
+  // -- Bars -------------------------------------------------------------------
   for (const bar of bars) {
     const rowIdx = stratumToRow(bar.stratum)
     const rowY = HEADER_HEIGHT + rowIdx * ROW_HEIGHT
-
-    // Compute total row height accounting for sub-lanes
     const subLaneH = ROW_HEIGHT / bar.totalSubLanes
 
     const x1 = phaseToX(bar.startPhase, contentWidth)
     const x2 = phaseToX(bar.endPhase + 1, contentWidth)
-    const barW = Math.max(x2 - x1, 6)
+    const barW = Math.max(x2 - x1, 8)
     const barY = rowY + bar.subLane * subLaneH + BAR_MARGIN
     const barH = Math.min(BAR_HEIGHT, subLaneH - BAR_MARGIN * 2)
 
-    // Bar fill
     const isHovered = bar.canonicalName === state.hoveredCanonical
     const isSelected = bar.canonicalName === state.selectedCanonical
-    ctx.globalAlpha = isHovered ? 0.9 : 0.8
+
+    // Bar shadow (subtle depth)
+    if (isHovered) {
+      ctx.save()
+      ctx.shadowColor = 'rgba(44, 36, 24, 0.15)'
+      ctx.shadowBlur = 4
+      ctx.shadowOffsetY = 1
+      ctx.fillStyle = bar.color
+      roundRect(ctx, x1, barY, barW, barH, BAR_RADIUS)
+      ctx.fill()
+      ctx.restore()
+    }
+
+    // Bar fill
     ctx.fillStyle = bar.color
+    ctx.globalAlpha = isHovered ? 1 : 0.85
     roundRect(ctx, x1, barY, barW, barH, BAR_RADIUS)
     ctx.fill()
     ctx.globalAlpha = 1
 
-    // Selected outline
-    if (isSelected) {
-      ctx.strokeStyle = primaryColor
-      ctx.lineWidth = 2
-      roundRect(ctx, x1, barY, barW, barH, BAR_RADIUS)
-      ctx.stroke()
-    }
+    // Border
+    ctx.strokeStyle = isSelected ? primaryColor : isHovered ? primaryColor : 'rgba(0,0,0,0.12)'
+    ctx.lineWidth = isSelected ? 2 : 1
+    if (isHovered) ctx.globalAlpha = 0.7
+    roundRect(ctx, x1, barY, barW, barH, BAR_RADIUS)
+    ctx.stroke()
+    ctx.globalAlpha = 1
 
-    // Hover outline (lighter)
-    if (isHovered && !isSelected) {
-      ctx.strokeStyle = primaryColor
-      ctx.lineWidth = 1
-      ctx.globalAlpha = 0.5
-      roundRect(ctx, x1, barY, barW, barH, BAR_RADIUS)
-      ctx.stroke()
-      ctx.globalAlpha = 1
-    }
-
-    // Label inside bar (common name + count)
-    if (barW > 40) {
-      ctx.fillStyle = surfaceColor
+    // Label inside bar
+    if (barW > 50) {
+      // Dark text on colored background for readability
+      ctx.fillStyle = '#fff'
+      ctx.globalAlpha = 0.95
       ctx.font = `600 10px ${fontSans}`
       ctx.save()
       ctx.beginPath()
-      ctx.rect(x1 + 2, barY, barW - 4, barH)
+      ctx.rect(x1 + 4, barY, barW - 8, barH)
       ctx.clip()
       const label = bar.count > 0
         ? `${bar.commonName} (${bar.count})`
         : bar.commonName
-      ctx.fillText(label, x1 + 6, barY + barH / 2 + 3.5)
+      ctx.fillText(label, x1 + 7, barY + barH / 2 + 3.5)
       ctx.restore()
+      ctx.globalAlpha = 1
+    } else if (barW > 20) {
+      // Just show count for narrow bars
+      ctx.fillStyle = '#fff'
+      ctx.globalAlpha = 0.9
+      ctx.font = `600 9px ${fontSans}`
+      ctx.textAlign = 'center'
+      ctx.fillText(`${bar.count}`, x1 + barW / 2, barY + barH / 2 + 3)
+      ctx.textAlign = 'left'
+      ctx.globalAlpha = 1
     }
   }
 }
@@ -342,7 +344,6 @@ export function hitTestBar(
 ): ConsortiumHitResult | null {
   const contentWidth = width - LABEL_WIDTH
 
-  // Ignore clicks in the label sidebar or header
   if (x < LABEL_WIDTH || y < HEADER_HEIGHT) return null
 
   for (const bar of bars) {
@@ -352,18 +353,13 @@ export function hitTestBar(
 
     const x1 = phaseToX(bar.startPhase, contentWidth)
     const x2 = phaseToX(bar.endPhase + 1, contentWidth)
-    const barW = Math.max(x2 - x1, 6)
+    const barW = Math.max(x2 - x1, 8)
     const barY = rowY + bar.subLane * subLaneH + BAR_MARGIN
     const barH = Math.min(BAR_HEIGHT, subLaneH - BAR_MARGIN * 2)
 
     if (x >= x1 && x <= x1 + barW && y >= barY && y <= barY + barH) {
-      // Check edges
-      if (x - x1 < EDGE_THRESHOLD) {
-        return { canonicalName: bar.canonicalName, edge: 'left' }
-      }
-      if (x1 + barW - x < EDGE_THRESHOLD) {
-        return { canonicalName: bar.canonicalName, edge: 'right' }
-      }
+      if (x - x1 < EDGE_THRESHOLD) return { canonicalName: bar.canonicalName, edge: 'left' }
+      if (x1 + barW - x < EDGE_THRESHOLD) return { canonicalName: bar.canonicalName, edge: 'right' }
       return { canonicalName: bar.canonicalName, edge: 'body' }
     }
   }

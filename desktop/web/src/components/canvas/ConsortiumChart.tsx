@@ -90,7 +90,7 @@ export function ConsortiumChart() {
           canonical_name: name,
           stratum: 'unassigned',
           start_phase: 0,
-          end_phase: 0,
+          end_phase: 2,
         }, { markDirty: false })
       }
     }
