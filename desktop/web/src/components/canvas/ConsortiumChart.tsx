@@ -66,6 +66,7 @@ export function ConsortiumChart() {
 
   // Auto-sync: add/remove consortium entries when species change on canvas
   useSignalEffect(() => {
+    void sceneEntityRevision.value
     const d = currentDesign.value
     if (!d) return
 
