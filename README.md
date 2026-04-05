@@ -64,7 +64,7 @@ canopi/
 
 ## Status
 
-Release `0.2.0` is published. See [releases](https://github.com/naejin/canopi/releases) for downloads, [docs/README.md](docs/README.md) for the current doc map, and [docs/roadmap.md](docs/roadmap.md) for historical roadmap context.
+Release `0.2.0` is published. See [releases](https://github.com/naejin/canopi/releases) for downloads and [docs/README.md](docs/README.md) for the current doc map.
 
 ## License
 

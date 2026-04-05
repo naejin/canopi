@@ -52,8 +52,8 @@ These align with the core risks identified in the architecture review.
 - Verify timeline renderer is NOT in the main chunk (bottom panel is toggled)
 
 ### 4. Safeguards
-- **ErrorBoundary**: Add a Preact ErrorBoundary wrapping `main.tsx` — blank-screen crash protection. Small, no dependencies (see roadmap SG.0)
-- **Pre-commit hooks**: Add husky + lint-staged (`tsc --noEmit`, `eslint`) — prevents broken commits during parallel agent work (see roadmap SG.1)
+- **ErrorBoundary**: Add a Preact ErrorBoundary wrapping `main.tsx` — blank-screen crash protection. Small, no dependencies (see `docs/archive/roadmap.md` SG.0)
+- **Pre-commit hooks**: Add husky + lint-staged (`tsc --noEmit`, `eslint`) — prevents broken commits during parallel agent work (see `docs/archive/roadmap.md` SG.1)
 
 ### 5. Moderate-priority cleanup
 - Add real Rust → frontend → Rust round-trip test for file-format contract (see review Finding 3)
@@ -70,30 +70,30 @@ These align with the core risks identified in the architecture review.
 
 **MapLibre / geo:**
 - In-canvas MapLibre layers (via dedicated `MapLibreController` — see root `CLAUDE.md` MapLibre Integration Rule)
-- Local tangent plane projection math in `canvas/projection.ts` (`lngLatToMeters` / `metersToLngLat`) — prerequisite for MapLibre viewport sync (see roadmap 4.0c)
-- PMTiles offline tiles: Rust reader + Tauri custom protocol + download manager UI (see roadmap 4.2)
-- Contour/hillshade layers via `maplibre-contour` + DEM tiles (see roadmap 4.3/4.4)
+- Local tangent plane projection math in `canvas/projection.ts` (`lngLatToMeters` / `metersToLngLat`) — prerequisite for MapLibre viewport sync (see `docs/archive/roadmap.md` 4.0c)
+- PMTiles offline tiles: Rust reader + Tauri custom protocol + download manager UI (see `docs/archive/roadmap.md` 4.2)
+- Contour/hillshade layers via `maplibre-contour` + DEM tiles (see `docs/archive/roadmap.md` 4.3/4.4)
 
 **Bottom panels:**
-- Timeline MVP: trim plan is ready and convergence-independent — 6 targeted removals + BottomPanel routing enables all three tabs. See `docs/timeline/timeline-plan.md`. Identity semantics convergence is needed for full panel↔canvas sync but not for shipping the trimmed timeline
+- Timeline MVP: trim plan is ready and convergence-independent — 6 targeted removals + BottomPanel routing enables all three tabs. See `docs/timeline-plan.md`. Identity semantics convergence is needed for full panel↔canvas sync but not for shipping the trimmed timeline
 - Bottom-panel budget workflows (requires identity semantics convergence for canvas highlighting)
 - Bottom-panel consortium workflows
 
 **Other:**
 - Featured-design world map / template import
-- Template adaptation (hardiness comparison, replacement suggestions — see roadmap 7.2, distinct from import)
+- Template adaptation (hardiness comparison, replacement suggestions — see `docs/archive/roadmap.md` 7.2, distinct from import)
 - Export (PNG/SVG/CSV/GeoJSON)
 - Knowledge / learning content surface
-- Pen/stylus input support (requires hardware testers — see roadmap 5.4)
+- Pen/stylus input support (requires hardware testers — see `docs/archive/roadmap.md` 5.4)
 
 ## Deferred Quality Work
 
-- **Async/blocking UX audit**: Identify every frontend `await` of a slow IPC call that blocks rendering — geocoding in `LocationInput.tsx`, photo carousel in detail card, filter options on first mount (see roadmap QA.2)
-- **Memory leak audit**: Review resource lifecycle for MapLibre instances, module-level effects, autosave timers, panel mount/unmount (see roadmap QA.4)
-- **Network/disk resilience**: Audit failure paths — geocoding timeout, image cache fallback, disk-full autosave, template download validation (see roadmap QA.5)
-- **Security surface review**: Markdown sanitization in `markdown.ts`, `validated_column()` allowlist completeness, geocoding URL encoding (see roadmap QA.6c)
-- **Design coherence (DC) phase**: Systematic CSS token migration across 34 modules — see roadmap Phase DC. Most canvas dark-mode bugs (BUG-002–006) are already fixed via `theme-refresh.ts` + CSS variables; remaining hardcoded colors listed in active work section 5
-- **Test foundation**: Signal state tests, canvas operation tests, CI coverage reporting (see roadmap SG.2)
+- **Async/blocking UX audit**: Identify every frontend `await` of a slow IPC call that blocks rendering — geocoding in `LocationInput.tsx`, photo carousel in detail card, filter options on first mount (see `docs/archive/roadmap.md` QA.2)
+- **Memory leak audit**: Review resource lifecycle for MapLibre instances, module-level effects, autosave timers, panel mount/unmount (see `docs/archive/roadmap.md` QA.4)
+- **Network/disk resilience**: Audit failure paths — geocoding timeout, image cache fallback, disk-full autosave, template download validation (see `docs/archive/roadmap.md` QA.5)
+- **Security surface review**: Markdown sanitization in `markdown.ts`, `validated_column()` allowlist completeness, geocoding URL encoding (see `docs/archive/roadmap.md` QA.6c)
+- **Design coherence (DC) phase**: Systematic CSS token migration across 34 modules — see `docs/archive/roadmap.md` Phase DC. Most canvas dark-mode bugs (BUG-002–006) are already fixed via `theme-refresh.ts` + CSS variables; remaining hardcoded colors listed in active work section 5
+- **Test foundation**: Signal state tests, canvas operation tests, CI coverage reporting (see `docs/archive/roadmap.md` SG.2)
 
 ## Guardrails
 

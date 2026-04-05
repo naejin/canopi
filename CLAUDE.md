@@ -218,7 +218,7 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 - Renderer validation: `docs/renderer/renderer.md`
 - Database guidance: `docs/db/README.md`
 - Product scope lock: `docs/product-definition.md`
-- Historical roadmap: `docs/roadmap.md`
+- Historical roadmap: `docs/archive/roadmap.md`
 - Archived reviews: `docs/archive/reviews/`
 - Design system: `.interface-design/system.md`
 - Rewrite history: `docs/archive/rewrite-history-2026-03.md`

@@ -1,14 +1,8 @@
 # Database Docs
 
-Database-specific guidance lives here.
+Database-specific guidance lives here. For schema contract and query patterns, see `desktop/src/db/CLAUDE.md`.
 
-Reference:
+## Reference
 
-- [Archived Review Notes](../archive/reviews/plant-db-filter-audit.md)
-
-Use this folder for:
-
-- schema contract notes
-- SQL and SQLite review material
-- data-quality audits
-- plant DB maintenance guidance
+- [canopi-data Translation Gaps](./canopi-data-translation-gaps.md) — audit of missing/incomplete translations in the plant DB
+- [Archived: Plant DB Filter Audit](../archive/reviews/plant-db-filter-audit.md)

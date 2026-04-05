@@ -1,34 +1,24 @@
 # Development
 
-## Desktop Dev Command
+See root `CLAUDE.md` for the full command reference.
 
-Use `cargo tauri dev` to run the desktop app in development.
-
-Do not use `cargo run dev` for this. In this workspace, `cargo run dev` runs the desktop binary and passes `dev` as an application argument; it does not start the Tauri dev workflow.
-
-## Frontend Hook Location
-
-The frontend app lives in `desktop/web`.
-
-Tauri dev and build hooks are configured in `desktop/tauri.conf.json` to run from that directory:
-
-- `beforeDevCommand`: `npm run dev`
-- `beforeBuildCommand`: `npm run build`
-- hook `cwd`: `web`
-
-This matters because the repository root also has a `package.json`, but it does not define the frontend `dev` or `build` scripts.
-
-## Common Local Commands
+Key commands:
 
 ```bash
-# Desktop app with Tauri + frontend dev server
+# Full app dev (from project root — NOT desktop/)
 cargo tauri dev
 
-# Frontend only
-npm run dev --prefix desktop/web
+# Frontend only (from desktop/web/)
+npm run dev
 
-# Frontend checks
-npx --prefix desktop/web tsc --noEmit -p desktop/web/tsconfig.json
-npm test --prefix desktop/web
-npm run build --prefix desktop/web
+# TypeScript check (from desktop/web/)
+npx tsc --noEmit
+
+# Frontend tests (from desktop/web/)
+npm test
+
+# Rust workspace check (without plant DB)
+CANOPI_SKIP_BUNDLED_DB=1 cargo check --workspace
 ```
+
+**Gotcha**: Do not use `cargo run dev` — it passes `dev` as an app argument, not as a Tauri dev workflow.
