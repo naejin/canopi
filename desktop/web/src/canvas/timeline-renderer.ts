@@ -10,7 +10,6 @@ export const LANE_HEIGHT = 32
 export const RULER_HEIGHT = 28
 const BAR_RADIUS = 4
 const BAR_MARGIN = 4
-const EDGE_THRESHOLD = 6 // px from bar edge to trigger resize cursor
 
 /** Width of the species label sidebar in pixels. Shared with InteractiveTimeline. */
 export const LABEL_SIDEBAR_WIDTH = 140
@@ -231,7 +230,7 @@ export function renderTimeline(
   const firstTickMs = Math.floor(viewStartMs / intervalMs) * intervalMs
 
   ctx.fillStyle = textMutedColor
-  ctx.font = `500 10px ${_cssVar('--font-sans') || 'system-ui, sans-serif'}`
+  ctx.font = `600 10px ${_cssVar('--font-sans') || 'system-ui, sans-serif'}`
   ctx.strokeStyle = borderColor
   ctx.lineWidth = 0.5
 
@@ -302,7 +301,7 @@ export function renderTimeline(
 
     // Species label in sidebar
     ctx.fillStyle = textColor
-    ctx.font = `500 11px ${_cssVar('--font-sans') || 'system-ui, sans-serif'}`
+    ctx.font = `600 11px ${_cssVar('--font-sans') || 'system-ui, sans-serif'}`
     const label = row.speciesName || 'General'
     ctx.save()
     ctx.beginPath()
@@ -338,13 +337,8 @@ export function renderTimeline(
 
       // Bar fill
       const baseColor = ACTION_COLORS[action.action_type] ?? ACTION_COLORS.other!
-      if (action.completed) {
-        ctx.globalAlpha = 0.35
-        ctx.fillStyle = textMutedColor
-      } else {
-        ctx.globalAlpha = action.id === hoveredId ? 0.9 : 0.8
-        ctx.fillStyle = baseColor
-      }
+      ctx.globalAlpha = action.id === hoveredId ? 0.9 : 0.8
+      ctx.fillStyle = baseColor
       _roundRect(ctx, x1, barY, barW, barH, BAR_RADIUS)
       ctx.fill()
       ctx.globalAlpha = 1
@@ -369,8 +363,8 @@ export function renderTimeline(
 
       // Label inside bar
       if (barW > 40) {
-        ctx.fillStyle = action.completed ? textMutedColor : surfaceColor
-        ctx.font = `500 10px ${_cssVar('--font-sans') || 'system-ui, sans-serif'}`
+        ctx.fillStyle = surfaceColor
+        ctx.font = `600 10px ${_cssVar('--font-sans') || 'system-ui, sans-serif'}`
         ctx.save()
         ctx.beginPath()
         ctx.rect(x1 + 2, barY, barW - 4, barH)
@@ -379,15 +373,6 @@ export function renderTimeline(
         ctx.restore()
       }
 
-      // Completed strikethrough
-      if (action.completed && barW > 10) {
-        ctx.strokeStyle = textMutedColor
-        ctx.lineWidth = 1
-        ctx.beginPath()
-        ctx.moveTo(x1 + 4, barY + barH / 2)
-        ctx.lineTo(x1 + barW - 4, barY + barH / 2)
-        ctx.stroke()
-      }
     }
   }
 
@@ -420,7 +405,7 @@ export function renderTimeline(
 // Hit testing
 // ---------------------------------------------------------------------------
 
-export type HitEdge = 'left' | 'right' | 'body' | null
+export type HitEdge = 'body' | null
 
 export interface HitResult {
   action: TimelineAction
@@ -465,11 +450,7 @@ export function hitTestAction(
       const barH = subLaneH - BAR_MARGIN * 2
 
       if (x >= x1 && x <= x1 + barW && y >= barY && y <= barY + barH) {
-        // Determine edge
-        let edge: HitEdge = 'body'
-        if (x - x1 < EDGE_THRESHOLD) edge = 'left'
-        else if (x1 + barW - x < EDGE_THRESHOLD) edge = 'right'
-        return { action, edge }
+        return { action, edge: 'body' }
       }
     }
   }

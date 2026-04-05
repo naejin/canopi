@@ -23,14 +23,9 @@ import { dateToX, snapToDay, toISODate } from '../../canvas/timeline-math'
 import type { TimelineAction } from '../../types/design'
 import styles from './InteractiveTimeline.module.css'
 
-const ZOOM_FACTOR = 1.15
-const MIN_PX_PER_DAY = 0.3
-const MAX_PX_PER_DAY = 60
-
-export type Granularity = 'week' | 'month' | 'year'
+export type Granularity = 'month' | 'year'
 
 const GRANULARITY_PX_PER_DAY: Record<Granularity, number> = {
-  week: 20,
   month: 5,
   year: 0.8,
 }
@@ -50,14 +45,6 @@ type DragState =
       startMouseX: number
       originalStartDate: string
       originalEndDate: string | null
-    }
-  | {
-      type: 'resize'
-      actionId: string
-      edge: 'left' | 'right'
-      startMouseX: number
-      originalStartDate: string
-      originalEndDate: string
     }
   | {
       type: 'pan'
@@ -145,20 +132,6 @@ export function InteractiveTimeline({
   const handleWheel = useCallback((event: WheelEvent) => {
     event.preventDefault()
 
-    if (event.ctrlKey || event.metaKey) {
-      const canvas = canvasRef.current
-      if (!canvas) return
-      const rect = canvas.getBoundingClientRect()
-      const mouseX = event.clientX - rect.left - LABEL_SIDEBAR_WIDTH
-      const previous = pxPerDay.value
-      const factor = event.deltaY < 0 ? ZOOM_FACTOR : 1 / ZOOM_FACTOR
-      const next = Math.min(MAX_PX_PER_DAY, Math.max(MIN_PX_PER_DAY, previous * factor))
-      const worldX = (scrollX.value + mouseX) / previous
-      scrollX.value = worldX * next - mouseX
-      pxPerDay.value = next
-      return
-    }
-
     scrollX.value += event.deltaX || event.deltaY
     if (event.shiftKey) {
       scrollY.value = Math.max(0, scrollY.value + event.deltaY)
@@ -210,18 +183,6 @@ export function InteractiveTimeline({
 
     if (!hit.action.start_date) return
 
-    if (hit.edge === 'left' || hit.edge === 'right') {
-      dragState.current = {
-        type: 'resize',
-        actionId: hit.action.id,
-        edge: hit.edge,
-        startMouseX: event.clientX,
-        originalStartDate: hit.action.start_date,
-        originalEndDate: hit.action.end_date ?? toISODate(new Date(new Date(hit.action.start_date).getTime() + 86400000)),
-      }
-      return
-    }
-
     dragState.current = {
       type: 'move',
       actionId: hit.action.id,
@@ -262,20 +223,6 @@ export function InteractiveTimeline({
       return
     }
 
-    if (drag?.type === 'resize') {
-      const dayDelta = (event.clientX - drag.startMouseX) / pxPerDay.value
-      if (drag.edge === 'right') {
-        const nextEnd = snapToDay(new Date(new Date(drag.originalEndDate).getTime() + dayDelta * 86400000))
-        if (nextEnd.getTime() <= new Date(drag.originalStartDate).getTime()) return
-        updateTimelineAction(drag.actionId, { end_date: toISODate(nextEnd) }, { markDirty: false })
-      } else {
-        const nextStart = snapToDay(new Date(new Date(drag.originalStartDate).getTime() + dayDelta * 86400000))
-        if (nextStart.getTime() >= new Date(drag.originalEndDate).getTime()) return
-        updateTimelineAction(drag.actionId, { start_date: toISODate(nextStart) }, { markDirty: false })
-      }
-      return
-    }
-
     const hit = hitTestAction(
       mouseX,
       mouseY,
@@ -287,7 +234,7 @@ export function InteractiveTimeline({
 
     if (hit) {
       hoveredId.value = hit.action.id
-      canvas.style.cursor = hit.edge ? 'ew-resize' : 'grab'
+      canvas.style.cursor = 'grab'
     } else {
       hoveredId.value = null
       canvas.style.cursor = mouseY < RULER_HEIGHT ? 'default' : 'crosshair'

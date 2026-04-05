@@ -3,12 +3,9 @@ import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale } from '../../state/app'
 import { currentDesign } from '../../state/document'
-import { currentCanvasSession } from '../../canvas/session'
 import { toISODate } from '../../canvas/timeline-math'
 import {
   addTimelineAction,
-  appendAutoTimelineActions,
-  buildDefaultTimelineActions,
   updateTimelineAction,
 } from '../../state/timeline-actions'
 import type { TimelineAction } from '../../types/design'
@@ -18,7 +15,7 @@ import styles from './TimelineTab.module.css'
 type ActionType = 'planting' | 'pruning' | 'harvest' | 'watering' | 'fertilising' | 'other'
 
 const ACTION_TYPES: ActionType[] = ['planting', 'pruning', 'harvest', 'watering', 'fertilising', 'other']
-const GRANULARITIES: Granularity[] = ['week', 'month', 'year']
+const GRANULARITIES: Granularity[] = ['month', 'year']
 
 interface FormState {
   action_type: string
@@ -36,7 +33,6 @@ const EMPTY_FORM: FormState = {
 
 export function TimelineTab() {
   void locale.value
-  const session = currentCanvasSession.value
 
   const granularity = useSignal<Granularity>('month')
   const selectedId = useSignal<string | null>(null)
@@ -108,20 +104,6 @@ export function TimelineTab() {
     cancelForm()
   }
 
-  function autoPopulate() {
-    const design = currentDesign.value
-    if (!design) return
-
-    const plants = session?.getPlacedPlants() ?? design.plants
-    const nextActions = buildDefaultTimelineActions(
-      plants,
-      design.timeline ?? [],
-      t('canvas.timeline.type_planting'),
-      t('canvas.timeline.type_harvest'),
-    )
-    appendAutoTimelineActions(nextActions)
-  }
-
   return (
     <div className={styles.container}>
       <div className={styles.header}>
@@ -142,9 +124,6 @@ export function TimelineTab() {
 
         <button type="button" className={styles.toolBtn} onClick={() => scrollToTodayRef.current?.()}>
           {t('canvas.timeline.todayMarker')}
-        </button>
-        <button type="button" className={styles.toolBtn} onClick={autoPopulate}>
-          {t('canvas.timeline.prePopulate')}
         </button>
         <div className={styles.headerSpacer} />
         {hasActions && <span className={styles.count}>{actions.length}</span>}

@@ -1,7 +1,8 @@
-import { t } from '../../i18n'
 import { locale } from '../../state/app'
-import { bottomPanelHeight, bottomPanelOpen } from '../../state/canvas'
+import { bottomPanelHeight, bottomPanelOpen, bottomPanelTab } from '../../state/canvas'
 import { setBottomPanelHeight } from '../../state/canvas-actions'
+import { TimelineTab } from './TimelineTab'
+import { BudgetTab } from './BudgetTab'
 import styles from './BottomPanel.module.css'
 
 export function BottomPanel() {
@@ -16,7 +17,8 @@ export function BottomPanel() {
     <div className={styles.panel} style={{ height: `${height}px` }}>
       <ResizeHandle />
       <div className={styles.content}>
-        <p className={styles.placeholder}>{t('canvas.bottomPanel.germinating')}</p>
+        {bottomPanelTab.value === 'timeline' && <TimelineTab />}
+        {bottomPanelTab.value === 'budget' && <BudgetTab />}
       </div>
     </div>
   )
