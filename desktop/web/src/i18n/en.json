@@ -302,28 +302,6 @@
       "yearView": "Year",
       "todayMarker": "Today"
     },
-    "consortium": {
-      "title": "Consortium",
-      "addConsortium": "Add consortium",
-      "editConsortium": "Edit consortium",
-      "deleteConsortium": "Delete consortium",
-      "name": "Name",
-      "namePlaceholder": "Consortium name",
-      "plants": "Plants",
-      "plantsPlaceholder": "Plant names, comma-separated",
-      "notes": "Notes",
-      "notesPlaceholder": "Optional notes",
-      "companion": "Companion",
-      "antagonist": "Antagonist",
-      "emptyState": "No consortiums yet",
-      "emptyHint": "Place companion plants to see relationships, or add a consortium manually",
-      "matrixTitle": "Strata-Succession Matrix",
-      "matrixHint": "Coming soon — a matrix view of your plants organized by syntropic strata and succession stages",
-      "save": "Save",
-      "cancel": "Cancel",
-      "edit": "Edit",
-      "delete": "Delete"
-    },
     "budget": {
       "title": "Budget",
       "addItem": "Add item",

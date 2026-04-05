@@ -1,6 +1,5 @@
 import { signal } from '@preact/signals'
 import type { Guide } from '../canvas/guides'
-import type { Consortium } from '../types/design'
 
 export const activeTool = signal<string>('select')
 export const zoomLevel = signal<number>(1)
@@ -91,10 +90,6 @@ export const plantStampSpecies = signal<PlantStampSpecies | null>(null)
 // Design location — mirror of currentDesign.location for canvas modules
 // (avoids circular import from state/design.ts)
 export const designLocation = signal<{ lat: number; lon: number } | null>(null)
-
-// Consortium — mirror of currentDesign.consortiums for canvas modules
-export const currentConsortiums = signal<Consortium[]>([])
-export const highlightedConsortium = signal<string | null>(null)
 
 // Bottom panel
 export type BottomPanelTab = 'timeline' | 'budget' | 'consortium'

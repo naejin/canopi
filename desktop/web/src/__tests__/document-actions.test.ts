@@ -54,7 +54,6 @@ vi.mock('../i18n', () => ({
 
 import {
   activeTool,
-  highlightedConsortium,
   lockedObjectIds,
   selectedObjectIds,
 } from '../state/canvas'
@@ -87,7 +86,6 @@ function makeFile(name: string): CanopiFile {
     plants: [],
     zones: [],
     annotations: [],
-    consortiums: [],
     timeline: [],
     budget: [],
     created_at: '2026-03-29T00:00:00.000Z',
@@ -158,8 +156,6 @@ beforeEach(() => {
   activeTool.value = 'rectangle'
   selectedObjectIds.value = new Set(['selected-1'])
   lockedObjectIds.value = new Set(['locked-1'])
-  highlightedConsortium.value = 'consortium-1'
-
   mocks.canvasSession.serializeDocument.mockClear()
 })
 

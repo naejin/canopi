@@ -6,7 +6,6 @@ export type SceneDiffKind =
   | 'plants'
   | 'zones'
   | 'annotations'
-  | 'consortiums'
   | 'groups'
   | 'plantSpeciesColors'
   | 'extra'
@@ -24,7 +23,6 @@ type PersistedPatchKey =
   | 'plants'
   | 'zones'
   | 'annotations'
-  | 'consortiums'
   | 'groups'
   | 'createdAt'
   | 'updatedAt'
@@ -66,7 +64,6 @@ const PATCH_KEYS: PersistedPatchKey[] = [
   'plants',
   'zones',
   'annotations',
-  'consortiums',
   'groups',
   'createdAt',
   'updatedAt',
@@ -84,7 +81,6 @@ const DIFF_BY_KEY: Record<PersistedPatchKey, SceneDiffKind> = {
   plants: 'plants',
   zones: 'zones',
   annotations: 'annotations',
-  consortiums: 'consortiums',
   groups: 'groups',
   createdAt: 'meta',
   updatedAt: 'meta',

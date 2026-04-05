@@ -302,28 +302,6 @@
       "yearView": "년",
       "todayMarker": "오늘"
     },
-    "consortium": {
-      "title": "컨소시엄",
-      "addConsortium": "컨소시엄 추가",
-      "editConsortium": "컨소시엄 편집",
-      "deleteConsortium": "컨소시엄 삭제",
-      "name": "이름",
-      "namePlaceholder": "컨소시엄 이름",
-      "plants": "식물",
-      "plantsPlaceholder": "식물 이름 (쉼표로 구분)",
-      "notes": "메모",
-      "notesPlaceholder": "선택 사항 메모",
-      "companion": "공생",
-      "antagonist": "길항",
-      "emptyState": "아직 컨소시엄이 없습니다",
-      "emptyHint": "공생 식물을 배치하여 관계를 확인하거나 직접 컨소시엄을 추가하세요",
-      "matrixTitle": "층위-천이 매트릭스",
-      "matrixHint": "준비 중 — 신열대 층위와 천이 단계별로 식물을 정리한 매트릭스 뷰",
-      "save": "저장",
-      "cancel": "취소",
-      "edit": "편집",
-      "delete": "삭제"
-    },
     "budget": {
       "title": "예산",
       "addItem": "항목 추가",

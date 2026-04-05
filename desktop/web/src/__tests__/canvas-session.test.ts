@@ -30,7 +30,6 @@ const FILE: CanopiFile = {
   }],
   zones: [],
   annotations: [],
-  consortiums: [],
   groups: [],
   timeline: [],
   budget: [],

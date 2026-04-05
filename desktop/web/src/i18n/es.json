@@ -302,28 +302,6 @@
       "yearView": "Año",
       "todayMarker": "Hoy"
     },
-    "consortium": {
-      "title": "Consorcio",
-      "addConsortium": "Añadir consorcio",
-      "editConsortium": "Editar consorcio",
-      "deleteConsortium": "Eliminar consorcio",
-      "name": "Nombre",
-      "namePlaceholder": "Nombre del consorcio",
-      "plants": "Plantas",
-      "plantsPlaceholder": "Nombres de plantas, separados por comas",
-      "notes": "Notas",
-      "notesPlaceholder": "Notas opcionales",
-      "companion": "Compañera",
-      "antagonist": "Antagonista",
-      "emptyState": "Sin consorcios",
-      "emptyHint": "Coloca plantas compañeras para ver relaciones, o añade un consorcio manualmente",
-      "save": "Guardar",
-      "cancel": "Cancelar",
-      "edit": "Editar",
-      "delete": "Eliminar",
-      "matrixTitle": "Matriz estrato-sucesión",
-      "matrixHint": "Próximamente — vista matricial de plantas por estrato sintrópico y etapa de sucesión"
-    },
     "budget": {
       "title": "Presupuesto",
       "addItem": "Añadir partida",

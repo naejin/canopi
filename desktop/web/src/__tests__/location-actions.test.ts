@@ -16,7 +16,6 @@ beforeEach(() => {
     layers: [],
     plants: [],
     zones: [],
-    consortiums: [],
     groups: [],
     timeline: [],
     budget: [],

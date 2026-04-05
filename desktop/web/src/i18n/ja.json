@@ -302,28 +302,6 @@
       "yearView": "年",
       "todayMarker": "今日"
     },
-    "consortium": {
-      "title": "コンソーシアム",
-      "addConsortium": "コンソーシアムを追加",
-      "editConsortium": "コンソーシアムを編集",
-      "deleteConsortium": "コンソーシアムを削除",
-      "name": "名前",
-      "namePlaceholder": "コンソーシアム名",
-      "plants": "植物",
-      "plantsPlaceholder": "植物名（カンマ区切り）",
-      "notes": "メモ",
-      "notesPlaceholder": "任意のメモ",
-      "companion": "共生植物",
-      "antagonist": "拮抗植物",
-      "emptyState": "コンソーシアムはまだありません",
-      "emptyHint": "共生植物を配置して関係を確認するか、手動でコンソーシアムを追加してください",
-      "matrixTitle": "階層・遷移マトリクス",
-      "matrixHint": "近日公開 — シントロピー農法の階層と遷移段階で植物を整理するマトリクスビュー",
-      "save": "保存",
-      "cancel": "キャンセル",
-      "edit": "編集",
-      "delete": "削除"
-    },
     "budget": {
       "title": "予算",
       "addItem": "項目を追加",

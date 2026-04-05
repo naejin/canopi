@@ -78,10 +78,10 @@ export interface ObjectGroup {
 }
 
 export interface Consortium {
-  id: string
-  name: string
-  plant_ids: string[]
-  notes: string | null
+  canonical_name: string
+  stratum: string
+  start_phase: number
+  end_phase: number
 }
 
 export interface TimelineAction {

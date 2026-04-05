@@ -302,28 +302,6 @@
       "yearView": "Jaar",
       "todayMarker": "Vandaag"
     },
-    "consortium": {
-      "title": "Consortium",
-      "addConsortium": "Consortium toevoegen",
-      "editConsortium": "Consortium bewerken",
-      "deleteConsortium": "Consortium verwijderen",
-      "name": "Naam",
-      "namePlaceholder": "Naam consortium",
-      "plants": "Planten",
-      "plantsPlaceholder": "Plantnamen, kommagescheiden",
-      "notes": "Notities",
-      "notesPlaceholder": "Optionele notities",
-      "companion": "Begeleidend",
-      "antagonist": "Antagonist",
-      "emptyState": "Nog geen consortia",
-      "emptyHint": "Plaats begeleidende planten om relaties te zien, of voeg handmatig een consortium toe",
-      "matrixTitle": "Strata-successiematrix",
-      "matrixHint": "Binnenkort beschikbaar — een matrixweergave van je planten geordend op syntroop stratum en successiefase",
-      "save": "Opslaan",
-      "cancel": "Annuleren",
-      "edit": "Bewerken",
-      "delete": "Verwijderen"
-    },
     "budget": {
       "title": "Budget",
       "addItem": "Item toevoegen",

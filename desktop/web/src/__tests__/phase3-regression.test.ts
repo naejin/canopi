@@ -19,7 +19,7 @@ describe('persistent plant IDs', () => {
     const raw = {
       version: 1, name: 'test', description: null, location: null,
       north_bearing_deg: 0, plant_species_colors: {}, layers: [], plants: [], zones: [],
-      consortiums: [], groups: [{ id: 'g1', name: null, layer: 'zones', position: { x: 0, y: 0 }, rotation: null, member_ids: ['a', 'b'] }],
+      groups: [{ id: 'g1', name: null, layer: 'zones', position: { x: 0, y: 0 }, rotation: null, member_ids: ['a', 'b'] }],
       timeline: [], budget: [], created_at: '', updated_at: '',
     }
     const extra = extractExtra(raw as Record<string, unknown>)

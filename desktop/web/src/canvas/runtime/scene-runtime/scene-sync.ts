@@ -1,9 +1,7 @@
 import { batch } from '@preact/signals'
 import {
-  currentConsortiums,
   designLocation,
   guides,
-  highlightedConsortium,
   layerLockState,
   layerOpacity,
   layerVisibility,
@@ -38,7 +36,6 @@ export function resetTransientRuntimeState(
   setTool('select')
   clearCanvasSelection()
   lockedObjectIds.value = new Set()
-  highlightedConsortium.value = null
   plantColorMenuOpen.value = false
 }
 
@@ -57,7 +54,6 @@ export function syncCanvasSignalsFromDocument(file: CanopiFile): void {
     layerLockState.value = locks
     layerOpacity.value = opacities
     plantSpeciesColors.value = { ...file.plant_species_colors }
-    currentConsortiums.value = file.consortiums ?? []
     guides.value = Array.isArray(file.extra?.guides) ? file.extra.guides as never[] : []
     northBearingDeg.value = file.north_bearing_deg ?? 0
     designLocation.value = file.location ? { lat: file.location.lat, lon: file.location.lon } : null

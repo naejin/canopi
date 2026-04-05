@@ -23,7 +23,6 @@ const BASE_FILE: CanopiFile = {
   plants: [],
   zones: [],
   annotations: [],
-  consortiums: [],
   groups: [],
   timeline: [],
   budget: [],
@@ -134,10 +133,10 @@ describe('SceneCanvasRuntime', () => {
           currency: 'EUR',
         }],
         consortiums: [{
-          id: 'consortium-1',
-          name: 'North bed',
-          plant_ids: ['plant-1'],
-          notes: null,
+          canonical_name: 'Quercus robur',
+          stratum: 'high',
+          start_phase: 0,
+          end_phase: 3,
         }],
         extra: {
           guides: [{ id: 'guide-1', axis: 'h', position: 42 }],

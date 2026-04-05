@@ -44,7 +44,6 @@ export function createDefaultScenePersistedState(now: Date = new Date()): SceneP
     plants: [],
     zones: [],
     annotations: [],
-    consortiums: [],
     groups: [],
     createdAt: timestamp,
     updatedAt: timestamp,

@@ -1,6 +1,6 @@
 import { batch } from '@preact/signals'
 import type { CanopiFile } from '../types/design'
-import { currentConsortiums, designLocation } from './canvas'
+import { designLocation } from './canvas'
 import { currentDesign, nonCanvasRevision } from './design'
 
 interface DocumentMutationOptions {
@@ -8,7 +8,6 @@ interface DocumentMutationOptions {
 }
 
 export function syncDocumentMirrors(file: CanopiFile | null): void {
-  currentConsortiums.value = file?.consortiums ?? []
   designLocation.value = file?.location
     ? { lat: file.location.lat, lon: file.location.lon }
     : null

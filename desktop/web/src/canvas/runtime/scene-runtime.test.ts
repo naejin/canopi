@@ -8,7 +8,6 @@ vi.mock('../../ipc/species', () => ({
 import {
   activeTool,
   guides,
-  highlightedConsortium,
   layerOpacity,
   layerVisibility,
   lockedObjectIds,
@@ -119,7 +118,6 @@ describe('scene canvas runtime', () => {
     locale.value = 'en'
     selectedObjectIds.value = new Set()
     lockedObjectIds.value = new Set()
-    highlightedConsortium.value = null
     plantColorMenuOpen.value = false
     plantStampSpecies.value = null
     snapToGridEnabled.value = false
@@ -293,7 +291,6 @@ describe('scene canvas runtime', () => {
       width_max_m: 4,
     }
     plantColorMenuOpen.value = true
-    highlightedConsortium.value = 'consortium-1'
     lockedObjectIds.value = new Set(['zone-1'])
     selectedObjectIds.value = new Set(['plant-1'])
     runtime.getSceneStore().setSelection(['plant-1'])
@@ -306,7 +303,6 @@ describe('scene canvas runtime', () => {
     expect(activeTool.value).toBe('select')
     expect(plantStampSpecies.value).toBe(null)
     expect(plantColorMenuOpen.value).toBe(false)
-    expect(highlightedConsortium.value).toBe(null)
     expect(lockedObjectIds.value.size).toBe(0)
     expect(selectedObjectIds.value.size).toBe(0)
     runtime.destroy()

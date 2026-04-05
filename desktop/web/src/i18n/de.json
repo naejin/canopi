@@ -302,28 +302,6 @@
       "yearView": "Jahr",
       "todayMarker": "Heute"
     },
-    "consortium": {
-      "title": "Konsortium",
-      "addConsortium": "Konsortium hinzufügen",
-      "editConsortium": "Konsortium bearbeiten",
-      "deleteConsortium": "Konsortium löschen",
-      "name": "Name",
-      "namePlaceholder": "Konsortiumsname",
-      "plants": "Pflanzen",
-      "plantsPlaceholder": "Pflanzennamen, kommagetrennt",
-      "notes": "Notizen",
-      "notesPlaceholder": "Optionale Notizen",
-      "companion": "Begleitpflanze",
-      "antagonist": "Antagonist",
-      "emptyState": "Noch keine Konsortien",
-      "emptyHint": "Platzieren Sie Begleitpflanzen, um Beziehungen zu sehen, oder fügen Sie ein Konsortium manuell hinzu",
-      "matrixTitle": "Schichten-Sukzessions-Matrix",
-      "matrixHint": "Demnächst — eine Matrixansicht Ihrer Pflanzen, organisiert nach syntropischen Schichten und Sukzessionsstufen",
-      "save": "Speichern",
-      "cancel": "Abbrechen",
-      "edit": "Bearbeiten",
-      "delete": "Löschen"
-    },
     "budget": {
       "title": "Budget",
       "addItem": "Posten hinzufügen",

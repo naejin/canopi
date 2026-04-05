@@ -83,21 +83,12 @@ export interface SceneObjectGroupEntity {
   memberIds: string[]
 }
 
-export interface SceneConsortiumEntity {
-  kind: 'consortium'
-  id: string
-  name: string
-  plantIds: string[]
-  notes: string | null
-}
-
 export type SceneEntity =
   | SceneLayerEntity
   | ScenePlantEntity
   | SceneZoneEntity
   | SceneAnnotationEntity
   | SceneObjectGroupEntity
-  | SceneConsortiumEntity
 
 export interface ScenePersistedState {
   version: number
@@ -110,7 +101,6 @@ export interface ScenePersistedState {
   plants: ScenePlantEntity[]
   zones: SceneZoneEntity[]
   annotations: SceneAnnotationEntity[]
-  consortiums: SceneConsortiumEntity[]
   groups: SceneObjectGroupEntity[]
   createdAt: string
   updatedAt: string

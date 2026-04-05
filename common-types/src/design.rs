@@ -86,13 +86,10 @@ pub struct Annotation {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct Consortium {
-    #[serde(default)]
-    pub id: String,
-    pub name: String,
-    /// Placed-plant IDs (from 3-pre). Legacy files may have canonical names here instead.
-    #[serde(alias = "plants")]
-    pub plant_ids: Vec<String>,
-    pub notes: Option<String>,
+    pub canonical_name: String,
+    pub stratum: String,
+    pub start_phase: u32,
+    pub end_phase: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]

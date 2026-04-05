@@ -1,7 +1,6 @@
 import type {
   Annotation,
   CanopiFile,
-  Consortium,
   Layer,
   Location,
   ObjectGroup,
@@ -10,7 +9,6 @@ import type {
 } from '../../../types/design'
 import type {
   SceneAnnotationEntity,
-  SceneConsortiumEntity,
   SceneLayerEntity,
   SceneLocation,
   SceneObjectGroupEntity,
@@ -36,7 +34,6 @@ export function hydrateScenePersistedState(file: CanopiFile): ScenePersistedStat
     plants: file.plants.map(hydratePlantEntity),
     zones: file.zones.map(hydrateZoneEntity),
     annotations: (file.annotations ?? []).map(hydrateAnnotationEntity),
-    consortiums: (file.consortiums ?? []).map(hydrateConsortiumEntity),
     groups: (file.groups ?? []).map(hydrateGroupEntity),
     createdAt: file.created_at,
     updatedAt: file.updated_at,
@@ -61,7 +58,6 @@ export function serializeScenePersistedState(
     plants: state.plants.map(serializePlantEntity),
     zones: state.zones.map(serializeZoneEntity),
     annotations: state.annotations.map(serializeAnnotationEntity),
-    consortiums: state.consortiums.map(serializeConsortiumEntity),
     groups: state.groups.map(serializeGroupEntity),
     created_at: state.createdAt,
     updated_at: now.toISOString(),
@@ -78,7 +74,6 @@ export function cloneScenePersistedState(state: ScenePersistedState): ScenePersi
     plants: state.plants.map(clonePlantEntity),
     zones: state.zones.map(cloneZoneEntity),
     annotations: state.annotations.map(cloneAnnotationEntity),
-    consortiums: state.consortiums.map(cloneConsortiumEntity),
     groups: state.groups.map(cloneGroupEntity),
     extra: { ...state.extra },
   }
@@ -276,31 +271,6 @@ function cloneGroupEntity(group: SceneObjectGroupEntity): SceneObjectGroupEntity
   }
 }
 
-function hydrateConsortiumEntity(consortium: Consortium): SceneConsortiumEntity {
-  return {
-    kind: 'consortium',
-    id: consortium.id,
-    name: consortium.name,
-    plantIds: [...consortium.plant_ids],
-    notes: consortium.notes,
-  }
-}
-
-function serializeConsortiumEntity(consortium: SceneConsortiumEntity): Consortium {
-  return {
-    id: consortium.id,
-    name: consortium.name,
-    plant_ids: [...consortium.plantIds],
-    notes: consortium.notes,
-  }
-}
-
-function cloneConsortiumEntity(consortium: SceneConsortiumEntity): SceneConsortiumEntity {
-  return {
-    ...consortium,
-    plantIds: [...consortium.plantIds],
-  }
-}
 
 function clonePoint(point: { x: number; y: number }): { x: number; y: number } {
   return {

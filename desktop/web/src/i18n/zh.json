@@ -302,28 +302,6 @@
       "yearView": "年",
       "todayMarker": "今天"
     },
-    "consortium": {
-      "title": "共生组合",
-      "addConsortium": "添加共生组合",
-      "editConsortium": "编辑共生组合",
-      "deleteConsortium": "删除共生组合",
-      "name": "名称",
-      "namePlaceholder": "共生组合名称",
-      "plants": "植物",
-      "plantsPlaceholder": "植物名称，用逗号分隔",
-      "notes": "备注",
-      "notesPlaceholder": "可选备注",
-      "companion": "伴生植物",
-      "antagonist": "拮抗植物",
-      "emptyState": "暂无共生组合",
-      "emptyHint": "放置伴生植物以查看关系，或手动添加共生组合",
-      "save": "保存",
-      "cancel": "取消",
-      "edit": "编辑",
-      "delete": "删除",
-      "matrixTitle": "层级演替矩阵",
-      "matrixHint": "即将推出 — 按协同种植层级和演替阶段排列的植物矩阵视图"
-    },
     "budget": {
       "title": "预算",
       "addItem": "添加条目",
