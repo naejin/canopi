@@ -11,11 +11,12 @@ import {
   buildConsortiumBars,
   renderConsortium,
   hitTestBar,
+  computeRowHeights,
+  rowY as computeRowY,
   xToPhase,
   STRATA_ROWS,
   HEADER_HEIGHT,
   LABEL_WIDTH,
-  ROW_HEIGHT,
   CONSORTIUM_PHASES,
   type ConsortiumRenderState,
 } from '../../canvas/consortium-renderer'
@@ -61,6 +62,9 @@ export function ConsortiumChart() {
     () => buildConsortiumBars(consortiums, plants, colors),
     [consortiums, plants, colors],
   )
+  const rowHeights = useMemo(() => computeRowHeights(bars), [bars])
+  const rowHeightsRef = useRef(rowHeights)
+  rowHeightsRef.current = rowHeights
   const barsRef = useRef(bars)
   barsRef.current = bars
 
@@ -112,11 +116,15 @@ export function ConsortiumChart() {
     if (!canvas) return
 
     const rect = canvas.getBoundingClientRect()
-    if (rect.width === 0 || rect.height === 0) return
+    if (rect.width === 0) return
+
+    const rh = rowHeightsRef.current
+    const totalHeight = HEADER_HEIGHT + rh.reduce((a, b) => a + b, 0)
+    canvas.style.height = `${totalHeight}px`
 
     const dpr = window.devicePixelRatio || 1
     canvas.width = rect.width * dpr
-    canvas.height = rect.height * dpr
+    canvas.height = totalHeight * dpr
 
     const ctx = canvas.getContext('2d')
     if (!ctx) return
@@ -126,7 +134,7 @@ export function ConsortiumChart() {
       hoveredCanonical: hoveredCanonical.value,
       selectedCanonical: null,
     }
-    renderConsortium(ctx, rect.width, rect.height, barsRef.current, state, t)
+    renderConsortium(ctx, rect.width, totalHeight, barsRef.current, state, t, rh)
   }
 
   useSignalEffect(() => {
@@ -160,7 +168,7 @@ export function ConsortiumChart() {
     const mouseX = event.clientX - rect.left
     const mouseY = event.clientY - rect.top
 
-    const hit = hitTestBar(mouseX, mouseY, barsRef.current, rect.width, rect.height)
+    const hit = hitTestBar(mouseX, mouseY, barsRef.current, rect.width, rect.height, rowHeightsRef.current)
     if (!hit) return
 
     const bar = barsRef.current.find((b) => b.canonicalName === hit.canonicalName)
@@ -206,7 +214,14 @@ export function ConsortiumChart() {
       const newEnd = Math.min(CONSORTIUM_PHASES.length - 1, newStart + duration)
       const adjustedStart = newEnd - duration
 
-      const rowIndex = Math.max(0, Math.min(STRATA_ROWS.length - 1, Math.floor((mouseY - HEADER_HEIGHT) / ROW_HEIGHT)))
+      // Find which stratum row the mouse Y falls into using dynamic row heights
+      let rowIndex = STRATA_ROWS.length - 1
+      const rh = rowHeightsRef.current
+      for (let i = 0; i < STRATA_ROWS.length; i++) {
+        const ry = computeRowY(i + 1, rh)
+        if (mouseY < ry) { rowIndex = i; break }
+      }
+      rowIndex = Math.max(0, Math.min(STRATA_ROWS.length - 1, rowIndex))
       const newStratum = STRATA_ROWS[rowIndex] ?? 'unassigned'
 
       // Skip no-op updates to avoid unconditional signal writes at 60fps
@@ -236,7 +251,7 @@ export function ConsortiumChart() {
     }
 
     // Not dragging — update hover and cursor
-    const hit = hitTestBar(mouseX, mouseY, barsRef.current, rect.width, rect.height)
+    const hit = hitTestBar(mouseX, mouseY, barsRef.current, rect.width, rect.height, rowHeightsRef.current)
     if (hit) {
       if (hoveredCanonical.value !== hit.canonicalName) {
         hoveredCanonical.value = hit.canonicalName

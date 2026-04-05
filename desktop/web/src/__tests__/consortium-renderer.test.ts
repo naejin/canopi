@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   buildConsortiumBars,
   hitTestBar,
+  computeRowHeights,
+  rowY as computeRowY,
   phaseToX,
   xToPhase,
   stratumToRow,
-  HEADER_HEIGHT,
   LABEL_WIDTH,
-  ROW_HEIGHT,
 } from '../canvas/consortium-renderer'
 import type { ConsortiumBarLayout } from '../canvas/consortium-renderer'
 import type { Consortium, PlacedPlant } from '../types/design'
@@ -132,23 +132,26 @@ describe('hitTestBar', () => {
   }
 
   it('returns null when no bars exist', () => {
-    const result = hitTestBar(200, 100, [], totalWidth, totalHeight)
+    const rowHeights = computeRowHeights([])
+    const result = hitTestBar(200, 100, [], totalWidth, totalHeight, rowHeights)
     expect(result).toBeNull()
   })
 
   it('detects body hit on a bar', () => {
     const bar = makeBar({ stratum: 'high', startPhase: 1, endPhase: 3 })
     const bars = [bar]
+    const rowHeights = computeRowHeights(bars)
 
     // Compute expected pixel coordinates
     const rowIdx = stratumToRow('high') // 1
-    const rowY = HEADER_HEIGHT + rowIdx * ROW_HEIGHT
+    const ry = computeRowY(rowIdx, rowHeights)
+    const rh = rowHeights[rowIdx]!
     const x1 = phaseToX(1, contentWidth)
     const x2 = phaseToX(4, contentWidth) // endPhase + 1
     const centerX = (x1 + x2) / 2
-    const centerY = rowY + ROW_HEIGHT / 2
+    const centerY = ry + rh / 2
 
-    const result = hitTestBar(centerX, centerY, bars, totalWidth, totalHeight)
+    const result = hitTestBar(centerX, centerY, bars, totalWidth, totalHeight, rowHeights)
     expect(result).not.toBeNull()
     expect(result!.edge).toBe('body')
     expect(result!.canonicalName).toBe('Malus domestica')
@@ -157,21 +160,23 @@ describe('hitTestBar', () => {
   it('detects edge hits for resize', () => {
     const bar = makeBar({ stratum: 'high', startPhase: 1, endPhase: 3 })
     const bars = [bar]
+    const rowHeights = computeRowHeights(bars)
 
     const rowIdx = stratumToRow('high')
-    const rowY = HEADER_HEIGHT + rowIdx * ROW_HEIGHT
+    const ry = computeRowY(rowIdx, rowHeights)
+    const rh = rowHeights[rowIdx]!
     const x1 = phaseToX(1, contentWidth)
     const x2 = phaseToX(4, contentWidth) // endPhase + 1
     const barW = Math.max(x2 - x1, 6)
-    const centerY = rowY + ROW_HEIGHT / 2
+    const centerY = ry + rh / 2
 
     // Hit near left edge (within 6px threshold)
-    const leftResult = hitTestBar(x1 + 2, centerY, bars, totalWidth, totalHeight)
+    const leftResult = hitTestBar(x1 + 2, centerY, bars, totalWidth, totalHeight, rowHeights)
     expect(leftResult).not.toBeNull()
     expect(leftResult!.edge).toBe('left')
 
     // Hit near right edge (within 6px threshold)
-    const rightResult = hitTestBar(x1 + barW - 2, centerY, bars, totalWidth, totalHeight)
+    const rightResult = hitTestBar(x1 + barW - 2, centerY, bars, totalWidth, totalHeight, rowHeights)
     expect(rightResult).not.toBeNull()
     expect(rightResult!.edge).toBe('right')
   })

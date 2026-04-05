@@ -19,7 +19,8 @@ export const CONSORTIUM_PHASES = [
 
 export const STRATA_ROWS = ['emergent', 'high', 'medium', 'low', 'unassigned'] as const
 
-export const ROW_HEIGHT = 52
+export const MIN_ROW_HEIGHT = 36
+export const LANE_HEIGHT = 32
 export const HEADER_HEIGHT = 36
 export const LABEL_WIDTH = 130
 const BAR_HEIGHT = 26
@@ -69,6 +70,25 @@ export function xToPhase(x: number, contentWidth: number): number {
 export function stratumToRow(stratum: string): number {
   const idx = (STRATA_ROWS as readonly string[]).indexOf(stratum)
   return idx === -1 ? 4 : idx
+}
+
+// ---------------------------------------------------------------------------
+// Dynamic row sizing
+// ---------------------------------------------------------------------------
+
+export function computeRowHeights(bars: ConsortiumBarLayout[]): number[] {
+  const laneCounts = new Array(STRATA_ROWS.length).fill(1) as number[]
+  for (const bar of bars) {
+    const rowIdx = stratumToRow(bar.stratum)
+    laneCounts[rowIdx] = Math.max(laneCounts[rowIdx]!, bar.totalSubLanes)
+  }
+  return laneCounts.map(lanes => Math.max(MIN_ROW_HEIGHT, lanes * LANE_HEIGHT))
+}
+
+export function rowY(rowIndex: number, rowHeights: number[]): number {
+  let y = HEADER_HEIGHT
+  for (let i = 0; i < rowIndex; i++) y += (rowHeights[i] ?? MIN_ROW_HEIGHT)
+  return y
 }
 
 // ---------------------------------------------------------------------------
@@ -155,6 +175,7 @@ export function renderConsortium(
   bars: ConsortiumBarLayout[],
   state: ConsortiumRenderState,
   t: (key: string) => string,
+  rowHeights: number[],
 ): void {
   const bgColor = cssVar('--color-bg') || '#E6E0D4'
   const surfaceColor = cssVar('--color-surface') || '#EDE8DD'
@@ -166,7 +187,7 @@ export function renderConsortium(
   const fontSans = cssVar('--font-sans') || 'Inter, system-ui, sans-serif'
 
   const contentWidth = width - LABEL_WIDTH
-  const gridHeight = STRATA_ROWS.length * ROW_HEIGHT
+  const gridHeight = rowHeights.reduce((a, b) => a + b, 0)
 
   ctx.clearRect(0, 0, width, height)
 
@@ -176,9 +197,10 @@ export function renderConsortium(
 
   // -- Alternating row backgrounds --------------------------------------------
   for (let r = 0; r < STRATA_ROWS.length; r++) {
-    const rowY = HEADER_HEIGHT + r * ROW_HEIGHT
+    const ry = rowY(r, rowHeights)
+    const rh = rowHeights[r] ?? MIN_ROW_HEIGHT
     ctx.fillStyle = r % 2 === 0 ? surfaceColor : surfaceMuted
-    ctx.fillRect(LABEL_WIDTH, rowY, contentWidth, ROW_HEIGHT)
+    ctx.fillRect(LABEL_WIDTH, ry, contentWidth, rh)
   }
 
   // -- Label sidebar ----------------------------------------------------------
@@ -211,14 +233,15 @@ export function renderConsortium(
   // -- Row labels -------------------------------------------------------------
   for (let r = 0; r < STRATA_ROWS.length; r++) {
     const stratum = STRATA_ROWS[r]!
-    const rowY = HEADER_HEIGHT + r * ROW_HEIGHT
-    const labelY = rowY + ROW_HEIGHT / 2
+    const ry = rowY(r, rowHeights)
+    const rh = rowHeights[r] ?? MIN_ROW_HEIGHT
+    const labelY = ry + rh / 2
 
     ctx.fillStyle = textColor
     ctx.font = `600 11px ${fontSans}`
     ctx.save()
     ctx.beginPath()
-    ctx.rect(0, rowY, LABEL_WIDTH - 4, ROW_HEIGHT)
+    ctx.rect(0, ry, LABEL_WIDTH - 4, rh)
     ctx.clip()
     ctx.fillText(t('canvas.consortium.' + stratum), 10, labelY + 4)
     ctx.restore()
@@ -242,7 +265,7 @@ export function renderConsortium(
 
   // Horizontal row dividers
   for (let r = 1; r <= STRATA_ROWS.length; r++) {
-    const y = HEADER_HEIGHT + r * ROW_HEIGHT + 0.5
+    const y = rowY(r, rowHeights) + 0.5
     ctx.beginPath()
     ctx.moveTo(0, y)
     ctx.lineTo(width, y)
@@ -263,13 +286,14 @@ export function renderConsortium(
   // -- Bars -------------------------------------------------------------------
   for (const bar of bars) {
     const rowIdx = stratumToRow(bar.stratum)
-    const rowY = HEADER_HEIGHT + rowIdx * ROW_HEIGHT
-    const subLaneH = ROW_HEIGHT / bar.totalSubLanes
+    const ry = rowY(rowIdx, rowHeights)
+    const rh = rowHeights[rowIdx] ?? MIN_ROW_HEIGHT
+    const subLaneH = rh / bar.totalSubLanes
 
     const x1 = phaseToX(bar.startPhase, contentWidth)
     const x2 = phaseToX(bar.endPhase + 1, contentWidth)
     const barW = Math.max(x2 - x1, 8)
-    const barY = rowY + bar.subLane * subLaneH + BAR_MARGIN
+    const barY = ry + bar.subLane * subLaneH + BAR_MARGIN
     const barH = Math.min(BAR_HEIGHT, subLaneH - BAR_MARGIN * 2)
 
     const isHovered = bar.canonicalName === state.hoveredCanonical
@@ -341,6 +365,7 @@ export function hitTestBar(
   bars: ConsortiumBarLayout[],
   width: number,
   _height: number,
+  rowHeights: number[],
 ): ConsortiumHitResult | null {
   const contentWidth = width - LABEL_WIDTH
 
@@ -348,13 +373,14 @@ export function hitTestBar(
 
   for (const bar of bars) {
     const rowIdx = stratumToRow(bar.stratum)
-    const rowY = HEADER_HEIGHT + rowIdx * ROW_HEIGHT
-    const subLaneH = ROW_HEIGHT / bar.totalSubLanes
+    const ry = rowY(rowIdx, rowHeights)
+    const rh = rowHeights[rowIdx] ?? MIN_ROW_HEIGHT
+    const subLaneH = rh / bar.totalSubLanes
 
     const x1 = phaseToX(bar.startPhase, contentWidth)
     const x2 = phaseToX(bar.endPhase + 1, contentWidth)
     const barW = Math.max(x2 - x1, 8)
-    const barY = rowY + bar.subLane * subLaneH + BAR_MARGIN
+    const barY = ry + bar.subLane * subLaneH + BAR_MARGIN
     const barH = Math.min(BAR_HEIGHT, subLaneH - BAR_MARGIN * 2)
 
     if (x >= x1 && x <= x1 + barW && y >= barY && y <= barY + barH) {
