@@ -9,7 +9,8 @@ Keep one active source of truth per topic and avoid rereading or rewriting the w
 ## Before Editing
 
 1. Identify the doc category first:
-   - active rewrite and blockers: `docs/todo.md`
+   - active and deferred work: `docs/todo.md`
+   - architecture rationale: `docs/code-quality-architecture-review-2026-04-05.md`
    - release operations: `docs/release-operations.md`
    - release verification: `docs/release-verification.md`
    - historical roadmap: `docs/roadmap.md`

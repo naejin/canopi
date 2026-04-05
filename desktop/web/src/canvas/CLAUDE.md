@@ -6,12 +6,12 @@ The live canvas now runs through `SceneCanvasRuntime`.
 
 Production ownership is:
 - `CanvasPanel` mounts `SceneCanvasRuntime`
-- `CanvasSession` is the only app-facing canvas seam
-- `SceneStore` is the only source of truth for canvas/document state
+- `SceneCanvasRuntime` is the app-facing canvas authority (via interface, not the `CanvasSession` pass-through — see Public Seams below)
+- `SceneStore` is the source of truth for **canvas scene state** (plants, zones, annotations, groups, layers, plant-species-colors). Non-canvas document sections (consortiums, timeline, budget) are owned by the document store — see root `CLAUDE.md` Document Authority Rule
 - `RendererHost` owns backend selection, startup fallback, and runtime recovery
 - `PixiJS` is the primary world renderer
 - `Canvas2D` is the fallback renderer
-- the location/map flow is handled by a separate location shell and should not be treated as part of the canvas panel contract
+- MapLibre is a derived visualization layer managed by a dedicated controller, not embedded in the canvas runtime (see root `CLAUDE.md` MapLibre Integration Rule)
 
 Landed in the live path:
 - scene-owned load/replace/save flows
@@ -24,19 +24,20 @@ Legacy Konva / `CanvasEngine` code may still exist in-tree as superseded history
 ## Architecture Rules
 
 ### Public Seams
-- `CanvasSession` is the only app-facing canvas authority
-- `CanvasRuntime` is the execution seam behind `CanvasSession`
-- app code must not reach into renderer implementations or old engine internals
+- App code must not reach into renderer implementations or runtime internals
+- The app-facing canvas boundary should be a TypeScript interface implemented by `SceneCanvasRuntime`, not a 1:1 pass-through class. `CanvasSession` in its current form (200 lines of pure delegation) should be replaced with an interface or given real logic (validation, error boundaries, logging)
+- As bottom panels need to read canvas entity state (plant list, species, positions), consider splitting into two interfaces: one for **interaction commands** (tools, selection, history, zoom) and one for **state queries** (entity reads for panels, bounds for map sync). Both implemented by the runtime
 
 ### State Ownership
-- `SceneStore` owns persisted document state and ephemeral session state
-- commands, tools, save/load, and document replacement mutate scene state, not renderer objects
-- canvas-owned document fields serialize from the live scene, not from stale document input copies
-- top-level `annotations` belong in the schema; do not put live annotations back under `extra`
-- plant presentation state lives in `SceneStore.session`, not in standalone canvas signals
-- the only active presentation fields are `plantSizeMode` and `plantColorByAttr`
-- selection truth lives in `SceneStore.session.selectedEntityIds`
-- `CanvasSession.getSelection()/setSelection()/clearSelection()` are runtime-backed; canvas signals such as `selectedObjectIds`, `plantSizeMode`, and `plantColorByAttr` are UI mirrors, not runtime authority
+- `SceneStore` owns **canvas scene state**: plants, zones, annotations, groups, layers, plant-species-colors, and ephemeral session state (selection, viewport, hover, presentation modes)
+- Non-canvas document sections (consortiums, timeline, budget, location, description, extra) are **not** owned by `SceneStore` — they belong to the document store. See root `CLAUDE.md` Document Authority Rule
+- Commands, tools, save/load, and document replacement mutate scene state, not renderer objects
+- Canvas-owned document fields serialize from the live scene, not from stale document input copies
+- Top-level `annotations` belong in the schema; do not put live annotations back under `extra`
+- Plant presentation state lives in `SceneStore.session`, not in standalone canvas signals
+- The only active presentation fields are `plantSizeMode` and `plantColorByAttr`
+- Selection truth lives in `SceneStore.session.selectedEntityIds`
+- Canvas signals such as `selectedObjectIds`, `plantSizeMode`, and `plantColorByAttr` are UI mirrors, not runtime authority. Prefer computed/derived signals over manually-synced mirrors (see root `CLAUDE.md` Signal Mirror Rule)
 
 ### Rendering Ownership
 - `RendererHost` owns backend lifecycle, capability probing, and fallback
@@ -49,12 +50,11 @@ Legacy Konva / `CanvasEngine` code may still exist in-tree as superseded history
 
 ### Interaction Ownership
 - `SceneInteractionController` owns live pointer and drag behavior
-- location/map UI state stays in the location shell; do not pull `maplibre-gl` back into the canvas path
-- hit testing and selection geometry must stay scene-side
-- do not reintroduce Konva-node queries into live interaction paths
-- off-canvas drag continuation, multi-drag, and additive selection behavior are part of the contract
-- plant hit testing must use the same shared presentation context as renderers and fit/bounds logic
-- interaction selection writes must go through the runtime-owned selection seam; runtime logic must read authoritative selection from scene session
+- Hit testing and selection geometry must stay scene-side
+- Off-canvas drag continuation, multi-drag, and additive selection behavior are part of the contract
+- Plant hit testing must use the same shared presentation context as renderers and fit/bounds logic
+- Interaction selection writes must go through the runtime-owned selection seam; runtime logic must read authoritative selection from scene session
+- MapLibre interaction (map pan/zoom, click-on-map) is owned by the MapLibre controller, not by `SceneInteractionController`. The two coordinate through `CameraController` for viewport sync
 
 ### Annotation Rules
 - annotation geometry must come from shared helpers in `runtime/annotation-layout.ts`
@@ -91,34 +91,41 @@ Legacy Konva / `CanvasEngine` code may still exist in-tree as superseded history
 ## Runtime Split
 
 ```
-CanvasSession
-  └── CanvasRuntime
-      └── SceneCanvasRuntime
-          ├── SceneStore
-          ├── SceneInteractionController
-          ├── CameraController
-          ├── SceneHistory / SceneCommands
-          ├── RendererHost
-          │   ├── Pixi scene renderer
-          │   └── Canvas2D scene renderer
-          └── HTML rulers / overlay chrome
+App code
+  ├── CanvasRuntime interface (interaction + state queries)
+  │     └── SceneCanvasRuntime
+  │           ├── SceneStore (canvas scene state)
+  │           ├── SceneInteractionController
+  │           ├── CameraController
+  │           ├── SceneHistory / SceneCommands
+  │           ├── RendererHost
+  │           │   ├── Pixi scene renderer
+  │           │   └── Canvas2D scene renderer
+  │           └── HTML rulers / overlay chrome
+  ├── MapLibreController (derived visualization, sibling to runtime)
+  │     └── syncs viewport via CameraController
+  └── Document store (non-canvas state: consortiums, timeline, budget)
+        └── state/design.ts + state/document.ts
 ```
 
-## Active Cleanup Work
+## Active Work
 
-The rewrite cutover is complete. Konva dependency has been fully removed — all legacy factory functions, Konva-typed interfaces, and the `konva` package itself are gone. Remaining work is hardening:
-- keep save/load strictly scene-authoritative
-- keep annotation geometry consistent across runtime, interaction, and renderers
-- keep plant presentation state scene-session-owned and geometry consistent across all consumers
-- keep the location shell isolated from the canvas runtime and preserve the current lazy boundary around `maplibre-gl`
-- keep docs synchronized with the live scene runtime
+The rewrite cutover is complete. Konva dependency has been fully removed. Current focus is convergence for panel/map expansion:
+- Keep save/load strictly scene-authoritative for canvas entities
+- Keep annotation geometry consistent across runtime, interaction, and renderers
+- Keep plant presentation state scene-session-owned and geometry consistent across all consumers
+- Converge the save-time merge seam in `serializeDocument()` — non-canvas sections should come from the document store directly, not be re-merged into `SceneStore` at save time
+- Replace `CanvasSession` pass-through with a runtime interface (or give it real logic)
+- Preserve the lazy import boundary around `maplibre-gl` for bundle size
+- Keep docs synchronized with the live scene runtime
 
 ## Gotchas
 
-- `CanvasRuntime` no longer exposes `getEngine()`; do not add escape hatches back
-- command history is patch-based, not snapshot-based
-- selection/order/group logic works on scene entity IDs; preserve stable IDs
-- `SceneStore.toCanopiFile()` is the canonical serialization path for canvas state
+- Do not add `getEngine()`-style escape hatches that expose renderer internals to app code
+- Command history is patch-based, not snapshot-based. The diff uses `JSON.stringify` comparison — correct but O(n) on full persisted state. Watch for perf if designs grow large
+- Selection/order/group logic works on scene entity IDs; preserve stable IDs
+- `SceneStore.toCanopiFile()` is the canonical serialization path for canvas scene state
 - `computeSceneBounds()` must include annotation extents, not only annotation anchor points
 - `computeSceneBounds()` and grouping bounds must use the runtime plant presentation context, not raw `plant.scale`
-- species-wide plant colors are document state and must survive save/reload
+- Species-wide plant colors are document state and must survive save/reload
+- `ScenePersistedState` has a `version` field but no migration code reads it yet. Before the first breaking schema change, add a `migrateDocument()` step in the load path

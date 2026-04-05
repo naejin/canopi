@@ -8,15 +8,18 @@ Token rule: search first, then read only the smallest set of owning docs needed 
 
 1. [`Docs Index`](./README.md)
 2. [`Docs Maintenance`](./maintenance.md) when you are updating docs or changing the read path
-3. [`Rewrite Operational Reference`](./todo.md) for active rewrite work
-4. [`Release Verification`](./release-verification.md) and [`Release Operations`](./release-operations.md) when the task touches release or packaging
-5. [`Renderer`](./renderer/README.md) for canvas or retained-surface work
-6. [`Database`](./db/README.md) for schema, search, or DB pipeline work
-7. [`Archive`](./archive/README.md) only when you need historical context
+3. [`Active Work Tracker`](./todo.md) for current and deferred work
+4. [`Architecture Review`](./code-quality-architecture-review-2026-04-05.md) for architectural rationale and tradeoffs
+5. [`Release Verification`](./release-verification.md) and [`Release Operations`](./release-operations.md) when the task touches release or packaging
+6. [`Renderer`](./renderer/README.md) for canvas or retained-surface work
+7. [`Database`](./db/README.md) for schema, search, or DB pipeline work
+8. [`Archive`](./archive/README.md) only when you need historical context
 
 ## Canonical Sources
 
-- `docs/todo.md` is the active rewrite and blocker reference
+- `docs/todo.md` is the active and deferred work tracker
+- `docs/code-quality-architecture-review-2026-04-05.md` is the architecture review with rationale for current priorities
+- `docs/product-definition.md` is the product scope lock
 - `docs/release-verification.md` is the signed-off beta verification record
 - `docs/release-operations.md` is the operator runbook for DB publishing, release candidates, and promotion
 - `docs/renderer/renderer.md` is the renderer-specific validation checklist

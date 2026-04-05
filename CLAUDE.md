@@ -57,35 +57,55 @@ These features were deleted during pre-rewrite cleanup. See `docs/todo.md` for c
 - **Konva engine**: Entire `CanvasEngine` + old command/tool/serializer/history/import/export system deleted. Konva dependency fully removed. Replaced by scene-owned runtime (PixiJS + Canvas2D)
 - **Per-plant labels**: Label rendering, collision detection, dedup, and adaptive placement all deleted. Replaced by hover tooltip (common name + scientific name), hover species highlight (ring on same-species), and selection labels (one per species at centroid). See `desktop/web/src/canvas/CLAUDE.md` Plant Presentation Rules
 
-## Architecture Rules (from rewrite — enforced)
-
-These rules are non-negotiable. They come from `docs/todo.md` and protect the architectural boundaries established during the rewrite.
+## Architecture Rules
 
 ### Document Mutation Rule
 - **No component may replace the active document directly** — only `state/document-actions.ts` performs destructive session replacement
 - **No panel may call document replacement directly** — panels request document changes through the document-actions boundary
 - All document-replacing flows use one shared guard path (dirty check → confirm → replace)
 
+### Document Authority Rule
+The `.canopi` file has two categories of content with separate authorities:
+
+- **Canvas scene state** (plants, zones, annotations, groups, plant-species-colors, layers) — owned by `SceneStore`. Mutations flow through the canvas runtime. Renderers and interaction are projections of this state
+- **Non-canvas document state** (consortiums, timeline, budget, location, description, extra) — owned by the document store (`state/design.ts` / `state/document.ts`). Mutations flow through `mutateCurrentDesign()` and the `*-actions.ts` modules
+
+The save path composes both into a single `CanopiFile`. Neither authority should duplicate the other's data. Panels that read canvas entities (plant list, zone names) should use a read-only query interface on the runtime, not mirrored signals.
+
+**Anti-patterns:**
+- Do not push non-canvas state (consortiums, timeline, budget) into `SceneStore` — it is not a canvas concern
+- Do not mirror canvas state into standalone signals (`currentConsortiums`, `designLocation`) when a derived/computed value or a direct read from the authority would work
+- Do not create new ad hoc sync paths between the two authorities — if sync is needed, centralize it in one explicit adapter
+
 ### Action-Layer Rule
 - **Action modules must not import other action modules** — `state/*-actions.ts` files are leaf modules
-- Cross-cutting flows should compose actions at a higher boundary (e.g., a workflow module)
-- If repeated orchestration appears, create a small explicit workflow module (see `state/template-import-workflow.ts`)
 - Import direction: **components → actions → state** (never backwards)
+- **Cross-concern orchestration**: When a mutation in one domain must trigger side effects in another (e.g., plant deleted → orphan cleanup in timeline/budget/consortium), create an explicit workflow module at a higher boundary. Do not wire action modules to each other. See `state/template-import-workflow.ts` for the pattern
+- As panel↔canvas sync grows, expect more workflow modules. This is the intended pattern — name them clearly (e.g., `state/plant-lifecycle-workflow.ts`)
 
 ### Signal Performance in Hot Paths
 - **Never write signals unconditionally at 60fps** (e.g. map `move` events). New object literals always fail `Object.is` equality, triggering unnecessary rerenders. Use `.peek()` to read without subscribing, compare before writing
 - **`getBoundingClientRect()` in hot loops**: Cache the DOMRect — don't call twice per pointermove event
 
+### Signal Mirror Rule
+- **Prefer derived/computed signals over manually-synced mirrors.** If a value exists in one authority (SceneStore or document store), components should read from that authority — or from a `computed()` signal derived from it — not from a hand-copied signal that requires `syncDocumentMirrors()`
+- Existing mirrors (`currentConsortiums`, `designLocation`) should be replaced with computed views as the document authority converges. Do not add new mirrors
+
 ### Resource Ownership Rule
 - Every resource-owning surface must have **one explicit lifecycle owner** for setup, update, and teardown
-- Applies to: canvas runtime (SceneCanvasRuntime), renderer host, map instances, timers, listeners, async cancellation tokens, DOM overlays
+- Applies to: canvas runtime (SceneCanvasRuntime), renderer host, MapLibre instances, timers, listeners, async cancellation tokens, DOM overlays
 - HMR cleanup: module-level `effect()` and `addEventListener` must store disposers and clean up via `import.meta.hot.dispose()`
+
+### MapLibre Integration Rule
+- **MapLibre is a derived visualization layer, not a document authority.** Map layers render scene/document state; they do not own or mutate it
+- MapLibre instances must be managed by a dedicated controller (e.g., `MapLibreController`), not scattered across the canvas runtime or individual components
+- Map viewport sync with the canvas must go through `CameraController`, not ad hoc signal wiring
+- The lazy import boundary around `maplibre-gl` should be preserved for bundle size, but isolation from the canvas runtime is no longer required — the map controller is a sibling to the runtime, not walled off from it
 
 ### Hotspot File Protection
 These files have concentrated authority. **One writer at a time** — do not assign multiple concurrent writers. Create seam files first, then move ownership:
 - `desktop/web/src/canvas/runtime/scene-runtime.ts`
 - `desktop/web/src/canvas/runtime/scene-interaction.ts`
-- `desktop/web/src/canvas/session.ts`
 - `desktop/src/db/plant_db.rs`
 - `desktop/src/db/query_builder.rs`
 - `desktop/web/src/state/design.ts`
@@ -191,7 +211,8 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 - Docs entry point: `docs/README.md`
 - Agent reading order: `docs/agents.md`
 - Docs maintenance protocol: `docs/maintenance.md`
-- Beta-release reference: `docs/todo.md`
+- Active/deferred work tracker: `docs/todo.md`
+- Architecture review: `docs/code-quality-architecture-review-2026-04-05.md`
 - Release hardening: `docs/release-verification.md`
 - Release operations: `docs/release-operations.md`
 - Renderer validation: `docs/renderer/renderer.md`

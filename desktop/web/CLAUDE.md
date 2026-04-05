@@ -2,8 +2,11 @@
 
 ## State
 - All reactive state as `@preact/signals` at module level
-- `SceneStore` is the canvas source of truth — UI signals are mirrors, not authority
-- `CanvasSession` is the only app-facing canvas seam; components must not reach into runtime internals
+- **Two document authorities** — see root `CLAUDE.md` Document Authority Rule:
+  - `SceneStore` owns canvas scene state (plants, zones, annotations, groups, layers, plant-species-colors)
+  - `state/design.ts` + `state/document.ts` own non-canvas document state (consortiums, timeline, budget, location, description, extra)
+- UI signals for canvas state (`selectedObjectIds`, `plantSizeMode`, `plantColorByAttr`) are mirrors of `SceneStore.session`, not authority. Prefer reading from the runtime via a query interface over syncing into standalone signals
+- **Canvas seam**: App code must not reach into renderer implementations or `SceneCanvasRuntime` internals. The app-facing boundary should be an interface (interaction commands + read-only state queries), not a 1:1 pass-through class. As the panel surface grows, consider splitting into an interaction interface (tools, selection, history) and a state-query interface (entity reads for panels)
 
 ## PanelBar State
 - PanelBar is visible on the welcome screen (no design loaded) — location, plant-db, and favorites buttons are `disabled` when `currentDesign` is null. Only the canvas button is always active

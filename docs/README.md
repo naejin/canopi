@@ -12,8 +12,9 @@ If you are using this repo with agents, start with [`Agent Guide`](./agents.md) 
 ## Active Docs
 
 - [Product Definition](./product-definition.md)
-- [Rewrite Operational Reference](./todo.md)
+- [Active Work Tracker](./todo.md)
 - [Development](./development.md)
+- [Code Quality And Architecture Review](./code-quality-architecture-review-2026-04-05.md)
 - [Release Operations](./release-operations.md)
 - [Release Verification](./release-verification.md)
 - [Agent Guide](./agents.md)

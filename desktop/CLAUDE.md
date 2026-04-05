@@ -6,18 +6,17 @@
 - Map errors: `.map_err(|e| format!("Failed to <action>: {e}"))`
 - Mutex locks: use `db::acquire(&db.0, "PlantDb")` helper — recovers from poison with `tracing::warn`, don't use inline `lock().unwrap_or_else()` anymore
 
-## Document Lifecycle (enforced — Wave 1 + Wave 2)
+## Document Lifecycle
 - **`state/document-actions.ts` is the sole document replacement authority** — no component or panel may replace the active document directly. All destructive flows (new, open, template import) go through document-actions
 - **`state/document.ts` is the canonical document API** — external consumers import from here. `state/design.ts` is internal
-- **`session.serializeDocument()` / `SceneStore.toCanopiFile()` is the sole save composition point** — all save paths go through it. The old `toCanopi(engine, ...)` serializer is deleted
+- **`session.serializeDocument()` / `SceneStore.toCanopiFile()` is the sole save composition point** — all save paths go through it
 - **Never regenerate `created_at`** — preserve from loaded file
 - **Preserve all loaded document sections on save** — timeline, budget, consortiums, description, location, extra fields
 - **Preserve per-object non-visual fields** — plant notes/planted_date/quantity and zone notes
-- **Preserve unknown `extra` fields** — `extractExtra()` captures unknown top-level keys. Spread extra FIRST in `toCanopi()`
+- **Preserve unknown `extra` fields** — `extractExtra()` captures unknown top-level keys. Spread extra FIRST when composing the save output
 - **Two-baseline dirty model** — Canvas: `_savedPosition` checkpoint in `SceneHistory` (patch-based). Non-canvas: `nonCanvasRevision` vs `nonCanvasSavedRevision`. Never write to `designDirty` directly
 - **Autosave** checkpoints same document as manual save. Failures surface via `autosaveFailed` signal
-- **Background-image import is gated** — not persisted in `.canopi` yet
-- **No scene-store/state module cycle** — `SceneStore` and scene runtime must NOT import from `state/design.ts`
+- **No circular imports between scene store and document store** — `SceneStore` and scene runtime must not import `state/design.ts` directly. If the runtime needs to read document state (e.g., for save composition), pass it as a parameter or use a reader interface. The goal is unidirectional data flow, not total isolation
 - **Close guard uses `destroy()` not `close()`** — avoids re-entry loop
 - **Cross-platform file replace** — `atomic_replace()` in `design/mod.rs`
 - **Queued-load handoff** — `consumeQueuedDocumentLoad` routes through document-actions without the dirty guard (file was just opened from OS, no unsaved work to protect)
