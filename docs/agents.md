@@ -20,7 +20,6 @@ Token rule: search first, then read only the smallest set of owning docs needed 
 - `docs/todo.md` — active and deferred work tracker
 - `docs/code-quality-architecture-review-2026-04-05.md` — architecture review with rationale
 - `docs/product-definition.md` — product scope lock
-- `docs/timeline-plan.md` — ready-to-execute timeline MVP trim plan
 - `docs/release-verification.md` — signed-off beta verification record
 - `docs/release-operations.md` — operator runbook for DB publishing, RC, promotion
 - `docs/renderer/renderer.md` — renderer-specific validation checklist

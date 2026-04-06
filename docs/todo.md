@@ -1,7 +1,7 @@
 # Canopi: Current Work
 
-**Date**: 2026-04-05
-**Status**: v0.2.0 shipped — rewrite cut over, architecture review completed
+**Date**: 2026-04-06
+**Status**: v0.2.0 shipped — rewrite cut over, bottom-panel MVP landed
 
 This file tracks active and deferred work.
 For architectural analysis and rationale, see [Code Quality And Architecture Review](./code-quality-architecture-review-2026-04-05.md).
@@ -25,13 +25,16 @@ For architectural analysis and rationale, see [Code Quality And Architecture Rev
 These align with the core risks identified in the architecture review.
 
 **Document authority convergence:**
-- Converge the save-time merge seam in `serializeDocument()` — non-canvas sections (consortiums, timeline, budget) should come from the document store directly, not be re-merged into `SceneStore` at save time
-- Replace ad hoc mirrors (`currentConsortiums`, `designLocation`) with computed/derived signals
+- ~~Converge the save-time merge seam in `serializeDocument()`~~ — **done** (`b4596f1`): non-canvas sections come from document store, not re-merged into SceneStore
+- ~~Replace `currentConsortiums` mirror~~ — **done** (`a8f7fbc`): removed entirely, consortium data is document-store owned
+- ~~Replace `designLocation` mirror~~ — **done** (`e9e7e7b`): consolidated to single writer (`syncDesignLocationMirror`)
+- ~~Consortium auto-sync as workflow~~ — **done** (`04fd4fa`): `consortium-sync-workflow.ts` runs at document level, not view-dependent
 - See root `CLAUDE.md` Document Authority Rule
 
 **Panel identity semantics:**
-- Define explicit target identity types for timeline, budget, and consortium references before activating panels
+- Define explicit target identity types for timeline, budget, and consortium references before activating full panel↔canvas sync
 - Timeline and budget currently mix placed-plant IDs, canonical names, and string matching — converge on explicit target types
+- Consortium now uses `canonical_name` as identity key (succession entries keyed by species)
 - See architecture review Finding 2
 
 **Canvas seam:**
@@ -74,10 +77,11 @@ These align with the core risks identified in the architecture review.
 - PMTiles offline tiles: Rust reader + Tauri custom protocol + download manager UI (see `docs/archive/roadmap.md` 4.2)
 - Contour/hillshade layers via `maplibre-contour` + DEM tiles (see `docs/archive/roadmap.md` 4.3/4.4)
 
-**Bottom panels:**
-- Timeline MVP: trim plan is ready and convergence-independent — 6 targeted removals + BottomPanel routing enables all three tabs. See `docs/timeline-plan.md`. Identity semantics convergence is needed for full panel↔canvas sync but not for shipping the trimmed timeline
-- Bottom-panel budget workflows (requires identity semantics convergence for canvas highlighting)
-- Bottom-panel consortium workflows
+**Bottom panels (MVP shipped):**
+- ~~Timeline MVP~~ — **done** (`d56ab50`): trimmed week view, zoom, edge resize, auto-populate, completed UI. Tab routing active
+- ~~Budget tab~~ — **done**: auto-counted plant list, price editing, CSV export. Live updates via `sceneEntityRevision`
+- ~~Consortium succession chart~~ — **done** (`9fd8cf3`..`1007a96`): Canvas2D strata×phase grid, auto-sync from placed species, drag-move/resize, hover sync with canvas
+- Remaining: full panel↔canvas highlighting sync (requires identity semantics convergence), canvas→chart hover direction
 
 **Other:**
 - Featured-design world map / template import
@@ -102,16 +106,16 @@ These align with the core risks identified in the architecture review.
 - Do not move annotations back under `extra`
 - Do not reintroduce `plantDisplayMode` or split plant presentation authority
 - Do not reintroduce full scene rebuilds on viewport-only updates
-- Do not push non-canvas state (consortiums, timeline, budget) into `SceneStore`
-- Do not add new ad hoc signal mirrors — use computed/derived signals (see root `CLAUDE.md` Signal Mirror Rule)
-- Do not activate bottom-panel tabs before their identity semantics are defined
+- Do not push non-canvas state (consortiums, timeline, budget) into `SceneStore` — **enforced**: save-path split-brain fix removes all non-canvas state from ScenePersistedState
+- Do not add new ad hoc signal mirrors — use computed/derived signals or single-writer pattern (see root `CLAUDE.md` Signal Mirror Rule). `designLocation` is consolidated to single writer; `currentConsortiums` was removed entirely
+- Bottom-panel tabs are active — consortium auto-sync runs at document level via `consortium-sync-workflow.ts`
 - Do not make MapLibre a second document authority
 
 ## Exit Criteria For Convergence Phase
 
-- Document authority boundary is explicit: one answer per field for "who owns this?"
-- Save path composes from two authorities without re-merging non-canvas state into SceneStore
-- Panel identity semantics are defined and typed (not stringly-typed string arrays)
+- ~~Document authority boundary is explicit~~ — **done**: canvas state in SceneStore, non-canvas in document store, save composes both
+- ~~Save path composes from two authorities without re-merging~~ — **done**: `serializeDocument()` spreads canvas output + document store sections
+- Panel identity semantics are defined and typed (not stringly-typed string arrays) — **partially done**: consortium uses `canonical_name`, timeline/budget still use mixed IDs
 - `CanvasSession` is either replaced with an interface or given real logic
 - File-format round-trip test exists
-- Architecture review findings 1 and 2 are resolved
+- ~~Architecture review Finding 1 resolved~~ — **done**; Finding 2 partially resolved (consortium identity converged)

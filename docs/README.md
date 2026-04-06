@@ -7,7 +7,6 @@ If you are using this repo with agents, start with [`Agent Guide`](./agents.md).
 - [Active Work Tracker](./todo.md) — current and deferred work
 - [Architecture Review](./code-quality-architecture-review-2026-04-05.md) — architectural analysis and rationale
 - [Product Definition](./product-definition.md) — product scope and surface status
-- [Timeline MVP Plan](./timeline-plan.md) — ready-to-execute trim plan for bottom-panel timeline
 - [Development](./development.md) — key commands (see root `CLAUDE.md` for full reference)
 - [Release Operations](./release-operations.md) — DB publishing, RC, promotion
 - [Release Verification](./release-verification.md) — beta verification record

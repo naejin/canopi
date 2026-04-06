@@ -51,7 +51,7 @@ These features were deleted during pre-rewrite cleanup. See `docs/todo.md` for c
 - **Export**: GeoJSON, PNG/SVG export commands
 - **Support files**: dimensions.ts, pattern-math.ts, map-layer.ts, ipc/community.ts, ipc/tiles.ts, TileDownloadModal
 - **Retained for beta release**: LayerPanel, location flows (Wave 3 retained-surface closeout)
-- **Bottom panel re-added**: Location tab visible. Timeline/Budget/Consortium tabs staged behind `VISIBLE_BOTTOM_PANEL_TABS` guard in `state/canvas.ts` — add tab to the array to reveal
+- **Bottom panel shipped**: Timeline (trimmed), Budget, and Consortium (succession chart) tabs all active. Consortium auto-sync runs via `state/consortium-sync-workflow.ts` at document level. Panel↔canvas reactivity via `sceneEntityRevision` signal
 - **Deferred beyond beta**: WorldMapPanel, geo/terrain, export, learning content
 - **Selection**: No resize/rotate — objects are position-only (highlight + move). Resize/rotate commands all deleted
 - **Konva engine**: Entire `CanvasEngine` + old command/tool/serializer/history/import/export system deleted. Konva dependency fully removed. Replaced by scene-owned runtime (PixiJS + Canvas2D)
