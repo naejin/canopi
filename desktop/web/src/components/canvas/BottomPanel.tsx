@@ -1,4 +1,3 @@
-import { locale } from '../../state/app'
 import { bottomPanelHeight, bottomPanelOpen, bottomPanelTab } from '../../state/canvas'
 import { setBottomPanelHeight } from '../../state/canvas-actions'
 import { TimelineTab } from './TimelineTab'
@@ -7,8 +6,6 @@ import { ConsortiumChart } from './ConsortiumChart'
 import styles from './BottomPanel.module.css'
 
 export function BottomPanel() {
-  void locale.value
-
   const open = bottomPanelOpen.value
   const height = bottomPanelHeight.value
 

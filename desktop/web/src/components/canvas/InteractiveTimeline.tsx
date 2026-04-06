@@ -84,7 +84,14 @@ export function InteractiveTimeline({
   rowsRef.current = groupActionsBySpecies(actions)
   layoutRef.current = computeLayout(rowsRef.current)
 
-  const renderState: TimelineRenderState = {
+  const renderStateRef = useRef<TimelineRenderState>({
+    originDate,
+    pxPerDay: pxPerDay.value,
+    scrollX: scrollX.value,
+    selectedId,
+    hoveredId: hoveredId.value,
+  })
+  renderStateRef.current = {
     originDate,
     pxPerDay: pxPerDay.value,
     scrollX: scrollX.value,
@@ -99,10 +106,10 @@ export function InteractiveTimeline({
       height,
       rowsRef.current,
       layoutRef.current,
-      renderState,
+      renderStateRef.current,
       scrollY.value,
     )
-  }, [renderState, scrollY.value])
+  }, [originDate, pxPerDay.value, scrollX.value, selectedId, hoveredId.value, scrollY.value])
 
   const handleWheel = useCallback((event: WheelEvent) => {
     event.preventDefault()
@@ -140,7 +147,7 @@ export function InteractiveTimeline({
       mouseY,
       rowsRef.current,
       layoutRef.current,
-      renderState,
+      renderStateRef.current,
       scrollY.value,
     )
 
@@ -165,7 +172,7 @@ export function InteractiveTimeline({
       originalStartDate: hit.action.start_date,
       originalEndDate: hit.action.end_date,
     }
-  }, [renderState, scrollY.value, onEditRequest, onSelect])
+  }, [onEditRequest, onSelect])
 
   const handleMouseMove = useCallback((event: MouseEvent) => {
     const canvas = canvasRef.current
@@ -203,7 +210,7 @@ export function InteractiveTimeline({
       mouseY,
       rowsRef.current,
       layoutRef.current,
-      renderState,
+      renderStateRef.current,
       scrollY.value,
     )
 
@@ -214,7 +221,7 @@ export function InteractiveTimeline({
       hoveredId.value = null
       canvas.style.cursor = mouseY < RULER_HEIGHT ? 'default' : 'crosshair'
     }
-  }, [renderState, scrollY.value])
+  }, [])
 
   const handleMouseUp = useCallback(() => {
     const drag = dragState.current
@@ -266,7 +273,7 @@ export function InteractiveTimeline({
     return () => {
       scrollToTodayRef.current = null
     }
-  }, [scrollToTodayRef, originDate])
+  }, [scrollToTodayRef, originDate, pxPerDay.value])
 
   return (
     <canvas
