@@ -57,10 +57,11 @@ export function ConsortiumChart() {
   const plants = session?.getPlacedPlants() ?? design?.plants ?? []
   const consortiums = design?.consortiums ?? []
   const colors = plantSpeciesColors.value
+  const localizedNames = session?.getLocalizedCommonNames()
 
   const bars = useMemo(
-    () => buildConsortiumBars(consortiums, plants, colors),
-    [consortiums, plants, colors],
+    () => buildConsortiumBars(consortiums, plants, colors, localizedNames),
+    [consortiums, plants, colors, localizedNames],
   )
   const rowHeights = useMemo(() => computeRowHeights(bars), [bars])
   const rowHeightsRef = useRef(rowHeights)

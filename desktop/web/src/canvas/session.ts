@@ -158,6 +158,10 @@ export class CanvasSession {
     return this._runtime.getPlacedPlants()
   }
 
+  getLocalizedCommonNames(): ReadonlyMap<string, string | null> {
+    return this._runtime.getLocalizedCommonNames()
+  }
+
   ensureSpeciesCacheEntries(canonicalNames: string[], activeLocale: string): Promise<boolean> {
     return this._runtime.ensureSpeciesCacheEntries(canonicalNames, activeLocale)
   }

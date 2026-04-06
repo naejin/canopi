@@ -45,6 +45,7 @@ export interface CanvasRuntime {
   setPlantColorByAttr(attr: ColorByAttribute | null): void
   getSelectedPlantColorContext(): SelectedPlantColorContext
   getPlacedPlants(): PlacedPlant[]
+  getLocalizedCommonNames(): ReadonlyMap<string, string | null>
   ensureSpeciesCacheEntries(canonicalNames: string[], activeLocale: string): Promise<boolean>
   setSelectedPlantColor(color: string | null): number
   setPlantColorForSpecies(canonicalName: string, color: string | null): number

@@ -499,6 +499,10 @@ export class SceneCanvasRuntime implements CanvasRuntime {
     return this._sceneStore.toCanopiFile().plants
   }
 
+  getLocalizedCommonNames(): ReadonlyMap<string, string | null> {
+    return this._plantLabels.getLocaleSnapshot(locale.value)
+  }
+
   async ensureSpeciesCacheEntries(canonicalNames: string[], activeLocale: string): Promise<boolean> {
     const loaded = await this._speciesCache.ensureEntries(canonicalNames, activeLocale)
     const backfilled = this._backfillPlantPresentationMetadataFromSpeciesCache()

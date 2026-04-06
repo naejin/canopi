@@ -99,6 +99,7 @@ export function buildConsortiumBars(
   entries: Consortium[],
   plants: PlacedPlant[],
   speciesColors: Record<string, string>,
+  localizedNames?: ReadonlyMap<string, string | null>,
 ): ConsortiumBarLayout[] {
   const plantCounts = new Map<string, { count: number; commonName: string }>()
   for (const plant of plants) {
@@ -106,9 +107,10 @@ export function buildConsortiumBars(
     if (existing) {
       existing.count++
     } else {
+      const localized = localizedNames?.get(plant.canonical_name)
       plantCounts.set(plant.canonical_name, {
         count: 1,
-        commonName: plant.common_name ?? plant.canonical_name,
+        commonName: localized ?? plant.common_name ?? plant.canonical_name,
       })
     }
   }

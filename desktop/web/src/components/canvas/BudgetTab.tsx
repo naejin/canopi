@@ -9,7 +9,10 @@ import { setPlantBudgetPrice } from '../../state/budget-actions'
 import type { BudgetItem, PlacedPlant } from '../../types/design'
 import styles from './BudgetTab.module.css'
 
-function countPlants(plants: PlacedPlant[]): { canonical: string; commonName: string; count: number }[] {
+function countPlants(
+  plants: PlacedPlant[],
+  localizedNames?: ReadonlyMap<string, string | null>,
+): { canonical: string; commonName: string; count: number }[] {
   const grouped = new Map<string, { commonName: string; count: number }>()
   for (const plant of plants) {
     const existing = grouped.get(plant.canonical_name)
@@ -18,8 +21,9 @@ function countPlants(plants: PlacedPlant[]): { canonical: string; commonName: st
       if (!existing.commonName && plant.common_name) existing.commonName = plant.common_name
       continue
     }
+    const localized = localizedNames?.get(plant.canonical_name)
     grouped.set(plant.canonical_name, {
-      commonName: plant.common_name ?? '',
+      commonName: localized ?? plant.common_name ?? '',
       count: 1,
     })
   }
@@ -68,7 +72,8 @@ export function BudgetTab() {
   const design = currentDesign.value
   const budget = design?.budget ?? []
   const plants = session?.getPlacedPlants() ?? design?.plants ?? []
-  const groupedPlants = countPlants(plants)
+  const localizedNames = session?.getLocalizedCommonNames()
+  const groupedPlants = countPlants(plants, localizedNames)
   const priceMap = buildPriceMap(budget)
   const defaultCurrency = priceMap.values().next().value?.currency ?? 'EUR'
   const grandTotal = groupedPlants.reduce((total, row) => {
