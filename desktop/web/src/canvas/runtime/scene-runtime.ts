@@ -60,7 +60,7 @@ import type {
 import { createScenePatchCommand, type SceneCommandSnapshot } from './scene-commands'
 import { SceneHistory } from './scene-history'
 import type { CanvasRuntime, CanvasRuntimeDocumentMetadata } from './runtime'
-import { installConsortiumSync, resetConsortiumSync } from '../../state/consortium-sync-workflow'
+import { installConsortiumSync } from '../../state/consortium-sync-workflow'
 
 const EMPTY_PLANT_COLOR_CONTEXT: SelectedPlantColorContext = {
   plantIds: [],
@@ -594,7 +594,6 @@ export class SceneCanvasRuntime implements CanvasRuntime {
     this._invalidate('scene')
 
     this._consortiumSyncDisposer?.()
-    resetConsortiumSync()
     this._consortiumSyncDisposer = installConsortiumSync()
   }
 
@@ -604,7 +603,8 @@ export class SceneCanvasRuntime implements CanvasRuntime {
     this._history.clear()
     this._syncCanvasSignalsFromScene()
     this._invalidate('scene')
-    resetConsortiumSync()
+    this._consortiumSyncDisposer?.()
+    this._consortiumSyncDisposer = installConsortiumSync()
   }
 
   serializeDocument(metadata: CanvasRuntimeDocumentMetadata, doc: CanopiFile | null): CanopiFile {
