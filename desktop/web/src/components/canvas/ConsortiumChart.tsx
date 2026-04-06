@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale } from '../../state/app'
-import { plantSpeciesColors, hoveredConsortiumSpecies, sceneEntityRevision } from '../../state/canvas'
+import { plantSpeciesColors, hoveredConsortiumSpecies, sceneEntityRevision, plantNamesRevision } from '../../state/canvas'
 import { currentDesign } from '../../state/document'
 import { currentCanvasSession } from '../../canvas/session'
 import { moveConsortiumEntry } from '../../state/consortium-actions'
@@ -47,6 +47,7 @@ type DragState =
 export function ConsortiumChart() {
   void locale.value
   void sceneEntityRevision.value
+  void plantNamesRevision.value
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const hoveredCanonical = useSignal<string | null>(null)

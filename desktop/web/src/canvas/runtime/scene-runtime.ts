@@ -5,6 +5,7 @@ import {
   hoveredConsortiumSpecies,
   layerVisibility,
   lockedObjectIds,
+  plantNamesRevision,
   plantSpeciesColors,
   rulersVisible,
   sceneEntityRevision,
@@ -892,7 +893,8 @@ export class SceneCanvasRuntime implements CanvasRuntime {
     const canonicalNames = [...new Set(plants.map((plant) => plant.canonicalName))]
     if (canonicalNames.length === 0) return
 
-    await this._plantLabels.ensureEntries(canonicalNames, locale.value)
+    const labelsChanged = await this._plantLabels.ensureEntries(canonicalNames, locale.value)
+    if (labelsChanged) plantNamesRevision.value += 1
 
     const needsSpeciesCache =
       session.plantColorByAttr !== null

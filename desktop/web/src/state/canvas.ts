@@ -96,6 +96,11 @@ export const designLocation = signal<{ lat: number; lon: number } | null>(null)
 // to nonCanvasRevision in state/design.ts which tracks document-store changes.
 export const sceneEntityRevision = signal<number>(0)
 
+// Incremented when localized plant names finish loading (async IPC).
+// Panels subscribe to this so they re-render with fresh names after
+// the label resolver cache is populated for the new locale.
+export const plantNamesRevision = signal<number>(0)
+
 // Bottom panel
 export type BottomPanelTab = 'timeline' | 'budget' | 'consortium'
 export const VISIBLE_BOTTOM_PANEL_TABS: BottomPanelTab[] = ['timeline', 'budget', 'consortium']
