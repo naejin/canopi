@@ -5,7 +5,7 @@ import { locale } from '../../state/app'
 import { plantSpeciesColors, hoveredConsortiumSpecies, sceneEntityRevision } from '../../state/canvas'
 import { currentDesign } from '../../state/document'
 import { currentCanvasSession } from '../../canvas/session'
-import { upsertConsortiumEntry, deleteConsortiumEntry, moveConsortiumEntry } from '../../state/consortium-actions'
+import { moveConsortiumEntry } from '../../state/consortium-actions'
 import { markDocumentDirty } from '../../state/document-mutations'
 import {
   buildConsortiumBars,
@@ -50,7 +50,6 @@ export function ConsortiumChart() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const hoveredCanonical = useSignal<string | null>(null)
   const dragState = useRef<DragState>(null)
-  const lastCanonicalNamesRef = useRef<Set<string>>(new Set())
 
   const session = currentCanvasSession.value
   const design = currentDesign.value
@@ -67,47 +66,6 @@ export function ConsortiumChart() {
   rowHeightsRef.current = rowHeights
   const barsRef = useRef(bars)
   barsRef.current = bars
-
-  // Auto-sync: add/remove consortium entries when species change on canvas
-  useSignalEffect(() => {
-    void sceneEntityRevision.value
-    const d = currentDesign.value
-    if (!d) return
-
-    const s = currentCanvasSession.value
-    const currentPlants = s?.getPlacedPlants() ?? d.plants ?? []
-    const currentConsortiums = d.consortiums ?? []
-    const currentNames = new Set(currentPlants.map((p) => p.canonical_name))
-    const lastNames = lastCanonicalNamesRef.current
-
-    if (currentNames.size === lastNames.size) {
-      let same = true
-      for (const name of currentNames) {
-        if (!lastNames.has(name)) { same = false; break }
-      }
-      if (same) return
-    }
-
-    for (const name of currentNames) {
-      if (!lastNames.has(name) && !currentConsortiums.some((c) => c.canonical_name === name)) {
-        upsertConsortiumEntry({
-          canonical_name: name,
-          stratum: 'unassigned',
-          start_phase: 0,
-          end_phase: 2,
-        }, { markDirty: false })
-      }
-    }
-
-    const consortiumNames = new Set(currentConsortiums.map((c) => c.canonical_name))
-    for (const name of consortiumNames) {
-      if (!currentNames.has(name)) {
-        deleteConsortiumEntry(name, { markDirty: false })
-      }
-    }
-
-    lastCanonicalNamesRef.current = currentNames
-  })
 
   // Ref-based redraw to avoid re-registering ResizeObserver on data changes
   const redrawRef = useRef<() => void>(() => {})

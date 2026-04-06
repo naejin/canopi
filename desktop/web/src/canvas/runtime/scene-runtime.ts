@@ -60,6 +60,7 @@ import type {
 import { createScenePatchCommand, type SceneCommandSnapshot } from './scene-commands'
 import { SceneHistory } from './scene-history'
 import type { CanvasRuntime, CanvasRuntimeDocumentMetadata } from './runtime'
+import { installConsortiumSync, resetConsortiumSync } from '../../state/consortium-sync-workflow'
 
 const EMPTY_PLANT_COLOR_CONTEXT: SelectedPlantColorContext = {
   plantIds: [],
@@ -91,6 +92,7 @@ export class SceneCanvasRuntime implements CanvasRuntime {
   private _clipboard: SceneClipboardPayload | null = null
   private readonly _disposeEffects: Array<() => void> = []
   private _renderEpoch = 0
+  private _consortiumSyncDisposer: (() => void) | null = null
 
   constructor() {
     this._installEffects()
@@ -590,6 +592,10 @@ export class SceneCanvasRuntime implements CanvasRuntime {
     clearCanvasSelection()
     this._syncCanvasSignalsFromScene()
     this._invalidate('scene')
+
+    this._consortiumSyncDisposer?.()
+    resetConsortiumSync()
+    this._consortiumSyncDisposer = installConsortiumSync()
   }
 
   replaceDocument(file: CanopiFile): void {
@@ -598,6 +604,7 @@ export class SceneCanvasRuntime implements CanvasRuntime {
     this._history.clear()
     this._syncCanvasSignalsFromScene()
     this._invalidate('scene')
+    resetConsortiumSync()
   }
 
   serializeDocument(metadata: CanvasRuntimeDocumentMetadata, doc: CanopiFile | null): CanopiFile {
@@ -642,6 +649,8 @@ export class SceneCanvasRuntime implements CanvasRuntime {
   }
 
   destroy(): void {
+    this._consortiumSyncDisposer?.()
+    this._consortiumSyncDisposer = null
     this._interaction?.dispose()
     this._interaction = null
     this._chrome?.destroy()
