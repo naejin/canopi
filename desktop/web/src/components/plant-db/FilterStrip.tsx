@@ -15,6 +15,17 @@ import { RangeSlider } from './RangeSlider'
 import { ThresholdSlider } from './ThresholdSlider'
 import styles from './PlantDb.module.css'
 
+// Ecological order: top of canopy → bottom
+const STRATUM_ORDER = ['emergent', 'high', 'medium', 'low']
+
+function sortStrata(strata: string[]): string[] {
+  return [...strata].sort((a, b) => {
+    const ai = STRATUM_ORDER.indexOf(a)
+    const bi = STRATUM_ORDER.indexOf(b)
+    return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
+  })
+}
+
 function toggleArrayValue(arr: string[] | null, val: string): string[] | null {
   if (arr === null) return [val];
   if (arr.includes(val)) {
@@ -41,7 +52,7 @@ export function FilterStrip({ onMoreFilters }: { onMoreFilters: () => void }) {
       <div className={styles.filterRow}>
         <span className={styles.filterLabel}>{t('filters.stratum')}</span>
         <div className={styles.filterControl}>
-          {(opts?.strata ?? []).map((s) => (
+          {sortStrata(opts?.strata ?? []).map((s) => (
             <FilterChip
               key={s}
               label={t(`filters.stratum_${s}`, s)}
