@@ -102,6 +102,16 @@ The save path composes both into a single `CanopiFile`. Neither authority should
 - Map viewport sync with the canvas must go through `CameraController`, not ad hoc signal wiring
 - The lazy import boundary around `maplibre-gl` should be preserved for bundle size, but isolation from the canvas runtime is no longer required — the map controller is a sibling to the runtime, not walled off from it
 
+### Panel ↔ Canvas Reactivity
+- **Bottom panel components must subscribe to `sceneEntityRevision`** from `state/canvas.ts` to react to canvas mutations (plant placement, undo/redo). Reading `currentCanvasSession.value?.getPlacedPlants()` alone is not reactive — the session reference doesn't change when scene state changes
+- **Cross-domain auto-sync must be a workflow module** (like `consortium-sync-workflow.ts`), not a component-level effect. Component effects only run when mounted — data integrity requires document-level effects that run regardless of which tab is visible
+- **Use `.peek()` in workflow effects** to read signals without subscribing. Only subscribe to the intended trigger signal (e.g., `sceneEntityRevision`). Writing `currentDesign.value` inside an effect that subscribes to it creates re-execution loops
+
+### Canvas2D Tab Components
+- **Use `useCanvasRenderer` hook** from `components/canvas/useCanvasRenderer.ts` for DPR-aware canvas setup — handles `devicePixelRatio` scaling, `ResizeObserver`, and redraw lifecycle. Both `ConsortiumChart` and `InteractiveTimeline` use it
+- **Use `canvas2d-utils.ts`** for `cssVar()` (cached CSS variable reads) and `roundRect()` (rounded rectangle path) — shared between `timeline-renderer.ts` and `consortium-renderer.ts`
+- **Renderer functions receive `t` parameter** for i18n — don't hardcode user-visible strings in Canvas2D renderers
+
 ### Hotspot File Protection
 These files have concentrated authority. **One writer at a time** — do not assign multiple concurrent writers. Create seam files first, then move ownership:
 - `desktop/web/src/canvas/runtime/scene-runtime.ts`

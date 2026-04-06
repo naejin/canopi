@@ -119,6 +119,12 @@ The rewrite cutover is complete. Konva dependency has been fully removed. Curren
 - Preserve the lazy import boundary around `maplibre-gl` for bundle size
 - Keep docs synchronized with the live scene runtime
 
+### Consortium Succession Chart
+- `consortium-renderer.ts` follows the same Canvas2D pattern as `timeline-renderer.ts` — pure render + hit test, no component state
+- `computeBarRect()` is the shared geometry helper — used by both `renderConsortium()` and `hitTestBar()`. Do not duplicate bar geometry computation
+- `hoveredConsortiumSpecies` signal bridges chart hover to canvas highlight — `effects.ts` has a dedicated `onConsortiumHover` effect that calls `_invalidate('scene')` when it changes
+- `sceneEntityRevision` is incremented in `_markCanvasDirty()` and `undo()`/`redo()` — if adding a new mutation path, it must also increment this signal or bottom-panel components will not update
+
 ## Gotchas
 
 - Do not add `getEngine()`-style escape hatches that expose renderer internals to app code

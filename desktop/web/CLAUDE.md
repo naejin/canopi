@@ -28,6 +28,11 @@
 - **Section headers**: Uppercase, `var(--text-xs)` (11px), weight 600, `0.06em` letter-spacing, `--color-text-muted`. One pattern everywhere — no 10px/12px/14px variations
 - **Non-token sizes**: When a component genuinely needs a size not in the token scale (e.g., 22px swatches), define a scoped CSS custom property on the component root (e.g., `--swatch-size: 22px`) and reference it everywhere. Never scatter raw px values
 
+## Canvas2D Component Patterns
+- **Drag handlers must use `useCallback([])` with refs**, not signal-derived deps. A `renderState` object literal in `useCallback` deps causes the callback to be a new reference every render → document-level event listeners re-register mid-drag
+- **`useMemo` for layout computation** (e.g., `buildConsortiumBars`), not inline in the component body — prevents O(n) layout work on every hover
+- **Change guards before `moveConsortiumEntry` during drag** — skip no-op updates when phase/stratum haven't changed to avoid unconditional signal writes at 60fps
+
 ## Canvas Overlay Styling
 - Canvas runtime overlay modules (`.ts`, not `.tsx`) use **inline styles with CSS custom properties** — no CSS Module imports from plain `.ts` files (only `.tsx` components use CSS Modules in this project)
 
