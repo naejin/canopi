@@ -7,7 +7,11 @@ interface DocumentMutationOptions {
   markDirty?: boolean
 }
 
-export function syncDocumentMirrors(file: CanopiFile | null): void {
+/**
+ * Sole writer for designLocation mirror signal.
+ * Called whenever currentDesign changes (replace, mutate, document-actions).
+ */
+export function syncDesignLocationMirror(file: CanopiFile | null): void {
   designLocation.value = file?.location
     ? { lat: file.location.lat, lon: file.location.lon }
     : null
@@ -16,7 +20,7 @@ export function syncDocumentMirrors(file: CanopiFile | null): void {
 export function replaceCurrentDesignSnapshot(file: CanopiFile): void {
   batch(() => {
     currentDesign.value = file
-    syncDocumentMirrors(file)
+    syncDesignLocationMirror(file)
   })
 }
 
@@ -32,7 +36,7 @@ export function mutateCurrentDesign(
 
   batch(() => {
     currentDesign.value = next
-    syncDocumentMirrors(next)
+    syncDesignLocationMirror(next)
     if (options.markDirty !== false) {
       nonCanvasRevision.value += 1
     }

@@ -4,7 +4,7 @@ import { getCurrentCanvasSession, type CanvasSession } from '../canvas/session'
 import * as designIpc from '../ipc/design'
 import { t } from '../i18n'
 import { extractExtra } from './document-extra'
-import { syncDocumentMirrors } from './document-mutations'
+import { syncDesignLocationMirror } from './document-mutations'
 import {
   currentDesign,
   designDirty,
@@ -273,7 +273,7 @@ function applyDocumentReplacement(
 ): void {
   session.replaceDocument(file)
   replaceCurrentDesignState(file, path, name)
-  syncDocumentMirrors(file)
+  syncDesignLocationMirror(file)
   resetDirtyBaselines()
   session.clearHistory()
   session.showCanvasChrome()

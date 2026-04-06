@@ -87,8 +87,8 @@ export interface PlantStampSpecies {
 }
 export const plantStampSpecies = signal<PlantStampSpecies | null>(null)
 
-// Design location — mirror of currentDesign.location for canvas modules
-// (avoids circular import from state/design.ts)
+// Design location — single-writer mirror of currentDesign.location
+// Sole writer: syncDocumentMirrors() in state/document-mutations.ts
 export const designLocation = signal<{ lat: number; lon: number } | null>(null)
 
 // Canvas entity revision — incremented on every scene mutation (plant/zone/annotation

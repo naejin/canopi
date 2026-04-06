@@ -33,15 +33,13 @@ export function deleteConsortiumEntry(canonicalName: string, options: Consortium
 
 export function moveConsortiumEntry(
   canonicalName: string,
-  stratum: string,
-  startPhase: number,
-  endPhase: number,
+  updates: { stratum?: string; startPhase: number; endPhase: number },
   options: ConsortiumUpdateOptions = {},
 ): void {
   updateConsortiums(
     (consortiums) => consortiums.map((c) =>
       c.canonical_name === canonicalName
-        ? { ...c, stratum: stratum || c.stratum, start_phase: startPhase, end_phase: endPhase }
+        ? { ...c, stratum: updates.stratum ?? c.stratum, start_phase: updates.startPhase, end_phase: updates.endPhase }
         : c,
     ),
     options,

@@ -3,7 +3,6 @@ import { useEffect, useRef } from 'preact/hooks'
 import { t } from '../../i18n'
 import { locale } from '../../state/app'
 import { currentDesign } from '../../state/document'
-import { designLocation } from '../../state/canvas'
 import { geocodeAddress } from '../../ipc/geocoding'
 import type { GeoResult } from '../../ipc/geocoding'
 import { clearDesignLocation, setDesignLocation } from '../../state/location-actions'
@@ -35,7 +34,6 @@ export function LocationInput() {
     latInput.value = loc?.lat?.toString() ?? ''
     lonInput.value = loc?.lon?.toString() ?? ''
     altInput.value = loc?.altitude_m?.toString() ?? ''
-    designLocation.value = loc ? { lat: loc.lat, lon: loc.lon } : null
   })
 
   // Debounced geocode search

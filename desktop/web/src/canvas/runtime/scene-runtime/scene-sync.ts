@@ -1,6 +1,5 @@
 import { batch } from '@preact/signals'
 import {
-  designLocation,
   guides,
   layerLockState,
   layerOpacity,
@@ -56,7 +55,6 @@ export function syncCanvasSignalsFromDocument(file: CanopiFile): void {
     plantSpeciesColors.value = { ...file.plant_species_colors }
     guides.value = Array.isArray(file.extra?.guides) ? file.extra.guides as never[] : []
     northBearingDeg.value = file.north_bearing_deg ?? 0
-    designLocation.value = file.location ? { lat: file.location.lat, lon: file.location.lon } : null
   })
 }
 

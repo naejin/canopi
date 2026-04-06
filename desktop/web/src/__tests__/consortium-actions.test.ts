@@ -59,7 +59,7 @@ describe('consortium actions', () => {
 
   it('moves an entry to a new stratum and phase range', () => {
     upsertConsortiumEntry({ canonical_name: 'Quercus robur', stratum: 'high', start_phase: 0, end_phase: 3 })
-    moveConsortiumEntry('Quercus robur', 'medium', 2, 5)
+    moveConsortiumEntry('Quercus robur', { stratum: 'medium', startPhase: 2, endPhase: 5 })
 
     const entry = currentDesign.value?.consortiums?.[0]
     expect(entry?.stratum).toBe('medium')
@@ -67,9 +67,9 @@ describe('consortium actions', () => {
     expect(entry?.end_phase).toBe(5)
   })
 
-  it('preserves existing stratum when empty string is passed', () => {
+  it('preserves existing stratum when stratum is omitted', () => {
     upsertConsortiumEntry({ canonical_name: 'Quercus robur', stratum: 'high', start_phase: 0, end_phase: 3 })
-    moveConsortiumEntry('Quercus robur', '', 1, 4)
+    moveConsortiumEntry('Quercus robur', { startPhase: 1, endPhase: 4 })
 
     expect(currentDesign.value!.consortiums![0]!.stratum).toBe('high')
   })

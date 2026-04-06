@@ -186,7 +186,7 @@ export function ConsortiumChart() {
       const bar = barsRef.current.find((b) => b.canonicalName === drag.canonicalName)
       if (bar && bar.startPhase === adjustedStart && bar.endPhase === newEnd && bar.stratum === newStratum) return
 
-      moveConsortiumEntry(drag.canonicalName, newStratum, adjustedStart, newEnd, { markDirty: false })
+      moveConsortiumEntry(drag.canonicalName, { stratum: newStratum, startPhase: adjustedStart, endPhase: newEnd }, { markDirty: false })
       return
     }
 
@@ -198,12 +198,12 @@ export function ConsortiumChart() {
         const newStart = Math.min(clampedPhase, drag.originalEndPhase)
         const bar = barsRef.current.find((b) => b.canonicalName === drag.canonicalName)
         if (bar && bar.startPhase === newStart) return
-        moveConsortiumEntry(drag.canonicalName, drag.currentStratum, newStart, drag.originalEndPhase, { markDirty: false })
+        moveConsortiumEntry(drag.canonicalName, { startPhase: newStart, endPhase: drag.originalEndPhase }, { markDirty: false })
       } else {
         const newEnd = Math.max(clampedPhase, drag.originalStartPhase)
         const bar = barsRef.current.find((b) => b.canonicalName === drag.canonicalName)
         if (bar && bar.endPhase === newEnd) return
-        moveConsortiumEntry(drag.canonicalName, drag.currentStratum, drag.originalStartPhase, newEnd, { markDirty: false })
+        moveConsortiumEntry(drag.canonicalName, { startPhase: drag.originalStartPhase, endPhase: newEnd }, { markDirty: false })
       }
       return
     }

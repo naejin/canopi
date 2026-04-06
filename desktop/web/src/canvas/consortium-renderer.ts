@@ -165,6 +165,27 @@ export function buildConsortiumBars(
 }
 
 // ---------------------------------------------------------------------------
+// Bar geometry
+// ---------------------------------------------------------------------------
+
+export interface BarRect { x: number; y: number; w: number; h: number }
+
+export function computeBarRect(bar: ConsortiumBarLayout, contentWidth: number, rowHeights: number[]): BarRect {
+  const rowIdx = stratumToRow(bar.stratum)
+  const ry = rowY(rowIdx, rowHeights)
+  const rh = rowHeights[rowIdx] ?? MIN_ROW_HEIGHT
+  const subLaneH = rh / bar.totalSubLanes
+  const x1 = phaseToX(bar.startPhase, contentWidth)
+  const x2 = phaseToX(bar.endPhase + 1, contentWidth)
+  return {
+    x: x1,
+    y: ry + bar.subLane * subLaneH + BAR_MARGIN,
+    w: Math.max(x2 - x1, 8),
+    h: Math.min(BAR_HEIGHT, subLaneH - BAR_MARGIN * 2),
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Main render
 // ---------------------------------------------------------------------------
 
@@ -285,16 +306,7 @@ export function renderConsortium(
 
   // -- Bars -------------------------------------------------------------------
   for (const bar of bars) {
-    const rowIdx = stratumToRow(bar.stratum)
-    const ry = rowY(rowIdx, rowHeights)
-    const rh = rowHeights[rowIdx] ?? MIN_ROW_HEIGHT
-    const subLaneH = rh / bar.totalSubLanes
-
-    const x1 = phaseToX(bar.startPhase, contentWidth)
-    const x2 = phaseToX(bar.endPhase + 1, contentWidth)
-    const barW = Math.max(x2 - x1, 8)
-    const barY = ry + bar.subLane * subLaneH + BAR_MARGIN
-    const barH = Math.min(BAR_HEIGHT, subLaneH - BAR_MARGIN * 2)
+    const { x, y: barY, w: barW, h: barH } = computeBarRect(bar, contentWidth, rowHeights)
 
     const isHovered = bar.canonicalName === state.hoveredCanonical
     const isSelected = bar.canonicalName === state.selectedCanonical
@@ -306,7 +318,7 @@ export function renderConsortium(
       ctx.shadowBlur = 4
       ctx.shadowOffsetY = 1
       ctx.fillStyle = bar.color
-      roundRect(ctx, x1, barY, barW, barH, BAR_RADIUS)
+      roundRect(ctx, x, barY, barW, barH, BAR_RADIUS)
       ctx.fill()
       ctx.restore()
     }
@@ -314,7 +326,7 @@ export function renderConsortium(
     // Bar fill
     ctx.fillStyle = bar.color
     ctx.globalAlpha = isHovered ? 1 : 0.85
-    roundRect(ctx, x1, barY, barW, barH, BAR_RADIUS)
+    roundRect(ctx, x, barY, barW, barH, BAR_RADIUS)
     ctx.fill()
     ctx.globalAlpha = 1
 
@@ -322,7 +334,7 @@ export function renderConsortium(
     ctx.strokeStyle = isSelected ? primaryColor : isHovered ? primaryColor : 'rgba(0,0,0,0.12)'
     ctx.lineWidth = isSelected ? 2 : 1
     if (isHovered) ctx.globalAlpha = 0.7
-    roundRect(ctx, x1, barY, barW, barH, BAR_RADIUS)
+    roundRect(ctx, x, barY, barW, barH, BAR_RADIUS)
     ctx.stroke()
     ctx.globalAlpha = 1
 
@@ -334,12 +346,12 @@ export function renderConsortium(
       ctx.font = `600 10px ${fontSans}`
       ctx.save()
       ctx.beginPath()
-      ctx.rect(x1 + 4, barY, barW - 8, barH)
+      ctx.rect(x + 4, barY, barW - 8, barH)
       ctx.clip()
       const label = bar.count > 0
         ? `${bar.commonName} (${bar.count})`
         : bar.commonName
-      ctx.fillText(label, x1 + 7, barY + barH / 2 + 3.5)
+      ctx.fillText(label, x + 7, barY + barH / 2 + 3.5)
       ctx.restore()
       ctx.globalAlpha = 1
     } else if (barW > 20) {
@@ -348,7 +360,7 @@ export function renderConsortium(
       ctx.globalAlpha = 0.9
       ctx.font = `600 9px ${fontSans}`
       ctx.textAlign = 'center'
-      ctx.fillText(`${bar.count}`, x1 + barW / 2, barY + barH / 2 + 3)
+      ctx.fillText(`${bar.count}`, x + barW / 2, barY + barH / 2 + 3)
       ctx.textAlign = 'left'
       ctx.globalAlpha = 1
     }
@@ -372,20 +384,11 @@ export function hitTestBar(
   if (x < LABEL_WIDTH || y < HEADER_HEIGHT) return null
 
   for (const bar of bars) {
-    const rowIdx = stratumToRow(bar.stratum)
-    const ry = rowY(rowIdx, rowHeights)
-    const rh = rowHeights[rowIdx] ?? MIN_ROW_HEIGHT
-    const subLaneH = rh / bar.totalSubLanes
+    const r = computeBarRect(bar, contentWidth, rowHeights)
 
-    const x1 = phaseToX(bar.startPhase, contentWidth)
-    const x2 = phaseToX(bar.endPhase + 1, contentWidth)
-    const barW = Math.max(x2 - x1, 8)
-    const barY = ry + bar.subLane * subLaneH + BAR_MARGIN
-    const barH = Math.min(BAR_HEIGHT, subLaneH - BAR_MARGIN * 2)
-
-    if (x >= x1 && x <= x1 + barW && y >= barY && y <= barY + barH) {
-      if (x - x1 < EDGE_THRESHOLD) return { canonicalName: bar.canonicalName, edge: 'left' }
-      if (x1 + barW - x < EDGE_THRESHOLD) return { canonicalName: bar.canonicalName, edge: 'right' }
+    if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) {
+      if (x - r.x < EDGE_THRESHOLD) return { canonicalName: bar.canonicalName, edge: 'left' }
+      if (r.x + r.w - x < EDGE_THRESHOLD) return { canonicalName: bar.canonicalName, edge: 'right' }
       return { canonicalName: bar.canonicalName, edge: 'body' }
     }
   }
