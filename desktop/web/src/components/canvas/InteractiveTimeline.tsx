@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'preact/hooks'
+import { useCanvasRenderer } from './useCanvasRenderer'
 import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale } from '../../state/app'
@@ -91,43 +92,17 @@ export function InteractiveTimeline({
     hoveredId: hoveredId.value,
   }
 
-  const redraw = useCallback(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-
-    const rect = canvas.getBoundingClientRect()
-    if (rect.width === 0 || rect.height === 0) return
-
-    const dpr = window.devicePixelRatio || 1
-    canvas.width = rect.width * dpr
-    canvas.height = rect.height * dpr
-
-    const context = canvas.getContext('2d')
-    if (!context) return
-
+  useCanvasRenderer(canvasRef, (ctx, width, height) => {
     renderTimeline(
-      context,
-      rect.width,
-      rect.height,
+      ctx,
+      width,
+      height,
       rowsRef.current,
       layoutRef.current,
       renderState,
       scrollY.value,
     )
   }, [renderState, scrollY.value])
-
-  useEffect(() => {
-    redraw()
-  }, [redraw])
-
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-
-    const observer = new ResizeObserver(() => redraw())
-    observer.observe(canvas)
-    return () => observer.disconnect()
-  }, [redraw])
 
   const handleWheel = useCallback((event: WheelEvent) => {
     event.preventDefault()

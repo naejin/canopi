@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'preact/hooks'
-import { useSignal, useSignalEffect } from '@preact/signals'
+import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale } from '../../state/app'
 import { plantSpeciesColors, hoveredConsortiumSpecies, sceneEntityRevision } from '../../state/canvas'
@@ -20,6 +20,7 @@ import {
   CONSORTIUM_PHASES,
   type ConsortiumRenderState,
 } from '../../canvas/consortium-renderer'
+import { useCanvasRenderer } from './useCanvasRenderer'
 import styles from './ConsortiumChart.module.css'
 
 type DragState =
@@ -67,51 +68,23 @@ export function ConsortiumChart() {
   const barsRef = useRef(bars)
   barsRef.current = bars
 
-  // Ref-based redraw to avoid re-registering ResizeObserver on data changes
-  const redrawRef = useRef<() => void>(() => {})
-  redrawRef.current = () => {
+  // Set canvas height for scrolling (outside the shared hook so
+  // getBoundingClientRect picks it up before the DPR-scaled redraw)
+  useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-
-    const rect = canvas.getBoundingClientRect()
-    if (rect.width === 0) return
-
-    const rh = rowHeightsRef.current
-    const totalHeight = HEADER_HEIGHT + rh.reduce((a, b) => a + b, 0)
+    const totalHeight = HEADER_HEIGHT + rowHeights.reduce((a, b) => a + b, 0)
     canvas.style.height = `${totalHeight}px`
+  }, [rowHeights])
 
-    const dpr = window.devicePixelRatio || 1
-    canvas.width = rect.width * dpr
-    canvas.height = totalHeight * dpr
-
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    ctx.scale(dpr, dpr)
+  // Shared DPR/resize/redraw hook
+  useCanvasRenderer(canvasRef, (ctx, width, height) => {
     const state: ConsortiumRenderState = {
       hoveredCanonical: hoveredCanonical.value,
       selectedCanonical: null,
     }
-    renderConsortium(ctx, rect.width, totalHeight, barsRef.current, state, t, rh)
-  }
-
-  useSignalEffect(() => {
-    void hoveredCanonical.value
-    redrawRef.current()
-  })
-
-  useEffect(() => {
-    redrawRef.current()
-  }, [bars])
-
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-
-    const observer = new ResizeObserver(() => redrawRef.current())
-    observer.observe(canvas)
-    return () => observer.disconnect()
-  }, [])
+    renderConsortium(ctx, width, height, barsRef.current, state, t, rowHeightsRef.current)
+  }, [bars, hoveredCanonical.value])
 
   // Clear consortium hover bridge on unmount
   useEffect(() => {
