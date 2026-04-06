@@ -271,6 +271,7 @@
     },
     "timeline": {
       "title": "Timeline",
+      "general": "General",
       "addAction": "Add action",
       "editAction": "Edit action",
       "deleteAction": "Delete action",

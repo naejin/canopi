@@ -271,6 +271,7 @@
     },
     "timeline": {
       "title": "Cronograma",
+      "general": "General",
       "addAction": "Añadir acción",
       "editAction": "Editar acción",
       "deleteAction": "Eliminar acción",

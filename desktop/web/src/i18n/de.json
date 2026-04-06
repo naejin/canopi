@@ -271,6 +271,7 @@
     },
     "timeline": {
       "title": "Zeitachse",
+      "general": "Allgemein",
       "addAction": "Aktion hinzufügen",
       "editAction": "Aktion bearbeiten",
       "deleteAction": "Aktion löschen",

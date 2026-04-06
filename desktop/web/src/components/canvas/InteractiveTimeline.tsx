@@ -108,6 +108,7 @@ export function InteractiveTimeline({
       layoutRef.current,
       renderStateRef.current,
       scrollY.value,
+      t,
     )
   }, [originDate, pxPerDay.value, scrollX.value, selectedId, hoveredId.value, scrollY.value])
 

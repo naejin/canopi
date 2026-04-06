@@ -271,6 +271,7 @@
     },
     "timeline": {
       "title": "타임라인",
+      "general": "일반",
       "addAction": "작업 추가",
       "editAction": "작업 편집",
       "deleteAction": "작업 삭제",

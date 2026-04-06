@@ -171,6 +171,7 @@ export function renderTimeline(
   layout: Map<string, ActionLayout>,
   state: TimelineRenderState,
   scrollY: number,
+  t: (key: string) => string,
 ): void {
   const dpr = window.devicePixelRatio || 1
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
@@ -284,7 +285,7 @@ export function renderTimeline(
     // Species label in sidebar
     ctx.fillStyle = textColor
     ctx.font = `600 11px ${cssVar('--font-sans') || 'system-ui, sans-serif'}`
-    const label = row.speciesName || 'General'
+    const label = row.speciesName || t('canvas.timeline.general')
     ctx.save()
     ctx.beginPath()
     ctx.rect(4, rY, chartLeft - 8, rH)

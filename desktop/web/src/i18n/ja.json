@@ -271,6 +271,7 @@
     },
     "timeline": {
       "title": "タイムライン",
+      "general": "一般",
       "addAction": "アクションを追加",
       "editAction": "アクションを編集",
       "deleteAction": "アクションを削除",

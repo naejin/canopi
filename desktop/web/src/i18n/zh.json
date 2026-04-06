@@ -271,6 +271,7 @@
     },
     "timeline": {
       "title": "时间轴",
+      "general": "通用",
       "addAction": "添加操作",
       "editAction": "编辑操作",
       "deleteAction": "删除操作",

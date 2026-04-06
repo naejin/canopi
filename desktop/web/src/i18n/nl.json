@@ -271,6 +271,7 @@
     },
     "timeline": {
       "title": "Tijdlijn",
+      "general": "Algemeen",
       "addAction": "Actie toevoegen",
       "editAction": "Actie bewerken",
       "deleteAction": "Actie verwijderen",

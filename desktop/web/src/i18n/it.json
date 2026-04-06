@@ -271,6 +271,7 @@
     },
     "timeline": {
       "title": "Calendario",
+      "general": "Generale",
       "addAction": "Aggiungi azione",
       "editAction": "Modifica azione",
       "deleteAction": "Elimina azione",
