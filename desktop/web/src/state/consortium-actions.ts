@@ -31,6 +31,22 @@ export function deleteConsortiumEntry(canonicalName: string, options: Consortium
   updateConsortiums((consortiums) => consortiums.filter((c) => c.canonical_name !== canonicalName), options)
 }
 
+/** Swap two entries' positions within the consortiums array to change sub-lane order. */
+export function reorderConsortiumEntry(
+  canonicalName: string,
+  targetIndex: number,
+  options: ConsortiumUpdateOptions = {},
+): void {
+  updateConsortiums((consortiums) => {
+    const currentIdx = consortiums.findIndex((c) => c.canonical_name === canonicalName)
+    if (currentIdx === -1 || currentIdx === targetIndex) return consortiums
+    const next = [...consortiums]
+    const [entry] = next.splice(currentIdx, 1)
+    next.splice(targetIndex, 0, entry!)
+    return next
+  }, options)
+}
+
 export function moveConsortiumEntry(
   canonicalName: string,
   updates: { stratum?: string; startPhase: number; endPhase: number },

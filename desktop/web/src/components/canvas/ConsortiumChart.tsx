@@ -5,7 +5,7 @@ import { locale } from '../../state/app'
 import { plantSpeciesColors, hoveredConsortiumSpecies, sceneEntityRevision, plantNamesRevision } from '../../state/canvas'
 import { currentDesign } from '../../state/document'
 import { currentCanvasSession } from '../../canvas/session'
-import { moveConsortiumEntry } from '../../state/consortium-actions'
+import { moveConsortiumEntry, reorderConsortiumEntry } from '../../state/consortium-actions'
 import { markDocumentDirty } from '../../state/document-mutations'
 import {
   buildConsortiumBars,
@@ -157,10 +157,33 @@ export function ConsortiumChart() {
       rowIndex = Math.max(0, Math.min(STRATA_ROWS.length - 1, rowIndex))
       const newStratum = STRATA_ROWS[rowIndex] ?? 'unassigned'
 
-      // Skip no-op updates to avoid unconditional signal writes at 60fps
       const bar = barsRef.current.find((b) => b.canonicalName === drag.canonicalName)
-      if (bar && bar.startPhase === adjustedStart && bar.endPhase === newEnd && bar.stratum === newStratum) return
+      if (!bar) return
 
+      // Vertical reorder within the same stratum
+      if (newStratum === bar.stratum && adjustedStart === bar.startPhase && newEnd === bar.endPhase) {
+        const rh = rowHeightsRef.current
+        const ry = computeRowY(rowIndex, rh)
+        const rowH = rh[rowIndex] ?? 36
+        const targetSubLane = Math.max(0, Math.min(bar.totalSubLanes - 1, Math.floor((mouseY - ry) / (rowH / bar.totalSubLanes))))
+        if (targetSubLane !== bar.subLane) {
+          // Find the bar currently in the target sub-lane and compute array indices
+          const sameStraum = barsRef.current.filter((b) => b.stratum === bar.stratum)
+          const targetBar = sameStraum[targetSubLane]
+          if (targetBar) {
+            const design = currentDesign.peek()
+            const consortiums = design?.consortiums ?? []
+            const targetArrayIdx = consortiums.findIndex((c) => c.canonical_name === targetBar.canonicalName)
+            if (targetArrayIdx !== -1) {
+              reorderConsortiumEntry(drag.canonicalName, targetArrayIdx, { markDirty: false })
+            }
+          }
+        }
+        return
+      }
+
+      // Cross-stratum or phase move
+      if (bar.startPhase === adjustedStart && bar.endPhase === newEnd && bar.stratum === newStratum) return
       moveConsortiumEntry(drag.canonicalName, { stratum: newStratum, startPhase: adjustedStart, endPhase: newEnd }, { markDirty: false })
       return
     }
