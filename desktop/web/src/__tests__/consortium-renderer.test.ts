@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildConsortiumBars,
+  filterActiveConsortiumEntries,
   hitTestBar,
   computeRowHeights,
   computeRowYOffsets,
@@ -126,6 +127,22 @@ describe('buildConsortiumBars', () => {
     const bars = buildConsortiumBars(entries, plants, {}, names)
     expect(bars).toHaveLength(1)
     expect(bars[0]!.commonName).toBe('Pommier')
+  })
+})
+
+describe('filterActiveConsortiumEntries', () => {
+  it('keeps preserved entries out of the chart until their species is placed again', () => {
+    const entries: Consortium[] = [
+      createConsortium({ canonical_name: 'Malus domestica' }),
+      createConsortium({ canonical_name: 'Acer campestre' }),
+    ]
+    const plants: PlacedPlant[] = [
+      createPlant({ canonical_name: 'Malus domestica' }),
+    ]
+
+    expect(filterActiveConsortiumEntries(entries, plants)).toEqual([
+      entries[0],
+    ])
   })
 })
 

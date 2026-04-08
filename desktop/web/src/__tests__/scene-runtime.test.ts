@@ -190,6 +190,18 @@ describe('SceneCanvasRuntime', () => {
     })
   })
 
+  it('defaults document budget currency while serializing', () => {
+    const runtime = new SceneCanvasRuntime()
+    runtime.loadDocument(BASE_FILE)
+
+    const serialized = runtime.serializeDocument(
+      { name: 'Updated' },
+      BASE_FILE,
+    )
+
+    expect(serialized.budget_currency).toBe('EUR')
+  })
+
   it('keeps scene selection authoritative and mirrors it into canvas signals', () => {
     const runtime = new SceneCanvasRuntime()
     runtime.getSceneStore().setSelection(['plant-1'])

@@ -640,7 +640,7 @@ export class SceneCanvasRuntime implements CanvasRuntime {
       consortiums: doc.consortiums,
       timeline: doc.timeline,
       budget: doc.budget,
-      budget_currency: doc.budget_currency,
+      budget_currency: doc.budget_currency ?? 'EUR',
     }
   }
 

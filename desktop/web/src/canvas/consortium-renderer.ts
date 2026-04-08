@@ -140,6 +140,14 @@ export function buildConsortiumBars(
   return bars
 }
 
+export function filterActiveConsortiumEntries(
+  entries: Consortium[],
+  plants: PlacedPlant[],
+): Consortium[] {
+  const activeSpecies = new Set(plants.map((plant) => plant.canonical_name))
+  return entries.filter((entry) => activeSpecies.has(entry.canonical_name))
+}
+
 // ---------------------------------------------------------------------------
 // Bar geometry
 // ---------------------------------------------------------------------------

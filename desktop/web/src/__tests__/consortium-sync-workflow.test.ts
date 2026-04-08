@@ -75,7 +75,7 @@ describe('consortium-sync-workflow', () => {
     expect(consortiums[0]!.stratum).toBe('unassigned')
   })
 
-  it('removes orphan consortium entries when species are deleted', () => {
+  it('preserves inactive consortium entries when species are deleted', () => {
     currentDesign.value = makeDesign({
       consortiums: [
         { canonical_name: 'Quercus robur', stratum: 'high', start_phase: 0, end_phase: 3 },
@@ -89,8 +89,8 @@ describe('consortium-sync-workflow', () => {
     sceneEntityRevision.value += 1
 
     const consortiums = currentDesign.value!.consortiums
-    expect(consortiums).toHaveLength(1)
-    expect(consortiums[0]!.canonical_name).toBe('Quercus robur')
+    expect(consortiums).toHaveLength(2)
+    expect(consortiums).toContainEqual({ canonical_name: 'Acer campestre', stratum: 'medium', start_phase: 0, end_phase: 2 })
   })
 
   it('does not increment nonCanvasRevision (markDirty: false)', () => {

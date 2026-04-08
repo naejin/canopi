@@ -9,6 +9,7 @@ import { moveConsortiumEntry, reorderConsortiumEntry } from '../../state/consort
 import { markDocumentDirty } from '../../state/document-mutations'
 import {
   buildConsortiumBars,
+  filterActiveConsortiumEntries,
   renderConsortium,
   hitTestBar,
   computeRowHeights,
@@ -73,7 +74,10 @@ export function ConsortiumChart() {
   localizedNamesRef.current = localizedNames
 
   const bars = useMemo(
-    () => buildConsortiumBars(consortiumsRef.current, plantsRef.current, colors, localizedNamesRef.current),
+    () => {
+      const activeEntries = filterActiveConsortiumEntries(consortiumsRef.current, plantsRef.current)
+      return buildConsortiumBars(activeEntries, plantsRef.current, colors, localizedNamesRef.current)
+    },
     // sceneEntityRevision + plantNamesRevision are the real change triggers;
     // plants/localizedNames are read from refs to avoid unstable array deps.
     // consortiums is a stable ref (only changes on mutateCurrentDesign), so

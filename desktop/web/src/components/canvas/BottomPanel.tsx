@@ -1,10 +1,23 @@
 import { useEffect, useRef } from 'preact/hooks'
+import { lazy, Suspense } from 'preact/compat'
 import { bottomPanelHeight, bottomPanelOpen, bottomPanelTab } from '../../state/canvas'
 import { commitBottomPanelHeight } from '../../state/canvas-actions'
-import { TimelineTab } from './TimelineTab'
-import { BudgetTab } from './BudgetTab'
-import { ConsortiumChart } from './ConsortiumChart'
 import styles from './BottomPanel.module.css'
+
+const TimelineTab = lazy(async () => {
+  const module = await import('./TimelineTab')
+  return { default: module.TimelineTab }
+})
+
+const BudgetTab = lazy(async () => {
+  const module = await import('./BudgetTab')
+  return { default: module.BudgetTab }
+})
+
+const ConsortiumChart = lazy(async () => {
+  const module = await import('./ConsortiumChart')
+  return { default: module.ConsortiumChart }
+})
 
 export function BottomPanel() {
   if (!bottomPanelOpen.value) return null
@@ -20,9 +33,11 @@ function BottomPanelInner() {
     <div ref={panelRef} className={styles.panel} style={{ height: `${height}px` }}>
       <ResizeHandle panelRef={panelRef} />
       <div className={styles.content}>
-        {tab === 'timeline' && <TimelineTab />}
-        {tab === 'budget' && <BudgetTab />}
-        {tab === 'consortium' && <ConsortiumChart />}
+        <Suspense fallback={<div className={styles.loading} aria-hidden="true" />}>
+          {tab === 'timeline' && <TimelineTab />}
+          {tab === 'budget' && <BudgetTab />}
+          {tab === 'consortium' && <ConsortiumChart />}
+        </Suspense>
       </div>
     </div>
   )

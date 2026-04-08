@@ -33,24 +33,15 @@ export function installConsortiumSync(): void {
       }
     }
 
-    const toDelete = new Set<string>()
-    for (const c of currentConsortiums) {
-      if (!currentNames.has(c.canonical_name)) {
-        toDelete.add(c.canonical_name)
-      }
-    }
-
-    if (toAdd.length === 0 && toDelete.size === 0) return
+    // Additive only: consortium entries are user-authored document metadata.
+    // Deleting them here would make canvas undo restore plants without restoring
+    // the user's stratum/phase edits. The chart filters inactive entries at
+    // render time, so preserved entries do not appear for absent species.
+    if (toAdd.length === 0) return
 
     mutateCurrentDesign((design) => {
-      let consortiums = design.consortiums
-      if (toDelete.size > 0) {
-        consortiums = consortiums.filter((c) => !toDelete.has(c.canonical_name))
-      }
-      if (toAdd.length > 0) {
-        const newEntries = toAdd.map((name) => ({ canonical_name: name, stratum: DEFAULT_STRATUM, start_phase: 0, end_phase: 2 }))
-        consortiums = [...consortiums, ...newEntries]
-      }
+      const newEntries = toAdd.map((name) => ({ canonical_name: name, stratum: DEFAULT_STRATUM, start_phase: 0, end_phase: 2 }))
+      const consortiums = [...design.consortiums, ...newEntries]
       return { ...design, consortiums }
     }, { markDirty: false })
   })
