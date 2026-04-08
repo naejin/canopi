@@ -1,8 +1,8 @@
-import { useCallback, useMemo, useRef } from 'preact/hooks'
+import { useCallback, useEffect, useMemo, useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale } from '../../state/app'
-import { sceneEntityRevision, plantNamesRevision } from '../../state/canvas'
+import { sceneEntityRevision, plantNamesRevision, hoveredPanelTargets } from '../../state/canvas'
 import { currentDesign, designName } from '../../state/document'
 import { currentCanvasSession } from '../../canvas/session'
 import { exportFile } from '../../ipc/design'
@@ -10,12 +10,20 @@ import { setPlantBudgetPrice, setBudgetCurrency } from '../../state/budget-actio
 import { Dropdown } from '../shared/Dropdown'
 import { CURRENCY_ITEMS } from './budget-currencies'
 import { countPlants, buildPriceMap, formatCurrency, escapeCsvField } from './budget-helpers'
-import type { BudgetItem, PlacedPlant } from '../../types/design'
+import { getBudgetHoverTarget, getBudgetSpeciesTarget, panelTargetsEqual } from '../../panel-targets'
+import type { BudgetItem, PanelTarget, PlacedPlant } from '../../types/design'
 import styles from './BudgetTab.module.css'
 
 const EMPTY_BUDGET: BudgetItem[] = []
 const EMPTY_PLANTS: PlacedPlant[] = []
 const EMPTY_NAMES: ReadonlyMap<string, string | null> = new Map()
+const EMPTY_PANEL_TARGETS: readonly PanelTarget[] = []
+
+function setBudgetHoveredPanelTargets(targets: readonly PanelTarget[]): void {
+  if (!panelTargetsEqual(hoveredPanelTargets.peek(), targets)) {
+    hoveredPanelTargets.value = targets
+  }
+}
 
 export function BudgetTab() {
   const session = currentCanvasSession.value
@@ -37,6 +45,14 @@ export function BudgetTab() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const groupedPlants = useMemo(() => countPlants(plantsRef.current, localizedNamesRef.current, locale.value), [sceneEntityRevision.value, plantNamesRevision.value, locale.value])
   const priceMap = useMemo(() => buildPriceMap(budget), [budget])
+  const budgetItemMap = useMemo(() => {
+    const map = new Map<string, BudgetItem>()
+    for (const item of budget) {
+      const target = getBudgetSpeciesTarget(item)
+      if (target) map.set(target.canonical_name, item)
+    }
+    return map
+  }, [budget])
   const totalPlants = useMemo(() => groupedPlants.reduce((sum, row) => sum + row.count, 0), [groupedPlants])
   const pricedCount = useMemo(() => groupedPlants.filter((row) => (priceMap.get(row.canonical)?.unit_cost ?? 0) > 0).length, [groupedPlants, priceMap])
   const grandTotal = useMemo(() => groupedPlants.reduce((total, row) => {
@@ -57,6 +73,16 @@ export function BudgetTab() {
     setPlantBudgetPrice(canonical, parseFloat(editPrice.value) || 0)
     editingCanonical.value = null
   }, [])
+
+  const handleRowMouseEnter = useCallback((canonical: string) => {
+    setBudgetHoveredPanelTargets([getBudgetHoverTarget(budgetItemMap.get(canonical), canonical)])
+  }, [budgetItemMap])
+
+  const clearBudgetHover = useCallback(() => {
+    setBudgetHoveredPanelTargets(EMPTY_PANEL_TARGETS)
+  }, [])
+
+  useEffect(() => clearBudgetHover, [clearBudgetHover])
 
   async function handleExportCSV() {
     const header = [t('canvas.budget.species'), t('canvas.budget.quantity'), t('canvas.budget.unitCost'), t('canvas.budget.lineTotal'), t('canvas.budget.currency')].map(escapeCsvField).join(',')
@@ -116,7 +142,7 @@ export function BudgetTab() {
         </button>
       </div>
 
-      <div className={styles.tableWrapper}>
+      <div className={styles.tableWrapper} onMouseLeave={clearBudgetHover}>
         <table className={styles.table}>
           <thead>
             <tr>
@@ -134,7 +160,12 @@ export function BudgetTab() {
               const isEditing = editingCanonical.value === row.canonical
 
               return (
-                <tr key={row.canonical} className={styles.row}>
+                <tr
+                  key={row.canonical}
+                  className={styles.row}
+                  onMouseEnter={() => handleRowMouseEnter(row.canonical)}
+                  onMouseLeave={clearBudgetHover}
+                >
                   <td>
                     <div className={styles.tdSpecies}>
                       <span className={styles.commonName}>{row.commonName || row.canonical}</span>

@@ -3,6 +3,7 @@ import { useCanvasRenderer } from './useCanvasRenderer'
 import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale } from '../../state/app'
+import { hoveredPanelTargets } from '../../state/canvas'
 import { currentDesign } from '../../state/document'
 import {
   deleteTimelineAction,
@@ -23,7 +24,8 @@ import {
   type TimelineRenderState,
 } from '../../canvas/timeline-renderer'
 import { dateToX, snapToDay, toISODate } from '../../canvas/timeline-math'
-import type { TimelineAction } from '../../types/design'
+import { getTimelineHoverTargets, panelTargetsEqual } from '../../panel-targets'
+import type { PanelTarget, TimelineAction } from '../../types/design'
 import styles from './InteractiveTimeline.module.css'
 
 export type Granularity = 'month' | 'year'
@@ -63,6 +65,13 @@ type DragState =
   | null
 
 const EMPTY_ACTIONS: TimelineAction[] = []
+const EMPTY_PANEL_TARGETS: readonly PanelTarget[] = []
+
+function setTimelineHoveredPanelTargets(targets: readonly PanelTarget[]): void {
+  if (!panelTargetsEqual(hoveredPanelTargets.peek(), targets)) {
+    hoveredPanelTargets.value = targets
+  }
+}
 
 export function InteractiveTimeline({
   granularity,
@@ -253,14 +262,20 @@ export function InteractiveTimeline({
       rowOffsetsRef.current,
     )
 
-    const newHoveredId = hit ? hit.action.id : null
-    if (hoveredId.value !== newHoveredId) hoveredId.value = newHoveredId
+    if (hit) {
+      if (hoveredId.value !== hit.action.id) hoveredId.value = hit.action.id
+      setTimelineHoveredPanelTargets(getTimelineHoverTargets(hit.action))
+    } else {
+      if (hoveredId.value !== null) hoveredId.value = null
+      setTimelineHoveredPanelTargets(EMPTY_PANEL_TARGETS)
+    }
     const newCursor = hit ? 'grab' : mouseY < RULER_HEIGHT ? 'default' : 'crosshair'
     if (canvas.style.cursor !== newCursor) canvas.style.cursor = newCursor
   }, [])
 
   const handleMouseLeave = useCallback(() => {
     if (hoveredId.value !== null) hoveredId.value = null
+    setTimelineHoveredPanelTargets(EMPTY_PANEL_TARGETS)
     if (canvasRef.current) canvasRef.current.style.cursor = 'default'
   }, [])
 
@@ -295,6 +310,7 @@ export function InteractiveTimeline({
       }
       dragState.current = null
       lastDragDates.current = { start: '', end: null }
+      setTimelineHoveredPanelTargets(EMPTY_PANEL_TARGETS)
     }
   }, [])
 
