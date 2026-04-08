@@ -9,7 +9,7 @@ import {
   installConsortiumSync,
 } from '../../state/document'
 import { autosaveDesign } from '../../ipc/design'
-import { CanvasSession, getCurrentCanvasSession, setCurrentCanvasSession } from '../../canvas/session'
+import { getCurrentCanvasSession, setCurrentCanvasSession } from '../../canvas/session'
 import { SceneCanvasRuntime } from '../../canvas/runtime/scene-runtime'
 import { CanvasToolbar } from '../canvas/CanvasToolbar'
 import { ZoomControls } from '../canvas/ZoomControls'
@@ -28,7 +28,6 @@ export function CanvasPanel() {
   const canvasAreaRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const rulerOverlayRef = useRef<HTMLDivElement>(null)
-  const sessionRef = useRef<CanvasSession | null>(null)
 
   useEffect(() => {
     const container = containerRef.current
@@ -36,8 +35,6 @@ export function CanvasPanel() {
     if (!container || !canvasArea) return
 
     const runtime = new SceneCanvasRuntime()
-    const session = new CanvasSession(runtime)
-    sessionRef.current = session
     let cancelled = false
     let cancelQueuedLoad = () => {}
     let resizeObserver: ResizeObserver | null = null
@@ -45,27 +42,27 @@ export function CanvasPanel() {
     void runtime.init(container).then(() => {
       if (cancelled) return
 
-      setCurrentCanvasSession(session)
-      session.initializeViewport()
+      setCurrentCanvasSession(runtime)
+      runtime.initializeViewport()
       if (rulerOverlayRef.current) {
-        session.attachRulersTo(rulerOverlayRef.current)
+        runtime.attachRulersTo(rulerOverlayRef.current)
       }
       if (currentDesign.value) {
-        loadCanvasFromDocument(currentDesign.value, session)
-        session.showCanvasChrome()
+        loadCanvasFromDocument(currentDesign.value, runtime)
+        runtime.showCanvasChrome()
       } else {
         // Install consortium sync unconditionally — queued document loads
         // (OS file-open) call applyDocumentReplacement which does not go
         // through loadCanvasFromDocument, so the sync must already be active.
         installConsortiumSync()
-        session.hideCanvasChrome()
+        runtime.hideCanvasChrome()
       }
 
       resizeObserver = new ResizeObserver(() => {
         runtime.resize(canvasArea.clientWidth, canvasArea.clientHeight)
       })
       resizeObserver.observe(canvasArea)
-      cancelQueuedLoad = consumeQueuedDocumentLoad(session)
+      cancelQueuedLoad = consumeQueuedDocumentLoad(runtime)
     }).catch((error) => {
       console.error('Failed to initialize scene canvas runtime:', error)
     })
@@ -76,15 +73,14 @@ export function CanvasPanel() {
       cancelQueuedLoad()
       if (currentDesign.value) {
         try {
-          snapshotCanvasIntoCurrentDocument(session, designName.value)
+          snapshotCanvasIntoCurrentDocument(runtime, designName.value)
           markCanvasDetachedDirty(canvasDirty.value)
         } catch (error) {
           console.error('Failed to snapshot canvas before teardown:', error)
         }
       }
       disposeDocumentWorkflows()
-      session.destroy()
-      sessionRef.current = null
+      runtime.destroy()
       setCurrentCanvasSession(null)
     }
   }, [])

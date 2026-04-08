@@ -1,30 +1,21 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { selectedObjectIds } from '../state/canvas'
-import { CanvasSession } from '../canvas/session'
+import { currentCanvasReady, currentCanvasSession, setCurrentCanvasSession } from '../canvas/session'
 import { SceneCanvasRuntime } from '../canvas/runtime/scene-runtime'
 
-describe('CanvasSession selection authority', () => {
+describe('canvas session readiness', () => {
   beforeEach(() => {
-    selectedObjectIds.value = new Set()
+    setCurrentCanvasSession(null)
   })
 
-  it('delegates selection reads and writes to the runtime', () => {
+  it('tracks readiness directly from the mounted runtime signal', () => {
     const runtime = new SceneCanvasRuntime()
-    const session = new CanvasSession(runtime)
 
-    runtime.getSceneStore().setSelection(['scene-1'])
-    selectedObjectIds.value = new Set(['mirror-1'])
+    setCurrentCanvasSession(runtime)
+    expect(currentCanvasSession.value).toBe(runtime)
+    expect(currentCanvasReady.value).toBe(true)
 
-    expect(session.getSelection()).toEqual(new Set(['scene-1']))
-
-    session.setSelection(['scene-2'])
-    expect(runtime.getSceneStore().session.selectedEntityIds).toEqual(new Set(['scene-2']))
-    expect(selectedObjectIds.value).toEqual(new Set(['scene-2']))
-    expect(session.getSelection()).toEqual(new Set(['scene-2']))
-
-    session.clearSelection()
-    expect(runtime.getSceneStore().session.selectedEntityIds.size).toBe(0)
-    expect(selectedObjectIds.value.size).toBe(0)
-    expect(session.getSelection().size).toBe(0)
+    setCurrentCanvasSession(null)
+    expect(currentCanvasSession.value).toBe(null)
+    expect(currentCanvasReady.value).toBe(false)
   })
 })
