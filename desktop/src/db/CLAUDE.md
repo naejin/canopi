@@ -1,6 +1,7 @@
 # Database & SQLite
 
 ## Schema & Contract
+- This file covers SQLite plant/user DB contracts only. `.canopi` file-format migrations such as panel-target v1→v2 repair belong in `desktop/src/design/format.rs`, not in the DB modules
 - **Plant DB schema contract**: `scripts/schema-contract.json` maps canopi-data export columns to canopi-core.db columns. `prepare-db.py` reads from this contract, not hardcoded lists. When canopi-data changes column names, update the contract — not the Rust code
 - **Plant detail query has one projection owner**: `detail.rs` owns a single ordered species-detail projection with cursor-based row mapping and contract-driven SQL generation. When adding/removing plant-detail fields, update that projection owner, the mapper, and the contract tests in the same patch instead of editing scattered `row.get(...)` sites
 - **`schema_contract.rs` module**: Runtime schema validation — checks `user_version`, expected table presence, and column counts at startup. Warns on drift but does not block startup

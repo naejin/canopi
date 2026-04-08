@@ -1,36 +1,38 @@
 # Canvas Runtime: Scene-Owned Production Path
 
-## Current Status (2026-04-02)
+## Current Status (2026-04-08)
 
 The live canvas now runs through `SceneCanvasRuntime`.
 
 Production ownership is:
 - `CanvasPanel` mounts `SceneCanvasRuntime`
-- `SceneCanvasRuntime` is the app-facing canvas authority (via interface, not the `CanvasSession` pass-through — see Public Seams below)
-- `SceneStore` is the source of truth for **canvas scene state** (plants, zones, annotations, groups, layers, plant-species-colors). Non-canvas document sections (consortiums, timeline, budget) are owned by the document store — see root `CLAUDE.md` Document Authority Rule
+- `SceneCanvasRuntime` implements the app-facing `CanvasRuntime` interface; `currentCanvasSession` stores `CanvasRuntime | null` directly
+- `SceneStore` is the source of truth for **canvas scene state** (plants, zones, annotations, groups, layers, plant-species-colors). Non-canvas document sections (consortiums, timeline, budget, `budget_currency`, location, description, extra) are owned by the document store — see root `CLAUDE.md` Document Authority Rule
 - `RendererHost` owns backend selection, startup fallback, and runtime recovery
 - `PixiJS` is the primary world renderer
 - `Canvas2D` is the fallback renderer
-- MapLibre is a derived visualization layer managed by a dedicated controller, not embedded in the canvas runtime (see root `CLAUDE.md` MapLibre Integration Rule)
+- Future in-canvas MapLibre must be a derived visualization layer managed by a dedicated controller, not embedded in the canvas runtime (see root `CLAUDE.md` MapLibre Integration Rule)
 
 Landed in the live path:
 - scene-owned load/replace/save flows
 - scene-owned selection, drag, rectangle creation, text annotations, plant-stamp placement, and drag-drop placement
 - command/patch history in `scene-history.ts` and `scene-commands.ts`
 - first-class top-level document `annotations`
+- typed panel-target hover/selection highlights via `PanelTarget[]` + `resolvePanelTargets()`
+- pure panel-target map projection via `projectPanelTargetsToMapFeatures()` for future rendered overlays
 
-Legacy Konva / `CanvasEngine` code may still exist in-tree as superseded history, but it is no longer the live canvas authority for rendering, interaction, or persistence.
+Konva / `CanvasEngine` code has been removed. Do not reintroduce Konva or `getEngine()`-style escape hatches.
 
 ## Architecture Rules
 
 ### Public Seams
 - App code must not reach into renderer implementations or runtime internals
-- The app-facing canvas boundary should be a TypeScript interface implemented by `SceneCanvasRuntime`, not a 1:1 pass-through class. `CanvasSession` in its current form (200 lines of pure delegation) should be replaced with an interface or given real logic (validation, error boundaries, logging)
-- As bottom panels need to read canvas entity state (plant list, species, positions), consider splitting into two interfaces: one for **interaction commands** (tools, selection, history, zoom) and one for **state queries** (entity reads for panels, bounds for map sync). Both implemented by the runtime
+- The app-facing canvas boundary is the `CanvasRuntime` TypeScript interface implemented by `SceneCanvasRuntime`; the old 1:1 `CanvasSession` pass-through class is gone
+- As bottom panels/map surfaces need more derived data, consider splitting `CanvasRuntime` into two interfaces: one for **interaction commands** (tools, selection, history, zoom) and one for **state queries/projections** (entity reads for panels, bounds/features for map sync). Both should still be implemented by the runtime or pure helpers, not by renderer internals
 
 ### State Ownership
 - `SceneStore` owns **canvas scene state**: plants, zones, annotations, groups, layers, plant-species-colors, and ephemeral session state (selection, viewport, hover, presentation modes)
-- Non-canvas document sections (consortiums, timeline, budget, location, description, extra) are **not** owned by `SceneStore` — they belong to the document store. See root `CLAUDE.md` Document Authority Rule
+- Non-canvas document sections (consortiums, timeline, budget, `budget_currency`, location, description, extra) are **not** owned by `SceneStore` — they belong to the document store. See root `CLAUDE.md` Document Authority Rule
 - Commands, tools, save/load, and document replacement mutate scene state, not renderer objects
 - Canvas-owned document fields serialize from the live scene, not from stale document input copies
 - Top-level `annotations` belong in the schema; do not put live annotations back under `extra`
@@ -38,6 +40,7 @@ Legacy Konva / `CanvasEngine` code may still exist in-tree as superseded history
 - The only active presentation fields are `plantSizeMode` and `plantColorByAttr`
 - Selection truth lives in `SceneStore.session.selectedEntityIds`
 - Canvas signals such as `selectedObjectIds`, `plantSizeMode`, and `plantColorByAttr` are UI mirrors, not runtime authority. Prefer computed/derived signals over manually-synced mirrors (see root `CLAUDE.md` Signal Mirror Rule)
+- Panel-origin target hover/selection signals are presentation inputs only. Resolving `hoveredPanelTargets` or `selectedPanelTargets` must not mutate real canvas selection, labels, dirty state, or history unless a future slice explicitly designs that behavior
 
 ### Rendering Ownership
 - `RendererHost` owns backend lifecycle, capability probing, and fallback
@@ -54,7 +57,14 @@ Legacy Konva / `CanvasEngine` code may still exist in-tree as superseded history
 - Off-canvas drag continuation, multi-drag, and additive selection behavior are part of the contract
 - Plant hit testing must use the same shared presentation context as renderers and fit/bounds logic
 - Interaction selection writes must go through the runtime-owned selection seam; runtime logic must read authoritative selection from scene session
-- MapLibre interaction (map pan/zoom, click-on-map) is owned by the MapLibre controller, not by `SceneInteractionController`. The two coordinate through `CameraController` for viewport sync
+- Future in-canvas MapLibre interaction (map pan/zoom, click-on-map) belongs in a MapLibre controller, not in `SceneInteractionController`. The two should coordinate through `CameraController` for viewport sync
+
+### Panel Target Projection Rules
+- Timeline, budget, and consortium identity is typed with `PanelTarget[]` / `PanelTarget`; do not reintroduce string matching against timeline descriptions, legacy `plants` arrays, budget descriptions, or consortium canonical-name fields
+- Use `resolvePanelTargets()` to map typed panel targets to scene plant/zone IDs for canvas highlights
+- Use `projectPanelTargetsToMapFeatures()` to turn typed panel targets into map-ready plant point / zone polygon features for future rendered overlays
+- `manual` and `none` targets are intentionally empty, not unresolved errors
+- Canvas-origin hover uses `hoveredCanvasTargets` and must remain separate from panel-origin hover/selection ownership
 
 ### Annotation Rules
 - annotation geometry must come from shared helpers in `runtime/annotation-layout.ts`
@@ -102,21 +112,20 @@ App code
   │           │   ├── Pixi scene renderer
   │           │   └── Canvas2D scene renderer
   │           └── HTML rulers / overlay chrome
-  ├── MapLibreController (derived visualization, sibling to runtime)
+  ├── Future MapLibreController (derived visualization, sibling to runtime)
   │     └── syncs viewport via CameraController
-  └── Document store (non-canvas state: consortiums, timeline, budget)
+  └── Document store (non-canvas state: consortiums, timeline, budget, budget_currency, location, description, extra)
         └── state/design.ts + state/document.ts
 ```
 
 ## Active Work
 
-The rewrite cutover is complete. Konva dependency has been fully removed. Current focus is convergence for panel/map expansion:
+The rewrite cutover is complete. Konva dependency has been fully removed. Current focus is narrow panel/map expansion and cleanup:
 - Keep save/load strictly scene-authoritative for canvas entities
 - Keep annotation geometry consistent across runtime, interaction, and renderers
 - Keep plant presentation state scene-session-owned and geometry consistent across all consumers
-- Converge the save-time merge seam in `serializeDocument()` — non-canvas sections should come from the document store directly, not be re-merged into `SceneStore` at save time
-- Replace `CanvasSession` pass-through with a runtime interface (or give it real logic)
-- Preserve the lazy import boundary around `maplibre-gl` for bundle size
+- Keep typed panel-target bridges resolver-based and presentation-only unless a future slice explicitly designs real selection/history behavior
+- Preserve the lazy import boundary around `maplibre-gl` for bundle size; verify chunk/lifecycle behavior before changing imports
 - Keep docs synchronized with the live scene runtime
 
 ### Consortium Succession Chart
@@ -125,7 +134,7 @@ The rewrite cutover is complete. Konva dependency has been fully removed. Curren
 - **`useCanvasRenderer` accepts optional `cachedRectRef` parameter**: Pass a `useRef<DOMRect | null>(null)` as the 4th argument — the hook uses it in `doRedraw` (avoids `getBoundingClientRect()` on dep-triggered redraws at 60fps) and the ResizeObserver invalidates it on resize. Do not create a separate ResizeObserver for `cachedRectRef` invalidation
 - **Renderers and hit-testers accept optional `rowOffsets`/`cachedRowOffsets` param**: Callers cache offsets in a ref via `useMemo` and pass them in to avoid per-frame recomputation. Both `renderTimeline` and `hitTestAction` follow this pattern
 - **Drag `cachedRect` pattern**: Store `canvas.getBoundingClientRect()` in `DragState.cachedRect` during `mousedown`. Use `drag?.cachedRect ?? canvas.getBoundingClientRect()` in `mousemove` — avoids forced layout at 60fps during drag. Both `ConsortiumChart` and `InteractiveTimeline` follow this pattern
-- `hoveredConsortiumSpecies` signal bridges chart hover to canvas highlight — `effects.ts` has a dedicated `onConsortiumHover` effect that calls `_invalidate('scene')` when it changes
+- Consortium, timeline, and budget hover bridge to canvas highlights through `hoveredPanelTargets`; timeline/budget panel-origin selection uses `selectedPanelTargets` plus `selectedPanelTargetOrigin`
 - **Within-stratum drag reorder is correct with mixed-strata arrays**: `reorderConsortiumEntry` uses `findIndex` on the target bar's canonical name to get its absolute array index, then splice remove-then-insert. This correctly preserves intra-stratum ordering even when entries from other strata are interleaved in the array — the relative order of same-stratum entries changes while other-stratum entries stay in place. Do not "fix" this by switching to stratum-relative indexing
 - **Consortium sync diffs against actual consortium state, not a cache**: `consortium-sync-workflow.ts` compares `getPlacedPlants()` names against `design.consortiums` entries directly on each `sceneEntityRevision` bump. Do not add a `lastSyncedNames` cache — it introduces stale-state bugs when consortiums are modified externally (template import, undo) and the `toAdd/toDelete` emptiness check is a sufficient no-op guard
 - `sceneEntityRevision` is incremented in `_markCanvasDirty()`, `undo()`/`redo()`, `loadDocument()`, and `replaceDocument()` — if adding a new mutation path, it must also increment this signal or bottom-panel components will not update
@@ -143,7 +152,7 @@ The rewrite cutover is complete. Konva dependency has been fully removed. Curren
 - **`bars` useMemo must include `consortiums` in deps**: `sceneEntityRevision` alone is insufficient — `reorderConsortiumEntry` during drag uses `markDirty: false` which doesn't increment `sceneEntityRevision`. The `consortiums` array ref from `currentDesign` is stable (only changes on `mutateCurrentDesign`), so it's safe as a dep alongside the revision signals
 - **Date formatting in Canvas2D renderers**: Use `Intl.DateTimeFormat` (or `date.toLocaleDateString(locale, ...)`) — never hardcoded English month arrays. Thread `locale` through the render state object alongside `t`
 - **No module-level mutable state for per-instance data**: Canvas2D helpers that cache theme colors (grid colors, ruler colors) must use instance properties, not `let` variables at module scope — multiple instances overwrite each other
-- **Unmount mid-drag cleanup**: `ConsortiumChart`'s unmount effect must call `markDocumentDirty()` if `dragState.current` is non-null — the normal `handleMouseUp` path won't fire if the component unmounts mid-drag (e.g., tab switch while holding mouse button)
+- **Unmount mid-drag cleanup**: Canvas2D tab components must call `markDocumentDirty()` only when `dragState.current?.hasMutated` is true, then clear the ref. The normal `handleMouseUp` path will not fire if the component unmounts mid-drag, but mousedown-without-movement must not mark dirty
 - **Guard `pxPerDay <= 0` in `renderTimeline`**: Before initial layout measurement, `pxPerDay` can be 0 — `niceInterval` returns `intervalMs=0`, causing an infinite tick loop. All Canvas2D renderers with time-based tick loops must guard against zero-density inputs
 - **`_formatDist` and `_formatDistance` are parallel implementations**: `scale-bar.ts` and `rulers.ts` each have private distance formatters. When changing format style (spacing, units), update both. A shared extractor was evaluated and rejected — the functions have different domain needs (rulers handle negatives, scale-bar doesn't)
 - **`consortium-sync-workflow` must subscribe to `currentDesign.value`** (not `.peek()`): The effect needs to re-trigger on document replacement (open/new/import), not just `sceneEntityRevision`. Use `.peek()` only inside the `mutateCurrentDesign` callback to avoid re-execution loops — but the outer read must be `.value` for subscription
@@ -162,9 +171,9 @@ The rewrite cutover is complete. Konva dependency has been fully removed. Curren
 - `computeSceneBounds()` must include annotation extents, not only annotation anchor points
 - `computeSceneBounds()` and grouping bounds must use the runtime plant presentation context, not raw `plant.scale`
 - Species-wide plant colors are document state and must survive save/reload
-- `ScenePersistedState` has a `version` field but no migration code reads it yet. Before the first breaking schema change, add a `migrateDocument()` step in the load path
+- Rust `load_from_file()` has a version-dispatched `migrate_design_value()` path for v1→v2 legacy panel target migration. Before the next breaking schema change, add the corresponding migration case there and add/adjust frontend fixtures rather than scattering ad hoc compatibility logic
 
 ### Scene Codec Contract
-- `serializeScenePersistedState` only produces canvas-entity fields — when adding new required fields to `CanopiFile` that are non-canvas state (consortiums, timeline, budget), the codec must emit empty placeholder values to satisfy the type contract. `serializeDocument()` overwrites them with document-store values
+- `serializeScenePersistedState` only produces canvas-entity fields plus document metadata placeholders — when adding new required fields to `CanopiFile` that are non-canvas state (consortiums, timeline, budget, `budget_currency`), the codec must emit empty placeholder/default values to satisfy the type contract. `serializeDocument()` overwrites them with document-store values
 - **Canvas DPR sizing must use `Math.round()`** — `canvas.width = cssWidth * dpr` produces floats on fractional-DPR screens (1.25, 1.5, 1.75). The browser truncates to integer on assignment, so the guard `canvas.width !== newW` never matches on subsequent frames → unconditional buffer reallocation. Always `Math.round(cssWidth * dpr)`. Pattern established in `useCanvasRenderer`, `_drawGrid`, and all ruler functions
 - **`ctx.setTransform()` not `ctx.scale()` after size guards** — when a size guard prevents canvas clearing, `ctx.scale(dpr, dpr)` accumulates (2x, 4x, 8x…) because the transform matrix persists. `ctx.setTransform(dpr, 0, 0, dpr, 0, 0)` atomically resets-and-sets. Both `useCanvasRenderer` and ruler functions use `setTransform`

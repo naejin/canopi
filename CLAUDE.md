@@ -32,6 +32,7 @@ Domain-specific instructions in subdirectory CLAUDE.md files:
 - **Left**: Canvas toolbar (38px) — drawing tools plus plant color action (Select, Hand, Rectangle, Text, Plant Color + Grid/Snap/Rulers toggles)
 - **Center**: Canvas workspace
 - **Right**: PanelBar (36px, always visible) + sliding panels (plant search, favorites)
+- **Bottom**: Bottom panel with active Timeline, Budget, and Consortium tabs
 - **Title bar**: Logo + file name + lang/theme toggle + window controls
 - **No activity bar** — removed, navigation via PanelBar
 - **No status bar** — removed, controls moved to title bar
@@ -51,7 +52,7 @@ These features were deleted during pre-rewrite cleanup. See `docs/todo.md` for c
 - **Export**: GeoJSON, PNG/SVG export commands
 - **Old support files**: dimensions.ts, pattern-math.ts, map-layer.ts, old tile download modal, and old tile IPC wrappers were pruned. Current `ipc/community.ts` is live for template catalog/import workflows
 - **Retained for beta release**: LayerPanel, location flows (Wave 3 retained-surface closeout)
-- **Bottom panel shipped**: Timeline (trimmed), Budget (redesigned: summary header, document-level currency via `budget_currency`, notebook-style table, inline price editing), and Consortium (succession chart) tabs all active. Consortium auto-sync runs via `state/consortium-sync-workflow.ts` at document level. Panel↔canvas reactivity via `sceneEntityRevision` signal
+- **Bottom panel shipped**: Timeline (trimmed), Budget (redesigned: summary header, document-level currency via `budget_currency`, notebook-style table, inline price editing), and Consortium (succession chart) tabs all active. Consortium auto-sync runs via `state/consortium-sync-workflow.ts` at document level. Panel↔canvas hover/selection presentation flows through typed `PanelTarget[]` signals and `resolvePanelTargets()`
 - **Active/deferred map split**: Location flow and featured-design world map surfaces exist; in-canvas geo/terrain, offline tiles, export, and learning content remain deferred beyond beta
 - **Selection**: No resize/rotate — objects are position-only (highlight + move). Resize/rotate commands all deleted
 - **Konva engine**: Entire `CanvasEngine` + old command/tool/serializer/history/import/export system deleted. Konva dependency fully removed. Replaced by scene-owned runtime (PixiJS + Canvas2D)
@@ -68,13 +69,13 @@ These features were deleted during pre-rewrite cleanup. See `docs/todo.md` for c
 The `.canopi` file has two categories of content with separate authorities:
 
 - **Canvas scene state** (plants, zones, annotations, groups, plant-species-colors, layers) — owned by `SceneStore`. Mutations flow through the canvas runtime. Renderers and interaction are projections of this state
-- **Non-canvas document state** (consortiums, timeline, budget, location, description, extra) — owned by the document store (`state/design.ts` / `state/document.ts`). Mutations flow through `mutateCurrentDesign()` and the `*-actions.ts` modules
+- **Non-canvas document state** (consortiums, timeline, budget, `budget_currency`, location, description, extra) — owned by the document store (`state/design.ts` / `state/document.ts`). Mutations flow through `mutateCurrentDesign()` and the `*-actions.ts` modules
 
 The save path composes both into a single `CanopiFile`. Neither authority should duplicate the other's data. Panels that read canvas entities (plant list, zone names) should use a read-only query interface on the runtime, not mirrored signals.
 
 **Anti-patterns:**
-- Do not push non-canvas state (consortiums, timeline, budget) into `SceneStore` — it is not a canvas concern
-- Do not mirror canvas state into standalone signals (e.g. `currentConsortiums`) when a derived/computed value or a direct read from the authority would work
+- Do not push non-canvas state (consortiums, timeline, budget, `budget_currency`) into `SceneStore` — it is not a canvas concern
+- Do not mirror canvas state into standalone signals when a derived/computed value or a direct read from the authority would work. Removed mirrors such as `currentConsortiums` must not be reintroduced
 - Do not create new ad hoc sync paths between the two authorities — if sync is needed, centralize it in one explicit adapter
 - **Adding new document-level fields**: Add to TS `CanopiFile` interface + `KNOWN_CANOPI_KEYS` in `state/document-extra.ts` + `serializeDocument()` passthrough. Rust `#[serde(flatten)] extra` round-trips unknown keys automatically, so no Rust struct change is needed until the field requires backend logic
 - **`KNOWN_CANOPI_KEYS` must include `'extra'`** — the `extra` field is a first-class key on `CanopiFile` emitted by the scene codec. Without it, `extractExtra()` captures the `extra` object as an unknown key, risking double-nesting on round-trip
@@ -95,7 +96,7 @@ The save path composes both into a single `CanopiFile`. Neither authority should
 
 ### Signal Mirror Rule
 - **Prefer derived/computed signals over manually-synced mirrors.** If a value exists in one authority (SceneStore or document store), components should read from that authority — or from a `computed()` signal derived from it — not from a hand-copied signal that requires `syncDocumentMirrors()`
-- Existing mirrors (e.g. `currentConsortiums`) should be replaced with computed views as the document authority converges. Do not add new mirrors. `designLocation` mirror was removed — read location from `currentDesign.value?.location` directly
+- Do not add new ad hoc mirrors. Removed mirrors such as `currentConsortiums` and `designLocation` must not be reintroduced — read location from `currentDesign.value?.location` directly
 
 ### Resource Ownership Rule
 - Every resource-owning surface must have **one explicit lifecycle owner** for setup, update, and teardown
@@ -107,12 +108,15 @@ The save path composes both into a single `CanopiFile`. Neither authority should
 - Existing full-screen surfaces may keep component-local MapLibre ownership when setup/update/teardown are contained in one component (`LocationTab`, `WorldMapSurface`). Future in-canvas MapLibre must use a dedicated controller (e.g., `MapLibreController`), not scattered across the canvas runtime or individual components
 - Map viewport sync with the canvas must go through `CameraController`, not ad hoc signal wiring
 - The lazy import boundary around `maplibre-gl` should be preserved for bundle size, but isolation from the canvas runtime is no longer required — the map controller is a sibling to the runtime, not walled off from it
+- Future rendered panel↔map overlays must consume the pure `projectPanelTargetsToMapFeatures()` seam rather than re-resolving panel identity or making MapLibre a second scene/document authority
 
 ### Panel ↔ Canvas Reactivity
 - **Bottom panel components that read canvas-derived data must subscribe to `sceneEntityRevision`** from `state/canvas.ts` to react to canvas mutations (plant placement, undo/redo). Reading `currentCanvasSession.value?.getPlacedPlants()` alone is not reactive — the session reference doesn't change when scene state changes. Panels that only read non-canvas document state (e.g., TimelineTab reads `currentDesign.value?.timeline`) should NOT subscribe — it causes spurious re-renders on every canvas mutation
 - **Cross-domain auto-sync must be a workflow module** (like `consortium-sync-workflow.ts`), not a component-level effect. Component effects only run when mounted — data integrity requires document-level effects that run regardless of which tab is visible
 - **Use `.peek()` in workflow effects** to read signals without subscribing. Only subscribe to the intended trigger signal (e.g., `sceneEntityRevision`). Writing `currentDesign.value` inside an effect that subscribes to it creates re-execution loops
-- **Panel target identity must be explicit before full sync expansion.** Timeline and budget still use ambiguous strings (`TimelineAction.plants`, `TimelineAction.zone`, budget `category + description`). Before adding full panel↔canvas highlighting, canvas→chart hover, or map overlay selection, introduce typed targets such as `placed_plant`, `species`, `zone`, and `manual` / `none`, plus compatibility migration for legacy records. Consortium is currently species-targeted via `canonical_name`; keep that explicit.
+- **Panel target identity is explicit.** Timeline, budget, and consortium entries use typed `PanelTarget` identity (`placed_plant`, `species`, `zone`, `manual`, `none`) with legacy migration. Do not reintroduce string matching against timeline descriptions, legacy `plants` arrays, budget descriptions, or consortium canonical-name fields
+- **Panel-origin hover/selection is presentation state.** `hoveredPanelTargets` and `selectedPanelTargets` are resolved by `SceneCanvasRuntime` into renderer highlights only. They must not mutate real canvas selection, selection labels, dirty state, or history unless a future slice explicitly chooses and designs that behavior
+- **Canvas-origin hover is separate.** Canvas plant hover publishes `hoveredCanvasTargets` for bottom-panel affordances without changing panel selection/history
 
 ### Canvas2D Tab Components
 - **Use `useCanvasRenderer` hook** from `components/canvas/useCanvasRenderer.ts` for DPR-aware canvas setup — handles `devicePixelRatio` scaling, `ResizeObserver`, and redraw lifecycle. Both `ConsortiumChart` and `InteractiveTimeline` use it

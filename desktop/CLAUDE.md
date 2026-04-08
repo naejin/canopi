@@ -24,7 +24,7 @@
 - **Queued-load handoff** — `consumeQueuedDocumentLoad` routes through document-actions without the dirty guard (file was just opened from OS, no unsaved work to protect)
 
 ## Settings Persistence Contract
-- **Rust `Settings` (user DB) is the single source of truth** for all user preferences: locale, theme, grid, snap, autosave interval. Rust struct retains map/terrain/bottom-panel fields for forward compatibility; frontend no longer reads/writes them (pruned features)
+- **Rust `Settings` (user DB) is the single source of truth** for all user preferences: locale, theme, grid, snap, autosave interval, and bottom-panel open/height/tab state. Map/terrain fields are retained for forward compatibility while in-canvas geo work remains deferred
 - **`localStorage` is a sync cache only** — `initTheme()` reads it for instant first-paint, Rust settings overwrite on bootstrap
 - **Frontend signals are runtime projections** — hydrated from Rust on startup via `get_settings` IPC
 - **`persistCurrentSettings()` in `state/app.ts`** — must include ALL settings in the Rust `Settings` struct
@@ -72,8 +72,8 @@
 - **Linux deps**: `sudo apt-get install libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev patchelf` — do NOT install `libappindicator3-dev`
 - **`std::fs::rename` on Windows**: Fails with locked files. Use `design::atomic_replace()` with rollback sidecar
 
-## MapLibre / Terrain (deleted — deferred post-rewrite)
-MapLibre code (`map-layer.ts`, contour/hillshade effects, map sync) was deleted during pre-rewrite pruning. These gotchas apply when rebuilding:
+## MapLibre / Terrain
+Current MapLibre usage is frontend-owned in the full-screen `LocationTab` and featured-design `WorldMapSurface`. The old in-canvas `map-layer.ts`, contour/hillshade effects, and viewport-sync code were deleted during pre-rewrite pruning. These gotchas apply when rebuilding in-canvas map layers:
 - **MapLibre paint properties can't use CSS vars**: Hardcoded hex colors in MapLibre style objects are acceptable — they render on map tiles, not app chrome
 - **`maplibre-contour` for client-side DEM contours**: Use `DemSource` with AWS Terrain Tiles (Terrarium encoding). Register protocol once with `addProtocol()`
 - **MapLibre container opacity for map blending**: Apply opacity to the container div; do not make the renderer canvas transparent via renderer internals
