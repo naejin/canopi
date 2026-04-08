@@ -8,6 +8,7 @@ vi.mock('../../ipc/species', () => ({
 import {
   activeTool,
   guides,
+  hoveredPanelTargets,
   layerOpacity,
   layerVisibility,
   lockedObjectIds,
@@ -21,6 +22,7 @@ import {
 import { canvasClean } from '../../state/design'
 import { locale } from '../../state/app'
 import type { CanopiFile } from '../../types/design'
+import { speciesTarget } from '../../panel-targets'
 import { SceneCanvasRuntime } from './scene-runtime.ts'
 import { getCommonNames } from '../../ipc/species'
 
@@ -123,6 +125,7 @@ describe('scene canvas runtime', () => {
     plantStampSpecies.value = null
     snapToGridEnabled.value = false
     guides.value = []
+    hoveredPanelTargets.value = []
     layerVisibility.value = {}
     layerOpacity.value = {}
     plantSizeMode.value = 'default'
@@ -260,6 +263,30 @@ describe('scene canvas runtime', () => {
     runtime.clearSelection()
     expect(runtime.getSceneStore().session.selectedEntityIds.size).toBe(0)
     expect(selectedObjectIds.value.size).toBe(0)
+  })
+
+  it('resolves hovered panel targets for renderer highlights without mutating selection', async () => {
+    const runtime = new SceneCanvasRuntime()
+    runtime.loadDocument(makeFile())
+    const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
+
+    renderer.renderScene.mockClear()
+    hoveredPanelTargets.value = [
+      speciesTarget('Malus domestica'),
+      { kind: 'zone', zone_name: 'zone-1' },
+      { kind: 'placed_plant', plant_id: 'missing-plant' },
+    ]
+
+    await vi.waitFor(() => {
+      expect(renderer.renderScene).toHaveBeenCalled()
+    })
+
+    const snapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
+    expect(snapshot?.highlightedPlantIds).toEqual(new Set(['plant-1', 'plant-2']))
+    expect(snapshot?.highlightedZoneIds).toEqual(new Set(['zone-1']))
+    expect(runtime.getSceneStore().session.selectedEntityIds.size).toBe(0)
+    expect(selectedObjectIds.value.size).toBe(0)
+    runtime.destroy()
   })
 
   it('uses the viewport-only renderer path for zoom updates', async () => {

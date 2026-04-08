@@ -52,6 +52,7 @@ These align with the core risks identified in the architecture review.
 - ~~Consortium bare `canonical_name` identity~~ — **done**: consortium entries are species-targeted via `target`, while current chart behavior remains species aggregate based.
 - ~~Add migration/repair rules for legacy timeline `plants`, budget `description` species rows, deleted plants/zones, and duplicate species placements~~ — **done**: legacy data is migrated into typed targets; unresolved/deleted targets remain explicit for later sync/highlight repair.
 - ~~Add pure target resolver before UI sync~~ — **done** (`7bf5a54`): `resolvePanelTargets()` maps typed panel targets to scene IDs (plant IDs and zone names), reports missing scene-backed targets, and treats `manual` / `none` as intentionally empty without mutating canvas selection or history.
+- ~~Add first panel→canvas hover bridge through target resolver~~ — **done**: bottom-panel hover state now carries `PanelTarget[]`; the scene runtime resolves it to plant/zone highlight IDs without mutating canvas selection or history. Current wiring covers consortium species hover only.
 - See architecture review Finding 2
 
 **Canvas seam:**
@@ -178,7 +179,7 @@ These align with the core risks identified in the architecture review.
 - ~~Budget tab~~ — **done**: redesigned with compact summary header (species/plant counts, pricing progress), document-level currency picker (13 currencies via `budget_currency` field), notebook-style ruled table, inline price editing, CSV export. Live updates via `sceneEntityRevision`
 - ~~Consortium succession chart~~ — **done** (`9fd8cf3`..`1007a96`): Canvas2D strata×phase grid, auto-sync from placed species, drag-move/resize, hover sync with canvas
 - ~~Bottom panel state persistence~~ — **done**: open/height/tab hydrated from Rust settings on bootstrap, persisted on panel actions (height persisted on drag-end, not per-frame)
-- Remaining: full panel↔canvas highlighting sync using the pure target resolver, canvas→chart hover direction
+- Remaining: timeline/budget hover and selection wiring using the pure target resolver, canvas→chart hover direction, panel↔map sync
 
 **Other:**
 - Featured-design world map / template import

@@ -2,12 +2,12 @@ import { useCallback, useEffect, useMemo, useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale } from '../../state/app'
-import { plantSpeciesColors, hoveredConsortiumSpecies, sceneEntityRevision, plantNamesRevision } from '../../state/canvas'
+import { plantSpeciesColors, hoveredPanelTargets, sceneEntityRevision, plantNamesRevision } from '../../state/canvas'
 import { currentDesign } from '../../state/document'
 import { currentCanvasSession } from '../../canvas/session'
 import { moveConsortiumEntry, reorderConsortiumEntry } from '../../state/consortium-actions'
 import { markDocumentDirty } from '../../state/document-mutations'
-import { getConsortiumCanonicalName } from '../../panel-targets'
+import { consortiumTarget, getConsortiumCanonicalName } from '../../panel-targets'
 import {
   buildConsortiumBars,
   filterActiveConsortiumEntries,
@@ -117,7 +117,7 @@ export function ConsortiumChart() {
   useEffect(() => {
     return () => {
       if (dragState.current?.hasMutated) markDocumentDirty()
-      hoveredConsortiumSpecies.value = null
+      hoveredPanelTargets.value = []
     }
   }, [])
 
@@ -245,13 +245,13 @@ export function ConsortiumChart() {
     if (hit) {
       if (hoveredCanonical.value !== hit.canonicalName) {
         hoveredCanonical.value = hit.canonicalName
-        hoveredConsortiumSpecies.value = hit.canonicalName
+        hoveredPanelTargets.value = [consortiumTarget(hit.canonicalName)]
       }
       canvas.style.cursor = hit.edge === 'body' ? 'grab' : 'ew-resize'
     } else {
       if (hoveredCanonical.value !== null) {
         hoveredCanonical.value = null
-        hoveredConsortiumSpecies.value = null
+        hoveredPanelTargets.value = []
       }
       canvas.style.cursor = 'default'
     }
@@ -260,7 +260,7 @@ export function ConsortiumChart() {
   const handleMouseLeave = useCallback(() => {
     if (hoveredCanonical.value !== null) {
       hoveredCanonical.value = null
-      hoveredConsortiumSpecies.value = null
+      hoveredPanelTargets.value = []
     }
     if (canvasRef.current) canvasRef.current.style.cursor = 'default'
   }, [])

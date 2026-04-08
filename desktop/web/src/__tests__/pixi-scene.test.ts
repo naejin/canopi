@@ -178,6 +178,8 @@ describe('createPixiSceneRenderer', () => {
       selectedPlantIds: new Set<string>(),
       selectedZoneIds: new Set<string>(),
       selectedAnnotationIds: new Set<string>(['annotation-1']),
+      highlightedPlantIds: new Set<string>(),
+      highlightedZoneIds: new Set<string>(),
       sizeMode: 'default' as const,
       colorByAttr: null,
       localizedCommonNames: new Map(),

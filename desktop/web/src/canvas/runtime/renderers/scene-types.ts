@@ -9,6 +9,8 @@ export interface SceneRendererSnapshot {
   readonly selectedPlantIds: ReadonlySet<string>
   readonly selectedZoneIds: ReadonlySet<string>
   readonly selectedAnnotationIds: ReadonlySet<string>
+  readonly highlightedPlantIds: ReadonlySet<string>
+  readonly highlightedZoneIds: ReadonlySet<string>
   readonly sizeMode: PlantSizeMode
   readonly colorByAttr: ColorByAttribute | null
   readonly speciesCache: ReadonlyMap<string, Record<string, unknown>>

@@ -169,7 +169,7 @@ function syncZones(
       zoneGraphicsByName.set(zone.name, graphics)
       world.addChild(graphics)
     }
-    drawZone(graphics, zone, snapshot.selectedZoneIds.has(zone.name))
+    drawZone(graphics, zone, snapshot.selectedZoneIds.has(zone.name), snapshot.highlightedZoneIds.has(zone.name))
     graphics.visible = true
   }
 
@@ -182,11 +182,12 @@ function syncZones(
   }
 }
 
-function drawZone(graphics: Graphics, zone: SceneZoneEntity, selected: boolean): void {
+function drawZone(graphics: Graphics, zone: SceneZoneEntity, selected: boolean, highlighted: boolean): void {
   const visual = resolveZoneVisual(zone)
   const fillColor = toPixiColor(visual.fill, 0)
-  const strokeColor = toPixiColor(selected ? getSelectionStrokeColor() : visual.stroke, 0)
-  const strokeWidth = selected ? 3 : 2
+  const emphasized = selected || highlighted
+  const strokeColor = toPixiColor(emphasized ? getSelectionStrokeColor() : visual.stroke, 0)
+  const strokeWidth = emphasized ? 3 : 2
 
   graphics.clear()
 
@@ -256,7 +257,7 @@ function syncPlants(
       plantGraphicsById.set(entry.plant.id, circle)
       world.addChild(circle)
     }
-    drawPlant(circle, entry, snapshot.hoveredCanonicalName)
+    drawPlant(circle, entry, snapshot.hoveredCanonicalName, snapshot.highlightedPlantIds.has(entry.plant.id))
     circle.visible = true
 
     const stackCount = layout.stackCounts.get(entry.plant.id)
@@ -322,6 +323,7 @@ function drawPlant(
   graphics: Graphics,
   entry: ReturnType<typeof buildPlantPresentationEntries>[number],
   hoveredCanonicalName: string | null,
+  highlighted: boolean,
 ): void {
   const color = toPixiColor(entry.color, 0)
   const selected = entry.selected
@@ -336,7 +338,7 @@ function drawPlant(
       width: selected ? 0.35 : 0.15,
       alpha: 1,
     })
-  if (hoveredCanonicalName && entry.plant.canonicalName === hoveredCanonicalName) {
+  if (highlighted || (hoveredCanonicalName && entry.plant.canonicalName === hoveredCanonicalName)) {
     graphics.circle(x, y, r * 1.4)
       .stroke({
         color: toPixiColor(getSelectionStrokeColor(), 0),

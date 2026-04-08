@@ -2,7 +2,7 @@ import { locale } from '../../state/app'
 import {
   gridVisible,
   guides,
-  hoveredConsortiumSpecies,
+  hoveredPanelTargets,
   layerVisibility,
   lockedObjectIds,
   plantNamesRevision,
@@ -61,6 +61,7 @@ import type {
 import { createScenePatchCommand, type SceneCommandSnapshot } from './scene-commands'
 import { SceneHistory } from './scene-history'
 import type { CanvasRuntime, CanvasRuntimeDocumentMetadata } from './runtime'
+import { resolvePanelTargets } from '../../panel-target-resolution'
 
 const EMPTY_PLANT_COLOR_CONTEXT: SelectedPlantColorContext = {
   plantIds: [],
@@ -795,7 +796,7 @@ export class SceneCanvasRuntime implements CanvasRuntime {
         const changed = this._applySignalBackedSceneState({ recordHistory: true, syncGuides: true })
         if (changed) this._invalidate('scene')
       },
-      onConsortiumHover: () => {
+      onPanelTargetHover: () => {
         this._invalidate('scene')
       },
     }))
@@ -849,17 +850,20 @@ export class SceneCanvasRuntime implements CanvasRuntime {
     const hoveredPlant = session.hoveredEntityId
       ? scene.plants.find((p) => p.id === session.hoveredEntityId)
       : null
+    const highlightedSceneIds = new Set(resolvePanelTargets(hoveredPanelTargets.value, scene).sceneIds)
     return {
       scene,
       viewport: this._camera.viewport,
       selectedPlantIds: getSelectedPlantIds(scene, session.selectedEntityIds),
       selectedZoneIds: getSelectedZoneIds(scene, session.selectedEntityIds),
       selectedAnnotationIds: getSelectedAnnotationIds(scene, session.selectedEntityIds),
+      highlightedPlantIds: getSelectedPlantIds(scene, highlightedSceneIds),
+      highlightedZoneIds: getSelectedZoneIds(scene, highlightedSceneIds),
       sizeMode: session.plantSizeMode,
       colorByAttr: session.plantColorByAttr,
       speciesCache: this._speciesCache.getCache(),
       localizedCommonNames: this._plantLabels.getLocaleSnapshot(locale.value),
-      hoveredCanonicalName: hoveredPlant?.canonicalName ?? hoveredConsortiumSpecies.value ?? null,
+      hoveredCanonicalName: hoveredPlant?.canonicalName ?? null,
       selectionLabels: computeSelectionLabels(
         scene.plants,
         session.selectedEntityIds,

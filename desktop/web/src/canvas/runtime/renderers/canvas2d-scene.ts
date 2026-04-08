@@ -107,8 +107,9 @@ function renderZones(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnaps
       ctx.fill()
     }
     ctx.globalAlpha = layer.opacity
-    ctx.strokeStyle = snapshot.selectedZoneIds.has(zone.name) ? getSelectionStrokeColor() : visual.stroke
-    ctx.lineWidth = (snapshot.selectedZoneIds.has(zone.name) ? 3 : 2) / Math.max(ctx.getTransform().a, 1e-6)
+    const emphasized = snapshot.selectedZoneIds.has(zone.name) || snapshot.highlightedZoneIds.has(zone.name)
+    ctx.strokeStyle = emphasized ? getSelectionStrokeColor() : visual.stroke
+    ctx.lineWidth = (emphasized ? 3 : 2) / Math.max(ctx.getTransform().a, 1e-6)
     ctx.stroke()
   }
 
@@ -156,6 +157,7 @@ function renderPlants(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnap
 
   for (const entry of entries) {
     const selected = entry.selected
+    const highlighted = snapshot.highlightedPlantIds.has(entry.plant.id)
 
     ctx.beginPath()
     ctx.arc(entry.plant.position.x, entry.plant.position.y, entry.radiusWorld, 0, Math.PI * 2)
@@ -167,7 +169,7 @@ function renderPlants(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnap
     ctx.lineWidth = selected ? worldLineWidth * 2.5 : worldLineWidth
     ctx.stroke()
 
-    if (snapshot.hoveredCanonicalName && entry.plant.canonicalName === snapshot.hoveredCanonicalName) {
+    if (highlighted || (snapshot.hoveredCanonicalName && entry.plant.canonicalName === snapshot.hoveredCanonicalName)) {
       ctx.beginPath()
       ctx.arc(entry.plant.position.x, entry.plant.position.y, entry.radiusWorld * 1.4, 0, Math.PI * 2)
       ctx.strokeStyle = getSelectionStrokeColor()

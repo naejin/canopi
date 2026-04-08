@@ -1,5 +1,6 @@
 import { signal } from '@preact/signals'
 import type { Guide } from '../canvas/guides'
+import type { PanelTarget } from '../types/design'
 
 export const activeTool = signal<string>('select')
 export const zoomLevel = signal<number>(1)
@@ -101,5 +102,6 @@ export const bottomPanelOpen = signal<boolean>(false)
 export const bottomPanelTab = signal<BottomPanelTab>('timeline')
 export const bottomPanelHeight = signal<number>(200)
 
-// Consortium chart → canvas hover bridge
-export const hoveredConsortiumSpecies = signal<string | null>(null)
+// Bottom-panel target hover bridge. The canvas runtime resolves these document
+// targets to scene IDs without mutating canvas selection/history.
+export const hoveredPanelTargets = signal<readonly PanelTarget[]>([])
