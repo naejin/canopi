@@ -23,7 +23,7 @@ A later review of the live code found that several original risks have been redu
 - **Finding 7 is partially addressed.** Rust has an ad hoc legacy consortium migration in `desktop/src/design/format.rs`, but there is still no version-dispatched migration boundary for future breaking file-format changes.
 - **Finding 8 was partly stale.** `maplibre-gl` is used by `LocationTab` and `WorldMapSurface`, and Vite has a `maplibre-gl` manual chunk. Do not remove MapLibre as a dead dependency. `suncalc` still appears unused.
 
-Practical recommendation as of 2026-04-08: do not run a broad architecture rewrite before `docs/todo.md`. The panel identity and runtime-session prerequisites are complete. Further panel-to-canvas, canvas-to-chart, or map overlay synchronization should build on `PanelTarget[]` plus `resolvePanelTargets()` and must not reintroduce string matching or mutate canvas selection/history from hover.
+Practical recommendation as of 2026-04-08: do not run a broad architecture rewrite before `docs/todo.md`. The panel identity and runtime-session prerequisites are complete. Further panel-to-canvas, canvas-to-chart, or map overlay synchronization should build on `PanelTarget[]` plus `resolvePanelTargets()` and must not reintroduce string matching or mutate canvas selection/history from hover or panel-origin presentation selection.
 
 ## Executive Summary
 
@@ -155,9 +155,9 @@ The original finding was valid when panel rows overloaded string fields and desc
 
 The pure resolver is also in place. `resolvePanelTargets()` maps document targets to scene IDs for plants/zones, reports unresolved scene-backed targets, and treats `manual` / `none` as intentionally empty.
 
-### Current hover bridge
+### Current panel-target bridges
 
-The first panel-to-canvas bridge is hover-only. Bottom-panel hover writes `hoveredPanelTargets`; `SceneCanvasRuntime` resolves those targets into renderer highlight IDs without changing canvas selection or history.
+The first panel-to-canvas bridges are presentation-only. Bottom-panel hover writes `hoveredPanelTargets`; timeline/budget selection writes `selectedPanelTargets` with `selectedPanelTargetOrigin` ownership so tab cleanup only clears its own selection. `SceneCanvasRuntime` resolves selected + hovered panel targets into renderer highlight IDs without changing real canvas selection, selection labels, dirty state, or history.
 
 Current wiring covers:
 
@@ -165,18 +165,21 @@ Current wiring covers:
 - timeline action hover via `action.targets`
 - budget row hover via an existing species-targeted plant `BudgetItem.target`, falling back to `speciesBudgetTarget(row.canonical)` when no species-targeted plant budget item exists
 - canvas plant hover to consortium chart hover via canvas-origin species targets
+- timeline action click highlighting via `action.targets`
+- budget row click highlighting via the same species target path as budget row hover
 
-Hover clears on mouse leave/unmount. This is not click-to-select, persistent selection, full panel/map synchronization, or map overlay work.
+Hover clears on mouse leave/unmount. Timeline/budget selected targets clear on owner-tab unmount, selected row/action disappearance, or document replacement. This is not real canvas selection, full panel/map synchronization, or map overlay work.
 
 ### Remaining guardrails
 
-Future panel-to-canvas selection and panel-to-map overlay work must use the same `PanelTarget[]` and `resolvePanelTargets()` path. Do not reintroduce string matching against timeline descriptions, legacy `plants` arrays, budget descriptions, or consortium canonical-name fields as a parallel sync mechanism.
+Future real panel-to-canvas selection and panel-to-map overlay work must use the same `PanelTarget[]` and `resolvePanelTargets()` path. Do not reintroduce string matching against timeline descriptions, legacy `plants` arrays, budget descriptions, or consortium canonical-name fields as a parallel sync mechanism. If future work intentionally promotes panel-origin highlighting into real canvas selection, it must explicitly decide how toolbar commands, delete, grouping, selection labels, dirty state, and history should behave.
 
 ### Acceptance criteria
 
 - Every panel row has explicit identity semantics — **met**
 - Panel hover can highlight the correct canvas entities through the pure resolver without mutating selection/history — **met for consortium, timeline, and budget hover**
-- Panel selection and MapLibre overlays can be driven from the same targets without inventing a second mapping layer — **remaining work**
+- Timeline/budget panel selection can highlight the correct canvas entities through the pure resolver without mutating real canvas selection/history — **met**
+- MapLibre overlays can be driven from the same targets without inventing a second mapping layer — **remaining work**
 
 ---
 

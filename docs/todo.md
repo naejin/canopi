@@ -54,6 +54,7 @@ These align with the core risks identified in the architecture review.
 - ~~Add pure target resolver before UI sync~~ — **done** (`7bf5a54`): `resolvePanelTargets()` maps typed panel targets to scene IDs (plant IDs and zone names), reports missing scene-backed targets, and treats `manual` / `none` as intentionally empty without mutating canvas selection or history.
 - ~~Add first panel→canvas hover bridge through target resolver~~ — **done**: bottom-panel hover state now carries `PanelTarget[]`; the scene runtime resolves it to plant/zone highlight IDs without mutating canvas selection or history. Current hover-only wiring covers consortium species hover, timeline action hover via `action.targets`, and budget row hover via the existing species-targeted plant `BudgetItem.target` with species-target fallback.
 - ~~Add canvas→chart hover bridge~~ — **done** (`108059d`): canvas plant hover now publishes canvas-origin species targets for consortium chart hover highlighting without mutating selection/history; resolver highlight buckets remain typed to avoid plant/zone ID collisions.
+- ~~Add timeline/budget selection wiring through target resolver~~ — **done** (`57c508d`): timeline action clicks and budget row clicks now write typed `selectedPanelTargets` plus source ownership, and the scene runtime resolves selected + hovered panel targets into renderer highlights. This deliberately does **not** mutate real canvas selection, selection labels, dirty state, or history.
 - See architecture review Finding 2
 
 **Canvas seam:**
@@ -180,7 +181,8 @@ These align with the core risks identified in the architecture review.
 - ~~Budget tab~~ — **done**: redesigned with compact summary header (species/plant counts, pricing progress), document-level currency picker (13 currencies via `budget_currency` field), notebook-style ruled table, inline price editing, CSV export. Live updates via `sceneEntityRevision`
 - ~~Consortium succession chart~~ — **done** (`9fd8cf3`..`1007a96`): Canvas2D strata×phase grid, auto-sync from placed species, drag-move/resize, hover sync with canvas
 - ~~Bottom panel state persistence~~ — **done**: open/height/tab hydrated from Rust settings on bootstrap, persisted on panel actions (height persisted on drag-end, not per-frame)
-- Remaining: timeline/budget selection wiring using the pure target resolver, panel↔map sync
+- ~~Timeline/budget selection wiring using the pure target resolver~~ — **done** (`57c508d`): selection is panel-origin presentation state only; map overlays and full panel↔canvas sync remain out of scope.
+- Remaining: panel↔map sync
 
 **Other:**
 - Featured-design world map / template import
