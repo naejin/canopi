@@ -1,7 +1,8 @@
-import { useCallback, useMemo, useRef } from 'preact/hooks'
+import { useCallback, useEffect, useMemo, useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale } from '../../state/app'
+import { selectedPanelTargetOrigin, selectedPanelTargets } from '../../state/canvas'
 import { currentDesign } from '../../state/document'
 import { toISODate } from '../../canvas/timeline-math'
 import {
@@ -15,6 +16,13 @@ import { InteractiveTimeline, type Granularity } from './InteractiveTimeline'
 import styles from './TimelineTab.module.css'
 
 const EMPTY_TIMELINE: TimelineAction[] = []
+const EMPTY_PANEL_TARGETS = [] as const
+
+function clearTimelineSelectedPanelTargets(): void {
+  if (selectedPanelTargetOrigin.peek() !== 'timeline') return
+  if (selectedPanelTargets.peek().length > 0) selectedPanelTargets.value = EMPTY_PANEL_TARGETS
+  selectedPanelTargetOrigin.value = null
+}
 
 type ActionType = 'planting' | 'pruning' | 'harvest' | 'watering' | 'fertilising' | 'other'
 
@@ -51,6 +59,15 @@ export function TimelineTab() {
 
   const actions = currentDesign.value?.timeline ?? EMPTY_TIMELINE
   const hasActions = actions.length > 0
+
+  useEffect(() => {
+    if (!selectedId.value) return
+    if (actions.some((action) => action.id === selectedId.value)) return
+    selectedId.value = null
+    clearTimelineSelectedPanelTargets()
+  }, [actions, selectedId.value])
+
+  useEffect(() => clearTimelineSelectedPanelTargets, [])
 
   function openAdd() {
     const today = new Date()

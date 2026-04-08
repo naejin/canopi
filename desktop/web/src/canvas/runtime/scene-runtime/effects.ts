@@ -8,6 +8,7 @@ import {
   layerOpacity,
   layerVisibility,
   rulersVisible,
+  selectedPanelTargets,
 } from '../../../state/canvas'
 
 interface SceneRuntimeEffectsDeps {
@@ -42,6 +43,7 @@ export function installSceneRuntimeEffects(deps: SceneRuntimeEffectsDeps): Array
     }),
     effect(() => {
       void hoveredPanelTargets.value
+      void selectedPanelTargets.value
       deps.onPanelTargetHover()
     }),
   ]

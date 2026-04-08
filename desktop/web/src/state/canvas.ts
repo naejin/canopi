@@ -106,6 +106,15 @@ export const bottomPanelHeight = signal<number>(200)
 // targets to scene IDs without mutating canvas selection/history.
 export const hoveredPanelTargets = signal<readonly PanelTarget[]>([])
 
+// Bottom-panel target selection bridge. This is panel-origin presentation state:
+// the canvas runtime resolves it to scene highlights without mutating canvas
+// selection, selection labels, dirty state, or history.
+export const selectedPanelTargets = signal<readonly PanelTarget[]>([])
+
+// Tracks which bottom-panel tab owns the current panel-origin selection so tab
+// cleanup only clears its own selection.
+export const selectedPanelTargetOrigin = signal<BottomPanelTab | null>(null)
+
 // Canvas-origin target hover bridge. Bottom-panel components can read this for
 // hover-only affordances without mutating panel selection/history.
 export const hoveredCanvasTargets = signal<readonly PanelTarget[]>([])

@@ -7,8 +7,9 @@ vi.mock('../components/canvas/useCanvasRenderer', () => ({
 }))
 
 import { InteractiveTimeline } from '../components/canvas/InteractiveTimeline'
+import { TimelineTab } from '../components/canvas/TimelineTab'
 import { currentDesign } from '../state/document'
-import { hoveredPanelTargets } from '../state/canvas'
+import { hoveredPanelTargets, selectedPanelTargetOrigin, selectedPanelTargets } from '../state/canvas'
 import { speciesTarget } from '../panel-targets'
 import type { CanopiFile, TimelineAction } from '../types/design'
 
@@ -60,6 +61,8 @@ describe('InteractiveTimeline hover cleanup', () => {
     document.body.appendChild(container)
     currentDesign.value = makeDesign({ timeline: [makeAction()] })
     hoveredPanelTargets.value = []
+    selectedPanelTargetOrigin.value = null
+    selectedPanelTargets.value = []
   })
 
   afterEach(() => {
@@ -67,11 +70,58 @@ describe('InteractiveTimeline hover cleanup', () => {
     container.remove()
     currentDesign.value = null
     hoveredPanelTargets.value = []
+    selectedPanelTargetOrigin.value = null
+    selectedPanelTargets.value = []
+  })
+
+  it('emits selected panel targets when clicking an action without mutating hover', async () => {
+    const onSelect = vi.fn()
+
+    await act(async () => {
+      render(
+        <InteractiveTimeline
+          granularity="month"
+          selectedId={null}
+          onSelect={onSelect}
+          onEditRequest={() => {}}
+        />,
+        container,
+      )
+    })
+
+    const canvas = container.querySelector('canvas')!
+    canvas.getBoundingClientRect = () => ({
+      left: 0,
+      top: 0,
+      right: 400,
+      bottom: 200,
+      width: 400,
+      height: 200,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    })
+
+    await act(async () => {
+      canvas.dispatchEvent(new MouseEvent('mousedown', {
+        button: 0,
+        clientX: 295,
+        clientY: 40,
+        bubbles: true,
+      }))
+    })
+
+    expect(onSelect).toHaveBeenCalledWith('task-1')
+    expect(selectedPanelTargets.value).toEqual([speciesTarget('Malus domestica')])
+    expect(selectedPanelTargetOrigin.value).toBe('timeline')
+    expect(hoveredPanelTargets.value).toEqual([])
   })
 
   it('clears panel hover targets when deleting the selected action', async () => {
     const onSelect = vi.fn()
     hoveredPanelTargets.value = [speciesTarget('Malus domestica')]
+    selectedPanelTargetOrigin.value = 'timeline'
+    selectedPanelTargets.value = [speciesTarget('Malus domestica')]
 
     await act(async () => {
       render(
@@ -92,5 +142,41 @@ describe('InteractiveTimeline hover cleanup', () => {
     expect(currentDesign.value?.timeline).toEqual([])
     expect(onSelect).toHaveBeenCalledWith(null)
     expect(hoveredPanelTargets.value).toEqual([])
+    expect(selectedPanelTargets.value).toEqual([])
+    expect(selectedPanelTargetOrigin.value).toBeNull()
+  })
+
+  it('clears timeline-owned selected panel targets when TimelineTab unmounts without a canvas child', async () => {
+    currentDesign.value = makeDesign({ timeline: [] })
+    selectedPanelTargetOrigin.value = 'timeline'
+    selectedPanelTargets.value = [speciesTarget('Malus domestica')]
+
+    await act(async () => {
+      render(<TimelineTab />, container)
+    })
+
+    await act(async () => {
+      render(null, container)
+    })
+
+    expect(selectedPanelTargets.value).toEqual([])
+    expect(selectedPanelTargetOrigin.value).toBeNull()
+  })
+
+  it('does not clear budget-owned selected panel targets when TimelineTab unmounts', async () => {
+    currentDesign.value = makeDesign({ timeline: [] })
+    selectedPanelTargetOrigin.value = 'budget'
+    selectedPanelTargets.value = [speciesTarget('Malus domestica')]
+
+    await act(async () => {
+      render(<TimelineTab />, container)
+    })
+
+    await act(async () => {
+      render(null, container)
+    })
+
+    expect(selectedPanelTargets.value).toEqual([speciesTarget('Malus domestica')])
+    expect(selectedPanelTargetOrigin.value).toBe('budget')
   })
 })
