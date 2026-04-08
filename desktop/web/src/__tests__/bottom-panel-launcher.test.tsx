@@ -14,7 +14,7 @@ describe('BottomPanelLauncher', () => {
     document.body.appendChild(container)
     locale.value = 'en'
     bottomPanelOpen.value = false
-    bottomPanelTab.value = 'timeline'
+    bottomPanelTab.value = 'budget'
   })
 
   afterEach(() => {
@@ -28,13 +28,13 @@ describe('BottomPanelLauncher', () => {
     })
 
     const buttons = Array.from(container.querySelectorAll('button'))
-    expect(buttons.map((button) => button.textContent?.trim())).toEqual(['Timeline', 'Budget', 'Consortium'])
+    expect(buttons.map((button) => button.textContent?.trim())).toEqual(['Budget', 'Consortium'])
 
     await act(async () => {
       buttons[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
     expect(bottomPanelOpen.value).toBe(true)
-    expect(bottomPanelTab.value).toBe('timeline')
+    expect(bottomPanelTab.value).toBe('budget')
   })
 })

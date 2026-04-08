@@ -6,7 +6,7 @@ import { openBottomPanel, setBottomPanelTab } from '../state/canvas-actions'
 
 beforeEach(() => {
   bottomPanelOpen.value = false
-  bottomPanelTab.value = 'timeline'
+  bottomPanelTab.value = 'budget'
 })
 
 describe('bottom panel actions', () => {
@@ -20,10 +20,10 @@ describe('bottom panel actions', () => {
   })
 
   it('keeps the panel open when switching tabs after opening', () => {
-    openBottomPanel('timeline')
-    setBottomPanelTab('budget')
+    openBottomPanel('budget')
+    setBottomPanelTab('consortium')
 
     expect(bottomPanelOpen.value).toBe(true)
-    expect(bottomPanelTab.value).toBe('budget')
+    expect(bottomPanelTab.value).toBe('consortium')
   })
 })

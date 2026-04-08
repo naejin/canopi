@@ -32,9 +32,9 @@ Domain-specific instructions in subdirectory CLAUDE.md files:
 - **Left**: Canvas toolbar (38px) — drawing tools plus plant color action (Select, Hand, Rectangle, Text, Plant Color + Grid/Snap/Rulers toggles)
 - **Center**: Canvas workspace
 - **Right**: PanelBar (36px, always visible) + sliding panels (plant search, favorites)
-- **Bottom**: Bottom panel with active Timeline, Budget, and Consortium tabs
+- **Bottom**: Bottom panel with Budget and Consortium tabs (Timeline hidden — pending rework)
 - **Title bar**: Logo + file name + lang/theme toggle + window controls
-- **No activity bar** — removed, navigation via PanelBar
+- **No activity bar** — removed, navigation via PanelBar (Location button hidden — no map layers yet)
 - **No status bar** — removed, controls moved to title bar
 - Design system: `.interface-design/system.md` (field notebook direction)
 
@@ -52,8 +52,8 @@ These features were deleted during pre-rewrite cleanup. See `docs/todo.md` for c
 - **Export**: GeoJSON, PNG/SVG export commands
 - **Old support files**: dimensions.ts, pattern-math.ts, map-layer.ts, old tile download modal, and old tile IPC wrappers were pruned. Current `ipc/community.ts` is live for template catalog/import workflows
 - **Retained for beta release**: LayerPanel, location flows (Wave 3 retained-surface closeout)
-- **Bottom panel shipped**: Timeline (trimmed), Budget (redesigned: summary header, document-level currency via `budget_currency`, notebook-style table, inline price editing), and Consortium (succession chart) tabs all active. Consortium auto-sync runs via `state/consortium-sync-workflow.ts` at document level. Panel↔canvas hover/selection presentation flows through typed `PanelTarget[]` signals and `resolvePanelTargets()`
-- **Active/deferred map split**: Location flow and featured-design world map surfaces exist; in-canvas geo/terrain, offline tiles, export, and learning content remain deferred beyond beta
+- **Bottom panel shipped**: Budget (redesigned: summary header, document-level currency via `budget_currency`, notebook-style table, inline price editing) and Consortium (succession chart) tabs active. Timeline tab hidden pending rework (code retained, UI entry point removed from `VISIBLE_BOTTOM_PANEL_TABS`). Consortium auto-sync runs via `state/consortium-sync-workflow.ts` at document level. Panel↔canvas hover/selection presentation flows through typed `PanelTarget[]` signals and `resolvePanelTargets()`
+- **Active/deferred map split**: Location flow and featured-design world map surfaces exist but Location PanelBar button is hidden (no in-canvas map layers yet); in-canvas geo/terrain, offline tiles, export, and learning content remain deferred beyond beta
 - **Selection**: No resize/rotate — objects are position-only (highlight + move). Resize/rotate commands all deleted
 - **Konva engine**: Entire `CanvasEngine` + old command/tool/serializer/history/import/export system deleted. Konva dependency fully removed. Replaced by scene-owned runtime (PixiJS + Canvas2D)
 - **Per-plant labels**: Label rendering, collision detection, dedup, and adaptive placement all deleted. Replaced by hover tooltip (common name + scientific name), hover species highlight (ring on same-species), and selection labels (one per species at centroid). See `desktop/web/src/canvas/CLAUDE.md` Plant Presentation Rules

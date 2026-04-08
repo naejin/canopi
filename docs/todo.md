@@ -1,7 +1,7 @@
 # Canopi: Current Work
 
 **Date**: 2026-04-08
-**Status**: v0.2.0 shipped — rewrite cut over, bottom-panel MVP landed, safeguards (ErrorBoundary + pre-commit hooks) active
+**Status**: v0.2.0 shipped — rewrite cut over, bottom-panel MVP landed, safeguards (ErrorBoundary + pre-commit hooks) active. Timeline tab hidden (pending rework), Location PanelBar button hidden (no in-canvas map layers yet)
 
 This file tracks active and deferred work.
 For architectural analysis and rationale, see [Code Quality And Architecture Review](./code-quality-architecture-review-2026-04-05.md).

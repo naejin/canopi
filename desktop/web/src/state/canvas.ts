@@ -97,9 +97,9 @@ export const plantNamesRevision = signal<number>(0)
 
 // Bottom panel
 export type BottomPanelTab = 'timeline' | 'budget' | 'consortium'
-export const VISIBLE_BOTTOM_PANEL_TABS: BottomPanelTab[] = ['timeline', 'budget', 'consortium']
+export const VISIBLE_BOTTOM_PANEL_TABS: BottomPanelTab[] = ['budget', 'consortium']
 export const bottomPanelOpen = signal<boolean>(false)
-export const bottomPanelTab = signal<BottomPanelTab>('timeline')
+export const bottomPanelTab = signal<BottomPanelTab>('budget')
 export const bottomPanelHeight = signal<number>(200)
 
 // Bottom-panel target hover bridge. The canvas runtime resolves these document

@@ -51,7 +51,7 @@ impl Default for Settings {
             last_active_panel: "plant-db".into(),
             bottom_panel_open: false,
             bottom_panel_height: 200,
-            bottom_panel_tab: "timeline".into(),
+            bottom_panel_tab: "budget".into(),
             map_layer_visible: false,
             map_style: "street".into(),
             map_opacity: 1.0,
