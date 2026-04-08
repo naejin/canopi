@@ -96,8 +96,8 @@ export function computeLayout(rows: SpeciesRow[]): Map<string, ActionLayout> {
     const row = rows[rowIndex]!
     // Sort actions by start date
     const sorted = [...row.actions].sort((a, b) => {
-      const aStart = a.start_date ? new Date(a.start_date).getTime() : 0
-      const bStart = b.start_date ? new Date(b.start_date).getTime() : 0
+      const aStart = a.start_date ? new Date(a.start_date).getTime() : Infinity
+      const bStart = b.start_date ? new Date(b.start_date).getTime() : Infinity
       return aStart - bStart
     })
 

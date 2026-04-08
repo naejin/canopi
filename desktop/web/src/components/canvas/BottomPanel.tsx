@@ -7,12 +7,15 @@ import { ConsortiumChart } from './ConsortiumChart'
 import styles from './BottomPanel.module.css'
 
 export function BottomPanel() {
-  const open = bottomPanelOpen.value
+  if (!bottomPanelOpen.value) return null
+  return <BottomPanelInner />
+}
+
+function BottomPanelInner() {
   const tab = bottomPanelTab.value
   const height = bottomPanelHeight.value
   const panelRef = useRef<HTMLDivElement>(null)
 
-  if (!open) return null
   return (
     <div ref={panelRef} className={styles.panel} style={{ height: `${height}px` }}>
       <ResizeHandle panelRef={panelRef} />

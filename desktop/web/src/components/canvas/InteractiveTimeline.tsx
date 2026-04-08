@@ -8,6 +8,7 @@ import {
   deleteTimelineAction,
   updateTimelineAction,
 } from '../../state/timeline-actions'
+import { isEditableTarget } from '../../canvas/runtime/interaction/pointer-utils'
 import { markDocumentDirty } from '../../state/document-mutations'
 import {
   LABEL_SIDEBAR_WIDTH,
@@ -300,6 +301,7 @@ export function InteractiveTimeline({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!selectedIdRef.current) return
+      if (isEditableTarget(event.target)) return
       if (event.key === 'Delete' || event.key === 'Backspace') {
         event.preventDefault()
         deleteTimelineAction(selectedIdRef.current)

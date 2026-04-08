@@ -50,6 +50,7 @@
 - **Resize handles must use pointer capture**: Use `setPointerCapture()`/`lostpointercapture` on the handle element instead of document-level `mousemove`/`mouseup` listeners — guarantees cleanup even when mouse is released outside the browser window. See `BottomPanel.tsx` `ResizeHandle`
 - **`Date.now()` in `useMemo`-feeding functions defeats memoization**: If a function's result feeds into `useMemo` deps, using `Date.now()` as a seed makes the dep non-deterministic → continuous redraw. Use `Infinity` with a stable fallback instead
 - **Canvas2D interactive components must have `onMouseLeave`**: Both `ConsortiumChart` and `InteractiveTimeline` use `hoveredX` signals for hover highlight — if the pointer exits the canvas without a final no-hit `mousemove` (fast exit between frames), the signal stays non-null. Add `onMouseLeave` with a `useCallback([])` that clears hover signals and resets `cursor` to `'default'`
+- **Document-level `keydown` handlers must guard with `isEditableTarget(event.target)`** from `canvas/runtime/interaction/pointer-utils.ts` — prevents capturing Delete/Backspace/etc. when the user is typing in form inputs. Import the shared utility; do not inline the check
 
 ## Shared Utilities
 - **`canvas/plant-grouping.ts`**: `groupPlantsBySpecies(plants, localizedNames)` — shared between `budget-helpers.ts` (BudgetTab) and `consortium-renderer.ts`. Do not duplicate plant-counting loops
@@ -61,7 +62,7 @@
 ## Preact / Signals Gotchas
 - **Stale async guard: one monotonic counter ref is enough**: For async effects that fire-and-forget (image loads, IPC calls), a single `useRef` counter incremented on each effect run guards against all staleness — across both prop changes and internal state changes. Don't layer a second ref tracking the prop value; the counter already subsumes it
 - **JSX `onWheel` is passive by default**: Browsers register JSX wheel handlers as passive — `preventDefault()` silently fails. Use imperative `addEventListener('wheel', handler, { passive: false })` in a `useEffect` instead
-- **Signal reads before early returns subscribe unnecessarily**: `const height = signal.value` before `if (!open) return null` subscribes the component even when closed. Move signal reads to after the guard
+- **Signal reads before early returns subscribe unnecessarily**: `const height = signal.value` before `if (!open) return null` subscribes the component even when closed. Move signal reads to after the guard. When `useRef` or other hooks prevent moving reads below the guard, split into a thin wrapper (reads only the guard signal, returns `null` or `<Inner />`) and an inner component (reads the rest). See `BottomPanel.tsx` for the pattern
 - **Interface parameter types must match implementation invariants**: If a method throws on null, the type must be non-null — push the guard to call sites for compile-time safety instead of runtime assertions. See `serializeDocument` in `runtime.ts`
 - **Preact Vite plugin**: Package is `@preact/preset-vite` (not `@preactjs/preset-vite`)
 - **HMR safety**: Module-level `effect()` and `addEventListener` must store disposers and clean up via `import.meta.hot.dispose()`

@@ -23,6 +23,7 @@ function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
     budget: [],
     created_at: '',
     updated_at: '',
+    extra: {},
     ...overrides,
   }
 }

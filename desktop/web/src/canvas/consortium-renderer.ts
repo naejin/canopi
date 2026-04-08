@@ -237,9 +237,9 @@ export function renderConsortium(
     const rh = rowHeights[r] ?? MIN_ROW_HEIGHT
     const labelY = ry + rh / 2
 
+    ctx.save()
     ctx.fillStyle = textColor
     ctx.font = `600 11px ${fontSans}`
-    ctx.save()
     ctx.beginPath()
     ctx.rect(0, ry, LABEL_WIDTH - 4, rh)
     ctx.clip()
