@@ -130,6 +130,14 @@
   background: var(--color-control-hover);
 }
 
+.rowSelected {
+  background: var(--color-control-active);
+}
+
+.rowSelected:hover {
+  background: var(--color-control-active);
+}
+
 .thSpecies {
   width: 100%;
 }

@@ -5,9 +5,10 @@ import { BudgetTab } from '../components/canvas/BudgetTab'
 import { currentCanvasSession } from '../canvas/session'
 import { locale } from '../state/app'
 import { currentDesign } from '../state/document'
-import { hoveredPanelTargets, plantNamesRevision, sceneEntityRevision } from '../state/canvas'
+import { hoveredPanelTargets, plantNamesRevision, sceneEntityRevision, selectedPanelTargetOrigin, selectedPanelTargets } from '../state/canvas'
 import { speciesBudgetTarget } from '../panel-targets'
 import type { CanopiFile, PlacedPlant } from '../types/design'
+import styles from '../components/canvas/BudgetTab.module.css'
 
 function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
@@ -56,6 +57,8 @@ describe('BudgetTab hover bridge', () => {
     document.body.appendChild(container)
     locale.value = 'en'
     hoveredPanelTargets.value = []
+    selectedPanelTargetOrigin.value = null
+    selectedPanelTargets.value = []
     sceneEntityRevision.value = 0
     plantNamesRevision.value = 0
     currentDesign.value = makeDesign({
@@ -83,6 +86,8 @@ describe('BudgetTab hover bridge', () => {
     currentDesign.value = null
     currentCanvasSession.value = null
     hoveredPanelTargets.value = []
+    selectedPanelTargetOrigin.value = null
+    selectedPanelTargets.value = []
   })
 
   it('emits and clears hovered panel targets for budget rows', async () => {
@@ -102,5 +107,61 @@ describe('BudgetTab hover bridge', () => {
       row!.dispatchEvent(new MouseEvent('mouseleave', { bubbles: false }))
     })
     expect(hoveredPanelTargets.value).toEqual([])
+  })
+
+  it('emits selected panel targets for budget rows without changing hover', async () => {
+    await act(async () => {
+      render(<BudgetTab />, container)
+    })
+
+    const row = container.querySelector('tbody tr')
+    expect(row).not.toBeNull()
+
+    await act(async () => {
+      row!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(selectedPanelTargets.value).toEqual([speciesBudgetTarget('Malus domestica')])
+    expect(selectedPanelTargetOrigin.value).toBe('budget')
+    expect(hoveredPanelTargets.value).toEqual([])
+  })
+
+  it('clears selected panel targets when the selected budget row disappears', async () => {
+    await act(async () => {
+      render(<BudgetTab />, container)
+    })
+
+    const row = container.querySelector('tbody tr')
+    expect(row).not.toBeNull()
+
+    await act(async () => {
+      row!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(selectedPanelTargets.value).toEqual([speciesBudgetTarget('Malus domestica')])
+    expect(selectedPanelTargetOrigin.value).toBe('budget')
+
+    await act(async () => {
+      currentCanvasSession.value = {
+        getPlacedPlants: () => [],
+        getLocalizedCommonNames: () => new Map(),
+      } as any
+      sceneEntityRevision.value += 1
+    })
+
+    expect(selectedPanelTargets.value).toEqual([])
+    expect(selectedPanelTargetOrigin.value).toBeNull()
+  })
+
+  it('does not clear timeline-owned selection on budget rerender', async () => {
+    selectedPanelTargetOrigin.value = 'timeline'
+    selectedPanelTargets.value = [speciesBudgetTarget('Malus domestica')]
+
+    await act(async () => {
+      render(<BudgetTab />, container)
+    })
+
+    expect(selectedPanelTargets.value).toEqual([speciesBudgetTarget('Malus domestica')])
+    expect(selectedPanelTargetOrigin.value).toBe('timeline')
+    expect(container.querySelector(`.${styles.rowSelected}`)).toBeNull()
   })
 })

@@ -17,6 +17,8 @@ import {
   plantColorByAttr,
   plantStampSpecies,
   plantSizeMode,
+  selectedPanelTargetOrigin,
+  selectedPanelTargets,
   selectedObjectIds,
   snapToGridEnabled,
 } from '../../state/canvas'
@@ -128,6 +130,8 @@ describe('scene canvas runtime', () => {
     guides.value = []
     hoveredCanvasTargets.value = []
     hoveredPanelTargets.value = []
+    selectedPanelTargetOrigin.value = null
+    selectedPanelTargets.value = []
     layerVisibility.value = {}
     layerOpacity.value = {}
     plantSizeMode.value = 'default'
@@ -291,6 +295,30 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
+  it('resolves selected panel targets for renderer highlights without mutating canvas selection or dirty state', async () => {
+    const runtime = new SceneCanvasRuntime()
+    runtime.loadDocument(makeFile())
+    const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
+
+    renderer.renderScene.mockClear()
+    selectedPanelTargets.value = [
+      speciesTarget('Malus domestica'),
+      { kind: 'zone', zone_name: 'zone-1' },
+    ]
+
+    await vi.waitFor(() => {
+      expect(renderer.renderScene).toHaveBeenCalled()
+    })
+
+    const snapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
+    expect(snapshot?.highlightedPlantIds).toEqual(new Set(['plant-1', 'plant-2']))
+    expect(snapshot?.highlightedZoneIds).toEqual(new Set(['zone-1']))
+    expect(runtime.getSceneStore().session.selectedEntityIds.size).toBe(0)
+    expect(selectedObjectIds.value.size).toBe(0)
+    expect(canvasClean.value).toBe(true)
+    runtime.destroy()
+  })
+
   it('keeps typed panel target highlights separate when plant IDs and zone names collide', async () => {
     const runtime = new SceneCanvasRuntime()
     runtime.loadDocument({
@@ -321,6 +349,26 @@ describe('scene canvas runtime', () => {
     const snapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
     expect(snapshot?.highlightedPlantIds).toEqual(new Set())
     expect(snapshot?.highlightedZoneIds).toEqual(new Set(['colliding-id']))
+    runtime.destroy()
+  })
+
+  it('unions selected and hovered panel target highlights without mutating canvas selection', async () => {
+    const runtime = new SceneCanvasRuntime()
+    runtime.loadDocument(makeFile())
+    const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
+
+    renderer.renderScene.mockClear()
+    selectedPanelTargets.value = [speciesTarget('Malus domestica')]
+    hoveredPanelTargets.value = [{ kind: 'zone', zone_name: 'zone-1' }]
+
+    await vi.waitFor(() => {
+      const snapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
+      expect(snapshot?.highlightedPlantIds).toEqual(new Set(['plant-1', 'plant-2']))
+      expect(snapshot?.highlightedZoneIds).toEqual(new Set(['zone-1']))
+    })
+
+    expect(runtime.getSceneStore().session.selectedEntityIds.size).toBe(0)
+    expect(selectedObjectIds.value.size).toBe(0)
     runtime.destroy()
   })
 
@@ -392,6 +440,9 @@ describe('scene canvas runtime', () => {
     plantColorMenuOpen.value = true
     lockedObjectIds.value = new Set(['zone-1'])
     selectedObjectIds.value = new Set(['plant-1'])
+    hoveredPanelTargets.value = [speciesTarget('Malus domestica')]
+    selectedPanelTargetOrigin.value = 'timeline'
+    selectedPanelTargets.value = [{ kind: 'zone', zone_name: 'zone-1' }]
     runtime.getSceneStore().setSelection(['plant-1'])
 
     renderer.renderScene.mockClear()
@@ -404,6 +455,9 @@ describe('scene canvas runtime', () => {
     expect(plantColorMenuOpen.value).toBe(false)
     expect(lockedObjectIds.value.size).toBe(0)
     expect(selectedObjectIds.value.size).toBe(0)
+    expect(hoveredPanelTargets.value).toEqual([])
+    expect(selectedPanelTargets.value).toEqual([])
+    expect(selectedPanelTargetOrigin.value).toBeNull()
     runtime.destroy()
   })
 

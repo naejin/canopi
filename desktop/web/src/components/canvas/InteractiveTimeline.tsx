@@ -3,7 +3,7 @@ import { useCanvasRenderer } from './useCanvasRenderer'
 import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale } from '../../state/app'
-import { hoveredPanelTargets } from '../../state/canvas'
+import { hoveredPanelTargets, selectedPanelTargetOrigin, selectedPanelTargets } from '../../state/canvas'
 import { currentDesign } from '../../state/document'
 import {
   deleteTimelineAction,
@@ -71,6 +71,19 @@ function setTimelineHoveredPanelTargets(targets: readonly PanelTarget[]): void {
   if (!panelTargetsEqual(hoveredPanelTargets.peek(), targets)) {
     hoveredPanelTargets.value = targets
   }
+}
+
+function setTimelineSelectedPanelTargets(targets: readonly PanelTarget[]): void {
+  if (!panelTargetsEqual(selectedPanelTargets.peek(), targets)) {
+    selectedPanelTargets.value = targets
+  }
+  selectedPanelTargetOrigin.value = targets.length > 0 ? 'timeline' : null
+}
+
+function clearTimelineSelectedPanelTargets(): void {
+  if (selectedPanelTargetOrigin.peek() !== 'timeline') return
+  if (selectedPanelTargets.peek().length > 0) selectedPanelTargets.value = []
+  selectedPanelTargetOrigin.value = null
 }
 
 export function InteractiveTimeline({
@@ -198,10 +211,12 @@ export function InteractiveTimeline({
 
     if (!hit) {
       onSelectRef.current(null)
+      clearTimelineSelectedPanelTargets()
       return
     }
 
     onSelectRef.current(hit.action.id)
+    setTimelineSelectedPanelTargets(getTimelineHoverTargets(hit.action))
 
     if (event.detail === 2) {
       onEditRequestRef.current(hit.action)
@@ -319,6 +334,7 @@ export function InteractiveTimeline({
       dragState.current = null
       lastDragDates.current = { start: '', end: null }
       setTimelineHoveredPanelTargets(EMPTY_PANEL_TARGETS)
+      clearTimelineSelectedPanelTargets()
     }
   }, [])
 
@@ -331,6 +347,7 @@ export function InteractiveTimeline({
         deleteTimelineAction(selectedIdRef.current)
         if (hoveredId.value !== null) hoveredId.value = null
         setTimelineHoveredPanelTargets(EMPTY_PANEL_TARGETS)
+        clearTimelineSelectedPanelTargets()
         onSelectRef.current(null)
       }
     }

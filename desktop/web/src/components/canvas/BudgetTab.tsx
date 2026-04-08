@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale } from '../../state/app'
-import { sceneEntityRevision, plantNamesRevision, hoveredPanelTargets } from '../../state/canvas'
+import { sceneEntityRevision, plantNamesRevision, hoveredPanelTargets, selectedPanelTargetOrigin, selectedPanelTargets } from '../../state/canvas'
 import { currentDesign, designName } from '../../state/document'
 import { currentCanvasSession } from '../../canvas/session'
 import { exportFile } from '../../ipc/design'
@@ -23,6 +23,19 @@ function setBudgetHoveredPanelTargets(targets: readonly PanelTarget[]): void {
   if (!panelTargetsEqual(hoveredPanelTargets.peek(), targets)) {
     hoveredPanelTargets.value = targets
   }
+}
+
+function setBudgetSelectedPanelTargets(targets: readonly PanelTarget[]): void {
+  if (!panelTargetsEqual(selectedPanelTargets.peek(), targets)) {
+    selectedPanelTargets.value = targets
+  }
+  selectedPanelTargetOrigin.value = targets.length > 0 ? 'budget' : null
+}
+
+function clearBudgetSelectedPanelTargets(): void {
+  if (selectedPanelTargetOrigin.peek() !== 'budget') return
+  if (selectedPanelTargets.peek().length > 0) selectedPanelTargets.value = []
+  selectedPanelTargetOrigin.value = null
 }
 
 export function BudgetTab() {
@@ -62,6 +75,8 @@ export function BudgetTab() {
 
   const priceMapRef = useRef(priceMap)
   priceMapRef.current = priceMap
+  const selectedTargets = selectedPanelTargets.value
+  const selectedOrigin = selectedPanelTargetOrigin.value
 
   const startEditPrice = useCallback((canonical: string) => {
     editPrice.value = String(priceMapRef.current.get(canonical)?.unit_cost ?? '')
@@ -78,11 +93,26 @@ export function BudgetTab() {
     setBudgetHoveredPanelTargets([getBudgetHoverTarget(budgetItemMap.get(canonical), canonical)])
   }, [budgetItemMap])
 
+  const handleRowClick = useCallback((canonical: string) => {
+    setBudgetSelectedPanelTargets([getBudgetHoverTarget(budgetItemMap.get(canonical), canonical)])
+  }, [budgetItemMap])
+
   const clearBudgetHover = useCallback(() => {
     setBudgetHoveredPanelTargets(EMPTY_PANEL_TARGETS)
   }, [])
 
   useEffect(() => clearBudgetHover, [clearBudgetHover])
+
+  useEffect(() => clearBudgetSelectedPanelTargets, [])
+
+  useEffect(() => {
+    if (selectedOrigin !== 'budget' || selectedTargets.length === 0) return
+    for (const row of groupedPlants) {
+      const target = getBudgetHoverTarget(budgetItemMap.get(row.canonical), row.canonical)
+      if (panelTargetsEqual(selectedTargets, [target])) return
+    }
+    clearBudgetSelectedPanelTargets()
+  }, [groupedPlants, budgetItemMap, selectedTargets, selectedOrigin])
 
   async function handleExportCSV() {
     const header = [t('canvas.budget.species'), t('canvas.budget.quantity'), t('canvas.budget.unitCost'), t('canvas.budget.lineTotal'), t('canvas.budget.currency')].map(escapeCsvField).join(',')
@@ -158,11 +188,14 @@ export function BudgetTab() {
               const price = entry?.unit_cost ?? 0
               const subtotal = row.count * price
               const isEditing = editingCanonical.value === row.canonical
+              const rowTarget = getBudgetHoverTarget(budgetItemMap.get(row.canonical), row.canonical)
+              const isSelected = selectedOrigin === 'budget' && panelTargetsEqual(selectedTargets, [rowTarget])
 
               return (
                 <tr
                   key={row.canonical}
-                  className={styles.row}
+                  className={`${styles.row}${isSelected ? ` ${styles.rowSelected}` : ''}`}
+                  onClick={() => handleRowClick(row.canonical)}
                   onMouseEnter={() => handleRowMouseEnter(row.canonical)}
                   onMouseLeave={clearBudgetHover}
                 >

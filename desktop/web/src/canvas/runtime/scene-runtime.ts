@@ -10,6 +10,8 @@ import {
   plantSpeciesColors,
   rulersVisible,
   sceneEntityRevision,
+  selectedPanelTargetOrigin,
+  selectedPanelTargets,
   snapToGridEnabled,
 } from '../../state/canvas'
 import type { ColorByAttribute, PlantSizeMode } from '../../state/canvas'
@@ -595,6 +597,7 @@ export class SceneCanvasRuntime implements CanvasRuntime {
 
   loadDocument(file: CanopiFile): void {
     this._syncHoveredCanvasTargets(null)
+    this._clearPanelOriginTargets()
     this._sceneStore.hydrate(file)
     this._history.clear()
     lockedObjectIds.value = new Set()
@@ -607,6 +610,7 @@ export class SceneCanvasRuntime implements CanvasRuntime {
   replaceDocument(file: CanopiFile): void {
     this._resetTransientRuntimeState()
     this._syncHoveredCanvasTargets(null)
+    this._clearPanelOriginTargets()
     this._sceneStore.hydrate(file)
     this._history.clear()
     this._syncCanvasSignalsFromScene()
@@ -719,6 +723,12 @@ export class SceneCanvasRuntime implements CanvasRuntime {
     if (!panelTargetsEqual(hoveredCanvasTargets.peek(), targets)) {
       hoveredCanvasTargets.value = targets
     }
+  }
+
+  private _clearPanelOriginTargets(): void {
+    if (hoveredPanelTargets.peek().length > 0) hoveredPanelTargets.value = []
+    if (selectedPanelTargets.peek().length > 0) selectedPanelTargets.value = []
+    if (selectedPanelTargetOrigin.value !== null) selectedPanelTargetOrigin.value = null
   }
 
   private _setHoveredEntityId(id: string | null, options: { invalidate?: boolean } = {}): void {
@@ -875,7 +885,10 @@ export class SceneCanvasRuntime implements CanvasRuntime {
     const hoveredPlant = session.hoveredEntityId
       ? scene.plants.find((p) => p.id === session.hoveredEntityId)
       : null
-    const highlightedTargets = resolvePanelTargets(hoveredPanelTargets.value, scene)
+    const highlightedTargets = resolvePanelTargets([
+      ...selectedPanelTargets.value,
+      ...hoveredPanelTargets.value,
+    ], scene)
     return {
       scene,
       viewport: this._camera.viewport,
