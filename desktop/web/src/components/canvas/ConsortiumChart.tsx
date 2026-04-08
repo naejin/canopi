@@ -232,15 +232,19 @@ export function ConsortiumChart() {
 
     if (drag?.type === 'resize') {
       const phase = Math.round(xToPhase(mouseX, contentWidth))
-      const clampedPhase = Math.max(0, Math.min(CONSORTIUM_PHASES.length - 1, phase))
       const bar = barsRef.current.find((b) => b.canonicalName === drag.canonicalName)
 
       if (drag.edge === 'left') {
+        const clampedPhase = Math.max(0, Math.min(CONSORTIUM_PHASES.length - 1, phase))
         const newStart = Math.min(clampedPhase, drag.originalEndPhase)
         if (bar && bar.startPhase === newStart) return
         moveConsortiumEntry(drag.canonicalName, { startPhase: newStart, endPhase: drag.originalEndPhase }, { markDirty: false })
         drag.hasMutated = true
       } else {
+        // Right edge pixel is at phaseToX(endPhase + 1), so xToPhase returns
+        // endPhase + 1 at the boundary. Allow clamp up to CONSORTIUM_PHASES.length
+        // so the last column is reachable after subtracting 1.
+        const clampedPhase = Math.max(0, Math.min(CONSORTIUM_PHASES.length, phase))
         const newEnd = Math.max(clampedPhase - 1, drag.originalStartPhase)
         if (bar && bar.endPhase === newEnd) return
         moveConsortiumEntry(drag.canonicalName, { startPhase: drag.originalStartPhase, endPhase: newEnd }, { markDirty: false })
