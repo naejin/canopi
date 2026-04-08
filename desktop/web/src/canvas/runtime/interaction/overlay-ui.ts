@@ -10,8 +10,8 @@ export function createInteractionPreview(container: HTMLElement): HTMLDivElement
     pointerEvents: 'none',
     display: 'none',
     zIndex: '2',
-    border: '1px dashed rgba(90, 115, 160, 0.9)',
-    background: 'rgba(90, 115, 160, 0.16)',
+    border: '1px dashed var(--color-overlay-band-border)',
+    background: 'var(--color-overlay-band-bg)',
     left: '0',
     top: '0',
   })
@@ -33,7 +33,7 @@ export function showInteractionPreview(
     width: `${rect.width}px`,
     height: `${rect.height}px`,
     borderStyle: mode === 'rectangle' ? 'solid' : 'dashed',
-    background: mode === 'rectangle' ? 'rgba(139, 127, 99, 0.18)' : 'rgba(90, 115, 160, 0.16)',
+    background: mode === 'rectangle' ? 'var(--color-overlay-rect-bg)' : 'var(--color-overlay-band-bg)',
   })
 }
 
