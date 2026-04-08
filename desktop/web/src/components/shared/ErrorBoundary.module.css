@@ -31,15 +31,24 @@
   font-size: var(--text-md);
   font-weight: 600;
   cursor: pointer;
-  background: var(--color-primary);
+  letter-spacing: 0.01em;
+  background-color: var(--color-primary);
   border: 1px solid var(--color-primary);
   color: var(--color-primary-contrast);
-  transition: background-color var(--transition-fast), border-color var(--transition-fast);
+  box-shadow: var(--shadow-md);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform var(--transition-normal), box-shadow var(--transition-normal);
 }
 
 .reloadBtn:hover {
-  background: var(--color-primary-hover);
+  background-color: var(--color-primary-hover);
   border-color: var(--color-primary-hover);
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-1px);
+}
+
+.reloadBtn:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-sm);
 }
 
 .reloadBtn:focus-visible {
@@ -75,5 +84,8 @@
 @media (prefers-reduced-motion: reduce) {
   .reloadBtn {
     transition: none;
+  }
+  .reloadBtn:hover {
+    transform: none;
   }
 }
