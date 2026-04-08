@@ -12,7 +12,7 @@ describe('ErrorBoundary', () => {
 
   beforeEach(() => {
     container = document.createElement('div')
-    document.body.replaceChildren()
+    document.body.innerHTML = ''
     document.body.appendChild(container)
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
