@@ -35,6 +35,6 @@ describe('canvas session seam', () => {
     setCurrentCanvasTool('hand')
 
     expect(setTool).toHaveBeenCalledWith('hand')
-    expect(currentCanvasTool.value).toBe('rectangle')
+    expect(currentCanvasTool.value).toBe('hand')
   })
 })

@@ -39,6 +39,7 @@ describe('buildPriceMap', () => {
     const budget = [
       { target: speciesBudgetTarget('Malus domestica'), category: 'plants', description: 'Malus domestica', unit_cost: 5, currency: 'EUR', quantity: 0 },
       { target: MANUAL_TARGET, category: 'materials', description: 'Mulch', unit_cost: 10, currency: 'EUR', quantity: 0 },
+      { target: speciesBudgetTarget('Malus domestica'), category: 'materials', description: 'Apple stakes', unit_cost: 20, currency: 'EUR', quantity: 0 },
     ]
     const map = buildPriceMap(budget)
     expect(map.size).toBe(1)

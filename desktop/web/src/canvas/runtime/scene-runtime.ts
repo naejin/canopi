@@ -2,6 +2,7 @@ import { locale } from '../../state/app'
 import {
   gridVisible,
   guides,
+  hoveredCanvasTargets,
   hoveredPanelTargets,
   layerVisibility,
   lockedObjectIds,
@@ -16,7 +17,7 @@ import type { CanopiFile, PlacedPlant } from '../../types/design'
 import type { SelectedPlantColorContext } from '../plant-color-context'
 import { normalizeHexColor } from '../plant-colors'
 import { computeSelectionLabels } from './selection-labels'
-import { clearCanvasSelection, setCanvasSelection } from '../session-state'
+import { clearCanvasSelection, setCanvasSelection, setCanvasTool } from '../session-state'
 import { refreshCanvasColorCache } from '../theme-refresh'
 import { CameraController, type SceneBounds } from './camera'
 import { SceneChromeOverlay } from './scene-chrome'
@@ -62,6 +63,7 @@ import { createScenePatchCommand, type SceneCommandSnapshot } from './scene-comm
 import { SceneHistory } from './scene-history'
 import type { CanvasRuntime, CanvasRuntimeDocumentMetadata } from './runtime'
 import { resolvePanelTargets } from '../../panel-target-resolution'
+import { panelTargetsEqual, speciesTarget } from '../../panel-targets'
 
 const EMPTY_PLANT_COLOR_CONTEXT: SelectedPlantColorContext = {
   plantIds: [],
@@ -121,9 +123,7 @@ export class SceneCanvasRuntime implements CanvasRuntime {
       markDirty: (before) => this._markCanvasDirty(before, 'interaction'),
       getLocalizedCommonNames: () => this._plantLabels.getLocaleSnapshot(locale.value),
       setHoveredEntityId: (id) => {
-        if (this._sceneStore.session.hoveredEntityId === id) return
-        this._sceneStore.updateSession((s) => { s.hoveredEntityId = id })
-        this._invalidate('scene')
+        this._setHoveredEntityId(id)
       },
     })
     await this._render()
@@ -178,6 +178,7 @@ export class SceneCanvasRuntime implements CanvasRuntime {
   }
 
   setTool(name: string): void {
+    setCanvasTool(name)
     this._interaction?.setTool(name)
   }
 
@@ -593,6 +594,7 @@ export class SceneCanvasRuntime implements CanvasRuntime {
   }
 
   loadDocument(file: CanopiFile): void {
+    this._syncHoveredCanvasTargets(null)
     this._sceneStore.hydrate(file)
     this._history.clear()
     lockedObjectIds.value = new Set()
@@ -604,6 +606,7 @@ export class SceneCanvasRuntime implements CanvasRuntime {
 
   replaceDocument(file: CanopiFile): void {
     this._resetTransientRuntimeState()
+    this._syncHoveredCanvasTargets(null)
     this._sceneStore.hydrate(file)
     this._history.clear()
     this._syncCanvasSignalsFromScene()
@@ -654,6 +657,7 @@ export class SceneCanvasRuntime implements CanvasRuntime {
   }
 
   destroy(): void {
+    this._setHoveredEntityId(null, { invalidate: false })
     this._interaction?.dispose()
     this._interaction = null
     this._chrome?.destroy()
@@ -705,6 +709,27 @@ export class SceneCanvasRuntime implements CanvasRuntime {
     resetTransientRuntimeState((name) => {
       this._interaction?.setTool(name)
     })
+  }
+
+  private _syncHoveredCanvasTargets(id: string | null): void {
+    const plant = id
+      ? this._sceneStore.persisted.plants.find((entry) => entry.id === id)
+      : null
+    const targets = plant ? [speciesTarget(plant.canonicalName)] : []
+    if (!panelTargetsEqual(hoveredCanvasTargets.peek(), targets)) {
+      hoveredCanvasTargets.value = targets
+    }
+  }
+
+  private _setHoveredEntityId(id: string | null, options: { invalidate?: boolean } = {}): void {
+    const invalidate = options.invalidate ?? true
+    if (this._sceneStore.session.hoveredEntityId === id) {
+      this._syncHoveredCanvasTargets(id)
+      return
+    }
+    this._sceneStore.updateSession((s) => { s.hoveredEntityId = id })
+    this._syncHoveredCanvasTargets(id)
+    if (invalidate) this._invalidate('scene')
   }
 
   private _reorderSelected(position: 'start' | 'end'): void {
@@ -850,15 +875,15 @@ export class SceneCanvasRuntime implements CanvasRuntime {
     const hoveredPlant = session.hoveredEntityId
       ? scene.plants.find((p) => p.id === session.hoveredEntityId)
       : null
-    const highlightedSceneIds = new Set(resolvePanelTargets(hoveredPanelTargets.value, scene).sceneIds)
+    const highlightedTargets = resolvePanelTargets(hoveredPanelTargets.value, scene)
     return {
       scene,
       viewport: this._camera.viewport,
       selectedPlantIds: getSelectedPlantIds(scene, session.selectedEntityIds),
       selectedZoneIds: getSelectedZoneIds(scene, session.selectedEntityIds),
       selectedAnnotationIds: getSelectedAnnotationIds(scene, session.selectedEntityIds),
-      highlightedPlantIds: getSelectedPlantIds(scene, highlightedSceneIds),
-      highlightedZoneIds: getSelectedZoneIds(scene, highlightedSceneIds),
+      highlightedPlantIds: new Set(highlightedTargets.plantIds),
+      highlightedZoneIds: new Set(highlightedTargets.zoneIds),
       sizeMode: session.plantSizeMode,
       colorByAttr: session.plantColorByAttr,
       speciesCache: this._speciesCache.getCache(),

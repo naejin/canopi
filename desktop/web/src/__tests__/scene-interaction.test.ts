@@ -17,7 +17,7 @@ function createInteractionDeps(
   container: HTMLDivElement,
   store: SceneStore,
   camera: CameraController,
-  overrides: Partial<Pick<SceneInteractionDeps, 'render' | 'markDirty' | 'setTool'>> = {},
+  overrides: Partial<Pick<SceneInteractionDeps, 'render' | 'markDirty' | 'setTool' | 'setHoveredEntityId'>> = {},
 ): SceneInteractionDeps {
   let selection = new Set<string>()
   const setSelection = vi.fn((ids: Iterable<string>) => {
@@ -45,7 +45,7 @@ function createInteractionDeps(
     })) as SceneInteractionDeps['setTool'],
     render: (overrides.render ?? (() => {})) as SceneInteractionDeps['render'],
     markDirty: (overrides.markDirty ?? (() => {})) as SceneInteractionDeps['markDirty'],
-    setHoveredEntityId: () => {},
+    setHoveredEntityId: overrides.setHoveredEntityId ?? (() => {}),
     getLocalizedCommonNames: () => new Map(),
   } as SceneInteractionDeps
 }
@@ -342,5 +342,15 @@ describe('SceneInteractionController', () => {
     expect(camera.viewport.y).toBe(20)
     expect(render).toHaveBeenCalled()
     controller.dispose()
+  })
+
+  it('clears hover when disposed', () => {
+    const setHoveredEntityId = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { setHoveredEntityId })
+    const controller = new SceneInteractionController(deps as any)
+
+    controller.dispose()
+
+    expect(setHoveredEntityId).toHaveBeenCalledWith(null)
   })
 })

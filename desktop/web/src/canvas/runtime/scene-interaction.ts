@@ -96,6 +96,7 @@ export class SceneInteractionController {
 
   dispose(): void {
     this._detach()
+    this._deps.setHoveredEntityId(null)
     this._removeTextarea()
     this._preview.remove()
     this._tooltip.dispose()

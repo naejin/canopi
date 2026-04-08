@@ -8,6 +8,7 @@ vi.mock('../../ipc/species', () => ({
 import {
   activeTool,
   guides,
+  hoveredCanvasTargets,
   hoveredPanelTargets,
   layerOpacity,
   layerVisibility,
@@ -125,6 +126,7 @@ describe('scene canvas runtime', () => {
     plantStampSpecies.value = null
     snapToGridEnabled.value = false
     guides.value = []
+    hoveredCanvasTargets.value = []
     hoveredPanelTargets.value = []
     layerVisibility.value = {}
     layerOpacity.value = {}
@@ -287,6 +289,75 @@ describe('scene canvas runtime', () => {
     expect(runtime.getSceneStore().session.selectedEntityIds.size).toBe(0)
     expect(selectedObjectIds.value.size).toBe(0)
     runtime.destroy()
+  })
+
+  it('keeps typed panel target highlights separate when plant IDs and zone names collide', async () => {
+    const runtime = new SceneCanvasRuntime()
+    runtime.loadDocument({
+      ...makeFile(),
+      plants: [
+        {
+          ...makeFile().plants[0]!,
+          id: 'colliding-id',
+          canonical_name: 'Malus domestica',
+        },
+      ],
+      zones: [
+        {
+          ...makeFile().zones[0]!,
+          name: 'colliding-id',
+        },
+      ],
+    })
+    const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
+
+    renderer.renderScene.mockClear()
+    hoveredPanelTargets.value = [{ kind: 'zone', zone_name: 'colliding-id' }]
+
+    await vi.waitFor(() => {
+      expect(renderer.renderScene).toHaveBeenCalled()
+    })
+
+    const snapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
+    expect(snapshot?.highlightedPlantIds).toEqual(new Set())
+    expect(snapshot?.highlightedZoneIds).toEqual(new Set(['colliding-id']))
+    runtime.destroy()
+  })
+
+  it('publishes canvas-origin species hover targets without mutating selection', async () => {
+    const runtime = new SceneCanvasRuntime()
+    runtime.loadDocument(makeFile())
+    await initRuntimeWithStubbedRenderer(runtime)
+
+    ;(runtime as any)._interaction._deps.setHoveredEntityId('plant-1')
+
+    expect(hoveredCanvasTargets.value).toEqual([speciesTarget('Malus domestica')])
+    expect(runtime.getSceneStore().session.selectedEntityIds.size).toBe(0)
+    expect(selectedObjectIds.value.size).toBe(0)
+    expect(canvasClean.value).toBe(true)
+
+    ;(runtime as any)._interaction._deps.setHoveredEntityId(null)
+
+    expect(hoveredCanvasTargets.value).toEqual([])
+    expect(runtime.getSceneStore().session.selectedEntityIds.size).toBe(0)
+    expect(selectedObjectIds.value.size).toBe(0)
+    expect(canvasClean.value).toBe(true)
+    runtime.destroy()
+  })
+
+  it('clears canvas-origin hover during destroy without rendering into a disposing renderer', async () => {
+    const runtime = new SceneCanvasRuntime()
+    runtime.loadDocument(makeFile())
+    const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
+
+    ;(runtime as any)._interaction._deps.setHoveredEntityId('plant-1')
+    expect(hoveredCanvasTargets.value).toEqual([speciesTarget('Malus domestica')])
+
+    renderer.renderScene.mockClear()
+    runtime.destroy()
+
+    expect(hoveredCanvasTargets.value).toEqual([])
+    expect(renderer.renderScene).not.toHaveBeenCalled()
   })
 
   it('uses the viewport-only renderer path for zoom updates', async () => {

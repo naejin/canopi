@@ -163,13 +163,14 @@ Current wiring covers:
 
 - consortium species hover
 - timeline action hover via `action.targets`
-- budget row hover via an existing `BudgetItem.target`, falling back to `speciesBudgetTarget(row.canonical)` when no budget item exists
+- budget row hover via an existing species-targeted plant `BudgetItem.target`, falling back to `speciesBudgetTarget(row.canonical)` when no species-targeted plant budget item exists
+- canvas plant hover to consortium chart hover via canvas-origin species targets
 
 Hover clears on mouse leave/unmount. This is not click-to-select, persistent selection, full panel/map synchronization, or map overlay work.
 
 ### Remaining guardrails
 
-Future panel-to-canvas selection, canvas-to-chart hover, and panel-to-map overlay work must use the same `PanelTarget[]` and `resolvePanelTargets()` path. Do not reintroduce string matching against timeline descriptions, legacy `plants` arrays, budget descriptions, or consortium canonical-name fields as a parallel sync mechanism.
+Future panel-to-canvas selection and panel-to-map overlay work must use the same `PanelTarget[]` and `resolvePanelTargets()` path. Do not reintroduce string matching against timeline descriptions, legacy `plants` arrays, budget descriptions, or consortium canonical-name fields as a parallel sync mechanism.
 
 ### Acceptance criteria
 
@@ -308,7 +309,7 @@ The original finding said `maplibre-gl`, `maplibre-contour`, and `suncalc` were 
 
 ### If pursuing MapLibre + panel activation:
 
-1. Use the existing `PanelTarget[]` and `resolvePanelTargets()` path for any new panel selection, canvas-to-chart hover, or map overlay sync; do not reintroduce string matching.
+1. Use the existing `PanelTarget[]` and `resolvePanelTargets()` path for any new panel selection or map overlay sync; do not reintroduce string matching.
 2. Add round-trip integration tests for the file-format contract (Finding 3).
 3. Add a versioned migration boundary before the next breaking `.canopi` schema change (Finding 7).
 4. Add in-canvas MapLibre layers as a derived visualization with a dedicated `MapLibreController`.

@@ -59,7 +59,7 @@ export function getTimelineHoverTargets(action: TimelineAction): readonly PanelT
 }
 
 export function getBudgetSpeciesTarget(item: BudgetItem): SpeciesPanelTarget | null {
-  return item.target.kind === 'species' ? item.target : null
+  return item.category === 'plants' && item.target.kind === 'species' ? item.target : null
 }
 
 export function getTimelineSpeciesTarget(action: TimelineAction): SpeciesPanelTarget | null {
