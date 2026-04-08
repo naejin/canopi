@@ -20,6 +20,19 @@ For architectural analysis and rationale, see [Code Quality And Architecture Rev
 
 ## Active Work
 
+### Architecture status from 2026-04-08 review
+
+Do **not** do a broad architecture refactor before this file. The document-authority convergence work is far enough along to continue safely: canvas scene state is owned by `SceneStore`, non-canvas document state is owned by `currentDesign` / document actions, and save composes both in `SceneCanvasRuntime.serializeDocument()`.
+
+Do a narrow convergence pass before expanding panel/map sync:
+- Define typed target identity semantics for timeline and budget before adding full panel-to-canvas highlighting, canvas-to-chart hover, or map overlays.
+- Replace the pass-through `CanvasSession` facade, or split it into explicit command/query interfaces, before adding more runtime API surface.
+- Add file-format round-trip/migration coverage before the next breaking `.canopi` schema change.
+
+Live-code corrections from the review:
+- `maplibre-gl` is not dead: `LocationTab` imports it directly, `WorldMapPanel` dynamically imports `WorldMapSurface`, and `vite.config.ts` has a `maplibre-gl` manual chunk. Keep MapLibre; verify chunk/lifecycle behavior instead of removing it.
+- `suncalc` still appears unused by live code and remains a removal candidate.
+
 ### 1. Convergence (prerequisites for panel/map expansion)
 
 These align with the core risks identified in the architecture review.
@@ -33,14 +46,24 @@ These align with the core risks identified in the architecture review.
 - See root `CLAUDE.md` Document Authority Rule
 
 **Panel identity semantics:**
-- Define explicit target identity types for timeline, budget, and consortium references before activating full panel↔canvas sync
-- Timeline and budget currently mix placed-plant IDs, canonical names, and string matching — converge on explicit target types
-- Consortium now uses `canonical_name` as identity key (succession entries keyed by species)
+- Define explicit target identity types for timeline, budget, and consortium references before activating full panel↔canvas sync.
+- Timeline currently stores `plants: string[] | null` and `zone: string | null` without saying whether the strings are placed-plant IDs, canonical species names, or zone names. New manual actions in `TimelineTab` set `plants: null` / `zone: null`.
+- Budget plant prices currently match by `category === 'plants' && description === canonicalName`; this makes `description` both a display field and an identity key.
+- Consortium now uses `canonical_name` as identity key (succession entries keyed by species), backed by `consortium-sync-workflow.ts` adding species entries from placed plants.
+- Recommended target shape before sync expansion:
+  - Shared target union: `placed_plant`, `species`, `zone`, `manual` / `none`.
+  - Timeline actions should express whether they target one placement, a species aggregate, a zone, or no scene object.
+  - Budget items should express whether they target a species aggregate, one placement, a zone, or a manual line item; keep display copy separate from identity.
+  - Consortium can remain species-targeted for the current succession chart, but encode that explicitly rather than relying on generic strings.
+- Add migration/repair rules for legacy timeline `plants`, budget `description` species rows, deleted plants/zones, and duplicate species placements.
 - See architecture review Finding 2
 
 **Canvas seam:**
-- Replace `CanvasSession` pass-through with a runtime interface (or give it real logic)
-- Consider split interface: interaction commands + read-only state queries for panels
+- Replace `CanvasSession` pass-through with a runtime interface (or give it real logic).
+- Existing `CanvasRuntime` already defines the boundary that `SceneCanvasRuntime` implements. Prefer either storing `CanvasRuntime | null` in `currentCanvasSession`, or splitting the API into:
+  - command surface for toolbar/shortcuts/document actions: tool, selection, zoom, undo/redo, clipboard, grouping, document load/save lifecycle
+  - read-only query surface for panels: placed plants, localized names, selected plant color context
+- Preserve the current `setCurrentCanvasTool()` behavior when no runtime is mounted: it primes the mirror tool state for later mount.
 
 ### 2. Correctness (ongoing)
 - Keep save/load strictly scene-authoritative for canvas entities
@@ -52,7 +75,7 @@ These align with the core risks identified in the architecture review.
 - Keep viewport-only updates on the renderer fast path
 - Keep Pixi retained across pan/zoom; avoid per-tick scene-tree rebuilds
 - Add scene-side spatial indexing only when profiling shows hit-testing or marquee is the bottleneck
-- **MapLibre chunk isolation**: Verify `maplibre-gl` is in a separate Vite chunk (dynamic import → code split), `maplibre-contour` in same chunk. Flag any chunk >500KB. If MapLibre is in the main bundle, fix the import to use dynamic `import()`. See roadmap QA.6b
+- **MapLibre chunk/lifecycle isolation**: Verify `maplibre-gl` is in a separate Vite chunk. `WorldMapPanel` already lazy-loads `WorldMapSurface`, but `LocationTab` imports `maplibre-gl` directly; check the production bundle before changing imports. Keep `maplibre-contour` in the same async chunk when contour UI is reactivated. Flag any chunk >500KB. See roadmap QA.6b
 - Verify timeline renderer is NOT in the main chunk (bottom panel is toggled)
 - ~~Canvas DPR sizing and transform fixes~~ — **done**: `useCanvasRenderer` uses `Math.round()` + `setTransform()` (not `scale()`), ruler functions aligned to same pattern. Prevents buffer reallocation on fractional-DPR screens and transform accumulation across redraws
 - ~~ConsortiumChart useMemo stability~~ — **done**: plants/consortiums read from refs with `sceneEntityRevision` as trigger dep, preventing O(n) `buildConsortiumBars` recomputation on every hover frame. `consortiums` added as direct dep to catch in-drag reorder changes (not covered by `sceneEntityRevision` when `markDirty: false`)
@@ -69,8 +92,8 @@ These align with the core risks identified in the architecture review.
 
 ### 5. Moderate-priority cleanup
 - Add real Rust → frontend → Rust round-trip test for file-format contract (see review Finding 3)
-- Add `migrateDocument()` step in load path before the first breaking schema change
-- Remove `suncalc` dependency (celestial dial was pruned, no code references it)
+- Add explicit versioned `migrateDocument()` / `migrate_design_value()` load path before the first breaking schema change. Rust already has an ad hoc legacy consortium migration in `desktop/src/design/format.rs`; promote that pattern into a version-dispatched migration boundary instead of adding scattered one-off migrations.
+- Remove `suncalc` dependency (celestial dial was pruned, no live code references it). Do not remove `maplibre-gl`; it is used by `LocationTab` and `WorldMapSurface`.
 - Watch `JSON.stringify` diff cost in `scene-commands.ts` as designs grow
 - ~~Hardcoded `rgba()` colors in `scene-interaction.ts` textarea~~ — **done**: replaced with CSS custom properties (`--color-surface`, `--color-primary`, `--color-text`, `--font-sans`, `--radius-sm`, `--text-base`). Remaining: `overlay-ui.ts` (selection band) still uses hardcoded `rgba()` — migrate to CSS variables for dark-mode correctness
 - ~~Timeline action-type colors dark mode~~ — **done**: replaced hardcoded hex `ACTION_COLOR_DEFAULTS` with `ACTION_COLOR_VARS` (CSS var name + hex fallback). Added `--color-action-*` tokens to `global.css` with dark-mode overrides
@@ -148,6 +171,7 @@ These align with the core risks identified in the architecture review.
 ## Deferred Product Work
 
 **MapLibre / geo:**
+- Current MapLibre usage: full-screen location shell (`LocationTab`) and dynamically loaded featured-design world map (`WorldMapSurface`). These are document-derived UI surfaces, not canvas authorities.
 - In-canvas MapLibre layers (via dedicated `MapLibreController` — see root `CLAUDE.md` MapLibre Integration Rule)
 - Local tangent plane projection math in `canvas/projection.ts` (`lngLatToMeters` / `metersToLngLat`) — prerequisite for MapLibre viewport sync (see `docs/archive/roadmap.md` 4.0c)
 - PMTiles offline tiles: Rust reader + Tauri custom protocol + download manager UI (see `docs/archive/roadmap.md` 4.2)
@@ -187,12 +211,14 @@ These align with the core risks identified in the architecture review.
 - Do not add new ad hoc signal mirrors — use computed/derived signals or single-writer pattern (see root `CLAUDE.md` Signal Mirror Rule). Both `designLocation` and `currentConsortiums` mirrors were removed entirely
 - Bottom-panel tabs are active — consortium auto-sync runs at document level via `consortium-sync-workflow.ts`
 - Do not make MapLibre a second document authority
+- Do not add full panel↔canvas or panel↔map sync until panel target identity is typed and migrated; otherwise selection/highlight behavior will become string matching.
 
 ## Exit Criteria For Convergence Phase
 
 - ~~Document authority boundary is explicit~~ — **done**: canvas state in SceneStore, non-canvas in document store, save composes both
 - ~~Save path composes from two authorities without re-merging~~ — **done**: `serializeDocument()` spreads canvas output + document store sections
-- Panel identity semantics are defined and typed (not stringly-typed string arrays) — **partially done**: consortium uses `canonical_name`, timeline/budget still use mixed IDs
-- `CanvasSession` is either replaced with an interface or given real logic
-- File-format round-trip test exists
+- Panel identity semantics are defined and typed (not stringly-typed string arrays) — **partially done**: consortium uses `canonical_name`, timeline/budget still use mixed IDs / descriptions
+- Legacy identity data is migrated or interpreted through one compatibility adapter: timeline `plants`/`zone`, budget `category + description`, consortium species entries
+- `CanvasSession` is either replaced with an interface, split into command/query surfaces, or given real logic
+- File-format round-trip test exists for Rust load → frontend normalize/serialize → Rust load, including unknown top-level fields and populated timeline/budget/consortium/location sections
 - ~~Architecture review Finding 1 resolved~~ — **done**; Finding 2 partially resolved (consortium identity converged)

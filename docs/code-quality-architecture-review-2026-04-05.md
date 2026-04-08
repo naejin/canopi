@@ -2,6 +2,7 @@
 
 Date: 2026-04-05
 Revised: 2026-04-05 (incorporates cross-review feedback from two independent agents)
+Updated: 2026-04-08 (post-bottom-panel MVP architecture pass; documents resolved and remaining convergence work)
 
 Purpose: give the next implementation agent an unbiased, actionable review of the current codebase and a converged direction for improving it.
 
@@ -11,6 +12,18 @@ This review is based on the current repository state, representative code inspec
 - `cargo test --workspace` passed across the Rust workspace
 
 That lowers immediate regression risk, but it does not remove the structural issues described below.
+
+## 2026-04-08 Follow-Up Status
+
+A later review of the live code found that several original risks have been reduced:
+
+- **Finding 1 is substantially resolved.** Canvas scene state is owned by `SceneStore`; non-canvas document state is owned by `currentDesign` / document actions; `SceneCanvasRuntime.serializeDocument()` composes canvas output with document-owned `consortiums`, `timeline`, `budget`, and `budget_currency`. The old `currentConsortiums` and `designLocation` mirrors are gone.
+- **Finding 2 remains the main blocker before panel/map sync expansion.** Consortiums now use `canonical_name`, but timeline and budget still rely on ambiguous strings (`TimelineAction.plants`, `TimelineAction.zone`, and budget `category + description` matching).
+- **Finding 4 remains open.** `CanvasSession` is still a mostly pass-through facade even though `CanvasRuntime` already exists.
+- **Finding 7 is partially addressed.** Rust has an ad hoc legacy consortium migration in `desktop/src/design/format.rs`, but there is still no version-dispatched migration boundary for future breaking file-format changes.
+- **Finding 8 was partly stale.** `maplibre-gl` is used by `LocationTab` and `WorldMapSurface`, and Vite has a `maplibre-gl` manual chunk. Do not remove MapLibre as a dead dependency. `suncalc` still appears unused.
+
+Practical recommendation as of 2026-04-08: do not run a broad architecture rewrite before `docs/todo.md`. Do a narrow convergence pass for panel identity semantics and the `CanvasSession` seam before expanding panel-to-canvas, canvas-to-chart, or map overlay synchronization.
 
 ## Executive Summary
 
@@ -22,20 +35,20 @@ The project has a good top-level product architecture:
 - tests are materially better than average for a Tauri desktop app
 - the CLAUDE.md architecture rules (document mutation, action-layer isolation, resource ownership) are unusually explicit and well-enforced
 
-The main weaknesses are in the frontend architecture:
+The main remaining weaknesses are in the frontend architecture:
 
-- document authority is split across multiple stores and mirrors — **core risk, fix before panel/map expansion**
-- entity identity semantics are inconsistent across panels — **core risk, fix before panel activation**
-- the file-format contract is fragile and under-tested — **moderate risk, address incrementally**
-- the canvas runtime is too broad — **maintainability concern, refactor incrementally**
+- entity identity semantics are inconsistent across panels — **core risk, fix before panel/map sync expansion**
+- `CanvasSession` duplicates an already-existing runtime interface — **moderate risk, fix before growing runtime API**
+- the file-format contract is fragile and under-tested — **moderate risk, address before schema changes**
+- the canvas runtime is broad — **maintainability concern, refactor incrementally**
 - lifecycle ownership is implicit in places — **low priority, refactor opportunistically**
 
 ### Severity tiers
 
 The findings below are organized by urgency:
 
-- **Core risks** (Findings 1–2): Structural issues that exist today and will block panel/map work if pursued. Fix before expanding.
-- **Moderate risks** (Findings 3–4): Real issues that can be addressed incrementally alongside feature work.
+- **Core risks** (Finding 2; Finding 1 historically): Structural issues that block panel/map sync if pursued. Finding 1 is now mostly resolved; Finding 2 remains.
+- **Moderate risks** (Findings 3–4 and 7): Real issues that can be addressed incrementally, but before schema or runtime API expansion where relevant.
 - **Low priority** (Finding 5): Maintainability concerns. Refactor opportunistically, not as prerequisites.
 
 ## Target Direction
@@ -55,7 +68,17 @@ The likely near-term direction is:
 
 ## Finding 1: Document Authority Is Split Across Multiple Stores
 
-**Severity: core risk — structural issue today, becomes a bug factory under panel/map expansion**
+**Severity as of 2026-04-08: mostly resolved — keep as historical context and guardrail**
+
+The original finding below described a real risk at the time of the April 5 review. The live code now has an explicit authority split:
+
+- canvas scene fields (`plants`, `zones`, `annotations`, `groups`, `layers`, `plant_species_colors`) are scene-store owned
+- non-canvas document fields (`consortiums`, `timeline`, `budget`, `budget_currency`, `location`, `description`, `extra`) are document-store owned
+- `serializeDocument()` composes those authorities rather than pushing non-canvas state into `SceneStore`
+
+Do not do a broad document-store rewrite just to satisfy this old finding. The remaining risk is drift: future work must avoid reintroducing ad hoc mirrors or making MapLibre/panels into second document authorities.
+
+### Original finding
 
 ### What is wrong
 
@@ -113,26 +136,28 @@ That is exactly the kind of feature growth that turns document mirroring into a 
 
 ### Acceptance criteria
 
-- There is a documented answer to "what is the source of truth for this field?"
-- Location, consortiums, timeline, and budget do not require ad hoc mirroring to stay in sync
-- Saving no longer depends on reconstructing document sections from multiple stores
+- There is a documented answer to "what is the source of truth for this field?" — **met in root `CLAUDE.md` Document Authority Rule**
+- Location, consortiums, timeline, and budget do not require ad hoc mirroring to stay in sync — **mostly met; consortium sync is an explicit document workflow**
+- Saving no longer depends on reconstructing non-canvas document sections from `SceneStore` — **met; save composes scene output with document-owned sections**
 
 ## Finding 2: Panel-To-Canvas Identity Semantics Are Inconsistent
 
-**Severity: core risk — structural issue today, blocks meaningful panel activation**
+**Severity as of 2026-04-08: core risk — blocks full panel-to-canvas, canvas-to-chart, and map overlay synchronization**
 
 ### What is wrong
 
-The three panel subsystems use three different identity schemes for referencing design content:
+The three panel subsystems still use different identity schemes for referencing design content:
 
-- **Consortiums** use placed-plant IDs (`plant_ids: Vec<String>` in `common-types/src/design.rs:88-96`)
-- **Timeline** auto-generation stores canonical species names in `plants: [canonical]` — the dedup key in `buildDefaultTimelineActions()` at `desktop/web/src/state/timeline-actions.ts:81` is `${canonical}-${action_type}`
-- **Budget** pricing matches by `description === canonicalName` — a string comparison on a free-text field (`desktop/web/src/state/budget-actions.ts:29`)
+- **Consortiums** now use `canonical_name` (`Consortium` in `desktop/web/src/types/design.ts`) and `consortium-sync-workflow.ts` auto-adds species entries from placed plants. This is an improvement over the old placed-plant-ID shape, but it should still be encoded as an explicit species target before general sync work.
+- **Timeline** stores `plants: string[] | null` and `zone: string | null` (`TimelineAction` in `desktop/web/src/types/design.ts`) without saying whether plant strings are placed-plant IDs or canonical species names. New manual actions in `TimelineTab` currently use `plants: null` / `zone: null`.
+- **Budget** pricing matches by `category === 'plants' && description === canonicalName` in `desktop/web/src/state/budget-actions.ts`. That makes a display field double as an identity key.
 
 Those are different concepts:
 - stable placed-plant IDs (unique per placement)
 - canonical species names (shared across all placements of a species)
+- zone names / IDs
 - view-derived species aggregates (computed at display time)
+- manual rows/tasks with no scene target
 
 They should not be treated as interchangeable references.
 
@@ -159,21 +184,26 @@ Without clear target semantics, sync logic will become stringly typed and brittl
 ### Improvement path
 
 1. Define target identity semantics before expanding the UI.
-2. Recommended: use explicit target types rather than overloading string arrays.
+2. Recommended: use explicit target types rather than overloading string arrays or descriptions.
 
 Example direction:
 
+- shared target union:
+  - `placed_plant` with a placed plant ID
+  - `species` with a canonical name
+  - `zone` with a zone name / stable zone ID
+  - `manual` / `none` with no scene target
 - timeline actions target:
-  - placed-plant IDs
-  - zone IDs
-  - species aggregates
-  - manual tasks with no scene target
+  - one or more placed plants
+  - a species aggregate
+  - a zone
+  - a manual task with no scene target
 - budget items target:
-  - species aggregate
-  - placed-plant ID
-  - zone
-  - manual line item
-- consortiums remain placed-plant-ID based
+  - a species aggregate
+  - one placed plant
+  - a zone
+  - a manual line item
+- consortiums remain species-targeted for the current succession chart unless product requirements demand per-placement succession
 
 3. Make the schema express those semantics directly instead of relying on interpretation.
 4. Build selectors that translate document targets into:
@@ -183,7 +213,9 @@ Example direction:
 5. Add deletion/migration rules:
    - orphaned references
    - duplicate species placements
-   - legacy canonical-name records
+   - legacy timeline `plants` arrays
+   - legacy budget `category + description` plant rows
+   - legacy canonical-name consortium records
 
 ### Acceptance criteria
 
@@ -305,17 +337,22 @@ For a design with hundreds of plants, this creates measurable garbage pressure. 
 
 ## Finding 7: No Data Migration Path
 
-**Severity: moderate — not urgent today, becomes critical at first breaking schema change**
+**Severity as of 2026-04-08: moderate — partially addressed, still needed before the next breaking schema change**
 
-`ScenePersistedState` has a `version` field, but no code reads it for migration. The `extra` field provides forward compatibility (unknown keys are preserved), but there is no backward compatibility mechanism. The first time a schema change removes or renames a field, old `.canopi` files will fail to load or silently lose data.
+`ScenePersistedState` has a `version` field, but no generalized frontend migration path reads it for migration. Rust now has an ad hoc `migrate_legacy_consortiums()` call in `desktop/src/design/format.rs`, which proves the load path can host migrations, but the code still needs an explicit version-dispatched boundary.
 
-Before the next schema change: add a `migrateDocument(file: CanopiFile): CanopiFile` step in the load path that dispatches on `version`.
+Before the next schema change: add a `migrate_design_value(value: serde_json::Value) -> serde_json::Value` / `migrateDocument(file: CanopiFile): CanopiFile` step in the load path that dispatches on `version`. Move the legacy consortium migration behind that boundary so new migrations do not become scattered one-off functions.
 
-## Finding 8: Dead Dependencies
+## Finding 8: Dead Dependencies / MapLibre Status
 
 **Severity: low — no functional impact, minor bundle/install bloat**
 
-`maplibre-gl`, `maplibre-contour`, and `suncalc` are in `desktop/web/package.json` but the code that uses them was deleted during pre-rewrite pruning. They add unnecessary weight to `node_modules`. Remove them if the features are not planned for the immediate next phase; re-add when needed.
+The original finding said `maplibre-gl`, `maplibre-contour`, and `suncalc` were all dead after pruning. That is now stale:
+
+- `maplibre-gl` is live: `LocationTab` imports it directly, and `WorldMapPanel` dynamically imports `WorldMapSurface`, which also imports it.
+- `vite.config.ts` already has a `maplibre-gl` manual chunk; verify production output before changing imports.
+- `maplibre-contour` has support code in `canvas/contours.ts` and should be kept if contour/hillshade work is near-term; otherwise it can be deferred separately from MapLibre core.
+- `suncalc` still appears unused by live code and can be removed if `rg "suncalc"` only finds docs/package metadata.
 
 ---
 
@@ -331,19 +368,20 @@ Before the next schema change: add a `migrateDocument(file: CanopiFile): CanopiF
 
 ### If pursuing MapLibre + panel activation:
 
-1. Converge on a single canonical document authority (Finding 1).
-2. Define stable identity semantics for timeline/budget/consortium references (Finding 2).
+1. Define stable identity semantics for timeline/budget/consortium references (Finding 2). Do this before full panel-to-canvas highlighting, canvas-to-chart hover, or map overlay selection.
+2. Replace or split `CanvasSession` before adding more runtime API surface (Finding 4).
 3. Add round-trip integration tests for the file-format contract (Finding 3).
-4. Add in-canvas MapLibre layers as a derived visualization with a dedicated controller.
-5. Mount the real bottom-panel tabs on top of the converged model.
-6. Address runtime breadth, lifecycle, and CanvasSession incrementally.
+4. Add a versioned migration boundary before changing the `.canopi` schema for target identities (Finding 7).
+5. Add in-canvas MapLibre layers as a derived visualization with a dedicated `MapLibreController`.
+6. Keep the document authority boundary from Finding 1 intact; do not push non-canvas state into `SceneStore` or MapLibre.
+7. Address runtime breadth and lifecycle incrementally.
 
 ### If pursuing other work (search improvements, export, polish):
 
 1. Add round-trip integration tests for the file-format contract (Finding 3).
 2. Replace CanvasSession pass-through with an interface (Finding 4).
 3. Add a document migration path before the next schema change (Finding 7).
-4. Remove dead dependencies (Finding 8).
+4. Remove `suncalc` if still unused; do not remove `maplibre-gl` while `LocationTab` / `WorldMapSurface` are live (Finding 8).
 5. Defer Findings 1 and 2 until panel/map work begins.
 
 ## Concrete Non-Goals
@@ -360,9 +398,10 @@ The next agent should avoid:
 
 This is a well-built codebase with strong product direction, a sensible Rust backend, explicit architecture guardrails, and enough tests to support careful refactoring.
 
-The current risk is not "low quality code everywhere." The current risk is concentrated in two areas:
+The current risk is not "low quality code everywhere." As of the 2026-04-08 follow-up, the highest risk is concentrated in:
 
-1. **Split document authority** — the save-time merge in `serializeDocument()` is the clearest symptom
-2. **Inconsistent identity semantics** — three panel subsystems use three different reference schemes
+1. **Inconsistent identity semantics** — panel subsystems still use ambiguous strings and descriptions for targets
+2. **Runtime API seam drift** — `CanvasSession` duplicates `CanvasRuntime` and will tax every new runtime method
+3. **File-format compatibility** — round-trip and migration coverage must land before schema changes
 
-Those are fixable, and they are the prerequisites for panel/map expansion. Everything else can be addressed incrementally.
+Those are fixable, and identity semantics are the prerequisite for robust panel/map expansion. Everything else can be addressed incrementally.

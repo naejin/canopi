@@ -5,7 +5,7 @@
 - **Frontend**: Preact + @preact/signals + TypeScript + Vite + CSS Modules
 - **Canvas**: PixiJS (primary renderer) + Canvas2D (fallback) — scene-owned runtime via `SceneCanvasRuntime`
 - **i18n**: i18next core (NOT react-i18next), 11 languages (en, fr, es, pt, it, zh, de, ja, ko, nl, ru)
-- **Maps**: MapLibre GL JS + maplibre-contour (dependency retained, code deleted — deferred post-rewrite)
+- **Maps**: MapLibre GL JS + maplibre-contour. Location shell and featured-design world map currently use MapLibre; in-canvas MapLibre layers remain deferred post-rewrite
 - **Native**: lib-c (Linux, Cairo PNG/PDF + inotify + XDG), lib-swift (macOS stub), lib-cpp (Windows stub)
 
 ## Project Structure
@@ -46,13 +46,13 @@ Domain-specific instructions in subdirectory CLAUDE.md files:
 ## Pruned Features (code deleted, git history preserves)
 These features were deleted during pre-rewrite cleanup. See `docs/todo.md` for current status:
 - **Tools**: Ellipse, Polygon, Freeform, Line, Measure, Dimension, Arrow, Callout, Pattern Fill, Spacing
-- **Overlays**: Minimap, Celestial dial, Consortium visual, MapLibre/location, Compass
-- **Panels**: Layer panel, World Map, Learning
+- **Overlays**: Minimap, Celestial dial, old in-canvas MapLibre/location overlay, Compass
+- **Old panel implementations**: pre-rewrite layer/world-map/learning panel implementations were pruned. Current `LayerPanel` is retained, and a newer `WorldMapPanel` / `WorldMapSurface` exists but is not the in-canvas map layer
 - **Export**: GeoJSON, PNG/SVG export commands
-- **Support files**: dimensions.ts, pattern-math.ts, map-layer.ts, ipc/community.ts, ipc/tiles.ts, TileDownloadModal
+- **Old support files**: dimensions.ts, pattern-math.ts, map-layer.ts, old tile download modal, and old tile IPC wrappers were pruned. Current `ipc/community.ts` is live for template catalog/import workflows
 - **Retained for beta release**: LayerPanel, location flows (Wave 3 retained-surface closeout)
 - **Bottom panel shipped**: Timeline (trimmed), Budget (redesigned: summary header, document-level currency via `budget_currency`, notebook-style table, inline price editing), and Consortium (succession chart) tabs all active. Consortium auto-sync runs via `state/consortium-sync-workflow.ts` at document level. Panel↔canvas reactivity via `sceneEntityRevision` signal
-- **Deferred beyond beta**: WorldMapPanel, geo/terrain, export, learning content
+- **Active/deferred map split**: Location flow and featured-design world map surfaces exist; in-canvas geo/terrain, offline tiles, export, and learning content remain deferred beyond beta
 - **Selection**: No resize/rotate — objects are position-only (highlight + move). Resize/rotate commands all deleted
 - **Konva engine**: Entire `CanvasEngine` + old command/tool/serializer/history/import/export system deleted. Konva dependency fully removed. Replaced by scene-owned runtime (PixiJS + Canvas2D)
 - **Per-plant labels**: Label rendering, collision detection, dedup, and adaptive placement all deleted. Replaced by hover tooltip (common name + scientific name), hover species highlight (ring on same-species), and selection labels (one per species at centroid). See `desktop/web/src/canvas/CLAUDE.md` Plant Presentation Rules
@@ -104,7 +104,7 @@ The save path composes both into a single `CanopiFile`. Neither authority should
 
 ### MapLibre Integration Rule
 - **MapLibre is a derived visualization layer, not a document authority.** Map layers render scene/document state; they do not own or mutate it
-- MapLibre instances must be managed by a dedicated controller (e.g., `MapLibreController`), not scattered across the canvas runtime or individual components
+- Existing full-screen surfaces may keep component-local MapLibre ownership when setup/update/teardown are contained in one component (`LocationTab`, `WorldMapSurface`). Future in-canvas MapLibre must use a dedicated controller (e.g., `MapLibreController`), not scattered across the canvas runtime or individual components
 - Map viewport sync with the canvas must go through `CameraController`, not ad hoc signal wiring
 - The lazy import boundary around `maplibre-gl` should be preserved for bundle size, but isolation from the canvas runtime is no longer required — the map controller is a sibling to the runtime, not walled off from it
 
@@ -112,6 +112,7 @@ The save path composes both into a single `CanopiFile`. Neither authority should
 - **Bottom panel components that read canvas-derived data must subscribe to `sceneEntityRevision`** from `state/canvas.ts` to react to canvas mutations (plant placement, undo/redo). Reading `currentCanvasSession.value?.getPlacedPlants()` alone is not reactive — the session reference doesn't change when scene state changes. Panels that only read non-canvas document state (e.g., TimelineTab reads `currentDesign.value?.timeline`) should NOT subscribe — it causes spurious re-renders on every canvas mutation
 - **Cross-domain auto-sync must be a workflow module** (like `consortium-sync-workflow.ts`), not a component-level effect. Component effects only run when mounted — data integrity requires document-level effects that run regardless of which tab is visible
 - **Use `.peek()` in workflow effects** to read signals without subscribing. Only subscribe to the intended trigger signal (e.g., `sceneEntityRevision`). Writing `currentDesign.value` inside an effect that subscribes to it creates re-execution loops
+- **Panel target identity must be explicit before full sync expansion.** Timeline and budget still use ambiguous strings (`TimelineAction.plants`, `TimelineAction.zone`, budget `category + description`). Before adding full panel↔canvas highlighting, canvas→chart hover, or map overlay selection, introduce typed targets such as `placed_plant`, `species`, `zone`, and `manual` / `none`, plus compatibility migration for legacy records. Consortium is currently species-targeted via `canonical_name`; keep that explicit.
 
 ### Canvas2D Tab Components
 - **Use `useCanvasRenderer` hook** from `components/canvas/useCanvasRenderer.ts` for DPR-aware canvas setup — handles `devicePixelRatio` scaling, `ResizeObserver`, and redraw lifecycle. Both `ConsortiumChart` and `InteractiveTimeline` use it
