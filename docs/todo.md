@@ -1,7 +1,7 @@
 # Canopi: Current Work
 
 **Date**: 2026-04-08
-**Status**: v0.2.0 shipped — rewrite cut over, bottom-panel MVP landed
+**Status**: v0.2.0 shipped — rewrite cut over, bottom-panel MVP landed, safeguards (ErrorBoundary + pre-commit hooks) active
 
 This file tracks active and deferred work.
 For architectural analysis and rationale, see [Code Quality And Architecture Review](./code-quality-architecture-review-2026-04-05.md).
@@ -87,8 +87,8 @@ These align with the core risks identified in the architecture review.
 - ~~BottomPanel 60fps resize re-renders~~ — **done**: resize handler writes to DOM ref during drag, commits signal + persists settings on mouseup only via `commitBottomPanelHeight`. Prevents parent re-rendering all tab children at 60fps during panel resize
 
 ### 4. Safeguards
-- **ErrorBoundary**: Add a Preact ErrorBoundary wrapping `main.tsx` — blank-screen crash protection. Small, no dependencies (see `docs/archive/roadmap.md` SG.0)
-- **Pre-commit hooks**: Add husky + lint-staged (`tsc --noEmit`, `eslint`) — prevents broken commits during parallel agent work (see `docs/archive/roadmap.md` SG.1)
+- ~~**ErrorBoundary**~~ — **done**: Preact class component in `components/shared/ErrorBoundary.tsx` wrapping `<App />` in `main.tsx`. Uses `getDerivedStateFromError` + `componentDidCatch` (with `ErrorInfo` for component stack). Fallback UI shows title, message, reload button, and collapsible stack trace. All strings via `t()` with i18n keys in 11 locales. CSS Module uses design system tokens only
+- ~~**Pre-commit hooks**~~ — **done**: husky v9 in `desktop/web/package.json` with monorepo `prepare` script (`cd ../.. && husky desktop/web/.husky`). Hook runs `tsc --noEmit` (~3-5s). No lint-staged (no ESLint yet). No `vitest run` (tests stay in CI to keep hook fast). Add `eslint` to hook when ESLint is introduced
 
 ### 5. Moderate-priority cleanup
 - Add real Rust → frontend → Rust round-trip test for file-format contract (see review Finding 3)
