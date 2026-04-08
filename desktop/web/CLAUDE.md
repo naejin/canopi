@@ -11,6 +11,12 @@
 - **Panel target bridges are presentation-only**: Bottom-panel hover/selection uses typed `PanelTarget[]` (`hoveredPanelTargets`, `selectedPanelTargets`, `selectedPanelTargetOrigin`) and the runtime resolves them into highlights. Do not mutate real canvas selection/history or reintroduce string matching for timeline/budget/consortium identity
 - **Map projection seam is pure**: `projectPanelTargetsToMapFeatures()` resolves typed targets through `resolvePanelTargets()` and `worldToGeo()`. It does not import MapLibre, write signals, or own document/canvas state; rendered overlays should consume it rather than duplicating identity logic
 
+## ErrorBoundary
+- `ErrorBoundary` class component in `components/shared/ErrorBoundary.tsx` wraps `<App />` in `main.tsx`
+- Catches render-time errors only (not event handlers, async, or `setTimeout`)
+- Import `ErrorInfo` from `preact` for `componentDidCatch` — don't redeclare the type inline
+- **No `t()` fallback strings**: i18next with `fallbackLng: 'en'` never returns falsy for existing keys. `t('key') || 'fallback'` is dead code — use `t('key')` directly
+
 ## PanelBar State
 - PanelBar is visible on the welcome screen (no design loaded) — location, plant-db, and favorites buttons are `disabled` when `currentDesign` is null. Only the canvas button is always active
 

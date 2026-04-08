@@ -186,6 +186,12 @@ python3 scripts/prepare-db.py
 cargo build --release
 ```
 
+### Pre-commit Hooks
+- **Husky v9** installed in `desktop/web/package.json` with monorepo `prepare` script: `cd ../.. && husky desktop/web/.husky`
+- Hook at `desktop/web/.husky/pre-commit` runs `tsc --noEmit` from `desktop/web/`
+- Tests stay in CI — slow hooks get bypassed with `--no-verify`, defeating the purpose
+- When ESLint is added, append it to the hook and add lint-staged for per-file linting
+
 ### Release Process
 - **Version bump files**: `Cargo.toml` (workspace version), `desktop/tauri.conf.json`, `desktop/web/package.json` — Cargo.lock auto-updates
 - **Trigger RC workflow**: `gh workflow run "Release Candidate" --ref main -f ref=main -f release_version=<ver> -f db_release_tag=canopi-core-db -f db_asset_name=canopi-core.db`
