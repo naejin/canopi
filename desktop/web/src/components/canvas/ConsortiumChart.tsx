@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
-import { locale } from '../../state/app'
+import { locale, theme } from '../../state/app'
 import { plantSpeciesColors, hoveredCanvasTargets, hoveredPanelTargets, sceneEntityRevision, plantNamesRevision } from '../../state/canvas'
 import { currentDesign } from '../../state/document'
 import { currentCanvasSession } from '../../canvas/session'
@@ -120,7 +120,7 @@ export function ConsortiumChart() {
       hoveredCanonical: effectiveHoveredCanonical,
     }
     renderConsortium(ctx, width, height, barsRef.current, state, t, rowHeightsRef.current, rowOffsetsRef.current)
-  }, [bars, effectiveHoveredCanonical, locale.value], cachedRectRef)
+  }, [bars, effectiveHoveredCanonical, locale.value, theme.value], cachedRectRef)
 
   // Clean up drag state and consortium hover bridge on unmount
   useEffect(() => {
@@ -232,16 +232,20 @@ export function ConsortiumChart() {
 
     if (drag?.type === 'resize') {
       const phase = Math.round(xToPhase(mouseX, contentWidth))
-      const clampedPhase = Math.max(0, Math.min(CONSORTIUM_PHASES.length - 1, phase))
       const bar = barsRef.current.find((b) => b.canonicalName === drag.canonicalName)
 
       if (drag.edge === 'left') {
+        const clampedPhase = Math.max(0, Math.min(CONSORTIUM_PHASES.length - 1, phase))
         const newStart = Math.min(clampedPhase, drag.originalEndPhase)
         if (bar && bar.startPhase === newStart) return
         moveConsortiumEntry(drag.canonicalName, { startPhase: newStart, endPhase: drag.originalEndPhase }, { markDirty: false })
         drag.hasMutated = true
       } else {
-        const newEnd = Math.max(clampedPhase, drag.originalStartPhase)
+        // Right edge pixel is at phaseToX(endPhase + 1), so xToPhase returns
+        // endPhase + 1 at the boundary. Allow clamp up to CONSORTIUM_PHASES.length
+        // so the last column is reachable after subtracting 1.
+        const clampedPhase = Math.max(0, Math.min(CONSORTIUM_PHASES.length, phase))
+        const newEnd = Math.max(clampedPhase - 1, drag.originalStartPhase)
         if (bar && bar.endPhase === newEnd) return
         moveConsortiumEntry(drag.canonicalName, { startPhase: drag.originalStartPhase, endPhase: newEnd }, { markDirty: false })
         drag.hasMutated = true

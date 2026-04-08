@@ -5,6 +5,7 @@ import {
   bottomPanelHeight,
   bottomPanelOpen,
   bottomPanelTab,
+  gridVisible,
   layerLockState,
   layerOpacity,
   layerPanelOpen,
@@ -22,6 +23,10 @@ export function toggleLayerPanel(): void {
 
 export function setActiveLayer(name: string): void {
   activeLayerName.value = name
+}
+
+export function toggleGridVisibility(): void {
+  gridVisible.value = !gridVisible.value
 }
 
 export function toggleLayerVisibility(name: string): void {

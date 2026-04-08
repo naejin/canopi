@@ -2,6 +2,7 @@ import { t } from '../../i18n'
 import { locale } from '../../state/app'
 import {
   activeLayerName,
+  gridVisible,
   layerLockState,
   layerOpacity,
   layerPanelOpen,
@@ -10,6 +11,7 @@ import {
 import {
   setActiveLayer,
   setLayerOpacity,
+  toggleGridVisibility,
   toggleLayerLock,
   toggleLayerPanel,
   toggleLayerVisibility,
@@ -94,7 +96,8 @@ export function LayerPanel() {
 
       <div role="list">
         {LAYER_ORDER.map((name) => {
-          const visible = layerVisibility.value[name] ?? true
+          const isBase = name === 'base'
+          const visible = isBase ? gridVisible.value : (layerVisibility.value[name] ?? true)
           const locked = layerLockState.value[name] ?? false
           const active = activeLayer === name
 
@@ -110,18 +113,20 @@ export function LayerPanel() {
                 type="button"
                 className={styles.toggleBtn}
                 aria-label={`${t('canvas.layers.visibility')}: ${t(`canvas.layers.${name}`)}`}
-                onClick={() => toggleLayerVisibility(name)}
+                onClick={() => isBase ? toggleGridVisibility() : toggleLayerVisibility(name)}
               >
                 <EyeIcon open={visible} />
               </button>
-              <button
-                type="button"
-                className={styles.toggleBtn}
-                aria-label={`${t('canvas.layers.lock')}: ${t(`canvas.layers.${name}`)}`}
-                onClick={() => toggleLayerLock(name)}
-              >
-                <LockIcon locked={locked} />
-              </button>
+              {!isBase && (
+                <button
+                  type="button"
+                  className={styles.toggleBtn}
+                  aria-label={`${t('canvas.layers.lock')}: ${t(`canvas.layers.${name}`)}`}
+                  onClick={() => toggleLayerLock(name)}
+                >
+                  <LockIcon locked={locked} />
+                </button>
+              )}
               <button
                 type="button"
                 className={styles.layerName}
@@ -134,22 +139,24 @@ export function LayerPanel() {
         })}
       </div>
 
-      <div className={styles.mapSection}>
-        <div className={styles.sectionHeader}>{t(`canvas.layers.${activeLayer}`)}</div>
-        <div className={styles.mapSliderRow}>
-          <span className={styles.mapSliderLabel}>{t('canvas.layers.opacity')}</span>
-          <input
-            type="range"
-            className={styles.mapSlider}
-            min="0"
-            max="100"
-            value={activeOpacity}
-            onInput={(event) => {
-              setLayerOpacity(activeLayer, Number((event.target as HTMLInputElement).value) / 100)
-            }}
-          />
+      {activeLayer !== 'base' && (
+        <div className={styles.mapSection}>
+          <div className={styles.sectionHeader}>{t(`canvas.layers.${activeLayer}`)}</div>
+          <div className={styles.mapSliderRow}>
+            <span className={styles.mapSliderLabel}>{t('canvas.layers.opacity')}</span>
+            <input
+              type="range"
+              className={styles.mapSlider}
+              min="0"
+              max="100"
+              value={activeOpacity}
+              onInput={(event) => {
+                setLayerOpacity(activeLayer, Number((event.target as HTMLInputElement).value) / 100)
+              }}
+            />
+          </div>
         </div>
-      </div>
+      )}
     </aside>
   )
 }
