@@ -129,6 +129,7 @@ The rewrite cutover is complete. Konva dependency has been fully removed. Curren
 - Keep docs synchronized with the live scene runtime
 
 ### Consortium Succession Chart
+- **`useCanvasRenderer` deps must include `theme.value`**: Both `ConsortiumChart` and `InteractiveTimeline` need `theme.value` in their `useCanvasRenderer` dependency arrays. Renderers read theme colors via `readThemeTokens()` at render time, but the redraw is only triggered by dep changes — without `theme.value`, theme toggles have no visible effect until the next unrelated interaction
 - `consortium-renderer.ts` follows the same Canvas2D pattern as `timeline-renderer.ts` — pure render + hit test, no component state
 - `computeBarRect()` is the shared geometry helper — used by both `renderConsortium()` and `hitTestBar()`. Do not duplicate bar geometry computation
 - **`useCanvasRenderer` accepts optional `cachedRectRef` parameter**: Pass a `useRef<DOMRect | null>(null)` as the 4th argument — the hook uses it in `doRedraw` (avoids `getBoundingClientRect()` on dep-triggered redraws at 60fps) and the ResizeObserver invalidates it on resize. Do not create a separate ResizeObserver for `cachedRectRef` invalidation

@@ -39,6 +39,8 @@
 - **Non-token sizes**: When a component genuinely needs a size not in the token scale (e.g., 22px swatches), define a scoped CSS custom property on the component root (e.g., `--swatch-size: 22px`) and reference it everywhere. Never scatter raw px values
 
 ## Canvas2D Component Patterns
+- **`useCanvasRenderer` deps must include `theme.value`** for theme reactivity — renderers read fresh CSS variables via `readThemeTokens()` at render time, but the redraw only fires when a dep changes. Missing `theme.value` causes stale colors until the next unrelated interaction
+- **Grid visibility uses `gridVisible` signal, not `layerVisibility['base']`**: The grid is chrome (rendered by `scene-chrome.ts`), not a scene entity. `LayerPanel` must read/write `gridVisible` for the 'base' layer, not the generic `layerVisibility` path. The 'base' entry in `persisted.layers` exists but no renderer or hit-tester reads it
 - **Drag handlers must use `useCallback([])` with refs**, not signal-derived deps. A `renderState` object literal in `useCallback` deps causes the callback to be a new reference every render → document-level event listeners re-register mid-drag
 - **Canvas `onMouseMove` must skip during drag**: When both document-level and canvas-element `mousemove` handlers exist, the canvas handler must early-return if drag is active (`if (!dragState.current) handleMouseMove(e)`) — otherwise `handleMouseMove` fires twice per event during drag
 - **Cache cumulative row offsets in a ref**: Compute `rowOffsets` via `useMemo` from `rowHeights`, store in a `rowOffsetsRef`, pass to renderers and hit-testers as an optional param — avoids per-frame array allocation at 60fps
