@@ -179,7 +179,7 @@ These align with the core risks identified in the architecture review.
 - ~~Budget tab~~ — **done**: redesigned with compact summary header (species/plant counts, pricing progress), document-level currency picker (13 currencies via `budget_currency` field), notebook-style ruled table, inline price editing, CSV export. Live updates via `sceneEntityRevision`
 - ~~Consortium succession chart~~ — **done** (`9fd8cf3`..`1007a96`): Canvas2D strata×phase grid, auto-sync from placed species, drag-move/resize, hover sync with canvas
 - ~~Bottom panel state persistence~~ — **done**: open/height/tab hydrated from Rust settings on bootstrap, persisted on panel actions (height persisted on drag-end, not per-frame)
-- Remaining: timeline/budget hover and selection wiring using the pure target resolver, canvas→chart hover direction, panel↔map sync
+- Remaining: timeline/budget selection wiring using the pure target resolver, canvas→chart hover direction, panel↔map sync
 
 **Other:**
 - Featured-design world map / template import
