@@ -18,12 +18,12 @@ That lowers immediate regression risk, but it does not remove the structural iss
 A later review of the live code found that several original risks have been reduced:
 
 - **Finding 1 is substantially resolved.** Canvas scene state is owned by `SceneStore`; non-canvas document state is owned by `currentDesign` / document actions; `SceneCanvasRuntime.serializeDocument()` composes canvas output with document-owned `consortiums`, `timeline`, `budget`, and `budget_currency`. The old `currentConsortiums` and `designLocation` mirrors are gone.
-- **Finding 2 remains the main blocker before panel/map sync expansion.** Consortiums now use `canonical_name`, but timeline and budget still rely on ambiguous strings (`TimelineAction.plants`, `TimelineAction.zone`, and budget `category + description` matching).
-- **Finding 4 remains open.** `CanvasSession` is still a mostly pass-through facade even though `CanvasRuntime` already exists.
+- **Finding 2 is resolved as a prerequisite.** Timeline, budget, and consortium records now use explicit `PanelTarget` identity (`placed_plant`, `species`, `zone`, `manual`, `none`), with migration coverage for legacy identity fields and a pure `resolvePanelTargets()` bridge for scene highlights.
+- **Finding 4 is resolved.** The pass-through `CanvasSession` class is gone; `currentCanvasSession` now stores `CanvasRuntime | null`, and `setCurrentCanvasTool()` preserves tool priming when no runtime is mounted.
 - **Finding 7 is partially addressed.** Rust has an ad hoc legacy consortium migration in `desktop/src/design/format.rs`, but there is still no version-dispatched migration boundary for future breaking file-format changes.
 - **Finding 8 was partly stale.** `maplibre-gl` is used by `LocationTab` and `WorldMapSurface`, and Vite has a `maplibre-gl` manual chunk. Do not remove MapLibre as a dead dependency. `suncalc` still appears unused.
 
-Practical recommendation as of 2026-04-08: do not run a broad architecture rewrite before `docs/todo.md`. Do a narrow convergence pass for panel identity semantics and the `CanvasSession` seam before expanding panel-to-canvas, canvas-to-chart, or map overlay synchronization.
+Practical recommendation as of 2026-04-08: do not run a broad architecture rewrite before `docs/todo.md`. The panel identity and runtime-session prerequisites are complete. Further panel-to-canvas, canvas-to-chart, or map overlay synchronization should build on `PanelTarget[]` plus `resolvePanelTargets()` and must not reintroduce string matching or mutate canvas selection/history from hover.
 
 ## Executive Summary
 
@@ -37,18 +37,17 @@ The project has a good top-level product architecture:
 
 The main remaining weaknesses are in the frontend architecture:
 
-- entity identity semantics are inconsistent across panels — **core risk, fix before panel/map sync expansion**
-- `CanvasSession` duplicates an already-existing runtime interface — **moderate risk, fix before growing runtime API**
 - the file-format contract is fragile and under-tested — **moderate risk, address before schema changes**
 - the canvas runtime is broad — **maintainability concern, refactor incrementally**
 - lifecycle ownership is implicit in places — **low priority, refactor opportunistically**
+- future panel/map sync must stay resolver-based — **guardrail, do not bypass `PanelTarget[]`**
 
 ### Severity tiers
 
 The findings below are organized by urgency:
 
-- **Core risks** (Finding 2; Finding 1 historically): Structural issues that block panel/map sync if pursued. Finding 1 is now mostly resolved; Finding 2 remains.
-- **Moderate risks** (Findings 3–4 and 7): Real issues that can be addressed incrementally, but before schema or runtime API expansion where relevant.
+- **Core risks** (Findings 1–2 historically): Structural issues that previously blocked panel/map sync. Finding 1 is mostly resolved and Finding 2 is resolved for typed identity semantics; keep both as guardrails.
+- **Moderate risks** (Findings 3 and 7): Real issues that can be addressed incrementally, but before schema expansion where relevant.
 - **Low priority** (Finding 5): Maintainability concerns. Refactor opportunistically, not as prerequisites.
 
 ## Target Direction
@@ -142,86 +141,41 @@ That is exactly the kind of feature growth that turns document mirroring into a 
 
 ## Finding 2: Panel-To-Canvas Identity Semantics Are Inconsistent
 
-**Severity as of 2026-04-08: core risk — blocks full panel-to-canvas, canvas-to-chart, and map overlay synchronization**
+**Severity as of 2026-04-08: resolved prerequisite — keep as a guardrail for full sync**
 
-### What is wrong
+### Current status
 
-The three panel subsystems still use different identity schemes for referencing design content:
+The original finding was valid when panel rows overloaded string fields and descriptions as identity. The live code now expresses panel identity through explicit targets:
 
-- **Consortiums** now use `canonical_name` (`Consortium` in `desktop/web/src/types/design.ts`) and `consortium-sync-workflow.ts` auto-adds species entries from placed plants. This is an improvement over the old placed-plant-ID shape, but it should still be encoded as an explicit species target before general sync work.
-- **Timeline** stores `plants: string[] | null` and `zone: string | null` (`TimelineAction` in `desktop/web/src/types/design.ts`) without saying whether plant strings are placed-plant IDs or canonical species names. New manual actions in `TimelineTab` currently use `plants: null` / `zone: null`.
-- **Budget** pricing matches by `category === 'plants' && description === canonicalName` in `desktop/web/src/state/budget-actions.ts`. That makes a display field double as an identity key.
+- `PanelTarget` covers `placed_plant`, `species`, `zone`, `manual`, and `none`.
+- `TimelineAction` stores `targets: PanelTarget[]` instead of ambiguous `plants` / `zone` identity fields.
+- `BudgetItem` stores `target: PanelTarget`; plant budget prices upsert/read by species target, while `description` remains display/category copy.
+- `Consortium` entries store a species `target`; the current chart remains species-aggregate based.
+- Legacy timeline, budget, and consortium identity data is migrated into typed targets, with unresolved/deleted references kept explicit for later repair or sync behavior.
 
-Those are different concepts:
-- stable placed-plant IDs (unique per placement)
-- canonical species names (shared across all placements of a species)
-- zone names / IDs
-- view-derived species aggregates (computed at display time)
-- manual rows/tasks with no scene target
+The pure resolver is also in place. `resolvePanelTargets()` maps document targets to scene IDs for plants/zones, reports unresolved scene-backed targets, and treats `manual` / `none` as intentionally empty.
 
-They should not be treated as interchangeable references.
+### Current hover bridge
 
-### Why this matters more now (roadmap-contingent)
+The first panel-to-canvas bridge is hover-only. Bottom-panel hover writes `hoveredPanelTargets`; `SceneCanvasRuntime` resolves those targets into renderer highlight IDs without changing canvas selection or history.
 
-If the app is going to support:
+Current wiring covers:
 
-- bottom-panel timeline with canvas highlighting
-- bottom-panel budget with canvas highlighting
-- bottom-panel consortium with canvas highlighting
-- MapLibre overlays driven by panel selection
+- consortium species hover
+- timeline action hover via `action.targets`
+- budget row hover via an existing `BudgetItem.target`, falling back to `speciesBudgetTarget(row.canonical)` when no budget item exists
 
-then the project must define what a panel row actually refers to.
+Hover clears on mouse leave/unmount. This is not click-to-select, persistent selection, full panel/map synchronization, or map overlay work.
 
-Examples:
+### Remaining guardrails
 
-- Does a timeline action target one placed plant, all placed plants of a species, a zone, or a freeform task?
-- Does a budget row refer to a species aggregate, a specific placement, a zone, or a non-canvas expense?
-- Does selecting a consortium row highlight exact plant instances on canvas and on the map?
-- If a panel references a plant and that plant is deleted, what is the repair behavior?
-
-Without clear target semantics, sync logic will become stringly typed and brittle.
-
-### Improvement path
-
-1. Define target identity semantics before expanding the UI.
-2. Recommended: use explicit target types rather than overloading string arrays or descriptions.
-
-Example direction:
-
-- shared target union:
-  - `placed_plant` with a placed plant ID
-  - `species` with a canonical name
-  - `zone` with a zone name / stable zone ID
-  - `manual` / `none` with no scene target
-- timeline actions target:
-  - one or more placed plants
-  - a species aggregate
-  - a zone
-  - a manual task with no scene target
-- budget items target:
-  - a species aggregate
-  - one placed plant
-  - a zone
-  - a manual line item
-- consortiums remain species-targeted for the current succession chart unless product requirements demand per-placement succession
-
-3. Make the schema express those semantics directly instead of relying on interpretation.
-4. Build selectors that translate document targets into:
-   - canvas highlights
-   - map overlay highlights
-   - panel counts and summaries
-5. Add deletion/migration rules:
-   - orphaned references
-   - duplicate species placements
-   - legacy timeline `plants` arrays
-   - legacy budget `category + description` plant rows
-   - legacy canonical-name consortium records
+Future panel-to-canvas selection, canvas-to-chart hover, and panel-to-map overlay work must use the same `PanelTarget[]` and `resolvePanelTargets()` path. Do not reintroduce string matching against timeline descriptions, legacy `plants` arrays, budget descriptions, or consortium canonical-name fields as a parallel sync mechanism.
 
 ### Acceptance criteria
 
-- Every panel row has explicit identity semantics
-- Panel selection can highlight the correct canvas entities deterministically
-- MapLibre overlays can be driven from the same targets without inventing a second mapping layer
+- Every panel row has explicit identity semantics — **met**
+- Panel hover can highlight the correct canvas entities through the pure resolver without mutating selection/history — **met for consortium, timeline, and budget hover**
+- Panel selection and MapLibre overlays can be driven from the same targets without inventing a second mapping layer — **remaining work**
 
 ---
 
@@ -266,27 +220,13 @@ The original version of this review characterized this as "two different mental 
 
 ## Finding 4: `CanvasSession` Is a Zero-Value Pass-Through Facade
 
-**Severity: moderate — 200 lines of pure boilerplate that taxes every runtime change**
+**Severity as of 2026-04-08: resolved**
 
-### What is wrong
+The original finding described a pass-through `CanvasSession` class that duplicated the runtime API. The live code now stores `CanvasRuntime | null` directly in `currentCanvasSession`, and `SceneCanvasRuntime` implements the runtime boundary.
 
-`desktop/web/src/canvas/session.ts` defines `CanvasSession` with ~40 methods. Every single one is a one-liner delegation to `_runtime`:
+The one important preserved behavior is `setCurrentCanvasTool()`: when no runtime is mounted, it still primes the mirrored tool state so the next mounted runtime can pick up the intended tool.
 
-```ts
-zoomIn(): void { this._runtime.zoomIn() }
-zoomOut(): void { this._runtime.zoomOut() }
-copy(): void { this._runtime.copy() }
-// ... 37 more identical pass-throughs
-```
-
-The class adds zero logic, zero validation, zero transformation. If the intent is to decouple app code from the runtime implementation, a TypeScript interface would achieve the same at zero runtime cost and zero maintenance overhead.
-
-As a class, it's a maintenance tax: every new runtime method requires a parallel update in the session. Every rename requires two edits. It's the most straightforward code quality issue in the frontend.
-
-### Improvement path
-
-1. Replace `CanvasSession` with a `CanvasRuntime` interface that `SceneCanvasRuntime` implements directly.
-2. Or, if the session layer should add real value (input validation, logging, error boundaries), add that logic. A pass-through with no logic should not exist as a class.
+Future runtime API growth can still split `CanvasRuntime` into explicit command/query interfaces if needed, but there is no longer a pass-through session class to maintain.
 
 ---
 
@@ -368,21 +308,19 @@ The original finding said `maplibre-gl`, `maplibre-contour`, and `suncalc` were 
 
 ### If pursuing MapLibre + panel activation:
 
-1. Define stable identity semantics for timeline/budget/consortium references (Finding 2). Do this before full panel-to-canvas highlighting, canvas-to-chart hover, or map overlay selection.
-2. Replace or split `CanvasSession` before adding more runtime API surface (Finding 4).
-3. Add round-trip integration tests for the file-format contract (Finding 3).
-4. Add a versioned migration boundary before changing the `.canopi` schema for target identities (Finding 7).
-5. Add in-canvas MapLibre layers as a derived visualization with a dedicated `MapLibreController`.
-6. Keep the document authority boundary from Finding 1 intact; do not push non-canvas state into `SceneStore` or MapLibre.
-7. Address runtime breadth and lifecycle incrementally.
+1. Use the existing `PanelTarget[]` and `resolvePanelTargets()` path for any new panel selection, canvas-to-chart hover, or map overlay sync; do not reintroduce string matching.
+2. Add round-trip integration tests for the file-format contract (Finding 3).
+3. Add a versioned migration boundary before the next breaking `.canopi` schema change (Finding 7).
+4. Add in-canvas MapLibre layers as a derived visualization with a dedicated `MapLibreController`.
+5. Keep the document authority boundary from Finding 1 intact; do not push non-canvas state into `SceneStore` or MapLibre.
+6. Address runtime breadth and lifecycle incrementally.
 
 ### If pursuing other work (search improvements, export, polish):
 
 1. Add round-trip integration tests for the file-format contract (Finding 3).
-2. Replace CanvasSession pass-through with an interface (Finding 4).
-3. Add a document migration path before the next schema change (Finding 7).
-4. Remove `suncalc` if still unused; do not remove `maplibre-gl` while `LocationTab` / `WorldMapSurface` are live (Finding 8).
-5. Defer Findings 1 and 2 until panel/map work begins.
+2. Add a document migration path before the next schema change (Finding 7).
+3. Remove `suncalc` if still unused; do not remove `maplibre-gl` while `LocationTab` / `WorldMapSurface` are live (Finding 8).
+4. Keep Findings 1 and 2 as guardrails if panel/map work resumes.
 
 ## Concrete Non-Goals
 
@@ -390,7 +328,7 @@ The next agent should avoid:
 
 - pushing more document truth into ad hoc canvas signals
 - making MapLibre a peer source of object state
-- adding new panel features before target identity semantics are defined
+- adding new panel sync that bypasses typed `PanelTarget[]` resolution
 - treating passing tests as proof that the architecture is already converged
 - blocking all feature work on prerequisite refactoring — tier the urgency
 
@@ -400,8 +338,8 @@ This is a well-built codebase with strong product direction, a sensible Rust bac
 
 The current risk is not "low quality code everywhere." As of the 2026-04-08 follow-up, the highest risk is concentrated in:
 
-1. **Inconsistent identity semantics** — panel subsystems still use ambiguous strings and descriptions for targets
-2. **Runtime API seam drift** — `CanvasSession` duplicates `CanvasRuntime` and will tax every new runtime method
-3. **File-format compatibility** — round-trip and migration coverage must land before schema changes
+1. **File-format compatibility** — round-trip and migration coverage must land before schema changes
+2. **Future sync creep** — panel/map work must stay on typed `PanelTarget[]` and `resolvePanelTargets()`
+3. **Runtime breadth** — `SceneCanvasRuntime` should be decomposed incrementally when new responsibilities justify it
 
-Those are fixable, and identity semantics are the prerequisite for robust panel/map expansion. Everything else can be addressed incrementally.
+Those are fixable, and the completed identity semantics provide the prerequisite for robust panel/map expansion. Everything else can be addressed incrementally.

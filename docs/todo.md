@@ -52,7 +52,7 @@ These align with the core risks identified in the architecture review.
 - ~~Consortium bare `canonical_name` identity~~ — **done**: consortium entries are species-targeted via `target`, while current chart behavior remains species aggregate based.
 - ~~Add migration/repair rules for legacy timeline `plants`, budget `description` species rows, deleted plants/zones, and duplicate species placements~~ — **done**: legacy data is migrated into typed targets; unresolved/deleted targets remain explicit for later sync/highlight repair.
 - ~~Add pure target resolver before UI sync~~ — **done** (`7bf5a54`): `resolvePanelTargets()` maps typed panel targets to scene IDs (plant IDs and zone names), reports missing scene-backed targets, and treats `manual` / `none` as intentionally empty without mutating canvas selection or history.
-- ~~Add first panel→canvas hover bridge through target resolver~~ — **done**: bottom-panel hover state now carries `PanelTarget[]`; the scene runtime resolves it to plant/zone highlight IDs without mutating canvas selection or history. Current wiring covers consortium species hover only.
+- ~~Add first panel→canvas hover bridge through target resolver~~ — **done**: bottom-panel hover state now carries `PanelTarget[]`; the scene runtime resolves it to plant/zone highlight IDs without mutating canvas selection or history. Current hover-only wiring covers consortium species hover, timeline action hover via `action.targets`, and budget row hover via the existing `BudgetItem.target` with species-target fallback.
 - See architecture review Finding 2
 
 **Canvas seam:**
