@@ -1,7 +1,7 @@
 # Beta Release Verification
 
-Date: 2026-04-03
-Status: v0.2.0 shipped — scene-owned canvas rewrite is cut over, post-beta improvements landed
+Date: 2026-04-08
+Status: v0.3.0 release candidate
 
 Wave 5 is a beta-release gate on the current retained-surface architecture. It does not claim the broader roadmap is complete.
 

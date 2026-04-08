@@ -104,7 +104,7 @@ After smoke verification passes, create or update the GitHub Release from that e
 scripts/promote-release.sh --run-id <run-id> --tag v<version> --title "Canopi <version>"
 ```
 
-Example for v0.2.0: `scripts/promote-release.sh --run-id 23849252941 --tag v0.2.0 --title "Canopi 0.2.0"`
+Example for v0.3.0: `scripts/promote-release.sh --run-id <run-id> --tag v0.3.0 --title "Canopi 0.3.0"`
 
 This script:
 
