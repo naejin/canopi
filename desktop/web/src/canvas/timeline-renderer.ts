@@ -106,7 +106,7 @@ export function computeLayout(rows: SpeciesRow[]): Map<string, ActionLayout> {
 
     for (const action of sorted) {
       const startMs = action.start_date ? new Date(action.start_date).getTime() : Infinity
-      const endMs = action.end_date ? new Date(action.end_date).getTime() : startMs + 86400000
+      const endMs = action.end_date ? new Date(action.end_date).getTime() : (isFinite(startMs) ? startMs + 86400000 : Infinity)
 
       let assigned = -1
       for (let i = 0; i < laneEnds.length; i++) {

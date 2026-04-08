@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
+import { locale } from '../../state/app'
 import { sceneEntityRevision, plantNamesRevision } from '../../state/canvas'
 import { currentDesign, designName } from '../../state/document'
 import { currentCanvasSession } from '../../canvas/session'
@@ -34,7 +35,7 @@ export function BudgetTab() {
   const localizedNamesRef = useRef(localizedNames)
   localizedNamesRef.current = localizedNames
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const groupedPlants = useMemo(() => countPlants(plantsRef.current, localizedNamesRef.current), [sceneEntityRevision.value, plantNamesRevision.value])
+  const groupedPlants = useMemo(() => countPlants(plantsRef.current, localizedNamesRef.current), [sceneEntityRevision.value, plantNamesRevision.value, locale.value])
   const priceMap = useMemo(() => buildPriceMap(budget), [budget])
   const totalPlants = useMemo(() => groupedPlants.reduce((sum, row) => sum + row.count, 0), [groupedPlants])
   const pricedCount = useMemo(() => groupedPlants.filter((row) => (priceMap.get(row.canonical)?.unit_cost ?? 0) > 0).length, [groupedPlants, priceMap])

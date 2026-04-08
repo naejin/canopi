@@ -16,6 +16,7 @@ const KNOWN_CANOPI_KEYS = new Set([
   'budget_currency',
   'created_at',
   'updated_at',
+  'extra',
 ])
 
 /** Extract unknown top-level keys from a raw IPC-deserialized object. */

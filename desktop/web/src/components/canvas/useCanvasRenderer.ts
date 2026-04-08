@@ -58,7 +58,8 @@ export function useCanvasRenderer(
     if (!canvas) return
 
     const observer = new ResizeObserver(() => {
-      if (cachedRectRef) cachedRectRef.current = null
+      const ref = cachedRectRefInternal.current.ref
+      if (ref) ref.current = null
       doRedraw.current()
     })
     observer.observe(canvas)

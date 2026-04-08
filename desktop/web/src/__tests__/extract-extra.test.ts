@@ -77,4 +77,17 @@ describe('extractExtra', () => {
     const extra = extractExtra(raw as any)
     expect('budget_currency' in extra).toBe(false)
   })
+
+  it('excludes extra key itself from extraction', () => {
+    const raw = {
+      version: 1,
+      name: 'test',
+      plant_species_colors: {},
+      extra: { guides: [{ id: 'g1', axis: 'h', position: 42 }] },
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    }
+    const result = extractExtra(raw as any)
+    expect('extra' in result).toBe(false)
+  })
 })

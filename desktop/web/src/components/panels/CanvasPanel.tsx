@@ -6,6 +6,7 @@ import {
   consumeQueuedDocumentLoad,
   snapshotCanvasIntoCurrentDocument,
   disposeDocumentWorkflows,
+  installConsortiumSync,
 } from '../../state/document'
 import { autosaveDesign } from '../../ipc/design'
 import { CanvasSession, getCurrentCanvasSession, setCurrentCanvasSession } from '../../canvas/session'
@@ -53,6 +54,10 @@ export function CanvasPanel() {
         loadCanvasFromDocument(currentDesign.value, session)
         session.showCanvasChrome()
       } else {
+        // Install consortium sync unconditionally — queued document loads
+        // (OS file-open) call applyDocumentReplacement which does not go
+        // through loadCanvasFromDocument, so the sync must already be active.
+        installConsortiumSync()
         session.hideCanvasChrome()
       }
 

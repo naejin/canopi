@@ -178,7 +178,7 @@ export function renderConsortium(
   const theme = readThemeTokens()
   const bgColor = theme.bg
   const surfaceColor = theme.surface
-  const surfaceMuted = cssVar('--color-surface-muted') || theme.surface
+  const surfaceMuted = cssVar('--color-surface-muted') || '#E8E3D9'
   const borderColor = theme.border
   const textColor = theme.text
   const textMutedColor = theme.textMuted

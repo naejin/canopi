@@ -12,7 +12,7 @@ import { extractExtra } from './document-extra'
 import { replaceCurrentDesignSnapshot } from './document-mutations'
 import { installConsortiumSync, disposeConsortiumSync } from './consortium-sync-workflow'
 
-export { extractExtra }
+export { extractExtra, installConsortiumSync }
 import { currentDesign } from './design'
 
 // Re-export document signals for external consumers
