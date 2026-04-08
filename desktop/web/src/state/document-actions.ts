@@ -4,7 +4,6 @@ import { getCurrentCanvasSession, type CanvasSession } from '../canvas/session'
 import * as designIpc from '../ipc/design'
 import { t } from '../i18n'
 import { extractExtra } from './document-extra'
-import { syncDesignLocationMirror } from './document-mutations'
 import {
   currentDesign,
   designDirty,
@@ -27,7 +26,9 @@ export type TemplateOpenResult = 'opened' | 'queued' | 'cancelled'
 
 function buildPersistedContent(session: CanvasSession | null): CanopiFile {
   if (session) {
-    return session.serializeDocument({ name: designName.value }, currentDesign.value)
+    const doc = currentDesign.value
+    if (!doc) throw new Error('buildPersistedContent: no design loaded')
+    return session.serializeDocument({ name: designName.value }, doc)
   }
 
   const design = currentDesign.value
@@ -273,14 +274,13 @@ function applyDocumentReplacement(
 ): void {
   session.replaceDocument(file)
   replaceCurrentDesignState(file, path, name)
-  syncDesignLocationMirror(file)
   resetDirtyBaselines()
   session.clearHistory()
   session.showCanvasChrome()
 }
 
 function normalizeDocument(file: CanopiFile, extra: Record<string, unknown>): CanopiFile {
-  return { ...file, annotations: file.annotations ?? [], extra }
+  return { ...file, extra }
 }
 
 function normalizeLoadedDocument(file: CanopiFile): CanopiFile {

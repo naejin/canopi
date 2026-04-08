@@ -18,22 +18,17 @@ export function niceInterval(pxPerDay: number): number {
 
 /**
  * Format a date for the time ruler label, adapting to the current interval.
+ * Uses Intl.DateTimeFormat for locale-aware month names.
  */
-export function formatDateLabel(date: Date, intervalDays: number): string {
-  if (intervalDays <= 1) {
-    return `${date.getDate()} ${MONTH_ABBRS[date.getMonth()]}`
-  }
+export function formatDateLabel(date: Date, intervalDays: number, locale: string): string {
   if (intervalDays <= 30) {
-    return `${date.getDate()} ${MONTH_ABBRS[date.getMonth()]}`
+    return date.toLocaleDateString(locale, { day: 'numeric', month: 'short' })
   }
   if (intervalDays <= 182) {
-    return `${MONTH_NAMES[date.getMonth()]} ${date.getFullYear()}`
+    return date.toLocaleDateString(locale, { month: 'long', year: 'numeric' })
   }
-  return `${date.getFullYear()}`
+  return String(date.getFullYear())
 }
-
-const MONTH_ABBRS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
 /**
  * Convert a Date to a pixel x-coordinate on the timeline.

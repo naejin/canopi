@@ -51,7 +51,7 @@ These features were deleted during pre-rewrite cleanup. See `docs/todo.md` for c
 - **Export**: GeoJSON, PNG/SVG export commands
 - **Support files**: dimensions.ts, pattern-math.ts, map-layer.ts, ipc/community.ts, ipc/tiles.ts, TileDownloadModal
 - **Retained for beta release**: LayerPanel, location flows (Wave 3 retained-surface closeout)
-- **Bottom panel shipped**: Timeline (trimmed), Budget, and Consortium (succession chart) tabs all active. Consortium auto-sync runs via `state/consortium-sync-workflow.ts` at document level. Panel↔canvas reactivity via `sceneEntityRevision` signal
+- **Bottom panel shipped**: Timeline (trimmed), Budget (redesigned: summary header, document-level currency via `budget_currency`, notebook-style table, inline price editing), and Consortium (succession chart) tabs all active. Consortium auto-sync runs via `state/consortium-sync-workflow.ts` at document level. Panel↔canvas reactivity via `sceneEntityRevision` signal
 - **Deferred beyond beta**: WorldMapPanel, geo/terrain, export, learning content
 - **Selection**: No resize/rotate — objects are position-only (highlight + move). Resize/rotate commands all deleted
 - **Konva engine**: Entire `CanvasEngine` + old command/tool/serializer/history/import/export system deleted. Konva dependency fully removed. Replaced by scene-owned runtime (PixiJS + Canvas2D)
@@ -74,14 +74,19 @@ The save path composes both into a single `CanopiFile`. Neither authority should
 
 **Anti-patterns:**
 - Do not push non-canvas state (consortiums, timeline, budget) into `SceneStore` — it is not a canvas concern
-- Do not mirror canvas state into standalone signals (`currentConsortiums`, `designLocation`) when a derived/computed value or a direct read from the authority would work
+- Do not mirror canvas state into standalone signals (e.g. `currentConsortiums`) when a derived/computed value or a direct read from the authority would work
 - Do not create new ad hoc sync paths between the two authorities — if sync is needed, centralize it in one explicit adapter
+- **Adding new document-level fields**: Add to TS `CanopiFile` interface + `KNOWN_CANOPI_KEYS` in `state/document-extra.ts` + `serializeDocument()` passthrough. Rust `#[serde(flatten)] extra` round-trips unknown keys automatically, so no Rust struct change is needed until the field requires backend logic
+- **Adding new required array fields to `CanopiFile`**: Add `#[serde(default)]` in Rust (backward compat with old files), make the field required (not optional) in TS `CanopiFile` to match Rust `Vec<T>`, add empty placeholder in `serializeScenePersistedState` in `codec.ts`, and update all test fixtures. The `?? []` fallback is only needed where the parent object is nullable (`currentDesign.value?.field ?? []`), not inside `mutateCurrentDesign` callbacks where the design is guaranteed non-null
 
 ### Action-Layer Rule
 - **Action modules must not import other action modules** — `state/*-actions.ts` files are leaf modules
 - Import direction: **components → actions → state** (never backwards)
 - **Cross-concern orchestration**: When a mutation in one domain must trigger side effects in another (e.g., plant deleted → orphan cleanup in timeline/budget/consortium), create an explicit workflow module at a higher boundary. Do not wire action modules to each other. See `state/template-import-workflow.ts` for the pattern
 - As panel↔canvas sync grows, expect more workflow modules. This is the intended pattern — name them clearly (e.g., `state/plant-lifecycle-workflow.ts`)
+- **Workflow effect lifecycle**: Workflow modules that install `effect()` should manage their own disposer as a module-level singleton (`installX()` / `disposeX()`). This avoids circular imports when both `document.ts` and `document-actions.ts` need to call them. Do not install workflow effects inside `SceneCanvasRuntime` — they belong at the document boundary
+- **Budget actions**: `state/budget-actions.ts` owns `setBudgetCurrency` and `setPlantBudgetPrice`. Price action reads currency from the document (`budget_currency`), not from caller parameters — prevents currency split state
+- **Settings-backed actions**: Action functions that mutate signals backed by Rust `Settings` (e.g., `setBottomPanelOpen`, `setBottomPanelTab`) must call `persistCurrentSettings()` after writing the signal. Exception: 60fps hot paths (e.g., drag resize) should persist on mouse-up, not per-frame
 
 ### Signal Performance in Hot Paths
 - **Never write signals unconditionally at 60fps** (e.g. map `move` events). New object literals always fail `Object.is` equality, triggering unnecessary rerenders. Use `.peek()` to read without subscribing, compare before writing
@@ -89,7 +94,7 @@ The save path composes both into a single `CanopiFile`. Neither authority should
 
 ### Signal Mirror Rule
 - **Prefer derived/computed signals over manually-synced mirrors.** If a value exists in one authority (SceneStore or document store), components should read from that authority — or from a `computed()` signal derived from it — not from a hand-copied signal that requires `syncDocumentMirrors()`
-- Existing mirrors (`currentConsortiums`, `designLocation`) should be replaced with computed views as the document authority converges. Do not add new mirrors
+- Existing mirrors (e.g. `currentConsortiums`) should be replaced with computed views as the document authority converges. Do not add new mirrors. `designLocation` mirror was removed — read location from `currentDesign.value?.location` directly
 
 ### Resource Ownership Rule
 - Every resource-owning surface must have **one explicit lifecycle owner** for setup, update, and teardown
@@ -103,13 +108,14 @@ The save path composes both into a single `CanopiFile`. Neither authority should
 - The lazy import boundary around `maplibre-gl` should be preserved for bundle size, but isolation from the canvas runtime is no longer required — the map controller is a sibling to the runtime, not walled off from it
 
 ### Panel ↔ Canvas Reactivity
-- **Bottom panel components must subscribe to `sceneEntityRevision`** from `state/canvas.ts` to react to canvas mutations (plant placement, undo/redo). Reading `currentCanvasSession.value?.getPlacedPlants()` alone is not reactive — the session reference doesn't change when scene state changes
+- **Bottom panel components that read canvas-derived data must subscribe to `sceneEntityRevision`** from `state/canvas.ts` to react to canvas mutations (plant placement, undo/redo). Reading `currentCanvasSession.value?.getPlacedPlants()` alone is not reactive — the session reference doesn't change when scene state changes. Panels that only read non-canvas document state (e.g., TimelineTab reads `currentDesign.value?.timeline`) should NOT subscribe — it causes spurious re-renders on every canvas mutation
 - **Cross-domain auto-sync must be a workflow module** (like `consortium-sync-workflow.ts`), not a component-level effect. Component effects only run when mounted — data integrity requires document-level effects that run regardless of which tab is visible
 - **Use `.peek()` in workflow effects** to read signals without subscribing. Only subscribe to the intended trigger signal (e.g., `sceneEntityRevision`). Writing `currentDesign.value` inside an effect that subscribes to it creates re-execution loops
 
 ### Canvas2D Tab Components
 - **Use `useCanvasRenderer` hook** from `components/canvas/useCanvasRenderer.ts` for DPR-aware canvas setup — handles `devicePixelRatio` scaling, `ResizeObserver`, and redraw lifecycle. Both `ConsortiumChart` and `InteractiveTimeline` use it
 - **Use `canvas2d-utils.ts`** for `cssVar()` (cached CSS variable reads) and `roundRect()` (rounded rectangle path) — shared between `timeline-renderer.ts` and `consortium-renderer.ts`
+- **Shared nice-distance arrays**: `grid.ts` exports `NICE_DISTANCES` — rulers and scale-bar derive subsets via `.filter()` (not `.slice(indexOf())` which silently breaks if the anchor value is removed). Do not create independent copies
 - **Renderer functions receive `t` parameter** for i18n — don't hardcode user-visible strings in Canvas2D renderers
 
 ### Hotspot File Protection
@@ -131,8 +137,9 @@ These files have concentrated authority. **One writer at a time** — do not ass
 5. For multi-feature i18n work: **batch all i18n keys in one early phase** to prevent 11-file merge conflicts across parallel agents
 6. Before planning new features: **explore the codebase for existing implementations** — code may already exist (e.g., copy-paste, favorites backend, display mode rendering were all discovered pre-built during MVP planning)
 7. Run `/simplify` after implementation — converges in ~3 rounds: R1 structural, R2 duplication exposed by R1 fixes, R3 confirms convergence
-8. For async canvas features: audit every pipeline operation for main-thread blocking — use `createImageBitmap()` (never `toDataURL()`), epoch guards for cancellation, `requestIdleCallback` for deferred init
-9. For multi-phase work: **implement → `tsc` + `npm test` → craft code review → fix → re-review until convergence** per phase. Don't batch reviews across phases — bugs compound
+8. Before acting on review findings: **cross-check against CLAUDE.md rules** — documented patterns (e.g., consortium-sync-workflow `currentDesign.value` subscription) may appear buggy but are intentional. The `toAdd/toDelete` emptiness guard is the designed re-execution breaker
+9. For async canvas features: audit every pipeline operation for main-thread blocking — use `createImageBitmap()` (never `toDataURL()`), epoch guards for cancellation, `requestIdleCallback` for deferred init
+10. For multi-phase work: **implement → `tsc` + `npm test` → craft code review → fix → re-review until convergence** per phase. Don't batch reviews across phases — bugs compound
 
 ### Banned Patterns (enforced by plugin hooks)
 - **No React**: Import from `preact`, `preact/hooks`, `preact/compat` — never `react`
@@ -239,4 +246,4 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 - rusqlite: `/rusqlite/rusqlite`
 - PixiJS: `/pixijs/pixijs`
 - MapLibre: `/maplibre/maplibre-gl-js`
-- i18next: `/i18next/react-i18next`
+- i18next: `/i18next/i18next`

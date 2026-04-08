@@ -4,7 +4,9 @@
 // consumed by the DOM legend so both reserve the same bottom band.
 // ---------------------------------------------------------------------------
 
-const NICE_DISTANCES = [0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000]
+import { NICE_DISTANCES } from './grid'
+
+const SCALE_BAR_DISTANCES = NICE_DISTANCES.filter(d => d >= 0.5)
 const TARGET_PX = 120
 
 export const SCALE_BAR_MARGIN_X = 40
@@ -20,8 +22,8 @@ export interface ScaleBarDisplay {
 export function getScaleBarDisplay(scale: number): ScaleBarDisplay {
   const safeScale = scale > 0 ? scale : 1
 
-  let bestDist = NICE_DISTANCES[0]!
-  for (const d of NICE_DISTANCES) {
+  let bestDist = SCALE_BAR_DISTANCES[0]!
+  for (const d of SCALE_BAR_DISTANCES) {
     if (d * safeScale <= TARGET_PX * 1.5) {
       bestDist = d
     } else {
@@ -36,7 +38,7 @@ export function getScaleBarDisplay(scale: number): ScaleBarDisplay {
 }
 
 function _formatDist(meters: number): string {
-  if (meters >= 1000) return `${(meters / 1000).toFixed(0)} km`
-  if (meters < 1) return `${(meters * 100).toFixed(0)} cm`
-  return `${meters % 1 === 0 ? meters.toFixed(0) : meters.toFixed(1)} m`
+  if (meters >= 1000) return `${(meters / 1000).toFixed(0)}km`
+  if (meters < 1) return `${(meters * 100).toFixed(0)}cm`
+  return `${meters % 1 === 0 ? meters.toFixed(0) : meters.toFixed(1)}m`
 }

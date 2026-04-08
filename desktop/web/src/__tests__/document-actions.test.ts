@@ -13,11 +13,15 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock('../canvas/session', () => ({
-  getCurrentCanvasSession() {
-    return mocks.canvasSession
-  },
-}))
+vi.mock('../canvas/session', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../canvas/session')>()
+  return {
+    ...actual,
+    getCurrentCanvasSession() {
+      return mocks.canvasSession
+    },
+  }
+})
 
 vi.mock('../state/document-extra', () => ({
   extractExtra: mocks.extractExtra,
@@ -80,16 +84,19 @@ function makeFile(name: string): CanopiFile {
     name,
     description: null,
     location: null,
-    north_bearing_deg: 0,
+    north_bearing_deg: null,
     plant_species_colors: {},
     layers: [],
     plants: [],
     zones: [],
     annotations: [],
+    consortiums: [],
+    groups: [],
     timeline: [],
     budget: [],
     created_at: '2026-03-29T00:00:00.000Z',
     updated_at: '2026-03-29T00:00:00.000Z',
+    extra: {},
   }
 }
 

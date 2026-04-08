@@ -54,6 +54,7 @@ describe('scene store', () => {
         },
       ],
       annotations: [],
+      consortiums: [{ canonical_name: 'Quercus robur', stratum: 'high', start_phase: 0, end_phase: 3 }],
       groups: [
         {
           id: 'group-1',
@@ -64,6 +65,8 @@ describe('scene store', () => {
           member_ids: ['plant-1'],
         },
       ],
+      timeline: [{ id: 't1', action_type: 'planting', description: 'Plant oak', start_date: '2026-04-01', end_date: '2026-04-02', recurrence: null, plants: ['Quercus robur'], zone: null, depends_on: [], completed: false, order: 0 }],
+      budget: [{ category: 'plants', description: 'Quercus robur', quantity: 1, unit_cost: 25, currency: 'EUR' }],
       created_at: '2026-04-01T10:00:00.000Z',
       updated_at: '2026-04-01T12:00:00.000Z',
       extra: {
@@ -100,8 +103,24 @@ describe('scene store', () => {
     expect(store.session.plantSizeMode).toBe('default')
     expect(store.session.plantColorByAttr).toBe('stratum')
 
+    // toCanopiFile serializes canvas-entity fields; non-canvas sections
+    // (consortiums, timeline, budget) are emitted as empty placeholders —
+    // even when the input file had non-empty values. This proves the codec
+    // does not accidentally leak document-store data through the scene path.
     const roundTripped = store.toCanopiFile({ now: new Date(file.updated_at) })
-    expect(roundTripped).toEqual(file)
+    expect(roundTripped.plants).toEqual(file.plants)
+    expect(roundTripped.zones).toEqual(file.zones)
+    expect(roundTripped.annotations).toEqual(file.annotations)
+    expect(roundTripped.groups).toEqual(file.groups)
+    expect(roundTripped.layers).toEqual(file.layers)
+    expect(roundTripped.plant_species_colors).toEqual(file.plant_species_colors)
+    expect(roundTripped.extra).toEqual(file.extra)
+    expect(roundTripped.name).toBe(file.name)
+    expect(roundTripped.version).toBe(file.version)
+    // Non-canvas sections must be empty placeholders, NOT the input values
+    expect(roundTripped.consortiums).toEqual([])
+    expect(roundTripped.timeline).toEqual([])
+    expect(roundTripped.budget).toEqual([])
   })
 
   it('creates a usable default scene state', () => {
@@ -151,7 +170,10 @@ describe('scene store', () => {
       ],
       zones: [],
       annotations: [],
+      consortiums: [],
       groups: [],
+      timeline: [],
+      budget: [],
       created_at: '2026-04-01T10:00:00.000Z',
       updated_at: '2026-04-01T12:00:00.000Z',
       extra: {},

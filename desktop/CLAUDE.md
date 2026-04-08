@@ -12,6 +12,7 @@
 - **`session.serializeDocument()` / `SceneStore.toCanopiFile()` is the sole save composition point** — all save paths go through it
 - **Never regenerate `created_at`** — preserve from loaded file
 - **Preserve all loaded document sections on save** — timeline, budget, consortiums, description, location, extra fields
+- **No `?? []` fallbacks on required `CanopiFile` array fields in TS**: Rust `#[serde(default)]` guarantees presence. TS-side `??` fallbacks are dead code that masks type errors. Only use `?? []` where the parent object is nullable (`currentDesign.value?.field ?? []`)
 - **Preserve per-object non-visual fields** — plant notes/planted_date/quantity and zone notes
 - **Preserve unknown `extra` fields** — `extractExtra()` captures unknown top-level keys. Spread extra FIRST when composing the save output
 - **Two-baseline dirty model** — Canvas: `_savedPosition` checkpoint in `SceneHistory` (patch-based). Non-canvas: `nonCanvasRevision` vs `nonCanvasSavedRevision`. Never write to `designDirty` directly
@@ -26,6 +27,7 @@
 - **`localStorage` is a sync cache only** — `initTheme()` reads it for instant first-paint, Rust settings overwrite on bootstrap
 - **Frontend signals are runtime projections** — hydrated from Rust on startup via `get_settings` IPC
 - **`persistCurrentSettings()` in `state/app.ts`** — must include ALL settings in the Rust `Settings` struct
+- **Adding a new persisted setting (end-to-end)**: (1) Add field to Rust `Settings` struct + TS `Settings` interface, (2) Add signal to the appropriate state module, (3) Hydrate from Rust in `app.tsx` bootstrap (`get_settings` handler), (4) Write back in `persistCurrentSettings()` in `state/app.ts`, (5) Call `persistCurrentSettings()` in the action functions that mutate the signal (skip 60fps hot paths like drag — persist on mouse-up instead)
 - **Theme**: light/dark only (no system option). Toggle in title bar cycles between the two
 
 ## Tauri v2 Gotchas

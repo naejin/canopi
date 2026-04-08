@@ -8,8 +8,6 @@ export const zoomReference = signal<number>(1)
 export const canvasReady = signal<boolean>(false)
 export const selectedObjectIds = signal<Set<string>>(new Set())
 
-// Layer visibility: all 7 layers defined.
-// water/contours/climate are off by default (empty until Phase 3).
 export function createDefaultLayerVisibility(): Record<string, boolean> {
   return {
     base: true,
@@ -25,7 +23,6 @@ export function createDefaultLayerVisibility(): Record<string, boolean> {
 export const layerVisibility = signal<Record<string, boolean>>(createDefaultLayerVisibility())
 
 // Grid / overlay state
-export const gridSize = signal<number>(1)            // meters: 0.5, 1, 2, 5
 export const snapToGridEnabled = signal<boolean>(false)
 export const gridVisible = signal<boolean>(true)
 export const rulersVisible = signal<boolean>(true)
@@ -87,10 +84,6 @@ export interface PlantStampSpecies {
 }
 export const plantStampSpecies = signal<PlantStampSpecies | null>(null)
 
-// Design location — single-writer mirror of currentDesign.location
-// Sole writer: syncDocumentMirrors() in state/document-mutations.ts
-export const designLocation = signal<{ lat: number; lon: number } | null>(null)
-
 // Canvas entity revision — incremented on every scene mutation (plant/zone/annotation
 // changes) so bottom-panel components can subscribe to canvas-store changes. Parallel
 // to nonCanvasRevision in state/design.ts which tracks document-store changes.
@@ -106,7 +99,7 @@ export type BottomPanelTab = 'timeline' | 'budget' | 'consortium'
 export const VISIBLE_BOTTOM_PANEL_TABS: BottomPanelTab[] = ['timeline', 'budget', 'consortium']
 export const bottomPanelOpen = signal<boolean>(false)
 export const bottomPanelTab = signal<BottomPanelTab>('timeline')
-export const bottomPanelHeight = signal<number>(240)
+export const bottomPanelHeight = signal<number>(200)
 
 // Consortium chart → canvas hover bridge
 export const hoveredConsortiumSpecies = signal<string | null>(null)

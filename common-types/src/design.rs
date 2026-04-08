@@ -14,10 +14,13 @@ pub struct CanopiFile {
     pub zones: Vec<Zone>,
     #[serde(default)]
     pub annotations: Vec<Annotation>,
+    #[serde(default)]
     pub consortiums: Vec<Consortium>,
     #[serde(default)]
     pub groups: Vec<ObjectGroup>,
+    #[serde(default)]
     pub timeline: Vec<TimelineAction>,
+    #[serde(default)]
     pub budget: Vec<BudgetItem>,
     pub created_at: String,
     pub updated_at: String,

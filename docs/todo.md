@@ -1,6 +1,6 @@
 # Canopi: Current Work
 
-**Date**: 2026-04-06
+**Date**: 2026-04-08
 **Status**: v0.2.0 shipped — rewrite cut over, bottom-panel MVP landed
 
 This file tracks active and deferred work.
@@ -27,8 +27,9 @@ These align with the core risks identified in the architecture review.
 **Document authority convergence:**
 - ~~Converge the save-time merge seam in `serializeDocument()`~~ — **done** (`b4596f1`): non-canvas sections come from document store, not re-merged into SceneStore
 - ~~Replace `currentConsortiums` mirror~~ — **done** (`a8f7fbc`): removed entirely, consortium data is document-store owned
-- ~~Replace `designLocation` mirror~~ — **done** (`e9e7e7b`): consolidated to single writer (`syncDesignLocationMirror`)
-- ~~Consortium auto-sync as workflow~~ — **done** (`04fd4fa`): `consortium-sync-workflow.ts` runs at document level, not view-dependent
+- ~~Replace `designLocation` mirror~~ — **done**: removed entirely (zero component consumers). Read location from `currentDesign.value?.location` directly
+- ~~Consortium auto-sync as workflow~~ — **done** (`04fd4fa`): `consortium-sync-workflow.ts` runs at document level (installed by `document.ts` via `loadCanvasFromDocument`, not by `SceneCanvasRuntime`). Sync returns early when canvas session is null (authority fix) — re-triggers via `sceneEntityRevision` on document load. Effect subscribes to `currentDesign.value` (not `.peek()`) so document replacement also re-triggers sync
+- ~~TS/Rust type alignment for array fields~~ — **done**: `consortiums`, `timeline`, `budget` are required in TS (matching Rust `Vec<T>`), Rust struct has `#[serde(default)]` for backward compat with old files, scene codec emits empty placeholders
 - See root `CLAUDE.md` Document Authority Rule
 
 **Panel identity semantics:**
@@ -53,6 +54,14 @@ These align with the core risks identified in the architecture review.
 - Add scene-side spatial indexing only when profiling shows hit-testing or marquee is the bottleneck
 - **MapLibre chunk isolation**: Verify `maplibre-gl` is in a separate Vite chunk (dynamic import → code split), `maplibre-contour` in same chunk. Flag any chunk >500KB. If MapLibre is in the main bundle, fix the import to use dynamic `import()`. See roadmap QA.6b
 - Verify timeline renderer is NOT in the main chunk (bottom panel is toggled)
+- ~~Canvas DPR sizing and transform fixes~~ — **done**: `useCanvasRenderer` uses `Math.round()` + `setTransform()` (not `scale()`), ruler functions aligned to same pattern. Prevents buffer reallocation on fractional-DPR screens and transform accumulation across redraws
+- ~~ConsortiumChart useMemo stability~~ — **done**: plants/consortiums read from refs with `sceneEntityRevision` as trigger dep, preventing O(n) `buildConsortiumBars` recomputation on every hover frame. `consortiums` added as direct dep to catch in-drag reorder changes (not covered by `sceneEntityRevision` when `markDirty: false`)
+- ~~InteractiveTimeline `originDate` reference churn~~ — **done**: `computeOriginDate` returned a new `Date` every call, defeating `useMemo` dep comparison and forcing canvas redraws. Replaced with numeric `originMs` intermediate; `Date` only recreated when timestamp changes
+- ~~InteractiveTimeline 60fps Date parsing~~ — **done**: `handleMouseMove` re-parsed `originalStartDate`/`originalEndDate` ISO strings on every pointermove. Pre-computed `originalStartMs`/`durationMs` in `DragState` at mousedown
+- ~~BudgetTab event handler churn~~ — **done**: `startEditPrice`/`commitPrice` recreated on every render (new reference per keypress during editing). Wrapped in `useCallback` with `priceMapRef`
+- ~~BudgetTab useMemo stability~~ — **done**: `getPlacedPlants()`/`getLocalizedCommonNames()` stored in refs with revision signals as deps (matching ConsortiumChart pattern), preventing O(n) `countPlants` recomputation on every keypress during price editing
+- ~~CanvasPanel unnecessary locale subscription~~ — **done**: removed `void locale.value` — all children subscribe independently, parent re-render was wasted work
+- ~~BottomPanel 60fps resize re-renders~~ — **done**: resize handler writes to DOM ref during drag, commits signal + persists settings on mouseup only via `commitBottomPanelHeight`. Prevents parent re-rendering all tab children at 60fps during panel resize
 
 ### 4. Safeguards
 - **ErrorBoundary**: Add a Preact ErrorBoundary wrapping `main.tsx` — blank-screen crash protection. Small, no dependencies (see `docs/archive/roadmap.md` SG.0)
@@ -63,7 +72,70 @@ These align with the core risks identified in the architecture review.
 - Add `migrateDocument()` step in load path before the first breaking schema change
 - Remove `suncalc` dependency (celestial dial was pruned, no code references it)
 - Watch `JSON.stringify` diff cost in `scene-commands.ts` as designs grow
-- Hardcoded `rgba()` colors remain in `rulers.ts`, `scene-interaction.ts` (textarea), `overlay-ui.ts` (selection band), `timeline-renderer.ts` (action type colors). Migrate to CSS variables or `getCanvasColor()` for dark-mode correctness
+- ~~Hardcoded `rgba()` colors in `scene-interaction.ts` textarea~~ — **done**: replaced with CSS custom properties (`--color-surface`, `--color-primary`, `--color-text`, `--font-sans`, `--radius-sm`, `--text-base`). Remaining: `overlay-ui.ts` (selection band) still uses hardcoded `rgba()` — migrate to CSS variables for dark-mode correctness
+- ~~Timeline action-type colors dark mode~~ — **done**: replaced hardcoded hex `ACTION_COLOR_DEFAULTS` with `ACTION_COLOR_VARS` (CSS var name + hex fallback). Added `--color-action-*` tokens to `global.css` with dark-mode overrides
+- ~~Timeline bar label dark mode~~ — **done**: in-bar text used `surfaceColor` (invisible in dark mode). Switched to `--color-primary-contrast`. CSS fallback hex values aligned across `timeline-renderer.ts` and `consortium-renderer.ts`
+- ~~Consortium-actions no-op spreading~~ — **done**: `updateConsortiums` wrapper checked reference identity before spreading, preventing spurious dirty marks on no-op reorders. Extended to `moveConsortiumEntry` (`findIndex` + value comparison guard) and `deleteConsortiumEntry` (`some()` guard before `filter()`) — all action updaters now short-circuit on no-op
+- ~~Dead i18n keys from pre-redesign budget/timeline CRUD~~ — **done**: 31 dead keys removed across 11 locales (~310 stale translations)
+- ~~Timeline planting green in UI chrome~~ — **done**: replaced `#5A7D3A` (green) with `#7D6049` (walnut brown) in `ACTION_COLOR_DEFAULTS`. "Green NEVER in UI chrome" rule enforced
+- ~~`budget_currency` undefined on new designs~~ — **done**: `serializeDocument()` now falls back to `'EUR'` instead of emitting `undefined`
+- ~~TimelineTab spurious canvas subscription~~ — **done**: removed `sceneEntityRevision` read — timeline is pure document state with no canvas dependency
+- ~~Native `<select>` in TimelineTab~~ — **done**: replaced with custom `Dropdown` component + `actionType` i18n key in all 11 locales
+- ~~BottomPanel 60fps resize re-renders~~ — **done**: resize uses direct DOM manipulation during drag, signal write only on mouseup via `commitBottomPanelHeight` action. Dead `setBottomPanelHeight` removed
+- ~~Sidebar 60fps resize re-renders~~ — **done**: `App.tsx` sidebar drag writes to DOM ref during drag, commits `sidePanelWidth` signal on mouseup only (matching BottomPanel pattern)
+- ~~ConsortiumChart unmount mid-drag~~ — **done**: cleanup effect calls `markDocumentDirty()` only if `dragState.hasMutated` is true — no spurious dirty on mousedown-then-tab-switch without movement
+- ~~Canvas2D font fallback consistency~~ — **done**: extracted `FONT_SANS_FALLBACK` to `canvas2d-utils.ts`, used by `consortium-renderer.ts`, `timeline-renderer.ts`, and `rulers.ts`. Ruler font strings cached in `_rulerFont10`/`_rulerFont11` via `refreshRulerColors()` (not `cssVar()` per frame)
+- ~~Canvas2D theme token duplication~~ — **done**: extracted `readThemeTokens()` to `canvas2d-utils.ts` — shared CSS token reader (bg, surface, border, text, textMuted, primary, primaryContrast, fontSans) used by both `consortium-renderer.ts` and `timeline-renderer.ts`. Renderer-specific tokens still use `cssVar()` directly
+- ~~InteractiveTimeline spurious dirty on click~~ — **done**: `handleMouseUp` called `markDocumentDirty()` on any non-pan mouseup even without movement. Added `hasMutated: boolean` to `DragState` (matching ConsortiumChart pattern), gated both mouseup and unmount cleanup
+- ~~BottomPanel resize height lost on unmount mid-drag~~ — **done**: `ResizeHandle` tracks `lastClientY` during drag for accurate commit on mouseup. Unmount calls `cleanup(false)` to discard partial drag height — avoids persisting half-dragged state to settings
+- ~~`updateConsortiums`/`updateTimeline` duplication~~ — **done**: extracted `updateDesignArray<K>()` generic helper in `document-mutations.ts`. Both action modules now delegate to it, passing `options` directly (no double-negation of `markDirty`)
+- ~~Dead `selectedCanonical` in consortium renderer~~ — **done**: removed always-null field from `ConsortiumRenderState`, deleted `isSelected` dead branch in render loop
+- ~~Timeline `pxPerDay=0` infinite loop~~ — **done**: `renderTimeline` early-returns when `pxPerDay <= 0` (happens before initial layout measurement). `niceInterval` returned `intervalMs=0`, causing infinite tick loop
+- ~~BottomPanel double `commitBottomPanelHeight`~~ — **done**: `releasePointerCapture()` in `pointerup` caused `lostpointercapture` to fire, running cleanup twice. Added `cleaned` boolean guard
+- ~~Rulers mousedown listener leak~~ — **done**: `setupRulerDrag` stored handler refs so `destroy()` can `removeEventListener` before `remove()`
+- ~~LocationInput stale null-guard~~ — **done**: `save()`/`clear()` used render-time `design` for guard while mutations used `currentDesign.peek()`. Aligned guards to `.peek()`
+- ~~Scale-bar/ruler formatting inconsistency~~ — **done**: `_formatDist` (scale-bar) and `_formatDistance` (rulers) had divergent unit spacing (`"40 cm"` vs `"40cm"`). Unified to no-space format
+- ~~InteractiveTimeline scrollY snapshot inconsistency~~ — **done**: `scrollX` was in `TimelineRenderState` but `scrollY` was a separate param — inconsistent snapshot during diagonal pan. Consolidated `scrollY` into `TimelineRenderState`, removed separate param from `renderTimeline`/`hitTestAction`
+- ~~Dead `HitEdge` type alias~~ — **done**: exported from `timeline-renderer.ts` with zero consumers. Inlined into `HitResult` interface, then narrowed to `edge: 'body'` (the `| null` arm was unreachable — no code path returns null)
+- ~~Timeline `order` duplicate after delete~~ — **done**: `addTimelineAction` computes `max(existing orders) + 1` instead of `timeline.length`
+- ~~`openBottomPanel` intermediate re-renders~~ — **done**: wrapped multi-signal writes in `batch()`, removed stale `_heightInitialized` guard that overwrote Rust-persisted height
+- ~~InteractiveTimeline `onWheel` passive listener~~ — **done**: JSX `onWheel` registers as passive by default — `preventDefault()` silently failed. Replaced with imperative `addEventListener({ passive: false })` in `useEffect`
+- ~~`serializeDocument` null doc type safety~~ — **done**: tightened `doc` param from `CanopiFile | null` to `CanopiFile` across interface/session/runtime. Guards at call sites (`document.ts`, `document-actions.ts`) make null-before-save a compile error instead of silent data loss
+- ~~Redundant `void signal.value` top-level reads~~ — **done**: removed from `ConsortiumChart` (`sceneEntityRevision`, `plantNamesRevision`), `BudgetTab` (same), `TimelineTab` (`locale`). `useMemo` deps already maintain subscriptions — the top-level reads caused full component re-renders on every canvas mutation
+- ~~`hitTestBar` dead `_height` parameter~~ — **done**: never read inside the function. Removed from signature + all 6 call sites
+- ~~Duplicate `SceneBounds` interface~~ — **done**: `scene-runtime.ts` had local copy identical to `camera.ts` export. Replaced with import
+- ~~Duplicate `cachedRectRef` ResizeObserver pattern~~ — **done**: both `ConsortiumChart` and `InteractiveTimeline` had identical 7-line `useEffect` blocks. Added optional `cachedRectRef` param to `useCanvasRenderer`, removed duplicate observers
+- ~~`guides` double-subscription in effects.ts~~ — **done**: `guides.value` was in both `onChromeOverlay` and `onLayerSignals`, causing two renders per guide change. Removed from `onChromeOverlay` — `onLayerSignals` path handles both sync and invalidation
+- ~~ConsortiumChart drag reorder TOCTOU~~ — **done**: used `currentDesign.peek().consortiums` instead of `consortiumsRef.current`, creating snapshot mismatch with `barsRef` during rapid drag. Aligned to ref
+- ~~InteractiveTimeline stale `lastDragDates`~~ — **done**: not reset in `handleMouseUp` — stale dedup guard persisted to next drag. Added reset
+- ~~`BottomPanel` unnecessary height signal subscription while closed~~ — **done**: `bottomPanelHeight.value` read before `!open` early return subscribed component while closed. Moved after guard
+- ~~`Math.min/max(...spread)` on zone polygon bounds~~ — **done**: `getMemberBounds` and `groupSelected` used spread on unbounded arrays. Replaced with for-loop reduction per CLAUDE.md convention
+- ~~`upsertConsortiumEntry` identity guard~~ — **done**: spreading `updated[idx] = entry` always created new object even when all fields unchanged. Added field-comparison guard (stratum, start_phase, end_phase)
+- ~~`BottomPanel` tab signal subscription while closed~~ — **done**: `bottomPanelTab.value` read before `!open` early return. Moved after guard (matching height fix)
+- ~~Consortium renderer dark-mode surface-muted fallback~~ — **done**: hardcoded `#E8E2D6` light-mode fallback for `--color-surface-muted` produced bright band in dark mode. Changed to `theme.surface` (theme-safe degradation)
+- ~~Timeline renderer sidebar double-stroke~~ — **done**: border drawn at full height, then ruler fill covered top portion, then border redrawn for ruler segment. Consolidated to single full-height draw after all fills
+- ~~`hitTestBar` impossible body hit on narrow bars~~ — **done**: `EDGE_THRESHOLD * 2 = 12 > min bar width = 8` meant edge zones consumed entire bar. Added guard to return `'body'` when bar width ≤ threshold
+- ~~`InteractiveTimeline` `handleMouseDown` unstable deps~~ — **done**: called `onSelect`/`onEditRequest` props directly despite `onSelectRef`/`onEditRequestRef` already existing. Switched to ref calls with `[]` deps; pan/drag start values use `.peek()`
+- ~~`commitBottomPanelHeight` spurious IPC~~ — **done**: no change guard — `persistCurrentSettings()` called on every mouseup even when height unchanged. Added equality check
+- ~~`updateTimelineAction` incomplete field-compare~~ — **done**: identity guard omitted `plants` and `depends_on` array fields — future callers patching only those fields would silently no-op. Guard now covers all 10 `TimelineAction` fields
+- ~~`Date.now()` in timeline `computeLayout`~~ — **done**: dateless actions sorted by wall-clock time, causing non-deterministic lane assignment across re-renders. Replaced with `Infinity` (stable, sorts last)
+- ~~`getSceneStore()` interface return type~~ — **done**: `CanvasRuntime` interface declared `SceneStore | null` but implementation never returns null. Removed `| null`
+- ~~`?? []` dead fallbacks on required CanopiFile fields~~ — **done**: removed from `normalizeDocument` (5 fields) and `serializeDocument` (3 fields). Rust `#[serde(default)]` guarantees presence; TS fallbacks masked type errors
+- ~~`STRATUM_ORDER` duplication in FilterStrip~~ — **done**: hand-copied `['emergent', 'high', 'medium', 'low']` replaced with import from `STRATA_ROWS` in `consortium-renderer.ts`
+- ~~Hardcoded `'unassigned'` in consortium sync workflow~~ — **done**: replaced string literal with `DEFAULT_STRATUM` derived from `STRATA_ROWS` constant
+- ~~Missing `'other'` action type color~~ — **done**: `ACTION_COLOR_VARS` had no entry for `'other'`, fell through to `fertilising` color. Added `--color-action-other` CSS variable (light + dark mode) and mapped in renderer
+- ~~Redundant `gridHeight` reduce in consortium renderer~~ — **done**: `rowHeights.reduce()` duplicated work already done by `computeRowYOffsets`. Derived from `rowOffsets[last] - HEADER_HEIGHT` instead
+- ~~ConsortiumChart/InteractiveTimeline ghost hover on fast mouse exit~~ — **done**: added `onMouseLeave` handlers to both canvas components, clearing `hoveredCanonical`/`hoveredConsortiumSpecies`/`hoveredId` signals and resetting cursor
+- ~~`scene-interaction.ts` getBoundingClientRect at 60fps during drag~~ — **done**: added `_cachedContainerRect` field, cached on `pointerdown`, used in `_screenPoint()`, cleared in `_cancelTransientInteraction`
+- ~~Consortium renderer save/restore pairing~~ — **done**: entire per-bar block (fill, border, shadow, labels) wrapped in single `ctx.save()`/`ctx.restore()`. Removes fragile manual `globalAlpha = 1` resets. Column headers and phase dividers also use save/restore
+- ~~Test fixture inconsistencies~~ — **done**: added missing `extra: {}` (location-actions), `consortiums: []`/`annotations: []`/`extra: {}` (phase3-regression), IPC mock (canvas-actions), fixed tautological store.test round-trip assertion (non-empty input → empty placeholder output)
+- ~~`useCanvasRenderer` `doRedraw` ignoring `cachedRectRef`~~ — **done**: hover path used `cachedRectRef` but dep-triggered redraws called `getBoundingClientRect()` unconditionally. `doRedraw` now reads from `cachedRectRef` when available, avoiding forced layout reflow at 60fps during pan/hover
+- ~~`InteractiveTimeline` `originDate` reference churn in deps~~ — **done**: `originDate` (`Date` object) in `useCanvasRenderer` deps created new reference every render when `originMs` was stable. Replaced with `originMs` (number) in deps; `Date` derived inside render callback from ref
+- ~~ConsortiumChart document-level cleanup stale dragState~~ — **done**: cleanup only removed listeners but didn't null `dragState.current`. Added `markDocumentDirty()` + `dragState.current = null` in cleanup (matching `InteractiveTimeline` pattern) to prevent stale ref on rapid tab re-mount
+- ~~ConsortiumChart resize `hasMutated` spurious dirty~~ — **done**: `drag.hasMutated = true` was set after both branches, reachable when `bar` is null. Moved inside each branch after `moveConsortiumEntry` so it's only set on actual mutation
+- ~~Plant-counting loop duplication~~ — **done**: identical species-grouping logic existed in `budget-helpers.ts` and `consortium-renderer.ts`. Extracted `groupPlantsBySpecies()` to `canvas/plant-grouping.ts`, consumed by both
+- ~~`Intl.NumberFormat` per-row construction in BudgetTab~~ — **done**: `formatCurrency` created new formatter on every call (~40-60 calls per render with 20 species). Added module-level `Map<string, Intl.NumberFormat>` cache keyed by currency
+- ~~`.exportBtn` missing `font-weight`~~ — **done**: interactive button inherited body weight 400 instead of label weight 600. Added `font-weight: 600` per typography rule
 
 ### 6. Documentation
 - Keep canvas/runtime/renderer docs aligned with the live architecture
@@ -79,8 +151,9 @@ These align with the core risks identified in the architecture review.
 
 **Bottom panels (MVP shipped):**
 - ~~Timeline MVP~~ — **done** (`d56ab50`): trimmed week view, zoom, edge resize, auto-populate, completed UI. Tab routing active
-- ~~Budget tab~~ — **done**: auto-counted plant list, price editing, CSV export. Live updates via `sceneEntityRevision`
+- ~~Budget tab~~ — **done**: redesigned with compact summary header (species/plant counts, pricing progress), document-level currency picker (13 currencies via `budget_currency` field), notebook-style ruled table, inline price editing, CSV export. Live updates via `sceneEntityRevision`
 - ~~Consortium succession chart~~ — **done** (`9fd8cf3`..`1007a96`): Canvas2D strata×phase grid, auto-sync from placed species, drag-move/resize, hover sync with canvas
+- ~~Bottom panel state persistence~~ — **done**: open/height/tab hydrated from Rust settings on bootstrap, persisted on panel actions (height persisted on drag-end, not per-frame)
 - Remaining: full panel↔canvas highlighting sync (requires identity semantics convergence), canvas→chart hover direction
 
 **Other:**
@@ -107,7 +180,7 @@ These align with the core risks identified in the architecture review.
 - Do not reintroduce `plantDisplayMode` or split plant presentation authority
 - Do not reintroduce full scene rebuilds on viewport-only updates
 - Do not push non-canvas state (consortiums, timeline, budget) into `SceneStore` — **enforced**: save-path split-brain fix removes all non-canvas state from ScenePersistedState
-- Do not add new ad hoc signal mirrors — use computed/derived signals or single-writer pattern (see root `CLAUDE.md` Signal Mirror Rule). `designLocation` is consolidated to single writer; `currentConsortiums` was removed entirely
+- Do not add new ad hoc signal mirrors — use computed/derived signals or single-writer pattern (see root `CLAUDE.md` Signal Mirror Rule). Both `designLocation` and `currentConsortiums` mirrors were removed entirely
 - Bottom-panel tabs are active — consortium auto-sync runs at document level via `consortium-sync-workflow.ts`
 - Do not make MapLibre a second document authority
 

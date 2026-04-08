@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { currentDesign, nonCanvasRevision } from '../state/design'
-import { upsertConsortiumEntry, deleteConsortiumEntry, moveConsortiumEntry } from '../state/consortium-actions'
+import { upsertConsortiumEntry, deleteConsortiumEntry, moveConsortiumEntry, reorderConsortiumEntry } from '../state/consortium-actions'
 
 beforeEach(() => {
   nonCanvasRevision.value = 0
@@ -9,7 +9,7 @@ beforeEach(() => {
     name: 'test',
     description: null,
     location: null,
-    north_bearing_deg: 0,
+    north_bearing_deg: null,
     plant_species_colors: {},
     layers: [],
     plants: [{
@@ -25,10 +25,14 @@ beforeEach(() => {
       quantity: null,
     }],
     zones: [],
+    annotations: [],
+    consortiums: [],
+    groups: [],
     timeline: [],
     budget: [],
     created_at: '',
     updated_at: '',
+    extra: {},
   }
 })
 
@@ -45,7 +49,7 @@ describe('consortium actions', () => {
     upsertConsortiumEntry({ canonical_name: 'Quercus robur', stratum: 'medium', start_phase: 0, end_phase: 3 })
 
     expect(currentDesign.value?.consortiums).toHaveLength(1)
-    expect(currentDesign.value!.consortiums![0]!.stratum).toBe('medium')
+    expect(currentDesign.value!.consortiums[0]!.stratum).toBe('medium')
     expect(nonCanvasRevision.value).toBe(2)
   })
 
@@ -61,22 +65,113 @@ describe('consortium actions', () => {
     upsertConsortiumEntry({ canonical_name: 'Quercus robur', stratum: 'high', start_phase: 0, end_phase: 3 })
     moveConsortiumEntry('Quercus robur', { stratum: 'medium', startPhase: 2, endPhase: 5 })
 
-    const entry = currentDesign.value?.consortiums?.[0]
-    expect(entry?.stratum).toBe('medium')
-    expect(entry?.start_phase).toBe(2)
-    expect(entry?.end_phase).toBe(5)
+    const entry = currentDesign.value!.consortiums[0]!
+    expect(entry.stratum).toBe('medium')
+    expect(entry.start_phase).toBe(2)
+    expect(entry.end_phase).toBe(5)
   })
 
   it('preserves existing stratum when stratum is omitted', () => {
     upsertConsortiumEntry({ canonical_name: 'Quercus robur', stratum: 'high', start_phase: 0, end_phase: 3 })
     moveConsortiumEntry('Quercus robur', { startPhase: 1, endPhase: 4 })
 
-    expect(currentDesign.value!.consortiums![0]!.stratum).toBe('high')
+    expect(currentDesign.value!.consortiums[0]!.stratum).toBe('high')
   })
 
   it('respects markDirty: false option', () => {
     upsertConsortiumEntry({ canonical_name: 'Quercus robur', stratum: 'high', start_phase: 0, end_phase: 3 }, { markDirty: false })
 
     expect(nonCanvasRevision.value).toBe(0)
+  })
+
+  it('upsertConsortiumEntry is a no-op when values unchanged', () => {
+    const entry = { canonical_name: 'Quercus robur', stratum: 'high', start_phase: 0, end_phase: 3 }
+    upsertConsortiumEntry(entry)
+    nonCanvasRevision.value = 0
+
+    upsertConsortiumEntry(entry)
+    expect(nonCanvasRevision.value).toBe(0)
+  })
+
+  it('moveConsortiumEntry is a no-op when canonical_name not found', () => {
+    upsertConsortiumEntry({ canonical_name: 'Quercus robur', stratum: 'high', start_phase: 0, end_phase: 3 })
+    nonCanvasRevision.value = 0
+    moveConsortiumEntry('Nonexistent', { stratum: 'medium', startPhase: 1, endPhase: 4 })
+
+    expect(nonCanvasRevision.value).toBe(0)
+  })
+
+  it('moveConsortiumEntry is a no-op when values unchanged', () => {
+    upsertConsortiumEntry({ canonical_name: 'Quercus robur', stratum: 'high', start_phase: 0, end_phase: 3 })
+    nonCanvasRevision.value = 0
+    moveConsortiumEntry('Quercus robur', { stratum: 'high', startPhase: 0, endPhase: 3 })
+
+    expect(nonCanvasRevision.value).toBe(0)
+  })
+
+  it('moveConsortiumEntry respects markDirty: false', () => {
+    upsertConsortiumEntry({ canonical_name: 'Quercus robur', stratum: 'high', start_phase: 0, end_phase: 3 })
+    nonCanvasRevision.value = 0
+    moveConsortiumEntry('Quercus robur', { stratum: 'medium', startPhase: 1, endPhase: 4 }, { markDirty: false })
+
+    expect(nonCanvasRevision.value).toBe(0)
+    expect(currentDesign.value!.consortiums[0]!.stratum).toBe('medium')
+  })
+
+  it('deleteConsortiumEntry is a no-op when canonical_name not found', () => {
+    upsertConsortiumEntry({ canonical_name: 'Quercus robur', stratum: 'high', start_phase: 0, end_phase: 3 })
+    nonCanvasRevision.value = 0
+    deleteConsortiumEntry('Nonexistent')
+
+    expect(nonCanvasRevision.value).toBe(0)
+    expect(currentDesign.value!.consortiums).toHaveLength(1)
+  })
+})
+
+describe('reorderConsortiumEntry', () => {
+  beforeEach(() => {
+    upsertConsortiumEntry({ canonical_name: 'Acer campestre', stratum: 'high', start_phase: 0, end_phase: 2 })
+    upsertConsortiumEntry({ canonical_name: 'Betula pendula', stratum: 'high', start_phase: 0, end_phase: 3 })
+    upsertConsortiumEntry({ canonical_name: 'Corylus avellana', stratum: 'medium', start_phase: 1, end_phase: 4 })
+    nonCanvasRevision.value = 0
+  })
+
+  it('moves an entry from index 0 to index 2', () => {
+    reorderConsortiumEntry('Acer campestre', 2)
+
+    const names = currentDesign.value!.consortiums.map((c) => c.canonical_name)
+    expect(names).toEqual(['Betula pendula', 'Corylus avellana', 'Acer campestre'])
+    expect(nonCanvasRevision.value).toBe(1)
+  })
+
+  it('moves an entry from index 2 to index 0', () => {
+    reorderConsortiumEntry('Corylus avellana', 0)
+
+    const names = currentDesign.value!.consortiums.map((c) => c.canonical_name)
+    expect(names).toEqual(['Corylus avellana', 'Acer campestre', 'Betula pendula'])
+  })
+
+  it('is a no-op when entry not found', () => {
+    reorderConsortiumEntry('Nonexistent species', 1)
+
+    const names = currentDesign.value!.consortiums.map((c) => c.canonical_name)
+    expect(names).toEqual(['Acer campestre', 'Betula pendula', 'Corylus avellana'])
+    expect(nonCanvasRevision.value).toBe(0)
+  })
+
+  it('is a no-op when target index equals current index', () => {
+    reorderConsortiumEntry('Betula pendula', 1)
+
+    const names = currentDesign.value!.consortiums.map((c) => c.canonical_name)
+    expect(names).toEqual(['Acer campestre', 'Betula pendula', 'Corylus avellana'])
+    expect(nonCanvasRevision.value).toBe(0)
+  })
+
+  it('respects markDirty: false option', () => {
+    reorderConsortiumEntry('Acer campestre', 2, { markDirty: false })
+
+    expect(nonCanvasRevision.value).toBe(0)
+    const names = currentDesign.value!.consortiums.map((c) => c.canonical_name)
+    expect(names).toEqual(['Betula pendula', 'Corylus avellana', 'Acer campestre'])
   })
 })

@@ -13,6 +13,7 @@ const KNOWN_CANOPI_KEYS = new Set([
   'groups',
   'timeline',
   'budget',
+  'budget_currency',
   'created_at',
   'updated_at',
 ])

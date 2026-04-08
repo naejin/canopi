@@ -95,14 +95,14 @@ export function LocationInput() {
     searchResults.value = []
     showDropdown.value = false
 
-    // Auto-save the selected location
-    if (!design) return
+    // Auto-save the selected location — read current design at call time, not render time
+    if (!currentDesign.peek()) return
     const alt = parseFloat(altInput.value)
     setDesignLocation({ lat: result.lat, lon: result.lon, altitude_m: isNaN(alt) ? null : alt })
   }
 
   function save() {
-    if (!design) return
+    if (!currentDesign.peek()) return
     const lat = parseFloat(latInput.value)
     const lon = parseFloat(lonInput.value)
     if (isNaN(lat) || isNaN(lon)) return
@@ -114,7 +114,7 @@ export function LocationInput() {
   }
 
   function clear() {
-    if (!design) return
+    if (!currentDesign.peek()) return
     clearDesignLocation()
     latInput.value = ''
     lonInput.value = ''
@@ -176,7 +176,7 @@ export function LocationInput() {
             className={styles.input}
             value={latInput.value}
             onInput={(e) => { latInput.value = e.currentTarget.value }}
-            placeholder="-90 to 90"
+            placeholder={t('canvas.location.latRange')}
             step="0.0001"
             min="-90"
             max="90"
@@ -190,7 +190,7 @@ export function LocationInput() {
             className={styles.input}
             value={lonInput.value}
             onInput={(e) => { lonInput.value = e.currentTarget.value }}
-            placeholder="-180 to 180"
+            placeholder={t('canvas.location.lonRange')}
             step="0.0001"
             min="-180"
             max="180"
@@ -224,7 +224,7 @@ export function LocationInput() {
       {location && (
         <p className={styles.current}>
           {t('canvas.location.current')}: {location.lat.toFixed(4)}, {location.lon.toFixed(4)}
-          {location.altitude_m != null && ` (${location.altitude_m}m)`}
+          {location.altitude_m != null && ` (${location.altitude_m} m)`}
         </p>
       )}
     </div>

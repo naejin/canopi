@@ -37,6 +37,14 @@
   --color-danger: #B5432A;          /* terracotta red — alert */
   --color-danger-bg: rgba(181, 67, 42, 0.07);
 
+  /* Timeline action types — earthy field notebook palette */
+  --color-action-planting: #7D6049;   /* walnut brown */
+  --color-action-pruning: #A06B1F;    /* ochre */
+  --color-action-harvest: #B8860B;    /* dark goldenrod */
+  --color-action-watering: #5B8FB9;   /* pond teal */
+  --color-action-fertilising: #7D6F5E; /* graphite */
+  --color-action-other: #8B7355;       /* driftwood */
+
   /* Plant attributes — earthy tones, not neon */
   --color-edible: #5A7D3A;           /* moss — food plants */
   --color-edible-bg: rgba(90, 125, 58, 0.08);
@@ -173,6 +181,13 @@
   --color-warning-bg: rgba(212, 168, 67, 0.15);
   --color-danger: #D4765A;
   --color-danger-bg: rgba(181, 67, 42, 0.10);
+
+  --color-action-planting: #A08F7F;
+  --color-action-pruning: #C89B4A;
+  --color-action-harvest: #D4A843;
+  --color-action-watering: #7BA8D4;
+  --color-action-fertilising: #A89A88;
+  --color-action-other: #9E8D78;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.35);

@@ -3,7 +3,6 @@
 export interface Settings {
   locale: Locale
   theme: Theme
-  grid_size_m: number
   snap_to_grid: boolean
   snap_to_guides: boolean
   show_smart_guides: boolean

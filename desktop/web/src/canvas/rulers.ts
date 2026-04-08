@@ -1,4 +1,3 @@
-import { gridSize } from '../state/canvas'
 import {
   SCALE_BAR_CANVAS_WIDTH,
   SCALE_BAR_MARGIN_X,
@@ -6,6 +5,8 @@ import {
   SCALE_BAR_RESERVED_BOTTOM_PX,
   getScaleBarDisplay,
 } from './scale-bar'
+import { FONT_SANS_FALLBACK } from './canvas2d-utils'
+import { NICE_DISTANCES } from './grid'
 
 const RULER_SIZE = 24 // pixels — thickness of horizontal and vertical rulers
 
@@ -34,10 +35,13 @@ export interface HtmlRulers {
 // Cached ruler colors — refreshed on theme change, not every frame
 // ---------------------------------------------------------------------------
 
+// Pre-init placeholders — overwritten by refreshRulerColors() before first draw
 let _rulerBg = '#E8E3D9'
-let _rulerText = 'rgba(60, 45, 30, 0.4)'
-let _rulerBorder = 'rgba(60, 45, 30, 0.12)'
-let _scaleBarColor = 'rgba(60, 45, 30, 0.4)'
+let _rulerText = '#6B5F4E'
+let _rulerBorder = '#D4CFC5'
+let _scaleBarColor = '#6B5F4E'
+let _rulerFont10 = `10px ${FONT_SANS_FALLBACK}`
+let _rulerFont11 = `11px ${FONT_SANS_FALLBACK}`
 
 /** Call once after init and on every theme change. */
 export function refreshRulerColors(container: HTMLElement): void {
@@ -46,6 +50,9 @@ export function refreshRulerColors(container: HTMLElement): void {
   _rulerText = cs.getPropertyValue('--canvas-ruler-text').trim() || '#64748b'
   _rulerBorder = cs.getPropertyValue('--color-border').trim() || '#e2e0dd'
   _scaleBarColor = cs.getPropertyValue('--color-text-muted').trim() || _rulerText
+  const fontSans = cs.getPropertyValue('--font-sans').trim() || FONT_SANS_FALLBACK
+  _rulerFont10 = `10px ${fontSans}`
+  _rulerFont11 = `11px ${fontSans}`
 }
 
 // ---------------------------------------------------------------------------
@@ -132,31 +139,27 @@ export function createHtmlRulers(containerDiv: HTMLElement): HtmlRulers {
   // Drag-from-ruler to create a guide line.
   // Horizontal ruler drag → horizontal guide (axis='h')
   // Vertical ruler drag → vertical guide (axis='v')
+  const rulerDragHandlers: Array<{ canvas: HTMLCanvasElement; handler: (e: MouseEvent) => void }> = []
+
   function setupRulerDrag(
     canvas: HTMLCanvasElement,
     axis: 'h' | 'v',
   ): void {
-    canvas.addEventListener('mousedown', (e) => {
+    const handler = (e: MouseEvent) => {
       e.preventDefault()
-      // We don't create the guide on mousedown — we wait for mouseup on the
-      // main canvas area. This means the user "drags" from the ruler.
-      // Use the mouseup position to determine the world coordinate.
       const onMouseUp = (upEvent: MouseEvent) => {
         document.removeEventListener('mouseup', onMouseUp)
         document.removeEventListener('mousemove', onMouseMove)
         containerDiv.style.cursor = ''
 
-        // Only create if the mouse ended outside the ruler area
         const rect = containerDiv.getBoundingClientRect()
         const mx = upEvent.clientX - rect.left
         const my = upEvent.clientY - rect.top
 
-        if (axis === 'h' && my <= RULER_SIZE) return  // Dropped back on ruler
+        if (axis === 'h' && my <= RULER_SIZE) return
         if (axis === 'v' && mx <= RULER_SIZE) return
 
         if (result.onGuideCreate) {
-          // Convert screen position to world coordinate
-          // The engine will set this callback with proper stage reference
           if (axis === 'h') {
             result.onGuideCreate('h', my)
           } else {
@@ -169,13 +172,18 @@ export function createHtmlRulers(containerDiv: HTMLElement): HtmlRulers {
       }
       document.addEventListener('mouseup', onMouseUp)
       document.addEventListener('mousemove', onMouseMove)
-    })
+    }
+    canvas.addEventListener('mousedown', handler)
+    rulerDragHandlers.push({ canvas, handler })
   }
 
   setupRulerDrag(hCanvas, 'h')
   setupRulerDrag(vCanvas, 'v')
 
   function destroy(): void {
+    for (const { canvas, handler } of rulerDragHandlers) {
+      canvas.removeEventListener('mousedown', handler)
+    }
     hCanvas.remove()
     vCanvas.remove()
     scaleCanvas.remove()
@@ -221,8 +229,8 @@ function _drawHorizontalRuler(canvas: HTMLCanvasElement, stage: StageView): void
 
   if (cssWidth <= 0) return
 
-  const newW = cssWidth * dpr
-  const newH = cssHeight * dpr
+  const newW = Math.round(cssWidth * dpr)
+  const newH = Math.round(cssHeight * dpr)
   if (canvas.width !== newW) canvas.width = newW
   if (canvas.height !== newH) canvas.height = newH
 
@@ -246,8 +254,7 @@ function _drawHorizontalRuler(canvas: HTMLCanvasElement, stage: StageView): void
   ctx.lineTo(cssWidth, cssHeight - 0.5)
   ctx.stroke()
 
-  const size = gridSize.value
-  const { tickInterval, labelInterval } = _calcTickIntervals(scale, size)
+  const { tickInterval, labelInterval } = _calcTickIntervals(scale)
 
   // World coordinate of the left edge of the visible area visible in this canvas.
   // The hCanvas starts at screen x = RULER_SIZE (CSS left offset), so the
@@ -258,7 +265,7 @@ function _drawHorizontalRuler(canvas: HTMLCanvasElement, stage: StageView): void
   const startWorld = Math.floor(worldLeft / tickInterval) * tickInterval
 
   ctx.fillStyle = _rulerText
-  ctx.font = `10px Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`
+  ctx.font = _rulerFont10
   ctx.textAlign = 'center'
   ctx.textBaseline = 'bottom'
   ctx.strokeStyle = _rulerText
@@ -292,8 +299,8 @@ function _drawVerticalRuler(canvas: HTMLCanvasElement, stage: StageView): void {
 
   if (cssHeight <= 0) return
 
-  const newW = cssWidth * dpr
-  const newH = cssHeight * dpr
+  const newW = Math.round(cssWidth * dpr)
+  const newH = Math.round(cssHeight * dpr)
   if (canvas.width !== newW) canvas.width = newW
   if (canvas.height !== newH) canvas.height = newH
 
@@ -317,8 +324,7 @@ function _drawVerticalRuler(canvas: HTMLCanvasElement, stage: StageView): void {
   ctx.lineTo(cssWidth - 0.5, cssHeight)
   ctx.stroke()
 
-  const size = gridSize.value
-  const { tickInterval, labelInterval } = _calcTickIntervals(scale, size)
+  const { tickInterval, labelInterval } = _calcTickIntervals(scale)
 
   // The vCanvas starts at screen y = RULER_SIZE (CSS top offset)
   const screenOffsetY = RULER_SIZE
@@ -327,7 +333,7 @@ function _drawVerticalRuler(canvas: HTMLCanvasElement, stage: StageView): void {
   const startWorld = Math.floor(worldTop / tickInterval) * tickInterval
 
   ctx.fillStyle = _rulerText
-  ctx.font = `10px Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`
+  ctx.font = _rulerFont10
   ctx.strokeStyle = _rulerText
   ctx.lineWidth = 1
 
@@ -365,8 +371,8 @@ function _drawScaleBar(canvas: HTMLCanvasElement, stage: StageView): void {
 
   if (cssWidth <= 0 || cssHeight <= 0) return
 
-  const newW = cssWidth * dpr
-  const newH = cssHeight * dpr
+  const newW = Math.round(cssWidth * dpr)
+  const newH = Math.round(cssHeight * dpr)
   if (canvas.width !== newW) canvas.width = newW
   if (canvas.height !== newH) canvas.height = newH
 
@@ -400,7 +406,7 @@ function _drawScaleBar(canvas: HTMLCanvasElement, stage: StageView): void {
   ctx.lineTo(endX, lineY + 4)
   ctx.stroke()
 
-  ctx.font = `11px Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`
+  ctx.font = _rulerFont11
   ctx.textAlign = 'center'
   ctx.textBaseline = 'bottom'
   ctx.fillText(label, startX + barScreenPx / 2, lineY - 8)
@@ -411,24 +417,26 @@ function _drawScaleBar(canvas: HTMLCanvasElement, stage: StageView): void {
 // Aim for ~60px between label ticks and ~15px between minor ticks
 // ---------------------------------------------------------------------------
 
-const RULER_NICE_DISTANCES = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000]
+// Ruler uses distances >= 0.1m (subset of shared NICE_DISTANCES from grid.ts)
+const RULER_DISTANCES = NICE_DISTANCES.filter(d => d >= 0.1)
 
 function _calcTickIntervals(
   scale: number,
-  _gridSizeMeters: number,
 ): { tickInterval: number; labelInterval: number } {
-  let tickInterval = RULER_NICE_DISTANCES[0]!
-  for (const d of RULER_NICE_DISTANCES) {
-    if (d * scale >= 15) {
-      tickInterval = d
+  let idx = RULER_DISTANCES.length - 1
+  for (let i = 0; i < RULER_DISTANCES.length; i++) {
+    if (RULER_DISTANCES[i]! * scale >= 15) {
+      idx = i
       break
     }
   }
+  const tickInterval = RULER_DISTANCES[idx]!
 
   let labelInterval = tickInterval
-  const idx = RULER_NICE_DISTANCES.indexOf(tickInterval)
-  if (idx >= 0 && idx + 2 < RULER_NICE_DISTANCES.length) {
-    labelInterval = RULER_NICE_DISTANCES[idx + 2]!
+  if (idx + 2 < RULER_DISTANCES.length) {
+    labelInterval = RULER_DISTANCES[idx + 2]!
+  } else if (idx + 1 < RULER_DISTANCES.length) {
+    labelInterval = RULER_DISTANCES[idx + 1]!
   }
 
   return { tickInterval, labelInterval }

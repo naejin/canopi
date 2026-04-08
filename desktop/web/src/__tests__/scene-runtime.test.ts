@@ -23,6 +23,7 @@ const BASE_FILE: CanopiFile = {
   plants: [],
   zones: [],
   annotations: [],
+  consortiums: [],
   groups: [],
   timeline: [],
   budget: [],
@@ -125,6 +126,7 @@ describe('SceneCanvasRuntime', () => {
           completed: false,
           order: 1,
         }],
+        budget_currency: 'EUR',
         budget: [{
           category: 'plants',
           description: 'Quercus robur',
@@ -150,6 +152,7 @@ describe('SceneCanvasRuntime', () => {
     expect(serialized.timeline).toHaveLength(1)
     expect(serialized.budget).toHaveLength(1)
     expect(serialized.consortiums).toHaveLength(1)
+    expect(serialized.budget_currency).toBe('EUR')
     expect(serialized.extra).toEqual({
       guides: [{ id: 'guide-1', axis: 'h', position: 42 }],
     })

@@ -1,38 +1,33 @@
 import type { BudgetItem } from '../types/design'
 import { mutateCurrentDesign } from './document-mutations'
 
-function updateBudget(updater: (budget: BudgetItem[]) => BudgetItem[]): void {
-  mutateCurrentDesign((design) => ({
-    ...design,
-    budget: updater(design.budget ?? []),
-  }))
-}
-
-export function upsertBudgetItem(predicate: (item: BudgetItem) => boolean, next: BudgetItem): void {
-  updateBudget((budget) => {
-    const index = budget.findIndex(predicate)
-    if (index === -1) return [...budget, next]
-    return budget.map((item, itemIndex) => (itemIndex === index ? next : item))
+export function setBudgetCurrency(currency: string): void {
+  mutateCurrentDesign((design) => {
+    if (design.budget_currency === currency) return design
+    return {
+      ...design,
+      budget_currency: currency,
+      budget: design.budget.map((item) => ({ ...item, currency })),
+    }
   })
-}
-
-export function deleteBudgetItem(predicate: (item: BudgetItem) => boolean): void {
-  updateBudget((budget) => budget.filter((item) => !predicate(item)))
 }
 
 export function setPlantBudgetPrice(
   canonicalName: string,
   unitCost: number,
-  currency: string,
 ): void {
-  upsertBudgetItem(
-    (item) => item.category === 'plants' && item.description === canonicalName,
-    {
-      category: 'plants',
-      description: canonicalName,
-      quantity: 0,
-      unit_cost: unitCost,
-      currency,
-    },
-  )
+  const sanitized = Math.max(0, isFinite(unitCost) ? unitCost : 0)
+  mutateCurrentDesign((design) => {
+    const currency = design.budget_currency ?? 'EUR'
+    const budget = design.budget
+    const index = budget.findIndex((item) => item.category === 'plants' && item.description === canonicalName)
+    const existing = index !== -1 ? budget[index] : undefined
+    if (existing && existing.unit_cost === sanitized && existing.currency === currency) return design
+    const next: BudgetItem = { category: 'plants', description: canonicalName, quantity: existing?.quantity ?? 0, unit_cost: sanitized, currency }
+    return {
+      ...design,
+      budget_currency: currency,
+      budget: index === -1 ? [...budget, next] : budget.map((item, i) => (i === index ? next : item)),
+    }
+  })
 }

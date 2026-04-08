@@ -6,7 +6,6 @@ use specta::Type;
 pub struct Settings {
     pub locale: Locale,
     pub theme: Theme,
-    pub grid_size_m: f32,
     pub snap_to_grid: bool,
     pub snap_to_guides: bool,
     pub show_smart_guides: bool,
@@ -37,7 +36,6 @@ impl Default for Settings {
         Self {
             locale: Locale::En,
             theme: Theme::Light,
-            grid_size_m: 1.0,
             snap_to_grid: true,
             snap_to_guides: true,
             show_smart_guides: true,

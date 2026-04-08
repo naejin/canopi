@@ -10,18 +10,16 @@ import {
   activeFilterCount,
   patchFilters,
 } from '../../state/plant-db'
+import { STRATA_ROWS } from '../../canvas/consortium-renderer'
 import { FilterChip } from './FilterChip'
 import { RangeSlider } from './RangeSlider'
 import { ThresholdSlider } from './ThresholdSlider'
 import styles from './PlantDb.module.css'
 
-// Ecological order: top of canopy → bottom
-const STRATUM_ORDER = ['emergent', 'high', 'medium', 'low']
-
 function sortStrata(strata: string[]): string[] {
   return [...strata].sort((a, b) => {
-    const ai = STRATUM_ORDER.indexOf(a)
-    const bi = STRATUM_ORDER.indexOf(b)
+    const ai = (STRATA_ROWS as readonly string[]).indexOf(a)
+    const bi = (STRATA_ROWS as readonly string[]).indexOf(b)
     return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
   })
 }

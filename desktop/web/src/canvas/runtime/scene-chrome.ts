@@ -1,4 +1,5 @@
 import type { Guide } from '../guides'
+import { NICE_DISTANCES, gridInterval } from '../grid'
 import {
   createHtmlRulers,
   refreshRulerColors,
@@ -11,8 +12,6 @@ import { getCanvasColor } from '../theme-refresh'
 
 const RULER_SIZE = 24
 const GRID_Z_INDEX = 4
-const NICE_DISTANCES = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000]
-const MIN_SCREEN_GAP = 20
 const MAJOR_STEP = 2
 
 export interface SceneChromeSnapshot {
@@ -30,9 +29,14 @@ export class SceneChromeOverlay {
   private readonly _rulers: HtmlRulers
   private _snapshot: SceneChromeSnapshot | null = null
   private _onGuideCreate: ((axis: 'h' | 'v', worldPosition: number) => void) | null = null
+  private _gridColor = '#D4CFC5'
+  private _gridMajorColor = '#B8A482'
 
   constructor(private readonly _container: HTMLElement) {
     refreshRulerColors(this._container)
+    const style = getComputedStyle(this._container)
+    this._gridColor = style.getPropertyValue('--canvas-grid').trim() || '#D4CFC5'
+    this._gridMajorColor = style.getPropertyValue('--canvas-grid-major').trim() || '#B8A482'
     this._gridCanvas.style.cssText = `
       position: absolute;
       inset: 0;
@@ -60,6 +64,9 @@ export class SceneChromeOverlay {
 
   refreshTheme(): void {
     refreshRulerColors(this._container)
+    const style = getComputedStyle(this._container)
+    this._gridColor = style.getPropertyValue('--canvas-grid').trim() || '#D4CFC5'
+    this._gridMajorColor = style.getPropertyValue('--canvas-grid-major').trim() || '#B8A482'
     this.render()
   }
 
@@ -130,21 +137,12 @@ export class SceneChromeOverlay {
     const right = left + snapshot.width / scale
     const bottom = top + snapshot.height / scale
 
-    let minorInterval = NICE_DISTANCES[NICE_DISTANCES.length - 1]!
-    let minorIdx = NICE_DISTANCES.length - 1
-    for (let index = 0; index < NICE_DISTANCES.length; index += 1) {
-      if (NICE_DISTANCES[index]! * scale >= MIN_SCREEN_GAP) {
-        minorInterval = NICE_DISTANCES[index]!
-        minorIdx = index
-        break
-      }
-    }
-
+    const { interval: minorInterval, index: minorIdx } = gridInterval(scale)
     const majorIdx = Math.min(minorIdx + MAJOR_STEP, NICE_DISTANCES.length - 1)
     const majorInterval = NICE_DISTANCES[majorIdx]!
 
     ctx.beginPath()
-    ctx.strokeStyle = getComputedStyle(this._container).getPropertyValue('--canvas-grid').trim() || 'rgba(0,0,0,0.06)'
+    ctx.strokeStyle = this._gridColor
     ctx.lineWidth = 1
 
     for (let x = Math.floor(left / minorInterval) * minorInterval; x <= right; x += minorInterval) {
@@ -162,7 +160,7 @@ export class SceneChromeOverlay {
     if (majorInterval <= minorInterval) return
 
     ctx.beginPath()
-    ctx.strokeStyle = getComputedStyle(this._container).getPropertyValue('--canvas-grid-major').trim() || 'rgba(0,0,0,0.12)'
+    ctx.strokeStyle = this._gridMajorColor
     ctx.lineWidth = 1
 
     for (let x = Math.floor(left / majorInterval) * majorInterval; x <= right; x += majorInterval) {

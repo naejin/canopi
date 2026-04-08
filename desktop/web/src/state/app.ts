@@ -2,7 +2,7 @@ import { signal, batch } from "@preact/signals";
 import type { PlantDbStatus } from "../types/health";
 import type { Settings } from "../types/settings";
 import { setSettings } from "../ipc/settings";
-import { gridSize, snapToGridEnabled } from "./canvas";
+import { snapToGridEnabled, snapToGuidesEnabled, bottomPanelOpen, bottomPanelHeight, bottomPanelTab } from "./canvas";
 
 export type Panel = "plant-db" | "canvas" | "favorites" | "location";
 
@@ -38,9 +38,12 @@ export function persistCurrentSettings(): void {
     ..._lastSettings,
     locale: locale.value,
     theme: theme.value,
-    grid_size_m: gridSize.value,
     snap_to_grid: snapToGridEnabled.value,
+    snap_to_guides: snapToGuidesEnabled.value,
     auto_save_interval_s: Math.round(autoSaveIntervalMs.value / 1000),
+    bottom_panel_open: bottomPanelOpen.value,
+    bottom_panel_height: bottomPanelHeight.value,
+    bottom_panel_tab: bottomPanelTab.value,
   };
   _lastSettings = updated;
   setSettings(updated).catch((e) => console.error('Failed to persist settings:', e));

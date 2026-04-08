@@ -11,7 +11,7 @@ export interface CanvasRuntimeDocumentMetadata {
 }
 
 export interface CanvasRuntime {
-  getSceneStore(): SceneStore | null
+  getSceneStore(): SceneStore
   getSelection(): Set<string>
   setSelection(ids: Iterable<string>): void
   clearSelection(): void
@@ -52,7 +52,7 @@ export interface CanvasRuntime {
   clearPlantSpeciesColor(canonicalName: string): boolean
   loadDocument(file: CanopiFile): void
   replaceDocument(file: CanopiFile): void
-  serializeDocument(metadata: CanvasRuntimeDocumentMetadata, doc: CanopiFile | null): CanopiFile
+  serializeDocument(metadata: CanvasRuntimeDocumentMetadata, doc: CanopiFile): CanopiFile
   markSaved(): void
   clearHistory(): void
   destroy(): void

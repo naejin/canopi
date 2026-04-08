@@ -1,7 +1,8 @@
 import type { Consortium, PlacedPlant } from '../types/design'
 import { getStratumColor } from './plants'
 import { DEFAULT_PLANT_COLOR } from './plant-colors'
-import { cssVar, roundRect } from './canvas2d-utils'
+import { cssVar, roundRect, readThemeTokens } from './canvas2d-utils'
+import { groupPlantsBySpecies } from './plant-grouping'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -34,7 +35,6 @@ const EDGE_THRESHOLD = 6
 
 export interface ConsortiumRenderState {
   hoveredCanonical: string | null
-  selectedCanonical: string | null
 }
 
 export interface ConsortiumBarLayout {
@@ -85,10 +85,14 @@ export function computeRowHeights(bars: ConsortiumBarLayout[]): number[] {
   return laneCounts.map(lanes => Math.max(MIN_ROW_HEIGHT, lanes * LANE_HEIGHT))
 }
 
-export function rowY(rowIndex: number, rowHeights: number[]): number {
-  let y = HEADER_HEIGHT
-  for (let i = 0; i < rowIndex; i++) y += (rowHeights[i] ?? MIN_ROW_HEIGHT)
-  return y
+/** Precompute cumulative Y offsets for all rows. */
+export function computeRowYOffsets(rowHeights: number[]): number[] {
+  const offsets = new Array(rowHeights.length + 1) as number[]
+  offsets[0] = HEADER_HEIGHT
+  for (let i = 0; i < rowHeights.length; i++) {
+    offsets[i + 1] = offsets[i]! + (rowHeights[i] ?? MIN_ROW_HEIGHT)
+  }
+  return offsets
 }
 
 // ---------------------------------------------------------------------------
@@ -101,19 +105,7 @@ export function buildConsortiumBars(
   speciesColors: Record<string, string>,
   localizedNames?: ReadonlyMap<string, string | null>,
 ): ConsortiumBarLayout[] {
-  const plantCounts = new Map<string, { count: number; commonName: string }>()
-  for (const plant of plants) {
-    const existing = plantCounts.get(plant.canonical_name)
-    if (existing) {
-      existing.count++
-    } else {
-      const localized = localizedNames?.get(plant.canonical_name)
-      plantCounts.set(plant.canonical_name, {
-        count: 1,
-        commonName: localized ?? plant.common_name ?? plant.canonical_name,
-      })
-    }
-  }
+  const plantCounts = groupPlantsBySpecies(plants, localizedNames)
 
   const bars: ConsortiumBarLayout[] = entries.map((entry) => {
     const plantInfo = plantCounts.get(entry.canonical_name)
@@ -154,9 +146,9 @@ export function buildConsortiumBars(
 
 export interface BarRect { x: number; y: number; w: number; h: number }
 
-export function computeBarRect(bar: ConsortiumBarLayout, contentWidth: number, rowHeights: number[]): BarRect {
+export function computeBarRect(bar: ConsortiumBarLayout, contentWidth: number, rowHeights: number[], rowOffsets: number[]): BarRect {
   const rowIdx = stratumToRow(bar.stratum)
-  const ry = rowY(rowIdx, rowHeights)
+  const ry = rowOffsets[rowIdx]!
   const rh = rowHeights[rowIdx] ?? MIN_ROW_HEIGHT
   const subLaneH = rh / bar.totalSubLanes
   const x1 = phaseToX(bar.startPhase, contentWidth)
@@ -181,18 +173,22 @@ export function renderConsortium(
   state: ConsortiumRenderState,
   t: (key: string) => string,
   rowHeights: number[],
+  cachedRowOffsets?: number[],
 ): void {
-  const bgColor = cssVar('--color-bg') || '#E6E0D4'
-  const surfaceColor = cssVar('--color-surface') || '#EDE8DD'
-  const surfaceMuted = cssVar('--color-surface-muted') || '#E8E2D6'
-  const borderColor = cssVar('--color-border') || 'rgba(60, 45, 30, 0.16)'
-  const textColor = cssVar('--color-text') || '#2C2418'
-  const textMutedColor = cssVar('--color-text-muted') || '#6B5F4E'
-  const primaryColor = cssVar('--color-primary') || '#A06B1F'
-  const fontSans = cssVar('--font-sans') || 'Inter, system-ui, sans-serif'
+  const theme = readThemeTokens()
+  const bgColor = theme.bg
+  const surfaceColor = theme.surface
+  const surfaceMuted = cssVar('--color-surface-muted') || theme.surface
+  const borderColor = theme.border
+  const textColor = theme.text
+  const textMutedColor = theme.textMuted
+  const primaryColor = theme.primary
+  const primaryContrastColor = theme.primaryContrast
+  const fontSans = theme.fontSans
 
   const contentWidth = width - LABEL_WIDTH
-  const gridHeight = rowHeights.reduce((a, b) => a + b, 0)
+  const rowOffsets = cachedRowOffsets ?? computeRowYOffsets(rowHeights)
+  const gridHeight = rowOffsets[rowOffsets.length - 1]! - HEADER_HEIGHT
 
   ctx.clearRect(0, 0, width, height)
 
@@ -202,7 +198,7 @@ export function renderConsortium(
 
   // -- Alternating row backgrounds --------------------------------------------
   for (let r = 0; r < STRATA_ROWS.length; r++) {
-    const ry = rowY(r, rowHeights)
+    const ry = rowOffsets[r]!
     const rh = rowHeights[r] ?? MIN_ROW_HEIGHT
     ctx.fillStyle = r % 2 === 0 ? surfaceColor : surfaceMuted
     ctx.fillRect(LABEL_WIDTH, ry, contentWidth, rh)
@@ -213,14 +209,14 @@ export function renderConsortium(
   ctx.fillRect(0, 0, LABEL_WIDTH, HEADER_HEIGHT + gridHeight)
 
   // -- Column headers ---------------------------------------------------------
+  ctx.save()
+  ctx.textAlign = 'center'
   for (let i = 0; i < CONSORTIUM_PHASES.length; i++) {
     const phase = CONSORTIUM_PHASES[i]!
     const x1 = phaseToX(i, contentWidth)
     const x2 = phaseToX(i + 1, contentWidth)
     const colW = x2 - x1
     const cx = x1 + colW / 2
-
-    ctx.textAlign = 'center'
 
     // Phase name
     ctx.fillStyle = textColor
@@ -229,16 +225,15 @@ export function renderConsortium(
 
     // Duration subtitle
     ctx.fillStyle = textMutedColor
-    ctx.font = `400 10px ${fontSans}`
+    ctx.font = `400 11px ${fontSans}`
     ctx.fillText(t(phase.durationKey), cx, HEADER_HEIGHT / 2 + 11, colW - 8)
   }
-
-  ctx.textAlign = 'left'
+  ctx.restore()
 
   // -- Row labels -------------------------------------------------------------
   for (let r = 0; r < STRATA_ROWS.length; r++) {
     const stratum = STRATA_ROWS[r]!
-    const ry = rowY(r, rowHeights)
+    const ry = rowOffsets[r]!
     const rh = rowHeights[r] ?? MIN_ROW_HEIGHT
     const labelY = ry + rh / 2
 
@@ -270,7 +265,7 @@ export function renderConsortium(
 
   // Horizontal row dividers
   for (let r = 1; r <= STRATA_ROWS.length; r++) {
-    const y = rowY(r, rowHeights) + 0.5
+    const y = rowOffsets[r]! + 0.5
     ctx.beginPath()
     ctx.moveTo(0, y)
     ctx.lineTo(width, y)
@@ -278,6 +273,7 @@ export function renderConsortium(
   }
 
   // Vertical phase dividers (lighter)
+  ctx.save()
   ctx.globalAlpha = 0.5
   for (let i = 1; i < CONSORTIUM_PHASES.length; i++) {
     const x = phaseToX(i, contentWidth) + 0.5
@@ -286,25 +282,21 @@ export function renderConsortium(
     ctx.lineTo(x, HEADER_HEIGHT + gridHeight)
     ctx.stroke()
   }
-  ctx.globalAlpha = 1
+  ctx.restore()
 
   // -- Bars -------------------------------------------------------------------
   for (const bar of bars) {
-    const { x, y: barY, w: barW, h: barH } = computeBarRect(bar, contentWidth, rowHeights)
+    const { x, y: barY, w: barW, h: barH } = computeBarRect(bar, contentWidth, rowHeights, rowOffsets)
 
     const isHovered = bar.canonicalName === state.hoveredCanonical
-    const isSelected = bar.canonicalName === state.selectedCanonical
+
+    ctx.save()
 
     // Bar shadow (subtle depth)
     if (isHovered) {
-      ctx.save()
-      ctx.shadowColor = 'rgba(44, 36, 24, 0.15)'
+      ctx.shadowColor = borderColor
       ctx.shadowBlur = 4
       ctx.shadowOffsetY = 1
-      ctx.fillStyle = bar.color
-      roundRect(ctx, x, barY, barW, barH, BAR_RADIUS)
-      ctx.fill()
-      ctx.restore()
     }
 
     // Bar fill
@@ -312,23 +304,22 @@ export function renderConsortium(
     ctx.globalAlpha = isHovered ? 1 : 0.85
     roundRect(ctx, x, barY, barW, barH, BAR_RADIUS)
     ctx.fill()
-    ctx.globalAlpha = 1
+
+    // Clear shadow before border (shadow only applies to fill)
+    ctx.shadowColor = 'transparent'
 
     // Border
-    ctx.strokeStyle = isSelected ? primaryColor : isHovered ? primaryColor : 'rgba(0,0,0,0.12)'
-    ctx.lineWidth = isSelected ? 2 : 1
-    if (isHovered) ctx.globalAlpha = 0.7
+    ctx.strokeStyle = isHovered ? primaryColor : borderColor
+    ctx.lineWidth = 1
+    ctx.globalAlpha = isHovered ? 0.7 : 1
     roundRect(ctx, x, barY, barW, barH, BAR_RADIUS)
     ctx.stroke()
-    ctx.globalAlpha = 1
 
     // Label inside bar
     if (barW > 50) {
-      // Dark text on colored background for readability
-      ctx.fillStyle = '#fff'
       ctx.globalAlpha = 0.95
-      ctx.font = `600 10px ${fontSans}`
-      ctx.save()
+      ctx.fillStyle = primaryContrastColor
+      ctx.font = `600 11px ${fontSans}`
       ctx.beginPath()
       ctx.rect(x + 4, barY, barW - 8, barH)
       ctx.clip()
@@ -336,18 +327,15 @@ export function renderConsortium(
         ? `${bar.commonName} (${bar.count})`
         : bar.commonName
       ctx.fillText(label, x + 7, barY + barH / 2 + 3.5)
-      ctx.restore()
-      ctx.globalAlpha = 1
     } else if (barW > 20) {
-      // Just show count for narrow bars
-      ctx.fillStyle = '#fff'
       ctx.globalAlpha = 0.9
-      ctx.font = `600 9px ${fontSans}`
+      ctx.fillStyle = primaryContrastColor
+      ctx.font = `600 11px ${fontSans}`
       ctx.textAlign = 'center'
       ctx.fillText(`${bar.count}`, x + barW / 2, barY + barH / 2 + 3)
-      ctx.textAlign = 'left'
-      ctx.globalAlpha = 1
     }
+
+    ctx.restore()
   }
 }
 
@@ -360,17 +348,19 @@ export function hitTestBar(
   y: number,
   bars: ConsortiumBarLayout[],
   width: number,
-  _height: number,
   rowHeights: number[],
+  rowOffsets?: number[],
 ): ConsortiumHitResult | null {
   const contentWidth = width - LABEL_WIDTH
 
   if (x < LABEL_WIDTH || y < HEADER_HEIGHT) return null
 
+  const offsets = rowOffsets ?? computeRowYOffsets(rowHeights)
   for (const bar of bars) {
-    const r = computeBarRect(bar, contentWidth, rowHeights)
+    const r = computeBarRect(bar, contentWidth, rowHeights, offsets)
 
     if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) {
+      if (r.w <= EDGE_THRESHOLD * 2) return { canonicalName: bar.canonicalName, edge: 'body' }
       if (x - r.x < EDGE_THRESHOLD) return { canonicalName: bar.canonicalName, edge: 'left' }
       if (r.x + r.w - x < EDGE_THRESHOLD) return { canonicalName: bar.canonicalName, edge: 'right' }
       return { canonicalName: bar.canonicalName, edge: 'body' }

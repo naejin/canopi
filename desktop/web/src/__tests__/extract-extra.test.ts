@@ -19,8 +19,12 @@ describe('extractExtra', () => {
       layers: [],
       plants: [],
       zones: [],
+      annotations: [],
+      consortiums: [],
+      groups: [],
       timeline: [],
       budget: [],
+      budget_currency: 'EUR',
       created_at: '2026-01-01T00:00:00Z',
       updated_at: '2026-01-01T00:00:00Z',
     }
@@ -58,5 +62,19 @@ describe('extractExtra', () => {
     expect(extra).toEqual({ custom_key: 42 })
     expect('plants' in extra).toBe(false)
     expect('version' in extra).toBe(false)
+  })
+
+  it('excludes budget_currency from extra (known key)', () => {
+    const raw = {
+      version: 1,
+      name: 'test',
+      plant_species_colors: {},
+      budget: [],
+      budget_currency: 'USD',
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    }
+    const extra = extractExtra(raw as any)
+    expect('budget_currency' in extra).toBe(false)
   })
 })

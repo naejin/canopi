@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'preact/hooks'
+import { useCallback, useMemo, useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale } from '../../state/app'
@@ -9,8 +9,11 @@ import {
   updateTimelineAction,
 } from '../../state/timeline-actions'
 import type { TimelineAction } from '../../types/design'
+import { Dropdown, type DropdownItem } from '../shared/Dropdown'
 import { InteractiveTimeline, type Granularity } from './InteractiveTimeline'
 import styles from './TimelineTab.module.css'
+
+const EMPTY_TIMELINE: TimelineAction[] = []
 
 type ActionType = 'planting' | 'pruning' | 'harvest' | 'watering' | 'fertilising' | 'other'
 
@@ -32,8 +35,6 @@ const EMPTY_FORM: FormState = {
 }
 
 export function TimelineTab() {
-  void locale.value
-
   const granularity = useSignal<Granularity>('month')
   const selectedId = useSignal<string | null>(null)
   const showForm = useSignal(false)
@@ -41,7 +42,13 @@ export function TimelineTab() {
   const form = useSignal<FormState>({ ...EMPTY_FORM })
   const scrollToTodayRef = useRef<(() => void) | null>(null)
 
-  const actions = currentDesign.value?.timeline ?? []
+  const actionTypeItems: DropdownItem<string>[] = useMemo(
+    () => ACTION_TYPES.map((type) => ({ value: type, label: t(`canvas.timeline.type_${type}`) })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [locale.value],
+  )
+
+  const actions = currentDesign.value?.timeline ?? EMPTY_TIMELINE
   const hasActions = actions.length > 0
 
   function openAdd() {
@@ -54,6 +61,8 @@ export function TimelineTab() {
     editingId.value = null
     showForm.value = true
   }
+
+  const handleSelect = useCallback((id: string | null) => { selectedId.value = id }, [])
 
   const openEdit = useCallback((action: TimelineAction) => {
     form.value = {
@@ -73,8 +82,6 @@ export function TimelineTab() {
   }
 
   function saveForm() {
-    const design = currentDesign.value
-    if (!design) return
     const next = form.value
     if (!next.description.trim()) return
 
@@ -97,7 +104,6 @@ export function TimelineTab() {
         zone: null,
         depends_on: null,
         completed: false,
-        order: (design.timeline ?? []).length,
       })
     }
 
@@ -134,19 +140,15 @@ export function TimelineTab() {
 
       {showForm.value && (
         <div className={styles.formRow}>
-          <select
-            className={styles.formSelect}
+          <Dropdown
+            trigger={t(`canvas.timeline.type_${form.value.action_type}`)}
+            items={actionTypeItems}
             value={form.value.action_type}
-            onChange={(event) => {
-              form.value = { ...form.value, action_type: (event.target as HTMLSelectElement).value }
-            }}
-          >
-            {ACTION_TYPES.map((type) => (
-              <option key={type} value={type}>
-                {t(`canvas.timeline.type_${type}`)}
-              </option>
-            ))}
-          </select>
+            onChange={(value) => { form.value = { ...form.value, action_type: value } }}
+            ariaLabel={t('canvas.timeline.actionType')}
+            menuDirection="down"
+            triggerClassName={styles.formSelect}
+          />
           <input
             type="text"
             className={styles.formInput}
@@ -164,7 +166,7 @@ export function TimelineTab() {
               form.value = { ...form.value, start_date: (event.target as HTMLInputElement).value }
             }}
           />
-          <span className={styles.dateSep}>{'->'}</span>
+          <span className={styles.dateSep}>{'\u2192'}</span>
           <input
             type="date"
             className={styles.formDate}
@@ -187,7 +189,7 @@ export function TimelineTab() {
           <InteractiveTimeline
             granularity={granularity.value}
             selectedId={selectedId.value}
-            onSelect={(id) => { selectedId.value = id }}
+            onSelect={handleSelect}
             onEditRequest={openEdit}
             scrollToTodayRef={scrollToTodayRef}
           />

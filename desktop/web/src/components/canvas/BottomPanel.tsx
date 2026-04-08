@@ -1,5 +1,6 @@
+import { useEffect, useRef } from 'preact/hooks'
 import { bottomPanelHeight, bottomPanelOpen, bottomPanelTab } from '../../state/canvas'
-import { setBottomPanelHeight } from '../../state/canvas-actions'
+import { commitBottomPanelHeight } from '../../state/canvas-actions'
 import { TimelineTab } from './TimelineTab'
 import { BudgetTab } from './BudgetTab'
 import { ConsortiumChart } from './ConsortiumChart'
@@ -7,48 +8,87 @@ import styles from './BottomPanel.module.css'
 
 export function BottomPanel() {
   const open = bottomPanelOpen.value
+  const tab = bottomPanelTab.value
   const height = bottomPanelHeight.value
+  const panelRef = useRef<HTMLDivElement>(null)
 
   if (!open) return null
-
   return (
-    <div className={styles.panel} style={{ height: `${height}px` }}>
-      <ResizeHandle />
+    <div ref={panelRef} className={styles.panel} style={{ height: `${height}px` }}>
+      <ResizeHandle panelRef={panelRef} />
       <div className={styles.content}>
-        {bottomPanelTab.value === 'timeline' && <TimelineTab />}
-        {bottomPanelTab.value === 'budget' && <BudgetTab />}
-        {bottomPanelTab.value === 'consortium' && <ConsortiumChart />}
+        {tab === 'timeline' && <TimelineTab />}
+        {tab === 'budget' && <BudgetTab />}
+        {tab === 'consortium' && <ConsortiumChart />}
       </div>
     </div>
   )
 }
 
-function ResizeHandle() {
+function ResizeHandle({ panelRef }: { panelRef: { current: HTMLDivElement | null } }) {
+  const handleRef = useRef<HTMLDivElement>(null)
+  const cleanupRef = useRef<((commit: boolean) => void) | null>(null)
+
+  useEffect(() => {
+    return () => { cleanupRef.current?.(false) }
+  }, [])
+
   return (
     <div
+      ref={handleRef}
       className={styles.resizeHandle}
-      onMouseDown={(event) => {
+      onPointerDown={(event) => {
+        if (event.button !== 0) return
         event.preventDefault()
+
+        const handle = handleRef.current
+        if (!handle) return
+        handle.setPointerCapture(event.pointerId)
+
         const startY = event.clientY
-        const startHeight = bottomPanelHeight.value
+        const startHeight = bottomPanelHeight.peek()
         const maxHeight = Math.max(200, window.innerHeight * 0.8)
 
-        const onMove = (moveEvent: MouseEvent) => {
-          const delta = startY - moveEvent.clientY
-          setBottomPanelHeight(Math.max(140, Math.min(maxHeight, startHeight + delta)))
+        const clampHeight = (clientY: number) =>
+          Math.max(140, Math.min(maxHeight, startHeight + (startY - clientY)))
+
+        let lastClientY = event.clientY
+        const pointerId = event.pointerId
+
+        const onMove = (moveEvent: PointerEvent) => {
+          lastClientY = moveEvent.clientY
+          if (panelRef.current) panelRef.current.style.height = `${clampHeight(moveEvent.clientY)}px`
         }
 
-        const onUp = () => {
-          document.removeEventListener('mousemove', onMove)
-          document.removeEventListener('mouseup', onUp)
+        let cleaned = false
+        const cleanup = (commit: boolean) => {
+          if (cleaned) return
+          cleaned = true
+          handle.removeEventListener('pointermove', onMove)
+          handle.removeEventListener('pointerup', onUp)
+          handle.removeEventListener('lostpointercapture', onLost)
           document.body.style.cursor = ''
           document.body.style.userSelect = ''
+          if (commit) commitBottomPanelHeight(clampHeight(lastClientY))
+          cleanupRef.current = null
         }
 
-        document.addEventListener('mousemove', onMove)
-        document.addEventListener('mouseup', onUp)
+        const onUp = (upEvent: PointerEvent) => {
+          lastClientY = upEvent.clientY
+          handle.releasePointerCapture(pointerId)
+          cleanup(true)
+        }
+
+        const onLost = () => {
+          cleanup(true)
+        }
+
+        handle.addEventListener('pointermove', onMove)
+        handle.addEventListener('pointerup', onUp)
+        handle.addEventListener('lostpointercapture', onLost)
         document.body.style.cursor = 'row-resize'
         document.body.style.userSelect = 'none'
+        cleanupRef.current = cleanup
       }}
     />
   )

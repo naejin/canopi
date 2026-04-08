@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('../ipc/settings', () => ({ setSettings: vi.fn().mockResolvedValue(undefined) }))
 import { VISIBLE_BOTTOM_PANEL_TABS, bottomPanelOpen, bottomPanelTab } from '../state/canvas'
 import { openBottomPanel, setBottomPanelTab } from '../state/canvas-actions'
 
@@ -19,9 +21,9 @@ describe('bottom panel actions', () => {
 
   it('keeps the panel open when switching tabs after opening', () => {
     openBottomPanel('timeline')
-    setBottomPanelTab('timeline')
+    setBottomPanelTab('budget')
 
     expect(bottomPanelOpen.value).toBe(true)
-    expect(bottomPanelTab.value).toBe('timeline')
+    expect(bottomPanelTab.value).toBe('budget')
   })
 })

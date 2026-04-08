@@ -11,7 +11,7 @@ describe('scale-bar metrics', () => {
   it('selects a stable nice distance and screen width from stage scale', () => {
     expect(getScaleBarDisplay(7.25)).toEqual({
       barScreenPx: 145,
-      label: '20 m',
+      label: '20m',
     })
   })
 

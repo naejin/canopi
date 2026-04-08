@@ -76,6 +76,7 @@ function makeFile(): CanopiFile {
         notes: null,
       },
     ],
+    annotations: [],
     consortiums: [],
     groups: [],
     timeline: [],

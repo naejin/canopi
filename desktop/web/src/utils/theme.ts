@@ -1,5 +1,6 @@
 import { effect } from "@preact/signals";
 import { theme } from "../state/app";
+import { invalidateCssVarCache } from "../canvas/canvas2d-utils";
 
 function applyTheme(resolved: "light" | "dark") {
   document.documentElement.setAttribute("data-theme", resolved);
@@ -29,6 +30,7 @@ export function initTheme() {
   // Apply theme reactively whenever the signal changes, and sync the cache
   disposeThemeEffect = effect(() => {
     applyTheme(theme.value);
+    invalidateCssVarCache();
     // Keep the sync cache up to date (Rust bootstrap overwrites the signal,
     // which triggers this effect, which updates the cache for next startup)
     localStorage.setItem("canopi-theme", theme.value);

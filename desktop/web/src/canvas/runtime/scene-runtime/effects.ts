@@ -31,7 +31,6 @@ export function installSceneRuntimeEffects(deps: SceneRuntimeEffectsDeps): Array
     effect(() => {
       void gridVisible.value
       void rulersVisible.value
-      void guides.value
       deps.onChromeOverlay()
     }),
     effect(() => {

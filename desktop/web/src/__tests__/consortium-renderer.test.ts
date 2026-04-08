@@ -3,7 +3,7 @@ import {
   buildConsortiumBars,
   hitTestBar,
   computeRowHeights,
-  rowY as computeRowY,
+  computeRowYOffsets,
   phaseToX,
   xToPhase,
   stratumToRow,
@@ -104,6 +104,29 @@ describe('buildConsortiumBars', () => {
     const bars = buildConsortiumBars([], [], {})
     expect(bars).toEqual([])
   })
+
+  it('handles entries with no corresponding placed plants', () => {
+    const entries: Consortium[] = [
+      createConsortium({ canonical_name: 'Prunus avium', stratum: 'high', start_phase: 0, end_phase: 2 }),
+    ]
+    const bars = buildConsortiumBars(entries, [], {})
+    expect(bars).toHaveLength(1)
+    expect(bars[0]!.count).toBe(0)
+    expect(bars[0]!.commonName).toBe('Prunus avium')
+  })
+
+  it('uses localizedNames over plant.common_name when provided', () => {
+    const entries: Consortium[] = [
+      createConsortium({ canonical_name: 'Malus domestica', stratum: 'high' }),
+    ]
+    const plants: PlacedPlant[] = [
+      createPlant({ canonical_name: 'Malus domestica', common_name: 'Apple' }),
+    ]
+    const names = new Map([['Malus domestica', 'Pommier']])
+    const bars = buildConsortiumBars(entries, plants, {}, names)
+    expect(bars).toHaveLength(1)
+    expect(bars[0]!.commonName).toBe('Pommier')
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -112,7 +135,6 @@ describe('buildConsortiumBars', () => {
 
 describe('hitTestBar', () => {
   const totalWidth = 800
-  const totalHeight = 400
   const contentWidth = totalWidth - LABEL_WIDTH
 
   /** Build a bar layout with known pixel coordinates for hit testing. */
@@ -133,7 +155,7 @@ describe('hitTestBar', () => {
 
   it('returns null when no bars exist', () => {
     const rowHeights = computeRowHeights([])
-    const result = hitTestBar(200, 100, [], totalWidth, totalHeight, rowHeights)
+    const result = hitTestBar(200, 100, [], totalWidth, rowHeights)
     expect(result).toBeNull()
   })
 
@@ -141,17 +163,18 @@ describe('hitTestBar', () => {
     const bar = makeBar({ stratum: 'high', startPhase: 1, endPhase: 3 })
     const bars = [bar]
     const rowHeights = computeRowHeights(bars)
+    const rowOffsets = computeRowYOffsets(rowHeights)
 
     // Compute expected pixel coordinates
     const rowIdx = stratumToRow('high') // 1
-    const ry = computeRowY(rowIdx, rowHeights)
+    const ry = rowOffsets[rowIdx]!
     const rh = rowHeights[rowIdx]!
     const x1 = phaseToX(1, contentWidth)
     const x2 = phaseToX(4, contentWidth) // endPhase + 1
     const centerX = (x1 + x2) / 2
     const centerY = ry + rh / 2
 
-    const result = hitTestBar(centerX, centerY, bars, totalWidth, totalHeight, rowHeights)
+    const result = hitTestBar(centerX, centerY, bars, totalWidth, rowHeights)
     expect(result).not.toBeNull()
     expect(result!.edge).toBe('body')
     expect(result!.canonicalName).toBe('Malus domestica')
@@ -161,22 +184,23 @@ describe('hitTestBar', () => {
     const bar = makeBar({ stratum: 'high', startPhase: 1, endPhase: 3 })
     const bars = [bar]
     const rowHeights = computeRowHeights(bars)
+    const rowOffsets = computeRowYOffsets(rowHeights)
 
     const rowIdx = stratumToRow('high')
-    const ry = computeRowY(rowIdx, rowHeights)
+    const ry = rowOffsets[rowIdx]!
     const rh = rowHeights[rowIdx]!
     const x1 = phaseToX(1, contentWidth)
     const x2 = phaseToX(4, contentWidth) // endPhase + 1
-    const barW = Math.max(x2 - x1, 6)
+    const barW = Math.max(x2 - x1, 8)
     const centerY = ry + rh / 2
 
     // Hit near left edge (within 6px threshold)
-    const leftResult = hitTestBar(x1 + 2, centerY, bars, totalWidth, totalHeight, rowHeights)
+    const leftResult = hitTestBar(x1 + 2, centerY, bars, totalWidth, rowHeights)
     expect(leftResult).not.toBeNull()
     expect(leftResult!.edge).toBe('left')
 
     // Hit near right edge (within 6px threshold)
-    const rightResult = hitTestBar(x1 + barW - 2, centerY, bars, totalWidth, totalHeight, rowHeights)
+    const rightResult = hitTestBar(x1 + barW - 2, centerY, bars, totalWidth, rowHeights)
     expect(rightResult).not.toBeNull()
     expect(rightResult!.edge).toBe('right')
   })
@@ -209,5 +233,11 @@ describe('coordinate helpers', () => {
     expect(stratumToRow('unknown')).toBe(4)
     expect(stratumToRow('')).toBe(4)
     expect(stratumToRow('tropical')).toBe(4)
+  })
+
+  it('xToPhase clamps out-of-range positions to max phase', () => {
+    // phaseToX(7, ...) is the sentinel used by computeBarRect for the right edge of last-phase bars
+    const x = phaseToX(7, contentWidth)
+    expect(xToPhase(x, contentWidth)).toBe(6)
   })
 })

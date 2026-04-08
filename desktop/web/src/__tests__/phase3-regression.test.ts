@@ -2,25 +2,21 @@
  * Phase 3 regression tests — pure-function correctness.
  *
  * Covers the math and utility functions that underpin Phase 3 features:
- * - Pattern math (point-in-polygon, grid/hex generation, line distribution)
  * - Projection (world ↔ geo coordinate conversion)
- * - Budget CSV export (formatting, escaping, totals)
  * - extractExtra (groups as a known key)
- *
- * NOTE: Serializer round-trip tests (grouped plants, GeoJSON with transforms)
- * require a Konva harness and belong in integration tests, not here.
  */
 import { describe, it, expect } from 'vitest'
 import { worldToGeo, geoToWorld, stageScaleToMapZoom } from '../canvas/projection'
 import { extractExtra } from '../state/document-extra'
 
-describe('persistent plant IDs', () => {
+describe('extractExtra groups key', () => {
   it('extractExtra preserves groups field', () => {
     const raw = {
       version: 1, name: 'test', description: null, location: null,
       north_bearing_deg: 0, plant_species_colors: {}, layers: [], plants: [], zones: [],
+      annotations: [],
       groups: [{ id: 'g1', name: null, layer: 'zones', position: { x: 0, y: 0 }, rotation: null, member_ids: ['a', 'b'] }],
-      timeline: [], budget: [], created_at: '', updated_at: '',
+      consortiums: [], timeline: [], budget: [], created_at: '', updated_at: '', extra: {},
     }
     const extra = extractExtra(raw as Record<string, unknown>)
     // 'groups' is now a known key, so it should NOT appear in extra
@@ -57,7 +53,7 @@ describe('projection', () => {
     expect(geo.lng).toBeGreaterThan(originLon)
   })
 
-  it('moving south (positive y in Konva) decreases latitude', () => {
+  it('moving south (positive y in canvas) decreases latitude', () => {
     const geo = worldToGeo(0, 1000, originLat, originLon)
     expect(geo.lat).toBeLessThan(originLat)
   })

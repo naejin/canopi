@@ -38,7 +38,7 @@ export function resetTransientRuntimeState(
   plantColorMenuOpen.value = false
 }
 
-export function syncCanvasSignalsFromDocument(file: CanopiFile): void {
+function syncCanvasSignalsFromDocument(file: CanopiFile): void {
   const visibility: Record<string, boolean> = {}
   const locks: Record<string, boolean> = {}
   const opacities: Record<string, number> = {}

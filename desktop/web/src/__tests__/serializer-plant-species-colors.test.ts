@@ -14,6 +14,8 @@ function makeDoc(): CanopiFile {
     layers: [],
     plants: [],
     zones: [],
+    annotations: [],
+    consortiums: [],
     groups: [],
     timeline: [],
     budget: [],

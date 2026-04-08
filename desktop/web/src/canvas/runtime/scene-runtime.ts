@@ -18,7 +18,7 @@ import { normalizeHexColor } from '../plant-colors'
 import { computeSelectionLabels } from './selection-labels'
 import { clearCanvasSelection, setCanvasSelection } from '../session-state'
 import { refreshCanvasColorCache } from '../theme-refresh'
-import { CameraController } from './camera'
+import { CameraController, type SceneBounds } from './camera'
 import { SceneChromeOverlay } from './scene-chrome'
 import { SceneInteractionController } from './scene-interaction'
 import { RendererHost } from './renderers'
@@ -61,7 +61,6 @@ import type {
 import { createScenePatchCommand, type SceneCommandSnapshot } from './scene-commands'
 import { SceneHistory } from './scene-history'
 import type { CanvasRuntime, CanvasRuntimeDocumentMetadata } from './runtime'
-import { installConsortiumSync } from '../../state/consortium-sync-workflow'
 
 const EMPTY_PLANT_COLOR_CONTEXT: SelectedPlantColorContext = {
   plantIds: [],
@@ -93,7 +92,6 @@ export class SceneCanvasRuntime implements CanvasRuntime {
   private _clipboard: SceneClipboardPayload | null = null
   private readonly _disposeEffects: Array<() => void> = []
   private _renderEpoch = 0
-  private _consortiumSyncDisposer: (() => void) | null = null
 
   constructor() {
     this._installEffects()
@@ -371,8 +369,11 @@ export class SceneCanvasRuntime implements CanvasRuntime {
       .filter((value): value is SceneBounds => value !== null)
     if (bounds.length === 0) return
 
-    const minX = Math.min(...bounds.map((bound) => bound.minX))
-    const minY = Math.min(...bounds.map((bound) => bound.minY))
+    let minX = Infinity, minY = Infinity
+    for (const b of bounds) {
+      if (b.minX < minX) minX = b.minX
+      if (b.minY < minY) minY = b.minY
+    }
     const nextGroup: SceneObjectGroupEntity = {
       kind: 'group',
       id: crypto.randomUUID(),
@@ -597,9 +598,7 @@ export class SceneCanvasRuntime implements CanvasRuntime {
     clearCanvasSelection()
     this._syncCanvasSignalsFromScene()
     this._invalidate('scene')
-
-    this._consortiumSyncDisposer?.()
-    this._consortiumSyncDisposer = installConsortiumSync()
+    sceneEntityRevision.value += 1
   }
 
   replaceDocument(file: CanopiFile): void {
@@ -608,27 +607,26 @@ export class SceneCanvasRuntime implements CanvasRuntime {
     this._history.clear()
     this._syncCanvasSignalsFromScene()
     this._invalidate('scene')
-    this._consortiumSyncDisposer?.()
-    this._consortiumSyncDisposer = installConsortiumSync()
+    sceneEntityRevision.value += 1
   }
 
-  serializeDocument(metadata: CanvasRuntimeDocumentMetadata, doc: CanopiFile | null): CanopiFile {
+  serializeDocument(metadata: CanvasRuntimeDocumentMetadata, doc: CanopiFile): CanopiFile {
     // Check before updatePersisted — if neither signal nor persisted has guides,
     // skip guide sync so doc-provided guides in extra are preserved.
     const shouldSyncGuides = guides.value.length > 0 || Array.isArray(this._sceneStore.persisted.extra?.guides)
     this._sceneStore.updatePersisted((persisted) => {
       persisted.name = metadata.name
-      persisted.description = metadata.description ?? doc?.description ?? null
+      persisted.description = metadata.description ?? doc.description ?? null
       persisted.location = metadata.location
         ? {
             lat: metadata.location.lat,
             lon: metadata.location.lon,
             altitudeM: metadata.location.altitude_m ?? null,
           }
-        : hydrateLocationFromDoc(doc?.location ?? null, persisted.location)
-      persisted.northBearingDeg = metadata.northBearingDeg ?? doc?.north_bearing_deg ?? persisted.northBearingDeg
-      persisted.createdAt = doc?.created_at ?? persisted.createdAt
-      persisted.extra = { ...(doc?.extra ?? persisted.extra ?? {}) }
+        : hydrateLocationFromDoc(doc.location ?? null, persisted.location)
+      persisted.northBearingDeg = metadata.northBearingDeg ?? doc.north_bearing_deg ?? persisted.northBearingDeg
+      persisted.createdAt = doc.created_at ?? persisted.createdAt
+      persisted.extra = { ...(doc.extra ?? persisted.extra ?? {}) }
     })
     this._applySignalBackedSceneState({ recordHistory: false, syncGuides: shouldSyncGuides })
 
@@ -638,10 +636,11 @@ export class SceneCanvasRuntime implements CanvasRuntime {
     // Compose final document: canvas state + non-canvas sections from document store
     return {
       ...canvasOutput,
-      description: metadata.description ?? doc?.description ?? canvasOutput.description,
-      consortiums: doc?.consortiums ?? [],
-      timeline: doc?.timeline ?? [],
-      budget: doc?.budget ?? [],
+      description: metadata.description ?? doc.description ?? canvasOutput.description,
+      consortiums: doc.consortiums,
+      timeline: doc.timeline,
+      budget: doc.budget,
+      budget_currency: doc.budget_currency,
     }
   }
 
@@ -654,8 +653,6 @@ export class SceneCanvasRuntime implements CanvasRuntime {
   }
 
   destroy(): void {
-    this._consortiumSyncDisposer?.()
-    this._consortiumSyncDisposer = null
     this._interaction?.dispose()
     this._interaction = null
     this._chrome?.destroy()
@@ -960,13 +957,6 @@ function hydrateLocationFromDoc(
   }
 }
 
-interface SceneBounds {
-  minX: number
-  minY: number
-  maxX: number
-  maxY: number
-}
-
 function reorderSceneEntities<T>(
   items: T[],
   selectedIds: Set<string>,
@@ -1018,14 +1008,14 @@ function getMemberBounds(
       }
     }
 
-    const xs = zone.points.map((point) => point.x)
-    const ys = zone.points.map((point) => point.y)
-    return {
-      minX: Math.min(...xs),
-      minY: Math.min(...ys),
-      maxX: Math.max(...xs),
-      maxY: Math.max(...ys),
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    for (const p of zone.points) {
+      if (p.x < minX) minX = p.x
+      if (p.x > maxX) maxX = p.x
+      if (p.y < minY) minY = p.y
+      if (p.y > maxY) maxY = p.y
     }
+    return { minX, minY, maxX, maxY }
   }
 
   const annotation = persisted.annotations.find((entry) => entry.id === memberId)

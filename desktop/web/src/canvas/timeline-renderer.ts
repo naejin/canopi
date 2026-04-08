@@ -1,6 +1,6 @@
 import type { TimelineAction } from '../types/design'
 import { dateToX, niceInterval, formatDateLabel } from './timeline-math'
-import { cssVar, roundRect } from './canvas2d-utils'
+import { cssVar, roundRect, readThemeTokens } from './canvas2d-utils'
 
 // ---------------------------------------------------------------------------
 // Timeline renderer — Canvas 2D drawing (not Konva)
@@ -15,22 +15,30 @@ const BAR_MARGIN = 4
 /** Width of the species label sidebar in pixels. Shared with InteractiveTimeline. */
 export const LABEL_SIDEBAR_WIDTH = 140
 
-/** Action type colors — earthy field notebook palette */
-const ACTION_COLORS: Record<string, string> = {
-  planting: '#5A7D3A',   // moss green
-  pruning: '#A06B1F',    // ochre
-  harvest: '#B8860B',    // dark goldenrod
-  watering: '#5B8FB9',   // pond teal
-  fertilising: '#7D6F5E', // graphite
-  other: '#7D6F5E',       // graphite
+/** Action type CSS variable names + hex fallbacks */
+const ACTION_COLOR_VARS: Record<string, [varName: string, fallback: string]> = {
+  planting: ['--color-action-planting', '#7D6049'],
+  pruning: ['--color-action-pruning', '#A06B1F'],
+  harvest: ['--color-action-harvest', '#B8860B'],
+  watering: ['--color-action-watering', '#5B8FB9'],
+  fertilising: ['--color-action-fertilising', '#7D6F5E'],
+  other: ['--color-action-other', '#8B7355'],
+}
+const DEFAULT_ACTION_COLOR: [string, string] = ['--color-action-other', '#8B7355']
+
+function actionColor(type: string): string {
+  const [varName, fallback] = ACTION_COLOR_VARS[type] ?? DEFAULT_ACTION_COLOR
+  return cssVar(varName) || fallback
 }
 
 export interface TimelineRenderState {
   originDate: Date
   pxPerDay: number
   scrollX: number
+  scrollY: number
   selectedId: string | null
   hoveredId: string | null
+  locale: string
 }
 
 export interface SpeciesRow {
@@ -97,7 +105,7 @@ export function computeLayout(rows: SpeciesRow[]): Map<string, ActionLayout> {
     const laneEnds: number[] = [] // end time of last action in each sub-lane
 
     for (const action of sorted) {
-      const startMs = action.start_date ? new Date(action.start_date).getTime() : Date.now()
+      const startMs = action.start_date ? new Date(action.start_date).getTime() : Infinity
       const endMs = action.end_date ? new Date(action.end_date).getTime() : startMs + 86400000
 
       let assigned = -1
@@ -131,33 +139,24 @@ export function computeLayout(rows: SpeciesRow[]): Map<string, ActionLayout> {
   return layout
 }
 
-/**
- * Compute the pixel Y offset for a given species row.
- */
-export function rowYOffset(rowIndex: number, rows: SpeciesRow[], layout: Map<string, ActionLayout>): number {
-  let y = RULER_HEIGHT
-  for (let i = 0; i < rowIndex; i++) {
-    y += rowHeight(rows[i]!, layout)
-  }
-  return y
-}
-
 /** Height of a species row in pixels. */
-export function rowHeight(row: SpeciesRow, layout: Map<string, ActionLayout>): number {
+function rowHeight(row: SpeciesRow, layout: Map<string, ActionLayout>): number {
   if (row.actions.length === 0) return LANE_HEIGHT
   const firstEntry = layout.get(row.actions[0]!.id)
   const totalSubLanes = firstEntry?.totalSubLanes ?? 1
   return Math.max(LANE_HEIGHT, totalSubLanes * LANE_HEIGHT)
 }
 
-/** Total content height including ruler. */
-export function totalContentHeight(rows: SpeciesRow[], layout: Map<string, ActionLayout>): number {
-  let h = RULER_HEIGHT
-  for (const row of rows) {
-    h += rowHeight(row, layout)
+/** Precompute cumulative Y offsets for all species rows. */
+export function computeTimelineRowOffsets(rows: SpeciesRow[], layout: Map<string, ActionLayout>): number[] {
+  const offsets = new Array(rows.length + 1) as number[]
+  offsets[0] = RULER_HEIGHT
+  for (let i = 0; i < rows.length; i++) {
+    offsets[i + 1] = offsets[i]! + rowHeight(rows[i]!, layout)
   }
-  return h
+  return offsets
 }
+
 
 // ---------------------------------------------------------------------------
 // Main render
@@ -170,37 +169,30 @@ export function renderTimeline(
   rows: SpeciesRow[],
   layout: Map<string, ActionLayout>,
   state: TimelineRenderState,
-  scrollY: number,
   t: (key: string) => string,
+  cachedRowOffsets?: number[],
 ): void {
-  const dpr = window.devicePixelRatio || 1
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
   ctx.clearRect(0, 0, width, height)
 
-  const { originDate, pxPerDay, scrollX, selectedId, hoveredId } = state
+  const { originDate, pxPerDay, scrollX, scrollY, selectedId, hoveredId } = state
+  if (pxPerDay <= 0) return
 
-  // Read theme tokens
-  const bgColor = cssVar('--color-bg') || '#F0EBE1'
-  const surfaceColor = cssVar('--color-surface') || '#FAF7F2'
-  const borderColor = cssVar('--color-border') || 'rgba(60, 45, 30, 0.12)'
-  const textColor = cssVar('--color-text') || '#2C2418'
-  const textMutedColor = cssVar('--color-text-muted') || '#7D6F5E'
-  const primaryColor = cssVar('--color-primary') || '#A06B1F'
+  const theme = readThemeTokens()
+  const bgColor = theme.bg
+  const surfaceColor = theme.surface
+  const borderColor = theme.border
+  const textColor = theme.text
+  const textMutedColor = theme.textMuted
+  const primaryColor = theme.primary
   const dangerColor = cssVar('--color-danger') || '#B5432A'
+  const primaryContrastColor = theme.primaryContrast
+  const fontSans = theme.fontSans
 
   const chartLeft = LABEL_SIDEBAR_WIDTH
 
   // -- Label sidebar background -----------------------------------------------
   ctx.fillStyle = surfaceColor
   ctx.fillRect(0, 0, chartLeft, height)
-
-  // Sidebar border
-  ctx.strokeStyle = borderColor
-  ctx.lineWidth = 1
-  ctx.beginPath()
-  ctx.moveTo(chartLeft, 0)
-  ctx.lineTo(chartLeft, height)
-  ctx.stroke()
 
   // -- Time ruler at top (above chart area only) ------------------------------
   ctx.fillStyle = bgColor
@@ -213,7 +205,7 @@ export function renderTimeline(
   const firstTickMs = Math.floor(viewStartMs / intervalMs) * intervalMs
 
   ctx.fillStyle = textMutedColor
-  ctx.font = `600 10px ${cssVar('--font-sans') || 'system-ui, sans-serif'}`
+  ctx.font = `600 11px ${fontSans}`
   ctx.strokeStyle = borderColor
   ctx.lineWidth = 0.5
 
@@ -230,7 +222,7 @@ export function renderTimeline(
     ctx.stroke()
 
     // Label
-    const label = formatDateLabel(date, interval)
+    const label = formatDateLabel(date, interval, state.locale)
     ctx.fillText(label, x + 3, RULER_HEIGHT - 10)
   }
 
@@ -242,14 +234,16 @@ export function renderTimeline(
   ctx.lineTo(width, RULER_HEIGHT)
   ctx.stroke()
 
-  // Ruler top-left corner label
+  // Ruler top-left corner fill
   ctx.fillStyle = bgColor
   ctx.fillRect(0, 0, chartLeft, RULER_HEIGHT)
+
+  // Sidebar border (full height, drawn after all fills to avoid overdraw)
   ctx.strokeStyle = borderColor
   ctx.lineWidth = 1
   ctx.beginPath()
   ctx.moveTo(chartLeft, 0)
-  ctx.lineTo(chartLeft, RULER_HEIGHT)
+  ctx.lineTo(chartLeft, height)
   ctx.stroke()
 
   // -- Species rows -----------------------------------------------------------
@@ -258,10 +252,11 @@ export function renderTimeline(
   ctx.rect(0, RULER_HEIGHT, width, height - RULER_HEIGHT)
   ctx.clip()
 
+  const rowOffsets = cachedRowOffsets ?? computeTimelineRowOffsets(rows, layout)
   for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
     const row = rows[rowIdx]!
-    const rY = rowYOffset(rowIdx, rows, layout) - scrollY
-    const rH = rowHeight(row, layout)
+    const rY = rowOffsets[rowIdx]! - scrollY
+    const rH = rowOffsets[rowIdx + 1]! - rowOffsets[rowIdx]!
 
     // Skip if out of view
     if (rY + rH < RULER_HEIGHT || rY > height) continue
@@ -284,7 +279,7 @@ export function renderTimeline(
 
     // Species label in sidebar
     ctx.fillStyle = textColor
-    ctx.font = `600 11px ${cssVar('--font-sans') || 'system-ui, sans-serif'}`
+    ctx.font = `600 11px ${fontSans}`
     const label = row.speciesName || t('canvas.timeline.general')
     ctx.save()
     ctx.beginPath()
@@ -319,7 +314,7 @@ export function renderTimeline(
       if (x1 + barW < chartLeft || x1 > width) continue
 
       // Bar fill
-      const baseColor = ACTION_COLORS[action.action_type] ?? ACTION_COLORS.other!
+      const baseColor = actionColor(action.action_type)
       ctx.globalAlpha = action.id === hoveredId ? 0.9 : 0.8
       ctx.fillStyle = baseColor
       roundRect(ctx, x1, barY, barW, barH, BAR_RADIUS)
@@ -346,8 +341,8 @@ export function renderTimeline(
 
       // Label inside bar
       if (barW > 40) {
-        ctx.fillStyle = surfaceColor
-        ctx.font = `600 10px ${cssVar('--font-sans') || 'system-ui, sans-serif'}`
+        ctx.fillStyle = primaryContrastColor
+        ctx.font = `600 11px ${fontSans}`
         ctx.save()
         ctx.beginPath()
         ctx.rect(x1 + 2, barY, barW - 4, barH)
@@ -388,11 +383,9 @@ export function renderTimeline(
 // Hit testing
 // ---------------------------------------------------------------------------
 
-export type HitEdge = 'body' | null
-
 export interface HitResult {
   action: TimelineAction
-  edge: HitEdge
+  edge: 'body'
 }
 
 export function hitTestAction(
@@ -401,14 +394,15 @@ export function hitTestAction(
   rows: SpeciesRow[],
   layout: Map<string, ActionLayout>,
   state: TimelineRenderState,
-  scrollY: number,
+  cachedRowOffsets?: number[],
 ): HitResult | null {
-  const { originDate, pxPerDay, scrollX } = state
+  const { originDate, pxPerDay, scrollX, scrollY } = state
   const chartLeft = LABEL_SIDEBAR_WIDTH
 
   // Ignore clicks in the label sidebar or ruler
   if (x < chartLeft || y < RULER_HEIGHT) return null
 
+  const rowOffsets = cachedRowOffsets ?? computeTimelineRowOffsets(rows, layout)
   for (const row of rows) {
     for (const action of row.actions) {
       if (!action.start_date) continue
@@ -417,8 +411,8 @@ export function hitTestAction(
       if (!entry) continue
 
       const rowIdx = entry.rowIndex
-      const rY = rowYOffset(rowIdx, rows, layout) - scrollY
-      const rH = rowHeight(rows[rowIdx]!, layout)
+      const rY = rowOffsets[rowIdx]! - scrollY
+      const rH = rowOffsets[rowIdx + 1]! - rowOffsets[rowIdx]!
       const subLaneH = rH / entry.totalSubLanes
 
       const startDate = new Date(action.start_date)

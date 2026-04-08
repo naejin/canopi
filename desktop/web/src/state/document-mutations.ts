@@ -1,27 +1,13 @@
 import { batch } from '@preact/signals'
 import type { CanopiFile } from '../types/design'
-import { designLocation } from './canvas'
 import { currentDesign, nonCanvasRevision } from './design'
 
 interface DocumentMutationOptions {
   markDirty?: boolean
 }
 
-/**
- * Sole writer for designLocation mirror signal.
- * Called whenever currentDesign changes (replace, mutate, document-actions).
- */
-export function syncDesignLocationMirror(file: CanopiFile | null): void {
-  designLocation.value = file?.location
-    ? { lat: file.location.lat, lon: file.location.lon }
-    : null
-}
-
 export function replaceCurrentDesignSnapshot(file: CanopiFile): void {
-  batch(() => {
-    currentDesign.value = file
-    syncDesignLocationMirror(file)
-  })
+  currentDesign.value = file
 }
 
 export function mutateCurrentDesign(
@@ -36,7 +22,6 @@ export function mutateCurrentDesign(
 
   batch(() => {
     currentDesign.value = next
-    syncDesignLocationMirror(next)
     if (options.markDirty !== false) {
       nonCanvasRevision.value += 1
     }
@@ -47,4 +32,20 @@ export function mutateCurrentDesign(
 
 export function markDocumentDirty(): void {
   nonCanvasRevision.value += 1
+}
+
+/**
+ * Generic updater for array fields on CanopiFile.
+ * Identity-guards the array to prevent no-op mutations from creating new objects.
+ */
+export function updateDesignArray<K extends keyof CanopiFile>(
+  key: K,
+  updater: (arr: CanopiFile[K]) => CanopiFile[K],
+  options: DocumentMutationOptions = {},
+): void {
+  mutateCurrentDesign((design) => {
+    const next = updater(design[key])
+    if (next === design[key]) return design
+    return { ...design, [key]: next }
+  }, options)
 }

@@ -1,5 +1,5 @@
 import type { TimelineAction } from '../types/design'
-import { mutateCurrentDesign } from './document-mutations'
+import { updateDesignArray } from './document-mutations'
 
 interface TimelineUpdateOptions {
   markDirty?: boolean
@@ -9,14 +9,15 @@ function updateTimeline(
   updater: (timeline: TimelineAction[]) => TimelineAction[],
   options: TimelineUpdateOptions = {},
 ): void {
-  mutateCurrentDesign((design) => ({
-    ...design,
-    timeline: updater(design.timeline ?? []),
-  }), { markDirty: options.markDirty !== false })
+  updateDesignArray('timeline', updater, options)
 }
 
-export function addTimelineAction(action: TimelineAction): void {
-  updateTimeline((timeline) => [...timeline, action])
+export function addTimelineAction(action: Omit<TimelineAction, 'order'>): void {
+  updateTimeline((timeline) => {
+    let maxOrder = -1
+    for (const a of timeline) if (a.order > maxOrder) maxOrder = a.order
+    return [...timeline, { ...action, order: maxOrder + 1 }]
+  })
 }
 
 export function updateTimelineAction(
@@ -25,32 +26,37 @@ export function updateTimelineAction(
   options: TimelineUpdateOptions = {},
 ): void {
   updateTimeline(
-    (timeline) => timeline.map((action) => (action.id === actionId ? { ...action, ...patch } : action)),
+    (timeline) => {
+      const idx = timeline.findIndex((a) => a.id === actionId)
+      if (idx === -1) return timeline
+      const existing = timeline[idx]!
+      const next = { ...existing, ...patch }
+      if (
+        next.start_date === existing.start_date &&
+        next.end_date === existing.end_date &&
+        next.action_type === existing.action_type &&
+        next.description === existing.description &&
+        next.order === existing.order &&
+        next.completed === existing.completed &&
+        next.recurrence === existing.recurrence &&
+        next.zone === existing.zone &&
+        next.plants === existing.plants &&
+        next.depends_on === existing.depends_on
+      ) return timeline
+      const updated = [...timeline]
+      updated[idx] = next
+      return updated
+    },
     options,
   )
-}
-
-export function replaceTimelineAction(
-  actionId: string,
-  next: TimelineAction,
-  options: TimelineUpdateOptions = {},
-): void {
-  updateTimeline(
-    (timeline) => timeline.map((action) => (action.id === actionId ? next : action)),
-    options,
-  )
-}
-
-export function replaceTimelineActions(
-  actions: TimelineAction[],
-  options: TimelineUpdateOptions = {},
-): void {
-  updateTimeline(() => actions, options)
 }
 
 export function deleteTimelineAction(
   actionId: string,
   options: TimelineUpdateOptions = {},
 ): void {
-  updateTimeline((timeline) => timeline.filter((action) => action.id !== actionId), options)
+  updateTimeline((timeline) => {
+    if (!timeline.some((a) => a.id === actionId)) return timeline
+    return timeline.filter((a) => a.id !== actionId)
+  }, options)
 }

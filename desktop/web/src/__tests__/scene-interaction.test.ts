@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { gridSize, plantStampSpecies, selectedObjectIds, snapToGridEnabled } from '../state/canvas'
+import { plantStampSpecies, selectedObjectIds, snapToGridEnabled } from '../state/canvas'
 import { CameraController } from '../canvas/runtime/camera'
 import { SceneStore } from '../canvas/runtime/scene'
 import { SceneInteractionController, type SceneInteractionDeps } from '../canvas/runtime/scene-interaction'
@@ -77,7 +77,6 @@ describe('SceneInteractionController', () => {
     selectedObjectIds.value = new Set()
     plantStampSpecies.value = null
     snapToGridEnabled.value = false
-    gridSize.value = 1
   })
 
   afterEach(() => {
@@ -85,7 +84,6 @@ describe('SceneInteractionController', () => {
     selectedObjectIds.value = new Set()
     plantStampSpecies.value = null
     snapToGridEnabled.value = false
-    gridSize.value = 1
   })
 
   it('selects and drags a plant in scene space', () => {
@@ -179,9 +177,51 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
-  it('snaps plant-stamp placement to the grid when snap is enabled', () => {
+  it('snaps dragged plant to grid when snap is enabled', () => {
+    // At scale=4, gridInterval() returns 5m (first NICE_DISTANCE where d*4 >= 20)
+    camera.setViewport({ x: 0, y: 0, scale: 4 })
     snapToGridEnabled.value = true
-    gridSize.value = 10
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'plant-1',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 50, y: 50 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+
+    const markDirty = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { markDirty })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    // Plant at (50,50). Screen = world * scale = (200,200).
+    // Click screen (201,202) → world (50.25, 50.5). snapRef = plant at (50,50).
+    // Drag screen (232,248) → world (58,62). rawDelta = (7.75, 11.5).
+    // candidate = (50+7.75, 50+11.5) = (57.75, 61.5) → snaps to (60,60).
+    // delta = (60-50, 60-50) = (10,10). Final = (60,60).
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 201, clientY: 202, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 232, clientY: 248, button: 0 }))
+    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 232, clientY: 248, button: 0 }))
+
+    expect(store.persisted.plants[0]?.position).toEqual({ x: 60, y: 60 })
+    expect(markDirty).toHaveBeenCalledTimes(1)
+    controller.dispose()
+  })
+
+  it('snaps plant-stamp placement to the grid when snap is enabled', () => {
+    // At scale=4, gridInterval() returns 5m
+    camera.setViewport({ x: 0, y: 0, scale: 4 })
+    snapToGridEnabled.value = true
     plantStampSpecies.value = {
       canonical_name: 'Malus domestica',
       common_name: 'Apple',
@@ -192,9 +232,10 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(createInteractionDeps(container, store, camera) as any)
     controller.setTool('plant-stamp')
 
+    // Screen (53,67) → world (13.25, 16.75) → snaps to (15, 15) at 5m interval
     ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 53, clientY: 67, button: 0 }))
 
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 50, y: 70 })
+    expect(store.persisted.plants[0]?.position).toEqual({ x: 15, y: 15 })
     controller.dispose()
   })
 

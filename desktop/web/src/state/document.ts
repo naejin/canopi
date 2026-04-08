@@ -10,6 +10,7 @@ import type { CanopiFile } from '../types/design'
 import type { CanvasSession } from '../canvas/session'
 import { extractExtra } from './document-extra'
 import { replaceCurrentDesignSnapshot } from './document-mutations'
+import { installConsortiumSync, disposeConsortiumSync } from './consortium-sync-workflow'
 
 export { extractExtra }
 import { currentDesign } from './design'
@@ -44,7 +45,9 @@ export function writeCanvasIntoDocument(
   session: CanvasSession,
   name: string,
 ): CanopiFile {
-  return session.serializeDocument({ name }, currentDesign.value)
+  const doc = currentDesign.value
+  if (!doc) throw new Error('writeCanvasIntoDocument: no design loaded')
+  return session.serializeDocument({ name }, doc)
 }
 
 export function snapshotCanvasIntoCurrentDocument(
@@ -66,4 +69,9 @@ export function loadCanvasFromDocument(
   session: CanvasSession,
 ): void {
   session.loadDocument(file)
+  installConsortiumSync()
+}
+
+export function disposeDocumentWorkflows(): void {
+  disposeConsortiumSync()
 }

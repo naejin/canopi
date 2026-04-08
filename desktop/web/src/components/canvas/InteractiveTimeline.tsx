@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'preact/hooks'
+import { useCallback, useEffect, useMemo, useRef } from 'preact/hooks'
 import { useCanvasRenderer } from './useCanvasRenderer'
 import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
@@ -13,6 +13,7 @@ import {
   LABEL_SIDEBAR_WIDTH,
   RULER_HEIGHT,
   computeLayout,
+  computeTimelineRowOffsets,
   groupActionsBySpecies,
   hitTestAction,
   renderTimeline,
@@ -44,8 +45,11 @@ type DragState =
       type: 'move'
       actionId: string
       startMouseX: number
-      originalStartDate: string
-      originalEndDate: string | null
+      originalStartMs: number
+      durationMs: number | null
+      pxPerDaySnapshot: number
+      cachedRect: DOMRect
+      hasMutated: boolean
     }
   | {
       type: 'pan'
@@ -53,8 +57,11 @@ type DragState =
       startMouseY: number
       startScrollX: number
       startScrollY: number
+      cachedRect: DOMRect
     }
   | null
+
+const EMPTY_ACTIONS: TimelineAction[] = []
 
 export function InteractiveTimeline({
   granularity,
@@ -63,9 +70,8 @@ export function InteractiveTimeline({
   onEditRequest,
   scrollToTodayRef,
 }: InteractiveTimelineProps) {
-  void locale.value
-
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const cachedRectRef = useRef<DOMRect | null>(null)
   const pxPerDay = useSignal(GRANULARITY_PX_PER_DAY[granularity])
   const scrollX = useSignal(0)
   const scrollY = useSignal(0)
@@ -73,30 +79,39 @@ export function InteractiveTimeline({
   const dragState = useRef<DragState>(null)
   const rowsRef = useRef<SpeciesRow[]>([])
   const layoutRef = useRef<Map<string, ActionLayout>>(new Map())
+  const lastDragDates = useRef<{ start: string; end: string | null }>({ start: '', end: null })
+  const selectedIdRef = useRef(selectedId)
+  selectedIdRef.current = selectedId
+  const onSelectRef = useRef(onSelect)
+  onSelectRef.current = onSelect
+  const onEditRequestRef = useRef(onEditRequest)
+  onEditRequestRef.current = onEditRequest
 
-  useEffect(() => {
-    pxPerDay.value = GRANULARITY_PX_PER_DAY[granularity]
-  }, [granularity])
+  // Guard: only write when granularity actually changed (avoids signal write in render body)
+  const nextPxPerDay = GRANULARITY_PX_PER_DAY[granularity]
+  if (pxPerDay.peek() !== nextPxPerDay) pxPerDay.value = nextPxPerDay
 
-  const actions = currentDesign.value?.timeline ?? []
-  const originDate = computeOriginDate(actions)
+  const actions = currentDesign.value?.timeline ?? EMPTY_ACTIONS
+  const originMs = useMemo(() => computeOriginMs(actions), [actions])
+  const originDate = useMemo(() => new Date(originMs), [originMs])
 
-  rowsRef.current = groupActionsBySpecies(actions)
-  layoutRef.current = computeLayout(rowsRef.current)
+  const rows = useMemo(() => groupActionsBySpecies(actions), [actions])
+  const layout = useMemo(() => computeLayout(rows), [rows])
+  const rowOffsets = useMemo(() => computeTimelineRowOffsets(rows, layout), [rows, layout])
+  rowsRef.current = rows
+  layoutRef.current = layout
+  const rowOffsetsRef = useRef(rowOffsets)
+  rowOffsetsRef.current = rowOffsets
 
-  const renderStateRef = useRef<TimelineRenderState>({
-    originDate,
-    pxPerDay: pxPerDay.value,
-    scrollX: scrollX.value,
-    selectedId,
-    hoveredId: hoveredId.value,
-  })
+  const renderStateRef = useRef<TimelineRenderState>(null!)
   renderStateRef.current = {
     originDate,
     pxPerDay: pxPerDay.value,
     scrollX: scrollX.value,
+    scrollY: scrollY.value,
     selectedId,
     hoveredId: hoveredId.value,
+    locale: locale.value,
   }
 
   useCanvasRenderer(canvasRef, (ctx, width, height) => {
@@ -107,19 +122,29 @@ export function InteractiveTimeline({
       rowsRef.current,
       layoutRef.current,
       renderStateRef.current,
-      scrollY.value,
       t,
+      rowOffsetsRef.current,
     )
-  }, [originDate, pxPerDay.value, scrollX.value, selectedId, hoveredId.value, scrollY.value])
+  }, [originMs, pxPerDay.value, scrollX.value, selectedId, hoveredId.value, scrollY.value, locale.value], cachedRectRef)
 
   const handleWheel = useCallback((event: WheelEvent) => {
     event.preventDefault()
 
-    scrollX.value += event.deltaX || event.deltaY
     if (event.shiftKey) {
-      scrollY.value = Math.max(0, scrollY.value + event.deltaY)
+      scrollY.value = Math.max(0, scrollY.peek() + event.deltaY)
+    } else {
+      scrollX.value = scrollX.peek() + (event.deltaX || event.deltaY)
     }
   }, [])
+
+  // Attach wheel listener imperatively with { passive: false } so preventDefault() works.
+  // JSX onWheel registers as passive by default — preventDefault() silently fails.
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    canvas.addEventListener('wheel', handleWheel, { passive: false })
+    return () => canvas.removeEventListener('wheel', handleWheel)
+  }, [handleWheel])
 
   const handleMouseDown = useCallback((event: MouseEvent) => {
     const canvas = canvasRef.current
@@ -135,8 +160,9 @@ export function InteractiveTimeline({
         type: 'pan',
         startMouseX: event.clientX,
         startMouseY: event.clientY,
-        startScrollX: scrollX.value,
-        startScrollY: scrollY.value,
+        startScrollX: scrollX.peek(),
+        startScrollY: scrollY.peek(),
+        cachedRect: rect,
       }
       return
     }
@@ -149,60 +175,71 @@ export function InteractiveTimeline({
       rowsRef.current,
       layoutRef.current,
       renderStateRef.current,
-      scrollY.value,
+      rowOffsetsRef.current,
     )
 
     if (!hit) {
-      onSelect(null)
+      onSelectRef.current(null)
       return
     }
 
-    onSelect(hit.action.id)
+    onSelectRef.current(hit.action.id)
 
     if (event.detail === 2) {
-      onEditRequest(hit.action)
+      onEditRequestRef.current(hit.action)
       return
     }
 
     if (!hit.action.start_date) return
 
+    const startMs = new Date(hit.action.start_date).getTime()
+    const durationMs = hit.action.end_date
+      ? new Date(hit.action.end_date).getTime() - startMs
+      : null
     dragState.current = {
       type: 'move',
       actionId: hit.action.id,
       startMouseX: event.clientX,
-      originalStartDate: hit.action.start_date,
-      originalEndDate: hit.action.end_date,
+      originalStartMs: startMs,
+      durationMs,
+      pxPerDaySnapshot: pxPerDay.peek(),
+      cachedRect: rect,
+      hasMutated: false,
     }
-  }, [onEditRequest, onSelect])
+  }, [])
 
   const handleMouseMove = useCallback((event: MouseEvent) => {
     const canvas = canvasRef.current
     if (!canvas) return
 
-    const rect = canvas.getBoundingClientRect()
+    const drag = dragState.current
+    const rect = drag?.cachedRect ?? (cachedRectRef.current ??= canvas.getBoundingClientRect())
     const mouseX = event.clientX - rect.left
     const mouseY = event.clientY - rect.top
-    const drag = dragState.current
 
     if (drag?.type === 'pan') {
-      scrollX.value = drag.startScrollX - (event.clientX - drag.startMouseX)
-      scrollY.value = Math.max(0, drag.startScrollY - (event.clientY - drag.startMouseY))
+      const newScrollX = drag.startScrollX - (event.clientX - drag.startMouseX)
+      const newScrollY = Math.max(0, drag.startScrollY - (event.clientY - drag.startMouseY))
+      if (scrollX.peek() !== newScrollX) scrollX.value = newScrollX
+      if (scrollY.peek() !== newScrollY) scrollY.value = newScrollY
       return
     }
 
     if (drag?.type === 'move') {
-      const dayDelta = (event.clientX - drag.startMouseX) / pxPerDay.value
-      const start = snapToDay(new Date(new Date(drag.originalStartDate).getTime() + dayDelta * 86400000))
-      let endDate: string | null = null
-      if (drag.originalEndDate) {
-        const duration = new Date(drag.originalEndDate).getTime() - new Date(drag.originalStartDate).getTime()
-        endDate = toISODate(new Date(start.getTime() + duration))
-      }
+      const dayDelta = (event.clientX - drag.startMouseX) / drag.pxPerDaySnapshot
+      const start = snapToDay(new Date(drag.originalStartMs + dayDelta * 86400000))
+      const startStr = toISODate(start)
+      const endDate = drag.durationMs != null
+        ? toISODate(new Date(start.getTime() + drag.durationMs))
+        : null
+      if (startStr === lastDragDates.current.start && endDate === lastDragDates.current.end) return
+      lastDragDates.current = { start: startStr, end: endDate }
       updateTimelineAction(
         drag.actionId,
-        { start_date: toISODate(start), end_date: endDate },
+        { start_date: startStr, end_date: endDate },
         { markDirty: false },
       )
+      drag.hasMutated = true
       return
     }
 
@@ -212,24 +249,31 @@ export function InteractiveTimeline({
       rowsRef.current,
       layoutRef.current,
       renderStateRef.current,
-      scrollY.value,
+      rowOffsetsRef.current,
     )
 
-    if (hit) {
-      hoveredId.value = hit.action.id
-      canvas.style.cursor = 'grab'
-    } else {
-      hoveredId.value = null
-      canvas.style.cursor = mouseY < RULER_HEIGHT ? 'default' : 'crosshair'
-    }
+    const newHoveredId = hit ? hit.action.id : null
+    if (hoveredId.value !== newHoveredId) hoveredId.value = newHoveredId
+    const newCursor = hit ? 'grab' : mouseY < RULER_HEIGHT ? 'default' : 'crosshair'
+    if (canvas.style.cursor !== newCursor) canvas.style.cursor = newCursor
   }, [])
+
+  const handleMouseLeave = useCallback(() => {
+    if (hoveredId.value !== null) hoveredId.value = null
+    if (canvasRef.current) canvasRef.current.style.cursor = 'default'
+  }, [])
+
+  const handleCanvasMouseMove = useCallback((e: MouseEvent) => {
+    if (!dragState.current) handleMouseMove(e)
+  }, [handleMouseMove])
 
   const handleMouseUp = useCallback(() => {
     const drag = dragState.current
-    if (drag && drag.type !== 'pan') {
+    if (drag && drag.type === 'move' && drag.hasMutated) {
       markDocumentDirty()
     }
     dragState.current = null
+    lastDragDates.current = { start: '', end: null }
   }, [])
 
   useEffect(() => {
@@ -245,22 +289,27 @@ export function InteractiveTimeline({
     return () => {
       document.removeEventListener('mousemove', onMove)
       document.removeEventListener('mouseup', onUp)
+      if (dragState.current?.type === 'move' && dragState.current.hasMutated) {
+        markDocumentDirty()
+      }
+      dragState.current = null
+      lastDragDates.current = { start: '', end: null }
     }
-  }, [handleMouseMove, handleMouseUp])
+  }, [])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!selectedId) return
+      if (!selectedIdRef.current) return
       if (event.key === 'Delete' || event.key === 'Backspace') {
         event.preventDefault()
-        deleteTimelineAction(selectedId)
-        onSelect(null)
+        deleteTimelineAction(selectedIdRef.current)
+        onSelectRef.current(null)
       }
     }
 
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [onSelect, selectedId])
+  }, [])
 
   useEffect(() => {
     if (!scrollToTodayRef) return
@@ -269,32 +318,32 @@ export function InteractiveTimeline({
       if (!canvas) return
       const rect = canvas.getBoundingClientRect()
       const chartWidth = rect.width - LABEL_SIDEBAR_WIDTH
-      scrollX.value = dateToX(new Date(), originDate, pxPerDay.value) - chartWidth / 2
+      const { originDate: o, pxPerDay: ppd } = renderStateRef.current
+      scrollX.value = dateToX(new Date(), o, ppd) - chartWidth / 2
     }
     return () => {
       scrollToTodayRef.current = null
     }
-  }, [scrollToTodayRef, originDate, pxPerDay.value])
+  }, [scrollToTodayRef])
 
   return (
     <canvas
       ref={canvasRef}
       className={styles.timeline}
-      onWheel={handleWheel}
       onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
+      onMouseMove={handleCanvasMouseMove}
+      onMouseLeave={handleMouseLeave}
       aria-label={t('canvas.timeline.title')}
     />
   )
 }
 
-function computeOriginDate(actions: TimelineAction[]): Date {
-  let earliest = new Date()
+function computeOriginMs(actions: TimelineAction[]): number {
+  let earliest = Infinity
   for (const action of actions) {
     if (!action.start_date) continue
-    const next = new Date(action.start_date)
-    if (next < earliest) earliest = next
+    const ms = new Date(action.start_date).getTime()
+    if (ms < earliest) earliest = ms
   }
-  return new Date(earliest.getTime() - 30 * 86400000)
+  return (isFinite(earliest) ? earliest : 0) - 30 * 86400000
 }

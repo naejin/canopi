@@ -1,10 +1,11 @@
 import { useRef, useEffect } from 'preact/hooks'
-import { locale, autoSaveIntervalMs } from '../../state/app'
+import { autoSaveIntervalMs } from '../../state/app'
 import {
   currentDesign, designName, designPath, designDirty,
   writeCanvasIntoDocument, loadCanvasFromDocument, autosaveFailed,
   consumeQueuedDocumentLoad,
   snapshotCanvasIntoCurrentDocument,
+  disposeDocumentWorkflows,
 } from '../../state/document'
 import { autosaveDesign } from '../../ipc/design'
 import { CanvasSession, getCurrentCanvasSession, setCurrentCanvasSession } from '../../canvas/session'
@@ -23,8 +24,6 @@ import styles from './Panels.module.css'
 // Autosave interval is now configurable via Rust settings (autoSaveIntervalMs signal)
 
 export function CanvasPanel() {
-  // Subscribe to locale so the component re-renders when language changes
-  void locale.value
   const canvasAreaRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const rulerOverlayRef = useRef<HTMLDivElement>(null)
@@ -78,6 +77,7 @@ export function CanvasPanel() {
           console.error('Failed to snapshot canvas before teardown:', error)
         }
       }
+      disposeDocumentWorkflows()
       session.destroy()
       sessionRef.current = null
       setCurrentCanvasSession(null)

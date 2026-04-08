@@ -10,11 +10,12 @@ export interface CanopiFile {
   layers: Layer[]
   plants: PlacedPlant[]
   zones: Zone[]
-  annotations?: Annotation[]
-  consortiums?: Consortium[]
-  groups?: ObjectGroup[]
-  timeline?: TimelineAction[]
-  budget?: BudgetItem[]
+  annotations: Annotation[]
+  consortiums: Consortium[]
+  groups: ObjectGroup[]
+  timeline: TimelineAction[]
+  budget: BudgetItem[]
+  budget_currency?: string // TS-only field; round-trips via Rust #[serde(flatten)] extra
   created_at: string
   updated_at: string
   extra?: Record<string, unknown>

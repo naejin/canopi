@@ -1,3 +1,4 @@
+import { batch } from '@preact/signals'
 import {
   type BottomPanelTab,
   activeLayerName,
@@ -9,6 +10,7 @@ import {
   layerPanelOpen,
   layerVisibility,
 } from './canvas'
+import { persistCurrentSettings } from './app'
 
 export function setLayerPanelOpen(open: boolean): void {
   layerPanelOpen.value = open
@@ -45,23 +47,25 @@ export function setLayerOpacity(name: string, opacity: number): void {
 
 export function setBottomPanelOpen(open: boolean): void {
   bottomPanelOpen.value = open
+  persistCurrentSettings()
 }
 
-let _heightInitialized = false
-
 export function openBottomPanel(tab: BottomPanelTab): void {
-  if (!_heightInitialized) {
-    bottomPanelHeight.value = Math.round(window.innerHeight * 0.5)
-    _heightInitialized = true
-  }
-  bottomPanelTab.value = tab
-  bottomPanelOpen.value = true
+  batch(() => {
+    bottomPanelTab.value = tab
+    bottomPanelOpen.value = true
+  })
+  persistCurrentSettings()
 }
 
 export function setBottomPanelTab(tab: BottomPanelTab): void {
   bottomPanelTab.value = tab
+  persistCurrentSettings()
 }
 
-export function setBottomPanelHeight(height: number): void {
+/** Commit final height on mouse-up and persist to Rust settings. */
+export function commitBottomPanelHeight(height: number): void {
+  if (bottomPanelHeight.value === height) return
   bottomPanelHeight.value = height
+  persistCurrentSettings()
 }

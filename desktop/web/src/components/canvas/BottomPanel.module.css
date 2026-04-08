@@ -7,7 +7,8 @@
 }
 
 .resizeHandle {
-  height: 2px;
+  --resize-hit-extend: var(--space-1);
+  height: var(--slider-track-size);
   background: var(--color-border-strong);
   cursor: row-resize;
   position: relative;
@@ -17,10 +18,10 @@
 .resizeHandle::before {
   content: '';
   position: absolute;
-  top: -4px;
+  top: calc(var(--resize-hit-extend) * -1);
   left: 0;
   right: 0;
-  height: 9px;
+  height: calc(var(--slider-track-size) + var(--resize-hit-extend) * 2);
 }
 
 .resizeHandle:hover {

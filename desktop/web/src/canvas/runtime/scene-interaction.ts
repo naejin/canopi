@@ -1,14 +1,13 @@
 import { computeSelectionRect } from '../operations'
 import { getCanvasTool } from '../session-state'
 import {
-  gridSize,
   guides,
   lockedObjectIds,
   plantStampSpecies,
   snapToGridEnabled,
   snapToGuidesEnabled,
 } from '../../state/canvas'
-import { snapToGrid } from '../grid'
+import { gridInterval, snapToGrid } from '../grid'
 import { snapToGuides } from '../guides'
 import type { SceneStore, ScenePoint } from './scene'
 import type { CameraController } from './camera'
@@ -69,6 +68,11 @@ export class SceneInteractionController {
   private _textarea: HTMLTextAreaElement | null = null
   private _textWorldPosition: ScenePoint | null = null
   private _spaceHeld = false
+  /** Original position of the hit entity — snap reference for drag. */
+  private _dragSnapRef: ScenePoint | null = null
+  private _lastDragDelta: ScenePoint = { x: 0, y: 0 }
+  /** Cached container rect captured on pointerdown — avoids forced reflow at 60fps during drag. */
+  private _cachedContainerRect: DOMRect | null = null
 
   constructor(private readonly _deps: SceneInteractionDeps) {
     this._preview = createInteractionPreview(this._deps.container)
@@ -126,6 +130,7 @@ export class SceneInteractionController {
   private readonly _onPointerDown = (event: PointerEvent): void => {
     if (event.button !== 0 && event.button !== 1) return
 
+    this._cachedContainerRect = this._deps.container.getBoundingClientRect()
     const screen = this._screenPoint(event)
     const world = this._deps.camera.screenToWorld(screen)
     this._pointerId = event.pointerId
@@ -199,6 +204,11 @@ export class SceneInteractionController {
     this._bandAdditive = false
     this._beforeSnapshot = this._captureSnapshot()
     captureSceneDragState(this._dragState, scene, this._deps.getSelection())
+    this._dragSnapRef =
+      this._dragState.plantStarts.get(hit.id) ??
+      this._dragState.annotationStarts.get(hit.id) ??
+      this._dragState.groupStarts.get(hit.id) ??
+      this._dragState.zoneStarts.get(hit.id)?.[0] ?? null
   }
 
   private readonly _onPointerLeave = (): void => {
@@ -246,7 +256,6 @@ export class SceneInteractionController {
 
     const screen = this._screenPoint(event)
     const rawWorld = this._deps.camera.screenToWorld(screen)
-    const world = this._applySnapping(rawWorld)
 
     if (this._mode === 'panning') {
       this._deps.getSceneStore().setViewport(this._deps.camera.panBy({
@@ -259,10 +268,10 @@ export class SceneInteractionController {
     }
 
     if (this._mode === 'dragging') {
-      const delta = {
-        x: world.x - this._startWorld.x,
-        y: world.y - this._startWorld.y,
-      }
+      const delta = this._computeDragDelta(rawWorld)
+      if (Math.abs(delta.x - this._lastDragDelta.x) < 0.0001
+        && Math.abs(delta.y - this._lastDragDelta.y) < 0.0001) return
+      this._lastDragDelta = delta
       applySceneDragDelta(this._deps.getSceneStore(), this._dragState, delta)
       this._deps.render('scene')
       return
@@ -282,10 +291,10 @@ export class SceneInteractionController {
     if (this._pointerId !== null && event.pointerId !== this._pointerId) return
     const screen = this._screenPoint(event)
     const rawWorld = this._deps.camera.screenToWorld(screen)
-    const world = this._applySnapping(rawWorld)
 
-    if (this._mode === 'dragging' && this._beforeSnapshot && this._startWorld) {
-      const moved = Math.abs(world.x - this._startWorld.x) > 0.001 || Math.abs(world.y - this._startWorld.y) > 0.001
+    if (this._mode === 'dragging' && this._beforeSnapshot) {
+      const moved = Math.abs(this._lastDragDelta.x) > 0.001
+        || Math.abs(this._lastDragDelta.y) > 0.001
       if (moved) {
         this._deps.markDirty(this._beforeSnapshot)
       } else {
@@ -295,7 +304,7 @@ export class SceneInteractionController {
     }
 
     if (this._mode === 'band' && this._startWorld) {
-      const rect = computeSelectionRect(this._startWorld, world)
+      const rect = computeSelectionRect(this._startWorld, rawWorld)
       const scene = this._deps.getSceneStore().persisted
       const current = this._bandAdditive
         ? new Set(this._deps.getSelection())
@@ -315,7 +324,7 @@ export class SceneInteractionController {
     }
 
     if (this._mode === 'rectangle' && this._startWorld) {
-      const rect = computeSelectionRect(this._startWorld, world)
+      const rect = computeSelectionRect(this._startWorld, rawWorld)
       if (rect.width >= 0.5 && rect.height >= 0.5) {
         const before = this._captureSnapshot()
         const zoneName = appendRectangleZone(this._deps.getSceneStore(), rect)
@@ -365,7 +374,7 @@ export class SceneInteractionController {
   }
 
   private _screenPoint(event: Pick<MouseEvent, 'clientX' | 'clientY'>): ScenePoint {
-    const rect = this._deps.container.getBoundingClientRect()
+    const rect = this._cachedContainerRect ?? this._deps.container.getBoundingClientRect()
     return {
       x: event.clientX - rect.left,
       y: event.clientY - rect.top,
@@ -395,17 +404,21 @@ export class SceneInteractionController {
     this._startScreen = null
     this._startWorld = null
     this._beforeSnapshot = null
+    this._dragSnapRef = null
+    this._lastDragDelta = { x: 0, y: 0 }
+    this._cachedContainerRect = null
     resetSceneDragState(this._dragState)
     this._bandAdditive = false
     hideInteractionPreview(this._preview)
     this._deps.container.style.cursor = cursorForTool(this._tool)
   }
 
+  /** Snap a world-space point to grid and/or guides. Used for placement (stamp, text). */
   private _applySnapping(point: ScenePoint): ScenePoint {
     let next = point
 
     if (snapToGridEnabled.value) {
-      next = snapToGrid(next.x, next.y, gridSize.value)
+      next = snapToGrid(next.x, next.y, gridInterval(this._deps.camera.viewport.scale).interval)
     }
 
     if (snapToGuidesEnabled.value && guides.value.length > 0) {
@@ -413,6 +426,28 @@ export class SceneInteractionController {
     }
 
     return next
+  }
+
+  /**
+   * Compute the snap-adjusted drag delta. Applies snapping to the hit entity's
+   * candidate position (original + raw delta), then derives the actual delta
+   * from that. This guarantees the dragged entity lands on grid/guide positions.
+   */
+  private _computeDragDelta(rawWorld: ScenePoint): ScenePoint {
+    const rawDelta = {
+      x: rawWorld.x - this._startWorld!.x,
+      y: rawWorld.y - this._startWorld!.y,
+    }
+    if (!this._dragSnapRef) return rawDelta
+    const candidate = {
+      x: this._dragSnapRef.x + rawDelta.x,
+      y: this._dragSnapRef.y + rawDelta.y,
+    }
+    const snapped = this._applySnapping(candidate)
+    return {
+      x: snapped.x - this._dragSnapRef.x,
+      y: snapped.y - this._dragSnapRef.y,
+    }
   }
 
   private _restoreBeforeSnapshot(): void {
@@ -454,17 +489,16 @@ export class SceneInteractionController {
       minWidth: '120px',
       minHeight: '24px',
       padding: '2px 4px',
-      background: '#ffffff',
-      border: '1px solid #5a73a0',
-      borderRadius: '4px',
+      background: 'var(--color-surface)',
+      border: '1px solid var(--color-primary)',
+      borderRadius: 'var(--radius-sm)',
       outline: 'none',
       resize: 'none',
       overflow: 'hidden',
-      fontFamily: 'Inter, sans-serif',
-      fontSize: '16px',
+      fontFamily: 'var(--font-sans, Inter, system-ui, sans-serif)',
+      fontSize: 'var(--text-base)',
       lineHeight: '1.4',
-      color: '#1a1a1a',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+      color: 'var(--color-text)',
       zIndex: '3',
       whiteSpace: 'pre',
     })

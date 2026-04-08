@@ -91,6 +91,6 @@ describe('html rulers overlay', () => {
     expect(rulers.scaleCanvas.width).toBe(SCALE_BAR_CANVAS_WIDTH * 2)
     expect(rulers.scaleCanvas.height).toBe(SCALE_BAR_RESERVED_BOTTOM_PX * 2)
     expect(ctx.setTransform).toHaveBeenCalledWith(2, 0, 0, 2, 0, 0)
-    expect(ctx.fillText).toHaveBeenCalledWith('20 m', 120, 16)
+    expect(ctx.fillText).toHaveBeenCalledWith('20m', 120, 16)
   })
 })

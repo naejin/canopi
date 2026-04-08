@@ -18,7 +18,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { confirmCloseWithUnsavedChanges } from "./state/close-guard";
 
 import type { Settings } from "./types/settings";
-import { gridSize, snapToGridEnabled } from "./state/canvas";
+import { snapToGridEnabled, snapToGuidesEnabled, bottomPanelOpen, bottomPanelHeight, bottomPanelTab, type BottomPanelTab, VISIBLE_BOTTOM_PANEL_TABS } from "./state/canvas";
 
 // Synchronous init — applies local defaults immediately (no theme flicker)
 initTheme();
@@ -33,9 +33,14 @@ invoke<Settings>('get_settings')
   .then((s) => {
     locale.value = s.locale;
     theme.value = s.theme === 'dark' ? 'dark' : 'light';
-    gridSize.value = s.grid_size_m;
     snapToGridEnabled.value = s.snap_to_grid;
+    snapToGuidesEnabled.value = s.snap_to_guides;
     autoSaveIntervalMs.value = s.auto_save_interval_s * 1000;
+    bottomPanelOpen.value = s.bottom_panel_open;
+    bottomPanelHeight.value = s.bottom_panel_height;
+    if (VISIBLE_BOTTOM_PANEL_TABS.includes(s.bottom_panel_tab as BottomPanelTab)) {
+      bottomPanelTab.value = s.bottom_panel_tab as BottomPanelTab;
+    }
     setBootstrappedSettings(s);
   })
   .catch((e) => console.error('Failed to bootstrap settings:', e));
@@ -134,10 +139,11 @@ export function App() {
   const showSidebar = showCanvas && side !== null;
 
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
+  const sidebarRef = useRef<HTMLDivElement>(null);
 
   const handleDragStart = useCallback((e: MouseEvent) => {
     e.preventDefault();
-    dragRef.current = { startX: e.clientX, startW: sidePanelWidth.value };
+    dragRef.current = { startX: e.clientX, startW: sidePanelWidth.peek() };
 
     const onMove = (ev: MouseEvent) => {
       if (!dragRef.current) return;
@@ -145,10 +151,15 @@ export function App() {
       const delta = dragRef.current.startX - ev.clientX;
       const maxW = Math.floor(window.innerWidth * MAX_SIDEBAR_RATIO);
       const newW = Math.max(MIN_SIDEBAR_WIDTH, Math.min(maxW, dragRef.current.startW + delta));
-      sidePanelWidth.value = newW;
+      // Write to DOM directly at 60fps — commit signal on mouseup
+      if (sidebarRef.current) sidebarRef.current.style.width = `${newW}px`;
     };
 
     const onUp = () => {
+      // Commit final width to signal
+      if (sidebarRef.current) {
+        sidePanelWidth.value = parseInt(sidebarRef.current.style.width, 10) || sidePanelWidth.peek();
+      }
       dragRef.current = null;
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
@@ -186,6 +197,7 @@ export function App() {
               aria-label={t('sidebar.resize')}
             />
             <div
+              ref={sidebarRef}
               className={styles.sidePanel}
               style={{
                 width: `${width}px`,

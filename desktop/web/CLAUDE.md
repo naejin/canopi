@@ -1,6 +1,7 @@
 # Frontend (Preact + Signals + CSS Modules)
 
 ## State
+- **`unlockSelected()` is actually `unlockAll()`**: The function clears all locked objects, not just selected ones. This is intentional — the sole call site (`Ctrl+L` shortcut) uses it as a toggle: selection present → lock selected, no selection → unlock all. Do not "fix" this without updating the shortcut manager
 - All reactive state as `@preact/signals` at module level
 - **Two document authorities** — see root `CLAUDE.md` Document Authority Rule:
   - `SceneStore` owns canvas scene state (plants, zones, annotations, groups, layers, plant-species-colors)
@@ -15,6 +16,7 @@
 - ALL user-visible strings must go through `t()` from `../i18n` — no hardcoded text in components
 - Add keys to all 11 locale files (en, fr, es, pt, it, zh, de, ja, ko, nl, ru) when adding new strings
 - **Unit strings must be i18n keys**: Never hardcode "yr", "d", "in" etc. in NumAttr/formatters. Use `t('plantDetail.yearUnit')` pattern. Scientific units (mg, mm, cm, g/g) are universal and don't need translation
+- **CSV/file export headers must use `t()`**: Table column headers in the UI use i18n, but export code easily misses this. Reuse the same `t()` keys for both
 
 ## CSS
 - Design tokens in `global.css` as CSS variables (field notebook palette)
@@ -30,23 +32,54 @@
 
 ## Canvas2D Component Patterns
 - **Drag handlers must use `useCallback([])` with refs**, not signal-derived deps. A `renderState` object literal in `useCallback` deps causes the callback to be a new reference every render → document-level event listeners re-register mid-drag
+- **Canvas `onMouseMove` must skip during drag**: When both document-level and canvas-element `mousemove` handlers exist, the canvas handler must early-return if drag is active (`if (!dragState.current) handleMouseMove(e)`) — otherwise `handleMouseMove` fires twice per event during drag
+- **Cache cumulative row offsets in a ref**: Compute `rowOffsets` via `useMemo` from `rowHeights`, store in a `rowOffsetsRef`, pass to renderers and hit-testers as an optional param — avoids per-frame array allocation at 60fps
+- **Snapshot mutable values at drag start**: Values that can change mid-drag (e.g., `pxPerDay`, zoom level) must be captured in `DragState` at `mousedown`, not read live from signals during `mousemove`
 - **`useMemo` for layout computation** (e.g., `buildConsortiumBars`), not inline in the component body — prevents O(n) layout work on every hover
+- **`useMemo` for derived table aggregates**: Table components with inline editing (e.g., BudgetTab) must memoize `countPlants`, `buildPriceMap`, and aggregate reduces — otherwise they re-run on every keypress during editing
+- **Canvas `onMouseMove` must be `useCallback`**: Both `ConsortiumChart` and `InteractiveTimeline` need `useCallback([handleMouseMove])` wrappers for the drag-guard lambda (`if (!dragState.current) handleMouseMove(e)`) — inline arrows create a new function reference per render, causing Preact to re-patch the event listener at 60fps
+- **Drag cleanup must track `hasMutated`**: Add a `hasMutated: boolean` field to `DragState`, set it `true` when a mutation actually fires (e.g., `moveConsortiumEntry`, `reorderConsortiumEntry`). Both `handleMouseUp` and unmount cleanup should only call `markDocumentDirty()` if `hasMutated` is true — prevents spurious dirty marks on mousedown-then-release or mousedown-then-tab-switch without movement
+- **Multi-signal action functions must use `batch()`**: When an action writes multiple signals (e.g., `openBottomPanel` writes tab + open + height), wrap in `batch()` from `@preact/signals` to prevent intermediate re-renders. Exception: 60fps hot paths where individual writes are already guarded
 - **Change guards before `moveConsortiumEntry` during drag** — skip no-op updates when phase/stratum haven't changed to avoid unconditional signal writes at 60fps
+- **`getPlacedPlants()` returns a fresh array reference every call** — never list it directly in `useMemo` deps. Store the result in a ref, use `sceneEntityRevision.value` as the trigger dep. Same applies to `getLocalizedCommonNames()`. See `ConsortiumChart.tsx` for the pattern
+- **Action module updater wrappers must check reference identity**: Shared helpers like `updateConsortiums(updater)` that wrap `mutateCurrentDesign` must check `if (next === design.field) return design` before spreading — otherwise no-op updaters (e.g., `reorderConsortiumEntry` with same index) still create new design objects, bypassing `mutateCurrentDesign`'s identity guard and causing spurious dirty marks. This applies to ALL array methods: `.map()` and `.filter()` both always return new arrays — add `findIndex`/`some` guards before mutating
+- **Upsert updaters must field-compare before spreading**: `upsertConsortiumEntry`-style functions that do `updated[idx] = entry` must compare all mutable fields first — spreading always creates a new object, bypassing `updateDesignArray`'s identity guard even when nothing changed
+- **Field-compare guards must cover ALL `TimelineAction` fields**: `updateTimelineAction`'s identity guard compares every field including `plants` and `depends_on` (reference equality). Omitting array fields causes silent data loss when a future caller patches only those fields
+- **60fps resize must bypass signals**: Panel resize handlers must set height directly on a DOM ref during drag (`panelRef.current.style.height`), NOT write to a signal at 60fps. Commit the final value to the signal via a dedicated action (e.g., `commitBottomPanelHeight`) on mouseup only — prevents parent re-rendering all children at 60fps during drag
+- **Cache `getBoundingClientRect()` in a ref for hover path**: Use `cachedRectRef = useRef<DOMRect | null>(null)` invalidated by `ResizeObserver`. In `handleMouseMove`: `drag?.cachedRect ?? (cachedRectRef.current ??= canvas.getBoundingClientRect())`. Avoids forced layout reflow at 60fps during hover. Both `ConsortiumChart` and `InteractiveTimeline` follow this pattern
+- **Resize handles must use pointer capture**: Use `setPointerCapture()`/`lostpointercapture` on the handle element instead of document-level `mousemove`/`mouseup` listeners — guarantees cleanup even when mouse is released outside the browser window. See `BottomPanel.tsx` `ResizeHandle`
+- **`Date.now()` in `useMemo`-feeding functions defeats memoization**: If a function's result feeds into `useMemo` deps, using `Date.now()` as a seed makes the dep non-deterministic → continuous redraw. Use `Infinity` with a stable fallback instead
+- **Canvas2D interactive components must have `onMouseLeave`**: Both `ConsortiumChart` and `InteractiveTimeline` use `hoveredX` signals for hover highlight — if the pointer exits the canvas without a final no-hit `mousemove` (fast exit between frames), the signal stays non-null. Add `onMouseLeave` with a `useCallback([])` that clears hover signals and resets `cursor` to `'default'`
+
+## Shared Utilities
+- **`canvas/plant-grouping.ts`**: `groupPlantsBySpecies(plants, localizedNames)` — shared between `budget-helpers.ts` (BudgetTab) and `consortium-renderer.ts`. Do not duplicate plant-counting loops
+- **`Intl.NumberFormat` must be cached**: Construction is expensive (~0.5ms each). `budget-helpers.ts` caches formatters per currency string in a module-level `Map`. Do not create `new Intl.NumberFormat()` in render loops
 
 ## Canvas Overlay Styling
 - Canvas runtime overlay modules (`.ts`, not `.tsx`) use **inline styles with CSS custom properties** — no CSS Module imports from plain `.ts` files (only `.tsx` components use CSS Modules in this project)
 
 ## Preact / Signals Gotchas
 - **Stale async guard: one monotonic counter ref is enough**: For async effects that fire-and-forget (image loads, IPC calls), a single `useRef` counter incremented on each effect run guards against all staleness — across both prop changes and internal state changes. Don't layer a second ref tracking the prop value; the counter already subsumes it
+- **JSX `onWheel` is passive by default**: Browsers register JSX wheel handlers as passive — `preventDefault()` silently fails. Use imperative `addEventListener('wheel', handler, { passive: false })` in a `useEffect` instead
+- **Signal reads before early returns subscribe unnecessarily**: `const height = signal.value` before `if (!open) return null` subscribes the component even when closed. Move signal reads to after the guard
+- **Interface parameter types must match implementation invariants**: If a method throws on null, the type must be non-null — push the guard to call sites for compile-time safety instead of runtime assertions. See `serializeDocument` in `runtime.ts`
 - **Preact Vite plugin**: Package is `@preact/preset-vite` (not `@preactjs/preset-vite`)
 - **HMR safety**: Module-level `effect()` and `addEventListener` must store disposers and clean up via `import.meta.hot.dispose()`
 - **Signals + hooks**: Use `useSignalEffect` (not `useEffect`) when subscribing to signals inside components
 - **Never put `signal.value` in a `useEffect` dependency array**: It captures the value at render time, not a live reference. It may work incidentally if `void signal.value` elsewhere triggers re-renders, but breaks silently when that line is removed. Use `useSignalEffect` instead
 - **Effect subscription**: Effects only subscribe to signals **read during execution**. An early `return` before reading a signal = never re-runs. Read ALL dependencies BEFORE conditional returns
 - **`void signal.value` in parent components**: Unnecessary when all child components subscribe to the signal independently. Safe to remove — children re-render on their own signal subscriptions
+- **`locale.value` in Canvas2D components**: Prefer adding `locale.value` to `useCanvasRenderer` deps over `void locale.value` at component top-level — it's more explicit about what triggers the redraw and avoids a full component re-render
+- **`updateDesignArray<K>()` in `document-mutations.ts`** is the generic helper for mutating array fields on `CanopiFile`. Action modules should use it instead of duplicating the identity-guard + spread pattern. Pass `options` through directly — don't re-evaluate `markDirty !== false`
 - **Signal retry pattern**: Setting a signal to its current value is a no-op (`Object.is` equality). To force a re-fetch, use a dedicated `retryCount` signal: read it in the effect, increment it in the retry handler
 - **`SceneHistory` truncation must mirror in both paths**: `execute()` and `record()` both trim `_past` at 500-cap. Both must set `_savedPosition = -1` when truncation passes the saved point, or dirty tracking breaks
+- **Stable empty fallback in component bodies**: `currentDesign.value?.timeline ?? []` creates a new reference every render, defeating `useMemo`. Use a module-level `const EMPTY_ACTIONS: T[] = []` as the fallback. This applies equally to `useMemo` deps — `design?.budget ?? []`, `session?.getPlacedPlants() ?? []`, and `session?.getLocalizedCommonNames() ?? new Map()` all need module-level stable constants (`EMPTY_BUDGET`, `EMPTY_PLANTS`, `EMPTY_NAMES`)
+- **Vitest partial mocks + signals**: When `vi.mock` replaces a module that exports signals, use `importOriginal` spread (`vi.mock(path, async (importOriginal) => ({ ...await importOriginal(), ...overrides }))`) — partial mocks that omit signal exports cause "no export defined" errors in downstream effect consumers
 - **`useEffect` needs a dependency array**: Omitting `[]` or `[dep]` runs the effect every render — causes listener leaks and duplicate subscriptions. Always provide explicit deps, even in Preact
+- **`display: flex` on `<td>` is unreliable in WebKitGTK**: Wrap flex content in a `<div>` inside the `<td>` — don't apply flex directly to table cells
+- **Pointer capture cleanup needs a guard boolean**: `releasePointerCapture()` in `pointerup` causes `lostpointercapture` to fire — cleanup runs twice without a `let cleaned = false` guard. Both `onUp` and `onLost` call `cleanup(true)`, so the guard prevents double `persistCurrentSettings` writes
+- **No `Math.max(...array.map())` for unbounded arrays**: Spread passes each element as a function argument — blows the call stack on large arrays. Use a `for` loop: `let max = -1; for (const a of arr) if (a.val > max) max = a.val`
+- **Dropdown `menuDirection`**: Use `"up"` for controls at screen bottom (canvas bar), `"down"` for controls inside panel headers. Match direction to available space, not habit
 
 ## Dynamic Filter State
 - **Error tracking**: `dynamicOptionsErrors` signal tracks per-locale per-field IPC errors. `DYNAMIC_OPTIONS_BACKEND_MISMATCH_ERROR` distinguishes permanent backend mismatch (field not in running binary) from transient errors (network, timeout). Only transient errors show a retry button in the UI. Errors are cleared on successful retry

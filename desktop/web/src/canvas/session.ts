@@ -188,7 +188,7 @@ export class CanvasSession {
 
   serializeDocument(
     metadata: CanvasRuntimeDocumentMetadata,
-    doc: CanopiFile | null,
+    doc: CanopiFile,
   ): CanopiFile {
     return this._runtime.serializeDocument(metadata, doc)
   }
