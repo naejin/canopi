@@ -3,9 +3,10 @@ import { lockedObjectIds, selectedObjectIds } from '../state/canvas'
 import { clearCanvasSelection } from '../canvas/session-state'
 import { SceneCanvasRuntime } from '../canvas/runtime/scene-runtime'
 import type { CanopiFile } from '../types/design'
+import { consortiumTarget, speciesBudgetTarget, speciesTarget } from '../panel-targets'
 
 const BASE_FILE: CanopiFile = {
-  version: 1,
+  version: 2,
   name: 'Demo',
   description: null,
   location: null,
@@ -120,14 +121,14 @@ describe('SceneCanvasRuntime', () => {
           start_date: '2026-04-10',
           end_date: null,
           recurrence: null,
-          plants: ['plant-1'],
-          zone: null,
+          targets: [speciesTarget('Quercus robur')],
           depends_on: null,
           completed: false,
           order: 1,
         }],
         budget_currency: 'EUR',
         budget: [{
+          target: speciesBudgetTarget('Quercus robur'),
           category: 'plants',
           description: 'Quercus robur',
           quantity: 1,
@@ -135,7 +136,7 @@ describe('SceneCanvasRuntime', () => {
           currency: 'EUR',
         }],
         consortiums: [{
-          canonical_name: 'Quercus robur',
+          target: consortiumTarget('Quercus robur'),
           stratum: 'high',
           start_phase: 0,
           end_phase: 3,

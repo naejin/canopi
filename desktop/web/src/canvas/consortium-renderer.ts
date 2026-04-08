@@ -1,4 +1,5 @@
 import type { Consortium, PlacedPlant } from '../types/design'
+import { getConsortiumCanonicalName } from '../panel-targets'
 import { getStratumColor } from './plants'
 import { DEFAULT_PLANT_COLOR } from './plant-colors'
 import { cssVar, roundRect, readThemeTokens } from './canvas2d-utils'
@@ -108,16 +109,17 @@ export function buildConsortiumBars(
   const plantCounts = groupPlantsBySpecies(plants, localizedNames)
 
   const bars: ConsortiumBarLayout[] = entries.map((entry) => {
-    const plantInfo = plantCounts.get(entry.canonical_name)
+    const canonicalName = getConsortiumCanonicalName(entry)
+    const plantInfo = plantCounts.get(canonicalName)
     return {
-      canonicalName: entry.canonical_name,
+      canonicalName,
       stratum: entry.stratum,
       startPhase: entry.start_phase,
       endPhase: entry.end_phase,
       subLane: 0,
       totalSubLanes: 1,
-      color: speciesColors[entry.canonical_name] ?? getStratumColor(entry.stratum) ?? DEFAULT_PLANT_COLOR,
-      commonName: plantInfo?.commonName ?? entry.canonical_name,
+      color: speciesColors[canonicalName] ?? getStratumColor(entry.stratum) ?? DEFAULT_PLANT_COLOR,
+      commonName: plantInfo?.commonName ?? canonicalName,
       count: plantInfo?.count ?? 0,
     }
   })
@@ -145,7 +147,7 @@ export function filterActiveConsortiumEntries(
   plants: PlacedPlant[],
 ): Consortium[] {
   const activeSpecies = new Set(plants.map((plant) => plant.canonical_name))
-  return entries.filter((entry) => activeSpecies.has(entry.canonical_name))
+  return entries.filter((entry) => activeSpecies.has(getConsortiumCanonicalName(entry)))
 }
 
 // ---------------------------------------------------------------------------

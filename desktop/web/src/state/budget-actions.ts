@@ -1,4 +1,5 @@
 import type { BudgetItem } from '../types/design'
+import { getBudgetSpeciesTarget, panelTargetEqual, speciesBudgetTarget } from '../panel-targets'
 import { mutateCurrentDesign } from './document-mutations'
 
 export function setBudgetCurrency(currency: string): void {
@@ -17,13 +18,17 @@ export function setPlantBudgetPrice(
   unitCost: number,
 ): void {
   const sanitized = Math.max(0, isFinite(unitCost) ? unitCost : 0)
+  const target = speciesBudgetTarget(canonicalName)
   mutateCurrentDesign((design) => {
     const currency = design.budget_currency ?? 'EUR'
     const budget = design.budget
-    const index = budget.findIndex((item) => item.category === 'plants' && item.description === canonicalName)
+    const index = budget.findIndex((item) => {
+      const itemTarget = getBudgetSpeciesTarget(item)
+      return itemTarget !== null && panelTargetEqual(itemTarget, target)
+    })
     const existing = index !== -1 ? budget[index] : undefined
     if (existing && existing.unit_cost === sanitized && existing.currency === currency) return design
-    const next: BudgetItem = { category: 'plants', description: canonicalName, quantity: existing?.quantity ?? 0, unit_cost: sanitized, currency }
+    const next: BudgetItem = { target, category: 'plants', description: canonicalName, quantity: existing?.quantity ?? 0, unit_cost: sanitized, currency }
     return {
       ...design,
       budget_currency: currency,

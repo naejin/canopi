@@ -1,5 +1,6 @@
 import type { BudgetItem, PlacedPlant } from '../../types/design'
 import { groupPlantsBySpecies } from '../../canvas/plant-grouping'
+import { getBudgetSpeciesTarget } from '../../panel-targets'
 
 export function countPlants(
   plants: PlacedPlant[],
@@ -16,8 +17,11 @@ export function countPlants(
 export function buildPriceMap(budget: BudgetItem[]): Map<string, { unit_cost: number; currency: string }> {
   return new Map(
     budget
-      .filter((item) => item.category === 'plants')
-      .map((item) => [item.description, { unit_cost: item.unit_cost, currency: item.currency }]),
+      .map((item) => {
+        const target = getBudgetSpeciesTarget(item)
+        return target ? [target.canonical_name, { unit_cost: item.unit_cost, currency: item.currency }] as const : null
+      })
+      .filter((entry): entry is readonly [string, { unit_cost: number; currency: string }] => entry !== null),
   )
 }
 

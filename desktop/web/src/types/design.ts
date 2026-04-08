@@ -79,10 +79,22 @@ export interface ObjectGroup {
 }
 
 export interface Consortium {
-  canonical_name: string
+  target: SpeciesPanelTarget
   stratum: string
   start_phase: number
   end_phase: number
+}
+
+export type PanelTarget =
+  | { kind: 'placed_plant'; plant_id: string }
+  | SpeciesPanelTarget
+  | { kind: 'zone'; zone_name: string }
+  | { kind: 'manual' }
+  | { kind: 'none' }
+
+export interface SpeciesPanelTarget {
+  kind: 'species'
+  canonical_name: string
 }
 
 export interface TimelineAction {
@@ -92,14 +104,14 @@ export interface TimelineAction {
   start_date: string | null
   end_date: string | null
   recurrence: string | null
-  plants: string[] | null
-  zone: string | null
+  targets: PanelTarget[]
   depends_on: string[] | null
   completed: boolean
   order: number
 }
 
 export interface BudgetItem {
+  target: PanelTarget
   category: string
   description: string
   quantity: number

@@ -1,4 +1,5 @@
 import type { TimelineAction } from '../types/design'
+import { panelTargetsEqual } from '../panel-targets'
 import { updateDesignArray } from './document-mutations'
 
 interface TimelineUpdateOptions {
@@ -39,8 +40,7 @@ export function updateTimelineAction(
         next.order === existing.order &&
         next.completed === existing.completed &&
         next.recurrence === existing.recurrence &&
-        next.zone === existing.zone &&
-        next.plants === existing.plants &&
+        panelTargetsEqual(next.targets, existing.targets) &&
         next.depends_on === existing.depends_on
       ) return timeline
       const updated = [...timeline]
