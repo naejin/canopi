@@ -55,6 +55,7 @@ These align with the core risks identified in the architecture review.
 - ~~Add first panel→canvas hover bridge through target resolver~~ — **done**: bottom-panel hover state now carries `PanelTarget[]`; the scene runtime resolves it to plant/zone highlight IDs without mutating canvas selection or history. Current hover-only wiring covers consortium species hover, timeline action hover via `action.targets`, and budget row hover via the existing species-targeted plant `BudgetItem.target` with species-target fallback.
 - ~~Add canvas→chart hover bridge~~ — **done** (`108059d`): canvas plant hover now publishes canvas-origin species targets for consortium chart hover highlighting without mutating selection/history; resolver highlight buckets remain typed to avoid plant/zone ID collisions.
 - ~~Add timeline/budget selection wiring through target resolver~~ — **done** (`57c508d`): timeline action clicks and budget row clicks now write typed `selectedPanelTargets` plus source ownership, and the scene runtime resolves selected + hovered panel targets into renderer highlights. This deliberately does **not** mutate real canvas selection, selection labels, dirty state, or history.
+- ~~Add resolver-based panel-target map projection seam before rendered overlays~~ — **done**: `projectPanelTargetsToMapFeatures()` turns typed `PanelTarget[]` plus scene/location data into GeoJSON-like plant point and zone polygon features via `resolvePanelTargets()` and `worldToGeo()`. This is a pure prerequisite only: no MapLibre import, overlay rendering, canvas selection mutation, dirty state, history, or document authority change.
 - See architecture review Finding 2
 
 **Canvas seam:**
@@ -182,7 +183,7 @@ These align with the core risks identified in the architecture review.
 - ~~Consortium succession chart~~ — **done** (`9fd8cf3`..`1007a96`): Canvas2D strata×phase grid, auto-sync from placed species, drag-move/resize, hover sync with canvas
 - ~~Bottom panel state persistence~~ — **done**: open/height/tab hydrated from Rust settings on bootstrap, persisted on panel actions (height persisted on drag-end, not per-frame)
 - ~~Timeline/budget selection wiring using the pure target resolver~~ — **done** (`57c508d`): selection is panel-origin presentation state only; map overlays and full panel↔canvas sync remain out of scope.
-- Remaining: panel↔map sync
+- Remaining: rendered panel↔map overlay sync using the pure map projection seam
 
 **Other:**
 - Featured-design world map / template import

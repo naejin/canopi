@@ -18,7 +18,7 @@ That lowers immediate regression risk, but it does not remove the structural iss
 A later review of the live code found that several original risks have been reduced:
 
 - **Finding 1 is substantially resolved.** Canvas scene state is owned by `SceneStore`; non-canvas document state is owned by `currentDesign` / document actions; `SceneCanvasRuntime.serializeDocument()` composes canvas output with document-owned `consortiums`, `timeline`, `budget`, and `budget_currency`. The old `currentConsortiums` and `designLocation` mirrors are gone.
-- **Finding 2 is resolved as a prerequisite.** Timeline, budget, and consortium records now use explicit `PanelTarget` identity (`placed_plant`, `species`, `zone`, `manual`, `none`), with migration coverage for legacy identity fields and a pure `resolvePanelTargets()` bridge for scene highlights.
+- **Finding 2 is resolved as a prerequisite.** Timeline, budget, and consortium records now use explicit `PanelTarget` identity (`placed_plant`, `species`, `zone`, `manual`, `none`), with migration coverage for legacy identity fields, a pure `resolvePanelTargets()` bridge for scene highlights, and a pure map projection seam for future overlays.
 - **Finding 4 is resolved.** The pass-through `CanvasSession` class is gone; `currentCanvasSession` now stores `CanvasRuntime | null`, and `setCurrentCanvasTool()` preserves tool priming when no runtime is mounted.
 - **Finding 7 is partially addressed.** Rust has an ad hoc legacy consortium migration in `desktop/src/design/format.rs`, but there is still no version-dispatched migration boundary for future breaking file-format changes.
 - **Finding 8 was partly stale.** `maplibre-gl` is used by `LocationTab` and `WorldMapSurface`, and Vite has a `maplibre-gl` manual chunk. Do not remove MapLibre as a dead dependency. `suncalc` still appears unused.
@@ -153,7 +153,7 @@ The original finding was valid when panel rows overloaded string fields and desc
 - `Consortium` entries store a species `target`; the current chart remains species-aggregate based.
 - Legacy timeline, budget, and consortium identity data is migrated into typed targets, with unresolved/deleted references kept explicit for later repair or sync behavior.
 
-The pure resolver is also in place. `resolvePanelTargets()` maps document targets to scene IDs for plants/zones, reports unresolved scene-backed targets, and treats `manual` / `none` as intentionally empty.
+The pure resolver is also in place. `resolvePanelTargets()` maps document targets to scene IDs for plants/zones, reports unresolved scene-backed targets, and treats `manual` / `none` as intentionally empty. `projectPanelTargetsToMapFeatures()` builds on that resolver and `worldToGeo()` to produce map-ready plant point and zone polygon features without importing MapLibre or mutating canvas/document state.
 
 ### Current panel-target bridges
 
@@ -168,18 +168,18 @@ Current wiring covers:
 - timeline action click highlighting via `action.targets`
 - budget row click highlighting via the same species target path as budget row hover
 
-Hover clears on mouse leave/unmount. Timeline/budget selected targets clear on owner-tab unmount, selected row/action disappearance, or document replacement. This is not real canvas selection, full panel/map synchronization, or map overlay work.
+Hover clears on mouse leave/unmount. Timeline/budget selected targets clear on owner-tab unmount, selected row/action disappearance, or document replacement. The map projection seam is data-only and not rendered. This is not real canvas selection, full panel/map synchronization, or map overlay work.
 
 ### Remaining guardrails
 
-Future real panel-to-canvas selection and panel-to-map overlay work must use the same `PanelTarget[]` and `resolvePanelTargets()` path. Do not reintroduce string matching against timeline descriptions, legacy `plants` arrays, budget descriptions, or consortium canonical-name fields as a parallel sync mechanism. If future work intentionally promotes panel-origin highlighting into real canvas selection, it must explicitly decide how toolbar commands, delete, grouping, selection labels, dirty state, and history should behave.
+Future real panel-to-canvas selection and rendered panel-to-map overlay work must use the same `PanelTarget[]` and `resolvePanelTargets()` path, with `projectPanelTargetsToMapFeatures()` available as the pure map-data seam. Do not reintroduce string matching against timeline descriptions, legacy `plants` arrays, budget descriptions, or consortium canonical-name fields as a parallel sync mechanism. If future work intentionally promotes panel-origin highlighting into real canvas selection, it must explicitly decide how toolbar commands, delete, grouping, selection labels, dirty state, and history should behave.
 
 ### Acceptance criteria
 
 - Every panel row has explicit identity semantics — **met**
 - Panel hover can highlight the correct canvas entities through the pure resolver without mutating selection/history — **met for consortium, timeline, and budget hover**
 - Timeline/budget panel selection can highlight the correct canvas entities through the pure resolver without mutating real canvas selection/history — **met**
-- MapLibre overlays can be driven from the same targets without inventing a second mapping layer — **remaining work**
+- MapLibre overlays can be driven from the same targets without inventing a second mapping layer — **pure projection seam met; rendered overlays remain**
 
 ---
 
@@ -312,7 +312,7 @@ The original finding said `maplibre-gl`, `maplibre-contour`, and `suncalc` were 
 
 ### If pursuing MapLibre + panel activation:
 
-1. Use the existing `PanelTarget[]` and `resolvePanelTargets()` path for any new panel selection or map overlay sync; do not reintroduce string matching.
+1. Use the existing `PanelTarget[]`, `resolvePanelTargets()`, and `projectPanelTargetsToMapFeatures()` path for any new panel selection or map overlay sync; do not reintroduce string matching.
 2. Add round-trip integration tests for the file-format contract (Finding 3).
 3. Add a versioned migration boundary before the next breaking `.canopi` schema change (Finding 7).
 4. Add in-canvas MapLibre layers as a derived visualization with a dedicated `MapLibreController`.
