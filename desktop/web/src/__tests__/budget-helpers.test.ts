@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { countPlants, buildPriceMap, formatCurrency, escapeCsvField } from '../components/canvas/budget-helpers'
+import { MANUAL_TARGET, speciesBudgetTarget } from '../panel-targets'
 
 describe('countPlants', () => {
   it('groups plants by canonical name and counts them', () => {
@@ -36,8 +37,8 @@ describe('countPlants', () => {
 describe('buildPriceMap', () => {
   it('builds map from plant-category budget items', () => {
     const budget = [
-      { category: 'plants', description: 'Malus domestica', unit_cost: 5, currency: 'EUR', quantity: 0 },
-      { category: 'materials', description: 'Mulch', unit_cost: 10, currency: 'EUR', quantity: 0 },
+      { target: speciesBudgetTarget('Malus domestica'), category: 'plants', description: 'Malus domestica', unit_cost: 5, currency: 'EUR', quantity: 0 },
+      { target: MANUAL_TARGET, category: 'materials', description: 'Mulch', unit_cost: 10, currency: 'EUR', quantity: 0 },
     ]
     const map = buildPriceMap(budget)
     expect(map.size).toBe(1)

@@ -4,6 +4,7 @@ import { currentDesign } from './design'
 import { currentCanvasSession } from '../canvas/session'
 import { mutateCurrentDesign } from './document-mutations'
 import { STRATA_ROWS } from '../canvas/consortium-renderer'
+import { consortiumTarget, getConsortiumCanonicalName } from '../panel-targets'
 
 const DEFAULT_STRATUM: string = STRATA_ROWS[STRATA_ROWS.length - 1]!
 
@@ -25,7 +26,7 @@ export function installConsortiumSync(): void {
     for (const p of currentPlants) currentNames.add(p.canonical_name)
 
     const existingConsortiumNames = new Set<string>()
-    for (const c of currentConsortiums) existingConsortiumNames.add(c.canonical_name)
+    for (const c of currentConsortiums) existingConsortiumNames.add(getConsortiumCanonicalName(c))
     const toAdd: string[] = []
     for (const name of currentNames) {
       if (!existingConsortiumNames.has(name)) {
@@ -40,7 +41,7 @@ export function installConsortiumSync(): void {
     if (toAdd.length === 0) return
 
     mutateCurrentDesign((design) => {
-      const newEntries = toAdd.map((name) => ({ canonical_name: name, stratum: DEFAULT_STRATUM, start_phase: 0, end_phase: 2 }))
+      const newEntries = toAdd.map((name) => ({ target: consortiumTarget(name), stratum: DEFAULT_STRATUM, start_phase: 0, end_phase: 2 }))
       const consortiums = [...design.consortiums, ...newEntries]
       return { ...design, consortiums }
     }, { markDirty: false })

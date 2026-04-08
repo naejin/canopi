@@ -7,6 +7,7 @@ import { currentDesign } from '../../state/document'
 import { currentCanvasSession } from '../../canvas/session'
 import { moveConsortiumEntry, reorderConsortiumEntry } from '../../state/consortium-actions'
 import { markDocumentDirty } from '../../state/document-mutations'
+import { getConsortiumCanonicalName } from '../../panel-targets'
 import {
   buildConsortiumBars,
   filterActiveConsortiumEntries,
@@ -203,7 +204,7 @@ export function ConsortiumChart() {
           const sameStratum = barsRef.current.filter((b) => b.stratum === bar.stratum)
           const targetBar = sameStratum[targetSubLane]
           if (targetBar) {
-            const targetArrayIdx = consortiumsRef.current.findIndex((c) => c.canonical_name === targetBar.canonicalName)
+            const targetArrayIdx = consortiumsRef.current.findIndex((c) => getConsortiumCanonicalName(c) === targetBar.canonicalName)
             if (targetArrayIdx !== -1) {
               reorderConsortiumEntry(drag.canonicalName, targetArrayIdx, { markDirty: false })
               drag.hasMutated = true

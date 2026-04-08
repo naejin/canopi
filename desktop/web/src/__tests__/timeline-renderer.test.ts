@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { computeLayout, groupActionsBySpecies } from '../canvas/timeline-renderer'
 import type { TimelineAction } from '../types/design'
+import { MANUAL_TARGET } from '../panel-targets'
 
 function makeAction(overrides: Partial<TimelineAction> = {}): TimelineAction {
   return {
@@ -10,8 +11,7 @@ function makeAction(overrides: Partial<TimelineAction> = {}): TimelineAction {
     start_date: '2026-01-01',
     end_date: '2026-02-01',
     recurrence: null,
-    plants: null,
-    zone: null,
+    targets: [MANUAL_TARGET],
     depends_on: null,
     completed: false,
     order: 0,

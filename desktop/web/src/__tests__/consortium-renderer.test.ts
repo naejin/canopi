@@ -12,18 +12,22 @@ import {
 } from '../canvas/consortium-renderer'
 import type { ConsortiumBarLayout } from '../canvas/consortium-renderer'
 import type { Consortium, PlacedPlant } from '../types/design'
+import { consortiumTarget } from '../panel-targets'
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function createConsortium(overrides: Partial<Consortium> = {}): Consortium {
+type ConsortiumOverrides = Partial<Consortium> & { canonical_name?: string }
+
+function createConsortium(overrides: ConsortiumOverrides = {}): Consortium {
+  const { canonical_name, ...rest } = overrides
   return {
-    canonical_name: 'Malus domestica',
+    target: consortiumTarget(canonical_name ?? 'Malus domestica'),
     stratum: 'high',
     start_phase: 0,
     end_phase: 2,
-    ...overrides,
+    ...rest,
   }
 }
 

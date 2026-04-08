@@ -1,4 +1,5 @@
 import type { Consortium } from '../types/design'
+import { getConsortiumCanonicalName, panelTargetEqual } from '../panel-targets'
 import { updateDesignArray } from './document-mutations'
 
 interface ConsortiumUpdateOptions {
@@ -14,10 +15,15 @@ function updateConsortiums(
 
 export function upsertConsortiumEntry(entry: Consortium, options: ConsortiumUpdateOptions = {}): void {
   updateConsortiums((consortiums) => {
-    const idx = consortiums.findIndex((c) => c.canonical_name === entry.canonical_name)
+    const idx = consortiums.findIndex((c) => panelTargetEqual(c.target, entry.target))
     if (idx >= 0) {
       const existing = consortiums[idx]!
-      if (existing.stratum === entry.stratum && existing.start_phase === entry.start_phase && existing.end_phase === entry.end_phase) {
+      if (
+        existing.stratum === entry.stratum &&
+        existing.start_phase === entry.start_phase &&
+        existing.end_phase === entry.end_phase &&
+        panelTargetEqual(existing.target, entry.target)
+      ) {
         return consortiums
       }
       const updated = [...consortiums]
@@ -30,8 +36,8 @@ export function upsertConsortiumEntry(entry: Consortium, options: ConsortiumUpda
 
 export function deleteConsortiumEntry(canonicalName: string, options: ConsortiumUpdateOptions = {}): void {
   updateConsortiums((consortiums) => {
-    if (!consortiums.some((c) => c.canonical_name === canonicalName)) return consortiums
-    return consortiums.filter((c) => c.canonical_name !== canonicalName)
+    if (!consortiums.some((c) => getConsortiumCanonicalName(c) === canonicalName)) return consortiums
+    return consortiums.filter((c) => getConsortiumCanonicalName(c) !== canonicalName)
   }, options)
 }
 
@@ -42,7 +48,7 @@ export function reorderConsortiumEntry(
   options: ConsortiumUpdateOptions = {},
 ): void {
   updateConsortiums((consortiums) => {
-    const currentIdx = consortiums.findIndex((c) => c.canonical_name === canonicalName)
+    const currentIdx = consortiums.findIndex((c) => getConsortiumCanonicalName(c) === canonicalName)
     if (currentIdx === -1 || currentIdx === targetIndex) return consortiums
     const next = [...consortiums]
     const [entry] = next.splice(currentIdx, 1)
@@ -58,7 +64,7 @@ export function moveConsortiumEntry(
 ): void {
   updateConsortiums(
     (consortiums) => {
-      const idx = consortiums.findIndex((c) => c.canonical_name === canonicalName)
+      const idx = consortiums.findIndex((c) => getConsortiumCanonicalName(c) === canonicalName)
       if (idx === -1) return consortiums
       const c = consortiums[idx]!
       const nextStratum = updates.stratum ?? c.stratum

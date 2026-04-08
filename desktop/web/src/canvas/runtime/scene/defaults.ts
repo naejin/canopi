@@ -28,7 +28,7 @@ export function createDefaultScenePersistedState(now: Date = new Date()): SceneP
   const timestamp = now.toISOString()
 
   return {
-    version: 1,
+    version: 2,
     name: 'Untitled',
     description: null,
     location: null,

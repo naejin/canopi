@@ -1,6 +1,7 @@
 import { message } from '@tauri-apps/plugin-dialog'
 import type { CanopiFile } from '../types/design'
-import { getCurrentCanvasSession, type CanvasSession } from '../canvas/session'
+import { getCurrentCanvasSession } from '../canvas/session'
+import type { CanvasRuntime } from '../canvas/runtime/runtime'
 import * as designIpc from '../ipc/design'
 import { t } from '../i18n'
 import { extractExtra } from './document-extra'
@@ -17,14 +18,14 @@ import {
 } from './design'
 
 interface DocumentLoadOptions {
-  session?: CanvasSession | null
+  session?: CanvasRuntime | null
   isCancelled?: () => boolean
 }
 
 type ReplacementDecision = 'proceed' | 'cancel'
 export type TemplateOpenResult = 'opened' | 'queued' | 'cancelled'
 
-function buildPersistedContent(session: CanvasSession | null): CanopiFile {
+function buildPersistedContent(session: CanvasRuntime | null): CanopiFile {
   if (session) {
     const doc = currentDesign.value
     if (!doc) throw new Error('buildPersistedContent: no design loaded')
@@ -144,7 +145,7 @@ export async function newDesignAction(): Promise<void> {
 /** Consume a queued document load when CanvasPanel mounts a fresh engine.
  *  Bypasses the dirty guard — queued loads happen on fresh mount before the
  *  user has interacted, so prompting to save is semantically wrong. */
-export function consumeQueuedDocumentLoad(session: CanvasSession): () => void {
+export function consumeQueuedDocumentLoad(session: CanvasRuntime): () => void {
   const queuedTemplate = pendingTemplateImport.value
   if (queuedTemplate) {
     let cancelled = false
@@ -270,7 +271,7 @@ function applyDocumentReplacement(
   file: CanopiFile,
   path: string | null,
   name: string,
-  session: CanvasSession,
+  session: CanvasRuntime,
 ): void {
   session.replaceDocument(file)
   replaceCurrentDesignState(file, path, name)

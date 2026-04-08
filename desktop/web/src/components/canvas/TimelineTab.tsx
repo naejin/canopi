@@ -8,6 +8,7 @@ import {
   addTimelineAction,
   updateTimelineAction,
 } from '../../state/timeline-actions'
+import { MANUAL_TARGET } from '../../panel-targets'
 import type { TimelineAction } from '../../types/design'
 import { Dropdown, type DropdownItem } from '../shared/Dropdown'
 import { InteractiveTimeline, type Granularity } from './InteractiveTimeline'
@@ -100,8 +101,7 @@ export function TimelineTab() {
         start_date: next.start_date || null,
         end_date: next.end_date || null,
         recurrence: null,
-        plants: null,
-        zone: null,
+        targets: [MANUAL_TARGET],
         depends_on: null,
         completed: false,
       })

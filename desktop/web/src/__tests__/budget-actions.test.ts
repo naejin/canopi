@@ -2,10 +2,11 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { currentDesign } from '../state/design'
 import { setBudgetCurrency, setPlantBudgetPrice } from '../state/budget-actions'
 import type { CanopiFile } from '../types/design'
+import { speciesBudgetTarget } from '../panel-targets'
 
 function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
-    version: 1,
+    version: 2,
     name: 'test',
     description: null,
     location: null,
@@ -35,8 +36,8 @@ describe('setBudgetCurrency', () => {
     currentDesign.value = makeDesign({
       budget_currency: 'EUR',
       budget: [
-        { category: 'plants', description: 'Malus domestica', quantity: 0, unit_cost: 5, currency: 'EUR' },
-        { category: 'plants', description: 'Prunus avium', quantity: 0, unit_cost: 3, currency: 'EUR' },
+        { target: speciesBudgetTarget('Malus domestica'), category: 'plants', description: 'Malus domestica', quantity: 0, unit_cost: 5, currency: 'EUR' },
+        { target: speciesBudgetTarget('Prunus avium'), category: 'plants', description: 'Prunus avium', quantity: 0, unit_cost: 3, currency: 'EUR' },
       ],
     })
 
@@ -61,7 +62,7 @@ describe('setBudgetCurrency', () => {
   it('does not convert unit costs', () => {
     currentDesign.value = makeDesign({
       budget: [
-        { category: 'plants', description: 'Malus domestica', quantity: 0, unit_cost: 5, currency: 'EUR' },
+        { target: speciesBudgetTarget('Malus domestica'), category: 'plants', description: 'Malus domestica', quantity: 0, unit_cost: 5, currency: 'EUR' },
       ],
     })
 
@@ -90,6 +91,7 @@ describe('setPlantBudgetPrice', () => {
     const budget = currentDesign.value!.budget!
     expect(budget).toHaveLength(1)
     expect(budget[0]!.description).toBe('Malus domestica')
+    expect(budget[0]!.target).toEqual(speciesBudgetTarget('Malus domestica'))
     expect(budget[0]!.unit_cost).toBe(7.5)
     expect(budget[0]!.currency).toBe('USD')
   })
@@ -106,7 +108,7 @@ describe('setPlantBudgetPrice', () => {
   it('updates an existing item', () => {
     currentDesign.value = makeDesign({
       budget: [
-        { category: 'plants', description: 'Malus domestica', quantity: 0, unit_cost: 5, currency: 'EUR' },
+        { target: speciesBudgetTarget('Malus domestica'), category: 'plants', description: 'Malus domestica', quantity: 0, unit_cost: 5, currency: 'EUR' },
       ],
     })
 
@@ -120,7 +122,7 @@ describe('setPlantBudgetPrice', () => {
   it('preserves existing quantity when updating price', () => {
     currentDesign.value = makeDesign({
       budget: [
-        { category: 'plants', description: 'Malus domestica', quantity: 3, unit_cost: 5, currency: 'EUR' },
+        { target: speciesBudgetTarget('Malus domestica'), category: 'plants', description: 'Malus domestica', quantity: 3, unit_cost: 5, currency: 'EUR' },
       ],
     })
 

@@ -89,10 +89,37 @@ pub struct Annotation {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct Consortium {
-    pub canonical_name: String,
+    pub target: SpeciesPanelTarget,
     pub stratum: String,
     pub start_phase: u32,
     pub end_phase: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(tag = "kind")]
+pub enum PanelTarget {
+    #[serde(rename = "placed_plant")]
+    PlacedPlant { plant_id: String },
+    #[serde(rename = "species")]
+    Species { canonical_name: String },
+    #[serde(rename = "zone")]
+    Zone { zone_name: String },
+    #[serde(rename = "manual")]
+    Manual,
+    #[serde(rename = "none")]
+    None,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct SpeciesPanelTarget {
+    pub kind: SpeciesPanelTargetKind,
+    pub canonical_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub enum SpeciesPanelTargetKind {
+    #[serde(rename = "species")]
+    Species,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -103,8 +130,8 @@ pub struct TimelineAction {
     pub start_date: Option<String>,
     pub end_date: Option<String>,
     pub recurrence: Option<String>,
-    pub plants: Option<Vec<String>>,
-    pub zone: Option<String>,
+    #[serde(default = "default_manual_targets")]
+    pub targets: Vec<PanelTarget>,
     pub depends_on: Option<Vec<String>>,
     pub completed: bool,
     pub order: i32,
@@ -112,11 +139,27 @@ pub struct TimelineAction {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct BudgetItem {
+    #[serde(default = "default_manual_target")]
+    pub target: PanelTarget,
     pub category: String,
     pub description: String,
     pub quantity: f64,
     pub unit_cost: f64,
     pub currency: String,
+}
+
+impl Default for PanelTarget {
+    fn default() -> Self {
+        Self::Manual
+    }
+}
+
+fn default_manual_target() -> PanelTarget {
+    PanelTarget::Manual
+}
+
+fn default_manual_targets() -> Vec<PanelTarget> {
+    vec![PanelTarget::Manual]
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]

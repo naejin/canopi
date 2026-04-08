@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CanopiFile } from '../../../types/design'
+import { consortiumTarget, speciesBudgetTarget, speciesTarget } from '../../../panel-targets'
 import {
   SceneStore,
   createDefaultScenePersistedState,
@@ -10,7 +11,7 @@ import {
 describe('scene store', () => {
   it('hydrates and serializes CanopiFile data without crossing the session boundary', () => {
     const file: CanopiFile = {
-      version: 1,
+      version: 2,
       name: 'Demo',
       description: 'sample',
       location: {
@@ -54,7 +55,7 @@ describe('scene store', () => {
         },
       ],
       annotations: [],
-      consortiums: [{ canonical_name: 'Quercus robur', stratum: 'high', start_phase: 0, end_phase: 3 }],
+      consortiums: [{ target: consortiumTarget('Quercus robur'), stratum: 'high', start_phase: 0, end_phase: 3 }],
       groups: [
         {
           id: 'group-1',
@@ -65,8 +66,8 @@ describe('scene store', () => {
           member_ids: ['plant-1'],
         },
       ],
-      timeline: [{ id: 't1', action_type: 'planting', description: 'Plant oak', start_date: '2026-04-01', end_date: '2026-04-02', recurrence: null, plants: ['Quercus robur'], zone: null, depends_on: [], completed: false, order: 0 }],
-      budget: [{ category: 'plants', description: 'Quercus robur', quantity: 1, unit_cost: 25, currency: 'EUR' }],
+      timeline: [{ id: 't1', action_type: 'planting', description: 'Plant oak', start_date: '2026-04-01', end_date: '2026-04-02', recurrence: null, targets: [speciesTarget('Quercus robur')], depends_on: [], completed: false, order: 0 }],
+      budget: [{ target: speciesBudgetTarget('Quercus robur'), category: 'plants', description: 'Quercus robur', quantity: 1, unit_cost: 25, currency: 'EUR' }],
       created_at: '2026-04-01T10:00:00.000Z',
       updated_at: '2026-04-01T12:00:00.000Z',
       extra: {
@@ -142,12 +143,12 @@ describe('scene store', () => {
     expect(session.activeLayerName).toBe('zones')
     expect(session.plantSizeMode).toBe('default')
     expect(session.plantColorByAttr).toBe(null)
-    expect(serializeScenePersistedState(persisted, { now: new Date('2026-04-02T00:00:00.000Z') }).version).toBe(1)
+    expect(serializeScenePersistedState(persisted, { now: new Date('2026-04-02T00:00:00.000Z') }).version).toBe(2)
   })
 
   it('serializes runtime plant presentation metadata back into the existing placed-plant fields only', () => {
     const file: CanopiFile = {
-      version: 1,
+      version: 2,
       name: 'Demo',
       description: null,
       location: null,

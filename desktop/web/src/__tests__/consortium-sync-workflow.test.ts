@@ -4,10 +4,11 @@ import { sceneEntityRevision } from '../state/canvas'
 import { currentCanvasSession } from '../canvas/session'
 import { installConsortiumSync, disposeConsortiumSync } from '../state/consortium-sync-workflow'
 import type { CanopiFile, PlacedPlant } from '../types/design'
+import { consortiumTarget, getConsortiumCanonicalName } from '../panel-targets'
 
 function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
-    version: 1,
+    version: 2,
     name: 'test',
     description: null,
     location: null,
@@ -71,15 +72,15 @@ describe('consortium-sync-workflow', () => {
 
     const consortiums = currentDesign.value!.consortiums
     expect(consortiums).toHaveLength(2)
-    expect(consortiums.map((c) => c.canonical_name).sort()).toEqual(['Acer campestre', 'Quercus robur'])
+    expect(consortiums.map(getConsortiumCanonicalName).sort()).toEqual(['Acer campestre', 'Quercus robur'])
     expect(consortiums[0]!.stratum).toBe('unassigned')
   })
 
   it('preserves inactive consortium entries when species are deleted', () => {
     currentDesign.value = makeDesign({
       consortiums: [
-        { canonical_name: 'Quercus robur', stratum: 'high', start_phase: 0, end_phase: 3 },
-        { canonical_name: 'Acer campestre', stratum: 'medium', start_phase: 0, end_phase: 2 },
+        { target: consortiumTarget('Quercus robur'), stratum: 'high', start_phase: 0, end_phase: 3 },
+        { target: consortiumTarget('Acer campestre'), stratum: 'medium', start_phase: 0, end_phase: 2 },
       ],
     })
     // Only Quercus remains on canvas
@@ -90,7 +91,7 @@ describe('consortium-sync-workflow', () => {
 
     const consortiums = currentDesign.value!.consortiums
     expect(consortiums).toHaveLength(2)
-    expect(consortiums).toContainEqual({ canonical_name: 'Acer campestre', stratum: 'medium', start_phase: 0, end_phase: 2 })
+    expect(consortiums).toContainEqual({ target: consortiumTarget('Acer campestre'), stratum: 'medium', start_phase: 0, end_phase: 2 })
   })
 
   it('does not increment nonCanvasRevision (markDirty: false)', () => {
@@ -106,7 +107,7 @@ describe('consortium-sync-workflow', () => {
   it('is a no-op when plant set has not changed', () => {
     const plants = [makePlant('Quercus robur')]
     currentDesign.value = makeDesign({
-      consortiums: [{ canonical_name: 'Quercus robur', stratum: 'high', start_phase: 0, end_phase: 3 }],
+      consortiums: [{ target: consortiumTarget('Quercus robur'), stratum: 'high', start_phase: 0, end_phase: 3 }],
     })
     ;(currentCanvasSession as any).value = mockSession(plants)
 

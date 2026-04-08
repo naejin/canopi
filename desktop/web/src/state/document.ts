@@ -7,7 +7,7 @@
  * persistence helpers.
  */
 import type { CanopiFile } from '../types/design'
-import type { CanvasSession } from '../canvas/session'
+import type { CanvasRuntime } from '../canvas/runtime/runtime'
 import { extractExtra } from './document-extra'
 import { replaceCurrentDesignSnapshot } from './document-mutations'
 import { installConsortiumSync, disposeConsortiumSync } from './consortium-sync-workflow'
@@ -42,7 +42,7 @@ export {
  * document for non-canvas sections. Called before save/autosave.
  */
 export function writeCanvasIntoDocument(
-  session: CanvasSession,
+  session: CanvasRuntime,
   name: string,
 ): CanopiFile {
   const doc = currentDesign.value
@@ -51,7 +51,7 @@ export function writeCanvasIntoDocument(
 }
 
 export function snapshotCanvasIntoCurrentDocument(
-  session: CanvasSession,
+  session: CanvasRuntime,
   name: string,
 ): CanopiFile | null {
   if (!currentDesign.value) return null
@@ -66,7 +66,7 @@ export function snapshotCanvasIntoCurrentDocument(
  */
 export function loadCanvasFromDocument(
   file: CanopiFile,
-  session: CanvasSession,
+  session: CanvasRuntime,
 ): void {
   session.loadDocument(file)
   installConsortiumSync()

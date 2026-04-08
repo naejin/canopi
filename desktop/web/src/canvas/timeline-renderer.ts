@@ -1,4 +1,5 @@
 import type { TimelineAction } from '../types/design'
+import { getTimelineSpeciesTarget } from '../panel-targets'
 import { dateToX, niceInterval, formatDateLabel } from './timeline-math'
 import { cssVar, roundRect, readThemeTokens } from './canvas2d-utils'
 
@@ -47,7 +48,7 @@ export interface SpeciesRow {
 }
 
 /**
- * Group actions by species (via plants[0] canonical name or ungrouped).
+ * Group actions by explicit species target or ungrouped.
  * Returns a flat list of rows: one per species, plus an "ungrouped" row.
  */
 export function groupActionsBySpecies(actions: TimelineAction[]): SpeciesRow[] {
@@ -55,7 +56,7 @@ export function groupActionsBySpecies(actions: TimelineAction[]): SpeciesRow[] {
   const ungrouped: TimelineAction[] = []
 
   for (const action of actions) {
-    const key = action.plants?.[0] ?? null
+    const key = getTimelineSpeciesTarget(action)?.canonical_name ?? null
     if (key) {
       const existing = speciesMap.get(key)
       if (existing) existing.push(action)

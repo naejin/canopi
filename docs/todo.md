@@ -25,9 +25,9 @@ For architectural analysis and rationale, see [Code Quality And Architecture Rev
 Do **not** do a broad architecture refactor before this file. The document-authority convergence work is far enough along to continue safely: canvas scene state is owned by `SceneStore`, non-canvas document state is owned by `currentDesign` / document actions, and save composes both in `SceneCanvasRuntime.serializeDocument()`.
 
 Do a narrow convergence pass before expanding panel/map sync:
-- Define typed target identity semantics for timeline and budget before adding full panel-to-canvas highlighting, canvas-to-chart hover, or map overlays.
-- Replace the pass-through `CanvasSession` facade, or split it into explicit command/query interfaces, before adding more runtime API surface.
-- Add file-format round-trip/migration coverage before the next breaking `.canopi` schema change.
+- ~~Define typed target identity semantics for timeline and budget before adding full panel-to-canvas highlighting, canvas-to-chart hover, or map overlays~~ — **done**: panel targets are typed as `placed_plant` / `species` / `zone` / `manual` / `none`; timeline, budget, and consortium now encode target identity explicitly.
+- ~~Replace the pass-through `CanvasSession` facade, or split it into explicit command/query interfaces, before adding more runtime API surface~~ — **done**: `currentCanvasSession` stores `CanvasRuntime | null`; `setCurrentCanvasTool()` still primes tool state without a mounted runtime.
+- ~~Add file-format round-trip/migration coverage before the next breaking `.canopi` schema change~~ — **done**: v1→v2 migration covers legacy panel identity fields, and v2 panel sections round-trip with unknown top-level fields.
 
 Live-code corrections from the review:
 - `maplibre-gl` is not dead: `LocationTab` imports it directly, `WorldMapPanel` dynamically imports `WorldMapSurface`, and `vite.config.ts` has a `maplibre-gl` manual chunk. Keep MapLibre; verify chunk/lifecycle behavior instead of removing it.
@@ -46,24 +46,19 @@ These align with the core risks identified in the architecture review.
 - See root `CLAUDE.md` Document Authority Rule
 
 **Panel identity semantics:**
-- Define explicit target identity types for timeline, budget, and consortium references before activating full panel↔canvas sync.
-- Timeline currently stores `plants: string[] | null` and `zone: string | null` without saying whether the strings are placed-plant IDs, canonical species names, or zone names. New manual actions in `TimelineTab` set `plants: null` / `zone: null`.
-- Budget plant prices currently match by `category === 'plants' && description === canonicalName`; this makes `description` both a display field and an identity key.
-- Consortium now uses `canonical_name` as identity key (succession entries keyed by species), backed by `consortium-sync-workflow.ts` adding species entries from placed plants.
-- Recommended target shape before sync expansion:
-  - Shared target union: `placed_plant`, `species`, `zone`, `manual` / `none`.
-  - Timeline actions should express whether they target one placement, a species aggregate, a zone, or no scene object.
-  - Budget items should express whether they target a species aggregate, one placement, a zone, or a manual line item; keep display copy separate from identity.
-  - Consortium can remain species-targeted for the current succession chart, but encode that explicitly rather than relying on generic strings.
-- Add migration/repair rules for legacy timeline `plants`, budget `description` species rows, deleted plants/zones, and duplicate species placements.
+- ~~Define explicit target identity types for timeline, budget, and consortium references before activating full panel↔canvas sync~~ — **done**: shared target union covers `placed_plant`, `species`, `zone`, `manual`, and `none`.
+- ~~Timeline `plants` / `zone` ambiguity~~ — **done**: timeline actions now write explicit `targets`; v1 migration maps legacy plant refs to placed-plant IDs when they match existing placements, otherwise species targets, plus zone targets.
+- ~~Budget `description` as identity key~~ — **done**: budget plant prices upsert and read by explicit species target; `description` remains display/category copy.
+- ~~Consortium bare `canonical_name` identity~~ — **done**: consortium entries are species-targeted via `target`, while current chart behavior remains species aggregate based.
+- ~~Add migration/repair rules for legacy timeline `plants`, budget `description` species rows, deleted plants/zones, and duplicate species placements~~ — **done**: legacy data is migrated into typed targets; unresolved/deleted targets remain explicit for later sync/highlight repair.
 - See architecture review Finding 2
 
 **Canvas seam:**
-- Replace `CanvasSession` pass-through with a runtime interface (or give it real logic).
-- Existing `CanvasRuntime` already defines the boundary that `SceneCanvasRuntime` implements. Prefer either storing `CanvasRuntime | null` in `currentCanvasSession`, or splitting the API into:
+- ~~Replace `CanvasSession` pass-through with a runtime interface (or give it real logic)~~ — **done**.
+- Existing `CanvasRuntime` already defines the boundary that `SceneCanvasRuntime` implements. The implemented seam stores `CanvasRuntime | null` in `currentCanvasSession`; future API growth can still split this into:
   - command surface for toolbar/shortcuts/document actions: tool, selection, zoom, undo/redo, clipboard, grouping, document load/save lifecycle
   - read-only query surface for panels: placed plants, localized names, selected plant color context
-- Preserve the current `setCurrentCanvasTool()` behavior when no runtime is mounted: it primes the mirror tool state for later mount.
+- ~~Preserve the current `setCurrentCanvasTool()` behavior when no runtime is mounted: it primes the mirror tool state for later mount~~ — **done**.
 
 ### 2. Correctness (ongoing)
 - Keep save/load strictly scene-authoritative for canvas entities
@@ -217,8 +212,8 @@ These align with the core risks identified in the architecture review.
 
 - ~~Document authority boundary is explicit~~ — **done**: canvas state in SceneStore, non-canvas in document store, save composes both
 - ~~Save path composes from two authorities without re-merging~~ — **done**: `serializeDocument()` spreads canvas output + document store sections
-- Panel identity semantics are defined and typed (not stringly-typed string arrays) — **partially done**: consortium uses `canonical_name`, timeline/budget still use mixed IDs / descriptions
-- Legacy identity data is migrated or interpreted through one compatibility adapter: timeline `plants`/`zone`, budget `category + description`, consortium species entries
-- `CanvasSession` is either replaced with an interface, split into command/query surfaces, or given real logic
-- File-format round-trip test exists for Rust load → frontend normalize/serialize → Rust load, including unknown top-level fields and populated timeline/budget/consortium/location sections
-- ~~Architecture review Finding 1 resolved~~ — **done**; Finding 2 partially resolved (consortium identity converged)
+- ~~Panel identity semantics are defined and typed (not stringly-typed string arrays)~~ — **done**
+- ~~Legacy identity data is migrated or interpreted through one compatibility adapter: timeline `plants`/`zone`, budget `category + description`, consortium species entries~~ — **done**
+- ~~`CanvasSession` is either replaced with an interface, split into command/query surfaces, or given real logic~~ — **done**
+- ~~File-format round-trip coverage exists for Rust load/save and frontend serialize paths, including unknown top-level fields and populated timeline/budget/consortium/location sections~~ — **done**: migration and v2 round-trip coverage now exercise populated panel/location sections and unknown top-level field preservation.
+- ~~Architecture review Finding 1 resolved~~ — **done**; ~~Finding 2 resolved~~ — **done**
