@@ -51,6 +51,7 @@ These align with the core risks identified in the architecture review.
 - ~~Budget `description` as identity key~~ — **done**: budget plant prices upsert and read by explicit species target; `description` remains display/category copy.
 - ~~Consortium bare `canonical_name` identity~~ — **done**: consortium entries are species-targeted via `target`, while current chart behavior remains species aggregate based.
 - ~~Add migration/repair rules for legacy timeline `plants`, budget `description` species rows, deleted plants/zones, and duplicate species placements~~ — **done**: legacy data is migrated into typed targets; unresolved/deleted targets remain explicit for later sync/highlight repair.
+- ~~Add pure target resolver before UI sync~~ — **done** (`7bf5a54`): `resolvePanelTargets()` maps typed panel targets to scene IDs (plant IDs and zone names), reports missing scene-backed targets, and treats `manual` / `none` as intentionally empty without mutating canvas selection or history.
 - See architecture review Finding 2
 
 **Canvas seam:**
@@ -177,7 +178,7 @@ These align with the core risks identified in the architecture review.
 - ~~Budget tab~~ — **done**: redesigned with compact summary header (species/plant counts, pricing progress), document-level currency picker (13 currencies via `budget_currency` field), notebook-style ruled table, inline price editing, CSV export. Live updates via `sceneEntityRevision`
 - ~~Consortium succession chart~~ — **done** (`9fd8cf3`..`1007a96`): Canvas2D strata×phase grid, auto-sync from placed species, drag-move/resize, hover sync with canvas
 - ~~Bottom panel state persistence~~ — **done**: open/height/tab hydrated from Rust settings on bootstrap, persisted on panel actions (height persisted on drag-end, not per-frame)
-- Remaining: full panel↔canvas highlighting sync (requires identity semantics convergence), canvas→chart hover direction
+- Remaining: full panel↔canvas highlighting sync using the pure target resolver, canvas→chart hover direction
 
 **Other:**
 - Featured-design world map / template import
@@ -206,7 +207,7 @@ These align with the core risks identified in the architecture review.
 - Do not add new ad hoc signal mirrors — use computed/derived signals or single-writer pattern (see root `CLAUDE.md` Signal Mirror Rule). Both `designLocation` and `currentConsortiums` mirrors were removed entirely
 - Bottom-panel tabs are active — consortium auto-sync runs at document level via `consortium-sync-workflow.ts`
 - Do not make MapLibre a second document authority
-- Do not add full panel↔canvas or panel↔map sync until panel target identity is typed and migrated; otherwise selection/highlight behavior will become string matching.
+- Do not add full panel↔canvas or panel↔map sync without resolving typed targets through the pure resolver; do not reintroduce string matching.
 
 ## Exit Criteria For Convergence Phase
 
