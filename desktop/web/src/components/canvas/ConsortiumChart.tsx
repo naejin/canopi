@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
-import { locale } from '../../state/app'
+import { locale, theme } from '../../state/app'
 import { plantSpeciesColors, hoveredCanvasTargets, hoveredPanelTargets, sceneEntityRevision, plantNamesRevision } from '../../state/canvas'
 import { currentDesign } from '../../state/document'
 import { currentCanvasSession } from '../../canvas/session'
@@ -120,7 +120,7 @@ export function ConsortiumChart() {
       hoveredCanonical: effectiveHoveredCanonical,
     }
     renderConsortium(ctx, width, height, barsRef.current, state, t, rowHeightsRef.current, rowOffsetsRef.current)
-  }, [bars, effectiveHoveredCanonical, locale.value], cachedRectRef)
+  }, [bars, effectiveHoveredCanonical, locale.value, theme.value], cachedRectRef)
 
   // Clean up drag state and consortium hover bridge on unmount
   useEffect(() => {
@@ -241,7 +241,7 @@ export function ConsortiumChart() {
         moveConsortiumEntry(drag.canonicalName, { startPhase: newStart, endPhase: drag.originalEndPhase }, { markDirty: false })
         drag.hasMutated = true
       } else {
-        const newEnd = Math.max(clampedPhase, drag.originalStartPhase)
+        const newEnd = Math.max(clampedPhase - 1, drag.originalStartPhase)
         if (bar && bar.endPhase === newEnd) return
         moveConsortiumEntry(drag.canonicalName, { startPhase: drag.originalStartPhase, endPhase: newEnd }, { markDirty: false })
         drag.hasMutated = true

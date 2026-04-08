@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'preact/hooks'
 import { useCanvasRenderer } from './useCanvasRenderer'
 import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
-import { locale } from '../../state/app'
+import { locale, theme } from '../../state/app'
 import { hoveredPanelTargets, selectedPanelTargetOrigin, selectedPanelTargets } from '../../state/canvas'
 import { currentDesign } from '../../state/document'
 import {
@@ -156,7 +156,7 @@ export function InteractiveTimeline({
       t,
       rowOffsetsRef.current,
     )
-  }, [originMs, pxPerDay.value, scrollX.value, selectedId, hoveredId.value, scrollY.value, locale.value], cachedRectRef)
+  }, [originMs, pxPerDay.value, scrollX.value, selectedId, hoveredId.value, scrollY.value, locale.value, theme.value], cachedRectRef)
 
   const handleWheel = useCallback((event: WheelEvent) => {
     event.preventDefault()
