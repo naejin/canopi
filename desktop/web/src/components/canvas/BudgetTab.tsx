@@ -35,7 +35,7 @@ export function BudgetTab() {
   const localizedNamesRef = useRef(localizedNames)
   localizedNamesRef.current = localizedNames
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const groupedPlants = useMemo(() => countPlants(plantsRef.current, localizedNamesRef.current), [sceneEntityRevision.value, plantNamesRevision.value, locale.value])
+  const groupedPlants = useMemo(() => countPlants(plantsRef.current, localizedNamesRef.current, locale.value), [sceneEntityRevision.value, plantNamesRevision.value, locale.value])
   const priceMap = useMemo(() => buildPriceMap(budget), [budget])
   const totalPlants = useMemo(() => groupedPlants.reduce((sum, row) => sum + row.count, 0), [groupedPlants])
   const pricedCount = useMemo(() => groupedPlants.filter((row) => (priceMap.get(row.canonical)?.unit_cost ?? 0) > 0).length, [groupedPlants, priceMap])
@@ -109,7 +109,7 @@ export function BudgetTab() {
           triggerClassName={styles.currencyChip}
         />
         <span className={styles.total}>
-          {t('canvas.budget.grandTotal')}{' '}{formatCurrency(grandTotal, currency)}
+          {t('canvas.budget.grandTotal')}{' '}{formatCurrency(grandTotal, currency, locale.value)}
         </span>
         <button type="button" className={styles.exportBtn} onClick={handleExportCSV}>
           {t('canvas.budget.exportCSV')}
@@ -165,11 +165,11 @@ export function BudgetTab() {
                         onClick={() => startEditPrice(row.canonical)}
                         aria-label={`${t('canvas.budget.setPrice')} ${row.commonName || row.canonical}`}
                       >
-                        {price > 0 ? formatCurrency(price, currency) : '\u2014'}
+                        {price > 0 ? formatCurrency(price, currency, locale.value) : '\u2014'}
                       </button>
                     )}
                   </td>
-                  <td className={styles.tdNum}>{price > 0 ? formatCurrency(subtotal, currency) : '\u2014'}</td>
+                  <td className={styles.tdNum}>{price > 0 ? formatCurrency(subtotal, currency, locale.value) : '\u2014'}</td>
                 </tr>
               )
             })}

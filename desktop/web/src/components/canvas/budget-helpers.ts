@@ -3,13 +3,14 @@ import { groupPlantsBySpecies } from '../../canvas/plant-grouping'
 
 export function countPlants(
   plants: PlacedPlant[],
-  localizedNames?: ReadonlyMap<string, string | null>,
+  localizedNames: ReadonlyMap<string, string | null> | undefined,
+  locale: string,
 ): { canonical: string; commonName: string; count: number }[] {
   const grouped = groupPlantsBySpecies(plants, localizedNames)
 
   return Array.from(grouped.entries())
     .map(([canonical, value]) => ({ canonical, ...value }))
-    .sort((left, right) => (left.commonName || left.canonical).localeCompare(right.commonName || right.canonical))
+    .sort((left, right) => (left.commonName || left.canonical).localeCompare(right.commonName || right.canonical, locale))
 }
 
 export function buildPriceMap(budget: BudgetItem[]): Map<string, { unit_cost: number; currency: string }> {
@@ -22,17 +23,18 @@ export function buildPriceMap(budget: BudgetItem[]): Map<string, { unit_cost: nu
 
 const _formatterCache = new Map<string, Intl.NumberFormat>()
 
-export function formatCurrency(amount: number, currency: string): string {
+export function formatCurrency(amount: number, currency: string, locale?: string): string {
   try {
-    let formatter = _formatterCache.get(currency)
+    const key = locale ? `${locale}:${currency}` : currency
+    let formatter = _formatterCache.get(key)
     if (!formatter) {
-      formatter = new Intl.NumberFormat(undefined, {
+      formatter = new Intl.NumberFormat(locale, {
         style: 'currency',
         currency,
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       })
-      _formatterCache.set(currency, formatter)
+      _formatterCache.set(key, formatter)
     }
     return formatter.format(amount)
   } catch {

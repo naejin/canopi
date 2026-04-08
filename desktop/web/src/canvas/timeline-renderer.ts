@@ -341,9 +341,9 @@ export function renderTimeline(
 
       // Label inside bar
       if (barW > 40) {
+        ctx.save()
         ctx.fillStyle = primaryContrastColor
         ctx.font = `600 11px ${fontSans}`
-        ctx.save()
         ctx.beginPath()
         ctx.rect(x1 + 2, barY, barW - 4, barH)
         ctx.clip()

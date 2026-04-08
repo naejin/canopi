@@ -8,7 +8,7 @@ describe('countPlants', () => {
       { canonical_name: 'Malus domestica', common_name: 'Apple' },
       { canonical_name: 'Prunus avium', common_name: 'Cherry' },
     ] as any[]
-    const result = countPlants(plants)
+    const result = countPlants(plants, undefined, 'en')
     expect(result).toHaveLength(2)
     expect(result.find((r) => r.canonical === 'Malus domestica')).toMatchObject({ count: 2 })
     expect(result.find((r) => r.canonical === 'Prunus avium')).toMatchObject({ count: 1 })
@@ -19,7 +19,7 @@ describe('countPlants', () => {
       { canonical_name: 'Malus domestica', common_name: 'Apple' },
     ] as any[]
     const localized = new Map([['Malus domestica', 'Pommier']])
-    const result = countPlants(plants, localized)
+    const result = countPlants(plants, localized, 'fr')
     expect(result[0]!.commonName).toBe('Pommier')
   })
 
@@ -28,7 +28,7 @@ describe('countPlants', () => {
       { canonical_name: 'Malus domestica', common_name: 'Apple' },
     ] as any[]
     const localized = new Map<string, string | null>([['Malus domestica', null]])
-    const result = countPlants(plants, localized)
+    const result = countPlants(plants, localized, 'en')
     expect(result[0]!.commonName).toBe('Apple')
   })
 })

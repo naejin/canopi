@@ -107,8 +107,8 @@ export function createScenePatchCommand(
     diffs.add(DIFF_BY_KEY[key])
   }
 
-  const beforeSelection = [...before.session.selectedEntityIds]
-  const afterSelection = [...after.session.selectedEntityIds]
+  const beforeSelection = [...before.session.selectedEntityIds].sort()
+  const afterSelection = [...after.session.selectedEntityIds].sort()
   if (stableStringify(beforeSelection) !== stableStringify(afterSelection)) {
     beforePatch.selection = beforeSelection
     afterPatch.selection = afterSelection

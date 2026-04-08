@@ -10,7 +10,7 @@ import { groupPlantsBySpecies } from './plant-grouping'
 
 export const CONSORTIUM_PHASES = [
   { key: 'placenta1', labelKey: 'canvas.consortium.phase_placenta1', durationKey: 'canvas.consortium.duration_90d' },
-  { key: 'placenta2', labelKey: 'canvas.consortium.phase_placenta2', durationKey: 'canvas.consortium.duration_2y' },
+  { key: 'placenta2', labelKey: 'canvas.consortium.phase_placenta2', durationKey: 'canvas.consortium.duration_180d' },
   { key: 'placenta3', labelKey: 'canvas.consortium.phase_placenta3', durationKey: 'canvas.consortium.duration_5y' },
   { key: 'secondaire1', labelKey: 'canvas.consortium.phase_secondaire1', durationKey: 'canvas.consortium.duration_10y' },
   { key: 'secondaire2', labelKey: 'canvas.consortium.phase_secondaire2', durationKey: 'canvas.consortium.duration_20y' },
@@ -178,7 +178,7 @@ export function renderConsortium(
   const theme = readThemeTokens()
   const bgColor = theme.bg
   const surfaceColor = theme.surface
-  const surfaceMuted = cssVar('--color-surface-muted') || '#E8E3D9'
+  const surfaceMuted = cssVar('--color-surface-muted') || surfaceColor
   const borderColor = theme.border
   const textColor = theme.text
   const textMutedColor = theme.textMuted

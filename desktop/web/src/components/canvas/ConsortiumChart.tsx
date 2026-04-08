@@ -79,7 +79,7 @@ export function ConsortiumChart() {
     // consortiums is a stable ref (only changes on mutateCurrentDesign), so
     // it's safe as a dep — needed to recompute bars after in-drag reorders.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [colors, sceneEntityRevision.value, plantNamesRevision.value, consortiums],
+    [colors, sceneEntityRevision.value, plantNamesRevision.value, consortiums, locale.value],
   )
   const rowHeights = useMemo(() => computeRowHeights(bars), [bars])
   const rowOffsets = useMemo(() => computeRowYOffsets(rowHeights), [rowHeights])
