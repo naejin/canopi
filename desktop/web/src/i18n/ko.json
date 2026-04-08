@@ -741,5 +741,11 @@
     "replacement": "다음으로 교체",
     "keepOriginal": "원본 유지",
     "reviewPlants": "위치에 맞는 식물 검토"
+  },
+  "error": {
+    "title": "문제가 발생했습니다",
+    "message": "애플리케이션에서 예기치 않은 오류가 발생했습니다. 다시 로드해 보세요.",
+    "reload": "다시 로드",
+    "details": "오류 세부 정보"
   }
 }

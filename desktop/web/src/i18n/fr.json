@@ -741,5 +741,11 @@
     "replacement": "Remplacer par",
     "keepOriginal": "Garder l'original",
     "reviewPlants": "Vérifier les plantes pour votre emplacement"
+  },
+  "error": {
+    "title": "Une erreur est survenue",
+    "message": "L'application a rencontré une erreur inattendue. Vous pouvez essayer de recharger.",
+    "reload": "Recharger",
+    "details": "Détails de l'erreur"
   }
 }

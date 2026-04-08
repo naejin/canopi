@@ -741,5 +741,11 @@
     "replacement": "Sostituisci con",
     "keepOriginal": "Mantieni originale",
     "reviewPlants": "Verifica piante per la tua posizione"
+  },
+  "error": {
+    "title": "Qualcosa è andato storto",
+    "message": "L'applicazione ha riscontrato un errore imprevisto. Puoi provare a ricaricare.",
+    "reload": "Ricarica",
+    "details": "Dettagli dell'errore"
   }
 }

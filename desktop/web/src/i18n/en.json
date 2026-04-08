@@ -741,5 +741,11 @@
     "replacement": "Replace with",
     "keepOriginal": "Keep original",
     "reviewPlants": "Review plants for your location"
+  },
+  "error": {
+    "title": "Something went wrong",
+    "message": "The application encountered an unexpected error. You can try reloading.",
+    "reload": "Reload",
+    "details": "Error details"
   }
 }

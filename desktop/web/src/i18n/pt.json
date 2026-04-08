@@ -741,5 +741,11 @@
     "replacement": "Substituir por",
     "keepOriginal": "Manter original",
     "reviewPlants": "Verificar plantas para sua localização"
+  },
+  "error": {
+    "title": "Algo deu errado",
+    "message": "O aplicativo encontrou um erro inesperado. Você pode tentar recarregar.",
+    "reload": "Recarregar",
+    "details": "Detalhes do erro"
   }
 }

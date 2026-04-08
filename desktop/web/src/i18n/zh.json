@@ -741,5 +741,11 @@
     "replacement": "替换为",
     "keepOriginal": "保留原始",
     "reviewPlants": "检查适合您位置的植物"
+  },
+  "error": {
+    "title": "出现了问题",
+    "message": "应用程序遇到了意外错误。您可以尝试重新加载。",
+    "reload": "重新加载",
+    "details": "错误详情"
   }
 }

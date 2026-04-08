@@ -741,5 +741,11 @@
     "replacement": "Vervangen door",
     "keepOriginal": "Origineel behouden",
     "reviewPlants": "Controleer planten voor uw locatie"
+  },
+  "error": {
+    "title": "Er is iets misgegaan",
+    "message": "De toepassing heeft een onverwachte fout aangetroffen. U kunt proberen opnieuw te laden.",
+    "reload": "Opnieuw laden",
+    "details": "Foutdetails"
   }
 }
