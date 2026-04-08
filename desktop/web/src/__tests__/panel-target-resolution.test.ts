@@ -23,6 +23,8 @@ describe('resolvePanelTargets', () => {
     const result = resolvePanelTargets([speciesTarget('Malus domestica')], createScene())
 
     expect(result).toEqual({
+      plantIds: ['plant-1', 'plant-3'],
+      zoneIds: [],
       sceneIds: ['plant-1', 'plant-3'],
       unresolvedTargets: [],
     })
@@ -34,6 +36,8 @@ describe('resolvePanelTargets', () => {
     const result = resolvePanelTargets([target], createScene())
 
     expect(result).toEqual({
+      plantIds: ['plant-2'],
+      zoneIds: [],
       sceneIds: ['plant-2'],
       unresolvedTargets: [],
     })
@@ -45,6 +49,8 @@ describe('resolvePanelTargets', () => {
     const result = resolvePanelTargets([target], createScene())
 
     expect(result).toEqual({
+      plantIds: [],
+      zoneIds: ['orchard'],
       sceneIds: ['orchard'],
       unresolvedTargets: [],
     })
@@ -54,6 +60,8 @@ describe('resolvePanelTargets', () => {
     const result = resolvePanelTargets([MANUAL_TARGET, NONE_TARGET], createScene())
 
     expect(result).toEqual({
+      plantIds: [],
+      zoneIds: [],
       sceneIds: [],
       unresolvedTargets: [],
     })
@@ -79,6 +87,8 @@ describe('resolvePanelTargets', () => {
     )
 
     expect(result).toEqual({
+      plantIds: ['plant-1', 'plant-3', 'plant-2'],
+      zoneIds: ['pond-edge'],
       sceneIds: ['plant-1', 'plant-3', 'plant-2', 'pond-edge'],
       unresolvedTargets: [missingSpecies, missingPlant, missingZone],
     })
@@ -95,7 +105,35 @@ describe('resolvePanelTargets', () => {
     )
 
     expect(result).toEqual({
+      plantIds: ['plant-3', 'plant-1'],
+      zoneIds: [],
       sceneIds: ['plant-3', 'plant-1'],
+      unresolvedTargets: [],
+    })
+  })
+
+  it('keeps plant and zone IDs typed when names collide', () => {
+    const result = resolvePanelTargets(
+      [
+        { kind: 'zone', zone_name: 'plant-1' },
+        { kind: 'placed_plant', plant_id: 'orchard' },
+      ],
+      createScene({
+        plants: [
+          { id: 'plant-1', canonicalName: 'Malus domestica' },
+          { id: 'orchard', canonicalName: 'Prunus avium' },
+        ],
+        zones: [
+          { name: 'plant-1' },
+          { name: 'orchard' },
+        ],
+      }),
+    )
+
+    expect(result).toEqual({
+      plantIds: ['orchard'],
+      zoneIds: ['plant-1'],
+      sceneIds: ['plant-1', 'orchard'],
       unresolvedTargets: [],
     })
   })

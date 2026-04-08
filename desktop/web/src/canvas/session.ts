@@ -28,6 +28,7 @@ export function setCurrentCanvasSession(session: CanvasRuntime | null): void {
 export function setCurrentCanvasTool(name: string): void {
   const session = currentCanvasSession.value
   if (session) {
+    setCanvasTool(name)
     session.setTool(name)
     return
   }

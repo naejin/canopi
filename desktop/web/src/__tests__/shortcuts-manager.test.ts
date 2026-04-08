@@ -27,7 +27,7 @@ describe('shortcut manager canvas tool switching', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'r' }))
 
     expect(setTool).toHaveBeenCalledWith('rectangle')
-    expect(activeTool.value).toBe('select')
+    expect(activeTool.value).toBe('rectangle')
   })
 
   it('falls back to priming the mirror tool state before session mount', () => {

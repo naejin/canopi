@@ -119,6 +119,21 @@ describe('setPlantBudgetPrice', () => {
     expect(budget[0]!.unit_cost).toBe(10)
   })
 
+  it('does not overwrite non-plant species-targeted budget items', () => {
+    currentDesign.value = makeDesign({
+      budget: [
+        { target: speciesBudgetTarget('Malus domestica'), category: 'materials', description: 'Apple stakes', quantity: 2, unit_cost: 12, currency: 'EUR' },
+      ],
+    })
+
+    setPlantBudgetPrice('Malus domestica', 10)
+
+    const budget = currentDesign.value!.budget!
+    expect(budget).toHaveLength(2)
+    expect(budget[0]).toMatchObject({ category: 'materials', description: 'Apple stakes', quantity: 2, unit_cost: 12 })
+    expect(budget[1]).toMatchObject({ category: 'plants', description: 'Malus domestica', quantity: 0, unit_cost: 10 })
+  })
+
   it('preserves existing quantity when updating price', () => {
     currentDesign.value = makeDesign({
       budget: [

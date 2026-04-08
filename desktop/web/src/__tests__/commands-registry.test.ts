@@ -35,7 +35,7 @@ describe('command registry canvas tool switching', () => {
     expect(activePanel.value).toBe('canvas')
     expect(sidePanel.value).toBe(null)
     expect(setTool).toHaveBeenCalledWith('hand')
-    expect(activeTool.value).toBe('select')
+    expect(activeTool.value).toBe('hand')
   })
 
   it('falls back to priming the mirror tool state when no session is mounted', () => {

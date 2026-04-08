@@ -113,6 +113,14 @@ export function InteractiveTimeline({
   const rowOffsetsRef = useRef(rowOffsets)
   rowOffsetsRef.current = rowOffsets
 
+  useEffect(() => {
+    const hoveredActionId = hoveredId.value
+    if (!hoveredActionId) return
+    if (actions.some((action) => action.id === hoveredActionId)) return
+    hoveredId.value = null
+    setTimelineHoveredPanelTargets(EMPTY_PANEL_TARGETS)
+  }, [actions, hoveredId.value])
+
   const renderStateRef = useRef<TimelineRenderState>(null!)
   renderStateRef.current = {
     originDate,
@@ -321,6 +329,8 @@ export function InteractiveTimeline({
       if (event.key === 'Delete' || event.key === 'Backspace') {
         event.preventDefault()
         deleteTimelineAction(selectedIdRef.current)
+        if (hoveredId.value !== null) hoveredId.value = null
+        setTimelineHoveredPanelTargets(EMPTY_PANEL_TARGETS)
         onSelectRef.current(null)
       }
     }

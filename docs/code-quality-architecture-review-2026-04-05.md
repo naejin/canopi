@@ -163,7 +163,7 @@ Current wiring covers:
 
 - consortium species hover
 - timeline action hover via `action.targets`
-- budget row hover via an existing `BudgetItem.target`, falling back to `speciesBudgetTarget(row.canonical)` when no budget item exists
+- budget row hover via an existing species-targeted plant `BudgetItem.target`, falling back to `speciesBudgetTarget(row.canonical)` when no species-targeted plant budget item exists
 
 Hover clears on mouse leave/unmount. This is not click-to-select, persistent selection, full panel/map synchronization, or map overlay work.
 

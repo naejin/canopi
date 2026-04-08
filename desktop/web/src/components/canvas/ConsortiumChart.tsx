@@ -2,12 +2,12 @@ import { useCallback, useEffect, useMemo, useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale } from '../../state/app'
-import { plantSpeciesColors, hoveredPanelTargets, sceneEntityRevision, plantNamesRevision } from '../../state/canvas'
+import { plantSpeciesColors, hoveredCanvasTargets, hoveredPanelTargets, sceneEntityRevision, plantNamesRevision } from '../../state/canvas'
 import { currentDesign } from '../../state/document'
 import { currentCanvasSession } from '../../canvas/session'
 import { moveConsortiumEntry, reorderConsortiumEntry } from '../../state/consortium-actions'
 import { markDocumentDirty } from '../../state/document-mutations'
-import { consortiumTarget, getConsortiumCanonicalName } from '../../panel-targets'
+import { consortiumTarget, getConsortiumCanonicalName, isSpeciesTarget } from '../../panel-targets'
 import {
   buildConsortiumBars,
   filterActiveConsortiumEntries,
@@ -24,11 +24,18 @@ import {
 } from '../../canvas/consortium-renderer'
 import { useCanvasRenderer } from './useCanvasRenderer'
 import styles from './ConsortiumChart.module.css'
-import type { Consortium, PlacedPlant } from '../../types/design'
+import type { Consortium, PanelTarget, PlacedPlant } from '../../types/design'
 
 const EMPTY_PLANTS: PlacedPlant[] = []
 const EMPTY_CONSORTIUMS: Consortium[] = []
 const EMPTY_NAMES: ReadonlyMap<string, string | null> = new Map()
+
+function getHoveredSpeciesCanonical(targets: readonly PanelTarget[]): string | null {
+  for (const target of targets) {
+    if (isSpeciesTarget(target)) return target.canonical_name
+  }
+  return null
+}
 
 type DragState =
   | {
@@ -66,6 +73,8 @@ export function ConsortiumChart() {
   const consortiums = design?.consortiums ?? EMPTY_CONSORTIUMS
   const colors = plantSpeciesColors.value
   const localizedNames = session?.getLocalizedCommonNames() ?? EMPTY_NAMES
+  const canvasHoveredCanonical = getHoveredSpeciesCanonical(hoveredCanvasTargets.value)
+  const effectiveHoveredCanonical = hoveredCanonical.value ?? canvasHoveredCanonical
 
   const plantsRef = useRef(plants)
   plantsRef.current = plants
@@ -108,10 +117,10 @@ export function ConsortiumChart() {
   // Shared DPR/resize/redraw hook
   useCanvasRenderer(canvasRef, (ctx, width, height) => {
     const state: ConsortiumRenderState = {
-      hoveredCanonical: hoveredCanonical.value,
+      hoveredCanonical: effectiveHoveredCanonical,
     }
     renderConsortium(ctx, width, height, barsRef.current, state, t, rowHeightsRef.current, rowOffsetsRef.current)
-  }, [bars, hoveredCanonical.value, locale.value], cachedRectRef)
+  }, [bars, effectiveHoveredCanonical, locale.value], cachedRectRef)
 
   // Clean up drag state and consortium hover bridge on unmount
   useEffect(() => {

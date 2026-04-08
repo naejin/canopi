@@ -105,3 +105,7 @@ export const bottomPanelHeight = signal<number>(200)
 // Bottom-panel target hover bridge. The canvas runtime resolves these document
 // targets to scene IDs without mutating canvas selection/history.
 export const hoveredPanelTargets = signal<readonly PanelTarget[]>([])
+
+// Canvas-origin target hover bridge. Bottom-panel components can read this for
+// hover-only affordances without mutating panel selection/history.
+export const hoveredCanvasTargets = signal<readonly PanelTarget[]>([])

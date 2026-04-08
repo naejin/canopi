@@ -3,6 +3,7 @@ import {
   MANUAL_TARGET,
   NONE_TARGET,
   getBudgetHoverTarget,
+  getBudgetSpeciesTarget,
   getTimelineHoverTargets,
   speciesBudgetTarget,
   speciesTarget,
@@ -54,5 +55,10 @@ describe('panel target hover helpers', () => {
 
   it('falls back to a species budget target for grouped plant rows without budget items', () => {
     expect(getBudgetHoverTarget(null, 'Malus domestica')).toEqual(speciesBudgetTarget('Malus domestica'))
+  })
+
+  it('only returns species targets for plant budget items', () => {
+    expect(getBudgetSpeciesTarget(makeBudgetItem())).toEqual(speciesBudgetTarget('Malus domestica'))
+    expect(getBudgetSpeciesTarget(makeBudgetItem({ category: 'materials' }))).toBeNull()
   })
 })
