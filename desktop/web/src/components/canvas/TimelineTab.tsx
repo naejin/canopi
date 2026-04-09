@@ -1,30 +1,23 @@
 import { useCallback, useEffect } from 'preact/hooks'
-import { useSignal } from '@preact/signals'
-import { selectedPanelTargetOrigin, selectedPanelTargets } from '../../state/canvas'
+import { useSignal, useSignalEffect } from '@preact/signals'
 import { currentDesign } from '../../state/document'
 import type { TimelineAction } from '../../types/design'
-import { InteractiveTimeline } from './InteractiveTimeline'
+import { InteractiveTimeline, clearTimelineSelectedPanelTargets } from './InteractiveTimeline'
 import styles from './TimelineTab.module.css'
 
 const EMPTY_TIMELINE: TimelineAction[] = []
-const EMPTY_PANEL_TARGETS = [] as const
-
-function clearTimelineSelectedPanelTargets(): void {
-  if (selectedPanelTargetOrigin.peek() !== 'timeline') return
-  if (selectedPanelTargets.peek().length > 0) selectedPanelTargets.value = EMPTY_PANEL_TARGETS
-  selectedPanelTargetOrigin.value = null
-}
 
 export function TimelineTab() {
   const selectedId = useSignal<string | null>(null)
-  const actions = currentDesign.value?.timeline ?? EMPTY_TIMELINE
 
-  useEffect(() => {
-    if (!selectedId.value) return
-    if (actions.some((action) => action.id === selectedId.value)) return
+  useSignalEffect(() => {
+    const id = selectedId.value
+    if (!id) return
+    const actions = currentDesign.value?.timeline ?? EMPTY_TIMELINE
+    if (actions.some((action) => action.id === id)) return
     selectedId.value = null
     clearTimelineSelectedPanelTargets()
-  }, [actions, selectedId.value])
+  })
 
   useEffect(() => clearTimelineSelectedPanelTargets, [])
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'preact/hooks'
 import { useCanvasRenderer } from './useCanvasRenderer'
-import { useSignal } from '@preact/signals'
+import { useSignal, useSignalEffect } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale, theme } from '../../state/app'
 import { hoveredPanelTargets, plantSpeciesColors, selectedPanelTargetOrigin, selectedPanelTargets } from '../../state/canvas'
@@ -128,7 +128,7 @@ function setTimelineSelectedPanelTargets(targets: readonly PanelTarget[]): void 
   selectedPanelTargetOrigin.value = targets.length > 0 ? 'timeline' : null
 }
 
-function clearTimelineSelectedPanelTargets(): void {
+export function clearTimelineSelectedPanelTargets(): void {
   if (selectedPanelTargetOrigin.peek() !== 'timeline') return
   if (selectedPanelTargets.peek().length > 0) selectedPanelTargets.value = []
   selectedPanelTargetOrigin.value = null
@@ -191,13 +191,14 @@ export function InteractiveTimeline({
   const rowOffsetsRef = useRef(rowOffsets)
   rowOffsetsRef.current = rowOffsets
 
-  useEffect(() => {
+  useSignalEffect(() => {
     const hoveredActionId = hoveredId.value
     if (!hoveredActionId) return
-    if (actions.some((action) => action.id === hoveredActionId)) return
+    const current = currentDesign.value?.timeline ?? EMPTY_ACTIONS
+    if (current.some((action) => action.id === hoveredActionId)) return
     hoveredId.value = null
     setTimelineHoveredPanelTargets(EMPTY_PANEL_TARGETS)
-  }, [actions, hoveredId.value])
+  })
 
   const renderStateRef = useRef<TimelineRenderState>(null!)
   renderStateRef.current = {
@@ -267,10 +268,9 @@ export function InteractiveTimeline({
 
     if (event.button !== 0) return
 
-    // Close popover on any left click
+    // Close popover on any left click, then fall through to process the click
     if (popoverState.peek()) {
       popoverState.value = null
-      return
     }
 
     // Ruler controls
