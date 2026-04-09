@@ -284,7 +284,16 @@
       "type_other": "その他",
       "monthView": "月",
       "yearView": "年",
-      "todayMarker": "今日"
+      "todayMarker": "今日",
+      "addTitle": "新規アクション",
+      "editTitle": "アクションを編集",
+      "startDate": "開始",
+      "endDate": "終了",
+      "notes": "メモ",
+      "species": "種",
+      "speciesNone": "なし",
+      "delete": "削除",
+      "add": "追加"
     },
     "budget": {
       "title": "予算",

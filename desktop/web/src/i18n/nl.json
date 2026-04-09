@@ -284,7 +284,16 @@
       "type_other": "Overig",
       "monthView": "Maand",
       "yearView": "Jaar",
-      "todayMarker": "Vandaag"
+      "todayMarker": "Vandaag",
+      "addTitle": "Nieuwe actie",
+      "editTitle": "Actie bewerken",
+      "startDate": "Begin",
+      "endDate": "Einde",
+      "notes": "Notities",
+      "species": "Soort",
+      "speciesNone": "Geen",
+      "delete": "Verwijderen",
+      "add": "Toevoegen"
     },
     "budget": {
       "title": "Budget",

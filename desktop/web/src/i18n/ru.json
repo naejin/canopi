@@ -284,7 +284,16 @@
       "type_other": "Другое",
       "monthView": "Месяц",
       "yearView": "Год",
-      "todayMarker": "Сегодня"
+      "todayMarker": "Сегодня",
+      "addTitle": "Новое действие",
+      "editTitle": "Редактировать",
+      "startDate": "Начало",
+      "endDate": "Конец",
+      "notes": "Заметки",
+      "species": "Вид",
+      "speciesNone": "Нет",
+      "delete": "Удалить",
+      "add": "Добавить"
     },
     "budget": {
       "title": "Бюджет",

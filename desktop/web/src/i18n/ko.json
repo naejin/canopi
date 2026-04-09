@@ -284,7 +284,16 @@
       "type_other": "기타",
       "monthView": "월",
       "yearView": "년",
-      "todayMarker": "오늘"
+      "todayMarker": "오늘",
+      "addTitle": "새 작업",
+      "editTitle": "작업 편집",
+      "startDate": "시작",
+      "endDate": "종료",
+      "notes": "메모",
+      "species": "종",
+      "speciesNone": "없음",
+      "delete": "삭제",
+      "add": "추가"
     },
     "budget": {
       "title": "예산",

@@ -284,7 +284,16 @@
       "type_other": "Otro",
       "monthView": "Mes",
       "yearView": "Año",
-      "todayMarker": "Hoy"
+      "todayMarker": "Hoy",
+      "addTitle": "Nueva accion",
+      "editTitle": "Editar accion",
+      "startDate": "Inicio",
+      "endDate": "Fin",
+      "notes": "Notas",
+      "species": "Especie",
+      "speciesNone": "Ninguna",
+      "delete": "Eliminar",
+      "add": "Agregar"
     },
     "budget": {
       "title": "Presupuesto",

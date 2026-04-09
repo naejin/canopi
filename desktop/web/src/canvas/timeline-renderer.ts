@@ -31,7 +31,7 @@ const ACTION_COLOR_VARS: Record<string, [varName: string, fallback: string]> = {
 }
 const DEFAULT_ACTION_COLOR: [string, string] = ['--color-action-other', '#8B7355']
 
-function actionColor(type: string): string {
+export function actionColor(type: string): string {
   const [varName, fallback] = ACTION_COLOR_VARS[type] ?? DEFAULT_ACTION_COLOR
   return cssVar(varName) || fallback
 }

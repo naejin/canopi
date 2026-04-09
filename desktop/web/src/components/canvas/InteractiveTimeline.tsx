@@ -5,13 +5,16 @@ import { t } from '../../i18n'
 import { locale, theme } from '../../state/app'
 import { hoveredPanelTargets, plantSpeciesColors, selectedPanelTargetOrigin, selectedPanelTargets } from '../../state/canvas'
 import { currentDesign } from '../../state/document'
+import { currentCanvasSession } from '../../canvas/session'
 import {
+  addTimelineAction,
   deleteTimelineAction,
   updateTimelineAction,
 } from '../../state/timeline-actions'
 import { isEditableTarget } from '../../canvas/runtime/interaction/pointer-utils'
 import { markDocumentDirty } from '../../state/document-mutations'
 import {
+  ACTION_TYPES,
   LABEL_SIDEBAR_WIDTH,
   RULER_BTN_MO,
   RULER_BTN_TODAY,
@@ -26,9 +29,10 @@ import {
   type ActionTypeRow,
   type TimelineRenderState,
 } from '../../canvas/timeline-renderer'
-import { dateToX, snapToDay, toISODate } from '../../canvas/timeline-math'
-import { getTimelineHoverTargets, panelTargetsEqual } from '../../panel-targets'
+import { dateToX, snapToDay, toISODate, xToDate } from '../../canvas/timeline-math'
+import { MANUAL_TARGET, getTimelineHoverTargets, panelTargetsEqual, speciesTarget } from '../../panel-targets'
 import type { PanelTarget, TimelineAction } from '../../types/design'
+import { TimelinePopover, type PopoverFormData } from './TimelinePopover'
 import styles from './InteractiveTimeline.module.css'
 
 export type Granularity = 'month' | 'year'
@@ -40,6 +44,7 @@ const GRANULARITY_PX_PER_DAY: Record<Granularity, number> = {
 
 const RULER_BTN_Y = 4
 const RULER_BTN_H = 20
+const CLICK_THRESHOLD = 3
 
 function hitTestRulerControls(x: number, y: number): 'granularity' | 'today' | null {
   if (y < RULER_BTN_Y || y > RULER_BTN_Y + RULER_BTN_H) return null
@@ -86,6 +91,27 @@ type DragState =
     }
   | null
 
+interface PopoverState {
+  mode: 'add' | 'edit'
+  anchorX: number
+  anchorY: number
+  actionId?: string
+  formData: PopoverFormData
+  speciesList: Array<{ canonical_name: string; display_name: string }>
+}
+
+interface PendingClick {
+  type: 'add' | 'edit'
+  clientX: number
+  clientY: number
+  anchorX: number
+  anchorY: number
+  actionId?: string
+  action?: TimelineAction
+  actionType?: string
+  date?: string
+}
+
 const EMPTY_ACTIONS: TimelineAction[] = []
 const EMPTY_PANEL_TARGETS: readonly PanelTarget[] = []
 
@@ -108,18 +134,40 @@ function clearTimelineSelectedPanelTargets(): void {
   selectedPanelTargetOrigin.value = null
 }
 
+function buildSpeciesList(): Array<{ canonical_name: string; display_name: string }> {
+  const session = currentCanvasSession.value
+  if (!session) return []
+  const plants = session.getPlacedPlants()
+  const names = session.getLocalizedCommonNames()
+  const seen = new Set<string>()
+  const result: Array<{ canonical_name: string; display_name: string }> = []
+  for (const plant of plants) {
+    if (seen.has(plant.canonical_name)) continue
+    seen.add(plant.canonical_name)
+    result.push({
+      canonical_name: plant.canonical_name,
+      display_name: names.get(plant.canonical_name) ?? plant.canonical_name,
+    })
+  }
+  result.sort((a, b) => a.display_name.localeCompare(b.display_name))
+  return result
+}
+
 export function InteractiveTimeline({
   selectedId,
   onSelect,
 }: InteractiveTimelineProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   const cachedRectRef = useRef<DOMRect | null>(null)
   const granularity = useSignal<Granularity>('month')
   const pxPerDay = useSignal(GRANULARITY_PX_PER_DAY.month)
   const scrollX = useSignal(0)
   const scrollY = useSignal(0)
   const hoveredId = useSignal<string | null>(null)
+  const popoverState = useSignal<PopoverState | null>(null)
   const dragState = useRef<DragState>(null)
+  const pendingClick = useRef<PendingClick | null>(null)
   const rowsRef = useRef<ActionTypeRow[]>([])
   const layoutRef = useRef<Map<string, ActionLayout>>(new Map())
   const lastDragDates = useRef<{ start: string; end: string | null }>({ start: '', end: null })
@@ -178,6 +226,8 @@ export function InteractiveTimeline({
 
   const handleWheel = useCallback((event: WheelEvent) => {
     event.preventDefault()
+    // Close popover on scroll/zoom
+    if (popoverState.peek()) popoverState.value = null
 
     if (event.shiftKey) {
       scrollY.value = Math.max(0, scrollY.peek() + event.deltaY)
@@ -186,8 +236,6 @@ export function InteractiveTimeline({
     }
   }, [])
 
-  // Attach wheel listener imperatively with { passive: false } so preventDefault() works.
-  // JSX onWheel registers as passive by default — preventDefault() silently fails.
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -218,6 +266,12 @@ export function InteractiveTimeline({
 
     if (event.button !== 0) return
 
+    // Close popover on any left click
+    if (popoverState.peek()) {
+      popoverState.value = null
+      return
+    }
+
     // Ruler controls
     if (mouseY < RULER_HEIGHT) {
       const rulerHit = hitTestRulerControls(mouseX, mouseY)
@@ -228,13 +282,10 @@ export function InteractiveTimeline({
         return
       }
       if (rulerHit === 'today') {
-        const canvas = canvasRef.current
-        if (canvas) {
-          const r = cachedRectRef.current ?? canvas.getBoundingClientRect()
-          const chartWidth = r.width - LABEL_SIDEBAR_WIDTH
-          const { originDate: o, pxPerDay: ppd } = renderStateRef.current
-          scrollX.value = dateToX(new Date(), o, ppd) - chartWidth / 2
-        }
+        const r = cachedRectRef.current ?? canvas.getBoundingClientRect()
+        const chartWidth = r.width - LABEL_SIDEBAR_WIDTH
+        const { originDate: o, pxPerDay: ppd } = renderStateRef.current
+        scrollX.value = dateToX(new Date(), o, ppd) - chartWidth / 2
         return
       }
       return
@@ -250,8 +301,29 @@ export function InteractiveTimeline({
     )
 
     if (!hit) {
-      onSelectRef.current(null)
-      clearTimelineSelectedPanelTargets()
+      // Click on empty chart space - prepare add popover
+      const { originDate: o, pxPerDay: ppd, scrollX: sx } = renderStateRef.current
+      const chartX = mouseX - LABEL_SIDEBAR_WIDTH + sx
+      const clickDate = snapToDay(xToDate(chartX, o, ppd))
+      // Determine action type from row
+      const offsets = rowOffsetsRef.current
+      const adjustedY = mouseY + scrollY.peek()
+      let rowActionType = ACTION_TYPES[0]!
+      for (let i = 0; i < offsets.length - 1; i++) {
+        if (adjustedY >= offsets[i]! && adjustedY < offsets[i + 1]!) {
+          rowActionType = ACTION_TYPES[i] ?? ACTION_TYPES[0]!
+          break
+        }
+      }
+      pendingClick.current = {
+        type: 'add',
+        clientX: event.clientX,
+        clientY: event.clientY,
+        anchorX: mouseX,
+        anchorY: mouseY,
+        actionType: rowActionType,
+        date: toISODate(clickDate),
+      }
       return
     }
 
@@ -277,6 +349,17 @@ export function InteractiveTimeline({
       }
       document.body.style.cursor = 'ew-resize'
       return
+    }
+
+    // Body hit - prepare edit popover (opens on mouseup if no drag)
+    pendingClick.current = {
+      type: 'edit',
+      clientX: event.clientX,
+      clientY: event.clientY,
+      anchorX: mouseX,
+      anchorY: mouseY,
+      actionId: hit.action.id,
+      action: hit.action,
     }
 
     const durationMs = endMs != null ? endMs - startMs : null
@@ -385,7 +468,7 @@ export function InteractiveTimeline({
     if (!dragState.current) handleMouseMove(e)
   }, [handleMouseMove])
 
-  const handleMouseUp = useCallback(() => {
+  const handleMouseUp = useCallback((event: MouseEvent) => {
     const drag = dragState.current
     if (drag && (drag.type === 'move' || drag.type === 'resize') && drag.hasMutated) {
       markDocumentDirty()
@@ -393,14 +476,59 @@ export function InteractiveTimeline({
     if (drag?.type === 'resize') document.body.style.cursor = ''
     dragState.current = null
     lastDragDates.current = { start: '', end: null }
+
+    // Check pending click for popover opening
+    const pending = pendingClick.current
+    pendingClick.current = null
+    if (!pending) return
+    const dx = Math.abs(event.clientX - pending.clientX)
+    const dy = Math.abs(event.clientY - pending.clientY)
+    if (dx + dy >= CLICK_THRESHOLD) return
+
+    const sl = buildSpeciesList()
+
+    if (pending.type === 'add') {
+      const startDate = pending.date!
+      const endDate = toISODate(new Date(new Date(startDate).getTime() + 14 * 86400000))
+      popoverState.value = {
+        mode: 'add',
+        anchorX: pending.anchorX,
+        anchorY: pending.anchorY,
+        formData: {
+          action_type: pending.actionType!,
+          start_date: startDate,
+          end_date: endDate,
+          description: '',
+          species_canonical: null,
+        },
+        speciesList: sl,
+      }
+    } else if (pending.type === 'edit' && pending.action) {
+      const a = pending.action
+      const existingSpecies = a.targets.find((tgt) => tgt.kind === 'species')
+      popoverState.value = {
+        mode: 'edit',
+        anchorX: pending.anchorX,
+        anchorY: pending.anchorY,
+        actionId: pending.actionId,
+        formData: {
+          action_type: a.action_type,
+          start_date: a.start_date ?? '',
+          end_date: a.end_date ?? '',
+          description: a.description,
+          species_canonical: existingSpecies?.kind === 'species' ? existingSpecies.canonical_name : null,
+        },
+        speciesList: sl,
+      }
+    }
   }, [])
 
   useEffect(() => {
     const onMove = (event: MouseEvent) => {
       if (dragState.current) handleMouseMove(event)
     }
-    const onUp = () => {
-      if (dragState.current) handleMouseUp()
+    const onUp = (event: MouseEvent) => {
+      handleMouseUp(event)
     }
 
     document.addEventListener('mousemove', onMove)
@@ -415,6 +543,7 @@ export function InteractiveTimeline({
       if (drag?.type === 'resize') document.body.style.cursor = ''
       dragState.current = null
       lastDragDates.current = { start: '', end: null }
+      pendingClick.current = null
       setTimelineHoveredPanelTargets(EMPTY_PANEL_TARGETS)
       clearTimelineSelectedPanelTargets()
     }
@@ -422,6 +551,7 @@ export function InteractiveTimeline({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (popoverState.peek()) return
       if (!selectedIdRef.current) return
       if (isEditableTarget(event.target)) return
       if (event.key === 'Delete' || event.key === 'Backspace') {
@@ -438,15 +568,79 @@ export function InteractiveTimeline({
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [])
 
+  const handlePopoverSave = useCallback((data: PopoverFormData) => {
+    const ps = popoverState.peek()
+    if (!ps) return
+
+    const targets = data.species_canonical
+      ? [speciesTarget(data.species_canonical)]
+      : [MANUAL_TARGET]
+
+    if (ps.mode === 'add') {
+      const id = crypto.randomUUID()
+      addTimelineAction({
+        id,
+        action_type: data.action_type,
+        description: data.description,
+        start_date: data.start_date || null,
+        end_date: data.end_date || null,
+        recurrence: null,
+        targets,
+        depends_on: null,
+        completed: false,
+      })
+      onSelectRef.current(id)
+    } else if (ps.actionId) {
+      updateTimelineAction(ps.actionId, {
+        action_type: data.action_type,
+        description: data.description,
+        start_date: data.start_date || null,
+        end_date: data.end_date || null,
+        targets,
+      })
+    }
+    popoverState.value = null
+  }, [])
+
+  const handlePopoverDelete = useCallback(() => {
+    const ps = popoverState.peek()
+    if (!ps?.actionId) return
+    deleteTimelineAction(ps.actionId)
+    onSelectRef.current(null)
+    clearTimelineSelectedPanelTargets()
+    popoverState.value = null
+  }, [])
+
+  const handlePopoverCancel = useCallback(() => {
+    popoverState.value = null
+  }, [])
+
+  const ps = popoverState.value
+
   return (
-    <canvas
-      ref={canvasRef}
-      className={styles.timeline}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleCanvasMouseMove}
-      onMouseLeave={handleMouseLeave}
-      aria-label={t('canvas.timeline.title')}
-    />
+    <div ref={containerRef} className={styles.container}>
+      <canvas
+        ref={canvasRef}
+        className={styles.timeline}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleCanvasMouseMove}
+        onMouseLeave={handleMouseLeave}
+        aria-label={t('canvas.timeline.title')}
+      />
+      {ps && (
+        <TimelinePopover
+          mode={ps.mode}
+          anchorX={ps.anchorX}
+          anchorY={ps.anchorY}
+          containerRef={containerRef}
+          initialData={ps.formData}
+          speciesList={ps.speciesList}
+          onSave={handlePopoverSave}
+          onDelete={ps.mode === 'edit' ? handlePopoverDelete : undefined}
+          onCancel={handlePopoverCancel}
+        />
+      )}
+    </div>
   )
 }
 

@@ -284,7 +284,16 @@
       "type_other": "Other",
       "monthView": "Month",
       "yearView": "Year",
-      "todayMarker": "Today"
+      "todayMarker": "Today",
+      "addTitle": "New action",
+      "editTitle": "Edit action",
+      "startDate": "Start",
+      "endDate": "End",
+      "notes": "Notes",
+      "species": "Species",
+      "speciesNone": "None",
+      "delete": "Delete",
+      "add": "Add"
     },
     "budget": {
       "title": "Budget",

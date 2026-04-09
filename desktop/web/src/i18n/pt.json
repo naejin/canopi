@@ -284,7 +284,16 @@
       "type_other": "Outro",
       "monthView": "Mês",
       "yearView": "Ano",
-      "todayMarker": "Hoje"
+      "todayMarker": "Hoje",
+      "addTitle": "Nova acao",
+      "editTitle": "Editar acao",
+      "startDate": "Inicio",
+      "endDate": "Fim",
+      "notes": "Notas",
+      "species": "Especie",
+      "speciesNone": "Nenhuma",
+      "delete": "Excluir",
+      "add": "Adicionar"
     },
     "budget": {
       "title": "Orçamento",

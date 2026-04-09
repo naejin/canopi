@@ -284,7 +284,16 @@
       "type_other": "其他",
       "monthView": "月",
       "yearView": "年",
-      "todayMarker": "今天"
+      "todayMarker": "今天",
+      "addTitle": "新动作",
+      "editTitle": "编辑动作",
+      "startDate": "开始",
+      "endDate": "结束",
+      "notes": "备注",
+      "species": "物种",
+      "speciesNone": "无",
+      "delete": "删除",
+      "add": "添加"
     },
     "budget": {
       "title": "预算",

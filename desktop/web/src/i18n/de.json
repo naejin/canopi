@@ -284,7 +284,16 @@
       "type_other": "Sonstiges",
       "monthView": "Monat",
       "yearView": "Jahr",
-      "todayMarker": "Heute"
+      "todayMarker": "Heute",
+      "addTitle": "Neue Aktion",
+      "editTitle": "Aktion bearbeiten",
+      "startDate": "Beginn",
+      "endDate": "Ende",
+      "notes": "Notizen",
+      "species": "Art",
+      "speciesNone": "Keine",
+      "delete": "Entfernen",
+      "add": "Hinzufugen"
     },
     "budget": {
       "title": "Budget",
