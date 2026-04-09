@@ -40,8 +40,9 @@ const GRANULARITY_PX_PER_DAY: Record<Granularity, number> = {
   year: 0.8,
 }
 
-const RULER_BTN_Y = 4
-const RULER_BTN_H = 20
+// Must match pillY / pillH in timeline-renderer.ts ruler controls
+const RULER_BTN_Y = (28 - 18) / 2  // (RULER_HEIGHT - pillH) / 2 = 5
+const RULER_BTN_H = 18
 const CLICK_THRESHOLD = 3
 
 function hitTestRulerControls(x: number, y: number): 'granularity' | 'today' | null {
