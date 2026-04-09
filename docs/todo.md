@@ -179,7 +179,7 @@ These align with the core risks identified in the architecture review.
 
 **Bottom panels (MVP shipped):**
 - ~~Timeline MVP~~ — **done** (`d56ab50`): trimmed week view, zoom, edge resize, auto-populate, completed UI. Tab routing active
-- ~~Timeline UX rework~~ — **done**: replaced species-grouped rows with 6 fixed action-type rows (always visible), removed header/form, embedded zoom/today controls in ruler, click-to-add/edit floating popover, edge resize, hover tooltip, species color priority for bar colors. Tab re-enabled in `VISIBLE_BOTTOM_PANEL_TABS`
+- ~~Timeline UX rework~~ — **done**: replaced species-grouped rows with 6 fixed action-type rows (always visible), removed header/form, click-to-add/edit floating popover with date validation (min/max constraints + inline error), edge resize, hover tooltip, species color priority for bar colors, ctrl+scroll zoom (0.2-20 pxPerDay range with cursor-anchored scaling). Ruler controls hidden pending design iteration. Tab re-enabled in `VISIBLE_BOTTOM_PANEL_TABS`
 - ~~Budget tab~~ — **done**: redesigned with compact summary header (species/plant counts, pricing progress), document-level currency picker (13 currencies via `budget_currency` field), notebook-style ruled table, inline price editing, CSV export. Live updates via `sceneEntityRevision`
 - ~~Consortium succession chart~~ — **done** (`9fd8cf3`..`1007a96`): Canvas2D strata×phase grid, auto-sync from placed species, drag-move/resize, hover sync with canvas
 - ~~Bottom panel state persistence~~ — **done**: open/height/tab hydrated from Rust settings on bootstrap, persisted on panel actions (height persisted on drag-end, not per-frame)
