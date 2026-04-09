@@ -165,6 +165,7 @@ export function InteractiveTimeline({
   const scrollX = useSignal(0)
   const scrollY = useSignal(0)
   const hoveredId = useSignal<string | null>(null)
+  const tooltipState = useSignal<{ x: number; y: number; action: TimelineAction } | null>(null)
   const popoverState = useSignal<PopoverState | null>(null)
   const dragState = useRef<DragState>(null)
   const pendingClick = useRef<PendingClick | null>(null)
@@ -384,6 +385,9 @@ export function InteractiveTimeline({
     const mouseX = event.clientX - rect.left
     const mouseY = event.clientY - rect.top
 
+    // Clear tooltip during any drag
+    if (drag && tooltipState.peek()) tooltipState.value = null
+
     if (drag?.type === 'pan') {
       const newScrollX = drag.startScrollX - (event.clientX - drag.startMouseX)
       const newScrollY = Math.max(0, drag.startScrollY - (event.clientY - drag.startMouseY))
@@ -448,9 +452,13 @@ export function InteractiveTimeline({
     if (hit) {
       if (hoveredId.value !== hit.action.id) hoveredId.value = hit.action.id
       setTimelineHoveredPanelTargets(getTimelineHoverTargets(hit.action))
+      if (!popoverState.peek()) {
+        tooltipState.value = { x: mouseX, y: mouseY, action: hit.action }
+      }
     } else {
       if (hoveredId.value !== null) hoveredId.value = null
       setTimelineHoveredPanelTargets(EMPTY_PANEL_TARGETS)
+      if (tooltipState.peek()) tooltipState.value = null
     }
     const newCursor = hit
       ? (hit.edge === 'left' || hit.edge === 'right' ? 'ew-resize' : 'grab')
@@ -460,6 +468,7 @@ export function InteractiveTimeline({
 
   const handleMouseLeave = useCallback(() => {
     if (hoveredId.value !== null) hoveredId.value = null
+    if (tooltipState.peek()) tooltipState.value = null
     setTimelineHoveredPanelTargets(EMPTY_PANEL_TARGETS)
     if (canvasRef.current) canvasRef.current.style.cursor = 'default'
   }, [])
@@ -616,6 +625,7 @@ export function InteractiveTimeline({
   }, [])
 
   const ps = popoverState.value
+  const tip = tooltipState.value
 
   return (
     <div ref={containerRef} className={styles.container}>
@@ -627,6 +637,21 @@ export function InteractiveTimeline({
         onMouseLeave={handleMouseLeave}
         aria-label={t('canvas.timeline.title')}
       />
+      {tip && !ps && (
+        <div className={styles.tooltip} style={{ left: Math.min(tip.x + 12, (containerRef.current?.clientWidth ?? 300) - 230), top: tip.y + 12 }}>
+          <div className={styles.tooltipType}>{t(`canvas.timeline.type_${tip.action.action_type}`)}</div>
+          {tip.action.start_date && (
+            <div className={styles.tooltipDates}>
+              {tip.action.start_date}{tip.action.end_date ? ` - ${tip.action.end_date}` : ''}
+            </div>
+          )}
+          {tip.action.description && (
+            <div className={styles.tooltipDesc}>
+              {tip.action.description.length > 50 ? tip.action.description.slice(0, 50) + '...' : tip.action.description}
+            </div>
+          )}
+        </div>
+      )}
       {ps && (
         <TimelinePopover
           mode={ps.mode}

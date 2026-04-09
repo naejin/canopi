@@ -15,3 +15,34 @@
 .timeline:active {
   cursor: grabbing;
 }
+
+.tooltip {
+  position: absolute;
+  pointer-events: none;
+  z-index: 20;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-2);
+  max-width: 220px;
+}
+
+.tooltipType {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.tooltipDates {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.tooltipDesc {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
