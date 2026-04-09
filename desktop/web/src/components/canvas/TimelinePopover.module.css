@@ -1,6 +1,6 @@
 .popover {
   --popover-width: 280px;
-  position: absolute;
+  position: fixed;
   z-index: 24;
   width: var(--popover-width);
   background: var(--color-surface);
@@ -88,10 +88,6 @@
   border-radius: var(--radius-md);
   color: var(--color-text);
   font-size: var(--text-xs);
-}
-
-.inputError {
-  border-color: var(--color-danger);
 }
 
 .error {
