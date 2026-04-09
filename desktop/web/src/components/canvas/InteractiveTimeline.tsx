@@ -302,6 +302,8 @@ export function InteractiveTimeline({
     )
 
     if (!hit) {
+      // Sidebar is read-only - no add popover
+      if (mouseX < LABEL_SIDEBAR_WIDTH) return
       // Click on empty chart space - prepare add popover
       const { originDate: o, pxPerDay: ppd, scrollX: sx } = renderStateRef.current
       const chartX = mouseX - LABEL_SIDEBAR_WIDTH + sx
@@ -512,8 +514,10 @@ export function InteractiveTimeline({
         },
         speciesList: sl,
       }
-    } else if (pending.type === 'edit' && pending.action) {
-      const a = pending.action
+    } else if (pending.type === 'edit' && pending.actionId) {
+      // Read live action from document (may have moved during sub-threshold drag)
+      const a = (currentDesign.peek()?.timeline ?? EMPTY_ACTIONS).find((act) => act.id === pending.actionId)
+      if (!a) return
       const existingSpecies = a.targets.find((tgt) => tgt.kind === 'species')
       popoverState.value = {
         mode: 'edit',

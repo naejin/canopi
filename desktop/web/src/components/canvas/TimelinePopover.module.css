@@ -76,7 +76,7 @@
   font-size: var(--text-xs);
   font-weight: 600;
   color: var(--color-text-muted);
-  min-width: 32px;
+  min-width: var(--space-8);
 }
 
 .input {
