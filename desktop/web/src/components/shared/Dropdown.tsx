@@ -1,6 +1,7 @@
 import { useRef } from 'preact/hooks'
 import { useSignal, useSignalEffect } from '@preact/signals'
 import type { ComponentChildren } from 'preact'
+import { computeFloatingDirection, shouldAlignRight } from '../../utils/floating-position'
 import styles from './Dropdown.module.css'
 
 export interface DropdownItem<T> {
@@ -70,7 +71,19 @@ export function Dropdown<T>({
     }
   })
 
-  const menuDirClass = menuDirection === 'up' ? styles.menuUp : styles.menuDown
+  // Viewport-aware direction, max-height, and horizontal alignment
+  let resolvedDir: 'up' | 'down' = menuDirection
+  let menuMaxHeight: number | undefined
+  let alignRight = false
+  if (open.value && triggerRef.current) {
+    const rect = triggerRef.current.getBoundingClientRect()
+    const result = computeFloatingDirection(rect, { preferred: menuDirection })
+    resolvedDir = result.direction
+    menuMaxHeight = result.availableHeight
+    alignRight = shouldAlignRight(rect, 120) // 120 = CSS min-width of .menu
+  }
+
+  const menuDirClass = resolvedDir === 'up' ? styles.menuUp : styles.menuDown
 
   return (
     <div
@@ -100,6 +113,10 @@ export function Dropdown<T>({
           className={`${styles.menu} ${menuDirClass}${menuClassName ? ` ${menuClassName}` : ''}`}
           role="listbox"
           aria-label={ariaLabel}
+          style={{
+            ...(menuMaxHeight !== undefined ? { maxHeight: menuMaxHeight } : {}),
+            ...(alignRight ? { left: 'auto', right: 0 } : {}),
+          }}
         >
           {items.map((item) => (
             <button

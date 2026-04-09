@@ -1,3 +1,4 @@
+import { createPortal } from 'preact/compat'
 import { useCallback, useEffect, useMemo, useRef } from 'preact/hooks'
 import { useCanvasRenderer } from './useCanvasRenderer'
 import { useSignal, useSignalEffect } from '@preact/signals'
@@ -44,6 +45,24 @@ const GRANULARITY_PX_PER_DAY: Record<Granularity, number> = {
 const RULER_BTN_Y = (28 - 18) / 2  // (RULER_HEIGHT - pillH) / 2 = 5
 const RULER_BTN_H = 18
 const CLICK_THRESHOLD = 3
+const AUTO_SCROLL_EDGE_ZONE = 60
+const AUTO_SCROLL_MIN_SPEED = 1
+const AUTO_SCROLL_MAX_SPEED = 15
+
+function computeAutoScrollSpeed(mouseX: number, chartWidth: number): number {
+  const leftEdge = LABEL_SIDEBAR_WIDTH
+  if (mouseX < leftEdge + AUTO_SCROLL_EDGE_ZONE) {
+    const depth = leftEdge + AUTO_SCROLL_EDGE_ZONE - mouseX
+    const ratio = Math.min(depth / AUTO_SCROLL_EDGE_ZONE, 1)
+    return -(AUTO_SCROLL_MIN_SPEED + (AUTO_SCROLL_MAX_SPEED - AUTO_SCROLL_MIN_SPEED) * ratio * ratio)
+  }
+  if (mouseX > chartWidth - AUTO_SCROLL_EDGE_ZONE) {
+    const depth = mouseX - (chartWidth - AUTO_SCROLL_EDGE_ZONE)
+    const ratio = Math.min(depth / AUTO_SCROLL_EDGE_ZONE, 1)
+    return AUTO_SCROLL_MIN_SPEED + (AUTO_SCROLL_MAX_SPEED - AUTO_SCROLL_MIN_SPEED) * ratio * ratio
+  }
+  return 0
+}
 
 function hitTestRulerControls(x: number, y: number): 'granularity' | 'today' | null {
   if (y < RULER_BTN_Y || y > RULER_BTN_Y + RULER_BTN_H) return null
@@ -84,9 +103,7 @@ type DragState =
   | {
       type: 'pan'
       startMouseX: number
-      startMouseY: number
       startScrollX: number
-      startScrollY: number
       cachedRect: DOMRect
     }
   | null
@@ -163,7 +180,6 @@ export function InteractiveTimeline({
   const granularity = useSignal<Granularity>('month')
   const pxPerDay = useSignal(GRANULARITY_PX_PER_DAY.month)
   const scrollX = useSignal(0)
-  const scrollY = useSignal(0)
   const hoveredId = useSignal<string | null>(null)
   const tooltipState = useSignal<{ x: number; y: number; action: TimelineAction } | null>(null)
   const popoverState = useSignal<PopoverState | null>(null)
@@ -172,6 +188,12 @@ export function InteractiveTimeline({
   const rowsRef = useRef<ActionTypeRow[]>([])
   const layoutRef = useRef<Map<string, ActionLayout>>(new Map())
   const lastDragDates = useRef<{ start: string; end: string | null }>({ start: '', end: null })
+  const dragOriginMsRef = useRef<number | null>(null)
+  const dragOriginDateRef = useRef<Date | null>(null)
+  const computedOriginMsRef = useRef(0)
+  const autoScrollRafRef = useRef<number | null>(null)
+  const autoScrollAccumRef = useRef(0)
+  const lastDragClientXRef = useRef(0)
   const selectedIdRef = useRef(selectedId)
   selectedIdRef.current = selectedId
   const onSelectRef = useRef(onSelect)
@@ -190,6 +212,16 @@ export function InteractiveTimeline({
   layoutRef.current = layout
   const rowOffsetsRef = useRef(rowOffsets)
   rowOffsetsRef.current = rowOffsets
+  computedOriginMsRef.current = originMs
+
+  // Set canvas height for native scrolling (like ConsortiumChart)
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const totalHeight = rowOffsets[rowOffsets.length - 1] ?? RULER_HEIGHT
+    canvas.style.height = `${totalHeight}px`
+    cachedRectRef.current = null
+  }, [rowOffsets])
 
   useSignalEffect(() => {
     const hoveredActionId = hoveredId.value
@@ -202,10 +234,9 @@ export function InteractiveTimeline({
 
   const renderStateRef = useRef<TimelineRenderState>(null!)
   renderStateRef.current = {
-    originDate,
+    originDate: dragOriginDateRef.current ?? originDate,
     pxPerDay: pxPerDay.value,
     scrollX: scrollX.value,
-    scrollY: scrollY.value,
     selectedId,
     hoveredId: hoveredId.value,
     locale: locale.value,
@@ -224,33 +255,29 @@ export function InteractiveTimeline({
       t,
       rowOffsetsRef.current,
     )
-  }, [originMs, pxPerDay.value, scrollX.value, selectedId, hoveredId.value, scrollY.value, locale.value, theme.value, speciesColors, granularity.value], cachedRectRef)
+  }, [actions, originMs, pxPerDay.value, scrollX.value, selectedId, hoveredId.value, locale.value, theme.value, speciesColors, granularity.value], cachedRectRef)
 
   const handleWheel = useCallback((event: WheelEvent) => {
+    if (!(event.ctrlKey || event.metaKey)) return // let native scroll handle vertical
     event.preventDefault()
-    // Close popover on scroll/zoom
+    const drag = dragState.current
+    if (drag?.type === 'move' || drag?.type === 'resize') return
     if (popoverState.peek()) popoverState.value = null
 
-    if (event.ctrlKey || event.metaKey) {
-      // Zoom: ctrl+wheel or pinch gesture
-      const factor = event.deltaY > 0 ? 0.9 : 1.1
-      const prev = pxPerDay.peek()
-      const next = Math.max(0.2, Math.min(20, prev * factor))
-      if (next !== prev) {
-        // Keep the point under the cursor stationary
-        const canvas = canvasRef.current
-        if (canvas) {
-          const rect = cachedRectRef.current ?? canvas.getBoundingClientRect()
-          const mouseX = event.clientX - rect.left - LABEL_SIDEBAR_WIDTH
-          const dayAtCursor = (scrollX.peek() + mouseX) / prev
-          scrollX.value = dayAtCursor * next - mouseX
-        }
-        pxPerDay.value = next
+    // Zoom: ctrl+wheel or pinch gesture
+    const factor = event.deltaY > 0 ? 0.9 : 1.1
+    const prev = pxPerDay.peek()
+    const next = Math.max(0.2, Math.min(20, prev * factor))
+    if (next !== prev) {
+      // Keep the point under the cursor stationary
+      const canvas = canvasRef.current
+      if (canvas) {
+        const rect = cachedRectRef.current ?? canvas.getBoundingClientRect()
+        const mouseX = event.clientX - rect.left - LABEL_SIDEBAR_WIDTH
+        const dayAtCursor = (scrollX.peek() + mouseX) / prev
+        scrollX.value = dayAtCursor * next - mouseX
       }
-    } else if (event.shiftKey) {
-      scrollY.value = Math.max(0, scrollY.peek() + event.deltaY)
-    } else {
-      scrollX.value = scrollX.peek() + (event.deltaX || event.deltaY)
+      pxPerDay.value = next
     }
   }, [])
 
@@ -260,6 +287,89 @@ export function InteractiveTimeline({
     canvas.addEventListener('wheel', handleWheel, { passive: false })
     return () => canvas.removeEventListener('wheel', handleWheel)
   }, [handleWheel])
+
+  function applyDragDelta(drag: NonNullable<DragState> & { type: 'move' | 'resize' }, totalPxDelta: number): void {
+    const dayDelta = totalPxDelta / drag.pxPerDaySnapshot
+    const deltaMs = dayDelta * 86400000
+
+    if (drag.type === 'move') {
+      const start = snapToDay(new Date(drag.originalStartMs + deltaMs))
+      const startStr = toISODate(start)
+      const endDate = drag.durationMs != null
+        ? toISODate(new Date(start.getTime() + drag.durationMs))
+        : null
+      if (startStr === lastDragDates.current.start && endDate === lastDragDates.current.end) return
+      lastDragDates.current = { start: startStr, end: endDate }
+      updateTimelineAction(drag.actionId, { start_date: startStr, end_date: endDate }, { markDirty: false })
+    } else if (drag.edge === 'left') {
+      const newStartMs = drag.originalStartMs + deltaMs
+      const maxStartMs = drag.originalEndMs != null ? drag.originalEndMs : drag.originalStartMs + 86400000
+      const clampedStart = snapToDay(new Date(Math.min(newStartMs, maxStartMs)))
+      const startStr = toISODate(clampedStart)
+      const endStr = drag.originalEndMs != null ? toISODate(new Date(drag.originalEndMs)) : null
+      if (startStr === lastDragDates.current.start && endStr === lastDragDates.current.end) return
+      lastDragDates.current = { start: startStr, end: endStr }
+      updateTimelineAction(drag.actionId, { start_date: startStr }, { markDirty: false })
+    } else {
+      const originalEnd = drag.originalEndMs ?? drag.originalStartMs + 86400000
+      const newEndMs = originalEnd + deltaMs
+      const clampedEnd = snapToDay(new Date(Math.max(newEndMs, drag.originalStartMs)))
+      const endStr = toISODate(clampedEnd)
+      const startStr = toISODate(new Date(drag.originalStartMs))
+      if (startStr === lastDragDates.current.start && endStr === lastDragDates.current.end) return
+      lastDragDates.current = { start: startStr, end: endStr }
+      updateTimelineAction(drag.actionId, { end_date: endStr }, { markDirty: false })
+    }
+    drag.hasMutated = true
+  }
+
+  function stopAutoScroll(): void {
+    const rafId = autoScrollRafRef.current
+    if (rafId != null) {
+      cancelAnimationFrame(rafId)
+      autoScrollRafRef.current = null
+    }
+  }
+
+  function autoScrollTick(): void {
+    if (autoScrollRafRef.current == null) return
+    const drag = dragState.current
+    if (!drag || (drag.type !== 'move' && drag.type !== 'resize')) {
+      stopAutoScroll()
+      return
+    }
+    const mouseX = lastDragClientXRef.current - drag.cachedRect.left
+    const speed = computeAutoScrollSpeed(mouseX, drag.cachedRect.width)
+    if (speed === 0) {
+      stopAutoScroll()
+      return
+    }
+    scrollX.value = scrollX.peek() + speed
+    autoScrollAccumRef.current += speed
+    applyDragDelta(drag, lastDragClientXRef.current - drag.startMouseX + autoScrollAccumRef.current)
+    autoScrollRafRef.current = requestAnimationFrame(autoScrollTick)
+  }
+
+  function updateAutoScroll(mouseX: number, chartWidth: number): void {
+    const speed = computeAutoScrollSpeed(mouseX, chartWidth)
+    if (speed !== 0) {
+      if (autoScrollRafRef.current == null) {
+        autoScrollRafRef.current = requestAnimationFrame(autoScrollTick)
+      }
+    } else {
+      stopAutoScroll()
+    }
+  }
+
+  const handleContainerScroll = useCallback(() => {
+    cachedRectRef.current = null
+    stopAutoScroll()
+    if (hoveredId.peek() !== null) hoveredId.value = null
+    if (tooltipState.peek()) tooltipState.value = null
+    if (popoverState.peek()) popoverState.value = null
+    setTimelineHoveredPanelTargets(EMPTY_PANEL_TARGETS)
+    if (canvasRef.current) canvasRef.current.style.cursor = 'default'
+  }, [])
 
   const handleMouseDown = useCallback((event: MouseEvent) => {
     const canvas = canvasRef.current
@@ -274,11 +384,10 @@ export function InteractiveTimeline({
       dragState.current = {
         type: 'pan',
         startMouseX: event.clientX,
-        startMouseY: event.clientY,
         startScrollX: scrollX.peek(),
-        startScrollY: scrollY.peek(),
         cachedRect: rect,
       }
+      document.body.style.cursor = 'grabbing'
       return
     }
 
@@ -330,7 +439,7 @@ export function InteractiveTimeline({
       const clickDate = snapToDay(xToDate(chartX, o, ppd))
       // Determine action type from row
       const offsets = rowOffsetsRef.current
-      const adjustedY = mouseY + scrollY.peek()
+      const adjustedY = mouseY
       let rowActionType = ACTION_TYPES[0]!
       for (let i = 0; i < offsets.length - 1; i++) {
         if (adjustedY >= offsets[i]! && adjustedY < offsets[i + 1]!) {
@@ -342,10 +451,16 @@ export function InteractiveTimeline({
         type: 'add',
         clientX: event.clientX,
         clientY: event.clientY,
-        anchorX: mouseX,
-        anchorY: mouseY,
+        anchorX: event.clientX,
+        anchorY: event.clientY,
         actionType: rowActionType,
         date: toISODate(clickDate),
+      }
+      dragState.current = {
+        type: 'pan',
+        startMouseX: event.clientX,
+        startScrollX: scrollX.peek(),
+        cachedRect: rect,
       }
       return
     }
@@ -359,6 +474,11 @@ export function InteractiveTimeline({
     const endMs = hit.action.end_date ? new Date(hit.action.end_date).getTime() : null
 
     if (hit.edge === 'left' || hit.edge === 'right') {
+      dragOriginMsRef.current = computedOriginMsRef.current
+      dragOriginDateRef.current = new Date(computedOriginMsRef.current)
+      lastDragClientXRef.current = event.clientX
+      stopAutoScroll()
+      autoScrollAccumRef.current = 0
       dragState.current = {
         type: 'resize',
         actionId: hit.action.id,
@@ -379,13 +499,18 @@ export function InteractiveTimeline({
       type: 'edit',
       clientX: event.clientX,
       clientY: event.clientY,
-      anchorX: mouseX,
-      anchorY: mouseY,
+      anchorX: event.clientX,
+      anchorY: event.clientY,
       actionId: hit.action.id,
       action: hit.action,
     }
 
     const durationMs = endMs != null ? endMs - startMs : null
+    dragOriginMsRef.current = computedOriginMsRef.current
+    dragOriginDateRef.current = new Date(computedOriginMsRef.current)
+    lastDragClientXRef.current = event.clientX
+    stopAutoScroll()
+    autoScrollAccumRef.current = 0
     dragState.current = {
       type: 'move',
       actionId: hit.action.id,
@@ -411,54 +536,17 @@ export function InteractiveTimeline({
     if (drag && tooltipState.peek()) tooltipState.value = null
 
     if (drag?.type === 'pan') {
+      if (document.body.style.cursor !== 'grabbing') document.body.style.cursor = 'grabbing'
       const newScrollX = drag.startScrollX - (event.clientX - drag.startMouseX)
-      const newScrollY = Math.max(0, drag.startScrollY - (event.clientY - drag.startMouseY))
       if (scrollX.peek() !== newScrollX) scrollX.value = newScrollX
-      if (scrollY.peek() !== newScrollY) scrollY.value = newScrollY
       return
     }
 
-    if (drag?.type === 'move') {
-      const dayDelta = (event.clientX - drag.startMouseX) / drag.pxPerDaySnapshot
-      const start = snapToDay(new Date(drag.originalStartMs + dayDelta * 86400000))
-      const startStr = toISODate(start)
-      const endDate = drag.durationMs != null
-        ? toISODate(new Date(start.getTime() + drag.durationMs))
-        : null
-      if (startStr === lastDragDates.current.start && endDate === lastDragDates.current.end) return
-      lastDragDates.current = { start: startStr, end: endDate }
-      updateTimelineAction(
-        drag.actionId,
-        { start_date: startStr, end_date: endDate },
-        { markDirty: false },
-      )
-      drag.hasMutated = true
-      return
-    }
-
-    if (drag?.type === 'resize') {
-      const dayDelta = (event.clientX - drag.startMouseX) / drag.pxPerDaySnapshot
-      const deltaMs = dayDelta * 86400000
-      if (drag.edge === 'left') {
-        const newStartMs = drag.originalStartMs + deltaMs
-        const maxStartMs = drag.originalEndMs != null ? drag.originalEndMs : drag.originalStartMs + 86400000
-        const clampedStart = snapToDay(new Date(Math.min(newStartMs, maxStartMs)))
-        const startStr = toISODate(clampedStart)
-        const endStr = drag.originalEndMs != null ? toISODate(new Date(drag.originalEndMs)) : null
-        if (startStr === lastDragDates.current.start && endStr === lastDragDates.current.end) return
-        lastDragDates.current = { start: startStr, end: endStr }
-        updateTimelineAction(drag.actionId, { start_date: startStr }, { markDirty: false })
-      } else {
-        const originalEnd = drag.originalEndMs ?? drag.originalStartMs + 86400000
-        const newEndMs = originalEnd + deltaMs
-        const clampedEnd = snapToDay(new Date(Math.max(newEndMs, drag.originalStartMs)))
-        const endStr = toISODate(clampedEnd)
-        const startStr = toISODate(new Date(drag.originalStartMs))
-        if (startStr === lastDragDates.current.start && endStr === lastDragDates.current.end) return
-        lastDragDates.current = { start: startStr, end: endStr }
-        updateTimelineAction(drag.actionId, { end_date: endStr }, { markDirty: false })
-      }
-      drag.hasMutated = true
+    if (drag?.type === 'move' || drag?.type === 'resize') {
+      lastDragClientXRef.current = event.clientX
+      const autoScrollPx = autoScrollAccumRef.current
+      applyDragDelta(drag, event.clientX - drag.startMouseX + autoScrollPx)
+      updateAutoScroll(mouseX, drag.cachedRect.width)
       return
     }
 
@@ -500,11 +588,25 @@ export function InteractiveTimeline({
   }, [handleMouseMove])
 
   const handleMouseUp = useCallback((event: MouseEvent) => {
+    stopAutoScroll()
     const drag = dragState.current
     if (drag && (drag.type === 'move' || drag.type === 'resize') && drag.hasMutated) {
       markDocumentDirty()
     }
-    if (drag?.type === 'resize') document.body.style.cursor = ''
+    if (drag?.type === 'resize' || drag?.type === 'pan') document.body.style.cursor = ''
+
+    // Unfreeze coordinate origin and compensate scrollX to prevent visual jump
+    const frozenMs = dragOriginMsRef.current
+    if (frozenMs != null) {
+      const realMs = computedOriginMsRef.current
+      dragOriginMsRef.current = null
+      dragOriginDateRef.current = null
+      if (frozenMs !== realMs) {
+        const deltaDays = (frozenMs - realMs) / 86400000
+        scrollX.value = scrollX.peek() + deltaDays * pxPerDay.peek()
+      }
+    }
+
     dragState.current = null
     lastDragDates.current = { start: '', end: null }
 
@@ -564,17 +666,28 @@ export function InteractiveTimeline({
       handleMouseUp(event)
     }
 
+    const onLeave = () => {
+      if (dragState.current?.type === 'move' || dragState.current?.type === 'resize') {
+        stopAutoScroll()
+      }
+    }
+
     document.addEventListener('mousemove', onMove)
     document.addEventListener('mouseup', onUp)
+    document.documentElement.addEventListener('mouseleave', onLeave)
     return () => {
       document.removeEventListener('mousemove', onMove)
       document.removeEventListener('mouseup', onUp)
+      document.documentElement.removeEventListener('mouseleave', onLeave)
+      stopAutoScroll()
       const drag = dragState.current
       if (drag && (drag.type === 'move' || drag.type === 'resize') && drag.hasMutated) {
         markDocumentDirty()
       }
-      if (drag?.type === 'resize') document.body.style.cursor = ''
+      if (drag?.type === 'resize' || drag?.type === 'pan') document.body.style.cursor = ''
       dragState.current = null
+      dragOriginMsRef.current = null
+      dragOriginDateRef.current = null
       lastDragDates.current = { start: '', end: null }
       pendingClick.current = null
       setTimelineHoveredPanelTargets(EMPTY_PANEL_TARGETS)
@@ -652,7 +765,7 @@ export function InteractiveTimeline({
   const tip = tooltipState.value
 
   return (
-    <div ref={containerRef} className={styles.container}>
+    <div ref={containerRef} className={styles.container} onScroll={handleContainerScroll}>
       <canvas
         ref={canvasRef}
         className={styles.timeline}
@@ -676,18 +789,18 @@ export function InteractiveTimeline({
           )}
         </div>
       )}
-      {ps && (
+      {ps && createPortal(
         <TimelinePopover
           mode={ps.mode}
           anchorX={ps.anchorX}
           anchorY={ps.anchorY}
-          containerRef={containerRef}
           initialData={ps.formData}
           speciesList={ps.speciesList}
           onSave={handlePopoverSave}
           onDelete={ps.mode === 'edit' ? handlePopoverDelete : undefined}
           onCancel={handlePopoverCancel}
-        />
+        />,
+        document.body,
       )}
     </div>
   )

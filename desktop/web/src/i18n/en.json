@@ -753,5 +753,12 @@
     "message": "The application encountered an unexpected error. You can try reloading.",
     "reload": "Reload",
     "details": "Error details"
+  },
+  "shared": {
+    "datePicker": {
+      "previousMonth": "Previous month",
+      "nextMonth": "Next month",
+      "chooseDate": "Choose date"
+    }
   }
 }

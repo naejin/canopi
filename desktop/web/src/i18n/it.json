@@ -753,5 +753,12 @@
     "message": "L'applicazione ha riscontrato un errore imprevisto. Puoi provare a ricaricare.",
     "reload": "Ricarica",
     "details": "Dettagli dell'errore"
+  },
+  "shared": {
+    "datePicker": {
+      "previousMonth": "Mese precedente",
+      "nextMonth": "Mese successivo",
+      "chooseDate": "Scegli data"
+    }
   }
 }

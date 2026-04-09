@@ -753,5 +753,12 @@
     "message": "アプリケーションで予期しないエラーが発生しました。再読み込みをお試しください。",
     "reload": "再読み込み",
     "details": "エラーの詳細"
+  },
+  "shared": {
+    "datePicker": {
+      "previousMonth": "前月",
+      "nextMonth": "翌月",
+      "chooseDate": "日付を選択"
+    }
   }
 }

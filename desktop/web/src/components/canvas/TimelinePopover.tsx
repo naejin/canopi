@@ -49,8 +49,16 @@ export function TimelinePopover({
     const popRect = el.getBoundingClientRect()
     let x = anchorX
     let y = anchorY
-    // Flip above if not enough space below
-    if (y + popRect.height > window.innerHeight) y = anchorY - popRect.height - 4
+    // Flip to whichever direction has more room
+    if (y + popRect.height > window.innerHeight) {
+      const spaceAbove = anchorY
+      const spaceBelow = window.innerHeight - anchorY
+      if (spaceAbove > spaceBelow) {
+        y = Math.max(4, anchorY - popRect.height - 4)
+      } else {
+        y = Math.max(4, window.innerHeight - popRect.height - 4)
+      }
+    }
     // Horizontal clamp to viewport
     if (x + popRect.width > window.innerWidth) x = window.innerWidth - popRect.width - 4
     if (x < 4) x = 4

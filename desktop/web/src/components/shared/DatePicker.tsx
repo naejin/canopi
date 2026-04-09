@@ -3,6 +3,7 @@ import { useSignal, useSignalEffect } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale } from '../../state/app'
 import { toISODate } from '../../canvas/timeline-math'
+import { computeFloatingDirection, shouldAlignRight } from '../../utils/floating-position'
 import styles from './DatePicker.module.css'
 
 // ---------------------------------------------------------------------------
@@ -197,16 +198,13 @@ export function DatePicker({
     viewMonth.value = m
   }, []) // eslint-disable-line
 
-  // Viewport-aware direction
+  // Viewport-aware direction and horizontal alignment
   let resolvedDir: 'up' | 'down' = 'down'
+  let alignRight = false
   if (open.value && triggerRef.current) {
     const rect = triggerRef.current.getBoundingClientRect()
-    const gap = 4
-    const pad = 8
-    const spaceBelow = window.innerHeight - rect.bottom - gap - pad
-    const spaceAbove = rect.top - gap - pad
-    const minUsable = 100
-    if (spaceBelow < minUsable && spaceAbove > spaceBelow) resolvedDir = 'up'
+    resolvedDir = computeFloatingDirection(rect, { gap: 4, minUsable: 240 }).direction
+    alignRight = shouldAlignRight(rect, 220) // calendar is ~220px wide (fixed)
   }
 
   // Format trigger display
@@ -248,6 +246,7 @@ export function DatePicker({
           maxDate={maxDate}
           locale={currentLocale}
           direction={resolvedDir}
+          alignRight={alignRight}
           onSelect={handleSelectDay}
           onPrevMonth={handlePrevMonth}
           onNextMonth={handleNextMonth}
@@ -273,6 +272,7 @@ interface CalendarPanelProps {
   maxDate: Date | null
   locale: string
   direction: 'up' | 'down'
+  alignRight?: boolean
   onSelect: (date: Date) => void
   onPrevMonth: () => void
   onNextMonth: () => void
@@ -287,6 +287,7 @@ function CalendarPanel({
   maxDate,
   locale: loc,
   direction,
+  alignRight,
   onSelect,
   onPrevMonth,
   onNextMonth,
@@ -447,6 +448,7 @@ function CalendarPanel({
   return (
     <div
       className={calendarClass}
+      style={alignRight ? { left: 'auto', right: 0 } : undefined}
       role="dialog"
       aria-label={t('shared.datePicker.chooseDate')}
       onKeyDown={handleKeyDown}

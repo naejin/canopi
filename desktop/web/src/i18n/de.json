@@ -753,5 +753,12 @@
     "message": "Die Anwendung hat einen unerwarteten Fehler festgestellt. Sie können versuchen, neu zu laden.",
     "reload": "Neu laden",
     "details": "Fehlerdetails"
+  },
+  "shared": {
+    "datePicker": {
+      "previousMonth": "Vorheriger Monat",
+      "nextMonth": "Nächster Monat",
+      "chooseDate": "Datum wählen"
+    }
   }
 }

@@ -753,5 +753,12 @@
     "message": "De toepassing heeft een onverwachte fout aangetroffen. U kunt proberen opnieuw te laden.",
     "reload": "Opnieuw laden",
     "details": "Foutdetails"
+  },
+  "shared": {
+    "datePicker": {
+      "previousMonth": "Vorige maand",
+      "nextMonth": "Volgende maand",
+      "chooseDate": "Kies datum"
+    }
   }
 }

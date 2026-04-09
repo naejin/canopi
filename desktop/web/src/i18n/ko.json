@@ -753,5 +753,12 @@
     "message": "애플리케이션에서 예기치 않은 오류가 발생했습니다. 다시 로드해 보세요.",
     "reload": "다시 로드",
     "details": "오류 세부 정보"
+  },
+  "shared": {
+    "datePicker": {
+      "previousMonth": "이전 달",
+      "nextMonth": "다음 달",
+      "chooseDate": "날짜 선택"
+    }
   }
 }

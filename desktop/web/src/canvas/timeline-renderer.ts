@@ -54,7 +54,6 @@ export interface TimelineRenderState {
   originDate: Date
   pxPerDay: number
   scrollX: number
-  scrollY: number
   selectedId: string | null
   hoveredId: string | null
   locale: string
@@ -183,7 +182,7 @@ export function renderTimeline(
 ): void {
   ctx.clearRect(0, 0, width, height)
 
-  const { originDate, pxPerDay, scrollX, scrollY, selectedId, hoveredId } = state
+  const { originDate, pxPerDay, scrollX, selectedId, hoveredId } = state
   if (pxPerDay <= 0) return
 
   const theme = readThemeTokens()
@@ -270,11 +269,8 @@ export function renderTimeline(
   const rowOffsets = cachedRowOffsets ?? computeTimelineRowOffsets(rows, layout)
   for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
     const row = rows[rowIdx]!
-    const rY = rowOffsets[rowIdx]! - scrollY
+    const rY = rowOffsets[rowIdx]!
     const rH = rowOffsets[rowIdx + 1]! - rowOffsets[rowIdx]!
-
-    // Skip if out of view
-    if (rY + rH < RULER_HEIGHT || rY > height) continue
 
     // Alternating row backgrounds
     if (rowIdx % 2 === 1) {
@@ -418,7 +414,7 @@ export function hitTestAction(
   state: TimelineRenderState,
   cachedRowOffsets?: number[],
 ): HitResult | null {
-  const { originDate, pxPerDay, scrollX, scrollY } = state
+  const { originDate, pxPerDay, scrollX } = state
   const chartLeft = LABEL_SIDEBAR_WIDTH
 
   // Ignore clicks in the label sidebar or ruler
@@ -433,7 +429,7 @@ export function hitTestAction(
       if (!entry) continue
 
       const rowIdx = entry.rowIndex
-      const rY = rowOffsets[rowIdx]! - scrollY
+      const rY = rowOffsets[rowIdx]!
       const rH = rowOffsets[rowIdx + 1]! - rowOffsets[rowIdx]!
       const subLaneH = rH / entry.totalSubLanes
 

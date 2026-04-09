@@ -2,18 +2,15 @@
   position: relative;
   width: 100%;
   height: 100%;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .timeline {
   width: 100%;
-  height: 100%;
   display: block;
   cursor: default;
-}
-
-.timeline:active {
-  cursor: grabbing;
+  flex-shrink: 0;
 }
 
 .tooltip {

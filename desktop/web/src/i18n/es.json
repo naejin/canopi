@@ -753,5 +753,12 @@
     "message": "La aplicación encontró un error inesperado. Puede intentar recargar.",
     "reload": "Recargar",
     "details": "Detalles del error"
+  },
+  "shared": {
+    "datePicker": {
+      "previousMonth": "Mes anterior",
+      "nextMonth": "Mes siguiente",
+      "chooseDate": "Elegir fecha"
+    }
   }
 }

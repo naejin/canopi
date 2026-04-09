@@ -45,7 +45,7 @@ Domain-specific instructions in subdirectory CLAUDE.md files:
 - Depth: borders-only (no dramatic shadows)
 
 ## Current Scope
-- **Bottom panel**: Timeline, Budget, and Consortium tabs active. Timeline uses direct-manipulation UX: 6 fixed action-type rows, click-to-add/edit popover with date validation, edge resize, hover tooltip, ctrl+scroll zoom. Ruler controls hidden pending design iteration. Panel-canvas hover/selection flows through typed `PanelTarget[]` signals and `resolvePanelTargets()`
+- **Bottom panel**: Timeline, Budget, and Consortium tabs active. Timeline uses direct-manipulation UX: 6 fixed action-type rows, click-to-add/edit popover with date validation, edge resize, hover tooltip, ctrl+scroll zoom, drag-to-move with frozen coordinate origin, and auto-scroll on edge drag (rAF-based, quadratic acceleration). Ruler controls hidden pending design iteration. Panel-canvas hover/selection flows through typed `PanelTarget[]` signals and `resolvePanelTargets()`
 - **Maps**: Location flow and world map surfaces exist but Location PanelBar button is hidden (no in-canvas map layers yet); in-canvas geo/terrain, offline tiles, export, and learning content remain deferred beyond beta
 - **Selection**: No resize/rotate — objects are position-only (highlight + move)
 - **Plant labels**: Hover tooltip + hover species highlight + selection labels (one per species at centroid). See `desktop/web/src/canvas/CLAUDE.md` Plant Presentation Rules
