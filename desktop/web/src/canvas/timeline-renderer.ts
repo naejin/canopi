@@ -36,10 +36,19 @@ export function actionColor(type: string): string {
   return cssVar(varName) || fallback
 }
 
-// Ruler control button bounds — shared between render and hit-test
-export const RULER_BTN_MO = { x: 8, w: 22 }
-export const RULER_BTN_YR = { x: 32, w: 20 }
-export const RULER_BTN_TODAY = { x: 58, w: 40 }
+/** Ruler control button bounds — populated by renderTimeline, read by hit-test. */
+export interface RulerControlBounds {
+  mo: { x: number; w: number }
+  yr: { x: number; w: number }
+  today: { x: number; w: number }
+}
+
+/** Shared mutable bounds object — updated each render frame. */
+export const rulerControlBounds: RulerControlBounds = {
+  mo: { x: 0, w: 0 },
+  yr: { x: 0, w: 0 },
+  today: { x: 0, w: 0 },
+}
 
 export interface TimelineRenderState {
   originDate: Date
@@ -249,15 +258,34 @@ export function renderTimeline(
   // -- Ruler controls (top-left corner) ---------------------------------------
   const isMonth = state.granularity === 'month'
   ctx.font = `600 11px ${fontSans}`
-  // "Mo" toggle
+  const moLabel = t('canvas.timeline.monthView')
+  const yrLabel = t('canvas.timeline.yearView')
+  const todayLabel = t('canvas.timeline.todayMarker')
+  const moW = ctx.measureText(moLabel).width
+  const yrW = ctx.measureText(yrLabel).width
+  const todayW = ctx.measureText(todayLabel).width
+  const pad = 8
+  const gap = 4
+  const sep = 12
+  let cx = pad
+  // Month toggle
+  rulerControlBounds.mo = { x: cx, w: moW }
   ctx.fillStyle = isMonth ? primaryColor : textMutedColor
-  ctx.fillText(t('canvas.timeline.monthView'), RULER_BTN_MO.x, 18)
-  // "Yr" toggle
+  ctx.fillText(moLabel, cx, 18)
+  cx += moW + gap
+  // Separator dot
+  ctx.fillStyle = borderColor
+  ctx.fillRect(cx, 10, 1, 8)
+  cx += gap
+  // Year toggle
+  rulerControlBounds.yr = { x: cx, w: yrW }
   ctx.fillStyle = isMonth ? textMutedColor : primaryColor
-  ctx.fillText(t('canvas.timeline.yearView'), RULER_BTN_YR.x, 18)
-  // "Today" button
+  ctx.fillText(yrLabel, cx, 18)
+  cx += yrW + sep
+  // Today button
+  rulerControlBounds.today = { x: cx, w: todayW }
   ctx.fillStyle = textMutedColor
-  ctx.fillText(t('canvas.timeline.todayMarker'), RULER_BTN_TODAY.x, 18)
+  ctx.fillText(todayLabel, cx, 18)
 
   // -- Action type rows -------------------------------------------------------
   ctx.save()

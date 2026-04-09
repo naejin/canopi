@@ -16,10 +16,8 @@ import { markDocumentDirty } from '../../state/document-mutations'
 import {
   ACTION_TYPES,
   LABEL_SIDEBAR_WIDTH,
-  RULER_BTN_MO,
-  RULER_BTN_TODAY,
-  RULER_BTN_YR,
   RULER_HEIGHT,
+  rulerControlBounds,
   computeLayout,
   computeTimelineRowOffsets,
   groupActionsByType,
@@ -48,9 +46,10 @@ const CLICK_THRESHOLD = 3
 
 function hitTestRulerControls(x: number, y: number): 'granularity' | 'today' | null {
   if (y < RULER_BTN_Y || y > RULER_BTN_Y + RULER_BTN_H) return null
-  if (x >= RULER_BTN_MO.x && x <= RULER_BTN_MO.x + RULER_BTN_MO.w) return 'granularity'
-  if (x >= RULER_BTN_YR.x && x <= RULER_BTN_YR.x + RULER_BTN_YR.w) return 'granularity'
-  if (x >= RULER_BTN_TODAY.x && x <= RULER_BTN_TODAY.x + RULER_BTN_TODAY.w) return 'today'
+  const { mo, yr, today } = rulerControlBounds
+  if (x >= mo.x && x <= mo.x + mo.w) return 'granularity'
+  if (x >= yr.x && x <= yr.x + yr.w) return 'granularity'
+  if (x >= today.x && x <= today.x + today.w) return 'today'
   return null
 }
 
@@ -231,7 +230,23 @@ export function InteractiveTimeline({
     // Close popover on scroll/zoom
     if (popoverState.peek()) popoverState.value = null
 
-    if (event.shiftKey) {
+    if (event.ctrlKey || event.metaKey) {
+      // Zoom: ctrl+wheel or pinch gesture
+      const factor = event.deltaY > 0 ? 0.9 : 1.1
+      const prev = pxPerDay.peek()
+      const next = Math.max(0.2, Math.min(20, prev * factor))
+      if (next !== prev) {
+        // Keep the point under the cursor stationary
+        const canvas = canvasRef.current
+        if (canvas) {
+          const rect = cachedRectRef.current ?? canvas.getBoundingClientRect()
+          const mouseX = event.clientX - rect.left - LABEL_SIDEBAR_WIDTH
+          const dayAtCursor = (scrollX.peek() + mouseX) / prev
+          scrollX.value = dayAtCursor * next - mouseX
+        }
+        pxPerDay.value = next
+      }
+    } else if (event.shiftKey) {
       scrollY.value = Math.max(0, scrollY.peek() + event.deltaY)
     } else {
       scrollX.value = scrollX.peek() + (event.deltaX || event.deltaY)
