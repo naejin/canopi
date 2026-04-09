@@ -73,6 +73,11 @@ export function TimelinePopover({
       const target = event.target
       if (!(target instanceof Element)) return
       if (target.closest('[data-preserve-overlays="true"]')) return
+      // Native date picker calendar is outside our DOM tree — clicks on it
+      // trigger this handler. Skip close when a date input inside our popover
+      // has focus (means the calendar dropdown is open or just closed).
+      const active = document.activeElement
+      if (active instanceof HTMLInputElement && active.type === 'date' && popoverRef.current?.contains(active)) return
       onCancel()
     }
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -146,11 +151,7 @@ export function TimelinePopover({
             className={`${styles.input} ${dateError.value ? styles.inputError : ''}`}
             value={form.value.start_date}
             max={form.value.end_date || undefined}
-            onChange={(e) => {
-              const el = e.target as HTMLInputElement
-              updateField('start_date', el.value)
-              el.blur()
-            }}
+            onChange={(e) => updateField('start_date', (e.target as HTMLInputElement).value)}
           />
         </div>
         <div className={styles.dateRow}>
@@ -160,11 +161,7 @@ export function TimelinePopover({
             className={`${styles.input} ${dateError.value ? styles.inputError : ''}`}
             value={form.value.end_date}
             min={form.value.start_date || undefined}
-            onChange={(e) => {
-              const el = e.target as HTMLInputElement
-              updateField('end_date', el.value)
-              el.blur()
-            }}
+            onChange={(e) => updateField('end_date', (e.target as HTMLInputElement).value)}
           />
         </div>
         {dateError.value && (
