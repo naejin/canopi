@@ -269,8 +269,10 @@ export function InteractiveTimeline({
     if (event.button !== 0) return
 
     // Close popover on any left click, then fall through to process the click
+    let popoverWasOpen = false
     if (popoverState.peek()) {
       popoverState.value = null
+      popoverWasOpen = true
     }
 
     // Ruler controls
@@ -304,6 +306,8 @@ export function InteractiveTimeline({
     if (!hit) {
       // Sidebar is read-only - no add popover
       if (mouseX < LABEL_SIDEBAR_WIDTH) return
+      // Dismiss-only: don't reopen add popover on the same click that closed one
+      if (popoverWasOpen) return
       // Click on empty chart space - prepare add popover
       const { originDate: o, pxPerDay: ppd, scrollX: sx } = renderStateRef.current
       const chartX = mouseX - LABEL_SIDEBAR_WIDTH + sx
