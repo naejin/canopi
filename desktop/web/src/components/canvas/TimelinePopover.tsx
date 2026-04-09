@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
+import { locale } from '../../state/app'
 import { ACTION_TYPES, actionColor } from '../../canvas/timeline-renderer'
 import { Dropdown, type DropdownItem } from '../shared/Dropdown'
 import styles from './TimelinePopover.module.css'
@@ -36,6 +37,7 @@ export function TimelinePopover({
   onDelete,
   onCancel,
 }: TimelinePopoverProps) {
+  void locale.value // subscribe to locale changes for t() reactivity
   const form = useSignal<PopoverFormData>({ ...initialData })
   const popoverRef = useRef<HTMLDivElement>(null)
   const posX = useSignal(anchorX)
