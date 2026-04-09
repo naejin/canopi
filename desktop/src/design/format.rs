@@ -3,6 +3,10 @@ use common_types::design::{
 };
 use std::path::Path;
 
+/// The current file-format version this build produces and migrates to.
+/// Bump when adding a new migration step (and add the corresponding match arm).
+const CURRENT_VERSION: u64 = 2;
+
 /// Save a `CanopiFile` to disk atomically.
 ///
 /// Steps:
@@ -58,12 +62,13 @@ pub fn load_from_file(path: &Path) -> Result<CanopiFile, String> {
 
     // Log the version for diagnostics.
     if let Some(v) = value.get("version").and_then(|v| v.as_u64())
-        && v > 2
+        && v > CURRENT_VERSION
     {
         tracing::info!(
-            "Loading design version {} from {}; current app supports version 2",
+            "Loading design version {} from {}; current app supports version {}",
             v,
-            path.display()
+            path.display(),
+            CURRENT_VERSION,
         );
     }
 
@@ -77,9 +82,20 @@ pub fn load_from_file(path: &Path) -> Result<CanopiFile, String> {
 }
 
 fn migrate_design_value(value: &mut serde_json::Value) {
-    let version = value.get("version").and_then(|v| v.as_u64()).unwrap_or(1);
-    if version <= 1 {
-        migrate_v1_to_v2(value);
+    loop {
+        let version = value.get("version").and_then(|v| v.as_u64()).unwrap_or(1);
+        if version >= CURRENT_VERSION {
+            break;
+        }
+        match version {
+            1 => migrate_v1_to_v2(value),
+            _ => {
+                tracing::warn!(
+                    "Unknown file version {version} during migration, stopping"
+                );
+                break;
+            }
+        }
     }
 }
 
@@ -327,7 +343,7 @@ pub fn create_default() -> CanopiFile {
     ];
 
     CanopiFile {
-        version: 2,
+        version: CURRENT_VERSION as u32,
         name: "Untitled".into(),
         description: None,
         location: None,
@@ -760,5 +776,12 @@ mod tests {
 
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(path.with_extension("canopi.prev"));
+    }
+
+    #[test]
+    fn test_migrate_stops_on_unknown_version() {
+        let mut value = serde_json::json!({ "version": 0, "name": "test" });
+        migrate_design_value(&mut value);
+        assert_eq!(value["version"], 0, "version 0 has no migration path");
     }
 }
