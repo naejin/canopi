@@ -670,4 +670,95 @@ mod tests {
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(path.with_extension("canopi.prev"));
     }
+
+    #[test]
+    fn test_budget_currency_round_trips_via_serde_flatten() {
+        use serde_json::json;
+
+        let dir = std::env::temp_dir();
+        let path = dir.join("canopi_test_budget_currency.canopi");
+
+        // Simulate what the TS serializer produces: budget_currency as top-level key
+        let mut value = serde_json::to_value(create_default()).expect("serialize");
+        value["budget_currency"] = json!("USD");
+
+        std::fs::write(&path, serde_json::to_string_pretty(&value).unwrap())
+            .expect("write");
+        let loaded = load_from_file(&path).expect("load");
+
+        // budget_currency is not a named Rust field, so #[serde(flatten)] absorbs it into extra
+        assert_eq!(
+            loaded.extra.get("budget_currency").and_then(|v| v.as_str()),
+            Some("USD"),
+            "budget_currency should survive via serde flatten extra"
+        );
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_populated_sections_survive_two_round_trips() {
+        use serde_json::json;
+
+        let dir = std::env::temp_dir();
+        let path = dir.join("canopi_test_populated_round_trip.canopi");
+
+        let mut value = serde_json::to_value(create_default()).expect("serialize");
+        value["location"] = json!({ "lat": 48.8566, "lon": 2.3522, "altitude_m": 35 });
+        value["consortiums"] = json!([{
+            "target": { "kind": "species", "canonical_name": "Quercus robur" },
+            "stratum": "high",
+            "start_phase": 0,
+            "end_phase": 3
+        }]);
+        value["timeline"] = json!([{
+            "id": "task-1",
+            "action_type": "planting",
+            "description": "Plant oak",
+            "start_date": "2026-04-01",
+            "end_date": null,
+            "recurrence": null,
+            "targets": [{ "kind": "species", "canonical_name": "Quercus robur" }],
+            "depends_on": null,
+            "completed": false,
+            "order": 0
+        }]);
+        value["budget"] = json!([{
+            "target": { "kind": "species", "canonical_name": "Quercus robur" },
+            "category": "plants",
+            "description": "English oak",
+            "quantity": 1,
+            "unit_cost": 25,
+            "currency": "EUR"
+        }]);
+        value["future_feature"] = json!({ "data": true });
+
+        // First round-trip
+        std::fs::write(&path, serde_json::to_string_pretty(&value).unwrap())
+            .expect("write initial");
+        let loaded1 = load_from_file(&path).expect("load 1");
+        save_to_file(&path, &loaded1).expect("save 1");
+
+        // Second round-trip
+        let loaded2 = load_from_file(&path).expect("load 2");
+
+        assert_eq!(loaded2.version, 2, "version should stay 2");
+        assert_eq!(loaded2.location.as_ref().map(|l| l.lat), Some(48.8566));
+        assert_eq!(loaded2.consortiums.len(), 1);
+        assert_eq!(loaded2.timeline.len(), 1);
+        assert_eq!(loaded2.timeline[0].targets.len(), 1);
+        assert!(matches!(loaded2.timeline[0].targets[0], PanelTarget::Species { .. }));
+        assert_eq!(loaded2.budget.len(), 1);
+        assert!(matches!(loaded2.budget[0].target, PanelTarget::Species { .. }));
+        assert_eq!(
+            loaded2.extra.get("future_feature")
+                .and_then(|v| v.get("data"))
+                .and_then(|v| v.as_bool()),
+            Some(true),
+            "unknown field should survive two round-trips"
+        );
+
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(path.with_extension("canopi.prev"));
+    }
 }

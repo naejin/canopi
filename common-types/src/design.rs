@@ -95,7 +95,7 @@ pub struct Consortium {
     pub end_phase: u32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
 #[serde(tag = "kind")]
 pub enum PanelTarget {
     #[serde(rename = "placed_plant")]
@@ -104,6 +104,7 @@ pub enum PanelTarget {
     Species { canonical_name: String },
     #[serde(rename = "zone")]
     Zone { zone_name: String },
+    #[default]
     #[serde(rename = "manual")]
     Manual,
     #[serde(rename = "none")]
@@ -146,12 +147,6 @@ pub struct BudgetItem {
     pub quantity: f64,
     pub unit_cost: f64,
     pub currency: String,
-}
-
-impl Default for PanelTarget {
-    fn default() -> Self {
-        Self::Manual
-    }
 }
 
 fn default_manual_target() -> PanelTarget {
