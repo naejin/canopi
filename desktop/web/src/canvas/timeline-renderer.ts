@@ -255,68 +255,11 @@ export function renderTimeline(
   ctx.lineTo(chartLeft, height)
   ctx.stroke()
 
-  // -- Ruler controls (top-left corner) — pill-shaped chips -------------------
-  const isMonth = state.granularity === 'month'
-  ctx.font = `600 11px ${fontSans}`
-  const moLabel = t('canvas.timeline.monthView')
-  const yrLabel = t('canvas.timeline.yearView')
-  const todayLabel = t('canvas.timeline.todayMarker')
-  const moW = ctx.measureText(moLabel).width
-  const yrW = ctx.measureText(yrLabel).width
-  const todayW = ctx.measureText(todayLabel).width
-  const pillH = 18
-  const pillPadX = 6
-  const pillY = (RULER_HEIGHT - pillH) / 2
-  const pillR = 3
-  const pillGap = 2
-  const groupGap = 6
-  let cx = 6
-
-  // Month/Year segmented toggle
-  const segW = moW + pillPadX * 2 + pillGap + yrW + pillPadX * 2
-  // Segment background
-  ctx.fillStyle = surfaceColor
-  roundRect(ctx, cx, pillY, segW, pillH, pillR)
-  ctx.fill()
-  ctx.strokeStyle = borderColor
-  ctx.lineWidth = 1
-  roundRect(ctx, cx, pillY, segW, pillH, pillR)
-  ctx.stroke()
-  // Month pill
-  const moFullW = moW + pillPadX * 2
-  rulerControlBounds.mo = { x: cx, w: moFullW }
-  if (isMonth) {
-    ctx.fillStyle = bgColor
-    roundRect(ctx, cx + 1, pillY + 1, moFullW - 2, pillH - 2, pillR - 1)
-    ctx.fill()
-  }
-  ctx.fillStyle = isMonth ? primaryColor : textMutedColor
-  ctx.fillText(moLabel, cx + pillPadX, pillY + pillH - 5)
-  cx += moFullW + pillGap
-  // Year pill
-  const yrFullW = yrW + pillPadX * 2
-  rulerControlBounds.yr = { x: cx, w: yrFullW }
-  if (!isMonth) {
-    ctx.fillStyle = bgColor
-    roundRect(ctx, cx - 1, pillY + 1, yrFullW, pillH - 2, pillR - 1)
-    ctx.fill()
-  }
-  ctx.fillStyle = isMonth ? textMutedColor : primaryColor
-  ctx.fillText(yrLabel, cx + pillPadX, pillY + pillH - 5)
-  cx += yrFullW + groupGap
-
-  // Today button pill
-  const todayFullW = todayW + pillPadX * 2
-  rulerControlBounds.today = { x: cx, w: todayFullW }
-  ctx.fillStyle = surfaceColor
-  roundRect(ctx, cx, pillY, todayFullW, pillH, pillR)
-  ctx.fill()
-  ctx.strokeStyle = borderColor
-  ctx.lineWidth = 1
-  roundRect(ctx, cx, pillY, todayFullW, pillH, pillR)
-  ctx.stroke()
-  ctx.fillStyle = textMutedColor
-  ctx.fillText(todayLabel, cx + pillPadX, pillY + pillH - 5)
+  // Ruler controls hidden — zoom via ctrl+scroll, granularity via future UI
+  // Zero out bounds so hit-test never matches
+  rulerControlBounds.mo = { x: 0, w: 0 }
+  rulerControlBounds.yr = { x: 0, w: 0 }
+  rulerControlBounds.today = { x: 0, w: 0 }
 
   // -- Action type rows -------------------------------------------------------
   ctx.save()
