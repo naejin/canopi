@@ -25,6 +25,7 @@
 - Add keys to all 11 locale files (en, fr, es, pt, it, zh, de, ja, ko, nl, ru) when adding new strings
 - **Unit strings must be i18n keys**: Never hardcode "yr", "d", "in" etc. in NumAttr/formatters. Use `t('plantDetail.yearUnit')` pattern. Scientific units (mg, mm, cm, g/g) are universal and don't need translation
 - **CSV/file export headers must use `t()`**: Table column headers in the UI use i18n, but export code easily misses this. Reuse the same `t()` keys for both
+- **Components using `t()` must subscribe to `locale`**: Read `void locale.value` in the component body or include `locale.value` in render deps. Without it, `t()` returns stale translations when the user switches language. Canvas2D components use `locale.value` in `useCanvasRenderer` deps instead
 
 ## CSS
 - Design tokens in `global.css` as CSS variables (field notebook palette)
@@ -34,6 +35,9 @@
 - **Transition timing**: Use `var(--transition-fast)` (80ms ease) for color/bg/border hover states, `var(--transition-normal)` (150ms ease) for transform/layout shifts, `var(--transition-enter)` (200ms ease-out) for panel slide/fade enter. Always use `ms` units, never `s`
 - **Dark mode token audit**: When adding CSS that uses `--color-*` tokens as foreground text/border, verify the token has a dark mode override in `global.css` `[data-theme="dark"]`. Check contrast ratio >= 4.5:1 against `--color-bg`
 - **Click-outside-to-close pattern**: Use `pointerup` (not `mousedown`) to avoid catching the click that opened the panel. No `setTimeout` delays — they create race conditions on rapid toggle. Controls that shouldn't dismiss open panels (e.g., locale picker) use `data-preserve-overlays="true"` — the handler checks `target.closest('[data-preserve-overlays="true"]')` before closing. See `MoreFiltersPanel.tsx`, `Dropdown.tsx`
+- **Native date picker calendar is outside our DOM**: `pointerup` click-outside handlers fire on calendar clicks. Guard with `document.activeElement` check: if it's a `type="date"` input inside the overlay, skip the close. Use `onChange` (not `onInput`) for date inputs — `onInput` fires on intermediate picker interaction. Don't call `blur()` to close the picker — let the native calendar handle its own lifecycle
+- **Popover flip positioning**: When `anchorY + popoverHeight > containerHeight`, position at `anchorY - popoverHeight - gap` instead of clamping upward. Clamping inside `overflow: hidden` containers still clips
+- **Popover close + click-through**: When removing an early `return` after popover dismiss to allow click-through on action hits, guard the empty-space path with a `popoverWasOpen` flag to prevent dismiss-click from reopening a new popover. See `InteractiveTimeline.tsx`
 - **No raw `white`/`black` in CSS Modules**: Use `var(--color-bg)` for white-on-colored backgrounds (badges, pills). Raw color keywords break dark mode just like raw `rgba()` does
 - **Section headers**: Uppercase, `var(--text-xs)` (11px), weight 600, `0.06em` letter-spacing, `--color-text-muted`. One pattern everywhere — no 10px/12px/14px variations
 - **Non-token sizes**: When a component genuinely needs a size not in the token scale (e.g., 22px swatches), define a scoped CSS custom property on the component root (e.g., `--swatch-size: 22px`) and reference it everywhere. Never scatter raw px values
