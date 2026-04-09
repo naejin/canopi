@@ -44,19 +44,12 @@ Domain-specific instructions in subdirectory CLAUDE.md files:
 - Theme toggle: light/dark only (no system option)
 - Depth: borders-only (no dramatic shadows)
 
-## Pruned Features (code deleted, git history preserves)
-These features were deleted during pre-rewrite cleanup. See `docs/todo.md` for current status:
-- **Tools**: Ellipse, Polygon, Freeform, Line, Measure, Dimension, Arrow, Callout, Pattern Fill, Spacing
-- **Overlays**: Minimap, Celestial dial, old in-canvas MapLibre/location overlay, Compass
-- **Old panel implementations**: pre-rewrite layer/world-map/learning panel implementations were pruned. Current `LayerPanel` is retained, and a newer `WorldMapPanel` / `WorldMapSurface` exists but is not the in-canvas map layer
-- **Export**: GeoJSON, PNG/SVG export commands
-- **Old support files**: dimensions.ts, pattern-math.ts, map-layer.ts, old tile download modal, and old tile IPC wrappers were pruned. Current `ipc/community.ts` is live for template catalog/import workflows
-- **Retained for beta release**: LayerPanel, location flows (Wave 3 retained-surface closeout)
-- **Bottom panel shipped**: Budget (redesigned: summary header, document-level currency via `budget_currency`, notebook-style table, inline price editing) and Consortium (succession chart) tabs active. Timeline tab hidden pending rework (code retained, UI entry point removed from `VISIBLE_BOTTOM_PANEL_TABS`). Consortium auto-sync runs via `state/consortium-sync-workflow.ts` at document level. Panel↔canvas hover/selection presentation flows through typed `PanelTarget[]` signals and `resolvePanelTargets()`
-- **Active/deferred map split**: Location flow and featured-design world map surfaces exist but Location PanelBar button is hidden (no in-canvas map layers yet); in-canvas geo/terrain, offline tiles, export, and learning content remain deferred beyond beta
-- **Selection**: No resize/rotate — objects are position-only (highlight + move). Resize/rotate commands all deleted
-- **Konva engine**: Entire `CanvasEngine` + old command/tool/serializer/history/import/export system deleted. Konva dependency fully removed. Replaced by scene-owned runtime (PixiJS + Canvas2D)
-- **Per-plant labels**: Label rendering, collision detection, dedup, and adaptive placement all deleted. Replaced by hover tooltip (common name + scientific name), hover species highlight (ring on same-species), and selection labels (one per species at centroid). See `desktop/web/src/canvas/CLAUDE.md` Plant Presentation Rules
+## Current Scope
+- **Bottom panel**: Budget and Consortium tabs active. Timeline tab hidden pending rework (code retained, UI entry point removed from `VISIBLE_BOTTOM_PANEL_TABS`). Panel-canvas hover/selection flows through typed `PanelTarget[]` signals and `resolvePanelTargets()`
+- **Maps**: Location flow and world map surfaces exist but Location PanelBar button is hidden (no in-canvas map layers yet); in-canvas geo/terrain, offline tiles, export, and learning content remain deferred beyond beta
+- **Selection**: No resize/rotate — objects are position-only (highlight + move)
+- **Plant labels**: Hover tooltip + hover species highlight + selection labels (one per species at centroid). See `desktop/web/src/canvas/CLAUDE.md` Plant Presentation Rules
+- Many tools, overlays, and export commands were pruned during the rewrite — see git history. See `docs/todo.md` for current and deferred work
 
 ## Architecture Rules
 
@@ -75,17 +68,17 @@ The save path composes both into a single `CanopiFile`. Neither authority should
 
 **Anti-patterns:**
 - Do not push non-canvas state (consortiums, timeline, budget, `budget_currency`) into `SceneStore` — it is not a canvas concern
-- Do not mirror canvas state into standalone signals when a derived/computed value or a direct read from the authority would work. Removed mirrors such as `currentConsortiums` must not be reintroduced
+- Do not mirror canvas state into standalone signals when a derived/computed value or a direct read from the authority would work. Prefer `computed()` signals derived from the authority over manually-synced mirrors
 - Do not create new ad hoc sync paths between the two authorities — if sync is needed, centralize it in one explicit adapter
 - **Adding new document-level fields**: Add to TS `CanopiFile` interface + `KNOWN_CANOPI_KEYS` in `state/document-extra.ts` + `serializeDocument()` passthrough. Rust `#[serde(flatten)] extra` round-trips unknown keys automatically, so no Rust struct change is needed until the field requires backend logic
 - **`KNOWN_CANOPI_KEYS` must include `'extra'`** — the `extra` field is a first-class key on `CanopiFile` emitted by the scene codec. Without it, `extractExtra()` captures the `extra` object as an unknown key, risking double-nesting on round-trip
 - **Adding new required array fields to `CanopiFile`**: Add `#[serde(default)]` in Rust (backward compat with old files), make the field required (not optional) in TS `CanopiFile` to match Rust `Vec<T>`, add empty placeholder in `serializeScenePersistedState` in `codec.ts`, and update all test fixtures. The `?? []` fallback is only needed where the parent object is nullable (`currentDesign.value?.field ?? []`), not inside `mutateCurrentDesign` callbacks where the design is guaranteed non-null
+- **Adding a new file-format migration**: Add a match arm in `migrate_design_value()` in `desktop/src/design/format.rs` for the new version, bump `CURRENT_VERSION`, and add the migration function. The loop runs each step sequentially (v1->v2->v3 etc.). Add a test in the same file's `mod tests`
 
 ### Action-Layer Rule
 - **Action modules must not import other action modules** — `state/*-actions.ts` files are leaf modules
 - Import direction: **components → actions → state** (never backwards)
-- **Cross-concern orchestration**: When a mutation in one domain must trigger side effects in another (e.g., plant deleted → orphan cleanup in timeline/budget/consortium), create an explicit workflow module at a higher boundary. Do not wire action modules to each other. See `state/template-import-workflow.ts` for the pattern
-- As panel↔canvas sync grows, expect more workflow modules. This is the intended pattern — name them clearly (e.g., `state/plant-lifecycle-workflow.ts`)
+- **Cross-concern orchestration**: When a mutation in one domain must trigger side effects in another (e.g., plant deleted → orphan cleanup in timeline/budget/consortium), create an explicit workflow module at a higher boundary. Do not wire action modules to each other. See `state/template-import-workflow.ts` and `state/consortium-sync-workflow.ts` for the pattern
 - **Workflow effect lifecycle**: Workflow modules that install `effect()` should manage their own disposer as a module-level singleton (`installX()` / `disposeX()`). This avoids circular imports when both `document.ts` and `document-actions.ts` need to call them. Do not install workflow effects inside `SceneCanvasRuntime` — they belong at the document boundary
 - **Budget actions**: `state/budget-actions.ts` owns `setBudgetCurrency` and `setPlantBudgetPrice`. Price action reads currency from the document (`budget_currency`), not from caller parameters — prevents currency split state
 - **Settings-backed actions**: Action functions that mutate signals backed by Rust `Settings` (e.g., `setBottomPanelOpen`, `setBottomPanelTab`) must call `persistCurrentSettings()` after writing the signal. Exception: 60fps hot paths (e.g., drag resize) should persist on mouse-up, not per-frame
@@ -94,10 +87,6 @@ The save path composes both into a single `CanopiFile`. Neither authority should
 - **Never write signals unconditionally at 60fps** (e.g. map `move` events). New object literals always fail `Object.is` equality, triggering unnecessary rerenders. Use `.peek()` to read without subscribing, compare before writing
 - **`getBoundingClientRect()` in hot loops**: Cache the DOMRect — don't call twice per pointermove event
 
-### Signal Mirror Rule
-- **Prefer derived/computed signals over manually-synced mirrors.** If a value exists in one authority (SceneStore or document store), components should read from that authority — or from a `computed()` signal derived from it — not from a hand-copied signal that requires `syncDocumentMirrors()`
-- Do not add new ad hoc mirrors. Removed mirrors such as `currentConsortiums` and `designLocation` must not be reintroduced — read location from `currentDesign.value?.location` directly
-
 ### Resource Ownership Rule
 - Every resource-owning surface must have **one explicit lifecycle owner** for setup, update, and teardown
 - Applies to: canvas runtime (SceneCanvasRuntime), renderer host, MapLibre instances, timers, listeners, async cancellation tokens, DOM overlays
@@ -105,10 +94,10 @@ The save path composes both into a single `CanopiFile`. Neither authority should
 
 ### MapLibre Integration Rule
 - **MapLibre is a derived visualization layer, not a document authority.** Map layers render scene/document state; they do not own or mutate it
-- Existing full-screen surfaces may keep component-local MapLibre ownership when setup/update/teardown are contained in one component (`LocationTab`, `WorldMapSurface`). Future in-canvas MapLibre must use a dedicated controller (e.g., `MapLibreController`), not scattered across the canvas runtime or individual components
-- Map viewport sync with the canvas must go through `CameraController`, not ad hoc signal wiring
-- The lazy import boundary around `maplibre-gl` should be preserved for bundle size, but isolation from the canvas runtime is no longer required — the map controller is a sibling to the runtime, not walled off from it
-- Future rendered panel↔map overlays must consume the pure `projectPanelTargetsToMapFeatures()` seam rather than re-resolving panel identity or making MapLibre a second scene/document authority
+- Existing full-screen surfaces may keep component-local MapLibre ownership when setup/update/teardown are contained in one component (`LocationTab`, `WorldMapSurface`). Future in-canvas MapLibre must not be scattered across the canvas runtime or individual components
+- **MapLibre follows canvas camera state (one-directional).** The canvas camera is the authority; the map layer subscribes and projects. Do not prescribe a specific controller/sync pattern — architecture should emerge from implementation constraints (compositing strategy, MapLibre API, performance)
+- The lazy import boundary around `maplibre-gl` should be preserved for bundle size
+- Future rendered panel-map overlays must consume the pure `projectPanelTargetsToMapFeatures()` seam rather than re-resolving panel identity or making MapLibre a second scene/document authority
 
 ### Panel ↔ Canvas Reactivity
 - **Bottom panel components that read canvas-derived data must subscribe to `sceneEntityRevision`** from `state/canvas.ts` to react to canvas mutations (plant placement, undo/redo). Reading `currentCanvasSession.value?.getPlacedPlants()` alone is not reactive — the session reference doesn't change when scene state changes. Panels that only read non-canvas document state (e.g., TimelineTab reads `currentDesign.value?.timeline`) should NOT subscribe — it causes spurious re-renders on every canvas mutation
@@ -124,28 +113,18 @@ The save path composes both into a single `CanopiFile`. Neither authority should
 - **Shared nice-distance arrays**: `grid.ts` exports `NICE_DISTANCES` — rulers and scale-bar derive subsets via `.filter()` (not `.slice(indexOf())` which silently breaks if the anchor value is removed). Do not create independent copies
 - **Renderer functions receive `t` parameter** for i18n — don't hardcode user-visible strings in Canvas2D renderers
 
-### Hotspot File Protection
-These files have concentrated authority. **One writer at a time** — do not assign multiple concurrent writers. Create seam files first, then move ownership:
-- `desktop/web/src/canvas/runtime/scene-runtime.ts`
-- `desktop/web/src/canvas/runtime/scene-interaction.ts`
-- `desktop/src/db/plant_db.rs`
-- `desktop/src/db/query_builder.rs`
-- `desktop/web/src/state/design.ts`
-- `desktop/web/src/state/plant-db.ts`
-
 ## Key Conventions
 
 ### Before Writing Code
 1. Query **Context7** for up-to-date library API docs (see Context7 Library IDs below)
 2. For UI work: read `.interface-design/system.md` for design tokens and patterns. Load `/interface-design:init` only for major new UI surfaces (new panels, new workflows, new component patterns)
 3. Use taoki `xray`/`ripple` to understand file structure and blast radius before modifying
-4. For multi-phase work with subagents: define a **file ownership matrix** (one writer per file at any time), keep **Tauri MCP in main context only** (single WebView session), and decide UI control types in the plan before building alternatives
+4. For multi-phase work with subagents: define a **file ownership matrix** (one writer per file at any time — especially hotspot files like `scene-runtime.ts`, `scene-interaction.ts`, `design.ts`, `plant_db.rs`), keep **Tauri MCP in main context only** (single WebView session), and decide UI control types in the plan before building alternatives
 5. For multi-feature i18n work: **batch all i18n keys in one early phase** to prevent 11-file merge conflicts across parallel agents
 6. Before planning new features: **explore the codebase for existing implementations** — code may already exist (e.g., copy-paste, favorites backend, display mode rendering were all discovered pre-built during MVP planning)
 7. Run `/simplify` after implementation — converges in ~3 rounds: R1 structural, R2 duplication exposed by R1 fixes, R3 confirms convergence
-8. Before acting on review findings: **cross-check against CLAUDE.md rules** — documented patterns (e.g., consortium-sync-workflow `currentDesign.value` subscription) may appear buggy but are intentional. The `toAdd/toDelete` emptiness guard is the designed re-execution breaker
-9. For async canvas features: audit every pipeline operation for main-thread blocking — use `createImageBitmap()` (never `toDataURL()`), epoch guards for cancellation, `requestIdleCallback` for deferred init
-10. For multi-phase work: **implement → `tsc` + `npm test` → craft code review → fix → re-review until convergence** per phase. Don't batch reviews across phases — bugs compound
+8. For multi-phase work: **implement → `tsc` + `npm test` → craft code review → fix → re-review until convergence** per phase. Don't batch reviews across phases — bugs compound
+9. When delegating commits to subagents: instruct them to `git add` only the specific files they modified — never `git add -A` or `git add .`. Pre-existing dirty working tree changes get swept into their commits otherwise
 
 ### Banned Patterns (enforced by plugin hooks)
 - **No React**: Import from `preact`, `preact/hooks`, `preact/compat` — never `react`
@@ -259,3 +238,84 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 - PixiJS: `/pixijs/pixijs`
 - MapLibre: `/maplibre/maplibre-gl-js`
 - i18next: `/i18next/i18next`
+
+## Contributing
+
+### When fixing a bug:
+
+1. Create a test (ideally at a unit stage) to *PROVE* the bug exists before attempting to fix it.
+2. Identify the architecturally appropriate place to fix the bug.
+   * Ideally fixing bugs leads to *reducing* overall complexity, not adding complexity by applying a band-aid
+3. Consider: is this the *ONLY* case for this bug, or does this bug have a broader scope
+   * If the bug has a broader scope, expand the tests to show *ALL* cases you can think of for the bug
+4. Update the code making minimal changes besides fixing the bug at the architecturally correct place to minimize added complexity.
+5. Commit changes to fix bugs as stand-alone bug fixes. Limit including bug fixes as part of other commits.
+
+### When adding a feature:
+
+If you ever encounter a compiler bug, stop everything you're doing, and fix the bug.  See the above section for how to do this appropriately.
+
+If you ever find a limitation in the language that you have to work around, stop, identify the problem, and suggest how the language needs to be improved to fix this limitation focing work arounds.
+
+## Output
+- Answer is always line 1. Reasoning comes after, never before.
+- No preamble. No "Great question!", "Sure!", "Of course!", "Certainly!", "Absolutely!".
+- No hollow closings. No "I hope this helps!", "Let me know if you need anything!".
+- No restating the prompt. If the task is clear, execute immediately.
+- No explaining what you are about to do. Just do it.
+- No unsolicited suggestions. Do exactly what was asked, nothing more.
+- Structured output only: bullets, tables, code blocks. Prose only when explicitly requested.
+
+## Token Efficiency
+- Compress responses. Every sentence must earn its place.
+- No redundant context. Do not repeat information already established in the session.
+- No long intros or transitions between sections.
+- Short responses are correct unless depth is explicitly requested.
+
+## Typography - ASCII Only
+- No em dashes (-) - use hyphens (-)
+- No smart/curly quotes - use straight quotes (" ')
+- No ellipsis character - use three dots (...)
+- No Unicode bullets - use hyphens (-) or asterisks (*)
+- No non-breaking spaces
+
+## Sycophancy - Zero Tolerance
+- Never validate the user before answering.
+- Never say "You're absolutely right!" unless the user made a verifiable correct statement.
+- Disagree when wrong. State the correction directly.
+- Do not change a correct answer because the user pushes back.
+
+## Accuracy and Speculation Control
+- Never speculate about code, files, or APIs you have not read.
+- If referencing a file or function: read it first, then answer.
+- If unsure: say "I don't know." Never guess confidently.
+- Never invent file paths, function names, or API signatures.
+- If a user corrects a factual claim: accept it as ground truth for the entire session. Never re-assert the original claim.
+- Whenever something doesn't work, you should first assume that your changes broke it. Code is always committed at working states.
+
+## Code Output
+- Avoid brittle, narrow solutions. When fixing bugs, always consider: is this the only case? Or does this fix apply more broadly? Is the band-aid solution correct. Prefer architecturally correct fixes, that solve the problem at the root and apply to all cases.
+- Return the simplest working solution. No over-engineering.
+- No abstractions or helpers for single-use operations.
+- No speculative features or future-proofing.
+- No docstrings or comments on code that was not changed.
+- Inline comments only where logic is non-obvious.
+- Read the file before modifying it. Never edit blind.
+
+## Warnings and Disclaimers
+- No safety disclaimers unless there is a genuine life-safety or legal risk.
+- No "Note that...", "Keep in mind that...", "It's worth mentioning..." soft warnings.
+- No "As an AI, I..." framing.
+
+## Session Memory
+- Learn user corrections and preferences within the session.
+- Apply them silently. Do not re-announce learned behavior.
+- If the user corrects a mistake: fix it, remember it, move on.
+
+## Scope Control
+- Do not add features beyond what was asked.
+- Do not refactor surrounding code when fixing a bug.
+- Do not create new files unless strictly necessary.
+
+## Override Rule
+User instructions always override this file.
