@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeLayout, groupActionsBySpecies } from '../canvas/timeline-renderer'
+import { computeLayout, groupActionsByType } from '../canvas/timeline-renderer'
 import type { TimelineAction } from '../types/design'
 import { MANUAL_TARGET } from '../panel-targets'
 
@@ -21,7 +21,7 @@ function makeAction(overrides: Partial<TimelineAction> = {}): TimelineAction {
 
 describe('computeLayout', () => {
   it('assigns non-overlapping actions to the same sub-lane', () => {
-    const rows = groupActionsBySpecies([
+    const rows = groupActionsByType([
       makeAction({ id: 'a1', start_date: '2026-01-01', end_date: '2026-02-01' }),
       makeAction({ id: 'a2', start_date: '2026-03-01', end_date: '2026-04-01' }),
     ])
@@ -32,7 +32,7 @@ describe('computeLayout', () => {
   })
 
   it('stacks overlapping actions into separate sub-lanes', () => {
-    const rows = groupActionsBySpecies([
+    const rows = groupActionsByType([
       makeAction({ id: 'a1', start_date: '2026-01-01', end_date: '2026-03-01' }),
       makeAction({ id: 'a2', start_date: '2026-02-01', end_date: '2026-04-01' }),
     ])
@@ -43,7 +43,7 @@ describe('computeLayout', () => {
   })
 
   it('dateless actions do not block lanes for subsequent actions', () => {
-    const rows = groupActionsBySpecies([
+    const rows = groupActionsByType([
       makeAction({ id: 'a1', start_date: '2026-01-01', end_date: '2026-02-01' }),
       makeAction({ id: 'dateless', start_date: null, end_date: null }),
       makeAction({ id: 'a3', start_date: '2026-03-01', end_date: '2026-04-01' }),

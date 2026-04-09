@@ -3,7 +3,7 @@ import { useCanvasRenderer } from './useCanvasRenderer'
 import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale, theme } from '../../state/app'
-import { hoveredPanelTargets, selectedPanelTargetOrigin, selectedPanelTargets } from '../../state/canvas'
+import { hoveredPanelTargets, plantSpeciesColors, selectedPanelTargetOrigin, selectedPanelTargets } from '../../state/canvas'
 import { currentDesign } from '../../state/document'
 import {
   deleteTimelineAction,
@@ -16,11 +16,11 @@ import {
   RULER_HEIGHT,
   computeLayout,
   computeTimelineRowOffsets,
-  groupActionsBySpecies,
+  groupActionsByType,
   hitTestAction,
   renderTimeline,
   type ActionLayout,
-  type SpeciesRow,
+  type ActionTypeRow,
   type TimelineRenderState,
 } from '../../canvas/timeline-renderer'
 import { dateToX, snapToDay, toISODate } from '../../canvas/timeline-math'
@@ -100,7 +100,7 @@ export function InteractiveTimeline({
   const scrollY = useSignal(0)
   const hoveredId = useSignal<string | null>(null)
   const dragState = useRef<DragState>(null)
-  const rowsRef = useRef<SpeciesRow[]>([])
+  const rowsRef = useRef<ActionTypeRow[]>([])
   const layoutRef = useRef<Map<string, ActionLayout>>(new Map())
   const lastDragDates = useRef<{ start: string; end: string | null }>({ start: '', end: null })
   const selectedIdRef = useRef(selectedId)
@@ -115,10 +115,12 @@ export function InteractiveTimeline({
   if (pxPerDay.peek() !== nextPxPerDay) pxPerDay.value = nextPxPerDay
 
   const actions = currentDesign.value?.timeline ?? EMPTY_ACTIONS
-  const originMs = useMemo(() => computeOriginMs(actions), [actions])
+  const speciesColors = plantSpeciesColors.value
+  const todayMs = useMemo(() => Date.now(), [])
+  const originMs = useMemo(() => computeOriginMs(actions, todayMs), [actions, todayMs])
   const originDate = useMemo(() => new Date(originMs), [originMs])
 
-  const rows = useMemo(() => groupActionsBySpecies(actions), [actions])
+  const rows = useMemo(() => groupActionsByType(actions), [actions])
   const layout = useMemo(() => computeLayout(rows), [rows])
   const rowOffsets = useMemo(() => computeTimelineRowOffsets(rows, layout), [rows, layout])
   rowsRef.current = rows
@@ -143,6 +145,7 @@ export function InteractiveTimeline({
     selectedId,
     hoveredId: hoveredId.value,
     locale: locale.value,
+    speciesColors,
   }
 
   useCanvasRenderer(canvasRef, (ctx, width, height) => {
@@ -156,7 +159,7 @@ export function InteractiveTimeline({
       t,
       rowOffsetsRef.current,
     )
-  }, [originMs, pxPerDay.value, scrollX.value, selectedId, hoveredId.value, scrollY.value, locale.value, theme.value], cachedRectRef)
+  }, [originMs, pxPerDay.value, scrollX.value, selectedId, hoveredId.value, scrollY.value, locale.value, theme.value, speciesColors], cachedRectRef)
 
   const handleWheel = useCallback((event: WheelEvent) => {
     event.preventDefault()
@@ -383,12 +386,12 @@ export function InteractiveTimeline({
   )
 }
 
-function computeOriginMs(actions: TimelineAction[]): number {
+function computeOriginMs(actions: TimelineAction[], fallbackMs: number): number {
   let earliest = Infinity
   for (const action of actions) {
     if (!action.start_date) continue
     const ms = new Date(action.start_date).getTime()
     if (ms < earliest) earliest = ms
   }
-  return (isFinite(earliest) ? earliest : 0) - 30 * 86400000
+  return (isFinite(earliest) ? earliest : fallbackMs) - 30 * 86400000
 }

@@ -105,7 +105,7 @@ describe('InteractiveTimeline hover cleanup', () => {
     await act(async () => {
       canvas.dispatchEvent(new MouseEvent('mousedown', {
         button: 0,
-        clientX: 295,
+        clientX: 262,
         clientY: 40,
         bubbles: true,
       }))

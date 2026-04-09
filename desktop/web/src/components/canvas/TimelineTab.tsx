@@ -5,6 +5,7 @@ import { locale } from '../../state/app'
 import { selectedPanelTargetOrigin, selectedPanelTargets } from '../../state/canvas'
 import { currentDesign } from '../../state/document'
 import { toISODate } from '../../canvas/timeline-math'
+import { ACTION_TYPES } from '../../canvas/timeline-renderer'
 import {
   addTimelineAction,
   updateTimelineAction,
@@ -24,9 +25,6 @@ function clearTimelineSelectedPanelTargets(): void {
   selectedPanelTargetOrigin.value = null
 }
 
-type ActionType = 'planting' | 'pruning' | 'harvest' | 'watering' | 'fertilising' | 'other'
-
-const ACTION_TYPES: ActionType[] = ['planting', 'pruning', 'harvest', 'watering', 'fertilising', 'other']
 const GRANULARITIES: Granularity[] = ['month', 'year']
 
 interface FormState {
@@ -58,7 +56,6 @@ export function TimelineTab() {
   )
 
   const actions = currentDesign.value?.timeline ?? EMPTY_TIMELINE
-  const hasActions = actions.length > 0
 
   useEffect(() => {
     if (!selectedId.value) return
@@ -149,7 +146,7 @@ export function TimelineTab() {
           {t('canvas.timeline.todayMarker')}
         </button>
         <div className={styles.headerSpacer} />
-        {hasActions && <span className={styles.count}>{actions.length}</span>}
+        {actions.length > 0 && <span className={styles.count}>{actions.length}</span>}
         <button type="button" className={styles.addBtn} onClick={openAdd}>
           + {t('canvas.timeline.addAction')}
         </button>
@@ -201,27 +198,15 @@ export function TimelineTab() {
         </div>
       )}
 
-      {hasActions ? (
-        <div className={styles.canvasArea}>
-          <InteractiveTimeline
-            granularity={granularity.value}
-            selectedId={selectedId.value}
-            onSelect={handleSelect}
-            onEditRequest={openEdit}
-            scrollToTodayRef={scrollToTodayRef}
-          />
-        </div>
-      ) : (
-        <div className={styles.emptyState}>
-          <p className={styles.emptyTitle}>{t('canvas.timeline.emptyState')}</p>
-          <p className={styles.emptyHint}>{t('canvas.timeline.emptyHint')}</p>
-          {!showForm.value && (
-            <button type="button" className={styles.emptyAddBtn} onClick={openAdd}>
-              + {t('canvas.timeline.addAction')}
-            </button>
-          )}
-        </div>
-      )}
+      <div className={styles.canvasArea}>
+        <InteractiveTimeline
+          granularity={granularity.value}
+          selectedId={selectedId.value}
+          onSelect={handleSelect}
+          onEditRequest={openEdit}
+          scrollToTodayRef={scrollToTodayRef}
+        />
+      </div>
     </div>
   )
 }

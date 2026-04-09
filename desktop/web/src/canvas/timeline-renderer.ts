@@ -8,13 +8,17 @@ import { cssVar, roundRect, readThemeTokens } from './canvas2d-utils'
 // Theme-aware: reads CSS variables from a container element at render time.
 // ---------------------------------------------------------------------------
 
+export type ActionType = 'planting' | 'pruning' | 'harvest' | 'watering' | 'fertilising' | 'other'
+export const ACTION_TYPES: ActionType[] = ['planting', 'pruning', 'harvest', 'watering', 'fertilising', 'other']
+
 export const LANE_HEIGHT = 32
 export const RULER_HEIGHT = 28
 const BAR_RADIUS = 4
 const BAR_MARGIN = 4
+const DOT_RADIUS = 4
 
-/** Width of the species label sidebar in pixels. Shared with InteractiveTimeline. */
-export const LABEL_SIDEBAR_WIDTH = 140
+/** Width of the action type label sidebar in pixels. Shared with InteractiveTimeline. */
+export const LABEL_SIDEBAR_WIDTH = 110
 
 /** Action type CSS variable names + hex fallbacks */
 const ACTION_COLOR_VARS: Record<string, [varName: string, fallback: string]> = {
@@ -40,57 +44,46 @@ export interface TimelineRenderState {
   selectedId: string | null
   hoveredId: string | null
   locale: string
+  speciesColors: Record<string, string>
 }
 
-export interface SpeciesRow {
-  speciesName: string
+export interface ActionTypeRow {
+  actionType: string
   actions: TimelineAction[]
 }
 
 /**
- * Group actions by explicit species target or ungrouped.
- * Returns a flat list of rows: one per species, plus an "ungrouped" row.
+ * Group actions by action type into 6 fixed rows.
+ * Always returns exactly 6 rows in ACTION_TYPES order, even if empty.
  */
-export function groupActionsBySpecies(actions: TimelineAction[]): SpeciesRow[] {
-  const speciesMap = new Map<string, TimelineAction[]>()
-  const ungrouped: TimelineAction[] = []
+export function groupActionsByType(actions: TimelineAction[]): ActionTypeRow[] {
+  const buckets = new Map<string, TimelineAction[]>()
+  for (const type of ACTION_TYPES) buckets.set(type, [])
 
   for (const action of actions) {
-    const key = getTimelineSpeciesTarget(action)?.canonical_name ?? null
-    if (key) {
-      const existing = speciesMap.get(key)
-      if (existing) existing.push(action)
-      else speciesMap.set(key, [action])
-    } else {
-      ungrouped.push(action)
-    }
+    const bucket = buckets.get(action.action_type)
+    if (bucket) bucket.push(action)
+    else buckets.get('other')!.push(action)
   }
 
-  const rows: SpeciesRow[] = []
-  for (const [name, acts] of speciesMap) {
-    rows.push({ speciesName: name, actions: acts })
-  }
-  if (ungrouped.length > 0) {
-    rows.push({ speciesName: '', actions: ungrouped })
-  }
-  return rows
+  return ACTION_TYPES.map((type) => ({ actionType: type, actions: buckets.get(type)! }))
 }
 
 /**
- * Compute lane layout: each action gets a lane index within its species row,
+ * Compute lane layout: each action gets a lane index within its action type row,
  * stacking vertically when bars overlap in time.
  * Returns a map of actionId -> { row index, sub-lane within row }.
  */
 export interface ActionLayout {
-  /** Species row index (0-based) */
+  /** Action type row index (0-based) */
   rowIndex: number
-  /** Sub-lane within the species row (0-based) for stacking overlapping bars */
+  /** Sub-lane within the row (0-based) for stacking overlapping bars */
   subLane: number
-  /** Total number of sub-lanes in this species row */
+  /** Total number of sub-lanes in this row */
   totalSubLanes: number
 }
 
-export function computeLayout(rows: SpeciesRow[]): Map<string, ActionLayout> {
+export function computeLayout(rows: ActionTypeRow[]): Map<string, ActionLayout> {
   const layout = new Map<string, ActionLayout>()
 
   for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
@@ -140,16 +133,16 @@ export function computeLayout(rows: SpeciesRow[]): Map<string, ActionLayout> {
   return layout
 }
 
-/** Height of a species row in pixels. */
-function rowHeight(row: SpeciesRow, layout: Map<string, ActionLayout>): number {
+/** Height of an action type row in pixels. */
+function rowHeight(row: ActionTypeRow, layout: Map<string, ActionLayout>): number {
   if (row.actions.length === 0) return LANE_HEIGHT
   const firstEntry = layout.get(row.actions[0]!.id)
   const totalSubLanes = firstEntry?.totalSubLanes ?? 1
   return Math.max(LANE_HEIGHT, totalSubLanes * LANE_HEIGHT)
 }
 
-/** Precompute cumulative Y offsets for all species rows. */
-export function computeTimelineRowOffsets(rows: SpeciesRow[], layout: Map<string, ActionLayout>): number[] {
+/** Precompute cumulative Y offsets for all action type rows. */
+export function computeTimelineRowOffsets(rows: ActionTypeRow[], layout: Map<string, ActionLayout>): number[] {
   const offsets = new Array(rows.length + 1) as number[]
   offsets[0] = RULER_HEIGHT
   for (let i = 0; i < rows.length; i++) {
@@ -167,7 +160,7 @@ export function renderTimeline(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
-  rows: SpeciesRow[],
+  rows: ActionTypeRow[],
   layout: Map<string, ActionLayout>,
   state: TimelineRenderState,
   t: (key: string) => string,
@@ -278,17 +271,21 @@ export function renderTimeline(
     ctx.lineTo(width, rY + rH)
     ctx.stroke()
 
-    // Species label in sidebar
-    ctx.fillStyle = textColor
-    ctx.font = `600 11px ${fontSans}`
-    const label = row.speciesName || t('canvas.timeline.general')
+    // Action type dot + label in sidebar
     ctx.save()
     ctx.beginPath()
-    ctx.rect(4, rY, chartLeft - 8, rH)
+    ctx.rect(0, rY, chartLeft, rH)
     ctx.clip()
-    // Vertically center the text
-    const labelY = rY + rH / 2 + 4
-    ctx.fillText(label, 8, labelY)
+    const centerY = rY + rH / 2
+    // Color dot
+    ctx.fillStyle = actionColor(row.actionType)
+    ctx.beginPath()
+    ctx.arc(8 + DOT_RADIUS, centerY, DOT_RADIUS, 0, Math.PI * 2)
+    ctx.fill()
+    // Label
+    ctx.fillStyle = textColor
+    ctx.font = `600 12px ${fontSans}`
+    ctx.fillText(t(`canvas.timeline.type_${row.actionType}`), 8 + DOT_RADIUS * 2 + 6, centerY + 4)
     ctx.restore()
 
     // -- Action bars for this row -------------------------------------------
@@ -314,8 +311,9 @@ export function renderTimeline(
       // Skip if out of horizontal view
       if (x1 + barW < chartLeft || x1 > width) continue
 
-      // Bar fill
-      const baseColor = actionColor(action.action_type)
+      // Bar fill — species color takes priority when assigned
+      const speciesTarget = getTimelineSpeciesTarget(action)
+      const baseColor = (speciesTarget ? state.speciesColors[speciesTarget.canonical_name] : undefined) ?? actionColor(action.action_type)
       ctx.globalAlpha = action.id === hoveredId ? 0.9 : 0.8
       ctx.fillStyle = baseColor
       roundRect(ctx, x1, barY, barW, barH, BAR_RADIUS)
@@ -392,7 +390,7 @@ export interface HitResult {
 export function hitTestAction(
   x: number,
   y: number,
-  rows: SpeciesRow[],
+  rows: ActionTypeRow[],
   layout: Map<string, ActionLayout>,
   state: TimelineRenderState,
   cachedRowOffsets?: number[],
