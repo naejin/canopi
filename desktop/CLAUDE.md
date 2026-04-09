@@ -16,6 +16,7 @@
 - **`installConsortiumSync()` must be active before any document load completes** — `loadCanvasFromDocument` installs it, but `applyDocumentReplacement` (queued loads, template imports) does not. `CanvasPanel` must call it unconditionally at mount, not only when `currentDesign.value` exists
 - **Preserve per-object non-visual fields** — plant notes/planted_date/quantity and zone notes
 - **Preserve unknown `extra` fields** — `extractExtra()` captures unknown top-level keys. Spread extra FIRST when composing the save output
+- **File format version**: `CURRENT_VERSION` constant in `desktop/src/design/format.rs` — used by migration loop, `create_default()`, and forward-version diagnostic log. Type is `u32` (matches `CanopiFile.version`). Cast to `u64` only at the JSON boundary (`serde_json::as_u64()`)
 - **Two-baseline dirty model** — Canvas: `_savedPosition` checkpoint in `SceneHistory` (patch-based). Non-canvas: `nonCanvasRevision` vs `nonCanvasSavedRevision`. Never write to `designDirty` directly
 - **Autosave** checkpoints same document as manual save. Failures surface via `autosaveFailed` signal
 - **No circular imports between scene store and document store** — `SceneStore` and scene runtime must not import `state/design.ts` directly. If the runtime needs to read document state (e.g., for save composition), pass it as a parameter or use a reader interface. The goal is unidirectional data flow, not total isolation

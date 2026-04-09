@@ -39,7 +39,7 @@ Konva / `CanvasEngine` code has been removed. Do not reintroduce Konva or `getEn
 - Plant presentation state lives in `SceneStore.session`, not in standalone canvas signals
 - The only active presentation fields are `plantSizeMode` and `plantColorByAttr`
 - Selection truth lives in `SceneStore.session.selectedEntityIds`
-- Canvas signals such as `selectedObjectIds`, `plantSizeMode`, and `plantColorByAttr` are UI mirrors, not runtime authority. Prefer computed/derived signals over manually-synced mirrors (see root `CLAUDE.md` Signal Mirror Rule)
+- Canvas signals such as `selectedObjectIds`, `plantSizeMode`, and `plantColorByAttr` are UI mirrors, not runtime authority. Prefer computed/derived signals over manually-synced mirrors (see root `CLAUDE.md` Document Authority Rule)
 - Panel-origin target hover/selection signals are presentation inputs only. Resolving `hoveredPanelTargets` or `selectedPanelTargets` must not mutate real canvas selection, labels, dirty state, or history unless a future slice explicitly designs that behavior
 
 ### Rendering Ownership

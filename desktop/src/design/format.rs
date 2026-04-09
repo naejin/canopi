@@ -1,7 +1,9 @@
-use common_types::design::{
-    Annotation, BudgetItem, CanopiFile, Consortium, Layer, PlacedPlant, TimelineAction, Zone,
-};
+use common_types::design::{CanopiFile, Layer};
 use std::path::Path;
+
+/// The current file-format version this build produces and migrates to.
+/// Bump when adding a new migration step (and add the corresponding match arm).
+const CURRENT_VERSION: u32 = 2;
 
 /// Save a `CanopiFile` to disk atomically.
 ///
@@ -58,12 +60,13 @@ pub fn load_from_file(path: &Path) -> Result<CanopiFile, String> {
 
     // Log the version for diagnostics.
     if let Some(v) = value.get("version").and_then(|v| v.as_u64())
-        && v > 2
+        && v > CURRENT_VERSION as u64
     {
         tracing::info!(
-            "Loading design version {} from {}; current app supports version 2",
+            "Loading design version {} from {}; current app supports version {}",
             v,
-            path.display()
+            path.display(),
+            CURRENT_VERSION,
         );
     }
 
@@ -77,9 +80,23 @@ pub fn load_from_file(path: &Path) -> Result<CanopiFile, String> {
 }
 
 fn migrate_design_value(value: &mut serde_json::Value) {
-    let version = value.get("version").and_then(|v| v.as_u64()).unwrap_or(1);
-    if version <= 1 {
-        migrate_v1_to_v2(value);
+    loop {
+        let version = value
+            .get("version")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(1) as u32;
+        if version >= CURRENT_VERSION {
+            break;
+        }
+        match version {
+            1 => migrate_v1_to_v2(value),
+            _ => {
+                tracing::warn!(
+                    "Unknown file version {version} during migration, stopping"
+                );
+                break;
+            }
+        }
     }
 }
 
@@ -327,20 +344,20 @@ pub fn create_default() -> CanopiFile {
     ];
 
     CanopiFile {
-        version: 2,
+        version: CURRENT_VERSION,
         name: "Untitled".into(),
         description: None,
         location: None,
         north_bearing_deg: None,
         plant_species_colors: std::collections::HashMap::new(),
         layers,
-        plants: Vec::<PlacedPlant>::new(),
-        zones: Vec::<Zone>::new(),
-        annotations: Vec::<Annotation>::new(),
-        consortiums: Vec::<Consortium>::new(),
+        plants: Vec::new(),
+        zones: Vec::new(),
+        annotations: Vec::new(),
+        consortiums: Vec::new(),
         groups: Vec::new(),
-        timeline: Vec::<TimelineAction>::new(),
-        budget: Vec::<BudgetItem>::new(),
+        timeline: Vec::new(),
+        budget: Vec::new(),
         created_at: now.clone(),
         updated_at: now,
         extra: std::collections::HashMap::new(),
@@ -653,10 +670,12 @@ mod tests {
         let reloaded = load_from_file(&path).expect("saved v2 file should reload");
 
         assert_eq!(reloaded.version, 2);
-        assert_eq!(reloaded.location.as_ref().map(|location| location.lat), Some(48.8566));
+        assert_eq!(reloaded.location.as_ref().map(|l| l.lat), Some(48.8566));
         assert_eq!(reloaded.consortiums.len(), 1);
+        assert_eq!(reloaded.timeline.len(), 1);
         assert_eq!(reloaded.timeline[0].targets.len(), 2);
         assert!(matches!(reloaded.timeline[0].targets[0], PanelTarget::Species { .. }));
+        assert_eq!(reloaded.budget.len(), 1);
         assert!(matches!(reloaded.budget[0].target, PanelTarget::Species { .. }));
         assert_eq!(
             reloaded
@@ -669,5 +688,28 @@ mod tests {
 
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(path.with_extension("canopi.prev"));
+    }
+
+    #[test]
+    fn test_budget_currency_round_trips_via_serde_flatten() {
+        use serde_json::json;
+
+        // budget_currency is not a named Rust field, so #[serde(flatten)] absorbs it into extra
+        let mut value = serde_json::to_value(create_default()).expect("serialize");
+        value["budget_currency"] = json!("USD");
+
+        let loaded: CanopiFile = serde_json::from_value(value).expect("deserialize");
+        assert_eq!(
+            loaded.extra.get("budget_currency").and_then(|v| v.as_str()),
+            Some("USD"),
+            "budget_currency should survive via serde flatten extra"
+        );
+    }
+
+    #[test]
+    fn test_migrate_stops_on_unknown_version() {
+        let mut value = serde_json::json!({ "version": 0, "name": "test" });
+        migrate_design_value(&mut value);
+        assert_eq!(value["version"], 0, "version 0 has no migration path");
     }
 }
