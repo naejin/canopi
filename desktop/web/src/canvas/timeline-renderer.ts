@@ -401,9 +401,11 @@ export function renderTimeline(
 // Hit testing
 // ---------------------------------------------------------------------------
 
+const EDGE_THRESHOLD = 6
+
 export interface HitResult {
   action: TimelineAction
-  edge: 'body'
+  edge: 'left' | 'right' | 'body'
 }
 
 export function hitTestAction(
@@ -445,6 +447,9 @@ export function hitTestAction(
       const barH = subLaneH - BAR_MARGIN * 2
 
       if (x >= x1 && x <= x1 + barW && y >= barY && y <= barY + barH) {
+        if (barW <= EDGE_THRESHOLD * 2) return { action, edge: 'body' }
+        if (x - x1 < EDGE_THRESHOLD) return { action, edge: 'left' }
+        if (x1 + barW - x < EDGE_THRESHOLD) return { action, edge: 'right' }
         return { action, edge: 'body' }
       }
     }

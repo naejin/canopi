@@ -66,6 +66,17 @@ type DragState =
       hasMutated: boolean
     }
   | {
+      type: 'resize'
+      actionId: string
+      edge: 'left' | 'right'
+      startMouseX: number
+      originalStartMs: number
+      originalEndMs: number | null
+      pxPerDaySnapshot: number
+      cachedRect: DOMRect
+      hasMutated: boolean
+    }
+  | {
       type: 'pan'
       startMouseX: number
       startMouseY: number
@@ -250,9 +261,25 @@ export function InteractiveTimeline({
     if (!hit.action.start_date) return
 
     const startMs = new Date(hit.action.start_date).getTime()
-    const durationMs = hit.action.end_date
-      ? new Date(hit.action.end_date).getTime() - startMs
-      : null
+    const endMs = hit.action.end_date ? new Date(hit.action.end_date).getTime() : null
+
+    if (hit.edge === 'left' || hit.edge === 'right') {
+      dragState.current = {
+        type: 'resize',
+        actionId: hit.action.id,
+        edge: hit.edge,
+        startMouseX: event.clientX,
+        originalStartMs: startMs,
+        originalEndMs: endMs,
+        pxPerDaySnapshot: pxPerDay.peek(),
+        cachedRect: rect,
+        hasMutated: false,
+      }
+      document.body.style.cursor = 'ew-resize'
+      return
+    }
+
+    const durationMs = endMs != null ? endMs - startMs : null
     dragState.current = {
       type: 'move',
       actionId: hit.action.id,
@@ -300,6 +327,32 @@ export function InteractiveTimeline({
       return
     }
 
+    if (drag?.type === 'resize') {
+      const dayDelta = (event.clientX - drag.startMouseX) / drag.pxPerDaySnapshot
+      const deltaMs = dayDelta * 86400000
+      if (drag.edge === 'left') {
+        const newStartMs = drag.originalStartMs + deltaMs
+        const maxStartMs = drag.originalEndMs != null ? drag.originalEndMs : drag.originalStartMs + 86400000
+        const clampedStart = snapToDay(new Date(Math.min(newStartMs, maxStartMs)))
+        const startStr = toISODate(clampedStart)
+        const endStr = drag.originalEndMs != null ? toISODate(new Date(drag.originalEndMs)) : null
+        if (startStr === lastDragDates.current.start && endStr === lastDragDates.current.end) return
+        lastDragDates.current = { start: startStr, end: endStr }
+        updateTimelineAction(drag.actionId, { start_date: startStr }, { markDirty: false })
+      } else {
+        const originalEnd = drag.originalEndMs ?? drag.originalStartMs + 86400000
+        const newEndMs = originalEnd + deltaMs
+        const clampedEnd = snapToDay(new Date(Math.max(newEndMs, drag.originalStartMs)))
+        const endStr = toISODate(clampedEnd)
+        const startStr = toISODate(new Date(drag.originalStartMs))
+        if (startStr === lastDragDates.current.start && endStr === lastDragDates.current.end) return
+        lastDragDates.current = { start: startStr, end: endStr }
+        updateTimelineAction(drag.actionId, { end_date: endStr }, { markDirty: false })
+      }
+      drag.hasMutated = true
+      return
+    }
+
     const hit = hitTestAction(
       mouseX,
       mouseY,
@@ -316,7 +369,9 @@ export function InteractiveTimeline({
       if (hoveredId.value !== null) hoveredId.value = null
       setTimelineHoveredPanelTargets(EMPTY_PANEL_TARGETS)
     }
-    const newCursor = hit ? 'grab' : mouseY < RULER_HEIGHT ? 'default' : 'crosshair'
+    const newCursor = hit
+      ? (hit.edge === 'left' || hit.edge === 'right' ? 'ew-resize' : 'grab')
+      : mouseY < RULER_HEIGHT ? 'default' : 'crosshair'
     if (canvas.style.cursor !== newCursor) canvas.style.cursor = newCursor
   }, [])
 
@@ -332,9 +387,10 @@ export function InteractiveTimeline({
 
   const handleMouseUp = useCallback(() => {
     const drag = dragState.current
-    if (drag && drag.type === 'move' && drag.hasMutated) {
+    if (drag && (drag.type === 'move' || drag.type === 'resize') && drag.hasMutated) {
       markDocumentDirty()
     }
+    if (drag?.type === 'resize') document.body.style.cursor = ''
     dragState.current = null
     lastDragDates.current = { start: '', end: null }
   }, [])
@@ -352,9 +408,11 @@ export function InteractiveTimeline({
     return () => {
       document.removeEventListener('mousemove', onMove)
       document.removeEventListener('mouseup', onUp)
-      if (dragState.current?.type === 'move' && dragState.current.hasMutated) {
+      const drag = dragState.current
+      if (drag && (drag.type === 'move' || drag.type === 'resize') && drag.hasMutated) {
         markDocumentDirty()
       }
+      if (drag?.type === 'resize') document.body.style.cursor = ''
       dragState.current = null
       lastDragDates.current = { start: '', end: null }
       setTimelineHoveredPanelTargets(EMPTY_PANEL_TARGETS)
