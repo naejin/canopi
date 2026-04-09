@@ -146,7 +146,11 @@ export function TimelinePopover({
             className={`${styles.input} ${dateError.value ? styles.inputError : ''}`}
             value={form.value.start_date}
             max={form.value.end_date || undefined}
-            onInput={(e) => updateField('start_date', (e.target as HTMLInputElement).value)}
+            onChange={(e) => {
+              const el = e.target as HTMLInputElement
+              updateField('start_date', el.value)
+              el.blur()
+            }}
           />
         </div>
         <div className={styles.dateRow}>
@@ -156,7 +160,11 @@ export function TimelinePopover({
             className={`${styles.input} ${dateError.value ? styles.inputError : ''}`}
             value={form.value.end_date}
             min={form.value.start_date || undefined}
-            onInput={(e) => updateField('end_date', (e.target as HTMLInputElement).value)}
+            onChange={(e) => {
+              const el = e.target as HTMLInputElement
+              updateField('end_date', el.value)
+              el.blur()
+            }}
           />
         </div>
         {dateError.value && (
