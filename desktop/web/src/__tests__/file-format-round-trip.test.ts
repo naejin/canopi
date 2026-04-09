@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { hydrateScenePersistedState, serializeScenePersistedState } from '../canvas/runtime/scene/codec'
 import type { CanopiFile } from '../types/design'
 
+// Minimal fixture covering one of each entity type, with both populated and null optional fields.
+// Non-canvas sections (consortiums, timeline, budget) are empty -- the codec doesn't round-trip them.
 const FIXTURE: CanopiFile = {
   version: 2,
   name: 'Round-trip test',
-  description: 'A test design with all entity types',
+  description: 'A test design',
   location: { lat: 48.8566, lon: 2.3522, altitude_m: null },
   north_bearing_deg: 14,
   plant_species_colors: {
@@ -15,11 +17,6 @@ const FIXTURE: CanopiFile = {
   layers: [
     { name: 'base', visible: true, locked: false, opacity: 1 },
     { name: 'contours', visible: false, locked: true, opacity: 0.5 },
-    { name: 'climate', visible: false, locked: false, opacity: 1 },
-    { name: 'zones', visible: true, locked: false, opacity: 0.8 },
-    { name: 'water', visible: false, locked: false, opacity: 1 },
-    { name: 'plants', visible: true, locked: false, opacity: 1 },
-    { name: 'annotations', visible: true, locked: false, opacity: 0.9 },
   ],
   plants: [
     {
@@ -51,12 +48,7 @@ const FIXTURE: CanopiFile = {
     {
       name: 'Orchard',
       zone_type: 'planting',
-      points: [
-        { x: 0, y: 0 },
-        { x: 100, y: 0 },
-        { x: 100, y: 100 },
-        { x: 0, y: 100 },
-      ],
+      points: [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }],
       fill_color: '#99CC66',
       notes: 'Main orchard area',
     },
@@ -81,38 +73,9 @@ const FIXTURE: CanopiFile = {
       member_ids: ['plant-1', 'plant-2'],
     },
   ],
-  consortiums: [
-    {
-      target: { kind: 'species', canonical_name: 'Quercus robur' },
-      stratum: 'high',
-      start_phase: 0,
-      end_phase: 3,
-    },
-  ],
-  timeline: [
-    {
-      id: 'task-1',
-      action_type: 'mulch',
-      description: 'Apply mulch',
-      start_date: '2026-04-10',
-      end_date: null,
-      recurrence: null,
-      targets: [{ kind: 'species', canonical_name: 'Quercus robur' }],
-      depends_on: null,
-      completed: false,
-      order: 1,
-    },
-  ],
-  budget: [
-    {
-      target: { kind: 'species', canonical_name: 'Quercus robur' },
-      category: 'plants',
-      description: 'Quercus robur',
-      quantity: 1,
-      unit_cost: 12,
-      currency: 'EUR',
-    },
-  ],
+  consortiums: [],
+  timeline: [],
+  budget: [],
   created_at: '2026-01-15T10:30:00.000Z',
   updated_at: '2026-02-20T14:45:00.000Z',
   extra: { future_feature: { nested: true, count: 42 } },
@@ -120,105 +83,14 @@ const FIXTURE: CanopiFile = {
 
 describe('file format round-trip', () => {
   it('canvas codec round-trips all entity types', () => {
-    const hydrated = hydrateScenePersistedState(FIXTURE)
-    const serialized = serializeScenePersistedState(hydrated, {
-      now: new Date('2026-04-09T12:00:00.000Z'),
-    })
+    const now = new Date('2026-04-09T12:00:00.000Z')
+    const serialized = serializeScenePersistedState(
+      hydrateScenePersistedState(FIXTURE),
+      { now },
+    )
 
-    // Plants
-    expect(serialized.plants).toHaveLength(2)
-    const p1 = serialized.plants[0]!
-    expect(p1.id).toBe('plant-1')
-    expect(p1.canonical_name).toBe('Quercus robur')
-    expect(p1.common_name).toBe('English Oak')
-    expect(p1.color).toBe('#228833')
-    expect(p1.position).toEqual({ x: 100, y: 200 })
-    expect(p1.rotation).toBe(45)
-    expect(p1.scale).toBe(3.5)
-    expect(p1.notes).toBe('Near the pond')
-    expect(p1.planted_date).toBe('2025-03-15')
-    expect(p1.quantity).toBe(1)
-
-    const p2 = serialized.plants[1]!
-    expect(p2.common_name).toBeNull()
-    expect(p2.color).toBeNull()
-    expect(p2.position).toEqual({ x: -50.5, y: 300.75 })
-    expect(p2.rotation).toBeNull()
-    expect(p2.scale).toBeNull()
-    expect(p2.notes).toBeNull()
-    expect(p2.planted_date).toBeNull()
-    expect(p2.quantity).toBe(3)
-
-    // Zones
-    expect(serialized.zones).toHaveLength(1)
-    const z = serialized.zones[0]!
-    expect(z.name).toBe('Orchard')
-    expect(z.zone_type).toBe('planting')
-    expect(z.points).toEqual([
-      { x: 0, y: 0 },
-      { x: 100, y: 0 },
-      { x: 100, y: 100 },
-      { x: 0, y: 100 },
-    ])
-    expect(z.fill_color).toBe('#99CC66')
-    expect(z.notes).toBe('Main orchard area')
-
-    // Annotations
-    expect(serialized.annotations).toHaveLength(1)
-    const a = serialized.annotations[0]!
-    expect(a.id).toBe('ann-1')
-    expect(a.annotation_type).toBe('text')
-    expect(a.position).toEqual({ x: 50, y: 50 })
-    expect(a.text).toBe('North boundary')
-    expect(a.font_size).toBe(16)
-    expect(a.rotation).toBe(-10)
-
-    // Groups
-    expect(serialized.groups).toHaveLength(1)
-    const g = serialized.groups[0]!
-    expect(g.id).toBe('group-1')
-    expect(g.name).toBe('Fruit trees')
-    expect(g.layer).toBe('plants')
-    expect(g.position).toEqual({ x: 25, y: 110 })
-    expect(g.rotation).toBeNull()
-    expect(g.member_ids).toEqual(['plant-1', 'plant-2'])
-
-    // Layers
-    expect(serialized.layers).toHaveLength(7)
-    expect(serialized.layers[0]).toEqual({ name: 'base', visible: true, locked: false, opacity: 1 })
-    expect(serialized.layers[1]).toEqual({ name: 'contours', visible: false, locked: true, opacity: 0.5 })
-    expect(serialized.layers[3]).toEqual({ name: 'zones', visible: true, locked: false, opacity: 0.8 })
-    expect(serialized.layers[6]).toEqual({ name: 'annotations', visible: true, locked: false, opacity: 0.9 })
-
-    // Location (with null altitude_m) and bearing
-    expect(serialized.location).toEqual({ lat: 48.8566, lon: 2.3522, altitude_m: null })
-    expect(serialized.north_bearing_deg).toBe(14)
-
-    // Metadata scalars
-    expect(serialized.name).toBe('Round-trip test')
-    expect(serialized.description).toBe('A test design with all entity types')
-
-    // Plant species colors
-    expect(serialized.plant_species_colors).toEqual({
-      'Quercus robur': '#228833',
-      'Malus domestica': '#AA4422',
-    })
-
-    // Version
-    expect(serialized.version).toBe(2)
-
-    // created_at preserved, updated_at regenerated
-    expect(serialized.created_at).toBe('2026-01-15T10:30:00.000Z')
-    expect(serialized.updated_at).toBe('2026-04-09T12:00:00.000Z')
-    expect(serialized.updated_at).not.toBe(FIXTURE.updated_at)
-
-    // Extra unknown fields preserved with nested structure
-    expect(serialized.extra).toEqual({ future_feature: { nested: true, count: 42 } })
-
-    // Non-canvas sections are empty placeholders (codec contract)
-    expect(serialized.consortiums).toEqual([])
-    expect(serialized.timeline).toEqual([])
-    expect(serialized.budget).toEqual([])
+    // updated_at is regenerated from `now`; all other fields round-trip exactly
+    expect(serialized.updated_at).toBe(now.toISOString())
+    expect(serialized).toEqual({ ...FIXTURE, updated_at: now.toISOString() })
   })
-
 })

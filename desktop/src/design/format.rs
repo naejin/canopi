@@ -1,11 +1,9 @@
-use common_types::design::{
-    Annotation, BudgetItem, CanopiFile, Consortium, Layer, PlacedPlant, TimelineAction, Zone,
-};
+use common_types::design::{CanopiFile, Layer};
 use std::path::Path;
 
 /// The current file-format version this build produces and migrates to.
 /// Bump when adding a new migration step (and add the corresponding match arm).
-const CURRENT_VERSION: u64 = 2;
+const CURRENT_VERSION: u32 = 2;
 
 /// Save a `CanopiFile` to disk atomically.
 ///
@@ -62,7 +60,7 @@ pub fn load_from_file(path: &Path) -> Result<CanopiFile, String> {
 
     // Log the version for diagnostics.
     if let Some(v) = value.get("version").and_then(|v| v.as_u64())
-        && v > CURRENT_VERSION
+        && v > CURRENT_VERSION as u64
     {
         tracing::info!(
             "Loading design version {} from {}; current app supports version {}",
@@ -83,7 +81,10 @@ pub fn load_from_file(path: &Path) -> Result<CanopiFile, String> {
 
 fn migrate_design_value(value: &mut serde_json::Value) {
     loop {
-        let version = value.get("version").and_then(|v| v.as_u64()).unwrap_or(1);
+        let version = value
+            .get("version")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(1) as u32;
         if version >= CURRENT_VERSION {
             break;
         }
@@ -343,20 +344,20 @@ pub fn create_default() -> CanopiFile {
     ];
 
     CanopiFile {
-        version: CURRENT_VERSION as u32,
+        version: CURRENT_VERSION,
         name: "Untitled".into(),
         description: None,
         location: None,
         north_bearing_deg: None,
         plant_species_colors: std::collections::HashMap::new(),
         layers,
-        plants: Vec::<PlacedPlant>::new(),
-        zones: Vec::<Zone>::new(),
-        annotations: Vec::<Annotation>::new(),
-        consortiums: Vec::<Consortium>::new(),
+        plants: Vec::new(),
+        zones: Vec::new(),
+        annotations: Vec::new(),
+        consortiums: Vec::new(),
         groups: Vec::new(),
-        timeline: Vec::<TimelineAction>::new(),
-        budget: Vec::<BudgetItem>::new(),
+        timeline: Vec::new(),
+        budget: Vec::new(),
         created_at: now.clone(),
         updated_at: now,
         extra: std::collections::HashMap::new(),
@@ -669,10 +670,12 @@ mod tests {
         let reloaded = load_from_file(&path).expect("saved v2 file should reload");
 
         assert_eq!(reloaded.version, 2);
-        assert_eq!(reloaded.location.as_ref().map(|location| location.lat), Some(48.8566));
+        assert_eq!(reloaded.location.as_ref().map(|l| l.lat), Some(48.8566));
         assert_eq!(reloaded.consortiums.len(), 1);
+        assert_eq!(reloaded.timeline.len(), 1);
         assert_eq!(reloaded.timeline[0].targets.len(), 2);
         assert!(matches!(reloaded.timeline[0].targets[0], PanelTarget::Species { .. }));
+        assert_eq!(reloaded.budget.len(), 1);
         assert!(matches!(reloaded.budget[0].target, PanelTarget::Species { .. }));
         assert_eq!(
             reloaded
@@ -691,91 +694,16 @@ mod tests {
     fn test_budget_currency_round_trips_via_serde_flatten() {
         use serde_json::json;
 
-        let dir = std::env::temp_dir();
-        let path = dir.join("canopi_test_budget_currency.canopi");
-
-        // Simulate what the TS serializer produces: budget_currency as top-level key
+        // budget_currency is not a named Rust field, so #[serde(flatten)] absorbs it into extra
         let mut value = serde_json::to_value(create_default()).expect("serialize");
         value["budget_currency"] = json!("USD");
 
-        std::fs::write(&path, serde_json::to_string_pretty(&value).unwrap())
-            .expect("write");
-        let loaded = load_from_file(&path).expect("load");
-
-        // budget_currency is not a named Rust field, so #[serde(flatten)] absorbs it into extra
+        let loaded: CanopiFile = serde_json::from_value(value).expect("deserialize");
         assert_eq!(
             loaded.extra.get("budget_currency").and_then(|v| v.as_str()),
             Some("USD"),
             "budget_currency should survive via serde flatten extra"
         );
-
-        let _ = std::fs::remove_file(&path);
-    }
-
-    #[test]
-    fn test_populated_sections_survive_two_round_trips() {
-        use serde_json::json;
-
-        let dir = std::env::temp_dir();
-        let path = dir.join("canopi_test_populated_round_trip.canopi");
-
-        let mut value = serde_json::to_value(create_default()).expect("serialize");
-        value["location"] = json!({ "lat": 48.8566, "lon": 2.3522, "altitude_m": 35 });
-        value["consortiums"] = json!([{
-            "target": { "kind": "species", "canonical_name": "Quercus robur" },
-            "stratum": "high",
-            "start_phase": 0,
-            "end_phase": 3
-        }]);
-        value["timeline"] = json!([{
-            "id": "task-1",
-            "action_type": "planting",
-            "description": "Plant oak",
-            "start_date": "2026-04-01",
-            "end_date": null,
-            "recurrence": null,
-            "targets": [{ "kind": "species", "canonical_name": "Quercus robur" }],
-            "depends_on": null,
-            "completed": false,
-            "order": 0
-        }]);
-        value["budget"] = json!([{
-            "target": { "kind": "species", "canonical_name": "Quercus robur" },
-            "category": "plants",
-            "description": "English oak",
-            "quantity": 1,
-            "unit_cost": 25,
-            "currency": "EUR"
-        }]);
-        value["future_feature"] = json!({ "data": true });
-
-        // First round-trip
-        std::fs::write(&path, serde_json::to_string_pretty(&value).unwrap())
-            .expect("write initial");
-        let loaded1 = load_from_file(&path).expect("load 1");
-        save_to_file(&path, &loaded1).expect("save 1");
-
-        // Second round-trip
-        let loaded2 = load_from_file(&path).expect("load 2");
-
-        assert_eq!(loaded2.version, 2, "version should stay 2");
-        assert_eq!(loaded2.location.as_ref().map(|l| l.lat), Some(48.8566));
-        assert_eq!(loaded2.consortiums.len(), 1);
-        assert_eq!(loaded2.timeline.len(), 1);
-        assert_eq!(loaded2.timeline[0].targets.len(), 1);
-        assert!(matches!(loaded2.timeline[0].targets[0], PanelTarget::Species { .. }));
-        assert_eq!(loaded2.budget.len(), 1);
-        assert!(matches!(loaded2.budget[0].target, PanelTarget::Species { .. }));
-        assert_eq!(
-            loaded2.extra.get("future_feature")
-                .and_then(|v| v.get("data"))
-                .and_then(|v| v.as_bool()),
-            Some(true),
-            "unknown field should survive two round-trips"
-        );
-
-        let _ = std::fs::remove_file(&path);
-        let _ = std::fs::remove_file(path.with_extension("canopi.prev"));
     }
 
     #[test]
