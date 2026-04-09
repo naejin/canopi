@@ -289,7 +289,8 @@
       "species": "物种",
       "speciesNone": "无",
       "delete": "删除",
-      "add": "添加"
+      "add": "添加",
+      "dateError": "开始日期必须在结束日期之前或相同"
     },
     "budget": {
       "title": "预算",

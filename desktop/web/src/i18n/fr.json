@@ -289,7 +289,8 @@
       "species": "Espece",
       "speciesNone": "Aucune",
       "delete": "Supprimer",
-      "add": "Ajouter"
+      "add": "Ajouter",
+      "dateError": "La date de debut doit etre anterieure ou egale a la date de fin"
     },
     "budget": {
       "title": "Budget",

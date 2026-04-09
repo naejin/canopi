@@ -91,10 +91,20 @@ export function TimelinePopover({
     ...speciesList.map((s) => ({ value: s.canonical_name as string | null, label: s.display_name })),
   ]
 
-  const handleSave = () => onSave(form.value)
+  const dateError = useSignal<string | null>(null)
+
+  const handleSave = () => {
+    const f = form.value
+    if (f.start_date && f.end_date && f.start_date > f.end_date) {
+      dateError.value = t('canvas.timeline.dateError')
+      return
+    }
+    onSave(f)
+  }
 
   const updateField = <K extends keyof PopoverFormData>(key: K, value: PopoverFormData[K]) => {
     form.value = { ...form.value, [key]: value }
+    if (dateError.peek()) dateError.value = null
   }
 
   return (
@@ -133,8 +143,9 @@ export function TimelinePopover({
           <span className={styles.label}>{t('canvas.timeline.startDate')}</span>
           <input
             type="date"
-            className={styles.input}
+            className={`${styles.input} ${dateError.value ? styles.inputError : ''}`}
             value={form.value.start_date}
+            max={form.value.end_date || undefined}
             onInput={(e) => updateField('start_date', (e.target as HTMLInputElement).value)}
           />
         </div>
@@ -142,11 +153,15 @@ export function TimelinePopover({
           <span className={styles.label}>{t('canvas.timeline.endDate')}</span>
           <input
             type="date"
-            className={styles.input}
+            className={`${styles.input} ${dateError.value ? styles.inputError : ''}`}
             value={form.value.end_date}
+            min={form.value.start_date || undefined}
             onInput={(e) => updateField('end_date', (e.target as HTMLInputElement).value)}
           />
         </div>
+        {dateError.value && (
+          <div className={styles.error}>{dateError.value}</div>
+        )}
         <input
           type="text"
           className={styles.input}

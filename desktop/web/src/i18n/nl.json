@@ -289,7 +289,8 @@
       "species": "Soort",
       "speciesNone": "Geen",
       "delete": "Verwijderen",
-      "add": "Toevoegen"
+      "add": "Toevoegen",
+      "dateError": "Startdatum moet voor of gelijk aan de einddatum zijn"
     },
     "budget": {
       "title": "Budget",

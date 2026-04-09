@@ -90,6 +90,15 @@
   font-size: var(--text-xs);
 }
 
+.inputError {
+  border-color: var(--color-danger);
+}
+
+.error {
+  font-size: var(--text-xs);
+  color: var(--color-danger);
+}
+
 .speciesRow {
   display: flex;
   align-items: center;
