@@ -75,8 +75,8 @@ These align with the core risks identified in the architecture review.
 - Keep viewport-only updates on the renderer fast path
 - Keep Pixi retained across pan/zoom; avoid per-tick scene-tree rebuilds
 - Add scene-side spatial indexing only when profiling shows hit-testing or marquee is the bottleneck
-- **MapLibre chunk/lifecycle isolation**: Verify `maplibre-gl` is in a separate Vite chunk. `WorldMapPanel` already lazy-loads `WorldMapSurface`, but `LocationTab` imports `maplibre-gl` directly; check the production bundle before changing imports. Keep `maplibre-contour` in the same async chunk when contour UI is reactivated. Flag any chunk >500KB. See roadmap QA.6b
-- Verify timeline renderer is NOT in the main chunk (bottom panel is toggled)
+- ~~**MapLibre chunk/lifecycle isolation**~~ — **done**: `maplibre-gl` lands in its own chunk (`maplibre-gl-*.js`, 1,049KB / 283KB gzip) via `manualChunks` in `vite.config.ts`. `LocationTab` and `WorldMapSurface` import it statically but `manualChunks` still splits it. MapLibre is the only chunk exceeding 500KB (expected). Tauri and i18next also correctly isolated. Main chunk is 695KB (207KB gzip) — contains core app code (scene runtime, interaction, Preact components); PixiJS renderer backends are split into 6 async chunks (248KB total)
+- ~~Verify timeline renderer is NOT in the main chunk~~ — **done**: all three bottom-panel tabs (`TimelineTab` 15KB, `BudgetTab` 8KB, `ConsortiumChart` 5KB) land in async chunks via Preact `lazy()` in `BottomPanel.tsx`. Shared `useCanvasRenderer` hook is also async (0.7KB). Zero bottom-panel rendering code in the main bundle
 - ~~Canvas DPR sizing and transform fixes~~ — **done**: `useCanvasRenderer` uses `Math.round()` + `setTransform()` (not `scale()`), ruler functions aligned to same pattern. Prevents buffer reallocation on fractional-DPR screens and transform accumulation across redraws
 - ~~ConsortiumChart useMemo stability~~ — **done**: plants/consortiums read from refs with `sceneEntityRevision` as trigger dep, preventing O(n) `buildConsortiumBars` recomputation on every hover frame. `consortiums` added as direct dep to catch in-drag reorder changes (not covered by `sceneEntityRevision` when `markDirty: false`)
 - ~~InteractiveTimeline `originDate` reference churn~~ — **done**: `computeOriginDate` returned a new `Date` every call, defeating `useMemo` dep comparison and forcing canvas redraws. Replaced with numeric `originMs` intermediate; `Date` only recreated when timestamp changes
@@ -91,8 +91,8 @@ These align with the core risks identified in the architecture review.
 - ~~**Pre-commit hooks**~~ — **done**: husky v9 in `desktop/web/package.json` with monorepo `prepare` script (`cd ../.. && husky desktop/web/.husky`). Hook runs `tsc --noEmit` (~3-5s). No lint-staged (no ESLint yet). No `vitest run` (tests stay in CI to keep hook fast). Add `eslint` to hook when ESLint is introduced
 
 ### 5. Moderate-priority cleanup
-- Add real Rust → frontend → Rust round-trip test for file-format contract (see review Finding 3)
-- Add explicit versioned `migrateDocument()` / `migrate_design_value()` load path before the first breaking schema change. Rust already has an ad hoc legacy consortium migration in `desktop/src/design/format.rs`; promote that pattern into a version-dispatched migration boundary instead of adding scattered one-off migrations.
+- ~~Add per-side file-format round-trip tests~~ — **done**: TS codec test (`file-format-round-trip.test.ts`) exercises `hydrateScenePersistedState` -> `serializeScenePersistedState` with all entity types populated, verifying canvas field preservation, per-object non-visual fields, extra unknown fields, created_at stability, and codec placeholder contract. Rust tests (`format.rs`) cover `budget_currency` round-trip via `#[serde(flatten)]` and two-cycle save/load fidelity for all document sections. A true cross-boundary IPC test remains deferred (Test foundation scope)
+- ~~Add explicit versioned `migrate_design_value()` load path~~ — **done**: promoted ad hoc `if version <= 1` to a version-dispatched loop + match in `format.rs`. `CURRENT_VERSION` constant (u64 = 2) used by migration, `create_default()`, and the forward-version diagnostic log. Future v2->v3 migrations plug into one match arm
 - ~~Remove `suncalc` dependency~~ — **done**: removed `suncalc` and `@types/suncalc` from `package.json` (celestial dial was pruned, no live code references it). Do not remove `maplibre-gl`; it is used by `LocationTab` and `WorldMapSurface`.
 - Watch `JSON.stringify` diff cost in `scene-commands.ts` as designs grow
 - ~~Hardcoded `rgba()` colors in `scene-interaction.ts` textarea~~ — **done**: replaced with CSS custom properties (`--color-surface`, `--color-primary`, `--color-text`, `--font-sans`, `--radius-sm`, `--text-base`). ~~Remaining: `overlay-ui.ts` (selection band) hardcoded `rgba()`~~ — **done**: replaced with `--color-overlay-band-border`, `--color-overlay-band-bg`, `--color-overlay-rect-bg` CSS variables with dark-mode overrides in `global.css`
@@ -172,7 +172,7 @@ These align with the core risks identified in the architecture review.
 
 **MapLibre / geo:**
 - Current MapLibre usage: full-screen location shell (`LocationTab`) and dynamically loaded featured-design world map (`WorldMapSurface`). These are document-derived UI surfaces, not canvas authorities.
-- In-canvas MapLibre layers (via dedicated `MapLibreController` — see root `CLAUDE.md` MapLibre Integration Rule)
+- In-canvas MapLibre layers (architecture TBD at implementation time — see root `CLAUDE.md` MapLibre Integration Rule)
 - Local tangent plane projection math in `canvas/projection.ts` (`lngLatToMeters` / `metersToLngLat`) — prerequisite for MapLibre viewport sync (see `docs/archive/roadmap.md` 4.0c)
 - PMTiles offline tiles: Rust reader + Tauri custom protocol + download manager UI (see `docs/archive/roadmap.md` 4.2)
 - Contour/hillshade layers via `maplibre-contour` + DEM tiles (see `docs/archive/roadmap.md` 4.3/4.4)
@@ -209,7 +209,7 @@ These align with the core risks identified in the architecture review.
 - Do not reintroduce `plantDisplayMode` or split plant presentation authority
 - Do not reintroduce full scene rebuilds on viewport-only updates
 - Do not push non-canvas state (consortiums, timeline, budget) into `SceneStore` — **enforced**: save-path split-brain fix removes all non-canvas state from ScenePersistedState
-- Do not add new ad hoc signal mirrors — use computed/derived signals or single-writer pattern (see root `CLAUDE.md` Signal Mirror Rule). Both `designLocation` and `currentConsortiums` mirrors were removed entirely
+- Do not add new ad hoc signal mirrors — use computed/derived signals or single-writer pattern (see root `CLAUDE.md` Document Authority Rule)
 - Bottom-panel tabs are active — consortium auto-sync runs at document level via `consortium-sync-workflow.ts`
 - Do not make MapLibre a second document authority
 - Do not add full panel↔canvas or panel↔map sync without resolving typed targets through the pure resolver; do not reintroduce string matching.
