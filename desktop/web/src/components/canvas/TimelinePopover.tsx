@@ -3,6 +3,7 @@ import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale } from '../../state/app'
 import { ACTION_TYPES, actionColor } from '../../canvas/timeline-renderer'
+import { DatePicker } from '../shared/DatePicker'
 import { Dropdown, type DropdownItem } from '../shared/Dropdown'
 import styles from './TimelinePopover.module.css'
 
@@ -18,7 +19,6 @@ interface TimelinePopoverProps {
   mode: 'add' | 'edit'
   anchorX: number
   anchorY: number
-  containerRef: { current: HTMLDivElement | null }
   initialData: PopoverFormData
   speciesList: Array<{ canonical_name: string; display_name: string }>
   onSave: (data: PopoverFormData) => void
@@ -30,7 +30,6 @@ export function TimelinePopover({
   mode,
   anchorX,
   anchorY,
-  containerRef,
   initialData,
   speciesList,
   onSave,
@@ -47,30 +46,18 @@ export function TimelinePopover({
   useEffect(() => {
     const el = popoverRef.current
     if (!el) return
-    const container = containerRef.current
-    if (!container) return
     const popRect = el.getBoundingClientRect()
-    const cW = container.clientWidth
-    const cH = container.clientHeight
     let x = anchorX
     let y = anchorY
     // Flip above if not enough space below
-    if (y + popRect.height > cH) y = anchorY - popRect.height - 4
-    // Horizontal clamp
-    if (x + popRect.width > cW) x = cW - popRect.width - 4
+    if (y + popRect.height > window.innerHeight) y = anchorY - popRect.height - 4
+    // Horizontal clamp to viewport
+    if (x + popRect.width > window.innerWidth) x = window.innerWidth - popRect.width - 4
     if (x < 4) x = 4
     if (y < 4) y = 4
     posX.value = x
     posY.value = y
   }, [anchorX, anchorY])
-
-  // Auto-focus first date input
-  useEffect(() => {
-    const el = popoverRef.current
-    if (!el) return
-    const input = el.querySelector('input[type="date"]') as HTMLInputElement | null
-    input?.focus()
-  }, [])
 
   // Click-outside + Escape (in useEffect, not synchronous)
   useEffect(() => {
@@ -78,11 +65,6 @@ export function TimelinePopover({
       const target = event.target
       if (!(target instanceof Element)) return
       if (target.closest('[data-preserve-overlays="true"]')) return
-      // Native date picker calendar is outside our DOM tree — clicks on it
-      // trigger this handler. Skip close when a date input inside our popover
-      // has focus (means the calendar dropdown is open or just closed).
-      const active = document.activeElement
-      if (active instanceof HTMLInputElement && active.type === 'date' && popoverRef.current?.contains(active)) return
       onCancel()
     }
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -151,22 +133,26 @@ export function TimelinePopover({
       <div className={styles.fields}>
         <div className={styles.dateRow}>
           <span className={styles.label}>{t('canvas.timeline.startDate')}</span>
-          <input
-            type="date"
-            className={`${styles.input} ${dateError.value ? styles.inputError : ''}`}
+          <DatePicker
             value={form.value.start_date}
+            onChange={(v) => updateField('start_date', v)}
             max={form.value.end_date || undefined}
-            onChange={(e) => updateField('start_date', (e.target as HTMLInputElement).value)}
+            error={!!dateError.value}
+            className={styles.input}
+            preserveOverlays
+            ariaLabel={t('canvas.timeline.startDate')}
           />
         </div>
         <div className={styles.dateRow}>
           <span className={styles.label}>{t('canvas.timeline.endDate')}</span>
-          <input
-            type="date"
-            className={`${styles.input} ${dateError.value ? styles.inputError : ''}`}
+          <DatePicker
             value={form.value.end_date}
+            onChange={(v) => updateField('end_date', v)}
             min={form.value.start_date || undefined}
-            onChange={(e) => updateField('end_date', (e.target as HTMLInputElement).value)}
+            error={!!dateError.value}
+            className={styles.input}
+            preserveOverlays
+            ariaLabel={t('canvas.timeline.endDate')}
           />
         </div>
         {dateError.value && (
