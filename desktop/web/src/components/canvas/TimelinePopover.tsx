@@ -43,18 +43,21 @@ export function TimelinePopover({
   const posX = useSignal(anchorX)
   const posY = useSignal(anchorY)
 
-  // Edge clamping after mount
+  // Edge clamping after mount — flip above click point if no room below
   useEffect(() => {
     const el = popoverRef.current
     if (!el) return
     const container = containerRef.current
-    const bounds = container ? container.getBoundingClientRect() : null
-    if (!bounds) return
-    const rect = el.getBoundingClientRect()
+    if (!container) return
+    const popRect = el.getBoundingClientRect()
+    const cW = container.clientWidth
+    const cH = container.clientHeight
     let x = anchorX
     let y = anchorY
-    if (x + rect.width > bounds.width) x = bounds.width - rect.width - 4
-    if (y + rect.height > bounds.height) y = bounds.height - rect.height - 4
+    // Flip above if not enough space below
+    if (y + popRect.height > cH) y = anchorY - popRect.height - 4
+    // Horizontal clamp
+    if (x + popRect.width > cW) x = cW - popRect.width - 4
     if (x < 4) x = 4
     if (y < 4) y = 4
     posX.value = x
