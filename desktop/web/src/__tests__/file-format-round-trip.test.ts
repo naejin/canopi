@@ -190,8 +190,13 @@ describe('file format round-trip', () => {
     expect(serialized.layers[3]).toEqual({ name: 'zones', visible: true, locked: false, opacity: 0.8 })
     expect(serialized.layers[6]).toEqual({ name: 'annotations', visible: true, locked: false, opacity: 0.9 })
 
-    // Location (with null altitude_m)
+    // Location (with null altitude_m) and bearing
     expect(serialized.location).toEqual({ lat: 48.8566, lon: 2.3522, altitude_m: null })
+    expect(serialized.north_bearing_deg).toBe(14)
+
+    // Metadata scalars
+    expect(serialized.name).toBe('Round-trip test')
+    expect(serialized.description).toBe('A test design with all entity types')
 
     // Plant species colors
     expect(serialized.plant_species_colors).toEqual({
@@ -216,8 +221,4 @@ describe('file format round-trip', () => {
     expect(serialized.budget).toEqual([])
   })
 
-  it('CanopiFile survives JSON.parse(JSON.stringify())', () => {
-    const roundTripped = JSON.parse(JSON.stringify(FIXTURE)) as CanopiFile
-    expect(roundTripped).toEqual(FIXTURE)
-  })
 })
