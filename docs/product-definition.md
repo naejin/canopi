@@ -1,7 +1,7 @@
 # Product Definition
 
 Date: 2026-04-05
-Status: v0.2.0 shipped, rewrite complete. Convergence phase active — see `docs/todo.md`
+Status: v0.3.0 — timeline rework shipped, bottom-panel triptych complete. See `docs/todo.md`
 
 ## Scope Matrix
 
