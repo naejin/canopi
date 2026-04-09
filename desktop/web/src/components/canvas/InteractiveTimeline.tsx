@@ -13,6 +13,9 @@ import { isEditableTarget } from '../../canvas/runtime/interaction/pointer-utils
 import { markDocumentDirty } from '../../state/document-mutations'
 import {
   LABEL_SIDEBAR_WIDTH,
+  RULER_BTN_MO,
+  RULER_BTN_TODAY,
+  RULER_BTN_YR,
   RULER_HEIGHT,
   computeLayout,
   computeTimelineRowOffsets,
@@ -35,12 +38,20 @@ const GRANULARITY_PX_PER_DAY: Record<Granularity, number> = {
   year: 0.8,
 }
 
+const RULER_BTN_Y = 4
+const RULER_BTN_H = 20
+
+function hitTestRulerControls(x: number, y: number): 'granularity' | 'today' | null {
+  if (y < RULER_BTN_Y || y > RULER_BTN_Y + RULER_BTN_H) return null
+  if (x >= RULER_BTN_MO.x && x <= RULER_BTN_MO.x + RULER_BTN_MO.w) return 'granularity'
+  if (x >= RULER_BTN_YR.x && x <= RULER_BTN_YR.x + RULER_BTN_YR.w) return 'granularity'
+  if (x >= RULER_BTN_TODAY.x && x <= RULER_BTN_TODAY.x + RULER_BTN_TODAY.w) return 'today'
+  return null
+}
+
 interface InteractiveTimelineProps {
-  granularity: Granularity
   selectedId: string | null
   onSelect: (id: string | null) => void
-  onEditRequest: (action: TimelineAction) => void
-  scrollToTodayRef?: { current: (() => void) | null }
 }
 
 type DragState =
@@ -87,15 +98,13 @@ function clearTimelineSelectedPanelTargets(): void {
 }
 
 export function InteractiveTimeline({
-  granularity,
   selectedId,
   onSelect,
-  onEditRequest,
-  scrollToTodayRef,
 }: InteractiveTimelineProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const cachedRectRef = useRef<DOMRect | null>(null)
-  const pxPerDay = useSignal(GRANULARITY_PX_PER_DAY[granularity])
+  const granularity = useSignal<Granularity>('month')
+  const pxPerDay = useSignal(GRANULARITY_PX_PER_DAY.month)
   const scrollX = useSignal(0)
   const scrollY = useSignal(0)
   const hoveredId = useSignal<string | null>(null)
@@ -107,12 +116,6 @@ export function InteractiveTimeline({
   selectedIdRef.current = selectedId
   const onSelectRef = useRef(onSelect)
   onSelectRef.current = onSelect
-  const onEditRequestRef = useRef(onEditRequest)
-  onEditRequestRef.current = onEditRequest
-
-  // Guard: only write when granularity actually changed (avoids signal write in render body)
-  const nextPxPerDay = GRANULARITY_PX_PER_DAY[granularity]
-  if (pxPerDay.peek() !== nextPxPerDay) pxPerDay.value = nextPxPerDay
 
   const actions = currentDesign.value?.timeline ?? EMPTY_ACTIONS
   const speciesColors = plantSpeciesColors.value
@@ -146,6 +149,7 @@ export function InteractiveTimeline({
     hoveredId: hoveredId.value,
     locale: locale.value,
     speciesColors,
+    granularity: granularity.value,
   }
 
   useCanvasRenderer(canvasRef, (ctx, width, height) => {
@@ -159,7 +163,7 @@ export function InteractiveTimeline({
       t,
       rowOffsetsRef.current,
     )
-  }, [originMs, pxPerDay.value, scrollX.value, selectedId, hoveredId.value, scrollY.value, locale.value, theme.value, speciesColors], cachedRectRef)
+  }, [originMs, pxPerDay.value, scrollX.value, selectedId, hoveredId.value, scrollY.value, locale.value, theme.value, speciesColors, granularity.value], cachedRectRef)
 
   const handleWheel = useCallback((event: WheelEvent) => {
     event.preventDefault()
@@ -203,6 +207,28 @@ export function InteractiveTimeline({
 
     if (event.button !== 0) return
 
+    // Ruler controls
+    if (mouseY < RULER_HEIGHT) {
+      const rulerHit = hitTestRulerControls(mouseX, mouseY)
+      if (rulerHit === 'granularity') {
+        const next: Granularity = granularity.peek() === 'month' ? 'year' : 'month'
+        granularity.value = next
+        pxPerDay.value = GRANULARITY_PX_PER_DAY[next]
+        return
+      }
+      if (rulerHit === 'today') {
+        const canvas = canvasRef.current
+        if (canvas) {
+          const r = cachedRectRef.current ?? canvas.getBoundingClientRect()
+          const chartWidth = r.width - LABEL_SIDEBAR_WIDTH
+          const { originDate: o, pxPerDay: ppd } = renderStateRef.current
+          scrollX.value = dateToX(new Date(), o, ppd) - chartWidth / 2
+        }
+        return
+      }
+      return
+    }
+
     const hit = hitTestAction(
       mouseX,
       mouseY,
@@ -220,11 +246,6 @@ export function InteractiveTimeline({
 
     onSelectRef.current(hit.action.id)
     setTimelineSelectedPanelTargets(getTimelineHoverTargets(hit.action))
-
-    if (event.detail === 2) {
-      onEditRequestRef.current(hit.action)
-      return
-    }
 
     if (!hit.action.start_date) return
 
@@ -358,21 +379,6 @@ export function InteractiveTimeline({
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [])
-
-  useEffect(() => {
-    if (!scrollToTodayRef) return
-    scrollToTodayRef.current = () => {
-      const canvas = canvasRef.current
-      if (!canvas) return
-      const rect = canvas.getBoundingClientRect()
-      const chartWidth = rect.width - LABEL_SIDEBAR_WIDTH
-      const { originDate: o, pxPerDay: ppd } = renderStateRef.current
-      scrollX.value = dateToX(new Date(), o, ppd) - chartWidth / 2
-    }
-    return () => {
-      scrollToTodayRef.current = null
-    }
-  }, [scrollToTodayRef])
 
   return (
     <canvas

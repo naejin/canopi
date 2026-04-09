@@ -80,10 +80,8 @@ describe('InteractiveTimeline hover cleanup', () => {
     await act(async () => {
       render(
         <InteractiveTimeline
-          granularity="month"
           selectedId={null}
           onSelect={onSelect}
-          onEditRequest={() => {}}
         />,
         container,
       )
@@ -126,10 +124,8 @@ describe('InteractiveTimeline hover cleanup', () => {
     await act(async () => {
       render(
         <InteractiveTimeline
-          granularity="month"
           selectedId="task-1"
           onSelect={onSelect}
-          onEditRequest={() => {}}
         />,
         container,
       )

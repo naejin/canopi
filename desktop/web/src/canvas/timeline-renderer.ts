@@ -36,6 +36,11 @@ function actionColor(type: string): string {
   return cssVar(varName) || fallback
 }
 
+// Ruler control button bounds — shared between render and hit-test
+export const RULER_BTN_MO = { x: 8, w: 22 }
+export const RULER_BTN_YR = { x: 32, w: 20 }
+export const RULER_BTN_TODAY = { x: 58, w: 40 }
+
 export interface TimelineRenderState {
   originDate: Date
   pxPerDay: number
@@ -45,6 +50,7 @@ export interface TimelineRenderState {
   hoveredId: string | null
   locale: string
   speciesColors: Record<string, string>
+  granularity: string
 }
 
 export interface ActionTypeRow {
@@ -240,7 +246,20 @@ export function renderTimeline(
   ctx.lineTo(chartLeft, height)
   ctx.stroke()
 
-  // -- Species rows -----------------------------------------------------------
+  // -- Ruler controls (top-left corner) ---------------------------------------
+  const isMonth = state.granularity === 'month'
+  ctx.font = `600 11px ${fontSans}`
+  // "Mo" toggle
+  ctx.fillStyle = isMonth ? primaryColor : textMutedColor
+  ctx.fillText(t('canvas.timeline.monthView'), RULER_BTN_MO.x, 18)
+  // "Yr" toggle
+  ctx.fillStyle = isMonth ? textMutedColor : primaryColor
+  ctx.fillText(t('canvas.timeline.yearView'), RULER_BTN_YR.x, 18)
+  // "Today" button
+  ctx.fillStyle = textMutedColor
+  ctx.fillText(t('canvas.timeline.todayMarker'), RULER_BTN_TODAY.x, 18)
+
+  // -- Action type rows -------------------------------------------------------
   ctx.save()
   ctx.beginPath()
   ctx.rect(0, RULER_HEIGHT, width, height - RULER_HEIGHT)
