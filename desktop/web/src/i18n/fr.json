@@ -268,12 +268,8 @@
     },
     "timeline": {
       "title": "Calendrier",
-      "general": "Général",
-      "addAction": "Ajouter une action",
       "actionType": "Type d'action",
       "description": "Description",
-      "emptyState": "Aucune action",
-      "emptyHint": "Ajoutez des dates de plantation, de taille et de récolte",
       "save": "Enregistrer",
       "cancel": "Annuler",
       "type_planting": "Plantation",

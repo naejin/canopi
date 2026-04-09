@@ -268,12 +268,8 @@
     },
     "timeline": {
       "title": "Cronograma",
-      "general": "General",
-      "addAction": "Añadir acción",
       "actionType": "Tipo de acción",
       "description": "Descripción",
-      "emptyState": "Sin acciones",
-      "emptyHint": "Añade fechas de siembra, podas y cosechas",
       "save": "Guardar",
       "cancel": "Cancelar",
       "type_planting": "Siembra",

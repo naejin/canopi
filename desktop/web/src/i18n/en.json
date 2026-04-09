@@ -268,12 +268,8 @@
     },
     "timeline": {
       "title": "Timeline",
-      "general": "General",
-      "addAction": "Add action",
       "actionType": "Action type",
       "description": "Description",
-      "emptyState": "No actions yet",
-      "emptyHint": "Add planting dates, pruning schedules, and harvest timing",
       "save": "Save",
       "cancel": "Cancel",
       "type_planting": "Planting",

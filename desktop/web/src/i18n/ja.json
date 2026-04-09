@@ -268,12 +268,8 @@
     },
     "timeline": {
       "title": "タイムライン",
-      "general": "一般",
-      "addAction": "アクションを追加",
       "actionType": "アクションタイプ",
       "description": "説明",
-      "emptyState": "アクションはまだありません",
-      "emptyHint": "植え付け日、剪定スケジュール、収穫時期を追加",
       "save": "保存",
       "cancel": "キャンセル",
       "type_planting": "植え付け",

@@ -268,12 +268,8 @@
     },
     "timeline": {
       "title": "Cronograma",
-      "general": "Geral",
-      "addAction": "Adicionar ação",
       "actionType": "Tipo de ação",
       "description": "Descrição",
-      "emptyState": "Nenhuma ação",
-      "emptyHint": "Adicione datas de plantio, podas e colheitas",
       "save": "Salvar",
       "cancel": "Cancelar",
       "type_planting": "Plantio",

@@ -268,12 +268,8 @@
     },
     "timeline": {
       "title": "Tijdlijn",
-      "general": "Algemeen",
-      "addAction": "Actie toevoegen",
       "actionType": "Actietype",
       "description": "Beschrijving",
-      "emptyState": "Nog geen acties",
-      "emptyHint": "Voeg plantdata, snoeiplanningen en oogsttijden toe",
       "save": "Opslaan",
       "cancel": "Annuleren",
       "type_planting": "Planten",

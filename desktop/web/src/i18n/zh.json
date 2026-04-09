@@ -268,12 +268,8 @@
     },
     "timeline": {
       "title": "时间轴",
-      "general": "通用",
-      "addAction": "添加操作",
       "actionType": "操作类型",
       "description": "描述",
-      "emptyState": "暂无操作",
-      "emptyHint": "添加种植日期、修剪计划和收获时间",
       "save": "保存",
       "cancel": "取消",
       "type_planting": "种植",

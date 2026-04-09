@@ -268,12 +268,8 @@
     },
     "timeline": {
       "title": "Zeitachse",
-      "general": "Allgemein",
-      "addAction": "Aktion hinzufügen",
       "actionType": "Aktionstyp",
       "description": "Beschreibung",
-      "emptyState": "Noch keine Aktionen",
-      "emptyHint": "Pflanzdaten, Schnitttermine und Erntezeiten hinzufügen",
       "save": "Speichern",
       "cancel": "Abbrechen",
       "type_planting": "Pflanzung",

@@ -268,12 +268,8 @@
     },
     "timeline": {
       "title": "Calendario",
-      "general": "Generale",
-      "addAction": "Aggiungi azione",
       "actionType": "Tipo di azione",
       "description": "Descrizione",
-      "emptyState": "Nessuna azione",
-      "emptyHint": "Aggiungi date di semina, potatura e raccolta",
       "save": "Salva",
       "cancel": "Annulla",
       "type_planting": "Semina",
