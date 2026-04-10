@@ -73,6 +73,10 @@
 - **Cached Date refs for frozen values must be set at ALL code paths that set the source ref**: When caching `new Date(msRef.current)` in a `dateRef` to avoid per-render allocation, ensure every code path that writes `msRef` also writes `dateRef`. `Edit` with `replace_all` may silently match only one of multiple identical lines — verify all sites manually
 - **Separate rAF lifecycle refs from accumulated state refs**: When a rAF loop accumulates a value (scroll offset, position delta) that other code paths also read, the accumulated value must survive `cancelAnimationFrame` + ref clear. Use two refs: one for the rAF id (nullable, cleared on stop) and one for the accumulated value (reset only at the start of the owning operation, e.g., drag start)
 
+## Budget / Numeric Input Patterns
+- **Never use `parseFloat(v) || 0` for optional numeric inputs**: The `|| 0` conflates empty input with intentional zero. Use `isFinite(parsed) && parsed >= 0` to reject empty/invalid and accept zero
+- **Check entry existence, not value, for "has been set" semantics**: `priceMap.has(key)` distinguishes "not yet priced" from "priced at 0". Do not use `price > 0` as a proxy for "has a price entry"
+
 ## Shared Utilities
 - **`canvas/plant-grouping.ts`**: `groupPlantsBySpecies(plants, localizedNames)` — shared between `budget-helpers.ts` (BudgetTab) and `consortium-renderer.ts`. Do not duplicate plant-counting loops
 - **`Intl.NumberFormat` must be cached**: Construction is expensive (~0.5ms each). `budget-helpers.ts` caches formatters per currency string in a module-level `Map`. Do not create `new Intl.NumberFormat()` in render loops

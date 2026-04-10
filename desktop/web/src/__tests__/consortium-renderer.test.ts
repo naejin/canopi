@@ -235,7 +235,7 @@ describe('coordinate helpers', () => {
   const contentWidth = 700
 
   it('phaseToX and xToPhase round-trip', () => {
-    for (let phase = 0; phase <= 6; phase++) {
+    for (let phase = 0; phase <= 7; phase++) {
       const x = phaseToX(phase, contentWidth)
       const recovered = xToPhase(x, contentWidth)
       expect(recovered).toBeCloseTo(phase, 2)
@@ -256,9 +256,22 @@ describe('coordinate helpers', () => {
     expect(stratumToRow('tropical')).toBe(4)
   })
 
-  it('xToPhase clamps out-of-range positions to max phase', () => {
+  it('xToPhase clamps out-of-range positions to boundary', () => {
     // phaseToX(7, ...) is the sentinel used by computeBarRect for the right edge of last-phase bars
     const x = phaseToX(7, contentWidth)
-    expect(xToPhase(x, contentWidth)).toBe(6)
+    expect(xToPhase(x, contentWidth)).toBe(7)
+    // Beyond the content area still clamps to 7
+    expect(xToPhase(x + 100, contentWidth)).toBe(7)
+    // Left of content area clamps to 0
+    expect(xToPhase(0, contentWidth)).toBe(0)
+    expect(xToPhase(-100, contentWidth)).toBe(0)
+  })
+
+  it('right-edge drag pattern reaches climax', () => {
+    // Right-edge resize: xToPhase returns up to 7, handler subtracts 1 to get endPhase
+    const x = phaseToX(7, contentWidth)
+    const phase = Math.round(xToPhase(x, contentWidth))
+    const newEnd = phase - 1
+    expect(newEnd).toBe(6) // climax phase index
   })
 })

@@ -67,7 +67,7 @@ export function BudgetTab() {
     return map
   }, [budget])
   const totalPlants = useMemo(() => groupedPlants.reduce((sum, row) => sum + row.count, 0), [groupedPlants])
-  const pricedCount = useMemo(() => groupedPlants.filter((row) => (priceMap.get(row.canonical)?.unit_cost ?? 0) > 0).length, [groupedPlants, priceMap])
+  const pricedCount = useMemo(() => groupedPlants.filter((row) => priceMap.has(row.canonical)).length, [groupedPlants, priceMap])
   const grandTotal = useMemo(() => groupedPlants.reduce((total, row) => {
     const entry = priceMap.get(row.canonical)
     return total + row.count * (entry?.unit_cost ?? 0)
@@ -85,7 +85,8 @@ export function BudgetTab() {
 
   const commitPrice = useCallback((canonical: string) => {
     if (editingCanonical.value !== canonical) return
-    setPlantBudgetPrice(canonical, parseFloat(editPrice.value) || 0)
+    const parsed = parseFloat(editPrice.value)
+    if (isFinite(parsed) && parsed >= 0) setPlantBudgetPrice(canonical, parsed)
     editingCanonical.value = null
   }, [])
 
@@ -202,7 +203,7 @@ export function BudgetTab() {
                   <td>
                     <div className={styles.tdSpecies}>
                       <span className={styles.commonName}>{row.commonName || row.canonical}</span>
-                      {row.commonName && <span className={styles.canonical}>{row.canonical}</span>}
+                      {row.commonName && <>{' '}<span className={styles.canonical}>{row.canonical}</span></>}
                     </div>
                   </td>
                   <td className={styles.tdNum}>{row.count}</td>
@@ -225,15 +226,15 @@ export function BudgetTab() {
                     ) : (
                       <button
                         type="button"
-                        className={`${styles.priceBtn}${price === 0 ? ` ${styles.priceEmpty}` : ''}`}
+                        className={`${styles.priceBtn}${entry === undefined ? ` ${styles.priceEmpty}` : ''}`}
                         onClick={() => startEditPrice(row.canonical)}
                         aria-label={`${t('canvas.budget.setPrice')} ${row.commonName || row.canonical}`}
                       >
-                        {price > 0 ? formatCurrency(price, currency, locale.value) : '\u2014'}
+                        {entry !== undefined ? formatCurrency(price, currency, locale.value) : '\u2014'}
                       </button>
                     )}
                   </td>
-                  <td className={styles.tdNum}>{price > 0 ? formatCurrency(subtotal, currency, locale.value) : '\u2014'}</td>
+                  <td className={styles.tdNum}>{entry !== undefined ? formatCurrency(subtotal, currency, locale.value) : '\u2014'}</td>
                 </tr>
               )
             })}

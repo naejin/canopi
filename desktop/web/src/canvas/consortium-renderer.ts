@@ -65,7 +65,7 @@ export function phaseToX(phase: number, contentWidth: number): number {
 
 export function xToPhase(x: number, contentWidth: number): number {
   const fraction = (x - LABEL_WIDTH) / contentWidth
-  return Math.max(0, Math.min(CONSORTIUM_PHASES.length - 1, fraction * CONSORTIUM_PHASES.length))
+  return Math.max(0, Math.min(CONSORTIUM_PHASES.length, fraction * CONSORTIUM_PHASES.length))
 }
 
 export function stratumToRow(stratum: string): number {
