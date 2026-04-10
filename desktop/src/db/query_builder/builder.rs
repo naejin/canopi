@@ -118,6 +118,7 @@ impl QueryBuilder {
                            WHERE scn.species_id = s.id
                              AND scn.language = ?{locale_position}
                              AND scn.common_name != bcn_loc.common_name
+                             AND scn.common_name != s.canonical_name
                            ORDER BY scn.is_primary DESC, LENGTH(scn.common_name) ASC
                            LIMIT 1
                          )

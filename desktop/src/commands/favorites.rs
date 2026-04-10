@@ -140,7 +140,7 @@ fn hydrate_species_list(
             .map(|(mut item, species_id)| {
                 if let Some(name) = crate::db::plant_db::get_locale_best_common_name(conn, &species_id, locale) {
                     item.common_name_2 = crate::db::plant_db::get_secondary_common_name(
-                        conn, &species_id, locale, &name,
+                        conn, &species_id, locale, &name, &item.canonical_name,
                     );
                     item.common_name = Some(name);
                 } else {

@@ -154,7 +154,8 @@ mod tests {
                 (1, 'fr', 'Lavande Alpha');
 
             INSERT INTO species_common_names VALUES
-                (1, 'Lavande Alpha', 'fr', 1, 'test'),
+                (1, 'Lavandula alpha', 'fr', 1, 'test'),
+                (1, 'Lavande Alpha', 'fr', 0, 'test'),
                 (1, 'Lavande vraie', 'fr', 0, 'test');
 
             INSERT INTO species_search_fts(species_search_fts) VALUES('rebuild');",
