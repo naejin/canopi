@@ -138,9 +138,29 @@ fn hydrate_species_list(
             .optional()
             .map_err(|e| format!("Failed to hydrate species '{name}': {e}"))?
             .map(|(mut item, species_id)| {
-                // Override common_name with locale-aware lookup.
-                item.common_name = crate::db::plant_db::get_common_name(conn, &species_id, locale)
-                    .or(item.common_name);
+                // Check locale-specific name directly
+                let locale_best: Option<String> = conn
+                    .query_row(
+                        "SELECT common_name FROM best_common_names
+                         WHERE species_id = ?1 AND language = ?2 LIMIT 1",
+                        [&species_id, &locale.to_string()],
+                        |row| row.get(0),
+                    )
+                    .optional()
+                    .ok()
+                    .flatten();
+
+                if let Some(ref name) = locale_best {
+                    item.common_name = Some(name.clone());
+                    item.is_name_fallback = false;
+                    item.common_name_2 = crate::db::plant_db::get_secondary_common_name(
+                        conn, &species_id, locale, name,
+                    );
+                } else {
+                    item.common_name = crate::db::plant_db::get_common_name(conn, &species_id, locale)
+                        .or(item.common_name);
+                    item.is_name_fallback = locale != "en";
+                }
                 item
             });
 
