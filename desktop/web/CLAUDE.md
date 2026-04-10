@@ -30,6 +30,7 @@
 ## CSS
 - Design tokens in `global.css` as CSS variables (field notebook palette)
 - Components use CSS Modules, reference tokens (never raw values)
+- **CSS Modules `composes:` for variant classes**: When a modifier class shares most properties with a base class (e.g., `.commonNameFallback` vs `.commonName`), use `composes: baseClass` and override only the differing properties. Avoids copy-paste duplication
 - Dark theme via `[data-theme="dark"]` on `<html>`
 - **No hardcoded px values**: All spacing must use `var(--space-N)` tokens (4/8/12/16/24/28/32/48px). All font-sizes must use `var(--text-*)` tokens (xs=11/sm=12/base=13/md=14/lg=16/xl=20). All border-radius must use `var(--radius-*)` tokens (sm=3/md=5/lg=7/full=9999). Control sizes must use `var(--control-size-*)` tokens (xs=20/sm=24/md=28/lg=32/xl=34/window=44). Slider dimensions must use `var(--slider-thumb-size)` (12px) and `var(--slider-track-size)` (2px). No invented sizes (6px, 10px, 14px, 22px etc.) — see `.interface-design/system.md` for the allowed scales
 - **Transition timing**: Use `var(--transition-fast)` (80ms ease) for color/bg/border hover states, `var(--transition-normal)` (150ms ease) for transform/layout shifts, `var(--transition-enter)` (200ms ease-out) for panel slide/fade enter. Always use `ms` units, never `s`

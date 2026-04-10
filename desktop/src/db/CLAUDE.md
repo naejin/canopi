@@ -34,7 +34,7 @@
 - **Cursor pagination typed values**: Height/Hardiness sort values must be pushed as `Value::Real`/`Value::Integer`, not `Value::Text`. SQLite type affinity makes text-vs-numeric comparisons silently wrong
 
 ## FTS5 Full-Text Search
-- **FTS5 weighted columns**: `species_search_fts` has 5 columns: `canonical_name`, `common_names`, `family_genus`, `uses_text`, `other_text`. Ranked via `bm25(species_search_fts, 10, 8, 5, 1, 1)`. Built in `prepare-db.py build_search_index()`
+- **FTS5 weighted columns**: `species_search_fts` has 5 columns: `canonical_name`, `common_names`, `family_genus`, `uses_text`, `other_text`. Ranked via `bm25(species_search_fts, 8, 10, 5, 1, 1)` — common name matches rank above canonical name matches. Built in `prepare-db.py build_search_index()`
 - **FTS5 MATCH syntax**: Always use full table name (`species_search_fts MATCH ?1`), never an alias
 - **FTS5 sanitization**: Strip ALL metacharacters `"()*+-^:\` — not just quotes. Empty after sanitization -> skip FTS
 
@@ -52,7 +52,10 @@
 ## Common Names
 - **Common name lookup order**: `best_common_names` -> `species_common_names` -> `species.common_name`. Both `get_common_name` (single) and `get_common_names_batch` (batch) follow this order. Always use `best_common_names` first — `species_common_names` has gaps (e.g., no French entries for many species)
 - **`best_common_names` selection**: Uses `is_primary` flag from `species_common_names` (preferred), falls back to shortest non-canonical name. `prepare-db.py` uses `ROW_NUMBER()` with `is_primary DESC, LENGTH ASC`
-- **`best_common_names` returns one name per locale**: Uses `is_primary` flag to select the best name (e.g., "Mais" for Zea mays in French, not "Ble d'Inde"). `species_common_names` has multiple names per species — multiple-name display planned for 3.3b
+- **`best_common_names` returns one name per locale**: Uses `is_primary` flag to select the best name (e.g., "Mais" for Zea mays in French, not "Ble d'Inde"). `species_common_names` has multiple names per species
+- **`get_locale_best_common_name`**: Returns the locale-specific best name only (no fallback). Use when you need to distinguish locale match from English fallback. `get_common_name` delegates to this internally as its first step
+- **`get_secondary_common_name`**: Returns the next-best name for a locale excluding the primary. Used by favorites hydration and search query (correlated subquery)
+- **Search query returns `display_name_2` and `is_name_fallback`**: Correlated subquery against `species_common_names` for secondary locale name; CASE expression for fallback flag. Favorites hydration uses `get_locale_best_common_name` + `get_secondary_common_name` for the same data
 
 ## Species Uses
 - **`species_uses` descriptions are translatable**: `translated_values` has `use:*` prefixed field names (e.g., `use:edible_uses`). Map `use_category` "edible uses" -> field "use:edible_uses" via `category.replace(' ', '_')`. Query must use `SELECT DISTINCT` — the table has massive row duplication from prepare-db.py joins
