@@ -10,7 +10,8 @@ pub use flower::get_flower_color_batch;
 #[allow(unused_imports)]
 pub use lookup::translate_value;
 pub use lookup::{
-    get_common_name, get_common_names_batch, get_locale_common_names, get_secondary_common_name,
+    get_common_name, get_common_names_batch, get_locale_best_common_name,
+    get_locale_common_names, get_secondary_common_name,
 };
 pub use search::search;
 

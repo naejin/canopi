@@ -3,18 +3,26 @@ use std::collections::HashMap;
 use common_types::species::CommonNameEntry;
 use rusqlite::{Connection, OptionalExtension, types::ToSql};
 
+/// Returns the best common name for the given locale only (no fallback).
+pub fn get_locale_best_common_name(
+    conn: &Connection,
+    species_id: &str,
+    locale: &str,
+) -> Option<String> {
+    conn.query_row(
+        "SELECT common_name FROM best_common_names
+         WHERE species_id = ?1 AND language = ?2
+         LIMIT 1",
+        [species_id, locale],
+        |row| row.get(0),
+    )
+    .optional()
+    .ok()
+    .flatten()
+}
+
 pub fn get_common_name(conn: &Connection, species_id: &str, locale: &str) -> Option<String> {
-    let best: Option<String> = conn
-        .query_row(
-            "SELECT common_name FROM best_common_names
-             WHERE species_id = ?1 AND language = ?2
-             LIMIT 1",
-            [species_id, locale],
-            |row| row.get(0),
-        )
-        .optional()
-        .ok()
-        .flatten();
+    let best = get_locale_best_common_name(conn, species_id, locale);
     if best.is_some() {
         return best;
     }
