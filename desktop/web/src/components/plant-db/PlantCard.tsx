@@ -52,7 +52,10 @@ export function PlantCard({ plant }: Props) {
     >
       <span className={styles.cardBotanical}>{plant.canonical_name}</span>
       {plant.common_name !== null && (
-        <span className={styles.cardCommon}>{plant.common_name}</span>
+        <span className={plant.is_name_fallback ? styles.cardCommonFallback : styles.cardCommon}>
+          {plant.common_name}
+          {plant.common_name_2 && <> · {plant.common_name_2}</>}
+        </span>
       )}
       {plant.family && <span className={styles.cardFamily}>{plant.family}</span>}
 

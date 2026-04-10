@@ -86,7 +86,10 @@ export function PlantRow({ plant }: Props) {
         <div className={styles.nameRow}>
           {plant.common_name ? (
             <>
-              <span className={styles.commonName}>{plant.common_name}</span>
+              <span className={plant.is_name_fallback ? styles.commonNameFallback : styles.commonName}>
+                {plant.common_name}
+                {plant.common_name_2 && <span className={styles.secondaryName}> · {plant.common_name_2}</span>}
+              </span>
               <span className={styles.botanicalName}>{plant.canonical_name}</span>
             </>
           ) : (

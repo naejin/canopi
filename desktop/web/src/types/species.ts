@@ -2,6 +2,8 @@ export interface SpeciesListItem {
   canonical_name: string;
   slug: string;
   common_name: string | null;
+  common_name_2: string | null;
+  is_name_fallback: boolean;
   family: string | null;
   genus: string | null;
   height_max_m: number | null;
