@@ -85,6 +85,25 @@ pub fn get_locale_common_names(
     Ok(rows)
 }
 
+pub fn get_secondary_common_name(
+    conn: &Connection,
+    species_id: &str,
+    locale: &str,
+    primary_name: &str,
+) -> Option<String> {
+    conn.query_row(
+        "SELECT common_name FROM species_common_names
+         WHERE species_id = ?1 AND language = ?2 AND common_name != ?3
+         ORDER BY is_primary DESC, LENGTH(common_name) ASC
+         LIMIT 1",
+        [species_id, locale, primary_name],
+        |row| row.get(0),
+    )
+    .optional()
+    .ok()
+    .flatten()
+}
+
 pub fn get_common_names_batch(
     conn: &Connection,
     canonical_names: &[String],

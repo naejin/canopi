@@ -36,18 +36,18 @@ pub fn search(
                 canonical_name: row.get(0)?,
                 slug: row.get(1)?,
                 common_name: row.get(2)?,
-                common_name_2: None,
-                is_name_fallback: false,
-                family: row.get(3)?,
-                genus: row.get(4)?,
-                height_max_m: row.get(5)?,
-                hardiness_zone_min: row.get(6)?,
-                hardiness_zone_max: row.get(7)?,
-                growth_rate: row.get(8)?,
-                stratum: row.get(9)?,
-                edibility_rating: row.get(10)?,
-                medicinal_rating: row.get(11)?,
-                width_max_m: row.get(12)?,
+                common_name_2: row.get(3)?,
+                is_name_fallback: row.get::<_, i32>(4).unwrap_or(0) == 1,
+                family: row.get(5)?,
+                genus: row.get(6)?,
+                height_max_m: row.get(7)?,
+                hardiness_zone_min: row.get(8)?,
+                hardiness_zone_max: row.get(9)?,
+                growth_rate: row.get(10)?,
+                stratum: row.get(11)?,
+                edibility_rating: row.get(12)?,
+                medicinal_rating: row.get(13)?,
+                width_max_m: row.get(14)?,
                 is_favorite: false,
             })
         })
@@ -131,6 +131,13 @@ mod tests {
                 common_name TEXT NOT NULL,
                 PRIMARY KEY (species_id, language)
             );
+            CREATE TABLE species_common_names (
+                species_id INTEGER NOT NULL,
+                common_name TEXT NOT NULL,
+                language TEXT NOT NULL,
+                is_primary INTEGER NOT NULL DEFAULT 0,
+                source TEXT
+            );
 
             INSERT INTO species (
                 id,
@@ -143,7 +150,12 @@ mod tests {
 
             INSERT INTO best_common_names VALUES
                 (1, 'en', 'Lavender Alpha'),
-                (2, 'en', 'Lavender Beta');
+                (2, 'en', 'Lavender Beta'),
+                (1, 'fr', 'Lavande Alpha');
+
+            INSERT INTO species_common_names VALUES
+                (1, 'Lavande Alpha', 'fr', 1, 'test'),
+                (1, 'Lavande vraie', 'fr', 0, 'test');
 
             INSERT INTO species_search_fts(species_search_fts) VALUES('rebuild');",
         )
@@ -186,5 +198,35 @@ mod tests {
             second.items[0].canonical_name
         );
         assert_eq!(second.next_cursor, None);
+    }
+
+    #[test]
+    fn locale_common_names_and_fallback() {
+        let conn = test_db();
+
+        let result = search(
+            &conn,
+            None,
+            SpeciesFilter::default(),
+            None,
+            Sort::Name,
+            10,
+            "fr".to_owned(),
+        )
+        .unwrap();
+
+        assert_eq!(result.items.len(), 2);
+
+        // Species 1 has French names -> locale name + secondary, no fallback
+        let alpha = result.items.iter().find(|i| i.canonical_name == "Lavandula alpha").unwrap();
+        assert_eq!(alpha.common_name.as_deref(), Some("Lavande Alpha"));
+        assert_eq!(alpha.common_name_2.as_deref(), Some("Lavande vraie"));
+        assert!(!alpha.is_name_fallback);
+
+        // Species 2 has no French names -> English fallback, no secondary
+        let beta = result.items.iter().find(|i| i.canonical_name == "Lavandula beta").unwrap();
+        assert_eq!(beta.common_name.as_deref(), Some("Lavender Beta"));
+        assert_eq!(beta.common_name_2, None);
+        assert!(beta.is_name_fallback);
     }
 }

@@ -79,7 +79,7 @@ impl QueryBuilder {
 
         let order_by = match self.sort {
             Sort::Relevance if fts_join.is_some() => {
-                "ORDER BY bm25(species_search_fts, 10, 8, 5, 1, 1), s.canonical_name".to_owned()
+                "ORDER BY bm25(species_search_fts, 8, 10, 5, 1, 1), s.canonical_name".to_owned()
             }
             _ => format!("ORDER BY {}, s.canonical_name", sort_column(&self.sort)),
         };
@@ -111,6 +111,19 @@ impl QueryBuilder {
             "SELECT s.canonical_name,
                     s.slug,
                     COALESCE(bcn_loc.common_name, bcn_en.common_name, s.common_name) AS display_name,
+                    CASE WHEN bcn_loc.common_name IS NOT NULL
+                         THEN (
+                           SELECT scn.common_name
+                           FROM species_common_names scn
+                           WHERE scn.species_id = s.id
+                             AND scn.language = ?{locale_position}
+                             AND scn.common_name != bcn_loc.common_name
+                           ORDER BY scn.is_primary DESC, LENGTH(scn.common_name) ASC
+                           LIMIT 1
+                         )
+                         ELSE NULL
+                    END AS display_name_2,
+                    CASE WHEN bcn_loc.common_name IS NULL THEN 1 ELSE 0 END AS is_name_fallback,
                     s.family,
                     s.genus,
                     s.height_max_m,
