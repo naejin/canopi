@@ -36,6 +36,8 @@ pub fn search(
                 canonical_name: row.get(0)?,
                 slug: row.get(1)?,
                 common_name: row.get(2)?,
+                common_name_2: None,
+                is_name_fallback: false,
                 family: row.get(3)?,
                 genus: row.get(4)?,
                 height_max_m: row.get(5)?,

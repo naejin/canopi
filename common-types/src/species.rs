@@ -6,6 +6,8 @@ pub struct SpeciesListItem {
     pub canonical_name: String,
     pub slug: String,
     pub common_name: Option<String>,
+    pub common_name_2: Option<String>,
+    pub is_name_fallback: bool,
     pub family: Option<String>,
     pub genus: Option<String>,
     pub height_max_m: Option<f32>,
