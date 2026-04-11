@@ -104,7 +104,7 @@ pub fn get_secondary_common_name(
         "SELECT common_name FROM species_common_names
          WHERE species_id = ?1 AND language = ?2
            AND common_name != ?3 AND common_name != ?4
-         ORDER BY is_primary DESC, LENGTH(common_name) ASC
+         ORDER BY (source = 'llm') DESC, is_primary DESC, LENGTH(common_name) ASC
          LIMIT 1",
         [species_id, locale, primary_name, canonical_name],
         |row| row.get(0),

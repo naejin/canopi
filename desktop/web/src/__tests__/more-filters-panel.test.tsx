@@ -63,4 +63,44 @@ describe('MoreFiltersPanel outside-click behavior', () => {
 
     expect(onClose).toHaveBeenCalledTimes(1)
   })
+
+  it('uses integer slider steps for hardiness filters', async () => {
+    dynamicOptionsCache.value = {
+      en: {
+        hardiness_zone_min: {
+          field: 'hardiness_zone_min',
+          field_type: 'numeric',
+          values: null,
+          range: [1, 13],
+        },
+      },
+    }
+
+    await act(async () => {
+      render(<MoreFiltersPanel open onClose={vi.fn()} />, container)
+      await flushEffects()
+    })
+
+    const climateButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Climate & Soil'))
+    expect(climateButton).toBeTruthy()
+
+    await act(async () => {
+      climateButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flushEffects()
+    })
+
+    const hardinessButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Hardiness zone min'))
+    expect(hardinessButton).toBeTruthy()
+
+    await act(async () => {
+      hardinessButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flushEffects()
+    })
+
+    const rangeInputs = Array.from(container.querySelectorAll('input[type="range"]'))
+    expect(rangeInputs).toHaveLength(2)
+    expect(rangeInputs.every((input) => (input as HTMLInputElement).step === '1')).toBe(true)
+  })
 })

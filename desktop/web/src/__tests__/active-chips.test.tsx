@@ -14,10 +14,6 @@ describe('ActiveChips', () => {
     document.body.appendChild(container)
     locale.value = 'en'
     activeFilters.value = {
-      hardiness_min: null,
-      hardiness_max: null,
-      height_min: null,
-      height_max: null,
       sun_tolerances: null,
       soil_tolerances: null,
       growth_rate: null,
@@ -25,7 +21,9 @@ describe('ActiveChips', () => {
       edible: null,
       edibility_min: null,
       nitrogen_fixer: null,
-      stratum: null,
+      climate_zones: null,
+      growth_form_type: null,
+      woody: null,
       family: null,
       extra: null,
     }
@@ -70,5 +68,15 @@ describe('ActiveChips', () => {
 
     expect(container.textContent).toContain('Port')
     expect(container.textContent).toContain('Arbuste')
+  })
+
+  it('formats numeric dynamic filters as readable ranges', async () => {
+    extraFilters.value = [{ field: 'hardiness_zone_min', op: 'Between', values: ['5', '8'] }]
+
+    await act(async () => {
+      render(<ActiveChips />, container)
+    })
+
+    expect(container.textContent).toContain('Hardiness zone min: 5–8')
   })
 })

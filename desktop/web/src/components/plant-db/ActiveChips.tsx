@@ -10,9 +10,74 @@ import {
   patchFilters,
   removeExtraFilter,
 } from '../../state/plant-db'
+import type { DynamicFilter, DynamicFilterOptions, SpeciesFilter } from '../../types/species'
 import { FIELD_REGISTRY, categoryForField } from './field-registry'
 import { FilterChip } from './FilterChip'
+import { toggleArrayValue } from './filter-utils'
 import styles from './PlantDb.module.css'
+
+type Chip = { key: string; label: string; color: string; onDismiss: () => void };
+
+function addArrayChips(
+  chips: Chip[],
+  filters: SpeciesFilter,
+  field: keyof SpeciesFilter,
+  prefix: string,
+  i18nPrefix: string,
+  color: string,
+) {
+  const values = filters[field] as string[] | null;
+  if (!values) return;
+  for (const v of values) {
+    chips.push({
+      key: `${prefix}-${v}`,
+      label: t(`${i18nPrefix}${v}`, v),
+      color,
+      onDismiss: () => patchFilters({ [field]: toggleArrayValue(filters[field] as string[] | null, v) }),
+    });
+  }
+}
+
+function formatNumericExtraValue(filter: DynamicFilter): string | null {
+  const [low, high] = filter.values;
+
+  switch (filter.op) {
+    case 'Equals':
+      return low ?? null
+    case 'Gte':
+      return low != null ? `>= ${low}` : null
+    case 'Lte':
+      return low != null ? `<= ${low}` : null
+    case 'Between':
+      if (low != null && high != null) return low === high ? low : `${low}\u2013${high}`
+      return low ?? high ?? null
+    default:
+      return null
+  }
+}
+
+function formatExtraFilterDisplay(
+  filter: DynamicFilter,
+  label: string,
+  localeOptions: Record<string, DynamicFilterOptions>,
+): string {
+  const fieldDef = FIELD_REGISTRY.find((field) => field.key === filter.field)
+  const cachedValues = localeOptions[filter.field]?.values
+
+  if (fieldDef?.type === 'categorical' && cachedValues) {
+    const localizedValues = filter.values.map((value) => (
+      cachedValues.find((candidate) => candidate.value === value)?.label ?? value
+    ))
+    return localizedValues.length > 0 ? `${label}: ${localizedValues.join(', ')}` : label
+  }
+
+  if (fieldDef?.type === 'numeric') {
+    const formattedValue = formatNumericExtraValue(filter)
+    return formattedValue ? `${label}: ${formattedValue}` : label
+  }
+
+  return filter.values.length > 0 ? `${label}: ${filter.values.join(', ')}` : label
+}
 
 export function ActiveChips() {
   const loc = locale.value;
@@ -43,50 +108,23 @@ export function ActiveChips() {
 
   if (!hasAny) return null;
 
-  const chips: { key: string; label: string; color: string; onDismiss: () => void }[] = [];
+  const chips: Chip[] = [];
 
-  // Stratum chips
-  if (filters.stratum) {
-    for (const s of filters.stratum) {
-      chips.push({
-        key: `stratum-${s}`,
-        label: t(`filters.stratum_${s}`, s),
-        color: '--color-nitrogen',
-        onDismiss: () => {
-          const next = (filters.stratum ?? []).filter((v) => v !== s);
-          patchFilters({ stratum: next.length ? next : null });
-        },
-      });
-    }
-  }
+  addArrayChips(chips, filters, 'climate_zones', 'cz', 'filters.climateZone_', '--color-sun');
+  addArrayChips(chips, filters, 'growth_form_type', 'gft', 'filters.growthFormType_', '--color-family');
+  addArrayChips(chips, filters, 'sun_tolerances', 'sun', 'plantDb.sunTolerance_', '--color-sun');
+  addArrayChips(chips, filters, 'life_cycle', 'lc', 'filters.lifeCycle_', '--color-family');
+  addArrayChips(chips, filters, 'growth_rate', 'gr', 'filters.growthRate_', '--color-family');
 
-  // Sun chips
-  if (filters.sun_tolerances) {
-    for (const s of filters.sun_tolerances) {
-      chips.push({
-        key: `sun-${s}`,
-        label: t(`plantDb.sunTolerance_${s}`, s),
-        color: '--color-sun',
-        onDismiss: () => {
-          const next = (filters.sun_tolerances ?? []).filter((v) => v !== s);
-          patchFilters({ sun_tolerances: next.length ? next : null });
-        },
-      });
-    }
-  }
-
-  // Hardiness
-  if (filters.hardiness_min !== null || filters.hardiness_max !== null) {
-    const label = `${t('filters.hardiness')}: ${filters.hardiness_min ?? '?'}\u2013${filters.hardiness_max ?? '?'}`;
+  if (filters.woody !== null) {
     chips.push({
-      key: 'hardiness',
-      label,
-      color: '--color-hardiness',
-      onDismiss: () => patchFilters({ hardiness_min: null, hardiness_max: null }),
+      key: 'woody',
+      label: t('filters.woody'),
+      color: '--color-family',
+      onDismiss: () => patchFilters({ woody: null }),
     });
   }
 
-  // Edibility
   if (filters.edibility_min !== null) {
     chips.push({
       key: 'edibility',
@@ -96,18 +134,6 @@ export function ActiveChips() {
     });
   }
 
-  // Height
-  if (filters.height_min !== null || filters.height_max !== null) {
-    const label = `${t('filters.height')}: ${filters.height_min ?? 0}\u2013${filters.height_max ?? '\u221E'}m`;
-    chips.push({
-      key: 'height',
-      label,
-      color: '--color-height',
-      onDismiss: () => patchFilters({ height_min: null, height_max: null }),
-    });
-  }
-
-  // Nitrogen fixer
   if (filters.nitrogen_fixer !== null) {
     chips.push({
       key: 'nitrogen',
@@ -117,48 +143,13 @@ export function ActiveChips() {
     });
   }
 
-  // Life cycle (also in FilterStrip, chips here for dismissal)
-  if (filters.life_cycle) {
-    for (const lc of filters.life_cycle) {
-      chips.push({
-        key: `lc-${lc}`,
-        label: t(`filters.lifeCycle_${lc}`, lc),
-        color: '--color-family',
-        onDismiss: () => {
-          const next = (filters.life_cycle ?? []).filter((v) => v !== lc);
-          patchFilters({ life_cycle: next.length ? next : null });
-        },
-      });
-    }
-  }
-
-  if (filters.growth_rate) {
-    for (const gr of filters.growth_rate) {
-      chips.push({
-        key: `gr-${gr}`,
-        label: t(`filters.growthRate_${gr}`, gr),
-        color: '--color-family',
-        onDismiss: () => {
-          const next = (filters.growth_rate ?? []).filter((v) => v !== gr);
-          patchFilters({ growth_rate: next.length ? next : null });
-        },
-      });
-    }
-  }
-
-  // Extra (dynamic) filters
   for (const ef of extras) {
     const cat = categoryForField(ef.field);
     const fieldDef = FIELD_REGISTRY.find((f) => f.key === ef.field);
     const label = fieldDef ? t(fieldDef.i18nKey, ef.field) : ef.field;
-    const cachedValues = localeOptions[ef.field]?.values;
-    const localizedValues = fieldDef?.type === 'categorical' && cachedValues
-      ? ef.values.map((v) => cachedValues.find((cv) => cv.value === v)?.label ?? v)
-      : ef.values;
-    const display = localizedValues.length > 0 ? `${label}: ${localizedValues.join(', ')}` : label;
     chips.push({
       key: `extra-${ef.field}`,
-      label: display,
+      label: formatExtraFilterDisplay(ef, label, localeOptions),
       color: cat?.color ?? '--color-primary',
       onDismiss: () => removeExtraFilter(ef.field),
     });

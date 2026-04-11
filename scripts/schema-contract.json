@@ -1,7 +1,7 @@
 {
-  "schema_version": 7,
-  "min_export_schema_version": 10,
-  "description": "Maps canopi-data export columns to canopi-core.db species table. Update this file when canopi-data changes column names. v7: canopi-data export v10 — species_distributions junction table added, fruit_seed_color/period translations added, stratum/succession_stage translations improved.",
+  "schema_version": 8,
+  "min_export_schema_version": 11,
+  "description": "Maps canopi-data export columns to canopi-core.db species table. Update this file when canopi-data changes column names. v8: canopi-data export v11 — species_climate_zones junction table added, climate_zones JSON column on species, LLM-curated common names.",
   "columns": [
     {"name": "id", "type": "TEXT", "required": true},
     {"name": "slug", "type": "TEXT", "required": true},
@@ -160,6 +160,7 @@
 
     {"name": "native_distribution", "type": "TEXT"},
     {"name": "introduced_distribution", "type": "TEXT"},
+    {"name": "climate_zones", "type": "TEXT"},
     {"name": "conservation_status", "type": "TEXT"},
 
     {"name": "image_urls", "type": "TEXT"},
@@ -191,7 +192,8 @@
     "species_text_translations",
     "synonym_lookup",
     "translated_values",
-    "species_distributions"
+    "species_distributions",
+    "species_climate_zones"
   ],
   "indexes": {
     "species": [
@@ -246,11 +248,23 @@
     "species_distributions": [
       {"name": "idx_dist_species_type", "columns": "species_id, distribution_type"}
     ],
+    "species_climate_zones": [
+      {"name": "idx_cz_species_zone", "columns": "species_id, climate_zone"}
+    ],
     "best_common_names": [
       {"name": "idx_bcn_species_lang", "columns": "species_id, language"}
     ]
   },
   "translations": {
+    "climate_zone": {
+      "Tropical": {"fr": "Tropical", "es": "Tropical", "pt": "Tropical", "it": "Tropicale", "zh": "热带", "de": "Tropisch", "ja": "熱帯", "ko": "열대", "nl": "Tropisch", "ru": "Тропический"},
+      "Arid": {"fr": "Aride", "es": "Árido", "pt": "Árido", "it": "Arido", "zh": "干旱", "de": "Arid", "ja": "乾燥", "ko": "건조", "nl": "Aride", "ru": "Аридный"},
+      "Mediterranean": {"fr": "Méditerranéen", "es": "Mediterráneo", "pt": "Mediterrâneo", "it": "Mediterraneo", "zh": "地中海", "de": "Mediterran", "ja": "地中海性", "ko": "지중해성", "nl": "Mediterraan", "ru": "Средиземноморский"},
+      "Subtropical": {"fr": "Subtropical", "es": "Subtropical", "pt": "Subtropical", "it": "Subtropicale", "zh": "亚热带", "de": "Subtropisch", "ja": "亜熱帯", "ko": "아열대", "nl": "Subtropisch", "ru": "Субтропический"},
+      "Temperate": {"fr": "Tempéré", "es": "Templado", "pt": "Temperado", "it": "Temperato", "zh": "温带", "de": "Gemäßigt", "ja": "温帯", "ko": "온대", "nl": "Gematigd", "ru": "Умеренный"},
+      "Continental": {"fr": "Continental", "es": "Continental", "pt": "Continental", "it": "Continentale", "zh": "大陆性", "de": "Kontinental", "ja": "大陸性", "ko": "대륙성", "nl": "Continentaal", "ru": "Континентальный"},
+      "Boreal": {"fr": "Boréal", "es": "Boreal", "pt": "Boreal", "it": "Boreale", "zh": "寒带", "de": "Boreal", "ja": "亜寒帯", "ko": "아한대", "nl": "Boreaal", "ru": "Бореальный"}
+    },
     "habit": {
       "Climber": {"fr": "Grimpante", "es": "Trepadora", "pt": "Trepadeira", "it": "Rampicante", "zh": "攀援", "de": "Kletterpflanze", "ja": "つる性", "ko": "덩굴", "nl": "Klimplant", "ru": "Лиана"},
       "Shrub": {"fr": "Arbuste", "es": "Arbusto", "pt": "Arbusto", "it": "Arbusto", "zh": "灌木", "de": "Strauch", "ja": "低木", "ko": "관목", "nl": "Struik", "ru": "Кустарник"},

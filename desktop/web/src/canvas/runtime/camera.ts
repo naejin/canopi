@@ -5,6 +5,8 @@ import { getPlantWorldBounds, type PlantPresentationContext } from './plant-pres
 
 const DEFAULT_VIEWPORT_METERS = 100
 const DEFAULT_FIT_PADDING = 0.1
+const FIT_MAX_ITERATIONS = 20
+const FIT_CONVERGENCE_THRESHOLD = 0.0001
 const ZOOM_FACTOR = 1.1
 const ZOOM_MIN = 0.1
 const ZOOM_MAX = 200
@@ -93,24 +95,46 @@ export class CameraController {
   }
 
   zoomToFit(scene: ScenePersistedState, options: SceneBoundsOptions = {}): SceneViewportState {
-    const bounds = computeSceneBounds(scene, {
-      annotationViewportScale: options.annotationViewportScale ?? this._viewport.scale,
-      plantContext: options.plantContext,
-    })
-    if (!bounds || this._screen.width <= 0 || this._screen.height <= 0) {
+    if (this._screen.width <= 0 || this._screen.height <= 0) {
       return this.viewport
     }
 
-    const contentWidth = Math.max(bounds.maxX - bounds.minX, 1)
-    const contentHeight = Math.max(bounds.maxY - bounds.minY, 1)
-    const scale = clampScale(Math.min(
-      (this._screen.width * (1 - DEFAULT_FIT_PADDING * 2)) / contentWidth,
-      (this._screen.height * (1 - DEFAULT_FIT_PADDING * 2)) / contentHeight,
-    ))
+    // Annotations and default-mode plants have screen-space dimensions, so their
+    // world-space footprint is inversely proportional to scale. Computing bounds
+    // once with the current scale and deriving a new scale creates a circular
+    // dependency - each call only moves partway toward the true fit. Iterate
+    // until the scale converges (typically 2-3 rounds).
+    let currentScale = options.annotationViewportScale ?? this._viewport.scale
+    let bounds: SceneBounds | null = null
+    let scale = currentScale
+
+    for (let i = 0; i < FIT_MAX_ITERATIONS; i++) {
+      bounds = computeSceneBounds(scene, {
+        annotationViewportScale: currentScale,
+        plantContext: options.plantContext,
+      })
+      if (!bounds) return this.viewport
+
+      const contentWidth = Math.max(bounds.maxX - bounds.minX, 1)
+      const contentHeight = Math.max(bounds.maxY - bounds.minY, 1)
+      scale = clampScale(Math.min(
+        (this._screen.width * (1 - DEFAULT_FIT_PADDING * 2)) / contentWidth,
+        (this._screen.height * (1 - DEFAULT_FIT_PADDING * 2)) / contentHeight,
+      ))
+
+      if (Math.abs(scale - currentScale) / Math.max(scale, currentScale) < FIT_CONVERGENCE_THRESHOLD) {
+        break
+      }
+      currentScale = scale
+    }
+
+    const finalBounds = bounds!
+    const contentWidth = Math.max(finalBounds.maxX - finalBounds.minX, 1)
+    const contentHeight = Math.max(finalBounds.maxY - finalBounds.minY, 1)
 
     return this.setViewport({
-      x: (this._screen.width - contentWidth * scale) / 2 - bounds.minX * scale,
-      y: (this._screen.height - contentHeight * scale) / 2 - bounds.minY * scale,
+      x: (this._screen.width - contentWidth * scale) / 2 - finalBounds.minX * scale,
+      y: (this._screen.height - contentHeight * scale) / 2 - finalBounds.minY * scale,
       scale,
     })
   }

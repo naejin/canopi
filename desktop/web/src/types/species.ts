@@ -207,6 +207,7 @@ export interface SpeciesDetail {
   // Distribution
   native_distribution: string | null;
   introduced_distribution: string | null;
+  climate_zones: string | null;
   conservation_status: string | null;
   // Ellenberg
   ellenberg_light: number | null;
@@ -239,10 +240,6 @@ export interface FlowerColorResolution {
 }
 
 export interface SpeciesFilter {
-  hardiness_min: number | null;
-  hardiness_max: number | null;
-  height_min: number | null;
-  height_max: number | null;
   sun_tolerances: string[] | null;
   soil_tolerances: string[] | null;
   growth_rate: string[] | null;
@@ -250,7 +247,9 @@ export interface SpeciesFilter {
   edible: boolean | null;
   edibility_min: number | null;
   nitrogen_fixer: boolean | null;
-  stratum: string[] | null;
+  climate_zones: string[] | null;
+  growth_form_type: string[] | null;
+  woody: boolean | null;
   family: string | null;
   extra: DynamicFilter[] | null;
 }
@@ -266,8 +265,8 @@ export interface PaginatedResult<T> {
 export interface FilterOptions {
   families: string[];
   growth_rates: string[];
-  strata: string[];
-  hardiness_range: [number, number];
+  climate_zones: string[];
+  growth_form_types: string[];
   life_cycles: string[];
   sun_tolerances: string[];
   soil_tolerances: string[];

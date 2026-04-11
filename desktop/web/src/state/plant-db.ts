@@ -9,10 +9,6 @@ import type { DynamicFilter, FilterOp, DynamicFilterOptions } from '../types/spe
 
 export const searchText = signal('');
 export const activeFilters = signal<SpeciesFilter>({
-  hardiness_min: null,
-  hardiness_max: null,
-  height_min: null,
-  height_max: null,
   sun_tolerances: null,
   soil_tolerances: null,
   growth_rate: null,
@@ -20,7 +16,9 @@ export const activeFilters = signal<SpeciesFilter>({
   edible: null,
   edibility_min: null,
   nitrogen_fixer: null,
-  stratum: null,
+  climate_zones: null,
+  growth_form_type: null,
+  woody: null,
   family: null,
   extra: null,
 });
@@ -63,10 +61,6 @@ export const recentlyViewed = signal<SpeciesListItem[]>([]);
 export const hasActiveFilters = computed(() => {
   const f = activeFilters.value;
   return (
-    f.hardiness_min !== null ||
-    f.hardiness_max !== null ||
-    f.height_min !== null ||
-    f.height_max !== null ||
     (f.sun_tolerances !== null && f.sun_tolerances.length > 0) ||
     (f.soil_tolerances !== null && f.soil_tolerances.length > 0) ||
     (f.growth_rate !== null && f.growth_rate.length > 0) ||
@@ -74,7 +68,9 @@ export const hasActiveFilters = computed(() => {
     f.edible !== null ||
     f.edibility_min !== null ||
     f.nitrogen_fixer !== null ||
-    (f.stratum !== null && f.stratum.length > 0) ||
+    (f.climate_zones !== null && f.climate_zones.length > 0) ||
+    (f.growth_form_type !== null && f.growth_form_type.length > 0) ||
+    f.woody !== null ||
     f.family !== null ||
     (f.extra !== null && f.extra.length > 0) ||
     extraFilters.value.length > 0
@@ -86,12 +82,14 @@ export const hasExtraFilters = computed(() => extraFilters.value.length > 0);
 export const activeFilterCount = computed(() => {
   const f = activeFilters.value;
   let count = 0;
-  if (f.hardiness_min !== null || f.hardiness_max !== null) count++;
+  if (f.climate_zones !== null && f.climate_zones.length > 0) count++;
+  if (f.growth_form_type !== null && f.growth_form_type.length > 0) count++;
   if (f.sun_tolerances !== null && f.sun_tolerances.length > 0) count++;
-  if (f.stratum !== null && f.stratum.length > 0) count++;
-  if (f.edibility_min !== null) count++;
-  if (f.height_min !== null || f.height_max !== null) count++;
+  if (f.soil_tolerances !== null && f.soil_tolerances.length > 0) count++;
+  if (f.growth_rate !== null && f.growth_rate.length > 0) count++;
   if (f.life_cycle !== null && f.life_cycle.length > 0) count++;
+  if (f.edibility_min !== null) count++;
+  if (f.woody !== null) count++;
   if (f.nitrogen_fixer !== null) count++;
   count += extraFilters.value.length;
   return count;
@@ -404,10 +402,6 @@ export async function loadDynamicOptions(fields: string[]): Promise<void> {
 /** Clear all active filters. */
 export function clearFilters(): void {
   activeFilters.value = {
-    hardiness_min: null,
-    hardiness_max: null,
-    height_min: null,
-    height_max: null,
     sun_tolerances: null,
     soil_tolerances: null,
     growth_rate: null,
@@ -415,7 +409,9 @@ export function clearFilters(): void {
     edible: null,
     edibility_min: null,
     nitrogen_fixer: null,
-    stratum: null,
+    climate_zones: null,
+    growth_form_type: null,
+    woody: null,
     family: null,
     extra: null,
   };

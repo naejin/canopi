@@ -10,14 +10,15 @@ pub use flower::get_flower_color_batch;
 #[allow(unused_imports)]
 pub use lookup::translate_value;
 pub use lookup::{
-    get_common_name, get_common_names_batch, get_locale_best_common_name,
-    get_locale_common_names, get_secondary_common_name,
+    get_common_name, get_common_names_batch, get_locale_best_common_name, get_locale_common_names,
+    get_secondary_common_name,
 };
 pub use search::search;
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use common_types::species::{Sort, SpeciesFilter};
     use rusqlite::Connection;
     use serde::Deserialize;
     use std::{collections::HashSet, fs, path::Path};
@@ -186,6 +187,7 @@ mod tests {
                 hedge_tolerance TEXT,
                 native_distribution TEXT,
                 introduced_distribution TEXT,
+                climate_zones TEXT,
                 conservation_status TEXT,
                 image_urls TEXT,
                 ellenberg_light REAL,
@@ -272,6 +274,14 @@ mod tests {
                 region TEXT NOT NULL,
                 source TEXT
             );
+            CREATE TABLE species_climate_zones (
+                id TEXT PRIMARY KEY,
+                species_id TEXT NOT NULL,
+                climate_zone TEXT NOT NULL,
+                confidence REAL NOT NULL,
+                source TEXT,
+                UNIQUE(species_id, climate_zone)
+            );
 
             INSERT INTO species (id, slug, canonical_name, common_name, family, genus,
                 height_min_m, height_max_m, width_max_m, hardiness_zone_min, hardiness_zone_max,
@@ -281,7 +291,7 @@ mod tests {
                 well_drained, tolerates_light_soil, tolerates_medium_soil, tolerates_heavy_soil,
                 nitrogen_fixer, stratum, edibility_rating, medicinal_rating,
                 scented, toxicity,
-                native_distribution, introduced_distribution)
+                native_distribution, introduced_distribution, climate_zones)
             VALUES (
                 'uuid-lav', 'lavandula-angustifolia', 'Lavandula angustifolia',
                 'Lavender', 'Lamiaceae', 'Lavandula',
@@ -292,7 +302,7 @@ mod tests {
                 1, 1, 1, 0,
                 0, 'Low', 3, 2,
                 1, NULL,
-                '[]', 'Europe, Western Asia'
+                '[]', 'Europe, Western Asia', '[\"Mediterranean\", \"Temperate\"]'
             );
             INSERT INTO species (id, slug, canonical_name, common_name, family, genus,
                 height_min_m, height_max_m, width_max_m, hardiness_zone_min, hardiness_zone_max,
@@ -302,7 +312,7 @@ mod tests {
                 tolerates_full_sun, tolerates_semi_shade, tolerates_full_shade,
                 nitrogen_fixer, stratum, edibility_rating, medicinal_rating,
                 succession_stage, seed_dormancy_depth, serotinous, invasive_potential,
-                biogeographic_status, native_distribution)
+                biogeographic_status, native_distribution, climate_zones)
             VALUES (
                 'uuid-ald', 'alnus-glutinosa', 'Alnus glutinosa',
                 'Alder', 'Betulaceae', 'Alnus',
@@ -313,7 +323,7 @@ mod tests {
                 1, 0, 0,
                 1, 'Canopy', 0, 0,
                 'secondary_i', 'Absolute', 1, 'Potentially Invasive',
-                'Native', '[\"Asia\", \"Europe\"]'
+                'Native', '[\"Asia\", \"Europe\"]', '[\"Temperate\", \"Continental\"]'
             );
 
             INSERT INTO species_common_names VALUES
@@ -340,12 +350,21 @@ mod tests {
                 ('t3', 'flower_color', 'Purple', 'Violet', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
                 ('t4', 'seed_dormancy_depth', 'Absolute', 'Absolue', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
                 ('t5', 'invasive_potential', 'Potentially Invasive', 'Potentiellement invasive', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-                ('t6', 'biogeographic_status', 'Native', 'Indigène', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+                ('t6', 'biogeographic_status', 'Native', 'Indigène', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+                ('t7', 'climate_zone', 'Mediterranean', 'Méditerranéen', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+                ('t8', 'climate_zone', 'Temperate', 'Tempéré', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+                ('t9', 'climate_zone', 'Continental', 'Continental', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 
             INSERT INTO best_common_names VALUES
                 ('uuid-lav', 'en', 'Lavender'),
                 ('uuid-lav', 'fr', 'Lavande'),
                 ('uuid-ald', 'en', 'Common Alder');
+
+            INSERT INTO species_climate_zones VALUES
+                ('cz1', 'uuid-lav', 'Mediterranean', 0.72, 'wcvp'),
+                ('cz2', 'uuid-lav', 'Temperate', 0.28, 'wcvp'),
+                ('cz3', 'uuid-ald', 'Temperate', 0.65, 'wcvp'),
+                ('cz4', 'uuid-ald', 'Continental', 0.35, 'wcvp');
         ",
         )
         .unwrap();
@@ -369,6 +388,10 @@ mod tests {
         assert_eq!(detail.tolerates_light_soil, Some(true));
         assert_eq!(detail.tolerates_medium_soil, Some(true));
         assert_eq!(detail.tolerates_heavy_soil, Some(false));
+        assert_eq!(
+            detail.climate_zones.as_deref(),
+            Some("Mediterranean, Temperate")
+        );
     }
 
     #[test]
@@ -460,6 +483,16 @@ mod tests {
     }
 
     #[test]
+    fn test_get_detail_translates_climate_zones() {
+        let conn = test_db();
+        let detail = get_detail(&conn, "Alnus glutinosa", "fr").unwrap();
+        assert_eq!(
+            detail.climate_zones.as_deref(),
+            Some("Tempéré, Continental")
+        );
+    }
+
+    #[test]
     fn test_get_detail_maps_new_split_fields() {
         let conn = test_db();
         let detail = get_detail(&conn, "Alnus glutinosa", "fr").unwrap();
@@ -490,8 +523,39 @@ mod tests {
         assert!(opts.soil_tolerances.contains(&"well_drained".to_owned()));
         assert!(opts.soil_tolerances.contains(&"heavy_clay".to_owned()));
         assert!(opts.sun_tolerances.contains(&"full_sun".to_owned()));
-        assert!(opts.hardiness_range.0 <= 1);
-        assert!(opts.hardiness_range.1 >= 9);
+        assert_eq!(opts.climate_zones.len(), 7);
+        assert!(opts.climate_zones.contains(&"Tropical".to_owned()));
+        assert!(opts.climate_zones.contains(&"Boreal".to_owned()));
+    }
+
+    #[test]
+    fn test_search_climate_zone_filter() {
+        let conn = test_db();
+        // Mediterranean filter should return only Lavandula (not Alnus)
+        let filters = SpeciesFilter {
+            climate_zones: Some(vec!["Mediterranean".to_owned()]),
+            ..Default::default()
+        };
+        let result = search(&conn, None, filters, None, Sort::Name, 50, "en".to_owned()).unwrap();
+        assert_eq!(result.items.len(), 1);
+        assert_eq!(result.items[0].canonical_name, "Lavandula angustifolia");
+
+        // Temperate filter should return both species
+        let filters = SpeciesFilter {
+            climate_zones: Some(vec!["Temperate".to_owned()]),
+            ..Default::default()
+        };
+        let result = search(&conn, None, filters, None, Sort::Name, 50, "en".to_owned()).unwrap();
+        assert_eq!(result.items.len(), 2);
+
+        // Continental filter should return only Alnus
+        let filters = SpeciesFilter {
+            climate_zones: Some(vec!["Continental".to_owned()]),
+            ..Default::default()
+        };
+        let result = search(&conn, None, filters, None, Sort::Name, 50, "en".to_owned()).unwrap();
+        assert_eq!(result.items.len(), 1);
+        assert_eq!(result.items[0].canonical_name, "Alnus glutinosa");
     }
 
     #[test]

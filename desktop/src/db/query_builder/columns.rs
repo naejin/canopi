@@ -26,6 +26,10 @@ pub(crate) fn validated_column(field: &str) -> Option<&'static str> {
         "resprout_ability" => Some("s.resprout_ability"),
         "coppice_potential" => Some("s.coppice_potential"),
         // Climate & Soil
+        "stratum" => Some("s.stratum"),
+        "hardiness_zone_min" => Some("s.hardiness_zone_min"),
+        "hardiness_zone_max" => Some("s.hardiness_zone_max"),
+        "height_max_m" => Some("s.height_max_m"),
         "frost_tender" => Some("s.frost_tender"),
         "drought_tolerance" => Some("s.drought_tolerance"),
         "soil_ph_min" => Some("s.soil_ph_min"),

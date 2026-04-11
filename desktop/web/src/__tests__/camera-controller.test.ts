@@ -80,6 +80,30 @@ describe('CameraController', () => {
     expect(bottomRight.x).toBeLessThanOrEqual(1000)
     expect(bottomRight.y).toBeLessThanOrEqual(800)
   })
+
+  it('converges in a single call despite scale-dependent bounds', () => {
+    const camera = new CameraController()
+    camera.initialize({ width: 1000, height: 800 })
+    const scene = createScene()
+    scene.annotations = [{
+      kind: 'annotation',
+      id: 'a1',
+      annotationType: 'text',
+      position: { x: 50, y: 60 },
+      text: 'A long annotation that affects bounds',
+      fontSize: 20,
+      rotationDeg: null,
+    }]
+
+    // First call should converge fully
+    const first = camera.zoomToFit(scene)
+    // Second call should produce the same scale (no further convergence needed)
+    const second = camera.zoomToFit(scene)
+
+    expect(first.scale).toBeCloseTo(second.scale, 2)
+    expect(first.x).toBeCloseTo(second.x, 1)
+    expect(first.y).toBeCloseTo(second.y, 1)
+  })
 })
 
 describe('computeSceneBounds', () => {

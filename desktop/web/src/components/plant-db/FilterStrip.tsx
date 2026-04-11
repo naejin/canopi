@@ -10,27 +10,18 @@ import {
   activeFilterCount,
   patchFilters,
 } from '../../state/plant-db'
-import { STRATA_ROWS } from '../../canvas/consortium-renderer'
+import type { SpeciesFilter } from '../../types/species'
 import { FilterChip } from './FilterChip'
-import { RangeSlider } from './RangeSlider'
 import { ThresholdSlider } from './ThresholdSlider'
+import { toggleArrayValue } from './filter-utils'
 import styles from './PlantDb.module.css'
 
-function sortStrata(strata: string[]): string[] {
-  return [...strata].sort((a, b) => {
-    const ai = (STRATA_ROWS as readonly string[]).indexOf(a)
-    const bi = (STRATA_ROWS as readonly string[]).indexOf(b)
-    return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
-  })
-}
-
-function toggleArrayValue(arr: string[] | null, val: string): string[] | null {
-  if (arr === null) return [val];
-  if (arr.includes(val)) {
-    const next = arr.filter((v) => v !== val);
-    return next.length === 0 ? null : next;
-  }
-  return [...arr, val];
+interface ChipRowConfig {
+  label: string
+  options: string[]
+  filterKey: keyof SpeciesFilter
+  i18nPrefix: string
+  color: string
 }
 
 export function FilterStrip({ onMoreFilters }: { onMoreFilters: () => void }) {
@@ -44,73 +35,32 @@ export function FilterStrip({ onMoreFilters }: { onMoreFilters: () => void }) {
     void loadFilterOptions();
   }, []);
 
+  const chipRows: ChipRowConfig[] = [
+    { label: t('filters.climateZone'), options: opts?.climate_zones ?? [], filterKey: 'climate_zones', i18nPrefix: 'filters.climateZone_', color: '--color-sun' },
+    { label: t('filters.growthFormType'), options: opts?.growth_form_types ?? [], filterKey: 'growth_form_type', i18nPrefix: 'filters.growthFormType_', color: '--color-family' },
+    { label: t('filters.sun'), options: opts?.sun_tolerances ?? [], filterKey: 'sun_tolerances', i18nPrefix: 'plantDb.sunTolerance_', color: '--color-sun' },
+    { label: t('filters.lifecycle'), options: opts?.life_cycles ?? [], filterKey: 'life_cycle', i18nPrefix: 'filters.lifeCycle_', color: '--color-family' },
+  ];
+
   return (
     <div className={styles.filterStrip}>
-      {/* Stratum — multi-select chips */}
-      <div className={styles.filterRow}>
-        <span className={styles.filterLabel}>{t('filters.stratum')}</span>
-        <div className={styles.filterControl}>
-          {sortStrata(opts?.strata ?? []).map((s) => (
-            <FilterChip
-              key={s}
-              label={t(`filters.stratum_${s}`, s)}
-              color="--color-nitrogen"
-              active={filters.stratum?.includes(s) ?? false}
-              onClick={() => patchFilters({ stratum: toggleArrayValue(filters.stratum, s) })}
-            />
-          ))}
+      {chipRows.map((row) => (
+        <div key={row.filterKey} className={styles.filterRow}>
+          <span className={styles.filterLabel}>{row.label}</span>
+          <div className={styles.filterControl}>
+            {row.options.map((val) => (
+              <FilterChip
+                key={val}
+                label={t(`${row.i18nPrefix}${val}`, val)}
+                color={row.color}
+                active={(filters[row.filterKey] as string[] | null)?.includes(val) ?? false}
+                onClick={() => patchFilters({ [row.filterKey]: toggleArrayValue(filters[row.filterKey] as string[] | null, val) })}
+              />
+            ))}
+          </div>
         </div>
-      </div>
+      ))}
 
-      {/* Sun tolerance — multi-select chips */}
-      <div className={styles.filterRow}>
-        <span className={styles.filterLabel}>{t('filters.sun')}</span>
-        <div className={styles.filterControl}>
-          {(opts?.sun_tolerances ?? []).map((s) => (
-            <FilterChip
-              key={s}
-              label={t(`plantDb.sunTolerance_${s}`, s)}
-              color="--color-sun"
-              active={filters.sun_tolerances?.includes(s) ?? false}
-              onClick={() => patchFilters({ sun_tolerances: toggleArrayValue(filters.sun_tolerances, s) })}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* Life cycle — multi-select chips */}
-      <div className={styles.filterRow}>
-        <span className={styles.filterLabel}>{t('filters.lifecycle')}</span>
-        <div className={styles.filterControl}>
-          {(opts?.life_cycles ?? []).map((lc) => (
-            <FilterChip
-              key={lc}
-              label={t(`filters.lifeCycle_${lc}`, lc)}
-              color="--color-family"
-              active={filters.life_cycle?.includes(lc) ?? false}
-              onClick={() => patchFilters({ life_cycle: toggleArrayValue(filters.life_cycle, lc) })}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* Hardiness zone — range slider */}
-      <div className={styles.filterRow}>
-        <span className={styles.filterLabel}>{t('filters.hardiness')}</span>
-        <div className={styles.filterControl}>
-          <RangeSlider
-            min={opts?.hardiness_range[0] ?? 1}
-            max={opts?.hardiness_range[1] ?? 13}
-            valueLow={filters.hardiness_min}
-            valueHigh={filters.hardiness_max}
-            onChangeLow={(v) => patchFilters({ hardiness_min: v })}
-            onChangeHigh={(v) => patchFilters({ hardiness_max: v })}
-            ariaLabel={t('filters.hardiness')}
-          />
-        </div>
-      </div>
-
-      {/* Edibility — threshold slider */}
       <div className={styles.filterRow}>
         <span className={styles.filterLabel}>{t('filters.edibility')}</span>
         <div className={styles.filterControl}>
@@ -124,25 +74,20 @@ export function FilterStrip({ onMoreFilters }: { onMoreFilters: () => void }) {
         </div>
       </div>
 
-      {/* Height range — range slider */}
       <div className={styles.filterRow}>
-        <span className={styles.filterLabel}>{t('filters.height')}</span>
+        <span className={styles.filterLabel}>{t('filters.woody')}</span>
         <div className={styles.filterControl}>
-          <RangeSlider
-            min={0}
-            max={50}
-            valueLow={filters.height_min}
-            valueHigh={filters.height_max}
-            onChangeLow={(v) => patchFilters({ height_min: v })}
-            onChangeHigh={(v) => patchFilters({ height_max: v })}
-            step={0.5}
-            formatLabel={(v) => `${v} m`}
-            ariaLabel={t('filters.height')}
-          />
+          <label className={styles.toggleSwitch}>
+            <input
+              type="checkbox"
+              checked={filters.woody === true}
+              onChange={(e) => patchFilters({ woody: (e.target as HTMLInputElement).checked ? true : null })}
+            />
+            <span className={styles.toggleTrack} />
+          </label>
         </div>
       </div>
 
-      {/* Nitrogen fixer — toggle switch */}
       <div className={styles.filterRow}>
         <span className={styles.filterLabel}>{t('filters.nitrogen')}</span>
         <div className={styles.filterControl}>
@@ -157,7 +102,6 @@ export function FilterStrip({ onMoreFilters }: { onMoreFilters: () => void }) {
         </div>
       </div>
 
-      {/* Bottom row: More filters + Clear */}
       <div className={styles.filterActions}>
         <button type="button" className={styles.moreFiltersBtn} onClick={onMoreFilters}>
           {t('filters.moreFilters')}

@@ -8,21 +8,6 @@ pub(super) fn append_structured_filters(
     params: &mut Vec<Value>,
     filters: &SpeciesFilter,
 ) {
-    if let Some(min) = filters.hardiness_min {
-        where_clauses.push(format!("s.hardiness_zone_min >= ?{}", params.len() + 1));
-        params.push(Value::Integer(min as i64));
-    }
-
-    if let Some(max) = filters.hardiness_max {
-        where_clauses.push(format!("s.hardiness_zone_max <= ?{}", params.len() + 1));
-        params.push(Value::Integer(max as i64));
-    }
-
-    if let Some(height) = filters.height_max {
-        where_clauses.push(format!("s.height_max_m <= ?{}", params.len() + 1));
-        params.push(Value::Real(height as f64));
-    }
-
     if let Some(ref tolerances) = filters.sun_tolerances
         && !tolerances.is_empty()
     {
@@ -80,10 +65,6 @@ pub(super) fn append_structured_filters(
         }
     }
 
-    if let Some(ref strata) = filters.stratum {
-        append_text_in_clause(where_clauses, params, "s.stratum", strata);
-    }
-
     if let Some(ref family) = filters.family {
         where_clauses.push(format!("s.family = ?{}", params.len() + 1));
         params.push(Value::Text(family.clone()));
@@ -101,9 +82,31 @@ pub(super) fn append_structured_filters(
         where_clauses.push("s.nitrogen_fixer = 1".to_owned());
     }
 
-    if let Some(min_height) = filters.height_min {
-        where_clauses.push(format!("s.height_max_m >= ?{}", params.len() + 1));
-        params.push(Value::Real(min_height as f64));
+    if let Some(ref zones) = filters.climate_zones
+        && !zones.is_empty()
+    {
+        let placeholders: Vec<String> = zones
+            .iter()
+            .enumerate()
+            .map(|(i, _)| format!("?{}", params.len() + 1 + i))
+            .collect();
+        where_clauses.push(format!(
+            "EXISTS (SELECT 1 FROM species_climate_zones cz WHERE cz.species_id = s.id AND cz.climate_zone IN ({}))",
+            placeholders.join(", ")
+        ));
+        for zone in zones {
+            params.push(Value::Text(zone.clone()));
+        }
+    }
+
+    if let Some(ref types) = filters.growth_form_type {
+        append_text_in_clause(where_clauses, params, "s.growth_form_type", types);
+    }
+
+    if let Some(woody) = filters.woody
+        && woody
+    {
+        where_clauses.push("s.woody = 1".to_owned());
     }
 
     if let Some(min_rating) = filters.edibility_min {

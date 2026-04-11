@@ -14,6 +14,7 @@ export interface FieldDef {
   category: FilterCategory;
   i18nKey: string;
   color: string;
+  step?: number;
 }
 
 export const CATEGORIES: { key: FilterCategory; i18nKey: string; color: string }[] = [
@@ -29,6 +30,7 @@ export const CATEGORIES: { key: FilterCategory; i18nKey: string; color: string }
 
 export const FIELD_REGISTRY: FieldDef[] = [
   // Growth & Form
+  { key: 'stratum', type: 'categorical', category: 'growth', i18nKey: 'filters.field.stratum', color: '--color-family' },
   { key: 'woody', type: 'boolean', category: 'growth', i18nKey: 'filters.field.woody', color: '--color-family' },
   { key: 'habit', type: 'categorical', category: 'growth', i18nKey: 'filters.field.habit', color: '--color-family' },
   { key: 'growth_form_type', type: 'categorical', category: 'growth', i18nKey: 'filters.field.growthFormType', color: '--color-family' },
@@ -40,6 +42,9 @@ export const FIELD_REGISTRY: FieldDef[] = [
   { key: 'active_growth_period', type: 'categorical', category: 'growth', i18nKey: 'filters.field.activeGrowthPeriod', color: '--color-family' },
 
   // Climate & Soil
+  { key: 'hardiness_zone_min', type: 'numeric', category: 'climate', i18nKey: 'filters.field.hardinessZoneMin', color: '--color-sun', step: 1 },
+  { key: 'hardiness_zone_max', type: 'numeric', category: 'climate', i18nKey: 'filters.field.hardinessZoneMax', color: '--color-sun', step: 1 },
+  { key: 'height_max_m', type: 'numeric', category: 'climate', i18nKey: 'filters.field.heightMax', color: '--color-sun', step: 0.5 },
   { key: 'frost_tender', type: 'boolean', category: 'climate', i18nKey: 'filters.field.frostTender', color: '--color-sun' },
   { key: 'drought_tolerance', type: 'categorical', category: 'climate', i18nKey: 'filters.field.droughtTolerance', color: '--color-sun' },
   { key: 'soil_ph_min', type: 'numeric', category: 'climate', i18nKey: 'filters.field.soilPhMin', color: '--color-sun' },
@@ -110,8 +115,8 @@ export const FIELD_REGISTRY: FieldDef[] = [
   { key: 'fire_resistant', type: 'boolean', category: 'risk', i18nKey: 'filters.field.fireResistant', color: '--color-danger' },
 
   // Uses
-  { key: 'medicinal_rating', type: 'numeric', category: 'uses', i18nKey: 'filters.field.medicinalRating', color: '--color-primary' },
-  { key: 'other_uses_rating', type: 'numeric', category: 'uses', i18nKey: 'filters.field.otherUsesRating', color: '--color-primary' },
+  { key: 'medicinal_rating', type: 'numeric', category: 'uses', i18nKey: 'filters.field.medicinalRating', color: '--color-primary', step: 1 },
+  { key: 'other_uses_rating', type: 'numeric', category: 'uses', i18nKey: 'filters.field.otherUsesRating', color: '--color-primary', step: 1 },
   { key: 'scented', type: 'boolean', category: 'uses', i18nKey: 'filters.field.scented', color: '--color-primary' },
   { key: 'propagated_by_seed', type: 'boolean', category: 'reproduce', i18nKey: 'filters.field.propagatedBySeed', color: '--color-medicinal' },
   { key: 'propagated_by_cuttings', type: 'boolean', category: 'reproduce', i18nKey: 'filters.field.propagatedByCuttings', color: '--color-medicinal' },

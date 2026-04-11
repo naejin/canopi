@@ -17,6 +17,25 @@ fn parse_json_array_to_display(json_str: &str) -> Option<String> {
     }
 }
 
+fn parse_json_array_to_translated_display(
+    conn: &Connection,
+    field: &str,
+    json_str: &str,
+    locale: &str,
+) -> Option<String> {
+    match serde_json::from_str::<Vec<String>>(json_str) {
+        Ok(items) if !items.is_empty() => Some(
+            items
+                .iter()
+                .map(|item| translate_value(conn, field, item, locale))
+                .collect::<Vec<_>>()
+                .join(", "),
+        ),
+        Ok(_) => None,
+        Err(_) => Some(translate_composite_value(conn, field, json_str, locale)),
+    }
+}
+
 const DETAIL_CONTRACT_COLUMNS: &[&str] = &[
     "id",
     "canonical_name",
@@ -160,6 +179,7 @@ const DETAIL_CONTRACT_COLUMNS: &[&str] = &[
     "hedge_tolerance",
     "native_distribution",
     "introduced_distribution",
+    "climate_zones",
     "conservation_status",
     "image_urls",
     "ellenberg_light",
@@ -376,6 +396,7 @@ fn map_detail_row(row: &Row<'_>) -> rusqlite::Result<(String, SpeciesDetail)> {
         hedge_tolerance: cursor.read()?,
         native_distribution: cursor.read()?,
         introduced_distribution: cursor.read()?,
+        climate_zones: cursor.read()?,
         conservation_status: cursor.read()?,
         image_urls: cursor.read()?,
         ellenberg_light: cursor.read()?,
@@ -430,6 +451,9 @@ pub fn get_detail(
         .introduced_distribution
         .as_deref()
         .and_then(parse_json_array_to_display);
+    detail.climate_zones = detail.climate_zones.as_deref().and_then(|value| {
+        parse_json_array_to_translated_display(conn, "climate_zone", value, locale)
+    });
 
     for (field, getter, setter) in [
         (

@@ -14,10 +14,20 @@ pub fn get_filter_options(conn: &Connection) -> Result<FilterOptions, String> {
         "SELECT DISTINCT growth_rate FROM species WHERE growth_rate IS NOT NULL ORDER BY growth_rate",
         "growth rates",
     )?;
-    let strata: Vec<String> = distinct_text_values(
+    let climate_zones = vec![
+        "Tropical".to_owned(),
+        "Arid".to_owned(),
+        "Mediterranean".to_owned(),
+        "Subtropical".to_owned(),
+        "Temperate".to_owned(),
+        "Continental".to_owned(),
+        "Boreal".to_owned(),
+    ];
+
+    let growth_form_types: Vec<String> = distinct_text_values(
         conn,
-        "SELECT DISTINCT stratum FROM species WHERE stratum IS NOT NULL ORDER BY stratum",
-        "strata",
+        "SELECT DISTINCT growth_form_type FROM species WHERE growth_form_type IS NOT NULL ORDER BY growth_form_type",
+        "growth form types",
     )?;
 
     let life_cycles = vec![
@@ -44,20 +54,11 @@ pub fn get_filter_options(conn: &Connection) -> Result<FilterOptions, String> {
         sun_tolerances.push("full_shade".to_owned());
     }
 
-    let hardiness_range: (i32, i32) = conn
-        .query_row(
-            "SELECT COALESCE(MIN(hardiness_zone_min), 1), COALESCE(MAX(hardiness_zone_max), 13)
-             FROM species",
-            [],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
-        .map_err(|e| format!("Failed to fetch hardiness range: {e}"))?;
-
     Ok(FilterOptions {
         families,
         growth_rates,
-        strata,
-        hardiness_range,
+        climate_zones,
+        growth_form_types,
         life_cycles,
         sun_tolerances,
         soil_tolerances,
@@ -213,6 +214,9 @@ fn is_numeric_field(field: &str) -> bool {
             | "precip_max_inches"
             | "medicinal_rating"
             | "other_uses_rating"
+            | "hardiness_zone_min"
+            | "hardiness_zone_max"
+            | "height_max_m"
             | "ellenberg_light"
             | "ellenberg_temperature"
             | "ellenberg_moisture"

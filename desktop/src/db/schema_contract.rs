@@ -1,4 +1,4 @@
-pub(crate) const EXPECTED_PLANT_SCHEMA_VERSION: i32 = 7;
+pub(crate) const EXPECTED_PLANT_SCHEMA_VERSION: i32 = 8;
 
 #[cfg(test)]
 pub(crate) const REQUIRED_APP_TRANSLATION_FIELDS: &[&str] = &[
@@ -6,6 +6,7 @@ pub(crate) const REQUIRED_APP_TRANSLATION_FIELDS: &[&str] = &[
     "anaerobic_tolerance",
     "biogeographic_status",
     "bloom_period",
+    "climate_zone",
     "deciduous_evergreen",
     "drought_tolerance",
     "fertility_requirement",

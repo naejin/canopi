@@ -16,6 +16,10 @@ import { CATEGORIES, fieldsForCategory, type FieldDef, type FilterCategory } fro
 import { FilterChip } from './FilterChip'
 import { RangeSlider } from './RangeSlider'
 import styles from './MoreFiltersPanel.module.css'
+import type { SpeciesFilter } from '../../types/species'
+
+/** Fields handled by FilterStrip as first-class typed filters - exclude from dynamic More Filters. */
+const STRIP_FIELDS = new Set<string>(['growth_form_type', 'woody'] satisfies (keyof SpeciesFilter)[])
 
 interface Props {
   open: boolean
@@ -108,6 +112,7 @@ function CategorySection({ category, searchQuery }: {
   void locale.value
   const open = useSignal(false)
   const fields = fieldsForCategory(category.key as FilterCategory)
+    .filter((f) => !STRIP_FIELDS.has(f.key))
   const extras = extraFilters.value
 
   // Filter fields by search query
@@ -261,7 +266,7 @@ function FieldRow({ field }: { field: FieldDef }) {
                   addExtraFilter(field.key, 'Between', [low, String(v ?? opts.range![1])])
                 }
               }}
-              step={opts.range[1] - opts.range[0] > 100 ? 1 : 0.1}
+              step={field.step ?? (opts.range[1] - opts.range[0] > 100 ? 1 : 0.1)}
               ariaLabel={label}
             />
           )}

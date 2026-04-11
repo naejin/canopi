@@ -181,6 +181,7 @@ pub struct SpeciesDetail {
     // Distribution
     pub native_distribution: Option<String>,
     pub introduced_distribution: Option<String>,
+    pub climate_zones: Option<String>,
     pub conservation_status: Option<String>,
     // Media
     pub image_urls: Option<String>,
@@ -252,10 +253,6 @@ pub struct CommonNameEntry {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
 pub struct SpeciesFilter {
-    pub hardiness_min: Option<i32>,
-    pub hardiness_max: Option<i32>,
-    pub height_max: Option<f32>,
-    pub height_min: Option<f32>,
     pub sun_tolerances: Option<Vec<String>>,
     pub soil_tolerances: Option<Vec<String>>,
     pub growth_rate: Option<Vec<String>>,
@@ -263,7 +260,9 @@ pub struct SpeciesFilter {
     pub edible: Option<bool>,
     pub edibility_min: Option<i32>,
     pub nitrogen_fixer: Option<bool>,
-    pub stratum: Option<Vec<String>>,
+    pub climate_zones: Option<Vec<String>>,
+    pub growth_form_type: Option<Vec<String>>,
+    pub woody: Option<bool>,
     pub family: Option<String>,
     pub extra: Option<Vec<DynamicFilter>>,
 }
@@ -289,8 +288,8 @@ pub struct PaginatedResult<T: specta::Type> {
 pub struct FilterOptions {
     pub families: Vec<String>,
     pub growth_rates: Vec<String>,
-    pub strata: Vec<String>,
-    pub hardiness_range: (i32, i32),
+    pub climate_zones: Vec<String>,
+    pub growth_form_types: Vec<String>,
     pub life_cycles: Vec<String>,
     pub sun_tolerances: Vec<String>,
     pub soil_tolerances: Vec<String>,
