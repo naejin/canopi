@@ -53,7 +53,15 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": ["resources/canopi-core.db"]
+    "resources": ["resources/canopi-core.db"],
+    "shortDescription": "Agroecological garden design tool",
+    "longDescription": "Canopi is an agroecological design application for planning and managing gardens, food forests, and permaculture systems.",
+    "linux": {
+      "deb": {
+        "section": "science",
+        "depends": ["libwebkit2gtk-4.1-0 | libwebkit2gtk-4.1-0t64", "libgtk-3-0 | libgtk-3-0t64"]
+      }
+    }
   },
   "plugins": {}
 }

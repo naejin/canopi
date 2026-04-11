@@ -163,6 +163,10 @@ python3 scripts/prepare-db.py
 
 # Build release
 cargo build --release
+
+# Inspect Linux .deb package
+dpkg-deb --info target/x86_64-unknown-linux-gnu/release/bundle/deb/Canopi_*_amd64.deb
+readelf -d target/x86_64-unknown-linux-gnu/release/canopi-desktop | grep NEEDED
 ```
 
 ### Pre-commit Hooks

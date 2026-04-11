@@ -62,7 +62,9 @@
 - **Rust lint gate**: Match CI locally with `cargo clippy --workspace --all-targets -- -D warnings`. `--all-targets` matters; plain workspace clippy can miss test-only warnings
 - **CI release build downloads the DB**: The `build.yml` workflow downloads `canopi-core.db` from the `canopi-core-db` GitHub release tag into `desktop/resources/` before running `tauri build`
 - **Linux deps shared action**: `.github/actions/install-linux-deps/` — reusable composite action for `apt-get install` of GTK/WebKit/librsvg/patchelf. Used by lint, test, and build jobs
-- **Linux bundle**: `--bundles deb` only (no AppImage/RPM). Other platforms use Tauri defaults
+- **Linux bundle**: `--bundles deb appimage` (no RPM). Other platforms use Tauri defaults
+- **Deb depends**: Explicit `depends` in `tauri.conf.json` uses `|` alternatives for Ubuntu 24.04 t64 transition (`libgtk-3-0 | libgtk-3-0t64`). Tauri *merges* custom depends with auto-detected ones (doesn't replace)
+- **Package size**: `canopi-core.db` is ~1.1GB, making the `.deb` ~335MB compressed. AppImage is ~351MB. Large enough for download corruption - users should verify checksums
 - **Release candidate workflow**: `.github/workflows/release-candidate.yml` — builds RC artifacts from a release branch. Promotion scripts: `scripts/promote-release.sh` (RC → release), `scripts/publish-db-release.sh` (upload canopi-core.db to GitHub release tag)
 - **Desktop icons**: Generated via `scripts/generate-desktop-icons.sh` from an SVG source. All sizes (32/128/256/icns/ico) must be committed — `generate_context!()` panics if missing
 
