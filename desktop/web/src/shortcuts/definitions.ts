@@ -15,6 +15,17 @@ export const PANEL_SHORTCUTS = {
   plantDb: 'Ctrl+2',
 } as const
 
+export const EDIT_SHORTCUTS = {
+  undo: 'Ctrl+Z',
+  redo: 'Ctrl+Shift+Z',
+} as const
+
+export const VIEW_SHORTCUTS = {
+  zoomIn: 'Ctrl+=',
+  zoomOut: 'Ctrl+-',
+  fitToContent: 'Ctrl+0',
+} as const
+
 export const TOOL_SHORTCUTS = {
   select: 'V',
   hand: 'H',

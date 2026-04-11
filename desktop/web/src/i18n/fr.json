@@ -609,6 +609,21 @@
     "shadeTolerant": "Tolérant à l'ombre",
     "edible": "Comestible"
   },
+  "menu": {
+    "file": "Fichier",
+    "edit": "Edition",
+    "view": "Affichage",
+    "file.new": "Nouveau design",
+    "file.open": "Ouvrir un design",
+    "file.save": "Enregistrer",
+    "file.saveAs": "Enregistrer sous",
+    "file.exit": "Quitter",
+    "edit.undo": "Annuler",
+    "edit.redo": "Retablir",
+    "view.zoomIn": "Zoom avant",
+    "view.zoomOut": "Zoom arriere",
+    "view.fitToContent": "Ajuster au contenu"
+  },
   "titleBar": {
     "unsavedChanges": "Modifications non enregistrées"
   },
@@ -621,11 +636,9 @@
     "resize": "Redimensionner le panneau"
   },
   "filters": {
-    "stratum": "Strate",
     "sun": "Soleil",
     "hardiness": "Rusticité",
     "edibility": "Comestibilité",
-    "height": "Hauteur",
     "nitrogen": "Fixateur N₂",
     "lifecycle": "Cycle de vie",
     "moreFilters": "Plus de filtres",
@@ -729,7 +742,30 @@
     "sliderMin": "minimum",
     "sliderMax": "maximum",
     "sliderThreshold": "seuil minimum",
-    "noMinimum": "Aucun minimum"
+    "noMinimum": "Aucun minimum",
+    "climateZone": "Zone climatique",
+    "growthFormType": "Forme de croissance",
+    "woody": "Ligneux",
+    "climateZone_Tropical": "Tropical",
+    "climateZone_Arid": "Aride",
+    "climateZone_Mediterranean": "Méditerranéen",
+    "climateZone_Subtropical": "Subtropical",
+    "climateZone_Temperate": "Tempéré",
+    "climateZone_Continental": "Continental",
+    "climateZone_Boreal": "Boréal",
+    "growthFormType_Herb": "Herbe",
+    "growthFormType_Shrub": "Arbuste",
+    "growthFormType_Tree": "Arbre",
+    "growthFormType_Epiphyte": "Épiphyte",
+    "growthFormType_Vine": "Liane",
+    "growthFormType_Graminoid": "Graminoïde",
+    "growthFormType_Subshrub": "Sous-arbrisseau",
+    "growthFormType_Forb": "Herbacée",
+    "growthFormType_Fern": "Fougère",
+    "field.stratum": "Strate",
+    "field.hardinessZoneMin": "Zone de rusticité min",
+    "field.hardinessZoneMax": "Zone de rusticité max",
+    "field.heightMax": "Hauteur max (m)"
   },
   "favorites": {
     "empty": "Aucun favori pour le moment",

@@ -1,6 +1,7 @@
 import { signal } from "@preact/signals";
 import { activePanel, navigateTo } from "../state/app";
 import { currentCanvasHasSelection, getCurrentCanvasSession, setCurrentCanvasTool } from "../canvas/session";
+import { isEditableTarget } from "../canvas/runtime/interaction/pointer-utils";
 import {
   COMMAND_PALETTE_SHORTCUT_KEY,
   canvasToolKeys,
@@ -26,8 +27,7 @@ export function initShortcuts() {
 
   _keydownHandler = (e: KeyboardEvent) => {
     // Don't capture when typing in inputs
-    const tag = (e.target as HTMLElement).tagName;
-    const isInput = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+    const isInput = isEditableTarget(e.target);
 
     // Ctrl+Shift+P — command palette
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === COMMAND_PALETTE_SHORTCUT_KEY) {
@@ -93,9 +93,27 @@ export function initShortcuts() {
       }
     }
 
-    // Canvas object operations — only when canvas panel is active and not in input
+    // Canvas operations — only when canvas panel is active and not in input
     const session = getCurrentCanvasSession()
     if (activePanel.value === "canvas" && !isInput && session) {
+      // Ctrl+= — zoom in
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "=") {
+        e.preventDefault();
+        session.zoomIn();
+        return;
+      }
+      // Ctrl+- — zoom out
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "-") {
+        e.preventDefault();
+        session.zoomOut();
+        return;
+      }
+      // Ctrl+0 — fit to content
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "0") {
+        e.preventDefault();
+        session.zoomToFit();
+        return;
+      }
       // Ctrl+Z — undo
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "z") {
         e.preventDefault();

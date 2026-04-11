@@ -609,6 +609,21 @@
     "shadeTolerant": "음지 내성",
     "edible": "식용"
   },
+  "menu": {
+    "file": "파일",
+    "edit": "편집",
+    "view": "보기",
+    "file.new": "새 디자인",
+    "file.open": "디자인 열기",
+    "file.save": "저장",
+    "file.saveAs": "다른 이름으로 저장",
+    "file.exit": "종료",
+    "edit.undo": "실행 취소",
+    "edit.redo": "다시 실행",
+    "view.zoomIn": "확대",
+    "view.zoomOut": "축소",
+    "view.fitToContent": "콘텐츠에 맞추기"
+  },
   "titleBar": {
     "unsavedChanges": "저장되지 않은 변경사항"
   },
@@ -621,11 +636,9 @@
     "resize": "사이드바 크기 조절"
   },
   "filters": {
-    "stratum": "층위",
     "sun": "일조",
     "hardiness": "내한성",
     "edibility": "식용성",
-    "height": "높이",
     "nitrogen": "질소고정",
     "lifecycle": "생활주기",
     "moreFilters": "추가 필터",
@@ -729,7 +742,30 @@
     "sliderMin": "최소",
     "sliderMax": "최대",
     "sliderThreshold": "최소 기준값",
-    "noMinimum": "최소값 없음"
+    "noMinimum": "최소값 없음",
+    "climateZone": "기후대",
+    "growthFormType": "성장 형태",
+    "woody": "목본",
+    "climateZone_Tropical": "열대",
+    "climateZone_Arid": "건조",
+    "climateZone_Mediterranean": "지중해성",
+    "climateZone_Subtropical": "아열대",
+    "climateZone_Temperate": "온대",
+    "climateZone_Continental": "대륙성",
+    "climateZone_Boreal": "아한대",
+    "growthFormType_Herb": "초본",
+    "growthFormType_Shrub": "관목",
+    "growthFormType_Tree": "교목",
+    "growthFormType_Epiphyte": "착생식물",
+    "growthFormType_Vine": "덩굴식물",
+    "growthFormType_Graminoid": "벼과",
+    "growthFormType_Subshrub": "아관목",
+    "growthFormType_Forb": "넓은잎풀",
+    "growthFormType_Fern": "양치류",
+    "field.stratum": "층위",
+    "field.hardinessZoneMin": "내한성 구역 최소",
+    "field.hardinessZoneMax": "내한성 구역 최대",
+    "field.heightMax": "최대 높이 (m)"
   },
   "favorites": {
     "empty": "즐겨찾기가 없습니다",

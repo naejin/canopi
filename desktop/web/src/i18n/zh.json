@@ -609,6 +609,21 @@
     "shadeTolerant": "耐阴植物",
     "edible": "可食用"
   },
+  "menu": {
+    "file": "文件",
+    "edit": "编辑",
+    "view": "视图",
+    "file.new": "新建设计",
+    "file.open": "打开设计",
+    "file.save": "保存",
+    "file.saveAs": "另存为",
+    "file.exit": "退出",
+    "edit.undo": "撤销",
+    "edit.redo": "重做",
+    "view.zoomIn": "放大",
+    "view.zoomOut": "缩小",
+    "view.fitToContent": "适应内容"
+  },
   "titleBar": {
     "unsavedChanges": "未保存的更改"
   },
@@ -621,11 +636,9 @@
     "resize": "调整侧边栏大小"
   },
   "filters": {
-    "stratum": "层级",
     "sun": "光照",
     "hardiness": "耐寒性",
     "edibility": "可食性",
-    "height": "高度",
     "nitrogen": "固氮",
     "lifecycle": "生命周期",
     "moreFilters": "更多筛选",
@@ -729,7 +742,30 @@
     "sliderMin": "最小值",
     "sliderMax": "最大值",
     "sliderThreshold": "最低阈值",
-    "noMinimum": "无最小值"
+    "noMinimum": "无最小值",
+    "climateZone": "气候带",
+    "growthFormType": "生长形态",
+    "woody": "木本",
+    "climateZone_Tropical": "热带",
+    "climateZone_Arid": "干旱",
+    "climateZone_Mediterranean": "地中海",
+    "climateZone_Subtropical": "亚热带",
+    "climateZone_Temperate": "温带",
+    "climateZone_Continental": "大陆性",
+    "climateZone_Boreal": "寒带",
+    "growthFormType_Herb": "草本",
+    "growthFormType_Shrub": "灌木",
+    "growthFormType_Tree": "乔木",
+    "growthFormType_Epiphyte": "附生植物",
+    "growthFormType_Vine": "藤本",
+    "growthFormType_Graminoid": "禾草",
+    "growthFormType_Subshrub": "亚灌木",
+    "growthFormType_Forb": "阔叶草本",
+    "growthFormType_Fern": "蕨类",
+    "field.stratum": "层次",
+    "field.hardinessZoneMin": "耐寒区最小",
+    "field.hardinessZoneMax": "耐寒区最大",
+    "field.heightMax": "最大高度 (m)"
   },
   "favorites": {
     "empty": "暂无收藏",

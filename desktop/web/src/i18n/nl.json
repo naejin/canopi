@@ -609,6 +609,21 @@
     "shadeTolerant": "Schaduwverdragend",
     "edible": "Eetbaar"
   },
+  "menu": {
+    "file": "Bestand",
+    "edit": "Bewerken",
+    "view": "Beeld",
+    "file.new": "Nieuw ontwerp",
+    "file.open": "Ontwerp openen",
+    "file.save": "Opslaan",
+    "file.saveAs": "Opslaan als",
+    "file.exit": "Afsluiten",
+    "edit.undo": "Ongedaan maken",
+    "edit.redo": "Opnieuw",
+    "view.zoomIn": "Inzoomen",
+    "view.zoomOut": "Uitzoomen",
+    "view.fitToContent": "Aanpassen aan inhoud"
+  },
   "titleBar": {
     "unsavedChanges": "Niet-opgeslagen wijzigingen"
   },
@@ -621,11 +636,9 @@
     "resize": "Zijbalk aanpassen"
   },
   "filters": {
-    "stratum": "Laag",
     "sun": "Zon",
     "hardiness": "Winterhardheid",
     "edibility": "Eetbaarheid",
-    "height": "Hoogte",
     "nitrogen": "N₂-fixeerder",
     "lifecycle": "Levenscyclus",
     "moreFilters": "Meer filters",
@@ -729,7 +742,30 @@
     "sliderMin": "minimum",
     "sliderMax": "maximum",
     "sliderThreshold": "minimumdrempel",
-    "noMinimum": "Geen minimum"
+    "noMinimum": "Geen minimum",
+    "climateZone": "Klimaatzone",
+    "growthFormType": "Groeivorm",
+    "woody": "Houtig",
+    "climateZone_Tropical": "Tropisch",
+    "climateZone_Arid": "Aride",
+    "climateZone_Mediterranean": "Mediterraan",
+    "climateZone_Subtropical": "Subtropisch",
+    "climateZone_Temperate": "Gematigd",
+    "climateZone_Continental": "Continentaal",
+    "climateZone_Boreal": "Boreaal",
+    "growthFormType_Herb": "Kruid",
+    "growthFormType_Shrub": "Struik",
+    "growthFormType_Tree": "Boom",
+    "growthFormType_Epiphyte": "Epifyt",
+    "growthFormType_Vine": "Klimplant",
+    "growthFormType_Graminoid": "Gras",
+    "growthFormType_Subshrub": "Halfstruik",
+    "growthFormType_Forb": "Kruidachtige",
+    "growthFormType_Fern": "Varen",
+    "field.stratum": "Laag",
+    "field.hardinessZoneMin": "Winterhardheidszone min",
+    "field.hardinessZoneMax": "Winterhardheidszone max",
+    "field.heightMax": "Max. hoogte (m)"
   },
   "favorites": {
     "empty": "Nog geen favorieten",

@@ -3,6 +3,7 @@ import { designName, designDirty } from '../../state/document'
 import { activePanel, locale, theme, persistCurrentSettings } from '../../state/app'
 import { t } from '../../i18n'
 import { Dropdown, type DropdownItem } from './Dropdown'
+import { MenuBar } from './MenuBar'
 import styles from './TitleBar.module.css'
 
 const LOCALES = ['en', 'fr', 'es', 'pt', 'it', 'zh', 'de', 'ja', 'ko', 'nl', 'ru'] as const
@@ -51,7 +52,7 @@ export function TitleBar() {
     if (e.buttons !== 1) return
     // Don't drag if clicking on a window control button
     const target = e.target as HTMLElement
-    if (target.closest('button')) return
+    if (target.closest('button, [role="menu"], [role="menubar"], [role="menuitem"]')) return
 
     if (e.detail === 2) {
       void appWindow.toggleMaximize()
@@ -62,7 +63,7 @@ export function TitleBar() {
 
   return (
     <div className={styles.titleBar} onMouseDown={handleMouseDown}>
-      {/* Left: Logo + file name */}
+      {/* Left: Logo + menu bar */}
       <div className={styles.left}>
         <img
           src={new URL('../../assets/canopi-logo.svg', import.meta.url).href}
@@ -70,6 +71,11 @@ export function TitleBar() {
           alt="Canopi"
           draggable={false}
         />
+        <MenuBar />
+      </div>
+
+      {/* Center: file name + draggable spacer */}
+      <div className={styles.dragRegion}>
         {showsDocumentName && name && name !== 'Untitled' && (
           <span className={styles.fileName}>
             {name}
@@ -77,9 +83,6 @@ export function TitleBar() {
           </span>
         )}
       </div>
-
-      {/* Center: Spacer — draggable via parent onMouseDown */}
-      <div className={styles.dragRegion} />
 
       {/* Right controls: language + theme */}
       <div className={styles.settings}>

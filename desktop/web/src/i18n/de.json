@@ -609,6 +609,21 @@
     "shadeTolerant": "Schattentolerant",
     "edible": "Essbar"
   },
+  "menu": {
+    "file": "Datei",
+    "edit": "Bearbeiten",
+    "view": "Ansicht",
+    "file.new": "Neues Design",
+    "file.open": "Design offnen",
+    "file.save": "Speichern",
+    "file.saveAs": "Speichern unter",
+    "file.exit": "Beenden",
+    "edit.undo": "Ruckgangig",
+    "edit.redo": "Wiederholen",
+    "view.zoomIn": "Vergrossern",
+    "view.zoomOut": "Verkleinern",
+    "view.fitToContent": "An Inhalt anpassen"
+  },
   "titleBar": {
     "unsavedChanges": "Ungespeicherte Änderungen"
   },
@@ -621,11 +636,9 @@
     "resize": "Seitenleiste anpassen"
   },
   "filters": {
-    "stratum": "Schicht",
     "sun": "Sonne",
     "hardiness": "Winterhärte",
     "edibility": "Essbarkeit",
-    "height": "Höhe",
     "nitrogen": "N₂-Fixierer",
     "lifecycle": "Lebenszyklus",
     "moreFilters": "Weitere Filter",
@@ -729,7 +742,30 @@
     "sliderMin": "Minimum",
     "sliderMax": "Maximum",
     "sliderThreshold": "Mindestschwelle",
-    "noMinimum": "Kein Minimum"
+    "noMinimum": "Kein Minimum",
+    "climateZone": "Klimazone",
+    "growthFormType": "Wuchsform",
+    "woody": "Holzig",
+    "climateZone_Tropical": "Tropisch",
+    "climateZone_Arid": "Arid",
+    "climateZone_Mediterranean": "Mediterran",
+    "climateZone_Subtropical": "Subtropisch",
+    "climateZone_Temperate": "Gemäßigt",
+    "climateZone_Continental": "Kontinental",
+    "climateZone_Boreal": "Boreal",
+    "growthFormType_Herb": "Kraut",
+    "growthFormType_Shrub": "Strauch",
+    "growthFormType_Tree": "Baum",
+    "growthFormType_Epiphyte": "Epiphyt",
+    "growthFormType_Vine": "Kletterpflanze",
+    "growthFormType_Graminoid": "Gras",
+    "growthFormType_Subshrub": "Halbstrauch",
+    "growthFormType_Forb": "Staude",
+    "growthFormType_Fern": "Farn",
+    "field.stratum": "Schicht",
+    "field.hardinessZoneMin": "Härtezone min",
+    "field.hardinessZoneMax": "Härtezone max",
+    "field.heightMax": "Max. Höhe (m)"
   },
   "favorites": {
     "empty": "Noch keine Favoriten",

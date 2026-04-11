@@ -201,6 +201,9 @@ export class SceneCanvasRuntime implements CanvasRuntime {
     this._invalidate('viewport')
   }
 
+  get canUndo() { return this._history.canUndo }
+  get canRedo() { return this._history.canRedo }
+
   undo(): void {
     this._history.undo(this._historyRuntime())
     this._syncCanvasSignalsFromScene()

@@ -609,6 +609,21 @@
     "shadeTolerant": "Tolerante à sombra",
     "edible": "Comestível"
   },
+  "menu": {
+    "file": "Arquivo",
+    "edit": "Editar",
+    "view": "Ver",
+    "file.new": "Novo design",
+    "file.open": "Abrir design",
+    "file.save": "Salvar",
+    "file.saveAs": "Salvar como",
+    "file.exit": "Sair",
+    "edit.undo": "Desfazer",
+    "edit.redo": "Refazer",
+    "view.zoomIn": "Ampliar",
+    "view.zoomOut": "Reduzir",
+    "view.fitToContent": "Ajustar ao conteudo"
+  },
   "titleBar": {
     "unsavedChanges": "Alterações não salvas"
   },
@@ -621,11 +636,9 @@
     "resize": "Redimensionar painel"
   },
   "filters": {
-    "stratum": "Estrato",
     "sun": "Sol",
     "hardiness": "Rusticidade",
     "edibility": "Comestibilidade",
-    "height": "Altura",
     "nitrogen": "Fixador N₂",
     "lifecycle": "Ciclo de vida",
     "moreFilters": "Mais filtros",
@@ -729,7 +742,30 @@
     "sliderMin": "mínimo",
     "sliderMax": "máximo",
     "sliderThreshold": "limiar mínimo",
-    "noMinimum": "Sem mínimo"
+    "noMinimum": "Sem mínimo",
+    "climateZone": "Zona climática",
+    "growthFormType": "Forma de crescimento",
+    "woody": "Lenhoso",
+    "climateZone_Tropical": "Tropical",
+    "climateZone_Arid": "Árido",
+    "climateZone_Mediterranean": "Mediterrâneo",
+    "climateZone_Subtropical": "Subtropical",
+    "climateZone_Temperate": "Temperado",
+    "climateZone_Continental": "Continental",
+    "climateZone_Boreal": "Boreal",
+    "growthFormType_Herb": "Erva",
+    "growthFormType_Shrub": "Arbusto",
+    "growthFormType_Tree": "Árvore",
+    "growthFormType_Epiphyte": "Epífita",
+    "growthFormType_Vine": "Trepadeira",
+    "growthFormType_Graminoid": "Graminoide",
+    "growthFormType_Subshrub": "Subarbusto",
+    "growthFormType_Forb": "Herbácea",
+    "growthFormType_Fern": "Samambaia",
+    "field.stratum": "Estrato",
+    "field.hardinessZoneMin": "Zona de rusticidade mín",
+    "field.hardinessZoneMax": "Zona de rusticidade máx",
+    "field.heightMax": "Altura máx (m)"
   },
   "favorites": {
     "empty": "Nenhum favorito ainda",

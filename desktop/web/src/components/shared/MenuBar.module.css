@@ -1,0 +1,123 @@
+.menuBar {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  flex-shrink: 0;
+}
+
+.menuGroup {
+  position: relative;
+}
+
+.trigger {
+  display: flex;
+  align-items: center;
+  height: var(--control-size-md);
+  padding: 0 var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.trigger:hover {
+  color: var(--color-text);
+  background: var(--color-control-hover);
+}
+
+.triggerOpen {
+  color: var(--color-text);
+  background: var(--color-primary-bg);
+}
+
+.trigger:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+/* Menu dropdown panel */
+.menu {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  min-width: 180px;
+  padding: var(--space-1) 0;
+  z-index: 100;
+  opacity: 0;
+  animation: menuIn var(--transition-enter) forwards;
+}
+
+@keyframes menuIn {
+  to {
+    opacity: 1;
+  }
+}
+
+/* Menu item */
+.item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  width: 100%;
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--color-text);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.item:hover {
+  background: var(--color-primary-bg);
+}
+
+.item:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.itemDisabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.itemLabel {
+  flex: 1;
+}
+
+.itemShortcut {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  margin-left: var(--space-4);
+}
+
+/* Separator */
+.separator {
+  height: 1px;
+  background: var(--color-border);
+  margin: var(--space-1) 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trigger,
+  .item {
+    transition: none;
+  }
+  .menu {
+    animation: none;
+    opacity: 1;
+  }
+}

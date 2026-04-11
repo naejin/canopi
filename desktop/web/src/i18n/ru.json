@@ -609,6 +609,21 @@
     "shadeTolerant": "Теневыносливые",
     "edible": "Съедобные"
   },
+  "menu": {
+    "file": "Файл",
+    "edit": "Правка",
+    "view": "Вид",
+    "file.new": "Новый дизайн",
+    "file.open": "Открыть дизайн",
+    "file.save": "Сохранить",
+    "file.saveAs": "Сохранить как",
+    "file.exit": "Выход",
+    "edit.undo": "Отменить",
+    "edit.redo": "Повторить",
+    "view.zoomIn": "Увеличить",
+    "view.zoomOut": "Уменьшить",
+    "view.fitToContent": "По содержимому"
+  },
   "titleBar": {
     "unsavedChanges": "Несохранённые изменения"
   },
@@ -621,11 +636,9 @@
     "resize": "Изменить размер боковой панели"
   },
   "filters": {
-    "stratum": "Ярус",
     "sun": "Солнце",
     "hardiness": "Морозостойкость",
     "edibility": "Съедобность",
-    "height": "Высота",
     "nitrogen": "Фиксатор N₂",
     "lifecycle": "Жизненный цикл",
     "moreFilters": "Больше фильтров",
@@ -729,7 +742,30 @@
     "sliderMin": "минимум",
     "sliderMax": "максимум",
     "sliderThreshold": "минимальный порог",
-    "noMinimum": "Без минимума"
+    "noMinimum": "Без минимума",
+    "climateZone": "Климатическая зона",
+    "growthFormType": "Форма роста",
+    "woody": "Древесный",
+    "climateZone_Tropical": "Тропический",
+    "climateZone_Arid": "Аридный",
+    "climateZone_Mediterranean": "Средиземноморский",
+    "climateZone_Subtropical": "Субтропический",
+    "climateZone_Temperate": "Умеренный",
+    "climateZone_Continental": "Континентальный",
+    "climateZone_Boreal": "Бореальный",
+    "growthFormType_Herb": "Трава",
+    "growthFormType_Shrub": "Кустарник",
+    "growthFormType_Tree": "Дерево",
+    "growthFormType_Epiphyte": "Эпифит",
+    "growthFormType_Vine": "Лиана",
+    "growthFormType_Graminoid": "Злак",
+    "growthFormType_Subshrub": "Полукустарник",
+    "growthFormType_Forb": "Разнотравье",
+    "growthFormType_Fern": "Папоротник",
+    "field.stratum": "Ярус",
+    "field.hardinessZoneMin": "Зона морозостойкости мин",
+    "field.hardinessZoneMax": "Зона морозостойкости макс",
+    "field.heightMax": "Макс. высота (м)"
   },
   "favorites": {
     "empty": "Избранного пока нет",

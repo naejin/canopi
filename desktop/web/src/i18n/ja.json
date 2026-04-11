@@ -609,6 +609,21 @@
     "shadeTolerant": "耐陰性植物",
     "edible": "食用"
   },
+  "menu": {
+    "file": "ファイル",
+    "edit": "編集",
+    "view": "表示",
+    "file.new": "新規デザイン",
+    "file.open": "デザインを開く",
+    "file.save": "保存",
+    "file.saveAs": "名前を付けて保存",
+    "file.exit": "終了",
+    "edit.undo": "元に戻す",
+    "edit.redo": "やり直し",
+    "view.zoomIn": "拡大",
+    "view.zoomOut": "縮小",
+    "view.fitToContent": "コンテンツに合わせる"
+  },
   "titleBar": {
     "unsavedChanges": "未保存の変更"
   },
@@ -621,11 +636,9 @@
     "resize": "サイドバーのサイズを変更"
   },
   "filters": {
-    "stratum": "階層",
     "sun": "日照",
     "hardiness": "耐寒性",
     "edibility": "食用性",
-    "height": "高さ",
     "nitrogen": "窒素固定",
     "lifecycle": "ライフサイクル",
     "moreFilters": "その他のフィルター",
@@ -729,7 +742,30 @@
     "sliderMin": "最小",
     "sliderMax": "最大",
     "sliderThreshold": "最小しきい値",
-    "noMinimum": "最小値なし"
+    "noMinimum": "最小値なし",
+    "climateZone": "気候帯",
+    "growthFormType": "成長形態",
+    "woody": "木本",
+    "climateZone_Tropical": "熱帯",
+    "climateZone_Arid": "乾燥",
+    "climateZone_Mediterranean": "地中海性",
+    "climateZone_Subtropical": "亜熱帯",
+    "climateZone_Temperate": "温帯",
+    "climateZone_Continental": "大陸性",
+    "climateZone_Boreal": "亜寒帯",
+    "growthFormType_Herb": "草本",
+    "growthFormType_Shrub": "低木",
+    "growthFormType_Tree": "高木",
+    "growthFormType_Epiphyte": "着生植物",
+    "growthFormType_Vine": "つる植物",
+    "growthFormType_Graminoid": "イネ科植物",
+    "growthFormType_Subshrub": "亜低木",
+    "growthFormType_Forb": "広葉草本",
+    "growthFormType_Fern": "シダ",
+    "field.stratum": "階層",
+    "field.hardinessZoneMin": "耐寒ゾーン最小",
+    "field.hardinessZoneMax": "耐寒ゾーン最大",
+    "field.heightMax": "最大高さ (m)"
   },
   "favorites": {
     "empty": "お気に入りはまだありません",

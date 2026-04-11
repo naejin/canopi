@@ -609,6 +609,21 @@
     "shadeTolerant": "Tollerante all'ombra",
     "edible": "Commestibile"
   },
+  "menu": {
+    "file": "File",
+    "edit": "Modifica",
+    "view": "Visualizza",
+    "file.new": "Nuovo design",
+    "file.open": "Apri design",
+    "file.save": "Salva",
+    "file.saveAs": "Salva con nome",
+    "file.exit": "Esci",
+    "edit.undo": "Annulla",
+    "edit.redo": "Ripristina",
+    "view.zoomIn": "Ingrandisci",
+    "view.zoomOut": "Riduci",
+    "view.fitToContent": "Adatta al contenuto"
+  },
   "titleBar": {
     "unsavedChanges": "Modifiche non salvate"
   },
@@ -621,11 +636,9 @@
     "resize": "Ridimensiona pannello"
   },
   "filters": {
-    "stratum": "Strato",
     "sun": "Sole",
     "hardiness": "Rusticità",
     "edibility": "Commestibilità",
-    "height": "Altezza",
     "nitrogen": "Fissatore N₂",
     "lifecycle": "Ciclo di vita",
     "moreFilters": "Altri filtri",
@@ -729,7 +742,30 @@
     "sliderMin": "minimo",
     "sliderMax": "massimo",
     "sliderThreshold": "soglia minima",
-    "noMinimum": "Nessun minimo"
+    "noMinimum": "Nessun minimo",
+    "climateZone": "Zona climatica",
+    "growthFormType": "Forma di crescita",
+    "woody": "Legnoso",
+    "climateZone_Tropical": "Tropicale",
+    "climateZone_Arid": "Arido",
+    "climateZone_Mediterranean": "Mediterraneo",
+    "climateZone_Subtropical": "Subtropicale",
+    "climateZone_Temperate": "Temperato",
+    "climateZone_Continental": "Continentale",
+    "climateZone_Boreal": "Boreale",
+    "growthFormType_Herb": "Erba",
+    "growthFormType_Shrub": "Arbusto",
+    "growthFormType_Tree": "Albero",
+    "growthFormType_Epiphyte": "Epifita",
+    "growthFormType_Vine": "Rampicante",
+    "growthFormType_Graminoid": "Graminoide",
+    "growthFormType_Subshrub": "Suffrutice",
+    "growthFormType_Forb": "Forba",
+    "growthFormType_Fern": "Felce",
+    "field.stratum": "Strato",
+    "field.hardinessZoneMin": "Zona di rusticità min",
+    "field.hardinessZoneMax": "Zona di rusticità max",
+    "field.heightMax": "Altezza max (m)"
   },
   "favorites": {
     "empty": "Nessun preferito ancora",

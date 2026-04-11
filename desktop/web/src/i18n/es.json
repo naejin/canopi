@@ -609,6 +609,21 @@
     "shadeTolerant": "Tolerante a la sombra",
     "edible": "Comestible"
   },
+  "menu": {
+    "file": "Archivo",
+    "edit": "Editar",
+    "view": "Ver",
+    "file.new": "Nuevo diseno",
+    "file.open": "Abrir diseno",
+    "file.save": "Guardar",
+    "file.saveAs": "Guardar como",
+    "file.exit": "Salir",
+    "edit.undo": "Deshacer",
+    "edit.redo": "Rehacer",
+    "view.zoomIn": "Acercar",
+    "view.zoomOut": "Alejar",
+    "view.fitToContent": "Ajustar al contenido"
+  },
   "titleBar": {
     "unsavedChanges": "Cambios sin guardar"
   },
@@ -621,11 +636,9 @@
     "resize": "Redimensionar panel"
   },
   "filters": {
-    "stratum": "Estrato",
     "sun": "Sol",
     "hardiness": "Rusticidad",
     "edibility": "Comestibilidad",
-    "height": "Altura",
     "nitrogen": "Fijador N₂",
     "lifecycle": "Ciclo de vida",
     "moreFilters": "Más filtros",
@@ -729,7 +742,30 @@
     "sliderMin": "mínimo",
     "sliderMax": "máximo",
     "sliderThreshold": "umbral mínimo",
-    "noMinimum": "Sin mínimo"
+    "noMinimum": "Sin mínimo",
+    "climateZone": "Zona climática",
+    "growthFormType": "Forma de crecimiento",
+    "woody": "Leñoso",
+    "climateZone_Tropical": "Tropical",
+    "climateZone_Arid": "Árido",
+    "climateZone_Mediterranean": "Mediterráneo",
+    "climateZone_Subtropical": "Subtropical",
+    "climateZone_Temperate": "Templado",
+    "climateZone_Continental": "Continental",
+    "climateZone_Boreal": "Boreal",
+    "growthFormType_Herb": "Hierba",
+    "growthFormType_Shrub": "Arbusto",
+    "growthFormType_Tree": "Árbol",
+    "growthFormType_Epiphyte": "Epífita",
+    "growthFormType_Vine": "Liana",
+    "growthFormType_Graminoid": "Graminoide",
+    "growthFormType_Subshrub": "Subarbusto",
+    "growthFormType_Forb": "Herbácea",
+    "growthFormType_Fern": "Helecho",
+    "field.stratum": "Estrato",
+    "field.hardinessZoneMin": "Zona de rusticidad mín",
+    "field.hardinessZoneMax": "Zona de rusticidad máx",
+    "field.heightMax": "Altura máx (m)"
   },
   "favorites": {
     "empty": "Aún no hay favoritos",

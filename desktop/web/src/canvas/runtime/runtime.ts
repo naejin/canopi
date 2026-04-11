@@ -1,3 +1,4 @@
+import type { ReadonlySignal } from '@preact/signals'
 import type { CanopiFile, PlacedPlant } from '../../types/design'
 import type { ColorByAttribute, PlantSizeMode } from '../../state/canvas'
 import type { SelectedPlantColorContext } from '../plant-color-context'
@@ -23,6 +24,8 @@ export interface CanvasRuntime {
   zoomIn(): void
   zoomOut(): void
   zoomToFit(): void
+  readonly canUndo: ReadonlySignal<boolean>
+  readonly canRedo: ReadonlySignal<boolean>
   undo(): void
   redo(): void
   copy(): void
