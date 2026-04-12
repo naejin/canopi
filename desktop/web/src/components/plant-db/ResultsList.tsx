@@ -16,6 +16,9 @@ import {
   viewMode,
   loadNextPage,
   searchText,
+  activeFilters,
+  extraFilters,
+  sortField,
   hasActiveFilters,
   retrySearch,
 } from '../../state/plant-db';
@@ -50,18 +53,26 @@ function makeVirtOpts(
 }
 
 export function ResultsList() {
-  void locale.value;
   const results = searchResults.value;
   const searching = isSearching.value;
   const error = searchError.value;
   const hasMore = nextCursor.value !== null;
   const mode = viewMode.value;
+  const activeLocale = locale.value;
+  const searchSignature = JSON.stringify({
+    text: searchText.value,
+    filters: activeFilters.value,
+    extras: extraFilters.value,
+    sort: sortField.value,
+    locale: activeLocale,
+  });
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const forceUpdate = useForceUpdate();
   const virtualizerRef = useRef<Virtualizer<HTMLDivElement, Element> | null>(null);
 
-  // Create/destroy Virtualizer when entering/leaving list mode
+  // Rebuild the virtualizer for each distinct search so stale range/scroll state
+  // from a previous query cannot leak into the next result set.
   useEffect(() => {
     if (mode !== 'list') {
       // Cleanup if switching away from list
@@ -71,6 +82,10 @@ export function ResultsList() {
         virtualizerRef.current = null;
       }
       return;
+    }
+
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = 0;
     }
 
     const handleChange = (instance: Virtualizer<HTMLDivElement, Element>) => {
@@ -90,9 +105,9 @@ export function ResultsList() {
       cleanup?.();
       virtualizerRef.current = null;
     };
-  // forceUpdate is stable (reducer dispatch), mode drives create/destroy
+  // forceUpdate is stable (reducer dispatch); rebuild on search changes
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode]);
+  }, [mode, searchSignature]);
 
   // Keep Virtualizer count in sync with searchResults signal changes
   useSignalEffect(() => {

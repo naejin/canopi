@@ -13,37 +13,37 @@ export function SearchBar() {
 
   return (
     <div className={styles.searchWrap}>
-      <input
-        type="search"
-        className={styles.searchInput}
-        value={text}
-        onInput={(e) => {
-          searchText.value = e.currentTarget.value;
-        }}
-        placeholder={t('plantDb.searchPlaceholder')}
-        aria-label={t('plantDb.searchPlaceholder')}
-      />
-      {text.length > 0 && (
-        <button
-          type="button"
-          className={styles.searchClear}
-          onClick={() => {
-            searchText.value = '';
+      <div className={styles.searchInputWrap}>
+        <input
+          type="search"
+          className={styles.searchInput}
+          value={text}
+          onInput={(e) => {
+            searchText.value = e.currentTarget.value;
           }}
-          aria-label={t('plantDb.clearSearch')}
-        >
-          ×
-        </button>
-      )}
-      {!searching && (
+          placeholder={t('plantDb.searchPlaceholder')}
+          aria-label={t('plantDb.searchPlaceholder')}
+        />
+        {text.length > 0 && (
+          <button
+            type="button"
+            className={styles.searchClear}
+            onClick={() => {
+              searchText.value = '';
+            }}
+            aria-label={t('plantDb.clearSearch')}
+          >
+            ×
+          </button>
+        )}
+      </div>
+      {!searching && count > 0 && (
         <span
-          className={`${styles.resultCount} ${text.length > 0 ? styles.resultCountShifted : ''}`}
+          className={styles.resultCount}
           aria-live="polite"
           aria-atomic="true"
         >
-          {count > 0
-            ? t('plantDb.resultsCount', { count })
-            : ''}
+          {t('plantDb.resultsCount', { count })}
         </span>
       )}
     </div>

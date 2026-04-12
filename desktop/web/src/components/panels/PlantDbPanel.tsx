@@ -13,6 +13,7 @@ import { SearchBar } from '../plant-db/SearchBar'
 import { FilterStrip } from '../plant-db/FilterStrip'
 import { ActiveChips } from '../plant-db/ActiveChips'
 import { ResultsList } from '../plant-db/ResultsList'
+import { ViewModeToggle } from '../plant-db/ViewModeToggle'
 import { MoreFiltersPanel } from '../plant-db/MoreFiltersPanel'
 import { PlantDetailCard } from '../plant-detail/PlantDetailCard'
 import plantDetailStyles from '../plant-detail/PlantDetail.module.css'
@@ -46,6 +47,7 @@ export function PlantDbPanel() {
         {/* Search header */}
         <div className={styles.searchHeader}>
           <SearchBar />
+          <ViewModeToggle />
         </div>
 
         {/* Always-visible filter strip */}

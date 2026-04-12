@@ -33,6 +33,8 @@
 - Components use CSS Modules, reference tokens (never raw values)
 - **CSS Modules `composes:` for variant classes**: When a modifier class shares most properties with a base class (e.g., `.commonNameFallback` vs `.commonName`), use `composes: baseClass` and override only the differing properties. Avoids copy-paste duplication
 - Dark theme via `[data-theme="dark"]` on `<html>`
+- **No `type="search"` native clear button**: WebKitGTK renders its own clear button on search inputs. Hide with `::-webkit-search-cancel-button { -webkit-appearance: none; display: none; }` when using a custom clear button
+- **SearchBar layout is flex, not absolute overlay**: The result count is a flex sibling of the input wrapper, not absolutely positioned inside it. Absolute positioning of variable-width text (counts, translations) inside inputs breaks across languages. Only the clear button is absolutely positioned inside its own `.searchInputWrap`
 - **No hardcoded px values**: All spacing must use `var(--space-N)` tokens (4/8/12/16/24/28/32/48px). All font-sizes must use `var(--text-*)` tokens (xs=11/sm=12/base=13/md=14/lg=16/xl=20). All border-radius must use `var(--radius-*)` tokens (sm=3/md=5/lg=7/full=9999). Control sizes must use `var(--control-size-*)` tokens (xs=20/sm=24/md=28/lg=32/xl=34/window=44). Slider dimensions must use `var(--slider-thumb-size)` (12px) and `var(--slider-track-size)` (2px). No invented sizes (6px, 10px, 14px, 22px etc.) — see `.interface-design/system.md` for the allowed scales
 - **Transition timing**: Use `var(--transition-fast)` (80ms ease) for color/bg/border hover states, `var(--transition-normal)` (150ms ease) for transform/layout shifts, `var(--transition-enter)` (200ms ease-out) for panel slide/fade enter. Always use `ms` units, never `s`
 - **Dark mode token audit**: When adding CSS that uses `--color-*` tokens as foreground text/border, verify the token has a dark mode override in `global.css` `[data-theme="dark"]`. Check contrast ratio >= 4.5:1 against `--color-bg`
@@ -82,11 +84,13 @@
 ## Shared Utilities
 - **`canvas/plant-grouping.ts`**: `groupPlantsBySpecies(plants, localizedNames)` — shared between `budget-helpers.ts` (BudgetTab) and `consortium-renderer.ts`. Do not duplicate plant-counting loops
 - **`Intl.NumberFormat` must be cached**: Construction is expensive (~0.5ms each). `budget-helpers.ts` caches formatters per currency string in a module-level `Map`. Do not create `new Intl.NumberFormat()` in render loops
+- **PlantCard must mirror PlantRow data presentation**: Both use `fmtHeight()` for heights, `STRATUM_I18N_KEY` for translated strata, colored `.tag` classes (family/hardiness/height/stratum/edibility), and identical drag data format (canonical_name, common_name, stratum, width_max_m). When updating one, update the other
 
 ## Canvas Overlay Styling
 - Canvas runtime overlay modules (`.ts`, not `.tsx`) use **inline styles with CSS custom properties** — no CSS Module imports from plain `.ts` files (only `.tsx` components use CSS Modules in this project)
 
 ## Preact / Signals Gotchas
+- **Virtualizer must reset on search signature change**: The `@tanstack/virtual-core` instance in `ResultsList` must be recreated when search results change from a new query (not just appended via pagination). Without this, stale virtualizer state shows wrong item counts. The scroll container must also scroll to top on new queries
 - **Stale async guard: one monotonic counter ref is enough**: For async effects that fire-and-forget (image loads, IPC calls), a single `useRef` counter incremented on each effect run guards against all staleness — across both prop changes and internal state changes. Don't layer a second ref tracking the prop value; the counter already subsumes it
 - **JSX `onWheel` is passive by default**: Browsers register JSX wheel handlers as passive — `preventDefault()` silently fails. Use imperative `addEventListener('wheel', handler, { passive: false })` in a `useEffect` instead
 - **Use refs (not signals) for keyboard focus tracking**: Non-reactive state like `focusedDay` in grid navigation should be a `useRef`, not a `useSignal`. Signal writes during render (`focusedDay.value = computedValue`) cause double-renders. Refs are read during render for `tabIndex` and written in event handlers — re-renders come from prop/signal changes that already trigger them (e.g., month change)
