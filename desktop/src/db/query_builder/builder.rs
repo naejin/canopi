@@ -5,6 +5,47 @@ use super::columns::sort_column;
 use super::cursor::decode_cursor;
 use super::filters::append_structured_filters;
 
+/// Sanitize text for FTS5 MATCH, returning `None` if nothing useful remains.
+pub(crate) fn sanitize_fts_text(text: &str) -> Option<String> {
+    let sanitized = text.replace(|c: char| r#""()*+-^:\"#.contains(c), "");
+    let trimmed = sanitized.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(format!("{trimmed}*"))
+    }
+}
+
+/// Builds a `SELECT COUNT(*)` query using the same FTS + filter logic as the
+/// full search query, but without locale JOINs, cursor, ORDER BY, or LIMIT.
+pub(crate) fn build_count_query(
+    text: Option<&str>,
+    filters: &SpeciesFilter,
+) -> (String, Vec<Value>) {
+    let mut params: Vec<Value> = Vec::new();
+    let mut where_clauses: Vec<String> = Vec::new();
+
+    let fts_join = match text.and_then(sanitize_fts_text) {
+        Some(term) => {
+            where_clauses.push(format!("species_search_fts MATCH ?{}", params.len() + 1));
+            params.push(Value::Text(term));
+            "JOIN species_search_fts ON species_search_fts.rowid = s.rowid"
+        }
+        None => "",
+    };
+
+    append_structured_filters(&mut where_clauses, &mut params, filters);
+
+    let where_sql = if where_clauses.is_empty() {
+        String::new()
+    } else {
+        format!("WHERE {}", where_clauses.join(" AND "))
+    };
+
+    let sql = format!("SELECT COUNT(*) FROM species s {fts_join} {where_sql}");
+    (sql, params)
+}
+
 /// Builds the complete search SQL and its bound parameter list.
 ///
 /// Returns `(sql, params)` ready for `conn.prepare(&sql)` followed by
@@ -53,18 +94,13 @@ impl QueryBuilder {
         params.push(Value::Text(self.locale));
         params.push(Value::Text("en".to_owned()));
 
-        let fts_join = if let Some(ref text) = self.text {
-            let sanitized = text.replace(|character: char| r#""()*+-^:\"#.contains(character), "");
-            if sanitized.trim().is_empty() {
-                None
-            } else {
-                let search_term = format!("{}*", sanitized.trim());
+        let fts_join = match self.text.as_deref().and_then(sanitize_fts_text) {
+            Some(search_term) => {
                 where_clauses.push(format!("species_search_fts MATCH ?{}", params.len() + 1));
                 params.push(Value::Text(search_term));
                 Some("JOIN species_search_fts ON species_search_fts.rowid = s.rowid".to_owned())
             }
-        } else {
-            None
+            None => None,
         };
 
         let uses_relevance_offset = matches!(self.sort, Sort::Relevance) && fts_join.is_some();

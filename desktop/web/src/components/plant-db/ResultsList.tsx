@@ -137,11 +137,7 @@ export function ResultsList() {
           <button
             type="button"
             className={styles.retryBtn}
-            onClick={() => {
-              // Trigger re-search by nudging the sort signal (safe side-effect)
-              const s = searchText.value;
-              searchText.value = s;
-            }}
+            onClick={() => retrySearch()}
           >
             {t('plantDb.retry')}
           </button>

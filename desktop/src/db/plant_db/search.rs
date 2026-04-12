@@ -1,7 +1,10 @@
 use common_types::species::{PaginatedResult, Sort, SpeciesFilter, SpeciesListItem};
 use rusqlite::{Connection, params_from_iter};
 
-use crate::db::query_builder::{QueryBuilder, decode_relevance_offset, encode_cursor, sort_column};
+use crate::db::query_builder::{
+    QueryBuilder, build_count_query, decode_relevance_offset, encode_cursor, sanitize_fts_text,
+    sort_column,
+};
 
 /// Searches species using FTS5, structured filters, or both.
 ///
@@ -17,12 +20,22 @@ pub fn search(
     locale: String,
 ) -> Result<PaginatedResult<SpeciesListItem>, String> {
     let is_relevance_sort = matches!(sort, Sort::Relevance);
+    let uses_relevance_offset =
+        is_relevance_sort && text.as_deref().and_then(sanitize_fts_text).is_some();
     let sort_col = sort_column(&sort).to_owned();
-    let relevance_offset = if is_relevance_sort && text.is_some() {
+    let relevance_offset = if uses_relevance_offset {
         decode_relevance_offset(cursor.as_deref()).unwrap_or(0)
     } else {
         0
     };
+
+    let (count_sql, count_params) = build_count_query(text.as_deref(), &filters);
+    let total_estimate = conn
+        .query_row(&count_sql, params_from_iter(count_params.iter()), |row| {
+            row.get::<_, u32>(0)
+        })
+        .map_err(|e| format!("Failed to count species search results: {e}"))?;
+
     let qb = QueryBuilder::new(text, filters, cursor, sort, limit, locale);
     let (sql, params) = qb.build();
 
@@ -65,7 +78,7 @@ pub fn search(
     let items: Vec<SpeciesListItem> = rows.into_iter().take(limit as usize).collect();
 
     let next_cursor = if has_next {
-        if is_relevance_sort {
+        if uses_relevance_offset {
             Some(format!("offset:{}", relevance_offset + items.len() as u32))
         } else {
             items.last().map(|last| {
@@ -92,7 +105,7 @@ pub fn search(
     Ok(PaginatedResult {
         items,
         next_cursor,
-        total_estimate: 0,
+        total_estimate,
     })
 }
 
@@ -180,6 +193,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(first.items.len(), 1);
+        assert_eq!(first.total_estimate, 2);
         assert_eq!(first.next_cursor.as_deref(), Some("offset:1"));
 
         let second = search(
@@ -217,17 +231,135 @@ mod tests {
         .unwrap();
 
         assert_eq!(result.items.len(), 2);
+        assert_eq!(result.total_estimate, 2);
 
         // Species 1 has French names -> locale name + secondary, no fallback
-        let alpha = result.items.iter().find(|i| i.canonical_name == "Lavandula alpha").unwrap();
+        let alpha = result
+            .items
+            .iter()
+            .find(|i| i.canonical_name == "Lavandula alpha")
+            .unwrap();
         assert_eq!(alpha.common_name.as_deref(), Some("Lavande Alpha"));
         assert_eq!(alpha.common_name_2.as_deref(), Some("Lavande vraie"));
         assert!(!alpha.is_name_fallback);
 
         // Species 2 has no French names -> English fallback, no secondary
-        let beta = result.items.iter().find(|i| i.canonical_name == "Lavandula beta").unwrap();
+        let beta = result
+            .items
+            .iter()
+            .find(|i| i.canonical_name == "Lavandula beta")
+            .unwrap();
         assert_eq!(beta.common_name.as_deref(), Some("Lavender Beta"));
         assert_eq!(beta.common_name_2, None);
         assert!(beta.is_name_fallback);
+    }
+
+    #[test]
+    fn total_estimate_reflects_text_filter() {
+        let conn = test_db();
+
+        let result = search(
+            &conn,
+            Some("alpha".to_owned()),
+            SpeciesFilter::default(),
+            None,
+            Sort::Name,
+            10,
+            "en".to_owned(),
+        )
+        .unwrap();
+
+        assert_eq!(result.total_estimate, 1);
+        assert_eq!(result.items.len(), 1);
+        assert_eq!(result.items[0].canonical_name, "Lavandula alpha");
+    }
+
+    #[test]
+    fn blank_relevance_search_falls_back_to_name_cursor_pagination() {
+        let conn = test_db();
+
+        let first = search(
+            &conn,
+            Some("\" () + -".to_owned()),
+            SpeciesFilter::default(),
+            None,
+            Sort::Relevance,
+            1,
+            "en".to_owned(),
+        )
+        .unwrap();
+
+        assert_eq!(first.total_estimate, 2);
+        assert_eq!(first.items.len(), 1);
+        let next_cursor = first.next_cursor.clone().expect("expected cursor");
+        assert!(!next_cursor.starts_with("offset:"));
+
+        let second = search(
+            &conn,
+            Some("\" () + -".to_owned()),
+            SpeciesFilter::default(),
+            Some(next_cursor),
+            Sort::Relevance,
+            1,
+            "en".to_owned(),
+        )
+        .unwrap();
+
+        assert_eq!(second.items.len(), 1);
+        assert_ne!(
+            first.items[0].canonical_name,
+            second.items[0].canonical_name
+        );
+        assert_eq!(second.next_cursor, None);
+    }
+
+    #[test]
+    fn count_query_errors_are_returned() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE species (
+                id INTEGER PRIMARY KEY,
+                canonical_name TEXT NOT NULL,
+                slug TEXT NOT NULL,
+                common_name TEXT,
+                family TEXT,
+                genus TEXT,
+                height_max_m REAL,
+                hardiness_zone_min INTEGER,
+                hardiness_zone_max INTEGER,
+                growth_rate TEXT,
+                stratum TEXT,
+                edibility_rating INTEGER,
+                medicinal_rating INTEGER,
+                width_max_m REAL
+            );
+            CREATE TABLE best_common_names (
+                species_id INTEGER NOT NULL,
+                language TEXT NOT NULL,
+                common_name TEXT NOT NULL,
+                PRIMARY KEY (species_id, language)
+            );
+            CREATE TABLE species_common_names (
+                species_id INTEGER NOT NULL,
+                common_name TEXT NOT NULL,
+                language TEXT NOT NULL,
+                is_primary INTEGER NOT NULL DEFAULT 0,
+                source TEXT
+            );",
+        )
+        .unwrap();
+
+        let error = search(
+            &conn,
+            Some("lavender".to_owned()),
+            SpeciesFilter::default(),
+            None,
+            Sort::Relevance,
+            10,
+            "en".to_owned(),
+        )
+        .unwrap_err();
+
+        assert!(error.contains("Failed to count species search results"));
     }
 }

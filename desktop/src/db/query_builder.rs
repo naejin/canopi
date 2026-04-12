@@ -4,7 +4,9 @@ mod cursor;
 mod filters;
 
 pub use builder::QueryBuilder;
+pub(crate) use builder::build_count_query;
 pub(crate) use builder::decode_relevance_offset;
+pub(crate) use builder::sanitize_fts_text;
 pub use columns::sort_column;
 pub(crate) use columns::validated_column;
 #[allow(unused_imports)]
@@ -223,5 +225,36 @@ mod tests {
             _ => panic!("expected integer offset"),
         };
         assert_eq!(offset_val, 50);
+    }
+
+    #[test]
+    fn test_count_query_no_text_no_filters() {
+        let (sql, params) = build_count_query(None, &default_filter());
+        assert!(sql.contains("SELECT COUNT(*)"));
+        assert!(!sql.contains("species_search_fts"));
+        assert_eq!(params.len(), 0);
+    }
+
+    #[test]
+    fn test_count_query_with_text() {
+        let (sql, params) = build_count_query(Some("lavender"), &default_filter());
+        assert!(sql.contains("SELECT COUNT(*)"));
+        assert!(sql.contains("species_search_fts MATCH"));
+        assert_eq!(params.len(), 1);
+        match &params[0] {
+            Value::Text(s) => assert_eq!(s, "lavender*"),
+            _ => panic!("expected text param"),
+        }
+    }
+
+    #[test]
+    fn test_count_query_with_filters() {
+        let mut f = default_filter();
+        f.nitrogen_fixer = Some(true);
+        let (sql, params) = build_count_query(None, &f);
+        assert!(sql.contains("SELECT COUNT(*)"));
+        assert!(sql.contains("nitrogen_fixer = 1"));
+        assert!(!sql.contains("species_search_fts"));
+        assert_eq!(params.len(), 0);
     }
 }
