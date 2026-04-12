@@ -80,6 +80,7 @@ Konva / `CanvasEngine` code has been removed. Do not reintroduce Konva or `getEn
 - size mode and color mode are independent axes; do not reintroduce a combined `plantDisplayMode`
 - bounds, zoom-to-fit, grouping, renderers, and interaction must all consume the same resolved presentation state
 - species-cache backfill may enrich plant metadata, but production geometry should never depend on ad hoc empty-cache fallbacks
+- **Default-mode dot sizing is world-proportional**: `PLANT_WORLD_RADIUS = 0.12m` (24cm diameter) gives ~80% fill at 30cm spacing, ~48% at 50cm. Screen size is capped at `CIRCLE_SCREEN_PX` (8px) when zoomed in and floored at `MIN_SCREEN_PX` (2px) when zoomed far out. Do not reintroduce fixed screen-pixel sizing — it causes unreadable overlap in dense designs. Do not use `zoomReference` as a pivot — it's design-dependent and produces inconsistent behavior
 
 ### Hover & Tooltip Rules
 - `SceneInteractionController._updateHover()` hit-tests on idle `pointermove` (when `_pointerId === null`)

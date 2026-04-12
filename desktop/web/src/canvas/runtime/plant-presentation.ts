@@ -281,6 +281,11 @@ export function buildPlantPresentationSnapshot(
   }
 }
 
+// Fixed world radius for default-mode dots. 0.12m (24cm diameter) gives ~80%
+// fill at 30cm spacing and ~48% at 50cm — readable for typical dense designs.
+const PLANT_WORLD_RADIUS = 0.12
+const MIN_SCREEN_PX = 2
+
 function resolvePlantRadiusWorld(
   plant: ScenePlantEntity,
   context: PlantPresentationContext,
@@ -290,7 +295,13 @@ function resolvePlantRadiusWorld(
     if (canopySpreadM && canopySpreadM > 0) return canopySpreadM / 2
     return getFallbackWorldRadius(context.zoomReference)
   }
-  return CIRCLE_SCREEN_PX / Math.max(context.viewport.scale, 0.001)
+
+  const scale = Math.max(context.viewport.scale, 0.001)
+  const screenPx = PLANT_WORLD_RADIUS * scale
+
+  if (screenPx > CIRCLE_SCREEN_PX) return CIRCLE_SCREEN_PX / scale  // cap at 8px
+  if (screenPx < MIN_SCREEN_PX) return MIN_SCREEN_PX / scale        // floor at 2px
+  return PLANT_WORLD_RADIUS
 }
 
 function resolvePlantColorByAttribute(
