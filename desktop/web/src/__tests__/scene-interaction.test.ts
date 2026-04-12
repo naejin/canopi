@@ -17,7 +17,7 @@ function createInteractionDeps(
   container: HTMLDivElement,
   store: SceneStore,
   camera: CameraController,
-  overrides: Partial<Pick<SceneInteractionDeps, 'render' | 'markDirty' | 'setTool' | 'setHoveredEntityId'>> = {},
+  overrides: Partial<Pick<SceneInteractionDeps, 'render' | 'markDirty' | 'setTool' | 'setHoveredEntityId' | 'setViewport'>> = {},
 ): SceneInteractionDeps {
   let selection = new Set<string>()
   const setSelection = vi.fn((ids: Iterable<string>) => {
@@ -35,6 +35,9 @@ function createInteractionDeps(
     container,
     getSceneStore: () => store,
     camera,
+    setViewport: (overrides.setViewport ?? ((viewport) => {
+      store.setViewport(viewport)
+    })) as SceneInteractionDeps['setViewport'],
     getSpeciesCache: () => new Map(),
     getPlantPresentationContext: createPlantPresentationContext,
     getSelection: () => new Set(selection),
@@ -119,6 +122,21 @@ describe('SceneInteractionController', () => {
     expect(store.persisted.plants[0]?.position).toEqual({ x: 35, y: 45 })
     expect(markDirty).toHaveBeenCalledTimes(1)
     expect(deps.setSelection).toHaveBeenCalledWith(new Set(['plant-1']))
+    controller.dispose()
+  })
+
+  it('routes wheel zoom through the viewport setter and viewport render path', () => {
+    const render = vi.fn()
+    const setViewport = vi.fn((viewport) => {
+      store.setViewport(viewport)
+    })
+    const deps = createInteractionDeps(container, store, camera, { render, setViewport })
+    const controller = new SceneInteractionController(deps as any)
+
+    ;(controller as any)._onWheel(new WheelEvent('wheel', { clientX: 200, clientY: 150, deltaY: -120 }))
+
+    expect(setViewport).toHaveBeenCalledTimes(1)
+    expect(render).toHaveBeenCalledWith('viewport')
     controller.dispose()
   })
 

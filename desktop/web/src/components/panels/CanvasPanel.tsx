@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'preact/hooks'
+import { useRef, useEffect, useState } from 'preact/hooks'
 import { autoSaveIntervalMs } from '../../state/app'
 import {
   currentDesign, designName, designPath, designDirty,
@@ -15,11 +15,13 @@ import { CanvasToolbar } from '../canvas/CanvasToolbar'
 import { ZoomControls } from '../canvas/ZoomControls'
 import { DisplayModeControls } from '../canvas/DisplayModeControls'
 import { DisplayLegend } from '../canvas/DisplayLegend'
+import { MapLibreCanvasSurface } from '../canvas/MapLibreCanvasSurface'
 import { BottomPanel } from '../canvas/BottomPanel'
 import { BottomPanelLauncher } from '../canvas/BottomPanelLauncher'
 import { LayerPanel } from '../canvas/LayerPanel'
 import { WelcomeScreen } from '../shared/WelcomeScreen'
 import { canvasDirty, markCanvasDetachedDirty } from '../../state/design'
+import { layerVisibility } from '../../state/canvas'
 import styles from './Panels.module.css'
 
 // Autosave interval is now configurable via Rust settings (autoSaveIntervalMs signal)
@@ -28,6 +30,7 @@ export function CanvasPanel() {
   const canvasAreaRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const rulerOverlayRef = useRef<HTMLDivElement>(null)
+  const [basemapActive, setBasemapActive] = useState(false)
 
   useEffect(() => {
     const container = containerRef.current
@@ -105,6 +108,9 @@ export function CanvasPanel() {
   }, [intervalMs])
 
   const hasDesign = currentDesign.value !== null
+  const hasLocation = currentDesign.value?.location != null
+  const basemapVisible = layerVisibility.value.base ?? true
+  const shouldShowBasemap = hasDesign && hasLocation && basemapVisible
 
   return (
     <div className={styles.canvasPanel}>
@@ -113,7 +119,12 @@ export function CanvasPanel() {
       <div className={styles.canvasColumn}>
         <div className={styles.canvasRow}>
           <div ref={canvasAreaRef} className={styles.canvasArea}>
-            <div ref={containerRef} className={styles.canvasContainer} />
+            {hasDesign && <MapLibreCanvasSurface onActiveChange={setBasemapActive} />}
+            <div
+              ref={containerRef}
+              className={styles.canvasContainer}
+              data-basemap-active={shouldShowBasemap && basemapActive ? 'true' : 'false'}
+            />
             <div ref={rulerOverlayRef} className={styles.rulerOverlay} />
 
             {!hasDesign && <WelcomeScreen />}

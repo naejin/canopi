@@ -3,6 +3,7 @@ import type { CanopiFile, PlacedPlant } from '../../types/design'
 import type { ColorByAttribute, PlantSizeMode } from '../../state/canvas'
 import type { SelectedPlantColorContext } from '../plant-color-context'
 import type { SceneStore } from './scene'
+import type { SceneViewportState } from './scene'
 
 export interface CanvasRuntimeDocumentMetadata {
   name: string
@@ -13,6 +14,9 @@ export interface CanvasRuntimeDocumentMetadata {
 
 export interface CanvasRuntime {
   getSceneStore(): SceneStore
+  getViewport(): SceneViewportState
+  getViewportScreenSize(): { width: number; height: number }
+  readonly viewportRevision: ReadonlySignal<number>
   getSelection(): Set<string>
   setSelection(ids: Iterable<string>): void
   clearSelection(): void

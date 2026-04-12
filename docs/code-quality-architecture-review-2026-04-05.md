@@ -54,7 +54,7 @@ The findings below are organized by urgency:
 
 The likely near-term direction is:
 
-- add in-canvas map layers using MapLibre
+- extend the new in-canvas MapLibre basemap slice into richer map workflows
 - reactivate the bottom-panel timeline, budget, and consortium surfaces
 - keep those panels synchronized with the actual canvas scene
 - let panel selections influence canvas presentation and, in some cases, map overlays
@@ -315,7 +315,7 @@ The original finding said `maplibre-gl`, `maplibre-contour`, and `suncalc` were 
 1. Use the existing `PanelTarget[]`, `resolvePanelTargets()`, and `projectPanelTargetsToMapFeatures()` path for any new panel selection or map overlay sync; do not reintroduce string matching.
 2. Add round-trip integration tests for the file-format contract (Finding 3).
 3. Add a versioned migration boundary before the next breaking `.canopi` schema change (Finding 7).
-4. Add in-canvas MapLibre layers as a derived visualization with a dedicated `MapLibreController`.
+4. This step has now started: keep extending in-canvas MapLibre only as a derived visualization with one dedicated surface/controller; do not fold it into runtime or renderer internals.
 5. Keep the document authority boundary from Finding 1 intact; do not push non-canvas state into `SceneStore` or MapLibre.
 6. Address runtime breadth and lifecycle incrementally.
 

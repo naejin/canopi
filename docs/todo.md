@@ -1,7 +1,7 @@
 # Canopi: Current Work
 
-**Date**: 2026-04-08
-**Status**: v0.3.0 — timeline rework shipped (direct-manipulation UX), bottom-panel triptych complete (Timeline + Budget + Consortium). Location PanelBar button hidden (no in-canvas map layers yet)
+**Date**: 2026-04-13
+**Status**: v0.3.0 — timeline rework shipped (direct-manipulation UX), bottom-panel triptych complete (Timeline + Budget + Consortium), and the first in-canvas MapLibre basemap slice landed. Location PanelBar button remains hidden; location editing stays in the dedicated flow
 
 This file tracks active and deferred work.
 For architectural analysis and rationale, see [Code Quality And Architecture Review](./code-quality-architecture-review-2026-04-05.md).
@@ -173,8 +173,11 @@ These align with the core risks identified in the architecture review.
 
 **MapLibre / geo:**
 - Current MapLibre usage: full-screen location shell (`LocationTab`) and dynamically loaded featured-design world map (`WorldMapSurface`). These are document-derived UI surfaces, not canvas authorities.
-- In-canvas MapLibre layers (architecture TBD at implementation time — see root `CLAUDE.md` MapLibre Integration Rule)
-- Local tangent plane projection math in `canvas/projection.ts` (`lngLatToMeters` / `metersToLngLat`) — prerequisite for MapLibre viewport sync (see `docs/archive/roadmap.md` 4.0c)
+- ~~In-canvas MapLibre base layer behind the canvas~~ — **done**: `CanvasPanel` mounts `MapLibreCanvasSurface` behind `.canvasContainer`; the surface lazy-loads `maplibre-gl`, stays non-interactive, and owns its own lifecycle
+- ~~Canvas camera -> MapLibre viewport sync~~ — **done**: canvas remains authoritative; the basemap follows one-way through read-only runtime/query seams (`getViewport()`, `getViewportScreenSize()`, `viewportRevision`) and pure camera projection
+- ~~Initial in-canvas scope: toggleable base map only, mounted via a dedicated MapLibre controller/surface, with no map-driven document mutation~~ — **done**
+- Follow-up: rendered panel↔map overlays using the pure `projectPanelTargetsToMapFeatures()` seam
+- Local tangent plane projection math in `canvas/projection.ts` (`lngLatToMeters` / `metersToLngLat`) — prerequisite for viewport sync and future in-canvas geo layers (see `docs/archive/roadmap.md` 4.0c)
 - PMTiles offline tiles: Rust reader + Tauri custom protocol + download manager UI (see `docs/archive/roadmap.md` 4.2)
 - Contour/hillshade layers via `maplibre-contour` + DEM tiles (see `docs/archive/roadmap.md` 4.3/4.4)
 

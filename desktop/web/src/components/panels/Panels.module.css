@@ -96,8 +96,13 @@
 .canvasContainer {
   position: absolute;
   inset: 0;
+  z-index: 1;
   overflow: hidden;
   background: var(--canvas-bg, var(--color-bg));
+}
+
+.canvasContainer[data-basemap-active="true"] {
+  background: transparent;
 }
 
 /* Thin utility bar between canvas and bottom panel — display controls, launcher, zoom */

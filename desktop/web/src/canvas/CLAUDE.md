@@ -1,6 +1,6 @@
 # Canvas Runtime: Scene-Owned Production Path
 
-## Current Status (2026-04-08)
+## Current Status (2026-04-13)
 
 The live canvas now runs through `SceneCanvasRuntime`.
 
@@ -11,7 +11,7 @@ Production ownership is:
 - `RendererHost` owns backend selection, startup fallback, and runtime recovery
 - `PixiJS` is the primary world renderer
 - `Canvas2D` is the fallback renderer
-- Future in-canvas MapLibre must be a derived visualization layer managed by a dedicated controller, not embedded in the canvas runtime (see root `CLAUDE.md` MapLibre Integration Rule)
+- In-canvas MapLibre basemap is now a derived sibling surface managed outside the runtime (`MapLibreCanvasSurface` mounted by `CanvasPanel`), not embedded in renderer code or runtime internals
 
 Landed in the live path:
 - scene-owned load/replace/save flows
@@ -20,6 +20,7 @@ Landed in the live path:
 - first-class top-level document `annotations`
 - typed panel-target hover/selection highlights via `PanelTarget[]` + `resolvePanelTargets()`
 - pure panel-target map projection via `projectPanelTargetsToMapFeatures()` for future rendered overlays
+- a non-interactive in-canvas MapLibre basemap driven by read-only `CanvasRuntime` viewport seams
 
 Konva / `CanvasEngine` code has been removed. Do not reintroduce Konva or `getEngine()`-style escape hatches.
 
@@ -28,6 +29,7 @@ Konva / `CanvasEngine` code has been removed. Do not reintroduce Konva or `getEn
 ### Public Seams
 - App code must not reach into renderer implementations or runtime internals
 - The app-facing canvas boundary is the `CanvasRuntime` TypeScript interface implemented by `SceneCanvasRuntime`; the old 1:1 `CanvasSession` pass-through class is gone
+- `CanvasRuntime` now exposes read-only viewport queries for sibling surfaces: `getViewport()`, `getViewportScreenSize()`, and `viewportRevision`
 - As bottom panels/map surfaces need more derived data, consider splitting `CanvasRuntime` into two interfaces: one for **interaction commands** (tools, selection, history, zoom) and one for **state queries/projections** (entity reads for panels, bounds/features for map sync). Both should still be implemented by the runtime or pure helpers, not by renderer internals
 
 ### State Ownership
@@ -46,6 +48,7 @@ Konva / `CanvasEngine` code has been removed. Do not reintroduce Konva or `getEn
 - `RendererHost` owns backend lifecycle, capability probing, and fallback
 - renderers are projections of scene state, never the source of truth
 - camera transforms go through `CameraController`; do not invent a second transform authority
+- the in-canvas basemap is a sibling visualization layer, not part of the renderer contract
 - screen-space chrome such as rulers stays outside the world renderer
 - renderers may cache scene state internally, but viewport-only updates must not require a fresh runtime scene snapshot
 - `renderScene()` is for scene/presentation/selection rebuilds; `setViewport()` is for camera-only updates
@@ -57,7 +60,7 @@ Konva / `CanvasEngine` code has been removed. Do not reintroduce Konva or `getEn
 - Off-canvas drag continuation, multi-drag, and additive selection behavior are part of the contract
 - Plant hit testing must use the same shared presentation context as renderers and fit/bounds logic
 - Interaction selection writes must go through the runtime-owned selection seam; runtime logic must read authoritative selection from scene session
-- Future in-canvas MapLibre interaction (map pan/zoom, click-on-map) belongs in a MapLibre controller, not in `SceneInteractionController`. The two should coordinate through `CameraController` for viewport sync
+- In-canvas MapLibre interaction (map pan/zoom, click-on-map) remains out of scope for the current basemap slice and belongs in a dedicated MapLibre controller, not in `SceneInteractionController`
 
 ### Panel Target Projection Rules
 - Timeline, budget, and consortium identity is typed with `PanelTarget[]` / `PanelTarget`; do not reintroduce string matching against timeline descriptions, legacy `plants` arrays, budget descriptions, or consortium canonical-name fields
@@ -65,6 +68,7 @@ Konva / `CanvasEngine` code has been removed. Do not reintroduce Konva or `getEn
 - Use `projectPanelTargetsToMapFeatures()` to turn typed panel targets into map-ready plant point / zone polygon features for future rendered overlays
 - `manual` and `none` targets are intentionally empty, not unresolved errors
 - Canvas-origin hover uses `hoveredCanvasTargets` and must remain separate from panel-origin hover/selection ownership
+- The current basemap slice is non-interactive and visual-only. Panel↔map overlays remain a separate follow-up and must consume the pure projection seam rather than querying scene identity directly from the map surface
 
 ### Annotation Rules
 - annotation geometry must come from shared helpers in `runtime/annotation-layout.ts`

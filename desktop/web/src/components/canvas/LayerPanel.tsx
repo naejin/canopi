@@ -1,5 +1,6 @@
 import { t } from '../../i18n'
 import { locale } from '../../state/app'
+import { currentDesign } from '../../state/document'
 import {
   activeLayerName,
   gridVisible,
@@ -20,6 +21,10 @@ import styles from './LayerPanel.module.css'
 
 const LAYER_ORDER = ['annotations', 'plants', 'zones', 'base'] as const
 type LayerName = typeof LAYER_ORDER[number]
+
+function layerLabelKey(name: LayerName): string {
+  return name === 'base' ? 'canvas.layers.basemap' : `canvas.layers.${name}`
+}
 
 function ChevronIcon({ direction }: { direction: 'left' | 'right' }) {
   const d = direction === 'left' ? 'M10 3L5 8L10 13' : 'M6 3L11 8L6 13'
@@ -79,6 +84,7 @@ export function LayerPanel() {
   }
 
   const activeOpacity = Math.round((layerOpacity.value[activeLayer] ?? 1) * 100)
+  const hasLocation = currentDesign.value?.location != null
 
   return (
     <aside className={styles.panel} aria-label={t('canvas.layers.layerPanel')}>
@@ -97,7 +103,7 @@ export function LayerPanel() {
       <div role="list">
         {LAYER_ORDER.map((name) => {
           const isBase = name === 'base'
-          const visible = isBase ? gridVisible.value : (layerVisibility.value[name] ?? true)
+          const visible = layerVisibility.value[name] ?? true
           const locked = layerLockState.value[name] ?? false
           const active = activeLayer === name
 
@@ -112,8 +118,8 @@ export function LayerPanel() {
               <button
                 type="button"
                 className={styles.toggleBtn}
-                aria-label={`${t('canvas.layers.visibility')}: ${t(`canvas.layers.${name}`)}`}
-                onClick={() => isBase ? toggleGridVisibility() : toggleLayerVisibility(name)}
+                aria-label={`${t('canvas.layers.visibility')}: ${t(layerLabelKey(name))}`}
+                onClick={() => toggleLayerVisibility(name)}
               >
                 <EyeIcon open={visible} />
               </button>
@@ -132,31 +138,48 @@ export function LayerPanel() {
                 className={styles.layerName}
                 onClick={() => setActiveLayer(name)}
               >
-                {t(`canvas.layers.${name}`)}
+                {t(layerLabelKey(name))}
               </button>
             </div>
           )
         })}
       </div>
 
-      {activeLayer !== 'base' && (
-        <div className={styles.mapSection}>
-          <div className={styles.sectionHeader}>{t(`canvas.layers.${activeLayer}`)}</div>
-          <div className={styles.mapSliderRow}>
-            <span className={styles.mapSliderLabel}>{t('canvas.layers.opacity')}</span>
-            <input
-              type="range"
-              className={styles.mapSlider}
-              min="0"
-              max="100"
-              value={activeOpacity}
-              onInput={(event) => {
-                setLayerOpacity(activeLayer, Number((event.target as HTMLInputElement).value) / 100)
-              }}
-            />
-          </div>
+      <div className={styles.overlaySection}>
+        <div className={styles.sectionHeader}>{t('canvas.grid.grid')}</div>
+        <div className={styles.overlayRow}>
+          <button
+            type="button"
+            className={styles.toggleBtn}
+            aria-label={`${t('canvas.layers.visibility')}: ${t('canvas.layers.base')}`}
+            onClick={toggleGridVisibility}
+          >
+            <EyeIcon open={gridVisible.value} />
+          </button>
+          <span className={styles.overlayLabel}>{t('canvas.layers.base')}</span>
         </div>
-      )}
+      </div>
+
+      <div className={styles.mapSection}>
+        <div className={styles.sectionHeader}>{t(layerLabelKey(activeLayer))}</div>
+        {activeLayer === 'base' && !hasLocation && (
+          <div className={styles.mapHint}>{t('canvas.layers.setLocation')}</div>
+        )}
+        <div className={styles.mapSliderRow}>
+          <span className={styles.mapSliderLabel}>{t('canvas.layers.opacity')}</span>
+          <input
+            type="range"
+            className={styles.mapSlider}
+            min="0"
+            max="100"
+            value={activeOpacity}
+            disabled={activeLayer === 'base' && !hasLocation}
+            onInput={(event) => {
+              setLayerOpacity(activeLayer, Number((event.target as HTMLInputElement).value) / 100)
+            }}
+          />
+        </div>
+      </div>
     </aside>
   )
 }

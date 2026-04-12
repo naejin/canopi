@@ -86,9 +86,10 @@
 - **`std::fs::rename` on Windows**: Fails with locked files. Use `design::atomic_replace()` with rollback sidecar
 
 ## MapLibre / Terrain
-Current MapLibre usage is frontend-owned in the full-screen `LocationTab` and featured-design `WorldMapSurface`. The old in-canvas `map-layer.ts`, contour/hillshade effects, and viewport-sync code were deleted during pre-rewrite pruning. These gotchas apply when rebuilding in-canvas map layers:
+Current MapLibre usage is frontend-owned in the full-screen `LocationTab`, featured-design `WorldMapSurface`, and the in-canvas `MapLibreCanvasSurface` basemap. The current in-canvas slice is visual-only: lazy-loaded, non-interactive, and driven by the canvas camera through read-only runtime seams. These gotchas apply when extending beyond that base-layer slice:
 - **MapLibre paint properties can't use CSS vars**: Hardcoded hex colors in MapLibre style objects are acceptable — they render on map tiles, not app chrome
 - **`maplibre-contour` for client-side DEM contours**: Use `DemSource` with AWS Terrain Tiles (Terrarium encoding). Register protocol once with `addProtocol()`
 - **MapLibre container opacity for map blending**: Apply opacity to the container div; do not make the renderer canvas transparent via renderer internals
 - **Map layer z-index**: Insert map div before `.canvasContainer`. Canvas container background must become transparent when map is active
+- **Canvas camera remains authoritative**: In-canvas MapLibre follows viewport state via read-only runtime APIs (`getViewport()`, `getViewportScreenSize()`, `viewportRevision`). Do not let MapLibre become a second camera or document authority
 - **`download_template` security**: HTTPS-only + domain allowlist (`templates.canopi.app`) + filename sanitization + path traversal check + 50MB size limit

@@ -5,7 +5,7 @@
 - **Frontend**: Preact + @preact/signals + TypeScript + Vite + CSS Modules
 - **Canvas**: PixiJS (primary renderer) + Canvas2D (fallback) — scene-owned runtime via `SceneCanvasRuntime`
 - **i18n**: i18next core (NOT react-i18next), 11 languages (en, fr, es, pt, it, zh, de, ja, ko, nl, ru)
-- **Maps**: MapLibre GL JS + maplibre-contour. Location shell and featured-design world map currently use MapLibre; in-canvas MapLibre layers remain deferred post-rewrite
+- **Maps**: MapLibre GL JS + maplibre-contour. Location shell, featured-design world map, and an in-canvas basemap surface now use MapLibre; panel↔map overlays, contours/hillshade, offline tiles, export, and learning surfaces remain deferred
 - **Native**: lib-c (Linux, Cairo PNG/PDF + inotify + XDG), lib-swift (macOS stub), lib-cpp (Windows stub)
 
 ## Project Structure
@@ -34,7 +34,7 @@ Domain-specific instructions in subdirectory CLAUDE.md files:
 - **Right**: PanelBar (36px, always visible) + sliding panels (plant search, favorites)
 - **Bottom**: Bottom panel with Budget and Consortium tabs (Timeline hidden — pending rework)
 - **Title bar**: Logo + file name + lang/theme toggle + window controls
-- **No activity bar** — removed, navigation via PanelBar (Location button hidden — no map layers yet)
+- **No activity bar** — removed, navigation via PanelBar (Location button still hidden; location editing remains a dedicated flow even though the in-canvas basemap now exists)
 - **No status bar** — removed, controls moved to title bar
 - Design system: `.interface-design/system.md` (field notebook direction)
 
@@ -46,7 +46,7 @@ Domain-specific instructions in subdirectory CLAUDE.md files:
 
 ## Current Scope
 - **Bottom panel**: Timeline, Budget, and Consortium tabs active. Timeline uses direct-manipulation UX: 6 fixed action-type rows, click-to-add/edit popover with date validation, edge resize, hover tooltip, ctrl+scroll zoom, drag-to-move with frozen coordinate origin, and auto-scroll on edge drag (rAF-based, quadratic acceleration). Ruler controls hidden pending design iteration. Panel-canvas hover/selection flows through typed `PanelTarget[]` signals and `resolvePanelTargets()`
-- **Maps**: Location flow and world map surfaces exist but Location PanelBar button is hidden (no in-canvas map layers yet); in-canvas geo/terrain, offline tiles, export, and learning content remain deferred beyond beta
+- **Maps**: Location flow and world map surfaces exist, and the canvas now has a non-interactive MapLibre basemap behind the scene surface. The Location PanelBar button remains hidden; panel↔map overlays, contours/hillshade, offline tiles, export, and learning content remain deferred beyond beta
 - **Selection**: No resize/rotate — objects are position-only (highlight + move)
 - **Plant labels**: Hover tooltip + hover species highlight + selection labels (one per species at centroid). See `desktop/web/src/canvas/CLAUDE.md` Plant Presentation Rules
 - Many tools, overlays, and export commands were pruned during the rewrite — see git history. See `docs/todo.md` for current and deferred work
@@ -99,8 +99,8 @@ The save path composes both into a single `CanopiFile`. Neither authority should
 
 ### MapLibre Integration Rule
 - **MapLibre is a derived visualization layer, not a document authority.** Map layers render scene/document state; they do not own or mutate it
-- Existing full-screen surfaces may keep component-local MapLibre ownership when setup/update/teardown are contained in one component (`LocationTab`, `WorldMapSurface`). Future in-canvas MapLibre must not be scattered across the canvas runtime or individual components
-- **MapLibre follows canvas camera state (one-directional).** The canvas camera is the authority; the map layer subscribes and projects. Do not prescribe a specific controller/sync pattern — architecture should emerge from implementation constraints (compositing strategy, MapLibre API, performance)
+- Existing full-screen surfaces may keep component-local MapLibre ownership when setup/update/teardown are contained in one component (`LocationTab`, `WorldMapSurface`). In-canvas MapLibre must remain isolated in one dedicated sibling surface/controller and must not be scattered across the canvas runtime or renderer implementations
+- **MapLibre follows canvas camera state (one-directional).** The canvas camera is the authority; the map layer subscribes and projects through read-only runtime/query seams. The current in-canvas basemap is non-interactive and must not mutate document or canvas state
 - The lazy import boundary around `maplibre-gl` should be preserved for bundle size
 - Future rendered panel-map overlays must consume the pure `projectPanelTargetsToMapFeatures()` seam rather than re-resolving panel identity or making MapLibre a second scene/document authority
 

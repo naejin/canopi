@@ -243,6 +243,16 @@ describe('scene canvas runtime', () => {
     expect(plantColorByAttr.value).toBe('flower')
   })
 
+  it('bumps viewportRevision on viewport-only camera changes', async () => {
+    const runtime = new SceneCanvasRuntime()
+    await initRuntimeWithStubbedRenderer(runtime)
+
+    const before = runtime.viewportRevision.value
+    runtime.zoomIn()
+
+    expect(runtime.viewportRevision.value).toBeGreaterThan(before)
+  })
+
   it('derives selected plant context from scene session, not the mirror signal', () => {
     const runtime = new SceneCanvasRuntime()
     runtime.loadDocument(makeFile())
@@ -421,6 +431,19 @@ describe('scene canvas runtime', () => {
 
     expect(renderer.setViewport).toHaveBeenCalled()
     expect(renderer.renderScene).not.toHaveBeenCalled()
+    runtime.destroy()
+  })
+
+  it('bumps viewport revision for zoom and resize updates', async () => {
+    const runtime = new SceneCanvasRuntime()
+    await initRuntimeWithStubbedRenderer(runtime)
+    const initialRevision = runtime.viewportRevision.value
+
+    runtime.zoomIn()
+    expect(runtime.viewportRevision.value).toBe(initialRevision + 1)
+
+    runtime.resize(400, 300)
+    expect(runtime.viewportRevision.value).toBe(initialRevision + 2)
     runtime.destroy()
   })
 

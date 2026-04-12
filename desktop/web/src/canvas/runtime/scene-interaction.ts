@@ -14,6 +14,7 @@ import type { CameraController } from './camera'
 import type { SceneCommandSnapshot } from './scene-commands'
 import type { PlantPresentationContext } from './plant-presentation'
 import type { SpeciesCacheEntry } from './species-cache'
+import type { SceneViewportState } from './scene'
 import {
   applySceneDragDelta,
   captureSceneDragState,
@@ -42,6 +43,7 @@ export interface SceneInteractionDeps {
   container: HTMLElement
   getSceneStore: () => SceneStore
   camera: CameraController
+  setViewport: (viewport: SceneViewportState) => void
   getSpeciesCache: () => ReadonlyMap<string, SpeciesCacheEntry>
   getPlantPresentationContext: (viewportScale: number) => PlantPresentationContext
   getSelection: () => ReadonlySet<string>
@@ -259,7 +261,7 @@ export class SceneInteractionController {
     const rawWorld = this._deps.camera.screenToWorld(screen)
 
     if (this._mode === 'panning') {
-      this._deps.getSceneStore().setViewport(this._deps.camera.panBy({
+      this._deps.setViewport(this._deps.camera.panBy({
         x: screen.x - this._startScreen.x,
         y: screen.y - this._startScreen.y,
       }))
@@ -344,7 +346,7 @@ export class SceneInteractionController {
     event.preventDefault()
     const screen = this._screenPoint(event)
     const factor = event.deltaY < 0 ? 1.1 : 1 / 1.1
-    this._deps.getSceneStore().setViewport(this._deps.camera.zoomAroundScreenPoint(screen, factor))
+    this._deps.setViewport(this._deps.camera.zoomAroundScreenPoint(screen, factor))
     this._deps.render('viewport')
   }
 

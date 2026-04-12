@@ -1,3 +1,4 @@
+import { signal } from '@preact/signals'
 import { locale } from '../../state/app'
 import {
   gridVisible,
@@ -81,6 +82,7 @@ type RuntimeInvalidationKind = 'scene' | 'viewport' | 'chrome'
 export class SceneCanvasRuntime implements CanvasRuntime {
   private readonly _sceneStore = new SceneStore()
   private readonly _camera = new CameraController()
+  private readonly _viewportRevision = signal(0)
   private readonly _rendererHost = new RendererHost<SceneRendererContext, SceneRendererInstance>({
     backends: [
       createPixiSceneRenderer(),
@@ -110,11 +112,12 @@ export class SceneCanvasRuntime implements CanvasRuntime {
       width: Math.max(1, container.clientWidth),
       height: Math.max(1, container.clientHeight),
     })
-    this._sceneStore.setViewport(viewport)
+    this._setViewport(viewport, { forceRevision: true })
     this._interaction = new SceneInteractionController({
       container,
       getSceneStore: () => this._sceneStore,
       camera: this._camera,
+      setViewport: (viewport) => this._setViewport(viewport),
       getSpeciesCache: () => this._speciesCache.getCache(),
       getPlantPresentationContext: (viewportScale) => this._createPlantPresentationContext(viewportScale),
       getSelection: () => this._sceneStore.session.selectedEntityIds,
@@ -133,6 +136,18 @@ export class SceneCanvasRuntime implements CanvasRuntime {
 
   getSceneStore(): SceneStore {
     return this._sceneStore
+  }
+
+  getViewport() {
+    return this._camera.viewport
+  }
+
+  getViewportScreenSize(): { width: number; height: number } {
+    return this._camera.screenSize
+  }
+
+  get viewportRevision() {
+    return this._viewportRevision
   }
 
   getSelection(): Set<string> {
@@ -156,7 +171,7 @@ export class SceneCanvasRuntime implements CanvasRuntime {
       width: Math.max(1, this._container.clientWidth),
       height: Math.max(1, this._container.clientHeight),
     })
-    this._sceneStore.setViewport(viewport)
+    this._setViewport(viewport, { forceRevision: true })
     void this._render()
   }
 
@@ -185,17 +200,17 @@ export class SceneCanvasRuntime implements CanvasRuntime {
   }
 
   zoomIn(): void {
-    this._sceneStore.setViewport(this._camera.zoomIn())
+    this._setViewport(this._camera.zoomIn())
     this._invalidate('viewport')
   }
 
   zoomOut(): void {
-    this._sceneStore.setViewport(this._camera.zoomOut())
+    this._setViewport(this._camera.zoomOut())
     this._invalidate('viewport')
   }
 
   zoomToFit(): void {
-    this._sceneStore.setViewport(this._camera.zoomToFit(this._sceneStore.persisted, {
+    this._setViewport(this._camera.zoomToFit(this._sceneStore.persisted, {
       plantContext: this._createPlantPresentationContext(this._camera.viewport.scale),
     }))
     this._invalidate('viewport')
@@ -602,6 +617,7 @@ export class SceneCanvasRuntime implements CanvasRuntime {
     this._syncHoveredCanvasTargets(null)
     this._clearPanelOriginTargets()
     this._sceneStore.hydrate(file)
+    this._viewportRevision.value += 1
     this._history.clear()
     lockedObjectIds.value = new Set()
     clearCanvasSelection()
@@ -615,6 +631,7 @@ export class SceneCanvasRuntime implements CanvasRuntime {
     this._syncHoveredCanvasTargets(null)
     this._clearPanelOriginTargets()
     this._sceneStore.hydrate(file)
+    this._viewportRevision.value += 1
     this._history.clear()
     this._syncCanvasSignalsFromScene()
     this._invalidate('scene')
@@ -674,7 +691,7 @@ export class SceneCanvasRuntime implements CanvasRuntime {
   }
 
   resize(width: number, height: number): void {
-    this._sceneStore.setViewport(this._camera.resize({ width, height }))
+    this._setViewport(this._camera.resize({ width, height }), { forceRevision: true })
     void this._rendererHost.run((renderer) => {
       renderer.resize(width, height)
       renderer.setViewport(this._camera.viewport)
@@ -691,6 +708,22 @@ export class SceneCanvasRuntime implements CanvasRuntime {
       session.documentRevision += 1
     })
     sceneEntityRevision.value += 1
+  }
+
+  private _setViewport(
+    viewport: { x: number; y: number; scale: number },
+    options: { forceRevision?: boolean } = {},
+  ): void {
+    const previous = this._sceneStore.session.viewport
+    this._sceneStore.setViewport(viewport)
+    if (
+      options.forceRevision
+      || previous.x !== viewport.x
+      || previous.y !== viewport.y
+      || previous.scale !== viewport.scale
+    ) {
+      this._viewportRevision.value += 1
+    }
   }
 
   private _invalidate(kind: RuntimeInvalidationKind = 'scene'): void {

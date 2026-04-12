@@ -28,7 +28,7 @@ Explicitly deferred beyond Wave 5 beta at beta-cut time:
 - color by plants
 - frontend lazy loading / performance improvements
 - detail-card photo fit polish
-- map layers
+- advanced map overlays / terrain layers
 - world map with featured designs / template import
 - timeline workflows
 - budget workflows
