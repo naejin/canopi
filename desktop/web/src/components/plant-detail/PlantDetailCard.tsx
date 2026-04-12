@@ -177,7 +177,8 @@ export function PlantDetailCard({ canonicalName }: Props) {
 
   const hasLight = d.tolerates_full_sun !== null || d.tolerates_semi_shade !== null
     || d.tolerates_full_shade !== null || d.frost_tender !== null || d.drought_tolerance !== null
-    || d.frost_free_days_min !== null || d.precip_min_inches !== null || d.precip_max_inches !== null;
+    || d.frost_free_days_min !== null || d.precip_min_inches !== null || d.precip_max_inches !== null
+    || d.climate_zones !== null;
 
   const hasSoil = d.soil_ph_min !== null || d.soil_ph_max !== null
     || d.well_drained !== null || d.heavy_clay !== null || d.tolerates_acid !== null
@@ -397,6 +398,7 @@ export function PlantDetailCard({ canonicalName }: Props) {
               )}
               <NumAttr label={t('plantDetail.frostFreeDays')} value={d.frost_free_days_min} unit={` ${t('plantDetail.daysUnit')}`} />
               <Attr label={t('plantDetail.precipRange')} value={precipStr} />
+              <Attr label={t('plantDetail.climateZones')} value={d.climate_zones} />
             </div>
           </CollapsibleSection>
         )}

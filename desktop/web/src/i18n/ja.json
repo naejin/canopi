@@ -495,6 +495,7 @@
     "leafRetention": "葉の保持",
     "frostFreeDays": "無霜日数",
     "precipRange": "降水量",
+    "climateZones": "気候帯",
     "toleratesLightSoil": "軽い土壌",
     "toleratesMediumSoil": "中程度の土壌",
     "toleratesHeavySoil": "重い土壌",

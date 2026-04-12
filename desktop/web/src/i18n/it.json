@@ -495,6 +495,7 @@
     "leafRetention": "Ritenzione fogliare",
     "frostFreeDays": "Giorni senza gelo",
     "precipRange": "Precipitazioni",
+    "climateZones": "Zone climatiche",
     "toleratesLightSoil": "Suolo leggero",
     "toleratesMediumSoil": "Suolo medio",
     "toleratesHeavySoil": "Suolo pesante",

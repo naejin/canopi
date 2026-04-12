@@ -495,6 +495,7 @@
     "leafRetention": "잎 보유",
     "frostFreeDays": "무상일수",
     "precipRange": "강수량",
+    "climateZones": "기후대",
     "toleratesLightSoil": "가벼운 토양",
     "toleratesMediumSoil": "보통 토양",
     "toleratesHeavySoil": "무거운 토양",

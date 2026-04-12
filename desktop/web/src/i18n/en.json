@@ -495,6 +495,7 @@
     "leafRetention": "Leaf retention",
     "frostFreeDays": "Frost-free days",
     "precipRange": "Precipitation",
+    "climateZones": "Climate zones",
     "toleratesLightSoil": "Light soil",
     "toleratesMediumSoil": "Medium soil",
     "toleratesHeavySoil": "Heavy soil",

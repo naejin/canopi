@@ -495,6 +495,7 @@
     "leafRetention": "叶片保留",
     "frostFreeDays": "无霜期",
     "precipRange": "降水量",
+    "climateZones": "气候带",
     "toleratesLightSoil": "轻质土壤",
     "toleratesMediumSoil": "中等土壤",
     "toleratesHeavySoil": "重质土壤",

@@ -16,7 +16,7 @@ export function RiskDistributionSection({ d, expanded, onToggle }: Props) {
     || d.invasive_usda !== null || d.weed_potential !== null
     || d.fire_resistant !== null || d.fire_tolerance !== null
     || d.hedge_tolerance !== null || d.native_distribution !== null
-    || d.introduced_distribution !== null || d.climate_zones !== null;
+    || d.introduced_distribution !== null;
 
   if (!hasData) return null;
 
@@ -38,7 +38,6 @@ export function RiskDistributionSection({ d, expanded, onToggle }: Props) {
       </div>
       <TextBlock label={t('plantDetail.nativeDistribution')} text={d.native_distribution} />
       <TextBlock label={t('plantDetail.introducedDistribution')} text={d.introduced_distribution} />
-      <TextBlock label={t('filters.climateZone')} text={d.climate_zones} />
     </CollapsibleSection>
   );
 }
