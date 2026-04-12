@@ -194,4 +194,30 @@ describe('plant DB controller lifecycle', () => {
     expect(plantDb.dynamicOptionsErrors.value.en?.habit).toBe('backend exploded')
     expect(plantDb.dynamicOptionsPending.value.en?.habit).toBeUndefined()
   })
+
+  it('preserves the first-page total estimate when loading more results', async () => {
+    const plantDb = await import('../state/plant-db')
+
+    plantDb.totalEstimate.value = 42
+    plantDb.nextCursor.value = 'offset:50'
+
+    ;(mocks.searchSpecies as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      items: [],
+      next_cursor: null,
+      total_estimate: 0,
+    })
+
+    await plantDb.loadNextPage()
+
+    expect(mocks.searchSpecies).toHaveBeenCalledWith(
+      '',
+      expect.any(Object),
+      'offset:50',
+      50,
+      'Name',
+      'en',
+      false,
+    )
+    expect(plantDb.totalEstimate.value).toBe(42)
+  })
 })

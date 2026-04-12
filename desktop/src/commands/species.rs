@@ -25,6 +25,7 @@ pub fn search_species(
     limit: u32,
     sort: Sort,
     locale: String,
+    include_total: Option<bool>,
 ) -> Result<PaginatedResult<SpeciesListItem>, String> {
     // Step 1: query plant DB, then release the lock before touching user DB.
     let text_opt = if text.trim().is_empty() {
@@ -35,7 +36,16 @@ pub fn search_species(
 
     let mut result = {
         let conn = acquire(&plant_db.0, "PlantDb");
-        crate::db::plant_db::search(&conn, text_opt, filters, cursor, sort, limit, locale)?
+        crate::db::plant_db::search(
+            &conn,
+            text_opt,
+            filters,
+            cursor,
+            sort,
+            limit,
+            include_total.unwrap_or(true),
+            locale,
+        )?
     };
 
     // Step 2: check favorites for each item — plant lock is now released.

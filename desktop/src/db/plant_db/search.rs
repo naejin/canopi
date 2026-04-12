@@ -17,6 +17,7 @@ pub fn search(
     cursor: Option<String>,
     sort: Sort,
     limit: u32,
+    include_total: bool,
     locale: String,
 ) -> Result<PaginatedResult<SpeciesListItem>, String> {
     let is_relevance_sort = matches!(sort, Sort::Relevance);
@@ -29,12 +30,15 @@ pub fn search(
         0
     };
 
-    let (count_sql, count_params) = build_count_query(text.as_deref(), &filters);
-    let total_estimate = conn
-        .query_row(&count_sql, params_from_iter(count_params.iter()), |row| {
+    let total_estimate = if include_total {
+        let (count_sql, count_params) = build_count_query(text.as_deref(), &filters);
+        conn.query_row(&count_sql, params_from_iter(count_params.iter()), |row| {
             row.get::<_, u32>(0)
         })
-        .map_err(|e| format!("Failed to count species search results: {e}"))?;
+        .map_err(|e| format!("Failed to count species search results: {e}"))?
+    } else {
+        0
+    };
 
     let qb = QueryBuilder::new(text, filters, cursor, sort, limit, locale);
     let (sql, params) = qb.build();
@@ -188,6 +192,7 @@ mod tests {
             None,
             Sort::Relevance,
             1,
+            true,
             "en".to_owned(),
         )
         .unwrap();
@@ -203,11 +208,13 @@ mod tests {
             first.next_cursor.clone(),
             Sort::Relevance,
             1,
+            false,
             "en".to_owned(),
         )
         .unwrap();
 
         assert_eq!(second.items.len(), 1);
+        assert_eq!(second.total_estimate, 0);
         assert_ne!(
             first.items[0].canonical_name,
             second.items[0].canonical_name
@@ -226,6 +233,7 @@ mod tests {
             None,
             Sort::Name,
             10,
+            true,
             "fr".to_owned(),
         )
         .unwrap();
@@ -265,6 +273,7 @@ mod tests {
             None,
             Sort::Name,
             10,
+            true,
             "en".to_owned(),
         )
         .unwrap();
@@ -285,6 +294,7 @@ mod tests {
             None,
             Sort::Relevance,
             1,
+            true,
             "en".to_owned(),
         )
         .unwrap();
@@ -301,11 +311,13 @@ mod tests {
             Some(next_cursor),
             Sort::Relevance,
             1,
+            false,
             "en".to_owned(),
         )
         .unwrap();
 
         assert_eq!(second.items.len(), 1);
+        assert_eq!(second.total_estimate, 0);
         assert_ne!(
             first.items[0].canonical_name,
             second.items[0].canonical_name
@@ -356,6 +368,7 @@ mod tests {
             None,
             Sort::Relevance,
             10,
+            true,
             "en".to_owned(),
         )
         .unwrap_err();

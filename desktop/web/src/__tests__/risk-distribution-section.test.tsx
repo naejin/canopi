@@ -17,7 +17,7 @@ describe('RiskDistributionSection', () => {
     container.remove()
   })
 
-  it('renders climate zones alongside distribution data', () => {
+  it('does not render climate zones after they moved to the light and climate section', () => {
     const detail = {
       toxicity: null,
       invasive_potential: null,
@@ -28,7 +28,7 @@ describe('RiskDistributionSection', () => {
       fire_resistant: null,
       fire_tolerance: null,
       hedge_tolerance: null,
-      native_distribution: null,
+      native_distribution: 'Temperate Europe',
       introduced_distribution: null,
       climate_zones: 'Temperate, Continental',
     } as SpeciesDetail
@@ -42,7 +42,9 @@ describe('RiskDistributionSection', () => {
       container,
     )
 
-    expect(container.textContent).toContain('Climate zone')
-    expect(container.textContent).toContain('Temperate, Continental')
+    expect(container.textContent).toContain('Native distribution')
+    expect(container.textContent).toContain('Temperate Europe')
+    expect(container.textContent).not.toContain('Climate zone')
+    expect(container.textContent).not.toContain('Temperate, Continental')
   })
 })

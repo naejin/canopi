@@ -118,6 +118,7 @@ function makeSession() {
     engine,
     replaceDocument: engine.replaceDocument,
     showCanvasChrome: engine.showCanvasChrome,
+    zoomToFit: vi.fn(),
     clearHistory: engine.history.clear,
     markSaved: engine.history.markSaved,
     serializeDocument: vi.fn((metadata: { name: string }) => makeFile(metadata.name)),
@@ -184,6 +185,7 @@ describe('document replacement actions', () => {
     expect(designPath.value).toBe('/designs/next.canopi')
     expect(mocks.canvasSession.engine.history.clear).toHaveBeenCalled()
     expect(mocks.canvasSession.showCanvasChrome).toHaveBeenCalled()
+    expect(mocks.canvasSession.zoomToFit).toHaveBeenCalled()
   })
 
   it('cancels replacement before loading when the user cancels', async () => {
@@ -210,6 +212,7 @@ describe('document replacement actions', () => {
     )
     expect(mocks.canvasSession.engine.history.markSaved).toHaveBeenCalled()
     expect(currentDesign.value?.name).toBe('Next')
+    expect(mocks.canvasSession.zoomToFit).toHaveBeenCalled()
   })
 
   it('treats save-dialog cancellation as a cancelled replacement', async () => {
@@ -301,6 +304,7 @@ describe('document replacement actions', () => {
     expect(nextSession.replaceDocument).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'Downloaded Template', extra: { imported: true } }),
     )
+    expect(nextSession.zoomToFit).toHaveBeenCalled()
     expect(designName.value).toBe('Forest Edge')
     expect(designPath.value).toBe(null)
     expect(pendingTemplateImport.value).toBe(null)

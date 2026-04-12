@@ -94,7 +94,7 @@ describe('plant presentation service', () => {
     expect(fallbackPresentation.radiusScreenPx).toBe(16)
   })
 
-  it('computes screen hit bounds from the resolved radius', () => {
+  it('computes screen hit bounds from the resolved radius with the minimum screen-size floor', () => {
     const hitBounds = getPlantScreenHitBounds(createPlant(), {
       viewport: createViewport({ x: 5, y: 7, scale: 8 }),
       zoomReference: 8,
@@ -104,12 +104,12 @@ describe('plant presentation service', () => {
     })
 
     expect(hitBounds.center).toEqual({ x: 85, y: 167 })
-    expect(hitBounds.radiusPx).toBe(12)
+    expect(hitBounds.radiusPx).toBe(6)
     expect(hitBounds.bounds).toEqual({
-      x: 73,
-      y: 155,
-      width: 24,
-      height: 24,
+      x: 79,
+      y: 161,
+      width: 12,
+      height: 12,
     })
   })
 

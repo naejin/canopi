@@ -121,6 +121,7 @@ async function executeSearch(generation: number): Promise<void> {
       50,
       sortField.value,
       locale.value,
+      true,
     );
 
     // Discard stale result if a newer search superseded this one
@@ -245,6 +246,7 @@ export async function loadNextPage(): Promise<void> {
       50,
       sortField.value,
       locale.value,
+      false,
     );
 
     if (generation !== searchGeneration) return;
@@ -252,7 +254,6 @@ export async function loadNextPage(): Promise<void> {
     batch(() => {
       searchResults.value = [...searchResults.value, ...result.items];
       nextCursor.value = result.next_cursor;
-      totalEstimate.value = result.total_estimate;
       isSearching.value = false;
     });
   } catch (err) {

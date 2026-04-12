@@ -26,6 +26,7 @@ export async function searchSpecies(
   limit = 50,
   sort: Sort = 'Name',
   locale = 'en',
+  includeTotal = true,
 ): Promise<PaginatedResult<SpeciesListItem>> {
   if (isDegraded()) return { items: [], next_cursor: null, total_estimate: 0 };
   return invoke('search_species', {
@@ -35,6 +36,7 @@ export async function searchSpecies(
     limit,
     sort,
     locale,
+    includeTotal,
   });
 }
 
