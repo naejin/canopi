@@ -22,26 +22,26 @@ describe('ActiveChips', () => {
       edibility_min: null,
       nitrogen_fixer: null,
       climate_zones: null,
-      growth_form_type: null,
+      habit: null,
       woody: null,
       family: null,
       extra: null,
     }
-    extraFilters.value = [{ field: 'habit', op: 'In', values: ['Shrub'] }]
+    extraFilters.value = [{ field: 'growth_form_type', op: 'In', values: ['Shrub'] }]
     dynamicOptionsPending.value = {}
     dynamicOptionsErrors.value = {}
     dynamicOptionsCache.value = {
       en: {
-        habit: {
-          field: 'habit',
+        growth_form_type: {
+          field: 'growth_form_type',
           field_type: 'categorical',
           values: [{ value: 'Shrub', label: 'Shrub' }],
           range: null,
         },
       },
       fr: {
-        habit: {
-          field: 'habit',
+        growth_form_type: {
+          field: 'growth_form_type',
           field_type: 'categorical',
           values: [{ value: 'Shrub', label: 'Arbuste' }],
           range: null,
@@ -60,13 +60,13 @@ describe('ActiveChips', () => {
       render(<ActiveChips />, container)
     })
 
-    expect(container.textContent).toContain('Habit: Shrub')
+    expect(container.textContent).toContain('Growth form type: Shrub')
 
     await act(async () => {
       locale.value = 'fr'
     })
 
-    expect(container.textContent).toContain('Port')
+    expect(container.textContent).toContain('Type de forme')
     expect(container.textContent).toContain('Arbuste')
   })
 

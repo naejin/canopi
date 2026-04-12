@@ -621,18 +621,17 @@
 /* ── FilterStrip ── */
 
 .filterStrip {
-  display: flex;
-  flex-direction: column;
-  gap: calc(var(--space-1) - 1px);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: calc(var(--space-1) + 2px);
+  row-gap: calc(var(--space-1) - 1px);
   padding: calc(var(--space-1) + 2px) calc(var(--space-2) + 2px) var(--space-1);
   flex-shrink: 0;
+  align-items: center;
 }
 
 .filterRow {
-  display: flex;
-  align-items: center;
-  gap: calc(var(--space-1) + 2px);
-  min-height: var(--control-size-sm);
+  display: contents;
 }
 
 .filterLabel {
@@ -640,27 +639,30 @@
   font-weight: 600;
   color: var(--color-text-muted);
   font-family: var(--font-sans);
-  width: calc(var(--space-12) + 4px);
-  flex-shrink: 0;
+  white-space: nowrap;
   text-align: right;
+  min-height: var(--control-size-sm);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
 }
 
 .filterControl {
-  flex: 1;
   display: flex;
   align-items: center;
   gap: calc(var(--space-1) - 1px);
   min-width: 0;
   overflow: hidden;
   flex-wrap: wrap;
+  min-height: var(--control-size-sm);
 }
 
 .filterActions {
+  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   gap: calc(var(--space-1) + 2px);
   padding-top: calc(var(--space-1) - 2px);
-  padding-left: calc(var(--space-12) + var(--space-2) + 2px);
 }
 
 .moreFiltersBtn {

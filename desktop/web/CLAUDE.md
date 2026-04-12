@@ -26,6 +26,7 @@
 - **Unit strings must be i18n keys**: Never hardcode "yr", "d", "in" etc. in NumAttr/formatters. Use `t('plantDetail.yearUnit')` pattern. Scientific units (mg, mm, cm, g/g) are universal and don't need translation
 - **CSV/file export headers must use `t()`**: Table column headers in the UI use i18n, but export code easily misses this. Reuse the same `t()` keys for both
 - **Components using `t()` must subscribe to `locale`**: Read `void locale.value` in the component body or include `locale.value` in render deps. Without it, `t()` returns stale translations when the user switches language. Canvas2D components use `locale.value` in `useCanvasRenderer` deps instead
+- **i18n translations must include proper diacritics**: Never use ASCII approximations (e.g., `Herbacee` instead of `Herbacée`, `Arbol` instead of `Árbol`). Applies to both `i18n/*.json` files and `schema-contract.json` translations. Copy from authoritative source (existing translations, Unicode references) rather than typing from memory
 
 ## CSS
 - Design tokens in `global.css` as CSS variables (field notebook palette)

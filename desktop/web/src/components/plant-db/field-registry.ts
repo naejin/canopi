@@ -32,7 +32,6 @@ export const FIELD_REGISTRY: FieldDef[] = [
   // Growth & Form
   { key: 'stratum', type: 'categorical', category: 'growth', i18nKey: 'filters.field.stratum', color: '--color-family' },
   { key: 'woody', type: 'boolean', category: 'growth', i18nKey: 'filters.field.woody', color: '--color-family' },
-  { key: 'habit', type: 'categorical', category: 'growth', i18nKey: 'filters.field.habit', color: '--color-family' },
   { key: 'growth_form_type', type: 'categorical', category: 'growth', i18nKey: 'filters.field.growthFormType', color: '--color-family' },
   { key: 'growth_habit', type: 'categorical', category: 'growth', i18nKey: 'filters.field.growthHabit', color: '--color-family' },
   { key: 'canopy_position', type: 'categorical', category: 'growth', i18nKey: 'filters.field.canopyPosition', color: '--color-family' },

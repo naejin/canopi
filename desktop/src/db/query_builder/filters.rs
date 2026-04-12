@@ -99,8 +99,8 @@ pub(super) fn append_structured_filters(
         }
     }
 
-    if let Some(ref types) = filters.growth_form_type {
-        append_text_in_clause(where_clauses, params, "s.growth_form_type", types);
+    if let Some(ref types) = filters.habit {
+        append_text_in_clause(where_clauses, params, "s.habit", types);
     }
 
     if let Some(woody) = filters.woody

@@ -24,11 +24,12 @@ pub fn get_filter_options(conn: &Connection) -> Result<FilterOptions, String> {
         "Boreal".to_owned(),
     ];
 
-    let growth_form_types: Vec<String> = distinct_text_values(
-        conn,
-        "SELECT DISTINCT growth_form_type FROM species WHERE growth_form_type IS NOT NULL ORDER BY growth_form_type",
-        "growth form types",
-    )?;
+    let habits = vec![
+        "Tree".to_owned(),
+        "Shrub".to_owned(),
+        "Herbaceous".to_owned(),
+        "Climber".to_owned(),
+    ];
 
     let life_cycles = vec![
         "Annual".to_owned(),
@@ -58,7 +59,7 @@ pub fn get_filter_options(conn: &Connection) -> Result<FilterOptions, String> {
         families,
         growth_rates,
         climate_zones,
-        growth_form_types,
+        habits,
         life_cycles,
         sun_tolerances,
         soil_tolerances,

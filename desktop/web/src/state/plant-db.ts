@@ -17,7 +17,7 @@ export const activeFilters = signal<SpeciesFilter>({
   edibility_min: null,
   nitrogen_fixer: null,
   climate_zones: null,
-  growth_form_type: null,
+  habit: null,
   woody: null,
   family: null,
   extra: null,
@@ -69,7 +69,7 @@ export const hasActiveFilters = computed(() => {
     f.edibility_min !== null ||
     f.nitrogen_fixer !== null ||
     (f.climate_zones !== null && f.climate_zones.length > 0) ||
-    (f.growth_form_type !== null && f.growth_form_type.length > 0) ||
+    (f.habit !== null && f.habit.length > 0) ||
     f.woody !== null ||
     f.family !== null ||
     (f.extra !== null && f.extra.length > 0) ||
@@ -83,7 +83,7 @@ export const activeFilterCount = computed(() => {
   const f = activeFilters.value;
   let count = 0;
   if (f.climate_zones !== null && f.climate_zones.length > 0) count++;
-  if (f.growth_form_type !== null && f.growth_form_type.length > 0) count++;
+  if (f.habit !== null && f.habit.length > 0) count++;
   if (f.sun_tolerances !== null && f.sun_tolerances.length > 0) count++;
   if (f.soil_tolerances !== null && f.soil_tolerances.length > 0) count++;
   if (f.growth_rate !== null && f.growth_rate.length > 0) count++;
@@ -410,7 +410,7 @@ export function clearFilters(): void {
     edibility_min: null,
     nitrogen_fixer: null,
     climate_zones: null,
-    growth_form_type: null,
+    habit: null,
     woody: null,
     family: null,
     extra: null,

@@ -14,12 +14,13 @@ import {
 } from '../../state/plant-db'
 import { CATEGORIES, fieldsForCategory, type FieldDef, type FilterCategory } from './field-registry'
 import { FilterChip } from './FilterChip'
+import { orderFilterValues } from './value-ordering'
 import { RangeSlider } from './RangeSlider'
 import styles from './MoreFiltersPanel.module.css'
 import type { SpeciesFilter } from '../../types/species'
 
 /** Fields handled by FilterStrip as first-class typed filters - exclude from dynamic More Filters. */
-const STRIP_FIELDS = new Set<string>(['growth_form_type', 'woody'] satisfies (keyof SpeciesFilter)[])
+const STRIP_FIELDS = new Set<string>(['habit', 'woody'] satisfies (keyof SpeciesFilter)[])
 
 interface Props {
   open: boolean
@@ -217,7 +218,7 @@ function FieldRow({ field }: { field: FieldDef }) {
         <div className={styles.fieldPicker}>
           {field.type === 'categorical' && opts?.values && (
             <div className={styles.chipGrid}>
-              {opts.values.map((v) => {
+              {orderFilterValues(field.key, opts.values).map((v) => {
                 const selected = activeFilter?.values.includes(v.value) ?? false
                 return (
                   <FilterChip

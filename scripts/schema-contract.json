@@ -268,7 +268,8 @@
     "habit": {
       "Climber": {"fr": "Grimpante", "es": "Trepadora", "pt": "Trepadeira", "it": "Rampicante", "zh": "攀援", "de": "Kletterpflanze", "ja": "つる性", "ko": "덩굴", "nl": "Klimplant", "ru": "Лиана"},
       "Shrub": {"fr": "Arbuste", "es": "Arbusto", "pt": "Arbusto", "it": "Arbusto", "zh": "灌木", "de": "Strauch", "ja": "低木", "ko": "관목", "nl": "Struik", "ru": "Кустарник"},
-      "Tree": {"fr": "Arbre", "es": "Árbol", "pt": "Árvore", "it": "Albero", "zh": "乔木", "de": "Baum", "ja": "高木", "ko": "교목", "nl": "Boom", "ru": "Дерево"}
+      "Tree": {"fr": "Arbre", "es": "Árbol", "pt": "Árvore", "it": "Albero", "zh": "乔木", "de": "Baum", "ja": "高木", "ko": "교목", "nl": "Boom", "ru": "Дерево"},
+      "Herbaceous": {"fr": "Herbacée", "es": "Herbácea", "pt": "Herbácea", "it": "Erbacea", "zh": "草本", "de": "Krautig", "ja": "草本", "ko": "초본", "nl": "Kruidachtig", "ru": "Травянистое"}
     },
     "bloom_period": {
       "Spring": {"fr": "Printemps", "es": "Primavera", "pt": "Primavera", "it": "Primavera", "zh": "春季", "de": "Frühling", "ja": "春", "ko": "봄", "nl": "Lente", "ru": "Весна"},

@@ -111,7 +111,7 @@ export function ActiveChips() {
   const chips: Chip[] = [];
 
   addArrayChips(chips, filters, 'climate_zones', 'cz', 'filters.climateZone_', '--color-sun');
-  addArrayChips(chips, filters, 'growth_form_type', 'gft', 'filters.growthFormType_', '--color-family');
+  addArrayChips(chips, filters, 'habit', 'hab', 'filters.habit_', '--color-family');
   addArrayChips(chips, filters, 'sun_tolerances', 'sun', 'plantDb.sunTolerance_', '--color-sun');
   addArrayChips(chips, filters, 'life_cycle', 'lc', 'filters.lifeCycle_', '--color-family');
   addArrayChips(chips, filters, 'growth_rate', 'gr', 'filters.growthRate_', '--color-family');

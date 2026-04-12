@@ -334,9 +334,9 @@ export function PlantDetailCard({ canonicalName }: Props) {
               </div>
             )}
             <div className={styles.attrGrid}>
+              <Attr label={t('plantDetail.habit')} value={d.habit} />
               <Attr label={t('plantDetail.lifespan')} value={d.lifespan} />
               <Attr label={t('plantDetail.deciduousEvergreen')} value={d.deciduous_evergreen} />
-              <Attr label={t('plantDetail.habit')} value={d.habit} />
               <Attr label={t('plantDetail.activeGrowth')} value={d.active_growth_period} />
               <Attr label={t('plantDetail.bloomPeriod')} value={d.bloom_period} />
               <Attr label={t('plantDetail.flowerColor')} value={d.flower_color} />

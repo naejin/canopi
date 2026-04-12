@@ -37,7 +37,7 @@ export function FilterStrip({ onMoreFilters }: { onMoreFilters: () => void }) {
 
   const chipRows: ChipRowConfig[] = [
     { label: t('filters.climateZone'), options: opts?.climate_zones ?? [], filterKey: 'climate_zones', i18nPrefix: 'filters.climateZone_', color: '--color-sun' },
-    { label: t('filters.growthFormType'), options: opts?.growth_form_types ?? [], filterKey: 'growth_form_type', i18nPrefix: 'filters.growthFormType_', color: '--color-family' },
+    { label: t('filters.habit'), options: opts?.habits ?? [], filterKey: 'habit', i18nPrefix: 'filters.habit_', color: '--color-family' },
     { label: t('filters.sun'), options: opts?.sun_tolerances ?? [], filterKey: 'sun_tolerances', i18nPrefix: 'plantDb.sunTolerance_', color: '--color-sun' },
     { label: t('filters.lifecycle'), options: opts?.life_cycles ?? [], filterKey: 'life_cycle', i18nPrefix: 'filters.lifeCycle_', color: '--color-family' },
   ];

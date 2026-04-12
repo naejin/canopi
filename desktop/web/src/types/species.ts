@@ -248,7 +248,7 @@ export interface SpeciesFilter {
   edibility_min: number | null;
   nitrogen_fixer: boolean | null;
   climate_zones: string[] | null;
-  growth_form_type: string[] | null;
+  habit: string[] | null;
   woody: boolean | null;
   family: string | null;
   extra: DynamicFilter[] | null;
@@ -266,7 +266,7 @@ export interface FilterOptions {
   families: string[];
   growth_rates: string[];
   climate_zones: string[];
-  growth_form_types: string[];
+  habits: string[];
   life_cycles: string[];
   sun_tolerances: string[];
   soil_tolerances: string[];
