@@ -126,6 +126,7 @@ Run this script against each packaged artifact:
 1. Launch the app and confirm clean startup with no bundled-resource failure.
 2. Create a design, edit it, save it, reload it, and switch documents without data loss.
 3. Open plant search, inspect plant detail, favorite a plant if available, and place a plant on canvas.
+   Search regression check: type a narrow prefix such as `asr`, delete back to `as`, and confirm the visible list repopulates and scrolls normally without needing a locale change or list/card toggle.
 4. Edit canvas content and verify undo/redo still works in the packaged build.
 5. Open layer controls and confirm required display/layer flows still function.
 6. Open the bottom-bar `location` tab, perform search, drag, zoom, and confirm the selected location updates correctly.
@@ -146,6 +147,7 @@ Fix only defects that block the beta release:
 - packaged resources needed for core retained-surface flows are missing or inaccessible
 - create/save/load/switch loses work
 - plant search/detail/placement is broken
+- plant search count and visible rows desynchronize until an unrelated UI action forces a redraw
 - undo/redo or roundtrip persistence regresses
 - layer controls or `location` retained-surface flows are broken
 - supported theme/locale usage has missing labels or unreadable surfaces

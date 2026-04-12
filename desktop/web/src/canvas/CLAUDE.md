@@ -99,6 +99,7 @@ Konva / `CanvasEngine` code has been removed. Do not reintroduce Konva or `getEn
 - use viewport invalidation for pan, zoom, and fit operations
 - use chrome invalidation for rulers, grid, and guide-only changes
 - do not route viewport-only work through the full scene render path
+- when a retained surface preserves stale content during async work, invalidate/reset from a committed content revision, not from intent state that can advance before the new payload lands
 
 ## Runtime Split
 

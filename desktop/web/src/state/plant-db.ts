@@ -24,6 +24,7 @@ export const activeFilters = signal<SpeciesFilter>({
 });
 export const sortField = signal<Sort>('Name');
 export const searchResults = signal<SpeciesListItem[]>([]);
+export const searchResultsRevision = signal(0);
 export const nextCursor = signal<string | null>(null);
 export const totalEstimate = signal(0);
 export const isSearching = signal(false);
@@ -129,6 +130,7 @@ async function executeSearch(generation: number): Promise<void> {
 
     batch(() => {
       searchResults.value = result.items;
+      searchResultsRevision.value += 1;
       nextCursor.value = result.next_cursor;
       totalEstimate.value = result.total_estimate;
       isSearching.value = false;

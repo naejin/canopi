@@ -87,6 +87,11 @@ The save path composes both into a single `CanopiFile`. Neither authority should
 - **Never write signals unconditionally at 60fps** (e.g. map `move` events). New object literals always fail `Object.is` equality, triggering unnecessary rerenders. Use `.peek()` to read without subscribing, compare before writing
 - **`getBoundingClientRect()` in hot loops**: Cache the DOMRect — don't call twice per pointermove event
 
+### Async Surface Rule
+- When a surface intentionally keeps stale data visible while async work is in flight (debounced search, deferred hydrate, optimistic list), separate **intent state** from **committed data state**
+- Scroll reset, virtualizer reset, and re-measure logic must key off a committed data revision, not raw input/filter signals that can advance before the new payload arrives
+- Increment committed-data revisions only when a new first page replaces the displayed dataset; pagination appends should update measurements in place without forcing a full reset
+
 ### Resource Ownership Rule
 - Every resource-owning surface must have **one explicit lifecycle owner** for setup, update, and teardown
 - Applies to: canvas runtime (SceneCanvasRuntime), renderer host, MapLibre instances, timers, listeners, async cancellation tokens, DOM overlays

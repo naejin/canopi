@@ -1,4 +1,4 @@
-import { useRef, useEffect, useReducer } from 'preact/hooks';
+import { useRef, useLayoutEffect, useReducer } from 'preact/hooks';
 import { useSignalEffect } from '@preact/signals';
 import {
   Virtualizer,
@@ -10,15 +10,13 @@ import { t } from '../../i18n';
 import { locale } from '../../state/app';
 import {
   searchResults,
+  searchResultsRevision,
   isSearching,
   searchError,
   nextCursor,
   viewMode,
   loadNextPage,
   searchText,
-  activeFilters,
-  extraFilters,
-  sortField,
   hasActiveFilters,
   retrySearch,
 } from '../../state/plant-db';
@@ -54,33 +52,27 @@ function makeVirtOpts(
 
 export function ResultsList() {
   const results = searchResults.value;
+  const resultSetRevision = searchResultsRevision.value;
   const searching = isSearching.value;
   const error = searchError.value;
   const hasMore = nextCursor.value !== null;
   const mode = viewMode.value;
-  const activeLocale = locale.value;
-  const searchSignature = JSON.stringify({
-    text: searchText.value,
-    filters: activeFilters.value,
-    extras: extraFilters.value,
-    sort: sortField.value,
-    locale: activeLocale,
-  });
+  void locale.value;
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const forceUpdate = useForceUpdate();
   const virtualizerRef = useRef<Virtualizer<HTMLDivElement, Element> | null>(null);
+  const virtualizerCleanupRef = useRef<(() => void) | null>(null);
 
-  // Rebuild the virtualizer for each distinct search so stale range/scroll state
-  // from a previous query cannot leak into the next result set.
-  useEffect(() => {
+  // Rebuild the virtualizer when a brand-new first page replaces the current
+  // result set. Query text can change before the async search resolves, so using
+  // query inputs as the reset key recreates the list against stale rows.
+  useLayoutEffect(() => {
     if (mode !== 'list') {
       // Cleanup if switching away from list
-      if (virtualizerRef.current) {
-        const cleanup = virtualizerRef.current._didMount();
-        cleanup?.();
-        virtualizerRef.current = null;
-      }
+      virtualizerCleanupRef.current?.();
+      virtualizerCleanupRef.current = null;
+      virtualizerRef.current = null;
       return;
     }
 
@@ -94,33 +86,37 @@ export function ResultsList() {
     };
 
     const virt = new Virtualizer<HTMLDivElement, Element>(
-      makeVirtOpts(scrollRef, searchResults.value.length, handleChange),
+      makeVirtOpts(scrollRef, results.length, handleChange),
     );
 
     virtualizerRef.current = virt;
     const cleanup = virt._didMount();
+    virtualizerCleanupRef.current = cleanup;
     virt._willUpdate();
 
     return () => {
       cleanup?.();
+      virtualizerCleanupRef.current = null;
       virtualizerRef.current = null;
     };
-  // forceUpdate is stable (reducer dispatch); rebuild on search changes
+  // forceUpdate is stable (reducer dispatch); rebuild when the displayed
+  // result set is replaced or list mode changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, searchSignature]);
+  }, [mode, resultSetRevision]);
 
-  // Keep Virtualizer count in sync with searchResults signal changes
+  // Keep Virtualizer measurements in sync when rows are appended or replaced
+  // without swapping to a new scroll element.
   useSignalEffect(() => {
-    const count = searchResults.value.length;
+    const results = searchResults.value;
     const virt = virtualizerRef.current;
     if (!virt) return;
     virt.setOptions(
-      makeVirtOpts(scrollRef, count, (instance) => {
+      makeVirtOpts(scrollRef, results.length, (instance) => {
         virtualizerRef.current = instance;
         forceUpdate();
       }),
     );
-    virt._willUpdate();
+    virt.measure();
   });
 
   // Infinite scroll: load next page when near the bottom

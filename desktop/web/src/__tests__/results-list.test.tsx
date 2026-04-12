@@ -7,36 +7,56 @@ const virtualCoreMocks = vi.hoisted(() => {
   const instances: Array<{
     cleanup: ReturnType<typeof vi.fn>
     setOptions: ReturnType<typeof vi.fn>
+    measure: ReturnType<typeof vi.fn>
     _didMount: ReturnType<typeof vi.fn>
     _willUpdate: ReturnType<typeof vi.fn>
     getVirtualItems: ReturnType<typeof vi.fn>
     getTotalSize: ReturnType<typeof vi.fn>
     options: {
       count: number
+      getScrollElement?: () => unknown
       onChange?: (instance: unknown) => void
     }
   }> = []
 
   class MockVirtualizer {
     cleanup = vi.fn()
+    scrollElement: unknown = null
     options: {
       count: number
+      getScrollElement?: () => unknown
       onChange?: (instance: unknown) => void
     }
 
-    constructor(options: { count: number; onChange?: (instance: unknown) => void }) {
+    constructor(options: {
+      count: number
+      getScrollElement?: () => unknown
+      onChange?: (instance: unknown) => void
+    }) {
       this.options = options
       instances.push(this)
     }
 
-    setOptions = vi.fn((nextOptions: { count: number; onChange?: (instance: unknown) => void }) => {
+    setOptions = vi.fn((nextOptions: {
+      count: number
+      getScrollElement?: () => unknown
+      onChange?: (instance: unknown) => void
+    }) => {
       this.options = nextOptions
+    })
+
+    measure = vi.fn(() => {
+      this.options.onChange?.(this)
     })
 
     _didMount = vi.fn(() => this.cleanup)
 
     _willUpdate = vi.fn(() => {
-      this.options.onChange?.(this)
+      const nextScrollElement = this.options.getScrollElement?.() ?? null
+      if (this.scrollElement !== nextScrollElement) {
+        this.scrollElement = nextScrollElement
+        this.options.onChange?.(this)
+      }
     })
 
     getVirtualItems = vi.fn(() => (
@@ -83,6 +103,7 @@ import {
   nextCursor,
   searchError,
   searchResults,
+  searchResultsRevision,
   searchText,
   sortField,
   viewMode,
@@ -148,6 +169,7 @@ describe('ResultsList', () => {
       makePlant('Aegopodium podagraria'),
       makePlant('Allium angulosum'),
     ]
+    searchResultsRevision.value = 1
     nextCursor.value = null
     isSearching.value = false
     searchError.value = null
@@ -156,25 +178,6 @@ describe('ResultsList', () => {
   afterEach(() => {
     render(null, container)
     container.remove()
-  })
-
-  it('recreates the virtualizer when the search signature changes', async () => {
-    await act(async () => {
-      render(<ResultsList />, container)
-    })
-
-    expect(virtualCoreMocks.instances).toHaveLength(1)
-    const firstVirtualizer = virtualCoreMocks.instances[0]
-
-    await act(async () => {
-      activeFilters.value = {
-        ...defaultFilters(),
-        habit: ['Herbaceous'],
-      }
-    })
-
-    expect(virtualCoreMocks.instances).toHaveLength(2)
-    expect(firstVirtualizer?.cleanup).toHaveBeenCalledTimes(1)
   })
 
   it('keeps the existing virtualizer when only more rows are appended', async () => {
@@ -194,6 +197,40 @@ describe('ResultsList', () => {
 
     expect(virtualCoreMocks.instances).toHaveLength(1)
     expect(firstVirtualizer?.setOptions).toHaveBeenCalled()
+    expect(firstVirtualizer?.measure).toHaveBeenCalled()
     expect(firstVirtualizer?.cleanup).not.toHaveBeenCalled()
+  })
+
+  it('rebuilds the virtualizer when a new first-page result set replaces stale rows', async () => {
+    searchResults.value = [
+      makePlant('Abies alba'),
+      makePlant('Abies spectabilis'),
+    ]
+    searchResultsRevision.value = 10
+
+    await act(async () => {
+      render(<ResultsList />, container)
+    })
+
+    expect(virtualCoreMocks.instances).toHaveLength(1)
+    const firstVirtualizer = virtualCoreMocks.instances[0]
+
+    await act(async () => {
+      searchText.value = 'as'
+      isSearching.value = true
+    })
+
+    expect(virtualCoreMocks.instances).toHaveLength(1)
+
+    await act(async () => {
+      searchResults.value = Array.from({ length: 50 }, (_, index) =>
+        makePlant(`Plant ${index + 1}`),
+      )
+      searchResultsRevision.value = 11
+      isSearching.value = false
+    })
+
+    expect(virtualCoreMocks.instances).toHaveLength(2)
+    expect(firstVirtualizer?.cleanup).toHaveBeenCalledTimes(1)
   })
 })

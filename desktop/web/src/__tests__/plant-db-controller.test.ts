@@ -64,6 +64,26 @@ describe('plant DB controller lifecycle', () => {
     expect(mocks.searchSpecies).not.toHaveBeenCalled()
   })
 
+  it('increments result-set revision on first-page searches but not pagination appends', async () => {
+    const plantDb = await import('../state/plant-db')
+    const dispose = plantDb.mountPlantDbController()
+
+    await flushMicrotasks()
+    expect(plantDb.searchResultsRevision.value).toBe(1)
+
+    plantDb.nextCursor.value = 'offset:50'
+    ;(mocks.searchSpecies as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      items: [],
+      next_cursor: null,
+      total_estimate: 0,
+    })
+
+    await plantDb.loadNextPage()
+
+    expect(plantDb.searchResultsRevision.value).toBe(1)
+    dispose()
+  })
+
   it('caches dynamic filter options per locale', async () => {
     const plantDb = await import('../state/plant-db')
     const appState = await import('../state/app')

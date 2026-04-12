@@ -163,6 +163,7 @@ These align with the core risks identified in the architecture review.
 - ~~TimelineTab missing `font-weight: 600`~~ — **done**: chip, toolBtn, addBtn, saveBtn, cancelBtn, emptyAddBtn all missing weight. Interactive elements rendered at browser default 400 instead of label weight 600
 - ~~`Intl.NumberFormat` per-row construction in BudgetTab~~ — **done**: `formatCurrency` created new formatter on every call (~40-60 calls per render with 20 species). Added module-level `Map<string, Intl.NumberFormat>` cache keyed by currency
 - ~~`.exportBtn` missing `font-weight`~~ — **done**: interactive button inherited body weight 400 instead of label weight 600. Added `font-weight: 600` per typography rule
+- ~~Plant search list freezes on stale narrow-result virtualizer after deleting text~~ — **done**: `ResultsList` now resets off committed first-page replacements via `searchResultsRevision` instead of raw query inputs, and same-container row-count updates call `virt.measure()` so the visible range recomputes immediately. Locale/view toggles are no longer required to recover from `asr` → `as` style widening queries
 
 ### 6. Documentation
 - Keep canvas/runtime/renderer docs aligned with the live architecture
