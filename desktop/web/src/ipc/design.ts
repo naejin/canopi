@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { save, open } from '@tauri-apps/plugin-dialog'
 import type { CanopiFile, DesignSummary, AutosaveEntry } from '../types/design'
+import { designPath } from '../state/design'
 
 // ---------------------------------------------------------------------------
 // File dialogs — run in the frontend (JS) to avoid GTK deadlock on Linux.
@@ -12,8 +13,10 @@ import type { CanopiFile, DesignSummary, AutosaveEntry } from '../types/design'
  * Returns the saved path. Throws "Dialog cancelled" if user dismisses.
  */
 export async function saveDesignAs(content: CanopiFile): Promise<string> {
+  const currentPath = designPath.peek()
+  const defaultName = `${content.name || 'Untitled'}.canopi`
   const filePath = await save({
-    defaultPath: `${content.name || 'Untitled'}.canopi`,
+    defaultPath: currentPath ?? defaultName,
     filters: [{ name: 'Canopi Design', extensions: ['canopi'] }],
   })
   if (!filePath) throw new Error('Dialog cancelled')
@@ -26,7 +29,10 @@ export async function saveDesignAs(content: CanopiFile): Promise<string> {
  * Returns the loaded CanopiFile. Throws "Dialog cancelled" if user dismisses.
  */
 export async function openDesignDialog(): Promise<{ file: CanopiFile; path: string }> {
+  const currentPath = designPath.peek()
+  const defaultDir = currentPath ? currentPath.substring(0, currentPath.lastIndexOf('/') + 1) : undefined
   const selected = await open({
+    defaultPath: defaultDir,
     filters: [{ name: 'Canopi Design', extensions: ['canopi'] }],
     multiple: false,
   })
