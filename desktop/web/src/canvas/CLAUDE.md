@@ -79,6 +79,7 @@ Konva / `CanvasEngine` code has been removed. Do not reintroduce Konva or `getEn
 - selection labels are computed by `runtime/selection-labels.ts`, separate from the presentation pipeline; both renderers recompute labels on viewport change
 - size mode and color mode are independent axes; do not reintroduce a combined `plantDisplayMode`
 - bounds, zoom-to-fit, grouping, renderers, and interaction must all consume the same resolved presentation state
+- **Designs auto-fit to content on open**: Both document-load paths call `session.zoomToFit()` after hydration. Safe for empty/new designs — `computeSceneBounds()` returns null and the camera returns the current viewport unchanged
 - species-cache backfill may enrich plant metadata, but production geometry should never depend on ad hoc empty-cache fallbacks
 - **Default-mode dot sizing is world-proportional**: `PLANT_WORLD_RADIUS = 0.12m` (24cm diameter) gives ~80% fill at 30cm spacing, ~48% at 50cm. Screen size is capped at `CIRCLE_SCREEN_PX` (8px) when zoomed in and floored at `MIN_SCREEN_PX` (2px) when zoomed far out. Do not reintroduce fixed screen-pixel sizing — it causes unreadable overlap in dense designs. Do not use `zoomReference` as a pivot — it's design-dependent and produces inconsistent behavior
 

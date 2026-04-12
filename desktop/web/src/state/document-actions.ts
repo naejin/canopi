@@ -278,6 +278,7 @@ function applyDocumentReplacement(
   resetDirtyBaselines()
   session.clearHistory()
   session.showCanvasChrome()
+  session.zoomToFit()
 }
 
 function normalizeDocument(file: CanopiFile, extra: Record<string, unknown>): CanopiFile {

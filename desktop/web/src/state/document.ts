@@ -69,6 +69,7 @@ export function loadCanvasFromDocument(
   session: CanvasRuntime,
 ): void {
   session.loadDocument(file)
+  session.zoomToFit()
   installConsortiumSync()
 }
 

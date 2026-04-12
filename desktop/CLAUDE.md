@@ -14,6 +14,7 @@
 - **Preserve all loaded document sections on save** — timeline, budget, consortiums, description, location, extra fields
 - **No `?? []` fallbacks on required `CanopiFile` array fields in TS**: Rust `#[serde(default)]` guarantees presence. TS-side `??` fallbacks are dead code that masks type errors. Only use `?? []` where the parent object is nullable (`currentDesign.value?.field ?? []`)
 - **`installConsortiumSync()` must be active before any document load completes** — `loadCanvasFromDocument` installs it, but `applyDocumentReplacement` (queued loads, template imports) does not. `CanvasPanel` must call it unconditionally at mount, not only when `currentDesign.value` exists
+- **Two document-load paths must stay in sync for post-load behavior**: `applyDocumentReplacement()` in `document-actions.ts` (open/new/template/OS-open) and `loadCanvasFromDocument()` in `document.ts` (CanvasPanel mount with existing design). Both call `session.zoomToFit()` after hydration. When adding new post-load behavior, update both paths
 - **Preserve per-object non-visual fields** — plant notes/planted_date/quantity and zone notes
 - **Preserve unknown `extra` fields** — `extractExtra()` captures unknown top-level keys. Spread extra FIRST when composing the save output
 - **File format version**: `CURRENT_VERSION` constant in `desktop/src/design/format.rs` — used by migration loop, `create_default()`, and forward-version diagnostic log. Type is `u32` (matches `CanopiFile.version`). Cast to `u64` only at the JSON boundary (`serde_json::as_u64()`)
