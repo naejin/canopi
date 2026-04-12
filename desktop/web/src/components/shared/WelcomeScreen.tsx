@@ -70,7 +70,7 @@ export function WelcomeScreen() {
                   <div className={styles.recentInfo}>
                     <span className={styles.recentName}>{file.name}</span>
                     <span className={styles.recentMeta}>
-                      {formatDate(file.updated_at)}
+                      {formatDate(file.updated_at, locale.value)}
                       {file.plant_count > 0 && ` · ${file.plant_count} plants`}
                     </span>
                   </div>
@@ -84,16 +84,17 @@ export function WelcomeScreen() {
   )
 }
 
-function formatDate(iso: string): string {
+function formatDate(iso: string, lang: string): string {
   try {
     const d = new Date(iso)
     const now = new Date()
     const diffMs = now.getTime() - d.getTime()
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-    if (diffDays === 0) return 'Today'
-    if (diffDays === 1) return 'Yesterday'
-    if (diffDays < 7) return `${diffDays} days ago`
-    return d.toLocaleDateString()
+    if (diffDays < 7) {
+      const rtf = new Intl.RelativeTimeFormat(lang, { numeric: 'auto' })
+      return rtf.format(-diffDays, 'day')
+    }
+    return d.toLocaleDateString(lang)
   } catch {
     return ''
   }

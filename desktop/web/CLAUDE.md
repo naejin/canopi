@@ -127,5 +127,8 @@
 ## TypeScript Patterns
 - **`satisfies` for typed string sets**: When a `Set<string>` must contain only valid keys of a type but `.has()` receives `string`, use `new Set<string>([...] satisfies (keyof T)[])` - compile-time validation at definition, no casts at call sites
 
+## Date Formatting
+- **Use `Intl.RelativeTimeFormat` + `Intl.DateTimeFormat` with `locale.value`** for date display — no i18n keys needed. `numeric: 'auto'` gives "today"/"yesterday" instead of "0 days ago"/"1 day ago". Pass `locale.value` as the locale argument to both APIs
+
 ## Testing (Vitest)
 - **i18n in Vitest**: The i18n module eagerly loads all 11 locale files at import time — `t()` returns real translations in tests without mocking. `locale.value` changes trigger `i18n.changeLanguage()` synchronously via module-level `effect()`
