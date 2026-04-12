@@ -42,6 +42,8 @@
 - **FTS5 weighted columns**: `species_search_fts` has 5 columns: `canonical_name`, `common_names`, `family_genus`, `uses_text`, `other_text`. Ranked via `bm25(species_search_fts, 8, 10, 5, 1, 1)` — common name matches rank above canonical name matches. Built in `prepare-db.py build_search_index()`
 - **FTS5 MATCH syntax**: Always use full table name (`species_search_fts MATCH ?1`), never an alias
 - **FTS5 sanitization**: Strip ALL metacharacters `"()*+-^:\` — not just quotes. Empty after sanitization -> skip FTS
+- **`sanitize_fts_text` is `pub(crate)`**: Shared FTS sanitization helper (strip metacharacters, trim, wildcard). Used by both `QueryBuilder::build()` and `build_count_query()`, and by `search.rs` for relevance-offset detection
+- **`build_count_query(text, filters)` for total counts**: Standalone function in `query_builder/builder.rs` that builds `SELECT COUNT(*)` with the same FTS + filter logic as `QueryBuilder::build()`. Takes `Option<&str>` and `&SpeciesFilter` by reference — call it before moving values into `QueryBuilder::new()` (borrow-then-move pattern). Skips locale JOINs, cursor, ORDER BY, LIMIT
 
 ## Translations
 - **`translated_values` table is wide format**: 22 language columns (`value_en`, `value_fr`, `value_es`, `value_pt`, `value_it`, `value_zh`, `value_de`, `value_ja`, `value_ko`, `value_nl`, `value_ru`, `value_fi`, `value_cs`, `value_pl`, `value_sv`, `value_da`, `value_ca`, `value_uk`, `value_hr`, `value_hu`). App UI supports 11 languages; extra 11 carried in DB for future expansion. NOT a normalized table with `language`/`translated` columns. `translate_value()` in `plant_db.rs` maps locale to column name via allowlist
