@@ -2,8 +2,8 @@ import {
   hoveredPanelTargets,
   selectedPanelTargetOrigin,
   selectedPanelTargets,
-  type BottomPanelTab,
-} from "../../state/canvas";
+} from "./state";
+import type { BottomPanelTab } from "../../state/canvas";
 import { panelTargetsEqual } from "../../panel-targets";
 import type { PanelTarget } from "../../types/design";
 

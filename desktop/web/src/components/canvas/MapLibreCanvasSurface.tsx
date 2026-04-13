@@ -30,15 +30,14 @@ import {
 import {
   contourIntervalMeters,
   hasVisibleMapLayer,
-  hoveredPanelTargets,
   hillshadeOpacity,
   hillshadeVisible,
   layerOpacity,
   layerVisibility,
   northBearingDeg,
   sceneEntityRevision,
-  selectedPanelTargets,
 } from '../../state/canvas'
+import { hoveredPanelTargets, selectedPanelTargets } from '../../app/panel-targets/state'
 import { theme } from '../../app/settings/state'
 import { currentDesign } from '../../state/design'
 import { loadMapLibre, type MapLibreApi, type MapLibreMapInstance } from './maplibre-loader'

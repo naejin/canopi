@@ -1,6 +1,5 @@
 import { signal } from '@preact/signals'
 import type { Guide } from '../canvas/guides'
-import type { PanelTarget } from '../types/design'
 
 export const activeTool = signal<string>('select')
 export const zoomLevel = signal<number>(1)
@@ -117,20 +116,3 @@ export const VISIBLE_BOTTOM_PANEL_TABS: BottomPanelTab[] = ['timeline', 'budget'
 export const bottomPanelOpen = signal<boolean>(false)
 export const bottomPanelTab = signal<BottomPanelTab>('budget')
 export const bottomPanelHeight = signal<number>(200)
-
-// Bottom-panel target hover bridge. The canvas runtime resolves these document
-// targets to scene IDs without mutating canvas selection/history.
-export const hoveredPanelTargets = signal<readonly PanelTarget[]>([])
-
-// Bottom-panel target selection bridge. This is panel-origin presentation state:
-// the canvas runtime resolves it to scene highlights without mutating canvas
-// selection, selection labels, dirty state, or history.
-export const selectedPanelTargets = signal<readonly PanelTarget[]>([])
-
-// Tracks which bottom-panel tab owns the current panel-origin selection so tab
-// cleanup only clears its own selection.
-export const selectedPanelTargetOrigin = signal<BottomPanelTab | null>(null)
-
-// Canvas-origin target hover bridge. Bottom-panel components can read this for
-// hover-only affordances without mutating panel selection/history.
-export const hoveredCanvasTargets = signal<readonly PanelTarget[]>([])

@@ -6,14 +6,13 @@ import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import { MapLibreCanvasSurface } from '../components/canvas/MapLibreCanvasSurface'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { currentDesign } from '../state/design'
+import { hoveredPanelTargets, selectedPanelTargets } from '../app/panel-targets/state'
 import {
   contourIntervalMeters,
   hillshadeOpacity,
   hillshadeVisible,
-  hoveredPanelTargets,
   layerOpacity,
   layerVisibility,
-  selectedPanelTargets,
 } from '../state/canvas'
 
 const removeMock = vi.fn()

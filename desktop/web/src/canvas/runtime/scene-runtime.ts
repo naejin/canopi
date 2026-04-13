@@ -2,17 +2,19 @@ import { signal } from '@preact/signals'
 import { locale } from '../../app/settings/state'
 import { clearPanelOriginTargets } from '../../app/panel-targets/coordinator'
 import {
-  gridVisible,
-  guides,
   hoveredCanvasTargets,
   hoveredPanelTargets,
+  selectedPanelTargets,
+} from '../../app/panel-targets/state'
+import {
+  gridVisible,
+  guides,
   layerVisibility,
   lockedObjectIds,
   plantNamesRevision,
   plantSpeciesColors,
   rulersVisible,
   sceneEntityRevision,
-  selectedPanelTargets,
   snapToGridEnabled,
 } from '../../state/canvas'
 import type { ColorByAttribute, PlantSizeMode } from '../../state/canvas'

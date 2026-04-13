@@ -8,8 +8,8 @@ vi.mock('../components/canvas/useCanvasRenderer', () => ({
 
 import { InteractiveTimeline } from '../components/canvas/InteractiveTimeline'
 import { TimelineTab } from '../components/canvas/TimelineTab'
+import { hoveredPanelTargets, selectedPanelTargetOrigin, selectedPanelTargets } from '../app/panel-targets/state'
 import { currentDesign } from '../state/design'
-import { hoveredPanelTargets, selectedPanelTargetOrigin, selectedPanelTargets } from '../state/canvas'
 import { speciesTarget } from '../panel-targets'
 import type { CanopiFile, TimelineAction } from '../types/design'
 

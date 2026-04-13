@@ -8,8 +8,6 @@ vi.mock('../../ipc/species', () => ({
 import {
   activeTool,
   guides,
-  hoveredCanvasTargets,
-  hoveredPanelTargets,
   layerOpacity,
   layerVisibility,
   lockedObjectIds,
@@ -17,11 +15,15 @@ import {
   plantColorByAttr,
   plantStampSpecies,
   plantSizeMode,
-  selectedPanelTargetOrigin,
-  selectedPanelTargets,
   selectedObjectIds,
   snapToGridEnabled,
 } from '../../state/canvas'
+import {
+  hoveredCanvasTargets,
+  hoveredPanelTargets,
+  selectedPanelTargetOrigin,
+  selectedPanelTargets,
+} from '../../app/panel-targets/state'
 import { canvasClean } from '../../state/design'
 import { locale } from '../../app/settings/state'
 import type { CanopiFile } from '../../types/design'

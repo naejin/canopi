@@ -10,7 +10,7 @@ import {
   hoveredPanelTargets,
   selectedPanelTargetOrigin,
   selectedPanelTargets,
-} from "../state/canvas";
+} from "../app/panel-targets/state";
 import { speciesTarget } from "../panel-targets";
 
 describe("panel target coordinator", () => {

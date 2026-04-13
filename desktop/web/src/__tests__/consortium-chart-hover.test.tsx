@@ -28,9 +28,8 @@ vi.mock('../components/canvas/useCanvasRenderer', () => ({
 import { ConsortiumChart } from '../components/canvas/ConsortiumChart'
 import { currentCanvasSession } from '../canvas/session'
 import { currentDesign } from '../state/design'
+import { hoveredCanvasTargets, hoveredPanelTargets } from '../app/panel-targets/state'
 import {
-  hoveredCanvasTargets,
-  hoveredPanelTargets,
   plantNamesRevision,
   sceneEntityRevision,
 } from '../state/canvas'
