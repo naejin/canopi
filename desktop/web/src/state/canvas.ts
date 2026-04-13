@@ -83,7 +83,6 @@ export function hasVisibleMapLayer(
     || hillshadeOn
 }
 
-export const plantColorMenuOpen = signal<boolean>(false)
 export const plantSpeciesColors = signal<Record<string, string>>({})
 
 // Canvas entity revision — incremented on every scene mutation (plant/zone/annotation

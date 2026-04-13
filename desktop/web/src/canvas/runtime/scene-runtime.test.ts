@@ -11,10 +11,10 @@ import {
   layerOpacity,
   layerVisibility,
   lockedObjectIds,
-  plantColorMenuOpen,
   selectedObjectIds,
   snapToGridEnabled,
 } from '../../state/canvas'
+import { plantColorMenuOpen } from '../plant-color-menu-state'
 import { plantColorByAttr, plantSizeMode } from '../plant-display-state'
 import { plantStampSpecies } from '../plant-tool-state'
 import {

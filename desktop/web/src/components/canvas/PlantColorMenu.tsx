@@ -1,5 +1,6 @@
 import { locale } from '../../app/settings/state'
-import { plantColorMenuOpen, plantSpeciesColors } from '../../state/canvas'
+import { plantColorMenuOpen } from '../../canvas/plant-color-menu-state'
+import { plantSpeciesColors } from '../../state/canvas'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { currentCanvasSelection, currentCanvasSession } from '../../canvas/session'
 import {

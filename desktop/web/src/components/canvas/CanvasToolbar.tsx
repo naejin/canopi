@@ -3,11 +3,11 @@ import type { ComponentChildren } from 'preact'
 import { useRef } from 'preact/hooks'
 import {
   gridVisible,
-  plantColorMenuOpen,
   rulersVisible,
   snapToGridEnabled,
 } from '../../state/canvas'
 import { locale } from '../../app/settings/state'
+import { plantColorMenuOpen } from '../../canvas/plant-color-menu-state'
 import { t } from '../../i18n'
 import { currentCanvasSelection, currentCanvasSession, currentCanvasTool } from '../../canvas/session'
 import {

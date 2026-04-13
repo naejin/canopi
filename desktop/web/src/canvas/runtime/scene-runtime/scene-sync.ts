@@ -6,9 +6,9 @@ import {
   layerVisibility,
   lockedObjectIds,
   northBearingDeg,
-  plantColorMenuOpen,
   plantSpeciesColors,
 } from '../../../state/canvas'
+import { plantColorMenuOpen } from '../../plant-color-menu-state'
 import type { CanopiFile } from '../../../types/design'
 import { plantColorByAttr, plantSizeMode } from '../../plant-display-state'
 import { clearCanvasSelection, setCanvasSelection, setCanvasTool } from '../../session-state'
