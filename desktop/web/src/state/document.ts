@@ -3,7 +3,7 @@
  * New document-session policy lives under app/document-session, while
  * state/design remains the low-level signal store.
  */
-export { extractExtra } from "./document-extra";
+export { extractDocumentExtra as extractExtra } from "../app/contracts/document";
 export {
   designDirty,
   designPath,

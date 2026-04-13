@@ -5,7 +5,7 @@
  * extractExtra() captures these so they survive the TS round-trip.
  */
 import { describe, it, expect } from 'vitest'
-import { extractExtra } from '../state/document-extra'
+import { extractDocumentExtra as extractExtra } from '../app/contracts/document'
 
 describe('extractExtra', () => {
   it('returns empty object for known-only keys', () => {
