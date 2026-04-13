@@ -10,7 +10,7 @@ import {
 } from '../../app/canvas-settings/signals'
 import { layerOpacity, layerVisibility } from '../../app/canvas-settings/signals'
 import { guides } from '../scene-metadata-state'
-import { lockedObjectIds } from '../runtime-mirror-state'
+import { lockedObjectIds, sceneEntityRevision } from '../runtime-mirror-state'
 import { plantColorMenuOpen } from '../plant-color-menu-state'
 import { plantColorByAttr, plantSizeMode } from '../plant-display-state'
 import { plantStampSpecies } from '../plant-tool-state'
@@ -250,6 +250,36 @@ describe('scene canvas runtime', () => {
     runtime.zoomIn()
 
     expect(runtime.viewportRevision.value).toBeGreaterThan(before)
+  })
+
+  it('skips stale presentation backfills after scene revision changes', async () => {
+    const runtime = new SceneCanvasRuntime()
+    runtime.loadDocument(makeFile())
+
+    const applyPresentationBackfills = vi.spyOn(
+      (runtime as any)._documents,
+      'applyPresentationBackfills',
+    )
+    let resolveRefresh!: (value: { changed: boolean; backfills: Array<{ plantId: string; stratum: string | null; canopySpreadM: number | null; scale: number | null }> | null }) => void
+    const pendingRefresh = new Promise<{ changed: boolean; backfills: Array<{ plantId: string; stratum: string | null; canopySpreadM: number | null; scale: number | null }> | null }>((resolve) => {
+      resolveRefresh = resolve
+    })
+    ;(runtime as any)._presentation.refreshSpeciesCacheEntries = vi.fn(() => pendingRefresh)
+
+    const pending = runtime.ensureSpeciesCacheEntries(['Malus domestica'], 'en')
+    sceneEntityRevision.value += 1
+    resolveRefresh({
+      changed: true,
+      backfills: [{
+        plantId: 'plant-1',
+        stratum: 'canopy',
+        canopySpreadM: 4,
+        scale: 4,
+      }],
+    })
+
+    await expect(pending).resolves.toBe(false)
+    expect(applyPresentationBackfills).not.toHaveBeenCalled()
   })
 
   it('derives selected plant context from scene session, not the mirror signal', () => {

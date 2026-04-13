@@ -61,9 +61,10 @@ export class SceneCanvasRuntime implements CanvasRuntime {
     getRendererHost: () => this._rendererHost,
     getViewport: () => this._camera.viewport,
     prepareSceneSnapshot: async () => {
+      const presentationRevision = this._currentPresentationRevision()
       this._applySignalBackedSceneState({ recordHistory: false, syncGuides: true })
       const presentation = await this._presentation.refreshCurrentPresentationData()
-      this._documents.applyPresentationBackfills(presentation.backfills)
+      this._applyPresentationBackfillsIfCurrent(presentationRevision, presentation.backfills)
       return this._presentation.buildRendererSnapshot()
     },
     renderChrome: () => this._renderChrome(),
@@ -340,10 +341,15 @@ export class SceneCanvasRuntime implements CanvasRuntime {
   }
 
   async ensureSpeciesCacheEntries(canonicalNames: string[], activeLocale: string): Promise<boolean> {
+    const presentationRevision = this._currentPresentationRevision()
     const result = await this._presentation.refreshSpeciesCacheEntries(canonicalNames, activeLocale)
-    this._documents.applyPresentationBackfills(result.backfills)
+    const appliedBackfills = this._applyPresentationBackfillsIfCurrent(
+      presentationRevision,
+      result.backfills,
+    )
+    if (presentationRevision !== this._currentPresentationRevision()) return false
     if (result.changed) this._invalidate('scene')
-    return result.changed
+    return result.changed || appliedBackfills
   }
 
   setSelectedPlantColor(color: string | null): number {
@@ -410,6 +416,18 @@ export class SceneCanvasRuntime implements CanvasRuntime {
 
   private _invalidate(kind: RuntimeInvalidationKind = 'scene'): void {
     this._rendering.invalidate(kind as SceneRuntimeRenderKind)
+  }
+
+  private _currentPresentationRevision(): number {
+    return sceneEntityRevision.value
+  }
+
+  private _applyPresentationBackfillsIfCurrent(
+    expectedRevision: number,
+    backfills: Parameters<SceneRuntimeDocumentBridge['applyPresentationBackfills']>[0],
+  ): boolean {
+    if (expectedRevision !== this._currentPresentationRevision()) return false
+    return this._documents.applyPresentationBackfills(backfills)
   }
 
   private _setSelection(ids: Iterable<string>): void {

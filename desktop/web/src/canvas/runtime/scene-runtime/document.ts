@@ -142,13 +142,22 @@ export class SceneRuntimeDocumentBridge {
     }
   }
 
-  applyPresentationBackfills(backfills: ReadonlyArray<PlantPresentationBackfill> | null): void {
-    if (!backfills || backfills.length === 0) return
+  applyPresentationBackfills(backfills: ReadonlyArray<PlantPresentationBackfill> | null): boolean {
+    if (!backfills || backfills.length === 0) return false
     const byId = new Map(backfills.map((entry) => [entry.plantId, entry]))
+    let changed = false
     this._sceneStore.updatePersisted((draft) => {
       draft.plants = draft.plants.map((plant) => {
         const next = byId.get(plant.id)
         if (!next) return plant
+        if (
+          next.stratum === plant.stratum
+          && next.canopySpreadM === plant.canopySpreadM
+          && next.scale === plant.scale
+        ) {
+          return plant
+        }
+        changed = true
         return {
           ...plant,
           stratum: next.stratum,
@@ -157,6 +166,7 @@ export class SceneRuntimeDocumentBridge {
         }
       })
     })
+    return changed
   }
 
   markSaved(): void {
