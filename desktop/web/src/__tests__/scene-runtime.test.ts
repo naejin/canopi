@@ -60,6 +60,9 @@ describe('SceneCanvasRuntime', () => {
     runtime.loadDocument({
       ...BASE_FILE,
       plants: [createPlant('plant-1', 10, 20)],
+      extra: {
+        guides: [{ id: 'guide-1', axis: 'h', position: 42 }],
+      },
     })
 
     runtime.selectAll()
@@ -102,6 +105,9 @@ describe('SceneCanvasRuntime', () => {
     runtime.loadDocument({
       ...BASE_FILE,
       plants: [createPlant('plant-1', 10, 20)],
+      extra: {
+        guides: [{ id: 'guide-1', axis: 'h', position: 42 }],
+      },
     })
     runtime.selectAll()
     runtime.setSelectedPlantColor('#228833')
@@ -144,6 +150,7 @@ describe('SceneCanvasRuntime', () => {
         }],
         extra: {
           guides: [{ id: 'guide-1', axis: 'h', position: 42 }],
+          preserved_from_document: true,
         },
       },
     )
@@ -157,8 +164,63 @@ describe('SceneCanvasRuntime', () => {
     expect(serialized.budget_currency).toBe('EUR')
     expect(serialized.extra).toEqual({
       guides: [{ id: 'guide-1', axis: 'h', position: 42 }],
+      preserved_from_document: true,
     })
     expect(serialized.plants[0]?.color).toBe('#228833')
+  })
+
+  it('undo and redo keep document-owned metadata outside scene history', () => {
+    const runtime = new SceneCanvasRuntime()
+    const documentCopy: CanopiFile = {
+      ...BASE_FILE,
+      description: 'Document authority description',
+      location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
+      north_bearing_deg: 27,
+      plants: [createPlant('plant-1', 10, 20)],
+      extra: {
+        guides: [{ id: 'guide-1', axis: 'h', position: 42 }],
+        preserved_from_document: { nested: true },
+      },
+    }
+
+    runtime.loadDocument(documentCopy)
+    runtime.selectAll()
+    runtime.setSelectedPlantColor('#228833')
+    runtime.undo()
+
+    const afterUndo = runtime.serializeDocument(
+      {
+        name: 'Updated',
+        description: documentCopy.description,
+        location: documentCopy.location,
+        northBearingDeg: documentCopy.north_bearing_deg,
+      },
+      documentCopy,
+    )
+
+    expect(afterUndo.description).toBe(documentCopy.description)
+    expect(afterUndo.location).toEqual(documentCopy.location)
+    expect(afterUndo.north_bearing_deg).toBe(documentCopy.north_bearing_deg)
+    expect(afterUndo.extra).toEqual(documentCopy.extra)
+    expect(afterUndo.plants[0]?.color).toBeNull()
+
+    runtime.redo()
+
+    const afterRedo = runtime.serializeDocument(
+      {
+        name: 'Updated',
+        description: documentCopy.description,
+        location: documentCopy.location,
+        northBearingDeg: documentCopy.north_bearing_deg,
+      },
+      documentCopy,
+    )
+
+    expect(afterRedo.description).toBe(documentCopy.description)
+    expect(afterRedo.location).toEqual(documentCopy.location)
+    expect(afterRedo.north_bearing_deg).toBe(documentCopy.north_bearing_deg)
+    expect(afterRedo.extra).toEqual(documentCopy.extra)
+    expect(afterRedo.plants[0]?.color).toBe('#228833')
   })
 
   it('preserves scene-owned species colors when serializing', () => {

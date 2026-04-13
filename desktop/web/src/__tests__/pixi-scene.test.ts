@@ -137,11 +137,6 @@ describe('createPixiSceneRenderer', () => {
 
     const snapshot: SceneRendererSnapshot = {
       scene: {
-        version: 1,
-        name: 'Renderer test',
-        description: null,
-        location: null,
-        northBearingDeg: 0,
         plants: [{
           kind: 'plant',
           id: 'plant-1',
@@ -170,9 +165,7 @@ describe('createPixiSceneRenderer', () => {
         groups: [],
         layers: [],
         plantSpeciesColors: {},
-        createdAt: '2026-04-02T00:00:00.000Z',
-        updatedAt: '2026-04-02T00:00:00.000Z',
-        extra: {},
+        guides: [],
       },
       viewport: { x: 0, y: 0, scale: 1 },
       selectedPlantIds: new Set<string>(),

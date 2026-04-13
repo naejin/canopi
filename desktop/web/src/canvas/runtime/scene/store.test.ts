@@ -115,9 +115,12 @@ describe('scene store', () => {
     expect(roundTripped.groups).toEqual(file.groups)
     expect(roundTripped.layers).toEqual(file.layers)
     expect(roundTripped.plant_species_colors).toEqual(file.plant_species_colors)
-    expect(roundTripped.extra).toEqual(file.extra)
-    expect(roundTripped.name).toBe(file.name)
-    expect(roundTripped.version).toBe(file.version)
+    expect(roundTripped.extra).toEqual({ guides: file.extra?.guides })
+    expect(roundTripped.name).toBe('Untitled')
+    expect(roundTripped.description).toBeNull()
+    expect(roundTripped.location).toBeNull()
+    expect(roundTripped.north_bearing_deg).toBe(0)
+    expect(roundTripped.version).toBe(2)
     // Non-canvas sections must be empty placeholders, NOT the input values
     expect(roundTripped.consortiums).toEqual([])
     expect(roundTripped.timeline).toEqual([])
@@ -199,9 +202,7 @@ describe('scene store', () => {
 
   it('serializes extra metadata under the extra key', () => {
     const persisted = createDefaultScenePersistedState(new Date('2026-04-02T00:00:00.000Z'))
-    persisted.extra = {
-      guides: [{ id: 'g-1', axis: 'h', position: 10 }],
-    }
+    persisted.guides = [{ id: 'g-1', axis: 'h', position: 10 }]
 
     const file = serializeScenePersistedState(persisted, { now: new Date('2026-04-02T00:00:00.000Z') })
 
