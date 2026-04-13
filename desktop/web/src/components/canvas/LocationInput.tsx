@@ -1,32 +1,28 @@
 import { useSignal, useSignalEffect } from '@preact/signals'
-import { useEffect, useRef } from 'preact/hooks'
+import { useEffect, useMemo, useRef } from 'preact/hooks'
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
 import { currentDesign } from '../../state/design'
-import { geocodeAddress } from '../../ipc/geocoding'
-import type { GeoResult } from '../../ipc/geocoding'
-import { clearDesignLocation, setDesignLocation } from '../../app/location/controller'
+import {
+  clearDesignLocation,
+  createLocationSearchController,
+  saveLocationDraft,
+  selectSearchResultLocation,
+  type LocationSearchResult,
+} from '../../app/location'
 import styles from './LocationInput.module.css'
 
 export function LocationInput() {
   void locale.value
 
+  const search = useMemo(() => createLocationSearchController(), [])
   const design = currentDesign.value
   const location = design?.location ?? null
 
   const latInput = useSignal(location?.lat?.toString() ?? '')
   const lonInput = useSignal(location?.lon?.toString() ?? '')
   const altInput = useSignal(location?.altitude_m?.toString() ?? '')
-
-  // Address search state
-  const addressQuery = useSignal('')
-  const searchResults = useSignal<GeoResult[]>([])
-  const isSearching = useSignal(false)
-  const showDropdown = useSignal(false)
-  const searchError = useSignal('')
   const dropdownRef = useRef<HTMLDivElement>(null)
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const requestIdRef = useRef(0)
 
   // Resync input values when the design changes (e.g., open different file)
   useSignalEffect(() => {
@@ -36,86 +32,37 @@ export function LocationInput() {
     altInput.value = loc?.altitude_m?.toString() ?? ''
   })
 
-  // Debounced geocode search
-  useSignalEffect(() => {
-    const query = addressQuery.value.trim()
-
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current)
-      debounceRef.current = null
-    }
-
-    if (query.length < 3) {
-      searchResults.value = []
-      showDropdown.value = false
-      isSearching.value = false
-      searchError.value = ''
-      return
-    }
-
-    isSearching.value = true
-    searchError.value = ''
-
-    debounceRef.current = setTimeout(async () => {
-      const myId = ++requestIdRef.current
-      try {
-        const results = await geocodeAddress(query)
-        if (requestIdRef.current !== myId) return // superseded by newer request
-        searchResults.value = results
-        showDropdown.value = true
-        isSearching.value = false
-      } catch (e) {
-        if (requestIdRef.current !== myId) return
-        searchError.value = t('canvas.location.geocodeError')
-        searchResults.value = []
-        showDropdown.value = true
-        isSearching.value = false
-      }
-    }, 300)
-  })
-
   // Click-outside-to-close + debounce cleanup
   useEffect(() => {
     function handlePointerUp(e: PointerEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        showDropdown.value = false
+        search.closeDropdown()
       }
     }
     document.addEventListener('pointerup', handlePointerUp)
     return () => {
       document.removeEventListener('pointerup', handlePointerUp)
-      if (debounceRef.current) clearTimeout(debounceRef.current)
+      search.dispose()
     }
-  }, [])
+  }, [search])
 
-  function selectResult(result: GeoResult) {
+  function selectResult(result: LocationSearchResult) {
     latInput.value = result.lat.toString()
     lonInput.value = result.lon.toString()
-    addressQuery.value = ''
-    searchResults.value = []
-    showDropdown.value = false
-
-    // Auto-save the selected location — read current design at call time, not render time
-    if (!currentDesign.peek()) return
-    const alt = parseFloat(altInput.value)
-    setDesignLocation({ lat: result.lat, lon: result.lon, altitude_m: isNaN(alt) ? null : alt })
+    search.consumeResult()
+    void selectSearchResultLocation(result, altInput.value)
   }
 
   function save() {
-    if (!currentDesign.peek()) return
-    const lat = parseFloat(latInput.value)
-    const lon = parseFloat(lonInput.value)
-    if (isNaN(lat) || isNaN(lon)) return
-    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return
-
-    const alt = parseFloat(altInput.value)
-
-    setDesignLocation({ lat, lon, altitude_m: isNaN(alt) ? null : alt })
+    void saveLocationDraft({
+      lat: latInput.value,
+      lon: lonInput.value,
+      altitude: altInput.value,
+    })
   }
 
   function clear() {
-    if (!currentDesign.peek()) return
-    clearDesignLocation()
+    void clearDesignLocation()
     latInput.value = ''
     lonInput.value = ''
     altInput.value = ''
@@ -132,35 +79,35 @@ export function LocationInput() {
           <input
             type="text"
             className={styles.searchInput}
-            value={addressQuery.value}
-            onInput={(e) => { addressQuery.value = e.currentTarget.value }}
+            value={search.query.value}
+            onInput={(e) => { search.setQuery(e.currentTarget.value) }}
             placeholder={t('canvas.location.searchPlaceholder')}
           />
         </label>
 
-        {isSearching.value && (
+        {search.isSearching.value && (
           <div className={styles.searchStatus}>
             {t('canvas.location.searching')}
           </div>
         )}
 
-        {showDropdown.value && !isSearching.value && (
+        {search.showDropdown.value && !search.isSearching.value && (
           <div className={styles.dropdown}>
-            {searchError.value ? (
-              <div className={styles.dropdownError}>{searchError.value}</div>
-            ) : searchResults.value.length === 0 ? (
+            {search.errorKey.value ? (
+              <div className={styles.dropdownError}>{t(search.errorKey.value)}</div>
+            ) : search.results.value.length === 0 ? (
               <div className={styles.dropdownEmpty}>
                 {t('canvas.location.noResults')}
               </div>
             ) : (
-              searchResults.value.map((result, i) => (
+              search.results.value.map((result, i) => (
                 <button
                   key={`${result.lat}-${result.lon}-${i}`}
                   type="button"
                   className={styles.resultItem}
                   onClick={() => selectResult(result)}
                 >
-                  {result.display_name}
+                  {result.displayName}
                 </button>
               ))
             )}
