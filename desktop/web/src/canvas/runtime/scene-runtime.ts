@@ -16,9 +16,8 @@ import {
   snapToGridEnabled,
 } from '../../state/canvas'
 import type { ColorByAttribute, PlantSizeMode } from '../../state/canvas'
-import type { CanopiFile, PlacedPlant } from '../../types/design'
+import type { CanopiFile, PanelTarget, PlacedPlant } from '../../types/design'
 import type { SelectedPlantColorContext } from '../plant-color-context'
-import { computeSelectionLabels } from './selection-labels'
 import { clearCanvasSelection, setCanvasSelection, setCanvasTool } from '../session-state'
 import { refreshCanvasColorCache } from '../theme-refresh'
 import { CameraController } from './camera'
@@ -27,15 +26,8 @@ import { SceneInteractionController } from './scene-interaction'
 import { RendererHost } from './renderers'
 import { createCanvas2DSceneRenderer } from './renderers/canvas2d-scene'
 import { createPixiSceneRenderer } from './renderers/pixi-scene'
-import type { SceneRendererContext, SceneRendererInstance, SceneRendererSnapshot } from './renderers/scene-types'
+import type { SceneRendererContext, SceneRendererInstance } from './renderers/scene-types'
 import { SceneStore } from './scene'
-import { CanvasSpeciesCache } from './species-cache'
-import { CanvasPlantLabelResolver } from './plant-labels'
-import {
-  getSelectedAnnotationIds,
-  getSelectedPlantIds,
-  getSelectedZoneIds,
-} from './scene-runtime/selection'
 import {
   applySignalBackedSceneState,
   resetTransientRuntimeState,
@@ -43,12 +35,11 @@ import {
   syncPresentationSignalsFromSceneSession,
 } from './scene-runtime/scene-sync'
 import { installSceneRuntimeEffects } from './scene-runtime/effects'
-import { type PlantPresentationContext } from './plant-presentation'
-import { resolvePlantCanopySpreadM, resolvePlantStratum } from './plant-presentation'
 import type { ScenePersistedState } from './scene'
 import { createScenePatchCommand, type SceneCommandSnapshot } from './scene-commands'
 import { SceneHistory } from './scene-history'
 import { SceneRuntimeMutationController } from './scene-runtime/mutations'
+import { SceneRuntimePresentationController } from './scene-runtime/presentation'
 import type { CanvasRuntime, CanvasRuntimeDocumentMetadata } from './runtime'
 import { resolvePanelTargets } from '../../panel-target-resolution'
 import { panelTargetsEqual, speciesTarget } from '../../panel-targets'
@@ -65,8 +56,7 @@ export class SceneCanvasRuntime implements CanvasRuntime {
       createCanvas2DSceneRenderer(),
     ],
   })
-  private readonly _speciesCache = new CanvasSpeciesCache()
-  private readonly _plantLabels = new CanvasPlantLabelResolver()
+  private readonly _presentation: SceneRuntimePresentationController
   private _container: HTMLElement | null = null
   private _chrome: SceneChromeOverlay | null = null
   private _interaction: SceneInteractionController | null = null
@@ -77,6 +67,15 @@ export class SceneCanvasRuntime implements CanvasRuntime {
   private _renderEpoch = 0
 
   constructor() {
+    this._presentation = new SceneRuntimePresentationController({
+      sceneStore: this._sceneStore,
+      getViewport: () => this._camera.viewport,
+      getLocale: () => locale.value,
+      resolveHighlightedTargets: (scene) => this._resolveHighlightedTargets(scene),
+      onPlantNamesChanged: () => {
+        plantNamesRevision.value += 1
+      },
+    })
     this._mutations = new SceneRuntimeMutationController({
       sceneStore: this._sceneStore,
       selection: {
@@ -100,8 +99,8 @@ export class SceneCanvasRuntime implements CanvasRuntime {
           }
         },
         getViewportScale: () => this._camera.viewport.scale,
-        createPlantPresentationContext: (viewportScale) => this._createPlantPresentationContext(viewportScale),
-        getSuggestedPlantColor: (canonicalName) => this._speciesCache.getSuggestedPlantColor(canonicalName),
+        createPlantPresentationContext: (viewportScale) => this._presentation.createPlantPresentationContext(viewportScale),
+        getSuggestedPlantColor: (canonicalName) => this._presentation.getSuggestedPlantColor(canonicalName),
       },
       invalidateScene: () => this._invalidate('scene'),
     })
@@ -122,15 +121,15 @@ export class SceneCanvasRuntime implements CanvasRuntime {
       getSceneStore: () => this._sceneStore,
       camera: this._camera,
       setViewport: (viewport) => this._setViewport(viewport),
-      getSpeciesCache: () => this._speciesCache.getCache(),
-      getPlantPresentationContext: (viewportScale) => this._createPlantPresentationContext(viewportScale),
+      getSpeciesCache: () => this._presentation.getSpeciesCache(),
+      getPlantPresentationContext: (viewportScale) => this._presentation.createPlantPresentationContext(viewportScale),
       getSelection: () => this._sceneStore.session.selectedEntityIds,
       setSelection: (ids) => this._setSelection(ids),
       clearSelection: () => this._setSelection([]),
       setTool: (name) => this.setTool(name),
       render: (kind) => this._invalidate(kind),
       markDirty: (before) => this._markCanvasDirty(before, 'interaction'),
-      getLocalizedCommonNames: () => this._plantLabels.getLocaleSnapshot(locale.value),
+      getLocalizedCommonNames: () => this._presentation.getLocalizedCommonNames(),
       setHoveredEntityId: (id) => {
         this._setHoveredEntityId(id)
       },
@@ -215,7 +214,7 @@ export class SceneCanvasRuntime implements CanvasRuntime {
 
   zoomToFit(): void {
     this._setViewport(this._camera.zoomToFit(this._sceneStore.persisted, {
-      plantContext: this._createPlantPresentationContext(this._camera.viewport.scale),
+      plantContext: this._presentation.createPlantPresentationContext(this._camera.viewport.scale),
     }))
     this._invalidate('viewport')
   }
@@ -319,14 +318,14 @@ export class SceneCanvasRuntime implements CanvasRuntime {
   }
 
   getLocalizedCommonNames(): ReadonlyMap<string, string | null> {
-    return this._plantLabels.getLocaleSnapshot(locale.value)
+    return this._presentation.getLocalizedCommonNames()
   }
 
   async ensureSpeciesCacheEntries(canonicalNames: string[], activeLocale: string): Promise<boolean> {
-    const loaded = await this._speciesCache.ensureEntries(canonicalNames, activeLocale)
-    const backfilled = this._backfillPlantPresentationMetadataFromSpeciesCache()
-    if (loaded || backfilled) this._invalidate('scene')
-    return loaded
+    const result = await this._presentation.refreshSpeciesCacheEntries(canonicalNames, activeLocale)
+    this._applyPresentationBackfills(result.backfills)
+    if (result.changed) this._invalidate('scene')
+    return result.changed
   }
 
   setSelectedPlantColor(color: string | null): number {
@@ -558,9 +557,10 @@ export class SceneCanvasRuntime implements CanvasRuntime {
     if (!this._container) return
     const renderEpoch = ++this._renderEpoch
     this._applySignalBackedSceneState({ recordHistory: false, syncGuides: true })
-    await this._ensureSpeciesCacheForCurrentPresentation()
+    const presentation = await this._presentation.refreshCurrentPresentationData()
+    this._applyPresentationBackfills(presentation.backfills)
     if (renderEpoch !== this._renderEpoch) return
-    const snapshot = this._buildRendererSnapshot()
+    const snapshot = this._presentation.buildRendererSnapshot()
     await this._rendererHost.run((renderer) => {
       renderer.resize(
         Math.max(1, this._container?.clientWidth ?? 1),
@@ -596,71 +596,6 @@ export class SceneCanvasRuntime implements CanvasRuntime {
     })
   }
 
-  private _buildRendererSnapshot(): SceneRendererSnapshot {
-    const scene = this._sceneStore.persisted
-    const session = this._sceneStore.session
-    const hoveredPlant = session.hoveredEntityId
-      ? scene.plants.find((p) => p.id === session.hoveredEntityId)
-      : null
-    const highlightedTargets = resolvePanelTargets([
-      ...selectedPanelTargets.value,
-      ...hoveredPanelTargets.value,
-    ], scene)
-    return {
-      scene,
-      viewport: this._camera.viewport,
-      selectedPlantIds: getSelectedPlantIds(scene, session.selectedEntityIds),
-      selectedZoneIds: getSelectedZoneIds(scene, session.selectedEntityIds),
-      selectedAnnotationIds: getSelectedAnnotationIds(scene, session.selectedEntityIds),
-      highlightedPlantIds: new Set(highlightedTargets.plantIds),
-      highlightedZoneIds: new Set(highlightedTargets.zoneIds),
-      sizeMode: session.plantSizeMode,
-      colorByAttr: session.plantColorByAttr,
-      speciesCache: this._speciesCache.getCache(),
-      localizedCommonNames: this._plantLabels.getLocaleSnapshot(locale.value),
-      hoveredCanonicalName: hoveredPlant?.canonicalName ?? null,
-      selectionLabels: computeSelectionLabels(
-        scene.plants,
-        session.selectedEntityIds,
-        this._camera.viewport,
-        this._plantLabels.getLocaleSnapshot(locale.value),
-      ),
-    }
-  }
-
-  private _createPlantPresentationContext(viewportScale = this._camera.viewport.scale): PlantPresentationContext {
-    const session = this._sceneStore.session
-    return {
-      viewport: {
-        x: 0,
-        y: 0,
-        scale: viewportScale,
-      },
-      sizeMode: session.plantSizeMode,
-      colorByAttr: session.plantColorByAttr,
-      speciesCache: this._speciesCache.getCache(),
-      localizedCommonNames: this._plantLabels.getLocaleSnapshot(locale.value),
-    }
-  }
-
-  private async _ensureSpeciesCacheForCurrentPresentation(): Promise<void> {
-    const session = this._sceneStore.session
-    const plants = this._sceneStore.persisted.plants
-    const canonicalNames = [...new Set(plants.map((plant) => plant.canonicalName))]
-    if (canonicalNames.length === 0) return
-
-    const labelsChanged = await this._plantLabels.ensureEntries(canonicalNames, locale.value)
-    if (labelsChanged) plantNamesRevision.value += 1
-
-    const needsSpeciesCache =
-      session.plantColorByAttr !== null
-      || session.plantSizeMode === 'canopy'
-      || plants.some((plant) => plant.stratum === null || plant.canopySpreadM === null)
-    if (!needsSpeciesCache) return
-    await this._speciesCache.ensureEntries(canonicalNames, locale.value)
-    this._backfillPlantPresentationMetadataFromSpeciesCache()
-  }
-
   private _applySignalBackedSceneState(options: { recordHistory: boolean; syncGuides: boolean }): boolean {
     return applySignalBackedSceneState({
       sceneStore: this._sceneStore,
@@ -680,27 +615,31 @@ export class SceneCanvasRuntime implements CanvasRuntime {
     this._renderChrome()
   }
 
-  private _backfillPlantPresentationMetadataFromSpeciesCache(): boolean {
-    const speciesCache = this._speciesCache.getCache()
-    let changed = false
+  private _applyPresentationBackfills(
+    backfills: ReadonlyArray<{ plantId: string; stratum: string | null; canopySpreadM: number | null; scale: number | null }> | null,
+  ): void {
+    if (!backfills || backfills.length === 0) return
+    const byId = new Map(backfills.map((entry) => [entry.plantId, entry]))
     this._sceneStore.updatePersisted((draft) => {
       draft.plants = draft.plants.map((plant) => {
-        const nextStratum = resolvePlantStratum(plant, speciesCache)
-        const nextCanopySpreadM = resolvePlantCanopySpreadM(plant, speciesCache)
-        const nextScale = nextCanopySpreadM ?? plant.scale
-        if (nextStratum === plant.stratum && nextCanopySpreadM === plant.canopySpreadM && nextScale === plant.scale) {
-          return plant
-        }
-        changed = true
+        const next = byId.get(plant.id)
+        if (!next) return plant
         return {
           ...plant,
-          stratum: nextStratum,
-          canopySpreadM: nextCanopySpreadM,
-          scale: nextScale,
+          stratum: next.stratum,
+          canopySpreadM: next.canopySpreadM,
+          scale: next.scale,
         }
       })
     })
-    return changed
+  }
+
+  private _resolveHighlightedTargets(scene: ScenePersistedState): { plantIds: readonly string[]; zoneIds: readonly string[] } {
+    const combinedTargets: PanelTarget[] = [
+      ...selectedPanelTargets.value,
+      ...hoveredPanelTargets.value,
+    ]
+    return resolvePanelTargets(combinedTargets, scene)
   }
 }
 
