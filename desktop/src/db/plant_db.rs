@@ -536,7 +536,8 @@ mod tests {
             climate_zones: Some(vec!["Mediterranean".to_owned()]),
             ..Default::default()
         };
-        let result = search(&conn, None, filters, None, Sort::Name, 50, "en".to_owned()).unwrap();
+        let result =
+            search(&conn, None, filters, None, Sort::Name, 50, true, "en".to_owned()).unwrap();
         assert_eq!(result.items.len(), 1);
         assert_eq!(result.items[0].canonical_name, "Lavandula angustifolia");
 
@@ -545,7 +546,8 @@ mod tests {
             climate_zones: Some(vec!["Temperate".to_owned()]),
             ..Default::default()
         };
-        let result = search(&conn, None, filters, None, Sort::Name, 50, "en".to_owned()).unwrap();
+        let result =
+            search(&conn, None, filters, None, Sort::Name, 50, true, "en".to_owned()).unwrap();
         assert_eq!(result.items.len(), 2);
 
         // Continental filter should return only Alnus
@@ -553,7 +555,8 @@ mod tests {
             climate_zones: Some(vec!["Continental".to_owned()]),
             ..Default::default()
         };
-        let result = search(&conn, None, filters, None, Sort::Name, 50, "en".to_owned()).unwrap();
+        let result =
+            search(&conn, None, filters, None, Sort::Name, 50, true, "en".to_owned()).unwrap();
         assert_eq!(result.items.len(), 1);
         assert_eq!(result.items[0].canonical_name, "Alnus glutinosa");
     }
