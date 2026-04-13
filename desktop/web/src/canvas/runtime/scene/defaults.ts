@@ -24,15 +24,8 @@ export function createDefaultSceneSessionState(overrides: Partial<SceneSessionSt
   }
 }
 
-export function createDefaultScenePersistedState(now: Date = new Date()): ScenePersistedState {
-  const timestamp = now.toISOString()
-
+export function createDefaultScenePersistedState(_now: Date = new Date()): ScenePersistedState {
   return {
-    version: 2,
-    name: 'Untitled',
-    description: null,
-    location: null,
-    northBearingDeg: 0,
     plantSpeciesColors: {},
     layers: SCENE_LAYER_NAMES.map((name) => ({
       kind: 'layer',
@@ -45,8 +38,6 @@ export function createDefaultScenePersistedState(now: Date = new Date()): SceneP
     zones: [],
     annotations: [],
     groups: [],
-    createdAt: timestamp,
-    updatedAt: timestamp,
-    extra: {},
+    guides: [],
   }
 }

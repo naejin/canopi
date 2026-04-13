@@ -52,6 +52,28 @@ function syncCanvasSignalsFromDocument(file: CanopiFile): void {
   })
 }
 
+function syncCanvasSignalsFromPersistedScene(sceneStore: SceneStore): void {
+  const persisted = sceneStore.persisted
+  const visibility: Record<string, boolean> = {}
+  const locks: Record<string, boolean> = {}
+  const opacities: Record<string, number> = {}
+  for (const layer of persisted.layers) {
+    visibility[layer.name] = layer.visible
+    locks[layer.name] = layer.locked
+    opacities[layer.name] = layer.opacity
+  }
+
+  batch(() => {
+    layerVisibility.value = visibility
+    layerLockState.value = locks
+    layerOpacity.value = opacities
+    syncPlantSpeciesColorDefaults(persisted.plantSpeciesColors)
+    guides.value = persisted.guides.map((guide) => ({ ...guide }))
+  })
+}
+
+export { syncCanvasSignalsFromDocument }
+
 export function syncPresentationSignalsFromSceneSession(sceneStore: SceneStore): void {
   const session = sceneStore.session
   plantSizeMode.value = session.plantSizeMode
@@ -59,9 +81,7 @@ export function syncPresentationSignalsFromSceneSession(sceneStore: SceneStore):
 }
 
 export function syncCanvasSignalsFromScene(sceneStore: SceneStore): void {
-  syncCanvasSignalsFromDocument(sceneStore.toCanopiFile({
-    now: new Date(sceneStore.persisted.updatedAt),
-  }))
+  syncCanvasSignalsFromPersistedScene(sceneStore)
   batch(() => {
     syncPresentationSignalsFromSceneSession(sceneStore)
     setCanvasSelection(sceneStore.session.selectedEntityIds)
@@ -80,7 +100,7 @@ export function applySignalBackedSceneState(
     layerOpacity.value,
   ))
   const nextGuides = guides.value
-  const currentGuides = Array.isArray(persisted.extra?.guides) ? persisted.extra.guides as typeof nextGuides : []
+  const currentGuides = persisted.guides
 
   const layersChanged = JSON.stringify(nextLayers) !== JSON.stringify(persisted.layers)
   const guidesChanged = options.syncGuides && JSON.stringify(currentGuides) !== JSON.stringify(nextGuides)
@@ -90,12 +110,7 @@ export function applySignalBackedSceneState(
 
   deps.sceneStore.updatePersisted((draft) => {
     if (layersChanged) draft.layers = nextLayers
-    if (guidesChanged) {
-      const nextExtra = { ...draft.extra }
-      if (nextGuides.length > 0) nextExtra.guides = nextGuides
-      else delete nextExtra.guides
-      draft.extra = nextExtra
-    }
+    if (guidesChanged) draft.guides = nextGuides.map((guide) => ({ ...guide }))
   })
 
   if (before) deps.markDirty(before, 'scene-settings')

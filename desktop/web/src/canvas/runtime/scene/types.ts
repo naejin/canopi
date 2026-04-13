@@ -19,12 +19,6 @@ export interface ScenePoint {
   y: number
 }
 
-export interface SceneLocation {
-  lat: number
-  lon: number
-  altitudeM: number | null
-}
-
 export interface SceneLayerEntity {
   kind: 'layer'
   name: string
@@ -79,6 +73,12 @@ export interface SceneObjectGroupEntity {
   memberIds: string[]
 }
 
+export interface SceneGuide {
+  id: string
+  axis: 'h' | 'v'
+  position: number
+}
+
 export type SceneEntity =
   | SceneLayerEntity
   | ScenePlantEntity
@@ -87,20 +87,13 @@ export type SceneEntity =
   | SceneObjectGroupEntity
 
 export interface ScenePersistedState {
-  version: number
-  name: string
-  description: string | null
-  location: SceneLocation | null
-  northBearingDeg: number | null
   plantSpeciesColors: Record<string, string>
   layers: SceneLayerEntity[]
   plants: ScenePlantEntity[]
   zones: SceneZoneEntity[]
   annotations: SceneAnnotationEntity[]
   groups: SceneObjectGroupEntity[]
-  createdAt: string
-  updatedAt: string
-  extra: Record<string, unknown>
+  guides: SceneGuide[]
 }
 
 export interface SceneViewportState {
