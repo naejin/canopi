@@ -2,13 +2,12 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 import { t } from '../../i18n'
 import { getCurrentCanvasSession } from '../../canvas/session'
 import {
-  currentDesign,
-  designDirty,
   saveCurrentDesign,
   saveAsCurrentDesign,
   openDesign,
   newDesignAction,
-} from '../../state/document'
+} from '../../app/document-session/actions'
+import { currentDesign, designDirty } from '../../state/design'
 import { FILE_SHORTCUTS, EDIT_SHORTCUTS, VIEW_SHORTCUTS } from '../../shortcuts/definitions'
 
 export interface MenuAction {

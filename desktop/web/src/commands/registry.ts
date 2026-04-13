@@ -7,7 +7,7 @@ import {
   saveAsCurrentDesign,
   openDesign,
   newDesignAction,
-} from "../state/document";
+} from "../app/document-session/actions";
 import { getCurrentCanvasSession } from "../canvas/session";
 
 export interface Command {

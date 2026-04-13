@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { activeTool } from '../state/canvas'
 import { activePanel, sidePanel } from '../app/shell/state'
 import { setCurrentCanvasSession } from '../canvas/session'
+import * as documentActions from '../app/document-session/actions'
 import { commands } from '../commands/registry'
 import { PANEL_SHORTCUTS, TOOL_SHORTCUTS } from '../shortcuts/definitions'
 
@@ -51,5 +52,22 @@ describe('command registry canvas tool switching', () => {
     expect(getCommand('nav.location').shortcut).toBeUndefined()
     expect(getCommand('canvas.tool.select').shortcut).toBe(TOOL_SHORTCUTS.select)
     expect(getCommand('canvas.tool.text').shortcut).toBe(TOOL_SHORTCUTS.text)
+  })
+
+  it('routes file commands through document-session actions', () => {
+    const newSpy = vi.spyOn(documentActions, 'newDesignAction').mockResolvedValue(undefined)
+    const openSpy = vi.spyOn(documentActions, 'openDesign').mockResolvedValue(undefined)
+    const saveSpy = vi.spyOn(documentActions, 'saveCurrentDesign').mockResolvedValue(undefined)
+    const saveAsSpy = vi.spyOn(documentActions, 'saveAsCurrentDesign').mockResolvedValue(undefined)
+
+    getCommand('file.new').action()
+    getCommand('file.open').action()
+    getCommand('file.save').action()
+    getCommand('file.saveAs').action()
+
+    expect(newSpy).toHaveBeenCalledTimes(1)
+    expect(openSpy).toHaveBeenCalledTimes(1)
+    expect(saveSpy).toHaveBeenCalledTimes(1)
+    expect(saveAsSpy).toHaveBeenCalledTimes(1)
   })
 })

@@ -1,5 +1,5 @@
 import { signal } from '@preact/signals'
-import type { TemplateMeta } from '../types/community'
+import type { TemplateMeta } from '../../types/community'
 
 /** Full catalog of featured design templates. */
 export const templateCatalog = signal<TemplateMeta[]>([])

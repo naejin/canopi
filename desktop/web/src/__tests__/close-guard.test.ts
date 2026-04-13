@@ -27,7 +27,7 @@ vi.mock('../i18n', () => ({
   },
 }))
 
-import { confirmCloseWithUnsavedChanges } from '../state/close-guard'
+import { confirmCloseWithUnsavedChanges } from '../app/shell/close-guard'
 
 describe('close guard', () => {
   beforeEach(() => {

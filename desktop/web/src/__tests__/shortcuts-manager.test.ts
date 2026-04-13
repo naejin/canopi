@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { activeTool } from '../state/canvas'
 import { activePanel, sidePanel } from '../app/shell/state'
+import * as documentActions from '../app/document-session/actions'
 import { initShortcuts } from '../shortcuts/manager'
 import { setCurrentCanvasSession } from '../canvas/session'
 
@@ -48,5 +49,22 @@ describe('shortcut manager canvas tool switching', () => {
 
     expect(activePanel.value).toBe('canvas')
     expect(sidePanel.value).toBe(null)
+  })
+
+  it('routes file shortcuts through document-session actions', () => {
+    const saveSpy = vi.spyOn(documentActions, 'saveCurrentDesign').mockResolvedValue(undefined)
+    const saveAsSpy = vi.spyOn(documentActions, 'saveAsCurrentDesign').mockResolvedValue(undefined)
+    const openSpy = vi.spyOn(documentActions, 'openDesign').mockResolvedValue(undefined)
+    const newSpy = vi.spyOn(documentActions, 'newDesignAction').mockResolvedValue(undefined)
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true }))
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'S', ctrlKey: true, shiftKey: true }))
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'o', ctrlKey: true }))
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', ctrlKey: true }))
+
+    expect(saveSpy).toHaveBeenCalledTimes(1)
+    expect(saveAsSpy).toHaveBeenCalledTimes(1)
+    expect(openSpy).toHaveBeenCalledTimes(1)
+    expect(newSpy).toHaveBeenCalledTimes(1)
   })
 })

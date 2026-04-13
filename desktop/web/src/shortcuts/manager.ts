@@ -12,7 +12,7 @@ import {
   saveAsCurrentDesign,
   openDesign,
   newDesignAction,
-} from "../state/document";
+} from "../app/document-session/actions";
 
 export const commandPaletteOpen = signal(false);
 

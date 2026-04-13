@@ -2,11 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   downloadTemplate: vi.fn(),
+  getTemplatePreview: vi.fn(),
   openDesignAsTemplate: vi.fn(),
 }))
 
 vi.mock('../ipc/community', () => ({
   downloadTemplate: mocks.downloadTemplate,
+  getTemplatePreview: mocks.getTemplatePreview,
 }))
 
 vi.mock('../app/document-session/actions', () => ({
@@ -17,8 +19,8 @@ import {
   selectedTemplate,
   templateImportError,
   templateImporting,
-} from '../state/community'
-import { importTemplateIntoCurrentSession } from '../state/template-import-workflow'
+} from '../app/community/state'
+import { importTemplateIntoCurrentSession, selectTemplate } from '../app/community/controller'
 import type { TemplateMeta } from '../types/community'
 
 const TEMPLATE: TemplateMeta = {
@@ -36,6 +38,7 @@ const TEMPLATE: TemplateMeta = {
 
 beforeEach(() => {
   mocks.downloadTemplate.mockReset()
+  mocks.getTemplatePreview.mockReset()
   mocks.openDesignAsTemplate.mockReset()
   selectedTemplate.value = TEMPLATE
   templateImportError.value = null
@@ -76,5 +79,20 @@ describe('template import workflow', () => {
     expect(selectedTemplate.value).toEqual(TEMPLATE)
     expect(templateImportError.value).toBe(null)
     expect(templateImporting.value).toBe(false)
+  })
+
+  it('does not restore a dismissed preview when an older request resolves late', async () => {
+    let resolvePreview: ((value: TemplateMeta) => void) | null = null
+    mocks.getTemplatePreview.mockReturnValue(new Promise<TemplateMeta>((resolve) => {
+      resolvePreview = resolve
+    }))
+
+    const pendingSelection = selectTemplate(TEMPLATE)
+    await Promise.resolve()
+    await selectTemplate(null)
+    resolvePreview!({ ...TEMPLATE, description: 'Loaded preview' })
+    await pendingSelection
+
+    expect(selectedTemplate.value).toBe(null)
   })
 })
