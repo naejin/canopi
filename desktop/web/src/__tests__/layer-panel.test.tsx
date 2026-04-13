@@ -7,10 +7,8 @@ import { locale } from '../state/app'
 import {
   activeLayerName,
   contourIntervalMeters,
-  gridVisible,
   hillshadeOpacity,
   hillshadeVisible,
-  layerLockState,
   layerOpacity,
   layerPanelOpen,
   layerVisibility,
@@ -45,13 +43,11 @@ describe('LayerPanel', () => {
     }
     layerPanelOpen.value = true
     activeLayerName.value = 'base'
-    gridVisible.value = true
+    layerVisibility.value = { base: true, contours: false, plants: true, zones: true, annotations: true }
+    layerOpacity.value = { base: 1, contours: 1, plants: 1, zones: 1, annotations: 1 }
     contourIntervalMeters.value = 0
     hillshadeVisible.value = false
     hillshadeOpacity.value = 0.55
-    layerVisibility.value = { base: true, contours: false, plants: true, zones: true, annotations: true }
-    layerLockState.value = {}
-    layerOpacity.value = { base: 1, contours: 1, plants: 1, zones: 1, annotations: 1 }
   })
 
   afterEach(() => {
@@ -59,7 +55,7 @@ describe('LayerPanel', () => {
     container.remove()
   })
 
-  it('treats the base row as basemap visibility and keeps grid independent', async () => {
+  it('treats the base row as basemap visibility', async () => {
     await act(async () => {
       render(<LayerPanel />, container)
     })
@@ -78,8 +74,6 @@ describe('LayerPanel', () => {
     })
 
     expect(layerVisibility.value.base).toBe(false)
-    expect(gridVisible.value).toBe(true)
-    expect(container.textContent).toContain('Grid')
   })
 
   it('exposes terrain controls without coupling them to the basemap toggle', async () => {
@@ -87,6 +81,7 @@ describe('LayerPanel', () => {
       render(<LayerPanel />, container)
     })
 
+    // Toggle contours visibility via eye button
     const contourToggle = Array.from(container.querySelectorAll('button'))
       .find((button) => button.getAttribute('aria-label') === 'Toggle visibility: Contour lines')
     expect(contourToggle).toBeTruthy()
@@ -98,24 +93,24 @@ describe('LayerPanel', () => {
     expect(layerVisibility.value.contours).toBe(true)
     expect(layerVisibility.value.base).toBe(true)
 
-    const contourSlider = container.querySelector<HTMLInputElement>('input[aria-label="Opacity: Contour lines"]')
+    // Click the contours name to make it active and reveal controls
+    const contourName = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent === 'Contour lines')
+    expect(contourName).toBeTruthy()
+    await act(async () => {
+      contourName?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    const contourSlider = container.querySelector<HTMLInputElement>('input[aria-label="Contour interval"]')
     expect(contourSlider).toBeTruthy()
     await act(async () => {
       if (!contourSlider) return
-      contourSlider.value = '45'
+      contourSlider.value = '25'
       contourSlider.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-    expect(layerOpacity.value.contours).toBe(0.45)
-
-    const intervalInput = container.querySelector<HTMLInputElement>('input[aria-label="Contour interval"]')
-    expect(intervalInput).toBeTruthy()
-    await act(async () => {
-      if (!intervalInput) return
-      intervalInput.value = '25'
-      intervalInput.dispatchEvent(new Event('input', { bubbles: true }))
     })
     expect(contourIntervalMeters.value).toBe(25)
 
+    // Toggle hillshade visibility
     const hillshadeToggle = Array.from(container.querySelectorAll('button'))
       .find((button) => button.getAttribute('aria-label') === 'Toggle visibility: Hillshading')
     expect(hillshadeToggle).toBeTruthy()
@@ -123,6 +118,14 @@ describe('LayerPanel', () => {
       hillshadeToggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     expect(hillshadeVisible.value).toBe(true)
+
+    // Click hillshading name to make it active and reveal controls
+    const hillshadeName = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent === 'Hillshading')
+    expect(hillshadeName).toBeTruthy()
+    await act(async () => {
+      hillshadeName?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
 
     const hillshadeSlider = container.querySelector<HTMLInputElement>('input[aria-label="Hillshade opacity"]')
     expect(hillshadeSlider).toBeTruthy()

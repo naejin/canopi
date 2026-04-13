@@ -168,7 +168,6 @@ describe('CanvasPanel basemap feedback', () => {
     })
 
     const status = container.querySelector('[role="status"]')
-    expect(status?.textContent).toContain('Basemap')
     expect(status?.textContent).toContain('Set a design location first')
     expect(container.querySelector('[role="img"][aria-label^="Compass"]')).toBeNull()
   })
@@ -207,7 +206,6 @@ describe('CanvasPanel basemap feedback', () => {
     })
 
     const status = container.querySelector('[role="status"]')
-    expect(status?.textContent).toContain('Basemap')
     expect(status?.textContent).toContain('Loading')
     expect(container.querySelector('[data-map-active="true"]')).not.toBeNull()
   })
@@ -246,7 +244,7 @@ describe('CanvasPanel basemap feedback', () => {
     })
 
     const status = container.querySelector('[role="status"]')
-    expect(status?.textContent).toContain('Current: 48.8566, 2.3522 (35 m)')
+    expect(status?.textContent).toContain('48.8566, 2.3522 (35 m)')
     expect(container.querySelector('[data-map-active="true"]')).toBeTruthy()
   })
 
@@ -317,8 +315,7 @@ describe('CanvasPanel basemap feedback', () => {
 
     expect(container.querySelector('[data-map-active="true"]')).toBeTruthy()
     const status = container.querySelector('[role="status"]')
-    expect(status?.textContent).toContain('Map Layers')
-    expect(status?.textContent).toContain('Current: 48.8566, 2.3522 (35 m)')
+    expect(status?.textContent).toContain('48.8566, 2.3522 (35 m)')
   })
 
   it('shows a basemap error when the surface reports a load failure', async () => {
@@ -393,7 +390,7 @@ describe('CanvasPanel basemap feedback', () => {
     })
 
     const status = container.querySelector('[role="status"]')
-    expect(status?.textContent).toContain('Current: 48.8566, 2.3522 (35 m)')
+    expect(status?.textContent).toContain('48.8566, 2.3522 (35 m)')
     expect(status?.textContent).toContain('Map Layers: dem fetch failed')
     expect(container.querySelector('[data-map-active="true"]')).toBeTruthy()
   })

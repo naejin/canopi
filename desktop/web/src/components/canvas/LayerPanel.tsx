@@ -4,10 +4,8 @@ import { currentDesign } from '../../state/document'
 import {
   activeLayerName,
   contourIntervalMeters,
-  gridVisible,
   hillshadeOpacity,
   hillshadeVisible,
-  layerLockState,
   layerOpacity,
   layerPanelOpen,
   layerVisibility,
@@ -18,18 +16,22 @@ import {
   setHillshadeOpacity,
   setLayerOpacity,
   toggleHillshadeVisibility,
-  toggleGridVisibility,
-  toggleLayerLock,
   toggleLayerPanel,
   toggleLayerVisibility,
 } from '../../state/canvas-actions'
+import { formatLocationSummary } from '../../utils/location'
 import styles from './LayerPanel.module.css'
 
-const LAYER_ORDER = ['annotations', 'plants', 'zones', 'base'] as const
-type LayerName = typeof LAYER_ORDER[number]
+const ALL_LAYERS = ['annotations', 'plants', 'zones', 'base', 'contours', 'hillshading'] as const
+type LayerName = typeof ALL_LAYERS[number]
 
-function layerLabelKey(name: LayerName): string {
-  return name === 'base' ? 'canvas.layers.basemap' : `canvas.layers.${name}`
+function layerLabel(name: LayerName): string {
+  switch (name) {
+    case 'base': return t('canvas.layers.basemap')
+    case 'contours': return t('canvas.terrain.contours')
+    case 'hillshading': return t('canvas.terrain.hillshade')
+    default: return t(`canvas.layers.${name}`)
+  }
 }
 
 function ChevronIcon({ direction }: { direction: 'left' | 'right' }) {
@@ -55,26 +57,14 @@ function EyeIcon({ open }: { open: boolean }) {
   )
 }
 
-function LockIcon({ locked }: { locked: boolean }) {
-  return (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <rect x="3.2" y="7" width="9.6" height="6.2" rx="1.2" stroke="currentColor" strokeWidth="1.3" />
-      {locked ? (
-        <path d="M5.2 7V5.4C5.2 3.9 6.3 2.8 7.8 2.8C9.3 2.8 10.4 3.9 10.4 5.4V7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-      ) : (
-        <path d="M5.2 7V5.4C5.2 3.9 6.3 2.8 7.8 2.8C8.7 2.8 9.6 3.2 10 3.9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-      )}
-    </svg>
-  )
+function getVisibility(name: LayerName): boolean {
+  if (name === 'hillshading') return hillshadeVisible.value
+  return layerVisibility.value[name] ?? true
 }
 
-function formatLocationSummary(location: { lat: number; lon: number; altitude_m: number | null }): string {
-  const base = `${location.lat.toFixed(4)}, ${location.lon.toFixed(4)}`
-  return location.altitude_m != null ? `${base} (${location.altitude_m} m)` : base
-}
-
-function clampPercent(value: number): number {
-  return Math.round(Math.min(1, Math.max(0, value)) * 100)
+function handleToggleVisibility(name: LayerName): void {
+  if (name === 'hillshading') toggleHillshadeVisibility()
+  else toggleLayerVisibility(name)
 }
 
 export function LayerPanel() {
@@ -98,12 +88,6 @@ export function LayerPanel() {
     )
   }
 
-  const activeOpacity = Math.round((layerOpacity.value[activeLayer] ?? 1) * 100)
-  const contoursVisible = layerVisibility.value.contours ?? false
-  const contoursOpacity = clampPercent(layerOpacity.value.contours ?? 1)
-  const contourInterval = contourIntervalMeters.value
-  const hillshadeOn = hillshadeVisible.value
-  const hillshadeLevel = clampPercent(hillshadeOpacity.value)
   const location = currentDesign.value?.location ?? null
   const hasLocation = location != null
 
@@ -122,165 +106,101 @@ export function LayerPanel() {
       </div>
 
       <div role="list">
-        {LAYER_ORDER.map((name) => {
-          const isBase = name === 'base'
-          const visible = layerVisibility.value[name] ?? true
-          const locked = layerLockState.value[name] ?? false
+        {ALL_LAYERS.map((name) => {
+          const visible = getVisibility(name)
           const active = activeLayer === name
+          const label = layerLabel(name)
 
           return (
-            <div
-              key={name}
-              role="listitem"
-              className={styles.layerRow}
-              data-active={active ? 'true' : 'false'}
-              data-hidden={visible ? 'false' : 'true'}
-            >
-              <button
-                type="button"
-                className={styles.toggleBtn}
-                aria-label={`${t('canvas.layers.visibility')}: ${t(layerLabelKey(name))}`}
-                onClick={() => toggleLayerVisibility(name)}
+            <div key={name}>
+              <div
+                role="listitem"
+                className={styles.layerRow}
+                data-active={active ? 'true' : 'false'}
+                data-hidden={visible ? 'false' : 'true'}
               >
-                <EyeIcon open={visible} />
-              </button>
-              {!isBase && (
                 <button
                   type="button"
                   className={styles.toggleBtn}
-                  aria-label={`${t('canvas.layers.lock')}: ${t(`canvas.layers.${name}`)}`}
-                  onClick={() => toggleLayerLock(name)}
+                  aria-label={`${t('canvas.layers.visibility')}: ${label}`}
+                  onClick={() => handleToggleVisibility(name)}
                 >
-                  <LockIcon locked={locked} />
+                  <EyeIcon open={visible} />
                 </button>
+                <button
+                  type="button"
+                  className={styles.layerName}
+                  onClick={() => setActiveLayer(name)}
+                >
+                  {label}
+                </button>
+              </div>
+              {active && (
+                <LayerDetail
+                  name={name}
+                  hasLocation={hasLocation}
+                  location={location}
+                />
               )}
-              <button
-                type="button"
-                className={styles.layerName}
-                onClick={() => setActiveLayer(name)}
-              >
-                {t(layerLabelKey(name))}
-              </button>
             </div>
           )
         })}
       </div>
+    </aside>
+  )
+}
 
-      <div className={styles.overlaySection}>
-        <div className={styles.sectionHeader}>{t('canvas.grid.grid')}</div>
-        <div className={styles.overlayRow}>
-          <button
-            type="button"
-            className={styles.toggleBtn}
-            aria-label={`${t('canvas.layers.visibility')}: ${t('canvas.grid.grid')}`}
-            onClick={toggleGridVisibility}
-          >
-            <EyeIcon open={gridVisible.value} />
-          </button>
-          <span className={styles.overlayLabel}>{t('canvas.grid.grid')}</span>
-        </div>
-      </div>
-
-      <div className={styles.mapSection}>
-        <div className={styles.sectionHeader}>{t(layerLabelKey(activeLayer))}</div>
-        {activeLayer === 'base' && (
+function LayerDetail({ name, hasLocation, location }: {
+  name: LayerName
+  hasLocation: boolean
+  location: { lat: number; lon: number; altitude_m: number | null } | null
+}) {
+  switch (name) {
+    case 'base':
+      return (
+        <div className={styles.layerDetail}>
           <div className={styles.locationCard} data-has-location={hasLocation ? 'true' : 'false'}>
             <span className={styles.locationCardLabel}>
               {hasLocation ? t('canvas.location.current') : t('canvas.location.required')}
             </span>
             <span className={styles.locationCardText}>
-              {hasLocation ? formatLocationSummary(location) : t('canvas.layers.setLocation')}
+              {hasLocation && location ? formatLocationSummary(location) : t('canvas.layers.setLocation')}
             </span>
           </div>
-        )}
-        <div className={styles.mapSliderRow}>
-          <span className={styles.mapSliderLabel}>{t('canvas.layers.opacity')}</span>
-          <input
-            type="range"
-            className={styles.mapSlider}
-            min="0"
-            max="100"
-            value={activeOpacity}
-            disabled={activeLayer === 'base' && !hasLocation}
-            onInput={(event) => {
-              setLayerOpacity(activeLayer, Number((event.target as HTMLInputElement).value) / 100)
-            }}
-          />
+          <OpacitySlider layer="base" disabled={!hasLocation} />
         </div>
-      </div>
-
-      <div className={styles.terrainSection}>
-        <div className={styles.sectionHeader}>{t('canvas.layers.mapSection')}</div>
-        <div
-          className={styles.terrainRow}
-          data-hidden={contoursVisible ? 'false' : 'true'}
-        >
-          <button
-            type="button"
-            className={styles.toggleBtn}
-            aria-label={`${t('canvas.layers.visibility')}: ${t('canvas.terrain.contours')}`}
-            onClick={() => toggleLayerVisibility('contours')}
-          >
-            <EyeIcon open={contoursVisible} />
-          </button>
-          <span className={styles.overlayLabel}>{t('canvas.terrain.contours')}</span>
-        </div>
-        <div className={styles.terrainControls}>
-          <div className={styles.mapSliderRow}>
-            <span className={styles.mapSliderLabel}>{t('canvas.layers.opacity')}</span>
-            <input
-              type="range"
-              className={styles.mapSlider}
-              min="0"
-              max="100"
-              value={contoursOpacity}
-              disabled={!contoursVisible}
-              aria-label={`${t('canvas.layers.opacity')}: ${t('canvas.terrain.contours')}`}
-              onInput={(event) => {
-                setLayerOpacity('contours', Number((event.target as HTMLInputElement).value) / 100)
-              }}
-            />
-          </div>
-          <label className={styles.numericControl}>
-            <span className={styles.mapSliderLabel}>{t('canvas.terrain.contourInterval')}</span>
+      )
+    case 'contours':
+      return (
+        <div className={styles.layerDetail}>
+          <OpacitySlider layer="contours" />
+          <div className={styles.controlRow}>
+            <span className={styles.controlLabel}>{t('canvas.terrain.contourInterval')}</span>
             <input
               type="number"
               min="0"
               step="1"
               className={styles.numericInput}
-              value={String(contourInterval)}
+              value={String(contourIntervalMeters.value)}
               aria-label={t('canvas.terrain.contourInterval')}
               onInput={(event) => {
                 setContourIntervalMeters(Number((event.target as HTMLInputElement).value))
               }}
             />
-          </label>
+          </div>
         </div>
-
-        <div
-          className={styles.terrainRow}
-          data-hidden={hillshadeOn ? 'false' : 'true'}
-        >
-          <button
-            type="button"
-            className={styles.toggleBtn}
-            aria-label={`${t('canvas.layers.visibility')}: ${t('canvas.terrain.hillshade')}`}
-            onClick={toggleHillshadeVisibility}
-          >
-            <EyeIcon open={hillshadeOn} />
-          </button>
-          <span className={styles.overlayLabel}>{t('canvas.terrain.hillshade')}</span>
-        </div>
-        <div className={styles.terrainControls}>
-          <div className={styles.mapSliderRow}>
-            <span className={styles.mapSliderLabel}>{t('canvas.terrain.hillshadeOpacity')}</span>
+      )
+    case 'hillshading':
+      return (
+        <div className={styles.layerDetail}>
+          <div className={styles.controlRow}>
+            <span className={styles.controlLabel}>{t('canvas.terrain.hillshadeOpacity')}</span>
             <input
               type="range"
               className={styles.mapSlider}
               min="0"
               max="100"
-              value={hillshadeLevel}
-              disabled={!hillshadeOn}
+              value={Math.round(hillshadeOpacity.value * 100)}
               aria-label={t('canvas.terrain.hillshadeOpacity')}
               onInput={(event) => {
                 setHillshadeOpacity(Number((event.target as HTMLInputElement).value) / 100)
@@ -288,7 +208,32 @@ export function LayerPanel() {
             />
           </div>
         </div>
-      </div>
-    </aside>
+      )
+    default:
+      return (
+        <div className={styles.layerDetail}>
+          <OpacitySlider layer={name} />
+        </div>
+      )
+  }
+}
+
+function OpacitySlider({ layer, disabled }: { layer: string; disabled?: boolean }) {
+  const opacity = Math.round((layerOpacity.value[layer] ?? 1) * 100)
+  return (
+    <div className={styles.controlRow}>
+      <span className={styles.controlLabel}>{t('canvas.layers.opacity')}</span>
+      <input
+        type="range"
+        className={styles.mapSlider}
+        min="0"
+        max="100"
+        value={opacity}
+        disabled={disabled}
+        onInput={(event) => {
+          setLayerOpacity(layer, Number((event.target as HTMLInputElement).value) / 100)
+        }}
+      />
+    </div>
   )
 }

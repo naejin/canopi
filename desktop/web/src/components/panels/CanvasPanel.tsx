@@ -30,14 +30,10 @@ import { LayerPanel } from '../canvas/LayerPanel'
 import { WelcomeScreen } from '../shared/WelcomeScreen'
 import { canvasDirty, markCanvasDetachedDirty } from '../../state/design'
 import { hasVisibleMapLayer, hillshadeVisible, layerVisibility } from '../../state/canvas'
+import { formatLocationSummary } from '../../utils/location'
 import styles from './Panels.module.css'
 
 // Autosave interval is now configurable via Rust settings (autoSaveIntervalMs signal)
-
-function formatLocationSummary(location: { lat: number; lon: number; altitude_m: number | null }): string {
-  const base = `${location.lat.toFixed(4)}, ${location.lon.toFixed(4)}`
-  return location.altitude_m != null ? `${base} (${location.altitude_m} m)` : base
-}
 
 export function CanvasPanel() {
   const canvasAreaRef = useRef<HTMLDivElement>(null)
@@ -129,11 +125,9 @@ export function CanvasPanel() {
   const location = currentDesign.value?.location ?? null
   const hasLocation = location != null
   const visibility = layerVisibility.value
-  const basemapVisible = visibility.base ?? true
   const mapVisible = hasVisibleMapLayer(visibility, hillshadeVisible.value)
   const shouldShowMapSurface = hasDesign && hasLocation && mapVisible
   const locationSummary = location ? formatLocationSummary(location) : null
-  const mapFeedbackLabel = basemapVisible ? t('canvas.layers.basemap') : t('canvas.layers.mapSection')
   const locationKey = location
     ? `${location.lat}:${location.lon}:${location.altitude_m ?? ''}`
     : null
@@ -167,7 +161,7 @@ export function CanvasPanel() {
     : basemapState.status === 'error'
       ? `${t('canvas.layers.basemapError')}: ${basemapState.errorMessage ?? ''}`.trim()
       : basemapState.status === 'ready'
-        ? `${t('canvas.location.current')}: ${locationSummary}${basemapState.terrainStatus === 'error' ? ` • ${t('canvas.layers.mapSection')}: ${basemapState.terrainErrorMessage ?? ''}` : ''}${basemapState.precisionWarning ? ` • ${t('canvas.layers.precisionWarning')}` : ''}`
+        ? `${locationSummary}${basemapState.terrainStatus === 'error' ? ` • ${t('canvas.layers.mapSection')}: ${basemapState.terrainErrorMessage ?? ''}` : ''}${basemapState.precisionWarning ? ` • ${t('canvas.layers.precisionWarning')}` : ''}`
         : t('canvas.layers.basemapLoading')
 
   return (
@@ -198,10 +192,7 @@ export function CanvasPanel() {
                 role="status"
                 aria-live="polite"
               >
-                <span className={styles.basemapFeedbackHeader}>
-                  <span className={styles.basemapFeedbackDot} aria-hidden="true" />
-                  <span className={styles.basemapFeedbackLabel}>{mapFeedbackLabel}</span>
-                </span>
+                <span className={styles.basemapFeedbackDot} aria-hidden="true" />
                 <span className={styles.basemapFeedbackText}>{basemapStatus}</span>
               </div>
             )}
