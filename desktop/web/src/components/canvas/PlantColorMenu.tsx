@@ -1,4 +1,4 @@
-import { locale } from '../../app/shell/state'
+import { locale } from '../../app/settings/state'
 import { plantColorMenuOpen, plantSpeciesColors } from '../../state/canvas'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { currentCanvasSelection, currentCanvasSession } from '../../canvas/session'

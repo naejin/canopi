@@ -6,7 +6,7 @@ import {
   createDefaultMapLibreBasemapStyle,
   REMOTE_BASEMAP_TILE_URL_TEMPLATE,
 } from '../../maplibre/config'
-import { locale } from '../../app/shell/state'
+import { locale } from '../../app/settings/state'
 import { geocodeAddress, type GeoResult } from '../../ipc/geocoding'
 import { currentDesign } from '../../state/design'
 import { clearDesignLocation, setDesignLocation } from '../../app/location/controller'

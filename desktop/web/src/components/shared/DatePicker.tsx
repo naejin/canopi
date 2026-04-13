@@ -1,7 +1,7 @@
 import { useRef, useCallback, useEffect } from 'preact/hooks'
 import { useSignal, useSignalEffect } from '@preact/signals'
 import { t } from '../../i18n'
-import { locale } from '../../app/shell/state'
+import { locale } from '../../app/settings/state'
 import { toISODate } from '../../canvas/timeline-math'
 import { computeFloatingDirection, shouldAlignRight } from '../../utils/floating-position'
 import styles from './DatePicker.module.css'

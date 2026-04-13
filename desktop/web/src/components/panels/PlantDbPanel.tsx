@@ -1,6 +1,6 @@
 import { useEffect } from 'preact/hooks'
 import { useSignal, useSignalEffect } from '@preact/signals'
-import { locale } from '../../app/shell/state'
+import { locale } from '../../app/settings/state'
 import {
   loadSidebarLists,
   mountPlantDbController,

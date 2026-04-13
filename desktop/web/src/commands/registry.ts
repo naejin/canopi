@@ -1,4 +1,5 @@
-import { navigateTo, theme, type Panel } from "../app/shell/state";
+import { navigateTo, type Panel } from "../app/shell/state";
+import { theme } from "../app/settings/state";
 import { persistCurrentSettings } from "../app/settings/persistence";
 import { setCurrentCanvasTool } from "../canvas/session";
 import { t } from "../i18n";

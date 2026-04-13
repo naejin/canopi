@@ -1,5 +1,5 @@
 import { t } from '../../i18n'
-import { locale } from '../../app/shell/state'
+import { locale } from '../../app/settings/state'
 import { layerPanelView } from '../../app/canvas-settings/state'
 import { currentDesign } from '../../state/design'
 import {

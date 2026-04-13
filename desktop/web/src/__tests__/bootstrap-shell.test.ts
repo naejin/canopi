@@ -59,7 +59,8 @@ describe("bootstrapShell", () => {
     });
 
     const { bootstrapShell } = await import("../app/shell/bootstrap");
-    const state = await import("../app/shell/state");
+    const settingsState = await import("../app/settings/state");
+    const healthState = await import("../app/health/state");
 
     bootstrapShell();
     bootstrapShell();
@@ -70,9 +71,9 @@ describe("bootstrapShell", () => {
     expect(mocks.invoke).toHaveBeenCalledTimes(2);
     expect(mocks.invoke).toHaveBeenNthCalledWith(1, "get_health");
     expect(mocks.invoke).toHaveBeenNthCalledWith(2, "get_settings");
-    expect(state.plantDbStatus.value).toBe("degraded");
-    expect(state.locale.value).toBe("fr");
-    expect(state.theme.value).toBe("dark");
-    expect(state.autoSaveIntervalMs.value).toBe(15_000);
+    expect(healthState.plantDbStatus.value).toBe("degraded");
+    expect(settingsState.locale.value).toBe("fr");
+    expect(settingsState.theme.value).toBe("dark");
+    expect(settingsState.autoSaveIntervalMs.value).toBe(15_000);
   });
 });

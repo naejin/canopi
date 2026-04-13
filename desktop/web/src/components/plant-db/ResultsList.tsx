@@ -7,7 +7,7 @@ import {
   elementScroll,
 } from '@tanstack/virtual-core';
 import { t } from '../../i18n';
-import { locale } from '../../app/shell/state';
+import { locale } from '../../app/settings/state';
 import {
   searchResults,
   searchResultsRevision,

@@ -7,7 +7,7 @@ import {
   rulersVisible,
   snapToGridEnabled,
 } from '../../state/canvas'
-import { locale } from '../../app/shell/state'
+import { locale } from '../../app/settings/state'
 import { t } from '../../i18n'
 import { currentCanvasSelection, currentCanvasSession, currentCanvasTool } from '../../canvas/session'
 import {

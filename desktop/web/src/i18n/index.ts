@@ -1,6 +1,6 @@
 import i18n from "i18next";
 import { effect } from "@preact/signals";
-import { locale } from "../app/shell/state";
+import { locale } from "../app/settings/state";
 
 import en from "./en.json";
 import fr from "./fr.json";

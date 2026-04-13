@@ -1,7 +1,7 @@
 import { batch, effect } from '@preact/signals'
 import { getFavorites, getRecentlyViewed, toggleFavorite } from '../../ipc/favorites'
 import { getDynamicFilterOptions, getFilterOptions, searchSpecies } from '../../ipc/species'
-import { locale } from '../shell/state'
+import { locale } from '../settings/state'
 import type { SpeciesFilter } from '../../types/species'
 import {
   activeFilters,

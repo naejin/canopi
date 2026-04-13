@@ -18,7 +18,7 @@ import {
   autoSaveIntervalMs,
   locale,
   theme,
-} from '../shell/state'
+} from './state'
 
 let lastSettings: Settings | null = null
 let queuedPersistTimer: ReturnType<typeof globalThis.setTimeout> | null = null

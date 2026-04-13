@@ -1,6 +1,6 @@
 import { useEffect } from 'preact/hooks'
 import { t } from '../../i18n'
-import { locale } from '../../app/shell/state'
+import { locale } from '../../app/settings/state'
 import {
   favoriteItems,
   favoriteItemsLoading,

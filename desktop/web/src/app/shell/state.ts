@@ -1,5 +1,4 @@
 import { signal, batch } from "@preact/signals";
-import type { PlantDbStatus } from "../../types/health";
 
 export type Panel = "plant-db" | "canvas" | "favorites" | "location";
 
@@ -9,14 +8,6 @@ export type SidePanel = "plant-db" | "favorites";
 const SIDE_PANELS = new Set<Panel>(["plant-db", "favorites"]);
 
 export const activePanel = signal<Panel>("canvas");
-export const locale = signal<"en" | "fr" | "es" | "pt" | "it" | "zh" | "de" | "ja" | "ko" | "nl" | "ru">("en");
-export const theme = signal<"light" | "dark">("light");
-
-/** Plant DB subsystem health — queried from Rust on startup. */
-export const plantDbStatus = signal<PlantDbStatus>("available");
-
-/** Autosave interval in milliseconds — hydrated from Rust settings on startup. */
-export const autoSaveIntervalMs = signal<number>(60_000);
 
 // Which sidebar panel is open alongside the canvas. null = none.
 // Starts closed — the user opens Plant DB when they need it (by then IPC is ready).

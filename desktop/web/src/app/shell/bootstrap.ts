@@ -3,8 +3,8 @@ import { initShortcuts } from "../../shortcuts/manager";
 import type { SubsystemHealth } from "../../types/health";
 import type { Settings } from "../../types/settings";
 import { initTheme } from "../../utils/theme";
+import { plantDbStatus } from "../health/state";
 import { setBootstrappedSettings } from "../settings/persistence";
-import { plantDbStatus } from "./state";
 
 let shellBootstrapped = false;
 

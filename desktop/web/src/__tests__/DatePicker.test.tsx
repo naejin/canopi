@@ -2,7 +2,7 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { DatePicker } from '../components/shared/DatePicker'
-import { locale } from '../app/shell/state'
+import { locale } from '../app/settings/state'
 
 describe('DatePicker', () => {
   let container: HTMLDivElement

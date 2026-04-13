@@ -3,7 +3,7 @@ import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MoreFiltersPanel } from '../components/plant-db/MoreFiltersPanel'
 import { dynamicOptionsCache, dynamicOptionsErrors, dynamicOptionsPending, extraFilters } from '../app/plant-browser'
-import { locale } from '../app/shell/state'
+import { locale } from '../app/settings/state'
 
 async function flushEffects(): Promise<void> {
   await Promise.resolve()

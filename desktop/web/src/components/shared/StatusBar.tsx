@@ -1,4 +1,4 @@
-import { locale, theme } from "../../app/shell/state";
+import { locale, theme } from "../../app/settings/state";
 import { persistCurrentSettings } from "../../app/settings/persistence";
 import { autosaveFailed } from "../../state/design";
 import { t } from "../../i18n";

@@ -15,7 +15,7 @@ import {
   snapToGridEnabled,
   snapToGuidesEnabled,
 } from '../state/canvas'
-import { autoSaveIntervalMs, locale, theme } from '../app/shell/state'
+import { autoSaveIntervalMs, locale, theme } from '../app/settings/state'
 import {
   flushQueuedSettingsPersist,
   queueSettingsPersist,

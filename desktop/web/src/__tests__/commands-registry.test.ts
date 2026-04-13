@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { activeTool } from '../state/canvas'
 import { activePanel, sidePanel } from '../app/shell/state'
+import { theme } from '../app/settings/state'
 import { setCurrentCanvasSession } from '../canvas/session'
 import * as documentActions from '../app/document-session/actions'
+import * as settingsPersistence from '../app/settings/persistence'
 import { commands } from '../commands/registry'
 import { PANEL_SHORTCUTS, TOOL_SHORTCUTS } from '../shortcuts/definitions'
 
@@ -23,6 +25,7 @@ describe('command registry canvas tool switching', () => {
   afterEach(() => {
     setCurrentCanvasSession(null)
     activeTool.value = 'select'
+    theme.value = 'light'
   })
 
   it('routes tool commands through the live canvas session when mounted', () => {
@@ -69,5 +72,15 @@ describe('command registry canvas tool switching', () => {
     expect(openSpy).toHaveBeenCalledTimes(1)
     expect(saveSpy).toHaveBeenCalledTimes(1)
     expect(saveAsSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('toggles theme through settings state and persistence', () => {
+    theme.value = 'light'
+    const persistSpy = vi.spyOn(settingsPersistence, 'persistCurrentSettings').mockImplementation(() => {})
+
+    getCommand('view.toggleTheme').action()
+
+    expect(theme.value).toBe('dark')
+    expect(persistSpy).toHaveBeenCalledTimes(1)
   })
 })

@@ -62,7 +62,7 @@ vi.mock("../app/settings/persistence", () => ({
 
 import { useCanvasDocumentSession } from "../app/document-session/use-canvas-document-session";
 import { currentCanvasSession } from "../canvas/session";
-import { autoSaveIntervalMs } from "../app/shell/state";
+import { autoSaveIntervalMs } from "../app/settings/state";
 import {
   autosaveFailed,
   currentDesign,

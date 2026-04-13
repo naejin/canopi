@@ -1,5 +1,5 @@
 import { t } from '../../i18n'
-import { locale } from '../../app/shell/state'
+import { locale } from '../../app/settings/state'
 import { type BottomPanelTab } from '../../state/canvas'
 import { openBottomPanel, setBottomPanelOpen } from '../../app/canvas-settings/controller'
 import { bottomPanelView } from '../../app/canvas-settings/state'

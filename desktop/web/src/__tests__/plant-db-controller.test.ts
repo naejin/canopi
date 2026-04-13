@@ -96,7 +96,7 @@ describe('plant DB controller lifecycle', () => {
 
   it('caches dynamic filter options per locale', async () => {
     const plantDb = await import('../app/plant-browser')
-    const appState = await import('../app/shell/state')
+    const appState = await import('../app/settings/state')
     const englishOptions: DynamicFilterOptions[] = [
       {
         field: 'habit',
@@ -135,7 +135,7 @@ describe('plant DB controller lifecycle', () => {
 
   it('deduplicates concurrent dynamic option requests for the same locale and field', async () => {
     const plantDb = await import('../app/plant-browser')
-    const appState = await import('../app/shell/state')
+    const appState = await import('../app/settings/state')
     let resolveRequest!: (value: DynamicFilterOptions[]) => void
     const request = new Promise<DynamicFilterOptions[]>((resolve) => {
       resolveRequest = resolve
@@ -168,7 +168,7 @@ describe('plant DB controller lifecycle', () => {
 
   it('records a field-level error when IPC returns no options for a requested field', async () => {
     const plantDb = await import('../app/plant-browser')
-    const appState = await import('../app/shell/state')
+    const appState = await import('../app/settings/state')
     vi.spyOn(console, 'error').mockImplementation(() => {})
 
     appState.locale.value = 'en'
@@ -184,7 +184,7 @@ describe('plant DB controller lifecycle', () => {
 
   it('clears field-level errors after a successful retry', async () => {
     const plantDb = await import('../app/plant-browser')
-    const appState = await import('../app/shell/state')
+    const appState = await import('../app/settings/state')
     vi.spyOn(console, 'error').mockImplementation(() => {})
 
     appState.locale.value = 'en'
@@ -212,7 +212,7 @@ describe('plant DB controller lifecycle', () => {
 
   it('records thrown IPC errors per field', async () => {
     const plantDb = await import('../app/plant-browser')
-    const appState = await import('../app/shell/state')
+    const appState = await import('../app/settings/state')
     vi.spyOn(console, 'error').mockImplementation(() => {})
 
     appState.locale.value = 'en'
@@ -279,7 +279,7 @@ describe('plant DB controller lifecycle', () => {
 
   it('ignores stale favorite-item responses after a locale switch', async () => {
     const plantDb = await import('../app/plant-browser')
-    const appState = await import('../app/shell/state')
+    const appState = await import('../app/settings/state')
     const english = deferred<any[]>()
     const french = deferred<any[]>()
 
@@ -342,7 +342,7 @@ describe('plant DB controller lifecycle', () => {
 
   it('ignores stale sidebar list responses after a locale switch', async () => {
     const plantDb = await import('../app/plant-browser')
-    const appState = await import('../app/shell/state')
+    const appState = await import('../app/settings/state')
     const englishFavorites = deferred<any[]>()
     const englishRecent = deferred<any[]>()
     const frenchFavorites = deferred<any[]>()

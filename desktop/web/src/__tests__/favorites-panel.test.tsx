@@ -27,7 +27,7 @@ vi.mock('../app/plant-browser', async () => {
 })
 
 import { FavoritesPanel } from '../components/panels/FavoritesPanel'
-import { locale } from '../app/shell/state'
+import { locale } from '../app/settings/state'
 import {
   favoriteItems,
   favoriteItemsLoading,

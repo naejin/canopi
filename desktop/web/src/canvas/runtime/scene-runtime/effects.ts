@@ -1,5 +1,5 @@
 import { effect } from '@preact/signals'
-import { locale, theme } from '../../../app/shell/state'
+import { locale, theme } from '../../../app/settings/state'
 import {
   gridVisible,
   guides,

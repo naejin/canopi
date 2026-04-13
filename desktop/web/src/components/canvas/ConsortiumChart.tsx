@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
-import { locale, theme } from '../../app/shell/state'
+import { locale, theme } from '../../app/settings/state'
 import { plantSpeciesColors, hoveredCanvasTargets, sceneEntityRevision, plantNamesRevision } from '../../state/canvas'
 import { currentDesign } from '../../state/design'
 import { currentCanvasSession } from '../../canvas/session'
