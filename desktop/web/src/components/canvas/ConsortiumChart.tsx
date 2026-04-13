@@ -3,7 +3,8 @@ import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale, theme } from '../../app/settings/state'
 import { hoveredCanvasTargets } from '../../app/panel-targets/state'
-import { plantSpeciesColors, sceneEntityRevision, plantNamesRevision } from '../../state/canvas'
+import { plantSpeciesColorDefaults } from '../../canvas/plant-species-color-defaults'
+import { sceneEntityRevision, plantNamesRevision } from '../../state/canvas'
 import { currentDesign } from '../../state/design'
 import { currentCanvasSession } from '../../canvas/session'
 import { moveConsortiumEntry, reorderConsortiumEntry } from '../../app/consortium/controller'
@@ -73,7 +74,7 @@ export function ConsortiumChart() {
   const design = currentDesign.value
   const plants = session?.getPlacedPlants() ?? EMPTY_PLANTS
   const consortiums = design?.consortiums ?? EMPTY_CONSORTIUMS
-  const colors = plantSpeciesColors.value
+  const colors = plantSpeciesColorDefaults.value
   const localizedNames = session?.getLocalizedCommonNames() ?? EMPTY_NAMES
   const canvasHoveredCanonical = getHoveredSpeciesCanonical(hoveredCanvasTargets.value)
   const effectiveHoveredCanonical = hoveredCanonical.value ?? canvasHoveredCanonical

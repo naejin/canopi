@@ -4,7 +4,7 @@ import { useCanvasRenderer } from './useCanvasRenderer'
 import { useSignal, useSignalEffect } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale, theme } from '../../app/settings/state'
-import { plantSpeciesColors } from '../../state/canvas'
+import { plantSpeciesColorDefaults } from '../../canvas/plant-species-color-defaults'
 import { currentDesign } from '../../state/design'
 import { currentCanvasSession } from '../../canvas/session'
 import {
@@ -199,7 +199,7 @@ export function InteractiveTimeline({
   onSelectRef.current = onSelect
 
   const actions = currentDesign.value?.timeline ?? EMPTY_ACTIONS
-  const speciesColors = plantSpeciesColors.value
+  const speciesColors = plantSpeciesColorDefaults.value
   const todayMs = useMemo(() => Date.now(), [])
   const originMs = useMemo(() => computeOriginMs(actions, todayMs), [actions, todayMs])
   const originDate = useMemo(() => new Date(originMs), [originMs])

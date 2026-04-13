@@ -83,8 +83,6 @@ export function hasVisibleMapLayer(
     || hillshadeOn
 }
 
-export const plantSpeciesColors = signal<Record<string, string>>({})
-
 // Canvas entity revision — incremented on every scene mutation (plant/zone/annotation
 // changes) so bottom-panel components can subscribe to canvas-store changes. Parallel
 // to nonCanvasRevision in state/design.ts which tracks document-store changes.

@@ -6,9 +6,9 @@ import {
   layerVisibility,
   lockedObjectIds,
   northBearingDeg,
-  plantSpeciesColors,
 } from '../../../state/canvas'
 import { plantColorMenuOpen } from '../../plant-color-menu-state'
+import { syncPlantSpeciesColorDefaults } from '../../plant-species-color-defaults'
 import type { CanopiFile } from '../../../types/design'
 import { plantColorByAttr, plantSizeMode } from '../../plant-display-state'
 import { clearCanvasSelection, setCanvasSelection, setCanvasTool } from '../../session-state'
@@ -51,7 +51,7 @@ function syncCanvasSignalsFromDocument(file: CanopiFile): void {
     layerVisibility.value = visibility
     layerLockState.value = locks
     layerOpacity.value = opacities
-    plantSpeciesColors.value = { ...file.plant_species_colors }
+    syncPlantSpeciesColorDefaults(file.plant_species_colors)
     guides.value = Array.isArray(file.extra?.guides) ? file.extra.guides as never[] : []
     northBearingDeg.value = file.north_bearing_deg ?? 0
   })

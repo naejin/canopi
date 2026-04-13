@@ -1,6 +1,6 @@
 import { locale } from '../../app/settings/state'
 import { plantColorMenuOpen } from '../../canvas/plant-color-menu-state'
-import { plantSpeciesColors } from '../../state/canvas'
+import { plantSpeciesColorDefaults } from '../../canvas/plant-species-color-defaults'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { currentCanvasSelection, currentCanvasSession } from '../../canvas/session'
 import {
@@ -41,7 +41,7 @@ function closeMenu(buttonRef?: { current: HTMLButtonElement | null }) {
 
 export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
   void currentCanvasSelection.value
-  void plantSpeciesColors.value
+  void plantSpeciesColorDefaults.value
   const session = currentCanvasSession.value
   const activeLocale = locale.value
   const menuOpen = plantColorMenuOpen.value

@@ -1,6 +1,5 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { SceneCanvasRuntime } from '../canvas/runtime/scene-runtime'
-import { plantSpeciesColors } from '../state/canvas'
 import type { CanopiFile } from '../types/design'
 
 function makeDoc(): CanopiFile {
@@ -26,10 +25,6 @@ function makeDoc(): CanopiFile {
 }
 
 describe('serializer species color defaults', () => {
-  beforeEach(() => {
-    plantSpeciesColors.value = {}
-  })
-
   it('persists document species color defaults into the canonical scene payload', () => {
     const runtime = new SceneCanvasRuntime()
     runtime.loadDocument(makeDoc())

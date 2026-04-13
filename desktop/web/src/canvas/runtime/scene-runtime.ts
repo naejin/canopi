@@ -12,7 +12,6 @@ import {
   layerVisibility,
   lockedObjectIds,
   plantNamesRevision,
-  plantSpeciesColors,
   rulersVisible,
   sceneEntityRevision,
   snapToGridEnabled,
@@ -21,6 +20,7 @@ import type { ColorByAttribute, PlantSizeMode } from '../plant-display-state'
 import type { CanopiFile, PanelTarget, PlacedPlant } from '../../types/design'
 import type { SelectedPlantColorContext } from '../plant-color-context'
 import { clearCanvasSelection, setCanvasSelection, setCanvasTool } from '../session-state'
+import { syncPlantSpeciesColorDefaults } from '../plant-species-color-defaults'
 import { refreshCanvasColorCache } from '../theme-refresh'
 import { CameraController } from './camera'
 import { SceneChromeOverlay } from './scene-chrome'
@@ -95,11 +95,7 @@ export class SceneCanvasRuntime implements CanvasRuntime {
       },
       presentation: {
         syncSignals: () => syncPresentationSignalsFromSceneSession(this._sceneStore),
-        syncPlantSpeciesColors: () => {
-          plantSpeciesColors.value = {
-            ...this._sceneStore.persisted.plantSpeciesColors,
-          }
-        },
+        syncPlantSpeciesColors: () => syncPlantSpeciesColorDefaults(this._sceneStore.persisted.plantSpeciesColors),
         getViewportScale: () => this._camera.viewport.scale,
         createPlantPresentationContext: (viewportScale) => this._presentation.createPlantPresentationContext(viewportScale),
         getSuggestedPlantColor: (canonicalName) => this._presentation.getSuggestedPlantColor(canonicalName),
