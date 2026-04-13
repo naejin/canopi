@@ -1,6 +1,11 @@
+import type { StyleSpecification } from 'maplibre-gl'
+
 export interface MapLibreMapConstructorOptions {
   container: HTMLElement
-  style: string
+  style: string | StyleSpecification
+  center?: [number, number]
+  zoom?: number
+  bearing?: number
   attributionControl: boolean
   interactive: boolean
   pitchWithRotate: boolean
@@ -8,27 +13,44 @@ export interface MapLibreMapConstructorOptions {
   touchZoomRotate: boolean
 }
 
+export interface MapLibreRequestParameters {
+  url: string
+}
+
+export interface MapLibreGetResourceResponse<T = ArrayBuffer> {
+  data: T
+}
+
 export interface MapLibreMapInstance {
   jumpTo(options: { center: [number, number]; zoom: number; bearing: number }): void
   resize(): void
   remove(): void
-  on(type: 'load' | 'error', listener: (event?: unknown) => void): void
-  off(type: 'load' | 'error', listener: (event?: unknown) => void): void
+  on(type: 'load' | 'error' | 'sourcedata', listener: (event?: unknown) => void): void
+  off(type: 'load' | 'error' | 'sourcedata', listener: (event?: unknown) => void): void
   loaded?(): boolean
+  isStyleLoaded?(): boolean
+  isSourceLoaded?(id: string): boolean
   addSource(id: string, source: Record<string, unknown>): void
   getSource(id: string): { setData(data: unknown): void } | undefined
   removeSource(id: string): void
   addLayer(layer: Record<string, unknown>): void
+  setPaintProperty?(layerId: string, name: string, value: unknown): void
   getLayer(id: string): unknown
   removeLayer(id: string): void
 }
 
 export interface MapLibreApi {
   Map: new (options: MapLibreMapConstructorOptions) => MapLibreMapInstance
+  addProtocol(
+    id: string,
+    protocol: (
+      requestParameters: MapLibreRequestParameters,
+      abortController: AbortController,
+    ) => Promise<MapLibreGetResourceResponse>,
+  ): void
 }
 
 let mapLibreModulePromise: Promise<MapLibreApi> | null = null
-let mapLibreCssPromise: Promise<unknown> | null = null
 
 export function loadMapLibreModule(): Promise<MapLibreApi> {
   if (!mapLibreModulePromise) {
@@ -45,20 +67,6 @@ export function loadMapLibreModule(): Promise<MapLibreApi> {
   return mapLibreModulePromise
 }
 
-export function loadMapLibreCss(): Promise<unknown> {
-  if (!mapLibreCssPromise) {
-    mapLibreCssPromise = import('maplibre-gl/dist/maplibre-gl.css').catch((error) => {
-      mapLibreCssPromise = null
-      throw error
-    })
-  }
-  return mapLibreCssPromise
-}
-
 export async function loadMapLibre() {
-  const [api] = await Promise.all([
-    loadMapLibreModule(),
-    loadMapLibreCss(),
-  ])
-  return api
+  return loadMapLibreModule()
 }

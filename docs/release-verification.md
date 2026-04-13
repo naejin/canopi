@@ -1,6 +1,6 @@
 # Beta Release Verification
 
-Date: 2026-04-08
+Date: 2026-04-13
 Status: v0.3.0 release candidate
 
 Wave 5 is a beta-release gate on the current retained-surface architecture. It does not claim the broader roadmap is complete.
@@ -36,6 +36,8 @@ Explicitly deferred beyond Wave 5 beta at beta-cut time:
 - geo / terrain workflows
 - export workflows
 - knowledge / learning surfaces
+
+For the current live geo/map slice status after beta, use `docs/todo.md` (`MapLibre / geo`) as the operational source of truth.
 
 `color by plants` landed later on 2026-04-01 as post-beta work. This section is a historical record of beta scope, not the current active backlog.
 

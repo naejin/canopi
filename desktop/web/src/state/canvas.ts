@@ -68,6 +68,22 @@ export function createDefaultLayerOpacity(): Record<string, number> {
 
 export const layerOpacity = signal<Record<string, number>>(createDefaultLayerOpacity())
 
+export const DEFAULT_CONTOUR_INTERVAL_METERS = 0
+export const DEFAULT_HILLSHADE_VISIBLE = false
+export const DEFAULT_HILLSHADE_OPACITY = 0.55
+export const contourIntervalMeters = signal<number>(DEFAULT_CONTOUR_INTERVAL_METERS)
+export const hillshadeVisible = signal<boolean>(DEFAULT_HILLSHADE_VISIBLE)
+export const hillshadeOpacity = signal<number>(DEFAULT_HILLSHADE_OPACITY)
+
+export function hasVisibleMapLayer(
+  visibility: Record<string, boolean>,
+  hillshadeOn: boolean,
+): boolean {
+  return (visibility.base ?? true)
+    || (visibility.contours ?? false)
+    || hillshadeOn
+}
+
 // Plant display modes
 export type PlantSizeMode = 'default' | 'canopy'
 export type ColorByAttribute = 'stratum' | 'hardiness' | 'lifecycle' | 'nitrogen' | 'edibility' | 'flower'

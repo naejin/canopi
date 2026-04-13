@@ -1,9 +1,11 @@
 import { useSignal, useSignalEffect } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
 import maplibregl from 'maplibre-gl'
-import 'maplibre-gl/dist/maplibre-gl.css'
 import { t } from '../../i18n'
-import { DEFAULT_MAPLIBRE_BASEMAP_STYLE_URL } from '../../maplibre/config'
+import {
+  createDefaultMapLibreBasemapStyle,
+  REMOTE_BASEMAP_TILE_URL_TEMPLATE,
+} from '../../maplibre/config'
 import { locale } from '../../state/app'
 import { geocodeAddress, type GeoResult } from '../../ipc/geocoding'
 import { currentDesign } from '../../state/document'
@@ -45,7 +47,6 @@ export function LocationTab() {
   useEffect(() => {
     const container = mapContainerRef.current
     if (!container || mapRef.current) return
-
     const savedLoc = currentDesign.value?.location
     const center: [number, number] = savedLoc
       ? [savedLoc.lon, savedLoc.lat]
@@ -53,7 +54,7 @@ export function LocationTab() {
 
     const map = new maplibregl.Map({
       container,
-      style: DEFAULT_MAPLIBRE_BASEMAP_STYLE_URL,
+      style: createDefaultMapLibreBasemapStyle(REMOTE_BASEMAP_TILE_URL_TEMPLATE),
       center,
       zoom: savedLoc ? 10 : 3.2,
       attributionControl: false,

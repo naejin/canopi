@@ -5,13 +5,16 @@ import {
   bottomPanelHeight,
   bottomPanelOpen,
   bottomPanelTab,
+  contourIntervalMeters,
   gridVisible,
+  hillshadeOpacity,
+  hillshadeVisible,
   layerLockState,
   layerOpacity,
   layerPanelOpen,
   layerVisibility,
 } from './canvas'
-import { persistCurrentSettings } from './app'
+import { persistCurrentSettings, queueSettingsPersist } from './app'
 
 export function setLayerPanelOpen(open: boolean): void {
   layerPanelOpen.value = open
@@ -30,9 +33,13 @@ export function toggleGridVisibility(): void {
 }
 
 export function toggleLayerVisibility(name: string): void {
+  const next = !(layerVisibility.value[name] ?? true)
   layerVisibility.value = {
     ...layerVisibility.value,
-    [name]: !(layerVisibility.value[name] ?? true),
+    [name]: next,
+  }
+  if (name === 'base' || name === 'contours') {
+    queueSettingsPersist()
   }
 }
 
@@ -44,10 +51,30 @@ export function toggleLayerLock(name: string): void {
 }
 
 export function setLayerOpacity(name: string, opacity: number): void {
+  const next = Math.min(1, Math.max(0, opacity))
   layerOpacity.value = {
     ...layerOpacity.value,
-    [name]: opacity,
+    [name]: next,
   }
+  if (name === 'base' || name === 'contours') {
+    queueSettingsPersist()
+  }
+}
+
+export function setContourIntervalMeters(interval: number): void {
+  if (!Number.isFinite(interval)) return
+  contourIntervalMeters.value = Math.max(0, Math.round(interval))
+  queueSettingsPersist()
+}
+
+export function toggleHillshadeVisibility(): void {
+  hillshadeVisible.value = !hillshadeVisible.value
+  queueSettingsPersist()
+}
+
+export function setHillshadeOpacity(opacity: number): void {
+  hillshadeOpacity.value = Math.min(1, Math.max(0, opacity))
+  queueSettingsPersist()
 }
 
 export function setBottomPanelOpen(open: boolean): void {

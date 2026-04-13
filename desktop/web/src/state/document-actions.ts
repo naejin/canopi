@@ -204,6 +204,7 @@ export function consumeQueuedDocumentLoad(session: CanvasRuntime): () => void {
 }
 
 async function confirmReplacement(): Promise<ReplacementDecision> {
+  if (!currentDesign.value) return 'proceed'
   if (!designDirty.value) return 'proceed'
 
   const saveLabel = t('canvas.file.save')

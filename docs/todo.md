@@ -172,12 +172,24 @@ These align with the core risks identified in the architecture review.
 ## Deferred Product Work
 
 **MapLibre / geo:**
-- Current MapLibre usage: full-screen location shell (`LocationTab`), dynamically loaded featured-design world map (`WorldMapSurface`), and the in-canvas `MapLibreCanvasSurface`. These are document-derived UI surfaces, not canvas authorities.
+- Current MapLibre usage: full-screen location shell (`LocationTab`), dynamically loaded featured-design world map (`WorldMapSurface`), and the in-canvas `MapLibreCanvasSurface`. These are document-derived UI surfaces, not canvas authorities. This section is the canonical current-status owner for the live map slice.
+- ~~Visible Location entry restored in `PanelBar`~~ — **done**: location editing is discoverable again through the dedicated flow; the canvas basemap still reads saved document location and remains non-authoritative
+- ~~Shared hosted basemap config across live MapLibre surfaces~~ — **done**: `maplibre/config.ts` owns `DEFAULT_MAPLIBRE_BASEMAP_STYLE_URL`, reused by `LocationTab`, `WorldMapSurface`, and `MapLibreCanvasSurface`
 - ~~In-canvas MapLibre base layer behind the canvas~~ — **done**: `CanvasPanel` mounts `MapLibreCanvasSurface` behind `.canvasContainer`; the surface lazy-loads `maplibre-gl`, stays non-interactive, owns its own lifecycle, and reports loading / ready / error state back to the canvas shell
-- ~~Canvas camera -> MapLibre viewport sync~~ — **done**: canvas remains authoritative; the basemap follows one-way through read-only runtime/query seams (`getViewport()`, `getViewportScreenSize()`, `viewportRevision`) and pure camera projection
+- ~~Canvas camera -> MapLibre viewport sync~~ — **done**: canvas remains authoritative; the basemap follows one-way through read-only runtime/query seams (`getViewport()`, `getViewportScreenSize()`, `viewportRevision`) and the canonical map-frame seam
+- ~~Bearing-aware canvas↔map sync seam~~ — **done**: `canvas/projection.ts` / `canvas/maplibre-camera.ts` now own the shared Mercator-backed local projection frame, `north_bearing_deg` participates in both camera derivation and map-feature projection, and in-canvas pan/zoom sync no longer relies on separate bearing math or 256px-world zoom shortcuts in the map surface
+- ~~No camera deadband in exact-sync contract~~ — **done**: tiny viewport changes now always apply through the canonical map frame instead of being skipped by tolerance checks in `MapLibreCanvasSurface`
 - ~~Initial in-canvas scope: toggleable base map only, mounted via a dedicated MapLibre controller/surface, with no map-driven document mutation~~ — **done**
+- ~~Canvas basemap feedback and location confirmation UI~~ — **done**: the canvas shell reports loading / ready / error state, and the layer panel shows saved-location confirmation without turning the map into a document authority
+- ~~Precision warning for large local-projection extents~~ — **done**: the canvas map feedback now warns once design geometry extends beyond the local precision threshold; the map stays active and diagnostics remain dev-only
 - ~~Rendered panel↔map overlays using the pure `projectPanelTargetsToMapFeatures()` seam~~ — **done**: hover/selection overlays now consume the pure projection seam instead of resolving identity inside MapLibre
-- Local tangent plane projection math in `canvas/projection.ts` (`lngLatToMeters` / `metersToLngLat`) — prerequisite for viewport sync and future in-canvas geo layers (see `docs/archive/roadmap.md` 4.0c)
+- ~~Display-only north compass in canvas chrome~~ — **done**: the canvas shows a north indicator derived from `north_bearing_deg`; it is informational only and does not introduce map-only rotation or working-plane rotation
+- Local-projection backend replacement for larger geodetic use cases — deferred: the current Mercator-backed local frame is the canonical seam, with warning-only guardrails for large designs
+- Follow-up cleanup tasks for a cleaner map architecture:
+  - Map surface simplification: reduce `MapLibreCanvasSurface` responsibilities further once the current exact-sync path stays stable; keep one canonical seam for camera, overlays, terrain, and diagnostics
+  - Projection seam cleanup: keep the local-projection backend replaceable, keep the `10 km` warning-only guardrail explicit, and defer geodetic backend work until real usage demands it
+  - Validation foundation: keep screen-lock regression coverage for pan, zoom, resize, fit-to-content, document open, and rotated designs; projected overlays must continue validating against the same exact-lock contract as basemap and terrain
+  - Post-hardening architecture pass: audit whether `CanvasRuntime` should split command vs query/projection responsibilities more explicitly, and whether map diagnostics/warning state should stay surface-local or move behind a smaller read-only adapter
 - PMTiles offline tiles: Rust reader + Tauri custom protocol + download manager UI (see `docs/archive/roadmap.md` 4.2)
 - Contour/hillshade layers via `maplibre-contour` + DEM tiles (see `docs/archive/roadmap.md` 4.3/4.4)
 

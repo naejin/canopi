@@ -6,7 +6,15 @@ import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import { MapLibreCanvasSurface } from '../components/canvas/MapLibreCanvasSurface'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { currentDesign } from '../state/document'
-import { hoveredPanelTargets, layerOpacity, layerVisibility, selectedPanelTargets } from '../state/canvas'
+import {
+  contourIntervalMeters,
+  hillshadeOpacity,
+  hillshadeVisible,
+  hoveredPanelTargets,
+  layerOpacity,
+  layerVisibility,
+  selectedPanelTargets,
+} from '../state/canvas'
 
 const removeMock = vi.fn()
 const resizeMock = vi.fn()
@@ -19,6 +27,8 @@ const removeSourceMock = vi.fn()
 const addLayerMock = vi.fn()
 const removeLayerMock = vi.fn()
 const loadMapLibreMock = vi.hoisted(() => vi.fn())
+const setPaintPropertyMock = vi.fn()
+const isSourceLoadedMock = vi.fn(() => true)
 let sourceStore = new Map<string, { setData: ReturnType<typeof vi.fn> }>()
 let layerStore = new Set<string>()
 
@@ -30,10 +40,12 @@ const mapConstructorMock = vi.fn(function MockMap() {
     on: onMock,
     off: offMock,
     loaded: loadedMock,
+    isSourceLoaded: isSourceLoadedMock,
     addSource: addSourceMock,
     getSource: (id: string) => sourceStore.get(id),
     removeSource: removeSourceMock,
     addLayer: addLayerMock,
+    setPaintProperty: setPaintPropertyMock,
     getLayer: (id: string) => (layerStore.has(id) ? { id } : undefined),
     removeLayer: removeLayerMock,
   }
@@ -136,6 +148,9 @@ describe('MapLibreCanvasSurface overlays', () => {
       updated_at: '2026-04-12T00:00:00.000Z',
       extra: {},
     }
+    contourIntervalMeters.value = 0
+    hillshadeVisible.value = false
+    hillshadeOpacity.value = 0.55
     layerVisibility.value = { base: true }
     layerOpacity.value = { base: 0.6 }
     hoveredPanelTargets.value = []
@@ -156,9 +171,13 @@ describe('MapLibreCanvasSurface overlays', () => {
     removeLayerMock.mockImplementation((id: string) => {
       layerStore.delete(id)
     })
+    setPaintPropertyMock.mockReset()
+    isSourceLoadedMock.mockReset()
+    isSourceLoadedMock.mockReturnValue(true)
     loadMapLibreMock.mockReset()
     loadMapLibreMock.mockResolvedValue({
       Map: mapConstructorMock,
+      addProtocol: vi.fn(),
     })
     sourceStore = new Map()
     layerStore = new Set()
@@ -209,6 +228,11 @@ describe('MapLibreCanvasSurface overlays', () => {
 
     await act(async () => {
       render(<MapLibreCanvasSurface />, container)
+      await Promise.resolve()
+    })
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
     })
 
     await act(async () => {

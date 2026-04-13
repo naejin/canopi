@@ -5,7 +5,7 @@
 - **Frontend**: Preact + @preact/signals + TypeScript + Vite + CSS Modules
 - **Canvas**: PixiJS (primary renderer) + Canvas2D (fallback) — scene-owned runtime via `SceneCanvasRuntime`
 - **i18n**: i18next core (NOT react-i18next), 11 languages (en, fr, es, pt, it, zh, de, ja, ko, nl, ru)
-- **Maps**: MapLibre GL JS + maplibre-contour. The visible PanelBar Location entry, featured-design world map, and in-canvas basemap surface now use MapLibre; the shared hosted basemap style is reused across location and canvas surfaces. Panel↔map hover/selection overlays now run through the pure projection/overlay seam, while contours/hillshade, offline tiles, export, and learning surfaces remain deferred
+- **Maps**: MapLibre GL JS + maplibre-contour. The visible PanelBar Location entry, featured-design world map, and in-canvas basemap surface now use MapLibre; the shared hosted basemap style is reused across all live MapLibre surfaces. Canvas camera sync and panel↔map hover/selection overlays now run through the same bearing-aware Mercator-backed projection seam, while contours/hillshade, offline tiles, export, and learning surfaces remain deferred
 - **Native**: lib-c (Linux, Cairo PNG/PDF + inotify + XDG), lib-swift (macOS stub), lib-cpp (Windows stub)
 
 ## Project Structure
@@ -46,7 +46,7 @@ Domain-specific instructions in subdirectory CLAUDE.md files:
 
 ## Current Scope
 - **Bottom panel**: Timeline, Budget, and Consortium tabs active. Timeline uses direct-manipulation UX: 6 fixed action-type rows, click-to-add/edit popover with date validation, edge resize, hover tooltip, ctrl+scroll zoom, drag-to-move with frozen coordinate origin, and auto-scroll on edge drag (rAF-based, quadratic acceleration). Ruler controls hidden pending design iteration. Panel-canvas hover/selection flows through typed `PanelTarget[]` signals and `resolvePanelTargets()`
-- **Maps**: Location flow and world map surfaces exist, the visible PanelBar Location entry opens the dedicated map flow, and the canvas now has a non-interactive MapLibre basemap behind the scene surface. The basemap surface reports loading / ready / error feedback, and panel↔map hover/selection overlays are live through the pure projection seam. Contours/hillshade, offline tiles, export, and learning content remain deferred beyond beta
+- **Maps**: Location flow and world map surfaces exist, the visible PanelBar Location entry opens the dedicated map flow, and the canvas now has a non-interactive MapLibre basemap behind the scene surface. The basemap surface reports loading / ready / error feedback, follows the canvas through the shared Mercator-backed bearing-aware projection seam, shows a display-only north compass in canvas chrome, exposes dev-only sync diagnostics, warns when local-projection precision may degrade for large designs, and renders panel↔map hover/selection overlays through the same pure projection path. Contours/hillshade, offline tiles, export, and learning content remain deferred beyond beta
 - **Selection**: No resize/rotate — objects are position-only (highlight + move)
 - **Plant labels**: Hover tooltip + hover species highlight + selection labels (one per species at centroid). See `desktop/web/src/canvas/CLAUDE.md` Plant Presentation Rules
 - Many tools, overlays, and export commands were pruned during the rewrite — see git history. See `docs/todo.md` for current and deferred work
@@ -101,8 +101,11 @@ The save path composes both into a single `CanopiFile`. Neither authority should
 - **MapLibre is a derived visualization layer, not a document authority.** Map layers render scene/document state; they do not own or mutate it
 - Existing full-screen surfaces may keep component-local MapLibre ownership when setup/update/teardown are contained in one component (`LocationTab`, `WorldMapSurface`). In-canvas MapLibre must remain isolated in one dedicated sibling surface/controller and must not be scattered across the canvas runtime or renderer implementations
 - **MapLibre follows canvas camera state (one-directional).** The canvas camera is the authority; the map layer subscribes and projects through read-only runtime/query seams. The current in-canvas basemap is non-interactive and must not mutate document or canvas state
+- **Map/canvas projection is bearing-aware, Mercator-backed, and shared.** `north_bearing_deg` participates in both camera derivation and world↔geo feature projection; do not keep separate bearing math or alternate zoom math in `MapLibreCanvasSurface` or overlay code
+- **Exact sync means no skipped viewport updates.** Do not add camera deadbands/tolerances in `MapLibreCanvasSurface` or other map consumers that can suppress tiny pan/zoom changes
+- **MapLibre bearing adaptation lives at the camera seam.** Preserve document `north_bearing_deg` semantics; if MapLibre-facing bearing handling changes, adapt it inside `canvas/maplibre-camera.ts`, not in panel overlays, canvas state, or document serialization
 - The lazy import boundary around `maplibre-gl` should be preserved for bundle size
-- Future rendered panel-map overlays must consume the pure `projectPanelTargetsToMapFeatures()` seam rather than re-resolving panel identity or making MapLibre a second scene/document authority
+- Rendered panel-map overlays, and any richer future variants, must consume the pure `projectPanelTargetsToMapFeatures()` seam rather than re-resolving panel identity or making MapLibre a second scene/document authority
 
 ### Panel ↔ Canvas Reactivity
 - **Bottom panel components that read canvas-derived data must subscribe to `sceneEntityRevision`** from `state/canvas.ts` to react to canvas mutations (plant placement, undo/redo). Reading `currentCanvasSession.value?.getPlacedPlants()` alone is not reactive — the session reference doesn't change when scene state changes. Panels that only read non-canvas document state (e.g., TimelineTab reads `currentDesign.value?.timeline`) should NOT subscribe — it causes spurious re-renders on every canvas mutation

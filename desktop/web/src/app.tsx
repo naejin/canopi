@@ -5,7 +5,7 @@ import { initTheme } from "./utils/theme";
 import { initShortcuts } from "./shortcuts/manager";
 import { useCallback, useRef } from "preact/hooks";
 import { lazy, Suspense } from "preact/compat";
-import { activePanel, sidePanel, sidePanelWidth, plantDbStatus, locale, theme, autoSaveIntervalMs, setBootstrappedSettings } from "./state/app";
+import { activePanel, sidePanel, sidePanelWidth, plantDbStatus, setBootstrappedSettings, flushQueuedSettingsPersist } from "./state/app";
 import { designDirty, saveCurrentDesign } from "./state/document";
 import { invoke } from "@tauri-apps/api/core";
 import type { SubsystemHealth } from "./types/health";
@@ -18,8 +18,6 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { confirmCloseWithUnsavedChanges } from "./state/close-guard";
 
 import type { Settings } from "./types/settings";
-import { snapToGridEnabled, snapToGuidesEnabled, bottomPanelOpen, bottomPanelHeight, bottomPanelTab, type BottomPanelTab, VISIBLE_BOTTOM_PANEL_TABS } from "./state/canvas";
-
 // Synchronous init — applies local defaults immediately (no theme flicker)
 initTheme();
 initShortcuts();
@@ -31,16 +29,6 @@ invoke<SubsystemHealth>('get_health')
 
 invoke<Settings>('get_settings')
   .then((s) => {
-    locale.value = s.locale;
-    theme.value = s.theme === 'dark' ? 'dark' : 'light';
-    snapToGridEnabled.value = s.snap_to_grid;
-    snapToGuidesEnabled.value = s.snap_to_guides;
-    autoSaveIntervalMs.value = s.auto_save_interval_s * 1000;
-    bottomPanelOpen.value = s.bottom_panel_open;
-    bottomPanelHeight.value = s.bottom_panel_height;
-    if (VISIBLE_BOTTOM_PANEL_TABS.includes(s.bottom_panel_tab as BottomPanelTab)) {
-      bottomPanelTab.value = s.bottom_panel_tab as BottomPanelTab;
-    }
     setBootstrappedSettings(s);
   })
   .catch((e) => console.error('Failed to bootstrap settings:', e));
@@ -59,6 +47,8 @@ let _unlistenClose: unknown = null
   if (typeof _unlistenClose === 'function') (_unlistenClose as () => void)()
 
   getCurrentWindow().onCloseRequested(async (event) => {
+    flushQueuedSettingsPersist()
+
     if (!designDirty.value) return  // clean — allow close immediately
 
     // Prevent the default close so we can prompt the user

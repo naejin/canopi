@@ -26,6 +26,7 @@ pub struct Settings {
     pub map_style: String,
     pub map_opacity: f32,
     pub contour_visible: bool,
+    pub contour_opacity: f32,
     pub contour_interval: u32,
     pub hillshade_visible: bool,
     pub hillshade_opacity: f32,
@@ -52,13 +53,14 @@ impl Default for Settings {
             bottom_panel_open: false,
             bottom_panel_height: 200,
             bottom_panel_tab: "budget".into(),
-            map_layer_visible: false,
+            map_layer_visible: true,
             map_style: "street".into(),
             map_opacity: 1.0,
             contour_visible: false,
-            contour_interval: 5,
+            contour_opacity: 1.0,
+            contour_interval: 0,
             hillshade_visible: false,
-            hillshade_opacity: 0.3,
+            hillshade_opacity: 0.55,
         }
     }
 }

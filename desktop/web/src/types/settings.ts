@@ -23,6 +23,7 @@ export interface Settings {
   map_style: string
   map_opacity: number
   contour_visible: boolean
+  contour_opacity: number
   contour_interval: number
   hillshade_visible: boolean
   hillshade_opacity: number

@@ -101,7 +101,7 @@
   background: var(--canvas-bg, var(--color-bg));
 }
 
-.canvasContainer[data-basemap-active="true"] {
+.canvasContainer[data-map-active="true"] {
   background: transparent;
 }
 

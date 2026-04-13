@@ -256,6 +256,7 @@
       "interval": "Interval",
       "basemapLoading": "Basiskaart laden...",
       "basemapError": "Basiskaart niet beschikbaar",
+      "precisionWarning": "De nauwkeurigheid kan afnemen bij grote ontwerpen",
       "setLocation": "Stel een locatie in om kaartlagen te activeren",
       "styleStreet": "Straat",
       "styleTerrain": "Terrein",

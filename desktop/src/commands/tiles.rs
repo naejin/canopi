@@ -5,6 +5,8 @@ use tauri::{AppHandle, Emitter, Manager};
 
 const TILE_FETCH_TIMEOUT_SECS: u64 = 10;
 const MAX_TILE_BYTES: u64 = 10 * 1024 * 1024;
+const OSM_TILE_URL_TEMPLATE: &str = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const TILE_USER_AGENT: &str = "Canopi/1.0";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -49,6 +51,17 @@ fn tiles_dir(app: &AppHandle) -> Result<PathBuf, String> {
         .map_err(|e| format!("Failed to resolve app data dir: {e}"))?
         .join("tiles");
     Ok(dir)
+}
+
+fn tile_path(tiles_root: &Path, z: u32, x: u32, y: u32) -> PathBuf {
+    tiles_root.join(format!("{z}/{x}/{y}.png"))
+}
+
+fn tile_url(z: u32, x: u32, y: u32) -> String {
+    OSM_TILE_URL_TEMPLATE
+        .replace("{z}", &z.to_string())
+        .replace("{x}", &x.to_string())
+        .replace("{y}", &y.to_string())
 }
 
 /// Read the manifest file if it exists.
@@ -177,7 +190,7 @@ fn download_tiles_blocking(
     }
     fs::create_dir_all(&tiles_root).map_err(|e| format!("Failed to create tiles dir: {e}"))?;
 
-    let tile_url_template = "https://tile.openstreetmap.org/{z}/{x}/{y}.png".to_string();
+    let tile_url_template = OSM_TILE_URL_TEMPLATE.to_string();
 
     let mut downloaded = 0u32;
 
@@ -193,17 +206,14 @@ fn download_tiles_blocking(
             fs::create_dir_all(&x_dir).map_err(|e| format!("Failed to create x dir: {e}"))?;
 
             for y in y_min..=y_max {
-                let url = tile_url_template
-                    .replace("{z}", &z.to_string())
-                    .replace("{x}", &x.to_string())
-                    .replace("{y}", &y.to_string());
+                let url = tile_url(z, x, y);
 
                 let tile_path = x_dir.join(format!("{y}.png"));
 
                 // Download the tile
                 let persisted = match crate::http::build_get_request(
                     &url,
-                    "Canopi/1.0",
+                    TILE_USER_AGENT,
                     std::time::Duration::from_secs(TILE_FETCH_TIMEOUT_SECS),
                 )
                 .call()
@@ -286,7 +296,7 @@ fn download_tiles_blocking(
 #[tauri::command]
 pub fn get_tile(app: AppHandle, z: u32, x: u32, y: u32) -> Result<Vec<u8>, String> {
     let tiles_root = tiles_dir(&app)?;
-    let tile_path = tiles_root.join(format!("{z}/{x}/{y}.png"));
+    let tile_path = tile_path(&tiles_root, z, x, y);
 
     if !tile_path.exists() {
         return Err(format!("Tile not found: z={z} x={x} y={y}"));

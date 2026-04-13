@@ -1,0 +1,50 @@
+.compass {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+  box-shadow: var(--shadow-sm);
+  pointer-events: none;
+}
+
+.dial {
+  width: 40px;
+  height: 40px;
+  overflow: visible;
+}
+
+.ring {
+  fill: none;
+  stroke: color-mix(in srgb, var(--color-border-strong) 75%, transparent);
+  stroke-width: 1.25;
+}
+
+.needle {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 160ms ease-out;
+}
+
+.needleNorth {
+  fill: var(--color-success);
+}
+
+.needleSouth {
+  fill: color-mix(in srgb, var(--color-text-muted) 85%, transparent);
+}
+
+.northLabel {
+  fill: var(--color-text);
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}

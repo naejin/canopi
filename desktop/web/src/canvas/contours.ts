@@ -67,7 +67,7 @@ export const DEM_ENCODING = 'terrarium' as const
 export function getContourSourceConfig(
   contourProtocolUrl: (options: ContourProtocolOptions) => string,
   userInterval: number,
-): { url: string; type: 'vector'; maxzoom: number } {
+): { tiles: string[]; type: 'vector'; maxzoom: number } {
   const thresholds = userInterval > 0
     ? thresholdsForInterval(userInterval)
     : DEFAULT_THRESHOLDS
@@ -81,7 +81,7 @@ export function getContourSourceConfig(
   })
 
   return {
-    url,
+    tiles: [url],
     type: 'vector' as const,
     maxzoom: DEM_MAX_ZOOM + 1,
   }
@@ -133,27 +133,6 @@ export function getContourLayerConfigs(isDark: boolean) {
         'line-opacity': 0.8,
       },
       layout: {
-        visibility: 'visible' as const,
-      },
-    },
-    labels: {
-      id: 'contour-labels',
-      type: 'symbol' as const,
-      source: 'contour-source',
-      'source-layer': 'contours',
-      filter: ['==', ['get', 'level'], 1],
-      paint: {
-        'text-color': inkColor,
-        'text-halo-color': isDark ? '#1a1612' : '#faf7f2',
-        'text-halo-width': 1.5,
-      },
-      layout: {
-        'symbol-placement': 'line' as const,
-        'text-field': ['concat', ['to-string', ['get', 'ele']], 'm'],
-        'text-font': ['Open Sans Regular'],
-        'text-size': 10,
-        'text-max-angle': 25,
-        'text-padding': 5,
         visibility: 'visible' as const,
       },
     },

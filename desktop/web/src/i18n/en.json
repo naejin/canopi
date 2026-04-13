@@ -256,6 +256,7 @@
       "interval": "Interval",
       "basemapLoading": "Loading basemap...",
       "basemapError": "Basemap unavailable",
+      "precisionWarning": "Precision may degrade for large designs",
       "setLocation": "Set a design location to enable map layers",
       "styleStreet": "Street",
       "styleTerrain": "Terrain",

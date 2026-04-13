@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from 'preact/hooks'
 import { t } from '../../i18n'
-import { autoSaveIntervalMs } from '../../state/app'
+import { autoSaveIntervalMs, flushQueuedSettingsPersist } from '../../state/app'
 import {
   currentDesign, designName, designPath, designDirty,
   writeCanvasIntoDocument, loadCanvasFromDocument, autosaveFailed,
@@ -13,6 +13,7 @@ import { autosaveDesign } from '../../ipc/design'
 import { getCurrentCanvasSession, setCurrentCanvasSession } from '../../canvas/session'
 import { SceneCanvasRuntime } from '../../canvas/runtime/scene-runtime'
 import { CanvasToolbar } from '../canvas/CanvasToolbar'
+import { CompassOverlay } from '../canvas/CompassOverlay'
 import { ZoomControls } from '../canvas/ZoomControls'
 import { DisplayModeControls } from '../canvas/DisplayModeControls'
 import { DisplayLegend } from '../canvas/DisplayLegend'
@@ -25,7 +26,7 @@ import { BottomPanelLauncher } from '../canvas/BottomPanelLauncher'
 import { LayerPanel } from '../canvas/LayerPanel'
 import { WelcomeScreen } from '../shared/WelcomeScreen'
 import { canvasDirty, markCanvasDetachedDirty } from '../../state/design'
-import { layerVisibility } from '../../state/canvas'
+import { hasVisibleMapLayer, hillshadeVisible, layerVisibility } from '../../state/canvas'
 import styles from './Panels.module.css'
 
 // Autosave interval is now configurable via Rust settings (autoSaveIntervalMs signal)
@@ -38,8 +39,11 @@ function formatLocationSummary(location: { lat: number; lon: number; altitude_m:
 function defaultBasemapState(): MapLibreCanvasSurfaceState {
   return {
     status: 'idle',
-    active: false,
     errorMessage: null,
+    terrainStatus: 'idle',
+    terrainErrorMessage: null,
+    precisionWarning: false,
+    designExtentMeters: null,
   }
 }
 
@@ -47,7 +51,6 @@ export function CanvasPanel() {
   const canvasAreaRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const rulerOverlayRef = useRef<HTMLDivElement>(null)
-  const [basemapActive, setBasemapActive] = useState(false)
   const [basemapState, setBasemapState] = useState<MapLibreCanvasSurfaceState>(defaultBasemapState)
   const [locationCueVisible, setLocationCueVisible] = useState(false)
   const lastLocationRef = useRef<string | null>(null)
@@ -94,6 +97,7 @@ export function CanvasPanel() {
       cancelled = true
       resizeObserver?.disconnect()
       cancelQueuedLoad()
+      flushQueuedSettingsPersist()
       if (currentDesign.value) {
         try {
           snapshotCanvasIntoCurrentDocument(runtime, designName.value)
@@ -130,9 +134,12 @@ export function CanvasPanel() {
   const hasDesign = currentDesign.value !== null
   const location = currentDesign.value?.location ?? null
   const hasLocation = location != null
-  const basemapVisible = layerVisibility.value.base ?? true
-  const shouldShowBasemap = hasDesign && hasLocation && basemapVisible
+  const visibility = layerVisibility.value
+  const basemapVisible = visibility.base ?? true
+  const mapVisible = hasVisibleMapLayer(visibility, hillshadeVisible.value)
+  const shouldShowMapSurface = hasDesign && hasLocation && mapVisible
   const locationSummary = location ? formatLocationSummary(location) : null
+  const mapFeedbackLabel = basemapVisible ? t('canvas.layers.basemap') : t('canvas.layers.mapSection')
   const locationKey = location
     ? `${location.lat}:${location.lon}:${location.altitude_m ?? ''}`
     : null
@@ -166,7 +173,7 @@ export function CanvasPanel() {
     : basemapState.status === 'error'
       ? `${t('canvas.layers.basemapError')}: ${basemapState.errorMessage ?? ''}`.trim()
       : basemapState.status === 'ready'
-        ? `${t('canvas.location.current')}: ${locationSummary}`
+        ? `${t('canvas.location.current')}: ${locationSummary}${basemapState.terrainStatus === 'error' ? ` • ${t('canvas.layers.mapSection')}: ${basemapState.terrainErrorMessage ?? ''}` : ''}${basemapState.precisionWarning ? ` • ${t('canvas.layers.precisionWarning')}` : ''}`
         : t('canvas.layers.basemapLoading')
 
   return (
@@ -176,19 +183,20 @@ export function CanvasPanel() {
       <div className={styles.canvasColumn}>
         <div className={styles.canvasRow}>
           <div ref={canvasAreaRef} className={styles.canvasArea}>
-            {hasDesign && (
-              <MapLibreCanvasSurface
-                onActiveChange={setBasemapActive}
-                onStateChange={setBasemapState}
-              />
-            )}
             <div
               ref={containerRef}
               className={styles.canvasContainer}
-              data-basemap-active={shouldShowBasemap && basemapActive ? 'true' : 'false'}
-            />
+              data-map-active={shouldShowMapSurface ? 'true' : 'false'}
+            >
+              {hasDesign && (
+                <MapLibreCanvasSurface
+                  onStateChange={setBasemapState}
+                />
+              )}
+            </div>
             <div ref={rulerOverlayRef} className={styles.rulerOverlay} />
-            {hasDesign && basemapVisible && (
+            {hasDesign && <CompassOverlay />}
+            {hasDesign && mapVisible && (
               <div
                 className={styles.basemapFeedback}
                 data-tone={basemapTone}
@@ -198,7 +206,7 @@ export function CanvasPanel() {
               >
                 <span className={styles.basemapFeedbackHeader}>
                   <span className={styles.basemapFeedbackDot} aria-hidden="true" />
-                  <span className={styles.basemapFeedbackLabel}>{t('canvas.layers.basemap')}</span>
+                  <span className={styles.basemapFeedbackLabel}>{mapFeedbackLabel}</span>
                 </span>
                 <span className={styles.basemapFeedbackText}>{basemapStatus}</span>
               </div>

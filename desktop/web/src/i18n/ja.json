@@ -256,6 +256,7 @@
       "interval": "間隔",
       "basemapLoading": "ベースマップを読み込み中...",
       "basemapError": "ベースマップを利用できません",
+      "precisionWarning": "大きなデザインでは精度が低下する場合があります",
       "setLocation": "地図レイヤーを有効にするには位置を設定してください",
       "styleStreet": "道路",
       "styleTerrain": "地形",

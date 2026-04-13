@@ -46,6 +46,7 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
       canvas.style.inset = '0'
       canvas.style.width = '100%'
       canvas.style.height = '100%'
+      canvas.style.background = 'transparent'
       canvas.style.zIndex = '1'
       context.container.appendChild(canvas)
 

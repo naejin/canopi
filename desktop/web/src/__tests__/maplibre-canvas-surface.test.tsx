@@ -6,7 +6,13 @@ import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import { MapLibreCanvasSurface } from '../components/canvas/MapLibreCanvasSurface'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { currentDesign } from '../state/document'
-import { layerOpacity, layerVisibility } from '../state/canvas'
+import {
+  contourIntervalMeters,
+  hillshadeOpacity,
+  hillshadeVisible,
+  layerOpacity,
+  layerVisibility,
+} from '../state/canvas'
 
 const removeMock = vi.fn()
 const resizeMock = vi.fn()
@@ -15,6 +21,16 @@ const onMock = vi.fn()
 const offMock = vi.fn()
 const loadedMock = vi.fn(() => true)
 const loadMapLibreMock = vi.hoisted(() => vi.fn())
+const loadMapLibreTerrainSupportMock = vi.hoisted(() => vi.fn())
+const addSourceMock = vi.fn()
+const removeSourceMock = vi.fn()
+const addLayerMock = vi.fn()
+const removeLayerMock = vi.fn()
+const setPaintPropertyMock = vi.fn()
+const isSourceLoadedMock = vi.fn(() => true)
+const isStyleLoadedMock = vi.fn(() => true)
+let sourceStore = new Map<string, Record<string, unknown>>()
+let layerStore = new Set<string>()
 const mapConstructorMock = vi.fn(function MockMap() {
   return {
     jumpTo: jumpToMock,
@@ -23,17 +39,24 @@ const mapConstructorMock = vi.fn(function MockMap() {
     on: onMock,
     off: offMock,
     loaded: loadedMock,
-    addSource: vi.fn(),
-    getSource: vi.fn(() => undefined),
-    removeSource: vi.fn(),
-    addLayer: vi.fn(),
-    getLayer: vi.fn(() => undefined),
-    removeLayer: vi.fn(),
+    isSourceLoaded: isSourceLoadedMock,
+    isStyleLoaded: isStyleLoadedMock,
+    addSource: addSourceMock,
+    getSource: (id: string) => sourceStore.get(id) as { setData(data: unknown): void } | undefined,
+    removeSource: removeSourceMock,
+    addLayer: addLayerMock,
+    setPaintProperty: setPaintPropertyMock,
+    getLayer: (id: string) => (layerStore.has(id) ? { id } : undefined),
+    removeLayer: removeLayerMock,
   }
 })
 
 vi.mock('../components/canvas/maplibre-loader', () => ({
   loadMapLibre: loadMapLibreMock,
+}))
+
+vi.mock('../maplibre/terrain-loader', () => ({
+  loadMapLibreTerrainSupport: loadMapLibreTerrainSupportMock,
 }))
 
 function createDeferred<T>() {
@@ -46,11 +69,34 @@ function createDeferred<T>() {
   return { promise, resolve, reject }
 }
 
-function createRuntime(scene = createDefaultScenePersistedState()) {
-  const viewportRevision = signal(0)
+async function eventually(assertion: () => void, attempts = 6): Promise<void> {
+  let lastError: unknown
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      assertion()
+      return
+    } catch (error) {
+      lastError = error
+      await act(async () => {
+        await new Promise((resolve) => window.setTimeout(resolve, 0))
+      })
+    }
+  }
+  throw lastError
+}
+
+function createRuntime(
+  scene = createDefaultScenePersistedState(),
+  options: {
+    viewport?: { x: number; y: number; scale: number }
+    viewportRevision?: ReturnType<typeof signal<number>>
+  } = {},
+) {
+  const viewportRevision = options.viewportRevision ?? signal(0)
+  const viewport = options.viewport ?? { x: 0, y: 0, scale: 1 }
   return {
     getSceneStore: () => ({ persisted: scene }),
-    getViewport: () => ({ x: 0, y: 0, scale: 1 }),
+    getViewport: () => viewport,
     getViewportScreenSize: () => ({ width: 400, height: 300 }),
     viewportRevision,
     getSelection: () => new Set(),
@@ -121,6 +167,9 @@ describe('MapLibreCanvasSurface', () => {
     document.body.innerHTML = ''
     document.body.appendChild(container)
     currentDesign.value = null
+    contourIntervalMeters.value = 0
+    hillshadeVisible.value = false
+    hillshadeOpacity.value = 0.55
     layerVisibility.value = { base: true }
     layerOpacity.value = { base: 0.6 }
     setCurrentCanvasSession(null)
@@ -132,9 +181,38 @@ describe('MapLibreCanvasSurface', () => {
     offMock.mockClear()
     loadedMock.mockReset()
     loadedMock.mockReturnValue(true)
+    isSourceLoadedMock.mockReset()
+    isSourceLoadedMock.mockReturnValue(true)
+    isStyleLoadedMock.mockReset()
+    isStyleLoadedMock.mockReturnValue(true)
+    addSourceMock.mockReset()
+    addSourceMock.mockImplementation((id: string, source: Record<string, unknown>) => {
+      sourceStore.set(id, source)
+    })
+    removeSourceMock.mockReset()
+    removeSourceMock.mockImplementation((id: string) => {
+      sourceStore.delete(id)
+    })
+    addLayerMock.mockReset()
+    addLayerMock.mockImplementation((layer: { id: string }) => {
+      layerStore.add(layer.id)
+    })
+    removeLayerMock.mockReset()
+    removeLayerMock.mockImplementation((id: string) => {
+      layerStore.delete(id)
+    })
+    setPaintPropertyMock.mockReset()
+    sourceStore = new Map()
+    layerStore = new Set()
     loadMapLibreMock.mockReset()
     loadMapLibreMock.mockResolvedValue({
       Map: mapConstructorMock,
+      addProtocol: vi.fn(),
+    })
+    loadMapLibreTerrainSupportMock.mockReset()
+    loadMapLibreTerrainSupportMock.mockResolvedValue({
+      sharedDemProtocolUrl: 'canopi-terrain-shared://{z}/{x}/{y}',
+      contourProtocolUrl: () => 'canopi-terrain-contours://{z}/{x}/{y}?thresholds=auto',
     })
   })
 
@@ -149,6 +227,10 @@ describe('MapLibreCanvasSurface', () => {
 
     await act(async () => {
       render(<MapLibreCanvasSurface />, container)
+      await Promise.resolve()
+    })
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
     })
 
     expect(mapConstructorMock).not.toHaveBeenCalled()
@@ -178,16 +260,116 @@ describe('MapLibreCanvasSurface', () => {
 
     await act(async () => {
       render(<MapLibreCanvasSurface />, container)
+      await Promise.resolve()
     })
 
-    expect(mapConstructorMock).toHaveBeenCalledTimes(1)
-    expect(jumpToMock).toHaveBeenCalled()
+    await eventually(() => {
+      expect(mapConstructorMock).toHaveBeenCalledTimes(1)
+      expect(jumpToMock).toHaveBeenCalled()
+    })
+    expect(mapConstructorMock).toHaveBeenCalledWith(expect.objectContaining({
+      center: expect.arrayContaining([expect.any(Number), expect.any(Number)]),
+      zoom: expect.any(Number),
+      bearing: expect.any(Number),
+    }))
 
     await act(async () => {
       layerVisibility.value = { base: false }
     })
 
     expect(removeMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('reapplies the map camera for tiny viewport changes', async () => {
+    currentDesign.value = {
+      version: 2,
+      name: 'Demo',
+      description: null,
+      location: { lat: 48.8566, lon: 2.3522, altitude_m: null },
+      north_bearing_deg: 12,
+      plant_species_colors: {},
+      layers: [],
+      plants: [],
+      zones: [],
+      annotations: [],
+      consortiums: [],
+      groups: [],
+      timeline: [],
+      budget: [],
+      created_at: '2026-04-12T00:00:00.000Z',
+      updated_at: '2026-04-12T00:00:00.000Z',
+      extra: {},
+    }
+    const viewport = { x: 0, y: 0, scale: 1 }
+    const viewportRevision = signal(0)
+    setCurrentCanvasSession(createRuntime(undefined, { viewport, viewportRevision }))
+
+    await act(async () => {
+      render(<MapLibreCanvasSurface />, container)
+    })
+
+    await eventually(() => {
+      expect(mapConstructorMock).toHaveBeenCalledTimes(1)
+      expect(jumpToMock).toHaveBeenCalled()
+    })
+
+    const initialJumpCount = jumpToMock.mock.calls.length
+    await act(async () => {
+      viewport.x += 0.0625
+      viewport.y -= 0.0625
+      viewportRevision.value += 1
+      await Promise.resolve()
+    })
+
+    await eventually(() => {
+      expect(jumpToMock.mock.calls.length).toBeGreaterThan(initialJumpCount)
+    })
+  })
+
+  it('keeps terrain mounted when the basemap is hidden and only basemap paint changes', async () => {
+    currentDesign.value = {
+      version: 2,
+      name: 'Demo',
+      description: null,
+      location: { lat: 48.8566, lon: 2.3522, altitude_m: null },
+      north_bearing_deg: 12,
+      plant_species_colors: {},
+      layers: [],
+      plants: [],
+      zones: [],
+      annotations: [],
+      consortiums: [],
+      groups: [],
+      timeline: [],
+      budget: [],
+      created_at: '2026-04-12T00:00:00.000Z',
+      updated_at: '2026-04-12T00:00:00.000Z',
+      extra: {},
+    }
+    setCurrentCanvasSession(createRuntime())
+    layerVisibility.value = { base: true, contours: true }
+    layerOpacity.value = { base: 0.6, contours: 0.5 }
+
+    await act(async () => {
+      render(<MapLibreCanvasSurface />, container)
+    })
+
+    await eventually(() => {
+      expect(mapConstructorMock).toHaveBeenCalledTimes(1)
+      expect(addLayerMock).toHaveBeenCalledWith(expect.objectContaining({ id: 'contour-minor' }))
+    })
+
+    setPaintPropertyMock.mockClear()
+    await act(async () => {
+      layerVisibility.value = { base: false, contours: true }
+    })
+
+    await eventually(() => {
+      expect(mapConstructorMock).toHaveBeenCalledTimes(1)
+      expect(removeMock).not.toHaveBeenCalled()
+      expect(setPaintPropertyMock).toHaveBeenCalledWith('basemap-background', 'background-opacity', 0)
+      expect(setPaintPropertyMock).toHaveBeenCalledWith('openstreetmap-raster', 'raster-opacity', 0)
+    })
   })
 
   it('does not instantiate a stale map after unmount during lazy load', async () => {
@@ -211,7 +393,7 @@ describe('MapLibreCanvasSurface', () => {
       extra: {},
     }
     setCurrentCanvasSession(createRuntime())
-    const deferred = createDeferred<{ Map: typeof mapConstructorMock }>()
+    const deferred = createDeferred<{ Map: typeof mapConstructorMock; addProtocol: ReturnType<typeof vi.fn> }>()
     loadMapLibreMock.mockReturnValueOnce(deferred.promise)
 
     await act(async () => {
@@ -220,7 +402,7 @@ describe('MapLibreCanvasSurface', () => {
 
     await act(async () => {
       render(null, container)
-      deferred.resolve({ Map: mapConstructorMock })
+      deferred.resolve({ Map: mapConstructorMock, addProtocol: vi.fn() })
       await deferred.promise
     })
 
@@ -261,10 +443,303 @@ describe('MapLibreCanvasSurface', () => {
         />,
         container,
       )
+      await Promise.resolve()
+    })
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
     })
 
     expect(states).toContain('loading:')
     expect(states).toContain('error:style fetch failed')
     expect(mapConstructorMock).not.toHaveBeenCalled()
+  })
+
+  it('stays loading until the basemap source reports loaded', async () => {
+    currentDesign.value = {
+      version: 2,
+      name: 'Demo',
+      description: null,
+      location: { lat: 48.8566, lon: 2.3522, altitude_m: null },
+      north_bearing_deg: 12,
+      plant_species_colors: {},
+      layers: [],
+      plants: [],
+      zones: [],
+      annotations: [],
+      consortiums: [],
+      groups: [],
+      timeline: [],
+      budget: [],
+      created_at: '2026-04-12T00:00:00.000Z',
+      updated_at: '2026-04-12T00:00:00.000Z',
+      extra: {},
+    }
+    setCurrentCanvasSession(createRuntime())
+    const states: string[] = []
+    isSourceLoadedMock.mockReturnValue(false)
+
+    await act(async () => {
+      render(
+        <MapLibreCanvasSurface
+          onStateChange={(state) => {
+            states.push(state.status)
+          }}
+        />,
+        container,
+      )
+    })
+
+    expect(states).toContain('loading')
+    expect(states).not.toContain('ready')
+  })
+
+  it('does not fail when basemap paint sync runs before the style is ready', async () => {
+    currentDesign.value = {
+      version: 2,
+      name: 'Demo',
+      description: null,
+      location: { lat: 48.8566, lon: 2.3522, altitude_m: null },
+      north_bearing_deg: 12,
+      plant_species_colors: {},
+      layers: [],
+      plants: [],
+      zones: [],
+      annotations: [],
+      consortiums: [],
+      groups: [],
+      timeline: [],
+      budget: [],
+      created_at: '2026-04-12T00:00:00.000Z',
+      updated_at: '2026-04-12T00:00:00.000Z',
+      extra: {},
+    }
+    setCurrentCanvasSession(createRuntime())
+    const states: string[] = []
+    loadedMock.mockReturnValue(false)
+    isSourceLoadedMock.mockReturnValue(false)
+    isStyleLoadedMock.mockReturnValue(false)
+
+    await act(async () => {
+      render(
+        <MapLibreCanvasSurface
+          onStateChange={(state) => {
+            states.push(`${state.status}:${state.errorMessage ?? ''}`)
+          }}
+        />,
+        container,
+      )
+    })
+
+    await act(async () => {
+      layerOpacity.value = { base: 0.4 }
+      await Promise.resolve()
+    })
+
+    expect(states).toContain('loading:')
+    expect(states).not.toContain('error:Style is not done loading')
+    expect(setPaintPropertyMock).not.toHaveBeenCalled()
+  })
+
+  it('adds and clears terrain layers without recreating the map', async () => {
+    currentDesign.value = {
+      version: 2,
+      name: 'Demo',
+      description: null,
+      location: { lat: 48.8566, lon: 2.3522, altitude_m: null },
+      north_bearing_deg: 12,
+      plant_species_colors: {},
+      layers: [],
+      plants: [],
+      zones: [],
+      annotations: [],
+      consortiums: [],
+      groups: [],
+      timeline: [],
+      budget: [],
+      created_at: '2026-04-12T00:00:00.000Z',
+      updated_at: '2026-04-12T00:00:00.000Z',
+      extra: {},
+    }
+    setCurrentCanvasSession(createRuntime())
+    layerVisibility.value = { base: true, contours: true }
+    layerOpacity.value = { base: 0.6, contours: 0.5 }
+
+    await act(async () => {
+      render(<MapLibreCanvasSurface />, container)
+    })
+
+    await eventually(() => {
+      expect(mapConstructorMock).toHaveBeenCalledTimes(1)
+      expect(loadMapLibreTerrainSupportMock.mock.calls.length).toBeGreaterThanOrEqual(1)
+      expect(addSourceMock).toHaveBeenCalledWith(
+        'terrain-contour-source',
+        expect.objectContaining({ type: 'vector' }),
+      )
+      expect(addLayerMock).toHaveBeenCalledWith(expect.objectContaining({ id: 'contour-minor' }))
+    })
+
+    await act(async () => {
+      layerVisibility.value = { base: true, contours: false }
+    })
+
+    await eventually(() => {
+      expect(mapConstructorMock).toHaveBeenCalledTimes(1)
+      expect(removeLayerMock).toHaveBeenCalledWith('contour-minor')
+      expect(removeSourceMock).toHaveBeenCalledWith('terrain-contour-source')
+    })
+  })
+
+  it('ignores stale async terrain rebuilds when contour settings change quickly', async () => {
+    currentDesign.value = {
+      version: 2,
+      name: 'Demo',
+      description: null,
+      location: { lat: 48.8566, lon: 2.3522, altitude_m: null },
+      north_bearing_deg: 12,
+      plant_species_colors: {},
+      layers: [],
+      plants: [],
+      zones: [],
+      annotations: [],
+      consortiums: [],
+      groups: [],
+      timeline: [],
+      budget: [],
+      created_at: '2026-04-12T00:00:00.000Z',
+      updated_at: '2026-04-12T00:00:00.000Z',
+      extra: {},
+    }
+    setCurrentCanvasSession(createRuntime())
+    layerVisibility.value = { base: true, contours: true }
+    contourIntervalMeters.value = 10
+
+    const firstTerrainLoad = createDeferred<{
+      sharedDemProtocolUrl: string
+      contourProtocolUrl: ({ thresholds }: { thresholds: Record<number, number | number[]> }) => string
+    }>()
+    const terrainProtocols = {
+      sharedDemProtocolUrl: 'canopi-terrain-shared://{z}/{x}/{y}',
+      contourProtocolUrl: ({ thresholds }: { thresholds: Record<number, number | number[]> }) =>
+        `canopi-terrain-contours://{z}/{x}/{y}?thresholds=${encodeURIComponent(JSON.stringify(thresholds))}`,
+    }
+    loadMapLibreTerrainSupportMock
+      .mockImplementationOnce(() => firstTerrainLoad.promise)
+      .mockResolvedValue(terrainProtocols)
+
+    await act(async () => {
+      render(<MapLibreCanvasSurface />, container)
+    })
+
+    await act(async () => {
+      contourIntervalMeters.value = 25
+      await Promise.resolve()
+    })
+
+    await eventually(() => {
+      expect(addSourceMock).toHaveBeenCalledWith(
+        'terrain-contour-source',
+        expect.objectContaining({
+          tiles: [expect.stringContaining('%5B25%2C125%5D')],
+        }),
+      )
+    })
+
+    const addSourceCallCount = addSourceMock.mock.calls.length
+    await act(async () => {
+      firstTerrainLoad.resolve(terrainProtocols)
+      await firstTerrainLoad.promise
+    })
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+
+    expect(addSourceMock.mock.calls.length).toBe(addSourceCallCount)
+  })
+
+  it('updates basemap opacity without changing terrain opacity', async () => {
+    currentDesign.value = {
+      version: 2,
+      name: 'Demo',
+      description: null,
+      location: { lat: 48.8566, lon: 2.3522, altitude_m: null },
+      north_bearing_deg: 12,
+      plant_species_colors: {},
+      layers: [],
+      plants: [],
+      zones: [],
+      annotations: [],
+      consortiums: [],
+      groups: [],
+      timeline: [],
+      budget: [],
+      created_at: '2026-04-12T00:00:00.000Z',
+      updated_at: '2026-04-12T00:00:00.000Z',
+      extra: {},
+    }
+    setCurrentCanvasSession(createRuntime())
+    layerVisibility.value = { base: true, contours: true }
+    layerOpacity.value = { base: 1, contours: 0.5 }
+
+    await act(async () => {
+      render(<MapLibreCanvasSurface />, container)
+    })
+
+    await eventually(() => {
+      expect(mapConstructorMock).toHaveBeenCalledTimes(1)
+    })
+
+    setPaintPropertyMock.mockClear()
+    await act(async () => {
+      layerOpacity.value = { base: 0.25, contours: 0.5 }
+    })
+
+    await eventually(() => {
+      expect(setPaintPropertyMock).toHaveBeenCalledWith('basemap-background', 'background-opacity', 0.25)
+      expect(setPaintPropertyMock).toHaveBeenCalledWith('openstreetmap-raster', 'raster-opacity', 0.25)
+      expect(removeLayerMock).not.toHaveBeenCalledWith('contour-minor')
+    })
+  })
+
+  it('keeps the basemap ready when terrain support fails to load', async () => {
+    currentDesign.value = {
+      version: 2,
+      name: 'Demo',
+      description: null,
+      location: { lat: 48.8566, lon: 2.3522, altitude_m: null },
+      north_bearing_deg: 12,
+      plant_species_colors: {},
+      layers: [],
+      plants: [],
+      zones: [],
+      annotations: [],
+      consortiums: [],
+      groups: [],
+      timeline: [],
+      budget: [],
+      created_at: '2026-04-12T00:00:00.000Z',
+      updated_at: '2026-04-12T00:00:00.000Z',
+      extra: {},
+    }
+    setCurrentCanvasSession(createRuntime())
+    layerVisibility.value = { base: true, contours: true }
+    const states: string[] = []
+    loadMapLibreTerrainSupportMock.mockRejectedValueOnce(new Error('dem fetch failed'))
+
+    await act(async () => {
+      render(
+        <MapLibreCanvasSurface
+          onStateChange={(state) => {
+            states.push(`${state.status}:${state.errorMessage ?? ''}`)
+          }}
+        />,
+        container,
+      )
+    })
+
+    await eventually(() => {
+      expect(states).toContain('ready:')
+      expect(states).not.toContain('error:dem fetch failed')
+      expect(removeMock).not.toHaveBeenCalled()
+    })
   })
 })

@@ -15,7 +15,7 @@ The live world renderer is scene-owned:
 - `PixiJS` is the primary backend
 - `Canvas2D` is the fallback backend
 - App code accesses the runtime through an interface (see `CLAUDE.md` canvas seam guidance)
-- MapLibre is a sibling visualization layer managed by a dedicated surface/controller, not part of the renderer path. The current in-canvas basemap lives behind `.canvasContainer`, follows the camera via read-only runtime seams, and reports loading / ready / error feedback plus pure panel-target overlays (see root `CLAUDE.md` MapLibre Integration Rule)
+- MapLibre is a sibling visualization layer managed by a dedicated surface/controller, not part of the renderer path. The current in-canvas basemap lives behind `.canvasContainer`, follows the camera via read-only runtime seams, and reports loading / ready / error feedback plus pure panel-target overlays. Treat `docs/todo.md` (`MapLibre / geo`) as the current-status owner and root `CLAUDE.md` as the authority rule set
 
 The renderer is not the source of truth. `SceneStore` owns canvas scene state.
 

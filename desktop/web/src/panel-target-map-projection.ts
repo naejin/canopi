@@ -22,6 +22,7 @@ export interface PanelTargetMapProjectionScene {
 export interface PanelTargetMapProjectionLocation {
   readonly lat: number
   readonly lon: number
+  readonly northBearingDeg?: number | null
 }
 
 export interface PanelTargetMapPlantFeature {
@@ -92,7 +93,13 @@ export function projectPanelTargetsToMapFeatures(
       pushSkipped(key, plantId)
       return
     }
-    const geo = worldToGeo(plant.position.x, plant.position.y, location.lat, location.lon)
+    const geo = worldToGeo(
+      plant.position.x,
+      plant.position.y,
+      location.lat,
+      location.lon,
+      location.northBearingDeg ?? 0,
+    )
     features.push({
       type: 'Feature',
       geometry: {
@@ -116,7 +123,13 @@ export function projectPanelTargetsToMapFeatures(
       return
     }
     const ring = zone.points.map((point): readonly [number, number] => {
-      const geo = worldToGeo(point.x, point.y, location.lat, location.lon)
+      const geo = worldToGeo(
+        point.x,
+        point.y,
+        location.lat,
+        location.lon,
+        location.northBearingDeg ?? 0,
+      )
       return [geo.lng, geo.lat]
     })
     const first = ring[0]!

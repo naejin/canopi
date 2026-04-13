@@ -256,6 +256,7 @@
       "interval": "Intervalle",
       "basemapLoading": "Chargement du fond de carte...",
       "basemapError": "Fond de carte indisponible",
+      "precisionWarning": "La précision peut diminuer pour les grands designs",
       "setLocation": "Définissez un emplacement pour activer les couches de carte",
       "styleStreet": "Plan",
       "styleTerrain": "Relief",

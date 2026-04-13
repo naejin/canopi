@@ -256,6 +256,7 @@
       "interval": "Intervalo",
       "basemapLoading": "Cargando mapa base...",
       "basemapError": "Mapa base no disponible",
+      "precisionWarning": "La precisión puede degradarse en diseños grandes",
       "setLocation": "Establezca una ubicación para activar las capas de mapa",
       "styleStreet": "Calles",
       "styleTerrain": "Terreno",

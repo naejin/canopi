@@ -65,6 +65,7 @@ import {
   currentDesign,
   designName,
   designPath,
+  detachedCanvasDirty,
   nonCanvasRevision,
   pendingDesignPath,
   pendingTemplateImport,
@@ -160,6 +161,7 @@ beforeEach(() => {
   pendingTemplateImport.value = null
   resetDirtyBaselines()
   nonCanvasRevision.value = 0
+  detachedCanvasDirty.value = false
 
   activeTool.value = 'rectangle'
   selectedObjectIds.value = new Set(['selected-1'])
@@ -287,6 +289,20 @@ describe('document replacement actions', () => {
     expect(mocks.loadDesign).not.toHaveBeenCalled()
     expect(currentDesign.value?.name).toBe('Current')
     expect(pendingDesignPath.value).toBe('/designs/next.canopi')
+  })
+
+  it('does not prompt for unsaved changes when no document is open', async () => {
+    currentDesign.value = null
+    designPath.value = null
+    nonCanvasRevision.value = 1
+    detachedCanvasDirty.value = true
+    mocks.loadDesign.mockResolvedValue(makeFile('Next'))
+
+    await openDesignFromPath('/designs/next.canopi')
+
+    expect(mocks.message).not.toHaveBeenCalled()
+    expect(mocks.loadDesign).toHaveBeenCalledWith('/designs/next.canopi')
+    expect(currentDesign.value).toEqual(expect.objectContaining({ name: 'Next' }))
   })
 
   it('queues template imports when the canvas engine is not ready, then applies them as unsaved designs', async () => {

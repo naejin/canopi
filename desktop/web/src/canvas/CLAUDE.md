@@ -11,7 +11,7 @@ Production ownership is:
 - `RendererHost` owns backend selection, startup fallback, and runtime recovery
 - `PixiJS` is the primary world renderer
 - `Canvas2D` is the fallback renderer
-- In-canvas MapLibre basemap is now a derived sibling surface managed outside the runtime (`MapLibreCanvasSurface` mounted by `CanvasPanel`), not embedded in renderer code or runtime internals. It shares the hosted basemap config with `LocationTab`, emits loading / ready / error state, and renders pure panel-target overlays from the projection seam
+- In-canvas MapLibre basemap is now a derived sibling surface managed outside the runtime (`MapLibreCanvasSurface` mounted by `CanvasPanel`), not embedded in renderer code or runtime internals. It shares the hosted basemap config with `LocationTab`, emits loading / ready / error state, follows the canvas through the shared Mercator-backed bearing-aware projection seam, warns when local-projection precision may degrade for large designs, and renders pure panel-target overlays from that same seam
 
 Landed in the live path:
 - scene-owned load/replace/save flows
@@ -19,8 +19,9 @@ Landed in the live path:
 - command/patch history in `scene-history.ts` and `scene-commands.ts`
 - first-class top-level document `annotations`
 - typed panel-target hover/selection highlights via `PanelTarget[]` + `resolvePanelTargets()`
-- pure panel-target map projection via `projectPanelTargetsToMapFeatures()` for future rendered overlays
+- pure, bearing-aware panel-target map projection via `projectPanelTargetsToMapFeatures()` plus a pure overlay contract for rendered map hover/selection overlays
 - a non-interactive in-canvas MapLibre basemap driven by read-only `CanvasRuntime` viewport seams, plus hover / selection overlays sourced from the pure projection seam
+- a display-only compass in canvas chrome driven by `northBearingDeg`
 
 Konva / `CanvasEngine` code has been removed. Do not reintroduce Konva or `getEngine()`-style escape hatches.
 
@@ -30,6 +31,9 @@ Konva / `CanvasEngine` code has been removed. Do not reintroduce Konva or `getEn
 - App code must not reach into renderer implementations or runtime internals
 - The app-facing canvas boundary is the `CanvasRuntime` TypeScript interface implemented by `SceneCanvasRuntime`; the old 1:1 `CanvasSession` pass-through class is gone
 - `CanvasRuntime` now exposes read-only viewport queries for sibling surfaces: `getViewport()`, `getViewportScreenSize()`, and `viewportRevision`
+- Bearing-aware world↔geo and viewport→MapLibre camera derivation live in pure helpers under `canvas/projection.ts` / `canvas/maplibre-camera.ts`; `MapLibreCanvasSurface` consumes them but does not own projection math. Keep camera/overlay/terrain sync on that one seam
+- Exact sync means every canonical frame change must be applied; do not add camera deadbands/tolerances in `MapLibreCanvasSurface` that can skip tiny pan/zoom updates
+- Preserve document `north_bearing_deg` semantics. Any MapLibre-facing bearing normalization/adaptation belongs in `canvas/maplibre-camera.ts`, not in runtime state, overlay projection, or compass UI
 - As bottom panels/map surfaces need more derived data, consider splitting `CanvasRuntime` into two interfaces: one for **interaction commands** (tools, selection, history, zoom) and one for **state queries/projections** (entity reads for panels, bounds/features for map sync). Both should still be implemented by the runtime or pure helpers, not by renderer internals
 
 ### State Ownership
@@ -65,7 +69,10 @@ Konva / `CanvasEngine` code has been removed. Do not reintroduce Konva or `getEn
 ### Panel Target Projection Rules
 - Timeline, budget, and consortium identity is typed with `PanelTarget[]` / `PanelTarget`; do not reintroduce string matching against timeline descriptions, legacy `plants` arrays, budget descriptions, or consortium canonical-name fields
 - Use `resolvePanelTargets()` to map typed panel targets to scene plant/zone IDs for canvas highlights
-- Use `projectPanelTargetsToMapFeatures()` to turn typed panel targets into map-ready plant point / zone polygon features for future rendered overlays
+- Use `projectPanelTargetsToMapFeatures()` to turn typed panel targets into map-ready plant point / zone polygon features for rendered overlays and future richer map variants
+- Camera sync and overlay projection must share the same bearing-aware world↔geo seam so pan/zoom stays aligned at all zoom levels
+- Screen-lock validation is the acceptance standard: the same world point must land on the same screen pixel in canvas and map projections
+- The canonical seam is Mercator-backed to match MapLibre's own projection surface; do not reintroduce equirectangular or 256px-world zoom shortcuts for the in-canvas map
 - `manual` and `none` targets are intentionally empty, not unresolved errors
 - Canvas-origin hover uses `hoveredCanvasTargets` and must remain separate from panel-origin hover/selection ownership
 - The current basemap slice is non-interactive for direct map gestures. Panel↔map hover/selection overlays are live and must consume the pure projection seam rather than querying scene identity directly from the map surface
@@ -119,8 +126,8 @@ App code
   │           │   ├── Pixi scene renderer
   │           │   └── Canvas2D scene renderer
   │           └── HTML rulers / overlay chrome
-  ├── Future MapLibreController (derived visualization, sibling to runtime)
-  │     └── syncs viewport via CameraController
+  ├── MapLibreCanvasSurface (derived sibling surface mounted by CanvasPanel)
+  │     └── syncs viewport via CanvasRuntime query seams and renders pure panel-target overlays
   └── Document store (non-canvas state: consortiums, timeline, budget, budget_currency, location, description, extra)
         └── state/design.ts + state/document.ts
 ```

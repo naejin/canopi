@@ -4,7 +4,7 @@ import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CanvasPanel } from '../components/panels/CanvasPanel'
 import { currentDesign } from '../state/document'
-import { layerVisibility } from '../state/canvas'
+import { hillshadeVisible, layerVisibility, northBearingDeg } from '../state/canvas'
 import { locale } from '../state/app'
 
 const initMock = vi.fn(async () => {})
@@ -16,12 +16,18 @@ const resizeMock = vi.fn()
 const destroyMock = vi.fn()
 let mockBasemapState: {
   status: 'idle' | 'loading' | 'ready' | 'error'
-  active: boolean
   errorMessage: string | null
+  terrainStatus: 'idle' | 'loading' | 'ready' | 'error'
+  terrainErrorMessage: string | null
+  precisionWarning: boolean
+  designExtentMeters: number | null
 } = {
   status: 'idle',
-  active: false,
   errorMessage: null,
+  terrainStatus: 'idle',
+  terrainErrorMessage: null,
+  precisionWarning: false,
+  designExtentMeters: null,
 }
 
 vi.mock('../components/canvas/CanvasToolbar', () => ({
@@ -58,16 +64,13 @@ vi.mock('../components/shared/WelcomeScreen', () => ({
 
 vi.mock('../components/canvas/MapLibreCanvasSurface', () => ({
   MapLibreCanvasSurface: ({
-    onActiveChange,
     onStateChange,
   }: {
-    onActiveChange?: (active: boolean) => void
     onStateChange?: (state: typeof mockBasemapState) => void
   }) => {
     useEffect(() => {
-      onActiveChange?.(mockBasemapState.active)
       onStateChange?.(mockBasemapState)
-    }, [onActiveChange, onStateChange])
+    }, [onStateChange])
     return <div data-testid="maplibre-surface" />
   },
 }))
@@ -114,6 +117,8 @@ describe('CanvasPanel basemap feedback', () => {
     document.body.appendChild(container)
     locale.value = 'en'
     layerVisibility.value = { base: true, plants: true, zones: true, annotations: true }
+    hillshadeVisible.value = false
+    northBearingDeg.value = 0
     currentDesign.value = null
     initMock.mockClear()
     showCanvasChromeMock.mockClear()
@@ -124,8 +129,11 @@ describe('CanvasPanel basemap feedback', () => {
     destroyMock.mockClear()
     mockBasemapState = {
       status: 'idle',
-      active: false,
       errorMessage: null,
+      terrainStatus: 'idle',
+      terrainErrorMessage: null,
+      precisionWarning: false,
+      designExtentMeters: null,
     }
   })
 
@@ -162,6 +170,7 @@ describe('CanvasPanel basemap feedback', () => {
     const status = container.querySelector('[role="status"]')
     expect(status?.textContent).toContain('Basemap')
     expect(status?.textContent).toContain('Set a design location first')
+    expect(container.querySelector('[role="img"][aria-label^="Compass"]')).toBeNull()
   })
 
   it('shows a loading basemap notice until the map becomes active', async () => {
@@ -186,8 +195,11 @@ describe('CanvasPanel basemap feedback', () => {
     }
     mockBasemapState = {
       status: 'loading',
-      active: false,
       errorMessage: null,
+      terrainStatus: 'idle',
+      terrainErrorMessage: null,
+      precisionWarning: false,
+      designExtentMeters: null,
     }
 
     await act(async () => {
@@ -197,7 +209,7 @@ describe('CanvasPanel basemap feedback', () => {
     const status = container.querySelector('[role="status"]')
     expect(status?.textContent).toContain('Basemap')
     expect(status?.textContent).toContain('Loading')
-    expect(container.querySelector('[data-basemap-active="true"]')).toBeNull()
+    expect(container.querySelector('[data-map-active="true"]')).not.toBeNull()
   })
 
   it('shows the saved location once the basemap becomes active', async () => {
@@ -222,8 +234,11 @@ describe('CanvasPanel basemap feedback', () => {
     }
     mockBasemapState = {
       status: 'ready',
-      active: true,
       errorMessage: null,
+      terrainStatus: 'idle',
+      terrainErrorMessage: null,
+      precisionWarning: false,
+      designExtentMeters: null,
     }
 
     await act(async () => {
@@ -232,7 +247,78 @@ describe('CanvasPanel basemap feedback', () => {
 
     const status = container.querySelector('[role="status"]')
     expect(status?.textContent).toContain('Current: 48.8566, 2.3522 (35 m)')
-    expect(container.querySelector('[data-basemap-active="true"]')).toBeTruthy()
+    expect(container.querySelector('[data-map-active="true"]')).toBeTruthy()
+  })
+
+  it('renders a display-only compass in canvas chrome', async () => {
+    currentDesign.value = {
+      version: 2,
+      name: 'Demo',
+      description: null,
+      location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
+      north_bearing_deg: 32,
+      plant_species_colors: {},
+      layers: [],
+      plants: [],
+      zones: [],
+      annotations: [],
+      consortiums: [],
+      groups: [],
+      timeline: [],
+      budget: [],
+      created_at: '2026-04-12T00:00:00.000Z',
+      updated_at: '2026-04-12T00:00:00.000Z',
+      extra: {},
+    }
+    northBearingDeg.value = 32
+
+    await act(async () => {
+      render(<CanvasPanel />, container)
+    })
+
+    const compass = container.querySelector('[role="img"][aria-label^="Compass"]')
+    expect(compass?.getAttribute('aria-label')).toContain('32°')
+  })
+
+  it('keeps the canvas map surface active for terrain-only visibility', async () => {
+    currentDesign.value = {
+      version: 2,
+      name: 'Demo',
+      description: null,
+      location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
+      north_bearing_deg: 0,
+      plant_species_colors: {},
+      layers: [],
+      plants: [],
+      zones: [],
+      annotations: [],
+      consortiums: [],
+      groups: [],
+      timeline: [],
+      budget: [],
+      created_at: '2026-04-12T00:00:00.000Z',
+      updated_at: '2026-04-12T00:00:00.000Z',
+      extra: {},
+    }
+    layerVisibility.value = { base: false, plants: true, zones: true, annotations: true }
+    hillshadeVisible.value = true
+    mockBasemapState = {
+      status: 'ready',
+      errorMessage: null,
+      terrainStatus: 'ready',
+      terrainErrorMessage: null,
+      precisionWarning: false,
+      designExtentMeters: null,
+    }
+
+    await act(async () => {
+      render(<CanvasPanel />, container)
+    })
+
+    expect(container.querySelector('[data-map-active="true"]')).toBeTruthy()
+    const status = container.querySelector('[role="status"]')
+    expect(status?.textContent).toContain('Map Layers')
+    expect(status?.textContent).toContain('Current: 48.8566, 2.3522 (35 m)')
   })
 
   it('shows a basemap error when the surface reports a load failure', async () => {
@@ -257,8 +343,11 @@ describe('CanvasPanel basemap feedback', () => {
     }
     mockBasemapState = {
       status: 'error',
-      active: false,
       errorMessage: 'style fetch failed',
+      terrainStatus: 'idle',
+      terrainErrorMessage: null,
+      precisionWarning: false,
+      designExtentMeters: null,
     }
 
     await act(async () => {
@@ -268,5 +357,81 @@ describe('CanvasPanel basemap feedback', () => {
     const status = container.querySelector('[role="status"]')
     expect(status?.textContent).toContain('Basemap unavailable')
     expect(status?.textContent).toContain('style fetch failed')
+  })
+
+  it('surfaces terrain degradation while keeping the basemap ready', async () => {
+    currentDesign.value = {
+      version: 2,
+      name: 'Demo',
+      description: null,
+      location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
+      north_bearing_deg: 0,
+      plant_species_colors: {},
+      layers: [],
+      plants: [],
+      zones: [],
+      annotations: [],
+      consortiums: [],
+      groups: [],
+      timeline: [],
+      budget: [],
+      created_at: '2026-04-12T00:00:00.000Z',
+      updated_at: '2026-04-12T00:00:00.000Z',
+      extra: {},
+    }
+    mockBasemapState = {
+      status: 'ready',
+      errorMessage: null,
+      terrainStatus: 'error',
+      terrainErrorMessage: 'dem fetch failed',
+      precisionWarning: false,
+      designExtentMeters: null,
+    }
+
+    await act(async () => {
+      render(<CanvasPanel />, container)
+    })
+
+    const status = container.querySelector('[role="status"]')
+    expect(status?.textContent).toContain('Current: 48.8566, 2.3522 (35 m)')
+    expect(status?.textContent).toContain('Map Layers: dem fetch failed')
+    expect(container.querySelector('[data-map-active="true"]')).toBeTruthy()
+  })
+
+  it('surfaces a precision warning for large designs', async () => {
+    currentDesign.value = {
+      version: 2,
+      name: 'Demo',
+      description: null,
+      location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
+      north_bearing_deg: 0,
+      plant_species_colors: {},
+      layers: [],
+      plants: [],
+      zones: [],
+      annotations: [],
+      consortiums: [],
+      groups: [],
+      timeline: [],
+      budget: [],
+      created_at: '2026-04-12T00:00:00.000Z',
+      updated_at: '2026-04-12T00:00:00.000Z',
+      extra: {},
+    }
+    mockBasemapState = {
+      status: 'ready',
+      errorMessage: null,
+      terrainStatus: 'idle',
+      terrainErrorMessage: null,
+      precisionWarning: true,
+      designExtentMeters: 12_000,
+    }
+
+    await act(async () => {
+      render(<CanvasPanel />, container)
+    })
+
+    const status = container.querySelector('[role="status"]')
+    expect(status?.textContent).toContain('Precision may degrade for large designs')
   })
 })

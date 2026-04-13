@@ -2,7 +2,19 @@ import { signal, batch } from "@preact/signals";
 import type { PlantDbStatus } from "../types/health";
 import type { Settings } from "../types/settings";
 import { setSettings } from "../ipc/settings";
-import { snapToGridEnabled, snapToGuidesEnabled, bottomPanelOpen, bottomPanelHeight, bottomPanelTab } from "./canvas";
+import {
+  VISIBLE_BOTTOM_PANEL_TABS,
+  bottomPanelHeight,
+  bottomPanelOpen,
+  bottomPanelTab,
+  contourIntervalMeters,
+  hillshadeOpacity,
+  hillshadeVisible,
+  layerOpacity,
+  layerVisibility,
+  snapToGridEnabled,
+  snapToGuidesEnabled,
+} from "./canvas";
 
 export type Panel = "plant-db" | "canvas" | "favorites" | "location";
 
@@ -25,15 +37,55 @@ export const autoSaveIntervalMs = signal<number>(60_000);
 /** Snapshot of the last settings received from Rust, used to build the full
  *  object when persisting a partial change back. */
 let _lastSettings: Settings | null = null;
+let _queuedPersistTimer: ReturnType<typeof globalThis.setTimeout> | null = null;
 
-/** Called by app.tsx after bootstrap to store the initial settings snapshot. */
+function clampUnitInterval(value: number, fallback: number): number {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(1, Math.max(0, value));
+}
+
+function normalizeContourInterval(value: number, fallback: number): number {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.max(0, Math.round(value));
+}
+
+/** Called by app.tsx after bootstrap to hydrate signals and store the settings snapshot. */
 export function setBootstrappedSettings(s: Settings): void {
+  batch(() => {
+    locale.value = s.locale;
+    theme.value = s.theme === "dark" ? "dark" : "light";
+    snapToGridEnabled.value = s.snap_to_grid;
+    snapToGuidesEnabled.value = s.snap_to_guides;
+    autoSaveIntervalMs.value = s.auto_save_interval_s * 1000;
+    bottomPanelOpen.value = s.bottom_panel_open;
+    bottomPanelHeight.value = s.bottom_panel_height;
+    if (VISIBLE_BOTTOM_PANEL_TABS.includes(s.bottom_panel_tab as typeof bottomPanelTab.value)) {
+      bottomPanelTab.value = s.bottom_panel_tab as typeof bottomPanelTab.value;
+    }
+    layerVisibility.value = {
+      ...layerVisibility.value,
+      base: s.map_layer_visible,
+      contours: s.contour_visible,
+    };
+    layerOpacity.value = {
+      ...layerOpacity.value,
+      base: clampUnitInterval(s.map_opacity, 1),
+      contours: clampUnitInterval(s.contour_opacity, 1),
+    };
+    contourIntervalMeters.value = normalizeContourInterval(s.contour_interval, 0);
+    hillshadeVisible.value = s.hillshade_visible;
+    hillshadeOpacity.value = clampUnitInterval(s.hillshade_opacity, 0.55);
+  });
   _lastSettings = s;
 }
 
 /** Persist the current signal values back to Rust. Call after user changes. */
 export function persistCurrentSettings(): void {
   if (!_lastSettings) return;
+  if (_queuedPersistTimer !== null) {
+    globalThis.clearTimeout(_queuedPersistTimer);
+    _queuedPersistTimer = null;
+  }
   const updated: Settings = {
     ..._lastSettings,
     locale: locale.value,
@@ -44,9 +96,36 @@ export function persistCurrentSettings(): void {
     bottom_panel_open: bottomPanelOpen.value,
     bottom_panel_height: bottomPanelHeight.value,
     bottom_panel_tab: bottomPanelTab.value,
+    map_layer_visible: layerVisibility.value.base ?? true,
+    map_opacity: clampUnitInterval(layerOpacity.value.base ?? 1, 1),
+    contour_visible: layerVisibility.value.contours ?? false,
+    contour_opacity: clampUnitInterval(layerOpacity.value.contours ?? 1, 1),
+    contour_interval: normalizeContourInterval(contourIntervalMeters.value, 0),
+    hillshade_visible: hillshadeVisible.value,
+    hillshade_opacity: clampUnitInterval(hillshadeOpacity.value, 0.55),
   };
   _lastSettings = updated;
   setSettings(updated).catch((e) => console.error('Failed to persist settings:', e));
+}
+
+/** Queue settings persistence for high-frequency controls like sliders. */
+export function queueSettingsPersist(delayMs = 160): void {
+  if (!_lastSettings) return;
+  if (_queuedPersistTimer !== null) {
+    globalThis.clearTimeout(_queuedPersistTimer);
+  }
+  _queuedPersistTimer = globalThis.setTimeout(() => {
+    _queuedPersistTimer = null;
+    persistCurrentSettings();
+  }, delayMs);
+}
+
+/** Flush a queued settings write immediately, if one is pending. */
+export function flushQueuedSettingsPersist(): void {
+  if (_queuedPersistTimer === null) return;
+  globalThis.clearTimeout(_queuedPersistTimer);
+  _queuedPersistTimer = null;
+  persistCurrentSettings();
 }
 
 // Which sidebar panel is open alongside the canvas. null = none.

@@ -3,7 +3,10 @@ import { locale } from '../../state/app'
 import { currentDesign } from '../../state/document'
 import {
   activeLayerName,
+  contourIntervalMeters,
   gridVisible,
+  hillshadeOpacity,
+  hillshadeVisible,
   layerLockState,
   layerOpacity,
   layerPanelOpen,
@@ -11,7 +14,10 @@ import {
 } from '../../state/canvas'
 import {
   setActiveLayer,
+  setContourIntervalMeters,
+  setHillshadeOpacity,
   setLayerOpacity,
+  toggleHillshadeVisibility,
   toggleGridVisibility,
   toggleLayerLock,
   toggleLayerPanel,
@@ -67,6 +73,10 @@ function formatLocationSummary(location: { lat: number; lon: number; altitude_m:
   return location.altitude_m != null ? `${base} (${location.altitude_m} m)` : base
 }
 
+function clampPercent(value: number): number {
+  return Math.round(Math.min(1, Math.max(0, value)) * 100)
+}
+
 export function LayerPanel() {
   void locale.value
 
@@ -89,6 +99,11 @@ export function LayerPanel() {
   }
 
   const activeOpacity = Math.round((layerOpacity.value[activeLayer] ?? 1) * 100)
+  const contoursVisible = layerVisibility.value.contours ?? false
+  const contoursOpacity = clampPercent(layerOpacity.value.contours ?? 1)
+  const contourInterval = contourIntervalMeters.value
+  const hillshadeOn = hillshadeVisible.value
+  const hillshadeLevel = clampPercent(hillshadeOpacity.value)
   const location = currentDesign.value?.location ?? null
   const hasLocation = location != null
 
@@ -191,6 +206,87 @@ export function LayerPanel() {
               setLayerOpacity(activeLayer, Number((event.target as HTMLInputElement).value) / 100)
             }}
           />
+        </div>
+      </div>
+
+      <div className={styles.terrainSection}>
+        <div className={styles.sectionHeader}>{t('canvas.layers.mapSection')}</div>
+        <div
+          className={styles.terrainRow}
+          data-hidden={contoursVisible ? 'false' : 'true'}
+        >
+          <button
+            type="button"
+            className={styles.toggleBtn}
+            aria-label={`${t('canvas.layers.visibility')}: ${t('canvas.terrain.contours')}`}
+            onClick={() => toggleLayerVisibility('contours')}
+          >
+            <EyeIcon open={contoursVisible} />
+          </button>
+          <span className={styles.overlayLabel}>{t('canvas.terrain.contours')}</span>
+        </div>
+        <div className={styles.terrainControls}>
+          <div className={styles.mapSliderRow}>
+            <span className={styles.mapSliderLabel}>{t('canvas.layers.opacity')}</span>
+            <input
+              type="range"
+              className={styles.mapSlider}
+              min="0"
+              max="100"
+              value={contoursOpacity}
+              disabled={!contoursVisible}
+              aria-label={`${t('canvas.layers.opacity')}: ${t('canvas.terrain.contours')}`}
+              onInput={(event) => {
+                setLayerOpacity('contours', Number((event.target as HTMLInputElement).value) / 100)
+              }}
+            />
+          </div>
+          <label className={styles.numericControl}>
+            <span className={styles.mapSliderLabel}>{t('canvas.terrain.contourInterval')}</span>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              className={styles.numericInput}
+              value={String(contourInterval)}
+              aria-label={t('canvas.terrain.contourInterval')}
+              onInput={(event) => {
+                setContourIntervalMeters(Number((event.target as HTMLInputElement).value))
+              }}
+            />
+          </label>
+        </div>
+
+        <div
+          className={styles.terrainRow}
+          data-hidden={hillshadeOn ? 'false' : 'true'}
+        >
+          <button
+            type="button"
+            className={styles.toggleBtn}
+            aria-label={`${t('canvas.layers.visibility')}: ${t('canvas.terrain.hillshade')}`}
+            onClick={toggleHillshadeVisibility}
+          >
+            <EyeIcon open={hillshadeOn} />
+          </button>
+          <span className={styles.overlayLabel}>{t('canvas.terrain.hillshade')}</span>
+        </div>
+        <div className={styles.terrainControls}>
+          <div className={styles.mapSliderRow}>
+            <span className={styles.mapSliderLabel}>{t('canvas.terrain.hillshadeOpacity')}</span>
+            <input
+              type="range"
+              className={styles.mapSlider}
+              min="0"
+              max="100"
+              value={hillshadeLevel}
+              disabled={!hillshadeOn}
+              aria-label={t('canvas.terrain.hillshadeOpacity')}
+              onInput={(event) => {
+                setHillshadeOpacity(Number((event.target as HTMLInputElement).value) / 100)
+              }}
+            />
+          </div>
         </div>
       </div>
     </aside>

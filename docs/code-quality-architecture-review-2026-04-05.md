@@ -168,7 +168,7 @@ Current wiring covers:
 - timeline action click highlighting via `action.targets`
 - budget row click highlighting via the same species target path as budget row hover
 
-Hover clears on mouse leave/unmount. Timeline/budget selected targets clear on owner-tab unmount, selected row/action disappearance, or document replacement. The map projection seam is data-only and not rendered. This is not real canvas selection, full panel/map synchronization, or map overlay work.
+Hover clears on mouse leave/unmount. Timeline/budget selected targets clear on owner-tab unmount, selected row/action disappearance, or document replacement. At review time the map projection seam was data-only; live code has since added rendered hover/selection overlays through the same pure projection path without promoting MapLibre into a second authority. This is still not real canvas selection or full map-driven document sync.
 
 ### Remaining guardrails
 
@@ -179,7 +179,7 @@ Future real panel-to-canvas selection and rendered panel-to-map overlay work mus
 - Every panel row has explicit identity semantics — **met**
 - Panel hover can highlight the correct canvas entities through the pure resolver without mutating selection/history — **met for consortium, timeline, and budget hover**
 - Timeline/budget panel selection can highlight the correct canvas entities through the pure resolver without mutating real canvas selection/history — **met**
-- MapLibre overlays can be driven from the same targets without inventing a second mapping layer — **pure projection seam met; rendered overlays remain**
+- MapLibre overlays can be driven from the same targets without inventing a second mapping layer — **met** (hover/selection overlays now render through the pure seam; richer variants remain future work)
 
 ---
 

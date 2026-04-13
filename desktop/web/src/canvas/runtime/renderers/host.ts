@@ -134,9 +134,10 @@ export class RendererHost<
       throw new RendererHostInitializationError('RendererHost requires initialize(context) before use.', [])
     }
 
-    const candidates = this._options.backends.filter((backend) =>
+    const supportedBackends = this._options.backends.filter((backend) =>
       backend.supports ? backend.supports(this._capabilities) : true,
     )
+    const candidates = supportedBackends
 
     if (candidates.length === 0) {
       throw new RendererHostInitializationError('No renderer backends are supported by the current environment.', [])

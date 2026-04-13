@@ -256,6 +256,7 @@
       "interval": "间距",
       "basemapLoading": "正在加载底图...",
       "basemapError": "底图不可用",
+      "precisionWarning": "对于较大的设计，精度可能会下降",
       "setLocation": "设置设计位置以启用地图图层",
       "styleStreet": "街道",
       "styleTerrain": "地形",

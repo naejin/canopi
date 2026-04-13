@@ -256,6 +256,7 @@
       "interval": "Intervallo",
       "basemapLoading": "Caricamento mappa base...",
       "basemapError": "Mappa base non disponibile",
+      "precisionWarning": "La precisione può ridursi per i progetti di grandi dimensioni",
       "setLocation": "Imposta una posizione per attivare i livelli mappa",
       "styleStreet": "Strade",
       "styleTerrain": "Terreno",
