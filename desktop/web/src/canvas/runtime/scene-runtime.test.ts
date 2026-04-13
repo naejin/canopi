@@ -7,11 +7,10 @@ vi.mock('../../ipc/species', () => ({
 }))
 import {
   guides,
-  layerOpacity,
-  layerVisibility,
   lockedObjectIds,
   snapToGridEnabled,
 } from '../../state/canvas'
+import { layerOpacity, layerVisibility } from '../../app/canvas-settings/signals'
 import { plantColorMenuOpen } from '../plant-color-menu-state'
 import { plantColorByAttr, plantSizeMode } from '../plant-display-state'
 import { plantStampSpecies } from '../plant-tool-state'

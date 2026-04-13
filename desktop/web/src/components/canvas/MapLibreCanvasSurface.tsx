@@ -34,6 +34,8 @@ import {
   hillshadeVisible,
   layerOpacity,
   layerVisibility,
+} from '../../app/canvas-settings/signals'
+import {
   northBearingDeg,
   sceneEntityRevision,
 } from '../../state/canvas'

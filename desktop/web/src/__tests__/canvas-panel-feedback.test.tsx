@@ -2,9 +2,10 @@ import { useEffect } from 'preact/hooks'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { hillshadeVisible, layerVisibility } from '../app/canvas-settings/signals'
 import { CanvasPanel } from '../components/panels/CanvasPanel'
 import { currentDesign } from '../state/design'
-import { hillshadeVisible, layerVisibility, northBearingDeg } from '../state/canvas'
+import { northBearingDeg } from '../state/canvas'
 import { locale } from '../app/settings/state'
 
 let mockBasemapState: {

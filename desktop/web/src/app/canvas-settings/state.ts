@@ -7,7 +7,7 @@ import {
   layerOpacity,
   layerPanelOpen,
   layerVisibility,
-} from '../../state/canvas'
+} from './signals'
 import {
   VISIBLE_BOTTOM_PANEL_TABS,
   bottomPanelHeight,

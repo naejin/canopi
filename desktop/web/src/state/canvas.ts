@@ -2,22 +2,6 @@ import { signal } from '@preact/signals'
 import type { Guide } from '../canvas/guides'
 export { activeTool, canvasReady, selectedObjectIds } from '../canvas/session-state'
 export { zoomLevel, zoomReference } from '../canvas/view-state'
-
-export function createDefaultLayerVisibility(): Record<string, boolean> {
-  return {
-    base: true,
-    contours: false,
-    climate: false,
-    zones: true,
-    water: false,
-    plants: true,
-    annotations: true,
-  }
-}
-
-export const layerVisibility = signal<Record<string, boolean>>(createDefaultLayerVisibility())
-
-// Grid / overlay state
 export const snapToGridEnabled = signal<boolean>(false)
 export const gridVisible = signal<boolean>(true)
 export const rulersVisible = signal<boolean>(true)
@@ -27,56 +11,6 @@ export const guides = signal<Guide[]>([])
 
 // Lock state — nodes in this set cannot be selected or transformed
 export const lockedObjectIds = signal<Set<string>>(new Set())
-
-// Layer panel sidebar
-export const layerPanelOpen = signal<boolean>(true)
-export const activeLayerName = signal<string>('zones')
-
-// Per-layer lock state (independent of object-level locks)
-export function createDefaultLayerLockState(): Record<string, boolean> {
-  return {
-    base: false,
-    contours: false,
-    climate: false,
-    zones: false,
-    water: false,
-    plants: false,
-    annotations: false,
-  }
-}
-
-export const layerLockState = signal<Record<string, boolean>>(createDefaultLayerLockState())
-
-// Per-layer opacity (0.0 – 1.0)
-export function createDefaultLayerOpacity(): Record<string, number> {
-  return {
-    base: 1,
-    contours: 1,
-    climate: 1,
-    zones: 1,
-    water: 1,
-    plants: 1,
-    annotations: 1,
-  }
-}
-
-export const layerOpacity = signal<Record<string, number>>(createDefaultLayerOpacity())
-
-export const DEFAULT_CONTOUR_INTERVAL_METERS = 0
-export const DEFAULT_HILLSHADE_VISIBLE = false
-export const DEFAULT_HILLSHADE_OPACITY = 0.55
-export const contourIntervalMeters = signal<number>(DEFAULT_CONTOUR_INTERVAL_METERS)
-export const hillshadeVisible = signal<boolean>(DEFAULT_HILLSHADE_VISIBLE)
-export const hillshadeOpacity = signal<number>(DEFAULT_HILLSHADE_OPACITY)
-
-export function hasVisibleMapLayer(
-  visibility: Record<string, boolean>,
-  hillshadeOn: boolean,
-): boolean {
-  return (visibility.base ?? true)
-    || (visibility.contours ?? false)
-    || hillshadeOn
-}
 
 // Canvas entity revision — incremented on every scene mutation (plant/zone/annotation
 // changes) so bottom-panel components can subscribe to canvas-store changes. Parallel

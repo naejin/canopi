@@ -5,10 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('../ipc/settings', () => ({ setSettings: vi.fn().mockResolvedValue(undefined) }))
 
 import { LayerPanel } from '../components/canvas/LayerPanel'
-import { setSettings } from '../ipc/settings'
-import { currentDesign } from '../state/design'
-import { locale } from '../app/settings/state'
-import { flushQueuedSettingsPersist, setBootstrappedSettings } from '../app/settings/persistence'
 import {
   activeLayerName,
   contourIntervalMeters,
@@ -17,7 +13,11 @@ import {
   layerOpacity,
   layerPanelOpen,
   layerVisibility,
-} from '../state/canvas'
+} from '../app/canvas-settings/signals'
+import { setSettings } from '../ipc/settings'
+import { currentDesign } from '../state/design'
+import { locale } from '../app/settings/state'
+import { flushQueuedSettingsPersist, setBootstrappedSettings } from '../app/settings/persistence'
 
 describe('LayerPanel', () => {
   let container: HTMLDivElement

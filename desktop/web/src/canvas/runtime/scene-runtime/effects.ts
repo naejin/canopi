@@ -1,12 +1,10 @@
 import { effect } from '@preact/signals'
 import { locale, theme } from '../../../app/settings/state'
 import { hoveredPanelTargets, selectedPanelTargets } from '../../../app/panel-targets/state'
+import { layerLockState, layerOpacity, layerVisibility } from '../../../app/canvas-settings/signals'
 import {
   gridVisible,
   guides,
-  layerLockState,
-  layerOpacity,
-  layerVisibility,
   rulersVisible,
 } from '../../../state/canvas'
 

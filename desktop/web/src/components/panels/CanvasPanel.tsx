@@ -18,7 +18,7 @@ import { BottomPanel } from '../canvas/BottomPanel'
 import { BottomPanelLauncher } from '../canvas/BottomPanelLauncher'
 import { LayerPanel } from '../canvas/LayerPanel'
 import { WelcomeScreen } from '../shared/WelcomeScreen'
-import { hasVisibleMapLayer, hillshadeVisible, layerVisibility } from '../../state/canvas'
+import { hasVisibleMapLayer, hillshadeVisible, layerVisibility } from '../../app/canvas-settings/signals'
 import { formatLocationSummary } from '../../utils/location'
 import styles from './Panels.module.css'
 

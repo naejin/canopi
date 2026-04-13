@@ -14,6 +14,8 @@ import {
   hillshadeVisible,
   layerOpacity,
   layerVisibility,
+} from '../app/canvas-settings/signals'
+import {
   snapToGridEnabled,
   snapToGuidesEnabled,
 } from '../state/canvas'

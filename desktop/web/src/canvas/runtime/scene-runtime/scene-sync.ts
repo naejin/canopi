@@ -1,9 +1,7 @@
 import { batch } from '@preact/signals'
+import { layerLockState, layerOpacity, layerVisibility } from '../../../app/canvas-settings/signals'
 import {
   guides,
-  layerLockState,
-  layerOpacity,
-  layerVisibility,
   lockedObjectIds,
   northBearingDeg,
 } from '../../../state/canvas'

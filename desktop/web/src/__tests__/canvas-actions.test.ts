@@ -8,7 +8,7 @@ import {
   hillshadeVisible,
   layerOpacity,
   layerVisibility,
-} from '../state/canvas'
+} from '../app/canvas-settings/signals'
 import {
   VISIBLE_BOTTOM_PANEL_TABS,
   bottomPanelOpen,

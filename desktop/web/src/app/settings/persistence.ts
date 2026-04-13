@@ -2,20 +2,19 @@ import { batch } from '@preact/signals'
 import type { Settings } from '../../types/settings'
 import { setSettings } from '../../ipc/settings'
 import {
-  VISIBLE_BOTTOM_PANEL_TABS,
-  bottomPanelHeight,
-  bottomPanelOpen,
-  bottomPanelTab,
-} from '../canvas-settings/bottom-panel-state'
-import {
   contourIntervalMeters,
   hillshadeOpacity,
   hillshadeVisible,
   layerOpacity,
   layerVisibility,
-  snapToGridEnabled,
-  snapToGuidesEnabled,
-} from '../../state/canvas'
+} from '../canvas-settings/signals'
+import {
+  VISIBLE_BOTTOM_PANEL_TABS,
+  bottomPanelHeight,
+  bottomPanelOpen,
+  bottomPanelTab,
+} from '../canvas-settings/bottom-panel-state'
+import { snapToGridEnabled, snapToGuidesEnabled } from '../../state/canvas'
 import {
   autoSaveIntervalMs,
   locale,

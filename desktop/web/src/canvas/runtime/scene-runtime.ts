@@ -9,13 +9,13 @@ import {
 import {
   gridVisible,
   guides,
-  layerVisibility,
   lockedObjectIds,
   plantNamesRevision,
   rulersVisible,
   sceneEntityRevision,
   snapToGridEnabled,
 } from '../../state/canvas'
+import { layerVisibility } from '../../app/canvas-settings/signals'
 import type { ColorByAttribute, PlantSizeMode } from '../plant-display-state'
 import type { CanopiFile, PanelTarget, PlacedPlant } from '../../types/design'
 import type { SelectedPlantColorContext } from '../plant-color-context'
