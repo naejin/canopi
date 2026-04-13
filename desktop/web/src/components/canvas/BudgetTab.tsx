@@ -3,7 +3,7 @@ import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale } from '../../app/shell/state'
 import { sceneEntityRevision, plantNamesRevision, selectedPanelTargetOrigin, selectedPanelTargets } from '../../state/canvas'
-import { currentDesign, designName } from '../../state/document'
+import { currentDesign, designName } from '../../state/design'
 import { currentCanvasSession } from '../../canvas/session'
 import { exportFile } from '../../ipc/design'
 import {

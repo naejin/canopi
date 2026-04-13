@@ -5,7 +5,7 @@ import { useSignal, useSignalEffect } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale, theme } from '../../app/shell/state'
 import { plantSpeciesColors } from '../../state/canvas'
-import { currentDesign } from '../../state/document'
+import { currentDesign } from '../../state/design'
 import { currentCanvasSession } from '../../canvas/session'
 import {
   clearHoveredPanelTargets,

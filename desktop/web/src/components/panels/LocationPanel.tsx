@@ -1,5 +1,5 @@
 import { locale } from '../../app/shell/state'
-import { currentDesign } from '../../state/document'
+import { currentDesign } from '../../state/design'
 import { LocationTab } from '../canvas/LocationTab'
 import { WelcomeScreen } from '../shared/WelcomeScreen'
 import styles from './LocationPanel.module.css'

@@ -3,7 +3,7 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CanvasPanel } from '../components/panels/CanvasPanel'
-import { currentDesign } from '../state/document'
+import { currentDesign } from '../state/design'
 import { hillshadeVisible, layerVisibility, northBearingDeg } from '../state/canvas'
 import { locale } from '../app/shell/state'
 

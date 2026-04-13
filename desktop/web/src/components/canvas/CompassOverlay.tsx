@@ -1,4 +1,4 @@
-import { currentDesign } from '../../state/document'
+import { currentDesign } from '../../state/design'
 import { t } from '../../i18n'
 import { northBearingDeg } from '../../state/canvas'
 import styles from './CompassOverlay.module.css'

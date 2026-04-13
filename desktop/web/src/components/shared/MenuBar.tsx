@@ -2,7 +2,7 @@ import { useRef } from 'preact/hooks'
 import { useSignal, useSignalEffect } from '@preact/signals'
 import { locale } from '../../app/shell/state'
 import { currentCanvasSession } from '../../canvas/session'
-import { currentDesign, designDirty } from '../../state/document'
+import { currentDesign, designDirty } from '../../state/design'
 import { getMenuDefinitions, type MenuDefinition, type MenuEntry } from './menu-definitions'
 import styles from './MenuBar.module.css'
 

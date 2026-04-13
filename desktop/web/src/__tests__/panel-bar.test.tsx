@@ -3,7 +3,7 @@ import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { PanelBar } from '../components/panels/PanelBar'
 import { activePanel, locale, sidePanel } from '../app/shell/state'
-import { currentDesign } from '../state/document'
+import { currentDesign } from '../state/design'
 
 describe('PanelBar', () => {
   let container: HTMLDivElement

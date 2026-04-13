@@ -1,7 +1,7 @@
 import { t } from '../../i18n'
 import { locale } from '../../app/shell/state'
 import { layerPanelView } from '../../app/canvas-settings/state'
-import { currentDesign } from '../../state/document'
+import { currentDesign } from '../../state/design'
 import {
   setActiveLayer,
   setContourIntervalMeters,

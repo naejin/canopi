@@ -8,7 +8,7 @@ import {
 } from '../../maplibre/config'
 import { locale } from '../../app/shell/state'
 import { geocodeAddress, type GeoResult } from '../../ipc/geocoding'
-import { currentDesign } from '../../state/document'
+import { currentDesign } from '../../state/design'
 import { clearDesignLocation, setDesignLocation } from '../../app/location/controller'
 import { navigateTo } from '../../app/shell/state'
 import { buildLocationCommit, computeSavedPinState } from './location-tab-logic'

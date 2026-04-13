@@ -6,7 +6,7 @@ vi.mock('../ipc/settings', () => ({ setSettings: vi.fn().mockResolvedValue(undef
 
 import { LayerPanel } from '../components/canvas/LayerPanel'
 import { setSettings } from '../ipc/settings'
-import { currentDesign } from '../state/document'
+import { currentDesign } from '../state/design'
 import { flushQueuedSettingsPersist, locale, setBootstrappedSettings } from '../app/shell/state'
 import {
   activeLayerName,

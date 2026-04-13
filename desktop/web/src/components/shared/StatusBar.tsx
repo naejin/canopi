@@ -1,5 +1,5 @@
 import { locale, theme, persistCurrentSettings } from "../../app/shell/state";
-import { autosaveFailed } from "../../state/document";
+import { autosaveFailed } from "../../state/design";
 import { t } from "../../i18n";
 import styles from "./StatusBar.module.css";
 

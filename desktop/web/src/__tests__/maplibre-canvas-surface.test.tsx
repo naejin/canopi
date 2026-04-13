@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import { MapLibreCanvasSurface } from '../components/canvas/MapLibreCanvasSurface'
 import { setCurrentCanvasSession } from '../canvas/session'
-import { currentDesign } from '../state/document'
+import { currentDesign } from '../state/design'
 import { theme } from '../app/shell/state'
 import {
   contourIntervalMeters,

@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from 'preact/hooks'
 import { useSignal, useSignalEffect } from '@preact/signals'
-import { currentDesign } from '../../state/document'
+import { currentDesign } from '../../state/design'
 import type { TimelineAction } from '../../types/design'
 import { InteractiveTimeline, clearTimelineSelectedPanelTargets } from './InteractiveTimeline'
 import styles from './TimelineTab.module.css'

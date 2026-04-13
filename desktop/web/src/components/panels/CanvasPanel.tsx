@@ -1,8 +1,6 @@
 import { useRef, useEffect, useState } from 'preact/hooks'
 import { t } from '../../i18n'
-import {
-  currentDesign,
-} from '../../state/document'
+import { currentDesign } from '../../state/design'
 import { useCanvasDocumentSession } from '../../app/document-session/use-canvas-document-session'
 import { CanvasToolbar } from '../canvas/CanvasToolbar'
 import { CompassOverlay } from '../canvas/CompassOverlay'

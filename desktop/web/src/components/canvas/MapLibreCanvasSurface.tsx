@@ -40,7 +40,7 @@ import {
   selectedPanelTargets,
 } from '../../state/canvas'
 import { theme } from '../../app/shell/state'
-import { currentDesign } from '../../state/document'
+import { currentDesign } from '../../state/design'
 import { loadMapLibre, type MapLibreApi, type MapLibreMapInstance } from './maplibre-loader'
 import styles from './MapLibreCanvasSurface.module.css'
 

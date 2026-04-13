@@ -2,9 +2,8 @@ import { signal, computed, batch } from '@preact/signals'
 import type { CanopiFile } from '../types/design'
 import { getCurrentCanvasSession } from '../canvas/session'
 
-// Low-level document session store. Public document policy lives in state/document
-// and app/document-session; other modules should not treat this file as the
-// long-term external API surface.
+// Low-level document session store and canonical signal surface.
+// Higher-level document policy lives in app/document-session.
 
 // ---------------------------------------------------------------------------
 // Signals
