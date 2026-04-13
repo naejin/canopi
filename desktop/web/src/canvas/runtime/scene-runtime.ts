@@ -21,7 +21,6 @@ import { setCanvasSelection, setCanvasTool } from '../session-state'
 import { syncPlantSpeciesColorDefaults } from '../plant-species-color-defaults'
 import { refreshCanvasColorCache } from '../theme-refresh'
 import { CameraController } from './camera'
-import { SceneChromeOverlay } from './scene-chrome'
 import { SceneInteractionController } from './scene-interaction'
 import { RendererHost } from './renderers'
 import { createCanvas2DSceneRenderer } from './renderers/canvas2d-scene'
@@ -34,6 +33,7 @@ import {
   syncCanvasSignalsFromScene,
   syncPresentationSignalsFromSceneSession,
 } from './scene-runtime/scene-sync'
+import { SceneRuntimeChromeCoordinator } from './scene-runtime/chrome-coordinator'
 import { SceneRuntimeDocumentBridge } from './scene-runtime/document'
 import { installSceneRuntimeEffects } from './scene-runtime/effects'
 import type { ScenePersistedState } from './scene'
@@ -58,9 +58,8 @@ export class SceneCanvasRuntime implements CanvasRuntime {
   })
   private readonly _presentation: SceneRuntimePresentationController
   private _container: HTMLElement | null = null
-  private _chrome: SceneChromeOverlay | null = null
+  private readonly _chrome = new SceneRuntimeChromeCoordinator()
   private _interaction: SceneInteractionController | null = null
-  private _chromeVisible = false
   private readonly _history = new SceneHistory()
   private readonly _mutations: SceneRuntimeMutationController
   private readonly _documents: SceneRuntimeDocumentBridge
@@ -190,21 +189,19 @@ export class SceneCanvasRuntime implements CanvasRuntime {
   }
 
   attachRulersTo(element: HTMLElement): void {
-    this._chrome?.destroy()
-    this._chrome = new SceneChromeOverlay(element)
-    this._chrome.setGuideCreate((axis, worldPosition) => {
+    this._chrome.attach(element, (axis, worldPosition) => {
       this._addGuide(axis, worldPosition)
     })
     this._renderChrome()
   }
 
   showCanvasChrome(): void {
-    this._chromeVisible = true
+    this._chrome.show()
     this._renderChrome()
   }
 
   hideCanvasChrome(): void {
-    this._chromeVisible = false
+    this._chrome.hide()
     this._renderChrome()
   }
 
@@ -375,8 +372,7 @@ export class SceneCanvasRuntime implements CanvasRuntime {
     this._setHoveredEntityId(null, { invalidate: false })
     this._interaction?.dispose()
     this._interaction = null
-    this._chrome?.destroy()
-    this._chrome = null
+    this._chrome.destroy()
     for (const dispose of this._disposeEffects.splice(0)) dispose()
     void this._rendererHost.dispose()
   }
@@ -466,7 +462,7 @@ export class SceneCanvasRuntime implements CanvasRuntime {
         if (this._container) {
           refreshCanvasColorCache(this._container)
         }
-        this._chrome?.refreshTheme()
+        this._chrome.refreshTheme()
         this._invalidate('scene')
       },
       onLocale: () => {
@@ -516,12 +512,11 @@ export class SceneCanvasRuntime implements CanvasRuntime {
   }
 
   private _renderChrome(): void {
-    if (!this._chrome || !this._container) return
+    if (!this._container) return
     this._chrome.update({
       viewport: this._camera.viewport,
       width: Math.max(1, this._container.clientWidth),
       height: Math.max(1, this._container.clientHeight),
-      chromeVisible: this._chromeVisible,
       rulersVisible: rulersVisible.value,
       gridVisible: gridVisible.value,
       guides: guides.value,
