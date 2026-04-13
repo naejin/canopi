@@ -36,6 +36,7 @@ import {
 import { SceneRuntimeChromeCoordinator } from './scene-runtime/chrome-coordinator'
 import { SceneRuntimeDocumentBridge } from './scene-runtime/document'
 import { installSceneRuntimeEffects } from './scene-runtime/effects'
+import { SceneRuntimeRenderScheduler, type SceneRuntimeRenderKind } from './scene-runtime/render-scheduler'
 import type { ScenePersistedState } from './scene'
 import { SceneHistory } from './scene-history'
 import { SceneRuntimeMutationController } from './scene-runtime/mutations'
@@ -56,15 +57,24 @@ export class SceneCanvasRuntime implements CanvasRuntime {
       createCanvas2DSceneRenderer(),
     ],
   })
+  private readonly _rendering = new SceneRuntimeRenderScheduler({
+    getRendererHost: () => this._rendererHost,
+    getViewport: () => this._camera.viewport,
+    prepareSceneSnapshot: async () => {
+      this._applySignalBackedSceneState({ recordHistory: false, syncGuides: true })
+      const presentation = await this._presentation.refreshCurrentPresentationData()
+      this._documents.applyPresentationBackfills(presentation.backfills)
+      return this._presentation.buildRendererSnapshot()
+    },
+    renderChrome: () => this._renderChrome(),
+  })
   private readonly _presentation: SceneRuntimePresentationController
-  private _container: HTMLElement | null = null
   private readonly _chrome = new SceneRuntimeChromeCoordinator()
   private _interaction: SceneInteractionController | null = null
   private readonly _history = new SceneHistory()
   private readonly _mutations: SceneRuntimeMutationController
   private readonly _documents: SceneRuntimeDocumentBridge
   private readonly _disposeEffects: Array<() => void> = []
-  private _renderEpoch = 0
 
   constructor() {
     this._presentation = new SceneRuntimePresentationController({
@@ -118,9 +128,8 @@ export class SceneCanvasRuntime implements CanvasRuntime {
   }
 
   async init(container: HTMLElement): Promise<void> {
-    this._container = container
     refreshCanvasColorCache(container)
-    await this._rendererHost.initialize({ container })
+    await this._rendering.initialize(container)
     const viewport = this._camera.initialize({
       width: Math.max(1, container.clientWidth),
       height: Math.max(1, container.clientHeight),
@@ -144,7 +153,7 @@ export class SceneCanvasRuntime implements CanvasRuntime {
         this._setHoveredEntityId(id)
       },
     })
-    await this._render()
+    await this._rendering.renderScene()
   }
 
   getSceneStore(): SceneStore {
@@ -179,13 +188,14 @@ export class SceneCanvasRuntime implements CanvasRuntime {
   }
 
   initializeViewport(): void {
-    if (!this._container) return
+    const container = this._rendering.container
+    if (!container) return
     const viewport = this._camera.initialize({
-      width: Math.max(1, this._container.clientWidth),
-      height: Math.max(1, this._container.clientHeight),
+      width: Math.max(1, container.clientWidth),
+      height: Math.max(1, container.clientHeight),
     })
     this._setViewport(viewport, { forceRevision: true })
-    void this._render()
+    void this._rendering.renderScene()
   }
 
   attachRulersTo(element: HTMLElement): void {
@@ -374,16 +384,12 @@ export class SceneCanvasRuntime implements CanvasRuntime {
     this._interaction = null
     this._chrome.destroy()
     for (const dispose of this._disposeEffects.splice(0)) dispose()
-    void this._rendererHost.dispose()
+    this._rendering.dispose()
   }
 
   resize(width: number, height: number): void {
     this._setViewport(this._camera.resize({ width, height }), { forceRevision: true })
-    void this._rendererHost.run((renderer) => {
-      renderer.resize(width, height)
-      renderer.setViewport(this._camera.viewport)
-    })
-    this._invalidate('chrome')
+    this._rendering.resize(width, height)
   }
 
   private _setViewport(
@@ -403,16 +409,7 @@ export class SceneCanvasRuntime implements CanvasRuntime {
   }
 
   private _invalidate(kind: RuntimeInvalidationKind = 'scene'): void {
-    if (kind === 'chrome') {
-      this._renderChrome()
-      return
-    }
-    if (!this._container) return
-    if (kind === 'viewport') {
-      void this._renderViewportOnly()
-      return
-    }
-    void this._render()
+    this._rendering.invalidate(kind as SceneRuntimeRenderKind)
   }
 
   private _setSelection(ids: Iterable<string>): void {
@@ -459,8 +456,9 @@ export class SceneCanvasRuntime implements CanvasRuntime {
   private _installEffects(): void {
     this._disposeEffects.push(...installSceneRuntimeEffects({
       onTheme: () => {
-        if (this._container) {
-          refreshCanvasColorCache(this._container)
+        const container = this._rendering.container
+        if (container) {
+          refreshCanvasColorCache(container)
         }
         this._chrome.refreshTheme()
         this._invalidate('scene')
@@ -481,42 +479,13 @@ export class SceneCanvasRuntime implements CanvasRuntime {
     }))
   }
 
-  private async _render(): Promise<void> {
-    if (!this._container) return
-    const renderEpoch = ++this._renderEpoch
-    this._applySignalBackedSceneState({ recordHistory: false, syncGuides: true })
-    const presentation = await this._presentation.refreshCurrentPresentationData()
-    this._documents.applyPresentationBackfills(presentation.backfills)
-    if (renderEpoch !== this._renderEpoch) return
-    const snapshot = this._presentation.buildRendererSnapshot()
-    await this._rendererHost.run((renderer) => {
-      renderer.resize(
-        Math.max(1, this._container?.clientWidth ?? 1),
-        Math.max(1, this._container?.clientHeight ?? 1),
-      )
-      renderer.renderScene(snapshot)
-    }, {
-      operationName: 'render scene',
-    })
-    this._renderChrome()
-  }
-
-  private async _renderViewportOnly(): Promise<void> {
-    if (!this._container) return
-    await this._rendererHost.run((renderer) => {
-      renderer.setViewport(this._camera.viewport)
-    }, {
-      operationName: 'update viewport',
-    })
-    this._renderChrome()
-  }
-
   private _renderChrome(): void {
-    if (!this._container) return
+    const container = this._rendering.container
+    if (!container) return
     this._chrome.update({
       viewport: this._camera.viewport,
-      width: Math.max(1, this._container.clientWidth),
-      height: Math.max(1, this._container.clientHeight),
+      width: Math.max(1, container.clientWidth),
+      height: Math.max(1, container.clientHeight),
       rulersVisible: rulersVisible.value,
       gridVisible: gridVisible.value,
       guides: guides.value,
