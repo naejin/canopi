@@ -2,10 +2,16 @@ import { useCallback, useEffect, useMemo, useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale } from '../../state/app'
-import { sceneEntityRevision, plantNamesRevision, hoveredPanelTargets, selectedPanelTargetOrigin, selectedPanelTargets } from '../../state/canvas'
+import { sceneEntityRevision, plantNamesRevision, selectedPanelTargetOrigin, selectedPanelTargets } from '../../state/canvas'
 import { currentDesign, designName } from '../../state/document'
 import { currentCanvasSession } from '../../canvas/session'
 import { exportFile } from '../../ipc/design'
+import {
+  clearHoveredPanelTargets,
+  clearSelectedPanelTargetsForOrigin,
+  setHoveredPanelTargets,
+  setSelectedPanelTargets,
+} from '../../app/panel-targets/coordinator'
 import { setPlantBudgetPrice, setBudgetCurrency } from '../../state/budget-actions'
 import { Dropdown } from '../shared/Dropdown'
 import { CURRENCY_ITEMS } from './budget-currencies'
@@ -17,25 +23,17 @@ import styles from './BudgetTab.module.css'
 const EMPTY_BUDGET: BudgetItem[] = []
 const EMPTY_PLANTS: PlacedPlant[] = []
 const EMPTY_NAMES: ReadonlyMap<string, string | null> = new Map()
-const EMPTY_PANEL_TARGETS: readonly PanelTarget[] = []
 
 function setBudgetHoveredPanelTargets(targets: readonly PanelTarget[]): void {
-  if (!panelTargetsEqual(hoveredPanelTargets.peek(), targets)) {
-    hoveredPanelTargets.value = targets
-  }
+  setHoveredPanelTargets(targets)
 }
 
 function setBudgetSelectedPanelTargets(targets: readonly PanelTarget[]): void {
-  if (!panelTargetsEqual(selectedPanelTargets.peek(), targets)) {
-    selectedPanelTargets.value = targets
-  }
-  selectedPanelTargetOrigin.value = targets.length > 0 ? 'budget' : null
+  setSelectedPanelTargets('budget', targets)
 }
 
 function clearBudgetSelectedPanelTargets(): void {
-  if (selectedPanelTargetOrigin.peek() !== 'budget') return
-  if (selectedPanelTargets.peek().length > 0) selectedPanelTargets.value = []
-  selectedPanelTargetOrigin.value = null
+  clearSelectedPanelTargetsForOrigin('budget')
 }
 
 export function BudgetTab() {
@@ -99,7 +97,7 @@ export function BudgetTab() {
   }, [budgetItemMap])
 
   const clearBudgetHover = useCallback(() => {
-    setBudgetHoveredPanelTargets(EMPTY_PANEL_TARGETS)
+    clearHoveredPanelTargets()
   }, [])
 
   useEffect(() => clearBudgetHover, [clearBudgetHover])

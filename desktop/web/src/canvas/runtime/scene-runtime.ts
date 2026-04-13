@@ -1,5 +1,6 @@
 import { signal } from '@preact/signals'
 import { locale } from '../../state/app'
+import { clearPanelOriginTargets } from '../../app/panel-targets/coordinator'
 import {
   gridVisible,
   guides,
@@ -11,7 +12,6 @@ import {
   plantSpeciesColors,
   rulersVisible,
   sceneEntityRevision,
-  selectedPanelTargetOrigin,
   selectedPanelTargets,
   snapToGridEnabled,
 } from '../../state/canvas'
@@ -762,9 +762,7 @@ export class SceneCanvasRuntime implements CanvasRuntime {
   }
 
   private _clearPanelOriginTargets(): void {
-    if (hoveredPanelTargets.peek().length > 0) hoveredPanelTargets.value = []
-    if (selectedPanelTargets.peek().length > 0) selectedPanelTargets.value = []
-    if (selectedPanelTargetOrigin.value !== null) selectedPanelTargetOrigin.value = null
+    clearPanelOriginTargets()
   }
 
   private _setHoveredEntityId(id: string | null, options: { invalidate?: boolean } = {}): void {

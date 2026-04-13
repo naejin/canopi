@@ -4,9 +4,15 @@ import { useCanvasRenderer } from './useCanvasRenderer'
 import { useSignal, useSignalEffect } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale, theme } from '../../state/app'
-import { hoveredPanelTargets, plantSpeciesColors, selectedPanelTargetOrigin, selectedPanelTargets } from '../../state/canvas'
+import { plantSpeciesColors } from '../../state/canvas'
 import { currentDesign } from '../../state/document'
 import { currentCanvasSession } from '../../canvas/session'
+import {
+  clearHoveredPanelTargets,
+  clearSelectedPanelTargetsForOrigin,
+  setHoveredPanelTargets,
+  setSelectedPanelTargets,
+} from '../../app/panel-targets/coordinator'
 import {
   addTimelineAction,
   deleteTimelineAction,
@@ -29,7 +35,7 @@ import {
   type TimelineRenderState,
 } from '../../canvas/timeline-renderer'
 import { dateToX, snapToDay, toISODate, xToDate } from '../../canvas/timeline-math'
-import { MANUAL_TARGET, getTimelineHoverTargets, panelTargetsEqual, speciesTarget } from '../../panel-targets'
+import { MANUAL_TARGET, getTimelineHoverTargets, speciesTarget } from '../../panel-targets'
 import type { PanelTarget, TimelineAction } from '../../types/design'
 import { TimelinePopover, type PopoverFormData } from './TimelinePopover'
 import styles from './InteractiveTimeline.module.css'
@@ -133,22 +139,15 @@ const EMPTY_ACTIONS: TimelineAction[] = []
 const EMPTY_PANEL_TARGETS: readonly PanelTarget[] = []
 
 function setTimelineHoveredPanelTargets(targets: readonly PanelTarget[]): void {
-  if (!panelTargetsEqual(hoveredPanelTargets.peek(), targets)) {
-    hoveredPanelTargets.value = targets
-  }
+  setHoveredPanelTargets(targets)
 }
 
 function setTimelineSelectedPanelTargets(targets: readonly PanelTarget[]): void {
-  if (!panelTargetsEqual(selectedPanelTargets.peek(), targets)) {
-    selectedPanelTargets.value = targets
-  }
-  selectedPanelTargetOrigin.value = targets.length > 0 ? 'timeline' : null
+  setSelectedPanelTargets('timeline', targets)
 }
 
 export function clearTimelineSelectedPanelTargets(): void {
-  if (selectedPanelTargetOrigin.peek() !== 'timeline') return
-  if (selectedPanelTargets.peek().length > 0) selectedPanelTargets.value = []
-  selectedPanelTargetOrigin.value = null
+  clearSelectedPanelTargetsForOrigin('timeline')
 }
 
 function buildSpeciesList(): Array<{ canonical_name: string; display_name: string }> {
@@ -229,7 +228,7 @@ export function InteractiveTimeline({
     const current = currentDesign.value?.timeline ?? EMPTY_ACTIONS
     if (current.some((action) => action.id === hoveredActionId)) return
     hoveredId.value = null
-    setTimelineHoveredPanelTargets(EMPTY_PANEL_TARGETS)
+    clearHoveredPanelTargets()
   })
 
   const renderStateRef = useRef<TimelineRenderState>(null!)

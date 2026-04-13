@@ -2,10 +2,11 @@ import { useCallback, useEffect, useMemo, useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale, theme } from '../../state/app'
-import { plantSpeciesColors, hoveredCanvasTargets, hoveredPanelTargets, sceneEntityRevision, plantNamesRevision } from '../../state/canvas'
+import { plantSpeciesColors, hoveredCanvasTargets, sceneEntityRevision, plantNamesRevision } from '../../state/canvas'
 import { currentDesign } from '../../state/document'
 import { currentCanvasSession } from '../../canvas/session'
 import { moveConsortiumEntry, reorderConsortiumEntry } from '../../state/consortium-actions'
+import { clearHoveredPanelTargets, setHoveredPanelTargets } from '../../app/panel-targets/coordinator'
 import { markDocumentDirty } from '../../state/document-mutations'
 import { consortiumTarget, getConsortiumCanonicalName, isSpeciesTarget } from '../../panel-targets'
 import {
@@ -126,7 +127,7 @@ export function ConsortiumChart() {
   useEffect(() => {
     return () => {
       if (dragState.current?.hasMutated) markDocumentDirty()
-      hoveredPanelTargets.value = []
+      clearHoveredPanelTargets()
     }
   }, [])
 
@@ -258,13 +259,13 @@ export function ConsortiumChart() {
     if (hit) {
       if (hoveredCanonical.value !== hit.canonicalName) {
         hoveredCanonical.value = hit.canonicalName
-        hoveredPanelTargets.value = [consortiumTarget(hit.canonicalName)]
+        setHoveredPanelTargets([consortiumTarget(hit.canonicalName)])
       }
       canvas.style.cursor = hit.edge === 'body' ? 'grab' : 'ew-resize'
     } else {
       if (hoveredCanonical.value !== null) {
         hoveredCanonical.value = null
-        hoveredPanelTargets.value = []
+        clearHoveredPanelTargets()
       }
       canvas.style.cursor = 'default'
     }
@@ -273,7 +274,7 @@ export function ConsortiumChart() {
   const handleMouseLeave = useCallback(() => {
     if (hoveredCanonical.value !== null) {
       hoveredCanonical.value = null
-      hoveredPanelTargets.value = []
+      clearHoveredPanelTargets()
     }
     if (canvasRef.current) canvasRef.current.style.cursor = 'default'
   }, [])
