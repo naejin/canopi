@@ -19,8 +19,11 @@ import { DisplayModeControls } from '../canvas/DisplayModeControls'
 import { DisplayLegend } from '../canvas/DisplayLegend'
 import {
   MapLibreCanvasSurface,
-  type MapLibreCanvasSurfaceState,
 } from '../canvas/MapLibreCanvasSurface'
+import {
+  IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
+  type MapLibreCanvasSurfaceState,
+} from '../../maplibre/canvas-surface-state'
 import { BottomPanel } from '../canvas/BottomPanel'
 import { BottomPanelLauncher } from '../canvas/BottomPanelLauncher'
 import { LayerPanel } from '../canvas/LayerPanel'
@@ -36,22 +39,13 @@ function formatLocationSummary(location: { lat: number; lon: number; altitude_m:
   return location.altitude_m != null ? `${base} (${location.altitude_m} m)` : base
 }
 
-function defaultBasemapState(): MapLibreCanvasSurfaceState {
-  return {
-    status: 'idle',
-    errorMessage: null,
-    terrainStatus: 'idle',
-    terrainErrorMessage: null,
-    precisionWarning: false,
-    designExtentMeters: null,
-  }
-}
-
 export function CanvasPanel() {
   const canvasAreaRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const rulerOverlayRef = useRef<HTMLDivElement>(null)
-  const [basemapState, setBasemapState] = useState<MapLibreCanvasSurfaceState>(defaultBasemapState)
+  const [basemapState, setBasemapState] = useState<MapLibreCanvasSurfaceState>(
+    () => IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
+  )
   const [locationCueVisible, setLocationCueVisible] = useState(false)
   const lastLocationRef = useRef<string | null>(null)
 

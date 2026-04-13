@@ -16,6 +16,7 @@
 - **Exact sync is correctness-critical**: Map camera math, basemap scale, terrain, and projected overlays must derive from the same canonical seam. Do not reintroduce `center + approximate zoom` shortcuts or separate projection math for different map layers
 - **Exact sync means no skipped viewport updates**: Do not reintroduce camera deadbands/tolerances in `MapLibreCanvasSurface` or any future map consumer
 - **MapLibre-facing bearing belongs at the seam**: Preserve document `north_bearing_deg` semantics. Any normalization/adaptation for MapLibre must live in `canvas/maplibre-camera.ts`, not in document state, overlays, or UI chrome
+- **Map surface helpers are split by responsibility**: `MapLibreCanvasSurface` remains the lifecycle owner, but state/diagnostic shaping lives in `maplibre/canvas-surface-state.ts`, basemap presentation/bootstrap helpers live in `maplibre/canvas-basemap.ts`, overlay coordination lives in `maplibre/canvas-overlays.ts`, and terrain diff/apply logic lives in `maplibre/terrain-sync.ts`
 
 ## ErrorBoundary
 - `ErrorBoundary` class component in `components/shared/ErrorBoundary.tsx` wraps `<App />` in `main.tsx`

@@ -184,12 +184,13 @@ These align with the core risks identified in the architecture review.
 - ~~Precision warning for large local-projection extents~~ — **done**: the canvas map feedback now warns once design geometry extends beyond the local precision threshold; the map stays active and diagnostics remain dev-only
 - ~~Rendered panel↔map overlays using the pure `projectPanelTargetsToMapFeatures()` seam~~ — **done**: hover/selection overlays now consume the pure projection seam instead of resolving identity inside MapLibre
 - ~~Display-only north compass in canvas chrome~~ — **done**: the canvas shows a north indicator derived from `north_bearing_deg`; it is informational only and does not introduce map-only rotation or working-plane rotation
+- ~~Map surface state/overlay/terrain helpers extracted from `MapLibreCanvasSurface`~~ — **done**: state/diagnostic shaping, basemap presentation/bootstrap helpers, overlay coordination, and terrain diff/apply logic now live in dedicated helper modules; `MapLibreCanvasSurface` remains the lifecycle owner
+- ~~Terrain paint-only updates stay incremental~~ — **done**: contour opacity/theme and hillshade opacity now update through paint-property sync instead of forcing full terrain source/layer rebuilds
 - Local-projection backend replacement for larger geodetic use cases — deferred: the current Mercator-backed local frame is the canonical seam, with warning-only guardrails for large designs
 - Follow-up cleanup tasks for a cleaner map architecture:
-  - Map surface simplification: reduce `MapLibreCanvasSurface` responsibilities further once the current exact-sync path stays stable; keep one canonical seam for camera, overlays, terrain, and diagnostics
   - Projection seam cleanup: keep the local-projection backend replaceable, keep the `10 km` warning-only guardrail explicit, and defer geodetic backend work until real usage demands it
   - Validation foundation: keep screen-lock regression coverage for pan, zoom, resize, fit-to-content, document open, and rotated designs; projected overlays must continue validating against the same exact-lock contract as basemap and terrain
-  - Post-hardening architecture pass: audit whether `CanvasRuntime` should split command vs query/projection responsibilities more explicitly, and whether map diagnostics/warning state should stay surface-local or move behind a smaller read-only adapter
+  - Post-hardening architecture pass: audit whether `CanvasRuntime` should split command vs query/projection responsibilities more explicitly, and whether the remaining lifecycle glue in `MapLibreCanvasSurface` should shrink further without creating a second authority
 - PMTiles offline tiles: Rust reader + Tauri custom protocol + download manager UI (see `docs/archive/roadmap.md` 4.2)
 - Contour/hillshade layers via `maplibre-contour` + DEM tiles (see `docs/archive/roadmap.md` 4.3/4.4)
 

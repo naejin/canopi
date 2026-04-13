@@ -6,6 +6,7 @@ import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import { MapLibreCanvasSurface } from '../components/canvas/MapLibreCanvasSurface'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { currentDesign } from '../state/document'
+import { theme } from '../state/app'
 import {
   contourIntervalMeters,
   hillshadeOpacity,
@@ -172,6 +173,7 @@ describe('MapLibreCanvasSurface', () => {
     hillshadeOpacity.value = 0.55
     layerVisibility.value = { base: true }
     layerOpacity.value = { base: 0.6 }
+    theme.value = 'light'
     setCurrentCanvasSession(null)
     mapConstructorMock.mockClear()
     jumpToMock.mockClear()
@@ -697,6 +699,107 @@ describe('MapLibreCanvasSurface', () => {
       expect(setPaintPropertyMock).toHaveBeenCalledWith('basemap-background', 'background-opacity', 0.25)
       expect(setPaintPropertyMock).toHaveBeenCalledWith('openstreetmap-raster', 'raster-opacity', 0.25)
       expect(removeLayerMock).not.toHaveBeenCalledWith('contour-minor')
+    })
+  })
+
+  it('updates contour paint in place without rebuilding terrain sources', async () => {
+    currentDesign.value = {
+      version: 2,
+      name: 'Demo',
+      description: null,
+      location: { lat: 48.8566, lon: 2.3522, altitude_m: null },
+      north_bearing_deg: 12,
+      plant_species_colors: {},
+      layers: [],
+      plants: [],
+      zones: [],
+      annotations: [],
+      consortiums: [],
+      groups: [],
+      timeline: [],
+      budget: [],
+      created_at: '2026-04-12T00:00:00.000Z',
+      updated_at: '2026-04-12T00:00:00.000Z',
+      extra: {},
+    }
+    setCurrentCanvasSession(createRuntime())
+    layerVisibility.value = { base: true, contours: true }
+    layerOpacity.value = { base: 1, contours: 0.5 }
+
+    await act(async () => {
+      render(<MapLibreCanvasSurface />, container)
+    })
+
+    await eventually(() => {
+      expect(addSourceMock).toHaveBeenCalledWith(
+        'terrain-contour-source',
+        expect.objectContaining({ type: 'vector' }),
+      )
+    })
+
+    addSourceMock.mockClear()
+    addLayerMock.mockClear()
+    setPaintPropertyMock.mockClear()
+
+    await act(async () => {
+      layerOpacity.value = { base: 1, contours: 0.7 }
+    })
+
+    await eventually(() => {
+      expect(setPaintPropertyMock).toHaveBeenCalledWith('contour-minor', 'line-opacity', expect.any(Number))
+      expect(setPaintPropertyMock).toHaveBeenCalledWith('contour-major', 'line-opacity', expect.any(Number))
+      expect(addSourceMock).not.toHaveBeenCalled()
+      expect(addLayerMock).not.toHaveBeenCalled()
+    })
+  })
+
+  it('updates contour theme paint in place without rebuilding terrain sources', async () => {
+    currentDesign.value = {
+      version: 2,
+      name: 'Demo',
+      description: null,
+      location: { lat: 48.8566, lon: 2.3522, altitude_m: null },
+      north_bearing_deg: 12,
+      plant_species_colors: {},
+      layers: [],
+      plants: [],
+      zones: [],
+      annotations: [],
+      consortiums: [],
+      groups: [],
+      timeline: [],
+      budget: [],
+      created_at: '2026-04-12T00:00:00.000Z',
+      updated_at: '2026-04-12T00:00:00.000Z',
+      extra: {},
+    }
+    setCurrentCanvasSession(createRuntime())
+    layerVisibility.value = { base: true, contours: true }
+
+    await act(async () => {
+      render(<MapLibreCanvasSurface />, container)
+    })
+
+    await eventually(() => {
+      expect(addSourceMock).toHaveBeenCalledWith(
+        'terrain-contour-source',
+        expect.objectContaining({ type: 'vector' }),
+      )
+    })
+
+    addSourceMock.mockClear()
+    addLayerMock.mockClear()
+    setPaintPropertyMock.mockClear()
+
+    await act(async () => {
+      theme.value = 'dark'
+    })
+
+    await eventually(() => {
+      expect(setPaintPropertyMock).toHaveBeenCalledWith('contour-minor', 'line-color', expect.any(String))
+      expect(setPaintPropertyMock).toHaveBeenCalledWith('contour-major', 'line-color', expect.any(String))
+      expect(addSourceMock).not.toHaveBeenCalled()
+      expect(addLayerMock).not.toHaveBeenCalled()
     })
   })
 

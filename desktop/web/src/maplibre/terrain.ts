@@ -43,6 +43,34 @@ function withAlpha(hex: string, opacity: number): string {
   return `rgba(${r}, ${g}, ${b}, ${Math.min(1, Math.max(0, opacity))})`
 }
 
+export function buildHillshadePaint(state: TerrainLayerState): Record<string, unknown> {
+  const hillshade = getHillshadeLayerConfig(0.6)
+  return {
+    ...hillshade.paint,
+    'hillshade-shadow-color': withAlpha('#5a4a3a', state.hillshadeOpacity),
+    'hillshade-highlight-color': withAlpha('#faf7f2', state.hillshadeOpacity),
+    'hillshade-accent-color': withAlpha('#8b7355', state.hillshadeOpacity),
+  }
+}
+
+export function buildContourPaints(
+  state: TerrainLayerState,
+): { minor: Record<string, unknown>; major: Record<string, unknown> } {
+  const contourLayers = getContourLayerConfigs(state.isDark)
+  const minorOpacity = Number(contourLayers.minor.paint['line-opacity'] ?? 1) * state.contoursOpacity
+  const majorOpacity = Number(contourLayers.major.paint['line-opacity'] ?? 1) * state.contoursOpacity
+  return {
+    minor: {
+      ...contourLayers.minor.paint,
+      'line-opacity': minorOpacity,
+    },
+    major: {
+      ...contourLayers.major.paint,
+      'line-opacity': majorOpacity,
+    },
+  }
+}
+
 export function createTerrainSources(
   protocols: TerrainProtocolSupport,
   state: TerrainLayerState,
@@ -82,34 +110,22 @@ export function createTerrainLayers(
     layers.push({
       ...hillshade,
       source: TERRAIN_DEM_SOURCE_ID,
-      paint: {
-        ...hillshade.paint,
-        'hillshade-shadow-color': withAlpha('#5a4a3a', state.hillshadeOpacity),
-        'hillshade-highlight-color': withAlpha('#faf7f2', state.hillshadeOpacity),
-        'hillshade-accent-color': withAlpha('#8b7355', state.hillshadeOpacity),
-      },
+      paint: buildHillshadePaint(state),
     })
   }
 
   if (state.contoursVisible) {
     const contourLayers = getContourLayerConfigs(state.isDark)
-    const minorOpacity = Number(contourLayers.minor.paint['line-opacity'] ?? 1) * state.contoursOpacity
-    const majorOpacity = Number(contourLayers.major.paint['line-opacity'] ?? 1) * state.contoursOpacity
+    const paints = buildContourPaints(state)
     layers.push({
       ...contourLayers.minor,
       source: TERRAIN_CONTOUR_SOURCE_ID,
-      paint: {
-        ...contourLayers.minor.paint,
-        'line-opacity': minorOpacity,
-      },
+      paint: paints.minor,
     })
     layers.push({
       ...contourLayers.major,
       source: TERRAIN_CONTOUR_SOURCE_ID,
-      paint: {
-        ...contourLayers.major.paint,
-        'line-opacity': majorOpacity,
-      },
+      paint: paints.major,
     })
   }
 

@@ -3,27 +3,30 @@ import { useEffect, useRef } from 'preact/hooks'
 import { currentCanvasSession } from '../../canvas/session'
 import { createMapFrame, type MapFrame } from '../../canvas/maplibre-camera'
 import {
-  TERRAIN_CONTOUR_LAYER_IDS,
-  TERRAIN_CONTOUR_SOURCE_ID,
-  TERRAIN_DEM_SOURCE_ID,
-  TERRAIN_HILLSHADE_LAYER_ID,
-  createTerrainLayers,
-  createTerrainSources,
   type TerrainLayerState,
 } from '../../maplibre/terrain'
 import { loadMapLibreTerrainSupport } from '../../maplibre/terrain-loader'
+import { MAPLIBRE_BASEMAP_SOURCE_ID } from '../../maplibre/config'
+import { syncCanvasPanelTargetOverlays } from '../../maplibre/canvas-overlays'
 import {
-  buildPanelTargetProjectionScene,
-  createPanelTargetMapOverlayContract,
-} from '../../maplibre/panel-target-overlays'
-import { clearPanelTargetMapOverlay, syncPanelTargetMapOverlay } from '../../maplibre/panel-target-overlay-sync'
+  IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
+  mapLibreCanvasSurfaceStateEquals,
+  mergeMapLibreCanvasSurfaceState,
+  precisionSnapshot,
+  publishMapDiagnostics,
+  type MapLibreCanvasSurfaceState,
+  type MapLibreCanvasSurfaceStateInput,
+} from '../../maplibre/canvas-surface-state'
 import {
-  MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
-  MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
-  createDefaultMapLibreBasemapStyle,
-  MAPLIBRE_BASEMAP_SOURCE_ID,
-  REMOTE_BASEMAP_TILE_URL_TEMPLATE,
-} from '../../maplibre/config'
+  createCanvasMapLibreMap,
+  syncBasemapPresentation as applyBasemapPresentation,
+} from '../../maplibre/canvas-basemap'
+import {
+  applyTerrainPaintUpdates,
+  classifyTerrainSync,
+  clearTerrain,
+  rebuildTerrain,
+} from '../../maplibre/terrain-sync'
 import {
   contourIntervalMeters,
   hasVisibleMapLayer,
@@ -38,71 +41,10 @@ import {
 } from '../../state/canvas'
 import { theme } from '../../state/app'
 import { currentDesign } from '../../state/document'
-import { projectPanelTargetsToMapFeatures } from '../../panel-target-map-projection'
-import type { ScenePersistedState } from '../../canvas/runtime/scene'
 import { loadMapLibre, type MapLibreApi, type MapLibreMapInstance } from './maplibre-loader'
 import styles from './MapLibreCanvasSurface.module.css'
 
-export type MapLibreCanvasSurfaceStatus = 'idle' | 'loading' | 'ready' | 'error'
-
-export interface MapLibreCanvasSurfaceState {
-  readonly status: MapLibreCanvasSurfaceStatus
-  readonly errorMessage: string | null
-  readonly terrainStatus: MapLibreCanvasSurfaceStatus
-  readonly terrainErrorMessage: string | null
-  readonly precisionWarning: boolean
-  readonly designExtentMeters: number | null
-}
-
-type MapLibreCanvasSurfaceStateInput = Omit<
-  MapLibreCanvasSurfaceState,
-  'precisionWarning' | 'designExtentMeters'
->
-
-const IDLE_STATE: MapLibreCanvasSurfaceState = {
-  status: 'idle',
-  errorMessage: null,
-  terrainStatus: 'idle',
-  terrainErrorMessage: null,
-  precisionWarning: false,
-  designExtentMeters: null,
-}
-
-const LOCAL_PROJECTION_WARNING_THRESHOLD_METERS = 10_000
-
-function computeSceneExtentMeters(scene: ScenePersistedState): number | null {
-  let maxDistanceMeters = 0
-  let hasGeometry = false
-
-  const includePoint = (x: number, y: number) => {
-    hasGeometry = true
-    maxDistanceMeters = Math.max(maxDistanceMeters, Math.hypot(x, y))
-  }
-
-  for (const plant of scene.plants) includePoint(plant.position.x, plant.position.y)
-  for (const zone of scene.zones) {
-    for (const point of zone.points) includePoint(point.x, point.y)
-  }
-  for (const annotation of scene.annotations) includePoint(annotation.position.x, annotation.position.y)
-  for (const group of scene.groups) includePoint(group.position.x, group.position.y)
-
-  return hasGeometry ? maxDistanceMeters : null
-}
-
-function publishMapDiagnostics(frame: MapFrame | null, designExtentMeters: number | null): void {
-  if (!import.meta.env.DEV) return
-  ;(globalThis as { __CANOPI_MAP_DEBUG__?: unknown }).__CANOPI_MAP_DEBUG__ = frame
-    ? {
-      center: frame.center,
-      zoom: frame.zoom,
-      bearing: frame.bearing,
-      viewportCenterWorld: frame.diagnostics.viewportCenterWorld,
-      viewportCornerGeo: frame.diagnostics.viewportCornerGeo,
-      designExtentMeters,
-      precisionWarning: designExtentMeters != null && designExtentMeters > LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
-    }
-    : null
-}
+export type { MapLibreCanvasSurfaceState } from '../../maplibre/canvas-surface-state'
 
 export function MapLibreCanvasSurface({
   onStateChange,
@@ -117,39 +59,18 @@ export function MapLibreCanvasSurface({
   const cameraRef = useRef<MapFrame | null>(null)
   const terrainStateRef = useRef<TerrainLayerState | null>(null)
   const terrainGenerationRef = useRef(0)
-  const stateRef = useRef<MapLibreCanvasSurfaceState>(IDLE_STATE)
+  const stateRef = useRef<MapLibreCanvasSurfaceState>(IDLE_MAPLIBRE_CANVAS_SURFACE_STATE)
   const detachMapEventsRef = useRef<(() => void) | null>(null)
 
-  const precisionSnapshot = (): Pick<MapLibreCanvasSurfaceState, 'precisionWarning' | 'designExtentMeters'> => {
-    const scene = currentCanvasSession.peek()?.getSceneStore().persisted ?? null
-    const designExtentMeters = scene ? computeSceneExtentMeters(scene) : null
-    return {
-      precisionWarning: designExtentMeters != null && designExtentMeters > LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
-      designExtentMeters,
-    }
-  }
-
   const setSurfaceState = (next: MapLibreCanvasSurfaceStateInput): void => {
-    const merged = {
-      ...next,
-      ...precisionSnapshot(),
-    }
-    const previous = stateRef.current
-    if (
-      previous.status === merged.status
-      && previous.errorMessage === merged.errorMessage
-      && previous.terrainStatus === merged.terrainStatus
-      && previous.terrainErrorMessage === merged.terrainErrorMessage
-      && previous.precisionWarning === merged.precisionWarning
-      && previous.designExtentMeters === merged.designExtentMeters
-    ) {
-      return
-    }
+    const scene = currentCanvasSession.peek()?.getSceneStore().persisted ?? null
+    const merged = mergeMapLibreCanvasSurfaceState(next, scene)
+    if (mapLibreCanvasSurfaceStateEquals(stateRef.current, merged)) return
     stateRef.current = merged
     onStateChange?.(merged)
   }
 
-  const destroyMap = (nextState: MapLibreCanvasSurfaceStateInput = IDLE_STATE): void => {
+  const destroyMap = (nextState: MapLibreCanvasSurfaceStateInput = IDLE_MAPLIBRE_CANVAS_SURFACE_STATE): void => {
     generationRef.current += 1
     detachMapEventsRef.current?.()
     detachMapEventsRef.current = null
@@ -166,18 +87,6 @@ export function MapLibreCanvasSurface({
     setSurfaceState(nextState)
   }
 
-  const clearTerrain = (map: MapLibreMapInstance): void => {
-    const terrainLayerIds = [
-      ...TERRAIN_CONTOUR_LAYER_IDS,
-      TERRAIN_HILLSHADE_LAYER_ID,
-    ]
-    for (const layerId of terrainLayerIds) {
-      if (map.getLayer(layerId)) map.removeLayer(layerId)
-    }
-    if (map.getSource(TERRAIN_CONTOUR_SOURCE_ID)) map.removeSource(TERRAIN_CONTOUR_SOURCE_ID)
-    if (map.getSource(TERRAIN_DEM_SOURCE_ID)) map.removeSource(TERRAIN_DEM_SOURCE_ID)
-  }
-
   const toErrorMessage = (error: unknown): string => {
     if (error instanceof Error && error.message) return error.message
     if (typeof error === 'string' && error.length > 0) return error
@@ -188,7 +97,8 @@ export function MapLibreCanvasSurface({
   }
 
   const syncPrecisionState = (): void => {
-    const nextPrecision = precisionSnapshot()
+    const scene = currentCanvasSession.peek()?.getSceneStore().persisted ?? null
+    const nextPrecision = precisionSnapshot(scene)
     setSurfaceState(stateRef.current)
     publishMapDiagnostics(cameraRef.current, nextPrecision.designExtentMeters)
   }
@@ -219,26 +129,13 @@ export function MapLibreCanvasSurface({
     publishMapDiagnostics(next, stateRef.current.designExtentMeters)
   }
 
-  const isStyleReady = (map: MapLibreMapInstance): boolean => {
-    const isStyleLoaded = map.isStyleLoaded?.()
-    if (typeof isStyleLoaded === 'boolean') return isStyleLoaded
-    return stateRef.current.status === 'ready'
-  }
-
   const syncBasemapPresentation = (map: MapLibreMapInstance): void => {
-    if (!isStyleReady(map)) return
-
     const basemapVisible = layerVisibility.peek().base ?? true
-    const basemapOpacity = basemapVisible ? (layerOpacity.peek().base ?? 1) : 0
-    map.setPaintProperty?.(
-      MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
-      'background-opacity',
-      basemapOpacity,
-    )
-    map.setPaintProperty?.(
-      MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
-      'raster-opacity',
-      basemapOpacity,
+    applyBasemapPresentation(
+      map,
+      stateRef.current.status,
+      basemapVisible,
+      layerOpacity.peek().base ?? 1,
     )
   }
 
@@ -246,31 +143,22 @@ export function MapLibreCanvasSurface({
     const map = mapRef.current
     const runtime = currentCanvasSession.peek()
     const location = currentDesign.peek()?.location ?? null
-    if (!map || !runtime || !location || stateRef.current.status !== 'ready') {
-      if (map) {
-        clearPanelTargetMapOverlay(map, 'hover')
-        clearPanelTargetMapOverlay(map, 'selection')
-      }
-      return
-    }
+    if (!map) return
 
-    const scene = buildPanelTargetProjectionScene(runtime.getSceneStore().persisted)
-    const projectionLocation = {
-      lat: location.lat,
-      lon: location.lon,
-      northBearingDeg: northBearingDeg.peek(),
-    }
-    const hoverOverlay = createPanelTargetMapOverlayContract(
-      'hover',
-      projectPanelTargetsToMapFeatures(hoveredPanelTargets.peek(), scene, projectionLocation),
+    syncCanvasPanelTargetOverlays(
+      map,
+      runtime?.getSceneStore().persisted ?? null,
+      location
+        ? {
+            lat: location.lat,
+            lon: location.lon,
+            northBearingDeg: northBearingDeg.peek(),
+          }
+        : null,
+      hoveredPanelTargets.peek(),
+      selectedPanelTargets.peek(),
+      stateRef.current.status === 'ready',
     )
-    const selectionOverlay = createPanelTargetMapOverlayContract(
-      'selection',
-      projectPanelTargetsToMapFeatures(selectedPanelTargets.peek(), scene, projectionLocation),
-    )
-
-    syncPanelTargetMapOverlay(map, selectionOverlay)
-    syncPanelTargetMapOverlay(map, hoverOverlay)
   }
 
   const syncTerrain = async (): Promise<void> => {
@@ -287,7 +175,10 @@ export function MapLibreCanvasSurface({
       isDark: theme.peek() === 'dark',
     }
 
-    if (!nextTerrainState.contoursVisible && !nextTerrainState.hillshadeVisible) {
+    const syncMode = classifyTerrainSync(terrainStateRef.current, nextTerrainState)
+    if (syncMode === 'noop') return
+
+    if (syncMode === 'clear') {
       terrainGenerationRef.current += 1
       clearTerrain(map)
       terrainStateRef.current = null
@@ -299,16 +190,14 @@ export function MapLibreCanvasSurface({
       return
     }
 
-    const previousTerrainState = terrainStateRef.current
-    if (
-      previousTerrainState
-      && previousTerrainState.contourIntervalMeters === nextTerrainState.contourIntervalMeters
-      && previousTerrainState.contoursVisible === nextTerrainState.contoursVisible
-      && previousTerrainState.contoursOpacity === nextTerrainState.contoursOpacity
-      && previousTerrainState.hillshadeVisible === nextTerrainState.hillshadeVisible
-      && previousTerrainState.hillshadeOpacity === nextTerrainState.hillshadeOpacity
-      && previousTerrainState.isDark === nextTerrainState.isDark
-    ) {
+    if (syncMode === 'paint') {
+      applyTerrainPaintUpdates(map, nextTerrainState)
+      terrainStateRef.current = nextTerrainState
+      setSurfaceState({
+        ...stateRef.current,
+        terrainStatus: 'ready',
+        terrainErrorMessage: null,
+      })
       return
     }
 
@@ -332,16 +221,7 @@ export function MapLibreCanvasSurface({
         return
       }
 
-      clearTerrain(map)
-
-      const terrainSources = createTerrainSources(protocols, nextTerrainState)
-      for (const { id, source } of terrainSources) {
-        map.addSource(id, source)
-      }
-      const terrainLayers = createTerrainLayers(nextTerrainState)
-      for (const layer of terrainLayers) {
-        map.addLayer(layer)
-      }
+      rebuildTerrain(map, protocols, nextTerrainState)
       terrainStateRef.current = nextTerrainState
       setSurfaceState({
         ...stateRef.current,
@@ -400,18 +280,7 @@ export function MapLibreCanvasSurface({
       if (generation !== generationRef.current) return
       mapLibreApiRef.current = maplibre
 
-      const map = new maplibre.Map({
-        container: surface,
-        style: createDefaultMapLibreBasemapStyle(REMOTE_BASEMAP_TILE_URL_TEMPLATE),
-        center: initialCamera ? [initialCamera.center[0], initialCamera.center[1]] : undefined,
-        zoom: initialCamera?.zoom,
-        bearing: initialCamera?.bearing,
-        attributionControl: false,
-        interactive: false,
-        pitchWithRotate: false,
-        dragRotate: false,
-        touchZoomRotate: false,
-      })
+      const map = createCanvasMapLibreMap(maplibre, surface, initialCamera)
       if (generation !== generationRef.current) {
         map.remove()
         return
@@ -452,8 +321,7 @@ export function MapLibreCanvasSurface({
           terrainStatus: 'idle',
           terrainErrorMessage: null,
         })
-        clearPanelTargetMapOverlay(map, 'hover')
-        clearPanelTargetMapOverlay(map, 'selection')
+        syncCanvasPanelTargetOverlays(map, null, null, [], [], false)
       }
 
       map.on('load', handleLoad)

@@ -104,6 +104,7 @@ The save path composes both into a single `CanopiFile`. Neither authority should
 - **Map/canvas projection is bearing-aware, Mercator-backed, and shared.** `north_bearing_deg` participates in both camera derivation and world↔geo feature projection; do not keep separate bearing math or alternate zoom math in `MapLibreCanvasSurface` or overlay code
 - **Exact sync means no skipped viewport updates.** Do not add camera deadbands/tolerances in `MapLibreCanvasSurface` or other map consumers that can suppress tiny pan/zoom changes
 - **MapLibre bearing adaptation lives at the camera seam.** Preserve document `north_bearing_deg` semantics; if MapLibre-facing bearing handling changes, adapt it inside `canvas/maplibre-camera.ts`, not in panel overlays, canvas state, or document serialization
+- Keep the in-canvas map surface thin. `MapLibreCanvasSurface` owns lifecycle only; helper modules under `desktop/web/src/maplibre/` should own state shaping, basemap presentation, overlay coordination, and terrain diff/apply logic
 - The lazy import boundary around `maplibre-gl` should be preserved for bundle size
 - Rendered panel-map overlays, and any richer future variants, must consume the pure `projectPanelTargetsToMapFeatures()` seam rather than re-resolving panel identity or making MapLibre a second scene/document authority
 
