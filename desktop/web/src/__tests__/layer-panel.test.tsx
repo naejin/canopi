@@ -14,6 +14,7 @@ import {
   layerPanelOpen,
   layerVisibility,
 } from '../app/canvas-settings/signals'
+import { basemapStyle } from '../app/settings/state'
 import { setSettings } from '../ipc/settings'
 import { currentDesign } from '../state/design'
 import { locale } from '../app/settings/state'
@@ -21,9 +22,12 @@ import { flushQueuedSettingsPersist, setBootstrappedSettings } from '../app/sett
 
 describe('LayerPanel', () => {
   let container: HTMLDivElement
+  let originalMapTilerKey: string | undefined
 
   beforeEach(() => {
     vi.useFakeTimers()
+    originalMapTilerKey = import.meta.env.VITE_MAPTILER_KEY
+    ;(import.meta.env as { VITE_MAPTILER_KEY?: string }).VITE_MAPTILER_KEY = 'test-maptiler-key'
     container = document.createElement('div')
     document.body.innerHTML = ''
     document.body.appendChild(container)
@@ -50,6 +54,7 @@ describe('LayerPanel', () => {
     }
     layerPanelOpen.value = true
     activeLayerName.value = 'base'
+    basemapStyle.value = 'street'
     layerVisibility.value = { base: true, contours: false, plants: true, zones: true, annotations: true }
     layerOpacity.value = { base: 1, contours: 1, plants: 1, zones: 1, annotations: 1 }
     contourIntervalMeters.value = 0
@@ -86,6 +91,7 @@ describe('LayerPanel', () => {
   })
 
   afterEach(() => {
+    ;(import.meta.env as { VITE_MAPTILER_KEY?: string }).VITE_MAPTILER_KEY = originalMapTilerKey
     flushQueuedSettingsPersist()
     vi.runOnlyPendingTimers()
     vi.useRealTimers()
@@ -112,6 +118,28 @@ describe('LayerPanel', () => {
     })
 
     expect(layerVisibility.value.base).toBe(false)
+  })
+
+  it('persists the selected basemap style from the base layer controls', async () => {
+    await act(async () => {
+      render(<LayerPanel />, container)
+    })
+
+    const basemapSelect = container.querySelector<HTMLSelectElement>('select')
+    expect(basemapSelect).toBeTruthy()
+
+    await act(async () => {
+      if (!basemapSelect) return
+      basemapSelect.value = 'satellite'
+      basemapSelect.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+
+    expect(basemapStyle.value).toBe('satellite')
+    vi.runAllTimers()
+    await Promise.resolve()
+    expect(vi.mocked(setSettings)).toHaveBeenCalledWith(expect.objectContaining({
+      map_style: 'satellite',
+    }))
   })
 
   it('exposes terrain controls without coupling them to the basemap toggle', async () => {

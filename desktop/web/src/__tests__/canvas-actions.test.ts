@@ -16,6 +16,7 @@ import {
 } from '../app/canvas-settings/bottom-panel-state'
 import {
   openBottomPanel,
+  setBasemapStyle,
   setBottomPanelTab,
   setContourIntervalMeters,
   setHillshadeOpacity,
@@ -23,6 +24,7 @@ import {
   toggleHillshadeVisibility,
   toggleLayerVisibility,
 } from '../app/canvas-settings/controller'
+import { basemapStyle } from '../app/settings/state'
 import { flushQueuedSettingsPersist, setBootstrappedSettings } from '../app/settings/persistence'
 
 beforeEach(() => {
@@ -32,6 +34,7 @@ beforeEach(() => {
   contourIntervalMeters.value = 0
   hillshadeVisible.value = false
   hillshadeOpacity.value = 0.55
+  basemapStyle.value = 'street'
   layerVisibility.value = { base: true, contours: false, plants: true, zones: true, annotations: true }
   layerOpacity.value = { base: 1, contours: 1, plants: 1, zones: 1, annotations: 1 }
   vi.mocked(setSettings).mockClear()
@@ -128,6 +131,7 @@ describe('bottom panel actions', () => {
 
     expect(layerVisibility.value.base).toBe(false)
     expect(layerOpacity.value.base).toBe(0.35)
+    expect(basemapStyle.value).toBe('street')
     expect(layerVisibility.value.contours).toBe(true)
     expect(layerOpacity.value.contours).toBe(0.45)
     expect(contourIntervalMeters.value).toBe(12)
@@ -137,6 +141,7 @@ describe('bottom panel actions', () => {
 
   it('persists basemap, contour, and hillshade controls independently', async () => {
     toggleLayerVisibility('base')
+    setBasemapStyle('satellite')
     setLayerOpacity('contours', 0.4)
     setContourIntervalMeters(18)
     toggleHillshadeVisibility()
@@ -147,6 +152,7 @@ describe('bottom panel actions', () => {
 
     expect(vi.mocked(setSettings)).toHaveBeenCalledWith(expect.objectContaining({
       map_layer_visible: false,
+      map_style: 'satellite',
       map_opacity: 1,
       contour_visible: false,
       contour_opacity: 0.4,

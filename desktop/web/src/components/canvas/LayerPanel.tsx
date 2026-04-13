@@ -4,6 +4,7 @@ import { layerPanelView } from '../../app/canvas-settings/state'
 import { currentDesign } from '../../state/design'
 import {
   setActiveLayer,
+  setBasemapStyle,
   setContourIntervalMeters,
   setHillshadeOpacity,
   setLayerOpacity,
@@ -11,7 +12,10 @@ import {
   toggleLayerPanel,
   toggleLayerVisibility,
 } from '../../app/canvas-settings/controller'
+import { basemapStyle } from '../../app/settings/state'
+import { isBasemapStyleSupported } from '../../maplibre/config'
 import { formatLocationSummary } from '../../utils/location'
+import type { BasemapStyle } from '../../generated/contracts'
 import styles from './LayerPanel.module.css'
 
 const ALL_LAYERS = ['annotations', 'plants', 'zones', 'base', 'contours', 'hillshading'] as const
@@ -162,6 +166,7 @@ function LayerDetail({ name, hasLocation, location, contourIntervalMeters, hills
 }) {
   switch (name) {
     case 'base':
+      const satelliteAvailable = isBasemapStyleSupported('satellite')
       return (
         <div className={styles.layerDetail}>
           <div className={styles.locationCard} data-has-location={hasLocation ? 'true' : 'false'}>
@@ -171,6 +176,19 @@ function LayerDetail({ name, hasLocation, location, contourIntervalMeters, hills
             <span className={styles.locationCardText}>
               {hasLocation && location ? formatLocationSummary(location) : t('canvas.layers.setLocation')}
             </span>
+          </div>
+          <div className={styles.controlRow}>
+            <span className={styles.controlLabel}>{t('canvas.layers.basemap')}</span>
+            <select
+              className={styles.selectInput}
+              value={basemapStyle.value}
+              onInput={(event) => {
+                setBasemapStyle((event.target as HTMLSelectElement).value as BasemapStyle)
+              }}
+            >
+              <option value="street">{t('canvas.layers.styleStreet')}</option>
+              <option value="satellite" disabled={!satelliteAvailable}>{t('canvas.layers.styleSatellite')}</option>
+            </select>
           </div>
           <OpacitySlider layer="base" disabled={!hasLocation} layerOpacity={layerOpacity} />
         </div>
