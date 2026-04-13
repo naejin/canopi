@@ -98,6 +98,11 @@ export function useMapLibreCanvasSurfaceController({
     publishMapDiagnostics(cameraRef.current, nextPrecision.designExtentMeters)
   }
 
+  const ownsCurrentMapGeneration = (
+    map: MapLibreMapInstance,
+    generation: number,
+  ): boolean => generation === generationRef.current && map === mapRef.current
+
   const applyCamera = (
     map: MapLibreMapInstance,
     runtime: ReturnType<typeof currentCanvasSession.peek>,
@@ -270,6 +275,7 @@ export function useMapLibreCanvasSurfaceController({
       }
 
       const markBasemapReady = (): void => {
+        if (!ownsCurrentMapGeneration(map, generation)) return
         if (stateRef.current.status === 'ready') return
         setSurfaceState({
           status: 'ready',
@@ -283,6 +289,7 @@ export function useMapLibreCanvasSurfaceController({
       }
 
       const maybeMarkBasemapReady = (event?: unknown): void => {
+        if (!ownsCurrentMapGeneration(map, generation)) return
         const sourceId = typeof event === 'object' && event && 'sourceId' in event
           ? (event as { sourceId?: unknown }).sourceId
           : undefined
@@ -292,11 +299,13 @@ export function useMapLibreCanvasSurfaceController({
       }
 
       const handleLoad = (): void => {
+        if (!ownsCurrentMapGeneration(map, generation)) return
         applyCamera(map, currentCanvasSession.peek(), currentDesign.peek()?.location ?? null, northBearingDeg.peek())
         maybeMarkBasemapReady()
       }
 
       const handleError = (event?: unknown): void => {
+        if (!ownsCurrentMapGeneration(map, generation)) return
         if (stateRef.current.status === 'ready') {
           console.error('MapLibre surface error:', event)
           return
@@ -325,10 +334,10 @@ export function useMapLibreCanvasSurfaceController({
 
       resizeObserverRef.current?.disconnect()
       resizeObserverRef.current = new ResizeObserver(() => {
-        if (!mapRef.current) return
-        mapRef.current.resize()
+        if (!ownsCurrentMapGeneration(map, generation)) return
+        map.resize()
         applyCamera(
-          mapRef.current,
+          map,
           currentCanvasSession.peek(),
           currentDesign.peek()?.location ?? null,
           northBearingDeg.peek(),
