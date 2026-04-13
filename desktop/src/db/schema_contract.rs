@@ -22,3 +22,27 @@ pub(crate) const REQUIRED_APP_TRANSLATION_FIELDS: &[&str] = &[
     "seed_dormancy_type",
     "toxicity",
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::{EXPECTED_PLANT_SCHEMA_VERSION, REQUIRED_APP_TRANSLATION_FIELDS};
+    use crate::db::test_support::load_schema_contract_fixture;
+
+    #[test]
+    fn test_expected_schema_version_matches_contract() {
+        let contract = load_schema_contract_fixture();
+        assert_eq!(contract.schema_version, EXPECTED_PLANT_SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn test_required_app_translation_fields_exist_in_contract() {
+        let contract = load_schema_contract_fixture();
+
+        for field in REQUIRED_APP_TRANSLATION_FIELDS {
+            assert!(
+                contract.translations.contains_key(*field),
+                "required contract translation field '{field}' missing from schema contract"
+            );
+        }
+    }
+}

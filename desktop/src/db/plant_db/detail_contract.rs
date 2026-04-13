@@ -187,3 +187,27 @@ pub(super) fn detail_query_sql() -> &'static str {
         })
         .as_str()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::detail_contract_columns;
+    use crate::db::test_support::load_schema_contract_fixture;
+    use std::collections::HashSet;
+
+    #[test]
+    fn test_detail_projection_columns_exist_in_contract() {
+        let contract = load_schema_contract_fixture();
+        let contract_columns: HashSet<String> = contract
+            .columns
+            .into_iter()
+            .map(|column| column.name)
+            .collect();
+
+        for column in detail_contract_columns() {
+            assert!(
+                contract_columns.contains(*column),
+                "detail projection column '{column}' missing from schema contract"
+            );
+        }
+    }
+}
