@@ -1,4 +1,6 @@
 pub mod design_files;
+pub mod geocoding;
+pub mod health;
 pub mod plant_browser;
 pub mod settings;
 pub mod species_catalog;
