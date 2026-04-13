@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CanvasToolbar } from '../components/canvas/CanvasToolbar'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { plantColorMenuOpen } from '../canvas/plant-color-menu-state'
-import { selectedObjectIds } from '../state/canvas'
+import { selectedObjectIds } from '../canvas/session-state'
 
 describe('CanvasToolbar plant color action', () => {
   let container: HTMLDivElement

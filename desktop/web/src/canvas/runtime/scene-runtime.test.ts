@@ -6,17 +6,16 @@ vi.mock('../../ipc/species', () => ({
   getCommonNames: vi.fn(async () => ({})),
 }))
 import {
-  activeTool,
   guides,
   layerOpacity,
   layerVisibility,
   lockedObjectIds,
-  selectedObjectIds,
   snapToGridEnabled,
 } from '../../state/canvas'
 import { plantColorMenuOpen } from '../plant-color-menu-state'
 import { plantColorByAttr, plantSizeMode } from '../plant-display-state'
 import { plantStampSpecies } from '../plant-tool-state'
+import { activeTool, selectedObjectIds } from '../session-state'
 import {
   hoveredCanvasTargets,
   hoveredPanelTargets,

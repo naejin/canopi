@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { lockedObjectIds, selectedObjectIds } from '../state/canvas'
+import { lockedObjectIds } from '../state/canvas'
+import { selectedObjectIds } from '../canvas/session-state'
 import { clearCanvasSelection } from '../canvas/session-state'
 import { SceneCanvasRuntime } from '../canvas/runtime/scene-runtime'
 import type { CanopiFile } from '../types/design'

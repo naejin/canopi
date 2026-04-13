@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import { hoveredPanelTargets, selectedPanelTargets } from '../app/panel-targets/state'
-import { selectedObjectIds } from '../state/canvas'
+import { selectedObjectIds } from '../canvas/session-state'
 import { resolvePanelTargets } from '../panel-target-resolution'
 import { projectPanelTargetsToMapFeatures } from '../panel-target-map-projection'
 import { createPanelTargetMapOverlayContract, buildPanelTargetProjectionScene } from '../maplibre/panel-target-overlays'

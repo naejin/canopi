@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PlantColorMenu } from '../components/canvas/PlantColorMenu'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { plantColorMenuOpen } from '../canvas/plant-color-menu-state'
-import { selectedObjectIds } from '../state/canvas'
+import { selectedObjectIds } from '../canvas/session-state'
 
 describe('PlantColorMenu', () => {
   let container: HTMLDivElement

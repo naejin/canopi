@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { activeTool } from '../state/canvas'
+import { activeTool } from '../canvas/session-state'
 import { activePanel, sidePanel } from '../app/shell/state'
 import { theme } from '../app/settings/state'
 import { setCurrentCanvasSession } from '../canvas/session'

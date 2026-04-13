@@ -52,10 +52,9 @@ vi.mock('../i18n', () => ({
 }))
 
 import {
-  activeTool,
   lockedObjectIds,
-  selectedObjectIds,
 } from '../state/canvas'
+import { activeTool, selectedObjectIds } from '../canvas/session-state'
 import {
   currentDesign,
   designName,

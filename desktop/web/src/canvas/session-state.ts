@@ -1,5 +1,8 @@
-import { computed } from '@preact/signals'
-import { activeTool, canvasReady, selectedObjectIds } from '../state/canvas'
+import { computed, signal } from '@preact/signals'
+
+export const activeTool = signal<string>('select')
+export const canvasReady = signal<boolean>(false)
+export const selectedObjectIds = signal<Set<string>>(new Set())
 
 // UI mirror state only. SceneCanvasRuntime owns authoritative canvas selection.
 export function getCanvasTool(): string {
@@ -12,7 +15,7 @@ export function setCanvasTool(name: string): void {
 
 // Re-export the signal directly — wrapping in computed() adds an extra reactive
 // node with no behavioral difference since computed(() => signal.value) === signal.
-export { activeTool as canvasToolState } from '../state/canvas'
+export { activeTool as canvasToolState }
 
 export function getCanvasSelection(): Set<string> {
   return new Set(selectedObjectIds.value)
@@ -25,7 +28,7 @@ export function setCanvasSelection(ids: Iterable<string>): void {
   selectedObjectIds.value = next
 }
 
-export { selectedObjectIds as canvasSelectionState } from '../state/canvas'
+export { selectedObjectIds as canvasSelectionState }
 
 export function clearCanvasSelection(): void {
   if (selectedObjectIds.value.size === 0) return
@@ -47,4 +50,4 @@ export function isCanvasReady(): boolean {
   return canvasReady.value
 }
 
-export { canvasReady as canvasReadyState } from '../state/canvas'
+export { canvasReady as canvasReadyState }

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { plantStampSpecies } from '../canvas/plant-tool-state'
-import { selectedObjectIds, snapToGridEnabled } from '../state/canvas'
+import { selectedObjectIds } from '../canvas/session-state'
+import { snapToGridEnabled } from '../state/canvas'
 import { CameraController } from '../canvas/runtime/camera'
 import { SceneStore } from '../canvas/runtime/scene'
 import { SceneInteractionController, type SceneInteractionDeps } from '../canvas/runtime/scene-interaction'
