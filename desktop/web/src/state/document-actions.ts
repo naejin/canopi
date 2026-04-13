@@ -4,7 +4,7 @@ import { getCurrentCanvasSession } from '../canvas/session'
 import type { CanvasRuntime } from '../canvas/runtime/runtime'
 import * as designIpc from '../ipc/design'
 import { t } from '../i18n'
-import { extractExtra } from './document-extra'
+import { normalizeLoadedDocument, normalizeNewDocument } from '../app/contracts/document'
 import {
   currentDesign,
   designDirty,
@@ -280,18 +280,6 @@ function applyDocumentReplacement(
   session.clearHistory()
   session.showCanvasChrome()
   session.zoomToFit()
-}
-
-function normalizeDocument(file: CanopiFile, extra: Record<string, unknown>): CanopiFile {
-  return { ...file, extra }
-}
-
-function normalizeLoadedDocument(file: CanopiFile): CanopiFile {
-  return normalizeDocument(file, extractExtra(file as unknown as Record<string, unknown>))
-}
-
-function normalizeNewDocument(file: CanopiFile): CanopiFile {
-  return normalizeDocument(file, {})
 }
 
 function nameFromPath(path: string): string {

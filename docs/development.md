@@ -14,6 +14,12 @@ npm run dev
 # TypeScript check (from desktop/web/)
 npx tsc --noEmit
 
+# Regenerate shared transport bindings (from desktop/web/)
+npm run gen:types
+
+# Verify generated transport bindings are up to date (from desktop/web/)
+npm run check:types
+
 # Frontend tests (from desktop/web/)
 npm test
 
