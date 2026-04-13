@@ -1,11 +1,10 @@
-# Rewrite Architecture: `arch-rewrite-core`
+# Rewrite Architecture: `arch-rewrite-core` (Completed)
 
-This branch is the architecture reset branch for Canopi's next core and now reflects
-the target architecture that the rewrite is converging on.
+This branch records the architecture reset that was landed for Canopi's next core.
 
-## Goal
+## Delivered Boundaries
 
-Preserve the current shipped product shell while replacing the internal architecture with clearer boundaries:
+The rewrite established these boundaries:
 
 - `common-types` defines transport and file-format contracts
 - frontend `domain/` defines internal product models and rules
@@ -15,20 +14,21 @@ Preserve the current shipped product shell while replacing the internal architec
 - canvas stays imperative and non-declarative
 - MapLibre stays a derived sibling surface, never a document or camera authority
 
-## Non-Negotiable Invariants
+## Invariants Kept
 
 - Canvas scene state and non-canvas document state stay split by authority.
 - Panel/map/canvas sync continues to go through typed `PanelTarget[]` seams.
 - `desktop/src/lib.rs` stays a thin composition root.
 - UI components must not become direct IPC clients for cross-feature workflows.
-- The rewrite may emit a new `.canopi` format, but old-file import should remain possible.
+- Old-file import remains possible.
 
-## Current Shape
+## Shipped Shape
 
 - Generated TypeScript transport bindings come from `common-types`.
 - Frontend orchestration lives under `desktop/web/src/app/`.
-- Frontend document authority stays in `state/design.ts`; legacy `state/app.ts`,
-  `state/document.ts`, and `state/canvas.ts` are gone.
+- Frontend document authority stays in `state/design.ts`; document policy lives in
+  `app/document/controller.ts` and `app/document-session/*`; legacy `state/app.ts`
+  and `state/canvas.ts` are gone.
 - Canvas runtime responsibilities are split across `scene-runtime.ts` and focused
   helpers for document, presentation, chrome, render scheduling, and mutations.
 - MapLibre is mounted through `MapLibreCanvasSurface.tsx`, with orchestration in
@@ -36,11 +36,11 @@ Preserve the current shipped product shell while replacing the internal architec
 - Backend command modules delegate to `desktop/src/services/*`.
 - Plant DB detail projection and row mapping are separated from the orchestration path.
 
-## Branch Strategy
+## Delivery Notes
 
 - Branch name: `arch-rewrite-core`
-- Delivery mode: one-shot cutover
-- Temporary compatibility shims are allowed for at most one milestone.
+- One-shot cutover completed.
+- Temporary compatibility shims were only a cutover-time bridge.
 - Hotspot files are serial-ownership files, not parallel-edit files.
 
 ## Hotspot Files
@@ -70,4 +70,4 @@ These files require single-owner edits per milestone:
 
 ## Implementation Rule
 
-The rewrite should move behavior onto new seams and then delete old seams. Do not keep two full architectures alive in parallel.
+The rewrite moved behavior onto new seams and then deleted the old seams. Do not keep two full architectures alive in parallel.

@@ -20,11 +20,11 @@ For architectural analysis and rationale, see [Code Quality And Architecture Rev
 
 ## Active Work
 
-### Architecture status from 2026-04-08 review
+### Architecture status
 
-Do **not** do a broad architecture refactor before this file. The document-authority convergence work is far enough along to continue safely: canvas scene state is owned by `SceneStore`, non-canvas document state is owned by `currentDesign` / document actions, and save composes both in `SceneCanvasRuntime.serializeDocument()`.
+The rewrite is shipped. Keep this file focused on post-rewrite cleanup, verification, and deferred product work; the review notes below are historical context now.
 
-Do a narrow convergence pass before expanding panel/map sync:
+Resolved review notes:
 - ~~Define typed target identity semantics for timeline and budget before adding full panel-to-canvas highlighting, canvas-to-chart hover, or map overlays~~ — **done**: panel targets are typed as `placed_plant` / `species` / `zone` / `manual` / `none`; timeline, budget, and consortium now encode target identity explicitly.
 - ~~Replace the pass-through `CanvasSession` facade, or split it into explicit command/query interfaces, before adding more runtime API surface~~ — **done**: `currentCanvasSession` stores `CanvasRuntime | null`; `setCurrentCanvasTool()` still primes tool state without a mounted runtime.
 - ~~Add file-format round-trip/migration coverage before the next breaking `.canopi` schema change~~ — **done**: v1→v2 migration covers legacy panel identity fields, and v2 panel sections round-trip with unknown top-level fields.
@@ -41,7 +41,7 @@ These align with the core risks identified in the architecture review.
 - ~~Converge the save-time merge seam in `serializeDocument()`~~ — **done** (`b4596f1`): non-canvas sections come from document store, not re-merged into SceneStore
 - ~~Replace `currentConsortiums` mirror~~ — **done** (`a8f7fbc`): removed entirely, consortium data is document-store owned
 - ~~Replace `designLocation` mirror~~ — **done**: removed entirely (zero component consumers). Read location from `currentDesign.value?.location` directly
-- ~~Consortium auto-sync as workflow~~ — **done** (`04fd4fa`): `consortium-sync-workflow.ts` runs at document level (installed by `document.ts` via `loadCanvasFromDocument`, not by `SceneCanvasRuntime`). Sync returns early when canvas session is null (authority fix) — re-triggers via `sceneEntityRevision` on document load. Effect subscribes to `currentDesign.value` (not `.peek()`) so document replacement also re-triggers sync
+- ~~Consortium auto-sync as workflow~~ — **done** (`04fd4fa`): `consortium-sync-workflow.ts` runs at the document-session boundary (installed by `loadCanvasFromDocument()` from `use-canvas-document-session.ts`, not by `SceneCanvasRuntime`). The effect subscribes to `currentDesign.value` so document replacement re-triggers sync, and it also re-triggers on `sceneEntityRevision`. Sync is additive-only: it appends missing consortium rows and preserves inactive entries rather than reconciling a `toAdd/toDelete` diff
 - ~~TS/Rust type alignment for array fields~~ — **done**: `consortiums`, `timeline`, `budget` are required in TS (matching Rust `Vec<T>`), Rust struct has `#[serde(default)]` for backward compat with old files, scene codec emits empty placeholders
 - See root `CLAUDE.md` Document Authority Rule
 
@@ -123,7 +123,7 @@ These align with the core risks identified in the architecture review.
 - ~~Timeline `order` duplicate after delete~~ — **done**: `addTimelineAction` computes `max(existing orders) + 1` instead of `timeline.length`
 - ~~`openBottomPanel` intermediate re-renders~~ — **done**: wrapped multi-signal writes in `batch()`, removed stale `_heightInitialized` guard that overwrote Rust-persisted height
 - ~~InteractiveTimeline `onWheel` passive listener~~ — **done**: JSX `onWheel` registers as passive by default — `preventDefault()` silently failed. Replaced with imperative `addEventListener({ passive: false })` in `useEffect`
-- ~~`serializeDocument` null doc type safety~~ — **done**: tightened `doc` param from `CanopiFile | null` to `CanopiFile` across interface/session/runtime. Guards at call sites (`document.ts`, `document-actions.ts`) make null-before-save a compile error instead of silent data loss
+- ~~`serializeDocument` null doc type safety~~ — **done**: tightened `doc` param from `CanopiFile | null` to `CanopiFile` across interface/session/runtime. Guards at the document-session boundary (`app/document-session/actions.ts`, `app/document-session/runtime.ts`) make null-before-save a compile error instead of silent data loss
 - ~~Redundant `void signal.value` top-level reads~~ — **done**: removed from `ConsortiumChart` (`sceneEntityRevision`, `plantNamesRevision`), `BudgetTab` (same), `TimelineTab` (`locale`). `useMemo` deps already maintain subscriptions — the top-level reads caused full component re-renders on every canvas mutation
 - ~~`hitTestBar` dead `_height` parameter~~ — **done**: never read inside the function. Removed from signature + all 6 call sites
 - ~~Duplicate `SceneBounds` interface~~ — **done**: `scene-runtime.ts` had local copy identical to `camera.ts` export. Replaced with import

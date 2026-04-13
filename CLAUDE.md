@@ -54,15 +54,15 @@ Domain-specific instructions in subdirectory CLAUDE.md files:
 ## Architecture Rules
 
 ### Document Mutation Rule
-- **No component may replace the active document directly** — only `state/document-actions.ts` performs destructive session replacement
-- **No panel may call document replacement directly** — panels request document changes through the document-actions boundary
+- **No component may replace the active document directly** — only `app/document-session/actions.ts` performs destructive session replacement
+- **No panel may call document replacement directly** — panels request document changes through the document-session actions boundary
 - All document-replacing flows use one shared guard path (dirty check → confirm → replace)
 
 ### Document Authority Rule
 The `.canopi` file has two categories of content with separate authorities:
 
 - **Canvas scene state** (plants, zones, annotations, groups, plant-species-colors, layers) — owned by `SceneStore`. Mutations flow through the canvas runtime. Renderers and interaction are projections of this state
-- **Non-canvas document state** (consortiums, timeline, budget, `budget_currency`, location, description, extra) — owned by the document store (`state/design.ts` / `state/document.ts`). Mutations flow through `mutateCurrentDesign()` and the `*-actions.ts` modules
+- **Non-canvas document state** (consortiums, timeline, budget, `budget_currency`, location, description, extra) — owned by the document layer (`state/design.ts`) with higher-level policy in `app/document/controller.ts` and `app/document-session/*`. Mutations flow through `mutateCurrentDesign()` and the feature controllers under `app/*/controller.ts`
 
 The save path composes both into a single `CanopiFile`. Neither authority should duplicate the other's data. Panels that read canvas entities (plant list, zone names) should use a read-only query interface on the runtime, not mirrored signals.
 
@@ -70,17 +70,17 @@ The save path composes both into a single `CanopiFile`. Neither authority should
 - Do not push non-canvas state (consortiums, timeline, budget, `budget_currency`) into `SceneStore` — it is not a canvas concern
 - Do not mirror canvas state into standalone signals when a derived/computed value or a direct read from the authority would work. Prefer `computed()` signals derived from the authority over manually-synced mirrors
 - Do not create new ad hoc sync paths between the two authorities — if sync is needed, centralize it in one explicit adapter
-- **Adding new document-level fields**: Add to TS `CanopiFile` interface + `KNOWN_CANOPI_KEYS` in `state/document-extra.ts` + `serializeDocument()` passthrough. Rust `#[serde(flatten)] extra` round-trips unknown keys automatically, so no Rust struct change is needed until the field requires backend logic
+- **Adding new document-level fields**: Add to the shared `CanopiFile` contract, regenerate `KNOWN_CANOPI_KEYS`, keep `app/contracts/document.ts` aligned, and add the `serializeDocument()` passthrough. Rust `#[serde(flatten)] extra` round-trips unknown keys automatically, so no Rust struct change is needed until the field requires backend logic
 - **`KNOWN_CANOPI_KEYS` must include `'extra'`** — the `extra` field is a first-class key on `CanopiFile` emitted by the scene codec. Without it, `extractExtra()` captures the `extra` object as an unknown key, risking double-nesting on round-trip
 - **Adding new required array fields to `CanopiFile`**: Add `#[serde(default)]` in Rust (backward compat with old files), make the field required (not optional) in TS `CanopiFile` to match Rust `Vec<T>`, add empty placeholder in `serializeScenePersistedState` in `codec.ts`, and update all test fixtures. The `?? []` fallback is only needed where the parent object is nullable (`currentDesign.value?.field ?? []`), not inside `mutateCurrentDesign` callbacks where the design is guaranteed non-null
 - **Adding a new file-format migration**: Add a match arm in `migrate_design_value()` in `desktop/src/design/format.rs` for the new version, bump `CURRENT_VERSION`, and add the migration function. The loop runs each step sequentially (v1->v2->v3 etc.). Add a test in the same file's `mod tests`
 
 ### Action-Layer Rule
-- **Action modules must not import other action modules** — `state/*-actions.ts` files are leaf modules
+- **Controller/action modules must not import other controller/action modules** — the write boundaries under `app/*/controller.ts` should stay leaf modules
 - Import direction: **components → actions → state** (never backwards)
-- **Cross-concern orchestration**: When a mutation in one domain must trigger side effects in another (e.g., plant deleted → orphan cleanup in timeline/budget/consortium), create an explicit workflow module at a higher boundary. Do not wire action modules to each other. See `state/template-import-workflow.ts` and `state/consortium-sync-workflow.ts` for the pattern
-- **Workflow effect lifecycle**: Workflow modules that install `effect()` should manage their own disposer as a module-level singleton (`installX()` / `disposeX()`). This avoids circular imports when both `document.ts` and `document-actions.ts` need to call them. Do not install workflow effects inside `SceneCanvasRuntime` — they belong at the document boundary
-- **Budget actions**: `state/budget-actions.ts` owns `setBudgetCurrency` and `setPlantBudgetPrice`. Price action reads currency from the document (`budget_currency`), not from caller parameters — prevents currency split state
+- **Cross-concern orchestration**: When a mutation in one domain must trigger side effects in another (e.g., plant deleted → orphan cleanup in timeline/budget/consortium), create an explicit workflow module at a higher boundary. Do not wire action modules to each other. See `app/document-session/workflows.ts` for the pattern
+- **Workflow effect lifecycle**: Workflow modules that install `effect()` should manage their own disposer as a module-level singleton (`installX()` / `disposeX()`). This avoids circular imports when both `app/document/controller.ts` and `app/document-session/actions.ts` need to call them. Do not install workflow effects inside `SceneCanvasRuntime` — they belong at the document boundary
+- **Budget actions**: `app/budget/controller.ts` owns `setBudgetCurrency` and `setPlantBudgetPrice`. Price action reads currency from the document (`budget_currency`), not from caller parameters — prevents currency split state
 - **Settings-backed actions**: Action functions that mutate signals backed by Rust `Settings` (e.g., `setBottomPanelOpen`, `setBottomPanelTab`) must call `persistCurrentSettings()` after writing the signal. Exception: 60fps hot paths (e.g., drag resize) should persist on mouse-up, not per-frame
 
 ### Signal Performance in Hot Paths
@@ -110,7 +110,7 @@ The save path composes both into a single `CanopiFile`. Neither authority should
 - Rendered panel-map overlays, and any richer future variants, must consume the pure `projectPanelTargetsToMapFeatures()` seam rather than re-resolving panel identity or making MapLibre a second scene/document authority
 
 ### Panel ↔ Canvas Reactivity
-- **Bottom panel components that read canvas-derived data must subscribe to `sceneEntityRevision`** from `state/canvas.ts` to react to canvas mutations (plant placement, undo/redo). Reading `currentCanvasSession.value?.getPlacedPlants()` alone is not reactive — the session reference doesn't change when scene state changes. Panels that only read non-canvas document state (e.g., TimelineTab reads `currentDesign.value?.timeline`) should NOT subscribe — it causes spurious re-renders on every canvas mutation
+- **Bottom panel components that read canvas-derived data must subscribe to `sceneEntityRevision`** from `canvas/runtime-mirror-state.ts` to react to canvas mutations (plant placement, undo/redo). Reading `currentCanvasSession.value?.getPlacedPlants()` alone is not reactive — the session reference doesn't change when scene state changes. Panels that only read non-canvas document state (e.g., TimelineTab reads `currentDesign.value?.timeline`) should NOT subscribe — it causes spurious re-renders on every canvas mutation
 - **Cross-domain auto-sync must be a workflow module** (like `consortium-sync-workflow.ts`), not a component-level effect. Component effects only run when mounted — data integrity requires document-level effects that run regardless of which tab is visible
 - **Use `.peek()` in workflow effects** to read signals without subscribing. Only subscribe to the intended trigger signal (e.g., `sceneEntityRevision`). Writing `currentDesign.value` inside an effect that subscribes to it creates re-execution loops
 - **Panel target identity is explicit.** Timeline, budget, and consortium entries use typed `PanelTarget` identity (`placed_plant`, `species`, `zone`, `manual`, `none`) with legacy migration. Do not reintroduce string matching against timeline descriptions, legacy `plants` arrays, budget descriptions, or consortium canonical-name fields

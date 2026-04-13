@@ -130,8 +130,10 @@ App code
   │           └── HTML rulers / overlay chrome
   ├── MapLibreCanvasSurface (derived sibling surface mounted by CanvasPanel)
   │     └── syncs viewport via CanvasRuntime query seams and renders pure panel-target overlays
-  └── Document store (non-canvas state: consortiums, timeline, budget, budget_currency, location, description, extra)
-        └── state/design.ts + state/document.ts
+  └── Document layer (non-canvas state: consortiums, timeline, budget, budget_currency, location, description, extra)
+        ├── state/design.ts
+        ├── app/document/controller.ts
+        └── app/document-session/*
 ```
 
 ## Active Work
@@ -154,7 +156,7 @@ The rewrite cutover is complete. Konva dependency has been fully removed. Curren
 - **Drag `cachedRect` pattern**: Store `canvas.getBoundingClientRect()` in `DragState.cachedRect` during `mousedown`. Use `drag?.cachedRect ?? canvas.getBoundingClientRect()` in `mousemove` — avoids forced layout at 60fps during drag. Both `ConsortiumChart` and `InteractiveTimeline` follow this pattern
 - Consortium, timeline, and budget hover bridge to canvas highlights through `hoveredPanelTargets`; timeline/budget panel-origin selection uses `selectedPanelTargets` plus `selectedPanelTargetOrigin`
 - **Within-stratum drag reorder is correct with mixed-strata arrays**: `reorderConsortiumEntry` uses `findIndex` on the target bar's canonical name to get its absolute array index, then splice remove-then-insert. This correctly preserves intra-stratum ordering even when entries from other strata are interleaved in the array — the relative order of same-stratum entries changes while other-stratum entries stay in place. Do not "fix" this by switching to stratum-relative indexing
-- **Consortium sync diffs against actual consortium state, not a cache**: `consortium-sync-workflow.ts` compares `getPlacedPlants()` names against `design.consortiums` entries directly on each `sceneEntityRevision` bump. Do not add a `lastSyncedNames` cache — it introduces stale-state bugs when consortiums are modified externally (template import, undo) and the `toAdd/toDelete` emptiness check is a sufficient no-op guard
+- **Consortium sync is additive-only, not a symmetric diff**: `consortium-sync-workflow.ts` compares `getPlacedPlants()` names against `design.consortiums` entries directly on each `sceneEntityRevision` bump, then appends missing entries only. Do not add a `lastSyncedNames` cache or a `toAdd/toDelete` reconciliation pass — inactive consortium entries must remain in the document
 - `sceneEntityRevision` is incremented in `_markCanvasDirty()`, `undo()`/`redo()`, `loadDocument()`, and `replaceDocument()` — if adding a new mutation path, it must also increment this signal or bottom-panel components will not update
 - **No raw `rgba()` in Canvas2D renderer fallbacks** — use hex fallbacks (e.g., `'#D4CFC5'`) not `rgba(0,0,0,0.12)`. Raw rgba with black/brown components breaks dark mode. The `cssVar()` call handles theming; the fallback is for missing-variable edge cases only
 - **Action-type colors use CSS variables**: `timeline-renderer.ts` resolves action colors via `cssVar('--color-action-<type>') || hexFallback` — tokens defined in `global.css` with dark-mode overrides. Follow the `ACTION_COLOR_VARS` pattern (CSS var name + hex fallback tuple) when adding new renderer-specific color categories
@@ -174,7 +176,7 @@ The rewrite cutover is complete. Konva dependency has been fully removed. Curren
 - **Unmount mid-drag cleanup**: Canvas2D tab components must call `markDocumentDirty()` only when `dragState.current?.hasMutated` is true, then clear the ref. The normal `handleMouseUp` path will not fire if the component unmounts mid-drag, but mousedown-without-movement must not mark dirty
 - **Guard `pxPerDay <= 0` in `renderTimeline`**: Before initial layout measurement, `pxPerDay` can be 0 — `niceInterval` returns `intervalMs=0`, causing an infinite tick loop. All Canvas2D renderers with time-based tick loops must guard against zero-density inputs
 - **`_formatDist` and `_formatDistance` are parallel implementations**: `scale-bar.ts` and `rulers.ts` each have private distance formatters. When changing format style (spacing, units), update both. A shared extractor was evaluated and rejected — the functions have different domain needs (rulers handle negatives, scale-bar doesn't)
-- **`consortium-sync-workflow` must subscribe to `currentDesign.value`** (not `.peek()`): The effect needs to re-trigger on document replacement (open/new/import), not just `sceneEntityRevision`. Use `.peek()` only inside the `mutateCurrentDesign` callback to avoid re-execution loops — but the outer read must be `.value` for subscription
+- **`consortium-sync-workflow` must subscribe to `currentDesign.value`** (not `.peek()`): The effect needs to re-trigger on document replacement (open/new/import) as well as `sceneEntityRevision`. Use `.peek()` only inside the `mutateCurrentDesign` callback to avoid re-execution loops — but the outer read must be `.value` for subscription
 - **Hit-test edge threshold vs min element width**: When `EDGE_THRESHOLD * 2 >= bar/element min width`, edge zones consume the entire element — body hits become impossible. Guard with `if (width <= EDGE_THRESHOLD * 2) return 'body'` before edge checks
 - **Renderer-specific CSS fallbacks must be theme-safe**: Don't hardcode light-mode hex for tokens like `--color-surface-muted`. Use `theme.surface` (from `readThemeTokens()`) as the fallback — degrades to uniform surface color in both themes rather than a bright band in dark mode
 - **Canvas2D draw order: fills before borders**: Drawing a border, then a fill that covers part of it, then redrawing the covered portion produces double-stroke with HiDPI antialiasing artifacts. Draw all fill rects first, then all borders in a single pass

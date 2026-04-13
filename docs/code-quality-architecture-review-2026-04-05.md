@@ -6,6 +6,8 @@ Updated: 2026-04-08 (post-bottom-panel MVP architecture pass; documents resolved
 
 Purpose: give the next implementation agent an unbiased, actionable review of the current codebase and a converged direction for improving it.
 
+Status note: this is a dated review artifact, not the live architecture authority. For the shipped document/runtime boundaries and current follow-up work, use `CLAUDE.md`, `desktop/web/src/canvas/CLAUDE.md`, and `docs/todo.md`.
+
 This review is based on the current repository state, representative code inspection across Rust and frontend modules, and a fresh local verification pass:
 
 - `npm test --prefix desktop/web` passed: 45 files, 203 tests
