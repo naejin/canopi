@@ -1,7 +1,6 @@
 use common_types::species::{
     PaginatedResult, Sort, SpeciesDetail, SpeciesFilter, SpeciesListItem,
 };
-use rusqlite::OptionalExtension;
 
 use crate::db::{self, PlantDb, UserDb};
 
@@ -96,7 +95,7 @@ pub fn get_favorites(
     }
 
     let conn = db::acquire(&plant_db.0, "PlantDb");
-    hydrate_species_list(&conn, &names, &locale, true)
+    crate::db::plant_db::hydrate_species_list_items(&conn, &names, &locale, true)
 }
 
 pub fn get_recently_viewed(
@@ -117,97 +116,13 @@ pub fn get_recently_viewed(
 
     let mut items = {
         let plant_conn = db::acquire(&plant_db.0, "PlantDb");
-        hydrate_species_list(&plant_conn, &names, &locale, false)?
+        crate::db::plant_db::hydrate_species_list_items(&plant_conn, &names, &locale, false)?
     };
 
     {
         let user_conn = db::acquire(&user_db.0, "UserDb");
         for item in &mut items {
             item.is_favorite = crate::db::user_db::is_favorite(&user_conn, &item.canonical_name);
-        }
-    }
-
-    Ok(items)
-}
-
-fn hydrate_species_list(
-    conn: &rusqlite::Connection,
-    names: &[String],
-    locale: &str,
-    all_favorites: bool,
-) -> Result<Vec<SpeciesListItem>, String> {
-    let mut items = Vec::with_capacity(names.len());
-
-    for name in names {
-        let row: Option<SpeciesListItem> = conn
-            .query_row(
-                "SELECT s.canonical_name,
-                        s.slug,
-                        s.common_name,
-                        s.family,
-                        s.genus,
-                        s.height_max_m,
-                        s.hardiness_zone_min,
-                        s.hardiness_zone_max,
-                        s.growth_rate,
-                        s.stratum,
-                        s.edibility_rating,
-                        s.medicinal_rating,
-                        s.width_max_m,
-                        s.id
-                 FROM species s
-                 WHERE s.canonical_name = ?1
-                 LIMIT 1",
-                [name],
-                |row| {
-                    Ok((
-                        SpeciesListItem {
-                            canonical_name: row.get(0)?,
-                            slug: row.get(1)?,
-                            common_name: row.get(2)?,
-                            common_name_2: None,
-                            is_name_fallback: false,
-                            family: row.get(3)?,
-                            genus: row.get(4)?,
-                            height_max_m: row.get(5)?,
-                            hardiness_zone_min: row.get(6)?,
-                            hardiness_zone_max: row.get(7)?,
-                            growth_rate: row.get(8)?,
-                            stratum: row.get(9)?,
-                            edibility_rating: row.get(10)?,
-                            medicinal_rating: row.get(11)?,
-                            width_max_m: row.get(12)?,
-                            is_favorite: all_favorites,
-                        },
-                        row.get::<_, String>(13)?,
-                    ))
-                },
-            )
-            .optional()
-            .map_err(|e| format!("Failed to hydrate species '{name}': {e}"))?
-            .map(|(mut item, species_id)| {
-                if let Some(name) =
-                    crate::db::plant_db::get_locale_best_common_name(conn, &species_id, locale)
-                {
-                    item.common_name_2 = crate::db::plant_db::get_secondary_common_name(
-                        conn,
-                        &species_id,
-                        locale,
-                        &name,
-                        &item.canonical_name,
-                    );
-                    item.common_name = Some(name);
-                } else {
-                    item.common_name =
-                        crate::db::plant_db::get_common_name(conn, &species_id, locale)
-                            .or(item.common_name);
-                    item.is_name_fallback = locale != "en";
-                }
-                item
-            });
-
-        if let Some(item) = row {
-            items.push(item);
         }
     }
 

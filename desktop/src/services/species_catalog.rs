@@ -12,14 +12,8 @@ pub fn get_species_relationships(
     canonical_name: String,
 ) -> Result<Vec<Relationship>, String> {
     let conn = db::acquire(&plant_db.0, "PlantDb");
-
-    let species_id: String = conn
-        .query_row(
-            "SELECT id FROM species WHERE canonical_name = ?1 LIMIT 1",
-            [&canonical_name],
-            |row| -> rusqlite::Result<_> { row.get(0) },
-        )
-        .map_err(|e| format!("Failed to look up species id for '{canonical_name}': {e}"))?;
+    let species_id = crate::db::plant_db::resolve_species_id(&conn, &canonical_name)?
+        .ok_or_else(|| format!("Species '{canonical_name}' not found"))?;
 
     crate::db::plant_db::get_relationships(&conn, &species_id)
 }
@@ -41,12 +35,11 @@ pub fn get_species_batch(
     let conn = db::acquire(&plant_db.0, "PlantDb");
     let mut results = Vec::with_capacity(canonical_names.len());
     for name in &canonical_names {
-        match crate::db::plant_db::get_detail(&conn, name, &locale) {
-            Ok(detail) => results.push(detail),
-            Err(error) => {
-                tracing::warn!("get_species_batch: skipping '{name}': {error}");
-            }
+        if crate::db::plant_db::resolve_species_id(&conn, name)?.is_none() {
+            tracing::warn!("get_species_batch: skipping missing species '{name}'");
+            continue;
         }
+        results.push(crate::db::plant_db::get_detail(&conn, name, &locale)?);
     }
     Ok(results)
 }
@@ -96,4 +89,57 @@ pub fn get_locale_common_names(
 ) -> Result<Vec<CommonNameEntry>, String> {
     let conn = db::acquire(&plant_db.0, "PlantDb");
     crate::db::plant_db::get_locale_common_names(&conn, &canonical_name, &locale)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::get_species_batch;
+    use crate::db::PlantDb;
+    use rusqlite::Connection;
+    use std::sync::Mutex;
+
+    #[test]
+    fn get_species_batch_skips_missing_species() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE species (
+                id TEXT PRIMARY KEY,
+                canonical_name TEXT NOT NULL
+            );",
+        )
+        .unwrap();
+        let plant_db = PlantDb(Mutex::new(conn));
+
+        let batch = get_species_batch(
+            &plant_db,
+            vec!["Missing species".to_owned()],
+            "en".to_owned(),
+        )
+        .unwrap();
+
+        assert!(batch.is_empty());
+    }
+
+    #[test]
+    fn get_species_batch_propagates_detail_failures_for_present_species() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE species (
+                id TEXT PRIMARY KEY,
+                canonical_name TEXT NOT NULL
+            );
+            INSERT INTO species (id, canonical_name) VALUES ('sp-1', 'Broken species');",
+        )
+        .unwrap();
+        let plant_db = PlantDb(Mutex::new(conn));
+
+        let error = get_species_batch(
+            &plant_db,
+            vec!["Broken species".to_owned()],
+            "en".to_owned(),
+        )
+        .unwrap_err();
+
+        assert!(error.contains("Failed to prepare species detail query"));
+    }
 }

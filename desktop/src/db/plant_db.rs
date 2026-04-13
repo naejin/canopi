@@ -3,18 +3,20 @@ mod detail_contract;
 mod detail_row_map;
 mod filters;
 mod flower;
+mod list_items;
 mod lookup;
 mod search;
 
 pub use detail::{get_detail, get_relationships, get_species_external_links, get_species_images};
 pub use filters::{get_dynamic_filter_options, get_filter_options};
 pub use flower::get_flower_color_batch;
+pub use list_items::hydrate_species_list_items;
 #[allow(unused_imports)]
 pub use lookup::translate_value;
 pub use lookup::{
-    get_common_name, get_common_names_batch, get_locale_best_common_name, get_locale_common_names,
-    get_secondary_common_name,
+    get_common_name, get_common_names_batch, get_locale_common_names,
 };
+pub use detail::resolve_species_id;
 pub use search::search;
 
 #[cfg(test)]
