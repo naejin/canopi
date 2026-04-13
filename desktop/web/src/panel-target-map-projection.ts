@@ -1,4 +1,4 @@
-import { worldToGeo } from './canvas/projection'
+import { getActiveProjectionBackend } from './canvas/projection'
 import { resolvePanelTargets } from './panel-target-resolution'
 import type { PanelTarget } from './types/design'
 
@@ -75,6 +75,7 @@ export function projectPanelTargetsToMapFeatures(
   }
 
   const features: PanelTargetMapFeature[] = []
+  const projectionBackend = getActiveProjectionBackend()
   const skippedSceneIds: string[] = []
   const emittedFeatureKeys = new Set<string>()
   const skippedFeatureKeys = new Set<string>()
@@ -93,7 +94,7 @@ export function projectPanelTargetsToMapFeatures(
       pushSkipped(key, plantId)
       return
     }
-    const geo = worldToGeo(
+    const geo = projectionBackend.worldToGeo(
       plant.position.x,
       plant.position.y,
       location.lat,
@@ -123,7 +124,7 @@ export function projectPanelTargetsToMapFeatures(
       return
     }
     const ring = zone.points.map((point): readonly [number, number] => {
-      const geo = worldToGeo(
+      const geo = projectionBackend.worldToGeo(
         point.x,
         point.y,
         location.lat,

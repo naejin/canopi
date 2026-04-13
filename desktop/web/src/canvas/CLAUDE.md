@@ -11,7 +11,7 @@ Production ownership is:
 - `RendererHost` owns backend selection, startup fallback, and runtime recovery
 - `PixiJS` is the primary world renderer
 - `Canvas2D` is the fallback renderer
-- In-canvas MapLibre basemap is now a derived sibling surface managed outside the runtime (`MapLibreCanvasSurface` mounted by `CanvasPanel`), not embedded in renderer code or runtime internals. It shares the hosted basemap config with `LocationTab`, emits loading / ready / error state, follows the canvas through the shared Mercator-backed bearing-aware projection seam, warns when local-projection precision may degrade for large designs, and renders pure panel-target overlays from that same seam. The surface is intentionally thin: state/diagnostic shaping, basemap presentation helpers, overlay coordination, and terrain diff/apply logic now live in dedicated helper modules under `maplibre/`
+- In-canvas MapLibre basemap is now a derived sibling surface managed outside the runtime (`MapLibreCanvasSurface` mounted by `CanvasPanel`), not embedded in renderer code or runtime internals. It shares the hosted basemap config with `LocationTab`, emits loading / ready / error state, follows the canvas through the shared Mercator-backed bearing-aware active projection backend seam, warns when backend-derived local-projection precision may degrade for large designs, and renders pure panel-target overlays from that same seam. The surface is intentionally thin: state/diagnostic shaping, basemap presentation helpers, overlay coordination, and terrain diff/apply logic now live in dedicated helper modules under `maplibre/`
 
 Landed in the live path:
 - scene-owned load/replace/save flows
@@ -31,9 +31,10 @@ Konva / `CanvasEngine` code has been removed. Do not reintroduce Konva or `getEn
 - App code must not reach into renderer implementations or runtime internals
 - The app-facing canvas boundary is the `CanvasRuntime` TypeScript interface implemented by `SceneCanvasRuntime`; the old 1:1 `CanvasSession` pass-through class is gone
 - `CanvasRuntime` now exposes read-only viewport queries for sibling surfaces: `getViewport()`, `getViewportScreenSize()`, and `viewportRevision`
-- Bearing-aware world↔geo and viewport→MapLibre camera derivation live in pure helpers under `canvas/projection.ts` / `canvas/maplibre-camera.ts`; `MapLibreCanvasSurface` consumes them but does not own projection math. Keep camera/overlay/terrain sync on that one seam
+- Bearing-aware world↔geo and viewport→MapLibre camera derivation live in the active backend seam under `canvas/projection.ts` / `canvas/maplibre-camera.ts`; `MapLibreCanvasSurface` consumes them but does not own projection math. Keep camera/overlay/terrain sync on that one seam
 - Exact sync means every canonical frame change must be applied; do not add camera deadbands/tolerances in `MapLibreCanvasSurface` that can skip tiny pan/zoom updates
 - Preserve document `north_bearing_deg` semantics. Any MapLibre-facing bearing normalization/adaptation belongs in `canvas/maplibre-camera.ts`, not in runtime state, overlay projection, or compass UI
+- Precision warning thresholds and dev diagnostics are backend-derived metadata. Surface/UI code may present them, but must not redefine them outside the projection seam
 - Terrain paint-only changes (opacity/theme) should stay incremental through `maplibre/terrain-sync.ts`; rebuild terrain sources/layers only when source-shape inputs change
 - As bottom panels/map surfaces need more derived data, consider splitting `CanvasRuntime` into two interfaces: one for **interaction commands** (tools, selection, history, zoom) and one for **state queries/projections** (entity reads for panels, bounds/features for map sync). Both should still be implemented by the runtime or pure helpers, not by renderer internals
 

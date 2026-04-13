@@ -6,6 +6,10 @@
  */
 import { describe, it, expect } from 'vitest'
 import {
+  LOCAL_MERCATOR_PROJECTION_BACKEND,
+  LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
+  createProjectionPrecisionSnapshot,
+  getActiveProjectionBackend,
   worldToGeo,
   geoToWorld,
   stageScaleToMapZoom,
@@ -13,6 +17,7 @@ import {
   viewportCenterGeo,
   viewportCornerGeoPoints,
 } from '../canvas/projection'
+import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 
 // ---------------------------------------------------------------------------
 // worldToGeo
@@ -228,6 +233,39 @@ describe('stageViewportCenter', () => {
     const expected = worldToGeo(2200, 1500, 45.52, -122.68)
     expect(result.lng).toBeCloseTo(expected.lng, 8)
     expect(result.lat).toBeCloseTo(expected.lat, 8)
+  })
+})
+
+describe('projection backend seam', () => {
+  it('exposes the local Mercator backend as the active implementation', () => {
+    expect(getActiveProjectionBackend()).toBe(LOCAL_MERCATOR_PROJECTION_BACKEND)
+    expect(getActiveProjectionBackend().id).toBe('local-mercator')
+  })
+
+  it('derives warning-only precision metrics from the active backend', () => {
+    const scene = createDefaultScenePersistedState()
+    scene.plants.push({
+      kind: 'plant',
+      id: 'plant-warning',
+      canonicalName: 'Malus domestica',
+      commonName: null,
+      color: null,
+      stratum: null,
+      canopySpreadM: null,
+      position: { x: LOCAL_PROJECTION_WARNING_THRESHOLD_METERS + 25, y: 0 },
+      rotationDeg: null,
+      scale: null,
+      notes: null,
+      plantedDate: null,
+      quantity: 1,
+    })
+
+    const precision = createProjectionPrecisionSnapshot(scene)
+
+    expect(precision.backendId).toBe('local-mercator')
+    expect(precision.warningThresholdMeters).toBe(LOCAL_PROJECTION_WARNING_THRESHOLD_METERS)
+    expect(precision.designExtentMeters).toBeGreaterThan(LOCAL_PROJECTION_WARNING_THRESHOLD_METERS)
+    expect(precision.precisionWarning).toBe(true)
   })
 })
 

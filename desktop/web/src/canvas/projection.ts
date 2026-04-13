@@ -10,14 +10,92 @@
 // may warn when a design grows too large for the local model.
 // ---------------------------------------------------------------------------
 
+import type { ScenePersistedState } from './runtime/scene'
+
 const EARTH_RADIUS_METERS = 6371008.8
 const EARTH_CIRCUMFERENCE_METERS = 2 * Math.PI * EARTH_RADIUS_METERS
 const DEGREES_TO_RADIANS = Math.PI / 180
 const MAPLIBRE_WORLD_TILE_SIZE = 512
+export const LOCAL_PROJECTION_WARNING_THRESHOLD_METERS = 10_000
 
 export interface MapMercatorCoordinate {
   x: number
   y: number
+}
+
+export interface ProjectionPrecisionSnapshot {
+  readonly backendId: string
+  readonly warningThresholdMeters: number
+  readonly designExtentMeters: number | null
+  readonly precisionWarning: boolean
+}
+
+export interface ProjectionBackend {
+  readonly id: string
+  readonly warningThresholdMeters: number
+  worldToMercator(
+    x: number,
+    y: number,
+    originLat: number,
+    originLon: number,
+    northBearingDeg?: number | null,
+  ): MapMercatorCoordinate
+  mercatorToWorld(
+    x: number,
+    y: number,
+    originLat: number,
+    originLon: number,
+    northBearingDeg?: number | null,
+  ): { x: number; y: number }
+  worldToGeo(
+    x: number,
+    y: number,
+    originLat: number,
+    originLon: number,
+    northBearingDeg?: number | null,
+  ): { lng: number; lat: number }
+  geoToWorld(
+    lng: number,
+    lat: number,
+    originLat: number,
+    originLon: number,
+    northBearingDeg?: number | null,
+  ): { x: number; y: number }
+  stageScaleToMapZoom(stageScale: number, lat: number): number
+  viewportCenterWorld(
+    viewport: { x: number; y: number; scale: number },
+    screenSize: { width: number; height: number },
+  ): { x: number; y: number }
+  viewportCenterGeo(
+    viewport: { x: number; y: number; scale: number },
+    screenSize: { width: number; height: number },
+    originLat: number,
+    originLon: number,
+    northBearingDeg?: number | null,
+  ): { lng: number; lat: number }
+  viewportCornerWorldPoints(
+    viewport: { x: number; y: number; scale: number },
+    screenSize: { width: number; height: number },
+  ): readonly [
+    { x: number; y: number },
+    { x: number; y: number },
+    { x: number; y: number },
+    { x: number; y: number },
+  ]
+  viewportCornerGeoPoints(
+    viewport: { x: number; y: number; scale: number },
+    screenSize: { width: number; height: number },
+    originLat: number,
+    originLon: number,
+    northBearingDeg?: number | null,
+  ): readonly [
+    { lng: number; lat: number },
+    { lng: number; lat: number },
+    { lng: number; lat: number },
+    { lng: number; lat: number },
+  ]
+  computeSceneExtentMeters(scene: ScenePersistedState): number | null
+  createPrecisionSnapshot(scene: ScenePersistedState | null): ProjectionPrecisionSnapshot
 }
 
 function resolveBearingRad(northBearingDeg: number | null | undefined): number {
@@ -87,7 +165,7 @@ export function mercatorToGeo(x: number, y: number): { lng: number; lat: number 
   }
 }
 
-export function worldToMercator(
+function localWorldToMercator(
   x: number,
   y: number,
   originLat: number,
@@ -103,7 +181,7 @@ export function worldToMercator(
   }
 }
 
-export function mercatorToWorld(
+function localMercatorToWorld(
   x: number,
   y: number,
   originLat: number,
@@ -117,18 +195,18 @@ export function mercatorToWorld(
   return eastNorthMetersToCanvasWorld(east, north, northBearingDeg)
 }
 
-export function worldToGeo(
+function localWorldToGeo(
   x: number,
   y: number,
   originLat: number,
   originLon: number,
   northBearingDeg: number | null = 0,
 ): { lng: number; lat: number } {
-  const mercator = worldToMercator(x, y, originLat, originLon, northBearingDeg)
+  const mercator = localWorldToMercator(x, y, originLat, originLon, northBearingDeg)
   return mercatorToGeo(mercator.x, mercator.y)
 }
 
-export function geoToWorld(
+function localGeoToWorld(
   lng: number,
   lat: number,
   originLat: number,
@@ -136,20 +214,20 @@ export function geoToWorld(
   northBearingDeg: number | null = 0,
 ): { x: number; y: number } {
   const mercator = geoToMercator(lng, lat)
-  return mercatorToWorld(mercator.x, mercator.y, originLat, originLon, northBearingDeg)
+  return localMercatorToWorld(mercator.x, mercator.y, originLat, originLon, northBearingDeg)
 }
 
 /**
  * Convert canvas viewport scale to a MapLibre zoom level using the same
  * Mercator world-size convention as MapLibre's transform (512px world at z=0).
  */
-export function stageScaleToMapZoom(stageScale: number, lat: number): number {
+function localStageScaleToMapZoom(stageScale: number, lat: number): number {
   const mercatorUnitsPerMeter = mercatorUnitsPerMeterAtLat(lat)
   const pixelsPerMercatorUnit = stageScale / mercatorUnitsPerMeter
   return Math.log2(pixelsPerMercatorUnit / MAPLIBRE_WORLD_TILE_SIZE)
 }
 
-export function viewportCenterWorld(
+function localViewportCenterWorld(
   viewport: { x: number; y: number; scale: number },
   screenSize: { width: number; height: number },
 ): { x: number; y: number } {
@@ -159,18 +237,18 @@ export function viewportCenterWorld(
   }
 }
 
-export function viewportCenterGeo(
+function localViewportCenterGeo(
   viewport: { x: number; y: number; scale: number },
   screenSize: { width: number; height: number },
   originLat: number,
   originLon: number,
   northBearingDeg: number | null = 0,
 ): { lng: number; lat: number } {
-  const center = viewportCenterWorld(viewport, screenSize)
-  return worldToGeo(center.x, center.y, originLat, originLon, northBearingDeg)
+  const center = localViewportCenterWorld(viewport, screenSize)
+  return localWorldToGeo(center.x, center.y, originLat, originLon, northBearingDeg)
 }
 
-export function viewportCornerWorldPoints(
+function localViewportCornerWorldPoints(
   viewport: { x: number; y: number; scale: number },
   screenSize: { width: number; height: number },
 ): readonly [
@@ -193,6 +271,165 @@ export function viewportCornerWorldPoints(
   return [topLeft!, topRight!, bottomRight!, bottomLeft!]
 }
 
+function localViewportCornerGeoPoints(
+  viewport: { x: number; y: number; scale: number },
+  screenSize: { width: number; height: number },
+  originLat: number,
+  originLon: number,
+  northBearingDeg: number | null = 0,
+): readonly [
+  { lng: number; lat: number },
+  { lng: number; lat: number },
+  { lng: number; lat: number },
+  { lng: number; lat: number },
+] {
+  const [topLeft, topRight, bottomRight, bottomLeft] = localViewportCornerWorldPoints(viewport, screenSize)
+  return [
+    localWorldToGeo(topLeft.x, topLeft.y, originLat, originLon, northBearingDeg),
+    localWorldToGeo(topRight.x, topRight.y, originLat, originLon, northBearingDeg),
+    localWorldToGeo(bottomRight.x, bottomRight.y, originLat, originLon, northBearingDeg),
+    localWorldToGeo(bottomLeft.x, bottomLeft.y, originLat, originLon, northBearingDeg),
+  ]
+}
+
+function localComputeSceneExtentMeters(scene: ScenePersistedState): number | null {
+  let maxDistanceMeters = 0
+  let hasGeometry = false
+
+  const includePoint = (x: number, y: number) => {
+    hasGeometry = true
+    maxDistanceMeters = Math.max(maxDistanceMeters, Math.hypot(x, y))
+  }
+
+  for (const plant of scene.plants) includePoint(plant.position.x, plant.position.y)
+  for (const zone of scene.zones) {
+    for (const point of zone.points) includePoint(point.x, point.y)
+  }
+  for (const annotation of scene.annotations) includePoint(annotation.position.x, annotation.position.y)
+  for (const group of scene.groups) includePoint(group.position.x, group.position.y)
+
+  return hasGeometry ? maxDistanceMeters : null
+}
+
+function localCreatePrecisionSnapshot(scene: ScenePersistedState | null): ProjectionPrecisionSnapshot {
+  const designExtentMeters = scene ? localComputeSceneExtentMeters(scene) : null
+  return {
+    backendId: 'local-mercator',
+    warningThresholdMeters: LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
+    designExtentMeters,
+    precisionWarning: designExtentMeters != null && designExtentMeters > LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
+  }
+}
+
+export const LOCAL_MERCATOR_PROJECTION_BACKEND: ProjectionBackend = {
+  id: 'local-mercator',
+  warningThresholdMeters: LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
+  worldToMercator: localWorldToMercator,
+  mercatorToWorld: localMercatorToWorld,
+  worldToGeo: localWorldToGeo,
+  geoToWorld: localGeoToWorld,
+  stageScaleToMapZoom: localStageScaleToMapZoom,
+  viewportCenterWorld: localViewportCenterWorld,
+  viewportCenterGeo: localViewportCenterGeo,
+  viewportCornerWorldPoints: localViewportCornerWorldPoints,
+  viewportCornerGeoPoints: localViewportCornerGeoPoints,
+  computeSceneExtentMeters: localComputeSceneExtentMeters,
+  createPrecisionSnapshot: localCreatePrecisionSnapshot,
+}
+
+export function getActiveProjectionBackend(): ProjectionBackend {
+  return LOCAL_MERCATOR_PROJECTION_BACKEND
+}
+
+export function createProjectionPrecisionSnapshot(
+  scene: ScenePersistedState | null,
+): ProjectionPrecisionSnapshot {
+  return getActiveProjectionBackend().createPrecisionSnapshot(scene)
+}
+
+export function computeSceneExtentMeters(scene: ScenePersistedState): number | null {
+  return getActiveProjectionBackend().computeSceneExtentMeters(scene)
+}
+
+export function worldToMercator(
+  x: number,
+  y: number,
+  originLat: number,
+  originLon: number,
+  northBearingDeg: number | null = 0,
+): MapMercatorCoordinate {
+  return getActiveProjectionBackend().worldToMercator(x, y, originLat, originLon, northBearingDeg)
+}
+
+export function mercatorToWorld(
+  x: number,
+  y: number,
+  originLat: number,
+  originLon: number,
+  northBearingDeg: number | null = 0,
+): { x: number; y: number } {
+  return getActiveProjectionBackend().mercatorToWorld(x, y, originLat, originLon, northBearingDeg)
+}
+
+export function worldToGeo(
+  x: number,
+  y: number,
+  originLat: number,
+  originLon: number,
+  northBearingDeg: number | null = 0,
+): { lng: number; lat: number } {
+  return getActiveProjectionBackend().worldToGeo(x, y, originLat, originLon, northBearingDeg)
+}
+
+export function geoToWorld(
+  lng: number,
+  lat: number,
+  originLat: number,
+  originLon: number,
+  northBearingDeg: number | null = 0,
+): { x: number; y: number } {
+  return getActiveProjectionBackend().geoToWorld(lng, lat, originLat, originLon, northBearingDeg)
+}
+
+export function stageScaleToMapZoom(stageScale: number, lat: number): number {
+  return getActiveProjectionBackend().stageScaleToMapZoom(stageScale, lat)
+}
+
+export function viewportCenterWorld(
+  viewport: { x: number; y: number; scale: number },
+  screenSize: { width: number; height: number },
+): { x: number; y: number } {
+  return getActiveProjectionBackend().viewportCenterWorld(viewport, screenSize)
+}
+
+export function viewportCenterGeo(
+  viewport: { x: number; y: number; scale: number },
+  screenSize: { width: number; height: number },
+  originLat: number,
+  originLon: number,
+  northBearingDeg: number | null = 0,
+): { lng: number; lat: number } {
+  return getActiveProjectionBackend().viewportCenterGeo(
+    viewport,
+    screenSize,
+    originLat,
+    originLon,
+    northBearingDeg,
+  )
+}
+
+export function viewportCornerWorldPoints(
+  viewport: { x: number; y: number; scale: number },
+  screenSize: { width: number; height: number },
+): readonly [
+  { x: number; y: number },
+  { x: number; y: number },
+  { x: number; y: number },
+  { x: number; y: number },
+] {
+  return getActiveProjectionBackend().viewportCornerWorldPoints(viewport, screenSize)
+}
+
 export function viewportCornerGeoPoints(
   viewport: { x: number; y: number; scale: number },
   screenSize: { width: number; height: number },
@@ -205,13 +442,13 @@ export function viewportCornerGeoPoints(
   { lng: number; lat: number },
   { lng: number; lat: number },
 ] {
-  const [topLeft, topRight, bottomRight, bottomLeft] = viewportCornerWorldPoints(viewport, screenSize)
-  return [
-    worldToGeo(topLeft.x, topLeft.y, originLat, originLon, northBearingDeg),
-    worldToGeo(topRight.x, topRight.y, originLat, originLon, northBearingDeg),
-    worldToGeo(bottomRight.x, bottomRight.y, originLat, originLon, northBearingDeg),
-    worldToGeo(bottomLeft.x, bottomLeft.y, originLat, originLon, northBearingDeg),
-  ]
+  return getActiveProjectionBackend().viewportCornerGeoPoints(
+    viewport,
+    screenSize,
+    originLat,
+    originLon,
+    northBearingDeg,
+  )
 }
 
 /**
@@ -227,5 +464,11 @@ export function stageViewportCenter(
   const scale = stage.scaleX()
   const centerWorldX = (-pos.x + stage.width() / 2) / scale
   const centerWorldY = (-pos.y + stage.height() / 2) / scale
-  return worldToGeo(centerWorldX, centerWorldY, originLat, originLon, northBearingDeg)
+  return getActiveProjectionBackend().worldToGeo(
+    centerWorldX,
+    centerWorldY,
+    originLat,
+    originLon,
+    northBearingDeg,
+  )
 }

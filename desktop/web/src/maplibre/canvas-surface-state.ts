@@ -1,5 +1,14 @@
 import type { MapFrame } from '../canvas/maplibre-camera'
 import type { ScenePersistedState } from '../canvas/runtime/scene'
+import {
+  createProjectionPrecisionSnapshot,
+  getActiveProjectionBackend,
+} from '../canvas/projection'
+
+export {
+  LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
+  computeSceneExtentMeters,
+} from '../canvas/projection'
 
 export type MapLibreCanvasSurfaceStatus = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -17,8 +26,6 @@ export type MapLibreCanvasSurfaceStateInput = Omit<
   'precisionWarning' | 'designExtentMeters'
 >
 
-export const LOCAL_PROJECTION_WARNING_THRESHOLD_METERS = 10_000
-
 export const IDLE_MAPLIBRE_CANVAS_SURFACE_STATE: MapLibreCanvasSurfaceState = {
   status: 'idle',
   errorMessage: null,
@@ -28,33 +35,14 @@ export const IDLE_MAPLIBRE_CANVAS_SURFACE_STATE: MapLibreCanvasSurfaceState = {
   designExtentMeters: null,
 }
 
-export function computeSceneExtentMeters(scene: ScenePersistedState): number | null {
-  let maxDistanceMeters = 0
-  let hasGeometry = false
-
-  const includePoint = (x: number, y: number) => {
-    hasGeometry = true
-    maxDistanceMeters = Math.max(maxDistanceMeters, Math.hypot(x, y))
-  }
-
-  for (const plant of scene.plants) includePoint(plant.position.x, plant.position.y)
-  for (const zone of scene.zones) {
-    for (const point of zone.points) includePoint(point.x, point.y)
-  }
-  for (const annotation of scene.annotations) includePoint(annotation.position.x, annotation.position.y)
-  for (const group of scene.groups) includePoint(group.position.x, group.position.y)
-
-  return hasGeometry ? maxDistanceMeters : null
-}
-
 export function precisionSnapshot(scene: ScenePersistedState | null): Pick<
   MapLibreCanvasSurfaceState,
   'precisionWarning' | 'designExtentMeters'
 > {
-  const designExtentMeters = scene ? computeSceneExtentMeters(scene) : null
+  const precision = createProjectionPrecisionSnapshot(scene)
   return {
-    precisionWarning: designExtentMeters != null && designExtentMeters > LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
-    designExtentMeters,
+    precisionWarning: precision.precisionWarning,
+    designExtentMeters: precision.designExtentMeters,
   }
 }
 
@@ -82,17 +70,26 @@ export function mapLibreCanvasSurfaceStateEquals(
   )
 }
 
-export function publishMapDiagnostics(frame: MapFrame | null, designExtentMeters: number | null): void {
+export function publishMapDiagnostics(
+  frame: MapFrame | null,
+  designExtentMeters: number | null,
+): void {
   if (!import.meta.env.DEV) return
+  const warningThresholdMeters = frame?.diagnostics.warningThresholdMeters
+    ?? getActiveProjectionBackend().warningThresholdMeters
+  const backendId = frame?.diagnostics.backendId ?? getActiveProjectionBackend().id
+  const precisionWarning = designExtentMeters != null && designExtentMeters > warningThresholdMeters
   ;(globalThis as { __CANOPI_MAP_DEBUG__?: unknown }).__CANOPI_MAP_DEBUG__ = frame
     ? {
+      projectionBackendId: backendId,
+      precisionWarningThresholdMeters: warningThresholdMeters,
       center: frame.center,
       zoom: frame.zoom,
       bearing: frame.bearing,
       viewportCenterWorld: frame.diagnostics.viewportCenterWorld,
       viewportCornerGeo: frame.diagnostics.viewportCornerGeo,
       designExtentMeters,
-      precisionWarning: designExtentMeters != null && designExtentMeters > LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
+      precisionWarning,
     }
     : null
 }

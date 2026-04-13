@@ -5,6 +5,8 @@ import {
   maplibreBearingFromNorthBearing,
 } from '../canvas/maplibre-camera'
 import { geoToMercator, stageScaleToMapZoom, worldToGeo } from '../canvas/projection'
+import { CameraController } from '../canvas/runtime/camera'
+import type { ScenePersistedState } from '../canvas/runtime/scene'
 
 const MAPLIBRE_WORLD_TILE_SIZE = 512
 const DEGREES_TO_RADIANS = Math.PI / 180
@@ -57,6 +59,70 @@ function projectWorldToExpectedMapScreen(
 ) {
   const geo = worldToGeo(point.x, point.y, location.lat, location.lon, northBearingDeg ?? 0)
   return projectGeoToMapScreen(geo.lng, geo.lat, frame, screenSize)
+}
+
+function createScene(): ScenePersistedState {
+  return {
+    version: 1,
+    name: 'Projection test',
+    description: null,
+    location: null,
+    northBearingDeg: 0,
+    plantSpeciesColors: {},
+    layers: [],
+    plants: [
+      {
+        kind: 'plant',
+        id: 'plant-1',
+        canonicalName: 'Malus domestica',
+        commonName: null,
+        color: null,
+        stratum: null,
+        canopySpreadM: null,
+        position: { x: -40, y: 15 },
+        rotationDeg: null,
+        scale: null,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      },
+      {
+        kind: 'plant',
+        id: 'plant-2',
+        canonicalName: 'Prunus avium',
+        commonName: null,
+        color: null,
+        stratum: null,
+        canopySpreadM: null,
+        position: { x: 30, y: -20 },
+        rotationDeg: null,
+        scale: null,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      },
+    ],
+    zones: [
+      {
+        kind: 'zone',
+        name: 'zone-1',
+        zoneType: 'rect',
+        points: [
+          { x: -60, y: -30 },
+          { x: 60, y: -30 },
+          { x: 60, y: 50 },
+          { x: -60, y: 50 },
+        ],
+        fillColor: null,
+        notes: null,
+      },
+    ],
+    annotations: [],
+    groups: [],
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    extra: {},
+  }
 }
 
 describe('computeMapLibreCamera', () => {
@@ -151,6 +217,8 @@ describe('computeMapLibreCamera', () => {
     expect(frame).not.toBeNull()
     expect(frame!.diagnostics.viewportCenterWorld.x).toBeCloseTo(350, 8)
     expect(frame!.diagnostics.viewportCenterWorld.y).toBeCloseTo(250, 8)
+    expect(frame!.diagnostics.backendId).toBe('local-mercator')
+    expect(frame!.diagnostics.warningThresholdMeters).toBe(10_000)
     expect(frame!.diagnostics.viewportCornerGeo).toHaveLength(4)
   })
 })
@@ -234,5 +302,65 @@ describe('screen-lock validation', () => {
 
     expect(afterMap.x - beforeMap.x).toBeCloseTo(afterCanvas.x - beforeCanvas.x, 6)
     expect(afterMap.y - beforeMap.y).toBeCloseTo(afterCanvas.y - beforeCanvas.y, 6)
+  })
+
+  it('keeps screen lock after viewport resize', () => {
+    const northBearingDeg = 18
+    const viewport = { x: -200, y: 80, scale: 2.1 }
+    const resizedScreen = { width: 1600, height: 900 }
+    const point = { x: 150, y: -45 }
+    const frame = createMapFrame(viewport, resizedScreen, location, northBearingDeg)
+
+    expect(frame).not.toBeNull()
+    const canvas = projectWorldToCanvasScreen(viewport, point)
+    const map = projectWorldToExpectedMapScreen(point, frame!, resizedScreen, location, northBearingDeg)
+
+    expect(map.x).toBeCloseTo(canvas.x, 6)
+    expect(map.y).toBeCloseTo(canvas.y, 6)
+  })
+
+  it('keeps screen lock for fit-to-content viewports', () => {
+    const northBearingDeg = 27
+    const scene = createScene()
+    const camera = new CameraController()
+    const screenSize = { width: 1280, height: 820 }
+    camera.initialize(screenSize)
+    const viewport = camera.zoomToFit(scene)
+    const frame = createMapFrame(viewport, screenSize, location, northBearingDeg)
+    const point = scene.plants[1]!.position
+
+    expect(frame).not.toBeNull()
+    const canvas = projectWorldToCanvasScreen(viewport, point)
+    const map = projectWorldToExpectedMapScreen(point, frame!, screenSize, location, northBearingDeg)
+
+    expect(map.x).toBeCloseTo(canvas.x, 6)
+    expect(map.y).toBeCloseTo(canvas.y, 6)
+  })
+
+  it('keeps screen lock for document-open auto-fit viewports', () => {
+    const northBearingDeg = 11
+    const scene = createScene()
+    scene.annotations.push({
+      kind: 'annotation',
+      id: 'annotation-1',
+      annotationType: 'text',
+      position: { x: 95, y: -55 },
+      text: 'Open document',
+      fontSize: 18,
+      rotationDeg: null,
+    })
+    const camera = new CameraController()
+    const screenSize = { width: 1100, height: 760 }
+    camera.initialize(screenSize)
+    const viewport = camera.zoomToFit(scene)
+    const frame = createMapFrame(viewport, screenSize, location, northBearingDeg)
+    const point = scene.annotations[0]!.position
+
+    expect(frame).not.toBeNull()
+    const canvas = projectWorldToCanvasScreen(viewport, point)
+    const map = projectWorldToExpectedMapScreen(point, frame!, screenSize, location, northBearingDeg)
+
+    expect(map.x).toBeCloseTo(canvas.x, 6)
+    expect(map.y).toBeCloseTo(canvas.y, 6)
   })
 })

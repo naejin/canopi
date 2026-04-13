@@ -1,9 +1,6 @@
 import type { SceneViewportState } from './runtime/scene'
 import {
-  stageScaleToMapZoom,
-  viewportCenterGeo,
-  viewportCenterWorld,
-  viewportCornerGeoPoints,
+  getActiveProjectionBackend,
 } from './projection'
 
 export interface MapLibreCameraLocation {
@@ -23,6 +20,8 @@ export interface MapLibreCameraOptions {
 }
 
 export interface MapFrameDiagnostics {
+  readonly backendId: string
+  readonly warningThresholdMeters: number
   readonly viewportCenterWorld: { x: number; y: number }
   readonly viewportCornerGeo: readonly [
     { lng: number; lat: number },
@@ -69,22 +68,26 @@ export function createMapFrame(
   if (screenSize.width <= 0 || screenSize.height <= 0) return null
   if (viewport.scale <= 0) return null
 
-  const center = viewportCenterGeo(
+  const backend = getActiveProjectionBackend()
+
+  const center = backend.viewportCenterGeo(
     viewport,
     screenSize,
     location.lat,
     location.lon,
     northBearingDeg,
   )
-  const viewportCenter = viewportCenterWorld(viewport, screenSize)
+  const viewportCenter = backend.viewportCenterWorld(viewport, screenSize)
 
   return {
     center: [center.lng, center.lat],
-    zoom: clampZoom(stageScaleToMapZoom(viewport.scale, location.lat)),
+    zoom: clampZoom(backend.stageScaleToMapZoom(viewport.scale, location.lat)),
     bearing: maplibreBearingFromNorthBearing(northBearingDeg),
     diagnostics: {
+      backendId: backend.id,
+      warningThresholdMeters: backend.warningThresholdMeters,
       viewportCenterWorld: viewportCenter,
-      viewportCornerGeo: viewportCornerGeoPoints(
+      viewportCornerGeo: backend.viewportCornerGeoPoints(
         viewport,
         screenSize,
         location.lat,
