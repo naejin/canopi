@@ -1,4 +1,5 @@
 mod detail;
+mod detail_contract;
 mod filters;
 mod flower;
 mod lookup;
@@ -684,7 +685,7 @@ mod tests {
             .map(|column| column.name)
             .collect();
 
-        for column in super::detail::detail_contract_columns() {
+        for column in super::detail_contract::detail_contract_columns() {
             assert!(
                 contract_columns.contains(*column),
                 "detail projection column '{column}' missing from schema contract"
