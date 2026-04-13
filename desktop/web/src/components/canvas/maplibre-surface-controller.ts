@@ -6,7 +6,7 @@ import {
   type TerrainLayerState,
 } from '../../maplibre/terrain'
 import { loadMapLibreTerrainSupport } from '../../maplibre/terrain-loader'
-import { MAPLIBRE_BASEMAP_SOURCE_ID } from '../../maplibre/config'
+import { MAPLIBRE_BASEMAP_SOURCE_ID, normalizeBasemapStyle } from '../../maplibre/config'
 import { syncCanvasPanelTargetOverlays } from '../../maplibre/canvas-overlays'
 import {
   IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
@@ -40,7 +40,7 @@ import {
 import { northBearingDeg } from '../../canvas/scene-metadata-state'
 import { sceneEntityRevision } from '../../canvas/runtime-mirror-state'
 import { hoveredPanelTargets, selectedPanelTargets } from '../../app/panel-targets/state'
-import { theme } from '../../app/settings/state'
+import { basemapStyle, theme } from '../../app/settings/state'
 import { currentDesign } from '../../state/design'
 import { loadMapLibre, type MapLibreApi, type MapLibreMapInstance } from './maplibre-loader'
 
@@ -58,6 +58,7 @@ export function useMapLibreCanvasSurfaceController({
   const generationRef = useRef(0)
   const cameraRef = useRef<MapFrame | null>(null)
   const terrainStateRef = useRef<TerrainLayerState | null>(null)
+  const basemapStyleRef = useRef<string | null>(null)
   const terrainGenerationRef = useRef(0)
   const stateRef = useRef<MapLibreCanvasSurfaceState>(IDLE_MAPLIBRE_CANVAS_SURFACE_STATE)
   const detachMapEventsRef = useRef<(() => void) | null>(null)
@@ -84,6 +85,7 @@ export function useMapLibreCanvasSurfaceController({
       mapRef.current.remove()
       mapRef.current = null
     }
+    basemapStyleRef.current = null
     publishMapDiagnostics(null, null)
     cameraRef.current = null
     terrainStateRef.current = null
@@ -233,15 +235,34 @@ export function useMapLibreCanvasSurfaceController({
     }
   }
 
-  const ensureMap = async (bearing: number | null): Promise<void> => {
+  const ensureMap = async (bearing: number | null, preferredBasemapStyle: string): Promise<void> => {
     const runtime = currentCanvasSession.peek()
     const location = currentDesign.peek()?.location ?? null
     const visibility = layerVisibility.peek()
     const visible = hasVisibleMapLayer(visibility, hillshadeVisible.peek())
     const surface = surfaceRef.current
+    const nextBasemapStyle = normalizeBasemapStyle(preferredBasemapStyle)
     if (!runtime || !location || !visible || !surface) {
       destroyMap()
       return
+    }
+
+    if (mapRef.current) {
+      if (basemapStyleRef.current !== nextBasemapStyle) {
+        destroyMap({
+          status: 'loading',
+          errorMessage: null,
+          terrainStatus: 'idle',
+          terrainErrorMessage: null,
+        })
+      } else {
+        mapRef.current.resize()
+        applyCamera(mapRef.current, runtime, location, bearing)
+        syncBasemapPresentation(mapRef.current)
+        syncOverlays()
+        void syncTerrain()
+        return
+      }
     }
 
     if (mapRef.current) {
@@ -268,11 +289,12 @@ export function useMapLibreCanvasSurfaceController({
       if (generation !== generationRef.current) return
       mapLibreApiRef.current = maplibre
 
-      const map = createCanvasMapLibreMap(maplibre, surface, initialCamera)
+      const map = createCanvasMapLibreMap(maplibre, surface, initialCamera, nextBasemapStyle)
       if (generation !== generationRef.current) {
         map.remove()
         return
       }
+      basemapStyleRef.current = nextBasemapStyle
 
       const markBasemapReady = (): void => {
         if (!ownsCurrentMapGeneration(map, generation)) return
@@ -363,6 +385,7 @@ export function useMapLibreCanvasSurfaceController({
     const visibleLayers = layerVisibility.value
     const mapVisible = hasVisibleMapLayer(visibleLayers, hillshadeVisible.value)
     const bearing = northBearingDeg.value
+    const preferredBasemapStyle = basemapStyle.value
     void runtime?.viewportRevision.value
 
     if (!runtime || !location || !mapVisible) {
@@ -370,7 +393,7 @@ export function useMapLibreCanvasSurfaceController({
       return
     }
 
-    void ensureMap(bearing)
+    void ensureMap(bearing, preferredBasemapStyle)
   })
 
   useSignalEffect(() => {

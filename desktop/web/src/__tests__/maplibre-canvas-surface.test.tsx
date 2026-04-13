@@ -13,7 +13,8 @@ import {
   layerVisibility,
 } from '../app/canvas-settings/signals'
 import { currentDesign } from '../state/design'
-import { theme } from '../app/settings/state'
+import { basemapStyle, theme } from '../app/settings/state'
+import { MAPLIBRE_BASEMAP_RASTER_LAYER_ID } from '../maplibre/config'
 
 const removeMock = vi.fn()
 const resizeMock = vi.fn()
@@ -168,6 +169,7 @@ describe('MapLibreCanvasSurface', () => {
     document.body.innerHTML = ''
     document.body.appendChild(container)
     currentDesign.value = null
+    basemapStyle.value = 'street'
     contourIntervalMeters.value = 0
     hillshadeVisible.value = false
     hillshadeOpacity.value = 0.55
@@ -371,7 +373,7 @@ describe('MapLibreCanvasSurface', () => {
       expect(mapConstructorMock).toHaveBeenCalledTimes(1)
       expect(removeMock).not.toHaveBeenCalled()
       expect(setPaintPropertyMock).toHaveBeenCalledWith('basemap-background', 'background-opacity', 0)
-      expect(setPaintPropertyMock).toHaveBeenCalledWith('openstreetmap-raster', 'raster-opacity', 0)
+      expect(setPaintPropertyMock).toHaveBeenCalledWith(MAPLIBRE_BASEMAP_RASTER_LAYER_ID, 'raster-opacity', 0)
     })
   })
 
@@ -698,9 +700,64 @@ describe('MapLibreCanvasSurface', () => {
 
     await eventually(() => {
       expect(setPaintPropertyMock).toHaveBeenCalledWith('basemap-background', 'background-opacity', 0.25)
-      expect(setPaintPropertyMock).toHaveBeenCalledWith('openstreetmap-raster', 'raster-opacity', 0.25)
+      expect(setPaintPropertyMock).toHaveBeenCalledWith(MAPLIBRE_BASEMAP_RASTER_LAYER_ID, 'raster-opacity', 0.25)
       expect(removeLayerMock).not.toHaveBeenCalledWith('contour-minor')
     })
+  })
+
+  it('recreates the map when the basemap style changes', async () => {
+    const originalMapTilerKey = import.meta.env.VITE_MAPTILER_KEY
+    ;(import.meta.env as { VITE_MAPTILER_KEY?: string }).VITE_MAPTILER_KEY = 'test-maptiler-key'
+
+    try {
+      currentDesign.value = {
+        version: 2,
+        name: 'Demo',
+        description: null,
+        location: { lat: 48.8566, lon: 2.3522, altitude_m: null },
+        north_bearing_deg: 0,
+        plant_species_colors: {},
+        layers: [],
+        plants: [],
+        zones: [],
+        annotations: [],
+        consortiums: [],
+        groups: [],
+        timeline: [],
+        budget: [],
+        created_at: '2026-04-12T00:00:00.000Z',
+        updated_at: '2026-04-12T00:00:00.000Z',
+        extra: {},
+      }
+      setCurrentCanvasSession(createRuntime())
+
+      await act(async () => {
+        render(<MapLibreCanvasSurface />, container)
+      })
+
+      expect(mapConstructorMock).toHaveBeenCalledTimes(1)
+
+      await act(async () => {
+        basemapStyle.value = 'satellite'
+      })
+
+      await eventually(() => {
+        expect(removeMock).toHaveBeenCalledTimes(1)
+        expect(mapConstructorMock).toHaveBeenCalledTimes(2)
+      })
+
+      const secondCall = mapConstructorMock.mock.calls[1] as [{ style?: unknown }] | undefined
+      const secondOptions = secondCall?.[0]
+      expect(secondOptions?.style).toMatchObject({
+        sources: {
+          'canopi-basemap-raster': expect.objectContaining({
+            tiles: [expect.stringContaining('api.maptiler.com/tiles/satellite-v4/{z}/{x}/{y}?key=test-maptiler-key')],
+          }),
+        },
+      })
+    } finally {
+      ;(import.meta.env as { VITE_MAPTILER_KEY?: string }).VITE_MAPTILER_KEY = originalMapTilerKey
+    }
   })
 
   it('updates contour paint in place without rebuilding terrain sources', async () => {
