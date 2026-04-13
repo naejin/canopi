@@ -18,6 +18,9 @@ const RAW_DOCUMENT = {
   groups: [],
   timeline: [],
   budget: [],
+  extra: {
+    preserved_from_file: 'keep-me',
+  },
   created_at: '2026-04-13T00:00:00.000Z',
   updated_at: '2026-04-13T00:00:00.000Z',
   schema_extension_flag: true,
@@ -32,6 +35,7 @@ describe('document format contract', () => {
     const normalized = normalizeLoadedDocument(RAW_DOCUMENT as unknown as CanopiFile)
 
     expect(normalized.extra).toEqual({
+      preserved_from_file: 'keep-me',
       schema_extension_flag: true,
       experimental_block: {
         source: 'future-version',

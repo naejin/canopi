@@ -7,13 +7,6 @@ import { currentDesign } from '../state/document'
 import { hillshadeVisible, layerVisibility, northBearingDeg } from '../state/canvas'
 import { locale } from '../state/app'
 
-const initMock = vi.fn(async () => {})
-const showCanvasChromeMock = vi.fn()
-const hideCanvasChromeMock = vi.fn()
-const initializeViewportMock = vi.fn()
-const attachRulersToMock = vi.fn()
-const resizeMock = vi.fn()
-const destroyMock = vi.fn()
 let mockBasemapState: {
   status: 'idle' | 'loading' | 'ready' | 'error'
   errorMessage: string | null
@@ -75,33 +68,8 @@ vi.mock('../components/canvas/MapLibreCanvasSurface', () => ({
   },
 }))
 
-vi.mock('../canvas/runtime/scene-runtime', () => ({
-  SceneCanvasRuntime: class {
-    init = initMock
-    initializeViewport = initializeViewportMock
-    attachRulersTo = attachRulersToMock
-    showCanvasChrome = showCanvasChromeMock
-    hideCanvasChrome = hideCanvasChromeMock
-    resize = resizeMock
-    destroy = destroyMock
-  },
-}))
-
-vi.mock('../state/document', async () => {
-  const actual = await vi.importActual<typeof import('../state/document')>('../state/document')
-  return {
-    ...actual,
-    loadCanvasFromDocument: vi.fn(),
-    consumeQueuedDocumentLoad: vi.fn(() => () => {}),
-    snapshotCanvasIntoCurrentDocument: vi.fn(),
-    disposeDocumentWorkflows: vi.fn(),
-    installConsortiumSync: vi.fn(),
-    writeCanvasIntoDocument: vi.fn(() => ''),
-  }
-})
-
-vi.mock('../ipc/design', () => ({
-  autosaveDesign: vi.fn(async () => undefined),
+vi.mock('../app/document-session/use-canvas-document-session', () => ({
+  useCanvasDocumentSession: vi.fn(),
 }))
 
 describe('CanvasPanel basemap feedback', () => {
@@ -120,13 +88,6 @@ describe('CanvasPanel basemap feedback', () => {
     hillshadeVisible.value = false
     northBearingDeg.value = 0
     currentDesign.value = null
-    initMock.mockClear()
-    showCanvasChromeMock.mockClear()
-    hideCanvasChromeMock.mockClear()
-    initializeViewportMock.mockClear()
-    attachRulersToMock.mockClear()
-    resizeMock.mockClear()
-    destroyMock.mockClear()
     mockBasemapState = {
       status: 'idle',
       errorMessage: null,

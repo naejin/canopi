@@ -1,13 +1,10 @@
 import { batch } from '@preact/signals'
 import type { CanopiFile } from '../types/design'
 import { currentDesign, nonCanvasRevision } from './design'
+export { replaceCurrentDesignSnapshot } from '../app/document-session/snapshot'
 
 interface DocumentMutationOptions {
   markDirty?: boolean
-}
-
-export function replaceCurrentDesignSnapshot(file: CanopiFile): void {
-  currentDesign.value = file
 }
 
 export function mutateCurrentDesign(

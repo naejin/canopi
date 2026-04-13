@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => {
   return {
     canvasSession: null as any,
-    extractExtra: vi.fn(() => ({ imported: true })),
     saveDesign: vi.fn(),
     saveDesignAs: vi.fn(),
     openDesignDialog: vi.fn(),
@@ -22,10 +21,6 @@ vi.mock('../canvas/session', async (importOriginal) => {
     },
   }
 })
-
-vi.mock('../state/document-extra', () => ({
-  extractExtra: mocks.extractExtra,
-}))
 
 vi.mock('../ipc/design', () => ({
   saveDesign: mocks.saveDesign,
@@ -144,8 +139,6 @@ async function flushMicrotasks(): Promise<void> {
 
 beforeEach(() => {
   mocks.canvasSession = makeSession()
-  mocks.extractExtra.mockReset()
-  mocks.extractExtra.mockReturnValue({ imported: true })
   mocks.saveDesign.mockReset()
   mocks.saveDesign.mockResolvedValue('/designs/current.canopi')
   mocks.saveDesignAs.mockReset()
@@ -180,7 +173,7 @@ describe('document replacement actions', () => {
     expect(mocks.saveDesign).not.toHaveBeenCalled()
     expect(mocks.loadDesign).toHaveBeenCalledWith('/designs/next.canopi')
     expect(mocks.canvasSession.replaceDocument).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'Next', extra: { imported: true } }),
+      expect.objectContaining({ name: 'Next', extra: {} }),
     )
     expect(currentDesign.value?.name).toBe('Next')
     expect(designName.value).toBe('Next')
@@ -318,7 +311,7 @@ describe('document replacement actions', () => {
 
     expect(mocks.loadDesign).toHaveBeenCalledWith('/tmp/template.canopi')
     expect(nextSession.replaceDocument).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'Downloaded Template', extra: { imported: true } }),
+      expect.objectContaining({ name: 'Downloaded Template', extra: {} }),
     )
     expect(nextSession.zoomToFit).toHaveBeenCalled()
     expect(designName.value).toBe('Forest Edge')

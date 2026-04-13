@@ -1,89 +1,14 @@
 import "./styles/global.css";
 import styles from "./App.module.css";
 import { t } from "./i18n";
-import { initTheme } from "./utils/theme";
-import { initShortcuts } from "./shortcuts/manager";
 import { useCallback, useRef } from "preact/hooks";
 import { lazy, Suspense } from "preact/compat";
-import { activePanel, sidePanel, sidePanelWidth, plantDbStatus, setBootstrappedSettings, flushQueuedSettingsPersist } from "./state/app";
-import { designDirty, saveCurrentDesign } from "./state/document";
-import { invoke } from "@tauri-apps/api/core";
-import type { SubsystemHealth } from "./types/health";
+import { activePanel, sidePanel, sidePanelWidth } from "./state/app";
 import { TitleBar } from "./components/shared/TitleBar";
 import { DegradedBanner } from "./components/shared/DegradedBanner";
 import { CommandPalette } from "./components/shared/CommandPalette";
 import { CanvasPanel } from "./components/panels/CanvasPanel";
 import { PanelBar } from "./components/panels/PanelBar";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { confirmCloseWithUnsavedChanges } from "./state/close-guard";
-
-import type { Settings } from "./types/settings";
-// Synchronous init — applies local defaults immediately (no theme flicker)
-initTheme();
-initShortcuts();
-
-// Async bootstrap — hydrate from persisted Rust settings, reconcile on arrival
-invoke<SubsystemHealth>('get_health')
-  .then((h) => { plantDbStatus.value = h.plant_db })
-  .catch((e) => console.error('Failed to query health:', e));
-
-invoke<Settings>('get_settings')
-  .then((s) => {
-    setBootstrappedSettings(s);
-  })
-  .catch((e) => console.error('Failed to bootstrap settings:', e));
-
-// Save-before-close guard — runs once at module init, not inside a component.
-// We keep a reference to the unlisten function so Vite HMR can remove the
-// previous handler before registering a new one (prevents duplicate prompts).
-//
-// Typed as `unknown` to prevent TypeScript's control-flow analysis from
-// narrowing the variable to `never` at the module top level (where it is
-// provably null on first load but may be a function on HMR re-execution).
-let _unlistenClose: unknown = null
-
-;(function registerCloseGuard() {
-  // On HMR re-execution, remove the previous listener before adding a new one.
-  if (typeof _unlistenClose === 'function') (_unlistenClose as () => void)()
-
-  getCurrentWindow().onCloseRequested(async (event) => {
-    flushQueuedSettingsPersist()
-
-    if (!designDirty.value) return  // clean — allow close immediately
-
-    // Prevent the default close so we can prompt the user
-    event.preventDefault()
-
-    const decision = await confirmCloseWithUnsavedChanges()
-
-    if (decision === 'cancel') {
-      return
-    }
-
-    if (decision === 'save') {
-      try {
-        await saveCurrentDesign()
-      } catch {
-        // Save failed or dialog was cancelled — do not close
-        return
-      }
-    }
-
-    // User chose "Don't save" (shouldSave=false) or save succeeded — close now.
-    // Must use destroy() instead of close() because close() re-emits
-    // closeRequested, re-entering this handler while designDirty is still true.
-    await getCurrentWindow().destroy()
-  }).then(unlisten => { _unlistenClose = unlisten })
-})()
-
-if (import.meta.hot) {
-  import.meta.hot.dispose(() => {
-    if (typeof _unlistenClose === 'function') {
-      ;(_unlistenClose as () => void)()
-      _unlistenClose = null
-    }
-  })
-}
 
 const MIN_SIDEBAR_WIDTH = 320;
 const MAX_SIDEBAR_RATIO = 0.9;
