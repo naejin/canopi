@@ -5,7 +5,7 @@ import { locale } from '../../app/shell/state'
 import { currentDesign } from '../../state/document'
 import { geocodeAddress } from '../../ipc/geocoding'
 import type { GeoResult } from '../../ipc/geocoding'
-import { clearDesignLocation, setDesignLocation } from '../../state/location-actions'
+import { clearDesignLocation, setDesignLocation } from '../../app/location/controller'
 import styles from './LocationInput.module.css'
 
 export function LocationInput() {

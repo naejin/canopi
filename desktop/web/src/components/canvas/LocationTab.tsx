@@ -9,7 +9,7 @@ import {
 import { locale } from '../../app/shell/state'
 import { geocodeAddress, type GeoResult } from '../../ipc/geocoding'
 import { currentDesign } from '../../state/document'
-import { clearDesignLocation, setDesignLocation } from '../../state/location-actions'
+import { clearDesignLocation, setDesignLocation } from '../../app/location/controller'
 import { navigateTo } from '../../app/shell/state'
 import { buildLocationCommit, computeSavedPinState } from './location-tab-logic'
 import styles from './LocationTab.module.css'

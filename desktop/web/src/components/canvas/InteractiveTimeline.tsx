@@ -17,9 +17,9 @@ import {
   addTimelineAction,
   deleteTimelineAction,
   updateTimelineAction,
-} from '../../state/timeline-actions'
+} from '../../app/timeline/controller'
 import { isEditableTarget } from '../../canvas/runtime/interaction/pointer-utils'
-import { markDocumentDirty } from '../../state/document-mutations'
+import { markDocumentDirty } from '../../app/document/controller'
 import {
   ACTION_TYPES,
   LABEL_SIDEBAR_WIDTH,

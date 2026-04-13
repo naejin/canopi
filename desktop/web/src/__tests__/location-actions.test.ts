@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { currentDesign, nonCanvasRevision } from '../state/design'
-import { clearDesignLocation, setDesignLocation } from '../state/location-actions'
+import { clearDesignLocation, setDesignLocation } from '../app/location/controller'
 
 beforeEach(() => {
   nonCanvasRevision.value = 0

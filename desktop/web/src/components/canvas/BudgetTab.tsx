@@ -12,7 +12,7 @@ import {
   setHoveredPanelTargets,
   setSelectedPanelTargets,
 } from '../../app/panel-targets/coordinator'
-import { setPlantBudgetPrice, setBudgetCurrency } from '../../state/budget-actions'
+import { setPlantBudgetPrice, setBudgetCurrency } from '../../app/budget/controller'
 import { Dropdown } from '../shared/Dropdown'
 import { CURRENCY_ITEMS } from './budget-currencies'
 import { countPlants, buildPriceMap, formatCurrency, escapeCsvField } from './budget-helpers'

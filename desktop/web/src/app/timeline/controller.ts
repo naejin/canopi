@@ -1,6 +1,6 @@
-import type { TimelineAction } from '../types/design'
-import { panelTargetsEqual } from '../panel-targets'
-import { updateDesignArray } from './document-mutations'
+import type { TimelineAction } from '../../types/design'
+import { panelTargetsEqual } from '../../panel-targets'
+import { updateDesignArray } from '../document/controller'
 
 interface TimelineUpdateOptions {
   markDirty?: boolean
@@ -16,7 +16,9 @@ function updateTimeline(
 export function addTimelineAction(action: Omit<TimelineAction, 'order'>): void {
   updateTimeline((timeline) => {
     let maxOrder = -1
-    for (const a of timeline) if (a.order > maxOrder) maxOrder = a.order
+    for (const existing of timeline) {
+      if (existing.order > maxOrder) maxOrder = existing.order
+    }
     return [...timeline, { ...action, order: maxOrder + 1 }]
   })
 }
@@ -28,9 +30,9 @@ export function updateTimelineAction(
 ): void {
   updateTimeline(
     (timeline) => {
-      const idx = timeline.findIndex((a) => a.id === actionId)
-      if (idx === -1) return timeline
-      const existing = timeline[idx]!
+      const index = timeline.findIndex((action) => action.id === actionId)
+      if (index === -1) return timeline
+      const existing = timeline[index]!
       const next = { ...existing, ...patch }
       if (
         next.start_date === existing.start_date &&
@@ -42,9 +44,12 @@ export function updateTimelineAction(
         next.recurrence === existing.recurrence &&
         panelTargetsEqual(next.targets, existing.targets) &&
         next.depends_on === existing.depends_on
-      ) return timeline
+      ) {
+        return timeline
+      }
+
       const updated = [...timeline]
-      updated[idx] = next
+      updated[index] = next
       return updated
     },
     options,
@@ -56,7 +61,7 @@ export function deleteTimelineAction(
   options: TimelineUpdateOptions = {},
 ): void {
   updateTimeline((timeline) => {
-    if (!timeline.some((a) => a.id === actionId)) return timeline
-    return timeline.filter((a) => a.id !== actionId)
+    if (!timeline.some((action) => action.id === actionId)) return timeline
+    return timeline.filter((action) => action.id !== actionId)
   }, options)
 }

@@ -4,7 +4,7 @@ import { STRATA_ROWS } from "../../canvas/consortium-renderer";
 import { consortiumTarget, getConsortiumCanonicalName } from "../../panel-targets";
 import { sceneEntityRevision } from "../../state/canvas";
 import { currentDesign } from "../../state/design";
-import { mutateCurrentDesign } from "../../state/document-mutations";
+import { mutateCurrentDesign } from "../document/controller";
 
 const DEFAULT_STRATUM: string = STRATA_ROWS[STRATA_ROWS.length - 1]!;
 

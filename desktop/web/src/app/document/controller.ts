@@ -1,7 +1,6 @@
 import { batch } from '@preact/signals'
-import type { CanopiFile } from '../types/design'
-import { currentDesign, nonCanvasRevision } from './design'
-export { replaceCurrentDesignSnapshot } from '../app/document-session/snapshot'
+import type { CanopiFile } from '../../types/design'
+import { currentDesign, nonCanvasRevision } from '../../state/design'
 
 interface DocumentMutationOptions {
   markDirty?: boolean
@@ -31,10 +30,6 @@ export function markDocumentDirty(): void {
   nonCanvasRevision.value += 1
 }
 
-/**
- * Generic updater for array fields on CanopiFile.
- * Identity-guards the array to prevent no-op mutations from creating new objects.
- */
 export function updateDesignArray<K extends keyof CanopiFile>(
   key: K,
   updater: (arr: CanopiFile[K]) => CanopiFile[K],

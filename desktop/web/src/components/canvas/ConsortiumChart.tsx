@@ -5,9 +5,9 @@ import { locale, theme } from '../../app/shell/state'
 import { plantSpeciesColors, hoveredCanvasTargets, sceneEntityRevision, plantNamesRevision } from '../../state/canvas'
 import { currentDesign } from '../../state/document'
 import { currentCanvasSession } from '../../canvas/session'
-import { moveConsortiumEntry, reorderConsortiumEntry } from '../../state/consortium-actions'
+import { moveConsortiumEntry, reorderConsortiumEntry } from '../../app/consortium/controller'
 import { clearHoveredPanelTargets, setHoveredPanelTargets } from '../../app/panel-targets/coordinator'
-import { markDocumentDirty } from '../../state/document-mutations'
+import { markDocumentDirty } from '../../app/document/controller'
 import { consortiumTarget, getConsortiumCanonicalName, isSpeciesTarget } from '../../panel-targets'
 import {
   buildConsortiumBars,
