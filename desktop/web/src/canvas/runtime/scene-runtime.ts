@@ -17,7 +17,7 @@ import { lockedObjectIds, plantNamesRevision, sceneEntityRevision } from '../run
 import type { ColorByAttribute, PlantSizeMode } from '../plant-display-state'
 import type { CanopiFile, PanelTarget, PlacedPlant } from '../../types/design'
 import type { SelectedPlantColorContext } from '../plant-color-context'
-import { clearCanvasSelection, setCanvasSelection, setCanvasTool } from '../session-state'
+import { setCanvasSelection, setCanvasTool } from '../session-state'
 import { syncPlantSpeciesColorDefaults } from '../plant-species-color-defaults'
 import { refreshCanvasColorCache } from '../theme-refresh'
 import { CameraController } from './camera'
@@ -34,9 +34,9 @@ import {
   syncCanvasSignalsFromScene,
   syncPresentationSignalsFromSceneSession,
 } from './scene-runtime/scene-sync'
+import { SceneRuntimeDocumentBridge } from './scene-runtime/document'
 import { installSceneRuntimeEffects } from './scene-runtime/effects'
 import type { ScenePersistedState } from './scene'
-import { createScenePatchCommand, type SceneCommandSnapshot } from './scene-commands'
 import { SceneHistory } from './scene-history'
 import { SceneRuntimeMutationController } from './scene-runtime/mutations'
 import { SceneRuntimePresentationController } from './scene-runtime/presentation'
@@ -63,6 +63,7 @@ export class SceneCanvasRuntime implements CanvasRuntime {
   private _chromeVisible = false
   private readonly _history = new SceneHistory()
   private readonly _mutations: SceneRuntimeMutationController
+  private readonly _documents: SceneRuntimeDocumentBridge
   private readonly _disposeEffects: Array<() => void> = []
   private _renderEpoch = 0
 
@@ -76,6 +77,20 @@ export class SceneCanvasRuntime implements CanvasRuntime {
         plantNamesRevision.value += 1
       },
     })
+    this._documents = new SceneRuntimeDocumentBridge({
+      sceneStore: this._sceneStore,
+      history: this._history,
+      setSelection: (ids) => this._setSelection(ids),
+      resetTransientRuntimeState: () => this._resetTransientRuntimeState(),
+      clearHoveredTargets: () => this._syncHoveredCanvasTargets(null),
+      clearPanelOriginTargets: () => this._clearPanelOriginTargets(),
+      syncCanvasSignalsFromScene: () => this._syncCanvasSignalsFromScene(),
+      invalidateScene: () => this._invalidate('scene'),
+      incrementViewportRevision: () => {
+        this._viewportRevision.value += 1
+      },
+      applySignalBackedSceneState: (options) => this._applySignalBackedSceneState(options),
+    })
     this._mutations = new SceneRuntimeMutationController({
       sceneStore: this._sceneStore,
       selection: {
@@ -88,8 +103,8 @@ export class SceneCanvasRuntime implements CanvasRuntime {
         },
       },
       history: {
-        captureSnapshot: () => this._captureCommandSnapshot(),
-        markDirty: (before, type) => this._markCanvasDirty(before, type),
+        captureSnapshot: () => this._documents.captureCommandSnapshot(),
+        markDirty: (before, type) => this._documents.markDirty(before, type),
       },
       presentation: {
         syncSignals: () => syncPresentationSignalsFromSceneSession(this._sceneStore),
@@ -124,7 +139,7 @@ export class SceneCanvasRuntime implements CanvasRuntime {
       clearSelection: () => this._setSelection([]),
       setTool: (name) => this.setTool(name),
       render: (kind) => this._invalidate(kind),
-      markDirty: (before) => this._markCanvasDirty(before, 'interaction'),
+      markDirty: (before) => this._documents.markDirty(before, 'interaction'),
       getLocalizedCommonNames: () => this._presentation.getLocalizedCommonNames(),
       setHoveredEntityId: (id) => {
         this._setHoveredEntityId(id)
@@ -219,14 +234,14 @@ export class SceneCanvasRuntime implements CanvasRuntime {
   get canRedo() { return this._history.canRedo }
 
   undo(): void {
-    this._history.undo(this._historyRuntime())
+    this._history.undo(this._documents.historyRuntime())
     this._syncCanvasSignalsFromScene()
     sceneEntityRevision.value += 1
     this._invalidate('scene')
   }
 
   redo(): void {
-    this._history.redo(this._historyRuntime())
+    this._history.redo(this._documents.historyRuntime())
     this._syncCanvasSignalsFromScene()
     sceneEntityRevision.value += 1
     this._invalidate('scene')
@@ -319,7 +334,7 @@ export class SceneCanvasRuntime implements CanvasRuntime {
 
   async ensureSpeciesCacheEntries(canonicalNames: string[], activeLocale: string): Promise<boolean> {
     const result = await this._presentation.refreshSpeciesCacheEntries(canonicalNames, activeLocale)
-    this._applyPresentationBackfills(result.backfills)
+    this._documents.applyPresentationBackfills(result.backfills)
     if (result.changed) this._invalidate('scene')
     return result.changed
   }
@@ -337,70 +352,23 @@ export class SceneCanvasRuntime implements CanvasRuntime {
   }
 
   loadDocument(file: CanopiFile): void {
-    this._syncHoveredCanvasTargets(null)
-    this._clearPanelOriginTargets()
-    this._sceneStore.hydrate(file)
-    this._viewportRevision.value += 1
-    this._history.clear()
-    lockedObjectIds.value = new Set()
-    clearCanvasSelection()
-    this._syncCanvasSignalsFromScene()
-    this._invalidate('scene')
-    sceneEntityRevision.value += 1
+    this._documents.loadDocument(file)
   }
 
   replaceDocument(file: CanopiFile): void {
-    this._resetTransientRuntimeState()
-    this._syncHoveredCanvasTargets(null)
-    this._clearPanelOriginTargets()
-    this._sceneStore.hydrate(file)
-    this._viewportRevision.value += 1
-    this._history.clear()
-    this._syncCanvasSignalsFromScene()
-    this._invalidate('scene')
-    sceneEntityRevision.value += 1
+    this._documents.replaceDocument(file)
   }
 
   serializeDocument(metadata: CanvasRuntimeDocumentMetadata, doc: CanopiFile): CanopiFile {
-    // Check before updatePersisted — if neither signal nor persisted has guides,
-    // skip guide sync so doc-provided guides in extra are preserved.
-    const shouldSyncGuides = guides.value.length > 0 || Array.isArray(this._sceneStore.persisted.extra?.guides)
-    this._sceneStore.updatePersisted((persisted) => {
-      persisted.name = metadata.name
-      persisted.description = metadata.description ?? doc.description ?? null
-      persisted.location = metadata.location
-        ? {
-            lat: metadata.location.lat,
-            lon: metadata.location.lon,
-            altitudeM: metadata.location.altitude_m ?? null,
-          }
-        : hydrateLocationFromDoc(doc.location ?? null, persisted.location)
-      persisted.northBearingDeg = metadata.northBearingDeg ?? doc.north_bearing_deg ?? persisted.northBearingDeg
-      persisted.createdAt = doc.created_at ?? persisted.createdAt
-      persisted.extra = { ...(doc.extra ?? persisted.extra ?? {}) }
-    })
-    this._applySignalBackedSceneState({ recordHistory: false, syncGuides: shouldSyncGuides })
-
-    // Canvas-only output from scene store
-    const canvasOutput = this._sceneStore.toCanopiFile({ now: new Date() })
-
-    // Compose final document: canvas state + non-canvas sections from document store
-    return {
-      ...canvasOutput,
-      description: metadata.description ?? doc.description ?? canvasOutput.description,
-      consortiums: doc.consortiums,
-      timeline: doc.timeline,
-      budget: doc.budget,
-      budget_currency: doc.budget_currency ?? 'EUR',
-    }
+    return this._documents.serializeDocument(metadata, doc)
   }
 
   markSaved(): void {
-    this._history.markSaved()
+    this._documents.markSaved()
   }
 
   clearHistory(): void {
-    this._history.clear()
+    this._documents.clearHistory()
   }
 
   destroy(): void {
@@ -420,17 +388,6 @@ export class SceneCanvasRuntime implements CanvasRuntime {
       renderer.setViewport(this._camera.viewport)
     })
     this._invalidate('chrome')
-  }
-
-  private _markCanvasDirty(before: SceneCommandSnapshot, type = 'scene-mutation'): void {
-    const after = this._captureCommandSnapshot()
-    const command = createScenePatchCommand(type, before, after)
-    if (!command) return
-    this._history.record(command)
-    this._sceneStore.updateSession((session) => {
-      session.documentRevision += 1
-    })
-    sceneEntityRevision.value += 1
   }
 
   private _setViewport(
@@ -503,27 +460,6 @@ export class SceneCanvasRuntime implements CanvasRuntime {
     syncCanvasSignalsFromScene(this._sceneStore)
   }
 
-  private _captureCommandSnapshot(): SceneCommandSnapshot {
-    const snapshot = this._sceneStore.snapshot()
-    return {
-      persisted: snapshot.persisted,
-      session: snapshot.session,
-      lockedIds: new Set(lockedObjectIds.value),
-    }
-  }
-
-  private _historyRuntime() {
-    return {
-      sceneStore: this._sceneStore,
-      setSelection: (ids: Iterable<string>) => {
-        this._setSelection(ids)
-      },
-      setLockedIds: (ids: Iterable<string>) => {
-        lockedObjectIds.value = new Set(ids)
-      },
-    }
-  }
-
   private _installEffects(): void {
     this._disposeEffects.push(...installSceneRuntimeEffects({
       onTheme: () => {
@@ -554,7 +490,7 @@ export class SceneCanvasRuntime implements CanvasRuntime {
     const renderEpoch = ++this._renderEpoch
     this._applySignalBackedSceneState({ recordHistory: false, syncGuides: true })
     const presentation = await this._presentation.refreshCurrentPresentationData()
-    this._applyPresentationBackfills(presentation.backfills)
+    this._documents.applyPresentationBackfills(presentation.backfills)
     if (renderEpoch !== this._renderEpoch) return
     const snapshot = this._presentation.buildRendererSnapshot()
     await this._rendererHost.run((renderer) => {
@@ -595,39 +531,20 @@ export class SceneCanvasRuntime implements CanvasRuntime {
   private _applySignalBackedSceneState(options: { recordHistory: boolean; syncGuides: boolean }): boolean {
     return applySignalBackedSceneState({
       sceneStore: this._sceneStore,
-      captureSnapshot: () => this._captureCommandSnapshot(),
-      markDirty: (before, type) => this._markCanvasDirty(before, type),
+      captureSnapshot: () => this._documents.captureCommandSnapshot(),
+      markDirty: (before, type) => this._documents.markDirty(before, type),
     }, options)
   }
 
   private _addGuide(axis: 'h' | 'v', position: number): void {
-    const before = this._captureCommandSnapshot()
+    const before = this._documents.captureCommandSnapshot()
     guides.value = [
       ...guides.value,
       { id: crypto.randomUUID(), axis, position },
     ]
     this._applySignalBackedSceneState({ recordHistory: false, syncGuides: true })
-    this._markCanvasDirty(before, 'guide-add')
+    this._documents.markDirty(before, 'guide-add')
     this._renderChrome()
-  }
-
-  private _applyPresentationBackfills(
-    backfills: ReadonlyArray<{ plantId: string; stratum: string | null; canopySpreadM: number | null; scale: number | null }> | null,
-  ): void {
-    if (!backfills || backfills.length === 0) return
-    const byId = new Map(backfills.map((entry) => [entry.plantId, entry]))
-    this._sceneStore.updatePersisted((draft) => {
-      draft.plants = draft.plants.map((plant) => {
-        const next = byId.get(plant.id)
-        if (!next) return plant
-        return {
-          ...plant,
-          stratum: next.stratum,
-          canopySpreadM: next.canopySpreadM,
-          scale: next.scale,
-        }
-      })
-    })
   }
 
   private _resolveHighlightedTargets(scene: ScenePersistedState): { plantIds: readonly string[]; zoneIds: readonly string[] } {
@@ -636,17 +553,5 @@ export class SceneCanvasRuntime implements CanvasRuntime {
       ...hoveredPanelTargets.value,
     ]
     return resolvePanelTargets(combinedTargets, scene)
-  }
-}
-
-function hydrateLocationFromDoc(
-  location: CanopiFile['location'] | null,
-  fallback: ScenePersistedState['location'],
-) {
-  if (!location) return fallback ?? null
-  return {
-    lat: location.lat,
-    lon: location.lon,
-    altitudeM: location.altitude_m ?? null,
   }
 }
