@@ -12,7 +12,7 @@ vi.mock('../app/canvas-settings/controller', async (importOriginal) => {
 
 import { BottomPanel } from '../components/canvas/BottomPanel'
 import { commitBottomPanelHeight } from '../app/canvas-settings/controller'
-import { bottomPanelHeight, bottomPanelOpen, bottomPanelTab } from '../state/canvas'
+import { bottomPanelHeight, bottomPanelOpen, bottomPanelTab } from '../app/canvas-settings/bottom-panel-state'
 
 describe('BottomPanel', () => {
   let container: HTMLDivElement

@@ -1,6 +1,6 @@
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
-import { type BottomPanelTab } from '../../state/canvas'
+import { type BottomPanelTab } from '../../app/canvas-settings/bottom-panel-state'
 import { openBottomPanel, setBottomPanelOpen } from '../../app/canvas-settings/controller'
 import { bottomPanelView } from '../../app/canvas-settings/state'
 import styles from './BottomPanelLauncher.module.css'

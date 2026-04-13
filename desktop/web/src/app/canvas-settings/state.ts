@@ -1,10 +1,6 @@
 import { computed } from '@preact/signals'
 import {
-  VISIBLE_BOTTOM_PANEL_TABS,
   activeLayerName,
-  bottomPanelHeight,
-  bottomPanelOpen,
-  bottomPanelTab,
   contourIntervalMeters,
   hillshadeOpacity,
   hillshadeVisible,
@@ -12,6 +8,12 @@ import {
   layerPanelOpen,
   layerVisibility,
 } from '../../state/canvas'
+import {
+  VISIBLE_BOTTOM_PANEL_TABS,
+  bottomPanelHeight,
+  bottomPanelOpen,
+  bottomPanelTab,
+} from './bottom-panel-state'
 
 export const bottomPanelView = computed(() => ({
   height: bottomPanelHeight.value,

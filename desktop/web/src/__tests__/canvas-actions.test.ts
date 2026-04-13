@@ -3,15 +3,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('../ipc/settings', () => ({ setSettings: vi.fn().mockResolvedValue(undefined) }))
 import { setSettings } from '../ipc/settings'
 import {
-  VISIBLE_BOTTOM_PANEL_TABS,
-  bottomPanelOpen,
-  bottomPanelTab,
   contourIntervalMeters,
   hillshadeOpacity,
   hillshadeVisible,
   layerOpacity,
   layerVisibility,
 } from '../state/canvas'
+import {
+  VISIBLE_BOTTOM_PANEL_TABS,
+  bottomPanelOpen,
+  bottomPanelTab,
+} from '../app/canvas-settings/bottom-panel-state'
 import {
   openBottomPanel,
   setBottomPanelTab,

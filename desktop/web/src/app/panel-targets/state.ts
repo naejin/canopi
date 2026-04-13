@@ -1,5 +1,5 @@
 import { signal } from '@preact/signals'
-import type { BottomPanelTab } from '../../state/canvas'
+import type { BottomPanelTab } from '../canvas-settings/bottom-panel-state'
 import type { PanelTarget } from '../../types/design'
 
 export const hoveredPanelTargets = signal<readonly PanelTarget[]>([])

@@ -3,7 +3,7 @@ import {
   selectedPanelTargetOrigin,
   selectedPanelTargets,
 } from "./state";
-import type { BottomPanelTab } from "../../state/canvas";
+import type { BottomPanelTab } from "../canvas-settings/bottom-panel-state";
 import { panelTargetsEqual } from "../../panel-targets";
 import type { PanelTarget } from "../../types/design";
 

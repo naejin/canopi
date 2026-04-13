@@ -6,6 +6,8 @@ import {
   bottomPanelHeight,
   bottomPanelOpen,
   bottomPanelTab,
+} from '../canvas-settings/bottom-panel-state'
+import {
   contourIntervalMeters,
   hillshadeOpacity,
   hillshadeVisible,

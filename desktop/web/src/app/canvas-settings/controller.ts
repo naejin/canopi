@@ -1,10 +1,6 @@
 import { batch } from '@preact/signals'
 import {
-  type BottomPanelTab,
   activeLayerName,
-  bottomPanelHeight,
-  bottomPanelOpen,
-  bottomPanelTab,
   contourIntervalMeters,
   gridVisible,
   hillshadeOpacity,
@@ -14,6 +10,12 @@ import {
   layerPanelOpen,
   layerVisibility,
 } from '../../state/canvas'
+import {
+  type BottomPanelTab,
+  bottomPanelHeight,
+  bottomPanelOpen,
+  bottomPanelTab,
+} from './bottom-panel-state'
 import { persistCurrentSettings, queueSettingsPersist } from '../settings/persistence'
 
 export function setLayerPanelOpen(open: boolean): void {
