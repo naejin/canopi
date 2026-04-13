@@ -86,15 +86,6 @@ export function hasVisibleMapLayer(
 export const plantColorMenuOpen = signal<boolean>(false)
 export const plantSpeciesColors = signal<Record<string, string>>({})
 
-// Plant stamp tool
-export interface PlantStampSpecies {
-  canonical_name: string
-  common_name: string | null
-  stratum: string | null
-  width_max_m: number | null
-}
-export const plantStampSpecies = signal<PlantStampSpecies | null>(null)
-
 // Canvas entity revision — incremented on every scene mutation (plant/zone/annotation
 // changes) so bottom-panel components can subscribe to canvas-store changes. Parallel
 // to nonCanvasRevision in state/design.ts which tracks document-store changes.

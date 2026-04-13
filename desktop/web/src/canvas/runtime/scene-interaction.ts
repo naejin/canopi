@@ -3,10 +3,10 @@ import { getCanvasTool } from '../session-state'
 import {
   guides,
   lockedObjectIds,
-  plantStampSpecies,
   snapToGridEnabled,
   snapToGuidesEnabled,
 } from '../../state/canvas'
+import { plantStampSpecies } from '../plant-tool-state'
 import { gridInterval, snapToGrid } from '../grid'
 import { snapToGuides } from '../guides'
 import type { SceneStore, ScenePoint } from './scene'
