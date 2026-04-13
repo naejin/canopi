@@ -1,6 +1,7 @@
-# Rewrite Plan: `arch-rewrite-core`
+# Rewrite Architecture: `arch-rewrite-core`
 
-This branch is the architecture reset branch for Canopi's next core.
+This branch is the architecture reset branch for Canopi's next core and now reflects
+the target architecture that the rewrite is converging on.
 
 ## Goal
 
@@ -22,6 +23,19 @@ Preserve the current shipped product shell while replacing the internal architec
 - UI components must not become direct IPC clients for cross-feature workflows.
 - The rewrite may emit a new `.canopi` format, but old-file import should remain possible.
 
+## Current Shape
+
+- Generated TypeScript transport bindings come from `common-types`.
+- Frontend orchestration lives under `desktop/web/src/app/`.
+- Frontend document authority stays in `state/design.ts`; legacy `state/app.ts`,
+  `state/document.ts`, and `state/canvas.ts` are gone.
+- Canvas runtime responsibilities are split across `scene-runtime.ts` and focused
+  helpers for document, presentation, chrome, render scheduling, and mutations.
+- MapLibre is mounted through `MapLibreCanvasSurface.tsx`, with orchestration in
+  `maplibre-surface-controller.ts` and no document/camera authority of its own.
+- Backend command modules delegate to `desktop/src/services/*`.
+- Plant DB detail projection and row mapping are separated from the orchestration path.
+
 ## Branch Strategy
 
 - Branch name: `arch-rewrite-core`
@@ -33,25 +47,26 @@ Preserve the current shipped product shell while replacing the internal architec
 
 These files require single-owner edits per milestone:
 
-- `desktop/web/src/app.tsx`
 - `desktop/web/src/components/panels/CanvasPanel.tsx`
 - `desktop/web/src/components/canvas/MapLibreCanvasSurface.tsx`
+- `desktop/web/src/components/canvas/maplibre-surface-controller.ts`
 - `desktop/web/src/canvas/runtime/scene-runtime.ts`
-- `desktop/web/src/state/app.ts`
-- `desktop/web/src/state/document.ts`
-- `desktop/web/src/state/canvas.ts`
 - `desktop/src/lib.rs`
+- `desktop/src/db/plant_db.rs`
+- `desktop/src/db/plant_db/detail.rs`
 - `common-types/src/design.rs`
 - `common-types/src/species.rs`
 
-## First Milestones
+## Major Milestones Landed
 
-1. Rewrite scaffold and guardrails
-2. Generated transport bindings from `common-types`
-3. Persistence and orchestration invariant tests
-4. Frontend app/session extraction
-5. Canvas/runtime decomposition
-6. Backend service extraction
+1. Rewrite scaffold and generated transport bindings
+2. Persistence and orchestration invariant tests
+3. Frontend app/session, shell, settings, and feature-controller extraction
+4. Removal of legacy frontend state facades
+5. Canvas/runtime decomposition across document, mutation, presentation, chrome, and render seams
+6. Backend service extraction across document, settings, tiles, adaptation, export, and related commands
+7. Plant DB detail contract and row-mapper separation
+8. Schema-contract test support extraction and relocation of contract assertions
 
 ## Implementation Rule
 
