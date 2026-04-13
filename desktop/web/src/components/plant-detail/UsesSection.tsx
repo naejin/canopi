@@ -1,5 +1,5 @@
 import { t } from '../../i18n';
-import { locale } from '../../state/app';
+import { locale } from '../../app/settings/state';
 import type { SpeciesUse } from '../../types/species';
 import styles from './PlantDetail.module.css';
 

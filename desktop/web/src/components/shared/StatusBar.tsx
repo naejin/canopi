@@ -1,5 +1,6 @@
-import { locale, theme, persistCurrentSettings } from "../../state/app";
-import { autosaveFailed } from "../../state/document";
+import { locale, theme } from "../../app/settings/state";
+import { persistCurrentSettings } from "../../app/settings/persistence";
+import { autosaveFailed } from "../../state/design";
 import { t } from "../../i18n";
 import styles from "./StatusBar.module.css";
 

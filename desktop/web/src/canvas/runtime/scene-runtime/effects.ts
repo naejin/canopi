@@ -1,15 +1,14 @@
 import { effect } from '@preact/signals'
-import { locale, theme } from '../../../state/app'
+import { locale, theme } from '../../../app/settings/state'
+import { hoveredPanelTargets, selectedPanelTargets } from '../../../app/panel-targets/state'
 import {
   gridVisible,
-  guides,
-  hoveredPanelTargets,
   layerLockState,
   layerOpacity,
   layerVisibility,
   rulersVisible,
-  selectedPanelTargets,
-} from '../../../state/canvas'
+} from '../../../app/canvas-settings/signals'
+import { guides } from '../../scene-metadata-state'
 
 interface SceneRuntimeEffectsDeps {
   onTheme: () => void

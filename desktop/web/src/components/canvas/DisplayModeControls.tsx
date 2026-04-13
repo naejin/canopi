@@ -1,6 +1,11 @@
-import { plantColorByAttr, plantSizeMode, type PlantSizeMode, type ColorByAttribute } from '../../state/canvas'
+import {
+  plantColorByAttr,
+  plantSizeMode,
+  type PlantSizeMode,
+  type ColorByAttribute,
+} from '../../canvas/plant-display-state'
 import { t } from '../../i18n'
-import { locale } from '../../state/app'
+import { locale } from '../../app/settings/state'
 import { getCurrentCanvasSession } from '../../canvas/session'
 import { Dropdown, type DropdownItem } from '../shared/Dropdown'
 import styles from './DisplayModeControls.module.css'

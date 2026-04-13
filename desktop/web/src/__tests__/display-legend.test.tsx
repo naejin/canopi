@@ -1,8 +1,8 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { plantColorByAttr } from '../canvas/plant-display-state'
 import { DisplayLegend } from '../components/canvas/DisplayLegend'
-import { plantColorByAttr } from '../state/canvas'
 
 describe('DisplayLegend', () => {
   let container: HTMLDivElement

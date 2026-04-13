@@ -1,17 +1,7 @@
 import { useRef, useEffect, useState } from 'preact/hooks'
 import { t } from '../../i18n'
-import { autoSaveIntervalMs, flushQueuedSettingsPersist } from '../../state/app'
-import {
-  currentDesign, designName, designPath, designDirty,
-  writeCanvasIntoDocument, loadCanvasFromDocument, autosaveFailed,
-  consumeQueuedDocumentLoad,
-  snapshotCanvasIntoCurrentDocument,
-  disposeDocumentWorkflows,
-  installConsortiumSync,
-} from '../../state/document'
-import { autosaveDesign } from '../../ipc/design'
-import { getCurrentCanvasSession, setCurrentCanvasSession } from '../../canvas/session'
-import { SceneCanvasRuntime } from '../../canvas/runtime/scene-runtime'
+import { currentDesign } from '../../state/design'
+import { useCanvasDocumentSession } from '../../app/document-session/use-canvas-document-session'
 import { CanvasToolbar } from '../canvas/CanvasToolbar'
 import { CompassOverlay } from '../canvas/CompassOverlay'
 import { ZoomControls } from '../canvas/ZoomControls'
@@ -28,12 +18,9 @@ import { BottomPanel } from '../canvas/BottomPanel'
 import { BottomPanelLauncher } from '../canvas/BottomPanelLauncher'
 import { LayerPanel } from '../canvas/LayerPanel'
 import { WelcomeScreen } from '../shared/WelcomeScreen'
-import { canvasDirty, markCanvasDetachedDirty } from '../../state/design'
-import { hasVisibleMapLayer, hillshadeVisible, layerVisibility } from '../../state/canvas'
+import { hasVisibleMapLayer, hillshadeVisible, layerVisibility } from '../../app/canvas-settings/signals'
 import { formatLocationSummary } from '../../utils/location'
 import styles from './Panels.module.css'
-
-// Autosave interval is now configurable via Rust settings (autoSaveIntervalMs signal)
 
 export function CanvasPanel() {
   const canvasAreaRef = useRef<HTMLDivElement>(null)
@@ -45,81 +32,7 @@ export function CanvasPanel() {
   const [locationCueVisible, setLocationCueVisible] = useState(false)
   const lastLocationRef = useRef<string | null>(null)
 
-  useEffect(() => {
-    const container = containerRef.current
-    const canvasArea = canvasAreaRef.current
-    if (!container || !canvasArea) return
-
-    const runtime = new SceneCanvasRuntime()
-    let cancelled = false
-    let cancelQueuedLoad = () => {}
-    let resizeObserver: ResizeObserver | null = null
-
-    void runtime.init(container).then(() => {
-      if (cancelled) return
-
-      setCurrentCanvasSession(runtime)
-      runtime.initializeViewport()
-      if (rulerOverlayRef.current) {
-        runtime.attachRulersTo(rulerOverlayRef.current)
-      }
-      if (currentDesign.value) {
-        loadCanvasFromDocument(currentDesign.value, runtime)
-        runtime.showCanvasChrome()
-      } else {
-        // Install consortium sync unconditionally — queued document loads
-        // (OS file-open) call applyDocumentReplacement which does not go
-        // through loadCanvasFromDocument, so the sync must already be active.
-        installConsortiumSync()
-        runtime.hideCanvasChrome()
-      }
-
-      resizeObserver = new ResizeObserver(() => {
-        runtime.resize(canvasArea.clientWidth, canvasArea.clientHeight)
-      })
-      resizeObserver.observe(canvasArea)
-      cancelQueuedLoad = consumeQueuedDocumentLoad(runtime)
-    }).catch((error) => {
-      console.error('Failed to initialize scene canvas runtime:', error)
-    })
-
-    return () => {
-      cancelled = true
-      resizeObserver?.disconnect()
-      cancelQueuedLoad()
-      flushQueuedSettingsPersist()
-      if (currentDesign.value) {
-        try {
-          snapshotCanvasIntoCurrentDocument(runtime, designName.value)
-          markCanvasDetachedDirty(canvasDirty.value)
-        } catch (error) {
-          console.error('Failed to snapshot canvas before teardown:', error)
-        }
-      }
-      disposeDocumentWorkflows()
-      runtime.destroy()
-      setCurrentCanvasSession(null)
-    }
-  }, [])
-
-  // Autosave timer — reactive to autoSaveIntervalMs changes.
-  // Separate from engine mount so the interval recreates when settings change.
-  const intervalMs = autoSaveIntervalMs.value
-  useEffect(() => {
-    const timer = setInterval(() => {
-      if (!designDirty.value) return
-      const session = getCurrentCanvasSession()
-      if (!session) return
-      const content = writeCanvasIntoDocument(session, designName.value)
-      autosaveDesign(content, designPath.value)
-        .then(() => { autosaveFailed.value = false })
-        .catch((err) => {
-          console.error('Autosave failed:', err)
-          autosaveFailed.value = true
-        })
-    }, intervalMs)
-    return () => clearInterval(timer)
-  }, [intervalMs])
+  useCanvasDocumentSession({ canvasAreaRef, containerRef, rulerOverlayRef })
 
   const hasDesign = currentDesign.value !== null
   const location = currentDesign.value?.location ?? null

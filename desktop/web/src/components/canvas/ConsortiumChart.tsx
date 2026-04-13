@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
-import { locale, theme } from '../../state/app'
-import { plantSpeciesColors, hoveredCanvasTargets, hoveredPanelTargets, sceneEntityRevision, plantNamesRevision } from '../../state/canvas'
-import { currentDesign } from '../../state/document'
+import { locale, theme } from '../../app/settings/state'
+import { hoveredCanvasTargets } from '../../app/panel-targets/state'
+import { plantSpeciesColorDefaults } from '../../canvas/plant-species-color-defaults'
+import { plantNamesRevision, sceneEntityRevision } from '../../canvas/runtime-mirror-state'
+import { currentDesign } from '../../state/design'
 import { currentCanvasSession } from '../../canvas/session'
-import { moveConsortiumEntry, reorderConsortiumEntry } from '../../state/consortium-actions'
-import { markDocumentDirty } from '../../state/document-mutations'
+import { moveConsortiumEntry, reorderConsortiumEntry } from '../../app/consortium/controller'
+import { clearHoveredPanelTargets, setHoveredPanelTargets } from '../../app/panel-targets/coordinator'
+import { markDocumentDirty } from '../../app/document/controller'
 import { consortiumTarget, getConsortiumCanonicalName, isSpeciesTarget } from '../../panel-targets'
 import {
   buildConsortiumBars,
@@ -71,7 +74,7 @@ export function ConsortiumChart() {
   const design = currentDesign.value
   const plants = session?.getPlacedPlants() ?? EMPTY_PLANTS
   const consortiums = design?.consortiums ?? EMPTY_CONSORTIUMS
-  const colors = plantSpeciesColors.value
+  const colors = plantSpeciesColorDefaults.value
   const localizedNames = session?.getLocalizedCommonNames() ?? EMPTY_NAMES
   const canvasHoveredCanonical = getHoveredSpeciesCanonical(hoveredCanvasTargets.value)
   const effectiveHoveredCanonical = hoveredCanonical.value ?? canvasHoveredCanonical
@@ -126,7 +129,7 @@ export function ConsortiumChart() {
   useEffect(() => {
     return () => {
       if (dragState.current?.hasMutated) markDocumentDirty()
-      hoveredPanelTargets.value = []
+      clearHoveredPanelTargets()
     }
   }, [])
 
@@ -258,13 +261,13 @@ export function ConsortiumChart() {
     if (hit) {
       if (hoveredCanonical.value !== hit.canonicalName) {
         hoveredCanonical.value = hit.canonicalName
-        hoveredPanelTargets.value = [consortiumTarget(hit.canonicalName)]
+        setHoveredPanelTargets([consortiumTarget(hit.canonicalName)])
       }
       canvas.style.cursor = hit.edge === 'body' ? 'grab' : 'ew-resize'
     } else {
       if (hoveredCanonical.value !== null) {
         hoveredCanonical.value = null
-        hoveredPanelTargets.value = []
+        clearHoveredPanelTargets()
       }
       canvas.style.cursor = 'default'
     }
@@ -273,7 +276,7 @@ export function ConsortiumChart() {
   const handleMouseLeave = useCallback(() => {
     if (hoveredCanonical.value !== null) {
       hoveredCanonical.value = null
-      hoveredPanelTargets.value = []
+      clearHoveredPanelTargets()
     }
     if (canvasRef.current) canvasRef.current.style.cursor = 'default'
   }, [])

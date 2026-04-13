@@ -1,5 +1,5 @@
 import { effect } from "@preact/signals";
-import { theme } from "../state/app";
+import { theme } from "../app/settings/state";
 import { invalidateCssVarCache } from "../canvas/canvas2d-utils";
 
 function applyTheme(resolved: "light" | "dark") {

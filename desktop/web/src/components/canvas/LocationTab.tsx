@@ -6,11 +6,11 @@ import {
   createDefaultMapLibreBasemapStyle,
   REMOTE_BASEMAP_TILE_URL_TEMPLATE,
 } from '../../maplibre/config'
-import { locale } from '../../state/app'
+import { locale } from '../../app/settings/state'
 import { geocodeAddress, type GeoResult } from '../../ipc/geocoding'
-import { currentDesign } from '../../state/document'
-import { clearDesignLocation, setDesignLocation } from '../../state/location-actions'
-import { navigateTo } from '../../state/app'
+import { currentDesign } from '../../state/design'
+import { clearDesignLocation, setDesignLocation } from '../../app/location/controller'
+import { navigateTo } from '../../app/shell/state'
 import { buildLocationCommit, computeSavedPinState } from './location-tab-logic'
 import styles from './LocationTab.module.css'
 

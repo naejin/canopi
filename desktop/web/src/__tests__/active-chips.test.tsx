@@ -2,8 +2,8 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ActiveChips } from '../components/plant-db/ActiveChips'
-import { dynamicOptionsCache, dynamicOptionsErrors, dynamicOptionsPending, extraFilters, activeFilters } from '../state/plant-db'
-import { locale } from '../state/app'
+import { dynamicOptionsCache, dynamicOptionsErrors, dynamicOptionsPending, extraFilters, activeFilters } from '../app/plant-browser'
+import { locale } from '../app/settings/state'
 
 describe('ActiveChips', () => {
   let container: HTMLDivElement

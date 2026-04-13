@@ -7,7 +7,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { worldToGeo, geoToWorld, stageScaleToMapZoom } from '../canvas/projection'
-import { extractExtra } from '../state/document-extra'
+import { extractDocumentExtra as extractExtra } from '../app/contracts/document'
 
 describe('extractExtra groups key', () => {
   it('extractExtra preserves groups field', () => {

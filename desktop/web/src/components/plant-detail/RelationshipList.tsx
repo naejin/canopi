@@ -1,6 +1,6 @@
 import { t } from '../../i18n';
-import { locale } from '../../state/app';
-import { selectedCanonicalName } from '../../state/plant-db';
+import { locale } from '../../app/settings/state';
+import { selectedCanonicalName } from '../../app/plant-browser';
 import type { Relationship } from '../../types/species';
 import styles from './PlantDetail.module.css';
 

@@ -8,6 +8,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "gen:types": "cargo run -p bindings-gen",
+    "check:types": "npm run gen:types && git diff --exit-code -- src/generated/contracts.ts src/generated/known-canopi-keys.ts",
     "prepare": "cd ../.. && husky desktop/web/.husky"
   },
   "dependencies": {

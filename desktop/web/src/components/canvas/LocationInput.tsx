@@ -1,11 +1,11 @@
 import { useSignal, useSignalEffect } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
 import { t } from '../../i18n'
-import { locale } from '../../state/app'
-import { currentDesign } from '../../state/document'
+import { locale } from '../../app/settings/state'
+import { currentDesign } from '../../state/design'
 import { geocodeAddress } from '../../ipc/geocoding'
 import type { GeoResult } from '../../ipc/geocoding'
-import { clearDesignLocation, setDesignLocation } from '../../state/location-actions'
+import { clearDesignLocation, setDesignLocation } from '../../app/location/controller'
 import styles from './LocationInput.module.css'
 
 export function LocationInput() {

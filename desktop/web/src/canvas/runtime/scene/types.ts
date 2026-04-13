@@ -1,3 +1,5 @@
+import type { ColorByAttribute, PlantSizeMode } from '../../plant-display-state'
+
 export const SCENE_LAYER_NAMES = [
   'base',
   'contours',
@@ -9,14 +11,8 @@ export const SCENE_LAYER_NAMES = [
 ] as const
 
 export type SceneLayerName = (typeof SCENE_LAYER_NAMES)[number]
-export type ScenePlantSizeMode = 'default' | 'canopy'
-export type SceneColorByAttribute =
-  | 'stratum'
-  | 'hardiness'
-  | 'lifecycle'
-  | 'nitrogen'
-  | 'edibility'
-  | 'flower'
+export type ScenePlantSizeMode = PlantSizeMode
+export type SceneColorByAttribute = ColorByAttribute
 
 export interface ScenePoint {
   x: number

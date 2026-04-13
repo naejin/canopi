@@ -1,7 +1,7 @@
 import type { RendererBackendContext, RendererBackendDefinition, RendererBackendInstance } from './types'
 import type { ScenePersistedState, SceneViewportState } from '../scene'
 import type { SelectionLabel } from '../selection-labels'
-import type { ColorByAttribute, PlantSizeMode } from '../../../state/canvas'
+import type { ColorByAttribute, PlantSizeMode } from '../../plant-display-state'
 
 export interface SceneRendererSnapshot {
   readonly scene: ScenePersistedState

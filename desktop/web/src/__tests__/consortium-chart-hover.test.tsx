@@ -27,13 +27,12 @@ vi.mock('../components/canvas/useCanvasRenderer', () => ({
 
 import { ConsortiumChart } from '../components/canvas/ConsortiumChart'
 import { currentCanvasSession } from '../canvas/session'
-import { currentDesign } from '../state/document'
+import { currentDesign } from '../state/design'
+import { hoveredCanvasTargets, hoveredPanelTargets } from '../app/panel-targets/state'
 import {
-  hoveredCanvasTargets,
-  hoveredPanelTargets,
   plantNamesRevision,
   sceneEntityRevision,
-} from '../state/canvas'
+} from '../canvas/runtime-mirror-state'
 import { consortiumTarget, speciesTarget } from '../panel-targets'
 import type { CanopiFile, PlacedPlant } from '../types/design'
 

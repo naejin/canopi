@@ -1,5 +1,5 @@
 import { signal } from "@preact/signals";
-import { activePanel, navigateTo } from "../state/app";
+import { activePanel, navigateTo } from "../app/shell/state";
 import { currentCanvasHasSelection, getCurrentCanvasSession, setCurrentCanvasTool } from "../canvas/session";
 import { isEditableTarget } from "../canvas/runtime/interaction/pointer-utils";
 import {
@@ -12,7 +12,7 @@ import {
   saveAsCurrentDesign,
   openDesign,
   newDesignAction,
-} from "../state/document";
+} from "../app/document-session/actions";
 
 export const commandPaletteOpen = signal(false);
 

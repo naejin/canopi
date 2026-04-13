@@ -1,4 +1,4 @@
-import type { PlantStampSpecies } from '../../../state/canvas'
+import type { PlantStampSpecies } from '../../plant-tool-state'
 import type { ScenePoint, SceneStore } from '../scene'
 
 export interface PlantDropPayload {

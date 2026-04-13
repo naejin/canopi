@@ -1,18 +1,22 @@
 mod detail;
+mod detail_contract;
+mod detail_row_map;
 mod filters;
 mod flower;
+mod list_items;
 mod lookup;
 mod search;
 
 pub use detail::{get_detail, get_relationships, get_species_external_links, get_species_images};
 pub use filters::{get_dynamic_filter_options, get_filter_options};
 pub use flower::get_flower_color_batch;
+pub use list_items::hydrate_species_list_items;
 #[allow(unused_imports)]
 pub use lookup::translate_value;
 pub use lookup::{
-    get_common_name, get_common_names_batch, get_locale_best_common_name, get_locale_common_names,
-    get_secondary_common_name,
+    get_common_name, get_common_names_batch, get_locale_common_names,
 };
+pub use detail::resolve_species_id;
 pub use search::search;
 
 #[cfg(test)]
@@ -20,25 +24,6 @@ mod tests {
     use super::*;
     use common_types::species::{Sort, SpeciesFilter};
     use rusqlite::Connection;
-    use serde::Deserialize;
-    use std::{collections::HashSet, fs, path::Path};
-
-    #[derive(Deserialize)]
-    struct SchemaContractFixture {
-        schema_version: i32,
-        columns: Vec<SchemaColumnFixture>,
-        translations: serde_json::Map<String, serde_json::Value>,
-    }
-
-    #[derive(Deserialize)]
-    struct SchemaColumnFixture {
-        name: String,
-    }
-
-    fn load_schema_contract_fixture() -> SchemaContractFixture {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../scripts/schema-contract.json");
-        serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap()
-    }
 
     fn test_db() -> Connection {
         let conn = Connection::open_in_memory().unwrap();
@@ -536,7 +521,8 @@ mod tests {
             climate_zones: Some(vec!["Mediterranean".to_owned()]),
             ..Default::default()
         };
-        let result = search(&conn, None, filters, None, Sort::Name, 50, "en".to_owned()).unwrap();
+        let result =
+            search(&conn, None, filters, None, Sort::Name, 50, true, "en".to_owned()).unwrap();
         assert_eq!(result.items.len(), 1);
         assert_eq!(result.items[0].canonical_name, "Lavandula angustifolia");
 
@@ -545,7 +531,8 @@ mod tests {
             climate_zones: Some(vec!["Temperate".to_owned()]),
             ..Default::default()
         };
-        let result = search(&conn, None, filters, None, Sort::Name, 50, "en".to_owned()).unwrap();
+        let result =
+            search(&conn, None, filters, None, Sort::Name, 50, true, "en".to_owned()).unwrap();
         assert_eq!(result.items.len(), 2);
 
         // Continental filter should return only Alnus
@@ -553,7 +540,8 @@ mod tests {
             climate_zones: Some(vec!["Continental".to_owned()]),
             ..Default::default()
         };
-        let result = search(&conn, None, filters, None, Sort::Name, 50, "en".to_owned()).unwrap();
+        let result =
+            search(&conn, None, filters, None, Sort::Name, 50, true, "en".to_owned()).unwrap();
         assert_eq!(result.items.len(), 1);
         assert_eq!(result.items[0].canonical_name, "Alnus glutinosa");
     }
@@ -661,44 +649,6 @@ mod tests {
             super::lookup::translate_composite_value(&conn, "flower_color", "Blue/Purple", "fr"),
             "Bleu/Violet"
         );
-    }
-
-    #[test]
-    fn test_expected_schema_version_matches_contract() {
-        let contract = load_schema_contract_fixture();
-        assert_eq!(
-            contract.schema_version,
-            crate::db::schema_contract::EXPECTED_PLANT_SCHEMA_VERSION
-        );
-    }
-
-    #[test]
-    fn test_detail_projection_columns_exist_in_contract() {
-        let contract = load_schema_contract_fixture();
-        let contract_columns: HashSet<String> = contract
-            .columns
-            .into_iter()
-            .map(|column| column.name)
-            .collect();
-
-        for column in super::detail::detail_contract_columns() {
-            assert!(
-                contract_columns.contains(*column),
-                "detail projection column '{column}' missing from schema contract"
-            );
-        }
-    }
-
-    #[test]
-    fn test_required_app_translation_fields_exist_in_contract() {
-        let contract = load_schema_contract_fixture();
-
-        for field in crate::db::schema_contract::REQUIRED_APP_TRANSLATION_FIELDS {
-            assert!(
-                contract.translations.contains_key(*field),
-                "required contract translation field '{field}' missing from schema contract"
-            );
-        }
     }
 
     #[test]

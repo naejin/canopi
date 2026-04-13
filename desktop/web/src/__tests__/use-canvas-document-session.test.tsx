@@ -1,0 +1,259 @@
+import { render } from "preact";
+import { useRef } from "preact/hooks";
+import { act } from "preact/test-utils";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  autosaveDesign: vi.fn(async () => undefined),
+  cancelQueuedLoad: vi.fn(),
+  consumeQueuedDocumentLoad: vi.fn(() => () => {}),
+  disposeDocumentWorkflows: vi.fn(),
+  flushQueuedSettingsPersist: vi.fn(),
+  installConsortiumSync: vi.fn(),
+  loadCanvasFromDocument: vi.fn(),
+  runtimeInstances: [] as Array<Record<string, unknown>>,
+  snapshotCanvasIntoCurrentDocument: vi.fn(),
+  writeCanvasIntoDocument: vi.fn(() => ({ name: "Autosaved" })),
+}));
+
+vi.mock("../canvas/runtime/scene-runtime", () => ({
+  SceneCanvasRuntime: class {
+    init = vi.fn(async () => {})
+    initializeViewport = vi.fn()
+    attachRulersTo = vi.fn()
+    showCanvasChrome = vi.fn()
+    hideCanvasChrome = vi.fn()
+    resize = vi.fn()
+    destroy = vi.fn()
+
+    constructor() {
+      mocks.runtimeInstances.push(this as unknown as Record<string, unknown>)
+    }
+  },
+}));
+
+vi.mock("../ipc/design", () => ({
+  autosaveDesign: mocks.autosaveDesign,
+}));
+
+vi.mock("../app/document-session/actions", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../app/document-session/actions")>();
+  return {
+    ...actual,
+    consumeQueuedDocumentLoad: mocks.consumeQueuedDocumentLoad,
+  };
+});
+
+vi.mock("../app/document-session/runtime", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../app/document-session/runtime")>();
+  return {
+    ...actual,
+    disposeDocumentWorkflows: mocks.disposeDocumentWorkflows,
+    installConsortiumSync: mocks.installConsortiumSync,
+    loadCanvasFromDocument: mocks.loadCanvasFromDocument,
+    snapshotCanvasIntoCurrentDocument: mocks.snapshotCanvasIntoCurrentDocument,
+    writeCanvasIntoDocument: mocks.writeCanvasIntoDocument,
+  };
+});
+
+vi.mock("../app/settings/persistence", () => ({
+  flushQueuedSettingsPersist: mocks.flushQueuedSettingsPersist,
+}));
+
+import { useCanvasDocumentSession } from "../app/document-session/use-canvas-document-session";
+import { currentCanvasSession } from "../canvas/session";
+import { autoSaveIntervalMs } from "../app/settings/state";
+import {
+  autosaveFailed,
+  currentDesign,
+  designName,
+  designPath,
+  detachedCanvasDirty,
+  resetDirtyBaselines,
+} from "../state/design";
+
+function Harness() {
+  const canvasAreaRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const rulerOverlayRef = useRef<HTMLDivElement>(null);
+
+  useCanvasDocumentSession({ canvasAreaRef, containerRef, rulerOverlayRef });
+
+  return (
+    <div>
+      <div ref={canvasAreaRef}>
+        <div ref={containerRef} />
+      </div>
+      <div ref={rulerOverlayRef} />
+    </div>
+  );
+}
+
+async function flushMicrotasks(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
+describe("useCanvasDocumentSession", () => {
+  let container: HTMLDivElement;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    mocks.autosaveDesign.mockClear();
+    mocks.cancelQueuedLoad.mockReset();
+    mocks.cancelQueuedLoad.mockImplementation(() => {});
+    mocks.consumeQueuedDocumentLoad.mockClear();
+    mocks.consumeQueuedDocumentLoad.mockImplementation(() => mocks.cancelQueuedLoad);
+    mocks.disposeDocumentWorkflows.mockClear();
+    mocks.flushQueuedSettingsPersist.mockClear();
+    mocks.installConsortiumSync.mockClear();
+    mocks.loadCanvasFromDocument.mockClear();
+    mocks.runtimeInstances.length = 0;
+    mocks.snapshotCanvasIntoCurrentDocument.mockClear();
+    mocks.writeCanvasIntoDocument.mockClear();
+    (globalThis as Record<string, unknown>).ResizeObserver = class {
+      observe() {}
+      disconnect() {}
+    };
+    container = document.createElement("div");
+    document.body.innerHTML = "";
+    document.body.appendChild(container);
+    currentCanvasSession.value = null;
+    currentDesign.value = null;
+    designName.value = "Demo";
+    designPath.value = "/designs/demo.canopi";
+    autoSaveIntervalMs.value = 100;
+    resetDirtyBaselines();
+    autosaveFailed.value = false;
+  });
+
+  afterEach(() => {
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
+    render(null, container);
+    container.remove();
+  });
+
+  it("mounts an empty session by installing workflows and hiding canvas chrome", async () => {
+    await act(async () => {
+      render(<Harness />, container);
+      await flushMicrotasks();
+    });
+
+    const runtime = mocks.runtimeInstances[0] as {
+      hideCanvasChrome: ReturnType<typeof vi.fn>;
+      initializeViewport: ReturnType<typeof vi.fn>;
+    };
+
+    expect(runtime).toBeDefined();
+    expect(runtime.initializeViewport).toHaveBeenCalledTimes(1);
+    expect(runtime.hideCanvasChrome).toHaveBeenCalledTimes(1);
+    expect(mocks.installConsortiumSync).toHaveBeenCalledTimes(1);
+    expect(mocks.consumeQueuedDocumentLoad).toHaveBeenCalledWith(currentCanvasSession.value);
+  });
+
+  it("loads the current design on mount and snapshots before teardown", async () => {
+    currentDesign.value = {
+      version: 2,
+      name: "Demo",
+      description: null,
+      location: null,
+      north_bearing_deg: 0,
+      plant_species_colors: {},
+      layers: [],
+      plants: [],
+      zones: [],
+      annotations: [],
+      consortiums: [],
+      groups: [],
+      timeline: [],
+      budget: [],
+      created_at: "2026-04-13T00:00:00.000Z",
+      updated_at: "2026-04-13T00:00:00.000Z",
+      extra: {},
+    };
+
+    await act(async () => {
+      render(<Harness />, container);
+      await flushMicrotasks();
+    });
+
+    const runtime = mocks.runtimeInstances[0] as {
+      destroy: ReturnType<typeof vi.fn>;
+      showCanvasChrome: ReturnType<typeof vi.fn>;
+    };
+
+    expect(mocks.loadCanvasFromDocument).toHaveBeenCalledWith(currentDesign.value, currentCanvasSession.value);
+    expect(runtime.showCanvasChrome).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      render(null, container);
+    });
+
+    expect(mocks.snapshotCanvasIntoCurrentDocument).toHaveBeenCalledTimes(1);
+    expect(mocks.disposeDocumentWorkflows).toHaveBeenCalledTimes(1);
+    expect(mocks.cancelQueuedLoad).toHaveBeenCalledTimes(1);
+    expect(mocks.flushQueuedSettingsPersist).toHaveBeenCalledTimes(1);
+    expect(runtime.destroy).toHaveBeenCalledTimes(1);
+    expect(currentCanvasSession.value).toBe(null);
+    const snapshotOrder = mocks.snapshotCanvasIntoCurrentDocument.mock.invocationCallOrder[0];
+    const destroyOrder = runtime.destroy.mock.invocationCallOrder[0];
+    expect(snapshotOrder).toBeLessThan(destroyOrder ?? Number.POSITIVE_INFINITY);
+  });
+
+  it("recreates autosave on interval changes", async () => {
+    currentDesign.value = {
+      version: 2,
+      name: "Demo",
+      description: null,
+      location: null,
+      north_bearing_deg: 0,
+      plant_species_colors: {},
+      layers: [],
+      plants: [],
+      zones: [],
+      annotations: [],
+      consortiums: [],
+      groups: [],
+      timeline: [],
+      budget: [],
+      created_at: "2026-04-13T00:00:00.000Z",
+      updated_at: "2026-04-13T00:00:00.000Z",
+      extra: {},
+    };
+    detachedCanvasDirty.value = true;
+
+    await act(async () => {
+      render(<Harness />, container);
+      await flushMicrotasks();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(100);
+      await flushMicrotasks();
+    });
+
+    expect(mocks.writeCanvasIntoDocument).toHaveBeenCalledTimes(1);
+    expect(mocks.autosaveDesign).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      autoSaveIntervalMs.value = 250;
+      await flushMicrotasks();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(100);
+      await flushMicrotasks();
+    });
+
+    expect(mocks.autosaveDesign).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      vi.advanceTimersByTime(150);
+      await flushMicrotasks();
+    });
+
+    expect(mocks.autosaveDesign).toHaveBeenCalledTimes(2);
+    expect(autosaveFailed.value).toBe(false);
+  });
+});

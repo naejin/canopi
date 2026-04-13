@@ -1,7 +1,7 @@
 import { useSignal, useSignalEffect } from '@preact/signals'
 import { useRef, useEffect } from 'preact/hooks'
 import { t } from '../../i18n'
-import { locale } from '../../state/app'
+import { locale } from '../../app/settings/state'
 import {
   extraFilters,
   addExtraFilter,
@@ -11,7 +11,7 @@ import {
   dynamicOptionsCache,
   dynamicOptionsErrors,
   dynamicOptionsPending,
-} from '../../state/plant-db'
+} from '../../app/plant-browser'
 import { CATEGORIES, fieldsForCategory, type FieldDef, type FilterCategory } from './field-registry'
 import { FilterChip } from './FilterChip'
 import { orderFilterValues } from './value-ordering'

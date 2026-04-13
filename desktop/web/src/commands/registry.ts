@@ -1,4 +1,6 @@
-import { navigateTo, theme, persistCurrentSettings, type Panel } from "../state/app";
+import { navigateTo, type Panel } from "../app/shell/state";
+import { theme } from "../app/settings/state";
+import { persistCurrentSettings } from "../app/settings/persistence";
 import { setCurrentCanvasTool } from "../canvas/session";
 import { t } from "../i18n";
 import { FILE_SHORTCUTS, EDIT_SHORTCUTS, VIEW_SHORTCUTS, PANEL_SHORTCUTS, TOOL_SHORTCUTS } from "../shortcuts/definitions";
@@ -7,7 +9,7 @@ import {
   saveAsCurrentDesign,
   openDesign,
   newDesignAction,
-} from "../state/document";
+} from "../app/document-session/actions";
 import { getCurrentCanvasSession } from "../canvas/session";
 
 export interface Command {

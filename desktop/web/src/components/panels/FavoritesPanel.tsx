@@ -1,38 +1,30 @@
 import { useEffect } from 'preact/hooks'
-import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
-import { locale } from '../../state/app'
-import { favoriteNames, selectedCanonicalName } from '../../state/plant-db'
-import { getFavorites } from '../../ipc/favorites'
+import { locale } from '../../app/settings/state'
+import {
+  favoriteItems,
+  favoriteItemsLoading,
+  favoriteItemsRevision,
+  loadFavoriteItems,
+  selectedCanonicalName,
+} from '../../app/plant-browser'
 import { PlantRow } from '../plant-db/PlantRow'
 import { PlantDetailCard } from '../plant-detail/PlantDetailCard'
 import plantDetailStyles from '../plant-detail/PlantDetail.module.css'
-import type { SpeciesListItem } from '../../types/species'
 import styles from './FavoritesPanel.module.css'
 
 export function FavoritesPanel() {
-  const items = useSignal<SpeciesListItem[]>([])
-  const loading = useSignal(true)
-
-  // Read reactive dependencies before the effect so subscriptions are tracked
-  const favCount = favoriteNames.value.length
+  const favoritesRevision = favoriteItemsRevision.value
   const lang = locale.value
   const selected = selectedCanonicalName.value
 
   useEffect(() => {
-    loading.value = true
-    getFavorites(lang)
-      .then((result) => {
-        items.value = result
-        loading.value = false
-      })
-      .catch(() => {
-        loading.value = false
-      })
-  }, [favCount, lang])
+    void loadFavoriteItems()
+  }, [favoritesRevision, lang])
 
-  const count = items.value.length
-  const isLoading = loading.value
+  const items = favoriteItems.value
+  const count = items.length
+  const isLoading = favoriteItemsLoading.value
 
   return (
     <div className={styles.panel}>
@@ -64,7 +56,7 @@ export function FavoritesPanel() {
           </div>
         ) : (
           <div className={styles.list} role="list" aria-label={t('nav.favorites')}>
-            {items.value.map((plant) => (
+            {items.map((plant) => (
               <PlantRow key={plant.canonical_name} plant={plant} />
             ))}
           </div>

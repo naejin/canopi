@@ -7,7 +7,7 @@ import {
   elementScroll,
 } from '@tanstack/virtual-core';
 import { t } from '../../i18n';
-import { locale } from '../../state/app';
+import { locale } from '../../app/settings/state';
 import {
   searchResults,
   searchResultsRevision,
@@ -19,7 +19,7 @@ import {
   searchText,
   hasActiveFilters,
   retrySearch,
-} from '../../state/plant-db';
+} from '../../app/plant-browser';
 import { PlantRow } from './PlantRow';
 import { PlantCard } from './PlantCard';
 import styles from './PlantDb.module.css';

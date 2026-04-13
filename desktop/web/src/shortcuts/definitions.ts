@@ -1,4 +1,4 @@
-import type { Panel } from '../state/app'
+import type { Panel } from '../app/shell/state'
 
 export const FILE_SHORTCUTS = {
   newDesign: 'Ctrl+N',

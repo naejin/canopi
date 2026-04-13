@@ -1,23 +1,14 @@
 import { useCallback, useEffect, useState } from 'preact/hooks'
 import { t } from '../../i18n'
-import { locale } from '../../state/app'
+import { locale } from '../../app/settings/state'
 import {
-  catalogError,
-  catalogLoading,
-  climateFilter,
-  selectedTemplate,
-  styleFilter,
-  templateCatalog,
-  templateImportError,
-  templateImporting,
-} from '../../state/community'
-import {
+  communityView,
+  importTemplateIntoCurrentSession,
   loadTemplateCatalog,
   selectTemplate,
   setClimateFilter,
   setStyleFilter,
-} from '../../state/community-actions'
-import { importTemplateIntoCurrentSession } from '../../state/template-import-workflow'
+} from '../../app/community/controller'
 import type { TemplateMeta } from '../../types/community'
 import styles from './WorldMapPanel.module.css'
 
@@ -90,14 +81,7 @@ export function WorldMapPanel() {
   void locale.value
 
   const [Surface, setSurface] = useState<SurfaceComponent | null>(null)
-  const catalog = templateCatalog.value
-  const loading = catalogLoading.value
-  const error = catalogError.value
-  const selected = selectedTemplate.value
-  const climate = climateFilter.value
-  const style = styleFilter.value
-  const importPending = templateImporting.value
-  const importError = templateImportError.value
+  const { catalog, loading, error, selected, climate, style, importPending, importError } = communityView.value
 
   useEffect(() => {
     void loadTemplateCatalog()

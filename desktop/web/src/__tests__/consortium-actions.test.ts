@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { currentDesign, nonCanvasRevision } from '../state/design'
-import { upsertConsortiumEntry, deleteConsortiumEntry, moveConsortiumEntry, reorderConsortiumEntry } from '../state/consortium-actions'
+import { upsertConsortiumEntry, deleteConsortiumEntry, moveConsortiumEntry, reorderConsortiumEntry } from '../app/consortium/controller'
 import { consortiumTarget, getConsortiumCanonicalName } from '../panel-targets'
 import type { Consortium } from '../types/design'
 

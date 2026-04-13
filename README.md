@@ -69,6 +69,12 @@ cd desktop/web && npm run dev
 # TypeScript check
 cd desktop/web && npx tsc --noEmit
 
+# Regenerate shared transport bindings
+cd desktop/web && npm run gen:types
+
+# Verify generated transport bindings are up to date
+cd desktop/web && npm run check:types
+
 # Tests
 cd desktop/web && npm test
 

@@ -5,16 +5,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import { MapLibreCanvasSurface } from '../components/canvas/MapLibreCanvasSurface'
 import { setCurrentCanvasSession } from '../canvas/session'
-import { currentDesign } from '../state/document'
 import {
   contourIntervalMeters,
   hillshadeOpacity,
   hillshadeVisible,
-  hoveredPanelTargets,
   layerOpacity,
   layerVisibility,
-  selectedPanelTargets,
-} from '../state/canvas'
+} from '../app/canvas-settings/signals'
+import { currentDesign } from '../state/design'
+import { hoveredPanelTargets, selectedPanelTargets } from '../app/panel-targets/state'
 
 const removeMock = vi.fn()
 const resizeMock = vi.fn()

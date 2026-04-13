@@ -1,5 +1,5 @@
 [workspace]
-members = ["desktop", "common-types", "lib-swift", "lib-cpp", "lib-c"]
+members = ["desktop", "common-types", "lib-swift", "lib-cpp", "lib-c", "bindings-gen"]
 resolver = "2"
 
 [workspace.package]

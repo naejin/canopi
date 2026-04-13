@@ -1,6 +1,6 @@
 import { getStratumColor, STRATUM_I18N_KEY } from './plants'
 import { t } from '../i18n'
-import type { ColorByAttribute } from '../state/canvas'
+import type { ColorByAttribute } from './plant-display-state'
 import {
   FLOWER_COLOR_ORDER,
   getFlowerColorHex,

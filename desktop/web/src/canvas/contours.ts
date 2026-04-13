@@ -7,7 +7,7 @@
 // in the map style.
 //
 // AD: Contour intervals are adaptive by zoom, with an optional user override
-// via `contourInterval` signal in state/canvas.
+// via the contour interval signal in app/canvas-settings/signals.
 // ---------------------------------------------------------------------------
 
 /**

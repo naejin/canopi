@@ -1,11 +1,13 @@
 mod blocking;
 mod commands;
+mod contracts;
 mod db;
 mod design;
 mod http;
 mod image_cache;
 mod logging;
 mod platform;
+mod services;
 
 use common_types::health::{PlantDbStatus, SubsystemHealth};
 use rusqlite::{Connection, OpenFlags};

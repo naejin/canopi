@@ -3,15 +3,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('../ipc/settings', () => ({ setSettings: vi.fn().mockResolvedValue(undefined) }))
 import { setSettings } from '../ipc/settings'
 import {
-  VISIBLE_BOTTOM_PANEL_TABS,
-  bottomPanelOpen,
-  bottomPanelTab,
   contourIntervalMeters,
   hillshadeOpacity,
   hillshadeVisible,
   layerOpacity,
   layerVisibility,
-} from '../state/canvas'
+} from '../app/canvas-settings/signals'
+import {
+  VISIBLE_BOTTOM_PANEL_TABS,
+  bottomPanelOpen,
+  bottomPanelTab,
+} from '../app/canvas-settings/bottom-panel-state'
 import {
   openBottomPanel,
   setBottomPanelTab,
@@ -20,8 +22,8 @@ import {
   setLayerOpacity,
   toggleHillshadeVisibility,
   toggleLayerVisibility,
-} from '../state/canvas-actions'
-import { flushQueuedSettingsPersist, setBootstrappedSettings } from '../state/app'
+} from '../app/canvas-settings/controller'
+import { flushQueuedSettingsPersist, setBootstrappedSettings } from '../app/settings/persistence'
 
 beforeEach(() => {
   vi.useFakeTimers()

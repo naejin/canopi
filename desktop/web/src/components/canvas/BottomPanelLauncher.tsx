@@ -1,12 +1,8 @@
 import { t } from '../../i18n'
-import { locale } from '../../state/app'
-import {
-  bottomPanelOpen,
-  bottomPanelTab,
-  type BottomPanelTab,
-  VISIBLE_BOTTOM_PANEL_TABS,
-} from '../../state/canvas'
-import { openBottomPanel, setBottomPanelOpen } from '../../state/canvas-actions'
+import { locale } from '../../app/settings/state'
+import { type BottomPanelTab } from '../../app/canvas-settings/bottom-panel-state'
+import { openBottomPanel, setBottomPanelOpen } from '../../app/canvas-settings/controller'
+import { bottomPanelView } from '../../app/canvas-settings/state'
 import styles from './BottomPanelLauncher.module.css'
 
 function getLabel(tab: BottomPanelTab): string {
@@ -23,8 +19,7 @@ function getLabel(tab: BottomPanelTab): string {
 export function BottomPanelLauncher() {
   void locale.value
 
-  const isOpen = bottomPanelOpen.value
-  const activeTab = bottomPanelTab.value
+  const { open: isOpen, tab: activeTab, visibleTabs } = bottomPanelView.value
 
   function handleClick(tab: BottomPanelTab) {
     if (isOpen && activeTab === tab) {
@@ -36,7 +31,7 @@ export function BottomPanelLauncher() {
 
   return (
     <div className={styles.launcher} role="tablist" aria-label={t('canvas.bottomPanel.ariaLabel')}>
-      {VISIBLE_BOTTOM_PANEL_TABS.map((tab) => (
+      {visibleTabs.map((tab) => (
         <button
           key={tab}
           type="button"
