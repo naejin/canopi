@@ -32,6 +32,16 @@ async function flushMicrotasks(): Promise<void> {
   await Promise.resolve()
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
 beforeEach(() => {
   vi.resetModules()
   mocks.searchSpecies.mockClear()
@@ -239,5 +249,132 @@ describe('plant DB controller lifecycle', () => {
       false,
     )
     expect(plantDb.totalEstimate.value).toBe(42)
+  })
+
+  it('loads favorite items into both detail and badge state', async () => {
+    const plantDb = await import('../state/plant-db')
+
+    ;(mocks.getFavorites as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+      {
+        canonical_name: 'Malus domestica',
+        common_name: 'Apple',
+        family: 'Rosaceae',
+        edible: true,
+        sun: 'full',
+        soil: 'loam',
+        height_m: 4,
+        width_m: 3,
+        is_favorite: true,
+        extra: null,
+      } as any,
+    ])
+
+    await plantDb.loadFavoriteItems()
+
+    expect(plantDb.favoriteNames.value).toEqual(['Malus domestica'])
+    expect(plantDb.favoriteItems.value).toHaveLength(1)
+    expect(plantDb.favoriteItems.value[0]?.canonical_name).toBe('Malus domestica')
+    expect(plantDb.favoriteItemsLoading.value).toBe(false)
+  })
+
+  it('ignores stale favorite-item responses after a locale switch', async () => {
+    const plantDb = await import('../state/plant-db')
+    const appState = await import('../state/app')
+    const english = deferred<any[]>()
+    const french = deferred<any[]>()
+
+    ;(mocks.getFavorites as ReturnType<typeof vi.fn>)
+      .mockReturnValueOnce(english.promise)
+      .mockReturnValueOnce(french.promise)
+
+    appState.locale.value = 'en'
+    const first = plantDb.loadFavoriteItems()
+
+    appState.locale.value = 'fr'
+    const second = plantDb.loadFavoriteItems()
+
+    english.resolve([
+      { canonical_name: 'English Favorite', is_favorite: true } as any,
+    ])
+    await first
+
+    expect(plantDb.favoriteItems.value).toEqual([])
+
+    french.resolve([
+      { canonical_name: 'French Favorite', is_favorite: true } as any,
+    ])
+    await second
+
+    expect(plantDb.favoriteItems.value).toEqual([
+      { canonical_name: 'French Favorite', is_favorite: true },
+    ])
+    expect(plantDb.favoriteNames.value).toEqual(['French Favorite'])
+  })
+
+  it('does not let a stale favorites reload overwrite an optimistic toggle', async () => {
+    const plantDb = await import('../state/plant-db')
+    const pendingFavorites = deferred<any[]>()
+
+    plantDb.searchResults.value = [
+      {
+        canonical_name: 'Malus domestica',
+        common_name: 'Apple',
+        is_favorite: true,
+      } as any,
+    ]
+    plantDb.favoriteItems.value = [{ canonical_name: 'Malus domestica', is_favorite: true } as any]
+    plantDb.favoriteNames.value = ['Malus domestica']
+
+    ;(mocks.getFavorites as ReturnType<typeof vi.fn>).mockReturnValueOnce(pendingFavorites.promise)
+    mocks.toggleFavorite.mockResolvedValueOnce(false)
+
+    const refresh = plantDb.loadFavoriteItems()
+    await plantDb.toggleFavoriteAction('Malus domestica')
+
+    pendingFavorites.resolve([{ canonical_name: 'Stale Favorite', is_favorite: true } as any])
+    await refresh
+
+    expect(plantDb.favoriteItems.value).toEqual([])
+    expect(plantDb.favoriteNames.value).toEqual([])
+    expect(plantDb.searchResults.value[0]?.is_favorite).toBe(false)
+    expect(plantDb.favoriteItemsLoading.value).toBe(false)
+  })
+
+  it('ignores stale sidebar list responses after a locale switch', async () => {
+    const plantDb = await import('../state/plant-db')
+    const appState = await import('../state/app')
+    const englishFavorites = deferred<any[]>()
+    const englishRecent = deferred<any[]>()
+    const frenchFavorites = deferred<any[]>()
+    const frenchRecent = deferred<any[]>()
+
+    ;(mocks.getFavorites as ReturnType<typeof vi.fn>)
+      .mockReturnValueOnce(englishFavorites.promise)
+      .mockReturnValueOnce(frenchFavorites.promise)
+    ;(mocks.getRecentlyViewed as ReturnType<typeof vi.fn>)
+      .mockReturnValueOnce(englishRecent.promise)
+      .mockReturnValueOnce(frenchRecent.promise)
+
+    appState.locale.value = 'en'
+    const first = plantDb.loadSidebarLists()
+
+    appState.locale.value = 'fr'
+    const second = plantDb.loadSidebarLists()
+
+    englishFavorites.resolve([{ canonical_name: 'English Favorite' } as any])
+    englishRecent.resolve([{ canonical_name: 'English Recent' } as any])
+    await first
+
+    expect(plantDb.favoriteNames.value).toEqual([])
+    expect(plantDb.recentlyViewed.value).toEqual([])
+
+    frenchFavorites.resolve([{ canonical_name: 'French Favorite' } as any])
+    frenchRecent.resolve([{ canonical_name: 'French Recent' } as any])
+    await second
+
+    expect(plantDb.favoriteNames.value).toEqual(['French Favorite'])
+    expect(plantDb.recentlyViewed.value).toEqual([
+      { canonical_name: 'French Recent' },
+    ])
   })
 })
