@@ -7,7 +7,7 @@ Status: v0.3.0 — timeline rework shipped, bottom-panel triptych complete. See 
 
 | surface | current state | rewrite-exit classification | owner wave | user-facing purpose | acceptance criteria |
 | --- | --- | --- | --- | --- | --- |
-| document safety and save/load flows | Shipped — guarded replacement path and explicit canvas/document authority split are live; see `docs/todo.md` for current convergence status | shipped | Wave 1 | Prevent document loss during create/open/load/switch flows | All document-replacing flows use one guarded boundary with save/discard/cancel semantics and queued-load safety |
+| document safety and save/load flows | Shipped — guarded replacement path and explicit canvas/document authority split are live; see `docs/todo.md` for current implementation detail | shipped | Wave 1 | Prevent document loss during create/open/load/switch flows | All document-replacing flows use one guarded boundary with save/discard/cancel semantics and queued-load safety |
 | plant DB search, filters, detail, favorites, and plant placement | Active | shipped | Waves 1-3 | Let users find plants, inspect them, favorite them, and place them on the canvas | Search/filter/detail/favorites/placement journeys work end to end without rewrite regressions |
 | core canvas editing flows | Active | shipped | Wave 2 | Let users create, edit, undo/redo, save, and reload canvas work | Core editing and roundtrip persistence pass parity checks |
 | WorldMapPanel / featured designs discovery | Deferred; hidden from the live UI | deferred | Post-convergence | Let users open a full-main-screen world map, browse featured-design pins, filter them, and enter template import safely | Not required for convergence phase |

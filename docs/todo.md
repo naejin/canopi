@@ -4,7 +4,7 @@
 **Status**: v0.3.0 — timeline rework shipped (direct-manipulation UX), bottom-panel triptych complete (Timeline + Budget + Consortium), and the in-canvas MapLibre slice now includes shared hosted basemap config, loading/error feedback, and panel↔map overlays. The Location entry is visible in PanelBar and still opens the dedicated flow
 
 This file tracks active and deferred work.
-For architectural analysis and rationale, see [Code Quality And Architecture Review](./code-quality-architecture-review-2026-04-05.md).
+For historical architectural analysis and rationale, see [Code Quality And Architecture Review](./archive/code-quality-architecture-review-2026-04-05.md).
 
 ## Completed (rewrite phase)
 

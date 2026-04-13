@@ -10,12 +10,13 @@ Keep one active source of truth per topic and avoid rereading or rewriting the w
 
 1. Identify the doc category first:
    - active and deferred work: `docs/todo.md`
-   - architecture rationale: `docs/code-quality-architecture-review-2026-04-05.md`
+   - live architecture rules: `CLAUDE.md` and `desktop/web/src/canvas/CLAUDE.md`
    - product scope: `docs/product-definition.md`
    - release operations: `docs/release-operations.md`
    - release verification: `docs/release-verification.md`
    - database: `docs/db/`
    - renderer: `docs/renderer/`
+   - historical architecture rationale: `docs/archive/code-quality-architecture-review-2026-04-05.md`
    - history/roadmap: `docs/archive/`
 2. Search for the exact topic with `rg` before opening more files.
 3. Open the smallest set of files that could own the change.

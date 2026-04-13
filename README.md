@@ -104,7 +104,7 @@ See [`docs/README.md`](docs/README.md) for the full doc map. Key entry points:
 
 - [Active work tracker](docs/todo.md)
 - [Product definition](docs/product-definition.md)
-- [Architecture review](docs/code-quality-architecture-review-2026-04-05.md)
+- [Docs and agent guide](docs/agents.md)
 - [Release operations](docs/release-operations.md)
 
 ## License

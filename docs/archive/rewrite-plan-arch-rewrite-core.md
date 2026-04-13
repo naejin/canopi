@@ -1,5 +1,7 @@
 # Rewrite Architecture: `arch-rewrite-core` (Completed)
 
+Status note: this is a completed rewrite artifact kept for history. For the live architecture and current follow-up work, use `CLAUDE.md`, `desktop/web/src/canvas/CLAUDE.md`, and `docs/todo.md`.
+
 This branch records the architecture reset that was landed for Canopi's next core.
 
 ## Delivered Boundaries

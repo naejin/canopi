@@ -7,8 +7,8 @@ Token rule: search first, then read only the smallest set of owning docs needed 
 ## Read Order
 
 1. [`Docs Index`](./README.md)
-2. [`Active Work Tracker`](./todo.md) for current and deferred work
-3. [`Architecture Review`](./code-quality-architecture-review-2026-04-05.md) for architectural rationale and tradeoffs
+2. [`../CLAUDE.md`](../CLAUDE.md) for live project rules and architecture invariants
+3. [`Active Work Tracker`](./todo.md) for current and deferred work
 4. [`Release Verification`](./release-verification.md) and [`Release Operations`](./release-operations.md) when the task touches release or packaging
 5. [`Renderer`](./renderer/README.md) for canvas or retained-surface work
 6. [`Database`](./db/README.md) for schema, search, or DB pipeline work
@@ -17,14 +17,15 @@ Token rule: search first, then read only the smallest set of owning docs needed 
 
 ## Canonical Sources
 
+- `../CLAUDE.md` — project-level rules and architecture invariants
 - `docs/todo.md` — active and deferred work tracker
-- `docs/code-quality-architecture-review-2026-04-05.md` — architecture review with rationale
 - `docs/product-definition.md` — product scope lock
 - `docs/release-verification.md` — signed-off beta verification record
 - `docs/release-operations.md` — operator runbook for DB publishing, RC, promotion
 - `docs/renderer/renderer.md` — renderer-specific validation checklist
 - `docs/db/README.md` — database guidance and data quality audits
 - `docs/maintenance.md` — how to update docs without rereading the archive
+- `../desktop/web/src/canvas/CLAUDE.md` — canvas-specific authority and runtime rules
 - `docs/archive/roadmap.md` — historical roadmap (reference for deferred QA/DC/SG phase details)
 
 ## What To Ignore First
@@ -32,6 +33,7 @@ Token rule: search first, then read only the smallest set of owning docs needed 
 - archived phase notes unless the task explicitly needs history
 - review artifacts unless you are checking how a previous decision was made
 - the roadmap is archived — actionable items have been extracted into `docs/todo.md`
+- the completed architecture review and rewrite plan are archived — do not treat them as live implementation guidance
 
 ## Rules Of Thumb
 

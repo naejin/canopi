@@ -234,7 +234,7 @@ The app has `tauri-plugin-mcp-bridge` (debug builds only). Use it for screenshot
 - Agent reading order: `docs/agents.md`
 - Docs maintenance protocol: `docs/maintenance.md`
 - Active/deferred work tracker: `docs/todo.md`
-- Architecture review: `docs/code-quality-architecture-review-2026-04-05.md`
+- Historical architecture review: `docs/archive/code-quality-architecture-review-2026-04-05.md`
 - Release hardening: `docs/release-verification.md`
 - Release operations: `docs/release-operations.md`
 - Renderer validation: `docs/renderer/renderer.md`
