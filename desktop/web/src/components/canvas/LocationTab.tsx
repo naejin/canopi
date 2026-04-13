@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'preact/hooks'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { t } from '../../i18n'
+import { DEFAULT_MAPLIBRE_BASEMAP_STYLE_URL } from '../../maplibre/config'
 import { locale } from '../../state/app'
 import { geocodeAddress, type GeoResult } from '../../ipc/geocoding'
 import { currentDesign } from '../../state/document'
@@ -12,7 +13,6 @@ import { buildLocationCommit, computeSavedPinState } from './location-tab-logic'
 import styles from './LocationTab.module.css'
 
 const DEFAULT_CENTER: [number, number] = [0, 20] // [lon, lat]
-const STYLE_URL = 'https://demotiles.maplibre.org/style.json'
 
 export function LocationTab() {
   void locale.value
@@ -53,7 +53,7 @@ export function LocationTab() {
 
     const map = new maplibregl.Map({
       container,
-      style: STYLE_URL,
+      style: DEFAULT_MAPLIBRE_BASEMAP_STYLE_URL,
       center,
       zoom: savedLoc ? 10 : 3.2,
       attributionControl: false,

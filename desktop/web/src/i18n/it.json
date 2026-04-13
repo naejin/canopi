@@ -254,6 +254,8 @@
       "satellite": "Satellite",
       "hillshade": "Ombreggiatura",
       "interval": "Intervallo",
+      "basemapLoading": "Caricamento mappa base...",
+      "basemapError": "Mappa base non disponibile",
       "setLocation": "Imposta una posizione per attivare i livelli mappa",
       "styleStreet": "Strade",
       "styleTerrain": "Terreno",

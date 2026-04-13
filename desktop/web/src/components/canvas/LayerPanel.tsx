@@ -62,6 +62,11 @@ function LockIcon({ locked }: { locked: boolean }) {
   )
 }
 
+function formatLocationSummary(location: { lat: number; lon: number; altitude_m: number | null }): string {
+  const base = `${location.lat.toFixed(4)}, ${location.lon.toFixed(4)}`
+  return location.altitude_m != null ? `${base} (${location.altitude_m} m)` : base
+}
+
 export function LayerPanel() {
   void locale.value
 
@@ -84,7 +89,8 @@ export function LayerPanel() {
   }
 
   const activeOpacity = Math.round((layerOpacity.value[activeLayer] ?? 1) * 100)
-  const hasLocation = currentDesign.value?.location != null
+  const location = currentDesign.value?.location ?? null
+  const hasLocation = location != null
 
   return (
     <aside className={styles.panel} aria-label={t('canvas.layers.layerPanel')}>
@@ -151,19 +157,26 @@ export function LayerPanel() {
           <button
             type="button"
             className={styles.toggleBtn}
-            aria-label={`${t('canvas.layers.visibility')}: ${t('canvas.layers.base')}`}
+            aria-label={`${t('canvas.layers.visibility')}: ${t('canvas.grid.grid')}`}
             onClick={toggleGridVisibility}
           >
             <EyeIcon open={gridVisible.value} />
           </button>
-          <span className={styles.overlayLabel}>{t('canvas.layers.base')}</span>
+          <span className={styles.overlayLabel}>{t('canvas.grid.grid')}</span>
         </div>
       </div>
 
       <div className={styles.mapSection}>
         <div className={styles.sectionHeader}>{t(layerLabelKey(activeLayer))}</div>
-        {activeLayer === 'base' && !hasLocation && (
-          <div className={styles.mapHint}>{t('canvas.layers.setLocation')}</div>
+        {activeLayer === 'base' && (
+          <div className={styles.locationCard} data-has-location={hasLocation ? 'true' : 'false'}>
+            <span className={styles.locationCardLabel}>
+              {hasLocation ? t('canvas.location.current') : t('canvas.location.required')}
+            </span>
+            <span className={styles.locationCardText}>
+              {hasLocation ? formatLocationSummary(location) : t('canvas.layers.setLocation')}
+            </span>
+          </div>
         )}
         <div className={styles.mapSliderRow}>
           <span className={styles.mapSliderLabel}>{t('canvas.layers.opacity')}</span>

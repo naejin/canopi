@@ -2,9 +2,8 @@ import { useEffect, useRef } from 'preact/hooks'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import type { TemplateMeta } from '../../types/community'
+import { DEFAULT_MAPLIBRE_BASEMAP_STYLE_URL } from '../../maplibre/config'
 import styles from './WorldMapSurface.module.css'
-
-const STYLE_URL = 'https://demotiles.maplibre.org/style.json'
 
 export function WorldMapSurface({
   templates,
@@ -25,7 +24,7 @@ export function WorldMapSurface({
 
     const map = new maplibregl.Map({
       container,
-      style: STYLE_URL,
+      style: DEFAULT_MAPLIBRE_BASEMAP_STYLE_URL,
       center: [0, 14],
       zoom: 1.15,
       attributionControl: false,

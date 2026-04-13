@@ -145,10 +145,46 @@
   color: var(--color-text-muted);
 }
 
-.mapHint {
+.locationCard {
   margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+}
+
+.locationCard[data-has-location="true"] {
+  border-color: var(--color-success);
+  background: var(--color-success-bg);
+}
+
+.locationCard[data-has-location="false"] {
+  border-color: var(--color-warning);
+  background: var(--color-warning-bg);
+}
+
+.locationCardLabel {
   font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   color: var(--color-text-muted);
+}
+
+.locationCard[data-has-location="true"] .locationCardLabel {
+  color: var(--color-success);
+}
+
+.locationCard[data-has-location="false"] .locationCardLabel {
+  color: var(--color-warning);
+}
+
+.locationCardText {
+  font-size: var(--text-sm);
+  color: var(--color-text);
   line-height: 1.4;
 }
 

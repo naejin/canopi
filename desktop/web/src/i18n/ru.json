@@ -254,6 +254,8 @@
       "satellite": "Спутник",
       "hillshade": "Отмывка рельефа",
       "interval": "Интервал",
+      "basemapLoading": "Загрузка базовой карты...",
+      "basemapError": "Базовая карта недоступна",
       "setLocation": "Задайте местоположение для включения слоёв карты",
       "styleStreet": "Улицы",
       "styleTerrain": "Рельеф",

@@ -86,10 +86,10 @@
 - **`std::fs::rename` on Windows**: Fails with locked files. Use `design::atomic_replace()` with rollback sidecar
 
 ## MapLibre / Terrain
-Current MapLibre usage is frontend-owned in the full-screen `LocationTab`, featured-design `WorldMapSurface`, and the in-canvas `MapLibreCanvasSurface` basemap. The current in-canvas slice is visual-only: lazy-loaded, non-interactive, and driven by the canvas camera through read-only runtime seams. These gotchas apply when extending beyond that base-layer slice:
+Current MapLibre usage is frontend-owned in the full-screen `LocationTab`, featured-design `WorldMapSurface`, and the in-canvas `MapLibreCanvasSurface` basemap. `LocationTab` and the canvas basemap share `DEFAULT_MAPLIBRE_BASEMAP_STYLE_URL` from `maplibre/config.ts`, so hosted basemap changes stay in sync. The current in-canvas slice is derived, non-authoritative, lazy-loaded, and non-interactive for direct map gestures, but it does emit loading / ready / error feedback and renders panel-target hover / selection overlays through the pure projection seam. These gotchas apply when extending beyond that slice:
 - **MapLibre paint properties can't use CSS vars**: Hardcoded hex colors in MapLibre style objects are acceptable — they render on map tiles, not app chrome
 - **`maplibre-contour` for client-side DEM contours**: Use `DemSource` with AWS Terrain Tiles (Terrarium encoding). Register protocol once with `addProtocol()`
 - **MapLibre container opacity for map blending**: Apply opacity to the container div; do not make the renderer canvas transparent via renderer internals
 - **Map layer z-index**: Insert map div before `.canvasContainer`. Canvas container background must become transparent when map is active
-- **Canvas camera remains authoritative**: In-canvas MapLibre follows viewport state via read-only runtime APIs (`getViewport()`, `getViewportScreenSize()`, `viewportRevision`). Do not let MapLibre become a second camera or document authority
+- **Canvas camera remains authoritative**: In-canvas MapLibre follows viewport state via read-only runtime APIs (`getViewport()`, `getViewportScreenSize()`, `viewportRevision`). Do not let MapLibre become a second camera or document authority, even when adding overlays or basemap feedback states
 - **`download_template` security**: HTTPS-only + domain allowlist (`templates.canopi.app`) + filename sanitization + path traversal check + 50MB size limit

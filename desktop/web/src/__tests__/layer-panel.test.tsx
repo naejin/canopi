@@ -61,6 +61,8 @@ describe('LayerPanel', () => {
     const rows = Array.from(container.querySelectorAll('[role="listitem"]'))
     const basemapRow = rows.find((row) => row.textContent?.includes('Basemap'))
     expect(basemapRow).toBeTruthy()
+    expect(container.textContent).toContain('Current')
+    expect(container.textContent).toContain('48.8566, 2.3522')
 
     const basemapToggle = basemapRow?.querySelector('button')
     expect(basemapToggle).toBeTruthy()

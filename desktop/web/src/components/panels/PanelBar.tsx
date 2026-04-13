@@ -19,12 +19,18 @@ const primaryPanels: PanelItem[] = [
       </svg>
     ),
   },
-  // Location panel hidden — no in-canvas map layers yet
-  // {
-  //   id: 'location',
-  //   label: () => t('canvas.location.title'),
-  //   icon: () => ( ... ),
-  // },
+  {
+    id: 'location',
+    label: () => t('canvas.location.title'),
+    icon: () => (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="8" />
+        <path d="M12 4a11 11 0 0 1 0 16" />
+        <path d="M12 4a11 11 0 0 0 0 16" />
+        <path d="M4 12h16" />
+      </svg>
+    ),
+  },
 ]
 
 const sidePanels: PanelItem[] = [

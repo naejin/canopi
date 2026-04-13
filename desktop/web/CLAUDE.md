@@ -9,8 +9,8 @@
 - UI signals for canvas state (`selectedObjectIds`, `plantSizeMode`, `plantColorByAttr`) are mirrors of `SceneStore.session`, not authority. Prefer reading from the runtime via a query interface over syncing into standalone signals
 - **Canvas seam**: App code must not reach into renderer implementations or `SceneCanvasRuntime` internals. `currentCanvasSession` stores `CanvasRuntime | null`; the old 1:1 `CanvasSession` pass-through class is gone. The current map surface reads viewport state through `CanvasRuntime` query seams (`getViewport()`, `getViewportScreenSize()`, `viewportRevision`) rather than private runtime fields. As the panel/map surface grows further, consider splitting `CanvasRuntime` into an interaction interface and a state-query/projection interface
 - **Panel target bridges are presentation-only**: Bottom-panel hover/selection uses typed `PanelTarget[]` (`hoveredPanelTargets`, `selectedPanelTargets`, `selectedPanelTargetOrigin`) and the runtime resolves them into highlights. Do not mutate real canvas selection/history or reintroduce string matching for timeline/budget/consortium identity
-- **Map projection seam is pure**: `projectPanelTargetsToMapFeatures()` resolves typed targets through `resolvePanelTargets()` and `worldToGeo()`. It does not import MapLibre, write signals, or own document/canvas state; rendered overlays should consume it rather than duplicating identity logic
-- **Basemap state semantics**: `layerVisibility.base` / `layerOpacity.base` now mean basemap visibility/opacity. `gridVisible` is a separate overlay control and must not be re-coupled to the base layer row
+- **Map projection seam is pure**: `projectPanelTargetsToMapFeatures()` resolves typed targets through `resolvePanelTargets()` and `worldToGeo()`. It does not import MapLibre, write signals, or own document/canvas state; rendered overlays consume it for map hover/selection rendering rather than duplicating identity logic
+- **Basemap state semantics**: `layerVisibility.base` / `layerOpacity.base` now mean basemap visibility/opacity for the shared hosted basemap. `gridVisible` is a separate overlay control and must not be re-coupled to the base layer row
 
 ## ErrorBoundary
 - `ErrorBoundary` class component in `components/shared/ErrorBoundary.tsx` wraps `<App />` in `main.tsx`
@@ -19,7 +19,7 @@
 - **No `t()` fallback strings**: i18next with `fallbackLng: 'en'` never returns falsy for existing keys. `t('key') || 'fallback'` is dead code — use `t('key')` directly
 
 ## PanelBar State
-- PanelBar is visible on the welcome screen (no design loaded) — location, plant-db, and favorites buttons are `disabled` when `currentDesign` is null. Only the canvas button is always active
+- PanelBar includes a visible Location entry. On the welcome screen (no design loaded), location, plant-db, and favorites buttons are `disabled`; the canvas button remains the only always-active entry
 
 ## i18n
 - ALL user-visible strings must go through `t()` from `../i18n` — no hardcoded text in components

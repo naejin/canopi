@@ -254,6 +254,8 @@
       "satellite": "Satellite",
       "hillshade": "Ombrage",
       "interval": "Intervalle",
+      "basemapLoading": "Chargement du fond de carte...",
+      "basemapError": "Fond de carte indisponible",
       "setLocation": "Définissez un emplacement pour activer les couches de carte",
       "styleStreet": "Plan",
       "styleTerrain": "Relief",

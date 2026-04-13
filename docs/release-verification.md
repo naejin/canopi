@@ -28,7 +28,7 @@ Explicitly deferred beyond Wave 5 beta at beta-cut time:
 - color by plants
 - frontend lazy loading / performance improvements
 - detail-card photo fit polish
-- advanced map overlays / terrain layers
+- advanced geo / terrain layers beyond the shipped basemap and panel-target overlay slice
 - world map with featured designs / template import
 - timeline workflows
 - budget workflows
@@ -73,7 +73,7 @@ These journeys must remain green for the beta release:
 1. Create a design, edit it, and switch documents without losing work.
 2. Search the plant database, inspect detail, favorite plants, and place plants on the canvas.
 3. Edit canvas content, undo/redo, save, reload, and preserve roundtrip parity.
-4. Use layer controls and location selection without lifecycle or persistence regressions.
+4. Use layer controls and location selection, including basemap loading/error feedback, without lifecycle or persistence regressions.
 5. Recover gracefully from network failure, disk failure, and invalid external data.
 6. Use the app in supported themes and locales without broken labels or unreadable surfaces.
 7. Build release artifacts for Linux, macOS, and Windows.
@@ -129,7 +129,7 @@ Run this script against each packaged artifact:
    Search regression check: type a narrow prefix such as `asr`, delete back to `as`, and confirm the visible list repopulates and scrolls normally without needing a locale change or list/card toggle.
 4. Edit canvas content and verify undo/redo still works in the packaged build.
 5. Open layer controls and confirm required display/layer flows still function.
-6. Open the bottom-bar `location` tab, perform search, drag, zoom, and confirm the selected location updates correctly.
+6. Open the visible PanelBar `location` entry, perform search, drag, zoom, and confirm the selected location updates correctly.
 7. Switch theme and locale and confirm there are no missing labels or unreadable retained surfaces.
 8. Confirm there is no startup-path, save-path, or packaged-resource regression.
 

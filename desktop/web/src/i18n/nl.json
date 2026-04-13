@@ -254,6 +254,8 @@
       "satellite": "Satelliet",
       "hillshade": "Reliëfschaduw",
       "interval": "Interval",
+      "basemapLoading": "Basiskaart laden...",
+      "basemapError": "Basiskaart niet beschikbaar",
       "setLocation": "Stel een locatie in om kaartlagen te activeren",
       "styleStreet": "Straat",
       "styleTerrain": "Terrein",

@@ -254,6 +254,8 @@
       "satellite": "Satélite",
       "hillshade": "Sombreado",
       "interval": "Intervalo",
+      "basemapLoading": "Cargando mapa base...",
+      "basemapError": "Mapa base no disponible",
       "setLocation": "Establezca una ubicación para activar las capas de mapa",
       "styleStreet": "Calles",
       "styleTerrain": "Terreno",

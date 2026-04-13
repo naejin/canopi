@@ -254,6 +254,8 @@
       "satellite": "Satellit",
       "hillshade": "Schummerung",
       "interval": "Intervall",
+      "basemapLoading": "Basiskarte wird geladen...",
+      "basemapError": "Basiskarte nicht verfügbar",
       "setLocation": "Legen Sie einen Standort fest, um Kartenebenen zu aktivieren",
       "styleStreet": "Straße",
       "styleTerrain": "Gelände",

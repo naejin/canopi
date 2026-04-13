@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState } from 'preact/hooks'
+import { t } from '../../i18n'
 import { autoSaveIntervalMs } from '../../state/app'
 import {
   currentDesign, designName, designPath, designDirty,
@@ -15,7 +16,10 @@ import { CanvasToolbar } from '../canvas/CanvasToolbar'
 import { ZoomControls } from '../canvas/ZoomControls'
 import { DisplayModeControls } from '../canvas/DisplayModeControls'
 import { DisplayLegend } from '../canvas/DisplayLegend'
-import { MapLibreCanvasSurface } from '../canvas/MapLibreCanvasSurface'
+import {
+  MapLibreCanvasSurface,
+  type MapLibreCanvasSurfaceState,
+} from '../canvas/MapLibreCanvasSurface'
 import { BottomPanel } from '../canvas/BottomPanel'
 import { BottomPanelLauncher } from '../canvas/BottomPanelLauncher'
 import { LayerPanel } from '../canvas/LayerPanel'
@@ -26,11 +30,27 @@ import styles from './Panels.module.css'
 
 // Autosave interval is now configurable via Rust settings (autoSaveIntervalMs signal)
 
+function formatLocationSummary(location: { lat: number; lon: number; altitude_m: number | null }): string {
+  const base = `${location.lat.toFixed(4)}, ${location.lon.toFixed(4)}`
+  return location.altitude_m != null ? `${base} (${location.altitude_m} m)` : base
+}
+
+function defaultBasemapState(): MapLibreCanvasSurfaceState {
+  return {
+    status: 'idle',
+    active: false,
+    errorMessage: null,
+  }
+}
+
 export function CanvasPanel() {
   const canvasAreaRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const rulerOverlayRef = useRef<HTMLDivElement>(null)
   const [basemapActive, setBasemapActive] = useState(false)
+  const [basemapState, setBasemapState] = useState<MapLibreCanvasSurfaceState>(defaultBasemapState)
+  const [locationCueVisible, setLocationCueVisible] = useState(false)
+  const lastLocationRef = useRef<string | null>(null)
 
   useEffect(() => {
     const container = containerRef.current
@@ -108,9 +128,46 @@ export function CanvasPanel() {
   }, [intervalMs])
 
   const hasDesign = currentDesign.value !== null
-  const hasLocation = currentDesign.value?.location != null
+  const location = currentDesign.value?.location ?? null
+  const hasLocation = location != null
   const basemapVisible = layerVisibility.value.base ?? true
   const shouldShowBasemap = hasDesign && hasLocation && basemapVisible
+  const locationSummary = location ? formatLocationSummary(location) : null
+  const locationKey = location
+    ? `${location.lat}:${location.lon}:${location.altitude_m ?? ''}`
+    : null
+
+  useEffect(() => {
+    if (locationKey === null) {
+      lastLocationRef.current = null
+      setLocationCueVisible(false)
+      return
+    }
+    if (lastLocationRef.current === null) {
+      lastLocationRef.current = locationKey
+      return
+    }
+    if (lastLocationRef.current === locationKey) return
+    lastLocationRef.current = locationKey
+    setLocationCueVisible(true)
+    const timer = window.setTimeout(() => setLocationCueVisible(false), 1800)
+    return () => window.clearTimeout(timer)
+  }, [locationKey])
+
+  const basemapTone = !hasLocation
+    ? 'warning'
+    : basemapState.status === 'error'
+      ? 'error'
+      : basemapState.status === 'ready'
+        ? 'ready'
+        : 'loading'
+  const basemapStatus = !hasLocation
+    ? t('canvas.location.required')
+    : basemapState.status === 'error'
+      ? `${t('canvas.layers.basemapError')}: ${basemapState.errorMessage ?? ''}`.trim()
+      : basemapState.status === 'ready'
+        ? `${t('canvas.location.current')}: ${locationSummary}`
+        : t('canvas.layers.basemapLoading')
 
   return (
     <div className={styles.canvasPanel}>
@@ -119,13 +176,33 @@ export function CanvasPanel() {
       <div className={styles.canvasColumn}>
         <div className={styles.canvasRow}>
           <div ref={canvasAreaRef} className={styles.canvasArea}>
-            {hasDesign && <MapLibreCanvasSurface onActiveChange={setBasemapActive} />}
+            {hasDesign && (
+              <MapLibreCanvasSurface
+                onActiveChange={setBasemapActive}
+                onStateChange={setBasemapState}
+              />
+            )}
             <div
               ref={containerRef}
               className={styles.canvasContainer}
               data-basemap-active={shouldShowBasemap && basemapActive ? 'true' : 'false'}
             />
             <div ref={rulerOverlayRef} className={styles.rulerOverlay} />
+            {hasDesign && basemapVisible && (
+              <div
+                className={styles.basemapFeedback}
+                data-tone={basemapTone}
+                data-location-cue={locationCueVisible ? 'true' : 'false'}
+                role="status"
+                aria-live="polite"
+              >
+                <span className={styles.basemapFeedbackHeader}>
+                  <span className={styles.basemapFeedbackDot} aria-hidden="true" />
+                  <span className={styles.basemapFeedbackLabel}>{t('canvas.layers.basemap')}</span>
+                </span>
+                <span className={styles.basemapFeedbackText}>{basemapStatus}</span>
+              </div>
+            )}
 
             {!hasDesign && <WelcomeScreen />}
             {hasDesign && <DisplayLegend />}

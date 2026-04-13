@@ -5,7 +5,7 @@
 - **Frontend**: Preact + @preact/signals + TypeScript + Vite + CSS Modules
 - **Canvas**: PixiJS (primary renderer) + Canvas2D (fallback) — scene-owned runtime via `SceneCanvasRuntime`
 - **i18n**: i18next core (NOT react-i18next), 11 languages (en, fr, es, pt, it, zh, de, ja, ko, nl, ru)
-- **Maps**: MapLibre GL JS + maplibre-contour. Location shell, featured-design world map, and an in-canvas basemap surface now use MapLibre; panel↔map overlays, contours/hillshade, offline tiles, export, and learning surfaces remain deferred
+- **Maps**: MapLibre GL JS + maplibre-contour. The visible PanelBar Location entry, featured-design world map, and in-canvas basemap surface now use MapLibre; the shared hosted basemap style is reused across location and canvas surfaces. Panel↔map hover/selection overlays now run through the pure projection/overlay seam, while contours/hillshade, offline tiles, export, and learning surfaces remain deferred
 - **Native**: lib-c (Linux, Cairo PNG/PDF + inotify + XDG), lib-swift (macOS stub), lib-cpp (Windows stub)
 
 ## Project Structure
@@ -34,7 +34,7 @@ Domain-specific instructions in subdirectory CLAUDE.md files:
 - **Right**: PanelBar (36px, always visible) + sliding panels (plant search, favorites)
 - **Bottom**: Bottom panel with Budget and Consortium tabs (Timeline hidden — pending rework)
 - **Title bar**: Logo + file name + lang/theme toggle + window controls
-- **No activity bar** — removed, navigation via PanelBar (Location button still hidden; location editing remains a dedicated flow even though the in-canvas basemap now exists)
+- **No activity bar** — removed, navigation via PanelBar (Location entry is visible; location editing remains a dedicated flow even though the in-canvas basemap now exists)
 - **No status bar** — removed, controls moved to title bar
 - Design system: `.interface-design/system.md` (field notebook direction)
 
@@ -46,7 +46,7 @@ Domain-specific instructions in subdirectory CLAUDE.md files:
 
 ## Current Scope
 - **Bottom panel**: Timeline, Budget, and Consortium tabs active. Timeline uses direct-manipulation UX: 6 fixed action-type rows, click-to-add/edit popover with date validation, edge resize, hover tooltip, ctrl+scroll zoom, drag-to-move with frozen coordinate origin, and auto-scroll on edge drag (rAF-based, quadratic acceleration). Ruler controls hidden pending design iteration. Panel-canvas hover/selection flows through typed `PanelTarget[]` signals and `resolvePanelTargets()`
-- **Maps**: Location flow and world map surfaces exist, and the canvas now has a non-interactive MapLibre basemap behind the scene surface. The Location PanelBar button remains hidden; panel↔map overlays, contours/hillshade, offline tiles, export, and learning content remain deferred beyond beta
+- **Maps**: Location flow and world map surfaces exist, the visible PanelBar Location entry opens the dedicated map flow, and the canvas now has a non-interactive MapLibre basemap behind the scene surface. The basemap surface reports loading / ready / error feedback, and panel↔map hover/selection overlays are live through the pure projection seam. Contours/hillshade, offline tiles, export, and learning content remain deferred beyond beta
 - **Selection**: No resize/rotate — objects are position-only (highlight + move)
 - **Plant labels**: Hover tooltip + hover species highlight + selection labels (one per species at centroid). See `desktop/web/src/canvas/CLAUDE.md` Plant Presentation Rules
 - Many tools, overlays, and export commands were pruned during the rewrite — see git history. See `docs/todo.md` for current and deferred work

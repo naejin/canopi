@@ -1,7 +1,7 @@
 # Canopi: Current Work
 
 **Date**: 2026-04-13
-**Status**: v0.3.0 — timeline rework shipped (direct-manipulation UX), bottom-panel triptych complete (Timeline + Budget + Consortium), and the first in-canvas MapLibre basemap slice landed. Location PanelBar button remains hidden; location editing stays in the dedicated flow
+**Status**: v0.3.0 — timeline rework shipped (direct-manipulation UX), bottom-panel triptych complete (Timeline + Budget + Consortium), and the in-canvas MapLibre slice now includes shared hosted basemap config, loading/error feedback, and panel↔map overlays. The Location entry is visible in PanelBar and still opens the dedicated flow
 
 This file tracks active and deferred work.
 For architectural analysis and rationale, see [Code Quality And Architecture Review](./code-quality-architecture-review-2026-04-05.md).
@@ -172,11 +172,11 @@ These align with the core risks identified in the architecture review.
 ## Deferred Product Work
 
 **MapLibre / geo:**
-- Current MapLibre usage: full-screen location shell (`LocationTab`) and dynamically loaded featured-design world map (`WorldMapSurface`). These are document-derived UI surfaces, not canvas authorities.
-- ~~In-canvas MapLibre base layer behind the canvas~~ — **done**: `CanvasPanel` mounts `MapLibreCanvasSurface` behind `.canvasContainer`; the surface lazy-loads `maplibre-gl`, stays non-interactive, and owns its own lifecycle
+- Current MapLibre usage: full-screen location shell (`LocationTab`), dynamically loaded featured-design world map (`WorldMapSurface`), and the in-canvas `MapLibreCanvasSurface`. These are document-derived UI surfaces, not canvas authorities.
+- ~~In-canvas MapLibre base layer behind the canvas~~ — **done**: `CanvasPanel` mounts `MapLibreCanvasSurface` behind `.canvasContainer`; the surface lazy-loads `maplibre-gl`, stays non-interactive, owns its own lifecycle, and reports loading / ready / error state back to the canvas shell
 - ~~Canvas camera -> MapLibre viewport sync~~ — **done**: canvas remains authoritative; the basemap follows one-way through read-only runtime/query seams (`getViewport()`, `getViewportScreenSize()`, `viewportRevision`) and pure camera projection
 - ~~Initial in-canvas scope: toggleable base map only, mounted via a dedicated MapLibre controller/surface, with no map-driven document mutation~~ — **done**
-- Follow-up: rendered panel↔map overlays using the pure `projectPanelTargetsToMapFeatures()` seam
+- ~~Rendered panel↔map overlays using the pure `projectPanelTargetsToMapFeatures()` seam~~ — **done**: hover/selection overlays now consume the pure projection seam instead of resolving identity inside MapLibre
 - Local tangent plane projection math in `canvas/projection.ts` (`lngLatToMeters` / `metersToLngLat`) — prerequisite for viewport sync and future in-canvas geo layers (see `docs/archive/roadmap.md` 4.0c)
 - PMTiles offline tiles: Rust reader + Tauri custom protocol + download manager UI (see `docs/archive/roadmap.md` 4.2)
 - Contour/hillshade layers via `maplibre-contour` + DEM tiles (see `docs/archive/roadmap.md` 4.3/4.4)
@@ -188,7 +188,7 @@ These align with the core risks identified in the architecture review.
 - ~~Consortium succession chart~~ — **done** (`9fd8cf3`..`1007a96`): Canvas2D strata×phase grid, auto-sync from placed species, drag-move/resize, hover sync with canvas
 - ~~Bottom panel state persistence~~ — **done**: open/height/tab hydrated from Rust settings on bootstrap, persisted on panel actions (height persisted on drag-end, not per-frame)
 - ~~Timeline/budget selection wiring using the pure target resolver~~ — **done** (`57c508d`): selection is panel-origin presentation state only; map overlays and full panel↔canvas sync remain out of scope.
-- Remaining: rendered panel↔map overlay sync using the pure map projection seam
+- Remaining: none for the basic panel↔map overlay seam; keep the projection seam for future richer overlay variants
 
 **Other:**
 - Featured-design world map / template import

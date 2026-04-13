@@ -254,6 +254,8 @@
       "satellite": "卫星",
       "hillshade": "山体阴影",
       "interval": "间距",
+      "basemapLoading": "正在加载底图...",
+      "basemapError": "底图不可用",
       "setLocation": "设置设计位置以启用地图图层",
       "styleStreet": "街道",
       "styleTerrain": "地形",

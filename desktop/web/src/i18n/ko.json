@@ -254,6 +254,8 @@
       "satellite": "위성",
       "hillshade": "음영기복",
       "interval": "간격",
+      "basemapLoading": "기본 지도를 불러오는 중...",
+      "basemapError": "기본 지도를 사용할 수 없습니다",
       "setLocation": "지도 레이어를 활성화하려면 위치를 설정하세요",
       "styleStreet": "거리",
       "styleTerrain": "지형",
