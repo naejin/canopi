@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   flushQueuedSettingsPersist: vi.fn(),
   installConsortiumSync: vi.fn(),
   loadCanvasFromDocument: vi.fn(),
+  runtimeInitImpl: vi.fn(async () => undefined),
   runtimeInstances: [] as Array<Record<string, unknown>>,
   snapshotCanvasIntoCurrentDocument: vi.fn(),
   writeCanvasIntoDocument: vi.fn(() => ({ name: "Autosaved" })),
@@ -18,7 +19,9 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("../canvas/runtime/scene-runtime", () => ({
   SceneCanvasRuntime: class {
-    init = vi.fn(async () => {})
+    init = vi.fn((container) => mocks.runtimeInitImpl(container))
+    loadDocument = vi.fn()
+    replaceDocument = vi.fn()
     initializeViewport = vi.fn()
     attachRulersTo = vi.fn()
     showCanvasChrome = vi.fn()
@@ -50,7 +53,11 @@ vi.mock("../app/document-session/runtime", async (importOriginal) => {
     ...actual,
     disposeDocumentWorkflows: mocks.disposeDocumentWorkflows,
     installConsortiumSync: mocks.installConsortiumSync,
-    loadCanvasFromDocument: mocks.loadCanvasFromDocument,
+    loadCanvasFromDocument: vi.fn((file, session) => {
+      mocks.loadCanvasFromDocument(file, session);
+      session.loadDocument(file);
+      mocks.installConsortiumSync();
+    }),
     snapshotCanvasIntoCurrentDocument: mocks.snapshotCanvasIntoCurrentDocument,
     writeCanvasIntoDocument: mocks.writeCanvasIntoDocument,
   };
@@ -94,6 +101,28 @@ async function flushMicrotasks(): Promise<void> {
   await Promise.resolve();
 }
 
+function makeDesign(name = "Demo") {
+  return {
+    version: 2,
+    name,
+    description: null,
+    location: null,
+    north_bearing_deg: 0,
+    plant_species_colors: {},
+    layers: [],
+    plants: [],
+    zones: [],
+    annotations: [],
+    consortiums: [],
+    groups: [],
+    timeline: [],
+    budget: [],
+    created_at: "2026-04-13T00:00:00.000Z",
+    updated_at: "2026-04-13T00:00:00.000Z",
+    extra: {},
+  };
+}
+
 describe("useCanvasDocumentSession", () => {
   let container: HTMLDivElement;
 
@@ -108,6 +137,8 @@ describe("useCanvasDocumentSession", () => {
     mocks.flushQueuedSettingsPersist.mockClear();
     mocks.installConsortiumSync.mockClear();
     mocks.loadCanvasFromDocument.mockClear();
+    mocks.runtimeInitImpl.mockReset();
+    mocks.runtimeInitImpl.mockResolvedValue(undefined);
     mocks.runtimeInstances.length = 0;
     mocks.snapshotCanvasIntoCurrentDocument.mockClear();
     mocks.writeCanvasIntoDocument.mockClear();
@@ -153,25 +184,7 @@ describe("useCanvasDocumentSession", () => {
   });
 
   it("loads the current design on mount and snapshots before teardown", async () => {
-    currentDesign.value = {
-      version: 2,
-      name: "Demo",
-      description: null,
-      location: null,
-      north_bearing_deg: 0,
-      plant_species_colors: {},
-      layers: [],
-      plants: [],
-      zones: [],
-      annotations: [],
-      consortiums: [],
-      groups: [],
-      timeline: [],
-      budget: [],
-      created_at: "2026-04-13T00:00:00.000Z",
-      updated_at: "2026-04-13T00:00:00.000Z",
-      extra: {},
-    };
+    currentDesign.value = makeDesign();
 
     await act(async () => {
       render(<Harness />, container);
@@ -201,26 +214,89 @@ describe("useCanvasDocumentSession", () => {
     expect(snapshotOrder).toBeLessThan(destroyOrder ?? Number.POSITIVE_INFINITY);
   });
 
-  it("recreates autosave on interval changes", async () => {
-    currentDesign.value = {
-      version: 2,
-      name: "Demo",
-      description: null,
-      location: null,
-      north_bearing_deg: 0,
-      plant_species_colors: {},
-      layers: [],
-      plants: [],
-      zones: [],
-      annotations: [],
-      consortiums: [],
-      groups: [],
-      timeline: [],
-      budget: [],
-      created_at: "2026-04-13T00:00:00.000Z",
-      updated_at: "2026-04-13T00:00:00.000Z",
-      extra: {},
+  it("does not snapshot when runtime init rejects", async () => {
+    currentDesign.value = makeDesign();
+    mocks.runtimeInitImpl.mockRejectedValueOnce(new Error("init failed"));
+
+    await act(async () => {
+      render(<Harness />, container);
+      await flushMicrotasks();
+    });
+
+    await act(async () => {
+      render(null, container);
+      await flushMicrotasks();
+    });
+
+    const runtime = mocks.runtimeInstances[0] as { destroy: ReturnType<typeof vi.fn> };
+
+    expect(mocks.loadCanvasFromDocument).not.toHaveBeenCalled();
+    expect(mocks.snapshotCanvasIntoCurrentDocument).not.toHaveBeenCalled();
+    expect(mocks.disposeDocumentWorkflows).toHaveBeenCalledTimes(1);
+    expect(runtime.destroy).toHaveBeenCalledTimes(1);
+    expect(currentCanvasSession.value).toBe(null);
+  });
+
+  it("does not snapshot before the runtime has loaded a document", async () => {
+    currentDesign.value = makeDesign();
+    let resolveInit: (() => void) | null = null;
+    mocks.runtimeInitImpl.mockImplementation(
+      () => new Promise<void>((resolve) => {
+        resolveInit = resolve;
+      }),
+    );
+
+    await act(async () => {
+      render(<Harness />, container);
+      await flushMicrotasks();
+    });
+
+    await act(async () => {
+      render(null, container);
+      await flushMicrotasks();
+    });
+
+    await act(async () => {
+      resolveInit?.();
+      await flushMicrotasks();
+    });
+
+    const runtime = mocks.runtimeInstances[0] as { destroy: ReturnType<typeof vi.fn> };
+
+    expect(mocks.loadCanvasFromDocument).not.toHaveBeenCalled();
+    expect(mocks.snapshotCanvasIntoCurrentDocument).not.toHaveBeenCalled();
+    expect(mocks.disposeDocumentWorkflows).toHaveBeenCalledTimes(1);
+    expect(runtime.destroy).toHaveBeenCalledTimes(1);
+    expect(currentCanvasSession.value).toBe(null);
+  });
+
+  it("snapshots after a queued document replacement loads through replaceDocument", async () => {
+    const queuedDesign = makeDesign("Queued");
+    mocks.consumeQueuedDocumentLoad.mockImplementation((session) => {
+      session.replaceDocument(queuedDesign);
+      currentDesign.value = queuedDesign;
+      return mocks.cancelQueuedLoad;
+    });
+
+    await act(async () => {
+      render(<Harness />, container);
+      await flushMicrotasks();
+    });
+
+    await act(async () => {
+      render(null, container);
+    });
+
+    const runtime = mocks.runtimeInstances[0] as {
+      destroy: ReturnType<typeof vi.fn>;
     };
+
+    expect(mocks.snapshotCanvasIntoCurrentDocument).toHaveBeenCalledTimes(1);
+    expect(runtime.destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it("recreates autosave on interval changes", async () => {
+    currentDesign.value = makeDesign();
     detachedCanvasDirty.value = true;
 
     await act(async () => {
