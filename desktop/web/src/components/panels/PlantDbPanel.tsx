@@ -1,6 +1,6 @@
 import { useEffect } from 'preact/hooks'
 import { useSignal, useSignalEffect } from '@preact/signals'
-import { locale } from '../../state/app'
+import { locale } from '../../app/shell/state'
 import {
   loadSidebarLists,
   mountPlantDbController,
@@ -8,7 +8,7 @@ import {
   searchResults,
   isSearching,
   retrySearch,
-} from '../../state/plant-db'
+} from '../../app/plant-browser'
 import { SearchBar } from '../plant-db/SearchBar'
 import { FilterStrip } from '../plant-db/FilterStrip'
 import { ActiveChips } from '../plant-db/ActiveChips'

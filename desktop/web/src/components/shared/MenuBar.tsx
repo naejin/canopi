@@ -1,6 +1,6 @@
 import { useRef } from 'preact/hooks'
 import { useSignal, useSignalEffect } from '@preact/signals'
-import { locale } from '../../state/app'
+import { locale } from '../../app/shell/state'
 import { currentCanvasSession } from '../../canvas/session'
 import { currentDesign, designDirty } from '../../state/document'
 import { getMenuDefinitions, type MenuDefinition, type MenuEntry } from './menu-definitions'

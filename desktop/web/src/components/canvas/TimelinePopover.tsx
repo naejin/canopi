@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
-import { locale } from '../../state/app'
+import { locale } from '../../app/shell/state'
 import { ACTION_TYPES, actionColor } from '../../canvas/timeline-renderer'
 import { DatePicker } from '../shared/DatePicker'
 import { Dropdown, type DropdownItem } from '../shared/Dropdown'

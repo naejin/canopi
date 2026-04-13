@@ -1,6 +1,6 @@
 import { useEffect } from 'preact/hooks'
 import { t } from '../../i18n'
-import { locale } from '../../state/app'
+import { locale } from '../../app/shell/state'
 import {
   activeFilters,
   filterOptions,
@@ -9,7 +9,7 @@ import {
   clearFilters,
   activeFilterCount,
   patchFilters,
-} from '../../state/plant-db'
+} from '../../app/plant-browser'
 import type { SpeciesFilter } from '../../types/species'
 import { FilterChip } from './FilterChip'
 import { ThresholdSlider } from './ThresholdSlider'

@@ -1,6 +1,6 @@
 import { t } from '../../i18n'
-import { locale } from '../../state/app'
-import { toggleFavoriteAction, selectedCanonicalName } from '../../state/plant-db'
+import { locale } from '../../app/shell/state'
+import { toggleFavoriteAction, selectedCanonicalName } from '../../app/plant-browser'
 import { plantStampSpecies } from '../../state/canvas'
 import { currentCanvasSession } from '../../canvas/session'
 import { STRATUM_I18N_KEY } from '../../types/constants'

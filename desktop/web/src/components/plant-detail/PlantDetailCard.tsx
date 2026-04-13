@@ -1,12 +1,12 @@
 import { useSignal } from '@preact/signals';
 import { useSignalEffect } from '@preact/signals';
 import { t } from '../../i18n';
-import { locale } from '../../state/app';
+import { locale } from '../../app/shell/state';
 import {
   selectedCanonicalName,
   favoriteNames,
   toggleFavoriteAction,
-} from '../../state/plant-db';
+} from '../../app/plant-browser';
 import { getSpeciesDetail, getLocaleCommonNames } from '../../ipc/species';
 import type { SpeciesDetail, CommonNameEntry } from '../../types/species';
 import { AttributeGrid } from './AttributeGrid';

@@ -1,7 +1,7 @@
 import { useSignal, useSignalEffect } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
 import { t } from '../../i18n'
-import { locale } from '../../state/app'
+import { locale } from '../../app/shell/state'
 import { currentDesign } from '../../state/document'
 import { geocodeAddress } from '../../ipc/geocoding'
 import type { GeoResult } from '../../ipc/geocoding'

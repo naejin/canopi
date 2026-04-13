@@ -1,6 +1,6 @@
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { designName, designDirty } from '../../state/document'
-import { activePanel, locale, theme, persistCurrentSettings } from '../../state/app'
+import { activePanel, locale, theme, persistCurrentSettings } from '../../app/shell/state'
 import { t } from '../../i18n'
 import { Dropdown, type DropdownItem } from './Dropdown'
 import { MenuBar } from './MenuBar'

@@ -1,6 +1,6 @@
 import { t } from '../../i18n';
-import { locale } from '../../state/app';
-import { sortField } from '../../state/plant-db';
+import { locale } from '../../app/shell/state';
+import { sortField } from '../../app/plant-browser';
 import type { Sort } from '../../types/species';
 import styles from './PlantDb.module.css';
 

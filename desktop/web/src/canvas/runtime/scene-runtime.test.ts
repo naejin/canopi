@@ -23,7 +23,7 @@ import {
   snapToGridEnabled,
 } from '../../state/canvas'
 import { canvasClean } from '../../state/design'
-import { locale } from '../../state/app'
+import { locale } from '../../app/shell/state'
 import type { CanopiFile } from '../../types/design'
 import { speciesTarget } from '../../panel-targets'
 import { SceneCanvasRuntime } from './scene-runtime.ts'

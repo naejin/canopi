@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { activeTool } from '../state/canvas'
-import { activePanel, sidePanel } from '../state/app'
+import { activePanel, sidePanel } from '../app/shell/state'
 import { initShortcuts } from '../shortcuts/manager'
 import { setCurrentCanvasSession } from '../canvas/session'
 

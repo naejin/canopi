@@ -1,4 +1,4 @@
-import { plantDbStatus } from '../../state/app'
+import { plantDbStatus } from '../../app/shell/state'
 import { t } from '../../i18n'
 import styles from './DegradedBanner.module.css'
 

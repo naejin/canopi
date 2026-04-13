@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { activePanel, navigateTo, sidePanel } from '../state/app'
+import { activePanel, navigateTo, sidePanel } from '../app/shell/state'
 
 beforeEach(() => {
   activePanel.value = 'canvas'

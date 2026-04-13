@@ -2,7 +2,7 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { PanelBar } from '../components/panels/PanelBar'
-import { activePanel, locale, sidePanel } from '../state/app'
+import { activePanel, locale, sidePanel } from '../app/shell/state'
 import { currentDesign } from '../state/document'
 
 describe('PanelBar', () => {

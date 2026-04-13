@@ -55,12 +55,12 @@ beforeEach(() => {
 
 describe('plant DB controller lifecycle', () => {
   it('does not execute searches on module import alone', async () => {
-    await import('../state/plant-db')
+    await import('../app/plant-browser')
     expect(mocks.searchSpecies).not.toHaveBeenCalled()
   })
 
   it('starts searches on mount and stops after dispose', async () => {
-    const plantDb = await import('../state/plant-db')
+    const plantDb = await import('../app/plant-browser')
     const dispose = plantDb.mountPlantDbController()
 
     await flushMicrotasks()
@@ -75,7 +75,7 @@ describe('plant DB controller lifecycle', () => {
   })
 
   it('increments result-set revision on first-page searches but not pagination appends', async () => {
-    const plantDb = await import('../state/plant-db')
+    const plantDb = await import('../app/plant-browser')
     const dispose = plantDb.mountPlantDbController()
 
     await flushMicrotasks()
@@ -95,8 +95,8 @@ describe('plant DB controller lifecycle', () => {
   })
 
   it('caches dynamic filter options per locale', async () => {
-    const plantDb = await import('../state/plant-db')
-    const appState = await import('../state/app')
+    const plantDb = await import('../app/plant-browser')
+    const appState = await import('../app/shell/state')
     const englishOptions: DynamicFilterOptions[] = [
       {
         field: 'habit',
@@ -134,8 +134,8 @@ describe('plant DB controller lifecycle', () => {
   })
 
   it('deduplicates concurrent dynamic option requests for the same locale and field', async () => {
-    const plantDb = await import('../state/plant-db')
-    const appState = await import('../state/app')
+    const plantDb = await import('../app/plant-browser')
+    const appState = await import('../app/shell/state')
     let resolveRequest!: (value: DynamicFilterOptions[]) => void
     const request = new Promise<DynamicFilterOptions[]>((resolve) => {
       resolveRequest = resolve
@@ -167,8 +167,8 @@ describe('plant DB controller lifecycle', () => {
   })
 
   it('records a field-level error when IPC returns no options for a requested field', async () => {
-    const plantDb = await import('../state/plant-db')
-    const appState = await import('../state/app')
+    const plantDb = await import('../app/plant-browser')
+    const appState = await import('../app/shell/state')
     vi.spyOn(console, 'error').mockImplementation(() => {})
 
     appState.locale.value = 'en'
@@ -183,8 +183,8 @@ describe('plant DB controller lifecycle', () => {
   })
 
   it('clears field-level errors after a successful retry', async () => {
-    const plantDb = await import('../state/plant-db')
-    const appState = await import('../state/app')
+    const plantDb = await import('../app/plant-browser')
+    const appState = await import('../app/shell/state')
     vi.spyOn(console, 'error').mockImplementation(() => {})
 
     appState.locale.value = 'en'
@@ -211,8 +211,8 @@ describe('plant DB controller lifecycle', () => {
   })
 
   it('records thrown IPC errors per field', async () => {
-    const plantDb = await import('../state/plant-db')
-    const appState = await import('../state/app')
+    const plantDb = await import('../app/plant-browser')
+    const appState = await import('../app/shell/state')
     vi.spyOn(console, 'error').mockImplementation(() => {})
 
     appState.locale.value = 'en'
@@ -226,7 +226,7 @@ describe('plant DB controller lifecycle', () => {
   })
 
   it('preserves the first-page total estimate when loading more results', async () => {
-    const plantDb = await import('../state/plant-db')
+    const plantDb = await import('../app/plant-browser')
 
     plantDb.totalEstimate.value = 42
     plantDb.nextCursor.value = 'offset:50'
@@ -252,7 +252,7 @@ describe('plant DB controller lifecycle', () => {
   })
 
   it('loads favorite items into both detail and badge state', async () => {
-    const plantDb = await import('../state/plant-db')
+    const plantDb = await import('../app/plant-browser')
 
     ;(mocks.getFavorites as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
       {
@@ -278,8 +278,8 @@ describe('plant DB controller lifecycle', () => {
   })
 
   it('ignores stale favorite-item responses after a locale switch', async () => {
-    const plantDb = await import('../state/plant-db')
-    const appState = await import('../state/app')
+    const plantDb = await import('../app/plant-browser')
+    const appState = await import('../app/shell/state')
     const english = deferred<any[]>()
     const french = deferred<any[]>()
 
@@ -312,7 +312,7 @@ describe('plant DB controller lifecycle', () => {
   })
 
   it('does not let a stale favorites reload overwrite an optimistic toggle', async () => {
-    const plantDb = await import('../state/plant-db')
+    const plantDb = await import('../app/plant-browser')
     const pendingFavorites = deferred<any[]>()
 
     plantDb.searchResults.value = [
@@ -341,8 +341,8 @@ describe('plant DB controller lifecycle', () => {
   })
 
   it('ignores stale sidebar list responses after a locale switch', async () => {
-    const plantDb = await import('../state/plant-db')
-    const appState = await import('../state/app')
+    const plantDb = await import('../app/plant-browser')
+    const appState = await import('../app/shell/state')
     const englishFavorites = deferred<any[]>()
     const englishRecent = deferred<any[]>()
     const frenchFavorites = deferred<any[]>()

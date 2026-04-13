@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'preact/hooks'
 import { t } from '../../i18n'
-import { locale } from '../../state/app'
+import { locale } from '../../app/shell/state'
 import { newDesignAction, openDesign, openDesignFromPath } from '../../state/document'
 import { getRecentFiles } from '../../ipc/design'
 import type { DesignSummary } from '../../types/design'

@@ -6,7 +6,7 @@ import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import { MapLibreCanvasSurface } from '../components/canvas/MapLibreCanvasSurface'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { currentDesign } from '../state/document'
-import { theme } from '../state/app'
+import { theme } from '../app/shell/state'
 import {
   contourIntervalMeters,
   hillshadeOpacity,

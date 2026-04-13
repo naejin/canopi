@@ -3,7 +3,7 @@ import styles from "./App.module.css";
 import { t } from "./i18n";
 import { useCallback, useRef } from "preact/hooks";
 import { lazy, Suspense } from "preact/compat";
-import { activePanel, sidePanel, sidePanelWidth } from "./state/app";
+import { activePanel, sidePanel, sidePanelWidth } from "./app/shell/state";
 import { TitleBar } from "./components/shared/TitleBar";
 import { DegradedBanner } from "./components/shared/DegradedBanner";
 import { CommandPalette } from "./components/shared/CommandPalette";

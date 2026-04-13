@@ -1,4 +1,4 @@
-import { sidePanel, navigateTo, activePanel, type Panel } from "../../state/app";
+import { sidePanel, navigateTo, activePanel, type Panel } from "../../app/shell/state";
 import { t } from "../../i18n";
 import { LeafIcon, PencilIcon } from "./icons";
 import styles from "./ActivityBar.module.css";

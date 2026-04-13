@@ -39,7 +39,7 @@ import {
   sceneEntityRevision,
   selectedPanelTargets,
 } from '../../state/canvas'
-import { theme } from '../../state/app'
+import { theme } from '../../app/shell/state'
 import { currentDesign } from '../../state/document'
 import { loadMapLibre, type MapLibreApi, type MapLibreMapInstance } from './maplibre-loader'
 import styles from './MapLibreCanvasSurface.module.css'

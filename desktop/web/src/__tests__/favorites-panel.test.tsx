@@ -18,8 +18,8 @@ vi.mock('../components/plant-detail/PlantDetailCard', () => ({
   ),
 }))
 
-vi.mock('../state/plant-db', async () => {
-  const actual = await vi.importActual<typeof import('../state/plant-db')>('../state/plant-db')
+vi.mock('../app/plant-browser', async () => {
+  const actual = await vi.importActual<typeof import('../app/plant-browser')>('../app/plant-browser')
   return {
     ...actual,
     loadFavoriteItems: mocks.loadFavoriteItems,
@@ -27,13 +27,13 @@ vi.mock('../state/plant-db', async () => {
 })
 
 import { FavoritesPanel } from '../components/panels/FavoritesPanel'
-import { locale } from '../state/app'
+import { locale } from '../app/shell/state'
 import {
   favoriteItems,
   favoriteItemsLoading,
   favoriteItemsRevision,
   selectedCanonicalName,
-} from '../state/plant-db'
+} from '../app/plant-browser'
 
 describe('FavoritesPanel', () => {
   let container: HTMLDivElement

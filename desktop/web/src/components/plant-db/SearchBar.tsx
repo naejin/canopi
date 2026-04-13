@@ -1,6 +1,6 @@
 import { t } from '../../i18n';
-import { locale } from '../../state/app';
-import { searchText, totalEstimate, isSearching } from '../../state/plant-db';
+import { locale } from '../../app/shell/state';
+import { searchText, totalEstimate, isSearching } from '../../app/plant-browser';
 import styles from './PlantDb.module.css';
 
 export function SearchBar() {

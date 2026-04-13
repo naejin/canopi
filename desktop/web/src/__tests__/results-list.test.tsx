@@ -107,8 +107,8 @@ import {
   searchText,
   sortField,
   viewMode,
-} from '../state/plant-db'
-import { locale } from '../state/app'
+} from '../app/plant-browser'
+import { locale } from '../app/shell/state'
 
 function defaultFilters() {
   return {

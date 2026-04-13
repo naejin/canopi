@@ -1,13 +1,13 @@
 import { useEffect } from 'preact/hooks'
 import { t } from '../../i18n'
-import { locale } from '../../state/app'
+import { locale } from '../../app/shell/state'
 import {
   favoriteItems,
   favoriteItemsLoading,
   favoriteItemsRevision,
   loadFavoriteItems,
   selectedCanonicalName,
-} from '../../state/plant-db'
+} from '../../app/plant-browser'
 import { PlantRow } from '../plant-db/PlantRow'
 import { PlantDetailCard } from '../plant-detail/PlantDetailCard'
 import plantDetailStyles from '../plant-detail/PlantDetail.module.css'

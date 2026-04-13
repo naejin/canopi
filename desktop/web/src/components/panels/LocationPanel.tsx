@@ -1,4 +1,4 @@
-import { locale } from '../../state/app'
+import { locale } from '../../app/shell/state'
 import { currentDesign } from '../../state/document'
 import { LocationTab } from '../canvas/LocationTab'
 import { WelcomeScreen } from '../shared/WelcomeScreen'

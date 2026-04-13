@@ -1,5 +1,5 @@
 import { signal } from '@preact/signals'
-import { locale } from '../../state/app'
+import { locale } from '../../app/shell/state'
 import { clearPanelOriginTargets } from '../../app/panel-targets/coordinator'
 import {
   gridVisible,

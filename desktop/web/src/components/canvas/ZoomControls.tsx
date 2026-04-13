@@ -1,5 +1,5 @@
 import { zoomLevel, zoomReference } from '../../state/canvas'
-import { locale } from '../../state/app'
+import { locale } from '../../app/shell/state'
 import { currentCanvasSession } from '../../canvas/session'
 import { t } from '../../i18n'
 import styles from './ZoomControls.module.css'

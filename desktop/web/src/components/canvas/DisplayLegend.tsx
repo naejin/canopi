@@ -1,5 +1,5 @@
 import { plantColorByAttr } from '../../state/canvas'
-import { locale } from '../../state/app'
+import { locale } from '../../app/shell/state'
 import { getLegendEntries } from '../../canvas/display-modes'
 import { SCALE_BAR_RESERVED_BOTTOM_PX } from '../../canvas/scale-bar'
 import { t } from '../../i18n'

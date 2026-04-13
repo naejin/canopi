@@ -1,6 +1,6 @@
 import { useSignalEffect } from '@preact/signals'
 import { t } from '../../i18n'
-import { locale } from '../../state/app'
+import { locale } from '../../app/shell/state'
 import {
   activeFilters,
   dynamicOptionsCache,
@@ -9,7 +9,7 @@ import {
   loadDynamicOptions,
   patchFilters,
   removeExtraFilter,
-} from '../../state/plant-db'
+} from '../../app/plant-browser'
 import type { DynamicFilter, DynamicFilterOptions, SpeciesFilter } from '../../types/species'
 import { FIELD_REGISTRY, categoryForField } from './field-registry'
 import { FilterChip } from './FilterChip'

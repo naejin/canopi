@@ -2,7 +2,7 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { BottomPanelLauncher } from '../components/canvas/BottomPanelLauncher'
-import { locale } from '../state/app'
+import { locale } from '../app/shell/state'
 import { bottomPanelOpen, bottomPanelTab } from '../state/canvas'
 
 describe('BottomPanelLauncher', () => {

@@ -3,7 +3,7 @@ import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { LayerPanel } from '../components/canvas/LayerPanel'
 import { currentDesign } from '../state/document'
-import { locale } from '../state/app'
+import { locale } from '../app/shell/state'
 import {
   activeLayerName,
   contourIntervalMeters,

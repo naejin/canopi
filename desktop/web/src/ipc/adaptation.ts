@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import { plantDbStatus } from '../state/app';
+import { plantDbStatus } from '../app/shell/state';
 
 export interface CompatibilityResult {
   species_id: string;

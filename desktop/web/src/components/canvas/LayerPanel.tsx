@@ -1,5 +1,5 @@
 import { t } from '../../i18n'
-import { locale } from '../../state/app'
+import { locale } from '../../app/shell/state'
 import { currentDesign } from '../../state/document'
 import {
   activeLayerName,
