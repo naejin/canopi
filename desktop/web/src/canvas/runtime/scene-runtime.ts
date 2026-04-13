@@ -18,28 +18,23 @@ import {
 import type { ColorByAttribute, PlantSizeMode } from '../../state/canvas'
 import type { CanopiFile, PlacedPlant } from '../../types/design'
 import type { SelectedPlantColorContext } from '../plant-color-context'
-import { normalizeHexColor } from '../plant-colors'
 import { computeSelectionLabels } from './selection-labels'
 import { clearCanvasSelection, setCanvasSelection, setCanvasTool } from '../session-state'
 import { refreshCanvasColorCache } from '../theme-refresh'
-import { CameraController, type SceneBounds } from './camera'
+import { CameraController } from './camera'
 import { SceneChromeOverlay } from './scene-chrome'
 import { SceneInteractionController } from './scene-interaction'
 import { RendererHost } from './renderers'
 import { createCanvas2DSceneRenderer } from './renderers/canvas2d-scene'
 import { createPixiSceneRenderer } from './renderers/pixi-scene'
 import type { SceneRendererContext, SceneRendererInstance, SceneRendererSnapshot } from './renderers/scene-types'
-import { getAnnotationWorldBounds } from './annotation-layout'
 import { SceneStore } from './scene'
 import { CanvasSpeciesCache } from './species-cache'
 import { CanvasPlantLabelResolver } from './plant-labels'
 import {
   getSelectedAnnotationIds,
   getSelectedPlantIds,
-  getSelectedTopLevelTargets,
   getSelectedZoneIds,
-  getSelectionLayer,
-  setsEqual,
 } from './scene-runtime/selection'
 import {
   applySignalBackedSceneState,
@@ -48,34 +43,15 @@ import {
   syncPresentationSignalsFromSceneSession,
 } from './scene-runtime/scene-sync'
 import { installSceneRuntimeEffects } from './scene-runtime/effects'
-import {
-  createClipboardPayload,
-  pasteClipboardPayload,
-  type SceneClipboardPayload,
-} from './scene-runtime/clipboard'
-import {
-  getPlantWorldBounds,
-  type PlantPresentationContext,
-} from './plant-presentation'
+import { type PlantPresentationContext } from './plant-presentation'
 import { resolvePlantCanopySpreadM, resolvePlantStratum } from './plant-presentation'
-import type {
-  SceneObjectGroupEntity,
-  ScenePersistedState,
-} from './scene'
+import type { ScenePersistedState } from './scene'
 import { createScenePatchCommand, type SceneCommandSnapshot } from './scene-commands'
 import { SceneHistory } from './scene-history'
+import { SceneRuntimeMutationController } from './scene-runtime/mutations'
 import type { CanvasRuntime, CanvasRuntimeDocumentMetadata } from './runtime'
 import { resolvePanelTargets } from '../../panel-target-resolution'
 import { panelTargetsEqual, speciesTarget } from '../../panel-targets'
-
-const EMPTY_PLANT_COLOR_CONTEXT: SelectedPlantColorContext = {
-  plantIds: [],
-  singleSpeciesCanonicalName: null,
-  singleSpeciesCommonName: null,
-  sharedCurrentColor: null,
-  suggestedColor: null,
-  singleSpeciesDefaultColor: null,
-}
 
 type RuntimeInvalidationKind = 'scene' | 'viewport' | 'chrome'
 
@@ -96,11 +72,39 @@ export class SceneCanvasRuntime implements CanvasRuntime {
   private _interaction: SceneInteractionController | null = null
   private _chromeVisible = false
   private readonly _history = new SceneHistory()
-  private _clipboard: SceneClipboardPayload | null = null
+  private readonly _mutations: SceneRuntimeMutationController
   private readonly _disposeEffects: Array<() => void> = []
   private _renderEpoch = 0
 
   constructor() {
+    this._mutations = new SceneRuntimeMutationController({
+      sceneStore: this._sceneStore,
+      selection: {
+        set: (ids) => this._setSelection(ids),
+      },
+      locks: {
+        get: () => lockedObjectIds.value,
+        set: (ids) => {
+          lockedObjectIds.value = new Set(ids)
+        },
+      },
+      history: {
+        captureSnapshot: () => this._captureCommandSnapshot(),
+        markDirty: (before, type) => this._markCanvasDirty(before, type),
+      },
+      presentation: {
+        syncSignals: () => syncPresentationSignalsFromSceneSession(this._sceneStore),
+        syncPlantSpeciesColors: () => {
+          plantSpeciesColors.value = {
+            ...this._sceneStore.persisted.plantSpeciesColors,
+          }
+        },
+        getViewportScale: () => this._camera.viewport.scale,
+        createPlantPresentationContext: (viewportScale) => this._createPlantPresentationContext(viewportScale),
+        getSuggestedPlantColor: (canonicalName) => this._speciesCache.getSuggestedPlantColor(canonicalName),
+      },
+      invalidateScene: () => this._invalidate('scene'),
+    })
     this._installEffects()
   }
 
@@ -234,206 +238,47 @@ export class SceneCanvasRuntime implements CanvasRuntime {
   }
 
   copy(): void {
-    const persisted = this._sceneStore.persisted
-    const selected = getSelectedTopLevelTargets(persisted, this._sceneStore.session.selectedEntityIds)
-    this._clipboard = createClipboardPayload(persisted, selected)
+    this._mutations.copy()
   }
 
   paste(): void {
-    if (!this._clipboard) return
-
-    const before = this._captureCommandSnapshot()
-    let nextSelection = new Set<string>()
-    this._sceneStore.updatePersisted((draft) => {
-      nextSelection = pasteClipboardPayload(this._clipboard!, draft)
-    })
-
-    if (nextSelection.size === 0) return
-    this._setSelection(nextSelection)
-    this._markCanvasDirty(before)
-    this._invalidate('scene')
+    this._mutations.paste()
   }
 
   duplicateSelected(): void {
-    this.copy()
-    this.paste()
+    this._mutations.duplicateSelected()
   }
 
   deleteSelected(): void {
-    const persisted = this._sceneStore.persisted
-    const selected = getSelectedTopLevelTargets(persisted, this._sceneStore.session.selectedEntityIds)
-    if (selected.length === 0) return
-
-    const before = this._captureCommandSnapshot()
-    const selectedGroupIds = new Set(selected.filter((target) => target.kind === 'group').map((target) => target.id))
-    const deletedPlantIds = new Set<string>()
-    const deletedZoneIds = new Set<string>()
-    const deletedAnnotationIds = new Set<string>()
-
-    for (const target of selected) {
-      if (target.kind === 'plant') deletedPlantIds.add(target.id)
-      else if (target.kind === 'zone') deletedZoneIds.add(target.id)
-      else if (target.kind === 'annotation') deletedAnnotationIds.add(target.id)
-    }
-
-    for (const group of persisted.groups) {
-      if (!selectedGroupIds.has(group.id)) continue
-      for (const memberId of group.memberIds) {
-        if (persisted.plants.some((plant) => plant.id === memberId)) deletedPlantIds.add(memberId)
-        else if (persisted.zones.some((zone) => zone.name === memberId)) deletedZoneIds.add(memberId)
-        else if (persisted.annotations.some((annotation) => annotation.id === memberId)) deletedAnnotationIds.add(memberId)
-      }
-    }
-
-    this._sceneStore.updatePersisted((draft) => {
-      draft.plants = draft.plants.filter((plant) => !deletedPlantIds.has(plant.id))
-      draft.zones = draft.zones.filter((zone) => !deletedZoneIds.has(zone.name))
-      draft.annotations = draft.annotations.filter((annotation) => !deletedAnnotationIds.has(annotation.id))
-      draft.groups = draft.groups
-        .filter((group) => !selectedGroupIds.has(group.id))
-        .map((group) => ({
-          ...group,
-          memberIds: group.memberIds.filter((memberId) =>
-            !deletedPlantIds.has(memberId) && !deletedZoneIds.has(memberId) && !deletedAnnotationIds.has(memberId),
-          ),
-        }))
-        .filter((group) => group.memberIds.length >= 2)
-    })
-
-    const nextLocked = new Set(lockedObjectIds.value)
-    for (const id of [...deletedPlantIds, ...deletedZoneIds, ...deletedAnnotationIds, ...selectedGroupIds]) {
-      nextLocked.delete(id)
-    }
-    lockedObjectIds.value = nextLocked
-    this._setSelection([])
-    this._markCanvasDirty(before)
-    this._invalidate('scene')
+    this._mutations.deleteSelected()
   }
 
   selectAll(): void {
-    const persisted = this._sceneStore.persisted
-    const locked = lockedObjectIds.value
-    const ids = new Set<string>()
-    const groupedMemberIds = new Set(persisted.groups.flatMap((group) => group.memberIds))
-
-    if (layerVisibility.value.plants !== false) {
-      for (const plant of persisted.plants) {
-        if (groupedMemberIds.has(plant.id) || locked.has(plant.id)) continue
-        ids.add(plant.id)
-      }
-    }
-
-    if (layerVisibility.value.zones !== false) {
-      for (const zone of persisted.zones) {
-        if (groupedMemberIds.has(zone.name) || locked.has(zone.name)) continue
-        ids.add(zone.name)
-      }
-    }
-
-    if (layerVisibility.value.annotations !== false) {
-      for (const annotation of persisted.annotations) {
-        if (groupedMemberIds.has(annotation.id) || locked.has(annotation.id)) continue
-        ids.add(annotation.id)
-      }
-    }
-
-    for (const group of persisted.groups) {
-      if (layerVisibility.value[group.layer] === false || locked.has(group.id)) continue
-      ids.add(group.id)
-    }
-
-    if (setsEqual(ids, this._sceneStore.session.selectedEntityIds)) return
-    this._setSelection(ids)
-    this._invalidate('scene')
+    this._mutations.selectAll(layerVisibility.value)
   }
 
   bringToFront(): void {
-    this._reorderSelected('end')
+    this._mutations.bringToFront()
   }
 
   sendToBack(): void {
-    this._reorderSelected('start')
+    this._mutations.sendToBack()
   }
 
   lockSelected(): void {
-    const selected = getSelectedTopLevelTargets(this._sceneStore.persisted, this._sceneStore.session.selectedEntityIds)
-    if (selected.length === 0) return
-    const before = this._captureCommandSnapshot()
-    const nextLocked = new Set(lockedObjectIds.value)
-    for (const target of selected) nextLocked.add(target.id)
-    lockedObjectIds.value = nextLocked
-    this._setSelection([])
-    this._markCanvasDirty(before, 'lock-selected')
-    this._invalidate('scene')
+    this._mutations.lockSelected()
   }
 
   unlockSelected(): void {
-    if (lockedObjectIds.value.size === 0) return
-    const before = this._captureCommandSnapshot()
-    lockedObjectIds.value = new Set()
-    this._markCanvasDirty(before, 'unlock-selected')
-    this._invalidate('scene')
+    this._mutations.unlockSelected()
   }
 
   groupSelected(): void {
-    const persisted = this._sceneStore.persisted
-    const selected = getSelectedTopLevelTargets(persisted, this._sceneStore.session.selectedEntityIds)
-    if (selected.length < 2 || selected.some((target) => target.kind === 'group')) return
-
-    const before = this._captureCommandSnapshot()
-    const layer = getSelectionLayer(selected[0]!)
-    if (!selected.every((target) => getSelectionLayer(target) === layer)) return
-
-    const memberIds = selected.map((target) => target.id)
-    const plantContext = this._createPlantPresentationContext(this._camera.viewport.scale)
-    const bounds = memberIds
-      .map((memberId) => getMemberBounds(memberId, persisted, this._camera.viewport.scale, plantContext))
-      .filter((value): value is SceneBounds => value !== null)
-    if (bounds.length === 0) return
-
-    let minX = Infinity, minY = Infinity
-    for (const b of bounds) {
-      if (b.minX < minX) minX = b.minX
-      if (b.minY < minY) minY = b.minY
-    }
-    const nextGroup: SceneObjectGroupEntity = {
-      kind: 'group',
-      id: crypto.randomUUID(),
-      name: null,
-      layer,
-      position: { x: minX, y: minY },
-      rotationDeg: null,
-      memberIds,
-    }
-
-    this._sceneStore.updatePersisted((draft) => {
-      draft.groups.push(nextGroup)
-    })
-    this._setSelection([nextGroup.id])
-    this._markCanvasDirty(before)
-    this._invalidate('scene')
+    this._mutations.groupSelected()
   }
 
   ungroupSelected(): void {
-    const persisted = this._sceneStore.persisted
-    const selectedGroupIds = new Set(
-      getSelectedTopLevelTargets(persisted, this._sceneStore.session.selectedEntityIds)
-        .filter((target) => target.kind === 'group')
-        .map((target) => target.id),
-    )
-    if (selectedGroupIds.size === 0) return
-
-    const before = this._captureCommandSnapshot()
-    const memberIds = persisted.groups
-      .filter((group) => selectedGroupIds.has(group.id))
-      .flatMap((group) => group.memberIds)
-
-    this._sceneStore.updatePersisted((draft) => {
-      draft.groups = draft.groups.filter((group) => !selectedGroupIds.has(group.id))
-    })
-    this._setSelection(memberIds)
-    this._markCanvasDirty(before)
-    this._invalidate('scene')
+    this._mutations.ungroupSelected()
   }
 
   toggleGrid(): void {
@@ -450,73 +295,23 @@ export class SceneCanvasRuntime implements CanvasRuntime {
   }
 
   getPlantSizeMode(): PlantSizeMode {
-    return this._sceneStore.session.plantSizeMode
+    return this._mutations.getPlantSizeMode()
   }
 
   setPlantSizeMode(mode: PlantSizeMode): void {
-    if (this._sceneStore.session.plantSizeMode === mode) return
-    this._sceneStore.updateSession((session) => {
-      session.plantSizeMode = mode
-    })
-    syncPresentationSignalsFromSceneSession(this._sceneStore)
-    this._invalidate('scene')
+    this._mutations.setPlantSizeMode(mode)
   }
 
   getPlantColorByAttr(): ColorByAttribute | null {
-    return this._sceneStore.session.plantColorByAttr
+    return this._mutations.getPlantColorByAttr()
   }
 
   setPlantColorByAttr(attr: ColorByAttribute | null): void {
-    if (this._sceneStore.session.plantColorByAttr === attr) return
-    this._sceneStore.updateSession((session) => {
-      session.plantColorByAttr = attr
-    })
-    syncPresentationSignalsFromSceneSession(this._sceneStore)
-    this._invalidate('scene')
+    this._mutations.setPlantColorByAttr(attr)
   }
 
   getSelectedPlantColorContext(): SelectedPlantColorContext {
-    const selectedPlantIds = getSelectedPlantIds(this._sceneStore.persisted, this._sceneStore.session.selectedEntityIds)
-    const selectedPlants = this._sceneStore.persisted.plants.filter((plant) => selectedPlantIds.has(plant.id))
-    if (selectedPlants.length === 0) return EMPTY_PLANT_COLOR_CONTEXT
-
-    const plantIds = selectedPlants.map((plant) => plant.id)
-    const canonicalNames = new Set(selectedPlants.map((plant) => plant.canonicalName))
-    const commonNames = new Set(
-      selectedPlants
-        .map((plant) => plant.commonName)
-        .filter((value): value is string => typeof value === 'string' && value.length > 0),
-    )
-    const colors = new Set(
-      selectedPlants
-        .map((plant) => normalizeHexColor(plant.color))
-        .filter((value): value is string => value !== null),
-    )
-    const hasUncolored = selectedPlants.some((plant) => normalizeHexColor(plant.color) === null)
-    const singleSpeciesCanonicalName = canonicalNames.size === 1 ? [...canonicalNames][0]! : null
-    const singleSpeciesCommonName = singleSpeciesCanonicalName && commonNames.size === 1
-      ? [...commonNames][0]!
-      : null
-    const sharedCurrentColor =
-      colors.size > 1 || (colors.size === 1 && hasUncolored)
-        ? 'mixed'
-        : colors.size === 1
-          ? [...colors][0]!
-          : null
-    const singleSpeciesDefaultColor = singleSpeciesCanonicalName
-      ? normalizeHexColor(this._sceneStore.persisted.plantSpeciesColors[singleSpeciesCanonicalName] ?? null)
-      : null
-
-    return {
-      plantIds,
-      singleSpeciesCanonicalName,
-      singleSpeciesCommonName,
-      sharedCurrentColor,
-      suggestedColor: singleSpeciesCanonicalName
-        ? this._speciesCache.getSuggestedPlantColor(singleSpeciesCanonicalName)
-        : null,
-      singleSpeciesDefaultColor,
-    }
+    return this._mutations.getSelectedPlantColorContext()
   }
 
   getPlacedPlants(): PlacedPlant[] {
@@ -535,82 +330,15 @@ export class SceneCanvasRuntime implements CanvasRuntime {
   }
 
   setSelectedPlantColor(color: string | null): number {
-    const selectedPlantIds = getSelectedPlantIds(this._sceneStore.persisted, this._sceneStore.session.selectedEntityIds)
-    const nextColor = normalizeHexColor(color)
-    let changed = 0
-    const before = this._captureCommandSnapshot()
-    this._sceneStore.updatePersisted((persisted) => {
-      persisted.plants = persisted.plants.map((plant) => {
-        if (!selectedPlantIds.has(plant.id)) return plant
-        const currentColor = normalizeHexColor(plant.color)
-        if (currentColor === nextColor) return plant
-        changed += 1
-        return {
-          ...plant,
-          color: nextColor,
-        }
-      })
-    })
-    if (changed > 0) {
-      this._markCanvasDirty(before)
-      this._invalidate('scene')
-    }
-    return changed
+    return this._mutations.setSelectedPlantColor(color)
   }
 
   setPlantColorForSpecies(canonicalName: string, color: string | null): number {
-    const nextColor = normalizeHexColor(color)
-    const previousSpeciesColor = normalizeHexColor(
-      this._sceneStore.persisted.plantSpeciesColors[canonicalName] ?? null,
-    )
-    const speciesColorChanged = previousSpeciesColor !== nextColor
-    let changed = 0
-    const before = this._captureCommandSnapshot()
-
-    this._sceneStore.updatePersisted((persisted) => {
-      persisted.plants = persisted.plants.map((plant) => {
-        if (plant.canonicalName !== canonicalName) return plant
-        const currentColor = normalizeHexColor(plant.color)
-        if (currentColor === nextColor) return plant
-        changed += 1
-        return {
-          ...plant,
-          color: nextColor,
-        }
-      })
-      const nextSpeciesColors = { ...persisted.plantSpeciesColors }
-      if (nextColor) nextSpeciesColors[canonicalName] = nextColor
-      else delete nextSpeciesColors[canonicalName]
-      persisted.plantSpeciesColors = nextSpeciesColors
-    })
-
-    plantSpeciesColors.value = {
-      ...this._sceneStore.persisted.plantSpeciesColors,
-    }
-
-    if (changed > 0 || speciesColorChanged) {
-      this._markCanvasDirty(before)
-      this._invalidate('scene')
-    }
-
-    return changed
+    return this._mutations.setPlantColorForSpecies(canonicalName, color)
   }
 
   clearPlantSpeciesColor(canonicalName: string): boolean {
-    const hadColor = normalizeHexColor(this._sceneStore.persisted.plantSpeciesColors[canonicalName] ?? null) !== null
-    if (!hadColor) return false
-    const before = this._captureCommandSnapshot()
-    this._sceneStore.updatePersisted((persisted) => {
-      const nextSpeciesColors = { ...persisted.plantSpeciesColors }
-      delete nextSpeciesColors[canonicalName]
-      persisted.plantSpeciesColors = nextSpeciesColors
-    })
-    plantSpeciesColors.value = {
-      ...this._sceneStore.persisted.plantSpeciesColors,
-    }
-    this._markCanvasDirty(before)
-    this._invalidate('scene')
-    return true
+    return this._mutations.clearPlantSpeciesColor(canonicalName)
   }
 
   loadDocument(file: CanopiFile): void {
@@ -774,51 +502,6 @@ export class SceneCanvasRuntime implements CanvasRuntime {
     this._sceneStore.updateSession((s) => { s.hoveredEntityId = id })
     this._syncHoveredCanvasTargets(id)
     if (invalidate) this._invalidate('scene')
-  }
-
-  private _reorderSelected(position: 'start' | 'end'): void {
-    const persisted = this._sceneStore.persisted
-    const selected = getSelectedTopLevelTargets(persisted, this._sceneStore.session.selectedEntityIds)
-    if (selected.length === 0) return
-
-    const before = this._captureCommandSnapshot()
-    const selectedPlantIds = new Set<string>()
-    const selectedZoneIds = new Set<string>()
-    const selectedAnnotationIds = new Set<string>()
-    const selectedGroupIds = new Set<string>()
-
-    for (const target of selected) {
-      if (target.kind === 'plant') {
-        selectedPlantIds.add(target.id)
-        continue
-      }
-      if (target.kind === 'zone') {
-        selectedZoneIds.add(target.id)
-        continue
-      }
-      if (target.kind === 'annotation') {
-        selectedAnnotationIds.add(target.id)
-        continue
-      }
-
-      selectedGroupIds.add(target.id)
-      const group = persisted.groups.find((entry) => entry.id === target.id)
-      if (!group) continue
-      for (const memberId of group.memberIds) {
-        if (persisted.plants.some((plant) => plant.id === memberId)) selectedPlantIds.add(memberId)
-        else if (persisted.zones.some((zone) => zone.name === memberId)) selectedZoneIds.add(memberId)
-        else if (persisted.annotations.some((annotation) => annotation.id === memberId)) selectedAnnotationIds.add(memberId)
-      }
-    }
-
-    this._sceneStore.updatePersisted((draft) => {
-      draft.plants = reorderSceneEntities(draft.plants, selectedPlantIds, position, (plant) => plant.id)
-      draft.zones = reorderSceneEntities(draft.zones, selectedZoneIds, position, (zone) => zone.name)
-      draft.annotations = reorderSceneEntities(draft.annotations, selectedAnnotationIds, position, (annotation) => annotation.id)
-      draft.groups = reorderSceneEntities(draft.groups, selectedGroupIds, position, (group) => group.id)
-    })
-    this._markCanvasDirty(before)
-    this._invalidate('scene')
   }
 
   private _syncCanvasSignalsFromScene(): void {
@@ -1030,77 +713,5 @@ function hydrateLocationFromDoc(
     lat: location.lat,
     lon: location.lon,
     altitudeM: location.altitude_m ?? null,
-  }
-}
-
-function reorderSceneEntities<T>(
-  items: T[],
-  selectedIds: Set<string>,
-  position: 'start' | 'end',
-  getId: (item: T) => string,
-): T[] {
-  if (selectedIds.size === 0) return items
-  const selected: T[] = []
-  const rest: T[] = []
-  for (const item of items) {
-    if (selectedIds.has(getId(item))) selected.push(item)
-    else rest.push(item)
-  }
-  return position === 'start'
-    ? [...selected, ...rest]
-    : [...rest, ...selected]
-}
-
-function getMemberBounds(
-  memberId: string,
-  persisted: ScenePersistedState,
-  annotationViewportScale: number,
-  plantContext: PlantPresentationContext,
-): SceneBounds | null {
-  const plant = persisted.plants.find((entry) => entry.id === memberId)
-  if (plant) {
-    const bounds = getPlantWorldBounds(plant, {
-      ...plantContext,
-      viewport: { x: 0, y: 0, scale: annotationViewportScale },
-    })
-    return {
-      minX: bounds.x,
-      minY: bounds.y,
-      maxX: bounds.x + bounds.width,
-      maxY: bounds.y + bounds.height,
-    }
-  }
-
-  const zone = persisted.zones.find((entry) => entry.name === memberId)
-  if (zone && zone.points.length > 0) {
-    if (zone.zoneType === 'ellipse' && zone.points.length >= 2) {
-      const center = zone.points[0]!
-      const radii = zone.points[1]!
-      return {
-        minX: center.x - radii.x,
-        minY: center.y - radii.y,
-        maxX: center.x + radii.x,
-        maxY: center.y + radii.y,
-      }
-    }
-
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-    for (const p of zone.points) {
-      if (p.x < minX) minX = p.x
-      if (p.x > maxX) maxX = p.x
-      if (p.y < minY) minY = p.y
-      if (p.y > maxY) maxY = p.y
-    }
-    return { minX, minY, maxX, maxY }
-  }
-
-  const annotation = persisted.annotations.find((entry) => entry.id === memberId)
-  if (!annotation) return null
-  const bounds = getAnnotationWorldBounds(annotation, annotationViewportScale)
-  return {
-    minX: bounds.x,
-    minY: bounds.y,
-    maxX: bounds.x + bounds.width,
-    maxY: bounds.y + bounds.height,
   }
 }
