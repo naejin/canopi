@@ -23,7 +23,8 @@ pub struct Settings {
     pub bottom_panel_height: u32,
     pub bottom_panel_tab: String,
     pub map_layer_visible: bool,
-    pub map_style: String,
+    #[serde(deserialize_with = "deserialize_basemap_style")]
+    pub map_style: BasemapStyle,
     pub map_opacity: f32,
     pub contour_visible: bool,
     pub contour_opacity: f32,
@@ -54,7 +55,7 @@ impl Default for Settings {
             bottom_panel_height: 200,
             bottom_panel_tab: "budget".into(),
             map_layer_visible: true,
-            map_style: "street".into(),
+            map_style: BasemapStyle::Street,
             map_opacity: 1.0,
             contour_visible: false,
             contour_opacity: 1.0,
@@ -62,6 +63,31 @@ impl Default for Settings {
             hillshade_visible: false,
             hillshade_opacity: 0.55,
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "lowercase")]
+pub enum BasemapStyle {
+    Street,
+    Satellite,
+}
+
+impl Default for BasemapStyle {
+    fn default() -> Self {
+        Self::Street
+    }
+}
+
+fn deserialize_basemap_style<'de, D>(deserializer: D) -> Result<BasemapStyle, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    match serde_json::Value::deserialize(deserializer) {
+        Ok(serde_json::Value::String(value)) if value == "satellite" => Ok(BasemapStyle::Satellite),
+        Ok(serde_json::Value::String(_)) => Ok(BasemapStyle::Street),
+        Ok(_) => Ok(BasemapStyle::Street),
+        Err(_) => Ok(BasemapStyle::Street),
     }
 }
 

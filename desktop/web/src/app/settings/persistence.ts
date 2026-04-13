@@ -18,9 +18,11 @@ import {
 } from '../canvas-settings/bottom-panel-state'
 import {
   autoSaveIntervalMs,
+  basemapStyle,
   locale,
   theme,
 } from './state'
+import { normalizeBasemapStyle } from '../../maplibre/config'
 
 let lastSettings: Settings | null = null
 let queuedPersistTimer: ReturnType<typeof globalThis.setTimeout> | null = null
@@ -39,6 +41,7 @@ export function setBootstrappedSettings(settings: Settings): void {
   batch(() => {
     locale.value = settings.locale
     theme.value = settings.theme === 'dark' ? 'dark' : 'light'
+    basemapStyle.value = normalizeBasemapStyle(settings.map_style)
     snapToGridEnabled.value = settings.snap_to_grid
     snapToGuidesEnabled.value = settings.snap_to_guides
     autoSaveIntervalMs.value = settings.auto_save_interval_s * 1000
@@ -81,6 +84,7 @@ export function persistCurrentSettings(): void {
     bottom_panel_height: bottomPanelHeight.value,
     bottom_panel_tab: bottomPanelTab.value,
     map_layer_visible: layerVisibility.value.base ?? true,
+    map_style: basemapStyle.value,
     map_opacity: clampUnitInterval(layerOpacity.value.base ?? 1, 1),
     contour_visible: layerVisibility.value.contours ?? false,
     contour_opacity: clampUnitInterval(layerOpacity.value.contours ?? 1, 1),
