@@ -23,7 +23,7 @@ export function createCanvasMapLibreMap(
     center: initialCamera ? [initialCamera.center[0], initialCamera.center[1]] : undefined,
     zoom: initialCamera?.zoom,
     bearing: initialCamera?.bearing,
-    attributionControl: false,
+    attributionControl: { compact: true },
     interactive: false,
     pitchWithRotate: false,
     dragRotate: false,

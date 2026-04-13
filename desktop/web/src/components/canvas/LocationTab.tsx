@@ -57,7 +57,7 @@ export function LocationTab() {
       style: createDefaultMapLibreBasemapStyle(REMOTE_BASEMAP_TILE_URL_TEMPLATE),
       center,
       zoom: savedLoc ? 10 : 3.2,
-      attributionControl: false,
+      attributionControl: { compact: true },
     })
 
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), 'bottom-right')

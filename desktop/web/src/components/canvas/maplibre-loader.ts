@@ -6,7 +6,7 @@ export interface MapLibreMapConstructorOptions {
   center?: [number, number]
   zoom?: number
   bearing?: number
-  attributionControl: boolean
+  attributionControl?: false | { compact?: boolean }
   interactive: boolean
   pitchWithRotate: boolean
   dragRotate: boolean

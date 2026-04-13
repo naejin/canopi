@@ -273,6 +273,7 @@ describe('MapLibreCanvasSurface', () => {
       center: expect.arrayContaining([expect.any(Number), expect.any(Number)]),
       zoom: expect.any(Number),
       bearing: expect.any(Number),
+      attributionControl: { compact: true },
     }))
 
     await act(async () => {

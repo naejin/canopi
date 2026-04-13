@@ -29,7 +29,7 @@ export function WorldMapSurface({
       style: createDefaultMapLibreBasemapStyle(REMOTE_BASEMAP_TILE_URL_TEMPLATE),
       center: [0, 14],
       zoom: 1.15,
-      attributionControl: false,
+      attributionControl: { compact: true },
     })
 
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), 'top-right')

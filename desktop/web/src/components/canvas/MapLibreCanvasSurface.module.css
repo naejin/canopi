@@ -5,3 +5,9 @@
   overflow: hidden;
   pointer-events: none;
 }
+
+.surface :global(.maplibregl-ctrl-bottom-right),
+.surface :global(.maplibregl-ctrl-bottom-left),
+.surface :global(.maplibregl-ctrl-attrib) {
+  pointer-events: auto;
+}
