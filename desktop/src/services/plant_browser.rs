@@ -26,7 +26,7 @@ pub fn search_species(
     };
 
     let mut result = {
-        let conn = db::acquire(&plant_db.0, "PlantDb");
+        let conn = db::require_plant_db(plant_db)?;
         crate::db::plant_db::search(
             &conn,
             text_opt,
@@ -56,7 +56,7 @@ pub fn get_species_detail(
     locale: String,
 ) -> Result<SpeciesDetail, String> {
     let detail = {
-        let conn = db::acquire(&plant_db.0, "PlantDb");
+        let conn = db::require_plant_db(plant_db)?;
         crate::db::plant_db::get_detail(&conn, &canonical_name, &locale)?
     };
 
@@ -94,7 +94,7 @@ pub fn get_favorites(
         return Ok(vec![]);
     }
 
-    let conn = db::acquire(&plant_db.0, "PlantDb");
+    let conn = db::require_plant_db(plant_db)?;
     crate::db::plant_db::hydrate_species_list_items(&conn, &names, &locale, true)
 }
 
@@ -115,7 +115,7 @@ pub fn get_recently_viewed(
     }
 
     let mut items = {
-        let plant_conn = db::acquire(&plant_db.0, "PlantDb");
+        let plant_conn = db::require_plant_db(plant_db)?;
         crate::db::plant_db::hydrate_species_list_items(&plant_conn, &names, &locale, false)?
     };
 
@@ -198,7 +198,7 @@ mod tests {
             INSERT INTO species_search_fts(species_search_fts) VALUES('rebuild');",
         )
         .unwrap();
-        PlantDb(Mutex::new(conn))
+        PlantDb::available(conn)
     }
 
     fn test_user_db() -> UserDb {
@@ -222,6 +222,27 @@ mod tests {
         )
         .unwrap();
         UserDb(Mutex::new(conn))
+    }
+
+    #[test]
+    fn search_returns_explicit_error_when_plant_db_missing() {
+        let plant_db = PlantDb::missing();
+        let user_db = test_user_db();
+
+        let error = search_species(
+            &plant_db,
+            &user_db,
+            "Malus".to_owned(),
+            SpeciesFilter::default(),
+            None,
+            10,
+            Sort::Name,
+            "en".to_owned(),
+            Some(true),
+        )
+        .unwrap_err();
+
+        assert!(error.contains("Plant database unavailable"));
     }
 
     #[test]
