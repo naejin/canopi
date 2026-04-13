@@ -56,13 +56,9 @@ vi.mock("../app/document-session/runtime", async (importOriginal) => {
   };
 });
 
-vi.mock("../app/shell/state", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../app/shell/state")>();
-  return {
-    ...actual,
-    flushQueuedSettingsPersist: mocks.flushQueuedSettingsPersist,
-  };
-});
+vi.mock("../app/settings/persistence", () => ({
+  flushQueuedSettingsPersist: mocks.flushQueuedSettingsPersist,
+}));
 
 import { useCanvasDocumentSession } from "../app/document-session/use-canvas-document-session";
 import { currentCanvasSession } from "../canvas/session";

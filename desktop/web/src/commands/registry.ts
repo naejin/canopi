@@ -1,4 +1,5 @@
-import { navigateTo, theme, persistCurrentSettings, type Panel } from "../app/shell/state";
+import { navigateTo, theme, type Panel } from "../app/shell/state";
+import { persistCurrentSettings } from "../app/settings/persistence";
 import { setCurrentCanvasTool } from "../canvas/session";
 import { t } from "../i18n";
 import { FILE_SHORTCUTS, EDIT_SHORTCUTS, VIEW_SHORTCUTS, PANEL_SHORTCUTS, TOOL_SHORTCUTS } from "../shortcuts/definitions";

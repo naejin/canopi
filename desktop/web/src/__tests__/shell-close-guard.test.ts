@@ -23,13 +23,9 @@ vi.mock("../app/document-session/actions", () => ({
   saveCurrentDesign: mocks.saveCurrentDesign,
 }));
 
-vi.mock("../app/shell/state", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../app/shell/state")>();
-  return {
-    ...actual,
-    flushQueuedSettingsPersist: mocks.flushQueuedSettingsPersist,
-  };
-});
+vi.mock("../app/settings/persistence", () => ({
+  flushQueuedSettingsPersist: mocks.flushQueuedSettingsPersist,
+}));
 
 vi.mock("../i18n", () => ({
   t: (key: string) => {

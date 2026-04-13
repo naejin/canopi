@@ -21,7 +21,7 @@ import {
   toggleHillshadeVisibility,
   toggleLayerVisibility,
 } from '../app/canvas-settings/controller'
-import { flushQueuedSettingsPersist, setBootstrappedSettings } from '../app/shell/state'
+import { flushQueuedSettingsPersist, setBootstrappedSettings } from '../app/settings/persistence'
 
 beforeEach(() => {
   vi.useFakeTimers()

@@ -3,7 +3,7 @@ import { message } from '@tauri-apps/plugin-dialog'
 import { saveCurrentDesign } from "../document-session/actions";
 import { designDirty } from "../../state/design";
 import { t } from '../../i18n'
-import { flushQueuedSettingsPersist } from "./state";
+import { flushQueuedSettingsPersist } from "../settings/persistence";
 
 let unlistenClose: (() => void) | null = null;
 let closeGuardRegistration = 0;

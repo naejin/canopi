@@ -14,7 +14,7 @@ import {
   layerPanelOpen,
   layerVisibility,
 } from '../../state/canvas'
-import { persistCurrentSettings, queueSettingsPersist } from '../shell/state'
+import { persistCurrentSettings, queueSettingsPersist } from '../settings/persistence'
 
 export function setLayerPanelOpen(open: boolean): void {
   layerPanelOpen.value = open

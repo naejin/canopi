@@ -11,7 +11,8 @@ import {
   canvasDirty,
   markCanvasDetachedDirty,
 } from "../../state/design";
-import { autoSaveIntervalMs, flushQueuedSettingsPersist } from "../shell/state";
+import { autoSaveIntervalMs } from "../shell/state";
+import { flushQueuedSettingsPersist } from "../settings/persistence";
 import { consumeQueuedDocumentLoad } from "./actions";
 import {
   disposeDocumentWorkflows,
