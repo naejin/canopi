@@ -16,6 +16,8 @@ import {
   bottomPanelOpen,
   bottomPanelTab,
 } from './bottom-panel-state'
+import type { BasemapStyle } from '../../generated/contracts'
+import { basemapStyle } from '../settings/state'
 import { persistCurrentSettings, queueSettingsPersist } from '../settings/persistence'
 
 export function setLayerPanelOpen(open: boolean): void {
@@ -28,6 +30,12 @@ export function toggleLayerPanel(): void {
 
 export function setActiveLayer(name: string): void {
   activeLayerName.value = name
+}
+
+export function setBasemapStyle(style: BasemapStyle): void {
+  if (basemapStyle.value === style) return
+  basemapStyle.value = style
+  queueSettingsPersist()
 }
 
 export function toggleGridVisibility(): void {

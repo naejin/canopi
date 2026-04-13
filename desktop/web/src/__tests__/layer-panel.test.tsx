@@ -14,6 +14,7 @@ import {
   layerPanelOpen,
   layerVisibility,
 } from '../app/canvas-settings/signals'
+import { basemapStyle } from '../app/settings/state'
 import { setSettings } from '../ipc/settings'
 import { currentDesign } from '../state/design'
 import { locale } from '../app/settings/state'
@@ -50,6 +51,7 @@ describe('LayerPanel', () => {
     }
     layerPanelOpen.value = true
     activeLayerName.value = 'base'
+    basemapStyle.value = 'street'
     layerVisibility.value = { base: true, contours: false, plants: true, zones: true, annotations: true }
     layerOpacity.value = { base: 1, contours: 1, plants: 1, zones: 1, annotations: 1 }
     contourIntervalMeters.value = 0
@@ -112,6 +114,15 @@ describe('LayerPanel', () => {
     })
 
     expect(layerVisibility.value.base).toBe(false)
+  })
+
+  it('does not expose basemap style selection in the base layer controls', async () => {
+    await act(async () => {
+      render(<LayerPanel />, container)
+    })
+
+    expect(container.querySelector('select')).toBeNull()
+    expect(basemapStyle.value).toBe('street')
   })
 
   it('exposes terrain controls without coupling them to the basemap toggle', async () => {

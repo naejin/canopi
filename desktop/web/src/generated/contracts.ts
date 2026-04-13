@@ -15,6 +15,8 @@ export type AutosaveEntry = {
 	saved_at: string,
 };
 
+export type BasemapStyle = "street" | "satellite";
+
 export type BudgetItem = {
 	target: PanelTarget,
 	category: string,
@@ -184,7 +186,7 @@ export type Settings = {
 	bottom_panel_height: number,
 	bottom_panel_tab: string,
 	map_layer_visible: boolean,
-	map_style: string,
+	map_style: BasemapStyle,
 	map_opacity: number,
 	contour_visible: boolean,
 	contour_opacity: number,

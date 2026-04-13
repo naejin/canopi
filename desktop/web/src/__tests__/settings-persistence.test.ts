@@ -17,7 +17,7 @@ import {
   snapToGridEnabled,
   snapToGuidesEnabled,
 } from '../app/canvas-settings/signals'
-import { autoSaveIntervalMs, locale, theme } from '../app/settings/state'
+import { autoSaveIntervalMs, basemapStyle, locale, theme } from '../app/settings/state'
 import {
   flushQueuedSettingsPersist,
   queueSettingsPersist,
@@ -29,6 +29,7 @@ beforeEach(() => {
   vi.mocked(setSettings).mockClear()
   locale.value = 'en'
   theme.value = 'light'
+  basemapStyle.value = 'street'
   autoSaveIntervalMs.value = 60_000
   snapToGridEnabled.value = false
   snapToGuidesEnabled.value = false
@@ -80,6 +81,7 @@ describe('settings persistence', () => {
 
     expect(locale.value).toBe('fr')
     expect(theme.value).toBe('dark')
+    expect(basemapStyle.value).toBe('street')
     expect(autoSaveIntervalMs.value).toBe(45_000)
     expect(snapToGridEnabled.value).toBe(true)
     expect(snapToGuidesEnabled.value).toBe(true)
@@ -126,6 +128,7 @@ describe('settings persistence', () => {
     })
 
     locale.value = 'de'
+    basemapStyle.value = 'satellite'
     layerOpacity.value = { ...layerOpacity.value, base: 0.6 }
     queueSettingsPersist(250)
 
@@ -141,6 +144,7 @@ describe('settings persistence', () => {
     expect(vi.mocked(setSettings)).toHaveBeenCalledTimes(1)
     expect(vi.mocked(setSettings)).toHaveBeenCalledWith(expect.objectContaining({
       locale: 'it',
+      map_style: 'satellite',
       map_opacity: 0.6,
       hillshade_visible: true,
     }))

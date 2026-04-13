@@ -2,9 +2,9 @@ import { useEffect, useRef } from 'preact/hooks'
 import maplibregl from 'maplibre-gl'
 import type { TemplateMeta } from '../../types/community'
 import {
-  createDefaultMapLibreBasemapStyle,
-  REMOTE_BASEMAP_TILE_URL_TEMPLATE,
+  createMapLibreBasemapStyle,
 } from '../../maplibre/config'
+import { basemapStyle } from '../../app/settings/state'
 import styles from './WorldMapSurface.module.css'
 
 export function WorldMapSurface({
@@ -19,16 +19,20 @@ export function WorldMapSurface({
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
   const markersRef = useRef<maplibregl.Marker[]>([])
+  const preservedViewRef = useRef<{ center: [number, number]; zoom: number } | null>(null)
+  const lastTemplateLayoutKeyRef = useRef<string>('')
+  const preferredBasemapStyle = basemapStyle.value
 
   useEffect(() => {
     const container = containerRef.current
-    if (!container || mapRef.current) return
+    if (!container) return
+    const preservedView = preservedViewRef.current
 
     const map = new maplibregl.Map({
       container,
-      style: createDefaultMapLibreBasemapStyle(REMOTE_BASEMAP_TILE_URL_TEMPLATE),
-      center: [0, 14],
-      zoom: 1.15,
+      style: createMapLibreBasemapStyle(preferredBasemapStyle),
+      center: preservedView?.center ?? [0, 14],
+      zoom: preservedView?.zoom ?? 1.15,
       attributionControl: { compact: true },
     })
 
@@ -36,12 +40,17 @@ export function WorldMapSurface({
     mapRef.current = map
 
     return () => {
+      const center = map.getCenter()
+      preservedViewRef.current = {
+        center: [center.lng, center.lat],
+        zoom: map.getZoom(),
+      }
       markersRef.current.forEach((marker) => marker.remove())
       markersRef.current = []
       map.remove()
       mapRef.current = null
     }
-  }, [])
+  }, [preferredBasemapStyle])
 
   useEffect(() => {
     const container = containerRef.current
@@ -69,6 +78,11 @@ export function WorldMapSurface({
     if (templates.length === 0) return
 
     const bounds = new maplibregl.LngLatBounds()
+    const nextTemplateLayoutKey = templates
+      .map((template) => `${template.id}:${template.location.lon}:${template.location.lat}`)
+      .join('|')
+    const shouldFitBounds = nextTemplateLayoutKey !== lastTemplateLayoutKeyRef.current
+    lastTemplateLayoutKeyRef.current = nextTemplateLayoutKey
 
     for (const template of templates) {
       const markerElement = document.createElement('button')
@@ -86,11 +100,11 @@ export function WorldMapSurface({
       bounds.extend([template.location.lon, template.location.lat])
     }
 
-    if (!bounds.isEmpty()) {
+    if (shouldFitBounds && !bounds.isEmpty()) {
       map.fitBounds(bounds, { padding: 48, maxZoom: 4.5, duration: 0 })
       map.resize()
     }
-  }, [templates])
+  }, [templates, preferredBasemapStyle])
 
   useEffect(() => {
     for (const marker of markersRef.current) {
@@ -98,7 +112,7 @@ export function WorldMapSurface({
       const isActive = el.dataset.templateId === selectedId
       el.className = `${styles.marker} ${isActive ? styles.markerActive : ''}`
     }
-  }, [selectedId])
+  }, [selectedId, templates, preferredBasemapStyle])
 
   useEffect(() => {
     const map = mapRef.current

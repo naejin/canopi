@@ -72,7 +72,7 @@ fn detect_initial_locale(os_locale: Option<&str>) -> Option<Locale> {
 mod tests {
     use super::{get_settings_with_locale, set_settings};
     use crate::db::UserDb;
-    use common_types::settings::{Locale, Settings, Theme};
+    use common_types::settings::{BasemapStyle, Locale, Settings, Theme};
     use rusqlite::Connection;
     use std::sync::Mutex;
 
@@ -102,6 +102,26 @@ mod tests {
     }
 
     #[test]
+    fn normalizes_missing_map_style_to_street() {
+        let settings = super::deserialize_settings(
+            r#"{"locale":"en","theme":"light","map_layer_visible":true}"#,
+        )
+        .unwrap();
+
+        assert_eq!(settings.map_style, BasemapStyle::Street);
+    }
+
+    #[test]
+    fn normalizes_invalid_map_style_to_street() {
+        let settings = super::deserialize_settings(
+            r#"{"locale":"en","theme":"light","map_style":"ocean"}"#,
+        )
+        .unwrap();
+
+        assert_eq!(settings.map_style, BasemapStyle::Street);
+    }
+
+    #[test]
     fn initializes_and_persists_detected_locale_on_first_read() {
         let user_db = test_user_db();
 
@@ -119,11 +139,13 @@ mod tests {
         let mut settings = Settings::default();
         settings.locale = Locale::De;
         settings.theme = Theme::Dark;
+        settings.map_style = BasemapStyle::Satellite;
 
         set_settings(&user_db, settings.clone()).unwrap();
 
         let stored = get_settings_with_locale(&user_db, Some("en_US")).unwrap();
         assert_eq!(stored.locale, Locale::De);
         assert_eq!(stored.theme, Theme::Dark);
+        assert_eq!(stored.map_style, BasemapStyle::Satellite);
     }
 }

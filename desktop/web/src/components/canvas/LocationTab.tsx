@@ -3,10 +3,9 @@ import { useEffect, useMemo, useRef } from 'preact/hooks'
 import maplibregl from 'maplibre-gl'
 import { t } from '../../i18n'
 import {
-  createDefaultMapLibreBasemapStyle,
-  REMOTE_BASEMAP_TILE_URL_TEMPLATE,
+  createMapLibreBasemapStyle,
 } from '../../maplibre/config'
-import { locale } from '../../app/settings/state'
+import { basemapStyle, locale } from '../../app/settings/state'
 import { currentDesign } from '../../state/design'
 import {
   clearDesignLocation,
@@ -26,9 +25,11 @@ export function LocationTab() {
   const search = useMemo(() => createLocationSearchController(), [])
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
+  const preservedViewRef = useRef<{ center: [number, number]; zoom: number } | null>(null)
   const searchRef = useRef<HTMLDivElement>(null)
 
   const pendingResult = useSignal<{ lat: number; lon: number } | null>(null)
+  const preferredBasemapStyle = basemapStyle.value
 
   // Saved pin state
   const pinState = useSignal<{
@@ -43,17 +44,17 @@ export function LocationTab() {
   // Initialize map
   useEffect(() => {
     const container = mapContainerRef.current
-    if (!container || mapRef.current) return
+    if (!container) return
     const savedLoc = currentDesign.value?.location
-    const center: [number, number] = savedLoc
-      ? [savedLoc.lon, savedLoc.lat]
-      : DEFAULT_CENTER
+    const preservedView = preservedViewRef.current
+    const center: [number, number] = preservedView?.center
+      ?? (savedLoc ? [savedLoc.lon, savedLoc.lat] : DEFAULT_CENTER)
 
     const map = new maplibregl.Map({
       container,
-      style: createDefaultMapLibreBasemapStyle(REMOTE_BASEMAP_TILE_URL_TEMPLATE),
+      style: createMapLibreBasemapStyle(preferredBasemapStyle),
       center,
-      zoom: savedLoc ? 10 : 3.2,
+      zoom: preservedView?.zoom ?? (savedLoc ? 10 : 3.2),
       attributionControl: { compact: true },
     })
 
@@ -68,13 +69,18 @@ export function LocationTab() {
     updatePinPosition(map)
 
     return () => {
+      const center = map.getCenter()
+      preservedViewRef.current = {
+        center: [center.lng, center.lat],
+        zoom: map.getZoom(),
+      }
       map.off('move', onMove)
       map.off('moveend', onMove)
       map.off('dragstart', onDragStart)
       map.remove()
       mapRef.current = null
     }
-  }, [])
+  }, [preferredBasemapStyle])
 
   // Resize observer — reads mapRef inside callback to avoid stale capture
   useEffect(() => {

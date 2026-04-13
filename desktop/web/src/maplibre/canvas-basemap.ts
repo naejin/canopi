@@ -1,9 +1,9 @@
 import type { MapFrame } from '../canvas/maplibre-camera'
+import type { BasemapStyle } from '../generated/contracts'
 import {
   MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
   MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
-  createDefaultMapLibreBasemapStyle,
-  REMOTE_BASEMAP_TILE_URL_TEMPLATE,
+  createMapLibreBasemapStyle,
 } from './config'
 import type { MapLibreApi, MapLibreMapInstance } from '../components/canvas/maplibre-loader'
 
@@ -16,10 +16,11 @@ export function createCanvasMapLibreMap(
   maplibre: MapLibreApi,
   container: HTMLElement,
   initialCamera: MapFrame | null,
+  basemapStyle: BasemapStyle,
 ): MapLibreMapInstance {
   return new maplibre.Map({
     container,
-    style: createDefaultMapLibreBasemapStyle(REMOTE_BASEMAP_TILE_URL_TEMPLATE),
+    style: createMapLibreBasemapStyle(basemapStyle),
     center: initialCamera ? [initialCamera.center[0], initialCamera.center[1]] : undefined,
     zoom: initialCamera?.zoom,
     bearing: initialCamera?.bearing,
