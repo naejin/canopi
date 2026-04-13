@@ -9,7 +9,7 @@ mod logging;
 mod platform;
 mod services;
 
-use common_types::health::{PlantDbStatus, SubsystemHealth};
+use common_types::health::SubsystemHealth;
 use rusqlite::{Connection, OpenFlags};
 use std::sync::Mutex;
 use tauri::Manager;
@@ -134,7 +134,7 @@ pub fn run() {
             // so fall back to the source path in the repo.
             let plant_db_path = resolve_plant_db_path(app.handle());
 
-            let plant_db_status = match plant_db_path {
+            let plant_db = match plant_db_path {
                 Some(path) => {
                     match Connection::open_with_flags(
                         &path,
@@ -164,26 +164,22 @@ pub fn run() {
                                     , db::schema_contract::EXPECTED_PLANT_SCHEMA_VERSION
                                 );
                             }
-                            app.manage(db::PlantDb(Mutex::new(plant_conn)));
                             tracing::info!("Plant DB opened at {} (schema v{user_version})", path.display());
-                            PlantDbStatus::Available
+                            db::PlantDb::available(plant_conn)
                         }
                         Err(e) => {
                             tracing::error!("Failed to open plant DB at {}: {e}. Species search unavailable.", path.display());
-                            // Register an empty in-memory DB so State<PlantDb> doesn't panic
-                            let fallback = Connection::open_in_memory().expect("in-memory DB");
-                            app.manage(db::PlantDb(Mutex::new(fallback)));
-                            PlantDbStatus::Corrupt
+                            db::PlantDb::corrupt()
                         }
                     }
                 }
                 None => {
                     tracing::error!("Plant DB not found. Run scripts/prepare-db.py first. Species search unavailable.");
-                    let fallback = Connection::open_in_memory().expect("in-memory DB");
-                    app.manage(db::PlantDb(Mutex::new(fallback)));
-                    PlantDbStatus::Missing
+                    db::PlantDb::missing()
                 }
             };
+            let plant_db_status = plant_db.status();
+            app.manage(plant_db);
 
             app.manage(AppHealth(Mutex::new(SubsystemHealth {
                 plant_db: plant_db_status,

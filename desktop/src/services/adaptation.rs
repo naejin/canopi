@@ -1,4 +1,4 @@
-use crate::db::{PlantDb, acquire};
+use crate::db::{PlantDb, require_plant_db};
 use crate::contracts::adaptation::{CompatibilityResult, ReplacementSuggestion};
 use rusqlite::types::ToSql;
 
@@ -15,7 +15,7 @@ pub fn check_plant_compatibility(
         return Err("Batch size exceeds maximum of 500 names".into());
     }
 
-    let conn = acquire(&plant_db.0, "PlantDb");
+    let conn = require_plant_db(plant_db)?;
     let placeholders = canonical_names
         .iter()
         .enumerate()
@@ -82,7 +82,7 @@ pub fn suggest_replacements(
     limit: u32,
     locale: String,
 ) -> Result<Vec<ReplacementSuggestion>, String> {
-    let conn = acquire(&plant_db.0, "PlantDb");
+    let conn = require_plant_db(plant_db)?;
 
     let source: Option<(Option<String>, Option<f32>)> = conn
         .query_row(
@@ -214,7 +214,6 @@ mod tests {
     use super::*;
     use crate::db::PlantDb;
     use rusqlite::Connection;
-    use std::sync::Mutex;
 
     fn test_plant_db() -> PlantDb {
         let conn = Connection::open_in_memory().unwrap();
@@ -298,7 +297,22 @@ mod tests {
             .unwrap();
         }
 
-        PlantDb(Mutex::new(conn))
+        PlantDb::available(conn)
+    }
+
+    #[test]
+    fn compatibility_returns_explicit_error_when_plant_db_missing() {
+        let plant_db = PlantDb::missing();
+
+        let error = check_plant_compatibility(
+            &plant_db,
+            vec!["Malus domestica".to_owned()],
+            7,
+            "en".to_owned(),
+        )
+        .unwrap_err();
+
+        assert!(error.contains("Plant database unavailable"));
     }
 
     #[test]

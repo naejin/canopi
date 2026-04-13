@@ -64,6 +64,7 @@ function PlantRow({
   const status = getStatus(result);
   const showReplacements = useSignal(false);
   const replacements = useSignal<ReplacementSuggestion[]>([]);
+  const replacementError = useSignal<string | null>(null);
   const loadingReplacements = useSignal(false);
 
   async function handleSuggest() {
@@ -72,6 +73,7 @@ function PlantRow({
       return;
     }
     loadingReplacements.value = true;
+    replacementError.value = null;
     try {
       const suggestions = await suggestReplacements(
         result.canonical_name,
@@ -80,8 +82,10 @@ function PlantRow({
         locale.value,
       );
       replacements.value = suggestions;
-    } catch (e) {
+    } catch (caught) {
       replacements.value = [];
+      replacementError.value =
+        caught instanceof Error ? caught.message : String(caught);
     } finally {
       loadingReplacements.value = false;
       showReplacements.value = true;
@@ -112,7 +116,11 @@ function PlantRow({
           </button>
           {showReplacements.value && (
             <div class={styles.replacements}>
-              {replacements.value.length === 0 ? (
+              {replacementError.value ? (
+                <p class={styles.noReplacements} role="alert">
+                  {replacementError.value}
+                </p>
+              ) : replacements.value.length === 0 ? (
                 <p class={styles.noReplacements}>
                   {t('adaptation.incompatible')}
                 </p>
@@ -163,10 +171,12 @@ export function TemplateAdaptation({
 
   const results = useSignal<CompatibilityResult[]>([]);
   const loading = useSignal(true);
+  const error = useSignal<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     loading.value = true;
+    error.value = null;
 
     checkPlantCompatibility(canonicalNames, targetHardiness, locale.value)
       .then((data) => {
@@ -175,9 +185,10 @@ export function TemplateAdaptation({
           loading.value = false;
         }
       })
-      .catch(() => {
+      .catch((caught) => {
         if (!cancelled) {
           results.value = [];
+          error.value = caught instanceof Error ? caught.message : String(caught);
           loading.value = false;
         }
       });
@@ -203,12 +214,16 @@ export function TemplateAdaptation({
           </button>
         </div>
 
-        <p class={styles.summary}>
-          {t('adaptation.reviewPlants')} — {compatibleCount.value}/{totalCount.value} {t('adaptation.compatible').toLowerCase()}
-        </p>
+        {!error.value && (
+          <p class={styles.summary}>
+            {t('adaptation.reviewPlants')} — {compatibleCount.value}/{totalCount.value} {t('adaptation.compatible').toLowerCase()}
+          </p>
+        )}
 
         {loading.value ? (
           <p class={styles.loading}>…</p>
+        ) : error.value ? (
+          <p class={styles.noReplacements} role="alert">{error.value}</p>
         ) : (
           <div class={styles.plantList}>
             {results.value.map((r) => (

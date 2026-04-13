@@ -1,4 +1,5 @@
 import { getFlowerColorBatch, getSpeciesBatch } from '../../ipc/species'
+import { isPlantDbUnavailableError } from '../../ipc/plant-db-errors'
 import { getFlowerColorHex } from '../plant-colors'
 
 export type SpeciesCacheEntry = Record<string, unknown>
@@ -17,10 +18,26 @@ export class CanvasSpeciesCache {
     const missingNames = [...new Set(canonicalNames.filter((name) => name && !this._cache.has(name)))]
     if (missingNames.length === 0) return false
 
-    const [details, flowerColors] = await Promise.all([
-      getSpeciesBatch(missingNames, activeLocale),
-      getFlowerColorBatch(missingNames),
-    ])
+    let details: Awaited<ReturnType<typeof getSpeciesBatch>>
+    let flowerColors: Awaited<ReturnType<typeof getFlowerColorBatch>>
+    try {
+      [details, flowerColors] = await Promise.all([
+        getSpeciesBatch(missingNames, activeLocale),
+        getFlowerColorBatch(missingNames),
+      ])
+    } catch (error) {
+      if (!isPlantDbUnavailableError(error)) {
+        throw error
+      }
+      for (const canonicalName of missingNames) {
+        this._cache.set(canonicalName, {
+          canonical_name: canonicalName,
+          resolved_flower_color: null,
+          resolved_flower_color_source: 'none',
+        })
+      }
+      return true
+    }
     const detailByName = new Map(
       details.map((detail) => [detail.canonical_name, detail as unknown as SpeciesCacheEntry]),
     )
