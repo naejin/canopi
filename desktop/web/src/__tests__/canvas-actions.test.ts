@@ -20,7 +20,7 @@ import {
   setLayerOpacity,
   toggleHillshadeVisibility,
   toggleLayerVisibility,
-} from '../state/canvas-actions'
+} from '../app/canvas-settings/controller'
 import { flushQueuedSettingsPersist, setBootstrappedSettings } from '../app/shell/state'
 
 beforeEach(() => {

@@ -15,19 +15,3 @@ export {
   autosaveFailed,
   resetDirtyBaselines,
 } from "./design";
-export {
-  consumeQueuedDocumentLoad,
-  saveCurrentDesign,
-  saveAsCurrentDesign,
-  openDesign,
-  openDesignAsTemplate,
-  openDesignFromPath,
-  newDesignAction,
-} from "../app/document-session/actions";
-export {
-  installConsortiumSync,
-  writeCanvasIntoDocument,
-  snapshotCanvasIntoCurrentDocument,
-  loadCanvasFromDocument,
-  disposeDocumentWorkflows,
-} from "../app/document-session/runtime";

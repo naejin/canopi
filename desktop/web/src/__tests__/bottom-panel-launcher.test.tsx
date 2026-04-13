@@ -37,4 +37,24 @@ describe('BottomPanelLauncher', () => {
     expect(bottomPanelOpen.value).toBe(true)
     expect(bottomPanelTab.value).toBe('timeline')
   })
+
+  it('closes the active tab when it is clicked again', async () => {
+    bottomPanelOpen.value = true
+    bottomPanelTab.value = 'budget'
+
+    await act(async () => {
+      render(<BottomPanelLauncher />, container)
+    })
+
+    const buttons = Array.from(container.querySelectorAll('button'))
+    const budgetButton = buttons.find((button) => button.textContent?.trim() === 'Budget')
+    expect(budgetButton).toBeTruthy()
+
+    await act(async () => {
+      budgetButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(bottomPanelOpen.value).toBe(false)
+    expect(bottomPanelTab.value).toBe('budget')
+  })
 })

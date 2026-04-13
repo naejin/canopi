@@ -1,9 +1,13 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('../ipc/settings', () => ({ setSettings: vi.fn().mockResolvedValue(undefined) }))
+
 import { LayerPanel } from '../components/canvas/LayerPanel'
+import { setSettings } from '../ipc/settings'
 import { currentDesign } from '../state/document'
-import { locale } from '../app/shell/state'
+import { flushQueuedSettingsPersist, locale, setBootstrappedSettings } from '../app/shell/state'
 import {
   activeLayerName,
   contourIntervalMeters,
@@ -18,10 +22,12 @@ describe('LayerPanel', () => {
   let container: HTMLDivElement
 
   beforeEach(() => {
+    vi.useFakeTimers()
     container = document.createElement('div')
     document.body.innerHTML = ''
     document.body.appendChild(container)
     locale.value = 'en'
+    vi.mocked(setSettings).mockClear()
     currentDesign.value = {
       version: 2,
       name: 'Demo',
@@ -48,9 +54,40 @@ describe('LayerPanel', () => {
     contourIntervalMeters.value = 0
     hillshadeVisible.value = false
     hillshadeOpacity.value = 0.55
+    setBootstrappedSettings({
+      locale: 'en',
+      theme: 'light',
+      snap_to_grid: true,
+      snap_to_guides: true,
+      show_smart_guides: true,
+      auto_save_interval_s: 60,
+      confirm_destructive: true,
+      default_currency: 'EUR',
+      measurement_units: 'metric',
+      show_botanical_names: true,
+      debug_logging: false,
+      check_updates: true,
+      default_design_dir: '',
+      recent_files_max: 20,
+      last_active_panel: 'canvas',
+      bottom_panel_open: false,
+      bottom_panel_height: 200,
+      bottom_panel_tab: 'budget',
+      map_layer_visible: true,
+      map_style: 'street',
+      map_opacity: 1,
+      contour_visible: false,
+      contour_opacity: 1,
+      contour_interval: 0,
+      hillshade_visible: false,
+      hillshade_opacity: 0.55,
+    })
   })
 
   afterEach(() => {
+    flushQueuedSettingsPersist()
+    vi.runOnlyPendingTimers()
+    vi.useRealTimers()
     render(null, container)
     container.remove()
   })
@@ -109,6 +146,12 @@ describe('LayerPanel', () => {
       contourSlider.dispatchEvent(new Event('input', { bubbles: true }))
     })
     expect(contourIntervalMeters.value).toBe(25)
+    vi.runAllTimers()
+    await Promise.resolve()
+    expect(vi.mocked(setSettings)).toHaveBeenCalledWith(expect.objectContaining({
+      contour_visible: true,
+      contour_interval: 25,
+    }))
 
     // Toggle hillshade visibility
     const hillshadeToggle = Array.from(container.querySelectorAll('button'))
@@ -135,5 +178,11 @@ describe('LayerPanel', () => {
       hillshadeSlider.dispatchEvent(new Event('input', { bubbles: true }))
     })
     expect(hillshadeOpacity.value).toBe(0.3)
+    vi.runAllTimers()
+    await Promise.resolve()
+    expect(vi.mocked(setSettings)).toHaveBeenCalledWith(expect.objectContaining({
+      hillshade_visible: true,
+      hillshade_opacity: 0.3,
+    }))
   })
 })

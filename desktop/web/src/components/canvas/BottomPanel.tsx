@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'preact/hooks'
 import { lazy, Suspense } from 'preact/compat'
-import { bottomPanelHeight, bottomPanelOpen, bottomPanelTab } from '../../state/canvas'
-import { commitBottomPanelHeight } from '../../state/canvas-actions'
+import { bottomPanelView } from '../../app/canvas-settings/state'
+import { commitBottomPanelHeight } from '../../app/canvas-settings/controller'
 import styles from './BottomPanel.module.css'
 
 const TimelineTab = lazy(async () => {
@@ -20,13 +20,12 @@ const ConsortiumChart = lazy(async () => {
 })
 
 export function BottomPanel() {
-  if (!bottomPanelOpen.value) return null
+  if (!bottomPanelView.value.open) return null
   return <BottomPanelInner />
 }
 
 function BottomPanelInner() {
-  const tab = bottomPanelTab.value
-  const height = bottomPanelHeight.value
+  const { tab, height } = bottomPanelView.value
   const panelRef = useRef<HTMLDivElement>(null)
 
   return (
@@ -64,7 +63,7 @@ function ResizeHandle({ panelRef }: { panelRef: { current: HTMLDivElement | null
         handle.setPointerCapture(event.pointerId)
 
         const startY = event.clientY
-        const startHeight = bottomPanelHeight.peek()
+        const startHeight = bottomPanelView.peek().height
         const maxHeight = Math.max(200, window.innerHeight * 0.8)
 
         const clampHeight = (clientY: number) =>

@@ -13,8 +13,8 @@ import {
   layerOpacity,
   layerPanelOpen,
   layerVisibility,
-} from './canvas'
-import { persistCurrentSettings, queueSettingsPersist } from '../app/shell/state'
+} from '../../state/canvas'
+import { persistCurrentSettings, queueSettingsPersist } from '../shell/state'
 
 export function setLayerPanelOpen(open: boolean): void {
   layerPanelOpen.value = open
@@ -95,7 +95,6 @@ export function setBottomPanelTab(tab: BottomPanelTab): void {
   persistCurrentSettings()
 }
 
-/** Commit final height on mouse-up and persist to Rust settings. */
 export function commitBottomPanelHeight(height: number): void {
   if (bottomPanelHeight.value === height) return
   bottomPanelHeight.value = height

@@ -1,5 +1,6 @@
 mod blocking;
 mod commands;
+mod contracts;
 mod db;
 mod design;
 mod http;

@@ -1,15 +1,7 @@
 import { t } from '../../i18n'
 import { locale } from '../../app/shell/state'
+import { layerPanelView } from '../../app/canvas-settings/state'
 import { currentDesign } from '../../state/document'
-import {
-  activeLayerName,
-  contourIntervalMeters,
-  hillshadeOpacity,
-  hillshadeVisible,
-  layerOpacity,
-  layerPanelOpen,
-  layerVisibility,
-} from '../../state/canvas'
 import {
   setActiveLayer,
   setContourIntervalMeters,
@@ -18,7 +10,7 @@ import {
   toggleHillshadeVisibility,
   toggleLayerPanel,
   toggleLayerVisibility,
-} from '../../state/canvas-actions'
+} from '../../app/canvas-settings/controller'
 import { formatLocationSummary } from '../../utils/location'
 import styles from './LayerPanel.module.css'
 
@@ -58,8 +50,9 @@ function EyeIcon({ open }: { open: boolean }) {
 }
 
 function getVisibility(name: LayerName): boolean {
-  if (name === 'hillshading') return hillshadeVisible.value
-  return layerVisibility.value[name] ?? true
+  const view = layerPanelView.peek()
+  if (name === 'hillshading') return view.hillshadeVisible
+  return view.layerVisibility[name] ?? true
 }
 
 function handleToggleVisibility(name: LayerName): void {
@@ -70,8 +63,14 @@ function handleToggleVisibility(name: LayerName): void {
 export function LayerPanel() {
   void locale.value
 
-  const open = layerPanelOpen.value
-  const activeLayer = activeLayerName.value as LayerName
+  const {
+    activeLayerName: activeLayerNameValue,
+    contourIntervalMeters: contourIntervalMetersValue,
+    hillshadeOpacity: hillshadeOpacityValue,
+    layerOpacity: layerOpacityValue,
+    layerPanelOpen: open,
+  } = layerPanelView.value
+  const activeLayer = activeLayerNameValue as LayerName
 
   if (!open) {
     return (
@@ -140,6 +139,9 @@ export function LayerPanel() {
                   name={name}
                   hasLocation={hasLocation}
                   location={location}
+                  contourIntervalMeters={contourIntervalMetersValue}
+                  hillshadeOpacity={hillshadeOpacityValue}
+                  layerOpacity={layerOpacityValue}
                 />
               )}
             </div>
@@ -150,10 +152,13 @@ export function LayerPanel() {
   )
 }
 
-function LayerDetail({ name, hasLocation, location }: {
+function LayerDetail({ name, hasLocation, location, contourIntervalMeters, hillshadeOpacity, layerOpacity }: {
   name: LayerName
   hasLocation: boolean
   location: { lat: number; lon: number; altitude_m: number | null } | null
+  contourIntervalMeters: number
+  hillshadeOpacity: number
+  layerOpacity: Record<string, number>
 }) {
   switch (name) {
     case 'base':
@@ -167,13 +172,13 @@ function LayerDetail({ name, hasLocation, location }: {
               {hasLocation && location ? formatLocationSummary(location) : t('canvas.layers.setLocation')}
             </span>
           </div>
-          <OpacitySlider layer="base" disabled={!hasLocation} />
+          <OpacitySlider layer="base" disabled={!hasLocation} layerOpacity={layerOpacity} />
         </div>
       )
     case 'contours':
       return (
         <div className={styles.layerDetail}>
-          <OpacitySlider layer="contours" />
+          <OpacitySlider layer="contours" layerOpacity={layerOpacity} />
           <div className={styles.controlRow}>
             <span className={styles.controlLabel}>{t('canvas.terrain.contourInterval')}</span>
             <input
@@ -181,7 +186,7 @@ function LayerDetail({ name, hasLocation, location }: {
               min="0"
               step="1"
               className={styles.numericInput}
-              value={String(contourIntervalMeters.value)}
+              value={String(contourIntervalMeters)}
               aria-label={t('canvas.terrain.contourInterval')}
               onInput={(event) => {
                 setContourIntervalMeters(Number((event.target as HTMLInputElement).value))
@@ -200,7 +205,7 @@ function LayerDetail({ name, hasLocation, location }: {
               className={styles.mapSlider}
               min="0"
               max="100"
-              value={Math.round(hillshadeOpacity.value * 100)}
+              value={Math.round(hillshadeOpacity * 100)}
               aria-label={t('canvas.terrain.hillshadeOpacity')}
               onInput={(event) => {
                 setHillshadeOpacity(Number((event.target as HTMLInputElement).value) / 100)
@@ -212,14 +217,14 @@ function LayerDetail({ name, hasLocation, location }: {
     default:
       return (
         <div className={styles.layerDetail}>
-          <OpacitySlider layer={name} />
+          <OpacitySlider layer={name} layerOpacity={layerOpacity} />
         </div>
       )
   }
 }
 
-function OpacitySlider({ layer, disabled }: { layer: string; disabled?: boolean }) {
-  const opacity = Math.round((layerOpacity.value[layer] ?? 1) * 100)
+function OpacitySlider({ layer, disabled, layerOpacity }: { layer: string; disabled?: boolean; layerOpacity: Record<string, number> }) {
+  const opacity = Math.round((layerOpacity[layer] ?? 1) * 100)
   return (
     <div className={styles.controlRow}>
       <span className={styles.controlLabel}>{t('canvas.layers.opacity')}</span>
