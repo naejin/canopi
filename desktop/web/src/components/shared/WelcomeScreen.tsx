@@ -1,21 +1,23 @@
-import { useState, useEffect } from 'preact/hooks'
+import { useEffect, useMemo } from 'preact/hooks'
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
 import { newDesignAction, openDesign, openDesignFromPath } from '../../app/document-session/actions'
-import { getRecentFiles } from '../../ipc/design'
-import type { DesignSummary } from '../../types/design'
+import { createRecentFilesController } from '../../app/recent-files'
 import styles from './WelcomeScreen.module.css'
 
 export function WelcomeScreen() {
   void locale.value
 
-  const [recentFiles, setRecentFiles] = useState<DesignSummary[]>([])
+  const recentFilesController = useMemo(() => createRecentFilesController(), [])
 
   useEffect(() => {
-    getRecentFiles()
-      .then((files) => setRecentFiles(files.slice(0, 5)))
-      .catch(() => {})
-  }, [])
+    void recentFilesController.load()
+    return () => {
+      recentFilesController.dispose()
+    }
+  }, [recentFilesController])
+
+  const recentFiles = recentFilesController.recentFiles.value
 
   return (
     <div className={styles.welcome} role="region" aria-label={t('canvas.emptyWelcome')}>

@@ -1,13 +1,12 @@
-import { useSignal, useComputed } from '@preact/signals';
-import { useEffect } from 'preact/hooks';
+import { useComputed } from '@preact/signals';
+import { useEffect, useMemo } from 'preact/hooks';
 import { t } from '../../i18n';
 import { locale } from '../../app/settings/state';
 import {
-  checkPlantCompatibility,
-  suggestReplacements,
+  createReplacementSuggestionsController,
+  createTemplateAdaptationController,
   type CompatibilityResult,
-  type ReplacementSuggestion,
-} from '../../ipc/adaptation';
+} from '../../app/adaptation';
 import styles from './TemplateAdaptation.module.css';
 
 export interface TemplateAdaptationProps {
@@ -62,34 +61,12 @@ function PlantRow({
   void locale.value;
 
   const status = getStatus(result);
-  const showReplacements = useSignal(false);
-  const replacements = useSignal<ReplacementSuggestion[]>([]);
-  const replacementError = useSignal<string | null>(null);
-  const loadingReplacements = useSignal(false);
+  const suggestions = useMemo(() => createReplacementSuggestionsController(), []);
+
+  useEffect(() => () => suggestions.dispose(), [suggestions]);
 
   async function handleSuggest() {
-    if (showReplacements.value) {
-      showReplacements.value = false;
-      return;
-    }
-    loadingReplacements.value = true;
-    replacementError.value = null;
-    try {
-      const suggestions = await suggestReplacements(
-        result.canonical_name,
-        targetHardiness,
-        5,
-        locale.value,
-      );
-      replacements.value = suggestions;
-    } catch (caught) {
-      replacements.value = [];
-      replacementError.value =
-        caught instanceof Error ? caught.message : String(caught);
-    } finally {
-      loadingReplacements.value = false;
-      showReplacements.value = true;
-    }
+    await suggestions.toggle(result.canonical_name, targetHardiness, locale.value);
   }
 
   const displayName = result.common_name ?? result.canonical_name;
@@ -110,22 +87,22 @@ function PlantRow({
           <button
             class={styles.suggestBtn}
             onClick={handleSuggest}
-            disabled={loadingReplacements.value}
+            disabled={suggestions.loading.value}
           >
             {t('adaptation.suggestReplacement')}
           </button>
-          {showReplacements.value && (
+          {suggestions.expanded.value && (
             <div class={styles.replacements}>
-              {replacementError.value ? (
+              {suggestions.errorMessage.value ? (
                 <p class={styles.noReplacements} role="alert">
-                  {replacementError.value}
+                  {suggestions.errorMessage.value}
                 </p>
-              ) : replacements.value.length === 0 ? (
+              ) : suggestions.replacements.value.length === 0 ? (
                 <p class={styles.noReplacements}>
                   {t('adaptation.incompatible')}
                 </p>
               ) : (
-                replacements.value.map((r) => (
+                suggestions.replacements.value.map((r) => (
                   <div key={r.canonical_name} class={styles.replacementItem}>
                     <span class={styles.replacementName}>
                       {r.common_name ?? r.canonical_name}
@@ -169,38 +146,19 @@ export function TemplateAdaptation({
   // Force re-render on locale change
   void locale.value;
 
-  const results = useSignal<CompatibilityResult[]>([]);
-  const loading = useSignal(true);
-  const error = useSignal<string | null>(null);
+  const controller = useMemo(() => createTemplateAdaptationController(), []);
 
   useEffect(() => {
-    let cancelled = false;
-    loading.value = true;
-    error.value = null;
+    controller.setRequest(canonicalNames, targetHardiness, locale.value);
+  }, [canonicalNames, targetHardiness, controller]);
 
-    checkPlantCompatibility(canonicalNames, targetHardiness, locale.value)
-      .then((data) => {
-        if (!cancelled) {
-          results.value = data;
-          loading.value = false;
-        }
-      })
-      .catch((caught) => {
-        if (!cancelled) {
-          results.value = [];
-          error.value = caught instanceof Error ? caught.message : String(caught);
-          loading.value = false;
-        }
-      });
-
-    return () => { cancelled = true; };
-  }, [canonicalNames, targetHardiness]);
+  useEffect(() => () => controller.dispose(), [controller]);
 
   const compatibleCount = useComputed(() =>
-    results.value.filter((r) => getStatus(r) === 'compatible').length,
+    controller.results.value.filter((r) => getStatus(r) === 'compatible').length,
   );
 
-  const totalCount = useComputed(() => results.value.length);
+  const totalCount = useComputed(() => controller.results.value.length);
 
   return (
     <div class={styles.overlay} onPointerUp={(e) => {
@@ -214,19 +172,19 @@ export function TemplateAdaptation({
           </button>
         </div>
 
-        {!error.value && (
+        {!controller.errorMessage.value && (
           <p class={styles.summary}>
             {t('adaptation.reviewPlants')} — {compatibleCount.value}/{totalCount.value} {t('adaptation.compatible').toLowerCase()}
           </p>
         )}
 
-        {loading.value ? (
+        {controller.loading.value ? (
           <p class={styles.loading}>…</p>
-        ) : error.value ? (
-          <p class={styles.noReplacements} role="alert">{error.value}</p>
+        ) : controller.errorMessage.value ? (
+          <p class={styles.noReplacements} role="alert">{controller.errorMessage.value}</p>
         ) : (
           <div class={styles.plantList}>
-            {results.value.map((r) => (
+            {controller.results.value.map((r) => (
               <PlantRow
                 key={r.canonical_name}
                 result={r}
