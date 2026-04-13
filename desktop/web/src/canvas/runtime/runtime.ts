@@ -1,6 +1,6 @@
 import type { ReadonlySignal } from '@preact/signals'
 import type { CanopiFile, PlacedPlant } from '../../types/design'
-import type { ColorByAttribute, PlantSizeMode } from '../../state/canvas'
+import type { ColorByAttribute, PlantSizeMode } from '../plant-display-state'
 import type { SelectedPlantColorContext } from '../plant-color-context'
 import type { SceneStore } from './scene'
 import type { SceneViewportState } from './scene'

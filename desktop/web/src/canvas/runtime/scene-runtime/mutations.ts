@@ -1,4 +1,4 @@
-import type { ColorByAttribute, PlantSizeMode } from '../../../state/canvas'
+import type { ColorByAttribute, PlantSizeMode } from '../../plant-display-state'
 import { getAnnotationWorldBounds } from '../annotation-layout'
 import type { SceneBounds } from '../camera'
 import {

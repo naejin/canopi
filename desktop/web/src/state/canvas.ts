@@ -83,11 +83,6 @@ export function hasVisibleMapLayer(
     || hillshadeOn
 }
 
-// Plant display modes
-export type PlantSizeMode = 'default' | 'canopy'
-export type ColorByAttribute = 'stratum' | 'hardiness' | 'lifecycle' | 'nitrogen' | 'edibility' | 'flower'
-export const plantSizeMode = signal<PlantSizeMode>('default')
-export const plantColorByAttr = signal<ColorByAttribute | null>(null)
 export const plantColorMenuOpen = signal<boolean>(false)
 export const plantSpeciesColors = signal<Record<string, string>>({})
 

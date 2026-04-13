@@ -12,12 +12,11 @@ import {
   layerVisibility,
   lockedObjectIds,
   plantColorMenuOpen,
-  plantColorByAttr,
   plantStampSpecies,
-  plantSizeMode,
   selectedObjectIds,
   snapToGridEnabled,
 } from '../../state/canvas'
+import { plantColorByAttr, plantSizeMode } from '../plant-display-state'
 import {
   hoveredCanvasTargets,
   hoveredPanelTargets,

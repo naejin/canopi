@@ -17,7 +17,7 @@ import {
   sceneEntityRevision,
   snapToGridEnabled,
 } from '../../state/canvas'
-import type { ColorByAttribute, PlantSizeMode } from '../../state/canvas'
+import type { ColorByAttribute, PlantSizeMode } from '../plant-display-state'
 import type { CanopiFile, PanelTarget, PlacedPlant } from '../../types/design'
 import type { SelectedPlantColorContext } from '../plant-color-context'
 import { clearCanvasSelection, setCanvasSelection, setCanvasTool } from '../session-state'

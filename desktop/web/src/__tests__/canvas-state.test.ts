@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { createDefaultLayerVisibility, plantColorByAttr, plantSizeMode } from '../state/canvas'
+import { plantColorByAttr, plantSizeMode } from '../canvas/plant-display-state'
+import { createDefaultLayerVisibility } from '../state/canvas'
 
 describe('canvas plant presentation state', () => {
   beforeEach(() => {

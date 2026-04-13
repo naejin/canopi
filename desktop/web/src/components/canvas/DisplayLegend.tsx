@@ -1,4 +1,4 @@
-import { plantColorByAttr } from '../../state/canvas'
+import { plantColorByAttr } from '../../canvas/plant-display-state'
 import { locale } from '../../app/settings/state'
 import { getLegendEntries } from '../../canvas/display-modes'
 import { SCALE_BAR_RESERVED_BOTTOM_PX } from '../../canvas/scale-bar'

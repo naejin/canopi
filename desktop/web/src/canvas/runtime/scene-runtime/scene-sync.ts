@@ -7,11 +7,10 @@ import {
   lockedObjectIds,
   northBearingDeg,
   plantColorMenuOpen,
-  plantColorByAttr,
-  plantSizeMode,
   plantSpeciesColors,
 } from '../../../state/canvas'
 import type { CanopiFile } from '../../../types/design'
+import { plantColorByAttr, plantSizeMode } from '../../plant-display-state'
 import { clearCanvasSelection, setCanvasSelection, setCanvasTool } from '../../session-state'
 import { cloneLayerWithSignals } from '../scene-visuals'
 import type { SceneCommandSnapshot } from '../scene-commands'

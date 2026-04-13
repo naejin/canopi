@@ -1,4 +1,5 @@
-import { zoomReference, type ColorByAttribute, type PlantSizeMode } from '../../state/canvas'
+import { type ColorByAttribute, type PlantSizeMode } from '../plant-display-state'
+import { zoomReference } from '../../state/canvas'
 import { getColorForAttribute } from '../display-modes'
 import { DEFAULT_PLANT_COLOR, normalizeHexColor } from '../plant-colors'
 import {
