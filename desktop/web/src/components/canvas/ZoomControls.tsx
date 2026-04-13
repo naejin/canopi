@@ -1,4 +1,4 @@
-import { zoomLevel, zoomReference } from '../../state/canvas'
+import { zoomLevel, zoomReference } from '../../canvas/view-state'
 import { locale } from '../../app/settings/state'
 import { currentCanvasSession } from '../../canvas/session'
 import { t } from '../../i18n'

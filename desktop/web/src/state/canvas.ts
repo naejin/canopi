@@ -1,10 +1,7 @@
 import { signal } from '@preact/signals'
 import type { Guide } from '../canvas/guides'
 export { activeTool, canvasReady, selectedObjectIds } from '../canvas/session-state'
-
-export const zoomLevel = signal<number>(1)
-/** The stage scale that represents 100% zoom (set on init to fit ~100m in viewport). */
-export const zoomReference = signal<number>(1)
+export { zoomLevel, zoomReference } from '../canvas/view-state'
 
 export function createDefaultLayerVisibility(): Record<string, boolean> {
   return {

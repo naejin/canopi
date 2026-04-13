@@ -1,4 +1,4 @@
-import { zoomLevel, zoomReference } from '../../state/canvas'
+import { zoomLevel, zoomReference } from '../view-state'
 import type { ScenePersistedState, ScenePoint, SceneViewportState } from './scene'
 import { getAnnotationWorldBounds } from './annotation-layout'
 import { getPlantWorldBounds, type PlantPresentationContext } from './plant-presentation'
