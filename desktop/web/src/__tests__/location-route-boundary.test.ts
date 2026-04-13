@@ -14,8 +14,12 @@ describe('location route boundary', () => {
   it('loads the location flow through the dedicated location panel', () => {
     const appSource = readSource('../app.tsx')
     const panelSource = readSource('../components/panels/LocationPanel.tsx')
+    const tabSource = readSource('../components/canvas/LocationTab.tsx')
+    const inputSource = readSource('../components/canvas/LocationInput.tsx')
 
     expect(appSource).toContain('import("./components/panels/LocationPanel")')
     expect(panelSource).toContain("LocationTab")
+    expect(tabSource).not.toContain("ipc/geocoding")
+    expect(inputSource).not.toContain("ipc/geocoding")
   })
 })

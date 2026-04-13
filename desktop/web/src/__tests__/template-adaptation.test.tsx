@@ -2,6 +2,7 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TemplateAdaptation } from '../components/canvas/TemplateAdaptation'
+import { locale } from '../app/settings/state'
 
 const mocks = vi.hoisted(() => ({
   checkPlantCompatibility: vi.fn(),
@@ -26,6 +27,7 @@ describe('TemplateAdaptation', () => {
     container = document.createElement('div')
     document.body.innerHTML = ''
     document.body.appendChild(container)
+    locale.value = 'en'
     mocks.checkPlantCompatibility.mockReset()
     mocks.suggestReplacements.mockReset()
   })
@@ -104,5 +106,30 @@ describe('TemplateAdaptation', () => {
     const errorAlert = container.querySelector('[role="alert"]')
     expect(errorAlert).not.toBeNull()
     expect(errorAlert?.textContent ?? '').toContain('Plant database unavailable')
+  })
+
+  it('reloads compatibility when the locale changes while the modal is open', async () => {
+    mocks.checkPlantCompatibility.mockResolvedValue([])
+
+    await act(async () => {
+      render(
+        <TemplateAdaptation
+          canonicalNames={['Malus domestica']}
+          targetHardiness={7}
+          onClose={() => {}}
+        />,
+        container,
+      )
+      await flushEffects()
+    })
+
+    locale.value = 'fr'
+
+    await act(async () => {
+      await flushEffects()
+    })
+
+    expect(mocks.checkPlantCompatibility).toHaveBeenNthCalledWith(1, ['Malus domestica'], 7, 'en')
+    expect(mocks.checkPlantCompatibility).toHaveBeenNthCalledWith(2, ['Malus domestica'], 7, 'fr')
   })
 })

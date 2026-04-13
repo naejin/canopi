@@ -6,7 +6,6 @@ import { selectedPanelTargetOrigin, selectedPanelTargets } from '../../app/panel
 import { plantNamesRevision, sceneEntityRevision } from '../../canvas/runtime-mirror-state'
 import { currentDesign, designName } from '../../state/design'
 import { currentCanvasSession } from '../../canvas/session'
-import { exportFile } from '../../ipc/design'
 import {
   clearHoveredPanelTargets,
   clearSelectedPanelTargetsForOrigin,
@@ -14,9 +13,10 @@ import {
   setSelectedPanelTargets,
 } from '../../app/panel-targets/coordinator'
 import { setPlantBudgetPrice, setBudgetCurrency } from '../../app/budget/controller'
+import { exportBudgetCsv, isBudgetExportCancelled } from '../../app/budget/export'
 import { Dropdown } from '../shared/Dropdown'
 import { CURRENCY_ITEMS } from './budget-currencies'
-import { countPlants, buildPriceMap, formatCurrency, escapeCsvField } from './budget-helpers'
+import { countPlants, buildPriceMap, formatCurrency } from './budget-helpers'
 import { getBudgetHoverTarget, getBudgetSpeciesTarget, panelTargetsEqual } from '../../panel-targets'
 import type { BudgetItem, PanelTarget, PlacedPlant } from '../../types/design'
 import styles from './BudgetTab.module.css'
@@ -115,20 +115,16 @@ export function BudgetTab() {
   }, [groupedPlants, budgetItemMap, selectedTargets, selectedOrigin])
 
   async function handleExportCSV() {
-    const header = [t('canvas.budget.species'), t('canvas.budget.quantity'), t('canvas.budget.unitCost'), t('canvas.budget.lineTotal'), t('canvas.budget.currency')].map(escapeCsvField).join(',')
-    const rows = [header]
-    for (const row of groupedPlants) {
-      const entry = priceMap.get(row.canonical)
-      const price = entry?.unit_cost ?? 0
-      const displayName = row.commonName || row.canonical
-      rows.push(`${escapeCsvField(displayName)},${row.count},${price.toFixed(2)},${(row.count * price).toFixed(2)},${currency}`)
-    }
-    rows.push(`${escapeCsvField(t('canvas.budget.grandTotal'))},,,${grandTotal.toFixed(2)},`)
-
     try {
-      await exportFile(rows.join('\n'), `${designName.value || 'budget'}-budget.csv`, 'CSV', ['csv'])
-    } catch {
-      // User cancelled export.
+      await exportBudgetCsv(groupedPlants, {
+        currency,
+        designName: designName.value,
+        lineItemPriceMap: priceMap,
+        grandTotal,
+      })
+    } catch (error) {
+      if (isBudgetExportCancelled(error)) return
+      console.error('Budget export failed:', error)
     }
   }
 

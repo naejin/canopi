@@ -1,5 +1,5 @@
 import { useSignal, useSignalEffect } from '@preact/signals'
-import { useEffect, useRef } from 'preact/hooks'
+import { useEffect, useMemo, useRef } from 'preact/hooks'
 import maplibregl from 'maplibre-gl'
 import { t } from '../../i18n'
 import {
@@ -7,9 +7,13 @@ import {
   REMOTE_BASEMAP_TILE_URL_TEMPLATE,
 } from '../../maplibre/config'
 import { locale } from '../../app/settings/state'
-import { geocodeAddress, type GeoResult } from '../../ipc/geocoding'
 import { currentDesign } from '../../state/design'
-import { clearDesignLocation, setDesignLocation } from '../../app/location/controller'
+import {
+  clearDesignLocation,
+  createLocationSearchController,
+  setDesignLocation,
+  type LocationSearchResult,
+} from '../../app/location'
 import { navigateTo } from '../../app/shell/state'
 import { buildLocationCommit, computeSavedPinState } from './location-tab-logic'
 import styles from './LocationTab.module.css'
@@ -19,19 +23,12 @@ const DEFAULT_CENTER: [number, number] = [0, 20] // [lon, lat]
 export function LocationTab() {
   void locale.value
 
+  const search = useMemo(() => createLocationSearchController(), [])
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
   const searchRef = useRef<HTMLDivElement>(null)
 
-  // Search state
-  const addressQuery = useSignal('')
-  const searchResults = useSignal<GeoResult[]>([])
-  const isSearching = useSignal(false)
-  const showDropdown = useSignal(false)
-  const searchError = useSignal('')
   const pendingResult = useSignal<{ lat: number; lon: number } | null>(null)
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const requestIdRef = useRef(0)
 
   // Saved pin state
   const pinState = useSignal<{
@@ -101,63 +98,23 @@ export function LocationTab() {
     if (map) updatePinPosition(map)
   })
 
-  // Debounced geocoding
-  useSignalEffect(() => {
-    const query = addressQuery.value.trim()
-
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current)
-      debounceRef.current = null
-    }
-
-    if (query.length < 3) {
-      searchResults.value = []
-      showDropdown.value = false
-      isSearching.value = false
-      searchError.value = ''
-      return
-    }
-
-    isSearching.value = true
-    searchError.value = ''
-
-    debounceRef.current = setTimeout(async () => {
-      const requestId = ++requestIdRef.current
-      try {
-        const results = await geocodeAddress(query)
-        if (requestId !== requestIdRef.current) return
-        searchResults.value = results
-        showDropdown.value = true
-        isSearching.value = false
-      } catch {
-        if (requestId !== requestIdRef.current) return
-        searchResults.value = []
-        searchError.value = t('canvas.location.geocodeError')
-        showDropdown.value = true
-        isSearching.value = false
-      }
-    }, 300)
-  })
-
   // Click outside to close dropdown
   useEffect(() => {
     function handlePointerUp(event: PointerEvent) {
       if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
-        showDropdown.value = false
+        search.closeDropdown()
       }
     }
 
     document.addEventListener('pointerup', handlePointerUp)
     return () => {
       document.removeEventListener('pointerup', handlePointerUp)
-      if (debounceRef.current) clearTimeout(debounceRef.current)
+      search.dispose()
     }
-  }, [])
+  }, [search])
 
-  function selectResult(result: GeoResult) {
-    addressQuery.value = ''
-    searchResults.value = []
-    showDropdown.value = false
+  function selectResult(result: LocationSearchResult) {
+    search.consumeResult()
     pendingResult.value = { lat: result.lat, lon: result.lon }
 
     const map = mapRef.current
@@ -223,8 +180,8 @@ export function LocationTab() {
           <input
             type="text"
             className={styles.searchInput}
-            value={addressQuery.value}
-            onInput={(e) => { addressQuery.value = e.currentTarget.value }}
+            value={search.query.value}
+            onInput={(e) => { search.setQuery(e.currentTarget.value) }}
             placeholder={t('canvas.location.searchPlaceholder')}
           />
           <button type="button" className={styles.setBtn} onClick={handleSet}>
@@ -237,25 +194,25 @@ export function LocationTab() {
           )}
         </div>
 
-        {isSearching.value && (
+        {search.isSearching.value && (
           <div className={styles.searchStatus}>{t('canvas.location.searching')}</div>
         )}
 
-        {showDropdown.value && !isSearching.value && (
+        {search.showDropdown.value && !search.isSearching.value && (
           <div className={styles.dropdown}>
-            {searchError.value ? (
-              <div className={styles.dropdownError}>{searchError.value}</div>
-            ) : searchResults.value.length === 0 ? (
+            {search.errorKey.value ? (
+              <div className={styles.dropdownError}>{t(search.errorKey.value)}</div>
+            ) : search.results.value.length === 0 ? (
               <div className={styles.dropdownEmpty}>{t('canvas.location.noResults')}</div>
             ) : (
-              searchResults.value.map((result, index) => (
+              search.results.value.map((result, index) => (
                 <button
                   key={`${result.lat}-${result.lon}-${index}`}
                   type="button"
                   className={styles.resultItem}
                   onClick={() => selectResult(result)}
                 >
-                  {result.display_name}
+                  {result.displayName}
                 </button>
               ))
             )}

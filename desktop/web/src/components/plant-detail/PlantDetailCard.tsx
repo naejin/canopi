@@ -1,14 +1,14 @@
-import { useSignal } from '@preact/signals';
-import { useSignalEffect } from '@preact/signals';
+import { useSignal, useSignalEffect } from '@preact/signals';
+import { useEffect, useMemo } from 'preact/hooks';
 import { t } from '../../i18n';
 import { locale } from '../../app/settings/state';
 import {
-  selectedCanonicalName,
-  favoriteNames,
-  toggleFavoriteAction,
-} from '../../app/plant-browser';
-import { getSpeciesDetail, getLocaleCommonNames } from '../../ipc/species';
-import type { SpeciesDetail, CommonNameEntry } from '../../types/species';
+  closePlantDetail,
+  createPlantDetailController,
+  isPlantDetailFavorite,
+  resolvePlantDetailName,
+  togglePlantDetailFavorite,
+} from '../../app/plant-detail';
 import { AttributeGrid } from './AttributeGrid';
 import { UsesSection } from './UsesSection';
 import { RiskDistributionSection } from './RiskDistributionSection';
@@ -22,72 +22,33 @@ interface Props {
   canonicalName: string;
 }
 
-type LoadState = 'loading' | 'loaded' | 'error';
-
 // ── Component ───────────────────────────────────────────────────────────────
 
 export function PlantDetailCard({ canonicalName }: Props) {
   void locale.value;
 
-  const detail = useSignal<SpeciesDetail | null>(null);
-  const loadState = useSignal<LoadState>('loading');
-  const errorMsg = useSignal<string | null>(null);
+  const detailController = useMemo(() => createPlantDetailController(), []);
   const expanded = useSignal<Set<string>>(new Set());
-  const retryCount = useSignal(0);
-  const secondaryNames = useSignal<CommonNameEntry[]>([]);
 
   useSignalEffect(() => {
-    const name = selectedCanonicalName.value ?? canonicalName;
-    const loc = locale.value;
-    void retryCount.value;
-
-    detail.value = null;
-    loadState.value = 'loading';
-    errorMsg.value = null;
-    secondaryNames.value = [];
-
-    let cancelled = false;
-
-    getSpeciesDetail(name, loc)
-      .then((data) => {
-        if (cancelled) return;
-        detail.value = data;
-        loadState.value = 'loaded';
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        errorMsg.value = err instanceof Error ? err.message : String(err);
-        loadState.value = 'error';
-      });
-
-    // Fetch locale common names (non-blocking — detail card renders without them)
-    getLocaleCommonNames(name, loc)
-      .then((entries) => {
-        if (cancelled) return;
-        secondaryNames.value = entries;
-      })
-      .catch(() => {
-        // Silently ignore — secondary names are optional
-      });
-
-    return () => {
-      cancelled = true;
-    };
+    detailController.setTarget(resolvePlantDetailName(canonicalName), locale.value);
   });
 
-  const effectiveName = selectedCanonicalName.value ?? canonicalName;
-  const isFavorite = favoriteNames.value.includes(effectiveName);
+  useEffect(() => () => detailController.dispose(), [detailController]);
+
+  const effectiveName = resolvePlantDetailName(canonicalName);
+  const isFavorite = isPlantDetailFavorite(effectiveName);
 
   const handleBack = () => {
-    selectedCanonicalName.value = null;
+    closePlantDetail();
   };
 
   const handleFav = () => {
-    void toggleFavoriteAction(effectiveName);
+    void togglePlantDetailFavorite(effectiveName);
   };
 
   const handleRetry = () => {
-    retryCount.value += 1;
+    detailController.retry();
   };
 
   const toggle = (id: string) => {
@@ -102,7 +63,7 @@ export function PlantDetailCard({ canonicalName }: Props) {
     : t('plantDb.addFavorite');
 
   // ── Loading ──────────────────────────────────────────────────────────────
-  if (loadState.value === 'loading') {
+  if (detailController.loadState.value === 'loading') {
     return (
       <div className={styles.card}>
         <div className={styles.header}>
@@ -129,7 +90,7 @@ export function PlantDetailCard({ canonicalName }: Props) {
   }
 
   // ── Error ────────────────────────────────────────────────────────────────
-  if (loadState.value === 'error') {
+  if (detailController.loadState.value === 'error') {
     return (
       <div className={styles.card}>
         <div className={styles.header}>
@@ -148,7 +109,7 @@ export function PlantDetailCard({ canonicalName }: Props) {
         </div>
         <div className={styles.body}>
           <div className={styles.errorState} role="alert">
-            <span>{t('plantDetail.error')}: {errorMsg.value}</span>
+            <span>{t('plantDetail.error')}: {detailController.errorMessage.value}</span>
             <button
               type="button"
               className={styles.retryBtn}
@@ -163,7 +124,7 @@ export function PlantDetailCard({ canonicalName }: Props) {
   }
 
   // ── Loaded ───────────────────────────────────────────────────────────────
-  const d = detail.value!;
+  const d = detailController.detail.value!;
 
   // ── Section visibility checks ────────────────────────────────────────────
 
@@ -273,7 +234,7 @@ export function PlantDetailCard({ canonicalName }: Props) {
           )}
           {(() => {
             // Filter out the primary name already displayed above
-            const others = secondaryNames.value.filter(
+            const others = detailController.secondaryNames.value.filter(
               (entry) => entry.name !== d.common_name,
             );
             if (others.length === 0) return null;
