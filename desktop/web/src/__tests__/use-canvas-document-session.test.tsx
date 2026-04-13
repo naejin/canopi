@@ -6,12 +6,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   autosaveDesign: vi.fn(async () => undefined),
   cancelQueuedLoad: vi.fn(),
-  consumeQueuedDocumentLoad: vi.fn(() => () => {}),
+  consumeQueuedDocumentLoad: vi.fn((_session?: unknown) => () => {}),
   disposeDocumentWorkflows: vi.fn(),
   flushQueuedSettingsPersist: vi.fn(),
   installConsortiumSync: vi.fn(),
   loadCanvasFromDocument: vi.fn(),
-  runtimeInitImpl: vi.fn(async () => undefined),
+  runtimeInitImpl: vi.fn(async (_container?: HTMLElement) => undefined),
   runtimeInstances: [] as Array<Record<string, unknown>>,
   snapshotCanvasIntoCurrentDocument: vi.fn(),
   writeCanvasIntoDocument: vi.fn(() => ({ name: "Autosaved" })),
@@ -241,8 +241,8 @@ describe("useCanvasDocumentSession", () => {
     currentDesign.value = makeDesign();
     let resolveInit: (() => void) | null = null;
     mocks.runtimeInitImpl.mockImplementation(
-      () => new Promise<void>((resolve) => {
-        resolveInit = resolve;
+      () => new Promise<undefined>((resolve) => {
+        resolveInit = () => resolve(undefined);
       }),
     );
 
@@ -272,7 +272,7 @@ describe("useCanvasDocumentSession", () => {
 
   it("snapshots after a queued document replacement loads through replaceDocument", async () => {
     const queuedDesign = makeDesign("Queued");
-    mocks.consumeQueuedDocumentLoad.mockImplementation((session) => {
+    mocks.consumeQueuedDocumentLoad.mockImplementation((session: any) => {
       session.replaceDocument(queuedDesign);
       currentDesign.value = queuedDesign;
       return mocks.cancelQueuedLoad;
