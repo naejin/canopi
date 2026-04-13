@@ -49,6 +49,16 @@ pub fn autosave(
     design_path: Option<&str>,
 ) -> Result<(), String> {
     let dir = autosave_dir(app)?;
+    write_autosave_file(&dir, content, design_path)
+}
+
+fn write_autosave_file(
+    dir: &std::path::Path,
+    content: &CanopiFile,
+    design_path: Option<&str>,
+) -> Result<(), String> {
+    std::fs::create_dir_all(dir)
+        .map_err(|e| format!("Failed to create autosave dir {}: {e}", dir.display()))?;
 
     let filename = match design_path {
         Some(p) => format!("{}.canopi", stem_for_path(p)),
@@ -102,7 +112,10 @@ fn prune_autosaves(dir: &std::path::Path, max_keep: usize) {
 /// List all autosave files available for crash recovery.
 pub fn list_autosaves(app: &AppHandle) -> Result<Vec<AutosaveEntry>, String> {
     let dir = autosave_dir(app)?;
+    list_autosaves_in_dir(&dir)
+}
 
+fn list_autosaves_in_dir(dir: &std::path::Path) -> Result<Vec<AutosaveEntry>, String> {
     let mut entries: Vec<(std::time::SystemTime, AutosaveEntry)> = match std::fs::read_dir(&dir) {
         Ok(rd) => rd
             .filter_map(|e| e.ok())
@@ -147,8 +160,12 @@ pub fn list_autosaves(app: &AppHandle) -> Result<Vec<AutosaveEntry>, String> {
 /// Load a previously autosaved file for crash recovery.
 pub fn recover_autosave(app: &AppHandle, autosave_path: &str) -> Result<CanopiFile, String> {
     let dir = autosave_dir(app)?;
-    let path = PathBuf::from(autosave_path);
+    let canonical_path = resolve_recover_path(&dir, autosave_path)?;
+    crate::design::format::load_from_file(&canonical_path)
+}
 
+fn resolve_recover_path(dir: &std::path::Path, autosave_path: &str) -> Result<PathBuf, String> {
+    let path = PathBuf::from(autosave_path);
     // Canonicalize both paths before comparing so that symlinks and `..`
     // components in the caller-supplied path cannot escape the autosave dir.
     let canonical_dir = dir
@@ -165,7 +182,7 @@ pub fn recover_autosave(app: &AppHandle, autosave_path: &str) -> Result<CanopiFi
         ));
     }
 
-    crate::design::format::load_from_file(&canonical_path)
+    Ok(canonical_path)
 }
 
 /// Attempt to read the `name` field from a design file without full deserialization.
@@ -185,6 +202,24 @@ fn mtime_to_iso(t: std::time::SystemTime) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use common_types::design::CanopiFile;
+
+    fn temp_autosave_dir(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "canopi_autosave_{name}_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos(),
+        ))
+    }
+
+    fn test_design(name: &str) -> CanopiFile {
+        let mut design = crate::design::format::create_default();
+        design.name = name.to_owned();
+        design
+    }
 
     #[test]
     fn test_stem_for_path_is_stable() {
@@ -205,5 +240,43 @@ mod tests {
         let stem = stem_for_path("/any/path");
         assert_eq!(stem.len(), 16);
         assert!(stem.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn writes_and_lists_autosaves_in_directory() {
+        let dir = temp_autosave_dir("list");
+        let design = test_design("Autosave Demo");
+
+        write_autosave_file(&dir, &design, Some("/tmp/demo.canopi")).unwrap();
+        let entries = list_autosaves_in_dir(&dir).unwrap();
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].name, "Autosave Demo");
+        assert!(entries[0].path.ends_with(".canopi"));
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn resolve_recover_path_rejects_paths_outside_autosave_dir() {
+        let dir = temp_autosave_dir("recover_guard");
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let outside = std::env::temp_dir().join(format!(
+            "canopi_outside_{}_{}.canopi",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos(),
+        ));
+        std::fs::write(&outside, "{}").unwrap();
+
+        let result = resolve_recover_path(&dir, outside.to_string_lossy().as_ref());
+
+        assert!(result.is_err());
+
+        let _ = std::fs::remove_file(outside);
+        let _ = std::fs::remove_dir_all(dir);
     }
 }
