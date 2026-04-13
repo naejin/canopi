@@ -233,7 +233,7 @@ checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
 name = "bindings-gen"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "common-types",
  "specta",
@@ -423,7 +423,7 @@ dependencies = [
 
 [[package]]
 name = "canopi-desktop"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "base64 0.22.1",
  "common-types",
@@ -556,7 +556,7 @@ dependencies = [
 
 [[package]]
 name = "common-types"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2195,7 +2195,7 @@ checksum = "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
 
 [[package]]
 name = "lib-c"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "cairo-rs 0.20.12",
  "inotify",
@@ -2204,11 +2204,11 @@ dependencies = [
 
 [[package]]
 name = "lib-cpp"
-version = "0.3.0"
+version = "0.4.0"
 
 [[package]]
 name = "lib-swift"
-version = "0.3.0"
+version = "0.4.0"
 
 [[package]]
 name = "libappindicator"
