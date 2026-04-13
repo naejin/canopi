@@ -30,6 +30,7 @@ import { SceneStore } from './scene'
 import {
   applySignalBackedSceneState,
   resetTransientRuntimeState,
+  syncCanvasSignalsFromDocument,
   syncCanvasSignalsFromScene,
   syncPresentationSignalsFromSceneSession,
 } from './scene-runtime/scene-sync'
@@ -94,6 +95,7 @@ export class SceneCanvasRuntime implements CanvasRuntime {
       resetTransientRuntimeState: () => this._resetTransientRuntimeState(),
       clearHoveredTargets: () => this._syncHoveredCanvasTargets(null),
       clearPanelOriginTargets: () => this._clearPanelOriginTargets(),
+      syncCanvasSignalsFromDocument: (file) => syncCanvasSignalsFromDocument(file),
       syncCanvasSignalsFromScene: () => this._syncCanvasSignalsFromScene(),
       invalidateScene: () => this._invalidate('scene'),
       incrementViewportRevision: () => {

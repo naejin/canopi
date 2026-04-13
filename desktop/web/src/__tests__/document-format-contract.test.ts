@@ -31,7 +31,7 @@ const RAW_DOCUMENT = {
 } as const
 
 describe('document format contract', () => {
-  it('normalizes raw loaded files into extra and preserves them through the scene codec', () => {
+  it('normalizes raw loaded files into extra while the scene codec keeps only scene-owned extra', () => {
     const normalized = normalizeLoadedDocument(RAW_DOCUMENT as unknown as CanopiFile)
 
     expect(normalized.extra).toEqual({
@@ -49,7 +49,7 @@ describe('document format contract', () => {
       { now },
     )
 
-    expect(roundTripped.extra).toEqual(normalized.extra)
+    expect(roundTripped.extra).toEqual({})
     expect(roundTripped.updated_at).toBe(now.toISOString())
   })
 })

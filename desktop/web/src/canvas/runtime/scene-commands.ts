@@ -1,32 +1,24 @@
 import type { ScenePersistedState, SceneSessionState, SceneStore } from './scene'
 
 export type SceneDiffKind =
-  | 'meta'
   | 'layers'
   | 'plants'
   | 'zones'
   | 'annotations'
   | 'groups'
   | 'plantSpeciesColors'
-  | 'extra'
+  | 'guides'
   | 'selection'
   | 'locks'
 
 type PersistedPatchKey =
-  | 'version'
-  | 'name'
-  | 'description'
-  | 'location'
-  | 'northBearingDeg'
   | 'plantSpeciesColors'
   | 'layers'
   | 'plants'
   | 'zones'
   | 'annotations'
   | 'groups'
-  | 'createdAt'
-  | 'updatedAt'
-  | 'extra'
+  | 'guides'
 
 export interface SceneCommandRuntime {
   readonly sceneStore: SceneStore
@@ -54,37 +46,23 @@ export interface SceneCommand {
 }
 
 const PATCH_KEYS: PersistedPatchKey[] = [
-  'version',
-  'name',
-  'description',
-  'location',
-  'northBearingDeg',
   'plantSpeciesColors',
   'layers',
   'plants',
   'zones',
   'annotations',
   'groups',
-  'createdAt',
-  'updatedAt',
-  'extra',
+  'guides',
 ]
 
 const DIFF_BY_KEY: Record<PersistedPatchKey, SceneDiffKind> = {
-  version: 'meta',
-  name: 'meta',
-  description: 'meta',
-  location: 'meta',
-  northBearingDeg: 'meta',
   plantSpeciesColors: 'plantSpeciesColors',
   layers: 'layers',
   plants: 'plants',
   zones: 'zones',
   annotations: 'annotations',
   groups: 'groups',
-  createdAt: 'meta',
-  updatedAt: 'meta',
-  extra: 'extra',
+  guides: 'guides',
 }
 
 export function createScenePatchCommand(

@@ -63,11 +63,6 @@ function projectWorldToExpectedMapScreen(
 
 function createScene(): ScenePersistedState {
   return {
-    version: 1,
-    name: 'Projection test',
-    description: null,
-    location: null,
-    northBearingDeg: 0,
     plantSpeciesColors: {},
     layers: [],
     plants: [
@@ -119,9 +114,7 @@ function createScene(): ScenePersistedState {
     ],
     annotations: [],
     groups: [],
-    createdAt: '2026-01-01T00:00:00.000Z',
-    updatedAt: '2026-01-01T00:00:00.000Z',
-    extra: {},
+    guides: [],
   }
 }
 

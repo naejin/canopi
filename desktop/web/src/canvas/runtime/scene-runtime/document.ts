@@ -1,7 +1,7 @@
 import type { CanopiFile } from '../../../types/design'
 import { guides } from '../../scene-metadata-state'
 import { lockedObjectIds, sceneEntityRevision } from '../../runtime-mirror-state'
-import type { ScenePersistedState, SceneStore } from '../scene'
+import type { SceneStore } from '../scene'
 import type { PlantPresentationBackfill } from './presentation'
 import {
   createScenePatchCommand,
@@ -23,6 +23,7 @@ interface SceneRuntimeDocumentBridgeOptions {
   resetTransientRuntimeState(): void
   clearHoveredTargets(): void
   clearPanelOriginTargets(): void
+  syncCanvasSignalsFromDocument(file: CanopiFile): void
   syncCanvasSignalsFromScene(): void
   invalidateScene(): void
   incrementViewportRevision(): void
@@ -36,6 +37,7 @@ export class SceneRuntimeDocumentBridge {
   private readonly _resetTransientRuntimeState: SceneRuntimeDocumentBridgeOptions['resetTransientRuntimeState']
   private readonly _clearHoveredTargets: SceneRuntimeDocumentBridgeOptions['clearHoveredTargets']
   private readonly _clearPanelOriginTargets: SceneRuntimeDocumentBridgeOptions['clearPanelOriginTargets']
+  private readonly _syncCanvasSignalsFromDocument: SceneRuntimeDocumentBridgeOptions['syncCanvasSignalsFromDocument']
   private readonly _syncCanvasSignalsFromScene: SceneRuntimeDocumentBridgeOptions['syncCanvasSignalsFromScene']
   private readonly _invalidateScene: SceneRuntimeDocumentBridgeOptions['invalidateScene']
   private readonly _incrementViewportRevision: SceneRuntimeDocumentBridgeOptions['incrementViewportRevision']
@@ -48,6 +50,7 @@ export class SceneRuntimeDocumentBridge {
     this._resetTransientRuntimeState = options.resetTransientRuntimeState
     this._clearHoveredTargets = options.clearHoveredTargets
     this._clearPanelOriginTargets = options.clearPanelOriginTargets
+    this._syncCanvasSignalsFromDocument = options.syncCanvasSignalsFromDocument
     this._syncCanvasSignalsFromScene = options.syncCanvasSignalsFromScene
     this._invalidateScene = options.invalidateScene
     this._incrementViewportRevision = options.incrementViewportRevision
@@ -61,6 +64,7 @@ export class SceneRuntimeDocumentBridge {
     this._incrementViewportRevision()
     this._history.clear()
     lockedObjectIds.value = new Set()
+    this._syncCanvasSignalsFromDocument(file)
     this._syncCanvasSignalsFromScene()
     this._invalidateScene()
     sceneEntityRevision.value += 1
@@ -73,6 +77,7 @@ export class SceneRuntimeDocumentBridge {
     this._sceneStore.hydrate(file)
     this._incrementViewportRevision()
     this._history.clear()
+    this._syncCanvasSignalsFromDocument(file)
     this._syncCanvasSignalsFromScene()
     this._invalidateScene()
     sceneEntityRevision.value += 1
@@ -81,28 +86,30 @@ export class SceneRuntimeDocumentBridge {
   serializeDocument(metadata: CanvasRuntimeDocumentMetadata, doc: CanopiFile): CanopiFile {
     const shouldSyncGuides =
       guides.value.length > 0
-      || Array.isArray(this._sceneStore.persisted.extra?.guides)
+      || this._sceneStore.persisted.guides.length > 0
 
-    this._sceneStore.updatePersisted((persisted) => {
-      persisted.name = metadata.name
-      persisted.description = metadata.description ?? doc.description ?? null
-      persisted.location = metadata.location
-        ? {
-            lat: metadata.location.lat,
-            lon: metadata.location.lon,
-            altitudeM: metadata.location.altitude_m ?? null,
-          }
-        : hydrateLocationFromDoc(doc.location ?? null, persisted.location)
-      persisted.northBearingDeg = metadata.northBearingDeg ?? doc.north_bearing_deg ?? persisted.northBearingDeg
-      persisted.createdAt = doc.created_at ?? persisted.createdAt
-      persisted.extra = { ...(doc.extra ?? persisted.extra ?? {}) }
-    })
     this._applySignalBackedSceneState({ recordHistory: false, syncGuides: shouldSyncGuides })
 
     const canvasOutput = this._sceneStore.toCanopiFile({ now: new Date() })
+    const nextExtra = { ...(doc.extra ?? {}) }
+    if (canvasOutput.extra && 'guides' in canvasOutput.extra) nextExtra.guides = canvasOutput.extra.guides
+    else delete nextExtra.guides
+
     return {
+      ...doc,
       ...canvasOutput,
-      description: metadata.description ?? doc.description ?? canvasOutput.description,
+      name: metadata.name,
+      description: metadata.description ?? doc.description ?? null,
+      location: metadata.location
+        ? {
+            lat: metadata.location.lat,
+            lon: metadata.location.lon,
+            altitude_m: metadata.location.altitude_m ?? null,
+          }
+        : doc.location ?? null,
+      north_bearing_deg: metadata.northBearingDeg ?? doc.north_bearing_deg ?? 0,
+      created_at: doc.created_at,
+      extra: nextExtra,
       consortiums: doc.consortiums,
       timeline: doc.timeline,
       budget: doc.budget,
@@ -175,17 +182,5 @@ export class SceneRuntimeDocumentBridge {
 
   clearHistory(): void {
     this._history.clear()
-  }
-}
-
-function hydrateLocationFromDoc(
-  location: CanopiFile['location'] | null,
-  fallback: ScenePersistedState['location'],
-) {
-  if (!location) return fallback ?? null
-  return {
-    lat: location.lat,
-    lon: location.lon,
-    altitudeM: location.altitude_m ?? null,
   }
 }

@@ -3,7 +3,7 @@ import { hydrateScenePersistedState, serializeScenePersistedState } from '../can
 import type { CanopiFile } from '../types/design'
 
 // Minimal fixture covering one of each entity type, with both populated and null optional fields.
-// Non-canvas sections (consortiums, timeline, budget) are empty -- the codec doesn't round-trip them.
+// Non-canvas sections are placeholders here because the scene codec no longer owns them.
 const FIXTURE: CanopiFile = {
   version: 2,
   name: 'Round-trip test',
@@ -78,19 +78,28 @@ const FIXTURE: CanopiFile = {
   budget: [],
   created_at: '2026-01-15T10:30:00.000Z',
   updated_at: '2026-02-20T14:45:00.000Z',
-  extra: { future_feature: { nested: true, count: 42 } },
+  extra: { guides: [{ id: 'guide-1', axis: 'h', position: 42 }], future_feature: { nested: true, count: 42 } },
 }
 
 describe('file format round-trip', () => {
-  it('canvas codec round-trips all entity types', () => {
+  it('canvas codec round-trips scene-owned entity fields and guide metadata', () => {
     const now = new Date('2026-04-09T12:00:00.000Z')
     const serialized = serializeScenePersistedState(
       hydrateScenePersistedState(FIXTURE),
       { now },
     )
 
-    // updated_at is regenerated from `now`; all other fields round-trip exactly
+    // updated_at is regenerated from `now`; document-owned metadata is emitted as placeholders.
     expect(serialized.updated_at).toBe(now.toISOString())
-    expect(serialized).toEqual({ ...FIXTURE, updated_at: now.toISOString() })
+    expect(serialized).toEqual({
+      ...FIXTURE,
+      name: 'Untitled',
+      description: null,
+      location: null,
+      north_bearing_deg: 0,
+      created_at: now.toISOString(),
+      updated_at: now.toISOString(),
+      extra: { guides: [{ id: 'guide-1', axis: 'h', position: 42 }] },
+    })
   })
 })

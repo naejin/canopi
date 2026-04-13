@@ -2,15 +2,14 @@ import type {
   Annotation,
   CanopiFile,
   Layer,
-  Location,
   ObjectGroup,
   PlacedPlant,
   Zone,
 } from '../../../types/design'
 import type {
   SceneAnnotationEntity,
+  SceneGuide,
   SceneLayerEntity,
-  SceneLocation,
   SceneObjectGroupEntity,
   ScenePersistedState,
   ScenePlantEntity,
@@ -24,20 +23,13 @@ export interface SceneSerializeOptions {
 
 export function hydrateScenePersistedState(file: CanopiFile): ScenePersistedState {
   return {
-    version: file.version,
-    name: file.name,
-    description: file.description,
-    location: hydrateLocation(file.location),
-    northBearingDeg: file.north_bearing_deg,
     plantSpeciesColors: { ...file.plant_species_colors },
     layers: file.layers.map(hydrateLayerEntity),
     plants: file.plants.map(hydratePlantEntity),
     zones: file.zones.map(hydrateZoneEntity),
     annotations: (file.annotations ?? []).map(hydrateAnnotationEntity),
     groups: (file.groups ?? []).map(hydrateGroupEntity),
-    createdAt: file.created_at,
-    updatedAt: file.updated_at,
-    extra: { ...(file.extra ?? {}) },
+    guides: hydrateGuides(file.extra?.guides),
   }
 }
 
@@ -48,11 +40,11 @@ export function serializeScenePersistedState(
   const now = options.now ?? new Date()
 
   return {
-    version: state.version,
-    name: state.name,
-    description: state.description,
-    location: serializeLocation(state.location),
-    north_bearing_deg: state.northBearingDeg,
+    version: 2,
+    name: 'Untitled',
+    description: null,
+    location: null,
+    north_bearing_deg: 0,
     plant_species_colors: { ...state.plantSpeciesColors },
     layers: state.layers.map(serializeLayerEntity),
     plants: state.plants.map(serializePlantEntity),
@@ -62,23 +54,22 @@ export function serializeScenePersistedState(
     groups: state.groups.map(serializeGroupEntity),
     timeline: [],
     budget: [],
-    created_at: state.createdAt,
+    created_at: now.toISOString(),
     updated_at: now.toISOString(),
-    extra: { ...state.extra },
+    extra: state.guides.length > 0 ? { guides: state.guides.map(cloneGuide) } : {},
   }
 }
 
 export function cloneScenePersistedState(state: ScenePersistedState): ScenePersistedState {
   return {
     ...state,
-    location: state.location ? { ...state.location } : null,
     plantSpeciesColors: { ...state.plantSpeciesColors },
     layers: state.layers.map(cloneLayerEntity),
     plants: state.plants.map(clonePlantEntity),
     zones: state.zones.map(cloneZoneEntity),
     annotations: state.annotations.map(cloneAnnotationEntity),
     groups: state.groups.map(cloneGroupEntity),
-    extra: { ...state.extra },
+    guides: state.guides.map(cloneGuide),
   }
 }
 
@@ -87,24 +78,6 @@ export function cloneSceneSessionState(state: SceneSessionState): SceneSessionSt
     ...state,
     selectedEntityIds: new Set(state.selectedEntityIds),
     viewport: { ...state.viewport },
-  }
-}
-
-function hydrateLocation(location: Location | null): SceneLocation | null {
-  if (!location) return null
-  return {
-    lat: location.lat,
-    lon: location.lon,
-    altitudeM: location.altitude_m,
-  }
-}
-
-function serializeLocation(location: SceneLocation | null): Location | null {
-  if (!location) return null
-  return {
-    lat: location.lat,
-    lon: location.lon,
-    altitude_m: location.altitudeM,
   }
 }
 
@@ -274,6 +247,28 @@ function cloneGroupEntity(group: SceneObjectGroupEntity): SceneObjectGroupEntity
   }
 }
 
+function hydrateGuides(raw: unknown): SceneGuide[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter((guide): guide is SceneGuide => {
+      if (!guide || typeof guide !== 'object') return false
+      const candidate = guide as Partial<SceneGuide>
+      return (
+        typeof candidate.id === 'string'
+        && (candidate.axis === 'h' || candidate.axis === 'v')
+        && typeof candidate.position === 'number'
+      )
+    })
+    .map(cloneGuide)
+}
+
+function cloneGuide(guide: SceneGuide): SceneGuide {
+  return {
+    id: guide.id,
+    axis: guide.axis,
+    position: guide.position,
+  }
+}
 
 function clonePoint(point: { x: number; y: number }): { x: number; y: number } {
   return {
