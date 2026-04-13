@@ -9,7 +9,7 @@ vi.mock('../ipc/community', () => ({
   downloadTemplate: mocks.downloadTemplate,
 }))
 
-vi.mock('../state/document-actions', () => ({
+vi.mock('../app/document-session/actions', () => ({
   openDesignAsTemplate: mocks.openDesignAsTemplate,
 }))
 

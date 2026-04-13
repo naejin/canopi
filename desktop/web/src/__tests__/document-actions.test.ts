@@ -71,7 +71,7 @@ import {
   openDesignAsTemplate,
   openDesignFromPath,
   saveCurrentDesign,
-} from '../state/document-actions'
+} from '../app/document-session/actions'
 import type { CanopiFile } from '../types/design'
 
 function makeFile(name: string): CanopiFile {

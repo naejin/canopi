@@ -1,4 +1,4 @@
-import { openDesignAsTemplate } from './document-actions'
+import { openDesignAsTemplate } from '../app/document-session/actions'
 import {
   selectedTemplate,
   templateImportError,
