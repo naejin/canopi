@@ -106,10 +106,10 @@
 }
 
 .basemapFeedback {
-  --basemap-status-left: 260px; /* right of 240px scale-bar canvas + gap */
+  --ruler-size: 24px;
   position: absolute;
-  bottom: var(--space-4);
-  left: var(--basemap-status-left);
+  top: calc(var(--ruler-size) + var(--space-1));
+  left: calc(var(--ruler-size) + var(--space-2));
   z-index: 20;
   display: inline-flex;
   align-items: center;
