@@ -74,6 +74,21 @@ describe('plant DB controller lifecycle', () => {
     expect(mocks.searchSpecies).not.toHaveBeenCalled()
   })
 
+  it('surfaces explicit unavailable errors when search short-circuits in degraded mode', async () => {
+    const plantDb = await import('../app/plant-browser')
+    ;(mocks.searchSpecies as ReturnType<typeof vi.fn>)
+      .mockRejectedValueOnce(new Error('Plant database unavailable: bundled plant database is missing'))
+
+    const dispose = plantDb.mountPlantDbController()
+    await flushMicrotasks()
+
+    expect(plantDb.searchError.value).toBe(
+      'Plant database unavailable: bundled plant database is missing',
+    )
+    expect(plantDb.isSearching.value).toBe(false)
+    dispose()
+  })
+
   it('increments result-set revision on first-page searches but not pagination appends', async () => {
     const plantDb = await import('../app/plant-browser')
     const dispose = plantDb.mountPlantDbController()

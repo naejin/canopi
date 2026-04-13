@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { plantDbStatus } from '../app/health/state';
+import { plantDbUnavailableMessage } from './plant-db-errors';
 
 export interface CompatibilityResult {
   species_id: string;
@@ -35,7 +36,8 @@ export async function checkPlantCompatibility(
   targetHardiness: number,
   locale = 'en',
 ): Promise<CompatibilityResult[]> {
-  if (isDegraded() || canonicalNames.length === 0) return [];
+  if (canonicalNames.length === 0) return [];
+  if (isDegraded()) throw new Error(plantDbUnavailableMessage(plantDbStatus.value));
   return invoke<CompatibilityResult[]>('check_plant_compatibility', {
     canonicalNames,
     targetHardiness,
@@ -53,7 +55,7 @@ export async function suggestReplacements(
   limit = 5,
   locale = 'en',
 ): Promise<ReplacementSuggestion[]> {
-  if (isDegraded()) return [];
+  if (isDegraded()) throw new Error(plantDbUnavailableMessage(plantDbStatus.value));
   return invoke<ReplacementSuggestion[]>('suggest_replacements', {
     canonicalName,
     targetHardiness,

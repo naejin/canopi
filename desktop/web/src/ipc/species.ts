@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { plantDbStatus } from '../app/health/state';
+import { plantDbUnavailableMessage } from './plant-db-errors';
 import type {
   SpeciesListItem,
   SpeciesDetail,
@@ -28,7 +29,7 @@ export async function searchSpecies(
   locale = 'en',
   includeTotal = true,
 ): Promise<PaginatedResult<SpeciesListItem>> {
-  if (isDegraded()) return { items: [], next_cursor: null, total_estimate: 0 };
+  if (isDegraded()) throw new Error(plantDbUnavailableMessage(plantDbStatus.value));
   return invoke('search_species', {
     text,
     filters,
@@ -44,7 +45,7 @@ export async function getSpeciesDetail(
   canonicalName: string,
   locale = 'en',
 ): Promise<SpeciesDetail> {
-  if (isDegraded()) throw new Error('Plant database unavailable');
+  if (isDegraded()) throw new Error(plantDbUnavailableMessage(plantDbStatus.value));
   return invoke('get_species_detail', { canonicalName, locale });
 }
 

@@ -34,7 +34,7 @@ describe("bootstrapShell", () => {
   it("boots once and hydrates health plus settings", async () => {
     mocks.invoke.mockImplementation((command: string) => {
       if (command === "get_health") {
-        return Promise.resolve({ plant_db: "degraded" });
+        return Promise.resolve({ plant_db: "missing" });
       }
       if (command === "get_settings") {
         return Promise.resolve({
@@ -71,7 +71,7 @@ describe("bootstrapShell", () => {
     expect(mocks.invoke).toHaveBeenCalledTimes(2);
     expect(mocks.invoke).toHaveBeenNthCalledWith(1, "get_health");
     expect(mocks.invoke).toHaveBeenNthCalledWith(2, "get_settings");
-    expect(healthState.plantDbStatus.value).toBe("degraded");
+    expect(healthState.plantDbStatus.value).toBe("missing");
     expect(settingsState.locale.value).toBe("fr");
     expect(settingsState.theme.value).toBe("dark");
     expect(settingsState.autoSaveIntervalMs.value).toBe(15_000);

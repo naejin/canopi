@@ -62,4 +62,23 @@ describe('CanvasSpeciesCache', () => {
     expect(mocks.getSpeciesBatch).toHaveBeenCalledTimes(1)
     expect(mocks.getFlowerColorBatch).toHaveBeenCalledTimes(1)
   })
+
+  it('seeds placeholder entries when plant db is unavailable', async () => {
+    mocks.getSpeciesBatch.mockRejectedValueOnce(
+      new Error('Plant database unavailable: bundled plant database is missing'),
+    )
+
+    const cache = new CanvasSpeciesCache()
+    const loaded = await cache.ensureEntries(['Malus domestica'], 'en')
+    const secondLoad = await cache.ensureEntries(['Malus domestica'], 'en')
+
+    expect(loaded).toBe(true)
+    expect(secondLoad).toBe(false)
+    expect(mocks.getSpeciesBatch).toHaveBeenCalledTimes(1)
+    expect(cache.getCache().get('Malus domestica')).toMatchObject({
+      canonical_name: 'Malus domestica',
+      resolved_flower_color: null,
+      resolved_flower_color_source: 'none',
+    })
+  })
 })
