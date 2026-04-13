@@ -32,7 +32,7 @@ import { hoveredCanvasTargets, hoveredPanelTargets } from '../app/panel-targets/
 import {
   plantNamesRevision,
   sceneEntityRevision,
-} from '../state/canvas'
+} from '../canvas/runtime-mirror-state'
 import { consortiumTarget, speciesTarget } from '../panel-targets'
 import type { CanopiFile, PlacedPlant } from '../types/design'
 

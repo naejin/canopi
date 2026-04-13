@@ -51,9 +51,7 @@ vi.mock('../i18n', () => ({
   },
 }))
 
-import {
-  lockedObjectIds,
-} from '../state/canvas'
+import { lockedObjectIds } from '../canvas/runtime-mirror-state'
 import { activeTool, selectedObjectIds } from '../canvas/session-state'
 import {
   currentDesign,

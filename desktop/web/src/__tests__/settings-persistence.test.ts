@@ -14,11 +14,9 @@ import {
   hillshadeVisible,
   layerOpacity,
   layerVisibility,
-} from '../app/canvas-settings/signals'
-import {
   snapToGridEnabled,
   snapToGuidesEnabled,
-} from '../state/canvas'
+} from '../app/canvas-settings/signals'
 import { autoSaveIntervalMs, locale, theme } from '../app/settings/state'
 import {
   flushQueuedSettingsPersist,

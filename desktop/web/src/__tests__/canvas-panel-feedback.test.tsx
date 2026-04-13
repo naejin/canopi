@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { hillshadeVisible, layerVisibility } from '../app/canvas-settings/signals'
 import { CanvasPanel } from '../components/panels/CanvasPanel'
 import { currentDesign } from '../state/design'
-import { northBearingDeg } from '../state/canvas'
+import { northBearingDeg } from '../canvas/scene-metadata-state'
 import { locale } from '../app/settings/state'
 
 let mockBasemapState: {

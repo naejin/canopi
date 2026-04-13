@@ -16,6 +16,10 @@ export const layerVisibility = signal<Record<string, boolean>>(createDefaultLaye
 
 export const layerPanelOpen = signal<boolean>(true)
 export const activeLayerName = signal<string>('zones')
+export const snapToGridEnabled = signal<boolean>(false)
+export const gridVisible = signal<boolean>(true)
+export const rulersVisible = signal<boolean>(true)
+export const snapToGuidesEnabled = signal<boolean>(true)
 
 export function createDefaultLayerLockState(): Record<string, boolean> {
   return {

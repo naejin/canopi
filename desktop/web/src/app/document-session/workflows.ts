@@ -2,7 +2,7 @@ import { effect } from "@preact/signals";
 import { currentCanvasSession } from "../../canvas/session";
 import { STRATA_ROWS } from "../../canvas/consortium-renderer";
 import { consortiumTarget, getConsortiumCanonicalName } from "../../panel-targets";
-import { sceneEntityRevision } from "../../state/canvas";
+import { sceneEntityRevision } from "../../canvas/runtime-mirror-state";
 import { currentDesign } from "../../state/design";
 import { mutateCurrentDesign } from "../document/controller";
 

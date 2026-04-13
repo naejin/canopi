@@ -1,14 +1,11 @@
 import { batch } from '@preact/signals'
 import { layerLockState, layerOpacity, layerVisibility } from '../../../app/canvas-settings/signals'
-import {
-  guides,
-  lockedObjectIds,
-  northBearingDeg,
-} from '../../../state/canvas'
 import { plantColorMenuOpen } from '../../plant-color-menu-state'
 import { syncPlantSpeciesColorDefaults } from '../../plant-species-color-defaults'
 import type { CanopiFile } from '../../../types/design'
 import { plantColorByAttr, plantSizeMode } from '../../plant-display-state'
+import { guides, northBearingDeg } from '../../scene-metadata-state'
+import { lockedObjectIds } from '../../runtime-mirror-state'
 import { clearCanvasSelection, setCanvasSelection, setCanvasTool } from '../../session-state'
 import { cloneLayerWithSignals } from '../scene-visuals'
 import type { SceneCommandSnapshot } from '../scene-commands'

@@ -2,6 +2,7 @@ import { batch } from '@preact/signals'
 import {
   activeLayerName,
   contourIntervalMeters,
+  gridVisible,
   hillshadeOpacity,
   hillshadeVisible,
   layerLockState,
@@ -9,7 +10,6 @@ import {
   layerPanelOpen,
   layerVisibility,
 } from './signals'
-import { gridVisible } from '../../state/canvas'
 import {
   type BottomPanelTab,
   bottomPanelHeight,

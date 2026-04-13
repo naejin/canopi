@@ -5,7 +5,7 @@ import {
   gridVisible,
   rulersVisible,
   snapToGridEnabled,
-} from '../../state/canvas'
+} from '../../app/canvas-settings/signals'
 import { locale } from '../../app/settings/state'
 import { plantColorMenuOpen } from '../../canvas/plant-color-menu-state'
 import { t } from '../../i18n'

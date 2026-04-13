@@ -3,6 +3,8 @@ import type { Settings } from '../../types/settings'
 import { setSettings } from '../../ipc/settings'
 import {
   contourIntervalMeters,
+  snapToGridEnabled,
+  snapToGuidesEnabled,
   hillshadeOpacity,
   hillshadeVisible,
   layerOpacity,
@@ -14,7 +16,6 @@ import {
   bottomPanelOpen,
   bottomPanelTab,
 } from '../canvas-settings/bottom-panel-state'
-import { snapToGridEnabled, snapToGuidesEnabled } from '../../state/canvas'
 import {
   autoSaveIntervalMs,
   locale,

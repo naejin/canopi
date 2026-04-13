@@ -1,6 +1,6 @@
 import { currentDesign } from '../../state/design'
 import { t } from '../../i18n'
-import { northBearingDeg } from '../../state/canvas'
+import { northBearingDeg } from '../../canvas/scene-metadata-state'
 import styles from './CompassOverlay.module.css'
 
 export function CompassOverlay() {

@@ -8,14 +8,12 @@ import {
 } from '../../app/panel-targets/state'
 import {
   gridVisible,
-  guides,
-  lockedObjectIds,
-  plantNamesRevision,
   rulersVisible,
-  sceneEntityRevision,
   snapToGridEnabled,
-} from '../../state/canvas'
-import { layerVisibility } from '../../app/canvas-settings/signals'
+  layerVisibility,
+} from '../../app/canvas-settings/signals'
+import { guides } from '../scene-metadata-state'
+import { lockedObjectIds, plantNamesRevision, sceneEntityRevision } from '../runtime-mirror-state'
 import type { ColorByAttribute, PlantSizeMode } from '../plant-display-state'
 import type { CanopiFile, PanelTarget, PlacedPlant } from '../../types/design'
 import type { SelectedPlantColorContext } from '../plant-color-context'

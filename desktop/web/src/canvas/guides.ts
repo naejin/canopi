@@ -1,4 +1,5 @@
-import { guides, snapToGuidesEnabled } from '../state/canvas'
+import { snapToGuidesEnabled } from '../app/canvas-settings/signals'
+import { guides } from './scene-metadata-state'
 
 // ---------------------------------------------------------------------------
 // Guide lines — dragged from rulers, persisted in .canopi `extra.guides`

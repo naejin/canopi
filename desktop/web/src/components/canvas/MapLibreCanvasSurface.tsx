@@ -35,10 +35,8 @@ import {
   layerOpacity,
   layerVisibility,
 } from '../../app/canvas-settings/signals'
-import {
-  northBearingDeg,
-  sceneEntityRevision,
-} from '../../state/canvas'
+import { northBearingDeg } from '../../canvas/scene-metadata-state'
+import { sceneEntityRevision } from '../../canvas/runtime-mirror-state'
 import { hoveredPanelTargets, selectedPanelTargets } from '../../app/panel-targets/state'
 import { theme } from '../../app/settings/state'
 import { currentDesign } from '../../state/design'

@@ -6,11 +6,11 @@ vi.mock('../../ipc/species', () => ({
   getCommonNames: vi.fn(async () => ({})),
 }))
 import {
-  guides,
-  lockedObjectIds,
   snapToGridEnabled,
-} from '../../state/canvas'
+} from '../../app/canvas-settings/signals'
 import { layerOpacity, layerVisibility } from '../../app/canvas-settings/signals'
+import { guides } from '../scene-metadata-state'
+import { lockedObjectIds } from '../runtime-mirror-state'
 import { plantColorMenuOpen } from '../plant-color-menu-state'
 import { plantColorByAttr, plantSizeMode } from '../plant-display-state'
 import { plantStampSpecies } from '../plant-tool-state'

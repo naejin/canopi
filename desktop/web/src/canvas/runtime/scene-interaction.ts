@@ -1,14 +1,14 @@
 import { computeSelectionRect } from '../operations'
 import { getCanvasTool } from '../session-state'
 import {
-  guides,
-  lockedObjectIds,
   snapToGridEnabled,
   snapToGuidesEnabled,
-} from '../../state/canvas'
+} from '../../app/canvas-settings/signals'
 import { plantStampSpecies } from '../plant-tool-state'
 import { gridInterval, snapToGrid } from '../grid'
 import { snapToGuides } from '../guides'
+import { guides } from '../scene-metadata-state'
+import { lockedObjectIds } from '../runtime-mirror-state'
 import type { SceneStore, ScenePoint } from './scene'
 import type { CameraController } from './camera'
 import type { SceneCommandSnapshot } from './scene-commands'
