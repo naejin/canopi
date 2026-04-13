@@ -93,4 +93,26 @@ describe('plant media controller', () => {
     expect(controller.loadedSrc.value).toBe(null)
     expect(controller.loadFailed.value).toBe(true)
   })
+
+  it('ignores in-flight image responses after disposal', async () => {
+    const deferredPath = createDeferred<string>()
+    const loadImages = vi.fn().mockResolvedValue([
+      { url: 'https://example.com/a.jpg', source: 'Example A' },
+    ])
+    const loadCachedImagePath = vi.fn().mockReturnValue(deferredPath.promise)
+    const controller = createPlantMediaController({
+      loadImages,
+      loadCachedImagePath,
+      toAssetUrl: (path) => `asset://${path}`,
+    })
+
+    controller.setCanonicalName('Lavandula angustifolia')
+    await flushMicrotasks()
+    controller.dispose()
+    deferredPath.resolve('/cache/a.jpg')
+    await flushMicrotasks()
+
+    expect(controller.loadedSrc.value).toBe(null)
+    expect(controller.loading.value).toBe(false)
+  })
 })

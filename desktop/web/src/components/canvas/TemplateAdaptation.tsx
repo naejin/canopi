@@ -150,7 +150,7 @@ export function TemplateAdaptation({
 
   useEffect(() => {
     controller.setRequest(canonicalNames, targetHardiness, locale.value);
-  }, [canonicalNames, targetHardiness, controller]);
+  }, [canonicalNames, targetHardiness, controller, locale.value]);
 
   useEffect(() => () => controller.dispose(), [controller]);
 

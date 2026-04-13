@@ -2,12 +2,13 @@ import { useSignal, useSignalEffect } from '@preact/signals';
 import { useEffect, useMemo } from 'preact/hooks';
 import { t } from '../../i18n';
 import { locale } from '../../app/settings/state';
-import { createPlantDetailController } from '../../app/plant-detail';
 import {
-  selectedCanonicalName,
-  favoriteNames,
-  toggleFavoriteAction,
-} from '../../app/plant-browser';
+  closePlantDetail,
+  createPlantDetailController,
+  isPlantDetailFavorite,
+  resolvePlantDetailName,
+  togglePlantDetailFavorite,
+} from '../../app/plant-detail';
 import { AttributeGrid } from './AttributeGrid';
 import { UsesSection } from './UsesSection';
 import { RiskDistributionSection } from './RiskDistributionSection';
@@ -30,20 +31,20 @@ export function PlantDetailCard({ canonicalName }: Props) {
   const expanded = useSignal<Set<string>>(new Set());
 
   useSignalEffect(() => {
-    detailController.setTarget(selectedCanonicalName.value ?? canonicalName, locale.value);
+    detailController.setTarget(resolvePlantDetailName(canonicalName), locale.value);
   });
 
   useEffect(() => () => detailController.dispose(), [detailController]);
 
-  const effectiveName = selectedCanonicalName.value ?? canonicalName;
-  const isFavorite = favoriteNames.value.includes(effectiveName);
+  const effectiveName = resolvePlantDetailName(canonicalName);
+  const isFavorite = isPlantDetailFavorite(effectiveName);
 
   const handleBack = () => {
-    selectedCanonicalName.value = null;
+    closePlantDetail();
   };
 
   const handleFav = () => {
-    void toggleFavoriteAction(effectiveName);
+    void togglePlantDetailFavorite(effectiveName);
   };
 
   const handleRetry = () => {

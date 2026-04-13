@@ -8,6 +8,10 @@ export interface BudgetExportRow {
   count: number
 }
 
+export function isBudgetExportCancelled(error: unknown): boolean {
+  return error instanceof Error && error.message === 'Dialog cancelled'
+}
+
 export async function exportBudgetCsv(
   rows: readonly BudgetExportRow[],
   options: {

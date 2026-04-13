@@ -13,7 +13,7 @@ import {
   setSelectedPanelTargets,
 } from '../../app/panel-targets/coordinator'
 import { setPlantBudgetPrice, setBudgetCurrency } from '../../app/budget/controller'
-import { exportBudgetCsv } from '../../app/budget/export'
+import { exportBudgetCsv, isBudgetExportCancelled } from '../../app/budget/export'
 import { Dropdown } from '../shared/Dropdown'
 import { CURRENCY_ITEMS } from './budget-currencies'
 import { countPlants, buildPriceMap, formatCurrency } from './budget-helpers'
@@ -122,8 +122,9 @@ export function BudgetTab() {
         lineItemPriceMap: priceMap,
         grandTotal,
       })
-    } catch {
-      // User cancelled export.
+    } catch (error) {
+      if (isBudgetExportCancelled(error)) return
+      console.error('Budget export failed:', error)
     }
   }
 

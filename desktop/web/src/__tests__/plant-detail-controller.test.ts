@@ -93,4 +93,27 @@ describe('plant detail controller', () => {
     expect(controller.detail.value?.canonical_name).toBe('Lavandula angustifolia')
     expect(controller.secondaryNames.value).toEqual([{ name: 'Lavande', locale: 'fr' }])
   })
+
+  it('reloads when the locale changes for the same canonical name and ignores updates after disposal', async () => {
+    const deferredDetail = createDeferred<import('../types/species').SpeciesDetail>()
+    const loadDetail = vi.fn()
+      .mockResolvedValueOnce(createDetail('Lavandula angustifolia', 'Lavender'))
+      .mockReturnValueOnce(deferredDetail.promise)
+    const loadLocaleCommonNames = vi.fn()
+      .mockResolvedValueOnce([{ name: 'Lavender', locale: 'en' }])
+      .mockResolvedValueOnce([{ name: 'Lavande', locale: 'fr' }])
+    const controller = createPlantDetailController({ loadDetail, loadLocaleCommonNames })
+
+    controller.setTarget('Lavandula angustifolia', 'en')
+    await flushMicrotasks()
+
+    controller.setTarget('Lavandula angustifolia', 'fr')
+    controller.dispose()
+    deferredDetail.resolve(createDetail('Lavandula angustifolia', 'Lavande'))
+    await flushMicrotasks()
+
+    expect(loadDetail).toHaveBeenNthCalledWith(1, 'Lavandula angustifolia', 'en')
+    expect(loadDetail).toHaveBeenNthCalledWith(2, 'Lavandula angustifolia', 'fr')
+    expect(controller.detail.value).toBe(null)
+  })
 })
