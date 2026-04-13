@@ -1,8 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'preact/hooks';
+import { useEffect, useMemo } from 'preact/hooks';
 import { t } from '../../i18n';
-import { convertFileSrc } from '@tauri-apps/api/core';
-import { getCachedImagePath, getSpeciesImages } from '../../ipc/species';
-import type { SpeciesImage } from '../../types/species';
+import { createPlantMediaController } from '../../app/plant-detail';
 import styles from './PhotoCarousel.module.css';
 
 const IMAGE_SOURCE_DISPLAY: Record<string, string> = {
@@ -15,121 +13,20 @@ interface Props {
 }
 
 export function PhotoCarousel({ canonicalName }: Props) {
-  const [images, setImages] = useState<SpeciesImage[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
-  const [imageReady, setImageReady] = useState(false);
-  const [loadFailed, setLoadFailed] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const media = useMemo(() => createPlantMediaController(), []);
 
-  // Monotonic counter — guards against stale setState from slow image cache responses
-  const activeImageRequestRef = useRef(0);
-
-  // Fetch image list when species changes
   useEffect(() => {
-    activeImageRequestRef.current += 1;
-    setImages([]);
-    setCurrentIndex(0);
-    setLoadedSrc(null);
-    setImageReady(false);
-    setLoadFailed(false);
-    setLoading(true);
+    media.setCanonicalName(canonicalName);
+  }, [canonicalName, media]);
 
-    let cancelled = false;
+  useEffect(() => () => media.dispose(), [media]);
 
-    getSpeciesImages(canonicalName)
-      .then((imgs) => {
-        if (cancelled) return;
-        setImages(imgs);
-        setLoading(false);
-      })
-      .catch(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => { cancelled = true; };
-  }, [canonicalName]);
-
-  // Load current image through cache
-  useEffect(() => {
-    if (images.length === 0) return;
-    const img = images[currentIndex];
-    if (!img) return;
-
-    let cancelled = false;
-    setLoadedSrc(null);
-    setImageReady(false);
-    setLoadFailed(false);
-
-    const requestId = activeImageRequestRef.current + 1;
-    activeImageRequestRef.current = requestId;
-    const preloadIndices = [currentIndex - 1, currentIndex + 1]
-      .filter((index) => index >= 0 && index < images.length);
-    const preloadUrls = new Set(
-      preloadIndices.flatMap((index) => {
-        const preloadImage = images[index];
-        return preloadImage ? [preloadImage.url] : [];
-      }),
-    );
-
-    getCachedImagePath(img.url)
-      .then((cachePath) => {
-        if (
-          !cancelled
-          && activeImageRequestRef.current === requestId
-        ) {
-          setLoadedSrc(convertFileSrc(cachePath));
-        }
-      })
-      .catch(() => {
-        // Fallback: try loading URL directly
-        if (
-          !cancelled
-          && activeImageRequestRef.current === requestId
-        ) {
-          setLoadedSrc(img.url);
-        }
-      });
-
-    for (const preloadUrl of preloadUrls) {
-      void getCachedImagePath(preloadUrl).catch(() => {
-        // Best-effort warmup only — keep the current image load path isolated.
-      });
-    }
-
-    return () => { cancelled = true; };
-  }, [images, currentIndex]);
-
-  const goNext = useCallback(() => {
-    setCurrentIndex((i) => (i + 1) % images.length);
-  }, [images.length]);
-
-  const goPrev = useCallback(() => {
-    setCurrentIndex((i) => (i - 1 + images.length) % images.length);
-  }, [images.length]);
-
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.key === 'ArrowLeft') goPrev();
-    else if (e.key === 'ArrowRight') goNext();
-  }, [goPrev, goNext]);
-
+  const images = media.images.value;
+  const currentIndex = media.currentIndex.value;
   const currentImage = images[currentIndex];
-  const handleImageError = () => {
-    if (!currentImage) return;
-    if (loadedSrc !== currentImage.url) {
-      setLoadedSrc(currentImage.url);
-      setImageReady(false);
-      setLoadFailed(false);
-      return;
-    }
-
-    setLoadedSrc(null);
-    setImageReady(false);
-    setLoadFailed(true);
-  };
 
   // No images available
-  if (!loading && images.length === 0) {
+  if (!media.loading.value && images.length === 0) {
     return (
       <div className={styles.placeholder}>
         <svg className={styles.placeholderIcon} width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
@@ -142,7 +39,7 @@ export function PhotoCarousel({ canonicalName }: Props) {
   }
 
   // Still loading image list
-  if (loading) {
+  if (media.loading.value) {
     return (
       <div className={styles.imageContainer}>
         <div className={styles.loading} />
@@ -153,21 +50,24 @@ export function PhotoCarousel({ canonicalName }: Props) {
   return (
     <div
       className={styles.carousel}
-      onKeyDown={handleKeyDown}
+      onKeyDown={(event) => {
+        if (event.key === 'ArrowLeft') media.goPrev();
+        else if (event.key === 'ArrowRight') media.goNext();
+      }}
       role="region"
       aria-label={t('plantDetail.photos')}
     >
       <div className={styles.imageContainer}>
-        {loadedSrc ? (
+        {media.loadedSrc.value ? (
           <img
-            src={loadedSrc}
+            src={media.loadedSrc.value}
             alt={canonicalName}
-            className={`${styles.image} ${imageReady ? styles.imageLoaded : ''}`}
+            className={`${styles.image} ${media.imageReady.value ? styles.imageLoaded : ''}`}
             loading="lazy"
-            onLoad={() => setImageReady(true)}
-            onError={handleImageError}
+            onLoad={() => media.markImageLoaded()}
+            onError={() => media.handleImageError()}
           />
-        ) : loadFailed ? (
+        ) : media.loadFailed.value ? (
           <div className={styles.inlinePlaceholder}>
             <svg className={styles.placeholderIcon} width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
               <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -180,7 +80,7 @@ export function PhotoCarousel({ canonicalName }: Props) {
         )}
 
         {/* Source badge */}
-        {currentImage?.source && imageReady && (
+        {currentImage?.source && media.imageReady.value && (
           <span className={styles.sourceBadge}>
             {IMAGE_SOURCE_DISPLAY[currentImage.source] ?? currentImage.source}
           </span>
@@ -192,7 +92,7 @@ export function PhotoCarousel({ canonicalName }: Props) {
             <button
               type="button"
               className={`${styles.navBtn} ${styles.navPrev}`}
-              onClick={goPrev}
+              onClick={() => media.goPrev()}
               aria-label={t('plantDetail.photoPrev')}
             >
               &#x2039;
@@ -200,7 +100,7 @@ export function PhotoCarousel({ canonicalName }: Props) {
             <button
               type="button"
               className={`${styles.navBtn} ${styles.navNext}`}
-              onClick={goNext}
+              onClick={() => media.goNext()}
               aria-label={t('plantDetail.photoNext')}
             >
               &#x203A;
@@ -217,7 +117,7 @@ export function PhotoCarousel({ canonicalName }: Props) {
               key={i}
               type="button"
               className={`${styles.dot} ${i === currentIndex ? styles.dotActive : ''}`}
-              onClick={() => setCurrentIndex(i)}
+              onClick={() => media.setCurrentIndex(i)}
               role="tab"
               aria-selected={i === currentIndex}
               aria-label={t('plantDetail.photoCount', { current: i + 1, total: images.length })}
