@@ -1,5 +1,6 @@
 pub mod community;
 pub mod adaptation;
+pub mod content;
 pub mod design_files;
 pub mod export;
 pub mod geocoding;

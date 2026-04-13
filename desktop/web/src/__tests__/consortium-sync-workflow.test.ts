@@ -2,7 +2,7 @@ import { beforeEach, afterEach, describe, expect, it } from 'vitest'
 import { currentDesign, nonCanvasRevision } from '../state/design'
 import { sceneEntityRevision } from '../state/canvas'
 import { currentCanvasSession } from '../canvas/session'
-import { installConsortiumSync, disposeConsortiumSync } from '../state/consortium-sync-workflow'
+import { installConsortiumSync, disposeConsortiumSync } from '../app/document-session/workflows'
 import type { CanopiFile, PlacedPlant } from '../types/design'
 import { consortiumTarget, getConsortiumCanonicalName } from '../panel-targets'
 
