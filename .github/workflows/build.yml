@@ -129,7 +129,7 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            bundle_args: --bundles deb
+            bundle_args: --bundles appimage
           - os: macos-14
             target: aarch64-apple-darwin
             bundle_args: ""
@@ -187,7 +187,6 @@ jobs:
         with:
           name: canopi-${{ matrix.target }}
           path: |
-            target/${{ matrix.target }}/release/bundle/**/*.deb
             target/${{ matrix.target }}/release/bundle/**/*.AppImage
             target/${{ matrix.target }}/release/bundle/**/*.dmg
             target/${{ matrix.target }}/release/bundle/**/*.msi

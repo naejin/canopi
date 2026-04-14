@@ -432,6 +432,7 @@
     "worldMap": "Go to World Map",
     "learning": "Go to Learning",
     "toggleTheme": "Toggle Theme",
+    "checkForUpdates": "Check for Updates",
     "commandPalette": "Command Palette",
     "searchPlaceholder": "Type a command...",
     "noResults": "No commands found"
@@ -754,6 +755,7 @@
     "file": "File",
     "edit": "Edit",
     "view": "View",
+    "help": "Help",
     "file.new": "New Design",
     "file.open": "Open Design",
     "file.save": "Save",
@@ -763,10 +765,33 @@
     "edit.redo": "Redo",
     "view.zoomIn": "Zoom In",
     "view.zoomOut": "Zoom Out",
-    "view.fitToContent": "Fit to Content"
+    "view.fitToContent": "Fit to Content",
+    "help.checkForUpdates": "Check for Updates"
   },
   "titleBar": {
     "unsavedChanges": "Unsaved changes"
+  },
+  "updater": {
+    "dialogTitle": "Updates",
+    "checking": "Checking for updates…",
+    "available": "Canopi {{version}} is available",
+    "install": "Install",
+    "installAfterSaving": "Install after saving",
+    "later": "Later",
+    "downloading": "Downloading update…",
+    "downloadProgress": "Downloading {{downloaded}} of {{total}}",
+    "readyToRestart": "Canopi {{version}} is ready to restart",
+    "restart": "Restart",
+    "retry": "Retry",
+    "errorPrefix": "Update failed",
+    "upToDateMessage": "Canopi is up to date.",
+    "saveBeforeInstallTitle": "Save changes before installing",
+    "saveBeforeInstallMessage": "Save or close your current document before installing this update.",
+    "saveBeforeInstallInline": "Save your current document before installing this update.",
+    "saveBeforeRestartTitle": "Save changes before restarting",
+    "saveBeforeRestartMessage": "Save or close your current document before restarting into the updated version.",
+    "saveBeforeRestartInline": "Save your current document before restarting into the updated version.",
+    "notConfigured": "Updater is not configured for this build."
   },
   "window": {
     "minimize": "Minimize",

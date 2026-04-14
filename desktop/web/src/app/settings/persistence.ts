@@ -19,6 +19,7 @@ import {
 import {
   autoSaveIntervalMs,
   basemapStyle,
+  checkUpdatesEnabled,
   locale,
   theme,
 } from './state'
@@ -42,6 +43,7 @@ export function setBootstrappedSettings(settings: Settings): void {
     locale.value = settings.locale
     theme.value = settings.theme === 'dark' ? 'dark' : 'light'
     basemapStyle.value = normalizeBasemapStyle(settings.map_style)
+    checkUpdatesEnabled.value = settings.check_updates
     snapToGridEnabled.value = settings.snap_to_grid
     snapToGuidesEnabled.value = settings.snap_to_guides
     autoSaveIntervalMs.value = settings.auto_save_interval_s * 1000
@@ -77,6 +79,7 @@ export function persistCurrentSettings(): void {
     ...lastSettings,
     locale: locale.value,
     theme: theme.value,
+    check_updates: checkUpdatesEnabled.value,
     snap_to_grid: snapToGridEnabled.value,
     snap_to_guides: snapToGuidesEnabled.value,
     auto_save_interval_s: Math.round(autoSaveIntervalMs.value / 1000),

@@ -432,6 +432,7 @@
     "worldMap": "世界地図へ移動",
     "learning": "学習へ移動",
     "toggleTheme": "テーマを切替",
+    "checkForUpdates": "Check for Updates",
     "commandPalette": "コマンドパレット",
     "searchPlaceholder": "コマンドを入力...",
     "noResults": "コマンドが見つかりません"
@@ -617,6 +618,7 @@
     "file": "ファイル",
     "edit": "編集",
     "view": "表示",
+    "help": "Help",
     "file.new": "新規デザイン",
     "file.open": "デザインを開く",
     "file.save": "保存",
@@ -626,10 +628,33 @@
     "edit.redo": "やり直し",
     "view.zoomIn": "拡大",
     "view.zoomOut": "縮小",
-    "view.fitToContent": "コンテンツに合わせる"
+    "view.fitToContent": "コンテンツに合わせる",
+    "help.checkForUpdates": "Check for Updates"
   },
   "titleBar": {
     "unsavedChanges": "未保存の変更"
+  },
+  "updater": {
+    "dialogTitle": "Updates",
+    "checking": "Checking for updates…",
+    "available": "Canopi {{version}} is available",
+    "install": "Install",
+    "installAfterSaving": "Install after saving",
+    "later": "Later",
+    "downloading": "Downloading update…",
+    "downloadProgress": "Downloading {{downloaded}} of {{total}}",
+    "readyToRestart": "Canopi {{version}} is ready to restart",
+    "restart": "Restart",
+    "retry": "Retry",
+    "errorPrefix": "Update failed",
+    "upToDateMessage": "Canopi is up to date.",
+    "saveBeforeInstallTitle": "Save changes before installing",
+    "saveBeforeInstallMessage": "Save or close your current document before installing this update.",
+    "saveBeforeInstallInline": "Save your current document before installing this update.",
+    "saveBeforeRestartTitle": "Save changes before restarting",
+    "saveBeforeRestartMessage": "Save or close your current document before restarting into the updated version.",
+    "saveBeforeRestartInline": "Save your current document before restarting into the updated version.",
+    "notConfigured": "Updater is not configured for this build."
   },
   "window": {
     "minimize": "最小化",

@@ -158,8 +158,9 @@ done
 manifest_dir="$tmpdir/canopi-release-candidate-manifest"
 manifest_path="$manifest_dir/SHA256SUMS.txt"
 metadata_path="$manifest_dir/release-metadata.json"
+latest_json_path="$manifest_dir/latest.json"
 
-if [[ ! -f "$manifest_path" || ! -f "$metadata_path" ]]; then
+if [[ ! -f "$manifest_path" || ! -f "$metadata_path" || ! -f "$latest_json_path" ]]; then
   echo "ERROR: Release-candidate manifest artifact is missing from run $run_id." >&2
   exit 1
 fi
@@ -172,11 +173,15 @@ log "Verifying packaged artifact checksums"
 
 mapfile -t release_files < <(
   find "$tmpdir" -type f \( \
-    -name '*.deb' -o \
     -name '*.AppImage' -o \
+    -name '*.AppImage.sig' -o \
+    -name '*.app.tar.gz' -o \
+    -name '*.app.tar.gz.sig' -o \
     -name '*.dmg' -o \
     -name '*.msi' -o \
-    -name '*.exe' \
+    -name '*.msi.sig' -o \
+    -name '*.exe' -o \
+    -name '*.exe.sig' \
   \) | sort
 )
 
@@ -219,6 +224,7 @@ log "Uploading packaged artifacts and manifest"
 gh release upload "$tag" \
   "${release_files[@]}" \
   "$manifest_path#SHA256SUMS.txt" \
+  "$latest_json_path#latest.json" \
   "$metadata_path#release-metadata.json" \
   --repo "$repo" \
   --clobber

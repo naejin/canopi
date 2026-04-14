@@ -432,6 +432,7 @@
     "worldMap": "前往世界地图",
     "learning": "前往学习",
     "toggleTheme": "切换主题",
+    "checkForUpdates": "Check for Updates",
     "commandPalette": "命令面板",
     "searchPlaceholder": "输入命令...",
     "noResults": "未找到命令"
@@ -617,6 +618,7 @@
     "file": "文件",
     "edit": "编辑",
     "view": "视图",
+    "help": "Help",
     "file.new": "新建设计",
     "file.open": "打开设计",
     "file.save": "保存",
@@ -626,10 +628,33 @@
     "edit.redo": "重做",
     "view.zoomIn": "放大",
     "view.zoomOut": "缩小",
-    "view.fitToContent": "适应内容"
+    "view.fitToContent": "适应内容",
+    "help.checkForUpdates": "Check for Updates"
   },
   "titleBar": {
     "unsavedChanges": "未保存的更改"
+  },
+  "updater": {
+    "dialogTitle": "Updates",
+    "checking": "Checking for updates…",
+    "available": "Canopi {{version}} is available",
+    "install": "Install",
+    "installAfterSaving": "Install after saving",
+    "later": "Later",
+    "downloading": "Downloading update…",
+    "downloadProgress": "Downloading {{downloaded}} of {{total}}",
+    "readyToRestart": "Canopi {{version}} is ready to restart",
+    "restart": "Restart",
+    "retry": "Retry",
+    "errorPrefix": "Update failed",
+    "upToDateMessage": "Canopi is up to date.",
+    "saveBeforeInstallTitle": "Save changes before installing",
+    "saveBeforeInstallMessage": "Save or close your current document before installing this update.",
+    "saveBeforeInstallInline": "Save your current document before installing this update.",
+    "saveBeforeRestartTitle": "Save changes before restarting",
+    "saveBeforeRestartMessage": "Save or close your current document before restarting into the updated version.",
+    "saveBeforeRestartInline": "Save your current document before restarting into the updated version.",
+    "notConfigured": "Updater is not configured for this build."
   },
   "window": {
     "minimize": "最小化",

@@ -19,6 +19,9 @@ Use this sequence from feature work to published beta:
 - `gh` installed and authenticated for the target repo
 - access to the canopi-data export DB used to build `canopi-core.db`
 - smoke-test owners available for Linux, macOS Apple Silicon, macOS Intel, and Windows
+- `CANOPI_UPDATER_PUBLIC_KEY` configured in GitHub Actions secrets
+- `TAURI_SIGNING_PRIVATE_KEY` configured in GitHub Actions secrets
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` configured in GitHub Actions secrets if the updater key is password-protected
 
 Verify local GitHub auth before starting:
 
@@ -65,6 +68,7 @@ The workflow preflight validates:
 - bundled DB asset exists and is non-empty
 - bundled DB schema version matches the app expectation
 - packaged artifacts exist before the checksum manifest is uploaded
+- updater artifacts are signed during the release build when signing secrets are present
 
 Artifacts to retain from the run:
 
@@ -81,11 +85,12 @@ Required evidence:
 - source commit SHA
 - bundled DB SHA256
 - `SHA256SUMS.txt`
+- `latest.json`
 - tester, date, platform result, and any defects
 
 Observed timing on `2026-04-01` for run `23849252941`:
 
-- Linux `.deb` build completed in about 6m 25s
+- Linux `.AppImage` build completed in about 6m 25s
 - macOS Apple Silicon build completed in about 5m 25s
 - macOS Intel build completed in about 10m 32s
 - The full release-candidate run finished in about 13-14 minutes end to end before promotion
@@ -112,7 +117,7 @@ This script:
 - requires the manifest artifact to be present
 - verifies `SHA256SUMS.txt`
 - creates or updates the GitHub Release
-- uploads the packaged artifacts, `SHA256SUMS.txt`, and `release-metadata.json`
+- uploads the packaged artifacts, updater signatures, `SHA256SUMS.txt`, `latest.json`, and `release-metadata.json`
 
 ## 5. Publish The Draft Release
 
@@ -132,3 +137,5 @@ gh release edit v<version> --draft=false
   Rebuild and republish the DB from the matching contract version before packaging.
 - Promotion checksum failure:
   Do not publish. Re-download artifacts from the run and investigate whether the run artifacts or manifest are incomplete.
+- Updater manifest/signature failure:
+  Do not publish. Confirm the release-candidate run had signing secrets, produced `.sig` files for updater artifacts, and generated a valid `latest.json`.

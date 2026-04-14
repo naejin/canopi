@@ -1,10 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('../app/updater/config', () => ({
+  updaterEnabled: true,
+}))
+
 import { activeTool } from '../canvas/session-state'
 import { activePanel, sidePanel } from '../app/shell/state'
 import { theme } from '../app/settings/state'
 import { setCurrentCanvasSession } from '../canvas/session'
 import * as documentActions from '../app/document-session/actions'
 import * as settingsPersistence from '../app/settings/persistence'
+import * as updaterController from '../app/updater/controller'
 import { commands } from '../commands/registry'
 import { PANEL_SHORTCUTS, TOOL_SHORTCUTS } from '../shortcuts/definitions'
 
@@ -82,5 +88,15 @@ describe('command registry canvas tool switching', () => {
 
     expect(theme.value).toBe('dark')
     expect(persistSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('routes update checks through the updater controller', () => {
+    expect(getCommand('help.checkForUpdates')).toBeTruthy()
+    const updaterSpy = vi.spyOn(updaterController, 'checkForUpdates').mockResolvedValue(undefined)
+
+    getCommand('help.checkForUpdates').action()
+
+    expect(updaterSpy).toHaveBeenCalledTimes(1)
+    expect(updaterSpy).toHaveBeenCalledWith({ interactive: true, resetDismissal: true })
   })
 })

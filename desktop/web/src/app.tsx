@@ -5,7 +5,7 @@ import { useCallback, useRef } from "preact/hooks";
 import { lazy, Suspense } from "preact/compat";
 import { activePanel, sidePanel, sidePanelWidth } from "./app/shell/state";
 import { TitleBar } from "./components/shared/TitleBar";
-import { DegradedBanner } from "./components/shared/DegradedBanner";
+import { ShellNotices } from "./components/shared/ShellNotices";
 import { CommandPalette } from "./components/shared/CommandPalette";
 import { CanvasPanel } from "./components/panels/CanvasPanel";
 import { PanelBar } from "./components/panels/PanelBar";
@@ -91,7 +91,7 @@ export function App() {
   return (
     <div className={styles.appRoot}>
       <TitleBar />
-      <DegradedBanner />
+      <ShellNotices />
       <div className={styles.appBody}>
         {/* Canvas — always fills available space */}
         {showCanvas && <CanvasPanel />}

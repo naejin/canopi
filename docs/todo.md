@@ -1,10 +1,51 @@
 # Canopi: Current Work
 
-**Date**: 2026-04-13
+**Date**: 2026-04-14
 **Status**: v0.3.0 — timeline rework shipped (direct-manipulation UX), bottom-panel triptych complete (Timeline + Budget + Consortium), and the in-canvas MapLibre slice now includes shared hosted basemap config, loading/error feedback, and panel↔map overlays. The Location entry is visible in PanelBar and still opens the dedicated flow
 
 This file tracks active and deferred work.
 For historical architectural analysis and rationale, see [Code Quality And Architecture Review](./archive/code-quality-architecture-review-2026-04-05.md).
+
+## Prioritized Backlog
+
+The rewrite is shipped. The main risk is no longer missing core features; it is regression, hidden performance cliffs, and architecture drift. Treat this section as the working backlog. The detailed notes below are supporting history unless they still appear here.
+
+### Now
+
+- **Correctness regression coverage**: keep save/load strictly scene-authoritative for canvas entities; keep species-color edits stable across save/reload; keep annotation bounds consistent across selection, grouping, fit, and rendering; keep plant presentation geometry consistent across renderers, interaction, grouping, and fit
+- **Performance guardrails**: keep viewport-only updates on the renderer fast path; keep Pixi retained across pan/zoom; avoid per-tick scene-tree rebuilds
+- **Diff-cost watch**: profile or otherwise watch the `JSON.stringify` diff cost in `scene-commands.ts` as designs grow before it becomes a silent large-document bottleneck
+- **Async/blocking UX audit**: identify slow frontend `await`s that block rendering, especially geocoding in `LocationInput.tsx`, photo carousel loading, and first-mount filter option loading
+- **Memory leak audit**: review lifecycle cleanup for MapLibre instances, module-level effects, autosave timers, and panel mount/unmount behavior
+- **Test foundation**: add the missing signal-state tests, canvas operation tests, and CI coverage reporting needed to catch regressions from the rewrite phase
+- **Documentation alignment**: keep canvas/runtime/renderer docs aligned with the live architecture; move historical migration detail into archive docs
+
+### Next
+
+- **Export**: ship user-facing export flows for PNG, SVG, CSV, and GeoJSON
+- **Resilience audit**: review failure paths for geocoding timeout, image-cache fallback, disk-full autosave, and template download validation
+- **Security surface review**: audit Markdown sanitization in `markdown.ts`, `validated_column()` allowlist completeness, and geocoding URL encoding
+- **Map validation hardening**: keep screen-lock regression coverage for pan, zoom, resize, fit-to-content, document open, rotated designs, and large-scene warning cases; projected overlays should continue validating against the same exact-lock contract as basemap and terrain
+- **Post-hardening map architecture pass**: decide whether `CanvasRuntime` should split command vs query/projection responsibilities more explicitly, and whether `MapLibreCanvasSurface` can shrink further without creating a second authority
+
+### Later
+
+- **Design coherence phase**: systematic CSS token migration across remaining modules
+- **Featured-design world map / template import**
+- **Template adaptation**: hardiness comparison and replacement suggestions
+- **Knowledge / learning content surface**
+- **PMTiles offline tiles**: Rust reader, Tauri custom protocol, and download manager UI
+- **Contour / hillshade layers** via `maplibre-contour` + DEM tiles
+- **Local-projection backend replacement for larger geodetic use cases**
+- **Backend-selection policy** for any future second map backend, but only after that backend exists
+
+### Probably Drop Unless Roadmap Pressure Appears
+
+- **Pen/stylus input support**: keep deferred until there is tester hardware and evidence that input quality is a real product gap
+
+## Historical Detail
+
+The sections below preserve the detailed rewrite log, completed cleanup notes, and deferred ideas. Use them as reference, not as the primary task queue.
 
 ## Completed (rewrite phase)
 

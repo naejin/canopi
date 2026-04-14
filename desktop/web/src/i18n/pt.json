@@ -432,6 +432,7 @@
     "worldMap": "Ir para mapa mundial",
     "learning": "Ir para aprendizado",
     "toggleTheme": "Alternar tema",
+    "checkForUpdates": "Check for Updates",
     "commandPalette": "Paleta de comandos",
     "searchPlaceholder": "Digite um comando...",
     "noResults": "Nenhum comando encontrado"
@@ -617,6 +618,7 @@
     "file": "Arquivo",
     "edit": "Editar",
     "view": "Ver",
+    "help": "Help",
     "file.new": "Novo design",
     "file.open": "Abrir design",
     "file.save": "Salvar",
@@ -626,10 +628,33 @@
     "edit.redo": "Refazer",
     "view.zoomIn": "Ampliar",
     "view.zoomOut": "Reduzir",
-    "view.fitToContent": "Ajustar ao conteudo"
+    "view.fitToContent": "Ajustar ao conteudo",
+    "help.checkForUpdates": "Check for Updates"
   },
   "titleBar": {
     "unsavedChanges": "Alterações não salvas"
+  },
+  "updater": {
+    "dialogTitle": "Updates",
+    "checking": "Checking for updates…",
+    "available": "Canopi {{version}} is available",
+    "install": "Install",
+    "installAfterSaving": "Install after saving",
+    "later": "Later",
+    "downloading": "Downloading update…",
+    "downloadProgress": "Downloading {{downloaded}} of {{total}}",
+    "readyToRestart": "Canopi {{version}} is ready to restart",
+    "restart": "Restart",
+    "retry": "Retry",
+    "errorPrefix": "Update failed",
+    "upToDateMessage": "Canopi is up to date.",
+    "saveBeforeInstallTitle": "Save changes before installing",
+    "saveBeforeInstallMessage": "Save or close your current document before installing this update.",
+    "saveBeforeInstallInline": "Save your current document before installing this update.",
+    "saveBeforeRestartTitle": "Save changes before restarting",
+    "saveBeforeRestartMessage": "Save or close your current document before restarting into the updated version.",
+    "saveBeforeRestartInline": "Save your current document before restarting into the updated version.",
+    "notConfigured": "Updater is not configured for this build."
   },
   "window": {
     "minimize": "Minimizar",

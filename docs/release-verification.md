@@ -52,8 +52,9 @@ These checks must pass before a beta release candidate is declared ready:
 - `npm test --prefix desktop/web`
 - `npm run build --prefix desktop/web`
 - GitHub Actions Tauri build matrix with artifact upload for Linux, macOS Apple Silicon, macOS Intel, and Windows
-- Linux CI packaging is intentionally constrained to the Debian bundle in GitHub Actions to avoid non-essential RPM packaging hangs during release-candidate assembly
+- Linux CI packaging is intentionally constrained to the AppImage bundle in GitHub Actions for the shipped Linux artifact
 - manual `Release Candidate` GitHub Actions workflow preflight for app version, bundled DB asset availability, bundled DB schema version, and checksum manifest generation
+- updater artifact signing plus `latest.json` generation in the release-candidate manifest job
 - i18n completeness test for all supported locales against `en.json`
 
 Current status in this tree:
@@ -88,7 +89,7 @@ Use the packaged artifact produced by the manual `Release Candidate` workflow fo
 
 | Platform / target | Artifact source | Tester / owner | Test date | Status | Defects / follow-up |
 | --- | --- | --- | --- | --- | --- |
-| Linux desktop (`.deb`) | GitHub Actions Linux Tauri build artifact | Release owner | — | Pending | — |
+| Linux desktop (`.AppImage`) | GitHub Actions Linux Tauri build artifact | Release owner | — | Pending | — |
 | macOS Apple Silicon (`aarch64-apple-darwin`) | GitHub Actions macOS 14 Tauri build artifact | Release owner | — | Pending | — |
 | macOS Intel (`x86_64-apple-darwin`) | GitHub Actions macOS 13 Tauri build artifact | Release owner | — | Pending | — |
 | Windows desktop | GitHub Actions Windows Tauri build artifact | Release owner | — | Pending | — |
@@ -118,6 +119,7 @@ Before promoting a beta-release candidate, capture and retain all of the followi
 - bundled DB release tag and asset name
 - bundled DB SHA256
 - packaged artifact checksum manifest (`SHA256SUMS.txt`)
+- updater manifest (`latest.json`)
 
 Promotion should only upload the exact artifacts whose checksums were produced by that run.
 
@@ -134,6 +136,7 @@ Run this script against each packaged artifact:
 6. Open the visible PanelBar `location` entry, perform search, drag, zoom, and confirm the selected location updates correctly.
 7. Switch theme and locale and confirm there are no missing labels or unreadable retained surfaces.
 8. Confirm there is no startup-path, save-path, or packaged-resource regression.
+9. Trigger `Check for Updates` against a newer signed release and confirm the packaged build detects the update, installs it, and relaunches correctly.
 
 ## Known Accepted Warnings
 

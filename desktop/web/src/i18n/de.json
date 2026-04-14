@@ -432,6 +432,7 @@
     "worldMap": "Zur Weltkarte",
     "learning": "Zum Lernen",
     "toggleTheme": "Erscheinungsbild wechseln",
+    "checkForUpdates": "Check for Updates",
     "commandPalette": "Befehlspalette",
     "searchPlaceholder": "Befehl eingeben...",
     "noResults": "Keine Befehle gefunden"
@@ -617,6 +618,7 @@
     "file": "Datei",
     "edit": "Bearbeiten",
     "view": "Ansicht",
+    "help": "Help",
     "file.new": "Neues Design",
     "file.open": "Design offnen",
     "file.save": "Speichern",
@@ -626,10 +628,33 @@
     "edit.redo": "Wiederholen",
     "view.zoomIn": "Vergrossern",
     "view.zoomOut": "Verkleinern",
-    "view.fitToContent": "An Inhalt anpassen"
+    "view.fitToContent": "An Inhalt anpassen",
+    "help.checkForUpdates": "Check for Updates"
   },
   "titleBar": {
     "unsavedChanges": "Ungespeicherte Änderungen"
+  },
+  "updater": {
+    "dialogTitle": "Updates",
+    "checking": "Checking for updates…",
+    "available": "Canopi {{version}} is available",
+    "install": "Install",
+    "installAfterSaving": "Install after saving",
+    "later": "Later",
+    "downloading": "Downloading update…",
+    "downloadProgress": "Downloading {{downloaded}} of {{total}}",
+    "readyToRestart": "Canopi {{version}} is ready to restart",
+    "restart": "Restart",
+    "retry": "Retry",
+    "errorPrefix": "Update failed",
+    "upToDateMessage": "Canopi is up to date.",
+    "saveBeforeInstallTitle": "Save changes before installing",
+    "saveBeforeInstallMessage": "Save or close your current document before installing this update.",
+    "saveBeforeInstallInline": "Save your current document before installing this update.",
+    "saveBeforeRestartTitle": "Save changes before restarting",
+    "saveBeforeRestartMessage": "Save or close your current document before restarting into the updated version.",
+    "saveBeforeRestartInline": "Save your current document before restarting into the updated version.",
+    "notConfigured": "Updater is not configured for this build."
   },
   "window": {
     "minimize": "Minimieren",

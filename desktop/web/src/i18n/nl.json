@@ -432,6 +432,7 @@
     "worldMap": "Ga naar Wereldkaart",
     "learning": "Ga naar Leren",
     "toggleTheme": "Thema wisselen",
+    "checkForUpdates": "Check for Updates",
     "commandPalette": "Opdrachtenpalet",
     "searchPlaceholder": "Typ een opdracht...",
     "noResults": "Geen opdrachten gevonden"
@@ -617,6 +618,7 @@
     "file": "Bestand",
     "edit": "Bewerken",
     "view": "Beeld",
+    "help": "Help",
     "file.new": "Nieuw ontwerp",
     "file.open": "Ontwerp openen",
     "file.save": "Opslaan",
@@ -626,10 +628,33 @@
     "edit.redo": "Opnieuw",
     "view.zoomIn": "Inzoomen",
     "view.zoomOut": "Uitzoomen",
-    "view.fitToContent": "Aanpassen aan inhoud"
+    "view.fitToContent": "Aanpassen aan inhoud",
+    "help.checkForUpdates": "Check for Updates"
   },
   "titleBar": {
     "unsavedChanges": "Niet-opgeslagen wijzigingen"
+  },
+  "updater": {
+    "dialogTitle": "Updates",
+    "checking": "Checking for updates…",
+    "available": "Canopi {{version}} is available",
+    "install": "Install",
+    "installAfterSaving": "Install after saving",
+    "later": "Later",
+    "downloading": "Downloading update…",
+    "downloadProgress": "Downloading {{downloaded}} of {{total}}",
+    "readyToRestart": "Canopi {{version}} is ready to restart",
+    "restart": "Restart",
+    "retry": "Retry",
+    "errorPrefix": "Update failed",
+    "upToDateMessage": "Canopi is up to date.",
+    "saveBeforeInstallTitle": "Save changes before installing",
+    "saveBeforeInstallMessage": "Save or close your current document before installing this update.",
+    "saveBeforeInstallInline": "Save your current document before installing this update.",
+    "saveBeforeRestartTitle": "Save changes before restarting",
+    "saveBeforeRestartMessage": "Save or close your current document before restarting into the updated version.",
+    "saveBeforeRestartInline": "Save your current document before restarting into the updated version.",
+    "notConfigured": "Updater is not configured for this build."
   },
   "window": {
     "minimize": "Minimaliseren",

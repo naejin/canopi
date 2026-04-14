@@ -13,10 +13,26 @@ use common_types::health::SubsystemHealth;
 use rusqlite::{Connection, OpenFlags};
 use std::sync::Mutex;
 use tauri::Manager;
+use tracing::warn;
 
 pub struct AppHealth(pub Mutex<SubsystemHealth>);
 
 const PLANT_DB_BUNDLED_PATHS: &[&str] = &["resources/canopi-core.db", "canopi-core.db"];
+fn updater_plugin<R: tauri::Runtime>() -> Option<tauri::plugin::TauriPlugin<R, tauri_plugin_updater::Config>> {
+    let pubkey = option_env!("CANOPI_UPDATER_PUBLIC_KEY")
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+
+    let Some(pubkey) = pubkey else {
+        warn!("Updater disabled: CANOPI_UPDATER_PUBLIC_KEY was not set at build time");
+        return None;
+    };
+    Some(
+        tauri_plugin_updater::Builder::new()
+            .pubkey(pubkey)
+            .build(),
+    )
+}
 
 fn resolve_plant_db_path<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
@@ -48,7 +64,14 @@ fn resolve_plant_db_path<R: tauri::Runtime>(
 pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|_app, _args, _cwd| {}))
-        .plugin(tauri_plugin_dialog::init());
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_process::init());
+
+    let builder = if let Some(plugin) = updater_plugin() {
+        builder.plugin(plugin)
+    } else {
+        builder
+    };
 
     #[cfg(debug_assertions)]
     let builder = builder.plugin(tauri_plugin_mcp_bridge::init());
