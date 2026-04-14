@@ -9,7 +9,7 @@ on:
         default: main
         type: string
       release_version:
-        description: Expected version from desktop/tauri.conf.json
+        description: Release version to inject at build time (for example 0.4.0 or 0.4.0-beta.1)
         required: true
         type: string
       db_release_tag:
@@ -28,6 +28,8 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  CANOPI_STABLE_MANIFEST_TAG: canopi-stable-manifest
+  CANOPI_BETA_MANIFEST_TAG: canopi-beta-manifest
 
 jobs:
   preflight:
@@ -39,7 +41,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ needs.preflight.outputs.head_sha }}
 
       - id: head
         name: Capture build commit
@@ -50,23 +52,23 @@ jobs:
           echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - id: version
-        name: Verify requested release version
+        name: Validate requested release version
         shell: bash
         run: |
           set -euo pipefail
-          actual_version="$(python3 - <<'PY'
-          import json
-          from pathlib import Path
-          print(json.loads(Path("desktop/tauri.conf.json").read_text())["version"])
-          PY
-          )"
           requested_version="${{ inputs.release_version }}"
-          echo "Requested release version: $requested_version"
-          echo "App version from desktop/tauri.conf.json: $actual_version"
-          if [[ "$actual_version" != "$requested_version" ]]; then
-            echo "::error::desktop/tauri.conf.json version '$actual_version' does not match workflow input '$requested_version'."
-            exit 1
-          fi
+          python3 - "$requested_version" <<'PY'
+          import re
+          import sys
+
+          version = sys.argv[1].strip()
+          pattern = re.compile(r"^\d+\.\d+\.\d+(?:[-.][0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$")
+          if not pattern.match(version):
+              raise SystemExit(
+                  f"Invalid release version '{version}'. Expected SemVer-like value such as 0.4.0 or 0.4.0-beta.1."
+              )
+          print(f"Requested release version: {version}")
+          PY
 
       - id: schema
         name: Read expected plant DB schema version
@@ -221,7 +223,7 @@ jobs:
       - name: Generate release-only updater config
         shell: bash
         env:
-          REPOSITORY: ${{ github.repository }}
+          RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
           python3 - <<'PY'
           import json
@@ -229,9 +231,7 @@ jobs:
           from pathlib import Path
 
           config = json.loads(Path("desktop/tauri.release.conf.json").read_text())
-          config.setdefault("plugins", {}).setdefault("updater", {})["endpoints"] = [
-              f"https://github.com/{os.environ['REPOSITORY']}/releases/latest/download/latest.json"
-          ]
+          config["version"] = os.environ["RELEASE_VERSION"]
           Path("desktop/tauri.release.generated.json").write_text(json.dumps(config, indent=2) + "\n")
           PY
 
@@ -241,6 +241,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           VITE_CANOPI_UPDATER_ENABLED: "true"
+          VITE_CANOPI_UPDATER_STABLE_ENDPOINT: https://github.com/${{ github.repository }}/releases/download/${{ env.CANOPI_STABLE_MANIFEST_TAG }}/latest.json
+          VITE_CANOPI_UPDATER_BETA_ENDPOINT: https://github.com/${{ github.repository }}/releases/download/${{ env.CANOPI_BETA_MANIFEST_TAG }}/latest.json
         run: npx --prefix desktop/web @tauri-apps/cli build --config desktop/tauri.release.generated.json --target ${{ matrix.target }} ${{ matrix.bundle_args }}
 
       - name: Upload artifacts
@@ -313,6 +315,7 @@ jobs:
               "ref": os.environ["BUILD_REF"],
               "head_sha": os.environ["HEAD_SHA"],
               "release_version": os.environ["BUILD_VERSION"],
+              "release_tag": f"v{os.environ['BUILD_VERSION']}",
               "db_release_tag": os.environ["DB_RELEASE_TAG"],
               "db_asset_name": os.environ["DB_ASSET_NAME"],
               "db_sha256": os.environ["DB_SHA256"],
@@ -381,7 +384,7 @@ jobs:
             echo "- Packaged artifact checksums: \`SHA256SUMS.txt\`"
             echo "- Updater manifest: \`latest.json\`"
             echo "- Bundled DB checksum: \`${{ needs.preflight.outputs.db_sha256 }}\`"
-            echo "- Promotion command: \`scripts/promote-release.sh --run-id ${{ github.run_id }} --tag <tag> --title <title>\`"
+            echo "- Promotion command: \`scripts/promote-release.sh --run-id ${{ github.run_id }} --channel <beta|stable> --tag <tag> --title <title>\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload release-candidate manifest
