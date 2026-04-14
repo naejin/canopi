@@ -29,6 +29,8 @@ interface Props<T> {
   optionClassName?: string
   /** Prevent parent overlays from treating this dropdown as an outside click. */
   preserveOverlays?: boolean
+  /** Disable the trigger while the surrounding state is not ready yet. */
+  disabled?: boolean
 }
 
 export function Dropdown<T>({
@@ -43,6 +45,7 @@ export function Dropdown<T>({
   menuClassName,
   optionClassName,
   preserveOverlays = false,
+  disabled = false,
 }: Props<T>) {
   const open = useSignal(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -95,10 +98,14 @@ export function Dropdown<T>({
         ref={triggerRef}
         className={`${styles.trigger}${triggerClassName ? ` ${triggerClassName}` : ''}`}
         type="button"
-        onClick={() => { open.value = !open.value }}
+        onClick={() => {
+          if (disabled) return
+          open.value = !open.value
+        }}
         aria-expanded={open.value}
         aria-haspopup="listbox"
         aria-label={ariaLabel}
+        disabled={disabled}
       >
         {trigger}
         <span
