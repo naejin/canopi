@@ -16,6 +16,7 @@ pub struct Settings {
     pub show_botanical_names: bool,
     pub debug_logging: bool,
     pub check_updates: bool,
+    pub update_channel: UpdateChannel,
     pub default_design_dir: String,
     pub recent_files_max: u32,
     pub last_active_panel: String,
@@ -48,6 +49,7 @@ impl Default for Settings {
             show_botanical_names: true,
             debug_logging: false,
             check_updates: true,
+            update_channel: UpdateChannel::Stable,
             default_design_dir: String::new(),
             recent_files_max: 20,
             last_active_panel: "plant-db".into(),
@@ -63,6 +65,19 @@ impl Default for Settings {
             hillshade_visible: false,
             hillshade_opacity: 0.55,
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "lowercase")]
+pub enum UpdateChannel {
+    Stable,
+    Beta,
+}
+
+impl Default for UpdateChannel {
+    fn default() -> Self {
+        Self::Stable
     }
 }
 

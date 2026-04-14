@@ -179,6 +179,7 @@ export type Settings = {
 	show_botanical_names: boolean,
 	debug_logging: boolean,
 	check_updates: boolean,
+	update_channel: UpdateChannel,
 	default_design_dir: string,
 	recent_files_max: number,
 	last_active_panel: string,
@@ -448,6 +449,8 @@ export type Topic = {
 	description: string | null,
 	category: string,
 };
+
+export type UpdateChannel = "stable" | "beta";
 
 export type Zone = {
 	name: string,

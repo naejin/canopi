@@ -24,6 +24,8 @@ vi.mock("../app/updater/controller", () => ({
 }));
 
 vi.mock("../app/updater/config", () => ({
+  UPDATE_CHANNELS: ["stable", "beta"],
+  updaterControlsVisible: true,
   updaterEnabled: true,
 }));
 
@@ -60,6 +62,7 @@ describe("bootstrapShell", () => {
           show_botanical_names: true,
           debug_logging: false,
           check_updates: true,
+          update_channel: "stable",
           default_design_dir: "",
           recent_files_max: 20,
           last_active_panel: "canvas",

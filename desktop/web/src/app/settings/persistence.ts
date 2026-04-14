@@ -1,4 +1,4 @@
-import { batch } from '@preact/signals'
+import { batch, signal } from '@preact/signals'
 import type { Settings } from '../../types/settings'
 import { setSettings } from '../../ipc/settings'
 import {
@@ -22,11 +22,13 @@ import {
   checkUpdatesEnabled,
   locale,
   theme,
+  updateChannel,
 } from './state'
 import { normalizeBasemapStyle } from '../../maplibre/config'
 
 let lastSettings: Settings | null = null
 let queuedPersistTimer: ReturnType<typeof globalThis.setTimeout> | null = null
+export const settingsHydrated = signal(false)
 
 function clampUnitInterval(value: number, fallback: number): number {
   if (!Number.isFinite(value)) return fallback
@@ -44,6 +46,7 @@ export function setBootstrappedSettings(settings: Settings): void {
     theme.value = settings.theme === 'dark' ? 'dark' : 'light'
     basemapStyle.value = normalizeBasemapStyle(settings.map_style)
     checkUpdatesEnabled.value = settings.check_updates
+    updateChannel.value = settings.update_channel ?? 'stable'
     snapToGridEnabled.value = settings.snap_to_grid
     snapToGuidesEnabled.value = settings.snap_to_guides
     autoSaveIntervalMs.value = settings.auto_save_interval_s * 1000
@@ -67,6 +70,7 @@ export function setBootstrappedSettings(settings: Settings): void {
     hillshadeOpacity.value = clampUnitInterval(settings.hillshade_opacity, 0.55)
   })
   lastSettings = settings
+  settingsHydrated.value = true
 }
 
 export function persistCurrentSettings(): void {
@@ -80,6 +84,7 @@ export function persistCurrentSettings(): void {
     locale: locale.value,
     theme: theme.value,
     check_updates: checkUpdatesEnabled.value,
+    update_channel: updateChannel.value,
     snap_to_grid: snapToGridEnabled.value,
     snap_to_guides: snapToGuidesEnabled.value,
     auto_save_interval_s: Math.round(autoSaveIntervalMs.value / 1000),
