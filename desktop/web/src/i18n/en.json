@@ -791,7 +791,17 @@
     "saveBeforeRestartTitle": "Save changes before restarting",
     "saveBeforeRestartMessage": "Save or close your current document before restarting into the updated version.",
     "saveBeforeRestartInline": "Save your current document before restarting into the updated version.",
-    "notConfigured": "Updater is not configured for this build."
+    "notConfigured": "Updater is not configured for this build.",
+    "channelDialogTitle": "Update channel",
+    "channelLabel": "Update channel",
+    "channelStable": "Stable",
+    "channelBeta": "Beta",
+    "channelBetaNotice": "Beta builds can be less stable. Future update checks will use the beta channel.",
+    "channelStableNotice": "Future update checks will use the stable channel. Canopi will not downgrade automatically, so this beta build may remain newer until stable catches up.",
+    "betaBadge": "Beta",
+    "checkingBeta": "Checking for beta updates…",
+    "availableBeta": "Canopi {{version}} is available on beta",
+    "upToDateBetaMessage": "Canopi beta channel is up to date."
   },
   "window": {
     "minimize": "Minimize",
