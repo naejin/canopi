@@ -27,7 +27,7 @@ export function getUpdaterShellNotice(): ShellNoticeProps | null {
   if (state.status === 'checking') {
     return {
       noticeKey: 'updater',
-      message: t('updater.checking'),
+      message: state.channel === 'beta' ? t('updater.checkingBeta') : t('updater.checking'),
       live: 'polite',
     }
   }
@@ -37,7 +37,10 @@ export function getUpdaterShellNotice(): ShellNoticeProps | null {
 
     return {
       noticeKey: 'updater',
-      message: t('updater.available', { version: state.version }),
+      message:
+        state.channel === 'beta'
+          ? t('updater.availableBeta', { version: state.version })
+          : t('updater.available', { version: state.version }),
       detail: blockedReason,
       live: 'polite',
       secondaryAction: {

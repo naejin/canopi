@@ -83,6 +83,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::settings::get_settings,
             commands::settings::set_settings,
+            commands::updater::check_for_updates,
             commands::species::search_species,
             commands::species::get_species_detail,
             commands::species::get_species_relationships,
