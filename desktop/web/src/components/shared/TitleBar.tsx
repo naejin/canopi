@@ -85,7 +85,6 @@ export function TitleBar() {
           </span>
         )}
       </div>
-
       {/* Right controls: language + theme */}
       <div className={styles.settings}>
         <LocalePicker />

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 const RETAINED_CSS_MODULES = [
   '../App.module.css',
-  '../components/shared/DegradedBanner.module.css',
+  '../components/shared/ShellNotice.module.css',
   '../components/shared/CommandPalette.module.css',
   '../components/shared/TitleBar.module.css',
   '../components/shared/Dropdown.module.css',
