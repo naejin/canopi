@@ -53,8 +53,11 @@ These checks must pass before a beta release candidate is declared ready:
 - `npm run build --prefix desktop/web`
 - GitHub Actions Tauri build matrix with artifact upload for Linux, macOS Apple Silicon, macOS Intel, and Windows
 - Linux CI packaging is intentionally constrained to the AppImage bundle in GitHub Actions for the shipped Linux artifact
-- manual `Release Candidate` GitHub Actions workflow preflight for app version, bundled DB asset availability, bundled DB schema version, and checksum manifest generation
+- manual `Release Candidate` GitHub Actions workflow preflight for release-version format, bundled DB asset availability, bundled DB schema version, and checksum manifest generation
 - updater artifact signing plus `latest.json` generation in the release-candidate manifest job
+- release build compile-time updater endpoints for both channels:
+  - `VITE_CANOPI_UPDATER_STABLE_ENDPOINT=.../canopi-stable-manifest/latest.json`
+  - `VITE_CANOPI_UPDATER_BETA_ENDPOINT=.../canopi-beta-manifest/latest.json`
 - i18n completeness test for all supported locales against `en.json`
 
 Current status in this tree:
@@ -67,7 +70,7 @@ Current status in this tree:
 - frontend i18n completeness: passing via the frontend test suite on 2026-04-02
 - frontend production build: passing locally on 2026-04-02
 - GitHub Actions workflow: includes rust fmt, clippy, TypeScript check, workspace tests, frontend tests, frontend build, and 4-target Tauri artifact builds
-- `Release Candidate` workflow: lands manual preflight validation for `desktop/tauri.conf.json` version, bundled DB asset availability, bundled DB schema compatibility, and packaged-artifact checksum manifest upload
+- `Release Candidate` workflow: lands manual preflight validation for release-version format, bundled DB asset availability, bundled DB schema compatibility, and packaged-artifact checksum manifest upload
 
 ## Required Product Journeys
 
@@ -85,43 +88,59 @@ These journeys must remain green for the beta release:
 
 Artifact builds are automated in CI, and the beta release also requires one packaged-app smoke pass per supported release artifact.
 
-Use the packaged artifact produced by the manual `Release Candidate` workflow for each target and record the result here.
+Use the packaged artifact from the promoted beta release, or the matching `Release Candidate` run before stable promotion, for each target and record the result here.
 
 | Platform / target | Artifact source | Tester / owner | Test date | Status | Defects / follow-up |
 | --- | --- | --- | --- | --- | --- |
 | Linux desktop (`.AppImage`) | GitHub Actions Linux Tauri build artifact | Release owner | — | Pending | — |
 | macOS Apple Silicon (`aarch64-apple-darwin`) | GitHub Actions macOS 14 Tauri build artifact | Release owner | — | Pending | — |
-| macOS Intel (`x86_64-apple-darwin`) | GitHub Actions macOS 13 Tauri build artifact | Release owner | — | Pending | — |
+| macOS Intel (`x86_64-apple-darwin`) | GitHub Actions macOS Intel Tauri build artifact | Release owner | — | Pending | — |
 | Windows desktop | GitHub Actions Windows Tauri build artifact | Release owner | — | Pending | — |
 
 This smoke pass is release-hardening work. It does not replace the separate live verification and renderer validation flows tracked elsewhere.
 
 ## Release Operator Sequence
 
-The beta-release operator flow is:
+The release operator flow is:
 
 1. Publish or verify the bundled DB asset with `scripts/publish-db-release.sh`.
 2. Run the `Release Candidate` GitHub Actions workflow for the exact candidate ref and release version.
-3. Use the artifacts from that run for manual smoke verification on each supported platform.
-4. Record tester, date, result, and any follow-up in the table above.
-5. Promote the exact verified run artifacts to a draft or final GitHub Release with `scripts/promote-release.sh`.
+3. Promote to beta with `scripts/promote-release.sh --channel beta ...`.
+4. Use the promoted beta artifacts for manual smoke verification on each supported platform.
+5. Record tester, date, result, and any follow-up in the table above.
+6. Apply normal soak/signoff (default 48h) or explicit release-owner override with a written reason.
+7. Promote to stable with `scripts/promote-release.sh --channel stable ...`.
 
 Do not rebuild artifacts locally for promotion unless the release process is explicitly being run in emergency/manual-only mode.
 See [`docs/release-operations.md`](/home/daylon/projects/canopi/docs/release-operations.md) for the operator runbook and command examples.
 
 ## Artifact Provenance Requirements
 
-Before promoting a beta-release candidate, capture and retain all of the following from the `Release Candidate` workflow run:
+Before promoting a beta or stable release candidate, capture and retain all of the following from the `Release Candidate` workflow run:
 
 - workflow run ID
 - source commit SHA
 - requested release version
+- expected release tag (`v<release_version>`)
 - bundled DB release tag and asset name
 - bundled DB SHA256
 - packaged artifact checksum manifest (`SHA256SUMS.txt`)
 - updater manifest (`latest.json`)
+- promotion channel (`beta` or `stable`)
+- moving manifest tags (`canopi-beta-manifest`, `canopi-stable-manifest`)
 
 Promotion should only upload the exact artifacts whose checksums were produced by that run.
+
+## Channel Policy
+
+- `beta` is an explicit opt-in updater channel inside the existing app.
+- Stable users must never receive beta builds automatically.
+- `beta` uses prerelease versions such as `0.4.0-beta.1`.
+- Stable builds are expected to be rebuilt from the exact accepted beta commit with no code changes between the accepted commit and the stable packaging run, and the release operator must verify the matching `head_sha`.
+- Switching from `beta` back to `stable` does not downgrade the installed app; it only changes future update checks.
+- Beta builds must not introduce irreversible local migrations before stable.
+- If a beta is bad, fix forward with a newer beta instead of attempting an automatic downgrade.
+- The release owner may override the normal soak/smoke gate or bypass beta entirely, but each bypass must have a short written reason.
 
 ## Minimum Packaged-App Smoke Script
 
