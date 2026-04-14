@@ -432,6 +432,7 @@
     "worldMap": "Vai alla mappa mondiale",
     "learning": "Vai all'apprendimento",
     "toggleTheme": "Cambia tema",
+    "checkForUpdates": "Check for Updates",
     "commandPalette": "Tavolozza comandi",
     "searchPlaceholder": "Digita un comando...",
     "noResults": "Nessun comando trovato"
@@ -617,6 +618,7 @@
     "file": "File",
     "edit": "Modifica",
     "view": "Visualizza",
+    "help": "Help",
     "file.new": "Nuovo design",
     "file.open": "Apri design",
     "file.save": "Salva",
@@ -626,10 +628,33 @@
     "edit.redo": "Ripristina",
     "view.zoomIn": "Ingrandisci",
     "view.zoomOut": "Riduci",
-    "view.fitToContent": "Adatta al contenuto"
+    "view.fitToContent": "Adatta al contenuto",
+    "help.checkForUpdates": "Check for Updates"
   },
   "titleBar": {
     "unsavedChanges": "Modifiche non salvate"
+  },
+  "updater": {
+    "dialogTitle": "Updates",
+    "checking": "Checking for updates…",
+    "available": "Canopi {{version}} is available",
+    "install": "Install",
+    "installAfterSaving": "Install after saving",
+    "later": "Later",
+    "downloading": "Downloading update…",
+    "downloadProgress": "Downloading {{downloaded}} of {{total}}",
+    "readyToRestart": "Canopi {{version}} is ready to restart",
+    "restart": "Restart",
+    "retry": "Retry",
+    "errorPrefix": "Update failed",
+    "upToDateMessage": "Canopi is up to date.",
+    "saveBeforeInstallTitle": "Save changes before installing",
+    "saveBeforeInstallMessage": "Save or close your current document before installing this update.",
+    "saveBeforeInstallInline": "Save your current document before installing this update.",
+    "saveBeforeRestartTitle": "Save changes before restarting",
+    "saveBeforeRestartMessage": "Save or close your current document before restarting into the updated version.",
+    "saveBeforeRestartInline": "Save your current document before restarting into the updated version.",
+    "notConfigured": "Updater is not configured for this build."
   },
   "window": {
     "minimize": "Riduci a icona",

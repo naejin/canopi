@@ -9,6 +9,8 @@ import {
 } from '../../app/document-session/actions'
 import { currentDesign, designDirty } from '../../state/design'
 import { FILE_SHORTCUTS, EDIT_SHORTCUTS, VIEW_SHORTCUTS } from '../../shortcuts/definitions'
+import { checkForUpdates } from '../../app/updater/controller'
+import { updaterEnabled } from '../../app/updater/config'
 
 export interface MenuAction {
   type: 'action'
@@ -38,7 +40,7 @@ export function getMenuDefinitions(): MenuDefinition[] {
   const hasDesign = currentDesign.value != null
   const hasSession = session != null
 
-  return [
+  const menus: MenuDefinition[] = [
     {
       id: 'file',
       label: t('menu.file'),
@@ -70,4 +72,16 @@ export function getMenuDefinitions(): MenuDefinition[] {
       ],
     },
   ]
+
+  if (updaterEnabled) {
+    menus.push({
+      id: 'help',
+      label: t('menu.help'),
+      items: [
+        { type: 'action', id: 'help.checkForUpdates', label: t('menu.help.checkForUpdates'), action: () => { void checkForUpdates({ interactive: true, resetDismissal: true }) }, disabled: false },
+      ],
+    })
+  }
+
+  return menus
 }

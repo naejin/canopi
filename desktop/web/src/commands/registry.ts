@@ -11,6 +11,8 @@ import {
   newDesignAction,
 } from "../app/document-session/actions";
 import { getCurrentCanvasSession } from "../canvas/session";
+import { checkForUpdates } from "../app/updater/controller";
+import { updaterEnabled } from "../app/updater/config";
 
 export interface Command {
   id: string;
@@ -35,7 +37,7 @@ function cycleTheme() {
   persistCurrentSettings();
 }
 
-export const commands: Command[] = [
+const baseCommands: Command[] = [
   // File operations
   { id: "file.new",    label: () => t("canvas.file.new"),    shortcut: FILE_SHORTCUTS.newDesign,   action: () => { void newDesignAction() } },
   { id: "file.open",   label: () => t("canvas.file.open"),   shortcut: FILE_SHORTCUTS.openDesign,  action: () => { void openDesign() } },
@@ -65,3 +67,10 @@ export const commands: Command[] = [
   { id: "canvas.tool.rectangle",  label: () => t("canvas.tools.rectangle"),  shortcut: TOOL_SHORTCUTS.rectangle, action: switchTool("rectangle") },
   { id: "canvas.tool.text",       label: () => t("canvas.tools.text"),       shortcut: TOOL_SHORTCUTS.text, action: switchTool("text") },
 ];
+
+export const commands: Command[] = updaterEnabled
+  ? [
+      ...baseCommands,
+      { id: "help.checkForUpdates", label: () => t("commands.checkForUpdates"), action: () => { void checkForUpdates({ interactive: true, resetDismissal: true }) } },
+    ]
+  : baseCommands

@@ -17,6 +17,8 @@
     "@tanstack/virtual-core": "^3.13.23",
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-dialog": "^2.0.0",
+    "@tauri-apps/plugin-process": "^2.0.0",
+    "@tauri-apps/plugin-updater": "^2.0.0",
     "i18next": "^24.0.0",
     "maplibre-contour": "^0.1.0",
     "maplibre-gl": "^5.21.1",

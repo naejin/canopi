@@ -5,6 +5,8 @@ import type { Settings } from "../../types/settings";
 import { initTheme } from "../../utils/theme";
 import { plantDbStatus } from "../health/state";
 import { setBootstrappedSettings } from "../settings/persistence";
+import { bootstrapUpdater } from "../updater/controller";
+import { updaterEnabled } from "../updater/config";
 
 let shellBootstrapped = false;
 
@@ -29,6 +31,9 @@ export function bootstrapShell(): void {
   void invoke<Settings>("get_settings")
     .then((settings) => {
       setBootstrappedSettings(settings);
+      if (updaterEnabled) {
+        bootstrapUpdater(settings.check_updates);
+      }
     })
     .catch((error) => console.error("Failed to bootstrap settings:", error));
 }

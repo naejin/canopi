@@ -432,6 +432,7 @@
     "worldMap": "세계 지도로 이동",
     "learning": "학습으로 이동",
     "toggleTheme": "테마 전환",
+    "checkForUpdates": "Check for Updates",
     "commandPalette": "명령 팔레트",
     "searchPlaceholder": "명령을 입력하세요...",
     "noResults": "명령을 찾을 수 없습니다"
@@ -617,6 +618,7 @@
     "file": "파일",
     "edit": "편집",
     "view": "보기",
+    "help": "Help",
     "file.new": "새 디자인",
     "file.open": "디자인 열기",
     "file.save": "저장",
@@ -626,10 +628,33 @@
     "edit.redo": "다시 실행",
     "view.zoomIn": "확대",
     "view.zoomOut": "축소",
-    "view.fitToContent": "콘텐츠에 맞추기"
+    "view.fitToContent": "콘텐츠에 맞추기",
+    "help.checkForUpdates": "Check for Updates"
   },
   "titleBar": {
     "unsavedChanges": "저장되지 않은 변경사항"
+  },
+  "updater": {
+    "dialogTitle": "Updates",
+    "checking": "Checking for updates…",
+    "available": "Canopi {{version}} is available",
+    "install": "Install",
+    "installAfterSaving": "Install after saving",
+    "later": "Later",
+    "downloading": "Downloading update…",
+    "downloadProgress": "Downloading {{downloaded}} of {{total}}",
+    "readyToRestart": "Canopi {{version}} is ready to restart",
+    "restart": "Restart",
+    "retry": "Retry",
+    "errorPrefix": "Update failed",
+    "upToDateMessage": "Canopi is up to date.",
+    "saveBeforeInstallTitle": "Save changes before installing",
+    "saveBeforeInstallMessage": "Save or close your current document before installing this update.",
+    "saveBeforeInstallInline": "Save your current document before installing this update.",
+    "saveBeforeRestartTitle": "Save changes before restarting",
+    "saveBeforeRestartMessage": "Save or close your current document before restarting into the updated version.",
+    "saveBeforeRestartInline": "Save your current document before restarting into the updated version.",
+    "notConfigured": "Updater is not configured for this build."
   },
   "window": {
     "minimize": "최소화",
