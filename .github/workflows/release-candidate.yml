@@ -158,7 +158,7 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            bundle_args: --bundles deb appimage
+            bundle_args: --bundles appimage
           - os: macos-14
             target: aarch64-apple-darwin
             bundle_args: ""
@@ -218,19 +218,45 @@ jobs:
             exit 1
           fi
 
+      - name: Generate release-only updater config
+        shell: bash
+        env:
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          config = json.loads(Path("desktop/tauri.release.conf.json").read_text())
+          config.setdefault("plugins", {}).setdefault("updater", {})["endpoints"] = [
+              f"https://github.com/{os.environ['REPOSITORY']}/releases/latest/download/latest.json"
+          ]
+          Path("desktop/tauri.release.generated.json").write_text(json.dumps(config, indent=2) + "\n")
+          PY
+
       - name: Build Tauri app
-        run: npx --prefix desktop/web @tauri-apps/cli build --target ${{ matrix.target }} ${{ matrix.bundle_args }}
+        env:
+          CANOPI_UPDATER_PUBLIC_KEY: ${{ secrets.CANOPI_UPDATER_PUBLIC_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          VITE_CANOPI_UPDATER_ENABLED: "true"
+        run: npx --prefix desktop/web @tauri-apps/cli build --config desktop/tauri.release.generated.json --target ${{ matrix.target }} ${{ matrix.bundle_args }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: canopi-${{ matrix.target }}
           path: |
-            target/${{ matrix.target }}/release/bundle/**/*.deb
             target/${{ matrix.target }}/release/bundle/**/*.AppImage
+            target/${{ matrix.target }}/release/bundle/**/*.AppImage.sig
+            target/${{ matrix.target }}/release/bundle/**/*.app.tar.gz
+            target/${{ matrix.target }}/release/bundle/**/*.app.tar.gz.sig
             target/${{ matrix.target }}/release/bundle/**/*.dmg
             target/${{ matrix.target }}/release/bundle/**/*.msi
+            target/${{ matrix.target }}/release/bundle/**/*.msi.sig
             target/${{ matrix.target }}/release/bundle/**/*.exe
+            target/${{ matrix.target }}/release/bundle/**/*.exe.sig
           if-no-files-found: error
           retention-days: 30
 
@@ -260,10 +286,14 @@ jobs:
           (
             cd artifacts
             find . -type f \( \
-              -name '*.deb' -o \
               -name '*.AppImage' -o \
+              -name '*.AppImage.sig' -o \
+              -name '*.app.tar.gz' -o \
+              -name '*.app.tar.gz.sig' -o \
               -name '*.dmg' -o \
               -name '*.msi' -o \
+              -name '*.msi.sig' -o \
+              -name '*.exe.sig' -o \
               -name '*.exe' \
             \) -print | sort | xargs sha256sum
           ) > SHA256SUMS.txt
@@ -291,6 +321,55 @@ jobs:
           Path("release-metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
           PY
 
+          python3 - <<'PY'
+          import datetime as dt
+          import json
+          import os
+          from pathlib import Path
+
+          artifacts_root = Path("artifacts")
+          repo = os.environ["REPOSITORY"]
+          version = os.environ["BUILD_VERSION"]
+          release_tag = f"v{version}"
+
+          def require_one(pattern: str) -> Path:
+              matches = sorted(artifacts_root.glob(pattern))
+              if len(matches) != 1:
+                  raise SystemExit(f"Expected exactly one match for {pattern}, found {len(matches)}")
+              return matches[0]
+
+          def signature_for(path: Path) -> str:
+              sig_path = Path(f"{path}.sig")
+              if not sig_path.exists():
+                  raise SystemExit(f"Missing updater signature for {path}")
+              return sig_path.read_text().strip()
+
+          platform_files = {
+              "linux-x86_64": require_one("canopi-x86_64-unknown-linux-gnu/**/*.AppImage"),
+              "darwin-aarch64": require_one("canopi-aarch64-apple-darwin/**/*.app.tar.gz"),
+              "darwin-x86_64": require_one("canopi-x86_64-apple-darwin/**/*.app.tar.gz"),
+              "windows-x86_64": require_one("canopi-x86_64-pc-windows-msvc/**/nsis/*.exe"),
+          }
+
+          latest = {
+              "version": version,
+              "notes": "",
+              "pub_date": dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+              "platforms": {
+                  platform: {
+                      "signature": signature_for(path),
+                      "url": f"https://github.com/{repo}/releases/download/{release_tag}/{path.name}",
+                  }
+                  for platform, path in platform_files.items()
+              },
+          }
+
+          Path("latest.json").write_text(json.dumps(latest, indent=2) + "\n")
+          PY
+
+          latest_sha256="$(sha256sum latest.json | awk '{print $1}')"
+          printf '%s  %s\n' "$latest_sha256" "canopi-release-candidate-manifest/latest.json" >> SHA256SUMS.txt
+
       - name: Write manifest summary
         shell: bash
         run: |
@@ -300,6 +379,7 @@ jobs:
             echo "- Commit: \`${{ needs.preflight.outputs.head_sha }}\`"
             echo "- Version: \`${{ inputs.release_version }}\`"
             echo "- Packaged artifact checksums: \`SHA256SUMS.txt\`"
+            echo "- Updater manifest: \`latest.json\`"
             echo "- Bundled DB checksum: \`${{ needs.preflight.outputs.db_sha256 }}\`"
             echo "- Promotion command: \`scripts/promote-release.sh --run-id ${{ github.run_id }} --tag <tag> --title <title>\`"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -310,6 +390,7 @@ jobs:
           name: canopi-release-candidate-manifest
           path: |
             SHA256SUMS.txt
+            latest.json
             release-metadata.json
           if-no-files-found: error
           retention-days: 30
