@@ -62,7 +62,7 @@
 .settings {
   display: flex;
   align-items: center;
-  gap: 0;
+  gap: var(--space-2);
   margin-right: var(--space-2);
   flex-shrink: 0;
 }
@@ -120,6 +120,12 @@
 
 .themeBtn:hover {
   color: var(--color-text);
+}
+
+.themeBtn:disabled {
+  color: var(--color-text-muted);
+  cursor: default;
+  opacity: 0.68;
 }
 
 @media (prefers-reduced-motion: reduce) {

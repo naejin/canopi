@@ -6,6 +6,7 @@ const RETAINED_CSS_MODULES = [
   '../components/shared/CommandPalette.module.css',
   '../components/shared/TitleBar.module.css',
   '../components/shared/Dropdown.module.css',
+  '../components/shared/SettingsModal.module.css',
   '../components/shared/WelcomeScreen.module.css',
   '../components/canvas/BottomPanel.module.css',
   '../components/panels/PanelBar.module.css',

@@ -28,6 +28,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .register::<common_types::settings::Locale>()
         .register::<common_types::settings::Settings>()
         .register::<common_types::settings::Theme>()
+        .register::<common_types::settings::UpdateChannel>()
         .register::<common_types::species::CommonNameEntry>()
         .register::<common_types::species::DynamicFilter>()
         .register::<common_types::species::DynamicFilterOptions>()

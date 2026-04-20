@@ -72,7 +72,7 @@ fn detect_initial_locale(os_locale: Option<&str>) -> Option<Locale> {
 mod tests {
     use super::{get_settings_with_locale, set_settings};
     use crate::db::UserDb;
-    use common_types::settings::{BasemapStyle, Locale, Settings, Theme};
+    use common_types::settings::{BasemapStyle, Locale, Settings, Theme, UpdateChannel};
     use rusqlite::Connection;
     use std::sync::Mutex;
 
@@ -119,6 +119,15 @@ mod tests {
         .unwrap();
 
         assert_eq!(settings.map_style, BasemapStyle::Street);
+    }
+
+    #[test]
+    fn defaults_missing_update_channel_to_stable() {
+        let settings =
+            super::deserialize_settings(r#"{"locale":"en","theme":"light","check_updates":true}"#)
+                .unwrap();
+
+        assert_eq!(settings.update_channel, UpdateChannel::Stable);
     }
 
     #[test]

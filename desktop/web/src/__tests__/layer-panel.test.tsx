@@ -70,6 +70,7 @@ describe('LayerPanel', () => {
       show_botanical_names: true,
       debug_logging: false,
       check_updates: true,
+      update_channel: 'stable',
       default_design_dir: '',
       recent_files_max: 20,
       last_active_panel: 'canvas',

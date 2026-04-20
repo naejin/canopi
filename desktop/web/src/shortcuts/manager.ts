@@ -1,5 +1,11 @@
 import { signal } from "@preact/signals";
 import { activePanel, navigateTo } from "../app/shell/state";
+import {
+  cancelSettingsSession,
+  openSettingsSession,
+  saveSettingsSession,
+} from "../app/settings/controller";
+import { settingsModalOpen } from "../app/settings/modal-state";
 import { currentCanvasHasSelection, getCurrentCanvasSession, setCurrentCanvasTool } from "../canvas/session";
 import { isEditableTarget } from "../canvas/runtime/interaction/pointer-utils";
 import {
@@ -19,6 +25,33 @@ export const commandPaletteOpen = signal(false);
 // Module-level reference so HMR can remove the old handler before re-adding.
 let _keydownHandler: ((e: KeyboardEvent) => void) | null = null
 
+export function handleSettingsModalShortcut(
+  e: Pick<KeyboardEvent, "ctrlKey" | "metaKey" | "shiftKey" | "key" | "preventDefault">,
+): boolean {
+  if (!settingsModalOpen.value) {
+    return false;
+  }
+
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === ",") {
+    e.preventDefault();
+    return true;
+  }
+
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "s") {
+    e.preventDefault();
+    void saveSettingsSession();
+    return true;
+  }
+
+  if (e.key === "Escape") {
+    e.preventDefault();
+    cancelSettingsSession();
+    return true;
+  }
+
+  return true;
+}
+
 export function initShortcuts() {
   // Remove any handler registered by a previous HMR execution.
   if (_keydownHandler) {
@@ -29,10 +62,20 @@ export function initShortcuts() {
     // Don't capture when typing in inputs
     const isInput = isEditableTarget(e.target);
 
+    if (handleSettingsModalShortcut(e)) {
+      return;
+    }
+
     // Ctrl+Shift+P — command palette
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === COMMAND_PALETTE_SHORTCUT_KEY) {
       e.preventDefault();
       commandPaletteOpen.value = !commandPaletteOpen.value;
+      return;
+    }
+
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === ",") {
+      e.preventDefault();
+      openSettingsSession();
       return;
     }
 

@@ -1,6 +1,8 @@
 import { useRef } from 'preact/hooks'
 import { useSignal, useSignalEffect } from '@preact/signals'
 import { locale } from '../../app/settings/state'
+import { settingsHydrated } from '../../app/settings/persistence'
+import { settingsModalOpen } from '../../app/settings/modal-state'
 import { currentCanvasSession } from '../../canvas/session'
 import { currentDesign, designDirty } from '../../state/design'
 import { getMenuDefinitions, type MenuDefinition, type MenuEntry } from './menu-definitions'
@@ -20,6 +22,8 @@ export function MenuBar() {
   void currentDesign.value
   void designDirty.value
   void currentCanvasSession.value
+  void settingsHydrated.value
+  void settingsModalOpen.value
 
   const menus = getMenuDefinitions()
 
@@ -35,6 +39,12 @@ export function MenuBar() {
     return () => {
       document.removeEventListener('pointerup', handleOutside)
     }
+  })
+
+  useSignalEffect(() => {
+    if (!settingsModalOpen.value) return
+    openMenuId.value = null
+    focusedItemIndex.current = -1
   })
 
   const focusItem = (menuEl: HTMLElement, index: number) => {
@@ -181,6 +191,7 @@ export function MenuBar() {
               onKeyDown={(e) => handleTriggerKeyDown(e, menu.id)}
               aria-expanded={isOpen}
               aria-haspopup="menu"
+              disabled={settingsModalOpen.value}
             >
               {menu.label}
             </button>

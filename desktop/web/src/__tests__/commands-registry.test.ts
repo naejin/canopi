@@ -6,7 +6,10 @@ vi.mock('../app/updater/config', () => ({
 
 import { activeTool } from '../canvas/session-state'
 import { activePanel, sidePanel } from '../app/shell/state'
+import { settingsHydrated } from '../app/settings/persistence'
 import { theme } from '../app/settings/state'
+import { settingsDraft } from '../app/settings/controller'
+import { settingsModalOpen } from '../app/settings/modal-state'
 import { setCurrentCanvasSession } from '../canvas/session'
 import * as documentActions from '../app/document-session/actions'
 import * as settingsPersistence from '../app/settings/persistence'
@@ -25,6 +28,9 @@ describe('command registry canvas tool switching', () => {
     activeTool.value = 'select'
     activePanel.value = 'canvas'
     sidePanel.value = null
+    settingsHydrated.value = true
+    settingsDraft.value = null
+    settingsModalOpen.value = false
     setCurrentCanvasSession(null)
   })
 
@@ -32,6 +38,9 @@ describe('command registry canvas tool switching', () => {
     setCurrentCanvasSession(null)
     activeTool.value = 'select'
     theme.value = 'light'
+    settingsHydrated.value = false
+    settingsDraft.value = null
+    settingsModalOpen.value = false
   })
 
   it('routes tool commands through the live canvas session when mounted', () => {
@@ -78,6 +87,13 @@ describe('command registry canvas tool switching', () => {
     expect(openSpy).toHaveBeenCalledTimes(1)
     expect(saveSpy).toHaveBeenCalledTimes(1)
     expect(saveAsSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('opens the settings modal through the file settings command', () => {
+    getCommand('file.settings').action()
+
+    expect(settingsModalOpen.value).toBe(true)
+    expect(settingsDraft.value).not.toBeNull()
   })
 
   it('toggles theme through settings state and persistence', () => {

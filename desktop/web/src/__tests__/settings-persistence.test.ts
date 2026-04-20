@@ -17,7 +17,7 @@ import {
   snapToGridEnabled,
   snapToGuidesEnabled,
 } from '../app/canvas-settings/signals'
-import { autoSaveIntervalMs, basemapStyle, checkUpdatesEnabled, locale, theme } from '../app/settings/state'
+import { autoSaveIntervalMs, basemapStyle, checkUpdatesEnabled, locale, theme, updateChannel } from '../app/settings/state'
 import {
   flushQueuedSettingsPersist,
   queueSettingsPersist,
@@ -31,6 +31,7 @@ beforeEach(() => {
   theme.value = 'light'
   basemapStyle.value = 'street'
   checkUpdatesEnabled.value = true
+  updateChannel.value = 'stable'
   autoSaveIntervalMs.value = 60_000
   snapToGridEnabled.value = false
   snapToGuidesEnabled.value = false
@@ -64,6 +65,7 @@ describe('settings persistence', () => {
       show_botanical_names: true,
       debug_logging: false,
       check_updates: true,
+      update_channel: 'beta',
       default_design_dir: '',
       recent_files_max: 20,
       last_active_panel: 'canvas',
@@ -84,6 +86,7 @@ describe('settings persistence', () => {
     expect(theme.value).toBe('dark')
     expect(basemapStyle.value).toBe('street')
     expect(checkUpdatesEnabled.value).toBe(true)
+    expect(updateChannel.value).toBe('beta')
     expect(autoSaveIntervalMs.value).toBe(45_000)
     expect(snapToGridEnabled.value).toBe(true)
     expect(snapToGuidesEnabled.value).toBe(true)
@@ -113,6 +116,7 @@ describe('settings persistence', () => {
       show_botanical_names: true,
       debug_logging: false,
       check_updates: true,
+      update_channel: 'stable',
       default_design_dir: '',
       recent_files_max: 20,
       last_active_panel: 'canvas',
@@ -132,6 +136,7 @@ describe('settings persistence', () => {
     locale.value = 'de'
     basemapStyle.value = 'satellite'
     checkUpdatesEnabled.value = false
+    updateChannel.value = 'beta'
     layerOpacity.value = { ...layerOpacity.value, base: 0.6 }
     queueSettingsPersist(250)
 
@@ -148,6 +153,7 @@ describe('settings persistence', () => {
     expect(vi.mocked(setSettings)).toHaveBeenCalledWith(expect.objectContaining({
       locale: 'it',
       check_updates: false,
+      update_channel: 'beta',
       map_style: 'satellite',
       map_opacity: 0.6,
       hillshade_visible: true,

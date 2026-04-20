@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { mutateCurrentDesign, updateDesignArray } from '../app/document/controller'
+import { mutateCurrentDesign, updateCurrentDesignMetadata, updateDesignArray } from '../app/document/controller'
 import { speciesBudgetTarget } from '../panel-targets'
-import { currentDesign, nonCanvasRevision } from '../state/design'
+import { currentDesign, designName, nonCanvasRevision } from '../state/design'
 
 beforeEach(() => {
   nonCanvasRevision.value = 0
@@ -24,6 +24,7 @@ beforeEach(() => {
     updated_at: '',
     extra: {},
   }
+  designName.value = 'test'
 })
 
 describe('document controller', () => {
@@ -61,5 +62,17 @@ describe('document controller', () => {
 
     expect(currentDesign.value?.budget).toHaveLength(1)
     expect(nonCanvasRevision.value).toBe(0)
+  })
+
+  it('updates design metadata and keeps the shell name in sync', () => {
+    updateCurrentDesignMetadata({
+      name: 'Kitchen Garden',
+      description: 'South slope layout',
+    })
+
+    expect(currentDesign.value?.name).toBe('Kitchen Garden')
+    expect(currentDesign.value?.description).toBe('South slope layout')
+    expect(designName.value).toBe('Kitchen Garden')
+    expect(nonCanvasRevision.value).toBe(1)
   })
 })

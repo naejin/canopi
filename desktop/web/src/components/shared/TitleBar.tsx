@@ -2,7 +2,8 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 import { designName, designDirty } from '../../state/design'
 import { activePanel } from '../../app/shell/state'
 import { locale, theme } from '../../app/settings/state'
-import { persistCurrentSettings } from '../../app/settings/persistence'
+import { persistCurrentSettings, settingsHydrated } from '../../app/settings/persistence'
+import { settingsModalOpen } from '../../app/settings/modal-state'
 import { t } from '../../i18n'
 import { Dropdown, type DropdownItem } from './Dropdown'
 import { MenuBar } from './MenuBar'
@@ -36,6 +37,7 @@ function LocalePicker() {
       menuClassName={styles.localeMenu}
       optionClassName={styles.localeItem}
       preserveOverlays
+      disabled={!settingsHydrated.value || settingsModalOpen.value}
     />
   )
 }
@@ -96,6 +98,7 @@ export function TitleBar() {
           }}
           aria-label={t('status.theme')}
           title={t(theme.value === 'dark' ? 'theme.light' : 'theme.dark')}
+          disabled={!settingsHydrated.value || settingsModalOpen.value}
         >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             {theme.value === 'dark' ? (

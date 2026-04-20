@@ -9,3 +9,4 @@ pub mod health;
 pub mod settings;
 pub mod species;
 pub mod tiles;
+pub mod updater;
