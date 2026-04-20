@@ -223,8 +223,11 @@ if [[ "${#release_files[@]}" -eq 0 ]]; then
   exit 1
 fi
 
-mapfile -t release_upload_args < <(
-  python3 - "$metadata_path" "${release_files[@]}" <<'PY'
+upload_dir="$tmpdir/release-upload"
+mkdir -p "$upload_dir"
+
+mapfile -t release_upload_map < <(
+  python3 - "$metadata_path" "$upload_dir" "${release_files[@]}" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -232,13 +235,29 @@ from pathlib import Path
 from scripts.release_asset_name import canonical_asset_name
 
 metadata = json.loads(Path(sys.argv[1]).read_text())
+upload_dir = Path(sys.argv[2])
 version = metadata["release_version"]
+seen = set()
 
-for artifact_path in sys.argv[2:]:
+for artifact_path in sys.argv[3:]:
     canonical_name = canonical_asset_name(version, artifact_path)
-    print(f"{artifact_path}#{canonical_name}")
+    if canonical_name in seen:
+        raise SystemExit(f"Duplicate canonical release asset name computed: {canonical_name}")
+    seen.add(canonical_name)
+    print(f"{artifact_path}\t{upload_dir / canonical_name}")
 PY
 )
+
+release_upload_paths=()
+for upload_entry in "${release_upload_map[@]}"; do
+  src_path="${upload_entry%%$'\t'*}"
+  dst_path="${upload_entry#*$'\t'}"
+  rm -f "$dst_path"
+  if ! ln "$src_path" "$dst_path" 2>/dev/null; then
+    cp "$src_path" "$dst_path"
+  fi
+  release_upload_paths+=("$dst_path")
+done
 
 read -r metadata_release_version metadata_release_tag metadata_head_sha < <(
   python3 - "$metadata_path" <<'PY'
@@ -417,7 +436,7 @@ upsert_release "$tag" "$title" "$notes_file" "$release_prerelease" "$release_lat
 
 log "Uploading packaged artifacts and manifest"
 gh release upload "$tag" \
-  "${release_upload_args[@]}" \
+  "${release_upload_paths[@]}" \
   "$manifest_path#SHA256SUMS.txt" \
   "$latest_json_path#latest.json" \
   "$metadata_path#release-metadata.json" \
