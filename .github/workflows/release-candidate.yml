@@ -368,6 +368,7 @@ jobs:
           import json
           import os
           from pathlib import Path
+          from scripts.release_asset_name import canonical_asset_name
 
           artifacts_root = Path("artifacts")
           repo = os.environ["REPOSITORY"]
@@ -400,7 +401,7 @@ jobs:
               "platforms": {
                   platform: {
                       "signature": signature_for(path),
-                      "url": f"https://github.com/{repo}/releases/download/{release_tag}/{path.name}",
+                      "url": f"https://github.com/{repo}/releases/download/{release_tag}/{canonical_asset_name(version, str(path))}",
                   }
                   for platform, path in platform_files.items()
               },

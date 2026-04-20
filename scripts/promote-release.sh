@@ -223,6 +223,23 @@ if [[ "${#release_files[@]}" -eq 0 ]]; then
   exit 1
 fi
 
+mapfile -t release_upload_args < <(
+  python3 - "$metadata_path" "${release_files[@]}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+from scripts.release_asset_name import canonical_asset_name
+
+metadata = json.loads(Path(sys.argv[1]).read_text())
+version = metadata["release_version"]
+
+for artifact_path in sys.argv[2:]:
+    canonical_name = canonical_asset_name(version, artifact_path)
+    print(f"{artifact_path}#{canonical_name}")
+PY
+)
+
 read -r metadata_release_version metadata_release_tag metadata_head_sha < <(
   python3 - "$metadata_path" <<'PY'
 import json
@@ -314,6 +331,12 @@ assert_existing_release_matches() {
     --pattern "release-metadata.json" \
     --dir "$existing_dir" \
     >/dev/null 2>&1; then
+    local asset_count
+    asset_count="$(gh api "repos/$repo/releases/tags/$release_tag" --jq '.assets | length')"
+    if [[ "$asset_count" == "0" ]]; then
+      log "Existing release '$release_tag' has no assets or release-metadata.json; treating it as an interrupted empty release."
+      return
+    fi
     echo "ERROR: Existing release '$release_tag' is missing release-metadata.json; refusing to mutate a versioned release without provenance." >&2
     exit 1
   fi
@@ -394,7 +417,7 @@ upsert_release "$tag" "$title" "$notes_file" "$release_prerelease" "$release_lat
 
 log "Uploading packaged artifacts and manifest"
 gh release upload "$tag" \
-  "${release_files[@]}" \
+  "${release_upload_args[@]}" \
   "$manifest_path#SHA256SUMS.txt" \
   "$latest_json_path#latest.json" \
   "$metadata_path#release-metadata.json" \
