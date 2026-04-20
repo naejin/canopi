@@ -77,6 +77,7 @@ Before promoting:
 Before promoting a release candidate to `beta`, verify:
 
 - the release version is a prerelease version such as `0.4.0-beta.1`
+- the Windows prerelease artifact is the NSIS `.exe` bundle, not an MSI
 - the release candidate artifacts come from the intended commit
 - packaged artifacts, signatures, `latest.json`, and `release-metadata.json` are present
 - the target beta tag/title are correct
@@ -113,7 +114,7 @@ Every supported packaged artifact needs a smoke result recorded here before stab
 | Linux desktop (`.AppImage`) | Release Candidate run artifact or promoted beta asset |  |  | Pending |  |
 | macOS Apple Silicon (`aarch64-apple-darwin`) | Release Candidate run artifact or promoted beta asset |  |  | Pending |  |
 | macOS Intel (`x86_64-apple-darwin`) | Release Candidate run artifact or promoted beta asset |  |  | Pending |  |
-| Windows desktop | Release Candidate run artifact or promoted beta asset |  |  | Pending |  |
+| Windows desktop (NSIS `.exe` for prerelease beta builds) | Release Candidate run artifact or promoted beta asset |  |  | Pending |  |
 
 ## Minimum Packaged-App Smoke Script
 

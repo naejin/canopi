@@ -83,6 +83,23 @@ Artifacts to retain from the run:
 - `canopi-<target>` per platform
 - `canopi-release-candidate-manifest`
 
+Windows prerelease packaging rule:
+
+- if `release_version` includes a prerelease suffix such as `-beta.1`, the Windows artifact is packaged as NSIS `.exe` only
+- MSI packaging is reserved for stable Windows releases because MSI does not accept semantic-version prerelease identifiers
+
+Observed timing on GitHub-hosted runners:
+
+- successful `0.5.0-beta.1` RC run `24686090934` on `2026-04-20` completed in about `13m 43s` wall-clock time
+- per-job timings from that run:
+  - preflight: `6s`
+  - Linux AppImage: `7m 51s`
+  - macOS Apple Silicon: `7m 24s`
+  - macOS Intel: `11m 06s`
+  - Windows NSIS: `13m 16s`
+  - manifest assembly: `15s`
+- use `~15 minutes` as the normal expectation for a healthy four-platform RC before re-checking the run
+
 ## 3. Promote To Beta
 
 Promote the exact run to a public prerelease:
