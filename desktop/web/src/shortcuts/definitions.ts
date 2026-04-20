@@ -5,6 +5,7 @@ export const FILE_SHORTCUTS = {
   openDesign: 'Ctrl+O',
   saveDesign: 'Ctrl+S',
   saveDesignAs: 'Ctrl+Shift+S',
+  settings: 'Ctrl+,',
   commandPalette: 'Ctrl+Shift+P',
 } as const
 

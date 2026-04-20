@@ -1,6 +1,7 @@
 import { navigateTo, type Panel } from "../app/shell/state";
 import { theme } from "../app/settings/state";
 import { persistCurrentSettings } from "../app/settings/persistence";
+import { openSettingsSession } from "../app/settings/controller";
 import { setCurrentCanvasTool } from "../canvas/session";
 import { t } from "../i18n";
 import { FILE_SHORTCUTS, EDIT_SHORTCUTS, VIEW_SHORTCUTS, PANEL_SHORTCUTS, TOOL_SHORTCUTS } from "../shortcuts/definitions";
@@ -43,6 +44,7 @@ const baseCommands: Command[] = [
   { id: "file.open",   label: () => t("canvas.file.open"),   shortcut: FILE_SHORTCUTS.openDesign,  action: () => { void openDesign() } },
   { id: "file.save",   label: () => t("canvas.file.save"),   shortcut: FILE_SHORTCUTS.saveDesign,  action: () => { void saveCurrentDesign() } },
   { id: "file.saveAs", label: () => t("canvas.file.saveAs"), shortcut: FILE_SHORTCUTS.saveDesignAs, action: () => { void saveAsCurrentDesign() } },
+  { id: "file.settings", label: () => t("commands.settings"), shortcut: FILE_SHORTCUTS.settings, action: () => { openSettingsSession() } },
 
   // Edit operations
   { id: "edit.undo",   label: () => t("menu.edit.undo"),   shortcut: EDIT_SHORTCUTS.undo,  action: () => { getCurrentCanvasSession()?.undo() } },

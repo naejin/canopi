@@ -7,6 +7,7 @@ import { activePanel, sidePanel, sidePanelWidth } from "./app/shell/state";
 import { TitleBar } from "./components/shared/TitleBar";
 import { ShellNotices } from "./components/shared/ShellNotices";
 import { CommandPalette } from "./components/shared/CommandPalette";
+import { SettingsModal } from "./components/shared/SettingsModal";
 import { CanvasPanel } from "./components/panels/CanvasPanel";
 import { PanelBar } from "./components/panels/PanelBar";
 
@@ -128,6 +129,7 @@ export function App() {
         {/* Right panel bar — always visible */}
         {(showCanvas || showLocation) && <PanelBar />}
       </div>
+      <SettingsModal />
       <CommandPalette />
     </div>
   );

@@ -11,6 +11,8 @@ import { currentDesign, designDirty } from '../../state/design'
 import { FILE_SHORTCUTS, EDIT_SHORTCUTS, VIEW_SHORTCUTS } from '../../shortcuts/definitions'
 import { checkForUpdates } from '../../app/updater/controller'
 import { updaterEnabled } from '../../app/updater/config'
+import { openSettingsSession } from '../../app/settings/controller'
+import { settingsHydrated } from '../../app/settings/persistence'
 
 export interface MenuAction {
   type: 'action'
@@ -50,6 +52,8 @@ export function getMenuDefinitions(): MenuDefinition[] {
         separator,
         { type: 'action', id: 'file.save', label: t('menu.file.save'), shortcut: FILE_SHORTCUTS.saveDesign, action: () => { void saveCurrentDesign() }, disabled: !hasDesign || !designDirty.value },
         { type: 'action', id: 'file.saveAs', label: t('menu.file.saveAs'), shortcut: FILE_SHORTCUTS.saveDesignAs, action: () => { void saveAsCurrentDesign() }, disabled: !hasDesign },
+        separator,
+        { type: 'action', id: 'file.settings', label: t('menu.file.settings'), shortcut: FILE_SHORTCUTS.settings, action: () => { openSettingsSession() }, disabled: !settingsHydrated.value },
         separator,
         { type: 'action', id: 'file.exit', label: t('menu.file.exit'), action: () => { void getCurrentWindow().close() }, disabled: false },
       ],

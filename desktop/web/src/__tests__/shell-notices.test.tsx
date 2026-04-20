@@ -23,7 +23,6 @@ vi.mock('../app/updater/controller', () => ({
   installAvailableUpdate: vi.fn(),
   restartToApplyUpdate: vi.fn(),
   retryUpdateAction: vi.fn(),
-  setUpdateChannelPreference: vi.fn(),
 }))
 
 import { TitleBar } from '../components/shared/TitleBar'
@@ -32,6 +31,7 @@ import { activePanel } from '../app/shell/state'
 import { plantDbStatus } from '../app/health/state'
 import { updaterState } from '../app/updater/state'
 import { designName, currentDesign, resetDirtyBaselines } from '../state/design'
+import { settingsModalOpen } from '../app/settings/modal-state'
 import { locale, theme, updateChannel } from '../app/settings/state'
 
 describe('shell notices', () => {
@@ -44,6 +44,7 @@ describe('shell notices', () => {
     locale.value = 'en'
     theme.value = 'light'
     updateChannel.value = 'stable'
+    settingsModalOpen.value = false
     activePanel.value = 'canvas'
     designName.value = 'Demo Design'
     currentDesign.value = {
@@ -92,6 +93,21 @@ describe('shell notices', () => {
     expect(container.textContent).not.toContain('Canopi 0.5.0 is available')
   })
 
+  it('disables title-bar quick controls while the settings modal is open', async () => {
+    settingsModalOpen.value = true
+
+    await act(async () => {
+      render(<TitleBar />, container)
+    })
+
+    const buttons = Array.from(container.querySelectorAll('button'))
+    const languageTrigger = buttons.find((button) => button.textContent?.includes('EN'))
+    const themeButton = buttons.find((button) => button.getAttribute('aria-label') === 'Theme')
+
+    expect(languageTrigger?.disabled).toBe(true)
+    expect(themeButton?.disabled).toBe(true)
+  })
+
   it('renders degraded health before updater availability in the shell notice stack', async () => {
     plantDbStatus.value = 'missing'
     updaterState.value = {
@@ -112,15 +128,5 @@ describe('shell notices', () => {
     expect(notices[1]?.getAttribute('data-shell-notice')).toBe('updater')
     expect(notices[0]?.textContent).toContain('Plant database not found')
     expect(notices[1]?.textContent).toContain('Canopi 0.5.0 is available')
-  })
-
-  it('shows a beta badge in the title bar when the beta channel is selected', async () => {
-    updateChannel.value = 'beta'
-
-    await act(async () => {
-      render(<TitleBar />, container)
-    })
-
-    expect(container.textContent).toContain('Beta')
   })
 })

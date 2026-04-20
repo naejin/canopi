@@ -170,7 +170,7 @@ export function dismissUpdate(): void {
   }
 }
 
-async function confirmChannelChange(
+export async function confirmUpdateChannelChange(
   previousChannel: UpdateChannel,
   nextChannel: UpdateChannel,
 ): Promise<boolean> {
@@ -191,16 +191,10 @@ async function confirmChannelChange(
   return true
 }
 
-export async function setUpdateChannelPreference(nextChannel: UpdateChannel): Promise<void> {
-  const previousChannel = updateChannel.peek()
-  if (previousChannel === nextChannel) return
-
-  const confirmed = await confirmChannelChange(previousChannel, nextChannel)
-  if (!confirmed) return
-
-  updateChannel.value = nextChannel
-  persistCurrentSettings()
-
+export async function applyUpdateChannelChangeEffects(
+  nextChannel: UpdateChannel,
+  options: { shouldRecheck: boolean },
+): Promise<void> {
   if (pendingUpdate?.channel !== nextChannel) {
     pendingUpdate = null
     const current = updaterState.peek()
@@ -209,9 +203,21 @@ export async function setUpdateChannelPreference(nextChannel: UpdateChannel): Pr
     }
   }
 
-  if (updaterEnabled) {
+  if (options.shouldRecheck && updaterEnabled) {
     await checkForUpdates({ resetDismissal: true })
   }
+}
+
+export async function setUpdateChannelPreference(nextChannel: UpdateChannel): Promise<void> {
+  const previousChannel = updateChannel.peek()
+  if (previousChannel === nextChannel) return
+
+  const confirmed = await confirmUpdateChannelChange(previousChannel, nextChannel)
+  if (!confirmed) return
+
+  updateChannel.value = nextChannel
+  persistCurrentSettings()
+  await applyUpdateChannelChangeEffects(nextChannel, { shouldRecheck: true })
 }
 
 export async function installAvailableUpdate(): Promise<void> {

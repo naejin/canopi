@@ -1,49 +1,32 @@
-# Beta Release Verification
+# Release Verification
 
-Date: 2026-04-13
-Status: v0.3.0 release candidate
+This document is the verification checklist for Canopi release candidates, beta promotions, and stable promotions.
 
-Wave 5 is a beta-release gate on the current retained-surface architecture. It does not claim the broader roadmap is complete.
+Use it together with [`docs/release-operations.md`](/home/daylon/projects/canopi/docs/release-operations.md), which is the operator runbook for building and promoting releases.
 
-## Packaged DB Root Cause
+## Purpose
 
-The beta build initially showed `Plant database not found` even though the bundled DB asset existed in CI. Root cause: the desktop app resolved `BaseDirectory::Resource` as `canopi-core.db`, but Tauri bundles the resource under the relative path declared in `tauri.conf.json`.
+This checklist exists to answer four questions before a release is promoted:
 
-For this app, `bundle.resources` is `resources/canopi-core.db`, so the packaged runtime lookup must resolve `resources/canopi-core.db` first. On Linux that maps to `usr/lib/Canopi/resources/canopi-core.db`; on macOS and Windows the same relative path applies inside the app bundle / install root.
+1. Did the requested release candidate build from the exact intended commit?
+2. Are the packaged artifacts and updater metadata internally consistent?
+3. Did the packaged app pass the required smoke checks on supported platforms?
+4. If normal release gates were bypassed, is the override recorded clearly?
 
-This is a packaging-path issue, not a `prepare-db.py` generation issue.
+## Current Release Policy
 
-## Wave 5 Beta Scope
-
-Supported release targets:
-- Linux desktop via Tauri
-- macOS desktop via Tauri
-- Windows desktop via Tauri
-
-Not release targets:
-- browser-only product
-- iOS / Android
-
-Explicitly deferred beyond Wave 5 beta at beta-cut time:
-- color by plants
-- frontend lazy loading / performance improvements
-- detail-card photo fit polish
-- advanced geo / terrain layers beyond the shipped basemap and panel-target overlay slice
-- world map with featured designs / template import
-- timeline workflows
-- budget workflows
-- consortium workflows
-- geo / terrain workflows
-- export workflows
-- knowledge / learning surfaces
-
-For the current live geo/map slice status after beta, use `docs/todo.md` (`MapLibre / geo`) as the operational source of truth.
-
-`color by plants` landed later on 2026-04-01 as post-beta work. This section is a historical record of beta scope, not the current active backlog.
+- `beta` is the normal gate before `stable`.
+- `beta` is opt-in only. Stable users must never receive beta automatically.
+- beta builds use prerelease versions such as `0.4.0-beta.1`.
+- stable builds are rebuilt from the exact accepted beta commit, with no code changes between accepted beta and stable packaging.
+- default soak window before stable promotion is `48 hours`.
+- the release owner may override the soak window, missing smoke evidence, or beta entirely, but each override must include a short written reason.
+- beta builds must not introduce irreversible local migrations before stable.
+- switching from `beta` back to `stable` changes only future update checks; it does not downgrade the installed app.
 
 ## Required Automated Gates
 
-These checks must pass before a beta release candidate is declared ready:
+These checks must pass before a release candidate is treated as promotable:
 
 - `cargo fmt --all -- --check`
 - `cargo clippy --workspace --all-targets -- -D warnings`
@@ -51,144 +34,139 @@ These checks must pass before a beta release candidate is declared ready:
 - `npx --prefix desktop/web tsc --noEmit -p desktop/web/tsconfig.json`
 - `npm test --prefix desktop/web`
 - `npm run build --prefix desktop/web`
-- GitHub Actions Tauri build matrix with artifact upload for Linux, macOS Apple Silicon, macOS Intel, and Windows
-- Linux CI packaging is intentionally constrained to the AppImage bundle in GitHub Actions for the shipped Linux artifact
-- manual `Release Candidate` GitHub Actions workflow preflight for release-version format, bundled DB asset availability, bundled DB schema version, and checksum manifest generation
-- updater artifact signing plus `latest.json` generation in the release-candidate manifest job
-- release build compile-time updater endpoints for both channels:
-  - `VITE_CANOPI_UPDATER_STABLE_ENDPOINT=.../canopi-stable-manifest/latest.json`
-  - `VITE_CANOPI_UPDATER_BETA_ENDPOINT=.../canopi-beta-manifest/latest.json`
-- i18n completeness test for all supported locales against `en.json`
+- GitHub Actions Tauri build matrix for:
+  - Linux AppImage
+  - macOS Apple Silicon
+  - macOS Intel
+  - Windows
+- `Release Candidate` workflow preflight for:
+  - release-version format
+  - bundled DB availability
+  - bundled DB schema compatibility
+  - packaged artifact manifest generation
+- updater signing and `latest.json` generation in the release-candidate manifest job
+- i18n completeness coverage in the frontend test suite
 
-Current status in this tree:
+## Artifact Provenance Checklist
 
-- `cargo fmt --all -- --check`: passing locally on 2026-04-02
-- `cargo clippy --workspace --all-targets -- -D warnings`: passing locally on 2026-04-02
-- `cargo test --workspace`: passing locally on 2026-04-02
-- `npx --prefix desktop/web tsc --noEmit -p desktop/web/tsconfig.json`: passing locally on 2026-04-02
-- frontend tests: passing locally on 2026-04-02
-- frontend i18n completeness: passing via the frontend test suite on 2026-04-02
-- frontend production build: passing locally on 2026-04-02
-- GitHub Actions workflow: includes rust fmt, clippy, TypeScript check, workspace tests, frontend tests, frontend build, and 4-target Tauri artifact builds
-- `Release Candidate` workflow: lands manual preflight validation for release-version format, bundled DB asset availability, bundled DB schema compatibility, and packaged-artifact checksum manifest upload
-
-## Required Product Journeys
-
-These journeys must remain green for the beta release:
-
-1. Create a design, edit it, and switch documents without losing work.
-2. Search the plant database, inspect detail, favorite plants, and place plants on the canvas.
-3. Edit canvas content, undo/redo, save, reload, and preserve roundtrip parity.
-4. Use layer controls and location selection, including basemap loading/error feedback, without lifecycle or persistence regressions.
-5. Recover gracefully from network failure, disk failure, and invalid external data.
-6. Use the app in supported themes and locales without broken labels or unreadable surfaces.
-7. Build release artifacts for Linux, macOS, and Windows.
-
-## Supported-Platform Smoke Verification
-
-Artifact builds are automated in CI, and the beta release also requires one packaged-app smoke pass per supported release artifact.
-
-Use the packaged artifact from the promoted beta release, or the matching `Release Candidate` run before stable promotion, for each target and record the result here.
-
-| Platform / target | Artifact source | Tester / owner | Test date | Status | Defects / follow-up |
-| --- | --- | --- | --- | --- | --- |
-| Linux desktop (`.AppImage`) | GitHub Actions Linux Tauri build artifact | Release owner | — | Pending | — |
-| macOS Apple Silicon (`aarch64-apple-darwin`) | GitHub Actions macOS 14 Tauri build artifact | Release owner | — | Pending | — |
-| macOS Intel (`x86_64-apple-darwin`) | GitHub Actions macOS Intel Tauri build artifact | Release owner | — | Pending | — |
-| Windows desktop | GitHub Actions Windows Tauri build artifact | Release owner | — | Pending | — |
-
-This smoke pass is release-hardening work. It does not replace the separate live verification and renderer validation flows tracked elsewhere.
-
-## Release Operator Sequence
-
-The release operator flow is:
-
-1. Publish or verify the bundled DB asset with `scripts/publish-db-release.sh`.
-2. Run the `Release Candidate` GitHub Actions workflow for the exact candidate ref and release version.
-3. Promote to beta with `scripts/promote-release.sh --channel beta ...`.
-4. Use the promoted beta artifacts for manual smoke verification on each supported platform.
-5. Record tester, date, result, and any follow-up in the table above.
-6. Apply normal soak/signoff (default 48h) or explicit release-owner override with a written reason.
-7. Promote to stable with `scripts/promote-release.sh --channel stable ...`.
-
-Do not rebuild artifacts locally for promotion unless the release process is explicitly being run in emergency/manual-only mode.
-See [`docs/release-operations.md`](/home/daylon/projects/canopi/docs/release-operations.md) for the operator runbook and command examples.
-
-## Artifact Provenance Requirements
-
-Before promoting a beta or stable release candidate, capture and retain all of the following from the `Release Candidate` workflow run:
+Capture and retain all of the following for the release candidate run before any promotion:
 
 - workflow run ID
 - source commit SHA
 - requested release version
-- expected release tag (`v<release_version>`)
-- bundled DB release tag and asset name
+- expected release tag `v<release_version>`
+- bundled DB release tag
+- bundled DB asset name
 - bundled DB SHA256
-- packaged artifact checksum manifest (`SHA256SUMS.txt`)
-- updater manifest (`latest.json`)
-- promotion channel (`beta` or `stable`)
-- moving manifest tags (`canopi-beta-manifest`, `canopi-stable-manifest`)
+- packaged artifact checksum manifest `SHA256SUMS.txt`
+- updater manifest `latest.json`
+- release metadata file `release-metadata.json`
 
-Promotion should only upload the exact artifacts whose checksums were produced by that run.
+Promotion must use the exact artifacts produced by that run.
 
-## Channel Policy
+Before promoting:
 
-- `beta` is an explicit opt-in updater channel inside the existing app.
-- Stable users must never receive beta builds automatically.
-- `beta` uses prerelease versions such as `0.4.0-beta.1`.
-- Stable builds are expected to be rebuilt from the exact accepted beta commit with no code changes between the accepted commit and the stable packaging run, and the release operator must verify the matching `head_sha`.
-- Switching from `beta` back to `stable` does not downgrade the installed app; it only changes future update checks.
-- Beta builds must not introduce irreversible local migrations before stable.
-- If a beta is bad, fix forward with a newer beta instead of attempting an automatic downgrade.
-- The release owner may override the normal soak/smoke gate or bypass beta entirely, but each bypass must have a short written reason.
+- verify `release-metadata.json.head_sha` matches the intended source commit
+- verify `release-metadata.json.release_tag` matches the intended release tag
+- verify `SHA256SUMS.txt` validates successfully against the downloaded run artifacts
+- verify `latest.json` exists and references signed updater artifacts
+
+## Beta Verification
+
+Before promoting a release candidate to `beta`, verify:
+
+- the release version is a prerelease version such as `0.4.0-beta.1`
+- the release candidate artifacts come from the intended commit
+- packaged artifacts, signatures, `latest.json`, and `release-metadata.json` are present
+- the target beta tag/title are correct
+
+After beta promotion:
+
+- verify the versioned GitHub prerelease exists and is public
+- verify the moving `canopi-beta-manifest` release points to the promoted beta build
+- verify beta users would receive that build through the updater feed
+
+## Stable Verification
+
+Before promoting a release candidate to `stable`, verify:
+
+- the stable release candidate was rebuilt from the exact accepted beta commit
+- `release-metadata.json.head_sha` matches the accepted beta commit
+- the accepted beta completed the normal soak/signoff path, or an override has been recorded
+- packaged artifacts, signatures, `latest.json`, and `release-metadata.json` are present
+- the target stable tag/title are correct
+
+After stable promotion:
+
+- verify the versioned GitHub stable release exists
+- verify the moving `canopi-stable-manifest` release points to the promoted stable build
+- verify `canopi-beta-manifest` now points to the accepted stable build until a newer beta is promoted
+- verify stable users would receive the stable build and beta users would continue on their channel behavior correctly
+
+## Supported Platform Smoke Matrix
+
+Every supported packaged artifact needs a smoke result recorded here before stable promotion, unless explicitly overridden.
+
+| Platform / target | Artifact source | Tester / owner | Test date | Status | Defects / follow-up |
+| --- | --- | --- | --- | --- | --- |
+| Linux desktop (`.AppImage`) | Release Candidate run artifact or promoted beta asset |  |  | Pending |  |
+| macOS Apple Silicon (`aarch64-apple-darwin`) | Release Candidate run artifact or promoted beta asset |  |  | Pending |  |
+| macOS Intel (`x86_64-apple-darwin`) | Release Candidate run artifact or promoted beta asset |  |  | Pending |  |
+| Windows desktop | Release Candidate run artifact or promoted beta asset |  |  | Pending |  |
 
 ## Minimum Packaged-App Smoke Script
 
-Run this script against each packaged artifact:
+Run this script against the packaged app for each supported platform artifact:
 
-1. Launch the app and confirm clean startup with no bundled-resource failure.
-2. Create a design, edit it, save it, reload it, and switch documents without data loss.
-3. Open plant search, inspect plant detail, favorite a plant if available, and place a plant on canvas.
-   Search regression check: type a narrow prefix such as `asr`, delete back to `as`, and confirm the visible list repopulates and scrolls normally without needing a locale change or list/card toggle.
-4. Edit canvas content and verify undo/redo still works in the packaged build.
+1. Launch the app and confirm clean startup with no packaged-resource failure.
+2. Create a design, edit it, save it, reload it, and switch documents without losing work.
+3. Search the plant database, inspect plant detail, and place a plant on canvas.
+4. Edit canvas content and verify undo/redo still works.
 5. Open layer controls and confirm required display/layer flows still function.
-6. Open the visible PanelBar `location` entry, perform search, drag, zoom, and confirm the selected location updates correctly.
+6. Open the `location` flow, search, drag, zoom, and confirm the selected location updates correctly.
 7. Switch theme and locale and confirm there are no missing labels or unreadable retained surfaces.
 8. Confirm there is no startup-path, save-path, or packaged-resource regression.
 9. Trigger `Check for Updates` against a newer signed release and confirm the packaged build detects the update, installs it, and relaunches correctly.
 
-## Known Accepted Warnings
+## Release Owner Signoff
 
-These are review items, not automatic blockers unless they become release-impacting:
+Record release-owner signoff before stable promotion:
 
-- Vite chunk-size warnings for the main bundle and `maplibre-gl` (konva chunk removed after dependency deletion)
+| Release version | Channel | Source commit | Release owner | Signoff date | Result | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+|  |  |  |  |  | Pending |  |
 
-## Wave 5 Blocking Defects
+## Override Log
 
-Fix only defects that block the beta release:
+Record every policy override here.
+
+Examples:
+
+- beta bypassed entirely
+- stable promoted before `48 hours`
+- missing platform smoke evidence overridden
+- stable promoted with a known non-blocking defect
+
+| Date | Release version | Override type | Owner | Reason |
+| --- | --- | --- | --- | --- |
+|  |  |  |  |  |
+
+## Blocking Defects
+
+Do not promote while any of these remain unresolved unless the release owner explicitly records an override:
 
 - app fails to launch
-- packaged resources needed for core retained-surface flows are missing or inaccessible
+- packaged resources required for core app flows are missing or inaccessible
 - create/save/load/switch loses work
 - plant search/detail/placement is broken
-- plant search count and visible rows desynchronize until an unrelated UI action forces a redraw
-- undo/redo or roundtrip persistence regresses
-- layer controls or `location` retained-surface flows are broken
+- undo/redo or persistence regresses
+- layer controls or location flows are broken
+- updater detection/install/restart is broken for the packaged app
 - supported theme/locale usage has missing labels or unreadable surfaces
 
-## Smoke Verification Ownership
+## Operator Notes
 
-Packaged-app smoke execution is owned by external platform testers or release operators.
-
-Repo follow-up from smoke feedback should stay narrow:
-- capture the evidence in the table above
-- fix only beta-blocking defects
-- rerun the affected target smoke pass after a fix lands
-
-## Remaining Wave 5 Work
-
-What remains after the automated checks and shipped beta:
-
-- keep the CI workflow green on `main`
-- fix only defects that block beta usability or packaging on supported targets
-- carry forward only the release-operator steps that still apply to future beta patches
+- Do not rebuild release artifacts locally as part of normal promotion.
+- Do not promote from partially downloaded or manually altered artifacts.
+- Do not assume the moving manifest tags are correct without checking them after promotion.
+- If a beta is bad, fix forward with a newer beta instead of attempting automatic downgrade behavior.

@@ -1,14 +1,13 @@
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { designName, designDirty } from '../../state/design'
 import { activePanel } from '../../app/shell/state'
-import { locale, theme, updateChannel } from '../../app/settings/state'
+import { locale, theme } from '../../app/settings/state'
 import { persistCurrentSettings, settingsHydrated } from '../../app/settings/persistence'
+import { settingsModalOpen } from '../../app/settings/modal-state'
 import { t } from '../../i18n'
 import { Dropdown, type DropdownItem } from './Dropdown'
 import { MenuBar } from './MenuBar'
 import styles from './TitleBar.module.css'
-import { setUpdateChannelPreference } from '../../app/updater/controller'
-import { UPDATE_CHANNELS, updaterControlsVisible } from '../../app/updater/config'
 
 const LOCALES = ['en', 'fr', 'es', 'pt', 'it', 'zh', 'de', 'ja', 'ko', 'nl', 'ru'] as const
 
@@ -16,32 +15,6 @@ const LOCALE_ITEMS: DropdownItem<string>[] = LOCALES.map((code) => ({
   value: code,
   label: code.toUpperCase(),
 }))
-
-function UpdateChannelPicker() {
-  const channelItems: DropdownItem<typeof updateChannel.value>[] = UPDATE_CHANNELS.map((channel) => ({
-    value: channel,
-    label: t(channel === 'beta' ? 'updater.channelBeta' : 'updater.channelStable'),
-  }))
-
-  return (
-    <Dropdown
-      trigger={t(updateChannel.value === 'beta' ? 'updater.channelBeta' : 'updater.channelStable')}
-      items={channelItems}
-      value={updateChannel.value}
-      onChange={(channel) => {
-        void setUpdateChannelPreference(channel)
-      }}
-      menuDirection="down"
-      ariaLabel={t('updater.channelLabel')}
-      className={styles.channelPicker}
-      triggerClassName={styles.channelBtn}
-      menuClassName={styles.channelMenu}
-      optionClassName={styles.channelItem}
-      preserveOverlays
-      disabled={!settingsHydrated.value}
-    />
-  )
-}
 
 const appWindow = getCurrentWindow()
 
@@ -64,6 +37,7 @@ function LocalePicker() {
       menuClassName={styles.localeMenu}
       optionClassName={styles.localeItem}
       preserveOverlays
+      disabled={!settingsHydrated.value || settingsModalOpen.value}
     />
   )
 }
@@ -115,14 +89,6 @@ export function TitleBar() {
       </div>
       {/* Right controls: language + theme */}
       <div className={styles.settings}>
-        {updaterControlsVisible && (
-          <div className={styles.channelControls}>
-            {updateChannel.value === 'beta' && (
-              <span className={styles.betaBadge}>{t('updater.betaBadge')}</span>
-            )}
-            <UpdateChannelPicker />
-          </div>
-        )}
         <LocalePicker />
         <button
           className={styles.themeBtn}
@@ -132,6 +98,7 @@ export function TitleBar() {
           }}
           aria-label={t('status.theme')}
           title={t(theme.value === 'dark' ? 'theme.light' : 'theme.dark')}
+          disabled={!settingsHydrated.value || settingsModalOpen.value}
         >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             {theme.value === 'dark' ? (
