@@ -368,12 +368,30 @@ jobs:
           import json
           import os
           from pathlib import Path
-          from scripts.release_asset_name import canonical_asset_name
 
           artifacts_root = Path("artifacts")
           repo = os.environ["REPOSITORY"]
           version = os.environ["BUILD_VERSION"]
           release_tag = f"v{version}"
+
+          def canonical_asset_name(artifact_path: Path) -> str:
+              name = artifact_path.name
+              path_text = str(artifact_path)
+
+              if name not in {"Canopi.app.tar.gz", "Canopi.app.tar.gz.sig"}:
+                  return name
+
+              if "aarch64-apple-darwin" in path_text:
+                  arch = "aarch64"
+              elif "x86_64-apple-darwin" in path_text:
+                  arch = "x64"
+              else:
+                  raise SystemExit(f"Cannot determine macOS architecture for updater asset: {artifact_path}")
+
+              canonical_name = f"Canopi_{version}_{arch}.app.tar.gz"
+              if name.endswith(".sig"):
+                  canonical_name += ".sig"
+              return canonical_name
 
           def require_one(pattern: str) -> Path:
               matches = sorted(artifacts_root.glob(pattern))
@@ -401,7 +419,7 @@ jobs:
               "platforms": {
                   platform: {
                       "signature": signature_for(path),
-                      "url": f"https://github.com/{repo}/releases/download/{release_tag}/{canonical_asset_name(version, str(path))}",
+                      "url": f"https://github.com/{repo}/releases/download/{release_tag}/{canonical_asset_name(path)}",
                   }
                   for platform, path in platform_files.items()
               },
