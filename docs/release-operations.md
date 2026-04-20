@@ -21,7 +21,7 @@ Use this sequence from feature work to a published release:
 - `gh` installed and authenticated for the target repo
 - access to the canopi-data export DB used to build `canopi-core.db`
 - smoke-test owners available for Linux, macOS Apple Silicon, macOS Intel, and Windows
-- `CANOPI_UPDATER_PUBLIC_KEY` configured in GitHub Actions secrets
+- committed updater public key present at [`desktop/updater-public.key`](/home/daylon/projects/canopi/desktop/updater-public.key)
 - `TAURI_SIGNING_PRIVATE_KEY` configured in GitHub Actions secrets
 - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` configured in GitHub Actions secrets if the updater key is password-protected
 
@@ -67,6 +67,7 @@ The workflow preflight validates:
 
 - candidate ref resolves cleanly
 - requested release version is valid release-version syntax
+- committed updater public key exists and is non-empty
 - bundled DB asset exists and is non-empty
 - bundled DB schema version matches the app expectation
 - packaged artifacts exist before the checksum manifest is uploaded
@@ -154,6 +155,6 @@ Stable releases are expected to be rebuilt from the same accepted commit as the 
 - Promotion checksum failure:
   Do not publish. Re-download artifacts from the run and investigate whether the run artifacts or manifest are incomplete.
 - Updater manifest or signature failure:
-  Do not publish. Confirm the release-candidate run had signing secrets, produced `.sig` files for updater artifacts, and generated a valid `latest.json`.
+  Do not publish. Confirm `desktop/updater-public.key` is present, the release-candidate run had signing secrets, produced `.sig` files for updater artifacts, and generated a valid `latest.json`.
 - Channel manifest mismatch:
   Do not publish. Confirm `canopi-stable-manifest` and `canopi-beta-manifest` point to the intended versioned release assets.

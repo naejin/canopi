@@ -8,6 +8,7 @@ mod image_cache;
 mod logging;
 mod platform;
 mod services;
+mod updater_config;
 
 use common_types::health::SubsystemHealth;
 use rusqlite::{Connection, OpenFlags};
@@ -19,12 +20,8 @@ pub struct AppHealth(pub Mutex<SubsystemHealth>);
 
 const PLANT_DB_BUNDLED_PATHS: &[&str] = &["resources/canopi-core.db", "canopi-core.db"];
 fn updater_plugin<R: tauri::Runtime>() -> Option<tauri::plugin::TauriPlugin<R, tauri_plugin_updater::Config>> {
-    let pubkey = option_env!("CANOPI_UPDATER_PUBLIC_KEY")
-        .map(str::trim)
-        .filter(|value| !value.is_empty());
-
-    let Some(pubkey) = pubkey else {
-        warn!("Updater disabled: CANOPI_UPDATER_PUBLIC_KEY was not set at build time");
+    let Some(pubkey) = updater_config::updater_public_key() else {
+        warn!("Updater disabled: desktop/updater-public.key is empty");
         return None;
     };
     Some(

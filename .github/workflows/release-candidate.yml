@@ -70,6 +70,28 @@ jobs:
           print(f"Requested release version: {version}")
           PY
 
+      - name: Validate updater signing secrets
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [[ -n "${TAURI_SIGNING_PRIVATE_KEY}" ]] || missing+=("TAURI_SIGNING_PRIVATE_KEY")
+          if (( ${#missing[@]} > 0 )); then
+            printf '::error::Missing required GitHub Actions secrets for release packaging: %s\n' "${missing[*]}"
+            exit 1
+          fi
+
+      - name: Validate committed updater public key
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -s desktop/updater-public.key ]]; then
+            echo "::error::desktop/updater-public.key is missing or empty."
+            exit 1
+          fi
+
       - id: schema
         name: Read expected plant DB schema version
         shell: bash
@@ -225,19 +247,14 @@ jobs:
         env:
           RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
-          python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-
-          config = json.loads(Path("desktop/tauri.release.conf.json").read_text())
-          config["version"] = os.environ["RELEASE_VERSION"]
-          Path("desktop/tauri.release.generated.json").write_text(json.dumps(config, indent=2) + "\n")
-          PY
+          python3 scripts/render-tauri-release-config.py \
+            --base-config desktop/tauri.release.conf.json \
+            --public-key desktop/updater-public.key \
+            --output desktop/tauri.release.generated.json \
+            --version "$RELEASE_VERSION"
 
       - name: Build Tauri app
         env:
-          CANOPI_UPDATER_PUBLIC_KEY: ${{ secrets.CANOPI_UPDATER_PUBLIC_KEY }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           VITE_CANOPI_UPDATER_ENABLED: "true"

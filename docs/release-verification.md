@@ -41,6 +41,7 @@ These checks must pass before a release candidate is treated as promotable:
   - Windows
 - `Release Candidate` workflow preflight for:
   - release-version format
+  - committed updater public key availability
   - bundled DB availability
   - bundled DB schema compatibility
   - packaged artifact manifest generation

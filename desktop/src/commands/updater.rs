@@ -5,6 +5,8 @@ use tauri_plugin_updater::UpdaterExt;
 use time::format_description::well_known::Rfc3339;
 use url::Url;
 
+use crate::updater_config::updater_public_key;
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateMetadata {
@@ -22,10 +24,7 @@ pub async fn check_for_updates<R: Runtime>(
     channel: UpdateChannel,
     endpoints: Vec<String>,
 ) -> Result<Option<UpdateMetadata>, String> {
-    let pubkey = option_env!("CANOPI_UPDATER_PUBLIC_KEY")
-        .map(str::trim)
-        .filter(|value| !value.is_empty());
-    if pubkey.is_none() {
+    if updater_public_key().is_none() {
         return Err("Updater is not configured for this build.".into());
     }
 
