@@ -93,7 +93,7 @@ Observed timing on GitHub-hosted runners:
 - successful `0.5.0-beta.1` RC run `24686090934` on `2026-04-20` completed in about `13m 43s` wall-clock time
 - per-job timings from that run:
   - preflight: `6s`
-  - Linux AppImage: `7m 51s`
+  - Linux deb/AppImage: `7m 51s`
   - macOS Apple Silicon: `7m 24s`
   - macOS Intel: `11m 06s`
   - Windows NSIS: `13m 16s`
@@ -116,6 +116,11 @@ This promotion does all of the following:
 - creates or updates the versioned GitHub prerelease
 - uploads packaged artifacts, updater signatures, `SHA256SUMS.txt`, `latest.json`, and `release-metadata.json`
 - updates the moving `canopi-beta-manifest` release so opted-in beta users receive that build
+
+Linux release note:
+
+- Linux promotions publish both the `.deb` package and the `AppImage`
+- the Linux entry in `latest.json` continues to point to the signed `AppImage`, because that is the updater artifact
 
 The beta promotion is published immediately. Do not rely on draft releases for updater-visible beta builds.
 
@@ -158,6 +163,8 @@ Stable promotion does all of the following:
 - uploads packaged artifacts, updater signatures, `SHA256SUMS.txt`, `latest.json`, and `release-metadata.json`
 - updates the moving `canopi-stable-manifest` release
 - repoints `canopi-beta-manifest` to the accepted stable build until a newer beta is promoted
+
+Linux stable releases publish both the `.deb` package and the `AppImage`, while the Linux updater feed continues to use the signed `AppImage`.
 
 Stable releases are expected to be rebuilt from the same accepted commit as the beta being promoted, with no code changes between the accepted commit and the stable packaging run. The release operator must verify that the published `release-metadata.json` `head_sha` matches the accepted beta commit, or record an explicit override reason.
 

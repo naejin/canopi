@@ -206,6 +206,7 @@ log "Verifying packaged artifact checksums"
 
 mapfile -t release_files < <(
   find "$tmpdir" -type f \( \
+    -name '*.deb' -o \
     -name '*.AppImage' -o \
     -name '*.AppImage.sig' -o \
     -name '*.app.tar.gz' -o \

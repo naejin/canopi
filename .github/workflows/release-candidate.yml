@@ -182,7 +182,7 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            bundle_args: --bundles appimage
+            bundle_args: --bundles deb appimage
           - os: macos-14
             target: aarch64-apple-darwin
             bundle_args: ""
@@ -289,6 +289,7 @@ jobs:
         with:
           name: canopi-${{ matrix.target }}
           path: |
+            target/${{ matrix.target }}/release/bundle/**/*.deb
             target/${{ matrix.target }}/release/bundle/**/*.AppImage
             target/${{ matrix.target }}/release/bundle/**/*.AppImage.sig
             target/${{ matrix.target }}/release/bundle/**/*.app.tar.gz
@@ -327,6 +328,7 @@ jobs:
           (
             cd artifacts
             find . -type f \( \
+              -name '*.deb' -o \
               -name '*.AppImage' -o \
               -name '*.AppImage.sig' -o \
               -name '*.app.tar.gz' -o \

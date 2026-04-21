@@ -35,6 +35,7 @@ These checks must pass before a release candidate is treated as promotable:
 - `npm test --prefix desktop/web`
 - `npm run build --prefix desktop/web`
 - GitHub Actions Tauri build matrix for:
+  - Linux `.deb`
   - Linux AppImage
   - macOS Apple Silicon
   - macOS Intel
@@ -78,6 +79,7 @@ Before promoting a release candidate to `beta`, verify:
 
 - the release version is a prerelease version such as `0.4.0-beta.1`
 - the Windows prerelease artifact is the NSIS `.exe` bundle, not an MSI
+- the Linux artifacts include both the `.deb` package and the signed `AppImage`
 - the release candidate artifacts come from the intended commit
 - packaged artifacts, signatures, `latest.json`, and `release-metadata.json` are present
 - the target beta tag/title are correct
@@ -95,6 +97,7 @@ Before promoting a release candidate to `stable`, verify:
 - the stable release candidate was rebuilt from the exact accepted beta commit
 - `release-metadata.json.head_sha` matches the accepted beta commit
 - the accepted beta completed the normal soak/signoff path, or an override has been recorded
+- the Linux artifacts include both the `.deb` package and the signed `AppImage`
 - packaged artifacts, signatures, `latest.json`, and `release-metadata.json` are present
 - the target stable tag/title are correct
 
@@ -111,6 +114,7 @@ Every supported packaged artifact needs a smoke result recorded here before stab
 
 | Platform / target | Artifact source | Tester / owner | Test date | Status | Defects / follow-up |
 | --- | --- | --- | --- | --- | --- |
+| Linux desktop (`.deb`) | Release Candidate run artifact or promoted beta asset |  |  | Pending |  |
 | Linux desktop (`.AppImage`) | Release Candidate run artifact or promoted beta asset |  |  | Pending |  |
 | macOS Apple Silicon (`aarch64-apple-darwin`) | Release Candidate run artifact or promoted beta asset |  |  | Pending |  |
 | macOS Intel (`x86_64-apple-darwin`) | Release Candidate run artifact or promoted beta asset |  |  | Pending |  |
