@@ -41,7 +41,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.preflight.outputs.head_sha }}
+          ref: ${{ inputs.ref }}
 
       - id: head
         name: Capture build commit
