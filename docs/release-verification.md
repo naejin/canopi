@@ -114,11 +114,11 @@ Every supported packaged artifact needs a smoke result recorded here before stab
 
 | Platform / target | Artifact source | Tester / owner | Test date | Status | Defects / follow-up |
 | --- | --- | --- | --- | --- | --- |
-| Linux desktop (`.deb`) | Release Candidate run artifact or promoted beta asset |  |  | Pending |  |
-| Linux desktop (`.AppImage`) | Release Candidate run artifact or promoted beta asset |  |  | Pending |  |
-| macOS Apple Silicon (`aarch64-apple-darwin`) | Release Candidate run artifact or promoted beta asset |  |  | Pending |  |
-| macOS Intel (`x86_64-apple-darwin`) | Release Candidate run artifact or promoted beta asset |  |  | Pending |  |
-| Windows desktop (NSIS `.exe` for prerelease beta builds) | Release Candidate run artifact or promoted beta asset |  |  | Pending |  |
+| Linux desktop (`.deb`) | `v0.5.0-beta.1` promoted beta asset | Daylon | 2026-04-21 | Passed | Verified working during beta acceptance. |
+| Linux desktop (`.AppImage`) | `v0.5.0-beta.1` promoted beta asset | Daylon | 2026-04-21 | Passed | Verified working during beta acceptance. |
+| macOS Apple Silicon (`aarch64-apple-darwin`) | `v0.5.0-beta.1` promoted beta asset | Daylon | 2026-04-21 | Passed | Verified working during beta acceptance. |
+| macOS Intel (`x86_64-apple-darwin`) | `v0.5.0-beta.1` promoted beta asset | Daylon | 2026-04-21 | Passed | Verified working during beta acceptance. |
+| Windows desktop (NSIS `.exe` for prerelease beta builds) | `v0.5.0-beta.1` promoted beta asset | Daylon | 2026-04-21 | Passed | Verified working during beta acceptance. |
 
 ## Minimum Packaged-App Smoke Script
 
@@ -140,7 +140,7 @@ Record release-owner signoff before stable promotion:
 
 | Release version | Channel | Source commit | Release owner | Signoff date | Result | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
-|  |  |  |  |  | Pending |  |
+| 0.5.0-beta.1 | beta | 60b07553ff82461968da39f0c6c49ca90b6a1ae4 | Daylon | 2026-04-21 | Passed | Accepted for stable promotion after successful beta verification. |
 
 ## Override Log
 
