@@ -27,6 +27,7 @@ import {
   totalEstimate,
   type FilterOp,
 } from './state'
+import { normalizeNumericExtraFilter } from './numeric-filter-normalization'
 
 let searchGeneration = 0
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
@@ -35,10 +36,33 @@ let sidebarListsGeneration = 0
 
 function mergedFilters(): SpeciesFilter {
   const filters = activeFilters.value
-  const extras = extraFilters.value
-  if (extras.length === 0) return filters
+  const typedEdibilityMin = filters.edibility_min != null && filters.edibility_min > 0
+    ? filters.edibility_min
+    : null
+
   const existing = filters.extra ?? []
-  return { ...filters, extra: [...existing, ...extras] }
+  const uiExtras = extraFilters.value
+  const uiFields = new Set(uiExtras.map((filter) => filter.field))
+  const merged = [
+    ...existing.filter((filter) => !uiFields.has(filter.field)),
+    ...uiExtras,
+  ]
+
+  const localeCache = dynamicOptionsCache.value[locale.value] ?? {}
+  const normalizedExtras = merged
+    .map((filter) => {
+      const range = localeCache[filter.field]?.field_type === 'numeric'
+        ? localeCache[filter.field]?.range
+        : null
+      return normalizeNumericExtraFilter(filter, range)
+    })
+    .filter((filter): filter is NonNullable<typeof filter> => filter !== null)
+
+  return {
+    ...filters,
+    edibility_min: typedEdibilityMin,
+    extra: normalizedExtras.length > 0 ? normalizedExtras : null,
+  }
 }
 
 async function executeSearch(generation: number): Promise<void> {
@@ -198,6 +222,14 @@ export async function loadFilterOptions(): Promise<void> {
 
 /** Patch active filters — shared by FilterStrip and ActiveChips. */
 export function patchFilters(patch: Partial<SpeciesFilter>): void {
+  if (Object.prototype.hasOwnProperty.call(patch, 'edibility_min')) {
+    const nextEdibilityMin = patch.edibility_min != null && patch.edibility_min > 0
+      ? patch.edibility_min
+      : null
+    activeFilters.value = { ...activeFilters.value, ...patch, edibility_min: nextEdibilityMin }
+    return
+  }
+
   activeFilters.value = { ...activeFilters.value, ...patch }
 }
 

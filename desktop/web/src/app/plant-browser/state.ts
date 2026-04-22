@@ -75,7 +75,7 @@ export const hasActiveFilters = computed(() => {
     (filters.growth_rate !== null && filters.growth_rate.length > 0) ||
     (filters.life_cycle !== null && filters.life_cycle.length > 0) ||
     filters.edible !== null ||
-    filters.edibility_min !== null ||
+    (filters.edibility_min !== null && filters.edibility_min > 0) ||
     filters.nitrogen_fixer !== null ||
     (filters.climate_zones !== null && filters.climate_zones.length > 0) ||
     (filters.habit !== null && filters.habit.length > 0) ||
@@ -97,7 +97,7 @@ export const activeFilterCount = computed(() => {
   if (filters.soil_tolerances !== null && filters.soil_tolerances.length > 0) count++
   if (filters.growth_rate !== null && filters.growth_rate.length > 0) count++
   if (filters.life_cycle !== null && filters.life_cycle.length > 0) count++
-  if (filters.edibility_min !== null) count++
+  if (filters.edibility_min !== null && filters.edibility_min > 0) count++
   if (filters.woody !== null) count++
   if (filters.nitrogen_fixer !== null) count++
   count += extraFilters.value.length

@@ -125,7 +125,7 @@ export function ActiveChips() {
     });
   }
 
-  if (filters.edibility_min !== null) {
+  if (filters.edibility_min !== null && filters.edibility_min > 0) {
     chips.push({
       key: 'edibility',
       label: `${t('filters.edibility')}: ${filters.edibility_min}+`,

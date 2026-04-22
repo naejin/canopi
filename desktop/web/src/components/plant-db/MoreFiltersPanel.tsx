@@ -11,6 +11,7 @@ import {
   dynamicOptionsCache,
   dynamicOptionsErrors,
   dynamicOptionsPending,
+  normalizeNumericExtraFilter,
 } from '../../app/plant-browser'
 import { CATEGORIES, fieldsForCategory, type FieldDef, type FilterCategory } from './field-registry'
 import { FilterChip } from './FilterChip'
@@ -252,19 +253,39 @@ function FieldRow({ field }: { field: FieldDef }) {
               valueLow={activeFilter?.values[0] != null ? parseFloat(activeFilter.values[0]) : null}
               valueHigh={activeFilter?.values[1] != null ? parseFloat(activeFilter.values[1]) : null}
               onChangeLow={(v) => {
-                const high = activeFilter?.values[1] ?? String(opts.range![1])
-                if (v === null && (!activeFilter || activeFilter.values[1] === String(opts.range![1]))) {
+                const activeHigh = Number(activeFilter?.values[1])
+                const high = Number.isFinite(activeHigh) ? activeHigh : opts.range![1]
+                const normalized = normalizeNumericExtraFilter(
+                  {
+                    field: field.key,
+                    op: 'Between',
+                    values: [String(v ?? opts.range![0]), String(high)],
+                  },
+                  opts.range,
+                )
+
+                if (normalized === null) {
                   removeExtraFilter(field.key)
                 } else {
-                  addExtraFilter(field.key, 'Between', [String(v ?? opts.range![0]), high])
+                  addExtraFilter(field.key, normalized.op, normalized.values)
                 }
               }}
               onChangeHigh={(v) => {
-                const low = activeFilter?.values[0] ?? String(opts.range![0])
-                if (v === null && (!activeFilter || activeFilter.values[0] === String(opts.range![0]))) {
+                const activeLow = Number(activeFilter?.values[0])
+                const low = Number.isFinite(activeLow) ? activeLow : opts.range![0]
+                const normalized = normalizeNumericExtraFilter(
+                  {
+                    field: field.key,
+                    op: 'Between',
+                    values: [String(low), String(v ?? opts.range![1])],
+                  },
+                  opts.range,
+                )
+
+                if (normalized === null) {
                   removeExtraFilter(field.key)
                 } else {
-                  addExtraFilter(field.key, 'Between', [low, String(v ?? opts.range![1])])
+                  addExtraFilter(field.key, normalized.op, normalized.values)
                 }
               }}
               step={field.step ?? (opts.range[1] - opts.range[0] > 100 ? 1 : 0.1)}
