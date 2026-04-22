@@ -6,8 +6,8 @@ This document describes the schema contract between canopi-data exports and the 
 
 | Parameter                  | Value | Location                          |
 |----------------------------|-------|-----------------------------------|
-| `PRAGMA user_version`      | 7     | Set by `prepare-db.py` at build   |
-| `min_export_schema_version`| 10    | Validated against canopi-data `_metadata.schema_version` |
+| `PRAGMA user_version`      | 8     | Set by `prepare-db.py` at build   |
+| `min_export_schema_version`| 11    | Validated against canopi-data `_metadata.schema_version` |
 
 The contract is defined in `scripts/schema-contract.json`.
 

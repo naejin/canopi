@@ -7,4 +7,5 @@ Search boundary note:
 
 ## Reference
 
+- [DB Export Validation — 2026-04-21 export](./export-validation-2026-04-21.md)
 - [Archived: Plant DB Filter Audit](../archive/reviews/plant-db-filter-audit.md)
