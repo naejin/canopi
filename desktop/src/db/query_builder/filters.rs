@@ -109,7 +109,9 @@ pub(super) fn append_structured_filters(
         where_clauses.push("s.woody = 1".to_owned());
     }
 
-    if let Some(min_rating) = filters.edibility_min {
+    if let Some(min_rating) = filters.edibility_min
+        && min_rating > 0
+    {
         where_clauses.push(format!("s.edibility_rating >= ?{}", params.len() + 1));
         params.push(Value::Integer(min_rating as i64));
     }
@@ -120,9 +122,9 @@ pub(super) fn append_structured_filters(
                 match extra.op {
                     FilterOp::IsTrue => where_clauses.push(format!("{column} = 1")),
                     FilterOp::Equals => {
-                        if let Some(value) = extra.values.first() {
+                        if let Some(value) = extra.values.first().and_then(|raw| parse_finite_numeric(raw)) {
                             where_clauses.push(format!("{column} = ?{}", params.len() + 1));
-                            params.push(Value::Text(value.clone()));
+                            params.push(Value::Real(value));
                         }
                     }
                     FilterOp::In => {
@@ -147,15 +149,40 @@ pub(super) fn append_structured_filters(
                         );
                     }
                     FilterOp::Between => {
-                        if extra.values.len() >= 2 {
-                            where_clauses.push(format!(
-                                "{column} BETWEEN ?{} AND ?{}",
-                                params.len() + 1,
-                                params.len() + 2
-                            ));
-                            push_best_effort_value(params, &extra.values[0]);
-                            push_best_effort_value(params, &extra.values[1]);
+                        if extra.values.len() < 2 {
+                            continue;
                         }
+
+                        let Some(low_raw) = parse_finite_numeric(&extra.values[0]) else {
+                            continue;
+                        };
+                        let Some(high_raw) = parse_finite_numeric(&extra.values[1]) else {
+                            continue;
+                        };
+
+                        let (low, high) = if low_raw <= high_raw {
+                            (low_raw, high_raw)
+                        } else {
+                            (high_raw, low_raw)
+                        };
+
+                        if low == high {
+                            continue;
+                        }
+
+                        if let Some((min, max)) = no_op_numeric_span(column)
+                            && low <= min && high >= max
+                        {
+                            continue;
+                        }
+
+                        where_clauses.push(format!(
+                            "{column} BETWEEN ?{} AND ?{}",
+                            params.len() + 1,
+                            params.len() + 2
+                        ));
+                        params.push(Value::Real(low));
+                        params.push(Value::Real(high));
                     }
                 }
             }
@@ -191,16 +218,27 @@ fn append_scalar_comparison(
     operator: &str,
     value: Option<&String>,
 ) {
-    if let Some(value) = value {
-        where_clauses.push(format!("{column} {operator} ?{}", params.len() + 1));
-        push_best_effort_value(params, value);
+    let Some(value) = value.and_then(|raw| parse_finite_numeric(raw)) else {
+        return;
+    };
+
+    if let Some((min, max)) = no_op_numeric_span(column) {
+        if (operator == ">=" && value <= min) || (operator == "<=" && value >= max) {
+            return;
+        }
     }
+
+    where_clauses.push(format!("{column} {operator} ?{}", params.len() + 1));
+    params.push(Value::Real(value));
 }
 
-fn push_best_effort_value(params: &mut Vec<Value>, value: &str) {
-    if let Ok(number) = value.parse::<f64>() {
-        params.push(Value::Real(number));
-    } else {
-        params.push(Value::Text(value.to_owned()));
+fn parse_finite_numeric(value: &str) -> Option<f64> {
+    value.parse::<f64>().ok().filter(|v| v.is_finite())
+}
+
+fn no_op_numeric_span(column: &str) -> Option<(f64, f64)> {
+    match column {
+        "s.medicinal_rating" | "s.other_uses_rating" => Some((0.0, 5.0)),
+        _ => None,
     }
 }

@@ -15,7 +15,7 @@ pub use cursor::{decode_cursor, encode_cursor};
 #[cfg(test)]
 mod tests {
     use super::*;
-    use common_types::species::{Sort, SpeciesFilter};
+    use common_types::species::{DynamicFilter, FilterOp, Sort, SpeciesFilter};
     use rusqlite::types::Value;
 
     fn default_filter() -> SpeciesFilter {
@@ -125,6 +125,24 @@ mod tests {
     }
 
     #[test]
+    fn test_edibility_min_zero_is_noop() {
+        let mut f = default_filter();
+        f.edibility_min = Some(0);
+        let qb = QueryBuilder::new(None, f, None, Sort::Name, 20, "en".to_owned());
+        let (sql, _) = qb.build();
+        assert!(!sql.contains("s.edibility_rating >="));
+    }
+
+    #[test]
+    fn test_edibility_min_positive_emits_clause() {
+        let mut f = default_filter();
+        f.edibility_min = Some(2);
+        let qb = QueryBuilder::new(None, f, None, Sort::Name, 20, "en".to_owned());
+        let (sql, _) = qb.build();
+        assert!(sql.contains("s.edibility_rating >="));
+    }
+
+    #[test]
     fn test_soil_tolerances_filter_uses_boolean_columns() {
         let mut f = default_filter();
         f.soil_tolerances = Some(vec!["light".to_owned(), "heavy_clay".to_owned()]);
@@ -204,6 +222,69 @@ mod tests {
                 "expected '{field}' to be allowlisted for dynamic filters"
             );
         }
+    }
+
+    #[test]
+    fn test_malformed_numeric_dynamic_filters_are_skipped() {
+        let mut f = default_filter();
+        f.extra = Some(vec![DynamicFilter {
+            field: "medicinal_rating".to_owned(),
+            op: FilterOp::Gte,
+            values: vec!["NaN".to_owned()],
+        }]);
+        let qb = QueryBuilder::new(None, f, None, Sort::Name, 20, "en".to_owned());
+        let (sql, _) = qb.build();
+        assert!(!sql.contains("s.medicinal_rating >="));
+    }
+
+    #[test]
+    fn test_reversed_numeric_between_is_reordered() {
+        let mut f = default_filter();
+        f.extra = Some(vec![DynamicFilter {
+            field: "medicinal_rating".to_owned(),
+            op: FilterOp::Between,
+            values: vec!["4".to_owned(), "1".to_owned()],
+        }]);
+        let qb = QueryBuilder::new(None, f, None, Sort::Name, 20, "en".to_owned());
+        let (sql, params) = qb.build();
+        assert!(sql.contains("s.medicinal_rating BETWEEN"));
+        assert!(params.iter().any(|v| matches!(v, Value::Real(n) if (*n - 1.0).abs() < f64::EPSILON)));
+        assert!(params.iter().any(|v| matches!(v, Value::Real(n) if (*n - 4.0).abs() < f64::EPSILON)));
+    }
+
+    #[test]
+    fn test_partial_numeric_between_is_retained() {
+        let mut f = default_filter();
+        f.extra = Some(vec![DynamicFilter {
+            field: "medicinal_rating".to_owned(),
+            op: FilterOp::Between,
+            values: vec!["0".to_owned(), "2".to_owned()],
+        }]);
+        let qb = QueryBuilder::new(None, f, None, Sort::Name, 20, "en".to_owned());
+        let (sql, _) = qb.build();
+        assert!(sql.contains("s.medicinal_rating BETWEEN"));
+    }
+
+    #[test]
+    fn test_rating_noop_numeric_filters_are_skipped() {
+        let mut f = default_filter();
+        f.extra = Some(vec![
+            DynamicFilter {
+                field: "medicinal_rating".to_owned(),
+                op: FilterOp::Gte,
+                values: vec!["0".to_owned()],
+            },
+            DynamicFilter {
+                field: "other_uses_rating".to_owned(),
+                op: FilterOp::Between,
+                values: vec!["0".to_owned(), "5".to_owned()],
+            },
+        ]);
+
+        let qb = QueryBuilder::new(None, f, None, Sort::Name, 20, "en".to_owned());
+        let (sql, _) = qb.build();
+        assert!(!sql.contains("s.medicinal_rating >="));
+        assert!(!sql.contains("s.other_uses_rating BETWEEN"));
     }
 
     #[test]
