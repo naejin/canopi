@@ -63,5 +63,12 @@
       }
     }
   },
-  "plugins": {}
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDY3OEJDMzdGOEU2RjkzRDUKUldUVmsyK09mOE9MWitldVo1UHRwdjF0TzR1dXpzakhqZkhGOUtyWkZuL2JObzhrZmljY01SbG0K",
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  }
 }
