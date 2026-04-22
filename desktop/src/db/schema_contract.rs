@@ -25,6 +25,8 @@ pub(crate) const REQUIRED_APP_TRANSLATION_FIELDS: &[&str] = &[
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use super::{EXPECTED_PLANT_SCHEMA_VERSION, REQUIRED_APP_TRANSLATION_FIELDS};
     use crate::db::test_support::load_schema_contract_fixture;
 
@@ -44,5 +46,34 @@ mod tests {
                 "required contract translation field '{field}' missing from schema contract"
             );
         }
+    }
+
+    #[test]
+    fn test_climate_zone_translations_match_expected_labels() {
+        let contract = load_schema_contract_fixture();
+        let climate_zone_values = contract
+            .translations
+            .get("climate_zone")
+            .expect("schema contract must define climate_zone translations");
+
+        let expected: BTreeSet<&str> = [
+            "Tropical",
+            "Arid",
+            "Mediterranean",
+            "Subtropical",
+            "Temperate",
+            "Continental",
+            "Boreal",
+        ]
+        .into_iter()
+        .collect();
+
+        let actual: BTreeSet<&str> = climate_zone_values
+            .as_object()
+            .expect("climate_zone translations must be an object map")
+            .keys()
+            .map(String::as_str)
+            .collect();
+        assert_eq!(actual, expected, "climate zone labels changed in schema contract");
     }
 }
