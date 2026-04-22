@@ -240,6 +240,77 @@ describe('plant DB controller lifecycle', () => {
     expect(plantDb.dynamicOptionsPending.value.en?.habit).toBeUndefined()
   })
 
+  it('normalizes typed and numeric extra filters before IPC search', async () => {
+    const plantDb = await import('../app/plant-browser')
+
+    plantDb.activeFilters.value = {
+      ...plantDb.activeFilters.value,
+      edibility_min: 0,
+      extra: [
+        { field: 'medicinal_rating', op: 'Between', values: ['0', '5'] },
+        { field: 'other_uses_rating', op: 'Between', values: ['x', '2'] },
+      ],
+    }
+    plantDb.extraFilters.value = []
+    plantDb.dynamicOptionsCache.value = {
+      en: {
+        medicinal_rating: {
+          field: 'medicinal_rating',
+          field_type: 'numeric',
+          values: null,
+          range: [0, 5],
+        },
+        other_uses_rating: {
+          field: 'other_uses_rating',
+          field_type: 'numeric',
+          values: null,
+          range: [0, 5],
+        },
+      },
+    }
+
+    const dispose = plantDb.mountPlantDbController()
+    await flushMicrotasks()
+
+    const lastCall = mocks.searchSpecies.mock.calls[mocks.searchSpecies.mock.calls.length - 1] as any[]
+    const sentFilters = lastCall?.[1] as any
+    expect(sentFilters).toBeTruthy()
+    expect(sentFilters.edibility_min).toBeNull()
+    expect(sentFilters.extra).toBeNull()
+
+    dispose()
+  })
+
+  it('prefers UI extra filters over typed extras for the same field', async () => {
+    const plantDb = await import('../app/plant-browser')
+
+    plantDb.activeFilters.value = {
+      ...plantDb.activeFilters.value,
+      extra: [{ field: 'medicinal_rating', op: 'Between', values: ['1', '4'] }],
+    }
+    plantDb.extraFilters.value = [{ field: 'medicinal_rating', op: 'Between', values: ['0', '2'] }]
+    plantDb.dynamicOptionsCache.value = {
+      en: {
+        medicinal_rating: {
+          field: 'medicinal_rating',
+          field_type: 'numeric',
+          values: null,
+          range: [0, 5],
+        },
+      },
+    }
+
+    const dispose = plantDb.mountPlantDbController()
+    await flushMicrotasks()
+
+    const lastCall = mocks.searchSpecies.mock.calls[mocks.searchSpecies.mock.calls.length - 1] as any[]
+    const sentFilters = lastCall?.[1] as any
+    expect(sentFilters).toBeTruthy()
+    expect(sentFilters.extra).toEqual([{ field: 'medicinal_rating', op: 'Between', values: ['0', '2'] }])
+
+    dispose()
+  })
+
   it('preserves the first-page total estimate when loading more results', async () => {
     const plantDb = await import('../app/plant-browser')
 

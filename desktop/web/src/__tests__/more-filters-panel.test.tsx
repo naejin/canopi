@@ -103,4 +103,59 @@ describe('MoreFiltersPanel outside-click behavior', () => {
     expect(rangeInputs).toHaveLength(2)
     expect(rangeInputs.every((input) => (input as HTMLInputElement).step === '1')).toBe(true)
   })
+
+  it('removes full-range numeric extras as no-op and keeps narrowed upper bounds', async () => {
+    dynamicOptionsCache.value = {
+      en: {
+        medicinal_rating: {
+          field: 'medicinal_rating',
+          field_type: 'numeric',
+          values: null,
+          range: [0, 5],
+        },
+      },
+    }
+
+    await act(async () => {
+      render(<MoreFiltersPanel open onClose={vi.fn()} />, container)
+      await flushEffects()
+    })
+
+    const usesButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Uses'))
+    expect(usesButton).toBeTruthy()
+
+    await act(async () => {
+      usesButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flushEffects()
+    })
+
+    const medicinalButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Medicinal rating'))
+    expect(medicinalButton).toBeTruthy()
+
+    await act(async () => {
+      medicinalButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flushEffects()
+    })
+
+    const rangeInputs = Array.from(container.querySelectorAll('input[type="range"]')) as HTMLInputElement[]
+    expect(rangeInputs).toHaveLength(2)
+
+    await act(async () => {
+      rangeInputs[1]!.value = '2'
+      rangeInputs[1]!.dispatchEvent(new Event('input', { bubbles: true }))
+      await flushEffects()
+    })
+
+    expect(extraFilters.value).toEqual([{ field: 'medicinal_rating', op: 'Between', values: ['0', '2'] }])
+
+    await act(async () => {
+      rangeInputs[1]!.value = '5'
+      rangeInputs[1]!.dispatchEvent(new Event('input', { bubbles: true }))
+      await flushEffects()
+    })
+
+    expect(extraFilters.value).toEqual([])
+  })
 })

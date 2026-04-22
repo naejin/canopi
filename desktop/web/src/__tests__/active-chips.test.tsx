@@ -2,7 +2,7 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ActiveChips } from '../components/plant-db/ActiveChips'
-import { dynamicOptionsCache, dynamicOptionsErrors, dynamicOptionsPending, extraFilters, activeFilters } from '../app/plant-browser'
+import { dynamicOptionsCache, dynamicOptionsErrors, dynamicOptionsPending, extraFilters, activeFilters, patchFilters } from '../app/plant-browser'
 import { locale } from '../app/settings/state'
 
 describe('ActiveChips', () => {
@@ -71,12 +71,23 @@ describe('ActiveChips', () => {
   })
 
   it('formats numeric dynamic filters as readable ranges', async () => {
-    extraFilters.value = [{ field: 'hardiness_zone_min', op: 'Between', values: ['5', '8'] }]
+    extraFilters.value = [{ field: 'hardiness_zone_min', op: 'Between', values: ['0', '2'] }]
 
     await act(async () => {
       render(<ActiveChips />, container)
     })
 
-    expect(container.textContent).toContain('Hardiness zone min: 5–8')
+    expect(container.textContent).toContain('Hardiness zone min: 0–2')
+  })
+
+  it('does not show an edibility chip for zero-threshold no-op', async () => {
+    extraFilters.value = []
+
+    await act(async () => {
+      render(<ActiveChips />, container)
+      patchFilters({ edibility_min: 0 })
+    })
+
+    expect(container.textContent ?? '').not.toContain('Edibility')
   })
 })
