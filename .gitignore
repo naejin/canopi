@@ -45,3 +45,8 @@ Thumbs.db
 *.AppImage
 *.deb
 desktop/resources/
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
