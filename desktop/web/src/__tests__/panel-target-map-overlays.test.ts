@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
-import { projectPanelTargetsToMapFeatures } from '../panel-target-map-projection'
-import { speciesTarget } from '../panel-targets'
-import {
-  buildPanelTargetProjectionScene,
-  createPanelTargetMapOverlayContract,
-} from '../maplibre/panel-target-overlays'
+import { panelTargets, speciesTarget } from '../panel-targets'
+import { createPanelTargetMapOverlayContract } from '../maplibre/panel-target-overlays'
 
 const LOCATION = { lat: 48.8566, lon: 2.3522 }
 
@@ -47,11 +43,11 @@ function createScene() {
 
 describe('panel-target map overlays', () => {
   it('builds a stable MapLibre contract for mixed projected features', () => {
-    const projection = projectPanelTargetsToMapFeatures(
+    const index = panelTargets.indexScene(createScene())
+    const projection = panelTargets.resolve(
       [speciesTarget('Malus domestica'), { kind: 'zone', zone_name: 'orchard' }],
-      buildPanelTargetProjectionScene(createScene()),
-      LOCATION,
-    )
+      index,
+    ).toMapFeatures(LOCATION)
 
     const overlay = createPanelTargetMapOverlayContract('selection', projection)
 
@@ -67,11 +63,10 @@ describe('panel-target map overlays', () => {
   })
 
   it('preserves empty overlays without inventing renderable features', () => {
-    const projection = projectPanelTargetsToMapFeatures(
+    const projection = panelTargets.resolve(
       [],
-      buildPanelTargetProjectionScene(createScene()),
-      LOCATION,
-    )
+      panelTargets.indexScene(createScene()),
+    ).toMapFeatures(LOCATION)
 
     const overlay = createPanelTargetMapOverlayContract('hover', projection)
 
@@ -83,11 +78,10 @@ describe('panel-target map overlays', () => {
   })
 
   it('carries missing-location skips through the overlay contract', () => {
-    const projection = projectPanelTargetsToMapFeatures(
+    const projection = panelTargets.resolve(
       [speciesTarget('Malus domestica')],
-      buildPanelTargetProjectionScene(createScene()),
-      null,
-    )
+      panelTargets.indexScene(createScene()),
+    ).toMapFeatures(null)
 
     const overlay = createPanelTargetMapOverlayContract('hover', projection)
 
@@ -98,11 +92,10 @@ describe('panel-target map overlays', () => {
 
   it('retains unresolved targets in the pure overlay contract', () => {
     const missingTarget = speciesTarget('Pyrus communis')
-    const projection = projectPanelTargetsToMapFeatures(
+    const projection = panelTargets.resolve(
       [missingTarget],
-      buildPanelTargetProjectionScene(createScene()),
-      LOCATION,
-    )
+      panelTargets.indexScene(createScene()),
+    ).toMapFeatures(LOCATION)
 
     const overlay = createPanelTargetMapOverlayContract('selection', projection)
 

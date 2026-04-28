@@ -4,11 +4,11 @@ import {
   selectedPanelTargets,
 } from "./state";
 import type { BottomPanelTab } from "../canvas-settings/bottom-panel-state";
-import { panelTargetsEqual } from "../../panel-targets";
+import { panelTargets } from "../../panel-targets";
 import type { PanelTarget } from "../../types/design";
 
 export function setHoveredPanelTargets(targets: readonly PanelTarget[]): void {
-  if (!panelTargetsEqual(hoveredPanelTargets.peek(), targets)) {
+  if (!panelTargets.listEquals(hoveredPanelTargets.peek(), targets)) {
     hoveredPanelTargets.value = targets;
   }
 }
@@ -23,7 +23,7 @@ export function setSelectedPanelTargets(
   origin: BottomPanelTab,
   targets: readonly PanelTarget[],
 ): void {
-  if (!panelTargetsEqual(selectedPanelTargets.peek(), targets)) {
+  if (!panelTargets.listEquals(selectedPanelTargets.peek(), targets)) {
     selectedPanelTargets.value = targets;
   }
   selectedPanelTargetOrigin.value = targets.length > 0 ? origin : null;

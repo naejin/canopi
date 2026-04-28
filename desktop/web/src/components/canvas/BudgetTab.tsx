@@ -17,7 +17,7 @@ import { exportBudgetCsv, isBudgetExportCancelled } from '../../app/budget/expor
 import { Dropdown } from '../shared/Dropdown'
 import { CURRENCY_ITEMS } from './budget-currencies'
 import { countPlants, buildPriceMap, formatCurrency } from './budget-helpers'
-import { getBudgetHoverTarget, getBudgetSpeciesTarget, panelTargetsEqual } from '../../panel-targets'
+import { getBudgetHoverTarget, getBudgetSpeciesTarget, panelTargets } from '../../panel-targets'
 import type { BudgetItem, PanelTarget, PlacedPlant } from '../../types/design'
 import styles from './BudgetTab.module.css'
 
@@ -109,7 +109,7 @@ export function BudgetTab() {
     if (selectedOrigin !== 'budget' || selectedTargets.length === 0) return
     for (const row of groupedPlants) {
       const target = getBudgetHoverTarget(budgetItemMap.get(row.canonical), row.canonical)
-      if (panelTargetsEqual(selectedTargets, [target])) return
+      if (panelTargets.listEquals(selectedTargets, [target])) return
     }
     clearBudgetSelectedPanelTargets()
   }, [groupedPlants, budgetItemMap, selectedTargets, selectedOrigin])
@@ -185,7 +185,7 @@ export function BudgetTab() {
               const subtotal = row.count * price
               const isEditing = editingCanonical.value === row.canonical
               const rowTarget = getBudgetHoverTarget(budgetItemMap.get(row.canonical), row.canonical)
-              const isSelected = selectedOrigin === 'budget' && panelTargetsEqual(selectedTargets, [rowTarget])
+              const isSelected = selectedOrigin === 'budget' && panelTargets.listEquals(selectedTargets, [rowTarget])
 
               return (
                 <tr

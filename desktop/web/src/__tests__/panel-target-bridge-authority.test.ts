@@ -2,10 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import { hoveredPanelTargets, selectedPanelTargets } from '../app/panel-targets/state'
 import { selectedObjectIds } from '../canvas/session-state'
-import { resolvePanelTargets } from '../panel-target-resolution'
-import { projectPanelTargetsToMapFeatures } from '../panel-target-map-projection'
-import { createPanelTargetMapOverlayContract, buildPanelTargetProjectionScene } from '../maplibre/panel-target-overlays'
-import { speciesTarget } from '../panel-targets'
+import { createPanelTargetMapOverlayContract } from '../maplibre/panel-target-overlays'
+import { panelTargets, speciesTarget } from '../panel-targets'
 
 function createScene() {
   const scene = createDefaultScenePersistedState()
@@ -39,12 +37,8 @@ describe('panel target bridge authority', () => {
     const scene = createScene()
     const targets = [speciesTarget('Malus domestica')]
 
-    const resolved = resolvePanelTargets(targets, scene)
-    const projection = projectPanelTargetsToMapFeatures(
-      targets,
-      buildPanelTargetProjectionScene(scene),
-      { lat: 48.8566, lon: 2.3522 },
-    )
+    const resolved = panelTargets.resolve(targets, panelTargets.indexScene(scene))
+    const projection = resolved.toMapFeatures({ lat: 48.8566, lon: 2.3522 })
     const overlay = createPanelTargetMapOverlayContract('selection', projection)
 
     expect(resolved.plantIds).toEqual(['plant-1'])

@@ -1,8 +1,9 @@
 import type { ScenePersistedState } from '../canvas/runtime/scene'
+import { panelTargets } from '../panel-targets'
+import type { PanelTargetSceneIndex } from '../panel-targets'
 import type {
   PanelTargetMapFeature,
   PanelTargetMapProjectionResult,
-  PanelTargetMapProjectionScene,
 } from '../panel-target-map-projection'
 
 export type PanelTargetMapOverlayVariant = 'hover' | 'selection'
@@ -102,18 +103,8 @@ function createLayerSpecs(
   ]
 }
 
-export function buildPanelTargetProjectionScene(scene: ScenePersistedState): PanelTargetMapProjectionScene {
-  return {
-    plants: scene.plants.map((plant) => ({
-      id: plant.id,
-      canonicalName: plant.canonicalName,
-      position: plant.position,
-    })),
-    zones: scene.zones.map((zone) => ({
-      name: zone.name,
-      points: zone.points,
-    })),
-  }
+export function buildPanelTargetProjectionScene(scene: ScenePersistedState): PanelTargetSceneIndex {
+  return panelTargets.indexScene(scene)
 }
 
 export function createPanelTargetMapOverlayContract(

@@ -1,5 +1,5 @@
 import type { TimelineAction } from '../../types/design'
-import { panelTargetsEqual } from '../../panel-targets'
+import { panelTargets } from '../../panel-targets'
 import { updateDesignArray } from '../document/controller'
 
 function updateTimeline(
@@ -42,7 +42,7 @@ export function applyTimelineActionPatch(
     next.order === existing.order &&
     next.completed === existing.completed &&
     next.recurrence === existing.recurrence &&
-    panelTargetsEqual(next.targets, existing.targets) &&
+    panelTargets.listEquals(next.targets, existing.targets) &&
     next.depends_on === existing.depends_on
   ) {
     return timeline

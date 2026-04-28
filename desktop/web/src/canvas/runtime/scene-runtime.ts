@@ -47,8 +47,7 @@ import {
   type SceneEditCoordinator,
 } from './scene-runtime/transactions'
 import type { CanvasRuntimeDocumentMetadata, MountedCanvasRuntime } from './runtime'
-import { resolvePanelTargets } from '../../panel-target-resolution'
-import { panelTargetsEqual, speciesTarget } from '../../panel-targets'
+import { panelTargets, speciesTarget } from '../../panel-targets'
 
 type RuntimeInvalidationKind = 'scene' | 'viewport' | 'chrome'
 
@@ -471,7 +470,7 @@ export class SceneCanvasRuntime implements MountedCanvasRuntime {
       ? this._sceneStore.persisted.plants.find((entry) => entry.id === id)
       : null
     const targets = plant ? [speciesTarget(plant.canonicalName)] : []
-    if (!panelTargetsEqual(hoveredCanvasTargets.peek(), targets)) {
+    if (!panelTargets.listEquals(hoveredCanvasTargets.peek(), targets)) {
       hoveredCanvasTargets.value = targets
     }
   }
@@ -558,6 +557,6 @@ export class SceneCanvasRuntime implements MountedCanvasRuntime {
       ...selectedPanelTargets.value,
       ...hoveredPanelTargets.value,
     ]
-    return resolvePanelTargets(combinedTargets, scene)
+    return panelTargets.resolve(combinedTargets, panelTargets.indexScene(scene))
   }
 }
