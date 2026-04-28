@@ -1,10 +1,7 @@
 use common_types::species::{PaginatedResult, Sort, SpeciesFilter, SpeciesListItem};
 use rusqlite::{Connection, params_from_iter};
 
-use crate::db::query_builder::{
-    QueryBuilder, build_count_query, decode_relevance_offset, encode_cursor, sanitize_fts_text,
-    sort_column,
-};
+use crate::db::query_builder::{SpeciesSearchPlan, SpeciesSearchRequest};
 
 /// Searches species using FTS5, structured filters, or both.
 ///
@@ -20,19 +17,18 @@ pub fn search(
     include_total: bool,
     locale: String,
 ) -> Result<PaginatedResult<SpeciesListItem>, String> {
-    let is_relevance_sort = matches!(sort, Sort::Relevance);
-    let uses_relevance_offset =
-        is_relevance_sort && text.as_deref().and_then(sanitize_fts_text).is_some();
-    let sort_col = sort_column(&sort).to_owned();
-    let relevance_offset = if uses_relevance_offset {
-        decode_relevance_offset(cursor.as_deref()).unwrap_or(0)
-    } else {
-        0
-    };
+    let plan = SpeciesSearchPlan::build(SpeciesSearchRequest {
+        text,
+        filters,
+        cursor,
+        sort,
+        limit,
+        include_total,
+        locale,
+    });
 
-    let total_estimate = if include_total {
-        let (count_sql, count_params) = build_count_query(text.as_deref(), &filters);
-        conn.query_row(&count_sql, params_from_iter(count_params.iter()), |row| {
+    let total_estimate = if let Some(count) = plan.count() {
+        conn.query_row(count.sql(), params_from_iter(count.params()), |row| {
             row.get::<_, u32>(0)
         })
         .map_err(|e| format!("Failed to count species search results: {e}"))?
@@ -40,15 +36,13 @@ pub fn search(
         0
     };
 
-    let qb = QueryBuilder::new(text, filters, cursor, sort, limit, locale);
-    let (sql, params) = qb.build();
-
+    let list = plan.list();
     let mut stmt = conn
-        .prepare(&sql)
+        .prepare(list.sql())
         .map_err(|e| format!("Failed to prepare species search: {e}"))?;
 
     let rows: Vec<SpeciesListItem> = stmt
-        .query_map(params_from_iter(params.iter()), |row| {
+        .query_map(params_from_iter(list.params()), |row| {
             Ok(SpeciesListItem {
                 canonical_name: row.get(0)?,
                 slug: row.get(1)?,
@@ -80,31 +74,7 @@ pub fn search(
 
     let has_next = rows.len() as u32 > limit;
     let items: Vec<SpeciesListItem> = rows.into_iter().take(limit as usize).collect();
-
-    let next_cursor = if has_next {
-        if uses_relevance_offset {
-            Some(format!("offset:{}", relevance_offset + items.len() as u32))
-        } else {
-            items.last().map(|last| {
-                let sort_value = match sort_col.as_str() {
-                    "s.family" => last.family.clone().unwrap_or_default(),
-                    "s.height_max_m" => last
-                        .height_max_m
-                        .map(|height| height.to_string())
-                        .unwrap_or_default(),
-                    "s.hardiness_zone_min" => last
-                        .hardiness_zone_min
-                        .map(|zone| zone.to_string())
-                        .unwrap_or_default(),
-                    "s.growth_rate" => last.growth_rate.clone().unwrap_or_default(),
-                    _ => last.canonical_name.clone(),
-                };
-                encode_cursor(&sort_value, &last.canonical_name)
-            })
-        }
-    } else {
-        None
-    };
+    let next_cursor = plan.next_cursor(&items, has_next);
 
     Ok(PaginatedResult {
         items,

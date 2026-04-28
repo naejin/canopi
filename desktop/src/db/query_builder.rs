@@ -3,12 +3,8 @@ mod columns;
 mod cursor;
 mod filters;
 
-pub use builder::QueryBuilder;
-pub(crate) use builder::build_count_query;
-pub(crate) use builder::decode_relevance_offset;
-pub(crate) use builder::sanitize_fts_text;
-pub(crate) use crate::db::plant_filter_fields::{filter_field_kind, PlantFilterFieldKind};
-pub use columns::sort_column;
+pub(crate) use crate::db::plant_filter_fields::{PlantFilterFieldKind, filter_field_kind};
+pub use builder::{SpeciesSearchPlan, SpeciesSearchRequest};
 pub(crate) use columns::validated_column;
 #[allow(unused_imports)]
 pub use cursor::{decode_cursor, encode_cursor};
@@ -16,11 +12,80 @@ pub use cursor::{decode_cursor, encode_cursor};
 #[cfg(test)]
 mod tests {
     use super::*;
-    use common_types::species::{Sort, SpeciesFilter};
+    use common_types::species::{DynamicFilter, FilterOp, Sort, SpeciesFilter, SpeciesListItem};
     use rusqlite::types::Value;
 
     fn default_filter() -> SpeciesFilter {
         SpeciesFilter::default()
+    }
+
+    fn request(
+        text: Option<&str>,
+        filters: SpeciesFilter,
+        cursor: Option<String>,
+        sort: Sort,
+        limit: u32,
+        include_total: bool,
+    ) -> SpeciesSearchRequest {
+        SpeciesSearchRequest {
+            text: text.map(str::to_owned),
+            filters,
+            cursor,
+            sort,
+            limit,
+            include_total,
+            locale: "en".to_owned(),
+        }
+    }
+
+    fn list_item(canonical_name: &str) -> SpeciesListItem {
+        SpeciesListItem {
+            canonical_name: canonical_name.to_owned(),
+            slug: canonical_name.to_lowercase().replace(' ', "-"),
+            common_name: None,
+            common_name_2: None,
+            is_name_fallback: false,
+            family: None,
+            genus: None,
+            height_max_m: None,
+            hardiness_zone_min: None,
+            hardiness_zone_max: None,
+            growth_rate: None,
+            stratum: None,
+            edibility_rating: None,
+            medicinal_rating: None,
+            width_max_m: None,
+            is_favorite: false,
+        }
+    }
+
+    fn normalized_main_where(sql: &str) -> String {
+        let main_from = sql.find("FROM species s").expect("main species FROM");
+        let scoped = &sql[main_from..];
+        let where_start = scoped.find("WHERE ").expect("main WHERE") + "WHERE ".len();
+        let tail = &scoped[where_start..];
+        let where_end = tail.find("ORDER BY").unwrap_or(tail.len());
+        normalize_placeholders(&tail[..where_end])
+    }
+
+    fn normalize_placeholders(fragment: &str) -> String {
+        let mut normalized = String::new();
+        let mut chars = fragment.chars().peekable();
+        while let Some(ch) = chars.next() {
+            if ch == '?' {
+                normalized.push('?');
+                while chars.peek().is_some_and(|next| next.is_ascii_digit()) {
+                    chars.next();
+                }
+            } else if ch.is_whitespace() {
+                if !normalized.ends_with(' ') {
+                    normalized.push(' ');
+                }
+            } else {
+                normalized.push(ch);
+            }
+        }
+        normalized.trim().to_owned()
     }
 
     #[test]
@@ -38,47 +103,43 @@ mod tests {
 
     #[test]
     fn test_empty_query_produces_valid_sql() {
-        let qb = QueryBuilder::new(
-            None,
-            default_filter(),
-            None,
-            Sort::Name,
-            20,
-            "en".to_owned(),
-        );
-        let (sql, params) = qb.build();
+        let plan =
+            SpeciesSearchPlan::build(request(None, default_filter(), None, Sort::Name, 20, false));
+        let sql = plan.list().sql();
+        let params = plan.list().params();
         assert!(sql.contains("FROM species s"));
         assert!(!sql.contains("species_search_fts"));
         // locale param + "en" fallback param + limit param
         assert_eq!(params.len(), 3);
+        assert!(plan.count().is_none());
     }
 
     #[test]
     fn test_text_search_includes_fts_join() {
-        let qb = QueryBuilder::new(
-            Some("lavender".to_owned()),
+        let plan = SpeciesSearchPlan::build(request(
+            Some("lavender"),
             default_filter(),
             None,
             Sort::Relevance,
             20,
-            "en".to_owned(),
-        );
-        let (sql, _params) = qb.build();
+            false,
+        ));
+        let sql = plan.list().sql();
         assert!(sql.contains("species_search_fts"));
         assert!(sql.contains("species_search_fts MATCH"));
     }
 
     #[test]
     fn test_fts_search_term_has_prefix_wildcard() {
-        let qb = QueryBuilder::new(
-            Some("lav".to_owned()),
+        let plan = SpeciesSearchPlan::build(request(
+            Some("lav"),
             default_filter(),
             None,
             Sort::Relevance,
             20,
-            "en".to_owned(),
-        );
-        let (_sql, params) = qb.build();
+            false,
+        ));
+        let params = plan.list().params();
         // params[0] = locale, params[1] = "en" fallback, params[2] = search term
         let search_term = match &params[2] {
             Value::Text(s) => s.clone(),
@@ -91,8 +152,8 @@ mod tests {
     fn test_nitrogen_fixer_true_filter() {
         let mut f = default_filter();
         f.nitrogen_fixer = Some(true);
-        let qb = QueryBuilder::new(None, f, None, Sort::Name, 20, "en".to_owned());
-        let (sql, _) = qb.build();
+        let plan = SpeciesSearchPlan::build(request(None, f, None, Sort::Name, 20, false));
+        let sql = plan.list().sql();
         assert!(sql.contains("nitrogen_fixer = 1"));
     }
 
@@ -100,8 +161,8 @@ mod tests {
     fn test_nitrogen_fixer_false_is_noop() {
         let mut f = default_filter();
         f.nitrogen_fixer = Some(false);
-        let qb = QueryBuilder::new(None, f, None, Sort::Name, 20, "en".to_owned());
-        let (sql, _) = qb.build();
+        let plan = SpeciesSearchPlan::build(request(None, f, None, Sort::Name, 20, false));
+        let sql = plan.list().sql();
         assert!(!sql.contains("nitrogen_fixer"));
     }
 
@@ -109,8 +170,8 @@ mod tests {
     fn test_life_cycle_filter_maps_to_boolean_columns() {
         let mut f = default_filter();
         f.life_cycle = Some(vec!["Annual".to_owned(), "Perennial".to_owned()]);
-        let qb = QueryBuilder::new(None, f, None, Sort::Name, 20, "en".to_owned());
-        let (sql, _) = qb.build();
+        let plan = SpeciesSearchPlan::build(request(None, f, None, Sort::Name, 20, false));
+        let sql = plan.list().sql();
         assert!(sql.contains("is_annual = 1"));
         assert!(sql.contains("is_perennial = 1"));
         assert!(sql.contains(" OR "));
@@ -120,8 +181,8 @@ mod tests {
     fn test_edible_filter() {
         let mut f = default_filter();
         f.edible = Some(true);
-        let qb = QueryBuilder::new(None, f, None, Sort::Name, 20, "en".to_owned());
-        let (sql, _) = qb.build();
+        let plan = SpeciesSearchPlan::build(request(None, f, None, Sort::Name, 20, false));
+        let sql = plan.list().sql();
         assert!(sql.contains("edibility_rating > 0"));
     }
 
@@ -129,8 +190,8 @@ mod tests {
     fn test_soil_tolerances_filter_uses_boolean_columns() {
         let mut f = default_filter();
         f.soil_tolerances = Some(vec!["light".to_owned(), "heavy_clay".to_owned()]);
-        let qb = QueryBuilder::new(None, f, None, Sort::Name, 20, "en".to_owned());
-        let (sql, _) = qb.build();
+        let plan = SpeciesSearchPlan::build(request(None, f, None, Sort::Name, 20, false));
+        let sql = plan.list().sql();
         assert!(sql.contains("tolerates_light_soil = 1"));
         assert!(sql.contains("heavy_clay = 1"));
         assert!(sql.contains(" OR "));
@@ -139,45 +200,38 @@ mod tests {
     #[test]
     fn test_cursor_clause_name_sort() {
         let cursor = encode_cursor("Lavandula angustifolia", "Lavandula angustifolia");
-        let qb = QueryBuilder::new(
+        let plan = SpeciesSearchPlan::build(request(
             None,
             default_filter(),
             Some(cursor),
             Sort::Name,
             20,
-            "en".to_owned(),
-        );
-        let (sql, _) = qb.build();
+            false,
+        ));
+        let sql = plan.list().sql();
         assert!(sql.contains("s.canonical_name >"));
     }
 
     #[test]
     fn test_cursor_clause_family_sort_uses_row_value() {
         let cursor = encode_cursor("Lamiaceae", "Lavandula angustifolia");
-        let qb = QueryBuilder::new(
+        let plan = SpeciesSearchPlan::build(request(
             None,
             default_filter(),
             Some(cursor),
             Sort::Family,
             20,
-            "en".to_owned(),
-        );
-        let (sql, _) = qb.build();
+            false,
+        ));
+        let sql = plan.list().sql();
         assert!(sql.contains("(s.family, s.canonical_name) >"));
     }
 
     #[test]
     fn test_limit_is_incremented_by_one() {
-        let qb = QueryBuilder::new(
-            None,
-            default_filter(),
-            None,
-            Sort::Name,
-            20,
-            "en".to_owned(),
-        );
-        let (_sql, params) = qb.build();
-        let limit_val = match params.last().unwrap() {
+        let plan =
+            SpeciesSearchPlan::build(request(None, default_filter(), None, Sort::Name, 20, false));
+        let limit_val = match plan.list().params().last().unwrap() {
             Value::Integer(n) => *n,
             _ => panic!("expected integer limit"),
         };
@@ -209,15 +263,16 @@ mod tests {
 
     #[test]
     fn test_relevance_sort_uses_offset_pagination() {
-        let qb = QueryBuilder::new(
-            Some("lavender".to_owned()),
+        let plan = SpeciesSearchPlan::build(request(
+            Some("lavender"),
             default_filter(),
             Some("offset:50".to_owned()),
             Sort::Relevance,
             20,
-            "en".to_owned(),
-        );
-        let (sql, params) = qb.build();
+            false,
+        ));
+        let sql = plan.list().sql();
+        let params = plan.list().params();
         assert!(sql.contains("ORDER BY bm25("));
         assert!(sql.contains("OFFSET ?"));
         assert!(!sql.contains("s.canonical_name >"));
@@ -226,11 +281,97 @@ mod tests {
             _ => panic!("expected integer offset"),
         };
         assert_eq!(offset_val, 50);
+
+        let items = vec![list_item("Lavandula alpha"), list_item("Lavandula beta")];
+        assert_eq!(plan.next_cursor(&items, true).as_deref(), Some("offset:52"));
+        assert_eq!(plan.next_cursor(&items, false), None);
+    }
+
+    #[test]
+    fn test_empty_or_unsafe_fts_falls_back_to_keyset_plan() {
+        for text in ["", "   ", "\" () + -"] {
+            let plan = SpeciesSearchPlan::build(request(
+                Some(text),
+                default_filter(),
+                None,
+                Sort::Relevance,
+                20,
+                true,
+            ));
+            assert!(!plan.list().sql().contains("species_search_fts"));
+            assert!(!plan.count().unwrap().sql().contains("species_search_fts"));
+            assert!(!plan.list().sql().contains("ORDER BY bm25("));
+            assert!(!plan.list().sql().contains("OFFSET ?"));
+
+            let items = vec![list_item("Lavandula alpha")];
+            let next_cursor = plan.next_cursor(&items, true).expect("expected cursor");
+            assert!(!next_cursor.starts_with("offset:"));
+        }
+    }
+
+    #[test]
+    fn test_non_relevance_keyset_cursors_use_sort_specific_values() {
+        let mut family = list_item("Lavandula angustifolia");
+        family.family = Some("Lamiaceae".to_owned());
+
+        let mut height = list_item("Malus domestica");
+        height.height_max_m = Some(7.5);
+
+        let mut hardiness = list_item("Vaccinium corymbosum");
+        hardiness.hardiness_zone_min = Some(4);
+
+        let mut growth_rate = list_item("Alnus rubra");
+        growth_rate.growth_rate = Some("Fast".to_owned());
+
+        for (sort, item, expected_value) in [
+            (Sort::Name, list_item("Acer rubrum"), "Acer rubrum"),
+            (Sort::Family, family, "Lamiaceae"),
+            (Sort::Height, height, "7.5"),
+            (Sort::Hardiness, hardiness, "4"),
+            (Sort::GrowthRate, growth_rate, "Fast"),
+        ] {
+            let plan =
+                SpeciesSearchPlan::build(request(None, default_filter(), None, sort, 20, false));
+            let cursor = plan
+                .next_cursor(std::slice::from_ref(&item), true)
+                .expect("expected cursor");
+            let (sort_value, canonical_name) = decode_cursor(&cursor).unwrap();
+            assert_eq!(sort_value, expected_value);
+            assert_eq!(canonical_name, item.canonical_name);
+        }
+    }
+
+    #[test]
+    fn test_count_and_list_plans_share_search_predicates() {
+        let mut filters = default_filter();
+        filters.family = Some("Lamiaceae".to_owned());
+        filters.extra = Some(vec![DynamicFilter {
+            field: "raunkiaer_life_form".to_owned(),
+            op: FilterOp::Equals,
+            values: vec!["Phanerophyte".to_owned()],
+        }]);
+
+        let plan = SpeciesSearchPlan::build(request(
+            Some("lavender"),
+            filters,
+            None,
+            Sort::Family,
+            20,
+            true,
+        ));
+
+        let count_where = normalized_main_where(plan.count().unwrap().sql());
+        let list_where = normalized_main_where(plan.list().sql());
+        assert_eq!(count_where, list_where);
     }
 
     #[test]
     fn test_count_query_no_text_no_filters() {
-        let (sql, params) = build_count_query(None, &default_filter());
+        let plan =
+            SpeciesSearchPlan::build(request(None, default_filter(), None, Sort::Name, 20, true));
+        let count = plan.count().unwrap();
+        let sql = count.sql();
+        let params = count.params();
         assert!(sql.contains("SELECT COUNT(*)"));
         assert!(!sql.contains("species_search_fts"));
         assert_eq!(params.len(), 0);
@@ -238,7 +379,17 @@ mod tests {
 
     #[test]
     fn test_count_query_with_text() {
-        let (sql, params) = build_count_query(Some("lavender"), &default_filter());
+        let plan = SpeciesSearchPlan::build(request(
+            Some("lavender"),
+            default_filter(),
+            None,
+            Sort::Name,
+            20,
+            true,
+        ));
+        let count = plan.count().unwrap();
+        let sql = count.sql();
+        let params = count.params();
         assert!(sql.contains("SELECT COUNT(*)"));
         assert!(sql.contains("species_search_fts MATCH"));
         assert_eq!(params.len(), 1);
@@ -252,10 +403,42 @@ mod tests {
     fn test_count_query_with_filters() {
         let mut f = default_filter();
         f.nitrogen_fixer = Some(true);
-        let (sql, params) = build_count_query(None, &f);
+        let plan = SpeciesSearchPlan::build(request(None, f, None, Sort::Name, 20, true));
+        let count = plan.count().unwrap();
+        let sql = count.sql();
+        let params = count.params();
         assert!(sql.contains("SELECT COUNT(*)"));
         assert!(sql.contains("nitrogen_fixer = 1"));
         assert!(!sql.contains("species_search_fts"));
         assert_eq!(params.len(), 0);
+    }
+
+    #[test]
+    fn test_dynamic_filter_plan_uses_generated_allowlist() {
+        let mut f = default_filter();
+        f.extra = Some(vec![
+            DynamicFilter {
+                field: "raunkiaer_life_form".to_owned(),
+                op: FilterOp::Equals,
+                values: vec!["Phanerophyte".to_owned()],
+            },
+            DynamicFilter {
+                field: "not_a_species_column".to_owned(),
+                op: FilterOp::Equals,
+                values: vec!["ignored".to_owned()],
+            },
+        ]);
+
+        let plan = SpeciesSearchPlan::build(request(None, f, None, Sort::Name, 20, true));
+
+        assert!(plan.list().sql().contains("s.raunkiaer_life_form = ?"));
+        assert!(
+            plan.count()
+                .unwrap()
+                .sql()
+                .contains("s.raunkiaer_life_form = ?")
+        );
+        assert!(!plan.list().sql().contains("not_a_species_column"));
+        assert!(!plan.count().unwrap().sql().contains("not_a_species_column"));
     }
 }
