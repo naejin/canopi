@@ -1,55 +1,49 @@
 import { computed, signal } from '@preact/signals'
+import { getDynamicFilterOptions, searchSpecies } from '../../ipc/species'
+import { locale } from '../settings/state'
 import type {
   DynamicFilter,
-  DynamicFilterOptions,
   FilterOp,
   FilterOptions,
-  Sort,
-  SpeciesFilter,
   SpeciesListItem,
 } from '../../types/species'
+import {
+  createEmptySpeciesFilter,
+  createPlantSearchSession,
+  DYNAMIC_OPTIONS_BACKEND_MISMATCH_ERROR,
+  isPlantSearchLoading,
+} from './search-session'
 
-export function createEmptySpeciesFilter(): SpeciesFilter {
-  return {
-    sun_tolerances: null,
-    soil_tolerances: null,
-    growth_rate: null,
-    life_cycle: null,
-    edible: null,
-    edibility_min: null,
-    nitrogen_fixer: null,
-    climate_zones: null,
-    habit: null,
-    woody: null,
-    family: null,
-    extra: null,
-  }
-}
+export { createEmptySpeciesFilter, DYNAMIC_OPTIONS_BACKEND_MISMATCH_ERROR }
 
 // ── Search state ──────────────────────────────────────────────────────────────
 
-export const searchText = signal('')
-export const activeFilters = signal<SpeciesFilter>(createEmptySpeciesFilter())
-export const sortField = signal<Sort>('Name')
-export const searchResults = signal<SpeciesListItem[]>([])
-export const searchResultsRevision = signal(0)
-export const nextCursor = signal<string | null>(null)
-export const totalEstimate = signal(0)
-export const isSearching = signal(false)
-export const searchError = signal<string | null>(null)
+export const plantSearchSession = createPlantSearchSession({
+  search: searchSpecies,
+  loadDynamicFilterOptions: getDynamicFilterOptions,
+  locale,
+})
+
+export const searchText = plantSearchSession.signals.text
+export const activeFilters = plantSearchSession.signals.filters
+export const sortField = plantSearchSession.signals.sort
+export const searchResults = plantSearchSession.signals.items
+export const searchResultsRevision = plantSearchSession.signals.committedRevision
+export const nextCursor = plantSearchSession.signals.nextCursor
+export const totalEstimate = plantSearchSession.signals.totalEstimate
+export const searchStatus = plantSearchSession.signals.status
+export const searchError = plantSearchSession.signals.error
+export const isSearching = computed(() => isPlantSearchLoading(searchStatus.value))
 
 // ── Filter options (loaded once) ─────────────────────────────────────────────
 
 export const filterOptions = signal<FilterOptions | null>(null)
 
 // ── Dynamic "More Filters" state ────────────────────────────────────────────
-export const extraFilters = signal<DynamicFilter[]>([])
-export const dynamicOptionsCache = signal<Record<string, Record<string, DynamicFilterOptions>>>({})
-export const dynamicOptionsPending = signal<Record<string, Record<string, boolean>>>({})
-export const dynamicOptionsErrors = signal<Record<string, Record<string, string>>>({})
-
-export const DYNAMIC_OPTIONS_BACKEND_MISMATCH_ERROR =
-  'Filter not exposed by running desktop backend. Restart the app after rebuilding.'
+export const extraFilters = plantSearchSession.signals.extraFilters
+export const dynamicOptionsCache = plantSearchSession.signals.dynamicOptionsCache
+export const dynamicOptionsPending = plantSearchSession.signals.dynamicOptionsPending
+export const dynamicOptionsErrors = plantSearchSession.signals.dynamicOptionsErrors
 
 // ── View state ────────────────────────────────────────────────────────────────
 

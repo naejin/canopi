@@ -1,0 +1,449 @@
+import { batch, computed, effect, signal, type ReadonlySignal, type Signal } from '@preact/signals'
+import type {
+  DynamicFilter,
+  DynamicFilterOptions,
+  FilterOp,
+  PaginatedResult,
+  Sort,
+  SpeciesFilter,
+  SpeciesListItem,
+} from '../../types/species'
+
+export type PlantSearchStatus = 'idle' | 'loading-first-page' | 'loading-next-page' | 'error'
+
+export interface PlantSearchIntent {
+  readonly text: string
+  readonly filters: SpeciesFilter
+  readonly extraFilters: readonly DynamicFilter[]
+  readonly sort: Sort
+  readonly locale: string
+}
+
+export interface PlantSearchResultState {
+  readonly items: readonly SpeciesListItem[]
+  readonly nextCursor: string | null
+  readonly totalEstimate: number
+  readonly committedRevision: number
+  readonly status: PlantSearchStatus
+  readonly error: string | null
+}
+
+export interface PlantSearchSession {
+  readonly intent: ReadonlySignal<PlantSearchIntent>
+  readonly results: ReadonlySignal<PlantSearchResultState>
+  setText(text: string): void
+  patchFilters(patch: Partial<SpeciesFilter>): void
+  setSort(sort: Sort): void
+  retry(): void
+  loadNextPage(): Promise<void>
+  dispose(): void
+}
+
+export type PlantSearchAdapter = (
+  text: string,
+  filters: SpeciesFilter,
+  cursor: string | null,
+  limit: number,
+  sort: Sort,
+  locale: string,
+  includeTotal: boolean,
+) => Promise<PaginatedResult<SpeciesListItem>>
+
+export type DynamicFilterOptionsAdapter = (
+  fields: string[],
+  locale: string,
+) => Promise<DynamicFilterOptions[]>
+
+export interface PlantSearchSessionSignals {
+  readonly text: Signal<string>
+  readonly filters: Signal<SpeciesFilter>
+  readonly extraFilters: Signal<DynamicFilter[]>
+  readonly sort: Signal<Sort>
+  readonly items: Signal<SpeciesListItem[]>
+  readonly nextCursor: Signal<string | null>
+  readonly totalEstimate: Signal<number>
+  readonly committedRevision: Signal<number>
+  readonly status: Signal<PlantSearchStatus>
+  readonly error: Signal<string | null>
+  readonly dynamicOptionsCache: Signal<Record<string, Record<string, DynamicFilterOptions>>>
+  readonly dynamicOptionsPending: Signal<Record<string, Record<string, boolean>>>
+  readonly dynamicOptionsErrors: Signal<Record<string, Record<string, string>>>
+}
+
+export interface ManagedPlantSearchSession extends PlantSearchSession {
+  readonly signals: PlantSearchSessionSignals
+  start(): () => void
+  addExtraFilter(field: string, op: FilterOp, values: string[]): void
+  removeExtraFilter(field: string): void
+  clearFilters(): void
+  loadDynamicOptions(fields: string[]): Promise<void>
+  updateResultItem(
+    canonicalName: string,
+    update: (item: SpeciesListItem) => SpeciesListItem,
+  ): void
+}
+
+type TimerHandle = ReturnType<typeof setTimeout>
+
+interface PlantSearchTimers {
+  setTimeout(callback: () => void, ms: number): TimerHandle
+  clearTimeout(handle: TimerHandle): void
+}
+
+interface PlantSearchSessionOptions {
+  readonly search: PlantSearchAdapter
+  readonly loadDynamicFilterOptions?: DynamicFilterOptionsAdapter
+  readonly locale: ReadonlySignal<string>
+  readonly pageSize?: number
+  readonly textDebounceMs?: number
+  readonly timers?: PlantSearchTimers
+}
+
+const DEFAULT_PAGE_SIZE = 50
+const DEFAULT_TEXT_DEBOUNCE_MS = 150
+
+export const DYNAMIC_OPTIONS_BACKEND_MISMATCH_ERROR =
+  'Filter not exposed by running desktop backend. Restart the app after rebuilding.'
+
+const defaultTimers: PlantSearchTimers = {
+  setTimeout: (callback, ms) => setTimeout(callback, ms),
+  clearTimeout: (handle) => clearTimeout(handle),
+}
+
+export function createEmptySpeciesFilter(): SpeciesFilter {
+  return {
+    sun_tolerances: null,
+    soil_tolerances: null,
+    growth_rate: null,
+    life_cycle: null,
+    edible: null,
+    edibility_min: null,
+    nitrogen_fixer: null,
+    climate_zones: null,
+    habit: null,
+    woody: null,
+    family: null,
+    extra: null,
+  }
+}
+
+export function isPlantSearchLoading(status: PlantSearchStatus): boolean {
+  return status === 'loading-first-page' || status === 'loading-next-page'
+}
+
+function mergeExtraFilters(
+  filters: SpeciesFilter,
+  extraFilters: readonly DynamicFilter[],
+): SpeciesFilter {
+  if (extraFilters.length === 0) return filters
+  const existing = filters.extra ?? []
+  return { ...filters, extra: [...existing, ...extraFilters] }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+export function createPlantSearchSession({
+  search,
+  loadDynamicFilterOptions = async () => [],
+  locale,
+  pageSize = DEFAULT_PAGE_SIZE,
+  textDebounceMs = DEFAULT_TEXT_DEBOUNCE_MS,
+  timers = defaultTimers,
+}: PlantSearchSessionOptions): ManagedPlantSearchSession {
+  const text = signal('')
+  const filters = signal<SpeciesFilter>(createEmptySpeciesFilter())
+  const extraFilters = signal<DynamicFilter[]>([])
+  const sort = signal<Sort>('Name')
+  const items = signal<SpeciesListItem[]>([])
+  const nextCursor = signal<string | null>(null)
+  const totalEstimate = signal(0)
+  const committedRevision = signal(0)
+  const status = signal<PlantSearchStatus>('idle')
+  const error = signal<string | null>(null)
+  const dynamicOptionsCache = signal<Record<string, Record<string, DynamicFilterOptions>>>({})
+  const dynamicOptionsPending = signal<Record<string, Record<string, boolean>>>({})
+  const dynamicOptionsErrors = signal<Record<string, Record<string, string>>>({})
+
+  const intent = computed<PlantSearchIntent>(() => ({
+    text: text.value,
+    filters: filters.value,
+    extraFilters: extraFilters.value,
+    sort: sort.value,
+    locale: locale.value,
+  }))
+
+  const results = computed<PlantSearchResultState>(() => ({
+    items: items.value,
+    nextCursor: nextCursor.value,
+    totalEstimate: totalEstimate.value,
+    committedRevision: committedRevision.value,
+    status: status.value,
+    error: error.value,
+  }))
+
+  let searchGeneration = 0
+  let debounceTimer: TimerHandle | null = null
+  let disposeIntentEffect: (() => void) | null = null
+  let lastText = text.peek()
+
+  function clearDebounceTimer(): void {
+    if (debounceTimer === null) return
+    timers.clearTimeout(debounceTimer)
+    debounceTimer = null
+  }
+
+  function currentIntent(): PlantSearchIntent {
+    return intent.value
+  }
+
+  async function executeFirstPage(generation: number): Promise<void> {
+    const requestIntent = currentIntent()
+    try {
+      const result = await search(
+        requestIntent.text,
+        mergeExtraFilters(requestIntent.filters, requestIntent.extraFilters),
+        null,
+        pageSize,
+        requestIntent.sort,
+        requestIntent.locale,
+        true,
+      )
+
+      if (generation !== searchGeneration) return
+
+      batch(() => {
+        items.value = result.items
+        committedRevision.value += 1
+        nextCursor.value = result.next_cursor
+        totalEstimate.value = result.total_estimate
+        status.value = 'idle'
+        error.value = null
+      })
+    } catch (caught) {
+      if (generation !== searchGeneration) return
+      batch(() => {
+        status.value = 'error'
+        error.value = errorMessage(caught)
+      })
+    }
+  }
+
+  function scheduleFirstPage(debounceMs: number): void {
+    searchGeneration += 1
+    const generation = searchGeneration
+
+    batch(() => {
+      nextCursor.value = null
+      error.value = null
+      status.value = 'loading-first-page'
+    })
+
+    clearDebounceTimer()
+    if (debounceMs <= 0) {
+      void executeFirstPage(generation)
+      return
+    }
+
+    debounceTimer = timers.setTimeout(() => {
+      debounceTimer = null
+      void executeFirstPage(generation)
+    }, debounceMs)
+  }
+
+  function start(): () => void {
+    if (disposeIntentEffect !== null) return stop
+
+    lastText = text.peek()
+    disposeIntentEffect = effect(() => {
+      const currentText = text.value
+      void filters.value
+      void extraFilters.value
+      void sort.value
+      void locale.value
+
+      const textChanged = currentText !== lastText
+      lastText = currentText
+      scheduleFirstPage(textChanged ? textDebounceMs : 0)
+    })
+
+    return stop
+  }
+
+  function stop(): void {
+    disposeIntentEffect?.()
+    disposeIntentEffect = null
+    clearDebounceTimer()
+    searchGeneration += 1
+    if (isPlantSearchLoading(status.value)) {
+      status.value = 'idle'
+    }
+  }
+
+  async function loadNextPage(): Promise<void> {
+    const cursor = nextCursor.value
+    if (cursor === null || isPlantSearchLoading(status.value)) return
+
+    const generation = searchGeneration
+    const requestIntent = currentIntent()
+    status.value = 'loading-next-page'
+    error.value = null
+
+    try {
+      const result = await search(
+        requestIntent.text,
+        mergeExtraFilters(requestIntent.filters, requestIntent.extraFilters),
+        cursor,
+        pageSize,
+        requestIntent.sort,
+        requestIntent.locale,
+        false,
+      )
+
+      if (generation !== searchGeneration) return
+
+      batch(() => {
+        items.value = [...items.value, ...result.items]
+        nextCursor.value = result.next_cursor
+        status.value = 'idle'
+        error.value = null
+      })
+    } catch (caught) {
+      if (generation !== searchGeneration) return
+      batch(() => {
+        status.value = 'error'
+        error.value = errorMessage(caught)
+      })
+    }
+  }
+
+  async function loadDynamicOptions(fields: string[]): Promise<void> {
+    const currentLocale = locale.value
+    const cacheForLocale = dynamicOptionsCache.value[currentLocale] ?? {}
+    const pendingForLocale = dynamicOptionsPending.value[currentLocale] ?? {}
+    const uncached = fields.filter((field) => !cacheForLocale[field] && !pendingForLocale[field])
+    if (uncached.length === 0) return
+
+    const errorsForLocale = { ...(dynamicOptionsErrors.value[currentLocale] ?? {}) }
+    for (const field of uncached) {
+      delete errorsForLocale[field]
+    }
+    dynamicOptionsErrors.value = {
+      ...dynamicOptionsErrors.value,
+      [currentLocale]: errorsForLocale,
+    }
+
+    dynamicOptionsPending.value = {
+      ...dynamicOptionsPending.value,
+      [currentLocale]: {
+        ...pendingForLocale,
+        ...Object.fromEntries(uncached.map((field) => [field, true])),
+      },
+    }
+
+    try {
+      const options = await loadDynamicFilterOptions(uncached, currentLocale)
+      const updatedLocale = { ...(dynamicOptionsCache.value[currentLocale] ?? {}) }
+      const updatedErrors = { ...(dynamicOptionsErrors.value[currentLocale] ?? {}) }
+      for (const option of options) {
+        updatedLocale[option.field] = option
+        delete updatedErrors[option.field]
+      }
+
+      const returnedFields = new Set(options.map((option) => option.field))
+      const missingFields = uncached.filter((field) => !returnedFields.has(field))
+      if (missingFields.length > 0) {
+        console.error('Dynamic filter options missing from IPC response', {
+          locale: currentLocale,
+          requested: uncached,
+          returned: [...returnedFields],
+          missing: missingFields,
+        })
+        for (const field of missingFields) {
+          updatedErrors[field] = DYNAMIC_OPTIONS_BACKEND_MISMATCH_ERROR
+        }
+      }
+
+      dynamicOptionsCache.value = { ...dynamicOptionsCache.value, [currentLocale]: updatedLocale }
+      dynamicOptionsErrors.value = { ...dynamicOptionsErrors.value, [currentLocale]: updatedErrors }
+    } catch (caught) {
+      const message = errorMessage(caught)
+      console.error('Failed to load dynamic filter options', {
+        locale: currentLocale,
+        fields: uncached,
+        error: message,
+      })
+      dynamicOptionsErrors.value = {
+        ...dynamicOptionsErrors.value,
+        [currentLocale]: {
+          ...(dynamicOptionsErrors.value[currentLocale] ?? {}),
+          ...Object.fromEntries(uncached.map((field) => [field, message])),
+        },
+      }
+    } finally {
+      const localePending = { ...(dynamicOptionsPending.value[currentLocale] ?? {}) }
+      for (const field of uncached) {
+        delete localePending[field]
+      }
+      dynamicOptionsPending.value = {
+        ...dynamicOptionsPending.value,
+        [currentLocale]: localePending,
+      }
+    }
+  }
+
+  return {
+    intent,
+    results,
+    signals: {
+      text,
+      filters,
+      extraFilters,
+      sort,
+      items,
+      nextCursor,
+      totalEstimate,
+      committedRevision,
+      status,
+      error,
+      dynamicOptionsCache,
+      dynamicOptionsPending,
+      dynamicOptionsErrors,
+    },
+    start,
+    setText(nextText) {
+      text.value = nextText
+    },
+    patchFilters(patch) {
+      filters.value = { ...filters.value, ...patch }
+    },
+    setSort(nextSort) {
+      sort.value = nextSort
+    },
+    addExtraFilter(field, op, values) {
+      const without = extraFilters.value.filter((filter) => filter.field !== field)
+      extraFilters.value = [...without, { field, op, values }]
+    },
+    removeExtraFilter(field) {
+      extraFilters.value = extraFilters.value.filter((filter) => filter.field !== field)
+    },
+    clearFilters() {
+      batch(() => {
+        filters.value = createEmptySpeciesFilter()
+        extraFilters.value = []
+      })
+    },
+    retry() {
+      scheduleFirstPage(0)
+    },
+    loadNextPage,
+    loadDynamicOptions,
+    updateResultItem(canonicalName, update) {
+      items.value = items.value.map((item) =>
+        item.canonical_name === canonicalName ? update(item) : item,
+      )
+    },
+    dispose: stop,
+  }
+}

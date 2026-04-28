@@ -1,15 +1,17 @@
 import { t } from '../../i18n';
 import { locale } from '../../app/settings/state';
-import { searchText, totalEstimate, isSearching } from '../../app/plant-browser';
+import { isPlantSearchLoading, plantSearchSession } from '../../app/plant-browser';
 import styles from './PlantDb.module.css';
 
 export function SearchBar() {
   // Subscribe to locale for re-render on language change
   void locale.value;
 
-  const text = searchText.value;
-  const count = totalEstimate.value;
-  const searching = isSearching.value;
+  const intent = plantSearchSession.intent.value;
+  const results = plantSearchSession.results.value;
+  const text = intent.text;
+  const count = results.totalEstimate;
+  const searching = isPlantSearchLoading(results.status);
 
   return (
     <div className={styles.searchWrap}>
@@ -19,7 +21,7 @@ export function SearchBar() {
           className={styles.searchInput}
           value={text}
           onInput={(e) => {
-            searchText.value = e.currentTarget.value;
+            plantSearchSession.setText(e.currentTarget.value);
           }}
           placeholder={t('plantDb.searchPlaceholder')}
           aria-label={t('plantDb.searchPlaceholder')}
@@ -29,7 +31,7 @@ export function SearchBar() {
             type="button"
             className={styles.searchClear}
             onClick={() => {
-              searchText.value = '';
+              plantSearchSession.setText('');
             }}
             aria-label={t('plantDb.clearSearch')}
           >

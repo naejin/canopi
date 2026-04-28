@@ -2,12 +2,11 @@ import { useSignalEffect } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
 import {
-  activeFilters,
   dynamicOptionsCache,
-  extraFilters,
   hasActiveFilters,
   loadDynamicOptions,
   patchFilters,
+  plantSearchSession,
   removeExtraFilter,
 } from '../../app/plant-browser'
 import type { DynamicFilter, DynamicFilterOptions, SpeciesFilter } from '../../types/species'
@@ -81,14 +80,15 @@ function formatExtraFilterDisplay(
 
 export function ActiveChips() {
   const loc = locale.value;
-  const filters = activeFilters.value;
-  const extras = extraFilters.value;
+  const intent = plantSearchSession.intent.value;
+  const filters = intent.filters;
+  const extras = intent.extraFilters;
   const hasAny = hasActiveFilters.value;
   const localeOptions = dynamicOptionsCache.value[loc] ?? {};
 
   useSignalEffect(() => {
     const currentLoc = locale.value;
-    const currentExtras = extraFilters.value;
+    const currentExtras = plantSearchSession.intent.value.extraFilters;
     const cache = dynamicOptionsCache.value[currentLoc] ?? {};
 
     const seen = new Set<string>();

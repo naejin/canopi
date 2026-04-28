@@ -3,7 +3,6 @@ import { useRef, useEffect } from 'preact/hooks'
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
 import {
-  extraFilters,
   addExtraFilter,
   removeExtraFilter,
   loadDynamicOptions,
@@ -11,6 +10,7 @@ import {
   dynamicOptionsCache,
   dynamicOptionsErrors,
   dynamicOptionsPending,
+  plantSearchSession,
 } from '../../app/plant-browser'
 import { CATEGORIES, fieldsForCategory, type FieldDef, type FilterCategory } from './field-registry'
 import { FilterChip } from './FilterChip'
@@ -109,7 +109,7 @@ function CategorySection({ category, searchQuery }: {
   void locale.value
   const open = useSignal(false)
   const fields = fieldsForCategory(category.key as FilterCategory)
-  const extras = extraFilters.value
+  const extras = plantSearchSession.intent.value.extraFilters
 
   // Filter fields by search query
   const visibleFields = searchQuery
@@ -152,7 +152,7 @@ function CategorySection({ category, searchQuery }: {
 
 function FieldRow({ field }: { field: FieldDef }) {
   const loc = locale.value
-  const extras = extraFilters.value
+  const extras = plantSearchSession.intent.value.extraFilters
   const cache = dynamicOptionsCache.value[loc] ?? {}
   const pending = dynamicOptionsPending.value[loc] ?? {}
   const errors = dynamicOptionsErrors.value[loc] ?? {}

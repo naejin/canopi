@@ -2,11 +2,11 @@ import { useEffect } from 'preact/hooks'
 import { useSignal, useSignalEffect } from '@preact/signals'
 import { locale } from '../../app/settings/state'
 import {
+  isPlantSearchLoading,
   loadSidebarLists,
   mountPlantDbController,
+  plantSearchSession,
   selectedCanonicalName,
-  searchResults,
-  isSearching,
   retrySearch,
 } from '../../app/plant-browser'
 import { SearchBar } from '../plant-db/SearchBar'
@@ -25,7 +25,8 @@ export function PlantDbPanel() {
 
   useEffect(() => {
     const disposeController = mountPlantDbController()
-    if (searchResults.value.length === 0 && !isSearching.value) {
+    const results = plantSearchSession.results.value
+    if (results.items.length === 0 && !isPlantSearchLoading(results.status)) {
       retrySearch()
     }
     return disposeController

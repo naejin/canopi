@@ -99,11 +99,11 @@ import { ResultsList } from '../components/plant-db/ResultsList'
 import {
   activeFilters,
   extraFilters,
-  isSearching,
   nextCursor,
   searchError,
   searchResults,
   searchResultsRevision,
+  searchStatus,
   searchText,
   sortField,
   viewMode,
@@ -171,7 +171,7 @@ describe('ResultsList', () => {
     ]
     searchResultsRevision.value = 1
     nextCursor.value = null
-    isSearching.value = false
+    searchStatus.value = 'idle'
     searchError.value = null
   })
 
@@ -217,7 +217,7 @@ describe('ResultsList', () => {
 
     await act(async () => {
       searchText.value = 'as'
-      isSearching.value = true
+      searchStatus.value = 'loading-first-page'
     })
 
     expect(virtualCoreMocks.instances).toHaveLength(1)
@@ -227,7 +227,7 @@ describe('ResultsList', () => {
         makePlant(`Plant ${index + 1}`),
       )
       searchResultsRevision.value = 11
-      isSearching.value = false
+      searchStatus.value = 'idle'
     })
 
     expect(virtualCoreMocks.instances).toHaveLength(2)

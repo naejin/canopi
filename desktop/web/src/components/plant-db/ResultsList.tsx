@@ -9,16 +9,10 @@ import {
 import { t } from '../../i18n';
 import { locale } from '../../app/settings/state';
 import {
-  searchResults,
-  searchResultsRevision,
-  isSearching,
-  searchError,
-  nextCursor,
+  isPlantSearchLoading,
+  plantSearchSession,
   viewMode,
-  loadNextPage,
-  searchText,
   hasActiveFilters,
-  retrySearch,
 } from '../../app/plant-browser';
 import { PlantRow } from './PlantRow';
 import { PlantCard } from './PlantCard';
@@ -51,11 +45,12 @@ function makeVirtOpts(
 }
 
 export function ResultsList() {
-  const results = searchResults.value;
-  const resultSetRevision = searchResultsRevision.value;
-  const searching = isSearching.value;
-  const error = searchError.value;
-  const hasMore = nextCursor.value !== null;
+  const resultState = plantSearchSession.results.value;
+  const results = resultState.items;
+  const resultSetRevision = resultState.committedRevision;
+  const searching = isPlantSearchLoading(resultState.status);
+  const error = resultState.error;
+  const hasMore = resultState.nextCursor !== null;
   const mode = viewMode.value;
   void locale.value;
 
@@ -107,7 +102,7 @@ export function ResultsList() {
   // Keep Virtualizer measurements in sync when rows are appended or replaced
   // without swapping to a new scroll element.
   useSignalEffect(() => {
-    const results = searchResults.value;
+    const results = plantSearchSession.results.value.items;
     const virt = virtualizerRef.current;
     if (!virt) return;
     virt.setOptions(
@@ -122,9 +117,10 @@ export function ResultsList() {
   // Infinite scroll: load next page when near the bottom
   const handleScroll = () => {
     const el = scrollRef.current;
-    if (!el || isSearching.value || nextCursor.value === null) return;
+    const latestResults = plantSearchSession.results.value;
+    if (!el || isPlantSearchLoading(latestResults.status) || latestResults.nextCursor === null) return;
     if (el.scrollTop + el.clientHeight >= el.scrollHeight - 200) {
-      void loadNextPage();
+      void plantSearchSession.loadNextPage();
     }
   };
 
@@ -148,7 +144,7 @@ export function ResultsList() {
           <button
             type="button"
             className={styles.retryBtn}
-            onClick={() => retrySearch()}
+            onClick={() => plantSearchSession.retry()}
           >
             {t('plantDb.retry')}
           </button>
@@ -159,7 +155,7 @@ export function ResultsList() {
 
   // Empty state
   if (!searching && results.length === 0) {
-    const hasQuery = searchText.value.length > 0 || hasActiveFilters.value;
+    const hasQuery = plantSearchSession.intent.value.text.length > 0 || hasActiveFilters.value;
     return (
       <div className={styles.listContainer}>
         <div className={styles.listEmpty}>
@@ -181,7 +177,7 @@ export function ResultsList() {
               <button
                 type="button"
                 className={`${styles.retryBtn} ${styles.listEmptyAction}`}
-                onClick={() => retrySearch()}
+                onClick={() => plantSearchSession.retry()}
               >
                 {t('plantDb.loadPlants')}
               </button>

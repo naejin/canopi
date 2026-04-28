@@ -2,13 +2,13 @@ import { useEffect } from 'preact/hooks'
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
 import {
-  activeFilters,
   filterOptions,
   hasActiveFilters,
   loadFilterOptions,
   clearFilters,
   activeFilterCount,
   patchFilters,
+  plantSearchSession,
 } from '../../app/plant-browser'
 import type { SpeciesFilter } from '../../types/species'
 import { FilterChip } from './FilterChip'
@@ -27,7 +27,7 @@ interface ChipRowConfig {
 export function FilterStrip({ onMoreFilters }: { onMoreFilters: () => void }) {
   void locale.value;
   const opts = filterOptions.value;
-  const filters = activeFilters.value;
+  const filters = plantSearchSession.intent.value.filters;
   const showClear = hasActiveFilters.value;
   const count = activeFilterCount.value;
 
