@@ -4,7 +4,7 @@ import type { SubsystemHealth } from "../../types/health";
 import type { Settings } from "../../types/settings";
 import { initTheme } from "../../utils/theme";
 import { plantDbStatus } from "../health/state";
-import { setBootstrappedSettings } from "../settings/persistence";
+import { hydrateSettingsProjection } from "../settings/projection";
 
 let shellBootstrapped = false;
 
@@ -28,7 +28,7 @@ export function bootstrapShell(): void {
 
   void invoke<Settings>("get_settings")
     .then((settings) => {
-      setBootstrappedSettings(settings);
+      hydrateSettingsProjection(settings);
     })
     .catch((error) => console.error("Failed to bootstrap settings:", error));
 }

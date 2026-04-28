@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   destroy: vi.fn(),
-  flushQueuedSettingsPersist: vi.fn(),
+  flushSettingsProjection: vi.fn(),
   getCurrentWindow: vi.fn(),
   message: vi.fn(),
   onCloseRequested: vi.fn(),
@@ -23,8 +23,8 @@ vi.mock("../app/document-session/actions", () => ({
   saveCurrentDesign: mocks.saveCurrentDesign,
 }));
 
-vi.mock("../app/settings/persistence", () => ({
-  flushQueuedSettingsPersist: mocks.flushQueuedSettingsPersist,
+vi.mock("../app/settings/projection", () => ({
+  flushSettingsProjection: mocks.flushSettingsProjection,
 }));
 
 vi.mock("../i18n", () => ({
@@ -55,7 +55,7 @@ describe("registerCloseGuard", () => {
   beforeEach(async () => {
     vi.resetModules();
     mocks.destroy.mockReset();
-    mocks.flushQueuedSettingsPersist.mockReset();
+    mocks.flushSettingsProjection.mockReset();
     mocks.getCurrentWindow.mockReset();
     mocks.message.mockReset();
     mocks.onCloseRequested.mockReset();
@@ -106,7 +106,7 @@ describe("registerCloseGuard", () => {
     const event = { preventDefault: vi.fn() };
     await handler(event);
 
-    expect(mocks.flushQueuedSettingsPersist).toHaveBeenCalledTimes(1);
+    expect(mocks.flushSettingsProjection).toHaveBeenCalledTimes(1);
     expect(event.preventDefault).not.toHaveBeenCalled();
     expect(mocks.message).not.toHaveBeenCalled();
     expect(mocks.destroy).not.toHaveBeenCalled();

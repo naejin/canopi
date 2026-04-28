@@ -1,5 +1,5 @@
 import { locale, theme } from "../../app/settings/state";
-import { persistCurrentSettings } from "../../app/settings/persistence";
+import { mutateSettingsProjection } from "../../app/settings/projection";
 import { autosaveFailed } from "../../state/design";
 import { t } from "../../i18n";
 import styles from "./StatusBar.module.css";
@@ -38,8 +38,10 @@ export function StatusBar() {
           className={styles.select}
           value={locale.value}
           onChange={(e) => {
-            locale.value = (e.target as HTMLSelectElement).value as typeof locale.value;
-            persistCurrentSettings();
+            const nextLocale = (e.target as HTMLSelectElement).value as typeof locale.value;
+            mutateSettingsProjection((settings) => {
+              settings.locale = nextLocale;
+            }, { persist: 'immediate' });
           }}
           aria-label={t("status.language")}
         >
@@ -50,8 +52,9 @@ export function StatusBar() {
         <button
           className={styles.themeBtn}
           onClick={() => {
-            theme.value = theme.value === 'dark' ? 'light' : 'dark';
-            persistCurrentSettings();
+            mutateSettingsProjection((settings) => {
+              settings.theme = settings.theme === 'dark' ? 'light' : 'dark';
+            }, { persist: 'immediate' });
           }}
           aria-label={`${t("status.theme")}: ${themeLabel}`}
           title={`${t("status.theme")}: ${themeLabel}`}

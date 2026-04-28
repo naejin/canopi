@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   cancelQueuedLoad: vi.fn(),
   consumeQueuedDocumentLoad: vi.fn((_session?: unknown) => () => {}),
   disposeDocumentWorkflows: vi.fn(),
-  flushQueuedSettingsPersist: vi.fn(),
+  flushSettingsProjection: vi.fn(),
   runtimeInitImpl: vi.fn(async (_container?: HTMLElement) => undefined),
   runtimeInstances: [] as Array<Record<string, unknown>>,
   snapshotCanvasIntoCurrentDocument: vi.fn(),
@@ -73,8 +73,8 @@ vi.mock("../app/document-session/runtime", async (importOriginal) => {
   };
 });
 
-vi.mock("../app/settings/persistence", () => ({
-  flushQueuedSettingsPersist: mocks.flushQueuedSettingsPersist,
+vi.mock("../app/settings/projection", () => ({
+  flushSettingsProjection: mocks.flushSettingsProjection,
 }));
 
 import { useCanvasDocumentSession } from "../app/document-session/use-canvas-document-session";
@@ -149,7 +149,7 @@ describe("useCanvasDocumentSession", () => {
     mocks.consumeQueuedDocumentLoad.mockClear();
     mocks.consumeQueuedDocumentLoad.mockImplementation(() => mocks.cancelQueuedLoad);
     mocks.disposeDocumentWorkflows.mockClear();
-    mocks.flushQueuedSettingsPersist.mockClear();
+    mocks.flushSettingsProjection.mockClear();
     mocks.runtimeInitImpl.mockReset();
     mocks.runtimeInitImpl.mockResolvedValue(undefined);
     mocks.runtimeInstances.length = 0;
@@ -233,7 +233,7 @@ describe("useCanvasDocumentSession", () => {
     expect(mocks.snapshotCanvasIntoCurrentDocument).toHaveBeenCalledTimes(1);
     expect(mocks.disposeDocumentWorkflows).toHaveBeenCalledTimes(1);
     expect(mocks.cancelQueuedLoad).toHaveBeenCalledTimes(1);
-    expect(mocks.flushQueuedSettingsPersist).toHaveBeenCalledTimes(1);
+    expect(mocks.flushSettingsProjection).toHaveBeenCalledTimes(1);
     expect(runtime.destroy).toHaveBeenCalledTimes(1);
     expect(currentCanvasSession.value).toBe(null);
     const snapshotOrder = mocks.snapshotCanvasIntoCurrentDocument.mock.invocationCallOrder[0];

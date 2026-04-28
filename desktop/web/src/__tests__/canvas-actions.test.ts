@@ -25,7 +25,7 @@ import {
   toggleLayerVisibility,
 } from '../app/canvas-settings/controller'
 import { basemapStyle } from '../app/settings/state'
-import { flushQueuedSettingsPersist, setBootstrappedSettings } from '../app/settings/persistence'
+import { flushSettingsProjection, hydrateSettingsProjection } from '../app/settings/projection'
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -38,7 +38,7 @@ beforeEach(() => {
   layerVisibility.value = { base: true, contours: false, plants: true, zones: true, annotations: true }
   layerOpacity.value = { base: 1, contours: 1, plants: 1, zones: 1, annotations: 1 }
   vi.mocked(setSettings).mockClear()
-  setBootstrappedSettings({
+  hydrateSettingsProjection({
     locale: 'en',
     theme: 'light',
     snap_to_grid: true,
@@ -100,7 +100,7 @@ describe('bottom panel actions', () => {
   })
 
   it('hydrates persisted map settings into the independent canvas controls', () => {
-    setBootstrappedSettings({
+    hydrateSettingsProjection({
       locale: 'fr',
       theme: 'dark',
       snap_to_grid: false,
@@ -140,26 +140,33 @@ describe('bottom panel actions', () => {
   })
 
   it('persists basemap, contour, and hillshade controls independently', async () => {
-    toggleLayerVisibility('base')
-    setBasemapStyle('satellite')
-    setLayerOpacity('contours', 0.4)
-    setContourIntervalMeters(18)
-    toggleHillshadeVisibility()
-    setHillshadeOpacity(0.25)
+    const originalMapTilerKey = import.meta.env.VITE_MAPTILER_KEY
+    ;(import.meta.env as { VITE_MAPTILER_KEY?: string }).VITE_MAPTILER_KEY = 'test-maptiler-key'
 
-    vi.runAllTimers()
-    await Promise.resolve()
+    try {
+      toggleLayerVisibility('base')
+      setBasemapStyle('satellite')
+      setLayerOpacity('contours', 0.4)
+      setContourIntervalMeters(18)
+      toggleHillshadeVisibility()
+      setHillshadeOpacity(0.25)
 
-    expect(vi.mocked(setSettings)).toHaveBeenCalledWith(expect.objectContaining({
-      map_layer_visible: false,
-      map_style: 'satellite',
-      map_opacity: 1,
-      contour_visible: false,
-      contour_opacity: 0.4,
-      contour_interval: 18,
-      hillshade_visible: true,
-      hillshade_opacity: 0.25,
-    }))
+      vi.runAllTimers()
+      await Promise.resolve()
+
+      expect(vi.mocked(setSettings)).toHaveBeenCalledWith(expect.objectContaining({
+        map_layer_visible: false,
+        map_style: 'satellite',
+        map_opacity: 1,
+        contour_visible: false,
+        contour_opacity: 0.4,
+        contour_interval: 18,
+        hillshade_visible: true,
+        hillshade_opacity: 0.25,
+      }))
+    } finally {
+      ;(import.meta.env as { VITE_MAPTILER_KEY?: string }).VITE_MAPTILER_KEY = originalMapTilerKey
+    }
   })
 
   it('flushes queued map-setting persistence immediately when requested', async () => {
@@ -167,7 +174,7 @@ describe('bottom panel actions', () => {
 
     expect(vi.mocked(setSettings)).not.toHaveBeenCalled()
 
-    flushQueuedSettingsPersist()
+    flushSettingsProjection()
     await Promise.resolve()
 
     expect(vi.mocked(setSettings)).toHaveBeenCalledWith(expect.objectContaining({

@@ -18,7 +18,7 @@ import { basemapStyle } from '../app/settings/state'
 import { setSettings } from '../ipc/settings'
 import { currentDesign } from '../state/design'
 import { locale } from '../app/settings/state'
-import { flushQueuedSettingsPersist, setBootstrappedSettings } from '../app/settings/persistence'
+import { flushSettingsProjection, hydrateSettingsProjection } from '../app/settings/projection'
 
 describe('LayerPanel', () => {
   let container: HTMLDivElement
@@ -57,7 +57,7 @@ describe('LayerPanel', () => {
     contourIntervalMeters.value = 0
     hillshadeVisible.value = false
     hillshadeOpacity.value = 0.55
-    setBootstrappedSettings({
+    hydrateSettingsProjection({
       locale: 'en',
       theme: 'light',
       snap_to_grid: true,
@@ -88,7 +88,7 @@ describe('LayerPanel', () => {
   })
 
   afterEach(() => {
-    flushQueuedSettingsPersist()
+    flushSettingsProjection()
     vi.runOnlyPendingTimers()
     vi.useRealTimers()
     render(null, container)

@@ -2,7 +2,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 import { designName, designDirty } from '../../state/design'
 import { activePanel } from '../../app/shell/state'
 import { locale, theme } from '../../app/settings/state'
-import { persistCurrentSettings } from '../../app/settings/persistence'
+import { mutateSettingsProjection } from '../../app/settings/projection'
 import { t } from '../../i18n'
 import { Dropdown, type DropdownItem } from './Dropdown'
 import { MenuBar } from './MenuBar'
@@ -19,8 +19,9 @@ const appWindow = getCurrentWindow()
 
 function LocalePicker() {
   const handleChange = (code: string) => {
-    locale.value = code as typeof locale.value
-    persistCurrentSettings()
+    mutateSettingsProjection((settings) => {
+      settings.locale = code as typeof locale.value
+    }, { persist: 'immediate' })
   }
 
   return (
@@ -92,8 +93,9 @@ export function TitleBar() {
         <button
           className={styles.themeBtn}
           onClick={() => {
-            theme.value = theme.value === 'dark' ? 'light' : 'dark'
-            persistCurrentSettings()
+            mutateSettingsProjection((settings) => {
+              settings.theme = settings.theme === 'dark' ? 'light' : 'dark'
+            }, { persist: 'immediate' })
           }}
           aria-label={t('status.theme')}
           title={t(theme.value === 'dark' ? 'theme.light' : 'theme.dark')}

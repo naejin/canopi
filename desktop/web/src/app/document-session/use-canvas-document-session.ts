@@ -12,7 +12,7 @@ import {
   markCanvasDetachedDirty,
 } from "../../state/design";
 import { autoSaveIntervalMs } from "../settings/state";
-import { flushQueuedSettingsPersist } from "../settings/persistence";
+import { flushSettingsProjection } from "../settings/projection";
 import {
   beginEmptyDocumentSession,
   consumeQueuedDocumentLoad,
@@ -96,7 +96,7 @@ export function useCanvasDocumentSession({
       cancelled = true;
       resizeObserver?.disconnect();
       cancelQueuedLoad();
-      flushQueuedSettingsPersist();
+      flushSettingsProjection();
       if (runtimeInitialized && runtime.hasLoadedDocument() && currentDesign.value) {
         try {
           snapshotCanvasIntoCurrentDocument(runtime, designName.value);

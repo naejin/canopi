@@ -1,0 +1,332 @@
+import { readFileSync } from 'node:fs'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('../ipc/settings', () => ({ setSettings: vi.fn().mockResolvedValue(undefined) }))
+
+import { setSettings } from '../ipc/settings'
+import type { BasemapStyle } from '../generated/contracts'
+import type { Settings, Theme } from '../types/settings'
+import {
+  bottomPanelHeight,
+  bottomPanelOpen,
+  bottomPanelTab,
+} from '../app/canvas-settings/bottom-panel-state'
+import {
+  contourIntervalMeters,
+  createDefaultLayerOpacity,
+  createDefaultLayerVisibility,
+  hillshadeOpacity,
+  hillshadeVisible,
+  layerOpacity,
+  layerVisibility,
+  snapToGridEnabled,
+  snapToGuidesEnabled,
+} from '../app/canvas-settings/signals'
+import { autoSaveIntervalMs, basemapStyle, locale, theme } from '../app/settings/state'
+import {
+  flushSettingsProjection,
+  hydrateSettingsProjection,
+  mutateSettingsProjection,
+  resetSettingsProjectionForTests,
+  snapshotSettingsProjection,
+} from '../app/settings/projection'
+
+function baseSettings(overrides: Partial<Settings> = {}): Settings {
+  return {
+    locale: 'en',
+    theme: 'light',
+    snap_to_grid: false,
+    snap_to_guides: true,
+    show_smart_guides: true,
+    auto_save_interval_s: 60,
+    confirm_destructive: true,
+    default_currency: 'EUR',
+    measurement_units: 'metric',
+    show_botanical_names: true,
+    debug_logging: false,
+    check_updates: true,
+    default_design_dir: '',
+    recent_files_max: 20,
+    last_active_panel: 'canvas',
+    bottom_panel_open: false,
+    bottom_panel_height: 200,
+    bottom_panel_tab: 'budget',
+    map_layer_visible: true,
+    map_style: 'street',
+    map_opacity: 1,
+    contour_visible: false,
+    contour_opacity: 1,
+    contour_interval: 0,
+    hillshade_visible: false,
+    hillshade_opacity: 0.55,
+    ...overrides,
+  }
+}
+
+function resetProjectionSignals(): void {
+  locale.value = 'en'
+  theme.value = 'light'
+  basemapStyle.value = 'street'
+  autoSaveIntervalMs.value = 60_000
+  snapToGridEnabled.value = false
+  snapToGuidesEnabled.value = true
+  bottomPanelOpen.value = false
+  bottomPanelHeight.value = 200
+  bottomPanelTab.value = 'budget'
+  layerVisibility.value = createDefaultLayerVisibility()
+  layerOpacity.value = createDefaultLayerOpacity()
+  contourIntervalMeters.value = 0
+  hillshadeVisible.value = false
+  hillshadeOpacity.value = 0.55
+}
+
+function readSource(path: string): string {
+  return readFileSync(new URL(path, import.meta.url), 'utf8')
+}
+
+let originalMapTilerKey: string | undefined
+
+beforeEach(() => {
+  vi.useFakeTimers()
+  originalMapTilerKey = import.meta.env.VITE_MAPTILER_KEY
+  ;(import.meta.env as { VITE_MAPTILER_KEY?: string }).VITE_MAPTILER_KEY = undefined
+  vi.mocked(setSettings).mockClear()
+  resetSettingsProjectionForTests(setSettings)
+  resetProjectionSignals()
+})
+
+afterEach(() => {
+  resetSettingsProjectionForTests()
+  vi.clearAllTimers()
+  vi.useRealTimers()
+  ;(import.meta.env as { VITE_MAPTILER_KEY?: string }).VITE_MAPTILER_KEY = originalMapTilerKey
+})
+
+describe('settings projection', () => {
+  it('hydrates Rust settings into the frontend projection without persisting', () => {
+    hydrateSettingsProjection(baseSettings({
+      locale: 'fr',
+      theme: 'dark',
+      snap_to_grid: true,
+      snap_to_guides: false,
+      auto_save_interval_s: 45,
+      bottom_panel_open: true,
+      bottom_panel_height: 320,
+      bottom_panel_tab: 'timeline',
+      map_layer_visible: false,
+      map_opacity: 0.35,
+      contour_visible: true,
+      contour_opacity: 0.45,
+      contour_interval: 12,
+      hillshade_visible: true,
+      hillshade_opacity: 0.2,
+    }))
+
+    expect(locale.value).toBe('fr')
+    expect(theme.value).toBe('dark')
+    expect(autoSaveIntervalMs.value).toBe(45_000)
+    expect(snapToGridEnabled.value).toBe(true)
+    expect(snapToGuidesEnabled.value).toBe(false)
+    expect(bottomPanelOpen.value).toBe(true)
+    expect(bottomPanelHeight.value).toBe(320)
+    expect(bottomPanelTab.value).toBe('timeline')
+    expect(layerVisibility.value.base).toBe(false)
+    expect(layerOpacity.value.base).toBe(0.35)
+    expect(layerVisibility.value.contours).toBe(true)
+    expect(layerOpacity.value.contours).toBe(0.45)
+    expect(contourIntervalMeters.value).toBe(12)
+    expect(hillshadeVisible.value).toBe(true)
+    expect(hillshadeOpacity.value).toBe(0.2)
+    expect(vi.mocked(setSettings)).not.toHaveBeenCalled()
+  })
+
+  it('snapshots the projection back to Rust settings while preserving unprojected fields', () => {
+    hydrateSettingsProjection(baseSettings({
+      confirm_destructive: false,
+      default_currency: 'USD',
+      default_design_dir: '/designs',
+    }))
+
+    mutateSettingsProjection((settings) => {
+      settings.locale = 'de'
+      settings.theme = 'dark'
+      settings.snapToGrid = true
+      settings.snapToGuides = false
+      settings.autoSaveIntervalMs = 15_000
+      settings.bottomPanel.open = true
+      settings.bottomPanel.height = 280
+      settings.bottomPanel.tab = 'consortium'
+      settings.mapLayers.baseVisible = false
+      settings.mapLayers.baseOpacity = 0.6
+      settings.mapLayers.contoursVisible = true
+      settings.mapLayers.contoursOpacity = 0.3
+      settings.mapLayers.contourIntervalMeters = 18
+      settings.mapLayers.hillshadeVisible = true
+      settings.mapLayers.hillshadeOpacity = 0.25
+    }, { persist: 'none' })
+
+    expect(snapshotSettingsProjection()).toEqual(expect.objectContaining({
+      locale: 'de',
+      theme: 'dark',
+      snap_to_grid: true,
+      snap_to_guides: false,
+      auto_save_interval_s: 15,
+      confirm_destructive: false,
+      default_currency: 'USD',
+      default_design_dir: '/designs',
+      bottom_panel_open: true,
+      bottom_panel_height: 280,
+      bottom_panel_tab: 'consortium',
+      map_layer_visible: false,
+      map_opacity: 0.6,
+      contour_visible: true,
+      contour_opacity: 0.3,
+      contour_interval: 18,
+      hillshade_visible: true,
+      hillshade_opacity: 0.25,
+    }))
+    expect(vi.mocked(setSettings)).not.toHaveBeenCalled()
+  })
+
+  it('normalizes theme, map style, opacities, and contour interval at the seam', () => {
+    hydrateSettingsProjection(baseSettings({
+      theme: 'neon' as Theme,
+      map_style: 'terrain' as BasemapStyle,
+      map_opacity: 2,
+      contour_opacity: -1,
+      contour_interval: 12.7,
+      hillshade_opacity: Number.NaN,
+    }))
+
+    expect(theme.value).toBe('light')
+    expect(basemapStyle.value).toBe('street')
+    expect(layerOpacity.value.base).toBe(1)
+    expect(layerOpacity.value.contours).toBe(0)
+    expect(contourIntervalMeters.value).toBe(13)
+    expect(hillshadeOpacity.value).toBe(0.55)
+
+    mutateSettingsProjection((settings) => {
+      settings.mapLayers.baseOpacity = -2
+      settings.mapLayers.contoursOpacity = Number.POSITIVE_INFINITY
+      settings.mapLayers.contourIntervalMeters = 7.6
+      settings.mapLayers.hillshadeOpacity = 3
+    }, { persist: 'none' })
+
+    expect(snapshotSettingsProjection()).toEqual(expect.objectContaining({
+      theme: 'light',
+      map_style: 'street',
+      map_opacity: 0,
+      contour_opacity: 1,
+      contour_interval: 8,
+      hillshade_opacity: 1,
+    }))
+  })
+
+  it('persists immediate mutations against the latest normalized snapshot', async () => {
+    hydrateSettingsProjection(baseSettings())
+
+    mutateSettingsProjection((settings) => {
+      settings.locale = 'es'
+      settings.bottomPanel.open = true
+    }, { persist: 'immediate' })
+    await Promise.resolve()
+
+    expect(vi.mocked(setSettings)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(setSettings)).toHaveBeenCalledWith(expect.objectContaining({
+      locale: 'es',
+      bottom_panel_open: true,
+    }))
+  })
+
+  it('debounces queued persistence and writes the latest projection', async () => {
+    hydrateSettingsProjection(baseSettings())
+
+    mutateSettingsProjection((settings) => {
+      settings.locale = 'fr'
+    }, { persist: 'queued', delayMs: 250 })
+    mutateSettingsProjection((settings) => {
+      settings.theme = 'dark'
+      settings.mapLayers.baseOpacity = 0.4
+    }, { persist: 'queued', delayMs: 250 })
+
+    vi.advanceTimersByTime(249)
+    expect(vi.mocked(setSettings)).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(1)
+    await Promise.resolve()
+
+    expect(vi.mocked(setSettings)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(setSettings)).toHaveBeenCalledWith(expect.objectContaining({
+      locale: 'fr',
+      theme: 'dark',
+      map_opacity: 0.4,
+    }))
+  })
+
+  it('flushes queued persistence immediately and clears the pending debounce', async () => {
+    hydrateSettingsProjection(baseSettings())
+
+    mutateSettingsProjection((settings) => {
+      settings.mapLayers.contourIntervalMeters = 24
+    }, { persist: 'queued', delayMs: 250 })
+
+    flushSettingsProjection()
+    await Promise.resolve()
+    vi.runAllTimers()
+
+    expect(vi.mocked(setSettings)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(setSettings)).toHaveBeenCalledWith(expect.objectContaining({
+      contour_interval: 24,
+    }))
+  })
+
+  it('updates projection state but does not persist before Rust settings bootstrap', () => {
+    resetSettingsProjectionForTests(setSettings)
+
+    mutateSettingsProjection((settings) => {
+      settings.theme = 'dark'
+    }, { persist: 'immediate' })
+    mutateSettingsProjection((settings) => {
+      settings.locale = 'it'
+    }, { persist: 'queued', delayMs: 10 })
+    vi.runAllTimers()
+
+    expect(theme.value).toBe('dark')
+    expect(locale.value).toBe('it')
+    expect(vi.mocked(setSettings)).not.toHaveBeenCalled()
+  })
+
+  it('avoids IPC when a mutation leaves the Rust settings snapshot unchanged', () => {
+    hydrateSettingsProjection(baseSettings())
+
+    mutateSettingsProjection((settings) => {
+      settings.locale = 'en'
+    }, { persist: 'immediate' })
+    mutateSettingsProjection((settings) => {
+      settings.locale = 'fr'
+    }, { persist: 'queued', delayMs: 250 })
+    mutateSettingsProjection((settings) => {
+      settings.locale = 'en'
+    }, { persist: 'queued', delayMs: 250 })
+    vi.runAllTimers()
+
+    expect(vi.mocked(setSettings)).not.toHaveBeenCalled()
+  })
+
+  it('keeps production settings-backed callers on the projection mutation seam', () => {
+    const sources = [
+      '../app/canvas-settings/controller.ts',
+      '../canvas/runtime/scene-runtime.ts',
+      '../components/shared/TitleBar.tsx',
+      '../components/shared/StatusBar.tsx',
+      '../commands/registry.ts',
+      '../utils/theme.ts',
+    ].map(readSource)
+
+    for (const source of sources) {
+      expect(source).toContain('settings/projection')
+      expect(source).not.toContain('settings/persistence')
+      expect(source).not.toMatch(/\b(?:locale|theme|basemapStyle|snapToGridEnabled|snapToGuidesEnabled|autoSaveIntervalMs|bottomPanelOpen|bottomPanelHeight|bottomPanelTab|contourIntervalMeters|hillshadeVisible|hillshadeOpacity)\.value\s*=(?!=)/)
+    }
+  })
+})

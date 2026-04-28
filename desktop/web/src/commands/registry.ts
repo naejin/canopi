@@ -1,6 +1,5 @@
 import { navigateTo, type Panel } from "../app/shell/state";
-import { theme } from "../app/settings/state";
-import { persistCurrentSettings } from "../app/settings/persistence";
+import { mutateSettingsProjection } from "../app/settings/projection";
 import { getCurrentCanvasCommandSurface, setCurrentCanvasTool } from "../canvas/session";
 import { t } from "../i18n";
 import { FILE_SHORTCUTS, EDIT_SHORTCUTS, VIEW_SHORTCUTS, PANEL_SHORTCUTS, TOOL_SHORTCUTS } from "../shortcuts/definitions";
@@ -30,8 +29,9 @@ function switchTool(tool: string): () => void {
 }
 
 function cycleTheme() {
-  theme.value = theme.value === 'dark' ? 'light' : 'dark';
-  persistCurrentSettings();
+  mutateSettingsProjection((settings) => {
+    settings.theme = settings.theme === 'dark' ? 'light' : 'dark';
+  }, { persist: 'immediate' });
 }
 
 export const commands: Command[] = [

@@ -29,6 +29,12 @@ CANOPI_SKIP_BUNDLED_DB=1 cargo check --workspace
 
 **Gotcha**: Do not use `cargo run dev` — it passes `dev` as an app argument, not as a Tauri dev workflow.
 
+## Frontend Settings Projection
+
+Rust `Settings` from the user DB is the settings authority. The frontend mirrors those values into runtime signals through `desktop/web/src/app/settings/projection.ts`; settings-backed callers should use `mutateSettingsProjection()` with an explicit persistence mode instead of writing signals and persisting separately.
+
+`hydrateSettingsProjection()` is the bootstrap boundary, `snapshotSettingsProjection()` maps the current projection back to Rust `Settings`, and `flushSettingsProjection()` is the teardown boundary for queued writes. The first-paint theme cache remains separate from settings authority: it may prime the theme signal before bootstrap, but Rust settings overwrite the projection when hydration completes.
+
 Plant-search verification when touching `desktop/web/src/state/plant-db.ts` or `desktop/web/src/components/plant-db/ResultsList.tsx`:
 
 ```bash

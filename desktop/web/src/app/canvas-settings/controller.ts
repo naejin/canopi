@@ -1,24 +1,14 @@
-import { batch } from '@preact/signals'
 import {
   activeLayerName,
-  contourIntervalMeters,
   gridVisible,
-  hillshadeOpacity,
-  hillshadeVisible,
   layerLockState,
   layerOpacity,
   layerPanelOpen,
   layerVisibility,
 } from './signals'
-import {
-  type BottomPanelTab,
-  bottomPanelHeight,
-  bottomPanelOpen,
-  bottomPanelTab,
-} from './bottom-panel-state'
+import { type BottomPanelTab } from './bottom-panel-state'
 import type { BasemapStyle } from '../../generated/contracts'
-import { basemapStyle } from '../settings/state'
-import { persistCurrentSettings, queueSettingsPersist } from '../settings/persistence'
+import { mutateSettingsProjection } from '../settings/projection'
 
 export function setLayerPanelOpen(open: boolean): void {
   layerPanelOpen.value = open
@@ -33,9 +23,9 @@ export function setActiveLayer(name: string): void {
 }
 
 export function setBasemapStyle(style: BasemapStyle): void {
-  if (basemapStyle.value === style) return
-  basemapStyle.value = style
-  queueSettingsPersist()
+  mutateSettingsProjection((settings) => {
+    settings.basemapStyle = style
+  }, { persist: 'queued' })
 }
 
 export function toggleGridVisibility(): void {
@@ -43,13 +33,23 @@ export function toggleGridVisibility(): void {
 }
 
 export function toggleLayerVisibility(name: string): void {
+  if (name === 'base') {
+    mutateSettingsProjection((settings) => {
+      settings.mapLayers.baseVisible = !settings.mapLayers.baseVisible
+    }, { persist: 'queued' })
+    return
+  }
+  if (name === 'contours') {
+    mutateSettingsProjection((settings) => {
+      settings.mapLayers.contoursVisible = !settings.mapLayers.contoursVisible
+    }, { persist: 'queued' })
+    return
+  }
+
   const next = !(layerVisibility.value[name] ?? true)
   layerVisibility.value = {
     ...layerVisibility.value,
     [name]: next,
-  }
-  if (name === 'base' || name === 'contours') {
-    queueSettingsPersist()
   }
 }
 
@@ -62,51 +62,65 @@ export function toggleLayerLock(name: string): void {
 
 export function setLayerOpacity(name: string, opacity: number): void {
   const next = Math.min(1, Math.max(0, opacity))
+  if (name === 'base') {
+    mutateSettingsProjection((settings) => {
+      settings.mapLayers.baseOpacity = next
+    }, { persist: 'queued' })
+    return
+  }
+  if (name === 'contours') {
+    mutateSettingsProjection((settings) => {
+      settings.mapLayers.contoursOpacity = next
+    }, { persist: 'queued' })
+    return
+  }
+
   layerOpacity.value = {
     ...layerOpacity.value,
     [name]: next,
-  }
-  if (name === 'base' || name === 'contours') {
-    queueSettingsPersist()
   }
 }
 
 export function setContourIntervalMeters(interval: number): void {
   if (!Number.isFinite(interval)) return
-  contourIntervalMeters.value = Math.max(0, Math.round(interval))
-  queueSettingsPersist()
+  mutateSettingsProjection((settings) => {
+    settings.mapLayers.contourIntervalMeters = interval
+  }, { persist: 'queued' })
 }
 
 export function toggleHillshadeVisibility(): void {
-  hillshadeVisible.value = !hillshadeVisible.value
-  queueSettingsPersist()
+  mutateSettingsProjection((settings) => {
+    settings.mapLayers.hillshadeVisible = !settings.mapLayers.hillshadeVisible
+  }, { persist: 'queued' })
 }
 
 export function setHillshadeOpacity(opacity: number): void {
-  hillshadeOpacity.value = Math.min(1, Math.max(0, opacity))
-  queueSettingsPersist()
+  mutateSettingsProjection((settings) => {
+    settings.mapLayers.hillshadeOpacity = opacity
+  }, { persist: 'queued' })
 }
 
 export function setBottomPanelOpen(open: boolean): void {
-  bottomPanelOpen.value = open
-  persistCurrentSettings()
+  mutateSettingsProjection((settings) => {
+    settings.bottomPanel.open = open
+  }, { persist: 'immediate' })
 }
 
 export function openBottomPanel(tab: BottomPanelTab): void {
-  batch(() => {
-    bottomPanelTab.value = tab
-    bottomPanelOpen.value = true
-  })
-  persistCurrentSettings()
+  mutateSettingsProjection((settings) => {
+    settings.bottomPanel.tab = tab
+    settings.bottomPanel.open = true
+  }, { persist: 'immediate' })
 }
 
 export function setBottomPanelTab(tab: BottomPanelTab): void {
-  bottomPanelTab.value = tab
-  persistCurrentSettings()
+  mutateSettingsProjection((settings) => {
+    settings.bottomPanel.tab = tab
+  }, { persist: 'immediate' })
 }
 
 export function commitBottomPanelHeight(height: number): void {
-  if (bottomPanelHeight.value === height) return
-  bottomPanelHeight.value = height
-  persistCurrentSettings()
+  mutateSettingsProjection((settings) => {
+    settings.bottomPanel.height = height
+  }, { persist: 'immediate' })
 }

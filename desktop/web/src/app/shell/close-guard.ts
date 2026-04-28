@@ -3,7 +3,7 @@ import { message } from '@tauri-apps/plugin-dialog'
 import { saveCurrentDesign } from "../document-session/actions";
 import { designDirty } from "../../state/design";
 import { t } from '../../i18n'
-import { flushQueuedSettingsPersist } from "../settings/persistence";
+import { flushSettingsProjection } from "../settings/projection";
 
 let unlistenClose: (() => void) | null = null;
 let closeGuardRegistration = 0;
@@ -41,7 +41,7 @@ export function registerCloseGuard(): void {
 
   void getCurrentWindow()
     .onCloseRequested(async (event) => {
-      flushQueuedSettingsPersist();
+      flushSettingsProjection();
 
       if (!designDirty.value) return;
 

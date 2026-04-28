@@ -4,7 +4,7 @@ import { activePanel, sidePanel } from '../app/shell/state'
 import { theme } from '../app/settings/state'
 import { setCurrentCanvasSession } from '../canvas/session'
 import * as documentActions from '../app/document-session/actions'
-import * as settingsPersistence from '../app/settings/persistence'
+import * as settingsProjection from '../app/settings/projection'
 import { commands } from '../commands/registry'
 import { PANEL_SHORTCUTS, TOOL_SHORTCUTS } from '../shortcuts/definitions'
 
@@ -20,9 +20,11 @@ describe('command registry canvas tool switching', () => {
     activePanel.value = 'canvas'
     sidePanel.value = null
     setCurrentCanvasSession(null)
+    settingsProjection.resetSettingsProjectionForTests()
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     setCurrentCanvasSession(null)
     activeTool.value = 'select'
     theme.value = 'light'
@@ -74,13 +76,13 @@ describe('command registry canvas tool switching', () => {
     expect(saveAsSpy).toHaveBeenCalledTimes(1)
   })
 
-  it('toggles theme through settings state and persistence', () => {
+  it('toggles theme through the settings projection seam', () => {
     theme.value = 'light'
-    const persistSpy = vi.spyOn(settingsPersistence, 'persistCurrentSettings').mockImplementation(() => {})
+    const mutateSpy = vi.spyOn(settingsProjection, 'mutateSettingsProjection')
 
     getCommand('view.toggleTheme').action()
 
     expect(theme.value).toBe('dark')
-    expect(persistSpy).toHaveBeenCalledTimes(1)
+    expect(mutateSpy).toHaveBeenCalledWith(expect.any(Function), { persist: 'immediate' })
   })
 })

@@ -1,5 +1,6 @@
 import { effect } from "@preact/signals";
 import { theme } from "../app/settings/state";
+import { primeThemeProjectionFromFirstPaintCache } from "../app/settings/projection";
 import { invalidateCssVarCache } from "../canvas/canvas2d-utils";
 
 function applyTheme(resolved: "light" | "dark") {
@@ -24,7 +25,7 @@ export function initTheme() {
   // Read the sync cache for instant first-paint (avoids flash)
   const cached = localStorage.getItem("canopi-theme");
   if (cached === "light" || cached === "dark") {
-    theme.value = cached;
+    primeThemeProjectionFromFirstPaintCache(cached);
   }
 
   // Apply theme reactively whenever the signal changes, and sync the cache

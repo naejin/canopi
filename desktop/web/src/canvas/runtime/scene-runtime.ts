@@ -1,5 +1,6 @@
 import { signal } from '@preact/signals'
 import { locale } from '../../app/settings/state'
+import { mutateSettingsProjection } from '../../app/settings/projection'
 import { clearPanelOriginTargets } from '../../app/panel-targets/coordinator'
 import {
   hoveredCanvasTargets,
@@ -9,7 +10,6 @@ import {
 import {
   gridVisible,
   rulersVisible,
-  snapToGridEnabled,
   layerVisibility,
 } from '../../app/canvas-settings/signals'
 import { guides } from '../scene-metadata-state'
@@ -311,7 +311,9 @@ export class SceneCanvasRuntime implements MountedCanvasRuntime {
   }
 
   toggleSnapToGrid(): void {
-    snapToGridEnabled.value = !snapToGridEnabled.value
+    mutateSettingsProjection((settings) => {
+      settings.snapToGrid = !settings.snapToGrid
+    }, { persist: 'queued' })
   }
 
   toggleRulers(): void {
