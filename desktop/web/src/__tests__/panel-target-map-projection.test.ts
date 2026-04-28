@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { MANUAL_TARGET, NONE_TARGET, speciesTarget } from '../panel-targets'
 import { createMapFrame } from '../canvas/maplibre-camera'
 import { geoToMercator } from '../canvas/projection'
+import { panelTargetIdentity } from '../panel-target-identity'
 import {
+  projectPanelTargetResolutionToMapFeatures,
   projectPanelTargetsToMapFeatures,
   type PanelTargetMapProjectionScene,
 } from '../panel-target-map-projection'
@@ -73,6 +75,22 @@ function createScene(overrides: Partial<PanelTargetMapProjectionScene> = {}): Pa
 }
 
 describe('projectPanelTargetsToMapFeatures', () => {
+  it('projects an identity resolution through the map adapter interface', () => {
+    const resolution = panelTargetIdentity.resolve(
+      [speciesTarget('Malus domestica'), { kind: 'zone', zone_name: 'orchard' }],
+      panelTargetIdentity.indexScene(createScene()),
+    )
+
+    const result = projectPanelTargetResolutionToMapFeatures(resolution, LOCATION)
+
+    expect(result.unresolvedTargets).toEqual([])
+    expect(result.features.map((feature) => feature.properties)).toEqual([
+      { kind: 'plant', sceneId: 'plant-1' },
+      { kind: 'plant', sceneId: 'plant-3' },
+      { kind: 'zone', sceneId: 'orchard' },
+    ])
+  })
+
   it('projects a species target to all matching plant point features in scene order', () => {
     const result = projectPanelTargetsToMapFeatures(
       [speciesTarget('Malus domestica')],

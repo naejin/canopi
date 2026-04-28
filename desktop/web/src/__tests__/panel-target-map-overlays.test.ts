@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import { panelTargets, speciesTarget } from '../panel-targets'
 import { createPanelTargetMapOverlayContract } from '../maplibre/panel-target-overlays'
+import { projectPanelTargetResolutionToMapFeatures } from '../panel-target-map-projection'
 
 const LOCATION = { lat: 48.8566, lon: 2.3522 }
 
@@ -47,9 +48,12 @@ describe('panel-target map overlays', () => {
     const projection = panelTargets.resolve(
       [speciesTarget('Malus domestica'), { kind: 'zone', zone_name: 'orchard' }],
       index,
-    ).toMapFeatures(LOCATION)
+    )
 
-    const overlay = createPanelTargetMapOverlayContract('selection', projection)
+    const overlay = createPanelTargetMapOverlayContract(
+      'selection',
+      projectPanelTargetResolutionToMapFeatures(projection, LOCATION),
+    )
 
     expect(overlay.source.id).toBe('panel-target-selection-source')
     expect(overlay.layers.map((layer) => layer.id)).toEqual([
@@ -66,9 +70,12 @@ describe('panel-target map overlays', () => {
     const projection = panelTargets.resolve(
       [],
       panelTargets.indexScene(createScene()),
-    ).toMapFeatures(LOCATION)
+    )
 
-    const overlay = createPanelTargetMapOverlayContract('hover', projection)
+    const overlay = createPanelTargetMapOverlayContract(
+      'hover',
+      projectPanelTargetResolutionToMapFeatures(projection, LOCATION),
+    )
 
     expect(overlay.source.data.features).toEqual([])
     expect(overlay.hasRenderableFeatures).toBe(false)
@@ -81,9 +88,12 @@ describe('panel-target map overlays', () => {
     const projection = panelTargets.resolve(
       [speciesTarget('Malus domestica')],
       panelTargets.indexScene(createScene()),
-    ).toMapFeatures(null)
+    )
 
-    const overlay = createPanelTargetMapOverlayContract('hover', projection)
+    const overlay = createPanelTargetMapOverlayContract(
+      'hover',
+      projectPanelTargetResolutionToMapFeatures(projection, null),
+    )
 
     expect(overlay.hasRenderableFeatures).toBe(false)
     expect(overlay.skippedReason).toBe('missing_location')
@@ -95,9 +105,12 @@ describe('panel-target map overlays', () => {
     const projection = panelTargets.resolve(
       [missingTarget],
       panelTargets.indexScene(createScene()),
-    ).toMapFeatures(LOCATION)
+    )
 
-    const overlay = createPanelTargetMapOverlayContract('selection', projection)
+    const overlay = createPanelTargetMapOverlayContract(
+      'selection',
+      projectPanelTargetResolutionToMapFeatures(projection, LOCATION),
+    )
 
     expect(overlay.hasRenderableFeatures).toBe(false)
     expect(overlay.unresolvedTargets).toEqual([missingTarget])

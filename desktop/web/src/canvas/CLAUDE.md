@@ -19,7 +19,7 @@ Landed in the live path:
 - command/patch history in `scene-history.ts` and `scene-commands.ts`
 - first-class top-level document `annotations`
 - typed panel-target hover/selection highlights via `PanelTarget[]` + `panelTargets.resolve(panelTargets.indexScene(scene))`
-- pure, bearing-aware panel-target map projection via `PanelTargetResolution.toMapFeatures()` plus a pure overlay contract for rendered map hover/selection overlays
+- pure, bearing-aware panel-target map projection via `projectPanelTargetResolutionToMapFeatures()` plus a pure overlay contract for rendered map hover/selection overlays
 - a non-interactive in-canvas MapLibre basemap driven by the read-only `CanvasQuerySurface`, plus hover / selection overlays sourced from the pure projection seam
 - a display-only compass in canvas chrome driven by `northBearingDeg`
 
@@ -72,7 +72,7 @@ Konva / `CanvasEngine` code has been removed. Do not reintroduce Konva or `getEn
 ### Panel Target Projection Rules
 - Timeline, budget, and consortium identity is typed with `PanelTarget[]` / `PanelTarget`; do not reintroduce string matching against timeline descriptions, legacy `plants` arrays, budget descriptions, or consortium canonical-name fields
 - Use `panelTargets.indexScene(scene)` and `panelTargets.resolve(targets, index)` to map typed panel targets to scene plant/zone IDs for canvas highlights
-- Use `PanelTargetResolution.toMapFeatures(location)` to turn the same resolved targets into map-ready plant point / zone polygon features for rendered overlays and future richer map variants
+- Use `projectPanelTargetResolutionToMapFeatures(resolution, location)` to turn the same resolved targets into map-ready plant point / zone polygon features for rendered overlays and future richer map variants
 - Camera sync and overlay projection must share the same bearing-aware world↔geo seam so pan/zoom stays aligned at all zoom levels
 - Screen-lock validation is the acceptance standard: the same world point must land on the same screen pixel in canvas and map projections
 - The canonical seam is Mercator-backed to match MapLibre's own projection surface; do not reintroduce equirectangular or 256px-world zoom shortcuts for the in-canvas map

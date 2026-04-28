@@ -1,6 +1,5 @@
 import type { ScenePersistedState } from '../canvas/runtime/scene'
-import { panelTargets } from '../panel-targets'
-import type { PanelTargetSceneIndex } from '../panel-targets'
+import { indexPanelTargetScene, type PanelTargetSceneIndex } from '../panel-target-identity'
 import type {
   PanelTargetMapFeature,
   PanelTargetMapProjectionResult,
@@ -104,7 +103,7 @@ function createLayerSpecs(
 }
 
 export function buildPanelTargetProjectionScene(scene: ScenePersistedState): PanelTargetSceneIndex {
-  return panelTargets.indexScene(scene)
+  return indexPanelTargetScene(scene)
 }
 
 export function createPanelTargetMapOverlayContract(
