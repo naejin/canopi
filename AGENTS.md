@@ -35,6 +35,21 @@
 - Keep commits scoped and reviewable; separate code, tests, and docs when practical.
 - PRs should include: a short problem/solution summary, test commands run, and screenshots or GIFs for UI changes.
 
+## Agent Workflow & Project Health
+- Use `bd` for all task tracking. Claim a bead before coding, and close it only after tests pass and the branch is pushed.
+- Use one branch per implementation bead. Start from `main`, run `git pull --rebase`, then create a scoped branch such as `refactor/document-session-transition`.
+- Before editing, run `git status`. Treat pre-existing dirty files as user-owned unless explicitly told otherwise.
+- Do not stage unrelated dirty files. If unrelated tracked changes block rebase or push, ask before stashing unless the user has already approved autostash for that operation.
+- If new work appears outside the bead scope, create a follow-up bead instead of expanding scope silently.
+- When changing architecture boundaries, persistence contracts, IPC contracts, or domain language, update the relevant active docs in `docs/` or create an ADR in the same branch.
+- Do not loosen type checks, tests, lint rules, or architecture guardrails just to make a gate pass. If a guardrail is wrong, document the reason in the bead and replace it with an equivalent or stronger guardrail.
+- Avoid new runtime dependencies unless the bead or PR explains why existing project patterns are insufficient.
+- Use subagents only for bounded exploration, verification, or disjoint implementation work. If subagents edit code, assign explicit file ownership and never let two agents edit the same files in parallel.
+- Prefer small, reviewable commits. Keep generated files in the same commit as the source change that produced them.
+- Frontend-only changes require `cd desktop/web && npx tsc --noEmit` plus focused Vitest coverage. Run full `npm test` when the touched surface is broad.
+- Rust or shared-contract changes require `CANOPI_SKIP_BUNDLED_DB=1 cargo check --workspace`; run `cargo test --workspace` for persistence, DB, or shared type changes.
+- Work is complete only when the current branch is pushed. For feature/refactor beads, push the bead branch; push `main` only for direct mainline maintenance or explicitly requested work.
+
 ## Architecture Notes
 - Canvas scene state is authoritative in the runtime; non-canvas document state is authoritative in the document layer.
 - Do not reintroduce duplicate state or direct component-to-IPC workflow logic.
