@@ -73,7 +73,7 @@ describe('timeline controller', () => {
     expect(nonCanvasRevision.value).toBe(0)
   })
 
-  it('respects markDirty: false on delete', () => {
+  it('deletes actions and marks the document dirty', () => {
     addTimelineAction({
       id: 'a',
       start_date: '2026-04-01',
@@ -87,9 +87,9 @@ describe('timeline controller', () => {
     })
     nonCanvasRevision.value = 0
 
-    deleteTimelineAction('a', { markDirty: false })
+    deleteTimelineAction('a')
 
     expect(currentDesign.value?.timeline).toEqual([])
-    expect(nonCanvasRevision.value).toBe(0)
+    expect(nonCanvasRevision.value).toBe(1)
   })
 })

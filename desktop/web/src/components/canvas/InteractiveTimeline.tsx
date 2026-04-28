@@ -15,11 +15,12 @@ import {
 } from '../../app/panel-targets/coordinator'
 import {
   addTimelineAction,
+  applyTimelineActionPatch,
   deleteTimelineAction,
   updateTimelineAction,
 } from '../../app/timeline/controller'
 import { isEditableTarget } from '../../canvas/runtime/interaction/pointer-utils'
-import { markDocumentDirty } from '../../app/document/controller'
+import { beginDocumentArrayEdit, type DocumentArrayEditTransaction } from '../../app/document/edit-transaction'
 import {
   ACTION_TYPES,
   LABEL_SIDEBAR_WIDTH,
@@ -93,7 +94,7 @@ type DragState =
       durationMs: number | null
       pxPerDaySnapshot: number
       cachedRect: DOMRect
-      hasMutated: boolean
+      edit: DocumentArrayEditTransaction<'timeline'>
     }
   | {
       type: 'resize'
@@ -104,7 +105,7 @@ type DragState =
       originalEndMs: number | null
       pxPerDaySnapshot: number
       cachedRect: DOMRect
-      hasMutated: boolean
+      edit: DocumentArrayEditTransaction<'timeline'>
     }
   | {
       type: 'pan'
@@ -299,7 +300,11 @@ export function InteractiveTimeline({
         : null
       if (startStr === lastDragDates.current.start && endDate === lastDragDates.current.end) return
       lastDragDates.current = { start: startStr, end: endDate }
-      updateTimelineAction(drag.actionId, { start_date: startStr, end_date: endDate }, { markDirty: false })
+      drag.edit.preview((timeline) => applyTimelineActionPatch(
+        timeline,
+        drag.actionId,
+        { start_date: startStr, end_date: endDate },
+      ))
     } else if (drag.edge === 'left') {
       const newStartMs = drag.originalStartMs + deltaMs
       const maxStartMs = drag.originalEndMs != null ? drag.originalEndMs : drag.originalStartMs + 86400000
@@ -308,7 +313,7 @@ export function InteractiveTimeline({
       const endStr = drag.originalEndMs != null ? toISODate(new Date(drag.originalEndMs)) : null
       if (startStr === lastDragDates.current.start && endStr === lastDragDates.current.end) return
       lastDragDates.current = { start: startStr, end: endStr }
-      updateTimelineAction(drag.actionId, { start_date: startStr }, { markDirty: false })
+      drag.edit.preview((timeline) => applyTimelineActionPatch(timeline, drag.actionId, { start_date: startStr }))
     } else {
       const originalEnd = drag.originalEndMs ?? drag.originalStartMs + 86400000
       const newEndMs = originalEnd + deltaMs
@@ -317,9 +322,8 @@ export function InteractiveTimeline({
       const startStr = toISODate(new Date(drag.originalStartMs))
       if (startStr === lastDragDates.current.start && endStr === lastDragDates.current.end) return
       lastDragDates.current = { start: startStr, end: endStr }
-      updateTimelineAction(drag.actionId, { end_date: endStr }, { markDirty: false })
+      drag.edit.preview((timeline) => applyTimelineActionPatch(timeline, drag.actionId, { end_date: endStr }))
     }
-    drag.hasMutated = true
   }
 
   function stopAutoScroll(): void {
@@ -487,7 +491,7 @@ export function InteractiveTimeline({
         originalEndMs: endMs,
         pxPerDaySnapshot: pxPerDay.peek(),
         cachedRect: rect,
-        hasMutated: false,
+        edit: beginDocumentArrayEdit('timeline'),
       }
       document.body.style.cursor = 'ew-resize'
       return
@@ -518,7 +522,7 @@ export function InteractiveTimeline({
       durationMs,
       pxPerDaySnapshot: pxPerDay.peek(),
       cachedRect: rect,
-      hasMutated: false,
+      edit: beginDocumentArrayEdit('timeline'),
     }
   }, [])
 
@@ -589,8 +593,8 @@ export function InteractiveTimeline({
   const handleMouseUp = useCallback((event: MouseEvent) => {
     stopAutoScroll()
     const drag = dragState.current
-    if (drag && (drag.type === 'move' || drag.type === 'resize') && drag.hasMutated) {
-      markDocumentDirty()
+    if (drag && (drag.type === 'move' || drag.type === 'resize')) {
+      drag.edit.commit()
     }
     if (drag?.type === 'resize' || drag?.type === 'pan') document.body.style.cursor = ''
 
@@ -680,8 +684,8 @@ export function InteractiveTimeline({
       document.documentElement.removeEventListener('mouseleave', onLeave)
       stopAutoScroll()
       const drag = dragState.current
-      if (drag && (drag.type === 'move' || drag.type === 'resize') && drag.hasMutated) {
-        markDocumentDirty()
+      if (drag && (drag.type === 'move' || drag.type === 'resize')) {
+        drag.edit.commit()
       }
       if (drag?.type === 'resize' || drag?.type === 'pan') document.body.style.cursor = ''
       dragState.current = null

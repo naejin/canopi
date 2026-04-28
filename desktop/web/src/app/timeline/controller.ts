@@ -2,15 +2,10 @@ import type { TimelineAction } from '../../types/design'
 import { panelTargetsEqual } from '../../panel-targets'
 import { updateDesignArray } from '../document/controller'
 
-interface TimelineUpdateOptions {
-  markDirty?: boolean
-}
-
 function updateTimeline(
   updater: (timeline: TimelineAction[]) => TimelineAction[],
-  options: TimelineUpdateOptions = {},
 ): void {
-  updateDesignArray('timeline', updater, options)
+  updateDesignArray('timeline', updater)
 }
 
 export function addTimelineAction(action: Omit<TimelineAction, 'order'>): void {
@@ -26,42 +21,41 @@ export function addTimelineAction(action: Omit<TimelineAction, 'order'>): void {
 export function updateTimelineAction(
   actionId: string,
   patch: Partial<TimelineAction>,
-  options: TimelineUpdateOptions = {},
 ): void {
-  updateTimeline(
-    (timeline) => {
-      const index = timeline.findIndex((action) => action.id === actionId)
-      if (index === -1) return timeline
-      const existing = timeline[index]!
-      const next = { ...existing, ...patch }
-      if (
-        next.start_date === existing.start_date &&
-        next.end_date === existing.end_date &&
-        next.action_type === existing.action_type &&
-        next.description === existing.description &&
-        next.order === existing.order &&
-        next.completed === existing.completed &&
-        next.recurrence === existing.recurrence &&
-        panelTargetsEqual(next.targets, existing.targets) &&
-        next.depends_on === existing.depends_on
-      ) {
-        return timeline
-      }
-
-      const updated = [...timeline]
-      updated[index] = next
-      return updated
-    },
-    options,
-  )
+  updateTimeline((timeline) => applyTimelineActionPatch(timeline, actionId, patch))
 }
 
-export function deleteTimelineAction(
+export function applyTimelineActionPatch(
+  timeline: TimelineAction[],
   actionId: string,
-  options: TimelineUpdateOptions = {},
-): void {
+  patch: Partial<TimelineAction>,
+): TimelineAction[] {
+  const index = timeline.findIndex((action) => action.id === actionId)
+  if (index === -1) return timeline
+  const existing = timeline[index]!
+  const next = { ...existing, ...patch }
+  if (
+    next.start_date === existing.start_date &&
+    next.end_date === existing.end_date &&
+    next.action_type === existing.action_type &&
+    next.description === existing.description &&
+    next.order === existing.order &&
+    next.completed === existing.completed &&
+    next.recurrence === existing.recurrence &&
+    panelTargetsEqual(next.targets, existing.targets) &&
+    next.depends_on === existing.depends_on
+  ) {
+    return timeline
+  }
+
+  const updated = [...timeline]
+  updated[index] = next
+  return updated
+}
+
+export function deleteTimelineAction(actionId: string): void {
   updateTimeline((timeline) => {
     if (!timeline.some((action) => action.id === actionId)) return timeline
     return timeline.filter((action) => action.id !== actionId)
-  }, options)
+  })
 }

@@ -7,9 +7,9 @@ import { plantSpeciesColorDefaults } from '../../canvas/plant-species-color-defa
 import { plantNamesRevision, sceneEntityRevision } from '../../canvas/runtime-mirror-state'
 import { currentDesign } from '../../state/design'
 import { currentCanvasQuerySurface } from '../../canvas/session'
-import { moveConsortiumEntry, reorderConsortiumEntry } from '../../app/consortium/controller'
+import { moveConsortiumEntryInArray, reorderConsortiumEntryInArray } from '../../app/consortium/controller'
 import { clearHoveredPanelTargets, setHoveredPanelTargets } from '../../app/panel-targets/coordinator'
-import { markDocumentDirty } from '../../app/document/controller'
+import { beginDocumentArrayEdit, type DocumentArrayEditTransaction } from '../../app/document/edit-transaction'
 import { consortiumTarget, getConsortiumCanonicalName, isSpeciesTarget } from '../../panel-targets'
 import {
   buildConsortiumBars,
@@ -50,7 +50,7 @@ type DragState =
       originalStartPhase: number
       originalEndPhase: number
       cachedRect: DOMRect
-      hasMutated: boolean
+      edit: DocumentArrayEditTransaction<'consortiums'>
     }
   | {
       type: 'resize'
@@ -60,7 +60,7 @@ type DragState =
       originalStartPhase: number
       originalEndPhase: number
       cachedRect: DOMRect
-      hasMutated: boolean
+      edit: DocumentArrayEditTransaction<'consortiums'>
     }
   | null
 
@@ -128,7 +128,7 @@ export function ConsortiumChart() {
   // Clean up drag state and consortium hover bridge on unmount
   useEffect(() => {
     return () => {
-      if (dragState.current?.hasMutated) markDocumentDirty()
+      dragState.current?.edit.commit()
       clearHoveredPanelTargets()
     }
   }, [])
@@ -157,7 +157,7 @@ export function ConsortiumChart() {
         originalStartPhase: bar.startPhase,
         originalEndPhase: bar.endPhase,
         cachedRect: rect,
-        hasMutated: false,
+        edit: beginDocumentArrayEdit('consortiums'),
       }
     } else {
       dragState.current = {
@@ -168,7 +168,7 @@ export function ConsortiumChart() {
         originalStartPhase: bar.startPhase,
         originalEndPhase: bar.endPhase,
         cachedRect: rect,
-        hasMutated: false,
+        edit: beginDocumentArrayEdit('consortiums'),
       }
     }
   }, [])
@@ -218,8 +218,11 @@ export function ConsortiumChart() {
           if (targetBar) {
             const targetArrayIdx = consortiumsRef.current.findIndex((c) => getConsortiumCanonicalName(c) === targetBar.canonicalName)
             if (targetArrayIdx !== -1) {
-              reorderConsortiumEntry(drag.canonicalName, targetArrayIdx, { markDirty: false })
-              drag.hasMutated = true
+              drag.edit.preview((consortiums) => reorderConsortiumEntryInArray(
+                consortiums,
+                drag.canonicalName,
+                targetArrayIdx,
+              ))
             }
           }
         }
@@ -228,8 +231,11 @@ export function ConsortiumChart() {
 
       // Cross-stratum or phase move
       if (bar.startPhase === adjustedStart && bar.endPhase === newEnd && bar.stratum === newStratum) return
-      moveConsortiumEntry(drag.canonicalName, { stratum: newStratum, startPhase: adjustedStart, endPhase: newEnd }, { markDirty: false })
-      drag.hasMutated = true
+      drag.edit.preview((consortiums) => moveConsortiumEntryInArray(
+        consortiums,
+        drag.canonicalName,
+        { stratum: newStratum, startPhase: adjustedStart, endPhase: newEnd },
+      ))
       return
     }
 
@@ -241,8 +247,11 @@ export function ConsortiumChart() {
         const clampedPhase = Math.max(0, Math.min(CONSORTIUM_PHASES.length - 1, phase))
         const newStart = Math.min(clampedPhase, drag.originalEndPhase)
         if (bar && bar.startPhase === newStart) return
-        moveConsortiumEntry(drag.canonicalName, { startPhase: newStart, endPhase: drag.originalEndPhase }, { markDirty: false })
-        drag.hasMutated = true
+        drag.edit.preview((consortiums) => moveConsortiumEntryInArray(
+          consortiums,
+          drag.canonicalName,
+          { startPhase: newStart, endPhase: drag.originalEndPhase },
+        ))
       } else {
         // Right edge pixel is at phaseToX(endPhase + 1), so xToPhase returns
         // endPhase + 1 at the boundary. Allow clamp up to CONSORTIUM_PHASES.length
@@ -250,8 +259,11 @@ export function ConsortiumChart() {
         const clampedPhase = Math.max(0, Math.min(CONSORTIUM_PHASES.length, phase))
         const newEnd = Math.max(clampedPhase - 1, drag.originalStartPhase)
         if (bar && bar.endPhase === newEnd) return
-        moveConsortiumEntry(drag.canonicalName, { startPhase: drag.originalStartPhase, endPhase: newEnd }, { markDirty: false })
-        drag.hasMutated = true
+        drag.edit.preview((consortiums) => moveConsortiumEntryInArray(
+          consortiums,
+          drag.canonicalName,
+          { startPhase: drag.originalStartPhase, endPhase: newEnd },
+        ))
       }
       return
     }
@@ -287,7 +299,7 @@ export function ConsortiumChart() {
 
   const handleMouseUp = useCallback(() => {
     if (dragState.current) {
-      if (dragState.current.hasMutated) markDocumentDirty()
+      dragState.current.edit.commit()
       dragState.current = null
     }
   }, [])
@@ -305,7 +317,7 @@ export function ConsortiumChart() {
     return () => {
       document.removeEventListener('mousemove', onMove)
       document.removeEventListener('mouseup', onUp)
-      if (dragState.current?.hasMutated) markDocumentDirty()
+      dragState.current?.edit.commit()
       dragState.current = null
     }
   }, [])
