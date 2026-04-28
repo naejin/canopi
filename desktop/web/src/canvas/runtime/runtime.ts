@@ -2,8 +2,7 @@ import type { ReadonlySignal } from '@preact/signals'
 import type { CanopiFile, PlacedPlant } from '../../types/design'
 import type { ColorByAttribute, PlantSizeMode } from '../plant-display-state'
 import type { SelectedPlantColorContext } from '../plant-color-context'
-import type { SceneStore } from './scene'
-import type { SceneViewportState } from './scene'
+import type { ScenePersistedState, SceneViewportState } from './scene'
 
 export interface CanvasRuntimeDocumentMetadata {
   name: string
@@ -12,18 +11,7 @@ export interface CanvasRuntimeDocumentMetadata {
   northBearingDeg?: number | null
 }
 
-export interface CanvasRuntime {
-  getSceneStore(): SceneStore
-  getViewport(): SceneViewportState
-  getViewportScreenSize(): { width: number; height: number }
-  readonly viewportRevision: ReadonlySignal<number>
-  getSelection(): Set<string>
-  setSelection(ids: Iterable<string>): void
-  clearSelection(): void
-  initializeViewport(): void
-  attachRulersTo(element: HTMLElement): void
-  showCanvasChrome(): void
-  hideCanvasChrome(): void
+export interface CanvasCommandSurface {
   setTool(name: string): void
   zoomIn(): void
   zoomOut(): void
@@ -46,21 +34,42 @@ export interface CanvasRuntime {
   toggleGrid(): void
   toggleSnapToGrid(): void
   toggleRulers(): void
-  getPlantSizeMode(): PlantSizeMode
   setPlantSizeMode(mode: PlantSizeMode): void
-  getPlantColorByAttr(): ColorByAttribute | null
   setPlantColorByAttr(attr: ColorByAttribute | null): void
-  getSelectedPlantColorContext(): SelectedPlantColorContext
-  getPlacedPlants(): PlacedPlant[]
-  getLocalizedCommonNames(): ReadonlyMap<string, string | null>
   ensureSpeciesCacheEntries(canonicalNames: string[], activeLocale: string): Promise<boolean>
   setSelectedPlantColor(color: string | null): number
   setPlantColorForSpecies(canonicalName: string, color: string | null): number
   clearPlantSpeciesColor(canonicalName: string): boolean
+}
+
+export interface CanvasQuerySurface {
+  getSceneSnapshot(): ScenePersistedState
+  getViewport(): SceneViewportState
+  getViewportScreenSize(): { width: number; height: number }
+  readonly viewportRevision: ReadonlySignal<number>
+  getSelection(): Set<string>
+  getPlantSizeMode(): PlantSizeMode
+  getPlantColorByAttr(): ColorByAttribute | null
+  getSelectedPlantColorContext(): SelectedPlantColorContext
+  getPlacedPlants(): PlacedPlant[]
+  getLocalizedCommonNames(): ReadonlyMap<string, string | null>
+}
+
+export interface CanvasDocumentSurface {
+  initializeViewport(): void
+  attachRulersTo(element: HTMLElement): void
+  showCanvasChrome(): void
+  hideCanvasChrome(): void
+  zoomToFit(): void
   loadDocument(file: CanopiFile): void
   replaceDocument(file: CanopiFile): void
   serializeDocument(metadata: CanvasRuntimeDocumentMetadata, doc: CanopiFile): CanopiFile
   markSaved(): void
   clearHistory(): void
+  resize(width: number, height: number): void
   destroy(): void
 }
+
+export type MountedCanvasRuntime = CanvasCommandSurface & CanvasQuerySurface & CanvasDocumentSurface
+
+export type CanvasRuntime = MountedCanvasRuntime

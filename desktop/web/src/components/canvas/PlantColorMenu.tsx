@@ -2,7 +2,11 @@ import { locale } from '../../app/settings/state'
 import { plantColorMenuOpen } from '../../canvas/plant-color-menu-state'
 import { plantSpeciesColorDefaults } from '../../canvas/plant-species-color-defaults'
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { currentCanvasSelection, currentCanvasSession } from '../../canvas/session'
+import {
+  currentCanvasCommandSurface,
+  currentCanvasQuerySurface,
+  currentCanvasSelection,
+} from '../../canvas/session'
 import {
   DEFAULT_PLANT_COLOR,
   PLANT_COLOR_PALETTE,
@@ -42,10 +46,11 @@ function closeMenu(buttonRef?: { current: HTMLButtonElement | null }) {
 export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
   void currentCanvasSelection.value
   void plantSpeciesColorDefaults.value
-  const session = currentCanvasSession.value
+  const commandSurface = currentCanvasCommandSurface.value
+  const querySurface = currentCanvasQuerySurface.value
   const activeLocale = locale.value
   const menuOpen = plantColorMenuOpen.value
-  const context = session?.getSelectedPlantColorContext() ?? {
+  const context = querySurface?.getSelectedPlantColorContext() ?? {
     plantIds: [],
     singleSpeciesCanonicalName: null,
     singleSpeciesCommonName: null,
@@ -143,7 +148,7 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
   useEffect(() => {
     if (!menuOpen || !context.singleSpeciesCanonicalName || context.suggestedColor) return
 
-    const pending = session?.ensureSpeciesCacheEntries([context.singleSpeciesCanonicalName], activeLocale)
+    const pending = commandSurface?.ensureSpeciesCacheEntries([context.singleSpeciesCanonicalName], activeLocale)
     if (!pending) return
 
     void pending.then((loaded) => {
@@ -151,7 +156,7 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
         setCacheVersion((value) => value + 1)
       }
     })
-  }, [menuOpen, activeLocale, context.singleSpeciesCanonicalName, context.suggestedColor])
+  }, [menuOpen, activeLocale, commandSurface, context.singleSpeciesCanonicalName, context.suggestedColor])
 
   useEffect(() => {
     if (!menuOpen) return
@@ -196,24 +201,24 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
 
   const applyToSelection = () => {
     if (!normalizedActiveColor) return
-    session?.setSelectedPlantColor(normalizedActiveColor)
+    commandSurface?.setSelectedPlantColor(normalizedActiveColor)
     closeMenu(buttonRef)
   }
 
   const applyToSpecies = () => {
     if (!normalizedActiveColor || !context.singleSpeciesCanonicalName) return
-    session?.setPlantColorForSpecies(context.singleSpeciesCanonicalName, normalizedActiveColor)
+    commandSurface?.setPlantColorForSpecies(context.singleSpeciesCanonicalName, normalizedActiveColor)
     closeMenu(buttonRef)
   }
 
   const clearSelectedPlantColors = () => {
-    session?.setSelectedPlantColor(null)
+    commandSurface?.setSelectedPlantColor(null)
     closeMenu(buttonRef)
   }
 
   const clearSpeciesColor = () => {
     if (!context.singleSpeciesCanonicalName) return
-    session?.clearPlantSpeciesColor(context.singleSpeciesCanonicalName)
+    commandSurface?.clearPlantSpeciesColor(context.singleSpeciesCanonicalName)
     closeMenu(buttonRef)
   }
 

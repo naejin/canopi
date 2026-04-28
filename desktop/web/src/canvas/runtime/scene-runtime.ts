@@ -42,13 +42,13 @@ import type { ScenePersistedState } from './scene'
 import { SceneHistory } from './scene-history'
 import { SceneRuntimeMutationController } from './scene-runtime/mutations'
 import { SceneRuntimePresentationController } from './scene-runtime/presentation'
-import type { CanvasRuntime, CanvasRuntimeDocumentMetadata } from './runtime'
+import type { CanvasRuntimeDocumentMetadata, MountedCanvasRuntime } from './runtime'
 import { resolvePanelTargets } from '../../panel-target-resolution'
 import { panelTargetsEqual, speciesTarget } from '../../panel-targets'
 
 type RuntimeInvalidationKind = 'scene' | 'viewport' | 'chrome'
 
-export class SceneCanvasRuntime implements CanvasRuntime {
+export class SceneCanvasRuntime implements MountedCanvasRuntime {
   private readonly _sceneStore = new SceneStore()
   private readonly _camera = new CameraController()
   private readonly _viewportRevision = signal(0)
@@ -161,6 +161,10 @@ export class SceneCanvasRuntime implements CanvasRuntime {
 
   getSceneStore(): SceneStore {
     return this._sceneStore
+  }
+
+  getSceneSnapshot(): ScenePersistedState {
+    return this._sceneStore.persisted
   }
 
   getViewport() {

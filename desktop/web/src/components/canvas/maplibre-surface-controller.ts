@@ -1,7 +1,8 @@
 import { useSignalEffect } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
 import type { MapFrame } from '../../canvas/maplibre-camera'
-import { currentCanvasSession } from '../../canvas/session'
+import { currentCanvasQuerySurface } from '../../canvas/session'
+import type { CanvasQuerySurface } from '../../canvas/runtime/runtime'
 import {
   type TerrainLayerState,
 } from '../../maplibre/terrain'
@@ -66,7 +67,7 @@ export function useMapLibreCanvasSurfaceController({
   onStateChangeRef.current = onStateChange
 
   const setSurfaceState = (next: MapLibreCanvasSurfaceStateInput): void => {
-    const scene = currentCanvasSession.peek()?.getSceneStore().persisted ?? null
+    const scene = currentCanvasQuerySurface.peek()?.getSceneSnapshot() ?? null
     const merged = mergeMapLibreCanvasSurfaceState(next, scene)
     if (mapLibreCanvasSurfaceStateEquals(stateRef.current, merged)) return
     stateRef.current = merged
@@ -94,7 +95,7 @@ export function useMapLibreCanvasSurfaceController({
   }
 
   const syncPrecisionState = (): void => {
-    const scene = currentCanvasSession.peek()?.getSceneStore().persisted ?? null
+    const scene = currentCanvasQuerySurface.peek()?.getSceneSnapshot() ?? null
     const nextPrecision = precisionSnapshot(scene)
     setSurfaceState(stateRef.current)
     publishMapDiagnostics(cameraRef.current, nextPrecision.designExtentMeters)
@@ -107,7 +108,7 @@ export function useMapLibreCanvasSurfaceController({
 
   const applyCamera = (
     map: MapLibreMapInstance,
-    runtime: ReturnType<typeof currentCanvasSession.peek>,
+    runtime: CanvasQuerySurface | null,
     location: { lat: number; lon: number } | null,
     bearing: number | null,
   ): void => {
@@ -129,13 +130,13 @@ export function useMapLibreCanvasSurfaceController({
 
   const syncOverlays = (): void => {
     const map = mapRef.current
-    const runtime = currentCanvasSession.peek()
+    const runtime = currentCanvasQuerySurface.peek()
     const location = currentDesign.peek()?.location ?? null
     if (!map) return
 
     syncCanvasPanelTargetOverlays(
       map,
-      runtime?.getSceneStore().persisted ?? null,
+      runtime?.getSceneSnapshot() ?? null,
       location
         ? {
             lat: location.lat,
@@ -236,7 +237,7 @@ export function useMapLibreCanvasSurfaceController({
   }
 
   const ensureMap = async (bearing: number | null, preferredBasemapStyle: string): Promise<void> => {
-    const runtime = currentCanvasSession.peek()
+    const runtime = currentCanvasQuerySurface.peek()
     const location = currentDesign.peek()?.location ?? null
     const visibility = layerVisibility.peek()
     const visible = hasVisibleMapLayer(visibility, hillshadeVisible.peek())
@@ -322,7 +323,7 @@ export function useMapLibreCanvasSurfaceController({
 
       const handleLoad = (): void => {
         if (!ownsCurrentMapGeneration(map, generation)) return
-        applyCamera(map, currentCanvasSession.peek(), currentDesign.peek()?.location ?? null, northBearingDeg.peek())
+        applyCamera(map, currentCanvasQuerySurface.peek(), currentDesign.peek()?.location ?? null, northBearingDeg.peek())
         maybeMarkBasemapReady()
       }
 
@@ -360,7 +361,7 @@ export function useMapLibreCanvasSurfaceController({
         map.resize()
         applyCamera(
           map,
-          currentCanvasSession.peek(),
+          currentCanvasQuerySurface.peek(),
           currentDesign.peek()?.location ?? null,
           northBearingDeg.peek(),
         )
@@ -380,7 +381,7 @@ export function useMapLibreCanvasSurfaceController({
   }
 
   useSignalEffect(() => {
-    const runtime = currentCanvasSession.value
+    const runtime = currentCanvasQuerySurface.value
     const location = currentDesign.value?.location ?? null
     const visibleLayers = layerVisibility.value
     const mapVisible = hasVisibleMapLayer(visibleLayers, hillshadeVisible.value)

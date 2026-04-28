@@ -1,4 +1,4 @@
-import type { CanvasRuntime } from "../../canvas/runtime/runtime";
+import type { CanvasDocumentSurface } from "../../canvas/runtime/runtime";
 import type { CanopiFile } from "../../types/design";
 import { currentDesign } from "../../state/design";
 import { replaceCurrentDesignSnapshot } from "./snapshot";
@@ -7,7 +7,7 @@ import { disposeConsortiumSync, installConsortiumSync } from "./workflows";
 export { installConsortiumSync };
 
 export function buildPersistedDocumentContent(
-  session: CanvasRuntime | null,
+  session: CanvasDocumentSurface | null,
   name: string,
 ): CanopiFile {
   if (session) {
@@ -29,7 +29,7 @@ export function buildPersistedDocumentContent(
  * document for non-canvas sections. Called before save/autosave.
  */
 export function writeCanvasIntoDocument(
-  session: CanvasRuntime,
+  session: CanvasDocumentSurface,
   name: string,
 ): CanopiFile {
   const design = currentDesign.value;
@@ -38,7 +38,7 @@ export function writeCanvasIntoDocument(
 }
 
 export function snapshotCanvasIntoCurrentDocument(
-  session: CanvasRuntime,
+  session: CanvasDocumentSurface,
   name: string,
 ): CanopiFile | null {
   if (!currentDesign.value) return null;
@@ -53,7 +53,7 @@ export function snapshotCanvasIntoCurrentDocument(
  */
 export function loadCanvasFromDocument(
   file: CanopiFile,
-  session: CanvasRuntime,
+  session: CanvasDocumentSurface,
 ): void {
   session.loadDocument(file);
   session.zoomToFit();

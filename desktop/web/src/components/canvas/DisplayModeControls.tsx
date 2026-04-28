@@ -6,7 +6,7 @@ import {
 } from '../../canvas/plant-display-state'
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
-import { getCurrentCanvasSession } from '../../canvas/session'
+import { getCurrentCanvasCommandSurface } from '../../canvas/session'
 import { Dropdown, type DropdownItem } from '../shared/Dropdown'
 import styles from './DisplayModeControls.module.css'
 
@@ -47,13 +47,13 @@ export function DisplayModeControls() {
   const colorAttr = plantColorByAttr.value
 
   const handleDisplaySelect = (v: PlantSizeMode) => {
-    const session = getCurrentCanvasSession()
+    const session = getCurrentCanvasCommandSurface()
     if (session) session.setPlantSizeMode(v)
     else plantSizeMode.value = v
   }
 
   const handleColorBySelect = (v: ColorByAttribute | null) => {
-    const session = getCurrentCanvasSession()
+    const session = getCurrentCanvasCommandSurface()
     if (session) session.setPlantColorByAttr(v)
     else plantColorByAttr.value = v
   }

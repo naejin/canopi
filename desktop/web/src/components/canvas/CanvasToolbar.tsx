@@ -9,7 +9,12 @@ import {
 import { locale } from '../../app/settings/state'
 import { plantColorMenuOpen } from '../../canvas/plant-color-menu-state'
 import { t } from '../../i18n'
-import { currentCanvasSelection, currentCanvasSession, currentCanvasTool } from '../../canvas/session'
+import {
+  currentCanvasCommandSurface,
+  currentCanvasQuerySurface,
+  currentCanvasSelection,
+  currentCanvasTool,
+} from '../../canvas/session'
 import {
   SelectIcon,
   HandIcon,
@@ -51,11 +56,12 @@ export function CanvasToolbar() {
   // Subscribe to locale so labels re-render on language change
   void locale.value
   void currentCanvasSelection.value
-  const session = currentCanvasSession.value
+  const commandSurface = currentCanvasCommandSurface.value
+  const querySurface = currentCanvasQuerySurface.value
 
   const toolbarRef = useRef<HTMLDivElement>(null)
   const plantColorButtonRef = useRef<HTMLButtonElement>(null)
-  const plantColorContext = session?.getSelectedPlantColorContext() ?? {
+  const plantColorContext = querySurface?.getSelectedPlantColorContext() ?? {
     plantIds: [],
     singleSpeciesCanonicalName: null,
     singleSpeciesCommonName: null,
@@ -67,7 +73,7 @@ export function CanvasToolbar() {
   useSignalEffect(() => {
     if (!plantColorMenuOpen.value) return
     currentCanvasSelection.value
-    if (!session || session.getSelectedPlantColorContext().plantIds.length === 0) {
+    if (!querySurface || querySurface.getSelectedPlantColorContext().plantIds.length === 0) {
       plantColorMenuOpen.value = false
     }
   })
@@ -90,7 +96,7 @@ export function CanvasToolbar() {
     const nextTool = ALL_TOOLS[nextIndex]
     if (!nextTool) return
 
-    session?.setTool(nextTool.id)
+    commandSurface?.setTool(nextTool.id)
 
     // Move DOM focus to the newly active button
     const toolbar = toolbarRef.current
@@ -119,7 +125,7 @@ export function CanvasToolbar() {
         // Only the active button is in the tab sequence; arrow keys move focus
         tabIndex={isActive ? 0 : -1}
         className={styles.toolButton}
-        onClick={() => { session?.setTool(tool.id) }}
+        onClick={() => { commandSurface?.setTool(tool.id) }}
       >
         <tool.Icon className={styles.toolIcon} />
         <span className={styles.tooltip} role="tooltip">
@@ -247,7 +253,7 @@ export function CanvasToolbar() {
         'canvas.grid.gridDesc',
         gridVisible.value,
         GridIcon,
-        () => session?.toggleGrid(),
+        () => commandSurface?.toggleGrid(),
       )}
       {renderToggle(
         'snap',
@@ -255,7 +261,7 @@ export function CanvasToolbar() {
         'canvas.grid.snapToGridDesc',
         snapToGridEnabled.value,
         SnapIcon,
-        () => session?.toggleSnapToGrid(),
+        () => commandSurface?.toggleSnapToGrid(),
       )}
       {renderToggle(
         'rulers',
@@ -263,7 +269,7 @@ export function CanvasToolbar() {
         'canvas.grid.rulersDesc',
         rulersVisible.value,
         RulerIcon,
-        () => session?.toggleRulers(),
+        () => commandSurface?.toggleRulers(),
       )}
 
     </div>

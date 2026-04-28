@@ -1,6 +1,6 @@
 import { message } from "@tauri-apps/plugin-dialog";
-import { getCurrentCanvasSession } from "../../canvas/session";
-import type { CanvasRuntime } from "../../canvas/runtime/runtime";
+import { getCurrentCanvasDocumentSurface } from "../../canvas/session";
+import type { CanvasDocumentSurface } from "../../canvas/runtime/runtime";
 import { normalizeLoadedDocument, normalizeNewDocument } from "../contracts/document";
 import * as designIpc from "../../ipc/design";
 import { t } from "../../i18n";
@@ -19,7 +19,7 @@ import {
 import { buildPersistedDocumentContent } from "./runtime";
 
 interface DocumentLoadOptions {
-  session?: CanvasRuntime | null;
+  session?: CanvasDocumentSurface | null;
   isCancelled?: () => boolean;
 }
 
@@ -28,7 +28,7 @@ export type TemplateOpenResult = "opened" | "queued" | "cancelled";
 
 /** Save to the current path (Ctrl+S). Opens Save As if no path exists yet. */
 export async function saveCurrentDesign(): Promise<void> {
-  const session = getCurrentCanvasSession();
+  const session = getCurrentCanvasDocumentSurface();
   const content = buildPersistedDocumentContent(session, designName.value);
 
   if (designPath.value) {
@@ -44,7 +44,7 @@ export async function saveCurrentDesign(): Promise<void> {
 
 /** Save As — always prompts for a new path (Ctrl+Shift+S). */
 export async function saveAsCurrentDesign(): Promise<void> {
-  const session = getCurrentCanvasSession();
+  const session = getCurrentCanvasDocumentSurface();
   const content = buildPersistedDocumentContent(session, designName.value);
 
   try {
@@ -59,7 +59,7 @@ export async function saveAsCurrentDesign(): Promise<void> {
 
 /** Open file dialog and replace the active document through the shared guard. */
 export async function openDesign(): Promise<void> {
-  const session = getCurrentCanvasSession();
+  const session = getCurrentCanvasDocumentSurface();
   if (!session) return;
 
   const decision = await confirmReplacement();
@@ -79,7 +79,7 @@ export async function openDesignFromPath(
   path: string,
   options: DocumentLoadOptions = {},
 ): Promise<void> {
-  const session = options.session ?? getCurrentCanvasSession();
+  const session = options.session ?? getCurrentCanvasDocumentSurface();
   if (!session) {
     pendingDesignPath.value = path;
     return;
@@ -100,7 +100,7 @@ export async function openDesignAsTemplate(
   name: string,
   options: DocumentLoadOptions = {},
 ): Promise<TemplateOpenResult> {
-  const session = options.session ?? getCurrentCanvasSession();
+  const session = options.session ?? getCurrentCanvasDocumentSurface();
   if (!session) {
     pendingTemplateImport.value = { path, name };
     return "queued";
@@ -118,7 +118,7 @@ export async function openDesignAsTemplate(
 
 /** Create a new blank design through the shared replacement guard. */
 export async function newDesignAction(): Promise<void> {
-  const session = getCurrentCanvasSession();
+  const session = getCurrentCanvasDocumentSurface();
   if (!session) return;
 
   const decision = await confirmReplacement();
@@ -131,7 +131,7 @@ export async function newDesignAction(): Promise<void> {
 /** Consume a queued document load when CanvasPanel mounts a fresh engine.
  *  Bypasses the dirty guard — queued loads happen on fresh mount before the
  *  user has interacted, so prompting to save is semantically wrong. */
-export function consumeQueuedDocumentLoad(session: CanvasRuntime): () => void {
+export function consumeQueuedDocumentLoad(session: CanvasDocumentSurface): () => void {
   const queuedTemplate = pendingTemplateImport.value;
   if (queuedTemplate) {
     let cancelled = false;
@@ -219,7 +219,7 @@ async function loadDesignDirect(
   path: string,
   options: DocumentLoadOptions = {},
 ): Promise<void> {
-  const session = options.session ?? getCurrentCanvasSession();
+  const session = options.session ?? getCurrentCanvasDocumentSurface();
   if (!session) {
     pendingDesignPath.value = path;
     return;
@@ -236,7 +236,7 @@ async function loadTemplateDirect(
   name: string,
   options: DocumentLoadOptions = {},
 ): Promise<void> {
-  const session = options.session ?? getCurrentCanvasSession();
+  const session = options.session ?? getCurrentCanvasDocumentSurface();
   if (!session) {
     pendingTemplateImport.value = { path, name };
     return;
@@ -252,7 +252,7 @@ function applyDocumentReplacement(
   file: CanopiFile,
   path: string | null,
   name: string,
-  session: CanvasRuntime,
+  session: CanvasDocumentSurface,
 ): void {
   session.replaceDocument(file);
   replaceCurrentDesignState(file, path, name);

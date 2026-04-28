@@ -19,6 +19,9 @@ vi.mock('../canvas/session', async (importOriginal) => {
     getCurrentCanvasSession() {
       return mocks.canvasSession
     },
+    getCurrentCanvasDocumentSurface() {
+      return mocks.canvasSession
+    },
   }
 })
 

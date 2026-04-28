@@ -1,7 +1,7 @@
 import { navigateTo, type Panel } from "../app/shell/state";
 import { theme } from "../app/settings/state";
 import { persistCurrentSettings } from "../app/settings/persistence";
-import { setCurrentCanvasTool } from "../canvas/session";
+import { getCurrentCanvasCommandSurface, setCurrentCanvasTool } from "../canvas/session";
 import { t } from "../i18n";
 import { FILE_SHORTCUTS, EDIT_SHORTCUTS, VIEW_SHORTCUTS, PANEL_SHORTCUTS, TOOL_SHORTCUTS } from "../shortcuts/definitions";
 import {
@@ -10,7 +10,6 @@ import {
   openDesign,
   newDesignAction,
 } from "../app/document-session/actions";
-import { getCurrentCanvasSession } from "../canvas/session";
 
 export interface Command {
   id: string;
@@ -43,13 +42,13 @@ export const commands: Command[] = [
   { id: "file.saveAs", label: () => t("canvas.file.saveAs"), shortcut: FILE_SHORTCUTS.saveDesignAs, action: () => { void saveAsCurrentDesign() } },
 
   // Edit operations
-  { id: "edit.undo",   label: () => t("menu.edit.undo"),   shortcut: EDIT_SHORTCUTS.undo,  action: () => { getCurrentCanvasSession()?.undo() } },
-  { id: "edit.redo",   label: () => t("menu.edit.redo"),   shortcut: EDIT_SHORTCUTS.redo,  action: () => { getCurrentCanvasSession()?.redo() } },
+  { id: "edit.undo",   label: () => t("menu.edit.undo"),   shortcut: EDIT_SHORTCUTS.undo,  action: () => { getCurrentCanvasCommandSurface()?.undo() } },
+  { id: "edit.redo",   label: () => t("menu.edit.redo"),   shortcut: EDIT_SHORTCUTS.redo,  action: () => { getCurrentCanvasCommandSurface()?.redo() } },
 
   // View operations
-  { id: "view.zoomIn",       label: () => t("menu.view.zoomIn"),       shortcut: VIEW_SHORTCUTS.zoomIn,       action: () => { getCurrentCanvasSession()?.zoomIn() } },
-  { id: "view.zoomOut",      label: () => t("menu.view.zoomOut"),      shortcut: VIEW_SHORTCUTS.zoomOut,      action: () => { getCurrentCanvasSession()?.zoomOut() } },
-  { id: "view.fitToContent", label: () => t("menu.view.fitToContent"), shortcut: VIEW_SHORTCUTS.fitToContent, action: () => { getCurrentCanvasSession()?.zoomToFit() } },
+  { id: "view.zoomIn",       label: () => t("menu.view.zoomIn"),       shortcut: VIEW_SHORTCUTS.zoomIn,       action: () => { getCurrentCanvasCommandSurface()?.zoomIn() } },
+  { id: "view.zoomOut",      label: () => t("menu.view.zoomOut"),      shortcut: VIEW_SHORTCUTS.zoomOut,      action: () => { getCurrentCanvasCommandSurface()?.zoomOut() } },
+  { id: "view.fitToContent", label: () => t("menu.view.fitToContent"), shortcut: VIEW_SHORTCUTS.fitToContent, action: () => { getCurrentCanvasCommandSurface()?.zoomToFit() } },
 
   // Navigation
   { id: "nav.canvas",   label: () => t("commands.canvas"),   shortcut: PANEL_SHORTCUTS.canvas, action: switchPanel("canvas") },
