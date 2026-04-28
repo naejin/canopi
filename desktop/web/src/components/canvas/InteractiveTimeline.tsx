@@ -6,7 +6,7 @@ import { t } from '../../i18n'
 import { locale, theme } from '../../app/settings/state'
 import { plantSpeciesColorDefaults } from '../../canvas/plant-species-color-defaults'
 import { currentDesign } from '../../state/design'
-import { currentCanvasSession } from '../../canvas/session'
+import { currentCanvasQuerySurface } from '../../canvas/session'
 import {
   clearHoveredPanelTargets,
   clearSelectedPanelTargetsForOrigin,
@@ -151,7 +151,7 @@ export function clearTimelineSelectedPanelTargets(): void {
 }
 
 function buildSpeciesList(): Array<{ canonical_name: string; display_name: string }> {
-  const session = currentCanvasSession.value
+  const session = currentCanvasQuerySurface.value
   if (!session) return []
   const plants = session.getPlacedPlants()
   const names = session.getLocalizedCommonNames()

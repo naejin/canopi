@@ -6,7 +6,7 @@ import { hoveredCanvasTargets } from '../../app/panel-targets/state'
 import { plantSpeciesColorDefaults } from '../../canvas/plant-species-color-defaults'
 import { plantNamesRevision, sceneEntityRevision } from '../../canvas/runtime-mirror-state'
 import { currentDesign } from '../../state/design'
-import { currentCanvasSession } from '../../canvas/session'
+import { currentCanvasQuerySurface } from '../../canvas/session'
 import { moveConsortiumEntry, reorderConsortiumEntry } from '../../app/consortium/controller'
 import { clearHoveredPanelTargets, setHoveredPanelTargets } from '../../app/panel-targets/coordinator'
 import { markDocumentDirty } from '../../app/document/controller'
@@ -70,7 +70,7 @@ export function ConsortiumChart() {
   const hoveredCanonical = useSignal<string | null>(null)
   const dragState = useRef<DragState>(null)
 
-  const session = currentCanvasSession.value
+  const session = currentCanvasQuerySurface.value
   const design = currentDesign.value
   const plants = session?.getPlacedPlants() ?? EMPTY_PLANTS
   const consortiums = design?.consortiums ?? EMPTY_CONSORTIUMS

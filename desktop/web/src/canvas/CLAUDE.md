@@ -6,7 +6,7 @@ The live canvas now runs through `SceneCanvasRuntime`.
 
 Production ownership is:
 - `CanvasPanel` mounts `SceneCanvasRuntime`
-- `SceneCanvasRuntime` implements the app-facing `CanvasRuntime` interface; `currentCanvasSession` stores `CanvasRuntime | null` directly
+- `SceneCanvasRuntime` implements the app-facing runtime surfaces: `CanvasCommandSurface`, `CanvasQuerySurface`, and `CanvasDocumentSurface`; `currentCanvasSession` stores the combined mounted runtime while callers consume the smallest surface they need
 - `SceneStore` is the source of truth for **canvas scene state** (plants, zones, annotations, groups, layers, plant-species-colors). Non-canvas document sections (consortiums, timeline, budget, `budget_currency`, location, description, extra) are owned by the document store — see root `CLAUDE.md` Document Authority Rule
 - `RendererHost` owns backend selection, startup fallback, and runtime recovery
 - `PixiJS` is the primary world renderer
@@ -20,7 +20,7 @@ Landed in the live path:
 - first-class top-level document `annotations`
 - typed panel-target hover/selection highlights via `PanelTarget[]` + `resolvePanelTargets()`
 - pure, bearing-aware panel-target map projection via `projectPanelTargetsToMapFeatures()` plus a pure overlay contract for rendered map hover/selection overlays
-- a non-interactive in-canvas MapLibre basemap driven by read-only `CanvasRuntime` viewport seams, plus hover / selection overlays sourced from the pure projection seam
+- a non-interactive in-canvas MapLibre basemap driven by the read-only `CanvasQuerySurface`, plus hover / selection overlays sourced from the pure projection seam
 - a display-only compass in canvas chrome driven by `northBearingDeg`
 
 Konva / `CanvasEngine` code has been removed. Do not reintroduce Konva or `getEngine()`-style escape hatches.
@@ -29,14 +29,15 @@ Konva / `CanvasEngine` code has been removed. Do not reintroduce Konva or `getEn
 
 ### Public Seams
 - App code must not reach into renderer implementations or runtime internals
-- The app-facing canvas boundary is the `CanvasRuntime` TypeScript interface implemented by `SceneCanvasRuntime`; the old 1:1 `CanvasSession` pass-through class is gone
-- `CanvasRuntime` now exposes read-only viewport queries for sibling surfaces: `getViewport()`, `getViewportScreenSize()`, and `viewportRevision`
+- The app-facing canvas boundary is split into `CanvasCommandSurface`, `CanvasQuerySurface`, and `CanvasDocumentSurface`, all implemented by `SceneCanvasRuntime`; the old 1:1 `CanvasSession` pass-through class is gone
+- Sibling read-only surfaces must consume `CanvasQuerySurface` for scene snapshots, viewport queries, selection reads, placed plants, localized names, and presentation context. They must not reach for command or document lifecycle methods
+- Toolbars, shortcuts, menus, and plant-color actions consume `CanvasCommandSurface`. Document session orchestration, save/load, chrome, resize, and teardown consume `CanvasDocumentSurface`
 - Bearing-aware world↔geo and viewport→MapLibre camera derivation live in the active backend seam under `canvas/projection.ts` / `canvas/maplibre-camera.ts`; `MapLibreCanvasSurface` consumes them but does not own projection math. Keep camera/overlay/terrain sync on that one seam
 - Exact sync means every canonical frame change must be applied; do not add camera deadbands/tolerances in `MapLibreCanvasSurface` that can skip tiny pan/zoom updates
 - Preserve document `north_bearing_deg` semantics. Any MapLibre-facing bearing normalization/adaptation belongs in `canvas/maplibre-camera.ts`, not in runtime state, overlay projection, or compass UI
 - Precision warning thresholds and dev diagnostics are backend-derived metadata. Surface/UI code may present them, but must not redefine them outside the projection seam
 - Terrain paint-only changes (opacity/theme) should stay incremental through `maplibre/terrain-sync.ts`; rebuild terrain sources/layers only when source-shape inputs change
-- As bottom panels/map surfaces need more derived data, consider splitting `CanvasRuntime` into two interfaces: one for **interaction commands** (tools, selection, history, zoom) and one for **state queries/projections** (entity reads for panels, bounds/features for map sync). Both should still be implemented by the runtime or pure helpers, not by renderer internals
+- Runtime surface growth should stay local-substitutable: add query methods to `CanvasQuerySurface`, user actions to `CanvasCommandSurface`, and save/load lifecycle methods to `CanvasDocumentSurface` instead of widening consumers back to the mounted runtime
 
 ### State Ownership
 - `SceneStore` owns **canvas scene state**: plants, zones, annotations, groups, layers, plant-species-colors, and ephemeral session state (selection, viewport, hover, presentation modes)
@@ -118,7 +119,10 @@ Konva / `CanvasEngine` code has been removed. Do not reintroduce Konva or `getEn
 
 ```
 App code
-  ├── CanvasRuntime interface (interaction + state queries)
+  ├── Canvas runtime surfaces
+  │     ├── CanvasCommandSurface (tools, history, zoom, edits, presentation mutations)
+  │     ├── CanvasQuerySurface (scene snapshot, viewport, selection, panel/map reads)
+  │     ├── CanvasDocumentSurface (load/save, chrome, resize, teardown)
   │     └── SceneCanvasRuntime
   │           ├── SceneStore (canvas scene state)
   │           ├── SceneInteractionController
@@ -129,7 +133,7 @@ App code
   │           │   └── Canvas2D scene renderer
   │           └── HTML rulers / overlay chrome
   ├── MapLibreCanvasSurface (derived sibling surface mounted by CanvasPanel)
-  │     └── syncs viewport via CanvasRuntime query seams and renders pure panel-target overlays
+  │     └── syncs viewport via CanvasQuerySurface and renders pure panel-target overlays
   └── Document layer (non-canvas state: consortiums, timeline, budget, budget_currency, location, description, extra)
         ├── state/design.ts
         ├── app/document/controller.ts

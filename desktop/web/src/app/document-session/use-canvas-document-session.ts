@@ -1,5 +1,5 @@
 import { useEffect } from "preact/hooks";
-import { setCurrentCanvasSession, getCurrentCanvasSession } from "../../canvas/session";
+import { setCurrentCanvasSession, getCurrentCanvasDocumentSurface } from "../../canvas/session";
 import { SceneCanvasRuntime } from "../../canvas/runtime/scene-runtime";
 import { autosaveDesign } from "../../ipc/design";
 import {
@@ -118,7 +118,7 @@ export function useCanvasDocumentSession({
   useEffect(() => {
     const timer = setInterval(() => {
       if (!designDirty.value) return;
-      const session = getCurrentCanvasSession();
+      const session = getCurrentCanvasDocumentSurface();
       if (!session) return;
       const content = writeCanvasIntoDocument(session, designName.value);
       autosaveDesign(content, designPath.value)

@@ -26,7 +26,7 @@ The rewrite is shipped. Keep this file focused on post-rewrite cleanup, verifica
 
 Resolved review notes:
 - ~~Define typed target identity semantics for timeline and budget before adding full panel-to-canvas highlighting, canvas-to-chart hover, or map overlays~~ — **done**: panel targets are typed as `placed_plant` / `species` / `zone` / `manual` / `none`; timeline, budget, and consortium now encode target identity explicitly.
-- ~~Replace the pass-through `CanvasSession` facade, or split it into explicit command/query interfaces, before adding more runtime API surface~~ — **done**: `currentCanvasSession` stores `CanvasRuntime | null`; `setCurrentCanvasTool()` still primes tool state without a mounted runtime.
+- ~~Replace the pass-through `CanvasSession` facade, or split it into explicit command/query interfaces, before adding more runtime API surface~~ — **done**: `currentCanvasSession` stores one mounted runtime and exposes command/query/document surface accessors; `setCurrentCanvasTool()` still primes tool state without a mounted runtime.
 - ~~Add file-format round-trip/migration coverage before the next breaking `.canopi` schema change~~ — **done**: v1→v2 migration covers legacy panel identity fields, and v2 panel sections round-trip with unknown top-level fields.
 
 Live-code corrections from the review:
@@ -60,9 +60,7 @@ These align with the core risks identified in the architecture review.
 
 **Canvas seam:**
 - ~~Replace `CanvasSession` pass-through with a runtime interface (or give it real logic)~~ — **done**.
-- Existing `CanvasRuntime` already defines the boundary that `SceneCanvasRuntime` implements. The implemented seam stores `CanvasRuntime | null` in `currentCanvasSession`; future API growth can still split this into:
-  - command surface for toolbar/shortcuts/document actions: tool, selection, zoom, undo/redo, clipboard, grouping, document load/save lifecycle
-  - read-only query surface for panels: placed plants, localized names, selected plant color context
+- ~~Split the runtime interface by caller need~~ — **done**: `SceneCanvasRuntime` implements `CanvasCommandSurface`, `CanvasQuerySurface`, and `CanvasDocumentSurface`. The session store still keeps one mounted runtime, while toolbars/shortcuts use the command surface, panels/MapLibre use the query surface, and document session code uses the document surface.
 - ~~Preserve the current `setCurrentCanvasTool()` behavior when no runtime is mounted: it primes the mirror tool state for later mount~~ — **done**.
 
 ### 2. Correctness (ongoing)
@@ -142,7 +140,7 @@ These align with the core risks identified in the architecture review.
 - ~~`commitBottomPanelHeight` spurious IPC~~ — **done**: no change guard — `persistCurrentSettings()` called on every mouseup even when height unchanged. Added equality check
 - ~~`updateTimelineAction` incomplete field-compare~~ — **done**: identity guard omitted `plants` and `depends_on` array fields — future callers patching only those fields would silently no-op. Guard now covers all 10 `TimelineAction` fields
 - ~~`Date.now()` in timeline `computeLayout`~~ — **done**: dateless actions sorted by wall-clock time, causing non-deterministic lane assignment across re-renders. Replaced with `Infinity` (stable, sorts last)
-- ~~`getSceneStore()` interface return type~~ — **done**: `CanvasRuntime` interface declared `SceneStore | null` but implementation never returns null. Removed `| null`
+- ~~`getSceneStore()` interface return type~~ — **done**: the public query surface now exposes `getSceneSnapshot()` instead of mutable `SceneStore` access; the concrete runtime keeps `getSceneStore()` for internal/runtime tests only
 - ~~`?? []` dead fallbacks on required CanopiFile fields~~ — **done**: removed from `normalizeDocument` (5 fields) and `serializeDocument` (3 fields). Rust `#[serde(default)]` guarantees presence; TS fallbacks masked type errors
 - ~~`STRATUM_ORDER` duplication in FilterStrip~~ — **done**: hand-copied `['emergent', 'high', 'medium', 'low']` replaced with import from `STRATA_ROWS` in `consortium-renderer.ts`
 - ~~Hardcoded `'unassigned'` in consortium sync workflow~~ — **done**: replaced string literal with `DEFAULT_STRATUM` derived from `STRATA_ROWS` constant
@@ -191,7 +189,7 @@ These align with the core risks identified in the architecture review.
   - Future geodetic backend implementation: keep the current local backend replaceable, but defer a second live backend until larger-scale designs make it necessary
   - Backend-selection policy: decide later whether backend choice should stay fixed, auto-switch by extent, or become a user-facing workflow; do not add selection state before the second backend exists
   - Validation foundation: keep screen-lock regression coverage for pan, zoom, resize, fit-to-content, document open, rotated designs, and large-scene warning cases; projected overlays must continue validating against the same exact-lock contract as basemap and terrain
-  - Post-hardening architecture pass: audit whether `CanvasRuntime` should split command vs query/projection responsibilities more explicitly, and whether the remaining lifecycle glue in `MapLibreCanvasSurface` should shrink further without creating a second authority
+  - Post-hardening architecture pass: keep command/query/document runtime surfaces narrow, and shrink the remaining lifecycle glue in `MapLibreCanvasSurface` without creating a second authority
 - PMTiles offline tiles: Rust reader + Tauri custom protocol + download manager UI (see `docs/archive/roadmap.md` 4.2)
 - Contour/hillshade layers via `maplibre-contour` + DEM tiles (see `docs/archive/roadmap.md` 4.3/4.4)
 

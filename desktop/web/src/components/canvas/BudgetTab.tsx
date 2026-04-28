@@ -5,7 +5,7 @@ import { locale } from '../../app/settings/state'
 import { selectedPanelTargetOrigin, selectedPanelTargets } from '../../app/panel-targets/state'
 import { plantNamesRevision, sceneEntityRevision } from '../../canvas/runtime-mirror-state'
 import { currentDesign, designName } from '../../state/design'
-import { currentCanvasSession } from '../../canvas/session'
+import { currentCanvasQuerySurface } from '../../canvas/session'
 import {
   clearHoveredPanelTargets,
   clearSelectedPanelTargetsForOrigin,
@@ -38,7 +38,7 @@ function clearBudgetSelectedPanelTargets(): void {
 }
 
 export function BudgetTab() {
-  const session = currentCanvasSession.value
+  const session = currentCanvasQuerySurface.value
 
   const editingCanonical = useSignal<string | null>(null)
   const editPrice = useSignal('')

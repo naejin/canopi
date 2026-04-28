@@ -1,6 +1,6 @@
 import { signal } from "@preact/signals";
 import { activePanel, navigateTo } from "../app/shell/state";
-import { currentCanvasHasSelection, getCurrentCanvasSession, setCurrentCanvasTool } from "../canvas/session";
+import { currentCanvasHasSelection, getCurrentCanvasCommandSurface, setCurrentCanvasTool } from "../canvas/session";
 import { isEditableTarget } from "../canvas/runtime/interaction/pointer-utils";
 import {
   COMMAND_PALETTE_SHORTCUT_KEY,
@@ -94,7 +94,7 @@ export function initShortcuts() {
     }
 
     // Canvas operations — only when canvas panel is active and not in input
-    const session = getCurrentCanvasSession()
+    const session = getCurrentCanvasCommandSurface()
     if (activePanel.value === "canvas" && !isInput && session) {
       // Ctrl+= — zoom in
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "=") {

@@ -1,6 +1,6 @@
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { t } from '../../i18n'
-import { getCurrentCanvasSession } from '../../canvas/session'
+import { getCurrentCanvasCommandSurface } from '../../canvas/session'
 import {
   saveCurrentDesign,
   saveAsCurrentDesign,
@@ -34,7 +34,7 @@ export interface MenuDefinition {
 const separator: MenuSeparator = { type: 'separator' }
 
 export function getMenuDefinitions(): MenuDefinition[] {
-  const session = getCurrentCanvasSession()
+  const session = getCurrentCanvasCommandSurface()
   const hasDesign = currentDesign.value != null
   const hasSession = session != null
 

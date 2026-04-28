@@ -1,5 +1,5 @@
 import { effect } from "@preact/signals";
-import { currentCanvasSession } from "../../canvas/session";
+import { currentCanvasQuerySurface } from "../../canvas/session";
 import { STRATA_ROWS } from "../../canvas/consortium-renderer";
 import { consortiumTarget, getConsortiumCanonicalName } from "../../panel-targets";
 import { sceneEntityRevision } from "../../canvas/runtime-mirror-state";
@@ -18,7 +18,7 @@ export function installConsortiumSync(): void {
     const design = currentDesign.value;
     if (!design) return;
 
-    const session = currentCanvasSession.peek();
+    const session = currentCanvasQuerySurface.peek();
     if (!session) return;
     const currentPlants = session.getPlacedPlants();
     const currentConsortiums = design.consortiums;

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import { MapLibreCanvasSurface } from '../components/canvas/MapLibreCanvasSurface'
 import { setCurrentCanvasSession } from '../canvas/session'
+import type { CanvasQuerySurface, MountedCanvasRuntime } from '../canvas/runtime/runtime'
 import {
   contourIntervalMeters,
   hillshadeOpacity,
@@ -91,49 +92,19 @@ function createRuntime(
   scene = createDefaultScenePersistedState(),
   options: {
     viewport?: { x: number; y: number; scale: number }
-    viewportRevision?: ReturnType<typeof signal<number>>
+    viewportRevision?: CanvasQuerySurface['viewportRevision']
   } = {},
-) {
+): CanvasQuerySurface {
   const viewportRevision = options.viewportRevision ?? signal(0)
   const viewport = options.viewport ?? { x: 0, y: 0, scale: 1 }
   return {
-    getSceneStore: () => ({ persisted: scene }),
+    getSceneSnapshot: () => scene,
     getViewport: () => viewport,
     getViewportScreenSize: () => ({ width: 400, height: 300 }),
     viewportRevision,
     getSelection: () => new Set(),
-    setSelection: () => {},
-    clearSelection: () => {},
-    initializeViewport: () => {},
-    attachRulersTo: () => {},
-    showCanvasChrome: () => {},
-    hideCanvasChrome: () => {},
-    setTool: () => {},
-    zoomIn: () => {},
-    zoomOut: () => {},
-    zoomToFit: () => {},
-    canUndo: signal(false),
-    canRedo: signal(false),
-    undo: () => {},
-    redo: () => {},
-    copy: () => {},
-    paste: () => {},
-    duplicateSelected: () => {},
-    deleteSelected: () => {},
-    selectAll: () => {},
-    bringToFront: () => {},
-    sendToBack: () => {},
-    lockSelected: () => {},
-    unlockSelected: () => {},
-    groupSelected: () => {},
-    ungroupSelected: () => {},
-    toggleGrid: () => {},
-    toggleSnapToGrid: () => {},
-    toggleRulers: () => {},
     getPlantSizeMode: () => 'default',
-    setPlantSizeMode: () => {},
     getPlantColorByAttr: () => null,
-    setPlantColorByAttr: () => {},
     getSelectedPlantColorContext: () => ({
       plantIds: [],
       singleSpeciesCanonicalName: null,
@@ -144,17 +115,11 @@ function createRuntime(
     }),
     getPlacedPlants: () => [],
     getLocalizedCommonNames: () => new Map(),
-    ensureSpeciesCacheEntries: async () => true,
-    setSelectedPlantColor: () => 0,
-    setPlantColorForSpecies: () => 0,
-    clearPlantSpeciesColor: () => false,
-    loadDocument: () => {},
-    replaceDocument: () => {},
-    serializeDocument: () => { throw new Error('unused') },
-    markSaved: () => {},
-    clearHistory: () => {},
-    destroy: () => {},
-  } as never
+  }
+}
+
+function setQuerySurfaceForTest(surface: CanvasQuerySurface | null): void {
+  setCurrentCanvasSession(surface as unknown as MountedCanvasRuntime | null)
 }
 
 describe('MapLibreCanvasSurface', () => {
@@ -227,7 +192,7 @@ describe('MapLibreCanvasSurface', () => {
   })
 
   it('does not initialize a map without a document location', async () => {
-    setCurrentCanvasSession(createRuntime())
+    setQuerySurfaceForTest(createRuntime())
 
     await act(async () => {
       render(<MapLibreCanvasSurface />, container)
@@ -260,7 +225,7 @@ describe('MapLibreCanvasSurface', () => {
       updated_at: '2026-04-12T00:00:00.000Z',
       extra: {},
     }
-    setCurrentCanvasSession(createRuntime())
+    setQuerySurfaceForTest(createRuntime())
 
     await act(async () => {
       render(<MapLibreCanvasSurface />, container)
@@ -307,7 +272,7 @@ describe('MapLibreCanvasSurface', () => {
     }
     const viewport = { x: 0, y: 0, scale: 1 }
     const viewportRevision = signal(0)
-    setCurrentCanvasSession(createRuntime(undefined, { viewport, viewportRevision }))
+    setQuerySurfaceForTest(createRuntime(undefined, { viewport, viewportRevision }))
 
     await act(async () => {
       render(<MapLibreCanvasSurface />, container)
@@ -351,7 +316,7 @@ describe('MapLibreCanvasSurface', () => {
       updated_at: '2026-04-12T00:00:00.000Z',
       extra: {},
     }
-    setCurrentCanvasSession(createRuntime())
+    setQuerySurfaceForTest(createRuntime())
     layerVisibility.value = { base: true, contours: true }
     layerOpacity.value = { base: 0.6, contours: 0.5 }
 
@@ -397,7 +362,7 @@ describe('MapLibreCanvasSurface', () => {
       updated_at: '2026-04-12T00:00:00.000Z',
       extra: {},
     }
-    setCurrentCanvasSession(createRuntime())
+    setQuerySurfaceForTest(createRuntime())
     const deferred = createDeferred<{ Map: typeof mapConstructorMock; addProtocol: ReturnType<typeof vi.fn> }>()
     loadMapLibreMock.mockReturnValueOnce(deferred.promise)
 
@@ -435,7 +400,7 @@ describe('MapLibreCanvasSurface', () => {
       updated_at: '2026-04-12T00:00:00.000Z',
       extra: {},
     }
-    setCurrentCanvasSession(createRuntime())
+    setQuerySurfaceForTest(createRuntime())
     const states: string[] = []
     loadMapLibreMock.mockRejectedValueOnce(new Error('style fetch failed'))
 
@@ -479,7 +444,7 @@ describe('MapLibreCanvasSurface', () => {
       updated_at: '2026-04-12T00:00:00.000Z',
       extra: {},
     }
-    setCurrentCanvasSession(createRuntime())
+    setQuerySurfaceForTest(createRuntime())
     const states: string[] = []
     isSourceLoadedMock.mockReturnValue(false)
 
@@ -518,7 +483,7 @@ describe('MapLibreCanvasSurface', () => {
       updated_at: '2026-04-12T00:00:00.000Z',
       extra: {},
     }
-    setCurrentCanvasSession(createRuntime())
+    setQuerySurfaceForTest(createRuntime())
     const states: string[] = []
     loadedMock.mockReturnValue(false)
     isSourceLoadedMock.mockReturnValue(false)
@@ -565,7 +530,7 @@ describe('MapLibreCanvasSurface', () => {
       updated_at: '2026-04-12T00:00:00.000Z',
       extra: {},
     }
-    setCurrentCanvasSession(createRuntime())
+    setQuerySurfaceForTest(createRuntime())
     layerVisibility.value = { base: true, contours: true }
     layerOpacity.value = { base: 0.6, contours: 0.5 }
 
@@ -614,7 +579,7 @@ describe('MapLibreCanvasSurface', () => {
       updated_at: '2026-04-12T00:00:00.000Z',
       extra: {},
     }
-    setCurrentCanvasSession(createRuntime())
+    setQuerySurfaceForTest(createRuntime())
     layerVisibility.value = { base: true, contours: true }
     contourIntervalMeters.value = 10
 
@@ -681,7 +646,7 @@ describe('MapLibreCanvasSurface', () => {
       updated_at: '2026-04-12T00:00:00.000Z',
       extra: {},
     }
-    setCurrentCanvasSession(createRuntime())
+    setQuerySurfaceForTest(createRuntime())
     layerVisibility.value = { base: true, contours: true }
     layerOpacity.value = { base: 1, contours: 0.5 }
 
@@ -729,7 +694,7 @@ describe('MapLibreCanvasSurface', () => {
         updated_at: '2026-04-12T00:00:00.000Z',
         extra: {},
       }
-      setCurrentCanvasSession(createRuntime())
+      setQuerySurfaceForTest(createRuntime())
 
       await act(async () => {
         render(<MapLibreCanvasSurface />, container)
@@ -780,7 +745,7 @@ describe('MapLibreCanvasSurface', () => {
       updated_at: '2026-04-12T00:00:00.000Z',
       extra: {},
     }
-    setCurrentCanvasSession(createRuntime())
+    setQuerySurfaceForTest(createRuntime())
     layerVisibility.value = { base: true, contours: true }
     layerOpacity.value = { base: 1, contours: 0.5 }
 
@@ -831,7 +796,7 @@ describe('MapLibreCanvasSurface', () => {
       updated_at: '2026-04-12T00:00:00.000Z',
       extra: {},
     }
-    setCurrentCanvasSession(createRuntime())
+    setQuerySurfaceForTest(createRuntime())
     layerVisibility.value = { base: true, contours: true }
 
     await act(async () => {
@@ -881,7 +846,7 @@ describe('MapLibreCanvasSurface', () => {
       updated_at: '2026-04-12T00:00:00.000Z',
       extra: {},
     }
-    setCurrentCanvasSession(createRuntime())
+    setQuerySurfaceForTest(createRuntime())
     layerVisibility.value = { base: true, contours: true }
     const states: string[] = []
     loadMapLibreTerrainSupportMock.mockRejectedValueOnce(new Error('dem fetch failed'))

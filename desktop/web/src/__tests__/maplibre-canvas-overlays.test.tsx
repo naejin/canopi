@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import { MapLibreCanvasSurface } from '../components/canvas/MapLibreCanvasSurface'
 import { setCurrentCanvasSession } from '../canvas/session'
+import type { CanvasQuerySurface, MountedCanvasRuntime } from '../canvas/runtime/runtime'
 import {
   contourIntervalMeters,
   hillshadeOpacity,
@@ -54,46 +55,16 @@ vi.mock('../components/canvas/maplibre-loader', () => ({
   loadMapLibre: loadMapLibreMock,
 }))
 
-function createRuntime(scene = createDefaultScenePersistedState()) {
+function createRuntime(scene = createDefaultScenePersistedState()): CanvasQuerySurface {
   const viewportRevision = signal(0)
   return {
-    getSceneStore: () => ({ persisted: scene }),
+    getSceneSnapshot: () => scene,
     getViewport: () => ({ x: 0, y: 0, scale: 1 }),
     getViewportScreenSize: () => ({ width: 400, height: 300 }),
     viewportRevision,
     getSelection: () => new Set(),
-    setSelection: () => {},
-    clearSelection: () => {},
-    initializeViewport: () => {},
-    attachRulersTo: () => {},
-    showCanvasChrome: () => {},
-    hideCanvasChrome: () => {},
-    setTool: () => {},
-    zoomIn: () => {},
-    zoomOut: () => {},
-    zoomToFit: () => {},
-    canUndo: signal(false),
-    canRedo: signal(false),
-    undo: () => {},
-    redo: () => {},
-    copy: () => {},
-    paste: () => {},
-    duplicateSelected: () => {},
-    deleteSelected: () => {},
-    selectAll: () => {},
-    bringToFront: () => {},
-    sendToBack: () => {},
-    lockSelected: () => {},
-    unlockSelected: () => {},
-    groupSelected: () => {},
-    ungroupSelected: () => {},
-    toggleGrid: () => {},
-    toggleSnapToGrid: () => {},
-    toggleRulers: () => {},
     getPlantSizeMode: () => 'default',
-    setPlantSizeMode: () => {},
     getPlantColorByAttr: () => null,
-    setPlantColorByAttr: () => {},
     getSelectedPlantColorContext: () => ({
       plantIds: [],
       singleSpeciesCanonicalName: null,
@@ -104,17 +75,11 @@ function createRuntime(scene = createDefaultScenePersistedState()) {
     }),
     getPlacedPlants: () => [],
     getLocalizedCommonNames: () => new Map(),
-    ensureSpeciesCacheEntries: async () => true,
-    setSelectedPlantColor: () => 0,
-    setPlantColorForSpecies: () => 0,
-    clearPlantSpeciesColor: () => false,
-    loadDocument: () => {},
-    replaceDocument: () => {},
-    serializeDocument: () => { throw new Error('unused') },
-    markSaved: () => {},
-    clearHistory: () => {},
-    destroy: () => {},
-  } as never
+  }
+}
+
+function setQuerySurfaceForTest(surface: CanvasQuerySurface | null): void {
+  setCurrentCanvasSession(surface as unknown as MountedCanvasRuntime | null)
 }
 
 describe('MapLibreCanvasSurface overlays', () => {
@@ -223,7 +188,7 @@ describe('MapLibreCanvasSurface overlays', () => {
         notes: null,
       },
     ]
-    setCurrentCanvasSession(createRuntime(scene))
+    setQuerySurfaceForTest(createRuntime(scene))
 
     await act(async () => {
       render(<MapLibreCanvasSurface />, container)
