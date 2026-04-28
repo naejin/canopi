@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { currentCanvasReady, currentCanvasSession, currentCanvasTool, getCurrentCanvasSession, setCurrentCanvasSession, setCurrentCanvasTool } from '../canvas/session'
 import { SceneCanvasRuntime } from '../canvas/runtime/scene-runtime'
+import { createCanvasRuntimeSurfaces } from '../canvas/runtime/surfaces'
 import type { CanvasRuntime } from '../canvas/runtime/runtime'
 
 describe('canvas session seam', () => {
@@ -9,13 +10,14 @@ describe('canvas session seam', () => {
     setCurrentCanvasTool('select')
   })
 
-  it('stores the live runtime directly', () => {
+  it('stores explicit runtime surfaces for the live runtime', () => {
     const runtime = new SceneCanvasRuntime()
+    const surfaces = createCanvasRuntimeSurfaces(runtime)
 
-    setCurrentCanvasSession(runtime)
+    setCurrentCanvasSession(surfaces)
 
-    expect(getCurrentCanvasSession()).toBe(runtime)
-    expect(currentCanvasSession.value).toBe(runtime)
+    expect(getCurrentCanvasSession()).toBe(surfaces)
+    expect(currentCanvasSession.value).toBe(surfaces)
     expect(currentCanvasReady.value).toBe(true)
 
     setCurrentCanvasSession(null)

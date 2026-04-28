@@ -73,4 +73,10 @@ export interface CanvasDocumentSurface {
 
 export type MountedCanvasRuntime = CanvasCommandSurface & CanvasQuerySurface & CanvasDocumentSurface
 
+export interface CanvasRuntimeSurfaces {
+  readonly commands: CanvasCommandSurface
+  readonly queries: CanvasQuerySurface
+  readonly documents: CanvasDocumentSurface
+}
+
 export type CanvasRuntime = MountedCanvasRuntime

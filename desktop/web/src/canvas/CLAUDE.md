@@ -6,7 +6,7 @@ The live canvas now runs through `SceneCanvasRuntime`.
 
 Production ownership is:
 - `CanvasPanel` mounts `SceneCanvasRuntime`
-- `SceneCanvasRuntime` implements the app-facing runtime surfaces: `CanvasCommandSurface`, `CanvasQuerySurface`, and `CanvasDocumentSurface`; `currentCanvasSession` stores the combined mounted runtime while callers consume the smallest surface they need
+- `SceneCanvasRuntime` implements the internal runtime behavior; document-session code publishes explicit `CanvasCommandSurface`, `CanvasQuerySurface`, and `CanvasDocumentSurface` facades through `currentCanvasSession` so callers consume the smallest surface they need
 - `SceneStore` is the source of truth for **canvas scene state** (plants, zones, annotations, groups, layers, plant-species-colors). Non-canvas document sections (consortiums, timeline, budget, `budget_currency`, location, description, extra) are owned by the document store — see root `CLAUDE.md` Document Authority Rule
 - `RendererHost` owns backend selection, startup fallback, and runtime recovery
 - `PixiJS` is the primary world renderer
@@ -29,7 +29,7 @@ Konva / `CanvasEngine` code has been removed. Do not reintroduce Konva or `getEn
 
 ### Public Seams
 - App code must not reach into renderer implementations or runtime internals
-- The app-facing canvas boundary is split into `CanvasCommandSurface`, `CanvasQuerySurface`, and `CanvasDocumentSurface`, all implemented by `SceneCanvasRuntime`; the old 1:1 `CanvasSession` pass-through class is gone
+- The app-facing canvas boundary is split into `CanvasCommandSurface`, `CanvasQuerySurface`, and `CanvasDocumentSurface` facades over `SceneCanvasRuntime`; the old 1:1 `CanvasSession` pass-through class is gone
 - Sibling read-only surfaces must consume `CanvasQuerySurface` for scene snapshots, viewport queries, selection reads, placed plants, localized names, and presentation context. They must not reach for command or document lifecycle methods
 - Toolbars, shortcuts, menus, and plant-color actions consume `CanvasCommandSurface`. Document session orchestration, save/load, chrome, resize, and teardown consume `CanvasDocumentSurface`
 - Bearing-aware world↔geo and viewport→MapLibre camera derivation live in the active backend seam under `canvas/projection.ts` / `canvas/maplibre-camera.ts`; `MapLibreCanvasSurface` consumes them but does not own projection math. Keep camera/overlay/terrain sync on that one seam

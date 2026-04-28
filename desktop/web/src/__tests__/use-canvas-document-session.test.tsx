@@ -78,7 +78,7 @@ vi.mock("../app/settings/projection", () => ({
 }));
 
 import { useCanvasDocumentSession } from "../app/document-session/use-canvas-document-session";
-import { currentCanvasSession } from "../canvas/session";
+import { currentCanvasDocumentSurface, currentCanvasSession } from "../canvas/session";
 import { autoSaveIntervalMs } from "../app/settings/state";
 import {
   autosaveFailed,
@@ -197,9 +197,9 @@ describe("useCanvasDocumentSession", () => {
 
     expect(runtime).toBeDefined();
     expect(runtime.initializeViewport).toHaveBeenCalledTimes(1);
-    expect(mocks.beginEmptyDocumentSession).toHaveBeenCalledWith(currentCanvasSession.value);
+    expect(mocks.beginEmptyDocumentSession).toHaveBeenCalledWith(currentCanvasDocumentSurface.value);
     expect(runtime.hideCanvasChrome).toHaveBeenCalledTimes(1);
-    expect(mocks.consumeQueuedDocumentLoad).toHaveBeenCalledWith(currentCanvasSession.value);
+    expect(mocks.consumeQueuedDocumentLoad).toHaveBeenCalledWith(currentCanvasDocumentSurface.value);
   });
 
   it("loads the current design on mount and snapshots before teardown", async () => {
@@ -220,7 +220,7 @@ describe("useCanvasDocumentSession", () => {
     expect(mocks.transitionDocument).toHaveBeenCalledWith(expect.objectContaining({
       source: "mount-existing",
       dirtyGuard: "skip",
-      session: currentCanvasSession.value,
+      session: currentCanvasDocumentSurface.value,
     }));
     expect(runtime.showCanvasChrome).toHaveBeenCalledTimes(1);
     expect(runtime.loadDocument).toBe((runtime as any).originalLoadDocument);

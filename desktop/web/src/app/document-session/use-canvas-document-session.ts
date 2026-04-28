@@ -1,6 +1,7 @@
 import { useEffect } from "preact/hooks";
-import { setCurrentCanvasSession, getCurrentCanvasDocumentSurface } from "../../canvas/session";
+import { setCanvasRuntimeSurfaces, getCurrentCanvasDocumentSurface } from "../../canvas/session";
 import { SceneCanvasRuntime } from "../../canvas/runtime/scene-runtime";
+import { createCanvasRuntimeSurfaces } from "../../canvas/runtime/surfaces";
 import { autosaveDesign } from "../../ipc/design";
 import {
   currentDesign,
@@ -49,6 +50,8 @@ export function useCanvasDocumentSession({
     if (!container || !canvasArea) return;
 
     const runtime = new SceneCanvasRuntime();
+    const surfaces = createCanvasRuntimeSurfaces(runtime);
+    const documents = surfaces.documents;
     let cancelled = false;
     let runtimeInitialized = false;
     let cancelQueuedLoad = () => {};
@@ -58,17 +61,17 @@ export function useCanvasDocumentSession({
       if (cancelled) return;
 
       runtimeInitialized = true;
-      setCurrentCanvasSession(runtime);
-      runtime.initializeViewport();
+      setCanvasRuntimeSurfaces(surfaces);
+      documents.initializeViewport();
       if (rulerOverlayRef.current) {
-        runtime.attachRulersTo(rulerOverlayRef.current);
+        documents.attachRulersTo(rulerOverlayRef.current);
       }
 
       if (currentDesign.value) {
         void transitionDocument({
           source: "mount-existing",
           dirtyGuard: "skip",
-          session: runtime,
+          session: documents,
           load: async () => {
             const file = currentDesign.value;
             if (!file) throw new Error("No current design to mount");
@@ -80,14 +83,14 @@ export function useCanvasDocumentSession({
           }
         });
       } else {
-        beginEmptyDocumentSession(runtime);
+        beginEmptyDocumentSession(documents);
       }
 
       resizeObserver = new ResizeObserver(() => {
-        runtime.resize(canvasArea.clientWidth, canvasArea.clientHeight);
+        documents.resize(canvasArea.clientWidth, canvasArea.clientHeight);
       });
       resizeObserver.observe(canvasArea);
-      cancelQueuedLoad = consumeQueuedDocumentLoad(runtime);
+      cancelQueuedLoad = consumeQueuedDocumentLoad(documents);
     }).catch((error) => {
       console.error("Failed to initialize scene canvas runtime:", error);
     });
@@ -107,7 +110,7 @@ export function useCanvasDocumentSession({
       }
       disposeDocumentWorkflows();
       runtime.destroy();
-      setCurrentCanvasSession(null);
+      setCanvasRuntimeSurfaces(null);
     };
   }, []);
 

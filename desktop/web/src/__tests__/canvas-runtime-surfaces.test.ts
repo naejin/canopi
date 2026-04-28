@@ -4,15 +4,16 @@ import {
   currentCanvasCommandSurface,
   currentCanvasDocumentSurface,
   currentCanvasQuerySurface,
+  setCanvasRuntimeSurfaces,
   setCurrentCanvasSession,
 } from '../canvas/session'
 import { SceneCanvasRuntime } from '../canvas/runtime/scene-runtime'
+import { createCanvasRuntimeSurfaces } from '../canvas/runtime/surfaces'
 import { createDefaultScenePersistedState, serializeScenePersistedState } from '../canvas/runtime/scene'
 import type {
   CanvasCommandSurface,
   CanvasDocumentSurface,
   CanvasQuerySurface,
-  MountedCanvasRuntime,
 } from '../canvas/runtime/runtime'
 
 function createQuerySurface() {
@@ -93,15 +94,19 @@ describe('canvas runtime surfaces', () => {
     setCurrentCanvasSession(null)
   })
 
-  it('publishes one mounted runtime through command, query, and document surfaces', () => {
-    const runtime: MountedCanvasRuntime = new SceneCanvasRuntime()
+  it('publishes explicit facades instead of the mounted runtime', () => {
+    const runtime = new SceneCanvasRuntime()
+    const surfaces = createCanvasRuntimeSurfaces(runtime)
 
     try {
-      setCurrentCanvasSession(runtime)
+      setCanvasRuntimeSurfaces(surfaces)
 
-      expect(currentCanvasCommandSurface.value).toBe(runtime)
-      expect(currentCanvasQuerySurface.value).toBe(runtime)
-      expect(currentCanvasDocumentSurface.value).toBe(runtime)
+      expect(currentCanvasCommandSurface.value).toBe(surfaces.commands)
+      expect(currentCanvasQuerySurface.value).toBe(surfaces.queries)
+      expect(currentCanvasDocumentSurface.value).toBe(surfaces.documents)
+      expect(currentCanvasCommandSurface.value).not.toBe(runtime)
+      expect(currentCanvasQuerySurface.value).not.toBe(runtime)
+      expect(currentCanvasDocumentSurface.value).not.toBe(runtime)
     } finally {
       runtime.destroy()
     }
