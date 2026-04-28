@@ -61,6 +61,7 @@ These align with the core risks identified in the architecture review.
 **Canvas seam:**
 - ~~Replace `CanvasSession` pass-through with a runtime interface (or give it real logic)~~ — **done**.
 - ~~Split the runtime interface by caller need~~ — **done**: `SceneCanvasRuntime` implements `CanvasCommandSurface`, `CanvasQuerySurface`, and `CanvasDocumentSurface`. The session store still keeps one mounted runtime, while toolbars/shortcuts use the command surface, panels/MapLibre use the query surface, and document session code uses the document surface.
+- ~~Deepen document session transitions~~ — **done**: document replacement policy now lives in `app/document-session/transition.ts`, which owns dirty replacement decisions, runtime load/replace selection, canonical document handoff, dirty baselines, history/chrome/zoom, workflow installation, queued-load cleanup, and transition results. `CanvasDocumentSurface.hasLoadedDocument()` replaces hook-level runtime monkey-patching for teardown snapshots.
 - ~~Preserve the current `setCurrentCanvasTool()` behavior when no runtime is mounted: it primes the mirror tool state for later mount~~ — **done**.
 
 ### 2. Correctness (ongoing)

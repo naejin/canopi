@@ -1,77 +1,44 @@
-import { message } from "@tauri-apps/plugin-dialog";
 import { getCurrentCanvasDocumentSurface } from "../../canvas/session";
 import type { CanvasDocumentSurface } from "../../canvas/runtime/runtime";
-import { normalizeLoadedDocument, normalizeNewDocument } from "../contracts/document";
 import * as designIpc from "../../ipc/design";
-import { t } from "../../i18n";
-import type { CanopiFile } from "../../types/design";
+import { pendingDesignPath, pendingTemplateImport } from "../../state/design";
 import {
-  currentDesign,
-  designDirty,
-  designName,
-  designPath,
-  pendingDesignPath,
-  pendingTemplateImport,
-  markSaved,
-  replaceCurrentDesignState,
-  resetDirtyBaselines,
-} from "../../state/design";
-import { buildPersistedDocumentContent } from "./runtime";
+  transitionDocument,
+  type DocumentTransitionResult,
+  consumeQueuedDocumentLoad,
+  saveCurrentDesign,
+  saveAsCurrentDesign,
+} from "./transition";
 
 interface DocumentLoadOptions {
   session?: CanvasDocumentSurface | null;
   isCancelled?: () => boolean;
 }
 
-type ReplacementDecision = "proceed" | "cancel";
 export type TemplateOpenResult = "opened" | "queued" | "cancelled";
 
-/** Save to the current path (Ctrl+S). Opens Save As if no path exists yet. */
-export async function saveCurrentDesign(): Promise<void> {
-  const session = getCurrentCanvasDocumentSurface();
-  const content = buildPersistedDocumentContent(session, designName.value);
-
-  if (designPath.value) {
-    await designIpc.saveDesign(designPath.value, content);
-    replaceCurrentDesignState(content, designPath.value, designName.value);
-  } else {
-    const path = await designIpc.saveDesignAs(content);
-    replaceCurrentDesignState(content, path, nameFromPath(path));
-  }
-
-  markSaved();
-}
-
-/** Save As — always prompts for a new path (Ctrl+Shift+S). */
-export async function saveAsCurrentDesign(): Promise<void> {
-  const session = getCurrentCanvasDocumentSurface();
-  const content = buildPersistedDocumentContent(session, designName.value);
-
-  try {
-    const path = await designIpc.saveDesignAs(content);
-    replaceCurrentDesignState(content, path, nameFromPath(path));
-    markSaved();
-  } catch (error) {
-    if (isCancelled(error)) return;
-    throw error;
-  }
-}
+export {
+  consumeQueuedDocumentLoad,
+  saveCurrentDesign,
+  saveAsCurrentDesign,
+};
 
 /** Open file dialog and replace the active document through the shared guard. */
 export async function openDesign(): Promise<void> {
   const session = getCurrentCanvasDocumentSurface();
   if (!session) return;
 
-  const decision = await confirmReplacement();
-  if (decision === "cancel") return;
+  const result = await transitionDocument({
+    source: "open-dialog",
+    dirtyGuard: "confirm",
+    session,
+    load: async () => {
+      const { file, path } = await designIpc.openDesignDialog();
+      return { file, path, name: file.name };
+    },
+  });
 
-  try {
-    const { file, path } = await designIpc.openDesignDialog();
-    applyDocumentReplacement(normalizeLoadedDocument(file), path, file.name, session);
-  } catch (error) {
-    if (isCancelled(error)) return;
-    throw error;
-  }
+  throwIfFailed(result);
 }
 
 /** Open a design from a known path (for example, recent files). */
@@ -85,13 +52,18 @@ export async function openDesignFromPath(
     return;
   }
 
-  const decision = await confirmReplacement();
-  if (decision === "cancel") return;
+  const result = await transitionDocument({
+    source: "open-path",
+    dirtyGuard: "confirm",
+    session,
+    load: async () => {
+      const file = await designIpc.loadDesign(path);
+      return { file, path, name: file.name };
+    },
+    isCancelled: options.isCancelled,
+  });
 
-  const file = await designIpc.loadDesign(path);
-  if (options.isCancelled?.()) return;
-
-  applyDocumentReplacement(normalizeLoadedDocument(file), path, file.name, session);
+  throwIfFailed(result);
 }
 
 /** Open a downloaded template as a new unsaved design through the shared guard. */
@@ -106,14 +78,20 @@ export async function openDesignAsTemplate(
     return "queued";
   }
 
-  const decision = await confirmReplacement();
-  if (decision === "cancel") return "cancelled";
+  const result = await transitionDocument({
+    source: "template",
+    dirtyGuard: "confirm",
+    session,
+    load: async () => ({
+      file: await designIpc.loadDesign(path),
+      path: null,
+      name,
+    }),
+    isCancelled: options.isCancelled,
+  });
 
-  const file = await designIpc.loadDesign(path);
-  if (options.isCancelled?.()) return "cancelled";
-
-  applyDocumentReplacement(normalizeLoadedDocument(file), null, name, session);
-  return "opened";
+  throwIfFailed(result);
+  return result.status === "applied" ? "opened" : "cancelled";
 }
 
 /** Create a new blank design through the shared replacement guard. */
@@ -121,160 +99,22 @@ export async function newDesignAction(): Promise<void> {
   const session = getCurrentCanvasDocumentSurface();
   if (!session) return;
 
-  const decision = await confirmReplacement();
-  if (decision === "cancel") return;
-
-  const file = await designIpc.newDesign();
-  applyDocumentReplacement(normalizeNewDocument(file), null, "Untitled", session);
-}
-
-/** Consume a queued document load when CanvasPanel mounts a fresh engine.
- *  Bypasses the dirty guard — queued loads happen on fresh mount before the
- *  user has interacted, so prompting to save is semantically wrong. */
-export function consumeQueuedDocumentLoad(session: CanvasDocumentSurface): () => void {
-  const queuedTemplate = pendingTemplateImport.value;
-  if (queuedTemplate) {
-    let cancelled = false;
-    void loadTemplateDirect(queuedTemplate.path, queuedTemplate.name, {
-      session,
-      isCancelled: () => cancelled,
-    }).then(() => {
-      if (!cancelled && pendingTemplateImport.value?.path === queuedTemplate.path) {
-        pendingTemplateImport.value = null;
-      }
-    }).catch((error) => {
-      if (cancelled) return;
-      pendingTemplateImport.value = queuedTemplate;
-      console.error("Queued template import failed:", error);
-      void message(`Failed to open ${queuedTemplate.name}.\n\n${formatError(error)}`, {
-        title: "Open failed",
-        kind: "error",
-      });
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }
-
-  const queuedPath = pendingDesignPath.value;
-  if (!queuedPath) return () => {};
-
-  let cancelled = false;
-  void loadDesignDirect(queuedPath, {
+  const result = await transitionDocument({
+    source: "new",
+    dirtyGuard: "confirm",
     session,
-    isCancelled: () => cancelled,
-  }).then(() => {
-    if (!cancelled && pendingDesignPath.value === queuedPath) {
-      pendingDesignPath.value = null;
-    }
-  }).catch((error) => {
-    if (cancelled) return;
-    pendingDesignPath.value = queuedPath;
-    console.error("Queued design load failed:", error);
-    void message(`Failed to open ${nameFromPath(queuedPath)}.\n\n${formatError(error)}`, {
-      title: "Open failed",
-      kind: "error",
-    });
+    load: async () => ({
+      file: await designIpc.newDesign(),
+      path: null,
+      name: "Untitled",
+    }),
   });
 
-  return () => {
-    cancelled = true;
-  };
+  throwIfFailed(result);
 }
 
-async function confirmReplacement(): Promise<ReplacementDecision> {
-  if (!currentDesign.value) return "proceed";
-  if (!designDirty.value) return "proceed";
-
-  const saveLabel = t("canvas.file.save");
-  const discardLabel = t("canvas.file.dontSave");
-  const cancelLabel = t("canvas.file.cancel");
-
-  const result = await message(t("canvas.file.unsavedChanges"), {
-    title: t("canvas.file.unsavedChanges"),
-    kind: "warning",
-    buttons: {
-      yes: saveLabel,
-      no: discardLabel,
-      cancel: cancelLabel,
-    },
-  });
-
-  if (result === cancelLabel) return "cancel";
-  if (result === saveLabel) {
-    try {
-      await saveCurrentDesign();
-    } catch (error) {
-      if (isCancelled(error)) return "cancel";
-      throw error;
-    }
+function throwIfFailed(result: DocumentTransitionResult): void {
+  if (result.status === "failed") {
+    throw result.error;
   }
-
-  return "proceed";
-}
-
-/** Load a design from path without the dirty guard — for queued loads on fresh mount. */
-async function loadDesignDirect(
-  path: string,
-  options: DocumentLoadOptions = {},
-): Promise<void> {
-  const session = options.session ?? getCurrentCanvasDocumentSurface();
-  if (!session) {
-    pendingDesignPath.value = path;
-    return;
-  }
-
-  const file = await designIpc.loadDesign(path);
-  if (options.isCancelled?.()) return;
-
-  applyDocumentReplacement(normalizeLoadedDocument(file), path, file.name, session);
-}
-
-async function loadTemplateDirect(
-  path: string,
-  name: string,
-  options: DocumentLoadOptions = {},
-): Promise<void> {
-  const session = options.session ?? getCurrentCanvasDocumentSurface();
-  if (!session) {
-    pendingTemplateImport.value = { path, name };
-    return;
-  }
-
-  const file = await designIpc.loadDesign(path);
-  if (options.isCancelled?.()) return;
-
-  applyDocumentReplacement(normalizeLoadedDocument(file), null, name, session);
-}
-
-function applyDocumentReplacement(
-  file: CanopiFile,
-  path: string | null,
-  name: string,
-  session: CanvasDocumentSurface,
-): void {
-  session.replaceDocument(file);
-  replaceCurrentDesignState(file, path, name);
-  resetDirtyBaselines();
-  session.clearHistory();
-  session.showCanvasChrome();
-  session.zoomToFit();
-}
-
-function nameFromPath(path: string): string {
-  const base = path.split(/[\\/]/).pop() ?? path;
-  return base.replace(/\.canopi$/i, "") || "Untitled";
-}
-
-function isCancelled(error: unknown): boolean {
-  return typeof error === "string"
-    ? error.includes("Dialog cancelled") || error.includes("cancelled")
-    : error instanceof Error
-      ? error.message.includes("cancelled")
-      : false;
-}
-
-function formatError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

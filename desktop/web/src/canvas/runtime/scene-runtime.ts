@@ -77,6 +77,7 @@ export class SceneCanvasRuntime implements MountedCanvasRuntime {
   private readonly _mutations: SceneRuntimeMutationController
   private readonly _documents: SceneRuntimeDocumentBridge
   private readonly _disposeEffects: Array<() => void> = []
+  private _documentLoaded = false
 
   constructor() {
     this._presentation = new SceneRuntimePresentationController({
@@ -372,10 +373,16 @@ export class SceneCanvasRuntime implements MountedCanvasRuntime {
 
   loadDocument(file: CanopiFile): void {
     this._documents.loadDocument(file)
+    this._documentLoaded = true
   }
 
   replaceDocument(file: CanopiFile): void {
     this._documents.replaceDocument(file)
+    this._documentLoaded = true
+  }
+
+  hasLoadedDocument(): boolean {
+    return this._documentLoaded
   }
 
   serializeDocument(metadata: CanvasRuntimeDocumentMetadata, doc: CanopiFile): CanopiFile {

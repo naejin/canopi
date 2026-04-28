@@ -109,15 +109,29 @@ function makeEngine() {
 }
 
 function makeSession() {
+  let loaded = false
   const engine = makeEngine()
+  engine.loadDocument.mockImplementation(() => {
+    loaded = true
+  })
+  engine.replaceDocument.mockImplementation(() => {
+    loaded = true
+  })
   return {
     engine,
+    loadDocument: engine.loadDocument,
     replaceDocument: engine.replaceDocument,
     showCanvasChrome: engine.showCanvasChrome,
+    hideCanvasChrome: vi.fn(),
     zoomToFit: vi.fn(),
+    hasLoadedDocument: vi.fn(() => loaded),
     clearHistory: engine.history.clear,
     markSaved: engine.history.markSaved,
     serializeDocument: vi.fn((metadata: { name: string }) => makeFile(metadata.name)),
+    initializeViewport: vi.fn(),
+    attachRulersTo: vi.fn(),
+    resize: vi.fn(),
+    destroy: vi.fn(),
   }
 }
 

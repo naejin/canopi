@@ -63,6 +63,7 @@ export interface CanvasDocumentSurface {
   zoomToFit(): void
   loadDocument(file: CanopiFile): void
   replaceDocument(file: CanopiFile): void
+  hasLoadedDocument(): boolean
   serializeDocument(metadata: CanvasRuntimeDocumentMetadata, doc: CanopiFile): CanopiFile
   markSaved(): void
   clearHistory(): void

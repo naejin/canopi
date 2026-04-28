@@ -79,6 +79,7 @@ function createDocumentSurface() {
     zoomToFit: () => {},
     loadDocument: (_file) => {},
     replaceDocument: (_file) => {},
+    hasLoadedDocument: () => false,
     serializeDocument: (metadata, doc) => ({ ...doc, name: metadata.name }),
     markSaved: () => {},
     clearHistory: () => {},
@@ -138,5 +139,18 @@ describe('canvas runtime surfaces', () => {
     documentSurface.getPlacedPlants
     // @ts-expect-error document surfaces cannot issue tool commands.
     documentSurface.setTool
+  })
+
+  it('reports whether a runtime has loaded a document without caller monkey-patching', () => {
+    const runtime = new SceneCanvasRuntime()
+    const file = serializeScenePersistedState(createDefaultScenePersistedState())
+
+    try {
+      expect(runtime.hasLoadedDocument()).toBe(false)
+      runtime.loadDocument(file)
+      expect(runtime.hasLoadedDocument()).toBe(true)
+    } finally {
+      runtime.destroy()
+    }
   })
 })
