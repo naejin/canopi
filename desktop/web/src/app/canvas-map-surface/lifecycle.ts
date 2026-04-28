@@ -6,7 +6,6 @@ import {
   type TerrainProtocolSupport,
 } from '../../maplibre/terrain'
 import { MAPLIBRE_BASEMAP_SOURCE_ID, normalizeBasemapStyle } from '../../maplibre/config'
-import { syncCanvasPanelTargetOverlays } from '../../maplibre/canvas-overlays'
 import {
   IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
   mapLibreCanvasSurfaceStateEquals,
@@ -27,6 +26,7 @@ import {
   clearTerrain,
   rebuildTerrain,
 } from '../../maplibre/terrain-sync'
+import { clearCanvasMapSurfaceOverlays, syncCanvasMapSurfaceOverlays } from './overlays'
 import { hasVisibleMapLayer } from '../canvas-settings/signals'
 import type { PanelTarget } from '../../types/design'
 import type { MapLibreApi, MapLibreMapInstance } from '../../components/canvas/maplibre-loader'
@@ -128,7 +128,7 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
     this.resizeObserver?.disconnect()
     this.resizeObserver = null
     if (this.map) {
-      syncCanvasPanelTargetOverlays(this.map, null, null, [], [], false)
+      clearCanvasMapSurfaceOverlays(this.map)
       this.map.remove()
       this.map = null
     }
@@ -179,20 +179,7 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
   private syncOverlays(snapshot: CanvasMapSurfaceSnapshot): void {
     if (!this.map) return
 
-    syncCanvasPanelTargetOverlays(
-      this.map,
-      snapshot.runtime?.getSceneSnapshot() ?? null,
-      snapshot.location
-        ? {
-            lat: snapshot.location.lat,
-            lon: snapshot.location.lon,
-            northBearingDeg: snapshot.northBearingDeg,
-          }
-        : null,
-      snapshot.hoveredTargets,
-      snapshot.selectedTargets,
-      this.state.status === 'ready',
-    )
+    syncCanvasMapSurfaceOverlays(this.map, snapshot, this.state.status === 'ready')
   }
 
   private async syncTerrain(snapshot: CanvasMapSurfaceSnapshot): Promise<void> {
@@ -375,7 +362,7 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
           terrainStatus: 'idle',
           terrainErrorMessage: null,
         })
-        syncCanvasPanelTargetOverlays(map, null, null, [], [], false)
+        clearCanvasMapSurfaceOverlays(map)
       }
 
       map.on('load', handleLoad)

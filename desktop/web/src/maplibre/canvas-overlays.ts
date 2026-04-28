@@ -14,6 +14,11 @@ export interface CanvasOverlayLocation {
   readonly northBearingDeg: number | null
 }
 
+export function clearCanvasPanelTargetOverlays(map: MapLibreOverlayMap): void {
+  clearPanelTargetMapOverlay(map, 'hover')
+  clearPanelTargetMapOverlay(map, 'selection')
+}
+
 export function syncCanvasPanelTargetOverlays(
   map: MapLibreOverlayMap,
   scene: ScenePersistedState | null,
@@ -23,8 +28,7 @@ export function syncCanvasPanelTargetOverlays(
   enabled: boolean,
 ): void {
   if (!enabled || !scene || !location) {
-    clearPanelTargetMapOverlay(map, 'hover')
-    clearPanelTargetMapOverlay(map, 'selection')
+    clearCanvasPanelTargetOverlays(map)
     return
   }
 
