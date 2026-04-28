@@ -75,9 +75,9 @@ export function resetDirtyBaselines(): void {
 }
 
 /** Mark save baseline as current state (used after successful save). */
-export function markSaved(): void {
+export function markSaved(session = getCurrentCanvasDocumentSurface()): void {
   // Tell history to remember the current position as saved
-  getCurrentCanvasDocumentSurface()?.markSaved()
+  session?.markSaved()
   detachedCanvasDirty.value = false
   nonCanvasSavedRevision.value = nonCanvasRevision.value
   autosaveFailed.value = false

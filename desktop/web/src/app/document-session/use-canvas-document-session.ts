@@ -13,11 +13,13 @@ import {
 } from "../../state/design";
 import { autoSaveIntervalMs } from "../settings/state";
 import { flushQueuedSettingsPersist } from "../settings/persistence";
-import { consumeQueuedDocumentLoad } from "./actions";
+import {
+  beginEmptyDocumentSession,
+  consumeQueuedDocumentLoad,
+  transitionDocument,
+} from "./transition";
 import {
   disposeDocumentWorkflows,
-  installConsortiumSync,
-  loadCanvasFromDocument,
   writeCanvasIntoDocument,
   snapshotCanvasIntoCurrentDocument,
 } from "./runtime";
@@ -49,22 +51,8 @@ export function useCanvasDocumentSession({
     const runtime = new SceneCanvasRuntime();
     let cancelled = false;
     let runtimeInitialized = false;
-    let canvasDocumentLoaded = false;
     let cancelQueuedLoad = () => {};
     let resizeObserver: ResizeObserver | null = null;
-    const loadDocument = runtime.loadDocument.bind(runtime);
-    const replaceDocument = runtime.replaceDocument.bind(runtime);
-
-    // Track whether this runtime ever received a real document load so teardown
-    // cannot serialize the default empty scene back into the canonical design.
-    runtime.loadDocument = (file) => {
-      loadDocument(file);
-      canvasDocumentLoaded = true;
-    };
-    runtime.replaceDocument = (file) => {
-      replaceDocument(file);
-      canvasDocumentLoaded = true;
-    };
 
     void runtime.init(container).then(() => {
       if (cancelled) return;
@@ -77,13 +65,22 @@ export function useCanvasDocumentSession({
       }
 
       if (currentDesign.value) {
-        loadCanvasFromDocument(currentDesign.value, runtime);
-        runtime.showCanvasChrome();
+        void transitionDocument({
+          source: "mount-existing",
+          dirtyGuard: "skip",
+          session: runtime,
+          load: async () => {
+            const file = currentDesign.value;
+            if (!file) throw new Error("No current design to mount");
+            return { file, path: designPath.value, name: designName.value };
+          },
+        }).then((result) => {
+          if (result.status === "failed") {
+            console.error("Failed to mount current canvas document:", result.error);
+          }
+        });
       } else {
-        // Queued file-open flows can replace the document without going
-        // through loadCanvasFromDocument, so the sync must already be active.
-        installConsortiumSync();
-        runtime.hideCanvasChrome();
+        beginEmptyDocumentSession(runtime);
       }
 
       resizeObserver = new ResizeObserver(() => {
@@ -100,7 +97,7 @@ export function useCanvasDocumentSession({
       resizeObserver?.disconnect();
       cancelQueuedLoad();
       flushQueuedSettingsPersist();
-      if (runtimeInitialized && canvasDocumentLoaded && currentDesign.value) {
+      if (runtimeInitialized && runtime.hasLoadedDocument() && currentDesign.value) {
         try {
           snapshotCanvasIntoCurrentDocument(runtime, designName.value);
           markCanvasDetachedDirty(canvasDirty.value);

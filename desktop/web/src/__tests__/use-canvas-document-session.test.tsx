@@ -5,23 +5,35 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   autosaveDesign: vi.fn(async () => undefined),
+  beginEmptyDocumentSession: vi.fn((session: any) => {
+    session.hideCanvasChrome();
+  }),
   cancelQueuedLoad: vi.fn(),
   consumeQueuedDocumentLoad: vi.fn((_session?: unknown) => () => {}),
   disposeDocumentWorkflows: vi.fn(),
   flushQueuedSettingsPersist: vi.fn(),
-  installConsortiumSync: vi.fn(),
-  loadCanvasFromDocument: vi.fn(),
   runtimeInitImpl: vi.fn(async (_container?: HTMLElement) => undefined),
   runtimeInstances: [] as Array<Record<string, unknown>>,
   snapshotCanvasIntoCurrentDocument: vi.fn(),
+  transitionDocument: vi.fn((request: any) => {
+    request.session.loadDocument({ name: "Mounted" });
+    request.session.showCanvasChrome();
+    return Promise.resolve({ status: "applied", documentLoaded: request.session.hasLoadedDocument() });
+  }),
   writeCanvasIntoDocument: vi.fn(() => ({ name: "Autosaved" })),
 }));
 
 vi.mock("../canvas/runtime/scene-runtime", () => ({
   SceneCanvasRuntime: class {
+    private loaded = false
     init = vi.fn((container) => mocks.runtimeInitImpl(container))
-    loadDocument = vi.fn()
-    replaceDocument = vi.fn()
+    loadDocument = vi.fn(() => {
+      this.loaded = true
+    })
+    replaceDocument = vi.fn(() => {
+      this.loaded = true
+    })
+    hasLoadedDocument = vi.fn(() => this.loaded)
     initializeViewport = vi.fn()
     attachRulersTo = vi.fn()
     showCanvasChrome = vi.fn()
@@ -30,6 +42,8 @@ vi.mock("../canvas/runtime/scene-runtime", () => ({
     destroy = vi.fn()
 
     constructor() {
+      ;(this as unknown as Record<string, unknown>).originalLoadDocument = this.loadDocument
+      ;(this as unknown as Record<string, unknown>).originalReplaceDocument = this.replaceDocument
       mocks.runtimeInstances.push(this as unknown as Record<string, unknown>)
     }
   },
@@ -39,11 +53,13 @@ vi.mock("../ipc/design", () => ({
   autosaveDesign: mocks.autosaveDesign,
 }));
 
-vi.mock("../app/document-session/actions", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../app/document-session/actions")>();
+vi.mock("../app/document-session/transition", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../app/document-session/transition")>();
   return {
     ...actual,
+    beginEmptyDocumentSession: mocks.beginEmptyDocumentSession,
     consumeQueuedDocumentLoad: mocks.consumeQueuedDocumentLoad,
+    transitionDocument: mocks.transitionDocument,
   };
 });
 
@@ -52,12 +68,6 @@ vi.mock("../app/document-session/runtime", async (importOriginal) => {
   return {
     ...actual,
     disposeDocumentWorkflows: mocks.disposeDocumentWorkflows,
-    installConsortiumSync: mocks.installConsortiumSync,
-    loadCanvasFromDocument: vi.fn((file, session) => {
-      mocks.loadCanvasFromDocument(file, session);
-      session.loadDocument(file);
-      mocks.installConsortiumSync();
-    }),
     snapshotCanvasIntoCurrentDocument: mocks.snapshotCanvasIntoCurrentDocument,
     writeCanvasIntoDocument: mocks.writeCanvasIntoDocument,
   };
@@ -99,6 +109,10 @@ function Harness() {
 async function flushMicrotasks(): Promise<void> {
   await Promise.resolve();
   await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
 }
 
 function makeDesign(name = "Demo") {
@@ -129,18 +143,23 @@ describe("useCanvasDocumentSession", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     mocks.autosaveDesign.mockClear();
+    mocks.beginEmptyDocumentSession.mockClear();
     mocks.cancelQueuedLoad.mockReset();
     mocks.cancelQueuedLoad.mockImplementation(() => {});
     mocks.consumeQueuedDocumentLoad.mockClear();
     mocks.consumeQueuedDocumentLoad.mockImplementation(() => mocks.cancelQueuedLoad);
     mocks.disposeDocumentWorkflows.mockClear();
     mocks.flushQueuedSettingsPersist.mockClear();
-    mocks.installConsortiumSync.mockClear();
-    mocks.loadCanvasFromDocument.mockClear();
     mocks.runtimeInitImpl.mockReset();
     mocks.runtimeInitImpl.mockResolvedValue(undefined);
     mocks.runtimeInstances.length = 0;
     mocks.snapshotCanvasIntoCurrentDocument.mockClear();
+    mocks.transitionDocument.mockClear();
+    mocks.transitionDocument.mockImplementation((request: any) => {
+      request.session.loadDocument({ name: "Mounted" });
+      request.session.showCanvasChrome();
+      return Promise.resolve({ status: "applied", documentLoaded: request.session.hasLoadedDocument() });
+    });
     mocks.writeCanvasIntoDocument.mockClear();
     (globalThis as Record<string, unknown>).ResizeObserver = class {
       observe() {}
@@ -178,8 +197,8 @@ describe("useCanvasDocumentSession", () => {
 
     expect(runtime).toBeDefined();
     expect(runtime.initializeViewport).toHaveBeenCalledTimes(1);
+    expect(mocks.beginEmptyDocumentSession).toHaveBeenCalledWith(currentCanvasSession.value);
     expect(runtime.hideCanvasChrome).toHaveBeenCalledTimes(1);
-    expect(mocks.installConsortiumSync).toHaveBeenCalledTimes(1);
     expect(mocks.consumeQueuedDocumentLoad).toHaveBeenCalledWith(currentCanvasSession.value);
   });
 
@@ -193,11 +212,19 @@ describe("useCanvasDocumentSession", () => {
 
     const runtime = mocks.runtimeInstances[0] as {
       destroy: ReturnType<typeof vi.fn>;
+      loadDocument: ReturnType<typeof vi.fn>;
+      replaceDocument: ReturnType<typeof vi.fn>;
       showCanvasChrome: ReturnType<typeof vi.fn>;
     };
 
-    expect(mocks.loadCanvasFromDocument).toHaveBeenCalledWith(currentDesign.value, currentCanvasSession.value);
+    expect(mocks.transitionDocument).toHaveBeenCalledWith(expect.objectContaining({
+      source: "mount-existing",
+      dirtyGuard: "skip",
+      session: currentCanvasSession.value,
+    }));
     expect(runtime.showCanvasChrome).toHaveBeenCalledTimes(1);
+    expect(runtime.loadDocument).toBe((runtime as any).originalLoadDocument);
+    expect((runtime as any).replaceDocument).toBe((runtime as any).originalReplaceDocument);
 
     await act(async () => {
       render(null, container);
@@ -230,7 +257,7 @@ describe("useCanvasDocumentSession", () => {
 
     const runtime = mocks.runtimeInstances[0] as { destroy: ReturnType<typeof vi.fn> };
 
-    expect(mocks.loadCanvasFromDocument).not.toHaveBeenCalled();
+    expect(mocks.transitionDocument).not.toHaveBeenCalled();
     expect(mocks.snapshotCanvasIntoCurrentDocument).not.toHaveBeenCalled();
     expect(mocks.disposeDocumentWorkflows).toHaveBeenCalledTimes(1);
     expect(runtime.destroy).toHaveBeenCalledTimes(1);
@@ -263,7 +290,7 @@ describe("useCanvasDocumentSession", () => {
 
     const runtime = mocks.runtimeInstances[0] as { destroy: ReturnType<typeof vi.fn> };
 
-    expect(mocks.loadCanvasFromDocument).not.toHaveBeenCalled();
+    expect(mocks.transitionDocument).not.toHaveBeenCalled();
     expect(mocks.snapshotCanvasIntoCurrentDocument).not.toHaveBeenCalled();
     expect(mocks.disposeDocumentWorkflows).toHaveBeenCalledTimes(1);
     expect(runtime.destroy).toHaveBeenCalledTimes(1);
