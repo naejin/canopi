@@ -15,4 +15,14 @@ describe('frontend boundary sources', () => {
     expect(welcomeSource).not.toContain('ipc/design')
     expect(budgetSource).not.toContain('ipc/design')
   })
+
+  it('keeps scene runtime panel-target app signals behind an injected adapter', () => {
+    const runtimeSource = readSource('../canvas/runtime/scene-runtime.ts')
+    const effectsSource = readSource('../canvas/runtime/scene-runtime/effects.ts')
+    const adapterSource = readSource('../app/canvas-runtime/panel-target-adapter.ts')
+
+    expect(runtimeSource).not.toContain('app/panel-targets')
+    expect(effectsSource).not.toContain('app/panel-targets')
+    expect(adapterSource).toContain('../panel-targets/state')
+  })
 })

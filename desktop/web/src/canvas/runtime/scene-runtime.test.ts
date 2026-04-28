@@ -21,11 +21,13 @@ import {
   selectedPanelTargetOrigin,
   selectedPanelTargets,
 } from '../../app/panel-targets/state'
+import { createAppSceneRuntimePanelTargetAdapter } from '../../app/canvas-runtime/panel-target-adapter'
 import { canvasClean } from '../../state/design'
 import { locale } from '../../app/settings/state'
-import type { CanopiFile } from '../../types/design'
+import type { CanopiFile, PanelTarget } from '../../types/design'
 import { speciesTarget } from '../../panel-targets'
 import { SceneCanvasRuntime } from './scene-runtime.ts'
+import type { SceneRuntimePanelTargetAdapter } from './scene-runtime/panel-target-adapter'
 import { getCommonNames } from '../../ipc/species'
 
 function makeFile(): CanopiFile {
@@ -115,6 +117,46 @@ async function initRuntimeWithStubbedRenderer(runtime: SceneCanvasRuntime) {
 
   await runtime.init(container)
   return { container, renderer }
+}
+
+function createRuntimeWithAppPanelTargets(): SceneCanvasRuntime {
+  return new SceneCanvasRuntime({
+    panelTargets: createAppSceneRuntimePanelTargetAdapter(),
+  })
+}
+
+function createPanelTargetAdapterProbe(initialTargets: readonly PanelTarget[] = []) {
+  let panelOriginTargets = initialTargets
+  let canvasHoverTargets: readonly PanelTarget[] = []
+  const subscribers = new Set<() => void>()
+  const adapter: SceneRuntimePanelTargetAdapter = {
+    readPanelOriginTargets: () => panelOriginTargets,
+    setCanvasHoverTargets: (targets) => {
+      canvasHoverTargets = [...targets]
+    },
+    clearPanelOriginTargets: () => {
+      panelOriginTargets = []
+      subscribers.forEach((notify) => notify())
+    },
+    subscribePanelOriginTargetChanges: (onChange) => {
+      subscribers.add(onChange)
+      return () => subscribers.delete(onChange)
+    },
+  }
+
+  return {
+    adapter,
+    setPanelOriginTargets: (targets: readonly PanelTarget[]) => {
+      panelOriginTargets = targets
+      subscribers.forEach((notify) => notify())
+    },
+    get canvasHoverTargets() {
+      return canvasHoverTargets
+    },
+    get panelOriginTargets() {
+      return panelOriginTargets
+    },
+  }
 }
 
 describe('scene canvas runtime', () => {
@@ -311,7 +353,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('resolves hovered panel targets for renderer highlights without mutating selection', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = createRuntimeWithAppPanelTargets()
     runtime.loadDocument(makeFile())
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
 
@@ -335,7 +377,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('resolves selected panel targets for renderer highlights without mutating canvas selection or dirty state', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = createRuntimeWithAppPanelTargets()
     runtime.loadDocument(makeFile())
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
 
@@ -359,7 +401,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('keeps typed panel target highlights separate when plant IDs and zone names collide', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = createRuntimeWithAppPanelTargets()
     runtime.loadDocument({
       ...makeFile(),
       plants: [
@@ -392,7 +434,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('unions selected and hovered panel target highlights without mutating canvas selection', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = createRuntimeWithAppPanelTargets()
     runtime.loadDocument(makeFile())
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
 
@@ -411,8 +453,33 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
+  it('uses the injected panel target adapter for highlights and canvas-origin hover', async () => {
+    const panelTargetProbe = createPanelTargetAdapterProbe()
+    const runtime = new SceneCanvasRuntime({ panelTargets: panelTargetProbe.adapter })
+    runtime.loadDocument(makeFile())
+    const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
+
+    renderer.renderScene.mockClear()
+    panelTargetProbe.setPanelOriginTargets([speciesTarget('Malus domestica')])
+
+    await vi.waitFor(() => {
+      expect(renderer.renderScene).toHaveBeenCalled()
+    })
+
+    const snapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
+    expect(snapshot?.highlightedPlantIds).toEqual(new Set(['plant-1', 'plant-2']))
+
+    ;(runtime as any)._interaction._deps.setHoveredEntityId('plant-1')
+    expect(panelTargetProbe.canvasHoverTargets).toEqual([speciesTarget('Malus domestica')])
+
+    panelTargetProbe.setPanelOriginTargets([{ kind: 'zone', zone_name: 'zone-1' }])
+    runtime.replaceDocument(makeFile())
+    expect(panelTargetProbe.panelOriginTargets).toEqual([])
+    runtime.destroy()
+  })
+
   it('publishes canvas-origin species hover targets without mutating selection', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = createRuntimeWithAppPanelTargets()
     runtime.loadDocument(makeFile())
     await initRuntimeWithStubbedRenderer(runtime)
 
@@ -433,7 +500,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('clears canvas-origin hover during destroy without rendering into a disposing renderer', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = createRuntimeWithAppPanelTargets()
     runtime.loadDocument(makeFile())
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
 
@@ -477,7 +544,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('resets transient runtime state before replacing the document', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = createRuntimeWithAppPanelTargets()
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
 
     runtime.loadDocument(makeFile())

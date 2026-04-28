@@ -15,6 +15,7 @@ The live world renderer is scene-owned:
 - `PixiJS` is the primary backend
 - `Canvas2D` is the fallback backend
 - App code accesses the runtime through command, query, and document surfaces (see `CLAUDE.md` canvas seam guidance)
+- App-owned signal synchronization, such as panel-target highlights and canvas-origin hover publication, enters the runtime through injected adapters at document-session mount
 - MapLibre is a sibling visualization layer managed by a dedicated surface/controller, not part of the renderer path. The current in-canvas basemap lives behind `.canvasContainer`, follows the camera via the read-only query surface, and reports loading / ready / error feedback plus pure panel-target overlays. Treat `docs/todo.md` (`MapLibre / geo`) as the current-status owner and root `CLAUDE.md` as the authority rule set
 
 The renderer is not the source of truth. `SceneStore` owns canvas scene state.
@@ -32,6 +33,7 @@ The renderer is not the source of truth. `SceneStore` owns canvas scene state.
 - UI signals are mirrors for components; renderers must not treat them as authoritative runtime input
 - Selection should always reflect `SceneStore.session.selectedEntityIds`, not UI signal mirrors
 - Document replacement resets transient runtime state before the replacement scene is hydrated
+- Panel-target app signals stay shell-owned; `SceneCanvasRuntime` reads panel-origin targets and publishes canvas-origin hover only through its injected adapter
 
 ### What renderers must not own
 - document persistence

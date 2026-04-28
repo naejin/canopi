@@ -1,6 +1,5 @@
 import { effect } from '@preact/signals'
 import { locale, theme } from '../../../app/settings/state'
-import { hoveredPanelTargets, selectedPanelTargets } from '../../../app/panel-targets/state'
 import {
   gridVisible,
   layerLockState,
@@ -16,6 +15,7 @@ interface SceneRuntimeEffectsDeps {
   onChromeOverlay: () => void
   onLayerSignals: () => void
   onPanelTargetHover: () => void
+  subscribePanelOriginTargetChanges(onChange: () => void): () => void
 }
 
 export function installSceneRuntimeEffects(deps: SceneRuntimeEffectsDeps): Array<() => void> {
@@ -40,10 +40,6 @@ export function installSceneRuntimeEffects(deps: SceneRuntimeEffectsDeps): Array
       void guides.value
       deps.onLayerSignals()
     }),
-    effect(() => {
-      void hoveredPanelTargets.value
-      void selectedPanelTargets.value
-      deps.onPanelTargetHover()
-    }),
+    deps.subscribePanelOriginTargetChanges(deps.onPanelTargetHover),
   ]
 }

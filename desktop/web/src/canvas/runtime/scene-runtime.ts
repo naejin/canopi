@@ -1,12 +1,6 @@
 import { signal } from '@preact/signals'
 import { locale } from '../../app/settings/state'
 import { mutateSettingsProjection } from '../../app/settings/projection'
-import { clearPanelOriginTargets } from '../../app/panel-targets/coordinator'
-import {
-  hoveredCanvasTargets,
-  hoveredPanelTargets,
-  selectedPanelTargets,
-} from '../../app/panel-targets/state'
 import {
   gridVisible,
   rulersVisible,
@@ -15,7 +9,7 @@ import {
 import { guides } from '../scene-metadata-state'
 import { lockedObjectIds, plantNamesRevision, sceneEntityRevision } from '../runtime-mirror-state'
 import type { ColorByAttribute, PlantSizeMode } from '../plant-display-state'
-import type { CanopiFile, PanelTarget, PlacedPlant } from '../../types/design'
+import type { CanopiFile, PlacedPlant } from '../../types/design'
 import type { SelectedPlantColorContext } from '../plant-color-context'
 import { setCanvasSelection, setCanvasTool } from '../session-state'
 import { syncPlantSpeciesColorDefaults } from '../plant-species-color-defaults'
@@ -46,10 +40,18 @@ import {
   SceneRuntimeEditCoordinator,
   type SceneEditCoordinator,
 } from './scene-runtime/transactions'
+import {
+  createDetachedSceneRuntimePanelTargetAdapter,
+  type SceneRuntimePanelTargetAdapter,
+} from './scene-runtime/panel-target-adapter'
 import type { CanvasRuntimeDocumentMetadata, MountedCanvasRuntime } from './runtime'
 import { panelTargets, speciesTarget } from '../../panel-targets'
 
 type RuntimeInvalidationKind = 'scene' | 'viewport' | 'chrome'
+
+export interface SceneCanvasRuntimeOptions {
+  panelTargets?: SceneRuntimePanelTargetAdapter
+}
 
 export class SceneCanvasRuntime implements MountedCanvasRuntime {
   private readonly _sceneStore = new SceneStore()
@@ -80,10 +82,12 @@ export class SceneCanvasRuntime implements MountedCanvasRuntime {
   private readonly _sceneEdits: SceneEditCoordinator
   private readonly _mutations: SceneRuntimeMutationController
   private readonly _documents: SceneRuntimeDocumentBridge
+  private readonly _panelTargetAdapter: SceneRuntimePanelTargetAdapter
   private readonly _disposeEffects: Array<() => void> = []
   private _documentLoaded = false
 
-  constructor() {
+  constructor(options: SceneCanvasRuntimeOptions = {}) {
+    this._panelTargetAdapter = options.panelTargets ?? createDetachedSceneRuntimePanelTargetAdapter()
     this._presentation = new SceneRuntimePresentationController({
       sceneStore: this._sceneStore,
       getViewport: () => this._camera.viewport,
@@ -99,7 +103,7 @@ export class SceneCanvasRuntime implements MountedCanvasRuntime {
       setSelection: (ids) => this._setSelection(ids),
       resetTransientRuntimeState: () => this._resetTransientRuntimeState(),
       clearHoveredTargets: () => this._syncHoveredCanvasTargets(null),
-      clearPanelOriginTargets: () => this._clearPanelOriginTargets(),
+      clearPanelOriginTargets: () => this._panelTargetAdapter.clearPanelOriginTargets(),
       syncCanvasSignalsFromDocument: (file) => syncCanvasSignalsFromDocument(file),
       syncCanvasSignalsFromScene: () => this._syncCanvasSignalsFromScene(),
       invalidateScene: () => this._invalidate('scene'),
@@ -470,13 +474,7 @@ export class SceneCanvasRuntime implements MountedCanvasRuntime {
       ? this._sceneStore.persisted.plants.find((entry) => entry.id === id)
       : null
     const targets = plant ? [speciesTarget(plant.canonicalName)] : []
-    if (!panelTargets.listEquals(hoveredCanvasTargets.peek(), targets)) {
-      hoveredCanvasTargets.value = targets
-    }
-  }
-
-  private _clearPanelOriginTargets(): void {
-    clearPanelOriginTargets()
+    this._panelTargetAdapter.setCanvasHoverTargets(targets)
   }
 
   private _setHoveredEntityId(id: string | null, options: { invalidate?: boolean } = {}): void {
@@ -517,6 +515,8 @@ export class SceneCanvasRuntime implements MountedCanvasRuntime {
       onPanelTargetHover: () => {
         this._invalidate('scene')
       },
+      subscribePanelOriginTargetChanges: (onChange) =>
+        this._panelTargetAdapter.subscribePanelOriginTargetChanges(onChange),
     }))
   }
 
@@ -553,10 +553,9 @@ export class SceneCanvasRuntime implements MountedCanvasRuntime {
   }
 
   private _resolveHighlightedTargets(scene: ScenePersistedState): { plantIds: readonly string[]; zoneIds: readonly string[] } {
-    const combinedTargets: PanelTarget[] = [
-      ...selectedPanelTargets.value,
-      ...hoveredPanelTargets.value,
-    ]
-    return panelTargets.resolve(combinedTargets, panelTargets.indexScene(scene))
+    return panelTargets.resolve(
+      this._panelTargetAdapter.readPanelOriginTargets(),
+      panelTargets.indexScene(scene),
+    )
   }
 }

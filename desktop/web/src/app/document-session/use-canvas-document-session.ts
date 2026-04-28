@@ -14,6 +14,7 @@ import {
 } from "../../state/design";
 import { autoSaveIntervalMs } from "../settings/state";
 import { flushSettingsProjection } from "../settings/projection";
+import { createAppSceneRuntimePanelTargetAdapter } from "../canvas-runtime/panel-target-adapter";
 import {
   beginEmptyDocumentSession,
   consumeQueuedDocumentLoad,
@@ -49,7 +50,9 @@ export function useCanvasDocumentSession({
     const canvasArea = canvasAreaRef.current;
     if (!container || !canvasArea) return;
 
-    const runtime = new SceneCanvasRuntime();
+    const runtime = new SceneCanvasRuntime({
+      panelTargets: createAppSceneRuntimePanelTargetAdapter(),
+    });
     const surfaces = createCanvasRuntimeSurfaces(runtime);
     const documents = surfaces.documents;
     let cancelled = false;
