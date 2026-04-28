@@ -42,6 +42,10 @@ import type { ScenePersistedState } from './scene'
 import { SceneHistory } from './scene-history'
 import { SceneRuntimeMutationController } from './scene-runtime/mutations'
 import { SceneRuntimePresentationController } from './scene-runtime/presentation'
+import {
+  SceneRuntimeEditCoordinator,
+  type SceneEditCoordinator,
+} from './scene-runtime/transactions'
 import type { CanvasRuntimeDocumentMetadata, MountedCanvasRuntime } from './runtime'
 import { resolvePanelTargets } from '../../panel-target-resolution'
 import { panelTargetsEqual, speciesTarget } from '../../panel-targets'
@@ -74,6 +78,7 @@ export class SceneCanvasRuntime implements MountedCanvasRuntime {
   private readonly _chrome = new SceneRuntimeChromeCoordinator()
   private _interaction: SceneInteractionController | null = null
   private readonly _history = new SceneHistory()
+  private readonly _sceneEdits: SceneEditCoordinator
   private readonly _mutations: SceneRuntimeMutationController
   private readonly _documents: SceneRuntimeDocumentBridge
   private readonly _disposeEffects: Array<() => void> = []
@@ -104,6 +109,16 @@ export class SceneCanvasRuntime implements MountedCanvasRuntime {
       },
       applySignalBackedSceneState: (options) => this._applySignalBackedSceneState(options),
     })
+    this._sceneEdits = new SceneRuntimeEditCoordinator({
+      sceneStore: this._sceneStore,
+      captureSnapshot: () => this._documents.captureCommandSnapshot(),
+      markDirty: (before, type) => this._documents.markDirty(before, type),
+      setSelection: (ids) => this._setSelection(ids),
+      setLockedIds: (ids) => {
+        lockedObjectIds.value = new Set(ids)
+      },
+      invalidate: (kind) => this._invalidate(kind),
+    })
     this._mutations = new SceneRuntimeMutationController({
       sceneStore: this._sceneStore,
       selection: {
@@ -111,14 +126,8 @@ export class SceneCanvasRuntime implements MountedCanvasRuntime {
       },
       locks: {
         get: () => lockedObjectIds.value,
-        set: (ids) => {
-          lockedObjectIds.value = new Set(ids)
-        },
       },
-      history: {
-        captureSnapshot: () => this._documents.captureCommandSnapshot(),
-        markDirty: (before, type) => this._documents.markDirty(before, type),
-      },
+      sceneEdits: this._sceneEdits,
       presentation: {
         syncSignals: () => syncPresentationSignalsFromSceneSession(this._sceneStore),
         syncPlantSpeciesColors: () => syncPlantSpeciesColorDefaults(this._sceneStore.persisted.plantSpeciesColors),
@@ -149,9 +158,9 @@ export class SceneCanvasRuntime implements MountedCanvasRuntime {
       getSelection: () => this._sceneStore.session.selectedEntityIds,
       setSelection: (ids) => this._setSelection(ids),
       clearSelection: () => this._setSelection([]),
+      sceneEdits: this._sceneEdits,
       setTool: (name) => this.setTool(name),
       render: (kind) => this._invalidate(kind),
-      markDirty: (before) => this._documents.markDirty(before, 'interaction'),
       getLocalizedCommonNames: () => this._presentation.getLocalizedCommonNames(),
       setHoveredEntityId: (id) => {
         this._setHoveredEntityId(id)

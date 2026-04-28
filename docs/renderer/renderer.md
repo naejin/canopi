@@ -23,6 +23,7 @@ The renderer is not the source of truth. `SceneStore` owns canvas scene state.
 
 ### What owns what
 - `SceneStore` owns persisted and session canvas state
+- `SceneRuntimeEditCoordinator` owns canvas scene edit transactions for command and interaction mutations
 - `CameraController` owns world/screen transforms
 - `SceneInteractionController` owns pointer behavior and selection logic
 - `RendererHost` owns backend lifecycle and recovery
@@ -37,6 +38,7 @@ The renderer is not the source of truth. `SceneStore` owns canvas scene state.
 - selection truth
 - drag truth
 - history state
+- edit transaction lifecycle
 - save/load authority
 - plant size/color mode authority
 - plant geometry recomputation that diverges from runtime bounds or hit testing

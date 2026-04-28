@@ -1,5 +1,5 @@
 import type { PlantStampSpecies } from '../../plant-tool-state'
-import type { ScenePoint, SceneStore } from '../scene'
+import type { ScenePersistedState, ScenePoint, SceneStore } from '../scene'
 
 export interface PlantDropPayload {
   canonical_name: string
@@ -18,26 +18,37 @@ export interface SceneRect {
 export function appendRectangleZone(store: SceneStore, rect: SceneRect): string | null {
   if (rect.width < 0.5 || rect.height < 0.5) return null
 
+  let zoneName: string | null = null
+  store.updatePersisted((draft) => {
+    zoneName = appendRectangleZoneToDraft(draft, rect)
+  })
+  return zoneName
+}
+
+export function appendRectangleZoneToDraft(
+  draft: ScenePersistedState,
+  rect: SceneRect,
+): string | null {
+  if (rect.width < 0.5 || rect.height < 0.5) return null
+
   const zoneId = crypto.randomUUID()
   const zoneName = `zone-${zoneId}`
-  store.updatePersisted((draft) => {
-    draft.zones = [
-      ...draft.zones,
-      {
-        kind: 'zone',
-        name: zoneName,
-        zoneType: 'rect',
-        points: [
-          { x: rect.x, y: rect.y },
-          { x: rect.x + rect.width, y: rect.y },
-          { x: rect.x + rect.width, y: rect.y + rect.height },
-          { x: rect.x, y: rect.y + rect.height },
-        ],
-        fillColor: null,
-        notes: null,
-      },
-    ]
-  })
+  draft.zones = [
+    ...draft.zones,
+    {
+      kind: 'zone',
+      name: zoneName,
+      zoneType: 'rect',
+      points: [
+        { x: rect.x, y: rect.y },
+        { x: rect.x + rect.width, y: rect.y },
+        { x: rect.x + rect.width, y: rect.y + rect.height },
+        { x: rect.x, y: rect.y + rect.height },
+      ],
+      fillColor: null,
+      notes: null,
+    },
+  ]
   return zoneName
 }
 
@@ -46,27 +57,37 @@ export function appendDroppedPlant(
   payload: PlantDropPayload,
   world: ScenePoint,
 ): string {
-  const id = crypto.randomUUID()
+  let id = ''
   store.updatePersisted((draft) => {
-    draft.plants = [
-      ...draft.plants,
-      {
-        kind: 'plant',
-        id,
-        canonicalName: payload.canonical_name,
-        commonName: payload.common_name,
-        color: draft.plantSpeciesColors[payload.canonical_name] ?? null,
-        stratum: payload.stratum,
-        canopySpreadM: payload.width_max_m,
-        position: world,
-        rotationDeg: null,
-        scale: payload.width_max_m,
-        notes: null,
-        plantedDate: null,
-        quantity: 1,
-      },
-    ]
+    id = appendDroppedPlantToDraft(draft, payload, world)
   })
+  return id
+}
+
+export function appendDroppedPlantToDraft(
+  draft: ScenePersistedState,
+  payload: PlantDropPayload,
+  world: ScenePoint,
+): string {
+  const id = crypto.randomUUID()
+  draft.plants = [
+    ...draft.plants,
+    {
+      kind: 'plant',
+      id,
+      canonicalName: payload.canonical_name,
+      commonName: payload.common_name,
+      color: draft.plantSpeciesColors[payload.canonical_name] ?? null,
+      stratum: payload.stratum,
+      canopySpreadM: payload.width_max_m,
+      position: world,
+      rotationDeg: null,
+      scale: payload.width_max_m,
+      notes: null,
+      plantedDate: null,
+      quantity: 1,
+    },
+  ]
   return id
 }
 
@@ -83,21 +104,31 @@ export function appendTextAnnotation(
   position: ScenePoint,
   text: string,
 ): string {
-  const id = crypto.randomUUID()
+  let id = ''
   store.updatePersisted((draft) => {
-    draft.annotations = [
-      ...draft.annotations,
-      {
-        kind: 'annotation',
-        id,
-        annotationType: 'text',
-        position,
-        text,
-        fontSize: 16,
-        rotationDeg: null,
-      },
-    ]
+    id = appendTextAnnotationToDraft(draft, position, text)
   })
+  return id
+}
+
+export function appendTextAnnotationToDraft(
+  draft: ScenePersistedState,
+  position: ScenePoint,
+  text: string,
+): string {
+  const id = crypto.randomUUID()
+  draft.annotations = [
+    ...draft.annotations,
+    {
+      kind: 'annotation',
+      id,
+      annotationType: 'text',
+      position,
+      text,
+      fontSize: 16,
+      rotationDeg: null,
+    },
+  ]
   return id
 }
 

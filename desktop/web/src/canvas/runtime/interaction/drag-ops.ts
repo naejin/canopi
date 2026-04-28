@@ -68,49 +68,57 @@ export function applySceneDragDelta(
   delta: ScenePoint,
 ): void {
   store.updatePersisted((draft) => {
-    draft.plants = draft.plants.map((plant) => {
-      const start = state.plantStarts.get(plant.id)
-      if (!start) return plant
-      return {
-        ...plant,
-        position: {
-          x: start.x + delta.x,
-          y: start.y + delta.y,
-        },
-      }
-    })
-    draft.zones = draft.zones.map((zone) => {
-      const start = state.zoneStarts.get(zone.name)
-      if (!start) return zone
-      return {
-        ...zone,
-        points: start.map((point) => ({
-          x: point.x + delta.x,
-          y: point.y + delta.y,
-        })),
-      }
-    })
-    draft.annotations = draft.annotations.map((annotation) => {
-      const start = state.annotationStarts.get(annotation.id)
-      if (!start) return annotation
-      return {
-        ...annotation,
-        position: {
-          x: start.x + delta.x,
-          y: start.y + delta.y,
-        },
-      }
-    })
-    draft.groups = draft.groups.map((group) => {
-      const start = state.groupStarts.get(group.id)
-      if (!start) return group
-      return {
-        ...group,
-        position: {
-          x: start.x + delta.x,
-          y: start.y + delta.y,
-        },
-      }
-    })
+    applySceneDragDeltaToDraft(draft, state, delta)
+  })
+}
+
+export function applySceneDragDeltaToDraft(
+  draft: ScenePersistedState,
+  state: SceneDragState,
+  delta: ScenePoint,
+): void {
+  draft.plants = draft.plants.map((plant) => {
+    const start = state.plantStarts.get(plant.id)
+    if (!start) return plant
+    return {
+      ...plant,
+      position: {
+        x: start.x + delta.x,
+        y: start.y + delta.y,
+      },
+    }
+  })
+  draft.zones = draft.zones.map((zone) => {
+    const start = state.zoneStarts.get(zone.name)
+    if (!start) return zone
+    return {
+      ...zone,
+      points: start.map((point) => ({
+        x: point.x + delta.x,
+        y: point.y + delta.y,
+      })),
+    }
+  })
+  draft.annotations = draft.annotations.map((annotation) => {
+    const start = state.annotationStarts.get(annotation.id)
+    if (!start) return annotation
+    return {
+      ...annotation,
+      position: {
+        x: start.x + delta.x,
+        y: start.y + delta.y,
+      },
+    }
+  })
+  draft.groups = draft.groups.map((group) => {
+    const start = state.groupStarts.get(group.id)
+    if (!start) return group
+    return {
+      ...group,
+      position: {
+        x: start.x + delta.x,
+        y: start.y + delta.y,
+      },
+    }
   })
 }

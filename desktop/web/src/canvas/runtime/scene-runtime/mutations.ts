@@ -12,7 +12,6 @@ import type {
   ScenePersistedState,
   SceneStore,
 } from '../scene'
-import type { SceneCommandSnapshot } from '../scene-commands'
 import {
   createClipboardPayload,
   pasteClipboardPayload,
@@ -24,6 +23,7 @@ import {
   getSelectionLayer,
   setsEqual,
 } from './selection'
+import type { SceneEditCoordinator } from './transactions'
 
 const EMPTY_PLANT_COLOR_CONTEXT: SelectedPlantColorContext = {
   plantIds: [],
@@ -41,12 +41,8 @@ interface SceneRuntimeMutationControllerOptions {
   }
   locks: {
     get(): ReadonlySet<string>
-    set(ids: Iterable<string>): void
   }
-  history: {
-    captureSnapshot(): SceneCommandSnapshot
-    markDirty(before: SceneCommandSnapshot, type?: string): void
-  }
+  sceneEdits: SceneEditCoordinator
   presentation: {
     syncSignals(): void
     syncPlantSpeciesColors(): void
@@ -61,7 +57,7 @@ export class SceneRuntimeMutationController {
   private readonly _sceneStore: SceneStore
   private readonly _selection: SceneRuntimeMutationControllerOptions['selection']
   private readonly _locks: SceneRuntimeMutationControllerOptions['locks']
-  private readonly _history: SceneRuntimeMutationControllerOptions['history']
+  private readonly _sceneEdits: SceneEditCoordinator
   private readonly _presentation: SceneRuntimeMutationControllerOptions['presentation']
   private readonly _invalidateScene: () => void
   private _clipboard: SceneClipboardPayload | null = null
@@ -70,7 +66,7 @@ export class SceneRuntimeMutationController {
     this._sceneStore = options.sceneStore
     this._selection = options.selection
     this._locks = options.locks
-    this._history = options.history
+    this._sceneEdits = options.sceneEdits
     this._presentation = options.presentation
     this._invalidateScene = options.invalidateScene
   }
@@ -84,16 +80,13 @@ export class SceneRuntimeMutationController {
   paste(): void {
     if (!this._clipboard) return
 
-    const before = this._history.captureSnapshot()
     let nextSelection = new Set<string>()
-    this._sceneStore.updatePersisted((draft) => {
-      nextSelection = pasteClipboardPayload(this._clipboard!, draft)
+    this._sceneEdits.run('paste', (tx) => {
+      tx.mutate((draft) => {
+        nextSelection = pasteClipboardPayload(this._clipboard!, draft)
+      })
+      if (nextSelection.size > 0) tx.setSelection(nextSelection)
     })
-
-    if (nextSelection.size === 0) return
-    this._selection.set(nextSelection)
-    this._history.markDirty(before)
-    this._invalidateScene()
   }
 
   duplicateSelected(): void {
@@ -106,26 +99,7 @@ export class SceneRuntimeMutationController {
     const selected = getSelectedTopLevelTargets(persisted, this._sceneStore.session.selectedEntityIds)
     if (selected.length === 0) return
 
-    const before = this._history.captureSnapshot()
     const deleted = resolveSelectedEntitySets(persisted, selected)
-
-    this._sceneStore.updatePersisted((draft) => {
-      draft.plants = draft.plants.filter((plant) => !deleted.plantIds.has(plant.id))
-      draft.zones = draft.zones.filter((zone) => !deleted.zoneIds.has(zone.name))
-      draft.annotations = draft.annotations.filter((annotation) => !deleted.annotationIds.has(annotation.id))
-      draft.groups = draft.groups
-        .filter((group) => !deleted.groupIds.has(group.id))
-        .map((group) => ({
-          ...group,
-          memberIds: group.memberIds.filter((memberId) =>
-            !deleted.plantIds.has(memberId)
-            && !deleted.zoneIds.has(memberId)
-            && !deleted.annotationIds.has(memberId),
-          ),
-        }))
-        .filter((group) => group.memberIds.length >= 2)
-    })
-
     const nextLocked = new Set(this._locks.get())
     for (const id of [
       ...deleted.plantIds,
@@ -135,10 +109,27 @@ export class SceneRuntimeMutationController {
     ]) {
       nextLocked.delete(id)
     }
-    this._locks.set(nextLocked)
-    this._selection.set([])
-    this._history.markDirty(before)
-    this._invalidateScene()
+
+    this._sceneEdits.run('delete-selected', (tx) => {
+      tx.mutate((draft) => {
+        draft.plants = draft.plants.filter((plant) => !deleted.plantIds.has(plant.id))
+        draft.zones = draft.zones.filter((zone) => !deleted.zoneIds.has(zone.name))
+        draft.annotations = draft.annotations.filter((annotation) => !deleted.annotationIds.has(annotation.id))
+        draft.groups = draft.groups
+          .filter((group) => !deleted.groupIds.has(group.id))
+          .map((group) => ({
+            ...group,
+            memberIds: group.memberIds.filter((memberId) =>
+              !deleted.plantIds.has(memberId)
+              && !deleted.zoneIds.has(memberId)
+              && !deleted.annotationIds.has(memberId),
+            ),
+          }))
+          .filter((group) => group.memberIds.length >= 2)
+      })
+      tx.setLockedIds(nextLocked)
+      tx.setSelection([])
+    })
   }
 
   selectAll(layerVisibility: Readonly<Record<string, boolean | undefined>>): void {
@@ -189,21 +180,19 @@ export class SceneRuntimeMutationController {
   lockSelected(): void {
     const selected = getSelectedTopLevelTargets(this._sceneStore.persisted, this._sceneStore.session.selectedEntityIds)
     if (selected.length === 0) return
-    const before = this._history.captureSnapshot()
     const nextLocked = new Set(this._locks.get())
     for (const target of selected) nextLocked.add(target.id)
-    this._locks.set(nextLocked)
-    this._selection.set([])
-    this._history.markDirty(before, 'lock-selected')
-    this._invalidateScene()
+    this._sceneEdits.run('lock-selected', (tx) => {
+      tx.setLockedIds(nextLocked)
+      tx.setSelection([])
+    })
   }
 
   unlockSelected(): void {
     if (this._locks.get().size === 0) return
-    const before = this._history.captureSnapshot()
-    this._locks.set([])
-    this._history.markDirty(before, 'unlock-selected')
-    this._invalidateScene()
+    this._sceneEdits.run('unlock-selected', (tx) => {
+      tx.setLockedIds([])
+    })
   }
 
   groupSelected(): void {
@@ -214,7 +203,6 @@ export class SceneRuntimeMutationController {
     const layer = getSelectionLayer(selected[0]!)
     if (!selected.every((target) => getSelectionLayer(target) === layer)) return
 
-    const before = this._history.captureSnapshot()
     const memberIds = selected.map((target) => target.id)
     const viewportScale = this._presentation.getViewportScale()
     const plantContext = this._presentation.createPlantPresentationContext(viewportScale)
@@ -240,12 +228,12 @@ export class SceneRuntimeMutationController {
       memberIds,
     }
 
-    this._sceneStore.updatePersisted((draft) => {
-      draft.groups.push(nextGroup)
+    this._sceneEdits.run('group-selected', (tx) => {
+      tx.mutate((draft) => {
+        draft.groups.push(nextGroup)
+      })
+      tx.setSelection([nextGroup.id])
     })
-    this._selection.set([nextGroup.id])
-    this._history.markDirty(before)
-    this._invalidateScene()
   }
 
   ungroupSelected(): void {
@@ -257,17 +245,16 @@ export class SceneRuntimeMutationController {
     )
     if (selectedGroupIds.size === 0) return
 
-    const before = this._history.captureSnapshot()
     const memberIds = persisted.groups
       .filter((group) => selectedGroupIds.has(group.id))
       .flatMap((group) => group.memberIds)
 
-    this._sceneStore.updatePersisted((draft) => {
-      draft.groups = draft.groups.filter((group) => !selectedGroupIds.has(group.id))
+    this._sceneEdits.run('ungroup-selected', (tx) => {
+      tx.mutate((draft) => {
+        draft.groups = draft.groups.filter((group) => !selectedGroupIds.has(group.id))
+      })
+      tx.setSelection(memberIds)
     })
-    this._selection.set(memberIds)
-    this._history.markDirty(before)
-    this._invalidateScene()
   }
 
   getPlantSizeMode(): PlantSizeMode {
@@ -344,58 +331,46 @@ export class SceneRuntimeMutationController {
     const selectedPlantIds = getSelectedPlantIds(this._sceneStore.persisted, this._sceneStore.session.selectedEntityIds)
     const nextColor = normalizeHexColor(color)
     let changed = 0
-    const before = this._history.captureSnapshot()
-    this._sceneStore.updatePersisted((persisted) => {
-      persisted.plants = persisted.plants.map((plant) => {
-        if (!selectedPlantIds.has(plant.id)) return plant
-        const currentColor = normalizeHexColor(plant.color)
-        if (currentColor === nextColor) return plant
-        changed += 1
-        return {
-          ...plant,
-          color: nextColor,
-        }
+    this._sceneEdits.run('set-selected-plant-color', (tx) => {
+      tx.mutate((persisted) => {
+        persisted.plants = persisted.plants.map((plant) => {
+          if (!selectedPlantIds.has(plant.id)) return plant
+          const currentColor = normalizeHexColor(plant.color)
+          if (currentColor === nextColor) return plant
+          changed += 1
+          return {
+            ...plant,
+            color: nextColor,
+          }
+        })
       })
     })
-    if (changed > 0) {
-      this._history.markDirty(before)
-      this._invalidateScene()
-    }
     return changed
   }
 
   setPlantColorForSpecies(canonicalName: string, color: string | null): number {
     const nextColor = normalizeHexColor(color)
-    const previousSpeciesColor = normalizeHexColor(
-      this._sceneStore.persisted.plantSpeciesColors[canonicalName] ?? null,
-    )
-    const speciesColorChanged = previousSpeciesColor !== nextColor
     let changed = 0
-    const before = this._history.captureSnapshot()
 
-    this._sceneStore.updatePersisted((persisted) => {
-      persisted.plants = persisted.plants.map((plant) => {
-        if (plant.canonicalName !== canonicalName) return plant
-        const currentColor = normalizeHexColor(plant.color)
-        if (currentColor === nextColor) return plant
-        changed += 1
-        return {
-          ...plant,
-          color: nextColor,
-        }
+    this._sceneEdits.run('set-plant-color-for-species', (tx) => {
+      tx.mutate((persisted) => {
+        persisted.plants = persisted.plants.map((plant) => {
+          if (plant.canonicalName !== canonicalName) return plant
+          const currentColor = normalizeHexColor(plant.color)
+          if (currentColor === nextColor) return plant
+          changed += 1
+          return {
+            ...plant,
+            color: nextColor,
+          }
+        })
+        const nextSpeciesColors = { ...persisted.plantSpeciesColors }
+        if (nextColor) nextSpeciesColors[canonicalName] = nextColor
+        else delete nextSpeciesColors[canonicalName]
+        persisted.plantSpeciesColors = nextSpeciesColors
       })
-      const nextSpeciesColors = { ...persisted.plantSpeciesColors }
-      if (nextColor) nextSpeciesColors[canonicalName] = nextColor
-      else delete nextSpeciesColors[canonicalName]
-      persisted.plantSpeciesColors = nextSpeciesColors
+      this._presentation.syncPlantSpeciesColors()
     })
-
-    this._presentation.syncPlantSpeciesColors()
-
-    if (changed > 0 || speciesColorChanged) {
-      this._history.markDirty(before)
-      this._invalidateScene()
-    }
 
     return changed
   }
@@ -403,15 +378,14 @@ export class SceneRuntimeMutationController {
   clearPlantSpeciesColor(canonicalName: string): boolean {
     const hadColor = normalizeHexColor(this._sceneStore.persisted.plantSpeciesColors[canonicalName] ?? null) !== null
     if (!hadColor) return false
-    const before = this._history.captureSnapshot()
-    this._sceneStore.updatePersisted((persisted) => {
-      const nextSpeciesColors = { ...persisted.plantSpeciesColors }
-      delete nextSpeciesColors[canonicalName]
-      persisted.plantSpeciesColors = nextSpeciesColors
+    this._sceneEdits.run('clear-plant-species-color', (tx) => {
+      tx.mutate((persisted) => {
+        const nextSpeciesColors = { ...persisted.plantSpeciesColors }
+        delete nextSpeciesColors[canonicalName]
+        persisted.plantSpeciesColors = nextSpeciesColors
+      })
+      this._presentation.syncPlantSpeciesColors()
     })
-    this._presentation.syncPlantSpeciesColors()
-    this._history.markDirty(before)
-    this._invalidateScene()
     return true
   }
 
@@ -420,17 +394,16 @@ export class SceneRuntimeMutationController {
     const selected = getSelectedTopLevelTargets(persisted, this._sceneStore.session.selectedEntityIds)
     if (selected.length === 0) return
 
-    const before = this._history.captureSnapshot()
     const resolved = resolveSelectedEntitySets(persisted, selected)
 
-    this._sceneStore.updatePersisted((draft) => {
-      draft.plants = reorderSceneEntities(draft.plants, resolved.plantIds, position, (plant) => plant.id)
-      draft.zones = reorderSceneEntities(draft.zones, resolved.zoneIds, position, (zone) => zone.name)
-      draft.annotations = reorderSceneEntities(draft.annotations, resolved.annotationIds, position, (annotation) => annotation.id)
-      draft.groups = reorderSceneEntities(draft.groups, resolved.groupIds, position, (group) => group.id)
+    this._sceneEdits.run(position === 'start' ? 'send-to-back' : 'bring-to-front', (tx) => {
+      tx.mutate((draft) => {
+        draft.plants = reorderSceneEntities(draft.plants, resolved.plantIds, position, (plant) => plant.id)
+        draft.zones = reorderSceneEntities(draft.zones, resolved.zoneIds, position, (zone) => zone.name)
+        draft.annotations = reorderSceneEntities(draft.annotations, resolved.annotationIds, position, (annotation) => annotation.id)
+        draft.groups = reorderSceneEntities(draft.groups, resolved.groupIds, position, (group) => group.id)
+      })
     })
-    this._history.markDirty(before)
-    this._invalidateScene()
   }
 }
 

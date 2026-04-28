@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { CanopiFile } from '../../../types/design'
 import { SceneStore } from '../scene'
 import { SceneRuntimeMutationController } from './mutations'
+import { SceneRuntimeEditCoordinator } from './transactions'
 
 function makeFile(): CanopiFile {
   return {
@@ -86,32 +87,41 @@ function createController(file = makeFile()) {
     presentationSyncs: 0,
     plantSpeciesColorSyncs: 0,
   }
+  const captureSnapshot = () => {
+    const snapshot = sceneStore.snapshot()
+    return {
+      persisted: snapshot.persisted,
+      session: snapshot.session,
+      lockedIds: new Set(state.lockedIds),
+    }
+  }
+  const setSelection = (ids: Iterable<string>) => {
+    sceneStore.setSelection(ids)
+  }
+  const sceneEdits = new SceneRuntimeEditCoordinator({
+    sceneStore,
+    captureSnapshot,
+    markDirty: (_before, type) => {
+      state.dirtyTypes.push(type ?? 'scene-mutation')
+      return true
+    },
+    setSelection,
+    setLockedIds: (ids) => {
+      state.lockedIds = new Set(ids)
+    },
+    invalidate: (kind) => {
+      if (kind === 'scene') state.invalidations += 1
+    },
+  })
   const controller = new SceneRuntimeMutationController({
     sceneStore,
     selection: {
-      set: (ids) => {
-        sceneStore.setSelection(ids)
-      },
+      set: setSelection,
     },
     locks: {
       get: () => state.lockedIds,
-      set: (ids) => {
-        state.lockedIds = new Set(ids)
-      },
     },
-    history: {
-      captureSnapshot: () => {
-        const snapshot = sceneStore.snapshot()
-        return {
-          persisted: snapshot.persisted,
-          session: snapshot.session,
-          lockedIds: new Set(state.lockedIds),
-        }
-      },
-      markDirty: (_before, type) => {
-        state.dirtyTypes.push(type ?? 'scene-mutation')
-      },
-    },
+    sceneEdits,
     presentation: {
       syncSignals: () => {
         state.presentationSyncs += 1
@@ -160,7 +170,7 @@ describe('scene runtime mutation controller', () => {
     expect(sceneStore.persisted.plants).toEqual([])
     expect(sceneStore.session.selectedEntityIds.size).toBe(0)
     expect(state.lockedIds).toEqual(new Set())
-    expect(state.dirtyTypes).toEqual(['scene-mutation'])
+    expect(state.dirtyTypes).toEqual(['delete-selected'])
     expect(state.invalidations).toBe(1)
   })
 
@@ -199,7 +209,7 @@ describe('scene runtime mutation controller', () => {
       'Malus domestica': '#C44230',
     })
     expect(state.plantSpeciesColorSyncs).toBe(1)
-    expect(state.dirtyTypes).toEqual(['scene-mutation'])
+    expect(state.dirtyTypes).toEqual(['set-plant-color-for-species'])
     expect(state.invalidations).toBe(1)
   })
 })

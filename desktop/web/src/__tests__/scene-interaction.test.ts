@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { plantStampSpecies } from '../canvas/plant-tool-state'
+import { lockedObjectIds } from '../canvas/runtime-mirror-state'
 import { selectedObjectIds } from '../canvas/session-state'
 import { snapToGridEnabled } from '../app/canvas-settings/signals'
 import { CameraController } from '../canvas/runtime/camera'
 import { SceneStore } from '../canvas/runtime/scene'
 import { SceneInteractionController, type SceneInteractionDeps } from '../canvas/runtime/scene-interaction'
+import { SceneRuntimeEditCoordinator } from '../canvas/runtime/scene-runtime/transactions'
 
 function createPlantPresentationContext(viewportScale: number) {
   return {
@@ -19,7 +21,8 @@ function createInteractionDeps(
   container: HTMLDivElement,
   store: SceneStore,
   camera: CameraController,
-  overrides: Partial<Pick<SceneInteractionDeps, 'render' | 'markDirty' | 'setTool' | 'setHoveredEntityId' | 'setViewport'>> = {},
+  overrides: Partial<Pick<SceneInteractionDeps, 'render' | 'sceneEdits' | 'setTool' | 'setHoveredEntityId' | 'setViewport'>>
+    & { onSceneEditCommit?: (type: string) => void } = {},
 ): SceneInteractionDeps {
   let selection = new Set<string>()
   const setSelection = vi.fn((ids: Iterable<string>) => {
@@ -31,6 +34,29 @@ function createInteractionDeps(
     selection = new Set()
     store.setSelection(selection)
     selectedObjectIds.value = new Set()
+  })
+  const render = (overrides.render ?? (() => {})) as SceneInteractionDeps['render']
+  const sceneEdits = overrides.sceneEdits ?? new SceneRuntimeEditCoordinator({
+    sceneStore: store,
+    captureSnapshot: () => {
+      const snapshot = store.snapshot()
+      return {
+        persisted: snapshot.persisted,
+        session: snapshot.session,
+        lockedIds: new Set(lockedObjectIds.value),
+      }
+    },
+    markDirty: (_before, type) => {
+      overrides.onSceneEditCommit?.(type ?? 'scene-mutation')
+      return true
+    },
+    setSelection,
+    setLockedIds: (ids) => {
+      lockedObjectIds.value = new Set(ids)
+    },
+    invalidate: (kind) => {
+      if (kind === 'scene' || kind === 'viewport') render(kind)
+    },
   })
 
   return {
@@ -45,11 +71,11 @@ function createInteractionDeps(
     getSelection: () => new Set(selection),
     setSelection,
     clearSelection,
+    sceneEdits,
     setTool: (overrides.setTool ?? ((name: string) => {
       void name
     })) as SceneInteractionDeps['setTool'],
-    render: (overrides.render ?? (() => {})) as SceneInteractionDeps['render'],
-    markDirty: (overrides.markDirty ?? (() => {})) as SceneInteractionDeps['markDirty'],
+    render,
     setHoveredEntityId: overrides.setHoveredEntityId ?? (() => {}),
     getLocalizedCommonNames: () => new Map(),
   } as SceneInteractionDeps
@@ -80,6 +106,7 @@ describe('SceneInteractionController', () => {
     camera.setViewport({ x: 0, y: 0, scale: 1 })
     store = new SceneStore()
     selectedObjectIds.value = new Set()
+    lockedObjectIds.value = new Set()
     plantStampSpecies.value = null
     snapToGridEnabled.value = false
   })
@@ -87,6 +114,7 @@ describe('SceneInteractionController', () => {
   afterEach(() => {
     container.remove()
     selectedObjectIds.value = new Set()
+    lockedObjectIds.value = new Set()
     plantStampSpecies.value = null
     snapToGridEnabled.value = false
   })
@@ -111,8 +139,8 @@ describe('SceneInteractionController', () => {
     })
 
     const render = vi.fn()
-    const markDirty = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { render, markDirty })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { render, onSceneEditCommit })
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('select')
 
@@ -122,7 +150,7 @@ describe('SceneInteractionController', () => {
 
     expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
     expect(store.persisted.plants[0]?.position).toEqual({ x: 35, y: 45 })
-    expect(markDirty).toHaveBeenCalledTimes(1)
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-drag')
     expect(deps.setSelection).toHaveBeenCalledWith(new Set(['plant-1']))
     controller.dispose()
   })
@@ -144,8 +172,8 @@ describe('SceneInteractionController', () => {
 
   it('creates a rectangle zone from the rectangle tool drag', () => {
     const render = vi.fn()
-    const markDirty = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { render, markDirty })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { render, onSceneEditCommit })
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('rectangle')
 
@@ -163,7 +191,7 @@ describe('SceneInteractionController', () => {
         { x: 10, y: 60 },
       ],
     })
-    expect(markDirty).toHaveBeenCalledTimes(1)
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-rectangle')
     expect(deps.setSelection).toHaveBeenCalledTimes(1)
     controller.dispose()
   })
@@ -219,8 +247,8 @@ describe('SceneInteractionController', () => {
       }]
     })
 
-    const markDirty = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { markDirty })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('select')
 
@@ -234,7 +262,7 @@ describe('SceneInteractionController', () => {
     ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 232, clientY: 248, button: 0 }))
 
     expect(store.persisted.plants[0]?.position).toEqual({ x: 60, y: 60 })
-    expect(markDirty).toHaveBeenCalledTimes(1)
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-drag')
     controller.dispose()
   })
 
@@ -260,8 +288,8 @@ describe('SceneInteractionController', () => {
   })
 
   it('creates plant placements from drag-and-drop payloads', () => {
-    const markDirty = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { markDirty })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
     const controller = new SceneInteractionController(deps as any)
 
     const dropEvent = new Event('drop', { bubbles: true, cancelable: true }) as DragEvent
@@ -290,7 +318,7 @@ describe('SceneInteractionController', () => {
       position: { x: 80, y: 90 },
       scale: 3,
     })
-    expect(markDirty).toHaveBeenCalledTimes(1)
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-drop')
     controller.dispose()
   })
 

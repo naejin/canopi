@@ -11,12 +11,11 @@ import { guides } from '../scene-metadata-state'
 import { lockedObjectIds } from '../runtime-mirror-state'
 import type { SceneStore, ScenePoint } from './scene'
 import type { CameraController } from './camera'
-import type { SceneCommandSnapshot } from './scene-commands'
 import type { PlantPresentationContext } from './plant-presentation'
 import type { SpeciesCacheEntry } from './species-cache'
 import type { SceneViewportState } from './scene'
 import {
-  applySceneDragDelta,
+  applySceneDragDeltaToDraft,
   captureSceneDragState,
   createSceneDragState,
   resetSceneDragState,
@@ -30,12 +29,12 @@ import {
 } from './interaction/overlay-ui'
 import { cursorForTool, hasAdditiveModifier, isEditableTarget } from './interaction/pointer-utils'
 import {
-  appendDroppedPlant,
-  appendRectangleZone,
-  appendStampedPlant,
-  appendTextAnnotation,
+  appendDroppedPlantToDraft,
+  appendRectangleZoneToDraft,
+  appendTextAnnotationToDraft,
   parsePlantDropPayload,
 } from './interaction/tool-actions'
+import type { SceneEditCoordinator, SceneEditTransaction } from './scene-runtime/transactions'
 
 type InteractionTool = 'select' | 'hand' | 'rectangle' | 'text' | 'plant-stamp' | string
 
@@ -49,9 +48,9 @@ export interface SceneInteractionDeps {
   getSelection: () => ReadonlySet<string>
   setSelection: (ids: Iterable<string>) => void
   clearSelection: () => void
+  sceneEdits: SceneEditCoordinator
   setTool: (name: string) => void
   render: (kind: 'scene' | 'viewport') => void
-  markDirty: (before: SceneCommandSnapshot) => void
   setHoveredEntityId: (id: string | null) => void
   getLocalizedCommonNames: () => ReadonlyMap<string, string | null>
 }
@@ -64,7 +63,7 @@ export class SceneInteractionController {
   private _pointerId: number | null = null
   private _startScreen: ScenePoint | null = null
   private _startWorld: ScenePoint | null = null
-  private _beforeSnapshot: SceneCommandSnapshot | null = null
+  private _dragEdit: SceneEditTransaction | null = null
   private readonly _dragState = createSceneDragState()
   private _bandAdditive = false
   private _textarea: HTMLTextAreaElement | null = null
@@ -205,7 +204,7 @@ export class SceneInteractionController {
 
     this._mode = 'dragging'
     this._bandAdditive = false
-    this._beforeSnapshot = this._captureSnapshot()
+    this._dragEdit = this._deps.sceneEdits.begin('interaction-drag')
     captureSceneDragState(this._dragState, scene, this._deps.getSelection())
     this._dragSnapRef =
       this._dragState.plantStarts.get(hit.id) ??
@@ -275,7 +274,9 @@ export class SceneInteractionController {
       if (Math.abs(delta.x - this._lastDragDelta.x) < 0.0001
         && Math.abs(delta.y - this._lastDragDelta.y) < 0.0001) return
       this._lastDragDelta = delta
-      applySceneDragDelta(this._deps.getSceneStore(), this._dragState, delta)
+      this._dragEdit?.mutate((draft) => {
+        applySceneDragDeltaToDraft(draft, this._dragState, delta)
+      })
       this._deps.render('scene')
       return
     }
@@ -295,15 +296,15 @@ export class SceneInteractionController {
     const screen = this._screenPoint(event)
     const rawWorld = this._deps.camera.screenToWorld(screen)
 
-    if (this._mode === 'dragging' && this._beforeSnapshot) {
+    if (this._mode === 'dragging' && this._dragEdit) {
       const moved = Math.abs(this._lastDragDelta.x) > 0.001
         || Math.abs(this._lastDragDelta.y) > 0.001
       if (moved) {
-        this._deps.markDirty(this._beforeSnapshot)
+        this._dragEdit.commit({ invalidate: 'scene' })
       } else {
-        this._restoreBeforeSnapshot()
+        this._dragEdit.abort()
+        this._deps.render('scene')
       }
-      this._deps.render('scene')
     }
 
     if (this._mode === 'band' && this._startWorld) {
@@ -329,13 +330,13 @@ export class SceneInteractionController {
     if (this._mode === 'rectangle' && this._startWorld) {
       const rect = computeSelectionRect(this._startWorld, rawWorld)
       if (rect.width >= 0.5 && rect.height >= 0.5) {
-        const before = this._captureSnapshot()
-        const zoneName = appendRectangleZone(this._deps.getSceneStore(), rect)
-        if (zoneName) {
-          this._deps.setSelection([zoneName])
-        }
-        this._deps.markDirty(before)
-        this._deps.render('scene')
+        this._deps.sceneEdits.run('interaction-rectangle', (tx) => {
+          let zoneName: string | null = null
+          tx.mutate((draft) => {
+            zoneName = appendRectangleZoneToDraft(draft, rect)
+          })
+          if (zoneName) tx.setSelection([zoneName])
+        })
       }
     }
 
@@ -369,11 +370,12 @@ export class SceneInteractionController {
     hideInteractionPreview(this._preview)
     const payload = parsePlantDropPayload(event)
     if (!payload) return
-    const before = this._captureSnapshot()
     const world = this._applySnapping(this._deps.camera.screenToWorld(this._screenPoint(event)))
-    appendDroppedPlant(this._deps.getSceneStore(), payload, world)
-    this._deps.markDirty(before)
-    this._deps.render('scene')
+    this._deps.sceneEdits.run('interaction-drop', (tx) => {
+      tx.mutate((draft) => {
+        appendDroppedPlantToDraft(draft, payload, world)
+      })
+    })
   }
 
   private _screenPoint(event: Pick<MouseEvent, 'clientX' | 'clientY'>): ScenePoint {
@@ -406,7 +408,8 @@ export class SceneInteractionController {
     this._pointerId = null
     this._startScreen = null
     this._startWorld = null
-    this._beforeSnapshot = null
+    this._dragEdit?.abort()
+    this._dragEdit = null
     this._dragSnapRef = null
     this._lastDragDelta = { x: 0, y: 0 }
     this._cachedContainerRect = null
@@ -453,22 +456,14 @@ export class SceneInteractionController {
     }
   }
 
-  private _restoreBeforeSnapshot(): void {
-    if (!this._beforeSnapshot) return
-    this._deps.getSceneStore().restoreSnapshot({
-      persisted: this._beforeSnapshot.persisted,
-      session: this._beforeSnapshot.session,
-    })
-    this._deps.setSelection(this._beforeSnapshot.session.selectedEntityIds)
-  }
-
   private _placePlantFromStamp(world: ScenePoint): void {
     const species = plantStampSpecies.value
     if (!species) return
-    const before = this._captureSnapshot()
-    appendStampedPlant(this._deps.getSceneStore(), species, world)
-    this._deps.markDirty(before)
-    this._deps.render('scene')
+    this._deps.sceneEdits.run('interaction-stamp-plant', (tx) => {
+      tx.mutate((draft) => {
+        appendDroppedPlantToDraft(draft, species, world)
+      })
+    })
   }
 
   private _handleTextPointerDown(world: ScenePoint): void {
@@ -545,11 +540,13 @@ export class SceneInteractionController {
     this._removeTextarea()
     if (!text) return
 
-    const before = this._captureSnapshot()
-    const nextId = appendTextAnnotation(this._deps.getSceneStore(), position, text)
-    this._deps.setSelection([nextId])
-    this._deps.markDirty(before)
-    this._deps.render('scene')
+    this._deps.sceneEdits.run('interaction-text', (tx) => {
+      let nextId = ''
+      tx.mutate((draft) => {
+        nextId = appendTextAnnotationToDraft(draft, position, text)
+      })
+      tx.setSelection([nextId])
+    })
   }
 
   private _removeTextarea(): void {
@@ -558,12 +555,4 @@ export class SceneInteractionController {
     this._textWorldPosition = null
   }
 
-  private _captureSnapshot(): SceneCommandSnapshot {
-    const snapshot = this._deps.getSceneStore().snapshot()
-    return {
-      persisted: snapshot.persisted,
-      session: snapshot.session,
-      lockedIds: new Set(lockedObjectIds.value),
-    }
-  }
 }

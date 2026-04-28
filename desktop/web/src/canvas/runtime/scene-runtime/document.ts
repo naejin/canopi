@@ -126,15 +126,16 @@ export class SceneRuntimeDocumentBridge {
     }
   }
 
-  markDirty(before: SceneCommandSnapshot, type = 'scene-mutation'): void {
+  markDirty(before: SceneCommandSnapshot, type = 'scene-mutation'): boolean {
     const after = this.captureCommandSnapshot()
     const command = createScenePatchCommand(type, before, after)
-    if (!command) return
+    if (!command) return false
     this._history.record(command)
     this._sceneStore.updateSession((session) => {
       session.documentRevision += 1
     })
     sceneEntityRevision.value += 1
+    return true
   }
 
   historyRuntime(): SceneCommandRuntime {
