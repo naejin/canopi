@@ -1,4 +1,5 @@
 import type { CanopiFile } from '../../../types/design'
+import { composeDocumentForSave } from '../../../app/contracts/document'
 import { guides } from '../../scene-metadata-state'
 import { lockedObjectIds, sceneEntityRevision } from '../../runtime-mirror-state'
 import type { SceneStore } from '../scene'
@@ -91,30 +92,7 @@ export class SceneRuntimeDocumentBridge {
     this._applySignalBackedSceneState({ recordHistory: false, syncGuides: shouldSyncGuides })
 
     const canvasOutput = this._sceneStore.toCanopiFile({ now: new Date() })
-    const nextExtra = { ...(doc.extra ?? {}) }
-    if (canvasOutput.extra && 'guides' in canvasOutput.extra) nextExtra.guides = canvasOutput.extra.guides
-    else delete nextExtra.guides
-
-    return {
-      ...doc,
-      ...canvasOutput,
-      name: metadata.name,
-      description: metadata.description ?? doc.description ?? null,
-      location: metadata.location
-        ? {
-            lat: metadata.location.lat,
-            lon: metadata.location.lon,
-            altitude_m: metadata.location.altitude_m ?? null,
-          }
-        : doc.location ?? null,
-      north_bearing_deg: metadata.northBearingDeg ?? doc.north_bearing_deg ?? 0,
-      created_at: doc.created_at,
-      extra: nextExtra,
-      consortiums: doc.consortiums,
-      timeline: doc.timeline,
-      budget: doc.budget,
-      budget_currency: doc.budget_currency ?? 'EUR',
-    }
+    return composeDocumentForSave({ metadata, document: doc, canvas: canvasOutput })
   }
 
   captureCommandSnapshot(): SceneCommandSnapshot {
