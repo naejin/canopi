@@ -7,6 +7,7 @@ pub use builder::QueryBuilder;
 pub(crate) use builder::build_count_query;
 pub(crate) use builder::decode_relevance_offset;
 pub(crate) use builder::sanitize_fts_text;
+pub(crate) use crate::db::plant_filter_fields::{filter_field_kind, PlantFilterFieldKind};
 pub use columns::sort_column;
 pub(crate) use columns::validated_column;
 #[allow(unused_imports)]

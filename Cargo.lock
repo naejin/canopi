@@ -236,6 +236,8 @@ name = "bindings-gen"
 version = "0.4.0"
 dependencies = [
  "common-types",
+ "serde",
+ "serde_json",
  "specta",
  "specta-typescript",
 ]

@@ -64,14 +64,14 @@ function formatExtraFilterDisplay(
   const fieldDef = FIELD_REGISTRY.find((field) => field.key === filter.field)
   const cachedValues = localeOptions[filter.field]?.values
 
-  if (fieldDef?.type === 'categorical' && cachedValues) {
+  if (fieldDef?.kind === 'categorical' && cachedValues) {
     const localizedValues = filter.values.map((value) => (
       cachedValues.find((candidate) => candidate.value === value)?.label ?? value
     ))
     return localizedValues.length > 0 ? `${label}: ${localizedValues.join(', ')}` : label
   }
 
-  if (fieldDef?.type === 'numeric') {
+  if (fieldDef?.kind === 'numeric') {
     const formattedValue = formatNumericExtraValue(filter)
     return formattedValue ? `${label}: ${formattedValue}` : label
   }
@@ -95,7 +95,7 @@ export function ActiveChips() {
     const uncachedFields: string[] = [];
     for (const ef of currentExtras) {
       const fieldDef = FIELD_REGISTRY.find((f) => f.key === ef.field);
-      if (fieldDef?.type === 'categorical' && !seen.has(fieldDef.key) && !cache[fieldDef.key]) {
+      if (fieldDef?.kind === 'categorical' && !seen.has(fieldDef.key) && !cache[fieldDef.key]) {
         seen.add(fieldDef.key);
         uncachedFields.push(fieldDef.key);
       }
@@ -150,7 +150,7 @@ export function ActiveChips() {
     chips.push({
       key: `extra-${ef.field}`,
       label: formatExtraFilterDisplay(ef, label, localeOptions),
-      color: cat?.color ?? '--color-primary',
+      color: cat?.colorToken ?? '--color-primary',
       onDismiss: () => removeExtraFilter(ef.field),
     });
   }

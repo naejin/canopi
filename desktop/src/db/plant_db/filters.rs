@@ -2,6 +2,7 @@ use common_types::species::{DynamicFilterOptions, FilterOptions, FilterValue};
 use rusqlite::Connection;
 
 use super::lookup::translate_composite_value;
+use crate::db::query_builder::{filter_field_kind, validated_column, PlantFilterFieldKind};
 
 pub fn get_filter_options(conn: &Connection) -> Result<FilterOptions, String> {
     let families: Vec<String> = distinct_text_values(
@@ -74,76 +75,80 @@ pub fn get_dynamic_filter_options(
     let mut results = Vec::with_capacity(fields.len());
 
     for field in fields {
-        let Some(column) = crate::db::query_builder::validated_column(field) else {
+        let Some(column) = validated_column(field) else {
             tracing::warn!(
                 "Dynamic filter field is not allowlisted in this backend build: {field}"
             );
             continue;
         };
+        let Some(field_kind) = filter_field_kind(field) else {
+            tracing::warn!("Dynamic filter field has no generated kind: {field}");
+            continue;
+        };
         let column_name = column.strip_prefix("s.").unwrap_or(column);
 
-        if is_boolean_field(field) {
-            results.push(DynamicFilterOptions {
-                field: field.clone(),
-                field_type: "boolean".to_owned(),
-                values: None,
-                range: None,
-            });
-            continue;
+        match field_kind {
+            PlantFilterFieldKind::Boolean => {
+                results.push(DynamicFilterOptions {
+                    field: field.clone(),
+                    field_type: "boolean".to_owned(),
+                    values: None,
+                    range: None,
+                });
+            }
+            PlantFilterFieldKind::Numeric => {
+                // Safety: column_name comes from validated_column() allowlist — not user input.
+                // Column identifiers cannot be bound as SQL parameters.
+                let range_result: Result<Option<(f64, f64)>, _> = conn
+                    .query_row(
+                        &format!(
+                            "SELECT MIN(CAST({column_name} AS REAL)), MAX(CAST({column_name} AS REAL)) \
+                             FROM species WHERE {column_name} IS NOT NULL AND typeof({column_name}) IN ('integer', 'real')"
+                        ),
+                        [],
+                        |row| {
+                            let min: Option<f64> = row.get(0)?;
+                            let max: Option<f64> = row.get(1)?;
+                            Ok(min.zip(max))
+                        },
+                    )
+                    .map_err(|e| format!("Failed to query range for {field}: {e}"));
+
+                results.push(DynamicFilterOptions {
+                    field: field.clone(),
+                    field_type: "numeric".to_owned(),
+                    values: None,
+                    range: range_result.ok().flatten(),
+                });
+            }
+            PlantFilterFieldKind::Categorical => {
+                // Safety: column_name comes from validated_column() allowlist — not user input.
+                let sql = format!(
+                    "SELECT DISTINCT {column_name} FROM species \
+                     WHERE {column_name} IS NOT NULL AND {column_name} != '' \
+                     ORDER BY {column_name} LIMIT 100"
+                );
+                let mut stmt = conn
+                    .prepare(&sql)
+                    .map_err(|e| format!("Failed to prepare distinct query for {field}: {e}"))?;
+                let values: Vec<FilterValue> = stmt
+                    .query_map([], |row| row.get::<_, String>(0))
+                    .map_err(|e| format!("Failed to fetch values for {field}: {e}"))?
+                    .filter_map(|result| result.ok())
+                    .map(|value| FilterValue {
+                        label: translate_composite_value(conn, field, &value, locale),
+                        value,
+                    })
+                    .collect();
+
+                results.push(DynamicFilterOptions {
+                    field: field.clone(),
+                    field_type: "categorical".to_owned(),
+                    values: Some(values),
+                    range: None,
+                });
+            }
         }
-
-        if is_numeric_field(field) {
-            // Safety: column_name comes from validated_column() allowlist — not user input.
-            // Column identifiers cannot be bound as SQL parameters.
-            let range_result: Result<Option<(f64, f64)>, _> = conn
-                .query_row(
-                    &format!(
-                        "SELECT MIN(CAST({column_name} AS REAL)), MAX(CAST({column_name} AS REAL)) \
-                         FROM species WHERE {column_name} IS NOT NULL AND typeof({column_name}) IN ('integer', 'real')"
-                    ),
-                    [],
-                    |row| {
-                        let min: Option<f64> = row.get(0)?;
-                        let max: Option<f64> = row.get(1)?;
-                        Ok(min.zip(max))
-                    },
-                )
-                .map_err(|e| format!("Failed to query range for {field}: {e}"));
-
-            results.push(DynamicFilterOptions {
-                field: field.clone(),
-                field_type: "numeric".to_owned(),
-                values: None,
-                range: range_result.ok().flatten(),
-            });
-            continue;
-        }
-
-        // Safety: column_name comes from validated_column() allowlist — not user input.
-        let sql = format!(
-            "SELECT DISTINCT {column_name} FROM species \
-             WHERE {column_name} IS NOT NULL AND {column_name} != '' \
-             ORDER BY {column_name} LIMIT 100"
-        );
-        let mut stmt = conn
-            .prepare(&sql)
-            .map_err(|e| format!("Failed to prepare distinct query for {field}: {e}"))?;
-        let values: Vec<FilterValue> = stmt
-            .query_map([], |row| row.get::<_, String>(0))
-            .map_err(|e| format!("Failed to fetch values for {field}: {e}"))?
-            .filter_map(|result| result.ok())
-            .map(|value| FilterValue {
-                label: translate_composite_value(conn, field, &value, locale),
-                value,
-            })
-            .collect();
-
-        results.push(DynamicFilterOptions {
-            field: field.clone(),
-            field_type: "categorical".to_owned(),
-            values: Some(values),
-            range: None,
-        });
     }
 
     Ok(results)
@@ -174,55 +179,4 @@ fn boolean_exists(conn: &Connection, column_name: &str) -> bool {
         |row| row.get(0),
     )
     .unwrap_or(false)
-}
-
-fn is_boolean_field(field: &str) -> bool {
-    matches!(
-        field,
-        "woody"
-            | "frost_tender"
-            | "allelopathic"
-            | "attracts_wildlife"
-            | "scented"
-            | "self_fertile"
-            | "noxious_status"
-            | "invasive_usda"
-            | "weed_potential"
-            | "fire_resistant"
-            | "resprout_ability"
-            | "coppice_potential"
-            | "tolerates_acid"
-            | "tolerates_alkaline"
-            | "tolerates_saline"
-            | "tolerates_wind"
-            | "tolerates_pollution"
-            | "tolerates_nutritionally_poor"
-            | "propagated_by_seed"
-            | "propagated_by_cuttings"
-            | "cold_stratification_required"
-            | "serotinous"
-    )
-}
-
-fn is_numeric_field(field: &str) -> bool {
-    matches!(
-        field,
-        "soil_ph_min"
-            | "soil_ph_max"
-            | "root_depth_min_cm"
-            | "frost_free_days_min"
-            | "precip_min_inches"
-            | "precip_max_inches"
-            | "medicinal_rating"
-            | "other_uses_rating"
-            | "hardiness_zone_min"
-            | "hardiness_zone_max"
-            | "height_max_m"
-            | "ellenberg_light"
-            | "ellenberg_temperature"
-            | "ellenberg_moisture"
-            | "ellenberg_reaction"
-            | "ellenberg_nitrogen"
-            | "ellenberg_salt"
-    )
 }

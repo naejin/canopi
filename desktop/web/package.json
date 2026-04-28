@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "gen:types": "cargo run -p bindings-gen",
-    "check:types": "npm run gen:types && git diff --exit-code -- src/generated/contracts.ts src/generated/known-canopi-keys.ts",
+    "check:types": "npm run gen:types && git diff --exit-code -- src/generated/contracts.ts src/generated/known-canopi-keys.ts src/generated/plant-filter-fields.ts ../src/db/plant_filter_fields.rs",
     "prepare": "cd ../.. && husky desktop/web/.husky"
   },
   "dependencies": {

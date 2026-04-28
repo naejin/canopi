@@ -35,7 +35,13 @@ Rust `Settings` from the user DB is the settings authority. The frontend mirrors
 
 `hydrateSettingsProjection()` is the bootstrap boundary, `snapshotSettingsProjection()` maps the current projection back to Rust `Settings`, and `flushSettingsProjection()` is the teardown boundary for queued writes. The first-paint theme cache remains separate from settings authority: it may prime the theme signal before bootstrap, but Rust settings overwrite the projection when hydration completes.
 
-Plant-search verification when touching `desktop/web/src/state/plant-db.ts` or `desktop/web/src/components/plant-db/ResultsList.tsx`:
+## Plant Filter Field Schema
+
+Plant filter field metadata is owned by `common-types/plant-filter-fields.json`. Run `cd desktop/web && npm run gen:types` after changing it; the generator emits the frontend adapter at `desktop/web/src/generated/plant-filter-fields.ts` and the Rust SQL allowlist adapter at `desktop/src/db/plant_filter_fields.rs`.
+
+The frontend adapter intentionally omits SQL columns. More Filters should use `dynamicFilterFieldsForCategory()` and related helpers for grouping, strip placement, field kind, color token, and option ordering. Rust SQL filtering should continue to go through `validated_column()` and `filter_field_kind()` so the generated static allowlist remains the security boundary.
+
+Plant-search verification when touching `desktop/web/src/app/plant-browser/*` or `desktop/web/src/components/plant-db/ResultsList.tsx`:
 
 ```bash
 # Focused frontend regression tests

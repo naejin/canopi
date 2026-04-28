@@ -17,10 +17,6 @@ import { FilterChip } from './FilterChip'
 import { orderFilterValues } from './value-ordering'
 import { RangeSlider } from './RangeSlider'
 import styles from './MoreFiltersPanel.module.css'
-import type { SpeciesFilter } from '../../types/species'
-
-/** Fields handled by FilterStrip as first-class typed filters - exclude from dynamic More Filters. */
-const STRIP_FIELDS = new Set<string>(['habit', 'woody'] satisfies (keyof SpeciesFilter)[])
 
 interface Props {
   open: boolean
@@ -113,7 +109,6 @@ function CategorySection({ category, searchQuery }: {
   void locale.value
   const open = useSignal(false)
   const fields = fieldsForCategory(category.key as FilterCategory)
-    .filter((f) => !STRIP_FIELDS.has(f.key))
   const extras = extraFilters.value
 
   // Filter fields by search query
@@ -132,7 +127,7 @@ function CategorySection({ category, searchQuery }: {
   const isOpen = open.value || searchQuery.length > 0
 
   return (
-    <div className={styles.categorySection} style={{ '--cat-color': `var(${category.color})` } as Record<string, string>}>
+    <div className={styles.categorySection} style={{ '--cat-color': `var(${category.colorToken})` } as Record<string, string>}>
       <button
         type="button"
         className={styles.categoryHeader}
@@ -165,7 +160,7 @@ function FieldRow({ field }: { field: FieldDef }) {
   const activeFilter = extras.find((ef) => ef.field === field.key)
   const label = t(field.i18nKey, field.key)
 
-  if (field.type === 'boolean') {
+  if (field.kind === 'boolean') {
     const isActive = !!activeFilter
     return (
       <div className={styles.fieldRow}>
@@ -216,7 +211,7 @@ function FieldRow({ field }: { field: FieldDef }) {
 
       {expanded.value && (
         <div className={styles.fieldPicker}>
-          {field.type === 'categorical' && opts?.values && (
+          {field.kind === 'categorical' && opts?.values && (
             <div className={styles.chipGrid}>
               {orderFilterValues(field.key, opts.values).map((v) => {
                 const selected = activeFilter?.values.includes(v.value) ?? false
@@ -224,7 +219,7 @@ function FieldRow({ field }: { field: FieldDef }) {
                   <FilterChip
                     key={v.value}
                     label={v.label}
-                    color={field.color}
+                    color={field.colorToken}
                     active={selected}
                     onClick={() => {
                       const current = activeFilter?.values ?? []
@@ -245,7 +240,7 @@ function FieldRow({ field }: { field: FieldDef }) {
             </div>
           )}
 
-          {field.type === 'numeric' && opts?.range && (
+          {field.kind === 'numeric' && opts?.range && (
             <RangeSlider
               min={opts.range[0]}
               max={opts.range[1]}
