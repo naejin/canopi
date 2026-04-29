@@ -8,6 +8,7 @@ import {
   clearFilters,
   activeFilterCount,
   patchFilters,
+  plantFilterCatalog,
   plantSearchSession,
 } from '../../app/plant-browser'
 import type { SpeciesFilter } from '../../types/species'
@@ -30,17 +31,26 @@ export function FilterStrip({ onMoreFilters }: { onMoreFilters: () => void }) {
   const filters = plantSearchSession.intent.value.filters;
   const showClear = hasActiveFilters.value;
   const count = activeFilterCount.value;
+  const woodyField = plantFilterCatalog.stripFields().find((field) => field.key === 'woody');
 
   useEffect(() => {
     void loadFilterOptions();
   }, []);
 
-  const chipRows: ChipRowConfig[] = [
-    { label: t('filters.climateZone'), options: opts?.climate_zones ?? [], filterKey: 'climate_zones', i18nPrefix: 'filters.climateZone_', color: '--color-sun' },
-    { label: t('filters.habit'), options: opts?.habits ?? [], filterKey: 'habit', i18nPrefix: 'filters.habit_', color: '--color-family' },
+  const schemaChipRows: ChipRowConfig[] = plantFilterCatalog.stripChoiceFields().map((entry) => ({
+    label: t(entry.field.i18nKey, entry.field.key),
+    options: opts?.[entry.optionsKey] ?? [],
+    filterKey: entry.filterKey,
+    i18nPrefix: entry.valueI18nPrefix,
+    color: entry.field.colorToken,
+  }));
+
+  const specialChipRows: ChipRowConfig[] = [
     { label: t('filters.sun'), options: opts?.sun_tolerances ?? [], filterKey: 'sun_tolerances', i18nPrefix: 'plantDb.sunTolerance_', color: '--color-sun' },
     { label: t('filters.lifecycle'), options: opts?.life_cycles ?? [], filterKey: 'life_cycle', i18nPrefix: 'filters.lifeCycle_', color: '--color-family' },
   ];
+
+  const chipRows = [...schemaChipRows, ...specialChipRows];
 
   return (
     <div className={styles.filterStrip}>
@@ -75,7 +85,7 @@ export function FilterStrip({ onMoreFilters }: { onMoreFilters: () => void }) {
       </div>
 
       <div className={styles.filterRow}>
-        <span className={styles.filterLabel}>{t('filters.woody')}</span>
+        <span className={styles.filterLabel}>{t(woodyField?.i18nKey ?? 'filters.woody', 'Woody')}</span>
         <div className={styles.filterControl}>
           <label className={styles.toggleSwitch}>
             <input

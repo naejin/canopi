@@ -178,6 +178,40 @@ mod tests {
     }
 
     #[test]
+    fn test_climate_zone_filter_maps_to_junction_subquery() {
+        let mut f = default_filter();
+        f.climate_zones = Some(vec!["Temperate".to_owned(), "Boreal".to_owned()]);
+        let plan = SpeciesSearchPlan::build(request(None, f, None, Sort::Name, 20, false));
+        let sql = plan.list().sql();
+        let params = plan.list().params();
+
+        assert!(sql.contains("species_climate_zones cz"));
+        assert!(sql.contains("cz.climate_zone IN (?"));
+        assert!(
+            params
+                .iter()
+                .any(|param| matches!(param, Value::Text(value) if value == "Temperate"))
+        );
+        assert!(
+            params
+                .iter()
+                .any(|param| matches!(param, Value::Text(value) if value == "Boreal"))
+        );
+    }
+
+    #[test]
+    fn test_schema_backed_strip_filters_use_generated_columns() {
+        let mut f = default_filter();
+        f.habit = Some(vec!["Tree".to_owned()]);
+        f.woody = Some(true);
+        let plan = SpeciesSearchPlan::build(request(None, f, None, Sort::Name, 20, false));
+        let sql = plan.list().sql();
+
+        assert!(sql.contains(validated_column("habit").unwrap()));
+        assert!(sql.contains(validated_column("woody").unwrap()));
+    }
+
+    #[test]
     fn test_edible_filter() {
         let mut f = default_filter();
         f.edible = Some(true);
@@ -440,5 +474,52 @@ mod tests {
         );
         assert!(!plan.list().sql().contains("not_a_species_column"));
         assert!(!plan.count().unwrap().sql().contains("not_a_species_column"));
+    }
+
+    #[test]
+    fn test_dynamic_filter_plan_uses_generated_kind_operator_support() {
+        let mut f = default_filter();
+        f.extra = Some(vec![
+            DynamicFilter {
+                field: "frost_tender".to_owned(),
+                op: FilterOp::IsTrue,
+                values: vec![],
+            },
+            DynamicFilter {
+                field: "growth_form_type".to_owned(),
+                op: FilterOp::In,
+                values: vec!["Tree".to_owned(), "Shrub".to_owned()],
+            },
+            DynamicFilter {
+                field: "height_max_m".to_owned(),
+                op: FilterOp::Gte,
+                values: vec!["2.5".to_owned()],
+            },
+            DynamicFilter {
+                field: "medicinal_rating".to_owned(),
+                op: FilterOp::Between,
+                values: vec!["1".to_owned(), "4".to_owned()],
+            },
+            DynamicFilter {
+                field: "growth_form_type".to_owned(),
+                op: FilterOp::Gte,
+                values: vec!["5".to_owned()],
+            },
+            DynamicFilter {
+                field: "frost_tender".to_owned(),
+                op: FilterOp::In,
+                values: vec!["true".to_owned()],
+            },
+        ]);
+
+        let plan = SpeciesSearchPlan::build(request(None, f, None, Sort::Name, 20, true));
+        let sql = plan.list().sql();
+
+        assert!(sql.contains("s.frost_tender = 1"));
+        assert!(sql.contains("s.growth_form_type IN (?"));
+        assert!(sql.contains("s.height_max_m >= ?"));
+        assert!(sql.contains("s.medicinal_rating BETWEEN ?"));
+        assert!(!sql.contains("s.growth_form_type >="));
+        assert!(!sql.contains("s.frost_tender IN"));
     }
 }

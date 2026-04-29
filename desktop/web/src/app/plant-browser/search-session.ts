@@ -8,6 +8,9 @@ import type {
   SpeciesFilter,
   SpeciesListItem,
 } from '../../types/species'
+import { createEmptySpeciesFilter, plantFilterModel } from './plant-filter-model'
+
+export { createEmptySpeciesFilter }
 
 export type PlantSearchStatus = 'idle' | 'loading-first-page' | 'loading-next-page' | 'error'
 
@@ -110,34 +113,8 @@ const defaultTimers: PlantSearchTimers = {
   clearTimeout: (handle) => clearTimeout(handle),
 }
 
-export function createEmptySpeciesFilter(): SpeciesFilter {
-  return {
-    sun_tolerances: null,
-    soil_tolerances: null,
-    growth_rate: null,
-    life_cycle: null,
-    edible: null,
-    edibility_min: null,
-    nitrogen_fixer: null,
-    climate_zones: null,
-    habit: null,
-    woody: null,
-    family: null,
-    extra: null,
-  }
-}
-
 export function isPlantSearchLoading(status: PlantSearchStatus): boolean {
   return status === 'loading-first-page' || status === 'loading-next-page'
-}
-
-function mergeExtraFilters(
-  filters: SpeciesFilter,
-  extraFilters: readonly DynamicFilter[],
-): SpeciesFilter {
-  if (extraFilters.length === 0) return filters
-  const existing = filters.extra ?? []
-  return { ...filters, extra: [...existing, ...extraFilters] }
 }
 
 function errorMessage(error: unknown): string {
@@ -203,7 +180,7 @@ export function createPlantSearchSession({
     try {
       const result = await search(
         requestIntent.text,
-        mergeExtraFilters(requestIntent.filters, requestIntent.extraFilters),
+        plantFilterModel.toRequestFilters(requestIntent.filters, requestIntent.extraFilters),
         null,
         pageSize,
         requestIntent.sort,
@@ -293,7 +270,7 @@ export function createPlantSearchSession({
     try {
       const result = await search(
         requestIntent.text,
-        mergeExtraFilters(requestIntent.filters, requestIntent.extraFilters),
+        plantFilterModel.toRequestFilters(requestIntent.filters, requestIntent.extraFilters),
         cursor,
         pageSize,
         requestIntent.sort,
