@@ -19,7 +19,7 @@ These instructions are for AI agents working in this repository. Optimize for lo
 - `common-types/`: shared Rust and TypeScript contracts. Regenerate bindings when these change.
 - `bindings-gen/`: codegen for frontend transport bindings.
 - `scripts/`: database preparation and release tooling.
-- `.interface-design/`: design system directory (removed — tokens documented in this file and in `global.css`).
+- `.interface-design/`: design system documentation (field notebook aesthetic, tokens, component patterns).
 
 ## Common Commands
 
