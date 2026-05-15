@@ -336,6 +336,13 @@
       "Low": {"fr": "Faible", "es": "Baja", "pt": "Baixa", "it": "Bassa", "zh": "低", "de": "Niedrig", "ja": "低", "ko": "낮음", "nl": "Laag", "ru": "Низкая"},
       "Medium": {"fr": "Moyenne", "es": "Media", "pt": "Média", "it": "Media", "zh": "中", "de": "Mittel", "ja": "中", "ko": "보통", "nl": "Gemiddeld", "ru": "Средняя"}
     },
+    "pollination_syndrome": {
+      "Entomophilous": {"fr": "Entomophile", "es": "Entomófila", "pt": "Entomófila", "it": "Entomofila", "zh": "虫媒", "de": "Entomophil", "ja": "虫媒", "ko": "곤충매개", "nl": "Entomofiel", "ru": "Энтомофильное"},
+      "Anemophilous": {"fr": "Anémophile", "es": "Anemófila", "pt": "Anemófila", "it": "Anemofila", "zh": "风媒", "de": "Anemophil", "ja": "風媒", "ko": "풍매", "nl": "Anemofiel", "ru": "Анемофильное"},
+      "Zoophilous": {"fr": "Zoophile", "es": "Zoofila", "pt": "Zoofila", "it": "Zoofila", "zh": "动物媒", "de": "Zoophil", "ja": "動物媒", "ko": "동물매개", "nl": "Zoofiel", "ru": "Зоофильное"},
+      "Hydrophilous": {"fr": "Hydrophile", "es": "Hidrófila", "pt": "Hidrófila", "it": "Idrofila", "zh": "水媒", "de": "Hydrophil", "ja": "水媒", "ko": "수매", "nl": "Hydrofiel", "ru": "Гидрофильное"},
+      "Autogamous": {"fr": "Autogame", "es": "Autógama", "pt": "Autógama", "it": "Autogama", "zh": "自花授粉", "de": "Autogam", "ja": "自花受粉", "ko": "자가수정", "nl": "Autogaam", "ru": "Автогамное"}
+    },
     "anaerobic_tolerance": {
       "High": {"fr": "Élevée", "es": "Alta", "pt": "Alta", "it": "Alta", "zh": "高", "de": "Hoch", "ja": "高", "ko": "높음", "nl": "Hoog", "ru": "Высокая"},
       "Low": {"fr": "Faible", "es": "Baja", "pt": "Baixa", "it": "Bassa", "zh": "低", "de": "Niedrig", "ja": "低", "ko": "낮음", "nl": "Laag", "ru": "Низкая"},
