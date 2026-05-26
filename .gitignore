@@ -24,6 +24,7 @@ desktop/web/src/bindings.ts
 desktop/gen/
 
 # Claude / plugin caches
+.agents/
 .cache/
 .claude-plugins/
 .claude.local.md
