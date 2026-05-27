@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   cancelQueuedLoad: vi.fn(),
   consumeQueuedDocumentLoad: vi.fn((_session?: unknown) => () => {}),
   disposeDocumentWorkflows: vi.fn(),
-  flushSettingsProjection: vi.fn(),
+  flushSettingsProjection: vi.fn(async () => undefined),
   runtimeInitImpl: vi.fn(async (_container?: HTMLElement) => undefined),
   runtimeInstances: [] as Array<Record<string, unknown>>,
   snapshotCanvasIntoCurrentDocument: vi.fn(),
@@ -149,7 +149,8 @@ describe("useCanvasDocumentSession", () => {
     mocks.consumeQueuedDocumentLoad.mockClear();
     mocks.consumeQueuedDocumentLoad.mockImplementation(() => mocks.cancelQueuedLoad);
     mocks.disposeDocumentWorkflows.mockClear();
-    mocks.flushSettingsProjection.mockClear();
+    mocks.flushSettingsProjection.mockReset();
+    mocks.flushSettingsProjection.mockResolvedValue(undefined);
     mocks.runtimeInitImpl.mockReset();
     mocks.runtimeInitImpl.mockResolvedValue(undefined);
     mocks.runtimeInstances.length = 0;

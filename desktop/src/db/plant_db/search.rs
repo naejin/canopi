@@ -296,6 +296,57 @@ mod tests {
     }
 
     #[test]
+    fn height_pagination_continues_after_null_sort_value() {
+        let conn = test_db();
+        conn.execute(
+            "INSERT INTO species (
+                id,
+                canonical_name, slug, common_name, family, genus,
+                height_max_m, hardiness_zone_min, hardiness_zone_max,
+                growth_rate, stratum, edibility_rating, medicinal_rating, width_max_m
+            ) VALUES (
+                3,
+                'Height unknown', 'height-unknown', 'Height Unknown', 'Rosaceae', 'Unknown',
+                NULL, 5, 9,
+                'Slow', 'Low', 1, 1, 1.0
+            )",
+            [],
+        )
+        .unwrap();
+
+        let first = search(
+            &conn,
+            None,
+            SpeciesFilter::default(),
+            None,
+            Sort::Height,
+            1,
+            true,
+            "en".to_owned(),
+        )
+        .unwrap();
+
+        assert_eq!(first.items.len(), 1);
+        assert_eq!(first.items[0].canonical_name, "Height unknown");
+        let next_cursor = first.next_cursor.clone().expect("expected cursor");
+
+        let second = search(
+            &conn,
+            None,
+            SpeciesFilter::default(),
+            Some(next_cursor),
+            Sort::Height,
+            1,
+            false,
+            "en".to_owned(),
+        )
+        .unwrap();
+
+        assert_eq!(second.items.len(), 1);
+        assert_eq!(second.items[0].canonical_name, "Lavandula alpha");
+    }
+
+    #[test]
     fn count_query_errors_are_returned() {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(

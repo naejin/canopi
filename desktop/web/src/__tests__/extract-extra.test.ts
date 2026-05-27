@@ -1,8 +1,8 @@
 /**
- * Tests for extractExtra() — forward-compatibility field preservation.
+ * Tests for extractExtra() — forward-compatibility field identification.
  *
  * Rust's #[serde(flatten)] produces top-level JSON keys for unknown fields.
- * extractExtra() captures these so they survive the TS round-trip.
+ * extractExtra() identifies these so they can survive the TS round-trip as top-level fields.
  */
 import { describe, it, expect } from 'vitest'
 import { extractDocumentExtra as extractExtra } from '../app/contracts/document'

@@ -229,7 +229,7 @@ describe('settings projection', () => {
       settings.locale = 'es'
       settings.bottomPanel.open = true
     }, { persist: 'immediate' })
-    await Promise.resolve()
+    await flushSettingsProjection()
 
     expect(vi.mocked(setSettings)).toHaveBeenCalledTimes(1)
     expect(vi.mocked(setSettings)).toHaveBeenCalledWith(expect.objectContaining({
@@ -253,7 +253,7 @@ describe('settings projection', () => {
     expect(vi.mocked(setSettings)).not.toHaveBeenCalled()
 
     vi.advanceTimersByTime(1)
-    await Promise.resolve()
+    await flushSettingsProjection()
 
     expect(vi.mocked(setSettings)).toHaveBeenCalledTimes(1)
     expect(vi.mocked(setSettings)).toHaveBeenCalledWith(expect.objectContaining({
@@ -270,13 +270,54 @@ describe('settings projection', () => {
       settings.mapLayers.contourIntervalMeters = 24
     }, { persist: 'queued', delayMs: 250 })
 
-    flushSettingsProjection()
-    await Promise.resolve()
+    await flushSettingsProjection()
     vi.runAllTimers()
 
     expect(vi.mocked(setSettings)).toHaveBeenCalledTimes(1)
     expect(vi.mocked(setSettings)).toHaveBeenCalledWith(expect.objectContaining({
       contour_interval: 24,
+    }))
+  })
+
+  it('keeps failed persistence outside the saved baseline so flush can retry it', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.mocked(setSettings)
+      .mockRejectedValueOnce(new Error('settings db unavailable'))
+      .mockResolvedValueOnce(undefined)
+    hydrateSettingsProjection(baseSettings())
+
+    mutateSettingsProjection((settings) => {
+      settings.locale = 'fr'
+    }, { persist: 'immediate' })
+
+    await expect(flushSettingsProjection()).rejects.toThrow('settings db unavailable')
+    await flushSettingsProjection()
+
+    expect(vi.mocked(setSettings)).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(setSettings)).toHaveBeenLastCalledWith(expect.objectContaining({
+      locale: 'fr',
+    }))
+    consoleError.mockRestore()
+  })
+
+  it('serializes overlapping writes so the latest projection wins', async () => {
+    hydrateSettingsProjection(baseSettings())
+
+    mutateSettingsProjection((settings) => {
+      settings.locale = 'fr'
+    }, { persist: 'immediate' })
+    mutateSettingsProjection((settings) => {
+      settings.locale = 'en'
+    }, { persist: 'immediate' })
+
+    await flushSettingsProjection()
+
+    expect(vi.mocked(setSettings)).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(setSettings)).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      locale: 'fr',
+    }))
+    expect(vi.mocked(setSettings)).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      locale: 'en',
     }))
   })
 

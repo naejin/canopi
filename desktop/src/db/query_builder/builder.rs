@@ -1,9 +1,12 @@
 use common_types::species::{Sort, SpeciesFilter, SpeciesListItem};
 use rusqlite::types::Value;
 
-use super::columns::sort_column;
+use super::columns::sort_key_expression;
 use super::cursor::{decode_cursor, encode_cursor};
 use super::filters::append_structured_filters;
+
+const HEIGHT_NULL_SORT_VALUE: f64 = -1.0;
+const HARDINESS_NULL_SORT_VALUE: i64 = 0;
 
 /// Sanitize text for FTS5 MATCH, returning `None` if nothing useful remains.
 pub(crate) fn sanitize_fts_text(text: &str) -> Option<String> {
@@ -162,9 +165,7 @@ fn build_list_statement(
         SpeciesSearchPagePlan::RelevanceOffset { .. } => {
             "ORDER BY bm25(species_search_fts, 8, 10, 5, 1, 1), s.canonical_name".to_owned()
         }
-        SpeciesSearchPagePlan::Keyset { .. } => {
-            format!("ORDER BY {}, s.canonical_name", sort_column(&request.sort))
-        }
+        SpeciesSearchPagePlan::Keyset { .. } => order_by_clause(&request.sort),
     };
 
     let limit_position = params.len() + 1;
@@ -253,7 +254,7 @@ fn where_sql(where_clauses: &[String]) -> String {
 fn cursor_clause(cursor: &Option<String>, sort: &Sort, params: &mut Vec<Value>) -> Option<String> {
     let cursor = cursor.as_ref()?;
     let (sort_value, cursor_name) = decode_cursor(cursor)?;
-    let column = sort_column(sort);
+    let sort_expression = sort_key_expression(sort);
 
     if matches!(sort, Sort::Name | Sort::Relevance) {
         let clause = format!("s.canonical_name > ?{}", params.len() + 1);
@@ -263,7 +264,7 @@ fn cursor_clause(cursor: &Option<String>, sort: &Sort, params: &mut Vec<Value>) 
 
     let clause = format!(
         "({}, s.canonical_name) > (?{}, ?{})",
-        column,
+        sort_expression,
         params.len() + 1,
         params.len() + 2
     );
@@ -271,16 +272,24 @@ fn cursor_clause(cursor: &Option<String>, sort: &Sort, params: &mut Vec<Value>) 
         Sort::Height => sort_value
             .parse::<f64>()
             .map(Value::Real)
-            .unwrap_or(Value::Null),
+            .unwrap_or(Value::Real(HEIGHT_NULL_SORT_VALUE)),
         Sort::Hardiness => sort_value
             .parse::<i64>()
             .map(Value::Integer)
-            .unwrap_or(Value::Null),
+            .unwrap_or(Value::Integer(HARDINESS_NULL_SORT_VALUE)),
         _ => Value::Text(sort_value),
     };
     params.push(typed_value);
     params.push(Value::Text(cursor_name));
     Some(clause)
+}
+
+fn order_by_clause(sort: &Sort) -> String {
+    if matches!(sort, Sort::Name | Sort::Relevance) {
+        return "ORDER BY s.canonical_name".to_owned();
+    }
+
+    format!("ORDER BY {}, s.canonical_name", sort_key_expression(sort))
 }
 
 fn decode_relevance_offset(cursor: Option<&str>) -> Option<u32> {
@@ -297,11 +306,11 @@ fn item_sort_value(sort: &Sort, item: &SpeciesListItem) -> String {
         Sort::Height => item
             .height_max_m
             .map(|height| height.to_string())
-            .unwrap_or_default(),
+            .unwrap_or_else(|| HEIGHT_NULL_SORT_VALUE.to_string()),
         Sort::Hardiness => item
             .hardiness_zone_min
             .map(|zone| zone.to_string())
-            .unwrap_or_default(),
+            .unwrap_or_else(|| HARDINESS_NULL_SORT_VALUE.to_string()),
         Sort::GrowthRate => item.growth_rate.clone().unwrap_or_default(),
         Sort::Name | Sort::Relevance => item.canonical_name.clone(),
     }

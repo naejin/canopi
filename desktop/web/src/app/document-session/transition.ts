@@ -44,6 +44,13 @@ export interface DocumentTransitionRequest {
   isCancelled?: () => boolean;
 }
 
+export interface DetachedDocumentTransitionRequest {
+  source: DocumentTransitionSource;
+  dirtyGuard: DirtyGuardMode;
+  load: () => Promise<DocumentTransitionLoadResult>;
+  isCancelled?: () => boolean;
+}
+
 export type DocumentTransitionStatus = "applied" | "cancelled" | "queued" | "failed";
 
 export interface DocumentTransitionResult {
@@ -127,6 +134,43 @@ export async function transitionDocument(
     return {
       status: "failed",
       documentLoaded: request.session.hasLoadedDocument(),
+      error,
+    };
+  }
+}
+
+export async function transitionDetachedDocument(
+  request: DetachedDocumentTransitionRequest,
+): Promise<DocumentTransitionResult> {
+  try {
+    if (request.dirtyGuard === "confirm") {
+      const decision = await confirmReplacement(null);
+      if (decision === "cancel") {
+        return cancelledResult(null);
+      }
+    }
+
+    const loaded = await request.load();
+    if (request.isCancelled?.()) {
+      return cancelledResult(null);
+    }
+
+    const file = normalizeDocumentForSource(request.source, loaded.file);
+    replaceCurrentDesignState(file, loaded.path, loaded.name);
+    resetDirtyBaselines();
+    installConsortiumSync();
+
+    return {
+      status: "applied",
+      documentLoaded: false,
+    };
+  } catch (error) {
+    if (isCancelled(error)) {
+      return cancelledResult(null);
+    }
+    return {
+      status: "failed",
+      documentLoaded: false,
       error,
     };
   }
@@ -273,7 +317,7 @@ function startQueuedDocumentLoad({
   };
 }
 
-async function confirmReplacement(session: CanvasDocumentSurface): Promise<ReplacementDecision> {
+async function confirmReplacement(session: CanvasDocumentSurface | null): Promise<ReplacementDecision> {
   if (!currentDesign.value) return "proceed";
   if (!designDirty.value) return "proceed";
 
@@ -313,10 +357,10 @@ function normalizeDocumentForSource(
   return normalizeLoadedDocument(file);
 }
 
-function cancelledResult(session: CanvasDocumentSurface): DocumentTransitionResult {
+function cancelledResult(session: CanvasDocumentSurface | null): DocumentTransitionResult {
   return {
     status: "cancelled",
-    documentLoaded: session.hasLoadedDocument(),
+    documentLoaded: session?.hasLoadedDocument() ?? false,
   };
 }
 

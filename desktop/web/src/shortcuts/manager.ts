@@ -28,9 +28,14 @@ export function initShortcuts() {
   _keydownHandler = (e: KeyboardEvent) => {
     // Don't capture when typing in inputs
     const isInput = isEditableTarget(e.target);
+    const key = e.key.toLowerCase();
 
     // Ctrl+Shift+P — command palette
-    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === COMMAND_PALETTE_SHORTCUT_KEY) {
+    if (
+      (e.ctrlKey || e.metaKey)
+      && e.shiftKey
+      && key === COMMAND_PALETTE_SHORTCUT_KEY.toLowerCase()
+    ) {
       e.preventDefault();
       commandPaletteOpen.value = !commandPaletteOpen.value;
       return;
@@ -71,22 +76,22 @@ export function initShortcuts() {
 
     // File operations — canvas panel, with or without focus on canvas
     if (activePanel.value === "canvas") {
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "s") {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && key === "s") {
         e.preventDefault();
         void saveCurrentDesign().catch(() => {});
         return;
       }
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "S") {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && key === "s") {
         e.preventDefault();
         void saveAsCurrentDesign();
         return;
       }
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "o") {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && key === "o") {
         e.preventDefault();
         void openDesign();
         return;
       }
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "n") {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && key === "n") {
         e.preventDefault();
         void newDesignAction();
         return;
@@ -115,31 +120,31 @@ export function initShortcuts() {
         return;
       }
       // Ctrl+Z — undo
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "z") {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && key === "z") {
         e.preventDefault();
         session.undo();
         return;
       }
       // Ctrl+Shift+Z — redo
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "z") {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && key === "z") {
         e.preventDefault();
         session.redo();
         return;
       }
       // Ctrl+C — copy
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "c") {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && key === "c") {
         e.preventDefault();
         session.copy();
         return;
       }
       // Ctrl+V — paste
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "v") {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && key === "v") {
         e.preventDefault();
         session.paste();
         return;
       }
       // Ctrl+D — duplicate
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "d") {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && key === "d") {
         e.preventDefault();
         session.duplicateSelected();
         return;
@@ -151,7 +156,7 @@ export function initShortcuts() {
         return;
       }
       // Ctrl+A — select all
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "a") {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && key === "a") {
         e.preventDefault();
         session.selectAll();
         return;
@@ -167,20 +172,20 @@ export function initShortcuts() {
         return;
       }
       // Ctrl+L — lock/unlock toggle
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "l") {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && key === "l") {
         e.preventDefault();
         if (currentCanvasHasSelection.value) session.lockSelected();
         else session.unlockSelected();
         return;
       }
       // Ctrl+G — group
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "g") {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && key === "g") {
         e.preventDefault();
         session.groupSelected();
         return;
       }
       // Ctrl+Shift+G — ungroup
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "G") {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && key === "g") {
         e.preventDefault();
         session.ungroupSelected();
         return;

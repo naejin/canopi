@@ -23,7 +23,7 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 ## Document Authority
 
 - Canvas scene state is owned by `SceneStore`: plants, zones, annotations, groups, plant species colors, layers, and canvas session state.
-- Non-canvas document state is owned by the document layer: consortiums, timeline, budget, `budget_currency`, location, description, and top-level unknown `extra` fields.
+- Non-canvas document state is owned by the document layer: consortiums, timeline, budget, `budget_currency`, location, description, explicit `extra`, and unknown top-level fields.
 - Non-canvas state must not be pushed into `SceneStore`.
 - Canvas state should not be mirrored into standalone signals when a computed value or runtime query surface is enough.
 - New cross-domain sync belongs in a workflow module, not a component effect and not an action-module import cycle.
@@ -33,8 +33,8 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 - Preserve `created_at` from loaded files.
 - Preserve loaded document sections on save: timeline, budget, consortiums, description, location, and extra fields.
 - Preserve per-object non-visual fields such as plant notes, planted date, quantity, and zone notes.
-- Preserve unknown top-level fields through document `extra`.
-- Spread `extra` first when composing persisted output so known fields remain authoritative.
+- Preserve unknown top-level fields as top-level fields. Keep explicit document `extra` for known frontend metadata such as guides.
+- Spread unknown top-level fields first when composing persisted output so known fields remain authoritative.
 - `KNOWN_CANOPI_KEYS` must include `extra`; otherwise `extractDocumentExtra()` can double-nest the `extra` object.
 - Top-level annotations belong in the schema. Do not put live annotations under `extra`.
 - `serializeScenePersistedState()` emits canvas-owned fields plus placeholders for required non-canvas fields. `serializeDocument()` overwrites placeholders with document-store values.

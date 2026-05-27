@@ -67,4 +67,19 @@ describe('shortcut manager canvas tool switching', () => {
     expect(openSpy).toHaveBeenCalledTimes(1)
     expect(newSpy).toHaveBeenCalledTimes(1)
   })
+
+  it('routes Ctrl+Shift+Z redo when the browser reports an uppercase key', () => {
+    const redo = vi.fn()
+    setCurrentCanvasSession({
+      redo,
+    } as any)
+
+    window.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'Z',
+      ctrlKey: true,
+      shiftKey: true,
+    }))
+
+    expect(redo).toHaveBeenCalledTimes(1)
+  })
 })

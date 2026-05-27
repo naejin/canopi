@@ -152,7 +152,7 @@ describe('bottom panel actions', () => {
       setHillshadeOpacity(0.25)
 
       vi.runAllTimers()
-      await Promise.resolve()
+      await flushSettingsProjection()
 
       expect(vi.mocked(setSettings)).toHaveBeenCalledWith(expect.objectContaining({
         map_layer_visible: false,
@@ -174,8 +174,7 @@ describe('bottom panel actions', () => {
 
     expect(vi.mocked(setSettings)).not.toHaveBeenCalled()
 
-    flushSettingsProjection()
-    await Promise.resolve()
+    await flushSettingsProjection()
 
     expect(vi.mocked(setSettings)).toHaveBeenCalledWith(expect.objectContaining({
       map_opacity: 0.6,

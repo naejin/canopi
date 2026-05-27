@@ -87,8 +87,8 @@ describe('LayerPanel', () => {
     })
   })
 
-  afterEach(() => {
-    flushSettingsProjection()
+  afterEach(async () => {
+    await flushSettingsProjection()
     vi.runOnlyPendingTimers()
     vi.useRealTimers()
     render(null, container)
@@ -159,7 +159,7 @@ describe('LayerPanel', () => {
     })
     expect(contourIntervalMeters.value).toBe(25)
     vi.runAllTimers()
-    await Promise.resolve()
+    await flushSettingsProjection()
     expect(vi.mocked(setSettings)).toHaveBeenCalledWith(expect.objectContaining({
       contour_visible: true,
       contour_interval: 25,
@@ -191,7 +191,7 @@ describe('LayerPanel', () => {
     })
     expect(hillshadeOpacity.value).toBe(0.3)
     vi.runAllTimers()
-    await Promise.resolve()
+    await flushSettingsProjection()
     expect(vi.mocked(setSettings)).toHaveBeenCalledWith(expect.objectContaining({
       hillshade_visible: true,
       hillshade_opacity: 0.3,

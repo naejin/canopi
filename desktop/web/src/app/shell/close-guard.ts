@@ -41,11 +41,19 @@ export function registerCloseGuard(): void {
 
   void getCurrentWindow()
     .onCloseRequested(async (event) => {
-      flushSettingsProjection();
-
-      if (!designDirty.value) return;
-
       event.preventDefault();
+
+      try {
+        await flushSettingsProjection();
+      } catch (error) {
+        console.error("Failed to flush settings before close:", error);
+        return;
+      }
+
+      if (!designDirty.value) {
+        await getCurrentWindow().destroy();
+        return;
+      }
 
       const decision = await confirmCloseWithUnsavedChanges();
       if (decision === "cancel") return;

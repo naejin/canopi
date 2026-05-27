@@ -258,7 +258,7 @@ mod tests {
             false,
         ));
         let sql = plan.list().sql();
-        assert!(sql.contains("(s.family, s.canonical_name) >"));
+        assert!(sql.contains("(COALESCE(s.family, ''), s.canonical_name) >"));
     }
 
     #[test]
@@ -373,6 +373,77 @@ mod tests {
             assert_eq!(sort_value, expected_value);
             assert_eq!(canonical_name, item.canonical_name);
         }
+    }
+
+    #[test]
+    fn test_nullable_keyset_cursors_use_non_null_sentinels() {
+        let mut height = list_item("Height unknown");
+        height.height_max_m = None;
+        let height_plan = SpeciesSearchPlan::build(request(
+            None,
+            default_filter(),
+            None,
+            Sort::Height,
+            20,
+            false,
+        ));
+        let height_cursor = height_plan
+            .next_cursor(std::slice::from_ref(&height), true)
+            .expect("expected cursor");
+        let height_cursor_plan = SpeciesSearchPlan::build(request(
+            None,
+            default_filter(),
+            Some(height_cursor),
+            Sort::Height,
+            20,
+            false,
+        ));
+
+        assert!(
+            height_cursor_plan
+                .list()
+                .sql()
+                .contains("(COALESCE(s.height_max_m, -1.0), s.canonical_name) >")
+        );
+        assert!(matches!(
+            height_cursor_plan.list().params().get(2),
+            Some(Value::Real(value)) if (*value + 1.0).abs() < f64::EPSILON
+        ));
+
+        let mut hardiness = list_item("Hardiness unknown");
+        hardiness.hardiness_zone_min = None;
+        let hardiness_plan = SpeciesSearchPlan::build(request(
+            None,
+            default_filter(),
+            None,
+            Sort::Hardiness,
+            20,
+            false,
+        ));
+        let hardiness_cursor = hardiness_plan
+            .next_cursor(std::slice::from_ref(&hardiness), true)
+            .expect("expected cursor");
+        let hardiness_cursor_plan = SpeciesSearchPlan::build(request(
+            None,
+            default_filter(),
+            Some(hardiness_cursor),
+            Sort::Hardiness,
+            20,
+            false,
+        ));
+
+        assert!(matches!(
+            hardiness_cursor_plan.list().params().get(2),
+            Some(Value::Integer(0))
+        ));
+        assert!(
+            !height_cursor_plan
+                .list()
+                .params()
+                .iter()
+                .chain(hardiness_cursor_plan.list().params().iter())
+                .any(|param| matches!(param, Value::Null))
+        );
     }
 
     #[test]

@@ -1,9 +1,10 @@
 import { getCurrentCanvasDocumentSurface } from "../../canvas/session";
 import type { CanvasDocumentSurface } from "../../canvas/runtime/runtime";
 import * as designIpc from "../../ipc/design";
-import { pendingDesignPath, pendingTemplateImport } from "../../state/design";
+import { currentDesign, pendingDesignPath, pendingTemplateImport } from "../../state/design";
 import {
   transitionDocument,
+  transitionDetachedDocument,
   type DocumentTransitionResult,
   consumeQueuedDocumentLoad,
   saveCurrentDesign,
@@ -26,17 +27,17 @@ export {
 /** Open file dialog and replace the active document through the shared guard. */
 export async function openDesign(): Promise<void> {
   const session = getCurrentCanvasDocumentSurface();
-  if (!session) return;
-
-  const result = await transitionDocument({
+  const request = {
     source: "open-dialog",
     dirtyGuard: "confirm",
-    session,
     load: async () => {
       const { file, path } = await designIpc.openDesignDialog();
       return { file, path, name: file.name };
     },
-  });
+  } as const;
+  const result = session
+    ? await transitionDocument({ ...request, session })
+    : await transitionDetachedDocument(request);
 
   throwIfFailed(result);
 }
@@ -48,6 +49,21 @@ export async function openDesignFromPath(
 ): Promise<void> {
   const session = options.session ?? getCurrentCanvasDocumentSurface();
   if (!session) {
+    if (currentDesign.value) {
+      const result = await transitionDetachedDocument({
+        source: "open-path",
+        dirtyGuard: "confirm",
+        load: async () => {
+          const file = await designIpc.loadDesign(path);
+          return { file, path, name: file.name };
+        },
+        isCancelled: options.isCancelled,
+      });
+
+      throwIfFailed(result);
+      return;
+    }
+
     pendingDesignPath.value = path;
     return;
   }
@@ -74,6 +90,22 @@ export async function openDesignAsTemplate(
 ): Promise<TemplateOpenResult> {
   const session = options.session ?? getCurrentCanvasDocumentSurface();
   if (!session) {
+    if (currentDesign.value) {
+      const result = await transitionDetachedDocument({
+        source: "template",
+        dirtyGuard: "confirm",
+        load: async () => ({
+          file: await designIpc.loadDesign(path),
+          path: null,
+          name,
+        }),
+        isCancelled: options.isCancelled,
+      });
+
+      throwIfFailed(result);
+      return result.status === "applied" ? "opened" : "cancelled";
+    }
+
     pendingTemplateImport.value = { path, name };
     return "queued";
   }
@@ -97,18 +129,18 @@ export async function openDesignAsTemplate(
 /** Create a new blank design through the shared replacement guard. */
 export async function newDesignAction(): Promise<void> {
   const session = getCurrentCanvasDocumentSurface();
-  if (!session) return;
-
-  const result = await transitionDocument({
+  const request = {
     source: "new",
     dirtyGuard: "confirm",
-    session,
     load: async () => ({
       file: await designIpc.newDesign(),
       path: null,
       name: "Untitled",
     }),
-  });
+  } as const;
+  const result = session
+    ? await transitionDocument({ ...request, session })
+    : await transitionDetachedDocument(request);
 
   throwIfFailed(result);
 }

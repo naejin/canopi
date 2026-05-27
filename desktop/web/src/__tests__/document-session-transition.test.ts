@@ -46,6 +46,7 @@ import type { CanvasDocumentSurface } from "../canvas/runtime/runtime";
 import {
   beginEmptyDocumentSession,
   consumeQueuedDocumentLoad,
+  transitionDetachedDocument,
   transitionDocument,
 } from "../app/document-session/transition";
 import {
@@ -261,6 +262,50 @@ describe("document session transition", () => {
     expect(designName.value).toBe("Forest Edge");
     expect(designPath.value).toBe(null);
     expect(designDirty.value).toBe(false);
+  });
+
+  it("applies detached replacements without requiring a canvas session", async () => {
+    nonCanvasRevision.value = 1;
+    mocks.message.mockResolvedValue("Don't Save");
+
+    const result = await transitionDetachedDocument({
+      source: "open-path",
+      dirtyGuard: "confirm",
+      load: async () => ({
+        file: makeFile("Detached Next"),
+        path: "/designs/detached-next.canopi",
+        name: "Detached Next",
+      }),
+    });
+
+    expect(result).toEqual({ status: "applied", documentLoaded: false });
+    expect(currentDesign.value?.name).toBe("Detached Next");
+    expect(designName.value).toBe("Detached Next");
+    expect(designPath.value).toBe("/designs/detached-next.canopi");
+    expect(designDirty.value).toBe(false);
+    expect(mocks.installConsortiumSync).toHaveBeenCalledTimes(1);
+  });
+
+  it("saves dirty detached documents through the document snapshot", async () => {
+    nonCanvasRevision.value = 1;
+    mocks.message.mockResolvedValue("Save");
+
+    const result = await transitionDetachedDocument({
+      source: "open-path",
+      dirtyGuard: "confirm",
+      load: async () => ({
+        file: makeFile("Detached Next"),
+        path: "/designs/detached-next.canopi",
+        name: "Detached Next",
+      }),
+    });
+
+    expect(result.status).toBe("applied");
+    expect(mocks.saveDesign).toHaveBeenCalledWith(
+      "/designs/current.canopi",
+      expect.objectContaining({ name: "Current" }),
+    );
+    expect(currentDesign.value?.name).toBe("Detached Next");
   });
 
   it("loads an existing mounted document without replacing canonical document state", async () => {

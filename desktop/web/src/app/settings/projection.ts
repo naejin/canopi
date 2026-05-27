@@ -64,6 +64,10 @@ const DEFAULT_BOTTOM_PANEL_TAB: BottomPanelTab = 'budget'
 let sourceSettings: Settings | null = null
 let queuedPersistTimer: ReturnType<typeof globalThis.setTimeout> | null = null
 let persistSettings: PersistSettings = setSettings
+let activePersist: Promise<void> | null = null
+let activePersistSettings: Settings | null = null
+let persistTail: Promise<void> = Promise.resolve()
+let persistSequence = 0
 
 function clampUnitInterval(value: number, fallback: number): number {
   if (!Number.isFinite(value)) return fallback
@@ -192,36 +196,63 @@ function clearQueuedPersist(): void {
   queuedPersistTimer = null
 }
 
-function persistSnapshot(settings: Settings): void {
-  sourceSettings = settings
-  persistSettings(settings).catch((error) => console.error('Failed to persist settings:', error))
+function persistSnapshot(settings: Settings): Promise<void> {
+  const sequence = ++persistSequence
+  const pending = persistTail
+    .catch(() => undefined)
+    .then(() => persistSettings(settings))
+    .then(() => {
+      if (sequence === persistSequence) {
+        sourceSettings = settings
+      }
+    })
+
+  persistTail = pending.catch(() => undefined)
+  activePersist = pending
+  activePersistSettings = settings
+  void pending.finally(() => {
+    if (activePersist === pending) {
+      activePersist = null
+      activePersistSettings = null
+    }
+  }).catch(() => undefined)
+  return pending
 }
 
-function persistProjection(mode: SettingsPersistMode, delayMs = DEFAULT_QUEUED_PERSIST_DELAY_MS): void {
-  if (mode === 'none') return
-  if (!sourceSettings) return
+function persistProjection(
+  mode: SettingsPersistMode,
+  delayMs = DEFAULT_QUEUED_PERSIST_DELAY_MS,
+): Promise<void> | null {
+  if (mode === 'none') return null
+  if (!sourceSettings) return null
 
   const updated = snapshotSettingsProjection()
-  if (settingsEqual(updated, sourceSettings)) {
+  if (
+    activePersist
+    && activePersistSettings
+    && settingsEqual(updated, activePersistSettings)
+  ) {
     clearQueuedPersist()
-    return
+    return activePersist
+  }
+
+  if (settingsEqual(updated, sourceSettings) && !activePersist) {
+    clearQueuedPersist()
+    return null
   }
 
   if (mode === 'immediate') {
     clearQueuedPersist()
-    persistSnapshot(updated)
-    return
+    return persistSnapshot(updated)
   }
 
   clearQueuedPersist()
   queuedPersistTimer = globalThis.setTimeout(() => {
     queuedPersistTimer = null
-    if (!sourceSettings) return
-
-    const queued = snapshotSettingsProjection()
-    if (settingsEqual(queued, sourceSettings)) return
-    persistSnapshot(queued)
+    persistProjection('immediate')
+      ?.catch((error) => console.error('Failed to persist settings:', error))
   }, delayMs)
+  return null
 }
 
 export function hydrateSettingsProjection(settings: Settings): void {
@@ -249,6 +280,7 @@ export function hydrateSettingsProjection(settings: Settings): void {
     },
   })
   applyDraftToProjection(draft)
+  persistSequence += 1
   sourceSettings = settings
 }
 
@@ -272,16 +304,27 @@ export function mutateSettingsProjection(
   const normalized = normalizeDraft(draft)
   applyDraftToProjection(normalized)
   persistProjection(options.persist ?? 'immediate', options.delayMs)
+    ?.catch((error) => console.error('Failed to persist settings:', error))
 }
 
-export function flushSettingsProjection(): void {
-  if (queuedPersistTimer === null) return
+export async function flushSettingsProjection(): Promise<void> {
   clearQueuedPersist()
-  persistProjection('immediate')
+  const pending = persistProjection('immediate')
+  if (pending) {
+    await pending
+    return
+  }
+  if (activePersist) {
+    await activePersist
+  }
 }
 
 export function resetSettingsProjectionForTests(adapter: PersistSettings = setSettings): void {
   clearQueuedPersist()
   sourceSettings = null
   persistSettings = adapter
+  activePersist = null
+  activePersistSettings = null
+  persistTail = Promise.resolve()
+  persistSequence = 0
 }

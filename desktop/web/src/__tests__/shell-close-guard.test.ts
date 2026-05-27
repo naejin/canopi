@@ -60,6 +60,7 @@ describe("registerCloseGuard", () => {
     mocks.message.mockReset();
     mocks.onCloseRequested.mockReset();
     mocks.saveCurrentDesign.mockReset();
+    mocks.flushSettingsProjection.mockResolvedValue(undefined);
     mocks.unlistenA.mockReset();
     mocks.unlistenB.mockReset();
     mocks.getCurrentWindow.mockReturnValue({
@@ -97,7 +98,7 @@ describe("registerCloseGuard", () => {
     expect(mocks.unlistenA).toHaveBeenCalledTimes(1);
   });
 
-  it("flushes settings and allows clean closes without prompting", async () => {
+  it("flushes settings before destroying clean windows", async () => {
     const { registerCloseGuard } = await import("../app/shell/close-guard");
     registerCloseGuard();
     await flushMicrotasks();
@@ -107,9 +108,26 @@ describe("registerCloseGuard", () => {
     await handler(event);
 
     expect(mocks.flushSettingsProjection).toHaveBeenCalledTimes(1);
-    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(event.preventDefault).toHaveBeenCalledTimes(1);
+    expect(mocks.message).not.toHaveBeenCalled();
+    expect(mocks.destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the window open when settings flush fails", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.flushSettingsProjection.mockRejectedValue(new Error("settings write failed"));
+    const { registerCloseGuard } = await import("../app/shell/close-guard");
+    registerCloseGuard();
+    await flushMicrotasks();
+
+    const handler = mocks.onCloseRequested.mock.calls[0]?.[0] as (event: { preventDefault: () => void }) => Promise<void>;
+    const event = { preventDefault: vi.fn() };
+    await handler(event);
+
+    expect(event.preventDefault).toHaveBeenCalledTimes(1);
     expect(mocks.message).not.toHaveBeenCalled();
     expect(mocks.destroy).not.toHaveBeenCalled();
+    consoleError.mockRestore();
   });
 
   it("prompts on dirty close and destroys the window after a successful save", async () => {

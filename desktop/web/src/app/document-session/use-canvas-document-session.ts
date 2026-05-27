@@ -102,7 +102,9 @@ export function useCanvasDocumentSession({
       cancelled = true;
       resizeObserver?.disconnect();
       cancelQueuedLoad();
-      flushSettingsProjection();
+      void flushSettingsProjection().catch((error) => {
+        console.error("Failed to flush settings during canvas teardown:", error);
+      });
       if (runtimeInitialized && runtime.hasLoadedDocument() && currentDesign.value) {
         try {
           snapshotCanvasIntoCurrentDocument(runtime, designName.value);

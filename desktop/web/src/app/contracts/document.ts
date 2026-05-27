@@ -59,11 +59,8 @@ export function extractDocumentExtra(raw: Record<string, unknown>): Record<strin
 
 export function normalizeLoadedDocument(file: CanopiFile): CanopiFile {
   return {
+    ...extractDocumentExtra(file as unknown as Record<string, unknown>),
     ...normalizeDocumentKnownFields(file),
-    extra: {
-      ...normalizePersistedExtra(file.extra),
-      ...extractDocumentExtra(file as unknown as Record<string, unknown>),
-    },
   }
 }
 
@@ -79,10 +76,12 @@ export function composeDocumentForSave({
   document,
   canvas,
 }: ComposeDocumentForSaveOptions): CanopiFile {
+  const topLevelExtra = extractDocumentExtra(document as unknown as Record<string, unknown>)
   const normalizedDocument = normalizeDocumentKnownFields(document)
   const normalizedCanvas = normalizeDocumentKnownFields(canvas)
 
   return {
+    ...topLevelExtra,
     ...normalizedDocument,
     version: normalizedCanvas.version,
     name: metadata.name,

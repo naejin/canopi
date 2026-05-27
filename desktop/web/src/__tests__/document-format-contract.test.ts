@@ -61,19 +61,19 @@ describe('document format contract', () => {
     expect(Object.keys(DOCUMENT_FILE_FIELD_OWNERS)).toEqual(KNOWN_CANOPI_KEYS)
   })
 
-  it('normalizes raw loaded files into extra while the scene codec keeps only scene-owned extra', () => {
+  it('normalizes raw loaded files while preserving unknown top-level fields', () => {
     const normalized = normalizeLoadedDocument(RAW_DOCUMENT as unknown as CanopiFile)
 
     expect(normalized.extra).toEqual({
       preserved_from_file: 'keep-me',
+    })
+    expect(normalized as unknown as Record<string, unknown>).toMatchObject({
       schema_extension_flag: true,
       experimental_block: {
         source: 'future-version',
         values: [1, 2, 3],
       },
     })
-    expect('schema_extension_flag' in (normalized as unknown as Record<string, unknown>)).toBe(false)
-    expect('experimental_block' in (normalized as unknown as Record<string, unknown>)).toBe(false)
 
     const now = new Date('2026-04-13T12:00:00.000Z')
     const roundTripped = serializeScenePersistedState(
@@ -101,7 +101,10 @@ describe('document format contract', () => {
     expect(normalized.groups).toEqual([])
     expect(normalized.timeline).toEqual([])
     expect(normalized.budget).toEqual([])
-    expect(normalized.extra).toMatchObject({
+    expect(normalized.extra).toEqual({
+      preserved_from_file: 'keep-me',
+    })
+    expect(normalized as unknown as Record<string, unknown>).toMatchObject({
       future_panel_field: { preserve: true },
     })
   })
@@ -144,7 +147,7 @@ describe('document format contract', () => {
         guides: [{ id: 'old-guide', axis: 'h', position: 12 }],
         future_panel_field: { preserve: true },
       },
-      future_top_level: 'drop-after-normalize',
+      future_top_level: 'preserve-after-normalize',
     } as CanopiFile & { future_top_level: string }
     const canvas = {
       ...BASE_DOCUMENT,
@@ -218,6 +221,8 @@ describe('document format contract', () => {
       guides: [{ id: 'new-guide', axis: 'v', position: 42 }],
       future_panel_field: { preserve: true },
     })
-    expect('future_top_level' in (saved as unknown as Record<string, unknown>)).toBe(false)
+    expect(saved as unknown as Record<string, unknown>).toMatchObject({
+      future_top_level: 'preserve-after-normalize',
+    })
   })
 })
