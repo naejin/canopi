@@ -25,7 +25,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - `SceneHistory` dirty state is checkpoint-based.
 - Any history truncation behavior must preserve saved-position semantics in all write paths.
 - Selection, hover, presentation-only target highlights, labels, and viewport-only work must not create document history entries unless explicitly designed.
-- Auto-fit on document open is expected; both document load paths call `zoomToFit()` after hydration.
+- Auto-fit on attached document open is expected; attached Design Session transitions call `zoomToFit()` after hydration. Detached transitions must not call canvas-only document surface methods.
 
 ## Rendering Ownership
 

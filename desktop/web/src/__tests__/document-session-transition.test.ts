@@ -42,7 +42,8 @@ vi.mock("../app/document-session/workflows", () => ({
   disposeConsortiumSync: vi.fn(),
 }));
 
-import type { CanvasDocumentSurface } from "../canvas/runtime/runtime";
+import type { CanvasDocumentSurface, MountedCanvasRuntime } from "../canvas/runtime/runtime";
+import { setCurrentCanvasSession } from "../canvas/session";
 import {
   beginEmptyDocumentSession,
   consumeQueuedDocumentLoad,
@@ -123,6 +124,7 @@ async function flushMicrotasks(): Promise<void> {
 }
 
 beforeEach(() => {
+  setCurrentCanvasSession(null);
   mocks.installConsortiumSync.mockClear();
   mocks.loadDesign.mockReset();
   mocks.message.mockReset();
@@ -261,6 +263,102 @@ describe("document session transition", () => {
     expect(designName.value).toBe("Forest Edge");
     expect(designPath.value).toBe(null);
     expect(designDirty.value).toBe(false);
+  });
+
+  it("applies detached replacements without requiring a canvas session", async () => {
+    nonCanvasRevision.value = 1;
+    mocks.message.mockResolvedValue("Don't Save");
+
+    const result = await transitionDocument({
+      source: "open-path",
+      dirtyGuard: "confirm",
+      session: null,
+      load: async () => ({
+        file: makeFile("Detached Next"),
+        path: "/designs/detached-next.canopi",
+        name: "Detached Next",
+      }),
+    });
+
+    expect(result).toEqual({ status: "applied", documentLoaded: false });
+    expect(currentDesign.value?.name).toBe("Detached Next");
+    expect(designName.value).toBe("Detached Next");
+    expect(designPath.value).toBe("/designs/detached-next.canopi");
+    expect(designDirty.value).toBe(false);
+    expect(mocks.installConsortiumSync).toHaveBeenCalledTimes(1);
+  });
+
+  it("saves dirty detached documents before applying a transition", async () => {
+    nonCanvasRevision.value = 1;
+    mocks.message.mockResolvedValue("Save");
+
+    const result = await transitionDocument({
+      source: "open-path",
+      dirtyGuard: "confirm",
+      session: null,
+      load: async () => ({
+        file: makeFile("Detached Next"),
+        path: "/designs/detached-next.canopi",
+        name: "Detached Next",
+      }),
+    });
+
+    expect(result.status).toBe("applied");
+    expect(mocks.saveDesign).toHaveBeenCalledWith(
+      "/designs/current.canopi",
+      expect.objectContaining({ name: "Current" }),
+    );
+    expect(currentDesign.value?.name).toBe("Detached Next");
+  });
+
+  it("does not use the current canvas session when a transition is explicitly detached", async () => {
+    const currentSession = makeSession();
+    setCurrentCanvasSession(currentSession as unknown as MountedCanvasRuntime);
+    nonCanvasRevision.value = 1;
+    mocks.message.mockResolvedValue("Save");
+
+    const result = await transitionDocument({
+      source: "open-path",
+      dirtyGuard: "confirm",
+      session: null,
+      load: async () => ({
+        file: makeFile("Detached Next"),
+        path: "/designs/detached-next.canopi",
+        name: "Detached Next",
+      }),
+    });
+
+    expect(result).toEqual({ status: "applied", documentLoaded: false });
+    expect(currentSession.serializeDocument).not.toHaveBeenCalled();
+    expect(currentSession.markSaved).not.toHaveBeenCalled();
+    expect(mocks.saveDesign).toHaveBeenCalledWith(
+      "/designs/current.canopi",
+      expect.objectContaining({ name: "Current" }),
+    );
+  });
+
+  it("queues deferrable detached transitions when no current design is loaded", async () => {
+    currentDesign.value = null;
+    designPath.value = null;
+    const defer = vi.fn();
+    const load = vi.fn(async () => ({
+      file: makeFile("Queued"),
+      path: "/designs/queued.canopi",
+      name: "Queued",
+    }));
+
+    const result = await transitionDocument({
+      source: "open-path",
+      dirtyGuard: "confirm",
+      session: null,
+      load,
+      deferWhenDetachedAndEmpty: defer,
+    });
+
+    expect(result).toEqual({ status: "queued", documentLoaded: false });
+    expect(defer).toHaveBeenCalledTimes(1);
+    expect(load).not.toHaveBeenCalled();
+    expect(mocks.message).not.toHaveBeenCalled();
   });
 
   it("loads an existing mounted document without replacing canonical document state", async () => {
