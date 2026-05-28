@@ -1,6 +1,12 @@
 use std::sync::OnceLock;
 
-const DETAIL_CONTRACT_COLUMNS: &[&str] = &[
+use common_types::species::SpeciesDetail;
+use rusqlite::Connection;
+use serde_json::Value;
+
+use super::lookup::translate_composite_value;
+
+const DETAIL_PROJECTION_COLUMNS: &[&str] = &[
     "id",
     "canonical_name",
     "common_name",
@@ -164,18 +170,118 @@ const DETAIL_CONTRACT_COLUMNS: &[&str] = &[
     "photosynthesis_pathway",
 ];
 
+const TRANSLATED_DETAIL_TEXT_FIELDS: &[&str] = &[
+    "growth_rate",
+    "deciduous_evergreen",
+    "drought_tolerance",
+    "stratum",
+    "succession_stage",
+    "habit",
+    "bloom_period",
+    "flower_color",
+    "active_growth_period",
+    "lifespan",
+    "toxicity",
+    "anaerobic_tolerance",
+    "canopy_position",
+    "cn_ratio",
+    "ecological_system",
+    "fertility_requirement",
+    "fire_tolerance",
+    "fruit_seed_abundance",
+    "grime_strategy",
+    "growth_form_type",
+    "growth_habit",
+    "hedge_tolerance",
+    "invasive_potential",
+    "biogeographic_status",
+    "leaf_compoundness",
+    "leaf_shape",
+    "leaf_type",
+    "moisture_use",
+    "mycorrhizal_type",
+    "pollination_syndrome",
+    "raunkiaer_life_form",
+    "reproductive_type",
+    "root_system_type",
+    "salinity_tolerance",
+    "seed_dispersal_mechanism",
+    "seed_dormancy_type",
+    "seed_dormancy_depth",
+    "seed_spread_rate",
+    "seed_storage_behaviour",
+    "seedbank_type",
+    "sexual_system",
+    "storage_organ",
+    "vegetative_spread_rate",
+    "classification_source",
+    "data_quality_tier",
+    "photosynthesis_pathway",
+    "clonal_growth_form",
+    "mating_system",
+    "conservation_status",
+    "fruit_type",
+    "fruit_seed_color",
+    "fruit_seed_period_begin",
+    "fruit_seed_period_end",
+    "growth_form_shape",
+    "propagation_method",
+    "sowing_period",
+    "harvest_period",
+    "dormancy_conditions",
+    "management_types",
+    "pollinators",
+];
+
 static DETAIL_QUERY_SQL: OnceLock<String> = OnceLock::new();
 
-pub(super) fn detail_contract_columns() -> &'static [&'static str] {
-    DETAIL_CONTRACT_COLUMNS
+pub(super) fn detail_projection_columns() -> &'static [&'static str] {
+    DETAIL_PROJECTION_COLUMNS
+}
+
+pub(super) fn translated_detail_text_fields() -> &'static [&'static str] {
+    TRANSLATED_DETAIL_TEXT_FIELDS
+}
+
+pub(super) fn translate_projected_text_fields(
+    conn: &Connection,
+    detail: &mut SpeciesDetail,
+    locale: &str,
+) -> Result<(), String> {
+    let mut value = serde_json::to_value(&*detail)
+        .map_err(|e| format!("Failed to prepare species detail translations: {e}"))?;
+    let Some(object) = value.as_object_mut() else {
+        return Err(
+            "Failed to prepare species detail translations: detail was not an object".into(),
+        );
+    };
+
+    for field in translated_detail_text_fields() {
+        let Some(current) = object.get_mut(*field) else {
+            debug_assert!(
+                false,
+                "translated field '{field}' is missing from SpeciesDetail"
+            );
+            continue;
+        };
+        let Some(text) = current.as_str() else {
+            continue;
+        };
+        let translated = translate_composite_value(conn, field, text, locale);
+        *current = Value::String(translated);
+    }
+
+    *detail = serde_json::from_value(value)
+        .map_err(|e| format!("Failed to apply species detail translations: {e}"))?;
+    Ok(())
 }
 
 pub(super) fn detail_query_sql() -> &'static str {
     DETAIL_QUERY_SQL
         .get_or_init(|| {
-            let select = DETAIL_CONTRACT_COLUMNS
+            let select = detail_projection_columns()
                 .iter()
-                .map(|column| format!("s.{column}"))
+                .map(|column| format!("s.{column} AS {column}"))
                 .collect::<Vec<_>>()
                 .join(",\n                    ");
             format!(
@@ -190,7 +296,7 @@ pub(super) fn detail_query_sql() -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::detail_contract_columns;
+    use super::{detail_projection_columns, translated_detail_text_fields};
     use crate::db::test_support::load_schema_contract_fixture;
     use std::collections::HashSet;
 
@@ -203,10 +309,22 @@ mod tests {
             .map(|column| column.name)
             .collect();
 
-        for column in detail_contract_columns() {
+        for column in detail_projection_columns() {
             assert!(
                 contract_columns.contains(*column),
                 "detail projection column '{column}' missing from schema contract"
+            );
+        }
+    }
+
+    #[test]
+    fn translated_detail_fields_are_projected_columns() {
+        let columns: HashSet<&str> = detail_projection_columns().iter().copied().collect();
+
+        for field in translated_detail_text_fields() {
+            assert!(
+                columns.contains(field),
+                "translated detail field '{field}' is not selected by the projection"
             );
         }
     }
