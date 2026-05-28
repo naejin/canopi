@@ -79,6 +79,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 
 - Use `useCanvasRenderer` for DPR-aware canvas setup, resize observation, and redraw lifecycle.
 - Use shared renderer utilities rather than duplicating drawing helpers.
+- Planning tab read-models such as Timeline Action rows, layout lanes, species picker options, and Target derivation belong in `app/planning-projection/`; Canvas2D renderers own drawing, row heights, hit geometry, and pointer math.
 - Canvas2D renderer functions receive `t` for i18n.
 - Cache row offsets and layout computation in refs/memos for pointer paths.
 - Snapshot drag-start values that can change mid-drag.

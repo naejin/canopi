@@ -47,7 +47,7 @@ Use this guide when changing Preact components, signals, i18n, CSS, panels, bott
 ## Panel And Canvas Reactivity
 
 - Planning surfaces that combine Design planning entries, placed plants, localized names, and Target hover/selection state should go through `desktop/web/src/app/planning-projection/`.
-- The Planning Projection module owns derived planning rows and Target presentation behavior for timeline, budget, and consortium views.
+- The Planning Projection module owns derived planning rows, Target presentation behavior, Timeline Action grouping/layout read-models, and Timeline species picker options for timeline, budget, and consortium views.
 - Planning views still own rendering, pointer geometry, local edit state, and calls to feature controllers such as budget/timeline/consortium mutations.
 - Bottom panel components that read canvas-derived data must subscribe to `sceneEntityRevision`.
 - Panels that only read non-canvas document state should not subscribe to canvas revisions.

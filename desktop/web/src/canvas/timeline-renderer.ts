@@ -1,5 +1,4 @@
-import type { TimelineAction } from '../types/design'
-import { getTimelineSpeciesTarget } from '../panel-targets'
+import type { TimelineActionLayout, TimelineActionTypeRow } from '../app/planning-projection'
 import { dateToX, niceInterval, formatDateLabel } from './timeline-math'
 import { cssVar, roundRect, readThemeTokens } from './canvas2d-utils'
 
@@ -7,9 +6,6 @@ import { cssVar, roundRect, readThemeTokens } from './canvas2d-utils'
 // Timeline renderer — Canvas 2D drawing (not Konva)
 // Theme-aware: reads CSS variables from a container element at render time.
 // ---------------------------------------------------------------------------
-
-export type ActionType = 'planting' | 'pruning' | 'harvest' | 'watering' | 'fertilising' | 'other'
-export const ACTION_TYPES: ActionType[] = ['planting', 'pruning', 'harvest', 'watering', 'fertilising', 'other']
 
 export const LANE_HEIGHT = 32
 export const RULER_HEIGHT = 28
@@ -61,94 +57,8 @@ export interface TimelineRenderState {
   granularity: string
 }
 
-export interface ActionTypeRow {
-  actionType: string
-  actions: TimelineAction[]
-}
-
-/**
- * Group actions by action type into 6 fixed rows.
- * Always returns exactly 6 rows in ACTION_TYPES order, even if empty.
- */
-export function groupActionsByType(actions: TimelineAction[]): ActionTypeRow[] {
-  const buckets = new Map<string, TimelineAction[]>()
-  for (const type of ACTION_TYPES) buckets.set(type, [])
-
-  for (const action of actions) {
-    const bucket = buckets.get(action.action_type)
-    if (bucket) bucket.push(action)
-    else buckets.get('other')!.push(action)
-  }
-
-  return ACTION_TYPES.map((type) => ({ actionType: type, actions: buckets.get(type)! }))
-}
-
-/**
- * Compute lane layout: each action gets a lane index within its action type row,
- * stacking vertically when bars overlap in time.
- * Returns a map of actionId -> { row index, sub-lane within row }.
- */
-export interface ActionLayout {
-  /** Action type row index (0-based) */
-  rowIndex: number
-  /** Sub-lane within the row (0-based) for stacking overlapping bars */
-  subLane: number
-  /** Total number of sub-lanes in this row */
-  totalSubLanes: number
-}
-
-export function computeLayout(rows: ActionTypeRow[]): Map<string, ActionLayout> {
-  const layout = new Map<string, ActionLayout>()
-
-  for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
-    const row = rows[rowIndex]!
-    // Sort actions by start date
-    const sorted = [...row.actions].sort((a, b) => {
-      const aStart = a.start_date ? new Date(a.start_date).getTime() : Infinity
-      const bStart = b.start_date ? new Date(b.start_date).getTime() : Infinity
-      return aStart - bStart
-    })
-
-    // Greedy lane packing — assign to the first sub-lane where the action doesn't overlap
-    const laneEnds: number[] = [] // end time of last action in each sub-lane
-
-    for (const action of sorted) {
-      const startMs = action.start_date ? new Date(action.start_date).getTime() : Infinity
-      const endMs = action.end_date ? new Date(action.end_date).getTime() : (isFinite(startMs) ? startMs + 86400000 : Infinity)
-
-      let assigned = -1
-      for (let i = 0; i < laneEnds.length; i++) {
-        if (startMs >= laneEnds[i]!) {
-          assigned = i
-          laneEnds[i] = endMs
-          break
-        }
-      }
-      if (assigned === -1) {
-        assigned = laneEnds.length
-        laneEnds.push(endMs)
-      }
-
-      layout.set(action.id, {
-        rowIndex,
-        subLane: assigned,
-        totalSubLanes: 0, // will be filled below
-      })
-    }
-
-    // Write total sub-lanes back
-    const totalSubLanes = Math.max(laneEnds.length, 1)
-    for (const action of sorted) {
-      const entry = layout.get(action.id)!
-      entry.totalSubLanes = totalSubLanes
-    }
-  }
-
-  return layout
-}
-
 /** Height of an action type row in pixels. */
-function rowHeight(row: ActionTypeRow, layout: Map<string, ActionLayout>): number {
+function rowHeight(row: TimelineActionTypeRow, layout: ReadonlyMap<string, TimelineActionLayout>): number {
   if (row.actions.length === 0) return LANE_HEIGHT
   const firstEntry = layout.get(row.actions[0]!.id)
   const totalSubLanes = firstEntry?.totalSubLanes ?? 1
@@ -156,7 +66,10 @@ function rowHeight(row: ActionTypeRow, layout: Map<string, ActionLayout>): numbe
 }
 
 /** Precompute cumulative Y offsets for all action type rows. */
-export function computeTimelineRowOffsets(rows: ActionTypeRow[], layout: Map<string, ActionLayout>): number[] {
+export function computeTimelineRowOffsets(
+  rows: readonly TimelineActionTypeRow[],
+  layout: ReadonlyMap<string, TimelineActionLayout>,
+): number[] {
   const offsets = new Array(rows.length + 1) as number[]
   offsets[0] = RULER_HEIGHT
   for (let i = 0; i < rows.length; i++) {
@@ -174,8 +87,8 @@ export function renderTimeline(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
-  rows: ActionTypeRow[],
-  layout: Map<string, ActionLayout>,
+  rows: readonly TimelineActionTypeRow[],
+  layout: ReadonlyMap<string, TimelineActionLayout>,
   state: TimelineRenderState,
   t: (key: string) => string,
   cachedRowOffsets?: number[],
@@ -307,14 +220,14 @@ export function renderTimeline(
 
     // -- Action bars for this row -------------------------------------------
     for (const action of row.actions) {
-      if (!action.start_date) continue
+      if (!action.startDate) continue
 
       const entry = layout.get(action.id)
       if (!entry) continue
 
-      const startDate = new Date(action.start_date)
-      const endDate = action.end_date
-        ? new Date(action.end_date)
+      const startDate = new Date(action.startDate)
+      const endDate = action.endDate
+        ? new Date(action.endDate)
         : new Date(startDate.getTime() + 86400000)
 
       const x1 = chartLeft + dateToX(startDate, originDate, pxPerDay) - scrollX
@@ -329,8 +242,7 @@ export function renderTimeline(
       if (x1 + barW < chartLeft || x1 > width) continue
 
       // Bar fill — species color takes priority when assigned
-      const speciesTarget = getTimelineSpeciesTarget(action)
-      const baseColor = (speciesTarget ? state.speciesColors[speciesTarget.canonical_name] : undefined) ?? actionColor(action.action_type)
+      const baseColor = (action.speciesCanonical ? state.speciesColors[action.speciesCanonical] : undefined) ?? actionColor(action.actionType)
       ctx.globalAlpha = action.id === hoveredId ? 0.9 : 0.8
       ctx.fillStyle = baseColor
       roundRect(ctx, x1, barY, barW, barH, BAR_RADIUS)
@@ -402,15 +314,15 @@ export function renderTimeline(
 const EDGE_THRESHOLD = 6
 
 export interface HitResult {
-  action: TimelineAction
+  action: TimelineActionTypeRow['actions'][number]
   edge: 'left' | 'right' | 'body'
 }
 
 export function hitTestAction(
   x: number,
   y: number,
-  rows: ActionTypeRow[],
-  layout: Map<string, ActionLayout>,
+  rows: readonly TimelineActionTypeRow[],
+  layout: ReadonlyMap<string, TimelineActionLayout>,
   state: TimelineRenderState,
   cachedRowOffsets?: number[],
 ): HitResult | null {
@@ -423,7 +335,7 @@ export function hitTestAction(
   const rowOffsets = cachedRowOffsets ?? computeTimelineRowOffsets(rows, layout)
   for (const row of rows) {
     for (const action of row.actions) {
-      if (!action.start_date) continue
+      if (!action.startDate) continue
 
       const entry = layout.get(action.id)
       if (!entry) continue
@@ -433,9 +345,9 @@ export function hitTestAction(
       const rH = rowOffsets[rowIdx + 1]! - rowOffsets[rowIdx]!
       const subLaneH = rH / entry.totalSubLanes
 
-      const startDate = new Date(action.start_date)
-      const endDate = action.end_date
-        ? new Date(action.end_date)
+      const startDate = new Date(action.startDate)
+      const endDate = action.endDate
+        ? new Date(action.endDate)
         : new Date(startDate.getTime() + 86400000)
 
       const x1 = chartLeft + dateToX(startDate, originDate, pxPerDay) - scrollX

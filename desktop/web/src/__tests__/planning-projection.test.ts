@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   buildBudgetPlanningProjection,
   buildConsortiumPlanningProjection,
+  buildTimelinePlanningProjection,
   clearPlanningHoveredTargets,
   getPlanningCanvasHoveredSpeciesCanonical,
   planningTargetsSelected,
@@ -17,7 +18,7 @@ import {
   selectedPanelTargets,
 } from '../app/panel-targets/state'
 import { MANUAL_TARGET, speciesBudgetTarget, speciesTarget } from '../panel-targets'
-import type { BudgetItem, Consortium, PlacedPlant } from '../types/design'
+import type { BudgetItem, Consortium, PlacedPlant, TimelineAction } from '../types/design'
 
 function makePlant(canonicalName: string, commonName: string | null = null): PlacedPlant {
   return {
@@ -31,6 +32,22 @@ function makePlant(canonicalName: string, commonName: string | null = null): Pla
     notes: null,
     planted_date: null,
     quantity: 1,
+  }
+}
+
+function makeAction(overrides: Partial<TimelineAction> = {}): TimelineAction {
+  return {
+    id: 'timeline-1',
+    action_type: 'planting',
+    description: 'Plant apple',
+    start_date: '2026-04-10',
+    end_date: null,
+    recurrence: null,
+    targets: [speciesTarget('Malus domestica')],
+    depends_on: null,
+    completed: false,
+    order: 0,
+    ...overrides,
   }
 }
 
@@ -147,5 +164,74 @@ describe('Planning Projection', () => {
       count: 1,
       color: '#a06b1f',
     })
+  })
+
+  it('projects Timeline rows, layout, target data, species options, and origin', () => {
+    const projection = buildTimelinePlanningProjection({
+      actions: [
+        makeAction({
+          id: 'plant-apple',
+          action_type: 'planting',
+          start_date: '2026-04-10',
+          end_date: '2026-04-20',
+        }),
+        makeAction({
+          id: 'harvest-apple',
+          action_type: 'harvest',
+          description: 'Pick apple',
+          start_date: '2026-08-10',
+          targets: [MANUAL_TARGET],
+        }),
+        makeAction({
+          id: 'unknown-type',
+          action_type: 'inspect',
+          start_date: null,
+          targets: [speciesTarget('Prunus avium')],
+        }),
+      ],
+      plants: [
+        makePlant('Malus domestica', 'Apple'),
+        makePlant('Malus domestica', 'Apple'),
+        makePlant('Prunus avium', 'Cherry'),
+      ],
+      localizedNames: new Map([['Malus domestica', 'Pommier']]),
+      fallbackOriginMs: new Date('2026-01-01T00:00:00.000Z').getTime(),
+      locale: 'fr',
+    })
+
+    const plantingRow = projection.rows.find((row) => row.actionType === 'planting')
+    const harvestRow = projection.rows.find((row) => row.actionType === 'harvest')
+    const otherRow = projection.rows.find((row) => row.actionType === 'other')
+
+    expect(projection.rows.map((row) => row.actionType)).toEqual([
+      'planting',
+      'pruning',
+      'harvest',
+      'watering',
+      'fertilising',
+      'other',
+    ])
+    expect(plantingRow?.actions[0]).toMatchObject({
+      id: 'plant-apple',
+      actionType: 'planting',
+      speciesCanonical: 'Malus domestica',
+      targets: [speciesTarget('Malus domestica')],
+    })
+    expect(harvestRow?.actions[0]).toMatchObject({
+      id: 'harvest-apple',
+      speciesCanonical: null,
+      targets: [MANUAL_TARGET],
+    })
+    expect(otherRow?.actions[0]?.id).toBe('unknown-type')
+    expect(projection.layout.get('plant-apple')).toMatchObject({
+      rowIndex: 0,
+      subLane: 0,
+      totalSubLanes: 1,
+    })
+    expect(projection.speciesList).toEqual([
+      { canonical_name: 'Prunus avium', display_name: 'Cherry' },
+      { canonical_name: 'Malus domestica', display_name: 'Pommier' },
+    ])
+    expect(new Date(projection.originMs).toISOString()).toBe('2026-03-11T00:00:00.000Z')
   })
 })

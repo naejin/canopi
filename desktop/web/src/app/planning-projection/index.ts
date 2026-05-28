@@ -11,6 +11,21 @@ export {
   type ConsortiumPlanningProjection,
 } from './consortium'
 export {
+  ACTION_TYPES,
+  buildTimelinePlanningProjection,
+  buildTimelineSpeciesOptions,
+  computeTimelineActionLayout,
+  computeTimelineOriginMs,
+  groupTimelineActionsByType,
+  projectTimelineAction,
+  type ActionType,
+  type TimelineActionLayout,
+  type TimelineActionTypeRow,
+  type TimelinePlanningAction,
+  type TimelinePlanningProjection,
+  type TimelineSpeciesOption,
+} from './timeline'
+export {
   clearPlanningHoveredTargets,
   clearPlanningOriginTargets,
   clearPlanningSelectedTargetsForOrigin,

@@ -5,13 +5,20 @@ import { useSignal, useSignalEffect } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale, theme } from '../../app/settings/state'
 import { plantSpeciesColorDefaults } from '../../canvas/plant-species-color-defaults'
+import { plantNamesRevision, sceneEntityRevision } from '../../canvas/runtime-mirror-state'
 import { currentDesign } from '../../state/design'
 import { currentCanvasQuerySurface } from '../../canvas/session'
 import {
+  ACTION_TYPES,
+  buildTimelinePlanningProjection,
   clearPlanningHoveredTargets,
   clearPlanningSelectedTargetsForOrigin,
+  projectTimelineAction,
   setPlanningHoveredTargets,
   setPlanningSelectedTargets,
+  type TimelineActionLayout,
+  type TimelineActionTypeRow,
+  type TimelinePlanningAction,
 } from '../../app/planning-projection'
 import {
   addTimelineAction,
@@ -22,22 +29,17 @@ import {
 import { isEditableTarget } from '../../canvas/runtime/interaction/pointer-utils'
 import { beginDocumentArrayEdit, type DocumentArrayEditTransaction } from '../../app/document/edit-transaction'
 import {
-  ACTION_TYPES,
   LABEL_SIDEBAR_WIDTH,
   RULER_HEIGHT,
   rulerControlBounds,
-  computeLayout,
   computeTimelineRowOffsets,
-  groupActionsByType,
   hitTestAction,
   renderTimeline,
-  type ActionLayout,
-  type ActionTypeRow,
   type TimelineRenderState,
 } from '../../canvas/timeline-renderer'
 import { dateToX, snapToDay, toISODate, xToDate } from '../../canvas/timeline-math'
-import { MANUAL_TARGET, getTimelineHoverTargets, speciesTarget } from '../../panel-targets'
-import type { PanelTarget, TimelineAction } from '../../types/design'
+import { MANUAL_TARGET, speciesTarget } from '../../panel-targets'
+import type { PanelTarget, PlacedPlant, TimelineAction } from '../../types/design'
 import { TimelinePopover, type PopoverFormData } from './TimelinePopover'
 import styles from './InteractiveTimeline.module.css'
 
@@ -131,13 +133,14 @@ interface PendingClick {
   anchorX: number
   anchorY: number
   actionId?: string
-  action?: TimelineAction
   actionType?: string
   date?: string
 }
 
 const EMPTY_ACTIONS: TimelineAction[] = []
 const EMPTY_PANEL_TARGETS: readonly PanelTarget[] = []
+const EMPTY_PLANTS: PlacedPlant[] = []
+const EMPTY_NAMES: ReadonlyMap<string, string | null> = new Map()
 
 function setTimelineHoveredPanelTargets(targets: readonly PanelTarget[]): void {
   setPlanningHoveredTargets(targets)
@@ -151,25 +154,6 @@ export function clearTimelineSelectedPanelTargets(): void {
   clearPlanningSelectedTargetsForOrigin('timeline')
 }
 
-function buildSpeciesList(): Array<{ canonical_name: string; display_name: string }> {
-  const session = currentCanvasQuerySurface.value
-  if (!session) return []
-  const plants = session.getPlacedPlants()
-  const names = session.getLocalizedCommonNames()
-  const seen = new Set<string>()
-  const result: Array<{ canonical_name: string; display_name: string }> = []
-  for (const plant of plants) {
-    if (seen.has(plant.canonical_name)) continue
-    seen.add(plant.canonical_name)
-    result.push({
-      canonical_name: plant.canonical_name,
-      display_name: names.get(plant.canonical_name) ?? plant.canonical_name,
-    })
-  }
-  result.sort((a, b) => a.display_name.localeCompare(b.display_name))
-  return result
-}
-
 export function InteractiveTimeline({
   selectedId,
   onSelect,
@@ -181,12 +165,12 @@ export function InteractiveTimeline({
   const pxPerDay = useSignal(GRANULARITY_PX_PER_DAY.month)
   const scrollX = useSignal(0)
   const hoveredId = useSignal<string | null>(null)
-  const tooltipState = useSignal<{ x: number; y: number; action: TimelineAction } | null>(null)
+  const tooltipState = useSignal<{ x: number; y: number; action: TimelinePlanningAction } | null>(null)
   const popoverState = useSignal<PopoverState | null>(null)
   const dragState = useRef<DragState>(null)
   const pendingClick = useRef<PendingClick | null>(null)
-  const rowsRef = useRef<ActionTypeRow[]>([])
-  const layoutRef = useRef<Map<string, ActionLayout>>(new Map())
+  const rowsRef = useRef<readonly TimelineActionTypeRow[]>([])
+  const layoutRef = useRef<ReadonlyMap<string, TimelineActionLayout>>(new Map())
   const lastDragDates = useRef<{ start: string; end: string | null }>({ start: '', end: null })
   const dragOriginMsRef = useRef<number | null>(null)
   const dragOriginDateRef = useRef<Date | null>(null)
@@ -200,14 +184,35 @@ export function InteractiveTimeline({
   onSelectRef.current = onSelect
 
   const actions = currentDesign.value?.timeline ?? EMPTY_ACTIONS
+  const session = currentCanvasQuerySurface.value
+  const plants = session?.getPlacedPlants() ?? EMPTY_PLANTS
+  const localizedNames = session?.getLocalizedCommonNames() ?? EMPTY_NAMES
+  const plantsRef = useRef(plants)
+  plantsRef.current = plants
+  const localizedNamesRef = useRef(localizedNames)
+  localizedNamesRef.current = localizedNames
   const speciesColors = plantSpeciesColorDefaults.value
   const todayMs = useMemo(() => Date.now(), [])
-  const originMs = useMemo(() => computeOriginMs(actions, todayMs), [actions, todayMs])
+  const projection = useMemo(
+    () => buildTimelinePlanningProjection({
+      actions,
+      plants: plantsRef.current,
+      localizedNames: localizedNamesRef.current,
+      fallbackOriginMs: todayMs,
+      locale: locale.value,
+    }),
+    // sceneEntityRevision + plantNamesRevision are the real change triggers;
+    // plants/localizedNames are read from refs to avoid unstable array deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [actions, todayMs, sceneEntityRevision.value, plantNamesRevision.value, locale.value],
+  )
+  const rows = projection.rows
+  const layout = projection.layout
+  const originMs = projection.originMs
   const originDate = useMemo(() => new Date(originMs), [originMs])
-
-  const rows = useMemo(() => groupActionsByType(actions), [actions])
-  const layout = useMemo(() => computeLayout(rows), [rows])
   const rowOffsets = useMemo(() => computeTimelineRowOffsets(rows, layout), [rows, layout])
+  const projectionRef = useRef(projection)
+  projectionRef.current = projection
   rowsRef.current = rows
   layoutRef.current = layout
   const rowOffsetsRef = useRef(rowOffsets)
@@ -469,12 +474,12 @@ export function InteractiveTimeline({
     }
 
     onSelectRef.current(hit.action.id)
-    setTimelineSelectedPanelTargets(getTimelineHoverTargets(hit.action))
+    setTimelineSelectedPanelTargets(hit.action.targets)
 
-    if (!hit.action.start_date) return
+    if (!hit.action.startDate) return
 
-    const startMs = new Date(hit.action.start_date).getTime()
-    const endMs = hit.action.end_date ? new Date(hit.action.end_date).getTime() : null
+    const startMs = new Date(hit.action.startDate).getTime()
+    const endMs = hit.action.endDate ? new Date(hit.action.endDate).getTime() : null
 
     if (hit.edge === 'left' || hit.edge === 'right') {
       dragOriginMsRef.current = computedOriginMsRef.current
@@ -505,7 +510,6 @@ export function InteractiveTimeline({
       anchorX: event.clientX,
       anchorY: event.clientY,
       actionId: hit.action.id,
-      action: hit.action,
     }
 
     const durationMs = endMs != null ? endMs - startMs : null
@@ -564,7 +568,7 @@ export function InteractiveTimeline({
 
     if (hit) {
       if (hoveredId.value !== hit.action.id) hoveredId.value = hit.action.id
-      setTimelineHoveredPanelTargets(getTimelineHoverTargets(hit.action))
+      setTimelineHoveredPanelTargets(hit.action.targets)
       if (!popoverState.peek()) {
         tooltipState.value = { x: mouseX, y: mouseY, action: hit.action }
       }
@@ -621,7 +625,7 @@ export function InteractiveTimeline({
     const dy = Math.abs(event.clientY - pending.clientY)
     if (dx + dy >= CLICK_THRESHOLD) return
 
-    const sl = buildSpeciesList()
+    const speciesList = [...projectionRef.current.speciesList]
 
     if (pending.type === 'add') {
       const startDate = pending.date!
@@ -637,13 +641,13 @@ export function InteractiveTimeline({
           description: '',
           species_canonical: null,
         },
-        speciesList: sl,
+        speciesList,
       }
     } else if (pending.type === 'edit' && pending.actionId) {
       // Read live action from document (may have moved during sub-threshold drag)
       const a = (currentDesign.peek()?.timeline ?? EMPTY_ACTIONS).find((act) => act.id === pending.actionId)
       if (!a) return
-      const existingSpecies = a.targets.find((tgt) => tgt.kind === 'species')
+      const projected = projectTimelineAction(a)
       popoverState.value = {
         mode: 'edit',
         anchorX: pending.anchorX,
@@ -654,9 +658,9 @@ export function InteractiveTimeline({
           start_date: a.start_date ?? '',
           end_date: a.end_date ?? '',
           description: a.description,
-          species_canonical: existingSpecies?.kind === 'species' ? existingSpecies.canonical_name : null,
+          species_canonical: projected.speciesCanonical,
         },
-        speciesList: sl,
+        speciesList,
       }
     }
   }, [])
@@ -779,10 +783,10 @@ export function InteractiveTimeline({
       />
       {tip && !ps && (
         <div className={styles.tooltip} style={{ left: Math.min(tip.x + 12, (containerRef.current?.clientWidth ?? 300) - 230), top: tip.y + 12 }}>
-          <div className={styles.tooltipType}>{t(`canvas.timeline.type_${tip.action.action_type}`)}</div>
-          {tip.action.start_date && (
+          <div className={styles.tooltipType}>{t(`canvas.timeline.type_${tip.action.actionType}`)}</div>
+          {tip.action.startDate && (
             <div className={styles.tooltipDates}>
-              {tip.action.start_date}{tip.action.end_date ? ` - ${tip.action.end_date}` : ''}
+              {tip.action.startDate}{tip.action.endDate ? ` - ${tip.action.endDate}` : ''}
             </div>
           )}
           {tip.action.description && (
@@ -807,14 +811,4 @@ export function InteractiveTimeline({
       )}
     </div>
   )
-}
-
-function computeOriginMs(actions: TimelineAction[], fallbackMs: number): number {
-  let earliest = Infinity
-  for (const action of actions) {
-    if (!action.start_date) continue
-    const ms = new Date(action.start_date).getTime()
-    if (ms < earliest) earliest = ms
-  }
-  return (isFinite(earliest) ? earliest : fallbackMs) - 30 * 86400000
 }
