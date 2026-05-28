@@ -15,5 +15,5 @@ pub async fn download_template(url: String) -> Result<String, String> {
     crate::blocking::run_blocking("template download", move || {
         crate::services::community::download_template_blocking(url)
     })
-        .await
+    .await
 }

@@ -8,8 +8,8 @@ pub fn get_settings(user_db: &UserDb) -> Result<Settings, String> {
 
 pub fn set_settings(user_db: &UserDb, settings: Settings) -> Result<(), String> {
     let conn = db::acquire(&user_db.0, "UserDb");
-    let json =
-        serde_json::to_string(&settings).map_err(|e| format!("Failed to serialize settings: {e}"))?;
+    let json = serde_json::to_string(&settings)
+        .map_err(|e| format!("Failed to serialize settings: {e}"))?;
     db::user_db::set_setting(&conn, "settings", &json)
         .map_err(|e| format!("Failed to save settings: {e}"))
 }
@@ -113,10 +113,9 @@ mod tests {
 
     #[test]
     fn normalizes_invalid_map_style_to_street() {
-        let settings = super::deserialize_settings(
-            r#"{"locale":"en","theme":"light","map_style":"ocean"}"#,
-        )
-        .unwrap();
+        let settings =
+            super::deserialize_settings(r#"{"locale":"en","theme":"light","map_style":"ocean"}"#)
+                .unwrap();
 
         assert_eq!(settings.map_style, BasemapStyle::Street);
     }

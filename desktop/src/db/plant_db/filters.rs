@@ -2,7 +2,7 @@ use common_types::species::{DynamicFilterOptions, FilterOptions, FilterValue};
 use rusqlite::Connection;
 
 use super::lookup::translate_composite_value;
-use crate::db::query_builder::{filter_field_kind, validated_column, PlantFilterFieldKind};
+use crate::db::query_builder::{PlantFilterFieldKind, filter_field_kind, validated_column};
 
 pub fn get_filter_options(conn: &Connection) -> Result<FilterOptions, String> {
     let families: Vec<String> = distinct_text_values(

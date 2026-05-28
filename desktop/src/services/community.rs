@@ -144,7 +144,10 @@ pub fn download_template_blocking(url: String) -> Result<String, String> {
     })
 }
 
-fn download_template_blocking_with_fetch<F>(url: String, mut fetch_bytes: F) -> Result<String, String>
+fn download_template_blocking_with_fetch<F>(
+    url: String,
+    mut fetch_bytes: F,
+) -> Result<String, String>
 where
     F: FnMut(&str) -> Result<Vec<u8>, String>,
 {
@@ -201,7 +204,10 @@ fn sanitized_download_file_name(url: &str) -> String {
     }
 }
 
-fn resolve_download_destination(tmp_dir: &std::path::Path, file_name: &str) -> Result<PathBuf, String> {
+fn resolve_download_destination(
+    tmp_dir: &std::path::Path,
+    file_name: &str,
+) -> Result<PathBuf, String> {
     let canonical_tmp = tmp_dir
         .canonicalize()
         .map_err(|e| format!("Failed to resolve temp dir: {e}"))?;
@@ -214,7 +220,10 @@ fn resolve_download_destination(tmp_dir: &std::path::Path, file_name: &str) -> R
     Ok(canonical_dest)
 }
 
-fn unique_download_destination(tmp_dir: &std::path::Path, file_name: &str) -> Result<PathBuf, String> {
+fn unique_download_destination(
+    tmp_dir: &std::path::Path,
+    file_name: &str,
+) -> Result<PathBuf, String> {
     resolve_download_destination(tmp_dir, &unique_file_name(file_name))
 }
 
@@ -236,8 +245,8 @@ fn unique_file_name(file_name: &str) -> String {
 mod tests {
     use super::{
         download_template_blocking_with_fetch, get_template_catalog, get_template_preview,
-        resolve_download_destination, sanitized_download_file_name,
-        unique_download_destination, validate_download_url,
+        resolve_download_destination, sanitized_download_file_name, unique_download_destination,
+        validate_download_url,
     };
 
     #[test]
@@ -293,8 +302,8 @@ mod tests {
     #[test]
     fn download_workflow_surfaces_fetch_errors() {
         let url = "https://templates.canopi.app/tpl-001.canopi".to_string();
-        let error = download_template_blocking_with_fetch(url, |_| Err("network down".into()))
-            .unwrap_err();
+        let error =
+            download_template_blocking_with_fetch(url, |_| Err("network down".into())).unwrap_err();
         assert!(error.contains("network down"));
     }
 }

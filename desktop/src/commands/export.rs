@@ -38,14 +38,7 @@ pub fn export_native_png(
     path: String,
 ) -> Result<String, String> {
     let platform = platform::native_platform();
-    crate::services::export::export_native_png(
-        &platform,
-        snapshot_base64,
-        width,
-        height,
-        dpi,
-        path,
-    )
+    crate::services::export::export_native_png(&platform, snapshot_base64, width, height, dpi, path)
 }
 
 /// Export a canvas snapshot as PDF with the given layout.
@@ -106,7 +99,8 @@ mod tests {
     impl TempTestDir {
         fn new(label: &str) -> Self {
             let sequence = TEST_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-            let root = std::env::temp_dir().join(format!("canopi-export-command-{label}-{sequence}"));
+            let root =
+                std::env::temp_dir().join(format!("canopi-export-command-{label}-{sequence}"));
             std::fs::create_dir_all(&root).unwrap();
             Self { root }
         }
@@ -132,7 +126,8 @@ mod tests {
         export_binary(vec![7, 8, 9], binary_path.display().to_string()).unwrap();
 
         let (text_bytes, text_name) = read_file_bytes(text_path.display().to_string()).unwrap();
-        let (binary_bytes, binary_name) = read_file_bytes(binary_path.display().to_string()).unwrap();
+        let (binary_bytes, binary_name) =
+            read_file_bytes(binary_path.display().to_string()).unwrap();
 
         assert_eq!(text_bytes, b"hello");
         assert_eq!(text_name, "export.txt");

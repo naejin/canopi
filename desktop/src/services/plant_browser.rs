@@ -1,6 +1,4 @@
-use common_types::species::{
-    PaginatedResult, Sort, SpeciesDetail, SpeciesFilter, SpeciesListItem,
-};
+use common_types::species::{PaginatedResult, Sort, SpeciesDetail, SpeciesFilter, SpeciesListItem};
 
 use crate::db::{self, PlantDb, UserDb};
 
@@ -131,9 +129,7 @@ pub fn get_recently_viewed(
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        get_favorites, get_recently_viewed, search_species, toggle_favorite,
-    };
+    use super::{get_favorites, get_recently_viewed, search_species, toggle_favorite};
     use crate::db::{self, PlantDb, UserDb};
     use common_types::species::{Sort, SpeciesFilter};
     use rusqlite::Connection;

@@ -15,88 +15,416 @@ pub(crate) struct PlantFilterField {
 }
 
 pub(crate) const PLANT_FILTER_FIELDS: &[PlantFilterField] = &[
-    PlantFilterField { key: "stratum", column: "s.stratum", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "woody", column: "s.woody", kind: PlantFilterFieldKind::Boolean },
-    PlantFilterField { key: "habit", column: "s.habit", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "growth_form_type", column: "s.growth_form_type", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "growth_form_shape", column: "s.growth_form_shape", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "growth_habit", column: "s.growth_habit", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "canopy_position", column: "s.canopy_position", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "deciduous_evergreen", column: "s.deciduous_evergreen", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "resprout_ability", column: "s.resprout_ability", kind: PlantFilterFieldKind::Boolean },
-    PlantFilterField { key: "coppice_potential", column: "s.coppice_potential", kind: PlantFilterFieldKind::Boolean },
-    PlantFilterField { key: "active_growth_period", column: "s.active_growth_period", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "hardiness_zone_min", column: "s.hardiness_zone_min", kind: PlantFilterFieldKind::Numeric },
-    PlantFilterField { key: "hardiness_zone_max", column: "s.hardiness_zone_max", kind: PlantFilterFieldKind::Numeric },
-    PlantFilterField { key: "height_max_m", column: "s.height_max_m", kind: PlantFilterFieldKind::Numeric },
-    PlantFilterField { key: "frost_tender", column: "s.frost_tender", kind: PlantFilterFieldKind::Boolean },
-    PlantFilterField { key: "drought_tolerance", column: "s.drought_tolerance", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "soil_ph_min", column: "s.soil_ph_min", kind: PlantFilterFieldKind::Numeric },
-    PlantFilterField { key: "soil_ph_max", column: "s.soil_ph_max", kind: PlantFilterFieldKind::Numeric },
-    PlantFilterField { key: "tolerates_acid", column: "s.tolerates_acid", kind: PlantFilterFieldKind::Boolean },
-    PlantFilterField { key: "tolerates_alkaline", column: "s.tolerates_alkaline", kind: PlantFilterFieldKind::Boolean },
-    PlantFilterField { key: "tolerates_saline", column: "s.tolerates_saline", kind: PlantFilterFieldKind::Boolean },
-    PlantFilterField { key: "tolerates_wind", column: "s.tolerates_wind", kind: PlantFilterFieldKind::Boolean },
-    PlantFilterField { key: "tolerates_pollution", column: "s.tolerates_pollution", kind: PlantFilterFieldKind::Boolean },
-    PlantFilterField { key: "tolerates_nutritionally_poor", column: "s.tolerates_nutritionally_poor", kind: PlantFilterFieldKind::Boolean },
-    PlantFilterField { key: "fertility_requirement", column: "s.fertility_requirement", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "moisture_use", column: "s.moisture_use", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "anaerobic_tolerance", column: "s.anaerobic_tolerance", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "root_depth_min_cm", column: "s.root_depth_min_cm", kind: PlantFilterFieldKind::Numeric },
-    PlantFilterField { key: "frost_free_days_min", column: "s.frost_free_days_min", kind: PlantFilterFieldKind::Numeric },
-    PlantFilterField { key: "precip_min_inches", column: "s.precip_min_inches", kind: PlantFilterFieldKind::Numeric },
-    PlantFilterField { key: "precip_max_inches", column: "s.precip_max_inches", kind: PlantFilterFieldKind::Numeric },
-    PlantFilterField { key: "succession_stage", column: "s.succession_stage", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "ecological_system", column: "s.ecological_system", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "mycorrhizal_type", column: "s.mycorrhizal_type", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "grime_strategy", column: "s.grime_strategy", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "allelopathic", column: "s.allelopathic", kind: PlantFilterFieldKind::Boolean },
-    PlantFilterField { key: "root_system_type", column: "s.root_system_type", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "attracts_wildlife", column: "s.attracts_wildlife", kind: PlantFilterFieldKind::Boolean },
-    PlantFilterField { key: "cn_ratio", column: "s.cn_ratio", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "raunkiaer_life_form", column: "s.raunkiaer_life_form", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "photosynthesis_pathway", column: "s.photosynthesis_pathway", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "ellenberg_light", column: "s.ellenberg_light", kind: PlantFilterFieldKind::Numeric },
-    PlantFilterField { key: "ellenberg_temperature", column: "s.ellenberg_temperature", kind: PlantFilterFieldKind::Numeric },
-    PlantFilterField { key: "ellenberg_moisture", column: "s.ellenberg_moisture", kind: PlantFilterFieldKind::Numeric },
-    PlantFilterField { key: "ellenberg_reaction", column: "s.ellenberg_reaction", kind: PlantFilterFieldKind::Numeric },
-    PlantFilterField { key: "ellenberg_nitrogen", column: "s.ellenberg_nitrogen", kind: PlantFilterFieldKind::Numeric },
-    PlantFilterField { key: "ellenberg_salt", column: "s.ellenberg_salt", kind: PlantFilterFieldKind::Numeric },
-    PlantFilterField { key: "pollination_syndrome", column: "s.pollination_syndrome", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "self_fertile", column: "s.self_fertile", kind: PlantFilterFieldKind::Boolean },
-    PlantFilterField { key: "reproductive_type", column: "s.reproductive_type", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "sexual_system", column: "s.sexual_system", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "vegetative_spread_rate", column: "s.vegetative_spread_rate", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "seed_spread_rate", column: "s.seed_spread_rate", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "mating_system", column: "s.mating_system", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "clonal_growth_form", column: "s.clonal_growth_form", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "storage_organ", column: "s.storage_organ", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "bloom_period", column: "s.bloom_period", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "flower_color", column: "s.flower_color", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "propagated_by_seed", column: "s.propagated_by_seed", kind: PlantFilterFieldKind::Boolean },
-    PlantFilterField { key: "propagated_by_cuttings", column: "s.propagated_by_cuttings", kind: PlantFilterFieldKind::Boolean },
-    PlantFilterField { key: "cold_stratification_required", column: "s.cold_stratification_required", kind: PlantFilterFieldKind::Boolean },
-    PlantFilterField { key: "fruit_type", column: "s.fruit_type", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "seed_dispersal_mechanism", column: "s.seed_dispersal_mechanism", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "seed_storage_behaviour", column: "s.seed_storage_behaviour", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "fruit_seed_abundance", column: "s.fruit_seed_abundance", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "seed_dormancy_type", column: "s.seed_dormancy_type", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "seed_dormancy_depth", column: "s.seed_dormancy_depth", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "serotinous", column: "s.serotinous", kind: PlantFilterFieldKind::Boolean },
-    PlantFilterField { key: "leaf_type", column: "s.leaf_type", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "leaf_compoundness", column: "s.leaf_compoundness", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "leaf_shape", column: "s.leaf_shape", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "toxicity", column: "s.toxicity", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "invasive_potential", column: "s.invasive_potential", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "biogeographic_status", column: "s.biogeographic_status", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "noxious_status", column: "s.noxious_status", kind: PlantFilterFieldKind::Boolean },
-    PlantFilterField { key: "invasive_usda", column: "s.invasive_usda", kind: PlantFilterFieldKind::Boolean },
-    PlantFilterField { key: "weed_potential", column: "s.weed_potential", kind: PlantFilterFieldKind::Boolean },
-    PlantFilterField { key: "fire_resistant", column: "s.fire_resistant", kind: PlantFilterFieldKind::Boolean },
-    PlantFilterField { key: "fire_tolerance", column: "s.fire_tolerance", kind: PlantFilterFieldKind::Categorical },
-    PlantFilterField { key: "medicinal_rating", column: "s.medicinal_rating", kind: PlantFilterFieldKind::Numeric },
-    PlantFilterField { key: "other_uses_rating", column: "s.other_uses_rating", kind: PlantFilterFieldKind::Numeric },
-    PlantFilterField { key: "scented", column: "s.scented", kind: PlantFilterFieldKind::Boolean },
+    PlantFilterField {
+        key: "stratum",
+        column: "s.stratum",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "woody",
+        column: "s.woody",
+        kind: PlantFilterFieldKind::Boolean,
+    },
+    PlantFilterField {
+        key: "habit",
+        column: "s.habit",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "growth_form_type",
+        column: "s.growth_form_type",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "growth_form_shape",
+        column: "s.growth_form_shape",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "growth_habit",
+        column: "s.growth_habit",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "canopy_position",
+        column: "s.canopy_position",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "deciduous_evergreen",
+        column: "s.deciduous_evergreen",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "resprout_ability",
+        column: "s.resprout_ability",
+        kind: PlantFilterFieldKind::Boolean,
+    },
+    PlantFilterField {
+        key: "coppice_potential",
+        column: "s.coppice_potential",
+        kind: PlantFilterFieldKind::Boolean,
+    },
+    PlantFilterField {
+        key: "active_growth_period",
+        column: "s.active_growth_period",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "hardiness_zone_min",
+        column: "s.hardiness_zone_min",
+        kind: PlantFilterFieldKind::Numeric,
+    },
+    PlantFilterField {
+        key: "hardiness_zone_max",
+        column: "s.hardiness_zone_max",
+        kind: PlantFilterFieldKind::Numeric,
+    },
+    PlantFilterField {
+        key: "height_max_m",
+        column: "s.height_max_m",
+        kind: PlantFilterFieldKind::Numeric,
+    },
+    PlantFilterField {
+        key: "frost_tender",
+        column: "s.frost_tender",
+        kind: PlantFilterFieldKind::Boolean,
+    },
+    PlantFilterField {
+        key: "drought_tolerance",
+        column: "s.drought_tolerance",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "soil_ph_min",
+        column: "s.soil_ph_min",
+        kind: PlantFilterFieldKind::Numeric,
+    },
+    PlantFilterField {
+        key: "soil_ph_max",
+        column: "s.soil_ph_max",
+        kind: PlantFilterFieldKind::Numeric,
+    },
+    PlantFilterField {
+        key: "tolerates_acid",
+        column: "s.tolerates_acid",
+        kind: PlantFilterFieldKind::Boolean,
+    },
+    PlantFilterField {
+        key: "tolerates_alkaline",
+        column: "s.tolerates_alkaline",
+        kind: PlantFilterFieldKind::Boolean,
+    },
+    PlantFilterField {
+        key: "tolerates_saline",
+        column: "s.tolerates_saline",
+        kind: PlantFilterFieldKind::Boolean,
+    },
+    PlantFilterField {
+        key: "tolerates_wind",
+        column: "s.tolerates_wind",
+        kind: PlantFilterFieldKind::Boolean,
+    },
+    PlantFilterField {
+        key: "tolerates_pollution",
+        column: "s.tolerates_pollution",
+        kind: PlantFilterFieldKind::Boolean,
+    },
+    PlantFilterField {
+        key: "tolerates_nutritionally_poor",
+        column: "s.tolerates_nutritionally_poor",
+        kind: PlantFilterFieldKind::Boolean,
+    },
+    PlantFilterField {
+        key: "fertility_requirement",
+        column: "s.fertility_requirement",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "moisture_use",
+        column: "s.moisture_use",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "anaerobic_tolerance",
+        column: "s.anaerobic_tolerance",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "root_depth_min_cm",
+        column: "s.root_depth_min_cm",
+        kind: PlantFilterFieldKind::Numeric,
+    },
+    PlantFilterField {
+        key: "frost_free_days_min",
+        column: "s.frost_free_days_min",
+        kind: PlantFilterFieldKind::Numeric,
+    },
+    PlantFilterField {
+        key: "precip_min_inches",
+        column: "s.precip_min_inches",
+        kind: PlantFilterFieldKind::Numeric,
+    },
+    PlantFilterField {
+        key: "precip_max_inches",
+        column: "s.precip_max_inches",
+        kind: PlantFilterFieldKind::Numeric,
+    },
+    PlantFilterField {
+        key: "succession_stage",
+        column: "s.succession_stage",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "ecological_system",
+        column: "s.ecological_system",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "mycorrhizal_type",
+        column: "s.mycorrhizal_type",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "grime_strategy",
+        column: "s.grime_strategy",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "allelopathic",
+        column: "s.allelopathic",
+        kind: PlantFilterFieldKind::Boolean,
+    },
+    PlantFilterField {
+        key: "root_system_type",
+        column: "s.root_system_type",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "attracts_wildlife",
+        column: "s.attracts_wildlife",
+        kind: PlantFilterFieldKind::Boolean,
+    },
+    PlantFilterField {
+        key: "cn_ratio",
+        column: "s.cn_ratio",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "raunkiaer_life_form",
+        column: "s.raunkiaer_life_form",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "photosynthesis_pathway",
+        column: "s.photosynthesis_pathway",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "ellenberg_light",
+        column: "s.ellenberg_light",
+        kind: PlantFilterFieldKind::Numeric,
+    },
+    PlantFilterField {
+        key: "ellenberg_temperature",
+        column: "s.ellenberg_temperature",
+        kind: PlantFilterFieldKind::Numeric,
+    },
+    PlantFilterField {
+        key: "ellenberg_moisture",
+        column: "s.ellenberg_moisture",
+        kind: PlantFilterFieldKind::Numeric,
+    },
+    PlantFilterField {
+        key: "ellenberg_reaction",
+        column: "s.ellenberg_reaction",
+        kind: PlantFilterFieldKind::Numeric,
+    },
+    PlantFilterField {
+        key: "ellenberg_nitrogen",
+        column: "s.ellenberg_nitrogen",
+        kind: PlantFilterFieldKind::Numeric,
+    },
+    PlantFilterField {
+        key: "ellenberg_salt",
+        column: "s.ellenberg_salt",
+        kind: PlantFilterFieldKind::Numeric,
+    },
+    PlantFilterField {
+        key: "pollination_syndrome",
+        column: "s.pollination_syndrome",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "self_fertile",
+        column: "s.self_fertile",
+        kind: PlantFilterFieldKind::Boolean,
+    },
+    PlantFilterField {
+        key: "reproductive_type",
+        column: "s.reproductive_type",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "sexual_system",
+        column: "s.sexual_system",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "vegetative_spread_rate",
+        column: "s.vegetative_spread_rate",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "seed_spread_rate",
+        column: "s.seed_spread_rate",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "mating_system",
+        column: "s.mating_system",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "clonal_growth_form",
+        column: "s.clonal_growth_form",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "storage_organ",
+        column: "s.storage_organ",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "bloom_period",
+        column: "s.bloom_period",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "flower_color",
+        column: "s.flower_color",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "propagated_by_seed",
+        column: "s.propagated_by_seed",
+        kind: PlantFilterFieldKind::Boolean,
+    },
+    PlantFilterField {
+        key: "propagated_by_cuttings",
+        column: "s.propagated_by_cuttings",
+        kind: PlantFilterFieldKind::Boolean,
+    },
+    PlantFilterField {
+        key: "cold_stratification_required",
+        column: "s.cold_stratification_required",
+        kind: PlantFilterFieldKind::Boolean,
+    },
+    PlantFilterField {
+        key: "fruit_type",
+        column: "s.fruit_type",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "seed_dispersal_mechanism",
+        column: "s.seed_dispersal_mechanism",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "seed_storage_behaviour",
+        column: "s.seed_storage_behaviour",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "fruit_seed_abundance",
+        column: "s.fruit_seed_abundance",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "seed_dormancy_type",
+        column: "s.seed_dormancy_type",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "seed_dormancy_depth",
+        column: "s.seed_dormancy_depth",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "serotinous",
+        column: "s.serotinous",
+        kind: PlantFilterFieldKind::Boolean,
+    },
+    PlantFilterField {
+        key: "leaf_type",
+        column: "s.leaf_type",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "leaf_compoundness",
+        column: "s.leaf_compoundness",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "leaf_shape",
+        column: "s.leaf_shape",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "toxicity",
+        column: "s.toxicity",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "invasive_potential",
+        column: "s.invasive_potential",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "biogeographic_status",
+        column: "s.biogeographic_status",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "noxious_status",
+        column: "s.noxious_status",
+        kind: PlantFilterFieldKind::Boolean,
+    },
+    PlantFilterField {
+        key: "invasive_usda",
+        column: "s.invasive_usda",
+        kind: PlantFilterFieldKind::Boolean,
+    },
+    PlantFilterField {
+        key: "weed_potential",
+        column: "s.weed_potential",
+        kind: PlantFilterFieldKind::Boolean,
+    },
+    PlantFilterField {
+        key: "fire_resistant",
+        column: "s.fire_resistant",
+        kind: PlantFilterFieldKind::Boolean,
+    },
+    PlantFilterField {
+        key: "fire_tolerance",
+        column: "s.fire_tolerance",
+        kind: PlantFilterFieldKind::Categorical,
+    },
+    PlantFilterField {
+        key: "medicinal_rating",
+        column: "s.medicinal_rating",
+        kind: PlantFilterFieldKind::Numeric,
+    },
+    PlantFilterField {
+        key: "other_uses_rating",
+        column: "s.other_uses_rating",
+        kind: PlantFilterFieldKind::Numeric,
+    },
+    PlantFilterField {
+        key: "scented",
+        column: "s.scented",
+        kind: PlantFilterFieldKind::Boolean,
+    },
 ];
 
 pub(crate) fn filter_field(key: &str) -> Option<&'static PlantFilterField> {
@@ -211,15 +539,28 @@ mod tests {
 
     #[test]
     fn exposes_field_kinds_from_schema() {
-        assert_eq!(filter_field_kind("woody"), Some(PlantFilterFieldKind::Boolean));
-        assert_eq!(filter_field_kind("growth_form_type"), Some(PlantFilterFieldKind::Categorical));
-        assert_eq!(filter_field_kind("height_max_m"), Some(PlantFilterFieldKind::Numeric));
+        assert_eq!(
+            filter_field_kind("woody"),
+            Some(PlantFilterFieldKind::Boolean)
+        );
+        assert_eq!(
+            filter_field_kind("growth_form_type"),
+            Some(PlantFilterFieldKind::Categorical)
+        );
+        assert_eq!(
+            filter_field_kind("height_max_m"),
+            Some(PlantFilterFieldKind::Numeric)
+        );
         assert_eq!(filter_field_kind("not_a_field"), None);
     }
 
     #[test]
     fn generated_fields_keep_static_sql_allowlist_entries() {
-        assert!(PLANT_FILTER_FIELDS.iter().all(|field| field.column.starts_with("s.")));
+        assert!(
+            PLANT_FILTER_FIELDS
+                .iter()
+                .all(|field| field.column.starts_with("s."))
+        );
         assert!(PLANT_FILTER_FIELDS.iter().any(|field| field.key == "habit"));
     }
 }

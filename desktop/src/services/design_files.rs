@@ -41,7 +41,10 @@ pub fn list_autosaves(app: &tauri::AppHandle) -> Result<Vec<AutosaveEntry>, Stri
     autosave::list_autosaves(app)
 }
 
-pub fn recover_autosave(app: &tauri::AppHandle, autosave_path: String) -> Result<CanopiFile, String> {
+pub fn recover_autosave(
+    app: &tauri::AppHandle,
+    autosave_path: String,
+) -> Result<CanopiFile, String> {
     autosave::recover_autosave(app, &autosave_path)
 }
 
@@ -92,7 +95,12 @@ mod tests {
         let design = test_design("Service Demo");
         let path = temp_design_path("round_trip");
 
-        let saved_path = save_design(&user_db, path.to_string_lossy().into_owned(), design.clone()).unwrap();
+        let saved_path = save_design(
+            &user_db,
+            path.to_string_lossy().into_owned(),
+            design.clone(),
+        )
+        .unwrap();
         let loaded = load_design(&user_db, saved_path.clone()).unwrap();
         let recent = get_recent_files(&user_db).unwrap();
 

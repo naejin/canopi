@@ -26,9 +26,15 @@ pub async fn download_tiles(
 ) -> Result<(), String> {
     let tiles_root = resolve_tiles_root(&app)?;
     crate::blocking::run_blocking("tile download", move || {
-        crate::services::tiles::download_tiles_blocking(&tiles_root, bbox, min_zoom, max_zoom, |progress| {
-            let _ = app.emit("tile-download-progress", progress);
-        })
+        crate::services::tiles::download_tiles_blocking(
+            &tiles_root,
+            bbox,
+            min_zoom,
+            max_zoom,
+            |progress| {
+                let _ = app.emit("tile-download-progress", progress);
+            },
+        )
     })
     .await
 }

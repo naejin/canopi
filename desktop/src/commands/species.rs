@@ -49,12 +49,7 @@ pub fn get_species_detail(
     canonical_name: String,
     locale: String,
 ) -> Result<SpeciesDetail, String> {
-    crate::services::plant_browser::get_species_detail(
-        &plant_db,
-        &user_db,
-        canonical_name,
-        locale,
-    )
+    crate::services::plant_browser::get_species_detail(&plant_db, &user_db, canonical_name, locale)
 }
 
 /// Returns companion/antagonist relationships for a species.

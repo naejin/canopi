@@ -69,7 +69,8 @@ pub fn hydrate_species_list_items(
                     );
                     item.common_name = Some(common_name);
                 } else {
-                    item.common_name = get_common_name(conn, &species_id, locale).or(item.common_name);
+                    item.common_name =
+                        get_common_name(conn, &species_id, locale).or(item.common_name);
                     item.is_name_fallback = locale != "en";
                 }
                 item

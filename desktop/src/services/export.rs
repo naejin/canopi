@@ -42,7 +42,10 @@ pub fn export_native_png(
     Ok(written_path)
 }
 
-#[allow(clippy::too_many_arguments, reason = "Service keeps the same flat export shape as IPC")]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Service keeps the same flat export shape as IPC"
+)]
 pub fn export_native_pdf(
     platform: &dyn Platform,
     snapshot_base64: String,
@@ -99,7 +102,8 @@ fn decode_canvas_snapshot(
 }
 
 fn write_bytes_to_path(path: String, bytes: &[u8], kind: &str) -> Result<String, String> {
-    std::fs::write(&path, bytes).map_err(|e| format!("Failed to write {kind} file to {path}: {e}"))?;
+    std::fs::write(&path, bytes)
+        .map_err(|e| format!("Failed to write {kind} file to {path}: {e}"))?;
     tracing::info!("Exported {kind} file to {path}");
     Ok(path)
 }
@@ -111,8 +115,8 @@ mod tests {
     };
     use crate::platform::{CanvasSnapshot, FileWatchHandle, Platform, PlatformError, PrintLayout};
     use std::path::{Path, PathBuf};
-    use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::Mutex;
+    use std::sync::atomic::{AtomicU64, Ordering};
 
     static TEST_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
@@ -157,7 +161,11 @@ mod tests {
     }
 
     impl Platform for RecordingPlatform {
-        fn export_png(&self, snapshot: &CanvasSnapshot, dpi: u32) -> Result<Vec<u8>, PlatformError> {
+        fn export_png(
+            &self,
+            snapshot: &CanvasSnapshot,
+            dpi: u32,
+        ) -> Result<Vec<u8>, PlatformError> {
             self.png_calls.lock().unwrap().push(PngCall {
                 dpi,
                 snapshot_width: snapshot.width,
@@ -207,7 +215,8 @@ mod tests {
     impl TempTestDir {
         fn new(label: &str) -> Self {
             let sequence = TEST_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-            let root = std::env::temp_dir().join(format!("canopi-export-service-{label}-{sequence}"));
+            let root =
+                std::env::temp_dir().join(format!("canopi-export-service-{label}-{sequence}"));
             std::fs::create_dir_all(&root).unwrap();
             Self { root }
         }
@@ -233,12 +242,16 @@ mod tests {
         export_binary(vec![1, 2, 3], binary_path.display().to_string()).unwrap();
 
         let (text_bytes, text_name) = read_file_bytes(text_path.display().to_string()).unwrap();
-        let (binary_bytes, binary_name) = read_file_bytes(binary_path.display().to_string()).unwrap();
+        let (binary_bytes, binary_name) =
+            read_file_bytes(binary_path.display().to_string()).unwrap();
 
         assert_eq!(text_bytes, b"hello");
         assert_eq!(text_name, text_path.file_name().unwrap().to_string_lossy());
         assert_eq!(binary_bytes, vec![1, 2, 3]);
-        assert_eq!(binary_name, binary_path.file_name().unwrap().to_string_lossy());
+        assert_eq!(
+            binary_name,
+            binary_path.file_name().unwrap().to_string_lossy()
+        );
     }
 
     #[test]

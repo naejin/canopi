@@ -81,19 +81,14 @@ pub fn load_from_file(path: &Path) -> Result<CanopiFile, String> {
 
 fn migrate_design_value(value: &mut serde_json::Value) {
     loop {
-        let version = value
-            .get("version")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(1) as u32;
+        let version = value.get("version").and_then(|v| v.as_u64()).unwrap_or(1) as u32;
         if version >= CURRENT_VERSION {
             break;
         }
         match version {
             1 => migrate_v1_to_v2(value),
             _ => {
-                tracing::warn!(
-                    "Unknown file version {version} during migration, stopping"
-                );
+                tracing::warn!("Unknown file version {version} during migration, stopping");
                 break;
             }
         }
@@ -134,18 +129,27 @@ fn migrate_legacy_timeline_targets(value: &mut serde_json::Value) {
     };
 
     for action in timeline {
-        if action.get("targets").and_then(|targets| targets.as_array()).is_some() {
+        if action
+            .get("targets")
+            .and_then(|targets| targets.as_array())
+            .is_some()
+        {
             continue;
         }
 
         let mut targets = Vec::<serde_json::Value>::new();
         if let Some(plants) = action.get("plants").and_then(|plants| plants.as_array()) {
             for plant_ref in plants {
-                let Some(raw_ref) = plant_ref.as_str().map(str::trim).filter(|raw_ref| !raw_ref.is_empty()) else {
+                let Some(raw_ref) = plant_ref
+                    .as_str()
+                    .map(str::trim)
+                    .filter(|raw_ref| !raw_ref.is_empty())
+                else {
                     continue;
                 };
                 if plant_ids.contains(raw_ref) {
-                    targets.push(serde_json::json!({ "kind": "placed_plant", "plant_id": raw_ref }));
+                    targets
+                        .push(serde_json::json!({ "kind": "placed_plant", "plant_id": raw_ref }));
                 } else {
                     targets.push(species_target(raw_ref));
                 }
@@ -610,10 +614,22 @@ mod tests {
 
         assert_eq!(loaded.version, 2);
         assert_eq!(loaded.timeline[0].targets.len(), 3);
-        assert!(matches!(loaded.timeline[0].targets[0], PanelTarget::PlacedPlant { .. }));
-        assert!(matches!(loaded.timeline[0].targets[1], PanelTarget::Species { .. }));
-        assert!(matches!(loaded.timeline[0].targets[2], PanelTarget::Zone { .. }));
-        assert!(matches!(loaded.budget[0].target, PanelTarget::Species { .. }));
+        assert!(matches!(
+            loaded.timeline[0].targets[0],
+            PanelTarget::PlacedPlant { .. }
+        ));
+        assert!(matches!(
+            loaded.timeline[0].targets[1],
+            PanelTarget::Species { .. }
+        ));
+        assert!(matches!(
+            loaded.timeline[0].targets[2],
+            PanelTarget::Zone { .. }
+        ));
+        assert!(matches!(
+            loaded.budget[0].target,
+            PanelTarget::Species { .. }
+        ));
 
         let _ = std::fs::remove_file(&path);
     }
@@ -664,7 +680,8 @@ mod tests {
             }
         ]);
 
-        std::fs::write(&path, serde_json::to_string_pretty(&value).unwrap()).expect("write v2 file");
+        std::fs::write(&path, serde_json::to_string_pretty(&value).unwrap())
+            .expect("write v2 file");
         let loaded = load_from_file(&path).expect("v2 file should load");
         save_to_file(&path, &loaded).expect("v2 file should save");
         let reloaded = load_from_file(&path).expect("saved v2 file should reload");
@@ -674,9 +691,15 @@ mod tests {
         assert_eq!(reloaded.consortiums.len(), 1);
         assert_eq!(reloaded.timeline.len(), 1);
         assert_eq!(reloaded.timeline[0].targets.len(), 2);
-        assert!(matches!(reloaded.timeline[0].targets[0], PanelTarget::Species { .. }));
+        assert!(matches!(
+            reloaded.timeline[0].targets[0],
+            PanelTarget::Species { .. }
+        ));
         assert_eq!(reloaded.budget.len(), 1);
-        assert!(matches!(reloaded.budget[0].target, PanelTarget::Species { .. }));
+        assert!(matches!(
+            reloaded.budget[0].target,
+            PanelTarget::Species { .. }
+        ));
         assert_eq!(
             reloaded
                 .extra

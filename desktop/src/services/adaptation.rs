@@ -1,5 +1,5 @@
-use crate::db::{PlantDb, require_plant_db};
 use crate::contracts::adaptation::{CompatibilityResult, ReplacementSuggestion};
+use crate::db::{PlantDb, require_plant_db};
 use rusqlite::types::ToSql;
 
 pub fn check_plant_compatibility(
@@ -33,7 +33,10 @@ pub fn check_plant_compatibility(
         .prepare(&sql)
         .map_err(|e| format!("Failed to prepare compatibility query: {e}"))?;
 
-    let params: Vec<&dyn ToSql> = canonical_names.iter().map(|name| name as &dyn ToSql).collect();
+    let params: Vec<&dyn ToSql> = canonical_names
+        .iter()
+        .map(|name| name as &dyn ToSql)
+        .collect();
 
     let rows = stmt
         .query_map(params.as_slice(), |row| -> rusqlite::Result<_> {
@@ -54,15 +57,18 @@ pub fn check_plant_compatibility(
         let (is_compatible, zone_diff) =
             compute_zone_diff(hardiness_min, hardiness_max, target_hardiness);
 
-        by_name.insert(canonical_name.clone(), CompatibilityResult {
-            species_id,
-            canonical_name,
-            common_name,
-            hardiness_min,
-            hardiness_max,
-            is_compatible,
-            zone_diff,
-        });
+        by_name.insert(
+            canonical_name.clone(),
+            CompatibilityResult {
+                species_id,
+                canonical_name,
+                common_name,
+                hardiness_min,
+                hardiness_max,
+                is_compatible,
+                zone_diff,
+            },
+        );
     }
 
     let mut results = Vec::with_capacity(by_name.len());
@@ -365,7 +371,10 @@ mod tests {
         )
         .unwrap();
 
-        let names: Vec<&str> = results.iter().map(|item| item.canonical_name.as_str()).collect();
+        let names: Vec<&str> = results
+            .iter()
+            .map(|item| item.canonical_name.as_str())
+            .collect();
         assert_eq!(names, vec!["Pear", "Apple"]);
     }
 
@@ -373,7 +382,10 @@ mod tests {
     fn replacements_prefer_same_stratum_height_and_stable_order() {
         let plant_db = test_plant_db();
         let results = suggest_replacements(&plant_db, "Apple".into(), 6, 20, "en".into()).unwrap();
-        let names: Vec<&str> = results.iter().map(|item| item.canonical_name.as_str()).collect();
+        let names: Vec<&str> = results
+            .iter()
+            .map(|item| item.canonical_name.as_str())
+            .collect();
 
         assert_eq!(names, vec!["Apricot", "Pear", "Plum"]);
         assert_eq!(results[0].common_name.as_deref(), Some("Apricot"));
@@ -384,7 +396,13 @@ mod tests {
         let plant_db = test_plant_db();
         let broad = suggest_replacements(&plant_db, "Unknown".into(), 6, 99, "en".into()).unwrap();
         assert!(broad.len() <= 20);
-        let names: Vec<&str> = broad.iter().map(|item| item.canonical_name.as_str()).collect();
-        assert_eq!(names, vec!["Apricot", "Quince", "Apple", "Currant", "Pear", "Plum"]);
+        let names: Vec<&str> = broad
+            .iter()
+            .map(|item| item.canonical_name.as_str())
+            .collect();
+        assert_eq!(
+            names,
+            vec!["Apricot", "Quince", "Apple", "Currant", "Pear", "Plum"]
+        );
     }
 }

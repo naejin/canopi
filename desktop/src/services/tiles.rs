@@ -330,7 +330,8 @@ fn offline_status_for_root(tiles_root: &Path) -> Result<OfflineStatus, String> {
 
 fn remove_offline_tiles_in_dir(tiles_root: &Path) -> Result<(), String> {
     if tiles_root.exists() {
-        fs::remove_dir_all(tiles_root).map_err(|e| format!("Failed to remove offline tiles: {e}"))?;
+        fs::remove_dir_all(tiles_root)
+            .map_err(|e| format!("Failed to remove offline tiles: {e}"))?;
         tracing::info!("Offline tiles removed");
     }
     Ok(())
@@ -339,7 +340,8 @@ fn remove_offline_tiles_in_dir(tiles_root: &Path) -> Result<(), String> {
 fn prepare_staging_root(tiles_root: &Path) -> Result<PathBuf, String> {
     let staging_root = unique_staging_root(tiles_root);
     if let Some(parent) = staging_root.parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("Failed to create tiles parent dir: {e}"))?;
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create tiles parent dir: {e}"))?;
     }
     prepare_tiles_root(&staging_root)?;
     Ok(staging_root)
@@ -370,9 +372,9 @@ fn replace_tiles_root(tiles_root: &Path, staging_root: &Path) -> Result<(), Stri
 #[cfg(test)]
 mod tests {
     use super::{
-        bbox_to_tile_range, count_tiles, download_tiles_blocking_with_fetch, get_tile,
-        offline_status_for_root, remove_offline_tiles_in_dir, validate_download_request,
-        write_manifest, OfflineStatus, TileManifest,
+        OfflineStatus, TileManifest, bbox_to_tile_range, count_tiles,
+        download_tiles_blocking_with_fetch, get_tile, offline_status_for_root,
+        remove_offline_tiles_in_dir, validate_download_request, write_manifest,
     };
     use std::time::{SystemTime, UNIX_EPOCH};
 

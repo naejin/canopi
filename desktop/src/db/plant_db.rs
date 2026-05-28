@@ -7,16 +7,14 @@ mod list_items;
 mod lookup;
 mod search;
 
+pub use detail::resolve_species_id;
 pub use detail::{get_detail, get_relationships, get_species_external_links, get_species_images};
 pub use filters::{get_dynamic_filter_options, get_filter_options};
 pub use flower::get_flower_color_batch;
 pub use list_items::hydrate_species_list_items;
 #[allow(unused_imports)]
 pub use lookup::translate_value;
-pub use lookup::{
-    get_common_name, get_common_names_batch, get_locale_common_names,
-};
-pub use detail::resolve_species_id;
+pub use lookup::{get_common_name, get_common_names_batch, get_locale_common_names};
 pub use search::search;
 
 #[cfg(test)]
@@ -521,8 +519,17 @@ mod tests {
             climate_zones: Some(vec!["Mediterranean".to_owned()]),
             ..Default::default()
         };
-        let result =
-            search(&conn, None, filters, None, Sort::Name, 50, true, "en".to_owned()).unwrap();
+        let result = search(
+            &conn,
+            None,
+            filters,
+            None,
+            Sort::Name,
+            50,
+            true,
+            "en".to_owned(),
+        )
+        .unwrap();
         assert_eq!(result.items.len(), 1);
         assert_eq!(result.items[0].canonical_name, "Lavandula angustifolia");
 
@@ -531,8 +538,17 @@ mod tests {
             climate_zones: Some(vec!["Temperate".to_owned()]),
             ..Default::default()
         };
-        let result =
-            search(&conn, None, filters, None, Sort::Name, 50, true, "en".to_owned()).unwrap();
+        let result = search(
+            &conn,
+            None,
+            filters,
+            None,
+            Sort::Name,
+            50,
+            true,
+            "en".to_owned(),
+        )
+        .unwrap();
         assert_eq!(result.items.len(), 2);
 
         // Continental filter should return only Alnus
@@ -540,8 +556,17 @@ mod tests {
             climate_zones: Some(vec!["Continental".to_owned()]),
             ..Default::default()
         };
-        let result =
-            search(&conn, None, filters, None, Sort::Name, 50, true, "en".to_owned()).unwrap();
+        let result = search(
+            &conn,
+            None,
+            filters,
+            None,
+            Sort::Name,
+            50,
+            true,
+            "en".to_owned(),
+        )
+        .unwrap();
         assert_eq!(result.items.len(), 1);
         assert_eq!(result.items[0].canonical_name, "Alnus glutinosa");
     }
