@@ -6,6 +6,7 @@ import {
   hasActiveFilters,
   loadDynamicOptions,
   patchFilters,
+  plantFilterCatalog,
   plantSearchSession,
   removeExtraFilter,
 } from '../../app/plant-browser'
@@ -110,11 +111,16 @@ export function ActiveChips() {
 
   const chips: Chip[] = [];
 
-  addArrayChips(chips, filters, 'climate_zones', 'cz', 'filters.climateZone_', '--color-sun');
-  addArrayChips(chips, filters, 'habit', 'hab', 'filters.habit_', '--color-family');
-  addArrayChips(chips, filters, 'sun_tolerances', 'sun', 'plantDb.sunTolerance_', '--color-sun');
-  addArrayChips(chips, filters, 'life_cycle', 'lc', 'filters.lifeCycle_', '--color-family');
-  addArrayChips(chips, filters, 'growth_rate', 'gr', 'filters.growthRate_', '--color-family');
+  for (const field of plantFilterCatalog.activeArrayChipFields()) {
+    addArrayChips(
+      chips,
+      filters,
+      field.filterKey,
+      field.keyPrefix,
+      field.valueI18nPrefix,
+      field.color,
+    )
+  }
 
   if (filters.woody !== null) {
     chips.push({

@@ -37,20 +37,13 @@ export function FilterStrip({ onMoreFilters }: { onMoreFilters: () => void }) {
     void loadFilterOptions();
   }, []);
 
-  const schemaChipRows: ChipRowConfig[] = plantFilterCatalog.stripChoiceFields().map((entry) => ({
-    label: t(entry.field.i18nKey, entry.field.key),
+  const chipRows: ChipRowConfig[] = plantFilterCatalog.stripChoiceFields().map((entry) => ({
+    label: t(entry.labelI18nKey, entry.fallbackLabel),
     options: opts?.[entry.optionsKey] ?? [],
     filterKey: entry.filterKey,
     i18nPrefix: entry.valueI18nPrefix,
-    color: entry.field.colorToken,
+    color: entry.color,
   }));
-
-  const specialChipRows: ChipRowConfig[] = [
-    { label: t('filters.sun'), options: opts?.sun_tolerances ?? [], filterKey: 'sun_tolerances', i18nPrefix: 'plantDb.sunTolerance_', color: '--color-sun' },
-    { label: t('filters.lifecycle'), options: opts?.life_cycles ?? [], filterKey: 'life_cycle', i18nPrefix: 'filters.lifeCycle_', color: '--color-family' },
-  ];
-
-  const chipRows = [...schemaChipRows, ...specialChipRows];
 
   return (
     <div className={styles.filterStrip}>

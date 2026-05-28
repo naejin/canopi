@@ -31,7 +31,8 @@ When canopi-data removes or adds columns, update atomically:
 - Cursor-based row mapping order must match the detail projection order.
 - Search plans own count/list query construction and cursor semantics.
 - Count and list predicates should share the same planner path.
-- `SpeciesFilter.life_cycle` maps to boolean DB columns such as `is_annual`, `is_biennial`, and `is_perennial`.
+- Species Catalog Filter predicates with bespoke behavior belong in `query_builder/species_catalog_filters.rs`.
+- `SpeciesFilter.life_cycle` remains a fixed request field, but its predicate routes through the Species Catalog Filter adapter and maps to boolean DB columns such as `is_annual`, `is_biennial`, and `is_perennial`.
 - Soil filtering uses boolean tolerance columns, not a `species_soil_types` table.
 - Dynamic filter fields must be validated through allowlisted column metadata.
 - Cursor pagination typed values must use numeric SQLite values for numeric sort fields, not text.
