@@ -5,29 +5,33 @@ import { useSignal, useSignalEffect } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale, theme } from '../../app/settings/state'
 import { plantSpeciesColorDefaults } from '../../canvas/plant-species-color-defaults'
-import { plantNamesRevision, sceneEntityRevision } from '../../canvas/runtime-mirror-state'
 import { currentDesign } from '../../state/design'
-import { currentCanvasQuerySurface } from '../../canvas/session'
 import {
   ACTION_TYPES,
-  buildTimelinePlanningProjection,
   clearPlanningHoveredTargets,
   clearPlanningSelectedTargetsForOrigin,
-  projectTimelineAction,
   setPlanningHoveredTargets,
   setPlanningSelectedTargets,
+  useTimelinePlanningProjection,
   type TimelineActionLayout,
   type TimelineActionTypeRow,
   type TimelinePlanningAction,
 } from '../../app/planning-projection'
 import {
   addTimelineAction,
-  applyTimelineActionPatch,
   deleteTimelineAction,
   updateTimelineAction,
 } from '../../app/timeline/controller'
+import {
+  beginTimelineActionEdit,
+  compensateFrozenTimelineOriginScroll,
+  computeTimelineAutoScrollSpeed,
+  createTimelineActionFromFormData,
+  formDataFromTimelineAction,
+  timelineActionPatchFromFormData,
+  type TimelineActionEditSession,
+} from '../../app/timeline/editing'
 import { isEditableTarget } from '../../canvas/runtime/interaction/pointer-utils'
-import { beginDocumentArrayEdit, type DocumentArrayEditTransaction } from '../../app/document/edit-transaction'
 import {
   LABEL_SIDEBAR_WIDTH,
   RULER_HEIGHT,
@@ -38,8 +42,7 @@ import {
   type TimelineRenderState,
 } from '../../canvas/timeline-renderer'
 import { dateToX, snapToDay, toISODate, xToDate } from '../../canvas/timeline-math'
-import { MANUAL_TARGET, speciesTarget } from '../../panel-targets'
-import type { PanelTarget, PlacedPlant, TimelineAction } from '../../types/design'
+import type { PanelTarget, TimelineAction } from '../../types/design'
 import { TimelinePopover, type PopoverFormData } from './TimelinePopover'
 import styles from './InteractiveTimeline.module.css'
 
@@ -54,24 +57,6 @@ const GRANULARITY_PX_PER_DAY: Record<Granularity, number> = {
 const RULER_BTN_Y = (28 - 18) / 2  // (RULER_HEIGHT - pillH) / 2 = 5
 const RULER_BTN_H = 18
 const CLICK_THRESHOLD = 3
-const AUTO_SCROLL_EDGE_ZONE = 60
-const AUTO_SCROLL_MIN_SPEED = 1
-const AUTO_SCROLL_MAX_SPEED = 15
-
-function computeAutoScrollSpeed(mouseX: number, chartWidth: number): number {
-  const leftEdge = LABEL_SIDEBAR_WIDTH
-  if (mouseX < leftEdge + AUTO_SCROLL_EDGE_ZONE) {
-    const depth = leftEdge + AUTO_SCROLL_EDGE_ZONE - mouseX
-    const ratio = Math.min(depth / AUTO_SCROLL_EDGE_ZONE, 1)
-    return -(AUTO_SCROLL_MIN_SPEED + (AUTO_SCROLL_MAX_SPEED - AUTO_SCROLL_MIN_SPEED) * ratio * ratio)
-  }
-  if (mouseX > chartWidth - AUTO_SCROLL_EDGE_ZONE) {
-    const depth = mouseX - (chartWidth - AUTO_SCROLL_EDGE_ZONE)
-    const ratio = Math.min(depth / AUTO_SCROLL_EDGE_ZONE, 1)
-    return AUTO_SCROLL_MIN_SPEED + (AUTO_SCROLL_MAX_SPEED - AUTO_SCROLL_MIN_SPEED) * ratio * ratio
-  }
-  return 0
-}
 
 function hitTestRulerControls(x: number, y: number): 'granularity' | 'today' | null {
   if (y < RULER_BTN_Y || y > RULER_BTN_Y + RULER_BTN_H) return null
@@ -90,24 +75,15 @@ interface InteractiveTimelineProps {
 type DragState =
   | {
       type: 'move'
-      actionId: string
       startMouseX: number
-      originalStartMs: number
-      durationMs: number | null
-      pxPerDaySnapshot: number
       cachedRect: DOMRect
-      edit: DocumentArrayEditTransaction<'timeline'>
+      edit: TimelineActionEditSession
     }
   | {
       type: 'resize'
-      actionId: string
-      edge: 'left' | 'right'
       startMouseX: number
-      originalStartMs: number
-      originalEndMs: number | null
-      pxPerDaySnapshot: number
       cachedRect: DOMRect
-      edit: DocumentArrayEditTransaction<'timeline'>
+      edit: TimelineActionEditSession
     }
   | {
       type: 'pan'
@@ -139,8 +115,6 @@ interface PendingClick {
 
 const EMPTY_ACTIONS: TimelineAction[] = []
 const EMPTY_PANEL_TARGETS: readonly PanelTarget[] = []
-const EMPTY_PLANTS: PlacedPlant[] = []
-const EMPTY_NAMES: ReadonlyMap<string, string | null> = new Map()
 
 function setTimelineHoveredPanelTargets(targets: readonly PanelTarget[]): void {
   setPlanningHoveredTargets(targets)
@@ -171,7 +145,6 @@ export function InteractiveTimeline({
   const pendingClick = useRef<PendingClick | null>(null)
   const rowsRef = useRef<readonly TimelineActionTypeRow[]>([])
   const layoutRef = useRef<ReadonlyMap<string, TimelineActionLayout>>(new Map())
-  const lastDragDates = useRef<{ start: string; end: string | null }>({ start: '', end: null })
   const dragOriginMsRef = useRef<number | null>(null)
   const dragOriginDateRef = useRef<Date | null>(null)
   const computedOriginMsRef = useRef(0)
@@ -184,28 +157,14 @@ export function InteractiveTimeline({
   onSelectRef.current = onSelect
 
   const actions = currentDesign.value?.timeline ?? EMPTY_ACTIONS
-  const session = currentCanvasQuerySurface.value
-  const plants = session?.getPlacedPlants() ?? EMPTY_PLANTS
-  const localizedNames = session?.getLocalizedCommonNames() ?? EMPTY_NAMES
-  const plantsRef = useRef(plants)
-  plantsRef.current = plants
-  const localizedNamesRef = useRef(localizedNames)
-  localizedNamesRef.current = localizedNames
   const speciesColors = plantSpeciesColorDefaults.value
   const todayMs = useMemo(() => Date.now(), [])
-  const projection = useMemo(
-    () => buildTimelinePlanningProjection({
-      actions,
-      plants: plantsRef.current,
-      localizedNames: localizedNamesRef.current,
-      fallbackOriginMs: todayMs,
-      locale: locale.value,
-    }),
-    // sceneEntityRevision + plantNamesRevision are the real change triggers;
-    // plants/localizedNames are read from refs to avoid unstable array deps.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [actions, todayMs, sceneEntityRevision.value, plantNamesRevision.value, locale.value],
-  )
+  const activeLocale = locale.value
+  const projection = useTimelinePlanningProjection({
+    actions,
+    fallbackOriginMs: todayMs,
+    locale: activeLocale,
+  })
   const rows = projection.rows
   const layout = projection.layout
   const originMs = projection.originMs
@@ -244,7 +203,7 @@ export function InteractiveTimeline({
     scrollX: scrollX.value,
     selectedId,
     hoveredId: hoveredId.value,
-    locale: locale.value,
+    locale: activeLocale,
     speciesColors,
     granularity: granularity.value,
   }
@@ -260,7 +219,7 @@ export function InteractiveTimeline({
       t,
       rowOffsetsRef.current,
     )
-  }, [actions, originMs, pxPerDay.value, scrollX.value, selectedId, hoveredId.value, locale.value, theme.value, speciesColors, granularity.value], cachedRectRef)
+  }, [actions, originMs, pxPerDay.value, scrollX.value, selectedId, hoveredId.value, activeLocale, theme.value, speciesColors, granularity.value], cachedRectRef)
 
   const handleWheel = useCallback((event: WheelEvent) => {
     if (!(event.ctrlKey || event.metaKey)) return // let native scroll handle vertical
@@ -294,41 +253,7 @@ export function InteractiveTimeline({
   }, [handleWheel])
 
   function applyDragDelta(drag: NonNullable<DragState> & { type: 'move' | 'resize' }, totalPxDelta: number): void {
-    const dayDelta = totalPxDelta / drag.pxPerDaySnapshot
-    const deltaMs = dayDelta * 86400000
-
-    if (drag.type === 'move') {
-      const start = snapToDay(new Date(drag.originalStartMs + deltaMs))
-      const startStr = toISODate(start)
-      const endDate = drag.durationMs != null
-        ? toISODate(new Date(start.getTime() + drag.durationMs))
-        : null
-      if (startStr === lastDragDates.current.start && endDate === lastDragDates.current.end) return
-      lastDragDates.current = { start: startStr, end: endDate }
-      drag.edit.preview((timeline) => applyTimelineActionPatch(
-        timeline,
-        drag.actionId,
-        { start_date: startStr, end_date: endDate },
-      ))
-    } else if (drag.edge === 'left') {
-      const newStartMs = drag.originalStartMs + deltaMs
-      const maxStartMs = drag.originalEndMs != null ? drag.originalEndMs : drag.originalStartMs + 86400000
-      const clampedStart = snapToDay(new Date(Math.min(newStartMs, maxStartMs)))
-      const startStr = toISODate(clampedStart)
-      const endStr = drag.originalEndMs != null ? toISODate(new Date(drag.originalEndMs)) : null
-      if (startStr === lastDragDates.current.start && endStr === lastDragDates.current.end) return
-      lastDragDates.current = { start: startStr, end: endStr }
-      drag.edit.preview((timeline) => applyTimelineActionPatch(timeline, drag.actionId, { start_date: startStr }))
-    } else {
-      const originalEnd = drag.originalEndMs ?? drag.originalStartMs + 86400000
-      const newEndMs = originalEnd + deltaMs
-      const clampedEnd = snapToDay(new Date(Math.max(newEndMs, drag.originalStartMs)))
-      const endStr = toISODate(clampedEnd)
-      const startStr = toISODate(new Date(drag.originalStartMs))
-      if (startStr === lastDragDates.current.start && endStr === lastDragDates.current.end) return
-      lastDragDates.current = { start: startStr, end: endStr }
-      drag.edit.preview((timeline) => applyTimelineActionPatch(timeline, drag.actionId, { end_date: endStr }))
-    }
+    drag.edit.applyPixelDelta(totalPxDelta)
   }
 
   function stopAutoScroll(): void {
@@ -347,7 +272,7 @@ export function InteractiveTimeline({
       return
     }
     const mouseX = lastDragClientXRef.current - drag.cachedRect.left
-    const speed = computeAutoScrollSpeed(mouseX, drag.cachedRect.width)
+    const speed = computeTimelineAutoScrollSpeed(mouseX, drag.cachedRect.width, LABEL_SIDEBAR_WIDTH)
     if (speed === 0) {
       stopAutoScroll()
       return
@@ -359,7 +284,7 @@ export function InteractiveTimeline({
   }
 
   function updateAutoScroll(mouseX: number, chartWidth: number): void {
-    const speed = computeAutoScrollSpeed(mouseX, chartWidth)
+    const speed = computeTimelineAutoScrollSpeed(mouseX, chartWidth, LABEL_SIDEBAR_WIDTH)
     if (speed !== 0) {
       if (autoScrollRafRef.current == null) {
         autoScrollRafRef.current = requestAnimationFrame(autoScrollTick)
@@ -489,14 +414,16 @@ export function InteractiveTimeline({
       autoScrollAccumRef.current = 0
       dragState.current = {
         type: 'resize',
-        actionId: hit.action.id,
-        edge: hit.edge,
         startMouseX: event.clientX,
-        originalStartMs: startMs,
-        originalEndMs: endMs,
-        pxPerDaySnapshot: pxPerDay.peek(),
         cachedRect: rect,
-        edit: beginDocumentArrayEdit('timeline'),
+        edit: beginTimelineActionEdit({
+          type: 'resize',
+          actionId: hit.action.id,
+          edge: hit.edge,
+          originalStartMs: startMs,
+          originalEndMs: endMs,
+          pxPerDaySnapshot: pxPerDay.peek(),
+        }),
       }
       document.body.style.cursor = 'ew-resize'
       return
@@ -520,13 +447,15 @@ export function InteractiveTimeline({
     autoScrollAccumRef.current = 0
     dragState.current = {
       type: 'move',
-      actionId: hit.action.id,
       startMouseX: event.clientX,
-      originalStartMs: startMs,
-      durationMs,
-      pxPerDaySnapshot: pxPerDay.peek(),
       cachedRect: rect,
-      edit: beginDocumentArrayEdit('timeline'),
+      edit: beginTimelineActionEdit({
+        type: 'move',
+        actionId: hit.action.id,
+        originalStartMs: startMs,
+        durationMs,
+        pxPerDaySnapshot: pxPerDay.peek(),
+      }),
     }
   }, [])
 
@@ -608,14 +537,15 @@ export function InteractiveTimeline({
       const realMs = computedOriginMsRef.current
       dragOriginMsRef.current = null
       dragOriginDateRef.current = null
-      if (frozenMs !== realMs) {
-        const deltaDays = (frozenMs - realMs) / 86400000
-        scrollX.value = scrollX.peek() + deltaDays * pxPerDay.peek()
-      }
+      scrollX.value = compensateFrozenTimelineOriginScroll({
+        frozenOriginMs: frozenMs,
+        realOriginMs: realMs,
+        scrollX: scrollX.peek(),
+        pxPerDay: pxPerDay.peek(),
+      })
     }
 
     dragState.current = null
-    lastDragDates.current = { start: '', end: null }
 
     // Check pending click for popover opening
     const pending = pendingClick.current
@@ -647,19 +577,12 @@ export function InteractiveTimeline({
       // Read live action from document (may have moved during sub-threshold drag)
       const a = (currentDesign.peek()?.timeline ?? EMPTY_ACTIONS).find((act) => act.id === pending.actionId)
       if (!a) return
-      const projected = projectTimelineAction(a)
       popoverState.value = {
         mode: 'edit',
         anchorX: pending.anchorX,
         anchorY: pending.anchorY,
         actionId: pending.actionId,
-        formData: {
-          action_type: a.action_type,
-          start_date: a.start_date ?? '',
-          end_date: a.end_date ?? '',
-          description: a.description,
-          species_canonical: projected.speciesCanonical,
-        },
+        formData: formDataFromTimelineAction(a),
         speciesList,
       }
     }
@@ -695,7 +618,6 @@ export function InteractiveTimeline({
       dragState.current = null
       dragOriginMsRef.current = null
       dragOriginDateRef.current = null
-      lastDragDates.current = { start: '', end: null }
       pendingClick.current = null
       setTimelineHoveredPanelTargets(EMPTY_PANEL_TARGETS)
       clearTimelineSelectedPanelTargets()
@@ -725,32 +647,12 @@ export function InteractiveTimeline({
     const ps = popoverState.peek()
     if (!ps) return
 
-    const targets = data.species_canonical
-      ? [speciesTarget(data.species_canonical)]
-      : [MANUAL_TARGET]
-
     if (ps.mode === 'add') {
       const id = crypto.randomUUID()
-      addTimelineAction({
-        id,
-        action_type: data.action_type,
-        description: data.description,
-        start_date: data.start_date || null,
-        end_date: data.end_date || null,
-        recurrence: null,
-        targets,
-        depends_on: null,
-        completed: false,
-      })
+      addTimelineAction(createTimelineActionFromFormData(id, data))
       onSelectRef.current(id)
     } else if (ps.actionId) {
-      updateTimelineAction(ps.actionId, {
-        action_type: data.action_type,
-        description: data.description,
-        start_date: data.start_date || null,
-        end_date: data.end_date || null,
-        targets,
-      })
+      updateTimelineAction(ps.actionId, timelineActionPatchFromFormData(data))
     }
     popoverState.value = null
   }, [])

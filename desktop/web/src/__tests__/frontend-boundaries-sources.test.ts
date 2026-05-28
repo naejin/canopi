@@ -34,4 +34,30 @@ describe('frontend boundary sources', () => {
     expect(rendererSource).not.toContain('buildConsortiumBars')
     expect(rendererSource).not.toContain('filterActiveConsortiumEntries')
   })
+
+  it('keeps planning surfaces behind the Planning Projection runtime seam', () => {
+    const budgetSource = readSource('../components/canvas/BudgetTab.tsx')
+    const timelineSource = readSource('../components/canvas/InteractiveTimeline.tsx')
+    const consortiumSource = readSource('../components/canvas/ConsortiumChart.tsx')
+    const runtimeSource = readSource('../app/planning-projection/runtime.ts')
+
+    for (const source of [budgetSource, timelineSource, consortiumSource]) {
+      expect(source).not.toContain('runtime-mirror-state')
+      expect(source).not.toContain('currentCanvasQuerySurface')
+      expect(source).not.toContain('getPlacedPlants()')
+      expect(source).not.toContain('getLocalizedCommonNames()')
+    }
+    expect(runtimeSource).toContain('runtime-mirror-state')
+    expect(runtimeSource).toContain('currentCanvasQuerySurface')
+  })
+
+  it('keeps Timeline Action document edits behind the Timeline editing module', () => {
+    const timelineSource = readSource('../components/canvas/InteractiveTimeline.tsx')
+    const editingSource = readSource('../app/timeline/editing.ts')
+
+    expect(timelineSource).not.toContain('beginDocumentArrayEdit')
+    expect(timelineSource).not.toContain('applyTimelineActionPatch')
+    expect(editingSource).toContain('beginDocumentArrayEdit')
+    expect(editingSource).toContain('applyTimelineActionPatch')
+  })
 })

@@ -40,3 +40,10 @@ export {
   type PlanningProjectionOrigin,
   type PlanningSelectionSnapshot,
 } from './target-presentation'
+export {
+  useBudgetPlanningProjection,
+  useConsortiumPlanningProjection,
+  usePlanningProjectionCanvasSnapshot,
+  useTimelinePlanningProjection,
+  type PlanningProjectionCanvasSnapshot,
+} from './runtime'

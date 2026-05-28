@@ -122,31 +122,27 @@ export function ActiveChips() {
     )
   }
 
-  if (filters.woody !== null) {
-    chips.push({
-      key: 'woody',
-      label: t('filters.woody'),
-      color: '--color-family',
-      onDismiss: () => patchFilters({ woody: null }),
-    });
+  for (const field of plantFilterCatalog.activeBooleanChipFields()) {
+    if (filters[field.filterKey] !== null) {
+      chips.push({
+        key: field.filterKey,
+        label: t(field.labelI18nKey),
+        color: field.color,
+        onDismiss: () => patchFilters({ [field.filterKey]: null }),
+      });
+    }
   }
 
-  if (filters.edibility_min !== null) {
-    chips.push({
-      key: 'edibility',
-      label: `${t('filters.edibility')}: ${filters.edibility_min}+`,
-      color: '--color-edible',
-      onDismiss: () => patchFilters({ edibility_min: null }),
-    });
-  }
-
-  if (filters.nitrogen_fixer !== null) {
-    chips.push({
-      key: 'nitrogen',
-      label: t('filters.nitrogen'),
-      color: '--color-nitrogen',
-      onDismiss: () => patchFilters({ nitrogen_fixer: null }),
-    });
+  for (const field of plantFilterCatalog.activeNumericChipFields()) {
+    const value = filters[field.filterKey] as number | null
+    if (value !== null) {
+      chips.push({
+        key: field.filterKey,
+        label: `${t(field.labelI18nKey)}: ${value}${field.suffix}`,
+        color: field.color,
+        onDismiss: () => patchFilters({ [field.filterKey]: null }),
+      });
+    }
   }
 
   for (const ef of extras) {

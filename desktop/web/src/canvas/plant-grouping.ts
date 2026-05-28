@@ -7,7 +7,7 @@ import type { PlacedPlant } from '../types/design'
  * Shared by Planning Projection and other species-level read models.
  */
 export function groupPlantsBySpecies(
-  plants: PlacedPlant[],
+  plants: readonly PlacedPlant[],
   localizedNames?: ReadonlyMap<string, string | null>,
 ): Map<string, { commonName: string; count: number }> {
   const grouped = new Map<string, { commonName: string; count: number }>()

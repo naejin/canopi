@@ -72,7 +72,7 @@ export function stratumToRow(stratum: string): number {
 // Dynamic row sizing
 // ---------------------------------------------------------------------------
 
-export function computeRowHeights(bars: ConsortiumBarLayout[]): number[] {
+export function computeRowHeights(bars: readonly ConsortiumBarLayout[]): number[] {
   const laneCounts = new Array(STRATA_ROWS.length).fill(1) as number[]
   for (const bar of bars) {
     const rowIdx = stratumToRow(bar.stratum)
@@ -120,7 +120,7 @@ export function renderConsortium(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
-  bars: ConsortiumBarLayout[],
+  bars: readonly ConsortiumBarLayout[],
   state: ConsortiumRenderState,
   t: (key: string) => string,
   rowHeights: number[],
@@ -297,7 +297,7 @@ export function renderConsortium(
 export function hitTestBar(
   x: number,
   y: number,
-  bars: ConsortiumBarLayout[],
+  bars: readonly ConsortiumBarLayout[],
   width: number,
   rowHeights: number[],
   rowOffsets?: number[],

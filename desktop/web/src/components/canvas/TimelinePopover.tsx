@@ -3,18 +3,13 @@ import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
 import { ACTION_TYPES } from '../../app/planning-projection'
+import type { TimelineActionFormData } from '../../app/timeline/editing'
 import { actionColor } from '../../canvas/timeline-renderer'
 import { DatePicker } from '../shared/DatePicker'
 import { Dropdown, type DropdownItem } from '../shared/Dropdown'
 import styles from './TimelinePopover.module.css'
 
-export interface PopoverFormData {
-  action_type: string
-  start_date: string
-  end_date: string
-  description: string
-  species_canonical: string | null
-}
+export type PopoverFormData = TimelineActionFormData
 
 interface TimelinePopoverProps {
   mode: 'add' | 'edit'

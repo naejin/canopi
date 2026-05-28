@@ -17,13 +17,13 @@ export interface ConsortiumPlanningBar {
 }
 
 export interface ConsortiumPlanningProjection {
-  readonly bars: ConsortiumPlanningBar[]
-  readonly activeEntries: Consortium[]
+  readonly bars: readonly ConsortiumPlanningBar[]
+  readonly activeEntries: readonly Consortium[]
 }
 
 export interface BuildConsortiumPlanningProjectionOptions {
-  readonly consortiums: Consortium[]
-  readonly plants: PlacedPlant[]
+  readonly consortiums: readonly Consortium[]
+  readonly plants: readonly PlacedPlant[]
   readonly speciesColors: Record<string, string>
   readonly localizedNames?: ReadonlyMap<string, string | null>
 }
@@ -42,8 +42,8 @@ export function buildConsortiumPlanningProjection({
 }
 
 export function buildConsortiumBars(
-  entries: Consortium[],
-  plants: PlacedPlant[],
+  entries: readonly Consortium[],
+  plants: readonly PlacedPlant[],
   speciesColors: Record<string, string>,
   localizedNames?: ReadonlyMap<string, string | null>,
 ): ConsortiumPlanningBar[] {
@@ -84,8 +84,8 @@ export function buildConsortiumBars(
 }
 
 export function filterActiveConsortiumEntries(
-  entries: Consortium[],
-  plants: PlacedPlant[],
+  entries: readonly Consortium[],
+  plants: readonly PlacedPlant[],
 ): Consortium[] {
   const activeSpecies = new Set(plants.map((plant) => plant.canonical_name))
   return entries.filter((entry) => activeSpecies.has(getConsortiumCanonicalName(entry)))

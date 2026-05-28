@@ -36,12 +36,41 @@ interface ActiveArrayChipBehavior {
   readonly color: string
 }
 
+interface StripThresholdBehavior {
+  readonly labelI18nKey: string
+  readonly fallbackLabel: string
+  readonly min: number
+  readonly max: number
+  readonly color: string
+}
+
+interface StripBooleanBehavior {
+  readonly labelI18nKey: string
+  readonly fallbackLabel: string
+  readonly color: string
+}
+
+interface ActiveBooleanChipBehavior {
+  readonly labelI18nKey: string
+  readonly color: string
+}
+
+interface ActiveNumericChipBehavior {
+  readonly labelI18nKey: string
+  readonly color: string
+  readonly suffix: string
+}
+
 interface AdapterFilterBehavior {
   readonly key: SpeciesFilterKey
   readonly kind: FilterActivityKind
   readonly countable: boolean
   readonly stripChoice?: StripChoiceBehavior
+  readonly stripThreshold?: StripThresholdBehavior
+  readonly stripBoolean?: StripBooleanBehavior
   readonly activeArrayChip?: ActiveArrayChipBehavior
+  readonly activeBooleanChip?: ActiveBooleanChipBehavior
+  readonly activeNumericChip?: ActiveNumericChipBehavior
 }
 
 export interface StripOptionSource {
@@ -66,6 +95,45 @@ export interface ActiveArrayChipField {
   readonly valueI18nPrefix: string
   readonly color: string
   readonly source: 'schema' | 'adapter'
+}
+
+export interface StripThresholdField {
+  readonly filterKey: SpeciesFilterKey
+  readonly labelI18nKey: string
+  readonly fallbackLabel: string
+  readonly min: number
+  readonly max: number
+  readonly color: string
+  readonly source: 'adapter'
+}
+
+export interface StripBooleanField {
+  readonly field?: PlantFilterFieldDef
+  readonly filterKey: SpeciesFilterKey
+  readonly labelI18nKey: string
+  readonly fallbackLabel: string
+  readonly color: string
+  readonly source: 'schema' | 'adapter'
+}
+
+export type StripFilterControl =
+  | ({ readonly control: 'choice' } & StripChoiceField)
+  | ({ readonly control: 'threshold' } & StripThresholdField)
+  | ({ readonly control: 'boolean' } & StripBooleanField)
+
+export interface ActiveBooleanChipField {
+  readonly filterKey: SpeciesFilterKey
+  readonly labelI18nKey: string
+  readonly color: string
+  readonly source: 'schema' | 'adapter'
+}
+
+export interface ActiveNumericChipField {
+  readonly filterKey: SpeciesFilterKey
+  readonly labelI18nKey: string
+  readonly color: string
+  readonly suffix: string
+  readonly source: 'adapter'
 }
 
 const SPECIES_FILTER_KEYS = {
@@ -157,8 +225,37 @@ const ADAPTER_FILTER_BEHAVIORS: readonly AdapterFilterBehavior[] = [
     },
   },
   { key: 'edible', kind: 'boolean', countable: false },
-  { key: 'edibility_min', kind: 'numeric', countable: true },
-  { key: 'nitrogen_fixer', kind: 'boolean', countable: true },
+  {
+    key: 'edibility_min',
+    kind: 'numeric',
+    countable: true,
+    stripThreshold: {
+      labelI18nKey: 'filters.edibility',
+      fallbackLabel: 'Edibility',
+      min: 0,
+      max: 5,
+      color: '--color-edible',
+    },
+    activeNumericChip: {
+      labelI18nKey: 'filters.edibility',
+      color: '--color-edible',
+      suffix: '+',
+    },
+  },
+  {
+    key: 'nitrogen_fixer',
+    kind: 'boolean',
+    countable: true,
+    stripBoolean: {
+      labelI18nKey: 'filters.nitrogen',
+      fallbackLabel: 'Nitrogen',
+      color: '--color-nitrogen',
+    },
+    activeBooleanChip: {
+      labelI18nKey: 'filters.nitrogen',
+      color: '--color-nitrogen',
+    },
+  },
   { key: 'family', kind: 'string', countable: false },
 ]
 
@@ -261,6 +358,56 @@ export function stripChoiceFields(): readonly StripChoiceField[] {
   return [...schemaFields, ...adapterFields]
 }
 
+export function stripThresholdFields(): readonly StripThresholdField[] {
+  return ADAPTER_FILTER_BEHAVIORS.flatMap((behavior): StripThresholdField[] => {
+    if (!behavior.stripThreshold) return []
+    return [{
+      filterKey: behavior.key,
+      labelI18nKey: behavior.stripThreshold.labelI18nKey,
+      fallbackLabel: behavior.stripThreshold.fallbackLabel,
+      min: behavior.stripThreshold.min,
+      max: behavior.stripThreshold.max,
+      color: behavior.stripThreshold.color,
+      source: 'adapter',
+    }]
+  })
+}
+
+export function stripBooleanFields(): readonly StripBooleanField[] {
+  const schemaFields = schemaStripFields().flatMap((field): StripBooleanField[] => {
+    if (!isSpeciesFilterKey(field.key) || field.kind !== 'boolean') return []
+    return [{
+      field,
+      filterKey: field.key,
+      labelI18nKey: field.i18nKey,
+      fallbackLabel: field.key,
+      color: field.colorToken,
+      source: 'schema',
+    }]
+  })
+
+  const adapterFields = ADAPTER_FILTER_BEHAVIORS.flatMap((behavior): StripBooleanField[] => {
+    if (!behavior.stripBoolean) return []
+    return [{
+      filterKey: behavior.key,
+      labelI18nKey: behavior.stripBoolean.labelI18nKey,
+      fallbackLabel: behavior.stripBoolean.fallbackLabel,
+      color: behavior.stripBoolean.color,
+      source: 'adapter',
+    }]
+  })
+
+  return [...schemaFields, ...adapterFields]
+}
+
+export function stripControls(): readonly StripFilterControl[] {
+  return [
+    ...stripChoiceFields().map((field) => ({ ...field, control: 'choice' as const })),
+    ...stripThresholdFields().map((field) => ({ ...field, control: 'threshold' as const })),
+    ...stripBooleanFields().map((field) => ({ ...field, control: 'boolean' as const })),
+  ]
+}
+
 export function stripOptionSource(fieldKey: string): StripOptionSource | undefined {
   if (!isSpeciesFilterKey(fieldKey)) return undefined
   const schemaSource = SCHEMA_STRIP_OPTION_SOURCES[fieldKey]
@@ -305,4 +452,41 @@ export function activeArrayChipFields(): readonly ActiveArrayChipField[] {
   })
 
   return [...schemaFields, ...adapterFields]
+}
+
+export function activeBooleanChipFields(): readonly ActiveBooleanChipField[] {
+  const schemaFields = schemaStripFields().flatMap((field): ActiveBooleanChipField[] => {
+    if (!isSpeciesFilterKey(field.key) || field.kind !== 'boolean') return []
+    return [{
+      filterKey: field.key,
+      labelI18nKey: field.i18nKey,
+      color: field.colorToken,
+      source: 'schema',
+    }]
+  })
+
+  const adapterFields = ADAPTER_FILTER_BEHAVIORS.flatMap((behavior): ActiveBooleanChipField[] => {
+    if (!behavior.activeBooleanChip) return []
+    return [{
+      filterKey: behavior.key,
+      labelI18nKey: behavior.activeBooleanChip.labelI18nKey,
+      color: behavior.activeBooleanChip.color,
+      source: 'adapter',
+    }]
+  })
+
+  return [...schemaFields, ...adapterFields]
+}
+
+export function activeNumericChipFields(): readonly ActiveNumericChipField[] {
+  return ADAPTER_FILTER_BEHAVIORS.flatMap((behavior): ActiveNumericChipField[] => {
+    if (!behavior.activeNumericChip) return []
+    return [{
+      filterKey: behavior.key,
+      labelI18nKey: behavior.activeNumericChip.labelI18nKey,
+      color: behavior.activeNumericChip.color,
+      suffix: behavior.activeNumericChip.suffix,
+      source: 'adapter',
+    }]
+  })
 }

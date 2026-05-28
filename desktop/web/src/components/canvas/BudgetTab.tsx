@@ -1,12 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef } from 'preact/hooks'
+import { useCallback, useEffect, useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
-import { plantNamesRevision, sceneEntityRevision } from '../../canvas/runtime-mirror-state'
 import { currentDesign, designName } from '../../state/design'
-import { currentCanvasQuerySurface } from '../../canvas/session'
 import {
-  buildBudgetPlanningProjection,
   clearPlanningHoveredTargets,
   clearPlanningSelectedTargetsForOrigin,
   planningTargetsSelected,
@@ -14,49 +11,36 @@ import {
   readPlanningSelection,
   setPlanningHoveredTargets,
   setPlanningSelectedTargets,
+  useBudgetPlanningProjection,
 } from '../../app/planning-projection'
 import { setPlantBudgetPrice, setBudgetCurrency } from '../../app/budget/controller'
 import { exportBudgetCsv, isBudgetExportCancelled } from '../../app/budget/export'
 import { Dropdown } from '../shared/Dropdown'
 import { CURRENCY_ITEMS } from './budget-currencies'
 import { formatCurrency } from './budget-helpers'
-import type { BudgetItem, PlacedPlant } from '../../types/design'
+import type { BudgetItem } from '../../types/design'
 import styles from './BudgetTab.module.css'
 
 const EMPTY_BUDGET: BudgetItem[] = []
-const EMPTY_PLANTS: PlacedPlant[] = []
-const EMPTY_NAMES: ReadonlyMap<string, string | null> = new Map()
 
 function clearBudgetSelectedPanelTargets(): void {
   clearPlanningSelectedTargetsForOrigin('budget')
 }
 
 export function BudgetTab() {
-  const session = currentCanvasQuerySurface.value
-
   const editingCanonical = useSignal<string | null>(null)
   const editPrice = useSignal('')
 
   const design = currentDesign.value
   const budget = design?.budget ?? EMPTY_BUDGET
   const currency = design?.budget_currency ?? 'EUR'
-  const plants = session?.getPlacedPlants() ?? EMPTY_PLANTS
-  const localizedNames = session?.getLocalizedCommonNames() ?? EMPTY_NAMES
-  // Store in refs — getPlacedPlants()/getLocalizedCommonNames() return fresh references
-  // every call. Use sceneEntityRevision/plantNamesRevision as the real change triggers.
-  const plantsRef = useRef(plants)
-  plantsRef.current = plants
-  const localizedNamesRef = useRef(localizedNames)
-  localizedNamesRef.current = localizedNames
   const budgetSelection = readPlanningSelection('budget')
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const projection = useMemo(() => buildBudgetPlanningProjection({
-    plants: plantsRef.current,
-    localizedNames: localizedNamesRef.current,
+  const activeLocale = locale.value
+  const projection = useBudgetPlanningProjection({
     budget,
     currency,
-    locale: locale.value,
-  }), [sceneEntityRevision.value, plantNamesRevision.value, locale.value, budget, currency])
+    locale: activeLocale,
+  })
 
   const projectionRef = useRef(projection)
   projectionRef.current = projection
@@ -142,7 +126,7 @@ export function BudgetTab() {
           triggerClassName={styles.currencyChip}
         />
         <span className={styles.total}>
-          {t('canvas.budget.grandTotal')}{' '}{formatCurrency(projection.grandTotal, currency, locale.value)}
+          {t('canvas.budget.grandTotal')}{' '}{formatCurrency(projection.grandTotal, currency, activeLocale)}
         </span>
         <button type="button" className={styles.exportBtn} onClick={handleExportCSV}>
           {t('canvas.budget.exportCSV')}
@@ -202,11 +186,11 @@ export function BudgetTab() {
                         onClick={() => startEditPrice(row.canonical)}
                         aria-label={`${t('canvas.budget.setPrice')} ${row.commonName || row.canonical}`}
                       >
-                        {row.hasPrice ? formatCurrency(row.unitCost, currency, locale.value) : '\u2014'}
+                        {row.hasPrice ? formatCurrency(row.unitCost, currency, activeLocale) : '\u2014'}
                       </button>
                     )}
                   </td>
-                  <td className={styles.tdNum}>{row.hasPrice ? formatCurrency(row.subtotal, currency, locale.value) : '\u2014'}</td>
+                  <td className={styles.tdNum}>{row.hasPrice ? formatCurrency(row.subtotal, currency, activeLocale) : '\u2014'}</td>
                 </tr>
               )
             })}

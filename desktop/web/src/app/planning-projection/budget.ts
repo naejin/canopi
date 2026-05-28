@@ -24,7 +24,7 @@ export interface BudgetPlanningProjection {
 }
 
 export interface BuildBudgetPlanningProjectionOptions {
-  readonly plants: PlacedPlant[]
+  readonly plants: readonly PlacedPlant[]
   readonly localizedNames?: ReadonlyMap<string, string | null>
   readonly budget: readonly BudgetItem[]
   readonly currency: string

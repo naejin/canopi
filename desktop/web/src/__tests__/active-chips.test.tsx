@@ -104,4 +104,22 @@ describe('ActiveChips', () => {
 
     expect(activeFilters.value.life_cycle).toBeNull()
   })
+
+  it('renders scalar fixed chips through the catalog behavior registry', async () => {
+    extraFilters.value = []
+    activeFilters.value = {
+      ...activeFilters.value,
+      woody: true,
+      nitrogen_fixer: true,
+      edibility_min: 3,
+    }
+
+    await act(async () => {
+      render(<ActiveChips />, container)
+    })
+
+    expect(container.textContent).toContain('Woody')
+    expect(container.textContent).toContain('N₂ Fixer')
+    expect(container.textContent).toContain('Edibility: 3+')
+  })
 })
