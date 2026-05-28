@@ -1,5 +1,5 @@
 use common_types::design::{AutosaveEntry, CanopiFile};
-use std::path::PathBuf;
+use std::{cmp::Reverse, path::PathBuf};
 use tauri::AppHandle;
 use tauri::Manager;
 
@@ -152,7 +152,7 @@ fn list_autosaves_in_dir(dir: &std::path::Path) -> Result<Vec<AutosaveEntry>, St
     };
 
     // Sort newest first for display.
-    entries.sort_by(|a, b| b.0.cmp(&a.0));
+    entries.sort_by_key(|entry| Reverse(entry.0));
 
     Ok(entries.into_iter().map(|(_, entry)| entry).collect())
 }
