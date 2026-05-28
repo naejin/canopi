@@ -11,6 +11,7 @@ import {
   removeExtraFilter,
 } from '../../app/plant-browser'
 import type { DynamicFilter, DynamicFilterOptions, SpeciesFilter } from '../../types/species'
+import type { ActiveChipField, SpeciesFilterKey } from '../../app/plant-browser'
 import { FIELD_REGISTRY, categoryForField } from './field-registry'
 import { FilterChip } from './FilterChip'
 import { toggleArrayValue } from './filter-utils'
@@ -21,7 +22,7 @@ type Chip = { key: string; label: string; color: string; onDismiss: () => void }
 function addArrayChips(
   chips: Chip[],
   filters: SpeciesFilter,
-  field: keyof SpeciesFilter,
+  field: SpeciesFilterKey,
   prefix: string,
   i18nPrefix: string,
   color: string,
@@ -35,6 +36,46 @@ function addArrayChips(
       color,
       onDismiss: () => patchFilters({ [field]: toggleArrayValue(filters[field] as string[] | null, v) }),
     });
+  }
+}
+
+function addCatalogChips(
+  chips: Chip[],
+  filters: SpeciesFilter,
+  fields: readonly ActiveChipField[],
+) {
+  for (const field of fields) {
+    if (field.kind === 'array') {
+      addArrayChips(
+        chips,
+        filters,
+        field.filterKey,
+        field.keyPrefix,
+        field.valueI18nPrefix,
+        field.color,
+      )
+      continue
+    }
+
+    if (field.kind === 'boolean') {
+      if (filters[field.filterKey] === null) continue
+      chips.push({
+        key: field.filterKey,
+        label: t(field.labelI18nKey, field.fallbackLabel),
+        color: field.color,
+        onDismiss: () => patchFilters({ [field.filterKey]: null }),
+      })
+      continue
+    }
+
+    const value = filters[field.filterKey] as number | null
+    if (value === null) continue
+    chips.push({
+      key: field.filterKey,
+      label: `${t(field.labelI18nKey, field.fallbackLabel)}: ${value}${field.suffix}`,
+      color: field.color,
+      onDismiss: () => patchFilters({ [field.filterKey]: null }),
+    })
   }
 }
 
@@ -111,39 +152,7 @@ export function ActiveChips() {
 
   const chips: Chip[] = [];
 
-  for (const field of plantFilterCatalog.activeArrayChipFields()) {
-    addArrayChips(
-      chips,
-      filters,
-      field.filterKey,
-      field.keyPrefix,
-      field.valueI18nPrefix,
-      field.color,
-    )
-  }
-
-  for (const field of plantFilterCatalog.activeBooleanChipFields()) {
-    if (filters[field.filterKey] !== null) {
-      chips.push({
-        key: field.filterKey,
-        label: t(field.labelI18nKey),
-        color: field.color,
-        onDismiss: () => patchFilters({ [field.filterKey]: null }),
-      });
-    }
-  }
-
-  for (const field of plantFilterCatalog.activeNumericChipFields()) {
-    const value = filters[field.filterKey] as number | null
-    if (value !== null) {
-      chips.push({
-        key: field.filterKey,
-        label: `${t(field.labelI18nKey)}: ${value}${field.suffix}`,
-        color: field.color,
-        onDismiss: () => patchFilters({ [field.filterKey]: null }),
-      });
-    }
-  }
+  addCatalogChips(chips, filters, plantFilterCatalog.activeChipFields())
 
   for (const ef of extras) {
     const cat = categoryForField(ef.field);

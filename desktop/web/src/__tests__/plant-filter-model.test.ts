@@ -32,6 +32,15 @@ describe('plant filter model', () => {
       'sun_tolerances',
       'life_cycle',
     ])
+    expect(plantFilterCatalog.stripControls().map((field) => `${field.kind}:${field.filterKey}`)).toEqual([
+      'choice:climate_zones',
+      'choice:habit',
+      'choice:sun_tolerances',
+      'choice:life_cycle',
+      'threshold:edibility_min',
+      'boolean:woody',
+      'boolean:nitrogen_fixer',
+    ])
     expect(plantFilterCatalog.stripOptionSource('life_cycle')).toEqual({
       filterOptionsKey: 'life_cycles',
       valueI18nPrefix: 'filters.lifeCycle_',
@@ -43,21 +52,22 @@ describe('plant filter model', () => {
       'life_cycle',
       'growth_rate',
     ])
-    expect(plantFilterCatalog.stripControls().map((control) => `${control.control}:${control.filterKey}`)).toEqual([
-      'choice:climate_zones',
-      'choice:habit',
-      'choice:sun_tolerances',
-      'choice:life_cycle',
-      'threshold:edibility_min',
-      'boolean:woody',
-      'boolean:nitrogen_fixer',
-    ])
     expect(plantFilterCatalog.activeBooleanChipFields().map((field) => field.filterKey)).toEqual([
       'woody',
       'nitrogen_fixer',
     ])
     expect(plantFilterCatalog.activeNumericChipFields().map((field) => field.filterKey)).toEqual([
       'edibility_min',
+    ])
+    expect(plantFilterCatalog.activeChipFields().map((field) => `${field.kind}:${field.filterKey}`)).toEqual([
+      'array:climate_zones',
+      'array:habit',
+      'array:sun_tolerances',
+      'array:life_cycle',
+      'array:growth_rate',
+      'boolean:woody',
+      'boolean:nitrogen_fixer',
+      'numeric-threshold:edibility_min',
     ])
   })
 

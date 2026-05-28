@@ -26,16 +26,19 @@ export const plantFilterCatalog = {
   activeBooleanChipFields: speciesCatalogFilters.activeBooleanChipFields,
 
   activeNumericChipFields: speciesCatalogFilters.activeNumericChipFields,
+
+  activeChipFields: speciesCatalogFilters.activeChipFields,
 }
 
 export type {
+  ActiveChipField,
   ActiveArrayChipField,
   ActiveBooleanChipField,
   ActiveNumericChipField,
   SpeciesFilterKey,
   StripBooleanField,
   StripChoiceField,
-  StripFilterControl,
+  StripControlField,
   StripOptionSource,
   StripThresholdField,
 } from './species-catalog-filters'

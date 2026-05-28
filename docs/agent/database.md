@@ -27,8 +27,8 @@ When canopi-data removes or adds columns, update atomically:
 
 ## Query Builder And Filters
 
-- Plant detail query has one projection owner: `plant_db/detail.rs`.
-- Cursor-based row mapping order must match the detail projection order.
+- Plant detail query shape, selected columns, row-mapping contract, and projected text translation have one projection owner: `plant_db/detail_projection.rs`.
+- Detail row mapping reads projected columns by name so projection order can change without remapping every field.
 - Search plans own count/list query construction and cursor semantics.
 - Count and list predicates should share the same planner path.
 - Fixed `SpeciesFilter` predicates with bespoke or schema-backed behavior belong in `query_builder/species_catalog_filters.rs`.

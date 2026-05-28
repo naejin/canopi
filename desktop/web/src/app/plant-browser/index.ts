@@ -10,3 +10,15 @@ export {
   type PlantSearchSession,
   type PlantSearchStatus,
 } from './search-session'
+export type {
+  ActiveArrayChipField,
+  ActiveBooleanChipField,
+  ActiveChipField,
+  ActiveNumericChipField,
+  SpeciesFilterKey,
+  StripBooleanField,
+  StripChoiceField,
+  StripControlField,
+  StripOptionSource,
+  StripThresholdField,
+} from './plant-filter-model'
