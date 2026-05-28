@@ -2,18 +2,18 @@ import { useCallback, useEffect, useMemo, useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale, theme } from '../../app/settings/state'
-import { hoveredCanvasTargets } from '../../app/panel-targets/state'
 import { plantSpeciesColorDefaults } from '../../canvas/plant-species-color-defaults'
-import { plantNamesRevision, sceneEntityRevision } from '../../canvas/runtime-mirror-state'
 import { currentDesign } from '../../state/design'
-import { currentCanvasQuerySurface } from '../../canvas/session'
 import { moveConsortiumEntryInArray, reorderConsortiumEntryInArray } from '../../app/consortium/controller'
-import { clearHoveredPanelTargets, setHoveredPanelTargets } from '../../app/panel-targets/coordinator'
-import { beginDocumentArrayEdit, type DocumentArrayEditTransaction } from '../../app/document/edit-transaction'
-import { consortiumTarget, getConsortiumCanonicalName, isSpeciesTarget } from '../../panel-targets'
 import {
-  buildConsortiumBars,
-  filterActiveConsortiumEntries,
+  clearPlanningHoveredTargets,
+  getPlanningCanvasHoveredSpeciesCanonical,
+  setPlanningHoveredSpecies,
+  useConsortiumPlanningProjection,
+} from '../../app/planning-projection'
+import { beginDocumentArrayEdit, type DocumentArrayEditTransaction } from '../../app/document/edit-transaction'
+import { getConsortiumCanonicalName } from '../../panel-targets'
+import {
   renderConsortium,
   hitTestBar,
   computeRowHeights,
@@ -27,18 +27,9 @@ import {
 } from '../../canvas/consortium-renderer'
 import { useCanvasRenderer } from './useCanvasRenderer'
 import styles from './ConsortiumChart.module.css'
-import type { Consortium, PanelTarget, PlacedPlant } from '../../types/design'
+import type { Consortium } from '../../types/design'
 
-const EMPTY_PLANTS: PlacedPlant[] = []
 const EMPTY_CONSORTIUMS: Consortium[] = []
-const EMPTY_NAMES: ReadonlyMap<string, string | null> = new Map()
-
-function getHoveredSpeciesCanonical(targets: readonly PanelTarget[]): string | null {
-  for (const target of targets) {
-    if (isSpeciesTarget(target)) return target.canonical_name
-  }
-  return null
-}
 
 type DragState =
   | {
@@ -70,34 +61,21 @@ export function ConsortiumChart() {
   const hoveredCanonical = useSignal<string | null>(null)
   const dragState = useRef<DragState>(null)
 
-  const session = currentCanvasQuerySurface.value
   const design = currentDesign.value
-  const plants = session?.getPlacedPlants() ?? EMPTY_PLANTS
   const consortiums = design?.consortiums ?? EMPTY_CONSORTIUMS
   const colors = plantSpeciesColorDefaults.value
-  const localizedNames = session?.getLocalizedCommonNames() ?? EMPTY_NAMES
-  const canvasHoveredCanonical = getHoveredSpeciesCanonical(hoveredCanvasTargets.value)
+  const canvasHoveredCanonical = getPlanningCanvasHoveredSpeciesCanonical()
   const effectiveHoveredCanonical = hoveredCanonical.value ?? canvasHoveredCanonical
 
-  const plantsRef = useRef(plants)
-  plantsRef.current = plants
   const consortiumsRef = useRef(consortiums)
   consortiumsRef.current = consortiums
-  const localizedNamesRef = useRef(localizedNames)
-  localizedNamesRef.current = localizedNames
 
-  const bars = useMemo(
-    () => {
-      const activeEntries = filterActiveConsortiumEntries(consortiumsRef.current, plantsRef.current)
-      return buildConsortiumBars(activeEntries, plantsRef.current, colors, localizedNamesRef.current)
-    },
-    // sceneEntityRevision + plantNamesRevision are the real change triggers;
-    // plants/localizedNames are read from refs to avoid unstable array deps.
-    // consortiums is a stable ref (only changes on mutateCurrentDesign), so
-    // it's safe as a dep — needed to recompute bars after in-drag reorders.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [colors, sceneEntityRevision.value, plantNamesRevision.value, consortiums, locale.value],
-  )
+  const activeLocale = locale.value
+  const projection = useConsortiumPlanningProjection({
+    consortiums,
+    speciesColors: colors,
+  })
+  const bars = projection.bars
   const rowHeights = useMemo(() => computeRowHeights(bars), [bars])
   const rowOffsets = useMemo(() => computeRowYOffsets(rowHeights), [rowHeights])
   const rowHeightsRef = useRef(rowHeights)
@@ -123,13 +101,13 @@ export function ConsortiumChart() {
       hoveredCanonical: effectiveHoveredCanonical,
     }
     renderConsortium(ctx, width, height, barsRef.current, state, t, rowHeightsRef.current, rowOffsetsRef.current)
-  }, [bars, effectiveHoveredCanonical, locale.value, theme.value], cachedRectRef)
+  }, [bars, effectiveHoveredCanonical, activeLocale, theme.value], cachedRectRef)
 
   // Clean up drag state and consortium hover bridge on unmount
   useEffect(() => {
     return () => {
       dragState.current?.edit.commit()
-      clearHoveredPanelTargets()
+      clearPlanningHoveredTargets()
     }
   }, [])
 
@@ -273,13 +251,13 @@ export function ConsortiumChart() {
     if (hit) {
       if (hoveredCanonical.value !== hit.canonicalName) {
         hoveredCanonical.value = hit.canonicalName
-        setHoveredPanelTargets([consortiumTarget(hit.canonicalName)])
+        setPlanningHoveredSpecies(hit.canonicalName)
       }
       canvas.style.cursor = hit.edge === 'body' ? 'grab' : 'ew-resize'
     } else {
       if (hoveredCanonical.value !== null) {
         hoveredCanonical.value = null
-        clearHoveredPanelTargets()
+        clearPlanningHoveredTargets()
       }
       canvas.style.cursor = 'default'
     }
@@ -288,7 +266,7 @@ export function ConsortiumChart() {
   const handleMouseLeave = useCallback(() => {
     if (hoveredCanonical.value !== null) {
       hoveredCanonical.value = null
-      clearHoveredPanelTargets()
+      clearPlanningHoveredTargets()
     }
     if (canvasRef.current) canvasRef.current.style.cursor = 'default'
   }, [])

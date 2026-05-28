@@ -11,6 +11,10 @@ export const plantFilterCatalog = {
 
   stripChoiceFields: speciesCatalogFilters.stripChoiceFields,
 
+  stripThresholdFields: speciesCatalogFilters.stripThresholdFields,
+
+  stripBooleanFields: speciesCatalogFilters.stripBooleanFields,
+
   stripControls: speciesCatalogFilters.stripControls,
 
   stripOptionSource: speciesCatalogFilters.stripOptionSource,
@@ -18,6 +22,10 @@ export const plantFilterCatalog = {
   hasSpeciesFilterStrategy: speciesCatalogFilters.hasSpeciesFilterStrategy,
 
   activeArrayChipFields: speciesCatalogFilters.activeArrayChipFields,
+
+  activeBooleanChipFields: speciesCatalogFilters.activeBooleanChipFields,
+
+  activeNumericChipFields: speciesCatalogFilters.activeNumericChipFields,
 
   activeChipFields: speciesCatalogFilters.activeChipFields,
 }

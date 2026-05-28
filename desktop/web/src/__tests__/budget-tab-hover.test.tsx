@@ -165,4 +165,28 @@ describe('BudgetTab hover bridge', () => {
     expect(selectedPanelTargetOrigin.value).toBe('timeline')
     expect(container.querySelector(`.${styles.rowSelected}`)).toBeNull()
   })
+
+  it('refreshes localized species names when switching to a cached locale', async () => {
+    currentCanvasSession.value = {
+      getPlacedPlants: () => [makePlant('Malus domestica', 'Fallback Apple')],
+      getLocalizedCommonNames: () => new Map([
+        ['Malus domestica', locale.value === 'fr' ? 'Pommier' : 'Apple'],
+      ]),
+    } as any
+
+    await act(async () => {
+      render(<BudgetTab />, container)
+    })
+
+    expect(container.textContent).toContain('Apple')
+    const namesRevisionBeforeLocaleChange = plantNamesRevision.value
+
+    await act(async () => {
+      locale.value = 'fr'
+    })
+
+    expect(plantNamesRevision.value).toBe(namesRevisionBeforeLocaleChange)
+    expect(container.textContent).toContain('Pommier')
+    expect(container.textContent).not.toContain('Apple')
+  })
 })

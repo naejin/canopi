@@ -52,6 +52,13 @@ describe('plant filter model', () => {
       'life_cycle',
       'growth_rate',
     ])
+    expect(plantFilterCatalog.activeBooleanChipFields().map((field) => field.filterKey)).toEqual([
+      'woody',
+      'nitrogen_fixer',
+    ])
+    expect(plantFilterCatalog.activeNumericChipFields().map((field) => field.filterKey)).toEqual([
+      'edibility_min',
+    ])
     expect(plantFilterCatalog.activeChipFields().map((field) => `${field.kind}:${field.filterKey}`)).toEqual([
       'array:climate_zones',
       'array:habit',
@@ -59,8 +66,8 @@ describe('plant filter model', () => {
       'array:life_cycle',
       'array:growth_rate',
       'boolean:woody',
-      'numeric-threshold:edibility_min',
       'boolean:nitrogen_fixer',
+      'numeric-threshold:edibility_min',
     ])
   })
 

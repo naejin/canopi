@@ -1,84 +1,52 @@
-import { useCallback, useEffect, useMemo, useRef } from 'preact/hooks'
+import { useCallback, useEffect, useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
-import { selectedPanelTargetOrigin, selectedPanelTargets } from '../../app/panel-targets/state'
-import { plantNamesRevision, sceneEntityRevision } from '../../canvas/runtime-mirror-state'
 import { currentDesign, designName } from '../../state/design'
-import { currentCanvasQuerySurface } from '../../canvas/session'
 import {
-  clearHoveredPanelTargets,
-  clearSelectedPanelTargetsForOrigin,
-  setHoveredPanelTargets,
-  setSelectedPanelTargets,
-} from '../../app/panel-targets/coordinator'
+  clearPlanningHoveredTargets,
+  clearPlanningSelectedTargetsForOrigin,
+  planningTargetsSelected,
+  prunePlanningSelectionForOrigin,
+  readPlanningSelection,
+  setPlanningHoveredTargets,
+  setPlanningSelectedTargets,
+  useBudgetPlanningProjection,
+} from '../../app/planning-projection'
 import { setPlantBudgetPrice, setBudgetCurrency } from '../../app/budget/controller'
 import { exportBudgetCsv, isBudgetExportCancelled } from '../../app/budget/export'
 import { Dropdown } from '../shared/Dropdown'
 import { CURRENCY_ITEMS } from './budget-currencies'
-import { countPlants, buildPriceMap, formatCurrency } from './budget-helpers'
-import { getBudgetHoverTarget, getBudgetSpeciesTarget, panelTargets } from '../../panel-targets'
-import type { BudgetItem, PanelTarget, PlacedPlant } from '../../types/design'
+import { formatCurrency } from './budget-helpers'
+import type { BudgetItem } from '../../types/design'
 import styles from './BudgetTab.module.css'
 
 const EMPTY_BUDGET: BudgetItem[] = []
-const EMPTY_PLANTS: PlacedPlant[] = []
-const EMPTY_NAMES: ReadonlyMap<string, string | null> = new Map()
-
-function setBudgetHoveredPanelTargets(targets: readonly PanelTarget[]): void {
-  setHoveredPanelTargets(targets)
-}
-
-function setBudgetSelectedPanelTargets(targets: readonly PanelTarget[]): void {
-  setSelectedPanelTargets('budget', targets)
-}
 
 function clearBudgetSelectedPanelTargets(): void {
-  clearSelectedPanelTargetsForOrigin('budget')
+  clearPlanningSelectedTargetsForOrigin('budget')
 }
 
 export function BudgetTab() {
-  const session = currentCanvasQuerySurface.value
-
   const editingCanonical = useSignal<string | null>(null)
   const editPrice = useSignal('')
 
   const design = currentDesign.value
   const budget = design?.budget ?? EMPTY_BUDGET
   const currency = design?.budget_currency ?? 'EUR'
-  const plants = session?.getPlacedPlants() ?? EMPTY_PLANTS
-  const localizedNames = session?.getLocalizedCommonNames() ?? EMPTY_NAMES
-  // Store in refs — getPlacedPlants()/getLocalizedCommonNames() return fresh references
-  // every call. Use sceneEntityRevision/plantNamesRevision as the real change triggers.
-  const plantsRef = useRef(plants)
-  plantsRef.current = plants
-  const localizedNamesRef = useRef(localizedNames)
-  localizedNamesRef.current = localizedNames
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const groupedPlants = useMemo(() => countPlants(plantsRef.current, localizedNamesRef.current, locale.value), [sceneEntityRevision.value, plantNamesRevision.value, locale.value])
-  const priceMap = useMemo(() => buildPriceMap(budget), [budget])
-  const budgetItemMap = useMemo(() => {
-    const map = new Map<string, BudgetItem>()
-    for (const item of budget) {
-      const target = getBudgetSpeciesTarget(item)
-      if (target) map.set(target.canonical_name, item)
-    }
-    return map
-  }, [budget])
-  const totalPlants = useMemo(() => groupedPlants.reduce((sum, row) => sum + row.count, 0), [groupedPlants])
-  const pricedCount = useMemo(() => groupedPlants.filter((row) => priceMap.has(row.canonical)).length, [groupedPlants, priceMap])
-  const grandTotal = useMemo(() => groupedPlants.reduce((total, row) => {
-    const entry = priceMap.get(row.canonical)
-    return total + row.count * (entry?.unit_cost ?? 0)
-  }, 0), [groupedPlants, priceMap])
+  const budgetSelection = readPlanningSelection('budget')
+  const activeLocale = locale.value
+  const projection = useBudgetPlanningProjection({
+    budget,
+    currency,
+    locale: activeLocale,
+  })
 
-  const priceMapRef = useRef(priceMap)
-  priceMapRef.current = priceMap
-  const selectedTargets = selectedPanelTargets.value
-  const selectedOrigin = selectedPanelTargetOrigin.value
+  const projectionRef = useRef(projection)
+  projectionRef.current = projection
 
   const startEditPrice = useCallback((canonical: string) => {
-    editPrice.value = String(priceMapRef.current.get(canonical)?.unit_cost ?? '')
+    editPrice.value = String(projectionRef.current.lineItemPriceMap.get(canonical)?.unit_cost ?? '')
     editingCanonical.value = canonical
   }, [])
 
@@ -90,15 +58,17 @@ export function BudgetTab() {
   }, [])
 
   const handleRowMouseEnter = useCallback((canonical: string) => {
-    setBudgetHoveredPanelTargets([getBudgetHoverTarget(budgetItemMap.get(canonical), canonical)])
-  }, [budgetItemMap])
+    const row = projectionRef.current.rows.find((candidate) => candidate.canonical === canonical)
+    if (row) setPlanningHoveredTargets([row.target])
+  }, [])
 
   const handleRowClick = useCallback((canonical: string) => {
-    setBudgetSelectedPanelTargets([getBudgetHoverTarget(budgetItemMap.get(canonical), canonical)])
-  }, [budgetItemMap])
+    const row = projectionRef.current.rows.find((candidate) => candidate.canonical === canonical)
+    if (row) setPlanningSelectedTargets('budget', [row.target])
+  }, [])
 
   const clearBudgetHover = useCallback(() => {
-    clearHoveredPanelTargets()
+    clearPlanningHoveredTargets()
   }, [])
 
   useEffect(() => clearBudgetHover, [clearBudgetHover])
@@ -106,21 +76,16 @@ export function BudgetTab() {
   useEffect(() => clearBudgetSelectedPanelTargets, [])
 
   useEffect(() => {
-    if (selectedOrigin !== 'budget' || selectedTargets.length === 0) return
-    for (const row of groupedPlants) {
-      const target = getBudgetHoverTarget(budgetItemMap.get(row.canonical), row.canonical)
-      if (panelTargets.listEquals(selectedTargets, [target])) return
-    }
-    clearBudgetSelectedPanelTargets()
-  }, [groupedPlants, budgetItemMap, selectedTargets, selectedOrigin])
+    prunePlanningSelectionForOrigin('budget', projection.rows.map((row) => [row.target]))
+  }, [projection.rows, budgetSelection.targets, budgetSelection.ownsOrigin])
 
   async function handleExportCSV() {
     try {
-      await exportBudgetCsv(groupedPlants, {
+      await exportBudgetCsv(projection.rows, {
         currency,
         designName: designName.value,
-        lineItemPriceMap: priceMap,
-        grandTotal,
+        lineItemPriceMap: projection.lineItemPriceMap,
+        grandTotal: projection.grandTotal,
       })
     } catch (error) {
       if (isBudgetExportCancelled(error)) return
@@ -128,7 +93,7 @@ export function BudgetTab() {
     }
   }
 
-  if (groupedPlants.length === 0) {
+  if (projection.rows.length === 0) {
     return (
       <div className={styles.container}>
         <div className={styles.emptyState}>
@@ -143,12 +108,12 @@ export function BudgetTab() {
     <div className={styles.container}>
       <div className={styles.header}>
         <span className={styles.summaryStats}>
-          {t('canvas.budget.speciesCount', { count: groupedPlants.length })}
+          {t('canvas.budget.speciesCount', { count: projection.rows.length })}
           <span className={styles.summaryDot}>{' \u00B7 '}</span>
-          {t('canvas.budget.plantCount', { count: totalPlants })}
+          {t('canvas.budget.plantCount', { count: projection.totalPlants })}
           <span className={styles.summaryDot}>{' \u00B7 '}</span>
-          <span className={pricedCount === groupedPlants.length && pricedCount > 0 ? styles.pricedComplete : undefined}>
-            {t('canvas.budget.pricedProgress', { done: pricedCount, total: groupedPlants.length })}
+          <span className={projection.pricedCount === projection.rows.length && projection.pricedCount > 0 ? styles.pricedComplete : undefined}>
+            {t('canvas.budget.pricedProgress', { done: projection.pricedCount, total: projection.rows.length })}
           </span>
         </span>
         <Dropdown
@@ -161,7 +126,7 @@ export function BudgetTab() {
           triggerClassName={styles.currencyChip}
         />
         <span className={styles.total}>
-          {t('canvas.budget.grandTotal')}{' '}{formatCurrency(grandTotal, currency, locale.value)}
+          {t('canvas.budget.grandTotal')}{' '}{formatCurrency(projection.grandTotal, currency, activeLocale)}
         </span>
         <button type="button" className={styles.exportBtn} onClick={handleExportCSV}>
           {t('canvas.budget.exportCSV')}
@@ -179,13 +144,9 @@ export function BudgetTab() {
             </tr>
           </thead>
           <tbody>
-            {groupedPlants.map((row) => {
-              const entry = priceMap.get(row.canonical)
-              const price = entry?.unit_cost ?? 0
-              const subtotal = row.count * price
+            {projection.rows.map((row) => {
               const isEditing = editingCanonical.value === row.canonical
-              const rowTarget = getBudgetHoverTarget(budgetItemMap.get(row.canonical), row.canonical)
-              const isSelected = selectedOrigin === 'budget' && panelTargets.listEquals(selectedTargets, [rowTarget])
+              const isSelected = planningTargetsSelected(budgetSelection, [row.target])
 
               return (
                 <tr
@@ -221,21 +182,21 @@ export function BudgetTab() {
                     ) : (
                       <button
                         type="button"
-                        className={`${styles.priceBtn}${entry === undefined ? ` ${styles.priceEmpty}` : ''}`}
+                        className={`${styles.priceBtn}${!row.hasPrice ? ` ${styles.priceEmpty}` : ''}`}
                         onClick={() => startEditPrice(row.canonical)}
                         aria-label={`${t('canvas.budget.setPrice')} ${row.commonName || row.canonical}`}
                       >
-                        {entry !== undefined ? formatCurrency(price, currency, locale.value) : '\u2014'}
+                        {row.hasPrice ? formatCurrency(row.unitCost, currency, activeLocale) : '\u2014'}
                       </button>
                     )}
                   </td>
-                  <td className={styles.tdNum}>{entry !== undefined ? formatCurrency(subtotal, currency, locale.value) : '\u2014'}</td>
+                  <td className={styles.tdNum}>{row.hasPrice ? formatCurrency(row.subtotal, currency, activeLocale) : '\u2014'}</td>
                 </tr>
               )
             })}
           </tbody>
         </table>
-        {pricedCount === 0 && (
+        {projection.pricedCount === 0 && (
           <p className={styles.hint}>{t('canvas.budget.hintSetPrice')}</p>
         )}
       </div>

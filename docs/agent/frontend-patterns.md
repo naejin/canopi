@@ -42,10 +42,16 @@ Use this guide when changing Preact components, signals, i18n, CSS, panels, bott
 
 - `app/plant-browser/species-catalog-filters.ts` owns Species Catalog Filter behavior for strip placement, active-chip formatting, activity counts, and fixed-field adapters.
 - Components such as `FilterStrip` and `ActiveChips` should consume `plantFilterCatalog` instead of hardcoding fixed filter rows or chip metadata.
+- Strip rows should come from `stripControls()`; active chips should come from `activeArrayChipFields()`, `activeBooleanChipFields()`, and `activeNumericChipFields()`.
 - Keep the shared `SpeciesFilter` request shape stable unless the bead explicitly changes frontend/backend contracts.
 
 ## Panel And Canvas Reactivity
 
+- Planning surfaces that combine Design planning entries, placed plants, localized names, and Target hover/selection state should go through `desktop/web/src/app/planning-projection/`.
+- The Planning Projection module owns derived planning rows, Target presentation behavior, Timeline Action grouping/layout read-models, and Timeline species picker options for timeline, budget, and consortium views.
+- Planning surfaces should use the Planning Projection runtime hooks for placed plants and localized Species names; do not read `currentCanvasQuerySurface`, `sceneEntityRevision`, or `plantNamesRevision` directly in Budget, Timeline, or Consortium UI.
+- Planning views still own rendering, pointer geometry, local edit state, and calls to feature controllers such as budget/timeline/consortium mutations.
+- Timeline Action date mutation, drag preview/commit behavior, form-to-Target mapping, auto-scroll speed, and frozen-origin scroll compensation belong in `app/timeline/editing.ts`; `InteractiveTimeline` should delegate to that module instead of owning document edit transactions directly.
 - Bottom panel components that read canvas-derived data must subscribe to `sceneEntityRevision`.
 - Panels that only read non-canvas document state should not subscribe to canvas revisions.
 - Timeline, budget, and consortium identity uses typed `PanelTarget` values. Do not reintroduce string matching against descriptions, legacy plant arrays, budget descriptions, or canonical-name fields.
