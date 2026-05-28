@@ -47,19 +47,6 @@ export function snapshotCanvasIntoCurrentDocument(
   return file;
 }
 
-/**
- * Load a CanopiFile into the canvas engine.
- * Called after opening/creating a design.
- */
-export function loadCanvasFromDocument(
-  file: CanopiFile,
-  session: CanvasDocumentSurface,
-): void {
-  session.loadDocument(file);
-  session.zoomToFit();
-  installConsortiumSync();
-}
-
 export function disposeDocumentWorkflows(): void {
   disposeConsortiumSync();
 }

@@ -5,7 +5,7 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 ## Current Boundaries
 
 - `desktop/web/src/app/document-session/actions.ts` exposes user-facing document actions.
-- `desktop/web/src/app/document-session/transition.ts` owns guarded document transitions, including dirty checks, replacement, queued loads, `zoomToFit()`, and workflow installation.
+- `desktop/web/src/app/document-session/transition.ts` owns guarded Design Session transitions, including dirty checks, attached/detached replacement selection, queued loads, `zoomToFit()` for attached sessions, and workflow installation.
 - `desktop/web/src/app/document-session/runtime.ts` owns mount-time document hydration and save composition helpers.
 - `desktop/web/src/app/document-session/workflows.ts` owns cross-domain workflow effects such as consortium sync.
 - `desktop/web/src/app/document/controller.ts` owns non-canvas document mutations through `mutateCurrentDesign()` and `updateDesignArray()`.
@@ -16,9 +16,10 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 - No component may replace the active document directly.
 - No panel may call document replacement directly.
 - Destructive document flows must use the shared guard path: dirty check -> confirm -> replace.
-- `transitionDocument()` is the replacement path for new/open/template/queued flows.
-- `loadCanvasFromDocument()` is the mount-existing hydration path.
-- Both load paths must stay aligned for post-load behavior. Today both hydrate the session, show chrome, call `zoomToFit()`, and install consortium sync.
+- `transitionDocument()` is the replacement path for new/open/template/queued/mount-existing flows.
+- Callers request a Design transition; `transitionDocument()` decides whether an attached `CanvasDocumentSurface` is available or whether to apply a detached document-state transition.
+- Attached transitions hydrate the canvas session, show chrome, call `zoomToFit()`, clear history, and install consortium sync.
+- Detached transitions update canonical document state, reset dirty baselines, and install consortium sync without canvas-only calls.
 
 ## Document Authority
 

@@ -39,9 +39,10 @@ export interface DocumentTransitionLoadResult {
 export interface DocumentTransitionRequest {
   source: DocumentTransitionSource;
   dirtyGuard: DirtyGuardMode;
-  session: CanvasDocumentSurface;
+  session?: CanvasDocumentSurface | null;
   load: () => Promise<DocumentTransitionLoadResult>;
   isCancelled?: () => boolean;
+  deferWhenDetachedAndEmpty?: () => void;
 }
 
 export type DocumentTransitionStatus = "applied" | "cancelled" | "queued" | "failed";
@@ -63,7 +64,7 @@ interface QueuedDocumentLoadOptions {
 type ReplacementDecision = "proceed" | "cancel";
 
 export async function saveCurrentDesign(options: SaveCurrentDesignOptions = {}): Promise<void> {
-  const session = options.session ?? getCurrentCanvasDocumentSurface();
+  const session = sessionForOption(options.session);
   const content = buildPersistedDocumentContent(session, designName.value);
 
   if (designPath.value) {
@@ -78,7 +79,7 @@ export async function saveCurrentDesign(options: SaveCurrentDesignOptions = {}):
 }
 
 export async function saveAsCurrentDesign(options: SaveCurrentDesignOptions = {}): Promise<void> {
-  const session = options.session ?? getCurrentCanvasDocumentSurface();
+  const session = sessionForOption(options.session);
   const content = buildPersistedDocumentContent(session, designName.value);
 
   try {
@@ -94,23 +95,32 @@ export async function saveAsCurrentDesign(options: SaveCurrentDesignOptions = {}
 export async function transitionDocument(
   request: DocumentTransitionRequest,
 ): Promise<DocumentTransitionResult> {
+  const session = sessionForTransition(request);
   try {
+    if (!session && !currentDesign.value && request.deferWhenDetachedAndEmpty) {
+      request.deferWhenDetachedAndEmpty();
+      return {
+        status: "queued",
+        documentLoaded: false,
+      };
+    }
+
     if (request.dirtyGuard === "confirm") {
-      const decision = await confirmReplacement(request.session);
+      const decision = await confirmReplacement(session);
       if (decision === "cancel") {
-        return cancelledResult(request.session);
+        return cancelledResult(session);
       }
     }
 
     const loaded = await request.load();
     if (request.isCancelled?.()) {
-      return cancelledResult(request.session);
+      return cancelledResult(session);
     }
 
     const file = normalizeDocumentForSource(request.source, loaded.file);
     applyDocumentTransition({
       source: request.source,
-      session: request.session,
+      session,
       file,
       path: loaded.path,
       name: loaded.name,
@@ -118,15 +128,15 @@ export async function transitionDocument(
 
     return {
       status: "applied",
-      documentLoaded: request.session.hasLoadedDocument(),
+      documentLoaded: session?.hasLoadedDocument() ?? false,
     };
   } catch (error) {
     if (isCancelled(error)) {
-      return cancelledResult(request.session);
+      return cancelledResult(session);
     }
     return {
       status: "failed",
-      documentLoaded: request.session.hasLoadedDocument(),
+      documentLoaded: session?.hasLoadedDocument() ?? false,
       error,
     };
   }
@@ -195,7 +205,7 @@ export function consumeQueuedDocumentLoad(
 
 interface ApplyDocumentTransitionOptions {
   source: DocumentTransitionSource;
-  session: CanvasDocumentSurface;
+  session: CanvasDocumentSurface | null;
   file: CanopiFile;
   path: string | null;
   name: string;
@@ -208,6 +218,11 @@ function applyDocumentTransition({
   path,
   name,
 }: ApplyDocumentTransitionOptions): void {
+  if (!session) {
+    applyDetachedDocumentTransition({ source, file, path, name });
+    return;
+  }
+
   if (source === "mount-existing") {
     session.loadDocument(file);
   } else {
@@ -219,6 +234,21 @@ function applyDocumentTransition({
   session.clearHistory();
   session.showCanvasChrome();
   session.zoomToFit();
+  installConsortiumSync();
+}
+
+function applyDetachedDocumentTransition({
+  source,
+  file,
+  path,
+  name,
+}: Omit<ApplyDocumentTransitionOptions, "session">): void {
+  if (source === "mount-existing") {
+    throw new Error("mount-existing document transitions require an attached canvas session");
+  }
+
+  replaceCurrentDesignState(file, path, name);
+  resetDirtyBaselines();
   installConsortiumSync();
 }
 
@@ -273,7 +303,19 @@ function startQueuedDocumentLoad({
   };
 }
 
-async function confirmReplacement(session: CanvasDocumentSurface): Promise<ReplacementDecision> {
+function sessionForTransition(request: DocumentTransitionRequest): CanvasDocumentSurface | null {
+  return sessionForOption(request.session);
+}
+
+function sessionForOption(
+  session: CanvasDocumentSurface | null | undefined,
+): CanvasDocumentSurface | null {
+  return session === undefined
+    ? getCurrentCanvasDocumentSurface()
+    : session;
+}
+
+async function confirmReplacement(session: CanvasDocumentSurface | null): Promise<ReplacementDecision> {
   if (!currentDesign.value) return "proceed";
   if (!designDirty.value) return "proceed";
 
@@ -313,10 +355,10 @@ function normalizeDocumentForSource(
   return normalizeLoadedDocument(file);
 }
 
-function cancelledResult(session: CanvasDocumentSurface): DocumentTransitionResult {
+function cancelledResult(session: CanvasDocumentSurface | null): DocumentTransitionResult {
   return {
     status: "cancelled",
-    documentLoaded: session.hasLoadedDocument(),
+    documentLoaded: session?.hasLoadedDocument() ?? false,
   };
 }
 

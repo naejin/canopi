@@ -68,6 +68,8 @@ import {
 } from '../state/design'
 import {
   consumeQueuedDocumentLoad,
+  newDesignAction,
+  openDesign,
   openDesignAsTemplate,
   openDesignFromPath,
   saveCurrentDesign,
@@ -287,14 +289,45 @@ describe('document replacement actions', () => {
     expect(currentDesign.value?.name).toBe('Current')
   })
 
-  it('queues the path without loading when engine is null', async () => {
+  it('applies a known path while the canvas session is detached', async () => {
     mocks.canvasSession = null
+    mocks.loadDesign.mockResolvedValue(makeFile('Next'))
+
+    await openDesignFromPath('/designs/next.canopi')
+
+    expect(mocks.message).not.toHaveBeenCalled()
+    expect(mocks.loadDesign).toHaveBeenCalledWith('/designs/next.canopi')
+    expect(currentDesign.value?.name).toBe('Next')
+    expect(designName.value).toBe('Next')
+    expect(designPath.value).toBe('/designs/next.canopi')
+    expect(pendingDesignPath.value).toBe(null)
+  })
+
+  it('saves before detached replacement when requested by the dirty guard', async () => {
+    mocks.canvasSession = null
+    nonCanvasRevision.value = 1
+    mocks.message.mockResolvedValue('Save')
+    mocks.loadDesign.mockResolvedValue(makeFile('Next'))
+
+    await openDesignFromPath('/designs/next.canopi')
+
+    expect(mocks.saveDesign).toHaveBeenCalledWith(
+      '/designs/current.canopi',
+      expect.objectContaining({ name: 'Current' }),
+    )
+    expect(mocks.loadDesign).toHaveBeenCalledWith('/designs/next.canopi')
+    expect(currentDesign.value?.name).toBe('Next')
+  })
+
+  it('queues a known path when neither document state nor canvas session is ready', async () => {
+    mocks.canvasSession = null
+    currentDesign.value = null
+    designPath.value = null
 
     await openDesignFromPath('/designs/next.canopi')
 
     expect(mocks.message).not.toHaveBeenCalled()
     expect(mocks.loadDesign).not.toHaveBeenCalled()
-    expect(currentDesign.value?.name).toBe('Current')
     expect(pendingDesignPath.value).toBe('/designs/next.canopi')
   })
 
@@ -312,8 +345,22 @@ describe('document replacement actions', () => {
     expect(currentDesign.value).toEqual(expect.objectContaining({ name: 'Next' }))
   })
 
-  it('queues template imports when the canvas engine is not ready, then applies them as unsaved designs', async () => {
+  it('opens template imports while the canvas session is detached', async () => {
     mocks.canvasSession = null
+    mocks.loadDesign.mockResolvedValue(makeFile('Downloaded Template'))
+
+    await expect(openDesignAsTemplate('/tmp/template.canopi', 'Forest Edge')).resolves.toBe('opened')
+    expect(mocks.loadDesign).toHaveBeenCalledWith('/tmp/template.canopi')
+    expect(currentDesign.value?.name).toBe('Downloaded Template')
+    expect(designName.value).toBe('Forest Edge')
+    expect(designPath.value).toBe(null)
+    expect(pendingTemplateImport.value).toBe(null)
+  })
+
+  it('queues template imports when neither document state nor canvas session is ready', async () => {
+    mocks.canvasSession = null
+    currentDesign.value = null
+    designPath.value = null
     mocks.loadDesign.mockResolvedValue(makeFile('Downloaded Template'))
 
     await expect(openDesignAsTemplate('/tmp/template.canopi', 'Forest Edge')).resolves.toBe('queued')
@@ -332,6 +379,33 @@ describe('document replacement actions', () => {
     expect(designPath.value).toBe(null)
     expect(pendingTemplateImport.value).toBe(null)
     cancel()
+  })
+
+  it('opens from the file dialog while the canvas session is detached', async () => {
+    mocks.canvasSession = null
+    mocks.openDesignDialog.mockResolvedValue({
+      file: makeFile('Dialog Pick'),
+      path: '/designs/dialog.canopi',
+    })
+
+    await openDesign()
+
+    expect(mocks.openDesignDialog).toHaveBeenCalledTimes(1)
+    expect(currentDesign.value?.name).toBe('Dialog Pick')
+    expect(designName.value).toBe('Dialog Pick')
+    expect(designPath.value).toBe('/designs/dialog.canopi')
+  })
+
+  it('creates a new design while the canvas session is detached', async () => {
+    mocks.canvasSession = null
+    mocks.newDesign.mockResolvedValue(makeFile('Untitled'))
+
+    await newDesignAction()
+
+    expect(mocks.newDesign).toHaveBeenCalledTimes(1)
+    expect(currentDesign.value?.name).toBe('Untitled')
+    expect(designName.value).toBe('Untitled')
+    expect(designPath.value).toBe(null)
   })
 
   it('saves the canonical document snapshot when no canvas session is mounted', async () => {
