@@ -79,4 +79,29 @@ describe('ActiveChips', () => {
 
     expect(container.textContent).toContain('Hardiness zone min: 5–8')
   })
+
+  it('renders and dismisses life cycle chips through the catalog behavior registry', async () => {
+    extraFilters.value = []
+    activeFilters.value = {
+      ...activeFilters.value,
+      life_cycle: ['Annual'],
+    }
+
+    await act(async () => {
+      render(<ActiveChips />, container)
+    })
+
+    expect(container.textContent).toContain('Annual')
+
+    const dismiss = Array.from(container.querySelectorAll('button')).find((button) => (
+      button.getAttribute('aria-label')?.includes('Annual')
+    ))
+    expect(dismiss).toBeDefined()
+
+    await act(async () => {
+      dismiss?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(activeFilters.value.life_cycle).toBeNull()
+  })
 })

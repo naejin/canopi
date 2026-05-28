@@ -2,6 +2,7 @@ mod builder;
 mod columns;
 mod cursor;
 mod filters;
+mod species_catalog_filters;
 
 pub(crate) use crate::db::plant_filter_fields::{PlantFilterFieldKind, filter_field_kind};
 pub use builder::{SpeciesSearchPlan, SpeciesSearchRequest};
@@ -175,6 +176,18 @@ mod tests {
         assert!(sql.contains("is_annual = 1"));
         assert!(sql.contains("is_perennial = 1"));
         assert!(sql.contains(" OR "));
+    }
+
+    #[test]
+    fn test_life_cycle_filter_unknown_values_are_noop() {
+        let mut f = default_filter();
+        f.life_cycle = Some(vec!["Unknown".to_owned()]);
+        let plan = SpeciesSearchPlan::build(request(None, f, None, Sort::Name, 20, false));
+        let sql = plan.list().sql();
+
+        assert!(!sql.contains("is_annual = 1"));
+        assert!(!sql.contains("is_biennial = 1"));
+        assert!(!sql.contains("is_perennial = 1"));
     }
 
     #[test]

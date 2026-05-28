@@ -2,6 +2,7 @@ use common_types::species::{DynamicFilter, FilterOp, SpeciesFilter};
 use rusqlite::types::Value;
 
 use super::columns::validated_column;
+use super::species_catalog_filters;
 use super::{PlantFilterFieldKind, filter_field_kind};
 
 pub(super) fn append_structured_filters(
@@ -52,18 +53,12 @@ pub(super) fn append_structured_filters(
     if let Some(ref cycles) = filters.life_cycle
         && !cycles.is_empty()
     {
-        let mut clauses: Vec<String> = Vec::new();
-        for cycle in cycles {
-            match cycle.as_str() {
-                "Annual" => clauses.push("s.is_annual = 1".to_owned()),
-                "Biennial" => clauses.push("s.is_biennial = 1".to_owned()),
-                "Perennial" => clauses.push("s.is_perennial = 1".to_owned()),
-                _ => {}
-            }
-        }
-        if !clauses.is_empty() {
-            where_clauses.push(format!("({})", clauses.join(" OR ")));
-        }
+        species_catalog_filters::append_text_list_filter(
+            where_clauses,
+            params,
+            "life_cycle",
+            cycles,
+        );
     }
 
     if let Some(ref family) = filters.family {

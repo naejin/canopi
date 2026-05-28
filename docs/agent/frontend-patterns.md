@@ -38,6 +38,12 @@ Use this guide when changing Preact components, signals, i18n, CSS, panels, bott
 - Pagination appends should update measurements in place without forcing full resets.
 - A single monotonic counter ref is enough for stale async guards in fire-and-forget effects.
 
+## Species Catalog Filters
+
+- `app/plant-browser/species-catalog-filters.ts` owns Species Catalog Filter behavior for strip placement, active-chip formatting, activity counts, and fixed-field adapters.
+- Components such as `FilterStrip` and `ActiveChips` should consume `plantFilterCatalog` instead of hardcoding fixed filter rows or chip metadata.
+- Keep the shared `SpeciesFilter` request shape stable unless the bead explicitly changes frontend/backend contracts.
+
 ## Panel And Canvas Reactivity
 
 - Bottom panel components that read canvas-derived data must subscribe to `sceneEntityRevision`.

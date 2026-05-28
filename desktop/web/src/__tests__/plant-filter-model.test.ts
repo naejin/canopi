@@ -25,6 +25,24 @@ describe('plant filter model', () => {
         expect(plantFilterCatalog.stripOptionSource(field.key)).toBeDefined()
       }
     }
+
+    expect(plantFilterCatalog.stripChoiceFields().map((field) => field.filterKey)).toEqual([
+      'climate_zones',
+      'habit',
+      'sun_tolerances',
+      'life_cycle',
+    ])
+    expect(plantFilterCatalog.stripOptionSource('life_cycle')).toEqual({
+      filterOptionsKey: 'life_cycles',
+      valueI18nPrefix: 'filters.lifeCycle_',
+    })
+    expect(plantFilterCatalog.activeArrayChipFields().map((field) => field.filterKey)).toEqual([
+      'climate_zones',
+      'habit',
+      'sun_tolerances',
+      'life_cycle',
+      'growth_rate',
+    ])
   })
 
   it('derives active filter state and count from one model', () => {
