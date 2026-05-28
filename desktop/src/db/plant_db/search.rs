@@ -7,6 +7,10 @@ use crate::db::query_builder::{SpeciesSearchPlan, SpeciesSearchRequest};
 ///
 /// Returns a paginated result. Pass the `next_cursor` from a previous result
 /// to fetch the next page.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Plant DB search mirrors the current flat species search request contract"
+)]
 pub fn search(
     conn: &Connection,
     text: Option<String>,

@@ -135,10 +135,12 @@ mod tests {
     #[test]
     fn saves_settings_round_trip() {
         let user_db = test_user_db();
-        let mut settings = Settings::default();
-        settings.locale = Locale::De;
-        settings.theme = Theme::Dark;
-        settings.map_style = BasemapStyle::Satellite;
+        let settings = Settings {
+            locale: Locale::De,
+            theme: Theme::Dark,
+            map_style: BasemapStyle::Satellite,
+            ..Default::default()
+        };
 
         set_settings(&user_db, settings.clone()).unwrap();
 

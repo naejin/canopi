@@ -66,17 +66,12 @@ impl Default for Settings {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum BasemapStyle {
+    #[default]
     Street,
     Satellite,
-}
-
-impl Default for BasemapStyle {
-    fn default() -> Self {
-        Self::Street
-    }
 }
 
 fn deserialize_basemap_style<'de, D>(deserializer: D) -> Result<BasemapStyle, D::Error>

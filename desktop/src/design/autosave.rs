@@ -76,7 +76,7 @@ fn write_autosave_file(
     super::atomic_replace(&tmp, &dest)
         .map_err(|e| format!("Failed to commit autosave to {}: {e}", dest.display()))?;
 
-    prune_autosaves(&dir, 5);
+    prune_autosaves(dir, 5);
 
     Ok(())
 }
@@ -116,7 +116,7 @@ pub fn list_autosaves(app: &AppHandle) -> Result<Vec<AutosaveEntry>, String> {
 }
 
 fn list_autosaves_in_dir(dir: &std::path::Path) -> Result<Vec<AutosaveEntry>, String> {
-    let mut entries: Vec<(std::time::SystemTime, AutosaveEntry)> = match std::fs::read_dir(&dir) {
+    let mut entries: Vec<(std::time::SystemTime, AutosaveEntry)> = match std::fs::read_dir(dir) {
         Ok(rd) => rd
             .filter_map(|e| e.ok())
             .filter(|e| e.path().extension().is_some_and(|x| x == "canopi"))
