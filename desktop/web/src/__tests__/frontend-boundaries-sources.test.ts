@@ -25,4 +25,13 @@ describe('frontend boundary sources', () => {
     expect(effectsSource).not.toContain('app/panel-targets')
     expect(adapterSource).toContain('../panel-targets/state')
   })
+
+  it('keeps Planning Projection read models out of Canvas2D renderers', () => {
+    const projectionSource = readSource('../app/planning-projection/consortium.ts')
+    const rendererSource = readSource('../canvas/consortium-renderer.ts')
+
+    expect(projectionSource).not.toContain('consortium-renderer')
+    expect(rendererSource).not.toContain('buildConsortiumBars')
+    expect(rendererSource).not.toContain('filterActiveConsortiumEntries')
+  })
 })

@@ -76,6 +76,10 @@ _Avoid_: Price, estimate row
 The design subject that a timeline action, budget item, or other planning entry refers to. A target may identify a species, a placed plant, a zone, or a manual entry.
 _Avoid_: Panel target, link, reference
 
+**Planning Projection**:
+A runtime read model that combines Design planning entries, placed plants, localized species names, and targets for planning surfaces such as timeline, budget, and consortium views. A planning projection does not own Design data or canvas scene data; it only derives view-ready planning rows and target presentation state from those authorities.
+_Avoid_: Panel view model, budget row helper, tab bridge
+
 **Consortium**:
 A stratified, time-aware plant assembly in a design. A consortium describes which species participate, which stratum they occupy, and which succession phases they span.
 _Avoid_: Guild, companion planting group
@@ -133,6 +137,9 @@ Use **Climate Zone** for broad site/template classification. Use **Hardiness Zon
 **Target vs Selection**:
 A **Target** names what a planning entry refers to. A selection is a temporary user interaction state and should not be used as domain language for planning relationships.
 
+**Planning Projection vs Design Authority**:
+A **Planning Projection** is derived runtime state for planning surfaces. It must not become the authority for Design planning entries, placed plants, or canvas scene state.
+
 **Consortium vs Guild**:
 Use **Consortium** for Canopi's broader stratified, time-aware plant assembly. Use "guild" only in explanatory copy when discussing narrower companion-planting concepts.
 
@@ -173,6 +180,10 @@ Developer: "It is a zone. A layer controls visibility and locking; the zone is t
 Designer: "Can a timeline action apply to every apple tree in the design?"
 
 Developer: "Yes. The timeline action can target the apple species, which resolves to the placed plants of that species in the design."
+
+Designer: "Why does the budget update when I add another apple tree?"
+
+Developer: "The budget view uses the planning projection, which derives budget rows from placed plants and budget items without becoming the source of truth for either."
 
 Designer: "Is the high canopy row a layer?"
 

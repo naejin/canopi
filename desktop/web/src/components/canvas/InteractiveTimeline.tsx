@@ -8,11 +8,11 @@ import { plantSpeciesColorDefaults } from '../../canvas/plant-species-color-defa
 import { currentDesign } from '../../state/design'
 import { currentCanvasQuerySurface } from '../../canvas/session'
 import {
-  clearHoveredPanelTargets,
-  clearSelectedPanelTargetsForOrigin,
-  setHoveredPanelTargets,
-  setSelectedPanelTargets,
-} from '../../app/panel-targets/coordinator'
+  clearPlanningHoveredTargets,
+  clearPlanningSelectedTargetsForOrigin,
+  setPlanningHoveredTargets,
+  setPlanningSelectedTargets,
+} from '../../app/planning-projection'
 import {
   addTimelineAction,
   applyTimelineActionPatch,
@@ -140,15 +140,15 @@ const EMPTY_ACTIONS: TimelineAction[] = []
 const EMPTY_PANEL_TARGETS: readonly PanelTarget[] = []
 
 function setTimelineHoveredPanelTargets(targets: readonly PanelTarget[]): void {
-  setHoveredPanelTargets(targets)
+  setPlanningHoveredTargets(targets)
 }
 
 function setTimelineSelectedPanelTargets(targets: readonly PanelTarget[]): void {
-  setSelectedPanelTargets('timeline', targets)
+  setPlanningSelectedTargets('timeline', targets)
 }
 
 export function clearTimelineSelectedPanelTargets(): void {
-  clearSelectedPanelTargetsForOrigin('timeline')
+  clearPlanningSelectedTargetsForOrigin('timeline')
 }
 
 function buildSpeciesList(): Array<{ canonical_name: string; display_name: string }> {
@@ -229,7 +229,7 @@ export function InteractiveTimeline({
     const current = currentDesign.value?.timeline ?? EMPTY_ACTIONS
     if (current.some((action) => action.id === hoveredActionId)) return
     hoveredId.value = null
-    clearHoveredPanelTargets()
+    clearPlanningHoveredTargets()
   })
 
   const renderStateRef = useRef<TimelineRenderState>(null!)

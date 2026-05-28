@@ -4,7 +4,7 @@ import type { PlacedPlant } from '../types/design'
  * Group placed plants by canonical name, resolving display names through
  * the localized names map with fallback to common_name then canonical_name.
  *
- * Shared between budget-helpers (BudgetTab) and consortium-renderer.
+ * Shared by Planning Projection and other species-level read models.
  */
 export function groupPlantsBySpecies(
   plants: PlacedPlant[],

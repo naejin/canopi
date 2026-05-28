@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  buildConsortiumBars,
-  filterActiveConsortiumEntries,
   hitTestBar,
   computeRowHeights,
   computeRowYOffsets,
@@ -11,6 +9,7 @@ import {
   LABEL_WIDTH,
 } from '../canvas/consortium-renderer'
 import type { ConsortiumBarLayout } from '../canvas/consortium-renderer'
+import { buildConsortiumBars, filterActiveConsortiumEntries } from '../app/planning-projection'
 import type { Consortium, PlacedPlant } from '../types/design'
 import { consortiumTarget } from '../panel-targets'
 
