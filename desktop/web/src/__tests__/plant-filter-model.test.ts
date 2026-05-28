@@ -32,6 +32,15 @@ describe('plant filter model', () => {
       'sun_tolerances',
       'life_cycle',
     ])
+    expect(plantFilterCatalog.stripControls().map((field) => `${field.kind}:${field.filterKey}`)).toEqual([
+      'choice:climate_zones',
+      'choice:habit',
+      'choice:sun_tolerances',
+      'choice:life_cycle',
+      'threshold:edibility_min',
+      'boolean:woody',
+      'boolean:nitrogen_fixer',
+    ])
     expect(plantFilterCatalog.stripOptionSource('life_cycle')).toEqual({
       filterOptionsKey: 'life_cycles',
       valueI18nPrefix: 'filters.lifeCycle_',
@@ -42,6 +51,16 @@ describe('plant filter model', () => {
       'sun_tolerances',
       'life_cycle',
       'growth_rate',
+    ])
+    expect(plantFilterCatalog.activeChipFields().map((field) => `${field.kind}:${field.filterKey}`)).toEqual([
+      'array:climate_zones',
+      'array:habit',
+      'array:sun_tolerances',
+      'array:life_cycle',
+      'array:growth_rate',
+      'boolean:woody',
+      'numeric-threshold:edibility_min',
+      'boolean:nitrogen_fixer',
     ])
   })
 

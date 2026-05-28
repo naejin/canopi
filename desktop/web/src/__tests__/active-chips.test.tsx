@@ -104,4 +104,23 @@ describe('ActiveChips', () => {
 
     expect(activeFilters.value.life_cycle).toBeNull()
   })
+
+  it('renders fixed strip chips through catalog descriptors', async () => {
+    extraFilters.value = []
+    activeFilters.value = {
+      ...activeFilters.value,
+      woody: true,
+      edibility_min: 3,
+      nitrogen_fixer: true,
+    }
+
+    await act(async () => {
+      render(<ActiveChips />, container)
+    })
+
+    expect(container.textContent).toContain('Woody')
+    expect(container.textContent).toContain('Edibility: 3+')
+    expect(container.textContent).toContain('N')
+    expect(container.textContent).toContain('Fixer')
+  })
 })

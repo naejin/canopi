@@ -11,19 +11,12 @@ import {
   plantFilterCatalog,
   plantSearchSession,
 } from '../../app/plant-browser'
-import type { SpeciesFilter } from '../../types/species'
+import type { FilterOptions, SpeciesFilter } from '../../types/species'
+import type { StripControlField } from '../../app/plant-browser'
 import { FilterChip } from './FilterChip'
 import { ThresholdSlider } from './ThresholdSlider'
 import { toggleArrayValue } from './filter-utils'
 import styles from './PlantDb.module.css'
-
-interface ChipRowConfig {
-  label: string
-  options: string[]
-  filterKey: keyof SpeciesFilter
-  i18nPrefix: string
-  color: string
-}
 
 export function FilterStrip({ onMoreFilters }: { onMoreFilters: () => void }) {
   void locale.value;
@@ -31,79 +24,22 @@ export function FilterStrip({ onMoreFilters }: { onMoreFilters: () => void }) {
   const filters = plantSearchSession.intent.value.filters;
   const showClear = hasActiveFilters.value;
   const count = activeFilterCount.value;
-  const woodyField = plantFilterCatalog.stripFields().find((field) => field.key === 'woody');
+  const controls = plantFilterCatalog.stripControls();
 
   useEffect(() => {
     void loadFilterOptions();
   }, []);
 
-  const chipRows: ChipRowConfig[] = plantFilterCatalog.stripChoiceFields().map((entry) => ({
-    label: t(entry.labelI18nKey, entry.fallbackLabel),
-    options: opts?.[entry.optionsKey] ?? [],
-    filterKey: entry.filterKey,
-    i18nPrefix: entry.valueI18nPrefix,
-    color: entry.color,
-  }));
-
   return (
     <div className={styles.filterStrip}>
-      {chipRows.map((row) => (
-        <div key={row.filterKey} className={styles.filterRow}>
-          <span className={styles.filterLabel}>{row.label}</span>
-          <div className={styles.filterControl}>
-            {row.options.map((val) => (
-              <FilterChip
-                key={val}
-                label={t(`${row.i18nPrefix}${val}`, val)}
-                color={row.color}
-                active={(filters[row.filterKey] as string[] | null)?.includes(val) ?? false}
-                onClick={() => patchFilters({ [row.filterKey]: toggleArrayValue(filters[row.filterKey] as string[] | null, val) })}
-              />
-            ))}
-          </div>
-        </div>
+      {controls.map((control) => (
+        <FilterControlRow
+          key={control.filterKey}
+          control={control}
+          filters={filters}
+          options={opts}
+        />
       ))}
-
-      <div className={styles.filterRow}>
-        <span className={styles.filterLabel}>{t('filters.edibility')}</span>
-        <div className={styles.filterControl}>
-          <ThresholdSlider
-            min={0}
-            max={5}
-            value={filters.edibility_min}
-            onChange={(v) => patchFilters({ edibility_min: v })}
-            ariaLabel={t('filters.edibility')}
-          />
-        </div>
-      </div>
-
-      <div className={styles.filterRow}>
-        <span className={styles.filterLabel}>{t(woodyField?.i18nKey ?? 'filters.woody', 'Woody')}</span>
-        <div className={styles.filterControl}>
-          <label className={styles.toggleSwitch}>
-            <input
-              type="checkbox"
-              checked={filters.woody === true}
-              onChange={(e) => patchFilters({ woody: (e.target as HTMLInputElement).checked ? true : null })}
-            />
-            <span className={styles.toggleTrack} />
-          </label>
-        </div>
-      </div>
-
-      <div className={styles.filterRow}>
-        <span className={styles.filterLabel}>{t('filters.nitrogen')}</span>
-        <div className={styles.filterControl}>
-          <label className={styles.toggleSwitch}>
-            <input
-              type="checkbox"
-              checked={filters.nitrogen_fixer === true}
-              onChange={(e) => patchFilters({ nitrogen_fixer: (e.target as HTMLInputElement).checked ? true : null })}
-            />
-            <span className={styles.toggleTrack} />
-          </label>
-        </div>
-      </div>
 
       <div className={styles.filterActions}>
         <button type="button" className={styles.moreFiltersBtn} onClick={onMoreFilters}>
@@ -119,4 +55,56 @@ export function FilterStrip({ onMoreFilters }: { onMoreFilters: () => void }) {
       </div>
     </div>
   );
+}
+
+function FilterControlRow({
+  control,
+  filters,
+  options,
+}: {
+  control: StripControlField
+  filters: SpeciesFilter
+  options: FilterOptions | null
+}) {
+  const label = t(control.labelI18nKey, control.fallbackLabel)
+
+  return (
+    <div className={styles.filterRow}>
+      <span className={styles.filterLabel}>{label}</span>
+      <div className={styles.filterControl}>
+        {control.kind === 'choice' && (options?.[control.optionsKey] ?? []).map((val) => (
+          <FilterChip
+            key={val}
+            label={t(`${control.valueI18nPrefix}${val}`, val)}
+            color={control.color}
+            active={(filters[control.filterKey] as string[] | null)?.includes(val) ?? false}
+            onClick={() => patchFilters({
+              [control.filterKey]: toggleArrayValue(filters[control.filterKey] as string[] | null, val),
+            })}
+          />
+        ))}
+        {control.kind === 'threshold' && (
+          <ThresholdSlider
+            min={control.min}
+            max={control.max}
+            value={filters[control.filterKey] as number | null}
+            onChange={(v) => patchFilters({ [control.filterKey]: v })}
+            ariaLabel={label}
+          />
+        )}
+        {control.kind === 'boolean' && (
+          <label className={styles.toggleSwitch}>
+            <input
+              type="checkbox"
+              checked={filters[control.filterKey] === control.activeValue}
+              onChange={(e) => patchFilters({
+                [control.filterKey]: (e.target as HTMLInputElement).checked ? control.activeValue : null,
+              })}
+            />
+            <span className={styles.toggleTrack} />
+          </label>
+        )}
+      </div>
+    </div>
+  )
 }

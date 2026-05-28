@@ -1,5 +1,5 @@
 mod detail;
-mod detail_contract;
+mod detail_projection;
 mod detail_row_map;
 mod filters;
 mod flower;

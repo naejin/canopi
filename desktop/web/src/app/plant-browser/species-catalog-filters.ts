@@ -50,6 +50,7 @@ export interface StripOptionSource {
 }
 
 export interface StripChoiceField {
+  readonly kind: 'choice'
   readonly field?: PlantFilterFieldDef
   readonly filterKey: SpeciesFilterKey
   readonly labelI18nKey: string
@@ -60,13 +61,59 @@ export interface StripChoiceField {
   readonly source: 'schema' | 'adapter'
 }
 
+export interface StripBooleanField {
+  readonly kind: 'boolean'
+  readonly field?: PlantFilterFieldDef
+  readonly filterKey: SpeciesFilterKey
+  readonly labelI18nKey: string
+  readonly fallbackLabel: string
+  readonly color: string
+  readonly activeValue: boolean
+  readonly source: 'schema' | 'adapter'
+}
+
+export interface StripThresholdField {
+  readonly kind: 'threshold'
+  readonly filterKey: SpeciesFilterKey
+  readonly labelI18nKey: string
+  readonly fallbackLabel: string
+  readonly color: string
+  readonly min: number
+  readonly max: number
+  readonly source: 'adapter'
+}
+
+export type StripControlField = StripChoiceField | StripBooleanField | StripThresholdField
+
 export interface ActiveArrayChipField {
+  readonly kind: 'array'
   readonly filterKey: SpeciesFilterKey
   readonly keyPrefix: string
   readonly valueI18nPrefix: string
   readonly color: string
   readonly source: 'schema' | 'adapter'
 }
+
+export interface ActiveBooleanChipField {
+  readonly kind: 'boolean'
+  readonly filterKey: SpeciesFilterKey
+  readonly labelI18nKey: string
+  readonly fallbackLabel: string
+  readonly color: string
+  readonly source: 'schema' | 'adapter'
+}
+
+export interface ActiveNumericChipField {
+  readonly kind: 'numeric-threshold'
+  readonly filterKey: SpeciesFilterKey
+  readonly labelI18nKey: string
+  readonly fallbackLabel: string
+  readonly color: string
+  readonly suffix: string
+  readonly source: 'adapter'
+}
+
+export type ActiveChipField = ActiveArrayChipField | ActiveBooleanChipField | ActiveNumericChipField
 
 const SPECIES_FILTER_KEYS = {
   sun_tolerances: true,
@@ -234,6 +281,7 @@ export function stripChoiceFields(): readonly StripChoiceField[] {
     const source = SCHEMA_STRIP_OPTION_SOURCES[field.key]
     if (source === undefined) return []
     return [{
+      kind: 'choice',
       field,
       filterKey: field.key,
       labelI18nKey: field.i18nKey,
@@ -248,6 +296,7 @@ export function stripChoiceFields(): readonly StripChoiceField[] {
   const adapterFields = ADAPTER_FILTER_BEHAVIORS.flatMap((behavior): StripChoiceField[] => {
     if (!behavior.stripChoice) return []
     return [{
+      kind: 'choice',
       filterKey: behavior.key,
       labelI18nKey: behavior.stripChoice.labelI18nKey,
       fallbackLabel: behavior.stripChoice.fallbackLabel,
@@ -259,6 +308,47 @@ export function stripChoiceFields(): readonly StripChoiceField[] {
   })
 
   return [...schemaFields, ...adapterFields]
+}
+
+export function stripControls(): readonly StripControlField[] {
+  const woodyField = schemaStripFields().find((field) => field.key === 'woody')
+  const controls: StripControlField[] = [...stripChoiceFields()]
+
+  controls.push({
+    kind: 'threshold',
+    filterKey: 'edibility_min',
+    labelI18nKey: 'filters.edibility',
+    fallbackLabel: 'Edibility',
+    color: '--color-edible',
+    min: 0,
+    max: 5,
+    source: 'adapter',
+  })
+
+  if (woodyField && isSpeciesFilterKey(woodyField.key)) {
+    controls.push({
+      kind: 'boolean',
+      field: woodyField,
+      filterKey: woodyField.key,
+      labelI18nKey: woodyField.i18nKey,
+      fallbackLabel: 'Woody',
+      color: woodyField.colorToken,
+      activeValue: true,
+      source: 'schema',
+    })
+  }
+
+  controls.push({
+    kind: 'boolean',
+    filterKey: 'nitrogen_fixer',
+    labelI18nKey: 'filters.nitrogen',
+    fallbackLabel: 'N2 Fixer',
+    color: '--color-nitrogen',
+    activeValue: true,
+    source: 'adapter',
+  })
+
+  return controls
 }
 
 export function stripOptionSource(fieldKey: string): StripOptionSource | undefined {
@@ -285,6 +375,7 @@ export function activeArrayChipFields(): readonly ActiveArrayChipField[] {
     const behavior = SCHEMA_ACTIVE_ARRAY_CHIPS[field.key]
     if (!behavior) return []
     return [{
+      kind: 'array',
       filterKey: field.key,
       keyPrefix: behavior.keyPrefix,
       valueI18nPrefix: behavior.valueI18nPrefix,
@@ -296,6 +387,7 @@ export function activeArrayChipFields(): readonly ActiveArrayChipField[] {
   const adapterFields = ADAPTER_FILTER_BEHAVIORS.flatMap((behavior): ActiveArrayChipField[] => {
     if (!behavior.activeArrayChip) return []
     return [{
+      kind: 'array',
       filterKey: behavior.key,
       keyPrefix: behavior.activeArrayChip.keyPrefix,
       valueI18nPrefix: behavior.activeArrayChip.valueI18nPrefix,
@@ -305,4 +397,42 @@ export function activeArrayChipFields(): readonly ActiveArrayChipField[] {
   })
 
   return [...schemaFields, ...adapterFields]
+}
+
+export function activeChipFields(): readonly ActiveChipField[] {
+  const woodyField = schemaStripFields().find((field) => field.key === 'woody')
+  const fields: ActiveChipField[] = [...activeArrayChipFields()]
+
+  if (woodyField && isSpeciesFilterKey(woodyField.key)) {
+    fields.push({
+      kind: 'boolean',
+      filterKey: woodyField.key,
+      labelI18nKey: woodyField.i18nKey,
+      fallbackLabel: 'Woody',
+      color: woodyField.colorToken,
+      source: 'schema',
+    })
+  }
+
+  fields.push(
+    {
+      kind: 'numeric-threshold',
+      filterKey: 'edibility_min',
+      labelI18nKey: 'filters.edibility',
+      fallbackLabel: 'Edibility',
+      color: '--color-edible',
+      suffix: '+',
+      source: 'adapter',
+    },
+    {
+      kind: 'boolean',
+      filterKey: 'nitrogen_fixer',
+      labelI18nKey: 'filters.nitrogen',
+      fallbackLabel: 'N2 Fixer',
+      color: '--color-nitrogen',
+      source: 'adapter',
+    },
+  )
+
+  return fields
 }
