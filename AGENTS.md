@@ -58,6 +58,12 @@ cd desktop/web && npm test
 # TypeScript check
 cd desktop/web && npx tsc --noEmit
 
+# Rust formatting check matching CI
+cargo fmt --all -- --check
+
+# Rust lint gate matching CI
+CANOPI_SKIP_BUNDLED_DB=1 cargo clippy --workspace --all-targets -- -D warnings
+
 # Regenerate shared TypeScript bindings
 cd desktop/web && npm run gen:types
 
@@ -113,8 +119,10 @@ cargo build --release
 - Frontend changes require `cd desktop/web && npx tsc --noEmit` and focused Vitest coverage.
 - Run `cd desktop/web && npm test` when the frontend surface area is broad or the change touches shared runtime behavior.
 - Shared contract changes require `cd desktop/web && npm run gen:types` and `cd desktop/web && npm run check:types`.
-- Rust changes require `CANOPI_SKIP_BUNDLED_DB=1 cargo check --workspace`.
+- Rust changes require `cargo fmt --all -- --check`, `CANOPI_SKIP_BUNDLED_DB=1 cargo clippy --workspace --all-targets -- -D warnings`, and `CANOPI_SKIP_BUNDLED_DB=1 cargo check --workspace`.
 - Persistence, database, IPC, or shared type changes require the relevant frontend checks plus `cargo test --workspace`.
+- Before pushing Rust, shared-contract, or mixed architecture branches, rebase or pull onto latest `main` and rerun the relevant CI-parity gates after that rebase.
+- If `main` already fails formatting, Clippy, generated-binding, or typecheck gates, create a separate maintenance bead and land the baseline repair before rebasing feature branches. Do not hide pre-existing gate repairs inside unrelated feature commits.
 - If a required gate cannot be run, record the exact command, failure reason, and residual risk in the bead and final handoff.
 
 ## Subagent Rules

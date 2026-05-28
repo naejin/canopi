@@ -8,6 +8,9 @@ Use this guide when changing build scripts, Tauri config, CI workflows, native p
 # Rust workspace check without local bundled plant DB
 CANOPI_SKIP_BUNDLED_DB=1 cargo check --workspace
 
+# Rust formatting check matching CI
+cargo fmt --all -- --check
+
 # Rust lint gate matching CI expectations
 CANOPI_SKIP_BUNDLED_DB=1 cargo clippy --workspace --all-targets -- -D warnings
 
