@@ -209,7 +209,7 @@ cargo build --release
 - For UI work, reference the Design Direction section and existing CSS tokens before adding styles.
 - For multi-phase or delegated work, define file ownership so only one writer edits a file at a time.
 - For multi-feature i18n work, batch all i18n keys in one early phase to reduce 11-file merge conflicts.
-- When adding a new filterable species field, update the backend column validation, query filter kind, generated/registry frontend metadata, all 11 locale files, and detail UI if the field is shown there.
+- When adding a new filterable species field, update `common-types/plant-filter-fields.json` (`fields` for dynamic filters or `fixed_filters` for top-level `SpeciesFilter` behavior), regenerate bindings, update all 11 locale files, and update detail UI if the field is shown there.
 
 ## Banned Patterns
 

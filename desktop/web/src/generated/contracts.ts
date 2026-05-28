@@ -50,6 +50,18 @@ export type CommonNameEntry = {
 	is_primary: boolean,
 };
 
+// Result of checking a single species against a target hardiness zone.
+export type CompatibilityResult = {
+	species_id: string,
+	canonical_name: string,
+	common_name: string | null,
+	hardiness_min: number | null,
+	hardiness_max: number | null,
+	is_compatible: boolean,
+	// How many zones the species is outside the target (0 = compatible).
+	zone_diff: number,
+};
+
 export type Consortium = {
 	target: SpeciesPanelTarget,
 	stratum: string,
@@ -108,6 +120,12 @@ export type FlowerColorResolution = {
 	source: string,
 };
 
+export type GeoResult = {
+	display_name: string,
+	lat: number,
+	lon: number,
+};
+
 export type Layer = {
 	name: string,
 	visible: boolean,
@@ -164,6 +182,16 @@ export type Relationship = {
 	related_canonical_name: string,
 	relationship_type: string,
 	description: string | null,
+};
+
+// A lighter species record used for replacement suggestions.
+export type ReplacementSuggestion = {
+	canonical_name: string,
+	common_name: string | null,
+	hardiness_min: number | null,
+	hardiness_max: number | null,
+	stratum: string | null,
+	height_max_m: number | null,
 };
 
 export type Settings = {

@@ -14,6 +14,29 @@ pub(crate) struct PlantFilterField {
     pub kind: PlantFilterFieldKind,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct FixedFilterBooleanMapping {
+    pub value: &'static str,
+    pub clause: &'static str,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum FixedFilterPredicate {
+    MappedBooleanList(&'static [FixedFilterBooleanMapping]),
+    TextInColumn(&'static str),
+    TextEqualsColumn(&'static str),
+    BooleanTrueClause(&'static str),
+    NumericGteColumn(&'static str),
+    ClimateZoneJoin,
+    SchemaTextIn { field_key: &'static str },
+    SchemaBooleanTrue { field_key: &'static str },
+}
+
+#[derive(Debug)]
+pub(crate) struct FixedFilterBehavior {
+    pub predicate: FixedFilterPredicate,
+}
+
 pub(crate) const PLANT_FILTER_FIELDS: &[PlantFilterField] = &[
     PlantFilterField {
         key: "stratum",
@@ -427,6 +450,95 @@ pub(crate) const PLANT_FILTER_FIELDS: &[PlantFilterField] = &[
     },
 ];
 
+const SUN_TOLERANCES_BOOLEAN_MAPPINGS: &[FixedFilterBooleanMapping] = &[
+    FixedFilterBooleanMapping {
+        value: "full_sun",
+        clause: "s.tolerates_full_sun = 1",
+    },
+    FixedFilterBooleanMapping {
+        value: "semi_shade",
+        clause: "s.tolerates_semi_shade = 1",
+    },
+    FixedFilterBooleanMapping {
+        value: "full_shade",
+        clause: "s.tolerates_full_shade = 1",
+    },
+];
+
+const SOIL_TOLERANCES_BOOLEAN_MAPPINGS: &[FixedFilterBooleanMapping] = &[
+    FixedFilterBooleanMapping {
+        value: "light",
+        clause: "s.tolerates_light_soil = 1",
+    },
+    FixedFilterBooleanMapping {
+        value: "medium",
+        clause: "s.tolerates_medium_soil = 1",
+    },
+    FixedFilterBooleanMapping {
+        value: "heavy",
+        clause: "s.tolerates_heavy_soil = 1",
+    },
+    FixedFilterBooleanMapping {
+        value: "well_drained",
+        clause: "s.well_drained = 1",
+    },
+    FixedFilterBooleanMapping {
+        value: "heavy_clay",
+        clause: "s.heavy_clay = 1",
+    },
+];
+
+const LIFE_CYCLE_BOOLEAN_MAPPINGS: &[FixedFilterBooleanMapping] = &[
+    FixedFilterBooleanMapping {
+        value: "Annual",
+        clause: "s.is_annual = 1",
+    },
+    FixedFilterBooleanMapping {
+        value: "Biennial",
+        clause: "s.is_biennial = 1",
+    },
+    FixedFilterBooleanMapping {
+        value: "Perennial",
+        clause: "s.is_perennial = 1",
+    },
+];
+
+pub(crate) const SPECIES_FILTER_FIXED_BEHAVIORS: &[FixedFilterBehavior] = &[
+    FixedFilterBehavior {
+        predicate: FixedFilterPredicate::MappedBooleanList(SUN_TOLERANCES_BOOLEAN_MAPPINGS),
+    },
+    FixedFilterBehavior {
+        predicate: FixedFilterPredicate::MappedBooleanList(SOIL_TOLERANCES_BOOLEAN_MAPPINGS),
+    },
+    FixedFilterBehavior {
+        predicate: FixedFilterPredicate::MappedBooleanList(LIFE_CYCLE_BOOLEAN_MAPPINGS),
+    },
+    FixedFilterBehavior {
+        predicate: FixedFilterPredicate::TextInColumn("s.growth_rate"),
+    },
+    FixedFilterBehavior {
+        predicate: FixedFilterPredicate::BooleanTrueClause("s.edibility_rating > 0"),
+    },
+    FixedFilterBehavior {
+        predicate: FixedFilterPredicate::NumericGteColumn("s.edibility_rating"),
+    },
+    FixedFilterBehavior {
+        predicate: FixedFilterPredicate::BooleanTrueClause("s.nitrogen_fixer = 1"),
+    },
+    FixedFilterBehavior {
+        predicate: FixedFilterPredicate::TextEqualsColumn("s.family"),
+    },
+    FixedFilterBehavior {
+        predicate: FixedFilterPredicate::ClimateZoneJoin,
+    },
+    FixedFilterBehavior {
+        predicate: FixedFilterPredicate::SchemaTextIn { field_key: "habit" },
+    },
+    FixedFilterBehavior {
+        predicate: FixedFilterPredicate::SchemaBooleanTrue { field_key: "woody" },
+    },
+];
+
 pub(crate) fn filter_field(key: &str) -> Option<&'static PlantFilterField> {
     match key {
         "stratum" => Some(&PLANT_FILTER_FIELDS[0]),
@@ -526,6 +638,23 @@ pub(crate) fn filter_field_kind(key: &str) -> Option<PlantFilterFieldKind> {
     filter_field(key).map(|field| field.kind)
 }
 
+pub(crate) fn fixed_filter_behavior(key: &str) -> Option<&'static FixedFilterBehavior> {
+    match key {
+        "sun_tolerances" => Some(&SPECIES_FILTER_FIXED_BEHAVIORS[0]),
+        "soil_tolerances" => Some(&SPECIES_FILTER_FIXED_BEHAVIORS[1]),
+        "life_cycle" => Some(&SPECIES_FILTER_FIXED_BEHAVIORS[2]),
+        "growth_rate" => Some(&SPECIES_FILTER_FIXED_BEHAVIORS[3]),
+        "edible" => Some(&SPECIES_FILTER_FIXED_BEHAVIORS[4]),
+        "edibility_min" => Some(&SPECIES_FILTER_FIXED_BEHAVIORS[5]),
+        "nitrogen_fixer" => Some(&SPECIES_FILTER_FIXED_BEHAVIORS[6]),
+        "family" => Some(&SPECIES_FILTER_FIXED_BEHAVIORS[7]),
+        "climate_zones" => Some(&SPECIES_FILTER_FIXED_BEHAVIORS[8]),
+        "habit" => Some(&SPECIES_FILTER_FIXED_BEHAVIORS[9]),
+        "woody" => Some(&SPECIES_FILTER_FIXED_BEHAVIORS[10]),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -562,5 +691,17 @@ mod tests {
                 .all(|field| field.column.starts_with("s."))
         );
         assert!(PLANT_FILTER_FIELDS.iter().any(|field| field.key == "habit"));
+    }
+
+    #[test]
+    fn exposes_fixed_species_filter_behavior_from_schema() {
+        let behavior = fixed_filter_behavior("life_cycle").unwrap();
+        match behavior.predicate {
+            FixedFilterPredicate::MappedBooleanList(clauses) => {
+                assert!(clauses.iter().any(|clause| clause.value == "Perennial"));
+            }
+            _ => panic!("expected mapped boolean predicate"),
+        }
+        assert!(fixed_filter_behavior("not_a_field").is_none());
     }
 }

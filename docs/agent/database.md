@@ -31,19 +31,21 @@ When canopi-data removes or adds columns, update atomically:
 - Detail row mapping reads projected columns by name so projection order can change without remapping every field.
 - Search plans own count/list query construction and cursor semantics.
 - Count and list predicates should share the same planner path.
-- Fixed `SpeciesFilter` predicates with bespoke or schema-backed behavior belong in `query_builder/species_catalog_filters.rs`.
+- `common-types/plant-filter-fields.json` owns both dynamic filter fields and the fixed `SpeciesFilter` catalog.
+- Fixed `SpeciesFilter` predicates with bespoke or schema-backed behavior belong in the JSON `fixed_filters` catalog; regenerate bindings instead of hand-editing generated Rust or TypeScript metadata.
+- `query_builder/species_catalog_filters.rs` is the Species Catalog Filter adapter: it consumes generated fixed-filter predicates and owns SQL assembly with prepared parameters.
 - `query_builder/filters.rs` should route fixed request fields to the Species Catalog Filter adapter and keep dynamic `extra` filters isolated behind allowlisted column validation.
-- `SpeciesFilter.life_cycle` remains a fixed request field, but its predicate routes through the Species Catalog Filter adapter and maps to boolean DB columns such as `is_annual`, `is_biennial`, and `is_perennial`.
+- `SpeciesFilter.life_cycle` remains a fixed request field, but its predicate routes through generated fixed-filter behavior and maps to boolean DB columns such as `is_annual`, `is_biennial`, and `is_perennial`.
 - Soil filtering uses boolean tolerance columns, not a `species_soil_types` table.
 - Dynamic filter fields must be validated through allowlisted column metadata.
 - Cursor pagination typed values must use numeric SQLite values for numeric sort fields, not text.
 
 ## Adding A Filterable Species Field
 
-1. Add the backend column allowlist entry.
-2. Classify the filter kind as numeric, boolean, categorical, or text where the query builder expects it.
-3. Update generated/registry frontend metadata.
-4. Add `filters.field.<key>` labels to all 11 locale files.
+1. Add dynamic fields to `common-types/plant-filter-fields.json` `fields`, or add top-level `SpeciesFilter` fields to `fixed_filters` with their predicate and UI behavior.
+2. For dynamic DB columns, declare the allowlisted `sql_column`; for fixed filters, choose the generated predicate kind instead of adding hard-coded SQL constants.
+3. Regenerate generated Rust and TypeScript metadata with `cd desktop/web && npm run gen:types`.
+4. Add `filters.field.<key>` labels to all 11 locale files for new dynamic fields, plus any fixed-filter UI labels referenced by the catalog.
 5. If the field appears in detail UI, update `PlantDetailCard`/detail components and `plantDetail.*` i18n keys.
 6. Add focused backend and frontend tests for filtering behavior.
 

@@ -134,6 +134,79 @@ export const PLANT_FILTER_FIELDS = [
   { key: "scented", kind: "boolean", category: "uses", i18nKey: "filters.field.scented", uiPlacement: "dynamic", colorToken: "--color-primary" },
 ] as const satisfies readonly PlantFilterFieldDef[]
 
+export type FixedFilterActivityKind =
+  | "array"
+  | "boolean"
+  | "numeric"
+  | "string"
+
+export interface FixedStripChoiceBehavior {
+  labelI18nKey: string
+  fallbackLabel: string
+  optionsKey: string
+  valueI18nPrefix: string
+  colorToken: string
+}
+
+export interface FixedStripThresholdBehavior {
+  labelI18nKey: string
+  fallbackLabel: string
+  min: number
+  max: number
+  colorToken: string
+}
+
+export interface FixedStripBooleanBehavior {
+  labelI18nKey: string
+  fallbackLabel: string
+  colorToken: string
+}
+
+export interface FixedActiveArrayChipBehavior {
+  keyPrefix: string
+  valueI18nPrefix: string
+  colorToken: string
+}
+
+export interface FixedActiveBooleanChipBehavior {
+  labelI18nKey: string
+  fallbackLabel: string
+  colorToken: string
+}
+
+export interface FixedActiveNumericChipBehavior {
+  labelI18nKey: string
+  fallbackLabel: string
+  colorToken: string
+  suffix: string
+}
+
+export interface SpeciesFilterFixedBehavior {
+  key: string
+  kind: FixedFilterActivityKind
+  countable: boolean
+  stripChoice?: FixedStripChoiceBehavior
+  stripThreshold?: FixedStripThresholdBehavior
+  stripBoolean?: FixedStripBooleanBehavior
+  activeArrayChip?: FixedActiveArrayChipBehavior
+  activeBooleanChip?: FixedActiveBooleanChipBehavior
+  activeNumericChip?: FixedActiveNumericChipBehavior
+}
+
+export const SPECIES_FILTER_FIXED_BEHAVIORS = [
+  { key: "sun_tolerances", kind: "array", countable: true, stripChoice: { labelI18nKey: "filters.sun", fallbackLabel: "Sun", optionsKey: "sun_tolerances", valueI18nPrefix: "plantDb.sunTolerance_", colorToken: "--color-sun" }, activeArrayChip: { keyPrefix: "sun", valueI18nPrefix: "plantDb.sunTolerance_", colorToken: "--color-sun" } },
+  { key: "soil_tolerances", kind: "array", countable: true },
+  { key: "life_cycle", kind: "array", countable: true, stripChoice: { labelI18nKey: "filters.lifecycle", fallbackLabel: "Life cycle", optionsKey: "life_cycles", valueI18nPrefix: "filters.lifeCycle_", colorToken: "--color-family" }, activeArrayChip: { keyPrefix: "lc", valueI18nPrefix: "filters.lifeCycle_", colorToken: "--color-family" } },
+  { key: "growth_rate", kind: "array", countable: true, activeArrayChip: { keyPrefix: "gr", valueI18nPrefix: "filters.growthRate_", colorToken: "--color-family" } },
+  { key: "edible", kind: "boolean", countable: false },
+  { key: "edibility_min", kind: "numeric", countable: true, stripThreshold: { labelI18nKey: "filters.edibility", fallbackLabel: "Edibility", min: 0, max: 5, colorToken: "--color-edible" }, activeNumericChip: { labelI18nKey: "filters.edibility", fallbackLabel: "Edibility", colorToken: "--color-edible", suffix: "+" } },
+  { key: "nitrogen_fixer", kind: "boolean", countable: true, stripBoolean: { labelI18nKey: "filters.nitrogen", fallbackLabel: "Nitrogen", colorToken: "--color-nitrogen" }, activeBooleanChip: { labelI18nKey: "filters.nitrogen", fallbackLabel: "Nitrogen", colorToken: "--color-nitrogen" } },
+  { key: "family", kind: "string", countable: false },
+  { key: "climate_zones", kind: "array", countable: true },
+  { key: "habit", kind: "array", countable: true },
+  { key: "woody", kind: "boolean", countable: true },
+] as const satisfies readonly SpeciesFilterFixedBehavior[]
+
 export const PLANT_FILTER_SQL_FIELD_KEYS = [
   "stratum",
   "woody",

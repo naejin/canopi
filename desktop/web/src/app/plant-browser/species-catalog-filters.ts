@@ -1,7 +1,9 @@
 import {
   PLANT_FILTER_FIELDS,
+  SPECIES_FILTER_FIXED_BEHAVIORS,
   type PlantFilterFieldDef,
   type PlantFilterUiPlacement,
+  type SpeciesFilterFixedBehavior,
 } from '../../generated/plant-filter-fields'
 import type { FilterOptions, SpeciesFilter } from '../../types/species'
 
@@ -14,6 +16,8 @@ type FilterOptionsKey = keyof Pick<
   FilterOptions,
   'climate_zones' | 'habits' | 'life_cycles' | 'sun_tolerances'
 >
+
+const FIXED_FILTER_BEHAVIORS: readonly SpeciesFilterFixedBehavior[] = SPECIES_FILTER_FIXED_BEHAVIORS
 
 interface FilterActivityStrategy {
   readonly key: SpeciesFilterKey
@@ -144,19 +148,18 @@ export interface ActiveNumericChipField {
 
 export type ActiveChipField = ActiveArrayChipField | ActiveBooleanChipField | ActiveNumericChipField
 
-const SPECIES_FILTER_KEYS = {
-  sun_tolerances: true,
-  soil_tolerances: true,
-  growth_rate: true,
-  life_cycle: true,
-  edible: true,
-  edibility_min: true,
-  nitrogen_fixer: true,
-  climate_zones: true,
-  habit: true,
-  woody: true,
-  family: true,
-} satisfies Record<SpeciesFilterKey, true>
+const SPECIES_FILTER_KEYS = new Set<string>([
+  ...FIXED_FILTER_BEHAVIORS.map((behavior) => behavior.key),
+  ...PLANT_FILTER_FIELDS
+    .filter((field) => field.uiPlacement === 'strip')
+    .map((field) => field.key),
+])
+
+const SCHEMA_STRIP_FILTER_KEYS = new Set<string>(
+  PLANT_FILTER_FIELDS
+    .filter((field) => field.uiPlacement === 'strip')
+    .map((field) => field.key),
+)
 
 const SCHEMA_STRIP_OPTION_SOURCES: Partial<Record<SpeciesFilterKey, StripOptionSource>> = {
   climate_zones: {
@@ -182,93 +185,61 @@ const SCHEMA_ACTIVE_ARRAY_CHIPS: Partial<Record<SpeciesFilterKey, ActiveArrayChi
   },
 }
 
-const ADAPTER_FILTER_BEHAVIORS: readonly AdapterFilterBehavior[] = [
-  {
-    key: 'sun_tolerances',
-    kind: 'array',
-    countable: true,
-    stripChoice: {
-      labelI18nKey: 'filters.sun',
-      fallbackLabel: 'Sun',
-      optionsKey: 'sun_tolerances',
-      valueI18nPrefix: 'plantDb.sunTolerance_',
-      color: '--color-sun',
-    },
-    activeArrayChip: {
-      keyPrefix: 'sun',
-      valueI18nPrefix: 'plantDb.sunTolerance_',
-      color: '--color-sun',
-    },
-  },
-  {
-    key: 'soil_tolerances',
-    kind: 'array',
-    countable: true,
-  },
-  {
-    key: 'life_cycle',
-    kind: 'array',
-    countable: true,
-    stripChoice: {
-      labelI18nKey: 'filters.lifecycle',
-      fallbackLabel: 'Life cycle',
-      optionsKey: 'life_cycles',
-      valueI18nPrefix: 'filters.lifeCycle_',
-      color: '--color-family',
-    },
-    activeArrayChip: {
-      keyPrefix: 'lc',
-      valueI18nPrefix: 'filters.lifeCycle_',
-      color: '--color-family',
-    },
-  },
-  {
-    key: 'growth_rate',
-    kind: 'array',
-    countable: true,
-    activeArrayChip: {
-      keyPrefix: 'gr',
-      valueI18nPrefix: 'filters.growthRate_',
-      color: '--color-family',
-    },
-  },
-  { key: 'edible', kind: 'boolean', countable: false },
-  {
-    key: 'edibility_min',
-    kind: 'numeric',
-    countable: true,
-    stripThreshold: {
-      labelI18nKey: 'filters.edibility',
-      fallbackLabel: 'Edibility',
-      min: 0,
-      max: 5,
-      color: '--color-edible',
-    },
-    activeNumericChip: {
-      labelI18nKey: 'filters.edibility',
-      color: '--color-edible',
-      suffix: '+',
-    },
-  },
-  {
-    key: 'nitrogen_fixer',
-    kind: 'boolean',
-    countable: true,
-    stripBoolean: {
-      labelI18nKey: 'filters.nitrogen',
-      fallbackLabel: 'Nitrogen',
-      color: '--color-nitrogen',
-    },
-    activeBooleanChip: {
-      labelI18nKey: 'filters.nitrogen',
-      color: '--color-nitrogen',
-    },
-  },
-  { key: 'family', kind: 'string', countable: false },
-]
+const ADAPTER_FILTER_BEHAVIORS: readonly AdapterFilterBehavior[] = FIXED_FILTER_BEHAVIORS
+  .filter((behavior) => !SCHEMA_STRIP_FILTER_KEYS.has(behavior.key))
+  .map((behavior) => ({
+    key: behavior.key as SpeciesFilterKey,
+    kind: behavior.kind,
+    countable: behavior.countable,
+    stripChoice: behavior.stripChoice
+      ? {
+          labelI18nKey: behavior.stripChoice.labelI18nKey,
+          fallbackLabel: behavior.stripChoice.fallbackLabel,
+          optionsKey: behavior.stripChoice.optionsKey as FilterOptionsKey,
+          valueI18nPrefix: behavior.stripChoice.valueI18nPrefix,
+          color: behavior.stripChoice.colorToken,
+        }
+      : undefined,
+    stripThreshold: behavior.stripThreshold
+      ? {
+          labelI18nKey: behavior.stripThreshold.labelI18nKey,
+          fallbackLabel: behavior.stripThreshold.fallbackLabel,
+          min: behavior.stripThreshold.min,
+          max: behavior.stripThreshold.max,
+          color: behavior.stripThreshold.colorToken,
+        }
+      : undefined,
+    stripBoolean: behavior.stripBoolean
+      ? {
+          labelI18nKey: behavior.stripBoolean.labelI18nKey,
+          fallbackLabel: behavior.stripBoolean.fallbackLabel,
+          color: behavior.stripBoolean.colorToken,
+        }
+      : undefined,
+    activeArrayChip: behavior.activeArrayChip
+      ? {
+          keyPrefix: behavior.activeArrayChip.keyPrefix,
+          valueI18nPrefix: behavior.activeArrayChip.valueI18nPrefix,
+          color: behavior.activeArrayChip.colorToken,
+        }
+      : undefined,
+    activeBooleanChip: behavior.activeBooleanChip
+      ? {
+          labelI18nKey: behavior.activeBooleanChip.labelI18nKey,
+          color: behavior.activeBooleanChip.colorToken,
+        }
+      : undefined,
+    activeNumericChip: behavior.activeNumericChip
+      ? {
+          labelI18nKey: behavior.activeNumericChip.labelI18nKey,
+          color: behavior.activeNumericChip.colorToken,
+          suffix: behavior.activeNumericChip.suffix,
+        }
+      : undefined,
+  }))
 
 function isSpeciesFilterKey(key: string): key is SpeciesFilterKey {
-  return key in SPECIES_FILTER_KEYS
+  return SPECIES_FILTER_KEYS.has(key)
 }
 
 function activityKindForSchemaField(field: PlantFilterFieldDef): FilterActivityKind {

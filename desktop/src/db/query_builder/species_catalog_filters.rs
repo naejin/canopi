@@ -1,94 +1,157 @@
 use common_types::species::SpeciesFilter;
 use rusqlite::types::Value;
 
+use crate::db::plant_filter_fields::{
+    FixedFilterBooleanMapping, FixedFilterPredicate, fixed_filter_behavior,
+};
+
 use super::columns::validated_column;
 use super::{PlantFilterFieldKind, filter_field_kind};
-
-const SUN_TOLERANCE_COLUMNS: &[(&str, &str)] = &[
-    ("full_sun", "s.tolerates_full_sun = 1"),
-    ("semi_shade", "s.tolerates_semi_shade = 1"),
-    ("full_shade", "s.tolerates_full_shade = 1"),
-];
-
-const SOIL_TOLERANCE_COLUMNS: &[(&str, &str)] = &[
-    ("light", "s.tolerates_light_soil = 1"),
-    ("medium", "s.tolerates_medium_soil = 1"),
-    ("heavy", "s.tolerates_heavy_soil = 1"),
-    ("well_drained", "s.well_drained = 1"),
-    ("heavy_clay", "s.heavy_clay = 1"),
-];
-
-const LIFE_CYCLE_COLUMNS: &[(&str, &str)] = &[
-    ("Annual", "s.is_annual = 1"),
-    ("Biennial", "s.is_biennial = 1"),
-    ("Perennial", "s.is_perennial = 1"),
-];
 
 pub(super) fn append_fixed_filters(
     where_clauses: &mut Vec<String>,
     params: &mut Vec<Value>,
     filters: &SpeciesFilter,
 ) {
-    append_mapped_boolean_list_filter(
+    append_generated_fixed_filter(
         where_clauses,
-        filters.sun_tolerances.as_deref(),
-        SUN_TOLERANCE_COLUMNS,
+        params,
+        "sun_tolerances",
+        FixedFilterValue::StringList(filters.sun_tolerances.as_deref()),
     );
-    append_mapped_boolean_list_filter(
+    append_generated_fixed_filter(
         where_clauses,
-        filters.soil_tolerances.as_deref(),
-        SOIL_TOLERANCE_COLUMNS,
+        params,
+        "soil_tolerances",
+        FixedFilterValue::StringList(filters.soil_tolerances.as_deref()),
     );
-
-    if let Some(ref growth_rates) = filters.growth_rate {
-        append_text_in_clause(where_clauses, params, "s.growth_rate", growth_rates);
-    }
-
-    append_mapped_boolean_list_filter(
+    append_generated_fixed_filter(
         where_clauses,
-        filters.life_cycle.as_deref(),
-        LIFE_CYCLE_COLUMNS,
+        params,
+        "growth_rate",
+        FixedFilterValue::StringList(filters.growth_rate.as_deref()),
     );
+    append_generated_fixed_filter(
+        where_clauses,
+        params,
+        "life_cycle",
+        FixedFilterValue::StringList(filters.life_cycle.as_deref()),
+    );
+    append_generated_fixed_filter(
+        where_clauses,
+        params,
+        "family",
+        FixedFilterValue::Text(filters.family.as_ref()),
+    );
+    append_generated_fixed_filter(
+        where_clauses,
+        params,
+        "edible",
+        FixedFilterValue::Boolean(filters.edible),
+    );
+    append_generated_fixed_filter(
+        where_clauses,
+        params,
+        "nitrogen_fixer",
+        FixedFilterValue::Boolean(filters.nitrogen_fixer),
+    );
+    append_generated_fixed_filter(
+        where_clauses,
+        params,
+        "climate_zones",
+        FixedFilterValue::StringList(filters.climate_zones.as_deref()),
+    );
+    append_generated_fixed_filter(
+        where_clauses,
+        params,
+        "habit",
+        FixedFilterValue::StringList(filters.habit.as_deref()),
+    );
+    append_generated_fixed_filter(
+        where_clauses,
+        params,
+        "woody",
+        FixedFilterValue::Boolean(filters.woody),
+    );
+    append_generated_fixed_filter(
+        where_clauses,
+        params,
+        "edibility_min",
+        FixedFilterValue::Integer(filters.edibility_min),
+    );
+}
 
-    if let Some(ref family) = filters.family {
-        where_clauses.push(format!("s.family = ?{}", params.len() + 1));
-        params.push(Value::Text(family.clone()));
-    }
+enum FixedFilterValue<'a> {
+    StringList(Option<&'a [String]>),
+    Boolean(Option<bool>),
+    Integer(Option<i32>),
+    Text(Option<&'a String>),
+}
 
-    if let Some(edible) = filters.edible
-        && edible
-    {
-        where_clauses.push("s.edibility_rating > 0".to_owned());
-    }
+fn append_generated_fixed_filter(
+    where_clauses: &mut Vec<String>,
+    params: &mut Vec<Value>,
+    key: &str,
+    value: FixedFilterValue<'_>,
+) {
+    let Some(behavior) = fixed_filter_behavior(key) else {
+        debug_assert!(false, "missing generated fixed filter behavior for '{key}'");
+        return;
+    };
 
-    if let Some(fixer) = filters.nitrogen_fixer
-        && fixer
-    {
-        where_clauses.push("s.nitrogen_fixer = 1".to_owned());
-    }
-
-    if let Some(ref zones) = filters.climate_zones {
-        append_climate_zone_filter(where_clauses, params, zones);
-    }
-
-    if let Some(ref habits) = filters.habit {
-        append_schema_text_in_clause(where_clauses, params, "habit", habits);
-    }
-
-    if let Some(woody) = filters.woody {
-        append_schema_boolean_true_clause(where_clauses, "woody", woody);
-    }
-
-    if let Some(min_rating) = filters.edibility_min {
-        where_clauses.push(format!("s.edibility_rating >= ?{}", params.len() + 1));
-        params.push(Value::Integer(min_rating as i64));
+    match (behavior.predicate, value) {
+        (
+            FixedFilterPredicate::MappedBooleanList(mapping),
+            FixedFilterValue::StringList(values),
+        ) => {
+            append_mapped_boolean_list_filter(where_clauses, values, mapping);
+        }
+        (
+            FixedFilterPredicate::TextInColumn(column),
+            FixedFilterValue::StringList(Some(values)),
+        ) => {
+            append_text_in_clause(where_clauses, params, column, values);
+        }
+        (FixedFilterPredicate::TextEqualsColumn(column), FixedFilterValue::Text(Some(value))) => {
+            where_clauses.push(format!("{column} = ?{}", params.len() + 1));
+            params.push(Value::Text(value.clone()));
+        }
+        (
+            FixedFilterPredicate::BooleanTrueClause(clause),
+            FixedFilterValue::Boolean(Some(true)),
+        ) => {
+            where_clauses.push(clause.to_owned());
+        }
+        (
+            FixedFilterPredicate::NumericGteColumn(column),
+            FixedFilterValue::Integer(Some(value)),
+        ) => {
+            where_clauses.push(format!("{column} >= ?{}", params.len() + 1));
+            params.push(Value::Integer(value as i64));
+        }
+        (FixedFilterPredicate::ClimateZoneJoin, FixedFilterValue::StringList(Some(values))) => {
+            append_climate_zone_filter(where_clauses, params, values);
+        }
+        (
+            FixedFilterPredicate::SchemaTextIn { field_key },
+            FixedFilterValue::StringList(Some(values)),
+        ) => {
+            append_schema_text_in_clause(where_clauses, params, field_key, values);
+        }
+        (
+            FixedFilterPredicate::SchemaBooleanTrue { field_key },
+            FixedFilterValue::Boolean(Some(value)),
+        ) => {
+            append_schema_boolean_true_clause(where_clauses, field_key, value);
+        }
+        _ => {}
     }
 }
 
 fn append_mapped_boolean_list_filter(
     where_clauses: &mut Vec<String>,
     values: Option<&[String]>,
-    mapping: &[(&str, &str)],
+    mapping: &[FixedFilterBooleanMapping],
 ) {
     let Some(values) = values else {
         return;
@@ -102,7 +165,7 @@ fn append_mapped_boolean_list_filter(
         .filter_map(|value| {
             mapping
                 .iter()
-                .find_map(|(known, clause)| (*known == value).then_some(*clause))
+                .find_map(|entry| (entry.value == value).then_some(entry.clause))
         })
         .collect();
 
@@ -196,12 +259,12 @@ mod tests {
     fn life_cycle_filter_maps_known_values_to_boolean_columns() {
         let mut clauses = Vec::new();
         let cycles = vec!["Annual".to_owned(), "Perennial".to_owned()];
+        let mapping = match fixed_filter_behavior("life_cycle").unwrap().predicate {
+            FixedFilterPredicate::MappedBooleanList(mapping) => mapping,
+            _ => panic!("life_cycle should use mapped boolean predicate"),
+        };
 
-        append_mapped_boolean_list_filter(
-            &mut clauses,
-            Some(cycles.as_slice()),
-            LIFE_CYCLE_COLUMNS,
-        );
+        append_mapped_boolean_list_filter(&mut clauses, Some(cycles.as_slice()), mapping);
 
         assert_eq!(clauses, ["(s.is_annual = 1 OR s.is_perennial = 1)"]);
     }
@@ -210,12 +273,12 @@ mod tests {
     fn life_cycle_filter_ignores_unknown_values() {
         let mut clauses = Vec::new();
         let cycles = vec!["Unknown".to_owned()];
+        let mapping = match fixed_filter_behavior("life_cycle").unwrap().predicate {
+            FixedFilterPredicate::MappedBooleanList(mapping) => mapping,
+            _ => panic!("life_cycle should use mapped boolean predicate"),
+        };
 
-        append_mapped_boolean_list_filter(
-            &mut clauses,
-            Some(cycles.as_slice()),
-            LIFE_CYCLE_COLUMNS,
-        );
+        append_mapped_boolean_list_filter(&mut clauses, Some(cycles.as_slice()), mapping);
 
         assert!(clauses.is_empty());
     }

@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "categories": [
     { "key": "growth", "i18n_key": "filters.category.growth", "color_token": "--color-family" },
     { "key": "climate", "i18n_key": "filters.category.climate", "color_token": "--color-sun" },
@@ -40,6 +40,149 @@
     "succession_stage": ["Pioneer I", "Pioneer II", "Secondary I", "Secondary II", "Climax"],
     "toxicity": ["None", "Slight", "Moderate", "Severe"]
   },
+  "fixed_filters": [
+    {
+      "key": "sun_tolerances",
+      "kind": "array",
+      "countable": true,
+      "strip_choice": {
+        "label_i18n_key": "filters.sun",
+        "fallback_label": "Sun",
+        "options_key": "sun_tolerances",
+        "value_i18n_prefix": "plantDb.sunTolerance_",
+        "color_token": "--color-sun"
+      },
+      "active_array_chip": {
+        "key_prefix": "sun",
+        "value_i18n_prefix": "plantDb.sunTolerance_",
+        "color_token": "--color-sun"
+      },
+      "predicate": {
+        "kind": "mapped_boolean_list",
+        "clauses": [
+          { "value": "full_sun", "clause": "s.tolerates_full_sun = 1" },
+          { "value": "semi_shade", "clause": "s.tolerates_semi_shade = 1" },
+          { "value": "full_shade", "clause": "s.tolerates_full_shade = 1" }
+        ]
+      }
+    },
+    {
+      "key": "soil_tolerances",
+      "kind": "array",
+      "countable": true,
+      "predicate": {
+        "kind": "mapped_boolean_list",
+        "clauses": [
+          { "value": "light", "clause": "s.tolerates_light_soil = 1" },
+          { "value": "medium", "clause": "s.tolerates_medium_soil = 1" },
+          { "value": "heavy", "clause": "s.tolerates_heavy_soil = 1" },
+          { "value": "well_drained", "clause": "s.well_drained = 1" },
+          { "value": "heavy_clay", "clause": "s.heavy_clay = 1" }
+        ]
+      }
+    },
+    {
+      "key": "life_cycle",
+      "kind": "array",
+      "countable": true,
+      "strip_choice": {
+        "label_i18n_key": "filters.lifecycle",
+        "fallback_label": "Life cycle",
+        "options_key": "life_cycles",
+        "value_i18n_prefix": "filters.lifeCycle_",
+        "color_token": "--color-family"
+      },
+      "active_array_chip": {
+        "key_prefix": "lc",
+        "value_i18n_prefix": "filters.lifeCycle_",
+        "color_token": "--color-family"
+      },
+      "predicate": {
+        "kind": "mapped_boolean_list",
+        "clauses": [
+          { "value": "Annual", "clause": "s.is_annual = 1" },
+          { "value": "Biennial", "clause": "s.is_biennial = 1" },
+          { "value": "Perennial", "clause": "s.is_perennial = 1" }
+        ]
+      }
+    },
+    {
+      "key": "growth_rate",
+      "kind": "array",
+      "countable": true,
+      "active_array_chip": {
+        "key_prefix": "gr",
+        "value_i18n_prefix": "filters.growthRate_",
+        "color_token": "--color-family"
+      },
+      "predicate": { "kind": "text_in_column", "column": "s.growth_rate" }
+    },
+    {
+      "key": "edible",
+      "kind": "boolean",
+      "countable": false,
+      "predicate": { "kind": "boolean_true_clause", "clause": "s.edibility_rating > 0" }
+    },
+    {
+      "key": "edibility_min",
+      "kind": "numeric",
+      "countable": true,
+      "strip_threshold": {
+        "label_i18n_key": "filters.edibility",
+        "fallback_label": "Edibility",
+        "min": 0,
+        "max": 5,
+        "color_token": "--color-edible"
+      },
+      "active_numeric_chip": {
+        "label_i18n_key": "filters.edibility",
+        "fallback_label": "Edibility",
+        "color_token": "--color-edible",
+        "suffix": "+"
+      },
+      "predicate": { "kind": "numeric_gte_column", "column": "s.edibility_rating" }
+    },
+    {
+      "key": "nitrogen_fixer",
+      "kind": "boolean",
+      "countable": true,
+      "strip_boolean": {
+        "label_i18n_key": "filters.nitrogen",
+        "fallback_label": "Nitrogen",
+        "color_token": "--color-nitrogen"
+      },
+      "active_boolean_chip": {
+        "label_i18n_key": "filters.nitrogen",
+        "fallback_label": "Nitrogen",
+        "color_token": "--color-nitrogen"
+      },
+      "predicate": { "kind": "boolean_true_clause", "clause": "s.nitrogen_fixer = 1" }
+    },
+    {
+      "key": "family",
+      "kind": "string",
+      "countable": false,
+      "predicate": { "kind": "text_equals_column", "column": "s.family" }
+    },
+    {
+      "key": "climate_zones",
+      "kind": "array",
+      "countable": true,
+      "predicate": { "kind": "climate_zone_join" }
+    },
+    {
+      "key": "habit",
+      "kind": "array",
+      "countable": true,
+      "predicate": { "kind": "schema_text_in", "field_key": "habit" }
+    },
+    {
+      "key": "woody",
+      "kind": "boolean",
+      "countable": true,
+      "predicate": { "kind": "schema_boolean_true", "field_key": "woody" }
+    }
+  ],
   "fields": [
     { "key": "climate_zones", "kind": "categorical", "category": "climate", "i18n_key": "filters.climateZone", "ui_placement": "strip" },
     { "key": "stratum", "kind": "categorical", "category": "growth", "i18n_key": "filters.field.stratum", "ui_placement": "dynamic", "sql_column": "s.stratum", "ordering": "stratum" },

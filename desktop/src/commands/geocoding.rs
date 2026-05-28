@@ -1,4 +1,4 @@
-pub use crate::services::geocoding::GeoResult;
+pub use common_types::location::GeoResult;
 
 #[tauri::command]
 pub async fn geocode_address(query: String) -> Result<Vec<GeoResult>, String> {

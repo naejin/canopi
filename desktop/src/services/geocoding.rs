@@ -1,11 +1,5 @@
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GeoResult {
-    pub display_name: String,
-    pub lat: f64,
-    pub lon: f64,
-}
+use common_types::location::GeoResult;
+use serde::Deserialize;
 
 #[derive(Deserialize)]
 struct NominatimResult {

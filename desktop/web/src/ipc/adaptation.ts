@@ -1,26 +1,9 @@
 import { invoke } from '@tauri-apps/api/core';
 import { plantDbStatus } from '../app/health/state';
 import { plantDbUnavailableMessage } from './plant-db-errors';
+import type { CompatibilityResult, ReplacementSuggestion } from '../generated/contracts';
 
-export interface CompatibilityResult {
-  species_id: string;
-  canonical_name: string;
-  common_name: string | null;
-  hardiness_min: number | null;
-  hardiness_max: number | null;
-  is_compatible: boolean;
-  /** How many zones the plant is outside the target (0 = compatible). */
-  zone_diff: number;
-}
-
-export interface ReplacementSuggestion {
-  canonical_name: string;
-  common_name: string | null;
-  hardiness_min: number | null;
-  hardiness_max: number | null;
-  stratum: string | null;
-  height_max_m: number | null;
-}
+export type { CompatibilityResult, ReplacementSuggestion };
 
 /** Returns true when plant DB is not available — all queries should short-circuit. */
 function isDegraded(): boolean {
