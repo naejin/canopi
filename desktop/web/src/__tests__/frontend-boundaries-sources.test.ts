@@ -9,6 +9,29 @@ function sourceExists(path: string): boolean {
   return existsSync(new URL(path, import.meta.url))
 }
 
+function importSpecifiers(source: string): string[] {
+  const patterns = [
+    /\bfrom\s+['"]([^'"]+)['"]/g,
+    /\bimport\s*\(\s*['"]([^'"]+)['"]/g,
+    /\bimport\s+['"]([^'"]+)['"]/g,
+  ]
+
+  return patterns.flatMap((pattern) =>
+    Array.from(source.matchAll(pattern), (match) => match[1] ?? ''),
+  )
+}
+
+function expectNoImportsMatching(
+  sourcePath: string,
+  forbiddenPatterns: readonly RegExp[],
+): void {
+  for (const specifier of importSpecifiers(readSource(sourcePath))) {
+    for (const pattern of forbiddenPatterns) {
+      expect(specifier, `${sourcePath} imports ${specifier}`).not.toMatch(pattern)
+    }
+  }
+}
+
 describe('frontend boundary sources', () => {
   it('keeps the remaining workflow components free of direct ipc imports', () => {
     const adaptationSource = readSource('../components/canvas/TemplateAdaptation.tsx')
@@ -18,6 +41,29 @@ describe('frontend boundary sources', () => {
     expect(adaptationSource).not.toContain('ipc/adaptation')
     expect(welcomeSource).not.toContain('ipc/design')
     expect(budgetSource).not.toContain('ipc/design')
+  })
+
+  it('keeps Site Adaptation sibling to the Species Catalog Workbench', () => {
+    const siteAdaptationSources = [
+      '../app/adaptation/index.ts',
+      '../app/adaptation/controller.ts',
+      '../components/canvas/TemplateAdaptation.tsx',
+    ]
+    const forbiddenImports = [
+      /(^|\/)app\/plant-browser(\/|$)/,
+      /(^|\/)plant-browser(\/|$)/,
+      /(^|\/)components\/plant-db(\/|$)/,
+      /(^|\/)plant-db(\/|$)/,
+      /(^|\/)components\/plant-detail(\/|$)/,
+      /(^|\/)plant-detail(\/|$)/,
+    ]
+
+    for (const sourcePath of siteAdaptationSources) {
+      const source = readSource(sourcePath)
+
+      expect(source).not.toContain('speciesCatalogWorkbench')
+      expectNoImportsMatching(sourcePath, forbiddenImports)
+    }
   })
 
   it('keeps scene runtime panel-target app signals behind an injected adapter', () => {

@@ -47,6 +47,7 @@ Use this guide when changing Preact components, signals, i18n, CSS, panels, bott
 - Strip rows should come from `stripControls()`; active chips should come from `activeArrayChipFields()`, `activeBooleanChipFields()`, and `activeNumericChipFields()`.
 - Keep the shared `SpeciesFilter` request shape stable unless the bead explicitly changes frontend/backend contracts.
 - Site Adaptation is a sibling Design workflow, not a mode inside the Species Catalog Workbench. It may share Species Catalog read adapters, but it must not depend on plant-browser UI state.
+- `components/plant-db/` and `components/plant-detail/` are Workbench-owned UI modules. Site Adaptation should not import them; if shared prop-only Species presentation becomes useful, extract it to a neutral module outside Workbench-owned directories.
 - `app/plant-browser/search-session.ts` owns Species Catalog short-query policy: empty text browses with an exact count, one normalized text character clears locally without backend search, and active text searches of two or more normalized characters omit exact first-page counts so the count chip stays hidden.
 - Species Catalog active text searches default to visible `Best match` backed by `Sort::Relevance`; explicit active-text sort selections override it, while the browse sort is preserved for empty text.
 
