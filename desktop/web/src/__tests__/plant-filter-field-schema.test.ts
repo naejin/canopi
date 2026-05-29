@@ -6,6 +6,7 @@ import {
   PLANT_FILTER_SQL_FIELD_KEYS,
   dynamicFilterFieldsForCategory,
   isStripField,
+  type PlantFilterFieldDef,
 } from '../generated/plant-filter-fields'
 import { orderFilterValues } from '../components/plant-db/value-ordering'
 import en from '../i18n/en.json'
@@ -62,6 +63,33 @@ describe('plant filter field schema', () => {
       expect(Object.keys(field)).not.toContain('sqlColumn')
       expect(Object.keys(field)).not.toContain('column')
     }
+  })
+
+  it('keeps strip Species Catalog Filter UI behavior in generated field metadata', () => {
+    const fields: readonly PlantFilterFieldDef[] = PLANT_FILTER_FIELDS
+    const byKey = new Map(fields.map((field) => [field.key, field]))
+
+    expect(byKey.get('climate_zones')).toMatchObject({
+      stripChoice: {
+        optionsKey: 'climate_zones',
+        valueI18nPrefix: 'filters.climateZone_',
+      },
+      activeArrayChip: {
+        keyPrefix: 'cz',
+        valueI18nPrefix: 'filters.climateZone_',
+      },
+    })
+    expect(byKey.get('habit')).toMatchObject({
+      stripChoice: {
+        optionsKey: 'habits',
+        valueI18nPrefix: 'filters.habit_',
+      },
+      activeArrayChip: {
+        keyPrefix: 'hab',
+        valueI18nPrefix: 'filters.habit_',
+      },
+    })
+    expect(byKey.get('woody')?.stripChoice).toBeUndefined()
   })
 
   it('groups only dynamic fields for More Filters and keeps strip fields out', () => {

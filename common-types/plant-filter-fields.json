@@ -184,10 +184,39 @@
     }
   ],
   "fields": [
-    { "key": "climate_zones", "kind": "categorical", "category": "climate", "i18n_key": "filters.climateZone", "ui_placement": "strip" },
+    {
+      "key": "climate_zones",
+      "kind": "categorical",
+      "category": "climate",
+      "i18n_key": "filters.climateZone",
+      "ui_placement": "strip",
+      "strip_choice": {
+        "options_key": "climate_zones",
+        "value_i18n_prefix": "filters.climateZone_"
+      },
+      "active_array_chip": {
+        "key_prefix": "cz",
+        "value_i18n_prefix": "filters.climateZone_"
+      }
+    },
     { "key": "stratum", "kind": "categorical", "category": "growth", "i18n_key": "filters.field.stratum", "ui_placement": "dynamic", "sql_column": "s.stratum", "ordering": "stratum" },
     { "key": "woody", "kind": "boolean", "category": "growth", "i18n_key": "filters.field.woody", "ui_placement": "strip", "sql_column": "s.woody" },
-    { "key": "habit", "kind": "categorical", "category": "growth", "i18n_key": "filters.field.habit", "ui_placement": "strip", "sql_column": "s.habit" },
+    {
+      "key": "habit",
+      "kind": "categorical",
+      "category": "growth",
+      "i18n_key": "filters.field.habit",
+      "ui_placement": "strip",
+      "sql_column": "s.habit",
+      "strip_choice": {
+        "options_key": "habits",
+        "value_i18n_prefix": "filters.habit_"
+      },
+      "active_array_chip": {
+        "key_prefix": "hab",
+        "value_i18n_prefix": "filters.habit_"
+      }
+    },
     { "key": "growth_form_type", "kind": "categorical", "category": "growth", "i18n_key": "filters.field.growthFormType", "ui_placement": "dynamic", "sql_column": "s.growth_form_type", "ordering": "growth_form_type" },
     { "key": "growth_form_shape", "kind": "categorical", "category": "growth", "i18n_key": "plantDetail.growthFormShape", "ui_placement": "hidden", "sql_column": "s.growth_form_shape" },
     { "key": "growth_habit", "kind": "categorical", "category": "growth", "i18n_key": "filters.field.growthHabit", "ui_placement": "dynamic", "sql_column": "s.growth_habit" },

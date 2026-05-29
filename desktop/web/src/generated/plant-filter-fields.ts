@@ -26,6 +26,16 @@ export interface PlantFilterCategory {
   colorToken: string
 }
 
+export interface PlantFilterFieldStripChoiceBehavior {
+  optionsKey: string
+  valueI18nPrefix: string
+}
+
+export interface PlantFilterFieldActiveArrayChipBehavior {
+  keyPrefix: string
+  valueI18nPrefix: string
+}
+
 export interface PlantFilterFieldDef {
   key: string
   kind: PlantFilterFieldKind
@@ -35,6 +45,8 @@ export interface PlantFilterFieldDef {
   colorToken: string
   step?: number
   ordering?: string | null
+  stripChoice?: PlantFilterFieldStripChoiceBehavior
+  activeArrayChip?: PlantFilterFieldActiveArrayChipBehavior
 }
 
 export const FILTER_CATEGORIES = [
@@ -49,10 +61,10 @@ export const FILTER_CATEGORIES = [
 ] as const satisfies readonly PlantFilterCategory[]
 
 export const PLANT_FILTER_FIELDS = [
-  { key: "climate_zones", kind: "categorical", category: "climate", i18nKey: "filters.climateZone", uiPlacement: "strip", colorToken: "--color-sun" },
+  { key: "climate_zones", kind: "categorical", category: "climate", i18nKey: "filters.climateZone", uiPlacement: "strip", colorToken: "--color-sun", stripChoice: { optionsKey: "climate_zones", valueI18nPrefix: "filters.climateZone_" }, activeArrayChip: { keyPrefix: "cz", valueI18nPrefix: "filters.climateZone_" } },
   { key: "stratum", kind: "categorical", category: "growth", i18nKey: "filters.field.stratum", uiPlacement: "dynamic", colorToken: "--color-family", ordering: "stratum" },
   { key: "woody", kind: "boolean", category: "growth", i18nKey: "filters.field.woody", uiPlacement: "strip", colorToken: "--color-family" },
-  { key: "habit", kind: "categorical", category: "growth", i18nKey: "filters.field.habit", uiPlacement: "strip", colorToken: "--color-family" },
+  { key: "habit", kind: "categorical", category: "growth", i18nKey: "filters.field.habit", uiPlacement: "strip", colorToken: "--color-family", stripChoice: { optionsKey: "habits", valueI18nPrefix: "filters.habit_" }, activeArrayChip: { keyPrefix: "hab", valueI18nPrefix: "filters.habit_" } },
   { key: "growth_form_type", kind: "categorical", category: "growth", i18nKey: "filters.field.growthFormType", uiPlacement: "dynamic", colorToken: "--color-family", ordering: "growth_form_type" },
   { key: "growth_form_shape", kind: "categorical", category: "growth", i18nKey: "plantDetail.growthFormShape", uiPlacement: "hidden", colorToken: "--color-family" },
   { key: "growth_habit", kind: "categorical", category: "growth", i18nKey: "filters.field.growthHabit", uiPlacement: "dynamic", colorToken: "--color-family" },

@@ -132,6 +132,20 @@ struct PlantFilterFieldSchema {
     sql_column: Option<String>,
     step: Option<f64>,
     ordering: Option<String>,
+    strip_choice: Option<FieldStripChoiceSchema>,
+    active_array_chip: Option<FieldActiveArrayChipSchema>,
+}
+
+#[derive(Debug, Deserialize)]
+struct FieldStripChoiceSchema {
+    options_key: String,
+    value_i18n_prefix: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct FieldActiveArrayChipSchema {
+    key_prefix: String,
+    value_i18n_prefix: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -274,7 +288,7 @@ impl FixedFilterActivityKind {
     }
 }
 
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum PlantFilterUiPlacement {
     Dynamic,
@@ -370,12 +384,20 @@ fn validate_plant_filter_schema(
                 return Err(format!("duplicate plant filter SQL column '{}'", column).into());
             }
         }
+        validate_field_ui_behavior(field)?;
     }
 
     let mut fixed_filter_keys = HashSet::new();
     for filter in &schema.fixed_filters {
         if !fixed_filter_keys.insert(filter.key.as_str()) {
             return Err(format!("duplicate fixed species filter '{}'", filter.key).into());
+        }
+        if !is_sql_identifier(&filter.key) {
+            return Err(format!(
+                "fixed species filter '{}' is not a valid generated request field",
+                filter.key
+            )
+            .into());
         }
         validate_fixed_filter_color(
             filter,
@@ -520,6 +542,46 @@ fn validate_plant_filter_schema(
                     "climate_zone_join",
                 )?;
             }
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_field_ui_behavior(
+    field: &PlantFilterFieldSchema,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if field.strip_choice.is_some() {
+        if field.kind != PlantFilterFieldKind::Categorical {
+            return Err(format!(
+                "plant filter field '{}' declares strip_choice but is not categorical",
+                field.key
+            )
+            .into());
+        }
+        if field.ui_placement != PlantFilterUiPlacement::Strip {
+            return Err(format!(
+                "plant filter field '{}' declares strip_choice outside strip placement",
+                field.key
+            )
+            .into());
+        }
+    }
+
+    if field.active_array_chip.is_some() {
+        if field.kind != PlantFilterFieldKind::Categorical {
+            return Err(format!(
+                "plant filter field '{}' declares active_array_chip but is not categorical",
+                field.key
+            )
+            .into());
+        }
+        if field.ui_placement != PlantFilterUiPlacement::Strip {
+            return Err(format!(
+                "plant filter field '{}' declares active_array_chip outside strip placement",
+                field.key
+            )
+            .into());
         }
     }
 
@@ -682,7 +744,13 @@ fn write_plant_filter_ts(
         "export interface PlantFilterCategory {\n  key: FilterCategory\n  i18nKey: string\n  colorToken: string\n}\n\n",
     );
     file.push_str(
-        "export interface PlantFilterFieldDef {\n  key: string\n  kind: PlantFilterFieldKind\n  category: FilterCategory\n  i18nKey: string\n  uiPlacement: PlantFilterUiPlacement\n  colorToken: string\n  step?: number\n  ordering?: string | null\n}\n\n",
+        "export interface PlantFilterFieldStripChoiceBehavior {\n  optionsKey: string\n  valueI18nPrefix: string\n}\n\n",
+    );
+    file.push_str(
+        "export interface PlantFilterFieldActiveArrayChipBehavior {\n  keyPrefix: string\n  valueI18nPrefix: string\n}\n\n",
+    );
+    file.push_str(
+        "export interface PlantFilterFieldDef {\n  key: string\n  kind: PlantFilterFieldKind\n  category: FilterCategory\n  i18nKey: string\n  uiPlacement: PlantFilterUiPlacement\n  colorToken: string\n  step?: number\n  ordering?: string | null\n  stripChoice?: PlantFilterFieldStripChoiceBehavior\n  activeArrayChip?: PlantFilterFieldActiveArrayChipBehavior\n}\n\n",
     );
 
     file.push_str("export const FILTER_CATEGORIES = [\n");
@@ -718,6 +786,22 @@ fn write_plant_filter_ts(
         }
         if let Some(ordering) = &field.ordering {
             write!(file, ", ordering: {}", ts_string(ordering))?;
+        }
+        if let Some(choice) = &field.strip_choice {
+            write!(
+                file,
+                ", stripChoice: {{ optionsKey: {}, valueI18nPrefix: {} }}",
+                ts_string(&choice.options_key),
+                ts_string(&choice.value_i18n_prefix),
+            )?;
+        }
+        if let Some(chip) = &field.active_array_chip {
+            write!(
+                file,
+                ", activeArrayChip: {{ keyPrefix: {}, valueI18nPrefix: {} }}",
+                ts_string(&chip.key_prefix),
+                ts_string(&chip.value_i18n_prefix),
+            )?;
         }
         file.push_str(" },\n");
     }
@@ -919,6 +1003,13 @@ fn write_plant_filter_rust(
     file.push_str("    pub key: &'static str,\n");
     file.push_str("    pub predicate: FixedFilterPredicate,\n");
     file.push_str("}\n\n");
+    file.push_str("#[derive(Debug, Clone, Copy)]\n");
+    file.push_str("pub(crate) enum FixedFilterValue<'a> {\n");
+    file.push_str("    StringList(Option<&'a [String]>),\n");
+    file.push_str("    Boolean(Option<bool>),\n");
+    file.push_str("    Integer(Option<i32>),\n");
+    file.push_str("    Text(Option<&'a String>),\n");
+    file.push_str("}\n\n");
     file.push_str("pub(crate) const PLANT_FILTER_FIELDS: &[PlantFilterField] = &[\n");
     for field in &sql_fields {
         writeln!(
@@ -936,6 +1027,7 @@ fn write_plant_filter_rust(
     }
     file.push_str("];\n\n");
     write_fixed_filter_rust_constants(&mut file, schema)?;
+    write_fixed_filter_value_adapter(&mut file, schema)?;
     file.push_str(
         "pub(crate) fn filter_field(key: &str) -> Option<&'static PlantFilterField> {\n    match key {\n",
     );
@@ -977,10 +1069,28 @@ fn write_plant_filter_rust(
     file.push_str(
         "\n    #[test]\n    fn exposes_fixed_species_filter_behavior_from_schema() {\n        let behavior = fixed_filter_behavior(\"life_cycle\").unwrap();\n        assert_eq!(behavior.key, \"life_cycle\");\n        match behavior.predicate {\n            FixedFilterPredicate::MappedBooleanList(clauses) => {\n                assert!(clauses.iter().any(|clause| clause.value == \"Perennial\"));\n            }\n            _ => panic!(\"expected mapped boolean predicate\"),\n        }\n        assert!(fixed_filter_behavior(\"not_a_field\").is_none());\n    }\n",
     );
+    file.push_str(
+        "\n    #[test]\n    fn generated_fixed_filters_read_species_filter_values() {\n        let filters = common_types::species::SpeciesFilter {\n            life_cycle: Some(vec![\"Perennial\".to_owned()]),\n            nitrogen_fixer: Some(true),\n            edibility_min: Some(3),\n            family: Some(\"Rosaceae\".to_owned()),\n            ..common_types::species::SpeciesFilter::default()\n        };\n\n        match fixed_filter_value(&filters, \"life_cycle\").unwrap() {\n            FixedFilterValue::StringList(Some(values)) => {\n                assert_eq!(values, [\"Perennial\".to_owned()].as_slice())\n            }\n            other => panic!(\"expected life_cycle list, got {other:?}\"),\n        }\n        assert!(matches!(\n            fixed_filter_value(&filters, \"nitrogen_fixer\"),\n            Some(FixedFilterValue::Boolean(Some(true)))\n        ));\n        assert!(matches!(\n            fixed_filter_value(&filters, \"edibility_min\"),\n            Some(FixedFilterValue::Integer(Some(3)))\n        ));\n        match fixed_filter_value(&filters, \"family\").unwrap() {\n            FixedFilterValue::Text(Some(value)) => assert_eq!(value, \"Rosaceae\"),\n            other => panic!(\"expected family text, got {other:?}\"),\n        }\n    }\n",
+    );
     file.push_str("}\n");
 
     std::fs::write(path, file)?;
+    format_generated_rust(path)?;
     Ok(())
+}
+
+fn format_generated_rust(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    let output = std::process::Command::new("rustfmt")
+        .arg("--edition")
+        .arg("2024")
+        .arg(path)
+        .output()?;
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    Err(format!("rustfmt failed for '{}': {stderr}", path.display()).into())
 }
 
 fn write_fixed_filter_rust_constants(
@@ -1013,6 +1123,55 @@ fn write_fixed_filter_rust_constants(
         file.push_str(",\n    },\n");
     }
     file.push_str("];\n\n");
+    Ok(())
+}
+
+fn write_fixed_filter_value_adapter(
+    file: &mut String,
+    schema: &PlantFilterSchema,
+) -> Result<(), Box<dyn std::error::Error>> {
+    file.push_str(
+        "pub(crate) fn fixed_filter_value<'a>(\n    filters: &'a common_types::species::SpeciesFilter,\n    key: &str,\n) -> Option<FixedFilterValue<'a>> {\n    match key {\n",
+    );
+    for filter in &schema.fixed_filters {
+        match filter.kind {
+            FixedFilterActivityKind::Array => {
+                let key = rust_string(&filter.key);
+                writeln!(file, "        {key} => {{")?;
+                writeln!(
+                    file,
+                    "            Some(FixedFilterValue::StringList(filters.{}.as_deref()))",
+                    filter.key,
+                )?;
+                writeln!(file, "        }}")?;
+            }
+            FixedFilterActivityKind::Boolean => {
+                writeln!(
+                    file,
+                    "        {} => Some(FixedFilterValue::Boolean(filters.{})),",
+                    rust_string(&filter.key),
+                    filter.key,
+                )?;
+            }
+            FixedFilterActivityKind::Numeric => {
+                writeln!(
+                    file,
+                    "        {} => Some(FixedFilterValue::Integer(filters.{})),",
+                    rust_string(&filter.key),
+                    filter.key,
+                )?;
+            }
+            FixedFilterActivityKind::String => {
+                writeln!(
+                    file,
+                    "        {} => Some(FixedFilterValue::Text(filters.{}.as_ref())),",
+                    rust_string(&filter.key),
+                    filter.key,
+                )?;
+            }
+        }
+    }
+    file.push_str("        _ => None,\n    }\n}\n\n");
     Ok(())
 }
 

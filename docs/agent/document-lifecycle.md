@@ -5,10 +5,12 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 ## Current Boundaries
 
 - `desktop/web/src/app/document-session/actions.ts` exposes user-facing document actions.
+- `desktop/web/src/app/document-session/lifecycle.ts` owns canvas runtime attachment, initial document mount, queued load installation, autosave timing, settings flush, teardown snapshot, persistence disposal, and canvas-session publication.
 - `desktop/web/src/app/document-session/transition.ts` owns guarded Design Session transitions, including dirty checks, attached/detached replacement selection, queued loads, `zoomToFit()` for attached sessions, and workflow installation.
 - `desktop/web/src/app/document-session/persistence.ts` owns persisted Design content composition, attached/detached save snapshots, teardown snapshots, and persistence workflow disposal.
 - `desktop/web/src/app/document-session/workflows.ts` owns cross-domain workflow effects such as consortium sync.
 - `desktop/web/src/app/document/controller.ts` owns non-canvas document mutations through `mutateCurrentDesign()` and `updateDesignArray()`.
+- `desktop/web/src/app/document-session/use-canvas-document-session.ts` is a DOM-ref adapter for `CanvasPanel`; keep lifecycle ordering out of the hook.
 - `desktop/web/src/state/design.ts` is low-level document state. Treat it as internal state, not a feature action API.
 
 ## Document Mutation Rules
@@ -66,6 +68,7 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 - Non-canvas dirty state is tracked by `nonCanvasRevision` vs `nonCanvasSavedRevision`.
 - Do not write `designDirty` directly.
 - Autosave checkpoints the same document as manual save.
+- Autosave scheduling and canvas snapshot composition are owned by `app/document-session/lifecycle.ts`; persistence composition remains in `app/document-session/persistence.ts`.
 - Autosave failures surface via `autosaveFailed`.
 
 ## Settings Persistence

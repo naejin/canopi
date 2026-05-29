@@ -32,9 +32,10 @@ When canopi-data removes or adds columns, update atomically:
 - Search plans own count/list query construction and cursor semantics.
 - Count and list predicates should share the same planner path.
 - `common-types/plant-filter-fields.json` owns both dynamic filter fields and the fixed `SpeciesFilter` catalog.
+- Strip-field UI behavior can be schema-defined with `strip_choice` and `active_array_chip` on categorical strip fields; regenerate bindings instead of duplicating strip or chip metadata in frontend adapters.
 - Fixed `SpeciesFilter` predicates with bespoke or schema-backed behavior belong in the JSON `fixed_filters` catalog; regenerate bindings instead of hand-editing generated Rust or TypeScript metadata.
 - `query_builder/species_catalog_filters.rs` is the Species Catalog Filter adapter: it consumes generated fixed-filter predicates and owns SQL assembly with prepared parameters.
-- Fixed Species Catalog Filter SQL dispatch iterates generated fixed-filter behaviors. Keep the flat `SpeciesFilter` value adapter in `query_builder/species_catalog_filters.rs` covered by its generated-behavior test when adding fixed fields.
+- Fixed Species Catalog Filter SQL dispatch iterates generated fixed-filter behaviors. The flat `SpeciesFilter` request-value adapter is generated into `desktop/src/db/plant_filter_fields.rs`; keep its generated-behavior tests current when adding fixed fields.
 - `query_builder/filters.rs` should route fixed request fields to the Species Catalog Filter adapter and keep dynamic `extra` filters isolated behind allowlisted column validation.
 - `SpeciesFilter.life_cycle` remains a fixed request field, but its predicate routes through generated fixed-filter behavior and maps to boolean DB columns such as `is_annual`, `is_biennial`, and `is_perennial`.
 - Soil filtering uses boolean tolerance columns, not a `species_soil_types` table.
@@ -45,10 +46,11 @@ When canopi-data removes or adds columns, update atomically:
 
 1. Add dynamic fields to `common-types/plant-filter-fields.json` `fields`, or add top-level `SpeciesFilter` fields to `fixed_filters` with their predicate and UI behavior.
 2. For dynamic DB columns, declare the allowlisted `sql_column`; for fixed filters, choose the generated predicate kind instead of adding hard-coded SQL constants.
-3. Regenerate generated Rust and TypeScript metadata with `cd desktop/web && npm run gen:types`.
-4. Add `filters.field.<key>` labels to all 11 locale files for new dynamic fields, plus any fixed-filter UI labels referenced by the catalog.
-5. If the field appears in detail UI, update `PlantDetailCard`/detail components and `plantDetail.*` i18n keys.
-6. Add focused backend and frontend tests for filtering behavior.
+3. For categorical strip fields, declare `strip_choice` and `active_array_chip` in `fields` when the strip and active-chip UI should be schema-driven.
+4. Regenerate generated Rust and TypeScript metadata with `cd desktop/web && npm run gen:types`.
+5. Add `filters.field.<key>` labels to all 11 locale files for new dynamic fields, plus any fixed-filter UI labels referenced by the catalog.
+6. If the field appears in detail UI, update `PlantDetailCard`/detail components and `plantDetail.*` i18n keys.
+7. Add focused backend and frontend tests for filtering behavior.
 
 ## FTS5 Search
 

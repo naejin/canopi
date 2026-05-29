@@ -54,6 +54,20 @@ describe('frontend boundary sources', () => {
     expect(runtimeSource).toContain('currentCanvasQuerySurface')
   })
 
+  it('keeps the canvas document hook as a Design Session lifecycle adapter', () => {
+    const hookSource = readSource('../app/document-session/use-canvas-document-session.ts')
+    const lifecycleSource = readSource('../app/document-session/lifecycle.ts')
+
+    expect(hookSource).toContain('./lifecycle')
+    expect(hookSource).not.toContain('SceneCanvasRuntime')
+    expect(hookSource).not.toContain('transitionDocument')
+    expect(hookSource).not.toContain('buildPersistedDesignSessionContent')
+    expect(hookSource).not.toContain('autosaveDesign')
+    expect(lifecycleSource).toContain('transitionDocument')
+    expect(lifecycleSource).toContain('buildPersistedDesignSessionContent')
+    expect(lifecycleSource).toContain('autosaveDesign')
+  })
+
   it('keeps Timeline Action document edits behind the Timeline editing module', () => {
     const timelineSource = readSource('../components/canvas/InteractiveTimeline.tsx')
     const interactionSource = readSource('../app/timeline/interaction.ts')

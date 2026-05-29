@@ -38,6 +38,14 @@ pub(crate) struct FixedFilterBehavior {
     pub predicate: FixedFilterPredicate,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum FixedFilterValue<'a> {
+    StringList(Option<&'a [String]>),
+    Boolean(Option<bool>),
+    Integer(Option<i32>),
+    Text(Option<&'a String>),
+}
+
 pub(crate) const PLANT_FILTER_FIELDS: &[PlantFilterField] = &[
     PlantFilterField {
         key: "stratum",
@@ -551,6 +559,32 @@ pub(crate) const SPECIES_FILTER_FIXED_BEHAVIORS: &[FixedFilterBehavior] = &[
     },
 ];
 
+pub(crate) fn fixed_filter_value<'a>(
+    filters: &'a common_types::species::SpeciesFilter,
+    key: &str,
+) -> Option<FixedFilterValue<'a>> {
+    match key {
+        "sun_tolerances" => Some(FixedFilterValue::StringList(
+            filters.sun_tolerances.as_deref(),
+        )),
+        "soil_tolerances" => Some(FixedFilterValue::StringList(
+            filters.soil_tolerances.as_deref(),
+        )),
+        "life_cycle" => Some(FixedFilterValue::StringList(filters.life_cycle.as_deref())),
+        "growth_rate" => Some(FixedFilterValue::StringList(filters.growth_rate.as_deref())),
+        "edible" => Some(FixedFilterValue::Boolean(filters.edible)),
+        "edibility_min" => Some(FixedFilterValue::Integer(filters.edibility_min)),
+        "nitrogen_fixer" => Some(FixedFilterValue::Boolean(filters.nitrogen_fixer)),
+        "family" => Some(FixedFilterValue::Text(filters.family.as_ref())),
+        "climate_zones" => Some(FixedFilterValue::StringList(
+            filters.climate_zones.as_deref(),
+        )),
+        "habit" => Some(FixedFilterValue::StringList(filters.habit.as_deref())),
+        "woody" => Some(FixedFilterValue::Boolean(filters.woody)),
+        _ => None,
+    }
+}
+
 pub(crate) fn filter_field(key: &str) -> Option<&'static PlantFilterField> {
     match key {
         "stratum" => Some(&PLANT_FILTER_FIELDS[0]),
@@ -717,5 +751,35 @@ mod tests {
             _ => panic!("expected mapped boolean predicate"),
         }
         assert!(fixed_filter_behavior("not_a_field").is_none());
+    }
+
+    #[test]
+    fn generated_fixed_filters_read_species_filter_values() {
+        let filters = common_types::species::SpeciesFilter {
+            life_cycle: Some(vec!["Perennial".to_owned()]),
+            nitrogen_fixer: Some(true),
+            edibility_min: Some(3),
+            family: Some("Rosaceae".to_owned()),
+            ..common_types::species::SpeciesFilter::default()
+        };
+
+        match fixed_filter_value(&filters, "life_cycle").unwrap() {
+            FixedFilterValue::StringList(Some(values)) => {
+                assert_eq!(values, ["Perennial".to_owned()].as_slice())
+            }
+            other => panic!("expected life_cycle list, got {other:?}"),
+        }
+        assert!(matches!(
+            fixed_filter_value(&filters, "nitrogen_fixer"),
+            Some(FixedFilterValue::Boolean(Some(true)))
+        ));
+        assert!(matches!(
+            fixed_filter_value(&filters, "edibility_min"),
+            Some(FixedFilterValue::Integer(Some(3)))
+        ));
+        match fixed_filter_value(&filters, "family").unwrap() {
+            FixedFilterValue::Text(Some(value)) => assert_eq!(value, "Rosaceae"),
+            other => panic!("expected family text, got {other:?}"),
+        }
     }
 }

@@ -2,8 +2,8 @@ use common_types::species::SpeciesFilter;
 use rusqlite::types::Value;
 
 use crate::db::plant_filter_fields::{
-    FixedFilterBehavior, FixedFilterBooleanMapping, FixedFilterPredicate,
-    SPECIES_FILTER_FIXED_BEHAVIORS,
+    FixedFilterBehavior, FixedFilterBooleanMapping, FixedFilterPredicate, FixedFilterValue,
+    SPECIES_FILTER_FIXED_BEHAVIORS, fixed_filter_value,
 };
 
 use super::columns::validated_column;
@@ -24,36 +24,6 @@ pub(super) fn append_fixed_filters(
             continue;
         };
         append_generated_fixed_filter(where_clauses, params, behavior, value);
-    }
-}
-
-enum FixedFilterValue<'a> {
-    StringList(Option<&'a [String]>),
-    Boolean(Option<bool>),
-    Integer(Option<i32>),
-    Text(Option<&'a String>),
-}
-
-fn fixed_filter_value<'a>(filters: &'a SpeciesFilter, key: &str) -> Option<FixedFilterValue<'a>> {
-    match key {
-        "sun_tolerances" => Some(FixedFilterValue::StringList(
-            filters.sun_tolerances.as_deref(),
-        )),
-        "soil_tolerances" => Some(FixedFilterValue::StringList(
-            filters.soil_tolerances.as_deref(),
-        )),
-        "growth_rate" => Some(FixedFilterValue::StringList(filters.growth_rate.as_deref())),
-        "life_cycle" => Some(FixedFilterValue::StringList(filters.life_cycle.as_deref())),
-        "edible" => Some(FixedFilterValue::Boolean(filters.edible)),
-        "edibility_min" => Some(FixedFilterValue::Integer(filters.edibility_min)),
-        "nitrogen_fixer" => Some(FixedFilterValue::Boolean(filters.nitrogen_fixer)),
-        "family" => Some(FixedFilterValue::Text(filters.family.as_ref())),
-        "climate_zones" => Some(FixedFilterValue::StringList(
-            filters.climate_zones.as_deref(),
-        )),
-        "habit" => Some(FixedFilterValue::StringList(filters.habit.as_deref())),
-        "woody" => Some(FixedFilterValue::Boolean(filters.woody)),
-        _ => None,
     }
 }
 

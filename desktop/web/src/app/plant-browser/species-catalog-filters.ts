@@ -27,57 +27,6 @@ interface FilterActivityStrategy {
   readonly source: 'schema' | 'adapter'
 }
 
-interface StripChoiceBehavior {
-  readonly labelI18nKey: string
-  readonly fallbackLabel: string
-  readonly optionsKey: FilterOptionsKey
-  readonly valueI18nPrefix: string
-  readonly color: string
-}
-
-interface ActiveArrayChipBehavior {
-  readonly keyPrefix: string
-  readonly valueI18nPrefix: string
-  readonly color: string
-}
-
-interface StripThresholdBehavior {
-  readonly labelI18nKey: string
-  readonly fallbackLabel: string
-  readonly min: number
-  readonly max: number
-  readonly color: string
-}
-
-interface StripBooleanBehavior {
-  readonly labelI18nKey: string
-  readonly fallbackLabel: string
-  readonly color: string
-}
-
-interface ActiveBooleanChipBehavior {
-  readonly labelI18nKey: string
-  readonly color: string
-}
-
-interface ActiveNumericChipBehavior {
-  readonly labelI18nKey: string
-  readonly color: string
-  readonly suffix: string
-}
-
-interface AdapterFilterBehavior {
-  readonly key: SpeciesFilterKey
-  readonly kind: FilterActivityKind
-  readonly countable: boolean
-  readonly stripChoice?: StripChoiceBehavior
-  readonly stripThreshold?: StripThresholdBehavior
-  readonly stripBoolean?: StripBooleanBehavior
-  readonly activeArrayChip?: ActiveArrayChipBehavior
-  readonly activeBooleanChip?: ActiveBooleanChipBehavior
-  readonly activeNumericChip?: ActiveNumericChipBehavior
-}
-
 export interface StripOptionSource {
   readonly filterOptionsKey: FilterOptionsKey
   readonly valueI18nPrefix: string
@@ -162,82 +111,8 @@ const SCHEMA_STRIP_FILTER_KEYS = new Set<string>(
     .map((field) => field.key),
 )
 
-const SCHEMA_STRIP_OPTION_SOURCES: Partial<Record<SpeciesFilterKey, StripOptionSource>> = {
-  climate_zones: {
-    filterOptionsKey: 'climate_zones',
-    valueI18nPrefix: 'filters.climateZone_',
-  },
-  habit: {
-    filterOptionsKey: 'habits',
-    valueI18nPrefix: 'filters.habit_',
-  },
-}
-
-const SCHEMA_ACTIVE_ARRAY_CHIPS: Partial<Record<SpeciesFilterKey, ActiveArrayChipBehavior>> = {
-  climate_zones: {
-    keyPrefix: 'cz',
-    valueI18nPrefix: 'filters.climateZone_',
-    color: '--color-sun',
-  },
-  habit: {
-    keyPrefix: 'hab',
-    valueI18nPrefix: 'filters.habit_',
-    color: '--color-family',
-  },
-}
-
-const ADAPTER_FILTER_BEHAVIORS: readonly AdapterFilterBehavior[] = FIXED_FILTER_BEHAVIORS
+const ADAPTER_FILTER_BEHAVIORS: readonly SpeciesFilterFixedBehavior[] = FIXED_FILTER_BEHAVIORS
   .filter((behavior) => !SCHEMA_STRIP_FILTER_KEYS.has(behavior.key))
-  .map((behavior) => ({
-    key: behavior.key as SpeciesFilterKey,
-    kind: behavior.kind,
-    countable: behavior.countable,
-    stripChoice: behavior.stripChoice
-      ? {
-          labelI18nKey: behavior.stripChoice.labelI18nKey,
-          fallbackLabel: behavior.stripChoice.fallbackLabel,
-          optionsKey: behavior.stripChoice.optionsKey as FilterOptionsKey,
-          valueI18nPrefix: behavior.stripChoice.valueI18nPrefix,
-          color: behavior.stripChoice.colorToken,
-        }
-      : undefined,
-    stripThreshold: behavior.stripThreshold
-      ? {
-          labelI18nKey: behavior.stripThreshold.labelI18nKey,
-          fallbackLabel: behavior.stripThreshold.fallbackLabel,
-          min: behavior.stripThreshold.min,
-          max: behavior.stripThreshold.max,
-          color: behavior.stripThreshold.colorToken,
-        }
-      : undefined,
-    stripBoolean: behavior.stripBoolean
-      ? {
-          labelI18nKey: behavior.stripBoolean.labelI18nKey,
-          fallbackLabel: behavior.stripBoolean.fallbackLabel,
-          color: behavior.stripBoolean.colorToken,
-        }
-      : undefined,
-    activeArrayChip: behavior.activeArrayChip
-      ? {
-          keyPrefix: behavior.activeArrayChip.keyPrefix,
-          valueI18nPrefix: behavior.activeArrayChip.valueI18nPrefix,
-          color: behavior.activeArrayChip.colorToken,
-        }
-      : undefined,
-    activeBooleanChip: behavior.activeBooleanChip
-      ? {
-          labelI18nKey: behavior.activeBooleanChip.labelI18nKey,
-          color: behavior.activeBooleanChip.colorToken,
-        }
-      : undefined,
-    activeNumericChip: behavior.activeNumericChip
-      ? {
-          labelI18nKey: behavior.activeNumericChip.labelI18nKey,
-          color: behavior.activeNumericChip.colorToken,
-          suffix: behavior.activeNumericChip.suffix,
-        }
-      : undefined,
-  }))
 
 function isSpeciesFilterKey(key: string): key is SpeciesFilterKey {
   return SPECIES_FILTER_KEYS.has(key)
@@ -271,7 +146,7 @@ const SCHEMA_STRIP_FILTER_STRATEGIES: readonly FilterActivityStrategy[] = PLANT_
 
 const ADAPTER_FILTER_STRATEGIES: readonly FilterActivityStrategy[] = ADAPTER_FILTER_BEHAVIORS
   .map((behavior) => ({
-    key: behavior.key,
+    key: behavior.key as SpeciesFilterKey,
     kind: behavior.kind,
     countable: behavior.countable,
     source: 'adapter' as const,
@@ -318,16 +193,15 @@ export function stripFields(): readonly PlantFilterFieldDef[] {
 export function stripChoiceFields(): readonly StripChoiceField[] {
   const schemaFields = schemaStripFields().flatMap((field): StripChoiceField[] => {
     if (!isSpeciesFilterKey(field.key) || field.kind !== 'categorical') return []
-    const source = SCHEMA_STRIP_OPTION_SOURCES[field.key]
-    if (source === undefined) return []
+    if (!field.stripChoice) return []
     return [{
       kind: 'choice',
       field,
       filterKey: field.key,
       labelI18nKey: field.i18nKey,
       fallbackLabel: field.key,
-      optionsKey: source.filterOptionsKey,
-      valueI18nPrefix: source.valueI18nPrefix,
+      optionsKey: field.stripChoice.optionsKey as FilterOptionsKey,
+      valueI18nPrefix: field.stripChoice.valueI18nPrefix,
       color: field.colorToken,
       source: 'schema',
     }]
@@ -337,12 +211,12 @@ export function stripChoiceFields(): readonly StripChoiceField[] {
     if (!behavior.stripChoice) return []
     return [{
       kind: 'choice',
-      filterKey: behavior.key,
+      filterKey: behavior.key as SpeciesFilterKey,
       labelI18nKey: behavior.stripChoice.labelI18nKey,
       fallbackLabel: behavior.stripChoice.fallbackLabel,
-      optionsKey: behavior.stripChoice.optionsKey,
+      optionsKey: behavior.stripChoice.optionsKey as FilterOptionsKey,
       valueI18nPrefix: behavior.stripChoice.valueI18nPrefix,
-      color: behavior.stripChoice.color,
+      color: behavior.stripChoice.colorToken,
       source: 'adapter',
     }]
   })
@@ -355,12 +229,12 @@ export function stripThresholdFields(): readonly StripThresholdField[] {
     if (!behavior.stripThreshold) return []
     return [{
       kind: 'threshold',
-      filterKey: behavior.key,
+      filterKey: behavior.key as SpeciesFilterKey,
       labelI18nKey: behavior.stripThreshold.labelI18nKey,
       fallbackLabel: behavior.stripThreshold.fallbackLabel,
       min: behavior.stripThreshold.min,
       max: behavior.stripThreshold.max,
-      color: behavior.stripThreshold.color,
+      color: behavior.stripThreshold.colorToken,
       source: 'adapter',
     }]
   })
@@ -385,10 +259,10 @@ export function stripBooleanFields(): readonly StripBooleanField[] {
     if (!behavior.stripBoolean) return []
     return [{
       kind: 'boolean',
-      filterKey: behavior.key,
+      filterKey: behavior.key as SpeciesFilterKey,
       labelI18nKey: behavior.stripBoolean.labelI18nKey,
       fallbackLabel: behavior.stripBoolean.fallbackLabel,
-      color: behavior.stripBoolean.color,
+      color: behavior.stripBoolean.colorToken,
       activeValue: true,
       source: 'adapter',
     }]
@@ -407,13 +281,18 @@ export function stripControls(): readonly StripControlField[] {
 
 export function stripOptionSource(fieldKey: string): StripOptionSource | undefined {
   if (!isSpeciesFilterKey(fieldKey)) return undefined
-  const schemaSource = SCHEMA_STRIP_OPTION_SOURCES[fieldKey]
-  if (schemaSource) return schemaSource
+  const schemaField = fields().find((field) => field.key === fieldKey)
+  if (schemaField?.stripChoice) {
+    return {
+      filterOptionsKey: schemaField.stripChoice.optionsKey as FilterOptionsKey,
+      valueI18nPrefix: schemaField.stripChoice.valueI18nPrefix,
+    }
+  }
 
   const adapter = ADAPTER_FILTER_BEHAVIORS.find((behavior) => behavior.key === fieldKey)
   return adapter?.stripChoice
     ? {
-        filterOptionsKey: adapter.stripChoice.optionsKey,
+        filterOptionsKey: adapter.stripChoice.optionsKey as FilterOptionsKey,
         valueI18nPrefix: adapter.stripChoice.valueI18nPrefix,
       }
     : undefined
@@ -426,14 +305,13 @@ export function hasSpeciesFilterStrategy(fieldKey: string): boolean {
 export function activeArrayChipFields(): readonly ActiveArrayChipField[] {
   const schemaFields = schemaStripFields().flatMap((field): ActiveArrayChipField[] => {
     if (!isSpeciesFilterKey(field.key) || field.kind !== 'categorical') return []
-    const behavior = SCHEMA_ACTIVE_ARRAY_CHIPS[field.key]
-    if (!behavior) return []
+    if (!field.activeArrayChip) return []
     return [{
       kind: 'array',
       filterKey: field.key,
-      keyPrefix: behavior.keyPrefix,
-      valueI18nPrefix: behavior.valueI18nPrefix,
-      color: behavior.color,
+      keyPrefix: field.activeArrayChip.keyPrefix,
+      valueI18nPrefix: field.activeArrayChip.valueI18nPrefix,
+      color: field.colorToken,
       source: 'schema',
     }]
   })
@@ -442,10 +320,10 @@ export function activeArrayChipFields(): readonly ActiveArrayChipField[] {
     if (!behavior.activeArrayChip) return []
     return [{
       kind: 'array',
-      filterKey: behavior.key,
+      filterKey: behavior.key as SpeciesFilterKey,
       keyPrefix: behavior.activeArrayChip.keyPrefix,
       valueI18nPrefix: behavior.activeArrayChip.valueI18nPrefix,
-      color: behavior.activeArrayChip.color,
+      color: behavior.activeArrayChip.colorToken,
       source: 'adapter',
     }]
   })
@@ -470,10 +348,10 @@ export function activeBooleanChipFields(): readonly ActiveBooleanChipField[] {
     if (!behavior.activeBooleanChip) return []
     return [{
       kind: 'boolean',
-      filterKey: behavior.key,
+      filterKey: behavior.key as SpeciesFilterKey,
       labelI18nKey: behavior.activeBooleanChip.labelI18nKey,
-      fallbackLabel: behavior.stripBoolean?.fallbackLabel ?? behavior.key,
-      color: behavior.activeBooleanChip.color,
+      fallbackLabel: behavior.activeBooleanChip.fallbackLabel,
+      color: behavior.activeBooleanChip.colorToken,
       source: 'adapter',
     }]
   })
@@ -486,10 +364,10 @@ export function activeNumericChipFields(): readonly ActiveNumericChipField[] {
     if (!behavior.activeNumericChip) return []
     return [{
       kind: 'numeric-threshold',
-      filterKey: behavior.key,
+      filterKey: behavior.key as SpeciesFilterKey,
       labelI18nKey: behavior.activeNumericChip.labelI18nKey,
-      fallbackLabel: behavior.stripThreshold?.fallbackLabel ?? behavior.key,
-      color: behavior.activeNumericChip.color,
+      fallbackLabel: behavior.activeNumericChip.fallbackLabel,
+      color: behavior.activeNumericChip.colorToken,
       suffix: behavior.activeNumericChip.suffix,
       source: 'adapter',
     }]
