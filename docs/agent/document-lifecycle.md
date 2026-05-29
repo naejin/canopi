@@ -5,8 +5,9 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 ## Current Boundaries
 
 - `desktop/web/src/app/document-session/actions.ts` exposes user-facing document actions.
-- `desktop/web/src/app/document-session/lifecycle.ts` owns canvas runtime attachment, initial document mount, queued load installation, autosave timing, settings flush, teardown snapshot, persistence disposal, and canvas-session publication.
-- `desktop/web/src/app/document-session/transition.ts` owns guarded Design Session transitions, including dirty checks, attached/detached replacement selection, queued loads, `zoomToFit()` for attached sessions, and workflow installation.
+- `desktop/web/src/app/document-session/lifecycle.ts` owns canvas runtime attachment, resize observation, autosave timing, settings flush, runtime teardown, and canvas-session publication.
+- `desktop/web/src/app/document-session/state-machine.ts` owns explicit Design Session states and transition ordering: attached/ detached readiness, dirty checks, attached/detached replacement selection, queued loads, `zoomToFit()` for attached sessions, autosave execution, teardown snapshots, persistence disposal, and workflow installation.
+- `desktop/web/src/app/document-session/transition.ts` is the compatibility facade over the Design Session state machine for document actions and lifecycle callers.
 - `desktop/web/src/app/document-session/persistence.ts` owns persisted Design content composition, attached/detached save snapshots, teardown snapshots, and persistence workflow disposal.
 - `desktop/web/src/app/document-session/workflows.ts` owns cross-domain workflow effects such as consortium sync.
 - `desktop/web/src/app/document/controller.ts` owns non-canvas document mutations through `mutateCurrentDesign()` and `updateDesignArray()`.
@@ -22,6 +23,7 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 - Callers request a Design transition; `transitionDocument()` decides whether an attached `CanvasDocumentSurface` is available or whether to apply a detached document-state transition.
 - Attached transitions hydrate the canvas session, show chrome, call `zoomToFit()`, clear history, and install consortium sync.
 - Detached transitions update canonical document state, reset dirty baselines, and install consortium sync without canvas-only calls.
+- Lifecycle callers should use `startAttachedDesignSession()`, `autosaveDesignSession()`, and `teardownAttachedDesignSession()` instead of reassembling Design Session state-machine steps locally.
 
 ## Document Authority
 
@@ -68,7 +70,7 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 - Non-canvas dirty state is tracked by `nonCanvasRevision` vs `nonCanvasSavedRevision`.
 - Do not write `designDirty` directly.
 - Autosave checkpoints the same document as manual save.
-- Autosave scheduling and canvas snapshot composition are owned by `app/document-session/lifecycle.ts`; persistence composition remains in `app/document-session/persistence.ts`.
+- Autosave scheduling is owned by `app/document-session/lifecycle.ts`; autosave execution and canvas snapshot composition route through the Design Session state machine; persistence composition remains in `app/document-session/persistence.ts`.
 - Autosave failures surface via `autosaveFailed`.
 
 ## Settings Persistence

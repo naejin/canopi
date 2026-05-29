@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   installConsortiumSync: vi.fn(),
+  autosaveDesign: vi.fn(),
   loadDesign: vi.fn(),
   message: vi.fn(),
   saveDesign: vi.fn(),
@@ -14,6 +15,7 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
 
 vi.mock("../ipc/design", () => ({
   loadDesign: mocks.loadDesign,
+  autosaveDesign: mocks.autosaveDesign,
   saveDesign: mocks.saveDesign,
   saveDesignAs: mocks.saveDesignAs,
   openDesignDialog: vi.fn(),
@@ -46,8 +48,12 @@ import type { CanvasDocumentSurface, MountedCanvasRuntime } from "../canvas/runt
 import { setCurrentCanvasSession } from "../canvas/session";
 import {
   beginEmptyDocumentSession,
+  autosaveDesignSession,
   consumeQueuedDocumentLoad,
+  getDesignSessionState,
+  resetDesignSessionStateForTests,
   transitionDocument,
+  type DocumentTransitionLoadResult,
 } from "../app/document-session/transition";
 import {
   currentDesign,
@@ -126,6 +132,8 @@ async function flushMicrotasks(): Promise<void> {
 beforeEach(() => {
   setCurrentCanvasSession(null);
   mocks.installConsortiumSync.mockClear();
+  mocks.autosaveDesign.mockReset();
+  mocks.autosaveDesign.mockResolvedValue(undefined);
   mocks.loadDesign.mockReset();
   mocks.message.mockReset();
   mocks.saveDesign.mockReset();
@@ -140,6 +148,7 @@ beforeEach(() => {
   resetDirtyBaselines();
   nonCanvasRevision.value = 0;
   detachedCanvasDirty.value = false;
+  resetDesignSessionStateForTests();
 });
 
 describe("document session transition", () => {
@@ -171,6 +180,40 @@ describe("document session transition", () => {
     expect(session.showCanvasChrome).toHaveBeenCalledTimes(1);
     expect(session.zoomToFit).toHaveBeenCalledTimes(1);
     expect(mocks.installConsortiumSync).toHaveBeenCalledTimes(1);
+  });
+
+  it("exposes loading and attached-ready states around attached transitions", async () => {
+    const session = makeSession();
+    const pending = deferred<DocumentTransitionLoadResult>();
+
+    const transition = transitionDocument({
+      source: "open-path",
+      dirtyGuard: "skip",
+      session,
+      load: () => pending.promise,
+    });
+
+    expect(getDesignSessionState()).toMatchObject({
+      status: "loading",
+      attached: true,
+      documentLoaded: false,
+      operation: "open-path",
+    });
+
+    pending.resolve({
+      file: makeFile("Next"),
+      path: "/designs/next.canopi",
+      name: "Next",
+    });
+
+    await transition;
+
+    expect(getDesignSessionState()).toMatchObject({
+      status: "attached-ready",
+      attached: true,
+      documentLoaded: true,
+      operation: null,
+    });
   });
 
   it("saves a dirty current document before applying the replacement", async () => {
@@ -242,6 +285,72 @@ describe("document session transition", () => {
     expect(session.replaceDocument).not.toHaveBeenCalled();
     expect(currentDesign.value?.name).toBe("Current");
     expect(designDirty.value).toBe(true);
+    expect(getDesignSessionState()).toMatchObject({
+      status: "attached-ready",
+      attached: true,
+      operation: null,
+    });
+  });
+
+  it("records failed transition state with the failing operation", async () => {
+    const session = makeSession();
+    const error = new Error("Disk read failed");
+
+    const result = await transitionDocument({
+      source: "open-path",
+      dirtyGuard: "skip",
+      session,
+      load: async () => {
+        throw error;
+      },
+    });
+
+    expect(result).toEqual({
+      status: "failed",
+      documentLoaded: false,
+      error,
+    });
+    expect(getDesignSessionState()).toMatchObject({
+      status: "failed",
+      attached: true,
+      documentLoaded: false,
+      operation: "open-path",
+      error,
+    });
+  });
+
+  it("exposes autosaving state while autosave is in flight", async () => {
+    const session = makeSession();
+    const pending = deferred<void>();
+    const logError = vi.fn();
+    nonCanvasRevision.value = 1;
+    mocks.autosaveDesign.mockReturnValue(pending.promise);
+
+    const autosave = autosaveDesignSession({
+      session,
+      runtimeInitialized: true,
+      logError,
+    });
+
+    expect(getDesignSessionState()).toMatchObject({
+      status: "autosaving",
+      attached: true,
+      operation: "autosave",
+    });
+
+    pending.resolve(undefined);
+    await autosave;
+
+    expect(mocks.autosaveDesign).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "Current" }),
+      "/designs/current.canopi",
+    );
+    expect(logError).not.toHaveBeenCalled();
+    expect(getDesignSessionState()).toMatchObject({
+      status: "attached-ready",
+      attached: true,
+      operation: null,
+    });
   });
 
   it("applies templates as unsaved documents with their requested display name", async () => {

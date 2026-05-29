@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   runtimeInitImpl: vi.fn(async (_container?: HTMLElement) => undefined),
   runtimeInstances: [] as Array<Record<string, unknown>>,
   snapshotCanvasIntoDesignSession: vi.fn(),
+  startAttachedDesignSession: vi.fn(),
   transitionDocument: vi.fn((request: any) => {
     request.session.loadDocument({ name: "Mounted" });
     request.session.showCanvasChrome();
@@ -59,6 +60,7 @@ vi.mock("../app/document-session/transition", async (importOriginal) => {
     ...actual,
     beginEmptyDocumentSession: mocks.beginEmptyDocumentSession,
     consumeQueuedDocumentLoad: mocks.consumeQueuedDocumentLoad,
+    startAttachedDesignSession: mocks.startAttachedDesignSession,
     transitionDocument: mocks.transitionDocument,
   };
 });
@@ -154,6 +156,16 @@ describe("useCanvasDocumentSession", () => {
     mocks.runtimeInitImpl.mockResolvedValue(undefined);
     mocks.runtimeInstances.length = 0;
     mocks.snapshotCanvasIntoDesignSession.mockClear();
+    mocks.startAttachedDesignSession.mockReset();
+    mocks.startAttachedDesignSession.mockImplementation((session: any) => {
+      if (currentDesign.value) {
+        session.loadDocument({ name: "Mounted" });
+        session.showCanvasChrome();
+        return Promise.resolve({ status: "applied", documentLoaded: session.hasLoadedDocument() });
+      }
+      mocks.beginEmptyDocumentSession(session);
+      return Promise.resolve(null);
+    });
     mocks.transitionDocument.mockClear();
     mocks.transitionDocument.mockImplementation((request: any) => {
       request.session.loadDocument({ name: "Mounted" });
@@ -197,7 +209,7 @@ describe("useCanvasDocumentSession", () => {
 
     expect(runtime).toBeDefined();
     expect(runtime.initializeViewport).toHaveBeenCalledTimes(1);
-    expect(mocks.beginEmptyDocumentSession).toHaveBeenCalledWith(currentCanvasDocumentSurface.value);
+    expect(mocks.startAttachedDesignSession).toHaveBeenCalledWith(currentCanvasDocumentSurface.value);
     expect(runtime.hideCanvasChrome).toHaveBeenCalledTimes(1);
     expect(mocks.consumeQueuedDocumentLoad).toHaveBeenCalledWith(currentCanvasDocumentSurface.value);
   });
@@ -217,11 +229,7 @@ describe("useCanvasDocumentSession", () => {
       showCanvasChrome: ReturnType<typeof vi.fn>;
     };
 
-    expect(mocks.transitionDocument).toHaveBeenCalledWith(expect.objectContaining({
-      source: "mount-existing",
-      dirtyGuard: "skip",
-      session: currentCanvasDocumentSurface.value,
-    }));
+    expect(mocks.startAttachedDesignSession).toHaveBeenCalledWith(currentCanvasDocumentSurface.value);
     expect(runtime.showCanvasChrome).toHaveBeenCalledTimes(1);
     expect(runtime.loadDocument).toBe((runtime as any).originalLoadDocument);
     expect((runtime as any).replaceDocument).toBe((runtime as any).originalReplaceDocument);

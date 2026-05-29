@@ -83,15 +83,24 @@ describe('frontend boundary sources', () => {
   it('keeps the canvas document hook as a Design Session lifecycle adapter', () => {
     const hookSource = readSource('../app/document-session/use-canvas-document-session.ts')
     const lifecycleSource = readSource('../app/document-session/lifecycle.ts')
+    const transitionSource = readSource('../app/document-session/transition.ts')
+    const stateMachineSource = readSource('../app/document-session/state-machine.ts')
 
     expect(hookSource).toContain('./lifecycle')
     expect(hookSource).not.toContain('SceneCanvasRuntime')
     expect(hookSource).not.toContain('transitionDocument')
     expect(hookSource).not.toContain('buildPersistedDesignSessionContent')
     expect(hookSource).not.toContain('autosaveDesign')
-    expect(lifecycleSource).toContain('transitionDocument')
-    expect(lifecycleSource).toContain('buildPersistedDesignSessionContent')
-    expect(lifecycleSource).toContain('autosaveDesign')
+    expect(lifecycleSource).toContain('startAttachedDesignSession')
+    expect(lifecycleSource).toContain('autosaveDesignSession')
+    expect(lifecycleSource).toContain('teardownAttachedDesignSession')
+    expect(lifecycleSource).not.toContain('transitionDocument')
+    expect(lifecycleSource).not.toContain('buildPersistedDesignSessionContent')
+    expect(lifecycleSource).not.toContain('../../ipc/design')
+    expect(transitionSource).toContain('createDesignSessionStateMachine')
+    expect(stateMachineSource).toContain('transitionDocument')
+    expect(stateMachineSource).toContain('buildPersistedDesignSessionContent')
+    expect(stateMachineSource).toContain('autosaveDesign')
   })
 
   it('keeps Timeline Action document edits behind the Timeline editing module', () => {

@@ -6,29 +6,15 @@ import type {
   CanvasRuntimeSurfaces,
   MountedCanvasRuntime,
 } from "../../canvas/runtime/runtime";
-import { autosaveDesign } from "../../ipc/design";
-import {
-  autosaveFailed,
-  canvasDirty,
-  currentDesign,
-  designDirty,
-  designName,
-  designPath,
-  markCanvasDetachedDirty,
-} from "../../state/design";
 import { autoSaveIntervalMs } from "../settings/state";
 import { flushSettingsProjection } from "../settings/projection";
 import { createAppSceneRuntimePanelTargetAdapter } from "../canvas-runtime/panel-target-adapter";
 import {
-  beginEmptyDocumentSession,
+  autosaveDesignSession,
   consumeQueuedDocumentLoad,
-  transitionDocument,
+  startAttachedDesignSession,
+  teardownAttachedDesignSession,
 } from "./transition";
-import {
-  buildPersistedDesignSessionContent,
-  disposeDesignSessionPersistence,
-  snapshotCanvasIntoDesignSession,
-} from "./persistence";
 
 interface DesignSessionLifecycleHost {
   readonly canvasArea: HTMLElement;
@@ -118,24 +104,15 @@ class RuntimeDesignSessionLifecycle implements DesignSessionLifecycle {
         this.documents.attachRulersTo(this.host.rulerOverlay);
       }
 
-      if (currentDesign.value) {
-        void transitionDocument({
-          source: "mount-existing",
-          dirtyGuard: "skip",
-          session: this.documents,
-          load: async () => {
-            const file = currentDesign.value;
-            if (!file) throw new Error("No current design to mount");
-            return { file, path: designPath.value, name: designName.value };
-          },
-        }).then((result) => {
-          if (result.status === "failed") {
+      void startAttachedDesignSession(this.documents)
+        .then((result) => {
+          if (result?.status === "failed") {
             this.deps.logError("Failed to mount current canvas document:", result.error);
           }
+        })
+        .catch((error: unknown) => {
+          this.deps.logError("Failed to start canvas document session:", error);
         });
-      } else {
-        beginEmptyDocumentSession(this.documents);
-      }
 
       this.resizeObserver = this.deps.createResizeObserver(() => {
         this.documents.resize(this.host.canvasArea.clientWidth, this.host.canvasArea.clientHeight);
@@ -161,8 +138,7 @@ class RuntimeDesignSessionLifecycle implements DesignSessionLifecycle {
     this.resizeObserver = null;
     this.cancelQueuedLoad();
     flushSettingsProjection();
-    this.snapshotBeforeTeardown();
-    disposeDesignSessionPersistence();
+    this.teardownDocumentSession();
     this.runtime.destroy();
     this.deps.publishSurfaces(null);
   }
@@ -174,35 +150,18 @@ class RuntimeDesignSessionLifecycle implements DesignSessionLifecycle {
   }
 
   private autosave(): void {
-    if (!designDirty.value) return;
-    if (!this.runtimeInitialized) return;
-    const content = buildPersistedDesignSessionContent({
+    void autosaveDesignSession({
       session: this.documents,
-      name: designName.value,
+      runtimeInitialized: this.runtimeInitialized,
+      logError: this.deps.logError,
     });
-    autosaveDesign(content, designPath.value)
-      .then(() => {
-        autosaveFailed.value = false;
-      })
-      .catch((error) => {
-        this.deps.logError("Autosave failed:", error);
-        autosaveFailed.value = true;
-      });
   }
 
-  private snapshotBeforeTeardown(): void {
-    if (!this.runtimeInitialized || !this.documents.hasLoadedDocument() || !currentDesign.value) {
-      return;
-    }
-
-    try {
-      snapshotCanvasIntoDesignSession({
-        session: this.documents,
-        name: designName.value,
-      });
-      markCanvasDetachedDirty(canvasDirty.value);
-    } catch (error) {
-      this.deps.logError("Failed to snapshot canvas before teardown:", error);
-    }
+  private teardownDocumentSession(): void {
+    teardownAttachedDesignSession({
+      session: this.documents,
+      runtimeInitialized: this.runtimeInitialized,
+      logError: this.deps.logError,
+    });
   }
 }
