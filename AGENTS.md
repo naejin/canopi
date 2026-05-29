@@ -185,7 +185,7 @@ cargo build --release
 - The `.canopi` file has two authorities.
 - Canvas scene state is owned by `SceneStore`: plants, zones, annotations, groups, plant species colors, and layers. Mutations flow through the canvas runtime.
 - Non-canvas document state is owned by the document layer: consortiums, timeline, budget, `budget_currency`, location, description, and extra. Mutations flow through `mutateCurrentDesign()` plus feature controllers under `app/*/controller.ts`.
-- Save composition happens through the document-session/runtime boundary and the canvas document surface. Neither authority should duplicate the other's data.
+- Save composition happens through the document-session/persistence seam and the canvas document surface. Neither authority should duplicate the other's data.
 - Panels that read canvas entities should use read-only runtime query surfaces, not mirrored signals, unless the guide documents an intentional mirror.
 
 ### Action Layer

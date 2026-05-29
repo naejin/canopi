@@ -21,10 +21,10 @@ import {
   transitionDocument,
 } from "./transition";
 import {
-  disposeDocumentWorkflows,
-  writeCanvasIntoDocument,
-  snapshotCanvasIntoCurrentDocument,
-} from "./runtime";
+  buildPersistedDesignSessionContent,
+  disposeDesignSessionPersistence,
+  snapshotCanvasIntoDesignSession,
+} from "./persistence";
 
 interface MutableDomRef<T> {
   current: T | null;
@@ -105,13 +105,16 @@ export function useCanvasDocumentSession({
       flushSettingsProjection();
       if (runtimeInitialized && runtime.hasLoadedDocument() && currentDesign.value) {
         try {
-          snapshotCanvasIntoCurrentDocument(runtime, designName.value);
+          snapshotCanvasIntoDesignSession({
+            session: runtime,
+            name: designName.value,
+          });
           markCanvasDetachedDirty(canvasDirty.value);
         } catch (error) {
           console.error("Failed to snapshot canvas before teardown:", error);
         }
       }
-      disposeDocumentWorkflows();
+      disposeDesignSessionPersistence();
       runtime.destroy();
       setCanvasRuntimeSurfaces(null);
     };
@@ -123,7 +126,10 @@ export function useCanvasDocumentSession({
       if (!designDirty.value) return;
       const session = getCurrentCanvasDocumentSurface();
       if (!session) return;
-      const content = writeCanvasIntoDocument(session, designName.value);
+      const content = buildPersistedDesignSessionContent({
+        session,
+        name: designName.value,
+      });
       autosaveDesign(content, designPath.value)
         .then(() => {
           autosaveFailed.value = false;
