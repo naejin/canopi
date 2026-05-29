@@ -28,6 +28,8 @@ export const plantFilterCatalog = {
   activeNumericChipFields: speciesCatalogFilters.activeNumericChipFields,
 
   activeChipFields: speciesCatalogFilters.activeChipFields,
+
+  fixedFilterKeys: speciesCatalogFilters.fixedFilterKeys,
 }
 
 export type {
@@ -46,17 +48,7 @@ export type {
 export const plantFilterModel = {
   createEmpty(): SpeciesFilter {
     return {
-      sun_tolerances: null,
-      soil_tolerances: null,
-      growth_rate: null,
-      life_cycle: null,
-      edible: null,
-      edibility_min: null,
-      nitrogen_fixer: null,
-      climate_zones: null,
-      habit: null,
-      woody: null,
-      family: null,
+      ...speciesCatalogFilters.createEmptyFixedFilterState(),
       extra: null,
     }
   },

@@ -34,6 +34,7 @@ pub(crate) enum FixedFilterPredicate {
 
 #[derive(Debug)]
 pub(crate) struct FixedFilterBehavior {
+    pub key: &'static str,
     pub predicate: FixedFilterPredicate,
 }
 
@@ -505,36 +506,47 @@ const LIFE_CYCLE_BOOLEAN_MAPPINGS: &[FixedFilterBooleanMapping] = &[
 
 pub(crate) const SPECIES_FILTER_FIXED_BEHAVIORS: &[FixedFilterBehavior] = &[
     FixedFilterBehavior {
+        key: "sun_tolerances",
         predicate: FixedFilterPredicate::MappedBooleanList(SUN_TOLERANCES_BOOLEAN_MAPPINGS),
     },
     FixedFilterBehavior {
+        key: "soil_tolerances",
         predicate: FixedFilterPredicate::MappedBooleanList(SOIL_TOLERANCES_BOOLEAN_MAPPINGS),
     },
     FixedFilterBehavior {
+        key: "life_cycle",
         predicate: FixedFilterPredicate::MappedBooleanList(LIFE_CYCLE_BOOLEAN_MAPPINGS),
     },
     FixedFilterBehavior {
+        key: "growth_rate",
         predicate: FixedFilterPredicate::TextInColumn("s.growth_rate"),
     },
     FixedFilterBehavior {
+        key: "edible",
         predicate: FixedFilterPredicate::BooleanTrueClause("s.edibility_rating > 0"),
     },
     FixedFilterBehavior {
+        key: "edibility_min",
         predicate: FixedFilterPredicate::NumericGteColumn("s.edibility_rating"),
     },
     FixedFilterBehavior {
+        key: "nitrogen_fixer",
         predicate: FixedFilterPredicate::BooleanTrueClause("s.nitrogen_fixer = 1"),
     },
     FixedFilterBehavior {
+        key: "family",
         predicate: FixedFilterPredicate::TextEqualsColumn("s.family"),
     },
     FixedFilterBehavior {
+        key: "climate_zones",
         predicate: FixedFilterPredicate::ClimateZoneJoin,
     },
     FixedFilterBehavior {
+        key: "habit",
         predicate: FixedFilterPredicate::SchemaTextIn { field_key: "habit" },
     },
     FixedFilterBehavior {
+        key: "woody",
         predicate: FixedFilterPredicate::SchemaBooleanTrue { field_key: "woody" },
     },
 ];
@@ -638,6 +650,7 @@ pub(crate) fn filter_field_kind(key: &str) -> Option<PlantFilterFieldKind> {
     filter_field(key).map(|field| field.kind)
 }
 
+#[cfg(test)]
 pub(crate) fn fixed_filter_behavior(key: &str) -> Option<&'static FixedFilterBehavior> {
     match key {
         "sun_tolerances" => Some(&SPECIES_FILTER_FIXED_BEHAVIORS[0]),
@@ -696,6 +709,7 @@ mod tests {
     #[test]
     fn exposes_fixed_species_filter_behavior_from_schema() {
         let behavior = fixed_filter_behavior("life_cycle").unwrap();
+        assert_eq!(behavior.key, "life_cycle");
         match behavior.predicate {
             FixedFilterPredicate::MappedBooleanList(clauses) => {
                 assert!(clauses.iter().any(|clause| clause.value == "Perennial"));

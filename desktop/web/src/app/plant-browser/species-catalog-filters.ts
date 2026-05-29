@@ -18,6 +18,7 @@ type FilterOptionsKey = keyof Pick<
 >
 
 const FIXED_FILTER_BEHAVIORS: readonly SpeciesFilterFixedBehavior[] = SPECIES_FILTER_FIXED_BEHAVIORS
+const FIXED_FILTER_KEYS = FIXED_FILTER_BEHAVIORS.map((behavior) => behavior.key as SpeciesFilterKey)
 
 interface FilterActivityStrategy {
   readonly key: SpeciesFilterKey
@@ -291,6 +292,16 @@ export function isActiveValue(kind: FilterActivityKind, value: SpeciesFilterValu
     case 'string':
       return typeof value === 'string' && value.length > 0
   }
+}
+
+export function fixedFilterKeys(): readonly SpeciesFilterKey[] {
+  return FIXED_FILTER_KEYS
+}
+
+export function createEmptyFixedFilterState(): Pick<SpeciesFilter, SpeciesFilterKey> {
+  return Object.fromEntries(
+    FIXED_FILTER_KEYS.map((key) => [key, null]),
+  ) as Pick<SpeciesFilter, SpeciesFilterKey>
 }
 
 export function fields(options: { placement?: PlantFilterUiPlacement } = {}): readonly PlantFilterFieldDef[] {

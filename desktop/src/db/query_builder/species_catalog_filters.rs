@@ -2,7 +2,8 @@ use common_types::species::SpeciesFilter;
 use rusqlite::types::Value;
 
 use crate::db::plant_filter_fields::{
-    FixedFilterBooleanMapping, FixedFilterPredicate, fixed_filter_behavior,
+    FixedFilterBehavior, FixedFilterBooleanMapping, FixedFilterPredicate,
+    SPECIES_FILTER_FIXED_BEHAVIORS,
 };
 
 use super::columns::validated_column;
@@ -13,72 +14,17 @@ pub(super) fn append_fixed_filters(
     params: &mut Vec<Value>,
     filters: &SpeciesFilter,
 ) {
-    append_generated_fixed_filter(
-        where_clauses,
-        params,
-        "sun_tolerances",
-        FixedFilterValue::StringList(filters.sun_tolerances.as_deref()),
-    );
-    append_generated_fixed_filter(
-        where_clauses,
-        params,
-        "soil_tolerances",
-        FixedFilterValue::StringList(filters.soil_tolerances.as_deref()),
-    );
-    append_generated_fixed_filter(
-        where_clauses,
-        params,
-        "growth_rate",
-        FixedFilterValue::StringList(filters.growth_rate.as_deref()),
-    );
-    append_generated_fixed_filter(
-        where_clauses,
-        params,
-        "life_cycle",
-        FixedFilterValue::StringList(filters.life_cycle.as_deref()),
-    );
-    append_generated_fixed_filter(
-        where_clauses,
-        params,
-        "family",
-        FixedFilterValue::Text(filters.family.as_ref()),
-    );
-    append_generated_fixed_filter(
-        where_clauses,
-        params,
-        "edible",
-        FixedFilterValue::Boolean(filters.edible),
-    );
-    append_generated_fixed_filter(
-        where_clauses,
-        params,
-        "nitrogen_fixer",
-        FixedFilterValue::Boolean(filters.nitrogen_fixer),
-    );
-    append_generated_fixed_filter(
-        where_clauses,
-        params,
-        "climate_zones",
-        FixedFilterValue::StringList(filters.climate_zones.as_deref()),
-    );
-    append_generated_fixed_filter(
-        where_clauses,
-        params,
-        "habit",
-        FixedFilterValue::StringList(filters.habit.as_deref()),
-    );
-    append_generated_fixed_filter(
-        where_clauses,
-        params,
-        "woody",
-        FixedFilterValue::Boolean(filters.woody),
-    );
-    append_generated_fixed_filter(
-        where_clauses,
-        params,
-        "edibility_min",
-        FixedFilterValue::Integer(filters.edibility_min),
-    );
+    for behavior in SPECIES_FILTER_FIXED_BEHAVIORS {
+        let Some(value) = fixed_filter_value(filters, behavior.key) else {
+            debug_assert!(
+                false,
+                "missing SpeciesFilter value adapter for generated fixed filter '{}'",
+                behavior.key
+            );
+            continue;
+        };
+        append_generated_fixed_filter(where_clauses, params, behavior, value);
+    }
 }
 
 enum FixedFilterValue<'a> {
@@ -88,17 +34,35 @@ enum FixedFilterValue<'a> {
     Text(Option<&'a String>),
 }
 
+fn fixed_filter_value<'a>(filters: &'a SpeciesFilter, key: &str) -> Option<FixedFilterValue<'a>> {
+    match key {
+        "sun_tolerances" => Some(FixedFilterValue::StringList(
+            filters.sun_tolerances.as_deref(),
+        )),
+        "soil_tolerances" => Some(FixedFilterValue::StringList(
+            filters.soil_tolerances.as_deref(),
+        )),
+        "growth_rate" => Some(FixedFilterValue::StringList(filters.growth_rate.as_deref())),
+        "life_cycle" => Some(FixedFilterValue::StringList(filters.life_cycle.as_deref())),
+        "edible" => Some(FixedFilterValue::Boolean(filters.edible)),
+        "edibility_min" => Some(FixedFilterValue::Integer(filters.edibility_min)),
+        "nitrogen_fixer" => Some(FixedFilterValue::Boolean(filters.nitrogen_fixer)),
+        "family" => Some(FixedFilterValue::Text(filters.family.as_ref())),
+        "climate_zones" => Some(FixedFilterValue::StringList(
+            filters.climate_zones.as_deref(),
+        )),
+        "habit" => Some(FixedFilterValue::StringList(filters.habit.as_deref())),
+        "woody" => Some(FixedFilterValue::Boolean(filters.woody)),
+        _ => None,
+    }
+}
+
 fn append_generated_fixed_filter(
     where_clauses: &mut Vec<String>,
     params: &mut Vec<Value>,
-    key: &str,
+    behavior: &FixedFilterBehavior,
     value: FixedFilterValue<'_>,
 ) {
-    let Some(behavior) = fixed_filter_behavior(key) else {
-        debug_assert!(false, "missing generated fixed filter behavior for '{key}'");
-        return;
-    };
-
     match (behavior.predicate, value) {
         (
             FixedFilterPredicate::MappedBooleanList(mapping),
@@ -253,7 +217,22 @@ fn append_text_in_clause(
 
 #[cfg(test)]
 mod tests {
+    use crate::db::plant_filter_fields::fixed_filter_behavior;
+
     use super::*;
+
+    #[test]
+    fn every_generated_fixed_filter_has_a_request_value_adapter() {
+        let filters = SpeciesFilter::default();
+
+        for behavior in SPECIES_FILTER_FIXED_BEHAVIORS {
+            assert!(
+                fixed_filter_value(&filters, behavior.key).is_some(),
+                "missing request value adapter for {}",
+                behavior.key
+            );
+        }
+    }
 
     #[test]
     fn life_cycle_filter_maps_known_values_to_boolean_columns() {
