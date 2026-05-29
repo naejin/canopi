@@ -74,6 +74,12 @@ describe('plant filter model', () => {
   it('derives active filter state and count from one model', () => {
     const empty = plantFilterModel.createEmpty()
 
+    expect(Object.keys(empty).filter((key) => key !== 'extra').sort()).toEqual(
+      [...plantFilterCatalog.fixedFilterKeys()].sort(),
+    )
+    for (const key of plantFilterCatalog.fixedFilterKeys()) {
+      expect(empty[key]).toBeNull()
+    }
     expect(plantFilterModel.hasActive(empty)).toBe(false)
     expect(plantFilterModel.activeCount(empty)).toBe(0)
 

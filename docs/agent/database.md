@@ -34,6 +34,7 @@ When canopi-data removes or adds columns, update atomically:
 - `common-types/plant-filter-fields.json` owns both dynamic filter fields and the fixed `SpeciesFilter` catalog.
 - Fixed `SpeciesFilter` predicates with bespoke or schema-backed behavior belong in the JSON `fixed_filters` catalog; regenerate bindings instead of hand-editing generated Rust or TypeScript metadata.
 - `query_builder/species_catalog_filters.rs` is the Species Catalog Filter adapter: it consumes generated fixed-filter predicates and owns SQL assembly with prepared parameters.
+- Fixed Species Catalog Filter SQL dispatch iterates generated fixed-filter behaviors. Keep the flat `SpeciesFilter` value adapter in `query_builder/species_catalog_filters.rs` covered by its generated-behavior test when adding fixed fields.
 - `query_builder/filters.rs` should route fixed request fields to the Species Catalog Filter adapter and keep dynamic `extra` filters isolated behind allowlisted column validation.
 - `SpeciesFilter.life_cycle` remains a fixed request field, but its predicate routes through generated fixed-filter behavior and maps to boolean DB columns such as `is_annual`, `is_biennial`, and `is_perennial`.
 - Soil filtering uses boolean tolerance columns, not a `species_soil_types` table.

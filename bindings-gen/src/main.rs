@@ -916,6 +916,7 @@ fn write_plant_filter_rust(
     file.push_str("}\n\n");
     file.push_str("#[derive(Debug)]\n");
     file.push_str("pub(crate) struct FixedFilterBehavior {\n");
+    file.push_str("    pub key: &'static str,\n");
     file.push_str("    pub predicate: FixedFilterPredicate,\n");
     file.push_str("}\n\n");
     file.push_str("pub(crate) const PLANT_FILTER_FIELDS: &[PlantFilterField] = &[\n");
@@ -953,7 +954,7 @@ fn write_plant_filter_rust(
         "pub(crate) fn filter_field_kind(key: &str) -> Option<PlantFilterFieldKind> {\n    filter_field(key).map(|field| field.kind)\n}\n\n",
     );
     file.push_str(
-        "pub(crate) fn fixed_filter_behavior(key: &str) -> Option<&'static FixedFilterBehavior> {\n    match key {\n",
+        "#[cfg(test)]\npub(crate) fn fixed_filter_behavior(key: &str) -> Option<&'static FixedFilterBehavior> {\n    match key {\n",
     );
     for (index, filter) in schema.fixed_filters.iter().enumerate() {
         writeln!(
@@ -974,7 +975,7 @@ fn write_plant_filter_rust(
         "    #[test]\n    fn generated_fields_keep_static_sql_allowlist_entries() {\n        assert!(\n            PLANT_FILTER_FIELDS\n                .iter()\n                .all(|field| field.column.starts_with(\"s.\"))\n        );\n        assert!(PLANT_FILTER_FIELDS.iter().any(|field| field.key == \"habit\"));\n    }\n",
     );
     file.push_str(
-        "\n    #[test]\n    fn exposes_fixed_species_filter_behavior_from_schema() {\n        let behavior = fixed_filter_behavior(\"life_cycle\").unwrap();\n        match behavior.predicate {\n            FixedFilterPredicate::MappedBooleanList(clauses) => {\n                assert!(clauses.iter().any(|clause| clause.value == \"Perennial\"));\n            }\n            _ => panic!(\"expected mapped boolean predicate\"),\n        }\n        assert!(fixed_filter_behavior(\"not_a_field\").is_none());\n    }\n",
+        "\n    #[test]\n    fn exposes_fixed_species_filter_behavior_from_schema() {\n        let behavior = fixed_filter_behavior(\"life_cycle\").unwrap();\n        assert_eq!(behavior.key, \"life_cycle\");\n        match behavior.predicate {\n            FixedFilterPredicate::MappedBooleanList(clauses) => {\n                assert!(clauses.iter().any(|clause| clause.value == \"Perennial\"));\n            }\n            _ => panic!(\"expected mapped boolean predicate\"),\n        }\n        assert!(fixed_filter_behavior(\"not_a_field\").is_none());\n    }\n",
     );
     file.push_str("}\n");
 
@@ -1006,6 +1007,7 @@ fn write_fixed_filter_rust_constants(
     file.push_str("pub(crate) const SPECIES_FILTER_FIXED_BEHAVIORS: &[FixedFilterBehavior] = &[\n");
     for filter in &schema.fixed_filters {
         writeln!(file, "    FixedFilterBehavior {{")?;
+        writeln!(file, "        key: {},", rust_string(&filter.key))?;
         write!(file, "        predicate: ")?;
         write_fixed_filter_rust_predicate(file, filter)?;
         file.push_str(",\n    },\n");

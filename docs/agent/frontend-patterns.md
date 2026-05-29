@@ -41,6 +41,7 @@ Use this guide when changing Preact components, signals, i18n, CSS, panels, bott
 ## Species Catalog Filters
 
 - `app/plant-browser/species-catalog-filters.ts` owns Species Catalog Filter behavior for strip placement, active-chip formatting, activity counts, and fixed-field adapters.
+- `plantFilterModel.createEmpty()` must derive fixed filter defaults from the Species Catalog Filter catalog, not hand-list `SpeciesFilter` fields.
 - Components such as `FilterStrip` and `ActiveChips` should consume `plantFilterCatalog` instead of hardcoding fixed filter rows or chip metadata.
 - Strip rows should come from `stripControls()`; active chips should come from `activeArrayChipFields()`, `activeBooleanChipFields()`, and `activeNumericChipFields()`.
 - Keep the shared `SpeciesFilter` request shape stable unless the bead explicitly changes frontend/backend contracts.
