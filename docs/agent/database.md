@@ -61,6 +61,7 @@ When canopi-data removes or adds columns, update atomically:
 - Empty sanitized query means skip FTS.
 - Relevance text searches rank Common Name matches before BM25: active-locale exact phrase first for multi-word queries, then active-locale indexed query tokens, then fallback English exact phrase/tokens, then `bm25(species_search_fts, 8, 10, 5, 1, 1)` for canonical name, family, genus, and broader text matches.
 - `total_estimate` comes from count; visible rows come from list. If UI shows a new count with old rows during debounce, investigate frontend committed-result lifecycle first.
+- The Species Catalog Workbench may pass `include_total=false` for active text searches to keep first-page latency low; pagination must rely on `next_cursor`, not `total_estimate`.
 - Run the manual Species Catalog latency harness with `cargo test -p canopi-desktop db::plant_db::search::tests::bundled_species_search_latency_harness_reports_list_and_count_timings -- --ignored --nocapture`.
 - The harness opens `desktop/resources/canopi-core.db` by default, or `CANOPI_PLANT_DB_PATH` when set, and reports first-page list latency separately from total-count latency.
 

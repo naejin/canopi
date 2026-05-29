@@ -93,8 +93,72 @@ describe('plant search session', () => {
       50,
       'Name',
       'en',
-      true,
+      false,
     )
+
+    dispose()
+  })
+
+  it('clears results for one-character normalized text without hitting backend search', async () => {
+    vi.useFakeTimers()
+    const locale = signal('en')
+    const search = vi.fn<PlantSearchAdapter>()
+      .mockResolvedValueOnce(page(['Initial row'], null, 42))
+    const session = createPlantSearchSession({ search, locale })
+    const dispose = session.start()
+
+    await flushMicrotasks()
+    expect(session.results.value.items.map((item) => item.canonical_name)).toEqual(['Initial row'])
+
+    search.mockClear()
+    session.setText(' é ')
+    await flushMicrotasks()
+
+    expect(session.results.value.status).toBe('loading-first-page')
+    expect(session.results.value.items.map((item) => item.canonical_name)).toEqual(['Initial row'])
+
+    vi.advanceTimersByTime(150)
+    await flushMicrotasks()
+
+    expect(search).not.toHaveBeenCalled()
+    expect(session.results.value.status).toBe('idle')
+    expect(session.results.value.items).toEqual([])
+    expect(session.results.value.nextCursor).toBeNull()
+    expect(session.results.value.totalEstimate).toBe(0)
+    expect(session.results.value.committedRevision).toBe(2)
+
+    dispose()
+  })
+
+  it('keeps exact counts for empty browse and omits them for active text searches', async () => {
+    vi.useFakeTimers()
+    const locale = signal('en')
+    const search = vi.fn<PlantSearchAdapter>()
+      .mockResolvedValueOnce(page(['Browse row'], null, 42))
+      .mockResolvedValueOnce(page(['Search row'], 'offset:50', 0))
+    const session = createPlantSearchSession({ search, locale })
+    const dispose = session.start()
+
+    await flushMicrotasks()
+    expect(search).toHaveBeenNthCalledWith(1, '', expect.any(Object), null, 50, 'Name', 'en', true)
+    expect(session.results.value.totalEstimate).toBe(42)
+
+    session.setText('al')
+    vi.advanceTimersByTime(150)
+    await flushMicrotasks()
+
+    expect(search).toHaveBeenNthCalledWith(
+      2,
+      'al',
+      expect.any(Object),
+      null,
+      50,
+      'Name',
+      'en',
+      false,
+    )
+    expect(session.results.value.items.map((item) => item.canonical_name)).toEqual(['Search row'])
+    expect(session.results.value.totalEstimate).toBe(0)
 
     dispose()
   })
