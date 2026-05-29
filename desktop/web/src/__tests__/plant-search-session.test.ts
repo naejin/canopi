@@ -91,7 +91,7 @@ describe('plant search session', () => {
       expect.any(Object),
       null,
       50,
-      'Name',
+      'Relevance',
       'en',
       false,
     )
@@ -153,12 +153,58 @@ describe('plant search session', () => {
       expect.any(Object),
       null,
       50,
-      'Name',
+      'Relevance',
       'en',
       false,
     )
     expect(session.results.value.items.map((item) => item.canonical_name)).toEqual(['Search row'])
     expect(session.results.value.totalEstimate).toBe(0)
+
+    dispose()
+  })
+
+  it('uses best match for active text until the user overrides that text search sort', async () => {
+    vi.useFakeTimers()
+    const locale = signal('en')
+    const search = vi.fn<PlantSearchAdapter>()
+      .mockResolvedValue(page([], null, 0))
+    const session = createPlantSearchSession({ search, locale })
+    const dispose = session.start()
+
+    await flushMicrotasks()
+    session.setSort('Height')
+    await flushMicrotasks()
+    expect(search).toHaveBeenLastCalledWith('', expect.any(Object), null, 50, 'Height', 'en', true)
+
+    session.setText('lin')
+    vi.advanceTimersByTime(150)
+    await flushMicrotasks()
+    expect(search).toHaveBeenLastCalledWith(
+      'lin',
+      expect.any(Object),
+      null,
+      50,
+      'Relevance',
+      'en',
+      false,
+    )
+
+    session.setSort('Family')
+    await flushMicrotasks()
+    expect(search).toHaveBeenLastCalledWith(
+      'lin',
+      expect.any(Object),
+      null,
+      50,
+      'Family',
+      'en',
+      false,
+    )
+
+    session.setText('')
+    vi.advanceTimersByTime(150)
+    await flushMicrotasks()
+    expect(search).toHaveBeenLastCalledWith('', expect.any(Object), null, 50, 'Height', 'en', true)
 
     dispose()
   })

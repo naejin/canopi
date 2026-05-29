@@ -39,6 +39,7 @@ import {
 } from './controller'
 import { plantFilterCatalog, type StripControlField } from './plant-filter-model'
 import {
+  isActiveSpeciesSearchText,
   isPlantSearchLoading,
   type PlantSearchIntent,
   type PlantSearchResultState,
@@ -95,6 +96,7 @@ export interface SpeciesCatalogWorkbench {
   toggleFavorite(canonicalName: string): Promise<void>
   isFavorite(canonicalName: string): boolean
   isSearchLoading(status: PlantSearchStatus): boolean
+  isActiveSearchText(text: string): boolean
 }
 
 const selectedCanonical = computed(() => selectedCanonicalName.value)
@@ -183,4 +185,6 @@ export const speciesCatalogWorkbench: SpeciesCatalogWorkbench = {
   },
 
   isSearchLoading: isPlantSearchLoading,
+
+  isActiveSearchText: isActiveSpeciesSearchText,
 }

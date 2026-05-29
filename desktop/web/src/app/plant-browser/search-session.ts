@@ -145,6 +145,10 @@ function searchTextPolicy(rawText: string): SearchTextPolicy {
   return 'active-text'
 }
 
+export function isActiveSpeciesSearchText(rawText: string): boolean {
+  return searchTextPolicy(rawText) === 'active-text'
+}
+
 export function createPlantSearchSession({
   search,
   loadDynamicFilterOptions = async () => [],
@@ -157,6 +161,7 @@ export function createPlantSearchSession({
   const filters = signal<SpeciesFilter>(createEmptySpeciesFilter())
   const extraFilters = signal<DynamicFilter[]>([])
   const sort = signal<Sort>('Name')
+  const textSortOverride = signal<Sort | null>(null)
   const items = signal<SpeciesListItem[]>([])
   const nextCursor = signal<string | null>(null)
   const totalEstimate = signal(0)
@@ -167,11 +172,19 @@ export function createPlantSearchSession({
   const dynamicOptionsPending = signal<Record<string, Record<string, boolean>>>({})
   const dynamicOptionsErrors = signal<Record<string, Record<string, string>>>({})
 
+  const effectiveSort = computed<Sort>(() => {
+    if (isActiveSpeciesSearchText(text.value)) {
+      return textSortOverride.value ?? 'Relevance'
+    }
+
+    return sort.value === 'Relevance' ? 'Name' : sort.value
+  })
+
   const intent = computed<PlantSearchIntent>(() => ({
     text: text.value,
     filters: filters.value,
     extraFilters: extraFilters.value,
-    sort: sort.value,
+    sort: effectiveSort.value,
     locale: locale.value,
   }))
 
@@ -279,7 +292,7 @@ export function createPlantSearchSession({
       const currentText = text.value
       void filters.value
       void extraFilters.value
-      void sort.value
+      void effectiveSort.value
       void locale.value
 
       const textChanged = currentText !== lastText
@@ -432,13 +445,26 @@ export function createPlantSearchSession({
     },
     start,
     setText(nextText) {
-      text.value = nextText
+      batch(() => {
+        text.value = nextText
+        if (!isActiveSpeciesSearchText(nextText)) {
+          textSortOverride.value = null
+        }
+      })
     },
     patchFilters(patch) {
       filters.value = { ...filters.value, ...patch }
     },
     setSort(nextSort) {
-      sort.value = nextSort
+      if (isActiveSpeciesSearchText(text.value)) {
+        textSortOverride.value = nextSort
+        return
+      }
+
+      batch(() => {
+        sort.value = nextSort === 'Relevance' ? 'Name' : nextSort
+        textSortOverride.value = null
+      })
     },
     addExtraFilter(field, op, values) {
       const without = extraFilters.value.filter((filter) => filter.field !== field)
