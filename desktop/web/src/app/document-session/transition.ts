@@ -16,7 +16,7 @@ import {
   replaceCurrentDesignState,
   resetDirtyBaselines,
 } from "../../state/design";
-import { buildPersistedDocumentContent } from "./runtime";
+import { buildPersistedDesignSessionContent } from "./persistence";
 import { installConsortiumSync } from "./workflows";
 
 export type DocumentTransitionSource =
@@ -65,7 +65,10 @@ type ReplacementDecision = "proceed" | "cancel";
 
 export async function saveCurrentDesign(options: SaveCurrentDesignOptions = {}): Promise<void> {
   const session = sessionForOption(options.session);
-  const content = buildPersistedDocumentContent(session, designName.value);
+  const content = buildPersistedDesignSessionContent({
+    session,
+    name: designName.value,
+  });
 
   if (designPath.value) {
     await designIpc.saveDesign(designPath.value, content);
@@ -80,7 +83,10 @@ export async function saveCurrentDesign(options: SaveCurrentDesignOptions = {}):
 
 export async function saveAsCurrentDesign(options: SaveCurrentDesignOptions = {}): Promise<void> {
   const session = sessionForOption(options.session);
-  const content = buildPersistedDocumentContent(session, designName.value);
+  const content = buildPersistedDesignSessionContent({
+    session,
+    name: designName.value,
+  });
 
   try {
     const path = await designIpc.saveDesignAs(content);

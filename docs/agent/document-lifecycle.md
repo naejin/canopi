@@ -6,7 +6,7 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 
 - `desktop/web/src/app/document-session/actions.ts` exposes user-facing document actions.
 - `desktop/web/src/app/document-session/transition.ts` owns guarded Design Session transitions, including dirty checks, attached/detached replacement selection, queued loads, `zoomToFit()` for attached sessions, and workflow installation.
-- `desktop/web/src/app/document-session/runtime.ts` owns mount-time document hydration and save composition helpers.
+- `desktop/web/src/app/document-session/persistence.ts` owns persisted Design content composition, attached/detached save snapshots, teardown snapshots, and persistence workflow disposal.
 - `desktop/web/src/app/document-session/workflows.ts` owns cross-domain workflow effects such as consortium sync.
 - `desktop/web/src/app/document/controller.ts` owns non-canvas document mutations through `mutateCurrentDesign()` and `updateDesignArray()`.
 - `desktop/web/src/state/design.ts` is low-level document state. Treat it as internal state, not a feature action API.
@@ -45,7 +45,7 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 - Add document-level fields to the shared `CanopiFile` contract.
 - Regenerate `desktop/web/src/generated/contracts.ts` and `known-canopi-keys.ts`.
 - Keep `desktop/web/src/app/contracts/document.ts` aligned.
-- Add save passthrough in the document-session/runtime composition path.
+- Add save passthrough in the document-session/persistence composition path.
 - Rust `#[serde(flatten)] extra` round-trips unknown keys automatically, so Rust struct changes are only needed when backend logic needs the field.
 - For new required array fields, add `#[serde(default)]` in Rust, make the TS field required, add an empty placeholder in the scene codec, and update test fixtures.
 - Avoid `?? []` fallbacks on required `CanopiFile` arrays except where the parent object is nullable, such as `currentDesign.value?.field ?? []`.
