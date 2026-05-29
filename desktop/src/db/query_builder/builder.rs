@@ -5,9 +5,11 @@ use super::columns::sort_column;
 use super::cursor::{decode_cursor, encode_cursor};
 use super::filters::append_structured_filters;
 
+const FTS_META_CHARS: &str = r#""()*+-^:\"#;
+
 /// Sanitize text for FTS5 MATCH, returning `None` if nothing useful remains.
 pub(crate) fn sanitize_fts_text(text: &str) -> Option<String> {
-    let sanitized = text.replace(|c: char| r#""()*+-^:\"#.contains(c), "");
+    let sanitized = text.replace(|c: char| FTS_META_CHARS.contains(c), "");
     let trimmed = sanitized.trim();
     if trimmed.is_empty() {
         None
@@ -45,6 +47,7 @@ pub struct SpeciesSearchRequest {
     pub limit: u32,
     pub include_total: bool,
     pub locale: String,
+    pub use_common_name_token_index: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -145,6 +148,14 @@ fn build_list_statement(
     params.push(Value::Text(request.locale.clone()));
     params.push(Value::Text("en".to_owned()));
 
+    let common_name_token = active_locale_common_name_whole_token(request.text.as_deref());
+    let (common_name_token_join, has_indexed_common_name_token) = common_name_token_join(
+        common_name_token.as_deref(),
+        request.use_common_name_token_index,
+        locale_position,
+        &mut params,
+    );
+
     let fts_join = append_search_conditions(
         &mut where_clauses,
         &mut params,
@@ -159,9 +170,11 @@ fn build_list_statement(
     }
 
     let order_by = match page {
-        SpeciesSearchPagePlan::RelevanceOffset { .. } => {
-            "ORDER BY bm25(species_search_fts, 8, 10, 5, 1, 1), s.canonical_name".to_owned()
-        }
+        SpeciesSearchPagePlan::RelevanceOffset { .. } => relevance_order_by(
+            common_name_token.as_deref(),
+            has_indexed_common_name_token,
+            &mut params,
+        ),
         SpeciesSearchPagePlan::Keyset { .. } => {
             format!("ORDER BY {}, s.canonical_name", sort_column(&request.sort))
         }
@@ -213,17 +226,99 @@ fn build_list_statement(
          FROM species s
          {fts_join}
          {cn_join}
+         {token_join}
          {where_sql}
          {order_by}
          {limit_clause}",
         fts_join = fts_join_sql,
         cn_join = common_name_join,
+        token_join = common_name_token_join,
         where_sql = where_sql,
         order_by = order_by,
         limit_clause = limit_clause,
     );
 
     SqlStatementPlan::new(sql, params)
+}
+
+fn common_name_token_join(
+    token: Option<&str>,
+    enabled: bool,
+    locale_position: usize,
+    params: &mut Vec<Value>,
+) -> (String, bool) {
+    if !enabled {
+        return (String::new(), false);
+    }
+
+    let Some(token) = token else {
+        return (String::new(), false);
+    };
+
+    let token_position = params.len() + 1;
+    params.push(Value::Text(token.to_owned()));
+    (
+        format!(
+            "LEFT JOIN species_search_common_name_tokens scnt
+             ON scnt.species_id = s.id
+            AND scnt.language = ?{locale_position}
+            AND scnt.token = ?{token_position}"
+        ),
+        true,
+    )
+}
+
+fn relevance_order_by(
+    token: Option<&str>,
+    has_indexed_common_name_token: bool,
+    params: &mut Vec<Value>,
+) -> String {
+    if has_indexed_common_name_token {
+        return "ORDER BY CASE WHEN scnt.species_id IS NOT NULL THEN 0 ELSE 1 END,
+                COALESCE(scnt.first_token_position, 2147483647),
+                bm25(species_search_fts, 8, 10, 5, 1, 1),
+                s.canonical_name"
+            .to_owned();
+    }
+
+    let Some(token) = token else {
+        return "ORDER BY bm25(species_search_fts, 8, 10, 5, 1, 1), s.canonical_name".to_owned();
+    };
+
+    let exact_position = params.len() + 1;
+    let starts_position = params.len() + 2;
+    let contains_position = params.len() + 3;
+    let ends_position = params.len() + 4;
+    params.push(Value::Text(token.to_owned()));
+    params.push(Value::Text(format!("{token} %")));
+    params.push(Value::Text(format!("% {token} %")));
+    params.push(Value::Text(format!("% {token}")));
+
+    format!(
+        "ORDER BY CASE
+             WHEN bcn_loc.common_name IS NOT NULL
+              AND (
+                bcn_loc.common_name = ?{exact_position} COLLATE NOCASE
+                OR bcn_loc.common_name LIKE ?{starts_position}
+                OR bcn_loc.common_name LIKE ?{contains_position}
+                OR bcn_loc.common_name LIKE ?{ends_position}
+              )
+             THEN 0 ELSE 1
+         END,
+         bm25(species_search_fts, 8, 10, 5, 1, 1),
+         s.canonical_name"
+    )
+}
+
+fn active_locale_common_name_whole_token(text: Option<&str>) -> Option<String> {
+    let sanitized = text?.replace(|c: char| FTS_META_CHARS.contains(c), " ");
+    let mut tokens = sanitized.split_whitespace();
+    let token = tokens.next()?.to_lowercase();
+    if token.is_empty() || tokens.next().is_some() {
+        None
+    } else {
+        Some(token)
+    }
 }
 
 fn append_search_conditions(

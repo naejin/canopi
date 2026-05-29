@@ -36,6 +36,7 @@ mod tests {
             limit,
             include_total,
             locale: "en".to_owned(),
+            use_common_name_token_index: true,
         }
     }
 
@@ -141,12 +142,12 @@ mod tests {
             false,
         ));
         let params = plan.list().params();
-        // params[0] = locale, params[1] = "en" fallback, params[2] = search term
-        let search_term = match &params[2] {
-            Value::Text(s) => s.clone(),
-            _ => panic!("expected text"),
-        };
-        assert_eq!(search_term, "lav*");
+        assert!(
+            params
+                .iter()
+                .any(|param| matches!(param, Value::Text(value) if value == "lav*")),
+            "expected FTS prefix wildcard in params, got {params:?}"
+        );
     }
 
     #[test]
@@ -320,7 +321,8 @@ mod tests {
         ));
         let sql = plan.list().sql();
         let params = plan.list().params();
-        assert!(sql.contains("ORDER BY bm25("));
+        assert!(sql.contains("ORDER BY CASE"));
+        assert!(sql.contains("bm25("));
         assert!(sql.contains("OFFSET ?"));
         assert!(!sql.contains("s.canonical_name >"));
         let offset_val = match params.last().unwrap() {
@@ -332,6 +334,47 @@ mod tests {
         let items = vec![list_item("Lavandula alpha"), list_item("Lavandula beta")];
         assert_eq!(plan.next_cursor(&items, true).as_deref(), Some("offset:52"));
         assert_eq!(plan.next_cursor(&items, false), None);
+    }
+
+    #[test]
+    fn test_relevance_sort_prefers_active_locale_common_name_whole_token() {
+        let plan = SpeciesSearchPlan::build(request(
+            Some("lin"),
+            default_filter(),
+            None,
+            Sort::Relevance,
+            20,
+            false,
+        ));
+        let sql = plan.list().sql();
+        let params = plan.list().params();
+
+        assert!(sql.contains("species_search_common_name_tokens scnt"));
+        assert!(sql.contains("scnt.language = ?1"));
+        assert!(sql.contains("scnt.token = ?"));
+        assert!(sql.contains("scnt.species_id IS NOT NULL"));
+        assert!(sql.contains("ORDER BY CASE"));
+        assert!(
+            params
+                .iter()
+                .any(|param| matches!(param, Value::Text(value) if value == "lin"))
+        );
+    }
+
+    #[test]
+    fn test_explicit_non_name_sort_skips_common_name_relevance_tier() {
+        let plan = SpeciesSearchPlan::build(request(
+            Some("lin"),
+            default_filter(),
+            None,
+            Sort::Family,
+            20,
+            false,
+        ));
+        let sql = plan.list().sql();
+
+        assert!(sql.contains("ORDER BY s.family"));
+        assert!(!sql.contains("ORDER BY CASE"));
     }
 
     #[test]

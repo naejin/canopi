@@ -13,9 +13,11 @@ Usage:
 
 import argparse
 import json
+import re
 import sqlite3
 import sys
 import time
+import unicodedata
 import uuid
 from pathlib import Path
 
@@ -261,6 +263,69 @@ def build_best_common_names(dst: sqlite3.Connection):
     dst.commit()
 
 
+def normalize_search_token(token: str) -> str:
+    """Normalize a name token to match FTS unicode61 remove_diacritics behavior."""
+    decomposed = unicodedata.normalize("NFKD", token)
+    without_diacritics = "".join(
+        char for char in decomposed if not unicodedata.combining(char)
+    )
+    return without_diacritics.casefold()
+
+
+def common_name_tokens(name: str) -> list[tuple[str, int]]:
+    tokens: list[tuple[str, int]] = []
+    for index, raw_token in enumerate(re.findall(r"\w+", name, flags=re.UNICODE)):
+        token = normalize_search_token(raw_token)
+        if token:
+            tokens.append((token, index))
+    return tokens
+
+
+def build_common_name_token_index(dst: sqlite3.Connection):
+    """Build indexed active-locale Common Name tokens for relevance ranking."""
+    dst.execute("""
+        CREATE TABLE species_search_common_name_tokens (
+            species_id TEXT NOT NULL,
+            language TEXT NOT NULL,
+            token TEXT NOT NULL,
+            first_token_position INTEGER NOT NULL,
+            PRIMARY KEY (species_id, language, token)
+        )
+    """)
+
+    token_positions: dict[tuple[str, str, str], int] = {}
+    rows = dst.execute("""
+        SELECT scn.species_id, scn.language, scn.common_name
+        FROM species_common_names scn
+        JOIN species s ON s.id = scn.species_id
+        WHERE scn.common_name != s.canonical_name
+    """)
+    for species_id, language, common_name in rows:
+        for token, position in common_name_tokens(common_name or ""):
+            key = (species_id, language, token)
+            previous_position = token_positions.get(key)
+            if previous_position is None or position < previous_position:
+                token_positions[key] = position
+
+    dst.executemany(
+        """
+        INSERT INTO species_search_common_name_tokens (
+            species_id, language, token, first_token_position
+        ) VALUES (?, ?, ?, ?)
+        """,
+        (
+            (species_id, language, token, position)
+            for (species_id, language, token), position in token_positions.items()
+        ),
+    )
+    dst.execute("""
+        CREATE INDEX idx_species_search_common_name_tokens_language_token
+            ON species_search_common_name_tokens(language, token, species_id)
+    """)
+    print(f"  -> {len(token_positions):,} common name token rows")
+    dst.commit()
+
+
 def filter_orphaned_relationships(dst: sqlite3.Connection):
     """Remove relationships referencing species not in our DB."""
     before = dst.execute("SELECT COUNT(*) FROM species_relationships").fetchone()[0]
@@ -388,7 +453,7 @@ def main():
     # Validate export schema version
     min_version = contract.get("min_export_schema_version", 0)
     if min_version > 0:
-        print("[0/9] Validating export schema version...")
+        print("[0/10] Validating export schema version...")
         export_version = validate_export_version(dst, min_version)
         if export_version is not None:
             print(f"  -> Export schema version: {export_version}")
@@ -397,38 +462,41 @@ def main():
     export_columns = get_export_columns(dst)
     print(f"  -> Export has {len(export_columns)} columns in species table")
 
-    print("[1/9] Creating core species table...")
+    print("[1/10] Creating core species table...")
     create_core_species_table(dst, contract["columns"], export_columns)
 
-    print("[2/9] Copying supporting tables...")
+    print("[2/10] Copying supporting tables...")
     copy_supporting_tables(dst, contract.get("supporting_tables", []))
 
     # Detach export DB — no longer needed
     dst.commit()
     dst.execute("DETACH DATABASE export_db")
 
-    print("[3/9] Building unified search index...")
+    print("[3/10] Building unified search index...")
     build_search_index(dst)
 
-    print("[4/9] Building best_common_names lookup table...")
+    print("[4/10] Building best_common_names lookup table...")
     build_best_common_names(dst)
 
-    print("[5/9] Filtering orphaned relationships...")
+    print("[5/10] Building common name token index...")
+    build_common_name_token_index(dst)
+
+    print("[6/10] Filtering orphaned relationships...")
     filter_orphaned_relationships(dst)
 
-    print("[6/9] Populating translations...")
+    print("[7/10] Populating translations...")
     populate_translations(dst, contract.get("translations", {}))
     dst.commit()
 
-    print("[7/9] Creating B-tree indexes...")
+    print("[8/10] Creating B-tree indexes...")
     create_btree_indexes(dst, contract.get("indexes", {}))
     dst.commit()
 
-    print("[8/9] Optimizing (ANALYZE + VACUUM)...")
+    print("[9/10] Optimizing (ANALYZE + VACUUM)...")
     dst.execute("ANALYZE")
     dst.execute("VACUUM")
 
-    print("[9/9] Finalizing...")
+    print("[10/10] Finalizing...")
     # Set schema version so Rust backend can detect DB format
     dst.execute(f"PRAGMA user_version = {contract['schema_version']}")
     # Switch to DELETE journal mode — read-only at runtime

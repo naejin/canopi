@@ -1,7 +1,7 @@
 {
-  "schema_version": 8,
+  "schema_version": 9,
   "min_export_schema_version": 11,
-  "description": "Maps canopi-data export columns to canopi-core.db species table. Update this file when canopi-data changes column names. v8: canopi-data export v11 — species_climate_zones junction table added, climate_zones JSON column on species, LLM-curated common names.",
+  "description": "Maps canopi-data export columns to canopi-core.db species table. Update this file when canopi-data changes column names. v9: indexed species_search_common_name_tokens added for localized Common Name relevance ranking.",
   "columns": [
     {"name": "id", "type": "TEXT", "required": true},
     {"name": "slug", "type": "TEXT", "required": true},

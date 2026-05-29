@@ -29,6 +29,7 @@ pub fn search(
         limit,
         include_total,
         locale,
+        use_common_name_token_index: supports_common_name_token_index(conn),
     });
 
     let total_estimate = if let Some(count) = plan.count() {
@@ -85,6 +86,16 @@ pub fn search(
         next_cursor,
         total_estimate,
     })
+}
+
+fn supports_common_name_token_index(conn: &Connection) -> bool {
+    conn.query_row(
+        "SELECT 1 FROM sqlite_master
+         WHERE type = 'table' AND name = 'species_search_common_name_tokens'",
+        [],
+        |_| Ok(()),
+    )
+    .is_ok()
 }
 
 #[cfg(test)]
@@ -194,6 +205,15 @@ mod tests {
                 content_rowid='species_rowid',
                 tokenize='unicode61 remove_diacritics 2'
             );
+            CREATE TABLE species_search_common_name_tokens (
+                species_id TEXT NOT NULL,
+                language TEXT NOT NULL,
+                token TEXT NOT NULL,
+                first_token_position INTEGER NOT NULL,
+                PRIMARY KEY (species_id, language, token)
+            );
+            CREATE INDEX idx_species_search_common_name_tokens_language_token
+                ON species_search_common_name_tokens(language, token, species_id);
             CREATE TABLE best_common_names (
                 species_id TEXT NOT NULL,
                 language TEXT NOT NULL,
@@ -253,7 +273,20 @@ mod tests {
                 GROUP BY species_id
             ) cn ON cn.species_id = s.id;
 
-            INSERT INTO species_search_fts(species_search_fts) VALUES('rebuild');",
+            INSERT INTO species_search_fts(species_search_fts) VALUES('rebuild');
+
+            INSERT INTO species_search_common_name_tokens VALUES
+                ('linum-usitatissimum', 'en', 'common', 0),
+                ('linum-usitatissimum', 'en', 'flax', 1),
+                ('linum-usitatissimum', 'fr', 'lin', 0),
+                ('linum-usitatissimum', 'fr', 'commun', 1),
+                ('linum-bienne', 'en', 'pale', 0),
+                ('linum-bienne', 'en', 'flax', 1),
+                ('linum-bienne', 'fr', 'lin', 0),
+                ('linum-bienne', 'fr', 'bisannuel', 1),
+                ('lindleya-mespiloides', 'en', 'lindleya', 0),
+                ('malus-domestica', 'en', 'apple', 0),
+                ('malus-domestica', 'fr', 'pommier', 0);",
         )
         .unwrap();
         conn
@@ -316,6 +349,7 @@ mod tests {
             limit: 20,
             include_total: true,
             locale: locale.to_owned(),
+            use_common_name_token_index: true,
         });
 
         let list_started = Instant::now();
@@ -565,6 +599,42 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn relevance_prefers_active_locale_common_name_whole_token() {
+        let conn = relevance_fixture_db();
+
+        let result = search(
+            &conn,
+            Some("lin".to_owned()),
+            SpeciesFilter::default(),
+            None,
+            Sort::Relevance,
+            10,
+            true,
+            "fr".to_owned(),
+        )
+        .unwrap();
+        let names = result
+            .items
+            .iter()
+            .map(|item| item.canonical_name.as_str())
+            .collect::<Vec<_>>();
+
+        assert!(names[..2].contains(&"Linum usitatissimum"));
+        assert!(names[..2].contains(&"Linum bienne"));
+        assert!(
+            names
+                .iter()
+                .position(|name| *name == "Linum bienne")
+                .unwrap()
+                < names
+                    .iter()
+                    .position(|name| *name == "Lindleya mespiloides")
+                    .unwrap(),
+            "expected Linum bienne before Lindleya mespiloides; got {names:?}"
+        );
     }
 
     #[test]

@@ -8,7 +8,7 @@ Use this guide when changing SQLite schema contracts, plant search, filters, spe
 - `prepare-db.py` reads from the contract. Update the contract when canopi-data changes column names.
 - Runtime schema validation lives in `desktop/src/db/schema_contract.rs`.
 - Startup warns on schema drift but does not block app startup.
-- Plant DB schema version is `PRAGMA user_version = 8` for the current core DB.
+- Plant DB schema version is `PRAGMA user_version = 9` for the current core DB.
 - canopi-data export schema version is tracked in the contract.
 - Species table name is `species`.
 - User DB migrations also use `PRAGMA user_version`; check before adding migrations.
@@ -55,9 +55,11 @@ When canopi-data removes or adds columns, update atomically:
 ## FTS5 Search
 
 - `species_search_fts` has weighted columns: canonical name, common names, family/genus, uses text, and other text.
+- `species_search_common_name_tokens` stores normalized Common Name tokens by species and language; relevance search uses it to boost active-locale whole-token Common Name matches before BM25.
 - Use the full FTS table name in `MATCH`, not an alias.
 - Strip all FTS metacharacters before building MATCH queries.
 - Empty sanitized query means skip FTS.
+- Relevance text searches rank active-locale whole-token Common Name matches before BM25, then fall back to `bm25(species_search_fts, 8, 10, 5, 1, 1)`.
 - `total_estimate` comes from count; visible rows come from list. If UI shows a new count with old rows during debounce, investigate frontend committed-result lifecycle first.
 - Run the manual Species Catalog latency harness with `cargo test -p canopi-desktop db::plant_db::search::tests::bundled_species_search_latency_harness_reports_list_and_count_timings -- --ignored --nocapture`.
 - The harness opens `desktop/resources/canopi-core.db` by default, or `CANOPI_PLANT_DB_PATH` when set, and reports first-page list latency separately from total-count latency.
