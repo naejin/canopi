@@ -350,14 +350,77 @@ mod tests {
         let params = plan.list().params();
 
         assert!(sql.contains("species_search_common_name_tokens scnt"));
-        assert!(sql.contains("scnt.language = ?1"));
-        assert!(sql.contains("scnt.token = ?"));
-        assert!(sql.contains("scnt.species_id IS NOT NULL"));
+        assert!(sql.contains("scnt0.language = ?1"));
+        assert!(sql.contains("scnt0.token = ?"));
+        assert!(sql.contains("scnt0.species_id IS NOT NULL"));
         assert!(sql.contains("ORDER BY CASE"));
         assert!(
             params
                 .iter()
                 .any(|param| matches!(param, Value::Text(value) if value == "lin"))
+        );
+    }
+
+    #[test]
+    fn test_multi_word_relevance_sort_adds_phrase_and_all_token_tiers() {
+        let plan = SpeciesSearchPlan::build(request(
+            Some("lin commun"),
+            default_filter(),
+            None,
+            Sort::Relevance,
+            20,
+            false,
+        ));
+        let sql = plan.list().sql();
+        let params = plan.list().params();
+
+        assert!(sql.contains("species_search_common_name_tokens scnt0"));
+        assert!(sql.contains("species_search_common_name_tokens scnt1"));
+        assert!(sql.contains("bcn_loc.common_name = ?"));
+        assert!(sql.contains("scnt0.species_id IS NOT NULL AND scnt1.species_id IS NOT NULL"));
+        assert!(
+            params
+                .iter()
+                .any(|param| matches!(param, Value::Text(value) if value == "lin"))
+        );
+        assert!(
+            params
+                .iter()
+                .any(|param| matches!(param, Value::Text(value) if value == "commun"))
+        );
+        assert!(
+            params
+                .iter()
+                .any(|param| matches!(param, Value::Text(value) if value == "lin commun"))
+        );
+    }
+
+    #[test]
+    fn test_common_name_token_query_normalizes_diacritics() {
+        let plan = SpeciesSearchPlan::build(request(
+            Some("lin léon"),
+            default_filter(),
+            None,
+            Sort::Relevance,
+            20,
+            false,
+        ));
+        let params = plan.list().params();
+
+        assert!(
+            params
+                .iter()
+                .any(|param| matches!(param, Value::Text(value) if value == "lin"))
+        );
+        assert!(
+            params
+                .iter()
+                .any(|param| matches!(param, Value::Text(value) if value == "leon"))
+        );
+        assert!(
+            !params
+                .iter()
+                .any(|param| matches!(param, Value::Text(value) if value == "léon"))
         );
     }
 

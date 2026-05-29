@@ -51,6 +51,12 @@ pub struct SpeciesSearchRequest {
 }
 
 #[derive(Debug, Clone)]
+struct CommonNameQuery {
+    phrase: Option<String>,
+    tokens: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
 enum SpeciesSearchPagePlan {
     RelevanceOffset { current_offset: u32 },
     Keyset { sort: Sort },
@@ -148,9 +154,12 @@ fn build_list_statement(
     params.push(Value::Text(request.locale.clone()));
     params.push(Value::Text("en".to_owned()));
 
-    let common_name_token = active_locale_common_name_whole_token(request.text.as_deref());
-    let (common_name_token_join, has_indexed_common_name_token) = common_name_token_join(
-        common_name_token.as_deref(),
+    let common_name_query = active_locale_common_name_query(request.text.as_deref());
+    let (common_name_token_join, common_name_token_aliases) = common_name_token_joins(
+        common_name_query
+            .as_ref()
+            .map(|query| query.tokens.as_slice())
+            .unwrap_or(&[]),
         request.use_common_name_token_index,
         locale_position,
         &mut params,
@@ -171,8 +180,8 @@ fn build_list_statement(
 
     let order_by = match page {
         SpeciesSearchPagePlan::RelevanceOffset { .. } => relevance_order_by(
-            common_name_token.as_deref(),
-            has_indexed_common_name_token,
+            common_name_query.as_ref(),
+            &common_name_token_aliases,
             &mut params,
         ),
         SpeciesSearchPagePlan::Keyset { .. } => {
@@ -241,47 +250,93 @@ fn build_list_statement(
     SqlStatementPlan::new(sql, params)
 }
 
-fn common_name_token_join(
-    token: Option<&str>,
+fn common_name_token_joins(
+    tokens: &[String],
     enabled: bool,
     locale_position: usize,
     params: &mut Vec<Value>,
-) -> (String, bool) {
-    if !enabled {
-        return (String::new(), false);
+) -> (String, Vec<String>) {
+    if !enabled || tokens.is_empty() {
+        return (String::new(), Vec::new());
     }
 
-    let Some(token) = token else {
-        return (String::new(), false);
-    };
+    let mut joins = Vec::with_capacity(tokens.len());
+    let mut aliases = Vec::with_capacity(tokens.len());
+    for (index, token) in tokens.iter().enumerate() {
+        let alias = format!("scnt{index}");
+        let token_position = params.len() + 1;
+        params.push(Value::Text(token.to_owned()));
+        joins.push(format!(
+            "LEFT JOIN species_search_common_name_tokens {alias}
+             ON {alias}.species_id = s.id
+            AND {alias}.language = ?{locale_position}
+            AND {alias}.token = ?{token_position}",
+            alias = alias
+        ));
+        aliases.push(alias);
+    }
 
-    let token_position = params.len() + 1;
-    params.push(Value::Text(token.to_owned()));
-    (
-        format!(
-            "LEFT JOIN species_search_common_name_tokens scnt
-             ON scnt.species_id = s.id
-            AND scnt.language = ?{locale_position}
-            AND scnt.token = ?{token_position}"
-        ),
-        true,
-    )
+    (joins.join("\n"), aliases)
 }
 
 fn relevance_order_by(
-    token: Option<&str>,
-    has_indexed_common_name_token: bool,
+    query: Option<&CommonNameQuery>,
+    token_aliases: &[String],
     params: &mut Vec<Value>,
 ) -> String {
-    if has_indexed_common_name_token {
-        return "ORDER BY CASE WHEN scnt.species_id IS NOT NULL THEN 0 ELSE 1 END,
-                COALESCE(scnt.first_token_position, 2147483647),
+    if !token_aliases.is_empty() {
+        let phrase_condition = query.and_then(|query| query.phrase.as_ref()).map(|phrase| {
+            let phrase_position = params.len() + 1;
+            params.push(Value::Text(phrase.to_owned()));
+            format!("bcn_loc.common_name = ?{phrase_position} COLLATE NOCASE")
+        });
+        let all_tokens_condition = token_aliases
+            .iter()
+            .map(|alias| format!("{alias}.species_id IS NOT NULL"))
+            .collect::<Vec<_>>()
+            .join(" AND ");
+        let all_tokens_tier = if phrase_condition.is_some() { 1 } else { 0 };
+        let token_positions = token_aliases
+            .iter()
+            .map(|alias| format!("COALESCE({alias}.first_token_position, 2147483647)"))
+            .collect::<Vec<_>>()
+            .join(" + ");
+
+        let mut cases = Vec::new();
+        if let Some(condition) = phrase_condition {
+            cases.push(format!("WHEN {condition} THEN 0"));
+        }
+        cases.push(format!(
+            "WHEN {all_tokens_condition} THEN {all_tokens_tier}"
+        ));
+
+        return format!(
+            "ORDER BY CASE {} ELSE {} END,
+                {token_positions},
                 bm25(species_search_fts, 8, 10, 5, 1, 1),
-                s.canonical_name"
-            .to_owned();
+                s.canonical_name",
+            cases.join(" "),
+            all_tokens_tier + 1,
+        );
     }
 
-    let Some(token) = token else {
+    let Some(query) = query else {
+        return "ORDER BY bm25(species_search_fts, 8, 10, 5, 1, 1), s.canonical_name".to_owned();
+    };
+
+    if let Some(phrase) = &query.phrase {
+        let phrase_position = params.len() + 1;
+        params.push(Value::Text(phrase.to_owned()));
+        return format!(
+            "ORDER BY CASE
+                 WHEN bcn_loc.common_name = ?{phrase_position} COLLATE NOCASE THEN 0 ELSE 1
+             END,
+             bm25(species_search_fts, 8, 10, 5, 1, 1),
+             s.canonical_name"
+        );
+    }
+
+    let Some(token) = query.tokens.first() else {
         return "ORDER BY bm25(species_search_fts, 8, 10, 5, 1, 1), s.canonical_name".to_owned();
     };
 
@@ -310,15 +365,56 @@ fn relevance_order_by(
     )
 }
 
-fn active_locale_common_name_whole_token(text: Option<&str>) -> Option<String> {
+fn active_locale_common_name_query(text: Option<&str>) -> Option<CommonNameQuery> {
     let sanitized = text?.replace(|c: char| FTS_META_CHARS.contains(c), " ");
-    let mut tokens = sanitized.split_whitespace();
-    let token = tokens.next()?.to_lowercase();
-    if token.is_empty() || tokens.next().is_some() {
+    let raw_tokens = sanitized.split_whitespace().collect::<Vec<_>>();
+    if raw_tokens.is_empty() {
         None
     } else {
-        Some(token)
+        let mut tokens = Vec::new();
+        for raw_token in &raw_tokens {
+            let token = normalize_common_name_token(raw_token);
+            if !tokens.contains(&token) {
+                tokens.push(token);
+            }
+        }
+        Some(CommonNameQuery {
+            phrase: (raw_tokens.len() > 1).then(|| raw_tokens.join(" ").to_lowercase()),
+            tokens,
+        })
     }
+}
+
+fn normalize_common_name_token(raw: &str) -> String {
+    let mut normalized = String::new();
+    for ch in raw.chars() {
+        match ch {
+            'à' | 'á' | 'â' | 'ã' | 'ä' | 'å' | 'ā' | 'ă' | 'ą' | 'À' | 'Á' | 'Â' | 'Ã' | 'Ä'
+            | 'Å' | 'Ā' | 'Ă' | 'Ą' => normalized.push('a'),
+            'ç' | 'ć' | 'č' | 'Ç' | 'Ć' | 'Č' => normalized.push('c'),
+            'ď' | 'đ' | 'Ð' | 'Ď' | 'Đ' => normalized.push('d'),
+            'è' | 'é' | 'ê' | 'ë' | 'ē' | 'ė' | 'ę' | 'ě' | 'È' | 'É' | 'Ê' | 'Ë' | 'Ē' | 'Ė'
+            | 'Ę' | 'Ě' => normalized.push('e'),
+            'ì' | 'í' | 'î' | 'ï' | 'ī' | 'į' | 'İ' | 'Ì' | 'Í' | 'Î' | 'Ï' | 'Ī' | 'Į' => {
+                normalized.push('i')
+            }
+            'ł' | 'Ł' => normalized.push('l'),
+            'ñ' | 'ń' | 'ň' | 'Ñ' | 'Ń' | 'Ň' => normalized.push('n'),
+            'ò' | 'ó' | 'ô' | 'õ' | 'ö' | 'ø' | 'ō' | 'ő' | 'Ò' | 'Ó' | 'Ô' | 'Õ' | 'Ö' | 'Ø'
+            | 'Ō' | 'Ő' => normalized.push('o'),
+            'ŕ' | 'ř' | 'Ŕ' | 'Ř' => normalized.push('r'),
+            'ś' | 'š' | 'ş' | 'Ś' | 'Š' | 'Ş' => normalized.push('s'),
+            'ť' | 'þ' | 'Þ' | 'Ť' => normalized.push('t'),
+            'ù' | 'ú' | 'û' | 'ü' | 'ū' | 'ů' | 'ű' | 'ų' | 'Ù' | 'Ú' | 'Û' | 'Ü' | 'Ū' | 'Ů'
+            | 'Ű' | 'Ų' => normalized.push('u'),
+            'ý' | 'ÿ' | 'Ý' => normalized.push('y'),
+            'ź' | 'ż' | 'ž' | 'Ź' | 'Ż' | 'Ž' => normalized.push('z'),
+            'æ' | 'Æ' => normalized.push_str("ae"),
+            'œ' | 'Œ' => normalized.push_str("oe"),
+            _ => normalized.extend(ch.to_lowercase()),
+        }
+    }
+    normalized
 }
 
 fn append_search_conditions(

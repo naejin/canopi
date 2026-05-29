@@ -236,6 +236,9 @@ mod tests {
             ) VALUES
                 ('linum-usitatissimum', 'Linum usitatissimum', 'linum-usitatissimum', 'Common flax', 'Linaceae', 'Linum', 1.2, 5, 9, 'Fast', 'Low', 4, 1, 0.3),
                 ('linum-bienne', 'Linum bienne', 'linum-bienne', 'Pale flax', 'Linaceae', 'Linum', 0.8, 6, 9, 'Medium', 'Low', 1, 0, 0.2),
+                ('linum-leonii', 'Linum leonii', 'linum-leonii', 'Leon flax', 'Linaceae', 'Linum', 0.5, 6, 9, 'Medium', 'Low', 1, 0, 0.2),
+                ('linum-communis', 'Linum communis', 'linum-communis', 'False flax', 'Linaceae', 'Linum', 0.7, 6, 9, 'Medium', 'Low', 1, 0, 0.2),
+                ('communia-linensis', 'Communia linensis', 'communia-linensis', 'Commun flax', 'Linaceae', 'Communia', 0.6, 6, 9, 'Medium', 'Low', 1, 0, 0.2),
                 ('lindleya-mespiloides', 'Lindleya mespiloides', 'lindleya-mespiloides', 'Lindleya', 'Rosaceae', 'Lindleya', 3.0, 7, 10, 'Medium', 'Shrub', 0, 0, 2.0),
                 ('malus-domestica', 'Malus domestica', 'malus-domestica', 'Apple', 'Rosaceae', 'Malus', 4.0, 4, 8, 'Medium', 'Canopy', 5, 1, 3.0);
 
@@ -244,6 +247,12 @@ mod tests {
                 ('linum-usitatissimum', 'Lin commun', 'fr', 1, 'test'),
                 ('linum-bienne', 'Pale flax', 'en', 1, 'test'),
                 ('linum-bienne', 'Lin bisannuel', 'fr', 1, 'test'),
+                ('linum-leonii', 'Leon flax', 'en', 1, 'test'),
+                ('linum-leonii', 'Lin de Léon', 'fr', 1, 'test'),
+                ('linum-communis', 'False flax', 'en', 1, 'test'),
+                ('linum-communis', 'Faux lin', 'fr', 1, 'test'),
+                ('communia-linensis', 'Commun flax', 'en', 1, 'test'),
+                ('communia-linensis', 'Commun Lin', 'fr', 1, 'test'),
                 ('lindleya-mespiloides', 'Lindleya', 'en', 1, 'test'),
                 ('malus-domestica', 'Apple', 'en', 1, 'test'),
                 ('malus-domestica', 'Pommier', 'fr', 1, 'test');
@@ -253,6 +262,12 @@ mod tests {
                 ('linum-usitatissimum', 'fr', 'Lin commun'),
                 ('linum-bienne', 'en', 'Pale flax'),
                 ('linum-bienne', 'fr', 'Lin bisannuel'),
+                ('linum-leonii', 'en', 'Leon flax'),
+                ('linum-leonii', 'fr', 'Lin de Léon'),
+                ('linum-communis', 'en', 'False flax'),
+                ('linum-communis', 'fr', 'Faux lin'),
+                ('communia-linensis', 'en', 'Commun flax'),
+                ('communia-linensis', 'fr', 'Commun Lin'),
                 ('lindleya-mespiloides', 'en', 'Lindleya'),
                 ('malus-domestica', 'en', 'Apple'),
                 ('malus-domestica', 'fr', 'Pommier');
@@ -284,6 +299,19 @@ mod tests {
                 ('linum-bienne', 'en', 'flax', 1),
                 ('linum-bienne', 'fr', 'lin', 0),
                 ('linum-bienne', 'fr', 'bisannuel', 1),
+                ('linum-leonii', 'en', 'leon', 0),
+                ('linum-leonii', 'en', 'flax', 1),
+                ('linum-leonii', 'fr', 'lin', 0),
+                ('linum-leonii', 'fr', 'de', 1),
+                ('linum-leonii', 'fr', 'leon', 2),
+                ('linum-communis', 'en', 'false', 0),
+                ('linum-communis', 'en', 'flax', 1),
+                ('linum-communis', 'fr', 'faux', 0),
+                ('linum-communis', 'fr', 'lin', 1),
+                ('communia-linensis', 'en', 'commun', 0),
+                ('communia-linensis', 'en', 'flax', 1),
+                ('communia-linensis', 'fr', 'commun', 0),
+                ('communia-linensis', 'fr', 'lin', 1),
                 ('lindleya-mespiloides', 'en', 'lindleya', 0),
                 ('malus-domestica', 'en', 'apple', 0),
                 ('malus-domestica', 'fr', 'pommier', 0);",
@@ -634,6 +662,81 @@ mod tests {
                     .position(|name| *name == "Lindleya mespiloides")
                     .unwrap(),
             "expected Linum bienne before Lindleya mespiloides; got {names:?}"
+        );
+    }
+
+    #[test]
+    fn relevance_prefers_active_locale_common_name_exact_phrase() {
+        let conn = relevance_fixture_db();
+
+        let result = search(
+            &conn,
+            Some("lin commun".to_owned()),
+            SpeciesFilter::default(),
+            None,
+            Sort::Relevance,
+            10,
+            true,
+            "fr".to_owned(),
+        )
+        .unwrap();
+        let names = result
+            .items
+            .iter()
+            .map(|item| item.canonical_name.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            names.first().copied(),
+            Some("Linum usitatissimum"),
+            "expected exact Common Name phrase before reversed all-token match; got {names:?}"
+        );
+        assert!(
+            names
+                .iter()
+                .position(|name| *name == "Linum usitatissimum")
+                .unwrap()
+                < names
+                    .iter()
+                    .position(|name| *name == "Communia linensis")
+                    .unwrap(),
+            "expected exact phrase before all-token match; got {names:?}"
+        );
+        assert!(
+            names
+                .iter()
+                .position(|name| *name == "Communia linensis")
+                .unwrap()
+                < names
+                    .iter()
+                    .position(|name| *name == "Linum communis")
+                    .unwrap(),
+            "expected all-token Common Name match before taxonomy-only prefix match; got {names:?}"
+        );
+    }
+
+    #[test]
+    fn relevance_common_name_tokens_match_diacritic_queries() {
+        let conn = relevance_fixture_db();
+
+        let result = search(
+            &conn,
+            Some("lin léon".to_owned()),
+            SpeciesFilter::default(),
+            None,
+            Sort::Relevance,
+            10,
+            true,
+            "fr".to_owned(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            result
+                .items
+                .first()
+                .map(|item| item.canonical_name.as_str()),
+            Some("Linum leonii")
         );
     }
 

@@ -59,7 +59,7 @@ When canopi-data removes or adds columns, update atomically:
 - Use the full FTS table name in `MATCH`, not an alias.
 - Strip all FTS metacharacters before building MATCH queries.
 - Empty sanitized query means skip FTS.
-- Relevance text searches rank active-locale whole-token Common Name matches before BM25, then fall back to `bm25(species_search_fts, 8, 10, 5, 1, 1)`.
+- Relevance text searches rank active-locale Common Name matches before BM25: exact phrase first for multi-word queries, all indexed query tokens next, then single whole-token matches, then `bm25(species_search_fts, 8, 10, 5, 1, 1)`.
 - `total_estimate` comes from count; visible rows come from list. If UI shows a new count with old rows during debounce, investigate frontend committed-result lifecycle first.
 - Run the manual Species Catalog latency harness with `cargo test -p canopi-desktop db::plant_db::search::tests::bundled_species_search_latency_harness_reports_list_and_count_timings -- --ignored --nocapture`.
 - The harness opens `desktop/resources/canopi-core.db` by default, or `CANOPI_PLANT_DB_PATH` when set, and reports first-page list latency separately from total-count latency.
