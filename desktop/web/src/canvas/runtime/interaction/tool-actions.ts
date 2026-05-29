@@ -1,5 +1,6 @@
 import type { PlantStampSpecies } from '../../plant-tool-state'
 import type { ScenePersistedState, ScenePoint, SceneStore } from '../scene'
+import { createUuid } from '../../../utils/ids'
 
 export interface PlantDropPayload {
   canonical_name: string
@@ -31,7 +32,7 @@ export function appendRectangleZoneToDraft(
 ): string | null {
   if (rect.width < 0.5 || rect.height < 0.5) return null
 
-  const zoneId = crypto.randomUUID()
+  const zoneId = createUuid()
   const zoneName = `zone-${zoneId}`
   draft.zones = [
     ...draft.zones,
@@ -69,7 +70,7 @@ export function appendDroppedPlantToDraft(
   payload: PlantDropPayload,
   world: ScenePoint,
 ): string {
-  const id = crypto.randomUUID()
+  const id = createUuid()
   draft.plants = [
     ...draft.plants,
     {
@@ -116,7 +117,7 @@ export function appendTextAnnotationToDraft(
   position: ScenePoint,
   text: string,
 ): string {
-  const id = crypto.randomUUID()
+  const id = createUuid()
   draft.annotations = [
     ...draft.annotations,
     {

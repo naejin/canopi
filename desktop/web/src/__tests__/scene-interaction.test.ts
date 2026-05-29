@@ -81,6 +81,27 @@ function createInteractionDeps(
   } as SceneInteractionDeps
 }
 
+function withoutNativeRandomUUID(action: () => void): void {
+  const originalCrypto = globalThis.crypto
+  Object.defineProperty(globalThis, 'crypto', {
+    configurable: true,
+    value: {
+      getRandomValues<T extends ArrayBufferView>(array: T): T {
+        return originalCrypto.getRandomValues(array)
+      },
+    },
+  })
+
+  try {
+    action()
+  } finally {
+    Object.defineProperty(globalThis, 'crypto', {
+      configurable: true,
+      value: originalCrypto,
+    })
+  }
+}
+
 describe('SceneInteractionController', () => {
   let container: HTMLDivElement
   let camera: CameraController
@@ -223,6 +244,40 @@ describe('SceneInteractionController', () => {
       position: { x: 50, y: 70 },
     })
     controller.dispose()
+  })
+
+  it('creates tool objects when native randomUUID is unavailable', () => {
+    withoutNativeRandomUUID(() => {
+      let rectangleController: SceneInteractionController | null = null
+      let plantController: SceneInteractionController | null = null
+
+      try {
+        rectangleController = new SceneInteractionController(createInteractionDeps(container, store, camera) as any)
+        rectangleController.setTool('rectangle')
+
+        ;(rectangleController as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 20, button: 0 }))
+        ;(rectangleController as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 40, clientY: 60, button: 0 }))
+        ;(rectangleController as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 40, clientY: 60, button: 0 }))
+
+        expect(store.persisted.zones).toHaveLength(1)
+
+        plantStampSpecies.value = {
+          canonical_name: 'Malus domestica',
+          common_name: 'Apple',
+          stratum: 'high',
+          width_max_m: 4,
+        }
+        plantController = new SceneInteractionController(createInteractionDeps(container, store, camera) as any)
+        plantController.setTool('plant-stamp')
+
+        ;(plantController as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 50, clientY: 70, button: 0 }))
+
+        expect(store.persisted.plants).toHaveLength(1)
+      } finally {
+        rectangleController?.dispose()
+        plantController?.dispose()
+      }
+    })
   })
 
   it('snaps dragged plant to grid when snap is enabled', () => {

@@ -44,6 +44,7 @@ import {
   type TimelineGranularity,
 } from '../../app/timeline/interaction'
 import { isEditableTarget } from '../../canvas/runtime/interaction/pointer-utils'
+import { createUuid } from '../../utils/ids'
 import {
   LABEL_SIDEBAR_WIDTH,
   RULER_HEIGHT,
@@ -544,7 +545,7 @@ export function InteractiveTimeline({
     const result = saveTimelineActionPopover({
       popover: ps,
       data,
-      createId: () => crypto.randomUUID(),
+      createId: createUuid,
     })
     if ('selectedId' in result) onSelectRef.current(result.selectedId ?? null)
     popoverState.value = null
