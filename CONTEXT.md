@@ -68,6 +68,10 @@ _Avoid_: Climate zone
 A scheduled action in a design, such as planting, maintenance, or another work item. A timeline action may have dates, recurrence, dependencies, completion state, and targets in the design.
 _Avoid_: Event, task, calendar item
 
+**Timeline Action Workbench**:
+The interaction surface for creating, editing, deleting, and selecting timeline actions in the timeline view. The timeline action workbench coordinates action forms and target presentation, but it does not own Design data.
+_Avoid_: Timeline popup, event editor, task workbench
+
 **Budget Item**:
 A cost entry in a design. A budget item may refer to a species, placed plant, zone, or manual line item and contributes to the design's budget.
 _Avoid_: Price, estimate row
@@ -148,6 +152,9 @@ Use **Stratum** for vertical ecological position in a consortium. Use **Layer** 
 
 **Succession Phase vs Timeline Action**:
 A **Succession Phase** describes a period in ecological development. A **Timeline Action** is scheduled work in the design.
+
+**Timeline Action vs Timeline Action Workbench**:
+A **Timeline Action** is the scheduled work in the Design. The **Timeline Action Workbench** is the interaction surface used to create, edit, delete, and select those actions.
 
 **Site Adaptation vs Template Adaptation**:
 Use **Site Adaptation** for the domain concept of fitting a design to a site. "Template adaptation" is acceptable only when discussing the specific import workflow.

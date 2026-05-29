@@ -8,25 +8,23 @@ import { plantSpeciesColorDefaults } from '../../canvas/plant-species-color-defa
 import { currentDesign } from '../../state/design'
 import {
   ACTION_TYPES,
-  clearPlanningHoveredTargets,
-  clearPlanningSelectedTargetsForOrigin,
-  setPlanningHoveredTargets,
-  setPlanningSelectedTargets,
   useTimelinePlanningProjection,
   type TimelineActionLayout,
   type TimelineActionTypeRow,
   type TimelinePlanningAction,
 } from '../../app/planning-projection'
 import {
-  addTimelineAction,
-  deleteTimelineAction,
-  updateTimelineAction,
-} from '../../app/timeline/controller'
-import {
-  createTimelineActionFromFormData,
-  formDataFromTimelineAction,
-  timelineActionPatchFromFormData,
-} from '../../app/timeline/editing'
+  clearTimelineHoveredPanelTargets,
+  clearTimelineSelectedPanelTargets,
+  deleteSelectedTimelineAction,
+  deleteTimelineActionPopover,
+  openTimelineActionPopover,
+  saveTimelineActionPopover,
+  setTimelineHoveredPanelTargets,
+  setTimelineSelectedPanelTargets,
+  type TimelineActionPendingClick,
+  type TimelineActionPopoverState,
+} from '../../app/timeline/workbench'
 import {
   TIMELINE_CLICK_THRESHOLD,
   TIMELINE_GRANULARITY_PX_PER_DAY,
@@ -55,7 +53,7 @@ import {
   type TimelineRenderState,
 } from '../../canvas/timeline-renderer'
 import { dateToX, snapToDay, toISODate, xToDate } from '../../canvas/timeline-math'
-import type { PanelTarget, TimelineAction } from '../../types/design'
+import type { TimelineAction } from '../../types/design'
 import { TimelinePopover, type PopoverFormData } from './TimelinePopover'
 import styles from './InteractiveTimeline.module.css'
 
@@ -66,40 +64,13 @@ interface InteractiveTimelineProps {
   onSelect: (id: string | null) => void
 }
 
-interface PopoverState {
-  mode: 'add' | 'edit'
-  anchorX: number
-  anchorY: number
-  actionId?: string
-  formData: PopoverFormData
-  speciesList: Array<{ canonical_name: string; display_name: string }>
-}
-
-interface PendingClick {
-  type: 'add' | 'edit'
-  clientX: number
-  clientY: number
-  anchorX: number
-  anchorY: number
-  actionId?: string
-  actionType?: string
-  date?: string
+interface PendingTimelineClick {
+  readonly clientX: number
+  readonly clientY: number
+  readonly popover: TimelineActionPendingClick
 }
 
 const EMPTY_ACTIONS: TimelineAction[] = []
-const EMPTY_PANEL_TARGETS: readonly PanelTarget[] = []
-
-function setTimelineHoveredPanelTargets(targets: readonly PanelTarget[]): void {
-  setPlanningHoveredTargets(targets)
-}
-
-function setTimelineSelectedPanelTargets(targets: readonly PanelTarget[]): void {
-  setPlanningSelectedTargets('timeline', targets)
-}
-
-export function clearTimelineSelectedPanelTargets(): void {
-  clearPlanningSelectedTargetsForOrigin('timeline')
-}
 
 export function InteractiveTimeline({
   selectedId,
@@ -113,9 +84,9 @@ export function InteractiveTimeline({
   const scrollX = useSignal(0)
   const hoveredId = useSignal<string | null>(null)
   const tooltipState = useSignal<{ x: number; y: number; action: TimelinePlanningAction } | null>(null)
-  const popoverState = useSignal<PopoverState | null>(null)
+  const popoverState = useSignal<TimelineActionPopoverState | null>(null)
   const dragState = useRef<TimelineDragState | null>(null)
-  const pendingClick = useRef<PendingClick | null>(null)
+  const pendingClick = useRef<PendingTimelineClick | null>(null)
   const rowsRef = useRef<readonly TimelineActionTypeRow[]>([])
   const layoutRef = useRef<ReadonlyMap<string, TimelineActionLayout>>(new Map())
   const dragOriginMsRef = useRef<number | null>(null)
@@ -166,7 +137,7 @@ export function InteractiveTimeline({
     const current = currentDesign.value?.timeline ?? EMPTY_ACTIONS
     if (current.some((action) => action.id === hoveredActionId)) return
     hoveredId.value = null
-    clearPlanningHoveredTargets()
+    clearTimelineHoveredPanelTargets()
   })
 
   const renderStateRef = useRef<TimelineRenderState>(null!)
@@ -269,7 +240,7 @@ export function InteractiveTimeline({
     if (hoveredId.peek() !== null) hoveredId.value = null
     if (tooltipState.peek()) tooltipState.value = null
     if (popoverState.peek()) popoverState.value = null
-    setTimelineHoveredPanelTargets(EMPTY_PANEL_TARGETS)
+    clearTimelineHoveredPanelTargets()
     if (canvasRef.current) canvasRef.current.style.cursor = 'default'
   }, [])
 
@@ -349,13 +320,15 @@ export function InteractiveTimeline({
         }
       }
       pendingClick.current = {
-        type: 'add',
         clientX: event.clientX,
         clientY: event.clientY,
-        anchorX: event.clientX,
-        anchorY: event.clientY,
-        actionType: rowActionType,
-        date: toISODate(clickDate),
+        popover: {
+          type: 'add',
+          anchorX: event.clientX,
+          anchorY: event.clientY,
+          actionType: rowActionType,
+          date: toISODate(clickDate),
+        },
       }
       dragState.current = createTimelinePanDrag({
         startMouseX: event.clientX,
@@ -389,12 +362,14 @@ export function InteractiveTimeline({
 
     // Body hit - prepare edit popover (opens on mouseup if no drag)
     pendingClick.current = {
-      type: 'edit',
       clientX: event.clientX,
       clientY: event.clientY,
-      anchorX: event.clientX,
-      anchorY: event.clientY,
-      actionId: hit.action.id,
+      popover: {
+        type: 'edit',
+        anchorX: event.clientX,
+        anchorY: event.clientY,
+        actionId: hit.action.id,
+      },
     }
 
     const freeze = createTimelineOriginFreeze(computedOriginMsRef.current)
@@ -455,7 +430,7 @@ export function InteractiveTimeline({
       }
     } else {
       if (hoveredId.value !== null) hoveredId.value = null
-      setTimelineHoveredPanelTargets(EMPTY_PANEL_TARGETS)
+      clearTimelineHoveredPanelTargets()
       if (tooltipState.peek()) tooltipState.value = null
     }
     const newCursor = hit
@@ -467,7 +442,7 @@ export function InteractiveTimeline({
   const handleMouseLeave = useCallback(() => {
     if (hoveredId.value !== null) hoveredId.value = null
     if (tooltipState.peek()) tooltipState.value = null
-    setTimelineHoveredPanelTargets(EMPTY_PANEL_TARGETS)
+    clearTimelineHoveredPanelTargets()
     if (canvasRef.current) canvasRef.current.style.cursor = 'default'
   }, [])
 
@@ -505,37 +480,10 @@ export function InteractiveTimeline({
     const dy = Math.abs(event.clientY - pending.clientY)
     if (dx + dy >= TIMELINE_CLICK_THRESHOLD) return
 
-    const speciesList = [...projectionRef.current.speciesList]
-
-    if (pending.type === 'add') {
-      const startDate = pending.date!
-      const endDate = toISODate(new Date(new Date(startDate).getTime() + 14 * 86400000))
-      popoverState.value = {
-        mode: 'add',
-        anchorX: pending.anchorX,
-        anchorY: pending.anchorY,
-        formData: {
-          action_type: pending.actionType!,
-          start_date: startDate,
-          end_date: endDate,
-          description: '',
-          species_canonical: null,
-        },
-        speciesList,
-      }
-    } else if (pending.type === 'edit' && pending.actionId) {
-      // Read live action from document (may have moved during sub-threshold drag)
-      const a = (currentDesign.peek()?.timeline ?? EMPTY_ACTIONS).find((act) => act.id === pending.actionId)
-      if (!a) return
-      popoverState.value = {
-        mode: 'edit',
-        anchorX: pending.anchorX,
-        anchorY: pending.anchorY,
-        actionId: pending.actionId,
-        formData: formDataFromTimelineAction(a),
-        speciesList,
-      }
-    }
+    popoverState.value = openTimelineActionPopover({
+      pendingClick: pending.popover,
+      speciesList: projectionRef.current.speciesList,
+    })
   }, [])
 
   useEffect(() => {
@@ -567,7 +515,7 @@ export function InteractiveTimeline({
       dragOriginMsRef.current = null
       dragOriginDateRef.current = null
       pendingClick.current = null
-      setTimelineHoveredPanelTargets(EMPTY_PANEL_TARGETS)
+      clearTimelineHoveredPanelTargets()
       clearTimelineSelectedPanelTargets()
     }
   }, [])
@@ -579,11 +527,9 @@ export function InteractiveTimeline({
       if (isEditableTarget(event.target)) return
       if (event.key === 'Delete' || event.key === 'Backspace') {
         event.preventDefault()
-        deleteTimelineAction(selectedIdRef.current)
+        const result = deleteSelectedTimelineAction(selectedIdRef.current)
         if (hoveredId.value !== null) hoveredId.value = null
-        setTimelineHoveredPanelTargets(EMPTY_PANEL_TARGETS)
-        clearTimelineSelectedPanelTargets()
-        onSelectRef.current(null)
+        if ('selectedId' in result) onSelectRef.current(result.selectedId ?? null)
       }
     }
 
@@ -595,22 +541,20 @@ export function InteractiveTimeline({
     const ps = popoverState.peek()
     if (!ps) return
 
-    if (ps.mode === 'add') {
-      const id = crypto.randomUUID()
-      addTimelineAction(createTimelineActionFromFormData(id, data))
-      onSelectRef.current(id)
-    } else if (ps.actionId) {
-      updateTimelineAction(ps.actionId, timelineActionPatchFromFormData(data))
-    }
+    const result = saveTimelineActionPopover({
+      popover: ps,
+      data,
+      createId: () => crypto.randomUUID(),
+    })
+    if ('selectedId' in result) onSelectRef.current(result.selectedId ?? null)
     popoverState.value = null
   }, [])
 
   const handlePopoverDelete = useCallback(() => {
     const ps = popoverState.peek()
-    if (!ps?.actionId) return
-    deleteTimelineAction(ps.actionId)
-    onSelectRef.current(null)
-    clearTimelineSelectedPanelTargets()
+    if (!ps) return
+    const result = deleteTimelineActionPopover(ps)
+    if ('selectedId' in result) onSelectRef.current(result.selectedId ?? null)
     popoverState.value = null
   }, [])
 

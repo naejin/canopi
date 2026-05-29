@@ -103,19 +103,30 @@ describe('frontend boundary sources', () => {
     expect(stateMachineSource).toContain('autosaveDesign')
   })
 
-  it('keeps Timeline Action document edits behind the Timeline editing module', () => {
+  it('keeps Timeline Action workbench and drag edits behind app/timeline modules', () => {
     const timelineSource = readSource('../components/canvas/InteractiveTimeline.tsx')
     const interactionSource = readSource('../app/timeline/interaction.ts')
     const editingSource = readSource('../app/timeline/editing.ts')
+    const workbenchSource = readSource('../app/timeline/workbench.ts')
 
     expect(timelineSource).not.toContain('beginDocumentArrayEdit')
     expect(timelineSource).not.toContain('beginTimelineActionEdit')
     expect(timelineSource).not.toContain('computeTimelineAutoScrollSpeed')
     expect(timelineSource).not.toContain('applyTimelineActionPatch')
+    expect(timelineSource).not.toContain('../app/timeline/controller')
+    expect(timelineSource).not.toContain('createTimelineActionFromFormData')
+    expect(timelineSource).not.toContain('formDataFromTimelineAction')
+    expect(timelineSource).not.toContain('timelineActionPatchFromFormData')
+    expect(timelineSource).toContain('../app/timeline/workbench')
     expect(interactionSource).toContain('beginTimelineActionEdit')
     expect(interactionSource).toContain('computeTimelineAutoScrollSpeed')
     expect(editingSource).toContain('beginDocumentArrayEdit')
     expect(editingSource).toContain('applyTimelineActionPatch')
+    expect(workbenchSource).toContain('../planning-projection')
+    expect(workbenchSource).toContain('./controller')
+    expect(workbenchSource).toContain('createTimelineActionFromFormData')
+    expect(workbenchSource).toContain('formDataFromTimelineAction')
+    expect(workbenchSource).toContain('timelineActionPatchFromFormData')
   })
 
   it('keeps Consortium document drag edits behind the Consortium interaction module', () => {

@@ -55,6 +55,7 @@ Use this guide when changing Preact components, signals, i18n, CSS, panels, bott
 - Planning surfaces should use the Planning Projection runtime hooks for placed plants and localized Species names; do not read `currentCanvasQuerySurface`, `sceneEntityRevision`, or `plantNamesRevision` directly in Budget, Timeline, or Consortium UI.
 - Planning views still own rendering, pointer geometry, local edit state, and calls to feature controllers such as budget/timeline/consortium mutations. Drag preview/commit behavior should sit behind the relevant interaction module before reaching document edit transactions.
 - Timeline Action date mutation and form-to-Target mapping belong in `app/timeline/editing.ts`; Timeline canvas gesture behavior, auto-scroll speed, and frozen-origin scroll compensation belong in `app/timeline/interaction.ts`.
+- Timeline Action add/edit/delete popover orchestration and Timeline-owned Target presentation cleanup belong in `app/timeline/workbench.ts`; `InteractiveTimeline` should call that workbench seam instead of importing Timeline controllers or form-mapping helpers directly.
 - Consortium canvas drag preview/commit behavior belongs in `app/consortium/interaction.ts`; `ConsortiumChart` should pass hit/layout snapshots to that module instead of owning document edit transactions directly.
 - Bottom panel components that read canvas-derived data must subscribe to `sceneEntityRevision`.
 - Panels that only read non-canvas document state should not subscribe to canvas revisions.

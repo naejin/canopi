@@ -16,7 +16,7 @@ interface TimelinePopoverProps {
   anchorX: number
   anchorY: number
   initialData: PopoverFormData
-  speciesList: Array<{ canonical_name: string; display_name: string }>
+  speciesList: ReadonlyArray<{ canonical_name: string; display_name: string }>
   onSave: (data: PopoverFormData) => void
   onDelete?: () => void
   onCancel: () => void
