@@ -1,4 +1,4 @@
-import { getTimelineSpeciesTarget } from '../../panel-targets'
+import { getTimelineSpeciesTarget } from '../../target'
 import type { PanelTarget, PlacedPlant, TimelineAction } from '../../types/design'
 
 export type ActionType = 'planting' | 'pruning' | 'harvest' | 'watering' | 'fertilising' | 'other'

@@ -1,6 +1,6 @@
 # Canvas Runtime
 
-Use this guide when changing canvas state, scene runtime, renderer behavior, hit testing, selection, presentation, history, panel target projection, or Canvas2D tab renderers.
+Use this guide when changing canvas state, scene runtime, renderer behavior, hit testing, selection, presentation, history, Target projection, or Canvas2D tab renderers.
 
 ## Public Seams
 
@@ -66,14 +66,14 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - Default-mode dot sizing is world-proportional with screen caps/floors from existing constants.
 - Species-cache backfill may enrich metadata, but production geometry should not depend on ad hoc empty-cache fallbacks.
 
-## Panel Target Projection
+## Target Projection
 
-- Timeline, budget, and consortium identity uses typed `PanelTarget[]` / `PanelTarget`.
+- Timeline, budget, and consortium identity uses typed `PanelTarget[]` / `PanelTarget` wire values, but frontend callers should import Target helpers from `desktop/web/src/target/`.
 - Do not reintroduce string matching against timeline descriptions, legacy `plants` arrays, budget descriptions, or consortium canonical-name fields.
-- Use the panel target resolution helpers to map typed targets to scene plant/zone IDs for canvas highlights.
+- Use the Target resolution helpers to map typed targets to scene plant/zone IDs for canvas highlights.
 - `manual` and `none` targets intentionally resolve to empty sets and are not errors.
 - Panel-origin hover and selection are presentation inputs. Resolving them must not mutate real canvas selection, labels, dirty state, or history.
-- App-owned panel Target presentation state is exposed through `app/panel-targets/presentation.ts`; runtime adapters should consume that seam instead of raw panel-target signals.
+- App-owned Target presentation state is exposed through `app/panel-targets/presentation.ts`; runtime adapters and map surface controllers should consume that seam instead of raw `app/panel-targets/state.ts` signals.
 - Canvas-origin hover remains separate.
 
 ## Canvas2D Tab Components

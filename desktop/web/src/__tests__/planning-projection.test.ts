@@ -17,7 +17,7 @@ import {
   selectedPanelTargetOrigin,
   selectedPanelTargets,
 } from '../app/panel-targets/state'
-import { MANUAL_TARGET, speciesBudgetTarget, speciesTarget } from '../panel-targets'
+import { MANUAL_TARGET, speciesBudgetTarget, speciesTarget } from '../target'
 import type { BudgetItem, Consortium, PlacedPlant, TimelineAction } from '../types/design'
 
 function makePlant(canonicalName: string, commonName: string | null = null): PlacedPlant {

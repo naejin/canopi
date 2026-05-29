@@ -19,7 +19,7 @@ import { currentCanvasSession } from '../canvas/session'
 import { locale } from '../app/settings/state'
 import { currentDesign } from '../state/design'
 import { plantNamesRevision, sceneEntityRevision } from '../canvas/runtime-mirror-state'
-import { speciesBudgetTarget } from '../panel-targets'
+import { speciesBudgetTarget } from '../target'
 import type { CanopiFile, PlacedPlant } from '../types/design'
 
 function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {

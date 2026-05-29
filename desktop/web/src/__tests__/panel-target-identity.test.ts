@@ -3,12 +3,12 @@ import { hoveredPanelTargets, selectedPanelTargets } from '../app/panel-targets/
 import {
   MANUAL_TARGET,
   NONE_TARGET,
-  panelTargetIdentity,
-  type PanelTargetSceneInput,
-} from '../panel-target-identity'
+  targetIdentity,
+  type TargetSceneInput,
+} from '../target'
 import type { PanelTarget } from '../types/design'
 
-function createScene(overrides: Partial<PanelTargetSceneInput> = {}): PanelTargetSceneInput {
+function createScene(overrides: Partial<TargetSceneInput> = {}): TargetSceneInput {
   return {
     plants: [
       { id: 'plant-1', canonicalName: 'Malus domestica', position: { x: 0, y: 0 } },
@@ -29,39 +29,39 @@ function createScene(overrides: Partial<PanelTargetSceneInput> = {}): PanelTarge
   }
 }
 
-describe('panelTargets identity seam', () => {
+describe('targets identity seam', () => {
   beforeEach(() => {
     hoveredPanelTargets.value = []
     selectedPanelTargets.value = []
   })
 
   it('centralizes constructors, keys, equality, and list equality', () => {
-    const species = panelTargetIdentity.species('Malus domestica')
-    const sameSpecies = panelTargetIdentity.species('Malus domestica')
-    const otherSpecies = panelTargetIdentity.species('Prunus avium')
+    const species = targetIdentity.species('Malus domestica')
+    const sameSpecies = targetIdentity.species('Malus domestica')
+    const otherSpecies = targetIdentity.species('Prunus avium')
 
     expect(species).toEqual({ kind: 'species', canonical_name: 'Malus domestica' })
-    expect(panelTargetIdentity.key(species)).toBe('species:Malus domestica')
-    expect(panelTargetIdentity.key({ kind: 'placed_plant', plant_id: 'plant-1' })).toBe('placed_plant:plant-1')
-    expect(panelTargetIdentity.key({ kind: 'zone', zone_name: 'orchard' })).toBe('zone:orchard')
-    expect(panelTargetIdentity.key(MANUAL_TARGET)).toBe('manual')
-    expect(panelTargetIdentity.key(NONE_TARGET)).toBe('none')
+    expect(targetIdentity.key(species)).toBe('species:Malus domestica')
+    expect(targetIdentity.key({ kind: 'placed_plant', plant_id: 'plant-1' })).toBe('placed_plant:plant-1')
+    expect(targetIdentity.key({ kind: 'zone', zone_name: 'orchard' })).toBe('zone:orchard')
+    expect(targetIdentity.key(MANUAL_TARGET)).toBe('manual')
+    expect(targetIdentity.key(NONE_TARGET)).toBe('none')
 
-    expect(panelTargetIdentity.equals(species, sameSpecies)).toBe(true)
-    expect(panelTargetIdentity.equals(species, otherSpecies)).toBe(false)
-    expect(panelTargetIdentity.listEquals([species, MANUAL_TARGET], [sameSpecies, MANUAL_TARGET])).toBe(true)
-    expect(panelTargetIdentity.listEquals([species, MANUAL_TARGET], [MANUAL_TARGET, sameSpecies])).toBe(false)
+    expect(targetIdentity.equals(species, sameSpecies)).toBe(true)
+    expect(targetIdentity.equals(species, otherSpecies)).toBe(false)
+    expect(targetIdentity.listEquals([species, MANUAL_TARGET], [sameSpecies, MANUAL_TARGET])).toBe(true)
+    expect(targetIdentity.listEquals([species, MANUAL_TARGET], [MANUAL_TARGET, sameSpecies])).toBe(false)
   })
 
   it('resolves scene-backed targets without owning map projection', () => {
-    const missingSpecies = panelTargetIdentity.species('Pyrus communis')
+    const missingSpecies = targetIdentity.species('Pyrus communis')
     const missingPlant: PanelTarget = { kind: 'placed_plant', plant_id: 'missing-plant' }
     const missingZone: PanelTarget = { kind: 'zone', zone_name: 'missing-zone' }
-    const index = panelTargetIdentity.indexScene(createScene())
+    const index = targetIdentity.indexScene(createScene())
 
-    const resolution = panelTargetIdentity.resolve(
+    const resolution = targetIdentity.resolve(
       [
-        panelTargetIdentity.species('Malus domestica'),
+        targetIdentity.species('Malus domestica'),
         { kind: 'placed_plant', plant_id: 'plant-2' },
         { kind: 'zone', zone_name: 'orchard' },
         MANUAL_TARGET,
@@ -87,15 +87,15 @@ describe('panelTargets identity seam', () => {
   })
 
   it('deduplicates resolved scene refs while preserving first discovery order', () => {
-    const resolution = panelTargetIdentity.resolve(
+    const resolution = targetIdentity.resolve(
       [
         { kind: 'placed_plant', plant_id: 'plant-3' },
-        panelTargetIdentity.species('Malus domestica'),
+        targetIdentity.species('Malus domestica'),
         { kind: 'placed_plant', plant_id: 'plant-1' },
         { kind: 'zone', zone_name: 'orchard' },
         { kind: 'zone', zone_name: 'orchard' },
       ],
-      panelTargetIdentity.indexScene(createScene()),
+      targetIdentity.indexScene(createScene()),
     )
 
     expect(resolution.plantIds).toEqual(['plant-3', 'plant-1'])
@@ -109,25 +109,25 @@ describe('panelTargets identity seam', () => {
   })
 
   it('reports unresolved targets without mutating panel hover or selection state', () => {
-    const hovered = [panelTargetIdentity.species('Hovered')]
-    const selected = [panelTargetIdentity.species('Selected')]
+    const hovered = [targetIdentity.species('Hovered')]
+    const selected = [targetIdentity.species('Selected')]
     hoveredPanelTargets.value = hovered
     selectedPanelTargets.value = selected
 
-    const resolution = panelTargetIdentity.resolve(
+    const resolution = targetIdentity.resolve(
       [
-        panelTargetIdentity.species('Missing species'),
+        targetIdentity.species('Missing species'),
         { kind: 'placed_plant', plant_id: 'missing-plant' },
         { kind: 'zone', zone_name: 'missing-zone' },
       ],
-      panelTargetIdentity.indexScene(createScene()),
+      targetIdentity.indexScene(createScene()),
     )
 
     expect(resolution.plantIds).toEqual([])
     expect(resolution.zoneIds).toEqual([])
     expect(resolution.sceneIds).toEqual([])
     expect(resolution.unresolvedTargets).toEqual([
-      panelTargetIdentity.species('Missing species'),
+      targetIdentity.species('Missing species'),
       { kind: 'placed_plant', plant_id: 'missing-plant' },
       { kind: 'zone', zone_name: 'missing-zone' },
     ])

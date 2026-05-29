@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { currentDesign } from '../state/design'
 import { setBudgetCurrency, setPlantBudgetPrice } from '../app/budget/controller'
 import type { CanopiFile } from '../types/design'
-import { speciesBudgetTarget } from '../panel-targets'
+import { speciesBudgetTarget } from '../target'
 
 function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {

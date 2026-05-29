@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { mutateCurrentDesign, updateDesignArray } from '../app/document/controller'
-import { speciesBudgetTarget } from '../panel-targets'
+import { speciesBudgetTarget } from '../target'
 import { currentDesign, nonCanvasRevision } from '../state/design'
 
 beforeEach(() => {

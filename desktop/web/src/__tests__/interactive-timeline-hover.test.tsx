@@ -10,7 +10,7 @@ import { InteractiveTimeline } from '../components/canvas/InteractiveTimeline'
 import { TimelineTab } from '../components/canvas/TimelineTab'
 import { hoveredPanelTargets, selectedPanelTargetOrigin, selectedPanelTargets } from '../app/panel-targets/state'
 import { currentDesign } from '../state/design'
-import { speciesTarget } from '../panel-targets'
+import { speciesTarget } from '../target'
 import type { CanopiFile, TimelineAction } from '../types/design'
 
 function makeAction(overrides: Partial<TimelineAction> = {}): TimelineAction {

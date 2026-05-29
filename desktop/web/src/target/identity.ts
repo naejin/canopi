@@ -1,56 +1,59 @@
-import type { PanelTarget, SpeciesPanelTarget } from './types/design'
+import type { PanelTarget, SpeciesPanelTarget } from '../types/design'
 
-export interface PanelTargetScenePoint {
+export type Target = PanelTarget
+export type SpeciesTarget = SpeciesPanelTarget
+
+export interface TargetScenePoint {
   readonly x: number
   readonly y: number
 }
 
-export interface PanelTargetPlantRef {
+export interface TargetPlantRef {
   readonly id: string
   readonly canonicalName: string
-  readonly position?: PanelTargetScenePoint
+  readonly position?: TargetScenePoint
 }
 
-export interface PanelTargetZoneRef {
+export interface TargetZoneRef {
   readonly name: string
-  readonly points?: readonly PanelTargetScenePoint[]
+  readonly points?: readonly TargetScenePoint[]
 }
 
-export interface PanelTargetSceneInput {
-  readonly plants: readonly PanelTargetPlantRef[]
-  readonly zones: readonly PanelTargetZoneRef[]
+export interface TargetSceneInput {
+  readonly plants: readonly TargetPlantRef[]
+  readonly zones: readonly TargetZoneRef[]
 }
 
-export interface PanelTargetSceneIndex {
-  readonly plantsById: ReadonlyMap<string, PanelTargetPlantRef>
+export interface TargetSceneIndex {
+  readonly plantsById: ReadonlyMap<string, TargetPlantRef>
   readonly plantIdsBySpecies: ReadonlyMap<string, readonly string[]>
-  readonly zonesByName: ReadonlyMap<string, PanelTargetZoneRef>
+  readonly zonesByName: ReadonlyMap<string, TargetZoneRef>
 }
 
-export type ResolvedPanelTargetRef =
-  | { readonly kind: 'plant'; readonly id: string; readonly plant: PanelTargetPlantRef }
-  | { readonly kind: 'zone'; readonly id: string; readonly zone: PanelTargetZoneRef }
+export type ResolvedTargetRef =
+  | { readonly kind: 'plant'; readonly id: string; readonly plant: TargetPlantRef }
+  | { readonly kind: 'zone'; readonly id: string; readonly zone: TargetZoneRef }
 
-export interface PanelTargetResolution {
+export interface TargetResolution {
   readonly plantIds: readonly string[]
   readonly zoneIds: readonly string[]
   readonly sceneIds: readonly string[]
-  readonly unresolvedTargets: readonly PanelTarget[]
-  readonly resolvedRefs: readonly ResolvedPanelTargetRef[]
+  readonly unresolvedTargets: readonly Target[]
+  readonly resolvedRefs: readonly ResolvedTargetRef[]
 }
 
-export const MANUAL_TARGET: PanelTarget = { kind: 'manual' }
-export const NONE_TARGET: PanelTarget = { kind: 'none' }
+export const MANUAL_TARGET: Target = { kind: 'manual' }
+export const NONE_TARGET: Target = { kind: 'none' }
 
-export function speciesTarget(canonicalName: string): SpeciesPanelTarget {
+export function speciesTarget(canonicalName: string): SpeciesTarget {
   return { kind: 'species', canonical_name: canonicalName }
 }
 
-export function isSpeciesTarget(target: PanelTarget): target is SpeciesPanelTarget {
+export function isSpeciesTarget(target: Target): target is SpeciesTarget {
   return target.kind === 'species'
 }
 
-export function panelTargetKey(target: PanelTarget): string {
+export function targetKey(target: Target): string {
   switch (target.kind) {
     case 'placed_plant':
       return `placed_plant:${target.plant_id}`
@@ -65,22 +68,22 @@ export function panelTargetKey(target: PanelTarget): string {
   }
 }
 
-export function panelTargetsEqual(left: readonly PanelTarget[], right: readonly PanelTarget[]): boolean {
+export function targetListsEqual(left: readonly Target[], right: readonly Target[]): boolean {
   if (left.length !== right.length) return false
   for (let i = 0; i < left.length; i++) {
-    if (panelTargetKey(left[i]!) !== panelTargetKey(right[i]!)) return false
+    if (targetKey(left[i]!) !== targetKey(right[i]!)) return false
   }
   return true
 }
 
-export function panelTargetEqual(left: PanelTarget, right: PanelTarget): boolean {
-  return panelTargetKey(left) === panelTargetKey(right)
+export function targetsEqual(left: Target, right: Target): boolean {
+  return targetKey(left) === targetKey(right)
 }
 
-export function indexPanelTargetScene(scene: PanelTargetSceneInput): PanelTargetSceneIndex {
-  const plantsById = new Map<string, PanelTargetPlantRef>()
+export function indexTargetScene(scene: TargetSceneInput): TargetSceneIndex {
+  const plantsById = new Map<string, TargetPlantRef>()
   const plantIdsBySpecies = new Map<string, string[]>()
-  const zonesByName = new Map<string, PanelTargetZoneRef>()
+  const zonesByName = new Map<string, TargetZoneRef>()
 
   for (const plant of scene.plants) {
     plantsById.set(plant.id, plant)
@@ -96,17 +99,17 @@ export function indexPanelTargetScene(scene: PanelTargetSceneInput): PanelTarget
   return { plantsById, plantIdsBySpecies, zonesByName }
 }
 
-export function resolvePanelTargetIdentity(
-  targets: readonly PanelTarget[],
-  index: PanelTargetSceneIndex,
-): PanelTargetResolution {
+export function resolveTargetsInScene(
+  values: readonly Target[],
+  index: TargetSceneIndex,
+): TargetResolution {
   const seenSceneIds = new Set<string>()
   const seenFeatureKeys = new Set<string>()
   const plantIds: string[] = []
   const zoneIds: string[] = []
   const sceneIds: string[] = []
-  const unresolvedTargets: PanelTarget[] = []
-  const resolvedRefs: ResolvedPanelTargetRef[] = []
+  const unresolvedTargets: Target[] = []
+  const resolvedRefs: ResolvedTargetRef[] = []
 
   const addSceneId = (id: string): void => {
     if (seenSceneIds.has(id)) return
@@ -114,7 +117,7 @@ export function resolvePanelTargetIdentity(
     sceneIds.push(id)
   }
 
-  const addPlant = (id: string, plant: PanelTargetPlantRef): void => {
+  const addPlant = (id: string, plant: TargetPlantRef): void => {
     if (!plantIds.includes(id)) plantIds.push(id)
     addSceneId(id)
     const featureKey = `plant:${id}`
@@ -123,7 +126,7 @@ export function resolvePanelTargetIdentity(
     resolvedRefs.push({ kind: 'plant', id, plant })
   }
 
-  const addZone = (id: string, zone: PanelTargetZoneRef): void => {
+  const addZone = (id: string, zone: TargetZoneRef): void => {
     if (!zoneIds.includes(id)) zoneIds.push(id)
     addSceneId(id)
     const featureKey = `zone:${id}`
@@ -132,7 +135,7 @@ export function resolvePanelTargetIdentity(
     resolvedRefs.push({ kind: 'zone', id, zone })
   }
 
-  for (const target of targets) {
+  for (const target of values) {
     switch (target.kind) {
       case 'species': {
         const speciesPlantIds = index.plantIdsBySpecies.get(target.canonical_name) ?? []
@@ -173,11 +176,11 @@ export function resolvePanelTargetIdentity(
   }
 }
 
-export const panelTargetIdentity = {
+export const targetIdentity = {
   species: speciesTarget,
-  key: panelTargetKey,
-  equals: panelTargetEqual,
-  listEquals: panelTargetsEqual,
-  indexScene: indexPanelTargetScene,
-  resolve: resolvePanelTargetIdentity,
+  key: targetKey,
+  equals: targetsEqual,
+  listEquals: targetListsEqual,
+  indexScene: indexTargetScene,
+  resolve: resolveTargetsInScene,
 } as const

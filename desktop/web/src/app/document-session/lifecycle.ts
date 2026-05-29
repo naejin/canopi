@@ -58,7 +58,7 @@ type InitializableCanvasRuntime = MountedCanvasRuntime & {
 
 const DEFAULT_LIFECYCLE_DEPS: DesignSessionLifecycleDeps = {
   createRuntime: () => new SceneCanvasRuntime({
-    panelTargets: createAppSceneRuntimePanelTargetAdapter(),
+    targetPresentation: createAppSceneRuntimePanelTargetAdapter(),
   }),
   createSurfaces: createCanvasRuntimeSurfaces,
   publishSurfaces: setCanvasRuntimeSurfaces,

@@ -33,7 +33,7 @@ import {
   plantNamesRevision,
   sceneEntityRevision,
 } from '../canvas/runtime-mirror-state'
-import { consortiumTarget, speciesTarget } from '../panel-targets'
+import { consortiumTarget, speciesTarget } from '../target'
 import type { CanopiFile, PlacedPlant } from '../types/design'
 
 function makeDesign(): CanopiFile {

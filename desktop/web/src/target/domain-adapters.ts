@@ -1,9 +1,5 @@
-import { isSpeciesTarget, speciesTarget } from './panel-target-identity'
-import type { BudgetItem, Consortium, PanelTarget, SpeciesPanelTarget, TimelineAction } from './types/design'
-
-export function getConsortiumCanonicalName(entry: Consortium): string {
-  return entry.target.canonical_name
-}
+import { isSpeciesTarget, speciesTarget } from './identity'
+import type { BudgetItem, Consortium, PanelTarget, SpeciesPanelTarget, TimelineAction } from '../types/design'
 
 export function consortiumTarget(canonicalName: string): SpeciesPanelTarget {
   return speciesTarget(canonicalName)
@@ -22,12 +18,15 @@ export function getTimelineHoverTargets(action: TimelineAction): readonly PanelT
 }
 
 export function getBudgetSpeciesTarget(item: BudgetItem): SpeciesPanelTarget | null {
-  return item.category === 'plants' && isSpeciesTarget(item.target) ? item.target : null
+  if (item.category !== 'plants') return null
+  return isSpeciesTarget(item.target) ? item.target : null
 }
 
 export function getTimelineSpeciesTarget(action: TimelineAction): SpeciesPanelTarget | null {
-  for (const target of action.targets) {
-    if (isSpeciesTarget(target)) return target
-  }
-  return null
+  const firstSpecies = action.targets.find(isSpeciesTarget)
+  return firstSpecies ?? null
+}
+
+export function getConsortiumCanonicalName(consortium: Consortium): string {
+  return consortium.target.canonical_name
 }

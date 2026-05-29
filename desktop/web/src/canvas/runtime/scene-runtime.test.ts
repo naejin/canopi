@@ -25,7 +25,7 @@ import { createAppSceneRuntimePanelTargetAdapter } from '../../app/canvas-runtim
 import { canvasClean } from '../../state/design'
 import { locale } from '../../app/settings/state'
 import type { CanopiFile, PanelTarget } from '../../types/design'
-import { speciesTarget } from '../../panel-targets'
+import { speciesTarget } from '../../target'
 import { SceneCanvasRuntime } from './scene-runtime.ts'
 import type { SceneRuntimePanelTargetAdapter } from './scene-runtime/panel-target-adapter'
 import { getCommonNames } from '../../ipc/species'
@@ -121,7 +121,7 @@ async function initRuntimeWithStubbedRenderer(runtime: SceneCanvasRuntime) {
 
 function createRuntimeWithAppPanelTargets(): SceneCanvasRuntime {
   return new SceneCanvasRuntime({
-    panelTargets: createAppSceneRuntimePanelTargetAdapter(),
+    targetPresentation: createAppSceneRuntimePanelTargetAdapter(),
   })
 }
 
@@ -455,7 +455,7 @@ describe('scene canvas runtime', () => {
 
   it('uses the injected panel target adapter for highlights and canvas-origin hover', async () => {
     const panelTargetProbe = createPanelTargetAdapterProbe()
-    const runtime = new SceneCanvasRuntime({ panelTargets: panelTargetProbe.adapter })
+    const runtime = new SceneCanvasRuntime({ targetPresentation: panelTargetProbe.adapter })
     runtime.loadDocument(makeFile())
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
 

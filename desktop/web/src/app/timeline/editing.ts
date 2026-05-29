@@ -1,5 +1,5 @@
 import { snapToDay, toISODate } from '../../canvas/timeline-math'
-import { MANUAL_TARGET, getTimelineSpeciesTarget, speciesTarget } from '../../panel-targets'
+import { MANUAL_TARGET, getTimelineSpeciesTarget, speciesTarget } from '../../target'
 import type { PanelTarget, TimelineAction } from '../../types/design'
 import { beginDocumentArrayEdit, type DocumentArrayEditTransaction } from '../document/edit-transaction'
 import { applyTimelineActionPatch } from './model'

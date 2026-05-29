@@ -4,7 +4,7 @@ import {
   groupTimelineActionsByType,
 } from '../app/planning-projection'
 import type { TimelineAction } from '../types/design'
-import { MANUAL_TARGET } from '../panel-targets'
+import { MANUAL_TARGET } from '../target'
 
 function makeAction(overrides: Partial<TimelineAction> = {}): TimelineAction {
   return {

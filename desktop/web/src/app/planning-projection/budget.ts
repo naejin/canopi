@@ -1,5 +1,5 @@
 import { groupPlantsBySpecies } from '../../canvas/plant-grouping'
-import { getBudgetHoverTarget, getBudgetSpeciesTarget } from '../../panel-targets'
+import { getBudgetHoverTarget, getBudgetSpeciesTarget } from '../../target'
 import type { BudgetItem, PanelTarget, PlacedPlant } from '../../types/design'
 
 export interface BudgetPlanningRow {

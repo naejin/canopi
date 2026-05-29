@@ -7,7 +7,7 @@ import { locale } from '../app/settings/state'
 import { hoveredPanelTargets, selectedPanelTargetOrigin, selectedPanelTargets } from '../app/panel-targets/state'
 import { currentDesign } from '../state/design'
 import { plantNamesRevision, sceneEntityRevision } from '../canvas/runtime-mirror-state'
-import { speciesBudgetTarget } from '../panel-targets'
+import { speciesBudgetTarget } from '../target'
 import type { CanopiFile, PlacedPlant } from '../types/design'
 import styles from '../components/canvas/BudgetTab.module.css'
 

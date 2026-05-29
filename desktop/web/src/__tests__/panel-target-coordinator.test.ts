@@ -16,7 +16,7 @@ import {
   selectedPanelTargetOrigin,
   selectedPanelTargets,
 } from "../app/panel-targets/state";
-import { speciesTarget } from "../panel-targets";
+import { speciesTarget } from "../target";
 
 describe("panel target coordinator", () => {
   beforeEach(() => {

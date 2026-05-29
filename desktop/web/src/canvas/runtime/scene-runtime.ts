@@ -45,12 +45,12 @@ import {
   type SceneRuntimePanelTargetAdapter,
 } from './scene-runtime/panel-target-adapter'
 import type { CanvasRuntimeDocumentMetadata, MountedCanvasRuntime } from './runtime'
-import { panelTargets, speciesTarget } from '../../panel-targets'
+import { targets, speciesTarget } from '../../target'
 
 type RuntimeInvalidationKind = 'scene' | 'viewport' | 'chrome'
 
 export interface SceneCanvasRuntimeOptions {
-  panelTargets?: SceneRuntimePanelTargetAdapter
+  targetPresentation?: SceneRuntimePanelTargetAdapter
 }
 
 export class SceneCanvasRuntime implements MountedCanvasRuntime {
@@ -87,7 +87,7 @@ export class SceneCanvasRuntime implements MountedCanvasRuntime {
   private _documentLoaded = false
 
   constructor(options: SceneCanvasRuntimeOptions = {}) {
-    this._panelTargetAdapter = options.panelTargets ?? createDetachedSceneRuntimePanelTargetAdapter()
+    this._panelTargetAdapter = options.targetPresentation ?? createDetachedSceneRuntimePanelTargetAdapter()
     this._presentation = new SceneRuntimePresentationController({
       sceneStore: this._sceneStore,
       getViewport: () => this._camera.viewport,
@@ -553,9 +553,9 @@ export class SceneCanvasRuntime implements MountedCanvasRuntime {
   }
 
   private _resolveHighlightedTargets(scene: ScenePersistedState): { plantIds: readonly string[]; zoneIds: readonly string[] } {
-    return panelTargets.resolve(
+    return targets.resolve(
       this._panelTargetAdapter.readPanelOriginTargets(),
-      panelTargets.indexScene(scene),
+      targets.indexScene(scene),
     )
   }
 }

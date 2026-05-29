@@ -1,15 +1,15 @@
 import type { ScenePersistedState } from '../canvas/runtime/scene'
-import { indexPanelTargetScene, type PanelTargetSceneIndex } from '../panel-target-identity'
+import { indexTargetScene, type TargetSceneIndex } from '../target'
 import type {
-  PanelTargetMapFeature,
-  PanelTargetMapProjectionResult,
-} from '../panel-target-map-projection'
+  TargetMapFeature,
+  TargetMapProjectionResult,
+} from '../target'
 
 export type PanelTargetMapOverlayVariant = 'hover' | 'selection'
 
 export interface PanelTargetMapOverlayFeatureCollection {
   readonly type: 'FeatureCollection'
-  readonly features: readonly PanelTargetMapFeature[]
+  readonly features: readonly TargetMapFeature[]
 }
 
 export interface PanelTargetMapOverlaySourceSpec {
@@ -30,9 +30,9 @@ export interface PanelTargetMapOverlayContract {
   readonly variant: PanelTargetMapOverlayVariant
   readonly source: PanelTargetMapOverlaySourceSpec
   readonly layers: readonly PanelTargetMapOverlayLayerSpec[]
-  readonly unresolvedTargets: PanelTargetMapProjectionResult['unresolvedTargets']
+  readonly unresolvedTargets: TargetMapProjectionResult['unresolvedTargets']
   readonly skippedSceneIds: readonly string[]
-  readonly skippedReason: PanelTargetMapProjectionResult['skippedReason']
+  readonly skippedReason: TargetMapProjectionResult['skippedReason']
   readonly hasRenderableFeatures: boolean
 }
 
@@ -102,13 +102,13 @@ function createLayerSpecs(
   ]
 }
 
-export function buildPanelTargetProjectionScene(scene: ScenePersistedState): PanelTargetSceneIndex {
-  return indexPanelTargetScene(scene)
+export function buildPanelTargetProjectionScene(scene: ScenePersistedState): TargetSceneIndex {
+  return indexTargetScene(scene)
 }
 
 export function createPanelTargetMapOverlayContract(
   variant: PanelTargetMapOverlayVariant,
-  projection: PanelTargetMapProjectionResult,
+  projection: TargetMapProjectionResult,
 ): PanelTargetMapOverlayContract {
   const sourceId = `panel-target-${variant}-source`
   return {

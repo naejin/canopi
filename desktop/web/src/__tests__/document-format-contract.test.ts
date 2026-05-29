@@ -6,7 +6,7 @@ import {
   normalizeLoadedDocument,
 } from '../app/contracts/document'
 import { KNOWN_CANOPI_KEYS } from '../generated/known-canopi-keys'
-import { consortiumTarget, speciesBudgetTarget, speciesTarget } from '../panel-targets'
+import { consortiumTarget, speciesBudgetTarget, speciesTarget } from '../target'
 import type { CanopiFile } from '../types/design'
 
 const RAW_DOCUMENT = {

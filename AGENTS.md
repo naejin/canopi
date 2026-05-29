@@ -36,7 +36,7 @@ These instructions are for AI agents working in this repository. Optimize for lo
 
 - [Document lifecycle](docs/agent/document-lifecycle.md): document authority, save/load, dirty state, settings persistence.
 - [Frontend patterns](docs/agent/frontend-patterns.md): Preact, signals, i18n, CSS, UI behavior, testing gotchas.
-- [Canvas runtime](docs/agent/canvas-runtime.md): runtime seams, scene ownership, rendering, interaction, panel target projection.
+- [Canvas runtime](docs/agent/canvas-runtime.md): runtime seams, scene ownership, rendering, interaction, Target projection.
 - [MapLibre](docs/agent/maplibre.md): basemap and terrain integration, projection, camera sync.
 - [Database](docs/agent/database.md): plant DB schema, query builder, FTS, translations, canopi-data export.
 - [Build and release](docs/agent/build-release.md): build commands, release workflow, platform/native rules.

@@ -7,7 +7,7 @@ import {
   getTimelineHoverTargets,
   speciesBudgetTarget,
   speciesTarget,
-} from '../panel-targets'
+} from '../target'
 import type { BudgetItem, TimelineAction } from '../types/design'
 
 function makeAction(overrides: Partial<TimelineAction> = {}): TimelineAction {

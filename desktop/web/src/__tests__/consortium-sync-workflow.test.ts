@@ -4,7 +4,7 @@ import { sceneEntityRevision } from '../canvas/runtime-mirror-state'
 import { currentCanvasSession } from '../canvas/session'
 import { installConsortiumSync, disposeConsortiumSync } from '../app/document-session/workflows'
 import type { CanopiFile, PlacedPlant } from '../types/design'
-import { consortiumTarget, getConsortiumCanonicalName } from '../panel-targets'
+import { consortiumTarget, getConsortiumCanonicalName } from '../target'
 
 function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {

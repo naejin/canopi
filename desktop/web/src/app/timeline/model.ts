@@ -1,4 +1,4 @@
-import { panelTargets } from '../../panel-targets'
+import { targets } from '../../target'
 import type { TimelineAction } from '../../types/design'
 
 export function applyTimelineActionPatch(
@@ -18,7 +18,7 @@ export function applyTimelineActionPatch(
     next.order === existing.order &&
     next.completed === existing.completed &&
     next.recurrence === existing.recurrence &&
-    panelTargets.listEquals(next.targets, existing.targets) &&
+    targets.listEquals(next.targets, existing.targets) &&
     next.depends_on === existing.depends_on
   ) {
     return timeline as TimelineAction[]

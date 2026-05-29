@@ -50,14 +50,15 @@ Use this guide when changing Preact components, signals, i18n, CSS, panels, bott
 
 - Planning surfaces that combine Design planning entries, placed plants, localized names, and Target hover/selection state should go through `desktop/web/src/app/planning-projection/`.
 - The Planning Projection module owns derived planning rows, Timeline Action grouping/layout read-models, and Timeline species picker options for timeline, budget, and consortium views.
-- `app/panel-targets/presentation.ts` owns Target presentation state and is the seam shared by Planning Projection and the canvas runtime adapter. Components and adapters should not import `app/panel-targets/state.ts` directly.
+- Pure Target identity, resolution, domain adapters, and map projection live in `desktop/web/src/target/`. Do not reintroduce root `panel-target*` modules.
+- `app/panel-targets/presentation.ts` owns Target presentation state and is the seam shared by Planning Projection, the canvas runtime adapter, and map surface controller. Components and adapters should not import `app/panel-targets/state.ts` directly.
 - Planning surfaces should use the Planning Projection runtime hooks for placed plants and localized Species names; do not read `currentCanvasQuerySurface`, `sceneEntityRevision`, or `plantNamesRevision` directly in Budget, Timeline, or Consortium UI.
 - Planning views still own rendering, pointer geometry, local edit state, and calls to feature controllers such as budget/timeline/consortium mutations. Drag preview/commit behavior should sit behind the relevant interaction module before reaching document edit transactions.
 - Timeline Action date mutation and form-to-Target mapping belong in `app/timeline/editing.ts`; Timeline canvas gesture behavior, auto-scroll speed, and frozen-origin scroll compensation belong in `app/timeline/interaction.ts`.
 - Consortium canvas drag preview/commit behavior belongs in `app/consortium/interaction.ts`; `ConsortiumChart` should pass hit/layout snapshots to that module instead of owning document edit transactions directly.
 - Bottom panel components that read canvas-derived data must subscribe to `sceneEntityRevision`.
 - Panels that only read non-canvas document state should not subscribe to canvas revisions.
-- Timeline, budget, and consortium identity uses typed `PanelTarget` values. Do not reintroduce string matching against descriptions, legacy plant arrays, budget descriptions, or canonical-name fields.
+- Timeline, budget, and consortium identity uses typed `PanelTarget` wire values through the Target module. Do not reintroduce string matching against descriptions, legacy plant arrays, budget descriptions, or canonical-name fields.
 - Panel-origin hover/selection is presentation state and must not mutate real canvas selection, labels, dirty state, or history.
 - Canvas-origin hover uses `hoveredCanvasTargets` and remains separate.
 

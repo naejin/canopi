@@ -11,7 +11,7 @@ import {
 import type { ConsortiumBarLayout } from '../canvas/consortium-renderer'
 import { buildConsortiumBars, filterActiveConsortiumEntries } from '../app/planning-projection'
 import type { Consortium, PlacedPlant } from '../types/design'
-import { consortiumTarget } from '../panel-targets'
+import { consortiumTarget } from '../target'
 
 // ---------------------------------------------------------------------------
 // Helpers

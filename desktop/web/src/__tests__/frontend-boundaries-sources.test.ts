@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 
 function readSource(path: string): string {
   return readFileSync(new URL(path, import.meta.url), 'utf8')
+}
+
+function sourceExists(path: string): boolean {
+  return existsSync(new URL(path, import.meta.url))
 }
 
 describe('frontend boundary sources', () => {
@@ -21,12 +25,34 @@ describe('frontend boundary sources', () => {
     const effectsSource = readSource('../canvas/runtime/scene-runtime/effects.ts')
     const adapterSource = readSource('../app/canvas-runtime/panel-target-adapter.ts')
     const presentationSource = readSource('../app/panel-targets/presentation.ts')
+    const mapSurfaceControllerSource = readSource('../components/canvas/maplibre-surface-controller.ts')
 
     expect(runtimeSource).not.toContain('app/panel-targets')
     expect(effectsSource).not.toContain('app/panel-targets')
     expect(adapterSource).toContain('../panel-targets/presentation')
     expect(adapterSource).not.toContain('../panel-targets/state')
+    expect(mapSurfaceControllerSource).toContain('app/panel-targets/presentation')
+    expect(mapSurfaceControllerSource).not.toContain('app/panel-targets/state')
     expect(presentationSource).toContain('./state')
+  })
+
+  it('keeps Target identity, resolution, and map projection behind the Target module', () => {
+    const targetIndexSource = readSource('../target/index.ts')
+    const mapOverlaySource = readSource('../maplibre/canvas-overlays.ts')
+    const runtimeSource = readSource('../canvas/runtime/scene-runtime.ts')
+
+    expect(sourceExists('../panel-targets.ts')).toBe(false)
+    expect(sourceExists('../panel-target-identity.ts')).toBe(false)
+    expect(sourceExists('../panel-target-resolution.ts')).toBe(false)
+    expect(sourceExists('../panel-target-map-projection.ts')).toBe(false)
+
+    expect(targetIndexSource).toContain('./identity')
+    expect(targetIndexSource).toContain('./resolution')
+    expect(targetIndexSource).toContain('./map-projection')
+    expect(mapOverlaySource).toContain('../target')
+    expect(mapOverlaySource).not.toContain('panel-target-map-projection')
+    expect(runtimeSource).toContain('../../target')
+    expect(runtimeSource).not.toContain('panel-target-identity')
   })
 
   it('keeps Planning Projection read models out of Canvas2D renderers', () => {

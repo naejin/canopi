@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
-import { panelTargets, speciesTarget } from '../panel-targets'
+import { targets, speciesTarget } from '../target'
 import { createPanelTargetMapOverlayContract } from '../maplibre/panel-target-overlays'
-import { projectPanelTargetResolutionToMapFeatures } from '../panel-target-map-projection'
+import { projectTargetResolutionToMapFeatures } from '../target'
 
 const LOCATION = { lat: 48.8566, lon: 2.3522 }
 
@@ -44,15 +44,15 @@ function createScene() {
 
 describe('panel-target map overlays', () => {
   it('builds a stable MapLibre contract for mixed projected features', () => {
-    const index = panelTargets.indexScene(createScene())
-    const projection = panelTargets.resolve(
+    const index = targets.indexScene(createScene())
+    const projection = targets.resolve(
       [speciesTarget('Malus domestica'), { kind: 'zone', zone_name: 'orchard' }],
       index,
     )
 
     const overlay = createPanelTargetMapOverlayContract(
       'selection',
-      projectPanelTargetResolutionToMapFeatures(projection, LOCATION),
+      projectTargetResolutionToMapFeatures(projection, LOCATION),
     )
 
     expect(overlay.source.id).toBe('panel-target-selection-source')
@@ -67,14 +67,14 @@ describe('panel-target map overlays', () => {
   })
 
   it('preserves empty overlays without inventing renderable features', () => {
-    const projection = panelTargets.resolve(
+    const projection = targets.resolve(
       [],
-      panelTargets.indexScene(createScene()),
+      targets.indexScene(createScene()),
     )
 
     const overlay = createPanelTargetMapOverlayContract(
       'hover',
-      projectPanelTargetResolutionToMapFeatures(projection, LOCATION),
+      projectTargetResolutionToMapFeatures(projection, LOCATION),
     )
 
     expect(overlay.source.data.features).toEqual([])
@@ -85,14 +85,14 @@ describe('panel-target map overlays', () => {
   })
 
   it('carries missing-location skips through the overlay contract', () => {
-    const projection = panelTargets.resolve(
+    const projection = targets.resolve(
       [speciesTarget('Malus domestica')],
-      panelTargets.indexScene(createScene()),
+      targets.indexScene(createScene()),
     )
 
     const overlay = createPanelTargetMapOverlayContract(
       'hover',
-      projectPanelTargetResolutionToMapFeatures(projection, null),
+      projectTargetResolutionToMapFeatures(projection, null),
     )
 
     expect(overlay.hasRenderableFeatures).toBe(false)
@@ -102,14 +102,14 @@ describe('panel-target map overlays', () => {
 
   it('retains unresolved targets in the pure overlay contract', () => {
     const missingTarget = speciesTarget('Pyrus communis')
-    const projection = panelTargets.resolve(
+    const projection = targets.resolve(
       [missingTarget],
-      panelTargets.indexScene(createScene()),
+      targets.indexScene(createScene()),
     )
 
     const overlay = createPanelTargetMapOverlayContract(
       'selection',
-      projectPanelTargetResolutionToMapFeatures(projection, LOCATION),
+      projectTargetResolutionToMapFeatures(projection, LOCATION),
     )
 
     expect(overlay.hasRenderableFeatures).toBe(false)

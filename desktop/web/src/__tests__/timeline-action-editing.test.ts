@@ -8,7 +8,7 @@ import {
   timelineActionPatchFromFormData,
 } from '../app/timeline/editing'
 import { currentDesign, nonCanvasRevision } from '../state/design'
-import { MANUAL_TARGET, speciesTarget } from '../panel-targets'
+import { MANUAL_TARGET, speciesTarget } from '../target'
 import type { CanopiFile, TimelineAction } from '../types/design'
 
 const MS_PER_DAY = 86400000

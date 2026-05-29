@@ -1,6 +1,6 @@
 import { effect } from '@preact/signals'
 import type { BottomPanelTab } from '../canvas-settings/bottom-panel-state'
-import { isSpeciesTarget, panelTargets, speciesTarget } from '../../panel-targets'
+import { isSpeciesTarget, targetIdentity, speciesTarget } from '../../target'
 import type { PanelTarget } from '../../types/design'
 import {
   hoveredCanvasTargets,
@@ -17,6 +17,11 @@ export interface PanelTargetSelectionSnapshot {
   readonly ownsOrigin: boolean
 }
 
+export interface PanelTargetOverlaySnapshot {
+  readonly hoveredTargets: readonly PanelTarget[]
+  readonly selectedTargets: readonly PanelTarget[]
+}
+
 export function readPanelTargetSelection(
   origin: PanelTargetPresentationOrigin,
 ): PanelTargetSelectionSnapshot {
@@ -31,14 +36,14 @@ export function readPanelTargetSelection(
 
 export function panelTargetSelectionMatches(
   selection: PanelTargetSelectionSnapshot,
-  targets: readonly PanelTarget[],
+  targetList: readonly PanelTarget[],
 ): boolean {
-  return selection.ownsOrigin && panelTargets.listEquals(selection.targets, targets)
+  return selection.ownsOrigin && targetIdentity.listEquals(selection.targets, targetList)
 }
 
-export function setHoveredPanelTargets(targets: readonly PanelTarget[]): void {
-  if (!panelTargets.listEquals(hoveredPanelTargets.peek(), targets)) {
-    hoveredPanelTargets.value = targets
+export function setHoveredPanelTargets(targetList: readonly PanelTarget[]): void {
+  if (!targetIdentity.listEquals(hoveredPanelTargets.peek(), targetList)) {
+    hoveredPanelTargets.value = targetList
   }
 }
 
@@ -54,12 +59,12 @@ export function clearHoveredPanelTargets(): void {
 
 export function setSelectedPanelTargets(
   origin: PanelTargetPresentationOrigin,
-  targets: readonly PanelTarget[],
+  targetList: readonly PanelTarget[],
 ): void {
-  if (!panelTargets.listEquals(selectedPanelTargets.peek(), targets)) {
-    selectedPanelTargets.value = targets
+  if (!targetIdentity.listEquals(selectedPanelTargets.peek(), targetList)) {
+    selectedPanelTargets.value = targetList
   }
-  selectedPanelTargetOrigin.value = targets.length > 0 ? origin : null
+  selectedPanelTargetOrigin.value = targetList.length > 0 ? origin : null
 }
 
 export function clearSelectedPanelTargetsForOrigin(
@@ -92,7 +97,7 @@ export function prunePanelTargetSelectionForOrigin(
     selectedPanelTargetOrigin.value = null
     return
   }
-  if (visibleTargetLists.some((targets) => panelTargets.listEquals(selected, targets))) return
+  if (visibleTargetLists.some((targetList) => targetIdentity.listEquals(selected, targetList))) return
   clearSelectedPanelTargetsForOrigin(origin)
 }
 
@@ -109,9 +114,9 @@ export function getCanvasHoveredSpeciesCanonical(): string | null {
   return getSpeciesCanonicalFromTargets(hoveredCanvasTargets.value)
 }
 
-export function setCanvasHoveredTargets(targets: readonly PanelTarget[]): void {
-  if (!panelTargets.listEquals(hoveredCanvasTargets.peek(), targets)) {
-    hoveredCanvasTargets.value = targets
+export function setCanvasHoveredTargets(targetList: readonly PanelTarget[]): void {
+  if (!targetIdentity.listEquals(hoveredCanvasTargets.peek(), targetList)) {
+    hoveredCanvasTargets.value = targetList
   }
 }
 
@@ -120,6 +125,13 @@ export function readPanelOriginTargets(): readonly PanelTarget[] {
     ...selectedPanelTargets.value,
     ...hoveredPanelTargets.value,
   ]
+}
+
+export function readPanelTargetOverlaySnapshot(): PanelTargetOverlaySnapshot {
+  return {
+    hoveredTargets: hoveredPanelTargets.value,
+    selectedTargets: selectedPanelTargets.value,
+  }
 }
 
 export function subscribePanelOriginTargetChanges(

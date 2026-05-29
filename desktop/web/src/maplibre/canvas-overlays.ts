@@ -1,5 +1,5 @@
 import type { ScenePersistedState } from '../canvas/runtime/scene'
-import { projectPanelTargetsToMapFeatures } from '../panel-target-map-projection'
+import { projectTargetsToMapFeatures } from '../target'
 import type { PanelTarget } from '../types/design'
 import { createPanelTargetMapOverlayContract } from './panel-target-overlays'
 import {
@@ -34,11 +34,11 @@ export function syncCanvasPanelTargetOverlays(
 
   const hoverOverlay = createPanelTargetMapOverlayContract(
     'hover',
-    projectPanelTargetsToMapFeatures(hoveredTargets, scene, location),
+    projectTargetsToMapFeatures(hoveredTargets, scene, location),
   )
   const selectionOverlay = createPanelTargetMapOverlayContract(
     'selection',
-    projectPanelTargetsToMapFeatures(selectedTargets, scene, location),
+    projectTargetsToMapFeatures(selectedTargets, scene, location),
   )
 
   syncPanelTargetMapOverlay(map, selectionOverlay)

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { MANUAL_TARGET, NONE_TARGET, speciesTarget } from '../panel-targets'
-import { resolvePanelTargets, type PanelTargetResolutionScene } from '../panel-target-resolution'
+import { MANUAL_TARGET, NONE_TARGET, speciesTarget } from '../target'
+import { resolveTargets, type TargetResolutionScene } from '../target'
 import type { PanelTarget } from '../types/design'
 
-function createScene(overrides: Partial<PanelTargetResolutionScene> = {}): PanelTargetResolutionScene {
+function createScene(overrides: Partial<TargetResolutionScene> = {}): TargetResolutionScene {
   return {
     plants: [
       { id: 'plant-1', canonicalName: 'Malus domestica' },
@@ -18,9 +18,9 @@ function createScene(overrides: Partial<PanelTargetResolutionScene> = {}): Panel
   }
 }
 
-describe('resolvePanelTargets', () => {
+describe('resolveTargets', () => {
   it('resolves a species target to all matching placed plants in scene order', () => {
-    const result = resolvePanelTargets([speciesTarget('Malus domestica')], createScene())
+    const result = resolveTargets([speciesTarget('Malus domestica')], createScene())
 
     expect(result).toEqual({
       plantIds: ['plant-1', 'plant-3'],
@@ -33,7 +33,7 @@ describe('resolvePanelTargets', () => {
   it('resolves a placed plant target only when the plant ID exists', () => {
     const target: PanelTarget = { kind: 'placed_plant', plant_id: 'plant-2' }
 
-    const result = resolvePanelTargets([target], createScene())
+    const result = resolveTargets([target], createScene())
 
     expect(result).toEqual({
       plantIds: ['plant-2'],
@@ -46,7 +46,7 @@ describe('resolvePanelTargets', () => {
   it('resolves a zone target by zone name', () => {
     const target: PanelTarget = { kind: 'zone', zone_name: 'orchard' }
 
-    const result = resolvePanelTargets([target], createScene())
+    const result = resolveTargets([target], createScene())
 
     expect(result).toEqual({
       plantIds: [],
@@ -57,7 +57,7 @@ describe('resolvePanelTargets', () => {
   })
 
   it('treats manual and none targets as intentionally empty', () => {
-    const result = resolvePanelTargets([MANUAL_TARGET, NONE_TARGET], createScene())
+    const result = resolveTargets([MANUAL_TARGET, NONE_TARGET], createScene())
 
     expect(result).toEqual({
       plantIds: [],
@@ -72,7 +72,7 @@ describe('resolvePanelTargets', () => {
     const missingPlant: PanelTarget = { kind: 'placed_plant', plant_id: 'plant-missing' }
     const missingZone: PanelTarget = { kind: 'zone', zone_name: 'missing-zone' }
 
-    const result = resolvePanelTargets(
+    const result = resolveTargets(
       [
         speciesTarget('Malus domestica'),
         { kind: 'placed_plant', plant_id: 'plant-2' },
@@ -95,7 +95,7 @@ describe('resolvePanelTargets', () => {
   })
 
   it('deduplicates scene IDs while preserving first discovery order', () => {
-    const result = resolvePanelTargets(
+    const result = resolveTargets(
       [
         { kind: 'placed_plant', plant_id: 'plant-3' },
         speciesTarget('Malus domestica'),
@@ -113,7 +113,7 @@ describe('resolvePanelTargets', () => {
   })
 
   it('keeps plant and zone IDs typed when names collide', () => {
-    const result = resolvePanelTargets(
+    const result = resolveTargets(
       [
         { kind: 'zone', zone_name: 'plant-1' },
         { kind: 'placed_plant', plant_id: 'orchard' },

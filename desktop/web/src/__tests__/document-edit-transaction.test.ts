@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { beginDocumentArrayEdit } from '../app/document/edit-transaction'
-import { consortiumTarget } from '../panel-targets'
+import { consortiumTarget } from '../target'
 import { currentDesign, nonCanvasRevision } from '../state/design'
 import type { CanopiFile, Consortium, TimelineAction } from '../types/design'
 

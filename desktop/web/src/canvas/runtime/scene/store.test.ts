@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CanopiFile } from '../../../types/design'
-import { consortiumTarget, speciesBudgetTarget, speciesTarget } from '../../../panel-targets'
+import { consortiumTarget, speciesBudgetTarget, speciesTarget } from '../../../target'
 import {
   SceneStore,
   createDefaultScenePersistedState,

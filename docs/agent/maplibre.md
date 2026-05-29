@@ -27,7 +27,7 @@ Use this guide when changing MapLibre surfaces, basemap rendering, terrain layer
 - Keep in-canvas map surfaces thin. Lifecycle classes/components own setup, update, and teardown.
 - Helper modules under `desktop/web/src/maplibre/` own basemap presentation, overlay coordination, terrain loading, and terrain diff/apply behavior.
 - Precision warnings and dev diagnostics derive from the projection seam, not ad hoc surface math.
-- Rendered panel-map overlays consume the pure panel target projection seam instead of resolving panel identity themselves.
+- Rendered map overlays consume the pure Target map projection seam in `desktop/web/src/target/` instead of resolving Target identity themselves.
 
 ## Layers And Settings
 

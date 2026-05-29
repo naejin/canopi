@@ -6,7 +6,7 @@ import {
   type ConsortiumBarLayout,
   type ConsortiumHitResult,
 } from '../../canvas/consortium-renderer'
-import { getConsortiumCanonicalName } from '../../panel-targets'
+import { getConsortiumCanonicalName } from '../../target'
 import type { Consortium } from '../../types/design'
 import { beginDocumentArrayEdit, type DocumentArrayEditTransaction } from '../document/edit-transaction'
 import {

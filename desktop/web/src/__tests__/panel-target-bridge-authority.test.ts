@@ -3,8 +3,8 @@ import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import { hoveredPanelTargets, selectedPanelTargets } from '../app/panel-targets/state'
 import { selectedObjectIds } from '../canvas/session-state'
 import { createPanelTargetMapOverlayContract } from '../maplibre/panel-target-overlays'
-import { panelTargets, speciesTarget } from '../panel-targets'
-import { projectPanelTargetResolutionToMapFeatures } from '../panel-target-map-projection'
+import { targets, speciesTarget } from '../target'
+import { projectTargetResolutionToMapFeatures } from '../target'
 
 function createScene() {
   const scene = createDefaultScenePersistedState()
@@ -36,10 +36,10 @@ describe('panel target bridge authority', () => {
     selectedPanelTargets.value = [speciesTarget('Malus domestica')]
 
     const scene = createScene()
-    const targets = [speciesTarget('Malus domestica')]
+    const targetList = [speciesTarget('Malus domestica')]
 
-    const resolved = panelTargets.resolve(targets, panelTargets.indexScene(scene))
-    const projection = projectPanelTargetResolutionToMapFeatures(resolved, { lat: 48.8566, lon: 2.3522 })
+    const resolved = targets.resolve(targetList, targets.indexScene(scene))
+    const projection = projectTargetResolutionToMapFeatures(resolved, { lat: 48.8566, lon: 2.3522 })
     const overlay = createPanelTargetMapOverlayContract('selection', projection)
 
     expect(resolved.plantIds).toEqual(['plant-1'])

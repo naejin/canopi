@@ -1,5 +1,5 @@
 import type { BudgetItem } from '../../types/design'
-import { getBudgetSpeciesTarget, panelTargets, speciesBudgetTarget } from '../../panel-targets'
+import { getBudgetSpeciesTarget, targets, speciesBudgetTarget } from '../../target'
 import { mutateCurrentDesign } from '../document/controller'
 
 export function setBudgetCurrency(currency: string): void {
@@ -21,7 +21,7 @@ export function setPlantBudgetPrice(canonicalName: string, unitCost: number): vo
     const budget = design.budget
     const index = budget.findIndex((item) => {
       const itemTarget = getBudgetSpeciesTarget(item)
-      return itemTarget !== null && panelTargets.equals(itemTarget, target)
+      return itemTarget !== null && targets.equals(itemTarget, target)
     })
     const existing = index !== -1 ? budget[index] : undefined
     if (existing && existing.unit_cost === sanitized && existing.currency === currency) return design

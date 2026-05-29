@@ -10,7 +10,7 @@ import {
 } from '../app/timeline/interaction'
 import { projectTimelineAction } from '../app/planning-projection'
 import { currentDesign, nonCanvasRevision, nonCanvasSavedRevision } from '../state/design'
-import { speciesTarget } from '../panel-targets'
+import { speciesTarget } from '../target'
 import type { CanopiFile, TimelineAction } from '../types/design'
 
 function makeRect(): DOMRect {

@@ -1,5 +1,5 @@
 import type { Consortium } from '../../types/design'
-import { getConsortiumCanonicalName, panelTargets } from '../../panel-targets'
+import { getConsortiumCanonicalName, targets } from '../../target'
 import { updateDesignArray } from '../document/controller'
 
 function updateConsortiums(
@@ -13,14 +13,14 @@ export function upsertConsortiumEntry(entry: Consortium): void {
 }
 
 export function upsertConsortiumEntryInArray(consortiums: Consortium[], entry: Consortium): Consortium[] {
-  const index = consortiums.findIndex((consortium) => panelTargets.equals(consortium.target, entry.target))
+  const index = consortiums.findIndex((consortium) => targets.equals(consortium.target, entry.target))
   if (index >= 0) {
     const existing = consortiums[index]!
     if (
       existing.stratum === entry.stratum &&
       existing.start_phase === entry.start_phase &&
       existing.end_phase === entry.end_phase &&
-      panelTargets.equals(existing.target, entry.target)
+      targets.equals(existing.target, entry.target)
     ) {
       return consortiums
     }

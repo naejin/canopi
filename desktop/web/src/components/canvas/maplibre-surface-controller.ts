@@ -19,7 +19,7 @@ import {
 } from '../../app/canvas-settings/signals'
 import { northBearingDeg } from '../../canvas/scene-metadata-state'
 import { sceneEntityRevision } from '../../canvas/runtime-mirror-state'
-import { hoveredPanelTargets, selectedPanelTargets } from '../../app/panel-targets/state'
+import { readPanelTargetOverlaySnapshot } from '../../app/panel-targets/presentation'
 import { basemapStyle, theme } from '../../app/settings/state'
 import { currentDesign } from '../../state/design'
 import { loadMapLibre } from './maplibre-loader'
@@ -55,8 +55,7 @@ export function useMapLibreCanvasSurfaceController({
     const bearing = northBearingDeg.value
     const preferredBasemapStyle = basemapStyle.value
     const activeTheme = theme.value
-    const hoverTargets = hoveredPanelTargets.value
-    const selectionTargets = selectedPanelTargets.value
+    const { hoveredTargets, selectedTargets } = readPanelTargetOverlaySnapshot()
     const contoursVisible = visibleLayers.contours ?? false
     const contoursOpacity = opacityByLayer.contours ?? 1
     const hillshadeOn = hillshadeVisible.value
@@ -80,8 +79,8 @@ export function useMapLibreCanvasSurfaceController({
         hillshadeOpacity: hillshadeAlpha,
         isDark: activeTheme === 'dark',
       },
-      hoveredTargets: [...hoverTargets],
-      selectedTargets: [...selectionTargets],
+      hoveredTargets: [...hoveredTargets],
+      selectedTargets: [...selectedTargets],
       theme: activeTheme,
     })
   })

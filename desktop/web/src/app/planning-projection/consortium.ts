@@ -1,7 +1,7 @@
 import { groupPlantsBySpecies } from '../../canvas/plant-grouping'
 import { DEFAULT_PLANT_COLOR } from '../../canvas/plant-colors'
 import { getStratumColor } from '../../canvas/plants'
-import { getConsortiumCanonicalName } from '../../panel-targets'
+import { getConsortiumCanonicalName } from '../../target'
 import type { Consortium, PlacedPlant } from '../../types/design'
 
 export interface ConsortiumPlanningBar {

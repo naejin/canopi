@@ -1,41 +1,39 @@
-import { getActiveProjectionBackend } from './canvas/projection'
+import { getActiveProjectionBackend } from '../canvas/projection'
 import {
-  indexPanelTargetScene,
-  resolvePanelTargetIdentity,
-  type PanelTargetResolution,
-  type PanelTargetSceneIndex,
-  type PanelTargetScenePoint,
-} from './panel-target-identity'
-import type {
-  PanelTargetSceneInput,
-} from './panel-target-identity'
-import type { PanelTarget } from './types/design'
+  indexTargetScene,
+  resolveTargetsInScene,
+  type TargetResolution,
+  type TargetSceneIndex,
+  type TargetSceneInput,
+  type TargetScenePoint,
+} from './identity'
+import type { PanelTarget } from '../types/design'
 
-export type PanelTargetMapProjectionPoint = PanelTargetScenePoint
+export type TargetMapProjectionPoint = TargetScenePoint
 
-export interface PanelTargetMapProjectionLocation {
+export interface TargetMapProjectionLocation {
   readonly lat: number
   readonly lon: number
   readonly northBearingDeg?: number | null
 }
 
-export interface PanelTargetMapPlantRef {
+export interface TargetMapPlantRef {
   readonly id: string
   readonly canonicalName: string
-  readonly position: PanelTargetMapProjectionPoint
+  readonly position: TargetMapProjectionPoint
 }
 
-export interface PanelTargetMapZoneRef {
+export interface TargetMapZoneRef {
   readonly name: string
-  readonly points: readonly PanelTargetMapProjectionPoint[]
+  readonly points: readonly TargetMapProjectionPoint[]
 }
 
-export interface PanelTargetMapProjectionScene {
-  readonly plants: readonly PanelTargetMapPlantRef[]
-  readonly zones: readonly PanelTargetMapZoneRef[]
+export interface TargetMapProjectionScene {
+  readonly plants: readonly TargetMapPlantRef[]
+  readonly zones: readonly TargetMapZoneRef[]
 }
 
-export interface PanelTargetMapPlantFeature {
+export interface TargetMapPlantFeature {
   readonly type: 'Feature'
   readonly geometry: {
     readonly type: 'Point'
@@ -47,7 +45,7 @@ export interface PanelTargetMapPlantFeature {
   }
 }
 
-export interface PanelTargetMapZoneFeature {
+export interface TargetMapZoneFeature {
   readonly type: 'Feature'
   readonly geometry: {
     readonly type: 'Polygon'
@@ -59,26 +57,26 @@ export interface PanelTargetMapZoneFeature {
   }
 }
 
-export type PanelTargetMapFeature = PanelTargetMapPlantFeature | PanelTargetMapZoneFeature
-export type PanelTargetMapSkippedReason = 'missing_location' | null
+export type TargetMapFeature = TargetMapPlantFeature | TargetMapZoneFeature
+export type TargetMapSkippedReason = 'missing_location' | null
 
-export interface PanelTargetMapProjectionResult {
-  readonly features: readonly PanelTargetMapFeature[]
+export interface TargetMapProjectionResult {
+  readonly features: readonly TargetMapFeature[]
   readonly unresolvedTargets: readonly PanelTarget[]
   readonly skippedSceneIds: readonly string[]
-  readonly skippedReason: PanelTargetMapSkippedReason
+  readonly skippedReason: TargetMapSkippedReason
 }
 
-function isPanelTargetSceneIndex(
-  scene: PanelTargetSceneInput | PanelTargetSceneIndex,
-): scene is PanelTargetSceneIndex {
+function isTargetSceneIndex(
+  scene: TargetSceneInput | TargetSceneIndex,
+): scene is TargetSceneIndex {
   return 'plantsById' in scene
 }
 
-export function projectPanelTargetResolutionToMapFeatures(
-  resolution: PanelTargetResolution,
-  location: PanelTargetMapProjectionLocation | null,
-): PanelTargetMapProjectionResult {
+export function projectTargetResolutionToMapFeatures(
+  resolution: TargetResolution,
+  location: TargetMapProjectionLocation | null,
+): TargetMapProjectionResult {
   if (!location) {
     return {
       features: [],
@@ -88,7 +86,7 @@ export function projectPanelTargetResolutionToMapFeatures(
     }
   }
 
-  const features: PanelTargetMapFeature[] = []
+  const features: TargetMapFeature[] = []
   const skippedSceneIds: string[] = []
   const skippedFeatureKeys = new Set<string>()
   const projectionBackend = getActiveProjectionBackend()
@@ -169,16 +167,16 @@ export function projectPanelTargetResolutionToMapFeatures(
   }
 }
 
-export function projectPanelTargetsToMapFeatures(
-  targets: readonly PanelTarget[],
-  scene: PanelTargetMapProjectionScene | PanelTargetSceneIndex,
-  location: PanelTargetMapProjectionLocation | null,
-): PanelTargetMapProjectionResult {
-  const index = isPanelTargetSceneIndex(scene) ? scene : indexPanelTargetScene(scene)
-  return projectPanelTargetResolutionToMapFeatures(resolvePanelTargetIdentity(targets, index), location)
+export function projectTargetsToMapFeatures(
+  values: readonly PanelTarget[],
+  scene: TargetMapProjectionScene | TargetSceneIndex,
+  location: TargetMapProjectionLocation | null,
+): TargetMapProjectionResult {
+  const index = isTargetSceneIndex(scene) ? scene : indexTargetScene(scene)
+  return projectTargetResolutionToMapFeatures(resolveTargetsInScene(values, index), location)
 }
 
-export const panelTargetMapProjection = {
-  project: projectPanelTargetResolutionToMapFeatures,
-  projectTargets: projectPanelTargetsToMapFeatures,
+export const targetMapProjection = {
+  project: projectTargetResolutionToMapFeatures,
+  projectTargets: projectTargetsToMapFeatures,
 } as const

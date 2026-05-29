@@ -12,7 +12,7 @@ import {
   phaseToX,
   stratumToRow,
 } from '../canvas/consortium-renderer'
-import { consortiumTarget } from '../panel-targets'
+import { consortiumTarget } from '../target'
 import { currentDesign, nonCanvasRevision, nonCanvasSavedRevision } from '../state/design'
 import type { CanopiFile, Consortium, PlacedPlant } from '../types/design'
 

@@ -4,7 +4,7 @@ import { selectedObjectIds } from '../canvas/session-state'
 import { clearCanvasSelection } from '../canvas/session-state'
 import { SceneCanvasRuntime } from '../canvas/runtime/scene-runtime'
 import type { CanopiFile } from '../types/design'
-import { consortiumTarget, speciesBudgetTarget, speciesTarget } from '../panel-targets'
+import { consortiumTarget, speciesBudgetTarget, speciesTarget } from '../target'
 
 const BASE_FILE: CanopiFile = {
   version: 2,

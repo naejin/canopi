@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { currentDesign, nonCanvasRevision } from '../state/design'
 import { upsertConsortiumEntry, deleteConsortiumEntry, moveConsortiumEntry, reorderConsortiumEntry } from '../app/consortium/controller'
-import { consortiumTarget, getConsortiumCanonicalName } from '../panel-targets'
+import { consortiumTarget, getConsortiumCanonicalName } from '../target'
 import type { Consortium } from '../types/design'
 
 function consortium(canonicalName: string, overrides: Partial<Omit<Consortium, 'target'>> = {}): Consortium {

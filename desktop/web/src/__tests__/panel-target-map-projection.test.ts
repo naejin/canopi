@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { MANUAL_TARGET, NONE_TARGET, speciesTarget } from '../panel-targets'
+import { MANUAL_TARGET, NONE_TARGET, speciesTarget } from '../target'
 import { createMapFrame } from '../canvas/maplibre-camera'
 import { geoToMercator } from '../canvas/projection'
-import { panelTargetIdentity } from '../panel-target-identity'
+import { targetIdentity } from '../target'
 import {
-  projectPanelTargetResolutionToMapFeatures,
-  projectPanelTargetsToMapFeatures,
-  type PanelTargetMapProjectionScene,
-} from '../panel-target-map-projection'
+  projectTargetResolutionToMapFeatures,
+  projectTargetsToMapFeatures,
+  type TargetMapProjectionScene,
+} from '../target'
 import type { PanelTarget } from '../types/design'
 
 const LOCATION = { lat: 48.8566, lon: 2.3522 }
@@ -45,7 +45,7 @@ function projectGeoToMapScreen(
   }
 }
 
-function createScene(overrides: Partial<PanelTargetMapProjectionScene> = {}): PanelTargetMapProjectionScene {
+function createScene(overrides: Partial<TargetMapProjectionScene> = {}): TargetMapProjectionScene {
   return {
     plants: [
       { id: 'plant-1', canonicalName: 'Malus domestica', position: { x: 0, y: 0 } },
@@ -74,14 +74,14 @@ function createScene(overrides: Partial<PanelTargetMapProjectionScene> = {}): Pa
   }
 }
 
-describe('projectPanelTargetsToMapFeatures', () => {
+describe('projectTargetsToMapFeatures', () => {
   it('projects an identity resolution through the map adapter interface', () => {
-    const resolution = panelTargetIdentity.resolve(
+    const resolution = targetIdentity.resolve(
       [speciesTarget('Malus domestica'), { kind: 'zone', zone_name: 'orchard' }],
-      panelTargetIdentity.indexScene(createScene()),
+      targetIdentity.indexScene(createScene()),
     )
 
-    const result = projectPanelTargetResolutionToMapFeatures(resolution, LOCATION)
+    const result = projectTargetResolutionToMapFeatures(resolution, LOCATION)
 
     expect(result.unresolvedTargets).toEqual([])
     expect(result.features.map((feature) => feature.properties)).toEqual([
@@ -92,7 +92,7 @@ describe('projectPanelTargetsToMapFeatures', () => {
   })
 
   it('projects a species target to all matching plant point features in scene order', () => {
-    const result = projectPanelTargetsToMapFeatures(
+    const result = projectTargetsToMapFeatures(
       [speciesTarget('Malus domestica')],
       createScene(),
       LOCATION,
@@ -117,7 +117,7 @@ describe('projectPanelTargetsToMapFeatures', () => {
   })
 
   it('projects a placed plant target without also projecting same-species plants', () => {
-    const result = projectPanelTargetsToMapFeatures(
+    const result = projectTargetsToMapFeatures(
       [{ kind: 'placed_plant', plant_id: 'plant-2' }],
       createScene(),
       LOCATION,
@@ -128,7 +128,7 @@ describe('projectPanelTargetsToMapFeatures', () => {
   })
 
   it('projects a zone target to a closed polygon and keeps colliding IDs typed', () => {
-    const result = projectPanelTargetsToMapFeatures(
+    const result = projectTargetsToMapFeatures(
       [
         { kind: 'zone', zone_name: 'plant-1' },
         { kind: 'placed_plant', plant_id: 'orchard' },
@@ -177,7 +177,7 @@ describe('projectPanelTargetsToMapFeatures', () => {
     const missingPlant: PanelTarget = { kind: 'placed_plant', plant_id: 'missing-plant' }
     const missingZone: PanelTarget = { kind: 'zone', zone_name: 'missing-zone' }
 
-    const result = projectPanelTargetsToMapFeatures(
+    const result = projectTargetsToMapFeatures(
       [MANUAL_TARGET, NONE_TARGET, missingSpecies, missingPlant, missingZone],
       createScene(),
       LOCATION,
@@ -192,7 +192,7 @@ describe('projectPanelTargetsToMapFeatures', () => {
   it('returns no features when location is missing while preserving resolver output', () => {
     const missingPlant: PanelTarget = { kind: 'placed_plant', plant_id: 'missing-plant' }
 
-    const result = projectPanelTargetsToMapFeatures(
+    const result = projectTargetsToMapFeatures(
       [speciesTarget('Malus domestica'), { kind: 'zone', zone_name: 'orchard' }, missingPlant],
       createScene(),
       null,
@@ -205,7 +205,7 @@ describe('projectPanelTargetsToMapFeatures', () => {
   })
 
   it('skips zones with fewer than three points instead of emitting invalid polygons', () => {
-    const result = projectPanelTargetsToMapFeatures(
+    const result = projectTargetsToMapFeatures(
       [{ kind: 'zone', zone_name: 'too-small' }],
       createScene(),
       LOCATION,
@@ -218,12 +218,12 @@ describe('projectPanelTargetsToMapFeatures', () => {
   })
 
   it('projects features through the same north-bearing transform as the map camera', () => {
-    const result = projectPanelTargetsToMapFeatures(
+    const result = projectTargetsToMapFeatures(
       [{ kind: 'placed_plant', plant_id: 'plant-2' }],
       createScene(),
       { ...LOCATION, northBearingDeg: 90 },
     )
-    const northUp = projectPanelTargetsToMapFeatures(
+    const northUp = projectTargetsToMapFeatures(
       [{ kind: 'placed_plant', plant_id: 'plant-2' }],
       createScene(),
       LOCATION,
@@ -254,7 +254,7 @@ describe('projectPanelTargetsToMapFeatures', () => {
     const screenSize = { width: 1200, height: 800 }
     const northBearingDeg = 32
     const frame = createMapFrame(viewport, screenSize, LOCATION, northBearingDeg)
-    const result = projectPanelTargetsToMapFeatures(
+    const result = projectTargetsToMapFeatures(
       [{ kind: 'placed_plant', plant_id: 'plant-2' }],
       scene,
       { ...LOCATION, northBearingDeg },
