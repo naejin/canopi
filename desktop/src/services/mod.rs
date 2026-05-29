@@ -8,4 +8,5 @@ pub mod health;
 pub mod plant_browser;
 pub mod settings;
 pub mod species_catalog;
+pub(crate) mod species_catalog_read;
 pub mod tiles;

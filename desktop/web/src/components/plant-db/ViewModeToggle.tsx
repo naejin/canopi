@@ -1,6 +1,6 @@
 import { t } from '../../i18n';
 import { locale } from '../../app/settings/state';
-import { viewMode, type ViewMode } from '../../app/plant-browser';
+import { speciesCatalogWorkbench, type ViewMode } from '../../app/plant-browser';
 import styles from './PlantDb.module.css';
 
 interface ViewOption {
@@ -16,7 +16,7 @@ const VIEW_OPTIONS: ViewOption[] = [
 
 export function ViewModeToggle() {
   void locale.value;
-  const current = viewMode.value;
+  const current = speciesCatalogWorkbench.viewMode.value;
 
   return (
     <div className={styles.viewToggle} role="group" aria-label={t('plantDb.viewMode')}>
@@ -26,7 +26,7 @@ export function ViewModeToggle() {
           type="button"
           className={`${styles.viewBtn} ${current === mode ? styles.viewBtnActive : ''}`}
           onClick={() => {
-            viewMode.value = mode;
+            speciesCatalogWorkbench.setViewMode(mode);
           }}
           aria-label={t(labelKey)}
           aria-pressed={current === mode}

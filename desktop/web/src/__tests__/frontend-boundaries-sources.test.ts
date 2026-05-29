@@ -64,6 +64,34 @@ describe('frontend boundary sources', () => {
     expect(rendererSource).not.toContain('filterActiveConsortiumEntries')
   })
 
+  it('keeps Species Catalog UI behind the workbench seam', () => {
+    const sources = [
+      readSource('../components/panels/PlantDbPanel.tsx'),
+      readSource('../components/panels/FavoritesPanel.tsx'),
+      readSource('../components/plant-db/SearchBar.tsx'),
+      readSource('../components/plant-db/ResultsList.tsx'),
+      readSource('../components/plant-db/FilterStrip.tsx'),
+      readSource('../components/plant-db/ActiveChips.tsx'),
+      readSource('../components/plant-db/MoreFiltersPanel.tsx'),
+      readSource('../components/plant-db/PlantRow.tsx'),
+      readSource('../components/plant-db/PlantCard.tsx'),
+      readSource('../components/plant-db/ViewModeToggle.tsx'),
+      readSource('../components/plant-db/SortSelect.tsx'),
+      readSource('../components/plant-detail/RelationshipList.tsx'),
+    ]
+
+    for (const source of sources) {
+      expect(source).toContain('speciesCatalogWorkbench')
+      expect(source).not.toContain('plantSearchSession')
+      expect(source).not.toContain('dynamicOptionsCache')
+      expect(source).not.toContain('dynamicOptionsErrors')
+      expect(source).not.toContain('dynamicOptionsPending')
+      expect(source).not.toContain('favoriteItems')
+      expect(source).not.toContain('favoriteNames')
+      expect(source).not.toContain('toggleFavoriteAction')
+    }
+  })
+
   it('keeps planning surfaces behind the Planning Projection runtime seam', () => {
     const budgetSource = readSource('../components/canvas/BudgetTab.tsx')
     const timelineSource = readSource('../components/canvas/InteractiveTimeline.tsx')

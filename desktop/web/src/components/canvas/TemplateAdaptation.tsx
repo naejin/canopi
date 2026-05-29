@@ -1,11 +1,11 @@
-import { useComputed } from '@preact/signals';
 import { useEffect, useMemo } from 'preact/hooks';
 import { t } from '../../i18n';
 import { locale } from '../../app/settings/state';
 import {
   createReplacementSuggestionsController,
   createTemplateAdaptationController,
-  type CompatibilityResult,
+  type SiteAdaptationBadge,
+  type SiteAdaptationReviewRow,
 } from '../../app/adaptation';
 import styles from './TemplateAdaptation.module.css';
 
@@ -20,16 +20,7 @@ export interface TemplateAdaptationProps {
   onReplace?: (originalName: string, replacementName: string) => void;
 }
 
-type PlantStatus = 'compatible' | 'marginal' | 'incompatible' | 'unknown';
-
-function getStatus(result: CompatibilityResult): PlantStatus {
-  if (result.hardiness_min == null && result.hardiness_max == null) return 'unknown';
-  if (result.is_compatible && result.zone_diff === 0) return 'compatible';
-  if (result.is_compatible) return 'marginal';
-  return 'incompatible';
-}
-
-function badgeClass(status: PlantStatus): string {
+function badgeClass(status: SiteAdaptationReviewRow['status']): string {
   switch (status) {
     case 'compatible': return styles.badgeCompatible!;
     case 'marginal': return styles.badgeMarginal!;
@@ -38,51 +29,43 @@ function badgeClass(status: PlantStatus): string {
   }
 }
 
-function badgeLabel(status: PlantStatus, zoneDiff: number): string {
-  switch (status) {
-    case 'compatible': return t('adaptation.compatible');
-    case 'marginal':
-    case 'incompatible':
-      return t('adaptation.hardinessWarning', { zones: String(zoneDiff) });
-    default: return '?';
-  }
+function badgeLabel(badge: SiteAdaptationBadge): string {
+  if (badge.i18nKey) return t(badge.i18nKey, badge.params);
+  return badge.literal ?? '';
 }
 
 function PlantRow({
-  result,
+  row,
   targetHardiness,
   onReplace,
 }: {
-  result: CompatibilityResult;
+  row: SiteAdaptationReviewRow;
   targetHardiness: number;
   onReplace?: (originalName: string, replacementName: string) => void;
 }) {
   // Force re-render on locale change
   void locale.value;
 
-  const status = getStatus(result);
   const suggestions = useMemo(() => createReplacementSuggestionsController(), []);
 
   useEffect(() => () => suggestions.dispose(), [suggestions]);
 
   async function handleSuggest() {
-    await suggestions.toggle(result.canonical_name, targetHardiness, locale.value);
+    await suggestions.toggle(row.canonicalName, targetHardiness, locale.value);
   }
-
-  const displayName = result.common_name ?? result.canonical_name;
 
   return (
     <div class={styles.plantRow}>
       <div class={styles.plantInfo}>
-        <p class={styles.plantName}>{displayName}</p>
-        {result.common_name && (
-          <p class={styles.plantCanonical}>{result.canonical_name}</p>
+        <p class={styles.plantName}>{row.displayName}</p>
+        {row.commonName && (
+          <p class={styles.plantCanonical}>{row.canonicalName}</p>
         )}
       </div>
-      <span class={badgeClass(status)}>
-        {badgeLabel(status, result.zone_diff)}
+      <span class={badgeClass(row.status)}>
+        {badgeLabel(row.badge)}
       </span>
-      {(status === 'incompatible' || status === 'marginal') && (
+      {row.showReplacementSuggestions && (
         <div class={styles.plantActions}>
           <button
             class={styles.suggestBtn}
@@ -97,26 +80,24 @@ function PlantRow({
                 <p class={styles.noReplacements} role="alert">
                   {suggestions.errorMessage.value}
                 </p>
-              ) : suggestions.replacements.value.length === 0 ? (
+              ) : suggestions.replacementRows.value.length === 0 ? (
                 <p class={styles.noReplacements}>
                   {t('adaptation.incompatible')}
                 </p>
               ) : (
-                suggestions.replacements.value.map((r) => (
-                  <div key={r.canonical_name} class={styles.replacementItem}>
+                suggestions.replacementRows.value.map((replacement) => (
+                  <div key={replacement.canonicalName} class={styles.replacementItem}>
                     <span class={styles.replacementName}>
-                      {r.common_name ?? r.canonical_name}
+                      {replacement.displayName}
                     </span>
                     <span class={styles.replacementZone}>
-                      {r.hardiness_min != null && r.hardiness_max != null
-                        ? `Z${r.hardiness_min}–${r.hardiness_max}`
-                        : ''}
+                      {replacement.hardinessLabel}
                     </span>
                     {onReplace ? (
                       <button
                         class={styles.replaceBtn}
                         onClick={() =>
-                          onReplace(result.canonical_name, r.canonical_name)
+                          onReplace(row.canonicalName, replacement.canonicalName)
                         }
                       >
                         {t('adaptation.replacement')}
@@ -154,11 +135,7 @@ export function TemplateAdaptation({
 
   useEffect(() => () => controller.dispose(), [controller]);
 
-  const compatibleCount = useComputed(() =>
-    controller.results.value.filter((r) => getStatus(r) === 'compatible').length,
-  );
-
-  const totalCount = useComputed(() => controller.results.value.length);
+  const summary = controller.summary.value;
 
   return (
     <div class={styles.overlay} onPointerUp={(e) => {
@@ -174,7 +151,7 @@ export function TemplateAdaptation({
 
         {!controller.errorMessage.value && (
           <p class={styles.summary}>
-            {t('adaptation.reviewPlants')} — {compatibleCount.value}/{totalCount.value} {t('adaptation.compatible').toLowerCase()}
+            {t('adaptation.reviewPlants')} — {summary.compatibleCount}/{summary.totalCount} {t('adaptation.compatible').toLowerCase()}
           </p>
         )}
 
@@ -184,10 +161,10 @@ export function TemplateAdaptation({
           <p class={styles.noReplacements} role="alert">{controller.errorMessage.value}</p>
         ) : (
           <div class={styles.plantList}>
-            {controller.results.value.map((r) => (
+            {controller.rows.value.map((row) => (
               <PlantRow
-                key={r.canonical_name}
-                result={r}
+                key={row.canonicalName}
+                row={row}
                 targetHardiness={targetHardiness}
                 onReplace={onReplace}
               />

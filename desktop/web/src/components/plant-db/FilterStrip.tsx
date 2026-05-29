@@ -1,16 +1,7 @@
 import { useEffect } from 'preact/hooks'
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
-import {
-  filterOptions,
-  hasActiveFilters,
-  loadFilterOptions,
-  clearFilters,
-  activeFilterCount,
-  patchFilters,
-  plantFilterCatalog,
-  plantSearchSession,
-} from '../../app/plant-browser'
+import { speciesCatalogWorkbench } from '../../app/plant-browser'
 import type { FilterOptions, SpeciesFilter } from '../../types/species'
 import type { StripControlField } from '../../app/plant-browser'
 import { FilterChip } from './FilterChip'
@@ -20,35 +11,31 @@ import styles from './PlantDb.module.css'
 
 export function FilterStrip({ onMoreFilters }: { onMoreFilters: () => void }) {
   void locale.value;
-  const opts = filterOptions.value;
-  const filters = plantSearchSession.intent.value.filters;
-  const showClear = hasActiveFilters.value;
-  const count = activeFilterCount.value;
-  const controls = plantFilterCatalog.stripControls();
+  const filterStrip = speciesCatalogWorkbench.filterStrip.value;
 
   useEffect(() => {
-    void loadFilterOptions();
+    void speciesCatalogWorkbench.loadFilterOptions();
   }, []);
 
   return (
     <div className={styles.filterStrip}>
-      {controls.map((control) => (
+      {filterStrip.controls.map((control) => (
         <FilterControlRow
           key={control.filterKey}
           control={control}
-          filters={filters}
-          options={opts}
+          filters={filterStrip.filters}
+          options={filterStrip.options}
         />
       ))}
 
       <div className={styles.filterActions}>
         <button type="button" className={styles.moreFiltersBtn} onClick={onMoreFilters}>
           {t('filters.moreFilters')}
-          {count > 0 && <span className={styles.filterBadge}>{count}</span>}
+          {filterStrip.activeCount > 0 && <span className={styles.filterBadge}>{filterStrip.activeCount}</span>}
           <span aria-hidden="true">{'\u203A'}</span>
         </button>
-        {showClear && (
-          <button type="button" className={styles.clearAllBtn} onClick={clearFilters}>
+        {filterStrip.hasActive && (
+          <button type="button" className={styles.clearAllBtn} onClick={speciesCatalogWorkbench.clearFilters}>
             {t('filters.clearAll')}
           </button>
         )}
@@ -78,7 +65,7 @@ function FilterControlRow({
             label={t(`${control.valueI18nPrefix}${val}`, val)}
             color={control.color}
             active={(filters[control.filterKey] as string[] | null)?.includes(val) ?? false}
-            onClick={() => patchFilters({
+            onClick={() => speciesCatalogWorkbench.patchFilters({
               [control.filterKey]: toggleArrayValue(filters[control.filterKey] as string[] | null, val),
             })}
           />
@@ -88,7 +75,7 @@ function FilterControlRow({
             min={control.min}
             max={control.max}
             value={filters[control.filterKey] as number | null}
-            onChange={(v) => patchFilters({ [control.filterKey]: v })}
+            onChange={(v) => speciesCatalogWorkbench.patchFilters({ [control.filterKey]: v })}
             ariaLabel={label}
           />
         )}
@@ -97,7 +84,7 @@ function FilterControlRow({
             <input
               type="checkbox"
               checked={filters[control.filterKey] === control.activeValue}
-              onChange={(e) => patchFilters({
+              onChange={(e) => speciesCatalogWorkbench.patchFilters({
                 [control.filterKey]: (e.target as HTMLInputElement).checked ? control.activeValue : null,
               })}
             />

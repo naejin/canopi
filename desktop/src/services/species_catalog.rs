@@ -6,6 +6,7 @@ use common_types::species::{
 };
 
 use crate::db::{self, PlantDb};
+use crate::services::species_catalog_read::SpeciesCatalogRead;
 
 pub fn get_species_relationships(
     plant_db: &PlantDb,
@@ -24,7 +25,7 @@ pub fn get_common_names(
     locale: String,
 ) -> Result<HashMap<String, String>, String> {
     let conn = db::require_plant_db(plant_db)?;
-    crate::db::plant_db::get_common_names_batch(&conn, &canonical_names, &locale)
+    SpeciesCatalogRead::new(&conn).common_names_for_canonical_names(&canonical_names, &locale)
 }
 
 pub fn get_species_batch(

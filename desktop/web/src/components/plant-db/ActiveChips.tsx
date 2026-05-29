@@ -1,15 +1,7 @@
 import { useSignalEffect } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
-import {
-  dynamicOptionsCache,
-  hasActiveFilters,
-  loadDynamicOptions,
-  patchFilters,
-  plantFilterCatalog,
-  plantSearchSession,
-  removeExtraFilter,
-} from '../../app/plant-browser'
+import { plantFilterCatalog, speciesCatalogWorkbench } from '../../app/plant-browser'
 import type { DynamicFilter, DynamicFilterOptions, SpeciesFilter } from '../../types/species'
 import type { ActiveChipField, SpeciesFilterKey } from '../../app/plant-browser'
 import { FIELD_REGISTRY, categoryForField } from './field-registry'
@@ -34,7 +26,7 @@ function addArrayChips(
       key: `${prefix}-${v}`,
       label: t(`${i18nPrefix}${v}`, v),
       color,
-      onDismiss: () => patchFilters({ [field]: toggleArrayValue(filters[field] as string[] | null, v) }),
+      onDismiss: () => speciesCatalogWorkbench.patchFilters({ [field]: toggleArrayValue(filters[field] as string[] | null, v) }),
     });
   }
 }
@@ -63,7 +55,7 @@ function addCatalogChips(
         key: field.filterKey,
         label: t(field.labelI18nKey, field.fallbackLabel),
         color: field.color,
-        onDismiss: () => patchFilters({ [field.filterKey]: null }),
+        onDismiss: () => speciesCatalogWorkbench.patchFilters({ [field.filterKey]: null }),
       })
       continue
     }
@@ -74,7 +66,7 @@ function addCatalogChips(
       key: field.filterKey,
       label: `${t(field.labelI18nKey, field.fallbackLabel)}: ${value}${field.suffix}`,
       color: field.color,
-      onDismiss: () => patchFilters({ [field.filterKey]: null }),
+      onDismiss: () => speciesCatalogWorkbench.patchFilters({ [field.filterKey]: null }),
     })
   }
 }
@@ -122,16 +114,17 @@ function formatExtraFilterDisplay(
 
 export function ActiveChips() {
   const loc = locale.value;
-  const intent = plantSearchSession.intent.value;
+  const intent = speciesCatalogWorkbench.intent.value;
   const filters = intent.filters;
   const extras = intent.extraFilters;
-  const hasAny = hasActiveFilters.value;
-  const localeOptions = dynamicOptionsCache.value[loc] ?? {};
+  const hasAny = speciesCatalogWorkbench.hasActiveFilters.value;
+  const dynamicOptions = speciesCatalogWorkbench.dynamicOptions.value;
+  const localeOptions = dynamicOptions.cache[loc] ?? {};
 
   useSignalEffect(() => {
     const currentLoc = locale.value;
-    const currentExtras = plantSearchSession.intent.value.extraFilters;
-    const cache = dynamicOptionsCache.value[currentLoc] ?? {};
+    const currentExtras = speciesCatalogWorkbench.intent.value.extraFilters;
+    const cache = speciesCatalogWorkbench.dynamicOptions.value.cache[currentLoc] ?? {};
 
     const seen = new Set<string>();
     const uncachedFields: string[] = [];
@@ -144,7 +137,7 @@ export function ActiveChips() {
     }
 
     if (uncachedFields.length > 0) {
-      void loadDynamicOptions(uncachedFields);
+      void speciesCatalogWorkbench.loadDynamicOptions(uncachedFields);
     }
   })
 
@@ -162,7 +155,7 @@ export function ActiveChips() {
       key: `extra-${ef.field}`,
       label: formatExtraFilterDisplay(ef, label, localeOptions),
       color: cat?.colorToken ?? '--color-primary',
-      onDismiss: () => removeExtraFilter(ef.field),
+      onDismiss: () => speciesCatalogWorkbench.removeExtraFilter(ef.field),
     });
   }
 

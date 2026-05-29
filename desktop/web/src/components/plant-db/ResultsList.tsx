@@ -8,12 +8,7 @@ import {
 } from '@tanstack/virtual-core';
 import { t } from '../../i18n';
 import { locale } from '../../app/settings/state';
-import {
-  isPlantSearchLoading,
-  plantSearchSession,
-  viewMode,
-  hasActiveFilters,
-} from '../../app/plant-browser';
+import { speciesCatalogWorkbench } from '../../app/plant-browser';
 import { PlantRow } from './PlantRow';
 import { PlantCard } from './PlantCard';
 import styles from './PlantDb.module.css';
@@ -45,13 +40,13 @@ function makeVirtOpts(
 }
 
 export function ResultsList() {
-  const resultState = plantSearchSession.results.value;
+  const resultState = speciesCatalogWorkbench.results.value;
   const results = resultState.items;
   const resultSetRevision = resultState.committedRevision;
-  const searching = isPlantSearchLoading(resultState.status);
+  const searching = speciesCatalogWorkbench.isSearchLoading(resultState.status);
   const error = resultState.error;
   const hasMore = resultState.nextCursor !== null;
-  const mode = viewMode.value;
+  const mode = speciesCatalogWorkbench.viewMode.value;
   void locale.value;
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -102,7 +97,7 @@ export function ResultsList() {
   // Keep Virtualizer measurements in sync when rows are appended or replaced
   // without swapping to a new scroll element.
   useSignalEffect(() => {
-    const results = plantSearchSession.results.value.items;
+    const results = speciesCatalogWorkbench.results.value.items;
     const virt = virtualizerRef.current;
     if (!virt) return;
     virt.setOptions(
@@ -117,10 +112,10 @@ export function ResultsList() {
   // Infinite scroll: load next page when near the bottom
   const handleScroll = () => {
     const el = scrollRef.current;
-    const latestResults = plantSearchSession.results.value;
-    if (!el || isPlantSearchLoading(latestResults.status) || latestResults.nextCursor === null) return;
+    const latestResults = speciesCatalogWorkbench.results.value;
+    if (!el || speciesCatalogWorkbench.isSearchLoading(latestResults.status) || latestResults.nextCursor === null) return;
     if (el.scrollTop + el.clientHeight >= el.scrollHeight - 200) {
-      void plantSearchSession.loadNextPage();
+      void speciesCatalogWorkbench.loadNextPage();
     }
   };
 
@@ -144,7 +139,7 @@ export function ResultsList() {
           <button
             type="button"
             className={styles.retryBtn}
-            onClick={() => plantSearchSession.retry()}
+            onClick={() => speciesCatalogWorkbench.retrySearch()}
           >
             {t('plantDb.retry')}
           </button>
@@ -155,7 +150,7 @@ export function ResultsList() {
 
   // Empty state
   if (!searching && results.length === 0) {
-    const hasQuery = plantSearchSession.intent.value.text.length > 0 || hasActiveFilters.value;
+    const hasQuery = speciesCatalogWorkbench.intent.value.text.length > 0 || speciesCatalogWorkbench.hasActiveFilters.value;
     return (
       <div className={styles.listContainer}>
         <div className={styles.listEmpty}>
@@ -177,7 +172,7 @@ export function ResultsList() {
               <button
                 type="button"
                 className={`${styles.retryBtn} ${styles.listEmptyAction}`}
-                onClick={() => plantSearchSession.retry()}
+                onClick={() => speciesCatalogWorkbench.retrySearch()}
               >
                 {t('plantDb.loadPlants')}
               </button>

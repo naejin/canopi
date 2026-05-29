@@ -3,14 +3,8 @@ import { useRef, useEffect } from 'preact/hooks'
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
 import {
-  addExtraFilter,
-  removeExtraFilter,
-  loadDynamicOptions,
   DYNAMIC_OPTIONS_BACKEND_MISMATCH_ERROR,
-  dynamicOptionsCache,
-  dynamicOptionsErrors,
-  dynamicOptionsPending,
-  plantSearchSession,
+  speciesCatalogWorkbench,
 } from '../../app/plant-browser'
 import { CATEGORIES, fieldsForCategory, type FieldDef, type FilterCategory } from './field-registry'
 import { FilterChip } from './FilterChip'
@@ -109,7 +103,7 @@ function CategorySection({ category, searchQuery }: {
   void locale.value
   const open = useSignal(false)
   const fields = fieldsForCategory(category.key as FilterCategory)
-  const extras = plantSearchSession.intent.value.extraFilters
+  const extras = speciesCatalogWorkbench.intent.value.extraFilters
 
   // Filter fields by search query
   const visibleFields = searchQuery
@@ -152,10 +146,11 @@ function CategorySection({ category, searchQuery }: {
 
 function FieldRow({ field }: { field: FieldDef }) {
   const loc = locale.value
-  const extras = plantSearchSession.intent.value.extraFilters
-  const cache = dynamicOptionsCache.value[loc] ?? {}
-  const pending = dynamicOptionsPending.value[loc] ?? {}
-  const errors = dynamicOptionsErrors.value[loc] ?? {}
+  const extras = speciesCatalogWorkbench.intent.value.extraFilters
+  const dynamicOptions = speciesCatalogWorkbench.dynamicOptions.value
+  const cache = dynamicOptions.cache[loc] ?? {}
+  const pending = dynamicOptions.pending[loc] ?? {}
+  const errors = dynamicOptions.errors[loc] ?? {}
   const expanded = useSignal(false)
   const activeFilter = extras.find((ef) => ef.field === field.key)
   const label = t(field.i18nKey, field.key)
@@ -170,9 +165,9 @@ function FieldRow({ field }: { field: FieldDef }) {
             checked={isActive}
             onChange={(e) => {
               if ((e.target as HTMLInputElement).checked) {
-                addExtraFilter(field.key, 'IsTrue', [])
+                speciesCatalogWorkbench.addExtraFilter(field.key, 'IsTrue', [])
               } else {
-                removeExtraFilter(field.key)
+                speciesCatalogWorkbench.removeExtraFilter(field.key)
               }
             }}
           />
@@ -184,11 +179,12 @@ function FieldRow({ field }: { field: FieldDef }) {
 
   // Re-fetch when locale changes while expanded (cache miss for new locale)
   useSignalEffect(() => {
-    const localeCache = dynamicOptionsCache.value[locale.value] ?? {}
-    const localePending = dynamicOptionsPending.value[locale.value] ?? {}
-    const localeErrors = dynamicOptionsErrors.value[locale.value] ?? {}
+    const dynamicOptions = speciesCatalogWorkbench.dynamicOptions.value
+    const localeCache = dynamicOptions.cache[locale.value] ?? {}
+    const localePending = dynamicOptions.pending[locale.value] ?? {}
+    const localeErrors = dynamicOptions.errors[locale.value] ?? {}
     if (expanded.value && !localeCache[field.key] && !localePending[field.key] && !localeErrors[field.key]) {
-      void loadDynamicOptions([field.key])
+      void speciesCatalogWorkbench.loadDynamicOptions([field.key])
     }
   })
 
@@ -226,12 +222,12 @@ function FieldRow({ field }: { field: FieldDef }) {
                       if (selected) {
                         const next = current.filter((x) => x !== v.value)
                         if (next.length === 0) {
-                          removeExtraFilter(field.key)
+                          speciesCatalogWorkbench.removeExtraFilter(field.key)
                         } else {
-                          addExtraFilter(field.key, 'In', next)
+                          speciesCatalogWorkbench.addExtraFilter(field.key, 'In', next)
                         }
                       } else {
-                        addExtraFilter(field.key, 'In', [...current, v.value])
+                        speciesCatalogWorkbench.addExtraFilter(field.key, 'In', [...current, v.value])
                       }
                     }}
                   />
@@ -249,17 +245,17 @@ function FieldRow({ field }: { field: FieldDef }) {
               onChangeLow={(v) => {
                 const high = activeFilter?.values[1] ?? String(opts.range![1])
                 if (v === null && (!activeFilter || activeFilter.values[1] === String(opts.range![1]))) {
-                  removeExtraFilter(field.key)
+                  speciesCatalogWorkbench.removeExtraFilter(field.key)
                 } else {
-                  addExtraFilter(field.key, 'Between', [String(v ?? opts.range![0]), high])
+                  speciesCatalogWorkbench.addExtraFilter(field.key, 'Between', [String(v ?? opts.range![0]), high])
                 }
               }}
               onChangeHigh={(v) => {
                 const low = activeFilter?.values[0] ?? String(opts.range![0])
                 if (v === null && (!activeFilter || activeFilter.values[0] === String(opts.range![0]))) {
-                  removeExtraFilter(field.key)
+                  speciesCatalogWorkbench.removeExtraFilter(field.key)
                 } else {
-                  addExtraFilter(field.key, 'Between', [low, String(v ?? opts.range![1])])
+                  speciesCatalogWorkbench.addExtraFilter(field.key, 'Between', [low, String(v ?? opts.range![1])])
                 }
               }}
               step={field.step ?? (opts.range[1] - opts.range[0] > 100 ? 1 : 0.1)}
@@ -277,7 +273,7 @@ function FieldRow({ field }: { field: FieldDef }) {
                 <button
                   type="button"
                   className={styles.retryBtn}
-                  onClick={() => { void loadDynamicOptions([field.key]) }}
+                  onClick={() => { void speciesCatalogWorkbench.loadDynamicOptions([field.key]) }}
                 >
                   {t('plantDb.retry', 'Retry')}
                 </button>

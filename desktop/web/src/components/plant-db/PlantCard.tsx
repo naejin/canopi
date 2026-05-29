@@ -1,6 +1,6 @@
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
-import { toggleFavoriteAction, selectedCanonicalName } from '../../app/plant-browser'
+import { speciesCatalogWorkbench } from '../../app/plant-browser'
 import { currentCanvasCommandSurface } from '../../canvas/session'
 import { plantStampSpecies } from '../../canvas/plant-tool-state'
 import { STRATUM_I18N_KEY } from '../../types/constants'
@@ -32,13 +32,13 @@ export function PlantCard({ plant }: Props) {
   }
 
   const handleClick = () => {
-    selectedCanonicalName.value = plant.canonical_name
+    speciesCatalogWorkbench.selectSpecies(plant.canonical_name)
   }
 
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
-      selectedCanonicalName.value = plant.canonical_name
+      speciesCatalogWorkbench.selectSpecies(plant.canonical_name)
     }
   }
 
@@ -55,7 +55,7 @@ export function PlantCard({ plant }: Props) {
 
   const handleFavClick = (e: MouseEvent) => {
     e.stopPropagation()
-    void toggleFavoriteAction(plant.canonical_name)
+    void speciesCatalogWorkbench.toggleFavorite(plant.canonical_name)
   }
 
   const hardiness = plant.hardiness_zone_min !== null

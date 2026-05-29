@@ -20,6 +20,10 @@ _Avoid_: Plant, catalog plant, database plant
 The searchable collection of species and their supporting data used when selecting plants for a design. Species in the catalog are not part of a design until they become placed plants.
 _Avoid_: Plant catalog, plant database
 
+**Species Catalog Workbench**:
+The interaction surface for browsing, filtering, selecting, favoriting, and inspecting species from the Species Catalog. The workbench coordinates Species Catalog UI state, but it does not own Species Catalog data and must not own Design workflows such as Site Adaptation.
+_Avoid_: Plant browser state, plant DB panel state
+
 **Species Catalog Filter**:
 A search criterion that narrows Species Catalog results by Species attributes such as climate fit, growth form, ecological role, risk, use, or morphology. A species catalog filter is user-facing behavior even when its implementation is backed by generated metadata, SQL columns, related tables, or bespoke predicates.
 _Avoid_: Plant filter, SQL filter, column filter
@@ -126,6 +130,9 @@ Use **Species** for catalog/database entries. Use **Placed Plant** for a species
 **Species Catalog vs Plant Database**:
 Use **Species Catalog** in domain language. "Plant database" is acceptable in broad product copy, but it should not be the canonical term in domain docs.
 
+**Species Catalog vs Species Catalog Workbench**:
+The **Species Catalog** is the collection of Species data. The **Species Catalog Workbench** is the interaction surface used to browse, filter, favorite, select, and inspect that data.
+
 **Species Catalog Filter vs SQL Column**:
 A **Species Catalog Filter** describes user-facing search behavior. A SQL column is only one possible implementation detail behind that behavior.
 
@@ -179,6 +186,10 @@ Developer: "No. The species catalog is the source for choosing species; the desi
 Designer: "Can I identify a species by its common name?"
 
 Developer: "You can search and display common names, but the species identity is its canonical name."
+
+Designer: "Is the species search panel the Species Catalog?"
+
+Developer: "The panel is the Species Catalog Workbench. It helps you browse and inspect the Species Catalog."
 
 Designer: "Is the orchard area a zone or a layer?"
 

@@ -1,30 +1,25 @@
 import { useEffect } from 'preact/hooks'
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
-import {
-  favoriteItems,
-  favoriteItemsLoading,
-  favoriteItemsRevision,
-  loadFavoriteItems,
-  selectedCanonicalName,
-} from '../../app/plant-browser'
+import { speciesCatalogWorkbench } from '../../app/plant-browser'
 import { PlantRow } from '../plant-db/PlantRow'
 import { PlantDetailCard } from '../plant-detail/PlantDetailCard'
 import plantDetailStyles from '../plant-detail/PlantDetail.module.css'
 import styles from './FavoritesPanel.module.css'
 
 export function FavoritesPanel() {
-  const favoritesRevision = favoriteItemsRevision.value
+  const favoritesView = speciesCatalogWorkbench.favorites.value
+  const favoritesRevision = favoritesView.revision
   const lang = locale.value
-  const selected = selectedCanonicalName.value
+  const selected = speciesCatalogWorkbench.selectedCanonicalName.value
 
   useEffect(() => {
-    void loadFavoriteItems()
+    void speciesCatalogWorkbench.loadFavorites()
   }, [favoritesRevision, lang])
 
-  const items = favoriteItems.value
+  const items = favoritesView.items
   const count = items.length
-  const isLoading = favoriteItemsLoading.value
+  const isLoading = favoritesView.loading
 
   return (
     <div className={styles.panel}>

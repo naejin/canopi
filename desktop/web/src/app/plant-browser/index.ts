@@ -1,5 +1,6 @@
 export * from './state'
 export * from './controller'
+export * from './workbench'
 export {
   createPlantSearchSession,
   isPlantSearchLoading,

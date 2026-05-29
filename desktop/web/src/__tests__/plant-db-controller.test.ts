@@ -292,6 +292,20 @@ describe('plant DB controller lifecycle', () => {
     expect(plantDb.favoriteItemsLoading.value).toBe(false)
   })
 
+  it('exposes selection and favorites through the Species Catalog Workbench', async () => {
+    const plantDb = await import('../app/plant-browser')
+
+    plantDb.speciesCatalogWorkbench.selectSpecies('Malus domestica')
+    plantDb.favoriteNames.value = ['Malus domestica']
+
+    expect(plantDb.speciesCatalogWorkbench.selectedCanonicalName.value).toBe('Malus domestica')
+    expect(plantDb.speciesCatalogWorkbench.isFavorite('Malus domestica')).toBe(true)
+
+    plantDb.speciesCatalogWorkbench.closeSpeciesDetail()
+
+    expect(plantDb.speciesCatalogWorkbench.selectedCanonicalName.value).toBeNull()
+  })
+
   it('ignores stale favorite-item responses after a locale switch', async () => {
     const plantDb = await import('../app/plant-browser')
     const appState = await import('../app/settings/state')

@@ -1,14 +1,7 @@
 import { useEffect } from 'preact/hooks'
 import { useSignal, useSignalEffect } from '@preact/signals'
 import { locale } from '../../app/settings/state'
-import {
-  isPlantSearchLoading,
-  loadSidebarLists,
-  mountPlantDbController,
-  plantSearchSession,
-  selectedCanonicalName,
-  retrySearch,
-} from '../../app/plant-browser'
+import { speciesCatalogWorkbench } from '../../app/plant-browser'
 import { SearchBar } from '../plant-db/SearchBar'
 import { FilterStrip } from '../plant-db/FilterStrip'
 import { ActiveChips } from '../plant-db/ActiveChips'
@@ -20,22 +13,19 @@ import plantDetailStyles from '../plant-detail/PlantDetail.module.css'
 import styles from '../plant-db/PlantDb.module.css'
 
 export function PlantDbPanel() {
-  const selected = selectedCanonicalName.value
+  const selected = speciesCatalogWorkbench.selectedCanonicalName.value
   const moreFiltersOpen = useSignal(false)
 
   useEffect(() => {
-    const disposeController = mountPlantDbController()
-    const results = plantSearchSession.results.value
-    if (results.items.length === 0 && !isPlantSearchLoading(results.status)) {
-      retrySearch()
-    }
+    const disposeController = speciesCatalogWorkbench.mount()
+    speciesCatalogWorkbench.ensureInitialSearch()
     return disposeController
   }, [])
 
   // Reload favorites/recent when locale changes (names are locale-dependent)
   useSignalEffect(() => {
     void locale.value
-    void loadSidebarLists()
+    void speciesCatalogWorkbench.reloadSidebarLists()
   })
 
   return (

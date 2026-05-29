@@ -1,6 +1,6 @@
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
-import { toggleFavoriteAction, selectedCanonicalName } from '../../app/plant-browser'
+import { speciesCatalogWorkbench } from '../../app/plant-browser'
 import { currentCanvasCommandSurface } from '../../canvas/session'
 import { plantStampSpecies } from '../../canvas/plant-tool-state'
 import { STRATUM_I18N_KEY } from '../../types/constants'
@@ -55,13 +55,13 @@ export function PlantRow({ plant }: Props) {
   }
 
   const handleRowClick = () => {
-    selectedCanonicalName.value = plant.canonical_name
+    speciesCatalogWorkbench.selectSpecies(plant.canonical_name)
   }
 
   const handleRowKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
-      selectedCanonicalName.value = plant.canonical_name
+      speciesCatalogWorkbench.selectSpecies(plant.canonical_name)
     }
   }
 
@@ -127,7 +127,7 @@ export function PlantRow({ plant }: Props) {
           className={`${styles.favBtn} ${plant.is_favorite ? styles.favBtnActive : ''}`}
           onClick={(e: MouseEvent) => {
             e.stopPropagation()
-            void toggleFavoriteAction(plant.canonical_name)
+            void speciesCatalogWorkbench.toggleFavorite(plant.canonical_name)
           }}
           aria-label={plant.is_favorite ? t('plantDb.removeFavorite') : t('plantDb.addFavorite')}
           aria-pressed={plant.is_favorite}

@@ -1,21 +1,17 @@
-import {
-  favoriteNames,
-  selectedCanonicalName,
-  toggleFavoriteAction,
-} from '../plant-browser'
+import { speciesCatalogWorkbench } from '../plant-browser'
 
 export function resolvePlantDetailName(canonicalName: string): string {
-  return selectedCanonicalName.value ?? canonicalName
+  return speciesCatalogWorkbench.selectedCanonicalName.value ?? canonicalName
 }
 
 export function closePlantDetail(): void {
-  selectedCanonicalName.value = null
+  speciesCatalogWorkbench.closeSpeciesDetail()
 }
 
 export function isPlantDetailFavorite(canonicalName: string): boolean {
-  return favoriteNames.value.includes(canonicalName)
+  return speciesCatalogWorkbench.isFavorite(canonicalName)
 }
 
 export async function togglePlantDetailFavorite(canonicalName: string): Promise<void> {
-  await toggleFavoriteAction(canonicalName)
+  await speciesCatalogWorkbench.toggleFavorite(canonicalName)
 }

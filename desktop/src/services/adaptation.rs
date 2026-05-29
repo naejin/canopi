@@ -1,5 +1,6 @@
 use crate::contracts::adaptation::{CompatibilityResult, ReplacementSuggestion};
 use crate::db::{PlantDb, require_plant_db};
+use crate::services::species_catalog_read::SpeciesCatalogRead;
 use rusqlite::types::ToSql;
 
 pub fn check_plant_compatibility(
@@ -16,6 +17,7 @@ pub fn check_plant_compatibility(
     }
 
     let conn = require_plant_db(plant_db)?;
+    let species_catalog = SpeciesCatalogRead::new(&conn);
     let placeholders = canonical_names
         .iter()
         .enumerate()
@@ -53,7 +55,7 @@ pub fn check_plant_compatibility(
     for row in rows {
         let (species_id, canonical_name, hardiness_min, hardiness_max) =
             row.map_err(|e| format!("Failed to read row: {e}"))?;
-        let common_name = crate::db::plant_db::get_common_name(&conn, &species_id, &locale);
+        let common_name = species_catalog.common_name_for_species_id(&species_id, &locale);
         let (is_compatible, zone_diff) =
             compute_zone_diff(hardiness_min, hardiness_max, target_hardiness);
 
@@ -89,6 +91,7 @@ pub fn suggest_replacements(
     locale: String,
 ) -> Result<Vec<ReplacementSuggestion>, String> {
     let conn = require_plant_db(plant_db)?;
+    let species_catalog = SpeciesCatalogRead::new(&conn);
 
     let source: Option<(Option<String>, Option<f32>)> = conn
         .query_row(
@@ -163,7 +166,7 @@ pub fn suggest_replacements(
     for row in rows {
         let (species_id, canonical_name, hardiness_min, hardiness_max, stratum, height_max_m) =
             row.map_err(|e| format!("Failed to read replacement row: {e}"))?;
-        let common_name = crate::db::plant_db::get_common_name(&conn, &species_id, &locale);
+        let common_name = species_catalog.common_name_for_species_id(&species_id, &locale);
         suggestions.push(ReplacementSuggestion {
             canonical_name,
             common_name,

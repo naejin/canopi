@@ -1,6 +1,6 @@
 import { t } from '../../i18n';
 import { locale } from '../../app/settings/state';
-import { plantSearchSession } from '../../app/plant-browser';
+import { speciesCatalogWorkbench } from '../../app/plant-browser';
 import type { Sort } from '../../types/species';
 import styles from './PlantDb.module.css';
 
@@ -19,9 +19,9 @@ export function SortSelect() {
   return (
     <select
       className={styles.sortSelect}
-      value={plantSearchSession.intent.value.sort}
+      value={speciesCatalogWorkbench.intent.value.sort}
       onChange={(e) => {
-        plantSearchSession.setSort(e.currentTarget.value as Sort);
+        speciesCatalogWorkbench.setSort(e.currentTarget.value as Sort);
       }}
       aria-label={t('plantDb.sort')}
     >

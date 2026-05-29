@@ -22,7 +22,10 @@ vi.mock('../app/plant-browser', async () => {
   const actual = await vi.importActual<typeof import('../app/plant-browser')>('../app/plant-browser')
   return {
     ...actual,
-    loadFavoriteItems: mocks.loadFavoriteItems,
+    speciesCatalogWorkbench: {
+      ...actual.speciesCatalogWorkbench,
+      loadFavorites: mocks.loadFavoriteItems,
+    },
   }
 })
 

@@ -1,6 +1,6 @@
 import { t } from '../../i18n';
 import { locale } from '../../app/settings/state';
-import { selectedCanonicalName } from '../../app/plant-browser';
+import { speciesCatalogWorkbench } from '../../app/plant-browser';
 import type { Relationship } from '../../types/species';
 import styles from './PlantDetail.module.css';
 
@@ -31,12 +31,12 @@ export function RelationshipList({ relationships }: Props) {
           role="listitem"
           tabIndex={0}
           onClick={() => {
-            selectedCanonicalName.value = rel.related_canonical_name;
+            speciesCatalogWorkbench.selectSpecies(rel.related_canonical_name);
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
-              selectedCanonicalName.value = rel.related_canonical_name;
+              speciesCatalogWorkbench.selectSpecies(rel.related_canonical_name);
             }
           }}
           aria-label={rel.related_canonical_name}

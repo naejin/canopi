@@ -76,6 +76,7 @@ When canopi-data removes or adds columns, update atomically:
 - `best_common_names` uses `is_primary`, then shortest non-canonical fallback.
 - `get_locale_best_common_name` returns locale-specific best name without fallback.
 - Search list rows include secondary names and fallback flags for disambiguation.
+- Cross-workflow backend callers should share Species Catalog read behavior through `desktop/src/services/species_catalog_read.rs` instead of reaching directly into `plant_db` lookup helpers from unrelated services.
 
 ## canopi-data Export
 
