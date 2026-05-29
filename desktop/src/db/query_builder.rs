@@ -396,6 +396,30 @@ mod tests {
     }
 
     #[test]
+    fn test_relevance_sort_tiers_fallback_language_below_active_locale() {
+        let mut request = request(
+            Some("lin"),
+            default_filter(),
+            None,
+            Sort::Relevance,
+            20,
+            false,
+        );
+        request.locale = "fr".to_owned();
+        let plan = SpeciesSearchPlan::build(request);
+        let sql = plan.list().sql();
+
+        assert!(sql.contains("species_search_common_name_tokens scnt0"));
+        assert!(sql.contains("species_search_common_name_tokens scnt_fb0"));
+        assert!(sql.contains("scnt0.species_id IS NOT NULL"));
+        assert!(sql.contains("scnt_fb0.species_id IS NOT NULL"));
+        assert!(
+            sql.find("scnt0.species_id IS NOT NULL").unwrap()
+                < sql.find("scnt_fb0.species_id IS NOT NULL").unwrap()
+        );
+    }
+
+    #[test]
     fn test_common_name_token_query_normalizes_diacritics() {
         let plan = SpeciesSearchPlan::build(request(
             Some("lin léon"),

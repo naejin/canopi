@@ -239,6 +239,7 @@ mod tests {
                 ('linum-leonii', 'Linum leonii', 'linum-leonii', 'Leon flax', 'Linaceae', 'Linum', 0.5, 6, 9, 'Medium', 'Low', 1, 0, 0.2),
                 ('linum-communis', 'Linum communis', 'linum-communis', 'False flax', 'Linaceae', 'Linum', 0.7, 6, 9, 'Medium', 'Low', 1, 0, 0.2),
                 ('communia-linensis', 'Communia linensis', 'communia-linensis', 'Commun flax', 'Linaceae', 'Communia', 0.6, 6, 9, 'Medium', 'Low', 1, 0, 0.2),
+                ('fallback-lin', 'Acmella fallback', 'acmella-fallback', 'Lin fallback', 'Asteraceae', 'Acmella', 0.4, 8, 10, 'Medium', 'Low', 1, 0, 0.2),
                 ('lindleya-mespiloides', 'Lindleya mespiloides', 'lindleya-mespiloides', 'Lindleya', 'Rosaceae', 'Lindleya', 3.0, 7, 10, 'Medium', 'Shrub', 0, 0, 2.0),
                 ('malus-domestica', 'Malus domestica', 'malus-domestica', 'Apple', 'Rosaceae', 'Malus', 4.0, 4, 8, 'Medium', 'Canopy', 5, 1, 3.0);
 
@@ -253,6 +254,7 @@ mod tests {
                 ('linum-communis', 'Faux lin', 'fr', 1, 'test'),
                 ('communia-linensis', 'Commun flax', 'en', 1, 'test'),
                 ('communia-linensis', 'Commun Lin', 'fr', 1, 'test'),
+                ('fallback-lin', 'Lin fallback', 'en', 1, 'test'),
                 ('lindleya-mespiloides', 'Lindleya', 'en', 1, 'test'),
                 ('malus-domestica', 'Apple', 'en', 1, 'test'),
                 ('malus-domestica', 'Pommier', 'fr', 1, 'test');
@@ -268,6 +270,7 @@ mod tests {
                 ('linum-communis', 'fr', 'Faux lin'),
                 ('communia-linensis', 'en', 'Commun flax'),
                 ('communia-linensis', 'fr', 'Commun Lin'),
+                ('fallback-lin', 'en', 'Lin fallback'),
                 ('lindleya-mespiloides', 'en', 'Lindleya'),
                 ('malus-domestica', 'en', 'Apple'),
                 ('malus-domestica', 'fr', 'Pommier');
@@ -312,6 +315,8 @@ mod tests {
                 ('communia-linensis', 'en', 'flax', 1),
                 ('communia-linensis', 'fr', 'commun', 0),
                 ('communia-linensis', 'fr', 'lin', 1),
+                ('fallback-lin', 'en', 'lin', 0),
+                ('fallback-lin', 'en', 'fallback', 1),
                 ('lindleya-mespiloides', 'en', 'lindleya', 0),
                 ('malus-domestica', 'en', 'apple', 0),
                 ('malus-domestica', 'fr', 'pommier', 0);",
@@ -663,6 +668,60 @@ mod tests {
                     .unwrap(),
             "expected Linum bienne before Lindleya mespiloides; got {names:?}"
         );
+    }
+
+    #[test]
+    fn relevance_places_fallback_common_names_after_active_locale_names() {
+        let conn = relevance_fixture_db();
+
+        let result = search(
+            &conn,
+            Some("lin".to_owned()),
+            SpeciesFilter::default(),
+            None,
+            Sort::Relevance,
+            10,
+            true,
+            "fr".to_owned(),
+        )
+        .unwrap();
+        let names = result
+            .items
+            .iter()
+            .map(|item| item.canonical_name.as_str())
+            .collect::<Vec<_>>();
+        let index_of = |needle: &str| {
+            names
+                .iter()
+                .position(|name| *name == needle)
+                .unwrap_or_else(|| panic!("expected {needle} in {names:?}"))
+        };
+
+        let fallback_index = index_of("Acmella fallback");
+        for active_locale_match in [
+            "Linum usitatissimum",
+            "Linum bienne",
+            "Linum leonii",
+            "Linum communis",
+            "Communia linensis",
+        ] {
+            assert!(
+                index_of(active_locale_match) < fallback_index,
+                "expected active-locale match {active_locale_match} before fallback match; got {names:?}"
+            );
+        }
+        assert!(
+            fallback_index < index_of("Lindleya mespiloides"),
+            "expected fallback common-name match before taxonomy-only match; got {names:?}"
+        );
+
+        let fallback = result
+            .items
+            .iter()
+            .find(|item| item.canonical_name == "Acmella fallback")
+            .unwrap();
+        assert_eq!(fallback.common_name.as_deref(), Some("Lin fallback"));
+        assert!(fallback.is_name_fallback);
     }
 
     #[test]

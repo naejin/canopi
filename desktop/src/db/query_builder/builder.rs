@@ -162,8 +162,26 @@ fn build_list_statement(
             .unwrap_or(&[]),
         request.use_common_name_token_index,
         locale_position,
+        "scnt",
         &mut params,
     );
+    let (fallback_common_name_token_join, fallback_common_name_token_aliases) =
+        common_name_token_joins(
+            common_name_query
+                .as_ref()
+                .map(|query| query.tokens.as_slice())
+                .unwrap_or(&[]),
+            request.use_common_name_token_index && request.locale != "en",
+            fallback_locale_position,
+            "scnt_fb",
+            &mut params,
+        );
+
+    let common_name_token_join = [common_name_token_join, fallback_common_name_token_join]
+        .into_iter()
+        .filter(|join| !join.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n");
 
     let fts_join = append_search_conditions(
         &mut where_clauses,
@@ -182,6 +200,7 @@ fn build_list_statement(
         SpeciesSearchPagePlan::RelevanceOffset { .. } => relevance_order_by(
             common_name_query.as_ref(),
             &common_name_token_aliases,
+            &fallback_common_name_token_aliases,
             &mut params,
         ),
         SpeciesSearchPagePlan::Keyset { .. } => {
@@ -254,6 +273,7 @@ fn common_name_token_joins(
     tokens: &[String],
     enabled: bool,
     locale_position: usize,
+    alias_prefix: &str,
     params: &mut Vec<Value>,
 ) -> (String, Vec<String>) {
     if !enabled || tokens.is_empty() {
@@ -263,7 +283,7 @@ fn common_name_token_joins(
     let mut joins = Vec::with_capacity(tokens.len());
     let mut aliases = Vec::with_capacity(tokens.len());
     for (index, token) in tokens.iter().enumerate() {
-        let alias = format!("scnt{index}");
+        let alias = format!("{alias_prefix}{index}");
         let token_position = params.len() + 1;
         params.push(Value::Text(token.to_owned()));
         joins.push(format!(
@@ -282,22 +302,45 @@ fn common_name_token_joins(
 fn relevance_order_by(
     query: Option<&CommonNameQuery>,
     token_aliases: &[String],
+    fallback_token_aliases: &[String],
     params: &mut Vec<Value>,
 ) -> String {
-    if !token_aliases.is_empty() {
+    if !token_aliases.is_empty() || !fallback_token_aliases.is_empty() {
         let phrase_condition = query.and_then(|query| query.phrase.as_ref()).map(|phrase| {
             let phrase_position = params.len() + 1;
             params.push(Value::Text(phrase.to_owned()));
             format!("bcn_loc.common_name = ?{phrase_position} COLLATE NOCASE")
         });
+        let fallback_phrase_condition = (!fallback_token_aliases.is_empty())
+            .then_some(())
+            .and_then(|()| {
+                query.and_then(|query| query.phrase.as_ref()).map(|phrase| {
+                    let phrase_position = params.len() + 1;
+                    params.push(Value::Text(phrase.to_owned()));
+                    format!("bcn_en.common_name = ?{phrase_position} COLLATE NOCASE")
+                })
+            });
         let all_tokens_condition = token_aliases
             .iter()
             .map(|alias| format!("{alias}.species_id IS NOT NULL"))
             .collect::<Vec<_>>()
             .join(" AND ");
-        let all_tokens_tier = if phrase_condition.is_some() { 1 } else { 0 };
+        let fallback_all_tokens_condition = fallback_token_aliases
+            .iter()
+            .map(|alias| format!("{alias}.species_id IS NOT NULL"))
+            .collect::<Vec<_>>()
+            .join(" AND ");
+        let active_all_tokens_tier = if phrase_condition.is_some() { 1 } else { 0 };
+        let fallback_phrase_tier = active_all_tokens_tier + 1;
+        let fallback_all_tokens_tier = fallback_phrase_tier
+            + if fallback_phrase_condition.is_some() {
+                1
+            } else {
+                0
+            };
         let token_positions = token_aliases
             .iter()
+            .chain(fallback_token_aliases.iter())
             .map(|alias| format!("COALESCE({alias}.first_token_position, 2147483647)"))
             .collect::<Vec<_>>()
             .join(" + ");
@@ -306,9 +349,19 @@ fn relevance_order_by(
         if let Some(condition) = phrase_condition {
             cases.push(format!("WHEN {condition} THEN 0"));
         }
-        cases.push(format!(
-            "WHEN {all_tokens_condition} THEN {all_tokens_tier}"
-        ));
+        if !all_tokens_condition.is_empty() {
+            cases.push(format!(
+                "WHEN {all_tokens_condition} THEN {active_all_tokens_tier}"
+            ));
+        }
+        if let Some(condition) = fallback_phrase_condition {
+            cases.push(format!("WHEN {condition} THEN {fallback_phrase_tier}"));
+        }
+        if !fallback_all_tokens_condition.is_empty() {
+            cases.push(format!(
+                "WHEN {fallback_all_tokens_condition} THEN {fallback_all_tokens_tier}"
+            ));
+        }
 
         return format!(
             "ORDER BY CASE {} ELSE {} END,
@@ -316,7 +369,7 @@ fn relevance_order_by(
                 bm25(species_search_fts, 8, 10, 5, 1, 1),
                 s.canonical_name",
             cases.join(" "),
-            all_tokens_tier + 1,
+            fallback_all_tokens_tier + 1,
         );
     }
 
