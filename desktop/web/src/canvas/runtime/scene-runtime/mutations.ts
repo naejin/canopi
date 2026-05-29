@@ -1,4 +1,5 @@
 import type { ColorByAttribute, PlantSizeMode } from '../../plant-display-state'
+import { createUuid } from '../../../utils/ids'
 import { getAnnotationWorldBounds } from '../annotation-layout'
 import type { SceneBounds } from '../camera'
 import {
@@ -220,7 +221,7 @@ export class SceneRuntimeMutationController {
 
     const nextGroup: SceneObjectGroupEntity = {
       kind: 'group',
-      id: crypto.randomUUID(),
+      id: createUuid(),
       name: null,
       layer,
       position: { x: minX, y: minY },

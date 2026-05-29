@@ -6,6 +6,7 @@ import type {
   SceneZoneEntity,
 } from '../scene'
 import type { SceneSelectionTarget } from './selection'
+import { createUuid } from '../../../utils/ids'
 
 const CLIPBOARD_OFFSET = 20
 
@@ -92,7 +93,7 @@ export function pasteClipboardPayload(
     if (memberIds.length === 0) continue
     const cloneGroup: SceneObjectGroupEntity = {
       ...group,
-      id: crypto.randomUUID(),
+      id: createUuid(),
       position: {
         x: group.position.x + CLIPBOARD_OFFSET,
         y: group.position.y + CLIPBOARD_OFFSET,
@@ -153,7 +154,7 @@ function cloneGroupEntity(group: SceneObjectGroupEntity): SceneObjectGroupEntity
 function clonePlantWithOffset(plant: ScenePlantEntity): ScenePlantEntity {
   return {
     ...clonePlantEntity(plant),
-    id: crypto.randomUUID(),
+    id: createUuid(),
     position: {
       x: plant.position.x + CLIPBOARD_OFFSET,
       y: plant.position.y + CLIPBOARD_OFFSET,
@@ -176,7 +177,7 @@ function cloneZoneWithOffset(zone: SceneZoneEntity, existingNames: Set<string>):
 function cloneAnnotationWithOffset(annotation: SceneAnnotationEntity): SceneAnnotationEntity {
   return {
     ...cloneAnnotationEntity(annotation),
-    id: crypto.randomUUID(),
+    id: createUuid(),
     position: {
       x: annotation.position.x + CLIPBOARD_OFFSET,
       y: annotation.position.y + CLIPBOARD_OFFSET,

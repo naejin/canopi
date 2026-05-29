@@ -14,6 +14,7 @@ import type { SelectedPlantColorContext } from '../plant-color-context'
 import { setCanvasSelection, setCanvasTool } from '../session-state'
 import { syncPlantSpeciesColorDefaults } from '../plant-species-color-defaults'
 import { refreshCanvasColorCache } from '../theme-refresh'
+import { createUuid } from '../../utils/ids'
 import { CameraController } from './camera'
 import { SceneInteractionController } from './scene-interaction'
 import { RendererHost } from './renderers'
@@ -545,7 +546,7 @@ export class SceneCanvasRuntime implements MountedCanvasRuntime {
     const before = this._documents.captureCommandSnapshot()
     guides.value = [
       ...guides.value,
-      { id: crypto.randomUUID(), axis, position },
+      { id: createUuid(), axis, position },
     ]
     this._applySignalBackedSceneState({ recordHistory: false, syncGuides: true })
     this._documents.markDirty(before, 'guide-add')
