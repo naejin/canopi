@@ -48,10 +48,12 @@ Use this guide when changing Preact components, signals, i18n, CSS, panels, bott
 ## Panel And Canvas Reactivity
 
 - Planning surfaces that combine Design planning entries, placed plants, localized names, and Target hover/selection state should go through `desktop/web/src/app/planning-projection/`.
-- The Planning Projection module owns derived planning rows, Target presentation behavior, Timeline Action grouping/layout read-models, and Timeline species picker options for timeline, budget, and consortium views.
+- The Planning Projection module owns derived planning rows, Timeline Action grouping/layout read-models, and Timeline species picker options for timeline, budget, and consortium views.
+- `app/panel-targets/presentation.ts` owns Target presentation state and is the seam shared by Planning Projection and the canvas runtime adapter. Components and adapters should not import `app/panel-targets/state.ts` directly.
 - Planning surfaces should use the Planning Projection runtime hooks for placed plants and localized Species names; do not read `currentCanvasQuerySurface`, `sceneEntityRevision`, or `plantNamesRevision` directly in Budget, Timeline, or Consortium UI.
-- Planning views still own rendering, pointer geometry, local edit state, and calls to feature controllers such as budget/timeline/consortium mutations.
-- Timeline Action date mutation, drag preview/commit behavior, form-to-Target mapping, auto-scroll speed, and frozen-origin scroll compensation belong in `app/timeline/editing.ts`; `InteractiveTimeline` should delegate to that module instead of owning document edit transactions directly.
+- Planning views still own rendering, pointer geometry, local edit state, and calls to feature controllers such as budget/timeline/consortium mutations. Drag preview/commit behavior should sit behind the relevant interaction module before reaching document edit transactions.
+- Timeline Action date mutation and form-to-Target mapping belong in `app/timeline/editing.ts`; Timeline canvas gesture behavior, auto-scroll speed, and frozen-origin scroll compensation belong in `app/timeline/interaction.ts`.
+- Consortium canvas drag preview/commit behavior belongs in `app/consortium/interaction.ts`; `ConsortiumChart` should pass hit/layout snapshots to that module instead of owning document edit transactions directly.
 - Bottom panel components that read canvas-derived data must subscribe to `sceneEntityRevision`.
 - Panels that only read non-canvas document state should not subscribe to canvas revisions.
 - Timeline, budget, and consortium identity uses typed `PanelTarget` values. Do not reintroduce string matching against descriptions, legacy plant arrays, budget descriptions, or canonical-name fields.

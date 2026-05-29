@@ -4,25 +4,24 @@ import { t } from '../../i18n'
 import { locale, theme } from '../../app/settings/state'
 import { plantSpeciesColorDefaults } from '../../canvas/plant-species-color-defaults'
 import { currentDesign } from '../../state/design'
-import { moveConsortiumEntryInArray, reorderConsortiumEntryInArray } from '../../app/consortium/controller'
+import {
+  beginConsortiumDrag,
+  commitConsortiumDrag,
+  previewConsortiumDrag,
+  type ConsortiumDragState,
+} from '../../app/consortium/interaction'
 import {
   clearPlanningHoveredTargets,
   getPlanningCanvasHoveredSpeciesCanonical,
   setPlanningHoveredSpecies,
   useConsortiumPlanningProjection,
 } from '../../app/planning-projection'
-import { beginDocumentArrayEdit, type DocumentArrayEditTransaction } from '../../app/document/edit-transaction'
-import { getConsortiumCanonicalName } from '../../panel-targets'
 import {
   renderConsortium,
   hitTestBar,
   computeRowHeights,
   computeRowYOffsets,
-  xToPhase,
-  STRATA_ROWS,
   HEADER_HEIGHT,
-  LABEL_WIDTH,
-  CONSORTIUM_PHASES,
   type ConsortiumRenderState,
 } from '../../canvas/consortium-renderer'
 import { useCanvasRenderer } from './useCanvasRenderer'
@@ -31,35 +30,11 @@ import type { Consortium } from '../../types/design'
 
 const EMPTY_CONSORTIUMS: Consortium[] = []
 
-type DragState =
-  | {
-      type: 'move'
-      canonicalName: string
-      startMouseX: number
-      startMouseY: number
-      originalStratum: string
-      originalStartPhase: number
-      originalEndPhase: number
-      cachedRect: DOMRect
-      edit: DocumentArrayEditTransaction<'consortiums'>
-    }
-  | {
-      type: 'resize'
-      canonicalName: string
-      edge: 'left' | 'right'
-      startMouseX: number
-      originalStartPhase: number
-      originalEndPhase: number
-      cachedRect: DOMRect
-      edit: DocumentArrayEditTransaction<'consortiums'>
-    }
-  | null
-
 export function ConsortiumChart() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const cachedRectRef = useRef<DOMRect | null>(null)
   const hoveredCanonical = useSignal<string | null>(null)
-  const dragState = useRef<DragState>(null)
+  const dragState = useRef<ConsortiumDragState | null>(null)
 
   const design = currentDesign.value
   const consortiums = design?.consortiums ?? EMPTY_CONSORTIUMS
@@ -106,7 +81,7 @@ export function ConsortiumChart() {
   // Clean up drag state and consortium hover bridge on unmount
   useEffect(() => {
     return () => {
-      dragState.current?.edit.commit()
+      commitConsortiumDrag(dragState.current)
       clearPlanningHoveredTargets()
     }
   }, [])
@@ -125,30 +100,12 @@ export function ConsortiumChart() {
     const bar = barsRef.current.find((b) => b.canonicalName === hit.canonicalName)
     if (!bar) return
 
-    if (hit.edge === 'body') {
-      dragState.current = {
-        type: 'move',
-        canonicalName: hit.canonicalName,
-        startMouseX: event.clientX,
-        startMouseY: event.clientY,
-        originalStratum: bar.stratum,
-        originalStartPhase: bar.startPhase,
-        originalEndPhase: bar.endPhase,
-        cachedRect: rect,
-        edit: beginDocumentArrayEdit('consortiums'),
-      }
-    } else {
-      dragState.current = {
-        type: 'resize',
-        canonicalName: hit.canonicalName,
-        edge: hit.edge,
-        startMouseX: event.clientX,
-        originalStartPhase: bar.startPhase,
-        originalEndPhase: bar.endPhase,
-        cachedRect: rect,
-        edit: beginDocumentArrayEdit('consortiums'),
-      }
-    }
+    dragState.current = beginConsortiumDrag({
+      hit,
+      bar,
+      startMouseX: event.clientX,
+      cachedRect: rect,
+    })
   }, [])
 
   const handleMouseMove = useCallback((event: MouseEvent) => {
@@ -159,94 +116,23 @@ export function ConsortiumChart() {
     const rect = drag?.cachedRect ?? (cachedRectRef.current ??= canvas.getBoundingClientRect())
     const mouseX = event.clientX - rect.left
     const mouseY = event.clientY - rect.top
-    const contentWidth = rect.width - LABEL_WIDTH
 
-    if (drag?.type === 'move') {
-      const phaseDelta = xToPhase(mouseX, contentWidth) - xToPhase(drag.startMouseX - rect.left, contentWidth)
-      const newStart = Math.round(Math.max(0, Math.min(CONSORTIUM_PHASES.length - 1, drag.originalStartPhase + phaseDelta)))
-      const duration = drag.originalEndPhase - drag.originalStartPhase
-      const newEnd = Math.min(CONSORTIUM_PHASES.length - 1, newStart + duration)
-      const adjustedStart = newEnd - duration
-
-      // Find which stratum row the mouse Y falls into using dynamic row heights
-      let rowIndex = STRATA_ROWS.length - 1
-      const rh = rowHeightsRef.current
-      const offsets = rowOffsetsRef.current
-      for (let i = 0; i < STRATA_ROWS.length; i++) {
-        if (mouseY < offsets[i + 1]!) { rowIndex = i; break }
-      }
-      rowIndex = Math.max(0, Math.min(STRATA_ROWS.length - 1, rowIndex))
-      const newStratum = STRATA_ROWS[rowIndex] ?? 'unassigned'
-
-      const bar = barsRef.current.find((b) => b.canonicalName === drag.canonicalName)
-      if (!bar) return
-
-      // Vertical reorder within the same stratum — guard ensures same row,
-      // so bar.totalSubLanes matches the target row's sub-lane count
-      if (newStratum === bar.stratum && adjustedStart === bar.startPhase && newEnd === bar.endPhase) {
-        const ry = offsets[rowIndex]!
-        const rowH = rh[rowIndex] ?? 36
-        const targetSubLane = Math.max(0, Math.min(bar.totalSubLanes - 1, Math.floor((mouseY - ry) / (rowH / bar.totalSubLanes))))
-        if (targetSubLane !== bar.subLane) {
-          // Find the bar currently in the target sub-lane and compute array indices.
-          // Use consortiumsRef (render-time snapshot) — not currentDesign.peek() — so
-          // the index lookup matches the same snapshot as the bar layout in barsRef.
-          const sameStratum = barsRef.current.filter((b) => b.stratum === bar.stratum)
-          const targetBar = sameStratum[targetSubLane]
-          if (targetBar) {
-            const targetArrayIdx = consortiumsRef.current.findIndex((c) => getConsortiumCanonicalName(c) === targetBar.canonicalName)
-            if (targetArrayIdx !== -1) {
-              drag.edit.preview((consortiums) => reorderConsortiumEntryInArray(
-                consortiums,
-                drag.canonicalName,
-                targetArrayIdx,
-              ))
-            }
-          }
-        }
-        return
-      }
-
-      // Cross-stratum or phase move
-      if (bar.startPhase === adjustedStart && bar.endPhase === newEnd && bar.stratum === newStratum) return
-      drag.edit.preview((consortiums) => moveConsortiumEntryInArray(
-        consortiums,
-        drag.canonicalName,
-        { stratum: newStratum, startPhase: adjustedStart, endPhase: newEnd },
-      ))
+    if (drag) {
+      previewConsortiumDrag(
+        drag,
+        {
+          bars: barsRef.current,
+          consortiums: consortiumsRef.current,
+          rowHeights: rowHeightsRef.current,
+          rowOffsets: rowOffsetsRef.current,
+          canvasWidth: rect.width,
+        },
+        { mouseX, mouseY },
+      )
       return
     }
 
-    if (drag?.type === 'resize') {
-      const phase = Math.round(xToPhase(mouseX, contentWidth))
-      const bar = barsRef.current.find((b) => b.canonicalName === drag.canonicalName)
-
-      if (drag.edge === 'left') {
-        const clampedPhase = Math.max(0, Math.min(CONSORTIUM_PHASES.length - 1, phase))
-        const newStart = Math.min(clampedPhase, drag.originalEndPhase)
-        if (bar && bar.startPhase === newStart) return
-        drag.edit.preview((consortiums) => moveConsortiumEntryInArray(
-          consortiums,
-          drag.canonicalName,
-          { startPhase: newStart, endPhase: drag.originalEndPhase },
-        ))
-      } else {
-        // Right edge pixel is at phaseToX(endPhase + 1), so xToPhase returns
-        // endPhase + 1 at the boundary. Allow clamp up to CONSORTIUM_PHASES.length
-        // so the last column is reachable after subtracting 1.
-        const clampedPhase = Math.max(0, Math.min(CONSORTIUM_PHASES.length, phase))
-        const newEnd = Math.max(clampedPhase - 1, drag.originalStartPhase)
-        if (bar && bar.endPhase === newEnd) return
-        drag.edit.preview((consortiums) => moveConsortiumEntryInArray(
-          consortiums,
-          drag.canonicalName,
-          { startPhase: drag.originalStartPhase, endPhase: newEnd },
-        ))
-      }
-      return
-    }
-
-    // Not dragging — update hover and cursor
+    // Not dragging - update hover and cursor
     const hit = hitTestBar(mouseX, mouseY, barsRef.current, rect.width, rowHeightsRef.current, rowOffsetsRef.current)
     if (hit) {
       if (hoveredCanonical.value !== hit.canonicalName) {
@@ -277,7 +163,7 @@ export function ConsortiumChart() {
 
   const handleMouseUp = useCallback(() => {
     if (dragState.current) {
-      dragState.current.edit.commit()
+      commitConsortiumDrag(dragState.current)
       dragState.current = null
     }
   }, [])
@@ -295,7 +181,7 @@ export function ConsortiumChart() {
     return () => {
       document.removeEventListener('mousemove', onMove)
       document.removeEventListener('mouseup', onUp)
-      dragState.current?.edit.commit()
+      commitConsortiumDrag(dragState.current)
       dragState.current = null
     }
   }, [])

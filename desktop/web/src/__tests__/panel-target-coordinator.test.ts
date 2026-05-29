@@ -7,6 +7,11 @@ import {
   setSelectedPanelTargets,
 } from "../app/panel-targets/coordinator";
 import {
+  readPanelOriginTargets,
+  setCanvasHoveredTargets,
+} from "../app/panel-targets/presentation";
+import {
+  hoveredCanvasTargets,
   hoveredPanelTargets,
   selectedPanelTargetOrigin,
   selectedPanelTargets,
@@ -16,6 +21,7 @@ import { speciesTarget } from "../panel-targets";
 describe("panel target coordinator", () => {
   beforeEach(() => {
     hoveredPanelTargets.value = [];
+    hoveredCanvasTargets.value = [];
     selectedPanelTargets.value = [];
     selectedPanelTargetOrigin.value = null;
   });
@@ -58,5 +64,18 @@ describe("panel target coordinator", () => {
     expect(hoveredPanelTargets.value).toEqual([]);
     expect(selectedPanelTargets.value).toEqual([]);
     expect(selectedPanelTargetOrigin.value).toBe(null);
+  });
+
+  it("keeps panel-origin and canvas-origin target state behind the presentation seam", () => {
+    const selected = speciesTarget("Selected");
+    const hovered = speciesTarget("Hovered");
+    const canvasHovered = speciesTarget("Canvas hovered");
+
+    setSelectedPanelTargets("timeline", [selected]);
+    setHoveredPanelTargets([hovered]);
+    setCanvasHoveredTargets([canvasHovered]);
+
+    expect(readPanelOriginTargets()).toEqual([selected, hovered]);
+    expect(hoveredCanvasTargets.value).toEqual([canvasHovered]);
   });
 });

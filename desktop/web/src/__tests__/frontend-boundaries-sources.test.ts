@@ -20,10 +20,13 @@ describe('frontend boundary sources', () => {
     const runtimeSource = readSource('../canvas/runtime/scene-runtime.ts')
     const effectsSource = readSource('../canvas/runtime/scene-runtime/effects.ts')
     const adapterSource = readSource('../app/canvas-runtime/panel-target-adapter.ts')
+    const presentationSource = readSource('../app/panel-targets/presentation.ts')
 
     expect(runtimeSource).not.toContain('app/panel-targets')
     expect(effectsSource).not.toContain('app/panel-targets')
-    expect(adapterSource).toContain('../panel-targets/state')
+    expect(adapterSource).toContain('../panel-targets/presentation')
+    expect(adapterSource).not.toContain('../panel-targets/state')
+    expect(presentationSource).toContain('./state')
   })
 
   it('keeps Planning Projection read models out of Canvas2D renderers', () => {
@@ -53,11 +56,28 @@ describe('frontend boundary sources', () => {
 
   it('keeps Timeline Action document edits behind the Timeline editing module', () => {
     const timelineSource = readSource('../components/canvas/InteractiveTimeline.tsx')
+    const interactionSource = readSource('../app/timeline/interaction.ts')
     const editingSource = readSource('../app/timeline/editing.ts')
 
     expect(timelineSource).not.toContain('beginDocumentArrayEdit')
+    expect(timelineSource).not.toContain('beginTimelineActionEdit')
+    expect(timelineSource).not.toContain('computeTimelineAutoScrollSpeed')
     expect(timelineSource).not.toContain('applyTimelineActionPatch')
+    expect(interactionSource).toContain('beginTimelineActionEdit')
+    expect(interactionSource).toContain('computeTimelineAutoScrollSpeed')
     expect(editingSource).toContain('beginDocumentArrayEdit')
     expect(editingSource).toContain('applyTimelineActionPatch')
+  })
+
+  it('keeps Consortium document drag edits behind the Consortium interaction module', () => {
+    const consortiumSource = readSource('../components/canvas/ConsortiumChart.tsx')
+    const interactionSource = readSource('../app/consortium/interaction.ts')
+
+    expect(consortiumSource).not.toContain('beginDocumentArrayEdit')
+    expect(consortiumSource).not.toContain('moveConsortiumEntryInArray')
+    expect(consortiumSource).not.toContain('reorderConsortiumEntryInArray')
+    expect(interactionSource).toContain('beginDocumentArrayEdit')
+    expect(interactionSource).toContain('moveConsortiumEntryInArray')
+    expect(interactionSource).toContain('reorderConsortiumEntryInArray')
   })
 })

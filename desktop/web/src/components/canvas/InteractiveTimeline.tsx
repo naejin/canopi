@@ -23,19 +23,32 @@ import {
   updateTimelineAction,
 } from '../../app/timeline/controller'
 import {
-  beginTimelineActionEdit,
-  compensateFrozenTimelineOriginScroll,
-  computeTimelineAutoScrollSpeed,
   createTimelineActionFromFormData,
   formDataFromTimelineAction,
   timelineActionPatchFromFormData,
-  type TimelineActionEditSession,
 } from '../../app/timeline/editing'
+import {
+  TIMELINE_CLICK_THRESHOLD,
+  TIMELINE_GRANULARITY_PX_PER_DAY,
+  applyTimelineEditDragDelta,
+  commitTimelineDrag,
+  createTimelineMoveDrag,
+  createTimelineOriginFreeze,
+  createTimelinePanDrag,
+  createTimelineResizeDrag,
+  hitTestTimelineRulerControls,
+  isTimelineEditDrag,
+  nextTimelineGranularity,
+  restoreTimelineOriginScroll,
+  timelineAutoScrollSpeed,
+  updateTimelinePanScrollX,
+  type TimelineDragState,
+  type TimelineGranularity,
+} from '../../app/timeline/interaction'
 import { isEditableTarget } from '../../canvas/runtime/interaction/pointer-utils'
 import {
   LABEL_SIDEBAR_WIDTH,
   RULER_HEIGHT,
-  rulerControlBounds,
   computeTimelineRowOffsets,
   hitTestAction,
   renderTimeline,
@@ -46,52 +59,12 @@ import type { PanelTarget, TimelineAction } from '../../types/design'
 import { TimelinePopover, type PopoverFormData } from './TimelinePopover'
 import styles from './InteractiveTimeline.module.css'
 
-export type Granularity = 'month' | 'year'
-
-const GRANULARITY_PX_PER_DAY: Record<Granularity, number> = {
-  month: 5,
-  year: 0.8,
-}
-
-// Must match pillY / pillH in timeline-renderer.ts ruler controls
-const RULER_BTN_Y = (28 - 18) / 2  // (RULER_HEIGHT - pillH) / 2 = 5
-const RULER_BTN_H = 18
-const CLICK_THRESHOLD = 3
-
-function hitTestRulerControls(x: number, y: number): 'granularity' | 'today' | null {
-  if (y < RULER_BTN_Y || y > RULER_BTN_Y + RULER_BTN_H) return null
-  const { mo, yr, today } = rulerControlBounds
-  if (x >= mo.x && x <= mo.x + mo.w) return 'granularity'
-  if (x >= yr.x && x <= yr.x + yr.w) return 'granularity'
-  if (x >= today.x && x <= today.x + today.w) return 'today'
-  return null
-}
+export type Granularity = TimelineGranularity
 
 interface InteractiveTimelineProps {
   selectedId: string | null
   onSelect: (id: string | null) => void
 }
-
-type DragState =
-  | {
-      type: 'move'
-      startMouseX: number
-      cachedRect: DOMRect
-      edit: TimelineActionEditSession
-    }
-  | {
-      type: 'resize'
-      startMouseX: number
-      cachedRect: DOMRect
-      edit: TimelineActionEditSession
-    }
-  | {
-      type: 'pan'
-      startMouseX: number
-      startScrollX: number
-      cachedRect: DOMRect
-    }
-  | null
 
 interface PopoverState {
   mode: 'add' | 'edit'
@@ -136,12 +109,12 @@ export function InteractiveTimeline({
   const containerRef = useRef<HTMLDivElement>(null)
   const cachedRectRef = useRef<DOMRect | null>(null)
   const granularity = useSignal<Granularity>('month')
-  const pxPerDay = useSignal(GRANULARITY_PX_PER_DAY.month)
+  const pxPerDay = useSignal(TIMELINE_GRANULARITY_PX_PER_DAY.month)
   const scrollX = useSignal(0)
   const hoveredId = useSignal<string | null>(null)
   const tooltipState = useSignal<{ x: number; y: number; action: TimelinePlanningAction } | null>(null)
   const popoverState = useSignal<PopoverState | null>(null)
-  const dragState = useRef<DragState>(null)
+  const dragState = useRef<TimelineDragState | null>(null)
   const pendingClick = useRef<PendingClick | null>(null)
   const rowsRef = useRef<readonly TimelineActionTypeRow[]>([])
   const layoutRef = useRef<ReadonlyMap<string, TimelineActionLayout>>(new Map())
@@ -252,10 +225,6 @@ export function InteractiveTimeline({
     return () => canvas.removeEventListener('wheel', handleWheel)
   }, [handleWheel])
 
-  function applyDragDelta(drag: NonNullable<DragState> & { type: 'move' | 'resize' }, totalPxDelta: number): void {
-    drag.edit.applyPixelDelta(totalPxDelta)
-  }
-
   function stopAutoScroll(): void {
     const rafId = autoScrollRafRef.current
     if (rafId != null) {
@@ -267,24 +236,24 @@ export function InteractiveTimeline({
   function autoScrollTick(): void {
     if (autoScrollRafRef.current == null) return
     const drag = dragState.current
-    if (!drag || (drag.type !== 'move' && drag.type !== 'resize')) {
+    if (!isTimelineEditDrag(drag)) {
       stopAutoScroll()
       return
     }
     const mouseX = lastDragClientXRef.current - drag.cachedRect.left
-    const speed = computeTimelineAutoScrollSpeed(mouseX, drag.cachedRect.width, LABEL_SIDEBAR_WIDTH)
+    const speed = timelineAutoScrollSpeed(mouseX, drag.cachedRect.width)
     if (speed === 0) {
       stopAutoScroll()
       return
     }
     scrollX.value = scrollX.peek() + speed
     autoScrollAccumRef.current += speed
-    applyDragDelta(drag, lastDragClientXRef.current - drag.startMouseX + autoScrollAccumRef.current)
+    applyTimelineEditDragDelta(drag, lastDragClientXRef.current - drag.startMouseX + autoScrollAccumRef.current)
     autoScrollRafRef.current = requestAnimationFrame(autoScrollTick)
   }
 
   function updateAutoScroll(mouseX: number, chartWidth: number): void {
-    const speed = computeTimelineAutoScrollSpeed(mouseX, chartWidth, LABEL_SIDEBAR_WIDTH)
+    const speed = timelineAutoScrollSpeed(mouseX, chartWidth)
     if (speed !== 0) {
       if (autoScrollRafRef.current == null) {
         autoScrollRafRef.current = requestAnimationFrame(autoScrollTick)
@@ -314,12 +283,11 @@ export function InteractiveTimeline({
 
     if (event.button === 1) {
       event.preventDefault()
-      dragState.current = {
-        type: 'pan',
+      dragState.current = createTimelinePanDrag({
         startMouseX: event.clientX,
         startScrollX: scrollX.peek(),
         cachedRect: rect,
-      }
+      })
       document.body.style.cursor = 'grabbing'
       return
     }
@@ -335,11 +303,11 @@ export function InteractiveTimeline({
 
     // Ruler controls
     if (mouseY < RULER_HEIGHT) {
-      const rulerHit = hitTestRulerControls(mouseX, mouseY)
+      const rulerHit = hitTestTimelineRulerControls(mouseX, mouseY)
       if (rulerHit === 'granularity') {
-        const next: Granularity = granularity.peek() === 'month' ? 'year' : 'month'
+        const next = nextTimelineGranularity(granularity.peek())
         granularity.value = next
-        pxPerDay.value = GRANULARITY_PX_PER_DAY[next]
+        pxPerDay.value = TIMELINE_GRANULARITY_PX_PER_DAY[next]
         return
       }
       if (rulerHit === 'today') {
@@ -389,12 +357,11 @@ export function InteractiveTimeline({
         actionType: rowActionType,
         date: toISODate(clickDate),
       }
-      dragState.current = {
-        type: 'pan',
+      dragState.current = createTimelinePanDrag({
         startMouseX: event.clientX,
         startScrollX: scrollX.peek(),
         cachedRect: rect,
-      }
+      })
       return
     }
 
@@ -403,28 +370,19 @@ export function InteractiveTimeline({
 
     if (!hit.action.startDate) return
 
-    const startMs = new Date(hit.action.startDate).getTime()
-    const endMs = hit.action.endDate ? new Date(hit.action.endDate).getTime() : null
-
     if (hit.edge === 'left' || hit.edge === 'right') {
-      dragOriginMsRef.current = computedOriginMsRef.current
-      dragOriginDateRef.current = new Date(computedOriginMsRef.current)
+      const freeze = createTimelineOriginFreeze(computedOriginMsRef.current)
+      dragOriginMsRef.current = freeze.originMs
+      dragOriginDateRef.current = freeze.originDate
       lastDragClientXRef.current = event.clientX
       stopAutoScroll()
       autoScrollAccumRef.current = 0
-      dragState.current = {
-        type: 'resize',
+      dragState.current = createTimelineResizeDrag({
+        hit,
         startMouseX: event.clientX,
         cachedRect: rect,
-        edit: beginTimelineActionEdit({
-          type: 'resize',
-          actionId: hit.action.id,
-          edge: hit.edge,
-          originalStartMs: startMs,
-          originalEndMs: endMs,
-          pxPerDaySnapshot: pxPerDay.peek(),
-        }),
-      }
+        pxPerDaySnapshot: pxPerDay.peek(),
+      })
       document.body.style.cursor = 'ew-resize'
       return
     }
@@ -439,24 +397,18 @@ export function InteractiveTimeline({
       actionId: hit.action.id,
     }
 
-    const durationMs = endMs != null ? endMs - startMs : null
-    dragOriginMsRef.current = computedOriginMsRef.current
-    dragOriginDateRef.current = new Date(computedOriginMsRef.current)
+    const freeze = createTimelineOriginFreeze(computedOriginMsRef.current)
+    dragOriginMsRef.current = freeze.originMs
+    dragOriginDateRef.current = freeze.originDate
     lastDragClientXRef.current = event.clientX
     stopAutoScroll()
     autoScrollAccumRef.current = 0
-    dragState.current = {
-      type: 'move',
+    dragState.current = createTimelineMoveDrag({
+      hit,
       startMouseX: event.clientX,
       cachedRect: rect,
-      edit: beginTimelineActionEdit({
-        type: 'move',
-        actionId: hit.action.id,
-        originalStartMs: startMs,
-        durationMs,
-        pxPerDaySnapshot: pxPerDay.peek(),
-      }),
-    }
+      pxPerDaySnapshot: pxPerDay.peek(),
+    })
   }, [])
 
   const handleMouseMove = useCallback((event: MouseEvent) => {
@@ -473,15 +425,15 @@ export function InteractiveTimeline({
 
     if (drag?.type === 'pan') {
       if (document.body.style.cursor !== 'grabbing') document.body.style.cursor = 'grabbing'
-      const newScrollX = drag.startScrollX - (event.clientX - drag.startMouseX)
+      const newScrollX = updateTimelinePanScrollX(drag, event.clientX)
       if (scrollX.peek() !== newScrollX) scrollX.value = newScrollX
       return
     }
 
-    if (drag?.type === 'move' || drag?.type === 'resize') {
+    if (isTimelineEditDrag(drag)) {
       lastDragClientXRef.current = event.clientX
       const autoScrollPx = autoScrollAccumRef.current
-      applyDragDelta(drag, event.clientX - drag.startMouseX + autoScrollPx)
+      applyTimelineEditDragDelta(drag, event.clientX - drag.startMouseX + autoScrollPx)
       updateAutoScroll(mouseX, drag.cachedRect.width)
       return
     }
@@ -526,9 +478,7 @@ export function InteractiveTimeline({
   const handleMouseUp = useCallback((event: MouseEvent) => {
     stopAutoScroll()
     const drag = dragState.current
-    if (drag && (drag.type === 'move' || drag.type === 'resize')) {
-      drag.edit.commit()
-    }
+    commitTimelineDrag(drag)
     if (drag?.type === 'resize' || drag?.type === 'pan') document.body.style.cursor = ''
 
     // Unfreeze coordinate origin and compensate scrollX to prevent visual jump
@@ -537,7 +487,7 @@ export function InteractiveTimeline({
       const realMs = computedOriginMsRef.current
       dragOriginMsRef.current = null
       dragOriginDateRef.current = null
-      scrollX.value = compensateFrozenTimelineOriginScroll({
+      scrollX.value = restoreTimelineOriginScroll({
         frozenOriginMs: frozenMs,
         realOriginMs: realMs,
         scrollX: scrollX.peek(),
@@ -553,7 +503,7 @@ export function InteractiveTimeline({
     if (!pending) return
     const dx = Math.abs(event.clientX - pending.clientX)
     const dy = Math.abs(event.clientY - pending.clientY)
-    if (dx + dy >= CLICK_THRESHOLD) return
+    if (dx + dy >= TIMELINE_CLICK_THRESHOLD) return
 
     const speciesList = [...projectionRef.current.speciesList]
 
@@ -597,7 +547,7 @@ export function InteractiveTimeline({
     }
 
     const onLeave = () => {
-      if (dragState.current?.type === 'move' || dragState.current?.type === 'resize') {
+      if (isTimelineEditDrag(dragState.current)) {
         stopAutoScroll()
       }
     }
@@ -611,9 +561,7 @@ export function InteractiveTimeline({
       document.documentElement.removeEventListener('mouseleave', onLeave)
       stopAutoScroll()
       const drag = dragState.current
-      if (drag && (drag.type === 'move' || drag.type === 'resize')) {
-        drag.edit.commit()
-      }
+      commitTimelineDrag(drag)
       if (drag?.type === 'resize' || drag?.type === 'pan') document.body.style.cursor = ''
       dragState.current = null
       dragOriginMsRef.current = null

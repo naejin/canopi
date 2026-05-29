@@ -73,6 +73,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - Use the panel target resolution helpers to map typed targets to scene plant/zone IDs for canvas highlights.
 - `manual` and `none` targets intentionally resolve to empty sets and are not errors.
 - Panel-origin hover and selection are presentation inputs. Resolving them must not mutate real canvas selection, labels, dirty state, or history.
+- App-owned panel Target presentation state is exposed through `app/panel-targets/presentation.ts`; runtime adapters should consume that seam instead of raw panel-target signals.
 - Canvas-origin hover remains separate.
 
 ## Canvas2D Tab Components
@@ -81,7 +82,8 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - Use shared renderer utilities rather than duplicating drawing helpers.
 - Planning tab read-models such as Timeline Action rows, layout lanes, species picker options, and Target derivation belong in `app/planning-projection/`; Canvas2D renderers own drawing, row heights, hit geometry, and pointer math.
 - Planning tab UI should consume Planning Projection runtime hooks instead of calling canvas query surfaces directly for placed plants or localized Species names.
-- Timeline Action editing belongs in `app/timeline/editing.ts`; Canvas2D timeline UI owns pointer geometry and popover placement, not document edit transaction internals.
+- Timeline Action document editing belongs in `app/timeline/editing.ts`; Timeline canvas gesture behavior belongs in `app/timeline/interaction.ts`. Canvas2D timeline UI owns pointer event wiring and popover placement, not document edit transaction internals.
+- Consortium canvas drag behavior belongs in `app/consortium/interaction.ts`; Canvas2D consortium UI owns hit wiring and render snapshots, not consortium document edit transaction internals.
 - Canvas2D renderer functions receive `t` for i18n.
 - Cache row offsets and layout computation in refs/memos for pointer paths.
 - Snapshot drag-start values that can change mid-drag.
