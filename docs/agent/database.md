@@ -30,6 +30,7 @@ When canopi-data removes or adds columns, update atomically:
 - Plant detail query shape, selected columns, row-mapping contract, and projected text translation have one projection owner: `plant_db/detail_projection.rs`.
 - Detail row mapping reads projected columns by name so projection order can change without remapping every field.
 - Search plans own count/list query construction and cursor semantics.
+- Species Catalog search planning is split by seam under `desktop/src/db/query_builder/`: `text.rs` owns FTS/Common Name normalization, `relevance.rs` owns Common Name ranking tiers and token joins, `predicates.rs` owns shared FTS/filter WHERE assembly, `pagination.rs` owns keyset/offset cursor behavior, and `projection.rs` owns list row SELECT columns.
 - Count and list predicates should share the same planner path.
 - `common-types/plant-filter-fields.json` owns both dynamic filter fields and the fixed `SpeciesFilter` catalog.
 - Strip-field UI behavior can be schema-defined with `strip_choice` and `active_array_chip` on categorical strip fields; regenerate bindings instead of duplicating strip or chip metadata in frontend adapters.

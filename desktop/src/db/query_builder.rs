@@ -2,7 +2,12 @@ mod builder;
 mod columns;
 mod cursor;
 mod filters;
+mod pagination;
+mod predicates;
+mod projection;
+mod relevance;
 mod species_catalog_filters;
+mod text;
 
 pub(crate) use crate::db::plant_filter_fields::{PlantFilterFieldKind, filter_field_kind};
 pub use builder::{SpeciesSearchPlan, SpeciesSearchRequest};
