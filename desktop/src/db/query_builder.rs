@@ -454,6 +454,61 @@ mod tests {
     }
 
     #[test]
+    fn test_common_name_token_query_uses_index_tokenization_rules() {
+        let plan = SpeciesSearchPlan::build(request(
+            Some("Carleton's soap/pod Edelweiß"),
+            default_filter(),
+            None,
+            Sort::Relevance,
+            20,
+            false,
+        ));
+        let sql = plan.list().sql();
+        let params = plan.list().params();
+
+        assert!(sql.contains("species_search_common_name_tokens scnt0"));
+        assert!(sql.contains("species_search_common_name_tokens scnt4"));
+        for expected_token in ["carleton", "s", "soap", "pod", "edelweiss"] {
+            assert!(
+                params
+                    .iter()
+                    .any(|param| matches!(param, Value::Text(value) if value == expected_token)),
+                "expected indexed Common Name token {expected_token:?} in params, got {params:?}"
+            );
+        }
+        for raw_token in ["carleton's", "soap/pod"] {
+            assert!(
+                !params
+                    .iter()
+                    .any(|param| matches!(param, Value::Text(value) if value == raw_token)),
+                "unexpected raw Common Name token {raw_token:?} in params: {params:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_common_name_token_query_matches_nfkd_without_ascii_transliteration() {
+        let plan = SpeciesSearchPlan::build(request(
+            Some("Cœur Smørrebrød Æble Łódź Ðe"),
+            default_filter(),
+            None,
+            Sort::Relevance,
+            20,
+            false,
+        ));
+        let params = plan.list().params();
+
+        for expected_token in ["cœur", "smørrebrød", "æble", "łodz", "ðe"] {
+            assert!(
+                params
+                    .iter()
+                    .any(|param| matches!(param, Value::Text(value) if value == expected_token)),
+                "expected indexed Common Name token {expected_token:?} in params, got {params:?}"
+            );
+        }
+    }
+
+    #[test]
     fn test_explicit_non_name_sort_skips_common_name_relevance_tier() {
         let plan = SpeciesSearchPlan::build(request(
             Some("lin"),
@@ -467,6 +522,7 @@ mod tests {
 
         assert!(sql.contains("ORDER BY s.family"));
         assert!(!sql.contains("ORDER BY CASE"));
+        assert!(!sql.contains("species_search_common_name_tokens"));
     }
 
     #[test]

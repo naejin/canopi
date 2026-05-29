@@ -110,14 +110,17 @@ fn build_list_statement(
     params.push(Value::Text(request.locale.clone()));
     params.push(Value::Text("en".to_owned()));
 
-    let relevance_plan = CommonNameRelevancePlan::build(
-        search_text.common_name_query(),
-        request.use_common_name_token_index,
-        locale_position,
-        fallback_locale_position,
-        &request.locale,
-        &mut params,
-    );
+    let relevance_plan = match page {
+        SpeciesSearchPagePlan::RelevanceOffset { .. } => Some(CommonNameRelevancePlan::build(
+            search_text.common_name_query(),
+            request.use_common_name_token_index,
+            locale_position,
+            fallback_locale_position,
+            &request.locale,
+            &mut params,
+        )),
+        SpeciesSearchPagePlan::Keyset { .. } => None,
+    };
 
     let mut predicates =
         PredicatePlan::for_search(search_text.fts_term(), &request.filters, &mut params);
@@ -130,7 +133,9 @@ fn build_list_statement(
     let order_by = match page {
         SpeciesSearchPagePlan::RelevanceOffset { .. } => relevance_order_by(
             search_text.common_name_query(),
-            &relevance_plan,
+            relevance_plan
+                .as_ref()
+                .expect("relevance plan is built for relevance pages"),
             &mut params,
         ),
         SpeciesSearchPagePlan::Keyset { .. } => page.order_by(&request.sort),
@@ -151,7 +156,10 @@ fn build_list_statement(
          {limit_clause}",
         fts_join = predicates.fts_join_sql(),
         cn_join = common_name_join,
-        token_join = relevance_plan.join_sql,
+        token_join = relevance_plan
+            .as_ref()
+            .map(|plan| plan.join_sql.as_str())
+            .unwrap_or(""),
         where_sql = where_sql,
         order_by = order_by,
         limit_clause = limit_clause,

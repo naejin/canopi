@@ -57,6 +57,7 @@ When canopi-data removes or adds columns, update atomically:
 
 - `species_search_fts` has weighted columns: canonical name, common names, family/genus, uses text, and other text.
 - `species_search_common_name_tokens` stores normalized Common Name tokens by species and language; relevance search uses it to boost Common Name token matches before BM25.
+- Query-side Common Name tokenization must stay aligned with `scripts/prepare-db.py` `common_name_tokens()`: split on Unicode word tokens, fold diacritics/case, and only plan token-table joins for relevance-ordered pages.
 - Use the full FTS table name in `MATCH`, not an alias.
 - Strip all FTS metacharacters before building MATCH queries.
 - Empty sanitized query means skip FTS.
