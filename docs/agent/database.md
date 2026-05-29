@@ -59,6 +59,8 @@ When canopi-data removes or adds columns, update atomically:
 - Strip all FTS metacharacters before building MATCH queries.
 - Empty sanitized query means skip FTS.
 - `total_estimate` comes from count; visible rows come from list. If UI shows a new count with old rows during debounce, investigate frontend committed-result lifecycle first.
+- Run the manual Species Catalog latency harness with `cargo test -p canopi-desktop db::plant_db::search::tests::bundled_species_search_latency_harness_reports_list_and_count_timings -- --ignored --nocapture`.
+- The harness opens `desktop/resources/canopi-core.db` by default, or `CANOPI_PLANT_DB_PATH` when set, and reports first-page list latency separately from total-count latency.
 
 ## Translations
 

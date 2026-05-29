@@ -90,8 +90,10 @@ pub fn search(
 #[cfg(test)]
 mod tests {
     use super::search;
+    use crate::db::query_builder::{SpeciesSearchPlan, SpeciesSearchRequest};
     use common_types::species::{Sort, SpeciesFilter};
-    use rusqlite::Connection;
+    use rusqlite::{Connection, OpenFlags, params_from_iter};
+    use std::{env, path::PathBuf, time::Duration, time::Instant};
 
     fn test_db() -> Connection {
         let conn = Connection::open_in_memory().unwrap();
@@ -153,6 +155,225 @@ mod tests {
         )
         .unwrap();
         conn
+    }
+
+    fn relevance_fixture_db() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE species (
+                id TEXT PRIMARY KEY,
+                canonical_name TEXT NOT NULL,
+                slug TEXT NOT NULL,
+                common_name TEXT,
+                family TEXT,
+                genus TEXT,
+                height_max_m REAL,
+                hardiness_zone_min INTEGER,
+                hardiness_zone_max INTEGER,
+                growth_rate TEXT,
+                stratum TEXT,
+                edibility_rating INTEGER,
+                medicinal_rating INTEGER,
+                width_max_m REAL
+            );
+            CREATE TABLE species_search_text (
+                species_rowid INTEGER PRIMARY KEY,
+                canonical_name TEXT NOT NULL DEFAULT '',
+                common_names TEXT NOT NULL DEFAULT '',
+                family_genus TEXT NOT NULL DEFAULT '',
+                uses_text TEXT NOT NULL DEFAULT '',
+                other_text TEXT NOT NULL DEFAULT ''
+            );
+            CREATE VIRTUAL TABLE species_search_fts USING fts5(
+                canonical_name,
+                common_names,
+                family_genus,
+                uses_text,
+                other_text,
+                content='species_search_text',
+                content_rowid='species_rowid',
+                tokenize='unicode61 remove_diacritics 2'
+            );
+            CREATE TABLE best_common_names (
+                species_id TEXT NOT NULL,
+                language TEXT NOT NULL,
+                common_name TEXT NOT NULL,
+                PRIMARY KEY (species_id, language)
+            );
+            CREATE TABLE species_common_names (
+                species_id TEXT NOT NULL,
+                common_name TEXT NOT NULL,
+                language TEXT NOT NULL,
+                is_primary INTEGER NOT NULL DEFAULT 0,
+                source TEXT
+            );
+
+            INSERT INTO species (
+                id,
+                canonical_name, slug, common_name, family, genus,
+                height_max_m, hardiness_zone_min, hardiness_zone_max,
+                growth_rate, stratum, edibility_rating, medicinal_rating, width_max_m
+            ) VALUES
+                ('linum-usitatissimum', 'Linum usitatissimum', 'linum-usitatissimum', 'Common flax', 'Linaceae', 'Linum', 1.2, 5, 9, 'Fast', 'Low', 4, 1, 0.3),
+                ('linum-bienne', 'Linum bienne', 'linum-bienne', 'Pale flax', 'Linaceae', 'Linum', 0.8, 6, 9, 'Medium', 'Low', 1, 0, 0.2),
+                ('lindleya-mespiloides', 'Lindleya mespiloides', 'lindleya-mespiloides', 'Lindleya', 'Rosaceae', 'Lindleya', 3.0, 7, 10, 'Medium', 'Shrub', 0, 0, 2.0),
+                ('malus-domestica', 'Malus domestica', 'malus-domestica', 'Apple', 'Rosaceae', 'Malus', 4.0, 4, 8, 'Medium', 'Canopy', 5, 1, 3.0);
+
+            INSERT INTO species_common_names VALUES
+                ('linum-usitatissimum', 'Common flax', 'en', 1, 'test'),
+                ('linum-usitatissimum', 'Lin commun', 'fr', 1, 'test'),
+                ('linum-bienne', 'Pale flax', 'en', 1, 'test'),
+                ('linum-bienne', 'Lin bisannuel', 'fr', 1, 'test'),
+                ('lindleya-mespiloides', 'Lindleya', 'en', 1, 'test'),
+                ('malus-domestica', 'Apple', 'en', 1, 'test'),
+                ('malus-domestica', 'Pommier', 'fr', 1, 'test');
+
+            INSERT INTO best_common_names VALUES
+                ('linum-usitatissimum', 'en', 'Common flax'),
+                ('linum-usitatissimum', 'fr', 'Lin commun'),
+                ('linum-bienne', 'en', 'Pale flax'),
+                ('linum-bienne', 'fr', 'Lin bisannuel'),
+                ('lindleya-mespiloides', 'en', 'Lindleya'),
+                ('malus-domestica', 'en', 'Apple'),
+                ('malus-domestica', 'fr', 'Pommier');
+
+            INSERT INTO species_search_text (
+                species_rowid, canonical_name, common_names, family_genus, uses_text, other_text
+            )
+            SELECT s.rowid,
+                s.canonical_name,
+                TRIM(COALESCE(s.common_name, '') || ' ' || COALESCE(cn.all_names, '')),
+                TRIM(COALESCE(s.family, '') || ' ' || COALESCE(s.genus, '')),
+                '',
+                ''
+            FROM species s
+            LEFT JOIN (
+                SELECT species_id, GROUP_CONCAT(common_name, ' ') AS all_names
+                FROM species_common_names
+                GROUP BY species_id
+            ) cn ON cn.species_id = s.id;
+
+            INSERT INTO species_search_fts(species_search_fts) VALUES('rebuild');",
+        )
+        .unwrap();
+        conn
+    }
+
+    fn run_bundled_species_search_latency_harness() -> Result<(), String> {
+        let Some(path) = bundled_species_search_db_path() else {
+            eprintln!(
+                "skipping species search latency harness: no bundled database found; \
+                 run `python3 scripts/prepare-db.py` or set CANOPI_PLANT_DB_PATH"
+            );
+            return Ok(());
+        };
+        let conn = Connection::open_with_flags(
+            &path,
+            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )
+        .map_err(|error| {
+            format!(
+                "Failed to open Species Catalog database at {}: {error}",
+                path.display()
+            )
+        })?;
+
+        eprintln!("species_search_latency db={}", path.display());
+        for case in [
+            ("fr-lin", "fr", "lin"),
+            ("fr-lin-commun", "fr", "lin commun"),
+            ("fr-lind", "fr", "lind"),
+            ("en-apple", "en", "apple"),
+            ("en-broad-a", "en", "a"),
+        ] {
+            report_species_search_latency_case(&conn, case)?;
+        }
+
+        Ok(())
+    }
+
+    fn bundled_species_search_db_path() -> Option<PathBuf> {
+        if let Ok(path) = env::var("CANOPI_PLANT_DB_PATH") {
+            let path = PathBuf::from(path);
+            return path.exists().then_some(path);
+        }
+
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources")
+            .join("canopi-core.db");
+        path.exists().then_some(path)
+    }
+
+    fn report_species_search_latency_case(
+        conn: &Connection,
+        (label, locale, query): (&str, &str, &str),
+    ) -> Result<(), String> {
+        let plan = SpeciesSearchPlan::build(SpeciesSearchRequest {
+            text: Some(query.to_owned()),
+            filters: SpeciesFilter::default(),
+            cursor: None,
+            sort: Sort::Relevance,
+            limit: 20,
+            include_total: true,
+            locale: locale.to_owned(),
+        });
+
+        let list_started = Instant::now();
+        let list_rows = execute_species_search_list(conn, &plan)?;
+        let list_elapsed = list_started.elapsed();
+
+        let count_started = Instant::now();
+        let total_estimate = execute_species_search_count(conn, &plan)?;
+        let count_elapsed = count_started.elapsed();
+
+        eprintln!(
+            "species_search_latency case={label} locale={locale} query={query:?} \
+             list_ms={} count_ms={} rows={} total_estimate={}",
+            millis(list_elapsed),
+            millis(count_elapsed),
+            list_rows,
+            total_estimate
+        );
+        Ok(())
+    }
+
+    fn execute_species_search_list(
+        conn: &Connection,
+        plan: &SpeciesSearchPlan,
+    ) -> Result<usize, String> {
+        let list = plan.list();
+        let mut stmt = conn
+            .prepare(list.sql())
+            .map_err(|error| format!("Failed to prepare Species Catalog list query: {error}"))?;
+        let mut rows = stmt
+            .query(params_from_iter(list.params()))
+            .map_err(|error| format!("Failed to execute Species Catalog list query: {error}"))?;
+        let mut count = 0;
+        while rows
+            .next()
+            .map_err(|error| format!("Failed to read Species Catalog list row: {error}"))?
+            .is_some()
+        {
+            count += 1;
+        }
+        Ok(count)
+    }
+
+    fn execute_species_search_count(
+        conn: &Connection,
+        plan: &SpeciesSearchPlan,
+    ) -> Result<u32, String> {
+        let count = plan
+            .count()
+            .ok_or_else(|| "Species Catalog count plan was not built".to_owned())?;
+        conn.query_row(count.sql(), params_from_iter(count.params()), |row| {
+            row.get::<_, u32>(0)
+        })
+        .map_err(|error| format!("Failed to execute Species Catalog count query: {error}"))
+    }
+
+    fn millis(duration: Duration) -> String {
+        format!("{:.3}", duration.as_secs_f64() * 1000.0)
     }
 
     #[test]
@@ -297,6 +518,59 @@ mod tests {
             second.items[0].canonical_name
         );
         assert_eq!(second.next_cursor, None);
+    }
+
+    #[test]
+    fn relevance_fixture_covers_common_name_search_examples() {
+        let conn = relevance_fixture_db();
+
+        for (locale, query, expected_names) in [
+            (
+                "fr",
+                "lin",
+                vec![
+                    "Linum usitatissimum",
+                    "Linum bienne",
+                    "Lindleya mespiloides",
+                ],
+            ),
+            ("fr", "lin commun", vec!["Linum usitatissimum"]),
+            ("fr", "lind", vec!["Lindleya mespiloides"]),
+            ("en", "apple", vec!["Malus domestica"]),
+        ] {
+            let result = search(
+                &conn,
+                Some(query.to_owned()),
+                SpeciesFilter::default(),
+                None,
+                Sort::Relevance,
+                10,
+                true,
+                locale.to_owned(),
+            )
+            .unwrap();
+
+            for expected_name in expected_names {
+                assert!(
+                    result
+                        .items
+                        .iter()
+                        .any(|item| item.canonical_name == expected_name),
+                    "expected {locale} query {query:?} to include {expected_name}; got {:?}",
+                    result
+                        .items
+                        .iter()
+                        .map(|item| item.canonical_name.as_str())
+                        .collect::<Vec<_>>()
+                );
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "manual latency harness; run with --ignored --nocapture"]
+    fn bundled_species_search_latency_harness_reports_list_and_count_timings() {
+        run_bundled_species_search_latency_harness().unwrap();
     }
 
     #[test]
