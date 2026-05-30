@@ -1,5 +1,5 @@
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import { designName, designDirty } from '../../state/design'
+import { designName, designDirty } from '../../app/document-session/store'
 import { activePanel } from '../../app/shell/state'
 import { locale, theme } from '../../app/settings/state'
 import { mutateSettingsProjection } from '../../app/settings/projection'

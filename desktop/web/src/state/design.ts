@@ -1,6 +1,5 @@
 import { signal, computed, batch } from '@preact/signals'
 import type { CanopiFile } from '../types/design'
-import { getCurrentCanvasDocumentSurface } from '../canvas/session'
 
 // Low-level document session store and canonical signal surface.
 // Higher-level document policy lives in app/document-session.
@@ -75,7 +74,7 @@ export function resetDirtyBaselines(): void {
 }
 
 /** Mark save baseline as current state (used after successful save). */
-export function markSaved(session = getCurrentCanvasDocumentSurface()): void {
+export function markSaved(session?: { markSaved(): void } | null): void {
   // Tell history to remember the current position as saved
   session?.markSaved()
   detachedCanvasDirty.value = false

@@ -1,5 +1,5 @@
 import { activePanel, sidePanel, navigateTo, type Panel } from '../../app/shell/state'
-import { currentDesign } from '../../state/design'
+import { currentDesign } from '../../app/document-session/store'
 import { t } from '../../i18n'
 import styles from './PanelBar.module.css'
 

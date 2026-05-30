@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'preact/hooks'
 import { useSignal, useSignalEffect } from '@preact/signals'
-import { currentDesign } from '../../state/design'
+import { currentDesign } from '../document-session/store'
 import {
   ACTION_TYPES,
   type TimelineActionLayout,

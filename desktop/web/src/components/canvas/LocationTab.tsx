@@ -6,7 +6,7 @@ import {
   createMapLibreBasemapStyle,
 } from '../../maplibre/config'
 import { basemapStyle, locale } from '../../app/settings/state'
-import { currentDesign } from '../../state/design'
+import { currentDesign } from '../../app/document-session/store'
 import {
   clearDesignLocation,
   createLocationSearchController,

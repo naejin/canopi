@@ -21,7 +21,7 @@ import { northBearingDeg } from '../../canvas/scene-metadata-state'
 import { sceneEntityRevision } from '../../canvas/runtime-mirror-state'
 import { readPanelTargetOverlaySnapshot } from '../../app/panel-targets/presentation'
 import { basemapStyle, theme } from '../../app/settings/state'
-import { currentDesign } from '../../state/design'
+import { currentDesign } from '../../app/document-session/store'
 import { loadMapLibre } from './maplibre-loader'
 
 interface UseMapLibreCanvasSurfaceControllerOptions {

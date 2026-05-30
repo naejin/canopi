@@ -6,19 +6,9 @@ import * as designIpc from "../../ipc/design";
 import { t } from "../../i18n";
 import type { CanopiFile } from "../../types/design";
 import {
-  autosaveFailed,
-  canvasDirty,
-  currentDesign,
-  designDirty,
-  designName,
-  designPath,
-  markCanvasDetachedDirty,
-  markSaved,
-  pendingDesignPath,
-  pendingTemplateImport,
-  replaceCurrentDesignState,
-  resetDirtyBaselines,
-} from "../../state/design";
+  designSessionStore,
+  type DesignSessionStore,
+} from "./store";
 import {
   buildPersistedDesignSessionContent,
   disposeDesignSessionPersistence,
@@ -100,6 +90,7 @@ export interface TeardownDesignSessionOptions {
 }
 
 export interface DesignSessionStateMachineDeps {
+  readonly store: DesignSessionStore;
   readonly getCurrentSession: () => CanvasDocumentSurface | null;
   readonly saveDesign: typeof designIpc.saveDesign;
   readonly saveDesignAs: typeof designIpc.saveDesignAs;
@@ -123,6 +114,7 @@ const INITIAL_STATE: DesignSessionState = {
 };
 
 const DEFAULT_DEPS: DesignSessionStateMachineDeps = {
+  store: designSessionStore,
   getCurrentSession: getCurrentCanvasDocumentSurface,
   saveDesign: (path, content) => designIpc.saveDesign(path, content),
   saveDesignAs: (content) => designIpc.saveDesignAs(content),
@@ -152,7 +144,7 @@ export class DesignSessionStateMachine {
   async startAttachedDesignSession(
     session: CanvasDocumentSurface,
   ): Promise<DocumentTransitionResult | null> {
-    if (!currentDesign.value) {
+    if (!this.deps.store.hasCurrentDesign()) {
       this.beginEmptyDocumentSession(session);
       return null;
     }
@@ -162,9 +154,13 @@ export class DesignSessionStateMachine {
       dirtyGuard: "skip",
       session,
       load: async () => {
-        const file = currentDesign.value;
+        const file = this.deps.store.readCurrentDesign();
         if (!file) throw new Error("No current design to mount");
-        return { file, path: designPath.value, name: designName.value };
+        return {
+          file,
+          path: this.deps.store.readDesignPath(),
+          name: this.deps.store.readDesignName(),
+        };
       },
     });
   }
@@ -187,18 +183,24 @@ export class DesignSessionStateMachine {
     try {
       const content = this.deps.buildPersistedContent({
         session,
-        name: designName.value,
+        name: this.deps.store.readDesignName(),
+        store: this.deps.store,
       });
 
-      if (designPath.value) {
-        await this.deps.saveDesign(designPath.value, content);
-        replaceCurrentDesignState(content, designPath.value, designName.value);
+      const path = this.deps.store.readDesignPath();
+      if (path) {
+        await this.deps.saveDesign(path, content);
+        this.deps.store.replaceCurrentDesignState(
+          content,
+          path,
+          this.deps.store.readDesignName(),
+        );
       } else {
-        const path = await this.deps.saveDesignAs(content);
-        replaceCurrentDesignState(content, path, nameFromPath(path));
+        const savedPath = await this.deps.saveDesignAs(content);
+        this.deps.store.replaceCurrentDesignState(content, savedPath, nameFromPath(savedPath));
       }
 
-      markSaved(session);
+      this.deps.store.markSaved(session);
     } finally {
       this.state = this.steadyStateFor(session);
     }
@@ -211,11 +213,12 @@ export class DesignSessionStateMachine {
     try {
       const content = this.deps.buildPersistedContent({
         session,
-        name: designName.value,
+        name: this.deps.store.readDesignName(),
+        store: this.deps.store,
       });
       const path = await this.deps.saveDesignAs(content);
-      replaceCurrentDesignState(content, path, nameFromPath(path));
-      markSaved(session);
+      this.deps.store.replaceCurrentDesignState(content, path, nameFromPath(path));
+      this.deps.store.markSaved(session);
     } catch (error) {
       if (isCancelled(error)) return;
       throw error;
@@ -230,7 +233,7 @@ export class DesignSessionStateMachine {
     const session = this.sessionForTransition(request);
 
     try {
-      if (!session && !currentDesign.value && request.deferWhenDetachedAndEmpty) {
+      if (!session && !this.deps.store.hasCurrentDesign() && request.deferWhenDetachedAndEmpty) {
         request.deferWhenDetachedAndEmpty();
         this.state = this.steadyStateFor(session);
         return {
@@ -289,7 +292,7 @@ export class DesignSessionStateMachine {
     session: CanvasDocumentSurface,
     options: QueuedDocumentLoadOptions = {},
   ): () => void {
-    const queuedTemplate = pendingTemplateImport.value;
+    const queuedTemplate = this.deps.store.readPendingTemplateImport();
     if (queuedTemplate) {
       return this.startQueuedDocumentLoad({
         session,
@@ -301,19 +304,20 @@ export class DesignSessionStateMachine {
           path: null,
           name: queuedTemplate.name,
         }),
-        isStillPending: () => pendingTemplateImport.value?.path === queuedTemplate.path,
+        isStillPending: () =>
+          this.deps.store.readPendingTemplateImport()?.path === queuedTemplate.path,
         clearPending: () => {
-          if (pendingTemplateImport.value?.path === queuedTemplate.path) {
-            pendingTemplateImport.value = null;
+          if (this.deps.store.readPendingTemplateImport()?.path === queuedTemplate.path) {
+            this.deps.store.setPendingTemplateImport(null);
           }
         },
         restorePending: () => {
-          pendingTemplateImport.value = queuedTemplate;
+          this.deps.store.setPendingTemplateImport(queuedTemplate);
         },
       });
     }
 
-    const queuedPath = pendingDesignPath.value;
+    const queuedPath = this.deps.store.readPendingDesignPath();
     if (!queuedPath) return () => {};
 
     return this.startQueuedDocumentLoad({
@@ -329,14 +333,14 @@ export class DesignSessionStateMachine {
           name: file.name,
         };
       },
-      isStillPending: () => pendingDesignPath.value === queuedPath,
+      isStillPending: () => this.deps.store.readPendingDesignPath() === queuedPath,
       clearPending: () => {
-        if (pendingDesignPath.value === queuedPath) {
-          pendingDesignPath.value = null;
+        if (this.deps.store.readPendingDesignPath() === queuedPath) {
+          this.deps.store.setPendingDesignPath(null);
         }
       },
       restorePending: () => {
-        pendingDesignPath.value = queuedPath;
+        this.deps.store.setPendingDesignPath(queuedPath);
       },
     });
   }
@@ -346,21 +350,22 @@ export class DesignSessionStateMachine {
     runtimeInitialized,
     logError,
   }: AutosaveDesignSessionOptions): Promise<boolean> {
-    if (!designDirty.value) return false;
+    if (!this.deps.store.isDesignDirty()) return false;
     if (!runtimeInitialized) return false;
 
     this.state = this.operationState("autosaving", "autosave", session);
     try {
       const content = this.deps.buildPersistedContent({
         session,
-        name: designName.value,
+        name: this.deps.store.readDesignName(),
+        store: this.deps.store,
       });
-      await this.deps.autosaveDesign(content, designPath.value);
-      autosaveFailed.value = false;
+      await this.deps.autosaveDesign(content, this.deps.store.readDesignPath());
+      this.deps.store.setAutosaveFailed(false);
       return true;
     } catch (error) {
       logError("Autosave failed:", error);
-      autosaveFailed.value = true;
+      this.deps.store.setAutosaveFailed(true);
       return false;
     } finally {
       this.state = this.steadyStateFor(session);
@@ -375,13 +380,14 @@ export class DesignSessionStateMachine {
     this.state = this.operationState("tearing-down", "teardown", session);
 
     try {
-      if (runtimeInitialized && session.hasLoadedDocument() && currentDesign.value) {
+      if (runtimeInitialized && session.hasLoadedDocument() && this.deps.store.hasCurrentDesign()) {
         try {
           this.deps.snapshotCanvasIntoSession({
             session,
-            name: designName.value,
+            name: this.deps.store.readDesignName(),
+            store: this.deps.store,
           });
-          markCanvasDetachedDirty(canvasDirty.value);
+          this.deps.store.markCanvasDetachedDirty(this.deps.store.isCanvasDirty());
         } catch (error) {
           logError("Failed to snapshot canvas before teardown:", error);
         }
@@ -448,8 +454,8 @@ export class DesignSessionStateMachine {
       session.loadDocument(file);
     } else {
       session.replaceDocument(file);
-      replaceCurrentDesignState(file, path, name);
-      resetDirtyBaselines();
+      this.deps.store.replaceCurrentDesignState(file, path, name);
+      this.deps.store.resetDirtyBaselines();
     }
 
     session.clearHistory();
@@ -468,14 +474,14 @@ export class DesignSessionStateMachine {
       throw new Error("mount-existing document transitions require an attached canvas session");
     }
 
-    replaceCurrentDesignState(file, path, name);
-    resetDirtyBaselines();
+    this.deps.store.replaceCurrentDesignState(file, path, name);
+    this.deps.store.resetDirtyBaselines();
     this.deps.installWorkflows();
   }
 
   private async confirmReplacement(session: CanvasDocumentSurface | null): Promise<ReplacementDecision> {
-    if (!currentDesign.value) return "proceed";
-    if (!designDirty.value) return "proceed";
+    if (!this.deps.store.hasCurrentDesign()) return "proceed";
+    if (!this.deps.store.isDesignDirty()) return "proceed";
 
     const saveLabel = this.deps.translate("canvas.file.save");
     const discardLabel = this.deps.translate("canvas.file.dontSave");
@@ -532,7 +538,7 @@ export class DesignSessionStateMachine {
   private steadyStateFor(session: CanvasDocumentSurface | null): DesignSessionState {
     const attached = session !== null;
     const documentLoaded = session?.hasLoadedDocument() ?? false;
-    const hasDesign = currentDesign.value !== null;
+    const hasDesign = this.deps.store.hasCurrentDesign();
     return {
       status: attached
         ? documentLoaded || hasDesign ? "attached-ready" : "attached-empty"

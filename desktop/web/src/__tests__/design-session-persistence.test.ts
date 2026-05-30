@@ -15,7 +15,10 @@ import {
   disposeDesignSessionPersistence,
   snapshotCanvasIntoDesignSession,
 } from '../app/document-session/persistence'
-import { currentDesign } from '../state/design'
+import {
+  createMemoryDesignSessionStore,
+  type DesignSessionStore,
+} from '../app/document-session/store'
 
 function makeDesign(name = 'Design'): CanopiFile {
   return {
@@ -65,19 +68,22 @@ function makeSession(
 }
 
 describe('Design Session persistence', () => {
+  let store: DesignSessionStore
+
   beforeEach(() => {
-    currentDesign.value = null
+    store = createMemoryDesignSessionStore({ file: null, path: null, name: 'Untitled' })
     mocks.disposeConsortiumSync.mockClear()
   })
 
   it('builds attached persisted content through the canvas document surface', () => {
     const design = makeDesign('Original')
     const session = makeSession()
-    currentDesign.value = design
+    store.replaceCurrentDesignState(design, null, design.name)
 
     const result = buildPersistedDesignSessionContent({
       session,
       name: 'Persisted',
+      store,
     })
 
     expect(session.serializeDocument).toHaveBeenCalledWith({ name: 'Persisted' }, design)
@@ -87,11 +93,12 @@ describe('Design Session persistence', () => {
 
   it('builds detached persisted content from canonical Design state', () => {
     const design = makeDesign('Original')
-    currentDesign.value = design
+    store.replaceCurrentDesignState(design, null, design.name)
 
     const result = buildPersistedDesignSessionContent({
       session: null,
       name: 'Detached',
+      store,
     })
 
     expect(result).toEqual({ ...design, name: 'Detached' })
@@ -101,6 +108,7 @@ describe('Design Session persistence', () => {
     expect(() => buildPersistedDesignSessionContent({
       session: null,
       name: 'Missing',
+      store,
     })).toThrow('buildPersistedDesignSessionContent: no design loaded')
   })
 
@@ -111,16 +119,17 @@ describe('Design Session persistence', () => {
       name: metadata.name,
       zones: [{ name: 'canvas-zone', zone_type: 'bed', points: [], fill_color: null, notes: null }],
     }))
-    currentDesign.value = design
+    store.replaceCurrentDesignState(design, null, design.name)
 
     const result = snapshotCanvasIntoDesignSession({
       session,
       name: 'Snapshot',
+      store,
     })
 
     expect(result?.name).toBe('Snapshot')
     expect(result?.zones).toEqual([{ name: 'canvas-zone', zone_type: 'bed', points: [], fill_color: null, notes: null }])
-    expect(currentDesign.value).toBe(result)
+    expect(store.readCurrentDesign()).toBe(result)
   })
 
   it('does not snapshot when no Design is loaded', () => {
@@ -129,6 +138,7 @@ describe('Design Session persistence', () => {
     const result = snapshotCanvasIntoDesignSession({
       session,
       name: 'Missing',
+      store,
     })
 
     expect(result).toBeNull()

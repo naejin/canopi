@@ -1,5 +1,5 @@
 import { signal } from '@preact/signals'
-import { canvasClean } from '../../state/design'
+import { setCanvasClean } from '../../app/document-session/store'
 import type { SceneCommand, SceneCommandRuntime } from './scene-commands'
 
 const MAX_HISTORY = 500
@@ -61,6 +61,6 @@ export class SceneHistory {
   private _updateSignals(): void {
     this.canUndo.value = this._past.length > 0
     this.canRedo.value = this._future.length > 0
-    canvasClean.value = this.isClean
+    setCanvasClean(this.isClean)
   }
 }

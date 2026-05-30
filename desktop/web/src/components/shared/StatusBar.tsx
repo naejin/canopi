@@ -1,6 +1,6 @@
 import { locale, theme } from "../../app/settings/state";
 import { mutateSettingsProjection } from "../../app/settings/projection";
-import { autosaveFailed } from "../../state/design";
+import { autosaveFailed } from "../../app/document-session/store";
 import { t } from "../../i18n";
 import styles from "./StatusBar.module.css";
 

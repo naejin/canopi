@@ -4,7 +4,7 @@ import { useCanvasRenderer } from './useCanvasRenderer'
 import { t } from '../../i18n'
 import { locale, theme } from '../../app/settings/state'
 import { plantSpeciesColorDefaults } from '../../canvas/plant-species-color-defaults'
-import { currentDesign } from '../../state/design'
+import { currentDesign } from '../../app/document-session/store'
 import { useTimelinePlanningProjection } from '../../app/planning-projection'
 import { useTimelineCanvasWorkbench } from '../../app/timeline/canvas-workbench'
 import {

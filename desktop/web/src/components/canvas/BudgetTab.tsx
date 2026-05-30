@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
-import { currentDesign, designName } from '../../state/design'
+import { currentDesign, designName } from '../../app/document-session/store'
 import {
   clearPlanningHoveredTargets,
   clearPlanningSelectedTargetsForOrigin,

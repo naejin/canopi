@@ -1,5 +1,5 @@
 import { toISODate } from '../../canvas/timeline-math'
-import { currentDesign } from '../../state/design'
+import { currentDesign } from '../document-session/store'
 import type { PanelTarget, TimelineAction } from '../../types/design'
 import {
   clearPlanningHoveredTargets,

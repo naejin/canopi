@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { existsSync, readFileSync } from 'node:fs'
+import * as fs from 'node:fs'
+
+const { existsSync, readFileSync } = fs
+const fsWithDirectoryRead = fs as unknown as {
+  readdirSync(
+    path: URL,
+    options: { withFileTypes: true },
+  ): Array<{ name: string; isDirectory(): boolean }>
+}
 
 function readSource(path: string): string {
   return readFileSync(new URL(path, import.meta.url), 'utf8')
@@ -7,6 +15,19 @@ function readSource(path: string): string {
 
 function sourceExists(path: string): boolean {
   return existsSync(new URL(path, import.meta.url))
+}
+
+function sourceFilesUnder(path: string): string[] {
+  const entries = fsWithDirectoryRead.readdirSync(new URL(path, import.meta.url), { withFileTypes: true })
+  return entries.flatMap((entry) => {
+    const child = `${path.replace(/\/$/, '')}/${entry.name}`
+    if (entry.isDirectory()) return sourceFilesUnder(child)
+    return child
+  })
+}
+
+function isTypescriptSource(path: string): boolean {
+  return /\.(ts|tsx)$/.test(path) && !/\.test\.(ts|tsx)$/.test(path)
 }
 
 function importSpecifiers(source: string): string[] {
@@ -175,6 +196,20 @@ describe('frontend boundary sources', () => {
     expect(stateMachineSource).toContain('transitionDocument')
     expect(stateMachineSource).toContain('buildPersistedDesignSessionContent')
     expect(stateMachineSource).toContain('autosaveDesign')
+  })
+
+  it('keeps production Design Session state behind the store seam', () => {
+    const sourcePaths = [
+      '../app',
+      '../canvas',
+      '../components',
+      '../ipc',
+    ].flatMap(sourceFilesUnder).filter(isTypescriptSource)
+
+    for (const sourcePath of sourcePaths) {
+      if (sourcePath === '../app/document-session/store.ts') continue
+      expectNoImportsMatching(sourcePath, [/state\/design$/])
+    }
   })
 
   it('keeps Timeline Action workbench and drag edits behind app/timeline modules', () => {

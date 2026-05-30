@@ -8,17 +8,20 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 - `desktop/web/src/app/document-session/lifecycle.ts` owns canvas runtime attachment, resize observation, autosave timing, settings flush, runtime teardown, and canvas-session publication.
 - `desktop/web/src/app/document-session/state-machine.ts` owns explicit Design Session states and transition ordering: attached/ detached readiness, dirty checks, attached/detached replacement selection, queued loads, `zoomToFit()` for attached sessions, autosave execution, teardown snapshots, persistence disposal, and workflow installation.
 - `desktop/web/src/app/document-session/transition.ts` is the compatibility facade over the Design Session state machine for document actions and lifecycle callers.
+- `desktop/web/src/app/document-session/store.ts` is the public Design Session state seam for active Design identity, dirty baselines, pending loads, saved markers, autosave failure, and read-only reactive projections.
 - `desktop/web/src/app/document-session/persistence.ts` owns persisted Design content composition, attached/detached save snapshots, teardown snapshots, and persistence workflow disposal.
 - `desktop/web/src/app/document-session/workflows.ts` owns cross-domain workflow effects such as consortium sync.
 - `desktop/web/src/app/document/controller.ts` owns non-canvas document mutations through `mutateCurrentDesign()` and `updateDesignArray()`.
 - `desktop/web/src/app/document-session/use-canvas-document-session.ts` is a DOM-ref adapter for `CanvasPanel`; keep lifecycle ordering out of the hook.
-- `desktop/web/src/state/design.ts` is low-level document state. Treat it as internal state, not a feature action API.
+- `desktop/web/src/state/design.ts` is low-level Design Session store implementation. Production code should import `app/document-session/store.ts`, not this file, unless the store seam itself is being changed.
 
 ## Document Mutation Rules
 
 - No component may replace the active document directly.
 - No panel may call document replacement directly.
 - Destructive document flows must use the shared guard path: dirty check -> confirm -> replace.
+- Production reads of active Design identity and dirty state should use the read-only projections from `app/document-session/store.ts`.
+- Production writes to active Design identity, dirty baselines, pending loads, autosave failure, or canvas-clean bridge state must go through `app/document-session/store.ts`.
 - `transitionDocument()` is the replacement path for new/open/template/queued/mount-existing flows.
 - Callers request a Design transition; `transitionDocument()` decides whether an attached `CanvasDocumentSurface` is available or whether to apply a detached document-state transition.
 - Attached transitions hydrate the canvas session, show chrome, call `zoomToFit()`, clear history, and install consortium sync.

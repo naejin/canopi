@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from 'preact/hooks'
 import { useSignal, useSignalEffect } from '@preact/signals'
-import { currentDesign } from '../../state/design'
+import { currentDesign } from '../../app/document-session/store'
 import type { TimelineAction } from '../../types/design'
 import { clearTimelineSelectedPanelTargets } from '../../app/timeline/workbench'
 import { InteractiveTimeline } from './InteractiveTimeline'

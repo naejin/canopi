@@ -47,26 +47,18 @@ vi.mock("../app/document-session/workflows", () => ({
 import type { CanvasDocumentSurface, MountedCanvasRuntime } from "../canvas/runtime/runtime";
 import { setCurrentCanvasSession } from "../canvas/session";
 import {
-  beginEmptyDocumentSession,
-  autosaveDesignSession,
-  consumeQueuedDocumentLoad,
-  getDesignSessionState,
-  resetDesignSessionStateForTests,
-  transitionDocument,
+  createDesignSessionStateMachine,
+  type DesignSessionStateMachine,
   type DocumentTransitionLoadResult,
-} from "../app/document-session/transition";
+} from "../app/document-session/state-machine";
 import {
-  currentDesign,
-  designDirty,
-  designName,
-  designPath,
-  detachedCanvasDirty,
-  nonCanvasRevision,
-  pendingDesignPath,
-  pendingTemplateImport,
-  resetDirtyBaselines,
-} from "../state/design";
+  createMemoryDesignSessionStore,
+  type DesignSessionStore,
+} from "../app/document-session/store";
 import type { CanopiFile } from "../types/design";
+
+let store: DesignSessionStore;
+let machine: DesignSessionStateMachine;
 
 function makeFile(name: string): CanopiFile {
   return {
@@ -130,6 +122,19 @@ async function flushMicrotasks(): Promise<void> {
   await Promise.resolve();
 }
 
+function resetMachine({
+  file = makeFile("Current"),
+  path = "/designs/current.canopi",
+  name = "Current",
+}: {
+  file?: CanopiFile | null;
+  path?: string | null;
+  name?: string;
+} = {}): void {
+  store = createMemoryDesignSessionStore({ file, path, name });
+  machine = createDesignSessionStateMachine({ store });
+}
+
 beforeEach(() => {
   setCurrentCanvasSession(null);
   mocks.installConsortiumSync.mockClear();
@@ -141,24 +146,16 @@ beforeEach(() => {
   mocks.saveDesign.mockResolvedValue("/designs/current.canopi");
   mocks.saveDesignAs.mockReset();
 
-  currentDesign.value = makeFile("Current");
-  designName.value = "Current";
-  designPath.value = "/designs/current.canopi";
-  pendingDesignPath.value = null;
-  pendingTemplateImport.value = null;
-  resetDirtyBaselines();
-  nonCanvasRevision.value = 0;
-  detachedCanvasDirty.value = false;
-  resetDesignSessionStateForTests();
+  resetMachine();
 });
 
 describe("document session transition", () => {
   it("applies a discarded open-path replacement through the full post-load sequence", async () => {
     const session = makeSession();
-    nonCanvasRevision.value = 1;
+    store.markDocumentDirty();
     mocks.message.mockResolvedValue("Don't Save");
 
-    const result = await transitionDocument({
+    const result = await machine.transitionDocument({
       source: "open-path",
       dirtyGuard: "confirm",
       session,
@@ -173,10 +170,10 @@ describe("document session transition", () => {
     expect(mocks.saveDesign).not.toHaveBeenCalled();
     expect(session.replaceDocument).toHaveBeenCalledWith(expect.objectContaining({ name: "Next", extra: {} }));
     expect(session.loadDocument).not.toHaveBeenCalled();
-    expect(currentDesign.value?.name).toBe("Next");
-    expect(designName.value).toBe("Next");
-    expect(designPath.value).toBe("/designs/next.canopi");
-    expect(designDirty.value).toBe(false);
+    expect(store.readCurrentDesign()?.name).toBe("Next");
+    expect(store.readDesignName()).toBe("Next");
+    expect(store.readDesignPath()).toBe("/designs/next.canopi");
+    expect(store.designDirty.value).toBe(false);
     expect(session.clearHistory).toHaveBeenCalledTimes(1);
     expect(session.showCanvasChrome).toHaveBeenCalledTimes(1);
     expect(session.zoomToFit).toHaveBeenCalledTimes(1);
@@ -187,14 +184,14 @@ describe("document session transition", () => {
     const session = makeSession();
     const pending = deferred<DocumentTransitionLoadResult>();
 
-    const transition = transitionDocument({
+    const transition = machine.transitionDocument({
       source: "open-path",
       dirtyGuard: "skip",
       session,
       load: () => pending.promise,
     });
 
-    expect(getDesignSessionState()).toMatchObject({
+    expect(machine.getState()).toMatchObject({
       status: "loading",
       attached: true,
       documentLoaded: false,
@@ -209,7 +206,7 @@ describe("document session transition", () => {
 
     await transition;
 
-    expect(getDesignSessionState()).toMatchObject({
+    expect(machine.getState()).toMatchObject({
       status: "attached-ready",
       attached: true,
       documentLoaded: true,
@@ -219,10 +216,10 @@ describe("document session transition", () => {
 
   it("saves a dirty current document before applying the replacement", async () => {
     const session = makeSession();
-    nonCanvasRevision.value = 1;
+    store.markDocumentDirty();
     mocks.message.mockResolvedValue("Save");
 
-    const result = await transitionDocument({
+    const result = await machine.transitionDocument({
       source: "open-path",
       dirtyGuard: "confirm",
       session,
@@ -239,12 +236,12 @@ describe("document session transition", () => {
       expect.objectContaining({ name: "Current" }),
     );
     expect(session.markSaved).toHaveBeenCalledTimes(1);
-    expect(currentDesign.value?.name).toBe("Next");
+    expect(store.readCurrentDesign()?.name).toBe("Next");
   });
 
   it("cancels before loading and preserves dirty baselines", async () => {
     const session = makeSession();
-    nonCanvasRevision.value = 1;
+    store.markDocumentDirty();
     mocks.message.mockResolvedValue("Cancel");
     const load = vi.fn(async () => ({
       file: makeFile("Next"),
@@ -252,7 +249,7 @@ describe("document session transition", () => {
       name: "Next",
     }));
 
-    const result = await transitionDocument({
+    const result = await machine.transitionDocument({
       source: "open-path",
       dirtyGuard: "confirm",
       session,
@@ -262,15 +259,15 @@ describe("document session transition", () => {
     expect(result).toEqual({ status: "cancelled", documentLoaded: false });
     expect(load).not.toHaveBeenCalled();
     expect(session.replaceDocument).not.toHaveBeenCalled();
-    expect(currentDesign.value?.name).toBe("Current");
-    expect(designDirty.value).toBe(true);
+    expect(store.readCurrentDesign()?.name).toBe("Current");
+    expect(store.designDirty.value).toBe(true);
   });
 
   it("cancels after an async load without replacing state or dirty baselines", async () => {
     const session = makeSession();
-    nonCanvasRevision.value = 1;
+    store.markDocumentDirty();
 
-    const result = await transitionDocument({
+    const result = await machine.transitionDocument({
       source: "open-path",
       dirtyGuard: "skip",
       session,
@@ -284,9 +281,9 @@ describe("document session transition", () => {
 
     expect(result).toEqual({ status: "cancelled", documentLoaded: false });
     expect(session.replaceDocument).not.toHaveBeenCalled();
-    expect(currentDesign.value?.name).toBe("Current");
-    expect(designDirty.value).toBe(true);
-    expect(getDesignSessionState()).toMatchObject({
+    expect(store.readCurrentDesign()?.name).toBe("Current");
+    expect(store.designDirty.value).toBe(true);
+    expect(machine.getState()).toMatchObject({
       status: "attached-ready",
       attached: true,
       operation: null,
@@ -297,7 +294,7 @@ describe("document session transition", () => {
     const session = makeSession();
     const error = new Error("Disk read failed");
 
-    const result = await transitionDocument({
+    const result = await machine.transitionDocument({
       source: "open-path",
       dirtyGuard: "skip",
       session,
@@ -311,7 +308,7 @@ describe("document session transition", () => {
       documentLoaded: false,
       error,
     });
-    expect(getDesignSessionState()).toMatchObject({
+    expect(machine.getState()).toMatchObject({
       status: "failed",
       attached: true,
       documentLoaded: false,
@@ -324,16 +321,16 @@ describe("document session transition", () => {
     const session = makeSession();
     const pending = deferred<void>();
     const logError = vi.fn();
-    nonCanvasRevision.value = 1;
+    store.markDocumentDirty();
     mocks.autosaveDesign.mockReturnValue(pending.promise);
 
-    const autosave = autosaveDesignSession({
+    const autosave = machine.autosaveDesignSession({
       session,
       runtimeInitialized: true,
       logError,
     });
 
-    expect(getDesignSessionState()).toMatchObject({
+    expect(machine.getState()).toMatchObject({
       status: "autosaving",
       attached: true,
       operation: "autosave",
@@ -347,7 +344,7 @@ describe("document session transition", () => {
       "/designs/current.canopi",
     );
     expect(logError).not.toHaveBeenCalled();
-    expect(getDesignSessionState()).toMatchObject({
+    expect(machine.getState()).toMatchObject({
       status: "attached-ready",
       attached: true,
       operation: null,
@@ -357,7 +354,7 @@ describe("document session transition", () => {
   it("applies templates as unsaved documents with their requested display name", async () => {
     const session = makeSession();
 
-    const result = await transitionDocument({
+    const result = await machine.transitionDocument({
       source: "template",
       dirtyGuard: "skip",
       session,
@@ -369,17 +366,17 @@ describe("document session transition", () => {
     });
 
     expect(result.status).toBe("applied");
-    expect(currentDesign.value?.name).toBe("Downloaded Template");
-    expect(designName.value).toBe("Forest Edge");
-    expect(designPath.value).toBe(null);
-    expect(designDirty.value).toBe(false);
+    expect(store.readCurrentDesign()?.name).toBe("Downloaded Template");
+    expect(store.readDesignName()).toBe("Forest Edge");
+    expect(store.readDesignPath()).toBe(null);
+    expect(store.designDirty.value).toBe(false);
   });
 
   it("applies detached replacements without requiring a canvas session", async () => {
-    nonCanvasRevision.value = 1;
+    store.markDocumentDirty();
     mocks.message.mockResolvedValue("Don't Save");
 
-    const result = await transitionDocument({
+    const result = await machine.transitionDocument({
       source: "open-path",
       dirtyGuard: "confirm",
       session: null,
@@ -391,18 +388,18 @@ describe("document session transition", () => {
     });
 
     expect(result).toEqual({ status: "applied", documentLoaded: false });
-    expect(currentDesign.value?.name).toBe("Detached Next");
-    expect(designName.value).toBe("Detached Next");
-    expect(designPath.value).toBe("/designs/detached-next.canopi");
-    expect(designDirty.value).toBe(false);
+    expect(store.readCurrentDesign()?.name).toBe("Detached Next");
+    expect(store.readDesignName()).toBe("Detached Next");
+    expect(store.readDesignPath()).toBe("/designs/detached-next.canopi");
+    expect(store.designDirty.value).toBe(false);
     expect(mocks.installConsortiumSync).toHaveBeenCalledTimes(1);
   });
 
   it("saves dirty detached documents before applying a transition", async () => {
-    nonCanvasRevision.value = 1;
+    store.markDocumentDirty();
     mocks.message.mockResolvedValue("Save");
 
-    const result = await transitionDocument({
+    const result = await machine.transitionDocument({
       source: "open-path",
       dirtyGuard: "confirm",
       session: null,
@@ -418,16 +415,16 @@ describe("document session transition", () => {
       "/designs/current.canopi",
       expect.objectContaining({ name: "Current" }),
     );
-    expect(currentDesign.value?.name).toBe("Detached Next");
+    expect(store.readCurrentDesign()?.name).toBe("Detached Next");
   });
 
   it("does not use the current canvas session when a transition is explicitly detached", async () => {
     const currentSession = makeSession();
     setCurrentCanvasSession(currentSession as unknown as MountedCanvasRuntime);
-    nonCanvasRevision.value = 1;
+    store.markDocumentDirty();
     mocks.message.mockResolvedValue("Save");
 
-    const result = await transitionDocument({
+    const result = await machine.transitionDocument({
       source: "open-path",
       dirtyGuard: "confirm",
       session: null,
@@ -448,8 +445,7 @@ describe("document session transition", () => {
   });
 
   it("queues deferrable detached transitions when no current design is loaded", async () => {
-    currentDesign.value = null;
-    designPath.value = null;
+    resetMachine({ file: null, path: null, name: "Untitled" });
     const defer = vi.fn();
     const load = vi.fn(async () => ({
       file: makeFile("Queued"),
@@ -457,7 +453,7 @@ describe("document session transition", () => {
       name: "Queued",
     }));
 
-    const result = await transitionDocument({
+    const result = await machine.transitionDocument({
       source: "open-path",
       dirtyGuard: "confirm",
       session: null,
@@ -473,25 +469,25 @@ describe("document session transition", () => {
 
   it("loads an existing mounted document without replacing canonical document state", async () => {
     const session = makeSession();
-    nonCanvasRevision.value = 1;
-    const mounted = currentDesign.value!;
+    store.markDocumentDirty();
+    const mounted = store.readCurrentDesign()!;
 
-    const result = await transitionDocument({
+    const result = await machine.transitionDocument({
       source: "mount-existing",
       dirtyGuard: "skip",
       session,
       load: async () => ({
         file: mounted,
-        path: designPath.value,
-        name: designName.value,
+        path: store.readDesignPath(),
+        name: store.readDesignName(),
       }),
     });
 
     expect(result).toEqual({ status: "applied", documentLoaded: true });
     expect(session.loadDocument).toHaveBeenCalledWith(mounted);
     expect(session.replaceDocument).not.toHaveBeenCalled();
-    expect(currentDesign.value).toBe(mounted);
-    expect(designDirty.value).toBe(true);
+    expect(store.readCurrentDesign()).toBe(mounted);
+    expect(store.designDirty.value).toBe(true);
     expect(session.clearHistory).toHaveBeenCalledTimes(1);
     expect(session.zoomToFit).toHaveBeenCalledTimes(1);
   });
@@ -499,17 +495,17 @@ describe("document session transition", () => {
   it("consumes queued path loads, clears the queue, and reports the transition result", async () => {
     const session = makeSession();
     const results: Array<{ status: string; documentLoaded: boolean }> = [];
-    pendingDesignPath.value = "/designs/queued.canopi";
+    store.setPendingDesignPath("/designs/queued.canopi");
     mocks.loadDesign.mockResolvedValue(makeFile("Queued"));
 
-    const cancel = consumeQueuedDocumentLoad(session, {
+    const cancel = machine.consumeQueuedDocumentLoad(session, {
       onResult: (result) => results.push({ status: result.status, documentLoaded: result.documentLoaded }),
     });
     await flushMicrotasks();
 
     expect(mocks.loadDesign).toHaveBeenCalledWith("/designs/queued.canopi");
     expect(session.replaceDocument).toHaveBeenCalledWith(expect.objectContaining({ name: "Queued" }));
-    expect(pendingDesignPath.value).toBe(null);
+    expect(store.readPendingDesignPath()).toBe(null);
     expect(results).toEqual([{ status: "applied", documentLoaded: true }]);
     cancel();
   });
@@ -517,15 +513,15 @@ describe("document session transition", () => {
   it("keeps queued failures pending and surfaces a retryable error", async () => {
     const session = makeSession();
     const queued = deferred<CanopiFile>();
-    pendingDesignPath.value = "/designs/broken.canopi";
+    store.setPendingDesignPath("/designs/broken.canopi");
     mocks.loadDesign.mockReturnValue(queued.promise);
 
-    consumeQueuedDocumentLoad(session);
+    machine.consumeQueuedDocumentLoad(session);
     queued.reject(new Error("Disk read failed"));
     await flushMicrotasks();
 
     expect(session.replaceDocument).not.toHaveBeenCalled();
-    expect(pendingDesignPath.value).toBe("/designs/broken.canopi");
+    expect(store.readPendingDesignPath()).toBe("/designs/broken.canopi");
     expect(mocks.message).toHaveBeenCalledWith(
       expect.stringContaining("Failed to open broken"),
       expect.objectContaining({ title: "Open failed", kind: "error" }),
@@ -535,22 +531,22 @@ describe("document session transition", () => {
   it("keeps queued loads pending when teardown cancels them before apply", async () => {
     const session = makeSession();
     const queued = deferred<CanopiFile>();
-    pendingDesignPath.value = "/designs/queued.canopi";
+    store.setPendingDesignPath("/designs/queued.canopi");
     mocks.loadDesign.mockReturnValue(queued.promise);
 
-    const cancel = consumeQueuedDocumentLoad(session);
+    const cancel = machine.consumeQueuedDocumentLoad(session);
     cancel();
     queued.resolve(makeFile("Queued"));
     await flushMicrotasks();
 
     expect(session.replaceDocument).not.toHaveBeenCalled();
-    expect(pendingDesignPath.value).toBe("/designs/queued.canopi");
+    expect(store.readPendingDesignPath()).toBe("/designs/queued.canopi");
   });
 
   it("starts an empty session by installing workflows and hiding canvas chrome", () => {
     const session = makeSession();
 
-    beginEmptyDocumentSession(session);
+    machine.beginEmptyDocumentSession(session);
 
     expect(mocks.installConsortiumSync).toHaveBeenCalledTimes(1);
     expect(session.hideCanvasChrome).toHaveBeenCalledTimes(1);

@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { save, open } from '@tauri-apps/plugin-dialog'
 import type { CanopiFile, DesignSummary, AutosaveEntry } from '../types/design'
-import { designPath } from '../state/design'
+import { designPath } from '../app/document-session/store'
 
 // ---------------------------------------------------------------------------
 // File dialogs — run in the frontend (JS) to avoid GTK deadlock on Linux.

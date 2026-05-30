@@ -1,5 +1,5 @@
 import type { CanopiFile } from '../../types/design'
-import { currentDesign } from '../../state/design'
+import { currentDesign } from '../document-session/store'
 import { markDocumentDirty, updateDesignArray } from './controller'
 
 export type DocumentArrayEditKey = 'timeline' | 'consortiums'

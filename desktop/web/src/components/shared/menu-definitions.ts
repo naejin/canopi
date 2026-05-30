@@ -7,7 +7,7 @@ import {
   openDesign,
   newDesignAction,
 } from '../../app/document-session/actions'
-import { currentDesign, designDirty } from '../../state/design'
+import { currentDesign, designDirty } from '../../app/document-session/store'
 import { FILE_SHORTCUTS, EDIT_SHORTCUTS, VIEW_SHORTCUTS } from '../../shortcuts/definitions'
 
 export interface MenuAction {

@@ -1,7 +1,7 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { message } from '@tauri-apps/plugin-dialog'
 import { saveCurrentDesign } from "../document-session/actions";
-import { designDirty } from "../../state/design";
+import { designDirty } from "../document-session/store";
 import { t } from '../../i18n'
 import { flushSettingsProjection } from "../settings/projection";
 

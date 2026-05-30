@@ -1,6 +1,5 @@
 import type { CanvasDocumentSurface } from "../../canvas/runtime/runtime";
 import * as designIpc from "../../ipc/design";
-import { pendingDesignPath, pendingTemplateImport } from "../../state/design";
 import {
   transitionDocument,
   type DocumentTransitionResult,
@@ -8,6 +7,10 @@ import {
   saveCurrentDesign,
   saveAsCurrentDesign,
 } from "./transition";
+import {
+  setPendingDesignPath,
+  setPendingTemplateImport,
+} from "./store";
 
 interface DocumentLoadOptions {
   session?: CanvasDocumentSurface | null;
@@ -51,7 +54,7 @@ export async function openDesignFromPath(
     },
     isCancelled: options.isCancelled,
     deferWhenDetachedAndEmpty: () => {
-      pendingDesignPath.value = path;
+      setPendingDesignPath(path);
     },
   });
 
@@ -75,7 +78,7 @@ export async function openDesignAsTemplate(
     }),
     isCancelled: options.isCancelled,
     deferWhenDetachedAndEmpty: () => {
-      pendingTemplateImport.value = { path, name };
+      setPendingTemplateImport({ path, name });
     },
   });
 
