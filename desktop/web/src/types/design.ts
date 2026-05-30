@@ -29,6 +29,5 @@ export interface CanopiFile extends Omit<
   timeline: TimelineAction[]
   budget: BudgetItem[]
   plants: PlacedPlant[]
-  budget_currency?: string
   extra?: Record<string, unknown>
 }

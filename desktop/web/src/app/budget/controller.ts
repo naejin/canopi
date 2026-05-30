@@ -1,6 +1,7 @@
 import type { BudgetItem } from '../../types/design'
 import { getBudgetSpeciesTarget, targets, speciesBudgetTarget } from '../../target'
 import { mutateCurrentDesign } from '../document/controller'
+import { DEFAULT_BUDGET_CURRENCY } from '../contracts/document'
 
 export function setBudgetCurrency(currency: string): void {
   mutateCurrentDesign((design) => {
@@ -17,7 +18,7 @@ export function setPlantBudgetPrice(canonicalName: string, unitCost: number): vo
   const sanitized = Math.max(0, isFinite(unitCost) ? unitCost : 0)
   const target = speciesBudgetTarget(canonicalName)
   mutateCurrentDesign((design) => {
-    const currency = design.budget_currency ?? 'EUR'
+    const currency = design.budget_currency ?? DEFAULT_BUDGET_CURRENCY
     const budget = design.budget
     const index = budget.findIndex((item) => {
       const itemTarget = getBudgetSpeciesTarget(item)

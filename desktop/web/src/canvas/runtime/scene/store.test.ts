@@ -68,6 +68,7 @@ describe('scene store', () => {
       ],
       timeline: [{ id: 't1', action_type: 'planting', description: 'Plant oak', start_date: '2026-04-01', end_date: '2026-04-02', recurrence: null, targets: [speciesTarget('Quercus robur')], depends_on: [], completed: false, order: 0 }],
       budget: [{ target: speciesBudgetTarget('Quercus robur'), category: 'plants', description: 'Quercus robur', quantity: 1, unit_cost: 25, currency: 'EUR' }],
+      budget_currency: 'EUR',
       created_at: '2026-04-01T10:00:00.000Z',
       updated_at: '2026-04-01T12:00:00.000Z',
       extra: {
@@ -178,6 +179,7 @@ describe('scene store', () => {
       groups: [],
       timeline: [],
       budget: [],
+      budget_currency: 'EUR',
       created_at: '2026-04-01T10:00:00.000Z',
       updated_at: '2026-04-01T12:00:00.000Z',
       extra: {},

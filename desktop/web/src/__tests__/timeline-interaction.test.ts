@@ -59,6 +59,7 @@ function makeDesign(action: TimelineAction): CanopiFile {
     groups: [],
     timeline: [action],
     budget: [],
+    budget_currency: 'EUR',
     extra: {},
     created_at: '2026-04-08T00:00:00.000Z',
     updated_at: '2026-04-08T00:00:00.000Z',

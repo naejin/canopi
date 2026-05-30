@@ -15,6 +15,7 @@ import {
 } from '../../app/planning-projection'
 import { setPlantBudgetPrice, setBudgetCurrency } from '../../app/budget/controller'
 import { exportBudgetCsv, isBudgetExportCancelled } from '../../app/budget/export'
+import { DEFAULT_BUDGET_CURRENCY } from '../../app/contracts/document'
 import { Dropdown } from '../shared/Dropdown'
 import { CURRENCY_ITEMS } from './budget-currencies'
 import { formatCurrency } from './budget-helpers'
@@ -33,7 +34,7 @@ export function BudgetTab() {
 
   const design = currentDesign.value
   const budget = design?.budget ?? EMPTY_BUDGET
-  const currency = design?.budget_currency ?? 'EUR'
+  const currency = design?.budget_currency ?? DEFAULT_BUDGET_CURRENCY
   const budgetSelection = readPlanningSelection('budget')
   const activeLocale = locale.value
   const projection = useBudgetPlanningProjection({

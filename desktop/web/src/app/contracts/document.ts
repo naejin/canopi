@@ -1,8 +1,11 @@
-import { KNOWN_CANOPI_KEYS } from '../../generated/known-canopi-keys'
+import {
+  DEFAULT_BUDGET_CURRENCY,
+  DOCUMENT_FILE_FIELD_OWNERS as GENERATED_DOCUMENT_FILE_FIELD_OWNERS,
+  KNOWN_CANOPI_KEYS,
+} from '../../generated/known-canopi-keys'
 import type { CanopiFile } from '../../types/design'
 
-type KnownCanopiKey = (typeof KNOWN_CANOPI_KEYS)[number]
-type DocumentFileFieldOwner = 'document' | 'scene' | 'shared'
+export { DEFAULT_BUDGET_CURRENCY, KNOWN_CANOPI_KEYS }
 
 export interface DocumentFileSaveMetadata {
   name: string
@@ -17,28 +20,9 @@ export interface ComposeDocumentForSaveOptions {
   canvas: CanopiFile
 }
 
-export const DOCUMENT_FILE_FIELD_OWNERS = {
-  version: 'scene',
-  name: 'document',
-  description: 'document',
-  location: 'document',
-  north_bearing_deg: 'document',
-  plant_species_colors: 'scene',
-  layers: 'scene',
-  plants: 'scene',
-  zones: 'scene',
-  annotations: 'scene',
-  consortiums: 'document',
-  groups: 'scene',
-  timeline: 'document',
-  budget: 'document',
-  budget_currency: 'document',
-  created_at: 'document',
-  updated_at: 'scene',
-  extra: 'shared',
-} as const satisfies Record<KnownCanopiKey, DocumentFileFieldOwner>
+export const DOCUMENT_FILE_FIELD_OWNERS = GENERATED_DOCUMENT_FILE_FIELD_OWNERS
 
-export const DOCUMENT_FILE_KNOWN_KEYS = Object.keys(DOCUMENT_FILE_FIELD_OWNERS) as KnownCanopiKey[]
+export const DOCUMENT_FILE_KNOWN_KEYS = KNOWN_CANOPI_KEYS
 
 const KNOWN_CANOPI_KEY_SET = new Set<string>(DOCUMENT_FILE_KNOWN_KEYS)
 
@@ -95,7 +79,7 @@ export function composeDocumentForSave({
     zones: normalizedCanvas.zones,
     annotations: normalizedCanvas.annotations,
     groups: normalizedCanvas.groups,
-    budget_currency: normalizedDocument.budget_currency ?? 'EUR',
+    budget_currency: normalizedDocument.budget_currency ?? DEFAULT_BUDGET_CURRENCY,
     updated_at: normalizedCanvas.updated_at,
     extra: composeDocumentExtra(normalizedDocument.extra, normalizedCanvas.extra),
   }
@@ -117,7 +101,7 @@ function normalizeDocumentKnownFields(file: CanopiFile): CanopiFile {
     groups: file.groups ?? [],
     timeline: file.timeline ?? [],
     budget: file.budget ?? [],
-    budget_currency: file.budget_currency,
+    budget_currency: file.budget_currency ?? DEFAULT_BUDGET_CURRENCY,
     created_at: file.created_at,
     updated_at: file.updated_at,
     extra: normalizePersistedExtra(file.extra),

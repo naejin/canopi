@@ -46,6 +46,7 @@ function design(overrides: Partial<CanopiFile> = {}): CanopiFile {
     groups: [],
     timeline: [timelineAction('a')],
     budget: [],
+    budget_currency: 'EUR',
     created_at: '',
     updated_at: '',
     extra: {},

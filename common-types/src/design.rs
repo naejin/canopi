@@ -1,6 +1,106 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
+pub const DEFAULT_BUDGET_CURRENCY: &str = "EUR";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DesignFileFieldOwner {
+    Document,
+    Scene,
+    Shared,
+}
+
+impl DesignFileFieldOwner {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Document => "document",
+            Self::Scene => "scene",
+            Self::Shared => "shared",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DesignFileField {
+    pub key: &'static str,
+    pub owner: DesignFileFieldOwner,
+}
+
+pub const DESIGN_FILE_FIELDS: &[DesignFileField] = &[
+    DesignFileField {
+        key: "version",
+        owner: DesignFileFieldOwner::Scene,
+    },
+    DesignFileField {
+        key: "name",
+        owner: DesignFileFieldOwner::Document,
+    },
+    DesignFileField {
+        key: "description",
+        owner: DesignFileFieldOwner::Document,
+    },
+    DesignFileField {
+        key: "location",
+        owner: DesignFileFieldOwner::Document,
+    },
+    DesignFileField {
+        key: "north_bearing_deg",
+        owner: DesignFileFieldOwner::Document,
+    },
+    DesignFileField {
+        key: "plant_species_colors",
+        owner: DesignFileFieldOwner::Scene,
+    },
+    DesignFileField {
+        key: "layers",
+        owner: DesignFileFieldOwner::Scene,
+    },
+    DesignFileField {
+        key: "plants",
+        owner: DesignFileFieldOwner::Scene,
+    },
+    DesignFileField {
+        key: "zones",
+        owner: DesignFileFieldOwner::Scene,
+    },
+    DesignFileField {
+        key: "annotations",
+        owner: DesignFileFieldOwner::Scene,
+    },
+    DesignFileField {
+        key: "consortiums",
+        owner: DesignFileFieldOwner::Document,
+    },
+    DesignFileField {
+        key: "groups",
+        owner: DesignFileFieldOwner::Scene,
+    },
+    DesignFileField {
+        key: "timeline",
+        owner: DesignFileFieldOwner::Document,
+    },
+    DesignFileField {
+        key: "budget",
+        owner: DesignFileFieldOwner::Document,
+    },
+    DesignFileField {
+        key: "budget_currency",
+        owner: DesignFileFieldOwner::Document,
+    },
+    DesignFileField {
+        key: "created_at",
+        owner: DesignFileFieldOwner::Document,
+    },
+    DesignFileField {
+        key: "updated_at",
+        owner: DesignFileFieldOwner::Scene,
+    },
+    DesignFileField {
+        key: "extra",
+        owner: DesignFileFieldOwner::Shared,
+    },
+];
+
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct CanopiFile {
     pub version: u32,
@@ -22,6 +122,8 @@ pub struct CanopiFile {
     pub timeline: Vec<TimelineAction>,
     #[serde(default)]
     pub budget: Vec<BudgetItem>,
+    #[serde(default = "default_budget_currency")]
+    pub budget_currency: String,
     pub created_at: String,
     pub updated_at: String,
     /// Preserves unknown fields for forward compatibility — round-trips fields
@@ -155,6 +257,10 @@ fn default_manual_target() -> PanelTarget {
 
 fn default_manual_targets() -> Vec<PanelTarget> {
     vec![PanelTarget::Manual]
+}
+
+pub fn default_budget_currency() -> String {
+    DEFAULT_BUDGET_CURRENCY.to_owned()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]

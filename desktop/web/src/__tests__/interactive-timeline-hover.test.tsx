@@ -45,6 +45,7 @@ function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
     groups: [],
     timeline: [],
     budget: [],
+    budget_currency: 'EUR',
     extra: {},
     created_at: '2026-04-08T00:00:00.000Z',
     updated_at: '2026-04-08T00:00:00.000Z',

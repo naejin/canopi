@@ -6,6 +6,7 @@ import type {
   PlacedPlant,
   Zone,
 } from '../../../types/design'
+import { DEFAULT_BUDGET_CURRENCY } from '../../../generated/known-canopi-keys'
 import type {
   SceneAnnotationEntity,
   SceneGuide,
@@ -54,6 +55,7 @@ export function serializeScenePersistedState(
     groups: state.groups.map(serializeGroupEntity),
     timeline: [],
     budget: [],
+    budget_currency: DEFAULT_BUDGET_CURRENCY,
     created_at: now.toISOString(),
     updated_at: now.toISOString(),
     extra: state.guides.length > 0 ? { guides: state.guides.map(cloneGuide) } : {},

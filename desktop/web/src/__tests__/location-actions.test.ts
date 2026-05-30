@@ -24,6 +24,7 @@ beforeEach(() => {
     groups: [],
     timeline: [],
     budget: [],
+    budget_currency: 'EUR',
     created_at: '',
     updated_at: '',
     extra: {},

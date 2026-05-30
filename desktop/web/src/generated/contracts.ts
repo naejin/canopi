@@ -41,6 +41,7 @@ export type CanopiFile = {
 	groups?: ObjectGroup[],
 	timeline?: TimelineAction[],
 	budget?: BudgetItem[],
+	budget_currency: string,
 	created_at: string,
 	updated_at: string,
 };

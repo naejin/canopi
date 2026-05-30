@@ -47,8 +47,9 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 ## Adding Document Fields
 
 - Add document-level fields to the shared `CanopiFile` contract.
+- Keep `common-types/src/design.rs` `DESIGN_FILE_FIELDS` aligned with the shared contract. This list generates frontend known keys and document/scene/shared field ownership metadata.
 - Regenerate `desktop/web/src/generated/contracts.ts` and `known-canopi-keys.ts`.
-- Keep `desktop/web/src/app/contracts/document.ts` aligned.
+- `desktop/web/src/app/contracts/document.ts` consumes generated field ownership metadata; do not hand-maintain a parallel owner map there.
 - Add save passthrough in the document-session/persistence composition path.
 - Rust `#[serde(flatten)] extra` round-trips unknown keys automatically, so Rust struct changes are only needed when backend logic needs the field.
 - For new required array fields, add `#[serde(default)]` in Rust, make the TS field required, add an empty placeholder in the scene codec, and update test fixtures.

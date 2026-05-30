@@ -76,6 +76,7 @@ const FIXTURE: CanopiFile = {
   consortiums: [],
   timeline: [],
   budget: [],
+  budget_currency: 'EUR',
   created_at: '2026-01-15T10:30:00.000Z',
   updated_at: '2026-02-20T14:45:00.000Z',
   extra: { guides: [{ id: 'guide-1', axis: 'h', position: 42 }], future_feature: { nested: true, count: 42 } },

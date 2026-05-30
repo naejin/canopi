@@ -1,4 +1,4 @@
-use common_types::design::{CanopiFile, Layer};
+use common_types::design::{CanopiFile, DEFAULT_BUDGET_CURRENCY, Layer};
 use std::path::Path;
 
 /// The current file-format version this build produces and migrates to.
@@ -362,6 +362,7 @@ pub fn create_default() -> CanopiFile {
         groups: Vec::new(),
         timeline: Vec::new(),
         budget: Vec::new(),
+        budget_currency: DEFAULT_BUDGET_CURRENCY.to_owned(),
         created_at: now.clone(),
         updated_at: now,
         extra: std::collections::HashMap::new(),
@@ -714,19 +715,24 @@ mod tests {
     }
 
     #[test]
-    fn test_budget_currency_round_trips_via_serde_flatten() {
+    fn test_budget_currency_is_a_named_defaulted_field() {
         use serde_json::json;
 
-        // budget_currency is not a named Rust field, so #[serde(flatten)] absorbs it into extra
         let mut value = serde_json::to_value(create_default()).expect("serialize");
         value["budget_currency"] = json!("USD");
 
         let loaded: CanopiFile = serde_json::from_value(value).expect("deserialize");
-        assert_eq!(
-            loaded.extra.get("budget_currency").and_then(|v| v.as_str()),
-            Some("USD"),
-            "budget_currency should survive via serde flatten extra"
-        );
+        assert_eq!(loaded.budget_currency, "USD");
+        assert!(!loaded.extra.contains_key("budget_currency"));
+
+        let mut legacy_value = serde_json::to_value(create_default()).expect("serialize");
+        legacy_value
+            .as_object_mut()
+            .expect("default design serializes to object")
+            .remove("budget_currency");
+
+        let legacy: CanopiFile = serde_json::from_value(legacy_value).expect("deserialize legacy");
+        assert_eq!(legacy.budget_currency, DEFAULT_BUDGET_CURRENCY);
     }
 
     #[test]
