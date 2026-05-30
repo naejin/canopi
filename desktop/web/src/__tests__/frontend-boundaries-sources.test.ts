@@ -232,6 +232,15 @@ describe('frontend boundary sources', () => {
     const timelineSource = readSource('../components/canvas/InteractiveTimeline.tsx')
     const consortiumSource = readSource('../components/canvas/ConsortiumChart.tsx')
     const runtimeSource = readSource('../app/planning-projection/runtime.ts')
+    const budgetWorkbenchSource = readSource('../app/budget/workbench.ts')
+    const budgetExportSource = readSource('../app/budget/export.ts')
+
+    expect(budgetSource).toContain('app/budget/workbench')
+    expect(budgetSource).not.toContain('app/planning-projection')
+    expect(budgetSource).not.toContain('app/budget/controller')
+    expect(budgetSource).not.toContain('app/budget/export')
+    expect(budgetWorkbenchSource).toContain('../planning-projection')
+    expect(budgetExportSource).not.toContain('components/canvas')
 
     for (const source of [budgetSource, timelineSource, consortiumSource]) {
       expect(source).not.toContain('runtime-mirror-state')

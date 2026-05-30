@@ -1,6 +1,6 @@
 const _formatterCache = new Map<string, Intl.NumberFormat>()
 
-export function formatCurrency(amount: number, currency: string, locale?: string): string {
+export function formatBudgetCurrency(amount: number, currency: string, locale?: string): string {
   try {
     const key = locale ? `${locale}:${currency}` : currency
     let formatter = _formatterCache.get(key)
@@ -19,8 +19,7 @@ export function formatCurrency(amount: number, currency: string, locale?: string
   }
 }
 
-export function escapeCsvField(value: string): string {
-  // Prevent spreadsheet formula injection (OWASP CSV injection)
+export function escapeBudgetCsvField(value: string): string {
   const sanitized = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value
   if (sanitized.includes(',') || sanitized.includes('"') || sanitized.includes('\n')) {
     return `"${sanitized.replace(/"/g, '""')}"`

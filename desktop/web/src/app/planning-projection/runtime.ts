@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'preact/hooks'
+import { useMemo } from 'preact/hooks'
 import { plantSpeciesColorDefaults } from '../../canvas/plant-species-color-defaults'
 import { plantNamesRevision, sceneEntityRevision } from '../../canvas/runtime-mirror-state'
 import { currentCanvasQuerySurface } from '../../canvas/session'
@@ -6,19 +6,9 @@ import { locale } from '../settings/state'
 import { DEFAULT_BUDGET_CURRENCY } from '../contracts/document'
 import { currentDesign, designName } from '../document-session/store'
 import type { BudgetItem, Consortium, PlacedPlant, TimelineAction } from '../../types/design'
-import { buildBudgetPlanningProjection, type BudgetPlanningProjection, type BudgetPlanningRow } from './budget'
+import { buildBudgetPlanningProjection, type BudgetPlanningProjection } from './budget'
 import { buildConsortiumPlanningProjection, type ConsortiumPlanningProjection } from './consortium'
 import { buildTimelinePlanningProjection, type TimelinePlanningProjection } from './timeline'
-import {
-  clearPlanningHoveredTargets,
-  clearPlanningSelectedTargetsForOrigin,
-  planningTargetsSelected,
-  prunePlanningSelectionForOrigin,
-  readPlanningSelection,
-  setPlanningHoveredTargets,
-  setPlanningSelectedTargets,
-  type PlanningSelectionSnapshot,
-} from './target-presentation'
 
 const EMPTY_PLANTS: readonly PlacedPlant[] = []
 const EMPTY_NAMES: ReadonlyMap<string, string | null> = new Map()
@@ -36,11 +26,6 @@ export interface BudgetPlanningSurface {
   readonly currency: string
   readonly designName: string
   readonly activeLocale: string
-  readonly selection: PlanningSelectionSnapshot
-  readonly clearHover: () => void
-  readonly hoverRow: (row: BudgetPlanningRow) => void
-  readonly selectRow: (row: BudgetPlanningRow) => void
-  readonly isRowSelected: (row: BudgetPlanningRow) => boolean
 }
 
 export interface TimelinePlanningSurface {
@@ -98,44 +83,12 @@ export function useBudgetPlanningSurface(): BudgetPlanningSurface {
     currency,
     locale: activeLocale,
   })
-  const selection = readPlanningSelection('budget')
-  const visibleTargetLists = useMemo(
-    () => projection.rows.map((row) => [row.target]),
-    [projection.rows],
-  )
-
-  useEffect(() => clearPlanningHoveredTargets, [])
-  useEffect(() => () => clearPlanningSelectedTargetsForOrigin('budget'), [])
-  useEffect(() => {
-    prunePlanningSelectionForOrigin('budget', visibleTargetLists)
-  }, [visibleTargetLists, selection.targets, selection.ownsOrigin])
-
-  const clearHover = useCallback(() => {
-    clearPlanningHoveredTargets()
-  }, [])
-
-  const hoverRow = useCallback((row: BudgetPlanningRow) => {
-    setPlanningHoveredTargets([row.target])
-  }, [])
-
-  const selectRow = useCallback((row: BudgetPlanningRow) => {
-    setPlanningSelectedTargets('budget', [row.target])
-  }, [])
-
-  const isRowSelected = useCallback((row: BudgetPlanningRow) => (
-    planningTargetsSelected(selection, [row.target])
-  ), [selection])
 
   return {
     projection,
     currency,
     designName: designName.value,
     activeLocale,
-    selection,
-    clearHover,
-    hoverRow,
-    selectRow,
-    isRowSelected,
   }
 }
 

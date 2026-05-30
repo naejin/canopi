@@ -1,39 +1,39 @@
 import { describe, it, expect } from 'vitest'
-import { formatCurrency, escapeCsvField } from '../components/canvas/budget-helpers'
+import { escapeBudgetCsvField, formatBudgetCurrency } from '../app/budget/formatting'
 
-describe('formatCurrency', () => {
+describe('formatBudgetCurrency', () => {
   it('formats a number as currency', () => {
-    const result = formatCurrency(5.5, 'USD')
+    const result = formatBudgetCurrency(5.5, 'USD')
     expect(result).toContain('5.50')
   })
 
   it('handles invalid currency gracefully', () => {
-    const result = formatCurrency(10, 'INVALID')
+    const result = formatBudgetCurrency(10, 'INVALID')
     expect(result).toContain('10.00')
   })
 })
 
-describe('escapeCsvField', () => {
+describe('escapeBudgetCsvField', () => {
   it('wraps fields containing commas in quotes', () => {
-    expect(escapeCsvField('hello, world')).toBe('"hello, world"')
+    expect(escapeBudgetCsvField('hello, world')).toBe('"hello, world"')
   })
 
   it('returns plain fields unchanged', () => {
-    expect(escapeCsvField('hello')).toBe('hello')
+    expect(escapeBudgetCsvField('hello')).toBe('hello')
   })
 
   it('doubles embedded double-quotes and wraps', () => {
-    expect(escapeCsvField('say "hello"')).toBe('"say ""hello"""')
+    expect(escapeBudgetCsvField('say "hello"')).toBe('"say ""hello"""')
   })
 
   it('wraps fields containing newlines', () => {
-    expect(escapeCsvField('line1\nline2')).toBe('"line1\nline2"')
+    expect(escapeBudgetCsvField('line1\nline2')).toBe('"line1\nline2"')
   })
 
   it('sanitizes formula injection prefixes', () => {
-    expect(escapeCsvField('=SUM(A1)')).toBe("'=SUM(A1)")
-    expect(escapeCsvField('+CMD')).toBe("'+CMD")
-    expect(escapeCsvField('-HYPERLINK')).toBe("'-HYPERLINK")
-    expect(escapeCsvField('@import')).toBe("'@import")
+    expect(escapeBudgetCsvField('=SUM(A1)')).toBe("'=SUM(A1)")
+    expect(escapeBudgetCsvField('+CMD')).toBe("'+CMD")
+    expect(escapeBudgetCsvField('-HYPERLINK')).toBe("'-HYPERLINK")
+    expect(escapeBudgetCsvField('@import')).toBe("'@import")
   })
 })

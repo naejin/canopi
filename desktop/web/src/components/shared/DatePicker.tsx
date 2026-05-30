@@ -7,7 +7,7 @@ import { computeFloatingDirection, shouldAlignRight } from '../../utils/floating
 import styles from './DatePicker.module.css'
 
 // ---------------------------------------------------------------------------
-// Intl.DateTimeFormat cache (same pattern as budget-helpers.ts)
+// Intl.DateTimeFormat cache
 // ---------------------------------------------------------------------------
 
 const _dtfCache = new Map<string, Intl.DateTimeFormat>()

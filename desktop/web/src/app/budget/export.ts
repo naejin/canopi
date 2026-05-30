@@ -1,6 +1,6 @@
 import { exportFile } from '../../ipc/design'
 import { t } from '../../i18n'
-import { escapeCsvField } from '../../components/canvas/budget-helpers'
+import { escapeBudgetCsvField } from './formatting'
 
 export interface BudgetExportRow {
   canonical: string
@@ -27,7 +27,7 @@ export async function exportBudgetCsv(
     t('canvas.budget.unitCost'),
     t('canvas.budget.lineTotal'),
     t('canvas.budget.currency'),
-  ].map(escapeCsvField).join(',')
+  ].map(escapeBudgetCsvField).join(',')
 
   const csvRows = [header]
   for (const row of rows) {
@@ -35,10 +35,10 @@ export async function exportBudgetCsv(
     const price = entry?.unit_cost ?? 0
     const displayName = row.commonName || row.canonical
     csvRows.push(
-      `${escapeCsvField(displayName)},${row.count},${price.toFixed(2)},${(row.count * price).toFixed(2)},${options.currency}`,
+      `${escapeBudgetCsvField(displayName)},${row.count},${price.toFixed(2)},${(row.count * price).toFixed(2)},${options.currency}`,
     )
   }
-  csvRows.push(`${escapeCsvField(t('canvas.budget.grandTotal'))},,,${options.grandTotal.toFixed(2)},`)
+  csvRows.push(`${escapeBudgetCsvField(t('canvas.budget.grandTotal'))},,,${options.grandTotal.toFixed(2)},`)
 
   await exportFile(
     csvRows.join('\n'),
