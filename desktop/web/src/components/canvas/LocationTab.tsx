@@ -1,20 +1,17 @@
-import { useSignal, useSignalEffect } from '@preact/signals'
-import { useEffect, useMemo, useRef } from 'preact/hooks'
+import { useSignal } from '@preact/signals'
+import { useEffect, useRef } from 'preact/hooks'
 import maplibregl from 'maplibre-gl'
 import { t } from '../../i18n'
 import {
   createMapLibreBasemapStyle,
 } from '../../maplibre/config'
 import { basemapStyle, locale } from '../../app/settings/state'
-import { currentDesign } from '../../app/document-session/store'
 import {
-  clearDesignLocation,
-  createLocationSearchController,
-  setDesignLocation,
+  computeSavedPinState,
+  useLocationWorkbench,
   type LocationSearchResult,
 } from '../../app/location'
 import { navigateTo } from '../../app/shell/state'
-import { buildLocationCommit, computeSavedPinState } from './location-tab-logic'
 import styles from './LocationTab.module.css'
 
 const DEFAULT_CENTER: [number, number] = [0, 20] // [lon, lat]
@@ -22,13 +19,15 @@ const DEFAULT_CENTER: [number, number] = [0, 20] // [lon, lat]
 export function LocationTab() {
   void locale.value
 
-  const search = useMemo(() => createLocationSearchController(), [])
+  const workbench = useLocationWorkbench()
+  const search = workbench.search
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
   const preservedViewRef = useRef<{ center: [number, number]; zoom: number } | null>(null)
   const searchRef = useRef<HTMLDivElement>(null)
+  const savedLocationRef = useRef(workbench.saved.location)
+  savedLocationRef.current = workbench.saved.location
 
-  const pendingResult = useSignal<{ lat: number; lon: number } | null>(null)
   const preferredBasemapStyle = basemapStyle.value
 
   // Saved pin state
@@ -39,13 +38,13 @@ export function LocationTab() {
     clamped: boolean
     angle: number
   }>({ visible: false, x: 0, y: 0, clamped: false, angle: 0 })
-  const committedLocation = currentDesign.value?.location ?? null
+  const committedLocation = workbench.saved.location
 
   // Initialize map
   useEffect(() => {
     const container = mapContainerRef.current
     if (!container) return
-    const savedLoc = currentDesign.value?.location
+    const savedLoc = savedLocationRef.current
     const preservedView = preservedViewRef.current
     const center: [number, number] = preservedView?.center
       ?? (savedLoc ? [savedLoc.lon, savedLoc.lat] : DEFAULT_CENTER)
@@ -60,7 +59,7 @@ export function LocationTab() {
 
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), 'bottom-right')
     const onMove = () => updatePinPosition(map)
-    const onDragStart = () => { pendingResult.value = null }
+    const onDragStart = () => workbench.clearPendingMapResult()
     map.on('move', onMove)
     map.on('moveend', onMove)
     map.on('dragstart', onDragStart)
@@ -97,12 +96,10 @@ export function LocationTab() {
     return () => observer.disconnect()
   }, [])
 
-  // Update pin when saved location changes
-  useSignalEffect(() => {
-    void currentDesign.value?.location
+  useEffect(() => {
     const map = mapRef.current
     if (map) updatePinPosition(map)
-  })
+  }, [workbench.saved.key])
 
   // Click outside to close dropdown
   useEffect(() => {
@@ -120,13 +117,12 @@ export function LocationTab() {
   }, [search])
 
   function selectResult(result: LocationSearchResult) {
-    search.consumeResult()
-    pendingResult.value = { lat: result.lat, lon: result.lon }
+    const next = workbench.previewSearchResultOnMap(result)
 
     const map = mapRef.current
     if (map) {
       map.easeTo({
-        center: [result.lon, result.lat],
+        center: [next.lon, next.lat],
         zoom: 14,
         duration: 600,
         essential: true,
@@ -135,25 +131,17 @@ export function LocationTab() {
   }
 
   function handleSet() {
-    const pending = pendingResult.value
-    if (pending) {
-      setDesignLocation(buildLocationCommit(pending, committedLocation))
-      pendingResult.value = null
-    } else {
-      const map = mapRef.current
-      if (!map) return
-      const center = map.getCenter()
-      setDesignLocation(buildLocationCommit({ lat: center.lat, lon: center.lng }, committedLocation))
-    }
+    const map = mapRef.current
+    const center = map?.getCenter()
+    workbench.commitMapLocation(center ? { lat: center.lat, lon: center.lng } : null)
   }
 
   function handleClear() {
-    clearDesignLocation()
-    pendingResult.value = null
+    workbench.clearLocation()
   }
 
   function updatePinPosition(map: maplibregl.Map) {
-    const loc = currentDesign.value?.location ?? null
+    const loc = savedLocationRef.current
     const container = map.getContainer()
     const next = computeSavedPinState(
       loc,

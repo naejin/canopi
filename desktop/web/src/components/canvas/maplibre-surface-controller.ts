@@ -21,7 +21,7 @@ import { northBearingDeg } from '../../canvas/scene-metadata-state'
 import { sceneEntityRevision } from '../../canvas/runtime-mirror-state'
 import { readPanelTargetOverlaySnapshot } from '../../app/panel-targets/presentation'
 import { basemapStyle, theme } from '../../app/settings/state'
-import { currentDesign } from '../../app/document-session/store'
+import { readSavedLocationPresentation } from '../../app/location'
 import { loadMapLibre } from './maplibre-loader'
 
 interface UseMapLibreCanvasSurfaceControllerOptions {
@@ -48,8 +48,7 @@ export function useMapLibreCanvasSurfaceController({
 
   useSignalEffect(() => {
     const runtime = currentCanvasQuerySurface.value
-    const design = currentDesign.value
-    const location = design?.location ?? null
+    const location = readSavedLocationPresentation().location
     const visibleLayers = layerVisibility.value
     const opacityByLayer = layerOpacity.value
     const bearing = northBearingDeg.value

@@ -1,7 +1,6 @@
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
 import { layerPanelView } from '../../app/canvas-settings/state'
-import { currentDesign } from '../../app/document-session/store'
 import {
   setActiveLayer,
   setContourIntervalMeters,
@@ -11,7 +10,8 @@ import {
   toggleLayerPanel,
   toggleLayerVisibility,
 } from '../../app/canvas-settings/controller'
-import { formatLocationSummary } from '../../utils/location'
+import { useSavedLocationPresentation } from '../../app/location'
+import type { Location } from '../../types/design'
 import styles from './LayerPanel.module.css'
 
 const ALL_LAYERS = ['annotations', 'plants', 'zones', 'base', 'contours', 'hillshading'] as const
@@ -71,6 +71,9 @@ export function LayerPanel() {
     layerPanelOpen: open,
   } = layerPanelView.value
   const activeLayer = activeLayerNameValue as LayerName
+  const savedLocation = useSavedLocationPresentation()
+  const location = savedLocation.location
+  const hasLocation = savedLocation.hasLocation
 
   if (!open) {
     return (
@@ -86,9 +89,6 @@ export function LayerPanel() {
       </div>
     )
   }
-
-  const location = currentDesign.value?.location ?? null
-  const hasLocation = location != null
 
   return (
     <aside className={styles.panel} aria-label={t('canvas.layers.layerPanel')}>
@@ -139,6 +139,7 @@ export function LayerPanel() {
                   name={name}
                   hasLocation={hasLocation}
                   location={location}
+                  locationSummary={savedLocation.summary}
                   contourIntervalMeters={contourIntervalMetersValue}
                   hillshadeOpacity={hillshadeOpacityValue}
                   layerOpacity={layerOpacityValue}
@@ -152,10 +153,11 @@ export function LayerPanel() {
   )
 }
 
-function LayerDetail({ name, hasLocation, location, contourIntervalMeters, hillshadeOpacity, layerOpacity }: {
+function LayerDetail({ name, hasLocation, location, locationSummary, contourIntervalMeters, hillshadeOpacity, layerOpacity }: {
   name: LayerName
   hasLocation: boolean
-  location: { lat: number; lon: number; altitude_m: number | null } | null
+  location: Location | null
+  locationSummary: string | null
   contourIntervalMeters: number
   hillshadeOpacity: number
   layerOpacity: Record<string, number>
@@ -169,7 +171,7 @@ function LayerDetail({ name, hasLocation, location, contourIntervalMeters, hills
               {hasLocation ? t('canvas.location.current') : t('canvas.location.required')}
             </span>
             <span className={styles.locationCardText}>
-              {hasLocation && location ? formatLocationSummary(location) : t('canvas.layers.setLocation')}
+              {hasLocation && location ? locationSummary : t('canvas.layers.setLocation')}
             </span>
           </div>
           <OpacitySlider layer="base" disabled={!hasLocation} layerOpacity={layerOpacity} />

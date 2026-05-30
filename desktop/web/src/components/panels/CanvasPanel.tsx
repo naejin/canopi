@@ -1,6 +1,5 @@
 import { useRef, useEffect, useState } from 'preact/hooks'
 import { t } from '../../i18n'
-import { currentDesign } from '../../app/document-session/store'
 import { useCanvasDocumentSession } from '../../app/document-session/use-canvas-document-session'
 import { CanvasToolbar } from '../canvas/CanvasToolbar'
 import { CompassOverlay } from '../canvas/CompassOverlay'
@@ -19,7 +18,7 @@ import { BottomPanelLauncher } from '../canvas/BottomPanelLauncher'
 import { LayerPanel } from '../canvas/LayerPanel'
 import { WelcomeScreen } from '../shared/WelcomeScreen'
 import { hasVisibleMapLayer, hillshadeVisible, layerVisibility } from '../../app/canvas-settings/signals'
-import { formatLocationSummary } from '../../utils/location'
+import { useSavedLocationPresentation } from '../../app/location'
 import styles from './Panels.module.css'
 
 export function CanvasPanel() {
@@ -34,16 +33,14 @@ export function CanvasPanel() {
 
   useCanvasDocumentSession({ canvasAreaRef, containerRef, rulerOverlayRef })
 
-  const hasDesign = currentDesign.value !== null
-  const location = currentDesign.value?.location ?? null
-  const hasLocation = location != null
+  const savedLocation = useSavedLocationPresentation()
+  const hasDesign = savedLocation.hasDesign
+  const hasLocation = savedLocation.hasLocation
   const visibility = layerVisibility.value
   const mapVisible = hasVisibleMapLayer(visibility, hillshadeVisible.value)
   const shouldShowMapSurface = hasDesign && hasLocation && mapVisible
-  const locationSummary = location ? formatLocationSummary(location) : null
-  const locationKey = location
-    ? `${location.lat}:${location.lon}:${location.altitude_m ?? ''}`
-    : null
+  const locationSummary = savedLocation.summary
+  const locationKey = savedLocation.key
 
   useEffect(() => {
     if (locationKey === null) {

@@ -1,13 +1,8 @@
-import { useSignal, useSignalEffect } from '@preact/signals'
-import { useEffect, useMemo, useRef } from 'preact/hooks'
+import { useEffect, useRef } from 'preact/hooks'
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
-import { currentDesign } from '../../app/document-session/store'
 import {
-  clearDesignLocation,
-  createLocationSearchController,
-  saveLocationDraft,
-  selectSearchResultLocation,
+  useLocationWorkbench,
   type LocationSearchResult,
 } from '../../app/location'
 import styles from './LocationInput.module.css'
@@ -15,22 +10,10 @@ import styles from './LocationInput.module.css'
 export function LocationInput() {
   void locale.value
 
-  const search = useMemo(() => createLocationSearchController(), [])
-  const design = currentDesign.value
-  const location = design?.location ?? null
-
-  const latInput = useSignal(location?.lat?.toString() ?? '')
-  const lonInput = useSignal(location?.lon?.toString() ?? '')
-  const altInput = useSignal(location?.altitude_m?.toString() ?? '')
+  const workbench = useLocationWorkbench()
+  const search = workbench.search
+  const location = workbench.saved.location
   const dropdownRef = useRef<HTMLDivElement>(null)
-
-  // Resync input values when the design changes (e.g., open different file)
-  useSignalEffect(() => {
-    const loc = currentDesign.value?.location ?? null
-    latInput.value = loc?.lat?.toString() ?? ''
-    lonInput.value = loc?.lon?.toString() ?? ''
-    altInput.value = loc?.altitude_m?.toString() ?? ''
-  })
 
   // Click-outside-to-close + debounce cleanup
   useEffect(() => {
@@ -47,25 +30,15 @@ export function LocationInput() {
   }, [search])
 
   function selectResult(result: LocationSearchResult) {
-    latInput.value = result.lat.toString()
-    lonInput.value = result.lon.toString()
-    search.consumeResult()
-    void selectSearchResultLocation(result, altInput.value)
+    void workbench.commitSearchResult(result)
   }
 
   function save() {
-    void saveLocationDraft({
-      lat: latInput.value,
-      lon: lonInput.value,
-      altitude: altInput.value,
-    })
+    void workbench.saveDraft()
   }
 
   function clear() {
-    void clearDesignLocation()
-    latInput.value = ''
-    lonInput.value = ''
-    altInput.value = ''
+    void workbench.clearLocation()
   }
 
   return (
@@ -121,8 +94,8 @@ export function LocationInput() {
           <input
             type="number"
             className={styles.input}
-            value={latInput.value}
-            onInput={(e) => { latInput.value = e.currentTarget.value }}
+            value={workbench.latDraft}
+            onInput={(e) => { workbench.setLatDraft(e.currentTarget.value) }}
             placeholder={t('canvas.location.latRange')}
             step="0.0001"
             min="-90"
@@ -135,8 +108,8 @@ export function LocationInput() {
           <input
             type="number"
             className={styles.input}
-            value={lonInput.value}
-            onInput={(e) => { lonInput.value = e.currentTarget.value }}
+            value={workbench.lonDraft}
+            onInput={(e) => { workbench.setLonDraft(e.currentTarget.value) }}
             placeholder={t('canvas.location.lonRange')}
             step="0.0001"
             min="-180"
@@ -149,8 +122,8 @@ export function LocationInput() {
           <input
             type="number"
             className={styles.input}
-            value={altInput.value}
-            onInput={(e) => { altInput.value = e.currentTarget.value }}
+            value={workbench.altitudeDraft}
+            onInput={(e) => { workbench.setAltitudeDraft(e.currentTarget.value) }}
             placeholder={t('canvas.location.optional')}
             step="1"
           />
@@ -170,8 +143,7 @@ export function LocationInput() {
 
       {location && (
         <p className={styles.current}>
-          {t('canvas.location.current')}: {location.lat.toFixed(4)}, {location.lon.toFixed(4)}
-          {location.altitude_m != null && ` (${location.altitude_m} m)`}
+          {t('canvas.location.current')}: {workbench.saved.summary}
         </p>
       )}
     </div>

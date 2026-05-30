@@ -56,6 +56,7 @@ Use this guide when changing Preact components, signals, i18n, CSS, panels, bott
 
 ## Panel And Canvas Reactivity
 
+- Location UI and map-readiness callers should consume the Location Workbench from `app/location/workbench.ts` for saved Location state, drafts, search result commits, altitude preservation, saved-site summaries, and map pin/readiness helpers. Components should not import `currentDesign` or `utils/location` directly for saved-location presentation.
 - Planning surfaces that combine Design planning entries, placed plants, localized names, and Target hover/selection state should go through `desktop/web/src/app/planning-projection/`.
 - Budget UI should consume the Budget Item Workbench from `app/budget/workbench.ts`; that workbench consumes Planning Projection read models and owns price draft lifecycle, currency commands, export behavior, formatting, and budget Target presentation.
 - Timeline and Consortium UI should consume the Planning Projection surface hooks (`useTimelinePlanningSurface()` through the Timeline Action Workbench and `useConsortiumPlanningSurface()`) instead of importing `currentDesign`, canvas query surfaces, runtime mirror revisions, or planning Target presentation helpers directly.

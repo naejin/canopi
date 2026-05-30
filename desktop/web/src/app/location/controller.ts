@@ -25,11 +25,10 @@ export function selectSearchResultLocation(
   result: { lat: number; lon: number },
   altitude: string,
 ): boolean {
-  const parsedAltitude = parseFloat(altitude)
-  return setDesignLocation({
-    lat: result.lat,
-    lon: result.lon,
-    altitude_m: Number.isNaN(parsedAltitude) ? null : parsedAltitude,
+  return saveLocationDraft({
+    lat: result.lat.toString(),
+    lon: result.lon.toString(),
+    altitude,
   })
 }
 

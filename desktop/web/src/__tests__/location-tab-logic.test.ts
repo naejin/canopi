@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildLocationCommit, computeSavedPinState } from '../components/canvas/location-tab-logic'
+import { buildLocationCommit, computeSavedPinState } from '../app/location'
 
 describe('location tab logic', () => {
   it('preserves altitude metadata when committing a moved location', () => {

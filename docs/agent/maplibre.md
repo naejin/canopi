@@ -6,6 +6,7 @@ Use this guide when changing MapLibre surfaces, basemap rendering, terrain layer
 
 - MapLibre is a derived visualization layer, not a document authority.
 - Map layers render scene/document state; they do not own or mutate it.
+- Map surfaces and readiness/status UI consume saved Location state through the Location Workbench; do not import Design Session state directly for location presentation.
 - Existing full-screen surfaces may keep component-local MapLibre ownership when setup/update/teardown are contained in one component.
 - In-canvas MapLibre remains isolated in the canvas map surface lifecycle and helper modules. Do not scatter MapLibre ownership across canvas runtime or renderers.
 - The lazy import boundary around `maplibre-gl` should be preserved for bundle size.

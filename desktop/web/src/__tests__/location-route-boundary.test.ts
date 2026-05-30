@@ -22,4 +22,27 @@ describe('location route boundary', () => {
     expect(tabSource).not.toContain("ipc/geocoding")
     expect(inputSource).not.toContain("ipc/geocoding")
   })
+
+  it('keeps saved-location UI behind the Location Workbench seam', () => {
+    const canvasPanelSource = readSource('../components/panels/CanvasPanel.tsx')
+    const layerPanelSource = readSource('../components/canvas/LayerPanel.tsx')
+    const mapSurfaceControllerSource = readSource('../components/canvas/maplibre-surface-controller.ts')
+    const tabSource = readSource('../components/canvas/LocationTab.tsx')
+    const inputSource = readSource('../components/canvas/LocationInput.tsx')
+
+    for (const source of [
+      canvasPanelSource,
+      layerPanelSource,
+      mapSurfaceControllerSource,
+      tabSource,
+      inputSource,
+    ]) {
+      expect(source).toContain('app/location')
+      expect(source).not.toContain('document-session/store')
+      expect(source).not.toContain('utils/location')
+      expect(source).not.toContain('setDesignLocation')
+      expect(source).not.toContain('clearDesignLocation')
+      expect(source).not.toContain('createLocationSearchController')
+    }
+  })
 })
