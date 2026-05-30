@@ -1,47 +1,29 @@
-import { useCallback, useEffect, useRef } from 'preact/hooks'
+import { useCallback, useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import { t } from '../../i18n'
-import { locale } from '../../app/settings/state'
-import { currentDesign, designName } from '../../app/document-session/store'
 import {
-  clearPlanningHoveredTargets,
-  clearPlanningSelectedTargetsForOrigin,
-  planningTargetsSelected,
-  prunePlanningSelectionForOrigin,
-  readPlanningSelection,
-  setPlanningHoveredTargets,
-  setPlanningSelectedTargets,
-  useBudgetPlanningProjection,
+  useBudgetPlanningSurface,
 } from '../../app/planning-projection'
 import { setPlantBudgetPrice, setBudgetCurrency } from '../../app/budget/controller'
 import { exportBudgetCsv, isBudgetExportCancelled } from '../../app/budget/export'
-import { DEFAULT_BUDGET_CURRENCY } from '../../app/contracts/document'
 import { Dropdown } from '../shared/Dropdown'
 import { CURRENCY_ITEMS } from './budget-currencies'
 import { formatCurrency } from './budget-helpers'
-import type { BudgetItem } from '../../types/design'
 import styles from './BudgetTab.module.css'
-
-const EMPTY_BUDGET: BudgetItem[] = []
-
-function clearBudgetSelectedPanelTargets(): void {
-  clearPlanningSelectedTargetsForOrigin('budget')
-}
 
 export function BudgetTab() {
   const editingCanonical = useSignal<string | null>(null)
   const editPrice = useSignal('')
-
-  const design = currentDesign.value
-  const budget = design?.budget ?? EMPTY_BUDGET
-  const currency = design?.budget_currency ?? DEFAULT_BUDGET_CURRENCY
-  const budgetSelection = readPlanningSelection('budget')
-  const activeLocale = locale.value
-  const projection = useBudgetPlanningProjection({
-    budget,
+  const {
+    projection,
     currency,
-    locale: activeLocale,
-  })
+    designName,
+    activeLocale,
+    clearHover,
+    hoverRow,
+    selectRow,
+    isRowSelected,
+  } = useBudgetPlanningSurface()
 
   const projectionRef = useRef(projection)
   projectionRef.current = projection
@@ -58,33 +40,11 @@ export function BudgetTab() {
     editingCanonical.value = null
   }, [])
 
-  const handleRowMouseEnter = useCallback((canonical: string) => {
-    const row = projectionRef.current.rows.find((candidate) => candidate.canonical === canonical)
-    if (row) setPlanningHoveredTargets([row.target])
-  }, [])
-
-  const handleRowClick = useCallback((canonical: string) => {
-    const row = projectionRef.current.rows.find((candidate) => candidate.canonical === canonical)
-    if (row) setPlanningSelectedTargets('budget', [row.target])
-  }, [])
-
-  const clearBudgetHover = useCallback(() => {
-    clearPlanningHoveredTargets()
-  }, [])
-
-  useEffect(() => clearBudgetHover, [clearBudgetHover])
-
-  useEffect(() => clearBudgetSelectedPanelTargets, [])
-
-  useEffect(() => {
-    prunePlanningSelectionForOrigin('budget', projection.rows.map((row) => [row.target]))
-  }, [projection.rows, budgetSelection.targets, budgetSelection.ownsOrigin])
-
   async function handleExportCSV() {
     try {
       await exportBudgetCsv(projection.rows, {
         currency,
-        designName: designName.value,
+        designName,
         lineItemPriceMap: projection.lineItemPriceMap,
         grandTotal: projection.grandTotal,
       })
@@ -134,7 +94,7 @@ export function BudgetTab() {
         </button>
       </div>
 
-      <div className={styles.tableWrapper} onMouseLeave={clearBudgetHover}>
+      <div className={styles.tableWrapper} onMouseLeave={clearHover}>
         <table className={styles.table}>
           <thead>
             <tr>
@@ -147,15 +107,15 @@ export function BudgetTab() {
           <tbody>
             {projection.rows.map((row) => {
               const isEditing = editingCanonical.value === row.canonical
-              const isSelected = planningTargetsSelected(budgetSelection, [row.target])
+              const isSelected = isRowSelected(row)
 
               return (
                 <tr
                   key={row.canonical}
                   className={`${styles.row}${isSelected ? ` ${styles.rowSelected}` : ''}`}
-                  onClick={() => handleRowClick(row.canonical)}
-                  onMouseEnter={() => handleRowMouseEnter(row.canonical)}
-                  onMouseLeave={clearBudgetHover}
+                  onClick={() => selectRow(row)}
+                  onMouseEnter={() => hoverRow(row)}
+                  onMouseLeave={clearHover}
                 >
                   <td>
                     <div className={styles.tdSpecies}>

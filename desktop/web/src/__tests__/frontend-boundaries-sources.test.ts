@@ -220,9 +220,12 @@ describe('frontend boundary sources', () => {
       expect(source).not.toContain('currentCanvasQuerySurface')
       expect(source).not.toContain('getPlacedPlants()')
       expect(source).not.toContain('getLocalizedCommonNames()')
+      expect(source).not.toContain('document-session/store')
+      expect(source).not.toContain('currentDesign')
     }
     expect(runtimeSource).toContain('runtime-mirror-state')
     expect(runtimeSource).toContain('currentCanvasQuerySurface')
+    expect(runtimeSource).toContain('document-session/store')
   })
 
   it('keeps the canvas document hook as a Design Session lifecycle adapter', () => {
@@ -273,6 +276,7 @@ describe('frontend boundary sources', () => {
     expect(timelineSource).not.toContain('beginTimelineActionEdit')
     expect(timelineSource).not.toContain('computeTimelineAutoScrollSpeed')
     expect(timelineSource).not.toContain('applyTimelineActionPatch')
+    expect(timelineSource).not.toContain('currentDesign')
     expect(timelineSource).not.toContain('../app/timeline/controller')
     expect(timelineSource).not.toContain('createTimelineActionFromFormData')
     expect(timelineSource).not.toContain('formDataFromTimelineAction')

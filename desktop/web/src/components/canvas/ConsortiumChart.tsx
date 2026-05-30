@@ -1,10 +1,8 @@
 import { useEffect, useMemo, useRef } from 'preact/hooks'
 import { t } from '../../i18n'
-import { locale, theme } from '../../app/settings/state'
-import { plantSpeciesColorDefaults } from '../../canvas/plant-species-color-defaults'
-import { currentDesign } from '../../app/document-session/store'
+import { theme } from '../../app/settings/state'
 import { useConsortiumCanvasWorkbench } from '../../app/consortium/workbench'
-import { useConsortiumPlanningProjection } from '../../app/planning-projection'
+import { useConsortiumPlanningSurface } from '../../app/planning-projection'
 import {
   renderConsortium,
   computeRowHeights,
@@ -14,22 +12,11 @@ import {
 } from '../../canvas/consortium-renderer'
 import { useCanvasRenderer } from './useCanvasRenderer'
 import styles from './ConsortiumChart.module.css'
-import type { Consortium } from '../../types/design'
-
-const EMPTY_CONSORTIUMS: Consortium[] = []
 
 export function ConsortiumChart() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
-  const design = currentDesign.value
-  const consortiums = design?.consortiums ?? EMPTY_CONSORTIUMS
-  const colors = plantSpeciesColorDefaults.value
-
-  const activeLocale = locale.value
-  const projection = useConsortiumPlanningProjection({
-    consortiums,
-    speciesColors: colors,
-  })
+  const { consortiums, projection, activeLocale } = useConsortiumPlanningSurface()
   const bars = projection.bars
   const rowHeights = useMemo(() => computeRowHeights(bars), [bars])
   const rowOffsets = useMemo(() => computeRowYOffsets(rowHeights), [rowHeights])

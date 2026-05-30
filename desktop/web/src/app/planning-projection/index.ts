@@ -42,8 +42,14 @@ export {
 } from './target-presentation'
 export {
   useBudgetPlanningProjection,
+  useBudgetPlanningSurface,
+  useConsortiumPlanningSurface,
   useConsortiumPlanningProjection,
   usePlanningProjectionCanvasSnapshot,
   useTimelinePlanningProjection,
+  useTimelinePlanningSurface,
+  type BudgetPlanningSurface,
+  type ConsortiumPlanningSurface,
   type PlanningProjectionCanvasSnapshot,
+  type TimelinePlanningSurface,
 } from './runtime'

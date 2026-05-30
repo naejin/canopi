@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef } from 'preact/hooks'
-import { useSignal, useSignalEffect } from '@preact/signals'
-import { currentDesign } from '../document-session/store'
+import { useSignal } from '@preact/signals'
 import {
   ACTION_TYPES,
+  useTimelinePlanningSurface,
   type TimelineActionLayout,
   type TimelineActionTypeRow,
   type TimelinePlanningAction,
-  type TimelinePlanningProjection,
 } from '../planning-projection'
 import {
   LABEL_SIDEBAR_WIDTH,
   RULER_HEIGHT,
+  computeTimelineRowOffsets,
   hitTestAction,
   type TimelineRenderState,
 } from '../../canvas/timeline-renderer'
@@ -61,20 +61,14 @@ export type TimelineTooltipState = {
 
 export interface TimelineCanvasWorkbenchOptions {
   readonly canvasRef: MutableDomRef<HTMLCanvasElement>
-  readonly rows: readonly TimelineActionTypeRow[]
-  readonly layout: ReadonlyMap<string, TimelineActionLayout>
-  readonly rowOffsets: number[]
-  readonly projection: TimelinePlanningProjection
-  readonly originDate: Date
-  readonly originMs: number
-  readonly selectedId: string | null
-  readonly onSelect: (id: string | null) => void
-  readonly locale: string
-  readonly speciesColors: Record<string, string>
 }
 
 export interface TimelineCanvasWorkbench {
   readonly cachedRectRef: { current: DOMRect | null }
+  readonly rows: readonly TimelineActionTypeRow[]
+  readonly layout: ReadonlyMap<string, TimelineActionLayout>
+  readonly rowOffsets: number[]
+  readonly canvasHeight: number
   readonly renderState: TimelineRenderState
   readonly renderDeps: readonly unknown[]
   readonly tooltip: TimelineTooltipState | null
@@ -99,21 +93,25 @@ const EMPTY_ACTIONS: TimelineAction[] = []
 
 export function useTimelineCanvasWorkbench({
   canvasRef,
-  rows,
-  layout,
-  rowOffsets,
-  projection,
-  originDate,
-  originMs,
-  selectedId,
-  onSelect,
-  locale,
-  speciesColors,
 }: TimelineCanvasWorkbenchOptions): TimelineCanvasWorkbench {
+  const fallbackOriginMs = useMemo(() => Date.now(), [])
+  const {
+    actions,
+    projection,
+    activeLocale,
+    speciesColors,
+  } = useTimelinePlanningSurface({ fallbackOriginMs })
+  const rows = projection.rows
+  const layout = projection.layout
+  const originMs = projection.originMs
+  const originDate = useMemo(() => new Date(originMs), [originMs])
+  const rowOffsets = useMemo(() => computeTimelineRowOffsets(rows, layout), [rows, layout])
+  const canvasHeight = rowOffsets[rowOffsets.length - 1] ?? RULER_HEIGHT
   const cachedRectRef = useRef<DOMRect | null>(null)
   const granularity = useSignal<TimelineGranularity>('month')
   const pxPerDay = useSignal(TIMELINE_GRANULARITY_PX_PER_DAY.month)
   const scrollX = useSignal(0)
+  const selectedId = useSignal<string | null>(null)
   const hoveredId = useSignal<string | null>(null)
   const tooltipState = useSignal<TimelineTooltipState | null>(null)
   const popoverState = useSignal<TimelineActionPopoverState | null>(null)
@@ -129,42 +127,46 @@ export function useTimelineCanvasWorkbench({
   const autoScrollRafRef = useRef<number | null>(null)
   const autoScrollAccumRef = useRef(0)
   const lastDragClientXRef = useRef(0)
-  const selectedIdRef = useRef(selectedId)
-  const onSelectRef = useRef(onSelect)
+  const selectedIdRef = useRef<string | null>(null)
 
-  selectedIdRef.current = selectedId
-  onSelectRef.current = onSelect
+  selectedIdRef.current = selectedId.value
   rowsRef.current = rows
   layoutRef.current = layout
   rowOffsetsRef.current = rowOffsets
   projectionRef.current = projection
   computedOriginMsRef.current = originMs
 
-  useSignalEffect(() => {
+  useEffect(() => {
+    const current = actions ?? EMPTY_ACTIONS
+    const selectedActionId = selectedId.value
+    if (selectedActionId && !current.some((action) => action.id === selectedActionId)) {
+      selectedId.value = null
+      clearTimelineSelectedPanelTargets()
+    }
+
     const hoveredActionId = hoveredId.value
-    if (!hoveredActionId) return
-    const current = currentDesign.value?.timeline ?? EMPTY_ACTIONS
-    if (current.some((action) => action.id === hoveredActionId)) return
-    hoveredId.value = null
-    clearTimelineHoveredPanelTargets()
-  })
+    if (hoveredActionId && !current.some((action) => action.id === hoveredActionId)) {
+      hoveredId.value = null
+      clearTimelineHoveredPanelTargets()
+    }
+  }, [actions, hoveredId.value, selectedId.value])
 
   const renderState = useMemo<TimelineRenderState>(() => ({
     originDate: dragOriginDateRef.current ?? originDate,
     pxPerDay: pxPerDay.value,
     scrollX: scrollX.value,
-    selectedId,
+    selectedId: selectedId.value,
     hoveredId: hoveredId.value,
-    locale,
+    locale: activeLocale,
     speciesColors,
     granularity: granularity.value,
   }), [
     originDate,
     pxPerDay.value,
     scrollX.value,
-    selectedId,
+    selectedId.value,
     hoveredId.value,
-    locale,
+    activeLocale,
     speciesColors,
     granularity.value,
   ])
@@ -339,7 +341,7 @@ export function useTimelineCanvasWorkbench({
       return
     }
 
-    onSelectRef.current(hit.action.id)
+    selectedId.value = hit.action.id
     setTimelineSelectedPanelTargets(hit.action.targets)
 
     if (!hit.action.startDate) return
@@ -526,7 +528,7 @@ export function useTimelineCanvasWorkbench({
         event.preventDefault()
         const result = deleteSelectedTimelineAction(selectedIdRef.current)
         if (hoveredId.value !== null) hoveredId.value = null
-        if ('selectedId' in result) onSelectRef.current(result.selectedId ?? null)
+        if ('selectedId' in result) selectedId.value = result.selectedId ?? null
       }
     }
 
@@ -543,7 +545,7 @@ export function useTimelineCanvasWorkbench({
       data,
       createId: createUuid,
     })
-    if ('selectedId' in result) onSelectRef.current(result.selectedId ?? null)
+    if ('selectedId' in result) selectedId.value = result.selectedId ?? null
     popoverState.value = null
   }, [popoverState])
 
@@ -551,7 +553,7 @@ export function useTimelineCanvasWorkbench({
     const ps = popoverState.peek()
     if (!ps) return
     const result = deleteTimelineActionPopover(ps)
-    if ('selectedId' in result) onSelectRef.current(result.selectedId ?? null)
+    if ('selectedId' in result) selectedId.value = result.selectedId ?? null
     popoverState.value = null
   }, [popoverState])
 
@@ -565,6 +567,10 @@ export function useTimelineCanvasWorkbench({
 
   return {
     cachedRectRef,
+    rows,
+    layout,
+    rowOffsets,
+    canvasHeight,
     renderState,
     renderDeps: [
       rows,
@@ -573,9 +579,9 @@ export function useTimelineCanvasWorkbench({
       originMs,
       pxPerDay.value,
       scrollX.value,
-      selectedId,
+      selectedId.value,
       hoveredId.value,
-      locale,
+      activeLocale,
       speciesColors,
       granularity.value,
     ],

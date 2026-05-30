@@ -1,82 +1,38 @@
 import { createPortal } from 'preact/compat'
-import { useEffect, useMemo, useRef } from 'preact/hooks'
+import { useEffect, useRef } from 'preact/hooks'
 import { useCanvasRenderer } from './useCanvasRenderer'
 import { t } from '../../i18n'
-import { locale, theme } from '../../app/settings/state'
-import { plantSpeciesColorDefaults } from '../../canvas/plant-species-color-defaults'
-import { currentDesign } from '../../app/document-session/store'
-import { useTimelinePlanningProjection } from '../../app/planning-projection'
+import { theme } from '../../app/settings/state'
 import { useTimelineCanvasWorkbench } from '../../app/timeline/canvas-workbench'
 import {
-  RULER_HEIGHT,
-  computeTimelineRowOffsets,
   renderTimeline,
 } from '../../canvas/timeline-renderer'
-import type { TimelineAction } from '../../types/design'
 import { TimelinePopover } from './TimelinePopover'
 import styles from './InteractiveTimeline.module.css'
 
-interface InteractiveTimelineProps {
-  selectedId: string | null
-  onSelect: (id: string | null) => void
-}
-
-const EMPTY_ACTIONS: TimelineAction[] = []
-
-export function InteractiveTimeline({
-  selectedId,
-  onSelect,
-}: InteractiveTimelineProps) {
+export function InteractiveTimeline() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  const actions = currentDesign.value?.timeline ?? EMPTY_ACTIONS
-  const speciesColors = plantSpeciesColorDefaults.value
-  const todayMs = useMemo(() => Date.now(), [])
-  const activeLocale = locale.value
-  const projection = useTimelinePlanningProjection({
-    actions,
-    fallbackOriginMs: todayMs,
-    locale: activeLocale,
-  })
-  const rows = projection.rows
-  const layout = projection.layout
-  const originMs = projection.originMs
-  const originDate = useMemo(() => new Date(originMs), [originMs])
-  const rowOffsets = useMemo(() => computeTimelineRowOffsets(rows, layout), [rows, layout])
-
-  const workbench = useTimelineCanvasWorkbench({
-    canvasRef,
-    rows,
-    layout,
-    rowOffsets,
-    projection,
-    originDate,
-    originMs,
-    selectedId,
-    onSelect,
-    locale: activeLocale,
-    speciesColors,
-  })
+  const workbench = useTimelineCanvasWorkbench({ canvasRef })
 
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-    const totalHeight = rowOffsets[rowOffsets.length - 1] ?? RULER_HEIGHT
-    canvas.style.height = `${totalHeight}px`
+    canvas.style.height = `${workbench.canvasHeight}px`
     workbench.invalidateLayout()
-  }, [rowOffsets, workbench.invalidateLayout])
+  }, [workbench.canvasHeight, workbench.invalidateLayout])
 
   useCanvasRenderer(canvasRef, (ctx, width, height) => {
     renderTimeline(
       ctx,
       width,
       height,
-      rows,
-      layout,
+      workbench.rows,
+      workbench.layout,
       workbench.renderState,
       t,
-      rowOffsets,
+      workbench.rowOffsets,
     )
   }, [...workbench.renderDeps, theme.value], workbench.cachedRectRef)
 
