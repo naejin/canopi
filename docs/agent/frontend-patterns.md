@@ -9,6 +9,7 @@ Use this guide when changing Preact components, signals, i18n, CSS, panels, bott
 - Controller/action modules should not import other controller/action modules.
 - `currentCanvasSession` stores runtime surfaces. App code should consume command/query/document facades, not renderer internals.
 - `unlockSelected()` intentionally unlocks all objects when no selection is present; update the shortcut behavior before changing that semantic.
+- `desktop/web/src/commands/registry.ts` is the App Command Graph seam. It owns command identity, labels, shortcuts, dispatch, disabled state, menu projection, palette projection, and keyboard shortcut dispatch. `MenuBar`, `CommandPalette`, and `shortcuts/manager.ts` should consume that seam instead of duplicating command actions or shortcut maps.
 
 ## Signals And Hooks
 
@@ -70,6 +71,12 @@ Use this guide when changing Preact components, signals, i18n, CSS, panels, bott
 - Timeline, budget, and consortium identity uses typed `PanelTarget` wire values through the Target module. Do not reintroduce string matching against descriptions, legacy plant arrays, budget descriptions, or canonical-name fields.
 - Panel-origin hover/selection is presentation state and must not mutate real canvas selection, labels, dirty state, or history.
 - Canvas-origin hover uses `hoveredCanvasTargets` and remains separate.
+
+## Design Template Import
+
+- `app/design-template-import/workflow.ts` owns Design Template import orchestration: download the template, then hand it to the Design Session action seam.
+- `app/community/controller.ts` owns Design Template catalog, preview, filters, selection, and import status only. It should call the Design Template import workflow instead of importing Design Session actions or `downloadTemplate` directly.
+- The workflow is a sibling of Community catalog state and Design Session lifecycle; do not move catalog state into Design Session, and do not put Design Session dirty-guard ordering in the Community module.
 
 ## i18n
 

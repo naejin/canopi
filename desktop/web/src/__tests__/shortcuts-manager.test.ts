@@ -4,6 +4,7 @@ import { activePanel, sidePanel } from '../app/shell/state'
 import * as documentActions from '../app/document-session/actions'
 import { initShortcuts } from '../shortcuts/manager'
 import { setCurrentCanvasSession } from '../canvas/session'
+import { currentDesign, nonCanvasRevision, nonCanvasSavedRevision } from '../state/design'
 
 describe('shortcut manager canvas tool switching', () => {
   beforeEach(() => {
@@ -11,12 +12,16 @@ describe('shortcut manager canvas tool switching', () => {
     sidePanel.value = null
     activeTool.value = 'select'
     setCurrentCanvasSession(null)
+    currentDesign.value = null
+    nonCanvasRevision.value = 0
+    nonCanvasSavedRevision.value = 0
     initShortcuts()
   })
 
   afterEach(() => {
     setCurrentCanvasSession(null)
     activeTool.value = 'select'
+    currentDesign.value = null
   })
 
   it('routes tool shortcuts through the live canvas session when mounted', () => {
@@ -52,6 +57,28 @@ describe('shortcut manager canvas tool switching', () => {
   })
 
   it('routes file shortcuts through document-session actions', () => {
+    currentDesign.value = {
+      version: 2,
+      name: 'test',
+      description: null,
+      location: null,
+      north_bearing_deg: null,
+      plant_species_colors: {},
+      layers: [],
+      plants: [],
+      zones: [],
+      annotations: [],
+      consortiums: [],
+      groups: [],
+      timeline: [],
+      budget: [],
+      budget_currency: 'EUR',
+      created_at: '',
+      updated_at: '',
+      extra: {},
+    }
+    nonCanvasRevision.value = 1
+    nonCanvasSavedRevision.value = 0
     const saveSpy = vi.spyOn(documentActions, 'saveCurrentDesign').mockResolvedValue(undefined)
     const saveAsSpy = vi.spyOn(documentActions, 'saveAsCurrentDesign').mockResolvedValue(undefined)
     const openSpy = vi.spyOn(documentActions, 'openDesign').mockResolvedValue(undefined)

@@ -1,7 +1,6 @@
 import { useRef, useState } from "preact/hooks";
 import { useSignalEffect } from "@preact/signals";
-import { commandPaletteOpen } from "../../shortcuts/manager";
-import { commands } from "../../commands/registry";
+import { commandPaletteOpen, commands } from "../../commands/registry";
 import { t } from "../../i18n";
 import styles from "./CommandPalette.module.css";
 
@@ -27,10 +26,9 @@ export function CommandPalette() {
 
   function execute(idx: number) {
     const cmd = filtered[idx];
-    if (cmd) {
-      cmd.action();
-      commandPaletteOpen.value = false;
-    }
+    if (!cmd || cmd.disabled()) return;
+    cmd.action();
+    commandPaletteOpen.value = false;
   }
 
   function onKeyDown(e: KeyboardEvent) {
@@ -91,6 +89,7 @@ export function CommandPalette() {
                 onClick={() => execute(i)}
                 role="option"
                 aria-selected={i === activeIdx}
+                aria-disabled={cmd.disabled()}
               >
                 <span>{cmd.label()}</span>
                 {cmd.shortcut && (

@@ -159,6 +159,34 @@ describe('frontend boundary sources', () => {
     }
   })
 
+  it('keeps app commands behind the command graph seam', () => {
+    const registrySource = readSource('../commands/registry.ts')
+    const shortcutManagerSource = readSource('../shortcuts/manager.ts')
+    const menuDefinitionsSource = readSource('../components/shared/menu-definitions.ts')
+    const commandPaletteSource = readSource('../components/shared/CommandPalette.tsx')
+
+    expect(registrySource).toContain('getMenuDefinitions')
+    expect(registrySource).toContain('handleAppCommandKeyDown')
+    expect(registrySource).toContain('runAppCommand')
+    expect(shortcutManagerSource).toContain('../commands/registry')
+    expect(shortcutManagerSource).not.toContain('../app/document-session/actions')
+    expect(shortcutManagerSource).not.toContain('../canvas/session')
+    expect(menuDefinitionsSource).toContain('../../commands/registry')
+    expect(commandPaletteSource).toContain('../../commands/registry')
+    expect(commandPaletteSource).not.toContain('../../shortcuts/manager')
+  })
+
+  it('keeps Design Template import orchestration in the workflow module', () => {
+    const communityControllerSource = readSource('../app/community/controller.ts')
+    const workflowSource = readSource('../app/design-template-import/workflow.ts')
+
+    expect(communityControllerSource).toContain('../design-template-import/workflow')
+    expect(communityControllerSource).not.toContain('../document-session/actions')
+    expect(communityControllerSource).not.toContain('downloadTemplate')
+    expect(workflowSource).toContain('../document-session/actions')
+    expect(workflowSource).toContain('../../ipc/community')
+  })
+
   it('keeps Species Catalog state private to the workbench implementation', () => {
     const sourcePaths = [
       '../app',

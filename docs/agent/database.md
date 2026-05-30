@@ -86,6 +86,7 @@ When canopi-data removes or adds columns, update atomically:
 - `get_locale_best_common_name` returns locale-specific best name without fallback.
 - Search list rows include secondary names and fallback flags for disambiguation.
 - Cross-workflow backend callers should share Species Catalog read behavior through `desktop/src/services/species_catalog_read.rs` instead of reaching directly into `plant_db` lookup helpers from unrelated services.
+- Site Adaptation compatibility and replacement reads belong behind `desktop/src/services/species_catalog_read.rs`. Site Adaptation owns compatibility interpretation and response shaping; it should not own Species Catalog SQL, placeholder assembly, table names, or localized Common Name lookup.
 
 ## canopi-data Export
 

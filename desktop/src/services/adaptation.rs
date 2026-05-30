@@ -1,7 +1,6 @@
 use crate::contracts::adaptation::{CompatibilityResult, ReplacementSuggestion};
 use crate::db::{PlantDb, require_plant_db};
 use crate::services::species_catalog_read::SpeciesCatalogRead;
-use rusqlite::types::ToSql;
 
 pub fn check_plant_compatibility(
     plant_db: &PlantDb,
@@ -18,66 +17,21 @@ pub fn check_plant_compatibility(
 
     let conn = require_plant_db(plant_db)?;
     let species_catalog = SpeciesCatalogRead::new(&conn);
-    let placeholders = canonical_names
-        .iter()
-        .enumerate()
-        .map(|(index, _)| format!("?{}", index + 1))
-        .collect::<Vec<_>>()
-        .join(", ");
-
-    let sql = format!(
-        "SELECT s.id, s.canonical_name, s.hardiness_zone_min, s.hardiness_zone_max
-         FROM species s
-         WHERE s.canonical_name IN ({placeholders})"
-    );
-
-    let mut stmt = conn
-        .prepare(&sql)
-        .map_err(|e| format!("Failed to prepare compatibility query: {e}"))?;
-
-    let params: Vec<&dyn ToSql> = canonical_names
-        .iter()
-        .map(|name| name as &dyn ToSql)
-        .collect();
-
-    let rows = stmt
-        .query_map(params.as_slice(), |row| -> rusqlite::Result<_> {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, Option<i32>>(2)?,
-                row.get::<_, Option<i32>>(3)?,
-            ))
-        })
-        .map_err(|e| format!("Failed to query compatibility: {e}"))?;
-
-    let mut by_name = std::collections::HashMap::new();
+    let rows = species_catalog.compatibility_rows_for_canonical_names(&canonical_names, &locale)?;
+    let mut results = Vec::with_capacity(rows.len());
     for row in rows {
-        let (species_id, canonical_name, hardiness_min, hardiness_max) =
-            row.map_err(|e| format!("Failed to read row: {e}"))?;
-        let common_name = species_catalog.common_name_for_species_id(&species_id, &locale);
         let (is_compatible, zone_diff) =
-            compute_zone_diff(hardiness_min, hardiness_max, target_hardiness);
+            compute_zone_diff(row.hardiness_min, row.hardiness_max, target_hardiness);
 
-        by_name.insert(
-            canonical_name.clone(),
-            CompatibilityResult {
-                species_id,
-                canonical_name,
-                common_name,
-                hardiness_min,
-                hardiness_max,
-                is_compatible,
-                zone_diff,
-            },
-        );
-    }
-
-    let mut results = Vec::with_capacity(by_name.len());
-    for canonical_name in canonical_names {
-        if let Some(result) = by_name.remove(&canonical_name) {
-            results.push(result);
-        }
+        results.push(CompatibilityResult {
+            species_id: row.species_id,
+            canonical_name: row.canonical_name,
+            common_name: row.common_name,
+            hardiness_min: row.hardiness_min,
+            hardiness_max: row.hardiness_max,
+            is_compatible,
+            zone_diff,
+        });
     }
 
     Ok(results)
@@ -92,92 +46,20 @@ pub fn suggest_replacements(
 ) -> Result<Vec<ReplacementSuggestion>, String> {
     let conn = require_plant_db(plant_db)?;
     let species_catalog = SpeciesCatalogRead::new(&conn);
-
-    let source: Option<(Option<String>, Option<f32>)> = conn
-        .query_row(
-            "SELECT s.stratum, s.height_max_m FROM species s WHERE s.canonical_name = ?1",
-            [&canonical_name],
-            |row| -> rusqlite::Result<_> { Ok((row.get(0)?, row.get(1)?)) },
-        )
-        .map_err(|e| format!("Failed to look up source species: {e}"))
-        .ok();
-
-    let (stratum, height) = source.unwrap_or((None, None));
-
-    let mut where_clauses = vec![
-        "s.canonical_name != ?1".to_owned(),
-        "s.hardiness_zone_min IS NOT NULL".to_owned(),
-        "s.hardiness_zone_max IS NOT NULL".to_owned(),
-        "s.hardiness_zone_min <= ?2".to_owned(),
-        "s.hardiness_zone_max >= ?2".to_owned(),
-    ];
-    let mut params: Vec<Box<dyn ToSql>> =
-        vec![Box::new(canonical_name.clone()), Box::new(target_hardiness)];
-
-    if let Some(ref source_stratum) = stratum {
-        params.push(Box::new(source_stratum.clone()));
-        where_clauses.push(format!("s.stratum = ?{}", params.len()));
-    }
-
-    if let Some(source_height) = height {
-        let min_height = source_height * 0.5;
-        let max_height = source_height * 1.5;
-        params.push(Box::new(min_height));
-        where_clauses.push(format!("s.height_max_m >= ?{}", params.len()));
-        params.push(Box::new(max_height));
-        where_clauses.push(format!("s.height_max_m <= ?{}", params.len()));
-    }
-
-    params.push(Box::new(limit.min(20)));
-    let limit_idx = params.len();
-
-    let sql = format!(
-        "SELECT s.id, s.canonical_name, s.hardiness_zone_min, s.hardiness_zone_max,
-                s.stratum, s.height_max_m
-         FROM species s
-         WHERE {}
-         ORDER BY ABS(s.hardiness_zone_min - ?2) ASC, s.canonical_name ASC
-         LIMIT ?{limit_idx}",
-        where_clauses.join(" AND ")
-    );
-
-    let param_refs: Vec<&dyn ToSql> = params
-        .iter()
-        .map(|value| value.as_ref() as &dyn ToSql)
-        .collect();
-
-    let mut stmt = conn
-        .prepare(&sql)
-        .map_err(|e| format!("Failed to prepare replacements query: {e}"))?;
-    let rows = stmt
-        .query_map(param_refs.as_slice(), |row| -> rusqlite::Result<_> {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, Option<i32>>(2)?,
-                row.get::<_, Option<i32>>(3)?,
-                row.get::<_, Option<String>>(4)?,
-                row.get::<_, Option<f32>>(5)?,
-            ))
+    species_catalog
+        .replacement_rows_for_species(&canonical_name, target_hardiness, limit, &locale)
+        .map(|rows| {
+            rows.into_iter()
+                .map(|row| ReplacementSuggestion {
+                    canonical_name: row.canonical_name,
+                    common_name: row.common_name,
+                    hardiness_min: row.hardiness_min,
+                    hardiness_max: row.hardiness_max,
+                    stratum: row.stratum,
+                    height_max_m: row.height_max_m,
+                })
+                .collect()
         })
-        .map_err(|e| format!("Failed to query replacements: {e}"))?;
-
-    let mut suggestions = Vec::new();
-    for row in rows {
-        let (species_id, canonical_name, hardiness_min, hardiness_max, stratum, height_max_m) =
-            row.map_err(|e| format!("Failed to read replacement row: {e}"))?;
-        let common_name = species_catalog.common_name_for_species_id(&species_id, &locale);
-        suggestions.push(ReplacementSuggestion {
-            canonical_name,
-            common_name,
-            hardiness_min,
-            hardiness_max,
-            stratum,
-            height_max_m,
-        });
-    }
-
-    Ok(suggestions)
 }
 
 /// Returns `(is_compatible, zone_diff)`.

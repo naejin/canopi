@@ -1,6 +1,6 @@
 import { computed } from '@preact/signals'
-import { openDesignAsTemplate } from '../document-session/actions'
-import { downloadTemplate, getTemplateCatalog, getTemplatePreview } from '../../ipc/community'
+import { importDesignTemplateIntoCurrentSession } from '../design-template-import/workflow'
+import { getTemplateCatalog, getTemplatePreview } from '../../ipc/community'
 import type { TemplateMeta } from '../../types/community'
 import {
   catalogError,
@@ -84,8 +84,7 @@ export async function importTemplateIntoCurrentSession(template: TemplateMeta): 
   templateImportError.value = null
 
   try {
-    const path = await downloadTemplate(template.download_url)
-    const result = await openDesignAsTemplate(path, template.title)
+    const result = await importDesignTemplateIntoCurrentSession(template)
     if (result !== 'cancelled') {
       selectedTemplate.value = null
     }
