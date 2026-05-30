@@ -190,14 +190,22 @@ describe('scene runtime mutation controller', () => {
     const { controller, sceneStore, state } = createController(file)
     state.lockedIds = new Set(['zone-1'])
 
-    controller.selectAll({
-      plants: true,
-      zones: true,
-      annotations: true,
-    })
+    controller.selectAll()
 
     expect(sceneStore.session.selectedEntityIds).toEqual(new Set(['group-1', 'annotation-1']))
     expect(state.invalidations).toBe(1)
+  })
+
+  it('selectAll reads layer visibility from the scene store', () => {
+    const file = makeFile()
+    file.layers = file.layers.map((layer) =>
+      layer.name === 'annotations' ? { ...layer, visible: false } : layer,
+    )
+    const { controller, sceneStore } = createController(file)
+
+    controller.selectAll()
+
+    expect(sceneStore.session.selectedEntityIds).toEqual(new Set(['plant-1', 'plant-2', 'zone-1']))
   })
 
   it('updates species colors through the presentation seam', () => {

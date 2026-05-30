@@ -4,7 +4,6 @@ import { mutateSettingsProjection } from '../../app/settings/projection'
 import {
   gridVisible,
   rulersVisible,
-  layerVisibility,
 } from '../../app/canvas-settings/signals'
 import { guides } from '../scene-metadata-state'
 import { lockedObjectIds, plantNamesRevision, sceneEntityRevision } from '../runtime-mirror-state'
@@ -23,17 +22,19 @@ import { createPixiSceneRenderer } from './renderers/pixi-scene'
 import type { SceneRendererContext, SceneRendererInstance } from './renderers/scene-types'
 import { SceneStore } from './scene'
 import {
-  applySignalBackedSceneState,
+  isAppOwnedLayerProjection,
   resetTransientRuntimeState,
   syncCanvasSignalsFromDocument,
   syncCanvasSignalsFromScene,
+  syncGuideSignalsFromScene,
   syncPresentationSignalsFromSceneSession,
+  syncSceneLayerSignalsFromScene,
 } from './scene-runtime/scene-sync'
 import { SceneRuntimeChromeCoordinator } from './scene-runtime/chrome-coordinator'
 import { SceneRuntimeDocumentBridge } from './scene-runtime/document'
 import { installSceneRuntimeEffects } from './scene-runtime/effects'
 import { SceneRuntimeRenderScheduler, type SceneRuntimeRenderKind } from './scene-runtime/render-scheduler'
-import type { ScenePersistedState } from './scene'
+import type { SceneLayerEntity, ScenePersistedState } from './scene'
 import { SceneHistory } from './scene-history'
 import { SceneRuntimeMutationController } from './scene-runtime/mutations'
 import { SceneRuntimePresentationController } from './scene-runtime/presentation'
@@ -49,6 +50,7 @@ import type { CanvasRuntimeDocumentMetadata, MountedCanvasRuntime } from './runt
 import { targets, speciesTarget } from '../../target'
 
 type RuntimeInvalidationKind = 'scene' | 'viewport' | 'chrome'
+type SceneLayerEdit = Partial<Pick<SceneLayerEntity, 'visible' | 'locked' | 'opacity'>>
 
 export interface SceneCanvasRuntimeOptions {
   targetPresentation?: SceneRuntimePanelTargetAdapter
@@ -69,7 +71,6 @@ export class SceneCanvasRuntime implements MountedCanvasRuntime {
     getViewport: () => this._camera.viewport,
     prepareSceneSnapshot: async () => {
       const presentationRevision = this._currentPresentationRevision()
-      this._applySignalBackedSceneState({ recordHistory: false, syncGuides: true })
       const presentation = await this._presentation.refreshCurrentPresentationData()
       this._applyPresentationBackfillsIfCurrent(presentationRevision, presentation.backfills)
       return this._presentation.buildRendererSnapshot()
@@ -111,7 +112,6 @@ export class SceneCanvasRuntime implements MountedCanvasRuntime {
       incrementViewportRevision: () => {
         this._viewportRevision.value += 1
       },
-      applySignalBackedSceneState: (options) => this._applySignalBackedSceneState(options),
     })
     this._sceneEdits = new SceneRuntimeEditCoordinator({
       sceneStore: this._sceneStore,
@@ -292,7 +292,7 @@ export class SceneCanvasRuntime implements MountedCanvasRuntime {
   }
 
   selectAll(): void {
-    this._mutations.selectAll(layerVisibility.value)
+    this._mutations.selectAll()
   }
 
   bringToFront(): void {
@@ -332,6 +332,21 @@ export class SceneCanvasRuntime implements MountedCanvasRuntime {
   toggleRulers(): void {
     rulersVisible.value = !rulersVisible.value
     this._invalidate('chrome')
+  }
+
+  setSceneLayerVisibility(name: string, visible: boolean): boolean {
+    return this._setSceneLayerState(name, { visible })
+  }
+
+  setSceneLayerOpacity(name: string, opacity: number): boolean {
+    if (!Number.isFinite(opacity)) return false
+    return this._setSceneLayerState(name, {
+      opacity: Math.min(1, Math.max(0, opacity)),
+    })
+  }
+
+  setSceneLayerLocked(name: string, locked: boolean): boolean {
+    return this._setSceneLayerState(name, { locked })
   }
 
   getPlantSizeMode(): PlantSizeMode {
@@ -509,10 +524,6 @@ export class SceneCanvasRuntime implements MountedCanvasRuntime {
       onChromeOverlay: () => {
         this._renderChrome()
       },
-      onLayerSignals: () => {
-        const changed = this._applySignalBackedSceneState({ recordHistory: true, syncGuides: true })
-        if (changed) this._invalidate('scene')
-      },
       onPanelTargetHover: () => {
         this._invalidate('scene')
       },
@@ -534,23 +545,37 @@ export class SceneCanvasRuntime implements MountedCanvasRuntime {
     })
   }
 
-  private _applySignalBackedSceneState(options: { recordHistory: boolean; syncGuides: boolean }): boolean {
-    return applySignalBackedSceneState({
-      sceneStore: this._sceneStore,
-      captureSnapshot: () => this._documents.captureCommandSnapshot(),
-      markDirty: (before, type) => this._documents.markDirty(before, type),
-    }, options)
+  private _setSceneLayerState(name: string, edit: SceneLayerEdit): boolean {
+    if (isAppOwnedLayerProjection(name)) return false
+
+    const committed = this._sceneEdits.run('scene-layer-settings', (tx) => {
+      tx.mutate((draft) => {
+        const layer = draft.layers.find((entry) => entry.name === name)
+        if (!layer) return
+        if (edit.visible !== undefined) layer.visible = edit.visible
+        if (edit.locked !== undefined) layer.locked = edit.locked
+        if (edit.opacity !== undefined) layer.opacity = edit.opacity
+      })
+    })
+    if (committed) syncSceneLayerSignalsFromScene(this._sceneStore, name)
+    return committed
   }
 
   private _addGuide(axis: 'h' | 'v', position: number): void {
-    const before = this._documents.captureCommandSnapshot()
-    guides.value = [
-      ...guides.value,
-      { id: createUuid(), axis, position },
-    ]
-    this._applySignalBackedSceneState({ recordHistory: false, syncGuides: true })
-    this._documents.markDirty(before, 'guide-add')
-    this._renderChrome()
+    const tx = this._sceneEdits.begin('guide-add')
+    try {
+      tx.mutate((draft) => {
+        draft.guides.push({ id: createUuid(), axis, position })
+      })
+      const committed = tx.commit({ invalidate: 'chrome' })
+      if (committed) {
+        syncGuideSignalsFromScene(this._sceneStore)
+        this._renderChrome()
+      }
+    } catch (error) {
+      tx.abort()
+      throw error
+    }
   }
 
   private _resolveHighlightedTargets(scene: ScenePersistedState): { plantIds: readonly string[]; zoneIds: readonly string[] } {

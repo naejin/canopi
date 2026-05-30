@@ -85,7 +85,6 @@ function createHarness() {
       invalidations.push('scene')
     },
     incrementViewportRevision: () => {},
-    applySignalBackedSceneState: () => false,
   })
   const sceneEdits = new SceneRuntimeEditCoordinator({
     sceneStore,

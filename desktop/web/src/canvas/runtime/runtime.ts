@@ -34,6 +34,9 @@ export interface CanvasCommandSurface {
   toggleGrid(): void
   toggleSnapToGrid(): void
   toggleRulers(): void
+  setSceneLayerVisibility(name: string, visible: boolean): boolean
+  setSceneLayerOpacity(name: string, opacity: number): boolean
+  setSceneLayerLocked(name: string, locked: boolean): boolean
   setPlantSizeMode(mode: PlantSizeMode): void
   setPlantColorByAttr(attr: ColorByAttribute | null): void
   ensureSpeciesCacheEntries(canonicalNames: string[], activeLocale: string): Promise<boolean>

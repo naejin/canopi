@@ -7,19 +7,19 @@ import { plantColorByAttr, plantSizeMode } from '../../plant-display-state'
 import { guides, northBearingDeg } from '../../scene-metadata-state'
 import { lockedObjectIds } from '../../runtime-mirror-state'
 import { clearCanvasSelection, setCanvasSelection, setCanvasTool } from '../../session-state'
-import { cloneLayerWithSignals } from '../scene-visuals'
-import type { SceneCommandSnapshot } from '../scene-commands'
 import type { SceneStore } from '../scene'
 
-interface ApplySignalBackedSceneStateOptions {
-  recordHistory: boolean
-  syncGuides: boolean
+const APP_OWNED_LAYER_PROJECTIONS = new Set(['base', 'contours'])
+
+interface SceneLayerProjectionSource {
+  name: string
+  visible: boolean
+  locked: boolean
+  opacity: number
 }
 
-interface ApplySignalBackedSceneStateDeps {
-  sceneStore: SceneStore
-  captureSnapshot: () => SceneCommandSnapshot
-  markDirty: (before: SceneCommandSnapshot, type: string) => void
+export function isAppOwnedLayerProjection(name: string): boolean {
+  return APP_OWNED_LAYER_PROJECTIONS.has(name)
 }
 
 export function resetTransientRuntimeState(
@@ -33,14 +33,7 @@ export function resetTransientRuntimeState(
 }
 
 function syncCanvasSignalsFromDocument(file: CanopiFile): void {
-  const visibility: Record<string, boolean> = {}
-  const locks: Record<string, boolean> = {}
-  const opacities: Record<string, number> = {}
-  for (const layer of file.layers) {
-    visibility[layer.name] = layer.visible
-    locks[layer.name] = layer.locked
-    opacities[layer.name] = layer.opacity
-  }
+  const { visibility, locks, opacities } = sceneLayerProjectionFromLayers(file.layers)
 
   batch(() => {
     layerVisibility.value = visibility
@@ -54,14 +47,7 @@ function syncCanvasSignalsFromDocument(file: CanopiFile): void {
 
 function syncCanvasSignalsFromPersistedScene(sceneStore: SceneStore): void {
   const persisted = sceneStore.persisted
-  const visibility: Record<string, boolean> = {}
-  const locks: Record<string, boolean> = {}
-  const opacities: Record<string, number> = {}
-  for (const layer of persisted.layers) {
-    visibility[layer.name] = layer.visible
-    locks[layer.name] = layer.locked
-    opacities[layer.name] = layer.opacity
-  }
+  const { visibility, locks, opacities } = sceneLayerProjectionFromLayers(persisted.layers)
 
   batch(() => {
     layerVisibility.value = visibility
@@ -88,31 +74,48 @@ export function syncCanvasSignalsFromScene(sceneStore: SceneStore): void {
   })
 }
 
-export function applySignalBackedSceneState(
-  deps: ApplySignalBackedSceneStateDeps,
-  options: ApplySignalBackedSceneStateOptions,
-): boolean {
-  const persisted = deps.sceneStore.persisted
-  const nextLayers = persisted.layers.map((layer) => cloneLayerWithSignals(
-    layer,
-    layerVisibility.value,
-    layerLockState.value,
-    layerOpacity.value,
-  ))
-  const nextGuides = guides.value
-  const currentGuides = persisted.guides
+export function syncSceneLayerSignalsFromScene(sceneStore: SceneStore, layerName: string): void {
+  if (isAppOwnedLayerProjection(layerName)) return
+  const layer = sceneStore.persisted.layers.find((entry) => entry.name === layerName)
+  if (!layer) return
 
-  const layersChanged = JSON.stringify(nextLayers) !== JSON.stringify(persisted.layers)
-  const guidesChanged = options.syncGuides && JSON.stringify(currentGuides) !== JSON.stringify(nextGuides)
-  if (!layersChanged && !guidesChanged) return false
-
-  const before = options.recordHistory ? deps.captureSnapshot() : null
-
-  deps.sceneStore.updatePersisted((draft) => {
-    if (layersChanged) draft.layers = nextLayers
-    if (guidesChanged) draft.guides = nextGuides.map((guide) => ({ ...guide }))
+  batch(() => {
+    layerVisibility.value = {
+      ...layerVisibility.value,
+      [layer.name]: layer.visible,
+    }
+    layerLockState.value = {
+      ...layerLockState.value,
+      [layer.name]: layer.locked,
+    }
+    layerOpacity.value = {
+      ...layerOpacity.value,
+      [layer.name]: layer.opacity,
+    }
   })
+}
 
-  if (before) deps.markDirty(before, 'scene-settings')
-  return true
+export function syncGuideSignalsFromScene(sceneStore: SceneStore): void {
+  guides.value = sceneStore.persisted.guides.map((guide) => ({ ...guide }))
+}
+
+function sceneLayerProjectionFromLayers(
+  layers: ReadonlyArray<SceneLayerProjectionSource>,
+): {
+  visibility: Record<string, boolean>
+  locks: Record<string, boolean>
+  opacities: Record<string, number>
+} {
+  const visibility = { ...layerVisibility.value }
+  const locks = { ...layerLockState.value }
+  const opacities = { ...layerOpacity.value }
+
+  for (const layer of layers) {
+    if (isAppOwnedLayerProjection(layer.name)) continue
+    visibility[layer.name] = layer.visible
+    locks[layer.name] = layer.locked
+    opacities[layer.name] = layer.opacity
+  }
+
+  return { visibility, locks, opacities }
 }

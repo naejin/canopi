@@ -1,6 +1,5 @@
 import type { CanopiFile } from '../../../types/design'
 import { composeDocumentForSave } from '../../../app/contracts/document'
-import { guides } from '../../scene-metadata-state'
 import { lockedObjectIds, sceneEntityRevision } from '../../runtime-mirror-state'
 import type { SceneStore } from '../scene'
 import type { PlantPresentationBackfill } from './presentation'
@@ -11,11 +10,6 @@ import {
 } from '../scene-commands'
 import { SceneHistory } from '../scene-history'
 import type { CanvasRuntimeDocumentMetadata } from '../runtime'
-
-interface ApplySignalBackedSceneStateOptions {
-  recordHistory: boolean
-  syncGuides: boolean
-}
 
 interface SceneRuntimeDocumentBridgeOptions {
   sceneStore: SceneStore
@@ -28,7 +22,6 @@ interface SceneRuntimeDocumentBridgeOptions {
   syncCanvasSignalsFromScene(): void
   invalidateScene(): void
   incrementViewportRevision(): void
-  applySignalBackedSceneState(options: ApplySignalBackedSceneStateOptions): boolean
 }
 
 export class SceneRuntimeDocumentBridge {
@@ -42,7 +35,6 @@ export class SceneRuntimeDocumentBridge {
   private readonly _syncCanvasSignalsFromScene: SceneRuntimeDocumentBridgeOptions['syncCanvasSignalsFromScene']
   private readonly _invalidateScene: SceneRuntimeDocumentBridgeOptions['invalidateScene']
   private readonly _incrementViewportRevision: SceneRuntimeDocumentBridgeOptions['incrementViewportRevision']
-  private readonly _applySignalBackedSceneState: SceneRuntimeDocumentBridgeOptions['applySignalBackedSceneState']
 
   constructor(options: SceneRuntimeDocumentBridgeOptions) {
     this._sceneStore = options.sceneStore
@@ -55,7 +47,6 @@ export class SceneRuntimeDocumentBridge {
     this._syncCanvasSignalsFromScene = options.syncCanvasSignalsFromScene
     this._invalidateScene = options.invalidateScene
     this._incrementViewportRevision = options.incrementViewportRevision
-    this._applySignalBackedSceneState = options.applySignalBackedSceneState
   }
 
   loadDocument(file: CanopiFile): void {
@@ -85,12 +76,6 @@ export class SceneRuntimeDocumentBridge {
   }
 
   serializeDocument(metadata: CanvasRuntimeDocumentMetadata, doc: CanopiFile): CanopiFile {
-    const shouldSyncGuides =
-      guides.value.length > 0
-      || this._sceneStore.persisted.guides.length > 0
-
-    this._applySignalBackedSceneState({ recordHistory: false, syncGuides: shouldSyncGuides })
-
     const canvasOutput = this._sceneStore.toCanopiFile({ now: new Date() })
     return composeDocumentForSave({ metadata, document: doc, canvas: canvasOutput })
   }

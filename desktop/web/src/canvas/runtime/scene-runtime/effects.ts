@@ -2,18 +2,13 @@ import { effect } from '@preact/signals'
 import { locale, theme } from '../../../app/settings/state'
 import {
   gridVisible,
-  layerLockState,
-  layerOpacity,
-  layerVisibility,
   rulersVisible,
 } from '../../../app/canvas-settings/signals'
-import { guides } from '../../scene-metadata-state'
 
 interface SceneRuntimeEffectsDeps {
   onTheme: () => void
   onLocale: () => void
   onChromeOverlay: () => void
-  onLayerSignals: () => void
   onPanelTargetHover: () => void
   subscribePanelOriginTargetChanges(onChange: () => void): () => void
 }
@@ -32,13 +27,6 @@ export function installSceneRuntimeEffects(deps: SceneRuntimeEffectsDeps): Array
       void gridVisible.value
       void rulersVisible.value
       deps.onChromeOverlay()
-    }),
-    effect(() => {
-      void layerVisibility.value
-      void layerLockState.value
-      void layerOpacity.value
-      void guides.value
-      deps.onLayerSignals()
     }),
     deps.subscribePanelOriginTargetChanges(deps.onPanelTargetHover),
   ]

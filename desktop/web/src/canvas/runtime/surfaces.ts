@@ -30,6 +30,9 @@ export function createCanvasRuntimeSurfaces(runtime: MountedCanvasRuntime): Canv
     toggleGrid: () => runtime.toggleGrid(),
     toggleSnapToGrid: () => runtime.toggleSnapToGrid(),
     toggleRulers: () => runtime.toggleRulers(),
+    setSceneLayerVisibility: (name, visible) => runtime.setSceneLayerVisibility(name, visible),
+    setSceneLayerOpacity: (name, opacity) => runtime.setSceneLayerOpacity(name, opacity),
+    setSceneLayerLocked: (name, locked) => runtime.setSceneLayerLocked(name, locked),
     setPlantSizeMode: (mode) => runtime.setPlantSizeMode(mode),
     setPlantColorByAttr: (attr) => runtime.setPlantColorByAttr(attr),
     ensureSpeciesCacheEntries: (canonicalNames, activeLocale) =>

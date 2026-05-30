@@ -133,11 +133,12 @@ export class SceneRuntimeMutationController {
     })
   }
 
-  selectAll(layerVisibility: Readonly<Record<string, boolean | undefined>>): void {
+  selectAll(): void {
     const persisted = this._sceneStore.persisted
     const locked = this._locks.get()
     const ids = new Set<string>()
     const groupedMemberIds = new Set(persisted.groups.flatMap((group) => group.memberIds))
+    const layerVisibility = sceneLayerVisibility(persisted)
 
     if (layerVisibility.plants !== false) {
       for (const plant of persisted.plants) {
@@ -406,6 +407,12 @@ export class SceneRuntimeMutationController {
       })
     })
   }
+}
+
+function sceneLayerVisibility(
+  persisted: ScenePersistedState,
+): Readonly<Record<string, boolean | undefined>> {
+  return Object.fromEntries(persisted.layers.map((layer) => [layer.name, layer.visible]))
 }
 
 function resolveSelectedEntitySets(

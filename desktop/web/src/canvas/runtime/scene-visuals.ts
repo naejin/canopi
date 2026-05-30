@@ -1,6 +1,5 @@
 import { getCanvasColor, isThemeManagedZoneFill } from '../theme-refresh'
 import type {
-  SceneLayerEntity,
   ScenePersistedState,
   SceneZoneEntity,
 } from './scene'
@@ -25,20 +24,6 @@ export function getSceneLayerStyle(
     visible: layer?.visible ?? true,
     locked: layer?.locked ?? false,
     opacity: layer?.opacity ?? 1,
-  }
-}
-
-export function cloneLayerWithSignals(
-  layer: SceneLayerEntity,
-  visibility: Record<string, boolean>,
-  locks: Record<string, boolean>,
-  opacities: Record<string, number>,
-): SceneLayerEntity {
-  return {
-    ...layer,
-    visible: visibility[layer.name] ?? layer.visible,
-    locked: locks[layer.name] ?? layer.locked,
-    opacity: opacities[layer.name] ?? layer.opacity,
   }
 }
 

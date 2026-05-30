@@ -6,6 +6,7 @@ import {
   contourIntervalMeters,
   hillshadeOpacity,
   hillshadeVisible,
+  layerLockState,
   layerOpacity,
   layerVisibility,
 } from '../app/canvas-settings/signals'
@@ -22,10 +23,12 @@ import {
   setHillshadeOpacity,
   setLayerOpacity,
   toggleHillshadeVisibility,
+  toggleLayerLock,
   toggleLayerVisibility,
 } from '../app/canvas-settings/controller'
 import { basemapStyle } from '../app/settings/state'
 import { flushSettingsProjection, hydrateSettingsProjection } from '../app/settings/projection'
+import { setCurrentCanvasSession } from '../canvas/session'
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -36,7 +39,9 @@ beforeEach(() => {
   hillshadeOpacity.value = 0.55
   basemapStyle.value = 'street'
   layerVisibility.value = { base: true, contours: false, plants: true, zones: true, annotations: true }
+  layerLockState.value = { base: false, contours: false, plants: false, zones: false, annotations: false }
   layerOpacity.value = { base: 1, contours: 1, plants: 1, zones: 1, annotations: 1 }
+  setCurrentCanvasSession(null)
   vi.mocked(setSettings).mockClear()
   hydrateSettingsProjection({
     locale: 'en',
@@ -69,6 +74,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  setCurrentCanvasSession(null)
   vi.runOnlyPendingTimers()
   vi.useRealTimers()
 })
@@ -180,5 +186,25 @@ describe('bottom panel actions', () => {
     expect(vi.mocked(setSettings)).toHaveBeenCalledWith(expect.objectContaining({
       map_opacity: 0.6,
     }))
+  })
+
+  it('routes scene layer controls through the mounted canvas command surface', () => {
+    const commandSurface = {
+      setSceneLayerVisibility: vi.fn(() => true),
+      setSceneLayerOpacity: vi.fn(() => true),
+      setSceneLayerLocked: vi.fn(() => true),
+    }
+    setCurrentCanvasSession(commandSurface as never)
+
+    toggleLayerVisibility('plants')
+    setLayerOpacity('zones', 0.4)
+    toggleLayerLock('annotations')
+
+    expect(commandSurface.setSceneLayerVisibility).toHaveBeenCalledWith('plants', false)
+    expect(commandSurface.setSceneLayerOpacity).toHaveBeenCalledWith('zones', 0.4)
+    expect(commandSurface.setSceneLayerLocked).toHaveBeenCalledWith('annotations', true)
+    expect(layerVisibility.value.plants).toBe(true)
+    expect(layerOpacity.value.zones).toBe(1)
+    expect(layerLockState.value.annotations).toBe(false)
   })
 })

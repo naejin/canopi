@@ -2,13 +2,19 @@ import {
   activeLayerName,
   gridVisible,
   layerLockState,
-  layerOpacity,
   layerPanelOpen,
   layerVisibility,
 } from './signals'
 import { type BottomPanelTab } from './bottom-panel-state'
 import type { BasemapStyle } from '../../generated/contracts'
 import { mutateSettingsProjection } from '../settings/projection'
+import { getCurrentCanvasCommandSurface } from '../../canvas/session'
+
+const MAP_SETTING_LAYERS = new Set(['base', 'contours'])
+
+function isMapSettingLayer(name: string): boolean {
+  return MAP_SETTING_LAYERS.has(name)
+}
 
 export function setLayerPanelOpen(open: boolean): void {
   layerPanelOpen.value = open
@@ -47,17 +53,13 @@ export function toggleLayerVisibility(name: string): void {
   }
 
   const next = !(layerVisibility.value[name] ?? true)
-  layerVisibility.value = {
-    ...layerVisibility.value,
-    [name]: next,
-  }
+  getCurrentCanvasCommandSurface()?.setSceneLayerVisibility(name, next)
 }
 
 export function toggleLayerLock(name: string): void {
-  layerLockState.value = {
-    ...layerLockState.value,
-    [name]: !(layerLockState.value[name] ?? false),
-  }
+  if (isMapSettingLayer(name)) return
+  const next = !(layerLockState.value[name] ?? false)
+  getCurrentCanvasCommandSurface()?.setSceneLayerLocked(name, next)
 }
 
 export function setLayerOpacity(name: string, opacity: number): void {
@@ -75,10 +77,7 @@ export function setLayerOpacity(name: string, opacity: number): void {
     return
   }
 
-  layerOpacity.value = {
-    ...layerOpacity.value,
-    [name]: next,
-  }
+  getCurrentCanvasCommandSurface()?.setSceneLayerOpacity(name, next)
 }
 
 export function setContourIntervalMeters(interval: number): void {

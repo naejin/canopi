@@ -103,6 +103,24 @@ describe('frontend boundary sources', () => {
     expect(presentationSource).toContain('./state')
   })
 
+  it('keeps scene layer and guide writes behind the Scene Edit runtime seam', () => {
+    const controllerSource = readSource('../app/canvas-settings/controller.ts')
+    const runtimeSource = readSource('../canvas/runtime/scene-runtime.ts')
+    const effectsSource = readSource('../canvas/runtime/scene-runtime/effects.ts')
+    const documentSource = readSource('../canvas/runtime/scene-runtime/document.ts')
+
+    expect(controllerSource).toContain('getCurrentCanvasCommandSurface')
+    expect(controllerSource).not.toContain('layerVisibility.value =')
+    expect(controllerSource).not.toContain('layerLockState.value =')
+    expect(controllerSource).not.toContain('layerOpacity.value =')
+    expect(runtimeSource).toContain('setSceneLayerVisibility')
+    expect(runtimeSource).toContain("_sceneEdits.begin('guide-add')")
+    expect(runtimeSource).not.toContain('applySignalBackedSceneState')
+    expect(effectsSource).not.toContain('layerVisibility')
+    expect(effectsSource).not.toContain('guides')
+    expect(documentSource).not.toContain('applySignalBackedSceneState')
+  })
+
   it('keeps Target identity, resolution, and map projection behind the Target module', () => {
     const targetIndexSource = readSource('../target/index.ts')
     const mapOverlaySource = readSource('../maplibre/canvas-overlays.ts')

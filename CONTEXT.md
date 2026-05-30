@@ -52,6 +52,10 @@ _Avoid_: Label, comment
 A visibility and locking group for design objects. A design has many layers, and each layer controls whether its objects are visible, locked, and how opaque they appear.
 _Avoid_: Category, folder
 
+**Scene Edit**:
+A runtime change to canvas-owned design state, including placed plants, zones, annotations, object groups, layers, plant species colors, and guides. A scene edit is the canvas mutation concept that owns undo/redo history, dirty-state updates, mirror projections, and render invalidation for canvas state.
+_Avoid_: Canvas mutation, layer signal write, scene patch
+
 **Object Group**:
 A named or unnamed collection of design objects that move or transform together. An object group may contain placed plants, zones, annotations, or other design objects.
 _Avoid_: Layer, selection
@@ -59,6 +63,10 @@ _Avoid_: Layer, selection
 **Location**:
 The real-world site associated with a design, expressed as latitude, longitude, and optionally altitude. A design has zero or one location.
 _Avoid_: Map pin, address
+
+**Location Workbench**:
+The interaction surface for searching, setting, clearing, presenting, and validating a design's location. The location workbench coordinates location drafts, geocoding results, altitude preservation, saved-site presentation, and map-readiness cues, but it does not own canvas scene data.
+_Avoid_: Map panel state, location input state, basemap status helper
 
 **Climate Zone**:
 A broad climate classification associated with a site or design template. Climate zone helps designers compare templates and site suitability at a high level.
@@ -79,6 +87,10 @@ _Avoid_: Timeline popup, event editor, task workbench
 **Budget Item**:
 A cost entry in a design. A budget item may refer to a species, placed plant, zone, or manual line item and contributes to the design's budget.
 _Avoid_: Price, estimate row
+
+**Budget Item Workbench**:
+The interaction surface for editing budget item prices, choosing budget currency, exporting budget data, and presenting budget item targets. The budget item workbench coordinates budget UI state and commands, but it does not own placed plants or the planning projection.
+_Avoid_: Budget tab state, price editor helper, CSV helper
 
 **Target**:
 The design subject that a timeline action, budget item, or other planning entry refers to. A target may identify a species, a placed plant, a zone, or a manual entry.
@@ -148,8 +160,17 @@ Use **Climate Zone** for broad site/template classification. Use **Hardiness Zon
 **Target vs Selection**:
 A **Target** names what a planning entry refers to. A selection is a temporary user interaction state and should not be used as domain language for planning relationships.
 
+**Scene Edit vs Design Mutation**:
+A **Scene Edit** changes canvas-owned design state and should be handled by the canvas runtime. A Design mutation changes non-canvas design state such as budget items, timeline actions, consortiums, location, description, or extra fields.
+
+**Location vs Location Workbench**:
+A **Location** is the saved site in a Design. The **Location Workbench** is the interaction surface that edits and presents that saved site.
+
 **Planning Projection vs Design Authority**:
 A **Planning Projection** is derived runtime state for planning surfaces. It must not become the authority for Design planning entries, placed plants, or canvas scene state.
+
+**Budget Item vs Budget Item Workbench**:
+A **Budget Item** is a cost entry in a Design. The **Budget Item Workbench** is the interaction surface that edits, exports, and presents budget item behavior.
 
 **Consortium vs Guild**:
 Use **Consortium** for Canopi's broader stratified, time-aware plant assembly. Use "guild" only in explanatory copy when discussing narrower companion-planting concepts.
@@ -195,6 +216,14 @@ Designer: "Is the orchard area a zone or a layer?"
 
 Developer: "It is a zone. A layer controls visibility and locking; the zone is the meaningful area in the design."
 
+Designer: "If I hide a layer, is that just a UI toggle?"
+
+Developer: "Layer visibility is canvas-owned design state. Changing it is a scene edit, so it belongs with canvas undo, dirty state, and save behavior."
+
+Designer: "Can I search for an address and keep the site's altitude?"
+
+Developer: "Yes. The location workbench handles the search result, saved location, and altitude preservation while the design stores only the location."
+
 Designer: "Can a timeline action apply to every apple tree in the design?"
 
 Developer: "Yes. The timeline action can target the apple species, which resolves to the placed plants of that species in the design."
@@ -202,6 +231,10 @@ Developer: "Yes. The timeline action can target the apple species, which resolve
 Designer: "Why does the budget update when I add another apple tree?"
 
 Developer: "The budget view uses the planning projection, which derives budget rows from placed plants and budget items without becoming the source of truth for either."
+
+Designer: "Is setting a plant price part of the planning projection?"
+
+Developer: "No. The budget item workbench edits budget items. The planning projection only derives rows from those budget items and placed plants."
 
 Designer: "Is the high canopy row a layer?"
 

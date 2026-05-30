@@ -17,7 +17,10 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - Commands, tools, save/load, and document replacement mutate scene state, not renderer objects.
 - Canvas-owned document fields serialize from the live scene, not stale document input copies.
 - Plant presentation state lives in `SceneStore.session`, not standalone canvas signals.
-- Canvas signals such as selected object IDs, size mode, and color mode are UI mirrors, not runtime authority.
+- Scene Layer visibility, opacity, and locks are scene edits. UI controllers must call the canvas command surface instead of writing `layerVisibility`, `layerOpacity`, or `layerLockState` directly.
+- Guide creation is a scene edit owned by the runtime. The `guides` signal is a chrome projection, not document authority.
+- Canvas signals such as selected object IDs, size mode, color mode, layer state, and guides are UI mirrors, not runtime authority.
+- Basemap, contour, and hillshade display settings remain app settings projections; do not route those map-surface settings through Scene Edit unless the document schema intentionally makes them canvas-owned.
 - No circular imports between scene store/runtime and document store. Pass document readers or values through seams when needed.
 
 ## History And Dirty State

@@ -8,7 +8,7 @@ vi.mock('../../ipc/species', () => ({
 import {
   snapToGridEnabled,
 } from '../../app/canvas-settings/signals'
-import { layerOpacity, layerVisibility } from '../../app/canvas-settings/signals'
+import { layerLockState, layerOpacity, layerVisibility } from '../../app/canvas-settings/signals'
 import { guides } from '../scene-metadata-state'
 import { lockedObjectIds, sceneEntityRevision } from '../runtime-mirror-state'
 import { plantColorMenuOpen } from '../plant-color-menu-state'
@@ -175,6 +175,7 @@ describe('scene canvas runtime', () => {
     selectedPanelTargetOrigin.value = null
     selectedPanelTargets.value = []
     layerVisibility.value = {}
+    layerLockState.value = {}
     layerOpacity.value = {}
     plantSizeMode.value = 'default'
     plantColorByAttr.value = null
@@ -602,28 +603,56 @@ describe('scene canvas runtime', () => {
     expect(invalidate).toHaveBeenLastCalledWith('scene')
   })
 
-  it('serializes signal-backed layer state and guides through the scene runtime', () => {
+  it('edits layer state through the scene edit history and projection signals', () => {
     const runtime = new SceneCanvasRuntime()
     const file = makeFile()
     runtime.loadDocument(file)
+    runtime.markSaved()
 
-    layerVisibility.value = {
-      ...layerVisibility.value,
-      plants: false,
-    }
-    layerOpacity.value = {
-      ...layerOpacity.value,
-      zones: 0.4,
-    }
-    guides.value = [{ id: 'guide-1', axis: 'v', position: 42 }]
+    expect(runtime.setSceneLayerVisibility('plants', false)).toBe(true)
+    expect(runtime.setSceneLayerOpacity('zones', 0.4)).toBe(true)
+    expect(runtime.setSceneLayerLocked('zones', true)).toBe(true)
 
     const serialized = runtime.serializeDocument({ name: file.name }, file)
 
     expect(serialized.layers.find((layer) => layer.name === 'plants')?.visible).toBe(false)
     expect(serialized.layers.find((layer) => layer.name === 'zones')?.opacity).toBe(0.4)
+    expect(serialized.layers.find((layer) => layer.name === 'zones')?.locked).toBe(true)
+    expect(layerVisibility.value.plants).toBe(false)
+    expect(layerOpacity.value.zones).toBe(0.4)
+    expect(layerLockState.value.zones).toBe(true)
+    expect(canvasClean.value).toBe(false)
+    expect(runtime.canUndo.value).toBe(true)
+
+    runtime.undo()
+    expect(runtime.serializeDocument({ name: file.name }, file).layers.find((layer) => layer.name === 'zones')?.locked)
+      .toBe(false)
+    expect(layerLockState.value.zones).toBe(false)
+
+    runtime.redo()
+    expect(runtime.serializeDocument({ name: file.name }, file).layers.find((layer) => layer.name === 'zones')?.locked)
+      .toBe(true)
+    expect(layerLockState.value.zones).toBe(true)
+  })
+
+  it('edits guides through the scene edit history and projection signals', () => {
+    const runtime = new SceneCanvasRuntime()
+    const file = makeFile()
+    runtime.loadDocument(file)
+    runtime.markSaved()
+
+    ;(runtime as any)._addGuide('v', 42)
+
+    const serialized = runtime.serializeDocument({ name: file.name }, file)
     expect(serialized.extra).toEqual({
-      guides: [{ id: 'guide-1', axis: 'v', position: 42 }],
+      guides: [{ id: expect.any(String), axis: 'v', position: 42 }],
     })
+    expect(guides.value).toEqual([{ id: expect.any(String), axis: 'v', position: 42 }])
+    expect(canvasClean.value).toBe(false)
+
+    runtime.undo()
+    expect(runtime.serializeDocument({ name: file.name }, file).extra).toEqual({})
+    expect(guides.value).toEqual([])
   })
 
   it('marks the canvas dirty when only the species default color changes', () => {
