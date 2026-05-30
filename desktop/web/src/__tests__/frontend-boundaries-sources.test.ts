@@ -179,6 +179,7 @@ describe('frontend boundary sources', () => {
 
   it('keeps Timeline Action workbench and drag edits behind app/timeline modules', () => {
     const timelineSource = readSource('../components/canvas/InteractiveTimeline.tsx')
+    const canvasWorkbenchSource = readSource('../app/timeline/canvas-workbench.ts')
     const interactionSource = readSource('../app/timeline/interaction.ts')
     const editingSource = readSource('../app/timeline/editing.ts')
     const workbenchSource = readSource('../app/timeline/workbench.ts')
@@ -191,7 +192,10 @@ describe('frontend boundary sources', () => {
     expect(timelineSource).not.toContain('createTimelineActionFromFormData')
     expect(timelineSource).not.toContain('formDataFromTimelineAction')
     expect(timelineSource).not.toContain('timelineActionPatchFromFormData')
-    expect(timelineSource).toContain('../app/timeline/workbench')
+    expect(timelineSource).toContain('../app/timeline/canvas-workbench')
+    expect(canvasWorkbenchSource).toContain('./interaction')
+    expect(canvasWorkbenchSource).toContain('./workbench')
+    expect(canvasWorkbenchSource).toContain('hitTestAction')
     expect(interactionSource).toContain('beginTimelineActionEdit')
     expect(interactionSource).toContain('computeTimelineAutoScrollSpeed')
     expect(editingSource).toContain('beginDocumentArrayEdit')
@@ -205,11 +209,15 @@ describe('frontend boundary sources', () => {
 
   it('keeps Consortium document drag edits behind the Consortium interaction module', () => {
     const consortiumSource = readSource('../components/canvas/ConsortiumChart.tsx')
+    const workbenchSource = readSource('../app/consortium/workbench.ts')
     const interactionSource = readSource('../app/consortium/interaction.ts')
 
     expect(consortiumSource).not.toContain('beginDocumentArrayEdit')
     expect(consortiumSource).not.toContain('moveConsortiumEntryInArray')
     expect(consortiumSource).not.toContain('reorderConsortiumEntryInArray')
+    expect(consortiumSource).toContain('../app/consortium/workbench')
+    expect(workbenchSource).toContain('./interaction')
+    expect(workbenchSource).toContain('hitTestBar')
     expect(interactionSource).toContain('beginDocumentArrayEdit')
     expect(interactionSource).toContain('moveConsortiumEntryInArray')
     expect(interactionSource).toContain('reorderConsortiumEntryInArray')
