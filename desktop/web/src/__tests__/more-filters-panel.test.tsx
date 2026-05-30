@@ -1,9 +1,8 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { MoreFiltersPanel } from '../components/plant-db/MoreFiltersPanel'
-import { dynamicOptionsCache, dynamicOptionsErrors, dynamicOptionsPending, extraFilters } from '../app/plant-browser'
-import { locale } from '../app/settings/state'
+import type { SpeciesCatalogWorkbench } from '../app/plant-browser/workbench'
+import { createTestSpeciesCatalogWorkbench } from './support/species-catalog-workbench'
 
 async function flushEffects(): Promise<void> {
   await Promise.resolve()
@@ -12,21 +11,44 @@ async function flushEffects(): Promise<void> {
 
 describe('MoreFiltersPanel outside-click behavior', () => {
   let container: HTMLDivElement
+  let MoreFiltersPanel: typeof import('../components/plant-db/MoreFiltersPanel').MoreFiltersPanel
+  let locale: typeof import('../app/settings/state').locale
+  let workbench: SpeciesCatalogWorkbench
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    vi.resetModules()
+    const settings = await import('../app/settings/state')
+    locale = settings.locale
+    locale.value = 'en'
+    workbench = await createTestSpeciesCatalogWorkbench({
+      locale,
+      loadDynamicFilterOptions: async (fields) => fields.map((field) => ({
+        field,
+        field_type: 'numeric',
+        values: null,
+        range: [1, 13],
+      })),
+    })
+    vi.doMock('../app/plant-browser', async () => {
+      const actual = await vi.importActual<typeof import('../app/plant-browser')>('../app/plant-browser')
+      return {
+        ...actual,
+        speciesCatalogWorkbench: workbench,
+      }
+    })
+    ;({ MoreFiltersPanel } = await import('../components/plant-db/MoreFiltersPanel'))
+
     container = document.createElement('div')
     document.body.innerHTML = ''
     document.body.appendChild(container)
-    locale.value = 'en'
-    extraFilters.value = []
-    dynamicOptionsCache.value = {}
-    dynamicOptionsPending.value = {}
-    dynamicOptionsErrors.value = {}
+    workbench.clearFilters()
   })
 
   afterEach(() => {
     render(null, container)
     container.remove()
+    workbench.dispose()
+    vi.doUnmock('../app/plant-browser')
   })
 
   it('stays open when interacting with an overlay-preserving control outside the panel', async () => {
@@ -65,16 +87,7 @@ describe('MoreFiltersPanel outside-click behavior', () => {
   })
 
   it('uses integer slider steps for hardiness filters', async () => {
-    dynamicOptionsCache.value = {
-      en: {
-        hardiness_zone_min: {
-          field: 'hardiness_zone_min',
-          field_type: 'numeric',
-          values: null,
-          range: [1, 13],
-        },
-      },
-    }
+    await workbench.loadDynamicOptions(['hardiness_zone_min'])
 
     await act(async () => {
       render(<MoreFiltersPanel open onClose={vi.fn()} />, container)

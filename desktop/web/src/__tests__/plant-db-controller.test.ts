@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { DynamicFilterOptions } from '../types/species'
+import type { DynamicFilterOptions, SpeciesListItem } from '../types/species'
 
 const mocks = vi.hoisted(() => ({
   searchSpecies: vi.fn(async () => ({
@@ -42,6 +42,27 @@ function deferred<T>() {
   return { promise, resolve, reject }
 }
 
+function makePlant(canonicalName: string, isFavorite = false): SpeciesListItem {
+  return {
+    canonical_name: canonicalName,
+    slug: canonicalName.toLowerCase().replace(/\s+/g, '-'),
+    common_name: canonicalName,
+    common_name_2: null,
+    is_name_fallback: false,
+    family: null,
+    genus: null,
+    height_max_m: null,
+    hardiness_zone_min: null,
+    hardiness_zone_max: null,
+    growth_rate: null,
+    stratum: null,
+    edibility_rating: null,
+    medicinal_rating: null,
+    width_max_m: null,
+    is_favorite: isFavorite,
+  }
+}
+
 beforeEach(() => {
   vi.resetModules()
   mocks.searchSpecies.mockClear()
@@ -53,7 +74,7 @@ beforeEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('plant DB controller lifecycle', () => {
+describe('Species Catalog Workbench lifecycle', () => {
   it('does not execute searches on module import alone', async () => {
     await import('../app/plant-browser')
     expect(mocks.searchSpecies).not.toHaveBeenCalled()
@@ -61,14 +82,14 @@ describe('plant DB controller lifecycle', () => {
 
   it('starts searches on mount and stops after dispose', async () => {
     const plantDb = await import('../app/plant-browser')
-    const dispose = plantDb.mountPlantDbController()
+    const dispose = plantDb.speciesCatalogWorkbench.mount()
 
     await flushMicrotasks()
     expect(mocks.searchSpecies).toHaveBeenCalledTimes(1)
 
     mocks.searchSpecies.mockClear()
     dispose()
-    plantDb.sortField.value = 'Family'
+    plantDb.speciesCatalogWorkbench.setSort('Family')
     await flushMicrotasks()
 
     expect(mocks.searchSpecies).not.toHaveBeenCalled()
@@ -79,33 +100,38 @@ describe('plant DB controller lifecycle', () => {
     ;(mocks.searchSpecies as ReturnType<typeof vi.fn>)
       .mockRejectedValueOnce(new Error('Plant database unavailable: bundled plant database is missing'))
 
-    const dispose = plantDb.mountPlantDbController()
+    const dispose = plantDb.speciesCatalogWorkbench.mount()
     await flushMicrotasks()
 
-    expect(plantDb.searchError.value).toBe(
+    const results = plantDb.speciesCatalogWorkbench.results.value
+    expect(results.error).toBe(
       'Plant database unavailable: bundled plant database is missing',
     )
-    expect(plantDb.isSearching.value).toBe(false)
+    expect(plantDb.speciesCatalogWorkbench.isSearchLoading(results.status)).toBe(false)
     dispose()
   })
 
   it('increments result-set revision on first-page searches but not pagination appends', async () => {
     const plantDb = await import('../app/plant-browser')
-    const dispose = plantDb.mountPlantDbController()
+    ;(mocks.searchSpecies as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      items: [],
+      next_cursor: 'offset:50',
+      total_estimate: 0,
+    })
+    const dispose = plantDb.speciesCatalogWorkbench.mount()
 
     await flushMicrotasks()
-    expect(plantDb.searchResultsRevision.value).toBe(1)
+    expect(plantDb.speciesCatalogWorkbench.results.value.committedRevision).toBe(1)
 
-    plantDb.nextCursor.value = 'offset:50'
     ;(mocks.searchSpecies as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       items: [],
       next_cursor: null,
       total_estimate: 0,
     })
 
-    await plantDb.loadNextPage()
+    await plantDb.speciesCatalogWorkbench.loadNextPage()
 
-    expect(plantDb.searchResultsRevision.value).toBe(1)
+    expect(plantDb.speciesCatalogWorkbench.results.value.committedRevision).toBe(1)
     dispose()
   })
 
@@ -134,17 +160,17 @@ describe('plant DB controller lifecycle', () => {
       .mockResolvedValueOnce(frenchOptions)
 
     appState.locale.value = 'en'
-    await plantDb.loadDynamicOptions(['habit'])
+    await plantDb.speciesCatalogWorkbench.loadDynamicOptions(['habit'])
     expect(mocks.getDynamicFilterOptions).toHaveBeenNthCalledWith(1, ['habit'], 'en')
-    expect(plantDb.dynamicOptionsCache.value.en?.habit?.values?.[0]?.label).toBe('Shrub')
+    expect(plantDb.speciesCatalogWorkbench.dynamicOptions.value.cache.en?.habit?.values?.[0]?.label).toBe('Shrub')
 
     appState.locale.value = 'fr'
-    await plantDb.loadDynamicOptions(['habit'])
+    await plantDb.speciesCatalogWorkbench.loadDynamicOptions(['habit'])
     expect(mocks.getDynamicFilterOptions).toHaveBeenNthCalledWith(2, ['habit'], 'fr')
-    expect(plantDb.dynamicOptionsCache.value.fr?.habit?.values?.[0]?.label).toBe('Arbuste')
+    expect(plantDb.speciesCatalogWorkbench.dynamicOptions.value.cache.fr?.habit?.values?.[0]?.label).toBe('Arbuste')
 
     appState.locale.value = 'en'
-    await plantDb.loadDynamicOptions(['habit'])
+    await plantDb.speciesCatalogWorkbench.loadDynamicOptions(['habit'])
     expect(mocks.getDynamicFilterOptions).toHaveBeenCalledTimes(2)
   })
 
@@ -159,11 +185,11 @@ describe('plant DB controller lifecycle', () => {
     ;(mocks.getDynamicFilterOptions as ReturnType<typeof vi.fn>).mockReturnValueOnce(request)
 
     appState.locale.value = 'fr'
-    const first = plantDb.loadDynamicOptions(['habit'])
-    const second = plantDb.loadDynamicOptions(['habit'])
+    const first = plantDb.speciesCatalogWorkbench.loadDynamicOptions(['habit'])
+    const second = plantDb.speciesCatalogWorkbench.loadDynamicOptions(['habit'])
 
     expect(mocks.getDynamicFilterOptions).toHaveBeenCalledTimes(1)
-    expect(plantDb.dynamicOptionsPending.value.fr?.habit).toBe(true)
+    expect(plantDb.speciesCatalogWorkbench.dynamicOptions.value.pending.fr?.habit).toBe(true)
 
     resolveRequest([
       {
@@ -177,8 +203,8 @@ describe('plant DB controller lifecycle', () => {
     await first
     await second
 
-    expect(plantDb.dynamicOptionsPending.value.fr?.habit).toBeUndefined()
-    expect(plantDb.dynamicOptionsCache.value.fr?.habit?.values?.[0]?.label).toBe('Arbuste')
+    expect(plantDb.speciesCatalogWorkbench.dynamicOptions.value.pending.fr?.habit).toBeUndefined()
+    expect(plantDb.speciesCatalogWorkbench.dynamicOptions.value.cache.fr?.habit?.values?.[0]?.label).toBe('Arbuste')
   })
 
   it('records a field-level error when IPC returns no options for a requested field', async () => {
@@ -189,10 +215,10 @@ describe('plant DB controller lifecycle', () => {
     appState.locale.value = 'en'
     ;(mocks.getDynamicFilterOptions as ReturnType<typeof vi.fn>).mockResolvedValueOnce([])
 
-    await plantDb.loadDynamicOptions(['habit'])
+    await plantDb.speciesCatalogWorkbench.loadDynamicOptions(['habit'])
 
-    expect(plantDb.dynamicOptionsCache.value.en?.habit).toBeUndefined()
-    expect(plantDb.dynamicOptionsErrors.value.en?.habit).toBe(
+    expect(plantDb.speciesCatalogWorkbench.dynamicOptions.value.cache.en?.habit).toBeUndefined()
+    expect(plantDb.speciesCatalogWorkbench.dynamicOptions.value.errors.en?.habit).toBe(
       plantDb.DYNAMIC_OPTIONS_BACKEND_MISMATCH_ERROR,
     )
   })
@@ -214,15 +240,15 @@ describe('plant DB controller lifecycle', () => {
         },
       ])
 
-    await plantDb.loadDynamicOptions(['habit'])
-    expect(plantDb.dynamicOptionsErrors.value.en?.habit).toBe(
+    await plantDb.speciesCatalogWorkbench.loadDynamicOptions(['habit'])
+    expect(plantDb.speciesCatalogWorkbench.dynamicOptions.value.errors.en?.habit).toBe(
       plantDb.DYNAMIC_OPTIONS_BACKEND_MISMATCH_ERROR,
     )
 
-    await plantDb.loadDynamicOptions(['habit'])
+    await plantDb.speciesCatalogWorkbench.loadDynamicOptions(['habit'])
 
-    expect(plantDb.dynamicOptionsErrors.value.en?.habit).toBeUndefined()
-    expect(plantDb.dynamicOptionsCache.value.en?.habit?.values?.[0]?.label).toBe('Shrub')
+    expect(plantDb.speciesCatalogWorkbench.dynamicOptions.value.errors.en?.habit).toBeUndefined()
+    expect(plantDb.speciesCatalogWorkbench.dynamicOptions.value.cache.en?.habit?.values?.[0]?.label).toBe('Shrub')
   })
 
   it('records thrown IPC errors per field', async () => {
@@ -234,17 +260,23 @@ describe('plant DB controller lifecycle', () => {
     ;(mocks.getDynamicFilterOptions as ReturnType<typeof vi.fn>)
       .mockRejectedValueOnce(new Error('backend exploded'))
 
-    await plantDb.loadDynamicOptions(['habit'])
+    await plantDb.speciesCatalogWorkbench.loadDynamicOptions(['habit'])
 
-    expect(plantDb.dynamicOptionsErrors.value.en?.habit).toBe('backend exploded')
-    expect(plantDb.dynamicOptionsPending.value.en?.habit).toBeUndefined()
+    expect(plantDb.speciesCatalogWorkbench.dynamicOptions.value.errors.en?.habit).toBe('backend exploded')
+    expect(plantDb.speciesCatalogWorkbench.dynamicOptions.value.pending.en?.habit).toBeUndefined()
   })
 
   it('preserves the first-page total estimate when loading more results', async () => {
     const plantDb = await import('../app/plant-browser')
 
-    plantDb.totalEstimate.value = 42
-    plantDb.nextCursor.value = 'offset:50'
+    ;(mocks.searchSpecies as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      items: [],
+      next_cursor: 'offset:50',
+      total_estimate: 42,
+    })
+
+    const dispose = plantDb.speciesCatalogWorkbench.mount()
+    await flushMicrotasks()
 
     ;(mocks.searchSpecies as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       items: [],
@@ -252,9 +284,9 @@ describe('plant DB controller lifecycle', () => {
       total_estimate: 0,
     })
 
-    await plantDb.loadNextPage()
+    await plantDb.speciesCatalogWorkbench.loadNextPage()
 
-    expect(mocks.searchSpecies).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mocks.searchSpecies).toHaveBeenLastCalledWith(expect.objectContaining({
       text: '',
       filters: expect.any(Object),
       cursor: 'offset:50',
@@ -263,40 +295,33 @@ describe('plant DB controller lifecycle', () => {
       locale: 'en',
       include_total: false,
     }))
-    expect(plantDb.totalEstimate.value).toBe(42)
+    expect(plantDb.speciesCatalogWorkbench.results.value.totalEstimate).toBe(42)
+    dispose()
   })
 
   it('loads favorite items into both detail and badge state', async () => {
     const plantDb = await import('../app/plant-browser')
 
     ;(mocks.getFavorites as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
-      {
-        canonical_name: 'Malus domestica',
-        common_name: 'Apple',
-        family: 'Rosaceae',
-        edible: true,
-        sun: 'full',
-        soil: 'loam',
-        height_m: 4,
-        width_m: 3,
-        is_favorite: true,
-        extra: null,
-      } as any,
+      makePlant('Malus domestica', true),
     ])
 
-    await plantDb.loadFavoriteItems()
+    await plantDb.speciesCatalogWorkbench.loadFavorites()
 
-    expect(plantDb.favoriteNames.value).toEqual(['Malus domestica'])
-    expect(plantDb.favoriteItems.value).toHaveLength(1)
-    expect(plantDb.favoriteItems.value[0]?.canonical_name).toBe('Malus domestica')
-    expect(plantDb.favoriteItemsLoading.value).toBe(false)
+    expect(plantDb.speciesCatalogWorkbench.sidebar.value.favoriteNames).toEqual(['Malus domestica'])
+    expect(plantDb.speciesCatalogWorkbench.favorites.value.items).toHaveLength(1)
+    expect(plantDb.speciesCatalogWorkbench.favorites.value.items[0]?.canonical_name).toBe('Malus domestica')
+    expect(plantDb.speciesCatalogWorkbench.favorites.value.loading).toBe(false)
   })
 
   it('exposes selection and favorites through the Species Catalog Workbench', async () => {
     const plantDb = await import('../app/plant-browser')
 
     plantDb.speciesCatalogWorkbench.selectSpecies('Malus domestica')
-    plantDb.favoriteNames.value = ['Malus domestica']
+    ;(mocks.getFavorites as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+      makePlant('Malus domestica', true),
+    ])
+    await plantDb.speciesCatalogWorkbench.loadFavorites()
 
     expect(plantDb.speciesCatalogWorkbench.selectedCanonicalName.value).toBe('Malus domestica')
     expect(plantDb.speciesCatalogWorkbench.isFavorite('Malus domestica')).toBe(true)
@@ -309,73 +334,77 @@ describe('plant DB controller lifecycle', () => {
   it('ignores stale favorite-item responses after a locale switch', async () => {
     const plantDb = await import('../app/plant-browser')
     const appState = await import('../app/settings/state')
-    const english = deferred<any[]>()
-    const french = deferred<any[]>()
+    const english = deferred<SpeciesListItem[]>()
+    const french = deferred<SpeciesListItem[]>()
 
     ;(mocks.getFavorites as ReturnType<typeof vi.fn>)
       .mockReturnValueOnce(english.promise)
       .mockReturnValueOnce(french.promise)
 
     appState.locale.value = 'en'
-    const first = plantDb.loadFavoriteItems()
+    const first = plantDb.speciesCatalogWorkbench.loadFavorites()
 
     appState.locale.value = 'fr'
-    const second = plantDb.loadFavoriteItems()
+    const second = plantDb.speciesCatalogWorkbench.loadFavorites()
 
     english.resolve([
-      { canonical_name: 'English Favorite', is_favorite: true } as any,
+      makePlant('English Favorite', true),
     ])
     await first
 
-    expect(plantDb.favoriteItems.value).toEqual([])
+    expect(plantDb.speciesCatalogWorkbench.favorites.value.items).toEqual([])
 
     french.resolve([
-      { canonical_name: 'French Favorite', is_favorite: true } as any,
+      makePlant('French Favorite', true),
     ])
     await second
 
-    expect(plantDb.favoriteItems.value).toEqual([
-      { canonical_name: 'French Favorite', is_favorite: true },
+    expect(plantDb.speciesCatalogWorkbench.favorites.value.items).toEqual([
+      makePlant('French Favorite', true),
     ])
-    expect(plantDb.favoriteNames.value).toEqual(['French Favorite'])
+    expect(plantDb.speciesCatalogWorkbench.sidebar.value.favoriteNames).toEqual(['French Favorite'])
   })
 
   it('does not let a stale favorites reload overwrite an optimistic toggle', async () => {
     const plantDb = await import('../app/plant-browser')
-    const pendingFavorites = deferred<any[]>()
+    const pendingFavorites = deferred<SpeciesListItem[]>()
 
-    plantDb.searchResults.value = [
-      {
-        canonical_name: 'Malus domestica',
-        common_name: 'Apple',
-        is_favorite: true,
-      } as any,
-    ]
-    plantDb.favoriteItems.value = [{ canonical_name: 'Malus domestica', is_favorite: true } as any]
-    plantDb.favoriteNames.value = ['Malus domestica']
+    ;(mocks.searchSpecies as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      items: [makePlant('Malus domestica', true)],
+      next_cursor: null,
+      total_estimate: 1,
+    })
+    const dispose = plantDb.speciesCatalogWorkbench.mount()
+    await flushMicrotasks()
+
+    ;(mocks.getFavorites as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+      makePlant('Malus domestica', true),
+    ])
+    await plantDb.speciesCatalogWorkbench.loadFavorites()
 
     ;(mocks.getFavorites as ReturnType<typeof vi.fn>).mockReturnValueOnce(pendingFavorites.promise)
     mocks.toggleFavorite.mockResolvedValueOnce(false)
 
-    const refresh = plantDb.loadFavoriteItems()
-    await plantDb.toggleFavoriteAction('Malus domestica')
+    const refresh = plantDb.speciesCatalogWorkbench.loadFavorites()
+    await plantDb.speciesCatalogWorkbench.toggleFavorite('Malus domestica')
 
-    pendingFavorites.resolve([{ canonical_name: 'Stale Favorite', is_favorite: true } as any])
+    pendingFavorites.resolve([makePlant('Stale Favorite', true)])
     await refresh
 
-    expect(plantDb.favoriteItems.value).toEqual([])
-    expect(plantDb.favoriteNames.value).toEqual([])
-    expect(plantDb.searchResults.value[0]?.is_favorite).toBe(false)
-    expect(plantDb.favoriteItemsLoading.value).toBe(false)
+    expect(plantDb.speciesCatalogWorkbench.favorites.value.items).toEqual([])
+    expect(plantDb.speciesCatalogWorkbench.sidebar.value.favoriteNames).toEqual([])
+    expect(plantDb.speciesCatalogWorkbench.results.value.items[0]?.is_favorite).toBe(false)
+    expect(plantDb.speciesCatalogWorkbench.favorites.value.loading).toBe(false)
+    dispose()
   })
 
   it('ignores stale sidebar list responses after a locale switch', async () => {
     const plantDb = await import('../app/plant-browser')
     const appState = await import('../app/settings/state')
-    const englishFavorites = deferred<any[]>()
-    const englishRecent = deferred<any[]>()
-    const frenchFavorites = deferred<any[]>()
-    const frenchRecent = deferred<any[]>()
+    const englishFavorites = deferred<SpeciesListItem[]>()
+    const englishRecent = deferred<SpeciesListItem[]>()
+    const frenchFavorites = deferred<SpeciesListItem[]>()
+    const frenchRecent = deferred<SpeciesListItem[]>()
 
     ;(mocks.getFavorites as ReturnType<typeof vi.fn>)
       .mockReturnValueOnce(englishFavorites.promise)
@@ -385,25 +414,25 @@ describe('plant DB controller lifecycle', () => {
       .mockReturnValueOnce(frenchRecent.promise)
 
     appState.locale.value = 'en'
-    const first = plantDb.loadSidebarLists()
+    const first = plantDb.speciesCatalogWorkbench.reloadSidebarLists()
 
     appState.locale.value = 'fr'
-    const second = plantDb.loadSidebarLists()
+    const second = plantDb.speciesCatalogWorkbench.reloadSidebarLists()
 
-    englishFavorites.resolve([{ canonical_name: 'English Favorite' } as any])
-    englishRecent.resolve([{ canonical_name: 'English Recent' } as any])
+    englishFavorites.resolve([makePlant('English Favorite')])
+    englishRecent.resolve([makePlant('English Recent')])
     await first
 
-    expect(plantDb.favoriteNames.value).toEqual([])
-    expect(plantDb.recentlyViewed.value).toEqual([])
+    expect(plantDb.speciesCatalogWorkbench.sidebar.value.favoriteNames).toEqual([])
+    expect(plantDb.speciesCatalogWorkbench.sidebar.value.recentlyViewed).toEqual([])
 
-    frenchFavorites.resolve([{ canonical_name: 'French Favorite' } as any])
-    frenchRecent.resolve([{ canonical_name: 'French Recent' } as any])
+    frenchFavorites.resolve([makePlant('French Favorite')])
+    frenchRecent.resolve([makePlant('French Recent')])
     await second
 
-    expect(plantDb.favoriteNames.value).toEqual(['French Favorite'])
-    expect(plantDb.recentlyViewed.value).toEqual([
-      { canonical_name: 'French Recent' },
+    expect(plantDb.speciesCatalogWorkbench.sidebar.value.favoriteNames).toEqual(['French Favorite'])
+    expect(plantDb.speciesCatalogWorkbench.sidebar.value.recentlyViewed).toEqual([
+      makePlant('French Recent'),
     ])
   })
 })

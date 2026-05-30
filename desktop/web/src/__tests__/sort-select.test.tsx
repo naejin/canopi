@@ -1,27 +1,42 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { speciesCatalogWorkbench, searchText, sortField } from '../app/plant-browser'
-import { locale } from '../app/settings/state'
-import { SortSelect } from '../components/plant-db/SortSelect'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { SpeciesCatalogWorkbench } from '../app/plant-browser/workbench'
+import { createTestSpeciesCatalogWorkbench } from './support/species-catalog-workbench'
 
 describe('SortSelect', () => {
   let container: HTMLDivElement
+  let SortSelect: typeof import('../components/plant-db/SortSelect').SortSelect
+  let locale: typeof import('../app/settings/state').locale
+  let workbench: SpeciesCatalogWorkbench
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    vi.resetModules()
+    const settings = await import('../app/settings/state')
+    locale = settings.locale
+    locale.value = 'en'
+    workbench = await createTestSpeciesCatalogWorkbench({ locale })
+    workbench.setSearchText('')
+    workbench.setSort('Name')
+    vi.doMock('../app/plant-browser', async () => {
+      const actual = await vi.importActual<typeof import('../app/plant-browser')>('../app/plant-browser')
+      return {
+        ...actual,
+        speciesCatalogWorkbench: workbench,
+      }
+    })
+    ;({ SortSelect } = await import('../components/plant-db/SortSelect'))
+
     container = document.createElement('div')
     document.body.innerHTML = ''
     document.body.appendChild(container)
-    locale.value = 'en'
-    speciesCatalogWorkbench.setSearchText('')
-    speciesCatalogWorkbench.setSort('Name')
-    searchText.value = ''
-    sortField.value = 'Name'
   })
 
   afterEach(() => {
     render(null, container)
     container.remove()
+    workbench.dispose()
+    vi.doUnmock('../app/plant-browser')
   })
 
   it('shows Name as the browse default and hides Best match without active text', async () => {
@@ -42,7 +57,7 @@ describe('SortSelect', () => {
 
   it('shows Best match as the default effective sort for active text', async () => {
     await act(async () => {
-      speciesCatalogWorkbench.setSearchText('lin')
+      workbench.setSearchText('lin')
       render(<SortSelect />, container)
     })
 
@@ -53,7 +68,7 @@ describe('SortSelect', () => {
 
   it('lets explicit sorts override active text Best match', async () => {
     await act(async () => {
-      speciesCatalogWorkbench.setSearchText('lin')
+      workbench.setSearchText('lin')
       render(<SortSelect />, container)
     })
 
@@ -63,7 +78,7 @@ describe('SortSelect', () => {
       select.dispatchEvent(new Event('change', { bubbles: true }))
     })
 
-    expect(speciesCatalogWorkbench.intent.value.sort).toBe('Family')
+    expect(workbench.intent.value.sort).toBe('Family')
     expect(select.value).toBe('Family')
   })
 })

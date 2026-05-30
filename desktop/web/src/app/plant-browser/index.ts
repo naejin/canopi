@@ -1,16 +1,5 @@
-export * from './state'
-export * from './controller'
 export * from './workbench'
-export {
-  createPlantSearchSession,
-  isPlantSearchLoading,
-  type DynamicFilterOptionsAdapter,
-  type PlantSearchAdapter,
-  type PlantSearchIntent,
-  type PlantSearchResultState,
-  type PlantSearchSession,
-  type PlantSearchStatus,
-} from './search-session'
+export { createEmptySpeciesFilter, plantFilterCatalog, plantFilterModel } from './plant-filter-model'
 export type {
   ActiveArrayChipField,
   ActiveBooleanChipField,

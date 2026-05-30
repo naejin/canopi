@@ -159,6 +159,28 @@ describe('frontend boundary sources', () => {
     }
   })
 
+  it('keeps Species Catalog state private to the workbench implementation', () => {
+    const sourcePaths = [
+      '../app',
+      '../components',
+    ].flatMap(sourceFilesUnder).filter(isTypescriptSource)
+    const forbiddenImports = [
+      /(^|\/)plant-browser\/state$/,
+      /(^|\/)plant-browser\/controller$/,
+      /(^|\/)plant-browser\/search-session$/,
+    ]
+
+    for (const sourcePath of sourcePaths) {
+      if (sourcePath === '../app/plant-browser/workbench.ts') continue
+      expectNoImportsMatching(sourcePath, forbiddenImports)
+    }
+
+    const barrelSource = readSource('../app/plant-browser/index.ts')
+    expect(barrelSource).not.toContain('./state')
+    expect(barrelSource).not.toContain('./controller')
+    expect(barrelSource).not.toContain('./search-session')
+  })
+
   it('keeps planning surfaces behind the Planning Projection runtime seam', () => {
     const budgetSource = readSource('../components/canvas/BudgetTab.tsx')
     const timelineSource = readSource('../components/canvas/InteractiveTimeline.tsx')

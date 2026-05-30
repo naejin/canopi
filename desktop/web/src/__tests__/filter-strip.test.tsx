@@ -1,40 +1,53 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { FilterStrip } from '../components/plant-db/FilterStrip'
-import {
-  activeFilters,
-  extraFilters,
-  filterOptions,
-  plantFilterModel,
-} from '../app/plant-browser'
-import { locale } from '../app/settings/state'
+import type { SpeciesCatalogWorkbench } from '../app/plant-browser/workbench'
+import { createTestSpeciesCatalogWorkbench } from './support/species-catalog-workbench'
 
 describe('FilterStrip', () => {
   let container: HTMLDivElement
+  let FilterStrip: typeof import('../components/plant-db/FilterStrip').FilterStrip
+  let locale: typeof import('../app/settings/state').locale
+  let workbench: SpeciesCatalogWorkbench
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    vi.resetModules()
+    const settings = await import('../app/settings/state')
+    locale = settings.locale
+    locale.value = 'en'
+    workbench = await createTestSpeciesCatalogWorkbench({
+      locale,
+      getFilterOptions: async () => ({
+        families: [],
+        growth_rates: [],
+        climate_zones: ['Temperate'],
+        habits: ['Tree'],
+        life_cycles: ['Annual'],
+        sun_tolerances: ['full_sun'],
+        soil_tolerances: [],
+      }),
+    })
+    vi.doMock('../app/plant-browser', async () => {
+      const actual = await vi.importActual<typeof import('../app/plant-browser')>('../app/plant-browser')
+      return {
+        ...actual,
+        speciesCatalogWorkbench: workbench,
+      }
+    })
+    ;({ FilterStrip } = await import('../components/plant-db/FilterStrip'))
+
     container = document.createElement('div')
     document.body.innerHTML = ''
     document.body.appendChild(container)
-    locale.value = 'en'
-    activeFilters.value = plantFilterModel.createEmpty()
-    extraFilters.value = []
-    filterOptions.value = {
-      families: [],
-      growth_rates: [],
-      climate_zones: ['Temperate'],
-      habits: ['Tree'],
-      life_cycles: ['Annual'],
-      sun_tolerances: ['full_sun'],
-      soil_tolerances: [],
-    }
+    workbench.clearFilters()
+    await workbench.loadFilterOptions()
   })
 
   afterEach(() => {
     render(null, container)
     container.remove()
-    filterOptions.value = null
+    workbench.dispose()
+    vi.doUnmock('../app/plant-browser')
   })
 
   it('renders life cycle as a catalog strip behavior and patches the fixed request field', async () => {
@@ -54,6 +67,6 @@ describe('FilterStrip', () => {
       annualChip?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    expect(activeFilters.value.life_cycle).toEqual(['Annual'])
+    expect(workbench.intent.value.filters.life_cycle).toEqual(['Annual'])
   })
 })

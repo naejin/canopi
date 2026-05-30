@@ -1,50 +1,42 @@
-import { computed, type ReadonlySignal } from '@preact/signals'
+import { batch, computed, signal, type ReadonlySignal } from '@preact/signals'
+import { getFavorites, getRecentlyViewed, toggleFavorite } from '../../ipc/favorites'
+import {
+  getDynamicFilterOptions,
+  getFilterOptions,
+  searchSpecies,
+} from '../../ipc/species'
 import type {
   DynamicFilterOptions,
   FilterOp,
   FilterOptions,
+  PaginatedResult,
   Sort,
   SpeciesFilter,
   SpeciesListItem,
+  SpeciesSearchRequest,
 } from '../../types/species'
+import { locale } from '../settings/state'
 import {
-  activeFilterCount,
-  dynamicOptionsCache,
-  dynamicOptionsErrors,
-  dynamicOptionsPending,
-  favoriteItems,
-  favoriteItemsLoading,
-  favoriteItemsRevision,
-  favoriteNames,
-  filterOptions,
-  hasActiveFilters,
-  plantSearchSession,
-  selectedCanonicalName,
-  viewMode,
-  type ViewMode,
-} from './state'
-import {
-  addExtraFilter,
-  clearFilters,
-  loadDynamicOptions,
-  loadFavoriteItems,
-  loadFilterOptions,
-  loadNextPage,
-  loadSidebarLists,
-  mountPlantDbController,
-  patchFilters,
-  removeExtraFilter,
-  retrySearch,
-  toggleFavoriteAction,
-} from './controller'
-import { plantFilterCatalog, type StripControlField } from './plant-filter-model'
-import {
+  createPlantSearchSession,
+  DYNAMIC_OPTIONS_BACKEND_MISMATCH_ERROR,
   isActiveSpeciesSearchText,
   isPlantSearchLoading,
+  type DynamicFilterOptionsAdapter,
+  type PlantSearchAdapter,
   type PlantSearchIntent,
   type PlantSearchResultState,
   type PlantSearchStatus,
 } from './search-session'
+import { plantFilterCatalog, plantFilterModel, type StripControlField } from './plant-filter-model'
+
+export { DYNAMIC_OPTIONS_BACKEND_MISMATCH_ERROR }
+
+export type ViewMode = 'list' | 'card'
+
+type FilterOptionsAdapter = () => Promise<FilterOptions | null>
+type FavoriteItemsAdapter = (locale: string) => Promise<SpeciesListItem[]>
+type RecentlyViewedAdapter = (locale: string, limit: number) => Promise<SpeciesListItem[]>
+type ToggleFavoriteAdapter = (canonicalName: string) => Promise<boolean>
 
 export interface SpeciesCatalogFilterStripView {
   readonly options: FilterOptions | null
@@ -61,9 +53,14 @@ export interface SpeciesCatalogFavoritesView {
 }
 
 export interface SpeciesCatalogDynamicOptionsView {
-  readonly cache: Record<string, Record<string, DynamicFilterOptions>>
-  readonly pending: Record<string, Record<string, boolean>>
-  readonly errors: Record<string, Record<string, string>>
+  readonly cache: Readonly<Record<string, Readonly<Record<string, DynamicFilterOptions>>>>
+  readonly pending: Readonly<Record<string, Readonly<Record<string, boolean>>>>
+  readonly errors: Readonly<Record<string, Readonly<Record<string, string>>>>
+}
+
+export interface SpeciesCatalogSidebarView {
+  readonly favoriteNames: readonly string[]
+  readonly recentlyViewed: readonly SpeciesListItem[]
 }
 
 export interface SpeciesCatalogWorkbench {
@@ -75,7 +72,9 @@ export interface SpeciesCatalogWorkbench {
   readonly filterStrip: ReadonlySignal<SpeciesCatalogFilterStripView>
   readonly favorites: ReadonlySignal<SpeciesCatalogFavoritesView>
   readonly dynamicOptions: ReadonlySignal<SpeciesCatalogDynamicOptionsView>
+  readonly sidebar: ReadonlySignal<SpeciesCatalogSidebarView>
   mount(): () => void
+  dispose(): void
   ensureInitialSearch(): void
   reloadSidebarLists(): Promise<void>
   loadFavorites(): Promise<void>
@@ -99,92 +98,301 @@ export interface SpeciesCatalogWorkbench {
   isActiveSearchText(text: string): boolean
 }
 
-const selectedCanonical = computed(() => selectedCanonicalName.value)
-const currentViewMode = computed(() => viewMode.value)
+export interface SpeciesCatalogWorkbenchOptions {
+  readonly search?: PlantSearchAdapter
+  readonly loadDynamicFilterOptions?: DynamicFilterOptionsAdapter
+  readonly getFilterOptions?: FilterOptionsAdapter
+  readonly getFavorites?: FavoriteItemsAdapter
+  readonly getRecentlyViewed?: RecentlyViewedAdapter
+  readonly toggleFavorite?: ToggleFavoriteAdapter
+  readonly locale?: ReadonlySignal<string>
+  readonly pageSize?: number
+  readonly textDebounceMs?: number
+}
 
-const filterStrip = computed<SpeciesCatalogFilterStripView>(() => ({
-  options: filterOptions.value,
-  filters: plantSearchSession.intent.value.filters,
-  hasActive: hasActiveFilters.value,
-  activeCount: activeFilterCount.value,
-  controls: plantFilterCatalog.stripControls(),
-}))
+export type SpeciesCatalogSearchAdapter = (
+  request: SpeciesSearchRequest,
+) => Promise<PaginatedResult<SpeciesListItem>>
 
-const favorites = computed<SpeciesCatalogFavoritesView>(() => ({
-  items: favoriteItems.value,
-  loading: favoriteItemsLoading.value,
-  revision: favoriteItemsRevision.value,
-}))
+export function createSpeciesCatalogWorkbench({
+  search = searchSpecies,
+  loadDynamicFilterOptions = getDynamicFilterOptions,
+  getFilterOptions: getFilterOptionsAdapter = getFilterOptions,
+  getFavorites: getFavoritesAdapter = getFavorites,
+  getRecentlyViewed: getRecentlyViewedAdapter = getRecentlyViewed,
+  toggleFavorite: toggleFavoriteAdapter = toggleFavorite,
+  locale: localeSignal = locale,
+  pageSize,
+  textDebounceMs,
+}: SpeciesCatalogWorkbenchOptions = {}): SpeciesCatalogWorkbench {
+  const plantSearchSession = createPlantSearchSession({
+    search,
+    loadDynamicFilterOptions,
+    locale: localeSignal,
+    pageSize,
+    textDebounceMs,
+  })
+  const filterOptions = signal<FilterOptions | null>(null)
+  const viewMode = signal<ViewMode>('list')
+  const selectedCanonicalName = signal<string | null>(null)
+  const favoriteNames = signal<string[]>([])
+  const favoriteItems = signal<SpeciesListItem[]>([])
+  const favoriteItemsLoading = signal(false)
+  const favoriteItemsRevision = signal(0)
+  const recentlyViewed = signal<SpeciesListItem[]>([])
+  const stripControls = plantFilterCatalog.stripControls()
 
-const dynamicOptions = computed<SpeciesCatalogDynamicOptionsView>(() => ({
-  cache: dynamicOptionsCache.value,
-  pending: dynamicOptionsPending.value,
-  errors: dynamicOptionsErrors.value,
-}))
+  const hasActiveFilters = computed(() => {
+    const intent = plantSearchSession.intent.value
+    return plantFilterModel.hasActive(intent.filters, intent.extraFilters)
+  })
 
-export const speciesCatalogWorkbench: SpeciesCatalogWorkbench = {
-  intent: plantSearchSession.intent,
-  results: plantSearchSession.results,
-  selectedCanonicalName: selectedCanonical,
-  viewMode: currentViewMode,
-  hasActiveFilters,
-  filterStrip,
-  favorites,
-  dynamicOptions,
+  const activeFilterCount = computed(() => {
+    const intent = plantSearchSession.intent.value
+    return plantFilterModel.activeCount(intent.filters, intent.extraFilters)
+  })
 
-  mount: mountPlantDbController,
+  const selectedCanonical = computed(() => selectedCanonicalName.value)
+  const currentViewMode = computed(() => viewMode.value)
 
-  ensureInitialSearch() {
-    const results = plantSearchSession.results.value
-    if (results.items.length === 0 && !isPlantSearchLoading(results.status)) {
-      retrySearch()
+  const filterStrip = computed<SpeciesCatalogFilterStripView>(() => ({
+    options: filterOptions.value,
+    filters: plantSearchSession.intent.value.filters,
+    hasActive: hasActiveFilters.value,
+    activeCount: activeFilterCount.value,
+    controls: stripControls,
+  }))
+
+  const favorites = computed<SpeciesCatalogFavoritesView>(() => ({
+    items: favoriteItems.value,
+    loading: favoriteItemsLoading.value,
+    revision: favoriteItemsRevision.value,
+  }))
+
+  const dynamicOptions = computed<SpeciesCatalogDynamicOptionsView>(() => ({
+    cache: plantSearchSession.signals.dynamicOptionsCache.value,
+    pending: plantSearchSession.signals.dynamicOptionsPending.value,
+    errors: plantSearchSession.signals.dynamicOptionsErrors.value,
+  }))
+
+  const sidebar = computed<SpeciesCatalogSidebarView>(() => ({
+    favoriteNames: favoriteNames.value,
+    recentlyViewed: recentlyViewed.value,
+  }))
+
+  let favoriteItemsGeneration = 0
+  let sidebarListsGeneration = 0
+  let controllerUsers = 0
+  let disposeSearchSession: (() => void) | null = null
+
+  function startPlantDbController(): void {
+    if (disposeSearchSession) return
+    disposeSearchSession = plantSearchSession.start()
+  }
+
+  function stopPlantDbController(): void {
+    disposeSearchSession?.()
+    disposeSearchSession = null
+  }
+
+  async function loadFilterOptions(): Promise<void> {
+    if (filterOptions.value !== null) return
+    try {
+      filterOptions.value = await getFilterOptionsAdapter()
+    } catch {
+      // Non-fatal: the filter strip can still render without option rows.
     }
-  },
+  }
 
-  reloadSidebarLists: loadSidebarLists,
-  loadFavorites: loadFavoriteItems,
-  loadFilterOptions,
+  async function toggleFavoriteAction(canonicalName: string): Promise<void> {
+    try {
+      favoriteItemsGeneration += 1
+      favoriteItemsLoading.value = false
+      favoriteItemsRevision.value += 1
+      const nowFavorite = await toggleFavoriteAdapter(canonicalName)
+      const currentItem = plantSearchSession.results.value.items.find((item) => (
+        item.canonical_name === canonicalName
+      ))
 
-  setSearchText(text) {
-    plantSearchSession.setText(text)
-  },
+      if (nowFavorite) {
+        batch(() => {
+          if (!favoriteNames.value.includes(canonicalName)) {
+            favoriteNames.value = [...favoriteNames.value, canonicalName]
+          }
+          favoriteItems.value = currentItem
+            ? [
+                { ...currentItem, is_favorite: true },
+                ...favoriteItems.value.filter((item) => item.canonical_name !== canonicalName),
+              ]
+            : favoriteItems.value.map((item) =>
+                item.canonical_name === canonicalName
+                  ? { ...item, is_favorite: true }
+                  : item,
+              )
+        })
+      } else {
+        batch(() => {
+          favoriteNames.value = favoriteNames.value.filter((name) => name !== canonicalName)
+          favoriteItems.value = favoriteItems.value.filter((item) => item.canonical_name !== canonicalName)
+        })
+      }
 
-  clearSearchText() {
-    plantSearchSession.setText('')
-  },
+      plantSearchSession.updateResultItem(canonicalName, (item) => ({
+        ...item,
+        is_favorite: nowFavorite,
+      }))
+    } catch {
+      // Non-fatal: UI state remains as it was before the attempted toggle.
+    }
+  }
 
-  retrySearch,
-  loadNextPage,
+  async function loadSidebarLists(): Promise<void> {
+    const generation = ++sidebarListsGeneration
+    const currentLocale = localeSignal.value
+    try {
+      const [favorites, recent] = await Promise.all([
+        getFavoritesAdapter(currentLocale),
+        getRecentlyViewedAdapter(currentLocale, 50),
+      ])
+      if (generation !== sidebarListsGeneration || currentLocale !== localeSignal.value) return
+      batch(() => {
+        favoriteNames.value = favorites.map((item) => item.canonical_name)
+        recentlyViewed.value = recent
+      })
+    } catch {
+      // Non-fatal: sidebar affordances stay stale rather than blocking search.
+    }
+  }
 
-  setSort(sort) {
-    plantSearchSession.setSort(sort)
-  },
+  async function loadFavoriteItems(): Promise<void> {
+    const generation = ++favoriteItemsGeneration
+    const requestedLocale = localeSignal.value
+    favoriteItemsLoading.value = true
+    try {
+      const items = await getFavoritesAdapter(requestedLocale)
+      if (generation !== favoriteItemsGeneration || requestedLocale !== localeSignal.value) return
+      batch(() => {
+        favoriteItems.value = items
+        favoriteNames.value = items.map((item) => item.canonical_name)
+      })
+    } catch {
+      // Non-fatal: the favorites panel keeps its previous content.
+    } finally {
+      if (generation === favoriteItemsGeneration) {
+        favoriteItemsLoading.value = false
+      }
+    }
+  }
 
-  setViewMode(mode) {
-    viewMode.value = mode
-  },
+  return {
+    intent: plantSearchSession.intent,
+    results: plantSearchSession.results,
+    selectedCanonicalName: selectedCanonical,
+    viewMode: currentViewMode,
+    hasActiveFilters,
+    filterStrip,
+    favorites,
+    dynamicOptions,
+    sidebar,
 
-  patchFilters,
-  clearFilters,
-  addExtraFilter,
-  removeExtraFilter,
-  loadDynamicOptions,
+    mount() {
+      controllerUsers += 1
+      startPlantDbController()
 
-  selectSpecies(canonicalName) {
-    selectedCanonicalName.value = canonicalName
-  },
+      return () => {
+        controllerUsers = Math.max(0, controllerUsers - 1)
+        if (controllerUsers === 0) {
+          stopPlantDbController()
+        }
+      }
+    },
 
-  closeSpeciesDetail() {
-    selectedCanonicalName.value = null
-  },
+    dispose() {
+      controllerUsers = 0
+      stopPlantDbController()
+    },
 
-  toggleFavorite: toggleFavoriteAction,
+    ensureInitialSearch() {
+      const results = plantSearchSession.results.value
+      if (results.items.length === 0 && !isPlantSearchLoading(results.status)) {
+        plantSearchSession.retry()
+      }
+    },
 
-  isFavorite(canonicalName) {
-    return favoriteNames.value.includes(canonicalName)
-  },
+    reloadSidebarLists: loadSidebarLists,
+    loadFavorites: loadFavoriteItems,
+    loadFilterOptions,
 
-  isSearchLoading: isPlantSearchLoading,
+    setSearchText(text) {
+      plantSearchSession.setText(text)
+    },
 
-  isActiveSearchText: isActiveSpeciesSearchText,
+    clearSearchText() {
+      plantSearchSession.setText('')
+    },
+
+    retrySearch() {
+      plantSearchSession.retry()
+    },
+
+    loadNextPage() {
+      return plantSearchSession.loadNextPage()
+    },
+
+    setSort(sort) {
+      plantSearchSession.setSort(sort)
+    },
+
+    setViewMode(mode) {
+      viewMode.value = mode
+    },
+
+    patchFilters(patch) {
+      plantSearchSession.patchFilters(patch)
+    },
+
+    clearFilters() {
+      plantSearchSession.clearFilters()
+    },
+
+    addExtraFilter(field, op, values) {
+      plantSearchSession.addExtraFilter(field, op, values)
+    },
+
+    removeExtraFilter(field) {
+      plantSearchSession.removeExtraFilter(field)
+    },
+
+    loadDynamicOptions(fields) {
+      return plantSearchSession.loadDynamicOptions(fields)
+    },
+
+    selectSpecies(canonicalName) {
+      selectedCanonicalName.value = canonicalName
+    },
+
+    closeSpeciesDetail() {
+      selectedCanonicalName.value = null
+    },
+
+    toggleFavorite: toggleFavoriteAction,
+
+    isFavorite(canonicalName) {
+      return favoriteNames.value.includes(canonicalName)
+    },
+
+    isSearchLoading: isPlantSearchLoading,
+
+    isActiveSearchText: isActiveSpeciesSearchText,
+  }
+}
+
+const liveSpeciesCatalogWorkbench = createSpeciesCatalogWorkbench()
+
+export const speciesCatalogWorkbench: SpeciesCatalogWorkbench = liveSpeciesCatalogWorkbench
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    liveSpeciesCatalogWorkbench.dispose()
+  })
 }

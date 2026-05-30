@@ -1,7 +1,13 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SpeciesListItem } from '../types/species'
+import type { PaginatedResult, SpeciesListItem } from '../types/species'
+import type { SpeciesCatalogWorkbench } from '../app/plant-browser/workbench'
+import {
+  createTestSpeciesCatalogWorkbench,
+  emptySpeciesSearchResult,
+  makeSpeciesListItem,
+} from './support/species-catalog-workbench'
 
 const virtualCoreMocks = vi.hoisted(() => {
   const instances: Array<{
@@ -95,92 +101,75 @@ vi.mock('../components/plant-db/PlantCard', () => ({
   PlantCard: ({ plant }: { plant: SpeciesListItem }) => <div>{plant.canonical_name}</div>,
 }))
 
-import { ResultsList } from '../components/plant-db/ResultsList'
-import {
-  activeFilters,
-  extraFilters,
-  nextCursor,
-  searchError,
-  searchResults,
-  searchResultsRevision,
-  searchStatus,
-  searchText,
-  sortField,
-  viewMode,
-} from '../app/plant-browser'
-import { locale } from '../app/settings/state'
-
-function defaultFilters() {
-  return {
-    sun_tolerances: null,
-    soil_tolerances: null,
-    growth_rate: null,
-    life_cycle: null,
-    edible: null,
-    edibility_min: null,
-    nitrogen_fixer: null,
-    climate_zones: null,
-    habit: null,
-    woody: null,
-    family: null,
-    extra: null,
-  }
+async function flushMicrotasks(): Promise<void> {
+  await Promise.resolve()
+  await Promise.resolve()
+  await Promise.resolve()
 }
 
-function makePlant(canonicalName: string): SpeciesListItem {
-  return {
-    canonical_name: canonicalName,
-    slug: canonicalName.toLowerCase().replace(/\s+/g, '-'),
-    common_name: canonicalName,
-    common_name_2: null,
-    is_name_fallback: false,
-    family: null,
-    genus: null,
-    height_max_m: null,
-    hardiness_zone_min: null,
-    hardiness_zone_max: null,
-    growth_rate: null,
-    stratum: null,
-    edibility_rating: null,
-    medicinal_rating: null,
-    width_max_m: null,
-    is_favorite: false,
-  }
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
 }
 
 describe('ResultsList', () => {
   let container: HTMLDivElement
+  let ResultsList: typeof import('../components/plant-db/ResultsList').ResultsList
+  let locale: typeof import('../app/settings/state').locale
+  let workbench: SpeciesCatalogWorkbench
+  let searchResponses: Array<PaginatedResult<SpeciesListItem> | Promise<PaginatedResult<SpeciesListItem>>>
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    vi.resetModules()
+    virtualCoreMocks.instances.length = 0
+    searchResponses = []
+    const settings = await import('../app/settings/state')
+    locale = settings.locale
+    locale.value = 'en'
+    workbench = await createTestSpeciesCatalogWorkbench({
+      locale,
+      search: async () => searchResponses.shift() ?? emptySpeciesSearchResult(),
+    })
+    workbench.setViewMode('list')
+    vi.doMock('../app/plant-browser', async () => {
+      const actual = await vi.importActual<typeof import('../app/plant-browser')>('../app/plant-browser')
+      return {
+        ...actual,
+        speciesCatalogWorkbench: workbench,
+      }
+    })
+    ;({ ResultsList } = await import('../components/plant-db/ResultsList'))
+
     container = document.createElement('div')
     document.body.innerHTML = ''
     document.body.appendChild(container)
-
-    virtualCoreMocks.instances.length = 0
-
-    locale.value = 'en'
-    viewMode.value = 'list'
-    searchText.value = ''
-    activeFilters.value = defaultFilters()
-    extraFilters.value = []
-    sortField.value = 'Name'
-    searchResults.value = [
-      makePlant('Achillea millefolium'),
-      makePlant('Aegopodium podagraria'),
-      makePlant('Allium angulosum'),
-    ]
-    searchResultsRevision.value = 1
-    nextCursor.value = null
-    searchStatus.value = 'idle'
-    searchError.value = null
   })
 
   afterEach(() => {
     render(null, container)
     container.remove()
+    workbench.dispose()
+    vi.doUnmock('../app/plant-browser')
   })
 
   it('keeps the existing virtualizer when only more rows are appended', async () => {
+    searchResponses.push({
+      items: [
+        makeSpeciesListItem('Achillea millefolium'),
+        makeSpeciesListItem('Aegopodium podagraria'),
+        makeSpeciesListItem('Allium angulosum'),
+      ],
+      next_cursor: 'offset:3',
+      total_estimate: 4,
+    })
+    workbench.mount()
+    await flushMicrotasks()
+
     await act(async () => {
       render(<ResultsList />, container)
     })
@@ -188,11 +177,14 @@ describe('ResultsList', () => {
     expect(virtualCoreMocks.instances).toHaveLength(1)
     const firstVirtualizer = virtualCoreMocks.instances[0]
 
+    searchResponses.push({
+      items: [makeSpeciesListItem('Allium carinatum')],
+      next_cursor: null,
+      total_estimate: 0,
+    })
+
     await act(async () => {
-      searchResults.value = [
-        ...searchResults.value,
-        makePlant('Allium carinatum'),
-      ]
+      await workbench.loadNextPage()
     })
 
     expect(virtualCoreMocks.instances).toHaveLength(1)
@@ -202,11 +194,16 @@ describe('ResultsList', () => {
   })
 
   it('rebuilds the virtualizer when a new first-page result set replaces stale rows', async () => {
-    searchResults.value = [
-      makePlant('Abies alba'),
-      makePlant('Abies spectabilis'),
-    ]
-    searchResultsRevision.value = 10
+    searchResponses.push({
+      items: [
+        makeSpeciesListItem('Abies alba'),
+        makeSpeciesListItem('Abies spectabilis'),
+      ],
+      next_cursor: null,
+      total_estimate: 2,
+    })
+    workbench.mount()
+    await flushMicrotasks()
 
     await act(async () => {
       render(<ResultsList />, container)
@@ -214,20 +211,25 @@ describe('ResultsList', () => {
 
     expect(virtualCoreMocks.instances).toHaveLength(1)
     const firstVirtualizer = virtualCoreMocks.instances[0]
+    const replacement = deferred<PaginatedResult<SpeciesListItem>>()
+    searchResponses.push(replacement.promise)
 
     await act(async () => {
-      searchText.value = 'as'
-      searchStatus.value = 'loading-first-page'
+      workbench.setSearchText('as')
+      await flushMicrotasks()
     })
 
     expect(virtualCoreMocks.instances).toHaveLength(1)
 
     await act(async () => {
-      searchResults.value = Array.from({ length: 50 }, (_, index) =>
-        makePlant(`Plant ${index + 1}`),
-      )
-      searchResultsRevision.value = 11
-      searchStatus.value = 'idle'
+      replacement.resolve({
+        items: Array.from({ length: 50 }, (_, index) =>
+          makeSpeciesListItem(`Plant ${index + 1}`),
+        ),
+        next_cursor: null,
+        total_estimate: 50,
+      })
+      await flushMicrotasks()
     })
 
     expect(virtualCoreMocks.instances).toHaveLength(2)

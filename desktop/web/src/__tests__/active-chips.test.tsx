@@ -1,58 +1,54 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { ActiveChips } from '../components/plant-db/ActiveChips'
-import { dynamicOptionsCache, dynamicOptionsErrors, dynamicOptionsPending, extraFilters, activeFilters } from '../app/plant-browser'
-import { locale } from '../app/settings/state'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { SpeciesCatalogWorkbench } from '../app/plant-browser/workbench'
+import { createTestSpeciesCatalogWorkbench } from './support/species-catalog-workbench'
 
 describe('ActiveChips', () => {
   let container: HTMLDivElement
+  let ActiveChips: typeof import('../components/plant-db/ActiveChips').ActiveChips
+  let locale: typeof import('../app/settings/state').locale
+  let workbench: SpeciesCatalogWorkbench
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    vi.resetModules()
+    const settings = await import('../app/settings/state')
+    locale = settings.locale
+    locale.value = 'en'
+    workbench = await createTestSpeciesCatalogWorkbench({
+      locale,
+      loadDynamicFilterOptions: async (fields, loc) => fields.map((field) => ({
+        field,
+        field_type: 'categorical',
+        values: [{
+          value: 'Shrub',
+          label: loc === 'fr' ? 'Arbuste' : 'Shrub',
+        }],
+        range: null,
+      })),
+    })
+    vi.doMock('../app/plant-browser', async () => {
+      const actual = await vi.importActual<typeof import('../app/plant-browser')>('../app/plant-browser')
+      return {
+        ...actual,
+        speciesCatalogWorkbench: workbench,
+      }
+    })
+    ;({ ActiveChips } = await import('../components/plant-db/ActiveChips'))
+
     container = document.createElement('div')
     document.body.innerHTML = ''
     document.body.appendChild(container)
-    locale.value = 'en'
-    activeFilters.value = {
-      sun_tolerances: null,
-      soil_tolerances: null,
-      growth_rate: null,
-      life_cycle: null,
-      edible: null,
-      edibility_min: null,
-      nitrogen_fixer: null,
-      climate_zones: null,
-      habit: null,
-      woody: null,
-      family: null,
-      extra: null,
-    }
-    extraFilters.value = [{ field: 'growth_form_type', op: 'In', values: ['Shrub'] }]
-    dynamicOptionsPending.value = {}
-    dynamicOptionsErrors.value = {}
-    dynamicOptionsCache.value = {
-      en: {
-        growth_form_type: {
-          field: 'growth_form_type',
-          field_type: 'categorical',
-          values: [{ value: 'Shrub', label: 'Shrub' }],
-          range: null,
-        },
-      },
-      fr: {
-        growth_form_type: {
-          field: 'growth_form_type',
-          field_type: 'categorical',
-          values: [{ value: 'Shrub', label: 'Arbuste' }],
-          range: null,
-        },
-      },
-    }
+    workbench.clearFilters()
+    workbench.addExtraFilter('growth_form_type', 'In', ['Shrub'])
+    await workbench.loadDynamicOptions(['growth_form_type'])
   })
 
   afterEach(() => {
     render(null, container)
     container.remove()
+    workbench.dispose()
+    vi.doUnmock('../app/plant-browser')
   })
 
   it('renders extra categorical chip values using the active locale cache', async () => {
@@ -64,6 +60,7 @@ describe('ActiveChips', () => {
 
     await act(async () => {
       locale.value = 'fr'
+      await workbench.loadDynamicOptions(['growth_form_type'])
     })
 
     expect(container.textContent).toContain('Type de forme')
@@ -71,7 +68,8 @@ describe('ActiveChips', () => {
   })
 
   it('formats numeric dynamic filters as readable ranges', async () => {
-    extraFilters.value = [{ field: 'hardiness_zone_min', op: 'Between', values: ['5', '8'] }]
+    workbench.clearFilters()
+    workbench.addExtraFilter('hardiness_zone_min', 'Between', ['5', '8'])
 
     await act(async () => {
       render(<ActiveChips />, container)
@@ -81,11 +79,8 @@ describe('ActiveChips', () => {
   })
 
   it('renders and dismisses life cycle chips through the catalog behavior registry', async () => {
-    extraFilters.value = []
-    activeFilters.value = {
-      ...activeFilters.value,
-      life_cycle: ['Annual'],
-    }
+    workbench.clearFilters()
+    workbench.patchFilters({ life_cycle: ['Annual'] })
 
     await act(async () => {
       render(<ActiveChips />, container)
@@ -102,17 +97,16 @@ describe('ActiveChips', () => {
       dismiss?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    expect(activeFilters.value.life_cycle).toBeNull()
+    expect(workbench.intent.value.filters.life_cycle).toBeNull()
   })
 
   it('renders fixed strip chips through catalog descriptors', async () => {
-    extraFilters.value = []
-    activeFilters.value = {
-      ...activeFilters.value,
+    workbench.clearFilters()
+    workbench.patchFilters({
       woody: true,
       edibility_min: 3,
       nitrogen_fixer: true,
-    }
+    })
 
     await act(async () => {
       render(<ActiveChips />, container)
