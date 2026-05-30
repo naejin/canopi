@@ -1,4 +1,4 @@
-pub(super) fn species_list_select_sql(locale_position: usize) -> String {
+pub(super) fn species_list_select_sql(locale_placeholder: &str) -> String {
     format!(
         "SELECT s.canonical_name,
                 s.slug,
@@ -8,7 +8,7 @@ pub(super) fn species_list_select_sql(locale_position: usize) -> String {
                        SELECT scn.common_name
                        FROM species_common_names scn
                        WHERE scn.species_id = s.id
-                         AND scn.language = ?{locale_position}
+                         AND scn.language = {locale_placeholder}
                          AND scn.common_name != bcn_loc.common_name
                          AND scn.common_name != s.canonical_name
                        ORDER BY (scn.source = 'llm') DESC, scn.is_primary DESC, LENGTH(scn.common_name) ASC

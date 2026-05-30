@@ -32,6 +32,7 @@ When canopi-data removes or adds columns, update atomically:
 - Search plans own count/list query construction and cursor semantics.
 - Species Catalog search has one structured request contract: `common-types/src/species.rs` `SpeciesSearchRequest`. Tauri command arguments may stay flat for IPC compatibility, but commands, services, plant DB search, and query planning should adapt to that request object instead of growing parallel argument lists.
 - Species Catalog search planning is split by seam under `desktop/src/db/query_builder/`: `text.rs` owns FTS/Common Name normalization, `relevance.rs` owns Common Name ranking tiers and token joins, `predicates.rs` owns shared FTS/filter WHERE assembly, `pagination.rs` owns keyset/offset cursor behavior, and `projection.rs` owns list row SELECT columns.
+- `query_builder/sql.rs` owns SQL parameter placeholder allocation. Query-builder modules should bind values through `SqlBuilder` instead of hand-numbering placeholders with `params.len() + 1`.
 - Count and list predicates should share the same planner path.
 - `common-types/plant-filter-fields.json` owns both dynamic filter fields and the fixed `SpeciesFilter` catalog.
 - Strip-field UI behavior can be schema-defined with `strip_choice` and `active_array_chip` on categorical strip fields; regenerate bindings instead of duplicating strip or chip metadata in frontend adapters.

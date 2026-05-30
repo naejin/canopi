@@ -5,6 +5,7 @@ use super::pagination::{SpeciesSearchPagePlan, cursor_clause};
 use super::predicates::PredicatePlan;
 use super::projection::species_list_select_sql;
 use super::relevance::{CommonNameRelevancePlan, relevance_order_by};
+use super::sql::SqlBuilder;
 use super::text::SearchText;
 
 #[derive(Debug, Clone)]
@@ -79,15 +80,15 @@ fn search_text_input(text: &str) -> Option<&str> {
 }
 
 fn build_count_statement(search_term: Option<&str>, filters: &SpeciesFilter) -> SqlStatementPlan {
-    let mut params: Vec<Value> = Vec::new();
-    let predicates = PredicatePlan::for_search(search_term, filters, &mut params);
+    let mut sql_builder = SqlBuilder::default();
+    let predicates = PredicatePlan::for_search(search_term, filters, &mut sql_builder);
     let sql = format!(
         "SELECT COUNT(*) FROM species s {} {}",
         predicates.fts_join_sql(),
         predicates.where_sql()
     );
 
-    SqlStatementPlan::new(sql, params)
+    SqlStatementPlan::new(sql, sql_builder.into_params())
 }
 
 fn build_list_statement(
@@ -95,36 +96,40 @@ fn build_list_statement(
     search_text: &SearchText,
     page: &SpeciesSearchPagePlan,
 ) -> SqlStatementPlan {
-    let mut params: Vec<Value> = Vec::new();
+    let mut sql_builder = SqlBuilder::default();
 
-    let locale_position = params.len() + 1;
-    let fallback_locale_position = params.len() + 2;
+    let locale_placeholder = sql_builder.bind_text(request.search.locale.clone());
+    let fallback_locale_placeholder = sql_builder.bind_text("en");
     let common_name_join = format!(
         "LEFT JOIN best_common_names bcn_loc \
-             ON bcn_loc.species_id = s.id AND bcn_loc.language = ?{locale_position} \
+             ON bcn_loc.species_id = s.id AND bcn_loc.language = {locale_placeholder} \
          LEFT JOIN best_common_names bcn_en \
-             ON bcn_en.species_id = s.id AND bcn_en.language = ?{fallback_locale_position}"
+             ON bcn_en.species_id = s.id AND bcn_en.language = {fallback_locale_placeholder}"
     );
-    params.push(Value::Text(request.search.locale.clone()));
-    params.push(Value::Text("en".to_owned()));
 
     let relevance_plan = match page {
         SpeciesSearchPagePlan::RelevanceOffset { .. } => Some(CommonNameRelevancePlan::build(
             search_text.common_name_query(),
             request.use_common_name_token_index,
-            locale_position,
-            fallback_locale_position,
+            &locale_placeholder,
+            &fallback_locale_placeholder,
             &request.search.locale,
-            &mut params,
+            &mut sql_builder,
         )),
         SpeciesSearchPagePlan::Keyset { .. } => None,
     };
 
-    let mut predicates =
-        PredicatePlan::for_search(search_text.fts_term(), &request.search.filters, &mut params);
+    let mut predicates = PredicatePlan::for_search(
+        search_text.fts_term(),
+        &request.search.filters,
+        &mut sql_builder,
+    );
     if page.is_keyset()
-        && let Some(clause) =
-            cursor_clause(&request.search.cursor, &request.search.sort, &mut params)
+        && let Some(clause) = cursor_clause(
+            &request.search.cursor,
+            &request.search.sort,
+            &mut sql_builder,
+        )
     {
         predicates.push(clause);
     }
@@ -135,13 +140,13 @@ fn build_list_statement(
             relevance_plan
                 .as_ref()
                 .expect("relevance plan is built for relevance pages"),
-            &mut params,
+            &mut sql_builder,
         ),
         SpeciesSearchPagePlan::Keyset { .. } => page.order_by(&request.search.sort),
     };
 
-    let limit_clause = page.limit_clause(request.search.limit, &mut params);
-    let select_sql = species_list_select_sql(locale_position);
+    let limit_clause = page.limit_clause(request.search.limit, &mut sql_builder);
+    let select_sql = species_list_select_sql(&locale_placeholder);
     let where_sql = predicates.where_sql();
 
     let sql = format!(
@@ -164,5 +169,5 @@ fn build_list_statement(
         limit_clause = limit_clause,
     );
 
-    SqlStatementPlan::new(sql, params)
+    SqlStatementPlan::new(sql, sql_builder.into_params())
 }

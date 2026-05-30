@@ -1,27 +1,27 @@
 use common_types::species::{DynamicFilter, FilterOp, SpeciesFilter};
-use rusqlite::types::Value;
 
 use super::columns::validated_column;
 use super::species_catalog_filters;
+use super::sql::SqlBuilder;
 use super::{PlantFilterFieldKind, filter_field_kind};
 
 pub(super) fn append_structured_filters(
     where_clauses: &mut Vec<String>,
-    params: &mut Vec<Value>,
+    sql_builder: &mut SqlBuilder,
     filters: &SpeciesFilter,
 ) {
-    species_catalog_filters::append_fixed_filters(where_clauses, params, filters);
+    species_catalog_filters::append_fixed_filters(where_clauses, sql_builder, filters);
 
     if let Some(ref extras) = filters.extra {
         for extra in extras {
-            append_dynamic_filter(where_clauses, params, extra);
+            append_dynamic_filter(where_clauses, sql_builder, extra);
         }
     }
 }
 
 fn append_dynamic_filter(
     where_clauses: &mut Vec<String>,
-    params: &mut Vec<Value>,
+    sql_builder: &mut SqlBuilder,
     extra: &DynamicFilter,
 ) {
     let Some(column) = validated_column(&extra.field) else {
@@ -36,22 +36,40 @@ fn append_dynamic_filter(
             where_clauses.push(format!("{column} = 1"));
         }
         (PlantFilterFieldKind::Categorical, FilterOp::Equals) => {
-            append_text_equals_clause(where_clauses, params, column, extra.values.first());
+            append_text_equals_clause(where_clauses, sql_builder, column, extra.values.first());
         }
         (PlantFilterFieldKind::Categorical, FilterOp::In) => {
-            append_text_in_clause(where_clauses, params, column, &extra.values);
+            append_text_in_clause(where_clauses, sql_builder, column, &extra.values);
         }
         (PlantFilterFieldKind::Numeric, FilterOp::Equals) => {
-            append_scalar_comparison(where_clauses, params, column, "=", extra.values.first());
+            append_scalar_comparison(
+                where_clauses,
+                sql_builder,
+                column,
+                "=",
+                extra.values.first(),
+            );
         }
         (PlantFilterFieldKind::Numeric, FilterOp::Gte) => {
-            append_scalar_comparison(where_clauses, params, column, ">=", extra.values.first());
+            append_scalar_comparison(
+                where_clauses,
+                sql_builder,
+                column,
+                ">=",
+                extra.values.first(),
+            );
         }
         (PlantFilterFieldKind::Numeric, FilterOp::Lte) => {
-            append_scalar_comparison(where_clauses, params, column, "<=", extra.values.first());
+            append_scalar_comparison(
+                where_clauses,
+                sql_builder,
+                column,
+                "<=",
+                extra.values.first(),
+            );
         }
         (PlantFilterFieldKind::Numeric, FilterOp::Between) => {
-            append_scalar_between_clause(where_clauses, params, column, &extra.values);
+            append_scalar_between_clause(where_clauses, sql_builder, column, &extra.values);
         }
         _ => {}
     }
@@ -59,7 +77,7 @@ fn append_dynamic_filter(
 
 fn append_text_in_clause(
     where_clauses: &mut Vec<String>,
-    params: &mut Vec<Value>,
+    sql_builder: &mut SqlBuilder,
     column: &str,
     values: &[String],
 ) {
@@ -67,63 +85,46 @@ fn append_text_in_clause(
         return;
     }
 
-    let placeholders: Vec<String> = values
-        .iter()
-        .enumerate()
-        .map(|(index, _)| format!("?{}", params.len() + 1 + index))
-        .collect();
+    let placeholders = sql_builder.bind_text_list(values);
     where_clauses.push(format!("{column} IN ({})", placeholders.join(", ")));
-    for value in values {
-        params.push(Value::Text(value.clone()));
-    }
 }
 
 fn append_text_equals_clause(
     where_clauses: &mut Vec<String>,
-    params: &mut Vec<Value>,
+    sql_builder: &mut SqlBuilder,
     column: &str,
     value: Option<&String>,
 ) {
     if let Some(value) = value {
-        where_clauses.push(format!("{column} = ?{}", params.len() + 1));
-        params.push(Value::Text(value.clone()));
+        let placeholder = sql_builder.bind_text(value.clone());
+        where_clauses.push(format!("{column} = {placeholder}"));
     }
 }
 
 fn append_scalar_comparison(
     where_clauses: &mut Vec<String>,
-    params: &mut Vec<Value>,
+    sql_builder: &mut SqlBuilder,
     column: &str,
     operator: &str,
     value: Option<&String>,
 ) {
     if let Some(value) = value {
-        where_clauses.push(format!("{column} {operator} ?{}", params.len() + 1));
-        push_best_effort_value(params, value);
+        let placeholder = sql_builder.bind_best_effort(value);
+        where_clauses.push(format!("{column} {operator} {placeholder}"));
     }
 }
 
 fn append_scalar_between_clause(
     where_clauses: &mut Vec<String>,
-    params: &mut Vec<Value>,
+    sql_builder: &mut SqlBuilder,
     column: &str,
     values: &[String],
 ) {
     if values.len() >= 2 {
+        let min_placeholder = sql_builder.bind_best_effort(&values[0]);
+        let max_placeholder = sql_builder.bind_best_effort(&values[1]);
         where_clauses.push(format!(
-            "{column} BETWEEN ?{} AND ?{}",
-            params.len() + 1,
-            params.len() + 2
+            "{column} BETWEEN {min_placeholder} AND {max_placeholder}",
         ));
-        push_best_effort_value(params, &values[0]);
-        push_best_effort_value(params, &values[1]);
-    }
-}
-
-fn push_best_effort_value(params: &mut Vec<Value>, value: &str) {
-    if let Ok(number) = value.parse::<f64>() {
-        params.push(Value::Real(number));
-    } else {
-        params.push(Value::Text(value.to_owned()));
     }
 }
