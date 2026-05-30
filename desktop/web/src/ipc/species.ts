@@ -5,10 +5,9 @@ import type {
   SpeciesListItem,
   SpeciesDetail,
   Relationship,
-  SpeciesFilter,
+  SpeciesSearchRequest,
   FilterOptions,
   PaginatedResult,
-  Sort,
   DynamicFilterOptions,
   CommonNameEntry,
   SpeciesImage,
@@ -21,23 +20,17 @@ function isDegraded(): boolean {
 }
 
 export async function searchSpecies(
-  text: string,
-  filters: SpeciesFilter,
-  cursor: string | null | undefined,
-  limit = 50,
-  sort: Sort = 'Name',
-  locale = 'en',
-  includeTotal = true,
+  request: SpeciesSearchRequest,
 ): Promise<PaginatedResult<SpeciesListItem>> {
   if (isDegraded()) throw new Error(plantDbUnavailableMessage(plantDbStatus.value));
   return invoke('search_species', {
-    text,
-    filters,
-    cursor: cursor ?? null,
-    limit,
-    sort,
-    locale,
-    includeTotal,
+    text: request.text,
+    filters: request.filters,
+    cursor: request.cursor ?? null,
+    limit: request.limit,
+    sort: request.sort,
+    locale: request.locale,
+    includeTotal: request.include_total,
   });
 }
 

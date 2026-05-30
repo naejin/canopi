@@ -1,4 +1,4 @@
-use common_types::species::{Sort, SpeciesFilter, SpeciesListItem};
+use common_types::species::{SpeciesFilter, SpeciesListItem, SpeciesSearchRequest};
 use rusqlite::types::Value;
 
 use super::pagination::{SpeciesSearchPagePlan, cursor_clause};
@@ -28,14 +28,8 @@ impl SqlStatementPlan {
 }
 
 #[derive(Debug, Clone)]
-pub struct SpeciesSearchRequest {
-    pub text: Option<String>,
-    pub filters: SpeciesFilter,
-    pub cursor: Option<String>,
-    pub sort: Sort,
-    pub limit: u32,
-    pub include_total: bool,
-    pub locale: String,
+pub struct SpeciesSearchPlanRequest {
+    pub search: SpeciesSearchRequest,
     pub use_common_name_token_index: bool,
 }
 
@@ -47,17 +41,17 @@ pub struct SpeciesSearchPlan {
 }
 
 impl SpeciesSearchPlan {
-    pub fn build(request: SpeciesSearchRequest) -> Self {
-        let search_text = SearchText::from_raw(request.text.as_deref());
+    pub fn build(request: SpeciesSearchPlanRequest) -> Self {
+        let search_text = SearchText::from_raw(search_text_input(&request.search.text));
         let page = SpeciesSearchPagePlan::for_request(
-            &request.sort,
-            request.cursor.as_deref(),
+            &request.search.sort,
+            request.search.cursor.as_deref(),
             search_text.has_fts_term(),
         );
-        let count = if request.include_total {
+        let count = if request.search.include_total {
             Some(build_count_statement(
                 search_text.fts_term(),
-                &request.filters,
+                &request.search.filters,
             ))
         } else {
             None
@@ -80,6 +74,10 @@ impl SpeciesSearchPlan {
     }
 }
 
+fn search_text_input(text: &str) -> Option<&str> {
+    (!text.trim().is_empty()).then_some(text)
+}
+
 fn build_count_statement(search_term: Option<&str>, filters: &SpeciesFilter) -> SqlStatementPlan {
     let mut params: Vec<Value> = Vec::new();
     let predicates = PredicatePlan::for_search(search_term, filters, &mut params);
@@ -93,7 +91,7 @@ fn build_count_statement(search_term: Option<&str>, filters: &SpeciesFilter) -> 
 }
 
 fn build_list_statement(
-    request: &SpeciesSearchRequest,
+    request: &SpeciesSearchPlanRequest,
     search_text: &SearchText,
     page: &SpeciesSearchPagePlan,
 ) -> SqlStatementPlan {
@@ -107,7 +105,7 @@ fn build_list_statement(
          LEFT JOIN best_common_names bcn_en \
              ON bcn_en.species_id = s.id AND bcn_en.language = ?{fallback_locale_position}"
     );
-    params.push(Value::Text(request.locale.clone()));
+    params.push(Value::Text(request.search.locale.clone()));
     params.push(Value::Text("en".to_owned()));
 
     let relevance_plan = match page {
@@ -116,16 +114,17 @@ fn build_list_statement(
             request.use_common_name_token_index,
             locale_position,
             fallback_locale_position,
-            &request.locale,
+            &request.search.locale,
             &mut params,
         )),
         SpeciesSearchPagePlan::Keyset { .. } => None,
     };
 
     let mut predicates =
-        PredicatePlan::for_search(search_text.fts_term(), &request.filters, &mut params);
+        PredicatePlan::for_search(search_text.fts_term(), &request.search.filters, &mut params);
     if page.is_keyset()
-        && let Some(clause) = cursor_clause(&request.cursor, &request.sort, &mut params)
+        && let Some(clause) =
+            cursor_clause(&request.search.cursor, &request.search.sort, &mut params)
     {
         predicates.push(clause);
     }
@@ -138,10 +137,10 @@ fn build_list_statement(
                 .expect("relevance plan is built for relevance pages"),
             &mut params,
         ),
-        SpeciesSearchPagePlan::Keyset { .. } => page.order_by(&request.sort),
+        SpeciesSearchPagePlan::Keyset { .. } => page.order_by(&request.search.sort),
     };
 
-    let limit_clause = page.limit_clause(request.limit, &mut params);
+    let limit_clause = page.limit_clause(request.search.limit, &mut params);
     let select_sql = species_list_select_sql(locale_position);
     let where_sql = predicates.where_sql();
 

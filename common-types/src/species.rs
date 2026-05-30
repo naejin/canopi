@@ -278,6 +278,17 @@ pub enum Sort {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct SpeciesSearchRequest {
+    pub text: String,
+    pub filters: SpeciesFilter,
+    pub cursor: Option<String>,
+    pub limit: u32,
+    pub sort: Sort,
+    pub locale: String,
+    pub include_total: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct PaginatedResult<T: specta::Type> {
     pub items: Vec<T>,
     pub next_cursor: Option<String>,

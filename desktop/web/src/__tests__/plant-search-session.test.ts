@@ -86,15 +86,15 @@ describe('plant search session', () => {
     await flushMicrotasks()
 
     expect(search).toHaveBeenCalledTimes(1)
-    expect(search).toHaveBeenLastCalledWith(
-      'al',
-      expect.any(Object),
-      null,
-      50,
-      'Relevance',
-      'en',
-      false,
-    )
+    expect(search).toHaveBeenLastCalledWith(expect.objectContaining({
+      text: 'al',
+      filters: expect.any(Object),
+      cursor: null,
+      limit: 50,
+      sort: 'Relevance',
+      locale: 'en',
+      include_total: false,
+    }))
 
     dispose()
   })
@@ -140,23 +140,30 @@ describe('plant search session', () => {
     const dispose = session.start()
 
     await flushMicrotasks()
-    expect(search).toHaveBeenNthCalledWith(1, '', expect.any(Object), null, 50, 'Name', 'en', true)
+    expect(search).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      text: '',
+      filters: expect.any(Object),
+      cursor: null,
+      limit: 50,
+      sort: 'Name',
+      locale: 'en',
+      include_total: true,
+    }))
     expect(session.results.value.totalEstimate).toBe(42)
 
     session.setText('al')
     vi.advanceTimersByTime(150)
     await flushMicrotasks()
 
-    expect(search).toHaveBeenNthCalledWith(
-      2,
-      'al',
-      expect.any(Object),
-      null,
-      50,
-      'Relevance',
-      'en',
-      false,
-    )
+    expect(search).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      text: 'al',
+      filters: expect.any(Object),
+      cursor: null,
+      limit: 50,
+      sort: 'Relevance',
+      locale: 'en',
+      include_total: false,
+    }))
     expect(session.results.value.items.map((item) => item.canonical_name)).toEqual(['Search row'])
     expect(session.results.value.totalEstimate).toBe(0)
 
@@ -174,37 +181,53 @@ describe('plant search session', () => {
     await flushMicrotasks()
     session.setSort('Height')
     await flushMicrotasks()
-    expect(search).toHaveBeenLastCalledWith('', expect.any(Object), null, 50, 'Height', 'en', true)
+    expect(search).toHaveBeenLastCalledWith(expect.objectContaining({
+      text: '',
+      filters: expect.any(Object),
+      cursor: null,
+      limit: 50,
+      sort: 'Height',
+      locale: 'en',
+      include_total: true,
+    }))
 
     session.setText('lin')
     vi.advanceTimersByTime(150)
     await flushMicrotasks()
-    expect(search).toHaveBeenLastCalledWith(
-      'lin',
-      expect.any(Object),
-      null,
-      50,
-      'Relevance',
-      'en',
-      false,
-    )
+    expect(search).toHaveBeenLastCalledWith(expect.objectContaining({
+      text: 'lin',
+      filters: expect.any(Object),
+      cursor: null,
+      limit: 50,
+      sort: 'Relevance',
+      locale: 'en',
+      include_total: false,
+    }))
 
     session.setSort('Family')
     await flushMicrotasks()
-    expect(search).toHaveBeenLastCalledWith(
-      'lin',
-      expect.any(Object),
-      null,
-      50,
-      'Family',
-      'en',
-      false,
-    )
+    expect(search).toHaveBeenLastCalledWith(expect.objectContaining({
+      text: 'lin',
+      filters: expect.any(Object),
+      cursor: null,
+      limit: 50,
+      sort: 'Family',
+      locale: 'en',
+      include_total: false,
+    }))
 
     session.setText('')
     vi.advanceTimersByTime(150)
     await flushMicrotasks()
-    expect(search).toHaveBeenLastCalledWith('', expect.any(Object), null, 50, 'Height', 'en', true)
+    expect(search).toHaveBeenLastCalledWith(expect.objectContaining({
+      text: '',
+      filters: expect.any(Object),
+      cursor: null,
+      limit: 50,
+      sort: 'Height',
+      locale: 'en',
+      include_total: true,
+    }))
 
     dispose()
   })
@@ -263,16 +286,15 @@ describe('plant search session', () => {
 
     await session.loadNextPage()
 
-    expect(search).toHaveBeenNthCalledWith(
-      2,
-      '',
-      expect.any(Object),
-      'offset:50',
-      50,
-      'Name',
-      'en',
-      false,
-    )
+    expect(search).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      text: '',
+      filters: expect.any(Object),
+      cursor: 'offset:50',
+      limit: 50,
+      sort: 'Name',
+      locale: 'en',
+      include_total: false,
+    }))
     expect(session.results.value.items.map((item) => item.canonical_name)).toEqual([
       'First row',
       'Second row',

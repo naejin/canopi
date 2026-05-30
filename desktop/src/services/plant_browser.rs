@@ -1,40 +1,17 @@
-use common_types::species::{PaginatedResult, Sort, SpeciesDetail, SpeciesFilter, SpeciesListItem};
+use common_types::species::{
+    PaginatedResult, SpeciesDetail, SpeciesListItem, SpeciesSearchRequest,
+};
 
 use crate::db::{self, PlantDb, UserDb};
 
-#[allow(
-    clippy::too_many_arguments,
-    reason = "Service mirrors the current flat Tauri species search contract"
-)]
 pub fn search_species(
     plant_db: &PlantDb,
     user_db: &UserDb,
-    text: String,
-    filters: SpeciesFilter,
-    cursor: Option<String>,
-    limit: u32,
-    sort: Sort,
-    locale: String,
-    include_total: Option<bool>,
+    request: SpeciesSearchRequest,
 ) -> Result<PaginatedResult<SpeciesListItem>, String> {
-    let text_opt = if text.trim().is_empty() {
-        None
-    } else {
-        Some(text)
-    };
-
     let mut result = {
         let conn = db::require_plant_db(plant_db)?;
-        crate::db::plant_db::search(
-            &conn,
-            text_opt,
-            filters,
-            cursor,
-            sort,
-            limit,
-            include_total.unwrap_or(true),
-            locale,
-        )?
+        crate::db::plant_db::search(&conn, request)?
     };
 
     {
@@ -131,7 +108,7 @@ pub fn get_recently_viewed(
 mod tests {
     use super::{get_favorites, get_recently_viewed, search_species, toggle_favorite};
     use crate::db::{self, PlantDb, UserDb};
-    use common_types::species::{Sort, SpeciesFilter};
+    use common_types::species::{Sort, SpeciesFilter, SpeciesSearchRequest};
     use rusqlite::Connection;
     use std::sync::Mutex;
 
@@ -220,6 +197,24 @@ mod tests {
         UserDb(Mutex::new(conn))
     }
 
+    fn search_request(
+        text: &str,
+        filters: SpeciesFilter,
+        limit: u32,
+        include_total: bool,
+        locale: &str,
+    ) -> SpeciesSearchRequest {
+        SpeciesSearchRequest {
+            text: text.to_owned(),
+            filters,
+            cursor: None,
+            limit,
+            sort: Sort::Name,
+            locale: locale.to_owned(),
+            include_total,
+        }
+    }
+
     #[test]
     fn search_returns_explicit_error_when_plant_db_missing() {
         let plant_db = PlantDb::missing();
@@ -228,13 +223,7 @@ mod tests {
         let error = search_species(
             &plant_db,
             &user_db,
-            "Malus".to_owned(),
-            SpeciesFilter::default(),
-            None,
-            10,
-            Sort::Name,
-            "en".to_owned(),
-            Some(true),
+            search_request("Malus", SpeciesFilter::default(), 10, true, "en"),
         )
         .unwrap_err();
 
@@ -251,19 +240,30 @@ mod tests {
         let result = search_species(
             &plant_db,
             &user_db,
-            "Malus".to_owned(),
-            SpeciesFilter::default(),
-            None,
-            10,
-            Sort::Name,
-            "en".to_owned(),
-            Some(true),
+            search_request("Malus", SpeciesFilter::default(), 10, true, "en"),
         )
         .unwrap();
 
         assert_eq!(result.items.len(), 1);
         assert_eq!(result.items[0].canonical_name, "Malus domestica");
+        assert_eq!(result.total_estimate, 1);
         assert!(result.items[0].is_favorite);
+    }
+
+    #[test]
+    fn search_request_can_skip_first_page_count() {
+        let plant_db = test_plant_db();
+        let user_db = test_user_db();
+
+        let result = search_species(
+            &plant_db,
+            &user_db,
+            search_request("Malus", SpeciesFilter::default(), 10, false, "en"),
+        )
+        .unwrap();
+
+        assert_eq!(result.items.len(), 1);
+        assert_eq!(result.total_estimate, 0);
     }
 
     #[test]

@@ -10,7 +10,7 @@ mod species_catalog_filters;
 mod text;
 
 pub(crate) use crate::db::plant_filter_fields::{PlantFilterFieldKind, filter_field_kind};
-pub use builder::{SpeciesSearchPlan, SpeciesSearchRequest};
+pub use builder::{SpeciesSearchPlan, SpeciesSearchPlanRequest};
 pub(crate) use columns::validated_column;
 #[allow(unused_imports)]
 pub use cursor::{decode_cursor, encode_cursor};
@@ -18,7 +18,9 @@ pub use cursor::{decode_cursor, encode_cursor};
 #[cfg(test)]
 mod tests {
     use super::*;
-    use common_types::species::{DynamicFilter, FilterOp, Sort, SpeciesFilter, SpeciesListItem};
+    use common_types::species::{
+        DynamicFilter, FilterOp, Sort, SpeciesFilter, SpeciesListItem, SpeciesSearchRequest,
+    };
     use rusqlite::types::Value;
 
     fn default_filter() -> SpeciesFilter {
@@ -32,15 +34,17 @@ mod tests {
         sort: Sort,
         limit: u32,
         include_total: bool,
-    ) -> SpeciesSearchRequest {
-        SpeciesSearchRequest {
-            text: text.map(str::to_owned),
-            filters,
-            cursor,
-            sort,
-            limit,
-            include_total,
-            locale: "en".to_owned(),
+    ) -> SpeciesSearchPlanRequest {
+        SpeciesSearchPlanRequest {
+            search: SpeciesSearchRequest {
+                text: text.unwrap_or("").to_owned(),
+                filters,
+                cursor,
+                sort,
+                limit,
+                include_total,
+                locale: "en".to_owned(),
+            },
             use_common_name_token_index: true,
         }
     }
@@ -410,7 +414,7 @@ mod tests {
             20,
             false,
         );
-        request.locale = "fr".to_owned();
+        request.search.locale = "fr".to_owned();
         let plan = SpeciesSearchPlan::build(request);
         let sql = plan.list().sql();
 

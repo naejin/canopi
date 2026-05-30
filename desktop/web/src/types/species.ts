@@ -14,5 +14,6 @@ export type {
   SpeciesFilter,
   SpeciesImage,
   SpeciesListItem,
+  SpeciesSearchRequest,
   SpeciesUse,
 } from '../generated/contracts'

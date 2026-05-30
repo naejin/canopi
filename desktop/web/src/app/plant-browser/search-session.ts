@@ -7,6 +7,7 @@ import type {
   Sort,
   SpeciesFilter,
   SpeciesListItem,
+  SpeciesSearchRequest,
 } from '../../types/species'
 import { createEmptySpeciesFilter, plantFilterModel } from './plant-filter-model'
 
@@ -43,13 +44,7 @@ export interface PlantSearchSession {
 }
 
 export type PlantSearchAdapter = (
-  text: string,
-  filters: SpeciesFilter,
-  cursor: string | null,
-  limit: number,
-  sort: Sort,
-  locale: string,
-  includeTotal: boolean,
+  request: SpeciesSearchRequest,
 ) => Promise<PaginatedResult<SpeciesListItem>>
 
 export type DynamicFilterOptionsAdapter = (
@@ -145,6 +140,23 @@ function searchTextPolicy(rawText: string): SearchTextPolicy {
   return 'active-text'
 }
 
+function buildSearchRequest(
+  intent: PlantSearchIntent,
+  cursor: string | null,
+  limit: number,
+  includeTotal: boolean,
+): SpeciesSearchRequest {
+  return {
+    text: intent.text,
+    filters: plantFilterModel.toRequestFilters(intent.filters, intent.extraFilters),
+    cursor,
+    limit,
+    sort: intent.sort,
+    locale: intent.locale,
+    include_total: includeTotal,
+  }
+}
+
 export function isActiveSpeciesSearchText(rawText: string): boolean {
   return searchTextPolicy(rawText) === 'active-text'
 }
@@ -233,15 +245,7 @@ export function createPlantSearchSession({
     const includeTotal = textPolicy === 'browse'
 
     try {
-      const result = await search(
-        requestIntent.text,
-        plantFilterModel.toRequestFilters(requestIntent.filters, requestIntent.extraFilters),
-        null,
-        pageSize,
-        requestIntent.sort,
-        requestIntent.locale,
-        includeTotal,
-      )
+      const result = await search(buildSearchRequest(requestIntent, null, pageSize, includeTotal))
 
       if (generation !== searchGeneration) return
 
@@ -323,15 +327,7 @@ export function createPlantSearchSession({
     error.value = null
 
     try {
-      const result = await search(
-        requestIntent.text,
-        plantFilterModel.toRequestFilters(requestIntent.filters, requestIntent.extraFilters),
-        cursor,
-        pageSize,
-        requestIntent.sort,
-        requestIntent.locale,
-        false,
-      )
+      const result = await search(buildSearchRequest(requestIntent, cursor, pageSize, false))
 
       if (generation !== searchGeneration) return
 

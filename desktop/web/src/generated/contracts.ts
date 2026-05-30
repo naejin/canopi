@@ -447,6 +447,16 @@ export type SpeciesPanelTarget = {
 
 export type SpeciesPanelTargetKind = "species";
 
+export type SpeciesSearchRequest = {
+	text: string,
+	filters: SpeciesFilter,
+	cursor: string | null,
+	limit: number,
+	sort: Sort,
+	locale: string,
+	include_total: boolean,
+};
+
 export type SpeciesUse = {
 	use_category: string,
 	use_description: string | null,

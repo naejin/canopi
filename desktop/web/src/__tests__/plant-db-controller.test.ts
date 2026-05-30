@@ -254,15 +254,15 @@ describe('plant DB controller lifecycle', () => {
 
     await plantDb.loadNextPage()
 
-    expect(mocks.searchSpecies).toHaveBeenCalledWith(
-      '',
-      expect.any(Object),
-      'offset:50',
-      50,
-      'Name',
-      'en',
-      false,
-    )
+    expect(mocks.searchSpecies).toHaveBeenCalledWith(expect.objectContaining({
+      text: '',
+      filters: expect.any(Object),
+      cursor: 'offset:50',
+      limit: 50,
+      sort: 'Name',
+      locale: 'en',
+      include_total: false,
+    }))
     expect(plantDb.totalEstimate.value).toBe(42)
   })
 

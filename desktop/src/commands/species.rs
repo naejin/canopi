@@ -3,7 +3,7 @@ use tauri::State;
 use common_types::species::{
     CommonNameEntry, DynamicFilterOptions, FilterOptions, FlowerColorResolution, PaginatedResult,
     Relationship, Sort, SpeciesDetail, SpeciesExternalLink, SpeciesFilter, SpeciesImage,
-    SpeciesListItem,
+    SpeciesListItem, SpeciesSearchRequest,
 };
 
 /// Search species with optional full-text and structured filters.
@@ -26,17 +26,16 @@ pub fn search_species(
     locale: String,
     include_total: Option<bool>,
 ) -> Result<PaginatedResult<SpeciesListItem>, String> {
-    crate::services::plant_browser::search_species(
-        &plant_db,
-        &user_db,
+    let request = SpeciesSearchRequest {
         text,
         filters,
         cursor,
         limit,
         sort,
         locale,
-        include_total,
-    )
+        include_total: include_total.unwrap_or(true),
+    };
+    crate::services::plant_browser::search_species(&plant_db, &user_db, request)
 }
 
 /// Fetch the full detail record for a species and record it in recently viewed.

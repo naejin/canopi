@@ -1,34 +1,19 @@
-use common_types::species::{PaginatedResult, Sort, SpeciesFilter, SpeciesListItem};
+use common_types::species::{PaginatedResult, SpeciesListItem, SpeciesSearchRequest};
 use rusqlite::{Connection, params_from_iter};
 
-use crate::db::query_builder::{SpeciesSearchPlan, SpeciesSearchRequest};
+use crate::db::query_builder::{SpeciesSearchPlan, SpeciesSearchPlanRequest};
 
 /// Searches species using FTS5, structured filters, or both.
 ///
 /// Returns a paginated result. Pass the `next_cursor` from a previous result
 /// to fetch the next page.
-#[allow(
-    clippy::too_many_arguments,
-    reason = "Plant DB search mirrors the current flat species search request contract"
-)]
 pub fn search(
     conn: &Connection,
-    text: Option<String>,
-    filters: SpeciesFilter,
-    cursor: Option<String>,
-    sort: Sort,
-    limit: u32,
-    include_total: bool,
-    locale: String,
+    request: SpeciesSearchRequest,
 ) -> Result<PaginatedResult<SpeciesListItem>, String> {
-    let plan = SpeciesSearchPlan::build(SpeciesSearchRequest {
-        text,
-        filters,
-        cursor,
-        sort,
-        limit,
-        include_total,
-        locale,
+    let limit = request.limit;
+    let plan = SpeciesSearchPlan::build(SpeciesSearchPlanRequest {
+        search: request,
         use_common_name_token_index: supports_common_name_token_index(conn),
     });
 
@@ -101,10 +86,30 @@ fn supports_common_name_token_index(conn: &Connection) -> bool {
 #[cfg(test)]
 mod tests {
     use super::search;
-    use crate::db::query_builder::{SpeciesSearchPlan, SpeciesSearchRequest};
-    use common_types::species::{Sort, SpeciesFilter};
+    use crate::db::query_builder::{SpeciesSearchPlan, SpeciesSearchPlanRequest};
+    use common_types::species::{Sort, SpeciesFilter, SpeciesSearchRequest};
     use rusqlite::{Connection, OpenFlags, params_from_iter};
     use std::{env, path::PathBuf, time::Duration, time::Instant};
+
+    fn search_request(
+        text: Option<&str>,
+        filters: SpeciesFilter,
+        cursor: Option<String>,
+        sort: Sort,
+        limit: u32,
+        include_total: bool,
+        locale: &str,
+    ) -> SpeciesSearchRequest {
+        SpeciesSearchRequest {
+            text: text.unwrap_or("").to_owned(),
+            filters,
+            cursor,
+            limit,
+            sort,
+            locale: locale.to_owned(),
+            include_total,
+        }
+    }
 
     fn test_db() -> Connection {
         let conn = Connection::open_in_memory().unwrap();
@@ -374,14 +379,16 @@ mod tests {
         conn: &Connection,
         (label, locale, query): (&str, &str, &str),
     ) -> Result<(), String> {
-        let plan = SpeciesSearchPlan::build(SpeciesSearchRequest {
-            text: Some(query.to_owned()),
-            filters: SpeciesFilter::default(),
-            cursor: None,
-            sort: Sort::Relevance,
-            limit: 20,
-            include_total: true,
-            locale: locale.to_owned(),
+        let plan = SpeciesSearchPlan::build(SpeciesSearchPlanRequest {
+            search: search_request(
+                Some(query),
+                SpeciesFilter::default(),
+                None,
+                Sort::Relevance,
+                20,
+                true,
+                locale,
+            ),
             use_common_name_token_index: true,
         });
 
@@ -449,13 +456,15 @@ mod tests {
 
         let first = search(
             &conn,
-            Some("lavender".to_owned()),
-            SpeciesFilter::default(),
-            None,
-            Sort::Relevance,
-            1,
-            true,
-            "en".to_owned(),
+            search_request(
+                Some("lavender"),
+                SpeciesFilter::default(),
+                None,
+                Sort::Relevance,
+                1,
+                true,
+                "en",
+            ),
         )
         .unwrap();
 
@@ -465,13 +474,15 @@ mod tests {
 
         let second = search(
             &conn,
-            Some("lavender".to_owned()),
-            SpeciesFilter::default(),
-            first.next_cursor.clone(),
-            Sort::Relevance,
-            1,
-            false,
-            "en".to_owned(),
+            search_request(
+                Some("lavender"),
+                SpeciesFilter::default(),
+                first.next_cursor.clone(),
+                Sort::Relevance,
+                1,
+                false,
+                "en",
+            ),
         )
         .unwrap();
 
@@ -490,13 +501,15 @@ mod tests {
 
         let result = search(
             &conn,
-            None,
-            SpeciesFilter::default(),
-            None,
-            Sort::Name,
-            10,
-            true,
-            "fr".to_owned(),
+            search_request(
+                None,
+                SpeciesFilter::default(),
+                None,
+                Sort::Name,
+                10,
+                true,
+                "fr",
+            ),
         )
         .unwrap();
 
@@ -530,13 +543,15 @@ mod tests {
 
         let result = search(
             &conn,
-            Some("alpha".to_owned()),
-            SpeciesFilter::default(),
-            None,
-            Sort::Name,
-            10,
-            true,
-            "en".to_owned(),
+            search_request(
+                Some("alpha"),
+                SpeciesFilter::default(),
+                None,
+                Sort::Name,
+                10,
+                true,
+                "en",
+            ),
         )
         .unwrap();
 
@@ -551,13 +566,15 @@ mod tests {
 
         let first = search(
             &conn,
-            Some("\" () + -".to_owned()),
-            SpeciesFilter::default(),
-            None,
-            Sort::Relevance,
-            1,
-            true,
-            "en".to_owned(),
+            search_request(
+                Some("\" () + -"),
+                SpeciesFilter::default(),
+                None,
+                Sort::Relevance,
+                1,
+                true,
+                "en",
+            ),
         )
         .unwrap();
 
@@ -568,13 +585,15 @@ mod tests {
 
         let second = search(
             &conn,
-            Some("\" () + -".to_owned()),
-            SpeciesFilter::default(),
-            Some(next_cursor),
-            Sort::Relevance,
-            1,
-            false,
-            "en".to_owned(),
+            search_request(
+                Some("\" () + -"),
+                SpeciesFilter::default(),
+                Some(next_cursor),
+                Sort::Relevance,
+                1,
+                false,
+                "en",
+            ),
         )
         .unwrap();
 
@@ -607,13 +626,15 @@ mod tests {
         ] {
             let result = search(
                 &conn,
-                Some(query.to_owned()),
-                SpeciesFilter::default(),
-                None,
-                Sort::Relevance,
-                10,
-                true,
-                locale.to_owned(),
+                search_request(
+                    Some(query),
+                    SpeciesFilter::default(),
+                    None,
+                    Sort::Relevance,
+                    10,
+                    true,
+                    locale,
+                ),
             )
             .unwrap();
 
@@ -640,13 +661,15 @@ mod tests {
 
         let result = search(
             &conn,
-            Some("lin".to_owned()),
-            SpeciesFilter::default(),
-            None,
-            Sort::Relevance,
-            10,
-            true,
-            "fr".to_owned(),
+            search_request(
+                Some("lin"),
+                SpeciesFilter::default(),
+                None,
+                Sort::Relevance,
+                10,
+                true,
+                "fr",
+            ),
         )
         .unwrap();
         let names = result
@@ -676,13 +699,15 @@ mod tests {
 
         let result = search(
             &conn,
-            Some("lin".to_owned()),
-            SpeciesFilter::default(),
-            None,
-            Sort::Relevance,
-            10,
-            true,
-            "fr".to_owned(),
+            search_request(
+                Some("lin"),
+                SpeciesFilter::default(),
+                None,
+                Sort::Relevance,
+                10,
+                true,
+                "fr",
+            ),
         )
         .unwrap();
         let names = result
@@ -730,13 +755,15 @@ mod tests {
 
         let result = search(
             &conn,
-            Some("lin commun".to_owned()),
-            SpeciesFilter::default(),
-            None,
-            Sort::Relevance,
-            10,
-            true,
-            "fr".to_owned(),
+            search_request(
+                Some("lin commun"),
+                SpeciesFilter::default(),
+                None,
+                Sort::Relevance,
+                10,
+                true,
+                "fr",
+            ),
         )
         .unwrap();
         let names = result
@@ -780,13 +807,15 @@ mod tests {
 
         let result = search(
             &conn,
-            Some("lin léon".to_owned()),
-            SpeciesFilter::default(),
-            None,
-            Sort::Relevance,
-            10,
-            true,
-            "fr".to_owned(),
+            search_request(
+                Some("lin léon"),
+                SpeciesFilter::default(),
+                None,
+                Sort::Relevance,
+                10,
+                true,
+                "fr",
+            ),
         )
         .unwrap();
 
@@ -843,13 +872,15 @@ mod tests {
 
         let error = search(
             &conn,
-            Some("lavender".to_owned()),
-            SpeciesFilter::default(),
-            None,
-            Sort::Relevance,
-            10,
-            true,
-            "en".to_owned(),
+            search_request(
+                Some("lavender"),
+                SpeciesFilter::default(),
+                None,
+                Sort::Relevance,
+                10,
+                true,
+                "en",
+            ),
         )
         .unwrap_err();
 

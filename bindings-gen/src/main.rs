@@ -49,6 +49,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .register::<common_types::species::SpeciesFilter>()
         .register::<common_types::species::SpeciesImage>()
         .register::<common_types::species::SpeciesListItem>()
+        .register::<common_types::species::SpeciesSearchRequest>()
         .register::<common_types::species::SpeciesUse>();
 
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
