@@ -7,6 +7,7 @@ mod predicates;
 mod projection;
 mod relevance;
 mod species_catalog_filters;
+mod sql;
 mod text;
 
 pub(crate) use crate::db::plant_filter_fields::{PlantFilterFieldKind, filter_field_kind};
@@ -22,6 +23,7 @@ mod tests {
         DynamicFilter, FilterOp, Sort, SpeciesFilter, SpeciesListItem, SpeciesSearchRequest,
     };
     use rusqlite::types::Value;
+    use std::collections::BTreeSet;
 
     fn default_filter() -> SpeciesFilter {
         SpeciesFilter::default()
@@ -99,6 +101,41 @@ mod tests {
         normalized.trim().to_owned()
     }
 
+    fn placeholder_numbers(sql: &str) -> BTreeSet<usize> {
+        let mut placeholders = BTreeSet::new();
+        let mut chars = sql.chars().peekable();
+        while let Some(ch) = chars.next() {
+            if ch != '?' {
+                continue;
+            }
+
+            let mut number = String::new();
+            while chars.peek().is_some_and(|next| next.is_ascii_digit()) {
+                number.push(chars.next().unwrap());
+            }
+
+            assert!(
+                !number.is_empty(),
+                "expected numbered placeholder in SQL:\n{sql}"
+            );
+            placeholders.insert(number.parse().expect("placeholder number"));
+        }
+        placeholders
+    }
+
+    fn assert_dense_statement_placeholders(statement: &builder::SqlStatementPlan) {
+        let placeholders = placeholder_numbers(statement.sql());
+        let expected: BTreeSet<usize> = (1..=statement.params().len()).collect();
+
+        assert_eq!(
+            placeholders,
+            expected,
+            "SQL placeholders should be dense and match params:\n{}\nparams: {:?}",
+            statement.sql(),
+            statement.params()
+        );
+    }
+
     #[test]
     fn test_cursor_round_trip() {
         let encoded = encode_cursor("Lamiaceae", "Lavandula angustifolia");
@@ -123,6 +160,48 @@ mod tests {
         // locale param + "en" fallback param + limit param
         assert_eq!(params.len(), 3);
         assert!(plan.count().is_none());
+    }
+
+    #[test]
+    fn test_search_plans_keep_placeholders_dense_with_params() {
+        let mut filters = default_filter();
+        filters.family = Some("Lamiaceae".to_owned());
+        filters.climate_zones = Some(vec!["Temperate".to_owned(), "Boreal".to_owned()]);
+        filters.extra = Some(vec![
+            DynamicFilter {
+                field: "growth_form_type".to_owned(),
+                op: FilterOp::In,
+                values: vec!["Tree".to_owned(), "Shrub".to_owned()],
+            },
+            DynamicFilter {
+                field: "height_max_m".to_owned(),
+                op: FilterOp::Between,
+                values: vec!["1".to_owned(), "8".to_owned()],
+            },
+        ]);
+
+        let mut relevance_request = request(
+            Some("lin commun"),
+            filters.clone(),
+            Some("offset:40".to_owned()),
+            Sort::Relevance,
+            20,
+            true,
+        );
+        relevance_request.search.locale = "fr".to_owned();
+        let relevance_plan = SpeciesSearchPlan::build(relevance_request);
+        assert_dense_statement_placeholders(relevance_plan.list());
+        assert_dense_statement_placeholders(relevance_plan.count().unwrap());
+
+        let keyset_plan = SpeciesSearchPlan::build(request(
+            None,
+            filters,
+            Some(encode_cursor("4", "Vaccinium corymbosum")),
+            Sort::Hardiness,
+            20,
+            false,
+        ));
+        assert_dense_statement_placeholders(keyset_plan.list());
     }
 
     #[test]
@@ -289,7 +368,7 @@ mod tests {
         let plan =
             SpeciesSearchPlan::build(request(None, default_filter(), None, Sort::Name, 20, false));
         let limit_val = match plan.list().params().last().unwrap() {
-            Value::Integer(n) => *n,
+            Value::Integer(n) => n.to_owned(),
             _ => panic!("expected integer limit"),
         };
         assert_eq!(limit_val, 21);
@@ -335,7 +414,7 @@ mod tests {
         assert!(sql.contains("OFFSET ?"));
         assert!(!sql.contains("s.canonical_name >"));
         let offset_val = match params.last().unwrap() {
-            Value::Integer(n) => *n,
+            Value::Integer(n) => n.to_owned(),
             _ => panic!("expected integer offset"),
         };
         assert_eq!(offset_val, 50);

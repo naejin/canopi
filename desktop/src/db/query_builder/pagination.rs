@@ -3,6 +3,7 @@ use rusqlite::types::Value;
 
 use super::columns::sort_column;
 use super::cursor::{decode_cursor, encode_cursor};
+use super::sql::SqlBuilder;
 
 #[derive(Debug, Clone)]
 pub(super) enum SpeciesSearchPagePlan {
@@ -34,18 +35,16 @@ impl SpeciesSearchPagePlan {
         }
     }
 
-    pub(super) fn limit_clause(&self, limit: u32, params: &mut Vec<Value>) -> String {
-        let limit_position = params.len() + 1;
-        params.push(Value::Integer((limit + 1) as i64));
+    pub(super) fn limit_clause(&self, limit: u32, sql_builder: &mut SqlBuilder) -> String {
+        let limit_placeholder = sql_builder.bind_integer((limit + 1) as i64);
         let offset_clause = match self {
             Self::RelevanceOffset { current_offset } if *current_offset > 0 => {
-                let offset_position = params.len() + 1;
-                params.push(Value::Integer(*current_offset as i64));
-                format!(" OFFSET ?{offset_position}")
+                let offset_placeholder = sql_builder.bind_integer(*current_offset as i64);
+                format!(" OFFSET {offset_placeholder}")
             }
             _ => String::new(),
         };
-        format!("LIMIT ?{limit_position}{offset_clause}")
+        format!("LIMIT {limit_placeholder}{offset_clause}")
     }
 
     pub(super) fn next_cursor(&self, items: &[SpeciesListItem], has_next: bool) -> Option<String> {
@@ -68,37 +67,34 @@ impl SpeciesSearchPagePlan {
 pub(super) fn cursor_clause(
     cursor: &Option<String>,
     sort: &Sort,
-    params: &mut Vec<Value>,
+    sql_builder: &mut SqlBuilder,
 ) -> Option<String> {
     let cursor = cursor.as_ref()?;
     let (sort_value, cursor_name) = decode_cursor(cursor)?;
     let column = sort_column(sort);
 
     if matches!(sort, Sort::Name | Sort::Relevance) {
-        let clause = format!("s.canonical_name > ?{}", params.len() + 1);
-        params.push(Value::Text(cursor_name));
+        let cursor_name_placeholder = sql_builder.bind_text(cursor_name);
+        let clause = format!("s.canonical_name > {cursor_name_placeholder}");
         return Some(clause);
     }
 
-    let clause = format!(
-        "({}, s.canonical_name) > (?{}, ?{})",
-        column,
-        params.len() + 1,
-        params.len() + 2
-    );
-    let typed_value = match sort {
+    let sort_placeholder = match sort {
         Sort::Height => sort_value
             .parse::<f64>()
-            .map(Value::Real)
-            .unwrap_or(Value::Null),
+            .map(|value| sql_builder.bind_real(value))
+            .unwrap_or_else(|_| sql_builder.bind(Value::Null)),
         Sort::Hardiness => sort_value
             .parse::<i64>()
-            .map(Value::Integer)
-            .unwrap_or(Value::Null),
-        _ => Value::Text(sort_value),
+            .map(|value| sql_builder.bind_integer(value))
+            .unwrap_or_else(|_| sql_builder.bind(Value::Null)),
+        _ => sql_builder.bind_text(sort_value),
     };
-    params.push(typed_value);
-    params.push(Value::Text(cursor_name));
+    let cursor_name_placeholder = sql_builder.bind_text(cursor_name);
+    let clause = format!(
+        "({}, s.canonical_name) > ({sort_placeholder}, {cursor_name_placeholder})",
+        column
+    );
     Some(clause)
 }
 

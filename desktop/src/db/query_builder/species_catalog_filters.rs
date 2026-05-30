@@ -1,5 +1,4 @@
 use common_types::species::SpeciesFilter;
-use rusqlite::types::Value;
 
 use crate::db::plant_filter_fields::{
     FixedFilterBehavior, FixedFilterBooleanMapping, FixedFilterPredicate, FixedFilterValue,
@@ -7,11 +6,12 @@ use crate::db::plant_filter_fields::{
 };
 
 use super::columns::validated_column;
+use super::sql::SqlBuilder;
 use super::{PlantFilterFieldKind, filter_field_kind};
 
 pub(super) fn append_fixed_filters(
     where_clauses: &mut Vec<String>,
-    params: &mut Vec<Value>,
+    sql_builder: &mut SqlBuilder,
     filters: &SpeciesFilter,
 ) {
     for behavior in SPECIES_FILTER_FIXED_BEHAVIORS {
@@ -23,13 +23,13 @@ pub(super) fn append_fixed_filters(
             );
             continue;
         };
-        append_generated_fixed_filter(where_clauses, params, behavior, value);
+        append_generated_fixed_filter(where_clauses, sql_builder, behavior, value);
     }
 }
 
 fn append_generated_fixed_filter(
     where_clauses: &mut Vec<String>,
-    params: &mut Vec<Value>,
+    sql_builder: &mut SqlBuilder,
     behavior: &FixedFilterBehavior,
     value: FixedFilterValue<'_>,
 ) {
@@ -44,11 +44,11 @@ fn append_generated_fixed_filter(
             FixedFilterPredicate::TextInColumn(column),
             FixedFilterValue::StringList(Some(values)),
         ) => {
-            append_text_in_clause(where_clauses, params, column, values);
+            append_text_in_clause(where_clauses, sql_builder, column, values);
         }
         (FixedFilterPredicate::TextEqualsColumn(column), FixedFilterValue::Text(Some(value))) => {
-            where_clauses.push(format!("{column} = ?{}", params.len() + 1));
-            params.push(Value::Text(value.clone()));
+            let placeholder = sql_builder.bind_text(value.clone());
+            where_clauses.push(format!("{column} = {placeholder}"));
         }
         (
             FixedFilterPredicate::BooleanTrueClause(clause),
@@ -60,17 +60,17 @@ fn append_generated_fixed_filter(
             FixedFilterPredicate::NumericGteColumn(column),
             FixedFilterValue::Integer(Some(value)),
         ) => {
-            where_clauses.push(format!("{column} >= ?{}", params.len() + 1));
-            params.push(Value::Integer(value as i64));
+            let placeholder = sql_builder.bind_integer(value as i64);
+            where_clauses.push(format!("{column} >= {placeholder}"));
         }
         (FixedFilterPredicate::ClimateZoneJoin, FixedFilterValue::StringList(Some(values))) => {
-            append_climate_zone_filter(where_clauses, params, values);
+            append_climate_zone_filter(where_clauses, sql_builder, values);
         }
         (
             FixedFilterPredicate::SchemaTextIn { field_key },
             FixedFilterValue::StringList(Some(values)),
         ) => {
-            append_schema_text_in_clause(where_clauses, params, field_key, values);
+            append_schema_text_in_clause(where_clauses, sql_builder, field_key, values);
         }
         (
             FixedFilterPredicate::SchemaBooleanTrue { field_key },
@@ -110,30 +110,23 @@ fn append_mapped_boolean_list_filter(
 
 fn append_climate_zone_filter(
     where_clauses: &mut Vec<String>,
-    params: &mut Vec<Value>,
+    sql_builder: &mut SqlBuilder,
     zones: &[String],
 ) {
     if zones.is_empty() {
         return;
     }
 
-    let placeholders: Vec<String> = zones
-        .iter()
-        .enumerate()
-        .map(|(i, _)| format!("?{}", params.len() + 1 + i))
-        .collect();
+    let placeholders = sql_builder.bind_text_list(zones);
     where_clauses.push(format!(
         "EXISTS (SELECT 1 FROM species_climate_zones cz WHERE cz.species_id = s.id AND cz.climate_zone IN ({}))",
         placeholders.join(", ")
     ));
-    for zone in zones {
-        params.push(Value::Text(zone.clone()));
-    }
 }
 
 fn append_schema_text_in_clause(
     where_clauses: &mut Vec<String>,
-    params: &mut Vec<Value>,
+    sql_builder: &mut SqlBuilder,
     field_key: &str,
     values: &[String],
 ) {
@@ -144,7 +137,7 @@ fn append_schema_text_in_clause(
     if let (Some(column), Some(PlantFilterFieldKind::Categorical)) =
         (validated_column(field_key), filter_field_kind(field_key))
     {
-        append_text_in_clause(where_clauses, params, column, values);
+        append_text_in_clause(where_clauses, sql_builder, column, values);
     }
 }
 
@@ -166,7 +159,7 @@ fn append_schema_boolean_true_clause(
 
 fn append_text_in_clause(
     where_clauses: &mut Vec<String>,
-    params: &mut Vec<Value>,
+    sql_builder: &mut SqlBuilder,
     column: &str,
     values: &[String],
 ) {
@@ -174,15 +167,8 @@ fn append_text_in_clause(
         return;
     }
 
-    let placeholders: Vec<String> = values
-        .iter()
-        .enumerate()
-        .map(|(index, _)| format!("?{}", params.len() + 1 + index))
-        .collect();
+    let placeholders = sql_builder.bind_text_list(values);
     where_clauses.push(format!("{column} IN ({})", placeholders.join(", ")));
-    for value in values {
-        params.push(Value::Text(value.clone()));
-    }
 }
 
 #[cfg(test)]
@@ -235,7 +221,7 @@ mod tests {
     #[test]
     fn fixed_filters_route_schema_and_bespoke_predicates_through_one_adapter() {
         let mut clauses = Vec::new();
-        let mut params = Vec::new();
+        let mut sql_builder = SqlBuilder::default();
         let filters = SpeciesFilter {
             sun_tolerances: Some(vec!["full_sun".to_owned(), "full_shade".to_owned()]),
             soil_tolerances: Some(vec!["heavy_clay".to_owned()]),
@@ -250,7 +236,7 @@ mod tests {
             ..SpeciesFilter::default()
         };
 
-        append_fixed_filters(&mut clauses, &mut params, &filters);
+        append_fixed_filters(&mut clauses, &mut sql_builder, &filters);
 
         let sql = clauses.join(" AND ");
         assert!(sql.contains("tolerates_full_sun = 1"));
@@ -263,6 +249,6 @@ mod tests {
         assert!(sql.contains("species_climate_zones cz"));
         assert!(sql.contains("s.habit IN"));
         assert!(sql.contains("s.woody = 1"));
-        assert_eq!(params.len(), 4);
+        assert_eq!(sql_builder.params().len(), 4);
     }
 }
