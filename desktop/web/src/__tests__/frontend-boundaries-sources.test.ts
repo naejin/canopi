@@ -255,9 +255,35 @@ describe('frontend boundary sources', () => {
       expect(source).not.toContain('document-session/store')
       expect(source).not.toContain('currentDesign')
     }
-    expect(runtimeSource).toContain('runtime-mirror-state')
     expect(runtimeSource).toContain('currentCanvasQuerySurface')
+    expect(runtimeSource).toContain('revision.scene.value')
+    expect(runtimeSource).not.toContain('runtime-mirror-state')
     expect(runtimeSource).toContain('document-session/store')
+  })
+
+  it('keeps runtime mirror revision signals behind the Canvas Query Surface', () => {
+    const sourcePaths = [
+      '../app',
+      '../components',
+      '../maplibre',
+    ].flatMap(sourceFilesUnder).filter(isTypescriptSource)
+
+    for (const sourcePath of sourcePaths) {
+      expectNoImportsMatching(sourcePath, [/canvas\/runtime-mirror-state$/])
+    }
+
+    const runtimeSurfaceSource = readSource('../canvas/runtime/runtime.ts')
+    const mountedRuntimeSource = readSource('../canvas/runtime/scene-runtime.ts')
+    const documentBridgeSource = readSource('../canvas/runtime/scene-runtime/document.ts')
+    const workflowsSource = readSource('../app/document-session/workflows.ts')
+    const mapSurfaceSource = readSource('../components/canvas/maplibre-surface-controller.ts')
+
+    expect(runtimeSurfaceSource).toContain('CanvasQueryRevision')
+    expect(mountedRuntimeSource).toContain('_incrementSceneRevision')
+    expect(documentBridgeSource).toContain('incrementSceneRevision')
+    expect(documentBridgeSource).not.toContain('sceneEntityRevision')
+    expect(workflowsSource).toContain('revision.scene.value')
+    expect(mapSurfaceSource).toContain('revision.viewport.value')
   })
 
   it('keeps Target presentation lifecycle out of Planning Projection', () => {

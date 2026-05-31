@@ -46,7 +46,11 @@ import {
   createDetachedSceneRuntimePanelTargetAdapter,
   type SceneRuntimePanelTargetAdapter,
 } from './scene-runtime/panel-target-adapter'
-import type { CanvasRuntimeDocumentMetadata, MountedCanvasRuntime } from './runtime'
+import type {
+  CanvasQueryRevision,
+  CanvasRuntimeDocumentMetadata,
+  MountedCanvasRuntime,
+} from './runtime'
 import { targets, speciesTarget } from '../../target'
 
 type RuntimeInvalidationKind = 'scene' | 'viewport' | 'chrome'
@@ -59,7 +63,14 @@ export interface SceneCanvasRuntimeOptions {
 export class SceneCanvasRuntime implements MountedCanvasRuntime {
   private readonly _sceneStore = new SceneStore()
   private readonly _camera = new CameraController()
+  private readonly _sceneRevision = signal(0)
+  private readonly _plantNamesQueryRevision = signal(0)
   private readonly _viewportRevision = signal(0)
+  private readonly _revision: CanvasQueryRevision = {
+    scene: this._sceneRevision,
+    plantNames: this._plantNamesQueryRevision,
+    viewport: this._viewportRevision,
+  }
   private readonly _rendererHost = new RendererHost<SceneRendererContext, SceneRendererInstance>({
     backends: [
       createPixiSceneRenderer(),
@@ -96,7 +107,7 @@ export class SceneCanvasRuntime implements MountedCanvasRuntime {
       getLocale: () => locale.value,
       resolveHighlightedTargets: (scene) => this._resolveHighlightedTargets(scene),
       onPlantNamesChanged: () => {
-        plantNamesRevision.value += 1
+        this._incrementPlantNamesRevision()
       },
     })
     this._documents = new SceneRuntimeDocumentBridge({
@@ -109,9 +120,8 @@ export class SceneCanvasRuntime implements MountedCanvasRuntime {
       syncCanvasSignalsFromDocument: (file) => syncCanvasSignalsFromDocument(file),
       syncCanvasSignalsFromScene: () => this._syncCanvasSignalsFromScene(),
       invalidateScene: () => this._invalidate('scene'),
-      incrementViewportRevision: () => {
-        this._viewportRevision.value += 1
-      },
+      incrementSceneRevision: () => this._incrementSceneRevision(),
+      incrementViewportRevision: () => this._incrementViewportRevision(),
     })
     this._sceneEdits = new SceneRuntimeEditCoordinator({
       sceneStore: this._sceneStore,
@@ -193,6 +203,10 @@ export class SceneCanvasRuntime implements MountedCanvasRuntime {
     return this._viewportRevision
   }
 
+  get revision() {
+    return this._revision
+  }
+
   getSelection(): Set<string> {
     return new Set(this._sceneStore.session.selectedEntityIds)
   }
@@ -264,14 +278,14 @@ export class SceneCanvasRuntime implements MountedCanvasRuntime {
   undo(): void {
     this._history.undo(this._documents.historyRuntime())
     this._syncCanvasSignalsFromScene()
-    sceneEntityRevision.value += 1
+    this._incrementSceneRevision()
     this._invalidate('scene')
   }
 
   redo(): void {
     this._history.redo(this._documents.historyRuntime())
     this._syncCanvasSignalsFromScene()
-    sceneEntityRevision.value += 1
+    this._incrementSceneRevision()
     this._invalidate('scene')
   }
 
@@ -453,7 +467,7 @@ export class SceneCanvasRuntime implements MountedCanvasRuntime {
       || previous.y !== viewport.y
       || previous.scale !== viewport.scale
     ) {
-      this._viewportRevision.value += 1
+      this._incrementViewportRevision()
     }
   }
 
@@ -462,7 +476,7 @@ export class SceneCanvasRuntime implements MountedCanvasRuntime {
   }
 
   private _currentPresentationRevision(): number {
-    return sceneEntityRevision.value
+    return this._sceneRevision.peek()
   }
 
   private _applyPresentationBackfillsIfCurrent(
@@ -530,6 +544,20 @@ export class SceneCanvasRuntime implements MountedCanvasRuntime {
       subscribePanelOriginTargetChanges: (onChange) =>
         this._panelTargetAdapter.subscribePanelOriginTargetChanges(onChange),
     }))
+  }
+
+  private _incrementSceneRevision(): void {
+    sceneEntityRevision.value += 1
+    this._sceneRevision.value += 1
+  }
+
+  private _incrementPlantNamesRevision(): void {
+    plantNamesRevision.value += 1
+    this._plantNamesQueryRevision.value += 1
+  }
+
+  private _incrementViewportRevision(): void {
+    this._viewportRevision.value += 1
   }
 
   private _renderChrome(): void {

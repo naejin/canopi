@@ -1,6 +1,5 @@
 import { useMemo } from 'preact/hooks'
 import { plantSpeciesColorDefaults } from '../../canvas/plant-species-color-defaults'
-import { plantNamesRevision, sceneEntityRevision } from '../../canvas/runtime-mirror-state'
 import { currentCanvasQuerySurface } from '../../canvas/session'
 import { locale } from '../settings/state'
 import { DEFAULT_BUDGET_CURRENCY } from '../contracts/document'
@@ -43,14 +42,14 @@ export interface ConsortiumPlanningSurface {
 
 export function usePlanningProjectionCanvasSnapshot(): PlanningProjectionCanvasSnapshot {
   const session = currentCanvasQuerySurface.value
-  const sceneRevision = sceneEntityRevision.value
-  const namesRevision = plantNamesRevision.value
+  const sceneRevision = session?.revision.scene.value ?? 0
+  const plantNamesRevision = session?.revision.plantNames.value ?? 0
   const activeLocale = locale.value
 
   return useMemo(() => ({
     plants: session?.getPlacedPlants() ?? EMPTY_PLANTS,
     localizedNames: session?.getLocalizedCommonNames() ?? EMPTY_NAMES,
-  }), [session, sceneRevision, namesRevision, activeLocale])
+  }), [session, sceneRevision, plantNamesRevision, activeLocale])
 }
 
 export function useBudgetPlanningProjection({

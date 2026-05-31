@@ -9,6 +9,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - Toolbars, shortcuts, menus, and plant color actions consume command surfaces.
 - Document session orchestration, save/load, chrome, resize, and teardown consume document surfaces.
 - Sibling read-only surfaces consume query surfaces for scene snapshots, viewport queries, selection reads, placed plants, localized names, and presentation context.
+- Scene freshness for app callers is exposed through `CanvasQuerySurface.revision`. App modules must not import `sceneEntityRevision` or `plantNamesRevision` from `canvas/runtime-mirror-state.ts`; those mirrors are runtime-internal compatibility signals.
 
 ## Scene Ownership
 
@@ -20,6 +21,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - Scene Layer visibility, opacity, and locks are scene edits. UI controllers must call the canvas command surface instead of writing `layerVisibility`, `layerOpacity`, or `layerLockState` directly.
 - Guide creation is a scene edit owned by the runtime. The `guides` signal is a chrome projection, not document authority.
 - Canvas signals such as selected object IDs, size mode, color mode, layer state, and guides are UI mirrors, not runtime authority.
+- Canvas Query Surface revision values are the app-facing freshness seam for scene entities, localized plant names, and viewport updates. If a caller needs to recompute from scene reads, subscribe to that surface instead of importing runtime mirror signals.
 - Basemap, contour, and hillshade display settings remain app settings projections; do not route those map-surface settings through Scene Edit unless the document schema intentionally makes them canvas-owned.
 - No circular imports between scene store/runtime and document store. Pass document readers or values through seams when needed.
 

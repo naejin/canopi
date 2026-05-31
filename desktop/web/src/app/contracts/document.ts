@@ -3,6 +3,10 @@ import {
   DOCUMENT_FILE_FIELD_OWNERS as GENERATED_DOCUMENT_FILE_FIELD_OWNERS,
   KNOWN_CANOPI_KEYS,
 } from '../../generated/known-canopi-keys'
+import type {
+  DocumentFileFieldOwner,
+  KnownCanopiKey,
+} from '../../generated/known-canopi-keys'
 import type { CanopiFile } from '../../types/design'
 
 export { DEFAULT_BUDGET_CURRENCY, KNOWN_CANOPI_KEYS }
@@ -25,6 +29,9 @@ export const DOCUMENT_FILE_FIELD_OWNERS = GENERATED_DOCUMENT_FILE_FIELD_OWNERS
 export const DOCUMENT_FILE_KNOWN_KEYS = KNOWN_CANOPI_KEYS
 
 const KNOWN_CANOPI_KEY_SET = new Set<string>(DOCUMENT_FILE_KNOWN_KEYS)
+const SHARED_EXTRA_FIELD_OWNERS = {
+  guides: 'scene',
+} as const satisfies Record<string, DocumentFileFieldOwner>
 
 function normalizePersistedExtra(extra: CanopiFile['extra']): Record<string, unknown> {
   if (!extra || typeof extra !== 'object' || Array.isArray(extra)) return {}
@@ -65,24 +72,38 @@ export function composeDocumentForSave({
 }: ComposeDocumentForSaveOptions): CanopiFile {
   const normalizedDocument = normalizeDocumentKnownFields(document)
   const normalizedCanvas = normalizeDocumentKnownFields(canvas)
+  const composed = composeKnownDocumentFields(normalizedDocument, normalizedCanvas)
 
   return {
-    ...normalizedDocument,
-    version: normalizedCanvas.version,
+    ...composed,
     name: metadata.name,
-    description: metadata.description ?? normalizedDocument.description ?? null,
-    location: normalizeMetadataLocation(metadata.location, normalizedDocument.location),
-    north_bearing_deg: metadata.northBearingDeg ?? normalizedDocument.north_bearing_deg ?? 0,
-    plant_species_colors: normalizedCanvas.plant_species_colors,
-    layers: normalizedCanvas.layers,
-    plants: normalizedCanvas.plants,
-    zones: normalizedCanvas.zones,
-    annotations: normalizedCanvas.annotations,
-    groups: normalizedCanvas.groups,
-    budget_currency: normalizedDocument.budget_currency ?? DEFAULT_BUDGET_CURRENCY,
-    updated_at: normalizedCanvas.updated_at,
-    extra: composeDocumentExtra(normalizedDocument.extra, normalizedCanvas.extra),
+    description: metadata.description ?? composed.description ?? null,
+    location: normalizeMetadataLocation(metadata.location, composed.location),
+    north_bearing_deg: metadata.northBearingDeg ?? composed.north_bearing_deg ?? 0,
   }
+}
+
+function composeKnownDocumentFields(
+  document: CanopiFile,
+  canvas: CanopiFile,
+): CanopiFile {
+  const output: Partial<Record<KnownCanopiKey, unknown>> = {}
+
+  for (const key of DOCUMENT_FILE_KNOWN_KEYS) {
+    if (key === 'extra') continue
+    output[key] = ownedFieldSource(key, document, canvas)[key]
+  }
+
+  output.extra = composeDocumentExtra(document.extra, canvas.extra)
+  return output as CanopiFile
+}
+
+function ownedFieldSource(
+  key: KnownCanopiKey,
+  document: CanopiFile,
+  canvas: CanopiFile,
+): CanopiFile {
+  return DOCUMENT_FILE_FIELD_OWNERS[key] === 'scene' ? canvas : document
 }
 
 function normalizeDocumentKnownFields(file: CanopiFile): CanopiFile {
@@ -126,10 +147,29 @@ function composeDocumentExtra(
 ): Record<string, unknown> {
   const nextExtra = normalizePersistedExtra(documentExtra)
   const sceneExtra = normalizePersistedExtra(canvasExtra)
-  if (Object.prototype.hasOwnProperty.call(sceneExtra, 'guides')) {
-    nextExtra.guides = sceneExtra.guides
-  } else {
-    delete nextExtra.guides
+
+  for (const [key, owner] of Object.entries(SHARED_EXTRA_FIELD_OWNERS)) {
+    const source = sharedExtraSource(owner, nextExtra, sceneExtra)
+    if (Object.prototype.hasOwnProperty.call(source, key)) {
+      nextExtra[key] = source[key]
+    } else {
+      delete nextExtra[key]
+    }
   }
+
   return nextExtra
+}
+
+function sharedExtraSource(
+  owner: DocumentFileFieldOwner,
+  documentExtra: Record<string, unknown>,
+  sceneExtra: Record<string, unknown>,
+): Record<string, unknown> {
+  switch (owner) {
+    case 'document':
+    case 'shared':
+      return documentExtra
+    case 'scene':
+      return sceneExtra
+  }
 }

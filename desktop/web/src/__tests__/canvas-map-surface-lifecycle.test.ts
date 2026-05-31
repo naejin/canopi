@@ -126,6 +126,7 @@ function createRuntime(
 ): CanvasQuerySurface {
   const viewport = options.viewport ?? { x: 0, y: 0, scale: 1 }
   return {
+    revision: { scene: signal(0), plantNames: signal(0), viewport: signal(0) },
     getSceneSnapshot: () => scene,
     getViewport: () => viewport,
     getViewportScreenSize: () => ({ width: 400, height: 300 }),

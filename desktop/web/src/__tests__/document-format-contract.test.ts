@@ -63,6 +63,119 @@ describe('document format contract', () => {
     expect(Object.keys(DOCUMENT_FILE_FIELD_OWNERS)).toEqual(KNOWN_CANOPI_KEYS)
   })
 
+  it('uses generated field ownership when composing known Design fields', () => {
+    const document = {
+      ...BASE_DOCUMENT,
+      version: 101,
+      description: 'Document-owned description',
+      location: { lat: 1, lon: 2, altitude_m: 3 },
+      north_bearing_deg: 11,
+      consortiums: [{
+        target: consortiumTarget('Document species'),
+        stratum: 'document',
+        start_phase: 1,
+        end_phase: 2,
+      }],
+      timeline: [{
+        id: 'document-action',
+        action_type: 'planting',
+        description: 'Document action',
+        start_date: null,
+        end_date: null,
+        recurrence: null,
+        targets: [speciesTarget('Document species')],
+        depends_on: null,
+        completed: false,
+        order: 0,
+      }],
+      budget: [{
+        target: speciesBudgetTarget('Document species'),
+        category: 'plants',
+        description: 'Document budget',
+        quantity: 2,
+        unit_cost: 3,
+        currency: 'USD',
+      }],
+      budget_currency: 'USD',
+      created_at: '2026-04-13T01:00:00.000Z',
+      extra: {
+        future_panel_field: { source: 'document' },
+        guides: [{ id: 'document-guide', axis: 'h', position: 1 }],
+      },
+    } satisfies CanopiFile
+    const canvas = {
+      ...BASE_DOCUMENT,
+      version: 202,
+      plant_species_colors: { 'Canvas species': '#112233' },
+      layers: [{ name: 'plants', visible: true, locked: true, opacity: 0.8 }],
+      plants: [{
+        id: 'canvas-plant',
+        canonical_name: 'Canvas species',
+        common_name: null,
+        color: null,
+        position: { x: 10, y: 20 },
+        rotation: null,
+        scale: null,
+        notes: null,
+        planted_date: null,
+        quantity: 1,
+      }],
+      zones: [{
+        name: 'Canvas zone',
+        zone_type: 'polygon',
+        points: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }],
+        fill_color: null,
+        notes: null,
+      }],
+      annotations: [{
+        id: 'canvas-annotation',
+        annotation_type: 'text',
+        position: { x: 3, y: 4 },
+        text: 'Canvas annotation',
+        font_size: 12,
+        rotation: null,
+      }],
+      groups: [{
+        id: 'canvas-group',
+        name: null,
+        layer: 'plants',
+        position: { x: 10, y: 20 },
+        rotation: null,
+        member_ids: ['canvas-plant'],
+      }],
+      updated_at: '2026-04-13T02:00:00.000Z',
+      extra: {
+        guides: [{ id: 'canvas-guide', axis: 'v', position: 2 }],
+      },
+    } satisfies CanopiFile
+
+    const saved = composeDocumentForSave({
+      metadata: { name: 'Metadata name' },
+      document,
+      canvas,
+    }) as unknown as Record<string, unknown>
+    const documentRecord = document as unknown as Record<string, unknown>
+    const canvasRecord = canvas as unknown as Record<string, unknown>
+    const metadataOwned = new Set(['name', 'description', 'location', 'north_bearing_deg', 'extra'])
+
+    for (const key of KNOWN_CANOPI_KEYS) {
+      if (metadataOwned.has(key)) continue
+      const expectedSource = DOCUMENT_FILE_FIELD_OWNERS[key] === 'scene'
+        ? canvasRecord
+        : documentRecord
+      expect(saved[key], key).toEqual(expectedSource[key])
+    }
+
+    expect(saved.name).toBe('Metadata name')
+    expect(saved.description).toBe('Document-owned description')
+    expect(saved.location).toEqual({ lat: 1, lon: 2, altitude_m: 3 })
+    expect(saved.north_bearing_deg).toBe(11)
+    expect(saved.extra).toEqual({
+      future_panel_field: { source: 'document' },
+      guides: [{ id: 'canvas-guide', axis: 'v', position: 2 }],
+    })
+  })
+
   it('normalizes raw loaded files into extra while the scene codec keeps only scene-owned extra', () => {
     const normalized = normalizeLoadedDocument(RAW_DOCUMENT as unknown as CanopiFile)
 

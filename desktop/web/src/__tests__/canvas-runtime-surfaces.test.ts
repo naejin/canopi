@@ -18,6 +18,7 @@ import type {
 
 function createQuerySurface() {
   return {
+    revision: { scene: signal(0), plantNames: signal(0), viewport: signal(0) },
     getSceneSnapshot: () => createDefaultScenePersistedState(),
     getViewport: () => ({ x: 0, y: 0, scale: 1 }),
     getViewportScreenSize: () => ({ width: 400, height: 300 }),

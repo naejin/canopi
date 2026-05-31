@@ -11,6 +11,12 @@ export interface CanvasRuntimeDocumentMetadata {
   northBearingDeg?: number | null
 }
 
+export interface CanvasQueryRevision {
+  readonly scene: ReadonlySignal<number>
+  readonly plantNames: ReadonlySignal<number>
+  readonly viewport: ReadonlySignal<number>
+}
+
 export interface CanvasCommandSurface {
   setTool(name: string): void
   zoomIn(): void
@@ -46,6 +52,7 @@ export interface CanvasCommandSurface {
 }
 
 export interface CanvasQuerySurface {
+  readonly revision: CanvasQueryRevision
   getSceneSnapshot(): ScenePersistedState
   getViewport(): SceneViewportState
   getViewportScreenSize(): { width: number; height: number }

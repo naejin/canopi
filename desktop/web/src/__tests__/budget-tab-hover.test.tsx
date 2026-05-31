@@ -6,10 +6,13 @@ import { currentCanvasSession } from '../canvas/session'
 import { locale } from '../app/settings/state'
 import { hoveredPanelTargets, selectedPanelTargetOrigin, selectedPanelTargets } from '../app/panel-targets/state'
 import { currentDesign } from './support/design-session-state'
-import { plantNamesRevision, sceneEntityRevision } from '../canvas/runtime-mirror-state'
 import { speciesBudgetTarget } from '../target'
 import type { CanopiFile, PlacedPlant } from '../types/design'
 import styles from '../components/canvas/BudgetTab.module.css'
+import {
+  createTestCanvasQuerySurface,
+  type TestCanvasQuerySurface,
+} from './support/canvas-query-surface'
 
 function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
@@ -52,6 +55,7 @@ function makePlant(canonicalName: string, commonName: string): PlacedPlant {
 
 describe('BudgetTab hover bridge', () => {
   let container: HTMLDivElement
+  let querySurface: TestCanvasQuerySurface
 
   beforeEach(() => {
     container = document.createElement('div')
@@ -61,8 +65,6 @@ describe('BudgetTab hover bridge', () => {
     hoveredPanelTargets.value = []
     selectedPanelTargetOrigin.value = null
     selectedPanelTargets.value = []
-    sceneEntityRevision.value = 0
-    plantNamesRevision.value = 0
     currentDesign.value = makeDesign({
       budget_currency: 'EUR',
       budget: [
@@ -76,10 +78,10 @@ describe('BudgetTab hover bridge', () => {
         },
       ],
     })
-    currentCanvasSession.value = {
-      getPlacedPlants: () => [makePlant('Malus domestica', 'Apple')],
-      getLocalizedCommonNames: () => new Map(),
-    } as any
+    querySurface = createTestCanvasQuerySurface({
+      plants: [makePlant('Malus domestica', 'Apple')],
+    })
+    currentCanvasSession.value = querySurface as any
   })
 
   afterEach(() => {
@@ -143,11 +145,8 @@ describe('BudgetTab hover bridge', () => {
     expect(selectedPanelTargetOrigin.value).toBe('budget')
 
     await act(async () => {
-      currentCanvasSession.value = {
-        getPlacedPlants: () => [],
-        getLocalizedCommonNames: () => new Map(),
-      } as any
-      sceneEntityRevision.value += 1
+      querySurface.setPlants([])
+      querySurface.bumpSceneRevision()
     })
 
     expect(selectedPanelTargets.value).toEqual([])
@@ -168,25 +167,27 @@ describe('BudgetTab hover bridge', () => {
   })
 
   it('refreshes localized species names when switching to a cached locale', async () => {
-    currentCanvasSession.value = {
-      getPlacedPlants: () => [makePlant('Malus domestica', 'Fallback Apple')],
-      getLocalizedCommonNames: () => new Map([
+    querySurface = createTestCanvasQuerySurface({
+      plants: [makePlant('Malus domestica', 'Fallback Apple')],
+      localizedNames: new Map([
         ['Malus domestica', locale.value === 'fr' ? 'Pommier' : 'Apple'],
       ]),
-    } as any
+    })
+    currentCanvasSession.value = querySurface as any
 
     await act(async () => {
       render(<BudgetTab />, container)
     })
 
     expect(container.textContent).toContain('Apple')
-    const namesRevisionBeforeLocaleChange = plantNamesRevision.value
 
     await act(async () => {
       locale.value = 'fr'
+      querySurface.setLocalizedNames(new Map([
+        ['Malus domestica', 'Pommier'],
+      ]))
     })
 
-    expect(plantNamesRevision.value).toBe(namesRevisionBeforeLocaleChange)
     expect(container.textContent).toContain('Pommier')
     expect(container.textContent).not.toContain('Apple')
   })

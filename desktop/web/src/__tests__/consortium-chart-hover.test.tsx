@@ -29,12 +29,9 @@ import { ConsortiumChart } from '../components/canvas/ConsortiumChart'
 import { currentCanvasSession } from '../canvas/session'
 import { currentDesign } from './support/design-session-state'
 import { hoveredCanvasTargets, hoveredPanelTargets } from '../app/panel-targets/state'
-import {
-  plantNamesRevision,
-  sceneEntityRevision,
-} from '../canvas/runtime-mirror-state'
 import { consortiumTarget, speciesTarget } from '../target'
 import type { CanopiFile, PlacedPlant } from '../types/design'
+import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 
 function makeDesign(): CanopiFile {
   return {
@@ -96,16 +93,13 @@ describe('ConsortiumChart canvas hover bridge', () => {
     renderConsortiumMock.mockClear()
     hoveredCanvasTargets.value = []
     hoveredPanelTargets.value = []
-    sceneEntityRevision.value = 0
-    plantNamesRevision.value = 0
     currentDesign.value = makeDesign()
-    currentCanvasSession.value = {
-      getPlacedPlants: () => [
+    currentCanvasSession.value = createTestCanvasQuerySurface({
+      plants: [
         makePlant('Malus domestica', 'Apple'),
         makePlant('Acer campestre', 'Field maple'),
       ],
-      getLocalizedCommonNames: () => new Map(),
-    } as any
+    }) as any
   })
 
   afterEach(() => {

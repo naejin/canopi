@@ -43,6 +43,7 @@ export function createCanvasRuntimeSurfaces(runtime: MountedCanvasRuntime): Canv
   }
 
   const queries: CanvasQuerySurface = {
+    get revision() { return runtime.revision },
     getSceneSnapshot: () => runtime.getSceneSnapshot(),
     getViewport: () => runtime.getViewport(),
     getViewportScreenSize: () => runtime.getViewportScreenSize(),

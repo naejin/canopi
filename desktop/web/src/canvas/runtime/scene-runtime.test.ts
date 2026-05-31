@@ -10,7 +10,7 @@ import {
 } from '../../app/canvas-settings/signals'
 import { layerLockState, layerOpacity, layerVisibility } from '../../app/canvas-settings/signals'
 import { guides } from '../scene-metadata-state'
-import { lockedObjectIds, sceneEntityRevision } from '../runtime-mirror-state'
+import { lockedObjectIds } from '../runtime-mirror-state'
 import { plantColorMenuOpen } from '../plant-color-menu-state'
 import { plantColorByAttr, plantSizeMode } from '../plant-display-state'
 import { plantStampSpecies } from '../plant-tool-state'
@@ -286,14 +286,14 @@ describe('scene canvas runtime', () => {
     expect(plantColorByAttr.value).toBe('flower')
   })
 
-  it('bumps viewportRevision on viewport-only camera changes', async () => {
+  it('bumps query viewport revision on viewport-only camera changes', async () => {
     const runtime = new SceneCanvasRuntime()
     await initRuntimeWithStubbedRenderer(runtime)
 
-    const before = runtime.viewportRevision.value
+    const before = runtime.revision.viewport.value
     runtime.zoomIn()
 
-    expect(runtime.viewportRevision.value).toBeGreaterThan(before)
+    expect(runtime.revision.viewport.value).toBeGreaterThan(before)
   })
 
   it('skips stale presentation backfills after scene revision changes', async () => {
@@ -311,7 +311,7 @@ describe('scene canvas runtime', () => {
     ;(runtime as any)._presentation.refreshSpeciesCacheEntries = vi.fn(() => pendingRefresh)
 
     const pending = runtime.ensureSpeciesCacheEntries(['Malus domestica'], 'en')
-    sceneEntityRevision.value += 1
+    runtime.setPlantColorForSpecies('Malus domestica', '#335577')
     resolveRefresh({
       changed: true,
       backfills: [{
@@ -535,13 +535,13 @@ describe('scene canvas runtime', () => {
   it('bumps viewport revision for zoom and resize updates', async () => {
     const runtime = new SceneCanvasRuntime()
     await initRuntimeWithStubbedRenderer(runtime)
-    const initialRevision = runtime.viewportRevision.value
+    const initialRevision = runtime.revision.viewport.value
 
     runtime.zoomIn()
-    expect(runtime.viewportRevision.value).toBe(initialRevision + 1)
+    expect(runtime.revision.viewport.value).toBe(initialRevision + 1)
 
     runtime.resize(400, 300)
-    expect(runtime.viewportRevision.value).toBe(initialRevision + 2)
+    expect(runtime.revision.viewport.value).toBe(initialRevision + 2)
     runtime.destroy()
   })
 

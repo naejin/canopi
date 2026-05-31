@@ -18,9 +18,9 @@ import { BudgetTab } from '../components/canvas/BudgetTab'
 import { currentCanvasSession } from '../canvas/session'
 import { locale } from '../app/settings/state'
 import { currentDesign } from './support/design-session-state'
-import { plantNamesRevision, sceneEntityRevision } from '../canvas/runtime-mirror-state'
 import { speciesBudgetTarget } from '../target'
 import type { CanopiFile, PlacedPlant } from '../types/design'
+import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 
 function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
@@ -70,8 +70,6 @@ describe('BudgetTab export', () => {
     document.body.innerHTML = ''
     document.body.appendChild(container)
     locale.value = 'en'
-    sceneEntityRevision.value = 0
-    plantNamesRevision.value = 0
     currentDesign.value = makeDesign({
       budget_currency: 'EUR',
       budget: [
@@ -85,10 +83,9 @@ describe('BudgetTab export', () => {
         },
       ],
     })
-    currentCanvasSession.value = {
-      getPlacedPlants: () => [makePlant('Malus domestica', 'Apple')],
-      getLocalizedCommonNames: () => new Map(),
-    } as any
+    currentCanvasSession.value = createTestCanvasQuerySurface({
+      plants: [makePlant('Malus domestica', 'Apple')],
+    }) as any
     mocks.exportBudgetCsv.mockReset()
     consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
   })

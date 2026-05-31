@@ -1,10 +1,10 @@
 import { beforeEach, afterEach, describe, expect, it } from 'vitest'
 import { currentDesign, nonCanvasRevision } from './support/design-session-state'
-import { sceneEntityRevision } from '../canvas/runtime-mirror-state'
 import { currentCanvasSession } from '../canvas/session'
 import { installConsortiumSync, disposeConsortiumSync } from '../app/document-session/workflows'
 import type { CanopiFile, PlacedPlant } from '../types/design'
 import { consortiumTarget, getConsortiumCanonicalName } from '../target'
+import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 
 function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
@@ -46,15 +46,12 @@ function makePlant(canonical_name: string): PlacedPlant {
 }
 
 function mockSession(plants: PlacedPlant[]) {
-  return {
-    getPlacedPlants: () => plants,
-  } as any
+  return createTestCanvasQuerySurface({ plants })
 }
 
 describe('consortium-sync-workflow', () => {
   beforeEach(() => {
     nonCanvasRevision.value = 0
-    sceneEntityRevision.value = 0
     currentDesign.value = null
     ;(currentCanvasSession as any).value = null
   })
@@ -65,11 +62,12 @@ describe('consortium-sync-workflow', () => {
 
   it('adds consortium entries for new plant species', () => {
     const plants = [makePlant('Quercus robur'), makePlant('Acer campestre')]
+    const session = mockSession(plants)
     currentDesign.value = makeDesign()
-    ;(currentCanvasSession as any).value = mockSession(plants)
+    ;(currentCanvasSession as any).value = session
 
     installConsortiumSync()
-    sceneEntityRevision.value += 1
+    session.bumpSceneRevision()
 
     const consortiums = currentDesign.value!.consortiums
     expect(consortiums).toHaveLength(2)
@@ -85,10 +83,11 @@ describe('consortium-sync-workflow', () => {
       ],
     })
     // Only Quercus remains on canvas
-    ;(currentCanvasSession as any).value = mockSession([makePlant('Quercus robur')])
+    const session = mockSession([makePlant('Quercus robur')])
+    ;(currentCanvasSession as any).value = session
 
     installConsortiumSync()
-    sceneEntityRevision.value += 1
+    session.bumpSceneRevision()
 
     const consortiums = currentDesign.value!.consortiums
     expect(consortiums).toHaveLength(2)
@@ -96,11 +95,12 @@ describe('consortium-sync-workflow', () => {
   })
 
   it('does not increment nonCanvasRevision (markDirty: false)', () => {
+    const session = mockSession([makePlant('Quercus robur')])
     currentDesign.value = makeDesign()
-    ;(currentCanvasSession as any).value = mockSession([makePlant('Quercus robur')])
+    ;(currentCanvasSession as any).value = session
 
     installConsortiumSync()
-    sceneEntityRevision.value += 1
+    session.bumpSceneRevision()
 
     expect(nonCanvasRevision.value).toBe(0)
   })
@@ -110,15 +110,16 @@ describe('consortium-sync-workflow', () => {
     currentDesign.value = makeDesign({
       consortiums: [{ target: consortiumTarget('Quercus robur'), stratum: 'high', start_phase: 0, end_phase: 3 }],
     })
-    ;(currentCanvasSession as any).value = mockSession(plants)
+    const session = mockSession(plants)
+    ;(currentCanvasSession as any).value = session
 
     installConsortiumSync()
     // First tick — names match existing consortiums
-    sceneEntityRevision.value += 1
+    session.bumpSceneRevision()
     const snapshotAfterFirst = currentDesign.value
 
     // Second tick — no change
-    sceneEntityRevision.value += 1
+    session.bumpSceneRevision()
     expect(currentDesign.value).toBe(snapshotAfterFirst)
   })
 

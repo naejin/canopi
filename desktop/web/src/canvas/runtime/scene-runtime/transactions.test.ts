@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { canvasClean } from '../../../__tests__/support/design-session-state'
 import type { CanopiFile } from '../../../types/design'
-import { lockedObjectIds, sceneEntityRevision } from '../../runtime-mirror-state'
+import { lockedObjectIds } from '../../runtime-mirror-state'
 import { selectedObjectIds } from '../../session-state'
 import { SceneHistory } from '../scene-history'
 import { SceneStore } from '../scene'
@@ -67,6 +67,7 @@ function createHarness() {
   const sceneStore = new SceneStore(makeFile())
   const history = new SceneHistory()
   const invalidations: SceneEditInvalidationKind[] = []
+  let sceneRevision = 0
   const setSelection = (ids: Iterable<string>) => {
     const next = new Set(ids)
     sceneStore.setSelection(next)
@@ -84,6 +85,9 @@ function createHarness() {
     invalidateScene: () => {
       invalidations.push('scene')
     },
+    incrementSceneRevision: () => {
+      sceneRevision += 1
+    },
     incrementViewportRevision: () => {},
   })
   const sceneEdits = new SceneRuntimeEditCoordinator({
@@ -99,19 +103,26 @@ function createHarness() {
     },
   })
 
-  return { sceneStore, history, documents, sceneEdits, invalidations, setSelection }
+  return {
+    sceneStore,
+    history,
+    documents,
+    sceneEdits,
+    invalidations,
+    setSelection,
+    readSceneRevision: () => sceneRevision,
+  }
 }
 
 describe('scene edit transactions', () => {
   beforeEach(() => {
     canvasClean.value = true
-    sceneEntityRevision.value = 0
     lockedObjectIds.value = new Set()
     selectedObjectIds.value = new Set()
   })
 
   it('commits a command edit as one history entry and one scene revision', () => {
-    const { sceneStore, history, documents, sceneEdits, invalidations } = createHarness()
+    const { sceneStore, history, documents, sceneEdits, invalidations, readSceneRevision } = createHarness()
 
     const committed = sceneEdits.run('command-move-plant', (tx) => {
       tx.mutate((draft) => {
@@ -121,7 +132,7 @@ describe('scene edit transactions', () => {
 
     expect(committed).toBe(true)
     expect(sceneStore.persisted.plants[0]?.position).toEqual({ x: 42, y: 10 })
-    expect(sceneEntityRevision.value).toBe(1)
+    expect(readSceneRevision()).toBe(1)
     expect(history.canUndo.value).toBe(true)
     expect(invalidations).toEqual(['scene'])
 
@@ -139,7 +150,7 @@ describe('scene edit transactions', () => {
   })
 
   it('does not dirty history, bump revision, or invalidate rendering for no-op edits', () => {
-    const { sceneStore, history, sceneEdits, invalidations } = createHarness()
+    const { sceneStore, history, sceneEdits, invalidations, readSceneRevision } = createHarness()
 
     const committed = sceneEdits.run('noop', (tx) => {
       tx.mutate((draft) => {
@@ -150,12 +161,12 @@ describe('scene edit transactions', () => {
 
     expect(committed).toBe(false)
     expect(history.canUndo.value).toBe(false)
-    expect(sceneEntityRevision.value).toBe(0)
+    expect(readSceneRevision()).toBe(0)
     expect(invalidations).toEqual([])
   })
 
   it('aborts and restores persisted scene, selection, and locks', () => {
-    const { sceneStore, history, sceneEdits, invalidations, setSelection } = createHarness()
+    const { sceneStore, history, sceneEdits, invalidations, setSelection, readSceneRevision } = createHarness()
     setSelection(['plant-1'])
     lockedObjectIds.value = new Set(['plant-1'])
 
@@ -177,12 +188,12 @@ describe('scene edit transactions', () => {
     expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
     expect(lockedObjectIds.value).toEqual(new Set(['plant-1']))
     expect(history.canUndo.value).toBe(false)
-    expect(sceneEntityRevision.value).toBe(0)
+    expect(readSceneRevision()).toBe(0)
     expect(invalidations).toEqual([])
   })
 
   it('commits long-lived interaction edits through the same lifecycle', () => {
-    const { sceneStore, history, sceneEdits, invalidations } = createHarness()
+    const { sceneStore, history, sceneEdits, invalidations, readSceneRevision } = createHarness()
     const tx = sceneEdits.begin('interaction-drag')
 
     tx.mutate((draft) => {
@@ -191,7 +202,7 @@ describe('scene edit transactions', () => {
 
     expect(tx.commit({ invalidate: 'viewport' })).toBe(true)
     expect(sceneStore.persisted.plants[1]?.position).toEqual({ x: 35, y: 35 })
-    expect(sceneEntityRevision.value).toBe(1)
+    expect(readSceneRevision()).toBe(1)
     expect(history.canUndo.value).toBe(true)
     expect(invalidations).toEqual(['viewport'])
   })

@@ -21,7 +21,7 @@ Use this guide when changing Preact components, signals, i18n, CSS, panels, bott
 - Setting a signal to its current value is a no-op. Use a dedicated retry signal when a retry must refetch.
 - Use `batch()` for action functions that write multiple signals.
 - Stable empty fallbacks should be module-level constants; `currentDesign.value?.timeline ?? []` in component bodies creates a fresh array.
-- `getPlacedPlants()` returns a fresh array. Do not list it directly in `useMemo` deps; use `sceneEntityRevision` as the trigger.
+- `getPlacedPlants()` returns a fresh array. Do not list it directly in `useMemo` deps; use `CanvasQuerySurface.revision.scene.value` through the owning app seam as the trigger.
 
 ## Hot Paths
 
@@ -70,7 +70,7 @@ Use this guide when changing Preact components, signals, i18n, CSS, panels, bott
 - Timeline canvas event ordering, selected Timeline Action identity, stale-selection cleanup, layout offsets, local interaction state, Target presentation writes, popover open/save/delete orchestration, keyboard delete handling, and cleanup belong in `app/timeline/canvas-workbench.ts`; `InteractiveTimeline` should stay a canvas host plus render call.
 - Timeline Action add/edit/delete document mutations and popover form mapping belong in `app/timeline/workbench.ts`; app-layer timeline modules may call that seam, but components should not import Timeline controllers or form-mapping helpers directly.
 - Consortium canvas event ordering, hover bridge behavior, drag lifecycle, and cleanup belong in `app/consortium/workbench.ts`; Consortium drag preview/commit math remains in `app/consortium/interaction.ts`; `ConsortiumChart` should stay a canvas host plus render call.
-- Bottom panel components that read canvas-derived data must subscribe to `sceneEntityRevision`.
+- Bottom panel components that read canvas-derived data must subscribe through the relevant Workbench or Planning Projection seam; app code should not import runtime mirror revision signals directly.
 - Panels that only read non-canvas document state should not subscribe to canvas revisions.
 - Timeline, budget, and consortium identity uses typed `PanelTarget` wire values through the Target module. Do not reintroduce string matching against descriptions, legacy plant arrays, budget descriptions, or canonical-name fields.
 - Panel-origin hover/selection is presentation state and must not mutate real canvas selection, labels, dirty state, or history.

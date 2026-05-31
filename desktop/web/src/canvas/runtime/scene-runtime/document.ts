@@ -1,6 +1,6 @@
 import type { CanopiFile } from '../../../types/design'
 import { composeDocumentForSave } from '../../../app/contracts/document'
-import { lockedObjectIds, sceneEntityRevision } from '../../runtime-mirror-state'
+import { lockedObjectIds } from '../../runtime-mirror-state'
 import type { SceneStore } from '../scene'
 import type { PlantPresentationBackfill } from './presentation'
 import {
@@ -21,6 +21,7 @@ interface SceneRuntimeDocumentBridgeOptions {
   syncCanvasSignalsFromDocument(file: CanopiFile): void
   syncCanvasSignalsFromScene(): void
   invalidateScene(): void
+  incrementSceneRevision(): void
   incrementViewportRevision(): void
 }
 
@@ -34,6 +35,7 @@ export class SceneRuntimeDocumentBridge {
   private readonly _syncCanvasSignalsFromDocument: SceneRuntimeDocumentBridgeOptions['syncCanvasSignalsFromDocument']
   private readonly _syncCanvasSignalsFromScene: SceneRuntimeDocumentBridgeOptions['syncCanvasSignalsFromScene']
   private readonly _invalidateScene: SceneRuntimeDocumentBridgeOptions['invalidateScene']
+  private readonly _incrementSceneRevision: SceneRuntimeDocumentBridgeOptions['incrementSceneRevision']
   private readonly _incrementViewportRevision: SceneRuntimeDocumentBridgeOptions['incrementViewportRevision']
 
   constructor(options: SceneRuntimeDocumentBridgeOptions) {
@@ -46,6 +48,7 @@ export class SceneRuntimeDocumentBridge {
     this._syncCanvasSignalsFromDocument = options.syncCanvasSignalsFromDocument
     this._syncCanvasSignalsFromScene = options.syncCanvasSignalsFromScene
     this._invalidateScene = options.invalidateScene
+    this._incrementSceneRevision = options.incrementSceneRevision
     this._incrementViewportRevision = options.incrementViewportRevision
   }
 
@@ -59,7 +62,7 @@ export class SceneRuntimeDocumentBridge {
     this._syncCanvasSignalsFromDocument(file)
     this._syncCanvasSignalsFromScene()
     this._invalidateScene()
-    sceneEntityRevision.value += 1
+    this._incrementSceneRevision()
   }
 
   replaceDocument(file: CanopiFile): void {
@@ -72,7 +75,7 @@ export class SceneRuntimeDocumentBridge {
     this._syncCanvasSignalsFromDocument(file)
     this._syncCanvasSignalsFromScene()
     this._invalidateScene()
-    sceneEntityRevision.value += 1
+    this._incrementSceneRevision()
   }
 
   serializeDocument(metadata: CanvasRuntimeDocumentMetadata, doc: CanopiFile): CanopiFile {
@@ -97,7 +100,7 @@ export class SceneRuntimeDocumentBridge {
     this._sceneStore.updateSession((session) => {
       session.documentRevision += 1
     })
-    sceneEntityRevision.value += 1
+    this._incrementSceneRevision()
     return true
   }
 

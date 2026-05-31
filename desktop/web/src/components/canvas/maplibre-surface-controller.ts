@@ -18,7 +18,6 @@ import {
   layerVisibility,
 } from '../../app/canvas-settings/signals'
 import { northBearingDeg } from '../../canvas/scene-metadata-state'
-import { sceneEntityRevision } from '../../canvas/runtime-mirror-state'
 import { readPanelTargetOverlaySnapshot } from '../../app/panel-targets/presentation'
 import { basemapStyle, theme } from '../../app/settings/state'
 import { readSavedLocationPresentation } from '../../app/location'
@@ -60,8 +59,8 @@ export function useMapLibreCanvasSurfaceController({
     const hillshadeOn = hillshadeVisible.value
     const hillshadeAlpha = hillshadeOpacity.value
     const contourInterval = contourIntervalMeters.value
-    void runtime?.viewportRevision.value
-    void sceneEntityRevision.value
+    void runtime?.revision.scene.value
+    void runtime?.revision.viewport.value
 
     lifecycleRef.current?.update({
       runtime,
