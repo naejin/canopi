@@ -219,7 +219,8 @@
       "miniMapLabel": "Voorbeeld",
       "addressLabel": "Adres",
       "opacity": "Kaartdekking",
-      "mapSatellite": "Satelliet"
+      "mapSatellite": "Satelliet",
+      "mapUnavailable": "Kaart niet beschikbaar"
     },
     "file": {
       "new": "Nieuw ontwerp",

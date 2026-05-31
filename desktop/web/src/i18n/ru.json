@@ -219,7 +219,8 @@
       "miniMapLabel": "Предпросмотр",
       "addressLabel": "Адрес",
       "opacity": "Прозрачность карты",
-      "mapSatellite": "Спутник"
+      "mapSatellite": "Спутник",
+      "mapUnavailable": "Карта недоступна"
     },
     "file": {
       "new": "Новый проект",

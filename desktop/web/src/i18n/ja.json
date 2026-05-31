@@ -219,7 +219,8 @@
       "miniMapLabel": "プレビュー",
       "addressLabel": "住所",
       "opacity": "地図の不透明度",
-      "mapSatellite": "衛星"
+      "mapSatellite": "衛星",
+      "mapUnavailable": "マップを利用できません"
     },
     "file": {
       "new": "新規デザイン",

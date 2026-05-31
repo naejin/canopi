@@ -219,7 +219,8 @@
       "miniMapLabel": "미리보기",
       "addressLabel": "주소",
       "opacity": "지도 불투명도",
-      "mapSatellite": "위성"
+      "mapSatellite": "위성",
+      "mapUnavailable": "지도를 사용할 수 없음"
     },
     "file": {
       "new": "새 설계",

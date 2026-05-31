@@ -44,6 +44,7 @@ Use this guide when changing MapLibre surfaces, basemap rendering, terrain layer
 ## Tauri And Network
 
 - CSP in `tauri.conf.json` is strict. Add resource origins when adding tile or image sources.
+- MapLibre's default bundle starts workers from blob URLs. Keep both `worker-src` and the WebKit fallback `child-src` open to `blob:` in Tauri CSP.
 - Blocking HTTP/file work must run behind an async Tauri command and `spawn_blocking`.
 - All `ureq` calls must set global timeouts and response size limits.
 - For large binary data, prefer `tauri::ipc::Response::new(bytes)` over JSON serialization.

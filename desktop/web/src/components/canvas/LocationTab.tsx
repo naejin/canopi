@@ -27,6 +27,7 @@ export function LocationTab() {
   const searchRef = useRef<HTMLDivElement>(null)
   const savedLocationRef = useRef(workbench.saved.location)
   savedLocationRef.current = workbench.saved.location
+  const mapInitFailed = useSignal(false)
 
   const preferredBasemapStyle = basemapStyle.value
 
@@ -44,22 +45,43 @@ export function LocationTab() {
   useEffect(() => {
     const container = mapContainerRef.current
     if (!container) return
+    mapInitFailed.value = false
     const savedLoc = savedLocationRef.current
     const preservedView = preservedViewRef.current
     const center: [number, number] = preservedView?.center
       ?? (savedLoc ? [savedLoc.lon, savedLoc.lat] : DEFAULT_CENTER)
 
-    const map = new maplibregl.Map({
-      container,
-      style: createMapLibreBasemapStyle(preferredBasemapStyle),
-      center,
-      zoom: preservedView?.zoom ?? (savedLoc ? 10 : 3.2),
-      attributionControl: { compact: true },
-    })
-
-    map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), 'bottom-right')
-    const onMove = () => updatePinPosition(map)
+    let map: maplibregl.Map | null = null
+    const onMove = () => {
+      if (map) updatePinPosition(map)
+    }
     const onDragStart = () => workbench.clearPendingMapResult()
+
+    try {
+      map = new maplibregl.Map({
+        container,
+        style: createMapLibreBasemapStyle(preferredBasemapStyle),
+        center,
+        zoom: preservedView?.zoom ?? (savedLoc ? 10 : 3.2),
+        attributionControl: { compact: true },
+      })
+
+      map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), 'bottom-right')
+    } catch (error) {
+      if (map) {
+        try {
+          map.remove()
+        } catch (cleanupError) {
+          console.error('[LocationTab] Failed to clean up MapLibre map after initialization failure', cleanupError)
+        }
+      }
+      container.replaceChildren()
+      mapRef.current = null
+      mapInitFailed.value = true
+      console.error('[LocationTab] Failed to initialize MapLibre map', error)
+      return
+    }
+
     map.on('move', onMove)
     map.on('moveend', onMove)
     map.on('dragstart', onDragStart)
@@ -163,10 +185,16 @@ export function LocationTab() {
   }
 
   const pin = pinState.value
+  const mapUnavailable = mapInitFailed.value
 
   return (
     <div className={styles.container}>
       <div ref={mapContainerRef} className={styles.map} />
+      {mapUnavailable && (
+        <div className={styles.mapUnavailable} role="alert">
+          {t('canvas.location.mapUnavailable')}
+        </div>
+      )}
 
       {/* Floating search bar */}
       <div className={styles.searchOverlay} ref={searchRef}>
@@ -227,16 +255,16 @@ export function LocationTab() {
       </button>
 
       {/* Center crosshair — always visible, shows where "Set" will place the pin */}
-      <div className={styles.centerCrosshair} aria-hidden="true" />
+      {!mapUnavailable && <div className={styles.centerCrosshair} aria-hidden="true" />}
 
       {/* Saved location pin — shows committed design location */}
-      {pin.visible && !pin.clamped && (
+      {!mapUnavailable && pin.visible && !pin.clamped && (
         <div
           className={styles.savedPin}
           style={{ left: `${pin.x}px`, top: `${pin.y}px` }}
         />
       )}
-      {pin.visible && pin.clamped && (
+      {!mapUnavailable && pin.visible && pin.clamped && (
         <div
           className={styles.savedPinClamped}
           style={{

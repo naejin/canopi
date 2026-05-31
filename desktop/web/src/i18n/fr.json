@@ -219,7 +219,8 @@
       "miniMapLabel": "Aperçu",
       "addressLabel": "Adresse",
       "opacity": "Opacité de la carte",
-      "mapSatellite": "Satellite"
+      "mapSatellite": "Satellite",
+      "mapUnavailable": "Carte indisponible"
     },
     "file": {
       "new": "Nouveau design",
