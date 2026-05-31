@@ -435,7 +435,8 @@
     "toggleTheme": "テーマを切替",
     "commandPalette": "コマンドパレット",
     "searchPlaceholder": "コマンドを入力...",
-    "noResults": "コマンドが見つかりません"
+    "noResults": "コマンドが見つかりません",
+    "reportProblem": "問題を報告"
   },
   "plantDetail": {
     "back": "戻る",
@@ -627,7 +628,9 @@
     "edit.redo": "やり直し",
     "view.zoomIn": "拡大",
     "view.zoomOut": "縮小",
-    "view.fitToContent": "コンテンツに合わせる"
+    "view.fitToContent": "コンテンツに合わせる",
+    "help": "ヘルプ",
+    "help.reportProblem": "問題を報告"
   },
   "titleBar": {
     "unsavedChanges": "未保存の変更"
@@ -806,5 +809,32 @@
       "nextMonth": "翌月",
       "chooseDate": "日付を選択"
     }
+  },
+  "problemReport": {
+    "title": "問題を報告",
+    "intro": "後で共有できる概要と診断バンドルを作成します。",
+    "descriptionLabel": "何が起きましたか？",
+    "descriptionPlaceholder": "何をしていたか、何がうまくいかなかったか、再現できるかを説明してください。",
+    "privacyNote": "診断バンドルには、デザイン、正確な位置、スクリーンショット、生のファイルパスは既定で含まれません。",
+    "create": "レポートを作成",
+    "creating": "作成中...",
+    "cancel": "キャンセル",
+    "close": "閉じる",
+    "successTitle": "レポートを作成しました",
+    "successText": "レポートファイルはこのフォルダーにあります。サポートに連絡するときは、バンドルを添付し概要を貼り付けてください。",
+    "folderPath": "フォルダー",
+    "summaryFile": "概要",
+    "bundleFile": "バンドル",
+    "copySummary": "概要をコピー",
+    "copiedSummary": "コピー済み",
+    "copyFailed": "概要をコピーできませんでした。概要ファイルはレポートフォルダーに残っています。",
+    "errorTitle": "レポートを作成できませんでした",
+    "showFolder": "フォルダーを表示",
+    "showingFolder": "開いています...",
+    "showFolderFailed": "フォルダーを表示できませんでした。正確なフォルダーパスは上に表示されたままです。",
+    "optionalAttachments": "任意の添付",
+    "includeCurrentDesign": "現在のデザインを含める",
+    "includeCurrentDesignDescription": "キャンバス内容、メモ、タイムライン、予算、保存済みの位置を含む .canopi コピーを追加します。",
+    "currentDesignUnavailable": "添付できる現在のデザインがありません。"
   }
 }

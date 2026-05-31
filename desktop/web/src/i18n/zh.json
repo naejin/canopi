@@ -435,7 +435,8 @@
     "toggleTheme": "切换主题",
     "commandPalette": "命令面板",
     "searchPlaceholder": "输入命令...",
-    "noResults": "未找到命令"
+    "noResults": "未找到命令",
+    "reportProblem": "报告问题"
   },
   "plantDetail": {
     "back": "返回",
@@ -627,7 +628,9 @@
     "edit.redo": "重做",
     "view.zoomIn": "放大",
     "view.zoomOut": "缩小",
-    "view.fitToContent": "适应内容"
+    "view.fitToContent": "适应内容",
+    "help": "帮助",
+    "help.reportProblem": "报告问题"
   },
   "titleBar": {
     "unsavedChanges": "未保存的更改"
@@ -806,5 +809,32 @@
       "nextMonth": "下个月",
       "chooseDate": "选择日期"
     }
+  },
+  "problemReport": {
+    "title": "报告问题",
+    "intro": "创建可稍后分享的摘要和诊断包。",
+    "descriptionLabel": "发生了什么？",
+    "descriptionPlaceholder": "描述你当时在做什么、哪里出错，以及是否能复现。",
+    "privacyNote": "诊断包默认不包含你的设计、精确位置、截图和原始文件路径。",
+    "create": "创建报告",
+    "creating": "正在创建...",
+    "cancel": "取消",
+    "close": "关闭",
+    "successTitle": "报告已创建",
+    "successText": "报告文件位于此文件夹。联系支持时请附上诊断包并粘贴摘要。",
+    "folderPath": "文件夹",
+    "summaryFile": "摘要",
+    "bundleFile": "诊断包",
+    "copySummary": "复制摘要",
+    "copiedSummary": "已复制",
+    "copyFailed": "无法复制摘要。摘要文件仍在报告文件夹中。",
+    "errorTitle": "无法创建报告",
+    "showFolder": "显示文件夹",
+    "showingFolder": "正在打开...",
+    "showFolderFailed": "无法显示文件夹。上方仍会显示确切的文件夹路径。",
+    "optionalAttachments": "可选附件",
+    "includeCurrentDesign": "包含当前设计",
+    "includeCurrentDesignDescription": "添加一个 .canopi 副本，其中包含画布内容、备注、时间线、预算和已保存的位置。",
+    "currentDesignUnavailable": "没有可附加的当前设计。"
   }
 }

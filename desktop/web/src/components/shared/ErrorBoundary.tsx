@@ -1,4 +1,5 @@
 import { Component, type ComponentChildren, type ErrorInfo } from 'preact'
+import { recordFrontendDiagnostic } from '../../app/problem-report/diagnostics'
 import { t } from '../../i18n'
 import styles from './ErrorBoundary.module.css'
 
@@ -19,6 +20,11 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     console.error('[ErrorBoundary]', error, errorInfo)
+    recordFrontendDiagnostic({
+      level: 'error',
+      source: 'ErrorBoundary',
+      message: `${error.stack || error.message}\n${errorInfo.componentStack}`,
+    })
   }
 
   render() {

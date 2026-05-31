@@ -433,6 +433,7 @@
     "worldMap": "Go to World Map",
     "learning": "Go to Learning",
     "toggleTheme": "Toggle Theme",
+    "reportProblem": "Report a Problem",
     "commandPalette": "Command Palette",
     "searchPlaceholder": "Type a command...",
     "noResults": "No commands found"
@@ -755,6 +756,7 @@
     "file": "File",
     "edit": "Edit",
     "view": "View",
+    "help": "Help",
     "file.new": "New Design",
     "file.open": "Open Design",
     "file.save": "Save",
@@ -764,7 +766,8 @@
     "edit.redo": "Redo",
     "view.zoomIn": "Zoom In",
     "view.zoomOut": "Zoom Out",
-    "view.fitToContent": "Fit to Content"
+    "view.fitToContent": "Fit to Content",
+    "help.reportProblem": "Report a Problem"
   },
   "titleBar": {
     "unsavedChanges": "Unsaved changes"
@@ -799,6 +802,33 @@
     "message": "The application encountered an unexpected error. You can try reloading.",
     "reload": "Reload",
     "details": "Error details"
+  },
+  "problemReport": {
+    "title": "Report a Problem",
+    "intro": "Create a summary and diagnostic bundle you can share later.",
+    "descriptionLabel": "What happened?",
+    "descriptionPlaceholder": "Describe what you were doing, what went wrong, and whether you can repeat it.",
+    "privacyNote": "The diagnostic bundle excludes your design, precise location, screenshots, and raw file paths by default.",
+    "create": "Create Report",
+    "creating": "Creating...",
+    "cancel": "Cancel",
+    "close": "Close",
+    "successTitle": "Report Created",
+    "successText": "The report files are in this folder. Attach the bundle and paste the summary when you contact support.",
+    "folderPath": "Folder",
+    "summaryFile": "Summary",
+    "bundleFile": "Bundle",
+    "copySummary": "Copy Summary",
+    "copiedSummary": "Copied",
+    "copyFailed": "Could not copy the summary. The summary file is still in the report folder.",
+    "errorTitle": "Report could not be created",
+    "showFolder": "Show Folder",
+    "showingFolder": "Showing...",
+    "showFolderFailed": "Could not show the folder. The exact folder path is still shown above.",
+    "optionalAttachments": "Optional attachments",
+    "includeCurrentDesign": "Include current Design",
+    "includeCurrentDesignDescription": "Adds a .canopi copy with canvas contents, notes, timeline, budget, and saved location.",
+    "currentDesignUnavailable": "No current Design is available to attach."
   },
   "shared": {
     "datePicker": {

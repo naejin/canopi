@@ -89,6 +89,8 @@ pub fn run() {
             commands::export::export_native_png,
             commands::export::export_native_pdf,
             commands::health::get_health,
+            commands::problem_report::create_problem_report,
+            commands::problem_report::show_problem_report_folder,
             commands::tiles::download_tiles,
             commands::tiles::get_tile,
             commands::tiles::get_offline_status,

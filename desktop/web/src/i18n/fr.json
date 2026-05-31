@@ -435,7 +435,8 @@
     "toggleTheme": "Changer le thème",
     "commandPalette": "Palette de commandes",
     "searchPlaceholder": "Entrez une commande...",
-    "noResults": "Aucune commande trouvée"
+    "noResults": "Aucune commande trouvée",
+    "reportProblem": "Signaler un problème"
   },
   "plantDetail": {
     "back": "Retour",
@@ -627,7 +628,9 @@
     "edit.redo": "Retablir",
     "view.zoomIn": "Zoom avant",
     "view.zoomOut": "Zoom arriere",
-    "view.fitToContent": "Ajuster au contenu"
+    "view.fitToContent": "Ajuster au contenu",
+    "help": "Aide",
+    "help.reportProblem": "Signaler un problème"
   },
   "titleBar": {
     "unsavedChanges": "Modifications non enregistrées"
@@ -806,5 +809,32 @@
       "nextMonth": "Mois suivant",
       "chooseDate": "Choisir une date"
     }
+  },
+  "problemReport": {
+    "title": "Signaler un problème",
+    "intro": "Crée un résumé et un paquet de diagnostic faciles à partager plus tard.",
+    "descriptionLabel": "Que s’est-il passé ?",
+    "descriptionPlaceholder": "Décrivez ce que vous faisiez, ce qui a échoué et si vous pouvez le reproduire.",
+    "privacyNote": "Le paquet de diagnostic exclut par défaut votre design, l’emplacement précis, les captures d’écran et les chemins de fichiers bruts.",
+    "create": "Créer le rapport",
+    "creating": "Création...",
+    "cancel": "Annuler",
+    "close": "Fermer",
+    "successTitle": "Rapport créé",
+    "successText": "Les fichiers du rapport sont dans ce dossier. Joignez le paquet et collez le résumé lorsque vous contactez le support.",
+    "folderPath": "Dossier",
+    "summaryFile": "Résumé",
+    "bundleFile": "Paquet",
+    "copySummary": "Copier le résumé",
+    "copiedSummary": "Copié",
+    "copyFailed": "Impossible de copier le résumé. Le fichier de résumé reste dans le dossier du rapport.",
+    "errorTitle": "Le rapport n’a pas pu être créé",
+    "showFolder": "Afficher le dossier",
+    "showingFolder": "Ouverture...",
+    "showFolderFailed": "Impossible d’afficher le dossier. Le chemin exact du dossier reste affiché ci-dessus.",
+    "optionalAttachments": "Pièces jointes facultatives",
+    "includeCurrentDesign": "Inclure le design actuel",
+    "includeCurrentDesignDescription": "Ajoute une copie .canopi avec le contenu du canevas, les notes, le calendrier, le budget et l’emplacement enregistré.",
+    "currentDesignUnavailable": "Aucun design actuel n’est disponible à joindre."
   }
 }

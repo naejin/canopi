@@ -121,6 +121,13 @@ export type FlowerColorResolution = {
 	source: string,
 };
 
+export type FrontendDiagnosticEntry = {
+	level: string,
+	source: string,
+	message: string,
+	timestamp_ms: number,
+};
+
 export type GeoResult = {
 	display_name: string,
 	lat: number,
@@ -177,6 +184,23 @@ export type PlantDbStatus = "available" | "missing" | "corrupt";
 export type Position = {
 	x: number,
 	y: number,
+};
+
+export type ProblemReportRequest = {
+	description: string,
+	frontend_diagnostics?: FrontendDiagnosticEntry[],
+	sensitive_attachments?: ProblemReportSensitiveAttachments,
+};
+
+export type ProblemReportResult = {
+	folder_path: string,
+	summary_path: string,
+	bundle_path: string,
+	report_summary: string,
+};
+
+export type ProblemReportSensitiveAttachments = {
+	current_design?: string | null,
 };
 
 export type Relationship = {

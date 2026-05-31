@@ -435,7 +435,8 @@
     "toggleTheme": "Erscheinungsbild wechseln",
     "commandPalette": "Befehlspalette",
     "searchPlaceholder": "Befehl eingeben...",
-    "noResults": "Keine Befehle gefunden"
+    "noResults": "Keine Befehle gefunden",
+    "reportProblem": "Problem melden"
   },
   "plantDetail": {
     "back": "Zurück",
@@ -627,7 +628,9 @@
     "edit.redo": "Wiederholen",
     "view.zoomIn": "Vergrossern",
     "view.zoomOut": "Verkleinern",
-    "view.fitToContent": "An Inhalt anpassen"
+    "view.fitToContent": "An Inhalt anpassen",
+    "help": "Hilfe",
+    "help.reportProblem": "Problem melden"
   },
   "titleBar": {
     "unsavedChanges": "Ungespeicherte Änderungen"
@@ -806,5 +809,32 @@
       "nextMonth": "Nächster Monat",
       "chooseDate": "Datum wählen"
     }
+  },
+  "problemReport": {
+    "title": "Problem melden",
+    "intro": "Erstellt eine Zusammenfassung und ein Diagnosepaket, das du später teilen kannst.",
+    "descriptionLabel": "Was ist passiert?",
+    "descriptionPlaceholder": "Beschreibe, was du getan hast, was fehlgeschlagen ist und ob du es wiederholen kannst.",
+    "privacyNote": "Das Diagnosepaket schließt standardmäßig dein Design, den genauen Standort, Screenshots und rohe Dateipfade aus.",
+    "create": "Bericht erstellen",
+    "creating": "Wird erstellt...",
+    "cancel": "Abbrechen",
+    "close": "Schließen",
+    "successTitle": "Bericht erstellt",
+    "successText": "Die Berichtsdateien befinden sich in diesem Ordner. Hänge das Paket an und füge die Zusammenfassung ein, wenn du den Support kontaktierst.",
+    "folderPath": "Ordner",
+    "summaryFile": "Zusammenfassung",
+    "bundleFile": "Paket",
+    "copySummary": "Zusammenfassung kopieren",
+    "copiedSummary": "Kopiert",
+    "copyFailed": "Die Zusammenfassung konnte nicht kopiert werden. Die Zusammenfassungsdatei bleibt im Berichtsordner.",
+    "errorTitle": "Der Bericht konnte nicht erstellt werden",
+    "showFolder": "Ordner anzeigen",
+    "showingFolder": "Wird geöffnet...",
+    "showFolderFailed": "Der Ordner konnte nicht angezeigt werden. Der genaue Ordnerpfad bleibt oben sichtbar.",
+    "optionalAttachments": "Optionale Anhänge",
+    "includeCurrentDesign": "Aktuelles Design einschließen",
+    "includeCurrentDesignDescription": "Fügt eine .canopi-Kopie mit Canvas-Inhalten, Notizen, Zeitplan, Budget und gespeichertem Standort hinzu.",
+    "currentDesignUnavailable": "Es ist kein aktuelles Design zum Anhängen verfügbar."
   }
 }

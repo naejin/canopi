@@ -435,7 +435,8 @@
     "toggleTheme": "테마 전환",
     "commandPalette": "명령 팔레트",
     "searchPlaceholder": "명령을 입력하세요...",
-    "noResults": "명령을 찾을 수 없습니다"
+    "noResults": "명령을 찾을 수 없습니다",
+    "reportProblem": "문제 신고"
   },
   "plantDetail": {
     "back": "뒤로",
@@ -627,7 +628,9 @@
     "edit.redo": "다시 실행",
     "view.zoomIn": "확대",
     "view.zoomOut": "축소",
-    "view.fitToContent": "콘텐츠에 맞추기"
+    "view.fitToContent": "콘텐츠에 맞추기",
+    "help": "도움말",
+    "help.reportProblem": "문제 신고"
   },
   "titleBar": {
     "unsavedChanges": "저장되지 않은 변경사항"
@@ -806,5 +809,32 @@
       "nextMonth": "다음 달",
       "chooseDate": "날짜 선택"
     }
+  },
+  "problemReport": {
+    "title": "문제 신고",
+    "intro": "나중에 공유할 수 있는 요약과 진단 번들을 만듭니다.",
+    "descriptionLabel": "무슨 일이 있었나요?",
+    "descriptionPlaceholder": "무엇을 하고 있었는지, 무엇이 잘못되었는지, 재현할 수 있는지 설명하세요.",
+    "privacyNote": "진단 번들은 기본적으로 디자인, 정확한 위치, 스크린샷, 원시 파일 경로를 제외합니다.",
+    "create": "보고서 만들기",
+    "creating": "만드는 중...",
+    "cancel": "취소",
+    "close": "닫기",
+    "successTitle": "보고서 생성됨",
+    "successText": "보고서 파일은 이 폴더에 있습니다. 지원팀에 연락할 때 번들을 첨부하고 요약을 붙여 넣으세요.",
+    "folderPath": "폴더",
+    "summaryFile": "요약",
+    "bundleFile": "번들",
+    "copySummary": "요약 복사",
+    "copiedSummary": "복사됨",
+    "copyFailed": "요약을 복사할 수 없습니다. 요약 파일은 보고서 폴더에 남아 있습니다.",
+    "errorTitle": "보고서를 만들 수 없습니다",
+    "showFolder": "폴더 보기",
+    "showingFolder": "여는 중...",
+    "showFolderFailed": "폴더를 표시할 수 없습니다. 정확한 폴더 경로는 위에 계속 표시됩니다.",
+    "optionalAttachments": "선택 첨부",
+    "includeCurrentDesign": "현재 디자인 포함",
+    "includeCurrentDesignDescription": "캔버스 내용, 메모, 일정, 예산, 저장된 위치가 포함된 .canopi 사본을 추가합니다.",
+    "currentDesignUnavailable": "첨부할 현재 디자인이 없습니다."
   }
 }

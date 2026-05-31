@@ -435,7 +435,8 @@
     "toggleTheme": "Thema wisselen",
     "commandPalette": "Opdrachtenpalet",
     "searchPlaceholder": "Typ een opdracht...",
-    "noResults": "Geen opdrachten gevonden"
+    "noResults": "Geen opdrachten gevonden",
+    "reportProblem": "Probleem melden"
   },
   "plantDetail": {
     "back": "Terug",
@@ -627,7 +628,9 @@
     "edit.redo": "Opnieuw",
     "view.zoomIn": "Inzoomen",
     "view.zoomOut": "Uitzoomen",
-    "view.fitToContent": "Aanpassen aan inhoud"
+    "view.fitToContent": "Aanpassen aan inhoud",
+    "help": "Help",
+    "help.reportProblem": "Probleem melden"
   },
   "titleBar": {
     "unsavedChanges": "Niet-opgeslagen wijzigingen"
@@ -806,5 +809,32 @@
       "nextMonth": "Volgende maand",
       "chooseDate": "Kies datum"
     }
+  },
+  "problemReport": {
+    "title": "Probleem melden",
+    "intro": "Maak een samenvatting en diagnosebundel die je later kunt delen.",
+    "descriptionLabel": "Wat is er gebeurd?",
+    "descriptionPlaceholder": "Beschrijf wat je deed, wat er misging en of je het kunt herhalen.",
+    "privacyNote": "De diagnosebundel bevat standaard geen ontwerp, precieze locatie, schermafbeeldingen of ruwe bestandspaden.",
+    "create": "Rapport maken",
+    "creating": "Maken...",
+    "cancel": "Annuleren",
+    "close": "Sluiten",
+    "successTitle": "Rapport gemaakt",
+    "successText": "De rapportbestanden staan in deze map. Voeg de bundel toe en plak de samenvatting wanneer je contact opneemt met support.",
+    "folderPath": "Map",
+    "summaryFile": "Samenvatting",
+    "bundleFile": "Bundel",
+    "copySummary": "Samenvatting kopiëren",
+    "copiedSummary": "Gekopieerd",
+    "copyFailed": "Kan de samenvatting niet kopiëren. Het samenvattingsbestand staat nog in de rapportmap.",
+    "errorTitle": "Rapport kon niet worden gemaakt",
+    "showFolder": "Map tonen",
+    "showingFolder": "Openen...",
+    "showFolderFailed": "Kan de map niet tonen. Het exacte pad blijft hierboven zichtbaar.",
+    "optionalAttachments": "Optionele bijlagen",
+    "includeCurrentDesign": "Huidig ontwerp opnemen",
+    "includeCurrentDesignDescription": "Voegt een .canopi-kopie toe met canvasinhoud, notities, planning, budget en opgeslagen locatie.",
+    "currentDesignUnavailable": "Er is geen huidig ontwerp beschikbaar om bij te voegen."
   }
 }
