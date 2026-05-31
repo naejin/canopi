@@ -89,7 +89,7 @@ import {
   designPath,
   detachedCanvasDirty,
   resetDirtyBaselines,
-} from "../state/design";
+} from "./support/design-session-state";
 
 function Harness() {
   const canvasAreaRef = useRef<HTMLDivElement>(null);

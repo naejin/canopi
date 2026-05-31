@@ -30,6 +30,10 @@ function isTypescriptSource(path: string): boolean {
   return /\.(ts|tsx)$/.test(path) && !/\.test\.(ts|tsx)$/.test(path)
 }
 
+function isTypescriptTestSource(path: string): boolean {
+  return /\.test\.(ts|tsx)$/.test(path)
+}
+
 function importSpecifiers(source: string): string[] {
   const patterns = [
     /\bfrom\s+['"]([^'"]+)['"]/g,
@@ -101,6 +105,7 @@ describe('frontend boundary sources', () => {
     expect(mapSurfaceControllerSource).toContain('app/panel-targets/presentation')
     expect(mapSurfaceControllerSource).not.toContain('app/panel-targets/state')
     expect(presentationSource).toContain('./state')
+    expect(presentationSource).toContain('createPanelTargetPresentationController')
   })
 
   it('keeps scene layer and guide writes behind the Scene Edit runtime seam', () => {
@@ -255,6 +260,27 @@ describe('frontend boundary sources', () => {
     expect(runtimeSource).toContain('document-session/store')
   })
 
+  it('keeps Target presentation lifecycle out of Planning Projection', () => {
+    const planningIndexSource = readSource('../app/planning-projection/index.ts')
+    const budgetWorkbenchSource = readSource('../app/budget/workbench.ts')
+    const timelineWorkbenchSource = readSource('../app/timeline/workbench.ts')
+    const consortiumWorkbenchSource = readSource('../app/consortium/workbench.ts')
+    const targetPresentationSource = readSource('../app/panel-targets/presentation.ts')
+
+    expect(sourceExists('../app/planning-projection/target-presentation.ts')).toBe(false)
+    expect(planningIndexSource).not.toContain('target-presentation')
+    expect(planningIndexSource).not.toContain('PlanningSelection')
+    expect(targetPresentationSource).toContain('PanelTargetPresentationController')
+    expect(targetPresentationSource).toContain('dispose()')
+
+    for (const source of [budgetWorkbenchSource, timelineWorkbenchSource, consortiumWorkbenchSource]) {
+      expect(source).toContain('../panel-targets/presentation')
+      expect(source).not.toContain('clearPlanning')
+      expect(source).not.toContain('setPlanning')
+      expect(source).not.toContain('readPlanning')
+    }
+  })
+
   it('keeps the canvas document hook as a Design Session lifecycle adapter', () => {
     const hookSource = readSource('../app/document-session/use-canvas-document-session.ts')
     const lifecycleSource = readSource('../app/document-session/lifecycle.ts')
@@ -290,6 +316,20 @@ describe('frontend boundary sources', () => {
       if (sourcePath === '../app/document-session/store.ts') continue
       expectNoImportsMatching(sourcePath, [/state\/design$/])
     }
+  })
+
+  it('keeps tests behind the Design Session test adapter', () => {
+    const sourcePaths = [
+      '../__tests__',
+      '../canvas',
+    ].flatMap(sourceFilesUnder).filter(isTypescriptTestSource)
+    const adapterSource = readSource('../__tests__/support/design-session-state.ts')
+
+    for (const sourcePath of sourcePaths) {
+      expectNoImportsMatching(sourcePath, [/state\/design$/])
+    }
+
+    expect(adapterSource).toContain('../../state/design')
   })
 
   it('keeps Timeline Action workbench and drag edits behind app/timeline modules', () => {

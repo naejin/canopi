@@ -10,11 +10,29 @@ import {
 } from './state'
 
 export type PanelTargetPresentationOrigin = BottomPanelTab
+export type TargetPresentationOrigin = PanelTargetPresentationOrigin
 
 export interface PanelTargetSelectionSnapshot {
   readonly origin: BottomPanelTab | null
   readonly targets: readonly PanelTarget[]
   readonly ownsOrigin: boolean
+}
+
+export interface PanelTargetPresentationController {
+  readonly origin: PanelTargetPresentationOrigin
+  readSelection(): PanelTargetSelectionSnapshot
+  selectionMatches(
+    selection: PanelTargetSelectionSnapshot,
+    targetList: readonly PanelTarget[],
+  ): boolean
+  setHoveredTargets(targetList: readonly PanelTarget[]): void
+  setHoveredSpecies(canonicalName: string): void
+  clearHoveredTargets(): void
+  setSelectedTargets(targetList: readonly PanelTarget[]): void
+  clearSelectedTargets(): void
+  pruneSelection(visibleTargetLists: readonly (readonly PanelTarget[])[]): void
+  readCanvasHoveredSpeciesCanonical(): string | null
+  dispose(): void
 }
 
 export interface PanelTargetOverlaySnapshot {
@@ -39,6 +57,55 @@ export function panelTargetSelectionMatches(
   targetList: readonly PanelTarget[],
 ): boolean {
   return selection.ownsOrigin && targetIdentity.listEquals(selection.targets, targetList)
+}
+
+export function createPanelTargetPresentationController(
+  origin: PanelTargetPresentationOrigin,
+): PanelTargetPresentationController {
+  return {
+    origin,
+
+    readSelection() {
+      return readPanelTargetSelection(origin)
+    },
+
+    selectionMatches(selection, targetList) {
+      return panelTargetSelectionMatches(selection, targetList)
+    },
+
+    setHoveredTargets(targetList) {
+      setHoveredPanelTargets(targetList)
+    },
+
+    setHoveredSpecies(canonicalName) {
+      setHoveredPanelSpecies(canonicalName)
+    },
+
+    clearHoveredTargets() {
+      clearHoveredPanelTargets()
+    },
+
+    setSelectedTargets(targetList) {
+      setSelectedPanelTargets(origin, targetList)
+    },
+
+    clearSelectedTargets() {
+      clearSelectedPanelTargetsForOrigin(origin)
+    },
+
+    pruneSelection(visibleTargetLists) {
+      prunePanelTargetSelectionForOrigin(origin, visibleTargetLists)
+    },
+
+    readCanvasHoveredSpeciesCanonical() {
+      return getCanvasHoveredSpeciesCanonical()
+    },
+
+    dispose() {
+      clearHoveredPanelTargets()
+      clearSelectedPanelTargetsForOrigin(origin)
+    },
+  }
 }
 
 export function setHoveredPanelTargets(targetList: readonly PanelTarget[]): void {

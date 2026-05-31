@@ -17,7 +17,7 @@ vi.mock('../app/budget/export', async (importOriginal) => {
 import { BudgetTab } from '../components/canvas/BudgetTab'
 import { currentCanvasSession } from '../canvas/session'
 import { locale } from '../app/settings/state'
-import { currentDesign } from '../state/design'
+import { currentDesign } from './support/design-session-state'
 import { plantNamesRevision, sceneEntityRevision } from '../canvas/runtime-mirror-state'
 import { speciesBudgetTarget } from '../target'
 import type { CanopiFile, PlacedPlant } from '../types/design'

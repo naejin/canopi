@@ -65,7 +65,7 @@ import {
   pendingDesignPath,
   pendingTemplateImport,
   resetDirtyBaselines,
-} from '../state/design'
+} from './support/design-session-state'
 import {
   consumeQueuedDocumentLoad,
   newDesignAction,

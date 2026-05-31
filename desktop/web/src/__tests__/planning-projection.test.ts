@@ -1,22 +1,9 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   buildBudgetPlanningProjection,
   buildConsortiumPlanningProjection,
   buildTimelinePlanningProjection,
-  clearPlanningHoveredTargets,
-  getPlanningCanvasHoveredSpeciesCanonical,
-  planningTargetsSelected,
-  prunePlanningSelectionForOrigin,
-  readPlanningSelection,
-  setPlanningHoveredSpecies,
-  setPlanningSelectedTargets,
 } from '../app/planning-projection'
-import {
-  hoveredCanvasTargets,
-  hoveredPanelTargets,
-  selectedPanelTargetOrigin,
-  selectedPanelTargets,
-} from '../app/panel-targets/state'
 import { MANUAL_TARGET, speciesBudgetTarget, speciesTarget } from '../target'
 import type { BudgetItem, Consortium, PlacedPlant, TimelineAction } from '../types/design'
 
@@ -52,13 +39,6 @@ function makeAction(overrides: Partial<TimelineAction> = {}): TimelineAction {
 }
 
 describe('Planning Projection', () => {
-  afterEach(() => {
-    hoveredCanvasTargets.value = []
-    hoveredPanelTargets.value = []
-    selectedPanelTargetOrigin.value = null
-    selectedPanelTargets.value = []
-  })
-
   it('projects Budget rows, price state, and totals from Design plus Placed Plant data', () => {
     const budget: BudgetItem[] = [
       {
@@ -111,36 +91,6 @@ describe('Planning Projection', () => {
       hasPrice: false,
       subtotal: 0,
     })
-  })
-
-  it('keeps Target presentation state behind the Planning Projection interface', () => {
-    setPlanningSelectedTargets('budget', [speciesBudgetTarget('Malus domestica')])
-
-    const budgetSelection = readPlanningSelection('budget')
-    const timelineSelection = readPlanningSelection('timeline')
-
-    expect(planningTargetsSelected(budgetSelection, [speciesBudgetTarget('Malus domestica')])).toBe(true)
-    expect(planningTargetsSelected(timelineSelection, [speciesBudgetTarget('Malus domestica')])).toBe(false)
-
-    prunePlanningSelectionForOrigin('timeline', [])
-    expect(selectedPanelTargets.value).toEqual([speciesBudgetTarget('Malus domestica')])
-    expect(selectedPanelTargetOrigin.value).toBe('budget')
-
-    prunePlanningSelectionForOrigin('budget', [[speciesBudgetTarget('Prunus avium')]])
-    expect(selectedPanelTargets.value).toEqual([])
-    expect(selectedPanelTargetOrigin.value).toBeNull()
-  })
-
-  it('bridges canvas-origin and panel-origin species hover through Target values', () => {
-    hoveredCanvasTargets.value = [MANUAL_TARGET, speciesTarget('Acer campestre')]
-
-    expect(getPlanningCanvasHoveredSpeciesCanonical()).toBe('Acer campestre')
-
-    setPlanningHoveredSpecies('Malus domestica')
-    expect(hoveredPanelTargets.value).toEqual([speciesTarget('Malus domestica')])
-
-    clearPlanningHoveredTargets()
-    expect(hoveredPanelTargets.value).toEqual([])
   })
 
   it('projects active Consortium bars from consortium entries plus Placed Plant data', () => {

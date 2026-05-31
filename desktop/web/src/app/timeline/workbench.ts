@@ -1,11 +1,8 @@
 import { toISODate } from '../../canvas/timeline-math'
 import { currentDesign } from '../document-session/store'
 import type { PanelTarget, TimelineAction } from '../../types/design'
+import { createPanelTargetPresentationController } from '../panel-targets/presentation'
 import {
-  clearPlanningHoveredTargets,
-  clearPlanningSelectedTargetsForOrigin,
-  setPlanningHoveredTargets,
-  setPlanningSelectedTargets,
   type TimelineSpeciesOption,
 } from '../planning-projection'
 import {
@@ -23,6 +20,7 @@ import {
 const EMPTY_ACTIONS: readonly TimelineAction[] = []
 const DEFAULT_ACTION_DURATION_DAYS = 14
 const MS_PER_DAY = 86400000
+const timelineTargetPresentation = createPanelTargetPresentationController('timeline')
 
 export type TimelineActionPopoverMode = 'add' | 'edit'
 
@@ -67,19 +65,19 @@ export interface TimelineActionMutationResult {
 }
 
 export function setTimelineHoveredPanelTargets(targets: readonly PanelTarget[]): void {
-  setPlanningHoveredTargets(targets)
+  timelineTargetPresentation.setHoveredTargets(targets)
 }
 
 export function clearTimelineHoveredPanelTargets(): void {
-  clearPlanningHoveredTargets()
+  timelineTargetPresentation.clearHoveredTargets()
 }
 
 export function setTimelineSelectedPanelTargets(targets: readonly PanelTarget[]): void {
-  setPlanningSelectedTargets('timeline', targets)
+  timelineTargetPresentation.setSelectedTargets(targets)
 }
 
 export function clearTimelineSelectedPanelTargets(): void {
-  clearPlanningSelectedTargetsForOrigin('timeline')
+  timelineTargetPresentation.clearSelectedTargets()
 }
 
 export function openTimelineActionPopover({

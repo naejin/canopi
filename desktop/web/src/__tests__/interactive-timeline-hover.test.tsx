@@ -9,7 +9,7 @@ vi.mock('../components/canvas/useCanvasRenderer', () => ({
 import { InteractiveTimeline } from '../components/canvas/InteractiveTimeline'
 import { TimelineTab } from '../components/canvas/TimelineTab'
 import { hoveredPanelTargets, selectedPanelTargetOrigin, selectedPanelTargets } from '../app/panel-targets/state'
-import { currentDesign } from '../state/design'
+import { currentDesign } from './support/design-session-state'
 import { speciesTarget } from '../target'
 import type { CanopiFile, TimelineAction } from '../types/design'
 

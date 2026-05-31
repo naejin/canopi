@@ -14,7 +14,7 @@ import {
   IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
   type MapLibreCanvasSurfaceState,
 } from '../maplibre/canvas-surface-state'
-import { currentDesign } from '../state/design'
+import { currentDesign } from './support/design-session-state'
 
 const attachMock = vi.hoisted(() => vi.fn())
 const updateMock = vi.hoisted(() => vi.fn())

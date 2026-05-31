@@ -96,8 +96,12 @@ _Avoid_: Budget tab state, price editor helper, CSV helper
 The design subject that a timeline action, budget item, or other planning entry refers to. A target may identify a species, a placed plant, a zone, or a manual entry.
 _Avoid_: Panel target, link, reference
 
+**Target Presentation**:
+Runtime presentation state that connects targets from planning surfaces, canvas hover, and map overlays. Target presentation may mark hovered or selected targets and their origin, but it must not mutate Design data, canvas selection, labels, dirty state, or history.
+_Avoid_: Panel target state, canvas selection, planning projection state
+
 **Planning Projection**:
-A runtime read model that combines Design planning entries, placed plants, localized species names, and targets for planning surfaces such as timeline, budget, and consortium views. A planning projection does not own Design data or canvas scene data; it only derives view-ready planning rows and target presentation state from those authorities.
+A runtime read model that combines Design planning entries, placed plants, localized species names, and targets for planning surfaces such as timeline, budget, and consortium views. A planning projection does not own Design data, canvas scene data, or Target Presentation lifecycle; it only derives view-ready planning rows from those authorities.
 _Avoid_: Panel view model, budget row helper, tab bridge
 
 **Consortium**:
@@ -159,6 +163,9 @@ Use **Climate Zone** for broad site/template classification. Use **Hardiness Zon
 
 **Target vs Selection**:
 A **Target** names what a planning entry refers to. A selection is a temporary user interaction state and should not be used as domain language for planning relationships.
+
+**Target vs Target Presentation**:
+A **Target** is the stored or derived subject a planning entry refers to. **Target Presentation** is runtime hover/selection state over targets and must not become the authority for planning entries or canvas selection.
 
 **Scene Edit vs Design Mutation**:
 A **Scene Edit** changes canvas-owned design state and should be handled by the canvas runtime. A Design mutation changes non-canvas design state such as budget items, timeline actions, consortiums, location, description, or extra fields.

@@ -4,7 +4,7 @@ import { activePanel, sidePanel } from '../app/shell/state'
 import * as documentActions from '../app/document-session/actions'
 import { initShortcuts } from '../shortcuts/manager'
 import { setCurrentCanvasSession } from '../canvas/session'
-import { currentDesign, nonCanvasRevision, nonCanvasSavedRevision } from '../state/design'
+import { currentDesign, nonCanvasRevision, nonCanvasSavedRevision } from './support/design-session-state'
 
 describe('shortcut manager canvas tool switching', () => {
   beforeEach(() => {

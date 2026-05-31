@@ -3,7 +3,7 @@ import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { BudgetTab } from '../components/canvas/BudgetTab'
 import { currentCanvasSession } from '../canvas/session'
-import { currentDesign } from '../state/design'
+import { currentDesign } from './support/design-session-state'
 import { locale } from '../app/settings/state'
 import { plantNamesRevision, sceneEntityRevision } from '../canvas/runtime-mirror-state'
 import {

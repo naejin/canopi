@@ -1,7 +1,7 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { currentDesign, nonCanvasRevision } from '../state/design'
+import { currentDesign, nonCanvasRevision } from './support/design-session-state'
 import {
   getSavedLocationPresentation,
   locationDraftFromSaved,

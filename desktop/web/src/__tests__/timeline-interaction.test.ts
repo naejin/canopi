@@ -9,7 +9,7 @@ import {
   updateTimelinePanScrollX,
 } from '../app/timeline/interaction'
 import { projectTimelineAction } from '../app/planning-projection'
-import { currentDesign, nonCanvasRevision, nonCanvasSavedRevision } from '../state/design'
+import { currentDesign, nonCanvasRevision, nonCanvasSavedRevision } from './support/design-session-state'
 import { speciesTarget } from '../target'
 import type { CanopiFile, TimelineAction } from '../types/design'
 

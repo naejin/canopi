@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { canvasClean } from '../../../state/design'
+import { canvasClean } from '../../../__tests__/support/design-session-state'
 import type { CanopiFile } from '../../../types/design'
 import { lockedObjectIds, sceneEntityRevision } from '../../runtime-mirror-state'
 import { selectedObjectIds } from '../../session-state'

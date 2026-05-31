@@ -11,13 +11,13 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { SceneHistory } from '../canvas/runtime/scene-history'
 import type { SceneCommand, SceneCommandRuntime } from '../canvas/runtime/scene-commands'
-import { canvasClean, canvasDirty, markCanvasDetachedDirty } from '../state/design'
+import { canvasClean, canvasDirty, markCanvasDetachedDirty } from './support/design-session-state'
 import {
   nonCanvasRevision,
   designDirty,
   resetDirtyBaselines,
   markSaved,
-} from '../state/design'
+} from './support/design-session-state'
 
 const mockRuntime: SceneCommandRuntime = {
   sceneStore: null as never,

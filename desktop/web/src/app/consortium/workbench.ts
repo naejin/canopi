@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
-import {
-  clearPlanningHoveredTargets,
-  getPlanningCanvasHoveredSpeciesCanonical,
-  setPlanningHoveredSpecies,
-} from '../planning-projection'
+import { createPanelTargetPresentationController } from '../panel-targets/presentation'
 import {
   hitTestBar,
   type ConsortiumBarLayout,
@@ -16,6 +12,8 @@ import {
   previewConsortiumDrag,
   type ConsortiumDragState,
 } from './interaction'
+
+const consortiumTargetPresentation = createPanelTargetPresentationController('consortium')
 
 interface MutableDomRef<T> {
   current: T | null
@@ -58,7 +56,7 @@ export function useConsortiumCanvasWorkbench({
   rowHeightsRef.current = rowHeights
   rowOffsetsRef.current = rowOffsets
 
-  const canvasHoveredCanonical = getPlanningCanvasHoveredSpeciesCanonical()
+  const canvasHoveredCanonical = consortiumTargetPresentation.readCanvasHoveredSpeciesCanonical()
   const effectiveHoveredCanonical = hoveredCanonical.value ?? canvasHoveredCanonical
 
   const handleMouseDown = useCallback((event: MouseEvent) => {
@@ -125,13 +123,13 @@ export function useConsortiumCanvasWorkbench({
     if (hit) {
       if (hoveredCanonical.value !== hit.canonicalName) {
         hoveredCanonical.value = hit.canonicalName
-        setPlanningHoveredSpecies(hit.canonicalName)
+        consortiumTargetPresentation.setHoveredSpecies(hit.canonicalName)
       }
       canvas.style.cursor = hit.edge === 'body' ? 'grab' : 'ew-resize'
     } else {
       if (hoveredCanonical.value !== null) {
         hoveredCanonical.value = null
-        clearPlanningHoveredTargets()
+        consortiumTargetPresentation.clearHoveredTargets()
       }
       canvas.style.cursor = 'default'
     }
@@ -140,7 +138,7 @@ export function useConsortiumCanvasWorkbench({
   const handleMouseLeave = useCallback(() => {
     if (hoveredCanonical.value !== null) {
       hoveredCanonical.value = null
-      clearPlanningHoveredTargets()
+      consortiumTargetPresentation.clearHoveredTargets()
     }
     if (canvasRef.current) canvasRef.current.style.cursor = 'default'
   }, [canvasRef, hoveredCanonical])
@@ -171,7 +169,7 @@ export function useConsortiumCanvasWorkbench({
       document.removeEventListener('mouseup', onUp)
       commitConsortiumDrag(dragState.current)
       dragState.current = null
-      clearPlanningHoveredTargets()
+      consortiumTargetPresentation.clearHoveredTargets()
     }
   }, [handleMouseMove, handleMouseUp])
 

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { currentDesign, nonCanvasRevision } from '../state/design'
+import { currentDesign, nonCanvasRevision } from './support/design-session-state'
 import {
   clearDesignLocation,
   saveLocationDraft,

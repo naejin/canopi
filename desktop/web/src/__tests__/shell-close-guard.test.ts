@@ -70,7 +70,7 @@ describe("registerCloseGuard", () => {
       .mockResolvedValueOnce(mocks.unlistenA)
       .mockResolvedValueOnce(mocks.unlistenB);
 
-    const design = await import("../state/design");
+    const design = await import("./support/design-session-state");
     design.resetDirtyBaselines();
   });
 
@@ -113,7 +113,7 @@ describe("registerCloseGuard", () => {
   });
 
   it("prompts on dirty close and destroys the window after a successful save", async () => {
-    const design = await import("../state/design");
+    const design = await import("./support/design-session-state");
     design.nonCanvasRevision.value = 1;
 
     mocks.message.mockResolvedValue("Save");
@@ -134,7 +134,7 @@ describe("registerCloseGuard", () => {
   });
 
   it("destroys without saving when the user discards changes", async () => {
-    const design = await import("../state/design");
+    const design = await import("./support/design-session-state");
     design.nonCanvasRevision.value = 1;
 
     mocks.message.mockResolvedValue("Don't Save");
@@ -153,7 +153,7 @@ describe("registerCloseGuard", () => {
   });
 
   it("keeps the window open when the user cancels the dirty-close prompt", async () => {
-    const design = await import("../state/design");
+    const design = await import("./support/design-session-state");
     design.nonCanvasRevision.value = 1;
 
     mocks.message.mockResolvedValue("Cancel");
@@ -172,7 +172,7 @@ describe("registerCloseGuard", () => {
   });
 
   it("keeps the window open when save fails", async () => {
-    const design = await import("../state/design");
+    const design = await import("./support/design-session-state");
     design.nonCanvasRevision.value = 1;
 
     mocks.message.mockResolvedValue("Save");

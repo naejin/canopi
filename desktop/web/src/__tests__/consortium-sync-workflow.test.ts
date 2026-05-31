@@ -1,5 +1,5 @@
 import { beforeEach, afterEach, describe, expect, it } from 'vitest'
-import { currentDesign, nonCanvasRevision } from '../state/design'
+import { currentDesign, nonCanvasRevision } from './support/design-session-state'
 import { sceneEntityRevision } from '../canvas/runtime-mirror-state'
 import { currentCanvasSession } from '../canvas/session'
 import { installConsortiumSync, disposeConsortiumSync } from '../app/document-session/workflows'

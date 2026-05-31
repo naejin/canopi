@@ -13,7 +13,7 @@ import {
   stratumToRow,
 } from '../canvas/consortium-renderer'
 import { consortiumTarget } from '../target'
-import { currentDesign, nonCanvasRevision, nonCanvasSavedRevision } from '../state/design'
+import { currentDesign, nonCanvasRevision, nonCanvasSavedRevision } from './support/design-session-state'
 import type { CanopiFile, Consortium, PlacedPlant } from '../types/design'
 
 const CANVAS_WIDTH = 800

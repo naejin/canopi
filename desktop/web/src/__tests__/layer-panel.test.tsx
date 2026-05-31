@@ -16,7 +16,7 @@ import {
 } from '../app/canvas-settings/signals'
 import { basemapStyle } from '../app/settings/state'
 import { setSettings } from '../ipc/settings'
-import { currentDesign } from '../state/design'
+import { currentDesign } from './support/design-session-state'
 import { locale } from '../app/settings/state'
 import { flushSettingsProjection, hydrateSettingsProjection } from '../app/settings/projection'
 

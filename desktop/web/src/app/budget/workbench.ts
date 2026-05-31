@@ -1,20 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import {
-  clearPlanningHoveredTargets,
-  clearPlanningSelectedTargetsForOrigin,
-  planningTargetsSelected,
-  prunePlanningSelectionForOrigin,
-  readPlanningSelection,
-  setPlanningHoveredTargets,
-  setPlanningSelectedTargets,
   useBudgetPlanningSurface,
   type BudgetPlanningProjection,
   type BudgetPlanningRow,
 } from '../planning-projection'
+import { createPanelTargetPresentationController } from '../panel-targets/presentation'
 import { exportBudgetCsv, isBudgetExportCancelled } from './export'
 import { formatBudgetCurrency } from './formatting'
 import { setBudgetCurrency, setPlantBudgetPrice } from './controller'
+
+const budgetTargetPresentation = createPanelTargetPresentationController('budget')
 
 export interface BudgetItemWorkbench {
   readonly projection: BudgetPlanningProjection
@@ -59,32 +55,31 @@ export function useBudgetItemWorkbench(): BudgetItemWorkbench {
   const projectionRef = useRef(projection)
   projectionRef.current = projection
 
-  const selection = readPlanningSelection('budget')
+  const selection = budgetTargetPresentation.readSelection()
   const visibleTargetLists = useMemo(
     () => projection.rows.map((row) => [row.target]),
     [projection.rows],
   )
 
-  useEffect(() => clearPlanningHoveredTargets, [])
-  useEffect(() => () => clearPlanningSelectedTargetsForOrigin('budget'), [])
+  useEffect(() => () => budgetTargetPresentation.dispose(), [])
   useEffect(() => {
-    prunePlanningSelectionForOrigin('budget', visibleTargetLists)
+    budgetTargetPresentation.pruneSelection(visibleTargetLists)
   }, [visibleTargetLists, selection.targets, selection.ownsOrigin])
 
   const clearHover = useCallback(() => {
-    clearPlanningHoveredTargets()
+    budgetTargetPresentation.clearHoveredTargets()
   }, [])
 
   const hoverRow = useCallback((row: BudgetPlanningRow) => {
-    setPlanningHoveredTargets([row.target])
+    budgetTargetPresentation.setHoveredTargets([row.target])
   }, [])
 
   const selectRow = useCallback((row: BudgetPlanningRow) => {
-    setPlanningSelectedTargets('budget', [row.target])
+    budgetTargetPresentation.setSelectedTargets([row.target])
   }, [])
 
   const isRowSelected = useCallback((row: BudgetPlanningRow) => (
-    planningTargetsSelected(selection, [row.target])
+    budgetTargetPresentation.selectionMatches(selection, [row.target])
   ), [selection])
 
   const startPriceEdit = useCallback((canonical: string) => {

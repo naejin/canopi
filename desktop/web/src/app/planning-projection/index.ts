@@ -26,21 +26,6 @@ export {
   type TimelineSpeciesOption,
 } from './timeline'
 export {
-  clearPlanningHoveredTargets,
-  clearPlanningOriginTargets,
-  clearPlanningSelectedTargetsForOrigin,
-  getPlanningCanvasHoveredSpeciesCanonical,
-  getPlanningSpeciesCanonicalFromTargets,
-  planningTargetsSelected,
-  prunePlanningSelectionForOrigin,
-  readPlanningSelection,
-  setPlanningHoveredSpecies,
-  setPlanningHoveredTargets,
-  setPlanningSelectedTargets,
-  type PlanningProjectionOrigin,
-  type PlanningSelectionSnapshot,
-} from './target-presentation'
-export {
   useBudgetPlanningProjection,
   useBudgetPlanningSurface,
   useConsortiumPlanningSurface,

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { addTimelineAction, deleteTimelineAction, updateTimelineAction } from '../app/timeline/controller'
-import { currentDesign, nonCanvasRevision } from '../state/design'
+import { currentDesign, nonCanvasRevision } from './support/design-session-state'
 
 beforeEach(() => {
   nonCanvasRevision.value = 0

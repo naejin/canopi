@@ -22,7 +22,7 @@ import {
   selectedPanelTargets,
 } from '../../app/panel-targets/state'
 import { createAppSceneRuntimePanelTargetAdapter } from '../../app/canvas-runtime/panel-target-adapter'
-import { canvasClean } from '../../state/design'
+import { canvasClean } from '../../__tests__/support/design-session-state'
 import { locale } from '../../app/settings/state'
 import type { CanopiFile, PanelTarget } from '../../types/design'
 import { speciesTarget } from '../../target'

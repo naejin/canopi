@@ -9,7 +9,7 @@ import {
   selectedPanelTargetOrigin,
   selectedPanelTargets,
 } from '../app/panel-targets/state'
-import { currentDesign, nonCanvasRevision } from '../state/design'
+import { currentDesign, nonCanvasRevision } from './support/design-session-state'
 import { MANUAL_TARGET, speciesTarget } from '../target'
 import type { CanopiFile, TimelineAction } from '../types/design'
 

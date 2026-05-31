@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { PanelBar } from '../components/panels/PanelBar'
 import { activePanel, sidePanel } from '../app/shell/state'
 import { locale } from '../app/settings/state'
-import { currentDesign } from '../state/design'
+import { currentDesign } from './support/design-session-state'
 
 describe('PanelBar', () => {
   let container: HTMLDivElement

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { beginDocumentArrayEdit } from '../app/document/edit-transaction'
 import { consortiumTarget } from '../target'
-import { currentDesign, nonCanvasRevision } from '../state/design'
+import { currentDesign, nonCanvasRevision } from './support/design-session-state'
 import type { CanopiFile, Consortium, TimelineAction } from '../types/design'
 
 function timelineAction(id: string, overrides: Partial<TimelineAction> = {}): TimelineAction {

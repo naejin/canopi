@@ -7,7 +7,7 @@ import {
   formDataFromTimelineAction,
   timelineActionPatchFromFormData,
 } from '../app/timeline/editing'
-import { currentDesign, nonCanvasRevision } from '../state/design'
+import { currentDesign, nonCanvasRevision } from './support/design-session-state'
 import { MANUAL_TARGET, speciesTarget } from '../target'
 import type { CanopiFile, TimelineAction } from '../types/design'
 
