@@ -12,6 +12,18 @@ _Avoid_: Document, file, project
 The active runtime context for a Design in the app. A design session includes the current Design state, dirty baselines, save/autosave behavior, queued Design loads, lifecycle workflows, and an optional attached canvas runtime.
 _Avoid_: Document session, file session, canvas session
 
+**Problem Report**:
+A user's description of a problem they encountered while using Canopi. A problem report may include reproduction context and a diagnostic bundle, but it is not the confirmed defect itself.
+_Avoid_: Bug report, issue, feedback
+
+**Report Summary**:
+A plain-text summary of a problem report that a user can copy into their chosen support channel. A report summary should be easy to find alongside any diagnostic bundle.
+_Avoid_: Issue body, debug text, support template
+
+**Diagnostic Bundle**:
+A user-approved package of troubleshooting evidence shared with a problem report. A diagnostic bundle contains support context only when the user chooses to include it.
+_Avoid_: Logs, debug export, support zip
+
 **Species**:
 A botanical catalog entry that describes a plant taxon and its ecological, morphological, agronomic, risk, use, and media data. A species is identified by its canonical name and may have common names.
 _Avoid_: Plant, catalog plant, database plant
@@ -140,6 +152,12 @@ Use **Design** for the user's agroecological plan. Reserve "document" and "file"
 **Design vs Design Session**:
 A **Design** is the agroecological plan. A **Design Session** is the active app runtime context around that design, including lifecycle and persistence behavior.
 
+**Problem Report vs Diagnostic Bundle**:
+A **Problem Report** is the user's account of what went wrong. A **Diagnostic Bundle** is optional supporting evidence the user can attach or share.
+
+**Report Summary vs Diagnostic Bundle**:
+A **Report Summary** is readable text for the support conversation. A **Diagnostic Bundle** is the attached evidence package.
+
 **Species vs Plant**:
 Use **Species** for catalog/database entries. Use **Placed Plant** for a species instance positioned in a design.
 
@@ -210,6 +228,10 @@ Developer: "Yes. Each copy is a separate placed plant, and each placed plant ref
 Designer: "Does editing the species catalog change my design?"
 
 Developer: "No. The species catalog is the source for choosing species; the design contains placed plants that refer to species."
+
+Designer: "The app behaved strangely. Should I send the logs?"
+
+Developer: "Create a problem report first. It gives you a report summary to copy and, if you choose, a diagnostic bundle with troubleshooting evidence."
 
 Designer: "Can I identify a species by its common name?"
 
