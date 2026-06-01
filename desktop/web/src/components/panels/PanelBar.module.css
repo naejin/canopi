@@ -45,7 +45,7 @@
   bottom: 8px;
   width: 2px;
   background: var(--color-accent);
-  border-radius: 1px 0 0 1px;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
 }
 
 .button:focus-visible {
