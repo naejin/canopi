@@ -8,6 +8,11 @@ import {
 } from '../../app/canvas-settings/signals'
 import { locale } from '../../app/settings/state'
 import { plantColorMenuOpen } from '../../canvas/plant-color-menu-state'
+import {
+  getAppCommand,
+  type AppCommandId,
+  type Command,
+} from '../../commands/registry'
 import { t } from '../../i18n'
 import {
   currentCanvasCommandSurface,
@@ -18,6 +23,8 @@ import {
 import {
   SelectIcon,
   HandIcon,
+  UndoIcon,
+  RedoIcon,
   RectangleIcon,
   EllipseIcon,
   PolygonIcon,
@@ -56,6 +63,15 @@ const SHAPE_TOOLS: ToolDef[] = [
 // All tool groups in order for keyboard navigation
 const ALL_TOOLS: ToolDef[] = [...TOOLS, ...SHAPE_TOOLS]
 
+const UNDO_COMMAND = toolbarCommand('edit.undo')
+const REDO_COMMAND = toolbarCommand('edit.redo')
+
+function toolbarCommand(id: AppCommandId): Command {
+  const command = getAppCommand(id)
+  if (!command) throw new Error(`Missing toolbar command ${id}`)
+  return command
+}
+
 export function CanvasToolbar() {
   // Subscribe to locale so labels re-render on language change
   void locale.value
@@ -85,10 +101,11 @@ export function CanvasToolbar() {
   // Arrow key navigation within the toolbar (roving tabindex pattern)
   function handleKeyDown(e: KeyboardEvent) {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+    if (!(e.target instanceof HTMLButtonElement) || !e.target.dataset.tool) return
 
     e.preventDefault()
 
-    const currentId = currentCanvasTool.value
+    const currentId = e.target.dataset.tool
     const currentIndex = ALL_TOOLS.findIndex((t) => t.id === currentId)
     if (currentIndex === -1) return
 
@@ -147,19 +164,27 @@ export function CanvasToolbar() {
   function renderActionButton(
     id: string,
     label: string,
-    desc: string,
+    desc: string | undefined,
     Icon: IconComponent,
-    pressed: boolean,
+    pressed: boolean | undefined,
     disabled: boolean,
     onClick: () => void,
+    options?: {
+      commandId?: string
+      shortcut?: string
+    },
   ) {
+    const pressedProps = pressed === undefined ? {} : { 'aria-pressed': pressed }
+
     return (
       <button
         ref={id === 'plant-color' ? plantColorButtonRef : undefined}
         key={id}
+        data-command={options?.commandId}
         type="button"
-        aria-pressed={pressed}
+        {...pressedProps}
         aria-label={label}
+        aria-keyshortcuts={options?.shortcut}
         aria-disabled={disabled}
         disabled={disabled}
         tabIndex={0}
@@ -169,10 +194,32 @@ export function CanvasToolbar() {
         <Icon className={styles.toolIcon} />
         <span className={styles.tooltip} role="tooltip">
           <span className={styles.tooltipName}>{label}</span>
-          <br />
-          <span className={styles.tooltipDesc}>{desc}</span>
+          {options?.shortcut && (
+            <span className={styles.tooltipShortcut}>({options.shortcut})</span>
+          )}
+          {desc && (
+            <>
+              <br />
+              <span className={styles.tooltipDesc}>{desc}</span>
+            </>
+          )}
         </span>
       </button>
+    )
+  }
+
+  function renderCommandButton(command: Command, Icon: IconComponent) {
+    return renderActionButton(
+      command.id,
+      command.label(),
+      undefined,
+      Icon,
+      undefined,
+      command.disabled(),
+      () => {
+        command.action()
+      },
+      { commandId: command.id, shortcut: command.shortcut },
     )
   }
 
@@ -230,6 +277,11 @@ export function CanvasToolbar() {
       <div className={styles.separator} role="separator" aria-hidden="true" />
 
       {SHAPE_TOOLS.map(renderButton)}
+
+      <div className={styles.separator} role="separator" aria-hidden="true" />
+
+      {renderCommandButton(UNDO_COMMAND, UndoIcon)}
+      {renderCommandButton(REDO_COMMAND, RedoIcon)}
 
       <div className={styles.separator} role="separator" aria-hidden="true" />
 

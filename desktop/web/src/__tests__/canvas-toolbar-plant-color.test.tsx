@@ -1,21 +1,31 @@
+import { signal } from '@preact/signals'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CanvasToolbar } from '../components/canvas/CanvasToolbar'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { plantColorMenuOpen } from '../canvas/plant-color-menu-state'
-import { selectedObjectIds } from '../canvas/session-state'
+import { activeTool, selectedObjectIds } from '../canvas/session-state'
 
-describe('CanvasToolbar plant color action', () => {
+describe('CanvasToolbar', () => {
   let container: HTMLDivElement
+  const canUndo = signal(false)
+  const canRedo = signal(false)
   const getSelectedPlantColorContext = vi.fn()
   const setTool = vi.fn()
+  const undo = vi.fn()
+  const redo = vi.fn()
 
   beforeEach(() => {
     container = document.createElement('div')
     document.body.innerHTML = ''
     document.body.appendChild(container)
+    activeTool.value = 'select'
+    canUndo.value = false
+    canRedo.value = false
     setTool.mockReset()
+    undo.mockReset()
+    redo.mockReset()
     selectedObjectIds.value = new Set()
     plantColorMenuOpen.value = false
     getSelectedPlantColorContext.mockImplementation(() => {
@@ -39,7 +49,11 @@ describe('CanvasToolbar plant color action', () => {
       }
     })
     setCurrentCanvasSession({
+      canUndo,
+      canRedo,
       setTool,
+      undo,
+      redo,
       getSelectedPlantColorContext,
       ensureSpeciesCacheEntries: vi.fn().mockResolvedValue(false),
       toggleGrid: vi.fn(),
@@ -54,6 +68,7 @@ describe('CanvasToolbar plant color action', () => {
   afterEach(() => {
     render(null, container)
     container.remove()
+    activeTool.value = 'select'
     selectedObjectIds.value = new Set()
     plantColorMenuOpen.value = false
     setCurrentCanvasSession(null)
@@ -119,5 +134,64 @@ describe('CanvasToolbar plant color action', () => {
     })
 
     expect(setTool).toHaveBeenCalledWith('polygon')
+  })
+
+  it('shows undo and redo command buttons disabled when history is unavailable', async () => {
+    await act(async () => {
+      render(<CanvasToolbar />, container)
+      await Promise.resolve()
+    })
+
+    const undoButton = container.querySelector<HTMLButtonElement>('button[data-command="edit.undo"]')
+    const redoButton = container.querySelector<HTMLButtonElement>('button[data-command="edit.redo"]')
+
+    expect(undoButton).not.toBeNull()
+    expect(redoButton).not.toBeNull()
+    expect(undoButton?.disabled).toBe(true)
+    expect(redoButton?.disabled).toBe(true)
+    expect(undoButton?.getAttribute('aria-label')).toBe('Undo')
+    expect(redoButton?.getAttribute('aria-label')).toBe('Redo')
+    expect(undoButton?.getAttribute('aria-keyshortcuts')).toBe('Ctrl+Z')
+    expect(redoButton?.getAttribute('aria-keyshortcuts')).toBe('Ctrl+Shift+Z')
+  })
+
+  it('runs undo and redo through the toolbar command buttons when history is available', async () => {
+    canUndo.value = true
+    canRedo.value = true
+
+    await act(async () => {
+      render(<CanvasToolbar />, container)
+      await Promise.resolve()
+    })
+
+    const undoButton = container.querySelector<HTMLButtonElement>('button[data-command="edit.undo"]')
+    const redoButton = container.querySelector<HTMLButtonElement>('button[data-command="edit.redo"]')
+
+    expect(undoButton?.disabled).toBe(false)
+    expect(redoButton?.disabled).toBe(false)
+
+    await act(async () => {
+      undoButton?.click()
+      redoButton?.click()
+      await Promise.resolve()
+    })
+
+    expect(undo).toHaveBeenCalledTimes(1)
+    expect(redo).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps arrow-key tool navigation scoped to tool buttons', async () => {
+    canUndo.value = true
+
+    await act(async () => {
+      render(<CanvasToolbar />, container)
+      await Promise.resolve()
+    })
+
+    const undoButton = container.querySelector<HTMLButtonElement>('button[data-command="edit.undo"]')
+    undoButton?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+
+    expect(setTool).not.toHaveBeenCalled()
+    expect(activeTool.value).toBe('select')
   })
 })

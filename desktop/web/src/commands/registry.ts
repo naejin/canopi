@@ -409,6 +409,24 @@ const commandById = new Map<AppCommandId, AppCommandDefinition>(
   APP_COMMANDS.map((command) => [command.id, command]),
 )
 
+function commandProjection(command: AppCommandDefinition): Command {
+  return {
+    id: command.id,
+    label: command.label!,
+    shortcut: command.shortcut,
+    disabled: () => isAppCommandDisabled(command.id),
+    action: () => {
+      runAppCommand(command.id)
+    },
+  }
+}
+
+export function getAppCommand(id: AppCommandId): Command | null {
+  const command = commandById.get(id)
+  if (!command?.label) return null
+  return commandProjection(command)
+}
+
 export function isAppCommandDisabled(id: AppCommandId): boolean {
   const command = commandById.get(id)
   if (!command) return true
@@ -427,15 +445,7 @@ export function runAppCommand(id: AppCommandId): boolean {
 
 export const commands: Command[] = APP_COMMANDS
   .filter((command) => command.palette && command.label)
-  .map((command) => ({
-    id: command.id,
-    label: command.label!,
-    shortcut: command.shortcut,
-    disabled: () => isAppCommandDisabled(command.id),
-    action: () => {
-      runAppCommand(command.id)
-    },
-  }))
+  .map(commandProjection)
 
 export function getMenuDefinitions(): MenuDefinition[] {
   const separator: MenuSeparator = { type: 'separator' }
