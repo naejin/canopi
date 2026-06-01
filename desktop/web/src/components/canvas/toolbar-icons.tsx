@@ -429,6 +429,36 @@ export function PlantStampIcon({ className }: IconProps) {
   )
 }
 
+export function ObjectStampIcon({ className }: IconProps) {
+  return (
+    <svg
+      className={className}
+      width="20"
+      height="20"
+      viewBox="0 0 20 20"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <rect x="4" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.5" />
+      <rect x="9" y="10" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.5" />
+      <path
+        d="M8 10L9 11"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <path
+        d="M12.5 4.5L15.5 4.5L15.5 7.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 export function DimensionIcon({ className }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">

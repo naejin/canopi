@@ -1231,6 +1231,204 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('samples a placed plant with Object Stamp and places anchored clones', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'plant-1',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: '#C44230',
+        stratum: 'high',
+        canopySpreadM: 4,
+        position: { x: 50, y: 60 },
+        rotationDeg: 15,
+        scale: 4,
+        notes: 'Source plant',
+        plantedDate: '2026-02-01',
+        quantity: 2,
+      }]
+    })
+
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('object-stamp')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 54, clientY: 63, button: 0 }))
+    expect(store.persisted.plants).toHaveLength(1)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 100, clientY: 120, button: 0 }))
+    const preview = Array.from(container.children)
+      .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
+    expect(preview?.style.display).toBe('block')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 100, clientY: 120, button: 0 }))
+
+    expect(store.persisted.plants).toHaveLength(2)
+    const clone = store.persisted.plants[1]!
+    expect(clone.id).not.toBe('plant-1')
+    expect(clone).toMatchObject({
+      canonicalName: 'Malus domestica',
+      commonName: 'Apple',
+      color: '#C44230',
+      stratum: 'high',
+      canopySpreadM: 4,
+      position: { x: 96, y: 117 },
+      rotationDeg: 15,
+      scale: 4,
+      notes: 'Source plant',
+      plantedDate: '2026-02-01',
+      quantity: 2,
+    })
+    expect(selectedObjectIds.value).toEqual(new Set([clone.id]))
+    expect(onSceneEditCommit).toHaveBeenCalledTimes(1)
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-object-stamp')
+    controller.dispose()
+  })
+
+  it('snaps Object Stamp placement by the sampled plant anchor', () => {
+    camera.setViewport({ x: 0, y: 0, scale: 4 })
+    snapToGridEnabled.value = true
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'plant-1',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 4,
+        position: { x: 10, y: 10 },
+        rotationDeg: null,
+        scale: 4,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('object-stamp')
+
+    // Screen (44, 44) -> world (11, 11), so the sampled anchor is +1,+1 from the plant position.
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 44, clientY: 44, button: 0 }))
+    // Screen (93, 107) -> world (23.25, 26.75), snapped to (25, 25) at this zoom level.
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 93, clientY: 107, button: 0 }))
+
+    expect(store.persisted.plants[1]?.position).toEqual({ x: 24, y: 24 })
+    controller.dispose()
+  })
+
+  it('clears loaded Object Stamp source and returns to select on Escape', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'plant-1',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 40, y: 40 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+
+    const setTool = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { setTool })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('object-stamp')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
+    ;(controller as any)._onKeyDown(new KeyboardEvent('keydown', { key: 'Escape' }))
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 90, clientY: 90, button: 0 }))
+
+    expect(setTool).toHaveBeenCalledWith('select')
+    expect(store.persisted.plants).toHaveLength(1)
+    controller.dispose()
+  })
+
+  it('clears loaded Object Stamp source when changing tools', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'plant-1',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 40, y: 40 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('object-stamp')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
+    controller.setTool('select')
+    controller.setTool('object-stamp')
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 90, clientY: 90, button: 0 }))
+
+    expect(store.persisted.plants).toHaveLength(1)
+    controller.dispose()
+  })
+
+  it('blocks Object Stamp sampling and placement for locked or hidden plant sources', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'plant-1',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 40, y: 40 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('object-stamp')
+
+    lockedObjectIds.value = new Set(['plant-1'])
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 90, clientY: 90, button: 0 }))
+    expect(store.persisted.plants).toHaveLength(1)
+
+    lockedObjectIds.value = new Set()
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
+    store.updatePersisted((draft) => {
+      const plantsLayer = draft.layers.find((layer) => layer.name === 'plants')
+      if (plantsLayer) plantsLayer.visible = false
+    })
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 90, clientY: 90, button: 0 }))
+
+    expect(store.persisted.plants).toHaveLength(1)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    controller.dispose()
+  })
+
   it('creates plant placements from drag-and-drop payloads', () => {
     const onSceneEditCommit = vi.fn()
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })

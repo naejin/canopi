@@ -86,6 +86,7 @@ export type AppCommandId =
   | 'canvas.tool.ellipse'
   | 'canvas.tool.polygon'
   | 'canvas.tool.text'
+  | 'canvas.tool.objectStamp'
   | 'canvas.copy'
   | 'canvas.paste'
   | 'canvas.duplicateSelected'
@@ -127,6 +128,7 @@ const TOOL_COMMAND_IDS: Record<string, AppCommandId> = {
   ellipse: 'canvas.tool.ellipse',
   polygon: 'canvas.tool.polygon',
   text: 'canvas.tool.text',
+  'object-stamp': 'canvas.tool.objectStamp',
 }
 
 const MENU_ORDER: readonly AppMenuId[] = ['file', 'edit', 'view', 'help']
@@ -349,6 +351,12 @@ const APP_COMMANDS: readonly AppCommandDefinition[] = [
     shortcut: TOOL_SHORTCUTS.text,
     palette: true,
     run: () => switchTool('text'),
+  },
+  {
+    id: 'canvas.tool.objectStamp',
+    label: () => t('canvas.tools.objectStamp'),
+    palette: true,
+    run: () => switchTool('object-stamp'),
   },
   {
     id: 'canvas.copy',

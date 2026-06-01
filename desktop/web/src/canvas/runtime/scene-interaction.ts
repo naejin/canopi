@@ -9,9 +9,9 @@ import { gridInterval, snapToGrid } from '../grid'
 import { snapToGuides } from '../guides'
 import { guides } from '../scene-metadata-state'
 import { lockedObjectIds } from '../runtime-mirror-state'
-import type { SceneStore, ScenePoint } from './scene'
+import type { ScenePlantEntity, SceneStore, ScenePoint } from './scene'
 import type { CameraController } from './camera'
-import type { PlantPresentationContext } from './plant-presentation'
+import { getPlantWorldBounds, type PlantPresentationContext } from './plant-presentation'
 import type { SpeciesCacheEntry } from './species-cache'
 import type { SceneViewportState } from './scene'
 import {
@@ -53,8 +53,18 @@ import {
   createRectangularZoneMeasurementsFromRect,
 } from './zone-measurements'
 import type { SceneEditCoordinator, SceneEditTransaction } from './scene-runtime/transactions'
+import { createUuid } from '../../utils/ids'
 
-type InteractionTool = 'select' | 'hand' | 'rectangle' | 'text' | 'plant-stamp' | string
+type InteractionTool = 'select' | 'hand' | 'rectangle' | 'text' | 'plant-stamp' | 'object-stamp' | string
+
+interface ObjectStampPlantSource {
+  kind: 'plant'
+  sourceId: string
+  plant: ScenePlantEntity
+  anchorOffset: ScenePoint
+}
+
+type ObjectStampSource = ObjectStampPlantSource
 
 export interface SceneInteractionDeps {
   container: HTMLElement
@@ -90,6 +100,7 @@ export class SceneInteractionController {
   private _textWorldPosition: ScenePoint | null = null
   private _polygonDraftVertices: ScenePoint[] = []
   private _polygonActiveWorld: ScenePoint | null = null
+  private _objectStampSource: ObjectStampSource | null = null
   private _spaceHeld = false
   /** Original position of the hit entity — snap reference for drag. */
   private _dragSnapRef: ScenePoint | null = null
@@ -111,6 +122,9 @@ export class SceneInteractionController {
     this._tool = name
     if (previousTool === 'plant-stamp' && name !== 'plant-stamp') {
       plantStampSpecies.value = null
+    }
+    if (previousTool === 'object-stamp' && name !== 'object-stamp') {
+      this._clearObjectStampSource()
     }
     if (previousTool === 'text' && name !== 'text') {
       this._removeTextarea()
@@ -178,6 +192,12 @@ export class SceneInteractionController {
 
     if (this._tool === 'plant-stamp') {
       this._placePlantFromStamp(this._applySnapping(world))
+      return
+    }
+
+    if (this._tool === 'object-stamp') {
+      event.preventDefault()
+      this._handleObjectStampPointerDown(world)
       return
     }
 
@@ -295,6 +315,12 @@ export class SceneInteractionController {
       this._polygonActiveWorld = this._applySnapping(this._deps.camera.screenToWorld(screen))
       this._polygonDraftOverlay.update(this._polygonDraftVertices, this._polygonActiveWorld, this._deps.camera)
       this._updateDraftPolygonMeasurements()
+      return
+    }
+
+    if (this._tool === 'object-stamp' && this._objectStampSource && this._pointerId === null) {
+      const screen = this._screenPoint(event)
+      this._updateObjectStampPreview(this._applySnapping(this._deps.camera.screenToWorld(screen)))
       return
     }
 
@@ -481,6 +507,12 @@ export class SceneInteractionController {
         this._commitPolygonDraft()
         return
       }
+    }
+
+    if (this._tool === 'object-stamp' && !isEditableTarget(event.target) && event.key === 'Escape') {
+      event.preventDefault()
+      this._switchTool('select')
+      return
     }
 
     if (event.code !== 'Space' || this._spaceHeld || isEditableTarget(event.target) || this._textarea) return
@@ -730,6 +762,122 @@ export class SceneInteractionController {
     })
   }
 
+  private _handleObjectStampPointerDown(world: ScenePoint): void {
+    if (!this._objectStampSource) {
+      this._sampleObjectStampSource(world)
+      this._pointerId = null
+      this._startScreen = null
+      this._startWorld = null
+      this._cachedContainerRect = null
+      return
+    }
+
+    this._placeObjectStamp(this._applySnapping(world))
+    this._pointerId = null
+    this._startScreen = null
+    this._startWorld = null
+    this._cachedContainerRect = null
+  }
+
+  private _sampleObjectStampSource(world: ScenePoint): void {
+    const scene = this._deps.getSceneStore().persisted
+    const hit = hitTestTopLevel(
+      scene,
+      world,
+      this._deps.camera.viewport.scale,
+      this._deps.getSpeciesCache(),
+      this._deps.getPlantPresentationContext,
+    )
+    if (!hit || hit.kind !== 'plant' || lockedObjectIds.value.has(hit.id)) return
+
+    const plant = scene.plants.find((entry) => entry.id === hit.id)
+    if (!plant) return
+
+    this._objectStampSource = {
+      kind: 'plant',
+      sourceId: plant.id,
+      plant: clonePlantForObjectStamp(plant),
+      anchorOffset: {
+        x: world.x - plant.position.x,
+        y: world.y - plant.position.y,
+      },
+    }
+    this._updateObjectStampPreview(world)
+  }
+
+  private _placeObjectStamp(anchorWorld: ScenePoint): void {
+    const source = this._objectStampSource
+    if (!source || !this._canUseObjectStampSource(source)) return
+
+    if (source.kind === 'plant') {
+      const position = {
+        x: anchorWorld.x - source.anchorOffset.x,
+        y: anchorWorld.y - source.anchorOffset.y,
+      }
+      let nextId = ''
+      const committed = this._deps.sceneEdits.run('interaction-object-stamp', (tx) => {
+        tx.mutate((draft) => {
+          const clone = clonePlantForObjectStamp(source.plant)
+          clone.id = createUuid()
+          clone.position = position
+          draft.plants = [...draft.plants, clone]
+          nextId = clone.id
+        })
+        if (nextId) tx.setSelection([nextId])
+      })
+      if (committed) this._updateObjectStampPreview(anchorWorld)
+    }
+  }
+
+  private _canUseObjectStampSource(source: ObjectStampSource): boolean {
+    if (lockedObjectIds.value.has(source.sourceId)) return false
+    const scene = this._deps.getSceneStore().persisted
+    if (source.kind === 'plant') {
+      const layer = scene.layers.find((entry) => entry.name === 'plants')
+      return layer?.visible !== false && layer?.locked !== true
+    }
+    return false
+  }
+
+  private _updateObjectStampPreview(anchorWorld: ScenePoint): void {
+    const source = this._objectStampSource
+    if (!source) {
+      hideInteractionPreview(this._preview)
+      return
+    }
+
+    if (source.kind === 'plant') {
+      const previewPlant = clonePlantForObjectStamp(source.plant)
+      previewPlant.position = {
+        x: anchorWorld.x - source.anchorOffset.x,
+        y: anchorWorld.y - source.anchorOffset.y,
+      }
+      const bounds = getPlantWorldBounds(
+        previewPlant,
+        this._deps.getPlantPresentationContext(this._deps.camera.viewport.scale),
+      )
+      showInteractionPreview(
+        this._preview,
+        'ellipse',
+        this._deps.camera.worldToScreen({ x: bounds.x, y: bounds.y }),
+        this._deps.camera.worldToScreen({
+          x: bounds.x + bounds.width,
+          y: bounds.y + bounds.height,
+        }),
+      )
+    }
+  }
+
+  private _clearObjectStampSource(): void {
+    this._objectStampSource = null
+    hideInteractionPreview(this._preview)
+  }
+
+  private _switchTool(name: string): void {
+    this._deps.setTool(name)
+    if (this._tool !== name) this.setTool(name)
+  }
+
   private _handleTextPointerDown(world: ScenePoint): void {
     if (this._textarea) {
       this._commitText()
@@ -823,4 +971,11 @@ export class SceneInteractionController {
 
 function pointsEqual(a: ScenePoint, b: ScenePoint): boolean {
   return Math.abs(a.x - b.x) < 0.0001 && Math.abs(a.y - b.y) < 0.0001
+}
+
+function clonePlantForObjectStamp(plant: ScenePlantEntity): ScenePlantEntity {
+  return {
+    ...plant,
+    position: { ...plant.position },
+  }
 }

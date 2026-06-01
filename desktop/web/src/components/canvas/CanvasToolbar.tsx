@@ -29,6 +29,7 @@ import {
   EllipseIcon,
   PolygonIcon,
   TextIcon,
+  ObjectStampIcon,
   GridIcon,
   SnapIcon,
   RulerIcon,
@@ -52,6 +53,7 @@ interface ToolDef {
 const TOOLS: ToolDef[] = [
   { id: 'select',      labelKey: 'canvas.tools.select',      descKey: 'canvas.tools.selectDesc',      shortcut: 'V', Icon: SelectIcon },
   { id: 'hand',        labelKey: 'canvas.tools.hand',        descKey: 'canvas.tools.handDesc',        shortcut: 'H', Icon: HandIcon },
+  { id: 'object-stamp', labelKey: 'canvas.tools.objectStamp', descKey: 'canvas.tools.objectStampDesc', Icon: ObjectStampIcon },
 ]
 
 const SHAPE_TOOLS: ToolDef[] = [

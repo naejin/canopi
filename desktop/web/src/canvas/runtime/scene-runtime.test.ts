@@ -621,6 +621,46 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
+  it('records Object Stamp plant placement in history without replacing the clipboard', async () => {
+    const runtime = new SceneCanvasRuntime()
+    const { container } = await initRuntimeWithStubbedRenderer(runtime)
+    Object.defineProperty(container, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({
+        left: 0,
+        top: 0,
+        right: 400,
+        bottom: 300,
+        width: 400,
+        height: 300,
+      }),
+    })
+    runtime.loadDocument(makeFile())
+    ;(runtime as any)._camera.setViewport({ x: 0, y: 0, scale: 1 })
+    runtime.getSceneStore().setViewport({ x: 0, y: 0, scale: 1 })
+
+    runtime.setSelection(['plant-2'])
+    runtime.copy()
+    runtime.setTool('object-stamp')
+
+    const interaction = (runtime as any)._interaction
+    interaction._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
+    interaction._onPointerDown(new MouseEvent('pointerdown', { clientX: 30, clientY: 30, button: 0 }))
+
+    expect(runtime.getSceneStore().persisted.plants).toHaveLength(3)
+    const stampedId = runtime.getSceneStore().persisted.plants[2]!.id
+    expect(selectedObjectIds.value).toEqual(new Set([stampedId]))
+
+    runtime.undo()
+    expect(runtime.getSceneStore().persisted.plants).toHaveLength(2)
+
+    runtime.paste()
+    const pasted = runtime.getSceneStore().persisted.plants[2]!
+    expect(pasted.canonicalName).toBe('Malus domestica')
+    expect(pasted.position).toEqual({ x: 40, y: 40 })
+    runtime.destroy()
+  })
+
   it('invalidates the scene after select-all and lock mutations', () => {
     const runtime = new SceneCanvasRuntime()
     runtime.loadDocument(makeFile())

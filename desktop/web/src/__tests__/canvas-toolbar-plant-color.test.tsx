@@ -136,6 +136,24 @@ describe('CanvasToolbar', () => {
     expect(setTool).toHaveBeenCalledWith('polygon')
   })
 
+  it('exposes Object Stamp in the toolbar', async () => {
+    await act(async () => {
+      render(<CanvasToolbar />, container)
+      await Promise.resolve()
+    })
+
+    const button = container.querySelector<HTMLButtonElement>('button[data-tool="object-stamp"]')
+    expect(button).not.toBeNull()
+    expect(button?.getAttribute('aria-label')).toBe('Object Stamp')
+
+    await act(async () => {
+      button?.click()
+      await Promise.resolve()
+    })
+
+    expect(setTool).toHaveBeenCalledWith('object-stamp')
+  })
+
   it('shows undo and redo command buttons disabled when history is unavailable', async () => {
     await act(async () => {
       render(<CanvasToolbar />, container)

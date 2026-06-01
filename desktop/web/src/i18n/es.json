@@ -100,6 +100,8 @@
       "measureDesc": "Medir distancias",
       "plantStamp": "Sello de planta",
       "plantStampDesc": "Colocar plantas desde la base de datos",
+      "objectStamp": "Sello de objeto",
+      "objectStampDesc": "Copiar objetos de diseño existentes",
       "dimension": "Cota",
       "dimensionDesc": "Medir distancia entre puntos o formas",
       "patternFill": "Relleno de patrón",
