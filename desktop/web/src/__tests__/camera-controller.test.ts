@@ -111,6 +111,29 @@ describe('computeSceneBounds', () => {
     })
   })
 
+  it('includes elliptical zone center and radii geometry', () => {
+    const scene = createScene()
+    scene.plants = []
+    scene.zones = [{
+      kind: 'zone',
+      name: 'ellipse-1',
+      zoneType: 'ellipse',
+      points: [
+        { x: 50, y: 60 },
+        { x: 30, y: 20 },
+      ],
+      fillColor: null,
+      notes: null,
+    }]
+
+    expect(computeSceneBounds(scene)).toEqual({
+      minX: 20,
+      minY: 40,
+      maxX: 80,
+      maxY: 80,
+    })
+  })
+
   it('includes annotation extents instead of only the annotation anchor point', () => {
     const scene = createScene()
     scene.annotations = [{

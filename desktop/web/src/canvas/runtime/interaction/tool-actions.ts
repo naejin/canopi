@@ -53,6 +53,31 @@ export function appendRectangleZoneToDraft(
   return zoneName
 }
 
+export function appendEllipseZoneToDraft(
+  draft: ScenePersistedState,
+  rect: SceneRect,
+): string | null {
+  if (rect.width < 0.5 || rect.height < 0.5) return null
+
+  const zoneId = createUuid()
+  const zoneName = `zone-${zoneId}`
+  draft.zones = [
+    ...draft.zones,
+    {
+      kind: 'zone',
+      name: zoneName,
+      zoneType: 'ellipse',
+      points: [
+        { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 },
+        { x: rect.width / 2, y: rect.height / 2 },
+      ],
+      fillColor: null,
+      notes: null,
+    },
+  ]
+  return zoneName
+}
+
 export function appendDroppedPlant(
   store: SceneStore,
   payload: PlantDropPayload,

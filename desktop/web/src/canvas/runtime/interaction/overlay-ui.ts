@@ -1,7 +1,7 @@
 import { computeSelectionRect } from '../../operations'
 import type { ScenePoint } from '../scene'
 
-export type InteractionPreviewMode = 'band' | 'rectangle'
+export type InteractionPreviewMode = 'band' | 'rectangle' | 'ellipse'
 
 export function createInteractionPreview(container: HTMLElement): HTMLDivElement {
   const preview = document.createElement('div')
@@ -32,8 +32,9 @@ export function showInteractionPreview(
     top: `${rect.y}px`,
     width: `${rect.width}px`,
     height: `${rect.height}px`,
-    borderStyle: mode === 'rectangle' ? 'solid' : 'dashed',
-    background: mode === 'rectangle' ? 'var(--color-overlay-rect-bg)' : 'var(--color-overlay-band-bg)',
+    borderStyle: mode === 'band' ? 'dashed' : 'solid',
+    borderRadius: mode === 'ellipse' ? '50%' : '0',
+    background: mode === 'band' ? 'var(--color-overlay-band-bg)' : 'var(--color-overlay-rect-bg)',
   })
 }
 

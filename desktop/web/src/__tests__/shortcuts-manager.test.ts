@@ -36,6 +36,18 @@ describe('shortcut manager canvas tool switching', () => {
     expect(activeTool.value).toBe('rectangle')
   })
 
+  it('routes the ellipse tool shortcut through the live canvas session', () => {
+    const setTool = vi.fn()
+    setCurrentCanvasSession({
+      setTool,
+    } as any)
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e' }))
+
+    expect(setTool).toHaveBeenCalledWith('ellipse')
+    expect(activeTool.value).toBe('ellipse')
+  })
+
   it('falls back to priming the mirror tool state before session mount', () => {
     setCurrentCanvasSession(null)
 

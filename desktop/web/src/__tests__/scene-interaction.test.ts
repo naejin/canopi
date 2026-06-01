@@ -227,6 +227,134 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('creates an elliptical zone from the ellipse tool drag', () => {
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('ellipse')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 20, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 70, clientY: 100, button: 0 }))
+
+    const preview = Array.from(container.children)
+      .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
+    expect(preview?.style.borderRadius).toBe('50%')
+
+    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 70, clientY: 100, button: 0 }))
+
+    expect(store.persisted.zones).toHaveLength(1)
+    expect(store.persisted.zones[0]).toMatchObject({
+      zoneType: 'ellipse',
+      points: [
+        { x: 40, y: 60 },
+        { x: 30, y: 40 },
+      ],
+    })
+    expect(store.toCanopiFile().zones[0]).toMatchObject({
+      zone_type: 'ellipse',
+      points: [
+        { x: 40, y: 60 },
+        { x: 30, y: 40 },
+      ],
+    })
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-ellipse')
+    expect(deps.setSelection).toHaveBeenCalledTimes(1)
+    controller.dispose()
+  })
+
+  it('normalizes elliptical zone drags in any direction', () => {
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('ellipse')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 110, clientY: 90, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 10, clientY: 10, button: 0 }))
+    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 10, clientY: 10, button: 0 }))
+
+    expect(store.persisted.zones[0]).toMatchObject({
+      zoneType: 'ellipse',
+      points: [
+        { x: 60, y: 50 },
+        { x: 50, y: 40 },
+      ],
+    })
+    controller.dispose()
+  })
+
+  it('previews and commits elliptical zones from snap-adjusted grid points', () => {
+    // At scale=4, gridInterval() returns 5m.
+    camera.setViewport({ x: 0, y: 0, scale: 4 })
+    snapToGridEnabled.value = true
+
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('ellipse')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 43, clientY: 87, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 148, clientY: 254, button: 0 }))
+
+    const preview = Array.from(container.children)
+      .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
+    expect(preview?.style.left).toBe('40px')
+    expect(preview?.style.top).toBe('80px')
+    expect(preview?.style.width).toBe('100px')
+    expect(preview?.style.height).toBe('180px')
+    expect(preview?.style.borderRadius).toBe('50%')
+
+    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 148, clientY: 254, button: 0 }))
+
+    expect(store.persisted.zones[0]).toMatchObject({
+      zoneType: 'ellipse',
+      points: [
+        { x: 22.5, y: 42.5 },
+        { x: 12.5, y: 22.5 },
+      ],
+    })
+    controller.dispose()
+  })
+
+  it('does not commit too-small elliptical zones', () => {
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('ellipse')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 10.2, clientY: 10.4, button: 0 }))
+    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 10.2, clientY: 10.4, button: 0 }))
+
+    expect(store.persisted.zones).toHaveLength(0)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    controller.dispose()
+  })
+
+  it('selects elliptical zones through ellipse hit testing', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [{
+        kind: 'zone',
+        name: 'zone-ellipse',
+        zoneType: 'ellipse',
+        points: [
+          { x: 50, y: 50 },
+          { x: 30, y: 20 },
+        ],
+        fillColor: null,
+        notes: null,
+      }]
+    })
+
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 50, clientY: 50, button: 0 }))
+    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 50, clientY: 50, button: 0 }))
+
+    expect(selectedObjectIds.value).toEqual(new Set(['zone-ellipse']))
+    expect(deps.setSelection).toHaveBeenCalledWith(new Set(['zone-ellipse']))
+    controller.dispose()
+  })
+
   it('previews and commits rectangle zones from snap-adjusted grid points', () => {
     // At scale=4, gridInterval() returns 5m.
     camera.setViewport({ x: 0, y: 0, scale: 4 })

@@ -58,6 +58,20 @@ describe('command registry canvas tool switching', () => {
     expect(activeTool.value).toBe('hand')
   })
 
+  it('exposes the ellipse tool through the shared command graph', () => {
+    const setTool = vi.fn()
+    setCurrentCanvasSession({
+      setTool,
+    } as any)
+
+    getCommand('canvas.tool.ellipse').action()
+
+    expect(getCommand('canvas.tool.ellipse').shortcut).toBe('E')
+    expect(activePanel.value).toBe('canvas')
+    expect(setTool).toHaveBeenCalledWith('ellipse')
+    expect(activeTool.value).toBe('ellipse')
+  })
+
   it('falls back to priming the mirror tool state when no session is mounted', () => {
     getCommand('canvas.tool.text').action()
 

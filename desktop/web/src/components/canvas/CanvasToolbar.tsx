@@ -19,6 +19,7 @@ import {
   SelectIcon,
   HandIcon,
   RectangleIcon,
+  EllipseIcon,
   TextIcon,
   GridIcon,
   SnapIcon,
@@ -46,6 +47,7 @@ const TOOLS: ToolDef[] = [
 
 const SHAPE_TOOLS: ToolDef[] = [
   { id: 'rectangle',   labelKey: 'canvas.tools.rectangle',   descKey: 'canvas.tools.rectangleDesc',   shortcut: 'R', Icon: RectangleIcon },
+  { id: 'ellipse',     labelKey: 'canvas.tools.ellipse',     descKey: 'canvas.tools.ellipseDesc',     shortcut: 'E', Icon: EllipseIcon },
   { id: 'text',        labelKey: 'canvas.tools.text',        descKey: 'canvas.tools.textDesc',        shortcut: 'T', Icon: TextIcon },
 ]
 

@@ -83,6 +83,7 @@ export type AppCommandId =
   | 'canvas.tool.select'
   | 'canvas.tool.hand'
   | 'canvas.tool.rectangle'
+  | 'canvas.tool.ellipse'
   | 'canvas.tool.text'
   | 'canvas.copy'
   | 'canvas.paste'
@@ -122,6 +123,7 @@ const TOOL_COMMAND_IDS: Record<string, AppCommandId> = {
   select: 'canvas.tool.select',
   hand: 'canvas.tool.hand',
   rectangle: 'canvas.tool.rectangle',
+  ellipse: 'canvas.tool.ellipse',
   text: 'canvas.tool.text',
 }
 
@@ -324,6 +326,13 @@ const APP_COMMANDS: readonly AppCommandDefinition[] = [
     shortcut: TOOL_SHORTCUTS.rectangle,
     palette: true,
     run: () => switchTool('rectangle'),
+  },
+  {
+    id: 'canvas.tool.ellipse',
+    label: () => t('canvas.tools.ellipse'),
+    shortcut: TOOL_SHORTCUTS.ellipse,
+    palette: true,
+    run: () => switchTool('ellipse'),
   },
   {
     id: 'canvas.tool.text',

@@ -9,11 +9,13 @@ import { selectedObjectIds } from '../canvas/session-state'
 describe('CanvasToolbar plant color action', () => {
   let container: HTMLDivElement
   const getSelectedPlantColorContext = vi.fn()
+  const setTool = vi.fn()
 
   beforeEach(() => {
     container = document.createElement('div')
     document.body.innerHTML = ''
     document.body.appendChild(container)
+    setTool.mockReset()
     selectedObjectIds.value = new Set()
     plantColorMenuOpen.value = false
     getSelectedPlantColorContext.mockImplementation(() => {
@@ -37,7 +39,7 @@ describe('CanvasToolbar plant color action', () => {
       }
     })
     setCurrentCanvasSession({
-      setTool: vi.fn(),
+      setTool,
       getSelectedPlantColorContext,
       ensureSpeciesCacheEntries: vi.fn().mockResolvedValue(false),
       toggleGrid: vi.fn(),
@@ -81,5 +83,23 @@ describe('CanvasToolbar plant color action', () => {
 
     expect(plantColorMenuOpen.value).toBe(true)
     expect(container.querySelector('[role="dialog"]')).not.toBeNull()
+  })
+
+  it('exposes the ellipse shape tool in the toolbar', async () => {
+    await act(async () => {
+      render(<CanvasToolbar />, container)
+      await Promise.resolve()
+    })
+
+    const button = container.querySelector<HTMLButtonElement>('button[data-tool="ellipse"]')
+    expect(button).not.toBeNull()
+    expect(button?.getAttribute('aria-keyshortcuts')).toBe('E')
+
+    await act(async () => {
+      button?.click()
+      await Promise.resolve()
+    })
+
+    expect(setTool).toHaveBeenCalledWith('ellipse')
   })
 })

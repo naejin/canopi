@@ -33,6 +33,7 @@ import {
 } from './interaction/zone-measurement-overlay'
 import { cursorForTool, hasAdditiveModifier, isEditableTarget } from './interaction/pointer-utils'
 import {
+  appendEllipseZoneToDraft,
   appendDroppedPlantToDraft,
   appendRectangleZoneToDraft,
   appendTextAnnotationToDraft,
@@ -68,7 +69,7 @@ export class SceneInteractionController {
   private readonly _tooltip: HoverTooltipController
   private readonly _zoneMeasurements: ZoneMeasurementOverlayController
   private _tool: InteractionTool = 'select'
-  private _mode: 'idle' | 'panning' | 'dragging' | 'band' | 'rectangle' = 'idle'
+  private _mode: 'idle' | 'panning' | 'dragging' | 'band' | 'rectangle' | 'ellipse' = 'idle'
   private _pointerId: number | null = null
   private _startScreen: ScenePoint | null = null
   private _startWorld: ScenePoint | null = null
@@ -168,12 +169,13 @@ export class SceneInteractionController {
 
     if (this._tool === 'rectangle') {
       event.preventDefault()
-      const snappedWorld = this._applySnapping(world)
-      const snappedScreen = this._deps.camera.worldToScreen(snappedWorld)
-      this._startWorld = snappedWorld
-      this._startScreen = snappedScreen
-      this._mode = 'rectangle'
-      showInteractionPreview(this._preview, 'rectangle', snappedScreen, snappedScreen)
+      this._beginBoxZoneDrawing('rectangle', world)
+      return
+    }
+
+    if (this._tool === 'ellipse') {
+      event.preventDefault()
+      this._beginBoxZoneDrawing('ellipse', world)
       return
     }
 
@@ -302,14 +304,15 @@ export class SceneInteractionController {
       return
     }
 
-    if (this._mode === 'band' || this._mode === 'rectangle') {
-      const endWorld = this._mode === 'rectangle' ? this._applySnapping(rawWorld) : rawWorld
-      const endScreen = this._mode === 'rectangle'
+    if (this._mode === 'band' || this._mode === 'rectangle' || this._mode === 'ellipse') {
+      const isBoxZone = this._mode === 'rectangle' || this._mode === 'ellipse'
+      const endWorld = isBoxZone ? this._applySnapping(rawWorld) : rawWorld
+      const endScreen = isBoxZone
         ? this._deps.camera.worldToScreen(endWorld)
         : screen
       showInteractionPreview(
         this._preview,
-        this._mode === 'rectangle' ? 'rectangle' : 'band',
+        isBoxZone ? this._mode : 'band',
         this._startScreen,
         endScreen,
       )
@@ -362,6 +365,19 @@ export class SceneInteractionController {
           let zoneName: string | null = null
           tx.mutate((draft) => {
             zoneName = appendRectangleZoneToDraft(draft, rect)
+          })
+          if (zoneName) tx.setSelection([zoneName])
+        })
+      }
+    }
+
+    if (this._mode === 'ellipse' && this._startWorld) {
+      const rect = computeSelectionRect(this._startWorld, this._applySnapping(rawWorld))
+      if (rect.width >= 0.5 && rect.height >= 0.5) {
+        this._deps.sceneEdits.run('interaction-ellipse', (tx) => {
+          let zoneName: string | null = null
+          tx.mutate((draft) => {
+            zoneName = appendEllipseZoneToDraft(draft, rect)
           })
           if (zoneName) tx.setSelection([zoneName])
         })
@@ -447,6 +463,15 @@ export class SceneInteractionController {
     this._bandAdditive = false
     hideInteractionPreview(this._preview)
     this._deps.container.style.cursor = cursorForTool(this._tool)
+  }
+
+  private _beginBoxZoneDrawing(mode: 'rectangle' | 'ellipse', world: ScenePoint): void {
+    const snappedWorld = this._applySnapping(world)
+    const snappedScreen = this._deps.camera.worldToScreen(snappedWorld)
+    this._startWorld = snappedWorld
+    this._startScreen = snappedScreen
+    this._mode = mode
+    showInteractionPreview(this._preview, mode, snappedScreen, snappedScreen)
   }
 
   private _updateDraftRectangleMeasurements(startWorld: ScenePoint, endWorld: ScenePoint): void {

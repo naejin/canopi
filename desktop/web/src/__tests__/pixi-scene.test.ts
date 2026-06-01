@@ -200,4 +200,75 @@ describe('createPixiSceneRenderer', () => {
 
     renderer.dispose()
   })
+
+  it('renders elliptical zones from center and radii geometry', async () => {
+    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
+    const pixi = await import('pixi.js') as unknown as {
+      __pixiMockState: {
+        graphics: Array<{ ellipse: ReturnType<typeof vi.fn> }>
+      }
+    }
+
+    const host = document.createElement('div')
+    Object.defineProperty(host, 'clientWidth', { configurable: true, value: 400 })
+    Object.defineProperty(host, 'clientHeight', { configurable: true, value: 300 })
+
+    const renderer = await createPixiSceneRenderer().initialize({ container: host }, {
+      backendId: 'pixi',
+      capabilities: {
+        domCanvas: true,
+        canvas2d: true,
+        offscreenCanvas: false,
+        offscreenCanvas2d: false,
+        webgl: true,
+        webgl2: true,
+        webgpu: false,
+        imageBitmap: false,
+        createImageBitmap: false,
+        worker: false,
+        devicePixelRatio: 1,
+        prefersReducedMotion: null,
+      },
+    } as never)
+
+    const snapshot: SceneRendererSnapshot = {
+      scene: {
+        plants: [],
+        zones: [{
+          kind: 'zone',
+          name: 'ellipse-1',
+          zoneType: 'ellipse',
+          points: [
+            { x: 50, y: 60 },
+            { x: 30, y: 20 },
+          ],
+          fillColor: null,
+          notes: null,
+        }],
+        annotations: [],
+        groups: [],
+        layers: [],
+        plantSpeciesColors: {},
+        guides: [],
+      },
+      viewport: { x: 0, y: 0, scale: 1 },
+      selectedPlantIds: new Set<string>(),
+      selectedZoneIds: new Set<string>(),
+      selectedAnnotationIds: new Set<string>(),
+      highlightedPlantIds: new Set<string>(),
+      highlightedZoneIds: new Set<string>(),
+      sizeMode: 'default' as const,
+      colorByAttr: null,
+      localizedCommonNames: new Map(),
+      hoveredCanonicalName: null,
+      selectionLabels: [],
+      speciesCache: new Map(),
+    }
+
+    renderer.renderScene(snapshot)
+
+    const ellipseGraphic = pixi.__pixiMockState.graphics.find((graphics) => graphics.ellipse.mock.calls.length > 0)
+    expect(ellipseGraphic?.ellipse).toHaveBeenCalledWith(50, 60, 30, 20)
+    renderer.dispose()
+  })
 })
