@@ -2,6 +2,7 @@ use common_types::health::SubsystemHealth;
 use common_types::settings::Settings;
 use common_types::support::{ProblemReportRequest, ProblemReportResult};
 use serde_json::json;
+use std::cmp::Reverse;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -493,7 +494,7 @@ impl Redactions {
             push_redaction(&mut known_paths, &path, "<home-dir>");
         }
 
-        known_paths.sort_by(|left, right| right.0.len().cmp(&left.0.len()));
+        known_paths.sort_by_key(|path| Reverse(path.0.len()));
         Self { known_paths }
     }
 
