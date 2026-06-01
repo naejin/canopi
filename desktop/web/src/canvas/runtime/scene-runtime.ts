@@ -473,6 +473,9 @@ export class SceneCanvasRuntime implements MountedCanvasRuntime {
 
   private _invalidate(kind: RuntimeInvalidationKind = 'scene'): void {
     this._rendering.invalidate(kind as SceneRuntimeRenderKind)
+    if (kind === 'scene' || kind === 'viewport') {
+      this._interaction?.refreshMeasurements()
+    }
   }
 
   private _currentPresentationRevision(): number {

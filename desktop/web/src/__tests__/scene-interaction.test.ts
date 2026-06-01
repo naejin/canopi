@@ -103,6 +103,11 @@ function withoutNativeRandomUUID(action: () => void): void {
   }
 }
 
+function zoneMeasurementTexts(container: HTMLElement): string[] {
+  return Array.from(container.querySelectorAll('[data-zone-measurement-label]'))
+    .map((label) => label.textContent ?? '')
+}
+
 describe('SceneInteractionController', () => {
   let container: HTMLDivElement
   let camera: CameraController
@@ -293,6 +298,214 @@ describe('SceneInteractionController', () => {
         { x: 12, y: 61 },
       ],
     })
+    controller.dispose()
+  })
+
+  it('shows live rectangle zone measurements while drawing without persisting them', () => {
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('rectangle')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 20, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 70, clientY: 100, button: 0 }))
+
+    expect(zoneMeasurementTexts(container)).toEqual([
+      '60 m',
+      '80 m',
+      '60 m',
+      '80 m',
+      '4800 m²',
+    ])
+    expect(store.persisted.annotations).toHaveLength(0)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    controller.dispose()
+  })
+
+  it('shows rectangle zone measurements when one top-level zone is selected', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [{
+        kind: 'zone',
+        name: 'zone-1',
+        zoneType: 'rect',
+        points: [
+          { x: 10, y: 10 },
+          { x: 110, y: 10 },
+          { x: 110, y: 90 },
+          { x: 10, y: 90 },
+        ],
+        fillColor: null,
+        notes: null,
+      }]
+    })
+
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 20, button: 0 }))
+    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 20, clientY: 20, button: 0 }))
+
+    expect(selectedObjectIds.value).toEqual(new Set(['zone-1']))
+    expect(zoneMeasurementTexts(container)).toEqual([
+      '100 m',
+      '80 m',
+      '100 m',
+      '80 m',
+      '8000 m²',
+    ])
+    controller.dispose()
+  })
+
+  it('suppresses rectangle zone measurements for multi-selection', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [
+        {
+          kind: 'zone',
+          name: 'zone-1',
+          zoneType: 'rect',
+          points: [
+            { x: 10, y: 10 },
+            { x: 110, y: 10 },
+            { x: 110, y: 90 },
+            { x: 10, y: 90 },
+          ],
+          fillColor: null,
+          notes: null,
+        },
+        {
+          kind: 'zone',
+          name: 'zone-2',
+          zoneType: 'rect',
+          points: [
+            { x: 150, y: 10 },
+            { x: 250, y: 10 },
+            { x: 250, y: 90 },
+            { x: 150, y: 90 },
+          ],
+          fillColor: null,
+          notes: null,
+        },
+      ]
+    })
+
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 20, button: 0 }))
+    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 20, clientY: 20, button: 0 }))
+    expect(zoneMeasurementTexts(container)).not.toEqual([])
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', {
+      clientX: 160,
+      clientY: 20,
+      button: 0,
+      shiftKey: true,
+    }))
+    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 160, clientY: 20, button: 0 }))
+
+    expect(selectedObjectIds.value).toEqual(new Set(['zone-1', 'zone-2']))
+    expect(zoneMeasurementTexts(container)).toEqual([])
+    controller.dispose()
+  })
+
+  it('suppresses rectangle zone measurements for group selection', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [{
+        kind: 'zone',
+        name: 'zone-1',
+        zoneType: 'rect',
+        points: [
+          { x: 10, y: 10 },
+          { x: 110, y: 10 },
+          { x: 110, y: 90 },
+          { x: 10, y: 90 },
+        ],
+        fillColor: null,
+        notes: null,
+      }]
+      draft.groups = [{
+        kind: 'group',
+        id: 'group-1',
+        name: null,
+        layer: 'zones',
+        position: { x: 0, y: 0 },
+        rotationDeg: null,
+        memberIds: ['zone-1'],
+      }]
+    })
+
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 20, button: 0 }))
+    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 20, clientY: 20, button: 0 }))
+
+    expect(selectedObjectIds.value).toEqual(new Set(['group-1']))
+    expect(zoneMeasurementTexts(container)).toEqual([])
+    controller.dispose()
+  })
+
+  it('hides short rectangle edge measurements while keeping the area visible', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [{
+        kind: 'zone',
+        name: 'zone-1',
+        zoneType: 'rect',
+        points: [
+          { x: 10, y: 10 },
+          { x: 30, y: 10 },
+          { x: 30, y: 110 },
+          { x: 10, y: 110 },
+        ],
+        fillColor: null,
+        notes: null,
+      }]
+    })
+
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 20, button: 0 }))
+    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 20, clientY: 20, button: 0 }))
+
+    expect(zoneMeasurementTexts(container)).toEqual([
+      '100 m',
+      '100 m',
+      '2000 m²',
+    ])
+    controller.dispose()
+  })
+
+  it('suppresses selected rectangle zone measurements when the zones layer is hidden', () => {
+    store.updatePersisted((draft) => {
+      const zonesLayer = draft.layers.find((layer) => layer.name === 'zones')
+      if (zonesLayer) zonesLayer.visible = false
+      draft.zones = [{
+        kind: 'zone',
+        name: 'zone-1',
+        zoneType: 'rect',
+        points: [
+          { x: 10, y: 10 },
+          { x: 110, y: 10 },
+          { x: 110, y: 90 },
+          { x: 10, y: 90 },
+        ],
+        fillColor: null,
+        notes: null,
+      }]
+    })
+
+    const deps = createInteractionDeps(container, store, camera)
+    deps.setSelection(['zone-1'])
+    const controller = new SceneInteractionController(deps as any)
+
+    controller.refreshMeasurements()
+
+    expect(zoneMeasurementTexts(container)).toEqual([])
     controller.dispose()
   })
 

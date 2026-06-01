@@ -27,6 +27,10 @@ import {
   hideInteractionPreview,
   showInteractionPreview,
 } from './interaction/overlay-ui'
+import {
+  createZoneMeasurementOverlay,
+  type ZoneMeasurementOverlayController,
+} from './interaction/zone-measurement-overlay'
 import { cursorForTool, hasAdditiveModifier, isEditableTarget } from './interaction/pointer-utils'
 import {
   appendDroppedPlantToDraft,
@@ -34,6 +38,10 @@ import {
   appendTextAnnotationToDraft,
   parsePlantDropPayload,
 } from './interaction/tool-actions'
+import {
+  createRectangularZoneMeasurements,
+  createRectangularZoneMeasurementsFromRect,
+} from './zone-measurements'
 import type { SceneEditCoordinator, SceneEditTransaction } from './scene-runtime/transactions'
 
 type InteractionTool = 'select' | 'hand' | 'rectangle' | 'text' | 'plant-stamp' | string
@@ -58,6 +66,7 @@ export interface SceneInteractionDeps {
 export class SceneInteractionController {
   private readonly _preview: HTMLDivElement
   private readonly _tooltip: HoverTooltipController
+  private readonly _zoneMeasurements: ZoneMeasurementOverlayController
   private _tool: InteractionTool = 'select'
   private _mode: 'idle' | 'panning' | 'dragging' | 'band' | 'rectangle' = 'idle'
   private _pointerId: number | null = null
@@ -78,6 +87,7 @@ export class SceneInteractionController {
   constructor(private readonly _deps: SceneInteractionDeps) {
     this._preview = createInteractionPreview(this._deps.container)
     this._tooltip = createHoverTooltip(this._deps.container)
+    this._zoneMeasurements = createZoneMeasurementOverlay(this._deps.container)
     this.setTool(getCanvasTool())
     this._attach()
   }
@@ -100,7 +110,12 @@ export class SceneInteractionController {
     this._deps.setHoveredEntityId(null)
     this._removeTextarea()
     this._preview.remove()
+    this._zoneMeasurements.dispose()
     this._tooltip.dispose()
+  }
+
+  refreshMeasurements(): void {
+    this._refreshSelectedZoneMeasurements()
   }
 
   private _attach(): void {
@@ -270,6 +285,7 @@ export class SceneInteractionController {
       }))
       this._startScreen = screen
       this._deps.render('viewport')
+      this._refreshSelectedZoneMeasurements()
       return
     }
 
@@ -282,12 +298,14 @@ export class SceneInteractionController {
         applySceneDragDeltaToDraft(draft, this._dragState, delta)
       })
       this._deps.render('scene')
+      this._refreshSelectedZoneMeasurements()
       return
     }
 
     if (this._mode === 'band' || this._mode === 'rectangle') {
+      const endWorld = this._mode === 'rectangle' ? this._applySnapping(rawWorld) : rawWorld
       const endScreen = this._mode === 'rectangle'
-        ? this._deps.camera.worldToScreen(this._applySnapping(rawWorld))
+        ? this._deps.camera.worldToScreen(endWorld)
         : screen
       showInteractionPreview(
         this._preview,
@@ -295,6 +313,9 @@ export class SceneInteractionController {
         this._startScreen,
         endScreen,
       )
+      if (this._mode === 'rectangle') {
+        this._updateDraftRectangleMeasurements(this._startWorld, endWorld)
+      }
     }
   }
 
@@ -348,6 +369,7 @@ export class SceneInteractionController {
     }
 
     this._cancelTransientInteraction()
+    this._refreshSelectedZoneMeasurements()
   }
 
   private readonly _onWheel = (event: WheelEvent): void => {
@@ -356,6 +378,7 @@ export class SceneInteractionController {
     const factor = event.deltaY < 0 ? 1.1 : 1 / 1.1
     this._deps.setViewport(this._deps.camera.zoomAroundScreenPoint(screen, factor))
     this._deps.render('viewport')
+    this._refreshSelectedZoneMeasurements()
   }
 
   private readonly _onDragOver = (event: DragEvent): void => {
@@ -424,6 +447,45 @@ export class SceneInteractionController {
     this._bandAdditive = false
     hideInteractionPreview(this._preview)
     this._deps.container.style.cursor = cursorForTool(this._tool)
+  }
+
+  private _updateDraftRectangleMeasurements(startWorld: ScenePoint, endWorld: ScenePoint): void {
+    const rect = computeSelectionRect(startWorld, endWorld)
+    this._zoneMeasurements.update(
+      createRectangularZoneMeasurementsFromRect(rect),
+      this._deps.camera,
+    )
+  }
+
+  private _refreshSelectedZoneMeasurements(): void {
+    const selection = Array.from(this._deps.getSelection())
+    if (selection.length !== 1) {
+      this._zoneMeasurements.hide()
+      return
+    }
+
+    const selectedId = selection[0]!
+    const scene = this._deps.getSceneStore().persisted
+    const zonesLayer = scene.layers.find((entry) => entry.name === 'zones')
+    if (zonesLayer?.visible === false) {
+      this._zoneMeasurements.hide()
+      return
+    }
+    if (scene.groups.some((group) => group.id === selectedId || group.memberIds.includes(selectedId))) {
+      this._zoneMeasurements.hide()
+      return
+    }
+
+    const zone = scene.zones.find((entry) => entry.name === selectedId)
+    if (!zone || zone.zoneType !== 'rect') {
+      this._zoneMeasurements.hide()
+      return
+    }
+
+    this._zoneMeasurements.update(
+      createRectangularZoneMeasurements(zone.points),
+      this._deps.camera,
+    )
   }
 
   /** Snap a world-space point to grid and/or guides. Used for placement (stamp, text). */

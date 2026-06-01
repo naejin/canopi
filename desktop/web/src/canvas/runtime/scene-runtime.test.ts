@@ -120,6 +120,11 @@ async function initRuntimeWithStubbedRenderer(runtime: SceneCanvasRuntime) {
   return { container, renderer }
 }
 
+function zoneMeasurementTexts(container: HTMLElement): string[] {
+  return Array.from(container.querySelectorAll('[data-zone-measurement-label]'))
+    .map((label) => label.textContent ?? '')
+}
+
 function createRuntimeWithAppPanelTargets(): SceneCanvasRuntime {
   return new SceneCanvasRuntime({
     targetPresentation: createAppSceneRuntimePanelTargetAdapter(),
@@ -352,6 +357,40 @@ describe('scene canvas runtime', () => {
     runtime.clearSelection()
     expect(runtime.getSceneStore().session.selectedEntityIds.size).toBe(0)
     expect(selectedObjectIds.value.size).toBe(0)
+  })
+
+  it('refreshes Zone Measurements when runtime selection changes', async () => {
+    const runtime = new SceneCanvasRuntime()
+    const file = makeFile()
+    file.zones = [{
+      name: 'zone-1',
+      zone_type: 'rect',
+      points: [
+        { x: 10, y: 10 },
+        { x: 110, y: 10 },
+        { x: 110, y: 90 },
+        { x: 10, y: 90 },
+      ],
+      fill_color: null,
+      notes: null,
+    }]
+    runtime.loadDocument(file)
+    const { container } = await initRuntimeWithStubbedRenderer(runtime)
+
+    runtime.setSelection(['zone-1'])
+
+    expect(zoneMeasurementTexts(container)).toEqual([
+      '100 m',
+      '80 m',
+      '100 m',
+      '80 m',
+      '8000 m²',
+    ])
+
+    runtime.clearSelection()
+
+    expect(zoneMeasurementTexts(container)).toEqual([])
+    runtime.destroy()
   })
 
   it('resolves hovered panel targets for renderer highlights without mutating selection', async () => {
