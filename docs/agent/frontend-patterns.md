@@ -112,6 +112,7 @@ Use this guide when changing Preact components, signals, i18n, CSS, panels, bott
 - Do not use raw `white`, `black`, or raw `rgba()` in CSS Modules. Use tokens.
 - Use only font weights `400` and `600`.
 - Use spacing, font-size, radius, control-size, slider, and transition tokens. If a component needs a one-off size, define a scoped CSS custom property.
+- Icon-only chrome buttons with hover/focus tooltips should use `components/shared/ButtonTooltip.tsx` instead of native `title`, especially in rail toolbars and panel bars where locale changes must update immediately.
 
 ## Canvas2D Components
 

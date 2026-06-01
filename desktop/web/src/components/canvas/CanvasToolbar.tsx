@@ -26,6 +26,7 @@ import {
   PaletteIcon,
 } from './toolbar-icons'
 import { PlantColorMenu } from './PlantColorMenu'
+import { ButtonTooltip } from '../shared/ButtonTooltip'
 
 import styles from './CanvasToolbar.module.css'
 
@@ -128,14 +129,7 @@ export function CanvasToolbar() {
         onClick={() => { commandSurface?.setTool(tool.id) }}
       >
         <tool.Icon className={styles.toolIcon} />
-        <span className={styles.tooltip} role="tooltip">
-          <span className={styles.tooltipName}>{label}</span>
-          {tool.shortcut && (
-            <span className={styles.tooltipShortcut}>{shortcutLabel}</span>
-          )}
-          <br />
-          <span className={styles.tooltipDesc}>{desc}</span>
-        </span>
+        <ButtonTooltip label={label} shortcut={shortcutLabel} description={desc} />
       </button>
     )
   }
@@ -163,11 +157,7 @@ export function CanvasToolbar() {
         onClick={onClick}
       >
         <Icon className={styles.toolIcon} />
-        <span className={styles.tooltip} role="tooltip">
-          <span className={styles.tooltipName}>{label}</span>
-          <br />
-          <span className={styles.tooltipDesc}>{desc}</span>
-        </span>
+        <ButtonTooltip label={label} description={desc} />
       </button>
     )
   }
@@ -193,11 +183,7 @@ export function CanvasToolbar() {
         onClick={onToggle}
       >
         <Icon className={styles.toolIcon} />
-        <span className={styles.tooltip} role="tooltip">
-          <span className={styles.tooltipName}>{label}</span>
-          <br />
-          <span className={styles.tooltipDesc}>{desc}</span>
-        </span>
+        <ButtonTooltip label={label} description={desc} />
       </button>
     )
   }

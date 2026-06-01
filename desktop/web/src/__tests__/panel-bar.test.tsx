@@ -59,4 +59,23 @@ describe('PanelBar', () => {
     expect(activePanel.value).toBe('location')
     expect(sidePanel.value).toBe(null)
   })
+
+  it('updates panel button tooltips immediately when the locale changes', async () => {
+    await act(async () => {
+      render(<PanelBar />, container)
+    })
+
+    expect(container.querySelector('button[aria-label="Design Location"] [role="tooltip"]')?.textContent)
+      .toContain('Design Location')
+
+    await act(async () => {
+      locale.value = 'fr'
+      await Promise.resolve()
+    })
+
+    const locationButton = container.querySelector('button[aria-label="Emplacement du design"]')
+    expect(locationButton).not.toBeNull()
+    expect(locationButton?.querySelector('[role="tooltip"]')?.textContent)
+      .toContain('Emplacement du design')
+  })
 })
