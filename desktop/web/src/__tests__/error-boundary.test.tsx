@@ -1,6 +1,10 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  recentFrontendDiagnostics,
+  resetFrontendDiagnosticsForTests,
+} from '../app/problem-report/diagnostics'
 import { ErrorBoundary } from '../components/shared/ErrorBoundary'
 
 function BuggyComponent(): never {
@@ -14,6 +18,7 @@ describe('ErrorBoundary', () => {
     container = document.createElement('div')
     document.body.innerHTML = ''
     document.body.appendChild(container)
+    resetFrontendDiagnosticsForTests()
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
@@ -21,6 +26,7 @@ describe('ErrorBoundary', () => {
     render(null, container)
     container.remove()
     vi.restoreAllMocks()
+    resetFrontendDiagnosticsForTests()
   })
 
   it('renders children when no error occurs', async () => {
@@ -58,5 +64,22 @@ describe('ErrorBoundary', () => {
     const details = container.querySelector('details')
     expect(details).not.toBeNull()
     expect(details!.textContent).toContain('Test error')
+  })
+
+  it('records ErrorBoundary failures for Problem Reports', async () => {
+    await act(async () => {
+      render(
+        <ErrorBoundary><BuggyComponent /></ErrorBoundary>,
+        container,
+      )
+    })
+
+    expect(recentFrontendDiagnostics()).toEqual([
+      expect.objectContaining({
+        level: 'error',
+        source: 'ErrorBoundary',
+        message: expect.stringContaining('Test error'),
+      }),
+    ])
   })
 })

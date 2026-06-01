@@ -435,7 +435,8 @@
     "toggleTheme": "Cambia tema",
     "commandPalette": "Tavolozza comandi",
     "searchPlaceholder": "Digita un comando...",
-    "noResults": "Nessun comando trovato"
+    "noResults": "Nessun comando trovato",
+    "reportProblem": "Segnala un problema"
   },
   "plantDetail": {
     "back": "Indietro",
@@ -627,7 +628,9 @@
     "edit.redo": "Ripristina",
     "view.zoomIn": "Ingrandisci",
     "view.zoomOut": "Riduci",
-    "view.fitToContent": "Adatta al contenuto"
+    "view.fitToContent": "Adatta al contenuto",
+    "help": "Aiuto",
+    "help.reportProblem": "Segnala un problema"
   },
   "titleBar": {
     "unsavedChanges": "Modifiche non salvate"
@@ -806,5 +809,32 @@
       "nextMonth": "Mese successivo",
       "chooseDate": "Scegli data"
     }
+  },
+  "problemReport": {
+    "title": "Segnala un problema",
+    "intro": "Crea un riepilogo e un pacchetto diagnostico da condividere più tardi.",
+    "descriptionLabel": "Che cosa è successo?",
+    "descriptionPlaceholder": "Descrivi cosa stavi facendo, cosa non ha funzionato e se riesci a ripeterlo.",
+    "privacyNote": "Il pacchetto diagnostico esclude per impostazione predefinita design, posizione precisa, schermate e percorsi file non filtrati.",
+    "create": "Crea rapporto",
+    "creating": "Creazione...",
+    "cancel": "Annulla",
+    "close": "Chiudi",
+    "successTitle": "Rapporto creato",
+    "successText": "I file del rapporto sono in questa cartella. Allega il pacchetto e incolla il riepilogo quando contatti il supporto.",
+    "folderPath": "Cartella",
+    "summaryFile": "Riepilogo",
+    "bundleFile": "Pacchetto",
+    "copySummary": "Copia riepilogo",
+    "copiedSummary": "Copiato",
+    "copyFailed": "Impossibile copiare il riepilogo. Il file di riepilogo resta nella cartella del rapporto.",
+    "errorTitle": "Impossibile creare il rapporto",
+    "showFolder": "Mostra cartella",
+    "showingFolder": "Apertura...",
+    "showFolderFailed": "Impossibile mostrare la cartella. Il percorso esatto resta visibile sopra.",
+    "optionalAttachments": "Allegati facoltativi",
+    "includeCurrentDesign": "Includi il design attuale",
+    "includeCurrentDesignDescription": "Aggiunge una copia .canopi con contenuti della tela, note, cronologia, budget e posizione salvata.",
+    "currentDesignUnavailable": "Nessun design attuale è disponibile da allegare."
   }
 }

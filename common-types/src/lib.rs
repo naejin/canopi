@@ -5,3 +5,4 @@ pub mod health;
 pub mod location;
 pub mod settings;
 pub mod species;
+pub mod support;

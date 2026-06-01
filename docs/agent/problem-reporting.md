@@ -1,0 +1,28 @@
+# Problem Reporting
+
+Use this guide when changing Problem Report, Report Summary, or Diagnostic Bundle behavior.
+
+## Product Boundary
+
+- Problem Reports are local-first. Do not add automatic upload, telemetry, email drafts, or GitHub issue creation unless a bead explicitly changes the support-channel decision.
+- The default Diagnostic Bundle must exclude Design contents, precise Location, screenshots, and raw filesystem paths.
+- Current Design contents may be included only through an explicit, off-by-default user consent control. When included, the bundle manifest and Report Summary must identify the sensitive attachment.
+- The user-facing artifacts are `Report Summary.txt` and `Diagnostic Bundle.zip` in a timestamped `Canopi Problem Report ...` folder. Keep this folder easy for non-technical users to find.
+- The success screen can reveal the generated folder through the narrow `show_problem_report_folder` command. Keep validation scoped to generated Problem Report folders and avoid unrestricted shell execution.
+
+## Implementation Seams
+
+- Shared IPC types live in `common-types/src/support.rs`; regenerate frontend bindings when they change.
+- Rust report assembly and privacy filtering belong in `desktop/src/services/problem_report.rs`.
+- The Tauri command should stay thin and only resolve app paths, settings, health, and runtime metadata before calling the service.
+- Native folder reveal uses fixed platform commands from Rust (`open`, `explorer`, or `xdg-open`) after service validation; tests should inject the reveal seam instead of launching a file manager.
+- Frontend entry points should go through the App Command Graph in `desktop/web/src/commands/registry.ts`; do not wire menu-only problem-report actions.
+- The dialog state lives under `desktop/web/src/app/problem-report/`.
+- Current Design attachments should be built through the document-session persistence seam so canvas-owned and document-owned state are composed the same way as saves.
+
+## UI And Testing
+
+- Follow `.interface-design/system.md`: field-notebook surfaces, ochre primary actions, borders-first depth, no green UI chrome, CSS module tokens for spacing/type/radius.
+- Add all user-visible strings to all 11 locale files.
+- Test the backend service through observable artifacts and privacy exclusions.
+- Test the frontend flow through the public dialog/command behavior, not internal component state.

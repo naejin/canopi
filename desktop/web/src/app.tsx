@@ -7,6 +7,7 @@ import { activePanel, sidePanel, sidePanelWidth } from "./app/shell/state";
 import { TitleBar } from "./components/shared/TitleBar";
 import { DegradedBanner } from "./components/shared/DegradedBanner";
 import { CommandPalette } from "./components/shared/CommandPalette";
+import { ProblemReportDialog } from "./components/shared/ProblemReportDialog";
 import { CanvasPanel } from "./components/panels/CanvasPanel";
 import { PanelBar } from "./components/panels/PanelBar";
 
@@ -129,6 +130,7 @@ export function App() {
         {(showCanvas || showLocation) && <PanelBar />}
       </div>
       <CommandPalette />
+      <ProblemReportDialog />
     </div>
   );
 }

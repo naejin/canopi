@@ -8,6 +8,11 @@ import {
   saveCurrentDesign,
 } from '../app/document-session/actions'
 import { activePanel, navigateTo, type Panel } from '../app/shell/state'
+import { problemReportDialogOpen } from '../app/problem-report/state'
+import {
+  diagnosticMessageFromError,
+  recordFrontendDiagnostic,
+} from '../app/problem-report/diagnostics'
 import { mutateSettingsProjection } from '../app/settings/projection'
 import {
   currentCanvasHasSelection,
@@ -57,7 +62,7 @@ export interface MenuDefinition {
   items: MenuEntry[]
 }
 
-type AppMenuId = 'file' | 'edit' | 'view'
+type AppMenuId = 'file' | 'edit' | 'view' | 'help'
 
 export type AppCommandId =
   | 'file.new'
@@ -70,6 +75,7 @@ export type AppCommandId =
   | 'view.zoomIn'
   | 'view.zoomOut'
   | 'view.fitToContent'
+  | 'help.reportProblem'
   | 'nav.canvas'
   | 'nav.location'
   | 'nav.plantDb'
@@ -119,7 +125,7 @@ const TOOL_COMMAND_IDS: Record<string, AppCommandId> = {
   text: 'canvas.tool.text',
 }
 
-const MENU_ORDER: readonly AppMenuId[] = ['file', 'edit', 'view']
+const MENU_ORDER: readonly AppMenuId[] = ['file', 'edit', 'view', 'help']
 const MENU_COMMAND_ORDER: Record<AppMenuId, readonly (AppCommandId | 'separator')[]> = {
   file: [
     'file.new',
@@ -132,12 +138,14 @@ const MENU_COMMAND_ORDER: Record<AppMenuId, readonly (AppCommandId | 'separator'
   ],
   edit: ['edit.undo', 'edit.redo'],
   view: ['view.zoomIn', 'view.zoomOut', 'view.fitToContent'],
+  help: ['help.reportProblem'],
 }
 
 const MENU_LABELS: Record<AppMenuId, () => string> = {
   file: () => t('menu.file'),
   edit: () => t('menu.edit'),
   view: () => t('menu.view'),
+  help: () => t('menu.help'),
 }
 
 function readAppCommandState(): AppCommandState {
@@ -164,6 +172,10 @@ function cycleTheme(): void {
   }, { persist: 'immediate' })
 }
 
+function openProblemReportDialog(): void {
+  problemReportDialogOpen.value = true
+}
+
 function runCanvas(
   state: AppCommandState,
   command: (canvas: CanvasCommandSurface) => void,
@@ -173,6 +185,11 @@ function runCanvas(
 
 function logCommandFailure(label: string, error: unknown): void {
   console.error(`${label} failed:`, error)
+  recordFrontendDiagnostic({
+    level: 'error',
+    source: `command:${label}`,
+    message: diagnosticMessageFromError(error),
+  })
 }
 
 function runAsyncCommand(label: string, action: () => Promise<unknown>): void {
@@ -254,6 +271,12 @@ const APP_COMMANDS: readonly AppCommandDefinition[] = [
     palette: true,
     run: (state) => runCanvas(state, (canvas) => canvas.zoomToFit()),
     disabled: (state) => !state.canvas,
+  },
+  {
+    id: 'help.reportProblem',
+    label: () => t('menu.help.reportProblem'),
+    palette: true,
+    run: openProblemReportDialog,
   },
   {
     id: 'nav.canvas',

@@ -435,7 +435,8 @@
     "toggleTheme": "Alternar tema",
     "commandPalette": "Paleta de comandos",
     "searchPlaceholder": "Digite um comando...",
-    "noResults": "Nenhum comando encontrado"
+    "noResults": "Nenhum comando encontrado",
+    "reportProblem": "Relatar um problema"
   },
   "plantDetail": {
     "back": "Voltar",
@@ -627,7 +628,9 @@
     "edit.redo": "Refazer",
     "view.zoomIn": "Ampliar",
     "view.zoomOut": "Reduzir",
-    "view.fitToContent": "Ajustar ao conteudo"
+    "view.fitToContent": "Ajustar ao conteudo",
+    "help": "Ajuda",
+    "help.reportProblem": "Relatar um problema"
   },
   "titleBar": {
     "unsavedChanges": "Alterações não salvas"
@@ -806,5 +809,32 @@
       "nextMonth": "Próximo mês",
       "chooseDate": "Escolher data"
     }
+  },
+  "problemReport": {
+    "title": "Relatar um problema",
+    "intro": "Cria um resumo e um pacote de diagnóstico que você pode compartilhar depois.",
+    "descriptionLabel": "O que aconteceu?",
+    "descriptionPlaceholder": "Descreva o que você estava fazendo, o que falhou e se consegue repetir.",
+    "privacyNote": "O pacote de diagnóstico exclui por padrão seu design, localização precisa, capturas de tela e caminhos de arquivo brutos.",
+    "create": "Criar relatório",
+    "creating": "Criando...",
+    "cancel": "Cancelar",
+    "close": "Fechar",
+    "successTitle": "Relatório criado",
+    "successText": "Os arquivos do relatório estão nesta pasta. Anexe o pacote e cole o resumo ao contatar o suporte.",
+    "folderPath": "Pasta",
+    "summaryFile": "Resumo",
+    "bundleFile": "Pacote",
+    "copySummary": "Copiar resumo",
+    "copiedSummary": "Copiado",
+    "copyFailed": "Não foi possível copiar o resumo. O arquivo de resumo ainda está na pasta do relatório.",
+    "errorTitle": "Não foi possível criar o relatório",
+    "showFolder": "Mostrar pasta",
+    "showingFolder": "Abrindo...",
+    "showFolderFailed": "Não foi possível mostrar a pasta. O caminho exato da pasta continua visível acima.",
+    "optionalAttachments": "Anexos opcionais",
+    "includeCurrentDesign": "Incluir o Design atual",
+    "includeCurrentDesignDescription": "Adiciona uma cópia .canopi com conteúdo da tela, notas, cronograma, orçamento e local salvo.",
+    "currentDesignUnavailable": "Não há um Design atual disponível para anexar."
   }
 }

@@ -40,6 +40,7 @@ These instructions are for AI agents working in this repository. Optimize for lo
 - [MapLibre](docs/agent/maplibre.md): basemap and terrain integration, projection, camera sync.
 - [Database](docs/agent/database.md): plant DB schema, query builder, FTS, translations, canopi-data export.
 - [Build and release](docs/agent/build-release.md): build commands, release workflow, platform/native rules.
+- [Problem reporting](docs/agent/problem-reporting.md): local Problem Reports, Diagnostic Bundle privacy boundary, reporting UI seams.
 
 Read the relevant subsystem guide before changing that area. If a guide disagrees with current code, trust the code, fix the guide, and note it in the handoff.
 

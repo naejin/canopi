@@ -435,7 +435,8 @@
     "toggleTheme": "Cambiar tema",
     "commandPalette": "Paleta de comandos",
     "searchPlaceholder": "Escriba un comando...",
-    "noResults": "No se encontraron comandos"
+    "noResults": "No se encontraron comandos",
+    "reportProblem": "Informar de un problema"
   },
   "plantDetail": {
     "back": "Volver",
@@ -627,7 +628,9 @@
     "edit.redo": "Rehacer",
     "view.zoomIn": "Acercar",
     "view.zoomOut": "Alejar",
-    "view.fitToContent": "Ajustar al contenido"
+    "view.fitToContent": "Ajustar al contenido",
+    "help": "Ayuda",
+    "help.reportProblem": "Informar de un problema"
   },
   "titleBar": {
     "unsavedChanges": "Cambios sin guardar"
@@ -806,5 +809,32 @@
       "nextMonth": "Mes siguiente",
       "chooseDate": "Elegir fecha"
     }
+  },
+  "problemReport": {
+    "title": "Informar de un problema",
+    "intro": "Crea un resumen y un paquete de diagnóstico que puedes compartir después.",
+    "descriptionLabel": "¿Qué pasó?",
+    "descriptionPlaceholder": "Describe qué estabas haciendo, qué falló y si puedes repetirlo.",
+    "privacyNote": "El paquete de diagnóstico excluye por defecto tu diseño, la ubicación precisa, capturas de pantalla y rutas de archivo sin procesar.",
+    "create": "Crear informe",
+    "creating": "Creando...",
+    "cancel": "Cancelar",
+    "close": "Cerrar",
+    "successTitle": "Informe creado",
+    "successText": "Los archivos del informe están en esta carpeta. Adjunta el paquete y pega el resumen cuando contactes con soporte.",
+    "folderPath": "Carpeta",
+    "summaryFile": "Resumen",
+    "bundleFile": "Paquete",
+    "copySummary": "Copiar resumen",
+    "copiedSummary": "Copiado",
+    "copyFailed": "No se pudo copiar el resumen. El archivo de resumen sigue en la carpeta del informe.",
+    "errorTitle": "No se pudo crear el informe",
+    "showFolder": "Mostrar carpeta",
+    "showingFolder": "Abriendo...",
+    "showFolderFailed": "No se pudo mostrar la carpeta. La ruta exacta sigue visible arriba.",
+    "optionalAttachments": "Adjuntos opcionales",
+    "includeCurrentDesign": "Incluir el diseño actual",
+    "includeCurrentDesignDescription": "Agrega una copia .canopi con contenido del lienzo, notas, cronograma, presupuesto y ubicación guardada.",
+    "currentDesignUnavailable": "No hay un diseño actual disponible para adjuntar."
   }
 }

@@ -6,6 +6,7 @@ pub mod export;
 pub mod favorites;
 pub mod geocoding;
 pub mod health;
+pub mod problem_report;
 pub mod settings;
 pub mod species;
 pub mod tiles;

@@ -5,6 +5,11 @@ import { theme } from '../app/settings/state'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { currentDesign, nonCanvasRevision, nonCanvasSavedRevision } from './support/design-session-state'
 import * as documentActions from '../app/document-session/actions'
+import { problemReportDialogOpen } from '../app/problem-report/state'
+import {
+  recentFrontendDiagnostics,
+  resetFrontendDiagnosticsForTests,
+} from '../app/problem-report/diagnostics'
 import * as settingsProjection from '../app/settings/projection'
 import { commands, getMenuDefinitions } from '../commands/registry'
 import { PANEL_SHORTCUTS, TOOL_SHORTCUTS } from '../shortcuts/definitions'
@@ -25,6 +30,8 @@ describe('command registry canvas tool switching', () => {
     nonCanvasRevision.value = 0
     nonCanvasSavedRevision.value = 0
     settingsProjection.resetSettingsProjectionForTests()
+    problemReportDialogOpen.value = false
+    resetFrontendDiagnosticsForTests()
   })
 
   afterEach(() => {
@@ -33,6 +40,8 @@ describe('command registry canvas tool switching', () => {
     activeTool.value = 'select'
     currentDesign.value = null
     theme.value = 'light'
+    problemReportDialogOpen.value = false
+    resetFrontendDiagnosticsForTests()
   })
 
   it('routes tool commands through the live canvas session when mounted', () => {
@@ -125,5 +134,30 @@ describe('command registry canvas tool switching', () => {
 
     expect(theme.value).toBe('dark')
     expect(mutateSpy).toHaveBeenCalledWith(expect.any(Function), { persist: 'immediate' })
+  })
+
+  it('opens problem reporting from the shared command graph', () => {
+    getCommand('help.reportProblem').action()
+
+    expect(problemReportDialogOpen.value).toBe(true)
+
+    const help = getMenuDefinitions().find((menu) => menu.id === 'help')
+    expect(help?.items.some((entry) => entry.type === 'action' && entry.id === 'help.reportProblem')).toBe(true)
+  })
+
+  it('records async command failures for Problem Reports', async () => {
+    vi.spyOn(documentActions, 'newDesignAction').mockRejectedValue(new Error('disk failed at /home/alice/design.canopi'))
+
+    getCommand('file.new').action()
+    await new Promise((resolve) => globalThis.setTimeout(resolve, 0))
+
+    expect(recentFrontendDiagnostics()).toEqual([
+      expect.objectContaining({
+        level: 'error',
+        source: 'command:New design',
+        message: expect.stringContaining('disk failed'),
+      }),
+    ])
+    expect(recentFrontendDiagnostics()[0]!.message).not.toContain('/home/alice')
   })
 })
