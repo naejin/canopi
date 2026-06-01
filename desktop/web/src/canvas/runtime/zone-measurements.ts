@@ -7,7 +7,7 @@ export interface ZoneMeasurementRect {
   height: number
 }
 
-export type ZoneMeasurementLabelKind = 'edge' | 'area'
+export type ZoneMeasurementLabelKind = 'edge' | 'dimension' | 'area'
 
 export interface ZoneMeasurementLabel {
   id: string
@@ -21,6 +21,41 @@ export interface ZoneMeasurementLabel {
 export function createRectangularZoneMeasurementsFromRect(rect: ZoneMeasurementRect): ZoneMeasurementLabel[] {
   if (rect.width < 0.5 || rect.height < 0.5) return []
   return createRectangularZoneMeasurements(rectanglePoints(rect))
+}
+
+export function createEllipticalZoneMeasurementsFromRect(rect: ZoneMeasurementRect): ZoneMeasurementLabel[] {
+  if (rect.width < 0.5 || rect.height < 0.5) return []
+  return createEllipticalZoneMeasurements(
+    { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 },
+    { x: rect.width / 2, y: rect.height / 2 },
+  )
+}
+
+export function createEllipticalZoneMeasurements(center: ScenePoint, radii: ScenePoint): ZoneMeasurementLabel[] {
+  const width = Math.abs(radii.x) * 2
+  const height = Math.abs(radii.y) * 2
+  if (width < 0.5 || height < 0.5) return []
+
+  return [
+    {
+      id: 'ellipse-width',
+      kind: 'dimension',
+      text: `W ${formatMetricDistance(width)}`,
+      worldPosition: { x: center.x, y: center.y - Math.abs(radii.y) },
+    },
+    {
+      id: 'ellipse-height',
+      kind: 'dimension',
+      text: `H ${formatMetricDistance(height)}`,
+      worldPosition: { x: center.x + Math.abs(radii.x), y: center.y },
+    },
+    {
+      id: 'area',
+      kind: 'area',
+      text: formatMetricArea(Math.PI * Math.abs(radii.x) * Math.abs(radii.y)),
+      worldPosition: center,
+    },
+  ]
 }
 
 export function createRectangularZoneMeasurements(points: readonly ScenePoint[]): ZoneMeasurementLabel[] {

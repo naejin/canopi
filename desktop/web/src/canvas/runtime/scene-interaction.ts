@@ -45,6 +45,8 @@ import {
   parsePlantDropPayload,
 } from './interaction/tool-actions'
 import {
+  createEllipticalZoneMeasurements,
+  createEllipticalZoneMeasurementsFromRect,
   createRectangularZoneMeasurements,
   createRectangularZoneMeasurementsFromRect,
 } from './zone-measurements'
@@ -341,6 +343,8 @@ export class SceneInteractionController {
       )
       if (this._mode === 'rectangle') {
         this._updateDraftRectangleMeasurements(this._startWorld, endWorld)
+      } else if (this._mode === 'ellipse') {
+        this._updateDraftEllipseMeasurements(this._startWorld, endWorld)
       }
     }
   }
@@ -589,6 +593,14 @@ export class SceneInteractionController {
     )
   }
 
+  private _updateDraftEllipseMeasurements(startWorld: ScenePoint, endWorld: ScenePoint): void {
+    const rect = computeSelectionRect(startWorld, endWorld)
+    this._zoneMeasurements.update(
+      createEllipticalZoneMeasurementsFromRect(rect),
+      this._deps.camera,
+    )
+  }
+
   private _refreshSelectedZoneMeasurements(): void {
     const selection = Array.from(this._deps.getSelection())
     if (selection.length !== 1) {
@@ -609,7 +621,20 @@ export class SceneInteractionController {
     }
 
     const zone = scene.zones.find((entry) => entry.name === selectedId)
-    if (!zone || zone.zoneType !== 'rect') {
+    if (!zone) {
+      this._zoneMeasurements.hide()
+      return
+    }
+
+    if (zone.zoneType === 'ellipse' && zone.points.length >= 2) {
+      this._zoneMeasurements.update(
+        createEllipticalZoneMeasurements(zone.points[0]!, zone.points[1]!),
+        this._deps.camera,
+      )
+      return
+    }
+
+    if (zone.zoneType !== 'rect') {
       this._zoneMeasurements.hide()
       return
     }

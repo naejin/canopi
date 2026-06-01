@@ -313,6 +313,103 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('shows live elliptical zone measurements while drawing without persisting them', () => {
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('ellipse')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 20, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 70, clientY: 100, button: 0 }))
+
+    expect(zoneMeasurementTexts(container)).toEqual([
+      'W 60 m',
+      'H 80 m',
+      '3770 m²',
+    ])
+    expect(store.persisted.annotations).toHaveLength(0)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    controller.dispose()
+  })
+
+  it('shows elliptical zone measurements when one top-level ellipse is selected', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [{
+        kind: 'zone',
+        name: 'ellipse-1',
+        zoneType: 'ellipse',
+        points: [
+          { x: 50, y: 60 },
+          { x: 30, y: 20 },
+        ],
+        fillColor: null,
+        notes: null,
+      }]
+    })
+
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 50, clientY: 60, button: 0 }))
+    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 50, clientY: 60, button: 0 }))
+
+    expect(zoneMeasurementTexts(container)).toEqual([
+      'W 60 m',
+      'H 40 m',
+      '1885 m²',
+    ])
+    controller.dispose()
+  })
+
+  it('suppresses elliptical zone measurements for multi-selection', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [
+        {
+          kind: 'zone',
+          name: 'ellipse-1',
+          zoneType: 'ellipse',
+          points: [
+            { x: 50, y: 60 },
+            { x: 30, y: 20 },
+          ],
+          fillColor: null,
+          notes: null,
+        },
+        {
+          kind: 'zone',
+          name: 'ellipse-2',
+          zoneType: 'ellipse',
+          points: [
+            { x: 150, y: 60 },
+            { x: 30, y: 20 },
+          ],
+          fillColor: null,
+          notes: null,
+        },
+      ]
+    })
+
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 50, clientY: 60, button: 0 }))
+    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 50, clientY: 60, button: 0 }))
+    expect(zoneMeasurementTexts(container)).not.toEqual([])
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', {
+      clientX: 150,
+      clientY: 60,
+      button: 0,
+      shiftKey: true,
+    }))
+    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 150, clientY: 60, button: 0 }))
+
+    expect(zoneMeasurementTexts(container)).toEqual([])
+    controller.dispose()
+  })
+
   it('does not commit too-small elliptical zones', () => {
     const onSceneEditCommit = vi.fn()
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
