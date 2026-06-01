@@ -48,6 +48,18 @@ describe('shortcut manager canvas tool switching', () => {
     expect(activeTool.value).toBe('ellipse')
   })
 
+  it('routes the polygon tool shortcut through the live canvas session', () => {
+    const setTool = vi.fn()
+    setCurrentCanvasSession({
+      setTool,
+    } as any)
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p' }))
+
+    expect(setTool).toHaveBeenCalledWith('polygon')
+    expect(activeTool.value).toBe('polygon')
+  })
+
   it('falls back to priming the mirror tool state before session mount', () => {
     setCurrentCanvasSession(null)
 

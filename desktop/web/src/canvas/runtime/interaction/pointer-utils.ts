@@ -2,6 +2,7 @@ export function cursorForTool(tool: string): string {
   if (tool === 'hand') return 'grab'
   if (tool === 'rectangle') return 'crosshair'
   if (tool === 'ellipse') return 'crosshair'
+  if (tool === 'polygon') return 'crosshair'
   if (tool === 'text') return 'text'
   if (tool === 'plant-stamp') return 'crosshair'
   return 'default'

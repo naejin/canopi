@@ -72,6 +72,20 @@ describe('command registry canvas tool switching', () => {
     expect(activeTool.value).toBe('ellipse')
   })
 
+  it('exposes the polygon tool through the shared command graph', () => {
+    const setTool = vi.fn()
+    setCurrentCanvasSession({
+      setTool,
+    } as any)
+
+    getCommand('canvas.tool.polygon').action()
+
+    expect(getCommand('canvas.tool.polygon').shortcut).toBe('P')
+    expect(activePanel.value).toBe('canvas')
+    expect(setTool).toHaveBeenCalledWith('polygon')
+    expect(activeTool.value).toBe('polygon')
+  })
+
   it('falls back to priming the mirror tool state when no session is mounted', () => {
     getCommand('canvas.tool.text').action()
 

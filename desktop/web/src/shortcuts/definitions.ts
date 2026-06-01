@@ -31,6 +31,7 @@ export const TOOL_SHORTCUTS = {
   hand: 'H',
   rectangle: 'R',
   ellipse: 'E',
+  polygon: 'P',
   text: 'T',
 } as const
 
@@ -48,6 +49,8 @@ export const canvasToolKeys: Record<string, string> = {
   R: 'rectangle',
   e: 'ellipse',
   E: 'ellipse',
+  p: 'polygon',
+  P: 'polygon',
   t: 'text',
   T: 'text',
 }

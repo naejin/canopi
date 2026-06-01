@@ -78,6 +78,28 @@ export function appendEllipseZoneToDraft(
   return zoneName
 }
 
+export function appendPolygonZoneToDraft(
+  draft: ScenePersistedState,
+  points: readonly ScenePoint[],
+): string | null {
+  if (!isValidPolygon(points)) return null
+
+  const zoneId = createUuid()
+  const zoneName = `zone-${zoneId}`
+  draft.zones = [
+    ...draft.zones,
+    {
+      kind: 'zone',
+      name: zoneName,
+      zoneType: 'polygon',
+      points: points.map((point) => ({ x: point.x, y: point.y })),
+      fillColor: null,
+      notes: null,
+    },
+  ]
+  return zoneName
+}
+
 export function appendDroppedPlant(
   store: SceneStore,
   payload: PlantDropPayload,
@@ -179,4 +201,18 @@ export function parsePlantDropPayload(event: DragEvent): PlantDropPayload | null
   } catch {
     return null
   }
+}
+
+function isValidPolygon(points: readonly ScenePoint[]): boolean {
+  return points.length >= 3 && Math.abs(polygonArea(points)) >= 0.25
+}
+
+function polygonArea(points: readonly ScenePoint[]): number {
+  let sum = 0
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index]!
+    const next = points[(index + 1) % points.length]!
+    sum += current.x * next.y - next.x * current.y
+  }
+  return sum / 2
 }

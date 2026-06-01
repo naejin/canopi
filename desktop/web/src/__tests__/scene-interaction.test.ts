@@ -355,6 +355,134 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('creates a polygonal zone from clicked vertices and an Enter close action', () => {
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('polygon')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 60, clientY: 10, button: 0 }))
+
+    const line = container.querySelector<SVGPolylineElement>('[data-polygon-draft-line]')
+    expect(line?.getAttribute('points')).toBe('10,10 60,10')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 60, clientY: 10, button: 0 }))
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 60, clientY: 50, button: 0 }))
+    ;(controller as any)._onKeyDown(new KeyboardEvent('keydown', { key: 'Enter' }))
+
+    expect(store.persisted.zones).toHaveLength(1)
+    expect(store.persisted.zones[0]).toMatchObject({
+      zoneType: 'polygon',
+      points: [
+        { x: 10, y: 10 },
+        { x: 60, y: 10 },
+        { x: 60, y: 50 },
+      ],
+    })
+    expect(store.toCanopiFile().zones[0]).toMatchObject({
+      zone_type: 'polygon',
+      points: [
+        { x: 10, y: 10 },
+        { x: 60, y: 10 },
+        { x: 60, y: 50 },
+      ],
+    })
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-polygon')
+    expect(deps.setSelection).toHaveBeenCalledTimes(1)
+    controller.dispose()
+  })
+
+  it('previews polygonal zone active edges from snap-adjusted grid points', () => {
+    // At scale=4, gridInterval() returns 5m.
+    camera.setViewport({ x: 0, y: 0, scale: 4 })
+    snapToGridEnabled.value = true
+
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('polygon')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 43, clientY: 87, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 148, clientY: 254, button: 0 }))
+
+    const line = container.querySelector<SVGPolylineElement>('[data-polygon-draft-line]')
+    expect(line?.getAttribute('points')).toBe('40,80 140,260')
+    controller.dispose()
+  })
+
+  it('closes a polygonal zone by clicking the first vertex', () => {
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('polygon')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 60, clientY: 10, button: 0 }))
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 60, clientY: 50, button: 0 }))
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 12, clientY: 11, button: 0 }))
+
+    expect(store.persisted.zones[0]).toMatchObject({
+      zoneType: 'polygon',
+      points: [
+        { x: 10, y: 10 },
+        { x: 60, y: 10 },
+        { x: 60, y: 50 },
+      ],
+    })
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-polygon')
+    controller.dispose()
+  })
+
+  it('cancels polygonal zone drafts with Escape without dirtying the scene', () => {
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('polygon')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 60, clientY: 10, button: 0 }))
+    ;(controller as any)._onKeyDown(new KeyboardEvent('keydown', { key: 'Escape' }))
+
+    expect(store.persisted.zones).toHaveLength(0)
+    expect(container.querySelector('[data-polygon-draft-line]')).toBeNull()
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    controller.dispose()
+  })
+
+  it('removes the last polygonal zone draft vertex with Backspace', () => {
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('polygon')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 60, clientY: 10, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 60, clientY: 50, button: 0 }))
+    ;(controller as any)._onKeyDown(new KeyboardEvent('keydown', { key: 'Backspace' }))
+
+    const line = container.querySelector<SVGPolylineElement>('[data-polygon-draft-line]')
+    expect(line?.getAttribute('points')).toBe('10,10 60,50')
+    expect(store.persisted.zones).toHaveLength(0)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    controller.dispose()
+  })
+
+  it('does not commit degenerate polygonal zones', () => {
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('polygon')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 60, clientY: 10, button: 0 }))
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 100, clientY: 10, button: 0 }))
+    ;(controller as any)._onKeyDown(new KeyboardEvent('keydown', { key: 'Enter' }))
+
+    expect(store.persisted.zones).toHaveLength(0)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    controller.dispose()
+  })
+
   it('previews and commits rectangle zones from snap-adjusted grid points', () => {
     // At scale=4, gridInterval() returns 5m.
     camera.setViewport({ x: 0, y: 0, scale: 4 })

@@ -102,4 +102,22 @@ describe('CanvasToolbar plant color action', () => {
 
     expect(setTool).toHaveBeenCalledWith('ellipse')
   })
+
+  it('exposes the polygon shape tool in the toolbar', async () => {
+    await act(async () => {
+      render(<CanvasToolbar />, container)
+      await Promise.resolve()
+    })
+
+    const button = container.querySelector<HTMLButtonElement>('button[data-tool="polygon"]')
+    expect(button).not.toBeNull()
+    expect(button?.getAttribute('aria-keyshortcuts')).toBe('P')
+
+    await act(async () => {
+      button?.click()
+      await Promise.resolve()
+    })
+
+    expect(setTool).toHaveBeenCalledWith('polygon')
+  })
 })

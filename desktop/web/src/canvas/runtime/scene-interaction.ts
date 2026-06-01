@@ -28,6 +28,10 @@ import {
   showInteractionPreview,
 } from './interaction/overlay-ui'
 import {
+  createPolygonDraftOverlay,
+  type PolygonDraftOverlayController,
+} from './interaction/polygon-draft-overlay'
+import {
   createZoneMeasurementOverlay,
   type ZoneMeasurementOverlayController,
 } from './interaction/zone-measurement-overlay'
@@ -35,6 +39,7 @@ import { cursorForTool, hasAdditiveModifier, isEditableTarget } from './interact
 import {
   appendEllipseZoneToDraft,
   appendDroppedPlantToDraft,
+  appendPolygonZoneToDraft,
   appendRectangleZoneToDraft,
   appendTextAnnotationToDraft,
   parsePlantDropPayload,
@@ -67,6 +72,7 @@ export interface SceneInteractionDeps {
 export class SceneInteractionController {
   private readonly _preview: HTMLDivElement
   private readonly _tooltip: HoverTooltipController
+  private readonly _polygonDraftOverlay: PolygonDraftOverlayController
   private readonly _zoneMeasurements: ZoneMeasurementOverlayController
   private _tool: InteractionTool = 'select'
   private _mode: 'idle' | 'panning' | 'dragging' | 'band' | 'rectangle' | 'ellipse' = 'idle'
@@ -78,6 +84,8 @@ export class SceneInteractionController {
   private _bandAdditive = false
   private _textarea: HTMLTextAreaElement | null = null
   private _textWorldPosition: ScenePoint | null = null
+  private _polygonDraftVertices: ScenePoint[] = []
+  private _polygonActiveWorld: ScenePoint | null = null
   private _spaceHeld = false
   /** Original position of the hit entity — snap reference for drag. */
   private _dragSnapRef: ScenePoint | null = null
@@ -88,6 +96,7 @@ export class SceneInteractionController {
   constructor(private readonly _deps: SceneInteractionDeps) {
     this._preview = createInteractionPreview(this._deps.container)
     this._tooltip = createHoverTooltip(this._deps.container)
+    this._polygonDraftOverlay = createPolygonDraftOverlay(this._deps.container)
     this._zoneMeasurements = createZoneMeasurementOverlay(this._deps.container)
     this.setTool(getCanvasTool())
     this._attach()
@@ -111,6 +120,7 @@ export class SceneInteractionController {
     this._deps.setHoveredEntityId(null)
     this._removeTextarea()
     this._preview.remove()
+    this._polygonDraftOverlay.dispose()
     this._zoneMeasurements.dispose()
     this._tooltip.dispose()
   }
@@ -176,6 +186,12 @@ export class SceneInteractionController {
     if (this._tool === 'ellipse') {
       event.preventDefault()
       this._beginBoxZoneDrawing('ellipse', world)
+      return
+    }
+
+    if (this._tool === 'polygon') {
+      event.preventDefault()
+      this._handlePolygonPointerDown(world)
       return
     }
 
@@ -270,6 +286,13 @@ export class SceneInteractionController {
   }
 
   private readonly _onPointerMove = (event: PointerEvent): void => {
+    if (this._tool === 'polygon' && this._polygonDraftVertices.length > 0 && this._pointerId === null) {
+      const screen = this._screenPoint(event)
+      this._polygonActiveWorld = this._applySnapping(this._deps.camera.screenToWorld(screen))
+      this._polygonDraftOverlay.update(this._polygonDraftVertices, this._polygonActiveWorld, this._deps.camera)
+      return
+    }
+
     if (this._pointerId === null) {
       this._updateHover(event)
       return
@@ -323,6 +346,7 @@ export class SceneInteractionController {
   }
 
   private readonly _onPointerUp = (event: PointerEvent): void => {
+    if (this._tool === 'polygon' && this._pointerId === null && this._polygonDraftVertices.length > 0) return
     if (this._pointerId !== null && event.pointerId !== this._pointerId) return
     const screen = this._screenPoint(event)
     const rawWorld = this._deps.camera.screenToWorld(screen)
@@ -433,6 +457,24 @@ export class SceneInteractionController {
   }
 
   private readonly _onKeyDown = (event: KeyboardEvent): void => {
+    if (this._tool === 'polygon' && this._polygonDraftVertices.length > 0 && !isEditableTarget(event.target)) {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        this._cancelPolygonDraft()
+        return
+      }
+      if (event.key === 'Backspace') {
+        event.preventDefault()
+        this._removeLastPolygonVertex()
+        return
+      }
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        this._commitPolygonDraft()
+        return
+      }
+    }
+
     if (event.code !== 'Space' || this._spaceHeld || isEditableTarget(event.target) || this._textarea) return
     event.preventDefault()
     this._spaceHeld = true
@@ -461,6 +503,7 @@ export class SceneInteractionController {
     this._cachedContainerRect = null
     resetSceneDragState(this._dragState)
     this._bandAdditive = false
+    this._cancelPolygonDraft()
     hideInteractionPreview(this._preview)
     this._deps.container.style.cursor = cursorForTool(this._tool)
   }
@@ -472,6 +515,70 @@ export class SceneInteractionController {
     this._startScreen = snappedScreen
     this._mode = mode
     showInteractionPreview(this._preview, mode, snappedScreen, snappedScreen)
+  }
+
+  private _handlePolygonPointerDown(world: ScenePoint): void {
+    const point = this._applySnapping(world)
+    this._mode = 'idle'
+    this._pointerId = null
+    this._startScreen = null
+    this._startWorld = null
+    this._cachedContainerRect = null
+    this._zoneMeasurements.hide()
+
+    if (this._shouldClosePolygonAt(point)) {
+      this._commitPolygonDraft()
+      return
+    }
+
+    const last = this._polygonDraftVertices[this._polygonDraftVertices.length - 1]
+    if (last && pointsEqual(last, point)) {
+      this._polygonActiveWorld = point
+      this._polygonDraftOverlay.update(this._polygonDraftVertices, this._polygonActiveWorld, this._deps.camera)
+      return
+    }
+
+    this._polygonDraftVertices = [...this._polygonDraftVertices, point]
+    this._polygonActiveWorld = point
+    this._polygonDraftOverlay.update(this._polygonDraftVertices, this._polygonActiveWorld, this._deps.camera)
+  }
+
+  private _shouldClosePolygonAt(point: ScenePoint): boolean {
+    if (this._polygonDraftVertices.length < 3) return false
+    const first = this._polygonDraftVertices[0]!
+    const firstScreen = this._deps.camera.worldToScreen(first)
+    const pointScreen = this._deps.camera.worldToScreen(point)
+    return Math.hypot(pointScreen.x - firstScreen.x, pointScreen.y - firstScreen.y) <= 8
+  }
+
+  private _commitPolygonDraft(): void {
+    if (this._polygonDraftVertices.length < 3) return
+    const committed = this._deps.sceneEdits.run('interaction-polygon', (tx) => {
+      let zoneName: string | null = null
+      tx.mutate((draft) => {
+        zoneName = appendPolygonZoneToDraft(draft, this._polygonDraftVertices)
+      })
+      if (zoneName) tx.setSelection([zoneName])
+    })
+    if (committed) {
+      this._cancelPolygonDraft()
+      this._refreshSelectedZoneMeasurements()
+    }
+  }
+
+  private _removeLastPolygonVertex(): void {
+    this._polygonDraftVertices = this._polygonDraftVertices.slice(0, -1)
+    if (this._polygonDraftVertices.length === 0) {
+      this._cancelPolygonDraft()
+      return
+    }
+    this._polygonDraftOverlay.update(this._polygonDraftVertices, this._polygonActiveWorld, this._deps.camera)
+  }
+
+  private _cancelPolygonDraft(): void {
+    this._polygonDraftVertices = []
+    this._polygonActiveWorld = null
+    this._polygonDraftOverlay.hide()
   }
 
   private _updateDraftRectangleMeasurements(startWorld: ScenePoint, endWorld: ScenePoint): void {
@@ -649,4 +756,8 @@ export class SceneInteractionController {
     this._textWorldPosition = null
   }
 
+}
+
+function pointsEqual(a: ScenePoint, b: ScenePoint): boolean {
+  return Math.abs(a.x - b.x) < 0.0001 && Math.abs(a.y - b.y) < 0.0001
 }
