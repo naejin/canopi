@@ -153,8 +153,12 @@ export class SceneInteractionController {
 
     if (this._tool === 'rectangle') {
       event.preventDefault()
+      const snappedWorld = this._applySnapping(world)
+      const snappedScreen = this._deps.camera.worldToScreen(snappedWorld)
+      this._startWorld = snappedWorld
+      this._startScreen = snappedScreen
       this._mode = 'rectangle'
-      showInteractionPreview(this._preview, 'rectangle', screen, screen)
+      showInteractionPreview(this._preview, 'rectangle', snappedScreen, snappedScreen)
       return
     }
 
@@ -282,11 +286,14 @@ export class SceneInteractionController {
     }
 
     if (this._mode === 'band' || this._mode === 'rectangle') {
+      const endScreen = this._mode === 'rectangle'
+        ? this._deps.camera.worldToScreen(this._applySnapping(rawWorld))
+        : screen
       showInteractionPreview(
         this._preview,
         this._mode === 'rectangle' ? 'rectangle' : 'band',
         this._startScreen,
-        screen,
+        endScreen,
       )
     }
   }
@@ -328,7 +335,7 @@ export class SceneInteractionController {
     }
 
     if (this._mode === 'rectangle' && this._startWorld) {
-      const rect = computeSelectionRect(this._startWorld, rawWorld)
+      const rect = computeSelectionRect(this._startWorld, this._applySnapping(rawWorld))
       if (rect.width >= 0.5 && rect.height >= 0.5) {
         this._deps.sceneEdits.run('interaction-rectangle', (tx) => {
           let zoneName: string | null = null

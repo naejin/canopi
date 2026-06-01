@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { plantStampSpecies } from '../canvas/plant-tool-state'
 import { lockedObjectIds } from '../canvas/runtime-mirror-state'
+import { guides } from '../canvas/scene-metadata-state'
 import { selectedObjectIds } from '../canvas/session-state'
-import { snapToGridEnabled } from '../app/canvas-settings/signals'
+import { snapToGridEnabled, snapToGuidesEnabled } from '../app/canvas-settings/signals'
 import { CameraController } from '../canvas/runtime/camera'
 import { SceneStore } from '../canvas/runtime/scene'
 import { SceneInteractionController, type SceneInteractionDeps } from '../canvas/runtime/scene-interaction'
@@ -130,6 +131,8 @@ describe('SceneInteractionController', () => {
     lockedObjectIds.value = new Set()
     plantStampSpecies.value = null
     snapToGridEnabled.value = false
+    snapToGuidesEnabled.value = false
+    guides.value = []
   })
 
   afterEach(() => {
@@ -138,6 +141,8 @@ describe('SceneInteractionController', () => {
     lockedObjectIds.value = new Set()
     plantStampSpecies.value = null
     snapToGridEnabled.value = false
+    snapToGuidesEnabled.value = false
+    guides.value = []
   })
 
   it('selects and drags a plant in scene space', () => {
@@ -214,6 +219,80 @@ describe('SceneInteractionController', () => {
     })
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-rectangle')
     expect(deps.setSelection).toHaveBeenCalledTimes(1)
+    controller.dispose()
+  })
+
+  it('previews and commits rectangle zones from snap-adjusted grid points', () => {
+    // At scale=4, gridInterval() returns 5m.
+    camera.setViewport({ x: 0, y: 0, scale: 4 })
+    snapToGridEnabled.value = true
+
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('rectangle')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 43, clientY: 87, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 148, clientY: 254, button: 0 }))
+
+    const preview = Array.from(container.children)
+      .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
+    expect(preview?.style.left).toBe('40px')
+    expect(preview?.style.top).toBe('80px')
+    expect(preview?.style.width).toBe('100px')
+    expect(preview?.style.height).toBe('180px')
+
+    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 148, clientY: 254, button: 0 }))
+
+    expect(store.persisted.zones).toHaveLength(1)
+    expect(store.persisted.zones[0]).toMatchObject({
+      zoneType: 'rect',
+      points: [
+        { x: 10, y: 20 },
+        { x: 35, y: 20 },
+        { x: 35, y: 65 },
+        { x: 10, y: 65 },
+      ],
+    })
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-rectangle')
+    controller.dispose()
+  })
+
+  it('previews and commits rectangle zones from snap-adjusted guide points', () => {
+    camera.setViewport({ x: 0, y: 0, scale: 4 })
+    snapToGuidesEnabled.value = true
+    guides.value = [
+      { id: 'guide-v-start', axis: 'v', position: 12 },
+      { id: 'guide-h-start', axis: 'h', position: 22 },
+      { id: 'guide-v-end', axis: 'v', position: 36 },
+      { id: 'guide-h-end', axis: 'h', position: 61 },
+    ]
+
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('rectangle')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 49, clientY: 85, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 142, clientY: 243, button: 0 }))
+
+    const preview = Array.from(container.children)
+      .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
+    expect(preview?.style.left).toBe('48px')
+    expect(preview?.style.top).toBe('88px')
+    expect(preview?.style.width).toBe('96px')
+    expect(preview?.style.height).toBe('156px')
+
+    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 142, clientY: 243, button: 0 }))
+
+    expect(store.persisted.zones[0]).toMatchObject({
+      zoneType: 'rect',
+      points: [
+        { x: 12, y: 22 },
+        { x: 36, y: 22 },
+        { x: 36, y: 61 },
+        { x: 12, y: 61 },
+      ],
+    })
     controller.dispose()
   })
 
