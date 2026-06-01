@@ -452,6 +452,39 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('moves elliptical zones without changing their radii', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [{
+        kind: 'zone',
+        name: 'zone-ellipse',
+        zoneType: 'ellipse',
+        points: [
+          { x: 50, y: 50 },
+          { x: 30, y: 20 },
+        ],
+        fillColor: null,
+        notes: null,
+      }]
+    })
+
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 50, clientY: 50, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 60, clientY: 65, button: 0 }))
+    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 60, clientY: 65, button: 0 }))
+
+    expect(selectedObjectIds.value).toEqual(new Set(['zone-ellipse']))
+    expect(store.persisted.zones[0]?.points).toEqual([
+      { x: 60, y: 65 },
+      { x: 30, y: 20 },
+    ])
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-drag')
+    controller.dispose()
+  })
+
   it('creates a polygonal zone from clicked vertices and an Enter close action', () => {
     const onSceneEditCommit = vi.fn()
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
