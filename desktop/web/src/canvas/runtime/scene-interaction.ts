@@ -47,6 +47,8 @@ import {
 import {
   createEllipticalZoneMeasurements,
   createEllipticalZoneMeasurementsFromRect,
+  createPolygonalZoneDraftMeasurements,
+  createPolygonalZoneMeasurements,
   createRectangularZoneMeasurements,
   createRectangularZoneMeasurementsFromRect,
 } from './zone-measurements'
@@ -292,6 +294,7 @@ export class SceneInteractionController {
       const screen = this._screenPoint(event)
       this._polygonActiveWorld = this._applySnapping(this._deps.camera.screenToWorld(screen))
       this._polygonDraftOverlay.update(this._polygonDraftVertices, this._polygonActiveWorld, this._deps.camera)
+      this._updateDraftPolygonMeasurements()
       return
     }
 
@@ -539,12 +542,14 @@ export class SceneInteractionController {
     if (last && pointsEqual(last, point)) {
       this._polygonActiveWorld = point
       this._polygonDraftOverlay.update(this._polygonDraftVertices, this._polygonActiveWorld, this._deps.camera)
+      this._updateDraftPolygonMeasurements()
       return
     }
 
     this._polygonDraftVertices = [...this._polygonDraftVertices, point]
     this._polygonActiveWorld = point
     this._polygonDraftOverlay.update(this._polygonDraftVertices, this._polygonActiveWorld, this._deps.camera)
+    this._updateDraftPolygonMeasurements()
   }
 
   private _shouldClosePolygonAt(point: ScenePoint): boolean {
@@ -577,12 +582,15 @@ export class SceneInteractionController {
       return
     }
     this._polygonDraftOverlay.update(this._polygonDraftVertices, this._polygonActiveWorld, this._deps.camera)
+    this._updateDraftPolygonMeasurements()
   }
 
   private _cancelPolygonDraft(): void {
+    const hadDraft = this._polygonDraftVertices.length > 0 || this._polygonActiveWorld !== null
     this._polygonDraftVertices = []
     this._polygonActiveWorld = null
     this._polygonDraftOverlay.hide()
+    if (hadDraft) this._zoneMeasurements.hide()
   }
 
   private _updateDraftRectangleMeasurements(startWorld: ScenePoint, endWorld: ScenePoint): void {
@@ -597,6 +605,13 @@ export class SceneInteractionController {
     const rect = computeSelectionRect(startWorld, endWorld)
     this._zoneMeasurements.update(
       createEllipticalZoneMeasurementsFromRect(rect),
+      this._deps.camera,
+    )
+  }
+
+  private _updateDraftPolygonMeasurements(): void {
+    this._zoneMeasurements.update(
+      createPolygonalZoneDraftMeasurements(this._polygonDraftVertices, this._polygonActiveWorld),
       this._deps.camera,
     )
   }
@@ -629,6 +644,14 @@ export class SceneInteractionController {
     if (zone.zoneType === 'ellipse' && zone.points.length >= 2) {
       this._zoneMeasurements.update(
         createEllipticalZoneMeasurements(zone.points[0]!, zone.points[1]!),
+        this._deps.camera,
+      )
+      return
+    }
+
+    if (zone.zoneType === 'polygon') {
+      this._zoneMeasurements.update(
+        createPolygonalZoneMeasurements(zone.points),
         this._deps.camera,
       )
       return

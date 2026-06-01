@@ -61,31 +61,73 @@ export function createEllipticalZoneMeasurements(center: ScenePoint, radii: Scen
 export function createRectangularZoneMeasurements(points: readonly ScenePoint[]): ZoneMeasurementLabel[] {
   if (points.length < 4) return []
   const corners = points.slice(0, 4)
-  const area = Math.abs(polygonArea(corners))
+  return createClosedPolygonMeasurements(corners)
+}
+
+export function createPolygonalZoneMeasurements(points: readonly ScenePoint[]): ZoneMeasurementLabel[] {
+  return createClosedPolygonMeasurements(points)
+}
+
+export function createPolygonalZoneDraftMeasurements(
+  vertices: readonly ScenePoint[],
+  activePoint: ScenePoint | null,
+): ZoneMeasurementLabel[] {
+  if (vertices.length === 0) return []
+  const last = vertices[vertices.length - 1]!
+  const previewPoints = activePoint && !pointsEqual(last, activePoint)
+    ? [...vertices, activePoint]
+    : [...vertices]
+
+  const labels: ZoneMeasurementLabel[] = []
+  for (let index = 0; index < previewPoints.length - 1; index += 1) {
+    labels.push(createEdgeLabel(`edge-${index}`, previewPoints[index]!, previewPoints[index + 1]!))
+  }
+
+  if (previewPoints.length >= 3) {
+    const area = Math.abs(polygonArea(previewPoints))
+    if (area >= 0.25) {
+      labels.push(createEdgeLabel('edge-closing', previewPoints[previewPoints.length - 1]!, previewPoints[0]!))
+      labels.push({
+        id: 'area',
+        kind: 'area',
+        text: formatMetricArea(area),
+        worldPosition: averagePoint(previewPoints),
+      })
+    }
+  }
+
+  return labels
+}
+
+function createClosedPolygonMeasurements(points: readonly ScenePoint[]): ZoneMeasurementLabel[] {
+  if (points.length < 3) return []
+  const area = Math.abs(polygonArea(points))
   if (area < 0.25) return []
 
   const labels: ZoneMeasurementLabel[] = []
-  for (let index = 0; index < corners.length; index += 1) {
-    const start = corners[index]!
-    const end = corners[(index + 1) % corners.length]!
-    labels.push({
-      id: `edge-${index}`,
-      kind: 'edge',
-      text: formatMetricDistance(distance(start, end)),
-      worldPosition: midpoint(start, end),
-      worldStart: start,
-      worldEnd: end,
-    })
+  for (let index = 0; index < points.length; index += 1) {
+    labels.push(createEdgeLabel(`edge-${index}`, points[index]!, points[(index + 1) % points.length]!))
   }
 
   labels.push({
     id: 'area',
     kind: 'area',
     text: formatMetricArea(area),
-    worldPosition: averagePoint(corners),
+    worldPosition: averagePoint(points),
   })
 
   return labels
+}
+
+function createEdgeLabel(id: string, start: ScenePoint, end: ScenePoint): ZoneMeasurementLabel {
+  return {
+    id,
+    kind: 'edge',
+    text: formatMetricDistance(distance(start, end)),
+    worldPosition: midpoint(start, end),
+    worldStart: start,
+    worldEnd: end,
+  }
 }
 
 export function rectanglePoints(rect: ZoneMeasurementRect): ScenePoint[] {
@@ -145,4 +187,8 @@ function polygonArea(points: readonly ScenePoint[]): number {
 function formatMetricNumber(value: number): string {
   const rounded = value >= 10 ? Math.round(value) : Math.round(value * 10) / 10
   return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1)
+}
+
+function pointsEqual(a: ScenePoint, b: ScenePoint): boolean {
+  return Math.abs(a.x - b.x) < 0.0001 && Math.abs(a.y - b.y) < 0.0001
 }

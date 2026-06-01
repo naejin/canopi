@@ -507,6 +507,118 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('shows a live polygonal zone active-edge measurement while drawing', () => {
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('polygon')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 60, clientY: 10, button: 0 }))
+
+    expect(zoneMeasurementTexts(container)).toEqual(['50 m'])
+    controller.dispose()
+  })
+
+  it('shows polygonal zone draft edge measurements, closing edge, and live area', () => {
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('polygon')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 60, clientY: 10, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 60, clientY: 50, button: 0 }))
+
+    expect(zoneMeasurementTexts(container)).toEqual([
+      '50 m',
+      '40 m',
+      '64 m',
+      '1000 m²',
+    ])
+    controller.dispose()
+  })
+
+  it('shows selected polygonal zone edge measurements and area', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [{
+        kind: 'zone',
+        name: 'polygon-1',
+        zoneType: 'polygon',
+        points: [
+          { x: 10, y: 10 },
+          { x: 60, y: 10 },
+          { x: 60, y: 50 },
+        ],
+        fillColor: null,
+        notes: null,
+      }]
+    })
+
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 20, button: 0 }))
+    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 40, clientY: 20, button: 0 }))
+
+    expect(zoneMeasurementTexts(container)).toEqual([
+      '50 m',
+      '40 m',
+      '64 m',
+      '1000 m²',
+    ])
+    controller.dispose()
+  })
+
+  it('suppresses polygonal zone measurements for multi-selection', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [
+        {
+          kind: 'zone',
+          name: 'polygon-1',
+          zoneType: 'polygon',
+          points: [
+            { x: 10, y: 10 },
+            { x: 60, y: 10 },
+            { x: 60, y: 50 },
+          ],
+          fillColor: null,
+          notes: null,
+        },
+        {
+          kind: 'zone',
+          name: 'polygon-2',
+          zoneType: 'polygon',
+          points: [
+            { x: 100, y: 10 },
+            { x: 150, y: 10 },
+            { x: 150, y: 50 },
+          ],
+          fillColor: null,
+          notes: null,
+        },
+      ]
+    })
+
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 20, button: 0 }))
+    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 40, clientY: 20, button: 0 }))
+    expect(zoneMeasurementTexts(container)).not.toEqual([])
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', {
+      clientX: 130,
+      clientY: 20,
+      button: 0,
+      shiftKey: true,
+    }))
+    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 130, clientY: 20, button: 0 }))
+
+    expect(zoneMeasurementTexts(container)).toEqual([])
+    controller.dispose()
+  })
+
   it('closes a polygonal zone by clicking the first vertex', () => {
     const onSceneEditCommit = vi.fn()
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
