@@ -76,6 +76,10 @@ _Avoid_: Shape metadata, annotation, label
 A text note positioned in a design. An annotation explains or labels part of the design without becoming a zone, placed plant, or timeline action.
 _Avoid_: Label, comment
 
+**Design Object**:
+A canvas-positioned part of a design, such as a placed plant, zone, annotation, or object group. Design objects are the things users arrange spatially in the design.
+_Avoid_: Canvas object, shape
+
 **Layer**:
 A visibility and locking group for design objects. A design has many layers, and each layer controls whether its objects are visible, locked, and how opaque they appear.
 _Avoid_: Category, folder
@@ -87,6 +91,14 @@ _Avoid_: Canvas mutation, layer signal write, scene patch
 **Object Group**:
 A named or unnamed collection of design objects that move or transform together. An object group may contain placed plants, zones, annotations, or other design objects.
 _Avoid_: Layer, selection
+
+**Plant Stamp**:
+An interaction for placing repeated placed plants from a chosen species. A plant stamp starts from Species Catalog data and creates new placed plants in the design.
+_Avoid_: Object stamp, clone tool
+
+**Object Stamp**:
+An interaction for sampling an existing design object and placing repeated copies of it. An object stamp starts from a design object already in the design, not from Species Catalog data.
+_Avoid_: Plant stamp, copy/paste
 
 **Location**:
 The real-world site associated with a design, expressed as latitude, longitude, and optionally altitude. A design has zero or one location.
@@ -204,6 +216,9 @@ A **Zone Edge** is part of a zone boundary. A line is an independently drawn des
 **Zone Measurement vs Annotation**:
 A **Zone Measurement** is derived from a zone's geometry. An **Annotation** is authored text in the design.
 
+**Canvas Object vs Design Object**:
+Use **Design Object** for a spatial part of a Design. "Canvas object" is implementation language and should not be the canonical product term.
+
 **Climate Zone vs Hardiness Zone**:
 Use **Climate Zone** for broad site/template classification. Use **Hardiness Zone** for species cold-tolerance compatibility.
 
@@ -227,6 +242,9 @@ A **Budget Item** is a cost entry in a Design. The **Budget Item Workbench** is 
 
 **Consortium vs Guild**:
 Use **Consortium** for Canopi's broader stratified, time-aware plant assembly. Use "guild" only in explanatory copy when discussing narrower companion-planting concepts.
+
+**Plant Stamp vs Object Stamp**:
+A **Plant Stamp** places placed plants from a chosen species. An **Object Stamp** copies an existing design object already in the design.
 
 **Stratum vs Layer**:
 Use **Stratum** for vertical ecological position in a consortium. Use **Layer** for design-object visibility and locking.
@@ -272,6 +290,10 @@ Developer: "The panel is the Species Catalog Workbench. It helps you browse and 
 Designer: "Is the orchard area a zone or a layer?"
 
 Developer: "It is a zone. A layer controls visibility and locking; the zone is the meaningful area in the design."
+
+Designer: "Can I stamp this existing apple tree several more times?"
+
+Developer: "Yes. Use Object Stamp to sample that placed plant, then place copies. Use Plant Stamp when you are starting from a species in the Species Catalog."
 
 Designer: "If I hide a layer, is that just a UI toggle?"
 
