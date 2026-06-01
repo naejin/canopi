@@ -661,6 +661,52 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
+  it('records Object Stamp group placement as one undoable edit with cloned members', async () => {
+    const runtime = new SceneCanvasRuntime()
+    const { container } = await initRuntimeWithStubbedRenderer(runtime)
+    Object.defineProperty(container, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({
+        left: 0,
+        top: 0,
+        right: 400,
+        bottom: 300,
+        width: 400,
+        height: 300,
+      }),
+    })
+    const file = makeFile()
+    file.groups = [{
+      id: 'group-1',
+      name: 'Pair',
+      layer: 'plants',
+      position: { x: 10, y: 10 },
+      rotation: null,
+      member_ids: ['plant-1', 'plant-2'],
+    }]
+    runtime.loadDocument(file)
+    ;(runtime as any)._camera.setViewport({ x: 0, y: 0, scale: 1 })
+    runtime.getSceneStore().setViewport({ x: 0, y: 0, scale: 1 })
+    runtime.setTool('object-stamp')
+
+    const interaction = (runtime as any)._interaction
+    interaction._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
+    interaction._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
+
+    expect(runtime.getSceneStore().persisted.groups).toHaveLength(2)
+    expect(runtime.getSceneStore().persisted.plants).toHaveLength(4)
+    const stampedGroup = runtime.getSceneStore().persisted.groups[1]!
+    expect(selectedObjectIds.value).toEqual(new Set([stampedGroup.id]))
+    expect(stampedGroup.memberIds).toHaveLength(2)
+    expect(stampedGroup.memberIds).not.toContain('plant-1')
+    expect(stampedGroup.memberIds).not.toContain('plant-2')
+
+    runtime.undo()
+    expect(runtime.getSceneStore().persisted.groups).toHaveLength(1)
+    expect(runtime.getSceneStore().persisted.plants).toHaveLength(2)
+    runtime.destroy()
+  })
+
   it('invalidates the scene after select-all and lock mutations', () => {
     const runtime = new SceneCanvasRuntime()
     runtime.loadDocument(makeFile())

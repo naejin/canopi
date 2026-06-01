@@ -9,7 +9,15 @@ import { gridInterval, snapToGrid } from '../grid'
 import { snapToGuides } from '../guides'
 import { guides } from '../scene-metadata-state'
 import { lockedObjectIds } from '../runtime-mirror-state'
-import type { SceneAnnotationEntity, ScenePlantEntity, SceneStore, ScenePoint, SceneZoneEntity } from './scene'
+import type {
+  SceneAnnotationEntity,
+  SceneObjectGroupEntity,
+  ScenePersistedState,
+  ScenePlantEntity,
+  SceneStore,
+  ScenePoint,
+  SceneZoneEntity,
+} from './scene'
 import type { CameraController } from './camera'
 import { getAnnotationWorldBounds } from './annotation-layout'
 import { getPlantWorldBounds, type PlantPresentationContext } from './plant-presentation'
@@ -79,7 +87,21 @@ interface ObjectStampAnnotationSource {
   anchorWorld: ScenePoint
 }
 
-type ObjectStampSource = ObjectStampPlantSource | ObjectStampZoneSource | ObjectStampAnnotationSource
+interface ObjectStampGroupSource {
+  kind: 'group'
+  sourceId: string
+  group: SceneObjectGroupEntity
+  plants: ScenePlantEntity[]
+  zones: SceneZoneEntity[]
+  annotations: SceneAnnotationEntity[]
+  anchorWorld: ScenePoint
+}
+
+type ObjectStampSource =
+  | ObjectStampPlantSource
+  | ObjectStampZoneSource
+  | ObjectStampAnnotationSource
+  | ObjectStampGroupSource
 
 export interface SceneInteractionDeps {
   container: HTMLElement
@@ -844,6 +866,25 @@ export class SceneInteractionController {
         anchorWorld: { ...world },
       }
       this._updateObjectStampPreview(world)
+      return
+    }
+
+    if (hit.kind === 'group') {
+      const group = scene.groups.find((entry) => entry.id === hit.id)
+      if (!group) return
+      const members = cloneGroupMembersForObjectStamp(group, scene)
+      if (members.plants.length + members.zones.length + members.annotations.length === 0) return
+
+      this._objectStampSource = {
+        kind: 'group',
+        sourceId: group.id,
+        group: cloneGroupForObjectStamp(group),
+        plants: members.plants,
+        zones: members.zones,
+        annotations: members.annotations,
+        anchorWorld: { ...world },
+      }
+      this._updateObjectStampPreview(world)
     }
   }
 
@@ -897,6 +938,60 @@ export class SceneInteractionController {
         if (nextId) tx.setSelection([nextId])
       })
       if (committed) this._updateObjectStampPreview(anchorWorld)
+      return
+    }
+
+    if (source.kind === 'group') {
+      let nextId = ''
+      const committed = this._deps.sceneEdits.run('interaction-object-stamp', (tx) => {
+        tx.mutate((draft) => {
+          const sourceToCloneId = new Map<string, string>()
+          const existingZoneNames = new Set(draft.zones.map((zone) => zone.name))
+
+          const clonedPlants = source.plants.map((plant) => {
+            const clone = clonePlantForObjectStamp(plant)
+            clone.id = createUuid()
+            clone.position = translatePoint(plant.position, delta)
+            sourceToCloneId.set(plant.id, clone.id)
+            return clone
+          })
+
+          const clonedZones = source.zones.map((zone) => {
+            const clone = cloneZoneForObjectStamp(zone)
+            clone.name = uniqueZoneName(zone.name, existingZoneNames)
+            existingZoneNames.add(clone.name)
+            clone.points = translateZonePoints(zone, delta)
+            sourceToCloneId.set(zone.name, clone.name)
+            return clone
+          })
+
+          const clonedAnnotations = source.annotations.map((annotation) => {
+            const clone = cloneAnnotationForObjectStamp(annotation)
+            clone.id = createUuid()
+            clone.position = translatePoint(annotation.position, delta)
+            sourceToCloneId.set(annotation.id, clone.id)
+            return clone
+          })
+
+          const memberIds = source.group.memberIds
+            .map((memberId) => sourceToCloneId.get(memberId) ?? null)
+            .filter((memberId): memberId is string => memberId !== null)
+          if (memberIds.length === 0) return
+
+          const cloneGroup = cloneGroupForObjectStamp(source.group)
+          cloneGroup.id = createUuid()
+          cloneGroup.position = translatePoint(source.group.position, delta)
+          cloneGroup.memberIds = memberIds
+
+          draft.plants = [...draft.plants, ...clonedPlants]
+          draft.zones = [...draft.zones, ...clonedZones]
+          draft.annotations = [...draft.annotations, ...clonedAnnotations]
+          draft.groups = [...draft.groups, cloneGroup]
+          nextId = cloneGroup.id
+        })
+        if (nextId) tx.setSelection([nextId])
+      })
+      if (committed) this._updateObjectStampPreview(anchorWorld)
     }
   }
 
@@ -913,6 +1008,10 @@ export class SceneInteractionController {
     }
     if (source.kind === 'annotation') {
       const layer = scene.layers.find((entry) => entry.name === 'annotations')
+      return layer?.visible !== false && layer?.locked !== true
+    }
+    if (source.kind === 'group') {
+      const layer = scene.layers.find((entry) => entry.name === source.group.layer)
       return layer?.visible !== false && layer?.locked !== true
     }
     return false
@@ -972,6 +1071,29 @@ export class SceneInteractionController {
         objectStampDelta(source, anchorWorld),
       )
       const bounds = getAnnotationWorldBounds(previewAnnotation, this._deps.camera.viewport.scale)
+      showInteractionPreview(
+        this._preview,
+        'rectangle',
+        this._deps.camera.worldToScreen({ x: bounds.x, y: bounds.y }),
+        this._deps.camera.worldToScreen({
+          x: bounds.x + bounds.width,
+          y: bounds.y + bounds.height,
+        }),
+      )
+      return
+    }
+
+    if (source.kind === 'group') {
+      const bounds = objectStampGroupBounds(
+        source,
+        objectStampDelta(source, anchorWorld),
+        this._deps.camera.viewport.scale,
+        this._deps.getPlantPresentationContext(this._deps.camera.viewport.scale),
+      )
+      if (!bounds) {
+        hideInteractionPreview(this._preview)
+        return
+      }
       showInteractionPreview(
         this._preview,
         'rectangle',
@@ -1110,6 +1232,42 @@ function cloneAnnotationForObjectStamp(annotation: SceneAnnotationEntity): Scene
   }
 }
 
+function cloneGroupForObjectStamp(group: SceneObjectGroupEntity): SceneObjectGroupEntity {
+  return {
+    ...group,
+    position: { ...group.position },
+    memberIds: [...group.memberIds],
+  }
+}
+
+function cloneGroupMembersForObjectStamp(
+  group: SceneObjectGroupEntity,
+  scene: ScenePersistedState,
+): Pick<ObjectStampGroupSource, 'plants' | 'zones' | 'annotations'> {
+  const plants: ScenePlantEntity[] = []
+  const zones: SceneZoneEntity[] = []
+  const annotations: SceneAnnotationEntity[] = []
+
+  for (const memberId of group.memberIds) {
+    const plant = scene.plants.find((entry) => entry.id === memberId)
+    if (plant) {
+      plants.push(clonePlantForObjectStamp(plant))
+      continue
+    }
+
+    const zone = scene.zones.find((entry) => entry.name === memberId)
+    if (zone) {
+      zones.push(cloneZoneForObjectStamp(zone))
+      continue
+    }
+
+    const annotation = scene.annotations.find((entry) => entry.id === memberId)
+    if (annotation) annotations.push(cloneAnnotationForObjectStamp(annotation))
+  }
+
+  return { plants, zones, annotations }
+}
+
 function objectStampDelta(source: ObjectStampSource, anchorWorld: ScenePoint): ScenePoint {
   return {
     x: anchorWorld.x - source.anchorWorld.x,
@@ -1165,5 +1323,45 @@ function zoneWorldBounds(zone: SceneZoneEntity): { x: number; y: number; width: 
     y: Math.min(...ys),
     width: Math.max(...xs) - Math.min(...xs),
     height: Math.max(...ys) - Math.min(...ys),
+  }
+}
+
+function objectStampGroupBounds(
+  source: ObjectStampGroupSource,
+  delta: ScenePoint,
+  viewportScale: number,
+  plantContext: PlantPresentationContext,
+): { x: number; y: number; width: number; height: number } | null {
+  const bounds: Array<{ x: number; y: number; width: number; height: number }> = []
+
+  for (const plant of source.plants) {
+    const previewPlant = clonePlantForObjectStamp(plant)
+    previewPlant.position = translatePoint(plant.position, delta)
+    bounds.push(getPlantWorldBounds(previewPlant, plantContext))
+  }
+
+  for (const zone of source.zones) {
+    const previewZone = cloneZoneForObjectStamp(zone)
+    previewZone.points = translateZonePoints(zone, delta)
+    const zoneBounds = zoneWorldBounds(previewZone)
+    if (zoneBounds) bounds.push(zoneBounds)
+  }
+
+  for (const annotation of source.annotations) {
+    const previewAnnotation = cloneAnnotationForObjectStamp(annotation)
+    previewAnnotation.position = translatePoint(annotation.position, delta)
+    bounds.push(getAnnotationWorldBounds(previewAnnotation, viewportScale))
+  }
+
+  if (bounds.length === 0) return null
+  const minX = Math.min(...bounds.map((entry) => entry.x))
+  const minY = Math.min(...bounds.map((entry) => entry.y))
+  const maxX = Math.max(...bounds.map((entry) => entry.x + entry.width))
+  const maxY = Math.max(...bounds.map((entry) => entry.y + entry.height))
+  return {
+    x: minX,
+    y: minY,
+    width: maxX - minX,
+    height: maxY - minY,
   }
 }

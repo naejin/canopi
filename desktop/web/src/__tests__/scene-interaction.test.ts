@@ -1674,6 +1674,171 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('samples an object group with Object Stamp and places cloned members with remapped group membership', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'plant-1',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: '#C44230',
+        stratum: 'high',
+        canopySpreadM: 4,
+        position: { x: 40, y: 40 },
+        rotationDeg: 15,
+        scale: 4,
+        notes: 'Tree',
+        plantedDate: null,
+        quantity: 1,
+      }]
+      draft.zones = [{
+        kind: 'zone',
+        name: 'Kitchen bed',
+        zoneType: 'rect',
+        points: [
+          { x: 10, y: 20 },
+          { x: 30, y: 20 },
+          { x: 30, y: 50 },
+          { x: 10, y: 50 },
+        ],
+        fillColor: '#A06B1F',
+        notes: 'Bed',
+      }]
+      draft.annotations = [{
+        kind: 'annotation',
+        id: 'annotation-1',
+        annotationType: 'text',
+        position: { x: 60, y: 30 },
+        text: 'Guild',
+        fontSize: 20,
+        rotationDeg: 10,
+      }]
+      draft.groups = [{
+        kind: 'group',
+        id: 'group-1',
+        name: 'Guild unit',
+        layer: 'plants',
+        position: { x: 10, y: 20 },
+        rotationDeg: 5,
+        memberIds: ['plant-1', 'Kitchen bed', 'annotation-1'],
+      }]
+    })
+
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('object-stamp')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 100, clientY: 120, button: 0 }))
+    const preview = Array.from(container.children)
+      .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
+    expect(preview?.style.display).toBe('block')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 100, clientY: 120, button: 0 }))
+
+    expect(store.persisted.groups).toHaveLength(2)
+    expect(store.persisted.plants).toHaveLength(2)
+    expect(store.persisted.zones).toHaveLength(2)
+    expect(store.persisted.annotations).toHaveLength(2)
+
+    const clonePlant = store.persisted.plants[1]!
+    const cloneZone = store.persisted.zones[1]!
+    const cloneAnnotation = store.persisted.annotations[1]!
+    const cloneGroup = store.persisted.groups[1]!
+
+    expect(clonePlant.id).not.toBe('plant-1')
+    expect(clonePlant).toMatchObject({
+      canonicalName: 'Malus domestica',
+      position: { x: 100, y: 120 },
+      rotationDeg: 15,
+    })
+    expect(cloneZone).toMatchObject({
+      name: 'Kitchen bed copy',
+      points: [
+        { x: 70, y: 100 },
+        { x: 90, y: 100 },
+        { x: 90, y: 130 },
+        { x: 70, y: 130 },
+      ],
+      fillColor: '#A06B1F',
+      notes: 'Bed',
+    })
+    expect(cloneAnnotation.id).not.toBe('annotation-1')
+    expect(cloneAnnotation).toMatchObject({
+      position: { x: 120, y: 110 },
+      text: 'Guild',
+      fontSize: 20,
+      rotationDeg: 10,
+    })
+    expect(cloneGroup).toMatchObject({
+      name: 'Guild unit',
+      layer: 'plants',
+      position: { x: 70, y: 100 },
+      rotationDeg: 5,
+      memberIds: [clonePlant.id, cloneZone.name, cloneAnnotation.id],
+    })
+    expect(cloneGroup.id).not.toBe('group-1')
+    expect(store.persisted.groups[0]?.memberIds).toEqual(['plant-1', 'Kitchen bed', 'annotation-1'])
+    expect(selectedObjectIds.value).toEqual(new Set([cloneGroup.id]))
+    expect(onSceneEditCommit).toHaveBeenCalledTimes(1)
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-object-stamp')
+    controller.dispose()
+  })
+
+  it('blocks Object Stamp sampling and placement for locked group sources or locked group layers', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'plant-1',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 4,
+        position: { x: 40, y: 40 },
+        rotationDeg: null,
+        scale: 4,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+      draft.groups = [{
+        kind: 'group',
+        id: 'group-1',
+        name: 'Guild unit',
+        layer: 'plants',
+        position: { x: 38, y: 38 },
+        rotationDeg: null,
+        memberIds: ['plant-1'],
+      }]
+    })
+
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('object-stamp')
+
+    lockedObjectIds.value = new Set(['group-1'])
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 120, clientY: 120, button: 0 }))
+    expect(store.persisted.groups).toHaveLength(1)
+    expect(store.persisted.plants).toHaveLength(1)
+
+    lockedObjectIds.value = new Set()
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
+    store.updatePersisted((draft) => {
+      const plantsLayer = draft.layers.find((layer) => layer.name === 'plants')
+      if (plantsLayer) plantsLayer.locked = true
+    })
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 120, clientY: 120, button: 0 }))
+
+    expect(store.persisted.groups).toHaveLength(1)
+    expect(store.persisted.plants).toHaveLength(1)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    controller.dispose()
+  })
+
   it('creates plant placements from drag-and-drop payloads', () => {
     const onSceneEditCommit = vi.fn()
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
