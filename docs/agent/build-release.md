@@ -41,6 +41,18 @@ cargo build --release
 - Debian dependencies in `tauri.conf.json` intentionally use alternatives for Ubuntu t64 transitions. Tauri merges custom depends with detected depends.
 - See `docs/release.md` for the detailed human release process.
 
+## CI Polling Cadence
+
+- Avoid streaming `gh run watch` into agent context for long package builds; it repeats the full job table and burns tokens while nothing changes.
+- Prefer one quiet status check, then wait before checking again:
+
+```bash
+gh run view <run-id> --json status,conclusion,jobs --jq '.status + " " + ((.conclusion // "")|tostring) + "\n" + ((.jobs // []) | map(.name + ": " + .status + " " + ((.conclusion // "")|tostring)) | join("\n"))'
+```
+
+- PR lint, tests, and platform compile jobs normally finish first. Package builds take longer; Windows Tauri packaging is commonly the last job.
+- Once only package builds remain, wait at least 2 minutes between quiet checks. If only Windows packaging remains, wait 5 minutes between checks unless GitHub reports a failure.
+
 ## Desktop Assets
 
 - Desktop icons are generated via `scripts/generate-desktop-icons.sh` from SVG source.
