@@ -86,7 +86,7 @@ export function queryRectTopLevel(
       const plant = scene.plants.find((entry) => entry.id === memberId)
       if (plant && rectsIntersect(rect, plantBounds(plant, viewportScale, speciesCache, getPlantContext))) return true
       const zone = scene.zones.find((entry) => entry.name === memberId)
-      if (zone && rectsIntersect(rect, zoneBounds(zone))) return true
+      if (zone && zoneIntersectsRect(zone, rect)) return true
       const annotation = scene.annotations.find((entry) => entry.id === memberId)
       return annotation ? rectsIntersect(rect, annotationBounds(annotation, viewportScale)) : false
     })
@@ -104,7 +104,7 @@ export function queryRectTopLevel(
   for (const zone of scene.zones) {
     if (groupedMembers.has(zone.name)) continue
     if (!isLayerInteractive(scene, 'zones')) continue
-    if (rectsIntersect(rect, zoneBounds(zone))) targets.push({ kind: 'zone', id: zone.name })
+    if (zoneIntersectsRect(zone, rect)) targets.push({ kind: 'zone', id: zone.name })
   }
 
   for (const annotation of scene.annotations) {
@@ -132,8 +132,140 @@ function hitZone(zone: SceneZoneEntity, point: ScenePoint): boolean {
     return nx * nx + ny * ny <= 1
   }
 
+  if (zone.zoneType === 'polygon' && zone.points.length >= 3) {
+    return pointInOrOnPolygon(point, zone.points)
+  }
+
   const bounds = zoneBounds(zone)
   return point.x >= bounds.x && point.x <= bounds.x + bounds.width && point.y >= bounds.y && point.y <= bounds.y + bounds.height
+}
+
+function zoneIntersectsRect(zone: SceneZoneEntity, rect: SimpleRect): boolean {
+  if (zone.zoneType === 'polygon' && zone.points.length >= 3) {
+    return polygonIntersectsRect(zone.points, rect)
+  }
+
+  return rectsIntersect(rect, zoneBounds(zone))
+}
+
+function polygonIntersectsRect(polygon: readonly ScenePoint[], rect: SimpleRect): boolean {
+  if (!rectsIntersect(rect, pointsBounds(polygon))) return false
+
+  const rectPoint = rect.width <= GEOMETRY_EPSILON && rect.height <= GEOMETRY_EPSILON
+  if (rectPoint) return pointInOrOnPolygon({ x: rect.x, y: rect.y }, polygon)
+
+  if (polygon.some((point) => pointInRect(point, rect))) return true
+
+  const corners = rectCorners(rect)
+  if (corners.some((corner) => pointInOrOnPolygon(corner, polygon))) return true
+
+  const rectEdges = rectEdgeSegments(corners)
+  for (let index = 0; index < polygon.length; index += 1) {
+    const start = polygon[index]!
+    const end = polygon[(index + 1) % polygon.length]!
+    if (rectEdges.some(([rectStart, rectEnd]) => segmentsIntersect(start, end, rectStart, rectEnd))) return true
+  }
+
+  return false
+}
+
+const GEOMETRY_EPSILON = 0.000001
+
+function pointInOrOnPolygon(point: ScenePoint, polygon: readonly ScenePoint[]): boolean {
+  return pointOnPolygonBoundary(point, polygon) || pointInPolygon(point, polygon)
+}
+
+function pointInPolygon(point: ScenePoint, polygon: readonly ScenePoint[]): boolean {
+  let inside = false
+
+  for (
+    let currentIndex = 0, previousIndex = polygon.length - 1;
+    currentIndex < polygon.length;
+    previousIndex = currentIndex, currentIndex += 1
+  ) {
+    const current = polygon[currentIndex]!
+    const previous = polygon[previousIndex]!
+    const crossesY = (current.y > point.y) !== (previous.y > point.y)
+    if (!crossesY) continue
+
+    const intersectionX = ((previous.x - current.x) * (point.y - current.y)) / (previous.y - current.y) + current.x
+    if (point.x < intersectionX) inside = !inside
+  }
+
+  return inside
+}
+
+function pointOnPolygonBoundary(point: ScenePoint, polygon: readonly ScenePoint[]): boolean {
+  for (let index = 0; index < polygon.length; index += 1) {
+    if (pointOnSegment(point, polygon[index]!, polygon[(index + 1) % polygon.length]!)) return true
+  }
+
+  return false
+}
+
+function pointInRect(point: ScenePoint, rect: SimpleRect): boolean {
+  return (
+    point.x >= rect.x - GEOMETRY_EPSILON &&
+    point.x <= rect.x + rect.width + GEOMETRY_EPSILON &&
+    point.y >= rect.y - GEOMETRY_EPSILON &&
+    point.y <= rect.y + rect.height + GEOMETRY_EPSILON
+  )
+}
+
+function rectCorners(rect: SimpleRect): ScenePoint[] {
+  return [
+    { x: rect.x, y: rect.y },
+    { x: rect.x + rect.width, y: rect.y },
+    { x: rect.x + rect.width, y: rect.y + rect.height },
+    { x: rect.x, y: rect.y + rect.height },
+  ]
+}
+
+function rectEdgeSegments(corners: readonly ScenePoint[]): Array<[ScenePoint, ScenePoint]> {
+  return [
+    [corners[0]!, corners[1]!],
+    [corners[1]!, corners[2]!],
+    [corners[2]!, corners[3]!],
+    [corners[3]!, corners[0]!],
+  ]
+}
+
+function segmentsIntersect(a: ScenePoint, b: ScenePoint, c: ScenePoint, d: ScenePoint): boolean {
+  if (
+    pointOnSegment(a, c, d) ||
+    pointOnSegment(b, c, d) ||
+    pointOnSegment(c, a, b) ||
+    pointOnSegment(d, a, b)
+  ) {
+    return true
+  }
+
+  const abC = orientation(a, b, c)
+  const abD = orientation(a, b, d)
+  const cdA = orientation(c, d, a)
+  const cdB = orientation(c, d, b)
+
+  const crossesAb = (abC > GEOMETRY_EPSILON && abD < -GEOMETRY_EPSILON)
+    || (abC < -GEOMETRY_EPSILON && abD > GEOMETRY_EPSILON)
+  const crossesCd = (cdA > GEOMETRY_EPSILON && cdB < -GEOMETRY_EPSILON)
+    || (cdA < -GEOMETRY_EPSILON && cdB > GEOMETRY_EPSILON)
+  return crossesAb && crossesCd
+}
+
+function pointOnSegment(point: ScenePoint, start: ScenePoint, end: ScenePoint): boolean {
+  const cross = orientation(start, end, point)
+  if (Math.abs(cross) > GEOMETRY_EPSILON) return false
+
+  return (
+    point.x >= Math.min(start.x, end.x) - GEOMETRY_EPSILON &&
+    point.x <= Math.max(start.x, end.x) + GEOMETRY_EPSILON &&
+    point.y >= Math.min(start.y, end.y) - GEOMETRY_EPSILON &&
+    point.y <= Math.max(start.y, end.y) + GEOMETRY_EPSILON
+  )
+}
+
+function orientation(a: ScenePoint, b: ScenePoint, c: ScenePoint): number {
+  return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
 }
 
 function plantBounds(
@@ -157,8 +289,12 @@ function zoneBounds(zone: SceneZoneEntity): SimpleRect {
     }
   }
 
-  const xs = zone.points.map((point) => point.x)
-  const ys = zone.points.map((point) => point.y)
+  return pointsBounds(zone.points)
+}
+
+function pointsBounds(points: readonly ScenePoint[]): SimpleRect {
+  const xs = points.map((point) => point.x)
+  const ys = points.map((point) => point.y)
   return {
     x: Math.min(...xs),
     y: Math.min(...ys),

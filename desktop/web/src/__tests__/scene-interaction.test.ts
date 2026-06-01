@@ -552,6 +552,36 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('clears existing selection when starting a polygonal zone draft', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'plant-1',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 80, y: 80 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+    const deps = createInteractionDeps(container, store, camera)
+    deps.setSelection(['plant-1'])
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('polygon')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
+
+    expect(selectedObjectIds.value.size).toBe(0)
+    expect(deps.clearSelection).toHaveBeenCalledTimes(1)
+    controller.dispose()
+  })
+
   it('shows polygonal zone draft edge measurements, closing edge, and live area', () => {
     const deps = createInteractionDeps(container, store, camera)
     const controller = new SceneInteractionController(deps as any)
@@ -652,6 +682,34 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('does not select polygonal zones from empty bounding-box space', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [{
+        kind: 'zone',
+        name: 'polygon-1',
+        zoneType: 'polygon',
+        points: [
+          { x: 10, y: 10 },
+          { x: 60, y: 10 },
+          { x: 60, y: 50 },
+        ],
+        fillColor: null,
+        notes: null,
+      }]
+    })
+
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 15, clientY: 45, button: 0 }))
+    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 15, clientY: 45, button: 0 }))
+
+    expect(selectedObjectIds.value.size).toBe(0)
+    expect(zoneMeasurementTexts(container)).toEqual([])
+    controller.dispose()
+  })
+
   it('closes a polygonal zone by clicking the first vertex', () => {
     const onSceneEditCommit = vi.fn()
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
@@ -704,6 +762,47 @@ describe('SceneInteractionController', () => {
 
     const line = container.querySelector<SVGPolylineElement>('[data-polygon-draft-line]')
     expect(line?.getAttribute('points')).toBe('10,10 60,50')
+    expect(store.persisted.zones).toHaveLength(0)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    controller.dispose()
+  })
+
+  it('preserves polygonal zone drafts while space-panning the canvas', () => {
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('polygon')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 60, clientY: 10, button: 0 }))
+
+    expect(container.querySelector('[data-polygon-draft-line]')).not.toBeNull()
+
+    ;(controller as any)._onKeyDown(new KeyboardEvent('keydown', { code: 'Space' }))
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 200, clientY: 150, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 220, clientY: 150, button: 0 }))
+    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 220, clientY: 150, button: 0 }))
+    ;(controller as any)._onKeyUp(new KeyboardEvent('keyup', { code: 'Space' }))
+
+    expect(container.querySelector('[data-polygon-draft-line]')).not.toBeNull()
+    expect(store.persisted.zones).toHaveLength(0)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    controller.dispose()
+  })
+
+  it('preserves polygonal zone drafts while middle-button panning the canvas', () => {
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('polygon')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 60, clientY: 10, button: 0 }))
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 200, clientY: 150, button: 1 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 220, clientY: 150, button: 1 }))
+    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 220, clientY: 150, button: 1 }))
+
+    expect(container.querySelector('[data-polygon-draft-line]')).not.toBeNull()
     expect(store.persisted.zones).toHaveLength(0)
     expect(onSceneEditCommit).not.toHaveBeenCalled()
     controller.dispose()

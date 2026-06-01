@@ -315,7 +315,7 @@ export class SceneInteractionController {
       }))
       this._startScreen = screen
       this._deps.render('viewport')
-      this._refreshSelectedZoneMeasurements()
+      this._refreshViewportDependentMeasurements()
       return
     }
 
@@ -357,6 +357,7 @@ export class SceneInteractionController {
     if (this._pointerId !== null && event.pointerId !== this._pointerId) return
     const screen = this._screenPoint(event)
     const rawWorld = this._deps.camera.screenToWorld(screen)
+    const shouldPreservePolygonDraft = this._mode === 'panning' && this._polygonDraftVertices.length > 0
 
     if (this._mode === 'dragging' && this._dragEdit) {
       const moved = Math.abs(this._lastDragDelta.x) > 0.001
@@ -415,8 +416,8 @@ export class SceneInteractionController {
       }
     }
 
-    this._cancelTransientInteraction()
-    this._refreshSelectedZoneMeasurements()
+    this._cancelTransientInteraction({ preservePolygonDraft: shouldPreservePolygonDraft })
+    this._refreshViewportDependentMeasurements()
   }
 
   private readonly _onWheel = (event: WheelEvent): void => {
@@ -425,7 +426,7 @@ export class SceneInteractionController {
     const factor = event.deltaY < 0 ? 1.1 : 1 / 1.1
     this._deps.setViewport(this._deps.camera.zoomAroundScreenPoint(screen, factor))
     this._deps.render('viewport')
-    this._refreshSelectedZoneMeasurements()
+    this._refreshViewportDependentMeasurements()
   }
 
   private readonly _onDragOver = (event: DragEvent): void => {
@@ -498,7 +499,7 @@ export class SceneInteractionController {
     }
   }
 
-  private _cancelTransientInteraction(): void {
+  private _cancelTransientInteraction(options: { preservePolygonDraft?: boolean } = {}): void {
     this._mode = 'idle'
     this._pointerId = null
     this._startScreen = null
@@ -510,7 +511,7 @@ export class SceneInteractionController {
     this._cachedContainerRect = null
     resetSceneDragState(this._dragState)
     this._bandAdditive = false
-    this._cancelPolygonDraft()
+    if (!options.preservePolygonDraft) this._cancelPolygonDraft()
     hideInteractionPreview(this._preview)
     this._deps.container.style.cursor = cursorForTool(this._tool)
   }
@@ -546,6 +547,10 @@ export class SceneInteractionController {
       return
     }
 
+    if (this._polygonDraftVertices.length === 0 && this._deps.getSelection().size > 0) {
+      this._deps.clearSelection()
+      this._deps.render('scene')
+    }
     this._polygonDraftVertices = [...this._polygonDraftVertices, point]
     this._polygonActiveWorld = point
     this._polygonDraftOverlay.update(this._polygonDraftVertices, this._polygonActiveWorld, this._deps.camera)
@@ -614,6 +619,16 @@ export class SceneInteractionController {
       createPolygonalZoneDraftMeasurements(this._polygonDraftVertices, this._polygonActiveWorld),
       this._deps.camera,
     )
+  }
+
+  private _refreshViewportDependentMeasurements(): void {
+    if (this._polygonDraftVertices.length > 0) {
+      this._polygonDraftOverlay.update(this._polygonDraftVertices, this._polygonActiveWorld, this._deps.camera)
+      this._updateDraftPolygonMeasurements()
+      return
+    }
+
+    this._refreshSelectedZoneMeasurements()
   }
 
   private _refreshSelectedZoneMeasurements(): void {
