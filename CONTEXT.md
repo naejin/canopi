@@ -60,8 +60,12 @@ _Avoid_: Shape, polygon, region
 A zone whose boundary is defined by three or more zone edges. A polygonal zone is still a zone; "polygonal" describes its boundary geometry.
 _Avoid_: Polygon, shape
 
+**Elliptical Zone**:
+A zone whose boundary is an ellipse. An elliptical zone is still a zone; "elliptical" describes its boundary geometry.
+_Avoid_: Oval, shape
+
 **Zone Edge**:
-One straight boundary segment of a zone. A polygonal zone has many zone edges; a rectangular zone has four zone edges.
+One straight boundary segment of a zone. A polygonal zone has many zone edges; a rectangular zone has four zone edges; an elliptical zone has no zone edges.
 _Avoid_: Line, stroke
 
 **Zone Measurement**:
@@ -190,6 +194,9 @@ Use **Zone** when the drawn area has design meaning. Use "shape" only for implem
 
 **Zone vs Polygonal Zone**:
 A **Polygonal Zone** is a kind of **Zone** with an edge-based boundary. Use "polygon" only for implementation or geometry discussions.
+
+**Ellipse vs Oval**:
+Use **Elliptical Zone** for zones with elliptical boundaries. "Oval" is acceptable in casual conversation, but it is not the canonical domain term.
 
 **Zone Edge vs Line**:
 A **Zone Edge** is part of a zone boundary. A line is an independently drawn design object or implementation geometry, not the canonical term for a polygon side.
