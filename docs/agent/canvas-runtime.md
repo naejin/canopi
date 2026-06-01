@@ -54,6 +54,19 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - Interaction selection writes go through the runtime-owned selection seam.
 - Document-level keyboard handlers must guard with `isEditableTarget(event.target)` so Delete/Backspace/etc. do not fire while typing.
 
+## Zone Measurements
+
+- Zone Measurements are derived presentation for zone geometry, not persisted design objects or annotations.
+- Render Zone Measurement labels through a renderer-independent, screen-space overlay so Pixi and Canvas2D backends do not duplicate measurement UI.
+- Show Zone Measurements while drawing a zone and for a single selected top-level Zone; suppress them for multi-selection and group selection.
+- Rectangular and polygonal Zones use the same measurement model: horizontal edge-length labels at readable edge midpoints plus one area label for the whole Zone.
+- Polygonal Zone drawing uses click-to-place vertices. The draft remains transient until the user closes it; Escape cancels the draft, Backspace removes the last vertex, and closing creates one scene edit.
+- During polygonal Zone drawing, live measurements include committed edge lengths, the active edge to the pointer, and once the preview has enough points to form a polygon, the closing edge back to the first point plus live area.
+- Format Zone Measurement values compactly: centimeters for distances below one meter, meters for ordinary distances, square centimeters for areas below one square meter, square meters for ordinary areas, and hectares for large areas.
+- Live Zone Measurements must describe the geometry that will actually be created, including snap-to-grid and snap-to-guides effects while drawing.
+- Hide edge-length labels for edges that are too short in screen space; zooming in should make them available again. Area labels should remain visible for valid areas.
+- Zone Measurement overlays respect Zone layer visibility. Locking does not suppress read-only measurements for an otherwise visible selected Zone.
+
 ## Annotation Rules
 
 - Annotation geometry comes from shared helpers in `runtime/annotation-layout.ts`.

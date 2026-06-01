@@ -56,6 +56,18 @@ _Avoid_: Species, plant record, catalog item
 A named area in a design, optionally typed by ecological or functional purpose. A design may contain many zones, and zones may overlap placed plants or other zones.
 _Avoid_: Shape, polygon, region
 
+**Polygonal Zone**:
+A zone whose boundary is defined by three or more zone edges. A polygonal zone is still a zone; "polygonal" describes its boundary geometry.
+_Avoid_: Polygon, shape
+
+**Zone Edge**:
+One straight boundary segment of a zone. A polygonal zone has many zone edges; a rectangular zone has four zone edges.
+_Avoid_: Line, stroke
+
+**Zone Measurement**:
+A derived physical size description of a zone or zone edge, such as width, height, edge length, or area. A zone measurement describes the zone's current geometry; it is not a separate design object.
+_Avoid_: Shape metadata, annotation, label
+
 **Annotation**:
 A text note positioned in a design. An annotation explains or labels part of the design without becoming a zone, placed plant, or timeline action.
 _Avoid_: Label, comment
@@ -175,6 +187,15 @@ Use **Canonical Name** for species identity in Canopi. "Scientific name" may be 
 
 **Zone vs Shape**:
 Use **Zone** when the drawn area has design meaning. Use "shape" only for implementation or geometry discussions.
+
+**Zone vs Polygonal Zone**:
+A **Polygonal Zone** is a kind of **Zone** with an edge-based boundary. Use "polygon" only for implementation or geometry discussions.
+
+**Zone Edge vs Line**:
+A **Zone Edge** is part of a zone boundary. A line is an independently drawn design object or implementation geometry, not the canonical term for a polygon side.
+
+**Zone Measurement vs Annotation**:
+A **Zone Measurement** is derived from a zone's geometry. An **Annotation** is authored text in the design.
 
 **Climate Zone vs Hardiness Zone**:
 Use **Climate Zone** for broad site/template classification. Use **Hardiness Zone** for species cold-tolerance compatibility.
