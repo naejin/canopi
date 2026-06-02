@@ -27,7 +27,7 @@ function createInteractionDeps(
   container: HTMLDivElement,
   store: SceneStore,
   camera: CameraController,
-  overrides: Partial<Pick<SceneInteractionDeps, 'render' | 'sceneEdits' | 'setTool' | 'setHoveredEntityId' | 'setViewport'>>
+  overrides: Partial<Pick<SceneInteractionDeps, 'render' | 'sceneEdits' | 'setTool' | 'setHoveredEntityId' | 'setViewport' | 'getPlantPresentationContext'>>
     & { onSceneEditCommit?: (type: string) => void } = {},
 ): SceneInteractionDeps {
   let selection = new Set<string>()
@@ -73,7 +73,7 @@ function createInteractionDeps(
       store.setViewport(viewport)
     })) as SceneInteractionDeps['setViewport'],
     getSpeciesCache: () => new Map(),
-    getPlantPresentationContext: createPlantPresentationContext,
+    getPlantPresentationContext: overrides.getPlantPresentationContext ?? createPlantPresentationContext,
     getSelection: () => new Set(selection),
     setSelection,
     clearSelection,
@@ -605,6 +605,8 @@ describe('SceneInteractionController', () => {
     expect(container.querySelector('[data-plant-spacing-guide]')).not.toBeNull()
     expect(container.querySelector<HTMLElement>('[data-plant-spacing-length-label]')?.textContent).toBe('6 m')
     expect(container.querySelectorAll('[data-plant-spacing-ghost]')).toHaveLength(3)
+    expect(container.querySelector<HTMLElement>('[data-plant-spacing-ghost]')?.style.width).toBe('4px')
+    expect(container.querySelector<HTMLElement>('[data-plant-spacing-ghost]')?.style.height).toBe('4px')
     expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.textContent).toContain('3')
 
     ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 26, clientY: 30, button: 0 }))
@@ -731,6 +733,51 @@ describe('SceneInteractionController', () => {
     const ghostCount = container.querySelectorAll('[data-plant-spacing-ghost]').length
     expect(ghostCount).toBeGreaterThan(0)
     expect(ghostCount).toBeLessThan(2000)
+    controller.dispose()
+  })
+
+  it('sizes Plant Spacing preview ghosts from canopy plant presentation', () => {
+    plantSpacingIntervalM.value = 2
+    camera.setViewport({ x: 0, y: 0, scale: 10 })
+    store.setViewport({ x: 0, y: 0, scale: 10 })
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'source',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 4,
+        position: { x: 2, y: 3 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+    const deps = createInteractionDeps(container, store, camera, {
+      getPlantPresentationContext: (viewportScale) => ({
+        ...createPlantPresentationContext(viewportScale),
+        sizeMode: 'canopy',
+      }),
+    })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('plant-spacing')
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 60, clientY: 30, button: 0 }))
+
+    const ghosts = container.querySelectorAll<HTMLElement>('[data-plant-spacing-ghost]')
+    expect(ghosts).toHaveLength(2)
+    expect(ghosts[0]?.style.width).toBe('40px')
+    expect(ghosts[0]?.style.height).toBe('40px')
+
+    ;(controller as any)._onWheel(new WheelEvent('wheel', { clientX: 0, clientY: 0, deltaY: -120 }))
+
+    const resizedGhost = container.querySelector<HTMLElement>('[data-plant-spacing-ghost]')!
+    expect(resizedGhost.style.width).not.toBe('40px')
+    expect(resizedGhost.style.height).not.toBe('40px')
     controller.dispose()
   })
 

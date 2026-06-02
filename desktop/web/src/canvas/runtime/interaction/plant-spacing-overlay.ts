@@ -25,6 +25,7 @@ interface PlantSpacingPreviewView {
   lengthLabel: string
   ghostPositions: readonly ScenePoint[]
   ghostColor: string
+  ghostRadiusPx: number
 }
 
 interface PlantSpacingOverlayEvents {
@@ -339,12 +340,13 @@ export function createPlantSpacingOverlay(
         const ghost = document.createElement('div')
         ghost.dataset.plantSpacingGhost = String(index)
         const screen = camera.worldToScreen(position)
+        const diameterPx = `${preview.ghostRadiusPx * 2}px`
         Object.assign(ghost.style, {
           position: 'absolute',
           left: `${screen.x}px`,
           top: `${screen.y}px`,
-          width: '12px',
-          height: '12px',
+          width: diameterPx,
+          height: diameterPx,
           borderRadius: 'var(--radius-full)',
           border: `2px solid ${preview.ghostColor}`,
           background: preview.ghostColor,

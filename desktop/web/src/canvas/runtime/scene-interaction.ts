@@ -1331,6 +1331,7 @@ export class SceneInteractionController {
       lengthLabel: formatPlantSpacingIntervalInput(length),
       ghostPositions: positions,
       ghostColor: this._plantSpacingGhostColor(source.plant),
+      ghostRadiusPx: this._plantSpacingGhostRadiusPx(source.plant),
     }, this._deps.camera)
   }
 
@@ -1455,6 +1456,12 @@ export class SceneInteractionController {
   private _plantSpacingGhostColor(plant: ScenePlantEntity): string {
     const context = this._deps.getPlantPresentationContext(this._deps.camera.viewport.scale)
     return resolvePlantDisplayColor(plant, context.colorByAttr, context.speciesCache)
+  }
+
+  private _plantSpacingGhostRadiusPx(plant: ScenePlantEntity): number {
+    const context = this._deps.getPlantPresentationContext(this._deps.camera.viewport.scale)
+    const bounds = getPlantWorldBounds(plant, context)
+    return Math.max(bounds.width, bounds.height) * this._deps.camera.viewport.scale / 2
   }
 
   private _plantSpacingEndpointFromEvent(event: Pick<MouseEvent, 'clientX' | 'clientY' | 'shiftKey'>): ScenePoint {
