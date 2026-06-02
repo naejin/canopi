@@ -6,6 +6,7 @@ export function cursorForTool(tool: string): string {
   if (tool === 'text') return 'text'
   if (tool === 'plant-stamp') return 'crosshair'
   if (tool === 'object-stamp') return 'crosshair'
+  if (tool === 'plant-spacing') return 'crosshair'
   return 'default'
 }
 

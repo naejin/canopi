@@ -102,6 +102,8 @@
       "plantStampDesc": "Colocar plantas desde la base de datos",
       "objectStamp": "Sello de objeto",
       "objectStampDesc": "Copiar objetos de diseño existentes",
+      "plantSpacing": "Espaciado de plantas",
+      "plantSpacingDesc": "Repetir una planta colocada a lo largo de una guía de espaciado",
       "dimension": "Cota",
       "dimensionDesc": "Medir distancia entre puntos o formas",
       "patternFill": "Relleno de patrón",
@@ -112,6 +114,19 @@
       "arrowDesc": "Dibujar una anotación con flecha",
       "callout": "Globo de texto",
       "calloutDesc": "Agregar un cuadro de texto"
+    },
+    "plantSpacing": {
+      "title": "Espaciado de plantas",
+      "selectSource": "Selecciona una planta colocada",
+      "sourceSelected": "Fuente seleccionada",
+      "sourceMissed": "Selecciona una planta colocada visible y desbloqueada",
+      "interval": "Intervalo",
+      "generatedCount": "{{count}} generadas",
+      "denseWarning": "Confirmar antes de crear {{count}} plantas",
+      "confirmDense": "Confirmar espaciado denso",
+      "confirmCounts": "{{generated}} generadas · {{total}} en total",
+      "confirm": "Confirmar",
+      "cancel": "Cancelar"
     },
     "grid": {
       "grid": "Cuadrícula",

@@ -99,6 +99,20 @@ describe('command registry canvas tool switching', () => {
     expect(activeTool.value).toBe('object-stamp')
   })
 
+  it('exposes Plant Spacing through the shared command graph', () => {
+    const setTool = vi.fn()
+    setCurrentCanvasSession({
+      setTool,
+    } as any)
+
+    getCommand('canvas.tool.plantSpacing').action()
+
+    expect(getCommand('canvas.tool.plantSpacing').shortcut).toBe('S')
+    expect(activePanel.value).toBe('canvas')
+    expect(setTool).toHaveBeenCalledWith('plant-spacing')
+    expect(activeTool.value).toBe('plant-spacing')
+  })
+
   it('falls back to priming the mirror tool state when no session is mounted', () => {
     getCommand('canvas.tool.text').action()
 

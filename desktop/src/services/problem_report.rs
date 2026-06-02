@@ -363,6 +363,7 @@ fn settings_summary(context: &ProblemReportContext) -> serde_json::Value {
             "map_layer_visible": settings.map_layer_visible,
             "contour_visible": settings.contour_visible,
             "hillshade_visible": settings.hillshade_visible,
+            "plant_spacing_interval_m": settings.plant_spacing_interval_m,
         })
     } else {
         json!({
@@ -745,6 +746,7 @@ mod tests {
                 target: "test-os/test-arch".to_owned(),
                 settings: Some(Settings {
                     default_design_dir: "/home/alice/designs".to_owned(),
+                    plant_spacing_interval_m: 0.75,
                     ..Settings::default()
                 }),
                 settings_error: None,
@@ -781,6 +783,8 @@ mod tests {
         assert!(bundle_text.contains("backend-log.txt"));
         assert!(bundle_text.contains("frontend-diagnostics.json"));
         assert!(bundle_text.contains("Render failed"));
+        assert!(bundle_text.contains("\"plant_spacing_interval_m\""));
+        assert!(bundle_text.contains("0.75"));
         assert!(!bundle_text.contains("current-design.canopi"));
         assert!(!bundle_text.contains("/home/alice"));
         assert!(!bundle_text.contains("Garden Site.canopi"));

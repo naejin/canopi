@@ -102,6 +102,8 @@
       "plantStampDesc": "Posizionare piante dal database",
       "objectStamp": "Timbro oggetto",
       "objectStampDesc": "Copiare oggetti di progetto esistenti",
+      "plantSpacing": "Distanza piante",
+      "plantSpacingDesc": "Ripetere una pianta posizionata lungo una guida di distanza",
       "dimension": "Quota",
       "dimensionDesc": "Misurare la distanza tra punti o forme",
       "patternFill": "Riempimento a motivo",
@@ -112,6 +114,19 @@
       "arrowDesc": "Disegna un'annotazione con freccia",
       "callout": "Fumetto",
       "calloutDesc": "Aggiungi un fumetto di testo"
+    },
+    "plantSpacing": {
+      "title": "Distanza piante",
+      "selectSource": "Seleziona una pianta posizionata",
+      "sourceSelected": "Fonte selezionata",
+      "sourceMissed": "Seleziona una pianta posizionata visibile e sbloccata",
+      "interval": "Intervallo",
+      "generatedCount": "{{count}} generate",
+      "denseWarning": "Conferma prima di creare {{count}} piante",
+      "confirmDense": "Conferma distanza densa",
+      "confirmCounts": "{{generated}} generate · {{total}} totali",
+      "confirm": "Conferma",
+      "cancel": "Annulla"
     },
     "grid": {
       "grid": "Griglia",

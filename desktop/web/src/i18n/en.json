@@ -102,6 +102,8 @@
       "plantStampDesc": "Place plants from database",
       "objectStamp": "Object Stamp",
       "objectStampDesc": "Copy existing design objects",
+      "plantSpacing": "Plant Spacing",
+      "plantSpacingDesc": "Repeat a placed plant along a spacing guide",
       "dimension": "Dimension",
       "dimensionDesc": "Measure distance between points or shapes",
       "patternFill": "Pattern Fill",
@@ -112,6 +114,19 @@
       "arrowDesc": "Draw an arrow annotation",
       "callout": "Callout",
       "calloutDesc": "Add a text callout box"
+    },
+    "plantSpacing": {
+      "title": "Plant Spacing",
+      "selectSource": "Select a placed plant",
+      "sourceSelected": "Source selected",
+      "sourceMissed": "Select a visible, unlocked placed plant",
+      "interval": "Interval",
+      "generatedCount": "{{count}} generated",
+      "denseWarning": "Confirm before creating {{count}} plants",
+      "confirmDense": "Confirm dense Plant Spacing",
+      "confirmCounts": "{{generated}} generated · {{total}} total",
+      "confirm": "Confirm",
+      "cancel": "Cancel"
     },
     "grid": {
       "grid": "Grid",

@@ -30,6 +30,7 @@ import {
   PolygonIcon,
   TextIcon,
   ObjectStampIcon,
+  SpacingIcon,
   GridIcon,
   SnapIcon,
   RulerIcon,
@@ -54,6 +55,7 @@ const TOOLS: ToolDef[] = [
   { id: 'select',      labelKey: 'canvas.tools.select',      descKey: 'canvas.tools.selectDesc',      shortcut: 'V', Icon: SelectIcon },
   { id: 'hand',        labelKey: 'canvas.tools.hand',        descKey: 'canvas.tools.handDesc',        shortcut: 'H', Icon: HandIcon },
   { id: 'object-stamp', labelKey: 'canvas.tools.objectStamp', descKey: 'canvas.tools.objectStampDesc', Icon: ObjectStampIcon },
+  { id: 'plant-spacing', labelKey: 'canvas.tools.plantSpacing', descKey: 'canvas.tools.plantSpacingDesc', shortcut: 'S', Icon: SpacingIcon },
 ]
 
 const SHAPE_TOOLS: ToolDef[] = [

@@ -246,6 +246,7 @@ export type Settings = {
 	contour_interval: number,
 	hillshade_visible: boolean,
 	hillshade_opacity: number,
+	plant_spacing_interval_m: number,
 };
 
 export type Sort = "Name" | "Family" | "Height" | "Hardiness" | "GrowthRate" | "Relevance";

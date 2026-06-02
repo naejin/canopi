@@ -33,6 +33,7 @@ export const TOOL_SHORTCUTS = {
   ellipse: 'E',
   polygon: 'P',
   text: 'T',
+  plantSpacing: 'S',
 } as const
 
 export const panelKeys: Record<string, Panel> = {
@@ -53,4 +54,6 @@ export const canvasToolKeys: Record<string, string> = {
   P: 'polygon',
   t: 'text',
   T: 'text',
+  s: 'plant-spacing',
+  S: 'plant-spacing',
 }

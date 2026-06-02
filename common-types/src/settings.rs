@@ -31,6 +31,8 @@ pub struct Settings {
     pub contour_interval: u32,
     pub hillshade_visible: bool,
     pub hillshade_opacity: f32,
+    #[serde(default = "default_plant_spacing_interval_m")]
+    pub plant_spacing_interval_m: f64,
 }
 
 impl Default for Settings {
@@ -62,8 +64,13 @@ impl Default for Settings {
             contour_interval: 0,
             hillshade_visible: false,
             hillshade_opacity: 0.55,
+            plant_spacing_interval_m: default_plant_spacing_interval_m(),
         }
     }
+}
+
+fn default_plant_spacing_interval_m() -> f64 {
+    0.5
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, Default)]

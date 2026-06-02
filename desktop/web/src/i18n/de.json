@@ -102,6 +102,8 @@
       "plantStampDesc": "Pflanzen aus der Datenbank platzieren",
       "objectStamp": "Objektstempel",
       "objectStampDesc": "Vorhandene Entwurfsobjekte kopieren",
+      "plantSpacing": "Pflanzenabstand",
+      "plantSpacingDesc": "Eine platzierte Pflanze entlang einer Abstandshilfe wiederholen",
       "dimension": "Bemaßung",
       "dimensionDesc": "Abstand zwischen Punkten oder Formen messen",
       "patternFill": "Musterfüllung",
@@ -112,6 +114,19 @@
       "arrowDesc": "Pfeilanmerkung zeichnen",
       "callout": "Legende",
       "calloutDesc": "Textlegende hinzufügen"
+    },
+    "plantSpacing": {
+      "title": "Pflanzenabstand",
+      "selectSource": "Platzierte Pflanze auswählen",
+      "sourceSelected": "Quelle ausgewählt",
+      "sourceMissed": "Wähle eine sichtbare, nicht gesperrte platzierte Pflanze",
+      "interval": "Intervall",
+      "generatedCount": "{{count}} erzeugt",
+      "denseWarning": "Vor dem Erzeugen von {{count}} Pflanzen bestätigen",
+      "confirmDense": "Dichten Pflanzenabstand bestätigen",
+      "confirmCounts": "{{generated}} erzeugt · {{total}} gesamt",
+      "confirm": "Bestätigen",
+      "cancel": "Abbrechen"
     },
     "grid": {
       "grid": "Raster",

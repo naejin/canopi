@@ -102,6 +102,8 @@
       "plantStampDesc": "Planten uit database plaatsen",
       "objectStamp": "Objectstempel",
       "objectStampDesc": "Bestaande ontwerpobjecten kopiëren",
+      "plantSpacing": "Plantafstand",
+      "plantSpacingDesc": "Een geplaatste plant langs een afstandslijn herhalen",
       "dimension": "Maatvoering",
       "dimensionDesc": "Afstand meten tussen punten of vormen",
       "patternFill": "Patroonvulling",
@@ -112,6 +114,19 @@
       "arrowDesc": "Een pijlannotatie tekenen",
       "callout": "Tekstballon",
       "calloutDesc": "Een tekstballonvak toevoegen"
+    },
+    "plantSpacing": {
+      "title": "Plantafstand",
+      "selectSource": "Selecteer een geplaatste plant",
+      "sourceSelected": "Bron geselecteerd",
+      "sourceMissed": "Selecteer een zichtbare, ontgrendelde geplaatste plant",
+      "interval": "Interval",
+      "generatedCount": "{{count}} gegenereerd",
+      "denseWarning": "Bevestig voordat {{count}} planten worden gemaakt",
+      "confirmDense": "Dichte plantafstand bevestigen",
+      "confirmCounts": "{{generated}} gegenereerd · {{total}} totaal",
+      "confirm": "Bevestigen",
+      "cancel": "Annuleren"
     },
     "grid": {
       "grid": "Raster",

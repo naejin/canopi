@@ -2,6 +2,7 @@ import { batch } from '@preact/signals'
 import type { BasemapStyle } from '../../generated/contracts'
 import type { Locale, Settings, Theme } from '../../types/settings'
 import { setSettings } from '../../ipc/settings'
+import { FALLBACK_PLANT_SPACING_INTERVAL_M } from '../../canvas/plant-spacing-interval'
 import { normalizeBasemapStyle } from '../../maplibre/config'
 import {
   contourIntervalMeters,
@@ -23,6 +24,7 @@ import {
   autoSaveIntervalMs,
   basemapStyle,
   locale,
+  plantSpacingIntervalM,
   theme,
 } from './state'
 
@@ -35,6 +37,7 @@ export interface SettingsProjectionDraft {
   snapToGrid: boolean
   snapToGuides: boolean
   autoSaveIntervalMs: number
+  plantSpacingIntervalM: number
   bottomPanel: {
     open: boolean
     height: number
@@ -75,6 +78,11 @@ function normalizeContourInterval(value: number, fallback: number): number {
   return Math.max(0, Math.round(value))
 }
 
+function normalizePositiveMeters(value: number, fallback: number): number {
+  if (!Number.isFinite(value) || value <= 0) return fallback
+  return value
+}
+
 function normalizeTheme(value: Theme): Theme {
   return value === 'dark' ? 'dark' : 'light'
 }
@@ -91,6 +99,7 @@ function createDraftFromProjection(): SettingsProjectionDraft {
     snapToGrid: snapToGridEnabled.value,
     snapToGuides: snapToGuidesEnabled.value,
     autoSaveIntervalMs: autoSaveIntervalMs.value,
+    plantSpacingIntervalM: plantSpacingIntervalM.value,
     bottomPanel: {
       open: bottomPanelOpen.value,
       height: bottomPanelHeight.value,
@@ -116,6 +125,10 @@ function normalizeDraft(draft: SettingsProjectionDraft): SettingsProjectionDraft
     snapToGrid: draft.snapToGrid,
     snapToGuides: draft.snapToGuides,
     autoSaveIntervalMs: Math.max(0, Math.round(draft.autoSaveIntervalMs)),
+    plantSpacingIntervalM: normalizePositiveMeters(
+      draft.plantSpacingIntervalM,
+      FALLBACK_PLANT_SPACING_INTERVAL_M,
+    ),
     bottomPanel: {
       open: draft.bottomPanel.open,
       height: draft.bottomPanel.height,
@@ -141,6 +154,7 @@ function applyDraftToProjection(draft: SettingsProjectionDraft): void {
     snapToGridEnabled.value = draft.snapToGrid
     snapToGuidesEnabled.value = draft.snapToGuides
     autoSaveIntervalMs.value = draft.autoSaveIntervalMs
+    plantSpacingIntervalM.value = draft.plantSpacingIntervalM
     bottomPanelOpen.value = draft.bottomPanel.open
     bottomPanelHeight.value = draft.bottomPanel.height
     bottomPanelTab.value = draft.bottomPanel.tab
@@ -168,6 +182,7 @@ function settingsFromDraft(base: Settings, draft: SettingsProjectionDraft): Sett
     snap_to_grid: draft.snapToGrid,
     snap_to_guides: draft.snapToGuides,
     auto_save_interval_s: Math.round(draft.autoSaveIntervalMs / 1000),
+    plant_spacing_interval_m: draft.plantSpacingIntervalM,
     bottom_panel_open: draft.bottomPanel.open,
     bottom_panel_height: draft.bottomPanel.height,
     bottom_panel_tab: draft.bottomPanel.tab,
@@ -233,6 +248,7 @@ export function hydrateSettingsProjection(settings: Settings): void {
     snapToGrid: settings.snap_to_grid,
     snapToGuides: settings.snap_to_guides,
     autoSaveIntervalMs: settings.auto_save_interval_s * 1000,
+    plantSpacingIntervalM: settings.plant_spacing_interval_m,
     bottomPanel: {
       open: settings.bottom_panel_open,
       height: settings.bottom_panel_height,

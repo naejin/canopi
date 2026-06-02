@@ -87,6 +87,7 @@ export type AppCommandId =
   | 'canvas.tool.polygon'
   | 'canvas.tool.text'
   | 'canvas.tool.objectStamp'
+  | 'canvas.tool.plantSpacing'
   | 'canvas.copy'
   | 'canvas.paste'
   | 'canvas.duplicateSelected'
@@ -129,6 +130,7 @@ const TOOL_COMMAND_IDS: Record<string, AppCommandId> = {
   polygon: 'canvas.tool.polygon',
   text: 'canvas.tool.text',
   'object-stamp': 'canvas.tool.objectStamp',
+  'plant-spacing': 'canvas.tool.plantSpacing',
 }
 
 const MENU_ORDER: readonly AppMenuId[] = ['file', 'edit', 'view', 'help']
@@ -357,6 +359,13 @@ const APP_COMMANDS: readonly AppCommandDefinition[] = [
     label: () => t('canvas.tools.objectStamp'),
     palette: true,
     run: () => switchTool('object-stamp'),
+  },
+  {
+    id: 'canvas.tool.plantSpacing',
+    label: () => t('canvas.tools.plantSpacing'),
+    shortcut: TOOL_SHORTCUTS.plantSpacing,
+    palette: true,
+    run: () => switchTool('plant-spacing'),
   },
   {
     id: 'canvas.copy',

@@ -70,6 +70,7 @@ beforeEach(() => {
     contour_interval: 0,
     hillshade_visible: false,
     hillshade_opacity: 0.55,
+    plant_spacing_interval_m: 0.5,
   })
 })
 
@@ -133,6 +134,7 @@ describe('bottom panel actions', () => {
       contour_interval: 12,
       hillshade_visible: true,
       hillshade_opacity: 0.2,
+      plant_spacing_interval_m: 0.5,
     })
 
     expect(layerVisibility.value.base).toBe(false)

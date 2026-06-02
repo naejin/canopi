@@ -23,7 +23,7 @@ import {
 } from '../../app/panel-targets/state'
 import { createAppSceneRuntimePanelTargetAdapter } from '../../app/canvas-runtime/panel-target-adapter'
 import { canvasClean } from '../../__tests__/support/design-session-state'
-import { locale } from '../../app/settings/state'
+import { locale, plantSpacingIntervalM } from '../../app/settings/state'
 import type { CanopiFile, PanelTarget } from '../../types/design'
 import { speciesTarget } from '../../target'
 import { SceneCanvasRuntime } from './scene-runtime.ts'
@@ -184,6 +184,7 @@ describe('scene canvas runtime', () => {
     layerOpacity.value = {}
     plantSizeMode.value = 'default'
     plantColorByAttr.value = null
+    plantSpacingIntervalM.value = 0.5
     canvasClean.value = true
     vi.mocked(getCommonNames).mockReset()
     vi.mocked(getCommonNames).mockResolvedValue({})
@@ -704,6 +705,43 @@ describe('scene canvas runtime', () => {
     runtime.undo()
     expect(runtime.getSceneStore().persisted.groups).toHaveLength(1)
     expect(runtime.getSceneStore().persisted.plants).toHaveLength(2)
+    runtime.destroy()
+  })
+
+  it('records Plant Spacing commit as one undoable scene edit', async () => {
+    plantSpacingIntervalM.value = 5
+    const runtime = new SceneCanvasRuntime()
+    const { container } = await initRuntimeWithStubbedRenderer(runtime)
+    Object.defineProperty(container, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({
+        left: 0,
+        top: 0,
+        right: 400,
+        bottom: 300,
+        width: 400,
+        height: 300,
+      }),
+    })
+    runtime.loadDocument(makeFile())
+    ;(runtime as any)._camera.setViewport({ x: 0, y: 0, scale: 1 })
+    runtime.getSceneStore().setViewport({ x: 0, y: 0, scale: 1 })
+    runtime.setTool('plant-spacing')
+
+    const interaction = (runtime as any)._interaction
+    interaction._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
+    interaction._onPointerMove(new MouseEvent('pointermove', { clientX: 20, clientY: 10, button: 0 }))
+    interaction._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 10, button: 0 }))
+
+    expect(runtime.getSceneStore().persisted.plants).toHaveLength(4)
+    expect(runtime.canUndo.value).toBe(true)
+
+    runtime.undo()
+    expect(runtime.getSceneStore().persisted.plants).toHaveLength(2)
+    expect(runtime.canRedo.value).toBe(true)
+
+    runtime.redo()
+    expect(runtime.getSceneStore().persisted.plants).toHaveLength(4)
     runtime.destroy()
   })
 

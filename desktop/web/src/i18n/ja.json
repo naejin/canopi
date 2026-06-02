@@ -102,6 +102,8 @@
       "plantStampDesc": "データベースから植物を配置",
       "objectStamp": "オブジェクトスタンプ",
       "objectStampDesc": "既存のデザインオブジェクトをコピー",
+      "plantSpacing": "植物間隔",
+      "plantSpacingDesc": "配置済みの植物を間隔ガイドに沿って繰り返す",
       "dimension": "寸法",
       "dimensionDesc": "点や図形間の距離を計測",
       "patternFill": "パターン塗りつぶし",
@@ -112,6 +114,19 @@
       "arrowDesc": "矢印の注釈を描画",
       "callout": "吹き出し",
       "calloutDesc": "テキスト吹き出しボックスを追加"
+    },
+    "plantSpacing": {
+      "title": "植物間隔",
+      "selectSource": "配置済みの植物を選択",
+      "sourceSelected": "ソースを選択しました",
+      "sourceMissed": "表示中でロックされていない配置済み植物を選択",
+      "interval": "間隔",
+      "generatedCount": "{{count}} 生成",
+      "denseWarning": "{{count}} 本の植物を作成する前に確認",
+      "confirmDense": "密な植物間隔を確認",
+      "confirmCounts": "{{generated}} 生成 · 合計 {{total}}",
+      "confirm": "確認",
+      "cancel": "キャンセル"
     },
     "grid": {
       "grid": "グリッド",

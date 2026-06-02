@@ -22,7 +22,7 @@ import {
   snapToGridEnabled,
   snapToGuidesEnabled,
 } from '../app/canvas-settings/signals'
-import { autoSaveIntervalMs, basemapStyle, locale, theme } from '../app/settings/state'
+import { autoSaveIntervalMs, basemapStyle, locale, plantSpacingIntervalM, theme } from '../app/settings/state'
 import {
   flushSettingsProjection,
   hydrateSettingsProjection,
@@ -59,6 +59,7 @@ function baseSettings(overrides: Partial<Settings> = {}): Settings {
     contour_interval: 0,
     hillshade_visible: false,
     hillshade_opacity: 0.55,
+    plant_spacing_interval_m: 0.5,
     ...overrides,
   }
 }
@@ -78,6 +79,7 @@ function resetProjectionSignals(): void {
   contourIntervalMeters.value = 0
   hillshadeVisible.value = false
   hillshadeOpacity.value = 0.55
+  plantSpacingIntervalM.value = 0.5
 }
 
 function readSource(path: string): string {
@@ -120,6 +122,7 @@ describe('settings projection', () => {
       contour_interval: 12,
       hillshade_visible: true,
       hillshade_opacity: 0.2,
+      plant_spacing_interval_m: 0.75,
     }))
 
     expect(locale.value).toBe('fr')
@@ -137,6 +140,7 @@ describe('settings projection', () => {
     expect(contourIntervalMeters.value).toBe(12)
     expect(hillshadeVisible.value).toBe(true)
     expect(hillshadeOpacity.value).toBe(0.2)
+    expect(plantSpacingIntervalM.value).toBe(0.75)
     expect(vi.mocked(setSettings)).not.toHaveBeenCalled()
   })
 
@@ -163,6 +167,7 @@ describe('settings projection', () => {
       settings.mapLayers.contourIntervalMeters = 18
       settings.mapLayers.hillshadeVisible = true
       settings.mapLayers.hillshadeOpacity = 0.25
+      settings.plantSpacingIntervalM = 0.25
     }, { persist: 'none' })
 
     expect(snapshotSettingsProjection()).toEqual(expect.objectContaining({
@@ -184,6 +189,7 @@ describe('settings projection', () => {
       contour_interval: 18,
       hillshade_visible: true,
       hillshade_opacity: 0.25,
+      plant_spacing_interval_m: 0.25,
     }))
     expect(vi.mocked(setSettings)).not.toHaveBeenCalled()
   })
@@ -196,6 +202,7 @@ describe('settings projection', () => {
       contour_opacity: -1,
       contour_interval: 12.7,
       hillshade_opacity: Number.NaN,
+      plant_spacing_interval_m: 0,
     }))
 
     expect(theme.value).toBe('light')
@@ -204,12 +211,14 @@ describe('settings projection', () => {
     expect(layerOpacity.value.contours).toBe(0)
     expect(contourIntervalMeters.value).toBe(13)
     expect(hillshadeOpacity.value).toBe(0.55)
+    expect(plantSpacingIntervalM.value).toBe(0.5)
 
     mutateSettingsProjection((settings) => {
       settings.mapLayers.baseOpacity = -2
       settings.mapLayers.contoursOpacity = Number.POSITIVE_INFINITY
       settings.mapLayers.contourIntervalMeters = 7.6
       settings.mapLayers.hillshadeOpacity = 3
+      settings.plantSpacingIntervalM = Number.POSITIVE_INFINITY
     }, { persist: 'none' })
 
     expect(snapshotSettingsProjection()).toEqual(expect.objectContaining({
@@ -219,6 +228,7 @@ describe('settings projection', () => {
       contour_opacity: 1,
       contour_interval: 8,
       hillshade_opacity: 1,
+      plant_spacing_interval_m: 0.5,
     }))
   })
 

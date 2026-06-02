@@ -1,6 +1,17 @@
 import { computeSelectionRect } from '../operations'
 import { getCanvasTool } from '../session-state'
 import {
+  formatPlantSpacingIntervalInput,
+  parsePlantSpacingIntervalInput,
+} from '../plant-spacing-interval'
+import {
+  computePlantSpacingPositions,
+  createPlantSpacingGeneratedPlants,
+} from '../plant-spacing-sequence'
+import { t } from '../../i18n'
+import { plantSpacingIntervalM } from '../../app/settings/state'
+import { mutateSettingsProjection } from '../../app/settings/projection'
+import {
   snapToGridEnabled,
   snapToGuidesEnabled,
 } from '../../app/canvas-settings/signals'
@@ -20,9 +31,17 @@ import type {
 } from './scene'
 import type { CameraController } from './camera'
 import { getAnnotationWorldBounds } from './annotation-layout'
-import { getPlantWorldBounds, type PlantPresentationContext } from './plant-presentation'
+import {
+  getPlantWorldBounds,
+  resolvePlantDisplayColor,
+  type PlantPresentationContext,
+} from './plant-presentation'
 import type { SpeciesCacheEntry } from './species-cache'
 import type { SceneViewportState } from './scene'
+import {
+  createPlantSpacingOverlay,
+  type PlantSpacingOverlayController,
+} from './interaction/plant-spacing-overlay'
 import {
   applySceneDragDeltaToDraft,
   captureSceneDragState,
@@ -64,7 +83,10 @@ import {
 import type { SceneEditCoordinator, SceneEditTransaction } from './scene-runtime/transactions'
 import { createUuid } from '../../utils/ids'
 
-type InteractionTool = 'select' | 'hand' | 'rectangle' | 'text' | 'plant-stamp' | 'object-stamp' | string
+type InteractionTool = 'select' | 'hand' | 'rectangle' | 'text' | 'plant-stamp' | 'object-stamp' | 'plant-spacing' | string
+
+const PLANT_SPACING_DENSE_CONFIRM_THRESHOLD = 100
+const PLANT_SPACING_DRAG_START_PX = 0.5
 
 interface ObjectStampPlantSource {
   kind: 'plant'
@@ -103,6 +125,12 @@ type ObjectStampSource =
   | ObjectStampAnnotationSource
   | ObjectStampGroupSource
 
+interface PlantSpacingSource {
+  sourceId: string
+  plant: ScenePlantEntity
+  label: string
+}
+
 export interface SceneInteractionDeps {
   container: HTMLElement
   getSceneStore: () => SceneStore
@@ -125,8 +153,9 @@ export class SceneInteractionController {
   private readonly _tooltip: HoverTooltipController
   private readonly _polygonDraftOverlay: PolygonDraftOverlayController
   private readonly _zoneMeasurements: ZoneMeasurementOverlayController
+  private readonly _plantSpacingOverlay: PlantSpacingOverlayController
   private _tool: InteractionTool = 'select'
-  private _mode: 'idle' | 'panning' | 'dragging' | 'band' | 'rectangle' | 'ellipse' = 'idle'
+  private _mode: 'idle' | 'panning' | 'dragging' | 'band' | 'rectangle' | 'ellipse' | 'plant-spacing-drag' = 'idle'
   private _pointerId: number | null = null
   private _startScreen: ScenePoint | null = null
   private _startWorld: ScenePoint | null = null
@@ -138,6 +167,12 @@ export class SceneInteractionController {
   private _polygonDraftVertices: ScenePoint[] = []
   private _polygonActiveWorld: ScenePoint | null = null
   private _objectStampSource: ObjectStampSource | null = null
+  private _plantSpacingSource: PlantSpacingSource | null = null
+  private _plantSpacingIntervalText = formatPlantSpacingIntervalInput(plantSpacingIntervalM.value)
+  private _plantSpacingIntervalValid = true
+  private _plantSpacingEndpoint: ScenePoint | null = null
+  private _plantSpacingGeneratedPositions: ScenePoint[] = []
+  private _plantSpacingConfirmation: { positions: ScenePoint[]; endpoint: ScenePoint } | null = null
   private _spaceHeld = false
   /** Original position of the hit entity — snap reference for drag. */
   private _dragSnapRef: ScenePoint | null = null
@@ -150,6 +185,16 @@ export class SceneInteractionController {
     this._tooltip = createHoverTooltip(this._deps.container)
     this._polygonDraftOverlay = createPolygonDraftOverlay(this._deps.container)
     this._zoneMeasurements = createZoneMeasurementOverlay(this._deps.container)
+    this._plantSpacingOverlay = createPlantSpacingOverlay(
+      this._deps.container,
+      {
+        onCancel: () => this._handlePlantSpacingCancel(),
+        onIntervalInput: (value) => this._handlePlantSpacingIntervalInput(value),
+        onIntervalCommit: (value) => this._commitPlantSpacingIntervalInput(value),
+        onConfirmDenseCommit: () => this._confirmPlantSpacingDenseCommit(),
+        onCancelDenseCommit: () => this._cancelPlantSpacingDenseCommit(),
+      },
+    )
     this.setTool(getCanvasTool())
     this._attach()
   }
@@ -163,10 +208,16 @@ export class SceneInteractionController {
     if (previousTool === 'object-stamp' && name !== 'object-stamp') {
       this._clearObjectStampSource()
     }
+    if (previousTool === 'plant-spacing' && name !== 'plant-spacing') {
+      this._clearPlantSpacingSource({ hide: true })
+    }
     if (previousTool === 'text' && name !== 'text') {
       this._removeTextarea()
     }
     this._cancelTransientInteraction()
+    if (name === 'plant-spacing') {
+      this._showPlantSpacingState()
+    }
     this._deps.container.style.cursor = cursorForTool(name)
   }
 
@@ -177,11 +228,12 @@ export class SceneInteractionController {
     this._preview.remove()
     this._polygonDraftOverlay.dispose()
     this._zoneMeasurements.dispose()
+    this._plantSpacingOverlay.dispose()
     this._tooltip.dispose()
   }
 
   refreshMeasurements(): void {
-    this._refreshSelectedZoneMeasurements()
+    this._refreshViewportDependentMeasurements()
   }
 
   private _attach(): void {
@@ -235,6 +287,12 @@ export class SceneInteractionController {
     if (this._tool === 'object-stamp') {
       event.preventDefault()
       this._handleObjectStampPointerDown(world)
+      return
+    }
+
+    if (this._tool === 'plant-spacing') {
+      event.preventDefault()
+      this._handlePlantSpacingPointerDown(event, world)
       return
     }
 
@@ -317,6 +375,12 @@ export class SceneInteractionController {
   }
 
   private _updateHover(event: PointerEvent): void {
+    if (this._tool === 'plant-spacing' && this._plantSpacingSource) {
+      this._deps.setHoveredEntityId(null)
+      this._tooltip.hide()
+      return
+    }
+
     const rect = this._deps.container.getBoundingClientRect()
     if (event.clientX < rect.left || event.clientX > rect.right
       || event.clientY < rect.top || event.clientY > rect.bottom) {
@@ -361,6 +425,16 @@ export class SceneInteractionController {
       return
     }
 
+    if (
+      this._tool === 'plant-spacing'
+      && this._plantSpacingSource
+      && !this._plantSpacingConfirmation
+      && this._pointerId === null
+    ) {
+      this._updatePlantSpacingPreview(this._plantSpacingEndpointFromEvent(event))
+      return
+    }
+
     if (this._pointerId === null) {
       this._updateHover(event)
       return
@@ -379,6 +453,25 @@ export class SceneInteractionController {
       this._startScreen = screen
       this._deps.render('viewport')
       this._refreshViewportDependentMeasurements()
+      return
+    }
+
+    if (
+      this._mode === 'plant-spacing-drag'
+      || (
+        this._mode === 'idle'
+        && this._tool === 'plant-spacing'
+        && this._plantSpacingSource
+        && !this._plantSpacingConfirmation
+      )
+    ) {
+      if (this._mode === 'idle') {
+        const movedPx = Math.hypot(screen.x - this._startScreen.x, screen.y - this._startScreen.y)
+        if (movedPx < PLANT_SPACING_DRAG_START_PX) return
+        this._mode = 'plant-spacing-drag'
+        this._focusCanvasContainer()
+      }
+      this._updatePlantSpacingPreview(this._plantSpacingEndpointFromEvent(event))
       return
     }
 
@@ -479,6 +572,10 @@ export class SceneInteractionController {
       }
     }
 
+    if (this._mode === 'plant-spacing-drag') {
+      this._commitPlantSpacingPreview(this._plantSpacingEndpointFromEvent(event))
+    }
+
     this._cancelTransientInteraction({ preservePolygonDraft: shouldPreservePolygonDraft })
     this._refreshViewportDependentMeasurements()
   }
@@ -549,6 +646,12 @@ export class SceneInteractionController {
     if (this._tool === 'object-stamp' && !isEditableTarget(event.target) && event.key === 'Escape') {
       event.preventDefault()
       this._switchTool('select')
+      return
+    }
+
+    if (this._tool === 'plant-spacing' && !isEditableTarget(event.target) && event.key === 'Escape') {
+      event.preventDefault()
+      this._handlePlantSpacingCancel()
       return
     }
 
@@ -695,6 +798,11 @@ export class SceneInteractionController {
       this._polygonDraftOverlay.update(this._polygonDraftVertices, this._polygonActiveWorld, this._deps.camera)
       this._updateDraftPolygonMeasurements()
       return
+    }
+
+    if (this._tool === 'plant-spacing') {
+      this._refreshPlantSpacingSourceHighlight()
+      if (this._plantSpacingEndpoint) this._updatePlantSpacingPreview(this._plantSpacingEndpoint)
     }
 
     this._refreshSelectedZoneMeasurements()
@@ -1111,6 +1219,258 @@ export class SceneInteractionController {
     hideInteractionPreview(this._preview)
   }
 
+  private _handlePlantSpacingPointerDown(event: Pick<MouseEvent, 'clientX' | 'clientY' | 'shiftKey'>, world: ScenePoint): void {
+    if (this._plantSpacingSource) {
+      this._commitPlantSpacingPreview(this._plantSpacingEndpointFromEvent(event))
+      return
+    }
+
+    const scene = this._deps.getSceneStore().persisted
+    const hit = hitTestTopLevel(
+      scene,
+      world,
+      this._deps.camera.viewport.scale,
+      this._deps.getSpeciesCache(),
+      this._deps.getPlantPresentationContext,
+    )
+
+    if (!hit || hit.kind !== 'plant' || lockedObjectIds.value.has(hit.id)) {
+      this._clearPlantSpacingPointerGesture()
+      this._plantSpacingOverlay.showSourcePicking(t('canvas.plantSpacing.sourceMissed'))
+      return
+    }
+
+    const plant = scene.plants.find((entry) => entry.id === hit.id)
+    if (!plant) {
+      this._clearPlantSpacingPointerGesture()
+      this._plantSpacingOverlay.showSourcePicking(t('canvas.plantSpacing.sourceMissed'))
+      return
+    }
+
+    const label = this._plantSpacingLabelForPlant(plant)
+    this._plantSpacingSource = {
+      sourceId: plant.id,
+      plant: clonePlantForObjectStamp(plant),
+      label,
+    }
+    this._plantSpacingIntervalText = formatPlantSpacingIntervalInput(plantSpacingIntervalM.value)
+    this._plantSpacingIntervalValid = true
+    this._showPlantSpacingState()
+    this._plantSpacingOverlay.focusIntervalInput()
+  }
+
+  private _clearPlantSpacingPointerGesture(): void {
+    this._pointerId = null
+    this._startScreen = null
+    this._startWorld = null
+    this._cachedContainerRect = null
+  }
+
+  private _handlePlantSpacingCancel(): void {
+    if (this._plantSpacingSource) {
+      this._clearPlantSpacingSource()
+      return
+    }
+    this._switchTool('select')
+  }
+
+  private _clearPlantSpacingSource(options: { hide?: boolean } = {}): void {
+    this._plantSpacingSource = null
+    this._plantSpacingEndpoint = null
+    this._plantSpacingGeneratedPositions = []
+    this._plantSpacingConfirmation = null
+    if (options.hide || this._tool !== 'plant-spacing') {
+      this._plantSpacingOverlay.hide()
+      return
+    }
+    this._plantSpacingOverlay.showSourcePicking()
+  }
+
+  private _showPlantSpacingState(): void {
+    const source = this._plantSpacingSource
+    if (!source) {
+      this._plantSpacingOverlay.showSourcePicking()
+      return
+    }
+
+    this._plantSpacingOverlay.showSourceSelected(
+      this._plantSpacingSourceView(source),
+      this._deps.camera,
+      {
+        value: this._plantSpacingIntervalText,
+        valid: this._plantSpacingIntervalValid,
+      },
+    )
+  }
+
+  private _updatePlantSpacingPreview(endpoint: ScenePoint): void {
+    const source = this._plantSpacingSource
+    if (!source) return
+
+    this._plantSpacingEndpoint = endpoint
+    const parsed = parsePlantSpacingIntervalInput(this._plantSpacingIntervalText)
+    this._plantSpacingIntervalValid = parsed.valid
+    const positions = parsed.valid
+      ? computePlantSpacingPositions(source.plant.position, endpoint, parsed.meters)
+      : []
+    this._plantSpacingGeneratedPositions = positions
+    const length = Math.hypot(
+      endpoint.x - source.plant.position.x,
+      endpoint.y - source.plant.position.y,
+    )
+    this._plantSpacingOverlay.setGeneratedCount(positions.length)
+    this._plantSpacingOverlay.setDenseWarning(
+      positions.length > PLANT_SPACING_DENSE_CONFIRM_THRESHOLD ? positions.length : null,
+    )
+    this._plantSpacingOverlay.showPreview({
+      start: source.plant.position,
+      end: endpoint,
+      lengthLabel: formatPlantSpacingIntervalInput(length),
+      ghostPositions: positions,
+      ghostColor: this._plantSpacingGhostColor(source.plant),
+    }, this._deps.camera)
+  }
+
+  private _commitPlantSpacingPreview(endpoint: ScenePoint): void {
+    const source = this._plantSpacingSource
+    if (!source) return
+
+    this._updatePlantSpacingPreview(endpoint)
+    if (!this._plantSpacingIntervalValid) {
+      this._plantSpacingOverlay.focusIntervalInput()
+      return
+    }
+
+    const positions = this._plantSpacingGeneratedPositions
+    if (positions.length === 0) return
+
+    if (positions.length > PLANT_SPACING_DENSE_CONFIRM_THRESHOLD) {
+      this._plantSpacingConfirmation = {
+        endpoint: { ...endpoint },
+        positions: positions.map((position) => ({ ...position })),
+      }
+      this._plantSpacingOverlay.showDenseConfirmation(positions.length, positions.length + 1)
+      return
+    }
+
+    this._commitPlantSpacingPositions(positions)
+  }
+
+  private _commitPlantSpacingPositions(positions: readonly ScenePoint[]): void {
+    const source = this._plantSpacingSource
+    if (!source) return
+
+    const generatedIds: string[] = []
+    const committed = this._deps.sceneEdits.run('interaction-plant-spacing', (tx) => {
+      tx.mutate((draft) => {
+        const generated = createPlantSpacingGeneratedPlants(source.plant, positions, () => {
+          const id = createUuid()
+          generatedIds.push(id)
+          return id
+        })
+        draft.plants = [...draft.plants, ...generated]
+      })
+      tx.setSelection([source.sourceId, ...generatedIds])
+    })
+
+    if (committed) {
+      this._clearPlantSpacingSource()
+    }
+  }
+
+  private _confirmPlantSpacingDenseCommit(): void {
+    const confirmation = this._plantSpacingConfirmation
+    if (!confirmation) return
+    this._commitPlantSpacingPositions(confirmation.positions)
+  }
+
+  private _cancelPlantSpacingDenseCommit(): void {
+    const confirmation = this._plantSpacingConfirmation
+    this._plantSpacingConfirmation = null
+    this._showPlantSpacingState()
+    if (confirmation) this._updatePlantSpacingPreview(confirmation.endpoint)
+  }
+
+  private _handlePlantSpacingIntervalInput(value: string): void {
+    this._plantSpacingIntervalText = value
+    this._plantSpacingIntervalValid = parsePlantSpacingIntervalInput(value).valid
+    this._plantSpacingOverlay.setIntervalValidity(this._plantSpacingIntervalValid)
+    if (this._plantSpacingEndpoint) this._updatePlantSpacingPreview(this._plantSpacingEndpoint)
+  }
+
+  private _commitPlantSpacingIntervalInput(value: string): void {
+    this._plantSpacingIntervalText = value
+    const parsed = parsePlantSpacingIntervalInput(value)
+    this._plantSpacingIntervalValid = parsed.valid
+    this._plantSpacingOverlay.setIntervalValidity(parsed.valid)
+
+    if (!parsed.valid) {
+      this._plantSpacingOverlay.focusIntervalInput()
+      return
+    }
+
+    mutateSettingsProjection((settings) => {
+      settings.plantSpacingIntervalM = parsed.meters
+    }, { persist: 'immediate' })
+    this._plantSpacingIntervalText = formatPlantSpacingIntervalInput(parsed.meters)
+    if (this._plantSpacingEndpoint) this._updatePlantSpacingPreview(this._plantSpacingEndpoint)
+    this._focusCanvasContainer()
+  }
+
+  private _focusCanvasContainer(): void {
+    if (this._deps.container.tabIndex < 0) this._deps.container.tabIndex = -1
+    this._deps.container.focus({ preventScroll: true })
+  }
+
+  private _refreshPlantSpacingSourceHighlight(): void {
+    this._plantSpacingOverlay.refreshSourceHighlight(
+      this._plantSpacingSource ? this._plantSpacingSourceView(this._plantSpacingSource) : null,
+      this._deps.camera,
+    )
+  }
+
+  private _plantSpacingSourceView(source: PlantSpacingSource): { id: string; label: string; bounds: { x: number; y: number; width: number; height: number } } {
+    return {
+      id: source.sourceId,
+      label: source.label,
+      bounds: getPlantWorldBounds(
+        source.plant,
+        this._deps.getPlantPresentationContext(this._deps.camera.viewport.scale),
+      ),
+    }
+  }
+
+  private _plantSpacingLabelForPlant(plant: ScenePlantEntity): string {
+    return this._deps.getLocalizedCommonNames().get(plant.canonicalName)
+      ?? plant.commonName
+      ?? plant.canonicalName
+  }
+
+  private _plantSpacingGhostColor(plant: ScenePlantEntity): string {
+    const context = this._deps.getPlantPresentationContext(this._deps.camera.viewport.scale)
+    return resolvePlantDisplayColor(plant, context.colorByAttr, context.speciesCache)
+  }
+
+  private _plantSpacingEndpointFromEvent(event: Pick<MouseEvent, 'clientX' | 'clientY' | 'shiftKey'>): ScenePoint {
+    const rawWorld = this._deps.camera.screenToWorld(this._clampedScreenPoint(event))
+    const source = this._plantSpacingSource
+    if (!source) return rawWorld
+
+    if (event.shiftKey) {
+      return constrainPointTo45Degrees(source.plant.position, rawWorld)
+    }
+
+    return this._applySnapping(rawWorld)
+  }
+
+  private _clampedScreenPoint(event: Pick<MouseEvent, 'clientX' | 'clientY'>): ScenePoint {
+    const rect = this._cachedContainerRect ?? this._deps.container.getBoundingClientRect()
+    return {
+      x: Math.min(Math.max(event.clientX - rect.left, 0), rect.width),
+      y: Math.min(Math.max(event.clientY - rect.top, 0), rect.height),
+    }
+  }
+
   private _switchTool(name: string): void {
     this._deps.setTool(name)
     if (this._tool !== name) this.setTool(name)
@@ -1279,6 +1639,20 @@ function translatePoint(point: ScenePoint, delta: ScenePoint): ScenePoint {
   return {
     x: point.x + delta.x,
     y: point.y + delta.y,
+  }
+}
+
+function constrainPointTo45Degrees(origin: ScenePoint, point: ScenePoint): ScenePoint {
+  const dx = point.x - origin.x
+  const dy = point.y - origin.y
+  const length = Math.hypot(dx, dy)
+  if (length <= 0.000001) return { ...origin }
+
+  const angle = Math.atan2(dy, dx)
+  const constrainedAngle = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4)
+  return {
+    x: origin.x + Math.cos(constrainedAngle) * length,
+    y: origin.y + Math.sin(constrainedAngle) * length,
   }
 }
 

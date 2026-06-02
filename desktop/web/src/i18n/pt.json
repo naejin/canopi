@@ -102,6 +102,8 @@
       "plantStampDesc": "Colocar plantas do banco de dados",
       "objectStamp": "Carimbo de objeto",
       "objectStampDesc": "Copiar objetos de design existentes",
+      "plantSpacing": "Espaçamento de plantas",
+      "plantSpacingDesc": "Repetir uma planta colocada ao longo de uma guia de espaçamento",
       "dimension": "Dimensão",
       "dimensionDesc": "Medir distância entre pontos ou formas",
       "patternFill": "Preenchimento padrão",
@@ -112,6 +114,19 @@
       "arrowDesc": "Desenhar uma seta de anotação",
       "callout": "Balão de texto",
       "calloutDesc": "Adicionar um balão de texto"
+    },
+    "plantSpacing": {
+      "title": "Espaçamento de plantas",
+      "selectSource": "Selecione uma planta colocada",
+      "sourceSelected": "Fonte selecionada",
+      "sourceMissed": "Selecione uma planta colocada visível e desbloqueada",
+      "interval": "Intervalo",
+      "generatedCount": "{{count}} geradas",
+      "denseWarning": "Confirmar antes de criar {{count}} plantas",
+      "confirmDense": "Confirmar espaçamento denso",
+      "confirmCounts": "{{generated}} geradas · {{total}} no total",
+      "confirm": "Confirmar",
+      "cancel": "Cancelar"
     },
     "grid": {
       "grid": "Grade",

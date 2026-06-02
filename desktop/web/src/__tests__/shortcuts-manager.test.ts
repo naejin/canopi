@@ -60,6 +60,34 @@ describe('shortcut manager canvas tool switching', () => {
     expect(activeTool.value).toBe('polygon')
   })
 
+  it('routes the Plant Spacing shortcut through the live canvas session', () => {
+    const setTool = vi.fn()
+    setCurrentCanvasSession({
+      setTool,
+    } as any)
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 's' }))
+
+    expect(setTool).toHaveBeenCalledWith('plant-spacing')
+    expect(activeTool.value).toBe('plant-spacing')
+  })
+
+  it('does not route tool shortcuts while an editable input is focused', () => {
+    const input = document.createElement('input')
+    document.body.appendChild(input)
+    const setTool = vi.fn()
+    setCurrentCanvasSession({
+      setTool,
+    } as any)
+
+    input.focus()
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 's', bubbles: true }))
+
+    expect(setTool).not.toHaveBeenCalled()
+    expect(activeTool.value).toBe('select')
+    input.remove()
+  })
+
   it('falls back to priming the mirror tool state before session mount', () => {
     setCurrentCanvasSession(null)
 

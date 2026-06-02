@@ -4,6 +4,7 @@ import { lockedObjectIds } from '../canvas/runtime-mirror-state'
 import { guides } from '../canvas/scene-metadata-state'
 import { selectedObjectIds } from '../canvas/session-state'
 import { snapToGridEnabled, snapToGuidesEnabled } from '../app/canvas-settings/signals'
+import { plantSpacingIntervalM } from '../app/settings/state'
 import { CameraController } from '../canvas/runtime/camera'
 import { SceneStore } from '../canvas/runtime/scene'
 import { SceneInteractionController, type SceneInteractionDeps } from '../canvas/runtime/scene-interaction'
@@ -138,6 +139,7 @@ describe('SceneInteractionController', () => {
     snapToGridEnabled.value = false
     snapToGuidesEnabled.value = false
     guides.value = []
+    plantSpacingIntervalM.value = 0.5
   })
 
   afterEach(() => {
@@ -148,6 +150,7 @@ describe('SceneInteractionController', () => {
     snapToGridEnabled.value = false
     snapToGuidesEnabled.value = false
     guides.value = []
+    plantSpacingIntervalM.value = 0.5
   })
 
   it('selects and drags a plant in scene space', () => {
@@ -183,6 +186,762 @@ describe('SceneInteractionController', () => {
     expect(store.persisted.plants[0]?.position).toEqual({ x: 35, y: 45 })
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-drag')
     expect(deps.setSelection).toHaveBeenCalledWith(new Set(['plant-1']))
+    controller.dispose()
+  })
+
+  it('shows Plant Spacing source picking and samples a plant without mutating selection', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'plant-1',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 20, y: 30 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+
+    const deps = createInteractionDeps(container, store, camera)
+    deps.setSelection(['already-selected'])
+    vi.mocked(deps.setSelection).mockClear()
+    const controller = new SceneInteractionController(deps as any)
+
+    controller.setTool('plant-spacing')
+
+    const hud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')
+    expect(hud?.textContent).toContain('Select a placed plant')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+
+    expect(container.querySelector('[data-plant-spacing-source="plant-1"]')).not.toBeNull()
+    expect(hud?.textContent).toContain('Apple')
+    expect(deps.setSelection).not.toHaveBeenCalled()
+    expect(selectedObjectIds.value).toEqual(new Set(['already-selected']))
+    controller.dispose()
+  })
+
+  it('keeps Plant Spacing in source-picking mode on missed clicks without clearing selection', () => {
+    const deps = createInteractionDeps(container, store, camera)
+    deps.setSelection(['already-selected'])
+    vi.mocked(deps.setSelection).mockClear()
+    vi.mocked(deps.clearSelection).mockClear()
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('plant-spacing')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 200, clientY: 200, button: 0 }))
+
+    const hud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')
+    expect(hud?.dataset.state).toBe('source-picking')
+    expect(hud?.textContent).toContain('Select a visible, unlocked placed plant')
+    expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
+    expect(deps.clearSelection).not.toHaveBeenCalled()
+    expect(deps.setSelection).not.toHaveBeenCalled()
+    expect(selectedObjectIds.value).toEqual(new Set(['already-selected']))
+    controller.dispose()
+  })
+
+  it('does not sample grouped or locked Plant Spacing source candidates', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [
+        {
+          kind: 'plant',
+          id: 'grouped-plant',
+          canonicalName: 'Malus domestica',
+          commonName: 'Apple',
+          color: null,
+          stratum: null,
+          canopySpreadM: 2,
+          position: { x: 20, y: 30 },
+          rotationDeg: null,
+          scale: 2,
+          notes: null,
+          plantedDate: null,
+          quantity: 1,
+        },
+        {
+          kind: 'plant',
+          id: 'locked-plant',
+          canonicalName: 'Pyrus communis',
+          commonName: 'Pear',
+          color: null,
+          stratum: null,
+          canopySpreadM: 2,
+          position: { x: 80, y: 30 },
+          rotationDeg: null,
+          scale: 2,
+          notes: null,
+          plantedDate: null,
+          quantity: 1,
+        },
+      ]
+      draft.groups = [{
+        kind: 'group',
+        id: 'group-1',
+        name: 'Grouped row',
+        layer: 'plants',
+        position: { x: 20, y: 30 },
+        rotationDeg: null,
+        memberIds: ['grouped-plant'],
+      }]
+    })
+    lockedObjectIds.value = new Set(['locked-plant'])
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('plant-spacing')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+    expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 80, clientY: 30, button: 0 }))
+    expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
+    controller.dispose()
+  })
+
+  it('does not sample Plant Spacing sources on hidden or locked plant layers', () => {
+    store.updatePersisted((draft) => {
+      draft.layers = draft.layers.map((layer) =>
+        layer.name === 'plants' ? { ...layer, visible: false, locked: false } : layer
+      )
+      draft.plants = [{
+        kind: 'plant',
+        id: 'plant-1',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 20, y: 30 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('plant-spacing')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+    expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
+
+    store.updatePersisted((draft) => {
+      draft.layers = draft.layers.map((layer) =>
+        layer.name === 'plants' ? { ...layer, visible: true, locked: true } : layer
+      )
+    })
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+    expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
+    controller.dispose()
+  })
+
+  it('clears Plant Spacing source state with Escape or HUD cancel and exits when no source exists', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'plant-1',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 20, y: 30 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+
+    const setTool = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { setTool })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('plant-spacing')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+    expect(container.querySelector('[data-plant-spacing-source="plant-1"]')).not.toBeNull()
+
+    ;(controller as any)._onKeyDown(new KeyboardEvent('keydown', { key: 'Escape' }))
+    expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
+    expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.dataset.state).toBe('source-picking')
+    expect(setTool).not.toHaveBeenCalled()
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+    container.querySelector<HTMLButtonElement>('[data-plant-spacing-hud] button')?.click()
+    expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
+    expect(setTool).not.toHaveBeenCalled()
+
+    ;(controller as any)._onKeyDown(new KeyboardEvent('keydown', { key: 'Escape' }))
+    expect(setTool).toHaveBeenCalledWith('select')
+    expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.style.display).toBe('none')
+    controller.dispose()
+  })
+
+  it('focuses Plant Spacing interval input after source sampling and accepts valid values with Enter', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'plant-1',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 20, y: 30 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+
+    controller.setTool('plant-spacing')
+    const inputBeforeSource = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')
+    expect(document.activeElement).not.toBe(inputBeforeSource)
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+
+    const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
+    const hud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')!
+    expect(input.value).toBe('50 cm')
+    expect(document.activeElement).toBe(input)
+
+    input.value = '0,75m'
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    expect(hud.dataset.intervalValidity).toBe('valid')
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+
+    expect(plantSpacingIntervalM.value).toBe(0.75)
+    expect(store.persisted.plants).toHaveLength(1)
+    expect(JSON.stringify(store.toCanopiFile())).not.toContain('plant_spacing_interval_m')
+    expect(container.querySelector('[data-plant-spacing-source="plant-1"]')).not.toBeNull()
+    controller.dispose()
+  })
+
+  it('keeps Plant Spacing source alive for invalid interval input', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'plant-1',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 20, y: 30 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('plant-spacing')
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+
+    const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
+    const hud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')!
+    input.value = '0'
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+
+    expect(hud.dataset.intervalValidity).toBe('invalid')
+    expect(plantSpacingIntervalM.value).toBe(0.5)
+    expect(document.activeElement).toBe(input)
+    expect(container.querySelector('[data-plant-spacing-source="plant-1"]')).not.toBeNull()
+    controller.dispose()
+  })
+
+  it('previews and commits a normal Plant Spacing sequence as one scene edit', () => {
+    plantSpacingIntervalM.value = 2
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'source',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: '#884422',
+        stratum: 'tree',
+        canopySpreadM: 3,
+        position: { x: 20, y: 30 },
+        rotationDeg: 15,
+        scale: 3,
+        notes: 'Do not copy',
+        plantedDate: '2026-03-01',
+        quantity: 4,
+      }]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('plant-spacing')
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 26, clientY: 30, button: 0 }))
+
+    expect(container.querySelector('[data-plant-spacing-guide]')).not.toBeNull()
+    expect(container.querySelector<HTMLElement>('[data-plant-spacing-length-label]')?.textContent).toBe('6 m')
+    expect(container.querySelectorAll('[data-plant-spacing-ghost]')).toHaveLength(3)
+    expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.textContent).toContain('3')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 26, clientY: 30, button: 0 }))
+
+    expect(onSceneEditCommit).toHaveBeenCalledTimes(1)
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-plant-spacing')
+    expect(store.persisted.plants).toHaveLength(4)
+    expect(store.persisted.plants.slice(1).map((plant) => plant.position)).toEqual([
+      { x: 22, y: 30 },
+      { x: 24, y: 30 },
+      { x: 26, y: 30 },
+    ])
+    expect(store.persisted.plants[1]).toMatchObject({
+      canonicalName: 'Malus domestica',
+      commonName: 'Apple',
+      color: '#884422',
+      stratum: 'tree',
+      canopySpreadM: 3,
+      rotationDeg: 15,
+      scale: 3,
+      notes: null,
+      plantedDate: null,
+      quantity: 1,
+    })
+    expect(store.persisted.groups).toEqual([])
+    expect(selectedObjectIds.value).toEqual(new Set(store.persisted.plants.map((plant) => plant.id)))
+    expect(container.querySelector('[data-plant-spacing-guide]')).toBeNull()
+    expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.dataset.state).toBe('source-picking')
+    controller.dispose()
+  })
+
+  it('keeps Plant Spacing preview active without a scene edit when no plants fit', () => {
+    plantSpacingIntervalM.value = 2
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'source',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 20, y: 30 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('plant-spacing')
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 21, clientY: 30, button: 0 }))
+
+    expect(container.querySelector<HTMLElement>('[data-plant-spacing-length-label]')?.textContent).toBe('1 m')
+    expect(container.querySelectorAll('[data-plant-spacing-ghost]')).toHaveLength(0)
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 21, clientY: 30, button: 0 }))
+
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    expect(store.persisted.plants).toHaveLength(1)
+    expect(container.querySelector('[data-plant-spacing-guide]')).not.toBeNull()
+    expect(container.querySelector('[data-plant-spacing-source="source"]')).not.toBeNull()
+    controller.dispose()
+  })
+
+  it('snaps Plant Spacing endpoint before computing preview and commit positions', () => {
+    plantSpacingIntervalM.value = 2
+    snapToGridEnabled.value = true
+    camera.setViewport({ x: 0, y: 0, scale: 10 })
+    store.setViewport({ x: 0, y: 0, scale: 10 })
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'source',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 2, y: 4 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('plant-spacing')
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 40, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 51, clientY: 40, button: 0 }))
+
+    expect(container.querySelectorAll('[data-plant-spacing-ghost]')).toHaveLength(2)
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 51, clientY: 40, button: 0 }))
+    expect(store.persisted.plants.slice(1).map((plant) => plant.position)).toEqual([
+      { x: 4, y: 4 },
+      { x: 6, y: 4 },
+    ])
+    controller.dispose()
+  })
+
+  it('gives Shift direction constraint priority over Plant Spacing snapping', () => {
+    plantSpacingIntervalM.value = 1
+    snapToGridEnabled.value = true
+    camera.setViewport({ x: 0, y: 0, scale: 10 })
+    store.setViewport({ x: 0, y: 0, scale: 10 })
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'source',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 4, y: 4 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('plant-spacing')
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', {
+      clientX: 71,
+      clientY: 52,
+      button: 0,
+      shiftKey: true,
+    }))
+
+    expect(container.querySelectorAll('[data-plant-spacing-ghost]')).toHaveLength(3)
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', {
+      clientX: 71,
+      clientY: 52,
+      button: 0,
+      shiftKey: true,
+    }))
+    expect(store.persisted.plants.slice(1).map((plant) => plant.position.y)).toEqual([4, 4, 4])
+    expect(store.persisted.plants.slice(1).map((plant) => plant.position.x)).toEqual([5, 6, 7])
+    controller.dispose()
+  })
+
+  it('clamps Plant Spacing endpoints outside the canvas to the visible edge', () => {
+    plantSpacingIntervalM.value = 100
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'source',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 20, y: 30 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('plant-spacing')
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 500, clientY: 30, button: 0 }))
+
+    expect(container.querySelector<HTMLElement>('[data-plant-spacing-length-label]')?.textContent).toBe('380 m')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 500, clientY: 30, button: 0 }))
+    expect(store.persisted.plants.slice(1).map((plant) => plant.position)).toEqual([
+      { x: 120, y: 30 },
+      { x: 220, y: 30 },
+      { x: 320, y: 30 },
+    ])
+    controller.dispose()
+  })
+
+  it('refreshes Plant Spacing preview after viewport changes', () => {
+    plantSpacingIntervalM.value = 2
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'source',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 20, y: 30 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('plant-spacing')
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 26, clientY: 30, button: 0 }))
+    const guide = container.querySelector<HTMLElement>('[data-plant-spacing-guide]')!
+    const widthBefore = guide.style.width
+
+    ;(controller as any)._onWheel(new WheelEvent('wheel', { clientX: 0, clientY: 0, deltaY: -120 }))
+
+    expect(container.querySelector<HTMLElement>('[data-plant-spacing-length-label]')?.textContent).toBe('6 m')
+    expect(guide.style.width).not.toBe(widthBefore)
+    controller.dispose()
+  })
+
+  it('commits exactly 100 generated Plant Spacing plants without confirmation', () => {
+    plantSpacingIntervalM.value = 1
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'source',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 10, y: 10 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('plant-spacing')
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 110, clientY: 10, button: 0 }))
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 110, clientY: 10, button: 0 }))
+
+    expect(container.querySelector('[data-plant-spacing-confirm]')).toBeNull()
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-plant-spacing')
+    expect(store.persisted.plants).toHaveLength(101)
+    controller.dispose()
+  })
+
+  it('freezes and confirms Plant Spacing previews over 100 generated plants', () => {
+    plantSpacingIntervalM.value = 1
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'source',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 10, y: 10 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('plant-spacing')
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 111, clientY: 10, button: 0 }))
+
+    const hud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')!
+    expect(hud.textContent).toContain('101')
+    expect(hud.textContent).toContain('Confirm')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 111, clientY: 10, button: 0 }))
+    expect(hud.dataset.state).toBe('confirming')
+    expect(hud.textContent).toContain('102')
+    expect(store.persisted.plants).toHaveLength(1)
+
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 140, clientY: 10, button: 0 }))
+    container.querySelector<HTMLButtonElement>('[data-plant-spacing-confirm]')?.click()
+
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-plant-spacing')
+    expect(store.persisted.plants).toHaveLength(102)
+    expect(store.persisted.plants[store.persisted.plants.length - 1]?.position).toEqual({ x: 111, y: 10 })
+    controller.dispose()
+  })
+
+  it('cancels dense Plant Spacing confirmation back to live preview', () => {
+    plantSpacingIntervalM.value = 1
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'source',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 10, y: 10 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('plant-spacing')
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 111, clientY: 10, button: 0 }))
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 111, clientY: 10, button: 0 }))
+
+    container.querySelector<HTMLButtonElement>('[data-plant-spacing-cancel-confirm]')?.click()
+
+    expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.dataset.state).toBe('source-selected')
+    expect(container.querySelector('[data-plant-spacing-source="source"]')).not.toBeNull()
+    expect(store.persisted.plants).toHaveLength(1)
+
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 20, clientY: 10, button: 0 }))
+    expect(container.querySelector<HTMLElement>('[data-plant-spacing-length-label]')?.textContent).toBe('10 m')
+    controller.dispose()
+  })
+
+  it('commits Plant Spacing from click-hold drag without focusing the interval input mid-drag', () => {
+    plantSpacingIntervalM.value = 2
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'source',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 20, y: 30 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('plant-spacing')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+    const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 26, clientY: 30, button: 0 }))
+    expect(document.activeElement).not.toBe(input)
+    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 26, clientY: 30, button: 0 }))
+
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-plant-spacing')
+    expect(store.persisted.plants).toHaveLength(4)
+    expect(store.persisted.plants.slice(1).map((plant) => plant.position)).toEqual([
+      { x: 22, y: 30 },
+      { x: 24, y: 30 },
+      { x: 26, y: 30 },
+    ])
+    controller.dispose()
+  })
+
+  it('enters dense confirmation from click-hold Plant Spacing drag', () => {
+    plantSpacingIntervalM.value = 1
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'source',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 10, y: 10 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('plant-spacing')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 111, clientY: 10, button: 0 }))
+    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 111, clientY: 10, button: 0 }))
+
+    expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.dataset.state).toBe('confirming')
+    expect(store.persisted.plants).toHaveLength(1)
+    container.querySelector<HTMLButtonElement>('[data-plant-spacing-confirm]')?.click()
+    expect(store.persisted.plants).toHaveLength(102)
+    controller.dispose()
+  })
+
+  it('keeps source and focuses interval input after click-hold Plant Spacing drag with invalid interval', () => {
+    plantSpacingIntervalM.value = 2
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'source',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 20, y: 30 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('plant-spacing')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+    const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
+    input.value = '0'
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 26, clientY: 30, button: 0 }))
+    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 26, clientY: 30, button: 0 }))
+
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    expect(store.persisted.plants).toHaveLength(1)
+    expect(container.querySelector('[data-plant-spacing-source="source"]')).not.toBeNull()
+    expect(document.activeElement).toBe(input)
     controller.dispose()
   })
 

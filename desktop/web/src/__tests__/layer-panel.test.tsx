@@ -85,6 +85,7 @@ describe('LayerPanel', () => {
       contour_interval: 0,
       hillshade_visible: false,
       hillshade_opacity: 0.55,
+      plant_spacing_interval_m: 0.5,
     })
   })
 
