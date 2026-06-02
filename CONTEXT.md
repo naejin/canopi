@@ -120,6 +120,10 @@ _Avoid_: Map pin, address
 The interaction surface for searching, setting, clearing, presenting, and validating a design's location. The location workbench coordinates location drafts, geocoding results, altitude preservation, saved-site presentation, and map-readiness cues, but it does not own canvas scene data.
 _Avoid_: Map panel state, location input state, basemap status helper
 
+**Location Notice**:
+A user-facing cue that reports location readiness for a design, such as needing a location before site-dependent context can be shown. A location notice is informational; it does not set, clear, or validate the design's location.
+_Avoid_: Basemap feedback, map warning, location tooltip
+
 **Climate Zone**:
 A broad climate classification associated with a site or design template. Climate zone helps designers compare templates and site suitability at a high level.
 _Avoid_: Hardiness zone
