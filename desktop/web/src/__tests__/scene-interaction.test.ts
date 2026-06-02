@@ -1019,6 +1019,37 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('formats a zero-length Plant Spacing guide as 0 cm while preserving the interval input fallback', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'source',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 20, y: 30 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('plant-spacing')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 20, clientY: 30, button: 0 }))
+
+    expect(container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')?.value).toBe('50 cm')
+    expect(container.querySelector<HTMLElement>('[data-plant-spacing-length-label]')?.textContent).toBe('0 cm')
+    expect(container.querySelector<HTMLElement>('[data-plant-spacing-generated-count]')?.textContent).toContain('0')
+    controller.dispose()
+  })
+
   it('snaps Plant Spacing endpoint before computing preview and commit positions', () => {
     plantSpacingIntervalM.value = 2
     snapToGridEnabled.value = true
@@ -1365,6 +1396,43 @@ describe('SceneInteractionController', () => {
 
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-plant-spacing')
     expect(store.persisted.plants).toHaveLength(4)
+    expect(store.persisted.plants.slice(1).map((plant) => plant.position)).toEqual([
+      { x: 22, y: 30 },
+      { x: 24, y: 30 },
+      { x: 26, y: 30 },
+    ])
+    controller.dispose()
+  })
+
+  it('commits Plant Spacing click-hold drag from the pointerup endpoint when release moves past the preview', () => {
+    plantSpacingIntervalM.value = 2
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'source',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 20, y: 30 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('plant-spacing')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 25, clientY: 30, button: 0 }))
+    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 26, clientY: 30, button: 0 }))
+
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-plant-spacing')
     expect(store.persisted.plants.slice(1).map((plant) => plant.position)).toEqual([
       { x: 22, y: 30 },
       { x: 24, y: 30 },

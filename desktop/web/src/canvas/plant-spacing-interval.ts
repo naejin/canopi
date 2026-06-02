@@ -31,11 +31,23 @@ export function formatPlantSpacingIntervalInput(meters: number): string {
     ? meters
     : FALLBACK_PLANT_SPACING_INTERVAL_M
 
-  if (normalized < 1) {
-    return `${formatDecimal(normalized * 100)} cm`
+  return formatMetricLength(normalized)
+}
+
+export function formatPlantSpacingGuideLength(meters: number): string {
+  const normalized = Number.isFinite(meters) && meters > 0
+    ? meters
+    : 0
+
+  return formatMetricLength(normalized)
+}
+
+function formatMetricLength(meters: number): string {
+  if (meters < 1) {
+    return `${formatDecimal(meters * 100)} cm`
   }
 
-  return `${formatDecimal(normalized)} m`
+  return `${formatDecimal(meters)} m`
 }
 
 function formatDecimal(value: number): string {

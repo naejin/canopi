@@ -1,6 +1,7 @@
 import { computeSelectionRect } from '../operations'
 import { getCanvasTool } from '../session-state'
 import {
+  formatPlantSpacingGuideLength,
   formatPlantSpacingIntervalInput,
   parsePlantSpacingIntervalInput,
 } from '../plant-spacing-interval'
@@ -174,6 +175,7 @@ export class SceneInteractionController {
   private _plantSpacingIntervalText = formatPlantSpacingIntervalInput(plantSpacingIntervalM.value)
   private _plantSpacingIntervalValid = true
   private _plantSpacingEndpoint: ScenePoint | null = null
+  private _plantSpacingPreviewPointer: { screen: ScenePoint; shiftKey: boolean } | null = null
   private _plantSpacingGeneratedPositions: ScenePoint[] = []
   private _plantSpacingGeneratedCount = 0
   private _spaceHeld = false
@@ -435,7 +437,7 @@ export class SceneInteractionController {
       && this._plantSpacingSource
       && this._pointerId === null
     ) {
-      this._updatePlantSpacingPreview(this._plantSpacingEndpointFromEvent(event))
+      this._updatePlantSpacingPreviewFromEvent(event)
       return
     }
 
@@ -471,13 +473,13 @@ export class SceneInteractionController {
       if (this._mode === 'idle') {
         const movedPx = Math.hypot(screen.x - this._startScreen.x, screen.y - this._startScreen.y)
         if (movedPx < PLANT_SPACING_DRAG_START_PX) {
-          this._updatePlantSpacingPreview(this._plantSpacingEndpointFromEvent(event))
+          this._updatePlantSpacingPreviewFromEvent(event)
           return
         }
         this._mode = 'plant-spacing-drag'
         this._focusCanvasContainer()
       }
-      this._updatePlantSpacingPreview(this._plantSpacingEndpointFromEvent(event))
+      this._updatePlantSpacingPreviewFromEvent(event)
       return
     }
 
@@ -579,7 +581,7 @@ export class SceneInteractionController {
     }
 
     if (this._mode === 'plant-spacing-drag') {
-      const endpoint = this._plantSpacingEndpoint ?? this._plantSpacingEndpointFromEvent(event)
+      const endpoint = this._plantSpacingDragCommitEndpoint(event)
       this._commitPlantSpacingPreview(endpoint)
     }
 
@@ -1284,6 +1286,7 @@ export class SceneInteractionController {
   private _clearPlantSpacingSource(options: { hide?: boolean } = {}): void {
     this._plantSpacingSource = null
     this._plantSpacingEndpoint = null
+    this._plantSpacingPreviewPointer = null
     this._plantSpacingGeneratedPositions = []
     this._plantSpacingGeneratedCount = 0
     if (options.hide || this._tool !== 'plant-spacing') {
@@ -1308,6 +1311,12 @@ export class SceneInteractionController {
         valid: this._plantSpacingIntervalValid,
       },
     )
+  }
+
+  private _updatePlantSpacingPreviewFromEvent(event: Pick<MouseEvent, 'clientX' | 'clientY' | 'shiftKey'>): void {
+    const screen = this._clampedScreenPoint(event)
+    this._plantSpacingPreviewPointer = { screen, shiftKey: event.shiftKey }
+    this._updatePlantSpacingPreview(this._plantSpacingEndpointFromScreen(screen, event.shiftKey))
   }
 
   private _updatePlantSpacingPreview(endpoint: ScenePoint): void {
@@ -1338,7 +1347,7 @@ export class SceneInteractionController {
     this._plantSpacingOverlay.showPreview({
       start: source.plant.position,
       end: endpoint,
-      lengthLabel: formatPlantSpacingIntervalInput(length),
+      lengthLabel: formatPlantSpacingGuideLength(length),
       ghostPositions: positions,
       ghostColor: this._plantSpacingGhostColor(source.plant),
       ghostRadiusPx: this._plantSpacingGhostRadiusPx(source.plant),
@@ -1374,6 +1383,21 @@ export class SceneInteractionController {
       ? computePlantSpacingPositions(source.plant.position, endpoint, parsed.meters)
       : this._plantSpacingGeneratedPositions
     this._commitPlantSpacingPositions(positions)
+  }
+
+  private _plantSpacingDragCommitEndpoint(event: Pick<MouseEvent, 'clientX' | 'clientY' | 'shiftKey'>): ScenePoint {
+    const releaseScreen = this._clampedScreenPoint(event)
+    const previewPointer = this._plantSpacingPreviewPointer
+    if (
+      this._plantSpacingEndpoint
+      && previewPointer?.shiftKey
+      && !event.shiftKey
+      && Math.abs(previewPointer.screen.x - releaseScreen.x) < 0.001
+      && Math.abs(previewPointer.screen.y - releaseScreen.y) < 0.001
+    ) {
+      return this._plantSpacingEndpoint
+    }
+    return this._plantSpacingEndpointFromScreen(releaseScreen, event.shiftKey)
   }
 
   private _commitPlantSpacingPositions(positions: readonly ScenePoint[]): void {
@@ -1486,11 +1510,15 @@ export class SceneInteractionController {
   }
 
   private _plantSpacingEndpointFromEvent(event: Pick<MouseEvent, 'clientX' | 'clientY' | 'shiftKey'>): ScenePoint {
-    const rawWorld = this._deps.camera.screenToWorld(this._clampedScreenPoint(event))
+    return this._plantSpacingEndpointFromScreen(this._clampedScreenPoint(event), event.shiftKey)
+  }
+
+  private _plantSpacingEndpointFromScreen(screen: ScenePoint, shiftKey: boolean): ScenePoint {
+    const rawWorld = this._deps.camera.screenToWorld(screen)
     const source = this._plantSpacingSource
     if (!source) return rawWorld
 
-    if (event.shiftKey) {
+    if (shiftKey) {
       return constrainPointTo45Degrees(source.plant.position, rawWorld)
     }
 

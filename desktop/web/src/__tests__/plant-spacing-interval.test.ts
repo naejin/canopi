@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   FALLBACK_PLANT_SPACING_INTERVAL_M,
+  formatPlantSpacingGuideLength,
   formatPlantSpacingIntervalInput,
   parsePlantSpacingIntervalInput,
 } from '../canvas/plant-spacing-interval'
@@ -29,5 +30,12 @@ describe('Plant Spacing interval parsing', () => {
     expect(formatPlantSpacingIntervalInput(FALLBACK_PLANT_SPACING_INTERVAL_M)).toBe('50 cm')
     expect(formatPlantSpacingIntervalInput(1.5)).toBe('1.5 m')
     expect(formatPlantSpacingIntervalInput(0.25)).toBe('25 cm')
+    expect(formatPlantSpacingIntervalInput(0)).toBe('50 cm')
+  })
+
+  it('formats guide lengths without applying the interval fallback', () => {
+    expect(formatPlantSpacingGuideLength(0)).toBe('0 cm')
+    expect(formatPlantSpacingGuideLength(0.25)).toBe('25 cm')
+    expect(formatPlantSpacingGuideLength(1.5)).toBe('1.5 m')
   })
 })
