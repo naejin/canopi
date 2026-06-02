@@ -462,6 +462,47 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('ignores Plant Spacing HUD pointerdowns while editing the interval input', () => {
+    plantSpacingIntervalM.value = 2
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'source',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 20, y: 30 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('plant-spacing')
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 26, clientY: 30, button: 0 }))
+
+    const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
+    input.dispatchEvent(new MouseEvent('pointerdown', {
+      bubbles: true,
+      clientX: 26,
+      clientY: 30,
+      button: 0,
+    }))
+
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    expect(store.persisted.plants).toHaveLength(1)
+    expect(container.querySelector('[data-plant-spacing-guide]')).not.toBeNull()
+    expect(container.querySelector('[data-plant-spacing-source="source"]')).not.toBeNull()
+    controller.dispose()
+  })
+
   it('keeps Plant Spacing source alive for invalid interval input', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{

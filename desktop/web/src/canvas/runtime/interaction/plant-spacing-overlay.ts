@@ -85,6 +85,9 @@ export function createPlantSpacingOverlay(
   root.style.left = `${hudPlacement.leftPx}px`
   root.style.minWidth = `${Math.min(240, hudPlacement.maxWidthPx)}px`
   root.style.maxWidth = `${Math.min(320, hudPlacement.maxWidthPx)}px`
+  root.addEventListener('pointerdown', (event) => {
+    event.stopPropagation()
+  })
 
   const header = document.createElement('div')
   header.style.cssText = [
