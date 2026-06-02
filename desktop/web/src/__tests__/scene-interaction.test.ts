@@ -462,6 +462,39 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('handles Escape from the focused Plant Spacing interval input', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'plant-1',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 20, y: 30 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('plant-spacing')
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+
+    const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
+    expect(document.activeElement).toBe(input)
+
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+
+    expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
+    expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.dataset.state).toBe('source-picking')
+    controller.dispose()
+  })
+
   it('ignores Plant Spacing HUD pointerdowns while editing the interval input', () => {
     plantSpacingIntervalM.value = 2
     store.updatePersisted((draft) => {
