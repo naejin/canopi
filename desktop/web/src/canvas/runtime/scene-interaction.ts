@@ -1338,6 +1338,11 @@ export class SceneInteractionController {
     const source = this._plantSpacingSource
     if (!source) return
 
+    if (!this._canUsePlantSpacingSource(source)) {
+      this._clearPlantSpacingUnavailableSource()
+      return
+    }
+
     this._updatePlantSpacingPreview(endpoint)
     const parsed = parsePlantSpacingIntervalInput(this._plantSpacingIntervalText)
     if (!this._plantSpacingIntervalValid || !parsed.valid) {
@@ -1374,6 +1379,20 @@ export class SceneInteractionController {
     if (committed) {
       this._clearPlantSpacingSource()
     }
+  }
+
+  private _canUsePlantSpacingSource(source: PlantSpacingSource): boolean {
+    if (lockedObjectIds.value.has(source.sourceId)) return false
+    const scene = this._deps.getSceneStore().persisted
+    const layer = scene.layers.find((entry) => entry.name === 'plants')
+    if (layer?.visible === false || layer?.locked === true) return false
+    if (!scene.plants.some((plant) => plant.id === source.sourceId)) return false
+    return !scene.groups.some((group) => group.memberIds.includes(source.sourceId))
+  }
+
+  private _clearPlantSpacingUnavailableSource(): void {
+    this._clearPlantSpacingSource()
+    this._plantSpacingOverlay.showSourcePicking(t('canvas.plantSpacing.sourceMissed'))
   }
 
   private _handlePlantSpacingIntervalInput(value: string): void {
