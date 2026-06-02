@@ -89,7 +89,7 @@ type InteractionTool = 'select' | 'hand' | 'rectangle' | 'text' | 'plant-stamp' 
 const PLANT_SPACING_DENSE_WARNING_THRESHOLD = 100
 const PLANT_SPACING_PREVIEW_POSITION_LIMIT = 250
 const PLANT_SPACING_COMMIT_POSITION_LIMIT = 5_000
-const PLANT_SPACING_DRAG_START_PX = 0.5
+const PLANT_SPACING_DRAG_START_PX = 4
 
 interface ObjectStampPlantSource {
   kind: 'plant'
@@ -470,7 +470,10 @@ export class SceneInteractionController {
     ) {
       if (this._mode === 'idle') {
         const movedPx = Math.hypot(screen.x - this._startScreen.x, screen.y - this._startScreen.y)
-        if (movedPx < PLANT_SPACING_DRAG_START_PX) return
+        if (movedPx < PLANT_SPACING_DRAG_START_PX) {
+          this._updatePlantSpacingPreview(this._plantSpacingEndpointFromEvent(event))
+          return
+        }
         this._mode = 'plant-spacing-drag'
         this._focusCanvasContainer()
       }

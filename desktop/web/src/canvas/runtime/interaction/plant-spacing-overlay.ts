@@ -146,13 +146,14 @@ export function createPlantSpacingOverlay(
     events.onIntervalInput(intervalInput.value)
   })
   intervalInput.addEventListener('keydown', (event) => {
-    event.stopPropagation()
     if (event.key === 'Enter') {
+      event.stopPropagation()
       event.preventDefault()
       events.onIntervalCommit(intervalInput.value)
       return
     }
     if (event.key === 'Escape') {
+      event.stopPropagation()
       event.preventDefault()
       events.onCancel()
     }
