@@ -1223,6 +1223,8 @@ export class SceneInteractionController {
   }
 
   private _handlePlantSpacingPointerDown(event: Pick<MouseEvent, 'clientX' | 'clientY' | 'shiftKey'>, world: ScenePoint): void {
+    if (this._plantSpacingConfirmation) return
+
     if (this._plantSpacingSource) {
       this._commitPlantSpacingPreview(this._plantSpacingEndpointFromEvent(event))
       return
@@ -1411,19 +1413,23 @@ export class SceneInteractionController {
   }
 
   private _handlePlantSpacingIntervalInput(value: string): void {
+    const endpoint = this._plantSpacingConfirmation?.endpoint ?? this._plantSpacingEndpoint
     this._plantSpacingIntervalText = value
     this._plantSpacingIntervalValid = parsePlantSpacingIntervalInput(value).valid
+    this._clearPlantSpacingDenseConfirmation()
     this._plantSpacingOverlay.setIntervalValidity(this._plantSpacingIntervalValid)
-    if (this._plantSpacingEndpoint) this._updatePlantSpacingPreview(this._plantSpacingEndpoint)
+    if (endpoint) this._updatePlantSpacingPreview(endpoint)
   }
 
   private _commitPlantSpacingIntervalInput(value: string): void {
+    const endpoint = this._plantSpacingConfirmation?.endpoint ?? this._plantSpacingEndpoint
     this._plantSpacingIntervalText = value
     const parsed = parsePlantSpacingIntervalInput(value)
     this._plantSpacingIntervalValid = parsed.valid
     this._plantSpacingOverlay.setIntervalValidity(parsed.valid)
 
     if (!parsed.valid) {
+      this._clearPlantSpacingDenseConfirmation()
       this._plantSpacingOverlay.focusIntervalInput()
       return
     }
@@ -1432,8 +1438,15 @@ export class SceneInteractionController {
       settings.plantSpacingIntervalM = parsed.meters
     }, { persist: 'immediate' })
     this._plantSpacingIntervalText = formatPlantSpacingIntervalInput(parsed.meters)
-    if (this._plantSpacingEndpoint) this._updatePlantSpacingPreview(this._plantSpacingEndpoint)
+    this._clearPlantSpacingDenseConfirmation()
+    if (endpoint) this._updatePlantSpacingPreview(endpoint)
     this._focusCanvasContainer()
+  }
+
+  private _clearPlantSpacingDenseConfirmation(): void {
+    if (!this._plantSpacingConfirmation) return
+    this._plantSpacingConfirmation = null
+    this._showPlantSpacingState()
   }
 
   private _focusCanvasContainer(): void {
