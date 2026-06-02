@@ -100,6 +100,18 @@ _Avoid_: Object stamp, clone tool
 An interaction for sampling an existing design object and placing repeated copies of it. An object stamp starts from a design object already in the design, not from Species Catalog data.
 _Avoid_: Plant stamp, copy/paste
 
+**Plant Spacing**:
+An interaction for repeating a sampled placed plant along a chosen spacing guide at a chosen interval. Plant spacing starts from a placed plant already in the design and creates additional placed plants of the same species.
+_Avoid_: Line tool, interval tool, linear stamp
+
+**Spacing Guide**:
+A temporary guide used to choose a direction, length, and interval for plant spacing. A spacing guide is not a design object.
+_Avoid_: Line, ruler line, spacing object
+
+**Plant Spacing Interval**:
+The positive center-to-center distance between placed plants in plant spacing. A plant spacing interval is expressed as a physical distance, not as canopy overlap or plant radius.
+_Avoid_: Gap, radius, endpoint spacing
+
 **Location**:
 The real-world site associated with a design, expressed as latitude, longitude, and optionally altitude. A design has zero or one location.
 _Avoid_: Map pin, address
@@ -246,6 +258,15 @@ Use **Consortium** for Canopi's broader stratified, time-aware plant assembly. U
 **Plant Stamp vs Object Stamp**:
 A **Plant Stamp** places placed plants from a chosen species. An **Object Stamp** copies an existing design object already in the design.
 
+**Object Stamp vs Plant Spacing**:
+An **Object Stamp** places one copy at a time from a sampled design object. **Plant Spacing** repeats a sampled placed plant along a spacing guide at a chosen interval.
+
+**Spacing Guide vs Design Object**:
+A **Spacing Guide** is temporary interaction guidance for plant spacing. A **Design Object** is part of the design.
+
+**Plant Spacing Interval vs Canopy Spread**:
+A **Plant Spacing Interval** positions plant centers. Canopy spread describes a plant's visible or biological size.
+
 **Stratum vs Layer**:
 Use **Stratum** for vertical ecological position in a consortium. Use **Layer** for design-object visibility and locking.
 
@@ -294,6 +315,18 @@ Developer: "It is a zone. A layer controls visibility and locking; the zone is t
 Designer: "Can I stamp this existing apple tree several more times?"
 
 Developer: "Yes. Use Object Stamp to sample that placed plant, then place copies. Use Plant Stamp when you are starting from a species in the Species Catalog."
+
+Designer: "Can I repeat this apple tree every three meters along this row?"
+
+Developer: "Yes. Use Plant Spacing to sample the placed plant, draw a spacing guide, and choose the interval."
+
+Designer: "Will that spacing guide stay in my design?"
+
+Developer: "No. The spacing guide is temporary; the design receives the generated placed plants."
+
+Designer: "Does three meter spacing mean three meters between canopies or plant centers?"
+
+Developer: "It means three meters center-to-center between placed plants."
 
 Designer: "If I hide a layer, is that just a UI toggle?"
 
