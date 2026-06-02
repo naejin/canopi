@@ -1103,6 +1103,55 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('commits a Plant Spacing click-hold drag from the latest Shift-constrained preview endpoint', () => {
+    plantSpacingIntervalM.value = 1
+    camera.setViewport({ x: 0, y: 0, scale: 10 })
+    store.setViewport({ x: 0, y: 0, scale: 10 })
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'source',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 4, y: 4 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('plant-spacing')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', {
+      clientX: 71,
+      clientY: 52,
+      button: 0,
+      shiftKey: true,
+    }))
+
+    expect(container.querySelector<HTMLElement>('[data-plant-spacing-guide]')?.style.transform).toBe('rotate(0rad)')
+
+    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', {
+      clientX: 71,
+      clientY: 52,
+      button: 0,
+      shiftKey: false,
+    }))
+
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-plant-spacing')
+    expect(store.persisted.plants.slice(1).map((plant) => plant.position.y)).toEqual([4, 4, 4])
+    expect(store.persisted.plants.slice(1).map((plant) => plant.position.x)).toEqual([5, 6, 7])
+    controller.dispose()
+  })
+
   it('clamps Plant Spacing endpoints outside the canvas to the visible edge', () => {
     plantSpacingIntervalM.value = 100
     store.updatePersisted((draft) => {

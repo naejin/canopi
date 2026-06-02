@@ -579,7 +579,8 @@ export class SceneInteractionController {
     }
 
     if (this._mode === 'plant-spacing-drag') {
-      this._commitPlantSpacingPreview(this._plantSpacingEndpointFromEvent(event))
+      const endpoint = this._plantSpacingEndpoint ?? this._plantSpacingEndpointFromEvent(event)
+      this._commitPlantSpacingPreview(endpoint)
     }
 
     this._cancelTransientInteraction({ preservePolygonDraft: shouldPreservePolygonDraft })
