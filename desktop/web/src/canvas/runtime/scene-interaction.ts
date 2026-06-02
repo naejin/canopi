@@ -5,6 +5,7 @@ import {
   parsePlantSpacingIntervalInput,
 } from '../plant-spacing-interval'
 import {
+  computePlantSpacingCount,
   computePlantSpacingPositions,
   createPlantSpacingGeneratedPlants,
 } from '../plant-spacing-sequence'
@@ -86,6 +87,7 @@ import { createUuid } from '../../utils/ids'
 type InteractionTool = 'select' | 'hand' | 'rectangle' | 'text' | 'plant-stamp' | 'object-stamp' | 'plant-spacing' | string
 
 const PLANT_SPACING_DENSE_CONFIRM_THRESHOLD = 100
+const PLANT_SPACING_PREVIEW_POSITION_LIMIT = 250
 const PLANT_SPACING_DRAG_START_PX = 0.5
 
 interface ObjectStampPlantSource {
@@ -172,7 +174,8 @@ export class SceneInteractionController {
   private _plantSpacingIntervalValid = true
   private _plantSpacingEndpoint: ScenePoint | null = null
   private _plantSpacingGeneratedPositions: ScenePoint[] = []
-  private _plantSpacingConfirmation: { positions: ScenePoint[]; endpoint: ScenePoint } | null = null
+  private _plantSpacingGeneratedCount = 0
+  private _plantSpacingConfirmation: { endpoint: ScenePoint; intervalM: number; generatedCount: number } | null = null
   private _spaceHeld = false
   /** Original position of the hit entity — snap reference for drag. */
   private _dragSnapRef: ScenePoint | null = null
@@ -1278,6 +1281,7 @@ export class SceneInteractionController {
     this._plantSpacingSource = null
     this._plantSpacingEndpoint = null
     this._plantSpacingGeneratedPositions = []
+    this._plantSpacingGeneratedCount = 0
     this._plantSpacingConfirmation = null
     if (options.hide || this._tool !== 'plant-spacing') {
       this._plantSpacingOverlay.hide()
@@ -1310,17 +1314,23 @@ export class SceneInteractionController {
     this._plantSpacingEndpoint = endpoint
     const parsed = parsePlantSpacingIntervalInput(this._plantSpacingIntervalText)
     this._plantSpacingIntervalValid = parsed.valid
+    const generatedCount = parsed.valid
+      ? computePlantSpacingCount(source.plant.position, endpoint, parsed.meters)
+      : 0
     const positions = parsed.valid
-      ? computePlantSpacingPositions(source.plant.position, endpoint, parsed.meters)
+      ? computePlantSpacingPositions(source.plant.position, endpoint, parsed.meters, {
+          limit: PLANT_SPACING_PREVIEW_POSITION_LIMIT,
+        })
       : []
     this._plantSpacingGeneratedPositions = positions
+    this._plantSpacingGeneratedCount = generatedCount
     const length = Math.hypot(
       endpoint.x - source.plant.position.x,
       endpoint.y - source.plant.position.y,
     )
-    this._plantSpacingOverlay.setGeneratedCount(positions.length)
+    this._plantSpacingOverlay.setGeneratedCount(generatedCount)
     this._plantSpacingOverlay.setDenseWarning(
-      positions.length > PLANT_SPACING_DENSE_CONFIRM_THRESHOLD ? positions.length : null,
+      generatedCount > PLANT_SPACING_DENSE_CONFIRM_THRESHOLD ? generatedCount : null,
     )
     this._plantSpacingOverlay.showPreview({
       start: source.plant.position,
@@ -1336,24 +1346,26 @@ export class SceneInteractionController {
     if (!source) return
 
     this._updatePlantSpacingPreview(endpoint)
-    if (!this._plantSpacingIntervalValid) {
+    const parsed = parsePlantSpacingIntervalInput(this._plantSpacingIntervalText)
+    if (!this._plantSpacingIntervalValid || !parsed.valid) {
       this._plantSpacingOverlay.focusIntervalInput()
       return
     }
 
-    const positions = this._plantSpacingGeneratedPositions
-    if (positions.length === 0) return
+    const generatedCount = this._plantSpacingGeneratedCount
+    if (generatedCount === 0) return
 
-    if (positions.length > PLANT_SPACING_DENSE_CONFIRM_THRESHOLD) {
+    if (generatedCount > PLANT_SPACING_DENSE_CONFIRM_THRESHOLD) {
       this._plantSpacingConfirmation = {
         endpoint: { ...endpoint },
-        positions: positions.map((position) => ({ ...position })),
+        intervalM: parsed.meters,
+        generatedCount,
       }
-      this._plantSpacingOverlay.showDenseConfirmation(positions.length, positions.length + 1)
+      this._plantSpacingOverlay.showDenseConfirmation(generatedCount, generatedCount + 1)
       return
     }
 
-    this._commitPlantSpacingPositions(positions)
+    this._commitPlantSpacingPositions(this._plantSpacingGeneratedPositions)
   }
 
   private _commitPlantSpacingPositions(positions: readonly ScenePoint[]): void {
@@ -1381,7 +1393,14 @@ export class SceneInteractionController {
   private _confirmPlantSpacingDenseCommit(): void {
     const confirmation = this._plantSpacingConfirmation
     if (!confirmation) return
-    this._commitPlantSpacingPositions(confirmation.positions)
+    const source = this._plantSpacingSource
+    if (!source) return
+    const positions = computePlantSpacingPositions(
+      source.plant.position,
+      confirmation.endpoint,
+      confirmation.intervalM,
+    )
+    this._commitPlantSpacingPositions(positions)
   }
 
   private _cancelPlantSpacingDenseCommit(): void {

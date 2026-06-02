@@ -2,27 +2,43 @@ import type { ScenePlantEntity, ScenePoint } from './runtime/scene'
 
 const EXACT_ENDPOINT_TOLERANCE_M = 0.000001
 
+interface PlantSpacingPositionOptions {
+  limit?: number
+}
+
+export function computePlantSpacingCount(
+  source: ScenePoint,
+  endpoint: ScenePoint,
+  intervalM: number,
+): number {
+  if (!Number.isFinite(intervalM) || intervalM <= 0) return 0
+
+  const length = Math.hypot(endpoint.x - source.x, endpoint.y - source.y)
+  if (!Number.isFinite(length) || length <= EXACT_ENDPOINT_TOLERANCE_M) return 0
+  if (length + EXACT_ENDPOINT_TOLERANCE_M < intervalM) return 0
+
+  const count = Math.floor((length + EXACT_ENDPOINT_TOLERANCE_M) / intervalM)
+  return count > 0 ? count : 0
+}
+
 export function computePlantSpacingPositions(
   source: ScenePoint,
   endpoint: ScenePoint,
   intervalM: number,
+  options: PlantSpacingPositionOptions = {},
 ): ScenePoint[] {
-  if (!Number.isFinite(intervalM) || intervalM <= 0) return []
-
   const dx = endpoint.x - source.x
   const dy = endpoint.y - source.y
   const length = Math.hypot(dx, dy)
-  if (!Number.isFinite(length) || length <= EXACT_ENDPOINT_TOLERANCE_M) return []
-  if (length + EXACT_ENDPOINT_TOLERANCE_M < intervalM) return []
-
-  const count = Math.floor((length + EXACT_ENDPOINT_TOLERANCE_M) / intervalM)
+  const count = computePlantSpacingCount(source, endpoint, intervalM)
   if (count <= 0) return []
 
   const ux = dx / length
   const uy = dy / length
   const positions: ScenePoint[] = []
+  const materializedCount = normalizeMaterializedCount(count, options.limit)
 
-  for (let index = 1; index <= count; index += 1) {
+  for (let index = 1; index <= materializedCount; index += 1) {
     const distance = intervalM * index
     const exactEndpoint = index === count
       && Math.abs(length - distance) <= EXACT_ENDPOINT_TOLERANCE_M
@@ -35,6 +51,12 @@ export function computePlantSpacingPositions(
   }
 
   return positions
+}
+
+function normalizeMaterializedCount(count: number, limit: number | undefined): number {
+  if (limit === undefined) return count
+  if (!Number.isFinite(limit) || limit <= 0) return 0
+  return Math.min(count, Math.floor(limit))
 }
 
 export function createPlantSpacingGeneratedPlants(

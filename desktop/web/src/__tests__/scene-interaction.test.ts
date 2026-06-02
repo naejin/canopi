@@ -600,6 +600,38 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('caps dense Plant Spacing preview ghosts while keeping the generated count', () => {
+    plantSpacingIntervalM.value = 0.001
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'source',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 20, y: 30 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('plant-spacing')
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 22, clientY: 30, button: 0 }))
+
+    expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.textContent).toContain('2000')
+    const ghostCount = container.querySelectorAll('[data-plant-spacing-ghost]').length
+    expect(ghostCount).toBeGreaterThan(0)
+    expect(ghostCount).toBeLessThan(2000)
+    controller.dispose()
+  })
+
   it('keeps Plant Spacing preview active without a scene edit when no plants fit', () => {
     plantSpacingIntervalM.value = 2
     store.updatePersisted((draft) => {
