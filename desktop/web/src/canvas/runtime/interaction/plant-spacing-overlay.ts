@@ -39,7 +39,7 @@ export interface PlantSpacingOverlayController {
   showSourcePicking(message?: string): void
   showSourceSelected(source: PlantSpacingSourceView, camera: CameraController, interval: PlantSpacingIntervalView): void
   setIntervalValidity(valid: boolean): void
-  setGeneratedCount(count: number | null, options?: { dense?: boolean }): void
+  setGeneratedCount(count: number | null, options?: { dense?: boolean; blocked?: boolean }): void
   showPreview(preview: PlantSpacingPreviewView, camera: CameraController): void
   hidePreview(): void
   focusIntervalInput(): void
@@ -308,10 +308,16 @@ export function createPlantSpacingOverlay(
         count.removeAttribute('data-density')
         return
       }
-      count.textContent = t('canvas.plantSpacing.generatedCount', { count: generatedCount })
-      count.dataset.density = options.dense ? 'dense' : 'normal'
-      count.style.color = options.dense ? 'var(--color-primary)' : 'var(--color-text)'
-      count.style.fontWeight = options.dense ? '600' : '400'
+      count.textContent = options.blocked
+        ? `${t('canvas.plantSpacing.generatedCount', { count: generatedCount })} · ${t('canvas.plantSpacing.commitLimitWarning')}`
+        : t('canvas.plantSpacing.generatedCount', { count: generatedCount })
+      count.dataset.density = options.blocked
+        ? 'blocked'
+        : (options.dense ? 'dense' : 'normal')
+      count.style.color = options.blocked
+        ? 'var(--color-danger, var(--color-primary))'
+        : (options.dense ? 'var(--color-primary)' : 'var(--color-text)')
+      count.style.fontWeight = options.dense || options.blocked ? '600' : '400'
       count.style.display = 'block'
     },
     showPreview(preview, camera) {

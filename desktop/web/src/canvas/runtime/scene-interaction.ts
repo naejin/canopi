@@ -88,6 +88,7 @@ type InteractionTool = 'select' | 'hand' | 'rectangle' | 'text' | 'plant-stamp' 
 
 const PLANT_SPACING_DENSE_WARNING_THRESHOLD = 100
 const PLANT_SPACING_PREVIEW_POSITION_LIMIT = 250
+const PLANT_SPACING_COMMIT_POSITION_LIMIT = 5_000
 const PLANT_SPACING_DRAG_START_PX = 0.5
 
 interface ObjectStampPlantSource {
@@ -1328,6 +1329,7 @@ export class SceneInteractionController {
     )
     this._plantSpacingOverlay.setGeneratedCount(generatedCount, {
       dense: generatedCount > PLANT_SPACING_DENSE_WARNING_THRESHOLD,
+      blocked: generatedCount > PLANT_SPACING_COMMIT_POSITION_LIMIT,
     })
     this._plantSpacingOverlay.showPreview({
       start: source.plant.position,
@@ -1357,6 +1359,12 @@ export class SceneInteractionController {
 
     const generatedCount = this._plantSpacingGeneratedCount
     if (generatedCount === 0) return
+    if (generatedCount > PLANT_SPACING_COMMIT_POSITION_LIMIT) {
+      this._plantSpacingOverlay.setGeneratedCount(generatedCount, {
+        blocked: true,
+      })
+      return
+    }
 
     const positions = generatedCount > this._plantSpacingGeneratedPositions.length
       ? computePlantSpacingPositions(source.plant.position, endpoint, parsed.meters)

@@ -124,6 +124,7 @@
       "escToCancel": "Esc per annullare",
       "interval": "Intervallo",
       "generatedCount": "{{count}} generate",
+      "commitLimitWarning": "Aumenta l'intervallo o accorcia la linea",
       "denseWarning": "Conferma prima di creare {{count}} piante",
       "confirmDense": "Conferma distanza densa",
       "confirmCounts": "{{generated}} generate · {{total}} totali",

@@ -124,6 +124,7 @@
       "escToCancel": "Esc 키로 취소",
       "interval": "간격",
       "generatedCount": "{{count}}개 생성",
+      "commitLimitWarning": "간격을 늘리거나 선을 줄이세요",
       "denseWarning": "{{count}}개 식물을 만들기 전에 확인",
       "confirmDense": "조밀한 식물 간격 확인",
       "confirmCounts": "{{generated}}개 생성 · 총 {{total}}개",

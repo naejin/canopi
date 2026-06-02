@@ -124,6 +124,7 @@
       "escToCancel": "Esc, чтобы отменить",
       "interval": "Интервал",
       "generatedCount": "{{count}} создано",
+      "commitLimitWarning": "Увеличьте интервал или укоротите линию",
       "denseWarning": "Подтвердите перед созданием {{count}} растений",
       "confirmDense": "Подтвердить плотный интервал",
       "confirmCounts": "{{generated}} создано · {{total}} всего",

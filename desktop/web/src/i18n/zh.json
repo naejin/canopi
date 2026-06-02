@@ -124,6 +124,7 @@
       "escToCancel": "按 Esc 取消",
       "interval": "间距",
       "generatedCount": "已生成 {{count}}",
+      "commitLimitWarning": "增大间距或缩短线段",
       "denseWarning": "创建 {{count}} 株植物前请确认",
       "confirmDense": "确认密集植物间距",
       "confirmCounts": "已生成 {{generated}} · 总计 {{total}}",

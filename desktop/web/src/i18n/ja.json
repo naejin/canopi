@@ -124,6 +124,7 @@
       "escToCancel": "Esc でキャンセル",
       "interval": "間隔",
       "generatedCount": "{{count}} 生成",
+      "commitLimitWarning": "間隔を広げるか線を短くしてください",
       "denseWarning": "{{count}} 本の植物を作成する前に確認",
       "confirmDense": "密な植物間隔を確認",
       "confirmCounts": "{{generated}} 生成 · 合計 {{total}}",

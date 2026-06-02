@@ -124,6 +124,7 @@
       "escToCancel": "Esc om te annuleren",
       "interval": "Interval",
       "generatedCount": "{{count}} gegenereerd",
+      "commitLimitWarning": "Vergroot het interval of verkort de lijn",
       "denseWarning": "Bevestig voordat {{count}} planten worden gemaakt",
       "confirmDense": "Dichte plantafstand bevestigen",
       "confirmCounts": "{{generated}} gegenereerd · {{total}} totaal",
