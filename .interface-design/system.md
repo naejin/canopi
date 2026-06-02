@@ -308,6 +308,11 @@ Earthy, not neon:
 - Location Notices move as one family after a design has a Location: loading, ready, precision warning, and map/terrain error states should not jump between canvas zones. Missing-location setup is not a canvas notice.
 - If layout pressure is severe, Tool HUDs keep their primary instruction visible. Location Notices may shrink to a one-line status with ellipsis, but should keep the status dot and shortest useful label visible.
 - Notices use `--canvas-ruler-bg` or `--color-surface`, `1px solid --color-border`, `--radius-md`, and no dramatic shadow. They must be clearly readable above canvas content without using green UI chrome.
+- Plant Spacing dense counts are warning-only. A physically valid Plant Spacing Interval must not be blocked by a confirmation step; the Tool HUD should emphasize generated counts above the dense threshold while leaving commit behavior direct.
+- After Plant Spacing samples a placed plant, the sampled plant name is the Tool HUD's primary line. Do not repeat the tool name or generic selected-state copy inside the HUD.
+- Plant Spacing Tool HUDs should not show a visible Cancel button. Use a muted keyboard hint instead: `Esc to exit` before a source is sampled, and `Esc to cancel` after a source is sampled. Keep the hint visible even when the Plant Spacing Interval input is focused.
+- Plant Spacing generated counts use normal text below the dense threshold and `--color-primary` with stronger weight above the threshold. Do not use danger/error colors for dense counts because dense Plant Spacing remains physically valid.
+- Plant Spacing should show generated-count feedback as one line, such as `128 generated`. Do not add a separate dense-warning sentence when the count crosses the threshold.
 
 ### Panel Bar (right edge)
 - 36px wide, always visible when canvas is active
