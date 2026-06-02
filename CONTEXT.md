@@ -121,7 +121,7 @@ The interaction surface for searching, setting, clearing, presenting, and valida
 _Avoid_: Map panel state, location input state, basemap status helper
 
 **Location Notice**:
-A user-facing cue that reports location readiness for a design, such as needing a location before site-dependent context can be shown. A location notice is informational; it does not set, clear, or validate the design's location.
+A user-facing cue that reports active site/map readiness for a design with a Location, such as loading, precision, or map/terrain availability. A location notice is informational; it does not set, clear, or validate the design's location.
 _Avoid_: Basemap feedback, map warning, location tooltip
 
 **Climate Zone**:

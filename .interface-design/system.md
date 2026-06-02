@@ -305,7 +305,7 @@ Earthy, not neon:
 - Active Tool HUDs use the top-left safe slot. They provide current interaction guidance and controls, so they have priority over informational notices.
 - Location Notices use the bottom-left safe slot. They report site/map readiness and stay visually attached to the canvas workspace, not the canvas bar.
 - The scale bar has priority over Location Notices. A Location Notice prefers bottom-left above the scale bar, shifts to the right of the scale bar when vertical space is tight, then compacts before disappearing.
-- Location Notices move as one family: missing location, loading, ready, precision warning, and map/terrain error states should not jump between canvas zones.
+- Location Notices move as one family after a design has a Location: loading, ready, precision warning, and map/terrain error states should not jump between canvas zones. Missing-location setup is not a canvas notice.
 - If layout pressure is severe, Tool HUDs keep their primary instruction visible. Location Notices may shrink to a one-line status with ellipsis, but should keep the status dot and shortest useful label visible.
 - Notices use `--canvas-ruler-bg` or `--color-surface`, `1px solid --color-border`, `--radius-md`, and no dramatic shadow. They must be clearly readable above canvas content without using green UI chrome.
 

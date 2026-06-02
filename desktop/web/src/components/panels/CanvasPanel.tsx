@@ -61,6 +61,7 @@ export function CanvasPanel() {
   const visibility = layerVisibility.value
   const mapVisible = hasVisibleMapLayer(visibility, hillshadeVisible.value)
   const shouldShowMapSurface = hasDesign && hasLocation && mapVisible
+  const shouldShowLocationNotice = shouldShowMapSurface
   const locationSummary = savedLocation.summary
   const locationKey = savedLocation.key
 
@@ -105,20 +106,16 @@ export function CanvasPanel() {
     return () => observer.disconnect()
   }, [hasDesign])
 
-  const basemapTone = !hasLocation
-    ? 'warning'
-    : basemapState.status === 'error'
-      ? 'error'
-      : basemapState.status === 'ready'
-        ? 'ready'
-        : 'loading'
-  const basemapStatus = !hasLocation
-    ? t('canvas.location.required')
-    : basemapState.status === 'error'
-      ? `${t('canvas.layers.basemapError')}: ${basemapState.errorMessage ?? ''}`.trim()
-      : basemapState.status === 'ready'
-        ? `${locationSummary}${basemapState.terrainStatus === 'error' ? ` • ${t('canvas.layers.mapSection')}: ${basemapState.terrainErrorMessage ?? ''}` : ''}${basemapState.precisionWarning ? ` • ${t('canvas.layers.precisionWarning')}` : ''}`
-        : t('canvas.layers.basemapLoading')
+  const basemapTone = basemapState.status === 'error'
+    ? 'error'
+    : basemapState.status === 'ready'
+      ? 'ready'
+      : 'loading'
+  const basemapStatus = basemapState.status === 'error'
+    ? `${t('canvas.layers.basemapError')}: ${basemapState.errorMessage ?? ''}`.trim()
+    : basemapState.status === 'ready'
+      ? `${locationSummary}${basemapState.terrainStatus === 'error' ? ` • ${t('canvas.layers.mapSection')}: ${basemapState.terrainErrorMessage ?? ''}` : ''}${basemapState.precisionWarning ? ` • ${t('canvas.layers.precisionWarning')}` : ''}`
+      : t('canvas.layers.basemapLoading')
   const locationNoticePlacement = resolveCanvasNoticePlacement('location-notice', {
     canvasWidth: canvasNoticeViewport.canvasWidth,
     canvasHeight: canvasNoticeViewport.canvasHeight,
@@ -152,7 +149,7 @@ export function CanvasPanel() {
             </div>
             <div ref={rulerOverlayRef} className={styles.rulerOverlay} />
             {hasDesign && <CompassOverlay />}
-            {hasDesign && mapVisible && (
+            {shouldShowLocationNotice && (
               <div
                 className={styles.basemapFeedback}
                 data-tone={basemapTone}

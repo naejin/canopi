@@ -109,7 +109,7 @@ describe('CanvasPanel basemap feedback', () => {
     container.remove()
   })
 
-  it('shows a location-required basemap notice when no design location is saved', async () => {
+  it('does not show a Location Notice when no design location is saved', async () => {
     currentDesign.value = {
       version: 2,
       name: 'Demo',
@@ -135,17 +135,17 @@ describe('CanvasPanel basemap feedback', () => {
       render(<CanvasPanel />, container)
     })
 
-    const status = container.querySelector('[role="status"]')
-    expect(status?.textContent).toContain('Set a design location first')
+    expect(container.querySelector('[role="status"]')).toBeNull()
+    expect(container.querySelector('[data-map-active="true"]')).toBeNull()
     expect(container.querySelector('[role="img"][aria-label^="Compass"]')).toBeNull()
   })
 
-  it('places missing-location feedback as a bottom-left Location Notice above the scale bar', async () => {
+  it('places loading feedback as a bottom-left Location Notice above the scale bar', async () => {
     currentDesign.value = {
       version: 2,
       name: 'Demo',
       description: null,
-      location: null,
+      location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
       north_bearing_deg: 0,
       plant_species_colors: {},
       layers: [],
@@ -160,6 +160,14 @@ describe('CanvasPanel basemap feedback', () => {
       created_at: '2026-04-12T00:00:00.000Z',
       updated_at: '2026-04-12T00:00:00.000Z',
       extra: {},
+    }
+    mockBasemapState = {
+      status: 'loading',
+      errorMessage: null,
+      terrainStatus: 'idle',
+      terrainErrorMessage: null,
+      precisionWarning: false,
+      designExtentMeters: null,
     }
 
     await act(async () => {
@@ -167,6 +175,7 @@ describe('CanvasPanel basemap feedback', () => {
     })
 
     const status = container.querySelector<HTMLElement>('[role="status"]')!
+    expect(status.textContent).toContain('Loading')
     expect(status.dataset.locationNoticePlacement).toBe('bottom-left-above-scale-bar')
     expect(status.style.left).toBe(`${CANVAS_RULER_SIZE_PX + CANVAS_NOTICE_MARGIN_PX}px`)
     expect(status.style.bottom).toBe(`${SCALE_BAR_RESERVED_BOTTOM_PX + CANVAS_NOTICE_MARGIN_PX}px`)
@@ -180,7 +189,7 @@ describe('CanvasPanel basemap feedback', () => {
       version: 2,
       name: 'Demo',
       description: null,
-      location: null,
+      location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
       north_bearing_deg: 0,
       plant_species_colors: {},
       layers: [],
@@ -195,6 +204,14 @@ describe('CanvasPanel basemap feedback', () => {
       created_at: '2026-04-12T00:00:00.000Z',
       updated_at: '2026-04-12T00:00:00.000Z',
       extra: {},
+    }
+    mockBasemapState = {
+      status: 'loading',
+      errorMessage: null,
+      terrainStatus: 'idle',
+      terrainErrorMessage: null,
+      precisionWarning: false,
+      designExtentMeters: null,
     }
 
     try {
@@ -219,7 +236,7 @@ describe('CanvasPanel basemap feedback', () => {
       version: 2,
       name: 'Demo',
       description: null,
-      location: null,
+      location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
       north_bearing_deg: 0,
       plant_species_colors: {},
       layers: [],
@@ -235,6 +252,14 @@ describe('CanvasPanel basemap feedback', () => {
       updated_at: '2026-04-12T00:00:00.000Z',
       extra: {},
     }
+    mockBasemapState = {
+      status: 'loading',
+      errorMessage: null,
+      terrainStatus: 'idle',
+      terrainErrorMessage: null,
+      precisionWarning: false,
+      designExtentMeters: null,
+    }
 
     try {
       await act(async () => {
@@ -246,7 +271,7 @@ describe('CanvasPanel basemap feedback', () => {
       expect(status.dataset.compact).toBe('true')
       expect(Number.parseFloat(status.style.maxWidth)).toBeLessThan(240)
       expect(status.querySelector('[aria-hidden="true"]')).not.toBeNull()
-      expect(status.textContent).toContain('Set a design location first')
+      expect(status.textContent).toContain('Loading')
     } finally {
       widthSpy.mockRestore()
       heightSpy.mockRestore()
