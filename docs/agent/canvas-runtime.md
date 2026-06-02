@@ -39,6 +39,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - Camera transforms go through `CameraController`.
 - The in-canvas basemap is a sibling visualization layer, not part of the renderer contract.
 - Screen-space chrome such as rulers stays outside the world renderer.
+- Canvas notice placement uses the Canvas Notice Layout seam for safe screen-space slots. Active Tool HUDs use the top-left safe slot; Location Notices use the bottom-left safe slot and reserve the scale bar before compacting.
 - Use scene invalidation for content, selection, presentation, locale, theme, and hover changes.
 - Use viewport invalidation for pan, zoom, and fit operations.
 - Use chrome invalidation for rulers, grid, and guide-only changes.

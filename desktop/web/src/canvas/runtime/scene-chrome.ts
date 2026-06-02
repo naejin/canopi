@@ -9,8 +9,9 @@ import {
 } from '../rulers'
 import type { SceneViewportState } from './scene'
 import { getCanvasColor } from '../theme-refresh'
+import { CANVAS_RULER_SIZE_PX } from '../canvas-notice-layout'
 
-const RULER_SIZE = 24
+const RULER_SIZE = CANVAS_RULER_SIZE_PX
 const GRID_Z_INDEX = 4
 const MAJOR_STEP = 2
 

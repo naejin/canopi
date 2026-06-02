@@ -5,10 +5,11 @@ import {
   SCALE_BAR_RESERVED_BOTTOM_PX,
   getScaleBarDisplay,
 } from './scale-bar'
+import { CANVAS_RULER_SIZE_PX } from './canvas-notice-layout'
 import { FONT_SANS_FALLBACK } from './canvas2d-utils'
 import { NICE_DISTANCES } from './grid'
 
-const RULER_SIZE = 24 // pixels — thickness of horizontal and vertical rulers
+const RULER_SIZE = CANVAS_RULER_SIZE_PX // pixels — thickness of horizontal and vertical rulers
 
 /** Minimal stage view contract — decoupled from any renderer library. */
 export interface StageView {

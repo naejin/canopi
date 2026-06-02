@@ -7,6 +7,11 @@ import { CanvasPanel } from '../components/panels/CanvasPanel'
 import { currentDesign } from './support/design-session-state'
 import { northBearingDeg } from '../canvas/scene-metadata-state'
 import { locale } from '../app/settings/state'
+import {
+  CANVAS_NOTICE_MARGIN_PX,
+  CANVAS_RULER_SIZE_PX,
+} from '../canvas/canvas-notice-layout'
+import { SCALE_BAR_CANVAS_WIDTH, SCALE_BAR_RESERVED_BOTTOM_PX } from '../canvas/scale-bar'
 
 let mockBasemapState: {
   status: 'idle' | 'loading' | 'ready' | 'error'
@@ -135,6 +140,119 @@ describe('CanvasPanel basemap feedback', () => {
     expect(container.querySelector('[role="img"][aria-label^="Compass"]')).toBeNull()
   })
 
+  it('places missing-location feedback as a bottom-left Location Notice above the scale bar', async () => {
+    currentDesign.value = {
+      version: 2,
+      name: 'Demo',
+      description: null,
+      location: null,
+      north_bearing_deg: 0,
+      plant_species_colors: {},
+      layers: [],
+      plants: [],
+      zones: [],
+      annotations: [],
+      consortiums: [],
+      groups: [],
+      timeline: [],
+      budget: [],
+      budget_currency: 'EUR',
+      created_at: '2026-04-12T00:00:00.000Z',
+      updated_at: '2026-04-12T00:00:00.000Z',
+      extra: {},
+    }
+
+    await act(async () => {
+      render(<CanvasPanel />, container)
+    })
+
+    const status = container.querySelector<HTMLElement>('[role="status"]')!
+    expect(status.dataset.locationNoticePlacement).toBe('bottom-left-above-scale-bar')
+    expect(status.style.left).toBe(`${CANVAS_RULER_SIZE_PX + CANVAS_NOTICE_MARGIN_PX}px`)
+    expect(status.style.bottom).toBe(`${SCALE_BAR_RESERVED_BOTTOM_PX + CANVAS_NOTICE_MARGIN_PX}px`)
+    expect(status.style.top).toBe('auto')
+  })
+
+  it('shifts Location Notices to the right of the scale bar when canvas height is tight', async () => {
+    const widthSpy = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(640)
+    const heightSpy = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(72)
+    currentDesign.value = {
+      version: 2,
+      name: 'Demo',
+      description: null,
+      location: null,
+      north_bearing_deg: 0,
+      plant_species_colors: {},
+      layers: [],
+      plants: [],
+      zones: [],
+      annotations: [],
+      consortiums: [],
+      groups: [],
+      timeline: [],
+      budget: [],
+      budget_currency: 'EUR',
+      created_at: '2026-04-12T00:00:00.000Z',
+      updated_at: '2026-04-12T00:00:00.000Z',
+      extra: {},
+    }
+
+    try {
+      await act(async () => {
+        render(<CanvasPanel />, container)
+      })
+
+      const status = container.querySelector<HTMLElement>('[role="status"]')!
+      expect(status.dataset.locationNoticePlacement).toBe('bottom-left-right-of-scale-bar')
+      expect(status.style.left).toBe(`${SCALE_BAR_CANVAS_WIDTH + CANVAS_NOTICE_MARGIN_PX}px`)
+      expect(status.style.bottom).toBe(`${CANVAS_NOTICE_MARGIN_PX}px`)
+    } finally {
+      widthSpy.mockRestore()
+      heightSpy.mockRestore()
+    }
+  })
+
+  it('keeps compact Location Notices visible under severe layout pressure', async () => {
+    const widthSpy = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(300)
+    const heightSpy = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(72)
+    currentDesign.value = {
+      version: 2,
+      name: 'Demo',
+      description: null,
+      location: null,
+      north_bearing_deg: 0,
+      plant_species_colors: {},
+      layers: [],
+      plants: [],
+      zones: [],
+      annotations: [],
+      consortiums: [],
+      groups: [],
+      timeline: [],
+      budget: [],
+      budget_currency: 'EUR',
+      created_at: '2026-04-12T00:00:00.000Z',
+      updated_at: '2026-04-12T00:00:00.000Z',
+      extra: {},
+    }
+
+    try {
+      await act(async () => {
+        render(<CanvasPanel />, container)
+      })
+
+      const status = container.querySelector<HTMLElement>('[role="status"]')!
+      expect(status.dataset.locationNoticePlacement).toBe('bottom-left-compact')
+      expect(status.dataset.compact).toBe('true')
+      expect(Number.parseFloat(status.style.maxWidth)).toBeLessThan(240)
+      expect(status.querySelector('[aria-hidden="true"]')).not.toBeNull()
+      expect(status.textContent).toContain('Set a design location first')
+    } finally {
+      widthSpy.mockRestore()
+      heightSpy.mockRestore()
+    }
+  })
+
   it('shows a loading basemap notice until the map becomes active', async () => {
     currentDesign.value = {
       version: 2,
@@ -171,6 +289,7 @@ describe('CanvasPanel basemap feedback', () => {
 
     const status = container.querySelector('[role="status"]')
     expect(status?.textContent).toContain('Loading')
+    expect((status as HTMLElement | null)?.dataset.locationNoticePlacement).toBe('bottom-left-above-scale-bar')
     expect(container.querySelector('[data-map-active="true"]')).not.toBeNull()
   })
 

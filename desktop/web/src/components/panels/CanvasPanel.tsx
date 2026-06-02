@@ -19,7 +19,25 @@ import { LayerPanel } from '../canvas/LayerPanel'
 import { WelcomeScreen } from '../shared/WelcomeScreen'
 import { hasVisibleMapLayer, hillshadeVisible, layerVisibility } from '../../app/canvas-settings/signals'
 import { useSavedLocationPresentation } from '../../app/location'
+import {
+  CANVAS_NOTICE_DEFAULT_CANVAS_HEIGHT_PX,
+  CANVAS_NOTICE_DEFAULT_CANVAS_WIDTH_PX,
+  resolveCanvasNoticePlacement,
+} from '../../canvas/canvas-notice-layout'
 import styles from './Panels.module.css'
+
+interface CanvasNoticeViewportState {
+  canvasWidth: number
+  canvasHeight: number
+}
+
+function readCanvasNoticeViewport(element: HTMLElement): CanvasNoticeViewportState {
+  const rect = element.getBoundingClientRect()
+  return {
+    canvasWidth: element.clientWidth || Math.round(rect.width) || CANVAS_NOTICE_DEFAULT_CANVAS_WIDTH_PX,
+    canvasHeight: element.clientHeight || Math.round(rect.height) || CANVAS_NOTICE_DEFAULT_CANVAS_HEIGHT_PX,
+  }
+}
 
 export function CanvasPanel() {
   const canvasAreaRef = useRef<HTMLDivElement>(null)
@@ -29,6 +47,10 @@ export function CanvasPanel() {
     () => IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
   )
   const [locationCueVisible, setLocationCueVisible] = useState(false)
+  const [canvasNoticeViewport, setCanvasNoticeViewport] = useState<CanvasNoticeViewportState>({
+    canvasWidth: CANVAS_NOTICE_DEFAULT_CANVAS_WIDTH_PX,
+    canvasHeight: CANVAS_NOTICE_DEFAULT_CANVAS_HEIGHT_PX,
+  })
   const lastLocationRef = useRef<string | null>(null)
 
   useCanvasDocumentSession({ canvasAreaRef, containerRef, rulerOverlayRef })
@@ -59,6 +81,30 @@ export function CanvasPanel() {
     return () => window.clearTimeout(timer)
   }, [locationKey])
 
+  useEffect(() => {
+    if (!hasDesign) return
+    const element = canvasAreaRef.current
+    if (!element) return
+
+    const updateViewport = () => {
+      const next = readCanvasNoticeViewport(element)
+      setCanvasNoticeViewport((previous) => {
+        if (
+          previous.canvasWidth === next.canvasWidth
+          && previous.canvasHeight === next.canvasHeight
+        ) {
+          return previous
+        }
+        return next
+      })
+    }
+
+    updateViewport()
+    const observer = new ResizeObserver(updateViewport)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [hasDesign])
+
   const basemapTone = !hasLocation
     ? 'warning'
     : basemapState.status === 'error'
@@ -73,6 +119,18 @@ export function CanvasPanel() {
       : basemapState.status === 'ready'
         ? `${locationSummary}${basemapState.terrainStatus === 'error' ? ` • ${t('canvas.layers.mapSection')}: ${basemapState.terrainErrorMessage ?? ''}` : ''}${basemapState.precisionWarning ? ` • ${t('canvas.layers.precisionWarning')}` : ''}`
         : t('canvas.layers.basemapLoading')
+  const locationNoticePlacement = resolveCanvasNoticePlacement('location-notice', {
+    canvasWidth: canvasNoticeViewport.canvasWidth,
+    canvasHeight: canvasNoticeViewport.canvasHeight,
+    rulersVisible: true,
+    scaleBarVisible: true,
+  })
+  const locationNoticeStyle = {
+    top: 'auto',
+    left: `${locationNoticePlacement.leftPx}px`,
+    bottom: `${locationNoticePlacement.bottomPx}px`,
+    maxWidth: `${Math.min(320, locationNoticePlacement.maxWidthPx)}px`,
+  }
 
   return (
     <div className={styles.canvasPanel}>
@@ -99,6 +157,9 @@ export function CanvasPanel() {
                 className={styles.basemapFeedback}
                 data-tone={basemapTone}
                 data-location-cue={locationCueVisible ? 'true' : 'false'}
+                data-location-notice-placement={locationNoticePlacement.placement}
+                data-compact={locationNoticePlacement.compact ? 'true' : 'false'}
+                style={locationNoticeStyle}
                 role="status"
                 aria-live="polite"
               >

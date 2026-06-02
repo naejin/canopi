@@ -9,6 +9,10 @@ import { CameraController } from '../canvas/runtime/camera'
 import { SceneStore } from '../canvas/runtime/scene'
 import { SceneInteractionController, type SceneInteractionDeps } from '../canvas/runtime/scene-interaction'
 import { SceneRuntimeEditCoordinator } from '../canvas/runtime/scene-runtime/transactions'
+import {
+  CANVAS_NOTICE_MARGIN_PX,
+  CANVAS_RULER_SIZE_PX,
+} from '../canvas/canvas-notice-layout'
 
 function createPlantPresentationContext(viewportScale: number) {
   return {
@@ -224,6 +228,34 @@ describe('SceneInteractionController', () => {
     expect(hud?.textContent).toContain('Apple')
     expect(deps.setSelection).not.toHaveBeenCalled()
     expect(selectedObjectIds.value).toEqual(new Set(['already-selected']))
+    controller.dispose()
+  })
+
+  it('places the Plant Spacing HUD in the top-left safe canvas slot', () => {
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+
+    controller.setTool('plant-spacing')
+
+    const hud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')!
+    const safeInset = CANVAS_RULER_SIZE_PX + CANVAS_NOTICE_MARGIN_PX
+    expect(hud.style.left).toBe(`${safeInset}px`)
+    expect(hud.style.top).toBe(`${safeInset}px`)
+    controller.dispose()
+  })
+
+  it('compacts the Plant Spacing HUD on constrained canvas sizes', () => {
+    Object.defineProperty(container, 'clientWidth', { configurable: true, value: 180 })
+    Object.defineProperty(container, 'clientHeight', { configurable: true, value: 96 })
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+
+    controller.setTool('plant-spacing')
+
+    const hud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')!
+    expect(hud.dataset.compact).toBe('true')
+    expect(Number.parseFloat(hud.style.maxWidth)).toBeLessThan(240)
+    expect(hud.textContent).toContain('Select a placed plant')
     controller.dispose()
   })
 

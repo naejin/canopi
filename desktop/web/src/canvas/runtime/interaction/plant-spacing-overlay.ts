@@ -1,6 +1,7 @@
 import { t } from '../../../i18n'
 import type { CameraController } from '../camera'
 import type { ScenePoint } from '../scene'
+import { resolveCanvasNoticePlacement } from '../../canvas-notice-layout'
 
 interface PlantSpacingSourceView {
   id: string
@@ -53,16 +54,24 @@ export function createPlantSpacingOverlay(
   container: HTMLElement,
   events: PlantSpacingOverlayEvents,
 ): PlantSpacingOverlayController {
+  const hudPlacement = resolveCanvasNoticePlacement('tool-hud', {
+    canvasWidth: container.clientWidth,
+    canvasHeight: container.clientHeight,
+    rulersVisible: true,
+    scaleBarVisible: true,
+  })
   const root = document.createElement('div')
   root.dataset.plantSpacingHud = 'true'
+  root.dataset.canvasNoticePlacement = hudPlacement.placement
+  root.dataset.compact = hudPlacement.compact ? 'true' : 'false'
   root.style.cssText = [
     'position: absolute',
-    'top: var(--space-3)',
-    'left: var(--space-3)',
+    `top: ${hudPlacement.topPx}px`,
+    `left: ${hudPlacement.leftPx}px`,
     'z-index: 25',
     'display: none',
-    'min-width: 240px',
-    'max-width: min(320px, calc(100% - var(--space-6)))',
+    `min-width: ${Math.min(240, hudPlacement.maxWidthPx)}px`,
+    `max-width: ${Math.min(320, hudPlacement.maxWidthPx)}px`,
     'padding: var(--space-2)',
     'background: var(--color-surface)',
     'border: 1px solid var(--color-border-strong, var(--color-border))',
@@ -72,6 +81,10 @@ export function createPlantSpacingOverlay(
     'color: var(--color-text)',
     'pointer-events: auto',
   ].join(';')
+  root.style.top = `${hudPlacement.topPx}px`
+  root.style.left = `${hudPlacement.leftPx}px`
+  root.style.minWidth = `${Math.min(240, hudPlacement.maxWidthPx)}px`
+  root.style.maxWidth = `${Math.min(320, hudPlacement.maxWidthPx)}px`
 
   const header = document.createElement('div')
   header.style.cssText = [
