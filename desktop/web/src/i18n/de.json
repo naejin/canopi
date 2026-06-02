@@ -100,6 +100,8 @@
       "measureDesc": "Abstände messen",
       "plantStamp": "Pflanzenstempel",
       "plantStampDesc": "Pflanzen aus der Datenbank platzieren",
+      "objectStamp": "Objektstempel",
+      "objectStampDesc": "Vorhandene Entwurfsobjekte kopieren",
       "dimension": "Bemaßung",
       "dimensionDesc": "Abstand zwischen Punkten oder Formen messen",
       "patternFill": "Musterfüllung",

@@ -100,6 +100,8 @@
       "measureDesc": "Medir distâncias",
       "plantStamp": "Carimbo de planta",
       "plantStampDesc": "Colocar plantas do banco de dados",
+      "objectStamp": "Carimbo de objeto",
+      "objectStampDesc": "Copiar objetos de design existentes",
       "dimension": "Dimensão",
       "dimensionDesc": "Medir distância entre pontos ou formas",
       "patternFill": "Preenchimento padrão",

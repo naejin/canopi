@@ -100,6 +100,8 @@
       "measureDesc": "测量距离",
       "plantStamp": "植物图章",
       "plantStampDesc": "从数据库放置植物",
+      "objectStamp": "对象图章",
+      "objectStampDesc": "复制现有设计对象",
       "dimension": "标注尺寸",
       "dimensionDesc": "测量点或形状之间的距离",
       "patternFill": "图案填充",

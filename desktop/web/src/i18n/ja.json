@@ -100,6 +100,8 @@
       "measureDesc": "距離を計測",
       "plantStamp": "植物スタンプ",
       "plantStampDesc": "データベースから植物を配置",
+      "objectStamp": "オブジェクトスタンプ",
+      "objectStampDesc": "既存のデザインオブジェクトをコピー",
       "dimension": "寸法",
       "dimensionDesc": "点や図形間の距離を計測",
       "patternFill": "パターン塗りつぶし",

@@ -100,6 +100,8 @@
       "measureDesc": "Mesurer des distances",
       "plantStamp": "Tampon plante",
       "plantStampDesc": "Placer des plantes depuis la base de données",
+      "objectStamp": "Tampon objet",
+      "objectStampDesc": "Copier des objets de conception existants",
       "dimension": "Cote",
       "dimensionDesc": "Mesurer la distance entre points ou formes",
       "patternFill": "Remplissage motif",

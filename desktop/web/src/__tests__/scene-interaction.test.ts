@@ -1231,6 +1231,614 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('samples a placed plant with Object Stamp and places anchored clones', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'plant-1',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: '#C44230',
+        stratum: 'high',
+        canopySpreadM: 4,
+        position: { x: 50, y: 60 },
+        rotationDeg: 15,
+        scale: 4,
+        notes: 'Source plant',
+        plantedDate: '2026-02-01',
+        quantity: 2,
+      }]
+    })
+
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('object-stamp')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 54, clientY: 63, button: 0 }))
+    expect(store.persisted.plants).toHaveLength(1)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 100, clientY: 120, button: 0 }))
+    const preview = Array.from(container.children)
+      .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
+    expect(preview?.style.display).toBe('block')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 100, clientY: 120, button: 0 }))
+
+    expect(store.persisted.plants).toHaveLength(2)
+    const clone = store.persisted.plants[1]!
+    expect(clone.id).not.toBe('plant-1')
+    expect(clone).toMatchObject({
+      canonicalName: 'Malus domestica',
+      commonName: 'Apple',
+      color: '#C44230',
+      stratum: 'high',
+      canopySpreadM: 4,
+      position: { x: 96, y: 117 },
+      rotationDeg: 15,
+      scale: 4,
+      notes: 'Source plant',
+      plantedDate: '2026-02-01',
+      quantity: 2,
+    })
+    expect(selectedObjectIds.value).toEqual(new Set([clone.id]))
+    expect(onSceneEditCommit).toHaveBeenCalledTimes(1)
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-object-stamp')
+    controller.dispose()
+  })
+
+  it('snaps Object Stamp placement by the sampled plant anchor', () => {
+    camera.setViewport({ x: 0, y: 0, scale: 4 })
+    snapToGridEnabled.value = true
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'plant-1',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 4,
+        position: { x: 10, y: 10 },
+        rotationDeg: null,
+        scale: 4,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('object-stamp')
+
+    // Screen (44, 44) -> world (11, 11), so the sampled anchor is +1,+1 from the plant position.
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 44, clientY: 44, button: 0 }))
+    // Screen (93, 107) -> world (23.25, 26.75), snapped to (25, 25) at this zoom level.
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 93, clientY: 107, button: 0 }))
+
+    expect(store.persisted.plants[1]?.position).toEqual({ x: 24, y: 24 })
+    controller.dispose()
+  })
+
+  it('clears loaded Object Stamp source and returns to select on Escape', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'plant-1',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 40, y: 40 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+
+    const setTool = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { setTool })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('object-stamp')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
+    ;(controller as any)._onKeyDown(new KeyboardEvent('keydown', { key: 'Escape' }))
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 90, clientY: 90, button: 0 }))
+
+    expect(setTool).toHaveBeenCalledWith('select')
+    expect(store.persisted.plants).toHaveLength(1)
+    controller.dispose()
+  })
+
+  it('clears loaded Object Stamp source when changing tools', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'plant-1',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 40, y: 40 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('object-stamp')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
+    controller.setTool('select')
+    controller.setTool('object-stamp')
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 90, clientY: 90, button: 0 }))
+
+    expect(store.persisted.plants).toHaveLength(1)
+    controller.dispose()
+  })
+
+  it('blocks Object Stamp sampling and placement for locked or hidden plant sources', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'plant-1',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 40, y: 40 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('object-stamp')
+
+    lockedObjectIds.value = new Set(['plant-1'])
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 90, clientY: 90, button: 0 }))
+    expect(store.persisted.plants).toHaveLength(1)
+
+    lockedObjectIds.value = new Set()
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
+    store.updatePersisted((draft) => {
+      const plantsLayer = draft.layers.find((layer) => layer.name === 'plants')
+      if (plantsLayer) plantsLayer.visible = false
+    })
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 90, clientY: 90, button: 0 }))
+
+    expect(store.persisted.plants).toHaveLength(1)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    controller.dispose()
+  })
+
+  it('samples a zone with Object Stamp and places anchored collision-safe clones', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [
+        {
+          kind: 'zone',
+          name: 'Kitchen bed',
+          zoneType: 'rect',
+          points: [
+            { x: 10, y: 20 },
+            { x: 50, y: 20 },
+            { x: 50, y: 60 },
+            { x: 10, y: 60 },
+          ],
+          fillColor: '#A06B1F',
+          notes: 'Annuals',
+        },
+        {
+          kind: 'zone',
+          name: 'Kitchen bed copy',
+          zoneType: 'rect',
+          points: [
+            { x: 200, y: 200 },
+            { x: 220, y: 200 },
+            { x: 220, y: 220 },
+            { x: 200, y: 220 },
+          ],
+          fillColor: null,
+          notes: null,
+        },
+      ]
+    })
+
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('object-stamp')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 25, clientY: 30, button: 0 }))
+    expect(store.persisted.zones).toHaveLength(2)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 120, clientY: 150, button: 0 }))
+    const preview = Array.from(container.children)
+      .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
+    expect(preview?.style.display).toBe('block')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 120, clientY: 150, button: 0 }))
+
+    expect(store.persisted.zones).toHaveLength(3)
+    const clone = store.persisted.zones[2]!
+    expect(clone).toMatchObject({
+      name: 'Kitchen bed copy 2',
+      zoneType: 'rect',
+      points: [
+        { x: 105, y: 140 },
+        { x: 145, y: 140 },
+        { x: 145, y: 180 },
+        { x: 105, y: 180 },
+      ],
+      fillColor: '#A06B1F',
+      notes: 'Annuals',
+    })
+    expect(selectedObjectIds.value).toEqual(new Set(['Kitchen bed copy 2']))
+    expect(onSceneEditCommit).toHaveBeenCalledTimes(1)
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-object-stamp')
+    controller.dispose()
+  })
+
+  it('samples an annotation with Object Stamp and places anchored clones with fresh ids', () => {
+    store.updatePersisted((draft) => {
+      draft.annotations = [{
+        kind: 'annotation',
+        id: 'annotation-1',
+        annotationType: 'text',
+        position: { x: 20, y: 30 },
+        text: 'Guild note',
+        fontSize: 20,
+        rotationDeg: 12,
+      }]
+    })
+
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('object-stamp')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 30, clientY: 40, button: 0 }))
+    expect(store.persisted.annotations).toHaveLength(1)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 100, clientY: 110, button: 0 }))
+    const preview = Array.from(container.children)
+      .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
+    expect(preview?.style.display).toBe('block')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 100, clientY: 110, button: 0 }))
+
+    expect(store.persisted.annotations).toHaveLength(2)
+    const clone = store.persisted.annotations[1]!
+    expect(clone.id).not.toBe('annotation-1')
+    expect(clone).toMatchObject({
+      annotationType: 'text',
+      position: { x: 90, y: 100 },
+      text: 'Guild note',
+      fontSize: 20,
+      rotationDeg: 12,
+    })
+    expect(selectedObjectIds.value).toEqual(new Set([clone.id]))
+    expect(onSceneEditCommit).toHaveBeenCalledTimes(1)
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-object-stamp')
+    controller.dispose()
+  })
+
+  it('snaps Object Stamp placement by the sampled annotation anchor', () => {
+    camera.setViewport({ x: 0, y: 0, scale: 4 })
+    snapToGridEnabled.value = true
+    store.updatePersisted((draft) => {
+      draft.annotations = [{
+        kind: 'annotation',
+        id: 'annotation-1',
+        annotationType: 'text',
+        position: { x: 10, y: 10 },
+        text: 'Note',
+        fontSize: 20,
+        rotationDeg: null,
+      }]
+    })
+
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('object-stamp')
+
+    // Screen (44, 44) -> world (11, 11), so the sampled anchor is +1,+1 from the annotation position.
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 44, clientY: 44, button: 0 }))
+    // Screen (93, 107) -> world (23.25, 26.75), snapped to (25, 25) at this zoom level.
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 93, clientY: 107, button: 0 }))
+
+    expect(store.persisted.annotations[1]?.position).toEqual({ x: 24, y: 24 })
+    controller.dispose()
+  })
+
+  it('preserves elliptical zone radii when stamping zones', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [{
+        kind: 'zone',
+        name: 'Oval bed',
+        zoneType: 'ellipse',
+        points: [
+          { x: 50, y: 60 },
+          { x: 20, y: 10 },
+        ],
+        fillColor: null,
+        notes: null,
+      }]
+    })
+
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('object-stamp')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 50, clientY: 60, button: 0 }))
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 100, clientY: 100, button: 0 }))
+
+    expect(store.persisted.zones).toHaveLength(2)
+    expect(store.persisted.zones[1]).toMatchObject({
+      name: 'Oval bed copy',
+      zoneType: 'ellipse',
+      points: [
+        { x: 100, y: 100 },
+        { x: 20, y: 10 },
+      ],
+    })
+    controller.dispose()
+  })
+
+  it('blocks Object Stamp sampling and placement for locked or hidden zone and annotation sources', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [{
+        kind: 'zone',
+        name: 'Kitchen bed',
+        zoneType: 'rect',
+        points: [
+          { x: 10, y: 10 },
+          { x: 60, y: 10 },
+          { x: 60, y: 50 },
+          { x: 10, y: 50 },
+        ],
+        fillColor: null,
+        notes: null,
+      }]
+      draft.annotations = [{
+        kind: 'annotation',
+        id: 'annotation-1',
+        annotationType: 'text',
+        position: { x: 100, y: 30 },
+        text: 'Note',
+        fontSize: 20,
+        rotationDeg: null,
+      }]
+    })
+
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('object-stamp')
+
+    lockedObjectIds.value = new Set(['Kitchen bed'])
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 20, button: 0 }))
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 120, clientY: 120, button: 0 }))
+    expect(store.persisted.zones).toHaveLength(1)
+
+    lockedObjectIds.value = new Set()
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 20, button: 0 }))
+    store.updatePersisted((draft) => {
+      const zonesLayer = draft.layers.find((layer) => layer.name === 'zones')
+      if (zonesLayer) zonesLayer.visible = false
+    })
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 120, clientY: 120, button: 0 }))
+    expect(store.persisted.zones).toHaveLength(1)
+
+    controller.setTool('select')
+    controller.setTool('object-stamp')
+    store.updatePersisted((draft) => {
+      const zonesLayer = draft.layers.find((layer) => layer.name === 'zones')
+      if (zonesLayer) zonesLayer.visible = true
+    })
+
+    lockedObjectIds.value = new Set(['annotation-1'])
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 104, clientY: 34, button: 0 }))
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 150, clientY: 90, button: 0 }))
+    expect(store.persisted.annotations).toHaveLength(1)
+
+    lockedObjectIds.value = new Set()
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 104, clientY: 34, button: 0 }))
+    store.updatePersisted((draft) => {
+      const annotationsLayer = draft.layers.find((layer) => layer.name === 'annotations')
+      if (annotationsLayer) annotationsLayer.locked = true
+    })
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 150, clientY: 90, button: 0 }))
+
+    expect(store.persisted.annotations).toHaveLength(1)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    controller.dispose()
+  })
+
+  it('samples an object group with Object Stamp and places cloned members with remapped group membership', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'plant-1',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: '#C44230',
+        stratum: 'high',
+        canopySpreadM: 4,
+        position: { x: 40, y: 40 },
+        rotationDeg: 15,
+        scale: 4,
+        notes: 'Tree',
+        plantedDate: null,
+        quantity: 1,
+      }]
+      draft.zones = [{
+        kind: 'zone',
+        name: 'Kitchen bed',
+        zoneType: 'rect',
+        points: [
+          { x: 10, y: 20 },
+          { x: 30, y: 20 },
+          { x: 30, y: 50 },
+          { x: 10, y: 50 },
+        ],
+        fillColor: '#A06B1F',
+        notes: 'Bed',
+      }]
+      draft.annotations = [{
+        kind: 'annotation',
+        id: 'annotation-1',
+        annotationType: 'text',
+        position: { x: 60, y: 30 },
+        text: 'Guild',
+        fontSize: 20,
+        rotationDeg: 10,
+      }]
+      draft.groups = [{
+        kind: 'group',
+        id: 'group-1',
+        name: 'Guild unit',
+        layer: 'plants',
+        position: { x: 10, y: 20 },
+        rotationDeg: 5,
+        memberIds: ['plant-1', 'Kitchen bed', 'annotation-1'],
+      }]
+    })
+
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('object-stamp')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 100, clientY: 120, button: 0 }))
+    const preview = Array.from(container.children)
+      .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
+    expect(preview?.style.display).toBe('block')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 100, clientY: 120, button: 0 }))
+
+    expect(store.persisted.groups).toHaveLength(2)
+    expect(store.persisted.plants).toHaveLength(2)
+    expect(store.persisted.zones).toHaveLength(2)
+    expect(store.persisted.annotations).toHaveLength(2)
+
+    const clonePlant = store.persisted.plants[1]!
+    const cloneZone = store.persisted.zones[1]!
+    const cloneAnnotation = store.persisted.annotations[1]!
+    const cloneGroup = store.persisted.groups[1]!
+
+    expect(clonePlant.id).not.toBe('plant-1')
+    expect(clonePlant).toMatchObject({
+      canonicalName: 'Malus domestica',
+      position: { x: 100, y: 120 },
+      rotationDeg: 15,
+    })
+    expect(cloneZone).toMatchObject({
+      name: 'Kitchen bed copy',
+      points: [
+        { x: 70, y: 100 },
+        { x: 90, y: 100 },
+        { x: 90, y: 130 },
+        { x: 70, y: 130 },
+      ],
+      fillColor: '#A06B1F',
+      notes: 'Bed',
+    })
+    expect(cloneAnnotation.id).not.toBe('annotation-1')
+    expect(cloneAnnotation).toMatchObject({
+      position: { x: 120, y: 110 },
+      text: 'Guild',
+      fontSize: 20,
+      rotationDeg: 10,
+    })
+    expect(cloneGroup).toMatchObject({
+      name: 'Guild unit',
+      layer: 'plants',
+      position: { x: 70, y: 100 },
+      rotationDeg: 5,
+      memberIds: [clonePlant.id, cloneZone.name, cloneAnnotation.id],
+    })
+    expect(cloneGroup.id).not.toBe('group-1')
+    expect(store.persisted.groups[0]?.memberIds).toEqual(['plant-1', 'Kitchen bed', 'annotation-1'])
+    expect(selectedObjectIds.value).toEqual(new Set([cloneGroup.id]))
+    expect(onSceneEditCommit).toHaveBeenCalledTimes(1)
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-object-stamp')
+    controller.dispose()
+  })
+
+  it('blocks Object Stamp sampling and placement for locked group sources or locked group layers', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'plant-1',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 4,
+        position: { x: 40, y: 40 },
+        rotationDeg: null,
+        scale: 4,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+      draft.groups = [{
+        kind: 'group',
+        id: 'group-1',
+        name: 'Guild unit',
+        layer: 'plants',
+        position: { x: 38, y: 38 },
+        rotationDeg: null,
+        memberIds: ['plant-1'],
+      }]
+    })
+
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('object-stamp')
+
+    lockedObjectIds.value = new Set(['group-1'])
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 120, clientY: 120, button: 0 }))
+    expect(store.persisted.groups).toHaveLength(1)
+    expect(store.persisted.plants).toHaveLength(1)
+
+    lockedObjectIds.value = new Set()
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
+    store.updatePersisted((draft) => {
+      const plantsLayer = draft.layers.find((layer) => layer.name === 'plants')
+      if (plantsLayer) plantsLayer.locked = true
+    })
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 120, clientY: 120, button: 0 }))
+
+    expect(store.persisted.groups).toHaveLength(1)
+    expect(store.persisted.plants).toHaveLength(1)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    controller.dispose()
+  })
+
   it('creates plant placements from drag-and-drop payloads', () => {
     const onSceneEditCommit = vi.fn()
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })

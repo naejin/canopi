@@ -100,6 +100,8 @@
       "measureDesc": "거리 측정",
       "plantStamp": "식물 스탬프",
       "plantStampDesc": "데이터베이스에서 식물 배치",
+      "objectStamp": "개체 스탬프",
+      "objectStampDesc": "기존 디자인 개체 복사",
       "dimension": "치수",
       "dimensionDesc": "점 또는 도형 간 거리 측정",
       "patternFill": "패턴 채우기",

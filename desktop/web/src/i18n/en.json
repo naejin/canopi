@@ -100,6 +100,8 @@
       "measureDesc": "Measure distances",
       "plantStamp": "Plant Stamp",
       "plantStampDesc": "Place plants from database",
+      "objectStamp": "Object Stamp",
+      "objectStampDesc": "Copy existing design objects",
       "dimension": "Dimension",
       "dimensionDesc": "Measure distance between points or shapes",
       "patternFill": "Pattern Fill",

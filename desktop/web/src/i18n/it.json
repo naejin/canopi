@@ -100,6 +100,8 @@
       "measureDesc": "Misurare distanze",
       "plantStamp": "Timbro pianta",
       "plantStampDesc": "Posizionare piante dal database",
+      "objectStamp": "Timbro oggetto",
+      "objectStampDesc": "Copiare oggetti di progetto esistenti",
       "dimension": "Quota",
       "dimensionDesc": "Misurare la distanza tra punti o forme",
       "patternFill": "Riempimento a motivo",
