@@ -193,6 +193,10 @@ export class SceneInteractionController {
         onCancel: () => this._handlePlantSpacingCancel(),
         onIntervalInput: (value) => this._handlePlantSpacingIntervalInput(value),
         onIntervalCommit: (value) => this._commitPlantSpacingIntervalInput(value),
+        onIntervalBlur: (value) => this._commitPlantSpacingIntervalInput(value, {
+          focusCanvasOnValid: false,
+          focusInputOnInvalid: false,
+        }),
       },
     )
     this.setTool(getCanvasTool())
@@ -1404,7 +1408,12 @@ export class SceneInteractionController {
     if (endpoint) this._updatePlantSpacingPreview(endpoint)
   }
 
-  private _commitPlantSpacingIntervalInput(value: string): void {
+  private _commitPlantSpacingIntervalInput(
+    value: string,
+    options: { focusCanvasOnValid?: boolean; focusInputOnInvalid?: boolean } = {},
+  ): void {
+    const focusCanvasOnValid = options.focusCanvasOnValid ?? true
+    const focusInputOnInvalid = options.focusInputOnInvalid ?? true
     const endpoint = this._plantSpacingEndpoint
     this._plantSpacingIntervalText = value
     const parsed = parsePlantSpacingIntervalInput(value)
@@ -1412,7 +1421,7 @@ export class SceneInteractionController {
     this._plantSpacingOverlay.setIntervalValidity(parsed.valid)
 
     if (!parsed.valid) {
-      this._plantSpacingOverlay.focusIntervalInput()
+      if (focusInputOnInvalid) this._plantSpacingOverlay.focusIntervalInput()
       return
     }
 
@@ -1421,7 +1430,7 @@ export class SceneInteractionController {
     }, { persist: 'immediate' })
     this._plantSpacingIntervalText = formatPlantSpacingIntervalInput(parsed.meters)
     if (endpoint) this._updatePlantSpacingPreview(endpoint)
-    this._focusCanvasContainer()
+    if (focusCanvasOnValid) this._focusCanvasContainer()
   }
 
   private _focusCanvasContainer(): void {

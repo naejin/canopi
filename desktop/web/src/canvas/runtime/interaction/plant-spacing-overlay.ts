@@ -32,6 +32,7 @@ interface PlantSpacingOverlayEvents {
   onCancel: () => void
   onIntervalInput: (value: string) => void
   onIntervalCommit: (value: string) => void
+  onIntervalBlur: (value: string) => void
 }
 
 export interface PlantSpacingOverlayController {
@@ -157,7 +158,7 @@ export function createPlantSpacingOverlay(
     }
   })
   intervalInput.addEventListener('blur', () => {
-    events.onIntervalCommit(intervalInput.value)
+    events.onIntervalBlur(intervalInput.value)
   })
 
   const hint = document.createElement('div')

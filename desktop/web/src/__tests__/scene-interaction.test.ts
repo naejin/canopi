@@ -459,10 +459,91 @@ describe('SceneInteractionController', () => {
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
 
     expect(plantSpacingIntervalM.value).toBe(0.75)
+    expect(document.activeElement).toBe(container)
     expect(store.persisted.plants).toHaveLength(1)
     expect(JSON.stringify(store.toCanopiFile())).not.toContain('plant_spacing_interval_m')
     expect(container.querySelector('[data-plant-spacing-source="plant-1"]')).not.toBeNull()
     controller.dispose()
+  })
+
+  it('applies Plant Spacing interval blur without stealing focus from the next control', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'plant-1',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 20, y: 30 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+    const nextControl = document.createElement('button')
+    document.body.appendChild(nextControl)
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('plant-spacing')
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+
+    const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
+    input.value = '0,75m'
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    nextControl.focus()
+    input.dispatchEvent(new FocusEvent('blur'))
+
+    expect(plantSpacingIntervalM.value).toBe(0.75)
+    expect(document.activeElement).toBe(nextControl)
+    expect(store.persisted.plants).toHaveLength(1)
+    expect(container.querySelector('[data-plant-spacing-source="plant-1"]')).not.toBeNull()
+    controller.dispose()
+    nextControl.remove()
+  })
+
+  it('keeps invalid Plant Spacing interval blur from stealing focus or mutating', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'plant-1',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 20, y: 30 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+    const nextControl = document.createElement('button')
+    document.body.appendChild(nextControl)
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('plant-spacing')
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+
+    const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
+    const hud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')!
+    input.value = '0'
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    nextControl.focus()
+    input.dispatchEvent(new FocusEvent('blur'))
+
+    expect(hud.dataset.intervalValidity).toBe('invalid')
+    expect(plantSpacingIntervalM.value).toBe(0.5)
+    expect(document.activeElement).toBe(nextControl)
+    expect(store.persisted.plants).toHaveLength(1)
+    expect(container.querySelector('[data-plant-spacing-source="plant-1"]')).not.toBeNull()
+    controller.dispose()
+    nextControl.remove()
   })
 
   it('handles Escape from the focused Plant Spacing interval input', () => {
