@@ -120,6 +120,8 @@
       "selectSource": "Selecteer een geplaatste plant",
       "sourceSelected": "Bron geselecteerd",
       "sourceMissed": "Selecteer een zichtbare, ontgrendelde geplaatste plant",
+      "escToExit": "Esc om af te sluiten",
+      "escToCancel": "Esc om te annuleren",
       "interval": "Interval",
       "generatedCount": "{{count}} gegenereerd",
       "denseWarning": "Bevestig voordat {{count}} planten worden gemaakt",

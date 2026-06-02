@@ -120,6 +120,8 @@
       "selectSource": "选择已放置的植物",
       "sourceSelected": "已选择来源",
       "sourceMissed": "请选择可见且未锁定的已放置植物",
+      "escToExit": "按 Esc 退出",
+      "escToCancel": "按 Esc 取消",
       "interval": "间距",
       "generatedCount": "已生成 {{count}}",
       "denseWarning": "创建 {{count}} 株植物前请确认",

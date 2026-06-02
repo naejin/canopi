@@ -120,6 +120,8 @@
       "selectSource": "Выберите размещенное растение",
       "sourceSelected": "Источник выбран",
       "sourceMissed": "Выберите видимое незаблокированное размещенное растение",
+      "escToExit": "Esc, чтобы выйти",
+      "escToCancel": "Esc, чтобы отменить",
       "interval": "Интервал",
       "generatedCount": "{{count}} создано",
       "denseWarning": "Подтвердите перед созданием {{count}} растений",

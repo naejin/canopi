@@ -120,6 +120,8 @@
       "selectSource": "Selecciona una planta colocada",
       "sourceSelected": "Fuente seleccionada",
       "sourceMissed": "Selecciona una planta colocada visible y desbloqueada",
+      "escToExit": "Esc para salir",
+      "escToCancel": "Esc para cancelar",
       "interval": "Intervalo",
       "generatedCount": "{{count}} generadas",
       "denseWarning": "Confirmar antes de crear {{count}} plantas",

@@ -221,11 +221,19 @@ describe('SceneInteractionController', () => {
 
     const hud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')
     expect(hud?.textContent).toContain('Select a placed plant')
+    expect(hud?.textContent).toContain('Esc to exit')
+    expect(hud?.textContent).not.toContain('Plant Spacing')
+    expect(hud?.querySelector('button')).toBeNull()
 
     ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
 
     expect(container.querySelector('[data-plant-spacing-source="plant-1"]')).not.toBeNull()
+    expect(container.querySelector<HTMLElement>('[data-plant-spacing-primary]')?.textContent).toBe('Apple')
     expect(hud?.textContent).toContain('Apple')
+    expect(hud?.textContent).toContain('Esc to cancel')
+    expect(hud?.textContent).not.toContain('Source selected')
+    expect(hud?.textContent).not.toContain('Plant Spacing')
+    expect(hud?.querySelector('button')).toBeNull()
     expect(deps.setSelection).not.toHaveBeenCalled()
     expect(selectedObjectIds.value).toEqual(new Set(['already-selected']))
     controller.dispose()
@@ -375,7 +383,7 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
-  it('clears Plant Spacing source state with Escape or HUD cancel and exits when no source exists', () => {
+  it('clears Plant Spacing source state with Escape and exits when no source exists', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
@@ -405,11 +413,6 @@ describe('SceneInteractionController', () => {
     ;(controller as any)._onKeyDown(new KeyboardEvent('keydown', { key: 'Escape' }))
     expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
     expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.dataset.state).toBe('source-picking')
-    expect(setTool).not.toHaveBeenCalled()
-
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
-    container.querySelector<HTMLButtonElement>('[data-plant-spacing-hud] button')?.click()
-    expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
     expect(setTool).not.toHaveBeenCalled()
 
     ;(controller as any)._onKeyDown(new KeyboardEvent('keydown', { key: 'Escape' }))
@@ -890,7 +893,7 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
-  it('freezes and confirms Plant Spacing previews over 100 generated plants', () => {
+  it('emphasizes dense Plant Spacing counts and commits them directly', () => {
     plantSpacingIntervalM.value = 1
     store.updatePersisted((draft) => {
       draft.plants = [{
@@ -917,136 +920,20 @@ describe('SceneInteractionController', () => {
     ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 111, clientY: 10, button: 0 }))
 
     const hud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')!
+    const count = container.querySelector<HTMLElement>('[data-plant-spacing-generated-count]')!
     expect(hud.textContent).toContain('101')
-    expect(hud.textContent).toContain('Confirm')
+    expect(hud.textContent).not.toContain('Confirm')
+    expect(container.querySelector('[data-plant-spacing-confirm]')).toBeNull()
+    expect(container.querySelector('[data-plant-spacing-cancel-confirm]')).toBeNull()
+    expect(count.dataset.density).toBe('dense')
+    expect(count.style.color).toBe('var(--color-primary)')
+    expect(count.style.fontWeight).toBe('600')
 
     ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 111, clientY: 10, button: 0 }))
-    expect(hud.dataset.state).toBe('confirming')
-    expect(hud.textContent).toContain('102')
-    expect(store.persisted.plants).toHaveLength(1)
-
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 140, clientY: 10, button: 0 }))
-    container.querySelector<HTMLButtonElement>('[data-plant-spacing-confirm]')?.click()
 
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-plant-spacing')
     expect(store.persisted.plants).toHaveLength(102)
     expect(store.persisted.plants[store.persisted.plants.length - 1]?.position).toEqual({ x: 111, y: 10 })
-    controller.dispose()
-  })
-
-  it('ignores canvas endpoint clicks while dense Plant Spacing confirmation is pending', () => {
-    plantSpacingIntervalM.value = 1
-    store.updatePersisted((draft) => {
-      draft.plants = [{
-        kind: 'plant',
-        id: 'source',
-        canonicalName: 'Malus domestica',
-        commonName: 'Apple',
-        color: null,
-        stratum: null,
-        canopySpreadM: 2,
-        position: { x: 10, y: 10 },
-        rotationDeg: null,
-        scale: 2,
-        notes: null,
-        plantedDate: null,
-        quantity: 1,
-      }]
-    })
-    const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
-    const controller = new SceneInteractionController(deps as any)
-    controller.setTool('plant-spacing')
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 111, clientY: 10, button: 0 }))
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 111, clientY: 10, button: 0 }))
-
-    const hud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')!
-    expect(hud.dataset.state).toBe('confirming')
-
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 10, button: 0 }))
-
-    expect(hud.dataset.state).toBe('confirming')
-    expect(onSceneEditCommit).not.toHaveBeenCalled()
-    expect(store.persisted.plants).toHaveLength(1)
-    expect(container.querySelector('[data-plant-spacing-confirm]')).not.toBeNull()
-    controller.dispose()
-  })
-
-  it('clears dense Plant Spacing confirmation when the interval changes', () => {
-    plantSpacingIntervalM.value = 1
-    store.updatePersisted((draft) => {
-      draft.plants = [{
-        kind: 'plant',
-        id: 'source',
-        canonicalName: 'Malus domestica',
-        commonName: 'Apple',
-        color: null,
-        stratum: null,
-        canopySpreadM: 2,
-        position: { x: 10, y: 10 },
-        rotationDeg: null,
-        scale: 2,
-        notes: null,
-        plantedDate: null,
-        quantity: 1,
-      }]
-    })
-    const deps = createInteractionDeps(container, store, camera)
-    const controller = new SceneInteractionController(deps as any)
-    controller.setTool('plant-spacing')
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 111, clientY: 10, button: 0 }))
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 111, clientY: 10, button: 0 }))
-
-    const hud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')!
-    expect(hud.dataset.state).toBe('confirming')
-
-    const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
-    input.value = '2 m'
-    input.dispatchEvent(new Event('input', { bubbles: true }))
-
-    expect(hud.dataset.state).toBe('source-selected')
-    expect(container.querySelector('[data-plant-spacing-confirm]')).toBeNull()
-    expect(hud.textContent).toContain('50')
-    expect(store.persisted.plants).toHaveLength(1)
-    controller.dispose()
-  })
-
-  it('cancels dense Plant Spacing confirmation back to live preview', () => {
-    plantSpacingIntervalM.value = 1
-    store.updatePersisted((draft) => {
-      draft.plants = [{
-        kind: 'plant',
-        id: 'source',
-        canonicalName: 'Malus domestica',
-        commonName: 'Apple',
-        color: null,
-        stratum: null,
-        canopySpreadM: 2,
-        position: { x: 10, y: 10 },
-        rotationDeg: null,
-        scale: 2,
-        notes: null,
-        plantedDate: null,
-        quantity: 1,
-      }]
-    })
-    const deps = createInteractionDeps(container, store, camera)
-    const controller = new SceneInteractionController(deps as any)
-    controller.setTool('plant-spacing')
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 111, clientY: 10, button: 0 }))
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 111, clientY: 10, button: 0 }))
-
-    container.querySelector<HTMLButtonElement>('[data-plant-spacing-cancel-confirm]')?.click()
-
-    expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.dataset.state).toBe('source-selected')
-    expect(container.querySelector('[data-plant-spacing-source="source"]')).not.toBeNull()
-    expect(store.persisted.plants).toHaveLength(1)
-
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 20, clientY: 10, button: 0 }))
-    expect(container.querySelector<HTMLElement>('[data-plant-spacing-length-label]')?.textContent).toBe('10 m')
     controller.dispose()
   })
 
@@ -1090,7 +977,7 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
-  it('enters dense confirmation from click-hold Plant Spacing drag', () => {
+  it('commits dense Plant Spacing from click-hold drag directly', () => {
     plantSpacingIntervalM.value = 1
     store.updatePersisted((draft) => {
       draft.plants = [{
@@ -1109,7 +996,8 @@ describe('SceneInteractionController', () => {
         quantity: 1,
       }]
     })
-    const deps = createInteractionDeps(container, store, camera)
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
 
@@ -1117,10 +1005,11 @@ describe('SceneInteractionController', () => {
     ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 111, clientY: 10, button: 0 }))
     ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 111, clientY: 10, button: 0 }))
 
-    expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.dataset.state).toBe('confirming')
-    expect(store.persisted.plants).toHaveLength(1)
-    container.querySelector<HTMLButtonElement>('[data-plant-spacing-confirm]')?.click()
+    expect(container.querySelector('[data-plant-spacing-confirm]')).toBeNull()
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-plant-spacing')
     expect(store.persisted.plants).toHaveLength(102)
+    expect(store.persisted.plants[store.persisted.plants.length - 1]?.position).toEqual({ x: 111, y: 10 })
+    expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.dataset.state).toBe('source-picking')
     controller.dispose()
   })
 

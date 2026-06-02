@@ -120,6 +120,8 @@
       "selectSource": "Platzierte Pflanze auswählen",
       "sourceSelected": "Quelle ausgewählt",
       "sourceMissed": "Wähle eine sichtbare, nicht gesperrte platzierte Pflanze",
+      "escToExit": "Esc zum Beenden",
+      "escToCancel": "Esc zum Abbrechen",
       "interval": "Intervall",
       "generatedCount": "{{count}} erzeugt",
       "denseWarning": "Vor dem Erzeugen von {{count}} Pflanzen bestätigen",

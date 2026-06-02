@@ -120,6 +120,8 @@
       "selectSource": "配置済みの植物を選択",
       "sourceSelected": "ソースを選択しました",
       "sourceMissed": "表示中でロックされていない配置済み植物を選択",
+      "escToExit": "Esc で終了",
+      "escToCancel": "Esc でキャンセル",
       "interval": "間隔",
       "generatedCount": "{{count}} 生成",
       "denseWarning": "{{count}} 本の植物を作成する前に確認",

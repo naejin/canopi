@@ -120,6 +120,8 @@
       "selectSource": "Select a placed plant",
       "sourceSelected": "Source selected",
       "sourceMissed": "Select a visible, unlocked placed plant",
+      "escToExit": "Esc to exit",
+      "escToCancel": "Esc to cancel",
       "interval": "Interval",
       "generatedCount": "{{count}} generated",
       "denseWarning": "Confirm before creating {{count}} plants",

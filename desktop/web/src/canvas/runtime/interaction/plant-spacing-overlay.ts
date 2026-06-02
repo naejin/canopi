@@ -31,17 +31,13 @@ interface PlantSpacingOverlayEvents {
   onCancel: () => void
   onIntervalInput: (value: string) => void
   onIntervalCommit: (value: string) => void
-  onConfirmDenseCommit: () => void
-  onCancelDenseCommit: () => void
 }
 
 export interface PlantSpacingOverlayController {
   showSourcePicking(message?: string): void
   showSourceSelected(source: PlantSpacingSourceView, camera: CameraController, interval: PlantSpacingIntervalView): void
   setIntervalValidity(valid: boolean): void
-  setGeneratedCount(count: number | null): void
-  setDenseWarning(count: number | null): void
-  showDenseConfirmation(generatedCount: number, totalCount: number): void
+  setGeneratedCount(count: number | null, options?: { dense?: boolean }): void
   showPreview(preview: PlantSpacingPreviewView, camera: CameraController): void
   hidePreview(): void
   focusIntervalInput(): void
@@ -89,81 +85,26 @@ export function createPlantSpacingOverlay(
     event.stopPropagation()
   })
 
-  const header = document.createElement('div')
-  header.style.cssText = [
-    'display: flex',
-    'align-items: center',
-    'justify-content: space-between',
-    'gap: var(--space-2)',
-  ].join(';')
-
-  const title = document.createElement('div')
-  title.textContent = t('canvas.plantSpacing.title')
-  title.style.cssText = [
-    'font-size: var(--text-xs)',
-    'font-weight: 600',
-    'text-transform: uppercase',
-    'letter-spacing: 0.06em',
-    'color: var(--color-text-muted)',
-  ].join(';')
-
-  const cancel = document.createElement('button')
-  cancel.type = 'button'
-  cancel.textContent = t('canvas.plantSpacing.cancel')
-  cancel.style.cssText = [
-    'min-height: var(--control-size-xs)',
-    'padding: var(--space-1) var(--space-2)',
-    'background: transparent',
-    'border: 1px solid transparent',
-    'border-radius: var(--radius-sm)',
-    'font-size: var(--text-xs)',
-    'font-weight: 600',
-    'color: var(--color-text-muted)',
-    'cursor: pointer',
-  ].join(';')
-  cancel.addEventListener('click', (event) => {
-    event.preventDefault()
-    event.stopPropagation()
-    events.onCancel()
-  })
-
   const status = document.createElement('div')
+  status.dataset.plantSpacingPrimary = 'true'
   status.style.cssText = [
-    'margin-top: var(--space-2)',
     'font-size: var(--text-sm)',
     'font-weight: 600',
     'color: var(--color-text)',
-  ].join(';')
-
-  const source = document.createElement('div')
-  source.style.cssText = [
-    'display: none',
-    'margin-top: var(--space-1)',
-    'font-size: var(--text-xs)',
-    'font-weight: 400',
-    'color: var(--color-text-muted)',
     'overflow: hidden',
     'text-overflow: ellipsis',
     'white-space: nowrap',
   ].join(';')
 
   const count = document.createElement('div')
+  count.dataset.plantSpacingGeneratedCount = 'true'
   count.style.cssText = [
     'display: none',
     'margin-top: var(--space-1)',
     'font-size: var(--text-xs)',
-    'font-weight: 600',
+    'font-weight: 400',
     'color: var(--color-text)',
     'font-variant-numeric: tabular-nums',
-  ].join(';')
-
-  const warning = document.createElement('div')
-  warning.style.cssText = [
-    'display: none',
-    'margin-top: var(--space-1)',
-    'font-size: var(--text-xs)',
-    'font-weight: 600',
-    'color: var(--color-primary)',
   ].join(';')
 
   const intervalRow = document.createElement('label')
@@ -218,50 +159,13 @@ export function createPlantSpacingOverlay(
     events.onIntervalCommit(intervalInput.value)
   })
 
-  const confirmRow = document.createElement('div')
-  confirmRow.style.cssText = [
-    'display: none',
-    'margin-top: var(--space-2)',
-    'gap: var(--space-2)',
-  ].join(';')
-
-  const confirmButton = document.createElement('button')
-  confirmButton.type = 'button'
-  confirmButton.style.cssText = [
-    'min-height: var(--control-size-md)',
-    'padding: var(--space-1) var(--space-3)',
-    'background: var(--color-primary)',
-    'border: 1px solid var(--color-primary)',
-    'border-radius: var(--radius-md)',
+  const hint = document.createElement('div')
+  hint.style.cssText = [
+    'margin-top: var(--space-1)',
     'font-size: var(--text-xs)',
-    'font-weight: 600',
-    'color: var(--color-primary-contrast)',
-    'cursor: pointer',
+    'font-weight: 400',
+    'color: var(--color-text-muted)',
   ].join(';')
-  confirmButton.addEventListener('click', (event) => {
-    event.preventDefault()
-    event.stopPropagation()
-    events.onConfirmDenseCommit()
-  })
-
-  const cancelConfirmButton = document.createElement('button')
-  cancelConfirmButton.type = 'button'
-  cancelConfirmButton.style.cssText = [
-    'min-height: var(--control-size-md)',
-    'padding: var(--space-1) var(--space-3)',
-    'background: var(--color-surface)',
-    'border: 1px solid var(--color-border-strong, var(--color-border))',
-    'border-radius: var(--radius-md)',
-    'font-size: var(--text-xs)',
-    'font-weight: 600',
-    'color: var(--color-text)',
-    'cursor: pointer',
-  ].join(';')
-  cancelConfirmButton.addEventListener('click', (event) => {
-    event.preventDefault()
-    event.stopPropagation()
-    events.onCancelDenseCommit()
-  })
 
   const highlight = document.createElement('div')
   highlight.style.cssText = [
@@ -311,19 +215,12 @@ export function createPlantSpacingOverlay(
     'pointer-events: none',
   ].join(';')
 
-  header.appendChild(title)
-  header.appendChild(cancel)
-  root.appendChild(header)
   root.appendChild(status)
-  root.appendChild(source)
-  root.appendChild(count)
-  root.appendChild(warning)
   intervalRow.appendChild(intervalLabel)
   intervalRow.appendChild(intervalInput)
   root.appendChild(intervalRow)
-  confirmRow.appendChild(confirmButton)
-  confirmRow.appendChild(cancelConfirmButton)
-  root.appendChild(confirmRow)
+  root.appendChild(count)
+  root.appendChild(hint)
   container.appendChild(ghosts)
   container.appendChild(guide)
   container.appendChild(lengthLabel)
@@ -331,11 +228,7 @@ export function createPlantSpacingOverlay(
   container.appendChild(root)
 
   function refreshStaticLabels(): void {
-    title.textContent = t('canvas.plantSpacing.title')
-    cancel.textContent = t('canvas.plantSpacing.cancel')
     intervalLabel.textContent = t('canvas.plantSpacing.interval')
-    confirmButton.textContent = t('canvas.plantSpacing.confirm')
-    cancelConfirmButton.textContent = t('canvas.plantSpacing.cancel')
   }
 
   function show(): void {
@@ -384,15 +277,10 @@ export function createPlantSpacingOverlay(
       refreshStaticLabels()
       root.dataset.state = 'source-picking'
       status.textContent = message
-      source.style.display = 'none'
-      source.textContent = ''
       count.style.display = 'none'
       count.textContent = ''
-      warning.style.display = 'none'
-      warning.textContent = ''
-      confirmRow.style.display = 'none'
-      confirmButton.removeAttribute('data-plant-spacing-confirm')
-      cancelConfirmButton.removeAttribute('data-plant-spacing-cancel-confirm')
+      count.removeAttribute('data-density')
+      hint.textContent = t('canvas.plantSpacing.escToExit')
       intervalRow.style.display = 'none'
       root.removeAttribute('data-interval-validity')
       hideSourceHighlight()
@@ -402,52 +290,27 @@ export function createPlantSpacingOverlay(
     showSourceSelected(sourceView, camera, interval) {
       refreshStaticLabels()
       root.dataset.state = 'source-selected'
-      status.textContent = t('canvas.plantSpacing.sourceSelected')
-      source.textContent = sourceView.label
-      source.style.display = 'block'
+      status.textContent = sourceView.label
+      hint.textContent = t('canvas.plantSpacing.escToCancel')
       intervalInput.value = interval.value
       setIntervalValidity(interval.valid)
       intervalRow.style.display = 'flex'
-      warning.style.display = 'none'
-      warning.textContent = ''
-      confirmRow.style.display = 'none'
-      confirmButton.removeAttribute('data-plant-spacing-confirm')
-      cancelConfirmButton.removeAttribute('data-plant-spacing-cancel-confirm')
       updateSourceHighlight(sourceView, camera)
       show()
     },
     setIntervalValidity,
-    setGeneratedCount(generatedCount) {
+    setGeneratedCount(generatedCount, options = {}) {
       if (generatedCount === null) {
         count.style.display = 'none'
         count.textContent = ''
+        count.removeAttribute('data-density')
         return
       }
       count.textContent = t('canvas.plantSpacing.generatedCount', { count: generatedCount })
+      count.dataset.density = options.dense ? 'dense' : 'normal'
+      count.style.color = options.dense ? 'var(--color-primary)' : 'var(--color-text)'
+      count.style.fontWeight = options.dense ? '600' : '400'
       count.style.display = 'block'
-    },
-    setDenseWarning(generatedCount) {
-      if (generatedCount === null) {
-        warning.style.display = 'none'
-        warning.textContent = ''
-        return
-      }
-      warning.textContent = t('canvas.plantSpacing.denseWarning', { count: generatedCount })
-      warning.style.display = 'block'
-    },
-    showDenseConfirmation(generatedCount, totalCount) {
-      refreshStaticLabels()
-      root.dataset.state = 'confirming'
-      status.textContent = t('canvas.plantSpacing.confirmDense')
-      count.textContent = t('canvas.plantSpacing.confirmCounts', {
-        generated: generatedCount,
-        total: totalCount,
-      })
-      count.style.display = 'block'
-      warning.style.display = 'none'
-      confirmRow.style.display = 'flex'
-      confirmButton.dataset.plantSpacingConfirm = 'true'
-      cancelConfirmButton.dataset.plantSpacingCancelConfirm = 'true'
     },
     showPreview(preview, camera) {
       const start = camera.worldToScreen(preview.start)
