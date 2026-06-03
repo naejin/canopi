@@ -18,7 +18,7 @@ import { BottomPanelLauncher } from '../canvas/BottomPanelLauncher'
 import { LayerPanel } from '../canvas/LayerPanel'
 import { WelcomeScreen } from '../shared/WelcomeScreen'
 import { hasVisibleMapLayer, hillshadeVisible, layerVisibility } from '../../app/canvas-settings/signals'
-import { useSavedLocationPresentation } from '../../app/location'
+import { getLocationNoticeReadModel, useSavedLocationPresentation } from '../../app/location'
 import {
   CANVAS_NOTICE_DEFAULT_CANVAS_HEIGHT_PX,
   CANVAS_NOTICE_DEFAULT_CANVAS_WIDTH_PX,
@@ -57,13 +57,15 @@ export function CanvasPanel() {
 
   const savedLocation = useSavedLocationPresentation()
   const hasDesign = savedLocation.hasDesign
-  const hasLocation = savedLocation.hasLocation
   const visibility = layerVisibility.value
   const mapVisible = hasVisibleMapLayer(visibility, hillshadeVisible.value)
-  const shouldShowMapSurface = hasDesign && hasLocation && mapVisible
-  const shouldShowLocationNotice = shouldShowMapSurface
-  const locationSummary = savedLocation.summary
-  const locationKey = savedLocation.key
+  const locationNotice = getLocationNoticeReadModel({
+    saved: savedLocation,
+    mapVisible,
+    mapSurface: basemapState,
+    t,
+  })
+  const locationKey = locationNotice.locationKey
 
   useEffect(() => {
     if (locationKey === null) {
@@ -106,16 +108,6 @@ export function CanvasPanel() {
     return () => observer.disconnect()
   }, [hasDesign])
 
-  const basemapTone = basemapState.status === 'error'
-    ? 'error'
-    : basemapState.status === 'ready'
-      ? 'ready'
-      : 'loading'
-  const basemapStatus = basemapState.status === 'error'
-    ? `${t('canvas.layers.basemapError')}: ${basemapState.errorMessage ?? ''}`.trim()
-    : basemapState.status === 'ready'
-      ? `${locationSummary}${basemapState.terrainStatus === 'error' ? ` • ${t('canvas.layers.mapSection')}: ${basemapState.terrainErrorMessage ?? ''}` : ''}${basemapState.precisionWarning ? ` • ${t('canvas.layers.precisionWarning')}` : ''}`
-      : t('canvas.layers.basemapLoading')
   const locationNoticePlacement = resolveCanvasNoticePlacement('location-notice', {
     canvasWidth: canvasNoticeViewport.canvasWidth,
     canvasHeight: canvasNoticeViewport.canvasHeight,
@@ -139,7 +131,7 @@ export function CanvasPanel() {
             <div
               ref={containerRef}
               className={styles.canvasContainer}
-              data-map-active={shouldShowMapSurface ? 'true' : 'false'}
+              data-map-active={locationNotice.mapSurfaceVisible ? 'true' : 'false'}
             >
               {hasDesign && (
                 <MapLibreCanvasSurface
@@ -149,10 +141,10 @@ export function CanvasPanel() {
             </div>
             <div ref={rulerOverlayRef} className={styles.rulerOverlay} />
             {hasDesign && <CompassOverlay />}
-            {shouldShowLocationNotice && (
+            {locationNotice.visible && (
               <div
                 className={styles.basemapFeedback}
-                data-tone={basemapTone}
+                data-tone={locationNotice.tone}
                 data-location-cue={locationCueVisible ? 'true' : 'false'}
                 data-location-notice-placement={locationNoticePlacement.placement}
                 data-compact={locationNoticePlacement.compact ? 'true' : 'false'}
@@ -161,7 +153,7 @@ export function CanvasPanel() {
                 aria-live="polite"
               >
                 <span className={styles.basemapFeedbackDot} aria-hidden="true" />
-                <span className={styles.basemapFeedbackText}>{basemapStatus}</span>
+                <span className={styles.basemapFeedbackText}>{locationNotice.statusText}</span>
               </div>
             )}
 
