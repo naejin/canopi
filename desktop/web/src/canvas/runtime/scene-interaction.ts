@@ -37,7 +37,7 @@ import {
 } from './interaction/tool-actions'
 import {
   createTextAnnotationTool,
-  type TextAnnotationTool,
+  createTextAnnotationToolAdapter,
 } from './interaction/text-annotation-tool'
 import {
   createZoneDrawingTool,
@@ -81,7 +81,6 @@ export interface SceneInteractionDeps {
 export class SceneInteractionController {
   private readonly _preview: HTMLDivElement
   private readonly _tooltip: HoverTooltipController
-  private readonly _textTool: TextAnnotationTool
   private readonly _zoneDrawing: ZoneDrawingTool
   private readonly _toolAdapters: ReadonlyMap<string, SceneToolAdapter>
   private _tool: InteractionTool = 'select'
@@ -103,7 +102,7 @@ export class SceneInteractionController {
   constructor(private readonly _deps: SceneInteractionDeps) {
     this._preview = createInteractionPreview(this._deps.container)
     this._tooltip = createHoverTooltip(this._deps.container)
-    this._textTool = createTextAnnotationTool({
+    const textTool = createTextAnnotationTool({
       container: this._deps.container,
       camera: this._deps.camera,
       sceneEdits: this._deps.sceneEdits,
@@ -141,6 +140,7 @@ export class SceneInteractionController {
       getContainerRect: () => this._cachedContainerRect ?? this._deps.container.getBoundingClientRect(),
     })
     this._toolAdapters = new Map([
+      ['text', createTextAnnotationToolAdapter(textTool)],
       ['object-stamp', createObjectStampToolAdapter(objectStampTool, {
         switchTool: (name) => this._switchTool(name),
       })],
@@ -156,9 +156,6 @@ export class SceneInteractionController {
     if (previousTool === 'plant-stamp' && name !== 'plant-stamp') {
       plantStampSpecies.value = null
     }
-    if (previousTool === 'text' && name !== 'text') {
-      this._textTool.cancel()
-    }
     if (previousTool !== name) {
       this._toolAdapterFor(previousTool)?.onDeactivate?.()
     }
@@ -170,7 +167,6 @@ export class SceneInteractionController {
   dispose(): void {
     this._detach()
     this._deps.setHoveredEntityId(null)
-    this._textTool.dispose()
     this._zoneDrawing.dispose()
     for (const adapter of this._toolAdapters.values()) {
       adapter.dispose?.()
@@ -258,12 +254,6 @@ export class SceneInteractionController {
     if (this._tool === 'polygon') {
       event.preventDefault()
       this._handlePolygonPointerDown(world)
-      return
-    }
-
-    if (this._tool === 'text') {
-      event.preventDefault()
-      this._handleTextPointerDown(world)
       return
     }
 
@@ -530,9 +520,15 @@ export class SceneInteractionController {
       if (this._zoneDrawing.handlePolygonKeyDown(event)) return
     }
 
-    if (this._activeToolAdapter()?.keyDown?.(event)) return
+    const activeAdapter = this._activeToolAdapter()
+    if (activeAdapter?.keyDown?.(event)) return
 
-    if (event.code !== 'Space' || this._spaceHeld || isEditableTarget(event.target) || this._textTool.hasActiveEditor()) return
+    if (
+      event.code !== 'Space'
+      || this._spaceHeld
+      || isEditableTarget(event.target)
+      || activeAdapter?.shouldSuppressSharedKeyboard?.(event)
+    ) return
     event.preventDefault()
     this._spaceHeld = true
     if (this._mode === 'idle' && this._tool !== 'hand') {
@@ -654,10 +650,6 @@ export class SceneInteractionController {
   private _switchTool(name: string): void {
     this._deps.setTool(name)
     if (this._tool !== name) this.setTool(name)
-  }
-
-  private _handleTextPointerDown(world: ScenePoint): void {
-    this._textTool.pointerDown(world)
   }
 
 }

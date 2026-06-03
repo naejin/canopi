@@ -28,6 +28,7 @@ export interface SceneToolAdapter {
   readonly onDeactivate?: () => void
   readonly shouldIgnorePointerEvent?: (target: EventTarget | null) => boolean
   readonly shouldSuppressHover?: () => boolean
+  readonly shouldSuppressSharedKeyboard?: (event: KeyboardEvent) => boolean
   readonly pointerDown?: (context: SceneToolPointerDownContext) => boolean
   readonly pointerMoveWithoutCapture?: (context: SceneToolPointerEvent) => boolean
   readonly pointerMoveWithCapture?: (context: SceneToolCapturedPointerContext) => boolean

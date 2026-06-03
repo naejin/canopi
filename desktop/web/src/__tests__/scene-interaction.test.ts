@@ -1796,6 +1796,25 @@ describe('SceneInteractionController', () => {
     expect(container.querySelector('textarea')).toBeNull()
   })
 
+  it('keeps Space from starting canvas panning while a text Annotation editor is active', () => {
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('text')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 24, clientY: 32, button: 0 }))
+    expect(container.querySelector('textarea')).not.toBeNull()
+    expect(container.style.cursor).toBe('text')
+
+    ;(controller as any)._onKeyDown(new KeyboardEvent('keydown', {
+      key: ' ',
+      code: 'Space',
+      cancelable: true,
+    }))
+
+    expect(container.style.cursor).toBe('text')
+    controller.dispose()
+  })
+
   it('creates a rectangle zone from the rectangle tool drag', () => {
     const render = vi.fn()
     const onSceneEditCommit = vi.fn()

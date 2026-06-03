@@ -2,6 +2,7 @@ import type { CameraController } from '../camera'
 import type { ScenePoint } from '../scene'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
 import { appendTextAnnotationToDraft } from './tool-actions'
+import type { SceneToolAdapter } from './tool-adapter'
 
 export interface TextAnnotationToolContext {
   readonly container: HTMLElement
@@ -114,5 +115,18 @@ export function createTextAnnotationTool(context: TextAnnotationToolContext): Te
     pointerDown,
     cancel,
     dispose: cancel,
+  }
+}
+
+export function createTextAnnotationToolAdapter(tool: TextAnnotationTool): SceneToolAdapter {
+  return {
+    onDeactivate: tool.cancel,
+    shouldSuppressSharedKeyboard: tool.hasActiveEditor,
+    pointerDown({ event, rawWorld }) {
+      event.preventDefault()
+      tool.pointerDown(rawWorld)
+      return true
+    },
+    dispose: tool.dispose,
   }
 }

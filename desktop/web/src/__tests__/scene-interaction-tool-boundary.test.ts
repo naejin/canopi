@@ -11,10 +11,14 @@ describe('Scene Interaction tool module boundaries', () => {
     const textToolSource = readSource('../canvas/runtime/interaction/text-annotation-tool.ts')
 
     expect(interactionSource).toContain('createTextAnnotationTool')
+    expect(interactionSource).toContain('createTextAnnotationToolAdapter')
+    expect(interactionSource).not.toContain('_textTool')
+    expect(interactionSource).not.toContain('hasActiveEditor')
     expect(interactionSource).not.toContain('HTMLTextAreaElement')
     expect(interactionSource).not.toContain('_textarea')
     expect(interactionSource).not.toContain('_textWorldPosition')
     expect(textToolSource).toContain('appendTextAnnotationToDraft')
+    expect(textToolSource).toContain('createTextAnnotationToolAdapter')
   })
 
   it('keeps Zone drawing draft state behind the zone drawing tool module', () => {
