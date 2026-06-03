@@ -13,7 +13,21 @@ import {
   type TimelineRenderState,
 } from '../../canvas/timeline-renderer'
 import { dateToX, snapToDay, toISODate, xToDate } from '../../canvas/timeline-math'
-import type { TimelineActionPendingClick } from './workbench'
+import {
+  clearTimelineHoveredPanelTargets,
+  clearTimelineSelectedPanelTargets,
+  deleteSelectedTimelineAction,
+  deleteTimelineActionPopover,
+  openTimelineActionPopover,
+  saveTimelineActionPopover,
+  setTimelineHoveredPanelTargets,
+  setTimelineSelectedPanelTargets,
+  type TimelineActionPendingClick,
+  type TimelineActionPopoverState,
+} from './workbench'
+import type { TimelineActionFormData } from './editing'
+import { createUuid } from '../../utils/ids'
+import { isEditableTarget } from '../../canvas/runtime/interaction/pointer-utils'
 import {
   TIMELINE_CLICK_THRESHOLD,
   TIMELINE_GRANULARITY_PX_PER_DAY,
@@ -51,13 +65,16 @@ export interface TimelineActionInteractionFrameView {
 }
 
 export interface TimelineActionInteractionFramePopoverDelegate {
+  get(): TimelineActionPopoverState | null
+  set(next: TimelineActionPopoverState | null): void
   isOpen(): boolean
   close(): boolean
-  openPendingClick(pendingClick: TimelineActionPendingClick): void
 }
 
 export interface TimelineActionInteractionFrameSelectionDelegate {
+  getSelectedId(): string | null
   selectAction(action: TimelinePlanningAction): void
+  setSelectedId(actionId: string | null): void
   clear(): void
 }
 
@@ -90,6 +107,7 @@ export interface TimelineActionInteractionFrameOptions {
 
 export interface TimelineActionInteractionFrame {
   getFrozenOriginDate(): Date | null
+  syncActions(actions: readonly { readonly id: string }[]): void
   handleMouseDown(event: MouseEvent): void
   handleCanvasMouseMove(event: MouseEvent): void
   handleMouseLeave(): void
@@ -98,6 +116,10 @@ export interface TimelineActionInteractionFrame {
   handleDocumentMouseUp(event: MouseEvent): void
   handleDocumentMouseLeave(): void
   handleWheel(event: WheelEvent): void
+  handleKeyDown(event: KeyboardEvent): void
+  handlePopoverSave(data: TimelineActionFormData): void
+  handlePopoverDelete(): void
+  handlePopoverCancel(): void
   abortActiveDrag(): void
   cleanup(): void
 }
@@ -115,6 +137,7 @@ export function createTimelineActionInteractionFrame({
   layoutRef,
   rowOffsetsRef,
   renderStateRef,
+  projectionRef,
   computedOriginMsRef,
   view,
   popover,
@@ -132,6 +155,8 @@ export function createTimelineActionInteractionFrame({
   let autoScrollRafId: number | null = null
   let autoScrollAccumPx = 0
   let lastDragClientX = 0
+  let selectedActionId: string | null = null
+  let hoveredActionId: string | null = null
 
   const stopAutoScroll = (): void => {
     const rafId = autoScrollRafId
@@ -207,7 +232,10 @@ export function createTimelineActionInteractionFrame({
     const dy = Math.abs(event.clientY - pending.clientY)
     if (dx + dy >= TIMELINE_CLICK_THRESHOLD) return
 
-    popover.openPendingClick(pending.popover)
+    popover.set(openTimelineActionPopover({
+      pendingClick: pending.popover,
+      speciesList: projectionRef.current.speciesList,
+    }))
   }
 
   const abortActiveDrag = (): void => {
@@ -220,8 +248,33 @@ export function createTimelineActionInteractionFrame({
     pendingClick = null
   }
 
+  const applySelectedIdResult = (result: { readonly selectedId?: string | null }): void => {
+    if (!('selectedId' in result)) return
+    selectedActionId = result.selectedId ?? null
+    selection.setSelectedId(selectedActionId)
+  }
+
+  const clearHover = (): void => {
+    hoveredActionId = null
+    hover.clear()
+    clearTimelineHoveredPanelTargets()
+  }
+
+  const clearSelection = (): void => {
+    selectedActionId = null
+    selection.setSelectedId(null)
+    selection.clear()
+    clearTimelineSelectedPanelTargets()
+  }
+
   return {
     getFrozenOriginDate: () => dragOriginDate,
+
+    syncActions(actions): void {
+      const liveIds = new Set(actions.map((action) => action.id))
+      if (selectedActionId && !liveIds.has(selectedActionId)) clearSelection()
+      if (hoveredActionId && !liveIds.has(hoveredActionId)) clearHover()
+    },
 
     handleMouseDown(event: MouseEvent): void {
       const canvas = canvasRef.current
@@ -303,7 +356,10 @@ export function createTimelineActionInteractionFrame({
         return
       }
 
+      selectedActionId = hit.action.id
+      selection.setSelectedId(hit.action.id)
       selection.selectAction(hit.action)
+      setTimelineSelectedPanelTargets(hit.action.targets)
       if (!hit.action.startDate) return
 
       const freeze = createTimelineOriginFreeze(computedOriginMsRef.current)
@@ -362,9 +418,11 @@ export function createTimelineActionInteractionFrame({
       )
 
       if (hit) {
+        hoveredActionId = hit.action.id
+        setTimelineHoveredPanelTargets(hit.action.targets)
         hover.showAction(hit.action, { x: mouseX, y: mouseY })
       } else {
-        hover.clear()
+        clearHover()
       }
 
       const nextCursor = hit
@@ -374,14 +432,14 @@ export function createTimelineActionInteractionFrame({
     },
 
     handleMouseLeave(): void {
-      hover.clear()
+      clearHover()
       if (canvasRef.current) canvasRef.current.style.cursor = 'default'
     },
 
     handleContainerScroll(): void {
       cachedRectRef.current = null
       stopAutoScroll()
-      hover.clear()
+      clearHover()
       popover.close()
       if (canvasRef.current) canvasRef.current.style.cursor = 'default'
     },
@@ -433,12 +491,49 @@ export function createTimelineActionInteractionFrame({
       view.setPxPerDay(nextPxPerDay)
     },
 
+    handleKeyDown(event: KeyboardEvent): void {
+      if (popover.get()) return
+      const activeSelectedId = selectedActionId ?? selection.getSelectedId()
+      if (!activeSelectedId) return
+      if (isEditableTarget(event.target)) return
+      if (event.key !== 'Delete' && event.key !== 'Backspace') return
+
+      event.preventDefault()
+      clearHover()
+      applySelectedIdResult(deleteSelectedTimelineAction(activeSelectedId))
+    },
+
+    handlePopoverSave(data: TimelineActionFormData): void {
+      const currentPopover = popover.get()
+      if (!currentPopover) return
+
+      const result = saveTimelineActionPopover({
+        popover: currentPopover,
+        data,
+        createId: createUuid,
+      })
+      applySelectedIdResult(result)
+      popover.set(null)
+    },
+
+    handlePopoverDelete(): void {
+      const currentPopover = popover.get()
+      if (!currentPopover) return
+
+      applySelectedIdResult(deleteTimelineActionPopover(currentPopover))
+      popover.set(null)
+    },
+
+    handlePopoverCancel(): void {
+      popover.set(null)
+    },
+
     abortActiveDrag,
 
     cleanup(): void {
       finishDrag(null)
-      hover.clear()
-      selection.clear()
+      clearHover()
+      clearSelection()
     },
   }
 }

@@ -12,8 +12,16 @@ import {
   computeTimelineRowOffsets,
   type TimelineRenderState,
 } from '../canvas/timeline-renderer'
-import type { TimelineActionPendingClick } from '../app/timeline/workbench'
+import {
+  openTimelineActionPopover,
+  type TimelineActionPopoverState,
+} from '../app/timeline/workbench'
 import { currentDesign, nonCanvasRevision } from './support/design-session-state'
+import {
+  hoveredPanelTargets,
+  selectedPanelTargetOrigin,
+  selectedPanelTargets,
+} from '../app/panel-targets/state'
 import { speciesTarget } from '../target'
 import type { CanopiFile, TimelineAction } from '../types/design'
 
@@ -104,7 +112,8 @@ function createFrameHarness({
   let scrollX = renderState.scrollX
   let pxPerDay = renderState.pxPerDay
   let granularity: 'month' | 'year' = 'month'
-  const openedPendingClicks: TimelineActionPendingClick[] = []
+  let popoverState: TimelineActionPopoverState | null = null
+  let selectedId: string | null = null
   const selectedActionIds: string[] = []
   const computedOriginMsRef = { current: projection.originMs }
   let selectionClearCount = 0
@@ -138,15 +147,25 @@ function createFrameHarness({
       },
     },
     popover: {
-      isOpen: () => false,
-      close: () => false,
-      openPendingClick: (pendingClick) => {
-        openedPendingClicks.push(pendingClick)
+      get: () => popoverState,
+      set: (next) => {
+        popoverState = next
+      },
+      isOpen: () => popoverState !== null,
+      close: () => {
+        if (!popoverState) return false
+        popoverState = null
+        return true
       },
     },
     selection: {
+      getSelectedId: () => selectedId,
       selectAction: (action) => {
+        selectedId = action.id
         selectedActionIds.push(action.id)
+      },
+      setSelectedId: (actionId) => {
+        selectedId = actionId
       },
       clear: () => {
         selectionClearCount++
@@ -177,7 +196,15 @@ function createFrameHarness({
     get scrollX() {
       return scrollX
     },
-    openedPendingClicks,
+    get popover() {
+      return popoverState
+    },
+    get selectedId() {
+      return selectedId
+    },
+    setPopover(next: TimelineActionPopoverState | null) {
+      popoverState = next
+    },
     selectedActionIds,
     computedOriginMsRef,
     get selectionClearCount() {
@@ -206,6 +233,9 @@ describe('Timeline Action interaction frame', () => {
   beforeEach(() => {
     document.body.style.cursor = ''
     nonCanvasRevision.value = 0
+    hoveredPanelTargets.value = []
+    selectedPanelTargetOrigin.value = null
+    selectedPanelTargets.value = []
   })
 
   it('owns pan drag state and cursor cleanup behind the frame seam', () => {
@@ -235,7 +265,25 @@ describe('Timeline Action interaction frame', () => {
     }))
 
     expect(document.body.style.cursor).toBe('')
-    expect(harness.openedPendingClicks).toEqual([])
+    expect(harness.popover).toBeNull()
+  })
+
+  it('writes and clears Timeline hover Target Presentation from the frame', () => {
+    const action = makeAction({ end_date: '2026-04-16' })
+    currentDesign.value = makeDesign(action)
+    const harness = createFrameHarness({ actions: [action], initialScrollX: 0 })
+
+    harness.frame.handleCanvasMouseMove(new MouseEvent('mousemove', {
+      clientX: LABEL_SIDEBAR_WIDTH + 60,
+      clientY: harness.chartY,
+      bubbles: true,
+    }))
+
+    expect(hoveredPanelTargets.value).toEqual([speciesTarget('Malus domestica')])
+
+    harness.frame.handleMouseLeave()
+
+    expect(hoveredPanelTargets.value).toEqual([])
   })
 
   it('previews and commits move drags while restoring a frozen planning origin', () => {
@@ -273,7 +321,7 @@ describe('Timeline Action interaction frame', () => {
 
     expect(nonCanvasRevision.value).toBe(1)
     expect(harness.scrollX).toBe(10)
-    expect(harness.openedPendingClicks).toEqual([])
+    expect(harness.popover).toBeNull()
   })
 
   it('previews and commits right-edge resize drags through the frame', () => {
@@ -371,12 +419,155 @@ describe('Timeline Action interaction frame', () => {
       start_date: '2026-04-10',
       end_date: '2026-04-16',
     })
-    expect(harness.openedPendingClicks).toEqual([{
-      type: 'edit',
-      anchorX: LABEL_SIDEBAR_WIDTH + 60,
-      anchorY: harness.chartY,
+    expect(harness.popover).toMatchObject({
+      mode: 'edit',
       actionId: 'task-1',
-    }])
+    })
+  })
+
+  it('saves edit popovers through the frame command surface', () => {
+    const action = makeAction({ end_date: '2026-04-16' })
+    currentDesign.value = makeDesign(action)
+    const harness = createFrameHarness({ actions: [action], initialScrollX: 0 })
+
+    harness.frame.handleMouseDown(new MouseEvent('mousedown', {
+      button: 0,
+      clientX: LABEL_SIDEBAR_WIDTH + 60,
+      clientY: harness.chartY,
+      bubbles: true,
+    }))
+    harness.frame.handleDocumentMouseUp(new MouseEvent('mouseup', {
+      button: 0,
+      clientX: LABEL_SIDEBAR_WIDTH + 60,
+      clientY: harness.chartY,
+      bubbles: true,
+    }))
+
+    expect(harness.popover?.mode).toBe('edit')
+
+    harness.frame.handlePopoverSave({
+      ...harness.popover!.formData,
+      description: 'Water deeply',
+    })
+
+    expect(currentDesign.value!.timeline[0]).toMatchObject({
+      id: 'task-1',
+      description: 'Water deeply',
+    })
+    expect(nonCanvasRevision.value).toBe(1)
+    expect(harness.popover).toBeNull()
+  })
+
+  it('deletes edit popovers and clears Timeline target presentation through the frame', () => {
+    const action = makeAction({ end_date: '2026-04-16' })
+    currentDesign.value = makeDesign(action)
+    hoveredPanelTargets.value = [speciesTarget('Malus domestica')]
+    selectedPanelTargetOrigin.value = 'timeline'
+    selectedPanelTargets.value = [speciesTarget('Malus domestica')]
+    const harness = createFrameHarness({ actions: [action], initialScrollX: 0 })
+
+    harness.frame.handleMouseDown(new MouseEvent('mousedown', {
+      button: 0,
+      clientX: LABEL_SIDEBAR_WIDTH + 60,
+      clientY: harness.chartY,
+      bubbles: true,
+    }))
+    harness.frame.handleDocumentMouseUp(new MouseEvent('mouseup', {
+      button: 0,
+      clientX: LABEL_SIDEBAR_WIDTH + 60,
+      clientY: harness.chartY,
+      bubbles: true,
+    }))
+
+    expect(harness.popover?.mode).toBe('edit')
+
+    harness.frame.handlePopoverDelete()
+
+    expect(currentDesign.value!.timeline).toEqual([])
+    expect(nonCanvasRevision.value).toBe(1)
+    expect(hoveredPanelTargets.value).toEqual([])
+    expect(selectedPanelTargets.value).toEqual([])
+    expect(selectedPanelTargetOrigin.value).toBeNull()
+    expect(harness.popover).toBeNull()
+  })
+
+  it('cancels popovers through the frame without mutating Timeline Actions', () => {
+    const action = makeAction({ end_date: '2026-04-16' })
+    currentDesign.value = makeDesign(action)
+    const harness = createFrameHarness({ actions: [action], initialScrollX: 0 })
+    harness.setPopover(openTimelineActionPopover({
+      pendingClick: {
+        type: 'edit',
+        anchorX: 200,
+        anchorY: 80,
+        actionId: 'task-1',
+      },
+      speciesList: [],
+      actions: [action],
+    }))
+
+    harness.frame.handlePopoverCancel()
+
+    expect(currentDesign.value!.timeline[0]).toMatchObject({
+      id: 'task-1',
+      description: 'Plant apple',
+    })
+    expect(nonCanvasRevision.value).toBe(0)
+    expect(harness.popover).toBeNull()
+  })
+
+  it('deletes the selected Timeline Action from keyboard input through the frame', () => {
+    const action = makeAction({ end_date: '2026-04-16' })
+    currentDesign.value = makeDesign(action)
+    const harness = createFrameHarness({ actions: [action], initialScrollX: 0 })
+
+    harness.frame.handleMouseDown(new MouseEvent('mousedown', {
+      button: 0,
+      clientX: LABEL_SIDEBAR_WIDTH + 60,
+      clientY: harness.chartY,
+      bubbles: true,
+    }))
+
+    const event = new KeyboardEvent('keydown', {
+      key: 'Delete',
+      bubbles: true,
+      cancelable: true,
+    })
+    harness.frame.handleKeyDown(event)
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(currentDesign.value!.timeline).toEqual([])
+    expect(nonCanvasRevision.value).toBe(1)
+    expect(selectedPanelTargets.value).toEqual([])
+    expect(selectedPanelTargetOrigin.value).toBeNull()
+  })
+
+  it('cleans up stale hover and selection when Timeline Actions disappear', () => {
+    const action = makeAction({ end_date: '2026-04-16' })
+    currentDesign.value = makeDesign(action)
+    const harness = createFrameHarness({ actions: [action], initialScrollX: 0 })
+
+    harness.frame.handleCanvasMouseMove(new MouseEvent('mousemove', {
+      clientX: LABEL_SIDEBAR_WIDTH + 60,
+      clientY: harness.chartY,
+      bubbles: true,
+    }))
+    harness.frame.handleMouseDown(new MouseEvent('mousedown', {
+      button: 0,
+      clientX: LABEL_SIDEBAR_WIDTH + 60,
+      clientY: harness.chartY,
+      bubbles: true,
+    }))
+
+    expect(hoveredPanelTargets.value).toEqual([speciesTarget('Malus domestica')])
+    expect(selectedPanelTargets.value).toEqual([speciesTarget('Malus domestica')])
+
+    harness.frame.syncActions([])
+
+    expect(harness.selectedId).toBeNull()
+    expect(hoveredPanelTargets.value).toEqual([])
+    expect(selectedPanelTargets.value).toEqual([])
+    expect(selectedPanelTargetOrigin.value).toBeNull()
   })
 
   it('aborts active edit drags without committing previewed dates', () => {
@@ -408,7 +599,7 @@ describe('Timeline Action interaction frame', () => {
       end_date: '2026-04-16',
     })
     expect(nonCanvasRevision.value).toBe(0)
-    expect(harness.openedPendingClicks).toEqual([])
+    expect(harness.popover).toBeNull()
   })
 
   it('cleans up active edit drags and scheduled autoscroll on unmount', () => {
@@ -436,6 +627,6 @@ describe('Timeline Action interaction frame', () => {
     expect(nonCanvasRevision.value).toBe(1)
     expect(harness.hoverClearCount).toBe(1)
     expect(harness.selectionClearCount).toBe(1)
-    expect(harness.openedPendingClicks).toEqual([])
+    expect(harness.popover).toBeNull()
   })
 })

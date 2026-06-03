@@ -11,7 +11,6 @@ import {
   computeTimelineRowOffsets,
   type TimelineRenderState,
 } from '../../canvas/timeline-renderer'
-import { createUuid } from '../../utils/ids'
 import type { TimelineAction } from '../../types/design'
 import type { TimelineActionFormData } from './editing'
 import {
@@ -23,16 +22,8 @@ import {
   type TimelineActionInteractionFrame,
 } from './interaction-frame'
 import {
-  clearTimelineHoveredPanelTargets,
-  clearTimelineSelectedPanelTargets,
-  deleteSelectedTimelineAction,
-  deleteTimelineActionPopover,
-  openTimelineActionPopover,
-  saveTimelineActionPopover,
   type TimelineActionPopoverState,
 } from './workbench'
-import { setTimelineHoveredPanelTargets, setTimelineSelectedPanelTargets } from './workbench'
-import { isEditableTarget } from '../../canvas/runtime/interaction/pointer-utils'
 
 interface MutableDomRef<T> {
   current: T | null
@@ -99,30 +90,13 @@ export function useTimelineCanvasWorkbench({
   const rowOffsetsRef = useRef<number[]>(rowOffsets)
   const projectionRef = useRef(projection)
   const computedOriginMsRef = useRef(0)
-  const selectedIdRef = useRef<string | null>(null)
   const interactionFrameRef = useRef<TimelineActionInteractionFrame | null>(null)
 
-  selectedIdRef.current = selectedId.value
   rowsRef.current = rows
   layoutRef.current = layout
   rowOffsetsRef.current = rowOffsets
   projectionRef.current = projection
   computedOriginMsRef.current = originMs
-
-  useEffect(() => {
-    const current = actions ?? EMPTY_ACTIONS
-    const selectedActionId = selectedId.value
-    if (selectedActionId && !current.some((action) => action.id === selectedActionId)) {
-      selectedId.value = null
-      clearTimelineSelectedPanelTargets()
-    }
-
-    const hoveredActionId = hoveredId.value
-    if (hoveredActionId && !current.some((action) => action.id === hoveredActionId)) {
-      hoveredId.value = null
-      clearTimelineHoveredPanelTargets()
-    }
-  }, [actions, hoveredId.value, selectedId.value])
 
   const renderState = useMemo<TimelineRenderState>(() => ({
     originDate: interactionFrameRef.current?.getFrozenOriginDate() ?? originDate,
@@ -172,37 +146,36 @@ export function useTimelineCanvasWorkbench({
         },
       },
       popover: {
+        get: () => popoverState.peek(),
+        set: (next) => {
+          popoverState.value = next
+        },
         isOpen: () => popoverState.peek() !== null,
         close: () => {
           if (!popoverState.peek()) return false
           popoverState.value = null
           return true
         },
-        openPendingClick: (pendingClick) => {
-          popoverState.value = openTimelineActionPopover({
-            pendingClick,
-            speciesList: projectionRef.current.speciesList,
-          })
-        },
       },
       selection: {
+        getSelectedId: () => selectedId.peek(),
         selectAction: (action) => {
           selectedId.value = action.id
-          setTimelineSelectedPanelTargets(action.targets)
         },
-        clear: clearTimelineSelectedPanelTargets,
+        setSelectedId: (actionId) => {
+          selectedId.value = actionId
+        },
+        clear: () => {},
       },
       hover: {
         showAction: (action, point) => {
           if (hoveredId.value !== action.id) hoveredId.value = action.id
-          setTimelineHoveredPanelTargets(action.targets)
           if (!popoverState.peek()) {
             tooltipState.value = { x: point.x, y: point.y, action }
           }
         },
         clear: () => {
           if (hoveredId.value !== null) hoveredId.value = null
-          clearTimelineHoveredPanelTargets()
           if (tooltipState.peek()) tooltipState.value = null
         },
         hideTooltip: () => {
@@ -226,60 +199,27 @@ export function useTimelineCanvasWorkbench({
     const onLeave = () => {
       interactionFrame.handleDocumentMouseLeave()
     }
+    const onKeyDown = (event: KeyboardEvent) => {
+      interactionFrame.handleKeyDown(event)
+    }
 
     document.addEventListener('mousemove', onMove)
     document.addEventListener('mouseup', onUp)
+    document.addEventListener('keydown', onKeyDown)
     document.documentElement.addEventListener('mouseleave', onLeave)
     return () => {
       if (canvas) canvas.removeEventListener('wheel', interactionFrame.handleWheel)
       document.removeEventListener('mousemove', onMove)
       document.removeEventListener('mouseup', onUp)
+      document.removeEventListener('keydown', onKeyDown)
       document.documentElement.removeEventListener('mouseleave', onLeave)
       interactionFrame.cleanup()
     }
   }, [canvasRef, interactionFrame])
 
   useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (popoverState.peek()) return
-      if (!selectedIdRef.current) return
-      if (isEditableTarget(event.target)) return
-      if (event.key === 'Delete' || event.key === 'Backspace') {
-        event.preventDefault()
-        const result = deleteSelectedTimelineAction(selectedIdRef.current)
-        if (hoveredId.value !== null) hoveredId.value = null
-        if ('selectedId' in result) selectedId.value = result.selectedId ?? null
-      }
-    }
-
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
-  }, [hoveredId, popoverState])
-
-  const handlePopoverSave = useCallback((data: TimelineActionFormData) => {
-    const ps = popoverState.peek()
-    if (!ps) return
-
-    const result = saveTimelineActionPopover({
-      popover: ps,
-      data,
-      createId: createUuid,
-    })
-    if ('selectedId' in result) selectedId.value = result.selectedId ?? null
-    popoverState.value = null
-  }, [popoverState])
-
-  const handlePopoverDelete = useCallback(() => {
-    const ps = popoverState.peek()
-    if (!ps) return
-    const result = deleteTimelineActionPopover(ps)
-    if ('selectedId' in result) selectedId.value = result.selectedId ?? null
-    popoverState.value = null
-  }, [popoverState])
-
-  const handlePopoverCancel = useCallback(() => {
-    popoverState.value = null
-  }, [popoverState])
+    interactionFrame.syncActions(actions ?? EMPTY_ACTIONS)
+  }, [actions, hoveredId.value, interactionFrame, selectedId.value])
 
   const invalidateLayout = useCallback(() => {
     cachedRectRef.current = null
@@ -312,8 +252,8 @@ export function useTimelineCanvasWorkbench({
     handleMouseDown: interactionFrame.handleMouseDown,
     handleCanvasMouseMove: interactionFrame.handleCanvasMouseMove,
     handleMouseLeave: interactionFrame.handleMouseLeave,
-    handlePopoverSave,
-    handlePopoverDelete,
-    handlePopoverCancel,
+    handlePopoverSave: interactionFrame.handlePopoverSave,
+    handlePopoverDelete: interactionFrame.handlePopoverDelete,
+    handlePopoverCancel: interactionFrame.handlePopoverCancel,
   }
 }
