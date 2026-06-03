@@ -9,6 +9,12 @@ function readSource(path: string): string {
   return readFileSync(new URL(path, import.meta.url), 'utf8')
 }
 
+function cssRule(source: string, selector: string): string {
+  const match = new RegExp(`${selector.replace('.', '\\.')}\\s*{([^}]*)}`, 's').exec(source)
+  expect(match, `${selector} rule should exist`).not.toBeNull()
+  return match?.[1] ?? ''
+}
+
 describe('FilterStrip', () => {
   let container: HTMLDivElement
   let FilterStrip: typeof import('../components/plant-db/FilterStrip').FilterStrip
@@ -77,11 +83,17 @@ describe('FilterStrip', () => {
 })
 
 describe('Species Catalog filter region layout', () => {
-  it('caps the combined filter region instead of individual filter rows', () => {
+  it('lets always-visible choice rows reserve wrapped ribbon height in normal flow', () => {
     const panelSource = readSource('../components/panels/PlantDbPanel.tsx')
     const stripSource = readSource('../components/plant-db/FilterStrip.tsx')
     const css = readSource('../components/plant-db/PlantDb.module.css')
     const moreFiltersCss = readSource('../components/plant-db/MoreFiltersPanel.module.css')
+    const filterRegionRule = cssRule(css, '.filterRegion')
+    const filterStripRule = cssRule(css, '.filterStrip')
+    const filterRowRule = cssRule(css, '.filterRow')
+    const filterControlRule = cssRule(css, '.filterControl')
+    const filterChoiceControlRule = cssRule(css, '.filterChoiceControl')
+    const filterActionsRule = cssRule(css, '.filterActions')
 
     expect(panelSource).toContain('className={styles.filterRegion}')
     expect(panelSource.indexOf('<FilterStrip')).toBeLessThan(panelSource.indexOf('<ActiveChips'))
@@ -89,16 +101,25 @@ describe('Species Catalog filter region layout', () => {
     expect(stripSource).toContain('styles.filterChoiceControl')
     expect(stripSource).not.toContain('styles.filterChoiceChip')
     expect(moreFiltersCss).toMatch(/\.chipGrid\s*{[^}]*display:\s*flex;[^}]*flex-wrap:\s*wrap;[^}]*gap:\s*calc\(var\(--space-1\) - 1px\);/s)
-    expect(css).toMatch(/\.filterStrip\s*{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;/s)
-    expect(css).not.toMatch(/\.filterStrip\s*{[^}]*grid-template-columns:/s)
-    expect(css).toMatch(/\.filterRow\s*{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*[^;]+minmax\(0,\s*1fr\);/s)
-    expect(css).not.toMatch(/\.filterRow\s*{[^}]*display:\s*contents;/s)
-    expect(css).toMatch(/\.filterChoiceControl\s*{[^}]*display:\s*flex;[^}]*flex-wrap:\s*wrap;[^}]*gap:\s*calc\(var\(--space-1\) - 1px\);/s)
-    expect(css).not.toMatch(/\.filterChoiceControl\s*{[^}]*grid-template-columns:/s)
+    expect(filterStripRule).toMatch(/display:\s*flex;/)
+    expect(filterStripRule).toMatch(/flex-direction:\s*column;/)
+    expect(filterStripRule).not.toMatch(/grid-template-columns:/)
+    expect(filterRowRule).toMatch(/display:\s*flex;/)
+    expect(filterRowRule).not.toMatch(/display:\s*grid;/)
+    expect(filterRowRule).not.toMatch(/display:\s*contents;/)
+    expect(filterRowRule).not.toMatch(/grid-template-columns:/)
+    expect(filterControlRule).toMatch(/flex:\s*1 1 0;/)
+    expect(filterControlRule).toMatch(/display:\s*flex;/)
+    expect(filterControlRule).toMatch(/flex-wrap:\s*wrap;/)
+    expect(filterChoiceControlRule).toMatch(/display:\s*flex;/)
+    expect(filterChoiceControlRule).toMatch(/flex-wrap:\s*wrap;/)
+    expect(filterChoiceControlRule).toMatch(/gap:\s*calc\(var\(--space-1\) - 1px\);/)
+    expect(filterChoiceControlRule).not.toMatch(/grid-template-columns:/)
     expect(css).not.toContain('.filterChoiceChip')
-    expect(css).toMatch(/\.filterRegion\s*{[^}]*max-height:\s*min\(45vh,\s*360px\);[^}]*overflow-y:\s*auto;/s)
-    expect(css).not.toMatch(/\.filterStrip\s*{[^}]*max-height:/s)
-    expect(css).not.toMatch(/\.filterControl\s*{[^}]*overflow:\s*hidden;/s)
-    expect(css).not.toMatch(/\.filterActions\s*{[^}]*grid-column:/s)
+    expect(filterRegionRule).toMatch(/max-height:\s*min\(45vh,\s*360px\);/)
+    expect(filterRegionRule).toMatch(/overflow-y:\s*auto;/)
+    expect(filterStripRule).not.toMatch(/max-height:/)
+    expect(filterControlRule).not.toMatch(/overflow:\s*(visible|hidden);/)
+    expect(filterActionsRule).not.toMatch(/grid-column:/)
   })
 })
