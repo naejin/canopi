@@ -87,8 +87,8 @@ describe('Species Catalog filter region layout', () => {
 
     expect(stripSource).toContain('styles.filterChoiceControl')
     expect(stripSource).toContain('styles.filterChoiceChip')
-    expect(css).toMatch(/\.filterChoiceControl\s*{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(min\(100%,\s*var\(--filter-choice-min-width\)\),\s*1fr\)\);/s)
-    expect(css).toMatch(/\.filterChoiceChip\s*{[^}]*justify-content:\s*center;/s)
+    expect(css).toMatch(/\.filterChoiceControl\s*{[^}]*--filter-choice-min-width:\s*calc\(var\(--space-12\) \+ var\(--space-4\)\);[^}]*display:\s*grid;[^}]*gap:\s*calc\(var\(--space-1\) - 2px\);[^}]*grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(min\(100%,\s*var\(--filter-choice-min-width\)\),\s*1fr\)\);/s)
+    expect(css).toMatch(/\.filterChoiceChip\s*{[^}]*justify-content:\s*center;[^}]*padding-left:\s*var\(--space-1\);[^}]*padding-right:\s*var\(--space-1\);/s)
     expect(css).toMatch(/\.filterRegion\s*{[^}]*max-height:\s*min\(45vh,\s*360px\);[^}]*overflow-y:\s*auto;/s)
     expect(css).not.toMatch(/\.filterStrip\s*{[^}]*max-height:/s)
     expect(css).not.toMatch(/\.filterControl\s*{[^}]*overflow:\s*hidden;/s)

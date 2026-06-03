@@ -686,13 +686,17 @@
 }
 
 .filterChoiceControl {
-  --filter-choice-min-width: calc(var(--space-12) + var(--space-8));
+  /* Seven Climate Zone choices need visible breakpoints in the normal sidebar width range. */
+  --filter-choice-min-width: calc(var(--space-12) + var(--space-4));
   display: grid;
+  gap: calc(var(--space-1) - 2px);
   grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--filter-choice-min-width)), 1fr));
 }
 
 .filterChoiceChip {
   justify-content: center;
+  padding-left: var(--space-1);
+  padding-right: var(--space-1);
 }
 
 .filterActions {
