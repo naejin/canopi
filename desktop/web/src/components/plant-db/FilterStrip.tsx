@@ -67,7 +67,6 @@ function FilterControlRow({
             key={val}
             label={t(`${control.valueI18nPrefix}${val}`, val)}
             color={control.color}
-            className={styles.filterChoiceChip}
             active={(filters[control.filterKey] as string[] | null)?.includes(val) ?? false}
             onClick={() => speciesCatalogWorkbench.patchFilters({
               [control.filterKey]: toggleArrayValue(filters[control.filterKey] as string[] | null, val),

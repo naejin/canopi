@@ -47,7 +47,7 @@ Use this guide when changing Preact components, signals, i18n, CSS, panels, bott
 - `plantFilterModel.createEmpty()` must derive fixed filter defaults from the Species Catalog Filter catalog, not hand-list `SpeciesFilter` fields.
 - Components such as `FilterStrip` and `ActiveChips` should consume `plantFilterCatalog` instead of hardcoding fixed filter rows or chip metadata.
 - Strip rows should come from `stripControls()`; active chips should come from `activeArrayChipFields()`, `activeBooleanChipFields()`, and `activeNumericChipFields()`.
-- Always-visible choice rows should use the dedicated responsive choice-chip layout with the compact strip-only chip basis. Do not rely on generic flex chip packing or large fixed chip tracks for row-height behavior; Climate Zone has enough choices that it can appear stuck at two rows across normal sidebar widths.
+- Always-visible choice rows should use the same natural flex-wrapping ribbon behavior as More Filters chip rows. Do not use equal-track grid layouts or strip-only chip sizing for row-height behavior; Climate Zone has enough choices that grid tracks can make the row appear fixed instead of fitting the visible ribbons.
 - Keep the shared `SpeciesFilter` request shape stable unless the bead explicitly changes frontend/backend contracts.
 - Site Adaptation is a sibling Design workflow, not a mode inside the Species Catalog Workbench. It may share Species Catalog read adapters, but it must not depend on plant-browser UI state.
 - `components/plant-db/` and `components/plant-detail/` are Workbench-owned UI modules. Site Adaptation should not import them; if shared prop-only Species presentation becomes useful, extract it to a neutral module outside Workbench-owned directories.
