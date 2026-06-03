@@ -4,6 +4,7 @@ import { t } from "./i18n";
 import { useCallback, useRef } from "preact/hooks";
 import { lazy, Suspense } from "preact/compat";
 import { activePanel, sidePanel, sidePanelWidth } from "./app/shell/state";
+import { commitSidePanelWidth } from "./app/shell/controller";
 import { TitleBar } from "./components/shared/TitleBar";
 import { DegradedBanner } from "./components/shared/DegradedBanner";
 import { CommandPalette } from "./components/shared/CommandPalette";
@@ -12,6 +13,9 @@ import { CanvasPanel } from "./components/panels/CanvasPanel";
 import { PanelBar } from "./components/panels/PanelBar";
 
 const MIN_SIDEBAR_WIDTH = 320;
+const DEFAULT_SIDEBAR_RATIO = 0.35;
+const DEFAULT_SIDEBAR_MAX_WIDTH = 520;
+const DEFAULT_SIDEBAR_WIDTH = `clamp(${MIN_SIDEBAR_WIDTH}px, 35vw, ${DEFAULT_SIDEBAR_MAX_WIDTH}px)`;
 const MAX_SIDEBAR_RATIO = 0.9;
 
 const PlantDbPanel = lazy(async () => {
@@ -54,12 +58,26 @@ export function App() {
   const showLocation = panel === "location";
   const showSidebar = showCanvas && side !== null;
 
-  const dragRef = useRef<{ startX: number; startW: number } | null>(null);
+  const dragRef = useRef<{ startX: number; startW: number; lastW: number; moved: boolean } | null>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
+
+  const defaultSidebarWidth = useCallback(() => (
+    Math.max(
+      MIN_SIDEBAR_WIDTH,
+      Math.min(DEFAULT_SIDEBAR_MAX_WIDTH, Math.floor(window.innerWidth * DEFAULT_SIDEBAR_RATIO)),
+    )
+  ), []);
+
+  const currentSidebarWidth = useCallback(() => {
+    const measured = sidebarRef.current?.getBoundingClientRect().width;
+    if (measured !== undefined && Number.isFinite(measured) && measured > 0) return measured;
+    return sidePanelWidth.peek() ?? defaultSidebarWidth();
+  }, [defaultSidebarWidth]);
 
   const handleDragStart = useCallback((e: MouseEvent) => {
     e.preventDefault();
-    dragRef.current = { startX: e.clientX, startW: sidePanelWidth.peek() };
+    const startW = currentSidebarWidth();
+    dragRef.current = { startX: e.clientX, startW, lastW: startW, moved: false };
 
     const onMove = (ev: MouseEvent) => {
       if (!dragRef.current) return;
@@ -67,14 +85,16 @@ export function App() {
       const delta = dragRef.current.startX - ev.clientX;
       const maxW = Math.floor(window.innerWidth * MAX_SIDEBAR_RATIO);
       const newW = Math.max(MIN_SIDEBAR_WIDTH, Math.min(maxW, dragRef.current.startW + delta));
+      dragRef.current.lastW = newW;
+      dragRef.current.moved = dragRef.current.moved || newW !== dragRef.current.startW;
       // Write to DOM directly at 60fps — commit signal on mouseup
       if (sidebarRef.current) sidebarRef.current.style.width = `${newW}px`;
     };
 
     const onUp = () => {
       // Commit final width to signal
-      if (sidebarRef.current) {
-        sidePanelWidth.value = parseInt(sidebarRef.current.style.width, 10) || sidePanelWidth.peek();
+      if (dragRef.current?.moved) {
+        commitSidePanelWidth(dragRef.current.lastW);
       }
       dragRef.current = null;
       document.removeEventListener("mousemove", onMove);
@@ -102,7 +122,7 @@ export function App() {
           </Suspense>
         )}
 
-        {/* Right side panel (plant search, etc.) */}
+        {/* Right side panel (Species Catalog Workbench, favorites, etc.) */}
         {showSidebar && (
           <>
             <div
@@ -116,10 +136,10 @@ export function App() {
               ref={sidebarRef}
               className={styles.sidePanel}
               style={{
-                width: `${width}px`,
+                '--side-panel-width': width === null ? DEFAULT_SIDEBAR_WIDTH : `${width}px`,
                 minWidth: `${MIN_SIDEBAR_WIDTH}px`,
                 maxWidth: '90%',
-              }}
+              } as Record<string, string>}
             >
               <SidePanelContent side={side!} />
             </div>

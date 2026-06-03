@@ -74,6 +74,7 @@ describe('LayerPanel', () => {
       default_design_dir: '',
       recent_files_max: 20,
       last_active_panel: 'canvas',
+      side_panel_width: null,
       bottom_panel_open: false,
       bottom_panel_height: 200,
       bottom_panel_tab: 'budget',

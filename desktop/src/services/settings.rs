@@ -139,6 +139,7 @@ mod tests {
             locale: Locale::De,
             theme: Theme::Dark,
             map_style: BasemapStyle::Satellite,
+            side_panel_width: Some(444),
             ..Default::default()
         };
 
@@ -148,5 +149,6 @@ mod tests {
         assert_eq!(stored.locale, Locale::De);
         assert_eq!(stored.theme, Theme::Dark);
         assert_eq!(stored.map_style, BasemapStyle::Satellite);
+        assert_eq!(stored.side_panel_width, Some(444));
     }
 }

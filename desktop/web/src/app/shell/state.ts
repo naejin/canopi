@@ -10,11 +10,13 @@ const SIDE_PANELS = new Set<Panel>(["plant-db", "favorites"]);
 export const activePanel = signal<Panel>("canvas");
 
 // Which sidebar panel is open alongside the canvas. null = none.
-// Starts closed — the user opens Plant DB when they need it (by then IPC is ready).
+// Starts closed — the user opens the Species Catalog Workbench when they need it
+// (by then IPC is ready).
 export const sidePanel = signal<SidePanel | null>(null);
 
-// Sidebar width in pixels — user-adjustable via drag handle
-export const sidePanelWidth = signal<number>(560);
+// Sidebar width in pixels. null = no explicit user resize, so the shell uses
+// the responsive first-use default.
+export const sidePanelWidth = signal<number | null>(null);
 
 /**
  * Navigate to a panel using the correct routing model:

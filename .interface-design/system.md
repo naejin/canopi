@@ -174,7 +174,7 @@ These sizes are tokenized and must be reused across retained surfaces.
 |---------|------|------------|
 | `--title-bar-height` | 36px | App shell |
 | `--panel-bar-width` | 36px | Right edge |
-| `--panel-width` | 280px | Plant DB, favorites |
+| `--panel-width` | 280px | Legacy generic sidebar defaults |
 | `--control-size-xs` | 20px | compact badges and close buttons |
 | `--control-size-sm` | 24px | zoom buttons, sliders, compact icon controls |
 | `--control-size-md` | 28px | standard buttons and inputs |
@@ -260,7 +260,7 @@ Plant groups are counter-scaled (`scaleX/scaleY = 1/stageScale`). Shadow effects
 
 - **Left toolbar**: 38px, drawing tools only (Select, Hand, Rectangle, Text + Grid/Snap/Rulers toggles). Active: 2px ochre left bar.
 - **Right panel bar**: 36px, always visible. Icons toggle sliding panels. Active: 2px ochre right bar.
-- **Right panels**: plant search, learning (future). Slide in between canvas and panel bar. Resizable via drag handle.
+- **Right panels**: Species Catalog Workbench, favorites, learning (future). Slide in between canvas and panel bar. First-use width is `clamp(320px, 35vw, 520px)`; after the user resizes, the explicit pixel width is remembered. Resizable via drag handle.
 - **Title bar**: 36px. Logo left, file name center-left, lang/theme controls + window buttons right.
 - **No activity bar** — merged into panel bar.
 - **No status bar** — lang/theme moved to title bar.
@@ -320,16 +320,16 @@ Earthy, not neon:
 - Active state: ochre right border + ochre icon color
 - Clicking toggles the corresponding panel
 
-### Plant Search Panel
+### Species Catalog Workbench
 - Search-first: full-width search input at top
-- FilterStrip: always-visible compact controls below search. 6 rows:
+- FilterStrip: always-visible compact controls below search. Rows come from the Species Catalog Filter catalog:
   - Stratum: multi-select `FilterChip` pills (teal `--color-nitrogen`)
   - Sun: multi-select `FilterChip` pills (amber `--color-sun`)
   - Hardiness: `RangeSlider` (1–13)
   - Edibility: `ThresholdSlider` (0–5 with tick marks)
   - Height: `RangeSlider` (0–50m)
   - N₂ Fixer: toggle switch (24×14px)
-- Each row: label 52px right-aligned + control flex-1. All 24px min-height
+- Each row: right-aligned label + control flex-1. All rows are 24px min-height and wrap dynamically based on panel width; filter choices must remain visible rather than clipped.
 - "More filters ›" text link + badge count at bottom, 58px left indent
 - ActiveChips strip: horizontal wrap of dismissable `FilterChip` pills, 58px left indent matching controls. Shows all active filters from both strip and "More" panel. Border-top + border-bottom separation
 - "More Filters" panel: slides in as overlay over results. Header + search + 8 collapsible categories with 2px colored left borders matching detail card sections. Boolean fields: inline checkbox. Categorical: expandable chip picker (lazy-loaded). Numeric: expandable range slider. "Done ›" text link in footer

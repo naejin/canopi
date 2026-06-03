@@ -20,6 +20,7 @@ import {
   bottomPanelOpen,
   bottomPanelTab,
 } from '../canvas-settings/bottom-panel-state'
+import { sidePanelWidth } from '../shell/state'
 import {
   autoSaveIntervalMs,
   basemapStyle,
@@ -38,6 +39,9 @@ export interface SettingsProjectionDraft {
   snapToGuides: boolean
   autoSaveIntervalMs: number
   plantSpacingIntervalM: number
+  sidePanel: {
+    width: number | null
+  }
   bottomPanel: {
     open: boolean
     height: number
@@ -63,6 +67,7 @@ type PersistSettings = (settings: Settings) => Promise<void>
 
 const DEFAULT_QUEUED_PERSIST_DELAY_MS = 160
 const DEFAULT_BOTTOM_PANEL_TAB: BottomPanelTab = 'budget'
+const MIN_SIDE_PANEL_WIDTH = 320
 
 let sourceSettings: Settings | null = null
 let queuedPersistTimer: ReturnType<typeof globalThis.setTimeout> | null = null
@@ -83,6 +88,11 @@ function normalizePositiveMeters(value: number, fallback: number): number {
   return value
 }
 
+function normalizeSidePanelWidth(value: number | null): number | null {
+  if (value === null || !Number.isFinite(value)) return null
+  return Math.max(MIN_SIDE_PANEL_WIDTH, Math.round(value))
+}
+
 function normalizeTheme(value: Theme): Theme {
   return value === 'dark' ? 'dark' : 'light'
 }
@@ -100,6 +110,9 @@ function createDraftFromProjection(): SettingsProjectionDraft {
     snapToGuides: snapToGuidesEnabled.value,
     autoSaveIntervalMs: autoSaveIntervalMs.value,
     plantSpacingIntervalM: plantSpacingIntervalM.value,
+    sidePanel: {
+      width: sidePanelWidth.value,
+    },
     bottomPanel: {
       open: bottomPanelOpen.value,
       height: bottomPanelHeight.value,
@@ -129,6 +142,9 @@ function normalizeDraft(draft: SettingsProjectionDraft): SettingsProjectionDraft
       draft.plantSpacingIntervalM,
       FALLBACK_PLANT_SPACING_INTERVAL_M,
     ),
+    sidePanel: {
+      width: normalizeSidePanelWidth(draft.sidePanel.width),
+    },
     bottomPanel: {
       open: draft.bottomPanel.open,
       height: draft.bottomPanel.height,
@@ -155,6 +171,7 @@ function applyDraftToProjection(draft: SettingsProjectionDraft): void {
     snapToGuidesEnabled.value = draft.snapToGuides
     autoSaveIntervalMs.value = draft.autoSaveIntervalMs
     plantSpacingIntervalM.value = draft.plantSpacingIntervalM
+    sidePanelWidth.value = draft.sidePanel.width
     bottomPanelOpen.value = draft.bottomPanel.open
     bottomPanelHeight.value = draft.bottomPanel.height
     bottomPanelTab.value = draft.bottomPanel.tab
@@ -183,6 +200,7 @@ function settingsFromDraft(base: Settings, draft: SettingsProjectionDraft): Sett
     snap_to_guides: draft.snapToGuides,
     auto_save_interval_s: Math.round(draft.autoSaveIntervalMs / 1000),
     plant_spacing_interval_m: draft.plantSpacingIntervalM,
+    side_panel_width: draft.sidePanel.width,
     bottom_panel_open: draft.bottomPanel.open,
     bottom_panel_height: draft.bottomPanel.height,
     bottom_panel_tab: draft.bottomPanel.tab,
@@ -249,6 +267,9 @@ export function hydrateSettingsProjection(settings: Settings): void {
     snapToGuides: settings.snap_to_guides,
     autoSaveIntervalMs: settings.auto_save_interval_s * 1000,
     plantSpacingIntervalM: settings.plant_spacing_interval_m,
+    sidePanel: {
+      width: settings.side_panel_width,
+    },
     bottomPanel: {
       open: settings.bottom_panel_open,
       height: settings.bottom_panel_height,

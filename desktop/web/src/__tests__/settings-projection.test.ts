@@ -22,6 +22,7 @@ import {
   snapToGridEnabled,
   snapToGuidesEnabled,
 } from '../app/canvas-settings/signals'
+import { sidePanelWidth } from '../app/shell/state'
 import { autoSaveIntervalMs, basemapStyle, locale, plantSpacingIntervalM, theme } from '../app/settings/state'
 import {
   flushSettingsProjection,
@@ -48,6 +49,7 @@ function baseSettings(overrides: Partial<Settings> = {}): Settings {
     default_design_dir: '',
     recent_files_max: 20,
     last_active_panel: 'canvas',
+    side_panel_width: null,
     bottom_panel_open: false,
     bottom_panel_height: 200,
     bottom_panel_tab: 'budget',
@@ -74,6 +76,7 @@ function resetProjectionSignals(): void {
   bottomPanelOpen.value = false
   bottomPanelHeight.value = 200
   bottomPanelTab.value = 'budget'
+  sidePanelWidth.value = null
   layerVisibility.value = createDefaultLayerVisibility()
   layerOpacity.value = createDefaultLayerOpacity()
   contourIntervalMeters.value = 0
@@ -112,6 +115,7 @@ describe('settings projection', () => {
       snap_to_grid: true,
       snap_to_guides: false,
       auto_save_interval_s: 45,
+      side_panel_width: 460,
       bottom_panel_open: true,
       bottom_panel_height: 320,
       bottom_panel_tab: 'timeline',
@@ -130,6 +134,7 @@ describe('settings projection', () => {
     expect(autoSaveIntervalMs.value).toBe(45_000)
     expect(snapToGridEnabled.value).toBe(true)
     expect(snapToGuidesEnabled.value).toBe(false)
+    expect(sidePanelWidth.value).toBe(460)
     expect(bottomPanelOpen.value).toBe(true)
     expect(bottomPanelHeight.value).toBe(320)
     expect(bottomPanelTab.value).toBe('timeline')
@@ -157,6 +162,7 @@ describe('settings projection', () => {
       settings.snapToGrid = true
       settings.snapToGuides = false
       settings.autoSaveIntervalMs = 15_000
+      settings.sidePanel.width = 440
       settings.bottomPanel.open = true
       settings.bottomPanel.height = 280
       settings.bottomPanel.tab = 'consortium'
@@ -179,6 +185,7 @@ describe('settings projection', () => {
       confirm_destructive: false,
       default_currency: 'USD',
       default_design_dir: '/designs',
+      side_panel_width: 440,
       bottom_panel_open: true,
       bottom_panel_height: 280,
       bottom_panel_tab: 'consortium',
@@ -203,6 +210,7 @@ describe('settings projection', () => {
       contour_interval: 12.7,
       hillshade_opacity: Number.NaN,
       plant_spacing_interval_m: 0,
+      side_panel_width: Number.NaN,
     }))
 
     expect(theme.value).toBe('light')
@@ -212,6 +220,7 @@ describe('settings projection', () => {
     expect(contourIntervalMeters.value).toBe(13)
     expect(hillshadeOpacity.value).toBe(0.55)
     expect(plantSpacingIntervalM.value).toBe(0.5)
+    expect(sidePanelWidth.value).toBe(null)
 
     mutateSettingsProjection((settings) => {
       settings.mapLayers.baseOpacity = -2
@@ -219,6 +228,7 @@ describe('settings projection', () => {
       settings.mapLayers.contourIntervalMeters = 7.6
       settings.mapLayers.hillshadeOpacity = 3
       settings.plantSpacingIntervalM = Number.POSITIVE_INFINITY
+      settings.sidePanel.width = 120
     }, { persist: 'none' })
 
     expect(snapshotSettingsProjection()).toEqual(expect.objectContaining({
@@ -229,6 +239,7 @@ describe('settings projection', () => {
       contour_interval: 8,
       hillshade_opacity: 1,
       plant_spacing_interval_m: 0.5,
+      side_panel_width: 320,
     }))
   })
 
@@ -237,6 +248,7 @@ describe('settings projection', () => {
 
     mutateSettingsProjection((settings) => {
       settings.locale = 'es'
+      settings.sidePanel.width = 480
       settings.bottomPanel.open = true
     }, { persist: 'immediate' })
     await Promise.resolve()
@@ -244,6 +256,7 @@ describe('settings projection', () => {
     expect(vi.mocked(setSettings)).toHaveBeenCalledTimes(1)
     expect(vi.mocked(setSettings)).toHaveBeenCalledWith(expect.objectContaining({
       locale: 'es',
+      side_panel_width: 480,
       bottom_panel_open: true,
     }))
   })
@@ -326,6 +339,7 @@ describe('settings projection', () => {
   it('keeps production settings-backed callers on the projection mutation seam', () => {
     const sources = [
       '../app/canvas-settings/controller.ts',
+      '../app/shell/controller.ts',
       '../canvas/runtime/scene-runtime.ts',
       '../components/shared/TitleBar.tsx',
       '../components/shared/StatusBar.tsx',
@@ -336,7 +350,7 @@ describe('settings projection', () => {
     for (const source of sources) {
       expect(source).toContain('settings/projection')
       expect(source).not.toContain('settings/persistence')
-      expect(source).not.toMatch(/\b(?:locale|theme|basemapStyle|snapToGridEnabled|snapToGuidesEnabled|autoSaveIntervalMs|bottomPanelOpen|bottomPanelHeight|bottomPanelTab|contourIntervalMeters|hillshadeVisible|hillshadeOpacity)\.value\s*=(?!=)/)
+      expect(source).not.toMatch(/\b(?:locale|theme|basemapStyle|snapToGridEnabled|snapToGuidesEnabled|autoSaveIntervalMs|sidePanelWidth|bottomPanelOpen|bottomPanelHeight|bottomPanelTab|contourIntervalMeters|hillshadeVisible|hillshadeOpacity)\.value\s*=(?!=)/)
     }
   })
 })

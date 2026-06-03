@@ -14,7 +14,7 @@ describe('app navigation', () => {
     expect(sidePanel.value).toBe(null)
   })
 
-  it('opens the plant database as a sidebar panel', () => {
+  it('opens the Species Catalog Workbench as a sidebar panel', () => {
     navigateTo('plant-db')
 
     expect(activePanel.value).toBe('canvas')

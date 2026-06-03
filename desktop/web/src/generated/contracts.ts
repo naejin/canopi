@@ -235,6 +235,7 @@ export type Settings = {
 	default_design_dir: string,
 	recent_files_max: number,
 	last_active_panel: string,
+	side_panel_width: number | null,
 	bottom_panel_open: boolean,
 	bottom_panel_height: number,
 	bottom_panel_tab: string,

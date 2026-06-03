@@ -639,12 +639,12 @@
 
 .filterStrip {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: minmax(calc(var(--space-12) - 2px), max-content) minmax(0, 1fr);
   column-gap: calc(var(--space-1) + 2px);
   row-gap: calc(var(--space-1) - 1px);
   padding: calc(var(--space-1) + 2px) calc(var(--space-2) + 2px) var(--space-1);
   flex-shrink: 0;
-  align-items: center;
+  align-items: start;
 }
 
 .filterRow {
@@ -656,20 +656,24 @@
   font-weight: 600;
   color: var(--color-text-muted);
   font-family: var(--font-sans);
-  white-space: nowrap;
+  max-width: 86px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.15;
   text-align: right;
   min-height: var(--control-size-sm);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: flex-end;
+  padding-top: calc(var(--space-1) - 1px);
 }
 
 .filterControl {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: calc(var(--space-1) - 1px);
   min-width: 0;
-  overflow: hidden;
+  overflow: visible;
   flex-wrap: wrap;
   min-height: var(--control-size-sm);
 }
@@ -790,13 +794,8 @@
   border-top: 1px solid var(--color-border);
   border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: visible;
   flex-wrap: wrap;
-}
-
-.activeChips::-webkit-scrollbar {
-  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

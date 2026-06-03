@@ -16,6 +16,7 @@
 
 /* Resizable side panel (right side) */
 .sidePanel {
+  width: var(--side-panel-width);
   display: flex;
   flex-direction: column;
   overflow: hidden;
