@@ -35,27 +35,10 @@ import {
   parsePlantDropPayload,
 } from './interaction/tool-actions'
 import {
-  createPlantStampTool,
-  createPlantStampToolAdapter,
-} from './interaction/plant-stamp-tool'
-import {
-  createTextAnnotationTool,
-  createTextAnnotationToolAdapter,
-} from './interaction/text-annotation-tool'
-import {
-  createZoneDrawingTool,
-  createZoneDrawingToolAdapters,
-} from './interaction/zone-drawing-tool'
-import {
-  createObjectStampTool,
-  createObjectStampToolAdapter,
-} from './interaction/object-stamp-tool'
-import {
-  createPlantSpacingTool,
-  createPlantSpacingToolAdapter,
-} from './interaction/plant-spacing-tool'
+  createSceneToolModules,
+  type SceneToolModules,
+} from './interaction/tool-modules'
 import type {
-  SceneToolAdapter,
   SceneToolPointerDrag,
 } from './interaction/tool-adapter'
 import type { SceneEditCoordinator, SceneEditTransaction } from './scene-runtime/transactions'
@@ -84,7 +67,7 @@ export interface SceneInteractionDeps {
 export class SceneInteractionController {
   private readonly _preview: HTMLDivElement
   private readonly _tooltip: HoverTooltipController
-  private readonly _toolAdapters: ReadonlyMap<string, SceneToolAdapter>
+  private readonly _tools: SceneToolModules
   private _tool: InteractionTool = 'select'
   private _mode: InteractionMode = 'idle'
   private _toolDrag: ToolPointerDrag | null = null
@@ -104,80 +87,36 @@ export class SceneInteractionController {
   constructor(private readonly _deps: SceneInteractionDeps) {
     this._preview = createInteractionPreview(this._deps.container)
     this._tooltip = createHoverTooltip(this._deps.container)
-    const textTool = createTextAnnotationTool({
-      container: this._deps.container,
-      camera: this._deps.camera,
-      sceneEdits: this._deps.sceneEdits,
-    })
-    const zoneDrawingTool = createZoneDrawingTool({
+    this._tools = createSceneToolModules({
       container: this._deps.container,
       preview: this._preview,
       camera: this._deps.camera,
+      sceneEdits: this._deps.sceneEdits,
       getSceneStore: this._deps.getSceneStore,
       getSelection: this._deps.getSelection,
       clearSelection: this._deps.clearSelection,
-      sceneEdits: this._deps.sceneEdits,
       render: this._deps.render,
-      applySnapping: (point) => this._applySnapping(point),
-    })
-    const zoneDrawingAdapters = createZoneDrawingToolAdapters(zoneDrawingTool)
-    const plantStampTool = createPlantStampTool({
-      sceneEdits: this._deps.sceneEdits,
-      applySnapping: (point) => this._applySnapping(point),
-    })
-    const objectStampTool = createObjectStampTool({
-      preview: this._preview,
-      camera: this._deps.camera,
-      getSceneStore: this._deps.getSceneStore,
-      getSpeciesCache: this._deps.getSpeciesCache,
-      getPlantPresentationContext: this._deps.getPlantPresentationContext,
-      sceneEdits: this._deps.sceneEdits,
-      applySnapping: (point) => this._applySnapping(point),
-    })
-    const plantSpacingTool = createPlantSpacingTool({
-      container: this._deps.container,
-      camera: this._deps.camera,
-      getSceneStore: this._deps.getSceneStore,
       getSpeciesCache: this._deps.getSpeciesCache,
       getPlantPresentationContext: this._deps.getPlantPresentationContext,
       getLocalizedCommonNames: this._deps.getLocalizedCommonNames,
-      sceneEdits: this._deps.sceneEdits,
       switchTool: (name) => this._switchTool(name),
       applySnapping: (point) => this._applySnapping(point),
       getContainerRect: () => this._cachedContainerRect ?? this._deps.container.getBoundingClientRect(),
     })
-    this._toolAdapters = new Map([
-      ['plant-stamp', createPlantStampToolAdapter(plantStampTool)],
-      ['text', createTextAnnotationToolAdapter(textTool)],
-      ['rectangle', zoneDrawingAdapters.rectangle],
-      ['ellipse', zoneDrawingAdapters.ellipse],
-      ['polygon', zoneDrawingAdapters.polygon],
-      ['object-stamp', createObjectStampToolAdapter(objectStampTool, {
-        switchTool: (name) => this._switchTool(name),
-      })],
-      ['plant-spacing', createPlantSpacingToolAdapter(plantSpacingTool)],
-    ])
     this.setTool(getCanvasTool())
     this._attach()
   }
 
   setTool(name: string): void {
-    const previousTool = this._tool
     this._tool = name
-    if (previousTool !== name) {
-      this._toolAdapterFor(previousTool)?.onDeactivate?.()
-    }
-    this._cancelTransientInteraction()
-    this._activeToolAdapter()?.onActivate?.()
+    this._tools.transitionTo(name, () => this._cancelTransientInteraction())
     this._deps.container.style.cursor = cursorForTool(name)
   }
 
   dispose(): void {
     this._detach()
     this._deps.setHoveredEntityId(null)
-    for (const adapter of this._toolAdapters.values()) {
-      adapter.dispose?.()
-    }
+    this._tools.dispose()
     this._preview.remove()
     this._tooltip.dispose()
   }
@@ -214,8 +153,7 @@ export class SceneInteractionController {
 
   private readonly _onPointerDown = (event: PointerEvent): void => {
     if (event.button !== 0 && event.button !== 1) return
-    const activeAdapter = this._activeToolAdapter()
-    if (activeAdapter?.shouldIgnorePointerEvent?.(event.target)) return
+    if (this._tools.shouldIgnorePointerEvent(event.target)) return
 
     this._cachedContainerRect = this._deps.container.getBoundingClientRect()
     const screen = this._screenPoint(event)
@@ -231,7 +169,7 @@ export class SceneInteractionController {
       return
     }
 
-    if (activeAdapter?.pointerDown?.({
+    if (this._tools.pointerDown({
       event,
       screen,
       rawWorld: world,
@@ -296,7 +234,7 @@ export class SceneInteractionController {
   }
 
   private _updateHover(event: PointerEvent): void {
-    if (this._activeToolAdapter()?.shouldSuppressHover?.()) {
+    if (this._tools.shouldSuppressHover()) {
       this._deps.setHoveredEntityId(null)
       this._tooltip.hide()
       return
@@ -332,13 +270,12 @@ export class SceneInteractionController {
   }
 
   private readonly _onPointerMove = (event: PointerEvent): void => {
-    const activeAdapter = this._activeToolAdapter()
-    if (activeAdapter?.shouldIgnorePointerEvent?.(event.target)) return
+    if (this._tools.shouldIgnorePointerEvent(event.target)) return
 
     if (this._pointerId === null) {
       const screen = this._screenPoint(event)
       const rawWorld = this._deps.camera.screenToWorld(screen)
-      if (activeAdapter?.pointerMoveWithoutCapture?.({ event, screen, rawWorld })) return
+      if (this._tools.pointerMoveWithoutCapture({ event, screen, rawWorld })) return
       this._updateHover(event)
       return
     }
@@ -364,7 +301,7 @@ export class SceneInteractionController {
       return
     }
 
-    if (this._mode === 'idle' && activeAdapter?.pointerMoveWithCapture?.({
+    if (this._mode === 'idle' && this._tools.pointerMoveWithCapture({
       event,
       screen,
       rawWorld,
@@ -396,13 +333,12 @@ export class SceneInteractionController {
   }
 
   private readonly _onPointerUp = (event: PointerEvent): void => {
-    const activeAdapter = this._activeToolAdapter()
-    if (this._pointerId === null && activeAdapter?.shouldIgnorePointerUpWithoutCapture?.()) return
+    if (this._pointerId === null && this._tools.shouldIgnorePointerUpWithoutCapture()) return
     if (this._pointerId !== null && event.pointerId !== this._pointerId) return
     const screen = this._screenPoint(event)
     const rawWorld = this._deps.camera.screenToWorld(screen)
     const shouldPreserveActiveDraft = this._mode === 'panning'
-      && Boolean(activeAdapter?.shouldPreserveTransientOnPan?.())
+      && this._tools.shouldPreserveTransientOnPan()
 
     if (this._mode === 'dragging' && this._dragEdit) {
       const moved = Math.abs(this._lastDragDelta.x) > 0.001
@@ -487,23 +423,14 @@ export class SceneInteractionController {
     }
   }
 
-  private _activeToolAdapter(): SceneToolAdapter | null {
-    return this._toolAdapterFor(this._tool)
-  }
-
-  private _toolAdapterFor(tool: string): SceneToolAdapter | null {
-    return this._toolAdapters.get(tool) ?? null
-  }
-
   private readonly _onKeyDown = (event: KeyboardEvent): void => {
-    const activeAdapter = this._activeToolAdapter()
-    if (activeAdapter?.keyDown?.(event)) return
+    if (this._tools.keyDown(event)) return
 
     if (
       event.code !== 'Space'
       || this._spaceHeld
       || isEditableTarget(event.target)
-      || activeAdapter?.shouldSuppressSharedKeyboard?.(event)
+      || this._tools.shouldSuppressSharedKeyboard(event)
     ) return
     event.preventDefault()
     this._spaceHeld = true
@@ -533,7 +460,7 @@ export class SceneInteractionController {
     this._cachedContainerRect = null
     resetSceneDragState(this._dragState)
     this._bandAdditive = false
-    this._activeToolAdapter()?.cancelTransient?.(options)
+    this._tools.cancelTransient(options)
     hideInteractionPreview(this._preview)
     this._deps.container.style.cursor = cursorForTool(this._tool)
   }
@@ -551,15 +478,13 @@ export class SceneInteractionController {
   }
 
   private _refreshViewportDependentMeasurements(): void {
-    if (this._activeToolAdapter()?.refreshViewportDependent?.()) return
+    if (this._tools.refreshViewportDependent()) return
 
     this._refreshSelectionDependentMeasurements()
   }
 
   private _refreshSelectionDependentMeasurements(): void {
-    for (const adapter of new Set(this._toolAdapters.values())) {
-      adapter.refreshSelectionDependent?.()
-    }
+    this._tools.refreshSelectionDependent()
   }
 
   /** Snap a world-space point to grid and/or guides. Used for placement (stamp, text). */

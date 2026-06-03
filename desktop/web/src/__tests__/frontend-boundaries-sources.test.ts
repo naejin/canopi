@@ -361,6 +361,7 @@ describe('frontend boundary sources', () => {
   it('keeps Timeline Action workbench and drag edits behind app/timeline modules', () => {
     const timelineSource = readSource('../components/canvas/InteractiveTimeline.tsx')
     const canvasWorkbenchSource = readSource('../app/timeline/canvas-workbench.ts')
+    const interactionWorkbenchSource = readSource('../app/timeline/interaction-workbench.ts')
     const interactionFrameSource = readSource('../app/timeline/interaction-frame.ts')
     const interactionSource = readSource('../app/timeline/interaction.ts')
     const editingSource = readSource('../app/timeline/editing.ts')
@@ -376,8 +377,11 @@ describe('frontend boundary sources', () => {
     expect(timelineSource).not.toContain('formDataFromTimelineAction')
     expect(timelineSource).not.toContain('timelineActionPatchFromFormData')
     expect(timelineSource).toContain('../app/timeline/canvas-workbench')
-    expect(canvasWorkbenchSource).toContain('./interaction-frame')
-    expect(canvasWorkbenchSource).toContain('./interaction')
+    expect(canvasWorkbenchSource).toContain('./interaction-workbench')
+    expectNoImportsMatching('../app/timeline/canvas-workbench.ts', [
+      /^\.\/interaction-frame$/,
+      /^\.\/interaction$/,
+    ])
     expect(canvasWorkbenchSource).toContain('./workbench')
     expect(canvasWorkbenchSource).not.toContain('hitTestAction')
     expect(canvasWorkbenchSource).not.toContain('createTimelineMoveDrag')
@@ -391,6 +395,12 @@ describe('frontend boundary sources', () => {
     expect(canvasWorkbenchSource).not.toContain('deleteTimelineActionPopover')
     expect(canvasWorkbenchSource).not.toContain('openTimelineActionPopover')
     expect(canvasWorkbenchSource).not.toContain('isEditableTarget')
+    expect(interactionWorkbenchSource).toContain('./interaction-frame')
+    expect(interactionWorkbenchSource).toContain('createTimelineActionInteractionFrame')
+    expect(interactionWorkbenchSource).toContain('view:')
+    expect(interactionWorkbenchSource).toContain('popover:')
+    expect(interactionWorkbenchSource).toContain('selection:')
+    expect(interactionWorkbenchSource).toContain('hover:')
     expect(interactionFrameSource).toContain('hitTestAction')
     expect(interactionFrameSource).toContain('createTimelineMoveDrag')
     expect(interactionFrameSource).toContain('createTimelineResizeDrag')

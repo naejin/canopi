@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef } from 'preact/hooks'
-import { useSignal } from '@preact/signals'
 import {
   useTimelinePlanningSurface,
   type TimelineActionLayout,
   type TimelineActionTypeRow,
-  type TimelinePlanningAction,
 } from '../planning-projection'
 import {
   RULER_HEIGHT,
@@ -14,25 +12,14 @@ import {
 import type { TimelineAction } from '../../types/design'
 import type { TimelineActionFormData } from './editing'
 import {
-  TIMELINE_GRANULARITY_PX_PER_DAY,
-  type TimelineGranularity,
-} from './interaction'
-import {
-  createTimelineActionInteractionFrame,
-  type TimelineActionInteractionFrame,
-} from './interaction-frame'
-import {
-  type TimelineActionPopoverState,
-} from './workbench'
+  createTimelineActionInteractionWorkbench,
+  type TimelineActionInteractionWorkbench,
+  type TimelineTooltipState,
+} from './interaction-workbench'
+import type { TimelineActionPopoverState } from './workbench'
 
 interface MutableDomRef<T> {
   current: T | null
-}
-
-export type TimelineTooltipState = {
-  x: number
-  y: number
-  action: TimelinePlanningAction
 }
 
 export interface TimelineCanvasWorkbenchOptions {
@@ -78,129 +65,43 @@ export function useTimelineCanvasWorkbench({
   const rowOffsets = useMemo(() => computeTimelineRowOffsets(rows, layout), [rows, layout])
   const canvasHeight = rowOffsets[rowOffsets.length - 1] ?? RULER_HEIGHT
   const cachedRectRef = useRef<DOMRect | null>(null)
-  const granularity = useSignal<TimelineGranularity>('month')
-  const pxPerDay = useSignal(TIMELINE_GRANULARITY_PX_PER_DAY.month)
-  const scrollX = useSignal(0)
-  const selectedId = useSignal<string | null>(null)
-  const hoveredId = useSignal<string | null>(null)
-  const tooltipState = useSignal<TimelineTooltipState | null>(null)
-  const popoverState = useSignal<TimelineActionPopoverState | null>(null)
-  const rowsRef = useRef<readonly TimelineActionTypeRow[]>([])
-  const layoutRef = useRef<ReadonlyMap<string, TimelineActionLayout>>(new Map())
-  const rowOffsetsRef = useRef<number[]>(rowOffsets)
-  const projectionRef = useRef(projection)
-  const computedOriginMsRef = useRef(0)
-  const interactionFrameRef = useRef<TimelineActionInteractionFrame | null>(null)
+  const interactionWorkbenchRef = useRef<TimelineActionInteractionWorkbench | null>(null)
 
-  rowsRef.current = rows
-  layoutRef.current = layout
-  rowOffsetsRef.current = rowOffsets
-  projectionRef.current = projection
-  computedOriginMsRef.current = originMs
-
-  const renderState = useMemo<TimelineRenderState>(() => ({
-    originDate: interactionFrameRef.current?.getFrozenOriginDate() ?? originDate,
-    pxPerDay: pxPerDay.value,
-    scrollX: scrollX.value,
-    selectedId: selectedId.value,
-    hoveredId: hoveredId.value,
-    locale: activeLocale,
-    speciesColors,
-    granularity: granularity.value,
-  }), [
-    originDate,
-    pxPerDay.value,
-    scrollX.value,
-    selectedId.value,
-    hoveredId.value,
-    activeLocale,
-    speciesColors,
-    granularity.value,
-  ])
-
-  const renderStateRef = useRef(renderState)
-  renderStateRef.current = renderState
-
-  if (!interactionFrameRef.current) {
-    interactionFrameRef.current = createTimelineActionInteractionFrame({
+  if (!interactionWorkbenchRef.current) {
+    interactionWorkbenchRef.current = createTimelineActionInteractionWorkbench({
       canvasRef,
       cachedRectRef,
-      rowsRef,
-      layoutRef,
-      rowOffsetsRef,
-      renderStateRef,
-      projectionRef,
-      computedOriginMsRef,
-      view: {
-        getScrollX: () => scrollX.peek(),
-        setScrollX: (next) => {
-          scrollX.value = next
-        },
-        getPxPerDay: () => pxPerDay.peek(),
-        setPxPerDay: (next) => {
-          pxPerDay.value = next
-        },
-        getGranularity: () => granularity.peek(),
-        setGranularity: (next) => {
-          granularity.value = next
-        },
-      },
-      popover: {
-        get: () => popoverState.peek(),
-        set: (next) => {
-          popoverState.value = next
-        },
-        isOpen: () => popoverState.peek() !== null,
-        close: () => {
-          if (!popoverState.peek()) return false
-          popoverState.value = null
-          return true
-        },
-      },
-      selection: {
-        getSelectedId: () => selectedId.peek(),
-        selectAction: (action) => {
-          selectedId.value = action.id
-        },
-        setSelectedId: (actionId) => {
-          selectedId.value = actionId
-        },
-        clear: () => {},
-      },
-      hover: {
-        showAction: (action, point) => {
-          if (hoveredId.value !== action.id) hoveredId.value = action.id
-          if (!popoverState.peek()) {
-            tooltipState.value = { x: point.x, y: point.y, action }
-          }
-        },
-        clear: () => {
-          if (hoveredId.value !== null) hoveredId.value = null
-          if (tooltipState.peek()) tooltipState.value = null
-        },
-        hideTooltip: () => {
-          if (tooltipState.peek()) tooltipState.value = null
-        },
-      },
     })
   }
-  const interactionFrame = interactionFrameRef.current
+  const interactionWorkbench = interactionWorkbenchRef.current
+  interactionWorkbench.updateInputs({
+    rows,
+    layout,
+    rowOffsets,
+    projection,
+    originDate,
+    originMs,
+    activeLocale,
+    speciesColors,
+  })
+
+  const renderState = interactionWorkbench.readRenderState()
 
   useEffect(() => {
     const canvas = canvasRef.current
-    if (canvas) canvas.addEventListener('wheel', interactionFrame.handleWheel, { passive: false })
+    if (canvas) canvas.addEventListener('wheel', interactionWorkbench.handleWheel, { passive: false })
 
     const onMove = (event: MouseEvent) => {
-      interactionFrame.handleDocumentMouseMove(event)
+      interactionWorkbench.handleDocumentMouseMove(event)
     }
     const onUp = (event: MouseEvent) => {
-      interactionFrame.handleDocumentMouseUp(event)
+      interactionWorkbench.handleDocumentMouseUp(event)
     }
     const onLeave = () => {
-      interactionFrame.handleDocumentMouseLeave()
+      interactionWorkbench.handleDocumentMouseLeave()
     }
     const onKeyDown = (event: KeyboardEvent) => {
-      interactionFrame.handleKeyDown(event)
+      interactionWorkbench.handleKeyDown(event)
     }
 
     document.addEventListener('mousemove', onMove)
@@ -208,18 +109,18 @@ export function useTimelineCanvasWorkbench({
     document.addEventListener('keydown', onKeyDown)
     document.documentElement.addEventListener('mouseleave', onLeave)
     return () => {
-      if (canvas) canvas.removeEventListener('wheel', interactionFrame.handleWheel)
+      if (canvas) canvas.removeEventListener('wheel', interactionWorkbench.handleWheel)
       document.removeEventListener('mousemove', onMove)
       document.removeEventListener('mouseup', onUp)
       document.removeEventListener('keydown', onKeyDown)
       document.documentElement.removeEventListener('mouseleave', onLeave)
-      interactionFrame.cleanup()
+      interactionWorkbench.cleanup()
     }
-  }, [canvasRef, interactionFrame])
+  }, [canvasRef, interactionWorkbench])
 
   useEffect(() => {
-    interactionFrame.syncActions(actions ?? EMPTY_ACTIONS)
-  }, [actions, hoveredId.value, interactionFrame, selectedId.value])
+    interactionWorkbench.syncActions(actions ?? EMPTY_ACTIONS)
+  }, [actions, interactionWorkbench, interactionWorkbench.hoveredId.value, interactionWorkbench.selectedId.value])
 
   const invalidateLayout = useCallback(() => {
     cachedRectRef.current = null
@@ -237,23 +138,23 @@ export function useTimelineCanvasWorkbench({
       layout,
       rowOffsets,
       originMs,
-      pxPerDay.value,
-      scrollX.value,
-      selectedId.value,
-      hoveredId.value,
+      interactionWorkbench.pxPerDay.value,
+      interactionWorkbench.scrollX.value,
+      interactionWorkbench.selectedId.value,
+      interactionWorkbench.hoveredId.value,
       activeLocale,
       speciesColors,
-      granularity.value,
+      interactionWorkbench.granularity.value,
     ],
-    tooltip: tooltipState.value,
-    popover: popoverState.value,
+    tooltip: interactionWorkbench.tooltip.value,
+    popover: interactionWorkbench.popover.value,
     invalidateLayout,
-    handleContainerScroll: interactionFrame.handleContainerScroll,
-    handleMouseDown: interactionFrame.handleMouseDown,
-    handleCanvasMouseMove: interactionFrame.handleCanvasMouseMove,
-    handleMouseLeave: interactionFrame.handleMouseLeave,
-    handlePopoverSave: interactionFrame.handlePopoverSave,
-    handlePopoverDelete: interactionFrame.handlePopoverDelete,
-    handlePopoverCancel: interactionFrame.handlePopoverCancel,
+    handleContainerScroll: interactionWorkbench.handleContainerScroll,
+    handleMouseDown: interactionWorkbench.handleMouseDown,
+    handleCanvasMouseMove: interactionWorkbench.handleCanvasMouseMove,
+    handleMouseLeave: interactionWorkbench.handleMouseLeave,
+    handlePopoverSave: interactionWorkbench.handlePopoverSave,
+    handlePopoverDelete: interactionWorkbench.handlePopoverDelete,
+    handlePopoverCancel: interactionWorkbench.handlePopoverCancel,
   }
 }

@@ -8,10 +8,14 @@ function readSource(path: string): string {
 describe('Scene Interaction tool module boundaries', () => {
   it('keeps Annotation Text editor state behind the text tool module', () => {
     const interactionSource = readSource('../canvas/runtime/scene-interaction.ts')
+    const toolModulesSource = readSource('../canvas/runtime/interaction/tool-modules.ts')
     const textToolSource = readSource('../canvas/runtime/interaction/text-annotation-tool.ts')
 
-    expect(interactionSource).toContain('createTextAnnotationTool')
-    expect(interactionSource).toContain('createTextAnnotationToolAdapter')
+    expect(interactionSource).toContain('createSceneToolModules')
+    expect(interactionSource).not.toContain('createTextAnnotationTool')
+    expect(interactionSource).not.toContain('createTextAnnotationToolAdapter')
+    expect(toolModulesSource).toContain('createTextAnnotationTool')
+    expect(toolModulesSource).toContain('createTextAnnotationToolAdapter')
     expect(interactionSource).not.toContain('_textTool')
     expect(interactionSource).not.toContain('hasActiveEditor')
     expect(interactionSource).not.toContain('HTMLTextAreaElement')
@@ -23,10 +27,14 @@ describe('Scene Interaction tool module boundaries', () => {
 
   it('keeps Zone drawing draft state behind the zone drawing tool module', () => {
     const interactionSource = readSource('../canvas/runtime/scene-interaction.ts')
+    const toolModulesSource = readSource('../canvas/runtime/interaction/tool-modules.ts')
     const zoneToolSource = readSource('../canvas/runtime/interaction/zone-drawing-tool.ts')
 
-    expect(interactionSource).toContain('createZoneDrawingTool')
-    expect(interactionSource).toContain('createZoneDrawingToolAdapters')
+    expect(interactionSource).toContain('createSceneToolModules')
+    expect(interactionSource).not.toContain('createZoneDrawingTool')
+    expect(interactionSource).not.toContain('createZoneDrawingToolAdapters')
+    expect(toolModulesSource).toContain('createZoneDrawingTool')
+    expect(toolModulesSource).toContain('createZoneDrawingToolAdapters')
     expect(interactionSource).not.toContain('_zoneDrawing')
     expect(interactionSource).not.toContain('hasPolygonDraft')
     expect(interactionSource).not.toContain('preservePolygonDraft')
@@ -43,10 +51,14 @@ describe('Scene Interaction tool module boundaries', () => {
 
   it('keeps Object Stamp source state behind the object stamp tool module', () => {
     const interactionSource = readSource('../canvas/runtime/scene-interaction.ts')
+    const toolModulesSource = readSource('../canvas/runtime/interaction/tool-modules.ts')
     const objectStampSource = readSource('../canvas/runtime/interaction/object-stamp-tool.ts')
 
-    expect(interactionSource).toContain('createObjectStampTool')
-    expect(interactionSource).toContain('createObjectStampToolAdapter')
+    expect(interactionSource).toContain('createSceneToolModules')
+    expect(interactionSource).not.toContain('createObjectStampTool')
+    expect(interactionSource).not.toContain('createObjectStampToolAdapter')
+    expect(toolModulesSource).toContain('createObjectStampTool')
+    expect(toolModulesSource).toContain('createObjectStampToolAdapter')
     expect(interactionSource).not.toContain('_objectStampTool')
     expect(interactionSource).not.toContain('_objectStampSource')
     expect(interactionSource).not.toContain('_sampleObjectStampSource')
@@ -58,10 +70,14 @@ describe('Scene Interaction tool module boundaries', () => {
 
   it('keeps Plant Stamp placement state behind the plant stamp tool module', () => {
     const interactionSource = readSource('../canvas/runtime/scene-interaction.ts')
+    const toolModulesSource = readSource('../canvas/runtime/interaction/tool-modules.ts')
     const plantStampSource = readSource('../canvas/runtime/interaction/plant-stamp-tool.ts')
 
-    expect(interactionSource).toContain('createPlantStampTool')
-    expect(interactionSource).toContain('createPlantStampToolAdapter')
+    expect(interactionSource).toContain('createSceneToolModules')
+    expect(interactionSource).not.toContain('createPlantStampTool')
+    expect(interactionSource).not.toContain('createPlantStampToolAdapter')
+    expect(toolModulesSource).toContain('createPlantStampTool')
+    expect(toolModulesSource).toContain('createPlantStampToolAdapter')
     expect(interactionSource).not.toContain('plantStampSpecies')
     expect(interactionSource).not.toContain('_placePlantFromStamp')
     expect(interactionSource).not.toContain("this._tool === 'plant-stamp'")
@@ -71,10 +87,14 @@ describe('Scene Interaction tool module boundaries', () => {
 
   it('keeps Plant Spacing source state behind the plant spacing tool module', () => {
     const interactionSource = readSource('../canvas/runtime/scene-interaction.ts')
+    const toolModulesSource = readSource('../canvas/runtime/interaction/tool-modules.ts')
     const plantSpacingSource = readSource('../canvas/runtime/interaction/plant-spacing-tool.ts')
 
-    expect(interactionSource).toContain('createPlantSpacingTool')
-    expect(interactionSource).toContain('createPlantSpacingToolAdapter')
+    expect(interactionSource).toContain('createSceneToolModules')
+    expect(interactionSource).not.toContain('createPlantSpacingTool')
+    expect(interactionSource).not.toContain('createPlantSpacingToolAdapter')
+    expect(toolModulesSource).toContain('createPlantSpacingTool')
+    expect(toolModulesSource).toContain('createPlantSpacingToolAdapter')
     expect(interactionSource).not.toContain('_plantSpacingTool')
     expect(interactionSource).not.toContain('shouldBeginDrag')
     expect(interactionSource).not.toContain('updatePreviewFromEvent')
