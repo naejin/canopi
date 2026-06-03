@@ -86,6 +86,9 @@ export function createPlantSpacingOverlay(
   root.addEventListener('pointerdown', (event) => {
     event.stopPropagation()
   })
+  root.addEventListener('pointermove', (event) => {
+    event.stopPropagation()
+  })
 
   const status = document.createElement('div')
   status.dataset.plantSpacingPrimary = 'true'

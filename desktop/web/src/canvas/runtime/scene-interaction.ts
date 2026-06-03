@@ -271,6 +271,7 @@ export class SceneInteractionController {
 
   private readonly _onPointerDown = (event: PointerEvent): void => {
     if (event.button !== 0 && event.button !== 1) return
+    if (this._tool === 'plant-spacing' && isPlantSpacingHudTarget(event.target)) return
 
     this._cachedContainerRect = this._deps.container.getBoundingClientRect()
     const screen = this._screenPoint(event)
@@ -418,6 +419,8 @@ export class SceneInteractionController {
   }
 
   private readonly _onPointerMove = (event: PointerEvent): void => {
+    if (this._tool === 'plant-spacing' && isPlantSpacingHudTarget(event.target)) return
+
     if (this._tool === 'polygon' && this._polygonDraftVertices.length > 0 && this._pointerId === null) {
       const screen = this._screenPoint(event)
       this._polygonActiveWorld = this._applySnapping(this._deps.camera.screenToWorld(screen))
@@ -519,6 +522,8 @@ export class SceneInteractionController {
   private readonly _onPointerUp = (event: PointerEvent): void => {
     if (this._tool === 'polygon' && this._pointerId === null && this._polygonDraftVertices.length > 0) return
     if (this._pointerId !== null && event.pointerId !== this._pointerId) return
+    const isPlantSpacingHudPointerUp = this._tool === 'plant-spacing'
+      && isPlantSpacingHudTarget(event.target)
     const screen = this._screenPoint(event)
     const rawWorld = this._deps.camera.screenToWorld(screen)
     const shouldPreservePolygonDraft = this._mode === 'panning' && this._polygonDraftVertices.length > 0
@@ -580,7 +585,7 @@ export class SceneInteractionController {
       }
     }
 
-    if (this._mode === 'plant-spacing-drag') {
+    if (this._mode === 'plant-spacing-drag' && !isPlantSpacingHudPointerUp) {
       const endpoint = this._plantSpacingDragCommitEndpoint(event)
       this._commitPlantSpacingPreview(endpoint)
     }
@@ -1716,6 +1721,11 @@ function constrainPointTo45Degrees(origin: ScenePoint, point: ScenePoint): Scene
     x: origin.x + Math.cos(constrainedAngle) * length,
     y: origin.y + Math.sin(constrainedAngle) * length,
   }
+}
+
+function isPlantSpacingHudTarget(target: EventTarget | null): boolean {
+  return target instanceof Element
+    && target.closest('[data-plant-spacing-hud]') !== null
 }
 
 function translateZonePoints(zone: SceneZoneEntity, delta: ScenePoint): ScenePoint[] {
