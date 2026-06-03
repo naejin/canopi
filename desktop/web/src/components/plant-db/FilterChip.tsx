@@ -7,9 +7,10 @@ interface FilterChipProps {
   active?: boolean;       // filled state (for selection chips)
   onDismiss?: () => void; // shows (x) button when provided
   onClick?: () => void;   // for toggle/selection behavior
+  className?: string;
 }
 
-export function FilterChip({ label, color, active, onDismiss, onClick }: FilterChipProps) {
+export function FilterChip({ label, color, active, onDismiss, onClick, className }: FilterChipProps) {
   const style = color ? {
     '--chip-color': `var(${color})`,
     '--chip-bg': `color-mix(in srgb, var(${color}) 12%, transparent)`,
@@ -17,7 +18,7 @@ export function FilterChip({ label, color, active, onDismiss, onClick }: FilterC
 
   return (
     <span
-      className={`${styles.chip} ${active ? styles.chipActive : ''} ${onClick ? styles.chipClickable : ''}`}
+      className={`${styles.chip} ${active ? styles.chipActive : ''} ${onClick ? styles.chipClickable : ''} ${className ?? ''}`}
       style={style}
       onClick={onClick}
       role={onClick ? 'button' : undefined}

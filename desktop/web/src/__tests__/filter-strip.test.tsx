@@ -79,11 +79,16 @@ describe('FilterStrip', () => {
 describe('Species Catalog filter region layout', () => {
   it('caps the combined filter region instead of individual filter rows', () => {
     const panelSource = readSource('../components/panels/PlantDbPanel.tsx')
+    const stripSource = readSource('../components/plant-db/FilterStrip.tsx')
     const css = readSource('../components/plant-db/PlantDb.module.css')
 
     expect(panelSource).toContain('className={styles.filterRegion}')
     expect(panelSource.indexOf('<FilterStrip')).toBeLessThan(panelSource.indexOf('<ActiveChips'))
 
+    expect(stripSource).toContain('styles.filterChoiceControl')
+    expect(stripSource).toContain('styles.filterChoiceChip')
+    expect(css).toMatch(/\.filterChoiceControl\s*{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(min\(100%,\s*var\(--filter-choice-min-width\)\),\s*1fr\)\);/s)
+    expect(css).toMatch(/\.filterChoiceChip\s*{[^}]*justify-content:\s*center;/s)
     expect(css).toMatch(/\.filterRegion\s*{[^}]*max-height:\s*min\(45vh,\s*360px\);[^}]*overflow-y:\s*auto;/s)
     expect(css).not.toMatch(/\.filterStrip\s*{[^}]*max-height:/s)
     expect(css).not.toMatch(/\.filterControl\s*{[^}]*overflow:\s*hidden;/s)

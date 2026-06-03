@@ -685,6 +685,16 @@
   min-height: var(--control-size-sm);
 }
 
+.filterChoiceControl {
+  --filter-choice-min-width: calc(var(--space-12) + var(--space-8));
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--filter-choice-min-width)), 1fr));
+}
+
+.filterChoiceChip {
+  justify-content: center;
+}
+
 .filterActions {
   grid-column: 1 / -1;
   display: flex;

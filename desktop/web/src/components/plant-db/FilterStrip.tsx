@@ -54,16 +54,20 @@ function FilterControlRow({
   options: FilterOptions | null
 }) {
   const label = t(control.labelI18nKey, control.fallbackLabel)
+  const controlClassName = control.kind === 'choice'
+    ? `${styles.filterControl} ${styles.filterChoiceControl}`
+    : styles.filterControl
 
   return (
     <div className={styles.filterRow}>
       <span className={styles.filterLabel}>{label}</span>
-      <div className={styles.filterControl}>
+      <div className={controlClassName}>
         {control.kind === 'choice' && (options?.[control.optionsKey] ?? []).map((val) => (
           <FilterChip
             key={val}
             label={t(`${control.valueI18nPrefix}${val}`, val)}
             color={control.color}
+            className={styles.filterChoiceChip}
             active={(filters[control.filterKey] as string[] | null)?.includes(val) ?? false}
             onClick={() => speciesCatalogWorkbench.patchFilters({
               [control.filterKey]: toggleArrayValue(filters[control.filterKey] as string[] | null, val),
