@@ -14,8 +14,7 @@ import { PanelBar } from "./components/panels/PanelBar";
 
 const MIN_SIDEBAR_WIDTH = 320;
 const DEFAULT_SIDEBAR_RATIO = 0.35;
-const DEFAULT_SIDEBAR_MAX_WIDTH = 520;
-const DEFAULT_SIDEBAR_WIDTH = `clamp(${MIN_SIDEBAR_WIDTH}px, 35vw, ${DEFAULT_SIDEBAR_MAX_WIDTH}px)`;
+const DEFAULT_SIDEBAR_WIDTH = `clamp(${MIN_SIDEBAR_WIDTH}px, 35vw, 90vw)`;
 const MAX_SIDEBAR_RATIO = 0.9;
 
 const PlantDbPanel = lazy(async () => {
@@ -64,7 +63,7 @@ export function App() {
   const defaultSidebarWidth = useCallback(() => (
     Math.max(
       MIN_SIDEBAR_WIDTH,
-      Math.min(DEFAULT_SIDEBAR_MAX_WIDTH, Math.floor(window.innerWidth * DEFAULT_SIDEBAR_RATIO)),
+      Math.floor(window.innerWidth * DEFAULT_SIDEBAR_RATIO),
     )
   ), []);
 

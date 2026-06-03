@@ -260,7 +260,7 @@ Plant groups are counter-scaled (`scaleX/scaleY = 1/stageScale`). Shadow effects
 
 - **Left toolbar**: 38px, drawing tools only (Select, Hand, Rectangle, Text + Grid/Snap/Rulers toggles). Active: 2px ochre left bar.
 - **Right panel bar**: 36px, always visible. Icons toggle sliding panels. Active: 2px ochre right bar.
-- **Right panels**: Species Catalog Workbench, favorites, learning (future). Slide in between canvas and panel bar. First-use width is `clamp(320px, 35vw, 520px)`; after the user resizes, the explicit pixel width is remembered. Resizable via drag handle.
+- **Right panels**: Species Catalog Workbench, favorites, learning (future). Slide in between canvas and panel bar. First-use width is `clamp(320px, 35vw, 90vw)` so the default remains proportional instead of stopping at a fixed pixel cap; after the user resizes, the explicit pixel width is remembered. Resizable via drag handle.
 - **Title bar**: 36px. Logo left, file name center-left, lang/theme controls + window buttons right.
 - **No activity bar** — merged into panel bar.
 - **No status bar** — lang/theme moved to title bar.

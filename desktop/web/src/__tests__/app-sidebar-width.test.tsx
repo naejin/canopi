@@ -47,12 +47,14 @@ describe('App sidebar width', () => {
     container.remove()
   })
 
-  it('uses a responsive first-use width when no explicit width is saved', async () => {
+  it('uses a responsive first-use width without a fixed pixel cap when no explicit width is saved', async () => {
     await act(async () => {
       render(<App />, container)
     })
 
-    expect(sidePanelElement(container).getAttribute('style')).toContain('--side-panel-width: clamp(320px, 35vw, 520px)')
+    const style = sidePanelElement(container).getAttribute('style')
+    expect(style).toContain('--side-panel-width: clamp(320px, 35vw, 90vw)')
+    expect(style).not.toContain('520px')
   })
 
   it('renders a saved width and commits resize drags through the settings controller', async () => {
