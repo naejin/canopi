@@ -118,6 +118,7 @@ function createFrameHarness({
   const computedOriginMsRef = { current: projection.originMs }
   let selectionClearCount = 0
   let hoverClearCount = 0
+  let tooltipVisible = false
   let nextFrameId = 1
   const animationCallbacks = new Map<number, FrameRequestCallback>()
 
@@ -172,11 +173,16 @@ function createFrameHarness({
       },
     },
     hover: {
-      showAction: () => {},
+      showAction: () => {
+        tooltipVisible = true
+      },
       clear: () => {
+        tooltipVisible = false
         hoverClearCount++
       },
-      hideTooltip: () => {},
+      hideTooltip: () => {
+        tooltipVisible = false
+      },
     },
     animation: {
       requestAnimationFrame: (callback) => {
@@ -212,6 +218,9 @@ function createFrameHarness({
     },
     get hoverClearCount() {
       return hoverClearCount
+    },
+    get tooltipVisible() {
+      return tooltipVisible
     },
     get scheduledAnimationFrames() {
       return animationCallbacks.size
@@ -266,6 +275,64 @@ describe('Timeline Action interaction frame', () => {
 
     expect(document.body.style.cursor).toBe('')
     expect(harness.popover).toBeNull()
+  })
+
+  it('hides a visible tooltip during middle-button pan drags', () => {
+    const action = makeAction({ end_date: '2026-04-16' })
+    currentDesign.value = makeDesign(action)
+    const harness = createFrameHarness({ actions: [action], initialScrollX: 0 })
+
+    harness.frame.handleCanvasMouseMove(new MouseEvent('mousemove', {
+      clientX: LABEL_SIDEBAR_WIDTH + 60,
+      clientY: harness.chartY,
+      bubbles: true,
+    }))
+
+    expect(harness.tooltipVisible).toBe(true)
+
+    harness.frame.handleMouseDown(new MouseEvent('mousedown', {
+      button: 1,
+      clientX: harness.chartX,
+      clientY: harness.chartY,
+      bubbles: true,
+    }))
+    harness.frame.handleDocumentMouseMove(new MouseEvent('mousemove', {
+      clientX: harness.chartX + 30,
+      clientY: harness.chartY,
+      bubbles: true,
+    }))
+
+    expect(harness.scrollX).toBe(-30)
+    expect(harness.tooltipVisible).toBe(false)
+  })
+
+  it('hides a visible tooltip during empty-space drag pans', () => {
+    const action = makeAction({ end_date: '2026-04-16' })
+    currentDesign.value = makeDesign(action)
+    const harness = createFrameHarness({ actions: [action], initialScrollX: 0 })
+
+    harness.frame.handleCanvasMouseMove(new MouseEvent('mousemove', {
+      clientX: LABEL_SIDEBAR_WIDTH + 60,
+      clientY: harness.chartY,
+      bubbles: true,
+    }))
+
+    expect(harness.tooltipVisible).toBe(true)
+
+    harness.frame.handleMouseDown(new MouseEvent('mousedown', {
+      button: 0,
+      clientX: LABEL_SIDEBAR_WIDTH + 180,
+      clientY: harness.chartY,
+      bubbles: true,
+    }))
+    harness.frame.handleDocumentMouseMove(new MouseEvent('mousemove', {
+      clientX: LABEL_SIDEBAR_WIDTH + 150,
+      clientY: harness.chartY,
+      bubbles: true,
+    }))
+
+    expect(harness.scrollX).toBe(30)
+    expect(harness.tooltipVisible).toBe(false)
   })
 
   it('writes and clears Timeline hover Target Presentation from the frame', () => {

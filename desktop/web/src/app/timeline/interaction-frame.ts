@@ -448,6 +448,7 @@ export function createTimelineActionInteractionFrame({
       const drag = dragState
       if (drag?.type === 'pan') {
         if (document.body.style.cursor !== 'grabbing') document.body.style.cursor = 'grabbing'
+        hover.hideTooltip()
         const nextScrollX = updateTimelinePanScrollX(drag, event.clientX)
         if (view.getScrollX() !== nextScrollX) view.setScrollX(nextScrollX)
         return
