@@ -5,7 +5,10 @@ import {
   layerPanelOpen,
   layerVisibility,
 } from './signals'
-import { type BottomPanelTab } from './bottom-panel-state'
+import {
+  bottomPanelTab,
+  type BottomPanelTab,
+} from './bottom-panel-state'
 import type { BasemapStyle } from '../../generated/contracts'
 import { mutateSettingsProjection } from '../settings/projection'
 import { getCurrentCanvasCommandSurface } from '../../canvas/session'
@@ -119,7 +122,8 @@ export function setBottomPanelTab(tab: BottomPanelTab): void {
 }
 
 export function commitBottomPanelHeight(height: number): void {
+  const tab = bottomPanelTab.peek()
   mutateSettingsProjection((settings) => {
-    settings.bottomPanel.height = height
+    settings.bottomPanel.heights[tab] = height
   }, { persist: 'immediate' })
 }

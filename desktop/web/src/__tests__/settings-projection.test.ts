@@ -7,9 +7,11 @@ import { setSettings } from '../ipc/settings'
 import type { BasemapStyle } from '../generated/contracts'
 import type { Settings, Theme } from '../types/settings'
 import {
-  bottomPanelHeight,
+  bottomPanelHeights,
   bottomPanelOpen,
   bottomPanelTab,
+  createDefaultBottomPanelHeights,
+  resolveBottomPanelHeight,
 } from '../app/canvas-settings/bottom-panel-state'
 import {
   contourIntervalMeters,
@@ -51,7 +53,9 @@ function baseSettings(overrides: Partial<Settings> = {}): Settings {
     last_active_panel: 'canvas',
     side_panel_width: null,
     bottom_panel_open: false,
-    bottom_panel_height: 200,
+    bottom_panel_timeline_height: null,
+    bottom_panel_budget_height: null,
+    bottom_panel_consortium_height: null,
     bottom_panel_tab: 'budget',
     map_layer_visible: true,
     map_style: 'street',
@@ -74,7 +78,7 @@ function resetProjectionSignals(): void {
   snapToGridEnabled.value = false
   snapToGuidesEnabled.value = true
   bottomPanelOpen.value = false
-  bottomPanelHeight.value = 200
+  bottomPanelHeights.value = createDefaultBottomPanelHeights()
   bottomPanelTab.value = 'budget'
   sidePanelWidth.value = null
   layerVisibility.value = createDefaultLayerVisibility()
@@ -117,7 +121,9 @@ describe('settings projection', () => {
       auto_save_interval_s: 45,
       side_panel_width: 460,
       bottom_panel_open: true,
-      bottom_panel_height: 320,
+      bottom_panel_timeline_height: 320,
+      bottom_panel_budget_height: null,
+      bottom_panel_consortium_height: 260,
       bottom_panel_tab: 'timeline',
       map_layer_visible: false,
       map_opacity: 0.35,
@@ -136,7 +142,12 @@ describe('settings projection', () => {
     expect(snapToGuidesEnabled.value).toBe(false)
     expect(sidePanelWidth.value).toBe(460)
     expect(bottomPanelOpen.value).toBe(true)
-    expect(bottomPanelHeight.value).toBe(320)
+    expect(bottomPanelHeights.value).toEqual({
+      timeline: 320,
+      budget: null,
+      consortium: 260,
+    })
+    expect(resolveBottomPanelHeight('budget')).toBe(224)
     expect(bottomPanelTab.value).toBe('timeline')
     expect(layerVisibility.value.base).toBe(false)
     expect(layerOpacity.value.base).toBe(0.35)
@@ -164,7 +175,9 @@ describe('settings projection', () => {
       settings.autoSaveIntervalMs = 15_000
       settings.sidePanel.width = 440
       settings.bottomPanel.open = true
-      settings.bottomPanel.height = 280
+      settings.bottomPanel.heights.timeline = 280
+      settings.bottomPanel.heights.budget = 300
+      settings.bottomPanel.heights.consortium = 260
       settings.bottomPanel.tab = 'consortium'
       settings.mapLayers.baseVisible = false
       settings.mapLayers.baseOpacity = 0.6
@@ -187,7 +200,9 @@ describe('settings projection', () => {
       default_design_dir: '/designs',
       side_panel_width: 440,
       bottom_panel_open: true,
-      bottom_panel_height: 280,
+      bottom_panel_timeline_height: 280,
+      bottom_panel_budget_height: 300,
+      bottom_panel_consortium_height: 260,
       bottom_panel_tab: 'consortium',
       map_layer_visible: false,
       map_opacity: 0.6,
@@ -211,6 +226,8 @@ describe('settings projection', () => {
       hillshade_opacity: Number.NaN,
       plant_spacing_interval_m: 0,
       side_panel_width: Number.NaN,
+      bottom_panel_timeline_height: 120,
+      bottom_panel_budget_height: Number.NaN,
     }))
 
     expect(theme.value).toBe('light')
@@ -221,6 +238,11 @@ describe('settings projection', () => {
     expect(hillshadeOpacity.value).toBe(0.55)
     expect(plantSpacingIntervalM.value).toBe(0.5)
     expect(sidePanelWidth.value).toBe(null)
+    expect(bottomPanelHeights.value).toEqual({
+      timeline: 140,
+      budget: null,
+      consortium: null,
+    })
 
     mutateSettingsProjection((settings) => {
       settings.mapLayers.baseOpacity = -2
@@ -229,6 +251,7 @@ describe('settings projection', () => {
       settings.mapLayers.hillshadeOpacity = 3
       settings.plantSpacingIntervalM = Number.POSITIVE_INFINITY
       settings.sidePanel.width = 120
+      settings.bottomPanel.heights.consortium = 139.6
     }, { persist: 'none' })
 
     expect(snapshotSettingsProjection()).toEqual(expect.objectContaining({
@@ -240,6 +263,7 @@ describe('settings projection', () => {
       hillshade_opacity: 1,
       plant_spacing_interval_m: 0.5,
       side_panel_width: 320,
+      bottom_panel_consortium_height: 140,
     }))
   })
 
@@ -350,7 +374,7 @@ describe('settings projection', () => {
     for (const source of sources) {
       expect(source).toContain('settings/projection')
       expect(source).not.toContain('settings/persistence')
-      expect(source).not.toMatch(/\b(?:locale|theme|basemapStyle|snapToGridEnabled|snapToGuidesEnabled|autoSaveIntervalMs|sidePanelWidth|bottomPanelOpen|bottomPanelHeight|bottomPanelTab|contourIntervalMeters|hillshadeVisible|hillshadeOpacity)\.value\s*=(?!=)/)
+      expect(source).not.toMatch(/\b(?:locale|theme|basemapStyle|snapToGridEnabled|snapToGuidesEnabled|autoSaveIntervalMs|sidePanelWidth|bottomPanelOpen|bottomPanelHeights|bottomPanelTab|contourIntervalMeters|hillshadeVisible|hillshadeOpacity)\.value\s*=(?!=)/)
     }
   })
 })

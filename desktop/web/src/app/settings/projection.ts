@@ -15,10 +15,13 @@ import {
 } from '../canvas-settings/signals'
 import {
   VISIBLE_BOTTOM_PANEL_TABS,
+  MIN_BOTTOM_PANEL_HEIGHT,
+  type BottomPanelHeightPreferences,
   type BottomPanelTab,
-  bottomPanelHeight,
+  bottomPanelHeights,
   bottomPanelOpen,
   bottomPanelTab,
+  createDefaultBottomPanelHeights,
 } from '../canvas-settings/bottom-panel-state'
 import { sidePanelWidth } from '../shell/state'
 import {
@@ -44,7 +47,7 @@ export interface SettingsProjectionDraft {
   }
   bottomPanel: {
     open: boolean
-    height: number
+    heights: BottomPanelHeightPreferences
     tab: BottomPanelTab
   }
   mapLayers: {
@@ -93,6 +96,21 @@ function normalizeSidePanelWidth(value: number | null): number | null {
   return Math.max(MIN_SIDE_PANEL_WIDTH, Math.round(value))
 }
 
+function normalizeBottomPanelHeight(value: number | null): number | null {
+  if (value === null || !Number.isFinite(value)) return null
+  return Math.max(MIN_BOTTOM_PANEL_HEIGHT, Math.round(value))
+}
+
+function normalizeBottomPanelHeights(
+  heights: BottomPanelHeightPreferences,
+): BottomPanelHeightPreferences {
+  return {
+    timeline: normalizeBottomPanelHeight(heights.timeline),
+    budget: normalizeBottomPanelHeight(heights.budget),
+    consortium: normalizeBottomPanelHeight(heights.consortium),
+  }
+}
+
 function normalizeTheme(value: Theme): Theme {
   return value === 'dark' ? 'dark' : 'light'
 }
@@ -115,7 +133,7 @@ function createDraftFromProjection(): SettingsProjectionDraft {
     },
     bottomPanel: {
       open: bottomPanelOpen.value,
-      height: bottomPanelHeight.value,
+      heights: { ...bottomPanelHeights.value },
       tab: bottomPanelTab.value,
     },
     mapLayers: {
@@ -147,7 +165,7 @@ function normalizeDraft(draft: SettingsProjectionDraft): SettingsProjectionDraft
     },
     bottomPanel: {
       open: draft.bottomPanel.open,
-      height: draft.bottomPanel.height,
+      heights: normalizeBottomPanelHeights(draft.bottomPanel.heights),
       tab: normalizeBottomPanelTab(draft.bottomPanel.tab),
     },
     mapLayers: {
@@ -173,7 +191,7 @@ function applyDraftToProjection(draft: SettingsProjectionDraft): void {
     plantSpacingIntervalM.value = draft.plantSpacingIntervalM
     sidePanelWidth.value = draft.sidePanel.width
     bottomPanelOpen.value = draft.bottomPanel.open
-    bottomPanelHeight.value = draft.bottomPanel.height
+    bottomPanelHeights.value = draft.bottomPanel.heights
     bottomPanelTab.value = draft.bottomPanel.tab
     layerVisibility.value = {
       ...layerVisibility.value,
@@ -202,7 +220,9 @@ function settingsFromDraft(base: Settings, draft: SettingsProjectionDraft): Sett
     plant_spacing_interval_m: draft.plantSpacingIntervalM,
     side_panel_width: draft.sidePanel.width,
     bottom_panel_open: draft.bottomPanel.open,
-    bottom_panel_height: draft.bottomPanel.height,
+    bottom_panel_timeline_height: draft.bottomPanel.heights.timeline,
+    bottom_panel_budget_height: draft.bottomPanel.heights.budget,
+    bottom_panel_consortium_height: draft.bottomPanel.heights.consortium,
     bottom_panel_tab: draft.bottomPanel.tab,
     map_layer_visible: draft.mapLayers.baseVisible,
     map_style: draft.basemapStyle,
@@ -272,7 +292,12 @@ export function hydrateSettingsProjection(settings: Settings): void {
     },
     bottomPanel: {
       open: settings.bottom_panel_open,
-      height: settings.bottom_panel_height,
+      heights: {
+        ...createDefaultBottomPanelHeights(),
+        timeline: settings.bottom_panel_timeline_height,
+        budget: settings.bottom_panel_budget_height,
+        consortium: settings.bottom_panel_consortium_height,
+      },
       tab: normalizeBottomPanelTab(settings.bottom_panel_tab as BottomPanelTab),
     },
     mapLayers: {

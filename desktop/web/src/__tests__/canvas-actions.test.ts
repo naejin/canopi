@@ -12,10 +12,12 @@ import {
 } from '../app/canvas-settings/signals'
 import {
   VISIBLE_BOTTOM_PANEL_TABS,
+  bottomPanelHeights,
   bottomPanelOpen,
   bottomPanelTab,
 } from '../app/canvas-settings/bottom-panel-state'
 import {
+  commitBottomPanelHeight,
   openBottomPanel,
   setBasemapStyle,
   setBottomPanelTab,
@@ -61,7 +63,9 @@ beforeEach(() => {
     last_active_panel: 'canvas',
     side_panel_width: null,
     bottom_panel_open: false,
-    bottom_panel_height: 200,
+    bottom_panel_timeline_height: null,
+    bottom_panel_budget_height: null,
+    bottom_panel_consortium_height: null,
     bottom_panel_tab: 'budget',
     map_layer_visible: true,
     map_style: 'street',
@@ -99,6 +103,19 @@ describe('bottom panel actions', () => {
     expect(bottomPanelTab.value).toBe('consortium')
   })
 
+  it('commits height changes only to the active bottom panel tab', () => {
+    openBottomPanel('timeline')
+    commitBottomPanelHeight(260)
+    setBottomPanelTab('budget')
+    commitBottomPanelHeight(300)
+
+    expect(bottomPanelHeights.value).toEqual({
+      timeline: 260,
+      budget: 300,
+      consortium: null,
+    })
+  })
+
   it('ignores invalid contour intervals instead of persisting NaN', () => {
     contourIntervalMeters.value = 20
 
@@ -126,7 +143,9 @@ describe('bottom panel actions', () => {
       last_active_panel: 'canvas',
       side_panel_width: null,
       bottom_panel_open: true,
-      bottom_panel_height: 240,
+      bottom_panel_timeline_height: 240,
+      bottom_panel_budget_height: null,
+      bottom_panel_consortium_height: null,
       bottom_panel_tab: 'timeline',
       map_layer_visible: false,
       map_style: 'street',

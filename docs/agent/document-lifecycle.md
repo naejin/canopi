@@ -88,6 +88,8 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 - Use `mutateSettingsProjection()` for settings-backed actions.
 - Use queued persistence for 60fps-adjacent paths and commit/flush on mouse-up or close as appropriate.
 - Use `flushSettingsProjection()` before shutdown paths that must not lose queued settings.
+- Bottom panel tab heights are nullable per-tab settings. `null` means the frontend should use the tab's first-use default; manual resize stores a concrete height for the active tab only.
+- Legacy `bottom_panel_height` values are migrated in the Rust settings service: `200` is treated as unset, and any other legacy height seeds Timeline, Budget, and Consortium heights.
 - `localStorage` is only a first-paint cache for theme; Rust settings overwrite it on bootstrap.
 - Theme is light/dark only. Stale `"system"` values are migrated by settings deserialization.
 

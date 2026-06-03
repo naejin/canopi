@@ -10,13 +10,14 @@ import {
 } from './signals'
 import {
   VISIBLE_BOTTOM_PANEL_TABS,
-  bottomPanelHeight,
+  bottomPanelHeights,
   bottomPanelOpen,
   bottomPanelTab,
+  resolveBottomPanelHeight,
 } from './bottom-panel-state'
 
 export const bottomPanelView = computed(() => ({
-  height: bottomPanelHeight.value,
+  height: resolveBottomPanelHeight(bottomPanelTab.value, bottomPanelHeights.value),
   open: bottomPanelOpen.value,
   tab: bottomPanelTab.value,
   visibleTabs: VISIBLE_BOTTOM_PANEL_TABS,

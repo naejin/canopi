@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'preact/hooks'
 import { lazy, Suspense } from 'preact/compat'
 import { bottomPanelView } from '../../app/canvas-settings/state'
 import { commitBottomPanelHeight } from '../../app/canvas-settings/controller'
+import { MIN_BOTTOM_PANEL_HEIGHT } from '../../app/canvas-settings/bottom-panel-state'
 import styles from './BottomPanel.module.css'
 
 const TimelineTab = lazy(async () => {
@@ -67,7 +68,7 @@ function ResizeHandle({ panelRef }: { panelRef: { current: HTMLDivElement | null
         const maxHeight = Math.max(200, window.innerHeight * 0.8)
 
         const clampHeight = (clientY: number) =>
-          Math.max(140, Math.min(maxHeight, startHeight + (startY - clientY)))
+          Math.max(MIN_BOTTOM_PANEL_HEIGHT, Math.min(maxHeight, startHeight + (startY - clientY)))
 
         let lastClientY = event.clientY
         const pointerId = event.pointerId

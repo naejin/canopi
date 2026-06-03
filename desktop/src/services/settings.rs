@@ -2,6 +2,13 @@ use common_types::settings::{Locale, Settings};
 
 use crate::db::{self, UserDb};
 
+const LEGACY_BOTTOM_PANEL_DEFAULT_HEIGHT: u64 = 200;
+const BOTTOM_PANEL_HEIGHT_KEYS: [&str; 3] = [
+    "bottom_panel_timeline_height",
+    "bottom_panel_budget_height",
+    "bottom_panel_consortium_height",
+];
+
 pub fn get_settings(user_db: &UserDb) -> Result<Settings, String> {
     get_settings_with_locale(user_db, sys_locale::get_locale().as_deref())
 }
@@ -43,7 +50,31 @@ fn deserialize_settings(serialized: &str) -> Result<Settings, String> {
     if value.get("theme").and_then(|theme| theme.as_str()) == Some("system") {
         value["theme"] = serde_json::json!("light");
     }
+    migrate_legacy_bottom_panel_height(&mut value);
     serde_json::from_value(value).map_err(|e| format!("Failed to parse settings: {e}"))
+}
+
+fn migrate_legacy_bottom_panel_height(value: &mut serde_json::Value) {
+    let Some(height) = value
+        .get("bottom_panel_height")
+        .and_then(|height| height.as_u64())
+    else {
+        return;
+    };
+    if height == LEGACY_BOTTOM_PANEL_DEFAULT_HEIGHT {
+        return;
+    }
+    if height > u32::MAX as u64 {
+        return;
+    }
+    let Some(settings) = value.as_object_mut() else {
+        return;
+    };
+    for key in BOTTOM_PANEL_HEIGHT_KEYS {
+        settings
+            .entry(key.to_owned())
+            .or_insert_with(|| serde_json::json!(height));
+    }
 }
 
 fn detect_initial_locale(os_locale: Option<&str>) -> Option<Locale> {
@@ -121,6 +152,30 @@ mod tests {
     }
 
     #[test]
+    fn migrates_legacy_bottom_panel_height_to_per_tab_heights() {
+        let settings = super::deserialize_settings(
+            r#"{"locale":"en","theme":"light","bottom_panel_height":320}"#,
+        )
+        .unwrap();
+
+        assert_eq!(settings.bottom_panel_timeline_height, Some(320));
+        assert_eq!(settings.bottom_panel_budget_height, Some(320));
+        assert_eq!(settings.bottom_panel_consortium_height, Some(320));
+    }
+
+    #[test]
+    fn treats_legacy_default_bottom_panel_height_as_unset() {
+        let settings = super::deserialize_settings(
+            r#"{"locale":"en","theme":"light","bottom_panel_height":200}"#,
+        )
+        .unwrap();
+
+        assert_eq!(settings.bottom_panel_timeline_height, None);
+        assert_eq!(settings.bottom_panel_budget_height, None);
+        assert_eq!(settings.bottom_panel_consortium_height, None);
+    }
+
+    #[test]
     fn initializes_and_persists_detected_locale_on_first_read() {
         let user_db = test_user_db();
 
@@ -150,5 +205,8 @@ mod tests {
         assert_eq!(stored.theme, Theme::Dark);
         assert_eq!(stored.map_style, BasemapStyle::Satellite);
         assert_eq!(stored.side_panel_width, Some(444));
+        assert_eq!(stored.bottom_panel_timeline_height, None);
+        assert_eq!(stored.bottom_panel_budget_height, None);
+        assert_eq!(stored.bottom_panel_consortium_height, None);
     }
 }

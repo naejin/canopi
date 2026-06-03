@@ -76,6 +76,7 @@ Use this guide when changing Preact components, signals, i18n, CSS, panels, bott
 - Timeline, budget, and consortium identity uses typed `PanelTarget` wire values through the Target module. Do not reintroduce string matching against descriptions, legacy plant arrays, budget descriptions, or canonical-name fields.
 - Panel-origin hover/selection is presentation state and must not mutate real canvas selection, labels, dirty state, or history.
 - Canvas-origin hover uses `hoveredCanvasTargets` and remains separate.
+- Bottom panel height is a per-tab settings preference. Read the active resolved height through `bottomPanelView`; commit manual resize through `commitBottomPanelHeight()` so only the active Bottom Panel Tab receives the concrete height.
 
 ## Design Template Import
 

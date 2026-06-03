@@ -12,7 +12,12 @@ vi.mock('../app/canvas-settings/controller', async (importOriginal) => {
 
 import { BottomPanel } from '../components/canvas/BottomPanel'
 import { commitBottomPanelHeight } from '../app/canvas-settings/controller'
-import { bottomPanelHeight, bottomPanelOpen, bottomPanelTab } from '../app/canvas-settings/bottom-panel-state'
+import {
+  bottomPanelHeights,
+  bottomPanelOpen,
+  bottomPanelTab,
+  createDefaultBottomPanelHeights,
+} from '../app/canvas-settings/bottom-panel-state'
 
 describe('BottomPanel', () => {
   let container: HTMLDivElement
@@ -23,7 +28,7 @@ describe('BottomPanel', () => {
     document.body.appendChild(container)
     bottomPanelOpen.value = true
     bottomPanelTab.value = 'budget'
-    bottomPanelHeight.value = 200
+    bottomPanelHeights.value = createDefaultBottomPanelHeights()
     vi.mocked(commitBottomPanelHeight).mockClear()
   })
 
@@ -68,6 +73,6 @@ describe('BottomPanel', () => {
     })
 
     expect(vi.mocked(commitBottomPanelHeight)).toHaveBeenCalledTimes(1)
-    expect(vi.mocked(commitBottomPanelHeight)).toHaveBeenCalledWith(260)
+    expect(vi.mocked(commitBottomPanelHeight)).toHaveBeenCalledWith(284)
   })
 })
