@@ -55,6 +55,18 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - Interaction selection writes go through the runtime-owned selection seam.
 - Document-level keyboard handlers must guard with `isEditableTarget(event.target)` so Delete/Backspace/etc. do not fire while typing.
 
+### Scene Interaction Tool Modules
+
+- Tool modules are internal adapters selected by `SceneInteractionController`; they do not change the public `SceneCanvasRuntime`, `CanvasCommandSurface`, `CanvasQuerySurface`, or `CanvasDocumentSurface` interfaces.
+- The central interaction controller owns global pointer, wheel, key, drag/drop listener registration, active-tool routing, cursor updates, shared panning, shared selection, scene invalidation, and common cancellation on tool changes.
+- Tool modules own tool-specific state machines, including setup, per-event handling, refresh-after-viewport-change behavior, cancellation, and teardown for their own transient state.
+- Shared tool context may expose only runtime-owned seams and stable projections: `SceneStore`, `CameraController`, Scene Edit transactions, selection setters/readers, hit testing, snapping/grid/guide reads, render invalidation, localized Species names, plant presentation context, settings commands or projections, and DOM overlay containers.
+- Tool modules may create DOM overlays for tool-owned chrome, but the module that creates an overlay owns its cleanup. Router-owned overlays stay router-owned until a later bead deliberately moves them behind a tool module.
+- Scene edits from tools must go through `SceneEditCoordinator`; modules must not mutate persisted scene arrays outside an edit transaction except for explicitly transient draft state owned by the runtime.
+- Tool modules must treat `setTool()` changes, `dispose()`, document replacement, Escape cancellation, source invalidation, and viewport refresh as lifecycle events that leave no stale overlays, listeners, selections, previews, or pointer capture behind.
+- Do not install module-level `effect()` or global listeners from a tool module unless that module also owns an explicit disposer and `import.meta.hot.dispose()` cleanup. Prefer router-dispatched events for canvas tool input.
+- Use Annotation Text as the tracer extraction because it is narrow, visible, has DOM overlay lifecycle, uses Scene Edit and selection, and proves the seam before moving larger Zone drawing, Object Stamp, and Plant Spacing state machines.
+
 ## Zone Measurements
 
 - Zone Measurements are derived presentation for zone geometry, not persisted design objects or annotations.
