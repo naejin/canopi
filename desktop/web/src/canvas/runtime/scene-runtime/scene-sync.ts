@@ -4,7 +4,7 @@ import { plantColorMenuOpen } from '../../plant-color-menu-state'
 import { syncPlantSpeciesColorDefaults } from '../../plant-species-color-defaults'
 import type { CanopiFile } from '../../../types/design'
 import { plantColorByAttr, plantSizeMode } from '../../plant-display-state'
-import { guides, northBearingDeg } from '../../scene-metadata-state'
+import { guides, northBearingAvailable, northBearingDeg } from '../../scene-metadata-state'
 import { lockedObjectIds } from '../../runtime-mirror-state'
 import { clearCanvasSelection, setCanvasSelection, setCanvasTool } from '../../session-state'
 import type { SceneStore } from '../scene'
@@ -42,6 +42,7 @@ function syncCanvasSignalsFromDocument(file: CanopiFile): void {
     syncPlantSpeciesColorDefaults(file.plant_species_colors)
     guides.value = Array.isArray(file.extra?.guides) ? file.extra.guides as never[] : []
     northBearingDeg.value = file.north_bearing_deg ?? 0
+    northBearingAvailable.value = file.north_bearing_deg != null
   })
 }
 

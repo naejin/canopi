@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { hillshadeVisible, layerVisibility } from '../app/canvas-settings/signals'
 import { CanvasPanel } from '../components/panels/CanvasPanel'
 import { currentDesign } from './support/design-session-state'
-import { northBearingDeg } from '../canvas/scene-metadata-state'
+import { northBearingAvailable, northBearingDeg } from '../canvas/scene-metadata-state'
 import { locale } from '../app/settings/state'
 import {
   CANVAS_NOTICE_MARGIN_PX,
@@ -93,6 +93,7 @@ describe('CanvasPanel basemap feedback', () => {
     layerVisibility.value = { base: true, plants: true, zones: true, annotations: true }
     hillshadeVisible.value = false
     northBearingDeg.value = 0
+    northBearingAvailable.value = false
     currentDesign.value = null
     mockBasemapState = {
       status: 'idle',
@@ -137,6 +138,37 @@ describe('CanvasPanel basemap feedback', () => {
 
     expect(container.querySelector('[role="status"]')).toBeNull()
     expect(container.querySelector('[data-map-active="true"]')).toBeNull()
+    expect(container.querySelector('[role="img"][aria-label^="Compass"]')).toBeNull()
+  })
+
+  it('does not show the compass until a saved Location has non-null north bearing metadata', async () => {
+    currentDesign.value = {
+      version: 2,
+      name: 'Demo',
+      description: null,
+      location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
+      north_bearing_deg: null,
+      plant_species_colors: {},
+      layers: [],
+      plants: [],
+      zones: [],
+      annotations: [],
+      consortiums: [],
+      groups: [],
+      timeline: [],
+      budget: [],
+      budget_currency: 'EUR',
+      created_at: '2026-04-12T00:00:00.000Z',
+      updated_at: '2026-04-12T00:00:00.000Z',
+      extra: {},
+    }
+    northBearingDeg.value = 0
+    northBearingAvailable.value = false
+
+    await act(async () => {
+      render(<CanvasPanel />, container)
+    })
+
     expect(container.querySelector('[role="img"][aria-label^="Compass"]')).toBeNull()
   })
 
@@ -379,6 +411,7 @@ describe('CanvasPanel basemap feedback', () => {
       extra: {},
     }
     northBearingDeg.value = 32
+    northBearingAvailable.value = true
 
     await act(async () => {
       render(<CanvasPanel />, container)

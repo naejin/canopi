@@ -25,14 +25,18 @@ describe('location route boundary', () => {
 
   it('keeps saved-location UI behind the Location Workbench seam', () => {
     const canvasPanelSource = readSource('../components/panels/CanvasPanel.tsx')
+    const locationPanelSource = readSource('../components/panels/LocationPanel.tsx')
     const layerPanelSource = readSource('../components/canvas/LayerPanel.tsx')
+    const compassOverlaySource = readSource('../components/canvas/CompassOverlay.tsx')
     const mapSurfaceControllerSource = readSource('../components/canvas/maplibre-surface-controller.ts')
     const tabSource = readSource('../components/canvas/LocationTab.tsx')
     const inputSource = readSource('../components/canvas/LocationInput.tsx')
 
     for (const source of [
       canvasPanelSource,
+      locationPanelSource,
       layerPanelSource,
+      compassOverlaySource,
       mapSurfaceControllerSource,
       tabSource,
       inputSource,

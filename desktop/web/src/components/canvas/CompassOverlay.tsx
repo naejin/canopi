@@ -1,11 +1,11 @@
-import { currentDesign } from '../../app/document-session/store'
+import { useSavedLocationPresentation } from '../../app/location'
 import { t } from '../../i18n'
-import { northBearingDeg } from '../../canvas/scene-metadata-state'
+import { northBearingAvailable, northBearingDeg } from '../../canvas/scene-metadata-state'
 import styles from './CompassOverlay.module.css'
 
 export function CompassOverlay() {
-  const design = currentDesign.value
-  if (!design?.location || design.north_bearing_deg == null) return null
+  const savedLocation = useSavedLocationPresentation()
+  if (!savedLocation.hasLocation || !northBearingAvailable.value) return null
 
   const bearing = northBearingDeg.value
 

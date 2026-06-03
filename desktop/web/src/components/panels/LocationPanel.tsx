@@ -1,16 +1,16 @@
 import { locale } from '../../app/settings/state'
-import { currentDesign } from '../../app/document-session/store'
+import { useSavedLocationPresentation } from '../../app/location'
 import { LocationTab } from '../canvas/LocationTab'
 import { WelcomeScreen } from '../shared/WelcomeScreen'
 import styles from './LocationPanel.module.css'
 
 export function LocationPanel() {
   void locale.value
-  const design = currentDesign.value
+  const savedLocation = useSavedLocationPresentation()
 
   return (
     <div className={styles.panel}>
-      {design ? (
+      {savedLocation.hasDesign ? (
         <LocationTab />
       ) : (
         <div className={styles.emptyState}>
