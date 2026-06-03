@@ -45,7 +45,7 @@ import {
 } from './interaction/zone-drawing-tool'
 import {
   createObjectStampTool,
-  type ObjectStampTool,
+  createObjectStampToolAdapter,
 } from './interaction/object-stamp-tool'
 import {
   createPlantSpacingTool,
@@ -83,7 +83,6 @@ export class SceneInteractionController {
   private readonly _tooltip: HoverTooltipController
   private readonly _textTool: TextAnnotationTool
   private readonly _zoneDrawing: ZoneDrawingTool
-  private readonly _objectStampTool: ObjectStampTool
   private readonly _toolAdapters: ReadonlyMap<string, SceneToolAdapter>
   private _tool: InteractionTool = 'select'
   private _mode: InteractionMode = 'idle'
@@ -120,7 +119,7 @@ export class SceneInteractionController {
       render: this._deps.render,
       applySnapping: (point) => this._applySnapping(point),
     })
-    this._objectStampTool = createObjectStampTool({
+    const objectStampTool = createObjectStampTool({
       preview: this._preview,
       camera: this._deps.camera,
       getSceneStore: this._deps.getSceneStore,
@@ -142,6 +141,9 @@ export class SceneInteractionController {
       getContainerRect: () => this._cachedContainerRect ?? this._deps.container.getBoundingClientRect(),
     })
     this._toolAdapters = new Map([
+      ['object-stamp', createObjectStampToolAdapter(objectStampTool, {
+        switchTool: (name) => this._switchTool(name),
+      })],
       ['plant-spacing', createPlantSpacingToolAdapter(plantSpacingTool)],
     ])
     this.setTool(getCanvasTool())
@@ -153,9 +155,6 @@ export class SceneInteractionController {
     this._tool = name
     if (previousTool === 'plant-stamp' && name !== 'plant-stamp') {
       plantStampSpecies.value = null
-    }
-    if (previousTool === 'object-stamp' && name !== 'object-stamp') {
-      this._objectStampTool.clear()
     }
     if (previousTool === 'text' && name !== 'text') {
       this._textTool.cancel()
@@ -173,7 +172,6 @@ export class SceneInteractionController {
     this._deps.setHoveredEntityId(null)
     this._textTool.dispose()
     this._zoneDrawing.dispose()
-    this._objectStampTool.dispose()
     for (const adapter of this._toolAdapters.values()) {
       adapter.dispose?.()
     }
@@ -232,13 +230,6 @@ export class SceneInteractionController {
 
     if (this._tool === 'plant-stamp') {
       this._placePlantFromStamp(this._applySnapping(world))
-      return
-    }
-
-    if (this._tool === 'object-stamp') {
-      event.preventDefault()
-      this._objectStampTool.pointerDown(world)
-      this._clearToolPointerGesture()
       return
     }
 
@@ -373,12 +364,6 @@ export class SceneInteractionController {
     if (this._tool === 'polygon' && this._zoneDrawing.hasPolygonDraft() && this._pointerId === null) {
       const screen = this._screenPoint(event)
       this._zoneDrawing.updatePolygonPointerMove(this._deps.camera.screenToWorld(screen))
-      return
-    }
-
-    if (this._tool === 'object-stamp' && this._objectStampTool.hasSource() && this._pointerId === null) {
-      const screen = this._screenPoint(event)
-      this._objectStampTool.updatePreview(this._deps.camera.screenToWorld(screen))
       return
     }
 
@@ -543,12 +528,6 @@ export class SceneInteractionController {
   private readonly _onKeyDown = (event: KeyboardEvent): void => {
     if (this._tool === 'polygon' && !isEditableTarget(event.target)) {
       if (this._zoneDrawing.handlePolygonKeyDown(event)) return
-    }
-
-    if (this._tool === 'object-stamp' && !isEditableTarget(event.target) && event.key === 'Escape') {
-      event.preventDefault()
-      this._switchTool('select')
-      return
     }
 
     if (this._activeToolAdapter()?.keyDown?.(event)) return

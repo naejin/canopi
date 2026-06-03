@@ -22,6 +22,8 @@ import {
   hideInteractionPreview,
   showInteractionPreview,
 } from './overlay-ui'
+import { isEditableTarget } from './pointer-utils'
+import type { SceneToolAdapter } from './tool-adapter'
 
 interface ObjectStampPlantSource {
   kind: 'plant'
@@ -395,6 +397,38 @@ export function createObjectStampTool(context: ObjectStampToolContext): ObjectSt
     updatePreview,
     clear,
     dispose: clear,
+  }
+}
+
+export interface ObjectStampToolAdapterContext {
+  readonly switchTool: (name: string) => void
+}
+
+export function createObjectStampToolAdapter(
+  tool: ObjectStampTool,
+  context: ObjectStampToolAdapterContext,
+): SceneToolAdapter {
+  return {
+    onDeactivate: tool.clear,
+    shouldSuppressHover: tool.hasSource,
+    pointerDown({ event, rawWorld, clearPointerGesture }) {
+      event.preventDefault()
+      tool.pointerDown(rawWorld)
+      clearPointerGesture()
+      return true
+    },
+    pointerMoveWithoutCapture({ rawWorld }) {
+      if (!tool.hasSource()) return false
+      tool.updatePreview(rawWorld)
+      return true
+    },
+    keyDown(event) {
+      if (event.key !== 'Escape' || isEditableTarget(event.target)) return false
+      event.preventDefault()
+      context.switchTool('select')
+      return true
+    },
+    dispose: tool.dispose,
   }
 }
 

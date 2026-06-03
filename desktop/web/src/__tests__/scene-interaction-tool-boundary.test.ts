@@ -37,11 +37,14 @@ describe('Scene Interaction tool module boundaries', () => {
     const objectStampSource = readSource('../canvas/runtime/interaction/object-stamp-tool.ts')
 
     expect(interactionSource).toContain('createObjectStampTool')
+    expect(interactionSource).toContain('createObjectStampToolAdapter')
+    expect(interactionSource).not.toContain('_objectStampTool')
     expect(interactionSource).not.toContain('_objectStampSource')
     expect(interactionSource).not.toContain('_sampleObjectStampSource')
     expect(interactionSource).not.toContain('_placeObjectStamp')
     expect(objectStampSource).toContain('ObjectStampSource')
     expect(objectStampSource).toContain('cloneGroupMembersForObjectStamp')
+    expect(objectStampSource).toContain('createObjectStampToolAdapter')
   })
 
   it('keeps Plant Spacing source state behind the plant spacing tool module', () => {

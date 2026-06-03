@@ -2982,6 +2982,40 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('clears loaded Object Stamp preview on controller dispose', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'plant-1',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 40, y: 40 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('object-stamp')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 90, clientY: 90, button: 0 }))
+    const preview = Array.from(container.children)
+      .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
+    expect(preview?.style.display).toBe('block')
+
+    controller.dispose()
+
+    expect(preview?.isConnected).toBe(false)
+  })
+
   it('blocks Object Stamp sampling and placement for locked or hidden plant sources', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
