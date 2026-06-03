@@ -645,17 +645,19 @@
 }
 
 .filterStrip {
-  display: grid;
-  grid-template-columns: minmax(calc(var(--space-12) - 2px), max-content) minmax(0, 1fr);
-  column-gap: calc(var(--space-1) + 2px);
-  row-gap: calc(var(--space-1) - 1px);
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) - 1px);
   padding: calc(var(--space-1) + 2px) calc(var(--space-2) + 2px) var(--space-1);
   flex-shrink: 0;
-  align-items: start;
 }
 
 .filterRow {
-  display: contents;
+  display: grid;
+  grid-template-columns: minmax(calc(var(--space-12) - 2px), max-content) minmax(0, 1fr);
+  column-gap: calc(var(--space-1) + 2px);
+  align-items: start;
+  min-width: 0;
 }
 
 .filterLabel {
@@ -692,7 +694,6 @@
 }
 
 .filterActions {
-  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   gap: calc(var(--space-1) + 2px);
