@@ -113,6 +113,12 @@ function zoneMeasurementTexts(container: HTMLElement): string[] {
     .map((label) => label.textContent ?? '')
 }
 
+function nextAnimationFrame(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => resolve())
+  })
+}
+
 describe('SceneInteractionController', () => {
   let container: HTMLDivElement
   let camera: CameraController
@@ -1613,6 +1619,103 @@ describe('SceneInteractionController', () => {
     expect(setViewport).toHaveBeenCalledTimes(1)
     expect(render).toHaveBeenCalledWith('viewport')
     controller.dispose()
+  })
+
+  it('commits a text Annotation with Enter and selects it', () => {
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('text')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 24, clientY: 32, button: 0 }))
+    const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
+    textarea.value = 'Guild note'
+    textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+
+    expect(store.persisted.annotations).toHaveLength(1)
+    expect(store.persisted.annotations[0]).toMatchObject({
+      annotationType: 'text',
+      position: { x: 24, y: 32 },
+      text: 'Guild note',
+    })
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-text')
+    expect(deps.setSelection).toHaveBeenCalledWith([store.persisted.annotations[0]!.id])
+    expect(container.querySelector('textarea')).toBeNull()
+    controller.dispose()
+  })
+
+  it('cancels a pending text Annotation with Escape', () => {
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('text')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 24, clientY: 32, button: 0 }))
+    const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
+    textarea.value = 'Draft note'
+    textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+
+    expect(store.persisted.annotations).toHaveLength(0)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    expect(container.querySelector('textarea')).toBeNull()
+    controller.dispose()
+  })
+
+  it('commits a pending text Annotation on blur', async () => {
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('text')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 24, clientY: 32, button: 0 }))
+    await nextAnimationFrame()
+    const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
+    textarea.value = 'Blurred note'
+    textarea.dispatchEvent(new FocusEvent('blur'))
+    await nextAnimationFrame()
+
+    expect(store.persisted.annotations).toHaveLength(1)
+    expect(store.persisted.annotations[0]).toMatchObject({
+      position: { x: 24, y: 32 },
+      text: 'Blurred note',
+    })
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-text')
+    expect(container.querySelector('textarea')).toBeNull()
+    controller.dispose()
+  })
+
+  it('does not commit empty text Annotations', () => {
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('text')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 24, clientY: 32, button: 0 }))
+    const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
+    textarea.value = '   '
+    textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+
+    expect(store.persisted.annotations).toHaveLength(0)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    expect(container.querySelector('textarea')).toBeNull()
+    controller.dispose()
+  })
+
+  it('cleans up pending text Annotation editors on tool change and disposal', () => {
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('text')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 24, clientY: 32, button: 0 }))
+    expect(container.querySelector('textarea')).not.toBeNull()
+    controller.setTool('select')
+    expect(container.querySelector('textarea')).toBeNull()
+
+    controller.setTool('text')
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 48, clientY: 64, button: 0 }))
+    expect(container.querySelector('textarea')).not.toBeNull()
+    controller.dispose()
+    expect(container.querySelector('textarea')).toBeNull()
   })
 
   it('creates a rectangle zone from the rectangle tool drag', () => {

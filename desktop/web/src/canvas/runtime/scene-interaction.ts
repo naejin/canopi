@@ -71,9 +71,12 @@ import {
   appendDroppedPlantToDraft,
   appendPolygonZoneToDraft,
   appendRectangleZoneToDraft,
-  appendTextAnnotationToDraft,
   parsePlantDropPayload,
 } from './interaction/tool-actions'
+import {
+  createTextAnnotationTool,
+  type TextAnnotationTool,
+} from './interaction/text-annotation-tool'
 import {
   createEllipticalZoneMeasurements,
   createEllipticalZoneMeasurementsFromRect,
@@ -158,6 +161,7 @@ export class SceneInteractionController {
   private readonly _polygonDraftOverlay: PolygonDraftOverlayController
   private readonly _zoneMeasurements: ZoneMeasurementOverlayController
   private readonly _plantSpacingOverlay: PlantSpacingOverlayController
+  private readonly _textTool: TextAnnotationTool
   private _tool: InteractionTool = 'select'
   private _mode: 'idle' | 'panning' | 'dragging' | 'band' | 'rectangle' | 'ellipse' | 'plant-spacing-drag' = 'idle'
   private _pointerId: number | null = null
@@ -166,8 +170,6 @@ export class SceneInteractionController {
   private _dragEdit: SceneEditTransaction | null = null
   private readonly _dragState = createSceneDragState()
   private _bandAdditive = false
-  private _textarea: HTMLTextAreaElement | null = null
-  private _textWorldPosition: ScenePoint | null = null
   private _polygonDraftVertices: ScenePoint[] = []
   private _polygonActiveWorld: ScenePoint | null = null
   private _objectStampSource: ObjectStampSource | null = null
@@ -190,6 +192,11 @@ export class SceneInteractionController {
     this._tooltip = createHoverTooltip(this._deps.container)
     this._polygonDraftOverlay = createPolygonDraftOverlay(this._deps.container)
     this._zoneMeasurements = createZoneMeasurementOverlay(this._deps.container)
+    this._textTool = createTextAnnotationTool({
+      container: this._deps.container,
+      camera: this._deps.camera,
+      sceneEdits: this._deps.sceneEdits,
+    })
     this._plantSpacingOverlay = createPlantSpacingOverlay(
       this._deps.container,
       {
@@ -219,7 +226,7 @@ export class SceneInteractionController {
       this._clearPlantSpacingSource({ hide: true })
     }
     if (previousTool === 'text' && name !== 'text') {
-      this._removeTextarea()
+      this._textTool.cancel()
     }
     this._cancelTransientInteraction()
     if (name === 'plant-spacing') {
@@ -231,7 +238,7 @@ export class SceneInteractionController {
   dispose(): void {
     this._detach()
     this._deps.setHoveredEntityId(null)
-    this._removeTextarea()
+    this._textTool.dispose()
     this._preview.remove()
     this._polygonDraftOverlay.dispose()
     this._zoneMeasurements.dispose()
@@ -669,7 +676,7 @@ export class SceneInteractionController {
       return
     }
 
-    if (event.code !== 'Space' || this._spaceHeld || isEditableTarget(event.target) || this._textarea) return
+    if (event.code !== 'Space' || this._spaceHeld || isEditableTarget(event.target) || this._textTool.hasActiveEditor()) return
     event.preventDefault()
     this._spaceHeld = true
     if (this._mode === 'idle' && this._tool !== 'hand') {
@@ -1544,92 +1551,7 @@ export class SceneInteractionController {
   }
 
   private _handleTextPointerDown(world: ScenePoint): void {
-    if (this._textarea) {
-      this._commitText()
-      return
-    }
-    this._textWorldPosition = world
-    this._spawnTextarea(world)
-  }
-
-  private _spawnTextarea(world: ScenePoint): void {
-    const textarea = document.createElement('textarea')
-    const screen = this._deps.camera.worldToScreen(world)
-    this._textarea = textarea
-
-    Object.assign(textarea.style, {
-      position: 'absolute',
-      left: `${screen.x}px`,
-      top: `${screen.y}px`,
-      minWidth: '120px',
-      minHeight: '24px',
-      padding: '2px 4px',
-      background: 'var(--color-surface)',
-      border: '1px solid var(--color-primary)',
-      borderRadius: 'var(--radius-sm)',
-      outline: 'none',
-      resize: 'none',
-      overflow: 'hidden',
-      fontFamily: 'var(--font-sans, Inter, system-ui, sans-serif)',
-      fontSize: 'var(--text-base)',
-      lineHeight: '1.4',
-      color: 'var(--color-text)',
-      zIndex: '3',
-      whiteSpace: 'pre',
-    })
-
-    this._deps.container.appendChild(textarea)
-    requestAnimationFrame(() => {
-      if (this._textarea !== textarea) return
-      textarea.focus()
-      textarea.addEventListener('input', () => {
-        textarea.style.height = 'auto'
-        textarea.style.height = `${textarea.scrollHeight}px`
-      })
-      textarea.addEventListener('blur', () => {
-        requestAnimationFrame(() => {
-          if (this._textarea === textarea) this._commitText()
-        })
-      })
-    })
-    textarea.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        event.stopPropagation()
-        this._removeTextarea()
-      } else if (event.key === 'Enter' && !event.shiftKey) {
-        event.preventDefault()
-        event.stopPropagation()
-        this._commitText()
-      }
-    })
-  }
-
-  private _commitText(): void {
-    const textarea = this._textarea
-    const position = this._textWorldPosition
-    if (!textarea || !position) {
-      this._removeTextarea()
-      return
-    }
-
-    const text = textarea.value.trim()
-    this._removeTextarea()
-    if (!text) return
-
-    this._deps.sceneEdits.run('interaction-text', (tx) => {
-      let nextId = ''
-      tx.mutate((draft) => {
-        nextId = appendTextAnnotationToDraft(draft, position, text)
-      })
-      tx.setSelection([nextId])
-    })
-  }
-
-  private _removeTextarea(): void {
-    this._textarea?.remove()
-    this._textarea = null
-    this._textWorldPosition = null
+    this._textTool.pointerDown(world)
   }
 
 }
