@@ -27,6 +27,8 @@ import {
   createPlantSpacingOverlay,
   type PlantSpacingOverlayController,
 } from './plant-spacing-overlay'
+import { isEditableTarget } from './pointer-utils'
+import type { SceneToolAdapter } from './tool-adapter'
 
 const PLANT_SPACING_DENSE_WARNING_THRESHOLD = 100
 const PLANT_SPACING_PREVIEW_POSITION_LIMIT = 250
@@ -412,6 +414,57 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
     commitDragFromEvent,
     refreshViewportDependent,
     dispose,
+  }
+}
+
+export function createPlantSpacingToolAdapter(tool: PlantSpacingTool): SceneToolAdapter {
+  return {
+    onActivate() {
+      tool.showState()
+    },
+    onDeactivate() {
+      tool.clear({ hide: true })
+    },
+    shouldIgnorePointerEvent: tool.isHudTarget,
+    shouldSuppressHover: tool.hasSource,
+    pointerDown({ event, rawWorld, clearPointerGesture }) {
+      event.preventDefault()
+      const result = tool.pointerDown(event, rawWorld)
+      if (result.clearPointerGesture) clearPointerGesture()
+      return true
+    },
+    pointerMoveWithoutCapture({ event }) {
+      if (!tool.hasSource()) return false
+      tool.updatePreviewFromEvent(event)
+      return true
+    },
+    pointerMoveWithCapture({ event, screen, startScreen, beginDrag }) {
+      if (!tool.hasSource()) return false
+      if (!tool.shouldBeginDrag(screen, startScreen)) {
+        tool.updatePreviewFromEvent(event)
+        return true
+      }
+
+      beginDrag({
+        update: ({ event }) => tool.updatePreviewFromEvent(event),
+        commit: ({ event }) => {
+          if (!tool.isHudTarget(event.target)) {
+            tool.commitDragFromEvent(event)
+          }
+        },
+      })
+      tool.beginDrag()
+      tool.updatePreviewFromEvent(event)
+      return true
+    },
+    keyDown(event) {
+      if (event.key !== 'Escape' || isEditableTarget(event.target)) return false
+      event.preventDefault()
+      tool.cancel()
+      return true
+    },
+    refreshViewportDependent: tool.refreshViewportDependent,
+    dispose: tool.dispose,
   }
 }
 

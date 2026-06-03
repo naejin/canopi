@@ -49,23 +49,17 @@ import {
 } from './interaction/object-stamp-tool'
 import {
   createPlantSpacingTool,
-  type PlantSpacingTool,
+  createPlantSpacingToolAdapter,
 } from './interaction/plant-spacing-tool'
+import type {
+  SceneToolAdapter,
+  SceneToolPointerDrag,
+} from './interaction/tool-adapter'
 import type { SceneEditCoordinator, SceneEditTransaction } from './scene-runtime/transactions'
 
 type InteractionTool = 'select' | 'hand' | 'rectangle' | 'text' | 'plant-stamp' | 'object-stamp' | 'plant-spacing' | string
 type InteractionMode = 'idle' | 'panning' | 'dragging' | 'band' | 'tool-drag'
-
-type ToolPointerDragEvent = {
-  readonly event: Pick<MouseEvent, 'clientX' | 'clientY' | 'shiftKey' | 'target'>
-  readonly screen: ScenePoint
-  readonly rawWorld: ScenePoint
-}
-
-interface ToolPointerDrag {
-  readonly update: (event: ToolPointerDragEvent) => void
-  readonly commit: (event: ToolPointerDragEvent) => void
-}
+type ToolPointerDrag = SceneToolPointerDrag
 
 export interface SceneInteractionDeps {
   container: HTMLElement
@@ -90,7 +84,7 @@ export class SceneInteractionController {
   private readonly _textTool: TextAnnotationTool
   private readonly _zoneDrawing: ZoneDrawingTool
   private readonly _objectStampTool: ObjectStampTool
-  private readonly _plantSpacingTool: PlantSpacingTool
+  private readonly _toolAdapters: ReadonlyMap<string, SceneToolAdapter>
   private _tool: InteractionTool = 'select'
   private _mode: InteractionMode = 'idle'
   private _toolDrag: ToolPointerDrag | null = null
@@ -135,7 +129,7 @@ export class SceneInteractionController {
       sceneEdits: this._deps.sceneEdits,
       applySnapping: (point) => this._applySnapping(point),
     })
-    this._plantSpacingTool = createPlantSpacingTool({
+    const plantSpacingTool = createPlantSpacingTool({
       container: this._deps.container,
       camera: this._deps.camera,
       getSceneStore: this._deps.getSceneStore,
@@ -147,6 +141,9 @@ export class SceneInteractionController {
       applySnapping: (point) => this._applySnapping(point),
       getContainerRect: () => this._cachedContainerRect ?? this._deps.container.getBoundingClientRect(),
     })
+    this._toolAdapters = new Map([
+      ['plant-spacing', createPlantSpacingToolAdapter(plantSpacingTool)],
+    ])
     this.setTool(getCanvasTool())
     this._attach()
   }
@@ -160,16 +157,14 @@ export class SceneInteractionController {
     if (previousTool === 'object-stamp' && name !== 'object-stamp') {
       this._objectStampTool.clear()
     }
-    if (previousTool === 'plant-spacing' && name !== 'plant-spacing') {
-      this._plantSpacingTool.clear({ hide: true })
-    }
     if (previousTool === 'text' && name !== 'text') {
       this._textTool.cancel()
     }
-    this._cancelTransientInteraction()
-    if (name === 'plant-spacing') {
-      this._plantSpacingTool.showState()
+    if (previousTool !== name) {
+      this._toolAdapterFor(previousTool)?.onDeactivate?.()
     }
+    this._cancelTransientInteraction()
+    this._activeToolAdapter()?.onActivate?.()
     this._deps.container.style.cursor = cursorForTool(name)
   }
 
@@ -179,7 +174,9 @@ export class SceneInteractionController {
     this._textTool.dispose()
     this._zoneDrawing.dispose()
     this._objectStampTool.dispose()
-    this._plantSpacingTool.dispose()
+    for (const adapter of this._toolAdapters.values()) {
+      adapter.dispose?.()
+    }
     this._preview.remove()
     this._tooltip.dispose()
   }
@@ -216,7 +213,8 @@ export class SceneInteractionController {
 
   private readonly _onPointerDown = (event: PointerEvent): void => {
     if (event.button !== 0 && event.button !== 1) return
-    if (this._tool === 'plant-spacing' && this._plantSpacingTool.isHudTarget(event.target)) return
+    const activeAdapter = this._activeToolAdapter()
+    if (activeAdapter?.shouldIgnorePointerEvent?.(event.target)) return
 
     this._cachedContainerRect = this._deps.container.getBoundingClientRect()
     const screen = this._screenPoint(event)
@@ -244,10 +242,13 @@ export class SceneInteractionController {
       return
     }
 
-    if (this._tool === 'plant-spacing') {
-      event.preventDefault()
-      const result = this._plantSpacingTool.pointerDown(event, world)
-      if (result.clearPointerGesture) this._clearToolPointerGesture()
+    if (activeAdapter?.pointerDown?.({
+      event,
+      screen,
+      rawWorld: world,
+      beginDrag: (drag) => this._beginToolPointerDrag(drag),
+      clearPointerGesture: () => this._clearToolPointerGesture(),
+    })) {
       return
     }
 
@@ -330,7 +331,7 @@ export class SceneInteractionController {
   }
 
   private _updateHover(event: PointerEvent): void {
-    if (this._tool === 'plant-spacing' && this._plantSpacingTool.hasSource()) {
+    if (this._activeToolAdapter()?.shouldSuppressHover?.()) {
       this._deps.setHoveredEntityId(null)
       this._tooltip.hide()
       return
@@ -366,7 +367,8 @@ export class SceneInteractionController {
   }
 
   private readonly _onPointerMove = (event: PointerEvent): void => {
-    if (this._tool === 'plant-spacing' && this._plantSpacingTool.isHudTarget(event.target)) return
+    const activeAdapter = this._activeToolAdapter()
+    if (activeAdapter?.shouldIgnorePointerEvent?.(event.target)) return
 
     if (this._tool === 'polygon' && this._zoneDrawing.hasPolygonDraft() && this._pointerId === null) {
       const screen = this._screenPoint(event)
@@ -380,16 +382,10 @@ export class SceneInteractionController {
       return
     }
 
-    if (
-      this._tool === 'plant-spacing'
-      && this._plantSpacingTool.hasSource()
-      && this._pointerId === null
-    ) {
-      this._plantSpacingTool.updatePreviewFromEvent(event)
-      return
-    }
-
     if (this._pointerId === null) {
+      const screen = this._screenPoint(event)
+      const rawWorld = this._deps.camera.screenToWorld(screen)
+      if (activeAdapter?.pointerMoveWithoutCapture?.({ event, screen, rawWorld })) return
       this._updateHover(event)
       return
     }
@@ -415,21 +411,15 @@ export class SceneInteractionController {
       return
     }
 
-    if (this._mode === 'idle' && this._tool === 'plant-spacing' && this._plantSpacingTool.hasSource()) {
-      if (!this._plantSpacingTool.shouldBeginDrag(screen, this._startScreen)) {
-        this._plantSpacingTool.updatePreviewFromEvent(event)
-        return
-      }
-      this._beginToolPointerDrag({
-        update: ({ event }) => this._plantSpacingTool.updatePreviewFromEvent(event),
-        commit: ({ event }) => {
-          if (!this._plantSpacingTool.isHudTarget(event.target)) {
-            this._plantSpacingTool.commitDragFromEvent(event)
-          }
-        },
-      })
-      this._plantSpacingTool.beginDrag()
-      this._toolDrag?.update({ event, screen, rawWorld })
+    if (this._mode === 'idle' && activeAdapter?.pointerMoveWithCapture?.({
+      event,
+      screen,
+      rawWorld,
+      startScreen: this._startScreen,
+      startWorld: this._startWorld,
+      beginDrag: (drag) => this._beginToolPointerDrag(drag),
+      clearPointerGesture: () => this._clearToolPointerGesture(),
+    })) {
       return
     }
 
@@ -542,6 +532,14 @@ export class SceneInteractionController {
     }
   }
 
+  private _activeToolAdapter(): SceneToolAdapter | null {
+    return this._toolAdapterFor(this._tool)
+  }
+
+  private _toolAdapterFor(tool: string): SceneToolAdapter | null {
+    return this._toolAdapters.get(tool) ?? null
+  }
+
   private readonly _onKeyDown = (event: KeyboardEvent): void => {
     if (this._tool === 'polygon' && !isEditableTarget(event.target)) {
       if (this._zoneDrawing.handlePolygonKeyDown(event)) return
@@ -553,11 +551,7 @@ export class SceneInteractionController {
       return
     }
 
-    if (this._tool === 'plant-spacing' && !isEditableTarget(event.target) && event.key === 'Escape') {
-      event.preventDefault()
-      this._plantSpacingTool.cancel()
-      return
-    }
+    if (this._activeToolAdapter()?.keyDown?.(event)) return
 
     if (event.code !== 'Space' || this._spaceHeld || isEditableTarget(event.target) || this._textTool.hasActiveEditor()) return
     event.preventDefault()
@@ -626,9 +620,7 @@ export class SceneInteractionController {
   private _refreshViewportDependentMeasurements(): void {
     if (this._zoneDrawing.refreshViewportDependent()) return
 
-    if (this._tool === 'plant-spacing') {
-      this._plantSpacingTool.refreshViewportDependent()
-    }
+    this._activeToolAdapter()?.refreshViewportDependent?.()
 
     this._zoneDrawing.refreshSelectedZoneMeasurements()
   }

@@ -49,12 +49,18 @@ describe('Scene Interaction tool module boundaries', () => {
     const plantSpacingSource = readSource('../canvas/runtime/interaction/plant-spacing-tool.ts')
 
     expect(interactionSource).toContain('createPlantSpacingTool')
+    expect(interactionSource).toContain('createPlantSpacingToolAdapter')
+    expect(interactionSource).not.toContain('_plantSpacingTool')
+    expect(interactionSource).not.toContain('shouldBeginDrag')
+    expect(interactionSource).not.toContain('updatePreviewFromEvent')
+    expect(interactionSource).not.toContain('commitDragFromEvent')
     expect(interactionSource).not.toContain('_plantSpacingSource')
     expect(interactionSource).not.toContain('_plantSpacingIntervalText')
     expect(interactionSource).not.toContain('_plantSpacingGeneratedPositions')
     expect(interactionSource).not.toContain('_commitPlantSpacingPreview')
     expect(plantSpacingSource).toContain('PlantSpacingSource')
     expect(plantSpacingSource).toContain('createPlantSpacingOverlay')
+    expect(plantSpacingSource).toContain('createPlantSpacingToolAdapter')
   })
 
   it('keeps active tool drag state generic in the scene interaction router', () => {
