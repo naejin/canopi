@@ -4,7 +4,6 @@ import {
   snapToGridEnabled,
   snapToGuidesEnabled,
 } from '../../app/canvas-settings/signals'
-import { plantStampSpecies } from '../plant-tool-state'
 import { gridInterval, snapToGrid } from '../grid'
 import { snapToGuides } from '../guides'
 import { guides } from '../scene-metadata-state'
@@ -35,6 +34,10 @@ import {
   appendDroppedPlantToDraft,
   parsePlantDropPayload,
 } from './interaction/tool-actions'
+import {
+  createPlantStampTool,
+  createPlantStampToolAdapter,
+} from './interaction/plant-stamp-tool'
 import {
   createTextAnnotationTool,
   createTextAnnotationToolAdapter,
@@ -118,6 +121,10 @@ export class SceneInteractionController {
       applySnapping: (point) => this._applySnapping(point),
     })
     const zoneDrawingAdapters = createZoneDrawingToolAdapters(zoneDrawingTool)
+    const plantStampTool = createPlantStampTool({
+      sceneEdits: this._deps.sceneEdits,
+      applySnapping: (point) => this._applySnapping(point),
+    })
     const objectStampTool = createObjectStampTool({
       preview: this._preview,
       camera: this._deps.camera,
@@ -140,6 +147,7 @@ export class SceneInteractionController {
       getContainerRect: () => this._cachedContainerRect ?? this._deps.container.getBoundingClientRect(),
     })
     this._toolAdapters = new Map([
+      ['plant-stamp', createPlantStampToolAdapter(plantStampTool)],
       ['text', createTextAnnotationToolAdapter(textTool)],
       ['rectangle', zoneDrawingAdapters.rectangle],
       ['ellipse', zoneDrawingAdapters.ellipse],
@@ -156,9 +164,6 @@ export class SceneInteractionController {
   setTool(name: string): void {
     const previousTool = this._tool
     this._tool = name
-    if (previousTool === 'plant-stamp' && name !== 'plant-stamp') {
-      plantStampSpecies.value = null
-    }
     if (previousTool !== name) {
       this._toolAdapterFor(previousTool)?.onDeactivate?.()
     }
@@ -223,11 +228,6 @@ export class SceneInteractionController {
       event.preventDefault()
       this._mode = 'panning'
       this._deps.container.style.cursor = 'grabbing'
-      return
-    }
-
-    if (this._tool === 'plant-stamp') {
-      this._placePlantFromStamp(this._applySnapping(world))
       return
     }
 
@@ -597,16 +597,6 @@ export class SceneInteractionController {
       x: snapped.x - this._dragSnapRef.x,
       y: snapped.y - this._dragSnapRef.y,
     }
-  }
-
-  private _placePlantFromStamp(world: ScenePoint): void {
-    const species = plantStampSpecies.value
-    if (!species) return
-    this._deps.sceneEdits.run('interaction-stamp-plant', (tx) => {
-      tx.mutate((draft) => {
-        appendDroppedPlantToDraft(draft, species, world)
-      })
-    })
   }
 
   private _switchTool(name: string): void {
