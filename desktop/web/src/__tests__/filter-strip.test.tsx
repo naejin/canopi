@@ -1,8 +1,13 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
+import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SpeciesCatalogWorkbench } from '../app/plant-browser/workbench'
 import { createTestSpeciesCatalogWorkbench } from './support/species-catalog-workbench'
+
+function readSource(path: string): string {
+  return readFileSync(new URL(path, import.meta.url), 'utf8')
+}
 
 describe('FilterStrip', () => {
   let container: HTMLDivElement
@@ -68,5 +73,19 @@ describe('FilterStrip', () => {
     })
 
     expect(workbench.intent.value.filters.life_cycle).toEqual(['Annual'])
+  })
+})
+
+describe('Species Catalog filter region layout', () => {
+  it('caps the combined filter region instead of individual filter rows', () => {
+    const panelSource = readSource('../components/panels/PlantDbPanel.tsx')
+    const css = readSource('../components/plant-db/PlantDb.module.css')
+
+    expect(panelSource).toContain('className={styles.filterRegion}')
+    expect(panelSource.indexOf('<FilterStrip')).toBeLessThan(panelSource.indexOf('<ActiveChips'))
+
+    expect(css).toMatch(/\.filterRegion\s*{[^}]*max-height:\s*min\(45vh,\s*360px\);[^}]*overflow-y:\s*auto;/s)
+    expect(css).not.toMatch(/\.filterStrip\s*{[^}]*max-height:/s)
+    expect(css).not.toMatch(/\.filterControl\s*{[^}]*overflow:\s*hidden;/s)
   })
 })

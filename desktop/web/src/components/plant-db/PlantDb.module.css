@@ -637,6 +637,13 @@
 
 /* ── FilterStrip ── */
 
+.filterRegion {
+  flex-shrink: 0;
+  max-height: min(45vh, 360px);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
 .filterStrip {
   display: grid;
   grid-template-columns: minmax(calc(var(--space-12) - 2px), max-content) minmax(0, 1fr);

@@ -41,11 +41,13 @@ export function PlantDbPanel() {
           <ViewModeToggle />
         </div>
 
-        {/* Always-visible filter strip */}
-        <FilterStrip onMoreFilters={() => { moreFiltersOpen.value = !moreFiltersOpen.value }} />
+        <div className={styles.filterRegion}>
+          {/* Always-visible filter rows */}
+          <FilterStrip onMoreFilters={() => { moreFiltersOpen.value = !moreFiltersOpen.value }} />
 
-        {/* Active filter chips */}
-        <ActiveChips />
+          {/* Active filter chips */}
+          <ActiveChips />
+        </div>
 
         {/* Results */}
         <ResultsList />

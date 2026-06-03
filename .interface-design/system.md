@@ -322,16 +322,12 @@ Earthy, not neon:
 
 ### Species Catalog Workbench
 - Search-first: full-width search input at top
-- FilterStrip: always-visible compact controls below search. Rows come from the Species Catalog Filter catalog:
-  - Stratum: multi-select `FilterChip` pills (teal `--color-nitrogen`)
-  - Sun: multi-select `FilterChip` pills (amber `--color-sun`)
-  - Hardiness: `RangeSlider` (1–13)
-  - Edibility: `ThresholdSlider` (0–5 with tick marks)
-  - Height: `RangeSlider` (0–50m)
-  - N₂ Fixer: toggle switch (24×14px)
-- Each row: right-aligned label + control flex-1. All rows are 24px min-height and wrap dynamically based on panel width; filter choices must remain visible rather than clipped.
-- "More filters ›" text link + badge count at bottom, 58px left indent
-- ActiveChips strip: horizontal wrap of dismissable `FilterChip` pills, 58px left indent matching controls. Shows all active filters from both strip and "More" panel. Border-top + border-bottom separation
+- Filter region: contains the always-visible `FilterStrip` rows and the `ActiveChips` strip. Natural height by default; in extreme small-height cases, the combined region scrolls vertically at `max-height: min(45vh, 360px)` so results never disappear entirely.
+- FilterStrip: always-visible compact controls below search. Filter rows come from the Species Catalog Filter catalog; do not hard-code the row list in component layout. Example rows may include Climate Zone, Sun, Habit, Life Cycle, Edibility, Woody, or N₂ Fixer depending on catalog metadata.
+- Each filter row: right-aligned label + control flex-1. Rows are 24px min-height, `height: auto`, and grow or shrink based on their own visible filter choices at the current panel width. Filter choices must remain visible rather than clipped. No per-row scrolling.
+- "More filters ›" text link + badge count at bottom of the FilterStrip, 58px left indent
+- ActiveChips strip: horizontal wrap of dismissable `FilterChip` pills, 58px left indent matching controls. Shows all active filters from both strip and "More" panel. Border-top + border-bottom separation. It participates in the combined filter-region height cap rather than owning a separate scroll surface.
+- Terms: use `filter row` for always-visible controls, `filter choice` for an individual chip/option inside a row, and `filter category` only for More Filters drawer groups such as Climate & Soil or Growth.
 - "More Filters" panel: slides in as overlay over results. Header + search + 8 collapsible categories with 2px colored left borders matching detail card sections. Boolean fields: inline checkbox. Categorical: expandable chip picker (lazy-loaded). Numeric: expandable range slider. "Done ›" text link in footer
 - Plant rows: compact, two lines:
   - Line 1: **common name** (12px, 500, `--color-text`) + *botanical name* (12px, 400, italic, `--color-text-muted`). Common name leads as the scan target. When no common name, botanical renders alone
