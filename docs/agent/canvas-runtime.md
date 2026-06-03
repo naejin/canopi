@@ -48,7 +48,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 
 ## Interaction Ownership
 
-- `SceneInteractionController` owns live pointer and drag behavior.
+- `SceneInteractionController` owns live pointer capture and generic drag routing; tool modules own tool-specific drag state.
 - Hit testing and selection geometry must stay scene-side.
 - Off-canvas drag continuation, multi-drag, and additive selection behavior are part of the runtime contract.
 - Plant hit testing must use the same shared presentation context as renderers and fit/bounds logic.

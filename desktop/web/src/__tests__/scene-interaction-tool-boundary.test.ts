@@ -56,4 +56,15 @@ describe('Scene Interaction tool module boundaries', () => {
     expect(plantSpacingSource).toContain('PlantSpacingSource')
     expect(plantSpacingSource).toContain('createPlantSpacingOverlay')
   })
+
+  it('keeps active tool drag state generic in the scene interaction router', () => {
+    const interactionSource = readSource('../canvas/runtime/scene-interaction.ts')
+
+    expect(interactionSource).toContain('ToolPointerDrag')
+    expect(interactionSource).not.toContain("'plant-spacing-drag'")
+    expect(interactionSource).not.toContain("this._mode = 'rectangle'")
+    expect(interactionSource).not.toContain("this._mode = 'ellipse'")
+    expect(interactionSource).not.toContain("this._mode === 'rectangle'")
+    expect(interactionSource).not.toContain("this._mode === 'ellipse'")
+  })
 })

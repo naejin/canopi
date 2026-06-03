@@ -54,6 +54,18 @@ import {
 import type { SceneEditCoordinator, SceneEditTransaction } from './scene-runtime/transactions'
 
 type InteractionTool = 'select' | 'hand' | 'rectangle' | 'text' | 'plant-stamp' | 'object-stamp' | 'plant-spacing' | string
+type InteractionMode = 'idle' | 'panning' | 'dragging' | 'band' | 'tool-drag'
+
+type ToolPointerDragEvent = {
+  readonly event: Pick<MouseEvent, 'clientX' | 'clientY' | 'shiftKey' | 'target'>
+  readonly screen: ScenePoint
+  readonly rawWorld: ScenePoint
+}
+
+interface ToolPointerDrag {
+  readonly update: (event: ToolPointerDragEvent) => void
+  readonly commit: (event: ToolPointerDragEvent) => void
+}
 
 export interface SceneInteractionDeps {
   container: HTMLElement
@@ -80,7 +92,8 @@ export class SceneInteractionController {
   private readonly _objectStampTool: ObjectStampTool
   private readonly _plantSpacingTool: PlantSpacingTool
   private _tool: InteractionTool = 'select'
-  private _mode: 'idle' | 'panning' | 'dragging' | 'band' | 'rectangle' | 'ellipse' | 'plant-spacing-drag' = 'idle'
+  private _mode: InteractionMode = 'idle'
+  private _toolDrag: ToolPointerDrag | null = null
   private _pointerId: number | null = null
   private _startScreen: ScenePoint | null = null
   private _startWorld: ScenePoint | null = null
@@ -240,15 +253,13 @@ export class SceneInteractionController {
 
     if (this._tool === 'rectangle') {
       event.preventDefault()
-      this._zoneDrawing.beginBox('rectangle', world)
-      this._mode = 'rectangle'
+      this._beginZoneBoxDrag('rectangle', world)
       return
     }
 
     if (this._tool === 'ellipse') {
       event.preventDefault()
-      this._zoneDrawing.beginBox('ellipse', world)
-      this._mode = 'ellipse'
+      this._beginZoneBoxDrag('ellipse', world)
       return
     }
 
@@ -399,23 +410,26 @@ export class SceneInteractionController {
       return
     }
 
-    if (
-      this._mode === 'plant-spacing-drag'
-      || (
-        this._mode === 'idle'
-        && this._tool === 'plant-spacing'
-        && this._plantSpacingTool.hasSource()
-      )
-    ) {
-      if (this._mode === 'idle') {
-        if (!this._plantSpacingTool.shouldBeginDrag(screen, this._startScreen)) {
-          this._plantSpacingTool.updatePreviewFromEvent(event)
-          return
-        }
-        this._mode = 'plant-spacing-drag'
-        this._plantSpacingTool.beginDrag()
+    if (this._mode === 'tool-drag' && this._toolDrag) {
+      this._toolDrag.update({ event, screen, rawWorld })
+      return
+    }
+
+    if (this._mode === 'idle' && this._tool === 'plant-spacing' && this._plantSpacingTool.hasSource()) {
+      if (!this._plantSpacingTool.shouldBeginDrag(screen, this._startScreen)) {
+        this._plantSpacingTool.updatePreviewFromEvent(event)
+        return
       }
-      this._plantSpacingTool.updatePreviewFromEvent(event)
+      this._beginToolPointerDrag({
+        update: ({ event }) => this._plantSpacingTool.updatePreviewFromEvent(event),
+        commit: ({ event }) => {
+          if (!this._plantSpacingTool.isHudTarget(event.target)) {
+            this._plantSpacingTool.commitDragFromEvent(event)
+          }
+        },
+      })
+      this._plantSpacingTool.beginDrag()
+      this._toolDrag?.update({ event, screen, rawWorld })
       return
     }
 
@@ -436,17 +450,11 @@ export class SceneInteractionController {
       showInteractionPreview(this._preview, 'band', this._startScreen, screen)
       return
     }
-
-    if (this._mode === 'rectangle' || this._mode === 'ellipse') {
-      this._zoneDrawing.updateBox(rawWorld)
-    }
   }
 
   private readonly _onPointerUp = (event: PointerEvent): void => {
     if (this._tool === 'polygon' && this._pointerId === null && this._zoneDrawing.hasPolygonDraft()) return
     if (this._pointerId !== null && event.pointerId !== this._pointerId) return
-    const isPlantSpacingHudPointerUp = this._tool === 'plant-spacing'
-      && this._plantSpacingTool.isHudTarget(event.target)
     const screen = this._screenPoint(event)
     const rawWorld = this._deps.camera.screenToWorld(screen)
     const shouldPreservePolygonDraft = this._mode === 'panning' && this._zoneDrawing.hasPolygonDraft()
@@ -482,16 +490,8 @@ export class SceneInteractionController {
       this._deps.render('scene')
     }
 
-    if (this._mode === 'rectangle' && this._startWorld) {
-      this._zoneDrawing.commitBox(rawWorld)
-    }
-
-    if (this._mode === 'ellipse' && this._startWorld) {
-      this._zoneDrawing.commitBox(rawWorld)
-    }
-
-    if (this._mode === 'plant-spacing-drag' && !isPlantSpacingHudPointerUp) {
-      this._plantSpacingTool.commitDragFromEvent(event)
+    if (this._mode === 'tool-drag' && this._toolDrag) {
+      this._toolDrag.commit({ event, screen, rawWorld })
     }
 
     this._cancelTransientInteraction({ preservePolygonDraft: shouldPreservePolygonDraft })
@@ -577,6 +577,7 @@ export class SceneInteractionController {
 
   private _cancelTransientInteraction(options: { preservePolygonDraft?: boolean } = {}): void {
     this._mode = 'idle'
+    this._toolDrag = null
     this._pointerId = null
     this._startScreen = null
     this._startWorld = null
@@ -592,8 +593,22 @@ export class SceneInteractionController {
     this._deps.container.style.cursor = cursorForTool(this._tool)
   }
 
+  private _beginToolPointerDrag(drag: ToolPointerDrag): void {
+    this._mode = 'tool-drag'
+    this._toolDrag = drag
+  }
+
+  private _beginZoneBoxDrag(mode: 'rectangle' | 'ellipse', world: ScenePoint): void {
+    this._zoneDrawing.beginBox(mode, world)
+    this._beginToolPointerDrag({
+      update: ({ rawWorld }) => this._zoneDrawing.updateBox(rawWorld),
+      commit: ({ rawWorld }) => this._zoneDrawing.commitBox(rawWorld),
+    })
+  }
+
   private _handlePolygonPointerDown(world: ScenePoint): void {
     this._mode = 'idle'
+    this._toolDrag = null
     this._pointerId = null
     this._startScreen = null
     this._startWorld = null
