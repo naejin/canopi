@@ -43,4 +43,17 @@ describe('Scene Interaction tool module boundaries', () => {
     expect(objectStampSource).toContain('ObjectStampSource')
     expect(objectStampSource).toContain('cloneGroupMembersForObjectStamp')
   })
+
+  it('keeps Plant Spacing source state behind the plant spacing tool module', () => {
+    const interactionSource = readSource('../canvas/runtime/scene-interaction.ts')
+    const plantSpacingSource = readSource('../canvas/runtime/interaction/plant-spacing-tool.ts')
+
+    expect(interactionSource).toContain('createPlantSpacingTool')
+    expect(interactionSource).not.toContain('_plantSpacingSource')
+    expect(interactionSource).not.toContain('_plantSpacingIntervalText')
+    expect(interactionSource).not.toContain('_plantSpacingGeneratedPositions')
+    expect(interactionSource).not.toContain('_commitPlantSpacingPreview')
+    expect(plantSpacingSource).toContain('PlantSpacingSource')
+    expect(plantSpacingSource).toContain('createPlantSpacingOverlay')
+  })
 })
