@@ -31,4 +31,16 @@ describe('Scene Interaction tool module boundaries', () => {
     expect(zoneToolSource).toContain('appendEllipseZoneToDraft')
     expect(zoneToolSource).toContain('appendPolygonZoneToDraft')
   })
+
+  it('keeps Object Stamp source state behind the object stamp tool module', () => {
+    const interactionSource = readSource('../canvas/runtime/scene-interaction.ts')
+    const objectStampSource = readSource('../canvas/runtime/interaction/object-stamp-tool.ts')
+
+    expect(interactionSource).toContain('createObjectStampTool')
+    expect(interactionSource).not.toContain('_objectStampSource')
+    expect(interactionSource).not.toContain('_sampleObjectStampSource')
+    expect(interactionSource).not.toContain('_placeObjectStamp')
+    expect(objectStampSource).toContain('ObjectStampSource')
+    expect(objectStampSource).toContain('cloneGroupMembersForObjectStamp')
+  })
 })
