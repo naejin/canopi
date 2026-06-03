@@ -11,6 +11,10 @@ export interface SceneToolPointerDrag {
   readonly commit: (context: SceneToolPointerEvent) => void
 }
 
+export interface SceneToolTransientOptions {
+  readonly preserveActiveDraft?: boolean
+}
+
 export interface SceneToolPointerDownContext extends SceneToolPointerEvent {
   readonly beginDrag: (drag: SceneToolPointerDrag) => void
   readonly clearPointerGesture: () => void
@@ -27,12 +31,16 @@ export interface SceneToolAdapter {
   readonly onActivate?: () => void
   readonly onDeactivate?: () => void
   readonly shouldIgnorePointerEvent?: (target: EventTarget | null) => boolean
+  readonly shouldIgnorePointerUpWithoutCapture?: () => boolean
+  readonly shouldPreserveTransientOnPan?: () => boolean
   readonly shouldSuppressHover?: () => boolean
   readonly shouldSuppressSharedKeyboard?: (event: KeyboardEvent) => boolean
   readonly pointerDown?: (context: SceneToolPointerDownContext) => boolean
   readonly pointerMoveWithoutCapture?: (context: SceneToolPointerEvent) => boolean
   readonly pointerMoveWithCapture?: (context: SceneToolCapturedPointerContext) => boolean
   readonly keyDown?: (event: KeyboardEvent) => boolean
-  readonly refreshViewportDependent?: () => void
+  readonly cancelTransient?: (options?: SceneToolTransientOptions) => void
+  readonly refreshViewportDependent?: () => boolean | void
+  readonly refreshSelectionDependent?: () => void
   readonly dispose?: () => void
 }

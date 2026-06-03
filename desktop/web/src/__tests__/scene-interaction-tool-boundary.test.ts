@@ -26,6 +26,10 @@ describe('Scene Interaction tool module boundaries', () => {
     const zoneToolSource = readSource('../canvas/runtime/interaction/zone-drawing-tool.ts')
 
     expect(interactionSource).toContain('createZoneDrawingTool')
+    expect(interactionSource).toContain('createZoneDrawingToolAdapters')
+    expect(interactionSource).not.toContain('_zoneDrawing')
+    expect(interactionSource).not.toContain('hasPolygonDraft')
+    expect(interactionSource).not.toContain('preservePolygonDraft')
     expect(interactionSource).not.toContain('_polygonDraftVertices')
     expect(interactionSource).not.toContain('_polygonActiveWorld')
     expect(interactionSource).not.toContain('appendRectangleZoneToDraft')
@@ -34,6 +38,7 @@ describe('Scene Interaction tool module boundaries', () => {
     expect(zoneToolSource).toContain('appendRectangleZoneToDraft')
     expect(zoneToolSource).toContain('appendEllipseZoneToDraft')
     expect(zoneToolSource).toContain('appendPolygonZoneToDraft')
+    expect(zoneToolSource).toContain('createZoneDrawingToolAdapters')
   })
 
   it('keeps Object Stamp source state behind the object stamp tool module', () => {

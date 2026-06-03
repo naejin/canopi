@@ -18,6 +18,8 @@ import {
   appendPolygonZoneToDraft,
   appendRectangleZoneToDraft,
 } from './tool-actions'
+import { isEditableTarget } from './pointer-utils'
+import type { SceneToolAdapter } from './tool-adapter'
 
 type BoxZoneMode = 'rectangle' | 'ellipse'
 
@@ -305,6 +307,63 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
     refreshViewportDependent,
     refreshSelectedZoneMeasurements,
     dispose,
+  }
+}
+
+export interface ZoneDrawingToolAdapters {
+  readonly rectangle: SceneToolAdapter
+  readonly ellipse: SceneToolAdapter
+  readonly polygon: SceneToolAdapter
+}
+
+export function createZoneDrawingToolAdapters(tool: ZoneDrawingTool): ZoneDrawingToolAdapters {
+  function cancelTransient(options: { preserveActiveDraft?: boolean } = {}): void {
+    tool.cancelTransient({ preservePolygonDraft: options.preserveActiveDraft })
+  }
+
+  function createBoxAdapter(mode: BoxZoneMode): SceneToolAdapter {
+    return {
+      onDeactivate: () => tool.cancelTransient(),
+      pointerDown({ event, rawWorld, beginDrag }) {
+        event.preventDefault()
+        tool.beginBox(mode, rawWorld)
+        beginDrag({
+          update: ({ rawWorld }) => tool.updateBox(rawWorld),
+          commit: ({ rawWorld }) => tool.commitBox(rawWorld),
+        })
+        return true
+      },
+      cancelTransient,
+    }
+  }
+
+  return {
+    rectangle: createBoxAdapter('rectangle'),
+    ellipse: createBoxAdapter('ellipse'),
+    polygon: {
+      onDeactivate: () => tool.cancelTransient(),
+      shouldIgnorePointerUpWithoutCapture: tool.hasPolygonDraft,
+      shouldPreserveTransientOnPan: tool.hasPolygonDraft,
+      pointerDown({ event, rawWorld, clearPointerGesture }) {
+        event.preventDefault()
+        clearPointerGesture()
+        tool.handlePolygonPointerDown(rawWorld)
+        return true
+      },
+      pointerMoveWithoutCapture({ rawWorld }) {
+        if (!tool.hasPolygonDraft()) return false
+        tool.updatePolygonPointerMove(rawWorld)
+        return true
+      },
+      keyDown(event) {
+        if (isEditableTarget(event.target)) return false
+        return tool.handlePolygonKeyDown(event)
+      },
+      cancelTransient,
+      refreshViewportDependent: tool.refreshViewportDependent,
+      refreshSelectionDependent: tool.refreshSelectedZoneMeasurements,
+      dispose: tool.dispose,
+    },
   }
 }
 

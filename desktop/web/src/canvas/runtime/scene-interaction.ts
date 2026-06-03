@@ -41,7 +41,7 @@ import {
 } from './interaction/text-annotation-tool'
 import {
   createZoneDrawingTool,
-  type ZoneDrawingTool,
+  createZoneDrawingToolAdapters,
 } from './interaction/zone-drawing-tool'
 import {
   createObjectStampTool,
@@ -81,7 +81,6 @@ export interface SceneInteractionDeps {
 export class SceneInteractionController {
   private readonly _preview: HTMLDivElement
   private readonly _tooltip: HoverTooltipController
-  private readonly _zoneDrawing: ZoneDrawingTool
   private readonly _toolAdapters: ReadonlyMap<string, SceneToolAdapter>
   private _tool: InteractionTool = 'select'
   private _mode: InteractionMode = 'idle'
@@ -107,7 +106,7 @@ export class SceneInteractionController {
       camera: this._deps.camera,
       sceneEdits: this._deps.sceneEdits,
     })
-    this._zoneDrawing = createZoneDrawingTool({
+    const zoneDrawingTool = createZoneDrawingTool({
       container: this._deps.container,
       preview: this._preview,
       camera: this._deps.camera,
@@ -118,6 +117,7 @@ export class SceneInteractionController {
       render: this._deps.render,
       applySnapping: (point) => this._applySnapping(point),
     })
+    const zoneDrawingAdapters = createZoneDrawingToolAdapters(zoneDrawingTool)
     const objectStampTool = createObjectStampTool({
       preview: this._preview,
       camera: this._deps.camera,
@@ -141,6 +141,9 @@ export class SceneInteractionController {
     })
     this._toolAdapters = new Map([
       ['text', createTextAnnotationToolAdapter(textTool)],
+      ['rectangle', zoneDrawingAdapters.rectangle],
+      ['ellipse', zoneDrawingAdapters.ellipse],
+      ['polygon', zoneDrawingAdapters.polygon],
       ['object-stamp', createObjectStampToolAdapter(objectStampTool, {
         switchTool: (name) => this._switchTool(name),
       })],
@@ -167,7 +170,6 @@ export class SceneInteractionController {
   dispose(): void {
     this._detach()
     this._deps.setHoveredEntityId(null)
-    this._zoneDrawing.dispose()
     for (const adapter of this._toolAdapters.values()) {
       adapter.dispose?.()
     }
@@ -236,24 +238,6 @@ export class SceneInteractionController {
       beginDrag: (drag) => this._beginToolPointerDrag(drag),
       clearPointerGesture: () => this._clearToolPointerGesture(),
     })) {
-      return
-    }
-
-    if (this._tool === 'rectangle') {
-      event.preventDefault()
-      this._beginZoneBoxDrag('rectangle', world)
-      return
-    }
-
-    if (this._tool === 'ellipse') {
-      event.preventDefault()
-      this._beginZoneBoxDrag('ellipse', world)
-      return
-    }
-
-    if (this._tool === 'polygon') {
-      event.preventDefault()
-      this._handlePolygonPointerDown(world)
       return
     }
 
@@ -351,12 +335,6 @@ export class SceneInteractionController {
     const activeAdapter = this._activeToolAdapter()
     if (activeAdapter?.shouldIgnorePointerEvent?.(event.target)) return
 
-    if (this._tool === 'polygon' && this._zoneDrawing.hasPolygonDraft() && this._pointerId === null) {
-      const screen = this._screenPoint(event)
-      this._zoneDrawing.updatePolygonPointerMove(this._deps.camera.screenToWorld(screen))
-      return
-    }
-
     if (this._pointerId === null) {
       const screen = this._screenPoint(event)
       const rawWorld = this._deps.camera.screenToWorld(screen)
@@ -407,7 +385,7 @@ export class SceneInteractionController {
         applySceneDragDeltaToDraft(draft, this._dragState, delta)
       })
       this._deps.render('scene')
-      this._zoneDrawing.refreshSelectedZoneMeasurements()
+      this._refreshSelectionDependentMeasurements()
       return
     }
 
@@ -418,11 +396,13 @@ export class SceneInteractionController {
   }
 
   private readonly _onPointerUp = (event: PointerEvent): void => {
-    if (this._tool === 'polygon' && this._pointerId === null && this._zoneDrawing.hasPolygonDraft()) return
+    const activeAdapter = this._activeToolAdapter()
+    if (this._pointerId === null && activeAdapter?.shouldIgnorePointerUpWithoutCapture?.()) return
     if (this._pointerId !== null && event.pointerId !== this._pointerId) return
     const screen = this._screenPoint(event)
     const rawWorld = this._deps.camera.screenToWorld(screen)
-    const shouldPreservePolygonDraft = this._mode === 'panning' && this._zoneDrawing.hasPolygonDraft()
+    const shouldPreserveActiveDraft = this._mode === 'panning'
+      && Boolean(activeAdapter?.shouldPreserveTransientOnPan?.())
 
     if (this._mode === 'dragging' && this._dragEdit) {
       const moved = Math.abs(this._lastDragDelta.x) > 0.001
@@ -459,7 +439,7 @@ export class SceneInteractionController {
       this._toolDrag.commit({ event, screen, rawWorld })
     }
 
-    this._cancelTransientInteraction({ preservePolygonDraft: shouldPreservePolygonDraft })
+    this._cancelTransientInteraction({ preserveActiveDraft: shouldPreserveActiveDraft })
     this._refreshViewportDependentMeasurements()
   }
 
@@ -516,10 +496,6 @@ export class SceneInteractionController {
   }
 
   private readonly _onKeyDown = (event: KeyboardEvent): void => {
-    if (this._tool === 'polygon' && !isEditableTarget(event.target)) {
-      if (this._zoneDrawing.handlePolygonKeyDown(event)) return
-    }
-
     const activeAdapter = this._activeToolAdapter()
     if (activeAdapter?.keyDown?.(event)) return
 
@@ -544,7 +520,7 @@ export class SceneInteractionController {
     }
   }
 
-  private _cancelTransientInteraction(options: { preservePolygonDraft?: boolean } = {}): void {
+  private _cancelTransientInteraction(options: { preserveActiveDraft?: boolean } = {}): void {
     this._mode = 'idle'
     this._toolDrag = null
     this._pointerId = null
@@ -557,7 +533,7 @@ export class SceneInteractionController {
     this._cachedContainerRect = null
     resetSceneDragState(this._dragState)
     this._bandAdditive = false
-    this._zoneDrawing.cancelTransient(options)
+    this._activeToolAdapter()?.cancelTransient?.(options)
     hideInteractionPreview(this._preview)
     this._deps.container.style.cursor = cursorForTool(this._tool)
   }
@@ -565,24 +541,6 @@ export class SceneInteractionController {
   private _beginToolPointerDrag(drag: ToolPointerDrag): void {
     this._mode = 'tool-drag'
     this._toolDrag = drag
-  }
-
-  private _beginZoneBoxDrag(mode: 'rectangle' | 'ellipse', world: ScenePoint): void {
-    this._zoneDrawing.beginBox(mode, world)
-    this._beginToolPointerDrag({
-      update: ({ rawWorld }) => this._zoneDrawing.updateBox(rawWorld),
-      commit: ({ rawWorld }) => this._zoneDrawing.commitBox(rawWorld),
-    })
-  }
-
-  private _handlePolygonPointerDown(world: ScenePoint): void {
-    this._mode = 'idle'
-    this._toolDrag = null
-    this._pointerId = null
-    this._startScreen = null
-    this._startWorld = null
-    this._cachedContainerRect = null
-    this._zoneDrawing.handlePolygonPointerDown(world)
   }
 
   private _clearToolPointerGesture(): void {
@@ -593,11 +551,15 @@ export class SceneInteractionController {
   }
 
   private _refreshViewportDependentMeasurements(): void {
-    if (this._zoneDrawing.refreshViewportDependent()) return
+    if (this._activeToolAdapter()?.refreshViewportDependent?.()) return
 
-    this._activeToolAdapter()?.refreshViewportDependent?.()
+    this._refreshSelectionDependentMeasurements()
+  }
 
-    this._zoneDrawing.refreshSelectedZoneMeasurements()
+  private _refreshSelectionDependentMeasurements(): void {
+    for (const adapter of new Set(this._toolAdapters.values())) {
+      adapter.refreshSelectionDependent?.()
+    }
   }
 
   /** Snap a world-space point to grid and/or guides. Used for placement (stamp, text). */

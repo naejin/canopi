@@ -2422,6 +2422,23 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('removes polygonal zone draft and measurement overlays on controller dispose', () => {
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('polygon')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 60, clientY: 10, button: 0 }))
+
+    expect(container.querySelector('[data-polygon-draft-line]')).not.toBeNull()
+    expect(zoneMeasurementTexts(container)).toEqual(['50 m'])
+
+    controller.dispose()
+
+    expect(container.querySelector('[data-polygon-draft-line]')).toBeNull()
+    expect(zoneMeasurementTexts(container)).toEqual([])
+  })
+
   it('does not commit degenerate polygonal zones', () => {
     const onSceneEditCommit = vi.fn()
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
