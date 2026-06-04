@@ -84,6 +84,10 @@ _Avoid_: Label, comment
 A canvas-positioned part of a design, such as a placed plant, zone, annotation, or object group. Design objects are the things users arrange spatially in the design.
 _Avoid_: Canvas object, shape
 
+**Design Object Lock**:
+A saved editing constraint on a design object that prevents direct selection, transformation, deletion, and reuse as an object stamp source while leaving the object visible in the design. A design object lock belongs to the design, not only to the design session, and is stored with the locked design object rather than in a separate top-level lock list. If an object group contains a locked design object, the object group cannot be moved, deleted, stamped, or otherwise edited in a way that mutates the locked member.
+_Avoid_: Selection lock, runtime lock
+
 **Visual Footprint**:
 The visible on-screen presence of a design object or its readable presentation aids at the current zoom level. A visual footprint may differ from the object's real-world geometry when readability requires it.
 _Avoid_: Object scale, canvas scale, display size
@@ -242,6 +246,9 @@ A **Zone Measurement** is derived from a zone's geometry. An **Annotation** is a
 
 **Canvas Object vs Design Object**:
 Use **Design Object** for a spatial part of a Design. "Canvas object" is implementation language and should not be the canonical product term.
+
+**Layer Lock vs Design Object Lock**:
+A **Layer** lock prevents editing every design object in that layer. A **Design Object Lock** prevents editing one design object and is saved with the design.
 
 **Climate Zone vs Hardiness Zone**:
 Use **Climate Zone** for broad site/template classification. Use **Hardiness Zone** for species cold-tolerance compatibility.
