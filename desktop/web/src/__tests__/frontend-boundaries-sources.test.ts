@@ -386,7 +386,21 @@ describe('frontend boundary sources', () => {
     expect(timelineSource).not.toContain('createTimelineActionFromFormData')
     expect(timelineSource).not.toContain('formDataFromTimelineAction')
     expect(timelineSource).not.toContain('timelineActionPatchFromFormData')
+    expect(timelineSource).not.toContain('renderTimeline')
+    expect(timelineSource).not.toContain('theme.value')
+    expect(timelineSource).not.toContain('workbench.')
+    expectNoImportsMatching('../components/canvas/InteractiveTimeline.tsx', [
+      /settings\/state$/,
+      /timeline-renderer$/,
+    ])
     expect(timelineSource).toContain('../app/timeline/canvas-workbench')
+    expect(timelineSource).toContain('useTimelineActionCanvasHostModel')
+    expect(timelineSource).toContain('hostModel.container')
+    expect(timelineSource).toContain('hostModel.canvas')
+    expect(timelineSource).toContain('hostModel.renderer')
+    expect(timelineSource).toContain('hostModel.overlays')
+    expect(canvasWorkbenchSource).toContain('TimelineActionCanvasHostModel')
+    expect(canvasWorkbenchSource).toContain('renderTimeline')
     expect(canvasWorkbenchSource).toContain('./interaction-workbench')
     expectNoImportsMatching('../app/timeline/canvas-workbench.ts', [
       /^\.\/interaction-frame$/,

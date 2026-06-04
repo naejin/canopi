@@ -182,6 +182,97 @@ describe('InteractiveTimeline hover cleanup', () => {
     expect(selectedPanelTargetOrigin.value).toBe('budget')
   })
 
+  it('cleans up Timeline-owned hover targets when the canvas host unmounts', async () => {
+    await act(async () => {
+      render(<InteractiveTimeline />, container)
+    })
+
+    const canvas = container.querySelector('canvas')!
+    canvas.getBoundingClientRect = () => ({
+      left: 0,
+      top: 0,
+      right: 400,
+      bottom: 200,
+      width: 400,
+      height: 200,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    })
+
+    await act(async () => {
+      canvas.dispatchEvent(new MouseEvent('mousemove', {
+        clientX: 262,
+        clientY: 40,
+        bubbles: true,
+      }))
+    })
+
+    expect(hoveredPanelTargets.value).toEqual([speciesTarget('Malus domestica')])
+
+    await act(async () => {
+      render(null, container)
+    })
+
+    expect(hoveredPanelTargets.value).toEqual([])
+  })
+
+  it('saves an edit popover through the Timeline canvas host model', async () => {
+    await act(async () => {
+      render(<InteractiveTimeline />, container)
+    })
+
+    const canvas = container.querySelector('canvas')!
+    canvas.getBoundingClientRect = () => ({
+      left: 0,
+      top: 0,
+      right: 400,
+      bottom: 200,
+      width: 400,
+      height: 200,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    })
+
+    await act(async () => {
+      canvas.dispatchEvent(new MouseEvent('mousedown', {
+        button: 0,
+        clientX: 262,
+        clientY: 40,
+        bubbles: true,
+      }))
+      document.dispatchEvent(new MouseEvent('mouseup', {
+        button: 0,
+        clientX: 262,
+        clientY: 40,
+        bubbles: true,
+      }))
+    })
+
+    const dialog = document.body.querySelector('[role="dialog"]') as HTMLDivElement | null
+    expect(dialog).toBeTruthy()
+
+    const notesInput = dialog!.querySelector('input[type="text"]') as HTMLInputElement | null
+    expect(notesInput).toBeTruthy()
+
+    await act(async () => {
+      notesInput!.value = 'Water deeply'
+      notesInput!.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+
+    const buttons = Array.from(dialog!.querySelectorAll('button'))
+    const saveButton = buttons[buttons.length - 1] as HTMLButtonElement | undefined
+    expect(saveButton).toBeTruthy()
+
+    await act(async () => {
+      saveButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(currentDesign.value?.timeline[0]?.description).toBe('Water deeply')
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull()
+  })
+
   it('closes the timeline popover when the scroll container moves', async () => {
     currentDesign.value = makeDesign({ timeline: [] })
 

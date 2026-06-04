@@ -1,88 +1,55 @@
 import { createPortal } from 'preact/compat'
-import { useEffect, useRef } from 'preact/hooks'
 import { useCanvasRenderer } from './useCanvasRenderer'
-import { t } from '../../i18n'
-import { theme } from '../../app/settings/state'
-import { useTimelineCanvasWorkbench } from '../../app/timeline/canvas-workbench'
-import {
-  renderTimeline,
-} from '../../canvas/timeline-renderer'
+import { useTimelineActionCanvasHostModel } from '../../app/timeline/canvas-workbench'
 import { TimelinePopover } from './TimelinePopover'
 import styles from './InteractiveTimeline.module.css'
 
 export function InteractiveTimeline() {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
+  const hostModel = useTimelineActionCanvasHostModel()
 
-  const workbench = useTimelineCanvasWorkbench({ canvasRef })
+  useCanvasRenderer(
+    hostModel.renderer.canvasRef,
+    hostModel.renderer.render,
+    hostModel.renderer.deps,
+    hostModel.renderer.cachedRectRef,
+  )
 
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    canvas.style.height = `${workbench.canvasHeight}px`
-    workbench.invalidateLayout()
-  }, [workbench.canvasHeight, workbench.invalidateLayout])
-
-  useCanvasRenderer(canvasRef, (ctx, width, height) => {
-    renderTimeline(
-      ctx,
-      width,
-      height,
-      workbench.rows,
-      workbench.layout,
-      workbench.renderState,
-      t,
-      workbench.rowOffsets,
-    )
-  }, [...workbench.renderDeps, theme.value], workbench.cachedRectRef)
-
-  const ps = workbench.popover
-  const tip = workbench.tooltip
+  const tooltip = hostModel.overlays.tooltip
+  const popover = hostModel.overlays.popover
 
   return (
-    <div ref={containerRef} className={styles.container} onScroll={workbench.handleContainerScroll}>
+    <div ref={hostModel.container.ref} className={styles.container} onScroll={hostModel.container.onScroll}>
       <canvas
-        ref={canvasRef}
+        ref={hostModel.canvas.ref}
         className={styles.timeline}
-        onMouseDown={workbench.handleMouseDown}
-        onMouseMove={workbench.handleCanvasMouseMove}
-        onMouseLeave={workbench.handleMouseLeave}
-        aria-label={t('canvas.timeline.title')}
+        onMouseDown={hostModel.canvas.onMouseDown}
+        onMouseMove={hostModel.canvas.onMouseMove}
+        onMouseLeave={hostModel.canvas.onMouseLeave}
+        aria-label={hostModel.canvas.ariaLabel}
       />
-      {tip && !ps && (
+      {tooltip && (
         <div
           className={styles.tooltip}
           style={{
-            left: Math.min(tip.x + 12, (containerRef.current?.clientWidth ?? 300) - 230),
-            top: tip.y + 12,
+            left: tooltip.x,
+            top: tooltip.y,
           }}
         >
-          <div className={styles.tooltipType}>{t(`canvas.timeline.type_${tip.action.actionType}`)}</div>
-          {tip.action.startDate && (
+          <div className={styles.tooltipType}>{tooltip.typeLabel}</div>
+          {tooltip.dates && (
             <div className={styles.tooltipDates}>
-              {tip.action.startDate}{tip.action.endDate ? ` - ${tip.action.endDate}` : ''}
+              {tooltip.dates}
             </div>
           )}
-          {tip.action.description && (
+          {tooltip.description && (
             <div className={styles.tooltipDesc}>
-              {tip.action.description.length > 50
-                ? `${tip.action.description.slice(0, 50)}...`
-                : tip.action.description}
+              {tooltip.description}
             </div>
           )}
         </div>
       )}
-      {ps && createPortal(
-        <TimelinePopover
-          mode={ps.mode}
-          anchorX={ps.anchorX}
-          anchorY={ps.anchorY}
-          initialData={ps.formData}
-          speciesList={ps.speciesList}
-          onSave={workbench.handlePopoverSave}
-          onDelete={ps.mode === 'edit' ? workbench.handlePopoverDelete : undefined}
-          onCancel={workbench.handlePopoverCancel}
-        />,
+      {popover && createPortal(
+        <TimelinePopover {...popover.props} />,
         document.body,
       )}
     </div>
