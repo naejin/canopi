@@ -1,10 +1,21 @@
 import type { ScenePersistedState } from './types'
 
 export function isSceneDesignObjectLocked(state: ScenePersistedState, id: string): boolean {
+  return isDirectSceneDesignObjectLocked(state, id)
+    || isSceneGroupLockedByMember(state, id)
+}
+
+function isDirectSceneDesignObjectLocked(state: ScenePersistedState, id: string): boolean {
   return state.plants.some((plant) => plant.id === id && plant.locked)
     || state.zones.some((zone) => zone.name === id && zone.locked)
     || state.annotations.some((annotation) => annotation.id === id && annotation.locked)
     || state.groups.some((group) => group.id === id && group.locked)
+}
+
+function isSceneGroupLockedByMember(state: ScenePersistedState, id: string): boolean {
+  const group = state.groups.find((entry) => entry.id === id)
+  if (!group) return false
+  return group.memberIds.some((memberId) => isDirectSceneDesignObjectLocked(state, memberId))
 }
 
 export function getLockedSceneDesignObjectIds(state: ScenePersistedState): Set<string> {

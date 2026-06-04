@@ -15,6 +15,7 @@ import type {
 } from '../scene'
 import {
   clearSceneDesignObjectLocks,
+  isSceneDesignObjectLocked,
   setSceneDesignObjectLocks,
 } from '../scene'
 import {
@@ -73,7 +74,7 @@ export class SceneRuntimeMutationController {
 
   copy(): void {
     const persisted = this._sceneStore.persisted
-    const selected = getSelectedTopLevelTargets(persisted, this._sceneStore.session.selectedEntityIds)
+    const selected = getEditableTopLevelTargets(persisted, this._sceneStore.session.selectedEntityIds)
     this._clipboard = createClipboardPayload(persisted, selected)
   }
 
@@ -96,7 +97,7 @@ export class SceneRuntimeMutationController {
 
   deleteSelected(): void {
     const persisted = this._sceneStore.persisted
-    const selected = getSelectedTopLevelTargets(persisted, this._sceneStore.session.selectedEntityIds)
+    const selected = getEditableTopLevelTargets(persisted, this._sceneStore.session.selectedEntityIds)
     if (selected.length === 0) return
 
     const deleted = resolveSelectedEntitySets(persisted, selected)
@@ -150,7 +151,7 @@ export class SceneRuntimeMutationController {
     }
 
     for (const group of persisted.groups) {
-      if (layerVisibility[group.layer] === false || group.locked) continue
+      if (layerVisibility[group.layer] === false || isSceneDesignObjectLocked(persisted, group.id)) continue
       ids.add(group.id)
     }
 
@@ -236,7 +237,7 @@ export class SceneRuntimeMutationController {
   ungroupSelected(): void {
     const persisted = this._sceneStore.persisted
     const selectedGroupIds = new Set(
-      getSelectedTopLevelTargets(persisted, this._sceneStore.session.selectedEntityIds)
+      getEditableTopLevelTargets(persisted, this._sceneStore.session.selectedEntityIds)
         .filter((target) => target.kind === 'group')
         .map((target) => target.id),
     )
@@ -388,7 +389,7 @@ export class SceneRuntimeMutationController {
 
   private _reorderSelected(position: 'start' | 'end'): void {
     const persisted = this._sceneStore.persisted
-    const selected = getSelectedTopLevelTargets(persisted, this._sceneStore.session.selectedEntityIds)
+    const selected = getEditableTopLevelTargets(persisted, this._sceneStore.session.selectedEntityIds)
     if (selected.length === 0) return
 
     const resolved = resolveSelectedEntitySets(persisted, selected)
@@ -402,6 +403,14 @@ export class SceneRuntimeMutationController {
       })
     })
   }
+}
+
+function getEditableTopLevelTargets(
+  persisted: ScenePersistedState,
+  selectedIds: ReadonlySet<string>,
+): ReturnType<typeof getSelectedTopLevelTargets> {
+  return getSelectedTopLevelTargets(persisted, selectedIds)
+    .filter((target) => !isSceneDesignObjectLocked(persisted, target.id))
 }
 
 function sceneLayerVisibility(

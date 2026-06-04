@@ -145,7 +145,7 @@ function createController(file = makeFile()) {
 }
 
 describe('scene runtime mutation controller', () => {
-  it('deletes selected groups with embedded locks', () => {
+  it('does not delete selected groups that contain locked members', () => {
     const file = makeFile()
     file.plants = file.plants.map((plant) =>
       plant.id === 'plant-1' ? { ...plant, locked: true } : plant,
@@ -158,7 +158,7 @@ describe('scene runtime mutation controller', () => {
         position: { x: 10, y: 10 },
         rotation: null,
         member_ids: ['plant-1', 'plant-2'],
-        locked: true,
+        locked: false,
       },
     ]
     const { controller, sceneStore, state } = createController(file)
@@ -166,11 +166,78 @@ describe('scene runtime mutation controller', () => {
 
     controller.deleteSelected()
 
-    expect(sceneStore.persisted.groups).toEqual([])
-    expect(sceneStore.persisted.plants).toEqual([])
-    expect(sceneStore.session.selectedEntityIds.size).toBe(0)
-    expect(state.dirtyTypes).toEqual(['delete-selected'])
-    expect(state.invalidations).toBe(1)
+    expect(sceneStore.persisted.groups).toHaveLength(1)
+    expect(sceneStore.persisted.plants).toHaveLength(2)
+    expect(sceneStore.session.selectedEntityIds).toEqual(new Set(['group-1']))
+    expect(state.dirtyTypes).toEqual([])
+    expect(state.invalidations).toBe(0)
+  })
+
+  it('does not ungroup or reorder selected groups that contain locked members', () => {
+    const file = makeFile()
+    file.plants = file.plants.map((plant) =>
+      plant.id === 'plant-1' ? { ...plant, locked: true } : plant,
+    )
+    file.groups = [
+      {
+        id: 'group-1',
+        name: null,
+        layer: 'plants',
+        position: { x: 10, y: 10 },
+        rotation: null,
+        member_ids: ['plant-1', 'plant-2'],
+        locked: false,
+      },
+      {
+        id: 'group-2',
+        name: null,
+        layer: 'plants',
+        position: { x: 30, y: 30 },
+        rotation: null,
+        member_ids: ['missing-member'],
+        locked: false,
+      },
+    ]
+    const { controller, sceneStore, state } = createController(file)
+    sceneStore.setSelection(['group-1'])
+
+    controller.ungroupSelected()
+    controller.bringToFront()
+    controller.sendToBack()
+
+    expect(sceneStore.persisted.groups.map((group) => group.id)).toEqual(['group-1', 'group-2'])
+    expect(sceneStore.persisted.plants).toHaveLength(2)
+    expect(sceneStore.session.selectedEntityIds).toEqual(new Set(['group-1']))
+    expect(state.dirtyTypes).toEqual([])
+    expect(state.invalidations).toBe(0)
+  })
+
+  it('does not duplicate selected groups that contain locked members', () => {
+    const file = makeFile()
+    file.plants = file.plants.map((plant) =>
+      plant.id === 'plant-1' ? { ...plant, locked: true } : plant,
+    )
+    file.groups = [
+      {
+        id: 'group-1',
+        name: null,
+        layer: 'plants',
+        position: { x: 10, y: 10 },
+        rotation: null,
+        member_ids: ['plant-1', 'plant-2'],
+        locked: false,
+      },
+    ]
+    const { controller, sceneStore, state } = createController(file)
+    sceneStore.setSelection(['group-1'])
+
+    controller.duplicateSelected()
+
+    expect(sceneStore.persisted.groups).toHaveLength(1)
+    expect(sceneStore.persisted.plants).toHaveLength(2)
+    expect(sceneStore.session.selectedEntityIds).toEqual(new Set(['group-1']))
+    expect(state.dirtyTypes).toEqual([])
+    expect(state.invalidations).toBe(0)
   })
 
   it('selectAll skips grouped members and locked entities', () => {
@@ -194,6 +261,30 @@ describe('scene runtime mutation controller', () => {
     controller.selectAll()
 
     expect(sceneStore.session.selectedEntityIds).toEqual(new Set(['group-1', 'annotation-1']))
+    expect(state.invalidations).toBe(1)
+  })
+
+  it('selectAll skips groups that contain locked members', () => {
+    const file = makeFile()
+    file.plants = file.plants.map((plant) =>
+      plant.id === 'plant-1' ? { ...plant, locked: true } : plant,
+    )
+    file.groups = [
+      {
+        id: 'group-1',
+        name: null,
+        layer: 'plants',
+        position: { x: 10, y: 10 },
+        rotation: null,
+        member_ids: ['plant-1', 'plant-2'],
+        locked: false,
+      },
+    ]
+    const { controller, sceneStore, state } = createController(file)
+
+    controller.selectAll()
+
+    expect(sceneStore.session.selectedEntityIds).toEqual(new Set(['zone-1', 'annotation-1']))
     expect(state.invalidations).toBe(1)
   })
 

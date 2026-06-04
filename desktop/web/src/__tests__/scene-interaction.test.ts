@@ -226,6 +226,53 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('does not select groups that contain locked Design Object members', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'locked-member',
+        locked: true,
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 20, y: 30 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+      draft.groups = [{
+        kind: 'group',
+        id: 'group-1',
+        locked: false,
+        name: null,
+        layer: 'plants',
+        position: { x: 20, y: 30 },
+        rotationDeg: null,
+        memberIds: ['locked-member'],
+      }]
+    })
+
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 20, clientY: 30, button: 0 }))
+
+    expect(selectedObjectIds.value).toEqual(new Set())
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 20, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 30, clientY: 40, button: 0 }))
+    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 30, clientY: 40, button: 0 }))
+
+    expect(selectedObjectIds.value).toEqual(new Set())
+    controller.dispose()
+  })
+
   it('shows Plant Spacing source picking and samples a plant without mutating selection', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
@@ -3626,6 +3673,70 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       const plantsLayer = draft.layers.find((layer) => layer.name === 'plants')
       if (plantsLayer) plantsLayer.locked = true
+    })
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 120, clientY: 120, button: 0 }))
+
+    expect(store.persisted.groups).toHaveLength(1)
+    expect(store.persisted.plants).toHaveLength(1)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    controller.dispose()
+  })
+
+  it('blocks Object Stamp sampling and placement for group sources containing locked members', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'plant-1',
+        locked: false,
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 4,
+        position: { x: 40, y: 40 },
+        rotationDeg: null,
+        scale: 4,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+      draft.groups = [{
+        kind: 'group',
+        id: 'group-1',
+        locked: false,
+        name: 'Guild unit',
+        layer: 'plants',
+        position: { x: 38, y: 38 },
+        rotationDeg: null,
+        memberIds: ['plant-1'],
+      }]
+    })
+
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('object-stamp')
+
+    store.updatePersisted((draft) => {
+      draft.plants = draft.plants.map((plant) =>
+        plant.id === 'plant-1' ? { ...plant, locked: true } : plant,
+      )
+    })
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 120, clientY: 120, button: 0 }))
+    expect(store.persisted.groups).toHaveLength(1)
+    expect(store.persisted.plants).toHaveLength(1)
+
+    store.updatePersisted((draft) => {
+      draft.plants = draft.plants.map((plant) =>
+        plant.id === 'plant-1' ? { ...plant, locked: false } : plant,
+      )
+    })
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
+    store.updatePersisted((draft) => {
+      draft.plants = draft.plants.map((plant) =>
+        plant.id === 'plant-1' ? { ...plant, locked: true } : plant,
+      )
     })
     ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 120, clientY: 120, button: 0 }))
 
