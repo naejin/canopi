@@ -30,6 +30,7 @@ function makeFile(): CanopiFile {
         notes: null,
         planted_date: null,
         quantity: 1,
+        locked: false,
       },
       {
         id: 'plant-2',
@@ -42,6 +43,7 @@ function makeFile(): CanopiFile {
         notes: null,
         planted_date: null,
         quantity: 1,
+        locked: false,
       },
     ],
     zones: [
@@ -56,6 +58,7 @@ function makeFile(): CanopiFile {
         ],
         fill_color: null,
         notes: null,
+        locked: false,
       },
     ],
     annotations: [
@@ -66,6 +69,7 @@ function makeFile(): CanopiFile {
         text: 'Note',
         font_size: 20,
         rotation: null,
+        locked: false,
       },
     ],
     consortiums: [],
@@ -82,7 +86,6 @@ function makeFile(): CanopiFile {
 function createController(file = makeFile()) {
   const sceneStore = new SceneStore(file)
   const state = {
-    lockedIds: new Set<string>(),
     invalidations: 0,
     dirtyTypes: [] as string[],
     presentationSyncs: 0,
@@ -93,7 +96,6 @@ function createController(file = makeFile()) {
     return {
       persisted: snapshot.persisted,
       session: snapshot.session,
-      lockedIds: new Set(state.lockedIds),
     }
   }
   const setSelection = (ids: Iterable<string>) => {
@@ -107,9 +109,6 @@ function createController(file = makeFile()) {
       return true
     },
     setSelection,
-    setLockedIds: (ids) => {
-      state.lockedIds = new Set(ids)
-    },
     invalidate: (kind) => {
       if (kind === 'scene') state.invalidations += 1
     },
@@ -118,9 +117,6 @@ function createController(file = makeFile()) {
     sceneStore,
     selection: {
       set: setSelection,
-    },
-    locks: {
-      get: () => state.lockedIds,
     },
     sceneEdits,
     presentation: {
@@ -149,8 +145,11 @@ function createController(file = makeFile()) {
 }
 
 describe('scene runtime mutation controller', () => {
-  it('deletes selected groups and clears matching locks', () => {
+  it('deletes selected groups with embedded locks', () => {
     const file = makeFile()
+    file.plants = file.plants.map((plant) =>
+      plant.id === 'plant-1' ? { ...plant, locked: true } : plant,
+    )
     file.groups = [
       {
         id: 'group-1',
@@ -159,18 +158,17 @@ describe('scene runtime mutation controller', () => {
         position: { x: 10, y: 10 },
         rotation: null,
         member_ids: ['plant-1', 'plant-2'],
+        locked: true,
       },
     ]
     const { controller, sceneStore, state } = createController(file)
     sceneStore.setSelection(['group-1'])
-    state.lockedIds = new Set(['group-1', 'plant-1'])
 
     controller.deleteSelected()
 
     expect(sceneStore.persisted.groups).toEqual([])
     expect(sceneStore.persisted.plants).toEqual([])
     expect(sceneStore.session.selectedEntityIds.size).toBe(0)
-    expect(state.lockedIds).toEqual(new Set())
     expect(state.dirtyTypes).toEqual(['delete-selected'])
     expect(state.invalidations).toBe(1)
   })
@@ -185,10 +183,13 @@ describe('scene runtime mutation controller', () => {
         position: { x: 10, y: 10 },
         rotation: null,
         member_ids: ['plant-1', 'plant-2'],
+        locked: false,
       },
     ]
+    file.zones = file.zones.map((zone) =>
+      zone.name === 'zone-1' ? { ...zone, locked: true } : zone,
+    )
     const { controller, sceneStore, state } = createController(file)
-    state.lockedIds = new Set(['zone-1'])
 
     controller.selectAll()
 

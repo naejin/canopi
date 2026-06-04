@@ -5,7 +5,6 @@ import { syncPlantSpeciesColorDefaults } from '../../plant-species-color-default
 import type { CanopiFile } from '../../../types/design'
 import { plantColorByAttr, plantSizeMode } from '../../plant-display-state'
 import { guides, northBearingAvailable, northBearingDeg } from '../../scene-metadata-state'
-import { lockedObjectIds } from '../../runtime-mirror-state'
 import { clearCanvasSelection, setCanvasSelection, setCanvasTool } from '../../session-state'
 import type { SceneStore } from '../scene'
 
@@ -28,7 +27,6 @@ export function resetTransientRuntimeState(
   setCanvasTool('select')
   setTool('select')
   clearCanvasSelection()
-  lockedObjectIds.value = new Set()
   plantColorMenuOpen.value = false
 }
 

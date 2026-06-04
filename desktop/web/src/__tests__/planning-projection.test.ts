@@ -19,6 +19,7 @@ function makePlant(canonicalName: string, commonName: string | null = null): Pla
     notes: null,
     planted_date: null,
     quantity: 1,
+    locked: false,
   }
 }
 

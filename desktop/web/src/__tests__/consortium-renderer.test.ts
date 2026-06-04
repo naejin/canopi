@@ -43,6 +43,7 @@ function createPlant(overrides: Partial<PlacedPlant> = {}): PlacedPlant {
     planted_date: null,
     quantity: null,
     ...overrides,
+    locked: overrides.locked ?? false,
   }
 }
 

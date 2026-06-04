@@ -126,6 +126,16 @@ describe('frontend boundary sources', () => {
     expect(documentSource).not.toContain('applySignalBackedSceneState')
   })
 
+  it('keeps Design Object lock authority inside SceneStore', () => {
+    const canvasSources = sourceFilesUnder('../canvas')
+      .filter(isTypescriptSource)
+      .filter((path) => path !== '../canvas/runtime-mirror-state.ts')
+
+    for (const sourcePath of canvasSources) {
+      expect(readSource(sourcePath), `${sourcePath} should not read lockedObjectIds`).not.toContain('lockedObjectIds')
+    }
+  })
+
   it('keeps Target identity, resolution, and map projection behind the Target module', () => {
     const targetIndexSource = readSource('../target/index.ts')
     const mapOverlaySource = readSource('../maplibre/canvas-overlays.ts')

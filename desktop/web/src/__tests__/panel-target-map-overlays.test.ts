@@ -11,6 +11,7 @@ function createScene() {
   scene.plants = [
     {
       kind: 'plant',
+      locked: false,
       id: 'plant-1',
       canonicalName: 'Malus domestica',
       commonName: 'Apple',
@@ -28,6 +29,7 @@ function createScene() {
   scene.zones = [
     {
       kind: 'zone',
+      locked: false,
       name: 'orchard',
       zoneType: 'polygon',
       points: [

@@ -67,6 +67,7 @@ export function createPlantSpacingGeneratedPlants(
   return positions.map((position, index) => ({
     kind: 'plant',
     id: createId(index),
+    locked: false,
     canonicalName: source.canonicalName,
     commonName: source.commonName,
     color: source.color,

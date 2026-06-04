@@ -67,6 +67,7 @@ describe('TemplateAdaptation', () => {
     mocks.checkPlantCompatibility.mockResolvedValueOnce([
       {
         canonical_name: 'Malus domestica',
+        locked: false,
         common_name: 'Apple',
         hardiness_min: 3,
         hardiness_max: 5,

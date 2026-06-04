@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { plantStampSpecies } from '../canvas/plant-tool-state'
-import { lockedObjectIds } from '../canvas/runtime-mirror-state'
 import { guides } from '../canvas/scene-metadata-state'
 import { selectedObjectIds } from '../canvas/session-state'
 import { snapToGridEnabled, snapToGuidesEnabled } from '../app/canvas-settings/signals'
@@ -49,7 +48,6 @@ function createInteractionDeps(
       return {
         persisted: snapshot.persisted,
         session: snapshot.session,
-        lockedIds: new Set(lockedObjectIds.value),
       }
     },
     markDirty: (_before, type) => {
@@ -57,9 +55,6 @@ function createInteractionDeps(
       return true
     },
     setSelection,
-    setLockedIds: (ids) => {
-      lockedObjectIds.value = new Set(ids)
-    },
     invalidate: (kind) => {
       if (kind === 'scene' || kind === 'viewport') render(kind)
     },
@@ -144,7 +139,6 @@ describe('SceneInteractionController', () => {
     camera.setViewport({ x: 0, y: 0, scale: 1 })
     store = new SceneStore()
     selectedObjectIds.value = new Set()
-    lockedObjectIds.value = new Set()
     plantStampSpecies.value = null
     snapToGridEnabled.value = false
     snapToGuidesEnabled.value = false
@@ -155,7 +149,6 @@ describe('SceneInteractionController', () => {
   afterEach(() => {
     container.remove()
     selectedObjectIds.value = new Set()
-    lockedObjectIds.value = new Set()
     plantStampSpecies.value = null
     snapToGridEnabled.value = false
     snapToGuidesEnabled.value = false
@@ -168,6 +161,7 @@ describe('SceneInteractionController', () => {
       draft.plants = [{
         kind: 'plant',
         id: 'plant-1',
+        locked: false,
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: null,
@@ -199,11 +193,45 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('does not select or drag locked Design Objects from SceneStore', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'locked-plant',
+        locked: true,
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 20, y: 30 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 35, clientY: 45, button: 0 }))
+    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 35, clientY: 45, button: 0 }))
+
+    expect(selectedObjectIds.value).toEqual(new Set())
+    expect(store.persisted.plants[0]?.position).toEqual({ x: 20, y: 30 })
+    controller.dispose()
+  })
+
   it('shows Plant Spacing source picking and samples a plant without mutating selection', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
         id: 'plant-1',
+        locked: false,
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: null,
@@ -299,6 +327,7 @@ describe('SceneInteractionController', () => {
         {
           kind: 'plant',
           id: 'grouped-plant',
+          locked: false,
           canonicalName: 'Malus domestica',
           commonName: 'Apple',
           color: null,
@@ -314,6 +343,7 @@ describe('SceneInteractionController', () => {
         {
           kind: 'plant',
           id: 'locked-plant',
+          locked: true,
           canonicalName: 'Pyrus communis',
           commonName: 'Pear',
           color: null,
@@ -330,6 +360,7 @@ describe('SceneInteractionController', () => {
       draft.groups = [{
         kind: 'group',
         id: 'group-1',
+        locked: false,
         name: 'Grouped row',
         layer: 'plants',
         position: { x: 20, y: 30 },
@@ -337,7 +368,6 @@ describe('SceneInteractionController', () => {
         memberIds: ['grouped-plant'],
       }]
     })
-    lockedObjectIds.value = new Set(['locked-plant'])
     const deps = createInteractionDeps(container, store, camera)
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
@@ -357,6 +387,7 @@ describe('SceneInteractionController', () => {
       )
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'plant-1',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -393,6 +424,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'plant-1',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -432,6 +464,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'source',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -473,6 +506,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'source',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -509,6 +543,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'plant-1',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -554,6 +589,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'plant-1',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -593,6 +629,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'plant-1',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -634,6 +671,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'plant-1',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -667,6 +705,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'plant-1',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -706,6 +745,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'source',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -747,6 +787,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'source',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -792,6 +833,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'source',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -831,6 +873,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'plant-1',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -868,6 +911,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'source',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -930,7 +974,6 @@ describe('SceneInteractionController', () => {
   it('does not commit Plant Spacing when the sampled source becomes unavailable before commit', () => {
     const runBlockedCommit = (blockCommit: () => void, expectedPlantCount = 1): void => {
       store = new SceneStore()
-      lockedObjectIds.value = new Set()
       plantSpacingIntervalM.value = 2
       store.updatePersisted((draft) => {
         draft.plants = [{
@@ -947,6 +990,7 @@ describe('SceneInteractionController', () => {
           notes: null,
           plantedDate: null,
           quantity: 1,
+          locked: false,
         }]
       })
       const onSceneEditCommit = vi.fn()
@@ -966,11 +1010,14 @@ describe('SceneInteractionController', () => {
       expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.dataset.state).toBe('source-picking')
       expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.textContent).toContain('Select a visible, unlocked placed plant')
       controller.dispose()
-      lockedObjectIds.value = new Set()
     }
 
     runBlockedCommit(function lockSourcePlant() {
-      lockedObjectIds.value = new Set(['source'])
+      store.updatePersisted((draft) => {
+        draft.plants = draft.plants.map((plant) =>
+          plant.id === 'source' ? { ...plant, locked: true } : plant,
+        )
+      })
     })
     runBlockedCommit(function removeSourcePlant() {
       store.updatePersisted((draft) => {
@@ -998,6 +1045,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'source',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -1030,6 +1078,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'source',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -1072,6 +1121,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'source',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -1113,6 +1163,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'source',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -1156,6 +1207,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'source',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -1193,6 +1245,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'source',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -1228,6 +1281,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'source',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -1266,6 +1320,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'source',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -1311,6 +1366,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'source',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -1358,6 +1414,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'source',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -1394,6 +1451,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'source',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -1428,6 +1486,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'source',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -1461,6 +1520,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'source',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -1505,6 +1565,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'source',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -1539,6 +1600,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'source',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -1579,6 +1641,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'source',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -1616,6 +1679,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'source',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -1652,6 +1716,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'source',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -1867,6 +1932,7 @@ describe('SceneInteractionController', () => {
     })
     expect(store.toCanopiFile().zones[0]).toMatchObject({
       zone_type: 'ellipse',
+      locked: false,
       points: [
         { x: 40, y: 60 },
         { x: 30, y: 40 },
@@ -1951,6 +2017,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.zones = [{
         kind: 'zone',
+        locked: false,
         name: 'ellipse-1',
         zoneType: 'ellipse',
         points: [
@@ -1982,6 +2049,7 @@ describe('SceneInteractionController', () => {
       draft.zones = [
         {
           kind: 'zone',
+          locked: false,
           name: 'ellipse-1',
           zoneType: 'ellipse',
           points: [
@@ -1993,6 +2061,7 @@ describe('SceneInteractionController', () => {
         },
         {
           kind: 'zone',
+          locked: false,
           name: 'ellipse-2',
           zoneType: 'ellipse',
           points: [
@@ -2044,6 +2113,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.zones = [{
         kind: 'zone',
+        locked: false,
         name: 'zone-ellipse',
         zoneType: 'ellipse',
         points: [
@@ -2071,6 +2141,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.zones = [{
         kind: 'zone',
+        locked: false,
         name: 'zone-ellipse',
         zoneType: 'ellipse',
         points: [
@@ -2127,6 +2198,7 @@ describe('SceneInteractionController', () => {
     })
     expect(store.toCanopiFile().zones[0]).toMatchObject({
       zone_type: 'polygon',
+      locked: false,
       points: [
         { x: 10, y: 10 },
         { x: 60, y: 10 },
@@ -2171,6 +2243,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'plant-1',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -2219,6 +2292,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.zones = [{
         kind: 'zone',
+        locked: false,
         name: 'polygon-1',
         zoneType: 'polygon',
         points: [
@@ -2252,6 +2326,7 @@ describe('SceneInteractionController', () => {
       draft.zones = [
         {
           kind: 'zone',
+          locked: false,
           name: 'polygon-1',
           zoneType: 'polygon',
           points: [
@@ -2264,6 +2339,7 @@ describe('SceneInteractionController', () => {
         },
         {
           kind: 'zone',
+          locked: false,
           name: 'polygon-2',
           zoneType: 'polygon',
           points: [
@@ -2301,6 +2377,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.zones = [{
         kind: 'zone',
+        locked: false,
         name: 'polygon-1',
         zoneType: 'polygon',
         points: [
@@ -2555,6 +2632,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.zones = [{
         kind: 'zone',
+        locked: false,
         name: 'zone-1',
         zoneType: 'rect',
         points: [
@@ -2591,6 +2669,7 @@ describe('SceneInteractionController', () => {
       draft.zones = [
         {
           kind: 'zone',
+          locked: false,
           name: 'zone-1',
           zoneType: 'rect',
           points: [
@@ -2604,6 +2683,7 @@ describe('SceneInteractionController', () => {
         },
         {
           kind: 'zone',
+          locked: false,
           name: 'zone-2',
           zoneType: 'rect',
           points: [
@@ -2643,6 +2723,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.zones = [{
         kind: 'zone',
+        locked: false,
         name: 'zone-1',
         zoneType: 'rect',
         points: [
@@ -2656,6 +2737,7 @@ describe('SceneInteractionController', () => {
       }]
       draft.groups = [{
         kind: 'group',
+        locked: false,
         id: 'group-1',
         name: null,
         layer: 'zones',
@@ -2681,6 +2763,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.zones = [{
         kind: 'zone',
+        locked: false,
         name: 'zone-1',
         zoneType: 'rect',
         points: [
@@ -2715,6 +2798,7 @@ describe('SceneInteractionController', () => {
       if (zonesLayer) zonesLayer.visible = false
       draft.zones = [{
         kind: 'zone',
+        locked: false,
         name: 'zone-1',
         zoneType: 'rect',
         points: [
@@ -2808,6 +2892,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'plant-1',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -2867,6 +2952,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'plant-1',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -2926,6 +3012,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'plant-1',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -2958,6 +3045,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'plant-1',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -2991,6 +3079,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'plant-1',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -3023,6 +3112,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'plant-1',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -3058,6 +3148,7 @@ describe('SceneInteractionController', () => {
       draft.plants = [{
         kind: 'plant',
         id: 'plant-1',
+        locked: true,
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: null,
@@ -3077,12 +3168,14 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('object-stamp')
 
-    lockedObjectIds.value = new Set(['plant-1'])
     ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
     ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 90, clientY: 90, button: 0 }))
     expect(store.persisted.plants).toHaveLength(1)
 
-    lockedObjectIds.value = new Set()
+    store.updatePersisted((draft) => {
+      const plant = draft.plants.find((entry) => entry.id === 'plant-1')
+      if (plant) plant.locked = false
+    })
     ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
     store.updatePersisted((draft) => {
       const plantsLayer = draft.layers.find((layer) => layer.name === 'plants')
@@ -3100,6 +3193,7 @@ describe('SceneInteractionController', () => {
       draft.zones = [
         {
           kind: 'zone',
+          locked: false,
           name: 'Kitchen bed',
           zoneType: 'rect',
           points: [
@@ -3113,6 +3207,7 @@ describe('SceneInteractionController', () => {
         },
         {
           kind: 'zone',
+          locked: false,
           name: 'Kitchen bed copy',
           zoneType: 'rect',
           points: [
@@ -3167,6 +3262,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.annotations = [{
         kind: 'annotation',
+        locked: false,
         id: 'annotation-1',
         annotationType: 'text',
         position: { x: 20, y: 30 },
@@ -3214,6 +3310,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.annotations = [{
         kind: 'annotation',
+        locked: false,
         id: 'annotation-1',
         annotationType: 'text',
         position: { x: 10, y: 10 },
@@ -3240,6 +3337,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.zones = [{
         kind: 'zone',
+        locked: false,
         name: 'Oval bed',
         zoneType: 'ellipse',
         points: [
@@ -3284,6 +3382,7 @@ describe('SceneInteractionController', () => {
         ],
         fillColor: null,
         notes: null,
+        locked: false,
       }]
       draft.annotations = [{
         kind: 'annotation',
@@ -3293,6 +3392,7 @@ describe('SceneInteractionController', () => {
         text: 'Note',
         fontSize: 20,
         rotationDeg: null,
+        locked: false,
       }]
     })
 
@@ -3301,12 +3401,20 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('object-stamp')
 
-    lockedObjectIds.value = new Set(['Kitchen bed'])
+    store.updatePersisted((draft) => {
+      draft.zones = draft.zones.map((zone) =>
+        zone.name === 'Kitchen bed' ? { ...zone, locked: true } : zone,
+      )
+    })
     ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 20, button: 0 }))
     ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 120, clientY: 120, button: 0 }))
     expect(store.persisted.zones).toHaveLength(1)
 
-    lockedObjectIds.value = new Set()
+    store.updatePersisted((draft) => {
+      draft.zones = draft.zones.map((zone) =>
+        zone.name === 'Kitchen bed' ? { ...zone, locked: false } : zone,
+      )
+    })
     ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 20, button: 0 }))
     store.updatePersisted((draft) => {
       const zonesLayer = draft.layers.find((layer) => layer.name === 'zones')
@@ -3322,12 +3430,20 @@ describe('SceneInteractionController', () => {
       if (zonesLayer) zonesLayer.visible = true
     })
 
-    lockedObjectIds.value = new Set(['annotation-1'])
+    store.updatePersisted((draft) => {
+      draft.annotations = draft.annotations.map((annotation) =>
+        annotation.id === 'annotation-1' ? { ...annotation, locked: true } : annotation,
+      )
+    })
     ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 104, clientY: 34, button: 0 }))
     ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 150, clientY: 90, button: 0 }))
     expect(store.persisted.annotations).toHaveLength(1)
 
-    lockedObjectIds.value = new Set()
+    store.updatePersisted((draft) => {
+      draft.annotations = draft.annotations.map((annotation) =>
+        annotation.id === 'annotation-1' ? { ...annotation, locked: false } : annotation,
+      )
+    })
     ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 104, clientY: 34, button: 0 }))
     store.updatePersisted((draft) => {
       const annotationsLayer = draft.layers.find((layer) => layer.name === 'annotations')
@@ -3344,6 +3460,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
+        locked: false,
         id: 'plant-1',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -3359,6 +3476,7 @@ describe('SceneInteractionController', () => {
       }]
       draft.zones = [{
         kind: 'zone',
+        locked: false,
         name: 'Kitchen bed',
         zoneType: 'rect',
         points: [
@@ -3372,6 +3490,7 @@ describe('SceneInteractionController', () => {
       }]
       draft.annotations = [{
         kind: 'annotation',
+        locked: false,
         id: 'annotation-1',
         annotationType: 'text',
         position: { x: 60, y: 30 },
@@ -3381,6 +3500,7 @@ describe('SceneInteractionController', () => {
       }]
       draft.groups = [{
         kind: 'group',
+        locked: false,
         id: 'group-1',
         name: 'Guild unit',
         layer: 'plants',
@@ -3468,6 +3588,7 @@ describe('SceneInteractionController', () => {
         notes: null,
         plantedDate: null,
         quantity: 1,
+        locked: false,
       }]
       draft.groups = [{
         kind: 'group',
@@ -3477,6 +3598,7 @@ describe('SceneInteractionController', () => {
         position: { x: 38, y: 38 },
         rotationDeg: null,
         memberIds: ['plant-1'],
+        locked: false,
       }]
     })
 
@@ -3485,13 +3607,21 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('object-stamp')
 
-    lockedObjectIds.value = new Set(['group-1'])
+    store.updatePersisted((draft) => {
+      draft.groups = draft.groups.map((group) =>
+        group.id === 'group-1' ? { ...group, locked: true } : group,
+      )
+    })
     ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
     ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 120, clientY: 120, button: 0 }))
     expect(store.persisted.groups).toHaveLength(1)
     expect(store.persisted.plants).toHaveLength(1)
 
-    lockedObjectIds.value = new Set()
+    store.updatePersisted((draft) => {
+      draft.groups = draft.groups.map((group) =>
+        group.id === 'group-1' ? { ...group, locked: false } : group,
+      )
+    })
     ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
     store.updatePersisted((draft) => {
       const plantsLayer = draft.layers.find((layer) => layer.name === 'plants')
@@ -3519,6 +3649,7 @@ describe('SceneInteractionController', () => {
         value: {
           getData: () => JSON.stringify({
             canonical_name: 'Pyrus communis',
+            locked: false,
             common_name: 'Pear',
             stratum: 'mid',
             width_max_m: 3,
@@ -3544,6 +3675,7 @@ describe('SceneInteractionController', () => {
     store.updatePersisted((draft) => {
       draft.zones = [{
         kind: 'zone',
+        locked: false,
         name: 'zone-1',
         zoneType: 'rect',
         points: [
@@ -3557,6 +3689,7 @@ describe('SceneInteractionController', () => {
       }]
       draft.annotations = [{
         kind: 'annotation',
+        locked: false,
         id: 'annotation-1',
         annotationType: 'text',
         position: { x: 20, y: 20 },

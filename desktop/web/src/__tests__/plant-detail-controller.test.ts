@@ -19,6 +19,7 @@ async function flushMicrotasks(): Promise<void> {
 function createDetail(canonicalName: string, commonName: string | null = null) {
   return {
     canonical_name: canonicalName,
+    locked: false,
     common_name: commonName,
     uses: [],
     relationships: [],

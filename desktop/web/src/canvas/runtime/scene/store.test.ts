@@ -29,6 +29,7 @@ describe('scene store', () => {
       plants: [
         {
           id: 'plant-1',
+          locked: false,
           canonical_name: 'Quercus robur',
           common_name: 'English oak',
           color: '#228833',
@@ -43,6 +44,7 @@ describe('scene store', () => {
       zones: [
         {
           name: 'zone-a',
+          locked: false,
           zone_type: 'rect',
           points: [
             { x: 0, y: 0 },
@@ -59,6 +61,7 @@ describe('scene store', () => {
       groups: [
         {
           id: 'group-1',
+          locked: false,
           name: 'grouped',
           layer: 'plants',
           position: { x: 4, y: 5 },
@@ -150,6 +153,79 @@ describe('scene store', () => {
     expect(serializeScenePersistedState(persisted, { now: new Date('2026-04-02T00:00:00.000Z') }).version).toBe(2)
   })
 
+  it('hydrates and serializes embedded Design Object lock state', () => {
+    const file: CanopiFile = {
+      version: 2,
+      name: 'Locked objects',
+      description: null,
+      location: null,
+      north_bearing_deg: 0,
+      plant_species_colors: {},
+      layers: [],
+      plants: [
+        {
+          id: 'plant-1',
+          locked: true,
+          canonical_name: 'Quercus robur',
+          common_name: null,
+          color: null,
+          position: { x: 1, y: 2 },
+          rotation: null,
+          scale: null,
+          notes: null,
+          planted_date: null,
+          quantity: null,
+        },
+      ],
+      zones: [
+        {
+          name: 'zone-1',
+          zone_type: 'polygon',
+          points: [{ x: 0, y: 0 }],
+          fill_color: null,
+          notes: null,
+          locked: true,
+        },
+      ],
+      annotations: [
+        {
+          id: 'annotation-1',
+          annotation_type: 'text',
+          position: { x: 3, y: 4 },
+          text: 'Note',
+          font_size: 16,
+          rotation: null,
+          locked: true,
+        },
+      ],
+      consortiums: [],
+      groups: [
+        {
+          id: 'group-1',
+          name: null,
+          layer: 'plants',
+          position: { x: 5, y: 6 },
+          rotation: null,
+          member_ids: ['plant-1'],
+          locked: true,
+        },
+      ],
+      timeline: [],
+      budget: [],
+      budget_currency: 'EUR',
+      created_at: '2026-04-01T10:00:00.000Z',
+      updated_at: '2026-04-01T12:00:00.000Z',
+      extra: {},
+    }
+
+    const serialized = SceneStore.fromCanopi(file).toCanopiFile({ now: new Date(file.updated_at) })
+
+    expect(serialized.plants[0]?.locked).toBe(true)
+    expect(serialized.zones[0]?.locked).toBe(true)
+    expect(serialized.annotations[0]?.locked).toBe(true)
+    expect(serialized.groups[0]?.locked).toBe(true)
+  })
+
   it('serializes runtime plant presentation metadata back into the existing placed-plant fields only', () => {
     const file: CanopiFile = {
       version: 2,
@@ -162,6 +238,7 @@ describe('scene store', () => {
       plants: [
         {
           id: 'plant-1',
+          locked: false,
           canonical_name: 'Quercus robur',
           common_name: 'English oak',
           color: null,

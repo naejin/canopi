@@ -30,10 +30,11 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 
 ## Document Authority
 
-- Canvas scene state is owned by `SceneStore`: plants, zones, annotations, groups, plant species colors, layers, and canvas session state.
+- Canvas scene state is owned by `SceneStore`: plants, zones, annotations, groups, Design Object locks, plant species colors, layers, and canvas session state.
 - Non-canvas document state is owned by the document layer: consortiums, timeline, budget, `budget_currency`, location, description, and top-level unknown `extra` fields.
 - Non-canvas state must not be pushed into `SceneStore`.
 - Canvas state should not be mirrored into standalone signals when a computed value or runtime query surface is enough.
+- Design Object lock state is canvas-owned document state. Old files missing per-object `locked` fields load unlocked; new saves must serialize explicit `locked` values.
 - New cross-domain sync belongs in a workflow module, not a component effect and not an action-module import cycle.
 
 ## Save And Format Contract

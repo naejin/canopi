@@ -22,6 +22,7 @@ function sourcePlant(overrides: Partial<ScenePlantEntity> = {}): ScenePlantEntit
     plantedDate: '2026-03-01',
     quantity: 4,
     ...overrides,
+    locked: overrides.locked ?? false,
   }
 }
 
@@ -58,6 +59,7 @@ describe('Plant Spacing sequence math', () => {
     expect(plants.map((plant) => plant.position)).toEqual([{ x: 2, y: 0 }, { x: 4, y: 0 }])
     expect(plants[0]).toMatchObject({
       kind: 'plant',
+      locked: false,
       canonicalName: 'Malus domestica',
       commonName: 'Apple',
       color: '#884422',

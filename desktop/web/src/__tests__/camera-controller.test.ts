@@ -9,6 +9,7 @@ function createScene(): ScenePersistedState {
     plants: [
       {
         kind: 'plant',
+        locked: false,
         id: 'p1',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -26,6 +27,7 @@ function createScene(): ScenePersistedState {
     zones: [
       {
         kind: 'zone',
+        locked: false,
         name: 'z1',
         zoneType: 'rect',
         points: [
@@ -80,6 +82,7 @@ describe('CameraController', () => {
     const scene = createScene()
     scene.annotations = [{
       kind: 'annotation',
+      locked: false,
       id: 'a1',
       annotationType: 'text',
       position: { x: 50, y: 60 },
@@ -128,6 +131,7 @@ describe('computeSceneBounds', () => {
     scene.plants = []
     scene.zones = [{
       kind: 'zone',
+      locked: false,
       name: 'ellipse-1',
       zoneType: 'ellipse',
       points: [
@@ -150,6 +154,7 @@ describe('computeSceneBounds', () => {
     const scene = createScene()
     scene.annotations = [{
       kind: 'annotation',
+      locked: false,
       id: 'annotation-1',
       annotationType: 'text',
       position: { x: 50, y: 60 },

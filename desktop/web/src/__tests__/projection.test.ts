@@ -246,6 +246,7 @@ describe('projection backend seam', () => {
     const scene = createDefaultScenePersistedState()
     scene.plants.push({
       kind: 'plant',
+      locked: false,
       id: 'plant-warning',
       canonicalName: 'Malus domestica',
       commonName: null,

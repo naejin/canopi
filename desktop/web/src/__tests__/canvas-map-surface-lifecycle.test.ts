@@ -513,6 +513,7 @@ describe('Canvas map surface lifecycle', () => {
     scene.plants = [
       {
         kind: 'plant',
+        locked: false,
         id: 'plant-1',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
@@ -530,6 +531,7 @@ describe('Canvas map surface lifecycle', () => {
     scene.zones = [
       {
         kind: 'zone',
+        locked: false,
         name: 'orchard',
         zoneType: 'polygon',
         points: [

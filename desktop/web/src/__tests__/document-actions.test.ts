@@ -54,7 +54,6 @@ vi.mock('../i18n', () => ({
   },
 }))
 
-import { lockedObjectIds } from '../canvas/runtime-mirror-state'
 import { activeTool, selectedObjectIds } from '../canvas/session-state'
 import {
   currentDesign,
@@ -175,7 +174,6 @@ beforeEach(() => {
 
   activeTool.value = 'rectangle'
   selectedObjectIds.value = new Set(['selected-1'])
-  lockedObjectIds.value = new Set(['locked-1'])
   mocks.canvasSession.serializeDocument.mockClear()
 })
 

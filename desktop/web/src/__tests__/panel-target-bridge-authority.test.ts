@@ -11,6 +11,7 @@ function createScene() {
   scene.plants = [
     {
       kind: 'plant',
+      locked: false,
       id: 'plant-1',
       canonicalName: 'Malus domestica',
       commonName: 'Apple',

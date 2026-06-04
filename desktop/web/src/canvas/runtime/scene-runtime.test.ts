@@ -10,7 +10,6 @@ import {
 } from '../../app/canvas-settings/signals'
 import { layerLockState, layerOpacity, layerVisibility } from '../../app/canvas-settings/signals'
 import { guides } from '../scene-metadata-state'
-import { lockedObjectIds } from '../runtime-mirror-state'
 import { plantColorMenuOpen } from '../plant-color-menu-state'
 import { plantColorByAttr, plantSizeMode } from '../plant-display-state'
 import { plantStampSpecies } from '../plant-tool-state'
@@ -54,6 +53,7 @@ function makeFile(): CanopiFile {
         notes: null,
         planted_date: null,
         quantity: 1,
+        locked: false,
       },
       {
         id: 'plant-2',
@@ -66,6 +66,7 @@ function makeFile(): CanopiFile {
         notes: null,
         planted_date: null,
         quantity: 1,
+        locked: false,
       },
     ],
     zones: [
@@ -80,6 +81,7 @@ function makeFile(): CanopiFile {
         ],
         fill_color: null,
         notes: null,
+        locked: false,
       },
     ],
     annotations: [],
@@ -170,7 +172,6 @@ describe('scene canvas runtime', () => {
     activeTool.value = 'select'
     locale.value = 'en'
     selectedObjectIds.value = new Set()
-    lockedObjectIds.value = new Set()
     plantColorMenuOpen.value = false
     plantStampSpecies.value = null
     snapToGridEnabled.value = false
@@ -230,10 +231,13 @@ describe('scene canvas runtime', () => {
         position: { x: 10, y: 10 },
         rotation: null,
         member_ids: ['plant-1', 'plant-2'],
+        locked: false,
       },
     ]
+    file.zones = file.zones.map((zone) =>
+      zone.name === 'zone-1' ? { ...zone, locked: true } : zone,
+    )
     runtime.loadDocument(file)
-    lockedObjectIds.value = new Set(['zone-1'])
 
     runtime.selectAll()
 
@@ -251,6 +255,7 @@ describe('scene canvas runtime', () => {
         position: { x: 10, y: 10 },
         rotation: null,
         member_ids: ['plant-1', 'plant-2'],
+        locked: false,
       },
     ]
     runtime.loadDocument(file)
@@ -374,6 +379,7 @@ describe('scene canvas runtime', () => {
       ],
       fill_color: null,
       notes: null,
+      locked: false,
     }]
     runtime.loadDocument(file)
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
@@ -451,6 +457,7 @@ describe('scene canvas runtime', () => {
           ...makeFile().plants[0]!,
           id: 'colliding-id',
           canonical_name: 'Malus domestica',
+          locked: false,
         },
       ],
       zones: [
@@ -599,7 +606,6 @@ describe('scene canvas runtime', () => {
       width_max_m: 4,
     }
     plantColorMenuOpen.value = true
-    lockedObjectIds.value = new Set(['zone-1'])
     selectedObjectIds.value = new Set(['plant-1'])
     hoveredPanelTargets.value = [speciesTarget('Malus domestica')]
     selectedPanelTargetOrigin.value = 'timeline'
@@ -614,7 +620,6 @@ describe('scene canvas runtime', () => {
     expect(activeTool.value).toBe('select')
     expect(plantStampSpecies.value).toBe(null)
     expect(plantColorMenuOpen.value).toBe(false)
-    expect(lockedObjectIds.value.size).toBe(0)
     expect(selectedObjectIds.value.size).toBe(0)
     expect(hoveredPanelTargets.value).toEqual([])
     expect(selectedPanelTargets.value).toEqual([])
@@ -684,6 +689,7 @@ describe('scene canvas runtime', () => {
       position: { x: 10, y: 10 },
       rotation: null,
       member_ids: ['plant-1', 'plant-2'],
+      locked: false,
     }]
     runtime.loadDocument(file)
     ;(runtime as any)._camera.setViewport({ x: 0, y: 0, scale: 1 })
@@ -764,6 +770,35 @@ describe('scene canvas runtime', () => {
     runtime.unlockSelected()
     expect(invalidate).toHaveBeenCalledTimes(1)
     expect(invalidate).toHaveBeenLastCalledWith('scene')
+  })
+
+  it('locks and unlocks selected Design Objects through scene edit history and serialization', () => {
+    const runtime = new SceneCanvasRuntime()
+    const file = makeFile()
+    runtime.loadDocument(file)
+    runtime.markSaved()
+
+    runtime.setSelection(['plant-1'])
+    runtime.lockSelected()
+
+    expect(runtime.serializeDocument({ name: file.name }, file).plants.find((plant) => plant.id === 'plant-1')?.locked)
+      .toBe(true)
+    expect(runtime.getSelection().size).toBe(0)
+    expect(canvasClean.value).toBe(false)
+    expect(runtime.canUndo.value).toBe(true)
+
+    runtime.undo()
+    expect(runtime.serializeDocument({ name: file.name }, file).plants.find((plant) => plant.id === 'plant-1')?.locked)
+      .toBe(false)
+
+    runtime.redo()
+    expect(runtime.serializeDocument({ name: file.name }, file).plants.find((plant) => plant.id === 'plant-1')?.locked)
+      .toBe(true)
+
+    runtime.setSelection(['plant-1'])
+    runtime.unlockSelected()
+    expect(runtime.serializeDocument({ name: file.name }, file).plants.find((plant) => plant.id === 'plant-1')?.locked)
+      .toBe(false)
   })
 
   it('edits layer state through the scene edit history and projection signals', () => {

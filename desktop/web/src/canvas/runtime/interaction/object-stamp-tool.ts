@@ -1,4 +1,3 @@
-import { lockedObjectIds } from '../../runtime-mirror-state'
 import { createUuid } from '../../../utils/ids'
 import { getAnnotationWorldBounds } from '../annotation-layout'
 import type {
@@ -10,6 +9,7 @@ import type {
   SceneStore,
   SceneZoneEntity,
 } from '../scene'
+import { isSceneDesignObjectLocked } from '../scene'
 import type { CameraController } from '../camera'
 import {
   getPlantWorldBounds,
@@ -101,7 +101,7 @@ export function createObjectStampTool(context: ObjectStampToolContext): ObjectSt
       context.getSpeciesCache(),
       context.getPlantPresentationContext,
     )
-    if (!hit || lockedObjectIds.value.has(hit.id)) return
+    if (!hit || isSceneDesignObjectLocked(scene, hit.id)) return
 
     if (hit.kind === 'plant') {
       const plant = scene.plants.find((entry) => entry.id === hit.id)
@@ -272,8 +272,8 @@ export function createObjectStampTool(context: ObjectStampToolContext): ObjectSt
   }
 
   function canUseObjectStampSource(source: ObjectStampSource): boolean {
-    if (lockedObjectIds.value.has(source.sourceId)) return false
     const scene = context.getSceneStore().persisted
+    if (isSceneDesignObjectLocked(scene, source.sourceId)) return false
     if (source.kind === 'plant') {
       const layer = scene.layers.find((entry) => entry.name === 'plants')
       return layer?.visible !== false && layer?.locked !== true

@@ -9,7 +9,6 @@ export type SceneDiffKind =
   | 'plantSpeciesColors'
   | 'guides'
   | 'selection'
-  | 'locks'
 
 type PersistedPatchKey =
   | 'plantSpeciesColors'
@@ -23,19 +22,16 @@ type PersistedPatchKey =
 export interface SceneCommandRuntime {
   readonly sceneStore: SceneStore
   setSelection(ids: Iterable<string>): void
-  setLockedIds(ids: Iterable<string>): void
 }
 
 export interface SceneCommandSnapshot {
   persisted: ScenePersistedState
   session: SceneSessionState
-  lockedIds: ReadonlySet<string>
 }
 
 interface ScenePatch {
   persisted?: Partial<ScenePersistedState>
   selection?: string[]
-  lockedIds?: string[]
 }
 
 export interface SceneCommand {
@@ -93,14 +89,6 @@ export function createScenePatchCommand(
     diffs.add('selection')
   }
 
-  const beforeLockedIds = [...before.lockedIds].sort()
-  const afterLockedIds = [...after.lockedIds].sort()
-  if (stableStringify(beforeLockedIds) !== stableStringify(afterLockedIds)) {
-    beforePatch.lockedIds = beforeLockedIds
-    afterPatch.lockedIds = afterLockedIds
-    diffs.add('locks')
-  }
-
   if (diffs.size === 0) return null
 
   return {
@@ -122,7 +110,6 @@ function applyScenePatch(runtime: SceneCommandRuntime, patch: ScenePatch): void 
     })
   }
   if (patch.selection) runtime.setSelection(patch.selection)
-  if (patch.lockedIds) runtime.setLockedIds(patch.lockedIds)
 }
 
 function stableStringify(value: unknown): string {

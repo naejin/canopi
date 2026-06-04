@@ -24,6 +24,7 @@ describe('CanvasSpeciesCache', () => {
     mocks.getSpeciesBatch.mockResolvedValueOnce([
       {
         canonical_name: 'Malus domestica',
+        locked: false,
         flower_color: 'White',
         family: 'Rosaceae',
       },
@@ -31,6 +32,7 @@ describe('CanvasSpeciesCache', () => {
     mocks.getFlowerColorBatch.mockResolvedValueOnce([
       {
         canonical_name: 'Malus domestica',
+        locked: false,
         flower_color: 'Pink',
         source: 'genus',
       },
@@ -44,6 +46,7 @@ describe('CanvasSpeciesCache', () => {
     expect(mocks.getFlowerColorBatch).toHaveBeenCalledWith(['Malus domestica'])
     expect(cache.getCache().get('Malus domestica')).toMatchObject({
       canonical_name: 'Malus domestica',
+      locked: false,
       flower_color: 'White',
       resolved_flower_color: 'Pink',
       resolved_flower_color_source: 'genus',

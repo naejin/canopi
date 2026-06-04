@@ -22,7 +22,6 @@ import {
 const mockRuntime: SceneCommandRuntime = {
   sceneStore: null as never,
   setSelection() {},
-  setLockedIds() {},
 }
 
 function noop(): SceneCommand {

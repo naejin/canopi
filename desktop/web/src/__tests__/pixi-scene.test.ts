@@ -139,6 +139,7 @@ describe('createPixiSceneRenderer', () => {
       scene: {
         plants: [{
           kind: 'plant',
+          locked: false,
           id: 'plant-1',
           canonicalName: 'Malus domestica',
           commonName: 'Apple',
@@ -155,6 +156,7 @@ describe('createPixiSceneRenderer', () => {
         zones: [],
         annotations: [{
           kind: 'annotation',
+          locked: false,
           id: 'annotation-1',
           annotationType: 'text',
           position: { x: 25, y: 35 },
@@ -236,6 +238,7 @@ describe('createPixiSceneRenderer', () => {
         plants: [],
         zones: [{
           kind: 'zone',
+          locked: false,
           name: 'ellipse-1',
           zoneType: 'ellipse',
           points: [
@@ -310,6 +313,7 @@ describe('createPixiSceneRenderer', () => {
       scene: {
         plants: [{
           kind: 'plant',
+          locked: false,
           id: 'plant-1',
           canonicalName: 'Malus domestica',
           commonName: 'Apple',
@@ -325,6 +329,7 @@ describe('createPixiSceneRenderer', () => {
         }],
         zones: [{
           kind: 'zone',
+          locked: false,
           name: 'zone-1',
           zoneType: 'rect',
           points: [

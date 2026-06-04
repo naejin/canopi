@@ -30,6 +30,7 @@ const FIXTURE: CanopiFile = {
       notes: 'Near the pond',
       planted_date: '2025-03-15',
       quantity: 1,
+      locked: false,
     },
     {
       id: 'plant-2',
@@ -42,6 +43,7 @@ const FIXTURE: CanopiFile = {
       notes: null,
       planted_date: null,
       quantity: 3,
+      locked: false,
     },
   ],
   zones: [
@@ -51,6 +53,7 @@ const FIXTURE: CanopiFile = {
       points: [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }],
       fill_color: '#99CC66',
       notes: 'Main orchard area',
+      locked: false,
     },
   ],
   annotations: [
@@ -61,11 +64,13 @@ const FIXTURE: CanopiFile = {
       text: 'North boundary',
       font_size: 16,
       rotation: -10,
+      locked: false,
     },
   ],
   groups: [
     {
       id: 'group-1',
+      locked: false,
       name: 'Fruit trees',
       layer: 'plants',
       position: { x: 25, y: 110 },

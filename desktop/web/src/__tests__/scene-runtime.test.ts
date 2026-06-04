@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { lockedObjectIds } from '../canvas/runtime-mirror-state'
 import { selectedObjectIds } from '../canvas/session-state'
 import { clearCanvasSelection } from '../canvas/session-state'
 import { SceneCanvasRuntime } from '../canvas/runtime/scene-runtime'
@@ -47,13 +46,13 @@ function createPlant(id: string, x: number, y: number, canonical = 'Quercus robu
     notes: null,
     planted_date: null,
     quantity: 1,
+    locked: false,
   }
 }
 
 describe('SceneCanvasRuntime', () => {
   beforeEach(() => {
     clearCanvasSelection()
-    lockedObjectIds.value = new Set()
   })
 
   it('duplicates plants and supports undo/redo from scene-owned history', () => {

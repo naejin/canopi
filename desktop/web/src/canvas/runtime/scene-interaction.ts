@@ -7,11 +7,11 @@ import {
 import { gridInterval, snapToGrid } from '../grid'
 import { snapToGuides } from '../guides'
 import { guides } from '../scene-metadata-state'
-import { lockedObjectIds } from '../runtime-mirror-state'
 import type {
   SceneStore,
   ScenePoint,
 } from './scene'
+import { isSceneDesignObjectLocked } from './scene'
 import type { CameraController } from './camera'
 import type { PlantPresentationContext } from './plant-presentation'
 import type { SpeciesCacheEntry } from './species-cache'
@@ -187,7 +187,7 @@ export class SceneInteractionController {
       this._deps.getSpeciesCache(),
       this._deps.getPlantPresentationContext,
     )
-    const hit = rawHit && !lockedObjectIds.value.has(rawHit.id) ? rawHit : null
+    const hit = rawHit && !isSceneDesignObjectLocked(scene, rawHit.id) ? rawHit : null
     const additive = hasAdditiveModifier(event)
 
     if (!hit) {
@@ -364,7 +364,7 @@ export class SceneInteractionController {
         this._deps.getSpeciesCache(),
         this._deps.getPlantPresentationContext,
       )) {
-        if (lockedObjectIds.value.has(target.id)) continue
+        if (isSceneDesignObjectLocked(scene, target.id)) continue
         current.add(target.id)
       }
       this._deps.setSelection(current)

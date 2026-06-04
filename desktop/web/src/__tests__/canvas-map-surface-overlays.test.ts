@@ -32,6 +32,7 @@ function createOverlayScene() {
   scene.plants = [
     {
       kind: 'plant',
+      locked: false,
       id: 'plant-1',
       canonicalName: 'Malus domestica',
       commonName: 'Apple',
@@ -49,6 +50,7 @@ function createOverlayScene() {
   scene.zones = [
     {
       kind: 'zone',
+      locked: false,
       name: 'orchard',
       zoneType: 'polygon',
       points: [

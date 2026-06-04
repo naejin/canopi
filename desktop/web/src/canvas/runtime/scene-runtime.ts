@@ -6,7 +6,7 @@ import {
   rulersVisible,
 } from '../../app/canvas-settings/signals'
 import { guides } from '../scene-metadata-state'
-import { lockedObjectIds, plantNamesRevision, sceneEntityRevision } from '../runtime-mirror-state'
+import { plantNamesRevision, sceneEntityRevision } from '../runtime-mirror-state'
 import type { ColorByAttribute, PlantSizeMode } from '../plant-display-state'
 import type { CanopiFile, PlacedPlant } from '../../types/design'
 import type { SelectedPlantColorContext } from '../plant-color-context'
@@ -128,18 +128,12 @@ export class SceneCanvasRuntime implements MountedCanvasRuntime {
       captureSnapshot: () => this._documents.captureCommandSnapshot(),
       markDirty: (before, type) => this._documents.markDirty(before, type),
       setSelection: (ids) => this._setSelection(ids),
-      setLockedIds: (ids) => {
-        lockedObjectIds.value = new Set(ids)
-      },
       invalidate: (kind) => this._invalidate(kind),
     })
     this._mutations = new SceneRuntimeMutationController({
       sceneStore: this._sceneStore,
       selection: {
         set: (ids) => this._setSelection(ids),
-      },
-      locks: {
-        get: () => lockedObjectIds.value,
       },
       sceneEdits: this._sceneEdits,
       presentation: {

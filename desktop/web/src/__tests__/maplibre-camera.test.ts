@@ -68,6 +68,7 @@ function createScene(): ScenePersistedState {
     plants: [
       {
         kind: 'plant',
+        locked: false,
         id: 'plant-1',
         canonicalName: 'Malus domestica',
         commonName: null,
@@ -83,6 +84,7 @@ function createScene(): ScenePersistedState {
       },
       {
         kind: 'plant',
+        locked: false,
         id: 'plant-2',
         canonicalName: 'Prunus avium',
         commonName: null,
@@ -100,6 +102,7 @@ function createScene(): ScenePersistedState {
     zones: [
       {
         kind: 'zone',
+        locked: false,
         name: 'zone-1',
         zoneType: 'rect',
         points: [
@@ -335,6 +338,7 @@ describe('screen-lock validation', () => {
     const scene = createScene()
     scene.annotations.push({
       kind: 'annotation',
+      locked: false,
       id: 'annotation-1',
       annotationType: 'text',
       position: { x: 95, y: -55 },

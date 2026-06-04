@@ -119,6 +119,7 @@ describe('document format contract', () => {
         notes: null,
         planted_date: null,
         quantity: 1,
+        locked: false,
       }],
       zones: [{
         name: 'Canvas zone',
@@ -126,6 +127,7 @@ describe('document format contract', () => {
         points: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }],
         fill_color: null,
         notes: null,
+        locked: false,
       }],
       annotations: [{
         id: 'canvas-annotation',
@@ -134,9 +136,11 @@ describe('document format contract', () => {
         text: 'Canvas annotation',
         font_size: 12,
         rotation: null,
+        locked: false,
       }],
       groups: [{
         id: 'canvas-group',
+        locked: false,
         name: null,
         layer: 'plants',
         position: { x: 10, y: 20 },
@@ -277,6 +281,7 @@ describe('document format contract', () => {
         notes: null,
         planted_date: null,
         quantity: 1,
+        locked: false,
       }],
       zones: [{
         name: 'North bed',
@@ -284,6 +289,7 @@ describe('document format contract', () => {
         points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }],
         fill_color: '#99CC66',
         notes: null,
+        locked: false,
       }],
       annotations: [{
         id: 'annotation-1',
@@ -292,9 +298,11 @@ describe('document format contract', () => {
         text: 'North',
         font_size: 12,
         rotation: null,
+        locked: false,
       }],
       groups: [{
         id: 'group-1',
+        locked: false,
         name: 'Trees',
         layer: 'plants',
         position: { x: 10, y: 20 },

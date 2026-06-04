@@ -42,6 +42,7 @@ function makePlant(canonical_name: string): PlacedPlant {
     notes: null,
     planted_date: null,
     quantity: null,
+    locked: false,
   }
 }
 

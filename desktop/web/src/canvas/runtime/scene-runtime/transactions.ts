@@ -9,7 +9,6 @@ export type SceneEditInvalidationKind = 'scene' | 'viewport' | 'chrome'
 export interface SceneEditTransaction {
   mutate(edit: (draft: ScenePersistedState) => void): void
   setSelection(ids: Iterable<string>): void
-  setLockedIds(ids: Iterable<string>): void
   commit(options?: { type?: string; invalidate?: SceneEditInvalidationKind }): boolean
   abort(): void
   readonly changed: boolean
@@ -25,7 +24,6 @@ interface SceneRuntimeEditCoordinatorOptions {
   captureSnapshot(): SceneCommandSnapshot
   markDirty(before: SceneCommandSnapshot, type?: string): boolean
   setSelection(ids: Iterable<string>): void
-  setLockedIds(ids: Iterable<string>): void
   invalidate(kind: SceneEditInvalidationKind): void
 }
 
@@ -34,7 +32,6 @@ export class SceneRuntimeEditCoordinator implements SceneEditCoordinator {
   private readonly _captureSnapshot: SceneRuntimeEditCoordinatorOptions['captureSnapshot']
   private readonly _markDirty: SceneRuntimeEditCoordinatorOptions['markDirty']
   private readonly _setSelection: SceneRuntimeEditCoordinatorOptions['setSelection']
-  private readonly _setLockedIds: SceneRuntimeEditCoordinatorOptions['setLockedIds']
   private readonly _invalidate: SceneRuntimeEditCoordinatorOptions['invalidate']
 
   constructor(options: SceneRuntimeEditCoordinatorOptions) {
@@ -42,7 +39,6 @@ export class SceneRuntimeEditCoordinator implements SceneEditCoordinator {
     this._captureSnapshot = options.captureSnapshot
     this._markDirty = options.markDirty
     this._setSelection = options.setSelection
-    this._setLockedIds = options.setLockedIds
     this._invalidate = options.invalidate
   }
 
@@ -64,7 +60,6 @@ export class SceneRuntimeEditCoordinator implements SceneEditCoordinator {
       captureSnapshot: this._captureSnapshot,
       markDirty: this._markDirty,
       setSelection: this._setSelection,
-      setLockedIds: this._setLockedIds,
       invalidate: this._invalidate,
     })
   }
@@ -81,7 +76,6 @@ class SceneRuntimeEditTransaction implements SceneEditTransaction {
   private readonly _captureSnapshot: SceneRuntimeEditCoordinatorOptions['captureSnapshot']
   private readonly _markDirty: SceneRuntimeEditCoordinatorOptions['markDirty']
   private readonly _setSelection: SceneRuntimeEditCoordinatorOptions['setSelection']
-  private readonly _setLockedIds: SceneRuntimeEditCoordinatorOptions['setLockedIds']
   private readonly _invalidate: SceneRuntimeEditCoordinatorOptions['invalidate']
   private _closed = false
   private _committedChanged: boolean | null = null
@@ -92,7 +86,6 @@ class SceneRuntimeEditTransaction implements SceneEditTransaction {
     this._captureSnapshot = options.captureSnapshot
     this._markDirty = options.markDirty
     this._setSelection = options.setSelection
-    this._setLockedIds = options.setLockedIds
     this._invalidate = options.invalidate
     this._before = options.captureSnapshot()
   }
@@ -110,11 +103,6 @@ class SceneRuntimeEditTransaction implements SceneEditTransaction {
   setSelection(ids: Iterable<string>): void {
     this._assertOpen()
     this._setSelection(ids)
-  }
-
-  setLockedIds(ids: Iterable<string>): void {
-    this._assertOpen()
-    this._setLockedIds(ids)
   }
 
   commit(options: { type?: string; invalidate?: SceneEditInvalidationKind } = {}): boolean {
@@ -143,7 +131,6 @@ class SceneRuntimeEditTransaction implements SceneEditTransaction {
       session: this._before.session,
     })
     this._setSelection(this._before.session.selectedEntityIds)
-    this._setLockedIds(this._before.lockedIds)
     this._committedChanged = false
   }
 

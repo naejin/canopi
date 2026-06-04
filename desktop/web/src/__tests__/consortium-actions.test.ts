@@ -35,6 +35,7 @@ beforeEach(() => {
       notes: null,
       planted_date: null,
       quantity: null,
+      locked: false,
     }],
     zones: [],
     annotations: [],

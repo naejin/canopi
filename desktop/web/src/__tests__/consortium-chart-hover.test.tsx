@@ -71,6 +71,7 @@ function makePlant(canonicalName: string, commonName: string): PlacedPlant {
     notes: null,
     planted_date: null,
     quantity: 1,
+    locked: false,
   }
 }
 

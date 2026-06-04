@@ -1,7 +1,6 @@
 import { t } from '../../../i18n'
 import { plantSpacingIntervalM } from '../../../app/settings/state'
 import { mutateSettingsProjection } from '../../../app/settings/projection'
-import { lockedObjectIds } from '../../runtime-mirror-state'
 import {
   formatPlantSpacingGuideLength,
   formatPlantSpacingIntervalInput,
@@ -20,6 +19,7 @@ import {
   type PlantPresentationContext,
 } from '../plant-presentation'
 import type { ScenePlantEntity, ScenePoint, SceneStore } from '../scene'
+import { isSceneDesignObjectLocked } from '../scene'
 import type { SpeciesCacheEntry } from '../species-cache'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
 import { hitTestTopLevel } from './hit-testing'
@@ -116,7 +116,7 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
       context.getPlantPresentationContext,
     )
 
-    if (!hit || hit.kind !== 'plant' || lockedObjectIds.value.has(hit.id)) {
+    if (!hit || hit.kind !== 'plant' || isSceneDesignObjectLocked(scene, hit.id)) {
       overlay.showSourcePicking(t('canvas.plantSpacing.sourceMissed'))
       return { clearPointerGesture: true }
     }
@@ -292,8 +292,8 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
   }
 
   function canUseSource(candidate: PlantSpacingSource): boolean {
-    if (lockedObjectIds.value.has(candidate.sourceId)) return false
     const scene = context.getSceneStore().persisted
+    if (isSceneDesignObjectLocked(scene, candidate.sourceId)) return false
     const layer = scene.layers.find((entry) => entry.name === 'plants')
     if (layer?.visible === false || layer?.locked === true) return false
     if (!scene.plants.some((plant) => plant.id === candidate.sourceId)) return false

@@ -24,6 +24,7 @@ describe('maplibre surface state adapter', () => {
     const scene = createDefaultScenePersistedState()
     scene.plants.push({
       kind: 'plant',
+      locked: false,
       id: 'plant-1',
       canonicalName: 'Malus domestica',
       commonName: null,
@@ -69,6 +70,7 @@ describe('maplibre surface state adapter', () => {
     const scene = createDefaultScenePersistedState()
     scene.groups.push({
       kind: 'group',
+      locked: false,
       id: 'group-1',
       name: 'orchard',
       layer: 'zones',

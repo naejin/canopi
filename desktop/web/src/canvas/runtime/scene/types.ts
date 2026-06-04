@@ -30,6 +30,7 @@ export interface SceneLayerEntity {
 export interface ScenePlantEntity {
   kind: 'plant'
   id: string
+  locked: boolean
   canonicalName: string
   commonName: string | null
   color: string | null
@@ -47,6 +48,7 @@ export interface ScenePlantEntity {
 export interface SceneZoneEntity {
   kind: 'zone'
   name: string
+  locked: boolean
   zoneType: string
   points: ScenePoint[]
   fillColor: string | null
@@ -56,6 +58,7 @@ export interface SceneZoneEntity {
 export interface SceneAnnotationEntity {
   kind: 'annotation'
   id: string
+  locked: boolean
   annotationType: string
   position: ScenePoint
   text: string
@@ -66,6 +69,7 @@ export interface SceneAnnotationEntity {
 export interface SceneObjectGroupEntity {
   kind: 'group'
   id: string
+  locked: boolean
   name: string | null
   layer: string
   position: ScenePoint

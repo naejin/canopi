@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { canvasClean } from '../../../__tests__/support/design-session-state'
 import type { CanopiFile } from '../../../types/design'
-import { lockedObjectIds } from '../../runtime-mirror-state'
 import { selectedObjectIds } from '../../session-state'
 import { SceneHistory } from '../scene-history'
 import { SceneStore } from '../scene'
@@ -36,6 +35,7 @@ function makeFile(): CanopiFile {
         notes: null,
         planted_date: null,
         quantity: 1,
+        locked: false,
       },
       {
         id: 'plant-2',
@@ -48,6 +48,7 @@ function makeFile(): CanopiFile {
         notes: null,
         planted_date: null,
         quantity: 1,
+        locked: false,
       },
     ],
     zones: [],
@@ -95,9 +96,6 @@ function createHarness() {
     captureSnapshot: () => documents.captureCommandSnapshot(),
     markDirty: (before, type) => documents.markDirty(before, type),
     setSelection,
-    setLockedIds: (ids) => {
-      lockedObjectIds.value = new Set(ids)
-    },
     invalidate: (kind) => {
       invalidations.push(kind)
     },
@@ -117,7 +115,6 @@ function createHarness() {
 describe('scene edit transactions', () => {
   beforeEach(() => {
     canvasClean.value = true
-    lockedObjectIds.value = new Set()
     selectedObjectIds.value = new Set()
   })
 
@@ -165,18 +162,20 @@ describe('scene edit transactions', () => {
     expect(invalidations).toEqual([])
   })
 
-  it('aborts and restores persisted scene, selection, and locks', () => {
+  it('aborts and restores persisted scene, selection, and embedded locks', () => {
     const { sceneStore, history, sceneEdits, invalidations, setSelection, readSceneRevision } = createHarness()
     setSelection(['plant-1'])
-    lockedObjectIds.value = new Set(['plant-1'])
+    sceneStore.updatePersisted((draft) => {
+      draft.plants[0]!.locked = true
+    })
 
     const tx = sceneEdits.begin('interaction-drag')
     tx.mutate((draft) => {
       draft.plants[0]!.position = { x: 99, y: 99 }
+      draft.plants[0]!.locked = false
       draft.plants = draft.plants.slice(0, 1)
     })
     tx.setSelection(['plant-2'])
-    tx.setLockedIds(['plant-2'])
 
     expect(tx.changed).toBe(true)
 
@@ -184,9 +183,9 @@ describe('scene edit transactions', () => {
 
     expect(sceneStore.persisted.plants).toHaveLength(2)
     expect(sceneStore.persisted.plants[0]?.position).toEqual({ x: 10, y: 10 })
+    expect(sceneStore.persisted.plants[0]?.locked).toBe(true)
     expect(sceneStore.session.selectedEntityIds).toEqual(new Set(['plant-1']))
     expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
-    expect(lockedObjectIds.value).toEqual(new Set(['plant-1']))
     expect(history.canUndo.value).toBe(false)
     expect(readSceneRevision()).toBe(0)
     expect(invalidations).toEqual([])

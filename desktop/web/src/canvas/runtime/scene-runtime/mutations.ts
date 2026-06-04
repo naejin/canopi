@@ -14,6 +14,10 @@ import type {
   SceneStore,
 } from '../scene'
 import {
+  clearSceneDesignObjectLocks,
+  setSceneDesignObjectLocks,
+} from '../scene'
+import {
   createClipboardPayload,
   pasteClipboardPayload,
   type SceneClipboardPayload,
@@ -40,9 +44,6 @@ interface SceneRuntimeMutationControllerOptions {
   selection: {
     set(ids: Iterable<string>): void
   }
-  locks: {
-    get(): ReadonlySet<string>
-  }
   sceneEdits: SceneEditCoordinator
   presentation: {
     syncSignals(): void
@@ -57,7 +58,6 @@ interface SceneRuntimeMutationControllerOptions {
 export class SceneRuntimeMutationController {
   private readonly _sceneStore: SceneStore
   private readonly _selection: SceneRuntimeMutationControllerOptions['selection']
-  private readonly _locks: SceneRuntimeMutationControllerOptions['locks']
   private readonly _sceneEdits: SceneEditCoordinator
   private readonly _presentation: SceneRuntimeMutationControllerOptions['presentation']
   private readonly _invalidateScene: () => void
@@ -66,7 +66,6 @@ export class SceneRuntimeMutationController {
   constructor(options: SceneRuntimeMutationControllerOptions) {
     this._sceneStore = options.sceneStore
     this._selection = options.selection
-    this._locks = options.locks
     this._sceneEdits = options.sceneEdits
     this._presentation = options.presentation
     this._invalidateScene = options.invalidateScene
@@ -101,15 +100,6 @@ export class SceneRuntimeMutationController {
     if (selected.length === 0) return
 
     const deleted = resolveSelectedEntitySets(persisted, selected)
-    const nextLocked = new Set(this._locks.get())
-    for (const id of [
-      ...deleted.plantIds,
-      ...deleted.zoneIds,
-      ...deleted.annotationIds,
-      ...deleted.groupIds,
-    ]) {
-      nextLocked.delete(id)
-    }
 
     this._sceneEdits.run('delete-selected', (tx) => {
       tx.mutate((draft) => {
@@ -128,41 +118,39 @@ export class SceneRuntimeMutationController {
           }))
           .filter((group) => group.memberIds.length >= 2)
       })
-      tx.setLockedIds(nextLocked)
       tx.setSelection([])
     })
   }
 
   selectAll(): void {
     const persisted = this._sceneStore.persisted
-    const locked = this._locks.get()
     const ids = new Set<string>()
     const groupedMemberIds = new Set(persisted.groups.flatMap((group) => group.memberIds))
     const layerVisibility = sceneLayerVisibility(persisted)
 
     if (layerVisibility.plants !== false) {
       for (const plant of persisted.plants) {
-        if (groupedMemberIds.has(plant.id) || locked.has(plant.id)) continue
+        if (groupedMemberIds.has(plant.id) || plant.locked) continue
         ids.add(plant.id)
       }
     }
 
     if (layerVisibility.zones !== false) {
       for (const zone of persisted.zones) {
-        if (groupedMemberIds.has(zone.name) || locked.has(zone.name)) continue
+        if (groupedMemberIds.has(zone.name) || zone.locked) continue
         ids.add(zone.name)
       }
     }
 
     if (layerVisibility.annotations !== false) {
       for (const annotation of persisted.annotations) {
-        if (groupedMemberIds.has(annotation.id) || locked.has(annotation.id)) continue
+        if (groupedMemberIds.has(annotation.id) || annotation.locked) continue
         ids.add(annotation.id)
       }
     }
 
     for (const group of persisted.groups) {
-      if (layerVisibility[group.layer] === false || locked.has(group.id)) continue
+      if (layerVisibility[group.layer] === false || group.locked) continue
       ids.add(group.id)
     }
 
@@ -182,18 +170,24 @@ export class SceneRuntimeMutationController {
   lockSelected(): void {
     const selected = getSelectedTopLevelTargets(this._sceneStore.persisted, this._sceneStore.session.selectedEntityIds)
     if (selected.length === 0) return
-    const nextLocked = new Set(this._locks.get())
-    for (const target of selected) nextLocked.add(target.id)
+    const selectedIds = selected.map((target) => target.id)
     this._sceneEdits.run('lock-selected', (tx) => {
-      tx.setLockedIds(nextLocked)
+      tx.mutate((draft) => {
+        setSceneDesignObjectLocks(draft, selectedIds, true)
+      })
       tx.setSelection([])
     })
   }
 
   unlockSelected(): void {
-    if (this._locks.get().size === 0) return
+    const persisted = this._sceneStore.persisted
+    const selected = getSelectedTopLevelTargets(persisted, this._sceneStore.session.selectedEntityIds)
+    const selectedIds = selected.map((target) => target.id)
     this._sceneEdits.run('unlock-selected', (tx) => {
-      tx.setLockedIds([])
+      tx.mutate((draft) => {
+        if (selectedIds.length > 0) setSceneDesignObjectLocks(draft, selectedIds, false)
+        else clearSceneDesignObjectLocks(draft)
+      })
     })
   }
 
@@ -223,6 +217,7 @@ export class SceneRuntimeMutationController {
     const nextGroup: SceneObjectGroupEntity = {
       kind: 'group',
       id: createUuid(),
+      locked: false,
       name: null,
       layer,
       position: { x: minX, y: minY },

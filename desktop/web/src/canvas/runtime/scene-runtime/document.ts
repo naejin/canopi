@@ -1,6 +1,5 @@
 import type { CanopiFile } from '../../../types/design'
 import { composeDocumentForSave } from '../../../app/contracts/document'
-import { lockedObjectIds } from '../../runtime-mirror-state'
 import type { SceneStore } from '../scene'
 import type { PlantPresentationBackfill } from './presentation'
 import {
@@ -58,7 +57,6 @@ export class SceneRuntimeDocumentBridge {
     this._sceneStore.hydrate(file)
     this._incrementViewportRevision()
     this._history.clear()
-    lockedObjectIds.value = new Set()
     this._syncCanvasSignalsFromDocument(file)
     this._syncCanvasSignalsFromScene()
     this._invalidateScene()
@@ -88,7 +86,6 @@ export class SceneRuntimeDocumentBridge {
     return {
       persisted: snapshot.persisted,
       session: snapshot.session,
-      lockedIds: new Set(lockedObjectIds.value),
     }
   }
 
@@ -109,9 +106,6 @@ export class SceneRuntimeDocumentBridge {
       sceneStore: this._sceneStore,
       setSelection: (ids) => {
         this._setSelection(ids)
-      },
-      setLockedIds: (ids) => {
-        lockedObjectIds.value = new Set(ids)
       },
     }
   }

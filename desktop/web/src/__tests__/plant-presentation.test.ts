@@ -32,6 +32,7 @@ function createPlant(overrides: Partial<ScenePlantEntity> = {}): ScenePlantEntit
     plantedDate: null,
     quantity: null,
     ...overrides,
+    locked: overrides.locked ?? false,
   }
 }
 

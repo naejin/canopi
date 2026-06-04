@@ -112,6 +112,7 @@ function hydratePlantEntity(plant: PlacedPlant): ScenePlantEntity {
   return {
     kind: 'plant',
     id: plant.id,
+    locked: plant.locked ?? false,
     canonicalName: plant.canonical_name,
     commonName: plant.common_name,
     color: plant.color,
@@ -132,6 +133,7 @@ function hydratePlantEntity(plant: PlacedPlant): ScenePlantEntity {
 function serializePlantEntity(plant: ScenePlantEntity): PlacedPlant {
   return {
     id: plant.id,
+    locked: plant.locked,
     canonical_name: plant.canonicalName,
     common_name: plant.commonName,
     color: plant.color,
@@ -158,6 +160,7 @@ function hydrateZoneEntity(zone: Zone): SceneZoneEntity {
   return {
     kind: 'zone',
     name: zone.name,
+    locked: zone.locked ?? false,
     zoneType: zone.zone_type,
     points: zone.points.map(clonePoint),
     fillColor: zone.fill_color,
@@ -168,6 +171,7 @@ function hydrateZoneEntity(zone: Zone): SceneZoneEntity {
 function serializeZoneEntity(zone: SceneZoneEntity): Zone {
   return {
     name: zone.name,
+    locked: zone.locked,
     zone_type: zone.zoneType,
     points: zone.points.map(clonePoint),
     fill_color: zone.fillColor,
@@ -186,6 +190,7 @@ function hydrateAnnotationEntity(annotation: Annotation): SceneAnnotationEntity 
   return {
     kind: 'annotation',
     id: annotation.id,
+    locked: annotation.locked ?? false,
     annotationType: annotation.annotation_type,
     position: clonePoint(annotation.position),
     text: annotation.text,
@@ -197,6 +202,7 @@ function hydrateAnnotationEntity(annotation: Annotation): SceneAnnotationEntity 
 function serializeAnnotationEntity(annotation: SceneAnnotationEntity): Annotation {
   return {
     id: annotation.id,
+    locked: annotation.locked,
     annotation_type: annotation.annotationType,
     position: clonePoint(annotation.position),
     text: annotation.text,
@@ -216,6 +222,7 @@ function hydrateGroupEntity(group: ObjectGroup): SceneObjectGroupEntity {
   return {
     kind: 'group',
     id: group.id,
+    locked: group.locked ?? false,
     name: group.name,
     layer: group.layer,
     position: {
@@ -230,6 +237,7 @@ function hydrateGroupEntity(group: ObjectGroup): SceneObjectGroupEntity {
 function serializeGroupEntity(group: SceneObjectGroupEntity): ObjectGroup {
   return {
     id: group.id,
+    locked: group.locked,
     name: group.name,
     layer: group.layer,
     position: {

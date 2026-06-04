@@ -48,6 +48,7 @@ export function appendRectangleZoneToDraft(
       ],
       fillColor: null,
       notes: null,
+      locked: false,
     },
   ]
   return zoneName
@@ -73,6 +74,7 @@ export function appendEllipseZoneToDraft(
       ],
       fillColor: null,
       notes: null,
+      locked: false,
     },
   ]
   return zoneName
@@ -95,6 +97,7 @@ export function appendPolygonZoneToDraft(
       points: points.map((point) => ({ x: point.x, y: point.y })),
       fillColor: null,
       notes: null,
+      locked: false,
     },
   ]
   return zoneName
@@ -134,6 +137,7 @@ export function appendDroppedPlantToDraft(
       notes: null,
       plantedDate: null,
       quantity: 1,
+      locked: false,
     },
   ]
   return id
@@ -175,6 +179,7 @@ export function appendTextAnnotationToDraft(
       text,
       fontSize: 16,
       rotationDeg: null,
+      locked: false,
     },
   ]
   return id

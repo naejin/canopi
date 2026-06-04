@@ -36,6 +36,7 @@ function makeFile(): CanopiFile {
         notes: null,
         planted_date: null,
         quantity: 1,
+        locked: false,
       },
     ],
     zones: [
@@ -50,6 +51,7 @@ function makeFile(): CanopiFile {
         ],
         fill_color: null,
         notes: null,
+        locked: false,
       },
     ],
     annotations: [],
@@ -102,11 +104,13 @@ describe('scene runtime presentation controller', () => {
     })
     vi.mocked(getSpeciesBatch).mockResolvedValue([{
       canonical_name: 'Malus domestica',
+      locked: false,
       stratum: 'canopy',
       width_max_m: 4.5,
     } as never])
     vi.mocked(getFlowerColorBatch).mockResolvedValue([{
       canonical_name: 'Malus domestica',
+      locked: false,
       flower_color: 'white',
       source: 'detail',
     } as never])

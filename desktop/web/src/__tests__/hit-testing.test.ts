@@ -10,6 +10,7 @@ function createScene(): ScenePersistedState {
     layers: [{ kind: 'layer', name: 'plants', visible: true, locked: false, opacity: 1 }],
     plants: [{
       kind: 'plant',
+      locked: false,
       id: 'plant-1',
       canonicalName: 'Malus domestica',
       commonName: 'Apple',
