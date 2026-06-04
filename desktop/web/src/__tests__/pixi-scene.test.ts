@@ -271,4 +271,102 @@ describe('createPixiSceneRenderer', () => {
     expect(ellipseGraphic?.ellipse).toHaveBeenCalledWith(50, 60, 30, 20)
     renderer.dispose()
   })
+
+  it('keeps zone and plant strokes screen-readable across viewport scale', async () => {
+    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
+    const pixi = await import('pixi.js') as unknown as {
+      __pixiMockState: {
+        graphics: Array<{
+          rect: ReturnType<typeof vi.fn>
+          circle: ReturnType<typeof vi.fn>
+          stroke: ReturnType<typeof vi.fn>
+        }>
+      }
+    }
+
+    const host = document.createElement('div')
+    Object.defineProperty(host, 'clientWidth', { configurable: true, value: 400 })
+    Object.defineProperty(host, 'clientHeight', { configurable: true, value: 300 })
+
+    const renderer = await createPixiSceneRenderer().initialize({ container: host }, {
+      backendId: 'pixi',
+      capabilities: {
+        domCanvas: true,
+        canvas2d: true,
+        offscreenCanvas: false,
+        offscreenCanvas2d: false,
+        webgl: true,
+        webgl2: true,
+        webgpu: false,
+        imageBitmap: false,
+        createImageBitmap: false,
+        worker: false,
+        devicePixelRatio: 1,
+        prefersReducedMotion: null,
+      },
+    } as never)
+
+    const snapshot: SceneRendererSnapshot = {
+      scene: {
+        plants: [{
+          kind: 'plant',
+          id: 'plant-1',
+          canonicalName: 'Malus domestica',
+          commonName: 'Apple',
+          color: null,
+          stratum: 'mid',
+          canopySpreadM: null,
+          position: { x: 10, y: 20 },
+          rotationDeg: null,
+          scale: null,
+          notes: null,
+          plantedDate: null,
+          quantity: 1,
+        }],
+        zones: [{
+          kind: 'zone',
+          name: 'zone-1',
+          zoneType: 'rect',
+          points: [
+            { x: 0, y: 0 },
+            { x: 10, y: 0 },
+            { x: 10, y: 10 },
+            { x: 0, y: 10 },
+          ],
+          fillColor: null,
+          notes: null,
+        }],
+        annotations: [],
+        groups: [],
+        layers: [],
+        plantSpeciesColors: {},
+        guides: [],
+      },
+      viewport: { x: 0, y: 0, scale: 4 },
+      selectedPlantIds: new Set<string>(['plant-1']),
+      selectedZoneIds: new Set<string>(['zone-1']),
+      selectedAnnotationIds: new Set<string>(),
+      highlightedPlantIds: new Set<string>(),
+      highlightedZoneIds: new Set<string>(),
+      sizeMode: 'default' as const,
+      colorByAttr: null,
+      localizedCommonNames: new Map(),
+      hoveredCanonicalName: null,
+      selectionLabels: [],
+      speciesCache: new Map(),
+    }
+
+    renderer.renderScene(snapshot)
+
+    const zoneGraphic = pixi.__pixiMockState.graphics.find((graphics) => graphics.rect.mock.calls.length > 0)
+    const plantGraphic = pixi.__pixiMockState.graphics.find((graphics) => graphics.circle.mock.calls.length > 0)
+    expect(zoneGraphic?.stroke.mock.calls[0]?.[0]).toMatchObject({ width: 0.75 })
+    expect(plantGraphic?.stroke.mock.calls[0]?.[0]).toMatchObject({ width: 0.9375 })
+
+    renderer.setViewport({ x: 0, y: 0, scale: 2 })
+
+    expect(zoneGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 1.5 })
+    expect(plantGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 1.875 })
+    renderer.dispose()
+  })
 })

@@ -20,6 +20,11 @@ import type { SceneRendererDefinition, SceneRendererInstance, SceneRendererSnaps
 import type { SceneAnnotationEntity, SceneZoneEntity } from '../scene'
 
 const BACKGROUND_COLOR = 0x000000
+const ZONE_STROKE_PX = 2
+const ZONE_EMPHASIZED_STROKE_PX = 3
+const PLANT_STROKE_PX = 1.5
+const PLANT_SELECTED_STROKE_PX = 3.75
+const PLANT_HIGHLIGHT_STROKE_PX = 2.25
 
 export function createPixiSceneRenderer(): SceneRendererDefinition {
   return {
@@ -121,6 +126,7 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
             snapshot.localizedCommonNames,
           )
           snapshot = { ...snapshot, viewport, selectionLabels: labels }
+          syncZones(zonesLayer, zoneGraphicsByName, snapshot, false)
           syncPlants(
             plantsLayer,
             plantsOverlayLayer,
@@ -169,7 +175,13 @@ function syncZones(
       zoneGraphicsByName.set(zone.name, graphics)
       world.addChild(graphics)
     }
-    drawZone(graphics, zone, snapshot.selectedZoneIds.has(zone.name), snapshot.highlightedZoneIds.has(zone.name))
+    drawZone(
+      graphics,
+      zone,
+      snapshot.selectedZoneIds.has(zone.name),
+      snapshot.highlightedZoneIds.has(zone.name),
+      snapshot.viewport.scale,
+    )
     graphics.visible = true
   }
 
@@ -182,12 +194,21 @@ function syncZones(
   }
 }
 
-function drawZone(graphics: Graphics, zone: SceneZoneEntity, selected: boolean, highlighted: boolean): void {
+function drawZone(
+  graphics: Graphics,
+  zone: SceneZoneEntity,
+  selected: boolean,
+  highlighted: boolean,
+  viewportScale: number,
+): void {
   const visual = resolveZoneVisual(zone)
   const fillColor = toPixiColor(visual.fill, 0)
   const emphasized = selected || highlighted
   const strokeColor = toPixiColor(emphasized ? getSelectionStrokeColor() : visual.stroke, 0)
-  const strokeWidth = emphasized ? 3 : 2
+  const strokeWidth = screenPxToWorldPx(
+    emphasized ? ZONE_EMPHASIZED_STROKE_PX : ZONE_STROKE_PX,
+    viewportScale,
+  )
 
   graphics.clear()
 
@@ -257,7 +278,13 @@ function syncPlants(
       plantGraphicsById.set(entry.plant.id, circle)
       world.addChild(circle)
     }
-    drawPlant(circle, entry, snapshot.hoveredCanonicalName, snapshot.highlightedPlantIds.has(entry.plant.id))
+    drawPlant(
+      circle,
+      entry,
+      snapshot.hoveredCanonicalName,
+      snapshot.highlightedPlantIds.has(entry.plant.id),
+      snapshot.viewport.scale,
+    )
     circle.visible = true
 
     const stackCount = layout.stackCounts.get(entry.plant.id)
@@ -324,6 +351,7 @@ function drawPlant(
   entry: ReturnType<typeof buildPlantPresentationEntries>[number],
   hoveredCanonicalName: string | null,
   highlighted: boolean,
+  viewportScale: number,
 ): void {
   const color = toPixiColor(entry.color, 0)
   const selected = entry.selected
@@ -335,17 +363,21 @@ function drawPlant(
     .fill({ color, alpha: 0.55 })
     .stroke({
       color: toPixiColor(selected ? getSelectionStrokeColor() : entry.color, color),
-      width: selected ? 0.35 : 0.15,
+      width: screenPxToWorldPx(selected ? PLANT_SELECTED_STROKE_PX : PLANT_STROKE_PX, viewportScale),
       alpha: 1,
     })
   if (highlighted || (hoveredCanonicalName && entry.plant.canonicalName === hoveredCanonicalName)) {
     graphics.circle(x, y, r * 1.4)
       .stroke({
         color: toPixiColor(getSelectionStrokeColor(), 0),
-        width: 0.2,
+        width: screenPxToWorldPx(PLANT_HIGHLIGHT_STROKE_PX, viewportScale),
         alpha: 0.5,
       })
   }
+}
+
+function screenPxToWorldPx(px: number, viewportScale: number): number {
+  return px / Math.max(viewportScale, 0.001)
 }
 
 function drawStackBadge(
