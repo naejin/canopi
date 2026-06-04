@@ -1,5 +1,4 @@
 import { type ColorByAttribute, type PlantSizeMode } from '../plant-display-state'
-import { zoomReference } from '../view-state'
 import { getColorForAttribute } from '../display-modes'
 import { DEFAULT_PLANT_COLOR, normalizeHexColor } from '../plant-colors'
 import {
@@ -282,10 +281,9 @@ export function buildPlantPresentationSnapshot(
   }
 }
 
-// Fixed world radius for default-mode dots. 0.12m (24cm diameter) gives ~80%
-// fill at 30cm spacing and ~48% at 50cm — readable for typical dense designs.
-const PLANT_WORLD_RADIUS = 0.12
-const MIN_SCREEN_PX = 2
+const SYMBOLIC_PLANT_MIN_SCREEN_PX = 2
+const SYMBOLIC_PLANT_MAX_SCREEN_PX = 6.75
+const SYMBOLIC_PLANT_HALF_GROWTH_SCALE = 21
 
 function resolvePlantRadiusWorld(
   plant: ScenePlantEntity,
@@ -294,15 +292,15 @@ function resolvePlantRadiusWorld(
   if (context.sizeMode === 'canopy') {
     const canopySpreadM = resolvePlantCanopySpreadM(plant, context.speciesCache)
     if (canopySpreadM && canopySpreadM > 0) return canopySpreadM / 2
-    return getFallbackWorldRadius(context.zoomReference)
+    return getSymbolicPlantRadiusWorld(context.viewport.scale)
   }
 
-  const scale = Math.max(context.viewport.scale, 0.001)
-  const screenPx = PLANT_WORLD_RADIUS * scale
+  return getSymbolicPlantRadiusWorld(context.viewport.scale)
+}
 
-  if (screenPx > CIRCLE_SCREEN_PX) return CIRCLE_SCREEN_PX / scale  // cap at 8px
-  if (screenPx < MIN_SCREEN_PX) return MIN_SCREEN_PX / scale        // floor at 2px
-  return PLANT_WORLD_RADIUS
+function getSymbolicPlantRadiusWorld(viewportScale: number): number {
+  const scale = Math.max(viewportScale, 0.001)
+  return getSymbolicPlantRadiusScreenPx(scale) / scale
 }
 
 function resolvePlantColorByAttribute(
@@ -316,11 +314,12 @@ function resolvePlantColorByAttribute(
   return getColorForAttribute(colorByAttr, speciesCache.get(plant.canonicalName))
 }
 
-function getFallbackWorldRadius(referenceScaleOverride?: number): number {
-  const referenceScale = referenceScaleOverride && referenceScaleOverride > 0
-    ? referenceScaleOverride
-    : (zoomReference.value > 0 ? zoomReference.value : 1)
-  return CIRCLE_SCREEN_PX / referenceScale
+function getSymbolicPlantRadiusScreenPx(viewportScale: number): number {
+  const scale = Math.max(viewportScale, 0.001)
+  const range = SYMBOLIC_PLANT_MAX_SCREEN_PX - SYMBOLIC_PLANT_MIN_SCREEN_PX
+  return SYMBOLIC_PLANT_MIN_SCREEN_PX + (
+    range * scale / (scale + SYMBOLIC_PLANT_HALF_GROWTH_SCALE)
+  )
 }
 
 function getStackPriority(plant: ScenePlantEntity, selected: boolean): number {

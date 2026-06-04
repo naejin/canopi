@@ -100,6 +100,18 @@ describe('CameraController', () => {
 })
 
 describe('computeSceneBounds', () => {
+  it('uses the symbolic Placed Plant Visual Footprint for plant-only bounds', () => {
+    const scene = createScene()
+    scene.zones = []
+
+    const bounds = computeSceneBounds(scene, 10)
+
+    expect(bounds?.minX).toBeCloseTo(9.65, 2)
+    expect(bounds?.minY).toBeCloseTo(19.65, 2)
+    expect(bounds?.maxX).toBeCloseTo(10.35, 2)
+    expect(bounds?.maxY).toBeCloseTo(20.35, 2)
+  })
+
   it('includes both plant and zone geometry', () => {
     const bounds = computeSceneBounds(createScene())
 

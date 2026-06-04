@@ -36,6 +36,28 @@ function createPlant(overrides: Partial<ScenePlantEntity> = {}): ScenePlantEntit
 }
 
 describe('plant presentation service', () => {
+  it('sizes default Plant Size Mode dots with a smooth absolute-scale Visual Footprint curve', () => {
+    const expectedRadiiByScale = new Map([
+      [1, 2.22],
+      [5, 2.91],
+      [10, 3.53],
+      [50, 5.35],
+      [200, 6.3],
+    ])
+
+    for (const [scale, expectedRadiusPx] of expectedRadiiByScale) {
+      const entry = buildPlantPresentationEntries([createPlant()], {
+        viewport: createViewport({ scale }),
+        zoomReference: 8,
+        sizeMode: 'default',
+        colorByAttr: null,
+        speciesCache: new Map(),
+      }, new Set())[0]!
+
+      expect(entry.radiusScreenPx).toBeCloseTo(expectedRadiusPx, 2)
+    }
+  })
+
   it('keeps override precedence for base color while allowing color-by display color', () => {
     const plant = createPlant({ color: '#c44230' })
     const speciesCache = new Map([
@@ -66,7 +88,7 @@ describe('plant presentation service', () => {
     expect(colorByPresentation.color).toBe('#8BC34A')
   })
 
-  it('matches canopy sizing from species detail and uses zoom-reference fallback when missing', () => {
+  it('matches canopy sizing from species detail and uses symbolic fallback when missing', () => {
     const canopyPlant = createPlant({ id: 'canopy-plant' })
     const fallbackPlant = createPlant({ id: 'fallback-plant', canonicalName: 'Pyrus communis' })
     const speciesCache = new Map([
@@ -90,27 +112,29 @@ describe('plant presentation service', () => {
 
     expect(canopyPresentation.radiusWorld).toBe(2)
     expect(canopyPresentation.radiusScreenPx).toBe(32)
-    expect(fallbackPresentation.radiusWorld).toBe(1)
-    expect(fallbackPresentation.radiusScreenPx).toBe(16)
+    expect(fallbackPresentation.radiusScreenPx).toBeCloseTo(4.05, 2)
+    expect(fallbackPresentation.radiusWorld).toBeCloseTo(4.05 / 16, 2)
   })
 
-  it('computes screen hit bounds from the resolved radius with the minimum screen-size floor', () => {
-    const hitBounds = getPlantScreenHitBounds(createPlant(), {
+  it('computes screen hit bounds from the resolved Visual Footprint plus interaction padding', () => {
+    const plant = createPlant()
+    const context = {
       viewport: createViewport({ x: 5, y: 7, scale: 8 }),
       zoomReference: 8,
       sizeMode: 'default',
       colorByAttr: null,
       speciesCache: new Map(),
-    })
+    } as const
+    const entry = buildPlantPresentationEntries([plant], context, new Set())[0]!
+    const hitBounds = getPlantScreenHitBounds(plant, context)
+    const expectedHitRadius = entry.radiusScreenPx + 4
 
     expect(hitBounds.center).toEqual({ x: 85, y: 167 })
-    expect(hitBounds.radiusPx).toBe(6)
-    expect(hitBounds.bounds).toEqual({
-      x: 79,
-      y: 161,
-      width: 12,
-      height: 12,
-    })
+    expect(hitBounds.radiusPx).toBeCloseTo(expectedHitRadius, 5)
+    expect(hitBounds.bounds.x).toBeCloseTo(85 - expectedHitRadius, 5)
+    expect(hitBounds.bounds.y).toBeCloseTo(167 - expectedHitRadius, 5)
+    expect(hitBounds.bounds.width).toBeCloseTo(expectedHitRadius * 2, 5)
+    expect(hitBounds.bounds.height).toBeCloseTo(expectedHitRadius * 2, 5)
   })
 
   it('clusters stack badges transitively and anchors them to the highest-priority member', () => {

@@ -893,8 +893,9 @@ describe('SceneInteractionController', () => {
     expect(container.querySelector('[data-plant-spacing-guide]')).not.toBeNull()
     expect(container.querySelector<HTMLElement>('[data-plant-spacing-length-label]')?.textContent).toBe('6 m')
     expect(container.querySelectorAll('[data-plant-spacing-ghost]')).toHaveLength(3)
-    expect(container.querySelector<HTMLElement>('[data-plant-spacing-ghost]')?.style.width).toBe('4px')
-    expect(container.querySelector<HTMLElement>('[data-plant-spacing-ghost]')?.style.height).toBe('4px')
+    const ghost = container.querySelector<HTMLElement>('[data-plant-spacing-ghost]')!
+    expect(Number.parseFloat(ghost.style.width)).toBeCloseTo(4.43, 2)
+    expect(Number.parseFloat(ghost.style.height)).toBeCloseTo(4.43, 2)
     expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.textContent).toContain('3')
 
     ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 26, clientY: 30, button: 0 }))
