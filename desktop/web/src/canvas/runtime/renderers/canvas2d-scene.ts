@@ -1,10 +1,10 @@
 import { getAnnotationScreenBounds, getAnnotationTextMetrics } from '../annotation-layout'
 import {
   buildPlantPresentationEntries,
+  getStackBadgeOffsetPx,
   layoutPlantPresentation,
-  STACK_BADGE_OFFSET_X_PX,
-  STACK_BADGE_OFFSET_Y_PX,
   STACK_BADGE_RADIUS_PX,
+  type PlantPresentationEntry,
 } from '../plant-presentation'
 import { computeSelectionLabels } from '../selection-labels'
 import type {
@@ -181,7 +181,7 @@ function renderPlants(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnap
 
     const stackCount = layout.stackCounts.get(entry.plant.id)
     if (stackCount) {
-      drawStackBadge(ctx, entry.screenPoint, stackCount, layer.opacity)
+      drawStackBadge(ctx, entry, stackCount, layer.opacity)
     }
   }
 
@@ -190,14 +190,15 @@ function renderPlants(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnap
 
 function drawStackBadge(
   ctx: CanvasRenderingContext2D,
-  screenPoint: { x: number; y: number },
+  entry: PlantPresentationEntry,
   count: number,
   opacity: number,
 ): void {
   ctx.save()
   ctx.setTransform(1, 0, 0, 1, 0, 0)
-  const x = screenPoint.x + STACK_BADGE_OFFSET_X_PX
-  const y = screenPoint.y + STACK_BADGE_OFFSET_Y_PX
+  const offset = getStackBadgeOffsetPx(entry.radiusScreenPx)
+  const x = entry.screenPoint.x + offset.x
+  const y = entry.screenPoint.y + offset.y
   ctx.globalAlpha = opacity
   ctx.fillStyle = getStackBadgeBackgroundColor()
   ctx.beginPath()

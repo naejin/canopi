@@ -2,7 +2,6 @@ import { type ColorByAttribute, type PlantSizeMode } from '../plant-display-stat
 import { getColorForAttribute } from '../display-modes'
 import { DEFAULT_PLANT_COLOR, normalizeHexColor } from '../plant-colors'
 import {
-  CIRCLE_SCREEN_PX,
   getPlantLOD,
   getStratumColor,
   type PlantLOD,
@@ -14,8 +13,7 @@ import type { SpeciesCacheEntry } from './species-cache'
 const STACK_THRESHOLD_PX = 5
 const STACK_THRESHOLD_SQ = STACK_THRESHOLD_PX * STACK_THRESHOLD_PX
 export const STACK_BADGE_RADIUS_PX = 7
-export const STACK_BADGE_OFFSET_X_PX = CIRCLE_SCREEN_PX + 2
-export const STACK_BADGE_OFFSET_Y_PX = -(CIRCLE_SCREEN_PX + 2)
+export const STACK_BADGE_GAP_PX = 2
 
 export interface PlantPresentationContext {
   viewport: SceneViewportState
@@ -62,6 +60,11 @@ export interface PlantStackBadgeDecision {
   text: string
   anchorScreenPoint: ScenePoint
   badgeCenterScreenPoint: ScenePoint
+}
+
+export function getStackBadgeOffsetPx(radiusScreenPx: number): ScenePoint {
+  const offset = radiusScreenPx + STACK_BADGE_GAP_PX
+  return { x: offset, y: -offset }
 }
 
 export interface PlantPresentationSnapshot {
@@ -252,6 +255,7 @@ export function resolveStackBadgeDecisions(
     const anchor = members[0]
     if (!anchor) continue
 
+    const badgeOffset = getStackBadgeOffsetPx(anchor.radiusScreenPx)
     decisions.push({
       anchorPlantId: anchor.plant.id,
       memberPlantIds: [...memberIds].sort(),
@@ -259,8 +263,8 @@ export function resolveStackBadgeDecisions(
       text: String(memberIds.length),
       anchorScreenPoint: anchor.screenPoint,
       badgeCenterScreenPoint: {
-        x: anchor.screenPoint.x + STACK_BADGE_OFFSET_X_PX,
-        y: anchor.screenPoint.y + STACK_BADGE_OFFSET_Y_PX,
+        x: anchor.screenPoint.x + badgeOffset.x,
+        y: anchor.screenPoint.y + badgeOffset.y,
       },
     })
   }

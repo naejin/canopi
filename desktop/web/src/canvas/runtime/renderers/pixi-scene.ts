@@ -2,9 +2,8 @@ import { Application, Container, Graphics, Text, TextStyle } from 'pixi.js'
 import { getAnnotationScreenBounds, getAnnotationWorldBounds } from '../annotation-layout'
 import {
   buildPlantPresentationEntries,
+  getStackBadgeOffsetPx,
   layoutPlantPresentation,
-  STACK_BADGE_OFFSET_X_PX,
-  STACK_BADGE_OFFSET_Y_PX,
   STACK_BADGE_RADIUS_PX,
 } from '../plant-presentation'
 import { computeSelectionLabels } from '../selection-labels'
@@ -354,10 +353,11 @@ function drawStackBadge(
   entry: ReturnType<typeof buildPlantPresentationEntries>[number],
   viewportScale: number,
 ): void {
+  const offset = getStackBadgeOffsetPx(entry.radiusScreenPx)
   badge.clear()
   badge.circle(
-    entry.plant.position.x + STACK_BADGE_OFFSET_X_PX / viewportScale,
-    entry.plant.position.y + STACK_BADGE_OFFSET_Y_PX / viewportScale,
+    entry.plant.position.x + offset.x / viewportScale,
+    entry.plant.position.y + offset.y / viewportScale,
     STACK_BADGE_RADIUS_PX / viewportScale,
   ).fill({ color: toPixiColor(getStackBadgeBackgroundColor(), 0), alpha: 1 })
 }
@@ -368,14 +368,15 @@ function drawStackBadgeText(
   stackCount: number,
   viewportScale: number,
 ): void {
+  const offset = getStackBadgeOffsetPx(entry.radiusScreenPx)
   badgeText.text = String(stackCount)
   badgeText.style = new TextStyle({
     fontSize: 9 / viewportScale,
     fill: toPixiColor(getStackBadgeTextColor(), 0),
   })
   badgeText.position.set(
-    entry.plant.position.x + STACK_BADGE_OFFSET_X_PX / viewportScale,
-    entry.plant.position.y + STACK_BADGE_OFFSET_Y_PX / viewportScale,
+    entry.plant.position.x + offset.x / viewportScale,
+    entry.plant.position.y + offset.y / viewportScale,
   )
   badgeText.anchor.set(0.5, 0.5)
 }

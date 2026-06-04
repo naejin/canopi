@@ -161,6 +161,38 @@ describe('plant presentation service', () => {
     })
   })
 
+  it('anchors stack badge centers from the current Placed Plant Visual Footprint', () => {
+    const snapshot = buildPlantPresentationSnapshot([
+      createPlant({ id: 'plant-a', position: { x: 0, y: 0 } }),
+      createPlant({ id: 'plant-b', position: { x: 0, y: 0 } }),
+    ], {
+      viewport: createViewport({ scale: 1 }),
+      zoomReference: 8,
+      sizeMode: 'default',
+      colorByAttr: null,
+      speciesCache: new Map(),
+    }, new Set())
+
+    expect(snapshot.stackBadges).toHaveLength(1)
+    expect(snapshot.stackBadges[0]!.badgeCenterScreenPoint.x).toBeCloseTo(4.22, 2)
+    expect(snapshot.stackBadges[0]!.badgeCenterScreenPoint.y).toBeCloseTo(-4.22, 2)
+  })
+
+  it('does not create stack badges for ordinary Visual Footprint overlap', () => {
+    const snapshot = buildPlantPresentationSnapshot([
+      createPlant({ id: 'plant-a', position: { x: 0, y: 0 } }),
+      createPlant({ id: 'plant-b', position: { x: 0.12, y: 0 } }),
+    ], {
+      viewport: createViewport({ scale: 50 }),
+      zoomReference: 8,
+      sizeMode: 'default',
+      colorByAttr: null,
+      speciesCache: new Map(),
+    }, new Set())
+
+    expect(snapshot.stackBadges).toEqual([])
+  })
+
   it('resolves color-by attributes from normalized species detail', () => {
     const color = plantPresentationService.resolveDisplayColor(
       createPlant(),
