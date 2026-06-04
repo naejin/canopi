@@ -52,6 +52,10 @@ _Avoid_: Species identifier, primary key
 An instance of a species positioned inside a design. Multiple placed plants may refer to the same species.
 _Avoid_: Species, plant record, catalog item
 
+**Plant Size Mode**:
+A presentation choice for how placed plants are visually sized in a design. The default plant size mode shows placed plants as symbolic position markers; canopy spread mode shows their physical canopy footprint.
+_Avoid_: Object scale, canvas scale, plant display mode
+
 **Zone**:
 A named area in a design, optionally typed by ecological or functional purpose. A design may contain many zones, and zones may overlap placed plants or other zones.
 _Avoid_: Shape, polygon, region
@@ -79,6 +83,10 @@ _Avoid_: Label, comment
 **Design Object**:
 A canvas-positioned part of a design, such as a placed plant, zone, annotation, or object group. Design objects are the things users arrange spatially in the design.
 _Avoid_: Canvas object, shape
+
+**Visual Footprint**:
+The visible on-screen presence of a design object or its readable presentation aids at the current zoom level. A visual footprint may differ from the object's real-world geometry when readability requires it.
+_Avoid_: Object scale, canvas scale, display size
 
 **Layer**:
 A visibility and locking group for design objects. A design has many layers, and each layer controls whether its objects are visible, locked, and how opaque they appear.

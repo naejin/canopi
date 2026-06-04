@@ -39,6 +39,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - Camera transforms go through `CameraController`.
 - The in-canvas basemap is a sibling visualization layer, not part of the renderer contract.
 - Screen-space chrome such as rulers stays outside the world renderer.
+- Strokes, outlines, stack badges, labels, handles, and measurement text are readability aids. Keep their visual weight screen-readable across zoom instead of scaling them as physical design geometry.
 - Canvas notice placement uses the Canvas Notice Layout seam for safe screen-space slots. Active Tool HUDs use the top-left safe slot; Location Notices use the bottom-left safe slot and reserve the scale bar before compacting.
 - Use scene invalidation for content, selection, presentation, locale, theme, and hover changes.
 - Use viewport invalidation for pan, zoom, and fit operations.
@@ -86,18 +87,22 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 ## Annotation Rules
 
 - Annotation geometry comes from shared helpers in `runtime/annotation-layout.ts`.
+- Annotation text is readable presentation anchored to a design position; its visible text bounds are screen-space and should not be treated as physical world geometry.
 - Use the same annotation bounds for hit testing, band select, grouping, zoom-to-fit, and selection outlines.
 - Visible text should win hit testing over underlying zones/plants when it is on top.
 
 ## Plant Presentation
 
 - Plant geometry, color, and stack badges come from `runtime/plant-presentation.ts`.
+- Visual Footprint is the shared presentation boundary for symbolic plant sizing; rendering, hit testing, band select, grouping bounds, and zoom-to-fit must consume the same computed footprint. Additional click/touch padding is allowed only as an explicit interaction affordance.
+- Stack badges indicate placed plants whose centers collapse to nearly the same screen position, not all plants whose symbolic Visual Footprints overlap. Badge placement should derive from the current plant visual radius instead of fixed legacy dot-size assumptions.
 - Do not reintroduce per-plant labels on canvas. Identification is through hover tooltip and per-species selection labels.
 - Hover tooltip is an HTML overlay managed by `SceneInteractionController` through `runtime/interaction/hover-tooltip.ts`.
 - Hover species highlight flows through renderer snapshots.
 - Selection labels are computed per species at centroid by `runtime/selection-labels.ts` and must track viewport changes.
 - Size mode and color mode are independent axes. Do not reintroduce a combined plant display mode.
-- Default-mode dot sizing is world-proportional with screen caps/floors from existing constants.
+- Default Plant Size Mode dots are symbolic position markers. Size them with a smooth absolute-scale Visual Footprint curve with soft screen-readable limits, not a hard pixel cap or design-reference-relative sizing. Target about 2px minimum, about 6.75px asymptotic maximum, and gradual growth from roughly 2.2px at 1 px/m to roughly 6.3px at 200 px/m.
+- Canopy spread mode is physical geometry when canopy spread is known. Plants with missing canopy spread use the symbolic Visual Footprint fallback rather than misleading physical circles.
 - Species-cache backfill may enrich metadata, but production geometry should not depend on ad hoc empty-cache fallbacks.
 
 ## Target Projection
