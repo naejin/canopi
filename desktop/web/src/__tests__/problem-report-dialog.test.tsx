@@ -2,7 +2,10 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { resetFrontendDiagnosticsForTests } from '../app/problem-report/diagnostics'
-import { problemReportDialogOpen } from '../app/problem-report/state'
+import {
+  openProblemReportDialog,
+  problemReportSubmission,
+} from '../app/problem-report/submission'
 import { replaceCurrentDesignState } from '../app/document-session/store'
 import { ProblemReportDialog } from '../components/shared/ProblemReportDialog'
 import type { CanopiFile } from '../types/design'
@@ -48,7 +51,7 @@ describe('ProblemReportDialog', () => {
     container = document.createElement('div')
     document.body.textContent = ''
     document.body.appendChild(container)
-    problemReportDialogOpen.value = true
+    openProblemReportDialog()
     mocks.createProblemReport.mockReset()
     mocks.showProblemReportFolder.mockReset()
     resetFrontendDiagnosticsForTests()
@@ -63,7 +66,7 @@ describe('ProblemReportDialog', () => {
   afterEach(() => {
     render(null, container)
     container.remove()
-    problemReportDialogOpen.value = false
+    problemReportSubmission.close()
     vi.restoreAllMocks()
   })
 

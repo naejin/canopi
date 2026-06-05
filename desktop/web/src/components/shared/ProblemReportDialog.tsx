@@ -1,14 +1,7 @@
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useRef } from 'preact/hooks'
 import { problemReportDialogOpen } from '../../app/problem-report/state'
-import { recentFrontendDiagnostics } from '../../app/problem-report/diagnostics'
-import { buildCurrentDesignProblemReportAttachment } from '../../app/problem-report/attachments'
+import { problemReportSubmission } from '../../app/problem-report/submission'
 import { locale } from '../../app/settings/state'
-import {
-  createProblemReport,
-  showProblemReportFolder,
-  type ProblemReportRequest,
-  type ProblemReportResult,
-} from '../../ipc/problem-report'
 import { t } from '../../i18n'
 import styles from './ProblemReportDialog.module.css'
 
@@ -18,14 +11,14 @@ export function ProblemReportDialog() {
 }
 
 function ProblemReportDialogContent() {
-  const [description, setDescription] = useState('')
-  const [result, setResult] = useState<ProblemReportResult | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [submitting, setSubmitting] = useState(false)
-  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
-  const [showFolderState, setShowFolderState] = useState<'idle' | 'showing' | 'failed'>('idle')
-  const [includeCurrentDesign, setIncludeCurrentDesign] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const description = problemReportSubmission.description.value
+  const includeCurrentDesign = problemReportSubmission.includeCurrentDesign.value
+  const submitting = problemReportSubmission.submitting.value
+  const result = problemReportSubmission.result.value
+  const error = problemReportSubmission.error.value
+  const copyState = problemReportSubmission.copyState.value
+  const showFolderState = problemReportSubmission.showFolderState.value
 
   void locale.value
 
@@ -34,60 +27,20 @@ function ProblemReportDialogContent() {
   }, [])
 
   function closeDialog(): void {
-    problemReportDialogOpen.value = false
+    problemReportSubmission.close()
   }
 
   async function submit(event: Event): Promise<void> {
     event.preventDefault()
-    setSubmitting(true)
-    setError(null)
-    setCopyState('idle')
-
-    try {
-      const sensitiveAttachments: NonNullable<ProblemReportRequest['sensitive_attachments']> = {}
-      const request: ProblemReportRequest = {
-        description,
-        frontend_diagnostics: recentFrontendDiagnostics(),
-        sensitive_attachments: sensitiveAttachments,
-      }
-      if (includeCurrentDesign) {
-        const currentDesign = buildCurrentDesignProblemReportAttachment()
-        if (!currentDesign) {
-          setError(t('problemReport.currentDesignUnavailable'))
-          return
-        }
-        sensitiveAttachments.current_design = currentDesign
-      }
-      const next = await createProblemReport(request)
-      setResult(next)
-      setShowFolderState('idle')
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught))
-    } finally {
-      setSubmitting(false)
-    }
+    await problemReportSubmission.submit()
   }
 
   async function copySummary(): Promise<void> {
-    if (!result) return
-    try {
-      if (!navigator.clipboard?.writeText) throw new Error('Clipboard is not available')
-      await navigator.clipboard.writeText(result.report_summary)
-      setCopyState('copied')
-    } catch {
-      setCopyState('failed')
-    }
+    await problemReportSubmission.copySummary()
   }
 
   async function showFolder(): Promise<void> {
-    if (!result) return
-    setShowFolderState('showing')
-    try {
-      await showProblemReportFolder(result.folder_path)
-      setShowFolderState('idle')
-    } catch {
-      setShowFolderState('failed')
-    }
+    await problemReportSubmission.showFolder()
   }
 
   function onKeyDown(event: KeyboardEvent): void {
@@ -182,7 +135,9 @@ function ProblemReportDialogContent() {
               className={styles.textarea}
               value={description}
               placeholder={t('problemReport.descriptionPlaceholder')}
-              onInput={(event) => setDescription((event.target as HTMLTextAreaElement).value)}
+              onInput={(event) =>
+                problemReportSubmission.setDescription((event.target as HTMLTextAreaElement).value)
+              }
             />
             <p className={styles.privacy}>{t('problemReport.privacyNote')}</p>
             <fieldset className={styles.attachments}>
@@ -193,7 +148,7 @@ function ProblemReportDialogContent() {
                   name="include-current-design"
                   checked={includeCurrentDesign}
                   onChange={(event) =>
-                    setIncludeCurrentDesign((event.target as HTMLInputElement).checked)
+                    problemReportSubmission.setIncludeCurrentDesign((event.target as HTMLInputElement).checked)
                   }
                 />
                 <span className={styles.checkboxText}>

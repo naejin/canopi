@@ -8,11 +8,11 @@ import {
   saveCurrentDesign,
 } from '../app/document-session/actions'
 import { activePanel, navigateTo, type Panel } from '../app/shell/state'
-import { problemReportDialogOpen } from '../app/problem-report/state'
 import {
   diagnosticMessageFromError,
   recordFrontendDiagnostic,
 } from '../app/problem-report/diagnostics'
+import { openProblemReportDialog } from '../app/problem-report/submission'
 import { mutateSettingsProjection } from '../app/settings/projection'
 import {
   currentCanvasHasSelection,
@@ -180,8 +180,8 @@ function cycleTheme(): void {
   }, { persist: 'immediate' })
 }
 
-function openProblemReportDialog(): void {
-  problemReportDialogOpen.value = true
+function showProblemReportDialog(): void {
+  openProblemReportDialog()
 }
 
 function runCanvas(
@@ -284,7 +284,7 @@ const APP_COMMANDS: readonly AppCommandDefinition[] = [
     id: 'help.reportProblem',
     label: () => t('menu.help.reportProblem'),
     palette: true,
-    run: openProblemReportDialog,
+    run: showProblemReportDialog,
   },
   {
     id: 'nav.canvas',

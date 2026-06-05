@@ -342,6 +342,16 @@ describe('frontend boundary sources', () => {
     expect(stateMachineSource).toContain('autosaveDesign')
   })
 
+  it('keeps the Problem Report dialog behind the submission module', () => {
+    const dialogSource = readSource('../components/shared/ProblemReportDialog.tsx')
+
+    expect(dialogSource).toContain('problemReportSubmission')
+    expect(dialogSource).not.toContain('recentFrontendDiagnostics')
+    expect(dialogSource).not.toContain('buildCurrentDesignProblemReportAttachment')
+    expect(dialogSource).not.toContain('../../ipc/problem-report')
+    expect(dialogSource).not.toContain('ProblemReportRequest')
+  })
+
   it('keeps production Design Session state behind the store seam', () => {
     const sourcePaths = [
       '../app',

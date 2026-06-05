@@ -17,7 +17,7 @@ Use this guide when changing Problem Report, Report Summary, or Diagnostic Bundl
 - The Tauri command should stay thin and only resolve app paths, settings, health, and runtime metadata before calling the service.
 - Native folder reveal uses fixed platform commands from Rust (`open`, `explorer`, or `xdg-open`) after service validation; tests should inject the reveal seam instead of launching a file manager.
 - Frontend entry points should go through the App Command Graph in `desktop/web/src/commands/registry.ts`; do not wire menu-only problem-report actions.
-- The dialog state lives under `desktop/web/src/app/problem-report/`.
+- Frontend submission state and request assembly live in `desktop/web/src/app/problem-report/submission.ts`. The dialog should render that module's state and call its commands instead of assembling diagnostics, sensitive attachments, clipboard writes, folder reveals, or IPC requests itself.
 - Current Design attachments should be built through the document-session persistence seam so canvas-owned and document-owned state are composed the same way as saves.
 
 ## UI And Testing
