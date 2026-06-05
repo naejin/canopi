@@ -7,7 +7,7 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 - `desktop/web/src/app/document-session/actions.ts` exposes user-facing document actions.
 - `desktop/web/src/app/document-session/lifecycle.ts` owns canvas runtime attachment, resize observation, autosave timing, settings flush, runtime teardown, and canvas-session publication.
 - `desktop/web/src/app/document-session/state-machine.ts` owns explicit Design Session states and transition ordering: attached/ detached readiness, dirty checks, attached/detached replacement selection, queued loads, `zoomToFit()` for attached sessions, autosave execution, teardown snapshots, persistence disposal, and workflow installation.
-- `desktop/web/src/app/document-session/transition.ts` is the compatibility facade over the Design Session state machine for document actions and lifecycle callers.
+- `desktop/web/src/app/document-session/transition.ts` exposes intent-shaped Design Session operations for document actions and lifecycle callers while keeping low-level transition request construction inside the Design Session module.
 - `desktop/web/src/app/document-session/store.ts` is the public Design Session state seam for active Design identity, dirty baselines, pending loads, saved markers, autosave failure, and read-only reactive projections.
 - `desktop/web/src/app/document-session/persistence.ts` owns persisted Design content composition, attached/detached save snapshots, teardown snapshots, and persistence workflow disposal.
 - `desktop/web/src/app/document-session/workflows.ts` owns cross-domain workflow effects such as consortium sync.
@@ -22,8 +22,9 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 - Destructive document flows must use the shared guard path: dirty check -> confirm -> replace.
 - Production reads of active Design identity and dirty state should use the read-only projections from `app/document-session/store.ts`.
 - Production writes to active Design identity, dirty baselines, pending loads, autosave failure, or canvas-clean bridge state must go through `app/document-session/store.ts`.
-- `transitionDocument()` is the replacement path for new/open/template/queued/mount-existing flows.
-- Callers request a Design transition; `transitionDocument()` decides whether an attached `CanvasDocumentSurface` is available or whether to apply a detached document-state transition.
+- Production callers use intent-shaped Design Session operations such as `openDesignSessionFromDialog()`, `openDesignSessionFromPath()`, `openTemplateDesignSession()`, `createNewDesignSession()`, `startAttachedDesignSession()`, `consumeQueuedDocumentLoad()`, `saveCurrentDesign()`, `saveAsCurrentDesign()`, `autosaveDesignSession()`, and `teardownAttachedDesignSession()`.
+- Low-level `transitionDocument()` request construction is internal to the Design Session module and state-machine tests. Production callers must not assemble transition sources, dirty guard modes, load callbacks, queue deferral behavior, or attached/detached branch policy.
+- Design Session operations decide whether an attached `CanvasDocumentSurface` is available or whether to apply a detached document-state transition.
 - Attached transitions hydrate the canvas session, show chrome, call `zoomToFit()`, clear history, and install consortium sync.
 - Detached transitions update canonical document state, reset dirty baselines, and install consortium sync without canvas-only calls.
 - Lifecycle callers should use `startAttachedDesignSession()`, `autosaveDesignSession()`, and `teardownAttachedDesignSession()` instead of reassembling Design Session state-machine steps locally.

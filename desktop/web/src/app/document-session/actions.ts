@@ -1,16 +1,14 @@
 import type { CanvasDocumentSurface } from "../../canvas/runtime/runtime";
-import * as designIpc from "../../ipc/design";
 import {
-  transitionDocument,
   type DocumentTransitionResult,
   consumeQueuedDocumentLoad,
+  createNewDesignSession,
+  openDesignSessionFromDialog,
+  openDesignSessionFromPath,
+  openTemplateDesignSession,
   saveCurrentDesign,
   saveAsCurrentDesign,
 } from "./transition";
-import {
-  setPendingDesignPath,
-  setPendingTemplateImport,
-} from "./store";
 
 interface DocumentLoadOptions {
   session?: CanvasDocumentSurface | null;
@@ -27,14 +25,7 @@ export {
 
 /** Open file dialog and replace the active document through the shared guard. */
 export async function openDesign(): Promise<void> {
-  const result = await transitionDocument({
-    source: "open-dialog",
-    dirtyGuard: "confirm",
-    load: async () => {
-      const { file, path } = await designIpc.openDesignDialog();
-      return { file, path, name: file.name };
-    },
-  });
+  const result = await openDesignSessionFromDialog();
 
   throwIfFailed(result);
 }
@@ -44,18 +35,9 @@ export async function openDesignFromPath(
   path: string,
   options: DocumentLoadOptions = {},
 ): Promise<void> {
-  const result = await transitionDocument({
-    source: "open-path",
-    dirtyGuard: "confirm",
+  const result = await openDesignSessionFromPath(path, {
     session: options.session,
-    load: async () => {
-      const file = await designIpc.loadDesign(path);
-      return { file, path, name: file.name };
-    },
     isCancelled: options.isCancelled,
-    deferWhenDetachedAndEmpty: () => {
-      setPendingDesignPath(path);
-    },
   });
 
   throwIfFailed(result);
@@ -67,19 +49,9 @@ export async function openDesignAsTemplate(
   name: string,
   options: DocumentLoadOptions = {},
 ): Promise<TemplateOpenResult> {
-  const result = await transitionDocument({
-    source: "template",
-    dirtyGuard: "confirm",
+  const result = await openTemplateDesignSession(path, name, {
     session: options.session,
-    load: async () => ({
-      file: await designIpc.loadDesign(path),
-      path: null,
-      name,
-    }),
     isCancelled: options.isCancelled,
-    deferWhenDetachedAndEmpty: () => {
-      setPendingTemplateImport({ path, name });
-    },
   });
 
   throwIfFailed(result);
@@ -89,15 +61,7 @@ export async function openDesignAsTemplate(
 
 /** Create a new blank design through the shared replacement guard. */
 export async function newDesignAction(): Promise<void> {
-  const result = await transitionDocument({
-    source: "new",
-    dirtyGuard: "confirm",
-    load: async () => ({
-      file: await designIpc.newDesign(),
-      path: null,
-      name: "Untitled",
-    }),
-  });
+  const result = await createNewDesignSession();
 
   throwIfFailed(result);
 }

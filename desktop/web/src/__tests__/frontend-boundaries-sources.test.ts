@@ -320,6 +320,7 @@ describe('frontend boundary sources', () => {
   it('keeps the canvas document hook as a Design Session lifecycle adapter', () => {
     const hookSource = readSource('../app/document-session/use-canvas-document-session.ts')
     const lifecycleSource = readSource('../app/document-session/lifecycle.ts')
+    const actionsSource = readSource('../app/document-session/actions.ts')
     const transitionSource = readSource('../app/document-session/transition.ts')
     const stateMachineSource = readSource('../app/document-session/state-machine.ts')
 
@@ -334,6 +335,7 @@ describe('frontend boundary sources', () => {
     expect(lifecycleSource).not.toContain('transitionDocument')
     expect(lifecycleSource).not.toContain('buildPersistedDesignSessionContent')
     expect(lifecycleSource).not.toContain('../../ipc/design')
+    expect(actionsSource).not.toContain('transitionDocument')
     expect(transitionSource).toContain('createDesignSessionStateMachine')
     expect(stateMachineSource).toContain('transitionDocument')
     expect(stateMachineSource).toContain('buildPersistedDesignSessionContent')

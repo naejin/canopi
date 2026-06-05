@@ -1,14 +1,18 @@
 import type { CanvasDocumentSurface } from "../../canvas/runtime/runtime";
+import * as designIpc from "../../ipc/design";
 import {
   createDesignSessionStateMachine,
   type AutosaveDesignSessionOptions,
   type DesignSessionState,
-  type DocumentTransitionRequest,
   type DocumentTransitionResult,
   type QueuedDocumentLoadOptions,
   type SaveCurrentDesignOptions,
   type TeardownDesignSessionOptions,
 } from "./state-machine";
+import {
+  setPendingDesignPath,
+  setPendingTemplateImport,
+} from "./store";
 
 export {
   createDesignSessionStateMachine,
@@ -18,18 +22,18 @@ export {
   type DesignSessionState,
   type DesignSessionStateMachineDeps,
   type DesignSessionStateStatus,
-  type DirtyGuardMode,
-  type DocumentTransitionLoadResult,
-  type DocumentTransitionRequest,
   type DocumentTransitionResult,
-  type DocumentTransitionSource,
-  type DocumentTransitionStatus,
   type QueuedDocumentLoadOptions,
   type SaveCurrentDesignOptions,
   type TeardownDesignSessionOptions,
 } from "./state-machine";
 
 const designSessionStateMachine = createDesignSessionStateMachine();
+
+interface DesignSessionLoadOptions {
+  readonly session?: CanvasDocumentSurface | null;
+  readonly isCancelled?: () => boolean;
+}
 
 export function getDesignSessionState(): DesignSessionState {
   return designSessionStateMachine.getState();
@@ -64,10 +68,67 @@ export function saveAsCurrentDesign(options: SaveCurrentDesignOptions = {}): Pro
   return designSessionStateMachine.saveAsCurrentDesign(options);
 }
 
-export function transitionDocument(
-  request: DocumentTransitionRequest,
+export function openDesignSessionFromDialog(): Promise<DocumentTransitionResult> {
+  return designSessionStateMachine.transitionDocument({
+    source: "open-dialog",
+    dirtyGuard: "confirm",
+    load: async () => {
+      const { file, path } = await designIpc.openDesignDialog();
+      return { file, path, name: file.name };
+    },
+  });
+}
+
+export function openDesignSessionFromPath(
+  path: string,
+  options: DesignSessionLoadOptions = {},
 ): Promise<DocumentTransitionResult> {
-  return designSessionStateMachine.transitionDocument(request);
+  return designSessionStateMachine.transitionDocument({
+    source: "open-path",
+    dirtyGuard: "confirm",
+    session: options.session,
+    load: async () => {
+      const file = await designIpc.loadDesign(path);
+      return { file, path, name: file.name };
+    },
+    isCancelled: options.isCancelled,
+    deferWhenDetachedAndEmpty: () => {
+      setPendingDesignPath(path);
+    },
+  });
+}
+
+export function openTemplateDesignSession(
+  path: string,
+  name: string,
+  options: DesignSessionLoadOptions = {},
+): Promise<DocumentTransitionResult> {
+  return designSessionStateMachine.transitionDocument({
+    source: "template",
+    dirtyGuard: "confirm",
+    session: options.session,
+    load: async () => ({
+      file: await designIpc.loadDesign(path),
+      path: null,
+      name,
+    }),
+    isCancelled: options.isCancelled,
+    deferWhenDetachedAndEmpty: () => {
+      setPendingTemplateImport({ path, name });
+    },
+  });
+}
+
+export function createNewDesignSession(): Promise<DocumentTransitionResult> {
+  return designSessionStateMachine.transitionDocument({
+    source: "new",
+    dirtyGuard: "confirm",
+    load: async () => ({
+      file: await designIpc.newDesign(),
+      path: null,
+      name: "Untitled",
+    }),
+  });
 }
 
 export function autosaveDesignSession(
