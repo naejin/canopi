@@ -3,6 +3,7 @@ import {
   createProblemReportSubmission,
   type ProblemReportSubmissionDeps,
 } from '../app/problem-report/submission'
+import type { ProblemReportResult } from '../ipc/problem-report'
 
 function createDeps(overrides: Partial<ProblemReportSubmissionDeps> = {}): ProblemReportSubmissionDeps {
   return {
@@ -27,6 +28,16 @@ function createDeps(overrides: Partial<ProblemReportSubmissionDeps> = {}): Probl
     setDialogOpen: vi.fn(),
     ...overrides,
   }
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
 }
 
 describe('Problem Report submission module', () => {
@@ -80,6 +91,19 @@ describe('Problem Report submission module', () => {
     expect(submission.submitting.value).toBe(false)
   })
 
+  it('shows errors from the active submission', async () => {
+    const deps = createDeps({
+      createProblemReport: vi.fn().mockRejectedValue(new Error('disk full')),
+    })
+    const submission = createProblemReportSubmission(deps)
+
+    await submission.submit()
+
+    expect(submission.error.value).toBe('disk full')
+    expect(submission.result.value).toBeNull()
+    expect(submission.submitting.value).toBe(false)
+  })
+
   it('copies the generated summary and reveals the generated folder through commands', async () => {
     const deps = createDeps()
     const submission = createProblemReportSubmission(deps)
@@ -108,5 +132,55 @@ describe('Problem Report submission module', () => {
     expect(submission.description.value).toBe('')
     expect(submission.includeCurrentDesign.value).toBe(false)
     expect(submission.result.value).toBeNull()
+  })
+
+  it('ignores stale success after the dialog is closed and reopened', async () => {
+    const pending = deferred<ProblemReportResult>()
+    const deps = createDeps({
+      createProblemReport: vi.fn(() => pending.promise),
+    })
+    const submission = createProblemReportSubmission(deps)
+
+    submission.open()
+    submission.setDescription('Old report')
+    const oldSubmit = submission.submit()
+    submission.close()
+    submission.open()
+    submission.setDescription('Fresh report')
+
+    pending.resolve({
+      folder_path: '/tmp/Canopi Problem Report/old',
+      summary_path: '/tmp/Canopi Problem Report/old/Report Summary.txt',
+      bundle_path: '/tmp/Canopi Problem Report/old/Diagnostic Bundle.zip',
+      report_summary: 'Old report summary',
+    })
+    await oldSubmit
+
+    expect(submission.description.value).toBe('Fresh report')
+    expect(submission.result.value).toBeNull()
+    expect(submission.error.value).toBeNull()
+    expect(submission.submitting.value).toBe(false)
+  })
+
+  it('ignores stale failure after the dialog is closed and reopened', async () => {
+    const pending = deferred<ProblemReportResult>()
+    const deps = createDeps({
+      createProblemReport: vi.fn(() => pending.promise),
+    })
+    const submission = createProblemReportSubmission(deps)
+
+    submission.open()
+    const oldSubmit = submission.submit()
+    submission.close()
+    submission.open()
+    submission.setDescription('Fresh report')
+
+    pending.reject(new Error('old request failed'))
+    await oldSubmit
+
+    expect(submission.description.value).toBe('Fresh report')
+    expect(submission.result.value).toBeNull()
+    expect(submission.error.value).toBeNull()
+    expect(submission.submitting.value).toBe(false)
   })
 })

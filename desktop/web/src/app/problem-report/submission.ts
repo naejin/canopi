@@ -72,8 +72,10 @@ export function createProblemReportSubmission(
   const error = signal<string | null>(null)
   const copyState = signal<ProblemReportCopyState>('idle')
   const showFolderState = signal<ProblemReportShowFolderState>('idle')
+  let generation = 0
 
   function reset(): void {
+    generation += 1
     description.value = ''
     includeCurrentDesign.value = false
     submitting.value = false
@@ -107,6 +109,8 @@ export function createProblemReportSubmission(
       includeCurrentDesign.value = include
     },
     async submit() {
+      generation += 1
+      const submitGeneration = generation
       submitting.value = true
       error.value = null
       copyState.value = 'idle'
@@ -116,22 +120,29 @@ export function createProblemReportSubmission(
         if (includeCurrentDesign.value) {
           const currentDesign = deps.buildCurrentDesignAttachment()
           if (!currentDesign) {
-            error.value = deps.currentDesignUnavailableMessage()
+            if (submitGeneration === generation) {
+              error.value = deps.currentDesignUnavailableMessage()
+            }
             return
           }
           sensitiveAttachments.current_design = currentDesign
         }
 
-        result.value = await deps.createProblemReport({
+        const nextResult = await deps.createProblemReport({
           description: description.value,
           frontend_diagnostics: deps.readFrontendDiagnostics(),
           sensitive_attachments: sensitiveAttachments,
         })
+        if (submitGeneration !== generation) return
+        result.value = nextResult
         showFolderState.value = 'idle'
       } catch (caught) {
+        if (submitGeneration !== generation) return
         error.value = caught instanceof Error ? caught.message : String(caught)
       } finally {
-        submitting.value = false
+        if (submitGeneration === generation) {
+          submitting.value = false
+        }
       }
     },
     async copySummary() {
