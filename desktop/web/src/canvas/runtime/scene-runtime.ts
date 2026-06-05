@@ -49,7 +49,6 @@ import {
 import type {
   CanvasQueryRevision,
   CanvasRuntimeDocumentMetadata,
-  MountedCanvasRuntime,
 } from './runtime'
 import { targets, speciesTarget } from '../../target'
 
@@ -60,7 +59,7 @@ export interface SceneCanvasRuntimeOptions {
   targetPresentation?: SceneRuntimePanelTargetAdapter
 }
 
-export class SceneCanvasRuntime implements MountedCanvasRuntime {
+export class SceneCanvasRuntime {
   private readonly _sceneStore = new SceneStore()
   private readonly _camera = new CameraController()
   private readonly _sceneRevision = signal(0)

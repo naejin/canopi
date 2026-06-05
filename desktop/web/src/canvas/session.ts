@@ -13,9 +13,7 @@ import type {
   CanvasDocumentSurface,
   CanvasQuerySurface,
   CanvasRuntimeSurfaces,
-  MountedCanvasRuntime,
 } from './runtime/runtime'
-import { createCanvasRuntimeSurfaces } from './runtime/surfaces'
 
 export const currentCanvasSession = signal<CanvasRuntimeSurfaces | null>(null)
 export const currentCanvasCommandSurface = computed<CanvasCommandSurface | null>(() =>
@@ -53,7 +51,7 @@ export function setCanvasRuntimeSurfaces(surfaces: CanvasRuntimeSurfaces | null)
   setCanvasReadyState(surfaces !== null)
 }
 
-export function setCurrentCanvasSession(session: MountedCanvasRuntime | CanvasRuntimeSurfaces | null): void {
+export function setCurrentCanvasSession(session: CanvasRuntimeSurfaces | null): void {
   if (!session) {
     setCanvasRuntimeSurfaces(null)
     return
@@ -64,15 +62,7 @@ export function setCurrentCanvasSession(session: MountedCanvasRuntime | CanvasRu
     return
   }
 
-  if (isCompleteMountedRuntime(session)) {
-    setCanvasRuntimeSurfaces(createCanvasRuntimeSurfaces(session))
-    return
-  }
-
-  // Compatibility for narrow fake surfaces in focused tests; production mount
-  // should publish explicit CanvasRuntimeSurfaces via setCanvasRuntimeSurfaces.
-  currentCanvasSession.value = session as unknown as CanvasRuntimeSurfaces
-  setCanvasReadyState(true)
+  throw new Error('Canvas session publication requires explicit canvas runtime surfaces.')
 }
 
 export function setCurrentCanvasTool(name: string): void {
@@ -99,26 +89,17 @@ function isCanvasRuntimeSurfaces(value: unknown): value is CanvasRuntimeSurfaces
   )
 }
 
-function isCompleteMountedRuntime(value: MountedCanvasRuntime): boolean {
-  return typeof value.setTool === 'function'
-    && typeof value.getSceneSnapshot === 'function'
-    && typeof value.serializeDocument === 'function'
-}
-
 function commandSurfaceFrom(session: CanvasRuntimeSurfaces | null): CanvasCommandSurface | null {
   if (!session) return null
-  if (isCanvasRuntimeSurfaces(session)) return session.commands
-  return session as unknown as CanvasCommandSurface
+  return session.commands
 }
 
 function querySurfaceFrom(session: CanvasRuntimeSurfaces | null): CanvasQuerySurface | null {
   if (!session) return null
-  if (isCanvasRuntimeSurfaces(session)) return session.queries
-  return session as unknown as CanvasQuerySurface
+  return session.queries
 }
 
 function documentSurfaceFrom(session: CanvasRuntimeSurfaces | null): CanvasDocumentSurface | null {
   if (!session) return null
-  if (isCanvasRuntimeSurfaces(session)) return session.documents
-  return session as unknown as CanvasDocumentSurface
+  return session.documents
 }

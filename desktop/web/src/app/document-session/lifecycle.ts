@@ -4,7 +4,6 @@ import { createCanvasRuntimeSurfaces } from "../../canvas/runtime/surfaces";
 import type {
   CanvasDocumentSurface,
   CanvasRuntimeSurfaces,
-  MountedCanvasRuntime,
 } from "../../canvas/runtime/runtime";
 import { autoSaveIntervalMs } from "../settings/state";
 import { flushSettingsProjection } from "../settings/projection";
@@ -28,8 +27,8 @@ interface DesignSessionResizeObserver {
 }
 
 interface DesignSessionLifecycleDeps {
-  readonly createRuntime: () => InitializableCanvasRuntime;
-  readonly createSurfaces: (runtime: MountedCanvasRuntime) => CanvasRuntimeSurfaces;
+  readonly createRuntime: () => SceneCanvasRuntime;
+  readonly createSurfaces: (runtime: SceneCanvasRuntime) => CanvasRuntimeSurfaces;
   readonly publishSurfaces: (surfaces: CanvasRuntimeSurfaces | null) => void;
   readonly createResizeObserver: (
     callback: ResizeObserverCallback,
@@ -37,10 +36,6 @@ interface DesignSessionLifecycleDeps {
   readonly readInitialAutosaveInterval: () => number;
   readonly logError: (message?: unknown, ...optionalParams: unknown[]) => void;
 }
-
-type InitializableCanvasRuntime = MountedCanvasRuntime & {
-  init(container: HTMLElement): Promise<void>;
-};
 
 const DEFAULT_LIFECYCLE_DEPS: DesignSessionLifecycleDeps = {
   createRuntime: () => new SceneCanvasRuntime({
@@ -73,7 +68,7 @@ export function createDesignSessionLifecycle(
 }
 
 class RuntimeDesignSessionLifecycle implements DesignSessionLifecycle {
-  private readonly runtime: InitializableCanvasRuntime;
+  private readonly runtime: SceneCanvasRuntime;
   private readonly surfaces: CanvasRuntimeSurfaces;
   private readonly documents: CanvasDocumentSurface;
   private cancelled = false;

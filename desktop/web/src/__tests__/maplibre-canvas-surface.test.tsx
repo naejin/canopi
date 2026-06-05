@@ -6,7 +6,7 @@ import { layerOpacity, layerVisibility, hillshadeVisible } from '../app/canvas-s
 import { hoveredPanelTargets, selectedPanelTargets } from '../app/panel-targets/state'
 import { basemapStyle, theme } from '../app/settings/state'
 import { setCurrentCanvasSession } from '../canvas/session'
-import type { CanvasQuerySurface, MountedCanvasRuntime } from '../canvas/runtime/runtime'
+import type { CanvasQuerySurface } from '../canvas/runtime/runtime'
 import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import { northBearingDeg } from '../canvas/scene-metadata-state'
 import { MapLibreCanvasSurface } from '../components/canvas/MapLibreCanvasSurface'
@@ -15,6 +15,7 @@ import {
   type MapLibreCanvasSurfaceState,
 } from '../maplibre/canvas-surface-state'
 import { currentDesign } from './support/design-session-state'
+import { createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
 
 const attachMock = vi.hoisted(() => vi.fn())
 const updateMock = vi.hoisted(() => vi.fn())
@@ -54,7 +55,7 @@ function createRuntime(): CanvasQuerySurface {
 }
 
 function setQuerySurfaceForTest(surface: CanvasQuerySurface | null): void {
-  setCurrentCanvasSession(surface as unknown as MountedCanvasRuntime | null)
+  setCurrentCanvasSession(surface ? createTestCanvasRuntimeSurfaces({ queries: surface }) : null)
 }
 
 describe('MapLibreCanvasSurface adapter', () => {

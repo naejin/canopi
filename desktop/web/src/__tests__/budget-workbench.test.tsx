@@ -2,7 +2,7 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { BudgetTab } from '../components/canvas/BudgetTab'
-import { currentCanvasSession } from '../canvas/session'
+import { setCurrentCanvasSession } from '../canvas/session'
 import { currentDesign } from './support/design-session-state'
 import { locale } from '../app/settings/state'
 import {
@@ -11,6 +11,7 @@ import {
 } from '../app/budget/workbench'
 import type { CanopiFile, PlacedPlant } from '../types/design'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
+import { createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
 
 function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
@@ -61,16 +62,18 @@ describe('Budget Item workbench', () => {
     document.body.appendChild(container)
     locale.value = 'en'
     currentDesign.value = makeDesign()
-    currentCanvasSession.value = createTestCanvasQuerySurface({
-      plants: [makePlant('Malus domestica', 'Apple')],
-    }) as any
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      queries: createTestCanvasQuerySurface({
+        plants: [makePlant('Malus domestica', 'Apple')],
+      }),
+    }))
   })
 
   afterEach(() => {
     render(null, container)
     container.remove()
     currentDesign.value = null
-    currentCanvasSession.value = null
+    setCurrentCanvasSession(null)
   })
 
   it('parses zero-price drafts without conflating them with an empty draft', () => {

@@ -26,12 +26,13 @@ vi.mock('../components/canvas/useCanvasRenderer', () => ({
 }))
 
 import { ConsortiumChart } from '../components/canvas/ConsortiumChart'
-import { currentCanvasSession } from '../canvas/session'
+import { setCurrentCanvasSession } from '../canvas/session'
 import { currentDesign } from './support/design-session-state'
 import { hoveredCanvasTargets, hoveredPanelTargets } from '../app/panel-targets/state'
 import { consortiumTarget, speciesTarget } from '../target'
 import type { CanopiFile, PlacedPlant } from '../types/design'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
+import { createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
 
 function makeDesign(): CanopiFile {
   return {
@@ -95,19 +96,21 @@ describe('ConsortiumChart canvas hover bridge', () => {
     hoveredCanvasTargets.value = []
     hoveredPanelTargets.value = []
     currentDesign.value = makeDesign()
-    currentCanvasSession.value = createTestCanvasQuerySurface({
-      plants: [
-        makePlant('Malus domestica', 'Apple'),
-        makePlant('Acer campestre', 'Field maple'),
-      ],
-    }) as any
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      queries: createTestCanvasQuerySurface({
+        plants: [
+          makePlant('Malus domestica', 'Apple'),
+          makePlant('Acer campestre', 'Field maple'),
+        ],
+      }),
+    }))
   })
 
   afterEach(() => {
     render(null, container)
     container.remove()
     currentDesign.value = null
-    currentCanvasSession.value = null
+    setCurrentCanvasSession(null)
     hoveredCanvasTargets.value = []
     hoveredPanelTargets.value = []
   })

@@ -2,7 +2,7 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { BudgetTab } from '../components/canvas/BudgetTab'
-import { currentCanvasSession } from '../canvas/session'
+import { setCurrentCanvasSession } from '../canvas/session'
 import { locale } from '../app/settings/state'
 import { hoveredPanelTargets, selectedPanelTargetOrigin, selectedPanelTargets } from '../app/panel-targets/state'
 import { currentDesign } from './support/design-session-state'
@@ -13,6 +13,7 @@ import {
   createTestCanvasQuerySurface,
   type TestCanvasQuerySurface,
 } from './support/canvas-query-surface'
+import { createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
 
 function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
@@ -82,14 +83,14 @@ describe('BudgetTab hover bridge', () => {
     querySurface = createTestCanvasQuerySurface({
       plants: [makePlant('Malus domestica', 'Apple')],
     })
-    currentCanvasSession.value = querySurface as any
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ queries: querySurface }))
   })
 
   afterEach(() => {
     render(null, container)
     container.remove()
     currentDesign.value = null
-    currentCanvasSession.value = null
+    setCurrentCanvasSession(null)
     hoveredPanelTargets.value = []
     selectedPanelTargetOrigin.value = null
     selectedPanelTargets.value = []
@@ -174,7 +175,7 @@ describe('BudgetTab hover bridge', () => {
         ['Malus domestica', locale.value === 'fr' ? 'Pommier' : 'Apple'],
       ]),
     })
-    currentCanvasSession.value = querySurface as any
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ queries: querySurface }))
 
     await act(async () => {
       render(<BudgetTab />, container)

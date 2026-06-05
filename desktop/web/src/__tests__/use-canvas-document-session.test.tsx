@@ -80,7 +80,7 @@ vi.mock("../app/settings/projection", () => ({
 }));
 
 import { useCanvasDocumentSession } from "../app/document-session/use-canvas-document-session";
-import { currentCanvasDocumentSurface, currentCanvasSession } from "../canvas/session";
+import { currentCanvasDocumentSurface, currentCanvasSession, setCurrentCanvasSession } from "../canvas/session";
 import { autoSaveIntervalMs } from "../app/settings/state";
 import {
   autosaveFailed,
@@ -181,7 +181,7 @@ describe("useCanvasDocumentSession", () => {
     container = document.createElement("div");
     document.body.innerHTML = "";
     document.body.appendChild(container);
-    currentCanvasSession.value = null;
+    setCurrentCanvasSession(null);
     currentDesign.value = null;
     designName.value = "Demo";
     designPath.value = "/designs/demo.canopi";

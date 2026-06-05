@@ -13,11 +13,21 @@ import {
 import * as settingsProjection from '../app/settings/projection'
 import { commands, getMenuDefinitions } from '../commands/registry'
 import { PANEL_SHORTCUTS, TOOL_SHORTCUTS } from '../shortcuts/definitions'
+import {
+  createTestCanvasCommandSurface,
+  createTestCanvasRuntimeSurfaces,
+} from './support/canvas-runtime-surfaces'
 
 function getCommand(id: string) {
   const command = commands.find((entry) => entry.id === id)
   if (!command) throw new Error(`Missing command ${id}`)
   return command
+}
+
+function mountCanvasCommandSurface(overrides: Parameters<typeof createTestCanvasCommandSurface>[0]): void {
+  setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+    commands: createTestCanvasCommandSurface(overrides),
+  }))
 }
 
 describe('command registry canvas tool switching', () => {
@@ -46,9 +56,7 @@ describe('command registry canvas tool switching', () => {
 
   it('routes tool commands through the live canvas session when mounted', () => {
     const setTool = vi.fn()
-    setCurrentCanvasSession({
-      setTool,
-    } as any)
+    mountCanvasCommandSurface({ setTool })
 
     getCommand('canvas.tool.hand').action()
 
@@ -60,9 +68,7 @@ describe('command registry canvas tool switching', () => {
 
   it('exposes the ellipse tool through the shared command graph', () => {
     const setTool = vi.fn()
-    setCurrentCanvasSession({
-      setTool,
-    } as any)
+    mountCanvasCommandSurface({ setTool })
 
     getCommand('canvas.tool.ellipse').action()
 
@@ -74,9 +80,7 @@ describe('command registry canvas tool switching', () => {
 
   it('exposes the polygon tool through the shared command graph', () => {
     const setTool = vi.fn()
-    setCurrentCanvasSession({
-      setTool,
-    } as any)
+    mountCanvasCommandSurface({ setTool })
 
     getCommand('canvas.tool.polygon').action()
 
@@ -88,9 +92,7 @@ describe('command registry canvas tool switching', () => {
 
   it('exposes Object Stamp through the shared command graph', () => {
     const setTool = vi.fn()
-    setCurrentCanvasSession({
-      setTool,
-    } as any)
+    mountCanvasCommandSurface({ setTool })
 
     getCommand('canvas.tool.objectStamp').action()
 
@@ -101,9 +103,7 @@ describe('command registry canvas tool switching', () => {
 
   it('exposes Plant Spacing through the shared command graph', () => {
     const setTool = vi.fn()
-    setCurrentCanvasSession({
-      setTool,
-    } as any)
+    mountCanvasCommandSurface({ setTool })
 
     getCommand('canvas.tool.plantSpacing').action()
 

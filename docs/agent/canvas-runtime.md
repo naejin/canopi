@@ -9,6 +9,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - Toolbars, shortcuts, menus, and plant color actions consume command surfaces.
 - Document session orchestration, save/load, chrome, resize, and teardown consume document surfaces.
 - Sibling read-only surfaces consume query surfaces for scene snapshots, viewport queries, selection reads, placed plants, localized names, and presentation context.
+- Publish live canvas sessions as explicit `CanvasRuntimeSurfaces` bundles. Do not publish a raw `SceneCanvasRuntime`, and do not cast a role-specific fake into the session signal; tests should use `createTestCanvasRuntimeSurfaces()` with the role surface they need.
 - Scene freshness for app callers is exposed through `CanvasQuerySurface.revision`. App modules must not import `sceneEntityRevision` or `plantNamesRevision` from `canvas/runtime-mirror-state.ts`; those mirrors are runtime-internal compatibility signals.
 
 ## Scene Ownership

@@ -31,6 +31,10 @@ import {
 import { basemapStyle } from '../app/settings/state'
 import { flushSettingsProjection, hydrateSettingsProjection } from '../app/settings/projection'
 import { setCurrentCanvasSession } from '../canvas/session'
+import {
+  createTestCanvasCommandSurface,
+  createTestCanvasRuntimeSurfaces,
+} from './support/canvas-runtime-surfaces'
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -217,7 +221,9 @@ describe('bottom panel actions', () => {
       setSceneLayerOpacity: vi.fn(() => true),
       setSceneLayerLocked: vi.fn(() => true),
     }
-    setCurrentCanvasSession(commandSurface as never)
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      commands: createTestCanvasCommandSurface(commandSurface),
+    }))
 
     toggleLayerVisibility('plants')
     setLayerOpacity('zones', 0.4)

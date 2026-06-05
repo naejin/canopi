@@ -5,6 +5,11 @@ import { PlantColorMenu } from '../components/canvas/PlantColorMenu'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { plantColorMenuOpen } from '../canvas/plant-color-menu-state'
 import { selectedObjectIds } from '../canvas/session-state'
+import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
+import {
+  createTestCanvasCommandSurface,
+  createTestCanvasRuntimeSurfaces,
+} from './support/canvas-runtime-surfaces'
 
 describe('PlantColorMenu', () => {
   let container: HTMLDivElement
@@ -24,13 +29,18 @@ describe('PlantColorMenu', () => {
     clearPlantSpeciesColor.mockReset()
     ensureSpeciesCacheEntries.mockClear()
     getSelectedPlantColorContext.mockReset()
-    setCurrentCanvasSession({
-      setSelectedPlantColor,
-      setPlantColorForSpecies,
-      clearPlantSpeciesColor,
-      ensureSpeciesCacheEntries,
-      getSelectedPlantColorContext,
-    } as any)
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      commands: createTestCanvasCommandSurface({
+        setSelectedPlantColor,
+        setPlantColorForSpecies,
+        clearPlantSpeciesColor,
+        ensureSpeciesCacheEntries,
+      }),
+      queries: {
+        ...createTestCanvasQuerySurface(),
+        getSelectedPlantColorContext,
+      },
+    }))
     buttonRef.current = document.createElement('button')
     selectedObjectIds.value = new Set(['plant-1'])
     plantColorMenuOpen.value = true

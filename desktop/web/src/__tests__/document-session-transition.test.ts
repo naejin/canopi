@@ -44,8 +44,9 @@ vi.mock("../app/document-session/workflows", () => ({
   disposeConsortiumSync: vi.fn(),
 }));
 
-import type { CanvasDocumentSurface, MountedCanvasRuntime } from "../canvas/runtime/runtime";
+import type { CanvasDocumentSurface } from "../canvas/runtime/runtime";
 import { setCurrentCanvasSession } from "../canvas/session";
+import { createTestCanvasRuntimeSurfaces } from "./support/canvas-runtime-surfaces";
 import {
   createDesignSessionStateMachine,
   type DesignSessionStateMachine,
@@ -420,7 +421,7 @@ describe("document session transition", () => {
 
   it("does not use the current canvas session when a transition is explicitly detached", async () => {
     const currentSession = makeSession();
-    setCurrentCanvasSession(currentSession as unknown as MountedCanvasRuntime);
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ documents: currentSession }));
     store.markDocumentDirty();
     mocks.message.mockResolvedValue("Save");
 

@@ -15,12 +15,13 @@ vi.mock('../app/budget/export', async (importOriginal) => {
 })
 
 import { BudgetTab } from '../components/canvas/BudgetTab'
-import { currentCanvasSession } from '../canvas/session'
+import { setCurrentCanvasSession } from '../canvas/session'
 import { locale } from '../app/settings/state'
 import { currentDesign } from './support/design-session-state'
 import { speciesBudgetTarget } from '../target'
 import type { CanopiFile, PlacedPlant } from '../types/design'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
+import { createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
 
 function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
@@ -84,9 +85,11 @@ describe('BudgetTab export', () => {
         },
       ],
     })
-    currentCanvasSession.value = createTestCanvasQuerySurface({
-      plants: [makePlant('Malus domestica', 'Apple')],
-    }) as any
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      queries: createTestCanvasQuerySurface({
+        plants: [makePlant('Malus domestica', 'Apple')],
+      }),
+    }))
     mocks.exportBudgetCsv.mockReset()
     consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
   })
@@ -96,7 +99,7 @@ describe('BudgetTab export', () => {
     render(null, container)
     container.remove()
     currentDesign.value = null
-    currentCanvasSession.value = null
+    setCurrentCanvasSession(null)
   })
 
   it('logs non-cancelled export failures instead of swallowing them', async () => {

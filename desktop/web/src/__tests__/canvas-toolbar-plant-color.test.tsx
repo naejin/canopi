@@ -6,6 +6,11 @@ import { CanvasToolbar } from '../components/canvas/CanvasToolbar'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { plantColorMenuOpen } from '../canvas/plant-color-menu-state'
 import { activeTool, selectedObjectIds } from '../canvas/session-state'
+import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
+import {
+  createTestCanvasCommandSurface,
+  createTestCanvasRuntimeSurfaces,
+} from './support/canvas-runtime-surfaces'
 
 describe('CanvasToolbar', () => {
   let container: HTMLDivElement
@@ -48,21 +53,26 @@ describe('CanvasToolbar', () => {
         singleSpeciesDefaultColor: null,
       }
     })
-    setCurrentCanvasSession({
-      canUndo,
-      canRedo,
-      setTool,
-      undo,
-      redo,
-      getSelectedPlantColorContext,
-      ensureSpeciesCacheEntries: vi.fn().mockResolvedValue(false),
-      toggleGrid: vi.fn(),
-      toggleSnapToGrid: vi.fn(),
-      toggleRulers: vi.fn(),
-      setSelectedPlantColor: vi.fn(),
-      setPlantColorForSpecies: vi.fn(),
-      clearPlantSpeciesColor: vi.fn(),
-    } as any)
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      commands: createTestCanvasCommandSurface({
+        canUndo,
+        canRedo,
+        setTool,
+        undo,
+        redo,
+        ensureSpeciesCacheEntries: vi.fn().mockResolvedValue(false),
+        toggleGrid: vi.fn(),
+        toggleSnapToGrid: vi.fn(),
+        toggleRulers: vi.fn(),
+        setSelectedPlantColor: vi.fn(),
+        setPlantColorForSpecies: vi.fn(),
+        clearPlantSpeciesColor: vi.fn(),
+      }),
+      queries: {
+        ...createTestCanvasQuerySurface(),
+        getSelectedPlantColorContext,
+      },
+    }))
   })
 
   afterEach(() => {

@@ -5,6 +5,16 @@ import * as documentActions from '../app/document-session/actions'
 import { initShortcuts } from '../shortcuts/manager'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { currentDesign, nonCanvasRevision, nonCanvasSavedRevision } from './support/design-session-state'
+import {
+  createTestCanvasCommandSurface,
+  createTestCanvasRuntimeSurfaces,
+} from './support/canvas-runtime-surfaces'
+
+function mountCanvasCommandSurface(overrides: Parameters<typeof createTestCanvasCommandSurface>[0]): void {
+  setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+    commands: createTestCanvasCommandSurface(overrides),
+  }))
+}
 
 describe('shortcut manager canvas tool switching', () => {
   beforeEach(() => {
@@ -26,9 +36,7 @@ describe('shortcut manager canvas tool switching', () => {
 
   it('routes tool shortcuts through the live canvas session when mounted', () => {
     const setTool = vi.fn()
-    setCurrentCanvasSession({
-      setTool,
-    } as any)
+    mountCanvasCommandSurface({ setTool })
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'r' }))
 
@@ -38,9 +46,7 @@ describe('shortcut manager canvas tool switching', () => {
 
   it('routes the ellipse tool shortcut through the live canvas session', () => {
     const setTool = vi.fn()
-    setCurrentCanvasSession({
-      setTool,
-    } as any)
+    mountCanvasCommandSurface({ setTool })
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e' }))
 
@@ -50,9 +56,7 @@ describe('shortcut manager canvas tool switching', () => {
 
   it('routes the polygon tool shortcut through the live canvas session', () => {
     const setTool = vi.fn()
-    setCurrentCanvasSession({
-      setTool,
-    } as any)
+    mountCanvasCommandSurface({ setTool })
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p' }))
 
@@ -62,9 +66,7 @@ describe('shortcut manager canvas tool switching', () => {
 
   it('routes the Plant Spacing shortcut through the live canvas session', () => {
     const setTool = vi.fn()
-    setCurrentCanvasSession({
-      setTool,
-    } as any)
+    mountCanvasCommandSurface({ setTool })
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 's' }))
 
@@ -76,9 +78,7 @@ describe('shortcut manager canvas tool switching', () => {
     const input = document.createElement('input')
     document.body.appendChild(input)
     const setTool = vi.fn()
-    setCurrentCanvasSession({
-      setTool,
-    } as any)
+    mountCanvasCommandSurface({ setTool })
 
     input.focus()
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 's', bubbles: true }))
