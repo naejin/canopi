@@ -1,21 +1,21 @@
 import { useEffect, useMemo, useRef } from 'preact/hooks'
 import {
   useTimelinePlanningSurface,
-} from '../planning-projection'
+} from '../../planning-projection'
 import {
   RULER_HEIGHT,
   computeTimelineRowOffsets,
   renderTimeline,
-} from '../../canvas/timeline-renderer'
-import { t } from '../../i18n'
-import { theme } from '../settings/state'
-import type { TimelineAction } from '../../types/design'
-import type { TimelineActionFormData } from './editing'
+} from '../../../canvas/timeline-renderer'
+import { t } from '../../../i18n'
+import { theme } from '../../settings/state'
+import type { TimelineAction } from '../../../types/design'
+import type { TimelineActionFormData } from '../editing'
 import {
-  createTimelineActionInteractionWorkbench,
-  type TimelineActionInteractionWorkbench,
-} from './interaction-workbench'
-import type { TimelineActionPopoverState } from './workbench'
+  createTimelineActionCanvasController,
+  type TimelineActionCanvasController,
+} from './controller'
+import type { TimelineActionPopoverState } from '../workbench'
 
 interface MutableDomRef<T> {
   current: T | null
@@ -93,17 +93,17 @@ export function useTimelineActionCanvasHostModel(): TimelineActionCanvasHostMode
   const rowOffsets = useMemo(() => computeTimelineRowOffsets(rows, layout), [rows, layout])
   const canvasHeight = rowOffsets[rowOffsets.length - 1] ?? RULER_HEIGHT
   const cachedRectRef = useRef<DOMRect | null>(null)
-  const interactionWorkbenchRef = useRef<TimelineActionInteractionWorkbench | null>(null)
+  const canvasControllerRef = useRef<TimelineActionCanvasController | null>(null)
   const activeTheme = theme.value
 
-  if (!interactionWorkbenchRef.current) {
-    interactionWorkbenchRef.current = createTimelineActionInteractionWorkbench({
+  if (!canvasControllerRef.current) {
+    canvasControllerRef.current = createTimelineActionCanvasController({
       canvasRef,
       cachedRectRef,
     })
   }
-  const interactionWorkbench = interactionWorkbenchRef.current
-  interactionWorkbench.updateInputs({
+  const canvasController = canvasControllerRef.current
+  canvasController.updateInputs({
     rows,
     layout,
     rowOffsets,
@@ -114,7 +114,7 @@ export function useTimelineActionCanvasHostModel(): TimelineActionCanvasHostMode
     speciesColors,
   })
 
-  const renderState = interactionWorkbench.readRenderState()
+  const renderState = canvasController.readRenderState()
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -125,19 +125,19 @@ export function useTimelineActionCanvasHostModel(): TimelineActionCanvasHostMode
 
   useEffect(() => {
     const canvas = canvasRef.current
-    if (canvas) canvas.addEventListener('wheel', interactionWorkbench.handleWheel, { passive: false })
+    if (canvas) canvas.addEventListener('wheel', canvasController.handleWheel, { passive: false })
 
     const onMove = (event: MouseEvent) => {
-      interactionWorkbench.handleDocumentMouseMove(event)
+      canvasController.handleDocumentMouseMove(event)
     }
     const onUp = (event: MouseEvent) => {
-      interactionWorkbench.handleDocumentMouseUp(event)
+      canvasController.handleDocumentMouseUp(event)
     }
     const onLeave = () => {
-      interactionWorkbench.handleDocumentMouseLeave()
+      canvasController.handleDocumentMouseLeave()
     }
     const onKeyDown = (event: KeyboardEvent) => {
-      interactionWorkbench.handleKeyDown(event)
+      canvasController.handleKeyDown(event)
     }
 
     document.addEventListener('mousemove', onMove)
@@ -145,21 +145,21 @@ export function useTimelineActionCanvasHostModel(): TimelineActionCanvasHostMode
     document.addEventListener('keydown', onKeyDown)
     document.documentElement.addEventListener('mouseleave', onLeave)
     return () => {
-      if (canvas) canvas.removeEventListener('wheel', interactionWorkbench.handleWheel)
+      if (canvas) canvas.removeEventListener('wheel', canvasController.handleWheel)
       document.removeEventListener('mousemove', onMove)
       document.removeEventListener('mouseup', onUp)
       document.removeEventListener('keydown', onKeyDown)
       document.documentElement.removeEventListener('mouseleave', onLeave)
-      interactionWorkbench.cleanup()
+      canvasController.cleanup()
     }
-  }, [canvasRef, interactionWorkbench])
+  }, [canvasRef, canvasController])
 
   useEffect(() => {
-    interactionWorkbench.syncActions(actions ?? EMPTY_ACTIONS)
-  }, [actions, interactionWorkbench, interactionWorkbench.hoveredId.value, interactionWorkbench.selectedId.value])
+    canvasController.syncActions(actions ?? EMPTY_ACTIONS)
+  }, [actions, canvasController, canvasController.hoveredId.value, canvasController.selectedId.value])
 
-  const popover = interactionWorkbench.popover.value
-  const tooltip = interactionWorkbench.tooltip.value
+  const popover = canvasController.popover.value
+  const tooltip = canvasController.tooltip.value
 
   const tooltipOverlay: TimelineActionCanvasTooltipOverlay | null = tooltip && !popover
     ? {
@@ -185,9 +185,9 @@ export function useTimelineActionCanvasHostModel(): TimelineActionCanvasHostMode
           anchorY: popover.anchorY,
           initialData: popover.formData,
           speciesList: popover.speciesList,
-          onSave: interactionWorkbench.handlePopoverSave,
-          ...(popover.mode === 'edit' ? { onDelete: interactionWorkbench.handlePopoverDelete } : {}),
-          onCancel: interactionWorkbench.handlePopoverCancel,
+          onSave: canvasController.handlePopoverSave,
+          ...(popover.mode === 'edit' ? { onDelete: canvasController.handlePopoverDelete } : {}),
+          onCancel: canvasController.handlePopoverCancel,
         },
       }
     : null
@@ -195,14 +195,14 @@ export function useTimelineActionCanvasHostModel(): TimelineActionCanvasHostMode
   return {
     container: {
       ref: containerRef,
-      onScroll: interactionWorkbench.handleContainerScroll,
+      onScroll: canvasController.handleContainerScroll,
     },
     canvas: {
       ref: canvasRef,
       ariaLabel: t('canvas.timeline.title'),
-      onMouseDown: interactionWorkbench.handleMouseDown,
-      onMouseMove: interactionWorkbench.handleCanvasMouseMove,
-      onMouseLeave: interactionWorkbench.handleMouseLeave,
+      onMouseDown: canvasController.handleMouseDown,
+      onMouseMove: canvasController.handleCanvasMouseMove,
+      onMouseLeave: canvasController.handleMouseLeave,
     },
     renderer: {
       canvasRef,
@@ -223,13 +223,13 @@ export function useTimelineActionCanvasHostModel(): TimelineActionCanvasHostMode
         layout,
         rowOffsets,
         originMs,
-        interactionWorkbench.pxPerDay.value,
-        interactionWorkbench.scrollX.value,
-        interactionWorkbench.selectedId.value,
-        interactionWorkbench.hoveredId.value,
+        canvasController.pxPerDay.value,
+        canvasController.scrollX.value,
+        canvasController.selectedId.value,
+        canvasController.hoveredId.value,
         activeLocale,
         speciesColors,
-        interactionWorkbench.granularity.value,
+        canvasController.granularity.value,
         activeTheme,
       ],
       cachedRectRef,

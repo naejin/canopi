@@ -1,6 +1,6 @@
 import { createPortal } from 'preact/compat'
 import { useCanvasRenderer } from './useCanvasRenderer'
-import { useTimelineActionCanvasHostModel } from '../../app/timeline/canvas-workbench'
+import { useTimelineActionCanvasHostModel } from '../../app/timeline/canvas'
 import { TimelinePopover } from './TimelinePopover'
 import styles from './InteractiveTimeline.module.css'
 

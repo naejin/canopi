@@ -4,21 +4,21 @@ import type {
   TimelineActionTypeRow,
   TimelinePlanningAction,
   TimelinePlanningProjection,
-} from '../planning-projection'
-import type { TimelineRenderState } from '../../canvas/timeline-renderer'
+} from '../../planning-projection'
+import type { TimelineRenderState } from '../../../canvas/timeline-renderer'
 import type {
   TimelineGranularity,
-} from './interaction'
+} from '../interaction'
 import {
   TIMELINE_GRANULARITY_PX_PER_DAY,
-} from './interaction'
+} from '../interaction'
 import {
   createTimelineActionInteractionFrame,
   type TimelineActionInteractionFrame,
   type TimelineActionInteractionFrameAnimation,
 } from './interaction-frame'
-import type { TimelineActionPopoverState } from './workbench'
-import type { TimelineActionFormData } from './editing'
+import type { TimelineActionPopoverState } from '../workbench'
+import type { TimelineActionFormData } from '../editing'
 
 interface MutableRef<T> {
   current: T
@@ -34,7 +34,7 @@ export type TimelineTooltipState = {
   action: TimelinePlanningAction
 }
 
-export interface TimelineActionInteractionWorkbenchInputs {
+export interface TimelineActionCanvasControllerInputs {
   readonly rows: readonly TimelineActionTypeRow[]
   readonly layout: ReadonlyMap<string, TimelineActionLayout>
   readonly rowOffsets: number[]
@@ -45,13 +45,13 @@ export interface TimelineActionInteractionWorkbenchInputs {
   readonly speciesColors: Record<string, string>
 }
 
-export interface TimelineActionInteractionWorkbenchOptions {
+export interface TimelineActionCanvasControllerOptions {
   readonly canvasRef: MutableDomRef<HTMLCanvasElement>
   readonly cachedRectRef: MutableDomRef<DOMRect>
   readonly animation?: TimelineActionInteractionFrameAnimation
 }
 
-export interface TimelineActionInteractionWorkbench {
+export interface TimelineActionCanvasController {
   readonly pxPerDay: ReadonlySignal<number>
   readonly scrollX: ReadonlySignal<number>
   readonly selectedId: ReadonlySignal<string | null>
@@ -59,7 +59,7 @@ export interface TimelineActionInteractionWorkbench {
   readonly granularity: ReadonlySignal<TimelineGranularity>
   readonly tooltip: ReadonlySignal<TimelineTooltipState | null>
   readonly popover: ReadonlySignal<TimelineActionPopoverState | null>
-  updateInputs(inputs: TimelineActionInteractionWorkbenchInputs): void
+  updateInputs(inputs: TimelineActionCanvasControllerInputs): void
   readRenderState(): TimelineRenderState
   getFrozenOriginDate(): Date | null
   syncActions(actions: readonly { readonly id: string }[]): void
@@ -88,11 +88,11 @@ const EMPTY_PROJECTION: TimelinePlanningProjection = {
   originMs: 0,
 }
 
-export function createTimelineActionInteractionWorkbench({
+export function createTimelineActionCanvasController({
   canvasRef,
   cachedRectRef,
   animation,
-}: TimelineActionInteractionWorkbenchOptions): TimelineActionInteractionWorkbench {
+}: TimelineActionCanvasControllerOptions): TimelineActionCanvasController {
   const rowsRef: MutableRef<readonly TimelineActionTypeRow[]> = { current: EMPTY_ROWS }
   const layoutRef: MutableRef<ReadonlyMap<string, TimelineActionLayout>> = { current: EMPTY_LAYOUT }
   const rowOffsetsRef: MutableRef<number[]> = { current: EMPTY_ROW_OFFSETS }
@@ -141,7 +141,7 @@ export function createTimelineActionInteractionWorkbench({
   }
 
   function activeFrame(): TimelineActionInteractionFrame {
-    if (!frame) throw new Error('Timeline Action interaction workbench is not initialized')
+    if (!frame) throw new Error('Timeline Action Canvas controller is not initialized')
     return frame
   }
 

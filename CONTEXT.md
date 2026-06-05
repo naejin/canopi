@@ -152,6 +152,10 @@ _Avoid_: Event, task, calendar item
 The interaction surface for creating, editing, deleting, and selecting timeline actions in the timeline view. The timeline action workbench coordinates action forms and target presentation, but it does not own Design data.
 _Avoid_: Timeline popup, event editor, task workbench
 
+**Timeline Action Canvas**:
+The canvas-based interaction surface for viewing, panning, zooming, dragging, selecting, and editing timeline actions. The timeline action canvas coordinates Planning Projection inputs, canvas rendering, pointer ordering, popover presentation, and target presentation, while Timeline Action data remains owned by the Design.
+_Avoid_: Timeline renderer, timeline frame, timeline canvas component
+
 **Budget Item**:
 A cost entry in a design. A budget item may refer to a species, placed plant, zone, or manual line item and contributes to the design's budget.
 _Avoid_: Price, estimate row

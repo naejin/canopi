@@ -5,7 +5,7 @@ import {
   groupTimelineActionsByType,
   type TimelinePlanningProjection,
 } from '../app/planning-projection'
-import { createTimelineActionInteractionFrame } from '../app/timeline/interaction-frame'
+import { createTimelineActionInteractionFrame } from '../app/timeline/canvas/interaction-frame'
 import {
   LABEL_SIDEBAR_WIDTH,
   RULER_HEIGHT,

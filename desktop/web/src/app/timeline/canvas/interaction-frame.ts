@@ -4,15 +4,15 @@ import type {
   TimelineActionTypeRow,
   TimelinePlanningAction,
   TimelinePlanningProjection,
-} from '../planning-projection'
-import { ACTION_TYPES } from '../planning-projection'
+} from '../../planning-projection'
+import { ACTION_TYPES } from '../../planning-projection'
 import {
   LABEL_SIDEBAR_WIDTH,
   RULER_HEIGHT,
   hitTestAction,
   type TimelineRenderState,
-} from '../../canvas/timeline-renderer'
-import { dateToX, snapToDay, toISODate, xToDate } from '../../canvas/timeline-math'
+} from '../../../canvas/timeline-renderer'
+import { dateToX, snapToDay, toISODate, xToDate } from '../../../canvas/timeline-math'
 import {
   clearTimelineHoveredPanelTargets,
   clearTimelineSelectedPanelTargets,
@@ -24,10 +24,10 @@ import {
   setTimelineSelectedPanelTargets,
   type TimelineActionPendingClick,
   type TimelineActionPopoverState,
-} from './workbench'
-import type { TimelineActionFormData } from './editing'
-import { createUuid } from '../../utils/ids'
-import { isEditableTarget } from '../../canvas/runtime/interaction/pointer-utils'
+} from '../workbench'
+import type { TimelineActionFormData } from '../editing'
+import { createUuid } from '../../../utils/ids'
+import { isEditableTarget } from '../../../canvas/runtime/interaction/pointer-utils'
 import {
   TIMELINE_CLICK_THRESHOLD,
   TIMELINE_GRANULARITY_PX_PER_DAY,
@@ -45,7 +45,7 @@ import {
   updateTimelinePanScrollX,
   type TimelineDragState,
   type TimelineGranularity,
-} from './interaction'
+} from '../interaction'
 
 interface MutableRef<T> {
   current: T
