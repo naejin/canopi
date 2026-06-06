@@ -29,6 +29,7 @@ describe('location route boundary', () => {
     const layerPanelSource = readSource('../components/canvas/LayerPanel.tsx')
     const compassOverlaySource = readSource('../components/canvas/CompassOverlay.tsx')
     const mapSurfaceControllerSource = readSource('../components/canvas/maplibre-surface-controller.ts')
+    const mapSurfaceSnapshotSource = readSource('../app/canvas-map-surface/snapshot.ts')
     const tabSource = readSource('../components/canvas/LocationTab.tsx')
     const inputSource = readSource('../components/canvas/LocationInput.tsx')
 
@@ -37,16 +38,23 @@ describe('location route boundary', () => {
       locationPanelSource,
       layerPanelSource,
       compassOverlaySource,
-      mapSurfaceControllerSource,
+      mapSurfaceSnapshotSource,
       tabSource,
       inputSource,
     ]) {
-      expect(source).toContain('app/location')
+      expect(source).toMatch(/app\/location|\.\.\/location/)
       expect(source).not.toContain('document-session/store')
       expect(source).not.toContain('utils/location')
       expect(source).not.toContain('setDesignLocation')
       expect(source).not.toContain('clearDesignLocation')
       expect(source).not.toContain('createLocationSearchController')
     }
+
+    expect(mapSurfaceControllerSource).toContain('canvas-map-surface/snapshot')
+    expect(mapSurfaceControllerSource).not.toContain('document-session/store')
+    expect(mapSurfaceControllerSource).not.toContain('utils/location')
+    expect(mapSurfaceControllerSource).not.toContain('setDesignLocation')
+    expect(mapSurfaceControllerSource).not.toContain('clearDesignLocation')
+    expect(mapSurfaceControllerSource).not.toContain('createLocationSearchController')
   })
 })

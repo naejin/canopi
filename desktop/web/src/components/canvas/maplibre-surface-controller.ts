@@ -1,10 +1,10 @@
 import { useSignalEffect } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
-import { currentCanvasQuerySurface } from '../../canvas/session'
 import {
   createCanvasMapSurfaceLifecycle,
   type CanvasMapSurfaceLifecycle,
 } from '../../app/canvas-map-surface/lifecycle'
+import { readCanvasMapSurfaceCoreSnapshot } from '../../app/canvas-map-surface/snapshot'
 import { loadMapLibreTerrainSupport } from '../../maplibre/terrain-loader'
 import {
   IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
@@ -14,13 +14,8 @@ import {
   contourIntervalMeters,
   hillshadeOpacity,
   hillshadeVisible,
-  layerOpacity,
-  layerVisibility,
 } from '../../app/canvas-settings/signals'
-import { northBearingDeg } from '../../canvas/scene-metadata-state'
 import { readPanelTargetOverlaySnapshot } from '../../app/panel-targets/presentation'
-import { basemapStyle, theme } from '../../app/settings/state'
-import { readSavedLocationPresentation } from '../../app/location'
 import { loadMapLibre } from './maplibre-loader'
 
 interface UseMapLibreCanvasSurfaceControllerOptions {
@@ -46,40 +41,26 @@ export function useMapLibreCanvasSurfaceController({
   }
 
   useSignalEffect(() => {
-    const runtime = currentCanvasQuerySurface.value
-    const location = readSavedLocationPresentation().location
-    const visibleLayers = layerVisibility.value
-    const opacityByLayer = layerOpacity.value
-    const bearing = northBearingDeg.value
-    const preferredBasemapStyle = basemapStyle.value
-    const activeTheme = theme.value
+    const coreSnapshot = readCanvasMapSurfaceCoreSnapshot()
     const { hoveredTargets, selectedTargets } = readPanelTargetOverlaySnapshot()
-    const contoursVisible = visibleLayers.contours ?? false
-    const contoursOpacity = opacityByLayer.contours ?? 1
+    const contoursVisible = coreSnapshot.layerVisibility.contours ?? false
+    const contoursOpacity = coreSnapshot.layerOpacity.contours ?? 1
     const hillshadeOn = hillshadeVisible.value
     const hillshadeAlpha = hillshadeOpacity.value
     const contourInterval = contourIntervalMeters.value
-    void runtime?.revision.scene.value
-    void runtime?.revision.viewport.value
 
     lifecycleRef.current?.update({
-      runtime,
-      location: location ? { lat: location.lat, lon: location.lon } : null,
-      northBearingDeg: bearing,
-      basemapStyle: preferredBasemapStyle,
-      layerVisibility: { ...visibleLayers },
-      layerOpacity: { ...opacityByLayer },
+      ...coreSnapshot,
       terrain: {
         contourIntervalMeters: contourInterval,
         contoursVisible,
         contoursOpacity,
         hillshadeVisible: hillshadeOn,
         hillshadeOpacity: hillshadeAlpha,
-        isDark: activeTheme === 'dark',
+        isDark: coreSnapshot.theme === 'dark',
       },
       hoveredTargets: [...hoveredTargets],
       selectedTargets: [...selectedTargets],
-      theme: activeTheme,
     })
   })
 

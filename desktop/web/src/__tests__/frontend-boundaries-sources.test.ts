@@ -108,6 +108,24 @@ describe('frontend boundary sources', () => {
     expect(presentationSource).toContain('createPanelTargetPresentationController')
   })
 
+  it('keeps core Canvas Map Surface inputs behind the app seam', () => {
+    const mapSurfaceControllerSource = readSource('../components/canvas/maplibre-surface-controller.ts')
+    const snapshotSource = readSource('../app/canvas-map-surface/snapshot.ts')
+
+    expect(mapSurfaceControllerSource).toContain('readCanvasMapSurfaceCoreSnapshot')
+    expectNoImportsMatching('../components/canvas/maplibre-surface-controller.ts', [
+      /canvas\/session$/,
+      /app\/location$/,
+      /app\/settings\/state$/,
+      /canvas\/scene-metadata-state$/,
+    ])
+    expect(snapshotSource).toContain('currentCanvasQuerySurface')
+    expect(snapshotSource).toContain('readSavedLocationPresentation')
+    expect(snapshotSource).toContain('northBearingDeg')
+    expect(snapshotSource).toContain('basemapStyle')
+    expect(snapshotSource).toContain('theme')
+  })
+
   it('keeps scene layer and guide writes behind the Scene Edit runtime seam', () => {
     const controllerSource = readSource('../app/canvas-settings/controller.ts')
     const runtimeSource = readSource('../canvas/runtime/scene-runtime.ts')
@@ -316,14 +334,14 @@ describe('frontend boundary sources', () => {
     const mountedRuntimeSource = readSource('../canvas/runtime/scene-runtime.ts')
     const documentBridgeSource = readSource('../canvas/runtime/scene-runtime/document.ts')
     const workflowsSource = readSource('../app/document-session/workflows.ts')
-    const mapSurfaceSource = readSource('../components/canvas/maplibre-surface-controller.ts')
+    const mapSurfaceSnapshotSource = readSource('../app/canvas-map-surface/snapshot.ts')
 
     expect(runtimeSurfaceSource).toContain('CanvasQueryRevision')
     expect(mountedRuntimeSource).toContain('_incrementSceneRevision')
     expect(documentBridgeSource).toContain('incrementSceneRevision')
     expect(documentBridgeSource).not.toContain('sceneEntityRevision')
     expect(workflowsSource).toContain('revision.scene.value')
-    expect(mapSurfaceSource).toContain('revision.viewport.value')
+    expect(mapSurfaceSnapshotSource).toContain('revision.viewport.value')
   })
 
   it('keeps Target presentation lifecycle out of Planning Projection', () => {
