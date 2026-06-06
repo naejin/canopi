@@ -1,6 +1,5 @@
-import { plantStampSpecies } from '../../plant-tool-state'
-import type { PlantDropPayload } from './tool-actions'
-import { appendDroppedPlantToDraft } from './tool-actions'
+import { clearPlantStampSource, readPlantStampSource } from '../../plant-stamp-source'
+import { appendPlantStampSourceToDraft } from './tool-actions'
 import type { ScenePoint } from '../scene'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
 import type { SceneToolAdapter } from './tool-adapter'
@@ -17,12 +16,12 @@ export interface PlantStampTool {
 
 export function createPlantStampTool(context: PlantStampToolContext): PlantStampTool {
   function pointerDown(world: ScenePoint): void {
-    const species: PlantDropPayload | null = plantStampSpecies.value
-    if (!species) return
+    const source = readPlantStampSource()
+    if (!source) return
 
     context.sceneEdits.run('interaction-stamp-plant', (tx) => {
       tx.mutate((draft) => {
-        appendDroppedPlantToDraft(draft, species, context.applySnapping(world))
+        appendPlantStampSourceToDraft(draft, source, context.applySnapping(world))
       })
     })
   }
@@ -30,7 +29,7 @@ export function createPlantStampTool(context: PlantStampToolContext): PlantStamp
   return {
     pointerDown,
     clear() {
-      plantStampSpecies.value = null
+      clearPlantStampSource()
     },
   }
 }

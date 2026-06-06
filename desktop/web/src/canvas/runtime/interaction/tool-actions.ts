@@ -1,13 +1,6 @@
-import type { PlantStampSpecies } from '../../plant-tool-state'
+import type { PlantStampSource } from '../../plant-stamp-source'
 import type { ScenePersistedState, ScenePoint, SceneStore } from '../scene'
 import { createUuid } from '../../../utils/ids'
-
-export interface PlantDropPayload {
-  canonical_name: string
-  common_name: string | null
-  stratum: string | null
-  width_max_m: number | null
-}
 
 export interface SceneRect {
   x: number
@@ -103,21 +96,9 @@ export function appendPolygonZoneToDraft(
   return zoneName
 }
 
-export function appendDroppedPlant(
-  store: SceneStore,
-  payload: PlantDropPayload,
-  world: ScenePoint,
-): string {
-  let id = ''
-  store.updatePersisted((draft) => {
-    id = appendDroppedPlantToDraft(draft, payload, world)
-  })
-  return id
-}
-
-export function appendDroppedPlantToDraft(
+export function appendPlantStampSourceToDraft(
   draft: ScenePersistedState,
-  payload: PlantDropPayload,
+  source: PlantStampSource,
   world: ScenePoint,
 ): string {
   const id = createUuid()
@@ -126,14 +107,14 @@ export function appendDroppedPlantToDraft(
     {
       kind: 'plant',
       id,
-      canonicalName: payload.canonical_name,
-      commonName: payload.common_name,
-      color: draft.plantSpeciesColors[payload.canonical_name] ?? null,
-      stratum: payload.stratum,
-      canopySpreadM: payload.width_max_m,
+      canonicalName: source.canonical_name,
+      commonName: source.common_name,
+      color: draft.plantSpeciesColors[source.canonical_name] ?? null,
+      stratum: source.stratum,
+      canopySpreadM: source.width_max_m,
       position: world,
       rotationDeg: null,
-      scale: payload.width_max_m,
+      scale: source.width_max_m,
       notes: null,
       plantedDate: null,
       quantity: 1,
@@ -141,14 +122,6 @@ export function appendDroppedPlantToDraft(
     },
   ]
   return id
-}
-
-export function appendStampedPlant(
-  store: SceneStore,
-  species: PlantStampSpecies,
-  world: ScenePoint,
-): string {
-  return appendDroppedPlant(store, species, world)
 }
 
 export function appendTextAnnotation(
@@ -183,29 +156,6 @@ export function appendTextAnnotationToDraft(
     },
   ]
   return id
-}
-
-export function parsePlantDropPayload(event: DragEvent): PlantDropPayload | null {
-  let raw: string | null = null
-  try {
-    raw = event.dataTransfer?.getData('text/plain') ?? null
-  } catch {
-    return null
-  }
-  if (!raw) return null
-
-  try {
-    const data = JSON.parse(raw)
-    if (typeof data.canonical_name !== 'string') return null
-    return {
-      canonical_name: data.canonical_name,
-      common_name: typeof data.common_name === 'string' ? data.common_name : null,
-      stratum: typeof data.stratum === 'string' ? data.stratum : null,
-      width_max_m: typeof data.width_max_m === 'number' ? data.width_max_m : null,
-    }
-  } catch {
-    return null
-  }
 }
 
 function isValidPolygon(points: readonly ScenePoint[]): boolean {

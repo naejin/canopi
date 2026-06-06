@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { plantStampSpecies } from '../canvas/plant-tool-state'
+import {
+  clearPlantStampSource,
+  selectPlantStampSource,
+  writePlantStampDragData,
+} from '../canvas/plant-stamp-source'
 import { guides } from '../canvas/scene-metadata-state'
 import { selectedObjectIds } from '../canvas/session-state'
 import { snapToGridEnabled, snapToGuidesEnabled } from '../app/canvas-settings/signals'
@@ -139,7 +143,7 @@ describe('SceneInteractionController', () => {
     camera.setViewport({ x: 0, y: 0, scale: 1 })
     store = new SceneStore()
     selectedObjectIds.value = new Set()
-    plantStampSpecies.value = null
+    clearPlantStampSource()
     snapToGridEnabled.value = false
     snapToGuidesEnabled.value = false
     guides.value = []
@@ -149,7 +153,7 @@ describe('SceneInteractionController', () => {
   afterEach(() => {
     container.remove()
     selectedObjectIds.value = new Set()
-    plantStampSpecies.value = null
+    clearPlantStampSource()
     snapToGridEnabled.value = false
     snapToGuidesEnabled.value = false
     guides.value = []
@@ -2875,12 +2879,12 @@ describe('SceneInteractionController', () => {
         'Malus domestica': '#C44230',
       }
     })
-    plantStampSpecies.value = {
+    selectPlantStampSource({
       canonical_name: 'Malus domestica',
       common_name: 'Apple',
       stratum: 'high',
       width_max_m: 4,
-    }
+    })
 
     const deps = createInteractionDeps(container, store, camera)
     const controller = new SceneInteractionController(deps as any)
@@ -2913,12 +2917,12 @@ describe('SceneInteractionController', () => {
 
         expect(store.persisted.zones).toHaveLength(1)
 
-        plantStampSpecies.value = {
+        selectPlantStampSource({
           canonical_name: 'Malus domestica',
           common_name: 'Apple',
           stratum: 'high',
           width_max_m: 4,
-        }
+        })
         plantController = new SceneInteractionController(createInteractionDeps(container, store, camera) as any)
         plantController.setTool('plant-stamp')
 
@@ -2978,12 +2982,12 @@ describe('SceneInteractionController', () => {
     // At scale=4, gridInterval() returns 5m
     camera.setViewport({ x: 0, y: 0, scale: 4 })
     snapToGridEnabled.value = true
-    plantStampSpecies.value = {
+    selectPlantStampSource({
       canonical_name: 'Malus domestica',
       common_name: 'Apple',
       stratum: 'high',
       width_max_m: 4,
-    }
+    })
 
     const controller = new SceneInteractionController(createInteractionDeps(container, store, camera) as any)
     controller.setTool('plant-stamp')
@@ -3750,6 +3754,22 @@ describe('SceneInteractionController', () => {
     const onSceneEditCommit = vi.fn()
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
     const controller = new SceneInteractionController(deps as any)
+    const dragData = new Map<string, string>()
+    const dataTransfer = {
+      effectAllowed: 'none',
+      setData(type: string, value: string) {
+        dragData.set(type, value)
+      },
+      getData(type: string) {
+        return dragData.get(type) ?? ''
+      },
+    }
+    writePlantStampDragData(dataTransfer, {
+      canonical_name: 'Pyrus communis',
+      common_name: 'Pear',
+      stratum: 'mid',
+      width_max_m: 3,
+    })
 
     const dropEvent = new Event('drop', { bubbles: true, cancelable: true }) as DragEvent
     Object.defineProperties(dropEvent, {
@@ -3757,15 +3777,7 @@ describe('SceneInteractionController', () => {
       clientY: { configurable: true, value: 90 },
       dataTransfer: {
         configurable: true,
-        value: {
-          getData: () => JSON.stringify({
-            canonical_name: 'Pyrus communis',
-            locked: false,
-            common_name: 'Pear',
-            stratum: 'mid',
-            width_max_m: 3,
-          }),
-        },
+        value: dataTransfer,
       },
     })
 

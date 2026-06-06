@@ -190,6 +190,17 @@ describe('frontend boundary sources', () => {
       expect(source).not.toContain('favoriteNames')
       expect(source).not.toContain('toggleFavoriteAction')
     }
+
+    for (const source of [
+      readSource('../components/plant-db/PlantRow.tsx'),
+      readSource('../components/plant-db/PlantCard.tsx'),
+    ]) {
+      expect(source).toContain('plant-stamp-source')
+      expect(source).not.toContain('plantStampSpecies')
+      expect(source).not.toContain('JSON.stringify')
+      expect(source).not.toContain("setData('text/plain'")
+      expect(source).not.toContain('setData("text/plain"')
+    }
   })
 
   it('keeps app commands behind the command graph seam', () => {

@@ -72,6 +72,7 @@ describe('Scene Interaction tool module boundaries', () => {
     const interactionSource = readSource('../canvas/runtime/scene-interaction.ts')
     const toolModulesSource = readSource('../canvas/runtime/interaction/tool-modules.ts')
     const plantStampSource = readSource('../canvas/runtime/interaction/plant-stamp-tool.ts')
+    const sourceSeam = readSource('../canvas/plant-stamp-source.ts')
 
     expect(interactionSource).toContain('createSceneToolModules')
     expect(interactionSource).not.toContain('createPlantStampTool')
@@ -81,8 +82,11 @@ describe('Scene Interaction tool module boundaries', () => {
     expect(interactionSource).not.toContain('plantStampSpecies')
     expect(interactionSource).not.toContain('_placePlantFromStamp')
     expect(interactionSource).not.toContain("this._tool === 'plant-stamp'")
-    expect(plantStampSource).toContain('plantStampSpecies')
-    expect(plantStampSource).toContain('appendDroppedPlantToDraft')
+    expect(plantStampSource).toContain('readPlantStampSource')
+    expect(plantStampSource).toContain('appendPlantStampSourceToDraft')
+    expect(sourceSeam).toContain('selectedPlantStampSource')
+    expect(sourceSeam).toContain('writePlantStampDragData')
+    expect(sourceSeam).toContain('readPlantStampDragData')
   })
 
   it('keeps Plant Spacing source state behind the plant spacing tool module', () => {
