@@ -30,6 +30,7 @@ When canopi-data removes or adds columns, update atomically:
 - Plant detail query shape, selected columns, row-mapping contract, and projected text translation have one projection owner: `plant_db/detail_projection.rs`.
 - Detail row mapping reads projected columns by name so projection order can change without remapping every field.
 - Search plans own count/list query construction and cursor semantics.
+- Species Catalog read projections own caller-oriented SQL shape, row mapping, parameter placeholders, and localized Common Name hydration before a workflow interprets the facts.
 - Species Catalog search has one structured request contract: `common-types/src/species.rs` `SpeciesSearchRequest`. Tauri command arguments may stay flat for IPC compatibility, but commands, services, plant DB search, and query planning should adapt to that request object instead of growing parallel argument lists.
 - Species Catalog search planning is split by seam under `desktop/src/db/query_builder/`: `text.rs` owns FTS/Common Name normalization, `relevance.rs` owns Common Name ranking tiers and token joins, `predicates.rs` owns shared FTS/filter WHERE assembly, `pagination.rs` owns keyset/offset cursor behavior, and `projection.rs` owns list row SELECT columns.
 - `query_builder/sql.rs` owns SQL parameter placeholder allocation. Query-builder modules should bind values through `SqlBuilder` instead of hand-numbering placeholders with `params.len() + 1`.
@@ -85,8 +86,8 @@ When canopi-data removes or adds columns, update atomically:
 - `best_common_names` uses `is_primary`, then shortest non-canonical fallback.
 - `get_locale_best_common_name` returns locale-specific best name without fallback.
 - Search list rows include secondary names and fallback flags for disambiguation.
-- Cross-workflow backend callers should share Species Catalog read behavior through `desktop/src/services/species_catalog_read.rs` instead of reaching directly into `plant_db` lookup helpers from unrelated services.
-- Site Adaptation compatibility and replacement reads belong behind `desktop/src/services/species_catalog_read.rs`. Site Adaptation owns compatibility interpretation and response shaping; it should not own Species Catalog SQL, placeholder assembly, table names, or localized Common Name lookup.
+- Cross-workflow backend callers should share Species Catalog read behavior through `desktop/src/services/species_catalog_read.rs` and its projection modules instead of reaching directly into `plant_db` lookup helpers from unrelated services.
+- Site Adaptation compatibility and replacement reads belong behind `desktop/src/services/species_catalog_read/{compatibility,replacement,common_names}.rs`. Site Adaptation owns hardiness compatibility interpretation and response shaping; it should not own Species Catalog SQL, placeholder assembly, table names, localized Common Name lookup, or Species Catalog storage test fixtures.
 
 ## canopi-data Export
 
