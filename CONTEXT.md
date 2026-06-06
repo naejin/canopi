@@ -12,6 +12,14 @@ _Avoid_: Document, file, project
 The active runtime context for a Design in the app. A design session includes the current Design state, dirty baselines, save/autosave behavior, queued Design loads, lifecycle workflows, and an optional attached canvas runtime.
 _Avoid_: Document session, file session, canvas session
 
+**App Command Graph**:
+The app runtime seam for user command identity, labels, availability, shortcuts, dispatch, and chrome projections such as menus, palettes, toolbars, and panel navigation. The app command graph coordinates command access to Design Session, canvas, settings, and shell state without owning those domain states.
+_Avoid_: Menu registry, shortcut map, toolbar state
+
+**Canvas Map Surface**:
+The in-canvas map visualization seam that turns Location, canvas query state, layer settings, terrain settings, Target Presentation, theme, and map bearing into one MapLibre-ready snapshot. The canvas map surface is derived presentation and must not own Design data, Scene Edit state, Location drafts, or settings persistence.
+_Avoid_: MapLibre controller, basemap helper, map overlay state
+
 **Problem Report**:
 A user's description of a problem they encountered while using Canopi. A problem report may include reproduction context and a diagnostic bundle, but it is not the confirmed defect itself.
 _Avoid_: Bug report, issue, feedback
