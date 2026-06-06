@@ -1,4 +1,5 @@
 export {
+  appCommandGraphChromeProjection,
   getMenuDefinitions,
   type MenuAction,
   type MenuDefinition,

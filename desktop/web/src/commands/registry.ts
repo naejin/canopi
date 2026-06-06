@@ -1,5 +1,5 @@
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import { signal } from '@preact/signals'
+import { computed, signal } from '@preact/signals'
 import { currentDesign, designDirty } from '../app/document-session/store'
 import {
   newDesignAction,
@@ -14,6 +14,7 @@ import {
 } from '../app/problem-report/diagnostics'
 import { openProblemReportDialog } from '../app/problem-report/submission'
 import { mutateSettingsProjection } from '../app/settings/projection'
+import { locale } from '../app/settings/state'
 import {
   currentCanvasHasSelection,
   getCurrentCanvasCommandSurface,
@@ -60,6 +61,11 @@ export interface MenuDefinition {
   id: AppMenuId
   label: string
   items: MenuEntry[]
+}
+
+export interface AppCommandGraphChromeProjection {
+  readonly menus: MenuDefinition[]
+  readonly paletteCommands: Command[]
 }
 
 type AppMenuId = 'file' | 'edit' | 'view' | 'help'
@@ -463,6 +469,19 @@ export function runAppCommand(id: AppCommandId): boolean {
 export const commands: Command[] = APP_COMMANDS
   .filter((command) => command.palette && command.label)
   .map(commandProjection)
+
+export const appCommandGraphChromeProjection = computed<AppCommandGraphChromeProjection>(() => {
+  void locale.value
+  const state = readAppCommandState()
+  for (const command of APP_COMMANDS) {
+    void (command.disabled?.(state) ?? false)
+  }
+
+  return {
+    menus: getMenuDefinitions(),
+    paletteCommands: commands,
+  }
+})
 
 export function getMenuDefinitions(): MenuDefinition[] {
   const separator: MenuSeparator = { type: 'separator' }

@@ -1,9 +1,6 @@
 import { useRef } from 'preact/hooks'
 import { useSignal, useSignalEffect } from '@preact/signals'
-import { locale } from '../../app/settings/state'
-import { currentCanvasCommandSurface } from '../../canvas/session'
-import { currentDesign, designDirty } from '../../app/document-session/store'
-import { getMenuDefinitions, type MenuDefinition, type MenuEntry } from './menu-definitions'
+import { appCommandGraphChromeProjection, type MenuDefinition, type MenuEntry } from './menu-definitions'
 import styles from './MenuBar.module.css'
 
 const wrapPrev = (i: number, len: number) => i > 0 ? i - 1 : len - 1
@@ -15,13 +12,7 @@ export function MenuBar() {
   const triggerRefs = useRef<Map<string, HTMLButtonElement>>(new Map())
   const focusedItemIndex = useRef(-1)
 
-  // Subscribe to signals that affect menu content (disabled states, labels)
-  void locale.value
-  void currentDesign.value
-  void designDirty.value
-  void currentCanvasCommandSurface.value
-
-  const menus = getMenuDefinitions()
+  const menus = appCommandGraphChromeProjection.value.menus
 
   // Close on click-outside (pointerup)
   useSignalEffect(() => {

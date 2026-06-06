@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { signal } from '@preact/signals'
 import { activeTool } from '../canvas/session-state'
 import { activePanel, sidePanel } from '../app/shell/state'
 import { theme } from '../app/settings/state'
@@ -11,7 +12,7 @@ import {
   resetFrontendDiagnosticsForTests,
 } from '../app/problem-report/diagnostics'
 import * as settingsProjection from '../app/settings/projection'
-import { commands, getMenuDefinitions } from '../commands/registry'
+import { appCommandGraphChromeProjection, commands, getMenuDefinitions } from '../commands/registry'
 import { PANEL_SHORTCUTS, TOOL_SHORTCUTS } from '../shortcuts/definitions'
 import {
   createTestCanvasCommandSurface,
@@ -179,6 +180,49 @@ describe('command registry canvas tool switching', () => {
     expect(menuCommandIds).toContain('view.zoomIn')
     expect(commandIds.has('file.save')).toBe(true)
     expect(commandIds.has('view.zoomIn')).toBe(true)
+  })
+
+  it('exposes reactive chrome projections from the App Command Graph', () => {
+    const fileSave = () => appCommandGraphChromeProjection.value.menus
+      .find((menu) => menu.id === 'file')!
+      .items.find((entry) => entry.type === 'action' && entry.id === 'file.save')
+    const undo = () => appCommandGraphChromeProjection.value.menus
+      .find((menu) => menu.id === 'edit')!
+      .items.find((entry) => entry.type === 'action' && entry.id === 'edit.undo')
+    const zoomIn = () => appCommandGraphChromeProjection.value.paletteCommands
+      .find((entry) => entry.id === 'view.zoomIn')!
+
+    expect(fileSave()).toMatchObject({ disabled: true })
+    expect(undo()).toMatchObject({ disabled: true })
+    expect(zoomIn().disabled()).toBe(true)
+
+    currentDesign.value = {
+      version: 2,
+      name: 'test',
+      description: null,
+      location: null,
+      north_bearing_deg: null,
+      plant_species_colors: {},
+      layers: [],
+      plants: [],
+      zones: [],
+      annotations: [],
+      consortiums: [],
+      groups: [],
+      timeline: [],
+      budget: [],
+      budget_currency: 'EUR',
+      created_at: '',
+      updated_at: '',
+      extra: {},
+    }
+    nonCanvasRevision.value = 1
+    nonCanvasSavedRevision.value = 0
+    mountCanvasCommandSurface({ canUndo: signal(true) })
+
+    expect(fileSave()).toMatchObject({ disabled: false })
+    expect(undo()).toMatchObject({ disabled: false })
+    expect(zoomIn().disabled()).toBe(false)
   })
 
   it('toggles theme through the settings projection seam', () => {

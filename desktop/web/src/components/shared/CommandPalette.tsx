@@ -1,6 +1,6 @@
 import { useRef, useState } from "preact/hooks";
 import { useSignalEffect } from "@preact/signals";
-import { commandPaletteOpen, commands } from "../../commands/registry";
+import { appCommandGraphChromeProjection, commandPaletteOpen } from "../../commands/registry";
 import { t } from "../../i18n";
 import styles from "./CommandPalette.module.css";
 
@@ -20,6 +20,7 @@ export function CommandPalette() {
 
   if (!commandPaletteOpen.value) return null;
 
+  const commands = appCommandGraphChromeProjection.value.paletteCommands;
   const filtered = commands.filter((cmd) =>
     cmd.label().toLowerCase().includes(query.toLowerCase())
   );
