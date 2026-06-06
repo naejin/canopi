@@ -5,10 +5,10 @@ import {
   computeRowYOffsets,
   phaseToX,
   xToPhase,
-  stratumToRow,
   LABEL_WIDTH,
 } from '../canvas/consortium-renderer'
 import type { ConsortiumBarLayout } from '../canvas/consortium-renderer'
+import { stratumToRow } from '../app/consortium/time-model'
 import { buildConsortiumBars, filterActiveConsortiumEntries } from '../app/planning-projection'
 import type { Consortium, PlacedPlant } from '../types/design'
 import { consortiumTarget } from '../target'
