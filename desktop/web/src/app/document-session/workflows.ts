@@ -1,11 +1,9 @@
 import { effect } from "@preact/signals";
 import { currentCanvasQuerySurface } from "../../canvas/session";
-import { STRATA_ROWS } from "../../canvas/consortium-renderer";
-import { consortiumTarget, getConsortiumCanonicalName } from "../../target";
+import { getConsortiumCanonicalName } from "../../target";
+import { createDefaultConsortiumEntry } from "../consortium/time-model";
 import { mutateCurrentDesign } from "../document/controller";
 import { currentDesign } from "./store";
-
-const DEFAULT_STRATUM: string = STRATA_ROWS[STRATA_ROWS.length - 1]!;
 
 let disposer: (() => void) | null = null;
 
@@ -39,12 +37,7 @@ export function installConsortiumSync(): void {
     if (toAdd.length === 0) return;
 
     mutateCurrentDesign((nextDesign) => {
-      const newEntries = toAdd.map((name) => ({
-        target: consortiumTarget(name),
-        stratum: DEFAULT_STRATUM,
-        start_phase: 0,
-        end_phase: 2,
-      }));
+      const newEntries = toAdd.map(createDefaultConsortiumEntry);
       const consortiums = [...nextDesign.consortiums, ...newEntries];
       return { ...nextDesign, consortiums };
     }, { markDirty: false });

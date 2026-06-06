@@ -1,20 +1,14 @@
 import { cssVar, roundRect, readThemeTokens } from './canvas2d-utils'
+import {
+  CONSORTIUM_STRATA,
+  CONSORTIUM_SUCCESSION_PHASES,
+  SUCCESSION_PHASE_COUNT,
+  stratumToRow,
+} from '../app/consortium/time-model'
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-export const CONSORTIUM_PHASES = [
-  { key: 'placenta1', labelKey: 'canvas.consortium.phase_placenta1', durationKey: 'canvas.consortium.duration_90d' },
-  { key: 'placenta2', labelKey: 'canvas.consortium.phase_placenta2', durationKey: 'canvas.consortium.duration_180d' },
-  { key: 'placenta3', labelKey: 'canvas.consortium.phase_placenta3', durationKey: 'canvas.consortium.duration_5y' },
-  { key: 'secondaire1', labelKey: 'canvas.consortium.phase_secondaire1', durationKey: 'canvas.consortium.duration_10y' },
-  { key: 'secondaire2', labelKey: 'canvas.consortium.phase_secondaire2', durationKey: 'canvas.consortium.duration_20y' },
-  { key: 'secondaire3', labelKey: 'canvas.consortium.phase_secondaire3', durationKey: 'canvas.consortium.duration_40y' },
-  { key: 'climax', labelKey: 'canvas.consortium.phase_climax', durationKey: 'canvas.consortium.duration_60y' },
-] as const
-
-export const STRATA_ROWS = ['emergent', 'high', 'medium', 'low', 'unassigned'] as const
 
 export const MIN_ROW_HEIGHT = 36
 export const LANE_HEIGHT = 32
@@ -55,17 +49,12 @@ export interface ConsortiumHitResult {
 // ---------------------------------------------------------------------------
 
 export function phaseToX(phase: number, contentWidth: number): number {
-  return LABEL_WIDTH + (phase / CONSORTIUM_PHASES.length) * contentWidth
+  return LABEL_WIDTH + (phase / SUCCESSION_PHASE_COUNT) * contentWidth
 }
 
 export function xToPhase(x: number, contentWidth: number): number {
   const fraction = (x - LABEL_WIDTH) / contentWidth
-  return Math.max(0, Math.min(CONSORTIUM_PHASES.length, fraction * CONSORTIUM_PHASES.length))
-}
-
-export function stratumToRow(stratum: string): number {
-  const idx = (STRATA_ROWS as readonly string[]).indexOf(stratum)
-  return idx === -1 ? 4 : idx
+  return Math.max(0, Math.min(SUCCESSION_PHASE_COUNT, fraction * SUCCESSION_PHASE_COUNT))
 }
 
 // ---------------------------------------------------------------------------
@@ -73,7 +62,7 @@ export function stratumToRow(stratum: string): number {
 // ---------------------------------------------------------------------------
 
 export function computeRowHeights(bars: readonly ConsortiumBarLayout[]): number[] {
-  const laneCounts = new Array(STRATA_ROWS.length).fill(1) as number[]
+  const laneCounts = new Array(CONSORTIUM_STRATA.length).fill(1) as number[]
   for (const bar of bars) {
     const rowIdx = stratumToRow(bar.stratum)
     laneCounts[rowIdx] = Math.max(laneCounts[rowIdx]!, bar.totalSubLanes)
@@ -148,7 +137,7 @@ export function renderConsortium(
   ctx.fillRect(0, 0, width, height)
 
   // -- Alternating row backgrounds --------------------------------------------
-  for (let r = 0; r < STRATA_ROWS.length; r++) {
+  for (let r = 0; r < CONSORTIUM_STRATA.length; r++) {
     const ry = rowOffsets[r]!
     const rh = rowHeights[r] ?? MIN_ROW_HEIGHT
     ctx.fillStyle = r % 2 === 0 ? surfaceColor : surfaceMuted
@@ -162,8 +151,8 @@ export function renderConsortium(
   // -- Column headers ---------------------------------------------------------
   ctx.save()
   ctx.textAlign = 'center'
-  for (let i = 0; i < CONSORTIUM_PHASES.length; i++) {
-    const phase = CONSORTIUM_PHASES[i]!
+  for (let i = 0; i < CONSORTIUM_SUCCESSION_PHASES.length; i++) {
+    const phase = CONSORTIUM_SUCCESSION_PHASES[i]!
     const x1 = phaseToX(i, contentWidth)
     const x2 = phaseToX(i + 1, contentWidth)
     const colW = x2 - x1
@@ -182,8 +171,8 @@ export function renderConsortium(
   ctx.restore()
 
   // -- Row labels -------------------------------------------------------------
-  for (let r = 0; r < STRATA_ROWS.length; r++) {
-    const stratum = STRATA_ROWS[r]!
+  for (let r = 0; r < CONSORTIUM_STRATA.length; r++) {
+    const stratum = CONSORTIUM_STRATA[r]!
     const ry = rowOffsets[r]!
     const rh = rowHeights[r] ?? MIN_ROW_HEIGHT
     const labelY = ry + rh / 2
@@ -215,7 +204,7 @@ export function renderConsortium(
   ctx.stroke()
 
   // Horizontal row dividers
-  for (let r = 1; r <= STRATA_ROWS.length; r++) {
+  for (let r = 1; r <= CONSORTIUM_STRATA.length; r++) {
     const y = rowOffsets[r]! + 0.5
     ctx.beginPath()
     ctx.moveTo(0, y)
@@ -226,7 +215,7 @@ export function renderConsortium(
   // Vertical phase dividers (lighter)
   ctx.save()
   ctx.globalAlpha = 0.5
-  for (let i = 1; i < CONSORTIUM_PHASES.length; i++) {
+  for (let i = 1; i < CONSORTIUM_SUCCESSION_PHASES.length; i++) {
     const x = phaseToX(i, contentWidth) + 0.5
     ctx.beginPath()
     ctx.moveTo(x, HEADER_HEIGHT)

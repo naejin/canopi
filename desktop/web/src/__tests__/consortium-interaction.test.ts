@@ -10,8 +10,8 @@ import {
   computeRowYOffsets,
   LABEL_WIDTH,
   phaseToX,
-  stratumToRow,
 } from '../canvas/consortium-renderer'
+import { stratumToRow } from '../app/consortium/time-model'
 import { consortiumTarget } from '../target'
 import { currentDesign, nonCanvasRevision, nonCanvasSavedRevision } from './support/design-session-state'
 import type { CanopiFile, Consortium, PlacedPlant } from '../types/design'

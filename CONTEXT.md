@@ -188,6 +188,10 @@ _Avoid_: Layer, row, height band
 A time phase in a consortium's development, from early establishment through climax. A consortium entry spans one or more succession phases.
 _Avoid_: Timeline action, stage
 
+**Consortium Time Model**:
+The ordered Succession Phases, ordered Strata, default Consortium entry timing, and clamping rules used by Consortium planning and presentation. The consortium time model defines time and Stratum meaning; renderers and interaction modules consume it rather than owning those facts.
+_Avoid_: Consortium renderer constants, timeline model
+
 **Design Template**:
 A reusable design that can be imported as the starting point for a new design. A design template usually includes location, placed plants, and descriptive metadata.
 _Avoid_: Community template, file template
@@ -295,6 +299,9 @@ Use **Stratum** for vertical ecological position in a consortium. Use **Layer** 
 
 **Succession Phase vs Timeline Action**:
 A **Succession Phase** describes a period in ecological development. A **Timeline Action** is scheduled work in the design.
+
+**Consortium Time Model vs Renderer Geometry**:
+The **Consortium Time Model** owns Succession Phase and Stratum order, labels, durations, defaults, and clamping. Renderer geometry owns pixel layout and drawing only.
 
 **Timeline Action vs Timeline Action Workbench**:
 A **Timeline Action** is the scheduled work in the Design. The **Timeline Action Workbench** is the interaction surface used to create, edit, delete, and select those actions.

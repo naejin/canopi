@@ -1,7 +1,5 @@
 import {
-  CONSORTIUM_PHASES,
   LABEL_WIDTH,
-  STRATA_ROWS,
   xToPhase,
   type ConsortiumBarLayout,
   type ConsortiumHitResult,
@@ -13,6 +11,13 @@ import {
   moveConsortiumEntryInArray,
   reorderConsortiumEntryInArray,
 } from './controller'
+import {
+  CONSORTIUM_STRATUM_COUNT,
+  LAST_SUCCESSION_PHASE_INDEX,
+  clampSuccessionPhaseBoundary,
+  clampSuccessionPhaseIndex,
+  stratumAtRow,
+} from './time-model'
 
 export type ConsortiumDragState = ConsortiumMoveDragState | ConsortiumResizeDragState
 
@@ -104,16 +109,13 @@ function previewConsortiumMoveDrag(
   const phaseDelta =
     xToPhase(pointer.mouseX, contentWidth)
     - xToPhase(drag.startMouseX - drag.cachedRect.left, contentWidth)
-  const newStart = Math.round(Math.max(
-    0,
-    Math.min(CONSORTIUM_PHASES.length - 1, drag.originalStartPhase + phaseDelta),
-  ))
+  const newStart = Math.round(clampSuccessionPhaseIndex(drag.originalStartPhase + phaseDelta))
   const duration = drag.originalEndPhase - drag.originalStartPhase
-  const newEnd = Math.min(CONSORTIUM_PHASES.length - 1, newStart + duration)
+  const newEnd = Math.min(LAST_SUCCESSION_PHASE_INDEX, newStart + duration)
   const adjustedStart = newEnd - duration
 
   const rowIndex = rowIndexForPointerY(pointer.mouseY, snapshot.rowOffsets)
-  const newStratum = STRATA_ROWS[rowIndex] ?? 'unassigned'
+  const newStratum = stratumAtRow(rowIndex)
 
   const bar = snapshot.bars.find((candidate) => candidate.canonicalName === drag.canonicalName)
   if (!bar) return
@@ -175,7 +177,7 @@ function previewConsortiumResizeDrag(
   const bar = snapshot.bars.find((candidate) => candidate.canonicalName === drag.canonicalName)
 
   if (drag.edge === 'left') {
-    const clampedPhase = Math.max(0, Math.min(CONSORTIUM_PHASES.length - 1, phase))
+    const clampedPhase = clampSuccessionPhaseIndex(phase)
     const newStart = Math.min(clampedPhase, drag.originalEndPhase)
     if (bar && bar.startPhase === newStart) return
     drag.edit.preview((consortiums) => moveConsortiumEntryInArray(
@@ -186,7 +188,7 @@ function previewConsortiumResizeDrag(
     return
   }
 
-  const clampedPhase = Math.max(0, Math.min(CONSORTIUM_PHASES.length, phase))
+  const clampedPhase = clampSuccessionPhaseBoundary(phase)
   const newEnd = Math.max(clampedPhase - 1, drag.originalStartPhase)
   if (bar && bar.endPhase === newEnd) return
   drag.edit.preview((consortiums) => moveConsortiumEntryInArray(
@@ -200,12 +202,12 @@ function rowIndexForPointerY(
   mouseY: number,
   rowOffsets: readonly number[],
 ): number {
-  let rowIndex = STRATA_ROWS.length - 1
-  for (let i = 0; i < STRATA_ROWS.length; i++) {
+  let rowIndex = CONSORTIUM_STRATUM_COUNT - 1
+  for (let i = 0; i < CONSORTIUM_STRATUM_COUNT; i++) {
     if (mouseY < rowOffsets[i + 1]!) {
       rowIndex = i
       break
     }
   }
-  return Math.max(0, Math.min(STRATA_ROWS.length - 1, rowIndex))
+  return Math.max(0, Math.min(CONSORTIUM_STRATUM_COUNT - 1, rowIndex))
 }
