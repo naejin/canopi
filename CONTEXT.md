@@ -40,6 +40,10 @@ _Avoid_: Plant browser state, plant DB panel state
 A search criterion that narrows Species Catalog results by Species attributes such as climate fit, growth form, ecological role, risk, use, or morphology. A species catalog filter is user-facing behavior even when its implementation is backed by generated metadata, SQL columns, related tables, or bespoke predicates.
 _Avoid_: Plant filter, SQL filter, column filter
 
+**Species Catalog Read Projection**:
+A backend read model that translates Species Catalog storage rows into caller-oriented data for search, detail, compatibility checks, or replacement suggestions. A species catalog read projection owns SQL shape, row mapping, parameter placeholders, and localized Common Name hydration; consuming workflows add their own interpretation.
+_Avoid_: Raw species row, SQL result, ad hoc lookup
+
 **Canonical Name**:
 The normalized name Canopi uses to identify a species. A species has one canonical name in Canopi, even when it has synonyms or multiple common names.
 _Avoid_: Scientific name, Latin name, species name
@@ -229,6 +233,9 @@ The **Species Catalog** is the collection of Species data. The **Species Catalog
 
 **Species Catalog Filter vs SQL Column**:
 A **Species Catalog Filter** describes user-facing search behavior. A SQL column is only one possible implementation detail behind that behavior.
+
+**Species Catalog Read Projection vs Site Adaptation**:
+A **Species Catalog Read Projection** reports Species Catalog facts in a caller-oriented shape. **Site Adaptation** interprets those facts for a target site, such as hardiness compatibility and replacement suggestion response shape.
 
 **Canonical Name vs Scientific Name**:
 Use **Canonical Name** for species identity in Canopi. "Scientific name" may be used in explanatory copy, but it is not the canonical identity term.
