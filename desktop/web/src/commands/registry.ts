@@ -7,7 +7,7 @@ import {
   saveAsCurrentDesign,
   saveCurrentDesign,
 } from '../app/document-session/actions'
-import { activePanel, navigateTo, type Panel } from '../app/shell/state'
+import { activePanel, navigateTo, sidePanel, type Panel, type SidePanel } from '../app/shell/state'
 import {
   diagnosticMessageFromError,
   recordFrontendDiagnostic,
@@ -68,6 +68,21 @@ export interface AppCommandGraphChromeProjection {
   readonly paletteCommands: Command[]
 }
 
+export interface AppCommandGraphPanelCommand {
+  readonly panel: Panel
+  readonly commandId: AppCommandId
+  readonly label: string
+  readonly shortcut?: string
+  readonly disabled: boolean
+  readonly active: boolean
+  readonly action: () => void
+}
+
+export interface AppCommandGraphPanelProjection {
+  readonly primary: AppCommandGraphPanelCommand[]
+  readonly side: AppCommandGraphPanelCommand[]
+}
+
 type AppMenuId = 'file' | 'edit' | 'view' | 'help'
 
 export type AppCommandId =
@@ -85,6 +100,7 @@ export type AppCommandId =
   | 'nav.canvas'
   | 'nav.location'
   | 'nav.plantDb'
+  | 'nav.favorites'
   | 'view.toggleTheme'
   | 'canvas.tool.select'
   | 'canvas.tool.hand'
@@ -110,6 +126,8 @@ interface AppCommandState {
   readonly designDirty: boolean
   readonly canvas: CanvasCommandSurface | null
   readonly canvasHasSelection: boolean
+  readonly activePanel: Panel
+  readonly sidePanel: SidePanel | null
 }
 
 interface AppCommandDefinition {
@@ -162,17 +180,47 @@ const MENU_LABELS: Record<AppMenuId, () => string> = {
   help: () => t('menu.help'),
 }
 
+const PANEL_COMMAND_GROUPS = {
+  primary: [
+    { panel: 'canvas', commandId: 'nav.canvas' },
+    { panel: 'location', commandId: 'nav.location' },
+  ],
+  side: [
+    { panel: 'plant-db', commandId: 'nav.plantDb' },
+    { panel: 'favorites', commandId: 'nav.favorites' },
+  ],
+} as const satisfies Record<string, readonly { panel: Panel, commandId: AppCommandId }[]>
+
+const PANEL_LABELS: Record<Panel, () => string> = {
+  canvas: () => t('nav.canvas'),
+  location: () => t('canvas.location.title'),
+  'plant-db': () => t('nav.plantDb'),
+  favorites: () => t('nav.favorites'),
+}
+
 function readAppCommandState(): AppCommandState {
   return {
     hasDesign: currentDesign.value !== null,
     designDirty: designDirty.value,
     canvas: getCurrentCanvasCommandSurface(),
     canvasHasSelection: currentCanvasHasSelection.value,
+    activePanel: activePanel.value,
+    sidePanel: sidePanel.value,
   }
 }
 
 function switchPanel(panel: Panel): void {
   navigateTo(panel)
+}
+
+function hasDesignForPanelNavigation(state: AppCommandState): boolean {
+  return state.hasDesign
+}
+
+function isPanelCommandActive(panel: Panel, state: AppCommandState): boolean {
+  if (panel === 'canvas') return state.activePanel === 'canvas' && state.sidePanel === null
+  if (panel === 'location') return state.activePanel === 'location'
+  return state.activePanel === 'canvas' && state.sidePanel === panel
 }
 
 function switchTool(tool: string): void {
@@ -304,6 +352,7 @@ const APP_COMMANDS: readonly AppCommandDefinition[] = [
     label: () => t('canvas.location.title'),
     palette: true,
     run: () => switchPanel('location'),
+    disabled: (state) => !hasDesignForPanelNavigation(state),
   },
   {
     id: 'nav.plantDb',
@@ -311,6 +360,14 @@ const APP_COMMANDS: readonly AppCommandDefinition[] = [
     shortcut: PANEL_SHORTCUTS.plantDb,
     palette: true,
     run: () => switchPanel('plant-db'),
+    disabled: (state) => !hasDesignForPanelNavigation(state),
+  },
+  {
+    id: 'nav.favorites',
+    label: () => t('nav.favorites'),
+    palette: true,
+    run: () => switchPanel('favorites'),
+    disabled: (state) => !hasDesignForPanelNavigation(state),
   },
   {
     id: 'view.toggleTheme',
@@ -483,6 +540,37 @@ export const appCommandGraphChromeProjection = computed<AppCommandGraphChromePro
   }
 })
 
+function panelCommandProjection(
+  entry: { readonly panel: Panel, readonly commandId: AppCommandId },
+  state: AppCommandState,
+): AppCommandGraphPanelCommand {
+  const command = commandById.get(entry.commandId)
+  if (!command?.label) {
+    throw new Error(`Missing panel navigation command '${entry.commandId}'`)
+  }
+  return {
+    panel: entry.panel,
+    commandId: entry.commandId,
+    label: PANEL_LABELS[entry.panel](),
+    shortcut: command.shortcut,
+    disabled: command.disabled?.(state) ?? false,
+    active: isPanelCommandActive(entry.panel, state),
+    action: () => {
+      runAppCommand(entry.commandId)
+    },
+  }
+}
+
+export const appCommandGraphPanelProjection = computed<AppCommandGraphPanelProjection>(() => {
+  void locale.value
+  const state = readAppCommandState()
+
+  return {
+    primary: PANEL_COMMAND_GROUPS.primary.map((entry) => panelCommandProjection(entry, state)),
+    side: PANEL_COMMAND_GROUPS.side.map((entry) => panelCommandProjection(entry, state)),
+  }
+})
+
 export function getMenuDefinitions(): MenuDefinition[] {
   const separator: MenuSeparator = { type: 'separator' }
 
@@ -585,6 +673,7 @@ function shortcutMatchForEvent(event: KeyboardEvent, editable: boolean): Shortcu
 function panelCommandId(panel: Panel): AppCommandId {
   if (panel === 'plant-db') return 'nav.plantDb'
   if (panel === 'location') return 'nav.location'
+  if (panel === 'favorites') return 'nav.favorites'
   return 'nav.canvas'
 }
 

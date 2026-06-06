@@ -12,7 +12,13 @@ import {
   resetFrontendDiagnosticsForTests,
 } from '../app/problem-report/diagnostics'
 import * as settingsProjection from '../app/settings/projection'
-import { appCommandGraphChromeProjection, commands, getMenuDefinitions } from '../commands/registry'
+import {
+  appCommandGraphChromeProjection,
+  appCommandGraphPanelProjection,
+  commands,
+  getMenuDefinitions,
+  runAppCommand,
+} from '../commands/registry'
 import { PANEL_SHORTCUTS, TOOL_SHORTCUTS } from '../shortcuts/definitions'
 import {
   createTestCanvasCommandSurface,
@@ -223,6 +229,66 @@ describe('command registry canvas tool switching', () => {
     expect(fileSave()).toMatchObject({ disabled: false })
     expect(undo()).toMatchObject({ disabled: false })
     expect(zoomIn().disabled()).toBe(false)
+  })
+
+  it('exposes panel navigation through the App Command Graph', () => {
+    const panelCommand = (id: string) => [
+      ...appCommandGraphPanelProjection.value.primary,
+      ...appCommandGraphPanelProjection.value.side,
+    ].find((entry) => entry.panel === id)!
+
+    expect(panelCommand('canvas')).toMatchObject({
+      commandId: 'nav.canvas',
+      disabled: false,
+      active: true,
+    })
+    expect(panelCommand('location')).toMatchObject({
+      commandId: 'nav.location',
+      disabled: true,
+      active: false,
+    })
+    expect(panelCommand('plant-db')).toMatchObject({
+      commandId: 'nav.plantDb',
+      disabled: true,
+      active: false,
+    })
+    expect(panelCommand('favorites')).toMatchObject({
+      commandId: 'nav.favorites',
+      disabled: true,
+      active: false,
+    })
+    expect(runAppCommand('nav.plantDb')).toBe(false)
+
+    currentDesign.value = {
+      version: 2,
+      name: 'test',
+      description: null,
+      location: null,
+      north_bearing_deg: null,
+      plant_species_colors: {},
+      layers: [],
+      plants: [],
+      zones: [],
+      annotations: [],
+      consortiums: [],
+      groups: [],
+      timeline: [],
+      budget: [],
+      budget_currency: 'EUR',
+      created_at: '',
+      updated_at: '',
+      extra: {},
+    }
+
+    expect(panelCommand('plant-db')).toMatchObject({ disabled: false, active: false })
+    expect(runAppCommand('nav.plantDb')).toBe(true)
+    expect(activePanel.value).toBe('canvas')
+    expect(sidePanel.value).toBe('plant-db')
+    expect(panelCommand('plant-db')).toMatchObject({ disabled: false, active: true })
+
+    expect(runAppCommand('nav.plantDb')).toBe(true)
+    expect(activePanel.value).toBe('canvas')
+    expect(sidePanel.value).toBe(null)
   })
 
   it('toggles theme through the settings projection seam', () => {

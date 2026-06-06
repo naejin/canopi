@@ -43,21 +43,65 @@ describe('PanelBar', () => {
     container.remove()
   })
 
+  function panelButton(label: string): HTMLButtonElement {
+    const button = container.querySelector(`button[aria-label="${label}"]`) as HTMLButtonElement | null
+    if (!button) throw new Error(`Missing panel button ${label}`)
+    return button
+  }
+
   it('renders the location entry point and routes to the location shell', async () => {
     await act(async () => {
       render(<PanelBar />, container)
     })
 
-    const locationButton = container.querySelector('button[aria-label="Design Location"]') as HTMLButtonElement | null
-    expect(locationButton).toBeTruthy()
-    expect(locationButton?.disabled).toBe(false)
+    const locationButton = panelButton('Design Location')
+    expect(locationButton.disabled).toBe(false)
 
     await act(async () => {
-      locationButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      locationButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
     expect(activePanel.value).toBe('location')
     expect(sidePanel.value).toBe(null)
+  })
+
+  it('disables design-dependent panel entry points when no design is open', async () => {
+    currentDesign.value = null
+
+    await act(async () => {
+      render(<PanelBar />, container)
+    })
+
+    expect(panelButton('Design Canvas').disabled).toBe(false)
+    expect(panelButton('Design Canvas').getAttribute('aria-pressed')).toBe('true')
+    expect(panelButton('Design Location').disabled).toBe(true)
+    expect(panelButton('Plant Database').disabled).toBe(true)
+    expect(panelButton('Favorites').disabled).toBe(true)
+  })
+
+  it('toggles side panels through the command graph projection click path', async () => {
+    await act(async () => {
+      render(<PanelBar />, container)
+    })
+
+    expect(panelButton('Plant Database').disabled).toBe(false)
+    expect(panelButton('Plant Database').getAttribute('aria-pressed')).toBe('false')
+
+    await act(async () => {
+      panelButton('Plant Database').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(activePanel.value).toBe('canvas')
+    expect(sidePanel.value).toBe('plant-db')
+    expect(panelButton('Plant Database').getAttribute('aria-pressed')).toBe('true')
+
+    await act(async () => {
+      panelButton('Plant Database').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(activePanel.value).toBe('canvas')
+    expect(sidePanel.value).toBe(null)
+    expect(panelButton('Plant Database').getAttribute('aria-pressed')).toBe('false')
   })
 
   it('updates panel button tooltips immediately when the locale changes', async () => {
