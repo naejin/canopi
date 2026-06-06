@@ -12,7 +12,11 @@ import { layerLockState, layerOpacity, layerVisibility } from '../../app/canvas-
 import { guides } from '../scene-metadata-state'
 import { plantColorMenuOpen } from '../plant-color-menu-state'
 import { plantColorByAttr, plantSizeMode } from '../plant-display-state'
-import { plantStampSpecies } from '../plant-tool-state'
+import {
+  clearPlantStampSource,
+  readPlantStampSource,
+  selectPlantStampSource,
+} from '../plant-stamp-source'
 import { activeTool, selectedObjectIds } from '../session-state'
 import {
   hoveredCanvasTargets,
@@ -173,7 +177,7 @@ describe('scene canvas runtime', () => {
     locale.value = 'en'
     selectedObjectIds.value = new Set()
     plantColorMenuOpen.value = false
-    plantStampSpecies.value = null
+    clearPlantStampSource()
     snapToGridEnabled.value = false
     guides.value = []
     hoveredCanvasTargets.value = []
@@ -599,12 +603,12 @@ describe('scene canvas runtime', () => {
     runtime.loadDocument(makeFile())
     runtime.setTool('plant-stamp')
     activeTool.value = 'plant-stamp'
-    plantStampSpecies.value = {
+    selectPlantStampSource({
       canonical_name: 'Malus domestica',
       common_name: 'Apple',
       stratum: 'high',
       width_max_m: 4,
-    }
+    })
     plantColorMenuOpen.value = true
     selectedObjectIds.value = new Set(['plant-1'])
     hoveredPanelTargets.value = [speciesTarget('Malus domestica')]
@@ -618,7 +622,7 @@ describe('scene canvas runtime', () => {
     await Promise.resolve()
 
     expect(activeTool.value).toBe('select')
-    expect(plantStampSpecies.value).toBe(null)
+    expect(readPlantStampSource()).toBe(null)
     expect(plantColorMenuOpen.value).toBe(false)
     expect(selectedObjectIds.value.size).toBe(0)
     expect(hoveredPanelTargets.value).toEqual([])

@@ -42,6 +42,7 @@ Use this guide when changing Preact components, signals, i18n, CSS, panels, bott
 ## Species Catalog Filters
 
 - Species Catalog UI modules should consume `speciesCatalogWorkbench` from `app/plant-browser/workbench.ts` for search intent/results, filter state, dynamic filter options, favorites, recently viewed Species, view mode, lifecycle, and Species detail selection. The Workbench owns those UI signals and exposes read-only reactive projections plus commands.
+- Species Catalog UI modules that start Plant Stamp placement should call `canvas/plant-stamp-source.ts`; they must not assemble drag JSON or write Plant Stamp Source state directly.
 - Do not reintroduce `app/plant-browser/state.ts` or `app/plant-browser/controller.ts`, and do not export lower-level search-session signals from `app/plant-browser/index.ts`. Focused Workbench implementation tests may use `createSpeciesCatalogWorkbench()`, but UI modules and broad tests should use the Workbench interface.
 - `app/plant-browser/species-catalog-filters.ts` owns Species Catalog Filter behavior for strip placement, active-chip formatting, activity counts, and fixed-field adapters.
 - `plantFilterModel.createEmpty()` must derive fixed filter defaults from the Species Catalog Filter catalog, not hand-list `SpeciesFilter` fields.

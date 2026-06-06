@@ -2,7 +2,10 @@ import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
 import { speciesCatalogWorkbench } from '../../app/plant-browser'
 import { currentCanvasCommandSurface } from '../../canvas/session'
-import { plantStampSpecies } from '../../canvas/plant-tool-state'
+import {
+  beginPlantStampFromSpecies,
+  writePlantStampDragData,
+} from '../../canvas/plant-stamp-source'
 import { STRATUM_I18N_KEY } from '../../types/constants'
 import type { SpeciesListItem } from '../../types/species'
 import styles from './PlantDb.module.css'
@@ -22,13 +25,7 @@ export function PlantRow({ plant }: Props) {
   const session = currentCanvasCommandSurface.value
 
   const handleDragStart = (e: DragEvent) => {
-    e.dataTransfer!.setData('text/plain', JSON.stringify({
-      canonical_name: plant.canonical_name,
-      common_name: plant.common_name,
-      stratum: plant.stratum,
-      width_max_m: plant.width_max_m,
-    }))
-    e.dataTransfer!.effectAllowed = 'copy'
+    writePlantStampDragData(e.dataTransfer, plant)
 
     const preview = document.createElement('div')
     preview.textContent = plant.common_name || plant.canonical_name
@@ -45,13 +42,7 @@ export function PlantRow({ plant }: Props) {
 
   const handlePlace = (e: MouseEvent) => {
     e.stopPropagation()
-    plantStampSpecies.value = {
-      canonical_name: plant.canonical_name,
-      common_name: plant.common_name,
-      stratum: plant.stratum,
-      width_max_m: plant.width_max_m,
-    }
-    session?.setTool('plant-stamp')
+    beginPlantStampFromSpecies(plant, session)
   }
 
   const handleRowClick = () => {

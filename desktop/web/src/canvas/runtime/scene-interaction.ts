@@ -31,9 +31,9 @@ import {
 } from './interaction/overlay-ui'
 import { cursorForTool, hasAdditiveModifier, isEditableTarget } from './interaction/pointer-utils'
 import {
-  appendDroppedPlantToDraft,
-  parsePlantDropPayload,
+  appendPlantStampSourceToDraft,
 } from './interaction/tool-actions'
+import { readPlantStampDropSource } from '../plant-stamp-source'
 import {
   createSceneToolModules,
   type SceneToolModules,
@@ -405,12 +405,12 @@ export class SceneInteractionController {
   private readonly _onDrop = (event: DragEvent): void => {
     event.preventDefault()
     hideInteractionPreview(this._preview)
-    const payload = parsePlantDropPayload(event)
-    if (!payload) return
+    const source = readPlantStampDropSource(event)
+    if (!source) return
     const world = this._applySnapping(this._deps.camera.screenToWorld(this._screenPoint(event)))
     this._deps.sceneEdits.run('interaction-drop', (tx) => {
       tx.mutate((draft) => {
-        appendDroppedPlantToDraft(draft, payload, world)
+        appendPlantStampSourceToDraft(draft, source, world)
       })
     })
   }

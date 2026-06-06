@@ -108,6 +108,10 @@ _Avoid_: Layer, selection
 An interaction for placing repeated placed plants from a chosen species. A plant stamp starts from Species Catalog data and creates new placed plants in the design.
 _Avoid_: Object stamp, clone tool
 
+**Plant Stamp Source**:
+The Species-derived source currently chosen for Plant Stamp placement, including the canonical name, Common Name, Stratum, and canopy spread needed to create placed plants from click or drag interactions. A plant stamp source is runtime interaction state, not a design object.
+_Avoid_: Plant stamp payload, plant stamp signal, dragged plant JSON
+
 **Object Stamp**:
 An interaction for sampling an existing design object and placing repeated copies of it. An object stamp starts from a design object already in the design, not from Species Catalog data.
 _Avoid_: Plant stamp, copy/paste
@@ -284,6 +288,9 @@ Use **Consortium** for Canopi's broader stratified, time-aware plant assembly. U
 
 **Plant Stamp vs Object Stamp**:
 A **Plant Stamp** places placed plants from a chosen species. An **Object Stamp** copies an existing design object already in the design.
+
+**Plant Stamp vs Plant Stamp Source**:
+A **Plant Stamp** is the placement interaction. A **Plant Stamp Source** is the runtime Species-derived source the interaction uses to create placed plants.
 
 **Object Stamp vs Plant Spacing**:
 An **Object Stamp** places one copy at a time from a sampled design object. **Plant Spacing** repeats a sampled placed plant along a spacing guide at a chosen interval.

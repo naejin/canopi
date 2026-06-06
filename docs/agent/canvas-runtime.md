@@ -70,6 +70,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - Tool modules must treat `setTool()` changes, `dispose()`, document replacement, Escape cancellation, source invalidation, and viewport refresh as lifecycle events that leave no stale overlays, listeners, selections, previews, or pointer capture behind.
 - Do not install module-level `effect()` or global listeners from a tool module unless that module also owns an explicit disposer and `import.meta.hot.dispose()` cleanup. Prefer router-dispatched events for canvas tool input.
 - Current Scene Edit tool adapters include Annotation Text, Zone drawing, Object Stamp, Plant Stamp, and Plant Spacing. Do not reintroduce tool-specific fields, source state, preview state, or direct tool branches into `SceneInteractionController`; route through a `SceneToolAdapter` and keep the state machine in the tool module.
+- `canvas/plant-stamp-source.ts` owns Plant Stamp Source selection plus drag data parsing/serialization. Plant Stamp tool modules consume that seam; Species Catalog UI modules call it instead of writing source state or hand-assembling drag payloads.
 - Guard Scene Edit ownership with source boundary tests in `scene-interaction-tool-boundary.test.ts` and user-equivalent lifecycle tests in `scene-interaction.test.ts`. Add tests before moving another tool concern across the router/module boundary.
 
 ## Zone Measurements
