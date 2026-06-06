@@ -2,6 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { signal } from '@preact/signals'
 import { activeTool } from '../canvas/session-state'
 import { activePanel, sidePanel } from '../app/shell/state'
+import {
+  gridVisible,
+  rulersVisible,
+  snapToGridEnabled,
+} from '../app/canvas-settings/signals'
 import { theme } from '../app/settings/state'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { currentDesign, nonCanvasRevision, nonCanvasSavedRevision } from './support/design-session-state'
@@ -15,11 +20,12 @@ import * as settingsProjection from '../app/settings/projection'
 import {
   appCommandGraphChromeProjection,
   appCommandGraphPanelProjection,
+  appCommandGraphToolbarProjection,
   commands,
   getMenuDefinitions,
   runAppCommand,
 } from '../commands/registry'
-import { PANEL_SHORTCUTS, TOOL_SHORTCUTS } from '../shortcuts/definitions'
+import { EDIT_SHORTCUTS, PANEL_SHORTCUTS, TOOL_SHORTCUTS } from '../shortcuts/definitions'
 import {
   createTestCanvasCommandSurface,
   createTestCanvasRuntimeSurfaces,
@@ -46,6 +52,9 @@ describe('command registry canvas tool switching', () => {
     currentDesign.value = null
     nonCanvasRevision.value = 0
     nonCanvasSavedRevision.value = 0
+    gridVisible.value = true
+    snapToGridEnabled.value = false
+    rulersVisible.value = true
     settingsProjection.resetSettingsProjectionForTests()
     problemReportDialogOpen.value = false
     resetFrontendDiagnosticsForTests()
@@ -57,6 +66,9 @@ describe('command registry canvas tool switching', () => {
     activeTool.value = 'select'
     currentDesign.value = null
     theme.value = 'light'
+    gridVisible.value = true
+    snapToGridEnabled.value = false
+    rulersVisible.value = true
     problemReportDialogOpen.value = false
     resetFrontendDiagnosticsForTests()
   })
@@ -289,6 +301,84 @@ describe('command registry canvas tool switching', () => {
     expect(runAppCommand('nav.plantDb')).toBe(true)
     expect(activePanel.value).toBe('canvas')
     expect(sidePanel.value).toBe(null)
+  })
+
+  it('exposes toolbar commands through the App Command Graph', () => {
+    const setTool = vi.fn()
+    const undo = vi.fn()
+    const toggleGrid = vi.fn()
+    const toggleSnapToGrid = vi.fn()
+    const toggleRulers = vi.fn()
+
+    const primaryTool = (tool: string) => appCommandGraphToolbarProjection.value.primaryTools
+      .find((entry) => entry.tool === tool)!
+    const shapeTool = (tool: string) => appCommandGraphToolbarProjection.value.shapeTools
+      .find((entry) => entry.tool === tool)!
+    const historyAction = (id: string) => appCommandGraphToolbarProjection.value.historyActions
+      .find((entry) => entry.id === id)!
+    const settingToggle = (id: string) => appCommandGraphToolbarProjection.value.settingsToggles
+      .find((entry) => entry.id === id)!
+
+    expect(primaryTool('select')).toMatchObject({
+      commandId: 'canvas.tool.select',
+      active: true,
+      disabled: false,
+      shortcut: TOOL_SHORTCUTS.select,
+    })
+    expect(shapeTool('ellipse')).toMatchObject({
+      commandId: 'canvas.tool.ellipse',
+      active: false,
+      disabled: false,
+      shortcut: TOOL_SHORTCUTS.ellipse,
+    })
+    expect(historyAction('undo')).toMatchObject({
+      commandId: 'edit.undo',
+      disabled: true,
+      shortcut: EDIT_SHORTCUTS.undo,
+    })
+    expect(settingToggle('grid')).toMatchObject({
+      commandId: 'canvas.toggleGrid',
+      disabled: true,
+      pressed: true,
+    })
+    expect(settingToggle('snap')).toMatchObject({
+      commandId: 'canvas.toggleSnapToGrid',
+      disabled: true,
+      pressed: false,
+    })
+    expect(settingToggle('rulers')).toMatchObject({
+      commandId: 'canvas.toggleRulers',
+      disabled: true,
+      pressed: true,
+    })
+
+    mountCanvasCommandSurface({
+      canUndo: signal(true),
+      setTool,
+      undo,
+      toggleGrid,
+      toggleSnapToGrid,
+      toggleRulers,
+    })
+    snapToGridEnabled.value = true
+
+    expect(historyAction('undo')).toMatchObject({ disabled: false })
+    expect(settingToggle('grid')).toMatchObject({ disabled: false, pressed: true })
+    expect(settingToggle('snap')).toMatchObject({ disabled: false, pressed: true })
+
+    shapeTool('ellipse').action()
+    historyAction('undo').action()
+    settingToggle('grid').action()
+    settingToggle('snap').action()
+    settingToggle('rulers').action()
+
+    expect(activePanel.value).toBe('canvas')
+    expect(setTool).toHaveBeenCalledWith('ellipse')
+    expect(activeTool.value).toBe('ellipse')
+    expect(undo).toHaveBeenCalledTimes(1)
+    expect(toggleGrid).toHaveBeenCalledTimes(1)
+    expect(toggleSnapToGrid).toHaveBeenCalledTimes(1)
+    expect(toggleRulers).toHaveBeenCalledTimes(1)
   })
 
   it('toggles theme through the settings projection seam', () => {

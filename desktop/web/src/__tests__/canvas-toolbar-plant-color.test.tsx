@@ -6,6 +6,11 @@ import { CanvasToolbar } from '../components/canvas/CanvasToolbar'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { plantColorMenuOpen } from '../canvas/plant-color-menu-state'
 import { activeTool, selectedObjectIds } from '../canvas/session-state'
+import {
+  gridVisible,
+  rulersVisible,
+  snapToGridEnabled,
+} from '../app/canvas-settings/signals'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 import {
   createTestCanvasCommandSurface,
@@ -20,6 +25,9 @@ describe('CanvasToolbar', () => {
   const setTool = vi.fn()
   const undo = vi.fn()
   const redo = vi.fn()
+  const toggleGrid = vi.fn()
+  const toggleSnapToGrid = vi.fn()
+  const toggleRulers = vi.fn()
 
   beforeEach(() => {
     container = document.createElement('div')
@@ -31,8 +39,14 @@ describe('CanvasToolbar', () => {
     setTool.mockReset()
     undo.mockReset()
     redo.mockReset()
+    toggleGrid.mockReset()
+    toggleSnapToGrid.mockReset()
+    toggleRulers.mockReset()
     selectedObjectIds.value = new Set()
     plantColorMenuOpen.value = false
+    gridVisible.value = true
+    snapToGridEnabled.value = false
+    rulersVisible.value = true
     getSelectedPlantColorContext.mockImplementation(() => {
       if (selectedObjectIds.value.size === 0) {
         return {
@@ -61,9 +75,9 @@ describe('CanvasToolbar', () => {
         undo,
         redo,
         ensureSpeciesCacheEntries: vi.fn().mockResolvedValue(false),
-        toggleGrid: vi.fn(),
-        toggleSnapToGrid: vi.fn(),
-        toggleRulers: vi.fn(),
+        toggleGrid,
+        toggleSnapToGrid,
+        toggleRulers,
         setSelectedPlantColor: vi.fn(),
         setPlantColorForSpecies: vi.fn(),
         clearPlantSpeciesColor: vi.fn(),
@@ -81,6 +95,9 @@ describe('CanvasToolbar', () => {
     activeTool.value = 'select'
     selectedObjectIds.value = new Set()
     plantColorMenuOpen.value = false
+    gridVisible.value = true
+    snapToGridEnabled.value = false
+    rulersVisible.value = true
     setCurrentCanvasSession(null)
   })
 
@@ -206,6 +223,35 @@ describe('CanvasToolbar', () => {
 
     expect(undo).toHaveBeenCalledTimes(1)
     expect(redo).toHaveBeenCalledTimes(1)
+  })
+
+  it('runs grid, snap, and ruler toggles through toolbar command buttons', async () => {
+    await act(async () => {
+      render(<CanvasToolbar />, container)
+      await Promise.resolve()
+    })
+
+    const gridButton = container.querySelector<HTMLButtonElement>('button[data-command="canvas.toggleGrid"]')
+    const snapButton = container.querySelector<HTMLButtonElement>('button[data-command="canvas.toggleSnapToGrid"]')
+    const rulersButton = container.querySelector<HTMLButtonElement>('button[data-command="canvas.toggleRulers"]')
+
+    expect(gridButton).not.toBeNull()
+    expect(snapButton).not.toBeNull()
+    expect(rulersButton).not.toBeNull()
+    expect(gridButton?.getAttribute('aria-pressed')).toBe('true')
+    expect(snapButton?.getAttribute('aria-pressed')).toBe('false')
+    expect(rulersButton?.getAttribute('aria-pressed')).toBe('true')
+
+    await act(async () => {
+      gridButton?.click()
+      snapButton?.click()
+      rulersButton?.click()
+      await Promise.resolve()
+    })
+
+    expect(toggleGrid).toHaveBeenCalledTimes(1)
+    expect(toggleSnapToGrid).toHaveBeenCalledTimes(1)
+    expect(toggleRulers).toHaveBeenCalledTimes(1)
   })
 
   it('keeps arrow-key tool navigation scoped to tool buttons', async () => {

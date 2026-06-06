@@ -1,24 +1,17 @@
 import { useSignalEffect } from '@preact/signals'
 import type { ComponentChildren } from 'preact'
 import { useRef } from 'preact/hooks'
-import {
-  gridVisible,
-  rulersVisible,
-  snapToGridEnabled,
-} from '../../app/canvas-settings/signals'
 import { locale } from '../../app/settings/state'
 import { plantColorMenuOpen } from '../../canvas/plant-color-menu-state'
 import {
-  getAppCommand,
-  type AppCommandId,
-  type Command,
+  appCommandGraphToolbarProjection,
+  type AppCommandGraphToolbarActionCommand,
+  type AppCommandGraphToolbarToolCommand,
 } from '../../commands/registry'
 import { t } from '../../i18n'
 import {
-  currentCanvasCommandSurface,
   currentCanvasQuerySurface,
   currentCanvasSelection,
-  currentCanvasTool,
 } from '../../canvas/session'
 import {
   SelectIcon,
@@ -43,46 +36,47 @@ import styles from './CanvasToolbar.module.css'
 
 type IconComponent = (props: { className?: string }) => ComponentChildren
 
-interface ToolDef {
-  id: string
-  labelKey: string
-  descKey: string
-  shortcut?: string
-  Icon: IconComponent
+const TOOL_ICONS: Record<string, IconComponent> = {
+  select: SelectIcon,
+  hand: HandIcon,
+  'object-stamp': ObjectStampIcon,
+  'plant-spacing': SpacingIcon,
+  rectangle: RectangleIcon,
+  ellipse: EllipseIcon,
+  polygon: PolygonIcon,
+  text: TextIcon,
 }
 
-const TOOLS: ToolDef[] = [
-  { id: 'select',      labelKey: 'canvas.tools.select',      descKey: 'canvas.tools.selectDesc',      shortcut: 'V', Icon: SelectIcon },
-  { id: 'hand',        labelKey: 'canvas.tools.hand',        descKey: 'canvas.tools.handDesc',        shortcut: 'H', Icon: HandIcon },
-  { id: 'object-stamp', labelKey: 'canvas.tools.objectStamp', descKey: 'canvas.tools.objectStampDesc', Icon: ObjectStampIcon },
-  { id: 'plant-spacing', labelKey: 'canvas.tools.plantSpacing', descKey: 'canvas.tools.plantSpacingDesc', shortcut: 'S', Icon: SpacingIcon },
-]
+const ACTION_ICONS: Record<string, IconComponent> = {
+  undo: UndoIcon,
+  redo: RedoIcon,
+  grid: GridIcon,
+  snap: SnapIcon,
+  rulers: RulerIcon,
+}
 
-const SHAPE_TOOLS: ToolDef[] = [
-  { id: 'rectangle',   labelKey: 'canvas.tools.rectangle',   descKey: 'canvas.tools.rectangleDesc',   shortcut: 'R', Icon: RectangleIcon },
-  { id: 'ellipse',     labelKey: 'canvas.tools.ellipse',     descKey: 'canvas.tools.ellipseDesc',     shortcut: 'E', Icon: EllipseIcon },
-  { id: 'polygon',     labelKey: 'canvas.tools.polygon',     descKey: 'canvas.tools.polygonDesc',     shortcut: 'P', Icon: PolygonIcon },
-  { id: 'text',        labelKey: 'canvas.tools.text',        descKey: 'canvas.tools.textDesc',        shortcut: 'T', Icon: TextIcon },
-]
+function iconForTool(tool: string): IconComponent {
+  const Icon = TOOL_ICONS[tool]
+  if (!Icon) throw new Error(`Missing toolbar tool icon '${tool}'`)
+  return Icon
+}
 
-// All tool groups in order for keyboard navigation
-const ALL_TOOLS: ToolDef[] = [...TOOLS, ...SHAPE_TOOLS]
-
-const UNDO_COMMAND = toolbarCommand('edit.undo')
-const REDO_COMMAND = toolbarCommand('edit.redo')
-
-function toolbarCommand(id: AppCommandId): Command {
-  const command = getAppCommand(id)
-  if (!command) throw new Error(`Missing toolbar command ${id}`)
-  return command
+function iconForAction(id: string): IconComponent {
+  const Icon = ACTION_ICONS[id]
+  if (!Icon) throw new Error(`Missing toolbar action icon '${id}'`)
+  return Icon
 }
 
 export function CanvasToolbar() {
   // Subscribe to locale so labels re-render on language change
   void locale.value
   void currentCanvasSelection.value
-  const commandSurface = currentCanvasCommandSurface.value
   const querySurface = currentCanvasQuerySurface.value
+  const toolbarProjection = appCommandGraphToolbarProjection.value
+  const allTools = [
+    ...toolbarProjection.primaryTools,
+    ...toolbarProjection.shapeTools,
+  ]
 
   const toolbarRef = useRef<HTMLDivElement>(null)
   const plantColorButtonRef = useRef<HTMLButtonElement>(null)
@@ -111,50 +105,50 @@ export function CanvasToolbar() {
     e.preventDefault()
 
     const currentId = e.target.dataset.tool
-    const currentIndex = ALL_TOOLS.findIndex((t) => t.id === currentId)
+    const currentIndex = allTools.findIndex((t) => t.tool === currentId)
     if (currentIndex === -1) return
 
     const nextIndex =
       e.key === 'ArrowDown'
-        ? (currentIndex + 1) % ALL_TOOLS.length
-        : (currentIndex - 1 + ALL_TOOLS.length) % ALL_TOOLS.length
+        ? (currentIndex + 1) % allTools.length
+        : (currentIndex - 1 + allTools.length) % allTools.length
 
-    const nextTool = ALL_TOOLS[nextIndex]
+    const nextTool = allTools[nextIndex]
     if (!nextTool) return
 
-    commandSurface?.setTool(nextTool.id)
+    nextTool.action()
 
     // Move DOM focus to the newly active button
     const toolbar = toolbarRef.current
     if (!toolbar) return
     const btn = toolbar.querySelector<HTMLButtonElement>(
-      `[data-tool="${nextTool.id}"]`
+      `[data-tool="${nextTool.tool}"]`
     )
     btn?.focus()
   }
 
-  function renderButton(tool: ToolDef) {
-    const isActive = currentCanvasTool.value === tool.id
-    const label = t(tool.labelKey)
-    const desc = t(tool.descKey)
-    const shortcutLabel = tool.shortcut ? `(${tool.shortcut})` : ''
+  function renderToolButton(command: AppCommandGraphToolbarToolCommand) {
+    const Icon = iconForTool(command.tool)
+    const shortcutLabel = command.shortcut ? `(${command.shortcut})` : ''
 
     return (
       <button
-        key={tool.id}
-        data-tool={tool.id}
+        key={command.tool}
+        data-tool={command.tool}
         type="button"
         role="radio"
-        aria-checked={isActive}
-        aria-label={tool.shortcut ? `${label} ${shortcutLabel}` : label}
-        aria-keyshortcuts={tool.shortcut}
+        aria-checked={command.active}
+        aria-label={command.shortcut ? `${command.label} ${shortcutLabel}` : command.label}
+        aria-keyshortcuts={command.shortcut}
+        aria-disabled={command.disabled}
+        disabled={command.disabled}
         // Only the active button is in the tab sequence; arrow keys move focus
-        tabIndex={isActive ? 0 : -1}
-        className={styles.toolButton}
-        onClick={() => { commandSurface?.setTool(tool.id) }}
+        tabIndex={command.active ? 0 : -1}
+        className={`${styles.toolButton}${command.disabled ? ` ${styles.toolButtonDisabled}` : ''}`}
+        onClick={command.action}
       >
-        <tool.Icon className={styles.toolIcon} />
-        <ButtonTooltip label={label} shortcut={shortcutLabel} description={desc} />
+        <Icon className={styles.toolIcon} />
+        <ButtonTooltip label={command.label} shortcut={shortcutLabel} description={command.description} />
       </button>
     )
   }
@@ -199,44 +193,17 @@ export function CanvasToolbar() {
     )
   }
 
-  function renderCommandButton(command: Command, Icon: IconComponent) {
+  function renderCommandButton(command: AppCommandGraphToolbarActionCommand) {
+    const Icon = iconForAction(command.id)
     return renderActionButton(
       command.id,
-      command.label(),
-      undefined,
+      command.label,
+      command.description,
       Icon,
-      undefined,
-      command.disabled(),
-      () => {
-        command.action()
-      },
-      { commandId: command.id, shortcut: command.shortcut },
-    )
-  }
-
-  function renderToggle(
-    id: string,
-    labelKey: string,
-    descKey: string,
-    pressed: boolean,
-    Icon: IconComponent,
-    onToggle: () => void,
-  ) {
-    const label = t(labelKey)
-    const desc = t(descKey)
-    return (
-      <button
-        key={id}
-        type="button"
-        aria-pressed={pressed}
-        aria-label={label}
-        tabIndex={0}
-        className={styles.toolButton}
-        onClick={onToggle}
-      >
-        <Icon className={styles.toolIcon} />
-        <ButtonTooltip label={label} description={desc} />
-      </button>
+      command.pressed,
+      command.disabled,
+      command.action,
+      { commandId: command.commandId, shortcut: command.shortcut },
     )
   }
 
@@ -259,16 +226,15 @@ export function CanvasToolbar() {
         }
       }}
     >
-      {TOOLS.map(renderButton)}
+      {toolbarProjection.primaryTools.map(renderToolButton)}
 
       <div className={styles.separator} role="separator" aria-hidden="true" />
 
-      {SHAPE_TOOLS.map(renderButton)}
+      {toolbarProjection.shapeTools.map(renderToolButton)}
 
       <div className={styles.separator} role="separator" aria-hidden="true" />
 
-      {renderCommandButton(UNDO_COMMAND, UndoIcon)}
-      {renderCommandButton(REDO_COMMAND, RedoIcon)}
+      {toolbarProjection.historyActions.map(renderCommandButton)}
 
       <div className={styles.separator} role="separator" aria-hidden="true" />
 
@@ -290,30 +256,7 @@ export function CanvasToolbar() {
 
       <div className={styles.separator} role="separator" aria-hidden="true" />
 
-      {renderToggle(
-        'grid',
-        'canvas.grid.grid',
-        'canvas.grid.gridDesc',
-        gridVisible.value,
-        GridIcon,
-        () => commandSurface?.toggleGrid(),
-      )}
-      {renderToggle(
-        'snap',
-        'canvas.grid.snapToGrid',
-        'canvas.grid.snapToGridDesc',
-        snapToGridEnabled.value,
-        SnapIcon,
-        () => commandSurface?.toggleSnapToGrid(),
-      )}
-      {renderToggle(
-        'rulers',
-        'canvas.grid.rulers',
-        'canvas.grid.rulersDesc',
-        rulersVisible.value,
-        RulerIcon,
-        () => commandSurface?.toggleRulers(),
-      )}
+      {toolbarProjection.settingsToggles.map(renderCommandButton)}
 
     </div>
   )

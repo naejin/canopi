@@ -9,7 +9,7 @@ Use this guide when changing Preact components, signals, i18n, CSS, panels, bott
 - Controller/action modules should not import other controller/action modules.
 - `currentCanvasSession` stores runtime surfaces. App code should consume command/query/document facades, not renderer internals.
 - `unlockSelected()` intentionally unlocks all objects when no selection is present; update the shortcut behavior before changing that semantic.
-- `desktop/web/src/commands/registry.ts` is the App Command Graph seam. It owns command identity, labels, shortcuts, dispatch, disabled state, menu projection, palette projection, and keyboard shortcut dispatch. `MenuBar`, `CommandPalette`, and `shortcuts/manager.ts` should consume that seam instead of duplicating command actions or shortcut maps.
+- `desktop/web/src/commands/registry.ts` is the App Command Graph seam. It owns command identity, labels, shortcuts, dispatch, disabled state, menu/palette/panel/toolbar projections, and keyboard shortcut dispatch. `MenuBar`, `CommandPalette`, `PanelBar`, `CanvasToolbar`, and `shortcuts/manager.ts` should consume that seam instead of duplicating command actions, availability checks, active state, or shortcut maps.
 
 ## Signals And Hooks
 

@@ -9,6 +9,11 @@ import {
 } from '../app/document-session/actions'
 import { activePanel, navigateTo, sidePanel, type Panel, type SidePanel } from '../app/shell/state'
 import {
+  gridVisible,
+  rulersVisible,
+  snapToGridEnabled,
+} from '../app/canvas-settings/signals'
+import {
   diagnosticMessageFromError,
   recordFrontendDiagnostic,
 } from '../app/problem-report/diagnostics'
@@ -17,6 +22,7 @@ import { mutateSettingsProjection } from '../app/settings/projection'
 import { locale } from '../app/settings/state'
 import {
   currentCanvasHasSelection,
+  currentCanvasTool,
   getCurrentCanvasCommandSurface,
   setCurrentCanvasTool,
 } from '../canvas/session'
@@ -83,6 +89,35 @@ export interface AppCommandGraphPanelProjection {
   readonly side: AppCommandGraphPanelCommand[]
 }
 
+export interface AppCommandGraphToolbarToolCommand {
+  readonly tool: string
+  readonly commandId: AppCommandId
+  readonly label: string
+  readonly description: string
+  readonly shortcut?: string
+  readonly active: boolean
+  readonly disabled: boolean
+  readonly action: () => void
+}
+
+export interface AppCommandGraphToolbarActionCommand {
+  readonly id: string
+  readonly commandId: AppCommandId
+  readonly label: string
+  readonly description?: string
+  readonly shortcut?: string
+  readonly disabled: boolean
+  readonly pressed?: boolean
+  readonly action: () => void
+}
+
+export interface AppCommandGraphToolbarProjection {
+  readonly primaryTools: AppCommandGraphToolbarToolCommand[]
+  readonly shapeTools: AppCommandGraphToolbarToolCommand[]
+  readonly historyActions: AppCommandGraphToolbarActionCommand[]
+  readonly settingsToggles: AppCommandGraphToolbarActionCommand[]
+}
+
 type AppMenuId = 'file' | 'edit' | 'view' | 'help'
 
 export type AppCommandId =
@@ -110,6 +145,9 @@ export type AppCommandId =
   | 'canvas.tool.text'
   | 'canvas.tool.objectStamp'
   | 'canvas.tool.plantSpacing'
+  | 'canvas.toggleGrid'
+  | 'canvas.toggleSnapToGrid'
+  | 'canvas.toggleRulers'
   | 'canvas.copy'
   | 'canvas.paste'
   | 'canvas.duplicateSelected'
@@ -197,6 +235,59 @@ const PANEL_LABELS: Record<Panel, () => string> = {
   'plant-db': () => t('nav.plantDb'),
   favorites: () => t('nav.favorites'),
 }
+
+const TOOLBAR_PRIMARY_TOOLS = [
+  { tool: 'select', commandId: 'canvas.tool.select', description: () => t('canvas.tools.selectDesc') },
+  { tool: 'hand', commandId: 'canvas.tool.hand', description: () => t('canvas.tools.handDesc') },
+  { tool: 'object-stamp', commandId: 'canvas.tool.objectStamp', description: () => t('canvas.tools.objectStampDesc') },
+  { tool: 'plant-spacing', commandId: 'canvas.tool.plantSpacing', description: () => t('canvas.tools.plantSpacingDesc') },
+] as const satisfies readonly {
+  readonly tool: string
+  readonly commandId: AppCommandId
+  readonly description: () => string
+}[]
+
+const TOOLBAR_SHAPE_TOOLS = [
+  { tool: 'rectangle', commandId: 'canvas.tool.rectangle', description: () => t('canvas.tools.rectangleDesc') },
+  { tool: 'ellipse', commandId: 'canvas.tool.ellipse', description: () => t('canvas.tools.ellipseDesc') },
+  { tool: 'polygon', commandId: 'canvas.tool.polygon', description: () => t('canvas.tools.polygonDesc') },
+  { tool: 'text', commandId: 'canvas.tool.text', description: () => t('canvas.tools.textDesc') },
+] as const satisfies readonly {
+  readonly tool: string
+  readonly commandId: AppCommandId
+  readonly description: () => string
+}[]
+
+const TOOLBAR_HISTORY_ACTIONS = [
+  { id: 'undo', commandId: 'edit.undo' },
+  { id: 'redo', commandId: 'edit.redo' },
+] as const satisfies readonly { readonly id: string, readonly commandId: AppCommandId }[]
+
+const TOOLBAR_SETTINGS_TOGGLES = [
+  {
+    id: 'grid',
+    commandId: 'canvas.toggleGrid',
+    description: () => t('canvas.grid.gridDesc'),
+    pressed: () => gridVisible.value,
+  },
+  {
+    id: 'snap',
+    commandId: 'canvas.toggleSnapToGrid',
+    description: () => t('canvas.grid.snapToGridDesc'),
+    pressed: () => snapToGridEnabled.value,
+  },
+  {
+    id: 'rulers',
+    commandId: 'canvas.toggleRulers',
+    description: () => t('canvas.grid.rulersDesc'),
+    pressed: () => rulersVisible.value,
+  },
+] as const satisfies readonly {
+  readonly id: string
+  readonly commandId: AppCommandId
+  readonly description: () => string
+  readonly pressed: () => boolean
+}[]
 
 function readAppCommandState(): AppCommandState {
   return {
@@ -431,6 +522,24 @@ const APP_COMMANDS: readonly AppCommandDefinition[] = [
     run: () => switchTool('plant-spacing'),
   },
   {
+    id: 'canvas.toggleGrid',
+    label: () => t('canvas.grid.grid'),
+    run: (state) => runCanvas(state, (canvas) => canvas.toggleGrid()),
+    disabled: (state) => !state.canvas,
+  },
+  {
+    id: 'canvas.toggleSnapToGrid',
+    label: () => t('canvas.grid.snapToGrid'),
+    run: (state) => runCanvas(state, (canvas) => canvas.toggleSnapToGrid()),
+    disabled: (state) => !state.canvas,
+  },
+  {
+    id: 'canvas.toggleRulers',
+    label: () => t('canvas.grid.rulers'),
+    run: (state) => runCanvas(state, (canvas) => canvas.toggleRulers()),
+    disabled: (state) => !state.canvas,
+  },
+  {
     id: 'canvas.copy',
     run: (state) => runCanvas(state, (canvas) => canvas.copy()),
     disabled: (state) => !state.canvas,
@@ -568,6 +677,90 @@ export const appCommandGraphPanelProjection = computed<AppCommandGraphPanelProje
   return {
     primary: PANEL_COMMAND_GROUPS.primary.map((entry) => panelCommandProjection(entry, state)),
     side: PANEL_COMMAND_GROUPS.side.map((entry) => panelCommandProjection(entry, state)),
+  }
+})
+
+function toolbarToolProjection(
+  entry: {
+    readonly tool: string
+    readonly commandId: AppCommandId
+    readonly description: () => string
+  },
+  state: AppCommandState,
+): AppCommandGraphToolbarToolCommand {
+  const command = commandById.get(entry.commandId)
+  if (!command?.label) {
+    throw new Error(`Missing toolbar tool command '${entry.commandId}'`)
+  }
+  return {
+    tool: entry.tool,
+    commandId: entry.commandId,
+    label: command.label(),
+    description: entry.description(),
+    shortcut: command.shortcut,
+    active: currentCanvasTool.value === entry.tool,
+    disabled: command.disabled?.(state) ?? false,
+    action: () => {
+      runAppCommand(entry.commandId)
+    },
+  }
+}
+
+function toolbarActionProjection(
+  entry: { readonly id: string, readonly commandId: AppCommandId },
+  state: AppCommandState,
+): AppCommandGraphToolbarActionCommand {
+  const command = commandById.get(entry.commandId)
+  if (!command?.label) {
+    throw new Error(`Missing toolbar action command '${entry.commandId}'`)
+  }
+  return {
+    id: entry.id,
+    commandId: entry.commandId,
+    label: command.label(),
+    shortcut: command.shortcut,
+    disabled: command.disabled?.(state) ?? false,
+    action: () => {
+      runAppCommand(entry.commandId)
+    },
+  }
+}
+
+function toolbarToggleProjection(
+  entry: {
+    readonly id: string
+    readonly commandId: AppCommandId
+    readonly description: () => string
+    readonly pressed: () => boolean
+  },
+  state: AppCommandState,
+): AppCommandGraphToolbarActionCommand {
+  const command = commandById.get(entry.commandId)
+  if (!command?.label) {
+    throw new Error(`Missing toolbar toggle command '${entry.commandId}'`)
+  }
+  return {
+    id: entry.id,
+    commandId: entry.commandId,
+    label: command.label(),
+    description: entry.description(),
+    disabled: command.disabled?.(state) ?? false,
+    pressed: entry.pressed(),
+    action: () => {
+      runAppCommand(entry.commandId)
+    },
+  }
+}
+
+export const appCommandGraphToolbarProjection = computed<AppCommandGraphToolbarProjection>(() => {
+  void locale.value
+  const state = readAppCommandState()
+
+  return {
+    primaryTools: TOOLBAR_PRIMARY_TOOLS.map((entry) => toolbarToolProjection(entry, state)),
+    shapeTools: TOOLBAR_SHAPE_TOOLS.map((entry) => toolbarToolProjection(entry, state)),
+    historyActions: TOOLBAR_HISTORY_ACTIONS.map((entry) => toolbarActionProjection(entry, state)),
+    settingsToggles: TOOLBAR_SETTINGS_TOGGLES.map((entry) => toolbarToggleProjection(entry, state)),
   }
 })
 
