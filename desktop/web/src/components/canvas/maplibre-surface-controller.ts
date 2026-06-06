@@ -4,18 +4,12 @@ import {
   createCanvasMapSurfaceLifecycle,
   type CanvasMapSurfaceLifecycle,
 } from '../../app/canvas-map-surface/lifecycle'
-import { readCanvasMapSurfaceCoreSnapshot } from '../../app/canvas-map-surface/snapshot'
+import { readCanvasMapSurfaceSnapshot } from '../../app/canvas-map-surface/snapshot'
 import { loadMapLibreTerrainSupport } from '../../maplibre/terrain-loader'
 import {
   IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
   type MapLibreCanvasSurfaceState,
 } from '../../maplibre/canvas-surface-state'
-import {
-  contourIntervalMeters,
-  hillshadeOpacity,
-  hillshadeVisible,
-} from '../../app/canvas-settings/signals'
-import { readPanelTargetOverlaySnapshot } from '../../app/panel-targets/presentation'
 import { loadMapLibre } from './maplibre-loader'
 
 interface UseMapLibreCanvasSurfaceControllerOptions {
@@ -41,27 +35,7 @@ export function useMapLibreCanvasSurfaceController({
   }
 
   useSignalEffect(() => {
-    const coreSnapshot = readCanvasMapSurfaceCoreSnapshot()
-    const { hoveredTargets, selectedTargets } = readPanelTargetOverlaySnapshot()
-    const contoursVisible = coreSnapshot.layerVisibility.contours ?? false
-    const contoursOpacity = coreSnapshot.layerOpacity.contours ?? 1
-    const hillshadeOn = hillshadeVisible.value
-    const hillshadeAlpha = hillshadeOpacity.value
-    const contourInterval = contourIntervalMeters.value
-
-    lifecycleRef.current?.update({
-      ...coreSnapshot,
-      terrain: {
-        contourIntervalMeters: contourInterval,
-        contoursVisible,
-        contoursOpacity,
-        hillshadeVisible: hillshadeOn,
-        hillshadeOpacity: hillshadeAlpha,
-        isDark: coreSnapshot.theme === 'dark',
-      },
-      hoveredTargets: [...hoveredTargets],
-      selectedTargets: [...selectedTargets],
-    })
+    lifecycleRef.current?.update(readCanvasMapSurfaceSnapshot())
   })
 
   useEffect(() => {

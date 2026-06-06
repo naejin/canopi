@@ -1,10 +1,20 @@
 import { effect, signal } from '@preact/signals'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
+  contourIntervalMeters,
+  hillshadeOpacity,
+  hillshadeVisible,
   layerOpacity,
   layerVisibility,
 } from '../app/canvas-settings/signals'
-import { readCanvasMapSurfaceCoreSnapshot } from '../app/canvas-map-surface/snapshot'
+import {
+  readCanvasMapSurfaceCoreSnapshot,
+  readCanvasMapSurfaceSnapshot,
+} from '../app/canvas-map-surface/snapshot'
+import {
+  hoveredPanelTargets,
+  selectedPanelTargets,
+} from '../app/panel-targets/state'
 import { basemapStyle, theme } from '../app/settings/state'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { northBearingDeg } from '../canvas/scene-metadata-state'
@@ -39,6 +49,11 @@ describe('Canvas Map Surface snapshot seam', () => {
     theme.value = 'dark'
     layerVisibility.value = { base: false, contours: true, plants: true }
     layerOpacity.value = { base: 0.4, contours: 0.75, plants: 1 }
+    contourIntervalMeters.value = 5
+    hillshadeVisible.value = true
+    hillshadeOpacity.value = 0.35
+    hoveredPanelTargets.value = [{ kind: 'manual' }]
+    selectedPanelTargets.value = [{ kind: 'none' }]
     setCurrentCanvasSession(null)
   })
 
@@ -49,6 +64,11 @@ describe('Canvas Map Surface snapshot seam', () => {
     theme.value = 'light'
     layerVisibility.value = { base: true, contours: false }
     layerOpacity.value = { base: 1, contours: 1 }
+    contourIntervalMeters.value = 0
+    hillshadeVisible.value = false
+    hillshadeOpacity.value = 0.55
+    hoveredPanelTargets.value = []
+    selectedPanelTargets.value = []
     setCurrentCanvasSession(null)
   })
 
@@ -88,5 +108,24 @@ describe('Canvas Map Surface snapshot seam', () => {
     } finally {
       dispose()
     }
+  })
+
+  it('assembles terrain and Target Presentation inputs into the full map snapshot', () => {
+    const runtime = createTestCanvasQuerySurface()
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ queries: runtime }))
+
+    expect(readCanvasMapSurfaceSnapshot()).toMatchObject({
+      runtime,
+      terrain: {
+        contourIntervalMeters: 5,
+        contoursVisible: true,
+        contoursOpacity: 0.75,
+        hillshadeVisible: true,
+        hillshadeOpacity: 0.35,
+        isDark: true,
+      },
+      hoveredTargets: [{ kind: 'manual' }],
+      selectedTargets: [{ kind: 'none' }],
+    })
   })
 })

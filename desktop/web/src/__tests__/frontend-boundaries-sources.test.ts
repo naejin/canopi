@@ -97,13 +97,16 @@ describe('frontend boundary sources', () => {
     const adapterSource = readSource('../app/canvas-runtime/panel-target-adapter.ts')
     const presentationSource = readSource('../app/panel-targets/presentation.ts')
     const mapSurfaceControllerSource = readSource('../components/canvas/maplibre-surface-controller.ts')
+    const mapSurfaceSnapshotSource = readSource('../app/canvas-map-surface/snapshot.ts')
 
     expect(runtimeSource).not.toContain('app/panel-targets')
     expect(effectsSource).not.toContain('app/panel-targets')
     expect(adapterSource).toContain('../panel-targets/presentation')
     expect(adapterSource).not.toContain('../panel-targets/state')
-    expect(mapSurfaceControllerSource).toContain('app/panel-targets/presentation')
+    expect(mapSurfaceControllerSource).not.toContain('app/panel-targets/presentation')
     expect(mapSurfaceControllerSource).not.toContain('app/panel-targets/state')
+    expect(mapSurfaceSnapshotSource).toContain('../panel-targets/presentation')
+    expect(mapSurfaceSnapshotSource).not.toContain('../panel-targets/state')
     expect(presentationSource).toContain('./state')
     expect(presentationSource).toContain('createPanelTargetPresentationController')
   })
@@ -112,15 +115,20 @@ describe('frontend boundary sources', () => {
     const mapSurfaceControllerSource = readSource('../components/canvas/maplibre-surface-controller.ts')
     const snapshotSource = readSource('../app/canvas-map-surface/snapshot.ts')
 
-    expect(mapSurfaceControllerSource).toContain('readCanvasMapSurfaceCoreSnapshot')
+    expect(mapSurfaceControllerSource).toContain('readCanvasMapSurfaceSnapshot')
     expectNoImportsMatching('../components/canvas/maplibre-surface-controller.ts', [
       /canvas\/session$/,
       /app\/location$/,
       /app\/settings\/state$/,
       /canvas\/scene-metadata-state$/,
+      /app\/canvas-settings\/signals$/,
+      /app\/panel-targets\/presentation$/,
     ])
     expect(snapshotSource).toContain('currentCanvasQuerySurface')
     expect(snapshotSource).toContain('readSavedLocationPresentation')
+    expect(snapshotSource).toContain('readPanelTargetOverlaySnapshot')
+    expect(snapshotSource).toContain('contourIntervalMeters')
+    expect(snapshotSource).toContain('hillshadeVisible')
     expect(snapshotSource).toContain('northBearingDeg')
     expect(snapshotSource).toContain('basemapStyle')
     expect(snapshotSource).toContain('theme')

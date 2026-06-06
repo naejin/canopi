@@ -1,8 +1,12 @@
 import {
+  contourIntervalMeters,
+  hillshadeOpacity,
+  hillshadeVisible,
   layerOpacity,
   layerVisibility,
 } from '../canvas-settings/signals'
 import { readSavedLocationPresentation } from '../location'
+import { readPanelTargetOverlaySnapshot } from '../panel-targets/presentation'
 import { basemapStyle, theme } from '../settings/state'
 import { currentCanvasQuerySurface } from '../../canvas/session'
 import { northBearingDeg } from '../../canvas/scene-metadata-state'
@@ -34,5 +38,24 @@ export function readCanvasMapSurfaceCoreSnapshot(): CanvasMapSurfaceCoreSnapshot
     layerVisibility: { ...layerVisibility.value },
     layerOpacity: { ...layerOpacity.value },
     theme: theme.value,
+  }
+}
+
+export function readCanvasMapSurfaceSnapshot(): CanvasMapSurfaceSnapshot {
+  const coreSnapshot = readCanvasMapSurfaceCoreSnapshot()
+  const { hoveredTargets, selectedTargets } = readPanelTargetOverlaySnapshot()
+
+  return {
+    ...coreSnapshot,
+    terrain: {
+      contourIntervalMeters: contourIntervalMeters.value,
+      contoursVisible: coreSnapshot.layerVisibility.contours ?? false,
+      contoursOpacity: coreSnapshot.layerOpacity.contours ?? 1,
+      hillshadeVisible: hillshadeVisible.value,
+      hillshadeOpacity: hillshadeOpacity.value,
+      isDark: coreSnapshot.theme === 'dark',
+    },
+    hoveredTargets: [...hoveredTargets],
+    selectedTargets: [...selectedTargets],
   }
 }
