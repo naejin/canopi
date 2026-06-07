@@ -294,7 +294,7 @@ describe('command registry canvas tool switching', () => {
     expect(runAppCommand('nav.plantDb')).toBe(true)
     expect(activePanel.value).toBe('canvas')
     expect(sidePanel.value).toBe('plant-db')
-    expect(panelCommand('plant-db')).toMatchObject({ disabled: true, active: true })
+    expect(panelCommand('plant-db')).toMatchObject({ disabled: false, active: true })
     expect(runAppCommand('nav.plantDb')).toBe(true)
     expect(activePanel.value).toBe('canvas')
     expect(sidePanel.value).toBe(null)

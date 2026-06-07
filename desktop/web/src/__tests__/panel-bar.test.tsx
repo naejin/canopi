@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { PanelBar } from '../components/panels/PanelBar'
 import { activePanel, sidePanel } from '../app/shell/state'
 import { locale } from '../app/settings/state'
+import { runAppCommand } from '../commands/registry'
 import { currentDesign } from './support/design-session-state'
 
 describe('PanelBar', () => {
@@ -77,6 +78,30 @@ describe('PanelBar', () => {
     expect(panelButton('Design Location').disabled).toBe(true)
     expect(panelButton('Plant Database').disabled).toBe(true)
     expect(panelButton('Favorites').disabled).toBe(true)
+  })
+
+  it('keeps an active no-design Plant Database panel button enabled so it can close the panel', async () => {
+    currentDesign.value = null
+    runAppCommand('nav.plantDb')
+
+    await act(async () => {
+      render(<PanelBar />, container)
+    })
+
+    expect(activePanel.value).toBe('canvas')
+    expect(sidePanel.value).toBe('plant-db')
+    expect(panelButton('Plant Database').disabled).toBe(false)
+    expect(panelButton('Plant Database').getAttribute('aria-pressed')).toBe('true')
+    expect(panelButton('Favorites').disabled).toBe(true)
+
+    await act(async () => {
+      panelButton('Plant Database').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(activePanel.value).toBe('canvas')
+    expect(sidePanel.value).toBe(null)
+    expect(panelButton('Plant Database').disabled).toBe(true)
+    expect(panelButton('Plant Database').getAttribute('aria-pressed')).toBe('false')
   })
 
   it('toggles side panels through the command graph projection click path', async () => {

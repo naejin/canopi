@@ -310,6 +310,7 @@ function hasDesignForPanelNavigation(state: AppCommandState): boolean {
 
 function isPanelChromeDisabled(panel: Panel, state: AppCommandState): boolean {
   if (panel === 'canvas') return false
+  if (isPanelCommandActive(panel, state)) return false
   return !hasDesignForPanelNavigation(state)
 }
 
