@@ -6,6 +6,7 @@ import { CanvasToolbar } from '../components/canvas/CanvasToolbar'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { plantColorMenuOpen } from '../canvas/plant-color-menu-state'
 import { activeTool, selectedObjectIds } from '../canvas/session-state'
+import { activePanel, sidePanel } from '../app/shell/state'
 import {
   gridVisible,
   rulersVisible,
@@ -44,6 +45,8 @@ describe('CanvasToolbar', () => {
     toggleRulers.mockReset()
     selectedObjectIds.value = new Set()
     plantColorMenuOpen.value = false
+    activePanel.value = 'canvas'
+    sidePanel.value = null
     gridVisible.value = true
     snapToGridEnabled.value = false
     rulersVisible.value = true
@@ -95,6 +98,8 @@ describe('CanvasToolbar', () => {
     activeTool.value = 'select'
     selectedObjectIds.value = new Set()
     plantColorMenuOpen.value = false
+    activePanel.value = 'canvas'
+    sidePanel.value = null
     gridVisible.value = true
     snapToGridEnabled.value = false
     rulersVisible.value = true
@@ -143,6 +148,46 @@ describe('CanvasToolbar', () => {
     })
 
     expect(setTool).toHaveBeenCalledWith('ellipse')
+  })
+
+  it('keeps an open side panel when clicking a toolbar tool', async () => {
+    sidePanel.value = 'plant-db'
+
+    await act(async () => {
+      render(<CanvasToolbar />, container)
+      await Promise.resolve()
+    })
+
+    const button = container.querySelector<HTMLButtonElement>('button[data-tool="ellipse"]')
+
+    await act(async () => {
+      button?.click()
+      await Promise.resolve()
+    })
+
+    expect(setTool).toHaveBeenCalledWith('ellipse')
+    expect(activePanel.value).toBe('canvas')
+    expect(sidePanel.value).toBe('plant-db')
+  })
+
+  it('keeps an open side panel when arrow-key toolbar navigation changes tools', async () => {
+    sidePanel.value = 'favorites'
+
+    await act(async () => {
+      render(<CanvasToolbar />, container)
+      await Promise.resolve()
+    })
+
+    const button = container.querySelector<HTMLButtonElement>('button[data-tool="select"]')
+
+    await act(async () => {
+      button?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+      await Promise.resolve()
+    })
+
+    expect(setTool).toHaveBeenCalledWith('hand')
+    expect(activePanel.value).toBe('canvas')
+    expect(sidePanel.value).toBe('favorites')
   })
 
   it('exposes the polygon shape tool in the toolbar', async () => {

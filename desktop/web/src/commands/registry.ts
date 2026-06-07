@@ -320,7 +320,9 @@ function isPanelCommandActive(panel: Panel, state: AppCommandState): boolean {
 }
 
 function switchTool(tool: string): void {
-  navigateTo('canvas')
+  if (activePanel.value !== 'canvas') {
+    navigateTo('canvas')
+  }
   setCurrentCanvasTool(tool)
 }
 

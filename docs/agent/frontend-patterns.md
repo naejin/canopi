@@ -11,6 +11,7 @@ Use this guide when changing Preact components, signals, i18n, CSS, panels, bott
 - `unlockSelected()` intentionally unlocks all objects when no selection is present; update the shortcut behavior before changing that semantic.
 - `desktop/web/src/commands/registry.ts` is the App Command Graph seam. It owns command identity, labels, shortcuts, dispatch, disabled state, menu/palette/panel/toolbar projections, and keyboard shortcut dispatch. `MenuBar`, `CommandPalette`, `PanelBar`, `CanvasToolbar`, and `shortcuts/manager.ts` should consume that seam instead of duplicating command actions, availability checks, active state, or shortcut maps.
 - Command execution availability and projection availability are not always identical. In particular, the Plant Database navigation command must remain runnable from the welcome/no-Design state for shortcut dispatch, while the PanelBar projection may still expose that entry point as disabled when no Design is open.
+- Canvas tool commands should navigate to the canvas only when invoked from a non-canvas primary panel. When `activePanel` is already `canvas`, tool changes must preserve any open side panel.
 
 ## Signals And Hooks
 

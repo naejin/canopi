@@ -85,6 +85,28 @@ describe('command registry canvas tool switching', () => {
     expect(activeTool.value).toBe('hand')
   })
 
+  it('preserves side panels only when tool commands already start from the canvas', () => {
+    const setTool = vi.fn()
+    mountCanvasCommandSurface({ setTool })
+
+    sidePanel.value = 'plant-db'
+    getCommand('canvas.tool.ellipse').action()
+
+    expect(activePanel.value).toBe('canvas')
+    expect(sidePanel.value).toBe('plant-db')
+    expect(setTool).toHaveBeenCalledWith('ellipse')
+    expect(activeTool.value).toBe('ellipse')
+
+    activePanel.value = 'location'
+    sidePanel.value = null
+    getCommand('canvas.tool.hand').action()
+
+    expect(activePanel.value).toBe('canvas')
+    expect(sidePanel.value).toBe(null)
+    expect(setTool).toHaveBeenCalledWith('hand')
+    expect(activeTool.value).toBe('hand')
+  })
+
   it('exposes the ellipse tool through the shared command graph', () => {
     const setTool = vi.fn()
     mountCanvasCommandSurface({ setTool })
