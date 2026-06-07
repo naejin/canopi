@@ -269,7 +269,13 @@ describe('command registry canvas tool switching', () => {
       disabled: true,
       active: false,
     })
-    expect(runAppCommand('nav.plantDb')).toBe(false)
+    expect(runAppCommand('nav.plantDb')).toBe(true)
+    expect(activePanel.value).toBe('canvas')
+    expect(sidePanel.value).toBe('plant-db')
+    expect(panelCommand('plant-db')).toMatchObject({ disabled: true, active: true })
+    expect(runAppCommand('nav.plantDb')).toBe(true)
+    expect(activePanel.value).toBe('canvas')
+    expect(sidePanel.value).toBe(null)
 
     currentDesign.value = {
       version: 2,

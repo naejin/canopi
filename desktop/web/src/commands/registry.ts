@@ -308,6 +308,11 @@ function hasDesignForPanelNavigation(state: AppCommandState): boolean {
   return state.hasDesign
 }
 
+function isPanelChromeDisabled(panel: Panel, state: AppCommandState): boolean {
+  if (panel === 'canvas') return false
+  return !hasDesignForPanelNavigation(state)
+}
+
 function isPanelCommandActive(panel: Panel, state: AppCommandState): boolean {
   if (panel === 'canvas') return state.activePanel === 'canvas' && state.sidePanel === null
   if (panel === 'location') return state.activePanel === 'location'
@@ -451,7 +456,6 @@ const APP_COMMANDS: readonly AppCommandDefinition[] = [
     shortcut: PANEL_SHORTCUTS.plantDb,
     palette: true,
     run: () => switchPanel('plant-db'),
-    disabled: (state) => !hasDesignForPanelNavigation(state),
   },
   {
     id: 'nav.favorites',
@@ -662,7 +666,7 @@ function panelCommandProjection(
     commandId: entry.commandId,
     label: PANEL_LABELS[entry.panel](),
     shortcut: command.shortcut,
-    disabled: command.disabled?.(state) ?? false,
+    disabled: isPanelChromeDisabled(entry.panel, state) || (command.disabled?.(state) ?? false),
     active: isPanelCommandActive(entry.panel, state),
     action: () => {
       runAppCommand(entry.commandId)
