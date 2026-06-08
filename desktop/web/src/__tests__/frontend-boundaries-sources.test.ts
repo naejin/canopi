@@ -232,6 +232,7 @@ describe('frontend boundary sources', () => {
   it('keeps app commands behind the command graph seam', () => {
     const registrySource = readSource('../commands/registry.ts')
     const catalogSource = readSource('../commands/graph/catalog.ts')
+    const projectionsSource = readSource('../commands/graph/projections.ts')
     const shortcutManagerSource = readSource('../shortcuts/manager.ts')
     const menuBarSource = readSource('../components/shared/MenuBar.tsx')
     const panelBarSource = readSource('../components/panels/PanelBar.tsx')
@@ -241,7 +242,14 @@ describe('frontend boundary sources', () => {
 
     expect(catalogSource).toContain('APP_COMMANDS')
     expect(catalogSource).toContain('readAppCommandState')
+    expect(importSpecifiers(projectionsSource)).toContain('./catalog')
     expect(registrySource).toContain('./graph/catalog')
+    expect(registrySource).toContain('./graph/projections')
+    expectNoImportsMatching('../commands/registry.ts', [
+      /app\/canvas-settings\/signals$/,
+      /app\/settings\/state$/,
+      /(^|\/)i18n$/,
+    ])
     expect(registrySource).toContain('appCommandGraphChromeProjection')
     expect(registrySource).toContain('appCommandGraphPanelProjection')
     expect(registrySource).toContain('appCommandGraphToolbarProjection')
