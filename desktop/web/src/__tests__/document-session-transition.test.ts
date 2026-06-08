@@ -40,12 +40,10 @@ vi.mock("../i18n", () => ({
 }));
 
 vi.mock("../app/document-session/workflows", () => ({
-  installConsortiumSync: mocks.installConsortiumSync,
-  disposeConsortiumSync: vi.fn(),
-  consortiumSyncWorkflow: {
+  DESIGN_SESSION_WORKFLOWS: [{
     id: "consortium-sync",
     install: mocks.installConsortiumSync,
-  },
+  }],
 }));
 
 import type { CanvasDocumentSurface } from "../canvas/runtime/runtime";

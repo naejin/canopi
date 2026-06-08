@@ -372,13 +372,17 @@ describe('frontend boundary sources', () => {
     const mountedRuntimeSource = readSource('../canvas/runtime/scene-runtime.ts')
     const documentBridgeSource = readSource('../canvas/runtime/scene-runtime/document.ts')
     const workflowsSource = readSource('../app/document-session/workflows.ts')
+    const consortiumWorkflowSource = readSource('../app/consortium/workflow.ts')
     const mapSurfaceSnapshotSource = readSource('../app/canvas-map-surface/snapshot.ts')
 
     expect(runtimeSurfaceSource).toContain('CanvasQueryRevision')
     expect(mountedRuntimeSource).toContain('_incrementSceneRevision')
     expect(documentBridgeSource).toContain('incrementSceneRevision')
     expect(documentBridgeSource).not.toContain('sceneEntityRevision')
-    expect(workflowsSource).toContain('revision.scene.value')
+    expect(workflowsSource).toContain('../consortium/workflow')
+    expect(workflowsSource).not.toContain('revision.scene.value')
+    expect(consortiumWorkflowSource).toContain('revision.scene.value')
+    expect(consortiumWorkflowSource).toContain('createDefaultConsortiumEntry')
     expect(mapSurfaceSnapshotSource).toContain('revision.viewport.value')
   })
 

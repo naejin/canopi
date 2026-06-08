@@ -14,7 +14,7 @@ import {
   disposeDesignSessionPersistence,
   snapshotCanvasIntoDesignSession,
 } from "./persistence";
-import { consortiumSyncWorkflow } from "./workflows";
+import { DESIGN_SESSION_WORKFLOWS } from "./workflows";
 import {
   createDesignSessionWorkflowRunner,
   type DesignSessionWorkflowRunner,
@@ -129,7 +129,7 @@ const DEFAULT_DEPS: DesignSessionStateMachineDeps = {
   buildPersistedContent: buildPersistedDesignSessionContent,
   snapshotCanvasIntoSession: snapshotCanvasIntoDesignSession,
   disposePersistence: disposeDesignSessionPersistence,
-  workflowRunner: createDesignSessionWorkflowRunner([consortiumSyncWorkflow]),
+  workflowRunner: createDesignSessionWorkflowRunner(DESIGN_SESSION_WORKFLOWS),
 };
 
 export class DesignSessionStateMachine {
