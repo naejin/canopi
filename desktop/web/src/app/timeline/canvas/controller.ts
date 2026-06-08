@@ -9,6 +9,7 @@ import type { TimelineRenderState } from '../../../canvas/timeline-renderer'
 import {
   DEFAULT_TIMELINE_PX_PER_DAY,
   createTimelineActionCanvasGeometry,
+  type TimelineActionCanvasGeometryState,
   type TimelineActionCanvasGeometry,
 } from './geometry'
 import {
@@ -85,6 +86,12 @@ const EMPTY_PROJECTION: TimelinePlanningProjection = {
   originMs: 0,
 }
 
+interface TimelineActionCanvasGeometryInputs {
+  readonly rows: readonly TimelineActionTypeRow[]
+  readonly layout: ReadonlyMap<string, TimelineActionLayout>
+  readonly state: TimelineActionCanvasGeometryState
+}
+
 export function createTimelineActionCanvasController({
   canvasRef,
   cachedRectRef,
@@ -125,6 +132,15 @@ export function createTimelineActionCanvasController({
       state: renderStateRef.current,
     }),
   }
+  let geometryInputs: TimelineActionCanvasGeometryInputs = {
+    rows: EMPTY_ROWS,
+    layout: EMPTY_LAYOUT,
+    state: {
+      originDate,
+      pxPerDay: pxPerDay.peek(),
+      scrollX: scrollX.peek(),
+    },
+  }
 
   function readRenderState(): TimelineRenderState {
     const state: TimelineRenderState = {
@@ -137,16 +153,36 @@ export function createTimelineActionCanvasController({
       speciesColors,
     }
     renderStateRef.current = state
-    geometryRef.current = createTimelineActionCanvasGeometry({
-      rows: rowsRef.current,
-      layout: layoutRef.current,
-      state,
-    })
+    syncGeometry(state)
     return state
   }
 
   function readGeometry(): TimelineActionCanvasGeometry {
     return geometryRef.current
+  }
+
+  function syncGeometry(state: TimelineRenderState): void {
+    const geometryState: TimelineActionCanvasGeometryState = {
+      originDate: state.originDate,
+      pxPerDay: state.pxPerDay,
+      scrollX: state.scrollX,
+    }
+    if (
+      geometryInputs.rows === rowsRef.current
+      && geometryInputs.layout === layoutRef.current
+      && geometryInputs.state.originDate === geometryState.originDate
+      && geometryInputs.state.pxPerDay === geometryState.pxPerDay
+      && geometryInputs.state.scrollX === geometryState.scrollX
+    ) {
+      return
+    }
+
+    geometryInputs = {
+      rows: rowsRef.current,
+      layout: layoutRef.current,
+      state: geometryState,
+    }
+    geometryRef.current = createTimelineActionCanvasGeometry(geometryInputs)
   }
 
   function activeFrame(): TimelineActionInteractionFrame {

@@ -2,8 +2,10 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+const useCanvasRendererMock = vi.hoisted(() => vi.fn())
+
 vi.mock('../components/canvas/useCanvasRenderer', () => ({
-  useCanvasRenderer: () => {},
+  useCanvasRenderer: useCanvasRendererMock,
 }))
 
 import { InteractiveTimeline } from '../components/canvas/InteractiveTimeline'
@@ -53,10 +55,16 @@ function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
   }
 }
 
+function latestRendererDeps(): readonly unknown[] | undefined {
+  const calls = useCanvasRendererMock.mock.calls
+  return calls[calls.length - 1]?.[2] as readonly unknown[] | undefined
+}
+
 describe('InteractiveTimeline hover cleanup', () => {
   let container: HTMLDivElement
 
   beforeEach(() => {
+    useCanvasRendererMock.mockClear()
     container = document.createElement('div')
     document.body.innerHTML = ''
     document.body.appendChild(container)
@@ -215,6 +223,58 @@ describe('InteractiveTimeline hover cleanup', () => {
     })
 
     expect(hoveredPanelTargets.value).toEqual([])
+  })
+
+  it('keeps renderer dependencies stable for tooltip-only moves over the same action', async () => {
+    await act(async () => {
+      render(<InteractiveTimeline />, container)
+    })
+
+    const canvas = container.querySelector('canvas')!
+    canvas.getBoundingClientRect = () => ({
+      left: 0,
+      top: 0,
+      right: 400,
+      bottom: 200,
+      width: 400,
+      height: 200,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    })
+    const depsAfterInitialRender = latestRendererDeps()
+    expect(depsAfterInitialRender).toBeTruthy()
+
+    await act(async () => {
+      canvas.dispatchEvent(new MouseEvent('mousemove', {
+        clientX: 262,
+        clientY: 40,
+        bubbles: true,
+      }))
+    })
+
+    const depsAfterHoverIdentity = latestRendererDeps()
+    expect(depsAfterHoverIdentity).toBeTruthy()
+    expect(depsAfterHoverIdentity).not.toBe(depsAfterInitialRender)
+    expect(depsAfterHoverIdentity!.some((dependency, index) => (
+      dependency !== depsAfterInitialRender![index]
+    ))).toBe(true)
+
+    await act(async () => {
+      canvas.dispatchEvent(new MouseEvent('mousemove', {
+        clientX: 264,
+        clientY: 40,
+        bubbles: true,
+      }))
+    })
+
+    const depsAfterTooltipMove = latestRendererDeps()
+    expect(depsAfterTooltipMove).toBeTruthy()
+    expect(depsAfterTooltipMove).not.toBe(depsAfterHoverIdentity)
+    expect(depsAfterTooltipMove).toHaveLength(depsAfterHoverIdentity!.length)
+    depsAfterTooltipMove!.forEach((dependency, index) => {
+      expect(dependency).toBe(depsAfterHoverIdentity![index])
+    })
   })
 
   it('saves an edit popover through the Timeline canvas host model', async () => {
