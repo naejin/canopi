@@ -553,6 +553,24 @@ describe('frontend boundary sources', () => {
     }
   })
 
+  it('keeps production Canvas Runtime core free of direct app imports', () => {
+    const runtimeSourcePaths = [
+      '../canvas/runtime-mirror-state.ts',
+      ...sourceFilesUnder('../canvas/runtime').filter(isTypescriptSource),
+    ]
+
+    expect(runtimeSourcePaths).toContain('../canvas/runtime/app-adapter.ts')
+    expectImportsToContain('../app/canvas-runtime/app-adapter.ts', [
+      '../../canvas/runtime/app-adapter',
+    ])
+
+    for (const sourcePath of runtimeSourcePaths) {
+      expectNoImportsMatching(sourcePath, [
+        /(^|\/)app(\/|$)/,
+      ])
+    }
+  })
+
   it('keeps the Problem Report dialog behind the submission module', () => {
     const dialogSource = readSource('../components/shared/ProblemReportDialog.tsx')
 
