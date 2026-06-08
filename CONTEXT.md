@@ -16,6 +16,14 @@ _Avoid_: Document session, file session, canvas session
 The app runtime seam for user command identity, labels, availability, shortcuts, dispatch, and chrome projections such as menus, palettes, toolbars, and panel navigation. The app command graph coordinates command access to Design Session, canvas, settings, and shell state without owning those domain states.
 _Avoid_: Menu registry, shortcut map, toolbar state
 
+**Canvas Runtime Surface**:
+The app-facing seam for canvas runtime behavior, split by role into command, query, and Design Session document surfaces. Canvas runtime surfaces expose canvas capabilities to app modules while hiding SceneStore, renderers, tool state machines, history internals, and app adapters. Canvas runtime core should not import app modules; app-owned settings, Design Session clean-state updates, save composition, and Target Presentation cross through explicit adapters.
+_Avoid_: Raw runtime, canvas service, renderer API
+
+**Canvas Runtime App Adapter**:
+A concrete adapter that connects Canvas Runtime Surface implementation to app-owned state such as settings projection, Design Session dirty-state, Design file composition, and Target Presentation. Canvas runtime app adapters belong at the app/canvas seam and must not become canvas scene authority.
+_Avoid_: Runtime helper, app bridge, global canvas state
+
 **Canvas Map Surface**:
 The in-canvas map visualization seam that turns Location, canvas query state, layer settings, terrain settings, Target Presentation, theme, and map bearing into one MapLibre-ready snapshot. The canvas map surface is derived presentation and must not own Design data, Scene Edit state, Location drafts, or settings persistence.
 _Avoid_: MapLibre controller, basemap helper, map overlay state
