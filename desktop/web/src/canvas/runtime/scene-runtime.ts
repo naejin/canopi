@@ -3,12 +3,6 @@ import {
   createDetachedCanvasRuntimeAppAdapter,
   type CanvasRuntimeAppAdapter,
 } from './app-adapter'
-import { locale } from '../../app/settings/state'
-import { mutateSettingsProjection } from '../../app/settings/projection'
-import {
-  gridVisible,
-  rulersVisible,
-} from '../../app/canvas-settings/signals'
 import { guides } from '../scene-metadata-state'
 import { plantNamesRevision, sceneEntityRevision } from '../runtime-mirror-state'
 import type { ColorByAttribute, PlantSizeMode } from '../plant-display-state'
@@ -26,7 +20,6 @@ import { createPixiSceneRenderer } from './renderers/pixi-scene'
 import type { SceneRendererContext, SceneRendererInstance } from './renderers/scene-types'
 import { SceneStore } from './scene'
 import {
-  isAppOwnedLayerProjection,
   resetTransientRuntimeState,
   syncCanvasSignalsFromDocument,
   syncCanvasSignalsFromScene,
@@ -113,7 +106,7 @@ export class SceneCanvasRuntime {
     this._presentation = new SceneRuntimePresentationController({
       sceneStore: this._sceneStore,
       getViewport: () => this._camera.viewport,
-      getLocale: () => locale.value,
+      getLocale: () => this._appAdapter.settings.readLocale(),
       resolveHighlightedTargets: (scene) => this._resolveHighlightedTargets(scene),
       onPlantNamesChanged: () => {
         this._incrementPlantNamesRevision()
@@ -127,7 +120,8 @@ export class SceneCanvasRuntime {
       clearHoveredTargets: () => this._syncHoveredCanvasTargets(null),
       clearPanelOriginTargets: () => this._panelTargetAdapter.clearPanelOriginTargets(),
       composeDocumentForSave: (input) => this._appAdapter.document.composeDocumentForSave(input),
-      syncCanvasSignalsFromDocument: (file) => syncCanvasSignalsFromDocument(file),
+      syncCanvasSignalsFromDocument: (file) =>
+        syncCanvasSignalsFromDocument(file, this._appAdapter.settings.layerProjections),
       syncCanvasSignalsFromScene: () => this._syncCanvasSignalsFromScene(),
       invalidateScene: () => this._invalidate('scene'),
       incrementSceneRevision: () => this._incrementSceneRevision(),
@@ -179,6 +173,8 @@ export class SceneCanvasRuntime {
       sceneEdits: this._sceneEdits,
       setTool: (name) => this.setTool(name),
       render: (kind) => this._invalidate(kind),
+      readSnapToGridEnabled: () => this._appAdapter.settings.readSnapToGridEnabled(),
+      readSnapToGuidesEnabled: () => this._appAdapter.settings.readSnapToGuidesEnabled(),
       getLocalizedCommonNames: () => this._presentation.getLocalizedCommonNames(),
       setHoveredEntityId: (id) => {
         this._setHoveredEntityId(id)
@@ -338,17 +334,15 @@ export class SceneCanvasRuntime {
   }
 
   toggleGrid(): void {
-    gridVisible.value = !gridVisible.value
+    this._appAdapter.settings.toggleGridVisible()
   }
 
   toggleSnapToGrid(): void {
-    mutateSettingsProjection((settings) => {
-      settings.snapToGrid = !settings.snapToGrid
-    }, { persist: 'queued' })
+    this._appAdapter.settings.toggleSnapToGrid()
   }
 
   toggleRulers(): void {
-    rulersVisible.value = !rulersVisible.value
+    this._appAdapter.settings.toggleRulersVisible()
     this._invalidate('chrome')
   }
 
@@ -526,7 +520,7 @@ export class SceneCanvasRuntime {
   }
 
   private _syncCanvasSignalsFromScene(): void {
-    syncCanvasSignalsFromScene(this._sceneStore)
+    syncCanvasSignalsFromScene(this._sceneStore, this._appAdapter.settings.layerProjections)
   }
 
   private _installEffects(): void {
@@ -548,6 +542,7 @@ export class SceneCanvasRuntime {
       onPanelTargetHover: () => {
         this._invalidate('scene')
       },
+      settings: this._appAdapter.settings,
       subscribePanelOriginTargetChanges: (onChange) =>
         this._panelTargetAdapter.subscribePanelOriginTargetChanges(onChange),
     }))
@@ -570,18 +565,19 @@ export class SceneCanvasRuntime {
   private _renderChrome(): void {
     const container = this._rendering.container
     if (!container) return
+    const chromeSettings = this._appAdapter.settings.readChromeOverlay()
     this._chrome.update({
       viewport: this._camera.viewport,
       width: Math.max(1, container.clientWidth),
       height: Math.max(1, container.clientHeight),
-      rulersVisible: rulersVisible.value,
-      gridVisible: gridVisible.value,
+      rulersVisible: chromeSettings.rulersVisible,
+      gridVisible: chromeSettings.gridVisible,
       guides: guides.value,
     })
   }
 
   private _setSceneLayerState(name: string, edit: SceneLayerEdit): boolean {
-    if (isAppOwnedLayerProjection(name)) return false
+    if (this._appAdapter.settings.layerProjections.isAppOwnedLayerProjection(name)) return false
 
     const committed = this._sceneEdits.run('scene-layer-settings', (tx) => {
       tx.mutate((draft) => {
@@ -592,7 +588,13 @@ export class SceneCanvasRuntime {
         if (edit.opacity !== undefined) layer.opacity = edit.opacity
       })
     })
-    if (committed) syncSceneLayerSignalsFromScene(this._sceneStore, name)
+    if (committed) {
+      syncSceneLayerSignalsFromScene(
+        this._sceneStore,
+        name,
+        this._appAdapter.settings.layerProjections,
+      )
+    }
     return committed
   }
 

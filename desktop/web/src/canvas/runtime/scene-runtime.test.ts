@@ -24,6 +24,7 @@ import {
   selectedPanelTargetOrigin,
   selectedPanelTargets,
 } from '../../app/panel-targets/state'
+import { createAppCanvasRuntimeAppAdapter } from '../../app/canvas-runtime/app-adapter'
 import { createAppSceneRuntimePanelTargetAdapter } from '../../app/canvas-runtime/panel-target-adapter'
 import { locale, plantSpacingIntervalM } from '../../app/settings/state'
 import type { CanopiFile, PanelTarget } from '../../types/design'
@@ -33,6 +34,7 @@ import type { SceneRuntimePanelTargetAdapter } from './scene-runtime/panel-targe
 import type {
   CanvasRuntimeAppAdapter,
   CanvasRuntimeDocumentCompositionInput,
+  CanvasRuntimeSettingsAdapter,
 } from './app-adapter'
 import { getCommonNames } from '../../ipc/species'
 
@@ -151,8 +153,51 @@ function createCleanStateAdapterProbe() {
     adapter: {
       cleanState: { setCanvasClean },
       document: { composeDocumentForSave: composeTestDocumentForSave },
+      settings: createTestSettingsAdapter(),
     } satisfies CanvasRuntimeAppAdapter,
     setCanvasClean,
+  }
+}
+
+function createTestSettingsAdapter(
+  overrides: Partial<CanvasRuntimeSettingsAdapter> = {},
+): CanvasRuntimeSettingsAdapter {
+  let gridVisible = false
+  let rulersVisible = false
+  let snapToGrid = false
+  let snapToGuides = false
+  return {
+    readLocale: () => 'en',
+    readChromeOverlay: () => ({ gridVisible, rulersVisible }),
+    readSnapToGridEnabled: () => snapToGrid,
+    readSnapToGuidesEnabled: () => snapToGuides,
+    toggleGridVisible: () => {
+      gridVisible = !gridVisible
+    },
+    toggleSnapToGrid: () => {
+      snapToGrid = !snapToGrid
+    },
+    toggleRulersVisible: () => {
+      rulersVisible = !rulersVisible
+    },
+    subscribeTheme: (onChange) => {
+      onChange()
+      return () => {}
+    },
+    subscribeLocale: (onChange) => {
+      onChange()
+      return () => {}
+    },
+    subscribeChromeOverlay: (onChange) => {
+      onChange()
+      return () => {}
+    },
+    layerProjections: {
+      isAppOwnedLayerProjection: (name) => name === 'base' || name === 'contours',
+      syncFromLayers: () => {},
+      syncLayer: () => {},
+    },
+    ...overrides,
   }
 }
 
@@ -326,13 +371,42 @@ describe('scene canvas runtime', () => {
   })
 
   it('toggles snap-to-grid through shared canvas state', () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = new SceneCanvasRuntime({
+      appAdapter: createAppCanvasRuntimeAppAdapter(),
+    })
 
     runtime.toggleSnapToGrid()
     expect(snapToGridEnabled.value).toBe(true)
 
     runtime.toggleSnapToGrid()
     expect(snapToGridEnabled.value).toBe(false)
+
+    runtime.destroy()
+  })
+
+  it('routes settings-backed canvas commands through the injected app adapter', () => {
+    const adapterProbe = createCleanStateAdapterProbe()
+    const toggleGridVisible = vi.fn()
+    const toggleSnapToGrid = vi.fn()
+    const toggleRulersVisible = vi.fn()
+    const runtime = new SceneCanvasRuntime({
+      appAdapter: {
+        ...adapterProbe.adapter,
+        settings: createTestSettingsAdapter({
+          toggleGridVisible,
+          toggleSnapToGrid,
+          toggleRulersVisible,
+        }),
+      },
+    })
+
+    runtime.toggleGrid()
+    runtime.toggleSnapToGrid()
+    runtime.toggleRulers()
+
+    expect(toggleGridVisible).toHaveBeenCalledTimes(1)
+    expect(toggleSnapToGrid).toHaveBeenCalledTimes(1)
+    expect(toggleRulersVisible).toHaveBeenCalledTimes(1)
   })
 
   it('owns plant presentation state in scene session and mirrors it to canvas signals', () => {
@@ -623,6 +697,7 @@ describe('scene canvas runtime', () => {
       appAdapter: {
         cleanState: { setCanvasClean: () => {} },
         document: { composeDocumentForSave },
+        settings: createTestSettingsAdapter(),
       },
     })
     const file = makeFile()
@@ -921,7 +996,12 @@ describe('scene canvas runtime', () => {
 
   it('edits layer state through the scene edit history and projection signals', () => {
     const cleanState = createCleanStateAdapterProbe()
-    const runtime = new SceneCanvasRuntime({ appAdapter: cleanState.adapter })
+    const runtime = new SceneCanvasRuntime({
+      appAdapter: {
+        ...cleanState.adapter,
+        settings: createAppCanvasRuntimeAppAdapter().settings,
+      },
+    })
     const file = makeFile()
     runtime.loadDocument(file)
     runtime.markSaved()
@@ -951,6 +1031,8 @@ describe('scene canvas runtime', () => {
     expect(runtime.serializeDocument({ name: file.name }, file).layers.find((layer) => layer.name === 'zones')?.locked)
       .toBe(true)
     expect(layerLockState.value.zones).toBe(true)
+
+    runtime.destroy()
   })
 
   it('edits guides through the scene edit history and projection signals', () => {
@@ -1002,7 +1084,9 @@ describe('scene canvas runtime', () => {
       .mockResolvedValueOnce({ 'Malus domestica': 'Apple' })
       .mockResolvedValueOnce({ 'Malus domestica': 'Pommier' })
 
-    const runtime = new SceneCanvasRuntime()
+    const runtime = new SceneCanvasRuntime({
+      appAdapter: createAppCanvasRuntimeAppAdapter(),
+    })
     runtime.loadDocument(makeFile())
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
     await Promise.resolve()

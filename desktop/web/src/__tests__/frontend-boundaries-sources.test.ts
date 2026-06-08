@@ -531,6 +531,28 @@ describe('frontend boundary sources', () => {
     ])
   })
 
+  it('routes shared runtime settings through the Canvas Runtime App Adapter', () => {
+    const appAdapterSource = readSource('../app/canvas-runtime/app-adapter.ts')
+    const runtimeAdapterSource = readSource('../canvas/runtime/app-adapter.ts')
+
+    expect(runtimeAdapterSource).toContain('CanvasRuntimeSettingsAdapter')
+    expect(appAdapterSource).toContain('mutateSettingsProjection')
+    expect(appAdapterSource).toContain('snapToGridEnabled')
+    expect(appAdapterSource).toContain('layerVisibility')
+
+    for (const sourcePath of [
+      '../canvas/runtime/scene-runtime.ts',
+      '../canvas/runtime/scene-runtime/effects.ts',
+      '../canvas/runtime/scene-runtime/scene-sync.ts',
+      '../canvas/runtime/scene-interaction.ts',
+    ]) {
+      expectNoImportsMatching(sourcePath, [
+        /app\/settings\//,
+        /app\/canvas-settings\//,
+      ])
+    }
+  })
+
   it('keeps the Problem Report dialog behind the submission module', () => {
     const dialogSource = readSource('../components/shared/ProblemReportDialog.tsx')
 

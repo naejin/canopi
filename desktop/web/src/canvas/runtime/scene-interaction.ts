@@ -1,9 +1,5 @@
 import { computeSelectionRect } from '../operations'
 import { getCanvasTool } from '../session-state'
-import {
-  snapToGridEnabled,
-  snapToGuidesEnabled,
-} from '../../app/canvas-settings/signals'
 import { gridInterval, snapToGrid } from '../grid'
 import { snapToGuides } from '../guides'
 import { guides } from '../scene-metadata-state'
@@ -60,6 +56,8 @@ export interface SceneInteractionDeps {
   sceneEdits: SceneEditCoordinator
   setTool: (name: string) => void
   render: (kind: 'scene' | 'viewport') => void
+  readSnapToGridEnabled: () => boolean
+  readSnapToGuidesEnabled: () => boolean
   setHoveredEntityId: (id: string | null) => void
   getLocalizedCommonNames: () => ReadonlyMap<string, string | null>
 }
@@ -491,11 +489,11 @@ export class SceneInteractionController {
   private _applySnapping(point: ScenePoint): ScenePoint {
     let next = point
 
-    if (snapToGridEnabled.value) {
+    if (this._deps.readSnapToGridEnabled()) {
       next = snapToGrid(next.x, next.y, gridInterval(this._deps.camera.viewport.scale).interval)
     }
 
-    if (snapToGuidesEnabled.value && guides.value.length > 0) {
+    if (this._deps.readSnapToGuidesEnabled() && guides.value.length > 0) {
       next = snapToGuides(next.x, next.y, this._deps.camera.viewport.scale)
     }
 
