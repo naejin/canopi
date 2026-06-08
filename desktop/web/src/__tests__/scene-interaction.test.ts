@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   clearPlantStampSource,
+  readPlantStampSource,
   selectPlantStampSource,
   writePlantStampDragData,
 } from '../canvas/plant-stamp-source'
@@ -2963,6 +2964,24 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('clears Plant Stamp source on controller dispose without writing scene data', () => {
+    selectPlantStampSource({
+      canonical_name: 'Malus domestica',
+      common_name: 'Apple',
+      stratum: 'high',
+      width_max_m: 4,
+    })
+
+    const controller = new SceneInteractionController(createInteractionDeps(container, store, camera) as any)
+    controller.setTool('plant-stamp')
+
+    expect(readPlantStampSource()).not.toBeNull()
+    controller.dispose()
+
+    expect(readPlantStampSource()).toBeNull()
+    expect(store.persisted.plants).toHaveLength(0)
+  })
+
   it('creates tool objects when native randomUUID is unavailable', () => {
     withoutNativeRandomUUID(() => {
       let rectangleController: SceneInteractionController | null = null
@@ -3832,6 +3851,15 @@ describe('SceneInteractionController', () => {
       width_max_m: 3,
     })
 
+    const dragOverEvent = new Event('dragover', { bubbles: true, cancelable: true }) as DragEvent
+    Object.defineProperties(dragOverEvent, {
+      clientX: { configurable: true, value: 80 },
+      clientY: { configurable: true, value: 90 },
+      dataTransfer: {
+        configurable: true,
+        value: dataTransfer,
+      },
+    })
     const dropEvent = new Event('drop', { bubbles: true, cancelable: true }) as DragEvent
     Object.defineProperties(dropEvent, {
       clientX: { configurable: true, value: 80 },
@@ -3841,7 +3869,11 @@ describe('SceneInteractionController', () => {
         value: dataTransfer,
       },
     })
+    const preview = Array.from(container.children)
+      .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
 
+    ;(controller as any)._onDragOver(dragOverEvent)
+    expect(preview?.style.display).toBe('block')
     ;(controller as any)._onDrop(dropEvent)
 
     expect(store.persisted.plants).toHaveLength(1)
@@ -3851,6 +3883,7 @@ describe('SceneInteractionController', () => {
       position: { x: 80, y: 90 },
       scale: 3,
     })
+    expect(preview?.style.display).toBe('none')
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-drop')
     controller.dispose()
   })

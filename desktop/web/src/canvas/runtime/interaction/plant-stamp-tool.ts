@@ -41,5 +41,6 @@ export function createPlantStampToolAdapter(tool: PlantStampTool): SceneToolAdap
       tool.pointerDown(rawWorld)
       return true
     },
+    dispose: tool.clear,
   }
 }

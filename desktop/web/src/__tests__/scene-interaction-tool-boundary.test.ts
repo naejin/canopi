@@ -6,6 +6,35 @@ function readSource(path: string): string {
 }
 
 describe('Scene Interaction tool module boundaries', () => {
+  it('routes Scene Interaction lifecycle through the Scene Interaction Frame seam', () => {
+    const interactionSource = readSource('../canvas/runtime/scene-interaction.ts')
+    const frameSource = readSource('../canvas/runtime/interaction/frame.ts')
+
+    expect(interactionSource).toContain('createSceneInteractionFrame')
+    expect(interactionSource).toContain('this._frame.cleanupTransient')
+    expect(interactionSource).not.toContain("addEventListener('pointerdown'")
+    expect(interactionSource).not.toContain("removeEventListener('pointerdown'")
+    expect(frameSource).toContain("addEventListener('pointerdown'")
+    expect(frameSource).toContain("removeEventListener('pointerdown'")
+    expect(frameSource).toContain('cleanupTransient')
+  })
+
+  it('keeps shared selection gestures behind the Scene Interaction Frame seam', () => {
+    const interactionSource = readSource('../canvas/runtime/scene-interaction.ts')
+    const sharedGesturesSource = readSource('../canvas/runtime/interaction/shared-gestures.ts')
+
+    expect(interactionSource).toContain('createSceneInteractionSharedGestures')
+    expect(interactionSource).not.toContain("this._mode === 'dragging'")
+    expect(interactionSource).not.toContain("this._mode === 'band'")
+    expect(interactionSource).not.toContain("this._mode === 'panning'")
+    expect(interactionSource).not.toContain('captureSceneDragState')
+    expect(interactionSource).not.toContain('queryRectTopLevel')
+    expect(interactionSource).not.toContain('interaction-drag')
+    expect(sharedGesturesSource).toContain('captureSceneDragState')
+    expect(sharedGesturesSource).toContain('queryRectTopLevel')
+    expect(sharedGesturesSource).toContain('interaction-drag')
+  })
+
   it('keeps Annotation Text editor state behind the text tool module', () => {
     const interactionSource = readSource('../canvas/runtime/scene-interaction.ts')
     const toolModulesSource = readSource('../canvas/runtime/interaction/tool-modules.ts')
