@@ -1,11 +1,10 @@
 import type { MapFrame } from '../../canvas/maplibre-camera'
-import type { CanvasQuerySurface } from '../../canvas/runtime/runtime'
 import type { BasemapStyle } from '../../generated/contracts'
 import {
   type TerrainLayerState,
   type TerrainProtocolSupport,
 } from '../../maplibre/terrain'
-import { MAPLIBRE_BASEMAP_SOURCE_ID, normalizeBasemapStyle } from '../../maplibre/config'
+import { MAPLIBRE_BASEMAP_SOURCE_ID } from '../../maplibre/config'
 import {
   IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
   mapLibreCanvasSurfaceStateEquals,
@@ -27,22 +26,14 @@ import {
   rebuildTerrain,
 } from '../../maplibre/terrain-sync'
 import { clearCanvasMapSurfaceOverlays, syncCanvasMapSurfaceOverlays } from './overlays'
-import { hasVisibleMapLayer } from '../canvas-settings/signals'
-import type { PanelTarget } from '../../types/design'
 import type { MapLibreApi, MapLibreMapInstance } from '../../components/canvas/maplibre-loader'
+import {
+  reconcileCanvasMapSurface,
+  type CanvasMapSurfaceReconciliation,
+} from './reconciliation'
+import type { CanvasMapSurfaceSnapshot } from './types'
 
-export interface CanvasMapSurfaceSnapshot {
-  readonly runtime: CanvasQuerySurface | null
-  readonly location: { lat: number; lon: number } | null
-  readonly northBearingDeg: number | null
-  readonly basemapStyle: BasemapStyle
-  readonly layerVisibility: Record<string, boolean>
-  readonly layerOpacity: Record<string, number>
-  readonly terrain: TerrainLayerState
-  readonly hoveredTargets: readonly PanelTarget[]
-  readonly selectedTargets: readonly PanelTarget[]
-  readonly theme: 'light' | 'dark'
-}
+export type { CanvasMapSurfaceSnapshot } from './types'
 
 export interface CanvasMapSurfaceLifecycle {
   attach(container: HTMLElement): void
@@ -263,31 +254,30 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
   private async ensureMap(): Promise<void> {
     const snapshot = this.snapshot
     const surface = this.container
-    const visible = snapshot
-      ? hasVisibleMapLayer(snapshot.layerVisibility, snapshot.terrain.hillshadeVisible)
-      : false
-    if (!snapshot || !snapshot.runtime || !snapshot.location || !visible || !surface) {
+    const reconciliation = this.reconcile(snapshot, surface)
+    if (reconciliation.type === 'inactive') {
+      return
+    }
+    if (reconciliation.type === 'destroy') {
       this.destroyMap()
       return
     }
 
-    const nextBasemapStyle = normalizeBasemapStyle(snapshot.basemapStyle)
-    if (this.map) {
-      if (this.activeBasemapStyle !== nextBasemapStyle) {
-        this.destroyMap({
-          status: 'loading',
-          errorMessage: null,
-          terrainStatus: 'idle',
-          terrainErrorMessage: null,
-        })
-      } else {
-        this.map.resize()
-        this.applyCamera(this.map, snapshot)
-        this.syncBasemapPresentation(this.map, snapshot)
-        this.syncOverlays(snapshot)
-        void this.syncTerrain(snapshot)
-        return
-      }
+    if (!snapshot || !surface) return
+
+    if (reconciliation.type === 'sync') {
+      if (!this.map) return
+      this.syncExistingMap(this.map, snapshot)
+      return
+    }
+
+    if (reconciliation.type === 'rebuild') {
+      this.destroyMap({
+        status: 'loading',
+        errorMessage: null,
+        terrainStatus: 'idle',
+        terrainErrorMessage: null,
+      })
     }
 
     const generation = this.generation + 1
@@ -309,12 +299,17 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
       if (generation !== this.generation) return
       this.maplibre = maplibre
 
-      const map = createCanvasMapLibreMap(maplibre, surface, initialCamera, nextBasemapStyle)
+      const map = createCanvasMapLibreMap(
+        maplibre,
+        surface,
+        initialCamera,
+        reconciliation.basemapStyle,
+      )
       if (generation !== this.generation) {
         map.remove()
         return
       }
-      this.activeBasemapStyle = nextBasemapStyle
+      this.activeBasemapStyle = reconciliation.basemapStyle
 
       const markBasemapReady = (): void => {
         if (!this.ownsCurrentMapGeneration(map, generation)) return
@@ -389,6 +384,30 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
         terrainErrorMessage: null,
       })
     }
+  }
+
+  private reconcile(
+    snapshot: CanvasMapSurfaceSnapshot | null,
+    surface: HTMLElement | null,
+  ): CanvasMapSurfaceReconciliation {
+    return reconcileCanvasMapSurface(snapshot, {
+      hasContainer: surface !== null,
+      hasMap: this.map !== null,
+      activeBasemapStyle: this.activeBasemapStyle,
+      surfaceStatus: this.state.status,
+      terrainStatus: this.state.terrainStatus,
+    })
+  }
+
+  private syncExistingMap(
+    map: MapLibreMapInstance,
+    snapshot: CanvasMapSurfaceSnapshot,
+  ): void {
+    map.resize()
+    this.applyCamera(map, snapshot)
+    this.syncBasemapPresentation(map, snapshot)
+    this.syncOverlays(snapshot)
+    void this.syncTerrain(snapshot)
   }
 
   private installResizeObserver(

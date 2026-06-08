@@ -10,6 +10,7 @@ Use this guide when changing MapLibre surfaces, basemap rendering, terrain layer
 - Existing full-screen surfaces may keep component-local MapLibre ownership when setup/update/teardown are contained in one component.
 - In-canvas MapLibre remains isolated in the canvas map surface lifecycle and helper modules. Do not scatter MapLibre ownership across canvas runtime or renderers.
 - `app/canvas-map-surface/snapshot.ts` owns in-canvas map snapshot inputs: canvas query surface freshness, saved Location, north bearing, basemap style, layer visibility/opacity, theme, terrain settings, and Target Presentation overlays. The mounted `components/canvas/maplibre-surface-controller.ts` should call that seam instead of importing those authorities directly.
+- `app/canvas-map-surface/reconciliation.ts` owns pure in-canvas map activation decisions: inactive, destroy, create, sync, or rebuild from snapshot inputs plus lifecycle state. `app/canvas-map-surface/lifecycle.ts` remains the single resource owner that executes MapLibre setup, mutation, and teardown.
 - The lazy import boundary around `maplibre-gl` should be preserved for bundle size.
 
 ## Camera And Projection

@@ -10,7 +10,7 @@ import { readPanelTargetOverlaySnapshot } from '../panel-targets/presentation'
 import { basemapStyle, theme } from '../settings/state'
 import { currentCanvasQuerySurface } from '../../canvas/session'
 import { northBearingDeg } from '../../canvas/scene-metadata-state'
-import type { CanvasMapSurfaceSnapshot } from './lifecycle'
+import type { CanvasMapSurfaceSnapshot } from './types'
 
 export type CanvasMapSurfaceCoreSnapshot = Pick<
   CanvasMapSurfaceSnapshot,
