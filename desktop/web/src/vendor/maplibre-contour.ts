@@ -1,4 +1,4 @@
-import type { MapLibreApi } from '../components/canvas/maplibre-loader'
+import type { MapLibreApi } from '../maplibre/loader'
 
 export interface LoadedMapLibreContourApi {
   readonly DemSource: new (options: {

@@ -10,7 +10,7 @@ import {
   IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
   type MapLibreCanvasSurfaceState,
 } from '../../maplibre/canvas-surface-state'
-import { loadMapLibre } from './maplibre-loader'
+import { loadMapLibre } from '../../maplibre/loader'
 
 interface UseMapLibreCanvasSurfaceControllerOptions {
   readonly onStateChange?: (state: MapLibreCanvasSurfaceState) => void
