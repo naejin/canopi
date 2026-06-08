@@ -493,6 +493,27 @@ describe('frontend boundary sources', () => {
     ])
   })
 
+  it('routes canvas clean-state reporting through the Canvas Runtime App Adapter', () => {
+    const historySource = readSource('../canvas/runtime/scene-history.ts')
+    const runtimeSource = readSource('../canvas/runtime/scene-runtime.ts')
+    const runtimeAdapterSource = readSource('../canvas/runtime/app-adapter.ts')
+    const appAdapterSource = readSource('../app/canvas-runtime/app-adapter.ts')
+    const hostSource = readSource('../app/canvas-runtime/host.ts')
+
+    expect(historySource).toContain('reportCleanState')
+    expect(runtimeSource).toContain('CanvasRuntimeAppAdapter')
+    expect(runtimeAdapterSource).toContain('CanvasRuntimeCleanStateAdapter')
+    expect(appAdapterSource).toContain('setCanvasClean')
+    expect(hostSource).toContain('createAppCanvasRuntimeAppAdapter')
+    expectImportsToContain('../app/canvas-runtime/app-adapter.ts', ['../document-session/store'])
+    expectNoImportsMatching('../canvas/runtime/scene-history.ts', [
+      /app\/document-session\/store$/,
+    ])
+    expectNoImportsMatching('../canvas/runtime/scene-runtime.ts', [
+      /app\/document-session\/store$/,
+    ])
+  })
+
   it('keeps the Problem Report dialog behind the submission module', () => {
     const dialogSource = readSource('../components/shared/ProblemReportDialog.tsx')
 

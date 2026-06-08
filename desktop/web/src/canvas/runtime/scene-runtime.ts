@@ -1,4 +1,8 @@
 import { signal } from '@preact/signals'
+import {
+  createDetachedCanvasRuntimeAppAdapter,
+  type CanvasRuntimeAppAdapter,
+} from './app-adapter'
 import { locale } from '../../app/settings/state'
 import { mutateSettingsProjection } from '../../app/settings/projection'
 import {
@@ -56,6 +60,7 @@ type RuntimeInvalidationKind = 'scene' | 'viewport' | 'chrome'
 type SceneLayerEdit = Partial<Pick<SceneLayerEntity, 'visible' | 'locked' | 'opacity'>>
 
 export interface SceneCanvasRuntimeOptions {
+  appAdapter?: CanvasRuntimeAppAdapter
   targetPresentation?: SceneRuntimePanelTargetAdapter
 }
 
@@ -90,7 +95,8 @@ export class SceneCanvasRuntime {
   private readonly _presentation: SceneRuntimePresentationController
   private readonly _chrome = new SceneRuntimeChromeCoordinator()
   private _interaction: SceneInteractionController | null = null
-  private readonly _history = new SceneHistory()
+  private readonly _appAdapter: CanvasRuntimeAppAdapter
+  private readonly _history: SceneHistory
   private readonly _sceneEdits: SceneEditCoordinator
   private readonly _mutations: SceneRuntimeMutationController
   private readonly _documents: SceneRuntimeDocumentBridge
@@ -99,6 +105,10 @@ export class SceneCanvasRuntime {
   private _documentLoaded = false
 
   constructor(options: SceneCanvasRuntimeOptions = {}) {
+    this._appAdapter = options.appAdapter ?? createDetachedCanvasRuntimeAppAdapter()
+    this._history = new SceneHistory({
+      reportCleanState: (clean) => this._appAdapter.cleanState.setCanvasClean(clean),
+    })
     this._panelTargetAdapter = options.targetPresentation ?? createDetachedSceneRuntimePanelTargetAdapter()
     this._presentation = new SceneRuntimePresentationController({
       sceneStore: this._sceneStore,

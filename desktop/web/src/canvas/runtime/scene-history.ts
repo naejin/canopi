@@ -1,16 +1,24 @@
 import { signal } from '@preact/signals'
-import { setCanvasClean } from '../../app/document-session/store'
 import type { SceneCommand, SceneCommandRuntime } from './scene-commands'
 
 const MAX_HISTORY = 500
+
+interface SceneHistoryOptions {
+  readonly reportCleanState?: (clean: boolean) => void
+}
 
 export class SceneHistory {
   private _past: SceneCommand[] = []
   private _future: SceneCommand[] = []
   private _savedPosition = 0
+  private readonly _reportCleanState: (clean: boolean) => void
 
   readonly canUndo = signal(false)
   readonly canRedo = signal(false)
+
+  constructor(options: SceneHistoryOptions = {}) {
+    this._reportCleanState = options.reportCleanState ?? (() => {})
+  }
 
   get isClean(): boolean {
     return this._savedPosition >= 0 && this._past.length === this._savedPosition
@@ -61,6 +69,6 @@ export class SceneHistory {
   private _updateSignals(): void {
     this.canUndo.value = this._past.length > 0
     this.canRedo.value = this._future.length > 0
-    setCanvasClean(this.isClean)
+    this._reportCleanState(this.isClean)
   }
 }
