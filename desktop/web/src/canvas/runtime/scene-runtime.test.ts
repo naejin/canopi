@@ -721,6 +721,66 @@ describe('scene canvas runtime', () => {
     expect(serialized.description).toBe('composed by adapter')
   })
 
+  it('preserves document-owned fields when serializing with the detached runtime adapter', () => {
+    const runtime = new SceneCanvasRuntime()
+    const file = {
+      ...makeFile(),
+      description: 'Loaded description',
+      location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
+      north_bearing_deg: 18,
+      consortiums: [{
+        target: { kind: 'species', canonical_name: 'Malus domestica' },
+        stratum: 'canopy',
+        start_phase: 1,
+        end_phase: 3,
+      }],
+      timeline: [{
+        id: 'action-1',
+        action_type: 'prune',
+        description: 'Winter prune',
+        start_date: '2026-12-01',
+        end_date: null,
+        recurrence: null,
+        targets: [{ kind: 'species', canonical_name: 'Malus domestica' }],
+        depends_on: null,
+        completed: false,
+        order: 0,
+      }],
+      budget: [{
+        target: { kind: 'manual' },
+        category: 'tools',
+        description: 'Pruning saw',
+        quantity: 1,
+        unit_cost: 35,
+        currency: 'EUR',
+      }],
+      budget_currency: 'USD',
+      created_at: '2025-01-01T00:00:00.000Z',
+      updated_at: '2025-02-01T00:00:00.000Z',
+      extra: {
+        imported_from: 'legacy-plan',
+      },
+    } satisfies CanopiFile
+
+    runtime.loadDocument(file)
+    runtime.setSelection(['plant-1'])
+    runtime.setSelectedPlantColor('#228833')
+
+    const serialized = runtime.serializeDocument({ name: 'Detached save' }, file)
+
+    expect(serialized.name).toBe('Detached save')
+    expect(serialized.description).toBe('Loaded description')
+    expect(serialized.location).toEqual({ lat: 48.8566, lon: 2.3522, altitude_m: 35 })
+    expect(serialized.north_bearing_deg).toBe(18)
+    expect(serialized.consortiums).toEqual(file.consortiums)
+    expect(serialized.timeline).toEqual(file.timeline)
+    expect(serialized.budget).toEqual(file.budget)
+    expect(serialized.budget_currency).toBe('USD')
+    expect(serialized.created_at).toBe('2025-01-01T00:00:00.000Z')
+    expect(serialized.extra).toEqual({ imported_from: 'legacy-plan' })
+    expect(serialized.plants[0]?.color).toBe('#228833')
+  })
+
   it('publishes canvas-origin species hover targets without mutating selection', async () => {
     const cleanState = createCleanStateAdapterProbe()
     const runtime = createRuntimeWithAppPanelTargets(cleanState.adapter)
