@@ -173,7 +173,8 @@ describe('frontend boundary sources', () => {
     const effectsSource = readSource('../canvas/runtime/scene-runtime/effects.ts')
     const documentSource = readSource('../canvas/runtime/scene-runtime/document.ts')
 
-    expect(controllerSource).toContain('getCurrentCanvasCommandSurface')
+    expect(controllerSource).toContain('getCurrentCanvasLayerCommandSurface')
+    expect(controllerSource).not.toContain('getCurrentCanvasCommandSurface')
     expect(controllerSource).not.toContain('layerVisibility.value =')
     expect(controllerSource).not.toContain('layerLockState.value =')
     expect(controllerSource).not.toContain('layerOpacity.value =')
@@ -183,6 +184,52 @@ describe('frontend boundary sources', () => {
     expect(effectsSource).not.toContain('layerVisibility')
     expect(effectsSource).not.toContain('guides')
     expect(documentSource).not.toContain('applySignalBackedSceneState')
+  })
+
+  it('keeps focused canvas callers on role-specific command surfaces', () => {
+    const focusedCanvasCommandConsumers = [
+      '../app/canvas-settings/controller.ts',
+      '../components/canvas/DisplayModeControls.tsx',
+      '../components/canvas/PlantColorMenu.tsx',
+      '../components/canvas/ZoomControls.tsx',
+      '../components/plant-db/PlantCard.tsx',
+      '../components/plant-db/PlantRow.tsx',
+    ]
+
+    expectNamedImportsFrom('../app/canvas-settings/controller.ts', '../../canvas/session', [
+      'getCurrentCanvasLayerCommandSurface',
+    ])
+    expectNamedImportsFrom('../components/canvas/DisplayModeControls.tsx', '../../canvas/session', [
+      'getCurrentCanvasPlantPresentationCommandSurface',
+    ])
+    expectNamedImportsFrom('../components/canvas/ZoomControls.tsx', '../../canvas/session', [
+      'currentCanvasViewportCommandSurface',
+    ])
+    expectNamedImportsFrom('../components/plant-db/PlantCard.tsx', '../../canvas/session', [
+      'currentCanvasToolCommandSurface',
+    ])
+    expectNamedImportsFrom('../components/plant-db/PlantRow.tsx', '../../canvas/session', [
+      'currentCanvasToolCommandSurface',
+    ])
+
+    const plantColorMenuImports = namedImportsFrom(
+      '../components/canvas/PlantColorMenu.tsx',
+      '../../canvas/session',
+    )
+    expect(plantColorMenuImports).toContain('currentCanvasPlantPresentationCommandSurface')
+    expect(plantColorMenuImports).toContain('currentCanvasQuerySurface')
+    expect(plantColorMenuImports).toContain('currentCanvasSelection')
+
+    for (const sourcePath of focusedCanvasCommandConsumers) {
+      const source = readSource(sourcePath)
+
+      expect(source, `${sourcePath} should not consume the full command bundle`).not.toContain(
+        'currentCanvasCommandSurface',
+      )
+      expect(source, `${sourcePath} should not consume the full command bundle`).not.toContain(
+        'getCurrentCanvasCommandSurface',
+      )
+    }
   })
 
   it('keeps Design Object lock authority inside SceneStore', () => {

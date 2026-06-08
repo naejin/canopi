@@ -41,37 +41,51 @@ function createQuerySurface() {
 
 function createCommandSurface() {
   return {
-    setTool: (_name: string) => {},
-    zoomIn: () => {},
-    zoomOut: () => {},
-    zoomToFit: () => {},
-    canUndo: signal(false),
-    canRedo: signal(false),
-    undo: () => {},
-    redo: () => {},
-    copy: () => {},
-    paste: () => {},
-    duplicateSelected: () => {},
-    deleteSelected: () => {},
-    selectAll: () => {},
-    bringToFront: () => {},
-    sendToBack: () => {},
-    lockSelected: () => {},
-    unlockSelected: () => {},
-    groupSelected: () => {},
-    ungroupSelected: () => {},
-    toggleGrid: () => {},
-    toggleSnapToGrid: () => {},
-    toggleRulers: () => {},
-    setSceneLayerVisibility: () => false,
-    setSceneLayerOpacity: () => false,
-    setSceneLayerLocked: () => false,
-    setPlantSizeMode: () => {},
-    setPlantColorByAttr: () => {},
-    ensureSpeciesCacheEntries: async () => true,
-    setSelectedPlantColor: () => 0,
-    setPlantColorForSpecies: () => 0,
-    clearPlantSpeciesColor: () => false,
+    tools: {
+      setTool: (_name: string) => {},
+    },
+    viewport: {
+      zoomIn: () => {},
+      zoomOut: () => {},
+      zoomToFit: () => {},
+    },
+    history: {
+      canUndo: signal(false),
+      canRedo: signal(false),
+      undo: () => {},
+      redo: () => {},
+    },
+    sceneEdits: {
+      copy: () => {},
+      paste: () => {},
+      duplicateSelected: () => {},
+      deleteSelected: () => {},
+      selectAll: () => {},
+      bringToFront: () => {},
+      sendToBack: () => {},
+      lockSelected: () => {},
+      unlockSelected: () => {},
+      groupSelected: () => {},
+      ungroupSelected: () => {},
+    },
+    chrome: {
+      toggleGrid: () => {},
+      toggleSnapToGrid: () => {},
+      toggleRulers: () => {},
+    },
+    layers: {
+      setSceneLayerVisibility: () => false,
+      setSceneLayerOpacity: () => false,
+      setSceneLayerLocked: () => false,
+    },
+    plantPresentation: {
+      setPlantSizeMode: () => {},
+      setPlantColorByAttr: () => {},
+      ensureSpeciesCacheEntries: async () => true,
+      setSelectedPlantColor: () => 0,
+      setPlantColorForSpecies: () => 0,
+      clearPlantSpeciesColor: () => false,
+    },
   } satisfies CanvasCommandSurface
 }
 
@@ -130,8 +144,10 @@ describe('canvas runtime surfaces', () => {
   it('keeps command consumers away from scene queries and document serialization', () => {
     const commandSurface = createCommandSurface()
 
-    commandSurface.setTool('hand')
-    expect(commandSurface.canUndo.value).toBe(false)
+    commandSurface.tools.setTool('hand')
+    expect(commandSurface.history.canUndo.value).toBe(false)
+    // @ts-expect-error command surfaces do not expose flat tool commands.
+    commandSurface.setTool
     // @ts-expect-error command surfaces cannot read scene snapshots.
     commandSurface.getSceneSnapshot
     // @ts-expect-error command surfaces cannot serialize documents.

@@ -1,8 +1,15 @@
 import type {
+  CanvasChromeCommandSurface,
   CanvasCommandSurface,
   CanvasDocumentSurface,
+  CanvasHistoryCommandSurface,
+  CanvasLayerCommandSurface,
+  CanvasPlantPresentationCommandSurface,
   CanvasQuerySurface,
   CanvasRuntimeSurfaces,
+  CanvasSceneEditCommandSurface,
+  CanvasToolCommandSurface,
+  CanvasViewportCommandSurface,
 } from './runtime'
 import type { SceneCanvasRuntime } from './scene-runtime'
 
@@ -15,56 +22,62 @@ export function createCanvasRuntimeSurfaces(runtime: SceneCanvasRuntime): Canvas
 }
 
 class SceneCanvasCommandAdapter implements CanvasCommandSurface {
-  constructor(private readonly runtime: SceneCanvasRuntime) {}
+  readonly tools: CanvasToolCommandSurface
+  readonly viewport: CanvasViewportCommandSurface
+  readonly history: CanvasHistoryCommandSurface
+  readonly sceneEdits: CanvasSceneEditCommandSurface
+  readonly chrome: CanvasChromeCommandSurface
+  readonly layers: CanvasLayerCommandSurface
+  readonly plantPresentation: CanvasPlantPresentationCommandSurface
 
-  setTool(name: string): void { this.runtime.setTool(name) }
-  zoomIn(): void { this.runtime.zoomIn() }
-  zoomOut(): void { this.runtime.zoomOut() }
-  zoomToFit(): void { this.runtime.zoomToFit() }
-  get canUndo() { return this.runtime.canUndo }
-  get canRedo() { return this.runtime.canRedo }
-  undo(): void { this.runtime.undo() }
-  redo(): void { this.runtime.redo() }
-  copy(): void { this.runtime.copy() }
-  paste(): void { this.runtime.paste() }
-  duplicateSelected(): void { this.runtime.duplicateSelected() }
-  deleteSelected(): void { this.runtime.deleteSelected() }
-  selectAll(): void { this.runtime.selectAll() }
-  bringToFront(): void { this.runtime.bringToFront() }
-  sendToBack(): void { this.runtime.sendToBack() }
-  lockSelected(): void { this.runtime.lockSelected() }
-  unlockSelected(): void { this.runtime.unlockSelected() }
-  groupSelected(): void { this.runtime.groupSelected() }
-  ungroupSelected(): void { this.runtime.ungroupSelected() }
-  toggleGrid(): void { this.runtime.toggleGrid() }
-  toggleSnapToGrid(): void { this.runtime.toggleSnapToGrid() }
-  toggleRulers(): void { this.runtime.toggleRulers() }
-  setSceneLayerVisibility(name: string, visible: boolean): boolean {
-    return this.runtime.setSceneLayerVisibility(name, visible)
-  }
-  setSceneLayerOpacity(name: string, opacity: number): boolean {
-    return this.runtime.setSceneLayerOpacity(name, opacity)
-  }
-  setSceneLayerLocked(name: string, locked: boolean): boolean {
-    return this.runtime.setSceneLayerLocked(name, locked)
-  }
-  setPlantSizeMode(mode: Parameters<CanvasCommandSurface['setPlantSizeMode']>[0]): void {
-    this.runtime.setPlantSizeMode(mode)
-  }
-  setPlantColorByAttr(attr: Parameters<CanvasCommandSurface['setPlantColorByAttr']>[0]): void {
-    this.runtime.setPlantColorByAttr(attr)
-  }
-  ensureSpeciesCacheEntries(canonicalNames: string[], activeLocale: string): Promise<boolean> {
-    return this.runtime.ensureSpeciesCacheEntries(canonicalNames, activeLocale)
-  }
-  setSelectedPlantColor(color: string | null): number {
-    return this.runtime.setSelectedPlantColor(color)
-  }
-  setPlantColorForSpecies(canonicalName: string, color: string | null): number {
-    return this.runtime.setPlantColorForSpecies(canonicalName, color)
-  }
-  clearPlantSpeciesColor(canonicalName: string): boolean {
-    return this.runtime.clearPlantSpeciesColor(canonicalName)
+  constructor(runtime: SceneCanvasRuntime) {
+    this.tools = {
+      setTool: (name) => runtime.setTool(name),
+    }
+    this.viewport = {
+      zoomIn: () => runtime.zoomIn(),
+      zoomOut: () => runtime.zoomOut(),
+      zoomToFit: () => runtime.zoomToFit(),
+    }
+    this.history = {
+      get canUndo() { return runtime.canUndo },
+      get canRedo() { return runtime.canRedo },
+      undo: () => runtime.undo(),
+      redo: () => runtime.redo(),
+    }
+    this.sceneEdits = {
+      copy: () => runtime.copy(),
+      paste: () => runtime.paste(),
+      duplicateSelected: () => runtime.duplicateSelected(),
+      deleteSelected: () => runtime.deleteSelected(),
+      selectAll: () => runtime.selectAll(),
+      bringToFront: () => runtime.bringToFront(),
+      sendToBack: () => runtime.sendToBack(),
+      lockSelected: () => runtime.lockSelected(),
+      unlockSelected: () => runtime.unlockSelected(),
+      groupSelected: () => runtime.groupSelected(),
+      ungroupSelected: () => runtime.ungroupSelected(),
+    }
+    this.chrome = {
+      toggleGrid: () => runtime.toggleGrid(),
+      toggleSnapToGrid: () => runtime.toggleSnapToGrid(),
+      toggleRulers: () => runtime.toggleRulers(),
+    }
+    this.layers = {
+      setSceneLayerVisibility: (name, visible) => runtime.setSceneLayerVisibility(name, visible),
+      setSceneLayerOpacity: (name, opacity) => runtime.setSceneLayerOpacity(name, opacity),
+      setSceneLayerLocked: (name, locked) => runtime.setSceneLayerLocked(name, locked),
+    }
+    this.plantPresentation = {
+      setPlantSizeMode: (mode) => runtime.setPlantSizeMode(mode),
+      setPlantColorByAttr: (attr) => runtime.setPlantColorByAttr(attr),
+      ensureSpeciesCacheEntries: (canonicalNames, activeLocale) =>
+        runtime.ensureSpeciesCacheEntries(canonicalNames, activeLocale),
+      setSelectedPlantColor: (color) => runtime.setSelectedPlantColor(color),
+      setPlantColorForSpecies: (canonicalName, color) =>
+        runtime.setPlantColorForSpecies(canonicalName, color),
+      clearPlantSpeciesColor: (canonicalName) => runtime.clearPlantSpeciesColor(canonicalName),
+    }
   }
 }
 

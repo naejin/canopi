@@ -39,7 +39,7 @@ describe('shortcut manager canvas tool switching', () => {
 
   it('routes tool shortcuts through the live canvas session when mounted', () => {
     const setTool = vi.fn()
-    mountCanvasCommandSurface({ setTool })
+    mountCanvasCommandSurface({ tools: { setTool } })
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'r' }))
 
@@ -49,7 +49,7 @@ describe('shortcut manager canvas tool switching', () => {
 
   it('routes the ellipse tool shortcut through the live canvas session', () => {
     const setTool = vi.fn()
-    mountCanvasCommandSurface({ setTool })
+    mountCanvasCommandSurface({ tools: { setTool } })
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e' }))
 
@@ -59,7 +59,7 @@ describe('shortcut manager canvas tool switching', () => {
 
   it('routes the polygon tool shortcut through the live canvas session', () => {
     const setTool = vi.fn()
-    mountCanvasCommandSurface({ setTool })
+    mountCanvasCommandSurface({ tools: { setTool } })
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p' }))
 
@@ -69,7 +69,7 @@ describe('shortcut manager canvas tool switching', () => {
 
   it('routes the Plant Spacing shortcut through the live canvas session', () => {
     const setTool = vi.fn()
-    mountCanvasCommandSurface({ setTool })
+    mountCanvasCommandSurface({ tools: { setTool } })
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 's' }))
 
@@ -81,7 +81,7 @@ describe('shortcut manager canvas tool switching', () => {
     const input = document.createElement('input')
     document.body.appendChild(input)
     const setTool = vi.fn()
-    mountCanvasCommandSurface({ setTool })
+    mountCanvasCommandSurface({ tools: { setTool } })
 
     input.focus()
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 's', bubbles: true }))
@@ -167,13 +167,17 @@ describe('shortcut manager canvas tool switching', () => {
     const undo = vi.fn()
     const redo = vi.fn()
     mountCanvasCommandSurface({
-      canUndo: signal(true),
-      canRedo: signal(true),
-      zoomIn,
-      zoomOut,
-      zoomToFit,
-      undo,
-      redo,
+      viewport: {
+        zoomIn,
+        zoomOut,
+        zoomToFit,
+      },
+      history: {
+        canUndo: signal(true),
+        canRedo: signal(true),
+        undo,
+        redo,
+      },
     })
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: '=', ctrlKey: true }))
@@ -201,16 +205,18 @@ describe('shortcut manager canvas tool switching', () => {
     const groupSelected = vi.fn()
     const ungroupSelected = vi.fn()
     mountCanvasCommandSurface({
-      copy,
-      paste,
-      duplicateSelected,
-      deleteSelected,
-      selectAll,
-      bringToFront,
-      sendToBack,
-      unlockSelected,
-      groupSelected,
-      ungroupSelected,
+      sceneEdits: {
+        copy,
+        paste,
+        duplicateSelected,
+        deleteSelected,
+        selectAll,
+        bringToFront,
+        sendToBack,
+        unlockSelected,
+        groupSelected,
+        ungroupSelected,
+      },
     })
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true }))

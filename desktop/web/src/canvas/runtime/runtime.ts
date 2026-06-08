@@ -17,15 +17,24 @@ export interface CanvasQueryRevision {
   readonly viewport: ReadonlySignal<number>
 }
 
-export interface CanvasCommandSurface {
+export interface CanvasToolCommandSurface {
   setTool(name: string): void
+}
+
+export interface CanvasViewportCommandSurface {
   zoomIn(): void
   zoomOut(): void
   zoomToFit(): void
+}
+
+export interface CanvasHistoryCommandSurface {
   readonly canUndo: ReadonlySignal<boolean>
   readonly canRedo: ReadonlySignal<boolean>
   undo(): void
   redo(): void
+}
+
+export interface CanvasSceneEditCommandSurface {
   copy(): void
   paste(): void
   duplicateSelected(): void
@@ -37,18 +46,37 @@ export interface CanvasCommandSurface {
   unlockSelected(): void
   groupSelected(): void
   ungroupSelected(): void
+}
+
+export interface CanvasChromeCommandSurface {
   toggleGrid(): void
   toggleSnapToGrid(): void
   toggleRulers(): void
+}
+
+export interface CanvasLayerCommandSurface {
   setSceneLayerVisibility(name: string, visible: boolean): boolean
   setSceneLayerOpacity(name: string, opacity: number): boolean
   setSceneLayerLocked(name: string, locked: boolean): boolean
+}
+
+export interface CanvasPlantPresentationCommandSurface {
   setPlantSizeMode(mode: PlantSizeMode): void
   setPlantColorByAttr(attr: ColorByAttribute | null): void
   ensureSpeciesCacheEntries(canonicalNames: string[], activeLocale: string): Promise<boolean>
   setSelectedPlantColor(color: string | null): number
   setPlantColorForSpecies(canonicalName: string, color: string | null): number
   clearPlantSpeciesColor(canonicalName: string): boolean
+}
+
+export interface CanvasCommandSurface {
+  readonly tools: CanvasToolCommandSurface
+  readonly viewport: CanvasViewportCommandSurface
+  readonly history: CanvasHistoryCommandSurface
+  readonly sceneEdits: CanvasSceneEditCommandSurface
+  readonly chrome: CanvasChromeCommandSurface
+  readonly layers: CanvasLayerCommandSurface
+  readonly plantPresentation: CanvasPlantPresentationCommandSurface
 }
 
 export interface CanvasQuerySurface {

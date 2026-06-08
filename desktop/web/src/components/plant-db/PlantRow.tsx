@@ -1,7 +1,7 @@
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
 import { speciesCatalogWorkbench } from '../../app/plant-browser'
-import { currentCanvasCommandSurface } from '../../canvas/session'
+import { currentCanvasToolCommandSurface } from '../../canvas/session'
 import {
   beginPlantStampFromSpecies,
   writePlantStampDragData,
@@ -22,7 +22,7 @@ interface Props {
 
 export function PlantRow({ plant }: Props) {
   void locale.value
-  const session = currentCanvasCommandSurface.value
+  const session = currentCanvasToolCommandSurface.value
 
   const handleDragStart = (e: DragEvent) => {
     writePlantStampDragData(e.dataTransfer, plant)

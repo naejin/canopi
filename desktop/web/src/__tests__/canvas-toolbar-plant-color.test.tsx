@@ -72,18 +72,24 @@ describe('CanvasToolbar', () => {
     })
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
       commands: createTestCanvasCommandSurface({
-        canUndo,
-        canRedo,
-        setTool,
-        undo,
-        redo,
-        ensureSpeciesCacheEntries: vi.fn().mockResolvedValue(false),
-        toggleGrid,
-        toggleSnapToGrid,
-        toggleRulers,
-        setSelectedPlantColor: vi.fn(),
-        setPlantColorForSpecies: vi.fn(),
-        clearPlantSpeciesColor: vi.fn(),
+        tools: { setTool },
+        history: {
+          canUndo,
+          canRedo,
+          undo,
+          redo,
+        },
+        chrome: {
+          toggleGrid,
+          toggleSnapToGrid,
+          toggleRulers,
+        },
+        plantPresentation: {
+          ensureSpeciesCacheEntries: vi.fn().mockResolvedValue(false),
+          setSelectedPlantColor: vi.fn(),
+          setPlantColorForSpecies: vi.fn(),
+          clearPlantSpeciesColor: vi.fn(),
+        },
       }),
       queries: {
         ...createTestCanvasQuerySurface(),

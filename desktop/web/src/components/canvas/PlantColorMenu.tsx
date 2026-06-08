@@ -3,7 +3,7 @@ import { plantColorMenuOpen } from '../../canvas/plant-color-menu-state'
 import { plantSpeciesColorDefaults } from '../../canvas/plant-species-color-defaults'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import {
-  currentCanvasCommandSurface,
+  currentCanvasPlantPresentationCommandSurface,
   currentCanvasQuerySurface,
   currentCanvasSelection,
 } from '../../canvas/session'
@@ -46,7 +46,7 @@ function closeMenu(buttonRef?: { current: HTMLButtonElement | null }) {
 export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
   void currentCanvasSelection.value
   void plantSpeciesColorDefaults.value
-  const commandSurface = currentCanvasCommandSurface.value
+  const commandSurface = currentCanvasPlantPresentationCommandSurface.value
   const querySurface = currentCanvasQuerySurface.value
   const activeLocale = locale.value
   const menuOpen = plantColorMenuOpen.value

@@ -1,13 +1,13 @@
 import { zoomLevel, zoomReference } from '../../canvas/view-state'
 import { locale } from '../../app/settings/state'
-import { currentCanvasCommandSurface } from '../../canvas/session'
+import { currentCanvasViewportCommandSurface } from '../../canvas/session'
 import { t } from '../../i18n'
 import styles from './ZoomControls.module.css'
 
 export function ZoomControls() {
   void locale.value
   const zoom = zoomLevel.value
-  const session = currentCanvasCommandSurface.value
+  const session = currentCanvasViewportCommandSurface.value
 
   return (
     <div className={styles.controls} role="group" aria-label={t('canvas.grid.zoom')}>

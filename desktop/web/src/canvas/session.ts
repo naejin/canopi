@@ -11,13 +11,29 @@ import {
 import type {
   CanvasCommandSurface,
   CanvasDocumentSurface,
+  CanvasLayerCommandSurface,
+  CanvasPlantPresentationCommandSurface,
   CanvasQuerySurface,
   CanvasRuntimeSurfaces,
+  CanvasToolCommandSurface,
+  CanvasViewportCommandSurface,
 } from './runtime/runtime'
 
 export const currentCanvasSession = signal<CanvasRuntimeSurfaces | null>(null)
 export const currentCanvasCommandSurface = computed<CanvasCommandSurface | null>(() =>
   commandSurfaceFrom(currentCanvasSession.value),
+)
+export const currentCanvasToolCommandSurface = computed<CanvasToolCommandSurface | null>(() =>
+  commandSurfaceFrom(currentCanvasSession.value)?.tools ?? null,
+)
+export const currentCanvasViewportCommandSurface = computed<CanvasViewportCommandSurface | null>(() =>
+  commandSurfaceFrom(currentCanvasSession.value)?.viewport ?? null,
+)
+export const currentCanvasLayerCommandSurface = computed<CanvasLayerCommandSurface | null>(() =>
+  commandSurfaceFrom(currentCanvasSession.value)?.layers ?? null,
+)
+export const currentCanvasPlantPresentationCommandSurface = computed<CanvasPlantPresentationCommandSurface | null>(() =>
+  commandSurfaceFrom(currentCanvasSession.value)?.plantPresentation ?? null,
 )
 export const currentCanvasQuerySurface = computed<CanvasQuerySurface | null>(() =>
   querySurfaceFrom(currentCanvasSession.value),
@@ -36,6 +52,22 @@ export function getCurrentCanvasSession(): CanvasRuntimeSurfaces | null {
 
 export function getCurrentCanvasCommandSurface(): CanvasCommandSurface | null {
   return currentCanvasCommandSurface.value
+}
+
+export function getCurrentCanvasToolCommandSurface(): CanvasToolCommandSurface | null {
+  return currentCanvasToolCommandSurface.value
+}
+
+export function getCurrentCanvasViewportCommandSurface(): CanvasViewportCommandSurface | null {
+  return currentCanvasViewportCommandSurface.value
+}
+
+export function getCurrentCanvasLayerCommandSurface(): CanvasLayerCommandSurface | null {
+  return currentCanvasLayerCommandSurface.value
+}
+
+export function getCurrentCanvasPlantPresentationCommandSurface(): CanvasPlantPresentationCommandSurface | null {
+  return currentCanvasPlantPresentationCommandSurface.value
 }
 
 export function getCurrentCanvasQuerySurface(): CanvasQuerySurface | null {
@@ -66,7 +98,7 @@ export function setCurrentCanvasSession(session: CanvasRuntimeSurfaces | null): 
 }
 
 export function setCurrentCanvasTool(name: string): void {
-  const session = currentCanvasCommandSurface.value
+  const session = currentCanvasToolCommandSurface.value
   if (session) {
     setCanvasTool(name)
     session.setTool(name)
