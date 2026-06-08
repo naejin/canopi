@@ -161,6 +161,7 @@ function createSnapshot(
     location: { lat: 48.8566, lon: 2.3522 },
     northBearingDeg: 12,
     basemapStyle: 'street',
+    hasVisibleMapLayer: true,
     layerVisibility: { base: true, contours: false },
     layerOpacity: { base: 0.6, contours: 0.5 },
     terrain: {
@@ -244,6 +245,7 @@ describe('Canvas map surface lifecycle', () => {
     expect(maps).toHaveLength(0)
 
     lifecycle.update(createSnapshot({
+      hasVisibleMapLayer: false,
       layerVisibility: { base: false, contours: false },
       terrain: {
         ...createSnapshot().terrain,

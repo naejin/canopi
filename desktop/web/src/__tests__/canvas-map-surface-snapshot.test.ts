@@ -96,6 +96,7 @@ describe('Canvas Map Surface snapshot seam', () => {
         location: { lat: 48.8566, lon: 2.3522 },
         northBearingDeg: 18,
         basemapStyle: 'satellite',
+        hasVisibleMapLayer: true,
         layerVisibility: { base: false, contours: true, plants: true },
         layerOpacity: { base: 0.4, contours: 0.75, plants: 1 },
         theme: 'dark',

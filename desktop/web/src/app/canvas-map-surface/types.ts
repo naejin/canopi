@@ -8,6 +8,7 @@ export interface CanvasMapSurfaceSnapshot {
   readonly location: { lat: number; lon: number } | null
   readonly northBearingDeg: number | null
   readonly basemapStyle: BasemapStyle
+  readonly hasVisibleMapLayer: boolean
   readonly layerVisibility: Record<string, boolean>
   readonly layerOpacity: Record<string, number>
   readonly terrain: TerrainLayerState

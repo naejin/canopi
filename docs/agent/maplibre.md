@@ -39,7 +39,7 @@ Use this guide when changing MapLibre surfaces, basemap rendering, terrain layer
 - `activeLayerName` can be any layer string used by scene and terrain layer UI.
 - Contours use `layerVisibility.contours` and `layerOpacity.contours`.
 - Hillshading uses `hillshadeVisible` and `hillshadeOpacity`.
-- `LayerPanel` bridges terrain asymmetry through helper functions.
+- Canvas Layer Presentation bridges scene/map/terrain layer asymmetry for `LayerPanel`, Canvas shell Location Notices, and Canvas Map Surface snapshots. Map readiness callers should consume its map-surface projection instead of recomputing base/contour/hillshade visibility.
 - Terrain paint-only changes, such as opacity and theme, should stay incremental through `maplibre/terrain-sync.ts`.
 - Rebuild terrain sources/layers only when source-shape inputs change.
 

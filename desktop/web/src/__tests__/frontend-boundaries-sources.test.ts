@@ -164,10 +164,10 @@ describe('frontend boundary sources', () => {
       /app\/panel-targets\/presentation$/,
     ])
     expect(snapshotSource).toContain('currentCanvasQuerySurface')
+    expect(snapshotSource).toContain('../canvas-layer-presentation/presentation')
     expect(snapshotSource).toContain('readSavedLocationPresentation')
     expect(snapshotSource).toContain('readPanelTargetOverlaySnapshot')
-    expect(snapshotSource).toContain('contourIntervalMeters')
-    expect(snapshotSource).toContain('hillshadeVisible')
+    expect(snapshotSource).not.toContain('../canvas-settings/signals')
     expect(snapshotSource).toContain('northBearingDeg')
     expect(snapshotSource).toContain('basemapStyle')
     expect(snapshotSource).toContain('theme')
@@ -175,11 +175,14 @@ describe('frontend boundary sources', () => {
 
   it('keeps scene layer and guide writes behind the Scene Edit runtime seam', () => {
     const controllerSource = readSource('../app/canvas-settings/controller.ts')
+    const layerPresentationSource = readSource('../app/canvas-layer-presentation/presentation.ts')
     const runtimeSource = readSource('../canvas/runtime/scene-runtime.ts')
     const effectsSource = readSource('../canvas/runtime/scene-runtime/effects.ts')
     const documentSource = readSource('../canvas/runtime/scene-runtime/document.ts')
 
-    expect(controllerSource).toContain('getCurrentCanvasLayerCommandSurface')
+    expect(controllerSource).toContain('../canvas-layer-presentation/presentation')
+    expect(controllerSource).not.toContain('getCurrentCanvasLayerCommandSurface')
+    expect(layerPresentationSource).toContain('getCurrentCanvasLayerCommandSurface')
     expect(controllerSource).not.toContain('getCurrentCanvasCommandSurface')
     expect(controllerSource).not.toContain('layerVisibility.value =')
     expect(controllerSource).not.toContain('layerLockState.value =')
@@ -194,7 +197,7 @@ describe('frontend boundary sources', () => {
 
   it('keeps focused canvas callers on role-specific command surfaces', () => {
     const focusedCanvasCommandConsumers = [
-      '../app/canvas-settings/controller.ts',
+      '../app/canvas-layer-presentation/presentation.ts',
       '../components/canvas/DisplayModeControls.tsx',
       '../components/canvas/PlantColorMenu.tsx',
       '../components/canvas/ZoomControls.tsx',
@@ -202,8 +205,9 @@ describe('frontend boundary sources', () => {
       '../components/plant-db/PlantRow.tsx',
     ]
 
-    expectNamedImportsFrom('../app/canvas-settings/controller.ts', '../../canvas/session', [
+    expectNamedImportsFrom('../app/canvas-layer-presentation/presentation.ts', '../../canvas/session', [
       'getCurrentCanvasLayerCommandSurface',
+      'currentCanvasQuerySurface',
     ])
     expectNamedImportsFrom('../components/canvas/DisplayModeControls.tsx', '../../canvas/session', [
       'getCurrentCanvasPlantPresentationCommandSurface',
@@ -236,6 +240,18 @@ describe('frontend boundary sources', () => {
         'getCurrentCanvasCommandSurface',
       )
     }
+  })
+
+  it('keeps LayerPanel as a Canvas Layer Presentation renderer', () => {
+    const layerPanelSource = readSource('../components/canvas/LayerPanel.tsx')
+
+    expect(layerPanelSource).toContain('../../app/canvas-layer-presentation/presentation')
+    expect(layerPanelSource).not.toContain('ALL_LAYERS')
+    expect(layerPanelSource).not.toContain('../../app/canvas-settings/state')
+    expect(layerPanelSource).not.toContain('../../app/canvas-settings/controller')
+    expect(layerPanelSource).not.toContain('useSavedLocationPresentation')
+    expect(layerPanelSource).not.toContain("case 'base'")
+    expect(layerPanelSource).not.toContain("case 'hillshading'")
   })
 
   it('keeps Design Object lock authority inside SceneStore', () => {

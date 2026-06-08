@@ -1,30 +1,15 @@
 import { t } from '../../i18n'
-import { locale } from '../../app/settings/state'
-import { layerPanelView } from '../../app/canvas-settings/state'
 import {
-  setActiveLayer,
-  setContourIntervalMeters,
-  setHillshadeOpacity,
-  setLayerOpacity,
-  toggleHillshadeVisibility,
-  toggleLayerPanel,
-  toggleLayerVisibility,
-} from '../../app/canvas-settings/controller'
-import { useSavedLocationPresentation } from '../../app/location'
-import type { Location } from '../../types/design'
+  type CanvasLayerPresentationDetail,
+  type CanvasLayerPresentationRow,
+  readCanvasLayerPresentation,
+  setCanvasLayerPresentationActiveLayer,
+  setCanvasLayerPresentationContourIntervalMeters,
+  setCanvasLayerPresentationOpacity,
+  setCanvasLayerPresentationVisibility,
+  toggleCanvasLayerPresentationPanel,
+} from '../../app/canvas-layer-presentation/presentation'
 import styles from './LayerPanel.module.css'
-
-const ALL_LAYERS = ['annotations', 'plants', 'zones', 'base', 'contours', 'hillshading'] as const
-type LayerName = typeof ALL_LAYERS[number]
-
-function layerLabel(name: LayerName): string {
-  switch (name) {
-    case 'base': return t('canvas.layers.basemap')
-    case 'contours': return t('canvas.terrain.contours')
-    case 'hillshading': return t('canvas.terrain.hillshade')
-    default: return t(`canvas.layers.${name}`)
-  }
-}
 
 function ChevronIcon({ direction }: { direction: 'left' | 'right' }) {
   const d = direction === 'left' ? 'M10 3L5 8L10 13' : 'M6 3L11 8L6 13'
@@ -49,40 +34,17 @@ function EyeIcon({ open }: { open: boolean }) {
   )
 }
 
-function getVisibility(name: LayerName): boolean {
-  const view = layerPanelView.peek()
-  if (name === 'hillshading') return view.hillshadeVisible
-  return view.layerVisibility[name] ?? true
-}
-
-function handleToggleVisibility(name: LayerName): void {
-  if (name === 'hillshading') toggleHillshadeVisibility()
-  else toggleLayerVisibility(name)
-}
-
 export function LayerPanel() {
-  void locale.value
+  const presentation = readCanvasLayerPresentation()
 
-  const {
-    activeLayerName: activeLayerNameValue,
-    contourIntervalMeters: contourIntervalMetersValue,
-    hillshadeOpacity: hillshadeOpacityValue,
-    layerOpacity: layerOpacityValue,
-    layerPanelOpen: open,
-  } = layerPanelView.value
-  const activeLayer = activeLayerNameValue as LayerName
-  const savedLocation = useSavedLocationPresentation()
-  const location = savedLocation.location
-  const hasLocation = savedLocation.hasLocation
-
-  if (!open) {
+  if (!presentation.panelOpen) {
     return (
       <div className={styles.panelCollapsed}>
         <button
           type="button"
           className={styles.collapseBtn}
           aria-label={t('canvas.layers.layerPanel')}
-          onClick={toggleLayerPanel}
+          onClick={toggleCanvasLayerPresentationPanel}
         >
           <ChevronIcon direction="left" />
         </button>
@@ -98,53 +60,41 @@ export function LayerPanel() {
           type="button"
           className={styles.collapseBtn}
           aria-label={t('canvas.layers.collapse')}
-          onClick={toggleLayerPanel}
+          onClick={toggleCanvasLayerPresentationPanel}
         >
           <ChevronIcon direction="right" />
         </button>
       </div>
 
       <div role="list">
-        {ALL_LAYERS.map((name) => {
-          const visible = getVisibility(name)
-          const active = activeLayer === name
-          const label = layerLabel(name)
-
+        {presentation.rows.map((row) => {
           return (
-            <div key={name}>
+            <div key={row.id}>
               <div
                 role="listitem"
                 className={styles.layerRow}
-                data-active={active ? 'true' : 'false'}
-                data-hidden={visible ? 'false' : 'true'}
+                data-active={row.active ? 'true' : 'false'}
+                data-hidden={row.visible ? 'false' : 'true'}
               >
                 <button
                   type="button"
                   className={styles.toggleBtn}
-                  aria-label={`${t('canvas.layers.visibility')}: ${label}`}
-                  onClick={() => handleToggleVisibility(name)}
+                  aria-label={`${t('canvas.layers.visibility')}: ${row.label}`}
+                  onClick={() => {
+                    setCanvasLayerPresentationVisibility(row.id, !row.visible)
+                  }}
                 >
-                  <EyeIcon open={visible} />
+                  <EyeIcon open={row.visible} />
                 </button>
                 <button
                   type="button"
                   className={styles.layerName}
-                  onClick={() => setActiveLayer(name)}
+                  onClick={() => setCanvasLayerPresentationActiveLayer(row.id)}
                 >
-                  {label}
+                  {row.label}
                 </button>
               </div>
-              {active && (
-                <LayerDetail
-                  name={name}
-                  hasLocation={hasLocation}
-                  location={location}
-                  locationSummary={savedLocation.summary}
-                  contourIntervalMeters={contourIntervalMetersValue}
-                  hillshadeOpacity={hillshadeOpacityValue}
-                  layerOpacity={layerOpacityValue}
-                />
-              )}
+              {row.active && <LayerDetail row={row} />}
             </div>
           )
         })}
@@ -153,80 +103,94 @@ export function LayerPanel() {
   )
 }
 
-function LayerDetail({ name, hasLocation, location, locationSummary, contourIntervalMeters, hillshadeOpacity, layerOpacity }: {
-  name: LayerName
-  hasLocation: boolean
-  location: Location | null
-  locationSummary: string | null
-  contourIntervalMeters: number
-  hillshadeOpacity: number
-  layerOpacity: Record<string, number>
-}) {
-  switch (name) {
-    case 'base':
-      return (
-        <div className={styles.layerDetail}>
-          <div className={styles.locationCard} data-has-location={hasLocation ? 'true' : 'false'}>
-            <span className={styles.locationCardLabel}>
-              {hasLocation ? t('canvas.location.current') : t('canvas.location.required')}
-            </span>
-            <span className={styles.locationCardText}>
-              {hasLocation && location ? locationSummary : t('canvas.layers.setLocation')}
-            </span>
-          </div>
-          <OpacitySlider layer="base" disabled={!hasLocation} layerOpacity={layerOpacity} />
-        </div>
-      )
+function LayerDetail({ row }: { row: CanvasLayerPresentationRow }) {
+  switch (row.detail.type) {
+    case 'location-map':
+      return <LocationLayerDetail row={row} detail={row.detail} />
     case 'contours':
-      return (
-        <div className={styles.layerDetail}>
-          <OpacitySlider layer="contours" layerOpacity={layerOpacity} />
-          <div className={styles.controlRow}>
-            <span className={styles.controlLabel}>{t('canvas.terrain.contourInterval')}</span>
-            <input
-              type="number"
-              min="0"
-              step="1"
-              className={styles.numericInput}
-              value={String(contourIntervalMeters)}
-              aria-label={t('canvas.terrain.contourInterval')}
-              onInput={(event) => {
-                setContourIntervalMeters(Number((event.target as HTMLInputElement).value))
-              }}
-            />
-          </div>
-        </div>
-      )
-    case 'hillshading':
-      return (
-        <div className={styles.layerDetail}>
-          <div className={styles.controlRow}>
-            <span className={styles.controlLabel}>{t('canvas.terrain.hillshadeOpacity')}</span>
-            <input
-              type="range"
-              className={styles.mapSlider}
-              min="0"
-              max="100"
-              value={Math.round(hillshadeOpacity * 100)}
-              aria-label={t('canvas.terrain.hillshadeOpacity')}
-              onInput={(event) => {
-                setHillshadeOpacity(Number((event.target as HTMLInputElement).value) / 100)
-              }}
-            />
-          </div>
-        </div>
-      )
-    default:
-      return (
-        <div className={styles.layerDetail}>
-          <OpacitySlider layer={name} layerOpacity={layerOpacity} />
-        </div>
-      )
+      return <ContourLayerDetail row={row} detail={row.detail} />
+    case 'hillshade':
+      return <HillshadeLayerDetail row={row} />
+    case 'scene':
+      return <SceneLayerDetail row={row} />
   }
 }
 
-function OpacitySlider({ layer, disabled, layerOpacity }: { layer: string; disabled?: boolean; layerOpacity: Record<string, number> }) {
-  const opacity = Math.round((layerOpacity[layer] ?? 1) * 100)
+function LocationLayerDetail({ row, detail }: {
+  row: CanvasLayerPresentationRow
+  detail: Extract<CanvasLayerPresentationDetail, { type: 'location-map' }>
+}) {
+  return (
+    <div className={styles.layerDetail}>
+      <div className={styles.locationCard} data-has-location={detail.hasLocation ? 'true' : 'false'}>
+        <span className={styles.locationCardLabel}>
+          {detail.hasLocation ? t('canvas.location.current') : t('canvas.location.required')}
+        </span>
+        <span className={styles.locationCardText}>
+          {detail.hasLocation ? detail.locationSummary : t('canvas.layers.setLocation')}
+        </span>
+      </div>
+      <OpacitySlider row={row} disabled={detail.opacityDisabled} />
+    </div>
+  )
+}
+
+function ContourLayerDetail({ row, detail }: {
+  row: CanvasLayerPresentationRow
+  detail: Extract<CanvasLayerPresentationDetail, { type: 'contours' }>
+}) {
+  return (
+    <div className={styles.layerDetail}>
+      <OpacitySlider row={row} />
+      <div className={styles.controlRow}>
+        <span className={styles.controlLabel}>{t('canvas.terrain.contourInterval')}</span>
+        <input
+          type="number"
+          min="0"
+          step="1"
+          className={styles.numericInput}
+          value={String(detail.contourIntervalMeters)}
+          aria-label={t('canvas.terrain.contourInterval')}
+          onInput={(event) => {
+            setCanvasLayerPresentationContourIntervalMeters(Number((event.target as HTMLInputElement).value))
+          }}
+        />
+      </div>
+    </div>
+  )
+}
+
+function HillshadeLayerDetail({ row }: { row: CanvasLayerPresentationRow }) {
+  return (
+    <div className={styles.layerDetail}>
+      <div className={styles.controlRow}>
+        <span className={styles.controlLabel}>{t('canvas.terrain.hillshadeOpacity')}</span>
+        <input
+          type="range"
+          className={styles.mapSlider}
+          min="0"
+          max="100"
+          value={Math.round(row.opacity * 100)}
+          aria-label={t('canvas.terrain.hillshadeOpacity')}
+          onInput={(event) => {
+            setCanvasLayerPresentationOpacity(row.id, Number((event.target as HTMLInputElement).value) / 100)
+          }}
+        />
+      </div>
+    </div>
+  )
+}
+
+function SceneLayerDetail({ row }: { row: CanvasLayerPresentationRow }) {
+  return (
+    <div className={styles.layerDetail}>
+      <OpacitySlider row={row} />
+    </div>
+  )
+}
+
+function OpacitySlider({ row, disabled }: { row: CanvasLayerPresentationRow; disabled?: boolean }) {
+  const opacity = Math.round(row.opacity * 100)
   return (
     <div className={styles.controlRow}>
       <span className={styles.controlLabel}>{t('canvas.layers.opacity')}</span>
@@ -238,7 +202,7 @@ function OpacitySlider({ layer, disabled, layerOpacity }: { layer: string; disab
         value={opacity}
         disabled={disabled}
         onInput={(event) => {
-          setLayerOpacity(layer, Number((event.target as HTMLInputElement).value) / 100)
+          setCanvasLayerPresentationOpacity(row.id, Number((event.target as HTMLInputElement).value) / 100)
         }}
       />
     </div>

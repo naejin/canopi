@@ -1,10 +1,4 @@
-import {
-  contourIntervalMeters,
-  hillshadeOpacity,
-  hillshadeVisible,
-  layerOpacity,
-  layerVisibility,
-} from '../canvas-settings/signals'
+import { readCanvasLayerPresentation } from '../canvas-layer-presentation/presentation'
 import { readSavedLocationPresentation } from '../location'
 import { readPanelTargetOverlaySnapshot } from '../panel-targets/presentation'
 import { basemapStyle, theme } from '../settings/state'
@@ -18,6 +12,7 @@ export type CanvasMapSurfaceCoreSnapshot = Pick<
   | 'location'
   | 'northBearingDeg'
   | 'basemapStyle'
+  | 'hasVisibleMapLayer'
   | 'layerVisibility'
   | 'layerOpacity'
   | 'theme'
@@ -29,14 +24,16 @@ export function readCanvasMapSurfaceCoreSnapshot(): CanvasMapSurfaceCoreSnapshot
   void runtime?.revision.viewport.value
 
   const location = readSavedLocationPresentation().location
+  const layerPresentation = readCanvasLayerPresentation()
 
   return {
     runtime,
     location: location ? { lat: location.lat, lon: location.lon } : null,
     northBearingDeg: northBearingDeg.value,
     basemapStyle: basemapStyle.value,
-    layerVisibility: { ...layerVisibility.value },
-    layerOpacity: { ...layerOpacity.value },
+    hasVisibleMapLayer: layerPresentation.mapSurface.hasVisibleMapLayer,
+    layerVisibility: { ...layerPresentation.mapSurface.layerVisibility },
+    layerOpacity: { ...layerPresentation.mapSurface.layerOpacity },
     theme: theme.value,
   }
 }
@@ -48,11 +45,7 @@ export function readCanvasMapSurfaceSnapshot(): CanvasMapSurfaceSnapshot {
   return {
     ...coreSnapshot,
     terrain: {
-      contourIntervalMeters: contourIntervalMeters.value,
-      contoursVisible: coreSnapshot.layerVisibility.contours ?? false,
-      contoursOpacity: coreSnapshot.layerOpacity.contours ?? 1,
-      hillshadeVisible: hillshadeVisible.value,
-      hillshadeOpacity: hillshadeOpacity.value,
+      ...readCanvasLayerPresentation().mapSurface.terrain,
       isDark: coreSnapshot.theme === 'dark',
     },
     hoveredTargets: [...hoveredTargets],

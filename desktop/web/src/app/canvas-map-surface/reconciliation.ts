@@ -48,7 +48,7 @@ export function reconcileCanvasMapSurface(
   if (!snapshot) return reconcileInactiveCanvasMapSurface('missing-snapshot', state)
   if (!snapshot.runtime) return reconcileInactiveCanvasMapSurface('missing-runtime', state)
   if (!snapshot.location) return reconcileInactiveCanvasMapSurface('missing-location', state)
-  if (!canvasMapSurfaceHasVisibleLayer(snapshot)) {
+  if (!snapshot.hasVisibleMapLayer) {
     return reconcileInactiveCanvasMapSurface('hidden', state)
   }
   if (!state.hasContainer) return reconcileInactiveCanvasMapSurface('missing-container', state)
@@ -66,12 +66,6 @@ function reconcileInactiveCanvasMapSurface(
   return state.hasMap || !surfaceStateIsIdle(state)
     ? { type: 'destroy', reason }
     : { type: 'inactive', reason }
-}
-
-function canvasMapSurfaceHasVisibleLayer(snapshot: CanvasMapSurfaceSnapshot): boolean {
-  return (snapshot.layerVisibility.base ?? true)
-    || (snapshot.layerVisibility.contours ?? false)
-    || snapshot.terrain.hillshadeVisible
 }
 
 function surfaceStateIsIdle(state: CanvasMapSurfaceReconciliationState): boolean {

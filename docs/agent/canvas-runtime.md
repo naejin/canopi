@@ -28,6 +28,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - Full Design file composition is app-owned and crosses `CanvasRuntimeAppAdapter.document`. Runtime core serializes canvas-owned state and must not import `app/contracts/document`.
 - Plant presentation state lives in `SceneStore.session`, not standalone canvas signals.
 - Scene Layer visibility, opacity, and locks are scene edits. UI controllers must call the canvas command surface instead of writing `layerVisibility`, `layerOpacity`, or `layerLockState` directly.
+- Canvas Layer Presentation (`app/canvas-layer-presentation/presentation.ts`) owns the visible Layer catalog and authority-correct row commands for scene Layers, basemap, contours, and hillshading. UI callers should consume that seam instead of hard-coding `base`, `contours`, or `hillshading` routing.
 - Design Object lock state lives on persisted scene entities in `SceneStore`. Production code must read and mutate object locks through scene queries/edits, never through standalone mirror signals.
 - A group is effectively locked for mutating canvas interactions when the group itself is locked or any existing member Design Object is locked. Missing member IDs do not lock a group.
 - Guide creation is a scene edit owned by the runtime. The `guides` signal is a chrome projection, not document authority.
