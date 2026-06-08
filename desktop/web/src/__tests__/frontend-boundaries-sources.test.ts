@@ -231,6 +231,7 @@ describe('frontend boundary sources', () => {
 
   it('keeps app commands behind the command graph seam', () => {
     const registrySource = readSource('../commands/registry.ts')
+    const graphSource = readSource('../commands/graph/index.ts')
     const catalogSource = readSource('../commands/graph/catalog.ts')
     const projectionsSource = readSource('../commands/graph/projections.ts')
     const shortcutsSource = readSource('../commands/graph/shortcuts.ts')
@@ -243,12 +244,16 @@ describe('frontend boundary sources', () => {
 
     expect(catalogSource).toContain('APP_COMMANDS')
     expect(catalogSource).toContain('readAppCommandState')
+    expect(importSpecifiers(graphSource)).toContain('./catalog')
+    expect(importSpecifiers(graphSource)).toContain('./projections')
+    expect(importSpecifiers(graphSource)).toContain('./shortcuts')
     expect(importSpecifiers(projectionsSource)).toContain('./catalog')
     expect(importSpecifiers(shortcutsSource)).toContain('./catalog')
-    expect(registrySource).toContain('./graph/catalog')
-    expect(registrySource).toContain('./graph/projections')
-    expect(registrySource).toContain('./graph/shortcuts')
+    expect(importSpecifiers(registrySource)).toContain('./graph')
     expectNoImportsMatching('../commands/registry.ts', [
+      /graph\/catalog$/,
+      /graph\/projections$/,
+      /graph\/shortcuts$/,
       /app\/canvas-settings\/signals$/,
       /app\/settings\/state$/,
       /(^|\/)i18n$/,

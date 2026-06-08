@@ -3,13 +3,13 @@ import {
   isCommandPaletteEscapeEvent,
   isCommandPaletteToggleEvent,
   runAppCommandShortcutForEvent,
-} from './graph/shortcuts'
+} from './graph'
 
-export type { AppCommandId } from './graph/catalog'
+export type { AppCommandId } from './graph'
 export {
-  isCatalogCommandDisabled as isAppCommandDisabled,
-  runCatalogCommand as runAppCommand,
-} from './graph/catalog'
+  isAppCommandDisabled,
+  runAppCommand,
+} from './graph'
 export {
   appCommandGraphChromeProjection,
   appCommandGraphPanelProjection,
@@ -17,7 +17,7 @@ export {
   commands,
   getAppCommand,
   getMenuDefinitions,
-} from './graph/projections'
+} from './graph'
 export type {
   AppCommandGraphChromeProjection,
   AppCommandGraphPanelCommand,
@@ -30,7 +30,7 @@ export type {
   MenuDefinition,
   MenuEntry,
   MenuSeparator,
-} from './graph/projections'
+} from './graph'
 
 export const commandPaletteOpen = signal(false)
 
