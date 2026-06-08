@@ -147,8 +147,14 @@ describe('frontend boundary sources', () => {
   it('keeps core Canvas Map Surface inputs behind the app seam', () => {
     const mapSurfaceControllerSource = readSource('../components/canvas/maplibre-surface-controller.ts')
     const snapshotSource = readSource('../app/canvas-map-surface/snapshot.ts')
+    const lifecycleSource = readSource('../app/canvas-map-surface/lifecycle.ts')
 
     expect(mapSurfaceControllerSource).toContain('readCanvasMapSurfaceSnapshot')
+    expect(mapSurfaceControllerSource).toContain('../../maplibre/loader')
+    expect(lifecycleSource).toContain('../../maplibre/loader')
+    expect(lifecycleSource).not.toContain('components/canvas/maplibre-loader')
+    expect(sourceExists('../components/canvas/maplibre-loader.ts')).toBe(false)
+    expect(sourceExists('../maplibre/loader.ts')).toBe(true)
     expectNoImportsMatching('../components/canvas/maplibre-surface-controller.ts', [
       /canvas\/session$/,
       /app\/location$/,

@@ -3,7 +3,7 @@ import {
   DEM_MAX_ZOOM,
   DEM_TILES_URL,
 } from '../canvas/contours'
-import type { MapLibreApi } from '../components/canvas/maplibre-loader'
+import type { MapLibreApi } from './loader'
 import type { TerrainProtocolSupport } from './terrain'
 import { loadMapLibreContourApi } from '../vendor/maplibre-contour'
 

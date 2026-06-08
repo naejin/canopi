@@ -26,7 +26,7 @@ import {
   rebuildTerrain,
 } from '../../maplibre/terrain-sync'
 import { clearCanvasMapSurfaceOverlays, syncCanvasMapSurfaceOverlays } from './overlays'
-import type { MapLibreApi, MapLibreMapInstance } from '../../components/canvas/maplibre-loader'
+import type { MapLibreApi, MapLibreMapInstance } from '../../maplibre/loader'
 import {
   reconcileCanvasMapSurface,
   type CanvasMapSurfaceReconciliation,

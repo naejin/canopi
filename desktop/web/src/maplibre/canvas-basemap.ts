@@ -5,7 +5,7 @@ import {
   MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
   createMapLibreBasemapStyle,
 } from './config'
-import type { MapLibreApi, MapLibreMapInstance } from '../components/canvas/maplibre-loader'
+import type { MapLibreApi, MapLibreMapInstance } from './loader'
 
 export interface BasemapPresentationMap {
   isStyleLoaded?(): boolean

@@ -10,7 +10,7 @@ import type {
   MapLibreApi,
   MapLibreMapConstructorOptions,
   MapLibreMapInstance,
-} from '../components/canvas/maplibre-loader'
+} from '../maplibre/loader'
 import { MAPLIBRE_BASEMAP_SOURCE_ID, MAPLIBRE_BASEMAP_RASTER_LAYER_ID } from '../maplibre/config'
 import {
   TERRAIN_CONTOUR_LAYER_IDS,
