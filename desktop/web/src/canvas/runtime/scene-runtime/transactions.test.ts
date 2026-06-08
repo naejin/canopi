@@ -81,6 +81,7 @@ function createHarness() {
     resetTransientRuntimeState: () => {},
     clearHoveredTargets: () => {},
     clearPanelOriginTargets: () => {},
+    composeDocumentForSave: ({ canvas }) => canvas,
     syncCanvasSignalsFromDocument: () => {},
     syncCanvasSignalsFromScene: () => {},
     invalidateScene: () => {

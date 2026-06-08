@@ -1,5 +1,4 @@
 import type { CanopiFile } from '../../../types/design'
-import { composeDocumentForSave } from '../../../app/contracts/document'
 import type { SceneStore } from '../scene'
 import type { PlantPresentationBackfill } from './presentation'
 import {
@@ -9,6 +8,9 @@ import {
 } from '../scene-commands'
 import { SceneHistory } from '../scene-history'
 import type { CanvasRuntimeDocumentMetadata } from '../runtime'
+import type {
+  CanvasRuntimeDocumentCompositionInput,
+} from '../app-adapter'
 
 interface SceneRuntimeDocumentBridgeOptions {
   sceneStore: SceneStore
@@ -17,6 +19,7 @@ interface SceneRuntimeDocumentBridgeOptions {
   resetTransientRuntimeState(): void
   clearHoveredTargets(): void
   clearPanelOriginTargets(): void
+  composeDocumentForSave(input: CanvasRuntimeDocumentCompositionInput): CanopiFile
   syncCanvasSignalsFromDocument(file: CanopiFile): void
   syncCanvasSignalsFromScene(): void
   invalidateScene(): void
@@ -31,6 +34,7 @@ export class SceneRuntimeDocumentBridge {
   private readonly _resetTransientRuntimeState: SceneRuntimeDocumentBridgeOptions['resetTransientRuntimeState']
   private readonly _clearHoveredTargets: SceneRuntimeDocumentBridgeOptions['clearHoveredTargets']
   private readonly _clearPanelOriginTargets: SceneRuntimeDocumentBridgeOptions['clearPanelOriginTargets']
+  private readonly _composeDocumentForSave: SceneRuntimeDocumentBridgeOptions['composeDocumentForSave']
   private readonly _syncCanvasSignalsFromDocument: SceneRuntimeDocumentBridgeOptions['syncCanvasSignalsFromDocument']
   private readonly _syncCanvasSignalsFromScene: SceneRuntimeDocumentBridgeOptions['syncCanvasSignalsFromScene']
   private readonly _invalidateScene: SceneRuntimeDocumentBridgeOptions['invalidateScene']
@@ -44,6 +48,7 @@ export class SceneRuntimeDocumentBridge {
     this._resetTransientRuntimeState = options.resetTransientRuntimeState
     this._clearHoveredTargets = options.clearHoveredTargets
     this._clearPanelOriginTargets = options.clearPanelOriginTargets
+    this._composeDocumentForSave = options.composeDocumentForSave
     this._syncCanvasSignalsFromDocument = options.syncCanvasSignalsFromDocument
     this._syncCanvasSignalsFromScene = options.syncCanvasSignalsFromScene
     this._invalidateScene = options.invalidateScene
@@ -78,7 +83,7 @@ export class SceneRuntimeDocumentBridge {
 
   serializeDocument(metadata: CanvasRuntimeDocumentMetadata, doc: CanopiFile): CanopiFile {
     const canvasOutput = this._sceneStore.toCanopiFile({ now: new Date() })
-    return composeDocumentForSave({ metadata, document: doc, canvas: canvasOutput })
+    return this._composeDocumentForSave({ metadata, document: doc, canvas: canvasOutput })
   }
 
   captureCommandSnapshot(): SceneCommandSnapshot {

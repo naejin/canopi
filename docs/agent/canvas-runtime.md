@@ -18,6 +18,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - Non-canvas document sections are not owned by `SceneStore`: consortiums, timeline, budget, `budget_currency`, location, description, and document extra.
 - Commands, tools, save/load, and document replacement mutate scene state, not renderer objects.
 - Canvas-owned document fields serialize from the live scene, not stale document input copies.
+- Full Design file composition is app-owned and crosses `CanvasRuntimeAppAdapter.document`. Runtime core serializes canvas-owned state and must not import `app/contracts/document`.
 - Plant presentation state lives in `SceneStore.session`, not standalone canvas signals.
 - Scene Layer visibility, opacity, and locks are scene edits. UI controllers must call the canvas command surface instead of writing `layerVisibility`, `layerOpacity`, or `layerLockState` directly.
 - Design Object lock state lives on persisted scene entities in `SceneStore`. Production code must read and mutate object locks through scene queries/edits, never through standalone mirror signals.

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { selectedObjectIds } from '../canvas/session-state'
 import { clearCanvasSelection } from '../canvas/session-state'
 import { SceneCanvasRuntime } from '../canvas/runtime/scene-runtime'
+import { createAppCanvasRuntimeAppAdapter } from '../app/canvas-runtime/app-adapter'
 import type { CanopiFile } from '../types/design'
 import { consortiumTarget, speciesBudgetTarget, speciesTarget } from '../target'
 
@@ -48,6 +49,12 @@ function createPlant(id: string, x: number, y: number, canonical = 'Quercus robu
     quantity: 1,
     locked: false,
   }
+}
+
+function createRuntimeWithAppComposition(): SceneCanvasRuntime {
+  return new SceneCanvasRuntime({
+    appAdapter: createAppCanvasRuntimeAppAdapter(),
+  })
 }
 
 describe('SceneCanvasRuntime', () => {
@@ -101,7 +108,7 @@ describe('SceneCanvasRuntime', () => {
   })
 
   it('serializes canvas state while preserving non-canvas document sections', () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = createRuntimeWithAppComposition()
     runtime.loadDocument({
       ...BASE_FILE,
       plants: [createPlant('plant-1', 10, 20)],
@@ -170,7 +177,7 @@ describe('SceneCanvasRuntime', () => {
   })
 
   it('undo and redo keep document-owned metadata outside scene history', () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = createRuntimeWithAppComposition()
     const documentCopy: CanopiFile = {
       ...BASE_FILE,
       description: 'Document authority description',

@@ -126,6 +126,7 @@ export class SceneCanvasRuntime {
       resetTransientRuntimeState: () => this._resetTransientRuntimeState(),
       clearHoveredTargets: () => this._syncHoveredCanvasTargets(null),
       clearPanelOriginTargets: () => this._panelTargetAdapter.clearPanelOriginTargets(),
+      composeDocumentForSave: (input) => this._appAdapter.document.composeDocumentForSave(input),
       syncCanvasSignalsFromDocument: (file) => syncCanvasSignalsFromDocument(file),
       syncCanvasSignalsFromScene: () => this._syncCanvasSignalsFromScene(),
       invalidateScene: () => this._invalidate('scene'),

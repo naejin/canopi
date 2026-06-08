@@ -514,6 +514,23 @@ describe('frontend boundary sources', () => {
     ])
   })
 
+  it('routes Design file composition through the Canvas Runtime App Adapter', () => {
+    const documentBridgeSource = readSource('../canvas/runtime/scene-runtime/document.ts')
+    const runtimeAdapterSource = readSource('../canvas/runtime/app-adapter.ts')
+    const appAdapterSource = readSource('../app/canvas-runtime/app-adapter.ts')
+
+    expect(documentBridgeSource).toContain('composeDocumentForSave')
+    expect(runtimeAdapterSource).toContain('CanvasRuntimeDocumentAdapter')
+    expect(appAdapterSource).toContain('composeDocumentForSave')
+    expectImportsToContain('../app/canvas-runtime/app-adapter.ts', ['../contracts/document'])
+    expectNoImportsMatching('../canvas/runtime/scene-runtime/document.ts', [
+      /app\/contracts\/document$/,
+    ])
+    expectNoImportsMatching('../canvas/runtime/scene-runtime.ts', [
+      /app\/contracts\/document$/,
+    ])
+  })
+
   it('keeps the Problem Report dialog behind the submission module', () => {
     const dialogSource = readSource('../components/shared/ProblemReportDialog.tsx')
 

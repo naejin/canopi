@@ -30,7 +30,10 @@ import type { CanopiFile, PanelTarget } from '../../types/design'
 import { speciesTarget } from '../../target'
 import { SceneCanvasRuntime } from './scene-runtime.ts'
 import type { SceneRuntimePanelTargetAdapter } from './scene-runtime/panel-target-adapter'
-import type { CanvasRuntimeAppAdapter } from './app-adapter'
+import type {
+  CanvasRuntimeAppAdapter,
+  CanvasRuntimeDocumentCompositionInput,
+} from './app-adapter'
 import { getCommonNames } from '../../ipc/species'
 
 function makeFile(): CanopiFile {
@@ -147,8 +150,40 @@ function createCleanStateAdapterProbe() {
   return {
     adapter: {
       cleanState: { setCanvasClean },
+      document: { composeDocumentForSave: composeTestDocumentForSave },
     } satisfies CanvasRuntimeAppAdapter,
     setCanvasClean,
+  }
+}
+
+function composeTestDocumentForSave({
+  metadata,
+  document,
+  canvas,
+}: CanvasRuntimeDocumentCompositionInput): CanopiFile {
+  return {
+    ...document,
+    ...canvas,
+    name: metadata.name,
+    description: metadata.description ?? document.description ?? null,
+    location: normalizeTestMetadataLocation(metadata.location, document.location),
+    north_bearing_deg: metadata.northBearingDeg ?? document.north_bearing_deg ?? 0,
+    extra: {
+      ...document.extra,
+      ...canvas.extra,
+    },
+  }
+}
+
+function normalizeTestMetadataLocation(
+  location: CanvasRuntimeDocumentCompositionInput['metadata']['location'],
+  fallback: CanopiFile['location'],
+): CanopiFile['location'] {
+  if (!location) return fallback ?? null
+  return {
+    lat: location.lat,
+    lon: location.lon,
+    altitude_m: location.altitude_m ?? null,
   }
 }
 
@@ -548,33 +583,62 @@ describe('scene canvas runtime', () => {
   })
 
   it('reports canvas clean-state transitions through the injected app adapter', () => {
-    const setCanvasClean = vi.fn<(clean: boolean) => void>()
+    const cleanState = createCleanStateAdapterProbe()
+    const runtime = new SceneCanvasRuntime({ appAdapter: cleanState.adapter })
+    const file = makeFile()
+
+    runtime.loadDocument(file)
+    runtime.markSaved()
+    cleanState.setCanvasClean.mockClear()
+
+    runtime.setSelection(['plant-1'])
+    runtime.lockSelected()
+    expect(lastCleanState(cleanState.setCanvasClean)).toBe(false)
+
+    runtime.undo()
+    expect(lastCleanState(cleanState.setCanvasClean)).toBe(true)
+
+    runtime.redo()
+    expect(lastCleanState(cleanState.setCanvasClean)).toBe(false)
+
+    runtime.markSaved()
+    expect(lastCleanState(cleanState.setCanvasClean)).toBe(true)
+
+    runtime.clearHistory()
+    expect(lastCleanState(cleanState.setCanvasClean)).toBe(true)
+  })
+
+  it('delegates Design file composition through the injected app adapter', () => {
+    const composeDocumentForSave = vi.fn(({
+      metadata,
+      document,
+      canvas,
+    }: CanvasRuntimeDocumentCompositionInput) => ({
+      ...document,
+      ...canvas,
+      name: metadata.name,
+      description: 'composed by adapter',
+    } as CanopiFile))
     const runtime = new SceneCanvasRuntime({
       appAdapter: {
-        cleanState: { setCanvasClean },
+        cleanState: { setCanvasClean: () => {} },
+        document: { composeDocumentForSave },
       },
     })
     const file = makeFile()
 
     runtime.loadDocument(file)
-    runtime.markSaved()
-    setCanvasClean.mockClear()
-
     runtime.setSelection(['plant-1'])
-    runtime.lockSelected()
-    expect(lastCleanState(setCanvasClean)).toBe(false)
+    runtime.setSelectedPlantColor('#228833')
 
-    runtime.undo()
-    expect(lastCleanState(setCanvasClean)).toBe(true)
+    const serialized = runtime.serializeDocument({ name: 'Adapter save' }, file)
 
-    runtime.redo()
-    expect(lastCleanState(setCanvasClean)).toBe(false)
-
-    runtime.markSaved()
-    expect(lastCleanState(setCanvasClean)).toBe(true)
-
-    runtime.clearHistory()
-    expect(lastCleanState(setCanvasClean)).toBe(true)
+    expect(composeDocumentForSave).toHaveBeenCalledTimes(1)
+    const input = composeDocumentForSave.mock.calls[0]?.[0]
+    expect(input?.metadata).toEqual({ name: 'Adapter save' })
+    expect(input?.document).toBe(file)
+    expect(input?.canvas.plants[0]?.color).toBe('#228833')
+    expect(serialized.description).toBe('composed by adapter')
   })
 
   it('publishes canvas-origin species hover targets without mutating selection', async () => {
