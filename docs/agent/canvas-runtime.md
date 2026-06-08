@@ -27,7 +27,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - Canvas signals such as selected object IDs, size mode, color mode, layer state, and guides are UI mirrors, not runtime authority.
 - Canvas Query Surface revision values are the app-facing freshness seam for scene entities, localized plant names, and viewport updates. If a caller needs to recompute from scene reads, subscribe to that surface instead of importing runtime mirror signals.
 - Basemap, contour, and hillshade display settings remain app settings projections; do not route those map-surface settings through Scene Edit unless the document schema intentionally makes them canvas-owned.
-- Shared runtime settings reads, writes, and subscriptions for locale, theme invalidation, grid/rulers/snap, and layer projections cross `CanvasRuntimeAppAdapter.settings`. Runtime core must not import `app/settings/*` or `app/canvas-settings/*` for those concerns.
+- Shared runtime settings reads, writes, and subscriptions for locale, theme invalidation, grid/rulers/snap, Plant Spacing interval, and layer projections cross `CanvasRuntimeAppAdapter.settings`. Runtime core must not import `app/settings/*` or `app/canvas-settings/*` for those concerns.
 - No circular imports between scene store/runtime and document store. Pass document readers or values through seams when needed.
 
 ## History And Dirty State

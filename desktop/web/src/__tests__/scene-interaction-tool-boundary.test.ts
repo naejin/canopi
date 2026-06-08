@@ -110,6 +110,12 @@ describe('Scene Interaction tool module boundaries', () => {
     expect(plantSpacingSource).toContain('PlantSpacingSource')
     expect(plantSpacingSource).toContain('createPlantSpacingOverlay')
     expect(plantSpacingSource).toContain('createPlantSpacingToolAdapter')
+    expect(plantSpacingSource).toContain('readPlantSpacingIntervalMeters')
+    expect(plantSpacingSource).toContain('commitPlantSpacingIntervalMeters')
+    expect(toolModulesSource).toContain('readPlantSpacingIntervalMeters: context.readPlantSpacingIntervalMeters')
+    expect(toolModulesSource).toContain('commitPlantSpacingIntervalMeters: context.commitPlantSpacingIntervalMeters')
+    expect(plantSpacingSource).not.toContain('../../../app/settings')
+    expect(plantSpacingSource).not.toContain('../../../app/canvas-settings')
   })
 
   it('keeps active tool drag state generic in the scene interaction router', () => {

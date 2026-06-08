@@ -175,6 +175,8 @@ export class SceneCanvasRuntime {
       render: (kind) => this._invalidate(kind),
       readSnapToGridEnabled: () => this._appAdapter.settings.readSnapToGridEnabled(),
       readSnapToGuidesEnabled: () => this._appAdapter.settings.readSnapToGuidesEnabled(),
+      readPlantSpacingIntervalMeters: () => this._appAdapter.settings.readPlantSpacingIntervalMeters(),
+      commitPlantSpacingIntervalMeters: (meters) => this._appAdapter.settings.commitPlantSpacingIntervalMeters(meters),
       getLocalizedCommonNames: () => this._presentation.getLocalizedCommonNames(),
       setHoveredEntityId: (id) => {
         this._setHoveredEntityId(id)

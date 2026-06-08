@@ -44,6 +44,8 @@ export interface SceneToolModulesContext {
   readonly getSpeciesCache: () => ReadonlyMap<string, SpeciesCacheEntry>
   readonly getPlantPresentationContext: (viewportScale: number) => PlantPresentationContext
   readonly getLocalizedCommonNames: () => ReadonlyMap<string, string | null>
+  readonly readPlantSpacingIntervalMeters: () => number
+  readonly commitPlantSpacingIntervalMeters: (meters: number) => void
   readonly getSelection: () => ReadonlySet<string>
   readonly clearSelection: () => void
   readonly sceneEdits: SceneEditCoordinator
@@ -108,6 +110,8 @@ export function createSceneToolModules(context: SceneToolModulesContext): SceneT
     getSpeciesCache: context.getSpeciesCache,
     getPlantPresentationContext: context.getPlantPresentationContext,
     getLocalizedCommonNames: context.getLocalizedCommonNames,
+    readPlantSpacingIntervalMeters: context.readPlantSpacingIntervalMeters,
+    commitPlantSpacingIntervalMeters: context.commitPlantSpacingIntervalMeters,
     sceneEdits: context.sceneEdits,
     switchTool: context.switchTool,
     applySnapping: context.applySnapping,
