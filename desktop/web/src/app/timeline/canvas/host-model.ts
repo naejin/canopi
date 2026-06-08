@@ -3,8 +3,6 @@ import {
   useTimelinePlanningSurface,
 } from '../../planning-projection'
 import {
-  RULER_HEIGHT,
-  computeTimelineRowOffsets,
   renderTimeline,
 } from '../../../canvas/timeline-renderer'
 import { t } from '../../../i18n'
@@ -90,8 +88,6 @@ export function useTimelineActionCanvasHostModel(): TimelineActionCanvasHostMode
   const layout = projection.layout
   const originMs = projection.originMs
   const originDate = useMemo(() => new Date(originMs), [originMs])
-  const rowOffsets = useMemo(() => computeTimelineRowOffsets(rows, layout), [rows, layout])
-  const canvasHeight = rowOffsets[rowOffsets.length - 1] ?? RULER_HEIGHT
   const cachedRectRef = useRef<DOMRect | null>(null)
   const canvasControllerRef = useRef<TimelineActionCanvasController | null>(null)
   const activeTheme = theme.value
@@ -106,7 +102,6 @@ export function useTimelineActionCanvasHostModel(): TimelineActionCanvasHostMode
   canvasController.updateInputs({
     rows,
     layout,
-    rowOffsets,
     projection,
     originDate,
     originMs,
@@ -115,6 +110,8 @@ export function useTimelineActionCanvasHostModel(): TimelineActionCanvasHostMode
   })
 
   const renderState = canvasController.readRenderState()
+  const geometry = canvasController.readGeometry()
+  const canvasHeight = geometry.canvasHeight
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -211,17 +208,13 @@ export function useTimelineActionCanvasHostModel(): TimelineActionCanvasHostMode
           ctx,
           width,
           height,
-          rows,
-          layout,
+          geometry,
           renderState,
           t,
-          rowOffsets,
         )
       },
       deps: [
-        rows,
-        layout,
-        rowOffsets,
+        geometry,
         originMs,
         canvasController.pxPerDay.value,
         canvasController.scrollX.value,
@@ -229,7 +222,6 @@ export function useTimelineActionCanvasHostModel(): TimelineActionCanvasHostMode
         canvasController.hoveredId.value,
         activeLocale,
         speciesColors,
-        canvasController.granularity.value,
         activeTheme,
       ],
       cachedRectRef,

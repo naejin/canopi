@@ -1,18 +1,17 @@
 import type {
   ActionType,
-  TimelineActionLayout,
-  TimelineActionTypeRow,
   TimelinePlanningAction,
   TimelinePlanningProjection,
 } from '../../planning-projection'
 import { ACTION_TYPES } from '../../planning-projection'
 import {
-  LABEL_SIDEBAR_WIDTH,
-  RULER_HEIGHT,
-  hitTestAction,
-  type TimelineRenderState,
-} from '../../../canvas/timeline-renderer'
-import { dateToX, snapToDay, toISODate, xToDate } from '../../../canvas/timeline-math'
+  TIMELINE_LABEL_SIDEBAR_WIDTH,
+  TIMELINE_RULER_HEIGHT,
+  findTimelineActionTypeAtY,
+  hitTestTimelineActionGeometry,
+  type TimelineActionCanvasGeometry,
+} from './geometry'
+import { snapToDay, toISODate, xToDate } from '../../../canvas/timeline-math'
 import {
   clearTimelineHoveredPanelTargets,
   clearTimelineSelectedPanelTargets,
@@ -30,21 +29,17 @@ import { createUuid } from '../../../utils/ids'
 import { isEditableTarget } from '../../../canvas/runtime/interaction/pointer-utils'
 import {
   TIMELINE_CLICK_THRESHOLD,
-  TIMELINE_GRANULARITY_PX_PER_DAY,
   applyTimelineEditDragDelta,
   commitTimelineDrag,
   createTimelineMoveDrag,
   createTimelineOriginFreeze,
   createTimelinePanDrag,
   createTimelineResizeDrag,
-  hitTestTimelineRulerControls,
   isTimelineEditDrag,
-  nextTimelineGranularity,
   restoreTimelineOriginScroll,
   timelineAutoScrollSpeed,
   updateTimelinePanScrollX,
   type TimelineDragState,
-  type TimelineGranularity,
 } from '../interaction'
 
 interface MutableRef<T> {
@@ -60,8 +55,6 @@ export interface TimelineActionInteractionFrameView {
   setScrollX(next: number): void
   getPxPerDay(): number
   setPxPerDay(next: number): void
-  getGranularity(): TimelineGranularity
-  setGranularity(next: TimelineGranularity): void
 }
 
 export interface TimelineActionInteractionFramePopoverDelegate {
@@ -92,10 +85,7 @@ export interface TimelineActionInteractionFrameAnimation {
 export interface TimelineActionInteractionFrameOptions {
   readonly canvasRef: MutableDomRef<HTMLCanvasElement>
   readonly cachedRectRef: MutableDomRef<DOMRect>
-  readonly rowsRef: MutableRef<readonly TimelineActionTypeRow[]>
-  readonly layoutRef: MutableRef<ReadonlyMap<string, TimelineActionLayout>>
-  readonly rowOffsetsRef: MutableRef<number[]>
-  readonly renderStateRef: MutableRef<TimelineRenderState>
+  readonly geometryRef: MutableRef<TimelineActionCanvasGeometry>
   readonly projectionRef: MutableRef<TimelinePlanningProjection>
   readonly computedOriginMsRef: MutableRef<number>
   readonly view: TimelineActionInteractionFrameView
@@ -133,10 +123,7 @@ interface PendingTimelineClick {
 export function createTimelineActionInteractionFrame({
   canvasRef,
   cachedRectRef,
-  rowsRef,
-  layoutRef,
-  rowOffsetsRef,
-  renderStateRef,
+  geometryRef,
   projectionRef,
   computedOriginMsRef,
   view,
@@ -298,45 +285,21 @@ export function createTimelineActionInteractionFrame({
       if (event.button !== 0) return
 
       const popoverWasOpen = popover.close()
-      if (mouseY < RULER_HEIGHT) {
-        const rulerHit = hitTestTimelineRulerControls(mouseX, mouseY)
-        if (rulerHit === 'granularity') {
-          const next = nextTimelineGranularity(view.getGranularity())
-          view.setGranularity(next)
-          view.setPxPerDay(TIMELINE_GRANULARITY_PX_PER_DAY[next])
-          return
-        }
-        if (rulerHit === 'today') {
-          const r = cachedRectRef.current ?? canvas.getBoundingClientRect()
-          const chartWidth = r.width - LABEL_SIDEBAR_WIDTH
-          const { originDate, pxPerDay } = renderStateRef.current
-          view.setScrollX(dateToX(new Date(), originDate, pxPerDay) - chartWidth / 2)
-        }
+      if (mouseY < TIMELINE_RULER_HEIGHT) {
         return
       }
 
-      const hit = hitTestAction(
-        mouseX,
-        mouseY,
-        rowsRef.current,
-        layoutRef.current,
-        renderStateRef.current,
-        rowOffsetsRef.current,
-      )
+      const geometry = geometryRef.current
+      const hit = hitTestTimelineActionGeometry(geometry, { x: mouseX, y: mouseY })
 
       if (!hit) {
-        if (mouseX < LABEL_SIDEBAR_WIDTH || popoverWasOpen) return
-        const { originDate, pxPerDay, scrollX } = renderStateRef.current
-        const chartX = mouseX - LABEL_SIDEBAR_WIDTH + scrollX
+        if (mouseX < TIMELINE_LABEL_SIDEBAR_WIDTH || popoverWasOpen) return
+        const { originDate, pxPerDay, scrollX } = geometry.state
+        const chartX = mouseX - TIMELINE_LABEL_SIDEBAR_WIDTH + scrollX
         const clickDate = snapToDay(xToDate(chartX, originDate, pxPerDay))
-        const offsets = rowOffsetsRef.current
-        let rowActionType: ActionType = ACTION_TYPES[0]!
-        for (let i = 0; i < offsets.length - 1; i++) {
-          if (mouseY >= offsets[i]! && mouseY < offsets[i + 1]!) {
-            rowActionType = ACTION_TYPES[i] ?? ACTION_TYPES[0]!
-            break
-          }
-        }
+        const rowActionType = (
+          findTimelineActionTypeAtY(geometry, mouseY) ?? ACTION_TYPES[0]!
+        ) as ActionType
         pendingClick = {
           clientX: event.clientX,
           clientY: event.clientY,
@@ -408,14 +371,7 @@ export function createTimelineActionInteractionFrame({
       const mouseX = event.clientX - rect.left
       const mouseY = event.clientY - rect.top
 
-      const hit = hitTestAction(
-        mouseX,
-        mouseY,
-        rowsRef.current,
-        layoutRef.current,
-        renderStateRef.current,
-        rowOffsetsRef.current,
-      )
+      const hit = hitTestTimelineActionGeometry(geometryRef.current, { x: mouseX, y: mouseY })
 
       if (hit) {
         hoveredActionId = hit.action.id
@@ -427,7 +383,7 @@ export function createTimelineActionInteractionFrame({
 
       const nextCursor = hit
         ? (hit.edge === 'left' || hit.edge === 'right' ? 'ew-resize' : 'grab')
-        : mouseY < RULER_HEIGHT ? 'default' : 'crosshair'
+        : mouseY < TIMELINE_RULER_HEIGHT ? 'default' : 'crosshair'
       if (canvas.style.cursor !== nextCursor) canvas.style.cursor = nextCursor
     },
 
@@ -485,7 +441,7 @@ export function createTimelineActionInteractionFrame({
       const canvas = canvasRef.current
       if (canvas) {
         const rect = cachedRectRef.current ?? canvas.getBoundingClientRect()
-        const mouseX = event.clientX - rect.left - LABEL_SIDEBAR_WIDTH
+        const mouseX = event.clientX - rect.left - TIMELINE_LABEL_SIDEBAR_WIDTH
         const dayAtCursor = (view.getScrollX() + mouseX) / previousPxPerDay
         view.setScrollX(dayAtCursor * nextPxPerDay - mouseX)
       }

@@ -7,11 +7,13 @@ import {
 } from '../app/planning-projection'
 import { createTimelineActionInteractionFrame } from '../app/timeline/canvas/interaction-frame'
 import {
-  LABEL_SIDEBAR_WIDTH,
-  RULER_HEIGHT,
-  computeTimelineRowOffsets,
   type TimelineRenderState,
 } from '../canvas/timeline-renderer'
+import {
+  TIMELINE_LABEL_SIDEBAR_WIDTH,
+  TIMELINE_RULER_HEIGHT,
+  createTimelineActionCanvasGeometry,
+} from '../app/timeline/canvas/geometry'
 import {
   openTimelineActionPopover,
   type TimelineActionPopoverState,
@@ -92,7 +94,6 @@ function createFrameHarness({
     ? groupTimelineActionsByType(actions)
     : ACTION_TYPES.map((actionType) => ({ actionType, actions: [] }))
   const layout = actions.length > 0 ? computeTimelineActionLayout(rows) : new Map()
-  const rowOffsets = computeTimelineRowOffsets(rows, layout)
   const renderState: TimelineRenderState = {
     originDate: new Date('2026-04-01T00:00:00.000Z'),
     pxPerDay: 5,
@@ -101,7 +102,13 @@ function createFrameHarness({
     hoveredId: null,
     locale: 'en',
     speciesColors: {},
-    granularity: 'month',
+  }
+  const geometryRef = {
+    current: createTimelineActionCanvasGeometry({
+      rows,
+      layout,
+      state: renderState,
+    }),
   }
   const projection: TimelinePlanningProjection = {
     rows,
@@ -111,7 +118,6 @@ function createFrameHarness({
   }
   let scrollX = renderState.scrollX
   let pxPerDay = renderState.pxPerDay
-  let granularity: 'month' | 'year' = 'month'
   let popoverState: TimelineActionPopoverState | null = null
   let selectedId: string | null = null
   const selectedActionIds: string[] = []
@@ -121,30 +127,34 @@ function createFrameHarness({
   let tooltipVisible = false
   let nextFrameId = 1
   const animationCallbacks = new Map<number, FrameRequestCallback>()
+  const syncGeometry = (): void => {
+    geometryRef.current = createTimelineActionCanvasGeometry({
+      rows,
+      layout,
+      state: {
+        originDate: renderState.originDate,
+        pxPerDay,
+        scrollX,
+      },
+    })
+  }
 
   const frame = createTimelineActionInteractionFrame({
     canvasRef: { current: canvas },
     cachedRectRef: { current: null },
-    rowsRef: { current: rows },
-    layoutRef: { current: layout },
-    rowOffsetsRef: { current: rowOffsets },
-    renderStateRef: { current: renderState },
+    geometryRef,
     projectionRef: { current: projection },
     computedOriginMsRef,
     view: {
       getScrollX: () => scrollX,
       setScrollX: (next) => {
         scrollX = next
-        renderState.scrollX = next
+        syncGeometry()
       },
       getPxPerDay: () => pxPerDay,
       setPxPerDay: (next) => {
         pxPerDay = next
-        renderState.pxPerDay = next
-      },
-      getGranularity: () => granularity,
-      setGranularity: (next) => {
-        granularity = next
+        syncGeometry()
       },
     },
     popover: {
@@ -233,8 +243,8 @@ function createFrameHarness({
       callback(0)
       return true
     },
-    chartY: RULER_HEIGHT + 12,
-    chartX: LABEL_SIDEBAR_WIDTH + 80,
+    chartY: TIMELINE_RULER_HEIGHT + 12,
+    chartX: TIMELINE_LABEL_SIDEBAR_WIDTH + 80,
   }
 }
 
@@ -283,7 +293,7 @@ describe('Timeline Action interaction frame', () => {
     const harness = createFrameHarness({ actions: [action], initialScrollX: 0 })
 
     harness.frame.handleCanvasMouseMove(new MouseEvent('mousemove', {
-      clientX: LABEL_SIDEBAR_WIDTH + 60,
+      clientX: TIMELINE_LABEL_SIDEBAR_WIDTH + 60,
       clientY: harness.chartY,
       bubbles: true,
     }))
@@ -312,7 +322,7 @@ describe('Timeline Action interaction frame', () => {
     const harness = createFrameHarness({ actions: [action], initialScrollX: 0 })
 
     harness.frame.handleCanvasMouseMove(new MouseEvent('mousemove', {
-      clientX: LABEL_SIDEBAR_WIDTH + 60,
+      clientX: TIMELINE_LABEL_SIDEBAR_WIDTH + 60,
       clientY: harness.chartY,
       bubbles: true,
     }))
@@ -321,12 +331,12 @@ describe('Timeline Action interaction frame', () => {
 
     harness.frame.handleMouseDown(new MouseEvent('mousedown', {
       button: 0,
-      clientX: LABEL_SIDEBAR_WIDTH + 180,
+      clientX: TIMELINE_LABEL_SIDEBAR_WIDTH + 180,
       clientY: harness.chartY,
       bubbles: true,
     }))
     harness.frame.handleDocumentMouseMove(new MouseEvent('mousemove', {
-      clientX: LABEL_SIDEBAR_WIDTH + 150,
+      clientX: TIMELINE_LABEL_SIDEBAR_WIDTH + 150,
       clientY: harness.chartY,
       bubbles: true,
     }))
@@ -341,7 +351,7 @@ describe('Timeline Action interaction frame', () => {
     const harness = createFrameHarness({ actions: [action], initialScrollX: 0 })
 
     harness.frame.handleCanvasMouseMove(new MouseEvent('mousemove', {
-      clientX: LABEL_SIDEBAR_WIDTH + 60,
+      clientX: TIMELINE_LABEL_SIDEBAR_WIDTH + 60,
       clientY: harness.chartY,
       bubbles: true,
     }))
@@ -360,7 +370,7 @@ describe('Timeline Action interaction frame', () => {
 
     harness.frame.handleMouseDown(new MouseEvent('mousedown', {
       button: 0,
-      clientX: LABEL_SIDEBAR_WIDTH + 50,
+      clientX: TIMELINE_LABEL_SIDEBAR_WIDTH + 50,
       clientY: harness.chartY,
       bubbles: true,
     }))
@@ -368,7 +378,7 @@ describe('Timeline Action interaction frame', () => {
     expect(harness.selectedActionIds).toEqual(['task-1'])
 
     harness.frame.handleDocumentMouseMove(new MouseEvent('mousemove', {
-      clientX: LABEL_SIDEBAR_WIDTH + 60,
+      clientX: TIMELINE_LABEL_SIDEBAR_WIDTH + 60,
       clientY: harness.chartY,
       bubbles: true,
     }))
@@ -381,7 +391,7 @@ describe('Timeline Action interaction frame', () => {
 
     harness.computedOriginMsRef.current = new Date('2026-03-30T00:00:00.000Z').getTime()
     harness.frame.handleDocumentMouseUp(new MouseEvent('mouseup', {
-      clientX: LABEL_SIDEBAR_WIDTH + 60,
+      clientX: TIMELINE_LABEL_SIDEBAR_WIDTH + 60,
       clientY: harness.chartY,
       bubbles: true,
     }))
@@ -398,7 +408,7 @@ describe('Timeline Action interaction frame', () => {
 
     harness.frame.handleMouseDown(new MouseEvent('mousedown', {
       button: 0,
-      clientX: LABEL_SIDEBAR_WIDTH + 73,
+      clientX: TIMELINE_LABEL_SIDEBAR_WIDTH + 73,
       clientY: harness.chartY,
       bubbles: true,
     }))
@@ -406,7 +416,7 @@ describe('Timeline Action interaction frame', () => {
     expect(document.body.style.cursor).toBe('ew-resize')
 
     harness.frame.handleDocumentMouseMove(new MouseEvent('mousemove', {
-      clientX: LABEL_SIDEBAR_WIDTH + 83,
+      clientX: TIMELINE_LABEL_SIDEBAR_WIDTH + 83,
       clientY: harness.chartY,
       bubbles: true,
     }))
@@ -418,7 +428,7 @@ describe('Timeline Action interaction frame', () => {
     expect(nonCanvasRevision.value).toBe(0)
 
     harness.frame.handleDocumentMouseUp(new MouseEvent('mouseup', {
-      clientX: LABEL_SIDEBAR_WIDTH + 83,
+      clientX: TIMELINE_LABEL_SIDEBAR_WIDTH + 83,
       clientY: harness.chartY,
       bubbles: true,
     }))
@@ -434,7 +444,7 @@ describe('Timeline Action interaction frame', () => {
 
     harness.frame.handleMouseDown(new MouseEvent('mousedown', {
       button: 0,
-      clientX: LABEL_SIDEBAR_WIDTH + 60,
+      clientX: TIMELINE_LABEL_SIDEBAR_WIDTH + 60,
       clientY: harness.chartY,
       bubbles: true,
     }))
@@ -470,13 +480,13 @@ describe('Timeline Action interaction frame', () => {
 
     harness.frame.handleMouseDown(new MouseEvent('mousedown', {
       button: 0,
-      clientX: LABEL_SIDEBAR_WIDTH + 60,
+      clientX: TIMELINE_LABEL_SIDEBAR_WIDTH + 60,
       clientY: harness.chartY,
       bubbles: true,
     }))
     harness.frame.handleDocumentMouseUp(new MouseEvent('mouseup', {
       button: 0,
-      clientX: LABEL_SIDEBAR_WIDTH + 60,
+      clientX: TIMELINE_LABEL_SIDEBAR_WIDTH + 60,
       clientY: harness.chartY,
       bubbles: true,
     }))
@@ -499,13 +509,13 @@ describe('Timeline Action interaction frame', () => {
 
     harness.frame.handleMouseDown(new MouseEvent('mousedown', {
       button: 0,
-      clientX: LABEL_SIDEBAR_WIDTH + 60,
+      clientX: TIMELINE_LABEL_SIDEBAR_WIDTH + 60,
       clientY: harness.chartY,
       bubbles: true,
     }))
     harness.frame.handleDocumentMouseUp(new MouseEvent('mouseup', {
       button: 0,
-      clientX: LABEL_SIDEBAR_WIDTH + 60,
+      clientX: TIMELINE_LABEL_SIDEBAR_WIDTH + 60,
       clientY: harness.chartY,
       bubbles: true,
     }))
@@ -535,13 +545,13 @@ describe('Timeline Action interaction frame', () => {
 
     harness.frame.handleMouseDown(new MouseEvent('mousedown', {
       button: 0,
-      clientX: LABEL_SIDEBAR_WIDTH + 60,
+      clientX: TIMELINE_LABEL_SIDEBAR_WIDTH + 60,
       clientY: harness.chartY,
       bubbles: true,
     }))
     harness.frame.handleDocumentMouseUp(new MouseEvent('mouseup', {
       button: 0,
-      clientX: LABEL_SIDEBAR_WIDTH + 60,
+      clientX: TIMELINE_LABEL_SIDEBAR_WIDTH + 60,
       clientY: harness.chartY,
       bubbles: true,
     }))
@@ -590,7 +600,7 @@ describe('Timeline Action interaction frame', () => {
 
     harness.frame.handleMouseDown(new MouseEvent('mousedown', {
       button: 0,
-      clientX: LABEL_SIDEBAR_WIDTH + 60,
+      clientX: TIMELINE_LABEL_SIDEBAR_WIDTH + 60,
       clientY: harness.chartY,
       bubbles: true,
     }))
@@ -615,13 +625,13 @@ describe('Timeline Action interaction frame', () => {
     const harness = createFrameHarness({ actions: [action], initialScrollX: 0 })
 
     harness.frame.handleCanvasMouseMove(new MouseEvent('mousemove', {
-      clientX: LABEL_SIDEBAR_WIDTH + 60,
+      clientX: TIMELINE_LABEL_SIDEBAR_WIDTH + 60,
       clientY: harness.chartY,
       bubbles: true,
     }))
     harness.frame.handleMouseDown(new MouseEvent('mousedown', {
       button: 0,
-      clientX: LABEL_SIDEBAR_WIDTH + 60,
+      clientX: TIMELINE_LABEL_SIDEBAR_WIDTH + 60,
       clientY: harness.chartY,
       bubbles: true,
     }))
@@ -644,12 +654,12 @@ describe('Timeline Action interaction frame', () => {
 
     harness.frame.handleMouseDown(new MouseEvent('mousedown', {
       button: 0,
-      clientX: LABEL_SIDEBAR_WIDTH + 60,
+      clientX: TIMELINE_LABEL_SIDEBAR_WIDTH + 60,
       clientY: harness.chartY,
       bubbles: true,
     }))
     harness.frame.handleDocumentMouseMove(new MouseEvent('mousemove', {
-      clientX: LABEL_SIDEBAR_WIDTH + 70,
+      clientX: TIMELINE_LABEL_SIDEBAR_WIDTH + 70,
       clientY: harness.chartY,
       bubbles: true,
     }))
@@ -676,7 +686,7 @@ describe('Timeline Action interaction frame', () => {
 
     harness.frame.handleMouseDown(new MouseEvent('mousedown', {
       button: 0,
-      clientX: LABEL_SIDEBAR_WIDTH + 60,
+      clientX: TIMELINE_LABEL_SIDEBAR_WIDTH + 60,
       clientY: harness.chartY,
       bubbles: true,
     }))

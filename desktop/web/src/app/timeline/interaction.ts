@@ -1,26 +1,13 @@
-import {
-  LABEL_SIDEBAR_WIDTH,
-  RULER_HEIGHT,
-  rulerControlBounds,
-  type HitResult,
-} from '../../canvas/timeline-renderer'
 import type { TimelineActionEditSession } from './editing'
 import {
   beginTimelineActionEdit,
   compensateFrozenTimelineOriginScroll,
   computeTimelineAutoScrollSpeed,
 } from './editing'
-
-export type TimelineGranularity = 'month' | 'year'
-
-export const TIMELINE_GRANULARITY_PX_PER_DAY: Record<TimelineGranularity, number> = {
-  month: 5,
-  year: 0.8,
-}
-
-// Must match pillY / pillH in timeline-renderer.ts ruler controls.
-const RULER_BTN_Y = (RULER_HEIGHT - 18) / 2
-const RULER_BTN_H = 18
+import {
+  TIMELINE_LABEL_SIDEBAR_WIDTH,
+  type TimelineActionHitResult,
+} from './canvas/geometry'
 
 export const TIMELINE_CLICK_THRESHOLD = 3
 
@@ -55,24 +42,6 @@ export interface TimelineOriginFreeze {
   readonly originDate: Date
 }
 
-export function hitTestTimelineRulerControls(
-  x: number,
-  y: number,
-): 'granularity' | 'today' | null {
-  if (y < RULER_BTN_Y || y > RULER_BTN_Y + RULER_BTN_H) return null
-  const { mo, yr, today } = rulerControlBounds
-  if (x >= mo.x && x <= mo.x + mo.w) return 'granularity'
-  if (x >= yr.x && x <= yr.x + yr.w) return 'granularity'
-  if (x >= today.x && x <= today.x + today.w) return 'today'
-  return null
-}
-
-export function nextTimelineGranularity(
-  current: TimelineGranularity,
-): TimelineGranularity {
-  return current === 'month' ? 'year' : 'month'
-}
-
 export function createTimelinePanDrag({
   startMouseX,
   startScrollX,
@@ -96,7 +65,7 @@ export function createTimelineMoveDrag({
   cachedRect,
   pxPerDaySnapshot,
 }: {
-  readonly hit: HitResult
+  readonly hit: TimelineActionHitResult
   readonly startMouseX: number
   readonly cachedRect: DOMRect
   readonly pxPerDaySnapshot: number
@@ -127,7 +96,7 @@ export function createTimelineResizeDrag({
   cachedRect,
   pxPerDaySnapshot,
 }: {
-  readonly hit: HitResult
+  readonly hit: TimelineActionHitResult
   readonly startMouseX: number
   readonly cachedRect: DOMRect
   readonly pxPerDaySnapshot: number
@@ -176,7 +145,7 @@ export function timelineAutoScrollSpeed(
   mouseX: number,
   chartWidth: number,
 ): number {
-  return computeTimelineAutoScrollSpeed(mouseX, chartWidth, LABEL_SIDEBAR_WIDTH)
+  return computeTimelineAutoScrollSpeed(mouseX, chartWidth, TIMELINE_LABEL_SIDEBAR_WIDTH)
 }
 
 export function createTimelineOriginFreeze(originMs: number): TimelineOriginFreeze {
