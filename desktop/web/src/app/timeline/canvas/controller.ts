@@ -6,12 +6,12 @@ import type {
   TimelinePlanningProjection,
 } from '../../planning-projection'
 import type { TimelineRenderState } from '../../../canvas/timeline-renderer'
-import type {
-  TimelineGranularity,
-} from '../interaction'
 import {
-  TIMELINE_GRANULARITY_PX_PER_DAY,
-} from '../interaction'
+  DEFAULT_TIMELINE_PX_PER_DAY,
+  createTimelineActionCanvasGeometry,
+  type TimelineActionCanvasGeometryState,
+  type TimelineActionCanvasGeometry,
+} from './geometry'
 import {
   createTimelineActionInteractionFrame,
   type TimelineActionInteractionFrame,
@@ -37,7 +37,6 @@ export type TimelineTooltipState = {
 export interface TimelineActionCanvasControllerInputs {
   readonly rows: readonly TimelineActionTypeRow[]
   readonly layout: ReadonlyMap<string, TimelineActionLayout>
-  readonly rowOffsets: number[]
   readonly projection: TimelinePlanningProjection
   readonly originDate: Date
   readonly originMs: number
@@ -56,11 +55,11 @@ export interface TimelineActionCanvasController {
   readonly scrollX: ReadonlySignal<number>
   readonly selectedId: ReadonlySignal<string | null>
   readonly hoveredId: ReadonlySignal<string | null>
-  readonly granularity: ReadonlySignal<TimelineGranularity>
   readonly tooltip: ReadonlySignal<TimelineTooltipState | null>
   readonly popover: ReadonlySignal<TimelineActionPopoverState | null>
   updateInputs(inputs: TimelineActionCanvasControllerInputs): void
   readRenderState(): TimelineRenderState
+  readGeometry(): TimelineActionCanvasGeometry
   getFrozenOriginDate(): Date | null
   syncActions(actions: readonly { readonly id: string }[]): void
   handleContainerScroll(): void
@@ -80,12 +79,17 @@ export interface TimelineActionCanvasController {
 
 const EMPTY_ROWS: readonly TimelineActionTypeRow[] = []
 const EMPTY_LAYOUT: ReadonlyMap<string, TimelineActionLayout> = new Map()
-const EMPTY_ROW_OFFSETS: number[] = []
 const EMPTY_PROJECTION: TimelinePlanningProjection = {
   rows: EMPTY_ROWS,
   layout: EMPTY_LAYOUT,
   speciesList: [],
   originMs: 0,
+}
+
+interface TimelineActionCanvasGeometryInputs {
+  readonly rows: readonly TimelineActionTypeRow[]
+  readonly layout: ReadonlyMap<string, TimelineActionLayout>
+  readonly state: TimelineActionCanvasGeometryState
 }
 
 export function createTimelineActionCanvasController({
@@ -95,15 +99,13 @@ export function createTimelineActionCanvasController({
 }: TimelineActionCanvasControllerOptions): TimelineActionCanvasController {
   const rowsRef: MutableRef<readonly TimelineActionTypeRow[]> = { current: EMPTY_ROWS }
   const layoutRef: MutableRef<ReadonlyMap<string, TimelineActionLayout>> = { current: EMPTY_LAYOUT }
-  const rowOffsetsRef: MutableRef<number[]> = { current: EMPTY_ROW_OFFSETS }
   const projectionRef: MutableRef<TimelinePlanningProjection> = { current: EMPTY_PROJECTION }
   const computedOriginMsRef: MutableRef<number> = { current: 0 }
 
-  const pxPerDay = signal(TIMELINE_GRANULARITY_PX_PER_DAY.month)
+  const pxPerDay = signal(DEFAULT_TIMELINE_PX_PER_DAY)
   const scrollX = signal(0)
   const selectedId = signal<string | null>(null)
   const hoveredId = signal<string | null>(null)
-  const granularity = signal<TimelineGranularity>('month')
   const tooltip = signal<TimelineTooltipState | null>(null)
   const popover = signal<TimelineActionPopoverState | null>(null)
 
@@ -121,7 +123,22 @@ export function createTimelineActionCanvasController({
       hoveredId: hoveredId.peek(),
       locale: activeLocale,
       speciesColors,
-      granularity: granularity.peek(),
+    },
+  }
+  const geometryRef: MutableRef<TimelineActionCanvasGeometry> = {
+    current: createTimelineActionCanvasGeometry({
+      rows: EMPTY_ROWS,
+      layout: EMPTY_LAYOUT,
+      state: renderStateRef.current,
+    }),
+  }
+  let geometryInputs: TimelineActionCanvasGeometryInputs = {
+    rows: EMPTY_ROWS,
+    layout: EMPTY_LAYOUT,
+    state: {
+      originDate,
+      pxPerDay: pxPerDay.peek(),
+      scrollX: scrollX.peek(),
     },
   }
 
@@ -134,10 +151,38 @@ export function createTimelineActionCanvasController({
       hoveredId: hoveredId.value,
       locale: activeLocale,
       speciesColors,
-      granularity: granularity.value,
     }
     renderStateRef.current = state
+    syncGeometry(state)
     return state
+  }
+
+  function readGeometry(): TimelineActionCanvasGeometry {
+    return geometryRef.current
+  }
+
+  function syncGeometry(state: TimelineRenderState): void {
+    const geometryState: TimelineActionCanvasGeometryState = {
+      originDate: state.originDate,
+      pxPerDay: state.pxPerDay,
+      scrollX: state.scrollX,
+    }
+    if (
+      geometryInputs.rows === rowsRef.current
+      && geometryInputs.layout === layoutRef.current
+      && geometryInputs.state.originDate === geometryState.originDate
+      && geometryInputs.state.pxPerDay === geometryState.pxPerDay
+      && geometryInputs.state.scrollX === geometryState.scrollX
+    ) {
+      return
+    }
+
+    geometryInputs = {
+      rows: rowsRef.current,
+      layout: layoutRef.current,
+      state: geometryState,
+    }
+    geometryRef.current = createTimelineActionCanvasGeometry(geometryInputs)
   }
 
   function activeFrame(): TimelineActionInteractionFrame {
@@ -148,10 +193,7 @@ export function createTimelineActionCanvasController({
   frame = createTimelineActionInteractionFrame({
     canvasRef,
     cachedRectRef,
-    rowsRef,
-    layoutRef,
-    rowOffsetsRef,
-    renderStateRef,
+    geometryRef,
     projectionRef,
     computedOriginMsRef,
     view: {
@@ -162,10 +204,6 @@ export function createTimelineActionCanvasController({
       getPxPerDay: () => pxPerDay.peek(),
       setPxPerDay: (next) => {
         pxPerDay.value = next
-      },
-      getGranularity: () => granularity.peek(),
-      setGranularity: (next) => {
-        granularity.value = next
       },
     },
     popover: {
@@ -213,14 +251,12 @@ export function createTimelineActionCanvasController({
     scrollX,
     selectedId,
     hoveredId,
-    granularity,
     tooltip,
     popover,
 
     updateInputs(inputs): void {
       rowsRef.current = inputs.rows
       layoutRef.current = inputs.layout
-      rowOffsetsRef.current = inputs.rowOffsets
       projectionRef.current = inputs.projection
       computedOriginMsRef.current = inputs.originMs
       originDate = inputs.originDate
@@ -230,6 +266,7 @@ export function createTimelineActionCanvasController({
     },
 
     readRenderState,
+    readGeometry,
     getFrozenOriginDate: () => activeFrame().getFrozenOriginDate(),
     syncActions: (actions) => activeFrame().syncActions(actions),
     handleContainerScroll: () => activeFrame().handleContainerScroll(),
