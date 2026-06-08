@@ -9,6 +9,7 @@
  * - Architecture review: Undo clears dirty even when non-canvas edits remain
  */
 import { describe, it, expect, beforeEach } from 'vitest'
+import { createAppCanvasRuntimeAppAdapter } from '../app/canvas-runtime/app-adapter'
 import { SceneHistory } from '../canvas/runtime/scene-history'
 import type { SceneCommand, SceneCommandRuntime } from '../canvas/runtime/scene-commands'
 import { canvasClean, canvasDirty, markCanvasDetachedDirty } from './support/design-session-state'
@@ -38,7 +39,10 @@ function noop(): SceneCommand {
 let history: SceneHistory
 
 beforeEach(() => {
-  history = new SceneHistory()
+  const appAdapter = createAppCanvasRuntimeAppAdapter()
+  history = new SceneHistory({
+    reportCleanState: (clean) => appAdapter.cleanState.setCanvasClean(clean),
+  })
   resetDirtyBaselines()
   history.clear()
 })

@@ -25,12 +25,12 @@ import {
   selectedPanelTargets,
 } from '../../app/panel-targets/state'
 import { createAppSceneRuntimePanelTargetAdapter } from '../../app/canvas-runtime/panel-target-adapter'
-import { canvasClean } from '../../__tests__/support/design-session-state'
 import { locale, plantSpacingIntervalM } from '../../app/settings/state'
 import type { CanopiFile, PanelTarget } from '../../types/design'
 import { speciesTarget } from '../../target'
 import { SceneCanvasRuntime } from './scene-runtime.ts'
 import type { SceneRuntimePanelTargetAdapter } from './scene-runtime/panel-target-adapter'
+import type { CanvasRuntimeAppAdapter } from './app-adapter'
 import { getCommonNames } from '../../ipc/species'
 
 function makeFile(): CanopiFile {
@@ -131,10 +131,25 @@ function zoneMeasurementTexts(container: HTMLElement): string[] {
     .map((label) => label.textContent ?? '')
 }
 
-function createRuntimeWithAppPanelTargets(): SceneCanvasRuntime {
+function createRuntimeWithAppPanelTargets(appAdapter?: CanvasRuntimeAppAdapter): SceneCanvasRuntime {
   return new SceneCanvasRuntime({
+    appAdapter,
     targetPresentation: createAppSceneRuntimePanelTargetAdapter(),
   })
+}
+
+function lastCleanState(setCanvasClean: ReturnType<typeof vi.fn<(clean: boolean) => void>>): boolean | undefined {
+  return setCanvasClean.mock.calls[setCanvasClean.mock.calls.length - 1]?.[0]
+}
+
+function createCleanStateAdapterProbe() {
+  const setCanvasClean = vi.fn<(clean: boolean) => void>()
+  return {
+    adapter: {
+      cleanState: { setCanvasClean },
+    } satisfies CanvasRuntimeAppAdapter,
+    setCanvasClean,
+  }
 }
 
 function createPanelTargetAdapterProbe(initialTargets: readonly PanelTarget[] = []) {
@@ -190,7 +205,6 @@ describe('scene canvas runtime', () => {
     plantSizeMode.value = 'default'
     plantColorByAttr.value = null
     plantSpacingIntervalM.value = 0.5
-    canvasClean.value = true
     vi.mocked(getCommonNames).mockReset()
     vi.mocked(getCommonNames).mockResolvedValue({})
   })
@@ -429,8 +443,10 @@ describe('scene canvas runtime', () => {
   })
 
   it('resolves selected panel targets for renderer highlights without mutating canvas selection or dirty state', async () => {
-    const runtime = createRuntimeWithAppPanelTargets()
+    const cleanState = createCleanStateAdapterProbe()
+    const runtime = createRuntimeWithAppPanelTargets(cleanState.adapter)
     runtime.loadDocument(makeFile())
+    cleanState.setCanvasClean.mockClear()
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
 
     renderer.renderScene.mockClear()
@@ -448,7 +464,7 @@ describe('scene canvas runtime', () => {
     expect(snapshot?.highlightedZoneIds).toEqual(new Set(['zone-1']))
     expect(runtime.getSceneStore().session.selectedEntityIds.size).toBe(0)
     expect(selectedObjectIds.value.size).toBe(0)
-    expect(canvasClean.value).toBe(true)
+    expect(cleanState.setCanvasClean).not.toHaveBeenCalledWith(false)
     runtime.destroy()
   })
 
@@ -531,9 +547,41 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
+  it('reports canvas clean-state transitions through the injected app adapter', () => {
+    const setCanvasClean = vi.fn<(clean: boolean) => void>()
+    const runtime = new SceneCanvasRuntime({
+      appAdapter: {
+        cleanState: { setCanvasClean },
+      },
+    })
+    const file = makeFile()
+
+    runtime.loadDocument(file)
+    runtime.markSaved()
+    setCanvasClean.mockClear()
+
+    runtime.setSelection(['plant-1'])
+    runtime.lockSelected()
+    expect(lastCleanState(setCanvasClean)).toBe(false)
+
+    runtime.undo()
+    expect(lastCleanState(setCanvasClean)).toBe(true)
+
+    runtime.redo()
+    expect(lastCleanState(setCanvasClean)).toBe(false)
+
+    runtime.markSaved()
+    expect(lastCleanState(setCanvasClean)).toBe(true)
+
+    runtime.clearHistory()
+    expect(lastCleanState(setCanvasClean)).toBe(true)
+  })
+
   it('publishes canvas-origin species hover targets without mutating selection', async () => {
-    const runtime = createRuntimeWithAppPanelTargets()
+    const cleanState = createCleanStateAdapterProbe()
+    const runtime = createRuntimeWithAppPanelTargets(cleanState.adapter)
     runtime.loadDocument(makeFile())
+    cleanState.setCanvasClean.mockClear()
     await initRuntimeWithStubbedRenderer(runtime)
 
     ;(runtime as any)._interaction._deps.setHoveredEntityId('plant-1')
@@ -541,14 +589,14 @@ describe('scene canvas runtime', () => {
     expect(hoveredCanvasTargets.value).toEqual([speciesTarget('Malus domestica')])
     expect(runtime.getSceneStore().session.selectedEntityIds.size).toBe(0)
     expect(selectedObjectIds.value.size).toBe(0)
-    expect(canvasClean.value).toBe(true)
+    expect(cleanState.setCanvasClean).not.toHaveBeenCalledWith(false)
 
     ;(runtime as any)._interaction._deps.setHoveredEntityId(null)
 
     expect(hoveredCanvasTargets.value).toEqual([])
     expect(runtime.getSceneStore().session.selectedEntityIds.size).toBe(0)
     expect(selectedObjectIds.value.size).toBe(0)
-    expect(canvasClean.value).toBe(true)
+    expect(cleanState.setCanvasClean).not.toHaveBeenCalledWith(false)
     runtime.destroy()
   })
 
@@ -777,10 +825,12 @@ describe('scene canvas runtime', () => {
   })
 
   it('locks and unlocks selected Design Objects through scene edit history and serialization', () => {
-    const runtime = new SceneCanvasRuntime()
+    const cleanState = createCleanStateAdapterProbe()
+    const runtime = new SceneCanvasRuntime({ appAdapter: cleanState.adapter })
     const file = makeFile()
     runtime.loadDocument(file)
     runtime.markSaved()
+    cleanState.setCanvasClean.mockClear()
 
     runtime.setSelection(['plant-1'])
     runtime.lockSelected()
@@ -788,7 +838,7 @@ describe('scene canvas runtime', () => {
     expect(runtime.serializeDocument({ name: file.name }, file).plants.find((plant) => plant.id === 'plant-1')?.locked)
       .toBe(true)
     expect(runtime.getSelection().size).toBe(0)
-    expect(canvasClean.value).toBe(false)
+    expect(lastCleanState(cleanState.setCanvasClean)).toBe(false)
     expect(runtime.canUndo.value).toBe(true)
 
     runtime.undo()
@@ -806,10 +856,12 @@ describe('scene canvas runtime', () => {
   })
 
   it('edits layer state through the scene edit history and projection signals', () => {
-    const runtime = new SceneCanvasRuntime()
+    const cleanState = createCleanStateAdapterProbe()
+    const runtime = new SceneCanvasRuntime({ appAdapter: cleanState.adapter })
     const file = makeFile()
     runtime.loadDocument(file)
     runtime.markSaved()
+    cleanState.setCanvasClean.mockClear()
 
     expect(runtime.setSceneLayerVisibility('plants', false)).toBe(true)
     expect(runtime.setSceneLayerOpacity('zones', 0.4)).toBe(true)
@@ -823,7 +875,7 @@ describe('scene canvas runtime', () => {
     expect(layerVisibility.value.plants).toBe(false)
     expect(layerOpacity.value.zones).toBe(0.4)
     expect(layerLockState.value.zones).toBe(true)
-    expect(canvasClean.value).toBe(false)
+    expect(lastCleanState(cleanState.setCanvasClean)).toBe(false)
     expect(runtime.canUndo.value).toBe(true)
 
     runtime.undo()
@@ -838,10 +890,12 @@ describe('scene canvas runtime', () => {
   })
 
   it('edits guides through the scene edit history and projection signals', () => {
-    const runtime = new SceneCanvasRuntime()
+    const cleanState = createCleanStateAdapterProbe()
+    const runtime = new SceneCanvasRuntime({ appAdapter: cleanState.adapter })
     const file = makeFile()
     runtime.loadDocument(file)
     runtime.markSaved()
+    cleanState.setCanvasClean.mockClear()
 
     ;(runtime as any)._addGuide('v', 42)
 
@@ -850,7 +904,7 @@ describe('scene canvas runtime', () => {
       guides: [{ id: expect.any(String), axis: 'v', position: 42 }],
     })
     expect(guides.value).toEqual([{ id: expect.any(String), axis: 'v', position: 42 }])
-    expect(canvasClean.value).toBe(false)
+    expect(lastCleanState(cleanState.setCanvasClean)).toBe(false)
 
     runtime.undo()
     expect(runtime.serializeDocument({ name: file.name }, file).extra).toEqual({})
@@ -858,7 +912,8 @@ describe('scene canvas runtime', () => {
   })
 
   it('marks the canvas dirty when only the species default color changes', () => {
-    const runtime = new SceneCanvasRuntime()
+    const cleanState = createCleanStateAdapterProbe()
+    const runtime = new SceneCanvasRuntime({ appAdapter: cleanState.adapter })
     const file = makeFile()
     file.plant_species_colors = {
       'Malus domestica': '#112233',
@@ -867,11 +922,12 @@ describe('scene canvas runtime', () => {
     file.plants[1]!.color = '#C44230'
     runtime.loadDocument(file)
     runtime.markSaved()
+    cleanState.setCanvasClean.mockClear()
 
     const changed = runtime.setPlantColorForSpecies('Malus domestica', '#C44230')
 
     expect(changed).toBe(0)
-    expect(canvasClean.value).toBe(false)
+    expect(lastCleanState(cleanState.setCanvasClean)).toBe(false)
     expect(runtime.serializeDocument({ name: file.name }, file).plant_species_colors).toEqual({
       'Malus domestica': '#C44230',
     })

@@ -31,6 +31,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 ## History And Dirty State
 
 - `SceneHistory` dirty state is checkpoint-based.
+- `SceneHistory` reports canvas clean-state through an injected clean-state callback from the `CanvasRuntimeAppAdapter`. Production wiring lives in `app/canvas-runtime/app-adapter.ts`; runtime core must not import `app/document-session/store`.
 - Any history truncation behavior must preserve saved-position semantics in all write paths.
 - Selection, hover, presentation-only target highlights, labels, and viewport-only work must not create document history entries unless explicitly designed.
 - Auto-fit on attached document open is expected; attached Design Session transitions call `zoomToFit()` after hydration. Detached transitions must not call canvas-only document surface methods.

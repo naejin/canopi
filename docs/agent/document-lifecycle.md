@@ -78,6 +78,7 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 - The dirty model has two baselines:
 - Canvas dirty state is tracked by `SceneHistory` saved checkpoints.
 - Non-canvas dirty state is tracked by `nonCanvasRevision` vs `nonCanvasSavedRevision`.
+- Canvas clean-state updates enter the Design Session through `app/canvas-runtime/app-adapter.ts`. Runtime core should receive a `CanvasRuntimeAppAdapter` clean-state callback instead of importing `app/document-session/store`.
 - Do not write `designDirty` directly.
 - Autosave checkpoints the same document as manual save.
 - Autosave scheduling is owned by `app/document-session/lifecycle.ts`; autosave execution and canvas snapshot composition route through the Design Session state machine; persistence composition remains in `app/document-session/persistence.ts`.
