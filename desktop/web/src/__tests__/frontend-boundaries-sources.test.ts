@@ -231,6 +231,7 @@ describe('frontend boundary sources', () => {
 
   it('keeps app commands behind the command graph seam', () => {
     const registrySource = readSource('../commands/registry.ts')
+    const catalogSource = readSource('../commands/graph/catalog.ts')
     const shortcutManagerSource = readSource('../shortcuts/manager.ts')
     const menuBarSource = readSource('../components/shared/MenuBar.tsx')
     const panelBarSource = readSource('../components/panels/PanelBar.tsx')
@@ -238,6 +239,9 @@ describe('frontend boundary sources', () => {
     const menuDefinitionsSource = readSource('../components/shared/menu-definitions.ts')
     const commandPaletteSource = readSource('../components/shared/CommandPalette.tsx')
 
+    expect(catalogSource).toContain('APP_COMMANDS')
+    expect(catalogSource).toContain('readAppCommandState')
+    expect(registrySource).toContain('./graph/catalog')
     expect(registrySource).toContain('appCommandGraphChromeProjection')
     expect(registrySource).toContain('appCommandGraphPanelProjection')
     expect(registrySource).toContain('appCommandGraphToolbarProjection')
@@ -263,6 +267,12 @@ describe('frontend boundary sources', () => {
     expect(commandPaletteSource).toContain('../../commands/registry')
     expect(commandPaletteSource).toContain('appCommandGraphChromeProjection')
     expect(commandPaletteSource).not.toContain('../../shortcuts/manager')
+    expectNoImportsMatching('../shortcuts/manager.ts', [/commands\/graph/])
+    expectNoImportsMatching('../components/shared/MenuBar.tsx', [/commands\/graph/])
+    expectNoImportsMatching('../components/panels/PanelBar.tsx', [/commands\/graph/])
+    expectNoImportsMatching('../components/canvas/CanvasToolbar.tsx', [/commands\/graph/])
+    expectNoImportsMatching('../components/shared/menu-definitions.ts', [/commands\/graph/])
+    expectNoImportsMatching('../components/shared/CommandPalette.tsx', [/commands\/graph/])
   })
 
   it('keeps Design Template import orchestration in the workflow module', () => {

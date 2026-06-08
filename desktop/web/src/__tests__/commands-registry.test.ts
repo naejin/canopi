@@ -22,6 +22,7 @@ import {
   appCommandGraphPanelProjection,
   appCommandGraphToolbarProjection,
   commands,
+  getAppCommand,
   getMenuDefinitions,
   runAppCommand,
 } from '../commands/registry'
@@ -206,6 +207,43 @@ describe('command registry canvas tool switching', () => {
     expect(openSpy).toHaveBeenCalledTimes(1)
     expect(saveSpy).toHaveBeenCalledTimes(1)
     expect(saveAsSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('looks up disabled state and dispatch through the public App Command Graph seam', () => {
+    const saveCommand = getAppCommand('file.save')
+    const saveSpy = vi.spyOn(documentActions, 'saveCurrentDesign').mockResolvedValue(undefined)
+
+    if (!saveCommand) throw new Error('Missing file.save command')
+    expect(saveCommand.disabled()).toBe(true)
+
+    currentDesign.value = {
+      version: 2,
+      name: 'test',
+      description: null,
+      location: null,
+      north_bearing_deg: null,
+      plant_species_colors: {},
+      layers: [],
+      plants: [],
+      zones: [],
+      annotations: [],
+      consortiums: [],
+      groups: [],
+      timeline: [],
+      budget: [],
+      budget_currency: 'EUR',
+      created_at: '',
+      updated_at: '',
+      extra: {},
+    }
+    nonCanvasRevision.value = 1
+    nonCanvasSavedRevision.value = 0
+
+    expect(saveCommand.disabled()).toBe(false)
+
+    saveCommand.action()
+
+    expect(saveSpy).toHaveBeenCalledTimes(1)
   })
 
   it('projects menu entries from the same command graph', () => {
