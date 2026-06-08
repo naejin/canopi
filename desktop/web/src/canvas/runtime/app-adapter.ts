@@ -113,15 +113,44 @@ function subscribeImmediately(onChange: () => void): () => void {
 
 function composeDetachedCanvasDocument({
   metadata,
+  document,
   canvas,
 }: CanvasRuntimeDocumentCompositionInput): CanopiFile {
   return {
+    ...document,
     ...canvas,
     name: metadata.name,
-    description: metadata.description ?? canvas.description ?? null,
-    location: normalizeMetadataLocation(metadata.location, canvas.location),
-    north_bearing_deg: metadata.northBearingDeg ?? canvas.north_bearing_deg ?? 0,
+    description: metadata.description ?? document.description ?? null,
+    location: normalizeMetadataLocation(metadata.location, document.location),
+    north_bearing_deg: metadata.northBearingDeg ?? document.north_bearing_deg ?? 0,
+    consortiums: document.consortiums,
+    timeline: document.timeline,
+    budget: document.budget,
+    budget_currency: document.budget_currency,
+    created_at: document.created_at,
+    extra: composeDetachedDocumentExtra(document.extra, canvas.extra),
   }
+}
+
+function composeDetachedDocumentExtra(
+  documentExtra: CanopiFile['extra'],
+  canvasExtra: CanopiFile['extra'],
+): Record<string, unknown> {
+  const nextExtra = normalizeDetachedExtra(documentExtra)
+  const sceneExtra = normalizeDetachedExtra(canvasExtra)
+
+  if (Object.prototype.hasOwnProperty.call(sceneExtra, 'guides')) {
+    nextExtra.guides = sceneExtra.guides
+  } else {
+    delete nextExtra.guides
+  }
+
+  return nextExtra
+}
+
+function normalizeDetachedExtra(extra: CanopiFile['extra']): Record<string, unknown> {
+  if (!extra || typeof extra !== 'object' || Array.isArray(extra)) return {}
+  return { ...extra }
 }
 
 function normalizeMetadataLocation(
