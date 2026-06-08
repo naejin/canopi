@@ -46,6 +46,39 @@ function importSpecifiers(source: string): string[] {
   )
 }
 
+function expectImportsToContain(
+  sourcePath: string,
+  expectedSpecifiers: readonly string[],
+): void {
+  const specifiers = importSpecifiers(readSource(sourcePath))
+  for (const specifier of expectedSpecifiers) {
+    expect(specifiers, `${sourcePath} imports`).toContain(specifier)
+  }
+}
+
+function namedImportsFrom(sourcePath: string, moduleSpecifier: string): string[] {
+  const escapedSpecifier = moduleSpecifier.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const pattern = new RegExp(
+    `\\bimport\\s*\\{([^}]*)\\}\\s*from\\s*['"]${escapedSpecifier}['"]`,
+    'g',
+  )
+  return Array.from(readSource(sourcePath).matchAll(pattern))
+    .flatMap((match) => (match[1] ?? '').split(','))
+    .map((entry) => entry.trim().replace(/^type\s+/, '').split(/\s+as\s+/)[0]?.trim() ?? '')
+    .filter(Boolean)
+}
+
+function expectNamedImportsFrom(
+  sourcePath: string,
+  moduleSpecifier: string,
+  expectedNames: readonly string[],
+): void {
+  expect(
+    namedImportsFrom(sourcePath, moduleSpecifier).sort(),
+    `${sourcePath} named imports from ${moduleSpecifier}`,
+  ).toEqual([...expectedNames].sort())
+}
+
 function expectNoImportsMatching(
   sourcePath: string,
   forbiddenPatterns: readonly RegExp[],
@@ -230,27 +263,25 @@ describe('frontend boundary sources', () => {
   })
 
   it('keeps app commands behind the command graph seam', () => {
-    const registrySource = readSource('../commands/registry.ts')
-    const graphSource = readSource('../commands/graph/index.ts')
-    const catalogSource = readSource('../commands/graph/catalog.ts')
-    const projectionsSource = readSource('../commands/graph/projections.ts')
-    const shortcutsSource = readSource('../commands/graph/shortcuts.ts')
-    const shortcutManagerSource = readSource('../shortcuts/manager.ts')
-    const menuBarSource = readSource('../components/shared/MenuBar.tsx')
-    const panelBarSource = readSource('../components/panels/PanelBar.tsx')
-    const canvasToolbarSource = readSource('../components/canvas/CanvasToolbar.tsx')
-    const menuDefinitionsSource = readSource('../components/shared/menu-definitions.ts')
-    const commandPaletteSource = readSource('../components/shared/CommandPalette.tsx')
+    const commandGraphConsumers = [
+      '../shortcuts/manager.ts',
+      '../components/shared/MenuBar.tsx',
+      '../components/panels/PanelBar.tsx',
+      '../components/canvas/CanvasToolbar.tsx',
+      '../components/shared/menu-definitions.ts',
+      '../components/shared/CommandPalette.tsx',
+    ]
 
-    expect(catalogSource).toContain('APP_COMMANDS')
-    expect(catalogSource).toContain('readAppCommandState')
-    expect(importSpecifiers(graphSource)).toContain('./catalog')
-    expect(importSpecifiers(graphSource)).toContain('./projections')
-    expect(importSpecifiers(graphSource)).toContain('./shortcuts')
-    expect(importSpecifiers(projectionsSource)).toContain('./catalog')
-    expect(importSpecifiers(shortcutsSource)).toContain('./catalog')
-    expect(importSpecifiers(registrySource)).toContain('./graph')
+    expectImportsToContain('../commands/graph/index.ts', [
+      './catalog',
+      './projections',
+      './shortcuts',
+    ])
+    expectImportsToContain('../commands/graph/projections.ts', ['./catalog'])
+    expectImportsToContain('../commands/graph/shortcuts.ts', ['./catalog'])
+    expectImportsToContain('../commands/registry.ts', ['./graph'])
     expectNoImportsMatching('../commands/registry.ts', [
+      /^\.\/graph\/(catalog|projections|shortcuts)$/,
       /graph\/catalog$/,
       /graph\/projections$/,
       /graph\/shortcuts$/,
@@ -262,37 +293,40 @@ describe('frontend boundary sources', () => {
       /canvas\/runtime\/interaction\/pointer-utils$/,
       /app\/shell\/state$/,
     ])
-    expect(registrySource).toContain('appCommandGraphChromeProjection')
-    expect(registrySource).toContain('appCommandGraphPanelProjection')
-    expect(registrySource).toContain('appCommandGraphToolbarProjection')
-    expect(registrySource).toContain('getMenuDefinitions')
-    expect(registrySource).toContain('handleAppCommandKeyDown')
-    expect(registrySource).toContain('runAppCommand')
-    expect(shortcutManagerSource).toContain('../commands/registry')
-    expect(shortcutManagerSource).not.toContain('../app/document-session/actions')
-    expect(shortcutManagerSource).not.toContain('../canvas/session')
-    expect(menuBarSource).toContain('appCommandGraphChromeProjection')
-    expect(menuBarSource).not.toContain('document-session/store')
-    expect(menuBarSource).not.toContain('canvas/session')
-    expect(panelBarSource).toContain('appCommandGraphPanelProjection')
-    expect(panelBarSource).not.toContain('document-session/store')
-    expect(panelBarSource).not.toContain('app/shell/state')
-    expect(panelBarSource).not.toContain('app/settings/state')
-    expect(canvasToolbarSource).toContain('appCommandGraphToolbarProjection')
-    expect(canvasToolbarSource).not.toContain('app/canvas-settings/signals')
-    expect(canvasToolbarSource).not.toContain('currentCanvasCommandSurface')
-    expect(canvasToolbarSource).not.toContain('currentCanvasTool')
-    expect(canvasToolbarSource).not.toContain('getAppCommand')
-    expect(menuDefinitionsSource).toContain('../../commands/registry')
-    expect(commandPaletteSource).toContain('../../commands/registry')
-    expect(commandPaletteSource).toContain('appCommandGraphChromeProjection')
-    expect(commandPaletteSource).not.toContain('../../shortcuts/manager')
-    expectNoImportsMatching('../shortcuts/manager.ts', [/commands\/graph/])
-    expectNoImportsMatching('../components/shared/MenuBar.tsx', [/commands\/graph/])
-    expectNoImportsMatching('../components/panels/PanelBar.tsx', [/commands\/graph/])
-    expectNoImportsMatching('../components/canvas/CanvasToolbar.tsx', [/commands\/graph/])
-    expectNoImportsMatching('../components/shared/menu-definitions.ts', [/commands\/graph/])
-    expectNoImportsMatching('../components/shared/CommandPalette.tsx', [/commands\/graph/])
+    expectImportsToContain('../shortcuts/manager.ts', ['../commands/registry'])
+    expectImportsToContain('../components/shared/MenuBar.tsx', ['./menu-definitions'])
+    expectImportsToContain('../components/panels/PanelBar.tsx', ['../../commands/registry'])
+    expectImportsToContain('../components/canvas/CanvasToolbar.tsx', ['../../commands/registry'])
+    expectImportsToContain('../components/shared/menu-definitions.ts', ['../../commands/registry'])
+    expectImportsToContain('../components/shared/CommandPalette.tsx', ['../../commands/registry'])
+
+    for (const sourcePath of commandGraphConsumers) {
+      expectNoImportsMatching(sourcePath, [/commands\/graph(\/|$)/])
+    }
+
+    expectNoImportsMatching('../shortcuts/manager.ts', [
+      /app\/document-session\/actions$/,
+      /canvas\/session$/,
+    ])
+    expectNoImportsMatching('../components/shared/MenuBar.tsx', [
+      /document-session\/store$/,
+      /canvas\/session$/,
+    ])
+    expectNoImportsMatching('../components/panels/PanelBar.tsx', [
+      /document-session\/store$/,
+      /app\/shell\/state$/,
+      /app\/settings\/state$/,
+    ])
+    expectNoImportsMatching('../components/canvas/CanvasToolbar.tsx', [
+      /app\/canvas-settings\/signals$/,
+    ])
+    expectNamedImportsFrom('../components/canvas/CanvasToolbar.tsx', '../../canvas/session', [
+      'currentCanvasQuerySurface',
+      'currentCanvasSelection',
+    ])
+    expectNoImportsMatching('../components/shared/CommandPalette.tsx', [
+      /shortcuts\/manager$/,
+    ])
   })
 
   it('keeps Design Template import orchestration in the workflow module', () => {
@@ -371,18 +405,32 @@ describe('frontend boundary sources', () => {
     const runtimeSurfaceSource = readSource('../canvas/runtime/runtime.ts')
     const mountedRuntimeSource = readSource('../canvas/runtime/scene-runtime.ts')
     const documentBridgeSource = readSource('../canvas/runtime/scene-runtime/document.ts')
-    const workflowsSource = readSource('../app/document-session/workflows.ts')
-    const consortiumWorkflowSource = readSource('../app/consortium/workflow.ts')
     const mapSurfaceSnapshotSource = readSource('../app/canvas-map-surface/snapshot.ts')
 
     expect(runtimeSurfaceSource).toContain('CanvasQueryRevision')
     expect(mountedRuntimeSource).toContain('_incrementSceneRevision')
     expect(documentBridgeSource).toContain('incrementSceneRevision')
     expect(documentBridgeSource).not.toContain('sceneEntityRevision')
-    expect(workflowsSource).toContain('../consortium/workflow')
-    expect(workflowsSource).not.toContain('revision.scene.value')
-    expect(consortiumWorkflowSource).toContain('revision.scene.value')
-    expect(consortiumWorkflowSource).toContain('createDefaultConsortiumEntry')
+    expectImportsToContain('../app/document-session/workflows.ts', ['../consortium/workflow'])
+    expectNoImportsMatching('../app/document-session/workflows.ts', [
+      /@preact\/signals$/,
+      /canvas\/session$/,
+      /document\/controller$/,
+      /document-session\/store$/,
+      /consortium\/time-model$/,
+    ])
+    expectImportsToContain('../app/consortium/workflow.ts', [
+      '../../canvas/session',
+      '../document/controller',
+      '../document-session/store',
+      '../document-session/workflow-runner',
+      './time-model',
+    ])
+    expectNoImportsMatching('../app/consortium/workflow.ts', [
+      /document-session\/lifecycle$/,
+      /document-session\/state-machine$/,
+      /document-session\/workflows$/,
+    ])
     expect(mapSurfaceSnapshotSource).toContain('revision.viewport.value')
   })
 
@@ -411,12 +459,10 @@ describe('frontend boundary sources', () => {
     const hookSource = readSource('../app/document-session/use-canvas-document-session.ts')
     const lifecycleSource = readSource('../app/document-session/lifecycle.ts')
     const actionsSource = readSource('../app/document-session/actions.ts')
-    const persistenceSource = readSource('../app/document-session/persistence.ts')
     const transitionSource = readSource('../app/document-session/transition.ts')
     const stateMachineSource = readSource('../app/document-session/state-machine.ts')
-    const workflowRunnerSource = readSource('../app/document-session/workflow-runner.ts')
 
-    expect(hookSource).toContain('./lifecycle')
+    expectImportsToContain('../app/document-session/use-canvas-document-session.ts', ['./lifecycle'])
     expect(hookSource).not.toContain('SceneCanvasRuntime')
     expect(hookSource).not.toContain('transitionDocument')
     expect(hookSource).not.toContain('buildPersistedDesignSessionContent')
@@ -430,11 +476,18 @@ describe('frontend boundary sources', () => {
     expect(actionsSource).not.toContain('transitionDocument')
     expect(transitionSource).toContain('createDesignSessionStateMachine')
     expect(stateMachineSource).toContain('transitionDocument')
-    expect(stateMachineSource).toContain('workflowRunner')
     expect(stateMachineSource).toContain('buildPersistedDesignSessionContent')
     expect(stateMachineSource).toContain('autosaveDesign')
-    expect(workflowRunnerSource).toContain('createDesignSessionWorkflowRunner')
-    expect(persistenceSource).not.toContain('disposeConsortiumSync')
+    expectImportsToContain('../app/document-session/state-machine.ts', [
+      './persistence',
+      './workflow-runner',
+      './workflows',
+    ])
+    expectNoImportsMatching('../app/document-session/persistence.ts', [
+      /consortium\/workflow$/,
+      /document-session\/workflow-runner$/,
+      /document-session\/workflows$/,
+    ])
   })
 
   it('keeps the Problem Report dialog behind the submission module', () => {
