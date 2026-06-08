@@ -6,11 +6,12 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 
 - `desktop/web/src/app/document-session/actions.ts` exposes user-facing document actions.
 - `desktop/web/src/app/document-session/lifecycle.ts` owns canvas runtime attachment, resize observation, autosave timing, settings flush, runtime teardown, and canvas-session publication.
-- `desktop/web/src/app/document-session/state-machine.ts` owns explicit Design Session states and transition ordering: attached/ detached readiness, dirty checks, attached/detached replacement selection, queued loads, `zoomToFit()` for attached sessions, autosave execution, teardown snapshots, persistence disposal, and workflow installation.
+- `desktop/web/src/app/document-session/state-machine.ts` owns explicit Design Session states and transition ordering: attached/ detached readiness, dirty checks, attached/detached replacement selection, queued loads, `zoomToFit()` for attached sessions, autosave execution, teardown snapshots, persistence disposal, and workflow runner install/dispose.
 - `desktop/web/src/app/document-session/transition.ts` exposes intent-shaped Design Session operations for document actions and lifecycle callers while keeping low-level transition request construction inside the Design Session module.
 - `desktop/web/src/app/document-session/store.ts` is the public Design Session state seam for active Design identity, dirty baselines, pending loads, saved markers, autosave failure, and read-only reactive projections.
-- `desktop/web/src/app/document-session/persistence.ts` owns persisted Design content composition, attached/detached save snapshots, teardown snapshots, and persistence workflow disposal.
-- `desktop/web/src/app/document-session/workflows.ts` owns cross-domain workflow effects such as consortium sync.
+- `desktop/web/src/app/document-session/persistence.ts` owns persisted Design content composition, attached/detached save snapshots, and teardown snapshots.
+- `desktop/web/src/app/document-session/workflow-runner.ts` owns Design Session workflow install/dispose idempotence.
+- `desktop/web/src/app/document-session/workflows.ts` owns cross-domain workflow adapters and effects such as consortium sync.
 - `desktop/web/src/app/document/controller.ts` owns non-canvas document mutations through `mutateCurrentDesign()` and `updateDesignArray()`.
 - `desktop/web/src/app/document-session/use-canvas-document-session.ts` is a DOM-ref adapter for `CanvasPanel`; keep lifecycle ordering out of the hook.
 - `desktop/web/src/state/design.ts` is low-level Design Session store implementation. Production code should import `app/document-session/store.ts`, not this file, unless the store seam itself is being changed. Broad frontend and canvas-runtime tests should use `desktop/web/src/__tests__/support/design-session-state.ts` instead of importing low-level signals directly.
@@ -25,8 +26,8 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 - Production callers use intent-shaped Design Session operations such as `openDesignSessionFromDialog()`, `openDesignSessionFromPath()`, `openTemplateDesignSession()`, `createNewDesignSession()`, `startAttachedDesignSession()`, `consumeQueuedDocumentLoad()`, `saveCurrentDesign()`, `saveAsCurrentDesign()`, `autosaveDesignSession()`, and `teardownAttachedDesignSession()`.
 - Low-level `transitionDocument()` request construction is internal to the Design Session module and state-machine tests. Production callers must not assemble transition sources, dirty guard modes, load callbacks, queue deferral behavior, or attached/detached branch policy.
 - Design Session operations decide whether an attached `CanvasDocumentSurface` is available or whether to apply a detached document-state transition.
-- Attached transitions hydrate the canvas session, show chrome, call `zoomToFit()`, clear history, and install consortium sync.
-- Detached transitions update canonical document state, reset dirty baselines, and install consortium sync without canvas-only calls.
+- Attached transitions hydrate the canvas session, show chrome, call `zoomToFit()`, clear history, and install Design Session workflows.
+- Detached transitions update canonical document state, reset dirty baselines, and install Design Session workflows without canvas-only calls.
 - Lifecycle callers should use `startAttachedDesignSession()`, `autosaveDesignSession()`, and `teardownAttachedDesignSession()` instead of reassembling Design Session state-machine steps locally.
 
 ## Document Authority

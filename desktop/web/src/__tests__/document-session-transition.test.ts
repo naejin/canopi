@@ -42,6 +42,10 @@ vi.mock("../i18n", () => ({
 vi.mock("../app/document-session/workflows", () => ({
   installConsortiumSync: mocks.installConsortiumSync,
   disposeConsortiumSync: vi.fn(),
+  consortiumSyncWorkflow: {
+    id: "consortium-sync",
+    install: mocks.installConsortiumSync,
+  },
 }));
 
 import type { CanvasDocumentSurface } from "../canvas/runtime/runtime";
@@ -552,5 +556,28 @@ describe("document session transition", () => {
     expect(mocks.installConsortiumSync).toHaveBeenCalledTimes(1);
     expect(session.hideCanvasChrome).toHaveBeenCalledTimes(1);
     expect(session.showCanvasChrome).not.toHaveBeenCalled();
+  });
+
+  it("disposes workflow runner and persistence during attached teardown", () => {
+    const session = makeSession();
+    const workflowRunner = {
+      install: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const disposePersistence = vi.fn();
+    machine = createDesignSessionStateMachine({
+      store,
+      workflowRunner,
+      disposePersistence,
+    });
+
+    machine.teardownAttachedDesignSession({
+      session,
+      runtimeInitialized: false,
+      logError: vi.fn(),
+    });
+
+    expect(workflowRunner.dispose).toHaveBeenCalledTimes(1);
+    expect(disposePersistence).toHaveBeenCalledTimes(1);
   });
 });

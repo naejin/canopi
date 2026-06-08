@@ -367,7 +367,7 @@ describe('settings projection', () => {
       '../canvas/runtime/scene-runtime.ts',
       '../components/shared/TitleBar.tsx',
       '../components/shared/StatusBar.tsx',
-      '../commands/registry.ts',
+      '../commands/graph/catalog.ts',
       '../utils/theme.ts',
     ].map(readSource)
 

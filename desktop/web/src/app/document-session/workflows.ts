@@ -4,6 +4,7 @@ import { getConsortiumCanonicalName } from "../../target";
 import { createDefaultConsortiumEntry } from "../consortium/time-model";
 import { mutateCurrentDesign } from "../document/controller";
 import { currentDesign } from "./store";
+import type { DesignSessionWorkflow } from "./workflow-runner";
 
 let disposer: (() => void) | null = null;
 
@@ -48,6 +49,14 @@ export function disposeConsortiumSync(): void {
   disposer?.();
   disposer = null;
 }
+
+export const consortiumSyncWorkflow: DesignSessionWorkflow = {
+  id: "consortium-sync",
+  install: () => {
+    installConsortiumSync();
+    return disposeConsortiumSync;
+  },
+};
 
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {

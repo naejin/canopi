@@ -2,14 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CanvasDocumentSurface } from '../canvas/runtime/runtime'
 import type { CanopiFile } from '../types/design'
 
-const mocks = vi.hoisted(() => ({
-  disposeConsortiumSync: vi.fn(),
-}))
-
-vi.mock('../app/document-session/workflows', () => ({
-  disposeConsortiumSync: mocks.disposeConsortiumSync,
-}))
-
 import {
   buildPersistedDesignSessionContent,
   disposeDesignSessionPersistence,
@@ -72,7 +64,6 @@ describe('Design Session persistence', () => {
 
   beforeEach(() => {
     store = createMemoryDesignSessionStore({ file: null, path: null, name: 'Untitled' })
-    mocks.disposeConsortiumSync.mockClear()
   })
 
   it('builds attached persisted content through the canvas document surface', () => {
@@ -145,9 +136,7 @@ describe('Design Session persistence', () => {
     expect(session.serializeDocument).not.toHaveBeenCalled()
   })
 
-  it('disposes Design Session persistence workflows', () => {
-    disposeDesignSessionPersistence()
-
-    expect(mocks.disposeConsortiumSync).toHaveBeenCalledTimes(1)
+  it('disposes Design Session persistence resources without owning workflows', () => {
+    expect(() => disposeDesignSessionPersistence()).not.toThrow()
   })
 })

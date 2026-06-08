@@ -1,6 +1,5 @@
 import type { CanvasDocumentSurface } from "../../canvas/runtime/runtime";
 import type { CanopiFile } from "../../types/design";
-import { disposeConsortiumSync } from "./workflows";
 import {
   designSessionStore,
   type DesignSessionStore,
@@ -43,7 +42,7 @@ export function snapshotCanvasIntoDesignSession({
 }
 
 export function disposeDesignSessionPersistence(): void {
-  disposeConsortiumSync();
+  // Workflow cleanup is owned by DesignSessionWorkflowRunner.
 }
 
 function requireCurrentDesign(store: DesignSessionStore, operation: string): CanopiFile {

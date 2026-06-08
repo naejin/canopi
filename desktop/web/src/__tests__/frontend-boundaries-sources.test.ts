@@ -407,8 +407,10 @@ describe('frontend boundary sources', () => {
     const hookSource = readSource('../app/document-session/use-canvas-document-session.ts')
     const lifecycleSource = readSource('../app/document-session/lifecycle.ts')
     const actionsSource = readSource('../app/document-session/actions.ts')
+    const persistenceSource = readSource('../app/document-session/persistence.ts')
     const transitionSource = readSource('../app/document-session/transition.ts')
     const stateMachineSource = readSource('../app/document-session/state-machine.ts')
+    const workflowRunnerSource = readSource('../app/document-session/workflow-runner.ts')
 
     expect(hookSource).toContain('./lifecycle')
     expect(hookSource).not.toContain('SceneCanvasRuntime')
@@ -424,8 +426,11 @@ describe('frontend boundary sources', () => {
     expect(actionsSource).not.toContain('transitionDocument')
     expect(transitionSource).toContain('createDesignSessionStateMachine')
     expect(stateMachineSource).toContain('transitionDocument')
+    expect(stateMachineSource).toContain('workflowRunner')
     expect(stateMachineSource).toContain('buildPersistedDesignSessionContent')
     expect(stateMachineSource).toContain('autosaveDesign')
+    expect(workflowRunnerSource).toContain('createDesignSessionWorkflowRunner')
+    expect(persistenceSource).not.toContain('disposeConsortiumSync')
   })
 
   it('keeps the Problem Report dialog behind the submission module', () => {

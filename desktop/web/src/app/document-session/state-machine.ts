@@ -14,7 +14,11 @@ import {
   disposeDesignSessionPersistence,
   snapshotCanvasIntoDesignSession,
 } from "./persistence";
-import { installConsortiumSync } from "./workflows";
+import { consortiumSyncWorkflow } from "./workflows";
+import {
+  createDesignSessionWorkflowRunner,
+  type DesignSessionWorkflowRunner,
+} from "./workflow-runner";
 
 export type DocumentTransitionSource =
   | "new"
@@ -101,7 +105,7 @@ export interface DesignSessionStateMachineDeps {
   readonly buildPersistedContent: typeof buildPersistedDesignSessionContent;
   readonly snapshotCanvasIntoSession: typeof snapshotCanvasIntoDesignSession;
   readonly disposePersistence: typeof disposeDesignSessionPersistence;
-  readonly installWorkflows: typeof installConsortiumSync;
+  readonly workflowRunner: DesignSessionWorkflowRunner;
 }
 
 type ReplacementDecision = "proceed" | "cancel";
@@ -125,7 +129,7 @@ const DEFAULT_DEPS: DesignSessionStateMachineDeps = {
   buildPersistedContent: buildPersistedDesignSessionContent,
   snapshotCanvasIntoSession: snapshotCanvasIntoDesignSession,
   disposePersistence: disposeDesignSessionPersistence,
-  installWorkflows: installConsortiumSync,
+  workflowRunner: createDesignSessionWorkflowRunner([consortiumSyncWorkflow]),
 };
 
 export class DesignSessionStateMachine {
@@ -172,7 +176,7 @@ export class DesignSessionStateMachine {
       documentLoaded: session.hasLoadedDocument(),
       operation: null,
     };
-    this.deps.installWorkflows();
+    this.deps.workflowRunner.install();
     session.hideCanvasChrome();
   }
 
@@ -393,8 +397,12 @@ export class DesignSessionStateMachine {
         }
       }
     } finally {
-      this.deps.disposePersistence();
-      this.state = this.steadyStateFor(null);
+      try {
+        this.deps.workflowRunner.dispose();
+      } finally {
+        this.deps.disposePersistence();
+        this.state = this.steadyStateFor(null);
+      }
     }
   }
 
@@ -461,7 +469,7 @@ export class DesignSessionStateMachine {
     session.clearHistory();
     session.showCanvasChrome();
     session.zoomToFit();
-    this.deps.installWorkflows();
+    this.deps.workflowRunner.install();
   }
 
   private applyDetachedDocumentTransition({
@@ -476,7 +484,7 @@ export class DesignSessionStateMachine {
 
     this.deps.store.replaceCurrentDesignState(file, path, name);
     this.deps.store.resetDirtyBaselines();
-    this.deps.installWorkflows();
+    this.deps.workflowRunner.install();
   }
 
   private async confirmReplacement(session: CanvasDocumentSurface | null): Promise<ReplacementDecision> {
