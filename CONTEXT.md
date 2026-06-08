@@ -28,6 +28,10 @@ _Avoid_: Runtime helper, app bridge, global canvas state
 The in-canvas map visualization seam that turns Location, canvas query state, layer settings, terrain settings, Target Presentation, theme, and map bearing into one MapLibre-ready snapshot. The canvas map surface is derived presentation and must not own Design data, Scene Edit state, Location drafts, or settings persistence.
 _Avoid_: MapLibre controller, basemap helper, map overlay state
 
+**Canvas Layer Presentation**:
+The app-facing presentation seam for Layer chrome, map layer visibility, terrain layer controls, active layer selection, Location readiness cues, and layer-related commands. Canvas layer presentation turns scene Layer state, settings-backed map layer preferences, terrain settings, and saved Location readiness into caller-ready layer read models while routing writes to the correct authority. It does not own Design data, Scene Edit state, Location drafts, Canvas Map Surface lifecycle, or settings persistence.
+_Avoid_: Layer panel state, map layer helper, terrain UI state
+
 **Problem Report**:
 A user's description of a problem they encountered while using Canopi. A problem report may include reproduction context and a diagnostic bundle, but it is not the confirmed defect itself.
 _Avoid_: Bug report, issue, feedback
@@ -119,6 +123,10 @@ _Avoid_: Category, folder
 **Scene Edit**:
 A runtime change to canvas-owned design state, including placed plants, zones, annotations, object groups, layers, plant species colors, and guides. A scene edit is the canvas mutation concept that owns undo/redo history, dirty-state updates, mirror projections, and render invalidation for canvas state.
 _Avoid_: Canvas mutation, layer signal write, scene patch
+
+**Scene Interaction Frame**:
+The canvas runtime interaction seam for pointer and keyboard gesture lifetime: capture, panning, zoom input, band selection, shared design object dragging, drop placement, hover presentation, snapping, and transient cleanup. The scene interaction frame dispatches tool-specific behavior to Scene Edit tool modules, but it owns cross-tool ordering and cleanup. It does not own persisted scene data, renderer output, Design Session state, or app chrome.
+_Avoid_: Interaction controller, tool router, event handler blob
 
 **Object Group**:
 A named or unnamed collection of design objects that move or transform together. An object group may contain placed plants, zones, annotations, or other design objects.
@@ -285,6 +293,12 @@ Use **Design Object** for a spatial part of a Design. "Canvas object" is impleme
 **Layer Lock vs Design Object Lock**:
 A **Layer** lock prevents editing every design object in that layer. A **Design Object Lock** prevents editing one design object and is saved with the design.
 
+**Layer vs Canvas Layer Presentation**:
+A **Layer** is a visibility and locking group in the Design. **Canvas Layer Presentation** is runtime presentation that combines Layer state with map and terrain controls for app chrome.
+
+**Canvas Layer Presentation vs Canvas Map Surface**:
+**Canvas Layer Presentation** decides which layer controls and layer commands app chrome exposes. The **Canvas Map Surface** renders the in-canvas map snapshot derived from those controls and other authorities.
+
 **Climate Zone vs Hardiness Zone**:
 Use **Climate Zone** for broad site/template classification. Use **Hardiness Zone** for species cold-tolerance compatibility.
 
@@ -296,6 +310,12 @@ A **Target** is the stored or derived subject a planning entry refers to. **Targ
 
 **Scene Edit vs Design Mutation**:
 A **Scene Edit** changes canvas-owned design state and should be handled by the canvas runtime. A Design mutation changes non-canvas design state such as budget items, timeline actions, consortiums, location, description, or extra fields.
+
+**Scene Edit vs Scene Interaction Frame**:
+A **Scene Edit** is the canvas-owned design change. The **Scene Interaction Frame** is the runtime gesture seam that may produce Scene Edits while also owning non-persisted interaction behavior such as panning, hover presentation, and cleanup.
+
+**Scene Interaction Frame vs Scene Edit Tool Module**:
+The **Scene Interaction Frame** owns cross-tool gesture lifetime, shared selection, and cleanup. A Scene Edit tool module owns tool-specific state, such as Plant Stamp, Object Stamp, Plant Spacing, Annotation, or Zone drawing behavior.
 
 **Location vs Location Workbench**:
 A **Location** is the saved site in a Design. The **Location Workbench** is the interaction surface that edits and presents that saved site.
