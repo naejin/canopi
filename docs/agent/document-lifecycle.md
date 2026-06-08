@@ -16,6 +16,8 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 - `desktop/web/src/app/document/controller.ts` owns non-canvas document mutations through `mutateCurrentDesign()` and `updateDesignArray()`.
 - `desktop/web/src/app/document-session/use-canvas-document-session.ts` is a DOM-ref adapter for `CanvasPanel`; keep lifecycle ordering out of the hook.
 - `desktop/web/src/state/design.ts` is low-level Design Session store implementation. Production code should import `app/document-session/store.ts`, not this file, unless the store seam itself is being changed. Broad frontend and canvas-runtime tests should use `desktop/web/src/__tests__/support/design-session-state.ts` instead of importing low-level signals directly.
+- `desktop/web/src/app/canvas-runtime/host.ts` publishes `CanvasRuntimeSurfaces` for the live Design Session. Document lifecycle code should consume role-specific canvas surfaces instead of a raw `SceneCanvasRuntime`.
+- `desktop/web/src/app/canvas-runtime/app-adapter.ts` is the app-owned bridge for canvas clean state, Design file composition, and settings persistence commands used by runtime core.
 
 ## Document Mutation Rules
 
