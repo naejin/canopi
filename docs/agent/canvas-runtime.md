@@ -6,12 +6,14 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 
 - App code must not reach into renderer implementations or runtime internals.
 - The app-facing canvas boundary is split into `CanvasCommandSurface`, `CanvasQuerySurface`, and `CanvasDocumentSurface`.
-- Toolbars, shortcuts, menus, and plant color actions consume command surfaces.
+- `CanvasCommandSurface` is role-shaped: `tools`, `viewport`, `history`, `sceneEdits`, `chrome`, `layers`, and `plantPresentation`. New focused callers should consume the narrow role surface exported by `canvas/session.ts` instead of the full command bundle.
+- The App Command Graph may consume the full `CanvasCommandSurface` because it is the shared command-ID orchestration layer. Do not use that as precedent for ordinary UI components or leaf controllers.
+- Toolbars, shortcuts, menus, and plant color actions consume command surfaces through the narrowest role that covers their writes.
 - Document session orchestration, save/load, chrome, resize, and teardown consume document surfaces.
 - Sibling read-only surfaces consume query surfaces for scene snapshots, viewport queries, selection reads, placed plants, localized names, and presentation context.
 - Publish live canvas sessions as explicit `CanvasRuntimeSurfaces` bundles. Do not publish a raw `SceneCanvasRuntime`, and do not cast a role-specific fake into the session signal; tests should use `createTestCanvasRuntimeSurfaces()` with the role surface they need.
 - Scene freshness for app callers is exposed through `CanvasQuerySurface.revision`. App modules must not import `sceneEntityRevision` or `plantNamesRevision` from `canvas/runtime-mirror-state.ts`; those mirrors are runtime-internal compatibility signals.
-- `canvas/runtime/surfaces.ts` owns the app-facing Canvas Runtime Surface role types and test surface helper.
+- `canvas/runtime/runtime.ts` owns the app-facing Canvas Runtime Surface interfaces. `canvas/runtime/surfaces.ts` adapts the live `SceneCanvasRuntime` into those interfaces.
 - `app/canvas-runtime/host.ts` owns live runtime creation and publication of `CanvasRuntimeSurfaces` into the Design Session.
 - `canvas/runtime/app-adapter.ts` owns the runtime-facing `CanvasRuntimeAppAdapter` contract and detached fallback behavior.
 - `app/canvas-runtime/app-adapter.ts` owns production wiring from the adapter contract to app-owned document/session/settings modules.

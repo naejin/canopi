@@ -11,7 +11,7 @@ import {
 } from './bottom-panel-state'
 import type { BasemapStyle } from '../../generated/contracts'
 import { mutateSettingsProjection } from '../settings/projection'
-import { getCurrentCanvasCommandSurface } from '../../canvas/session'
+import { getCurrentCanvasLayerCommandSurface } from '../../canvas/session'
 
 const MAP_SETTING_LAYERS = new Set(['base', 'contours'])
 
@@ -56,13 +56,13 @@ export function toggleLayerVisibility(name: string): void {
   }
 
   const next = !(layerVisibility.value[name] ?? true)
-  getCurrentCanvasCommandSurface()?.setSceneLayerVisibility(name, next)
+  getCurrentCanvasLayerCommandSurface()?.setSceneLayerVisibility(name, next)
 }
 
 export function toggleLayerLock(name: string): void {
   if (isMapSettingLayer(name)) return
   const next = !(layerLockState.value[name] ?? false)
-  getCurrentCanvasCommandSurface()?.setSceneLayerLocked(name, next)
+  getCurrentCanvasLayerCommandSurface()?.setSceneLayerLocked(name, next)
 }
 
 export function setLayerOpacity(name: string, opacity: number): void {
@@ -80,7 +80,7 @@ export function setLayerOpacity(name: string, opacity: number): void {
     return
   }
 
-  getCurrentCanvasCommandSurface()?.setSceneLayerOpacity(name, next)
+  getCurrentCanvasLayerCommandSurface()?.setSceneLayerOpacity(name, next)
 }
 
 export function setContourIntervalMeters(interval: number): void {

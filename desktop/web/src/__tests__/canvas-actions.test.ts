@@ -217,9 +217,11 @@ describe('bottom panel actions', () => {
 
   it('routes scene layer controls through the mounted canvas command surface', () => {
     const commandSurface = {
-      setSceneLayerVisibility: vi.fn(() => true),
-      setSceneLayerOpacity: vi.fn(() => true),
-      setSceneLayerLocked: vi.fn(() => true),
+      layers: {
+        setSceneLayerVisibility: vi.fn(() => true),
+        setSceneLayerOpacity: vi.fn(() => true),
+        setSceneLayerLocked: vi.fn(() => true),
+      },
     }
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
       commands: createTestCanvasCommandSurface(commandSurface),
@@ -229,9 +231,9 @@ describe('bottom panel actions', () => {
     setLayerOpacity('zones', 0.4)
     toggleLayerLock('annotations')
 
-    expect(commandSurface.setSceneLayerVisibility).toHaveBeenCalledWith('plants', false)
-    expect(commandSurface.setSceneLayerOpacity).toHaveBeenCalledWith('zones', 0.4)
-    expect(commandSurface.setSceneLayerLocked).toHaveBeenCalledWith('annotations', true)
+    expect(commandSurface.layers.setSceneLayerVisibility).toHaveBeenCalledWith('plants', false)
+    expect(commandSurface.layers.setSceneLayerOpacity).toHaveBeenCalledWith('zones', 0.4)
+    expect(commandSurface.layers.setSceneLayerLocked).toHaveBeenCalledWith('annotations', true)
     expect(layerVisibility.value.plants).toBe(true)
     expect(layerOpacity.value.zones).toBe(1)
     expect(layerLockState.value.annotations).toBe(false)

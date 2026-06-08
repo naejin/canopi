@@ -76,7 +76,7 @@ describe('command registry canvas tool switching', () => {
 
   it('routes tool commands through the live canvas session when mounted', () => {
     const setTool = vi.fn()
-    mountCanvasCommandSurface({ setTool })
+    mountCanvasCommandSurface({ tools: { setTool } })
 
     getCommand('canvas.tool.hand').action()
 
@@ -88,7 +88,7 @@ describe('command registry canvas tool switching', () => {
 
   it('preserves side panels only when tool commands already start from the canvas', () => {
     const setTool = vi.fn()
-    mountCanvasCommandSurface({ setTool })
+    mountCanvasCommandSurface({ tools: { setTool } })
 
     sidePanel.value = 'plant-db'
     getCommand('canvas.tool.ellipse').action()
@@ -110,7 +110,7 @@ describe('command registry canvas tool switching', () => {
 
   it('exposes the ellipse tool through the shared command graph', () => {
     const setTool = vi.fn()
-    mountCanvasCommandSurface({ setTool })
+    mountCanvasCommandSurface({ tools: { setTool } })
 
     getCommand('canvas.tool.ellipse').action()
 
@@ -122,7 +122,7 @@ describe('command registry canvas tool switching', () => {
 
   it('exposes the polygon tool through the shared command graph', () => {
     const setTool = vi.fn()
-    mountCanvasCommandSurface({ setTool })
+    mountCanvasCommandSurface({ tools: { setTool } })
 
     getCommand('canvas.tool.polygon').action()
 
@@ -134,7 +134,7 @@ describe('command registry canvas tool switching', () => {
 
   it('exposes Object Stamp through the shared command graph', () => {
     const setTool = vi.fn()
-    mountCanvasCommandSurface({ setTool })
+    mountCanvasCommandSurface({ tools: { setTool } })
 
     getCommand('canvas.tool.objectStamp').action()
 
@@ -145,7 +145,7 @@ describe('command registry canvas tool switching', () => {
 
   it('exposes Plant Spacing through the shared command graph', () => {
     const setTool = vi.fn()
-    mountCanvasCommandSurface({ setTool })
+    mountCanvasCommandSurface({ tools: { setTool } })
 
     getCommand('canvas.tool.plantSpacing').action()
 
@@ -296,7 +296,7 @@ describe('command registry canvas tool switching', () => {
     }
     nonCanvasRevision.value = 1
     nonCanvasSavedRevision.value = 0
-    mountCanvasCommandSurface({ canUndo: signal(true) })
+    mountCanvasCommandSurface({ history: { canUndo: signal(true) } })
 
     expect(fileSave()).toMatchObject({ disabled: false })
     expect(undo()).toMatchObject({ disabled: false })
@@ -419,12 +419,16 @@ describe('command registry canvas tool switching', () => {
     })
 
     mountCanvasCommandSurface({
-      canUndo: signal(true),
-      setTool,
-      undo,
-      toggleGrid,
-      toggleSnapToGrid,
-      toggleRulers,
+      tools: { setTool },
+      history: {
+        canUndo: signal(true),
+        undo,
+      },
+      chrome: {
+        toggleGrid,
+        toggleSnapToGrid,
+        toggleRulers,
+      },
     })
     snapToGridEnabled.value = true
 

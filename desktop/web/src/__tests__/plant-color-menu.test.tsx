@@ -31,10 +31,12 @@ describe('PlantColorMenu', () => {
     getSelectedPlantColorContext.mockReset()
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
       commands: createTestCanvasCommandSurface({
-        setSelectedPlantColor,
-        setPlantColorForSpecies,
-        clearPlantSpeciesColor,
-        ensureSpeciesCacheEntries,
+        plantPresentation: {
+          setSelectedPlantColor,
+          setPlantColorForSpecies,
+          clearPlantSpeciesColor,
+          ensureSpeciesCacheEntries,
+        },
       }),
       queries: {
         ...createTestCanvasQuerySurface(),

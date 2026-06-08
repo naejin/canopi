@@ -1,5 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { currentCanvasReady, currentCanvasSession, currentCanvasTool, getCurrentCanvasCommandSurface, getCurrentCanvasSession, setCurrentCanvasSession, setCurrentCanvasTool } from '../canvas/session'
+import {
+  currentCanvasReady,
+  currentCanvasSession,
+  currentCanvasTool,
+  getCurrentCanvasCommandSurface,
+  getCurrentCanvasSession,
+  getCurrentCanvasToolCommandSurface,
+  setCurrentCanvasSession,
+  setCurrentCanvasTool,
+} from '../canvas/session'
 import { SceneCanvasRuntime } from '../canvas/runtime/scene-runtime'
 import { createCanvasRuntimeSurfaces } from '../canvas/runtime/surfaces'
 
@@ -52,12 +61,16 @@ describe('canvas session seam', () => {
         ...surfaces,
         commands: {
           ...surfaces.commands,
-          setTool,
+          tools: {
+            ...surfaces.commands.tools,
+            setTool,
+          },
         },
       })
       setCurrentCanvasTool('hand')
 
       expect(getCurrentCanvasCommandSurface()).toBe(currentCanvasSession.value?.commands)
+      expect(getCurrentCanvasToolCommandSurface()).toBe(currentCanvasSession.value?.commands.tools)
       expect(setTool).toHaveBeenCalledWith('hand')
       expect(currentCanvasTool.value).toBe('hand')
     } finally {

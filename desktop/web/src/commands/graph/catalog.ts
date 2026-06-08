@@ -178,23 +178,23 @@ export const APP_COMMANDS: readonly AppCommandDefinition[] = [
     label: () => t('menu.edit.undo'),
     shortcut: EDIT_SHORTCUTS.undo,
     palette: true,
-    run: (state) => runCanvas(state, (canvas) => canvas.undo()),
-    disabled: (state) => !state.canvas || !state.canvas.canUndo.value,
+    run: (state) => runCanvas(state, (canvas) => canvas.history.undo()),
+    disabled: (state) => !state.canvas || !state.canvas.history.canUndo.value,
   },
   {
     id: 'edit.redo',
     label: () => t('menu.edit.redo'),
     shortcut: EDIT_SHORTCUTS.redo,
     palette: true,
-    run: (state) => runCanvas(state, (canvas) => canvas.redo()),
-    disabled: (state) => !state.canvas || !state.canvas.canRedo.value,
+    run: (state) => runCanvas(state, (canvas) => canvas.history.redo()),
+    disabled: (state) => !state.canvas || !state.canvas.history.canRedo.value,
   },
   {
     id: 'view.zoomIn',
     label: () => t('menu.view.zoomIn'),
     shortcut: VIEW_SHORTCUTS.zoomIn,
     palette: true,
-    run: (state) => runCanvas(state, (canvas) => canvas.zoomIn()),
+    run: (state) => runCanvas(state, (canvas) => canvas.viewport.zoomIn()),
     disabled: (state) => !state.canvas,
   },
   {
@@ -202,7 +202,7 @@ export const APP_COMMANDS: readonly AppCommandDefinition[] = [
     label: () => t('menu.view.zoomOut'),
     shortcut: VIEW_SHORTCUTS.zoomOut,
     palette: true,
-    run: (state) => runCanvas(state, (canvas) => canvas.zoomOut()),
+    run: (state) => runCanvas(state, (canvas) => canvas.viewport.zoomOut()),
     disabled: (state) => !state.canvas,
   },
   {
@@ -210,7 +210,7 @@ export const APP_COMMANDS: readonly AppCommandDefinition[] = [
     label: () => t('menu.view.fitToContent'),
     shortcut: VIEW_SHORTCUTS.fitToContent,
     palette: true,
-    run: (state) => runCanvas(state, (canvas) => canvas.zoomToFit()),
+    run: (state) => runCanvas(state, (canvas) => canvas.viewport.zoomToFit()),
     disabled: (state) => !state.canvas,
   },
   {
@@ -311,72 +311,72 @@ export const APP_COMMANDS: readonly AppCommandDefinition[] = [
   {
     id: 'canvas.toggleGrid',
     label: () => t('canvas.grid.grid'),
-    run: (state) => runCanvas(state, (canvas) => canvas.toggleGrid()),
+    run: (state) => runCanvas(state, (canvas) => canvas.chrome.toggleGrid()),
     disabled: (state) => !state.canvas,
   },
   {
     id: 'canvas.toggleSnapToGrid',
     label: () => t('canvas.grid.snapToGrid'),
-    run: (state) => runCanvas(state, (canvas) => canvas.toggleSnapToGrid()),
+    run: (state) => runCanvas(state, (canvas) => canvas.chrome.toggleSnapToGrid()),
     disabled: (state) => !state.canvas,
   },
   {
     id: 'canvas.toggleRulers',
     label: () => t('canvas.grid.rulers'),
-    run: (state) => runCanvas(state, (canvas) => canvas.toggleRulers()),
+    run: (state) => runCanvas(state, (canvas) => canvas.chrome.toggleRulers()),
     disabled: (state) => !state.canvas,
   },
   {
     id: 'canvas.copy',
-    run: (state) => runCanvas(state, (canvas) => canvas.copy()),
+    run: (state) => runCanvas(state, (canvas) => canvas.sceneEdits.copy()),
     disabled: (state) => !state.canvas,
   },
   {
     id: 'canvas.paste',
-    run: (state) => runCanvas(state, (canvas) => canvas.paste()),
+    run: (state) => runCanvas(state, (canvas) => canvas.sceneEdits.paste()),
     disabled: (state) => !state.canvas,
   },
   {
     id: 'canvas.duplicateSelected',
-    run: (state) => runCanvas(state, (canvas) => canvas.duplicateSelected()),
+    run: (state) => runCanvas(state, (canvas) => canvas.sceneEdits.duplicateSelected()),
     disabled: (state) => !state.canvas,
   },
   {
     id: 'canvas.deleteSelected',
-    run: (state) => runCanvas(state, (canvas) => canvas.deleteSelected()),
+    run: (state) => runCanvas(state, (canvas) => canvas.sceneEdits.deleteSelected()),
     disabled: (state) => !state.canvas,
   },
   {
     id: 'canvas.selectAll',
-    run: (state) => runCanvas(state, (canvas) => canvas.selectAll()),
+    run: (state) => runCanvas(state, (canvas) => canvas.sceneEdits.selectAll()),
     disabled: (state) => !state.canvas,
   },
   {
     id: 'canvas.bringToFront',
-    run: (state) => runCanvas(state, (canvas) => canvas.bringToFront()),
+    run: (state) => runCanvas(state, (canvas) => canvas.sceneEdits.bringToFront()),
     disabled: (state) => !state.canvas,
   },
   {
     id: 'canvas.sendToBack',
-    run: (state) => runCanvas(state, (canvas) => canvas.sendToBack()),
+    run: (state) => runCanvas(state, (canvas) => canvas.sceneEdits.sendToBack()),
     disabled: (state) => !state.canvas,
   },
   {
     id: 'canvas.lockOrUnlockSelected',
     run: (state) => runCanvas(state, (canvas) => {
-      if (state.canvasHasSelection) canvas.lockSelected()
-      else canvas.unlockSelected()
+      if (state.canvasHasSelection) canvas.sceneEdits.lockSelected()
+      else canvas.sceneEdits.unlockSelected()
     }),
     disabled: (state) => !state.canvas,
   },
   {
     id: 'canvas.groupSelected',
-    run: (state) => runCanvas(state, (canvas) => canvas.groupSelected()),
+    run: (state) => runCanvas(state, (canvas) => canvas.sceneEdits.groupSelected()),
     disabled: (state) => !state.canvas,
   },
   {
     id: 'canvas.ungroupSelected',
-    run: (state) => runCanvas(state, (canvas) => canvas.ungroupSelected()),
+    run: (state) => runCanvas(state, (canvas) => canvas.sceneEdits.ungroupSelected()),
     disabled: (state) => !state.canvas,
   },
 ]

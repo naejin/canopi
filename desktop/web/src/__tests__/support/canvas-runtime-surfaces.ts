@@ -7,6 +7,10 @@ import type {
 } from '../../canvas/runtime/runtime'
 import { createTestCanvasQuerySurface } from './canvas-query-surface'
 
+type DeepPartial<T> = {
+  [K in keyof T]?: T[K] extends object ? Partial<T[K]> : T[K]
+}
+
 interface TestCanvasRuntimeSurfaceOptions {
   readonly commands?: CanvasCommandSurface
   readonly queries?: CanvasQuerySurface
@@ -22,43 +26,65 @@ export function createTestCanvasRuntimeSurfaces({
 }
 
 export function createTestCanvasCommandSurface(
-  overrides: Partial<CanvasCommandSurface> = {},
+  overrides: DeepPartial<CanvasCommandSurface> = {},
 ): CanvasCommandSurface {
   const surface: CanvasCommandSurface = {
-    setTool: () => {},
-    zoomIn: () => {},
-    zoomOut: () => {},
-    zoomToFit: () => {},
-    canUndo: signal(false),
-    canRedo: signal(false),
-    undo: () => {},
-    redo: () => {},
-    copy: () => {},
-    paste: () => {},
-    duplicateSelected: () => {},
-    deleteSelected: () => {},
-    selectAll: () => {},
-    bringToFront: () => {},
-    sendToBack: () => {},
-    lockSelected: () => {},
-    unlockSelected: () => {},
-    groupSelected: () => {},
-    ungroupSelected: () => {},
-    toggleGrid: () => {},
-    toggleSnapToGrid: () => {},
-    toggleRulers: () => {},
-    setSceneLayerVisibility: () => false,
-    setSceneLayerOpacity: () => false,
-    setSceneLayerLocked: () => false,
-    setPlantSizeMode: () => {},
-    setPlantColorByAttr: () => {},
-    ensureSpeciesCacheEntries: async () => true,
-    setSelectedPlantColor: () => 0,
-    setPlantColorForSpecies: () => 0,
-    clearPlantSpeciesColor: () => false,
+    tools: {
+      setTool: () => {},
+    },
+    viewport: {
+      zoomIn: () => {},
+      zoomOut: () => {},
+      zoomToFit: () => {},
+    },
+    history: {
+      canUndo: signal(false),
+      canRedo: signal(false),
+      undo: () => {},
+      redo: () => {},
+    },
+    sceneEdits: {
+      copy: () => {},
+      paste: () => {},
+      duplicateSelected: () => {},
+      deleteSelected: () => {},
+      selectAll: () => {},
+      bringToFront: () => {},
+      sendToBack: () => {},
+      lockSelected: () => {},
+      unlockSelected: () => {},
+      groupSelected: () => {},
+      ungroupSelected: () => {},
+    },
+    chrome: {
+      toggleGrid: () => {},
+      toggleSnapToGrid: () => {},
+      toggleRulers: () => {},
+    },
+    layers: {
+      setSceneLayerVisibility: () => false,
+      setSceneLayerOpacity: () => false,
+      setSceneLayerLocked: () => false,
+    },
+    plantPresentation: {
+      setPlantSizeMode: () => {},
+      setPlantColorByAttr: () => {},
+      ensureSpeciesCacheEntries: async () => true,
+      setSelectedPlantColor: () => 0,
+      setPlantColorForSpecies: () => 0,
+      clearPlantSpeciesColor: () => false,
+    },
   }
 
-  return { ...surface, ...overrides }
+  return {
+    tools: { ...surface.tools, ...overrides.tools },
+    viewport: { ...surface.viewport, ...overrides.viewport },
+    history: { ...surface.history, ...overrides.history },
+    sceneEdits: { ...surface.sceneEdits, ...overrides.sceneEdits },
+    chrome: { ...surface.chrome, ...overrides.chrome },
+    layers: { ...surface.layers, ...overrides.layers },
+    plantPresentation: { ...surface.plantPresentation, ...overrides.plantPresentation },
+  }
 }
 
 export function createTestCanvasDocumentSurface(
