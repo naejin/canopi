@@ -1,6 +1,18 @@
 import type { CanopiFile } from '../../types/design'
 import type { CanvasRuntimeDocumentMetadata } from './runtime'
 
+export interface CanvasRuntimeLayerProjectionSource {
+  readonly name: string
+  readonly visible: boolean
+  readonly locked: boolean
+  readonly opacity: number
+}
+
+export interface CanvasRuntimeChromeSettingsSnapshot {
+  readonly gridVisible: boolean
+  readonly rulersVisible: boolean
+}
+
 export interface CanvasRuntimeCleanStateAdapter {
   setCanvasClean(clean: boolean): void
 }
@@ -15,12 +27,39 @@ export interface CanvasRuntimeDocumentAdapter {
   composeDocumentForSave(input: CanvasRuntimeDocumentCompositionInput): CanopiFile
 }
 
+export interface CanvasRuntimeSettingsAdapter {
+  readLocale(): string
+  readChromeOverlay(): CanvasRuntimeChromeSettingsSnapshot
+  readSnapToGridEnabled(): boolean
+  readSnapToGuidesEnabled(): boolean
+  toggleGridVisible(): void
+  toggleSnapToGrid(): void
+  toggleRulersVisible(): void
+  subscribeTheme(onChange: () => void): () => void
+  subscribeLocale(onChange: () => void): () => void
+  subscribeChromeOverlay(onChange: () => void): () => void
+  readonly layerProjections: CanvasRuntimeLayerProjectionAdapter
+}
+
+export interface CanvasRuntimeLayerProjectionAdapter {
+  isAppOwnedLayerProjection(name: string): boolean
+  syncFromLayers(layers: ReadonlyArray<CanvasRuntimeLayerProjectionSource>): void
+  syncLayer(layer: CanvasRuntimeLayerProjectionSource): void
+}
+
 export interface CanvasRuntimeAppAdapter {
   readonly cleanState: CanvasRuntimeCleanStateAdapter
   readonly document: CanvasRuntimeDocumentAdapter
+  readonly settings: CanvasRuntimeSettingsAdapter
 }
 
 export function createDetachedCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter {
+  let gridVisible = false
+  let snapToGrid = false
+  let snapToGuides = false
+  let rulersVisible = false
+  const layerProjections = new Map<string, CanvasRuntimeLayerProjectionSource>()
+
   return {
     cleanState: {
       setCanvasClean: () => {},
@@ -28,7 +67,40 @@ export function createDetachedCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter
     document: {
       composeDocumentForSave: composeDetachedCanvasDocument,
     },
+    settings: {
+      readLocale: () => 'en',
+      readChromeOverlay: () => ({ gridVisible, rulersVisible }),
+      readSnapToGridEnabled: () => snapToGrid,
+      readSnapToGuidesEnabled: () => snapToGuides,
+      toggleGridVisible: () => {
+        gridVisible = !gridVisible
+      },
+      toggleSnapToGrid: () => {
+        snapToGrid = !snapToGrid
+      },
+      toggleRulersVisible: () => {
+        rulersVisible = !rulersVisible
+      },
+      subscribeTheme: subscribeImmediately,
+      subscribeLocale: subscribeImmediately,
+      subscribeChromeOverlay: subscribeImmediately,
+      layerProjections: {
+        isAppOwnedLayerProjection: () => false,
+        syncFromLayers: (layers) => {
+          layerProjections.clear()
+          for (const layer of layers) layerProjections.set(layer.name, layer)
+        },
+        syncLayer: (layer) => {
+          layerProjections.set(layer.name, layer)
+        },
+      },
+    },
   }
+}
+
+function subscribeImmediately(onChange: () => void): () => void {
+  onChange()
+  return () => {}
 }
 
 function composeDetachedCanvasDocument({

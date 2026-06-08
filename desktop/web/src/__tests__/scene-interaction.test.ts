@@ -81,9 +81,11 @@ function createInteractionDeps(
       void name
     })) as SceneInteractionDeps['setTool'],
     render,
+    readSnapToGridEnabled: () => snapToGridEnabled.value,
+    readSnapToGuidesEnabled: () => snapToGuidesEnabled.value,
     setHoveredEntityId: overrides.setHoveredEntityId ?? (() => {}),
     getLocalizedCommonNames: () => new Map(),
-  } as SceneInteractionDeps
+  }
 }
 
 function withoutNativeRandomUUID(action: () => void): void {

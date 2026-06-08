@@ -1,33 +1,22 @@
-import { effect } from '@preact/signals'
-import { locale, theme } from '../../../app/settings/state'
-import {
-  gridVisible,
-  rulersVisible,
-} from '../../../app/canvas-settings/signals'
+import type { CanvasRuntimeSettingsAdapter } from '../app-adapter'
 
 interface SceneRuntimeEffectsDeps {
   onTheme: () => void
   onLocale: () => void
   onChromeOverlay: () => void
   onPanelTargetHover: () => void
+  settings: Pick<
+    CanvasRuntimeSettingsAdapter,
+    'subscribeTheme' | 'subscribeLocale' | 'subscribeChromeOverlay'
+  >
   subscribePanelOriginTargetChanges(onChange: () => void): () => void
 }
 
 export function installSceneRuntimeEffects(deps: SceneRuntimeEffectsDeps): Array<() => void> {
   return [
-    effect(() => {
-      void theme.value
-      deps.onTheme()
-    }),
-    effect(() => {
-      void locale.value
-      deps.onLocale()
-    }),
-    effect(() => {
-      void gridVisible.value
-      void rulersVisible.value
-      deps.onChromeOverlay()
-    }),
+    deps.settings.subscribeTheme(deps.onTheme),
+    deps.settings.subscribeLocale(deps.onLocale),
+    deps.settings.subscribeChromeOverlay(deps.onChromeOverlay),
     deps.subscribePanelOriginTargetChanges(deps.onPanelTargetHover),
   ]
 }

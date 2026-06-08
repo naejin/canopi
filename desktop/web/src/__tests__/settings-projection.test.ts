@@ -363,8 +363,8 @@ describe('settings projection', () => {
   it('keeps production settings-backed callers on the projection mutation seam', () => {
     const sources = [
       '../app/canvas-settings/controller.ts',
+      '../app/canvas-runtime/app-adapter.ts',
       '../app/shell/controller.ts',
-      '../canvas/runtime/scene-runtime.ts',
       '../components/shared/TitleBar.tsx',
       '../components/shared/StatusBar.tsx',
       '../commands/graph/catalog.ts',
@@ -376,5 +376,10 @@ describe('settings projection', () => {
       expect(source).not.toContain('settings/persistence')
       expect(source).not.toMatch(/\b(?:locale|theme|basemapStyle|snapToGridEnabled|snapToGuidesEnabled|autoSaveIntervalMs|sidePanelWidth|bottomPanelOpen|bottomPanelHeights|bottomPanelTab|contourIntervalMeters|hillshadeVisible|hillshadeOpacity)\.value\s*=(?!=)/)
     }
+
+    const runtimeSource = readSource('../canvas/runtime/scene-runtime.ts')
+
+    expect(runtimeSource).not.toContain('settings/projection')
+    expect(runtimeSource).not.toContain('settings/persistence')
   })
 })
