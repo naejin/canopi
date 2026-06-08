@@ -166,11 +166,16 @@ function createTestSettingsAdapter(
   let rulersVisible = false
   let snapToGrid = false
   let snapToGuides = false
+  let plantSpacingIntervalM = 0.5
   return {
     readLocale: () => 'en',
     readChromeOverlay: () => ({ gridVisible, rulersVisible }),
     readSnapToGridEnabled: () => snapToGrid,
     readSnapToGuidesEnabled: () => snapToGuides,
+    readPlantSpacingIntervalMeters: () => plantSpacingIntervalM,
+    commitPlantSpacingIntervalMeters: (meters) => {
+      plantSpacingIntervalM = meters
+    },
     toggleGridVisible: () => {
       gridVisible = !gridVisible
     },
@@ -906,8 +911,9 @@ describe('scene canvas runtime', () => {
   })
 
   it('records Plant Spacing commit as one undoable scene edit', async () => {
-    plantSpacingIntervalM.value = 5
-    const runtime = new SceneCanvasRuntime()
+    const cleanState = createCleanStateAdapterProbe()
+    cleanState.adapter.settings.commitPlantSpacingIntervalMeters(5)
+    const runtime = new SceneCanvasRuntime({ appAdapter: cleanState.adapter })
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
     Object.defineProperty(container, 'getBoundingClientRect', {
       configurable: true,

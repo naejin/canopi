@@ -13,7 +13,7 @@ import {
   snapToGuidesEnabled,
 } from '../canvas-settings/signals'
 import { mutateSettingsProjection } from '../settings/projection'
-import { locale, theme } from '../settings/state'
+import { locale, plantSpacingIntervalM, theme } from '../settings/state'
 import { composeDocumentForSave } from '../contracts/document'
 import { setCanvasClean } from '../document-session/store'
 
@@ -31,6 +31,12 @@ export function createAppCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter {
       }),
       readSnapToGridEnabled: () => snapToGridEnabled.value,
       readSnapToGuidesEnabled: () => snapToGuidesEnabled.value,
+      readPlantSpacingIntervalMeters: () => plantSpacingIntervalM.value,
+      commitPlantSpacingIntervalMeters: (meters) => {
+        mutateSettingsProjection((settings) => {
+          settings.plantSpacingIntervalM = meters
+        }, { persist: 'immediate' })
+      },
       toggleGridVisible: () => {
         gridVisible.value = !gridVisible.value
       },

@@ -58,6 +58,8 @@ export interface SceneInteractionDeps {
   render: (kind: 'scene' | 'viewport') => void
   readSnapToGridEnabled: () => boolean
   readSnapToGuidesEnabled: () => boolean
+  readPlantSpacingIntervalMeters: () => number
+  commitPlantSpacingIntervalMeters: (meters: number) => void
   setHoveredEntityId: (id: string | null) => void
   getLocalizedCommonNames: () => ReadonlyMap<string, string | null>
 }
@@ -97,6 +99,8 @@ export class SceneInteractionController {
       getSpeciesCache: this._deps.getSpeciesCache,
       getPlantPresentationContext: this._deps.getPlantPresentationContext,
       getLocalizedCommonNames: this._deps.getLocalizedCommonNames,
+      readPlantSpacingIntervalMeters: this._deps.readPlantSpacingIntervalMeters,
+      commitPlantSpacingIntervalMeters: this._deps.commitPlantSpacingIntervalMeters,
       switchTool: (name) => this._switchTool(name),
       applySnapping: (point) => this._applySnapping(point),
       getContainerRect: () => this._cachedContainerRect ?? this._deps.container.getBoundingClientRect(),

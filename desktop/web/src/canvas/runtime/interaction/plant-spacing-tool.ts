@@ -1,6 +1,4 @@
 import { t } from '../../../i18n'
-import { plantSpacingIntervalM } from '../../../app/settings/state'
-import { mutateSettingsProjection } from '../../../app/settings/projection'
 import {
   formatPlantSpacingGuideLength,
   formatPlantSpacingIntervalInput,
@@ -52,6 +50,8 @@ export interface PlantSpacingToolContext {
   readonly getSpeciesCache: () => ReadonlyMap<string, SpeciesCacheEntry>
   readonly getPlantPresentationContext: (viewportScale: number) => PlantPresentationContext
   readonly getLocalizedCommonNames: () => ReadonlyMap<string, string | null>
+  readonly readPlantSpacingIntervalMeters: () => number
+  readonly commitPlantSpacingIntervalMeters: (meters: number) => void
   readonly sceneEdits: SceneEditCoordinator
   readonly switchTool: (name: string) => void
   readonly applySnapping: (point: ScenePoint) => ScenePoint
@@ -78,7 +78,7 @@ export interface PlantSpacingTool {
 
 export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantSpacingTool {
   let source: PlantSpacingSource | null = null
-  let intervalText = formatPlantSpacingIntervalInput(plantSpacingIntervalM.value)
+  let intervalText = formatPlantSpacingIntervalInput(context.readPlantSpacingIntervalMeters())
   let intervalValid = true
   let endpoint: ScenePoint | null = null
   let previewPointer: { screen: ScenePoint; shiftKey: boolean } | null = null
@@ -132,7 +132,7 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
       plant: clonePlantForPlantSpacing(plant),
       label: labelForPlant(plant),
     }
-    intervalText = formatPlantSpacingIntervalInput(plantSpacingIntervalM.value)
+    intervalText = formatPlantSpacingIntervalInput(context.readPlantSpacingIntervalMeters())
     intervalValid = true
     showState()
     overlay.focusIntervalInput()
@@ -328,9 +328,7 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
       return
     }
 
-    mutateSettingsProjection((settings) => {
-      settings.plantSpacingIntervalM = parsed.meters
-    }, { persist: 'immediate' })
+    context.commitPlantSpacingIntervalMeters(parsed.meters)
     intervalText = formatPlantSpacingIntervalInput(parsed.meters)
     if (endpoint) updatePreview(endpoint)
     if (focusCanvasOnValid) focusCanvasContainer()

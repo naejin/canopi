@@ -1,4 +1,5 @@
 import type { CanopiFile } from '../../types/design'
+import { FALLBACK_PLANT_SPACING_INTERVAL_M } from '../plant-spacing-interval'
 import type { CanvasRuntimeDocumentMetadata } from './runtime'
 
 export interface CanvasRuntimeLayerProjectionSource {
@@ -32,6 +33,8 @@ export interface CanvasRuntimeSettingsAdapter {
   readChromeOverlay(): CanvasRuntimeChromeSettingsSnapshot
   readSnapToGridEnabled(): boolean
   readSnapToGuidesEnabled(): boolean
+  readPlantSpacingIntervalMeters(): number
+  commitPlantSpacingIntervalMeters(meters: number): void
   toggleGridVisible(): void
   toggleSnapToGrid(): void
   toggleRulersVisible(): void
@@ -58,6 +61,7 @@ export function createDetachedCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter
   let snapToGrid = false
   let snapToGuides = false
   let rulersVisible = false
+  let plantSpacingIntervalM = FALLBACK_PLANT_SPACING_INTERVAL_M
   const layerProjections = new Map<string, CanvasRuntimeLayerProjectionSource>()
 
   return {
@@ -72,6 +76,10 @@ export function createDetachedCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter
       readChromeOverlay: () => ({ gridVisible, rulersVisible }),
       readSnapToGridEnabled: () => snapToGrid,
       readSnapToGuidesEnabled: () => snapToGuides,
+      readPlantSpacingIntervalMeters: () => plantSpacingIntervalM,
+      commitPlantSpacingIntervalMeters: (meters) => {
+        plantSpacingIntervalM = meters
+      },
       toggleGridVisible: () => {
         gridVisible = !gridVisible
       },
