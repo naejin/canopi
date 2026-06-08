@@ -21,6 +21,16 @@ describe('location route boundary', () => {
     expect(panelSource).toContain("LocationTab")
     expect(tabSource).not.toContain("ipc/geocoding")
     expect(inputSource).not.toContain("ipc/geocoding")
+    for (const source of [tabSource, inputSource]) {
+      expect(source).not.toContain("document.addEventListener('pointerup'")
+      expect(source).not.toContain('search.closeDropdown')
+      expect(source).not.toContain('search.dispose')
+    }
+    expect(tabSource).toContain('useLocationMapEditingHost')
+    expect(tabSource).not.toContain("maplibre-gl")
+    expect(tabSource).not.toContain('createMapLibreBasemapStyle')
+    expect(tabSource).not.toContain('basemapStyle')
+    expect(tabSource).not.toContain('computeSavedPinState')
   })
 
   it('keeps saved-location UI behind the Location Workbench seam', () => {

@@ -1,4 +1,3 @@
-import { useEffect, useRef } from 'preact/hooks'
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
 import {
@@ -13,21 +12,6 @@ export function LocationInput() {
   const workbench = useLocationWorkbench()
   const search = workbench.search
   const location = workbench.saved.location
-  const dropdownRef = useRef<HTMLDivElement>(null)
-
-  // Click-outside-to-close + debounce cleanup
-  useEffect(() => {
-    function handlePointerUp(e: PointerEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        search.closeDropdown()
-      }
-    }
-    document.addEventListener('pointerup', handlePointerUp)
-    return () => {
-      document.removeEventListener('pointerup', handlePointerUp)
-      search.dispose()
-    }
-  }, [search])
 
   function selectResult(result: LocationSearchResult) {
     void workbench.commitSearchResult(result)
@@ -46,7 +30,7 @@ export function LocationInput() {
       <h3 className={styles.title}>{t('canvas.location.title')}</h3>
 
       {/* Address search */}
-      <div className={styles.searchSection} ref={dropdownRef}>
+      <div className={styles.searchSection} ref={search.setDropdownElement}>
         <label className={styles.label}>
           {t('canvas.location.addressLabel')}
           <input

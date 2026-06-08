@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'preact/hooks'
+import { useEffect, useMemo, useRef } from 'preact/hooks'
 import { useSignal, useSignalEffect } from '@preact/signals'
 import type { Location } from '../../types/design'
 import { formatLocationSummary } from '../../utils/location'
@@ -35,7 +35,7 @@ export interface PinOverlayState {
 
 export interface LocationWorkbench {
   readonly saved: SavedLocationPresentation
-  readonly search: LocationSearchController
+  readonly search: LocationWorkbenchSearch
   readonly latDraft: string
   readonly lonDraft: string
   readonly altitudeDraft: string
@@ -49,6 +49,10 @@ export interface LocationWorkbench {
   readonly previewSearchResultOnMap: (result: LocationSearchResult) => { lat: number; lon: number }
   readonly clearPendingMapResult: () => void
   readonly commitMapLocation: (center: { lat: number; lon: number } | null) => boolean
+}
+
+export interface LocationWorkbenchSearch extends LocationSearchController {
+  readonly setDropdownElement: (element: HTMLElement | null) => void
 }
 
 export function getSavedLocationPresentation(
@@ -135,6 +139,13 @@ export function useLocationWorkbench(): LocationWorkbench {
   savedLocationRef.current = saved.location
 
   const search = useMemo(() => createLocationSearchController(), [])
+  const searchDropdownRef = useRef<HTMLElement | null>(null)
+  const workbenchSearch = useMemo<LocationWorkbenchSearch>(() => ({
+    ...search,
+    setDropdownElement: (element) => {
+      searchDropdownRef.current = element
+    },
+  }), [search])
   const initialDraft = locationDraftFromSaved(saved.location)
   const latDraft = useSignal(initialDraft.lat)
   const lonDraft = useSignal(initialDraft.lon)
@@ -147,6 +158,22 @@ export function useLocationWorkbench(): LocationWorkbench {
     lonDraft.value = next.lon
     altitudeDraft.value = next.altitude
   })
+
+  useEffect(() => {
+    function handlePointerUp(event: PointerEvent) {
+      const dropdown = searchDropdownRef.current
+      if (dropdown && !dropdown.contains(event.target as Node)) {
+        search.closeDropdown()
+      }
+    }
+
+    document.addEventListener('pointerup', handlePointerUp)
+    return () => {
+      document.removeEventListener('pointerup', handlePointerUp)
+      search.dispose()
+      searchDropdownRef.current = null
+    }
+  }, [search])
 
   function saveDraftFromSignals(): boolean {
     return saveLocationDraft({
@@ -196,7 +223,7 @@ export function useLocationWorkbench(): LocationWorkbench {
 
   return {
     saved,
-    search,
+    search: workbenchSearch,
     latDraft: latDraft.value,
     lonDraft: lonDraft.value,
     altitudeDraft: altitudeDraft.value,

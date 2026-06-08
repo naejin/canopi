@@ -1,4 +1,5 @@
 export * from './controller'
+export * from './map-editing'
 export * from './notice'
 export * from './search-controller'
 export * from './workbench'
