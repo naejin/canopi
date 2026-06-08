@@ -86,3 +86,9 @@ export interface CanvasRuntimeSurfaces {
   readonly queries: CanvasQuerySurface
   readonly documents: CanvasDocumentSurface
 }
+
+export interface CanvasRuntimeHost {
+  readonly surfaces: CanvasRuntimeSurfaces
+  init(container: HTMLElement): Promise<void>
+  destroy(): void
+}

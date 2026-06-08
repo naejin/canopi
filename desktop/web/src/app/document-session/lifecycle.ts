@@ -1,13 +1,12 @@
 import { setCanvasRuntimeSurfaces } from "../../canvas/session";
-import { SceneCanvasRuntime } from "../../canvas/runtime/scene-runtime";
-import { createCanvasRuntimeSurfaces } from "../../canvas/runtime/surfaces";
 import type {
   CanvasDocumentSurface,
+  CanvasRuntimeHost,
   CanvasRuntimeSurfaces,
 } from "../../canvas/runtime/runtime";
 import { autoSaveIntervalMs } from "../settings/state";
 import { flushSettingsProjection } from "../settings/projection";
-import { createAppSceneRuntimePanelTargetAdapter } from "../canvas-runtime/panel-target-adapter";
+import { createAppCanvasRuntimeHost } from "../canvas-runtime/host";
 import {
   autosaveDesignSession,
   consumeQueuedDocumentLoad,
@@ -27,8 +26,7 @@ interface DesignSessionResizeObserver {
 }
 
 interface DesignSessionLifecycleDeps {
-  readonly createRuntime: () => SceneCanvasRuntime;
-  readonly createSurfaces: (runtime: SceneCanvasRuntime) => CanvasRuntimeSurfaces;
+  readonly createRuntimeHost: () => CanvasRuntimeHost;
   readonly publishSurfaces: (surfaces: CanvasRuntimeSurfaces | null) => void;
   readonly createResizeObserver: (
     callback: ResizeObserverCallback,
@@ -38,10 +36,7 @@ interface DesignSessionLifecycleDeps {
 }
 
 const DEFAULT_LIFECYCLE_DEPS: DesignSessionLifecycleDeps = {
-  createRuntime: () => new SceneCanvasRuntime({
-    targetPresentation: createAppSceneRuntimePanelTargetAdapter(),
-  }),
-  createSurfaces: createCanvasRuntimeSurfaces,
+  createRuntimeHost: createAppCanvasRuntimeHost,
   publishSurfaces: setCanvasRuntimeSurfaces,
   createResizeObserver: (callback) => {
     if (typeof ResizeObserver === "undefined") return null;
@@ -68,7 +63,7 @@ export function createDesignSessionLifecycle(
 }
 
 class RuntimeDesignSessionLifecycle implements DesignSessionLifecycle {
-  private readonly runtime: SceneCanvasRuntime;
+  private readonly runtimeHost: CanvasRuntimeHost;
   private readonly surfaces: CanvasRuntimeSurfaces;
   private readonly documents: CanvasDocumentSurface;
   private cancelled = false;
@@ -81,15 +76,15 @@ class RuntimeDesignSessionLifecycle implements DesignSessionLifecycle {
     private readonly host: DesignSessionLifecycleHost,
     private readonly deps: DesignSessionLifecycleDeps,
   ) {
-    this.runtime = deps.createRuntime();
-    this.surfaces = deps.createSurfaces(this.runtime);
+    this.runtimeHost = deps.createRuntimeHost();
+    this.surfaces = this.runtimeHost.surfaces;
     this.documents = this.surfaces.documents;
   }
 
   start(): void {
     this.updateAutosaveInterval(this.deps.readInitialAutosaveInterval());
 
-    void this.runtime.init(this.host.container).then(() => {
+    void this.runtimeHost.init(this.host.container).then(() => {
       if (this.cancelled) return;
 
       this.runtimeInitialized = true;
@@ -134,7 +129,7 @@ class RuntimeDesignSessionLifecycle implements DesignSessionLifecycle {
     this.cancelQueuedLoad();
     flushSettingsProjection();
     this.teardownDocumentSession();
-    this.runtime.destroy();
+    this.runtimeHost.destroy();
     this.deps.publishSurfaces(null);
   }
 
