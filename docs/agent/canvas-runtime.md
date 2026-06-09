@@ -12,7 +12,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - Document session orchestration, save/load, chrome, resize, and teardown consume document surfaces.
 - Sibling read-only surfaces consume query surfaces for scene snapshots, viewport queries, selection reads, placed plants, localized names, and presentation context.
 - Publish live canvas sessions as explicit `CanvasRuntimeSurfaces` bundles. Do not publish a raw `SceneCanvasRuntime`, and do not cast a role-specific fake into the session signal; tests should use `createTestCanvasRuntimeSurfaces()` with the role surface they need.
-- Scene freshness for app callers is exposed through `CanvasQuerySurface.revision`. App modules must not import `sceneEntityRevision` or `plantNamesRevision` from `canvas/runtime-mirror-state.ts`; those mirrors are runtime-internal compatibility signals.
+- Scene freshness for app callers is exposed through `CanvasQuerySurface.revision`. Do not recreate canvas runtime mirror revision signals; app modules subscribe through the query surface instead.
 - `canvas/runtime/runtime.ts` owns the app-facing Canvas Runtime Surface interfaces. `canvas/runtime/surfaces.ts` only composes the live runtime surfaces; command, query, and document surface behavior belongs behind the role modules in `canvas/runtime/*-surface.ts`.
 - `SceneCanvasRuntime` may still wire the concrete scene runtime during migration, but new surface behavior should be added to the relevant role module before adding more broad runtime pass-through code.
 - `canvas/runtime/document-surface.ts` owns document lifecycle surface behavior for load, replace, serialization, saved checkpoints, viewport initialization, chrome attachment, resize, and teardown. `SceneCanvasRuntime` compatibility methods delegate to that role.
@@ -80,6 +80,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 
 - Tool modules are internal adapters behind `canvas/runtime/interaction/tool-modules.ts`; they do not change the public `SceneCanvasRuntime`, `CanvasCommandSurface`, `CanvasQuerySurface`, or `CanvasDocumentSurface` interfaces.
 - Scene Interaction Frame (`canvas/runtime/interaction/frame.ts`) owns interaction listener setup/teardown, tool transition routing, transient cleanup ordering, and disposal cleanup ordering.
+- Test Scene Interaction behavior through the Scene Interaction Frame event harness in `desktop/web/src/__tests__/support/scene-interaction-frame.ts`. New broad interaction tests should dispatch user-equivalent pointer, keyboard, and wheel events instead of calling private `SceneInteractionController` handlers.
 - Shared panning, band selection, top-level Design Object dragging, snap-adjusted drag deltas, and shared gesture cleanup live in `canvas/runtime/interaction/shared-gestures.ts` behind the frame. `SceneInteractionController` should route these gestures through that seam and keep tool dispatch separate.
 - `SceneInteractionController` supplies concrete cleanup callbacks to `frame.cleanupTransient()`; do not inline the ordering for pointer gesture reset, shared gesture cancellation, tool transient cancellation, hover clearing, or cursor reset back into the controller.
 - Tool construction, active-tool lifecycle dispatch, and optional adapter hook normalization belong in `tool-modules.ts`.
@@ -91,7 +92,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - Do not install module-level `effect()` or global listeners from a tool module unless that module also owns an explicit disposer and `import.meta.hot.dispose()` cleanup. Prefer router-dispatched events for canvas tool input.
 - Current Scene Edit tool adapters include Annotation Text, Zone drawing, Object Stamp, Plant Stamp, and Plant Spacing. Do not reintroduce tool-specific fields, source state, preview state, or direct tool branches into `SceneInteractionController`; route through a `SceneToolAdapter` and keep the state machine in the tool module.
 - `canvas/plant-stamp-source.ts` owns Plant Stamp Source selection plus drag data parsing/serialization. Plant Stamp tool modules consume that seam and clear the selected source on adapter deactivation/disposal; Species Catalog UI modules call it instead of writing source state or hand-assembling drag payloads.
-- Guard Scene Edit ownership with source boundary tests in `scene-interaction-tool-boundary.test.ts` and user-equivalent lifecycle tests in `scene-interaction.test.ts`. Add tests before moving another tool concern across the router/module boundary.
+- Guard Scene Edit ownership with source boundary tests in `scene-interaction-tool-boundary.test.ts` and user-equivalent frame lifecycle tests in `scene-interaction.test.ts` or `scene-interaction-frame.test.ts`. Add tests before moving another tool concern across the router/module boundary.
 
 ## Zone Measurements
 

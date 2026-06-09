@@ -17,6 +17,7 @@ import {
   CANVAS_NOTICE_MARGIN_PX,
   CANVAS_RULER_SIZE_PX,
 } from '../canvas/canvas-notice-layout'
+import { createSceneInteractionEventHarness } from './support/scene-interaction-frame'
 
 function createPlantPresentationContext(viewportScale: number) {
   return {
@@ -199,18 +200,20 @@ describe('SceneInteractionController', () => {
     const render = vi.fn()
     const onSceneEditCommit = vi.fn()
     const deps = createInteractionDeps(container, store, camera, { render, onSceneEditCommit })
+    const events = createSceneInteractionEventHarness(container)
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('select')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 35, clientY: 45, button: 0 }))
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 35, clientY: 45, button: 0 }))
+    events.pointerDown({ x: 20, y: 30 })
+    events.pointerMove({ x: 35, y: 45 })
+    events.pointerUp({ x: 35, y: 45 })
 
     expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
     expect(store.persisted.plants[0]?.position).toEqual({ x: 35, y: 45 })
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-drag')
     expect(deps.setSelection).toHaveBeenCalledWith(new Set(['plant-1']))
     controller.dispose()
+    events.dispose()
   })
 
   it('does not select or drag locked Design Objects from SceneStore', () => {
@@ -1869,13 +1872,16 @@ describe('SceneInteractionController', () => {
       store.setViewport(viewport)
     })
     const deps = createInteractionDeps(container, store, camera, { render, setViewport })
+    const events = createSceneInteractionEventHarness(container)
     const controller = new SceneInteractionController(deps as any)
 
-    ;(controller as any)._onWheel(new WheelEvent('wheel', { clientX: 200, clientY: 150, deltaY: -120 }))
+    const wheel = events.wheel({ x: 200, y: 150 }, { deltaY: -120 })
 
+    expect(wheel.defaultPrevented).toBe(true)
     expect(setViewport).toHaveBeenCalledTimes(1)
     expect(render).toHaveBeenCalledWith('viewport')
     controller.dispose()
+    events.dispose()
   })
 
   it('commits a text Annotation with Enter and selects it', () => {
@@ -1998,12 +2004,13 @@ describe('SceneInteractionController', () => {
     const render = vi.fn()
     const onSceneEditCommit = vi.fn()
     const deps = createInteractionDeps(container, store, camera, { render, onSceneEditCommit })
+    const events = createSceneInteractionEventHarness(container)
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('rectangle')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 20, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 40, clientY: 60, button: 0 }))
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 40, clientY: 60, button: 0 }))
+    events.pointerDown({ x: 10, y: 20 })
+    events.pointerMove({ x: 40, y: 60 })
+    events.pointerUp({ x: 40, y: 60 })
 
     expect(store.persisted.zones).toHaveLength(1)
     expect(store.persisted.zones[0]).toMatchObject({
@@ -2018,6 +2025,7 @@ describe('SceneInteractionController', () => {
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-rectangle')
     expect(deps.setSelection).toHaveBeenCalledTimes(1)
     controller.dispose()
+    events.dispose()
   })
 
   it('creates an elliptical zone from the ellipse tool drag', () => {
@@ -3947,19 +3955,21 @@ describe('SceneInteractionController', () => {
   it('temporarily pans with the space key while select is active', () => {
     const render = vi.fn()
     const deps = createInteractionDeps(container, store, camera, { render })
+    const events = createSceneInteractionEventHarness(container)
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('select')
 
-    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' }))
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 100, clientY: 100, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 130, clientY: 120, button: 0 }))
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 130, clientY: 120, button: 0 }))
-    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'Space' }))
+    events.holdSpace()
+    events.pointerDown({ x: 100, y: 100 })
+    events.pointerMove({ x: 130, y: 120 })
+    events.pointerUp({ x: 130, y: 120 })
+    events.releaseSpace()
 
     expect(camera.viewport.x).toBe(30)
     expect(camera.viewport.y).toBe(20)
     expect(render).toHaveBeenCalled()
     controller.dispose()
+    events.dispose()
   })
 
   it('clears hover when disposed', () => {

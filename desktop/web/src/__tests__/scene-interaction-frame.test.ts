@@ -3,6 +3,7 @@ import {
   createSceneInteractionFrame,
   type SceneInteractionFrameHandlers,
 } from '../canvas/runtime/interaction/frame'
+import { createSceneInteractionEventHarness } from './support/scene-interaction-frame'
 
 function createHandlers(): SceneInteractionFrameHandlers {
   return {
@@ -20,6 +21,77 @@ function createHandlers(): SceneInteractionFrameHandlers {
 }
 
 describe('Scene Interaction Frame', () => {
+  it('dispatches user-equivalent pointer, keyboard, and wheel events through the frame', () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const harness = createSceneInteractionEventHarness(container, {
+      bounds: { left: 10, top: 20, width: 400, height: 300 },
+      trackListeners: true,
+    })
+    const received: string[] = []
+    let cachedRect: DOMRect | null = null
+    const handlers: SceneInteractionFrameHandlers = {
+      pointerDown: (event) => {
+        cachedRect = container.getBoundingClientRect()
+        received.push(`down:${event.pointerId}:${harness.screenPointFrom(event, cachedRect).x}:${event.shiftKey}`)
+      },
+      pointerLeave: (event) => {
+        received.push(`leave:${event.pointerId}`)
+      },
+      pointerMove: (event) => {
+        if (!cachedRect) throw new Error('pointer move before pointer down')
+        const screen = harness.screenPointFrom(event, cachedRect)
+        received.push(`move:${event.pointerId}:${screen.x}:${screen.y}:${event.altKey}`)
+      },
+      pointerUp: (event) => {
+        received.push(`up:${event.pointerId}`)
+        cachedRect = null
+      },
+      keyDown: (event) => {
+        received.push(`keydown:${event.code}`)
+      },
+      keyUp: (event) => {
+        received.push(`keyup:${event.code}`)
+      },
+      wheel: (event) => {
+        event.preventDefault()
+        received.push(`wheel:${harness.screenPointFrom(event).x}:${event.deltaY}`)
+      },
+      dragOver: vi.fn(),
+      dragLeave: vi.fn(),
+      drop: vi.fn(),
+    }
+    const frame = createSceneInteractionFrame({ container, handlers })
+
+    frame.attach()
+    harness.pointerDown({ x: 12, y: 14 }, { pointerId: 7, shiftKey: true })
+    harness.setBounds({ left: 30, top: 40, width: 400, height: 300 })
+    harness.pointerMoveClient({ x: 35, y: 48 }, { pointerId: 7, altKey: true })
+    harness.holdSpace()
+    harness.releaseSpace()
+    const wheel = harness.wheel({ x: 44, y: 55 }, { deltaY: -120 })
+    harness.pointerLeave({ x: 44, y: 55 }, { pointerId: 7 })
+    harness.pointerUpClient({ x: 35, y: 48 }, { pointerId: 7 })
+    frame.dispose(() => {})
+    harness.pointerDown({ x: 99, y: 99 }, { pointerId: 8 })
+
+    expect(wheel.defaultPrevented).toBe(true)
+    expect(harness.listenerLog?.containerAdds('pointerdown')).toHaveLength(1)
+    expect(harness.listenerLog?.containerRemoves('pointerdown')).toHaveLength(1)
+    expect(received).toEqual([
+      'down:7:12:true',
+      'move:7:25:28:true',
+      'keydown:Space',
+      'keyup:Space',
+      'wheel:44:-120',
+      'leave:7',
+      'up:7',
+    ])
+
+    harness.dispose()
+    container.remove()
+  })
+
   it('owns listener setup, teardown, transition cleanup, and disposal cleanup', () => {
     const container = document.createElement('div')
     const handlers = createHandlers()
@@ -53,12 +125,14 @@ describe('Scene Interaction Frame', () => {
     expect(disposeCleanup).toHaveBeenCalledTimes(1)
   })
 
-  it('owns transient cleanup ordering for shared gestures, tools, hover, and cursor state', () => {
+  it.each([
+    ['completed interaction', {}],
+    ['cancelled interaction', { preserveActiveDraft: true }],
+  ] as const)('owns transient cleanup ordering for a %s', (_name, options) => {
     const container = document.createElement('div')
     const handlers = createHandlers()
     const frame = createSceneInteractionFrame({ container, handlers })
     const order: string[] = []
-    const options = { preserveActiveDraft: true }
 
     frame.cleanupTransient(options, {
       clearPointerGesture: () => order.push('pointer'),
