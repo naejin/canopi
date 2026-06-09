@@ -1,33 +1,120 @@
-import type { CanvasDocumentSurface } from './runtime'
-import type { SceneCanvasRuntime } from './scene-runtime'
+import type { CanopiFile } from '../../types/design'
+import type { CameraController } from './camera'
+import type { PlantPresentationContext } from './plant-presentation'
+import type { CanvasDocumentSurface, CanvasRuntimeDocumentMetadata } from './runtime'
+import type { ScenePersistedState, SceneViewportState } from './scene'
+import type { SceneRuntimeChromeCoordinator } from './scene-runtime/chrome-coordinator'
+import type { SceneRuntimeDocumentBridge } from './scene-runtime/document'
+import type { SceneRuntimeRenderScheduler } from './scene-runtime/render-scheduler'
 
-export function createSceneCanvasDocumentSurface(runtime: SceneCanvasRuntime): CanvasDocumentSurface {
-  return new SceneCanvasDocumentRole(runtime)
+interface SceneCanvasDocumentSurfaceOptions {
+  readonly documents: Pick<
+    SceneRuntimeDocumentBridge,
+    'loadDocument' | 'replaceDocument' | 'serializeDocument' | 'markSaved' | 'clearHistory'
+  >
+  readonly camera: Pick<CameraController, 'initialize' | 'resize' | 'zoomToFit' | 'viewport'>
+  readonly chrome: Pick<SceneRuntimeChromeCoordinator, 'attach' | 'show' | 'hide' | 'destroy'>
+  readonly rendering: Pick<SceneRuntimeRenderScheduler, 'container' | 'renderScene' | 'resize' | 'dispose'>
+  readonly getSceneSnapshot: () => ScenePersistedState
+  readonly createPlantPresentationContext: (viewportScale: number) => PlantPresentationContext
+  readonly setViewport: (
+    viewport: SceneViewportState,
+    options?: { forceRevision?: boolean },
+  ) => void
+  readonly invalidateViewport: () => void
+  readonly renderChrome: () => void
+  readonly addGuide: (axis: 'h' | 'v', worldPosition: number) => void
+  readonly clearHoveredEntity: () => void
+  readonly disposeInteraction: () => void
+  readonly disposeEffects: () => void
+}
+
+export function createSceneCanvasDocumentSurface(
+  options: SceneCanvasDocumentSurfaceOptions,
+): CanvasDocumentSurface {
+  return new SceneCanvasDocumentRole(options)
 }
 
 class SceneCanvasDocumentRole implements CanvasDocumentSurface {
-  constructor(private readonly runtime: SceneCanvasRuntime) {}
+  private _documentLoaded = false
 
-  initializeViewport(): void { this.runtime.initializeViewport() }
-  attachRulersTo(element: HTMLElement): void { this.runtime.attachRulersTo(element) }
-  showCanvasChrome(): void { this.runtime.showCanvasChrome() }
-  hideCanvasChrome(): void { this.runtime.hideCanvasChrome() }
-  zoomToFit(): void { this.runtime.zoomToFit() }
-  loadDocument(file: Parameters<CanvasDocumentSurface['loadDocument']>[0]): void {
-    this.runtime.loadDocument(file)
+  constructor(private readonly options: SceneCanvasDocumentSurfaceOptions) {}
+
+  initializeViewport(): void {
+    const container = this.options.rendering.container
+    if (!container) return
+    const viewport = this.options.camera.initialize({
+      width: Math.max(1, container.clientWidth),
+      height: Math.max(1, container.clientHeight),
+    })
+    this.options.setViewport(viewport, { forceRevision: true })
+    void this.options.rendering.renderScene()
   }
-  replaceDocument(file: Parameters<CanvasDocumentSurface['replaceDocument']>[0]): void {
-    this.runtime.replaceDocument(file)
+
+  attachRulersTo(element: HTMLElement): void {
+    this.options.chrome.attach(element, (axis, worldPosition) => {
+      this.options.addGuide(axis, worldPosition)
+    })
+    this.options.renderChrome()
   }
-  hasLoadedDocument(): boolean { return this.runtime.hasLoadedDocument() }
+
+  showCanvasChrome(): void {
+    this.options.chrome.show()
+    this.options.renderChrome()
+  }
+
+  hideCanvasChrome(): void {
+    this.options.chrome.hide()
+    this.options.renderChrome()
+  }
+
+  zoomToFit(): void {
+    const viewport = this.options.camera.zoomToFit(this.options.getSceneSnapshot(), {
+      plantContext: this.options.createPlantPresentationContext(this.options.camera.viewport.scale),
+    })
+    this.options.setViewport(viewport)
+    this.options.invalidateViewport()
+  }
+
+  loadDocument(file: CanopiFile): void {
+    this.options.documents.loadDocument(file)
+    this._documentLoaded = true
+  }
+
+  replaceDocument(file: CanopiFile): void {
+    this.options.documents.replaceDocument(file)
+    this._documentLoaded = true
+  }
+
+  hasLoadedDocument(): boolean {
+    return this._documentLoaded
+  }
+
   serializeDocument(
-    metadata: Parameters<CanvasDocumentSurface['serializeDocument']>[0],
-    doc: Parameters<CanvasDocumentSurface['serializeDocument']>[1],
-  ) {
-    return this.runtime.serializeDocument(metadata, doc)
+    metadata: CanvasRuntimeDocumentMetadata,
+    doc: CanopiFile,
+  ): CanopiFile {
+    return this.options.documents.serializeDocument(metadata, doc)
   }
-  markSaved(): void { this.runtime.markSaved() }
-  clearHistory(): void { this.runtime.clearHistory() }
-  resize(width: number, height: number): void { this.runtime.resize(width, height) }
-  destroy(): void { this.runtime.destroy() }
+
+  markSaved(): void {
+    this.options.documents.markSaved()
+  }
+
+  clearHistory(): void {
+    this.options.documents.clearHistory()
+  }
+
+  resize(width: number, height: number): void {
+    this.options.setViewport(this.options.camera.resize({ width, height }), { forceRevision: true })
+    this.options.rendering.resize(width, height)
+  }
+
+  destroy(): void {
+    this.options.clearHoveredEntity()
+    this.options.disposeInteraction()
+    this.options.chrome.destroy()
+    this.options.disposeEffects()
+    this.options.rendering.dispose()
+  }
 }

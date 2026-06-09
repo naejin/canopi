@@ -29,6 +29,7 @@ import {
 } from './scene-runtime/scene-sync'
 import { SceneRuntimeChromeCoordinator } from './scene-runtime/chrome-coordinator'
 import { SceneRuntimeDocumentBridge } from './scene-runtime/document'
+import { createSceneCanvasDocumentSurface } from './document-surface'
 import { installSceneRuntimeEffects } from './scene-runtime/effects'
 import { SceneRuntimeRenderScheduler, type SceneRuntimeRenderKind } from './scene-runtime/render-scheduler'
 import type { SceneLayerEntity, ScenePersistedState } from './scene'
@@ -44,6 +45,7 @@ import {
   type SceneRuntimePanelTargetAdapter,
 } from './scene-runtime/panel-target-adapter'
 import type {
+  CanvasDocumentSurface,
   CanvasQueryRevision,
   CanvasRuntimeDocumentMetadata,
 } from './runtime'
@@ -93,9 +95,9 @@ export class SceneCanvasRuntime {
   private readonly _sceneEdits: SceneEditCoordinator
   private readonly _mutations: SceneRuntimeMutationController
   private readonly _documents: SceneRuntimeDocumentBridge
+  private readonly _documentSurface: CanvasDocumentSurface
   private readonly _panelTargetAdapter: SceneRuntimePanelTargetAdapter
   private readonly _disposeEffects: Array<() => void> = []
-  private _documentLoaded = false
 
   constructor(options: SceneCanvasRuntimeOptions = {}) {
     this._appAdapter = options.appAdapter ?? createDetachedCanvasRuntimeAppAdapter()
@@ -126,6 +128,27 @@ export class SceneCanvasRuntime {
       invalidateScene: () => this._invalidate('scene'),
       incrementSceneRevision: () => this._incrementSceneRevision(),
       incrementViewportRevision: () => this._incrementViewportRevision(),
+    })
+    this._documentSurface = createSceneCanvasDocumentSurface({
+      documents: this._documents,
+      camera: this._camera,
+      chrome: this._chrome,
+      rendering: this._rendering,
+      getSceneSnapshot: () => this._sceneStore.persisted,
+      createPlantPresentationContext: (viewportScale) =>
+        this._presentation.createPlantPresentationContext(viewportScale),
+      setViewport: (viewport, options) => this._setViewport(viewport, options),
+      invalidateViewport: () => this._invalidate('viewport'),
+      renderChrome: () => this._renderChrome(),
+      addGuide: (axis, worldPosition) => this._addGuide(axis, worldPosition),
+      clearHoveredEntity: () => this._setHoveredEntityId(null, { invalidate: false }),
+      disposeInteraction: () => {
+        this._interaction?.dispose()
+        this._interaction = null
+      },
+      disposeEffects: () => {
+        for (const dispose of this._disposeEffects.splice(0)) dispose()
+      },
     })
     this._sceneEdits = new SceneRuntimeEditCoordinator({
       sceneStore: this._sceneStore,
@@ -189,6 +212,10 @@ export class SceneCanvasRuntime {
     return this._sceneStore
   }
 
+  get documentSurface(): CanvasDocumentSurface {
+    return this._documentSurface
+  }
+
   getSceneSnapshot(): ScenePersistedState {
     return this._sceneStore.persisted
   }
@@ -225,31 +252,19 @@ export class SceneCanvasRuntime {
   }
 
   initializeViewport(): void {
-    const container = this._rendering.container
-    if (!container) return
-    const viewport = this._camera.initialize({
-      width: Math.max(1, container.clientWidth),
-      height: Math.max(1, container.clientHeight),
-    })
-    this._setViewport(viewport, { forceRevision: true })
-    void this._rendering.renderScene()
+    this._documentSurface.initializeViewport()
   }
 
   attachRulersTo(element: HTMLElement): void {
-    this._chrome.attach(element, (axis, worldPosition) => {
-      this._addGuide(axis, worldPosition)
-    })
-    this._renderChrome()
+    this._documentSurface.attachRulersTo(element)
   }
 
   showCanvasChrome(): void {
-    this._chrome.show()
-    this._renderChrome()
+    this._documentSurface.showCanvasChrome()
   }
 
   hideCanvasChrome(): void {
-    this._chrome.hide()
-    this._renderChrome()
+    this._documentSurface.hideCanvasChrome()
   }
 
   setTool(name: string): void {
@@ -268,10 +283,7 @@ export class SceneCanvasRuntime {
   }
 
   zoomToFit(): void {
-    this._setViewport(this._camera.zoomToFit(this._sceneStore.persisted, {
-      plantContext: this._presentation.createPlantPresentationContext(this._camera.viewport.scale),
-    }))
-    this._invalidate('viewport')
+    this._documentSurface.zoomToFit()
   }
 
   get canUndo() { return this._history.canUndo }
@@ -416,43 +428,35 @@ export class SceneCanvasRuntime {
   }
 
   loadDocument(file: CanopiFile): void {
-    this._documents.loadDocument(file)
-    this._documentLoaded = true
+    this._documentSurface.loadDocument(file)
   }
 
   replaceDocument(file: CanopiFile): void {
-    this._documents.replaceDocument(file)
-    this._documentLoaded = true
+    this._documentSurface.replaceDocument(file)
   }
 
   hasLoadedDocument(): boolean {
-    return this._documentLoaded
+    return this._documentSurface.hasLoadedDocument()
   }
 
   serializeDocument(metadata: CanvasRuntimeDocumentMetadata, doc: CanopiFile): CanopiFile {
-    return this._documents.serializeDocument(metadata, doc)
+    return this._documentSurface.serializeDocument(metadata, doc)
   }
 
   markSaved(): void {
-    this._documents.markSaved()
+    this._documentSurface.markSaved()
   }
 
   clearHistory(): void {
-    this._documents.clearHistory()
+    this._documentSurface.clearHistory()
   }
 
   destroy(): void {
-    this._setHoveredEntityId(null, { invalidate: false })
-    this._interaction?.dispose()
-    this._interaction = null
-    this._chrome.destroy()
-    for (const dispose of this._disposeEffects.splice(0)) dispose()
-    this._rendering.dispose()
+    this._documentSurface.destroy()
   }
 
   resize(width: number, height: number): void {
-    this._setViewport(this._camera.resize({ width, height }), { forceRevision: true })
-    this._rendering.resize(width, height)
+    this._documentSurface.resize(width, height)
   }
 
   private _setViewport(

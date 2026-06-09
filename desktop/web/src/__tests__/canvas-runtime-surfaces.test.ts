@@ -109,21 +109,40 @@ function createDocumentSurface() {
   } satisfies CanvasDocumentSurface
 }
 
+function readPackageSource(path: string): string {
+  const sourcePath = new URL(path, import.meta.url).pathname
+  return readFileSync(sourcePath.startsWith('/src/') ? `.${sourcePath}` : sourcePath, 'utf8')
+}
+
 describe('canvas runtime surfaces', () => {
   afterEach(() => {
     setCurrentCanvasSession(null)
   })
 
   it('composes internal role modules behind the public runtime surface factory', () => {
-    const surfacesPath = new URL('../canvas/runtime/surfaces.ts', import.meta.url).pathname
-    const surfacesSource = readFileSync(`.${surfacesPath}`, 'utf8')
+    const surfacesSource = readPackageSource('../canvas/runtime/surfaces.ts')
 
     expect(surfacesSource).toContain('createSceneCanvasCommandSurface')
     expect(surfacesSource).toContain('createSceneCanvasQuerySurface')
-    expect(surfacesSource).toContain('createSceneCanvasDocumentSurface')
     expect(surfacesSource).not.toContain('class SceneCanvasCommandAdapter')
     expect(surfacesSource).not.toContain('class SceneCanvasQueryAdapter')
     expect(surfacesSource).not.toContain('class SceneCanvasDocumentAdapter')
+  })
+
+  it('keeps document lifecycle behavior inside the document role module', () => {
+    const documentSurfaceSource = readPackageSource('../canvas/runtime/document-surface.ts')
+    const runtimeSource = readPackageSource('../canvas/runtime/scene-runtime.ts')
+
+    expect(documentSurfaceSource).not.toContain("from './scene-runtime'")
+    expect(documentSurfaceSource).not.toContain('this.runtime.')
+    expect(documentSurfaceSource).toContain('loadDocument(file')
+    expect(documentSurfaceSource).toContain('replaceDocument(file')
+    expect(documentSurfaceSource).toContain('serializeDocument(')
+    expect(documentSurfaceSource).toContain('resize(width')
+    expect(runtimeSource).toContain('get documentSurface')
+    expect(runtimeSource).not.toContain('this._documents.loadDocument(file)')
+    expect(runtimeSource).not.toContain('this._documents.replaceDocument(file)')
+    expect(runtimeSource).not.toContain('this._documents.serializeDocument(metadata, doc)')
   })
 
   it('publishes explicit facades instead of the mounted runtime', () => {

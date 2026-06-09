@@ -1,13 +1,19 @@
 import { createSceneCanvasCommandSurface } from './command-surface'
-import { createSceneCanvasDocumentSurface } from './document-surface'
 import { createSceneCanvasQuerySurface } from './query-surface'
-import type { CanvasRuntimeSurfaces } from './runtime'
+import type { CanvasDocumentSurface, CanvasRuntimeSurfaces } from './runtime'
 import type { SceneCanvasRuntime } from './scene-runtime'
 
 export function createCanvasRuntimeSurfaces(runtime: SceneCanvasRuntime): CanvasRuntimeSurfaces {
   return {
     commands: createSceneCanvasCommandSurface(runtime),
     queries: createSceneCanvasQuerySurface(runtime),
-    documents: createSceneCanvasDocumentSurface(runtime),
+    documents: documentSurfaceFrom(runtime),
   }
+}
+
+function documentSurfaceFrom(runtime: SceneCanvasRuntime): CanvasDocumentSurface {
+  const maybeRuntime = runtime as SceneCanvasRuntime & {
+    readonly documentSurface?: CanvasDocumentSurface
+  }
+  return maybeRuntime.documentSurface ?? runtime
 }
