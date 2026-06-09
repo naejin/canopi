@@ -482,6 +482,8 @@ describe('frontend boundary sources', () => {
   })
 
   it('keeps runtime mirror revision signals behind the Canvas Query Surface', () => {
+    expect(sourceExists('../canvas/runtime-mirror-state.ts')).toBe(false)
+
     const sourcePaths = [
       '../app',
       '../components',
@@ -644,10 +646,7 @@ describe('frontend boundary sources', () => {
   })
 
   it('keeps production Canvas Runtime core free of direct app imports', () => {
-    const runtimeSourcePaths = [
-      '../canvas/runtime-mirror-state.ts',
-      ...sourceFilesUnder('../canvas/runtime').filter(isTypescriptSource),
-    ]
+    const runtimeSourcePaths = sourceFilesUnder('../canvas/runtime').filter(isTypescriptSource)
 
     expect(runtimeSourcePaths).toContain('../canvas/runtime/app-adapter.ts')
     expectImportsToContain('../app/canvas-runtime/app-adapter.ts', [
