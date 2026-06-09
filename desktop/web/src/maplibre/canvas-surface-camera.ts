@@ -2,13 +2,13 @@ import {
   createMapFrame,
   type MapFrame,
   type MapLibreCameraLocation,
-  type MapLibreCameraScreenSize,
 } from '../canvas/maplibre-camera'
+import type { CanvasQuerySurface } from '../canvas/runtime/runtime'
 
-export interface MapLibreSurfaceCameraRuntime {
-  getViewport(): Parameters<typeof createMapFrame>[0]
-  getViewportScreenSize(): MapLibreCameraScreenSize
-}
+export type MapLibreSurfaceCameraRuntime = Pick<
+  CanvasQuerySurface,
+  'getViewport' | 'getViewportScreenSize'
+>
 
 export interface MapLibreSurfaceCameraMap {
   jumpTo(options: { center: [number, number]; zoom: number; bearing: number }): void

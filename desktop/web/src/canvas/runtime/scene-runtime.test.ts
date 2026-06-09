@@ -106,6 +106,45 @@ function makeFile(): CanopiFile {
   }
 }
 
+function fileWithOnlyPlants(...ids: string[]): CanopiFile {
+  const file = makeFile()
+  return {
+    ...file,
+    plants: file.plants.filter((plant) => ids.includes(plant.id)),
+    zones: [],
+    annotations: [],
+    groups: [],
+  }
+}
+
+function fileWithOnlyZone(zone: CanopiFile['zones'][number] = makeFile().zones[0]!): CanopiFile {
+  const file = makeFile()
+  return {
+    ...file,
+    plants: [],
+    zones: [zone],
+    annotations: [],
+    groups: [],
+  }
+}
+
+function fileWithGroupedPair(): CanopiFile {
+  const file = makeFile()
+  file.zones = []
+  file.groups = [
+    {
+      id: 'group-1',
+      name: null,
+      layer: 'plants',
+      position: { x: 10, y: 10 },
+      rotation: null,
+      member_ids: ['plant-1', 'plant-2'],
+      locked: false,
+    },
+  ]
+  return file
+}
+
 function createRendererStub() {
   return {
     id: 'test',
@@ -130,6 +169,22 @@ async function initRuntimeWithStubbedRenderer(runtime: SceneCanvasRuntime) {
 
   await runtime.init(container)
   return { container, renderer }
+}
+
+function setInteractionViewport(
+  runtime: SceneCanvasRuntime,
+  viewport: { x: number; y: number; scale: number } = { x: 0, y: 0, scale: 1 },
+): void {
+  ;(runtime as any)._camera.setViewport(viewport)
+  runtime.documentSurface.resize(400, 300)
+}
+
+function clickAt(
+  events: ReturnType<typeof createSceneInteractionEventHarness>,
+  point: { x: number; y: number },
+): void {
+  events.pointerDown(point)
+  events.pointerUp(point)
 }
 
 function zoneMeasurementTexts(container: HTMLElement): string[] {
@@ -297,28 +352,27 @@ describe('scene canvas runtime', () => {
 
   it('groups, duplicates, and deletes grouped scene entities', () => {
     const runtime = new SceneCanvasRuntime()
-    runtime.loadDocument(makeFile())
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1', 'plant-2'))
 
-    runtime.getSceneStore().setSelection(['plant-1', 'plant-2'])
-    selectedObjectIds.value = new Set(['plant-1', 'plant-2'])
-    runtime.groupSelected()
+    runtime.commandSurface.sceneEdits.selectAll()
+    runtime.commandSurface.sceneEdits.groupSelected()
 
-    const grouped = runtime.getSceneStore().persisted
+    const grouped = runtime.querySurface.getSceneSnapshot()
     expect(grouped.groups).toHaveLength(1)
     const groupId = grouped.groups[0]!.id
     expect(selectedObjectIds.value).toEqual(new Set([groupId]))
 
-    runtime.duplicateSelected()
+    runtime.commandSurface.sceneEdits.duplicateSelected()
 
-    const duplicated = runtime.getSceneStore().persisted
+    const duplicated = runtime.querySurface.getSceneSnapshot()
     expect(duplicated.groups).toHaveLength(2)
     expect(duplicated.plants).toHaveLength(4)
     const duplicateGroupId = [...selectedObjectIds.value][0]!
     expect(duplicateGroupId).not.toBe(groupId)
 
-    runtime.deleteSelected()
+    runtime.commandSurface.sceneEdits.deleteSelected()
 
-    const afterDelete = runtime.getSceneStore().persisted
+    const afterDelete = runtime.querySurface.getSceneSnapshot()
     expect(afterDelete.groups).toHaveLength(1)
     expect(afterDelete.plants).toHaveLength(2)
     expect(selectedObjectIds.value.size).toBe(0)
@@ -341,35 +395,22 @@ describe('scene canvas runtime', () => {
     file.zones = file.zones.map((zone) =>
       zone.name === 'zone-1' ? { ...zone, locked: true } : zone,
     )
-    runtime.loadDocument(file)
+    runtime.documentSurface.loadDocument(file)
 
-    runtime.selectAll()
+    runtime.commandSurface.sceneEdits.selectAll()
 
     expect(selectedObjectIds.value).toEqual(new Set(['group-1']))
   })
 
   it('applies selected plant colors through grouped selection', () => {
     const runtime = new SceneCanvasRuntime()
-    const file = makeFile()
-    file.groups = [
-      {
-        id: 'group-1',
-        name: null,
-        layer: 'plants',
-        position: { x: 10, y: 10 },
-        rotation: null,
-        member_ids: ['plant-1', 'plant-2'],
-        locked: false,
-      },
-    ]
-    runtime.loadDocument(file)
-    runtime.getSceneStore().setSelection(['group-1'])
-    selectedObjectIds.value = new Set(['group-1'])
+    runtime.documentSurface.loadDocument(fileWithGroupedPair())
+    runtime.commandSurface.sceneEdits.selectAll()
 
-    const changed = runtime.setSelectedPlantColor('#ff5500')
+    const changed = runtime.commandSurface.plantPresentation.setSelectedPlantColor('#ff5500')
 
     expect(changed).toBe(2)
-    expect(runtime.getSelectedPlantColorContext()).toMatchObject({
+    expect(runtime.querySurface.getSelectedPlantColorContext()).toMatchObject({
       plantIds: ['plant-1', 'plant-2'],
       sharedCurrentColor: '#FF5500',
       singleSpeciesCanonicalName: 'Malus domestica',
@@ -381,10 +422,10 @@ describe('scene canvas runtime', () => {
       appAdapter: createAppCanvasRuntimeAppAdapter(),
     })
 
-    runtime.toggleSnapToGrid()
+    runtime.commandSurface.chrome.toggleSnapToGrid()
     expect(snapToGridEnabled.value).toBe(true)
 
-    runtime.toggleSnapToGrid()
+    runtime.commandSurface.chrome.toggleSnapToGrid()
     expect(snapToGridEnabled.value).toBe(false)
 
     runtime.destroy()
@@ -406,9 +447,9 @@ describe('scene canvas runtime', () => {
       },
     })
 
-    runtime.toggleGrid()
-    runtime.toggleSnapToGrid()
-    runtime.toggleRulers()
+    runtime.commandSurface.chrome.toggleGrid()
+    runtime.commandSurface.chrome.toggleSnapToGrid()
+    runtime.commandSurface.chrome.toggleRulers()
 
     expect(toggleGridVisible).toHaveBeenCalledTimes(1)
     expect(toggleSnapToGrid).toHaveBeenCalledTimes(1)
@@ -417,15 +458,15 @@ describe('scene canvas runtime', () => {
 
   it('owns plant presentation state in scene session and mirrors it to canvas signals', () => {
     const runtime = new SceneCanvasRuntime()
-    runtime.loadDocument(makeFile())
+    runtime.documentSurface.loadDocument(makeFile())
 
-    runtime.setPlantSizeMode('canopy')
-    runtime.setPlantColorByAttr('flower')
+    runtime.commandSurface.plantPresentation.setPlantSizeMode('canopy')
+    runtime.commandSurface.plantPresentation.setPlantColorByAttr('flower')
 
-    expect(runtime.getPlantSizeMode()).toBe('canopy')
-    expect(runtime.getPlantColorByAttr()).toBe('flower')
-    expect(runtime.getSceneStore().session.plantSizeMode).toBe('canopy')
-    expect(runtime.getSceneStore().session.plantColorByAttr).toBe('flower')
+    expect(runtime.querySurface.getPlantSizeMode()).toBe('canopy')
+    expect(runtime.querySurface.getPlantColorByAttr()).toBe('flower')
+    expect(runtime.querySurface.getPlantSizeMode()).toBe('canopy')
+    expect(runtime.querySurface.getPlantColorByAttr()).toBe('flower')
     expect(plantSizeMode.value).toBe('canopy')
     expect(plantColorByAttr.value).toBe('flower')
   })
@@ -434,15 +475,15 @@ describe('scene canvas runtime', () => {
     const runtime = new SceneCanvasRuntime()
     await initRuntimeWithStubbedRenderer(runtime)
 
-    const before = runtime.revision.viewport.value
-    runtime.zoomIn()
+    const before = runtime.querySurface.revision.viewport.value
+    runtime.commandSurface.viewport.zoomIn()
 
-    expect(runtime.revision.viewport.value).toBeGreaterThan(before)
+    expect(runtime.querySurface.revision.viewport.value).toBeGreaterThan(before)
   })
 
   it('skips stale presentation backfills after scene revision changes', async () => {
     const runtime = new SceneCanvasRuntime()
-    runtime.loadDocument(makeFile())
+    runtime.documentSurface.loadDocument(makeFile())
 
     const applyPresentationBackfills = vi.spyOn(
       (runtime as any)._documents,
@@ -454,8 +495,8 @@ describe('scene canvas runtime', () => {
     })
     ;(runtime as any)._presentation.refreshSpeciesCacheEntries = vi.fn(() => pendingRefresh)
 
-    const pending = runtime.ensureSpeciesCacheEntries(['Malus domestica'], 'en')
-    runtime.setPlantColorForSpecies('Malus domestica', '#335577')
+    const pending = runtime.commandSurface.plantPresentation.ensureSpeciesCacheEntries(['Malus domestica'], 'en')
+    runtime.commandSurface.plantPresentation.setPlantColorForSpecies('Malus domestica', '#335577')
     resolveRefresh({
       changed: true,
       backfills: [{
@@ -472,29 +513,30 @@ describe('scene canvas runtime', () => {
 
   it('derives selected plant context from scene session, not the mirror signal', () => {
     const runtime = new SceneCanvasRuntime()
-    runtime.loadDocument(makeFile())
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
 
-    runtime.getSceneStore().setSelection(['plant-1'])
+    runtime.commandSurface.sceneEdits.selectAll()
     selectedObjectIds.value = new Set(['plant-2'])
 
-    expect(runtime.getSelectedPlantColorContext().plantIds).toEqual(['plant-1'])
+    expect(runtime.querySurface.getSelectedPlantColorContext().plantIds).toEqual(['plant-1'])
   })
 
   it('keeps runtime-backed selection authoritative over the mirror signal', () => {
     const runtime = new SceneCanvasRuntime()
-    runtime.loadDocument(makeFile())
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
 
-    runtime.getSceneStore().setSelection(['plant-1'])
+    runtime.commandSurface.sceneEdits.selectAll()
     selectedObjectIds.value = new Set(['zone-1'])
 
-    expect(runtime.getSelection()).toEqual(new Set(['plant-1']))
+    expect(runtime.querySurface.getSelection()).toEqual(new Set(['plant-1']))
 
-    runtime.setSelection(['plant-2'])
-    expect(runtime.getSceneStore().session.selectedEntityIds).toEqual(new Set(['plant-2']))
+    runtime.documentSurface.replaceDocument(fileWithOnlyPlants('plant-2'))
+    runtime.commandSurface.sceneEdits.selectAll()
+    expect(runtime.querySurface.getSelection()).toEqual(new Set(['plant-2']))
     expect(selectedObjectIds.value).toEqual(new Set(['plant-2']))
 
-    runtime.clearSelection()
-    expect(runtime.getSceneStore().session.selectedEntityIds.size).toBe(0)
+    runtime.documentSurface.replaceDocument(fileWithOnlyPlants('plant-2'))
+    expect(runtime.querySurface.getSelection().size).toBe(0)
     expect(selectedObjectIds.value.size).toBe(0)
   })
 
@@ -514,10 +556,10 @@ describe('scene canvas runtime', () => {
       notes: null,
       locked: false,
     }]
-    runtime.loadDocument(file)
+    runtime.documentSurface.loadDocument(fileWithOnlyZone(file.zones[0]!))
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
 
-    runtime.setSelection(['zone-1'])
+    runtime.commandSurface.sceneEdits.selectAll()
 
     expect(zoneMeasurementTexts(container)).toEqual([
       '100 m',
@@ -527,7 +569,7 @@ describe('scene canvas runtime', () => {
       '8000 m²',
     ])
 
-    runtime.clearSelection()
+    runtime.documentSurface.replaceDocument(fileWithOnlyZone(file.zones[0]!))
 
     expect(zoneMeasurementTexts(container)).toEqual([])
     runtime.destroy()
@@ -535,7 +577,7 @@ describe('scene canvas runtime', () => {
 
   it('resolves hovered panel targets for renderer highlights without mutating selection', async () => {
     const runtime = createRuntimeWithAppPanelTargets()
-    runtime.loadDocument(makeFile())
+    runtime.documentSurface.loadDocument(makeFile())
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
 
     renderer.renderScene.mockClear()
@@ -552,7 +594,7 @@ describe('scene canvas runtime', () => {
     const snapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
     expect(snapshot?.highlightedPlantIds).toEqual(new Set(['plant-1', 'plant-2']))
     expect(snapshot?.highlightedZoneIds).toEqual(new Set(['zone-1']))
-    expect(runtime.getSceneStore().session.selectedEntityIds.size).toBe(0)
+    expect(runtime.querySurface.getSelection().size).toBe(0)
     expect(selectedObjectIds.value.size).toBe(0)
     runtime.destroy()
   })
@@ -560,7 +602,7 @@ describe('scene canvas runtime', () => {
   it('resolves selected panel targets for renderer highlights without mutating canvas selection or dirty state', async () => {
     const cleanState = createCleanStateAdapterProbe()
     const runtime = createRuntimeWithAppPanelTargets(cleanState.adapter)
-    runtime.loadDocument(makeFile())
+    runtime.documentSurface.loadDocument(makeFile())
     cleanState.setCanvasClean.mockClear()
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
 
@@ -577,7 +619,7 @@ describe('scene canvas runtime', () => {
     const snapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
     expect(snapshot?.highlightedPlantIds).toEqual(new Set(['plant-1', 'plant-2']))
     expect(snapshot?.highlightedZoneIds).toEqual(new Set(['zone-1']))
-    expect(runtime.getSceneStore().session.selectedEntityIds.size).toBe(0)
+    expect(runtime.querySurface.getSelection().size).toBe(0)
     expect(selectedObjectIds.value.size).toBe(0)
     expect(cleanState.setCanvasClean).not.toHaveBeenCalledWith(false)
     runtime.destroy()
@@ -585,7 +627,7 @@ describe('scene canvas runtime', () => {
 
   it('keeps typed panel target highlights separate when plant IDs and zone names collide', async () => {
     const runtime = createRuntimeWithAppPanelTargets()
-    runtime.loadDocument({
+    runtime.documentSurface.loadDocument({
       ...makeFile(),
       plants: [
         {
@@ -619,7 +661,7 @@ describe('scene canvas runtime', () => {
 
   it('unions selected and hovered panel target highlights without mutating canvas selection', async () => {
     const runtime = createRuntimeWithAppPanelTargets()
-    runtime.loadDocument(makeFile())
+    runtime.documentSurface.loadDocument(makeFile())
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
 
     renderer.renderScene.mockClear()
@@ -632,7 +674,7 @@ describe('scene canvas runtime', () => {
       expect(snapshot?.highlightedZoneIds).toEqual(new Set(['zone-1']))
     })
 
-    expect(runtime.getSceneStore().session.selectedEntityIds.size).toBe(0)
+    expect(runtime.querySurface.getSelection().size).toBe(0)
     expect(selectedObjectIds.value.size).toBe(0)
     runtime.destroy()
   })
@@ -640,7 +682,7 @@ describe('scene canvas runtime', () => {
   it('uses the injected panel target adapter for highlights and canvas-origin hover', async () => {
     const panelTargetProbe = createPanelTargetAdapterProbe()
     const runtime = new SceneCanvasRuntime({ targetPresentation: panelTargetProbe.adapter })
-    runtime.loadDocument(makeFile())
+    runtime.documentSurface.loadDocument(makeFile())
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
 
     renderer.renderScene.mockClear()
@@ -657,7 +699,7 @@ describe('scene canvas runtime', () => {
     expect(panelTargetProbe.canvasHoverTargets).toEqual([speciesTarget('Malus domestica')])
 
     panelTargetProbe.setPanelOriginTargets([{ kind: 'zone', zone_name: 'zone-1' }])
-    runtime.replaceDocument(makeFile())
+    runtime.documentSurface.replaceDocument(makeFile())
     expect(panelTargetProbe.panelOriginTargets).toEqual([])
     runtime.destroy()
   })
@@ -665,26 +707,26 @@ describe('scene canvas runtime', () => {
   it('reports canvas clean-state transitions through the injected app adapter', () => {
     const cleanState = createCleanStateAdapterProbe()
     const runtime = new SceneCanvasRuntime({ appAdapter: cleanState.adapter })
-    const file = makeFile()
+    const file = fileWithOnlyPlants('plant-1')
 
-    runtime.loadDocument(file)
-    runtime.markSaved()
+    runtime.documentSurface.loadDocument(file)
+    runtime.documentSurface.markSaved()
     cleanState.setCanvasClean.mockClear()
 
-    runtime.setSelection(['plant-1'])
-    runtime.lockSelected()
+    runtime.commandSurface.sceneEdits.selectAll()
+    runtime.commandSurface.sceneEdits.lockSelected()
     expect(lastCleanState(cleanState.setCanvasClean)).toBe(false)
 
-    runtime.undo()
+    runtime.commandSurface.history.undo()
     expect(lastCleanState(cleanState.setCanvasClean)).toBe(true)
 
-    runtime.redo()
+    runtime.commandSurface.history.redo()
     expect(lastCleanState(cleanState.setCanvasClean)).toBe(false)
 
-    runtime.markSaved()
+    runtime.documentSurface.markSaved()
     expect(lastCleanState(cleanState.setCanvasClean)).toBe(true)
 
-    runtime.clearHistory()
+    runtime.documentSurface.clearHistory()
     expect(lastCleanState(cleanState.setCanvasClean)).toBe(true)
   })
 
@@ -708,11 +750,11 @@ describe('scene canvas runtime', () => {
     })
     const file = makeFile()
 
-    runtime.loadDocument(file)
-    runtime.setSelection(['plant-1'])
-    runtime.setSelectedPlantColor('#228833')
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    runtime.commandSurface.sceneEdits.selectAll()
+    runtime.commandSurface.plantPresentation.setSelectedPlantColor('#228833')
 
-    const serialized = runtime.serializeDocument({ name: 'Adapter save' }, file)
+    const serialized = runtime.documentSurface.serializeDocument({ name: 'Adapter save' }, file)
 
     expect(composeDocumentForSave).toHaveBeenCalledTimes(1)
     const input = composeDocumentForSave.mock.calls[0]?.[0]
@@ -763,11 +805,16 @@ describe('scene canvas runtime', () => {
       },
     } satisfies CanopiFile
 
-    runtime.loadDocument(file)
-    runtime.setSelection(['plant-1'])
-    runtime.setSelectedPlantColor('#228833')
+    runtime.documentSurface.loadDocument({
+      ...file,
+      plants: [file.plants[0]!],
+      zones: [],
+      groups: [],
+    })
+    runtime.commandSurface.sceneEdits.selectAll()
+    runtime.commandSurface.plantPresentation.setSelectedPlantColor('#228833')
 
-    const serialized = runtime.serializeDocument({ name: 'Detached save' }, file)
+    const serialized = runtime.documentSurface.serializeDocument({ name: 'Detached save' }, file)
 
     expect(serialized.name).toBe('Detached save')
     expect(serialized.description).toBe('Loaded description')
@@ -785,21 +832,21 @@ describe('scene canvas runtime', () => {
   it('publishes canvas-origin species hover targets without mutating selection', async () => {
     const cleanState = createCleanStateAdapterProbe()
     const runtime = createRuntimeWithAppPanelTargets(cleanState.adapter)
-    runtime.loadDocument(makeFile())
+    runtime.documentSurface.loadDocument(makeFile())
     cleanState.setCanvasClean.mockClear()
     await initRuntimeWithStubbedRenderer(runtime)
 
     ;(runtime as any)._interaction._deps.setHoveredEntityId('plant-1')
 
     expect(hoveredCanvasTargets.value).toEqual([speciesTarget('Malus domestica')])
-    expect(runtime.getSceneStore().session.selectedEntityIds.size).toBe(0)
+    expect(runtime.querySurface.getSelection().size).toBe(0)
     expect(selectedObjectIds.value.size).toBe(0)
     expect(cleanState.setCanvasClean).not.toHaveBeenCalledWith(false)
 
     ;(runtime as any)._interaction._deps.setHoveredEntityId(null)
 
     expect(hoveredCanvasTargets.value).toEqual([])
-    expect(runtime.getSceneStore().session.selectedEntityIds.size).toBe(0)
+    expect(runtime.querySurface.getSelection().size).toBe(0)
     expect(selectedObjectIds.value.size).toBe(0)
     expect(cleanState.setCanvasClean).not.toHaveBeenCalledWith(false)
     runtime.destroy()
@@ -807,7 +854,7 @@ describe('scene canvas runtime', () => {
 
   it('clears canvas-origin hover during destroy without rendering into a disposing renderer', async () => {
     const runtime = createRuntimeWithAppPanelTargets()
-    runtime.loadDocument(makeFile())
+    runtime.documentSurface.loadDocument(makeFile())
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
 
     ;(runtime as any)._interaction._deps.setHoveredEntityId('plant-1')
@@ -824,10 +871,10 @@ describe('scene canvas runtime', () => {
     const runtime = new SceneCanvasRuntime()
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
     const viewport = (runtime as any)._camera.initialize({ width: 400, height: 300 })
-    runtime.getSceneStore().setViewport(viewport)
+    setInteractionViewport(runtime, viewport)
 
     renderer.renderScene.mockClear()
-    runtime.zoomIn()
+    runtime.commandSurface.viewport.zoomIn()
     await Promise.resolve()
     await Promise.resolve()
 
@@ -839,13 +886,13 @@ describe('scene canvas runtime', () => {
   it('bumps viewport revision for zoom and resize updates', async () => {
     const runtime = new SceneCanvasRuntime()
     await initRuntimeWithStubbedRenderer(runtime)
-    const initialRevision = runtime.revision.viewport.value
+    const initialRevision = runtime.querySurface.revision.viewport.value
 
-    runtime.zoomIn()
-    expect(runtime.revision.viewport.value).toBe(initialRevision + 1)
+    runtime.commandSurface.viewport.zoomIn()
+    expect(runtime.querySurface.revision.viewport.value).toBe(initialRevision + 1)
 
-    runtime.resize(400, 300)
-    expect(runtime.revision.viewport.value).toBe(initialRevision + 2)
+    runtime.documentSurface.resize(400, 300)
+    expect(runtime.querySurface.revision.viewport.value).toBe(initialRevision + 2)
     runtime.destroy()
   })
 
@@ -853,8 +900,8 @@ describe('scene canvas runtime', () => {
     const runtime = createRuntimeWithAppPanelTargets()
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
 
-    runtime.loadDocument(makeFile())
-    runtime.setTool('plant-stamp')
+    runtime.documentSurface.loadDocument(makeFile())
+    runtime.commandSurface.tools.setTool('plant-stamp')
     activeTool.value = 'plant-stamp'
     selectPlantStampSource({
       canonical_name: 'Malus domestica',
@@ -867,10 +914,10 @@ describe('scene canvas runtime', () => {
     hoveredPanelTargets.value = [speciesTarget('Malus domestica')]
     selectedPanelTargetOrigin.value = 'timeline'
     selectedPanelTargets.value = [{ kind: 'zone', zone_name: 'zone-1' }]
-    runtime.getSceneStore().setSelection(['plant-1'])
+    runtime.commandSurface.sceneEdits.selectAll()
 
     renderer.renderScene.mockClear()
-    runtime.replaceDocument(makeFile())
+    runtime.documentSurface.replaceDocument(makeFile())
     await Promise.resolve()
     await Promise.resolve()
 
@@ -888,26 +935,25 @@ describe('scene canvas runtime', () => {
     const runtime = new SceneCanvasRuntime()
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
-    runtime.loadDocument(makeFile())
-    ;(runtime as any)._camera.setViewport({ x: 0, y: 0, scale: 1 })
-    runtime.getSceneStore().setViewport({ x: 0, y: 0, scale: 1 })
+    runtime.documentSurface.loadDocument(makeFile())
+    setInteractionViewport(runtime)
 
-    runtime.setSelection(['plant-2'])
-    runtime.copy()
-    runtime.setTool('object-stamp')
+    clickAt(events, { x: 20, y: 20 })
+    runtime.commandSurface.sceneEdits.copy()
+    runtime.commandSurface.tools.setTool('object-stamp')
 
     events.pointerDown({ x: 10, y: 10 })
     events.pointerDown({ x: 30, y: 30 })
 
-    expect(runtime.getSceneStore().persisted.plants).toHaveLength(3)
-    const stampedId = runtime.getSceneStore().persisted.plants[2]!.id
+    expect(runtime.querySurface.getSceneSnapshot().plants).toHaveLength(3)
+    const stampedId = runtime.querySurface.getSceneSnapshot().plants[2]!.id
     expect(selectedObjectIds.value).toEqual(new Set([stampedId]))
 
-    runtime.undo()
-    expect(runtime.getSceneStore().persisted.plants).toHaveLength(2)
+    runtime.commandSurface.history.undo()
+    expect(runtime.querySurface.getSceneSnapshot().plants).toHaveLength(2)
 
-    runtime.paste()
-    const pasted = runtime.getSceneStore().persisted.plants[2]!
+    runtime.commandSurface.sceneEdits.paste()
+    const pasted = runtime.querySurface.getSceneSnapshot().plants[2]!
     expect(pasted.canonicalName).toBe('Malus domestica')
     expect(pasted.position).toEqual({ x: 40, y: 40 })
     events.dispose()
@@ -919,6 +965,7 @@ describe('scene canvas runtime', () => {
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
     const file = makeFile()
+    file.zones = []
     file.groups = [{
       id: 'group-1',
       name: 'Pair',
@@ -928,25 +975,24 @@ describe('scene canvas runtime', () => {
       member_ids: ['plant-1', 'plant-2'],
       locked: false,
     }]
-    runtime.loadDocument(file)
-    ;(runtime as any)._camera.setViewport({ x: 0, y: 0, scale: 1 })
-    runtime.getSceneStore().setViewport({ x: 0, y: 0, scale: 1 })
-    runtime.setTool('object-stamp')
+    runtime.documentSurface.loadDocument(file)
+    setInteractionViewport(runtime)
+    runtime.commandSurface.tools.setTool('object-stamp')
 
     events.pointerDown({ x: 10, y: 10 })
     events.pointerDown({ x: 40, y: 40 })
 
-    expect(runtime.getSceneStore().persisted.groups).toHaveLength(2)
-    expect(runtime.getSceneStore().persisted.plants).toHaveLength(4)
-    const stampedGroup = runtime.getSceneStore().persisted.groups[1]!
+    expect(runtime.querySurface.getSceneSnapshot().groups).toHaveLength(2)
+    expect(runtime.querySurface.getSceneSnapshot().plants).toHaveLength(4)
+    const stampedGroup = runtime.querySurface.getSceneSnapshot().groups[1]!
     expect(selectedObjectIds.value).toEqual(new Set([stampedGroup.id]))
     expect(stampedGroup.memberIds).toHaveLength(2)
     expect(stampedGroup.memberIds).not.toContain('plant-1')
     expect(stampedGroup.memberIds).not.toContain('plant-2')
 
-    runtime.undo()
-    expect(runtime.getSceneStore().persisted.groups).toHaveLength(1)
-    expect(runtime.getSceneStore().persisted.plants).toHaveLength(2)
+    runtime.commandSurface.history.undo()
+    expect(runtime.querySurface.getSceneSnapshot().groups).toHaveLength(1)
+    expect(runtime.querySurface.getSceneSnapshot().plants).toHaveLength(2)
     events.dispose()
     runtime.destroy()
   })
@@ -957,45 +1003,44 @@ describe('scene canvas runtime', () => {
     const runtime = new SceneCanvasRuntime({ appAdapter: cleanState.adapter })
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
-    runtime.loadDocument(makeFile())
-    ;(runtime as any)._camera.setViewport({ x: 0, y: 0, scale: 1 })
-    runtime.getSceneStore().setViewport({ x: 0, y: 0, scale: 1 })
-    runtime.setTool('plant-spacing')
+    runtime.documentSurface.loadDocument(makeFile())
+    setInteractionViewport(runtime)
+    runtime.commandSurface.tools.setTool('plant-spacing')
 
     events.pointerDown({ x: 10, y: 10 })
     events.pointerMove({ x: 20, y: 10 })
     events.pointerDown({ x: 20, y: 10 })
 
-    expect(runtime.getSceneStore().persisted.plants).toHaveLength(4)
-    expect(runtime.canUndo.value).toBe(true)
+    expect(runtime.querySurface.getSceneSnapshot().plants).toHaveLength(4)
+    expect(runtime.commandSurface.history.canUndo.value).toBe(true)
 
-    runtime.undo()
-    expect(runtime.getSceneStore().persisted.plants).toHaveLength(2)
-    expect(runtime.canRedo.value).toBe(true)
+    runtime.commandSurface.history.undo()
+    expect(runtime.querySurface.getSceneSnapshot().plants).toHaveLength(2)
+    expect(runtime.commandSurface.history.canRedo.value).toBe(true)
 
-    runtime.redo()
-    expect(runtime.getSceneStore().persisted.plants).toHaveLength(4)
+    runtime.commandSurface.history.redo()
+    expect(runtime.querySurface.getSceneSnapshot().plants).toHaveLength(4)
     events.dispose()
     runtime.destroy()
   })
 
   it('invalidates the scene after select-all and lock mutations', () => {
     const runtime = new SceneCanvasRuntime()
-    runtime.loadDocument(makeFile())
+    runtime.documentSurface.loadDocument(makeFile())
     const invalidate = vi.spyOn(runtime as any, '_invalidate')
 
     invalidate.mockClear()
-    runtime.selectAll()
+    runtime.commandSurface.sceneEdits.selectAll()
     expect(invalidate).toHaveBeenCalledTimes(1)
     expect(invalidate).toHaveBeenLastCalledWith('scene')
 
     invalidate.mockClear()
-    runtime.lockSelected()
+    runtime.commandSurface.sceneEdits.lockSelected()
     expect(invalidate).toHaveBeenCalledTimes(1)
     expect(invalidate).toHaveBeenLastCalledWith('scene')
 
     invalidate.mockClear()
-    runtime.unlockSelected()
+    runtime.commandSurface.sceneEdits.unlockSelected()
     expect(invalidate).toHaveBeenCalledTimes(1)
     expect(invalidate).toHaveBeenLastCalledWith('scene')
   })
@@ -1003,31 +1048,30 @@ describe('scene canvas runtime', () => {
   it('locks and unlocks selected Design Objects through scene edit history and serialization', () => {
     const cleanState = createCleanStateAdapterProbe()
     const runtime = new SceneCanvasRuntime({ appAdapter: cleanState.adapter })
-    const file = makeFile()
-    runtime.loadDocument(file)
-    runtime.markSaved()
+    const file = fileWithOnlyPlants('plant-1')
+    runtime.documentSurface.loadDocument(file)
+    runtime.documentSurface.markSaved()
     cleanState.setCanvasClean.mockClear()
 
-    runtime.setSelection(['plant-1'])
-    runtime.lockSelected()
+    runtime.commandSurface.sceneEdits.selectAll()
+    runtime.commandSurface.sceneEdits.lockSelected()
 
-    expect(runtime.serializeDocument({ name: file.name }, file).plants.find((plant) => plant.id === 'plant-1')?.locked)
+    expect(runtime.documentSurface.serializeDocument({ name: file.name }, file).plants.find((plant) => plant.id === 'plant-1')?.locked)
       .toBe(true)
-    expect(runtime.getSelection().size).toBe(0)
+    expect(runtime.querySurface.getSelection().size).toBe(0)
     expect(lastCleanState(cleanState.setCanvasClean)).toBe(false)
-    expect(runtime.canUndo.value).toBe(true)
+    expect(runtime.commandSurface.history.canUndo.value).toBe(true)
 
-    runtime.undo()
-    expect(runtime.serializeDocument({ name: file.name }, file).plants.find((plant) => plant.id === 'plant-1')?.locked)
+    runtime.commandSurface.history.undo()
+    expect(runtime.documentSurface.serializeDocument({ name: file.name }, file).plants.find((plant) => plant.id === 'plant-1')?.locked)
       .toBe(false)
 
-    runtime.redo()
-    expect(runtime.serializeDocument({ name: file.name }, file).plants.find((plant) => plant.id === 'plant-1')?.locked)
+    runtime.commandSurface.history.redo()
+    expect(runtime.documentSurface.serializeDocument({ name: file.name }, file).plants.find((plant) => plant.id === 'plant-1')?.locked)
       .toBe(true)
 
-    runtime.setSelection(['plant-1'])
-    runtime.unlockSelected()
-    expect(runtime.serializeDocument({ name: file.name }, file).plants.find((plant) => plant.id === 'plant-1')?.locked)
+    runtime.commandSurface.sceneEdits.unlockSelected()
+    expect(runtime.documentSurface.serializeDocument({ name: file.name }, file).plants.find((plant) => plant.id === 'plant-1')?.locked)
       .toBe(false)
   })
 
@@ -1040,15 +1084,15 @@ describe('scene canvas runtime', () => {
       },
     })
     const file = makeFile()
-    runtime.loadDocument(file)
-    runtime.markSaved()
+    runtime.documentSurface.loadDocument(file)
+    runtime.documentSurface.markSaved()
     cleanState.setCanvasClean.mockClear()
 
-    expect(runtime.setSceneLayerVisibility('plants', false)).toBe(true)
-    expect(runtime.setSceneLayerOpacity('zones', 0.4)).toBe(true)
-    expect(runtime.setSceneLayerLocked('zones', true)).toBe(true)
+    expect(runtime.commandSurface.layers.setSceneLayerVisibility('plants', false)).toBe(true)
+    expect(runtime.commandSurface.layers.setSceneLayerOpacity('zones', 0.4)).toBe(true)
+    expect(runtime.commandSurface.layers.setSceneLayerLocked('zones', true)).toBe(true)
 
-    const serialized = runtime.serializeDocument({ name: file.name }, file)
+    const serialized = runtime.documentSurface.serializeDocument({ name: file.name }, file)
 
     expect(serialized.layers.find((layer) => layer.name === 'plants')?.visible).toBe(false)
     expect(serialized.layers.find((layer) => layer.name === 'zones')?.opacity).toBe(0.4)
@@ -1057,15 +1101,15 @@ describe('scene canvas runtime', () => {
     expect(layerOpacity.value.zones).toBe(0.4)
     expect(layerLockState.value.zones).toBe(true)
     expect(lastCleanState(cleanState.setCanvasClean)).toBe(false)
-    expect(runtime.canUndo.value).toBe(true)
+    expect(runtime.commandSurface.history.canUndo.value).toBe(true)
 
-    runtime.undo()
-    expect(runtime.serializeDocument({ name: file.name }, file).layers.find((layer) => layer.name === 'zones')?.locked)
+    runtime.commandSurface.history.undo()
+    expect(runtime.documentSurface.serializeDocument({ name: file.name }, file).layers.find((layer) => layer.name === 'zones')?.locked)
       .toBe(false)
     expect(layerLockState.value.zones).toBe(false)
 
-    runtime.redo()
-    expect(runtime.serializeDocument({ name: file.name }, file).layers.find((layer) => layer.name === 'zones')?.locked)
+    runtime.commandSurface.history.redo()
+    expect(runtime.documentSurface.serializeDocument({ name: file.name }, file).layers.find((layer) => layer.name === 'zones')?.locked)
       .toBe(true)
     expect(layerLockState.value.zones).toBe(true)
 
@@ -1076,21 +1120,21 @@ describe('scene canvas runtime', () => {
     const cleanState = createCleanStateAdapterProbe()
     const runtime = new SceneCanvasRuntime({ appAdapter: cleanState.adapter })
     const file = makeFile()
-    runtime.loadDocument(file)
-    runtime.markSaved()
+    runtime.documentSurface.loadDocument(file)
+    runtime.documentSurface.markSaved()
     cleanState.setCanvasClean.mockClear()
 
     ;(runtime as any)._addGuide('v', 42)
 
-    const serialized = runtime.serializeDocument({ name: file.name }, file)
+    const serialized = runtime.documentSurface.serializeDocument({ name: file.name }, file)
     expect(serialized.extra).toEqual({
       guides: [{ id: expect.any(String), axis: 'v', position: 42 }],
     })
     expect(guides.value).toEqual([{ id: expect.any(String), axis: 'v', position: 42 }])
     expect(lastCleanState(cleanState.setCanvasClean)).toBe(false)
 
-    runtime.undo()
-    expect(runtime.serializeDocument({ name: file.name }, file).extra).toEqual({})
+    runtime.commandSurface.history.undo()
+    expect(runtime.documentSurface.serializeDocument({ name: file.name }, file).extra).toEqual({})
     expect(guides.value).toEqual([])
   })
 
@@ -1103,15 +1147,15 @@ describe('scene canvas runtime', () => {
     }
     file.plants[0]!.color = '#C44230'
     file.plants[1]!.color = '#C44230'
-    runtime.loadDocument(file)
-    runtime.markSaved()
+    runtime.documentSurface.loadDocument(file)
+    runtime.documentSurface.markSaved()
     cleanState.setCanvasClean.mockClear()
 
-    const changed = runtime.setPlantColorForSpecies('Malus domestica', '#C44230')
+    const changed = runtime.commandSurface.plantPresentation.setPlantColorForSpecies('Malus domestica', '#C44230')
 
     expect(changed).toBe(0)
     expect(lastCleanState(cleanState.setCanvasClean)).toBe(false)
-    expect(runtime.serializeDocument({ name: file.name }, file).plant_species_colors).toEqual({
+    expect(runtime.documentSurface.serializeDocument({ name: file.name }, file).plant_species_colors).toEqual({
       'Malus domestica': '#C44230',
     })
   })
@@ -1124,7 +1168,7 @@ describe('scene canvas runtime', () => {
     const runtime = new SceneCanvasRuntime({
       appAdapter: createAppCanvasRuntimeAppAdapter(),
     })
-    runtime.loadDocument(makeFile())
+    runtime.documentSurface.loadDocument(makeFile())
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
     await Promise.resolve()
     await Promise.resolve()

@@ -3,9 +3,6 @@ import {
   createDetachedCanvasRuntimeAppAdapter,
   type CanvasRuntimeAppAdapter,
 } from './app-adapter'
-import type { ColorByAttribute, PlantSizeMode } from '../plant-display-state'
-import type { CanopiFile, PlacedPlant } from '../../types/design'
-import type { SelectedPlantColorContext } from '../plant-color-context'
 import { setCanvasSelection } from '../session-state'
 import { syncPlantSpeciesColorDefaults } from '../plant-species-color-defaults'
 import { refreshCanvasColorCache } from '../theme-refresh'
@@ -48,7 +45,6 @@ import type {
   CanvasDocumentSurface,
   CanvasQuerySurface,
   CanvasQueryRevision,
-  CanvasRuntimeDocumentMetadata,
 } from './runtime'
 import { targets, speciesTarget } from '../../target'
 
@@ -222,7 +218,7 @@ export class SceneCanvasRuntime {
       setSelection: (ids) => this._setSelection(ids),
       clearSelection: () => this._setSelection([]),
       sceneEdits: this._sceneEdits,
-      setTool: (name) => this.setTool(name),
+      setTool: (name) => this._commandSurface.tools.setTool(name),
       render: (kind) => this._invalidate(kind),
       readSnapToGridEnabled: () => this._appAdapter.settings.readSnapToGridEnabled(),
       readSnapToGuidesEnabled: () => this._appAdapter.settings.readSnapToGuidesEnabled(),
@@ -234,10 +230,6 @@ export class SceneCanvasRuntime {
       },
     })
     await this._rendering.renderScene()
-  }
-
-  getSceneStore(): SceneStore {
-    return this._sceneStore
   }
 
   get commandSurface(): CanvasCommandSurface {
@@ -252,226 +244,8 @@ export class SceneCanvasRuntime {
     return this._querySurface
   }
 
-  getSceneSnapshot(): ScenePersistedState {
-    return this._querySurface.getSceneSnapshot()
-  }
-
-  getViewport() {
-    return this._querySurface.getViewport()
-  }
-
-  getViewportScreenSize(): { width: number; height: number } {
-    return this._querySurface.getViewportScreenSize()
-  }
-
-  get viewportRevision() {
-    return this._querySurface.viewportRevision
-  }
-
-  get revision() {
-    return this._querySurface.revision
-  }
-
-  getSelection(): Set<string> {
-    return this._querySurface.getSelection()
-  }
-
-  setSelection(ids: Iterable<string>): void {
-    this._setSelection(ids)
-    this._invalidate('scene')
-  }
-
-  clearSelection(): void {
-    if (this._sceneStore.session.selectedEntityIds.size === 0) return
-    this._setSelection([])
-    this._invalidate('scene')
-  }
-
-  initializeViewport(): void {
-    this._documentSurface.initializeViewport()
-  }
-
-  attachRulersTo(element: HTMLElement): void {
-    this._documentSurface.attachRulersTo(element)
-  }
-
-  showCanvasChrome(): void {
-    this._documentSurface.showCanvasChrome()
-  }
-
-  hideCanvasChrome(): void {
-    this._documentSurface.hideCanvasChrome()
-  }
-
-  setTool(name: string): void {
-    this._commandSurface.tools.setTool(name)
-  }
-
-  zoomIn(): void {
-    this._commandSurface.viewport.zoomIn()
-  }
-
-  zoomOut(): void {
-    this._commandSurface.viewport.zoomOut()
-  }
-
-  zoomToFit(): void {
-    this._commandSurface.viewport.zoomToFit()
-  }
-
-  get canUndo() { return this._commandSurface.history.canUndo }
-  get canRedo() { return this._commandSurface.history.canRedo }
-
-  undo(): void {
-    this._commandSurface.history.undo()
-  }
-
-  redo(): void {
-    this._commandSurface.history.redo()
-  }
-
-  copy(): void {
-    this._commandSurface.sceneEdits.copy()
-  }
-
-  paste(): void {
-    this._commandSurface.sceneEdits.paste()
-  }
-
-  duplicateSelected(): void {
-    this._commandSurface.sceneEdits.duplicateSelected()
-  }
-
-  deleteSelected(): void {
-    this._commandSurface.sceneEdits.deleteSelected()
-  }
-
-  selectAll(): void {
-    this._commandSurface.sceneEdits.selectAll()
-  }
-
-  bringToFront(): void {
-    this._commandSurface.sceneEdits.bringToFront()
-  }
-
-  sendToBack(): void {
-    this._commandSurface.sceneEdits.sendToBack()
-  }
-
-  lockSelected(): void {
-    this._commandSurface.sceneEdits.lockSelected()
-  }
-
-  unlockSelected(): void {
-    this._commandSurface.sceneEdits.unlockSelected()
-  }
-
-  groupSelected(): void {
-    this._commandSurface.sceneEdits.groupSelected()
-  }
-
-  ungroupSelected(): void {
-    this._commandSurface.sceneEdits.ungroupSelected()
-  }
-
-  toggleGrid(): void {
-    this._commandSurface.chrome.toggleGrid()
-  }
-
-  toggleSnapToGrid(): void {
-    this._commandSurface.chrome.toggleSnapToGrid()
-  }
-
-  toggleRulers(): void {
-    this._commandSurface.chrome.toggleRulers()
-  }
-
-  setSceneLayerVisibility(name: string, visible: boolean): boolean {
-    return this._commandSurface.layers.setSceneLayerVisibility(name, visible)
-  }
-
-  setSceneLayerOpacity(name: string, opacity: number): boolean {
-    return this._commandSurface.layers.setSceneLayerOpacity(name, opacity)
-  }
-
-  setSceneLayerLocked(name: string, locked: boolean): boolean {
-    return this._commandSurface.layers.setSceneLayerLocked(name, locked)
-  }
-
-  getPlantSizeMode(): PlantSizeMode {
-    return this._querySurface.getPlantSizeMode()
-  }
-
-  setPlantSizeMode(mode: PlantSizeMode): void {
-    this._commandSurface.plantPresentation.setPlantSizeMode(mode)
-  }
-
-  getPlantColorByAttr(): ColorByAttribute | null {
-    return this._querySurface.getPlantColorByAttr()
-  }
-
-  setPlantColorByAttr(attr: ColorByAttribute | null): void {
-    this._commandSurface.plantPresentation.setPlantColorByAttr(attr)
-  }
-
-  getSelectedPlantColorContext(): SelectedPlantColorContext {
-    return this._querySurface.getSelectedPlantColorContext()
-  }
-
-  getPlacedPlants(): PlacedPlant[] {
-    return this._querySurface.getPlacedPlants()
-  }
-
-  getLocalizedCommonNames(): ReadonlyMap<string, string | null> {
-    return this._querySurface.getLocalizedCommonNames()
-  }
-
-  async ensureSpeciesCacheEntries(canonicalNames: string[], activeLocale: string): Promise<boolean> {
-    return this._commandSurface.plantPresentation.ensureSpeciesCacheEntries(canonicalNames, activeLocale)
-  }
-
-  setSelectedPlantColor(color: string | null): number {
-    return this._commandSurface.plantPresentation.setSelectedPlantColor(color)
-  }
-
-  setPlantColorForSpecies(canonicalName: string, color: string | null): number {
-    return this._commandSurface.plantPresentation.setPlantColorForSpecies(canonicalName, color)
-  }
-
-  clearPlantSpeciesColor(canonicalName: string): boolean {
-    return this._commandSurface.plantPresentation.clearPlantSpeciesColor(canonicalName)
-  }
-
-  loadDocument(file: CanopiFile): void {
-    this._documentSurface.loadDocument(file)
-  }
-
-  replaceDocument(file: CanopiFile): void {
-    this._documentSurface.replaceDocument(file)
-  }
-
-  hasLoadedDocument(): boolean {
-    return this._documentSurface.hasLoadedDocument()
-  }
-
-  serializeDocument(metadata: CanvasRuntimeDocumentMetadata, doc: CanopiFile): CanopiFile {
-    return this._documentSurface.serializeDocument(metadata, doc)
-  }
-
-  markSaved(): void {
-    this._documentSurface.markSaved()
-  }
-
-  clearHistory(): void {
-    this._documentSurface.clearHistory()
-  }
-
   destroy(): void {
     this._documentSurface.destroy()
-  }
-
-  resize(width: number, height: number): void {
-    this._documentSurface.resize(width, height)
   }
 
   private _setViewport(
