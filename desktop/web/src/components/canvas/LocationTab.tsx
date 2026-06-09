@@ -3,10 +3,10 @@ import {
   locale,
 } from '../../app/settings/state'
 import {
-  useLocationMapEditingHost,
   useLocationWorkbench,
   type LocationSearchResult,
 } from '../../app/location'
+import { useLocationMapEditingHost } from '../../app/location/map-editing'
 import { navigateTo } from '../../app/shell/state'
 import styles from './LocationTab.module.css'
 

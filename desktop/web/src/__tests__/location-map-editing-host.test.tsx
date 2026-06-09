@@ -2,11 +2,13 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  useLocationMapEditingHost,
   useLocationWorkbench,
-  type LocationMapEditingHost,
   type LocationWorkbench,
 } from '../app/location'
+import {
+  useLocationMapEditingHost,
+  type LocationMapEditingHost,
+} from '../app/location/map-editing'
 import { basemapStyle, locale } from '../app/settings/state'
 import { currentDesign, nonCanvasRevision } from './support/design-session-state'
 import type { CanopiFile } from '../types/design'
