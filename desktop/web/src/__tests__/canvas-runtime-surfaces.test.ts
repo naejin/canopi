@@ -122,8 +122,12 @@ describe('canvas runtime surfaces', () => {
   it('composes internal role modules behind the public runtime surface factory', () => {
     const surfacesSource = readPackageSource('../canvas/runtime/surfaces.ts')
 
-    expect(surfacesSource).toContain('commandSurfaceFrom')
-    expect(surfacesSource).toContain('querySurfaceFrom')
+    expect(surfacesSource).toContain('commands: runtime.commandSurface')
+    expect(surfacesSource).toContain('queries: runtime.querySurface')
+    expect(surfacesSource).toContain('documents: runtime.documentSurface')
+    expect(surfacesSource).not.toContain('?? runtime')
+    expect(surfacesSource).not.toContain('maybeRuntime')
+    expect(surfacesSource).not.toContain('as SceneCanvasRuntime &')
     expect(surfacesSource).not.toContain('class SceneCanvasCommandAdapter')
     expect(surfacesSource).not.toContain('class SceneCanvasQueryAdapter')
     expect(surfacesSource).not.toContain('class SceneCanvasDocumentAdapter')
@@ -252,12 +256,13 @@ describe('canvas runtime surfaces', () => {
 
   it('reports whether a runtime has loaded a document without caller monkey-patching', () => {
     const runtime = new SceneCanvasRuntime()
+    const surfaces = createCanvasRuntimeSurfaces(runtime)
     const file = serializeScenePersistedState(createDefaultScenePersistedState())
 
     try {
-      expect(runtime.hasLoadedDocument()).toBe(false)
-      runtime.loadDocument(file)
-      expect(runtime.hasLoadedDocument()).toBe(true)
+      expect(surfaces.documents.hasLoadedDocument()).toBe(false)
+      surfaces.documents.loadDocument(file)
+      expect(surfaces.documents.hasLoadedDocument()).toBe(true)
     } finally {
       runtime.destroy()
     }

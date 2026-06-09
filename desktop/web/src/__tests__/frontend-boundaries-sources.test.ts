@@ -264,6 +264,31 @@ describe('frontend boundary sources', () => {
     }
   })
 
+  it('keeps Canvas Runtime Surface publication explicit', () => {
+    const surfacesSource = readSource('../canvas/runtime/surfaces.ts')
+    const sessionSource = readSource('../canvas/session.ts')
+
+    expect(surfacesSource).toContain('commands: runtime.commandSurface')
+    expect(surfacesSource).toContain('queries: runtime.querySurface')
+    expect(surfacesSource).toContain('documents: runtime.documentSurface')
+    expect(surfacesSource).not.toContain('?? runtime')
+    expect(surfacesSource).not.toContain('maybeRuntime')
+    expect(surfacesSource).not.toContain('as SceneCanvasRuntime &')
+    expect(sessionSource).toContain('requires explicit canvas runtime surfaces')
+
+    const appFacingTestSources = sourceFilesUnder('./')
+      .filter(isTypescriptTestSource)
+      .filter((path) => path !== './canvas-runtime-surfaces.test.ts')
+      .filter((path) => path !== './frontend-boundaries-sources.test.ts')
+
+    for (const sourcePath of appFacingTestSources) {
+      expectNoImportsMatching(sourcePath, [/canvas\/runtime\/scene-runtime$/])
+      expect(readSource(sourcePath), `${sourcePath} should not reach into SceneStore`).not.toContain(
+        'getSceneStore(',
+      )
+    }
+  })
+
   it('keeps LayerPanel as a Canvas Layer Presentation renderer', () => {
     const layerPanelSource = readSource('../components/canvas/LayerPanel.tsx')
 
