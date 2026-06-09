@@ -4,7 +4,7 @@ use common_types::species::SpeciesDetail;
 use rusqlite::Connection;
 use serde_json::Value;
 
-use super::lookup::translate_composite_value;
+use super::common_names::translate_composite_value;
 
 const DETAIL_PROJECTION_COLUMNS: &[&str] = &[
     "id",

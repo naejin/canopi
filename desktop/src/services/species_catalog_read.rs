@@ -10,6 +10,8 @@ use rusqlite::Connection;
 mod common_names;
 mod compatibility;
 mod detail;
+mod detail_projection;
+mod detail_row_map;
 mod filters;
 mod flower;
 mod list_items;
@@ -144,6 +146,7 @@ impl<'conn> SpeciesCatalogRead<'conn> {
 mod tests {
     use super::*;
     use common_types::species::{Sort, SpeciesFilter};
+    use rusqlite::Connection;
 
     fn search_request() -> SpeciesSearchRequest {
         SpeciesSearchRequest {
@@ -217,6 +220,27 @@ mod tests {
             .locale_common_names_for_canonical_name("Apple", "fr")
             .unwrap();
         assert_eq!(names[0].name, "Pommier");
+    }
+
+    #[test]
+    fn detail_projection_hydrates_side_tables_and_translated_text() {
+        let conn = detail_projection_test_conn();
+        let catalog = SpeciesCatalogRead::new(&conn);
+
+        let detail = catalog.detail_for_canonical_name("Apple", "fr").unwrap();
+
+        assert_eq!(detail.common_name.as_deref(), Some("Pommier"));
+        assert_eq!(detail.family.as_deref(), Some("Rosaceae"));
+        assert_eq!(detail.growth_rate.as_deref(), Some("Lent"));
+        assert_eq!(detail.flower_color.as_deref(), Some("Bleu/Violet"));
+        assert_eq!(detail.is_perennial, Some(true));
+        assert_eq!(detail.native_distribution.as_deref(), Some("Asia, Europe"));
+        assert_eq!(detail.introduced_distribution.as_deref(), Some("Europe"));
+        assert_eq!(detail.climate_zones.as_deref(), Some("Tempéré"));
+        assert_eq!(detail.uses.len(), 1);
+        assert_eq!(detail.uses[0].use_category, "Medicinal");
+        assert_eq!(detail.relationships.len(), 1);
+        assert_eq!(detail.relationships[0].related_canonical_name, "Pear");
     }
 
     #[test]
@@ -305,5 +329,130 @@ mod tests {
 
         assert!(!plant_browser_source.contains("crate::db::plant_db::"));
         assert!(!species_catalog_source.contains("crate::db::plant_db::"));
+    }
+
+    fn detail_projection_test_conn() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        let mut species_columns = detail_projection::detail_projection_columns()
+            .iter()
+            .map(|column| (*column).to_owned())
+            .collect::<Vec<_>>();
+        species_columns.push("slug".to_owned());
+        species_columns.sort();
+        species_columns.dedup();
+        conn.execute_batch(&format!(
+            "CREATE TABLE species ({});
+             CREATE TABLE best_common_names (
+                 species_id TEXT NOT NULL,
+                 language TEXT NOT NULL,
+                 common_name TEXT NOT NULL,
+                 PRIMARY KEY (species_id, language)
+             );
+             CREATE TABLE species_common_names (
+                 id TEXT PRIMARY KEY,
+                 species_id TEXT NOT NULL,
+                 language TEXT NOT NULL,
+                 common_name TEXT NOT NULL,
+                 source TEXT,
+                 is_primary INTEGER DEFAULT 1
+             );
+             CREATE TABLE species_uses (
+                 id TEXT PRIMARY KEY,
+                 species_id TEXT NOT NULL,
+                 use_category TEXT NOT NULL,
+                 use_description TEXT
+             );
+             CREATE TABLE species_relationships (
+                 id TEXT PRIMARY KEY,
+                 species_id TEXT NOT NULL,
+                 related_species_slug TEXT NOT NULL,
+                 relationship_type TEXT NOT NULL
+             );
+             CREATE TABLE translated_values (
+                 id TEXT PRIMARY KEY,
+                 field_name TEXT NOT NULL,
+                 value_en TEXT NOT NULL,
+                 value_fr TEXT
+             );",
+            species_columns.join(", ")
+        ))
+        .unwrap();
+
+        conn.execute(
+            "INSERT INTO species (
+                 id, slug, canonical_name, common_name, family, growth_rate, flower_color,
+                 is_perennial, native_distribution, introduced_distribution, climate_zones
+             )
+             VALUES (
+                 'sp-1', 'apple', 'Apple', 'Apple fallback', 'Rosaceae', 'Slow', 'Blue/Purple',
+                 1, '[\"Asia\", \"Europe\"]', 'Europe', '[\"Temperate\"]'
+             )",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO species (id, slug, canonical_name)
+             VALUES ('sp-2', 'pear', 'Pear')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO best_common_names (species_id, language, common_name)
+             VALUES ('sp-1', 'fr', 'Pommier')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO species_uses (id, species_id, use_category, use_description)
+             VALUES ('use-1', 'sp-1', 'Medicinal', 'Tea')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO species_relationships (
+                 id, species_id, related_species_slug, relationship_type
+             )
+             VALUES ('rel-1', 'sp-1', 'pear', 'companion')",
+            [],
+        )
+        .unwrap();
+        for (id, field, value_en, value_fr) in [
+            ("t1", "growth_rate", "Slow", "Lent"),
+            ("t2", "flower_color", "Blue", "Bleu"),
+            ("t3", "flower_color", "Purple", "Violet"),
+            ("t4", "climate_zone", "Temperate", "Tempéré"),
+        ] {
+            conn.execute(
+                "INSERT INTO translated_values (id, field_name, value_en, value_fr)
+                 VALUES (?1, ?2, ?3, ?4)",
+                (id, field, value_en, value_fr),
+            )
+            .unwrap();
+        }
+
+        conn
+    }
+
+    #[test]
+    fn read_projection_modules_do_not_delegate_to_plant_db() {
+        let projection_sources = [
+            include_str!("species_catalog_read/common_names.rs"),
+            include_str!("species_catalog_read/detail.rs"),
+            include_str!("species_catalog_read/detail_projection.rs"),
+            include_str!("species_catalog_read/detail_row_map.rs"),
+            include_str!("species_catalog_read/filters.rs"),
+            include_str!("species_catalog_read/flower.rs"),
+            include_str!("species_catalog_read/list_items.rs"),
+            include_str!("species_catalog_read/media.rs"),
+            include_str!("species_catalog_read/relationships.rs"),
+            include_str!("species_catalog_read/search.rs"),
+        ];
+
+        for source in projection_sources {
+            assert!(!source.contains("crate::db::plant_db::"));
+        }
+
+        let plant_db_source = include_str!("../db/plant_db.rs");
+        assert!(!plant_db_source.contains("pub use"));
     }
 }

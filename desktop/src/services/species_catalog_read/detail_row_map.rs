@@ -197,8 +197,8 @@ pub(super) fn map_detail_row(row: &Row<'_>) -> rusqlite::Result<(String, Species
 
 #[cfg(test)]
 mod tests {
+    use super::super::detail_projection::detail_projection_columns;
     use super::map_detail_row;
-    use crate::db::plant_db::detail_projection::detail_projection_columns;
     use rusqlite::Connection;
 
     #[test]
