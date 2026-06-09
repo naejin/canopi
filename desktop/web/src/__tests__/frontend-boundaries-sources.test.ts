@@ -177,6 +177,7 @@ describe('frontend boundary sources', () => {
     const controllerSource = readSource('../app/canvas-settings/controller.ts')
     const layerPresentationSource = readSource('../app/canvas-layer-presentation/presentation.ts')
     const runtimeSource = readSource('../canvas/runtime/scene-runtime.ts')
+    const commandSurfaceSource = readSource('../canvas/runtime/command-surface.ts')
     const effectsSource = readSource('../canvas/runtime/scene-runtime/effects.ts')
     const documentSource = readSource('../canvas/runtime/scene-runtime/document.ts')
 
@@ -187,7 +188,7 @@ describe('frontend boundary sources', () => {
     expect(controllerSource).not.toContain('layerVisibility.value =')
     expect(controllerSource).not.toContain('layerLockState.value =')
     expect(controllerSource).not.toContain('layerOpacity.value =')
-    expect(runtimeSource).toContain('setSceneLayerVisibility')
+    expect(commandSurfaceSource).toContain('setSceneLayerVisibility')
     expect(runtimeSource).toContain("_sceneEdits.begin('guide-add')")
     expect(runtimeSource).not.toContain('applySignalBackedSceneState')
     expect(effectsSource).not.toContain('layerVisibility')
@@ -266,6 +267,7 @@ describe('frontend boundary sources', () => {
 
   it('keeps Canvas Runtime Surface publication explicit', () => {
     const surfacesSource = readSource('../canvas/runtime/surfaces.ts')
+    const runtimeSource = readSource('../canvas/runtime/scene-runtime.ts')
     const sessionSource = readSource('../canvas/session.ts')
 
     expect(surfacesSource).toContain('commands: runtime.commandSurface')
@@ -274,6 +276,9 @@ describe('frontend boundary sources', () => {
     expect(surfacesSource).not.toContain('?? runtime')
     expect(surfacesSource).not.toContain('maybeRuntime')
     expect(surfacesSource).not.toContain('as SceneCanvasRuntime &')
+    expect(runtimeSource).not.toContain('getSceneStore():')
+    expect(runtimeSource).not.toContain('\n  setSelection(ids')
+    expect(runtimeSource).not.toContain('loadDocument(file')
     expect(sessionSource).toContain('requires explicit canvas runtime surfaces')
 
     const appFacingTestSources = sourceFilesUnder('./')
