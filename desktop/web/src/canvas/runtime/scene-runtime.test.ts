@@ -37,6 +37,7 @@ import type {
   CanvasRuntimeSettingsAdapter,
 } from './app-adapter'
 import { getCommonNames } from '../../ipc/species'
+import { createSceneInteractionEventHarness } from '../../__tests__/support/scene-interaction-frame'
 
 function makeFile(): CanopiFile {
   return {
@@ -886,17 +887,7 @@ describe('scene canvas runtime', () => {
   it('records Object Stamp plant placement in history without replacing the clipboard', async () => {
     const runtime = new SceneCanvasRuntime()
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
-    Object.defineProperty(container, 'getBoundingClientRect', {
-      configurable: true,
-      value: () => ({
-        left: 0,
-        top: 0,
-        right: 400,
-        bottom: 300,
-        width: 400,
-        height: 300,
-      }),
-    })
+    const events = createSceneInteractionEventHarness(container)
     runtime.loadDocument(makeFile())
     ;(runtime as any)._camera.setViewport({ x: 0, y: 0, scale: 1 })
     runtime.getSceneStore().setViewport({ x: 0, y: 0, scale: 1 })
@@ -905,9 +896,8 @@ describe('scene canvas runtime', () => {
     runtime.copy()
     runtime.setTool('object-stamp')
 
-    const interaction = (runtime as any)._interaction
-    interaction._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
-    interaction._onPointerDown(new MouseEvent('pointerdown', { clientX: 30, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 10, y: 10 })
+    events.pointerDown({ x: 30, y: 30 })
 
     expect(runtime.getSceneStore().persisted.plants).toHaveLength(3)
     const stampedId = runtime.getSceneStore().persisted.plants[2]!.id
@@ -920,23 +910,14 @@ describe('scene canvas runtime', () => {
     const pasted = runtime.getSceneStore().persisted.plants[2]!
     expect(pasted.canonicalName).toBe('Malus domestica')
     expect(pasted.position).toEqual({ x: 40, y: 40 })
+    events.dispose()
     runtime.destroy()
   })
 
   it('records Object Stamp group placement as one undoable edit with cloned members', async () => {
     const runtime = new SceneCanvasRuntime()
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
-    Object.defineProperty(container, 'getBoundingClientRect', {
-      configurable: true,
-      value: () => ({
-        left: 0,
-        top: 0,
-        right: 400,
-        bottom: 300,
-        width: 400,
-        height: 300,
-      }),
-    })
+    const events = createSceneInteractionEventHarness(container)
     const file = makeFile()
     file.groups = [{
       id: 'group-1',
@@ -952,9 +933,8 @@ describe('scene canvas runtime', () => {
     runtime.getSceneStore().setViewport({ x: 0, y: 0, scale: 1 })
     runtime.setTool('object-stamp')
 
-    const interaction = (runtime as any)._interaction
-    interaction._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
-    interaction._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
+    events.pointerDown({ x: 10, y: 10 })
+    events.pointerDown({ x: 40, y: 40 })
 
     expect(runtime.getSceneStore().persisted.groups).toHaveLength(2)
     expect(runtime.getSceneStore().persisted.plants).toHaveLength(4)
@@ -967,6 +947,7 @@ describe('scene canvas runtime', () => {
     runtime.undo()
     expect(runtime.getSceneStore().persisted.groups).toHaveLength(1)
     expect(runtime.getSceneStore().persisted.plants).toHaveLength(2)
+    events.dispose()
     runtime.destroy()
   })
 
@@ -975,26 +956,15 @@ describe('scene canvas runtime', () => {
     cleanState.adapter.settings.commitPlantSpacingIntervalMeters(5)
     const runtime = new SceneCanvasRuntime({ appAdapter: cleanState.adapter })
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
-    Object.defineProperty(container, 'getBoundingClientRect', {
-      configurable: true,
-      value: () => ({
-        left: 0,
-        top: 0,
-        right: 400,
-        bottom: 300,
-        width: 400,
-        height: 300,
-      }),
-    })
+    const events = createSceneInteractionEventHarness(container)
     runtime.loadDocument(makeFile())
     ;(runtime as any)._camera.setViewport({ x: 0, y: 0, scale: 1 })
     runtime.getSceneStore().setViewport({ x: 0, y: 0, scale: 1 })
     runtime.setTool('plant-spacing')
 
-    const interaction = (runtime as any)._interaction
-    interaction._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
-    interaction._onPointerMove(new MouseEvent('pointermove', { clientX: 20, clientY: 10, button: 0 }))
-    interaction._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 10, button: 0 }))
+    events.pointerDown({ x: 10, y: 10 })
+    events.pointerMove({ x: 20, y: 10 })
+    events.pointerDown({ x: 20, y: 10 })
 
     expect(runtime.getSceneStore().persisted.plants).toHaveLength(4)
     expect(runtime.canUndo.value).toBe(true)
@@ -1005,6 +975,7 @@ describe('scene canvas runtime', () => {
 
     runtime.redo()
     expect(runtime.getSceneStore().persisted.plants).toHaveLength(4)
+    events.dispose()
     runtime.destroy()
   })
 

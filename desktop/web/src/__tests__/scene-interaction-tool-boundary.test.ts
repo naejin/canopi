@@ -6,6 +6,18 @@ function readSource(path: string): string {
 }
 
 describe('Scene Interaction tool module boundaries', () => {
+  it('keeps broad Scene Interaction tests on the frame event harness', () => {
+    const guardedSources = [
+      readSource('scene-interaction.test.ts'),
+      readSource('../canvas/runtime/scene-runtime.test.ts'),
+    ]
+
+    for (const source of guardedSources) {
+      expect(source).toContain('createSceneInteractionEventHarness')
+      expect(source).not.toMatch(/\._on(?:Pointer|Key|Wheel)/)
+    }
+  })
+
   it('routes Scene Interaction lifecycle through the Scene Interaction Frame seam', () => {
     const interactionSource = readSource('../canvas/runtime/scene-interaction.ts')
     const frameSource = readSource('../canvas/runtime/interaction/frame.ts')

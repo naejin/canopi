@@ -1,5 +1,4 @@
 import { readCanvasLayerPresentation } from '../canvas-layer-presentation/presentation'
-import { readDesignSessionMetadata } from '../document-session/store'
 import { readSavedLocationPresentation } from '../location'
 import { readPanelTargetOverlaySnapshot } from '../panel-targets/presentation'
 import { basemapStyle, theme } from '../settings/state'
@@ -23,14 +22,14 @@ export function readCanvasMapSurfaceCoreSnapshot(): CanvasMapSurfaceCoreSnapshot
   void runtime?.revision.scene.value
   void runtime?.revision.viewport.value
 
-  const location = readSavedLocationPresentation().location
-  const metadata = readDesignSessionMetadata()
+  const savedLocation = readSavedLocationPresentation()
+  const location = savedLocation.location
   const layerPresentation = readCanvasLayerPresentation()
 
   return {
     runtime,
     location: location ? { lat: location.lat, lon: location.lon } : null,
-    northBearingDeg: metadata.northBearingDeg,
+    northBearingDeg: savedLocation.northBearingDeg,
     basemapStyle: basemapStyle.value,
     hasVisibleMapLayer: layerPresentation.mapSurface.hasVisibleMapLayer,
     layerVisibility: { ...layerPresentation.mapSurface.layerVisibility },

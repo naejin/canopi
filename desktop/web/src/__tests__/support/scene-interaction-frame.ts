@@ -216,7 +216,7 @@ function createPointerEvent(
     isPrimary = true,
     target: _target,
     button = 0,
-    buttons = button === 0 ? 1 : 0,
+    buttons = defaultPointerButtons(type, button),
     bubbles = true,
     cancelable = true,
     ...mouseOptions
@@ -236,6 +236,14 @@ function createPointerEvent(
     isPrimary,
   })
   return event as PointerEvent
+}
+
+function defaultPointerButtons(type: string, button: number): number {
+  if (type === 'pointerup') return 0
+  if (button === 0) return 1
+  if (button === 1) return 4
+  if (button === 2) return 2
+  return 0
 }
 
 function definePointerFields(

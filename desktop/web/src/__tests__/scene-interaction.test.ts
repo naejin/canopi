@@ -17,7 +17,10 @@ import {
   CANVAS_NOTICE_MARGIN_PX,
   CANVAS_RULER_SIZE_PX,
 } from '../canvas/canvas-notice-layout'
-import { createSceneInteractionEventHarness } from './support/scene-interaction-frame'
+import {
+  createSceneInteractionEventHarness,
+  type SceneInteractionEventHarness,
+} from './support/scene-interaction-frame'
 
 function createPlantPresentationContext(viewportScale: number) {
   return {
@@ -139,21 +142,12 @@ describe('SceneInteractionController', () => {
   let container: HTMLDivElement
   let camera: CameraController
   let store: SceneStore
+  let events: SceneInteractionEventHarness
 
   beforeEach(() => {
     container = document.createElement('div')
     document.body.appendChild(container)
-    Object.defineProperty(container, 'getBoundingClientRect', {
-      configurable: true,
-      value: () => ({
-        left: 0,
-        top: 0,
-        right: 400,
-        bottom: 300,
-        width: 400,
-        height: 300,
-      }),
-    })
+    events = createSceneInteractionEventHarness(container)
 
     camera = new CameraController()
     camera.initialize({ width: 400, height: 300 })
@@ -168,6 +162,7 @@ describe('SceneInteractionController', () => {
   })
 
   afterEach(() => {
+    events.dispose()
     container.remove()
     selectedObjectIds.value = new Set()
     clearPlantStampSource()
@@ -200,7 +195,6 @@ describe('SceneInteractionController', () => {
     const render = vi.fn()
     const onSceneEditCommit = vi.fn()
     const deps = createInteractionDeps(container, store, camera, { render, onSceneEditCommit })
-    const events = createSceneInteractionEventHarness(container)
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('select')
 
@@ -213,7 +207,6 @@ describe('SceneInteractionController', () => {
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-drag')
     expect(deps.setSelection).toHaveBeenCalledWith(new Set(['plant-1']))
     controller.dispose()
-    events.dispose()
   })
 
   it('does not select or drag locked Design Objects from SceneStore', () => {
@@ -240,9 +233,9 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('select')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 35, clientY: 45, button: 0 }))
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 35, clientY: 45, button: 0 }))
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
+    events.pointerMove({ x: 35, y: 45 }, { button: 0 })
+    events.pointerUp({ x: 35, y: 45 }, { button: 0 })
 
     expect(selectedObjectIds.value).toEqual(new Set())
     expect(store.persisted.plants[0]?.position).toEqual({ x: 20, y: 30 })
@@ -283,14 +276,14 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('select')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 20, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
+    events.pointerUp({ x: 20, y: 30 }, { button: 0 })
 
     expect(selectedObjectIds.value).toEqual(new Set())
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 20, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 30, clientY: 40, button: 0 }))
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 30, clientY: 40, button: 0 }))
+    events.pointerDown({ x: 10, y: 20 }, { button: 0 })
+    events.pointerMove({ x: 30, y: 40 }, { button: 0 })
+    events.pointerUp({ x: 30, y: 40 }, { button: 0 })
 
     expect(selectedObjectIds.value).toEqual(new Set())
     controller.dispose()
@@ -329,7 +322,7 @@ describe('SceneInteractionController', () => {
     expect(hud?.textContent).not.toContain('Plant Spacing')
     expect(hud?.querySelector('button')).toBeNull()
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
 
     expect(container.querySelector('[data-plant-spacing-source="plant-1"]')).not.toBeNull()
     expect(container.querySelector<HTMLElement>('[data-plant-spacing-primary]')?.textContent).toBe('Apple')
@@ -379,7 +372,7 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 200, clientY: 200, button: 0 }))
+    events.pointerDown({ x: 200, y: 200 }, { button: 0 })
 
     const hud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')
     expect(hud?.dataset.state).toBe('source-picking')
@@ -442,10 +435,10 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
     expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 80, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 80, y: 30 }, { button: 0 })
     expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
     controller.dispose()
   })
@@ -476,7 +469,7 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
     expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
 
     store.updatePersisted((draft) => {
@@ -485,7 +478,7 @@ describe('SceneInteractionController', () => {
       )
     })
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
     expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
     controller.dispose()
   })
@@ -515,15 +508,15 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
     expect(container.querySelector('[data-plant-spacing-source="plant-1"]')).not.toBeNull()
 
-    ;(controller as any)._onKeyDown(new KeyboardEvent('keydown', { key: 'Escape' }))
+    events.keyDown({ key: 'Escape' })
     expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
     expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.dataset.state).toBe('source-picking')
     expect(setTool).not.toHaveBeenCalled()
 
-    ;(controller as any)._onKeyDown(new KeyboardEvent('keydown', { key: 'Escape' }))
+    events.keyDown({ key: 'Escape' })
     expect(setTool).toHaveBeenCalledWith('select')
     expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.style.display).toBe('none')
     controller.dispose()
@@ -553,8 +546,8 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 26, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
+    events.pointerMove({ x: 26, y: 30 }, { button: 0 })
     expect(container.querySelector('[data-plant-spacing-source="source"]')).not.toBeNull()
     expect(container.querySelector('[data-plant-spacing-guide]')).not.toBeNull()
 
@@ -595,8 +588,8 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 26, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
+    events.pointerMove({ x: 26, y: 30 }, { button: 0 })
     expect(container.querySelector('[data-plant-spacing-hud]')).not.toBeNull()
     expect(container.querySelector('[data-plant-spacing-guide]')).not.toBeNull()
 
@@ -635,7 +628,7 @@ describe('SceneInteractionController', () => {
     const inputBeforeSource = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')
     expect(document.activeElement).not.toBe(inputBeforeSource)
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
 
     const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
     const hud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')!
@@ -685,7 +678,7 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
 
     controller.setTool('plant-spacing')
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
 
     const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
     expect(input.value).toBe('1.25 m')
@@ -725,7 +718,7 @@ describe('SceneInteractionController', () => {
     const deps = createInteractionDeps(container, store, camera)
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
 
     const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
     input.value = '0,75m'
@@ -765,7 +758,7 @@ describe('SceneInteractionController', () => {
     const deps = createInteractionDeps(container, store, camera)
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
 
     const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
     const hud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')!
@@ -805,7 +798,7 @@ describe('SceneInteractionController', () => {
     const deps = createInteractionDeps(container, store, camera)
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
 
     const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
     expect(document.activeElement).toBe(input)
@@ -839,7 +832,7 @@ describe('SceneInteractionController', () => {
     const deps = createInteractionDeps(container, store, camera)
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
 
     const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
     const onWindowKeyDown = vi.fn()
@@ -880,8 +873,8 @@ describe('SceneInteractionController', () => {
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 26, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
+    events.pointerMove({ x: 26, y: 30 }, { button: 0 })
 
     const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
     input.dispatchEvent(new MouseEvent('pointerdown', {
@@ -921,8 +914,8 @@ describe('SceneInteractionController', () => {
     const deps = createInteractionDeps(container, store, camera)
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 26, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
+    events.pointerMove({ x: 26, y: 30 }, { button: 0 })
 
     const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
     const guide = container.querySelector<HTMLElement>('[data-plant-spacing-guide]')!
@@ -968,8 +961,8 @@ describe('SceneInteractionController', () => {
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 26, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
+    events.pointerMove({ x: 26, y: 30 }, { button: 0 })
 
     const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
     input.dispatchEvent(new MouseEvent('pointerup', {
@@ -1007,7 +1000,7 @@ describe('SceneInteractionController', () => {
     const deps = createInteractionDeps(container, store, camera)
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
 
     const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
     const hud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')!
@@ -1046,9 +1039,9 @@ describe('SceneInteractionController', () => {
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
 
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 26, clientY: 30, button: 0 }))
+    events.pointerMove({ x: 26, y: 30 }, { button: 0 })
 
     expect(container.querySelector('[data-plant-spacing-guide]')).not.toBeNull()
     expect(container.querySelector<HTMLElement>('[data-plant-spacing-length-label]')?.textContent).toBe('6 m')
@@ -1058,7 +1051,7 @@ describe('SceneInteractionController', () => {
     expect(Number.parseFloat(ghost.style.height)).toBeCloseTo(4.43, 2)
     expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.textContent).toContain('3')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 26, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 26, y: 30 }, { button: 0 })
 
     expect(onSceneEditCommit).toHaveBeenCalledTimes(1)
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-plant-spacing')
@@ -1113,11 +1106,11 @@ describe('SceneInteractionController', () => {
       const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
       const controller = new SceneInteractionController(deps as any)
       controller.setTool('plant-spacing')
-      ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
-      ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 26, clientY: 30, button: 0 }))
+      events.pointerDown({ x: 20, y: 30 }, { button: 0 })
+      events.pointerMove({ x: 26, y: 30 }, { button: 0 })
 
       blockCommit()
-      ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 26, clientY: 30, button: 0 }))
+      events.pointerDown({ x: 26, y: 30 }, { button: 0 })
 
       expect(onSceneEditCommit).not.toHaveBeenCalled()
       expect(store.persisted.plants).toHaveLength(expectedPlantCount)
@@ -1179,8 +1172,8 @@ describe('SceneInteractionController', () => {
     const deps = createInteractionDeps(container, store, camera)
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 22, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
+    events.pointerMove({ x: 22, y: 30 }, { button: 0 })
 
     expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.textContent).toContain('2000')
     const ghostCount = container.querySelectorAll('[data-plant-spacing-ghost]').length
@@ -1213,14 +1206,14 @@ describe('SceneInteractionController', () => {
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 20, clientY: 10, button: 0 }))
+    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
+    events.pointerMove({ x: 20, y: 10 }, { button: 0 })
 
     const count = container.querySelector<HTMLElement>('[data-plant-spacing-generated-count]')!
     expect(count.textContent).toContain('10000')
     expect(count.dataset.density).toBe('blocked')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 10, button: 0 }))
+    events.pointerDown({ x: 20, y: 10 }, { button: 0 })
 
     expect(onSceneEditCommit).not.toHaveBeenCalled()
     expect(store.persisted.plants).toHaveLength(1)
@@ -1256,15 +1249,15 @@ describe('SceneInteractionController', () => {
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 15, clientY: 10, button: 0 }))
+    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
+    events.pointerMove({ x: 15, y: 10 }, { button: 0 })
 
     const count = container.querySelector<HTMLElement>('[data-plant-spacing-generated-count]')!
     expect(count.textContent).toContain('5000')
     expect(count.dataset.density).toBe('dense')
     expect(container.querySelector('[data-plant-spacing-confirm]')).toBeNull()
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 15, clientY: 10, button: 0 }))
+    events.pointerDown({ x: 15, y: 10 }, { button: 0 })
 
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-plant-spacing')
     expect(store.persisted.plants).toHaveLength(5001)
@@ -1302,15 +1295,15 @@ describe('SceneInteractionController', () => {
     })
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 60, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
+    events.pointerMove({ x: 60, y: 30 }, { button: 0 })
 
     const ghosts = container.querySelectorAll<HTMLElement>('[data-plant-spacing-ghost]')
     expect(ghosts).toHaveLength(2)
     expect(ghosts[0]?.style.width).toBe('40px')
     expect(ghosts[0]?.style.height).toBe('40px')
 
-    ;(controller as any)._onWheel(new WheelEvent('wheel', { clientX: 0, clientY: 0, deltaY: -120 }))
+    events.wheel({ x: 0, y: 0 }, { deltaY: -120 })
 
     const resizedGhost = container.querySelector<HTMLElement>('[data-plant-spacing-ghost]')!
     expect(resizedGhost.style.width).not.toBe('40px')
@@ -1342,13 +1335,13 @@ describe('SceneInteractionController', () => {
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 21, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
+    events.pointerMove({ x: 21, y: 30 }, { button: 0 })
 
     expect(container.querySelector<HTMLElement>('[data-plant-spacing-length-label]')?.textContent).toBe('1 m')
     expect(container.querySelectorAll('[data-plant-spacing-ghost]')).toHaveLength(0)
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 21, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 21, y: 30 }, { button: 0 })
 
     expect(onSceneEditCommit).not.toHaveBeenCalled()
     expect(store.persisted.plants).toHaveLength(1)
@@ -1380,8 +1373,8 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 20, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
+    events.pointerMove({ x: 20, y: 30 }, { button: 0 })
 
     expect(container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')?.value).toBe('50 cm')
     expect(container.querySelector<HTMLElement>('[data-plant-spacing-length-label]')?.textContent).toBe('0 cm')
@@ -1415,12 +1408,12 @@ describe('SceneInteractionController', () => {
     const deps = createInteractionDeps(container, store, camera)
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 40, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 51, clientY: 40, button: 0 }))
+    events.pointerDown({ x: 20, y: 40 }, { button: 0 })
+    events.pointerMove({ x: 51, y: 40 }, { button: 0 })
 
     expect(container.querySelectorAll('[data-plant-spacing-ghost]')).toHaveLength(2)
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 51, clientY: 40, button: 0 }))
+    events.pointerDown({ x: 51, y: 40 }, { button: 0 })
     expect(store.persisted.plants.slice(1).map((plant) => plant.position)).toEqual([
       { x: 4, y: 4 },
       { x: 6, y: 4 },
@@ -1454,22 +1447,12 @@ describe('SceneInteractionController', () => {
     const deps = createInteractionDeps(container, store, camera)
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', {
-      clientX: 71,
-      clientY: 52,
-      button: 0,
-      shiftKey: true,
-    }))
+    events.pointerDown({ x: 40, y: 40 }, { button: 0 })
+    events.pointerMove({ x: 71, y: 52 }, { button: 0, shiftKey: true })
 
     expect(container.querySelectorAll('[data-plant-spacing-ghost]')).toHaveLength(3)
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', {
-      clientX: 71,
-      clientY: 52,
-      button: 0,
-      shiftKey: true,
-    }))
+    events.pointerDown({ x: 71, y: 52 }, { button: 0, shiftKey: true })
     expect(store.persisted.plants.slice(1).map((plant) => plant.position.y)).toEqual([4, 4, 4])
     expect(store.persisted.plants.slice(1).map((plant) => plant.position.x)).toEqual([5, 6, 7])
     controller.dispose()
@@ -1502,22 +1485,12 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', {
-      clientX: 71,
-      clientY: 52,
-      button: 0,
-      shiftKey: true,
-    }))
+    events.pointerDown({ x: 40, y: 40 }, { button: 0 })
+    events.pointerMove({ x: 71, y: 52 }, { button: 0, shiftKey: true })
 
     expect(container.querySelector<HTMLElement>('[data-plant-spacing-guide]')?.style.transform).toBe('rotate(0rad)')
 
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', {
-      clientX: 71,
-      clientY: 52,
-      button: 0,
-      shiftKey: false,
-    }))
+    events.pointerUp({ x: 71, y: 52 }, { button: 0, shiftKey: false })
 
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-plant-spacing')
     expect(store.persisted.plants.slice(1).map((plant) => plant.position.y)).toEqual([4, 4, 4])
@@ -1548,12 +1521,12 @@ describe('SceneInteractionController', () => {
     const deps = createInteractionDeps(container, store, camera)
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 500, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
+    events.pointerMove({ x: 500, y: 30 }, { button: 0 })
 
     expect(container.querySelector<HTMLElement>('[data-plant-spacing-length-label]')?.textContent).toBe('380 m')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 500, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 500, y: 30 }, { button: 0 })
     expect(store.persisted.plants.slice(1).map((plant) => plant.position)).toEqual([
       { x: 120, y: 30 },
       { x: 220, y: 30 },
@@ -1585,12 +1558,12 @@ describe('SceneInteractionController', () => {
     const deps = createInteractionDeps(container, store, camera)
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 26, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
+    events.pointerMove({ x: 26, y: 30 }, { button: 0 })
     const guide = container.querySelector<HTMLElement>('[data-plant-spacing-guide]')!
     const widthBefore = guide.style.width
 
-    ;(controller as any)._onWheel(new WheelEvent('wheel', { clientX: 0, clientY: 0, deltaY: -120 }))
+    events.wheel({ x: 0, y: 0 }, { deltaY: -120 })
 
     expect(container.querySelector<HTMLElement>('[data-plant-spacing-length-label]')?.textContent).toBe('6 m')
     expect(guide.style.width).not.toBe(widthBefore)
@@ -1621,9 +1594,9 @@ describe('SceneInteractionController', () => {
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 110, clientY: 10, button: 0 }))
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 110, clientY: 10, button: 0 }))
+    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
+    events.pointerMove({ x: 110, y: 10 }, { button: 0 })
+    events.pointerDown({ x: 110, y: 10 }, { button: 0 })
 
     expect(container.querySelector('[data-plant-spacing-confirm]')).toBeNull()
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-plant-spacing')
@@ -1655,8 +1628,8 @@ describe('SceneInteractionController', () => {
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 111, clientY: 10, button: 0 }))
+    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
+    events.pointerMove({ x: 111, y: 10 }, { button: 0 })
 
     const hud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')!
     const count = container.querySelector<HTMLElement>('[data-plant-spacing-generated-count]')!
@@ -1668,7 +1641,7 @@ describe('SceneInteractionController', () => {
     expect(count.style.color).toBe('var(--color-primary)')
     expect(count.style.fontWeight).toBe('600')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 111, clientY: 10, button: 0 }))
+    events.pointerDown({ x: 111, y: 10 }, { button: 0 })
 
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-plant-spacing')
     expect(store.persisted.plants).toHaveLength(102)
@@ -1701,9 +1674,9 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 21, clientY: 30, button: 0 }))
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 21, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
+    events.pointerMove({ x: 21, y: 30 }, { button: 0 })
+    events.pointerUp({ x: 21, y: 30 }, { button: 0 })
 
     expect(onSceneEditCommit).not.toHaveBeenCalled()
     expect(store.persisted.plants).toHaveLength(1)
@@ -1736,11 +1709,11 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
     const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 26, clientY: 30, button: 0 }))
+    events.pointerMove({ x: 26, y: 30 }, { button: 0 })
     expect(document.activeElement).not.toBe(input)
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 26, clientY: 30, button: 0 }))
+    events.pointerUp({ x: 26, y: 30 }, { button: 0 })
 
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-plant-spacing')
     expect(store.persisted.plants).toHaveLength(4)
@@ -1777,9 +1750,9 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 25, clientY: 30, button: 0 }))
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 26, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
+    events.pointerMove({ x: 25, y: 30 }, { button: 0 })
+    events.pointerUp({ x: 26, y: 30 }, { button: 0 })
 
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-plant-spacing')
     expect(store.persisted.plants.slice(1).map((plant) => plant.position)).toEqual([
@@ -1815,9 +1788,9 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 111, clientY: 10, button: 0 }))
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 111, clientY: 10, button: 0 }))
+    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
+    events.pointerMove({ x: 111, y: 10 }, { button: 0 })
+    events.pointerUp({ x: 111, y: 10 }, { button: 0 })
 
     expect(container.querySelector('[data-plant-spacing-confirm]')).toBeNull()
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-plant-spacing')
@@ -1852,12 +1825,12 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
     const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
     input.value = '0'
     input.dispatchEvent(new Event('input', { bubbles: true }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 26, clientY: 30, button: 0 }))
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 26, clientY: 30, button: 0 }))
+    events.pointerMove({ x: 26, y: 30 }, { button: 0 })
+    events.pointerUp({ x: 26, y: 30 }, { button: 0 })
 
     expect(onSceneEditCommit).not.toHaveBeenCalled()
     expect(store.persisted.plants).toHaveLength(1)
@@ -1872,7 +1845,6 @@ describe('SceneInteractionController', () => {
       store.setViewport(viewport)
     })
     const deps = createInteractionDeps(container, store, camera, { render, setViewport })
-    const events = createSceneInteractionEventHarness(container)
     const controller = new SceneInteractionController(deps as any)
 
     const wheel = events.wheel({ x: 200, y: 150 }, { deltaY: -120 })
@@ -1881,7 +1853,6 @@ describe('SceneInteractionController', () => {
     expect(setViewport).toHaveBeenCalledTimes(1)
     expect(render).toHaveBeenCalledWith('viewport')
     controller.dispose()
-    events.dispose()
   })
 
   it('commits a text Annotation with Enter and selects it', () => {
@@ -1890,7 +1861,7 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('text')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 24, clientY: 32, button: 0 }))
+    events.pointerDown({ x: 24, y: 32 }, { button: 0 })
     const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
     textarea.value = 'Guild note'
     textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
@@ -1913,7 +1884,7 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('text')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 24, clientY: 32, button: 0 }))
+    events.pointerDown({ x: 24, y: 32 }, { button: 0 })
     const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
     textarea.value = 'Draft note'
     textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
@@ -1930,7 +1901,7 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('text')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 24, clientY: 32, button: 0 }))
+    events.pointerDown({ x: 24, y: 32 }, { button: 0 })
     await nextAnimationFrame()
     const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
     textarea.value = 'Blurred note'
@@ -1953,7 +1924,7 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('text')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 24, clientY: 32, button: 0 }))
+    events.pointerDown({ x: 24, y: 32 }, { button: 0 })
     const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
     textarea.value = '   '
     textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
@@ -1969,13 +1940,13 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('text')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 24, clientY: 32, button: 0 }))
+    events.pointerDown({ x: 24, y: 32 }, { button: 0 })
     expect(container.querySelector('textarea')).not.toBeNull()
     controller.setTool('select')
     expect(container.querySelector('textarea')).toBeNull()
 
     controller.setTool('text')
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 48, clientY: 64, button: 0 }))
+    events.pointerDown({ x: 48, y: 64 }, { button: 0 })
     expect(container.querySelector('textarea')).not.toBeNull()
     controller.dispose()
     expect(container.querySelector('textarea')).toBeNull()
@@ -1986,15 +1957,15 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('text')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 24, clientY: 32, button: 0 }))
+    events.pointerDown({ x: 24, y: 32 }, { button: 0 })
     expect(container.querySelector('textarea')).not.toBeNull()
     expect(container.style.cursor).toBe('text')
 
-    ;(controller as any)._onKeyDown(new KeyboardEvent('keydown', {
+    events.keyDown({
       key: ' ',
       code: 'Space',
       cancelable: true,
-    }))
+    })
 
     expect(container.style.cursor).toBe('text')
     controller.dispose()
@@ -2004,7 +1975,6 @@ describe('SceneInteractionController', () => {
     const render = vi.fn()
     const onSceneEditCommit = vi.fn()
     const deps = createInteractionDeps(container, store, camera, { render, onSceneEditCommit })
-    const events = createSceneInteractionEventHarness(container)
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('rectangle')
 
@@ -2025,7 +1995,6 @@ describe('SceneInteractionController', () => {
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-rectangle')
     expect(deps.setSelection).toHaveBeenCalledTimes(1)
     controller.dispose()
-    events.dispose()
   })
 
   it('creates an elliptical zone from the ellipse tool drag', () => {
@@ -2034,14 +2003,14 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('ellipse')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 20, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 70, clientY: 100, button: 0 }))
+    events.pointerDown({ x: 10, y: 20 }, { button: 0 })
+    events.pointerMove({ x: 70, y: 100 }, { button: 0 })
 
     const preview = Array.from(container.children)
       .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
     expect(preview?.style.borderRadius).toBe('50%')
 
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 70, clientY: 100, button: 0 }))
+    events.pointerUp({ x: 70, y: 100 }, { button: 0 })
 
     expect(store.persisted.zones).toHaveLength(1)
     expect(store.persisted.zones[0]).toMatchObject({
@@ -2069,9 +2038,9 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('ellipse')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 110, clientY: 90, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 10, clientY: 10, button: 0 }))
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 10, clientY: 10, button: 0 }))
+    events.pointerDown({ x: 110, y: 90 }, { button: 0 })
+    events.pointerMove({ x: 10, y: 10 }, { button: 0 })
+    events.pointerUp({ x: 10, y: 10 }, { button: 0 })
 
     expect(store.persisted.zones[0]).toMatchObject({
       zoneType: 'ellipse',
@@ -2092,8 +2061,8 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('ellipse')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 43, clientY: 87, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 148, clientY: 254, button: 0 }))
+    events.pointerDown({ x: 43, y: 87 }, { button: 0 })
+    events.pointerMove({ x: 148, y: 254 }, { button: 0 })
 
     const preview = Array.from(container.children)
       .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
@@ -2103,7 +2072,7 @@ describe('SceneInteractionController', () => {
     expect(preview?.style.height).toBe('180px')
     expect(preview?.style.borderRadius).toBe('50%')
 
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 148, clientY: 254, button: 0 }))
+    events.pointerUp({ x: 148, y: 254 }, { button: 0 })
 
     expect(store.persisted.zones[0]).toMatchObject({
       zoneType: 'ellipse',
@@ -2121,8 +2090,8 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('ellipse')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 20, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 70, clientY: 100, button: 0 }))
+    events.pointerDown({ x: 10, y: 20 }, { button: 0 })
+    events.pointerMove({ x: 70, y: 100 }, { button: 0 })
 
     expect(zoneMeasurementTexts(container)).toEqual([
       'W 60 m',
@@ -2154,8 +2123,8 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('select')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 50, clientY: 60, button: 0 }))
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 50, clientY: 60, button: 0 }))
+    events.pointerDown({ x: 50, y: 60 }, { button: 0 })
+    events.pointerUp({ x: 50, y: 60 }, { button: 0 })
 
     expect(zoneMeasurementTexts(container)).toEqual([
       'W 60 m',
@@ -2199,17 +2168,12 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('select')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 50, clientY: 60, button: 0 }))
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 50, clientY: 60, button: 0 }))
+    events.pointerDown({ x: 50, y: 60 }, { button: 0 })
+    events.pointerUp({ x: 50, y: 60 }, { button: 0 })
     expect(zoneMeasurementTexts(container)).not.toEqual([])
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', {
-      clientX: 150,
-      clientY: 60,
-      button: 0,
-      shiftKey: true,
-    }))
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 150, clientY: 60, button: 0 }))
+    events.pointerDown({ x: 150, y: 60 }, { button: 0, shiftKey: true })
+    events.pointerUp({ x: 150, y: 60 }, { button: 0 })
 
     expect(zoneMeasurementTexts(container)).toEqual([])
     controller.dispose()
@@ -2221,9 +2185,9 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('ellipse')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 10.2, clientY: 10.4, button: 0 }))
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 10.2, clientY: 10.4, button: 0 }))
+    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
+    events.pointerMove({ x: 10.2, y: 10.4 }, { button: 0 })
+    events.pointerUp({ x: 10.2, y: 10.4 }, { button: 0 })
 
     expect(store.persisted.zones).toHaveLength(0)
     expect(onSceneEditCommit).not.toHaveBeenCalled()
@@ -2250,8 +2214,8 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('select')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 50, clientY: 50, button: 0 }))
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 50, clientY: 50, button: 0 }))
+    events.pointerDown({ x: 50, y: 50 }, { button: 0 })
+    events.pointerUp({ x: 50, y: 50 }, { button: 0 })
 
     expect(selectedObjectIds.value).toEqual(new Set(['zone-ellipse']))
     expect(deps.setSelection).toHaveBeenCalledWith(new Set(['zone-ellipse']))
@@ -2279,9 +2243,9 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('select')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 50, clientY: 50, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 60, clientY: 65, button: 0 }))
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 60, clientY: 65, button: 0 }))
+    events.pointerDown({ x: 50, y: 50 }, { button: 0 })
+    events.pointerMove({ x: 60, y: 65 }, { button: 0 })
+    events.pointerUp({ x: 60, y: 65 }, { button: 0 })
 
     expect(selectedObjectIds.value).toEqual(new Set(['zone-ellipse']))
     expect(store.persisted.zones[0]?.points).toEqual([
@@ -2298,15 +2262,15 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('polygon')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 60, clientY: 10, button: 0 }))
+    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
+    events.pointerMove({ x: 60, y: 10 }, { button: 0 })
 
     const line = container.querySelector<SVGPolylineElement>('[data-polygon-draft-line]')
     expect(line?.getAttribute('points')).toBe('10,10 60,10')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 60, clientY: 10, button: 0 }))
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 60, clientY: 50, button: 0 }))
-    ;(controller as any)._onKeyDown(new KeyboardEvent('keydown', { key: 'Enter' }))
+    events.pointerDown({ x: 60, y: 10 }, { button: 0 })
+    events.pointerDown({ x: 60, y: 50 }, { button: 0 })
+    events.keyDown({ key: 'Enter' })
 
     expect(store.persisted.zones).toHaveLength(1)
     expect(store.persisted.zones[0]).toMatchObject({
@@ -2340,8 +2304,8 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('polygon')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 43, clientY: 87, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 148, clientY: 254, button: 0 }))
+    events.pointerDown({ x: 43, y: 87 }, { button: 0 })
+    events.pointerMove({ x: 148, y: 254 }, { button: 0 })
 
     const line = container.querySelector<SVGPolylineElement>('[data-polygon-draft-line]')
     expect(line?.getAttribute('points')).toBe('40,80 140,260')
@@ -2353,8 +2317,8 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('polygon')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 60, clientY: 10, button: 0 }))
+    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
+    events.pointerMove({ x: 60, y: 10 }, { button: 0 })
 
     expect(zoneMeasurementTexts(container)).toEqual(['50 m'])
     controller.dispose()
@@ -2384,7 +2348,7 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('polygon')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
+    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
 
     expect(selectedObjectIds.value.size).toBe(0)
     expect(deps.clearSelection).toHaveBeenCalledTimes(1)
@@ -2396,9 +2360,9 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('polygon')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 60, clientY: 10, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 60, clientY: 50, button: 0 }))
+    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
+    events.pointerDown({ x: 60, y: 10 }, { button: 0 })
+    events.pointerMove({ x: 60, y: 50 }, { button: 0 })
 
     expect(zoneMeasurementTexts(container)).toEqual([
       '50 m',
@@ -2430,8 +2394,8 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('select')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 20, button: 0 }))
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 40, clientY: 20, button: 0 }))
+    events.pointerDown({ x: 40, y: 20 }, { button: 0 })
+    events.pointerUp({ x: 40, y: 20 }, { button: 0 })
 
     expect(zoneMeasurementTexts(container)).toEqual([
       '50 m',
@@ -2478,17 +2442,12 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('select')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 20, button: 0 }))
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 40, clientY: 20, button: 0 }))
+    events.pointerDown({ x: 40, y: 20 }, { button: 0 })
+    events.pointerUp({ x: 40, y: 20 }, { button: 0 })
     expect(zoneMeasurementTexts(container)).not.toEqual([])
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', {
-      clientX: 130,
-      clientY: 20,
-      button: 0,
-      shiftKey: true,
-    }))
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 130, clientY: 20, button: 0 }))
+    events.pointerDown({ x: 130, y: 20 }, { button: 0, shiftKey: true })
+    events.pointerUp({ x: 130, y: 20 }, { button: 0 })
 
     expect(zoneMeasurementTexts(container)).toEqual([])
     controller.dispose()
@@ -2515,8 +2474,8 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('select')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 15, clientY: 45, button: 0 }))
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 15, clientY: 45, button: 0 }))
+    events.pointerDown({ x: 15, y: 45 }, { button: 0 })
+    events.pointerUp({ x: 15, y: 45 }, { button: 0 })
 
     expect(selectedObjectIds.value.size).toBe(0)
     expect(zoneMeasurementTexts(container)).toEqual([])
@@ -2529,10 +2488,10 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('polygon')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 60, clientY: 10, button: 0 }))
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 60, clientY: 50, button: 0 }))
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 12, clientY: 11, button: 0 }))
+    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
+    events.pointerDown({ x: 60, y: 10 }, { button: 0 })
+    events.pointerDown({ x: 60, y: 50 }, { button: 0 })
+    events.pointerDown({ x: 12, y: 11 }, { button: 0 })
 
     expect(store.persisted.zones[0]).toMatchObject({
       zoneType: 'polygon',
@@ -2552,9 +2511,9 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('polygon')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 60, clientY: 10, button: 0 }))
-    ;(controller as any)._onKeyDown(new KeyboardEvent('keydown', { key: 'Escape' }))
+    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
+    events.pointerDown({ x: 60, y: 10 }, { button: 0 })
+    events.keyDown({ key: 'Escape' })
 
     expect(store.persisted.zones).toHaveLength(0)
     expect(container.querySelector('[data-polygon-draft-line]')).toBeNull()
@@ -2568,10 +2527,10 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('polygon')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 60, clientY: 10, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 60, clientY: 50, button: 0 }))
-    ;(controller as any)._onKeyDown(new KeyboardEvent('keydown', { key: 'Backspace' }))
+    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
+    events.pointerDown({ x: 60, y: 10 }, { button: 0 })
+    events.pointerMove({ x: 60, y: 50 }, { button: 0 })
+    events.keyDown({ key: 'Backspace' })
 
     const line = container.querySelector<SVGPolylineElement>('[data-polygon-draft-line]')
     expect(line?.getAttribute('points')).toBe('10,10 60,50')
@@ -2586,16 +2545,16 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('polygon')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 60, clientY: 10, button: 0 }))
+    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
+    events.pointerMove({ x: 60, y: 10 }, { button: 0 })
 
     expect(container.querySelector('[data-polygon-draft-line]')).not.toBeNull()
 
-    ;(controller as any)._onKeyDown(new KeyboardEvent('keydown', { code: 'Space' }))
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 200, clientY: 150, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 220, clientY: 150, button: 0 }))
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 220, clientY: 150, button: 0 }))
-    ;(controller as any)._onKeyUp(new KeyboardEvent('keyup', { code: 'Space' }))
+    events.keyDown({ code: 'Space' })
+    events.pointerDown({ x: 200, y: 150 }, { button: 0 })
+    events.pointerMove({ x: 220, y: 150 }, { button: 0 })
+    events.pointerUp({ x: 220, y: 150 }, { button: 0 })
+    events.keyUp({ code: 'Space' })
 
     expect(container.querySelector('[data-polygon-draft-line]')).not.toBeNull()
     expect(store.persisted.zones).toHaveLength(0)
@@ -2609,11 +2568,11 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('polygon')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 60, clientY: 10, button: 0 }))
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 200, clientY: 150, button: 1 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 220, clientY: 150, button: 1 }))
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 220, clientY: 150, button: 1 }))
+    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
+    events.pointerMove({ x: 60, y: 10 }, { button: 0 })
+    events.pointerDown({ x: 200, y: 150 }, { button: 1 })
+    events.pointerMove({ x: 220, y: 150 }, { button: 1 })
+    events.pointerUp({ x: 220, y: 150 }, { button: 1 })
 
     expect(container.querySelector('[data-polygon-draft-line]')).not.toBeNull()
     expect(store.persisted.zones).toHaveLength(0)
@@ -2626,8 +2585,8 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('polygon')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 60, clientY: 10, button: 0 }))
+    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
+    events.pointerMove({ x: 60, y: 10 }, { button: 0 })
 
     expect(container.querySelector('[data-polygon-draft-line]')).not.toBeNull()
     expect(zoneMeasurementTexts(container)).toEqual(['50 m'])
@@ -2644,10 +2603,10 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('polygon')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, button: 0 }))
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 60, clientY: 10, button: 0 }))
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 100, clientY: 10, button: 0 }))
-    ;(controller as any)._onKeyDown(new KeyboardEvent('keydown', { key: 'Enter' }))
+    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
+    events.pointerDown({ x: 60, y: 10 }, { button: 0 })
+    events.pointerDown({ x: 100, y: 10 }, { button: 0 })
+    events.keyDown({ key: 'Enter' })
 
     expect(store.persisted.zones).toHaveLength(0)
     expect(onSceneEditCommit).not.toHaveBeenCalled()
@@ -2664,8 +2623,8 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('rectangle')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 43, clientY: 87, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 148, clientY: 254, button: 0 }))
+    events.pointerDown({ x: 43, y: 87 }, { button: 0 })
+    events.pointerMove({ x: 148, y: 254 }, { button: 0 })
 
     const preview = Array.from(container.children)
       .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
@@ -2674,7 +2633,7 @@ describe('SceneInteractionController', () => {
     expect(preview?.style.width).toBe('100px')
     expect(preview?.style.height).toBe('180px')
 
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 148, clientY: 254, button: 0 }))
+    events.pointerUp({ x: 148, y: 254 }, { button: 0 })
 
     expect(store.persisted.zones).toHaveLength(1)
     expect(store.persisted.zones[0]).toMatchObject({
@@ -2706,8 +2665,8 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('rectangle')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 49, clientY: 85, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 142, clientY: 243, button: 0 }))
+    events.pointerDown({ x: 49, y: 85 }, { button: 0 })
+    events.pointerMove({ x: 142, y: 243 }, { button: 0 })
 
     const preview = Array.from(container.children)
       .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
@@ -2716,7 +2675,7 @@ describe('SceneInteractionController', () => {
     expect(preview?.style.width).toBe('96px')
     expect(preview?.style.height).toBe('156px')
 
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 142, clientY: 243, button: 0 }))
+    events.pointerUp({ x: 142, y: 243 }, { button: 0 })
 
     expect(store.persisted.zones[0]).toMatchObject({
       zoneType: 'rect',
@@ -2736,8 +2695,8 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('rectangle')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 20, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 70, clientY: 100, button: 0 }))
+    events.pointerDown({ x: 10, y: 20 }, { button: 0 })
+    events.pointerMove({ x: 70, y: 100 }, { button: 0 })
 
     expect(zoneMeasurementTexts(container)).toEqual([
       '60 m',
@@ -2773,8 +2732,8 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('select')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 20, button: 0 }))
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 20, clientY: 20, button: 0 }))
+    events.pointerDown({ x: 20, y: 20 }, { button: 0 })
+    events.pointerUp({ x: 20, y: 20 }, { button: 0 })
 
     expect(selectedObjectIds.value).toEqual(new Set(['zone-1']))
     expect(zoneMeasurementTexts(container)).toEqual([
@@ -2825,17 +2784,12 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('select')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 20, button: 0 }))
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 20, clientY: 20, button: 0 }))
+    events.pointerDown({ x: 20, y: 20 }, { button: 0 })
+    events.pointerUp({ x: 20, y: 20 }, { button: 0 })
     expect(zoneMeasurementTexts(container)).not.toEqual([])
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', {
-      clientX: 160,
-      clientY: 20,
-      button: 0,
-      shiftKey: true,
-    }))
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 160, clientY: 20, button: 0 }))
+    events.pointerDown({ x: 160, y: 20 }, { button: 0, shiftKey: true })
+    events.pointerUp({ x: 160, y: 20 }, { button: 0 })
 
     expect(selectedObjectIds.value).toEqual(new Set(['zone-1', 'zone-2']))
     expect(zoneMeasurementTexts(container)).toEqual([])
@@ -2874,8 +2828,8 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('select')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 20, button: 0 }))
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 20, clientY: 20, button: 0 }))
+    events.pointerDown({ x: 20, y: 20 }, { button: 0 })
+    events.pointerUp({ x: 20, y: 20 }, { button: 0 })
 
     expect(selectedObjectIds.value).toEqual(new Set(['group-1']))
     expect(zoneMeasurementTexts(container)).toEqual([])
@@ -2904,8 +2858,8 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('select')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 20, button: 0 }))
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 20, clientY: 20, button: 0 }))
+    events.pointerDown({ x: 20, y: 20 }, { button: 0 })
+    events.pointerUp({ x: 20, y: 20 }, { button: 0 })
 
     expect(zoneMeasurementTexts(container)).toEqual([
       '100 m',
@@ -2962,7 +2916,7 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-stamp')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 50, clientY: 70, button: 0 }))
+    events.pointerDown({ x: 50, y: 70 }, { button: 0 })
 
     expect(store.persisted.plants).toHaveLength(1)
     expect(store.persisted.plants[0]).toMatchObject({
@@ -3001,11 +2955,13 @@ describe('SceneInteractionController', () => {
         rectangleController = new SceneInteractionController(createInteractionDeps(container, store, camera) as any)
         rectangleController.setTool('rectangle')
 
-        ;(rectangleController as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 10, clientY: 20, button: 0 }))
-        ;(rectangleController as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 40, clientY: 60, button: 0 }))
-        ;(rectangleController as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 40, clientY: 60, button: 0 }))
+        events.pointerDown({ x: 10, y: 20 }, { button: 0 })
+        events.pointerMove({ x: 40, y: 60 }, { button: 0 })
+        events.pointerUp({ x: 40, y: 60 }, { button: 0 })
 
         expect(store.persisted.zones).toHaveLength(1)
+        rectangleController.dispose()
+        rectangleController = null
 
         selectPlantStampSource({
           canonical_name: 'Malus domestica',
@@ -3016,7 +2972,7 @@ describe('SceneInteractionController', () => {
         plantController = new SceneInteractionController(createInteractionDeps(container, store, camera) as any)
         plantController.setTool('plant-stamp')
 
-        ;(plantController as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 50, clientY: 70, button: 0 }))
+        events.pointerDown({ x: 50, y: 70 }, { button: 0 })
 
         expect(store.persisted.plants).toHaveLength(1)
       } finally {
@@ -3059,9 +3015,9 @@ describe('SceneInteractionController', () => {
     // Drag screen (232,248) → world (58,62). rawDelta = (7.75, 11.5).
     // candidate = (50+7.75, 50+11.5) = (57.75, 61.5) → snaps to (60,60).
     // delta = (60-50, 60-50) = (10,10). Final = (60,60).
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 201, clientY: 202, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 232, clientY: 248, button: 0 }))
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 232, clientY: 248, button: 0 }))
+    events.pointerDown({ x: 201, y: 202 }, { button: 0 })
+    events.pointerMove({ x: 232, y: 248 }, { button: 0 })
+    events.pointerUp({ x: 232, y: 248 }, { button: 0 })
 
     expect(store.persisted.plants[0]?.position).toEqual({ x: 60, y: 60 })
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-drag')
@@ -3083,7 +3039,7 @@ describe('SceneInteractionController', () => {
     controller.setTool('plant-stamp')
 
     // Screen (53,67) → world (13.25, 16.75) → snaps to (15, 15) at 5m interval
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 53, clientY: 67, button: 0 }))
+    events.pointerDown({ x: 53, y: 67 }, { button: 0 })
 
     expect(store.persisted.plants[0]?.position).toEqual({ x: 15, y: 15 })
     controller.dispose()
@@ -3114,16 +3070,16 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('object-stamp')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 54, clientY: 63, button: 0 }))
+    events.pointerDown({ x: 54, y: 63 }, { button: 0 })
     expect(store.persisted.plants).toHaveLength(1)
     expect(onSceneEditCommit).not.toHaveBeenCalled()
 
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 100, clientY: 120, button: 0 }))
+    events.pointerMove({ x: 100, y: 120 }, { button: 0 })
     const preview = Array.from(container.children)
       .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
     expect(preview?.style.display).toBe('block')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 100, clientY: 120, button: 0 }))
+    events.pointerDown({ x: 100, y: 120 }, { button: 0 })
 
     expect(store.persisted.plants).toHaveLength(2)
     const clone = store.persisted.plants[1]!
@@ -3174,9 +3130,9 @@ describe('SceneInteractionController', () => {
     controller.setTool('object-stamp')
 
     // Screen (44, 44) -> world (11, 11), so the sampled anchor is +1,+1 from the plant position.
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 44, clientY: 44, button: 0 }))
+    events.pointerDown({ x: 44, y: 44 }, { button: 0 })
     // Screen (93, 107) -> world (23.25, 26.75), snapped to (25, 25) at this zoom level.
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 93, clientY: 107, button: 0 }))
+    events.pointerDown({ x: 93, y: 107 }, { button: 0 })
 
     expect(store.persisted.plants[1]?.position).toEqual({ x: 24, y: 24 })
     controller.dispose()
@@ -3207,9 +3163,9 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('object-stamp')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
-    ;(controller as any)._onKeyDown(new KeyboardEvent('keydown', { key: 'Escape' }))
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 90, clientY: 90, button: 0 }))
+    events.pointerDown({ x: 40, y: 40 }, { button: 0 })
+    events.keyDown({ key: 'Escape' })
+    events.pointerDown({ x: 90, y: 90 }, { button: 0 })
 
     expect(setTool).toHaveBeenCalledWith('select')
     expect(store.persisted.plants).toHaveLength(1)
@@ -3240,10 +3196,10 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('object-stamp')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
+    events.pointerDown({ x: 40, y: 40 }, { button: 0 })
     controller.setTool('select')
     controller.setTool('object-stamp')
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 90, clientY: 90, button: 0 }))
+    events.pointerDown({ x: 90, y: 90 }, { button: 0 })
 
     expect(store.persisted.plants).toHaveLength(1)
     controller.dispose()
@@ -3273,8 +3229,8 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('object-stamp')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 90, clientY: 90, button: 0 }))
+    events.pointerDown({ x: 40, y: 40 }, { button: 0 })
+    events.pointerMove({ x: 90, y: 90 }, { button: 0 })
     const preview = Array.from(container.children)
       .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
     expect(preview?.style.display).toBe('block')
@@ -3309,20 +3265,20 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('object-stamp')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 90, clientY: 90, button: 0 }))
+    events.pointerDown({ x: 40, y: 40 }, { button: 0 })
+    events.pointerDown({ x: 90, y: 90 }, { button: 0 })
     expect(store.persisted.plants).toHaveLength(1)
 
     store.updatePersisted((draft) => {
       const plant = draft.plants.find((entry) => entry.id === 'plant-1')
       if (plant) plant.locked = false
     })
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
+    events.pointerDown({ x: 40, y: 40 }, { button: 0 })
     store.updatePersisted((draft) => {
       const plantsLayer = draft.layers.find((layer) => layer.name === 'plants')
       if (plantsLayer) plantsLayer.visible = false
     })
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 90, clientY: 90, button: 0 }))
+    events.pointerDown({ x: 90, y: 90 }, { button: 0 })
 
     expect(store.persisted.plants).toHaveLength(1)
     expect(onSceneEditCommit).not.toHaveBeenCalled()
@@ -3368,16 +3324,16 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('object-stamp')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 25, clientY: 30, button: 0 }))
+    events.pointerDown({ x: 25, y: 30 }, { button: 0 })
     expect(store.persisted.zones).toHaveLength(2)
     expect(onSceneEditCommit).not.toHaveBeenCalled()
 
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 120, clientY: 150, button: 0 }))
+    events.pointerMove({ x: 120, y: 150 }, { button: 0 })
     const preview = Array.from(container.children)
       .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
     expect(preview?.style.display).toBe('block')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 120, clientY: 150, button: 0 }))
+    events.pointerDown({ x: 120, y: 150 }, { button: 0 })
 
     expect(store.persisted.zones).toHaveLength(3)
     const clone = store.persisted.zones[2]!
@@ -3418,16 +3374,16 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('object-stamp')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 30, clientY: 40, button: 0 }))
+    events.pointerDown({ x: 30, y: 40 }, { button: 0 })
     expect(store.persisted.annotations).toHaveLength(1)
     expect(onSceneEditCommit).not.toHaveBeenCalled()
 
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 100, clientY: 110, button: 0 }))
+    events.pointerMove({ x: 100, y: 110 }, { button: 0 })
     const preview = Array.from(container.children)
       .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
     expect(preview?.style.display).toBe('block')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 100, clientY: 110, button: 0 }))
+    events.pointerDown({ x: 100, y: 110 }, { button: 0 })
 
     expect(store.persisted.annotations).toHaveLength(2)
     const clone = store.persisted.annotations[1]!
@@ -3466,9 +3422,9 @@ describe('SceneInteractionController', () => {
     controller.setTool('object-stamp')
 
     // Screen (44, 44) -> world (11, 11), so the sampled anchor is +1,+1 from the annotation position.
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 44, clientY: 44, button: 0 }))
+    events.pointerDown({ x: 44, y: 44 }, { button: 0 })
     // Screen (93, 107) -> world (23.25, 26.75), snapped to (25, 25) at this zoom level.
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 93, clientY: 107, button: 0 }))
+    events.pointerDown({ x: 93, y: 107 }, { button: 0 })
 
     expect(store.persisted.annotations[1]?.position).toEqual({ x: 24, y: 24 })
     controller.dispose()
@@ -3494,8 +3450,8 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('object-stamp')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 50, clientY: 60, button: 0 }))
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 100, clientY: 100, button: 0 }))
+    events.pointerDown({ x: 50, y: 60 }, { button: 0 })
+    events.pointerDown({ x: 100, y: 100 }, { button: 0 })
 
     expect(store.persisted.zones).toHaveLength(2)
     expect(store.persisted.zones[1]).toMatchObject({
@@ -3547,8 +3503,8 @@ describe('SceneInteractionController', () => {
         zone.name === 'Kitchen bed' ? { ...zone, locked: true } : zone,
       )
     })
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 20, button: 0 }))
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 120, clientY: 120, button: 0 }))
+    events.pointerDown({ x: 20, y: 20 }, { button: 0 })
+    events.pointerDown({ x: 120, y: 120 }, { button: 0 })
     expect(store.persisted.zones).toHaveLength(1)
 
     store.updatePersisted((draft) => {
@@ -3556,12 +3512,12 @@ describe('SceneInteractionController', () => {
         zone.name === 'Kitchen bed' ? { ...zone, locked: false } : zone,
       )
     })
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 20, clientY: 20, button: 0 }))
+    events.pointerDown({ x: 20, y: 20 }, { button: 0 })
     store.updatePersisted((draft) => {
       const zonesLayer = draft.layers.find((layer) => layer.name === 'zones')
       if (zonesLayer) zonesLayer.visible = false
     })
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 120, clientY: 120, button: 0 }))
+    events.pointerDown({ x: 120, y: 120 }, { button: 0 })
     expect(store.persisted.zones).toHaveLength(1)
 
     controller.setTool('select')
@@ -3576,8 +3532,8 @@ describe('SceneInteractionController', () => {
         annotation.id === 'annotation-1' ? { ...annotation, locked: true } : annotation,
       )
     })
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 104, clientY: 34, button: 0 }))
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 150, clientY: 90, button: 0 }))
+    events.pointerDown({ x: 104, y: 34 }, { button: 0 })
+    events.pointerDown({ x: 150, y: 90 }, { button: 0 })
     expect(store.persisted.annotations).toHaveLength(1)
 
     store.updatePersisted((draft) => {
@@ -3585,12 +3541,12 @@ describe('SceneInteractionController', () => {
         annotation.id === 'annotation-1' ? { ...annotation, locked: false } : annotation,
       )
     })
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 104, clientY: 34, button: 0 }))
+    events.pointerDown({ x: 104, y: 34 }, { button: 0 })
     store.updatePersisted((draft) => {
       const annotationsLayer = draft.layers.find((layer) => layer.name === 'annotations')
       if (annotationsLayer) annotationsLayer.locked = true
     })
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 150, clientY: 90, button: 0 }))
+    events.pointerDown({ x: 150, y: 90 }, { button: 0 })
 
     expect(store.persisted.annotations).toHaveLength(1)
     expect(onSceneEditCommit).not.toHaveBeenCalled()
@@ -3656,13 +3612,13 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('object-stamp')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
-    ;(controller as any)._onPointerMove(new MouseEvent('pointermove', { clientX: 100, clientY: 120, button: 0 }))
+    events.pointerDown({ x: 40, y: 40 }, { button: 0 })
+    events.pointerMove({ x: 100, y: 120 }, { button: 0 })
     const preview = Array.from(container.children)
       .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
     expect(preview?.style.display).toBe('block')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 100, clientY: 120, button: 0 }))
+    events.pointerDown({ x: 100, y: 120 }, { button: 0 })
 
     expect(store.persisted.groups).toHaveLength(2)
     expect(store.persisted.plants).toHaveLength(2)
@@ -3753,8 +3709,8 @@ describe('SceneInteractionController', () => {
         group.id === 'group-1' ? { ...group, locked: true } : group,
       )
     })
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 120, clientY: 120, button: 0 }))
+    events.pointerDown({ x: 40, y: 40 }, { button: 0 })
+    events.pointerDown({ x: 120, y: 120 }, { button: 0 })
     expect(store.persisted.groups).toHaveLength(1)
     expect(store.persisted.plants).toHaveLength(1)
 
@@ -3763,12 +3719,12 @@ describe('SceneInteractionController', () => {
         group.id === 'group-1' ? { ...group, locked: false } : group,
       )
     })
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
+    events.pointerDown({ x: 40, y: 40 }, { button: 0 })
     store.updatePersisted((draft) => {
       const plantsLayer = draft.layers.find((layer) => layer.name === 'plants')
       if (plantsLayer) plantsLayer.locked = true
     })
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 120, clientY: 120, button: 0 }))
+    events.pointerDown({ x: 120, y: 120 }, { button: 0 })
 
     expect(store.persisted.groups).toHaveLength(1)
     expect(store.persisted.plants).toHaveLength(1)
@@ -3816,8 +3772,8 @@ describe('SceneInteractionController', () => {
         plant.id === 'plant-1' ? { ...plant, locked: true } : plant,
       )
     })
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 120, clientY: 120, button: 0 }))
+    events.pointerDown({ x: 40, y: 40 }, { button: 0 })
+    events.pointerDown({ x: 120, y: 120 }, { button: 0 })
     expect(store.persisted.groups).toHaveLength(1)
     expect(store.persisted.plants).toHaveLength(1)
 
@@ -3826,13 +3782,13 @@ describe('SceneInteractionController', () => {
         plant.id === 'plant-1' ? { ...plant, locked: false } : plant,
       )
     })
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, button: 0 }))
+    events.pointerDown({ x: 40, y: 40 }, { button: 0 })
     store.updatePersisted((draft) => {
       draft.plants = draft.plants.map((plant) =>
         plant.id === 'plant-1' ? { ...plant, locked: true } : plant,
       )
     })
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 120, clientY: 120, button: 0 }))
+    events.pointerDown({ x: 120, y: 120 }, { button: 0 })
 
     expect(store.persisted.groups).toHaveLength(1)
     expect(store.persisted.plants).toHaveLength(1)
@@ -3930,8 +3886,8 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('select')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 24, clientY: 24, button: 0 }))
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 24, clientY: 24, button: 0 }))
+    events.pointerDown({ x: 24, y: 24 }, { button: 0 })
+    events.pointerUp({ x: 24, y: 24 }, { button: 0 })
 
     expect(selectedObjectIds.value).toEqual(new Set(['annotation-1']))
     expect(deps.setSelection).toHaveBeenCalledWith(new Set(['annotation-1']))
@@ -3944,8 +3900,8 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('select')
 
-    ;(controller as any)._onPointerDown(new MouseEvent('pointerdown', { clientX: 380, clientY: 280, button: 0 }))
-    ;(controller as any)._onPointerUp(new MouseEvent('pointerup', { clientX: 380, clientY: 280, button: 0 }))
+    events.pointerDown({ x: 380, y: 280 }, { button: 0 })
+    events.pointerUp({ x: 380, y: 280 }, { button: 0 })
 
     expect(selectedObjectIds.value.size).toBe(0)
     expect(deps.clearSelection).toHaveBeenCalledTimes(1)
@@ -3955,7 +3911,6 @@ describe('SceneInteractionController', () => {
   it('temporarily pans with the space key while select is active', () => {
     const render = vi.fn()
     const deps = createInteractionDeps(container, store, camera, { render })
-    const events = createSceneInteractionEventHarness(container)
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('select')
 
@@ -3969,7 +3924,6 @@ describe('SceneInteractionController', () => {
     expect(camera.viewport.y).toBe(20)
     expect(render).toHaveBeenCalled()
     controller.dispose()
-    events.dispose()
   })
 
   it('clears hover when disposed', () => {

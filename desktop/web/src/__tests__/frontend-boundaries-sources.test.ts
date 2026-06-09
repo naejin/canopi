@@ -212,7 +212,8 @@ describe('frontend boundary sources', () => {
     const mapSurfaceSnapshotSource = readSource('../app/canvas-map-surface/snapshot.ts')
 
     expect(guidesSource).not.toContain('scene-metadata-state')
-    expect(mapSurfaceSnapshotSource).toContain('../document-session/store')
+    expect(mapSurfaceSnapshotSource).toContain('readSavedLocationPresentation')
+    expect(mapSurfaceSnapshotSource).not.toContain('../document-session/store')
     expect(mapSurfaceSnapshotSource).not.toContain('scene-metadata-state')
   })
 
