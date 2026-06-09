@@ -13,10 +13,7 @@ pub fn get_species_relationships(
     canonical_name: String,
 ) -> Result<Vec<Relationship>, String> {
     let conn = db::require_plant_db(plant_db)?;
-    let species_id = crate::db::plant_db::resolve_species_id(&conn, &canonical_name)?
-        .ok_or_else(|| format!("Species '{canonical_name}' not found"))?;
-
-    crate::db::plant_db::get_relationships(&conn, &species_id)
+    SpeciesCatalogRead::new(&conn).relationships_for_canonical_name(&canonical_name)
 }
 
 pub fn get_common_names(
@@ -34,15 +31,7 @@ pub fn get_species_batch(
     locale: String,
 ) -> Result<Vec<SpeciesDetail>, String> {
     let conn = db::require_plant_db(plant_db)?;
-    let mut results = Vec::with_capacity(canonical_names.len());
-    for name in &canonical_names {
-        if crate::db::plant_db::resolve_species_id(&conn, name)?.is_none() {
-            tracing::warn!("get_species_batch: skipping missing species '{name}'");
-            continue;
-        }
-        results.push(crate::db::plant_db::get_detail(&conn, name, &locale)?);
-    }
-    Ok(results)
+    SpeciesCatalogRead::new(&conn).details_for_canonical_names(&canonical_names, &locale)
 }
 
 pub fn get_flower_color_batch(
@@ -50,12 +39,12 @@ pub fn get_flower_color_batch(
     canonical_names: Vec<String>,
 ) -> Result<Vec<FlowerColorResolution>, String> {
     let conn = db::require_plant_db(plant_db)?;
-    crate::db::plant_db::get_flower_color_batch(&conn, &canonical_names)
+    SpeciesCatalogRead::new(&conn).flower_colors_for_canonical_names(&canonical_names)
 }
 
 pub fn get_filter_options(plant_db: &PlantDb) -> Result<FilterOptions, String> {
     let conn = db::require_plant_db(plant_db)?;
-    crate::db::plant_db::get_filter_options(&conn)
+    SpeciesCatalogRead::new(&conn).filter_options()
 }
 
 pub fn get_dynamic_filter_options(
@@ -64,7 +53,7 @@ pub fn get_dynamic_filter_options(
     locale: String,
 ) -> Result<Vec<DynamicFilterOptions>, String> {
     let conn = db::require_plant_db(plant_db)?;
-    crate::db::plant_db::get_dynamic_filter_options(&conn, &fields, &locale)
+    SpeciesCatalogRead::new(&conn).dynamic_filter_options(&fields, &locale)
 }
 
 pub fn get_species_images(
@@ -72,7 +61,7 @@ pub fn get_species_images(
     canonical_name: String,
 ) -> Result<Vec<SpeciesImage>, String> {
     let conn = db::require_plant_db(plant_db)?;
-    crate::db::plant_db::get_species_images(&conn, &canonical_name)
+    SpeciesCatalogRead::new(&conn).images_for_canonical_name(&canonical_name)
 }
 
 pub fn get_species_external_links(
@@ -80,7 +69,7 @@ pub fn get_species_external_links(
     canonical_name: String,
 ) -> Result<Vec<SpeciesExternalLink>, String> {
     let conn = db::require_plant_db(plant_db)?;
-    crate::db::plant_db::get_species_external_links(&conn, &canonical_name)
+    SpeciesCatalogRead::new(&conn).external_links_for_canonical_name(&canonical_name)
 }
 
 pub fn get_locale_common_names(
@@ -89,7 +78,7 @@ pub fn get_locale_common_names(
     locale: String,
 ) -> Result<Vec<CommonNameEntry>, String> {
     let conn = db::require_plant_db(plant_db)?;
-    crate::db::plant_db::get_locale_common_names(&conn, &canonical_name, &locale)
+    SpeciesCatalogRead::new(&conn).locale_common_names_for_canonical_name(&canonical_name, &locale)
 }
 
 #[cfg(test)]

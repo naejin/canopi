@@ -3,6 +3,7 @@ use common_types::species::{
 };
 
 use crate::db::{self, PlantDb, UserDb};
+use crate::services::species_catalog_read::SpeciesCatalogRead;
 
 pub fn search_species(
     plant_db: &PlantDb,
@@ -11,7 +12,7 @@ pub fn search_species(
 ) -> Result<PaginatedResult<SpeciesListItem>, String> {
     let mut result = {
         let conn = db::require_plant_db(plant_db)?;
-        crate::db::plant_db::search(&conn, request)?
+        SpeciesCatalogRead::new(&conn).search(request)?
     };
 
     {
@@ -32,7 +33,7 @@ pub fn get_species_detail(
 ) -> Result<SpeciesDetail, String> {
     let detail = {
         let conn = db::require_plant_db(plant_db)?;
-        crate::db::plant_db::get_detail(&conn, &canonical_name, &locale)?
+        SpeciesCatalogRead::new(&conn).detail_for_canonical_name(&canonical_name, &locale)?
     };
 
     {
@@ -70,7 +71,12 @@ pub fn get_favorites(
     }
 
     let conn = db::require_plant_db(plant_db)?;
-    crate::db::plant_db::hydrate_species_list_items(&conn, &names, &locale, true)
+    let mut items =
+        SpeciesCatalogRead::new(&conn).list_items_for_canonical_names(&names, &locale)?;
+    for item in &mut items {
+        item.is_favorite = true;
+    }
+    Ok(items)
 }
 
 pub fn get_recently_viewed(
@@ -91,7 +97,7 @@ pub fn get_recently_viewed(
 
     let mut items = {
         let plant_conn = db::require_plant_db(plant_db)?;
-        crate::db::plant_db::hydrate_species_list_items(&plant_conn, &names, &locale, false)?
+        SpeciesCatalogRead::new(&plant_conn).list_items_for_canonical_names(&names, &locale)?
     };
 
     {
