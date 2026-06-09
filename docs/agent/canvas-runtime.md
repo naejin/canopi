@@ -13,7 +13,8 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - Sibling read-only surfaces consume query surfaces for scene snapshots, viewport queries, selection reads, placed plants, localized names, and presentation context.
 - Publish live canvas sessions as explicit `CanvasRuntimeSurfaces` bundles. Do not publish a raw `SceneCanvasRuntime`, and do not cast a role-specific fake into the session signal; tests should use `createTestCanvasRuntimeSurfaces()` with the role surface they need.
 - Scene freshness for app callers is exposed through `CanvasQuerySurface.revision`. App modules must not import `sceneEntityRevision` or `plantNamesRevision` from `canvas/runtime-mirror-state.ts`; those mirrors are runtime-internal compatibility signals.
-- `canvas/runtime/runtime.ts` owns the app-facing Canvas Runtime Surface interfaces. `canvas/runtime/surfaces.ts` adapts the live `SceneCanvasRuntime` into those interfaces.
+- `canvas/runtime/runtime.ts` owns the app-facing Canvas Runtime Surface interfaces. `canvas/runtime/surfaces.ts` only composes the live runtime surfaces; command, query, and document surface behavior belongs behind the role modules in `canvas/runtime/*-surface.ts`.
+- `SceneCanvasRuntime` may still wire the concrete scene runtime during migration, but new surface behavior should be added to the relevant role module before adding more broad runtime pass-through code.
 - `app/canvas-runtime/host.ts` owns live runtime creation and publication of `CanvasRuntimeSurfaces` into the Design Session.
 - `canvas/runtime/app-adapter.ts` owns the runtime-facing `CanvasRuntimeAppAdapter` contract and detached fallback behavior.
 - `app/canvas-runtime/app-adapter.ts` owns production wiring from the adapter contract to app-owned document/session/settings modules.

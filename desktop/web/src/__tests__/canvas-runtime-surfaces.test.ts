@@ -1,9 +1,11 @@
+import { readFileSync } from 'node:fs'
 import { signal } from '@preact/signals'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   currentCanvasCommandSurface,
   currentCanvasDocumentSurface,
   currentCanvasQuerySurface,
+  getCurrentCanvasTool,
   setCanvasRuntimeSurfaces,
   setCurrentCanvasSession,
 } from '../canvas/session'
@@ -112,6 +114,18 @@ describe('canvas runtime surfaces', () => {
     setCurrentCanvasSession(null)
   })
 
+  it('composes internal role modules behind the public runtime surface factory', () => {
+    const surfacesPath = new URL('../canvas/runtime/surfaces.ts', import.meta.url).pathname
+    const surfacesSource = readFileSync(`.${surfacesPath}`, 'utf8')
+
+    expect(surfacesSource).toContain('createSceneCanvasCommandSurface')
+    expect(surfacesSource).toContain('createSceneCanvasQuerySurface')
+    expect(surfacesSource).toContain('createSceneCanvasDocumentSurface')
+    expect(surfacesSource).not.toContain('class SceneCanvasCommandAdapter')
+    expect(surfacesSource).not.toContain('class SceneCanvasQueryAdapter')
+    expect(surfacesSource).not.toContain('class SceneCanvasDocumentAdapter')
+  })
+
   it('publishes explicit facades instead of the mounted runtime', () => {
     const runtime = new SceneCanvasRuntime()
     const surfaces = createCanvasRuntimeSurfaces(runtime)
@@ -125,6 +139,23 @@ describe('canvas runtime surfaces', () => {
       expect(currentCanvasCommandSurface.value).not.toBe(runtime)
       expect(currentCanvasQuerySurface.value).not.toBe(runtime)
       expect(currentCanvasDocumentSurface.value).not.toBe(runtime)
+    } finally {
+      runtime.destroy()
+    }
+  })
+
+  it('routes representative command, query, and document behavior through role surfaces', () => {
+    const runtime = new SceneCanvasRuntime()
+    const surfaces = createCanvasRuntimeSurfaces(runtime)
+    const file = serializeScenePersistedState(createDefaultScenePersistedState())
+
+    try {
+      surfaces.commands.tools.setTool('hand')
+      surfaces.documents.loadDocument(file)
+
+      expect(getCurrentCanvasTool()).toBe('hand')
+      expect(surfaces.documents.hasLoadedDocument()).toBe(true)
+      expect(surfaces.queries.getSceneSnapshot()).toEqual(createDefaultScenePersistedState())
     } finally {
       runtime.destroy()
     }
