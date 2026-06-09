@@ -3,8 +3,6 @@ import {
   createDetachedCanvasRuntimeAppAdapter,
   type CanvasRuntimeAppAdapter,
 } from './app-adapter'
-import { guides } from '../scene-metadata-state'
-import { plantNamesRevision, sceneEntityRevision } from '../runtime-mirror-state'
 import type { ColorByAttribute, PlantSizeMode } from '../plant-display-state'
 import type { CanopiFile, PlacedPlant } from '../../types/design'
 import type { SelectedPlantColorContext } from '../plant-color-context'
@@ -572,12 +570,10 @@ export class SceneCanvasRuntime {
   }
 
   private _incrementSceneRevision(): void {
-    sceneEntityRevision.value += 1
     this._sceneRevision.value += 1
   }
 
   private _incrementPlantNamesRevision(): void {
-    plantNamesRevision.value += 1
     this._plantNamesQueryRevision.value += 1
   }
 
@@ -595,7 +591,7 @@ export class SceneCanvasRuntime {
       height: Math.max(1, container.clientHeight),
       rulersVisible: chromeSettings.rulersVisible,
       gridVisible: chromeSettings.gridVisible,
-      guides: guides.value,
+      guides: this._sceneStore.persisted.guides,
     })
   }
 

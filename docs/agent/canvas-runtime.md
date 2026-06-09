@@ -36,8 +36,10 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - Design Object lock state lives on persisted scene entities in `SceneStore`. Production code must read and mutate object locks through scene queries/edits, never through standalone mirror signals.
 - A group is effectively locked for mutating canvas interactions when the group itself is locked or any existing member Design Object is locked. Missing member IDs do not lock a group.
 - Guide creation is a scene edit owned by the runtime. The `guides` signal is a chrome projection, not document authority.
+- Runtime chrome rendering and interaction snapping read guides from `SceneStore.persisted.guides`; do not read the `guides` signal in production runtime behavior.
 - Canvas signals such as selected object IDs, size mode, color mode, layer state, and guides are UI mirrors, not runtime authority.
-- Canvas Query Surface revision values are the app-facing freshness seam for scene entities, localized plant names, and viewport updates. If a caller needs to recompute from scene reads, subscribe to that surface instead of importing runtime mirror signals.
+- Canvas Query Surface revision values are the app-facing freshness seam for scene entities, localized plant names, and viewport updates. If a caller needs to recompute from scene reads, subscribe to that surface; production runtime code must not import runtime mirror revision signals.
+- Canvas Map Surface reads `north_bearing_deg` through the Design Session metadata/read seam, not `scene-metadata-state`.
 - Basemap, contour, and hillshade display settings remain app settings projections; do not route those map-surface settings through Scene Edit unless the document schema intentionally makes them canvas-owned.
 - Shared runtime settings reads, writes, and subscriptions for locale, theme invalidation, grid/rulers/snap, Plant Spacing interval, and layer projections cross `CanvasRuntimeAppAdapter.settings`. Runtime core must not import `app/settings/*` or `app/canvas-settings/*` for those concerns.
 - No circular imports between scene store/runtime and document store. Pass document readers or values through seams when needed.

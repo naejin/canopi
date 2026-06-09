@@ -2685,12 +2685,14 @@ describe('SceneInteractionController', () => {
   it('previews and commits rectangle zones from snap-adjusted guide points', () => {
     camera.setViewport({ x: 0, y: 0, scale: 4 })
     snapToGuidesEnabled.value = true
-    guides.value = [
-      { id: 'guide-v-start', axis: 'v', position: 12 },
-      { id: 'guide-h-start', axis: 'h', position: 22 },
-      { id: 'guide-v-end', axis: 'v', position: 36 },
-      { id: 'guide-h-end', axis: 'h', position: 61 },
-    ]
+    store.updatePersisted((draft) => {
+      draft.guides = [
+        { id: 'guide-v-start', axis: 'v', position: 12 },
+        { id: 'guide-h-start', axis: 'h', position: 22 },
+        { id: 'guide-v-end', axis: 'v', position: 36 },
+        { id: 'guide-h-end', axis: 'h', position: 61 },
+      ]
+    })
 
     const deps = createInteractionDeps(container, store, camera)
     const controller = new SceneInteractionController(deps as any)

@@ -8,7 +8,6 @@ import { basemapStyle, theme } from '../app/settings/state'
 import { setCurrentCanvasSession } from '../canvas/session'
 import type { CanvasQuerySurface } from '../canvas/runtime/runtime'
 import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
-import { northBearingDeg } from '../canvas/scene-metadata-state'
 import { MapLibreCanvasSurface } from '../components/canvas/MapLibreCanvasSurface'
 import {
   IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
@@ -89,7 +88,6 @@ describe('MapLibreCanvasSurface adapter', () => {
       updated_at: '2026-04-12T00:00:00.000Z',
       extra: {},
     }
-    northBearingDeg.value = 12
     basemapStyle.value = 'street'
     theme.value = 'light'
     layerVisibility.value = { base: true, contours: false }

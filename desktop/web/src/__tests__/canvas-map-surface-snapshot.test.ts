@@ -17,7 +17,6 @@ import {
 } from '../app/panel-targets/state'
 import { basemapStyle, theme } from '../app/settings/state'
 import { setCurrentCanvasSession } from '../canvas/session'
-import { northBearingDeg } from '../canvas/scene-metadata-state'
 import { currentDesign } from './support/design-session-state'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 import { createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
@@ -44,7 +43,6 @@ describe('Canvas Map Surface snapshot seam', () => {
       updated_at: '',
       extra: {},
     }
-    northBearingDeg.value = 18
     basemapStyle.value = 'satellite'
     theme.value = 'dark'
     layerVisibility.value = { base: false, contours: true, plants: true }
@@ -59,7 +57,6 @@ describe('Canvas Map Surface snapshot seam', () => {
 
   afterEach(() => {
     currentDesign.value = null
-    northBearingDeg.value = 0
     basemapStyle.value = 'street'
     theme.value = 'light'
     layerVisibility.value = { base: true, contours: false }

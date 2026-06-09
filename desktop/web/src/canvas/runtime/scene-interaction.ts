@@ -1,7 +1,6 @@
 import { getCanvasTool } from '../session-state'
 import { gridInterval, snapToGrid } from '../grid'
 import { snapToGuides } from '../guides'
-import { guides } from '../scene-metadata-state'
 import type {
   SceneStore,
   ScenePoint,
@@ -403,8 +402,9 @@ export class SceneInteractionController {
       next = snapToGrid(next.x, next.y, gridInterval(this._deps.camera.viewport.scale).interval)
     }
 
-    if (this._deps.readSnapToGuidesEnabled() && guides.value.length > 0) {
-      next = snapToGuides(next.x, next.y, this._deps.camera.viewport.scale)
+    const guides = this._deps.getSceneStore().persisted.guides
+    if (this._deps.readSnapToGuidesEnabled() && guides.length > 0) {
+      next = snapToGuides(next.x, next.y, this._deps.camera.viewport.scale, guides)
     }
 
     return next

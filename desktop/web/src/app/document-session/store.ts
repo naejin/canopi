@@ -14,6 +14,10 @@ export interface DesignSessionIdentity {
   readonly name: string
 }
 
+export interface DesignSessionMetadataSnapshot {
+  readonly northBearingDeg: number | null
+}
+
 export interface DocumentMutationOptions {
   readonly markDirty?: boolean
 }
@@ -27,6 +31,7 @@ export interface DesignSessionStore {
   readonly autosaveFailed: ReadonlySignal<boolean>
 
   readIdentity(): DesignSessionIdentity
+  readMetadata(): DesignSessionMetadataSnapshot
   readCurrentDesign(): CanopiFile | null
   readDesignPath(): string | null
   readDesignName(): string
@@ -88,6 +93,12 @@ function createDesignSessionStore(signals: DesignSessionStoreSignals): DesignSes
         file: signals.currentDesign.value,
         path: signals.designPath.value,
         name: signals.designName.value,
+      }
+    },
+
+    readMetadata() {
+      return {
+        northBearingDeg: signals.currentDesign.value?.north_bearing_deg ?? null,
       }
     },
 
@@ -269,6 +280,7 @@ export const canvasDirty = designSessionStore.canvasDirty
 export const autosaveFailed = designSessionStore.autosaveFailed
 
 export const readCurrentDesign = () => designSessionStore.readCurrentDesign()
+export const readDesignSessionMetadata = () => designSessionStore.readMetadata()
 export const readDesignPath = () => designSessionStore.readDesignPath()
 export const readDesignName = () => designSessionStore.readDesignName()
 export const replaceCurrentDesignState = (

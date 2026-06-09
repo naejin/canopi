@@ -1,6 +1,3 @@
-import { snapToGuidesEnabled } from '../app/canvas-settings/signals'
-import { guides } from './scene-metadata-state'
-
 // ---------------------------------------------------------------------------
 // Guide lines — dragged from rulers, persisted in .canopi `extra.guides`
 // ---------------------------------------------------------------------------
@@ -26,14 +23,13 @@ export function snapToGuides(
   x: number,
   y: number,
   stageScale: number,
+  guides: readonly Guide[],
 ): { x: number; y: number } {
-  if (!snapToGuidesEnabled.value) return { x, y }
-
   const threshold = SNAP_THRESHOLD_PX / stageScale
   let snappedX = x
   let snappedY = y
 
-  for (const g of guides.value) {
+  for (const g of guides) {
     if (g.axis === 'v') {
       if (Math.abs(x - g.position) < threshold) {
         snappedX = g.position

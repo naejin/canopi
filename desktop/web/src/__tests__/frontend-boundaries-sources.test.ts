@@ -195,6 +195,27 @@ describe('frontend boundary sources', () => {
     expect(documentSource).not.toContain('applySignalBackedSceneState')
   })
 
+  it('keeps production canvas runtime reads off canvas mirror signals', () => {
+    const runtimeSources = sourceFilesUnder('../canvas/runtime')
+      .filter(isTypescriptSource)
+      .filter((path) => path !== '../canvas/runtime/scene-runtime/scene-sync.ts')
+    const forbiddenRuntimeImports = [
+      /scene-metadata-state$/,
+      /runtime-mirror-state$/,
+    ]
+
+    for (const sourcePath of runtimeSources) {
+      expectNoImportsMatching(sourcePath, forbiddenRuntimeImports)
+    }
+
+    const guidesSource = readSource('../canvas/guides.ts')
+    const mapSurfaceSnapshotSource = readSource('../app/canvas-map-surface/snapshot.ts')
+
+    expect(guidesSource).not.toContain('scene-metadata-state')
+    expect(mapSurfaceSnapshotSource).toContain('../document-session/store')
+    expect(mapSurfaceSnapshotSource).not.toContain('scene-metadata-state')
+  })
+
   it('keeps focused canvas callers on role-specific command surfaces', () => {
     const focusedCanvasCommandConsumers = [
       '../app/canvas-layer-presentation/presentation.ts',
