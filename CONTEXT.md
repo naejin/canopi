@@ -12,6 +12,10 @@ _Avoid_: Document, file, project
 The active runtime context for a Design in the app. A design session includes the current Design state, dirty baselines, save/autosave behavior, queued Design loads, lifecycle workflows, and an optional attached canvas runtime.
 _Avoid_: Document session, file session, canvas session
 
+**Design Edit**:
+A non-canvas change to Design-owned state, including Location, Budget Items, Timeline Actions, Consortiums, description, and extra fields. Design Edit owns no-op detection, preview/commit/abort transaction behavior, and non-canvas dirty-state marking behind the Design Session seam. It does not own canvas scene state, save/load lifecycle, or UI draft state.
+_Avoid_: Document mutation, panel action, direct currentDesign write
+
 **App Command Graph**:
 The app runtime seam for user command identity, labels, availability, shortcuts, dispatch, and chrome projections such as menus, palettes, toolbars, and panel navigation. The app command graph coordinates command access to Design Session, canvas, settings, and shell state without owning those domain states.
 _Avoid_: Menu registry, shortcut map, toolbar state
@@ -248,6 +252,9 @@ Use **Design** for the user's agroecological plan. Reserve "document" and "file"
 **Design vs Design Session**:
 A **Design** is the agroecological plan. A **Design Session** is the active app runtime context around that design, including lifecycle and persistence behavior.
 
+**Design Session vs Design Edit**:
+A **Design Session** owns lifecycle, persistence, dirty baselines, and active Design identity. A **Design Edit** changes non-canvas Design state inside that session and owns no-op detection, preview transactions, and non-canvas dirty marking for those changes.
+
 **Problem Report vs Diagnostic Bundle**:
 A **Problem Report** is the user's account of what went wrong. A **Diagnostic Bundle** is optional supporting evidence the user can attach or share.
 
@@ -308,8 +315,8 @@ A **Target** names what a planning entry refers to. A selection is a temporary u
 **Target vs Target Presentation**:
 A **Target** is the stored or derived subject a planning entry refers to. **Target Presentation** is runtime hover/selection state over targets and must not become the authority for planning entries or canvas selection.
 
-**Scene Edit vs Design Mutation**:
-A **Scene Edit** changes canvas-owned design state and should be handled by the canvas runtime. A Design mutation changes non-canvas design state such as budget items, timeline actions, consortiums, location, description, or extra fields.
+**Scene Edit vs Design Edit**:
+A **Scene Edit** changes canvas-owned Design state and should be handled by the canvas runtime. A **Design Edit** changes non-canvas Design state such as Budget Items, Timeline Actions, Consortiums, Location, description, or extra fields.
 
 **Scene Edit vs Scene Interaction Frame**:
 A **Scene Edit** is the canvas-owned design change. The **Scene Interaction Frame** is the runtime gesture seam that may produce Scene Edits while also owning non-persisted interaction behavior such as panning, hover presentation, and cleanup.

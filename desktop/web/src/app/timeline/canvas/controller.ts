@@ -18,7 +18,7 @@ import {
   type TimelineActionInteractionFrameAnimation,
 } from './interaction-frame'
 import type { TimelineActionPopoverState } from '../workbench'
-import type { TimelineActionFormData } from '../editing'
+import type { TimelineActionFormData } from '../../design-edit'
 
 interface MutableRef<T> {
   current: T

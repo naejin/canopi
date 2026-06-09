@@ -6,11 +6,12 @@ import {
 } from '../../canvas/consortium-renderer'
 import { getConsortiumCanonicalName } from '../../target'
 import type { Consortium } from '../../types/design'
-import { beginDocumentArrayEdit, type DocumentArrayEditTransaction } from '../document/edit-transaction'
 import {
+  beginConsortiumDocumentEdit,
+  type ConsortiumDocumentEditTransaction,
   moveConsortiumEntryInArray,
   reorderConsortiumEntryInArray,
-} from './controller'
+} from '../design-edit'
 import {
   CONSORTIUM_STRATUM_COUNT,
   LAST_SUCCESSION_PHASE_INDEX,
@@ -28,7 +29,7 @@ export interface ConsortiumMoveDragState {
   readonly originalStartPhase: number
   readonly originalEndPhase: number
   readonly cachedRect: DOMRect
-  readonly edit: DocumentArrayEditTransaction<'consortiums'>
+  readonly edit: ConsortiumDocumentEditTransaction
 }
 
 export interface ConsortiumResizeDragState {
@@ -38,7 +39,7 @@ export interface ConsortiumResizeDragState {
   readonly originalStartPhase: number
   readonly originalEndPhase: number
   readonly cachedRect: DOMRect
-  readonly edit: DocumentArrayEditTransaction<'consortiums'>
+  readonly edit: ConsortiumDocumentEditTransaction
 }
 
 export interface ConsortiumDragSnapshot {
@@ -60,7 +61,7 @@ export function beginConsortiumDrag({
   readonly startMouseX: number
   readonly cachedRect: DOMRect
 }): ConsortiumDragState {
-  const edit = beginDocumentArrayEdit('consortiums')
+  const edit = beginConsortiumDocumentEdit()
   if (hit.edge === 'body') {
     return {
       type: 'move',

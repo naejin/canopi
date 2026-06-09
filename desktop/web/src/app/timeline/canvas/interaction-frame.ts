@@ -24,7 +24,7 @@ import {
   type TimelineActionPendingClick,
   type TimelineActionPopoverState,
 } from '../workbench'
-import type { TimelineActionFormData } from '../editing'
+import type { TimelineActionFormData } from '../../design-edit'
 import { createUuid } from '../../../utils/ids'
 import { isEditableTarget } from '../../../canvas/runtime/interaction/pointer-utils'
 import {

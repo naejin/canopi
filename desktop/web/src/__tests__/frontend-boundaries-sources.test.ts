@@ -529,6 +529,11 @@ describe('frontend boundary sources', () => {
     expect(mountedRuntimeSource).toContain('_incrementSceneRevision')
     expect(documentBridgeSource).toContain('incrementSceneRevision')
     expect(documentBridgeSource).not.toContain('sceneEntityRevision')
+    expect(sourceExists('../app/document/controller.ts')).toBe(false)
+    expect(sourceExists('../app/document/edit-transaction.ts')).toBe(false)
+    expect(sourceExists('../app/budget/controller.ts')).toBe(false)
+    expect(sourceExists('../app/timeline/controller.ts')).toBe(false)
+    expect(sourceExists('../app/consortium/controller.ts')).toBe(false)
     expectImportsToContain('../app/document-session/workflows.ts', ['../consortium/workflow'])
     expectNoImportsMatching('../app/document-session/workflows.ts', [
       /@preact\/signals$/,
@@ -539,7 +544,7 @@ describe('frontend boundary sources', () => {
     ])
     expectImportsToContain('../app/consortium/workflow.ts', [
       '../../canvas/session',
-      '../document/controller',
+      '../design-edit',
       '../document-session/store',
       '../document-session/workflow-runner',
       './time-model',
@@ -550,6 +555,32 @@ describe('frontend boundary sources', () => {
       /document-session\/workflows$/,
     ])
     expect(mapSurfaceSnapshotSource).toContain('revision.viewport.value')
+  })
+
+  it('keeps non-canvas Design writes behind the Design Edit seam', () => {
+    const sourcePaths = [
+      '../app',
+      '../components',
+    ].flatMap(sourceFilesUnder).filter(isTypescriptSource)
+
+    for (const sourcePath of sourcePaths) {
+      if (sourcePath.startsWith('../app/design-edit/')) continue
+      expectNoImportsMatching(sourcePath, [
+        /document\/controller$/,
+        /document\/edit-transaction$/,
+        /budget\/controller$/,
+        /timeline\/controller$/,
+        /consortium\/controller$/,
+      ])
+    }
+
+    expectImportsToContain('../app/design-edit/core.ts', ['../document-session/store'])
+    expectImportsToContain('../app/location/controller.ts', ['../design-edit'])
+    expectImportsToContain('../app/budget/workbench.ts', ['../design-edit'])
+    expectImportsToContain('../app/timeline/workbench.ts', ['../design-edit'])
+    expectImportsToContain('../app/timeline/interaction.ts', ['../design-edit'])
+    expectImportsToContain('../app/consortium/interaction.ts', ['../design-edit'])
+    expectImportsToContain('../app/consortium/workflow.ts', ['../design-edit'])
   })
 
   it('keeps Target presentation lifecycle out of Planning Projection', () => {
@@ -733,6 +764,7 @@ describe('frontend boundary sources', () => {
     const interactionFrameSource = readSource('../app/timeline/canvas/interaction-frame.ts')
     const interactionSource = readSource('../app/timeline/interaction.ts')
     const editingSource = readSource('../app/timeline/editing.ts')
+    const designEditTimelineSource = readSource('../app/design-edit/timeline.ts')
     const workbenchSource = readSource('../app/timeline/workbench.ts')
 
     expect(sourceExists('../app/timeline/canvas-workbench.ts')).toBe(false)
@@ -817,12 +849,15 @@ describe('frontend boundary sources', () => {
     expect(interactionFrameSource).toContain('isEditableTarget')
     expect(interactionSource).toContain('beginTimelineActionEdit')
     expect(interactionSource).toContain('computeTimelineAutoScrollSpeed')
+    expect(interactionSource).toContain('../design-edit')
     expect(interactionSource).not.toContain('rulerControlBounds')
     expect(interactionSource).not.toContain('hitTestTimelineRulerControls')
-    expect(editingSource).toContain('beginDocumentArrayEdit')
-    expect(editingSource).toContain('applyTimelineActionPatch')
+    expect(editingSource).not.toContain('beginDocumentArrayEdit')
+    expect(editingSource).not.toContain('applyTimelineActionPatch')
+    expect(designEditTimelineSource).toContain('beginDesignArrayEdit')
+    expect(designEditTimelineSource).toContain('applyTimelineActionPatch')
     expect(workbenchSource).toContain('../planning-projection')
-    expect(workbenchSource).toContain('./controller')
+    expect(workbenchSource).toContain('../design-edit')
     expect(workbenchSource).toContain('createTimelineActionFromFormData')
     expect(workbenchSource).toContain('formDataFromTimelineAction')
     expect(workbenchSource).toContain('timelineActionPatchFromFormData')
@@ -839,7 +874,8 @@ describe('frontend boundary sources', () => {
     expect(consortiumSource).toContain('../app/consortium/workbench')
     expect(workbenchSource).toContain('./interaction')
     expect(workbenchSource).toContain('hitTestBar')
-    expect(interactionSource).toContain('beginDocumentArrayEdit')
+    expect(interactionSource).toContain('../design-edit')
+    expect(interactionSource).toContain('beginConsortiumDocumentEdit')
     expect(interactionSource).toContain('moveConsortiumEntryInArray')
     expect(interactionSource).toContain('reorderConsortiumEntryInArray')
   })

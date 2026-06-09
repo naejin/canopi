@@ -185,14 +185,14 @@ cargo build --release
 
 - The `.canopi` file has two authorities.
 - Canvas scene state is owned by `SceneStore`: plants, zones, annotations, groups, Design Object locks, plant species colors, and layers. Mutations flow through the canvas runtime.
-- Non-canvas document state is owned by the document layer: consortiums, timeline, budget, `budget_currency`, location, description, and extra. Mutations flow through `mutateCurrentDesign()` plus feature controllers under `app/*/controller.ts`.
+- Non-canvas document state is owned by the document layer: consortiums, timeline, budget, `budget_currency`, location, description, and extra. Mutations flow through the Design Edit seam in `desktop/web/src/app/design-edit/`.
 - Save composition happens through the document-session/persistence seam and the canvas document surface. Neither authority should duplicate the other's data.
 - Panels that read canvas entities should use read-only runtime query surfaces, not mirrored signals, unless the guide documents an intentional mirror.
 
 ### Action Layer
 
 - Controller/action modules must not import other controller/action modules. Write boundaries under `app/*/controller.ts` should stay leaf modules.
-- Import direction is components -> actions/controllers -> state.
+- Import direction is components -> actions/controllers/workbenches -> Design Edit or state.
 - Cross-concern orchestration belongs in a higher workflow module, such as `app/document-session/workflows.ts`, not in leaf action modules.
 - Workflow modules that install `effect()` own their disposer with an `installX()` / `disposeX()` module-level singleton.
 

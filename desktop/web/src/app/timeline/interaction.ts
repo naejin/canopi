@@ -1,6 +1,8 @@
-import type { TimelineActionEditSession } from './editing'
 import {
   beginTimelineActionEdit,
+  type TimelineActionEditSession,
+} from '../design-edit'
+import {
   compensateFrozenTimelineOriginScroll,
   computeTimelineAutoScrollSpeed,
 } from './editing'

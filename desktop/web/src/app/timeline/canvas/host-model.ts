@@ -8,7 +8,7 @@ import {
 import { t } from '../../../i18n'
 import { theme } from '../../settings/state'
 import type { TimelineAction } from '../../../types/design'
-import type { TimelineActionFormData } from '../editing'
+import type { TimelineActionFormData } from '../../design-edit'
 import {
   createTimelineActionCanvasController,
   type TimelineActionCanvasController,

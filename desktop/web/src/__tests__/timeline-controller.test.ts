@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { addTimelineAction, deleteTimelineAction, updateTimelineAction } from '../app/timeline/controller'
+import { addTimelineAction, deleteTimelineAction, updateTimelineAction } from '../app/design-edit'
 import { currentDesign, nonCanvasRevision } from './support/design-session-state'
 
 beforeEach(() => {
@@ -26,7 +26,7 @@ beforeEach(() => {
   }
 })
 
-describe('timeline controller', () => {
+describe('Design Edit Timeline Actions', () => {
   it('adds actions with incrementing order', () => {
     addTimelineAction({
       id: 'a',

@@ -6,9 +6,9 @@ import {
   type BudgetPlanningRow,
 } from '../planning-projection'
 import { createPanelTargetPresentationController } from '../panel-targets/presentation'
+import { setBudgetCurrency, setPlantBudgetPrice } from '../design-edit'
 import { exportBudgetCsv, isBudgetExportCancelled } from './export'
 import { formatBudgetCurrency } from './formatting'
-import { setBudgetCurrency, setPlantBudgetPrice } from './controller'
 
 const budgetTargetPresentation = createPanelTargetPresentationController('budget')
 

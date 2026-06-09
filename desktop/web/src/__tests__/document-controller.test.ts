@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { mutateCurrentDesign, updateDesignArray } from '../app/document/controller'
+import { editCurrentDesign, editDesignArray } from '../app/design-edit'
 import { speciesBudgetTarget } from '../target'
 import { currentDesign, nonCanvasRevision } from './support/design-session-state'
 
@@ -27,31 +27,31 @@ beforeEach(() => {
   }
 })
 
-describe('document controller', () => {
+describe('Design Edit core', () => {
   it('skips dirty revision when mutation returns the same design', () => {
     const design = currentDesign.value!
 
-    const next = mutateCurrentDesign((current) => current)
+    const next = editCurrentDesign((current) => current)
 
     expect(next).toBe(design)
     expect(nonCanvasRevision.value).toBe(0)
   })
 
   it('supports markDirty: false for whole-design updates', () => {
-    mutateCurrentDesign((design) => ({ ...design, name: 'updated' }), { markDirty: false })
+    editCurrentDesign((design) => ({ ...design, name: 'updated' }), { markDirty: false })
 
     expect(currentDesign.value?.name).toBe('updated')
     expect(nonCanvasRevision.value).toBe(0)
   })
 
   it('avoids dirty revision for no-op array updates', () => {
-    updateDesignArray('timeline', (timeline) => timeline)
+    editDesignArray('timeline', (timeline) => timeline)
 
     expect(nonCanvasRevision.value).toBe(0)
   })
 
   it('supports markDirty: false for array updates', () => {
-    updateDesignArray('budget', () => [{
+    editDesignArray('budget', () => [{
       target: speciesBudgetTarget('Quercus robur'),
       category: 'plants',
       description: 'Quercus robur',

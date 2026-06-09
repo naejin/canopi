@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { beginDocumentArrayEdit } from '../app/document/edit-transaction'
+import { beginDesignArrayEdit } from '../app/design-edit'
 import { consortiumTarget } from '../target'
 import { currentDesign, nonCanvasRevision } from './support/design-session-state'
 import type { CanopiFile, Consortium, TimelineAction } from '../types/design'
@@ -59,9 +59,9 @@ beforeEach(() => {
   currentDesign.value = design()
 })
 
-describe('document array edit transactions', () => {
+describe('Design Edit array transactions', () => {
   it('previews document array updates without advancing the non-canvas revision', () => {
-    const edit = beginDocumentArrayEdit('timeline')
+    const edit = beginDesignArrayEdit('timeline')
 
     edit.preview((timeline) => timeline.map((action) => (
       action.id === 'a' ? { ...action, description: 'preview' } : action
@@ -73,7 +73,7 @@ describe('document array edit transactions', () => {
   })
 
   it('commits one dirty revision after one or many preview mutations', () => {
-    const edit = beginDocumentArrayEdit('timeline')
+    const edit = beginDesignArrayEdit('timeline')
 
     edit.preview((timeline) => timeline.map((action) => (
       action.id === 'a' ? { ...action, description: 'preview 1' } : action
@@ -89,7 +89,7 @@ describe('document array edit transactions', () => {
   })
 
   it('does not dirty when a committed transaction never mutates', () => {
-    const edit = beginDocumentArrayEdit('timeline')
+    const edit = beginDesignArrayEdit('timeline')
 
     edit.preview((timeline) => timeline)
     edit.commit()
@@ -100,7 +100,7 @@ describe('document array edit transactions', () => {
 
   it('aborts by restoring the original document slice without dirtying the document', () => {
     const original = currentDesign.value!.consortiums
-    const edit = beginDocumentArrayEdit('consortiums')
+    const edit = beginDesignArrayEdit('consortiums')
 
     edit.preview((consortiums) => [...consortiums, consortium('Acer campestre')])
     edit.abort()
@@ -112,7 +112,7 @@ describe('document array edit transactions', () => {
   })
 
   it('keeps commit and abort cleanup idempotent after a transaction closes', () => {
-    const edit = beginDocumentArrayEdit('consortiums')
+    const edit = beginDesignArrayEdit('consortiums')
 
     edit.preview((consortiums) => [...consortiums, consortium('Acer campestre')])
     edit.commit()

@@ -1,18 +1,15 @@
 import type { Location } from '../../types/design'
-import { mutateCurrentDesign } from '../document/controller'
+import {
+  clearDesignLocation as clearDesignLocationEdit,
+  setDesignLocation as setDesignLocationEdit,
+} from '../design-edit'
 
 export function setDesignLocation(next: Location): boolean {
-  return mutateCurrentDesign((design) => ({
-    ...design,
-    location: next,
-  })) !== null
+  return setDesignLocationEdit(next)
 }
 
 export function clearDesignLocation(): boolean {
-  return mutateCurrentDesign((design) => ({
-    ...design,
-    location: null,
-  })) !== null
+  return clearDesignLocationEdit()
 }
 
 export interface LocationDraft {

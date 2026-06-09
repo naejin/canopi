@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   beginTimelineActionEdit,
-  compensateFrozenTimelineOriginScroll,
-  computeTimelineAutoScrollSpeed,
   createTimelineActionFromFormData,
   formDataFromTimelineAction,
   timelineActionPatchFromFormData,
+} from '../app/design-edit'
+import {
+  compensateFrozenTimelineOriginScroll,
+  computeTimelineAutoScrollSpeed,
 } from '../app/timeline/editing'
 import { currentDesign, nonCanvasRevision } from './support/design-session-state'
 import { MANUAL_TARGET, speciesTarget } from '../target'

@@ -9,13 +9,11 @@ import {
   addTimelineAction,
   deleteTimelineAction,
   updateTimelineAction,
-} from './controller'
-import {
   createTimelineActionFromFormData,
   formDataFromTimelineAction,
   timelineActionPatchFromFormData,
   type TimelineActionFormData,
-} from './editing'
+} from '../design-edit'
 
 const EMPTY_ACTIONS: readonly TimelineAction[] = []
 const DEFAULT_ACTION_DURATION_DAYS = 14

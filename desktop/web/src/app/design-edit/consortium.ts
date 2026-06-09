@@ -1,15 +1,15 @@
 import type { Consortium } from '../../types/design'
 import { getConsortiumCanonicalName, targets } from '../../target'
-import { updateDesignArray } from '../document/controller'
+import { beginDesignArrayEdit, editDesignArray, type DesignArrayEditTransaction } from './core'
 
-function updateConsortiums(
-  updater: (consortiums: Consortium[]) => Consortium[],
-): void {
-  updateDesignArray('consortiums', updater)
+export type ConsortiumDocumentEditTransaction = DesignArrayEditTransaction<'consortiums'>
+
+export function beginConsortiumDocumentEdit(): ConsortiumDocumentEditTransaction {
+  return beginDesignArrayEdit('consortiums')
 }
 
 export function upsertConsortiumEntry(entry: Consortium): void {
-  updateConsortiums((consortiums) => upsertConsortiumEntryInArray(consortiums, entry))
+  editDesignArray('consortiums', (consortiums) => upsertConsortiumEntryInArray(consortiums, entry))
 }
 
 export function upsertConsortiumEntryInArray(consortiums: Consortium[], entry: Consortium): Consortium[] {
@@ -34,7 +34,7 @@ export function upsertConsortiumEntryInArray(consortiums: Consortium[], entry: C
 }
 
 export function deleteConsortiumEntry(canonicalName: string): void {
-  updateConsortiums((consortiums) => {
+  editDesignArray('consortiums', (consortiums) => {
     if (!consortiums.some((consortium) => getConsortiumCanonicalName(consortium) === canonicalName)) {
       return consortiums
     }
@@ -46,7 +46,7 @@ export function reorderConsortiumEntry(
   canonicalName: string,
   targetIndex: number,
 ): void {
-  updateConsortiums((consortiums) => reorderConsortiumEntryInArray(consortiums, canonicalName, targetIndex))
+  editDesignArray('consortiums', (consortiums) => reorderConsortiumEntryInArray(consortiums, canonicalName, targetIndex))
 }
 
 export function reorderConsortiumEntryInArray(
@@ -67,7 +67,7 @@ export function moveConsortiumEntry(
   canonicalName: string,
   updates: { stratum?: string; startPhase: number; endPhase: number },
 ): void {
-  updateConsortiums((consortiums) => moveConsortiumEntryInArray(consortiums, canonicalName, updates))
+  editDesignArray('consortiums', (consortiums) => moveConsortiumEntryInArray(consortiums, canonicalName, updates))
 }
 
 export function moveConsortiumEntryInArray(
