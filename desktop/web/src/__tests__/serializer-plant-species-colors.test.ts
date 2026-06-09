@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { SceneCanvasRuntime } from '../canvas/runtime/scene-runtime'
 import type { CanopiFile } from '../types/design'
+import { createLiveTestCanvasRuntimeHost } from './support/live-canvas-runtime'
 
 function makeDoc(): CanopiFile {
   return {
@@ -27,12 +27,18 @@ function makeDoc(): CanopiFile {
 
 describe('serializer species color defaults', () => {
   it('persists document species color defaults into the canonical scene payload', () => {
-    const runtime = new SceneCanvasRuntime()
-    runtime.loadDocument(makeDoc())
-    runtime.setPlantColorForSpecies('Malus domestica', '#C44230')
+    const host = createLiveTestCanvasRuntimeHost()
+    const { commands, documents } = host.surfaces
 
-    const file = runtime.serializeDocument({ name: 'Test' }, makeDoc())
+    try {
+      documents.loadDocument(makeDoc())
+      commands.plantPresentation.setPlantColorForSpecies('Malus domestica', '#C44230')
 
-    expect(file.plant_species_colors).toEqual({ 'Malus domestica': '#C44230' })
+      const file = documents.serializeDocument({ name: 'Test' }, makeDoc())
+
+      expect(file.plant_species_colors).toEqual({ 'Malus domestica': '#C44230' })
+    } finally {
+      host.destroy()
+    }
   })
 })

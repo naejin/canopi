@@ -9,8 +9,10 @@ import {
   setCurrentCanvasSession,
   setCurrentCanvasTool,
 } from '../canvas/session'
-import { SceneCanvasRuntime } from '../canvas/runtime/scene-runtime'
-import { createCanvasRuntimeSurfaces } from '../canvas/runtime/surfaces'
+import {
+  createTestCanvasCommandSurface,
+  createTestCanvasRuntimeSurfaces,
+} from './support/canvas-runtime-surfaces'
 
 describe('canvas session seam', () => {
   beforeEach(() => {
@@ -19,8 +21,7 @@ describe('canvas session seam', () => {
   })
 
   it('stores explicit runtime surfaces for the live runtime', () => {
-    const runtime = new SceneCanvasRuntime()
-    const surfaces = createCanvasRuntimeSurfaces(runtime)
+    const surfaces = createTestCanvasRuntimeSurfaces()
 
     setCurrentCanvasSession(surfaces)
 
@@ -35,17 +36,11 @@ describe('canvas session seam', () => {
   })
 
   it('rejects mounted runtime publication until it is adapted into explicit surfaces', () => {
-    const runtime = new SceneCanvasRuntime()
-
-    try {
-      expect(() => setCurrentCanvasSession(runtime as never)).toThrow(
-        /explicit canvas runtime surfaces/,
-      )
-      expect(currentCanvasSession.value).toBe(null)
-      expect(currentCanvasReady.value).toBe(false)
-    } finally {
-      runtime.destroy()
-    }
+    expect(() => setCurrentCanvasSession({ commandSurface: {} } as never)).toThrow(
+      /explicit canvas runtime surfaces/,
+    )
+    expect(currentCanvasSession.value).toBe(null)
+    expect(currentCanvasReady.value).toBe(false)
   })
 
   it('primes tool state before mount and delegates through the command surface after mount', () => {
@@ -53,28 +48,19 @@ describe('canvas session seam', () => {
     expect(currentCanvasTool.value).toBe('rectangle')
 
     const setTool = vi.fn()
-    const runtime = new SceneCanvasRuntime()
-    const surfaces = createCanvasRuntimeSurfaces(runtime)
-
-    try {
-      setCurrentCanvasSession({
-        ...surfaces,
-        commands: {
-          ...surfaces.commands,
-          tools: {
-            ...surfaces.commands.tools,
-            setTool,
-          },
+    const surfaces = createTestCanvasRuntimeSurfaces({
+      commands: createTestCanvasCommandSurface({
+        tools: {
+          setTool,
         },
-      })
-      setCurrentCanvasTool('hand')
+      }),
+    })
+    setCurrentCanvasSession(surfaces)
+    setCurrentCanvasTool('hand')
 
-      expect(getCurrentCanvasCommandSurface()).toBe(currentCanvasSession.value?.commands)
-      expect(getCurrentCanvasToolCommandSurface()).toBe(currentCanvasSession.value?.commands.tools)
-      expect(setTool).toHaveBeenCalledWith('hand')
-      expect(currentCanvasTool.value).toBe('hand')
-    } finally {
-      runtime.destroy()
-    }
+    expect(getCurrentCanvasCommandSurface()).toBe(currentCanvasSession.value?.commands)
+    expect(getCurrentCanvasToolCommandSurface()).toBe(currentCanvasSession.value?.commands.tools)
+    expect(setTool).toHaveBeenCalledWith('hand')
+    expect(currentCanvasTool.value).toBe('hand')
   })
 })

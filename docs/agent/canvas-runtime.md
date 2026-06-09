@@ -12,6 +12,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - Document session orchestration, save/load, chrome, resize, and teardown consume document surfaces.
 - Sibling read-only surfaces consume query surfaces for scene snapshots, viewport queries, selection reads, placed plants, localized names, and presentation context.
 - Publish live canvas sessions as explicit `CanvasRuntimeSurfaces` bundles. Do not publish a raw `SceneCanvasRuntime`, and do not cast a role-specific fake into the session signal; tests should use `createTestCanvasRuntimeSurfaces()` with the role surface they need.
+- `createCanvasRuntimeSurfaces()` must compose `runtime.commandSurface`, `runtime.querySurface`, and `runtime.documentSurface` directly. Do not reintroduce fallback casts that treat `SceneCanvasRuntime` itself as any role surface.
 - Scene freshness for app callers is exposed through `CanvasQuerySurface.revision`. Do not recreate canvas runtime mirror revision signals; app modules subscribe through the query surface instead.
 - `canvas/runtime/runtime.ts` owns the app-facing Canvas Runtime Surface interfaces. `canvas/runtime/surfaces.ts` only composes the live runtime surfaces; command, query, and document surface behavior belongs behind the role modules in `canvas/runtime/*-surface.ts`.
 - `SceneCanvasRuntime` may still wire the concrete scene runtime during migration, but new surface behavior should be added to the relevant role module before adding more broad runtime pass-through code.

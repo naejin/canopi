@@ -13,7 +13,10 @@ const mocks = vi.hoisted(() => ({
   disposeDesignSessionPersistence: vi.fn(),
   flushSettingsProjection: vi.fn(),
   runtimeInitImpl: vi.fn(async (_container?: HTMLElement) => undefined),
-  runtimeInstances: [] as Array<Record<string, unknown>>,
+  runtimeInstances: [] as Array<{
+    host: Record<string, unknown>;
+    documents: Record<string, unknown>;
+  }>,
   snapshotCanvasIntoDesignSession: vi.fn(),
   startAttachedDesignSession: vi.fn(),
   transitionDocument: vi.fn((request: any) => {
@@ -24,30 +27,42 @@ const mocks = vi.hoisted(() => ({
   buildPersistedDesignSessionContent: vi.fn(() => ({ name: "Autosaved" })),
 }));
 
-vi.mock("../canvas/runtime/scene-runtime", () => ({
-  SceneCanvasRuntime: class {
-    private loaded = false
-    init = vi.fn((container) => mocks.runtimeInitImpl(container))
-    loadDocument = vi.fn(() => {
-      this.loaded = true
-    })
-    replaceDocument = vi.fn(() => {
-      this.loaded = true
-    })
-    hasLoadedDocument = vi.fn(() => this.loaded)
-    initializeViewport = vi.fn()
-    attachRulersTo = vi.fn()
-    showCanvasChrome = vi.fn()
-    hideCanvasChrome = vi.fn()
-    resize = vi.fn()
-    destroy = vi.fn()
-
-    constructor() {
-      ;(this as unknown as Record<string, unknown>).originalLoadDocument = this.loadDocument
-      ;(this as unknown as Record<string, unknown>).originalReplaceDocument = this.replaceDocument
-      mocks.runtimeInstances.push(this as unknown as Record<string, unknown>)
-    }
-  },
+vi.mock("../app/canvas-runtime/host", () => ({
+  createAppCanvasRuntimeHost: vi.fn(() => {
+    let loaded = false;
+    const documents = {
+      initializeViewport: vi.fn(),
+      attachRulersTo: vi.fn(),
+      showCanvasChrome: vi.fn(),
+      hideCanvasChrome: vi.fn(),
+      zoomToFit: vi.fn(),
+      loadDocument: vi.fn(() => {
+        loaded = true;
+      }),
+      replaceDocument: vi.fn(() => {
+        loaded = true;
+      }),
+      hasLoadedDocument: vi.fn(() => loaded),
+      serializeDocument: vi.fn((_metadata, doc) => doc),
+      markSaved: vi.fn(),
+      clearHistory: vi.fn(),
+      resize: vi.fn(),
+      destroy: vi.fn(),
+    };
+    const host = {
+      surfaces: {
+        commands: {},
+        queries: {},
+        documents,
+      },
+      init: vi.fn((container) => mocks.runtimeInitImpl(container)),
+      destroy: vi.fn(),
+    };
+    (documents as Record<string, unknown>).originalLoadDocument = documents.loadDocument;
+    (documents as Record<string, unknown>).originalReplaceDocument = documents.replaceDocument;
+    mocks.runtimeInstances.push({ host, documents });
+    return host;
+  }),
 }));
 
 vi.mock("../ipc/design", () => ({
@@ -203,15 +218,15 @@ describe("useCanvasDocumentSession", () => {
       await flushMicrotasks();
     });
 
-    const runtime = mocks.runtimeInstances[0] as {
+    const documents = mocks.runtimeInstances[0]?.documents as {
       hideCanvasChrome: ReturnType<typeof vi.fn>;
       initializeViewport: ReturnType<typeof vi.fn>;
     };
 
-    expect(runtime).toBeDefined();
-    expect(runtime.initializeViewport).toHaveBeenCalledTimes(1);
+    expect(documents).toBeDefined();
+    expect(documents.initializeViewport).toHaveBeenCalledTimes(1);
     expect(mocks.startAttachedDesignSession).toHaveBeenCalledWith(currentCanvasDocumentSurface.value);
-    expect(runtime.hideCanvasChrome).toHaveBeenCalledTimes(1);
+    expect(documents.hideCanvasChrome).toHaveBeenCalledTimes(1);
     expect(mocks.consumeQueuedDocumentLoad).toHaveBeenCalledWith(currentCanvasDocumentSurface.value);
   });
 
@@ -223,17 +238,20 @@ describe("useCanvasDocumentSession", () => {
       await flushMicrotasks();
     });
 
-    const runtime = mocks.runtimeInstances[0] as {
-      destroy: ReturnType<typeof vi.fn>;
-      loadDocument: ReturnType<typeof vi.fn>;
-      replaceDocument: ReturnType<typeof vi.fn>;
-      showCanvasChrome: ReturnType<typeof vi.fn>;
+    const instance = mocks.runtimeInstances[0] as unknown as {
+      host: { destroy: ReturnType<typeof vi.fn> };
+      documents: {
+        loadDocument: ReturnType<typeof vi.fn>;
+        replaceDocument: ReturnType<typeof vi.fn>;
+        showCanvasChrome: ReturnType<typeof vi.fn>;
+      } & Record<string, unknown>;
     };
+    const documents = instance.documents;
 
     expect(mocks.startAttachedDesignSession).toHaveBeenCalledWith(currentCanvasDocumentSurface.value);
-    expect(runtime.showCanvasChrome).toHaveBeenCalledTimes(1);
-    expect(runtime.loadDocument).toBe((runtime as any).originalLoadDocument);
-    expect((runtime as any).replaceDocument).toBe((runtime as any).originalReplaceDocument);
+    expect(documents.showCanvasChrome).toHaveBeenCalledTimes(1);
+    expect(documents.loadDocument).toBe(documents.originalLoadDocument);
+    expect(documents.replaceDocument).toBe(documents.originalReplaceDocument);
 
     await act(async () => {
       render(null, container);
@@ -243,10 +261,10 @@ describe("useCanvasDocumentSession", () => {
     expect(mocks.disposeDesignSessionPersistence).toHaveBeenCalledTimes(1);
     expect(mocks.cancelQueuedLoad).toHaveBeenCalledTimes(1);
     expect(mocks.flushSettingsProjection).toHaveBeenCalledTimes(1);
-    expect(runtime.destroy).toHaveBeenCalledTimes(1);
+    expect(instance.host.destroy).toHaveBeenCalledTimes(1);
     expect(currentCanvasSession.value).toBe(null);
     const snapshotOrder = mocks.snapshotCanvasIntoDesignSession.mock.invocationCallOrder[0];
-    const destroyOrder = runtime.destroy.mock.invocationCallOrder[0];
+    const destroyOrder = instance.host.destroy.mock.invocationCallOrder[0];
     expect(snapshotOrder).toBeLessThan(destroyOrder ?? Number.POSITIVE_INFINITY);
   });
 
@@ -264,12 +282,14 @@ describe("useCanvasDocumentSession", () => {
       await flushMicrotasks();
     });
 
-    const runtime = mocks.runtimeInstances[0] as { destroy: ReturnType<typeof vi.fn> };
+    const instance = mocks.runtimeInstances[0] as unknown as {
+      host: { destroy: ReturnType<typeof vi.fn> };
+    };
 
     expect(mocks.transitionDocument).not.toHaveBeenCalled();
     expect(mocks.snapshotCanvasIntoDesignSession).not.toHaveBeenCalled();
     expect(mocks.disposeDesignSessionPersistence).toHaveBeenCalledTimes(1);
-    expect(runtime.destroy).toHaveBeenCalledTimes(1);
+    expect(instance.host.destroy).toHaveBeenCalledTimes(1);
     expect(currentCanvasSession.value).toBe(null);
   });
 
@@ -297,12 +317,14 @@ describe("useCanvasDocumentSession", () => {
       await flushMicrotasks();
     });
 
-    const runtime = mocks.runtimeInstances[0] as { destroy: ReturnType<typeof vi.fn> };
+    const instance = mocks.runtimeInstances[0] as unknown as {
+      host: { destroy: ReturnType<typeof vi.fn> };
+    };
 
     expect(mocks.transitionDocument).not.toHaveBeenCalled();
     expect(mocks.snapshotCanvasIntoDesignSession).not.toHaveBeenCalled();
     expect(mocks.disposeDesignSessionPersistence).toHaveBeenCalledTimes(1);
-    expect(runtime.destroy).toHaveBeenCalledTimes(1);
+    expect(instance.host.destroy).toHaveBeenCalledTimes(1);
     expect(currentCanvasSession.value).toBe(null);
   });
 
@@ -323,12 +345,12 @@ describe("useCanvasDocumentSession", () => {
       render(null, container);
     });
 
-    const runtime = mocks.runtimeInstances[0] as {
-      destroy: ReturnType<typeof vi.fn>;
+    const instance = mocks.runtimeInstances[0] as unknown as {
+      host: { destroy: ReturnType<typeof vi.fn> };
     };
 
     expect(mocks.snapshotCanvasIntoDesignSession).toHaveBeenCalledTimes(1);
-    expect(runtime.destroy).toHaveBeenCalledTimes(1);
+    expect(instance.host.destroy).toHaveBeenCalledTimes(1);
   });
 
   it("recreates autosave on interval changes", async () => {

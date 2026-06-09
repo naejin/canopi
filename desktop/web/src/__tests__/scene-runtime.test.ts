@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { selectedObjectIds } from '../canvas/session-state'
-import { clearCanvasSelection } from '../canvas/session-state'
-import { SceneCanvasRuntime } from '../canvas/runtime/scene-runtime'
+import { clearCanvasSelection, selectedObjectIds } from '../canvas/session-state'
 import { createAppCanvasRuntimeAppAdapter } from '../app/canvas-runtime/app-adapter'
 import type { CanopiFile } from '../types/design'
 import { consortiumTarget, speciesBudgetTarget, speciesTarget } from '../target'
+import {
+  createLiveTestCanvasRuntimeHost,
+  type TestCanvasRuntimeHostOptions,
+} from './support/live-canvas-runtime'
 
 const BASE_FILE: CanopiFile = {
   version: 2,
@@ -51,133 +53,156 @@ function createPlant(id: string, x: number, y: number, canonical = 'Quercus robu
   }
 }
 
-function createRuntimeWithAppComposition(): SceneCanvasRuntime {
-  return new SceneCanvasRuntime({
+function createRuntimeHost(options: TestCanvasRuntimeHostOptions = {}) {
+  return createLiveTestCanvasRuntimeHost(options)
+}
+
+function createRuntimeHostWithAppComposition() {
+  return createRuntimeHost({
     appAdapter: createAppCanvasRuntimeAppAdapter(),
   })
 }
 
-describe('SceneCanvasRuntime', () => {
+describe('Canvas runtime surfaces', () => {
   beforeEach(() => {
     clearCanvasSelection()
   })
 
   it('duplicates plants and supports undo/redo from scene-owned history', () => {
-    const runtime = new SceneCanvasRuntime()
-    runtime.loadDocument({
-      ...BASE_FILE,
-      plants: [createPlant('plant-1', 10, 20)],
-      extra: {
-        guides: [{ id: 'guide-1', axis: 'h', position: 42 }],
-      },
-    })
+    const host = createRuntimeHost()
+    const { commands, documents, queries } = host.surfaces
 
-    runtime.selectAll()
-    runtime.duplicateSelected()
+    try {
+      documents.loadDocument({
+        ...BASE_FILE,
+        plants: [createPlant('plant-1', 10, 20)],
+        extra: {
+          guides: [{ id: 'guide-1', axis: 'h', position: 42 }],
+        },
+      })
 
-    const duplicated = runtime.getPlacedPlants()
-    expect(duplicated).toHaveLength(2)
-    expect(duplicated[1]?.position).toEqual({ x: 30, y: 40 })
+      commands.sceneEdits.selectAll()
+      commands.sceneEdits.duplicateSelected()
 
-    runtime.undo()
-    expect(runtime.getPlacedPlants()).toHaveLength(1)
+      const duplicated = queries.getPlacedPlants()
+      expect(duplicated).toHaveLength(2)
+      expect(duplicated[1]?.position).toEqual({ x: 30, y: 40 })
 
-    runtime.redo()
-    expect(runtime.getPlacedPlants()).toHaveLength(2)
+      commands.history.undo()
+      expect(queries.getPlacedPlants()).toHaveLength(1)
+
+      commands.history.redo()
+      expect(queries.getPlacedPlants()).toHaveLength(2)
+    } finally {
+      host.destroy()
+    }
   })
 
   it('groups and ungroups selected scene entities without Konva nodes', () => {
-    const runtime = new SceneCanvasRuntime()
-    runtime.loadDocument({
-      ...BASE_FILE,
-      plants: [
-        createPlant('plant-1', 10, 20),
-        createPlant('plant-2', 30, 40),
-      ],
-    })
+    const host = createRuntimeHost()
+    const { commands, documents, queries } = host.surfaces
 
-    runtime.selectAll()
-    runtime.groupSelected()
+    try {
+      documents.loadDocument({
+        ...BASE_FILE,
+        plants: [
+          createPlant('plant-1', 10, 20),
+          createPlant('plant-2', 30, 40),
+        ],
+      })
 
-    const afterGroup = runtime.getSceneStore().persisted
-    expect(afterGroup.groups).toHaveLength(1)
-    expect(afterGroup.groups[0]?.memberIds).toEqual(['plant-1', 'plant-2'])
+      commands.sceneEdits.selectAll()
+      commands.sceneEdits.groupSelected()
 
-    runtime.ungroupSelected()
-    expect(runtime.getSceneStore().persisted.groups).toHaveLength(0)
+      const afterGroup = queries.getSceneSnapshot()
+      expect(afterGroup.groups).toHaveLength(1)
+      expect(afterGroup.groups[0]?.memberIds).toEqual(['plant-1', 'plant-2'])
+
+      commands.sceneEdits.ungroupSelected()
+      expect(queries.getSceneSnapshot().groups).toHaveLength(0)
+    } finally {
+      host.destroy()
+    }
   })
 
   it('serializes canvas state while preserving non-canvas document sections', () => {
-    const runtime = createRuntimeWithAppComposition()
-    runtime.loadDocument({
-      ...BASE_FILE,
-      plants: [createPlant('plant-1', 10, 20)],
-      extra: {
-        guides: [{ id: 'guide-1', axis: 'h', position: 42 }],
-      },
-    })
-    runtime.selectAll()
-    runtime.setSelectedPlantColor('#228833')
+    const host = createRuntimeHostWithAppComposition()
+    const { commands, documents } = host.surfaces
 
-    const serialized = runtime.serializeDocument(
-      {
-        name: 'Updated',
-        location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
-        northBearingDeg: 14,
-      },
-      {
+    try {
+      documents.loadDocument({
         ...BASE_FILE,
-        name: 'Doc copy',
-        timeline: [{
-          id: 'task-1',
-          action_type: 'mulch',
-          description: 'Apply mulch',
-          start_date: '2026-04-10',
-          end_date: null,
-          recurrence: null,
-          targets: [speciesTarget('Quercus robur')],
-          depends_on: null,
-          completed: false,
-          order: 1,
-        }],
-        budget_currency: 'EUR',
-        budget: [{
-          target: speciesBudgetTarget('Quercus robur'),
-          category: 'plants',
-          description: 'Quercus robur',
-          quantity: 1,
-          unit_cost: 12,
-          currency: 'EUR',
-        }],
-        consortiums: [{
-          target: consortiumTarget('Quercus robur'),
-          stratum: 'high',
-          start_phase: 0,
-          end_phase: 3,
-        }],
+        plants: [createPlant('plant-1', 10, 20)],
         extra: {
           guides: [{ id: 'guide-1', axis: 'h', position: 42 }],
-          preserved_from_document: true,
         },
-      },
-    )
+      })
+      commands.sceneEdits.selectAll()
+      commands.plantPresentation.setSelectedPlantColor('#228833')
 
-    expect(serialized.name).toBe('Updated')
-    expect(serialized.location).toEqual({ lat: 48.8566, lon: 2.3522, altitude_m: 35 })
-    expect(serialized.north_bearing_deg).toBe(14)
-    expect(serialized.timeline).toHaveLength(1)
-    expect(serialized.budget).toHaveLength(1)
-    expect(serialized.consortiums).toHaveLength(1)
-    expect(serialized.budget_currency).toBe('EUR')
-    expect(serialized.extra).toEqual({
-      guides: [{ id: 'guide-1', axis: 'h', position: 42 }],
-      preserved_from_document: true,
-    })
-    expect(serialized.plants[0]?.color).toBe('#228833')
+      const serialized = documents.serializeDocument(
+        {
+          name: 'Updated',
+          location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
+          northBearingDeg: 14,
+        },
+        {
+          ...BASE_FILE,
+          name: 'Doc copy',
+          timeline: [{
+            id: 'task-1',
+            action_type: 'mulch',
+            description: 'Apply mulch',
+            start_date: '2026-04-10',
+            end_date: null,
+            recurrence: null,
+            targets: [speciesTarget('Quercus robur')],
+            depends_on: null,
+            completed: false,
+            order: 1,
+          }],
+          budget_currency: 'EUR',
+          budget: [{
+            target: speciesBudgetTarget('Quercus robur'),
+            category: 'plants',
+            description: 'Quercus robur',
+            quantity: 1,
+            unit_cost: 12,
+            currency: 'EUR',
+          }],
+          consortiums: [{
+            target: consortiumTarget('Quercus robur'),
+            stratum: 'high',
+            start_phase: 0,
+            end_phase: 3,
+          }],
+          extra: {
+            guides: [{ id: 'guide-1', axis: 'h', position: 42 }],
+            preserved_from_document: true,
+          },
+        },
+      )
+
+      expect(serialized.name).toBe('Updated')
+      expect(serialized.location).toEqual({ lat: 48.8566, lon: 2.3522, altitude_m: 35 })
+      expect(serialized.north_bearing_deg).toBe(14)
+      expect(serialized.timeline).toHaveLength(1)
+      expect(serialized.budget).toHaveLength(1)
+      expect(serialized.consortiums).toHaveLength(1)
+      expect(serialized.budget_currency).toBe('EUR')
+      expect(serialized.extra).toEqual({
+        guides: [{ id: 'guide-1', axis: 'h', position: 42 }],
+        preserved_from_document: true,
+      })
+      expect(serialized.plants[0]?.color).toBe('#228833')
+    } finally {
+      host.destroy()
+    }
   })
 
   it('undo and redo keep document-owned metadata outside scene history', () => {
-    const runtime = createRuntimeWithAppComposition()
+    const host = createRuntimeHostWithAppComposition()
+    const { commands, documents } = host.surfaces
     const documentCopy: CanopiFile = {
       ...BASE_FILE,
       description: 'Document authority description',
@@ -190,102 +215,128 @@ describe('SceneCanvasRuntime', () => {
       },
     }
 
-    runtime.loadDocument(documentCopy)
-    runtime.selectAll()
-    runtime.setSelectedPlantColor('#228833')
-    runtime.undo()
+    try {
+      documents.loadDocument(documentCopy)
+      commands.sceneEdits.selectAll()
+      commands.plantPresentation.setSelectedPlantColor('#228833')
+      commands.history.undo()
 
-    const afterUndo = runtime.serializeDocument(
-      {
-        name: 'Updated',
-        description: documentCopy.description,
-        location: documentCopy.location,
-        northBearingDeg: documentCopy.north_bearing_deg,
-      },
-      documentCopy,
-    )
+      const afterUndo = documents.serializeDocument(
+        {
+          name: 'Updated',
+          description: documentCopy.description,
+          location: documentCopy.location,
+          northBearingDeg: documentCopy.north_bearing_deg,
+        },
+        documentCopy,
+      )
 
-    expect(afterUndo.description).toBe(documentCopy.description)
-    expect(afterUndo.location).toEqual(documentCopy.location)
-    expect(afterUndo.north_bearing_deg).toBe(documentCopy.north_bearing_deg)
-    expect(afterUndo.extra).toEqual(documentCopy.extra)
-    expect(afterUndo.plants[0]?.color).toBeNull()
+      expect(afterUndo.description).toBe(documentCopy.description)
+      expect(afterUndo.location).toEqual(documentCopy.location)
+      expect(afterUndo.north_bearing_deg).toBe(documentCopy.north_bearing_deg)
+      expect(afterUndo.extra).toEqual(documentCopy.extra)
+      expect(afterUndo.plants[0]?.color).toBeNull()
 
-    runtime.redo()
+      commands.history.redo()
 
-    const afterRedo = runtime.serializeDocument(
-      {
-        name: 'Updated',
-        description: documentCopy.description,
-        location: documentCopy.location,
-        northBearingDeg: documentCopy.north_bearing_deg,
-      },
-      documentCopy,
-    )
+      const afterRedo = documents.serializeDocument(
+        {
+          name: 'Updated',
+          description: documentCopy.description,
+          location: documentCopy.location,
+          northBearingDeg: documentCopy.north_bearing_deg,
+        },
+        documentCopy,
+      )
 
-    expect(afterRedo.description).toBe(documentCopy.description)
-    expect(afterRedo.location).toEqual(documentCopy.location)
-    expect(afterRedo.north_bearing_deg).toBe(documentCopy.north_bearing_deg)
-    expect(afterRedo.extra).toEqual(documentCopy.extra)
-    expect(afterRedo.plants[0]?.color).toBe('#228833')
+      expect(afterRedo.description).toBe(documentCopy.description)
+      expect(afterRedo.location).toEqual(documentCopy.location)
+      expect(afterRedo.north_bearing_deg).toBe(documentCopy.north_bearing_deg)
+      expect(afterRedo.extra).toEqual(documentCopy.extra)
+      expect(afterRedo.plants[0]?.color).toBe('#228833')
+    } finally {
+      host.destroy()
+    }
   })
 
   it('preserves scene-owned species colors when serializing', () => {
-    const runtime = new SceneCanvasRuntime()
-    runtime.loadDocument({
-      ...BASE_FILE,
-      plant_species_colors: {
-        'Quercus robur': '#112233',
-      },
-      plants: [createPlant('plant-1', 10, 20)],
-    })
+    const host = createRuntimeHost()
+    const { commands, documents } = host.surfaces
 
-    runtime.setPlantColorForSpecies('Quercus robur', '#228833')
-
-    const serialized = runtime.serializeDocument(
-      {
-        name: 'Updated',
-        location: null,
-        northBearingDeg: 0,
-      },
-      {
+    try {
+      documents.loadDocument({
         ...BASE_FILE,
         plant_species_colors: {
           'Quercus robur': '#112233',
         },
-      },
-    )
+        plants: [createPlant('plant-1', 10, 20)],
+      })
 
-    expect(serialized.plant_species_colors).toEqual({
-      'Quercus robur': '#228833',
-    })
+      commands.plantPresentation.setPlantColorForSpecies('Quercus robur', '#228833')
+
+      const serialized = documents.serializeDocument(
+        {
+          name: 'Updated',
+          location: null,
+          northBearingDeg: 0,
+        },
+        {
+          ...BASE_FILE,
+          plant_species_colors: {
+            'Quercus robur': '#112233',
+          },
+        },
+      )
+
+      expect(serialized.plant_species_colors).toEqual({
+        'Quercus robur': '#228833',
+      })
+    } finally {
+      host.destroy()
+    }
   })
 
   it('defaults document budget currency while serializing', () => {
-    const runtime = new SceneCanvasRuntime()
-    runtime.loadDocument(BASE_FILE)
+    const host = createRuntimeHost()
+    const { documents } = host.surfaces
 
-    const serialized = runtime.serializeDocument(
-      { name: 'Updated' },
-      BASE_FILE,
-    )
+    try {
+      documents.loadDocument(BASE_FILE)
 
-    expect(serialized.budget_currency).toBe('EUR')
+      const serialized = documents.serializeDocument(
+        { name: 'Updated' },
+        BASE_FILE,
+      )
+
+      expect(serialized.budget_currency).toBe('EUR')
+    } finally {
+      host.destroy()
+    }
   })
 
   it('keeps scene selection authoritative and mirrors it into canvas signals', () => {
-    const runtime = new SceneCanvasRuntime()
-    runtime.getSceneStore().setSelection(['plant-1'])
-    selectedObjectIds.value = new Set(['mirror-only'])
+    const host = createRuntimeHost()
+    const { commands, documents, queries } = host.surfaces
 
-    expect(runtime.getSelection()).toEqual(new Set(['plant-1']))
+    try {
+      documents.loadDocument({
+        ...BASE_FILE,
+        plants: [
+          createPlant('plant-1', 10, 20),
+          createPlant('plant-2', 30, 40),
+        ],
+      })
+      selectedObjectIds.value = new Set(['mirror-only'])
 
-    runtime.setSelection(['plant-2'])
-    expect(runtime.getSceneStore().session.selectedEntityIds).toEqual(new Set(['plant-2']))
-    expect(selectedObjectIds.value).toEqual(new Set(['plant-2']))
+      commands.sceneEdits.selectAll()
+      expect(queries.getSelection()).toEqual(new Set(['plant-1', 'plant-2']))
+      expect(selectedObjectIds.value).toEqual(new Set(['plant-1', 'plant-2']))
 
-    runtime.clearSelection()
-    expect(runtime.getSceneStore().session.selectedEntityIds.size).toBe(0)
-    expect(selectedObjectIds.value.size).toBe(0)
+      commands.sceneEdits.deleteSelected()
+      expect(queries.getSelection().size).toBe(0)
+      expect(selectedObjectIds.value.size).toBe(0)
+    } finally {
+      host.destroy()
+    }
   })
 })
