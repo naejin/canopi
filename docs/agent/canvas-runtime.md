@@ -16,6 +16,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - `canvas/runtime/runtime.ts` owns the app-facing Canvas Runtime Surface interfaces. `canvas/runtime/surfaces.ts` only composes the live runtime surfaces; command, query, and document surface behavior belongs behind the role modules in `canvas/runtime/*-surface.ts`.
 - `SceneCanvasRuntime` may still wire the concrete scene runtime during migration, but new surface behavior should be added to the relevant role module before adding more broad runtime pass-through code.
 - `canvas/runtime/document-surface.ts` owns document lifecycle surface behavior for load, replace, serialization, saved checkpoints, viewport initialization, chrome attachment, resize, and teardown. `SceneCanvasRuntime` compatibility methods delegate to that role.
+- `canvas/runtime/query-surface.ts` owns read-only surface behavior for scene snapshots, viewport facts, revisions, selection, placed plants, localized names, and plant presentation context. `SceneCanvasRuntime` compatibility methods delegate to that role.
 - `app/canvas-runtime/host.ts` owns live runtime creation and publication of `CanvasRuntimeSurfaces` into the Design Session.
 - `canvas/runtime/app-adapter.ts` owns the runtime-facing `CanvasRuntimeAppAdapter` contract and detached fallback behavior.
 - `app/canvas-runtime/app-adapter.ts` owns production wiring from the adapter contract to app-owned document/session/settings modules.

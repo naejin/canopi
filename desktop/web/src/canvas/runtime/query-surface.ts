@@ -1,22 +1,46 @@
-import type { CanvasQuerySurface } from './runtime'
-import type { SceneCanvasRuntime } from './scene-runtime'
+import type { PlacedPlant } from '../../types/design'
+import type { ColorByAttribute, PlantSizeMode } from '../plant-display-state'
+import type { SelectedPlantColorContext } from '../plant-color-context'
+import type { CameraController } from './camera'
+import type { CanvasQueryRevision, CanvasQuerySurface } from './runtime'
+import type { ScenePersistedState, SceneStore, SceneViewportState } from './scene'
+import type { SceneRuntimeMutationController } from './scene-runtime/mutations'
+import type { SceneRuntimePresentationController } from './scene-runtime/presentation'
 
-export function createSceneCanvasQuerySurface(runtime: SceneCanvasRuntime): CanvasQuerySurface {
-  return new SceneCanvasQueryRole(runtime)
+interface SceneCanvasQuerySurfaceOptions {
+  readonly revision: CanvasQueryRevision
+  readonly sceneStore: Pick<SceneStore, 'persisted' | 'session' | 'toCanopiFile'>
+  readonly camera: Pick<CameraController, 'viewport' | 'screenSize'>
+  readonly viewportRevision: CanvasQueryRevision['viewport']
+  readonly mutations: Pick<
+    SceneRuntimeMutationController,
+    'getPlantSizeMode' | 'getPlantColorByAttr' | 'getSelectedPlantColorContext'
+  >
+  readonly presentation: Pick<SceneRuntimePresentationController, 'getLocalizedCommonNames'>
+}
+
+export function createSceneCanvasQuerySurface(
+  options: SceneCanvasQuerySurfaceOptions,
+): CanvasQuerySurface {
+  return new SceneCanvasQueryRole(options)
 }
 
 class SceneCanvasQueryRole implements CanvasQuerySurface {
-  constructor(private readonly runtime: SceneCanvasRuntime) {}
+  constructor(private readonly options: SceneCanvasQuerySurfaceOptions) {}
 
-  get revision() { return this.runtime.revision }
-  getSceneSnapshot() { return this.runtime.getSceneSnapshot() }
-  getViewport() { return this.runtime.getViewport() }
-  getViewportScreenSize() { return this.runtime.getViewportScreenSize() }
-  get viewportRevision() { return this.runtime.viewportRevision }
-  getSelection() { return this.runtime.getSelection() }
-  getPlantSizeMode() { return this.runtime.getPlantSizeMode() }
-  getPlantColorByAttr() { return this.runtime.getPlantColorByAttr() }
-  getSelectedPlantColorContext() { return this.runtime.getSelectedPlantColorContext() }
-  getPlacedPlants() { return this.runtime.getPlacedPlants() }
-  getLocalizedCommonNames() { return this.runtime.getLocalizedCommonNames() }
+  get revision(): CanvasQueryRevision { return this.options.revision }
+  get viewportRevision(): CanvasQueryRevision['viewport'] { return this.options.viewportRevision }
+  getSceneSnapshot(): ScenePersistedState { return this.options.sceneStore.persisted }
+  getViewport(): SceneViewportState { return this.options.camera.viewport }
+  getViewportScreenSize(): { width: number; height: number } { return this.options.camera.screenSize }
+  getSelection(): Set<string> { return new Set(this.options.sceneStore.session.selectedEntityIds) }
+  getPlantSizeMode(): PlantSizeMode { return this.options.mutations.getPlantSizeMode() }
+  getPlantColorByAttr(): ColorByAttribute | null { return this.options.mutations.getPlantColorByAttr() }
+  getSelectedPlantColorContext(): SelectedPlantColorContext {
+    return this.options.mutations.getSelectedPlantColorContext()
+  }
+  getPlacedPlants(): PlacedPlant[] { return this.options.sceneStore.toCanopiFile().plants }
+  getLocalizedCommonNames(): ReadonlyMap<string, string | null> {
+    return this.options.presentation.getLocalizedCommonNames()
+  }
 }

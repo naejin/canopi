@@ -30,6 +30,7 @@ import {
 import { SceneRuntimeChromeCoordinator } from './scene-runtime/chrome-coordinator'
 import { SceneRuntimeDocumentBridge } from './scene-runtime/document'
 import { createSceneCanvasDocumentSurface } from './document-surface'
+import { createSceneCanvasQuerySurface } from './query-surface'
 import { installSceneRuntimeEffects } from './scene-runtime/effects'
 import { SceneRuntimeRenderScheduler, type SceneRuntimeRenderKind } from './scene-runtime/render-scheduler'
 import type { SceneLayerEntity, ScenePersistedState } from './scene'
@@ -46,6 +47,7 @@ import {
 } from './scene-runtime/panel-target-adapter'
 import type {
   CanvasDocumentSurface,
+  CanvasQuerySurface,
   CanvasQueryRevision,
   CanvasRuntimeDocumentMetadata,
 } from './runtime'
@@ -96,6 +98,7 @@ export class SceneCanvasRuntime {
   private readonly _mutations: SceneRuntimeMutationController
   private readonly _documents: SceneRuntimeDocumentBridge
   private readonly _documentSurface: CanvasDocumentSurface
+  private readonly _querySurface: CanvasQuerySurface
   private readonly _panelTargetAdapter: SceneRuntimePanelTargetAdapter
   private readonly _disposeEffects: Array<() => void> = []
 
@@ -172,6 +175,14 @@ export class SceneCanvasRuntime {
       },
       invalidateScene: () => this._invalidate('scene'),
     })
+    this._querySurface = createSceneCanvasQuerySurface({
+      revision: this._revision,
+      sceneStore: this._sceneStore,
+      camera: this._camera,
+      viewportRevision: this._viewportRevision,
+      mutations: this._mutations,
+      presentation: this._presentation,
+    })
     this._installEffects()
   }
 
@@ -216,28 +227,32 @@ export class SceneCanvasRuntime {
     return this._documentSurface
   }
 
+  get querySurface(): CanvasQuerySurface {
+    return this._querySurface
+  }
+
   getSceneSnapshot(): ScenePersistedState {
-    return this._sceneStore.persisted
+    return this._querySurface.getSceneSnapshot()
   }
 
   getViewport() {
-    return this._camera.viewport
+    return this._querySurface.getViewport()
   }
 
   getViewportScreenSize(): { width: number; height: number } {
-    return this._camera.screenSize
+    return this._querySurface.getViewportScreenSize()
   }
 
   get viewportRevision() {
-    return this._viewportRevision
+    return this._querySurface.viewportRevision
   }
 
   get revision() {
-    return this._revision
+    return this._querySurface.revision
   }
 
   getSelection(): Set<string> {
-    return new Set(this._sceneStore.session.selectedEntityIds)
+    return this._querySurface.getSelection()
   }
 
   setSelection(ids: Iterable<string>): void {
@@ -376,7 +391,7 @@ export class SceneCanvasRuntime {
   }
 
   getPlantSizeMode(): PlantSizeMode {
-    return this._mutations.getPlantSizeMode()
+    return this._querySurface.getPlantSizeMode()
   }
 
   setPlantSizeMode(mode: PlantSizeMode): void {
@@ -384,7 +399,7 @@ export class SceneCanvasRuntime {
   }
 
   getPlantColorByAttr(): ColorByAttribute | null {
-    return this._mutations.getPlantColorByAttr()
+    return this._querySurface.getPlantColorByAttr()
   }
 
   setPlantColorByAttr(attr: ColorByAttribute | null): void {
@@ -392,15 +407,15 @@ export class SceneCanvasRuntime {
   }
 
   getSelectedPlantColorContext(): SelectedPlantColorContext {
-    return this._mutations.getSelectedPlantColorContext()
+    return this._querySurface.getSelectedPlantColorContext()
   }
 
   getPlacedPlants(): PlacedPlant[] {
-    return this._sceneStore.toCanopiFile().plants
+    return this._querySurface.getPlacedPlants()
   }
 
   getLocalizedCommonNames(): ReadonlyMap<string, string | null> {
-    return this._presentation.getLocalizedCommonNames()
+    return this._querySurface.getLocalizedCommonNames()
   }
 
   async ensureSpeciesCacheEntries(canonicalNames: string[], activeLocale: string): Promise<boolean> {

@@ -123,7 +123,7 @@ describe('canvas runtime surfaces', () => {
     const surfacesSource = readPackageSource('../canvas/runtime/surfaces.ts')
 
     expect(surfacesSource).toContain('createSceneCanvasCommandSurface')
-    expect(surfacesSource).toContain('createSceneCanvasQuerySurface')
+    expect(surfacesSource).toContain('querySurfaceFrom')
     expect(surfacesSource).not.toContain('class SceneCanvasCommandAdapter')
     expect(surfacesSource).not.toContain('class SceneCanvasQueryAdapter')
     expect(surfacesSource).not.toContain('class SceneCanvasDocumentAdapter')
@@ -143,6 +143,23 @@ describe('canvas runtime surfaces', () => {
     expect(runtimeSource).not.toContain('this._documents.loadDocument(file)')
     expect(runtimeSource).not.toContain('this._documents.replaceDocument(file)')
     expect(runtimeSource).not.toContain('this._documents.serializeDocument(metadata, doc)')
+  })
+
+  it('keeps query read behavior inside the query role module', () => {
+    const querySurfaceSource = readPackageSource('../canvas/runtime/query-surface.ts')
+    const runtimeSource = readPackageSource('../canvas/runtime/scene-runtime.ts')
+
+    expect(querySurfaceSource).not.toContain("from './scene-runtime'")
+    expect(querySurfaceSource).not.toContain('this.runtime.')
+    expect(querySurfaceSource).toContain('getSceneSnapshot()')
+    expect(querySurfaceSource).toContain('getViewport()')
+    expect(querySurfaceSource).toContain('getSelection()')
+    expect(querySurfaceSource).toContain('getPlacedPlants()')
+    expect(runtimeSource).toContain('get querySurface')
+    expect(runtimeSource).not.toContain('return this._sceneStore.persisted')
+    expect(runtimeSource).not.toContain('return this._camera.viewport')
+    expect(runtimeSource).not.toContain('return new Set(this._sceneStore.session.selectedEntityIds)')
+    expect(runtimeSource).not.toContain('return this._sceneStore.toCanopiFile().plants')
   })
 
   it('publishes explicit facades instead of the mounted runtime', () => {
