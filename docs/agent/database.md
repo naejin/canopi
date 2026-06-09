@@ -20,14 +20,14 @@ When canopi-data removes or adds columns, update atomically:
 1. `scripts/schema-contract.json`: bump schema version, min export schema version, and columns.
 2. `desktop/src/db/schema_contract.rs`: bump expected plant schema version.
 3. `common-types/src/species.rs`: update shared structs.
-4. `desktop/src/db/plant_db/detail.rs`: update projection columns and row mapping order.
+4. `desktop/src/services/species_catalog_read/detail_projection.rs` and `detail_row_map.rs`: update projection columns and row mapping order.
 5. Backend test fixtures.
 6. `scripts/prepare-db.py`: update search index generation if FTS columns change.
 7. Frontend generated bindings if shared types changed.
 
 ## Query Builder And Filters
 
-- Plant detail query shape, selected columns, row-mapping contract, and projected text translation have one projection owner: `plant_db/detail_projection.rs`.
+- Plant detail query shape, selected columns, row-mapping contract, and projected text translation have one projection owner: `services/species_catalog_read/detail_projection.rs`.
 - Detail row mapping reads projected columns by name so projection order can change without remapping every field.
 - Search plans own count/list query construction and cursor semantics.
 - Species Catalog read projections own caller-oriented SQL shape, row mapping, parameter placeholders, and localized Common Name hydration before a workflow interprets the facts.
@@ -67,7 +67,7 @@ When canopi-data removes or adds columns, update atomically:
 - Relevance text searches rank Common Name matches before BM25: active-locale exact phrase first for multi-word queries, then active-locale indexed query tokens, then fallback English exact phrase/tokens, then `bm25(species_search_fts, 8, 10, 5, 1, 1)` for canonical name, family, genus, and broader text matches.
 - `total_estimate` comes from count; visible rows come from list. If UI shows a new count with old rows during debounce, investigate frontend committed-result lifecycle first.
 - The Species Catalog Workbench may pass `include_total=false` for active text searches to keep first-page latency low; pagination must rely on `next_cursor`, not `total_estimate`.
-- Run the manual Species Catalog latency harness with `cargo test -p canopi-desktop db::plant_db::search::tests::bundled_species_search_latency_harness_reports_list_and_count_timings -- --ignored --nocapture`.
+- Run the manual Species Catalog latency harness with `cargo test -p canopi-desktop services::species_catalog_read::search::tests::bundled_species_search_latency_harness_reports_list_and_count_timings -- --ignored --nocapture`.
 - The harness opens `desktop/resources/canopi-core.db` by default, or `CANOPI_PLANT_DB_PATH` when set, and reports first-page list latency separately from total-count latency.
 
 ## Translations

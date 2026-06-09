@@ -5,12 +5,12 @@ pub(super) fn read_images_projection(
     conn: &Connection,
     canonical_name: &str,
 ) -> Result<Vec<SpeciesImage>, String> {
-    crate::db::plant_db::get_species_images(conn, canonical_name)
+    super::detail::get_species_images(conn, canonical_name)
 }
 
 pub(super) fn read_external_links_projection(
     conn: &Connection,
     canonical_name: &str,
 ) -> Result<Vec<SpeciesExternalLink>, String> {
-    crate::db::plant_db::get_species_external_links(conn, canonical_name)
+    super::detail::get_species_external_links(conn, canonical_name)
 }
