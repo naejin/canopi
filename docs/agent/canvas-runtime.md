@@ -28,6 +28,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - Full Design file composition is app-owned and crosses `CanvasRuntimeAppAdapter.document`. Runtime core serializes canvas-owned state and must not import `app/contracts/document`.
 - Plant presentation state lives in `SceneStore.session`, not standalone canvas signals.
 - Scene Layer visibility, opacity, and locks are scene edits. UI controllers must call the canvas command surface instead of writing `layerVisibility`, `layerOpacity`, or `layerLockState` directly.
+- Canvas Layer Presentation (`app/canvas-layer-presentation/presentation.ts`) owns the visible Layer catalog and authority-correct row commands for scene Layers, basemap, contours, and hillshading. UI callers should consume that seam instead of hard-coding `base`, `contours`, or `hillshading` routing.
 - Design Object lock state lives on persisted scene entities in `SceneStore`. Production code must read and mutate object locks through scene queries/edits, never through standalone mirror signals.
 - A group is effectively locked for mutating canvas interactions when the group itself is locked or any existing member Design Object is locked. Missing member IDs do not lock a group.
 - Guide creation is a scene edit owned by the runtime. The `guides` signal is a chrome projection, not document authority.
@@ -72,7 +73,10 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 ### Scene Interaction Tool Modules
 
 - Tool modules are internal adapters behind `canvas/runtime/interaction/tool-modules.ts`; they do not change the public `SceneCanvasRuntime`, `CanvasCommandSurface`, `CanvasQuerySurface`, or `CanvasDocumentSurface` interfaces.
-- `SceneInteractionController` owns global pointer, wheel, key, drag/drop listener registration, shared panning, shared selection, scene invalidation, and common cancellation on tool changes. Tool construction, active-tool lifecycle dispatch, and optional adapter hook normalization belong in `tool-modules.ts`.
+- Scene Interaction Frame (`canvas/runtime/interaction/frame.ts`) owns interaction listener setup/teardown, tool transition routing, transient cleanup ordering, and disposal cleanup ordering.
+- Shared panning, band selection, top-level Design Object dragging, snap-adjusted drag deltas, and shared gesture cleanup live in `canvas/runtime/interaction/shared-gestures.ts` behind the frame. `SceneInteractionController` should route these gestures through that seam and keep tool dispatch separate.
+- `SceneInteractionController` supplies concrete cleanup callbacks to `frame.cleanupTransient()`; do not inline the ordering for pointer gesture reset, shared gesture cancellation, tool transient cancellation, hover clearing, or cursor reset back into the controller.
+- Tool construction, active-tool lifecycle dispatch, and optional adapter hook normalization belong in `tool-modules.ts`.
 - Tool modules own tool-specific state machines, including setup, per-event handling, refresh-after-viewport-change behavior, cancellation, and teardown for their own transient state.
 - Shared tool context may expose only runtime-owned seams and stable projections: `SceneStore`, `CameraController`, Scene Edit transactions, selection setters/readers, hit testing, snapping/grid/guide reads, render invalidation, localized Species names, plant presentation context, settings commands or projections, and DOM overlay containers.
 - Tool modules may create DOM overlays for tool-owned chrome, but the module that creates an overlay owns its cleanup. Router-owned overlays stay router-owned until a later bead deliberately moves them behind a tool module.
@@ -80,7 +84,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - Tool modules must treat `setTool()` changes, `dispose()`, document replacement, Escape cancellation, source invalidation, and viewport refresh as lifecycle events that leave no stale overlays, listeners, selections, previews, or pointer capture behind.
 - Do not install module-level `effect()` or global listeners from a tool module unless that module also owns an explicit disposer and `import.meta.hot.dispose()` cleanup. Prefer router-dispatched events for canvas tool input.
 - Current Scene Edit tool adapters include Annotation Text, Zone drawing, Object Stamp, Plant Stamp, and Plant Spacing. Do not reintroduce tool-specific fields, source state, preview state, or direct tool branches into `SceneInteractionController`; route through a `SceneToolAdapter` and keep the state machine in the tool module.
-- `canvas/plant-stamp-source.ts` owns Plant Stamp Source selection plus drag data parsing/serialization. Plant Stamp tool modules consume that seam; Species Catalog UI modules call it instead of writing source state or hand-assembling drag payloads.
+- `canvas/plant-stamp-source.ts` owns Plant Stamp Source selection plus drag data parsing/serialization. Plant Stamp tool modules consume that seam and clear the selected source on adapter deactivation/disposal; Species Catalog UI modules call it instead of writing source state or hand-assembling drag payloads.
 - Guard Scene Edit ownership with source boundary tests in `scene-interaction-tool-boundary.test.ts` and user-equivalent lifecycle tests in `scene-interaction.test.ts`. Add tests before moving another tool concern across the router/module boundary.
 
 ## Zone Measurements

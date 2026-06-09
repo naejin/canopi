@@ -17,7 +17,7 @@ import { BottomPanel } from '../canvas/BottomPanel'
 import { BottomPanelLauncher } from '../canvas/BottomPanelLauncher'
 import { LayerPanel } from '../canvas/LayerPanel'
 import { WelcomeScreen } from '../shared/WelcomeScreen'
-import { hasVisibleMapLayer, hillshadeVisible, layerVisibility } from '../../app/canvas-settings/signals'
+import { readCanvasLayerPresentation } from '../../app/canvas-layer-presentation/presentation'
 import { getLocationNoticeReadModel, useSavedLocationPresentation } from '../../app/location'
 import {
   CANVAS_NOTICE_DEFAULT_CANVAS_HEIGHT_PX,
@@ -57,8 +57,7 @@ export function CanvasPanel() {
 
   const savedLocation = useSavedLocationPresentation()
   const hasDesign = savedLocation.hasDesign
-  const visibility = layerVisibility.value
-  const mapVisible = hasVisibleMapLayer(visibility, hillshadeVisible.value)
+  const mapVisible = readCanvasLayerPresentation().hasVisibleMapLayer
   const locationNotice = getLocationNoticeReadModel({
     saved: savedLocation,
     mapVisible,

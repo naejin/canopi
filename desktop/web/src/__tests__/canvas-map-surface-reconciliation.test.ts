@@ -22,6 +22,7 @@ function snapshot(
     location: { lat: 48.8566, lon: 2.3522 },
     northBearingDeg: 12,
     basemapStyle: 'street',
+    hasVisibleMapLayer: true,
     layerVisibility: { base: true, contours: false },
     layerOpacity: { base: 1, contours: 1 },
     terrain: {
@@ -54,7 +55,7 @@ describe('Canvas Map Surface reconciliation', () => {
     ['missing-snapshot', null, {}],
     ['missing-runtime', snapshot({ runtime: null }), {}],
     ['missing-location', snapshot({ location: null }), {}],
-    ['hidden', snapshot({ layerVisibility: { base: false, contours: false } }), {}],
+    ['hidden', snapshot({ hasVisibleMapLayer: false }), {}],
     ['missing-container', snapshot(), { hasContainer: false }],
   ] as const)('stays inactive when the map is already idle: %s', (reason, input, state) => {
     expect(reconcile(input, state)).toEqual({ type: 'inactive', reason })
@@ -78,11 +79,45 @@ describe('Canvas Map Surface reconciliation', () => {
     })
   })
 
-  it('keeps a map eligible when base visibility is omitted but contours are off', () => {
-    expect(reconcile(snapshot({ layerVisibility: {} }))).toEqual({
-      type: 'create',
-      basemapStyle: 'street',
-    })
+  it.each([
+    ['base only', snapshot({
+      hasVisibleMapLayer: true,
+      layerVisibility: { base: true, contours: false },
+      terrain: {
+        contourIntervalMeters: 0,
+        contoursVisible: false,
+        contoursOpacity: 1,
+        hillshadeVisible: false,
+        hillshadeOpacity: 0.55,
+        isDark: false,
+      },
+    })],
+    ['contours only', snapshot({
+      hasVisibleMapLayer: true,
+      layerVisibility: { base: false, contours: true },
+      terrain: {
+        contourIntervalMeters: 10,
+        contoursVisible: true,
+        contoursOpacity: 1,
+        hillshadeVisible: false,
+        hillshadeOpacity: 0.55,
+        isDark: false,
+      },
+    })],
+    ['hillshade only', snapshot({
+      hasVisibleMapLayer: true,
+      layerVisibility: { base: false, contours: false },
+      terrain: {
+        contourIntervalMeters: 0,
+        contoursVisible: false,
+        contoursOpacity: 1,
+        hillshadeVisible: true,
+        hillshadeOpacity: 0.55,
+        isDark: false,
+      },
+    })],
+  ] as const)('keeps a map eligible with visible %s', (_label, input) => {
+    expect(reconcile(input)).toEqual({ type: 'create', basemapStyle: 'street' })
   })
 
   it('syncs an existing map when the normalized basemap style is unchanged', () => {

@@ -21,12 +21,33 @@ describe('location route boundary', () => {
     expect(panelSource).toContain("LocationTab")
     expect(tabSource).not.toContain("ipc/geocoding")
     expect(inputSource).not.toContain("ipc/geocoding")
+    for (const source of [tabSource, inputSource]) {
+      expect(source).not.toContain("document.addEventListener('pointerup'")
+      expect(source).not.toContain('search.closeDropdown')
+      expect(source).not.toContain('search.dispose')
+    }
+    expect(tabSource).toContain('useLocationMapEditingHost')
+    expect(tabSource).not.toContain("maplibre-gl")
+    expect(tabSource).not.toContain('createMapLibreBasemapStyle')
+    expect(tabSource).not.toContain('basemapStyle')
+    expect(tabSource).not.toContain('computeSavedPinState')
+  })
+
+  it('keeps the MapLibre map editing host off the shared Location barrel', () => {
+    const barrelSource = readSource('../app/location/index.ts')
+    const mapEditingSource = readSource('../app/location/map-editing.ts')
+    const tabSource = readSource('../components/canvas/LocationTab.tsx')
+
+    expect(mapEditingSource).toContain("maplibre-gl")
+    expect(barrelSource).not.toContain('./map-editing')
+    expect(tabSource).toContain('../../app/location/map-editing')
   })
 
   it('keeps saved-location UI behind the Location Workbench seam', () => {
     const canvasPanelSource = readSource('../components/panels/CanvasPanel.tsx')
     const locationPanelSource = readSource('../components/panels/LocationPanel.tsx')
     const layerPanelSource = readSource('../components/canvas/LayerPanel.tsx')
+    const layerPresentationSource = readSource('../app/canvas-layer-presentation/presentation.ts')
     const compassOverlaySource = readSource('../components/canvas/CompassOverlay.tsx')
     const mapSurfaceControllerSource = readSource('../components/canvas/maplibre-surface-controller.ts')
     const mapSurfaceSnapshotSource = readSource('../app/canvas-map-surface/snapshot.ts')
@@ -36,7 +57,7 @@ describe('location route boundary', () => {
     for (const source of [
       canvasPanelSource,
       locationPanelSource,
-      layerPanelSource,
+      layerPresentationSource,
       compassOverlaySource,
       mapSurfaceSnapshotSource,
       tabSource,
@@ -50,6 +71,9 @@ describe('location route boundary', () => {
       expect(source).not.toContain('createLocationSearchController')
     }
 
+    expect(layerPanelSource).toContain('canvas-layer-presentation/presentation')
+    expect(layerPanelSource).not.toContain('app/location')
+    expect(layerPanelSource).not.toContain('../location')
     expect(mapSurfaceControllerSource).toContain('canvas-map-surface/snapshot')
     expect(mapSurfaceControllerSource).not.toContain('document-session/store')
     expect(mapSurfaceControllerSource).not.toContain('utils/location')

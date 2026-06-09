@@ -1,6 +1,6 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { currentDesign, nonCanvasRevision } from './support/design-session-state'
 import {
   getSavedLocationPresentation,
@@ -45,6 +45,7 @@ describe('Location Workbench', () => {
   let workbench: LocationWorkbench | null
 
   beforeEach(() => {
+    vi.useFakeTimers()
     container = document.createElement('div')
     document.body.innerHTML = ''
     document.body.appendChild(container)
@@ -55,6 +56,8 @@ describe('Location Workbench', () => {
 
   afterEach(() => {
     render(null, container)
+    vi.runOnlyPendingTimers()
+    vi.useRealTimers()
     container.remove()
     currentDesign.value = null
     nonCanvasRevision.value = 0
@@ -120,5 +123,41 @@ describe('Location Workbench', () => {
     })
 
     expect(currentDesign.value?.location).toEqual({ lat: 40.7128, lon: -74.006, altitude_m: 35 })
+  })
+
+  it('owns search dropdown outside-click close behavior and disposal', () => {
+    renderProbe()
+    const search = currentWorkbench().search
+    const dropdown = document.createElement('div')
+    const inside = document.createElement('button')
+    dropdown.appendChild(inside)
+    document.body.appendChild(dropdown)
+
+    act(() => {
+      search.setDropdownElement(dropdown)
+      search.setQuery('paris')
+    })
+    expect(search.isSearching.value).toBe(true)
+
+    act(() => {
+      inside.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))
+    })
+    expect(search.isSearching.value).toBe(true)
+
+    act(() => {
+      document.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))
+    })
+    expect(search.isSearching.value).toBe(false)
+    expect(search.showDropdown.value).toBe(false)
+
+    act(() => {
+      search.setQuery('berlin')
+    })
+    expect(search.isSearching.value).toBe(true)
+
+    act(() => {
+      render(null, container)
+    })
+    expect(search.isSearching.value).toBe(false)
   })
 })
