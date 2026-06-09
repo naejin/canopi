@@ -8,12 +8,13 @@ import { plantNamesRevision, sceneEntityRevision } from '../runtime-mirror-state
 import type { ColorByAttribute, PlantSizeMode } from '../plant-display-state'
 import type { CanopiFile, PlacedPlant } from '../../types/design'
 import type { SelectedPlantColorContext } from '../plant-color-context'
-import { setCanvasSelection, setCanvasTool } from '../session-state'
+import { setCanvasSelection } from '../session-state'
 import { syncPlantSpeciesColorDefaults } from '../plant-species-color-defaults'
 import { refreshCanvasColorCache } from '../theme-refresh'
 import { createUuid } from '../../utils/ids'
 import { CameraController } from './camera'
 import { SceneInteractionController } from './scene-interaction'
+import { createSceneCanvasCommandSurface } from './command-surface'
 import { RendererHost } from './renderers'
 import { createCanvas2DSceneRenderer } from './renderers/canvas2d-scene'
 import { createPixiSceneRenderer } from './renderers/pixi-scene'
@@ -25,7 +26,6 @@ import {
   syncCanvasSignalsFromScene,
   syncGuideSignalsFromScene,
   syncPresentationSignalsFromSceneSession,
-  syncSceneLayerSignalsFromScene,
 } from './scene-runtime/scene-sync'
 import { SceneRuntimeChromeCoordinator } from './scene-runtime/chrome-coordinator'
 import { SceneRuntimeDocumentBridge } from './scene-runtime/document'
@@ -33,7 +33,7 @@ import { createSceneCanvasDocumentSurface } from './document-surface'
 import { createSceneCanvasQuerySurface } from './query-surface'
 import { installSceneRuntimeEffects } from './scene-runtime/effects'
 import { SceneRuntimeRenderScheduler, type SceneRuntimeRenderKind } from './scene-runtime/render-scheduler'
-import type { SceneLayerEntity, ScenePersistedState } from './scene'
+import type { ScenePersistedState } from './scene'
 import { SceneHistory } from './scene-history'
 import { SceneRuntimeMutationController } from './scene-runtime/mutations'
 import { SceneRuntimePresentationController } from './scene-runtime/presentation'
@@ -46,6 +46,7 @@ import {
   type SceneRuntimePanelTargetAdapter,
 } from './scene-runtime/panel-target-adapter'
 import type {
+  CanvasCommandSurface,
   CanvasDocumentSurface,
   CanvasQuerySurface,
   CanvasQueryRevision,
@@ -54,7 +55,6 @@ import type {
 import { targets, speciesTarget } from '../../target'
 
 type RuntimeInvalidationKind = 'scene' | 'viewport' | 'chrome'
-type SceneLayerEdit = Partial<Pick<SceneLayerEntity, 'visible' | 'locked' | 'opacity'>>
 
 export interface SceneCanvasRuntimeOptions {
   appAdapter?: CanvasRuntimeAppAdapter
@@ -94,6 +94,7 @@ export class SceneCanvasRuntime {
   private _interaction: SceneInteractionController | null = null
   private readonly _appAdapter: CanvasRuntimeAppAdapter
   private readonly _history: SceneHistory
+  private readonly _commandSurface: CanvasCommandSurface
   private readonly _sceneEdits: SceneEditCoordinator
   private readonly _mutations: SceneRuntimeMutationController
   private readonly _documents: SceneRuntimeDocumentBridge
@@ -175,6 +176,24 @@ export class SceneCanvasRuntime {
       },
       invalidateScene: () => this._invalidate('scene'),
     })
+    this._commandSurface = createSceneCanvasCommandSurface({
+      sceneStore: this._sceneStore,
+      camera: this._camera,
+      history: this._history,
+      documents: this._documents,
+      mutations: this._mutations,
+      sceneEdits: this._sceneEdits,
+      presentation: this._presentation,
+      settings: this._appAdapter.settings,
+      setViewport: (viewport) => this._setViewport(viewport),
+      setInteractionTool: (name) => {
+        this._interaction?.setTool(name)
+      },
+      syncCanvasSignalsFromScene: () => this._syncCanvasSignalsFromScene(),
+      incrementSceneRevision: () => this._incrementSceneRevision(),
+      currentPresentationRevision: () => this._currentPresentationRevision(),
+      invalidate: (kind) => this._invalidate(kind),
+    })
     this._querySurface = createSceneCanvasQuerySurface({
       revision: this._revision,
       sceneStore: this._sceneStore,
@@ -221,6 +240,10 @@ export class SceneCanvasRuntime {
 
   getSceneStore(): SceneStore {
     return this._sceneStore
+  }
+
+  get commandSurface(): CanvasCommandSurface {
+    return this._commandSurface
   }
 
   get documentSurface(): CanvasDocumentSurface {
@@ -283,111 +306,98 @@ export class SceneCanvasRuntime {
   }
 
   setTool(name: string): void {
-    setCanvasTool(name)
-    this._interaction?.setTool(name)
+    this._commandSurface.tools.setTool(name)
   }
 
   zoomIn(): void {
-    this._setViewport(this._camera.zoomIn())
-    this._invalidate('viewport')
+    this._commandSurface.viewport.zoomIn()
   }
 
   zoomOut(): void {
-    this._setViewport(this._camera.zoomOut())
-    this._invalidate('viewport')
+    this._commandSurface.viewport.zoomOut()
   }
 
   zoomToFit(): void {
-    this._documentSurface.zoomToFit()
+    this._commandSurface.viewport.zoomToFit()
   }
 
-  get canUndo() { return this._history.canUndo }
-  get canRedo() { return this._history.canRedo }
+  get canUndo() { return this._commandSurface.history.canUndo }
+  get canRedo() { return this._commandSurface.history.canRedo }
 
   undo(): void {
-    this._history.undo(this._documents.historyRuntime())
-    this._syncCanvasSignalsFromScene()
-    this._incrementSceneRevision()
-    this._invalidate('scene')
+    this._commandSurface.history.undo()
   }
 
   redo(): void {
-    this._history.redo(this._documents.historyRuntime())
-    this._syncCanvasSignalsFromScene()
-    this._incrementSceneRevision()
-    this._invalidate('scene')
+    this._commandSurface.history.redo()
   }
 
   copy(): void {
-    this._mutations.copy()
+    this._commandSurface.sceneEdits.copy()
   }
 
   paste(): void {
-    this._mutations.paste()
+    this._commandSurface.sceneEdits.paste()
   }
 
   duplicateSelected(): void {
-    this._mutations.duplicateSelected()
+    this._commandSurface.sceneEdits.duplicateSelected()
   }
 
   deleteSelected(): void {
-    this._mutations.deleteSelected()
+    this._commandSurface.sceneEdits.deleteSelected()
   }
 
   selectAll(): void {
-    this._mutations.selectAll()
+    this._commandSurface.sceneEdits.selectAll()
   }
 
   bringToFront(): void {
-    this._mutations.bringToFront()
+    this._commandSurface.sceneEdits.bringToFront()
   }
 
   sendToBack(): void {
-    this._mutations.sendToBack()
+    this._commandSurface.sceneEdits.sendToBack()
   }
 
   lockSelected(): void {
-    this._mutations.lockSelected()
+    this._commandSurface.sceneEdits.lockSelected()
   }
 
   unlockSelected(): void {
-    this._mutations.unlockSelected()
+    this._commandSurface.sceneEdits.unlockSelected()
   }
 
   groupSelected(): void {
-    this._mutations.groupSelected()
+    this._commandSurface.sceneEdits.groupSelected()
   }
 
   ungroupSelected(): void {
-    this._mutations.ungroupSelected()
+    this._commandSurface.sceneEdits.ungroupSelected()
   }
 
   toggleGrid(): void {
-    this._appAdapter.settings.toggleGridVisible()
+    this._commandSurface.chrome.toggleGrid()
   }
 
   toggleSnapToGrid(): void {
-    this._appAdapter.settings.toggleSnapToGrid()
+    this._commandSurface.chrome.toggleSnapToGrid()
   }
 
   toggleRulers(): void {
-    this._appAdapter.settings.toggleRulersVisible()
-    this._invalidate('chrome')
+    this._commandSurface.chrome.toggleRulers()
   }
 
   setSceneLayerVisibility(name: string, visible: boolean): boolean {
-    return this._setSceneLayerState(name, { visible })
+    return this._commandSurface.layers.setSceneLayerVisibility(name, visible)
   }
 
   setSceneLayerOpacity(name: string, opacity: number): boolean {
-    if (!Number.isFinite(opacity)) return false
-    return this._setSceneLayerState(name, {
-      opacity: Math.min(1, Math.max(0, opacity)),
-    })
+    return this._commandSurface.layers.setSceneLayerOpacity(name, opacity)
   }
 
   setSceneLayerLocked(name: string, locked: boolean): boolean {
-    return this._setSceneLayerState(name, { locked })
+    return this._commandSurface.layers.setSceneLayerLocked(name, locked)
   }
 
   getPlantSizeMode(): PlantSizeMode {
@@ -395,7 +405,7 @@ export class SceneCanvasRuntime {
   }
 
   setPlantSizeMode(mode: PlantSizeMode): void {
-    this._mutations.setPlantSizeMode(mode)
+    this._commandSurface.plantPresentation.setPlantSizeMode(mode)
   }
 
   getPlantColorByAttr(): ColorByAttribute | null {
@@ -403,7 +413,7 @@ export class SceneCanvasRuntime {
   }
 
   setPlantColorByAttr(attr: ColorByAttribute | null): void {
-    this._mutations.setPlantColorByAttr(attr)
+    this._commandSurface.plantPresentation.setPlantColorByAttr(attr)
   }
 
   getSelectedPlantColorContext(): SelectedPlantColorContext {
@@ -419,27 +429,19 @@ export class SceneCanvasRuntime {
   }
 
   async ensureSpeciesCacheEntries(canonicalNames: string[], activeLocale: string): Promise<boolean> {
-    const presentationRevision = this._currentPresentationRevision()
-    const result = await this._presentation.refreshSpeciesCacheEntries(canonicalNames, activeLocale)
-    const appliedBackfills = this._applyPresentationBackfillsIfCurrent(
-      presentationRevision,
-      result.backfills,
-    )
-    if (presentationRevision !== this._currentPresentationRevision()) return false
-    if (result.changed) this._invalidate('scene')
-    return result.changed || appliedBackfills
+    return this._commandSurface.plantPresentation.ensureSpeciesCacheEntries(canonicalNames, activeLocale)
   }
 
   setSelectedPlantColor(color: string | null): number {
-    return this._mutations.setSelectedPlantColor(color)
+    return this._commandSurface.plantPresentation.setSelectedPlantColor(color)
   }
 
   setPlantColorForSpecies(canonicalName: string, color: string | null): number {
-    return this._mutations.setPlantColorForSpecies(canonicalName, color)
+    return this._commandSurface.plantPresentation.setPlantColorForSpecies(canonicalName, color)
   }
 
   clearPlantSpeciesColor(canonicalName: string): boolean {
-    return this._mutations.clearPlantSpeciesColor(canonicalName)
+    return this._commandSurface.plantPresentation.clearPlantSpeciesColor(canonicalName)
   }
 
   loadDocument(file: CanopiFile): void {
@@ -595,28 +597,6 @@ export class SceneCanvasRuntime {
       gridVisible: chromeSettings.gridVisible,
       guides: guides.value,
     })
-  }
-
-  private _setSceneLayerState(name: string, edit: SceneLayerEdit): boolean {
-    if (this._appAdapter.settings.layerProjections.isAppOwnedLayerProjection(name)) return false
-
-    const committed = this._sceneEdits.run('scene-layer-settings', (tx) => {
-      tx.mutate((draft) => {
-        const layer = draft.layers.find((entry) => entry.name === name)
-        if (!layer) return
-        if (edit.visible !== undefined) layer.visible = edit.visible
-        if (edit.locked !== undefined) layer.locked = edit.locked
-        if (edit.opacity !== undefined) layer.opacity = edit.opacity
-      })
-    })
-    if (committed) {
-      syncSceneLayerSignalsFromScene(
-        this._sceneStore,
-        name,
-        this._appAdapter.settings.layerProjections,
-      )
-    }
-    return committed
   }
 
   private _addGuide(axis: 'h' | 'v', position: number): void {

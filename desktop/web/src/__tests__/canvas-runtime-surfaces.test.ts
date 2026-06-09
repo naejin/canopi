@@ -122,7 +122,7 @@ describe('canvas runtime surfaces', () => {
   it('composes internal role modules behind the public runtime surface factory', () => {
     const surfacesSource = readPackageSource('../canvas/runtime/surfaces.ts')
 
-    expect(surfacesSource).toContain('createSceneCanvasCommandSurface')
+    expect(surfacesSource).toContain('commandSurfaceFrom')
     expect(surfacesSource).toContain('querySurfaceFrom')
     expect(surfacesSource).not.toContain('class SceneCanvasCommandAdapter')
     expect(surfacesSource).not.toContain('class SceneCanvasQueryAdapter')
@@ -160,6 +160,23 @@ describe('canvas runtime surfaces', () => {
     expect(runtimeSource).not.toContain('return this._camera.viewport')
     expect(runtimeSource).not.toContain('return new Set(this._sceneStore.session.selectedEntityIds)')
     expect(runtimeSource).not.toContain('return this._sceneStore.toCanopiFile().plants')
+  })
+
+  it('keeps command mutation behavior inside the command role module', () => {
+    const commandSurfaceSource = readPackageSource('../canvas/runtime/command-surface.ts')
+    const runtimeSource = readPackageSource('../canvas/runtime/scene-runtime.ts')
+
+    expect(commandSurfaceSource).not.toContain("from './scene-runtime'")
+    expect(commandSurfaceSource).not.toContain('runtime.')
+    expect(commandSurfaceSource).toContain('setTool(name')
+    expect(commandSurfaceSource).toContain('zoomIn()')
+    expect(commandSurfaceSource).toContain('undo()')
+    expect(commandSurfaceSource).toContain('setSceneLayerVisibility')
+    expect(commandSurfaceSource).toContain('ensureSpeciesCacheEntries')
+    expect(runtimeSource).toContain('get commandSurface')
+    expect(runtimeSource).not.toContain('this._mutations.copy()')
+    expect(runtimeSource).not.toContain('this._history.undo(this._documents.historyRuntime())')
+    expect(runtimeSource).not.toContain('return this._setSceneLayerState(name, { visible })')
   })
 
   it('publishes explicit facades instead of the mounted runtime', () => {

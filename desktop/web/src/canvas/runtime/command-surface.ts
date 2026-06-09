@@ -1,3 +1,7 @@
+import { setCanvasTool } from '../session-state'
+import type { CanvasRuntimeSettingsAdapter } from './app-adapter'
+import type { CameraController } from './camera'
+import type { PlantPresentationBackfill, SceneRuntimePresentationController } from './scene-runtime/presentation'
 import type {
   CanvasChromeCommandSurface,
   CanvasCommandSurface,
@@ -8,10 +12,64 @@ import type {
   CanvasToolCommandSurface,
   CanvasViewportCommandSurface,
 } from './runtime'
-import type { SceneCanvasRuntime } from './scene-runtime'
+import type { SceneLayerEntity, SceneStore, SceneViewportState } from './scene'
+import type { SceneHistory } from './scene-history'
+import type { SceneRuntimeDocumentBridge } from './scene-runtime/document'
+import type { SceneRuntimeMutationController } from './scene-runtime/mutations'
+import { syncSceneLayerSignalsFromScene } from './scene-runtime/scene-sync'
+import type { SceneEditCoordinator } from './scene-runtime/transactions'
 
-export function createSceneCanvasCommandSurface(runtime: SceneCanvasRuntime): CanvasCommandSurface {
-  return new SceneCanvasCommandRole(runtime)
+type CommandInvalidationKind = 'scene' | 'viewport' | 'chrome'
+type SceneLayerEdit = Partial<Pick<SceneLayerEntity, 'visible' | 'locked' | 'opacity'>>
+
+interface SceneCanvasCommandSurfaceOptions {
+  readonly sceneStore: Pick<SceneStore, 'persisted'>
+  readonly camera: Pick<CameraController, 'zoomIn' | 'zoomOut' | 'zoomToFit' | 'viewport'>
+  readonly history: Pick<SceneHistory, 'canUndo' | 'canRedo' | 'undo' | 'redo'>
+  readonly documents: Pick<
+    SceneRuntimeDocumentBridge,
+    'historyRuntime' | 'applyPresentationBackfills'
+  >
+  readonly mutations: Pick<
+    SceneRuntimeMutationController,
+    | 'copy'
+    | 'paste'
+    | 'duplicateSelected'
+    | 'deleteSelected'
+    | 'selectAll'
+    | 'bringToFront'
+    | 'sendToBack'
+    | 'lockSelected'
+    | 'unlockSelected'
+    | 'groupSelected'
+    | 'ungroupSelected'
+    | 'setPlantSizeMode'
+    | 'setPlantColorByAttr'
+    | 'setSelectedPlantColor'
+    | 'setPlantColorForSpecies'
+    | 'clearPlantSpeciesColor'
+  >
+  readonly sceneEdits: SceneEditCoordinator
+  readonly presentation: Pick<
+    SceneRuntimePresentationController,
+    'createPlantPresentationContext' | 'refreshSpeciesCacheEntries'
+  >
+  readonly settings: Pick<
+    CanvasRuntimeSettingsAdapter,
+    'toggleGridVisible' | 'toggleSnapToGrid' | 'toggleRulersVisible' | 'layerProjections'
+  >
+  readonly setViewport: (viewport: SceneViewportState) => void
+  readonly setInteractionTool: (name: string) => void
+  readonly syncCanvasSignalsFromScene: () => void
+  readonly incrementSceneRevision: () => void
+  readonly currentPresentationRevision: () => number
+  readonly invalidate: (kind: CommandInvalidationKind) => void
+}
+
+export function createSceneCanvasCommandSurface(
+  options: SceneCanvasCommandSurfaceOptions,
+): CanvasCommandSurface {
+  return new SceneCanvasCommandRole(options)
 }
 
 class SceneCanvasCommandRole implements CanvasCommandSurface {
@@ -23,53 +81,146 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
   readonly layers: CanvasLayerCommandSurface
   readonly plantPresentation: CanvasPlantPresentationCommandSurface
 
-  constructor(runtime: SceneCanvasRuntime) {
+  constructor(private readonly options: SceneCanvasCommandSurfaceOptions) {
     this.tools = {
-      setTool: (name) => runtime.setTool(name),
+      setTool: (name) => this.setTool(name),
     }
     this.viewport = {
-      zoomIn: () => runtime.zoomIn(),
-      zoomOut: () => runtime.zoomOut(),
-      zoomToFit: () => runtime.zoomToFit(),
+      zoomIn: () => this.zoomIn(),
+      zoomOut: () => this.zoomOut(),
+      zoomToFit: () => this.zoomToFit(),
     }
     this.history = {
-      get canUndo() { return runtime.canUndo },
-      get canRedo() { return runtime.canRedo },
-      undo: () => runtime.undo(),
-      redo: () => runtime.redo(),
+      get canUndo() { return options.history.canUndo },
+      get canRedo() { return options.history.canRedo },
+      undo: () => this.undo(),
+      redo: () => this.redo(),
     }
     this.sceneEdits = {
-      copy: () => runtime.copy(),
-      paste: () => runtime.paste(),
-      duplicateSelected: () => runtime.duplicateSelected(),
-      deleteSelected: () => runtime.deleteSelected(),
-      selectAll: () => runtime.selectAll(),
-      bringToFront: () => runtime.bringToFront(),
-      sendToBack: () => runtime.sendToBack(),
-      lockSelected: () => runtime.lockSelected(),
-      unlockSelected: () => runtime.unlockSelected(),
-      groupSelected: () => runtime.groupSelected(),
-      ungroupSelected: () => runtime.ungroupSelected(),
+      copy: () => this.options.mutations.copy(),
+      paste: () => this.options.mutations.paste(),
+      duplicateSelected: () => this.options.mutations.duplicateSelected(),
+      deleteSelected: () => this.options.mutations.deleteSelected(),
+      selectAll: () => this.options.mutations.selectAll(),
+      bringToFront: () => this.options.mutations.bringToFront(),
+      sendToBack: () => this.options.mutations.sendToBack(),
+      lockSelected: () => this.options.mutations.lockSelected(),
+      unlockSelected: () => this.options.mutations.unlockSelected(),
+      groupSelected: () => this.options.mutations.groupSelected(),
+      ungroupSelected: () => this.options.mutations.ungroupSelected(),
     }
     this.chrome = {
-      toggleGrid: () => runtime.toggleGrid(),
-      toggleSnapToGrid: () => runtime.toggleSnapToGrid(),
-      toggleRulers: () => runtime.toggleRulers(),
+      toggleGrid: () => this.options.settings.toggleGridVisible(),
+      toggleSnapToGrid: () => this.options.settings.toggleSnapToGrid(),
+      toggleRulers: () => this.toggleRulers(),
     }
     this.layers = {
-      setSceneLayerVisibility: (name, visible) => runtime.setSceneLayerVisibility(name, visible),
-      setSceneLayerOpacity: (name, opacity) => runtime.setSceneLayerOpacity(name, opacity),
-      setSceneLayerLocked: (name, locked) => runtime.setSceneLayerLocked(name, locked),
+      setSceneLayerVisibility: (name, visible) => this.setSceneLayerState(name, { visible }),
+      setSceneLayerOpacity: (name, opacity) => this.setSceneLayerOpacity(name, opacity),
+      setSceneLayerLocked: (name, locked) => this.setSceneLayerState(name, { locked }),
     }
     this.plantPresentation = {
-      setPlantSizeMode: (mode) => runtime.setPlantSizeMode(mode),
-      setPlantColorByAttr: (attr) => runtime.setPlantColorByAttr(attr),
+      setPlantSizeMode: (mode) => this.options.mutations.setPlantSizeMode(mode),
+      setPlantColorByAttr: (attr) => this.options.mutations.setPlantColorByAttr(attr),
       ensureSpeciesCacheEntries: (canonicalNames, activeLocale) =>
-        runtime.ensureSpeciesCacheEntries(canonicalNames, activeLocale),
-      setSelectedPlantColor: (color) => runtime.setSelectedPlantColor(color),
+        this.ensureSpeciesCacheEntries(canonicalNames, activeLocale),
+      setSelectedPlantColor: (color) => this.options.mutations.setSelectedPlantColor(color),
       setPlantColorForSpecies: (canonicalName, color) =>
-        runtime.setPlantColorForSpecies(canonicalName, color),
-      clearPlantSpeciesColor: (canonicalName) => runtime.clearPlantSpeciesColor(canonicalName),
+        this.options.mutations.setPlantColorForSpecies(canonicalName, color),
+      clearPlantSpeciesColor: (canonicalName) => this.options.mutations.clearPlantSpeciesColor(canonicalName),
     }
+  }
+
+  private setTool(name: string): void {
+    setCanvasTool(name)
+    this.options.setInteractionTool(name)
+  }
+
+  private zoomIn(): void {
+    this.options.setViewport(this.options.camera.zoomIn())
+    this.options.invalidate('viewport')
+  }
+
+  private zoomOut(): void {
+    this.options.setViewport(this.options.camera.zoomOut())
+    this.options.invalidate('viewport')
+  }
+
+  private zoomToFit(): void {
+    this.options.setViewport(this.options.camera.zoomToFit(this.options.sceneStore.persisted, {
+      plantContext: this.options.presentation.createPlantPresentationContext(this.options.camera.viewport.scale),
+    }))
+    this.options.invalidate('viewport')
+  }
+
+  private undo(): void {
+    this.options.history.undo(this.options.documents.historyRuntime())
+    this.options.syncCanvasSignalsFromScene()
+    this.options.incrementSceneRevision()
+    this.options.invalidate('scene')
+  }
+
+  private redo(): void {
+    this.options.history.redo(this.options.documents.historyRuntime())
+    this.options.syncCanvasSignalsFromScene()
+    this.options.incrementSceneRevision()
+    this.options.invalidate('scene')
+  }
+
+  private toggleRulers(): void {
+    this.options.settings.toggleRulersVisible()
+    this.options.invalidate('chrome')
+  }
+
+  private setSceneLayerOpacity(name: string, opacity: number): boolean {
+    if (!Number.isFinite(opacity)) return false
+    return this.setSceneLayerState(name, {
+      opacity: Math.min(1, Math.max(0, opacity)),
+    })
+  }
+
+  private setSceneLayerState(name: string, edit: SceneLayerEdit): boolean {
+    if (this.options.settings.layerProjections.isAppOwnedLayerProjection(name)) return false
+
+    const committed = this.options.sceneEdits.run('scene-layer-settings', (tx) => {
+      tx.mutate((draft) => {
+        const layer = draft.layers.find((entry) => entry.name === name)
+        if (!layer) return
+        if (edit.visible !== undefined) layer.visible = edit.visible
+        if (edit.locked !== undefined) layer.locked = edit.locked
+        if (edit.opacity !== undefined) layer.opacity = edit.opacity
+      })
+    })
+    if (committed) {
+      syncSceneLayerSignalsFromScene(
+        this.options.sceneStore as SceneStore,
+        name,
+        this.options.settings.layerProjections,
+      )
+    }
+    return committed
+  }
+
+  private async ensureSpeciesCacheEntries(
+    canonicalNames: string[],
+    activeLocale: string,
+  ): Promise<boolean> {
+    const presentationRevision = this.options.currentPresentationRevision()
+    const result = await this.options.presentation.refreshSpeciesCacheEntries(canonicalNames, activeLocale)
+    const appliedBackfills = this.applyPresentationBackfillsIfCurrent(
+      presentationRevision,
+      result.backfills,
+    )
+    if (presentationRevision !== this.options.currentPresentationRevision()) return false
+    if (result.changed) this.options.invalidate('scene')
+    return result.changed || appliedBackfills
+  }
+
+  private applyPresentationBackfillsIfCurrent(
+    expectedRevision: number,
+    backfills: ReadonlyArray<PlantPresentationBackfill> | null,
+  ): boolean {
+    if (expectedRevision !== this.options.currentPresentationRevision()) return false
+    return this.options.documents.applyPresentationBackfills(backfills)
   }
 }
