@@ -51,7 +51,6 @@ export function useLocationMapEditingHost(workbench: LocationWorkbench): Locatio
     if (!host) return
 
     mapInitFailed.value = false
-    const savedLoc = savedLocationRef.current
     host.attach(container)
 
     const onMove = () => updateCurrentPinPosition()
@@ -59,15 +58,18 @@ export function useLocationMapEditingHost(workbench: LocationWorkbench): Locatio
 
     host.requestMap({
       key: preferredBasemapStyle,
-      createMap: (maplibre, target, preservedView) => createLocationMapLibreMap(
-        maplibre,
-        target,
-        {
-          basemapStyle: preferredBasemapStyle,
-          center: preservedView?.center ?? (savedLoc ? [savedLoc.lon, savedLoc.lat] : DEFAULT_CENTER),
-          zoom: preservedView?.zoom ?? (savedLoc ? 10 : 3.2),
-        },
-      ),
+      createMap: (maplibre, target, preservedView) => {
+        const savedLoc = savedLocationRef.current
+        return createLocationMapLibreMap(
+          maplibre,
+          target,
+          {
+            basemapStyle: preferredBasemapStyle,
+            center: preservedView?.center ?? (savedLoc ? [savedLoc.lon, savedLoc.lat] : DEFAULT_CENTER),
+            zoom: preservedView?.zoom ?? (savedLoc ? 10 : 3.2),
+          },
+        )
+      },
       captureViewState: (context) => readLocationMapViewState(asLocationMap(context)),
       onCreate: (context) => {
         const map = asLocationMap(context)

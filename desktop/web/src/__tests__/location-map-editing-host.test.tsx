@@ -242,4 +242,21 @@ describe('Location map editing host', () => {
       zoom: 8,
     })
   })
+
+  it('uses the latest saved Location when lazy map creation completes', async () => {
+    renderProbe()
+
+    act(() => {
+      currentDesign.value = makeDesign({
+        location: { lat: 52.52, lon: 13.405, altitude_m: 45 },
+      })
+    })
+
+    await vi.waitFor(() => expect(maplibreMock.mapConstructor).toHaveBeenCalledTimes(1))
+
+    expect(maplibreMock.mapConstructor.mock.calls[0]?.[0]).toMatchObject({
+      center: [13.405, 52.52],
+      zoom: 10,
+    })
+  })
 })
