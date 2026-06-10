@@ -2,7 +2,19 @@ pub(crate) fn species_list_select_sql(locale_placeholder: &str) -> String {
     format!(
         "SELECT s.canonical_name AS canonical_name,
                 s.slug AS slug,
-                COALESCE(bcn_loc.common_name, bcn_en.common_name, s.common_name) AS common_name,
+                COALESCE(
+                    bcn_loc.common_name,
+                    bcn_en.common_name,
+                    (
+                      SELECT scn_fallback.common_name
+                      FROM species_common_names scn_fallback
+                      WHERE scn_fallback.species_id = s.id
+                        AND scn_fallback.language = 'en'
+                        AND scn_fallback.is_primary = 1
+                      LIMIT 1
+                    ),
+                    s.common_name
+                ) AS common_name,
                 CASE WHEN bcn_loc.common_name IS NOT NULL
                      THEN (
                        SELECT scn.common_name
@@ -16,7 +28,7 @@ pub(crate) fn species_list_select_sql(locale_placeholder: &str) -> String {
                      )
                      ELSE NULL
                 END AS common_name_2,
-                CASE WHEN bcn_loc.common_name IS NULL THEN 1 ELSE 0 END AS is_name_fallback,
+                CASE WHEN bcn_loc.common_name IS NULL AND {locale_placeholder} != 'en' THEN 1 ELSE 0 END AS is_name_fallback,
                 s.family AS family,
                 s.genus AS genus,
                 s.height_max_m AS height_max_m,

@@ -197,6 +197,44 @@ mod tests {
     }
 
     #[test]
+    fn list_item_projection_preserves_primary_english_common_name_fallbacks() {
+        let conn = test_support::test_conn();
+        conn.execute(
+            "INSERT INTO species (
+                id, slug, canonical_name, common_name, family, genus, growth_rate, width_max_m,
+                hardiness_zone_min, hardiness_zone_max, edibility_rating, medicinal_rating,
+                stratum, height_max_m, tolerates_full_sun, tolerates_semi_shade,
+                tolerates_full_shade, flower_color
+             )
+             VALUES ('s7', 'fig', 'Fig', 'Storage fig', 'Moraceae', 'Ficus', 'Medium', 3.0,
+                7, 10, 5, 1, 'canopy', 5.0, 1, 0, 0, NULL)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO species_common_names (
+                id, species_id, language, common_name, source, is_primary
+             )
+             VALUES ('cn-10', 's7', 'en', 'Common fig', 'fixture', 1)",
+            [],
+        )
+        .unwrap();
+        let catalog = SpeciesCatalogRead::new(&conn);
+
+        let french_rows = catalog
+            .list_items_for_canonical_names(&["Fig".to_owned()], "fr")
+            .unwrap();
+        let english_rows = catalog
+            .list_items_for_canonical_names(&["Fig".to_owned()], "en")
+            .unwrap();
+
+        assert_eq!(french_rows[0].common_name.as_deref(), Some("Common fig"));
+        assert!(french_rows[0].is_name_fallback);
+        assert_eq!(english_rows[0].common_name.as_deref(), Some("Common fig"));
+        assert!(!english_rows[0].is_name_fallback);
+    }
+
+    #[test]
     fn filter_projection_reads_fixed_and_dynamic_options() {
         let conn = test_support::test_conn();
         let catalog = SpeciesCatalogRead::new(&conn);
