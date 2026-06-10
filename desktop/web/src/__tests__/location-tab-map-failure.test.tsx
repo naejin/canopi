@@ -77,7 +77,9 @@ describe('LocationTab map failures', () => {
       render(<LocationTab />, container)
     })
 
-    expect(container.querySelector('[role="alert"]')?.textContent).toContain('Map unavailable')
+    await vi.waitFor(() => {
+      expect(container.querySelector('[role="alert"]')?.textContent).toContain('Map unavailable')
+    })
     expect(container.querySelector('input')?.getAttribute('placeholder')).toBe('Search for a location...')
     expect(maplibreMock.navigationControlConstructor).not.toHaveBeenCalled()
   })

@@ -1,8 +1,16 @@
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
-import maplibregl from 'maplibre-gl'
-import { createMapLibreBasemapStyle } from '../../maplibre/config'
 import { basemapStyle } from '../settings/state'
+import {
+  createMapLibreHost,
+  type MapLibreHost,
+  type MapLibreHostContext,
+} from '../../maplibre/host'
+import {
+  createLocationMapLibreMap,
+  readLocationMapViewState,
+  type LocationMapLibreMap,
+} from '../../maplibre/location-map'
 import {
   computeSavedPinState,
   type LocationWorkbench,
@@ -24,12 +32,13 @@ export interface LocationMapEditingHost {
 
 export function useLocationMapEditingHost(workbench: LocationWorkbench): LocationMapEditingHost {
   const mapContainerRef = useRef<HTMLDivElement>(null)
-  const mapRef = useRef<maplibregl.Map | null>(null)
-  const preservedViewRef = useRef<{ center: [number, number]; zoom: number } | null>(null)
+  const hostRef = useRef<MapLibreHost | null>(null)
+  const mapRef = useRef<LocationMapLibreMap | null>(null)
   const savedLocationRef = useRef(workbench.saved.location)
   const workbenchRef = useRef(workbench)
   savedLocationRef.current = workbench.saved.location
   workbenchRef.current = workbench
+  if (!hostRef.current) hostRef.current = createMapLibreHost()
 
   const mapInitFailed = useSignal(false)
   const pinState = useSignal<PinOverlayState>({ visible: false, x: 0, y: 0, clamped: false, angle: 0 })
@@ -38,81 +47,60 @@ export function useLocationMapEditingHost(workbench: LocationWorkbench): Locatio
   useEffect(() => {
     const container = mapContainerRef.current
     if (!container) return
+    const host = hostRef.current
+    if (!host) return
+
     mapInitFailed.value = false
     const savedLoc = savedLocationRef.current
-    const preservedView = preservedViewRef.current
-    const center: [number, number] = preservedView?.center
-      ?? (savedLoc ? [savedLoc.lon, savedLoc.lat] : DEFAULT_CENTER)
+    host.attach(container)
 
-    let map: maplibregl.Map | null = null
-    const onMove = () => {
-      if (map) updatePinPosition(map)
-    }
+    const onMove = () => updateCurrentPinPosition()
     const onDragStart = () => workbenchRef.current.clearPendingMapResult()
 
-    try {
-      map = new maplibregl.Map({
-        container,
-        style: createMapLibreBasemapStyle(preferredBasemapStyle),
-        center,
-        zoom: preservedView?.zoom ?? (savedLoc ? 10 : 3.2),
-        attributionControl: { compact: true },
-      })
-
-      map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), 'bottom-right')
-    } catch (error) {
-      if (map) {
-        try {
-          map.remove()
-        } catch (cleanupError) {
-          console.error('[LocationTab] Failed to clean up MapLibre map after initialization failure', cleanupError)
-        }
-      }
-      container.replaceChildren()
-      mapRef.current = null
-      mapInitFailed.value = true
-      console.error('[LocationTab] Failed to initialize MapLibre map', error)
-      return
-    }
-
-    map.on('move', onMove)
-    map.on('moveend', onMove)
-    map.on('dragstart', onDragStart)
-
-    mapRef.current = map
-    updatePinPosition(map)
-
+    host.requestMap({
+      key: preferredBasemapStyle,
+      createMap: (maplibre, target, preservedView) => createLocationMapLibreMap(
+        maplibre,
+        target,
+        {
+          basemapStyle: preferredBasemapStyle,
+          center: preservedView?.center ?? (savedLoc ? [savedLoc.lon, savedLoc.lat] : DEFAULT_CENTER),
+          zoom: preservedView?.zoom ?? (savedLoc ? 10 : 3.2),
+        },
+      ),
+      captureViewState: (context) => readLocationMapViewState(asLocationMap(context)),
+      onCreate: (context) => {
+        const map = asLocationMap(context)
+        map.on('move', onMove)
+        map.on('moveend', onMove)
+        map.on('dragstart', onDragStart)
+        mapRef.current = map
+        updatePinPosition(map)
+      },
+      onResize: (context) => {
+        updatePinPosition(asLocationMap(context))
+      },
+      onDestroy: (context) => {
+        const map = asLocationMap(context)
+        map.off('move', onMove)
+        map.off('moveend', onMove)
+        map.off('dragstart', onDragStart)
+        if (mapRef.current === map) mapRef.current = null
+      },
+      onCreateError: (error) => {
+        container.replaceChildren()
+        mapRef.current = null
+        mapInitFailed.value = true
+        console.error('[LocationTab] Failed to initialize MapLibre map', error)
+      },
+    })
     return () => {
-      const center = map.getCenter()
-      preservedViewRef.current = {
-        center: [center.lng, center.lat],
-        zoom: map.getZoom(),
-      }
-      map.off('move', onMove)
-      map.off('moveend', onMove)
-      map.off('dragstart', onDragStart)
-      map.remove()
-      mapRef.current = null
+      host.destroy()
     }
   }, [preferredBasemapStyle])
 
   useEffect(() => {
-    const container = mapContainerRef.current
-    if (!container) return
-
-    const observer = new ResizeObserver(() => {
-      const map = mapRef.current
-      if (!map) return
-      map.resize()
-      updatePinPosition(map)
-    })
-    observer.observe(container)
-    return () => observer.disconnect()
-  }, [])
-
-  useEffect(() => {
-    const map = mapRef.current
-    if (map) updatePinPosition(map)
+    updateCurrentPinPosition()
   }, [workbench.saved.key])
 
   function previewSearchResult(result: LocationSearchResult): void {
@@ -132,7 +120,7 @@ export function useLocationMapEditingHost(workbench: LocationWorkbench): Locatio
     return workbench.commitMapLocation(center ? { lat: center.lat, lon: center.lng } : null)
   }
 
-  function updatePinPosition(map: maplibregl.Map) {
+  function updatePinPosition(map: LocationMapLibreMap) {
     const loc = savedLocationRef.current
     const container = map.getContainer()
     const next = computeSavedPinState(
@@ -151,6 +139,15 @@ export function useLocationMapEditingHost(workbench: LocationWorkbench): Locatio
     ) {
       pinState.value = next
     }
+  }
+
+  function updateCurrentPinPosition(): void {
+    const map = mapRef.current
+    if (map) updatePinPosition(map)
+  }
+
+  function asLocationMap(context: MapLibreHostContext): LocationMapLibreMap {
+    return context.map as unknown as LocationMapLibreMap
   }
 
   return {

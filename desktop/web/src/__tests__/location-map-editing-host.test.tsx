@@ -123,6 +123,13 @@ function HostProbe({ onRender }: {
   return <div ref={host.mapContainerRef} />
 }
 
+async function flushMapHost(): Promise<void> {
+  await act(async () => {
+    await Promise.resolve()
+    await Promise.resolve()
+  })
+}
+
 describe('Location map editing host', () => {
   let container: HTMLDivElement
   let workbench: LocationWorkbench | null
@@ -181,8 +188,10 @@ describe('Location map editing host', () => {
     return map
   }
 
-  it('owns saved pin projection, pending search preview, drag clearing, resize, and map commits', () => {
+  it('owns saved pin projection, pending search preview, drag clearing, resize, and map commits', async () => {
     renderProbe()
+    await vi.waitFor(() => expect(currentHost().pin.visible).toBe(true))
+    await flushMapHost()
 
     expect(currentHost().pin).toMatchObject({ visible: true, x: 120, y: 80, clamped: false })
 
@@ -215,5 +224,22 @@ describe('Location map editing host', () => {
     expect(currentHost().pin).toMatchObject({ visible: true, x: 216, y: 156, clamped: true })
     expect(workbench?.pendingMapResult).toBeNull()
     expect(nonCanvasRevision.value).toBe(2)
+  })
+
+  it('preserves the current map view when the basemap style rebuilds', async () => {
+    renderProbe()
+    await vi.waitFor(() => expect(maplibreMock.mapConstructor).toHaveBeenCalledTimes(1))
+
+    currentMap().center = { lng: 13.405, lat: 52.52 }
+    currentMap().zoom = 8
+    act(() => {
+      basemapStyle.value = 'satellite'
+    })
+
+    await vi.waitFor(() => expect(maplibreMock.mapConstructor).toHaveBeenCalledTimes(2))
+    expect(maplibreMock.mapConstructor.mock.calls[1]?.[0]).toMatchObject({
+      center: [13.405, 52.52],
+      zoom: 8,
+    })
   })
 })
