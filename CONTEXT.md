@@ -32,6 +32,10 @@ _Avoid_: Runtime helper, app bridge, global canvas state
 The in-canvas map visualization seam that turns Location, canvas query state, layer settings, terrain settings, Target Presentation, theme, and map bearing into one MapLibre-ready snapshot. The canvas map surface is derived presentation and must not own Design data, Scene Edit state, Location drafts, or settings persistence.
 _Avoid_: MapLibre controller, basemap helper, map overlay state
 
+**MapLibre Host**:
+The app runtime seam for MapLibre resource lifetime across map-backed surfaces, including lazy loading, map creation, teardown, resize observation, basemap style rebuilds, preserved view state, and initialization failure state. The maplibre host does not own Design data, Location edits, Design Template selection, Canvas Map Surface camera sync, terrain, or Target Presentation overlays; those remain in surface-specific adapters.
+_Avoid_: Map component, map helper, direct maplibregl ownership
+
 **Canvas Layer Presentation**:
 The app-facing presentation seam for Layer chrome, map layer visibility, terrain layer controls, active layer selection, Location readiness cues, and layer-related commands. Canvas layer presentation turns scene Layer state, settings-backed map layer preferences, terrain settings, and saved Location readiness into caller-ready layer read models while routing writes to the correct authority. It does not own Design data, Scene Edit state, Location drafts, Canvas Map Surface lifecycle, or settings persistence.
 _Avoid_: Layer panel state, map layer helper, terrain UI state
@@ -192,6 +196,10 @@ _Avoid_: Timeline popup, event editor, task workbench
 The canvas-based interaction surface for viewing, panning, zooming, dragging, selecting, and editing timeline actions. The timeline action canvas coordinates Planning Projection inputs, canvas rendering, pointer ordering, popover presentation, and target presentation, while Timeline Action data remains owned by the Design.
 _Avoid_: Timeline renderer, timeline frame, timeline canvas component
 
+**Planning Canvas Interaction Frame**:
+The planning-surface interaction seam for canvas-based Timeline Action and Consortium gesture lifetime: pointer capture, document listeners, drag preview/commit/abort, hover cleanup, stale selection cleanup, and Target Presentation writes. The planning canvas interaction frame owns shared interaction ordering while adapters own surface-specific geometry, rendering, popover details, and Design Edit commands.
+_Avoid_: Canvas2D helper, generic interaction utility, planning event handler
+
 **Budget Item**:
 A cost entry in a design. A budget item may refer to a species, placed plant, zone, or manual line item and contributes to the design's budget.
 _Avoid_: Price, estimate row
@@ -306,6 +314,9 @@ A **Layer** is a visibility and locking group in the Design. **Canvas Layer Pres
 **Canvas Layer Presentation vs Canvas Map Surface**:
 **Canvas Layer Presentation** decides which layer controls and layer commands app chrome exposes. The **Canvas Map Surface** renders the in-canvas map snapshot derived from those controls and other authorities.
 
+**MapLibre Host vs Canvas Map Surface**:
+The **MapLibre Host** owns MapLibre resource lifetime. The **Canvas Map Surface** owns the in-canvas map snapshot and app/canvas authority inputs that one MapLibre adapter renders.
+
 **Climate Zone vs Hardiness Zone**:
 Use **Climate Zone** for broad site/template classification. Use **Hardiness Zone** for species cold-tolerance compatibility.
 
@@ -362,6 +373,9 @@ The **Consortium Time Model** owns Succession Phase and Stratum order, labels, d
 
 **Timeline Action vs Timeline Action Workbench**:
 A **Timeline Action** is the scheduled work in the Design. The **Timeline Action Workbench** is the interaction surface used to create, edit, delete, and select those actions.
+
+**Timeline Action Canvas vs Planning Canvas Interaction Frame**:
+The **Timeline Action Canvas** owns Timeline Action planning presentation. The **Planning Canvas Interaction Frame** owns interaction ordering shared with other planning canvases, such as Consortium planning.
 
 **Site Adaptation vs Template Adaptation**:
 Use **Site Adaptation** for the domain concept of fitting a design to a site. "Template adaptation" is acceptable only when discussing the specific import workflow.
