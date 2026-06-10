@@ -1,3 +1,5 @@
+import type { ScenePoint } from '../scene'
+
 export interface SceneInteractionFrameHandlers {
   readonly pointerDown: (event: PointerEvent) => void
   readonly pointerLeave: (event: PointerEvent) => void
@@ -34,10 +36,40 @@ export interface SceneInteractionTransientCleanup {
   readonly resetCursor: () => void
 }
 
+export interface SceneInteractionPointerEvent {
+  readonly event: PointerEvent
+  readonly screen: ScenePoint
+  readonly rawWorld: ScenePoint
+}
+
+export interface SceneInteractionPointerDrag {
+  readonly update: (context: SceneInteractionPointerEvent) => void
+  readonly commit: (context: SceneInteractionPointerEvent) => void
+}
+
+export interface SceneInteractionPointerGestureStart {
+  readonly pointerId: number
+  readonly startScreen: ScenePoint
+  readonly startWorld: ScenePoint
+  readonly containerRect: DOMRect
+}
+
+export type SceneInteractionPointerGesture = SceneInteractionPointerGestureStart
+
 export interface SceneInteractionFrame {
   attach(): void
   detach(): void
   transitionTool(transition: SceneInteractionToolTransition): void
+  currentContainerRect(): DOMRect
+  startPointerGesture(gesture: SceneInteractionPointerGestureStart): void
+  hasPointerGesture(): boolean
+  pointerGestureFor(event: Pick<PointerEvent, 'pointerId'>): SceneInteractionPointerGesture | null
+  beginToolPointerDrag(drag: SceneInteractionPointerDrag): void
+  activeToolPointerDrag(): SceneInteractionPointerDrag | null
+  clearPointerGesture(): void
+  isSpaceHeld(): boolean
+  holdSpace(): void
+  releaseSpace(): void
   cleanupTransient(
     options: SceneInteractionTransientCleanupOptions,
     cleanup: SceneInteractionTransientCleanup,
@@ -52,6 +84,9 @@ export function createSceneInteractionFrame(options: SceneInteractionFrameOption
 class DefaultSceneInteractionFrame implements SceneInteractionFrame {
   private attached = false
   private disposed = false
+  private pointerGesture: SceneInteractionPointerGesture | null = null
+  private toolPointerDrag: SceneInteractionPointerDrag | null = null
+  private spaceHeld = false
 
   constructor(private readonly options: SceneInteractionFrameOptions) {}
 
@@ -93,6 +128,52 @@ class DefaultSceneInteractionFrame implements SceneInteractionFrame {
     transition.updateCursor(transition.toolName)
   }
 
+  currentContainerRect(): DOMRect {
+    return this.pointerGesture?.containerRect ?? this.options.container.getBoundingClientRect()
+  }
+
+  startPointerGesture(gesture: SceneInteractionPointerGestureStart): void {
+    if (this.disposed) return
+    this.pointerGesture = gesture
+    this.toolPointerDrag = null
+  }
+
+  hasPointerGesture(): boolean {
+    return this.pointerGesture !== null
+  }
+
+  pointerGestureFor(event: Pick<PointerEvent, 'pointerId'>): SceneInteractionPointerGesture | null {
+    if (this.pointerGesture?.pointerId !== event.pointerId) return null
+    return this.pointerGesture
+  }
+
+  beginToolPointerDrag(drag: SceneInteractionPointerDrag): void {
+    if (this.disposed) return
+    this.toolPointerDrag = drag
+  }
+
+  activeToolPointerDrag(): SceneInteractionPointerDrag | null {
+    return this.toolPointerDrag
+  }
+
+  clearPointerGesture(): void {
+    this.pointerGesture = null
+    this.toolPointerDrag = null
+  }
+
+  isSpaceHeld(): boolean {
+    return this.spaceHeld
+  }
+
+  holdSpace(): void {
+    if (this.disposed) return
+    this.spaceHeld = true
+  }
+
+  releaseSpace(): void {
+    this.spaceHeld = false
+  }
+
   cleanupTransient(
     options: SceneInteractionTransientCleanupOptions,
     cleanup: SceneInteractionTransientCleanup,
@@ -108,6 +189,8 @@ class DefaultSceneInteractionFrame implements SceneInteractionFrame {
   dispose(cleanup: () => void): void {
     if (this.disposed) return
     this.detach()
+    this.clearPointerGesture()
+    this.releaseSpace()
     cleanup()
     this.disposed = true
   }

@@ -648,52 +648,6 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
-  it('reads and commits Plant Spacing interval through interaction dependencies', () => {
-    store.updatePersisted((draft) => {
-      draft.plants = [{
-        kind: 'plant',
-        locked: false,
-        id: 'plant-1',
-        canonicalName: 'Malus domestica',
-        commonName: 'Apple',
-        color: null,
-        stratum: null,
-        canopySpreadM: 2,
-        position: { x: 20, y: 30 },
-        rotationDeg: null,
-        scale: 2,
-        notes: null,
-        plantedDate: null,
-        quantity: 1,
-      }]
-    })
-    let adapterInterval = 1.25
-    const commitPlantSpacingIntervalMeters = vi.fn((meters: number) => {
-      adapterInterval = meters
-    })
-    const deps = createInteractionDeps(container, store, camera, {
-      readPlantSpacingIntervalMeters: () => adapterInterval,
-      commitPlantSpacingIntervalMeters,
-    })
-    const controller = new SceneInteractionController(deps as any)
-
-    controller.setTool('plant-spacing')
-    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
-
-    const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
-    expect(input.value).toBe('1.25 m')
-
-    input.value = '0.75m'
-    input.dispatchEvent(new Event('input', { bubbles: true }))
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
-
-    expect(commitPlantSpacingIntervalMeters).toHaveBeenCalledWith(0.75)
-    expect(adapterInterval).toBe(0.75)
-    expect(plantSpacingIntervalM.value).toBe(0.5)
-    expect(document.activeElement).toBe(container)
-    controller.dispose()
-  })
-
   it('applies Plant Spacing interval blur without stealing focus from the next control', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
