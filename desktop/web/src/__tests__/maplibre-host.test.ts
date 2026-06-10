@@ -141,4 +141,55 @@ describe('MapLibre Host', () => {
     expect(observers[1]!.disconnect).toHaveBeenCalled()
     expect(maps[1]!.remove).toHaveBeenCalled()
   })
+
+  it('tears down partially initialized maps when post-create setup fails', async () => {
+    const host = createMapLibreHost({
+      loadMapLibre: vi.fn(async () => maplibre),
+      createResizeObserver: (callback) => {
+        const observer = new FakeResizeObserver(callback)
+        observers.push(observer)
+        return observer
+      },
+    })
+    const onCreateError = vi.fn()
+
+    host.attach(container)
+    host.requestMap({
+      key: 'street',
+      createMap: (api, target) => new api.Map({
+        container: target,
+        style: { version: 8, sources: {}, layers: [] },
+        interactive: false,
+        pitchWithRotate: false,
+        dragRotate: false,
+        touchZoomRotate: false,
+      }),
+      onCreate: () => {
+        throw new Error('post-create setup failed')
+      },
+      onCreateError,
+    })
+    await flushPromises()
+
+    expect(onCreateError).toHaveBeenCalledWith(expect.any(Error))
+    expect(host.current()).toBeNull()
+    expect(observers[0]!.disconnect).toHaveBeenCalled()
+    expect(maps[0]!.remove).toHaveBeenCalled()
+
+    host.requestMap({
+      key: 'street',
+      createMap: (api, target) => new api.Map({
+        container: target,
+        style: { version: 8, sources: {}, layers: [] },
+        interactive: false,
+        pitchWithRotate: false,
+        dragRotate: false,
+        touchZoomRotate: false,
+      }),
+    })
+    await flushPromises()
+
+    expect(maps).toHaveLength(2)
+    expect(host.current()?.map).toBe(maps[1])
+  })
 })

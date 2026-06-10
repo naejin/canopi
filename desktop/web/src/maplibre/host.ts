@@ -153,6 +153,7 @@ class ImperativeMapLibreHost implements MapLibreHost {
     } catch (error) {
       const currentRequest = this.currentPendingRequest(key, container, generation)
       if (!currentRequest) return
+      this.discardFailedCurrentMap(generation)
       this.loadingKey = null
       currentRequest.onCreateError?.(error)
     }
@@ -208,6 +209,17 @@ class ImperativeMapLibreHost implements MapLibreHost {
     } finally {
       context.map.remove()
     }
+  }
+
+  private discardFailedCurrentMap(generation: number): void {
+    const context = this.mapContext
+    if (!context || context.generation !== generation) return
+
+    this.generation += 1
+    this.resizeObserver?.disconnect()
+    this.resizeObserver = null
+    this.mapContext = null
+    context.map.remove()
   }
 
   private capturePreservedViewState(context: CurrentMapLibreHostContext): void {
