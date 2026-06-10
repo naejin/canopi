@@ -473,6 +473,15 @@ describe('frontend boundary sources', () => {
     expect(workflowSource).toContain('../../ipc/community')
   })
 
+  it('keeps the Design Template world map on the MapLibre Host path', () => {
+    const worldMapSource = readSource('../components/world-map/WorldMapSurface.tsx')
+
+    expect(worldMapSource).toContain('../../maplibre/host')
+    expect(worldMapSource).not.toContain("maplibre-gl")
+    expect(worldMapSource).not.toContain('createMapLibreBasemapStyle')
+    expect(worldMapSource).not.toContain('new ResizeObserver')
+  })
+
   it('keeps Species Catalog state private to the workbench implementation', () => {
     const sourcePaths = [
       '../app',

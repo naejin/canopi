@@ -1,9 +1,19 @@
 import { useEffect, useRef } from 'preact/hooks'
-import maplibregl from 'maplibre-gl'
 import type { TemplateMeta } from '../../types/community'
 import {
-  createMapLibreBasemapStyle,
-} from '../../maplibre/config'
+  createMapLibreHost,
+  type MapLibreApi,
+  type MapLibreHost,
+  type MapLibreHostContext,
+} from '../../maplibre/host'
+import {
+  createWorldMapBounds,
+  createWorldMapLibreMap,
+  createWorldMapMarker,
+  readWorldMapViewState,
+  type WorldMapLibreMap,
+  type WorldMapMarker,
+} from '../../maplibre/world-map'
 import { basemapStyle } from '../../app/settings/state'
 import styles from './WorldMapSurface.module.css'
 
@@ -17,74 +27,90 @@ export function WorldMapSurface({
   onSelect: (template: TemplateMeta) => void
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const mapRef = useRef<maplibregl.Map | null>(null)
-  const markersRef = useRef<maplibregl.Marker[]>([])
-  const preservedViewRef = useRef<{ center: [number, number]; zoom: number } | null>(null)
+  const hostRef = useRef<MapLibreHost | null>(null)
+  const mapRef = useRef<WorldMapLibreMap | null>(null)
+  const maplibreRef = useRef<MapLibreApi | null>(null)
+  const markersRef = useRef<WorldMapMarker[]>([])
   const lastTemplateLayoutKeyRef = useRef<string>('')
+  const templatesRef = useRef(templates)
+  const selectedIdRef = useRef(selectedId)
+  const onSelectRef = useRef(onSelect)
+  templatesRef.current = templates
+  selectedIdRef.current = selectedId
+  onSelectRef.current = onSelect
+  if (!hostRef.current) hostRef.current = createMapLibreHost()
+
   const preferredBasemapStyle = basemapStyle.value
 
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
-    const preservedView = preservedViewRef.current
+    const host = hostRef.current
+    if (!host) return
 
-    const map = new maplibregl.Map({
-      container,
-      style: createMapLibreBasemapStyle(preferredBasemapStyle),
-      center: preservedView?.center ?? [0, 14],
-      zoom: preservedView?.zoom ?? 1.15,
-      attributionControl: { compact: true },
+    host.attach(container)
+    host.requestMap({
+      key: preferredBasemapStyle,
+      createMap: (maplibre, target, preservedView) => createWorldMapLibreMap(
+        maplibre,
+        target,
+        {
+          basemapStyle: preferredBasemapStyle,
+          center: preservedView?.center ?? [0, 14],
+          zoom: preservedView?.zoom ?? 1.15,
+        },
+      ),
+      captureViewState: (context) => readWorldMapViewState(asWorldMap(context)),
+      onCreate: (context) => {
+        const map = asWorldMap(context)
+        mapRef.current = map
+        maplibreRef.current = context.maplibre
+        syncTemplateMarkers(map, context.maplibre)
+        syncMarkerSelection()
+        if (!context.preservedViewState) flyToSelectedTemplate(map)
+      },
+      onDestroy: (context) => {
+        clearMarkers()
+        const map = asWorldMap(context)
+        if (mapRef.current === map) mapRef.current = null
+        if (maplibreRef.current === context.maplibre) maplibreRef.current = null
+      },
     })
 
-    map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), 'top-right')
-    mapRef.current = map
-
     return () => {
-      const center = map.getCenter()
-      preservedViewRef.current = {
-        center: [center.lng, center.lat],
-        zoom: map.getZoom(),
-      }
-      markersRef.current.forEach((marker) => marker.remove())
-      markersRef.current = []
-      map.remove()
-      mapRef.current = null
+      host.destroy()
     }
   }, [preferredBasemapStyle])
 
   useEffect(() => {
-    const container = containerRef.current
     const map = mapRef.current
-    if (!container || !map) return
+    const maplibre = maplibreRef.current
+    if (map && maplibre) syncTemplateMarkers(map, maplibre)
+  }, [templates, preferredBasemapStyle])
 
-    const observer = new ResizeObserver(() => {
-      map.resize()
-    })
-    observer.observe(container)
-
-    return () => observer.disconnect()
-  }, [])
-
-  const onSelectRef = useRef(onSelect)
-  onSelectRef.current = onSelect
+  useEffect(() => {
+    syncMarkerSelection()
+  }, [selectedId, templates, preferredBasemapStyle])
 
   useEffect(() => {
     const map = mapRef.current
-    if (!map) return
+    if (map) flyToSelectedTemplate(map)
+  }, [selectedId, templates])
 
-    markersRef.current.forEach((marker) => marker.remove())
-    markersRef.current = []
+  function syncTemplateMarkers(map: WorldMapLibreMap, maplibre: MapLibreApi): void {
+    clearMarkers()
 
-    if (templates.length === 0) return
+    const currentTemplates = templatesRef.current
+    if (currentTemplates.length === 0) return
 
-    const bounds = new maplibregl.LngLatBounds()
-    const nextTemplateLayoutKey = templates
+    const bounds = createWorldMapBounds(maplibre)
+    const nextTemplateLayoutKey = currentTemplates
       .map((template) => `${template.id}:${template.location.lon}:${template.location.lat}`)
       .join('|')
     const shouldFitBounds = nextTemplateLayoutKey !== lastTemplateLayoutKeyRef.current
     lastTemplateLayoutKeyRef.current = nextTemplateLayoutKey
 
-    for (const template of templates) {
+    for (const template of currentTemplates) {
       const markerElement = document.createElement('button')
       markerElement.type = 'button'
       markerElement.className = styles.marker ?? ''
@@ -92,7 +118,7 @@ export function WorldMapSurface({
       markerElement.title = template.title
       markerElement.addEventListener('click', () => onSelectRef.current(template))
 
-      const marker = new maplibregl.Marker({ element: markerElement })
+      const marker = createWorldMapMarker(maplibre, markerElement)
         .setLngLat([template.location.lon, template.location.lat])
         .addTo(map)
 
@@ -104,21 +130,21 @@ export function WorldMapSurface({
       map.fitBounds(bounds, { padding: 48, maxZoom: 4.5, duration: 0 })
       map.resize()
     }
-  }, [templates, preferredBasemapStyle])
+  }
 
-  useEffect(() => {
+  function syncMarkerSelection(): void {
     for (const marker of markersRef.current) {
       const el = marker.getElement()
-      const isActive = el.dataset.templateId === selectedId
+      const isActive = el.dataset.templateId === selectedIdRef.current
       el.className = `${styles.marker} ${isActive ? styles.markerActive : ''}`
     }
-  }, [selectedId, templates, preferredBasemapStyle])
+  }
 
-  useEffect(() => {
-    const map = mapRef.current
-    if (!map || !selectedId) return
+  function flyToSelectedTemplate(map: WorldMapLibreMap): void {
+    const selectedId = selectedIdRef.current
+    if (!selectedId) return
 
-    const selected = templates.find((template) => template.id === selectedId)
+    const selected = templatesRef.current.find((template) => template.id === selectedId)
     if (!selected) return
 
     map.flyTo({
@@ -127,7 +153,16 @@ export function WorldMapSurface({
       duration: 600,
       essential: true,
     })
-  }, [selectedId, templates])
+  }
+
+  function clearMarkers(): void {
+    markersRef.current.forEach((marker) => marker.remove())
+    markersRef.current = []
+  }
+
+  function asWorldMap(context: MapLibreHostContext): WorldMapLibreMap {
+    return context.map as unknown as WorldMapLibreMap
+  }
 
   return <div ref={containerRef} className={styles.map} />
 }
