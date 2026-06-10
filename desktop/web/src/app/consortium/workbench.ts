@@ -210,7 +210,6 @@ export function useConsortiumCanvasWorkbench({
   useEffect(() => {
     const disposeDocumentListeners = planningFrame.installDocumentListeners({
       canvasRef,
-      handleWheel: () => {},
     })
     return () => {
       disposeDocumentListeners()

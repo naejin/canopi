@@ -800,6 +800,35 @@ describe('frontend boundary sources', () => {
     expect(adapterSource).toContain('../../state/design')
   })
 
+  it('keeps Planning Canvas interaction lifetime behind its planning-specific frame', () => {
+    const planningFrameSource = readSource('../app/planning-canvas/interaction-frame.ts')
+    const sceneFrameSource = readSource('../canvas/runtime/interaction/frame.ts')
+    const planningSurfaceSources = [
+      '../app/timeline/canvas/host-model.ts',
+      '../app/timeline/canvas/controller.ts',
+      '../app/timeline/canvas/interaction-frame.ts',
+      '../app/consortium/workbench.ts',
+      '../components/canvas/InteractiveTimeline.tsx',
+      '../components/canvas/ConsortiumChart.tsx',
+    ]
+
+    expect(planningFrameSource).toContain('createPlanningCanvasInteractionFrame')
+    expect(planningFrameSource).toContain('installDocumentListeners')
+    expect(planningFrameSource).toContain('syncVisibleItems')
+    expect(planningFrameSource).toContain('handleWheel?:')
+    expect(planningFrameSource).not.toContain('SceneInteraction')
+    expect(sceneFrameSource).not.toContain('planning-canvas')
+    expectNoImportsMatching('../app/planning-canvas/interaction-frame.ts', [
+      /canvas\/runtime\/interaction/,
+    ])
+
+    for (const sourcePath of planningSurfaceSources) {
+      const source = readSource(sourcePath)
+      expect(source, sourcePath).not.toContain('document.addEventListener')
+      expect(source, sourcePath).not.toContain('document.removeEventListener')
+    }
+  })
+
   it('keeps Timeline Action Canvas behavior behind one app/timeline/canvas module seam', () => {
     const timelineSource = readSource('../components/canvas/InteractiveTimeline.tsx')
     const canvasIndexSource = readSource('../app/timeline/canvas/index.ts')

@@ -31,7 +31,7 @@ export interface PlanningCanvasInteractionFrameOptions {
 
 export interface PlanningCanvasDocumentListenerOptions {
   readonly canvasRef: MutableDomRef<HTMLCanvasElement>
-  readonly handleWheel: (event: WheelEvent) => void
+  readonly handleWheel?: (event: WheelEvent) => void
 }
 
 export interface PlanningCanvasItemTarget {
@@ -87,7 +87,7 @@ export function createPlanningCanvasInteractionFrame({
         documentEvents.handleKeyDown(event)
       }
 
-      if (canvas) canvas.addEventListener('wheel', handleWheel, { passive: false })
+      if (canvas && handleWheel) canvas.addEventListener('wheel', handleWheel, { passive: false })
       document.addEventListener('mousemove', onMove)
       document.addEventListener('mouseup', onUp)
       document.addEventListener('keydown', onKeyDown)
@@ -97,7 +97,7 @@ export function createPlanningCanvasInteractionFrame({
       return () => {
         if (disposed) return
         disposed = true
-        if (canvas) canvas.removeEventListener('wheel', handleWheel)
+        if (canvas && handleWheel) canvas.removeEventListener('wheel', handleWheel)
         document.removeEventListener('mousemove', onMove)
         document.removeEventListener('mouseup', onUp)
         document.removeEventListener('keydown', onKeyDown)

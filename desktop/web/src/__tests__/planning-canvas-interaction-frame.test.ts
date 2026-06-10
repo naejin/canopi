@@ -62,4 +62,40 @@ describe('Planning Canvas interaction frame', () => {
     expect(keyDown).toHaveBeenCalledTimes(1)
     expect(documentMouseLeave).toHaveBeenCalledTimes(1)
   })
+
+  it('does not require a wheel listener for planning surfaces without wheel behavior', () => {
+    const canvas = document.createElement('canvas')
+    const documentMouseMove = vi.fn()
+
+    const frame = createPlanningCanvasInteractionFrame({
+      getHoveredId: () => null,
+      setHoveredId: () => {},
+      getSelectedId: () => null,
+      setSelectedId: () => {},
+      clearLocalHover: () => {},
+      clearLocalSelection: () => {},
+      targetPresentation: {
+        setHoveredTargets: () => {},
+        clearHoveredTargets: () => {},
+        setSelectedTargets: () => {},
+        clearSelectedTargets: () => {},
+      },
+      documentEvents: {
+        handleMouseMove: documentMouseMove,
+        handleMouseUp: () => {},
+        handleMouseLeave: () => {},
+        handleKeyDown: () => {},
+      },
+    })
+
+    const dispose = frame.installDocumentListeners({
+      canvasRef: { current: canvas },
+    })
+
+    document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }))
+
+    expect(documentMouseMove).toHaveBeenCalledTimes(1)
+
+    dispose()
+  })
 })
