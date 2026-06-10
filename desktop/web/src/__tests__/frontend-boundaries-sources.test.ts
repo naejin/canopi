@@ -148,13 +148,25 @@ describe('frontend boundary sources', () => {
     const mapSurfaceControllerSource = readSource('../components/canvas/maplibre-surface-controller.ts')
     const snapshotSource = readSource('../app/canvas-map-surface/snapshot.ts')
     const lifecycleSource = readSource('../app/canvas-map-surface/lifecycle.ts')
+    const hostSource = readSource('../maplibre/host.ts')
 
     expect(mapSurfaceControllerSource).toContain('readCanvasMapSurfaceSnapshot')
-    expect(mapSurfaceControllerSource).toContain('../../maplibre/loader')
-    expect(lifecycleSource).toContain('../../maplibre/loader')
+    expect(mapSurfaceControllerSource).not.toContain('../../maplibre/loader')
+    expect(lifecycleSource).toContain('../../maplibre/host')
     expect(lifecycleSource).not.toContain('components/canvas/maplibre-loader')
     expect(sourceExists('../components/canvas/maplibre-loader.ts')).toBe(false)
+    expect(sourceExists('../maplibre/host.ts')).toBe(true)
     expect(sourceExists('../maplibre/loader.ts')).toBe(true)
+    expectNoImportsMatching('../maplibre/host.ts', [
+      /(^|\/)app(\/|$)/,
+      /(^|\/)components(\/|$)/,
+      /document-session/,
+      /canvas-map-surface/,
+      /panel-targets/,
+    ])
+    expect(hostSource).toContain('loadMapLibre')
+    expect(hostSource).toContain('createResizeObserver')
+    expect(hostSource).toContain('preservedViewState')
     expectNoImportsMatching('../components/canvas/maplibre-surface-controller.ts', [
       /canvas\/session$/,
       /app\/location$/,

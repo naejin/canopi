@@ -26,7 +26,14 @@ import {
   rebuildTerrain,
 } from '../../maplibre/terrain-sync'
 import { clearCanvasMapSurfaceOverlays, syncCanvasMapSurfaceOverlays } from './overlays'
-import type { MapLibreApi, MapLibreMapInstance } from '../../maplibre/loader'
+import {
+  createMapLibreHost,
+  type MapLibreApi,
+  type MapLibreHost,
+  type MapLibreHostContext,
+  type MapLibreHostResizeObserver,
+  type MapLibreMapInstance,
+} from '../../maplibre/host'
 import {
   reconcileCanvasMapSurface,
   type CanvasMapSurfaceReconciliation,
@@ -41,17 +48,12 @@ export interface CanvasMapSurfaceLifecycle {
   destroy(nextState?: MapLibreCanvasSurfaceStateInput): void
 }
 
-interface CanvasMapSurfaceResizeObserver {
-  observe(target: Element): void
-  disconnect(): void
-}
-
 export interface CanvasMapSurfaceDeps {
-  readonly loadMapLibre: () => Promise<MapLibreApi>
+  readonly loadMapLibre?: () => Promise<MapLibreApi>
   readonly loadTerrainSupport: (maplibre: MapLibreApi) => Promise<TerrainProtocolSupport>
   readonly onStateChange?: (state: MapLibreCanvasSurfaceState) => void
   readonly publishDiagnostics?: (frame: MapFrame | null, designExtentMeters: number | null) => void
-  readonly createResizeObserver?: (callback: ResizeObserverCallback) => CanvasMapSurfaceResizeObserver | null
+  readonly createResizeObserver?: (callback: ResizeObserverCallback) => MapLibreHostResizeObserver | null
   readonly logError?: (message?: unknown, ...optionalParams: unknown[]) => void
 }
 
@@ -63,12 +65,9 @@ export function createCanvasMapSurfaceLifecycle(
 
 class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
   private readonly deps: CanvasMapSurfaceDeps
+  private readonly host: MapLibreHost
   private container: HTMLElement | null = null
   private snapshot: CanvasMapSurfaceSnapshot | null = null
-  private map: MapLibreMapInstance | null = null
-  private maplibre: MapLibreApi | null = null
-  private resizeObserver: CanvasMapSurfaceResizeObserver | null = null
-  private generation = 0
   private terrainGeneration = 0
   private camera: MapFrame | null = null
   private terrainState: TerrainLayerState | null = null
@@ -78,6 +77,11 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
 
   constructor(deps: CanvasMapSurfaceDeps) {
     this.deps = deps
+    this.host = createMapLibreHost({
+      loadMapLibre: deps.loadMapLibre,
+      createResizeObserver: deps.createResizeObserver,
+      logError: deps.logError,
+    })
   }
 
   attach(container: HTMLElement): void {
@@ -86,6 +90,7 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
       this.destroyMap()
     }
     this.container = container
+    this.host.attach(container)
     void this.ensureMap()
   }
 
@@ -99,7 +104,7 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
     nextState: MapLibreCanvasSurfaceStateInput = IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
   ): void {
     this.container = null
-    this.destroyMap(nextState)
+    this.destroyMap(nextState, { detachHost: true })
   }
 
   private setSurfaceState(next: MapLibreCanvasSurfaceStateInput): void {
@@ -112,16 +117,12 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
 
   private destroyMap(
     nextState: MapLibreCanvasSurfaceStateInput = IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
+    options: { detachHost?: boolean } = {},
   ): void {
-    this.generation += 1
-    this.detachMapEvents?.()
-    this.detachMapEvents = null
-    this.resizeObserver?.disconnect()
-    this.resizeObserver = null
-    if (this.map) {
-      clearCanvasMapSurfaceOverlays(this.map)
-      this.map.remove()
-      this.map = null
+    if (options.detachHost) {
+      this.host.destroy()
+    } else {
+      this.host.clearMap()
     }
     this.activeBasemapStyle = null
     this.publishDiagnostics(null, null)
@@ -134,13 +135,6 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
   private syncPrecisionState(): void {
     this.setSurfaceState(this.state)
     this.publishDiagnostics(this.camera, this.state.designExtentMeters)
-  }
-
-  private ownsCurrentMapGeneration(
-    map: MapLibreMapInstance,
-    generation: number,
-  ): boolean {
-    return generation === this.generation && map === this.map
   }
 
   private applyCamera(map: MapLibreMapInstance, snapshot: CanvasMapSurfaceSnapshot): void {
@@ -168,15 +162,16 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
   }
 
   private syncOverlays(snapshot: CanvasMapSurfaceSnapshot): void {
-    if (!this.map) return
+    const context = this.host.current()
+    if (!context) return
 
-    syncCanvasMapSurfaceOverlays(this.map, snapshot, this.state.status === 'ready')
+    syncCanvasMapSurfaceOverlays(context.map, snapshot, this.state.status === 'ready')
   }
 
   private async syncTerrain(snapshot: CanvasMapSurfaceSnapshot): Promise<void> {
-    const map = this.map
-    const maplibre = this.maplibre
-    if (!map || !maplibre || this.state.status !== 'ready') return
+    const context = this.host.current()
+    if (!context || this.state.status !== 'ready') return
+    const { map, maplibre } = context
 
     const nextTerrainState = snapshot.terrain
     const syncMode = classifyTerrainSync(this.terrainState, nextTerrainState)
@@ -207,7 +202,6 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
 
     const terrainGeneration = this.terrainGeneration + 1
     this.terrainGeneration = terrainGeneration
-    const generation = this.generation
     this.setSurfaceState({
       ...this.state,
       terrainStatus: 'loading',
@@ -217,9 +211,8 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
     try {
       const protocols = await this.deps.loadTerrainSupport(maplibre)
       if (
-        generation !== this.generation
+        !context.isCurrent()
         || terrainGeneration !== this.terrainGeneration
-        || map !== this.map
         || this.state.status !== 'ready'
       ) {
         return
@@ -234,9 +227,8 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
       })
     } catch (error) {
       if (
-        generation !== this.generation
+        !context.isCurrent()
         || terrainGeneration !== this.terrainGeneration
-        || map !== this.map
       ) {
         return
       }
@@ -266,8 +258,9 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
     if (!snapshot || !surface) return
 
     if (reconciliation.type === 'sync') {
-      if (!this.map) return
-      this.syncExistingMap(this.map, snapshot)
+      const context = this.host.current()
+      if (!context) return
+      this.syncExistingMap(context, snapshot)
       return
     }
 
@@ -280,8 +273,6 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
       })
     }
 
-    const generation = this.generation + 1
-    this.generation = generation
     const initialCamera = resolveMapLibreSurfaceFrame(
       snapshot.runtime,
       snapshot.location,
@@ -294,96 +285,35 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
       terrainErrorMessage: null,
     })
 
-    try {
-      const maplibre = await this.deps.loadMapLibre()
-      if (generation !== this.generation) return
-      this.maplibre = maplibre
-
-      const map = createCanvasMapLibreMap(
+    this.host.requestMap({
+      key: reconciliation.basemapStyle,
+      createMap: (maplibre) => createCanvasMapLibreMap(
         maplibre,
         surface,
         initialCamera,
         reconciliation.basemapStyle,
-      )
-      if (generation !== this.generation) {
-        map.remove()
-        return
-      }
-      this.activeBasemapStyle = reconciliation.basemapStyle
-
-      const markBasemapReady = (): void => {
-        if (!this.ownsCurrentMapGeneration(map, generation)) return
-        if (this.state.status === 'ready') return
-        this.setSurfaceState({
-          status: 'ready',
-          errorMessage: null,
-          terrainStatus: this.state.terrainStatus,
-          terrainErrorMessage: this.state.terrainErrorMessage,
-        })
+      ),
+      onCreate: (context) => {
+        this.installCanvasMapAdapter(context, reconciliation.basemapStyle)
+      },
+      onResize: (context) => {
         const currentSnapshot = this.snapshot
-        if (!currentSnapshot) return
-        this.syncBasemapPresentation(map, currentSnapshot)
-        this.syncOverlays(currentSnapshot)
-        void this.syncTerrain(currentSnapshot)
-      }
-
-      const maybeMarkBasemapReady = (event?: unknown): void => {
-        if (!this.ownsCurrentMapGeneration(map, generation)) return
-        const sourceId = typeof event === 'object' && event && 'sourceId' in event
-          ? (event as { sourceId?: unknown }).sourceId
-          : undefined
-        if (sourceId != null && sourceId !== MAPLIBRE_BASEMAP_SOURCE_ID) return
-        if (!map.isSourceLoaded?.(MAPLIBRE_BASEMAP_SOURCE_ID)) return
-        markBasemapReady()
-      }
-
-      const handleLoad = (): void => {
-        if (!this.ownsCurrentMapGeneration(map, generation)) return
-        const currentSnapshot = this.snapshot
-        if (!currentSnapshot) return
-        this.applyCamera(map, currentSnapshot)
-        maybeMarkBasemapReady()
-      }
-
-      const handleError = (event?: unknown): void => {
-        if (!this.ownsCurrentMapGeneration(map, generation)) return
-        if (this.state.status === 'ready') {
-          this.logError('MapLibre surface error:', event)
-          return
-        }
-        this.setSurfaceState({
+        if (currentSnapshot) this.applyCamera(context.map, currentSnapshot)
+      },
+      onDestroy: (context) => {
+        this.detachMapEvents?.()
+        this.detachMapEvents = null
+        clearCanvasMapSurfaceOverlays(context.map)
+      },
+      onCreateError: (error) => {
+        this.destroyMap({
           status: 'error',
-          errorMessage: toMapLibreSurfaceErrorMessage(event),
+          errorMessage: toMapLibreSurfaceErrorMessage(error),
           terrainStatus: 'idle',
           terrainErrorMessage: null,
         })
-        clearCanvasMapSurfaceOverlays(map)
-      }
-
-      map.on('load', handleLoad)
-      map.on('sourcedata', maybeMarkBasemapReady)
-      map.on('error', handleError)
-      this.detachMapEvents = () => {
-        map.off('load', handleLoad)
-        map.off('sourcedata', maybeMarkBasemapReady)
-        map.off('error', handleError)
-      }
-
-      this.map = map
-      this.applyCamera(map, snapshot)
-      map.resize()
-      this.installResizeObserver(map, generation, surface)
-
-      if (map.loaded?.()) handleLoad()
-    } catch (error) {
-      if (generation !== this.generation) return
-      this.destroyMap({
-        status: 'error',
-        errorMessage: toMapLibreSurfaceErrorMessage(error),
-        terrainStatus: 'idle',
-        terrainErrorMessage: null,
-      })
-    }
+      },
+    })
   }
 
   private reconcile(
@@ -392,7 +322,7 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
   ): CanvasMapSurfaceReconciliation {
     return reconcileCanvasMapSurface(snapshot, {
       hasContainer: surface !== null,
-      hasMap: this.map !== null,
+      hasMap: this.host.current() !== null,
       activeBasemapStyle: this.activeBasemapStyle,
       surfaceStatus: this.state.status,
       terrainStatus: this.state.terrainStatus,
@@ -400,37 +330,84 @@ class ImperativeCanvasMapSurfaceLifecycle implements CanvasMapSurfaceLifecycle {
   }
 
   private syncExistingMap(
-    map: MapLibreMapInstance,
+    context: MapLibreHostContext,
     snapshot: CanvasMapSurfaceSnapshot,
   ): void {
-    map.resize()
-    this.applyCamera(map, snapshot)
-    this.syncBasemapPresentation(map, snapshot)
+    this.host.resize()
+    this.syncBasemapPresentation(context.map, snapshot)
     this.syncOverlays(snapshot)
     void this.syncTerrain(snapshot)
   }
 
-  private installResizeObserver(
-    map: MapLibreMapInstance,
-    generation: number,
-    surface: HTMLElement,
+  private installCanvasMapAdapter(
+    context: MapLibreHostContext,
+    basemapStyle: BasemapStyle,
   ): void {
-    this.resizeObserver?.disconnect()
-    this.resizeObserver = this.createResizeObserver(() => {
-      if (!this.ownsCurrentMapGeneration(map, generation)) return
-      map.resize()
-      const currentSnapshot = this.snapshot
-      if (currentSnapshot) this.applyCamera(map, currentSnapshot)
-    })
-    this.resizeObserver?.observe(surface)
-  }
+    const { map } = context
+    this.activeBasemapStyle = basemapStyle
 
-  private createResizeObserver(
-    callback: ResizeObserverCallback,
-  ): CanvasMapSurfaceResizeObserver | null {
-    if (this.deps.createResizeObserver) return this.deps.createResizeObserver(callback)
-    if (typeof ResizeObserver === 'undefined') return null
-    return new ResizeObserver(callback)
+    const markBasemapReady = (): void => {
+      if (!context.isCurrent()) return
+      if (this.state.status === 'ready') return
+      this.setSurfaceState({
+        status: 'ready',
+        errorMessage: null,
+        terrainStatus: this.state.terrainStatus,
+        terrainErrorMessage: this.state.terrainErrorMessage,
+      })
+      const currentSnapshot = this.snapshot
+      if (!currentSnapshot) return
+      this.syncBasemapPresentation(map, currentSnapshot)
+      this.syncOverlays(currentSnapshot)
+      void this.syncTerrain(currentSnapshot)
+    }
+
+    const maybeMarkBasemapReady = (event?: unknown): void => {
+      if (!context.isCurrent()) return
+      const sourceId = typeof event === 'object' && event && 'sourceId' in event
+        ? (event as { sourceId?: unknown }).sourceId
+        : undefined
+      if (sourceId != null && sourceId !== MAPLIBRE_BASEMAP_SOURCE_ID) return
+      if (!map.isSourceLoaded?.(MAPLIBRE_BASEMAP_SOURCE_ID)) return
+      markBasemapReady()
+    }
+
+    const handleLoad = (): void => {
+      if (!context.isCurrent()) return
+      const currentSnapshot = this.snapshot
+      if (!currentSnapshot) return
+      this.applyCamera(map, currentSnapshot)
+      maybeMarkBasemapReady()
+    }
+
+    const handleError = (event?: unknown): void => {
+      if (!context.isCurrent()) return
+      if (this.state.status === 'ready') {
+        this.logError('MapLibre surface error:', event)
+        return
+      }
+      this.setSurfaceState({
+        status: 'error',
+        errorMessage: toMapLibreSurfaceErrorMessage(event),
+        terrainStatus: 'idle',
+        terrainErrorMessage: null,
+      })
+      clearCanvasMapSurfaceOverlays(map)
+    }
+
+    map.on('load', handleLoad)
+    map.on('sourcedata', maybeMarkBasemapReady)
+    map.on('error', handleError)
+    this.detachMapEvents = () => {
+      map.off('load', handleLoad)
+      map.off('sourcedata', maybeMarkBasemapReady)
+      map.off('error', handleError)
+    }
+
+    const currentSnapshot = this.snapshot
+    if (currentSnapshot) this.applyCamera(map, currentSnapshot)
+    map.resize()
+    if (map.loaded?.()) handleLoad()
   }
 
   private publishDiagnostics(
