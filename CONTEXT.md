@@ -36,6 +36,10 @@ _Avoid_: MapLibre controller, basemap helper, map overlay state
 The app runtime seam for MapLibre resource lifetime across map-backed surfaces, including lazy loading, map creation, teardown, resize observation, basemap style rebuilds, preserved view state, and initialization failure state. The maplibre host does not own Design data, Location edits, Design Template selection, Canvas Map Surface camera sync, terrain, or Target Presentation overlays; those remain in surface-specific adapters.
 _Avoid_: Map component, map helper, direct maplibregl ownership
 
+**MapLibre Surface Adapter**:
+The typed adapter seam above the MapLibre Host for map-backed surfaces. A maplibre surface adapter owns typed current-map access, per-map event listener cleanup, map-lifetime cleanup callbacks, and forwarding host lifecycle events to a surface-specific adapter. It does not own Design data, Location edits, Design Template selection, Canvas Map Surface camera sync, terrain, markers, or Target Presentation overlays.
+_Avoid_: Map component helper, host wrapper, map ref state
+
 **Canvas Layer Presentation**:
 The app-facing presentation seam for Layer chrome, map layer visibility, terrain layer controls, active layer selection, Location readiness cues, and layer-related commands. Canvas layer presentation turns scene Layer state, settings-backed map layer preferences, terrain settings, and saved Location readiness into caller-ready layer read models while routing writes to the correct authority. It does not own Design data, Scene Edit state, Location drafts, Canvas Map Surface lifecycle, or settings persistence.
 _Avoid_: Layer panel state, map layer helper, terrain UI state

@@ -1,11 +1,12 @@
 import { useEffect, useRef } from 'preact/hooks'
 import type { TemplateMeta } from '../../types/community'
 import {
-  createMapLibreHost,
   type MapLibreApi,
-  type MapLibreHost,
-  type MapLibreHostContext,
 } from '../../maplibre/host'
+import {
+  createMapLibreSurfaceAdapter,
+  type MapLibreSurfaceAdapter,
+} from '../../maplibre/surface-adapter'
 import {
   createWorldMapBounds,
   createWorldMapLibreMap,
@@ -27,9 +28,7 @@ export function WorldMapSurface({
   onSelect: (template: TemplateMeta) => void
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const hostRef = useRef<MapLibreHost | null>(null)
-  const mapRef = useRef<WorldMapLibreMap | null>(null)
-  const maplibreRef = useRef<MapLibreApi | null>(null)
+  const surfaceRef = useRef<MapLibreSurfaceAdapter<WorldMapLibreMap> | null>(null)
   const markersRef = useRef<WorldMapMarker[]>([])
   const lastTemplateLayoutKeyRef = useRef<string>('')
   const templatesRef = useRef(templates)
@@ -38,18 +37,18 @@ export function WorldMapSurface({
   templatesRef.current = templates
   selectedIdRef.current = selectedId
   onSelectRef.current = onSelect
-  if (!hostRef.current) hostRef.current = createMapLibreHost()
+  if (!surfaceRef.current) surfaceRef.current = createMapLibreSurfaceAdapter()
 
   const preferredBasemapStyle = basemapStyle.value
 
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
-    const host = hostRef.current
-    if (!host) return
+    const surface = surfaceRef.current
+    if (!surface) return
 
-    host.attach(container)
-    host.requestMap({
+    surface.attach(container)
+    surface.requestMap({
       key: preferredBasemapStyle,
       createMap: (maplibre, target, preservedView) => createWorldMapLibreMap(
         maplibre,
@@ -60,31 +59,23 @@ export function WorldMapSurface({
           zoom: preservedView?.zoom ?? 1.15,
         },
       ),
-      captureViewState: (context) => readWorldMapViewState(asWorldMap(context)),
+      captureViewState: (context) => readWorldMapViewState(context.map),
       onCreate: (context) => {
-        const map = asWorldMap(context)
-        mapRef.current = map
-        maplibreRef.current = context.maplibre
-        syncTemplateMarkers(map, context.maplibre)
+        context.lifetime.addCleanup(clearMarkers)
+        syncTemplateMarkers(context.map, context.maplibre)
         syncMarkerSelection()
-        if (!context.preservedViewState) flyToSelectedTemplate(map)
-      },
-      onDestroy: (context) => {
-        clearMarkers()
-        const map = asWorldMap(context)
-        if (mapRef.current === map) mapRef.current = null
-        if (maplibreRef.current === context.maplibre) maplibreRef.current = null
+        if (!context.preservedViewState) flyToSelectedTemplate(context.map)
       },
     })
 
     return () => {
-      host.destroy()
+      surface.destroy()
     }
   }, [preferredBasemapStyle])
 
   useEffect(() => {
-    const map = mapRef.current
-    const maplibre = maplibreRef.current
+    const map = surfaceRef.current?.map
+    const maplibre = surfaceRef.current?.maplibre
     if (map && maplibre) syncTemplateMarkers(map, maplibre)
   }, [templates, preferredBasemapStyle])
 
@@ -93,7 +84,7 @@ export function WorldMapSurface({
   }, [selectedId, templates, preferredBasemapStyle])
 
   useEffect(() => {
-    const map = mapRef.current
+    const map = surfaceRef.current?.map
     if (map) flyToSelectedTemplate(map)
   }, [selectedId, templates])
 
@@ -158,10 +149,6 @@ export function WorldMapSurface({
   function clearMarkers(): void {
     markersRef.current.forEach((marker) => marker.remove())
     markersRef.current = []
-  }
-
-  function asWorldMap(context: MapLibreHostContext): WorldMapLibreMap {
-    return context.map as unknown as WorldMapLibreMap
   }
 
   return <div ref={containerRef} className={styles.map} />
