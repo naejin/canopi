@@ -152,6 +152,7 @@ describe('MapLibre Host', () => {
       },
     })
     const onCreateError = vi.fn()
+    const onDestroy = vi.fn()
 
     host.attach(container)
     host.requestMap({
@@ -167,6 +168,7 @@ describe('MapLibre Host', () => {
       onCreate: () => {
         throw new Error('post-create setup failed')
       },
+      onDestroy,
       onCreateError,
     })
     await flushPromises()
@@ -174,6 +176,7 @@ describe('MapLibre Host', () => {
     expect(onCreateError).toHaveBeenCalledWith(expect.any(Error))
     expect(host.current()).toBeNull()
     expect(observers[0]!.disconnect).toHaveBeenCalled()
+    expect(onDestroy).toHaveBeenCalledWith(expect.objectContaining({ map: maps[0] }))
     expect(maps[0]!.remove).toHaveBeenCalled()
 
     host.requestMap({
@@ -191,5 +194,45 @@ describe('MapLibre Host', () => {
 
     expect(maps).toHaveLength(2)
     expect(host.current()?.map).toBe(maps[1])
+  })
+
+  it('still removes failed maps and reports create errors when post-create cleanup throws', async () => {
+    const logError = vi.fn()
+    const host = createMapLibreHost({
+      loadMapLibre: vi.fn(async () => maplibre),
+      logError,
+    })
+    const createError = new Error('post-create setup failed')
+    const cleanupError = new Error('adapter cleanup failed')
+    const onCreateError = vi.fn()
+
+    host.attach(container)
+    host.requestMap({
+      key: 'street',
+      createMap: (api, target) => new api.Map({
+        container: target,
+        style: { version: 8, sources: {}, layers: [] },
+        interactive: false,
+        pitchWithRotate: false,
+        dragRotate: false,
+        touchZoomRotate: false,
+      }),
+      onCreate: () => {
+        throw createError
+      },
+      onDestroy: () => {
+        throw cleanupError
+      },
+      onCreateError,
+    })
+    await flushPromises()
+
+    expect(maps[0]!.remove).toHaveBeenCalled()
+    expect(onCreateError).toHaveBeenCalledWith(createError)
+    expect(logError).toHaveBeenCalledWith(
+      'Failed to clean up MapLibre map after create failure:',
+      cleanupError,
+    )
+    expect(host.current()).toBeNull()
   })
 })

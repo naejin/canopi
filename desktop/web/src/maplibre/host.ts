@@ -219,7 +219,13 @@ class ImperativeMapLibreHost implements MapLibreHost {
     this.resizeObserver?.disconnect()
     this.resizeObserver = null
     this.mapContext = null
-    context.map.remove()
+    try {
+      context.request.onDestroy?.(context)
+    } catch (error) {
+      this.logError('Failed to clean up MapLibre map after create failure:', error)
+    } finally {
+      context.map.remove()
+    }
   }
 
   private capturePreservedViewState(context: CurrentMapLibreHostContext): void {
