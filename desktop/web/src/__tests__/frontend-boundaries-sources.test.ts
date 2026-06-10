@@ -482,6 +482,25 @@ describe('frontend boundary sources', () => {
     expect(worldMapSource).not.toContain('new ResizeObserver')
   })
 
+  it('keeps production MapLibre ownership in the host and low-level maplibre modules', () => {
+    const productionAppSources = [
+      '../app',
+      '../components',
+    ].flatMap(sourceFilesUnder).filter(isTypescriptSource)
+
+    for (const sourcePath of productionAppSources) {
+      const source = readSource(sourcePath)
+
+      expectNoImportsMatching(sourcePath, [/^maplibre-gl$/])
+      expect(source, `${sourcePath} should not construct basemap styles directly`).not.toContain(
+        'createMapLibreBasemapStyle',
+      )
+      expect(source, `${sourcePath} should not construct MapLibre classes directly`).not.toMatch(
+        /\bnew\s+maplibre(?:gl)?\./,
+      )
+    }
+  })
+
   it('keeps Species Catalog state private to the workbench implementation', () => {
     const sourcePaths = [
       '../app',

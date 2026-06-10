@@ -8,7 +8,7 @@ Use this guide when changing MapLibre surfaces, basemap rendering, terrain layer
 - Map layers render scene/document state; they do not own or mutate it.
 - Map surfaces and readiness/status UI consume saved Location state through the Location Workbench; do not import Design Session state directly for location presentation.
 - `maplibre/host.ts` owns shared MapLibre resource lifetime for migrated map-backed surfaces: lazy loading, map creation, resize observation, keyed rebuild teardown, preserved view state, initialization failure callbacks, and final removal. The host must not import app-owned Design, Location, Target Presentation, terrain, or canvas authority.
-- Existing full-screen surfaces may keep component-local MapLibre ownership when setup/update/teardown are contained in one component, unless they have been migrated to the MapLibre Host.
+- Production map-backed surfaces should request map lifetime through the MapLibre Host. Keep direct `maplibre-gl` imports, Map/Marker/Bounds construction, basemap style construction, and control construction in low-level modules under `desktop/web/src/maplibre/` or in tests.
 - In-canvas MapLibre remains isolated behind the Canvas Map Surface adapter and the MapLibre Host. Do not scatter MapLibre ownership across canvas runtime or renderers.
 - Location map editing uses the MapLibre Host for map lifetime and keeps saved Location authority, pending search-result preview, pin projection, drag clearing, and map-center commits in `app/location/map-editing.ts`.
 - The Design Template world map uses the MapLibre Host for map lifetime and keeps template marker creation, selection classes, fit-to-bounds, and selected-template fly-to behavior in `components/world-map/WorldMapSurface.tsx` with low-level constructors isolated under `maplibre/world-map.ts`.
@@ -30,7 +30,7 @@ Use this guide when changing MapLibre surfaces, basemap rendering, terrain layer
 
 ## Surface Shape
 
-- Keep in-canvas map surfaces thin. Lifecycle classes/components own setup, update, and teardown.
+- Keep map-backed surface adapters thin. The MapLibre Host owns setup, resize observation, keyed rebuild teardown, and final removal; adapters own surface-specific snapshots, events, overlays, markers, terrain, and presentation state.
 - Helper modules under `desktop/web/src/maplibre/` own MapLibre loading/types, basemap presentation, overlay coordination, terrain loading, and terrain diff/apply behavior.
 - Precision warnings and dev diagnostics derive from the projection seam, not ad hoc surface math.
 - Rendered map overlays consume the pure Target map projection seam in `desktop/web/src/target/` instead of resolving Target identity themselves.
