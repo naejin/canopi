@@ -34,7 +34,7 @@ import type { CanopiFile, PlacedPlant } from '../types/design'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 import { createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
 
-function makeDesign(): CanopiFile {
+function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
     version: 2,
     name: 'Consortium chart hover test',
@@ -57,6 +57,7 @@ function makeDesign(): CanopiFile {
     extra: {},
     created_at: '2026-04-08T00:00:00.000Z',
     updated_at: '2026-04-08T00:00:00.000Z',
+    ...overrides,
   }
 }
 
@@ -159,5 +160,43 @@ describe('ConsortiumChart canvas hover bridge', () => {
 
     expect(hoveredPanelTargets.value).toEqual([])
     expect(hoveredCanvasTargets.value).toEqual([speciesTarget('Acer campestre')])
+  })
+
+  it('clears local chart hover when the hovered consortium disappears', async () => {
+    await act(async () => {
+      render(<App><ConsortiumChart /></App>, container)
+    })
+
+    const canvas = container.querySelector('canvas')
+    expect(canvas).not.toBeNull()
+    Object.defineProperty(canvas!, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({
+        left: 0,
+        top: 0,
+        right: 800,
+        bottom: 216,
+        width: 800,
+        height: 216,
+      }),
+    })
+
+    await act(async () => {
+      canvas!.dispatchEvent(new MouseEvent('mousemove', { clientX: 270, clientY: 90, bubbles: true }))
+    })
+
+    expect(latestHoverState()?.hoveredCanonical).toBe('Malus domestica')
+    expect(hoveredPanelTargets.value).toEqual([consortiumTarget('Malus domestica')])
+
+    await act(async () => {
+      currentDesign.value = makeDesign({
+        consortiums: [
+          { target: consortiumTarget('Acer campestre'), stratum: 'medium', start_phase: 0, end_phase: 2 },
+        ],
+      })
+    })
+
+    expect(latestHoverState()?.hoveredCanonical).toBeNull()
+    expect(hoveredPanelTargets.value).toEqual([])
   })
 })

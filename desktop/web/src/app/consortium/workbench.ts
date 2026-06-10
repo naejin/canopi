@@ -2,9 +2,14 @@ import { useCallback, useEffect, useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import { createPanelTargetPresentationController } from '../panel-targets/presentation'
 import {
+  createPlanningCanvasInteractionFrame,
+  type PlanningCanvasInteractionFrame,
+} from '../planning-canvas/interaction-frame'
+import {
   hitTestBar,
   type ConsortiumBarLayout,
 } from '../../canvas/consortium-renderer'
+import { consortiumTarget } from '../../target'
 import type { Consortium } from '../../types/design'
 import {
   beginConsortiumDrag,
@@ -17,6 +22,12 @@ const consortiumTargetPresentation = createPanelTargetPresentationController('co
 
 interface MutableDomRef<T> {
   current: T | null
+}
+
+interface ConsortiumDocumentHandlers {
+  handleMouseMove(event: MouseEvent): void
+  handleMouseUp(event: MouseEvent): void
+  handleMouseLeave(): void
 }
 
 export interface ConsortiumCanvasWorkbenchOptions {
@@ -50,6 +61,42 @@ export function useConsortiumCanvasWorkbench({
   const consortiumsRef = useRef(consortiums)
   const rowHeightsRef = useRef<number[]>(rowHeights)
   const rowOffsetsRef = useRef<number[]>(rowOffsets)
+  const documentHandlersRef = useRef<ConsortiumDocumentHandlers>({
+    handleMouseMove: () => {},
+    handleMouseUp: () => {},
+    handleMouseLeave: () => {},
+  })
+  const planningFrameRef = useRef<PlanningCanvasInteractionFrame | null>(null)
+
+  if (!planningFrameRef.current) {
+    planningFrameRef.current = createPlanningCanvasInteractionFrame({
+      getHoveredId: () => hoveredCanonical.value,
+      setHoveredId: (id) => {
+        hoveredCanonical.value = id
+      },
+      getSelectedId: () => null,
+      setSelectedId: () => {},
+      clearLocalHover: () => {
+        hoveredCanonical.value = null
+        if (canvasRef.current) canvasRef.current.style.cursor = 'default'
+      },
+      clearLocalSelection: () => {},
+      targetPresentation: consortiumTargetPresentation,
+      documentEvents: {
+        handleMouseMove: (event) => {
+          documentHandlersRef.current.handleMouseMove(event)
+        },
+        handleMouseUp: (event) => {
+          documentHandlersRef.current.handleMouseUp(event)
+        },
+        handleMouseLeave: () => {
+          documentHandlersRef.current.handleMouseLeave()
+        },
+        handleKeyDown: () => {},
+      },
+    })
+  }
+  const planningFrame = planningFrameRef.current
 
   barsRef.current = bars
   consortiumsRef.current = consortiums
@@ -122,26 +169,22 @@ export function useConsortiumCanvasWorkbench({
     )
     if (hit) {
       if (hoveredCanonical.value !== hit.canonicalName) {
-        hoveredCanonical.value = hit.canonicalName
-        consortiumTargetPresentation.setHoveredSpecies(hit.canonicalName)
+        planningFrame.setHoveredItem({
+          id: hit.canonicalName,
+          targets: [consortiumTarget(hit.canonicalName)],
+        }, () => {})
       }
       canvas.style.cursor = hit.edge === 'body' ? 'grab' : 'ew-resize'
     } else {
-      if (hoveredCanonical.value !== null) {
-        hoveredCanonical.value = null
-        consortiumTargetPresentation.clearHoveredTargets()
-      }
+      if (hoveredCanonical.value !== null) planningFrame.clearHover()
       canvas.style.cursor = 'default'
     }
-  }, [canvasRef, hoveredCanonical])
+  }, [canvasRef, hoveredCanonical, planningFrame])
 
   const handleMouseLeave = useCallback(() => {
-    if (hoveredCanonical.value !== null) {
-      hoveredCanonical.value = null
-      consortiumTargetPresentation.clearHoveredTargets()
-    }
+    if (hoveredCanonical.value !== null) planningFrame.clearHover()
     if (canvasRef.current) canvasRef.current.style.cursor = 'default'
-  }, [canvasRef, hoveredCanonical])
+  }, [canvasRef, hoveredCanonical, planningFrame])
 
   const handleCanvasMouseMove = useCallback((event: MouseEvent) => {
     if (!dragState.current) handleMouseMove(event)
@@ -154,24 +197,32 @@ export function useConsortiumCanvasWorkbench({
     }
   }, [])
 
-  useEffect(() => {
-    const onMove = (event: MouseEvent) => {
+  documentHandlersRef.current = {
+    handleMouseMove: (event: MouseEvent) => {
       if (dragState.current) handleMouseMove(event)
-    }
-    const onUp = () => {
+    },
+    handleMouseUp: () => {
       handleMouseUp()
-    }
+    },
+    handleMouseLeave: () => {},
+  }
 
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
+  useEffect(() => {
+    const disposeDocumentListeners = planningFrame.installDocumentListeners({
+      canvasRef,
+      handleWheel: () => {},
+    })
     return () => {
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', onUp)
+      disposeDocumentListeners()
       commitConsortiumDrag(dragState.current)
       dragState.current = null
-      consortiumTargetPresentation.clearHoveredTargets()
+      planningFrame.cleanup()
     }
-  }, [handleMouseMove, handleMouseUp])
+  }, [canvasRef, planningFrame])
+
+  useEffect(() => {
+    planningFrame.syncVisibleItems(bars.map((bar) => ({ id: bar.canonicalName })))
+  }, [bars, hoveredCanonical.value, planningFrame])
 
   const invalidateLayout = useCallback(() => {
     cachedRectRef.current = null
