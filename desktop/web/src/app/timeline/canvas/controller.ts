@@ -61,6 +61,7 @@ export interface TimelineActionCanvasController {
   readRenderState(): TimelineRenderState
   readGeometry(): TimelineActionCanvasGeometry
   getFrozenOriginDate(): Date | null
+  installDocumentListeners(): () => void
   syncActions(actions: readonly { readonly id: string }[]): void
   handleContainerScroll(): void
   handleMouseDown(event: MouseEvent): void
@@ -268,6 +269,7 @@ export function createTimelineActionCanvasController({
     readRenderState,
     readGeometry,
     getFrozenOriginDate: () => activeFrame().getFrozenOriginDate(),
+    installDocumentListeners: () => activeFrame().installDocumentListeners(),
     syncActions: (actions) => activeFrame().syncActions(actions),
     handleContainerScroll: () => activeFrame().handleContainerScroll(),
     handleMouseDown: (event) => activeFrame().handleMouseDown(event),

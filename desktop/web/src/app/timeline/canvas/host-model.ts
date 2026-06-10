@@ -121,35 +121,12 @@ export function useTimelineActionCanvasHostModel(): TimelineActionCanvasHostMode
   }, [canvasHeight])
 
   useEffect(() => {
-    const canvas = canvasRef.current
-    if (canvas) canvas.addEventListener('wheel', canvasController.handleWheel, { passive: false })
-
-    const onMove = (event: MouseEvent) => {
-      canvasController.handleDocumentMouseMove(event)
-    }
-    const onUp = (event: MouseEvent) => {
-      canvasController.handleDocumentMouseUp(event)
-    }
-    const onLeave = () => {
-      canvasController.handleDocumentMouseLeave()
-    }
-    const onKeyDown = (event: KeyboardEvent) => {
-      canvasController.handleKeyDown(event)
-    }
-
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
-    document.addEventListener('keydown', onKeyDown)
-    document.documentElement.addEventListener('mouseleave', onLeave)
+    const disposeDocumentListeners = canvasController.installDocumentListeners()
     return () => {
-      if (canvas) canvas.removeEventListener('wheel', canvasController.handleWheel)
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', onUp)
-      document.removeEventListener('keydown', onKeyDown)
-      document.documentElement.removeEventListener('mouseleave', onLeave)
+      disposeDocumentListeners()
       canvasController.cleanup()
     }
-  }, [canvasRef, canvasController])
+  }, [canvasController])
 
   useEffect(() => {
     canvasController.syncActions(actions ?? EMPTY_ACTIONS)

@@ -78,6 +78,15 @@ export function clearTimelineSelectedPanelTargets(): void {
   timelineTargetPresentation.clearSelectedTargets()
 }
 
+export function createTimelineTargetPresentation() {
+  return {
+    setHoveredTargets: setTimelineHoveredPanelTargets,
+    clearHoveredTargets: clearTimelineHoveredPanelTargets,
+    setSelectedTargets: setTimelineSelectedPanelTargets,
+    clearSelectedTargets: clearTimelineSelectedPanelTargets,
+  }
+}
+
 export function openTimelineActionPopover({
   pendingClick,
   speciesList,

@@ -13,17 +13,18 @@ import {
 } from './geometry'
 import { snapToDay, toISODate, xToDate } from '../../../canvas/timeline-math'
 import {
-  clearTimelineHoveredPanelTargets,
-  clearTimelineSelectedPanelTargets,
+  createTimelineTargetPresentation,
   deleteSelectedTimelineAction,
   deleteTimelineActionPopover,
   openTimelineActionPopover,
   saveTimelineActionPopover,
-  setTimelineHoveredPanelTargets,
-  setTimelineSelectedPanelTargets,
   type TimelineActionPendingClick,
   type TimelineActionPopoverState,
 } from '../workbench'
+import {
+  createPlanningCanvasInteractionFrame,
+  type PlanningCanvasInteractionFrame,
+} from '../../planning-canvas/interaction-frame'
 import type { TimelineActionFormData } from '../../design-edit'
 import { createUuid } from '../../../utils/ids'
 import { isEditableTarget } from '../../../canvas/runtime/interaction/pointer-utils'
@@ -97,6 +98,7 @@ export interface TimelineActionInteractionFrameOptions {
 
 export interface TimelineActionInteractionFrame {
   getFrozenOriginDate(): Date | null
+  installDocumentListeners(): () => void
   syncActions(actions: readonly { readonly id: string }[]): void
   handleMouseDown(event: MouseEvent): void
   handleCanvasMouseMove(event: MouseEvent): void
@@ -144,6 +146,8 @@ export function createTimelineActionInteractionFrame({
   let lastDragClientX = 0
   let selectedActionId: string | null = null
   let hoveredActionId: string | null = null
+  let timelineFrame: TimelineActionInteractionFrame
+  let planningFrame: PlanningCanvasInteractionFrame
 
   const stopAutoScroll = (): void => {
     const rafId = autoScrollRafId
@@ -242,25 +246,52 @@ export function createTimelineActionInteractionFrame({
   }
 
   const clearHover = (): void => {
-    hoveredActionId = null
-    hover.clear()
-    clearTimelineHoveredPanelTargets()
+    planningFrame.clearHover()
   }
 
-  const clearSelection = (): void => {
-    selectedActionId = null
-    selection.setSelectedId(null)
-    selection.clear()
-    clearTimelineSelectedPanelTargets()
-  }
+  planningFrame = createPlanningCanvasInteractionFrame({
+    getHoveredId: () => hoveredActionId,
+    setHoveredId: (id) => {
+      hoveredActionId = id
+    },
+    getSelectedId: () => selectedActionId,
+    setSelectedId: (id) => {
+      selectedActionId = id
+    },
+    clearLocalHover: () => {
+      hover.clear()
+    },
+    clearLocalSelection: () => {
+      selection.setSelectedId(null)
+      selection.clear()
+    },
+    targetPresentation: createTimelineTargetPresentation(),
+    documentEvents: {
+      handleMouseMove: (event) => {
+        timelineFrame.handleDocumentMouseMove(event)
+      },
+      handleMouseUp: (event) => {
+        timelineFrame.handleDocumentMouseUp(event)
+      },
+      handleMouseLeave: () => {
+        timelineFrame.handleDocumentMouseLeave()
+      },
+      handleKeyDown: (event) => {
+        timelineFrame.handleKeyDown(event)
+      },
+    },
+  })
 
-  return {
+  timelineFrame = {
     getFrozenOriginDate: () => dragOriginDate,
 
+    installDocumentListeners: () => planningFrame.installDocumentListeners({
+      canvasRef,
+      handleWheel: timelineFrame.handleWheel,
+    }),
+
     syncActions(actions): void {
-      const liveIds = new Set(actions.map((action) => action.id))
-      if (selectedActionId && !liveIds.has(selectedActionId)) clearSelection()
-      if (hoveredActionId && !liveIds.has(hoveredActionId)) clearHover()
+      planningFrame.syncVisibleItems(actions)
     },
 
     handleMouseDown(event: MouseEvent): void {
@@ -319,10 +350,13 @@ export function createTimelineActionInteractionFrame({
         return
       }
 
-      selectedActionId = hit.action.id
-      selection.setSelectedId(hit.action.id)
-      selection.selectAction(hit.action)
-      setTimelineSelectedPanelTargets(hit.action.targets)
+      planningFrame.setSelectedItem({
+        id: hit.action.id,
+        targets: hit.action.targets,
+      }, () => {
+        selection.setSelectedId(hit.action.id)
+        selection.selectAction(hit.action)
+      })
       if (!hit.action.startDate) return
 
       const freeze = createTimelineOriginFreeze(computedOriginMsRef.current)
@@ -374,9 +408,12 @@ export function createTimelineActionInteractionFrame({
       const hit = hitTestTimelineActionGeometry(geometryRef.current, { x: mouseX, y: mouseY })
 
       if (hit) {
-        hoveredActionId = hit.action.id
-        setTimelineHoveredPanelTargets(hit.action.targets)
-        hover.showAction(hit.action, { x: mouseX, y: mouseY })
+        planningFrame.setHoveredItem({
+          id: hit.action.id,
+          targets: hit.action.targets,
+        }, () => {
+          hover.showAction(hit.action, { x: mouseX, y: mouseY })
+        })
       } else {
         clearHover()
       }
@@ -489,8 +526,9 @@ export function createTimelineActionInteractionFrame({
 
     cleanup(): void {
       finishDrag(null)
-      clearHover()
-      clearSelection()
+      planningFrame.cleanup()
     },
   }
+
+  return timelineFrame
 }
