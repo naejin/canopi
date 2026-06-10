@@ -34,14 +34,9 @@ import {
   createSceneInteractionSharedGestures,
   type SceneInteractionSharedGestures,
 } from './interaction/shared-gestures'
-import type {
-  SceneToolPointerDrag,
-} from './interaction/tool-adapter'
 import type { SceneEditCoordinator } from './scene-runtime/transactions'
 
 type InteractionTool = 'select' | 'hand' | 'rectangle' | 'text' | 'plant-stamp' | 'object-stamp' | 'plant-spacing' | string
-type InteractionMode = 'idle' | 'tool-drag'
-type ToolPointerDrag = SceneToolPointerDrag
 
 export interface SceneInteractionDeps {
   container: HTMLElement
@@ -71,14 +66,6 @@ export class SceneInteractionController {
   private readonly _frame: SceneInteractionFrame
   private readonly _sharedGestures: SceneInteractionSharedGestures
   private _tool: InteractionTool = 'select'
-  private _mode: InteractionMode = 'idle'
-  private _toolDrag: ToolPointerDrag | null = null
-  private _pointerId: number | null = null
-  private _startScreen: ScenePoint | null = null
-  private _startWorld: ScenePoint | null = null
-  private _spaceHeld = false
-  /** Cached container rect captured on pointerdown — avoids forced reflow at 60fps during drag. */
-  private _cachedContainerRect: DOMRect | null = null
 
   constructor(private readonly _deps: SceneInteractionDeps) {
     this._preview = createInteractionPreview(this._deps.container)
@@ -99,7 +86,7 @@ export class SceneInteractionController {
       commitPlantSpacingIntervalMeters: this._deps.commitPlantSpacingIntervalMeters,
       switchTool: (name) => this._switchTool(name),
       applySnapping: (point) => this._applySnapping(point),
-      getContainerRect: () => this._cachedContainerRect ?? this._deps.container.getBoundingClientRect(),
+      getContainerRect: () => this._frame.currentContainerRect(),
     })
     this._sharedGestures = createSceneInteractionSharedGestures({
       container: this._deps.container,
@@ -165,26 +152,41 @@ export class SceneInteractionController {
     if (event.button !== 0 && event.button !== 1) return
     if (this._tools.shouldIgnorePointerEvent(event.target)) return
 
-    this._cachedContainerRect = this._deps.container.getBoundingClientRect()
-    const screen = this._screenPoint(event)
+    const containerRect = this._deps.container.getBoundingClientRect()
+    const screen = this._screenPoint(event, containerRect)
     const world = this._deps.camera.screenToWorld(screen)
-    this._pointerId = event.pointerId
-    this._startScreen = screen
-    this._startWorld = world
+    this._frame.startPointerGesture({
+      pointerId: event.pointerId,
+      startScreen: screen,
+      startWorld: world,
+      containerRect,
+    })
 
-    if (this._sharedGestures.beginPan({ event, screen, world, tool: this._tool, spaceHeld: this._spaceHeld })) return
+    if (this._sharedGestures.beginPan({
+      event,
+      screen,
+      world,
+      tool: this._tool,
+      spaceHeld: this._frame.isSpaceHeld(),
+    })) return
 
     if (this._tools.pointerDown({
       event,
       screen,
       rawWorld: world,
-      beginDrag: (drag) => this._beginToolPointerDrag(drag),
-      clearPointerGesture: () => this._clearToolPointerGesture(),
+      beginDrag: (drag) => this._frame.beginToolPointerDrag(drag),
+      clearPointerGesture: () => this._frame.clearPointerGesture(),
     })) {
       return
     }
 
-    this._sharedGestures.beginSelectionGesture({ event, screen, world, tool: this._tool, spaceHeld: this._spaceHeld })
+    this._sharedGestures.beginSelectionGesture({
+      event,
+      screen,
+      world,
+      tool: this._tool,
+      spaceHeld: this._frame.isSpaceHeld(),
+    })
   }
 
   private readonly _onPointerLeave = (): void => {
@@ -231,47 +233,50 @@ export class SceneInteractionController {
   private readonly _onPointerMove = (event: PointerEvent): void => {
     if (this._tools.shouldIgnorePointerEvent(event.target)) return
 
-    if (this._pointerId === null) {
+    if (!this._frame.hasPointerGesture()) {
       const screen = this._screenPoint(event)
       const rawWorld = this._deps.camera.screenToWorld(screen)
       if (this._tools.pointerMoveWithoutCapture({ event, screen, rawWorld })) return
       this._updateHover(event)
       return
     }
-    if (event.pointerId !== this._pointerId) return
-    if (!this._startScreen || !this._startWorld) return
+    const pointerGesture = this._frame.pointerGestureFor(event)
+    if (!pointerGesture) return
 
     const screen = this._screenPoint(event)
     const rawWorld = this._deps.camera.screenToWorld(screen)
 
     if (this._sharedGestures.active && this._sharedGestures.pointerMove({ screen, rawWorld })) return
 
-    if (this._mode === 'tool-drag' && this._toolDrag) {
-      this._toolDrag.update({ event, screen, rawWorld })
+    const toolDrag = this._frame.activeToolPointerDrag()
+    if (toolDrag) {
+      toolDrag.update({ event, screen, rawWorld })
       return
     }
 
-    if (this._mode === 'idle' && this._tools.pointerMoveWithCapture({
+    if (this._tools.pointerMoveWithCapture({
       event,
       screen,
       rawWorld,
-      startScreen: this._startScreen,
-      startWorld: this._startWorld,
-      beginDrag: (drag) => this._beginToolPointerDrag(drag),
-      clearPointerGesture: () => this._clearToolPointerGesture(),
+      startScreen: pointerGesture.startScreen,
+      startWorld: pointerGesture.startWorld,
+      beginDrag: (drag) => this._frame.beginToolPointerDrag(drag),
+      clearPointerGesture: () => this._frame.clearPointerGesture(),
     })) {
       return
     }
   }
 
   private readonly _onPointerUp = (event: PointerEvent): void => {
-    if (this._pointerId === null && this._tools.shouldIgnorePointerUpWithoutCapture()) return
-    if (this._pointerId !== null && event.pointerId !== this._pointerId) return
+    const hasPointerGesture = this._frame.hasPointerGesture()
+    if (!hasPointerGesture && this._tools.shouldIgnorePointerUpWithoutCapture()) return
+    if (hasPointerGesture && !this._frame.pointerGestureFor(event)) return
     const screen = this._screenPoint(event)
     const rawWorld = this._deps.camera.screenToWorld(screen)
 
-    if (this._mode === 'tool-drag' && this._toolDrag) {
-      this._toolDrag.commit({ event, screen, rawWorld })
+    const toolDrag = this._frame.activeToolPointerDrag()
+    if (toolDrag) {
+      toolDrag.commit({ event, screen, rawWorld })
     }
     const sharedResult = this._sharedGestures.pointerUp({
       rawWorld,
@@ -318,8 +323,7 @@ export class SceneInteractionController {
     })
   }
 
-  private _screenPoint(event: Pick<MouseEvent, 'clientX' | 'clientY'>): ScenePoint {
-    const rect = this._cachedContainerRect ?? this._deps.container.getBoundingClientRect()
+  private _screenPoint(event: Pick<MouseEvent, 'clientX' | 'clientY'>, rect = this._frame.currentContainerRect()): ScenePoint {
     return {
       x: event.clientX - rect.left,
       y: event.clientY - rect.top,
@@ -331,20 +335,20 @@ export class SceneInteractionController {
 
     if (
       event.code !== 'Space'
-      || this._spaceHeld
+      || this._frame.isSpaceHeld()
       || isEditableTarget(event.target)
       || this._tools.shouldSuppressSharedKeyboard(event)
     ) return
     event.preventDefault()
-    this._spaceHeld = true
-    if (this._mode === 'idle' && this._tool !== 'hand') {
+    this._frame.holdSpace()
+    if (!this._frame.activeToolPointerDrag() && this._tool !== 'hand') {
       this._deps.container.style.cursor = 'grab'
     }
   }
 
   private readonly _onKeyUp = (event: KeyboardEvent): void => {
     if (event.code !== 'Space') return
-    this._spaceHeld = false
+    this._frame.releaseSpace()
     if (!this._sharedGestures.panning) {
       this._deps.container.style.cursor = cursorForTool(this._tool)
     }
@@ -352,14 +356,7 @@ export class SceneInteractionController {
 
   private _cancelTransientInteraction(options: SceneInteractionTransientCleanupOptions = {}): void {
     this._frame.cleanupTransient(options, {
-      clearPointerGesture: () => {
-        this._mode = 'idle'
-        this._toolDrag = null
-        this._pointerId = null
-        this._startScreen = null
-        this._startWorld = null
-        this._cachedContainerRect = null
-      },
+      clearPointerGesture: () => this._frame.clearPointerGesture(),
       cancelSharedGestures: () => this._sharedGestures.cancel(),
       cancelToolTransient: (cleanupOptions) => this._tools.cancelTransient(cleanupOptions),
       clearHover: () => {
@@ -370,18 +367,6 @@ export class SceneInteractionController {
         this._deps.container.style.cursor = cursorForTool(this._tool)
       },
     })
-  }
-
-  private _beginToolPointerDrag(drag: ToolPointerDrag): void {
-    this._mode = 'tool-drag'
-    this._toolDrag = drag
-  }
-
-  private _clearToolPointerGesture(): void {
-    this._pointerId = null
-    this._startScreen = null
-    this._startWorld = null
-    this._cachedContainerRect = null
   }
 
   private _refreshViewportDependentMeasurements(): void {

@@ -80,7 +80,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 ### Scene Interaction Tool Modules
 
 - Tool modules are internal adapters behind `canvas/runtime/interaction/tool-modules.ts`; they do not change the public `SceneCanvasRuntime`, `CanvasCommandSurface`, `CanvasQuerySurface`, or `CanvasDocumentSurface` interfaces.
-- Scene Interaction Frame (`canvas/runtime/interaction/frame.ts`) owns interaction listener setup/teardown, tool transition routing, transient cleanup ordering, and disposal cleanup ordering.
+- Scene Interaction Frame (`canvas/runtime/interaction/frame.ts`) owns interaction listener setup/teardown, generic pointer capture bookkeeping, cached pointer bounds, generic tool pointer-drag state, shared Space-key state for panning, tool transition routing, transient cleanup ordering, and disposal cleanup ordering.
 - Test Scene Interaction behavior through the Scene Interaction Frame event harness in `desktop/web/src/__tests__/support/scene-interaction-frame.ts`. New broad interaction tests should dispatch user-equivalent pointer, keyboard, and wheel events instead of calling private `SceneInteractionController` handlers.
 - Shared panning, band selection, top-level Design Object dragging, snap-adjusted drag deltas, and shared gesture cleanup live in `canvas/runtime/interaction/shared-gestures.ts` behind the frame. `SceneInteractionController` should route these gestures through that seam and keep tool dispatch separate.
 - `SceneInteractionController` supplies concrete cleanup callbacks to `frame.cleanupTransient()`; do not inline the ordering for pointer gesture reset, shared gesture cancellation, tool transient cancellation, hover clearing, or cursor reset back into the controller.
@@ -93,7 +93,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - Do not install module-level `effect()` or global listeners from a tool module unless that module also owns an explicit disposer and `import.meta.hot.dispose()` cleanup. Prefer router-dispatched events for canvas tool input.
 - Current Scene Edit tool adapters include Annotation Text, Zone drawing, Object Stamp, Plant Stamp, and Plant Spacing. Do not reintroduce tool-specific fields, source state, preview state, or direct tool branches into `SceneInteractionController`; route through a `SceneToolAdapter` and keep the state machine in the tool module.
 - `canvas/plant-stamp-source.ts` owns Plant Stamp Source selection plus drag data parsing/serialization. Plant Stamp tool modules consume that seam and clear the selected source on adapter deactivation/disposal; Species Catalog UI modules call it instead of writing source state or hand-assembling drag payloads.
-- Guard Scene Edit ownership with source boundary tests in `scene-interaction-tool-boundary.test.ts` and user-equivalent frame lifecycle tests in `scene-interaction.test.ts` or `scene-interaction-frame.test.ts`. Add tests before moving another tool concern across the router/module boundary.
+- Guard Scene Edit ownership with source boundary tests in `scene-interaction-tool-boundary.test.ts`, focused tool-module tests such as `plant-spacing-tool.test.ts`, and user-equivalent frame lifecycle tests in `scene-interaction.test.ts` or `scene-interaction-frame.test.ts`. Add tests before moving another tool concern across the router/module boundary.
 
 ## Zone Measurements
 

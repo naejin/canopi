@@ -147,4 +147,65 @@ describe('Scene Interaction Frame', () => {
 
     expect(order).toEqual(['pointer', 'shared', 'tool', 'hover', 'cursor'])
   })
+
+  it('owns captured pointer state, cached bounds, and tool drag lifecycle', () => {
+    const container = document.createElement('div')
+    const harness = createSceneInteractionEventHarness(container, {
+      bounds: { left: 10, top: 20, width: 400, height: 300 },
+    })
+    const frame = createSceneInteractionFrame({ container, handlers: createHandlers() })
+    const pointerDown = harness.pointerDown({ x: 12, y: 14 }, { pointerId: 7 })
+    const cachedRect = container.getBoundingClientRect()
+
+    frame.startPointerGesture({
+      pointerId: pointerDown.pointerId,
+      startScreen: { x: 12, y: 14 },
+      startWorld: { x: 120, y: 140 },
+      containerRect: cachedRect,
+    })
+    harness.setBounds({ left: 30, top: 40, width: 400, height: 300 })
+
+    expect(frame.hasPointerGesture()).toBe(true)
+    expect(frame.currentContainerRect().left).toBe(10)
+    expect(frame.pointerGestureFor({ pointerId: 8 })).toBeNull()
+    expect(frame.pointerGestureFor({ pointerId: 7 })).toMatchObject({
+      pointerId: 7,
+      startScreen: { x: 12, y: 14 },
+      startWorld: { x: 120, y: 140 },
+    })
+
+    const drag = {
+      update: vi.fn(),
+      commit: vi.fn(),
+    }
+    frame.beginToolPointerDrag(drag)
+    expect(frame.activeToolPointerDrag()).toBe(drag)
+
+    frame.clearPointerGesture()
+
+    expect(frame.hasPointerGesture()).toBe(false)
+    expect(frame.pointerGestureFor({ pointerId: 7 })).toBeNull()
+    expect(frame.activeToolPointerDrag()).toBeNull()
+    expect(frame.currentContainerRect().left).toBe(30)
+
+    harness.dispose()
+  })
+
+  it('owns shared space-key lifecycle state', () => {
+    const container = document.createElement('div')
+    const frame = createSceneInteractionFrame({ container, handlers: createHandlers() })
+
+    expect(frame.isSpaceHeld()).toBe(false)
+
+    frame.holdSpace()
+    expect(frame.isSpaceHeld()).toBe(true)
+
+    frame.releaseSpace()
+    expect(frame.isSpaceHeld()).toBe(false)
+
+    frame.holdSpace()
+    frame.dispose(() => {})
+
+    expect(frame.isSpaceHeld()).toBe(false)
+  })
 })

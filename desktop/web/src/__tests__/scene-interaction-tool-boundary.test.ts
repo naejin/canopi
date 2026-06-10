@@ -1,8 +1,12 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 function readSource(path: string): string {
   return readFileSync(new URL(path, import.meta.url), 'utf8')
+}
+
+function sourceExists(path: string): boolean {
+  return existsSync(new URL(path, import.meta.url))
 }
 
 describe('Scene Interaction tool module boundaries', () => {
@@ -29,6 +33,24 @@ describe('Scene Interaction tool module boundaries', () => {
     expect(frameSource).toContain("addEventListener('pointerdown'")
     expect(frameSource).toContain("removeEventListener('pointerdown'")
     expect(frameSource).toContain('cleanupTransient')
+  })
+
+  it('keeps generic pointer capture lifecycle behind the Scene Interaction Frame seam', () => {
+    const interactionSource = readSource('../canvas/runtime/scene-interaction.ts')
+    const frameSource = readSource('../canvas/runtime/interaction/frame.ts')
+
+    expect(frameSource).toContain('startPointerGesture')
+    expect(frameSource).toContain('pointerGestureFor')
+    expect(frameSource).toContain('beginToolPointerDrag')
+    expect(frameSource).toContain('clearPointerGesture')
+    expect(frameSource).toContain('isSpaceHeld')
+    expect(interactionSource).not.toContain('_pointerId')
+    expect(interactionSource).not.toContain('_startScreen')
+    expect(interactionSource).not.toContain('_startWorld')
+    expect(interactionSource).not.toContain('_cachedContainerRect')
+    expect(interactionSource).not.toContain('_toolDrag')
+    expect(interactionSource).not.toContain('_spaceHeld')
+    expect(interactionSource).not.toContain('InteractionMode')
   })
 
   it('keeps shared selection gestures behind the Scene Interaction Frame seam', () => {
@@ -157,6 +179,17 @@ describe('Scene Interaction tool module boundaries', () => {
     expect(toolModulesSource).toContain('commitPlantSpacingIntervalMeters: context.commitPlantSpacingIntervalMeters')
     expect(plantSpacingSource).not.toContain('../../../app/settings')
     expect(plantSpacingSource).not.toContain('../../../app/canvas-settings')
+  })
+
+  it('keeps representative Plant Spacing behavior coverage in focused tool tests', () => {
+    const broadInteractionTestSource = readSource('scene-interaction.test.ts')
+
+    expect(sourceExists('plant-spacing-tool.test.ts')).toBe(true)
+    const plantSpacingToolTestSource = readSource('plant-spacing-tool.test.ts')
+    expect(plantSpacingToolTestSource).toContain('createPlantSpacingToolAdapter')
+    expect(broadInteractionTestSource).not.toContain(
+      'reads and commits Plant Spacing interval through interaction dependencies',
+    )
   })
 
   it('keeps active tool drag state generic in the scene interaction router', () => {
