@@ -3,6 +3,8 @@ use rusqlite::{Connection, params_from_iter};
 
 use crate::db::query_builder::{SpeciesSearchPlan, SpeciesSearchPlanRequest};
 
+use super::list_projection::map_species_list_row;
+
 /// Searches species using FTS5, structured filters, or both.
 ///
 /// Returns a paginated result. Pass the `next_cursor` from a previous result
@@ -32,26 +34,7 @@ pub fn search(
         .map_err(|e| format!("Failed to prepare species search: {e}"))?;
 
     let rows: Vec<SpeciesListItem> = stmt
-        .query_map(params_from_iter(list.params()), |row| {
-            Ok(SpeciesListItem {
-                canonical_name: row.get(0)?,
-                slug: row.get(1)?,
-                common_name: row.get(2)?,
-                common_name_2: row.get(3)?,
-                is_name_fallback: row.get::<_, i32>(4).unwrap_or(0) == 1,
-                family: row.get(5)?,
-                genus: row.get(6)?,
-                height_max_m: row.get(7)?,
-                hardiness_zone_min: row.get(8)?,
-                hardiness_zone_max: row.get(9)?,
-                growth_rate: row.get(10)?,
-                stratum: row.get(11)?,
-                edibility_rating: row.get(12)?,
-                medicinal_rating: row.get(13)?,
-                width_max_m: row.get(14)?,
-                is_favorite: false,
-            })
-        })
+        .query_map(params_from_iter(list.params()), map_species_list_row)
         .map_err(|e| format!("Failed to execute species search: {e}"))?
         .filter_map(|result| match result {
             Ok(item) => Some(item),

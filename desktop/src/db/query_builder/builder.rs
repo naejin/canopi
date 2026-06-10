@@ -3,7 +3,7 @@ use rusqlite::types::Value;
 
 use super::pagination::{SpeciesSearchPagePlan, cursor_clause};
 use super::predicates::PredicatePlan;
-use super::projection::species_list_select_sql;
+use super::projection::{species_list_common_name_join_sql, species_list_select_sql};
 use super::relevance::{CommonNameRelevancePlan, relevance_order_by};
 use super::sql::SqlBuilder;
 use super::text::SearchText;
@@ -100,12 +100,8 @@ fn build_list_statement(
 
     let locale_placeholder = sql_builder.bind_text(request.search.locale.clone());
     let fallback_locale_placeholder = sql_builder.bind_text("en");
-    let common_name_join = format!(
-        "LEFT JOIN best_common_names bcn_loc \
-             ON bcn_loc.species_id = s.id AND bcn_loc.language = {locale_placeholder} \
-         LEFT JOIN best_common_names bcn_en \
-             ON bcn_en.species_id = s.id AND bcn_en.language = {fallback_locale_placeholder}"
-    );
+    let common_name_join =
+        species_list_common_name_join_sql(&locale_placeholder, &fallback_locale_placeholder);
 
     let relevance_plan = match page {
         SpeciesSearchPagePlan::RelevanceOffset { .. } => Some(CommonNameRelevancePlan::build(

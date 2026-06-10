@@ -15,6 +15,7 @@ mod detail_row_map;
 mod filters;
 mod flower;
 mod list_items;
+mod list_projection;
 mod media;
 mod relationships;
 mod replacement;
@@ -177,13 +178,22 @@ mod tests {
         let conn = test_support::test_conn();
         let catalog = SpeciesCatalogRead::new(&conn);
         let rows = catalog
-            .list_items_for_canonical_names(&["Apple".to_owned(), "Missing".to_owned()], "fr")
+            .list_items_for_canonical_names(
+                &["Apple".to_owned(), "Missing".to_owned(), "Plum".to_owned()],
+                "fr",
+            )
             .unwrap();
 
-        assert_eq!(rows.len(), 1);
+        assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].canonical_name, "Apple");
         assert_eq!(rows[0].common_name.as_deref(), Some("Pommier"));
+        assert_eq!(rows[0].common_name_2.as_deref(), Some("Pomme"));
+        assert!(!rows[0].is_name_fallback);
         assert!(!rows[0].is_favorite);
+        assert_eq!(rows[1].canonical_name, "Plum");
+        assert_eq!(rows[1].common_name.as_deref(), Some("Plum"));
+        assert!(rows[1].common_name_2.is_none());
+        assert!(rows[1].is_name_fallback);
     }
 
     #[test]
@@ -443,6 +453,7 @@ mod tests {
             include_str!("species_catalog_read/filters.rs"),
             include_str!("species_catalog_read/flower.rs"),
             include_str!("species_catalog_read/list_items.rs"),
+            include_str!("species_catalog_read/list_projection.rs"),
             include_str!("species_catalog_read/media.rs"),
             include_str!("species_catalog_read/relationships.rs"),
             include_str!("species_catalog_read/search.rs"),
