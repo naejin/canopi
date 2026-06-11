@@ -15,6 +15,18 @@ export interface SceneZoneVisual {
   stroke: string
 }
 
+export type CanvasInteractionVisualState =
+  | 'hover'
+  | 'selected'
+  | 'locked-design-object'
+  | 'locked-layer'
+
+export interface CanvasInteractionStrokeVisual {
+  color: string
+  widthPx: number
+  alpha: number
+}
+
 export function getSceneLayerStyle(
   scene: ScenePersistedState,
   layerName: string,
@@ -46,8 +58,38 @@ export function getPlantLabelColor(): string {
   return getCanvasColor('plant-label')
 }
 
-export function getSelectionStrokeColor(): string {
-  return getCanvasColor('selection-stroke')
+export function getCanvasInteractionStrokeVisual(
+  state: CanvasInteractionVisualState,
+): CanvasInteractionStrokeVisual {
+  if (state === 'selected') {
+    return {
+      color: getCanvasColor('selection-stroke'),
+      widthPx: 4.5,
+      alpha: 1,
+    }
+  }
+
+  if (state === 'locked-design-object') {
+    return {
+      color: getCanvasColor('locked-object-stroke'),
+      widthPx: 2.75,
+      alpha: 0.86,
+    }
+  }
+
+  if (state === 'locked-layer') {
+    return {
+      color: getCanvasColor('locked-layer-stroke'),
+      widthPx: 2.75,
+      alpha: 0.9,
+    }
+  }
+
+  return {
+    color: getCanvasColor('hover-stroke'),
+    widthPx: 2.5,
+    alpha: 0.72,
+  }
 }
 
 export function getStackBadgeBackgroundColor(): string {

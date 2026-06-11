@@ -17,7 +17,10 @@ type CanvasColorName =
   | 'zone-stroke'
   | 'zone-fill'
   | 'selection-fill'
+  | 'hover-stroke'
   | 'selection-stroke'
+  | 'locked-object-stroke'
+  | 'locked-layer-stroke'
   | 'highlight-glow'
 
 // CSS variable name for each canvas color. Most follow `--canvas-{key}`;
@@ -34,7 +37,10 @@ const _cssVarMap: { [K in CanvasColorName]: string } = {
   'zone-stroke': '--canvas-zone-stroke',
   'zone-fill': '--canvas-zone-fill',
   'selection-fill': '--canvas-selection',
+  'hover-stroke': '--canvas-hover-stroke',
   'selection-stroke': '--canvas-selection-stroke',
+  'locked-object-stroke': '--canvas-locked-object-stroke',
+  'locked-layer-stroke': '--canvas-locked-layer-stroke',
   'highlight-glow': '--color-primary',
 }
 
@@ -50,7 +56,10 @@ const _colors: { [K in CanvasColorName]: string } = {
   'zone-stroke': '#2D5F3F',
   'zone-fill': 'rgba(45, 95, 63, 0.1)',
   'selection-fill': 'rgba(160, 107, 31, 0.18)',
-  'selection-stroke': 'rgba(160, 107, 31, 0.6)',
+  'hover-stroke': 'rgba(160, 107, 31, 0.62)',
+  'selection-stroke': 'rgba(160, 107, 31, 0.92)',
+  'locked-object-stroke': 'rgba(107, 95, 78, 0.86)',
+  'locked-layer-stroke': 'rgba(181, 67, 42, 0.88)',
   'highlight-glow': '#A06B1F',
 }
 

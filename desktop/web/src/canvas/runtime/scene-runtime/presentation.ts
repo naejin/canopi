@@ -6,8 +6,9 @@ import {
   type PlantPresentationContext,
 } from '../plant-presentation'
 import { CanvasSpeciesCache } from '../species-cache'
-import type { SceneRendererSnapshot } from '../renderers/scene-types'
+import type { SceneRendererHoverTarget, SceneRendererSnapshot } from '../renderers/scene-types'
 import type { ScenePersistedState, SceneStore, SceneViewportState } from '../scene'
+import { isSceneDesignObjectLocked } from '../scene'
 import {
   getSelectedAnnotationIds,
   getSelectedPlantIds,
@@ -103,6 +104,7 @@ export class SceneRuntimePresentationController {
       speciesCache: this._speciesCache.getCache(),
       localizedCommonNames,
       hoveredCanonicalName: hoveredPlant?.canonicalName ?? null,
+      hoverTarget: getRendererHoverTarget(scene, session.hoveredEntityId),
       selectionLabels: computeSelectionLabels(
         scene.plants,
         session.selectedEntityIds,
@@ -179,4 +181,45 @@ export class SceneRuntimePresentationController {
     }
     return backfills.length > 0 ? backfills : null
   }
+}
+
+function getRendererHoverTarget(
+  scene: ScenePersistedState,
+  hoveredId: string | null,
+): SceneRendererHoverTarget | null {
+  if (!hoveredId) return null
+
+  const target = resolveHoverTarget(scene, hoveredId)
+  if (!target) return null
+  const layerName = getHoverTargetLayer(scene, target)
+  const layer = layerName ? scene.layers.find((entry) => entry.name === layerName) : null
+  const state = layer?.locked === true
+    ? 'locked-layer'
+    : isSceneDesignObjectLocked(scene, target.id)
+      ? 'locked-design-object'
+      : 'hover'
+  return { ...target, state }
+}
+
+function resolveHoverTarget(
+  scene: ScenePersistedState,
+  id: string,
+): Omit<SceneRendererHoverTarget, 'state'> | null {
+  if (scene.groups.some((group) => group.id === id)) return { kind: 'group', id }
+  if (scene.plants.some((plant) => plant.id === id)) return { kind: 'plant', id }
+  if (scene.zones.some((zone) => zone.name === id)) return { kind: 'zone', id }
+  if (scene.annotations.some((annotation) => annotation.id === id)) return { kind: 'annotation', id }
+  return null
+}
+
+function getHoverTargetLayer(
+  scene: ScenePersistedState,
+  target: Omit<SceneRendererHoverTarget, 'state'>,
+): string | null {
+  if (target.kind === 'group') {
+    return scene.groups.find((group) => group.id === target.id)?.layer ?? null
+  }
+  if (target.kind === 'zone') return 'zones'
+  if (target.kind === 'annotation') return 'annotations'
+  return 'plants'
 }

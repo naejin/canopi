@@ -9,22 +9,20 @@ import {
 import { computeSelectionLabels } from '../selection-labels'
 import {
   getAnnotationTextColor,
+  getCanvasInteractionStrokeVisual,
   getPlantLabelColor,
   getSceneLayerStyle,
-  getSelectionStrokeColor,
   getStackBadgeBackgroundColor,
   getStackBadgeTextColor,
   resolveZoneVisual,
+  type CanvasInteractionVisualState,
 } from '../scene-visuals'
-import type { SceneRendererDefinition, SceneRendererInstance, SceneRendererSnapshot } from './scene-types'
+import type { SceneRendererDefinition, SceneRendererHoverState, SceneRendererInstance, SceneRendererSnapshot } from './scene-types'
 import type { SceneAnnotationEntity, SceneZoneEntity } from '../scene'
 
 const BACKGROUND_COLOR = 0x000000
 const ZONE_STROKE_PX = 2
-const ZONE_EMPHASIZED_STROKE_PX = 3
 const PLANT_STROKE_PX = 1.5
-const PLANT_SELECTED_STROKE_PX = 3.75
-const PLANT_HIGHLIGHT_STROKE_PX = 2.25
 
 export function createPixiSceneRenderer(): SceneRendererDefinition {
   return {
@@ -180,6 +178,7 @@ function syncZones(
       zone,
       snapshot.selectedZoneIds.has(zone.name),
       snapshot.highlightedZoneIds.has(zone.name),
+      hoverStateForTarget(snapshot, 'zone', zone.name),
       snapshot.viewport.scale,
     )
     graphics.visible = true
@@ -199,16 +198,19 @@ function drawZone(
   zone: SceneZoneEntity,
   selected: boolean,
   highlighted: boolean,
+  hoverState: SceneRendererHoverState | null,
   viewportScale: number,
 ): void {
   const visual = resolveZoneVisual(zone)
   const fillColor = toPixiColor(visual.fill, 0)
-  const emphasized = selected || highlighted
-  const strokeColor = toPixiColor(emphasized ? getSelectionStrokeColor() : visual.stroke, 0)
+  const interactionState = resolveInteractionState(selected, highlighted, hoverState)
+  const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
+  const strokeColor = toPixiColor(interactionVisual?.color ?? visual.stroke, 0)
   const strokeWidth = screenPxToWorldPx(
-    emphasized ? ZONE_EMPHASIZED_STROKE_PX : ZONE_STROKE_PX,
+    interactionVisual?.widthPx ?? ZONE_STROKE_PX,
     viewportScale,
   )
+  const strokeAlpha = interactionVisual?.alpha ?? 1
 
   graphics.clear()
 
@@ -217,7 +219,7 @@ function drawZone(
     const end = zone.points[2]!
     graphics.rect(start.x, start.y, end.x - start.x, end.y - start.y)
       .fill({ color: fillColor, alpha: 0.2 })
-      .stroke({ color: strokeColor, width: strokeWidth, alpha: 1 })
+      .stroke({ color: strokeColor, width: strokeWidth, alpha: strokeAlpha })
     return
   }
 
@@ -226,7 +228,7 @@ function drawZone(
     const radii = zone.points[1]!
     graphics.ellipse(center.x, center.y, radii.x, radii.y)
       .fill({ color: fillColor, alpha: 0.2 })
-      .stroke({ color: strokeColor, width: strokeWidth, alpha: 1 })
+      .stroke({ color: strokeColor, width: strokeWidth, alpha: strokeAlpha })
     return
   }
 
@@ -243,7 +245,7 @@ function drawZone(
     graphics.closePath().fill({ color: fillColor, alpha: 0.2 })
   }
 
-  graphics.stroke({ color: strokeColor, width: strokeWidth, alpha: 1 })
+  graphics.stroke({ color: strokeColor, width: strokeWidth, alpha: strokeAlpha })
 }
 
 function syncPlants(
@@ -283,6 +285,7 @@ function syncPlants(
       entry,
       snapshot.hoveredCanonicalName,
       snapshot.highlightedPlantIds.has(entry.plant.id),
+      hoverStateForTarget(snapshot, 'plant', entry.plant.id),
       snapshot.viewport.scale,
     )
     circle.visible = true
@@ -351,10 +354,14 @@ function drawPlant(
   entry: ReturnType<typeof buildPlantPresentationEntries>[number],
   hoveredCanonicalName: string | null,
   highlighted: boolean,
+  hoverState: SceneRendererHoverState | null,
   viewportScale: number,
 ): void {
   const color = toPixiColor(entry.color, 0)
   const selected = entry.selected
+  const sameSpeciesHover = Boolean(hoveredCanonicalName && entry.plant.canonicalName === hoveredCanonicalName)
+  const interactionState = resolveInteractionState(selected, highlighted || sameSpeciesHover, hoverState)
+  const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
   const x = entry.plant.position.x
   const y = entry.plant.position.y
   const r = entry.radiusWorld
@@ -362,16 +369,20 @@ function drawPlant(
   graphics.circle(x, y, r)
     .fill({ color, alpha: 0.55 })
     .stroke({
-      color: toPixiColor(selected ? getSelectionStrokeColor() : entry.color, color),
-      width: screenPxToWorldPx(selected ? PLANT_SELECTED_STROKE_PX : PLANT_STROKE_PX, viewportScale),
+      color: toPixiColor(selected ? interactionVisual?.color : entry.color, color),
+      width: screenPxToWorldPx(
+        selected ? interactionVisual?.widthPx ?? PLANT_STROKE_PX : PLANT_STROKE_PX,
+        viewportScale,
+      ),
       alpha: 1,
     })
-  if (highlighted || (hoveredCanonicalName && entry.plant.canonicalName === hoveredCanonicalName)) {
+  if (interactionState && !selected) {
+    const ringVisual = getCanvasInteractionStrokeVisual(interactionState)
     graphics.circle(x, y, r * 1.4)
       .stroke({
-        color: toPixiColor(getSelectionStrokeColor(), 0),
-        width: screenPxToWorldPx(PLANT_HIGHLIGHT_STROKE_PX, viewportScale),
-        alpha: 0.5,
+        color: toPixiColor(ringVisual.color, 0),
+        width: screenPxToWorldPx(ringVisual.widthPx, viewportScale),
+        alpha: ringVisual.alpha,
       })
   }
 }
@@ -441,14 +452,19 @@ function syncAnnotations(
     text.visible = true
 
     const selected = snapshot.selectedAnnotationIds.has(annotation.id)
+    const interactionState = resolveInteractionState(
+      selected,
+      false,
+      hoverStateForTarget(snapshot, 'annotation', annotation.id),
+    )
     const highlight = annotationHighlightById.get(annotation.id)
-    if (selected) {
+    if (interactionState) {
       const nextHighlight = highlight ?? new Graphics()
       if (!annotationHighlightById.has(annotation.id)) {
         annotationHighlightById.set(annotation.id, nextHighlight)
         highlightLayer.addChild(nextHighlight)
       }
-      drawAnnotationHighlight(nextHighlight, annotation, snapshot.viewport.scale)
+      drawAnnotationHighlight(nextHighlight, annotation, snapshot.viewport.scale, interactionState)
       nextHighlight.visible = true
     } else if (reconcileRemoved) {
       if (highlight) {
@@ -495,8 +511,10 @@ function drawAnnotationHighlight(
   highlight: Graphics,
   annotation: SceneAnnotationEntity,
   viewportScale: number,
+  state: CanvasInteractionVisualState,
 ): void {
   const bounds = getAnnotationWorldBounds(annotation, viewportScale)
+  const visual = getCanvasInteractionStrokeVisual(state)
   highlight.clear()
   highlight
     .rect(
@@ -505,7 +523,11 @@ function drawAnnotationHighlight(
       bounds.width + 8 / viewportScale,
       bounds.height + 4 / viewportScale,
     )
-    .stroke({ color: toPixiColor(getSelectionStrokeColor(), 0), width: 1 / viewportScale, alpha: 1 })
+    .stroke({
+      color: toPixiColor(visual.color, 0),
+      width: screenPxToWorldPx(visual.widthPx, viewportScale),
+      alpha: visual.alpha,
+    })
 }
 
 function syncSelectionLabels(
@@ -549,7 +571,42 @@ function toPixiColor(color: string | null | undefined, fallback: string | number
 
   if (!color) return value
 
+  const rgba = color.match(/rgba?\(([^)]+)\)/i)
+  if (rgba) {
+    const channels = rgba[1]!
+      .split(',')
+      .slice(0, 3)
+      .map((channel) => Number.parseFloat(channel.trim()))
+    if (channels.length === 3 && channels.every((channel) => Number.isFinite(channel))) {
+      const [r, g, b] = channels.map((channel) => Math.max(0, Math.min(255, Math.round(channel)))) as [number, number, number]
+      return (r << 16) + (g << 8) + b
+    }
+  }
+
   const normalized = color.replace('#', '')
   const parsed = Number.parseInt(normalized, 16)
   return Number.isFinite(parsed) ? parsed : value
+}
+
+function resolveInteractionState(
+  selected: boolean,
+  highlighted: boolean,
+  hoverState: SceneRendererHoverState | null,
+): CanvasInteractionVisualState | null {
+  if (selected) return 'selected'
+  if (hoverState) return hoverState
+  return highlighted ? 'hover' : null
+}
+
+function hoverStateForTarget(
+  snapshot: SceneRendererSnapshot,
+  kind: 'plant' | 'zone' | 'annotation',
+  id: string,
+): SceneRendererHoverState | null {
+  const hoverTarget = snapshot.hoverTarget
+  if (!hoverTarget) return null
+  if (hoverTarget.kind === kind && hoverTarget.id === id) return hoverTarget.state
+  if (hoverTarget.kind !== 'group') return null
+  const group = snapshot.scene.groups.find((entry) => entry.id === hoverTarget.id)
+  return group?.memberIds.includes(id) ? hoverTarget.state : null
 }

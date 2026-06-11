@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { queryRectTopLevel } from '../canvas/runtime/interaction/hit-testing'
+import { hitTestTopLevel, hitTestVisibleTopLevel, queryRectTopLevel } from '../canvas/runtime/interaction/hit-testing'
 import type { PlantPresentationContext } from '../canvas/runtime/plant-presentation'
 import type { ScenePersistedState } from '../canvas/runtime/scene'
 
@@ -52,5 +52,15 @@ describe('scene hit testing', () => {
     )
 
     expect(targets).toEqual([{ kind: 'plant', id: 'plant-1' }])
+  })
+
+  it('detects visible locked-Layer targets for hover without making them editable', () => {
+    const scene = createScene()
+    scene.layers = [{ kind: 'layer', name: 'plants', visible: true, locked: true, opacity: 1 }]
+
+    expect(hitTestTopLevel(scene, { x: 10, y: 20 }, 10, new Map(), getPlantContext))
+      .toBeNull()
+    expect(hitTestVisibleTopLevel(scene, { x: 10, y: 20 }, 10, new Map(), getPlantContext))
+      .toEqual({ kind: 'plant', id: 'plant-1' })
   })
 })

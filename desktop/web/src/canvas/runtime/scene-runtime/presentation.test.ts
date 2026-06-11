@@ -174,6 +174,39 @@ describe('scene runtime presentation controller', () => {
     expect(snapshot.colorByAttr).toBe('flower')
   })
 
+  it('marks hovered targets with locked hover reasons for renderer cues', () => {
+    const { controller, sceneStore } = createController()
+    sceneStore.updateSession((session) => {
+      session.hoveredEntityId = 'zone-1'
+    })
+    sceneStore.updatePersisted((draft) => {
+      draft.layers = draft.layers.map((layer) => (
+        layer.name === 'zones' ? { ...layer, locked: true } : layer
+      ))
+    })
+
+    expect(controller.buildRendererSnapshot().hoverTarget).toEqual({
+      kind: 'zone',
+      id: 'zone-1',
+      state: 'locked-layer',
+    })
+
+    sceneStore.updatePersisted((draft) => {
+      draft.layers = draft.layers.map((layer) => (
+        layer.name === 'zones' ? { ...layer, locked: false } : layer
+      ))
+      draft.zones = draft.zones.map((zone) => (
+        zone.name === 'zone-1' ? { ...zone, locked: true } : zone
+      ))
+    })
+
+    expect(controller.buildRendererSnapshot().hoverTarget).toEqual({
+      kind: 'zone',
+      id: 'zone-1',
+      state: 'locked-design-object',
+    })
+  })
+
   it('treats label-only refreshes as presentation changes', async () => {
     vi.mocked(getCommonNames).mockResolvedValue({
       'Malus domestica': 'Pommier',

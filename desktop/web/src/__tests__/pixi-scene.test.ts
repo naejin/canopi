@@ -365,13 +365,114 @@ describe('createPixiSceneRenderer', () => {
 
     const zoneGraphic = pixi.__pixiMockState.graphics.find((graphics) => graphics.rect.mock.calls.length > 0)
     const plantGraphic = pixi.__pixiMockState.graphics.find((graphics) => graphics.circle.mock.calls.length > 0)
-    expect(zoneGraphic?.stroke.mock.calls[0]?.[0]).toMatchObject({ width: 0.75 })
-    expect(plantGraphic?.stroke.mock.calls[0]?.[0]).toMatchObject({ width: 0.9375 })
+    expect(zoneGraphic?.stroke.mock.calls[0]?.[0]).toMatchObject({ width: 1.125 })
+    expect(plantGraphic?.stroke.mock.calls[0]?.[0]).toMatchObject({ width: 1.125 })
 
     renderer.setViewport({ x: 0, y: 0, scale: 2 })
 
-    expect(zoneGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 1.5 })
-    expect(plantGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 1.875 })
+    expect(zoneGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 2.25 })
+    expect(plantGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 2.25 })
+    renderer.dispose()
+  })
+
+  it('renders selected zones with stronger ochre strokes than hover highlights', async () => {
+    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
+    const pixi = await import('pixi.js') as unknown as {
+      __pixiMockState: {
+        graphics: Array<{
+          rect: ReturnType<typeof vi.fn>
+          stroke: ReturnType<typeof vi.fn>
+        }>
+      }
+    }
+
+    const host = document.createElement('div')
+    Object.defineProperty(host, 'clientWidth', { configurable: true, value: 400 })
+    Object.defineProperty(host, 'clientHeight', { configurable: true, value: 300 })
+
+    const renderer = await createPixiSceneRenderer().initialize({ container: host }, {
+      backendId: 'pixi',
+      capabilities: {
+        domCanvas: true,
+        canvas2d: true,
+        offscreenCanvas: false,
+        offscreenCanvas2d: false,
+        webgl: true,
+        webgl2: true,
+        webgpu: false,
+        imageBitmap: false,
+        createImageBitmap: false,
+        worker: false,
+        devicePixelRatio: 1,
+        prefersReducedMotion: null,
+      },
+    } as never)
+
+    const snapshot: SceneRendererSnapshot = {
+      scene: {
+        plants: [],
+        zones: [
+          {
+            kind: 'zone',
+            locked: false,
+            name: 'selected-zone',
+            zoneType: 'rect',
+            points: [
+              { x: 0, y: 0 },
+              { x: 10, y: 0 },
+              { x: 10, y: 10 },
+              { x: 0, y: 10 },
+            ],
+            fillColor: null,
+            notes: null,
+          },
+          {
+            kind: 'zone',
+            locked: false,
+            name: 'hover-zone',
+            zoneType: 'rect',
+            points: [
+              { x: 20, y: 0 },
+              { x: 30, y: 0 },
+              { x: 30, y: 10 },
+              { x: 20, y: 10 },
+            ],
+            fillColor: null,
+            notes: null,
+          },
+        ],
+        annotations: [],
+        groups: [],
+        layers: [],
+        plantSpeciesColors: {},
+        guides: [],
+      },
+      viewport: { x: 0, y: 0, scale: 1 },
+      selectedPlantIds: new Set<string>(),
+      selectedZoneIds: new Set<string>(['selected-zone']),
+      selectedAnnotationIds: new Set<string>(),
+      highlightedPlantIds: new Set<string>(),
+      highlightedZoneIds: new Set<string>(['hover-zone']),
+      sizeMode: 'default' as const,
+      colorByAttr: null,
+      localizedCommonNames: new Map(),
+      hoveredCanonicalName: null,
+      selectionLabels: [],
+      speciesCache: new Map(),
+    }
+
+    renderer.renderScene(snapshot)
+
+    const selectedGraphic = pixi.__pixiMockState.graphics
+      .find((graphics) => graphics.rect.mock.calls[0]?.[0] === 0)
+    const hoverGraphic = pixi.__pixiMockState.graphics
+      .find((graphics) => graphics.rect.mock.calls[0]?.[0] === 20)
+    const selectedStroke = selectedGraphic?.stroke.mock.calls[0]?.[0]
+    const hoverStroke = hoverGraphic?.stroke.mock.calls[0]?.[0]
+
+    expect(selectedStroke).toMatchObject({ color: 0xa06b1f })
+    expect(selectedStroke.width).toBeGreaterThan(hoverStroke.width)
+    expect(selectedStroke.alpha).toBeGreaterThan(hoverStroke.alpha)
     renderer.dispose()
   })
 })

@@ -27,11 +27,46 @@ export function hitTestTopLevel(
   speciesCache: ReadonlyMap<string, SpeciesCacheEntry>,
   getPlantContext: (viewportScale: number) => PlantPresentationContext,
 ): TopLevelTarget | null {
+  return hitTestTopLevelWithLayerFilter(
+    scene,
+    point,
+    viewportScale,
+    speciesCache,
+    getPlantContext,
+    isLayerInteractive,
+  )
+}
+
+export function hitTestVisibleTopLevel(
+  scene: ScenePersistedState,
+  point: ScenePoint,
+  viewportScale: number,
+  speciesCache: ReadonlyMap<string, SpeciesCacheEntry>,
+  getPlantContext: (viewportScale: number) => PlantPresentationContext,
+): TopLevelTarget | null {
+  return hitTestTopLevelWithLayerFilter(
+    scene,
+    point,
+    viewportScale,
+    speciesCache,
+    getPlantContext,
+    isLayerVisible,
+  )
+}
+
+function hitTestTopLevelWithLayerFilter(
+  scene: ScenePersistedState,
+  point: ScenePoint,
+  viewportScale: number,
+  speciesCache: ReadonlyMap<string, SpeciesCacheEntry>,
+  getPlantContext: (viewportScale: number) => PlantPresentationContext,
+  isLayerHitEligible: (scene: ScenePersistedState, layerName: string) => boolean,
+): TopLevelTarget | null {
   const groupedMembers = new Set(scene.groups.flatMap((group) => group.memberIds))
 
   for (let i = scene.groups.length - 1; i >= 0; i -= 1) {
     const group = scene.groups[i]!
-    if (!isLayerInteractive(scene, group.layer)) continue
+    if (!isLayerHitEligible(scene, group.layer)) continue
     for (const memberId of group.memberIds) {
       const plant = scene.plants.find((entry) => entry.id === memberId)
       if (plant && hitTestPlant(plant, point, plantPresentationContext(getPlantContext, viewportScale, speciesCache))) {
@@ -47,14 +82,14 @@ export function hitTestTopLevel(
   for (let i = scene.annotations.length - 1; i >= 0; i -= 1) {
     const annotation = scene.annotations[i]!
     if (groupedMembers.has(annotation.id)) continue
-    if (!isLayerInteractive(scene, 'annotations')) continue
+    if (!isLayerHitEligible(scene, 'annotations')) continue
     if (hitAnnotation(annotation, point, viewportScale)) return { kind: 'annotation', id: annotation.id }
   }
 
   for (let i = scene.plants.length - 1; i >= 0; i -= 1) {
     const plant = scene.plants[i]!
     if (groupedMembers.has(plant.id)) continue
-    if (!isLayerInteractive(scene, 'plants')) continue
+    if (!isLayerHitEligible(scene, 'plants')) continue
     if (hitTestPlant(plant, point, plantPresentationContext(getPlantContext, viewportScale, speciesCache))) {
       return { kind: 'plant', id: plant.id }
     }
@@ -63,7 +98,7 @@ export function hitTestTopLevel(
   for (let i = scene.zones.length - 1; i >= 0; i -= 1) {
     const zone = scene.zones[i]!
     if (groupedMembers.has(zone.name)) continue
-    if (!isLayerInteractive(scene, 'zones')) continue
+    if (!isLayerHitEligible(scene, 'zones')) continue
     if (hitZone(zone, point, viewportScale)) return { kind: 'zone', id: zone.name }
   }
 
@@ -359,6 +394,11 @@ function annotationBounds(annotation: SceneAnnotationEntity, viewportScale: numb
 function isLayerInteractive(scene: ScenePersistedState, layerName: string): boolean {
   const layer = scene.layers.find((entry) => entry.name === layerName)
   return layer?.visible !== false && layer?.locked !== true
+}
+
+function isLayerVisible(scene: ScenePersistedState, layerName: string): boolean {
+  const layer = scene.layers.find((entry) => entry.name === layerName)
+  return layer?.visible !== false
 }
 
 function plantPresentationContext(

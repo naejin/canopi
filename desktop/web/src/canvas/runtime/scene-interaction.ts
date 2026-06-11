@@ -9,7 +9,7 @@ import type { CameraController } from './camera'
 import type { PlantPresentationContext } from './plant-presentation'
 import type { SpeciesCacheEntry } from './species-cache'
 import type { SceneViewportState } from './scene'
-import { hitTestTopLevel } from './interaction/hit-testing'
+import { hitTestVisibleTopLevel } from './interaction/hit-testing'
 import { createHoverTooltip, type HoverTooltipController } from './interaction/hover-tooltip'
 import {
   createInteractionPreview,
@@ -228,22 +228,25 @@ export class SceneInteractionController {
     }
     const screen = { x: event.clientX - rect.left, y: event.clientY - rect.top }
     const world = this._deps.camera.screenToWorld(screen)
-    const hit = hitTestTopLevel(
+    const hit = hitTestVisibleTopLevel(
       this._deps.getSceneStore().persisted,
       world,
       this._deps.camera.viewport.scale,
       this._deps.getSpeciesCache(),
       this._deps.getPlantPresentationContext,
     )
-    if (hit?.kind === 'plant') {
+    if (hit) {
       this._deps.setHoveredEntityId(hit.id)
+    }
+
+    if (hit?.kind === 'plant') {
       const plant = this._deps.getSceneStore().persisted.plants.find((p) => p.id === hit.id)
       if (plant) {
         const commonName = this._deps.getLocalizedCommonNames().get(plant.canonicalName) ?? plant.commonName
         this._tooltip.show(screen.x, screen.y, commonName, plant.canonicalName)
       }
     } else {
-      this._deps.setHoveredEntityId(null)
+      if (!hit) this._deps.setHoveredEntityId(null)
       this._tooltip.hide()
     }
   }

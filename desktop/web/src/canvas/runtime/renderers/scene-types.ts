@@ -3,6 +3,17 @@ import type { ScenePersistedState, SceneViewportState } from '../scene'
 import type { SelectionLabel } from '../selection-labels'
 import type { ColorByAttribute, PlantSizeMode } from '../../plant-display-state'
 
+export type SceneRendererHoverState =
+  | 'hover'
+  | 'locked-design-object'
+  | 'locked-layer'
+
+export type SceneRendererHoverTarget =
+  | { kind: 'plant'; id: string; state: SceneRendererHoverState }
+  | { kind: 'zone'; id: string; state: SceneRendererHoverState }
+  | { kind: 'annotation'; id: string; state: SceneRendererHoverState }
+  | { kind: 'group'; id: string; state: SceneRendererHoverState }
+
 export interface SceneRendererSnapshot {
   readonly scene: ScenePersistedState
   readonly viewport: SceneViewportState
@@ -16,6 +27,7 @@ export interface SceneRendererSnapshot {
   readonly speciesCache: ReadonlyMap<string, Record<string, unknown>>
   readonly localizedCommonNames: ReadonlyMap<string, string | null>
   readonly hoveredCanonicalName: string | null
+  readonly hoverTarget?: SceneRendererHoverTarget | null
   readonly selectionLabels: readonly SelectionLabel[]
 }
 

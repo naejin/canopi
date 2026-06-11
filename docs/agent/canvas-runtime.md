@@ -62,6 +62,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - The in-canvas basemap is a sibling visualization layer, not part of the renderer contract.
 - Screen-space chrome such as rulers stays outside the world renderer.
 - Strokes, outlines, stack badges, labels, handles, and measurement text are readability aids. Keep their visual weight screen-readable across zoom instead of scaling them as physical design geometry.
+- Selected, hover, locked-object hover, and locked-Layer hover strokes are screen-space interaction cues owned by `scene-visuals.ts`. Pixi and Canvas2D renderers should consume the same interaction visual helper so selected states remain stronger than hover and locked states do not imply editable selection.
 - Canvas notice placement uses the Canvas Notice Layout seam for safe screen-space slots. Active Tool HUDs use the top-left safe slot; Location Notices use the bottom-left safe slot and reserve the scale bar before compacting.
 - Use scene invalidation for content, selection, presentation, locale, theme, and hover changes.
 - Use viewport invalidation for pan, zoom, and fit operations.
@@ -77,6 +78,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - Species Selection is a Select-tool canvas selection gesture: double-clicking a visible editable top-level Placed Plant selects all visible editable top-level Placed Plants with the same Canonical Name across the design, excluding grouped members, locked Design Objects, hidden Layers, and locked Layers. Shift+double-click applies the same Species set additively/toggling against the current selection. It must not mutate Design data, Target Presentation, dirty state, or document history.
 - Plant hit testing must use the same shared presentation context as renderers and fit/bounds logic.
 - Interaction selection writes go through the runtime-owned selection seam.
+- Editable hit testing should continue to ignore locked Layers, but hover feedback may use visible-only hit testing so locked Layers and locked Design Objects can explain why an object is blocked.
 - Document-level keyboard handlers must guard with `isEditableTarget(event.target)` so Delete/Backspace/etc. do not fire while typing.
 
 ### Scene Interaction Tool Modules

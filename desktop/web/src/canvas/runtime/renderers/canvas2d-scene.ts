@@ -14,14 +14,15 @@ import type {
 } from '../scene'
 import {
   getAnnotationTextColor,
+  getCanvasInteractionStrokeVisual,
   getPlantLabelColor,
   getSceneLayerStyle,
-  getSelectionStrokeColor,
   getStackBadgeBackgroundColor,
   getStackBadgeTextColor,
   resolveZoneVisual,
+  type CanvasInteractionVisualState,
 } from '../scene-visuals'
-import type { SceneRendererDefinition, SceneRendererInstance, SceneRendererSnapshot } from './scene-types'
+import type { SceneRendererDefinition, SceneRendererHoverState, SceneRendererInstance, SceneRendererSnapshot } from './scene-types'
 
 export function createCanvas2DSceneRenderer(): SceneRendererDefinition {
   return {
@@ -108,9 +109,15 @@ function renderZones(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnaps
       ctx.fill()
     }
     ctx.globalAlpha = layer.opacity
-    const emphasized = snapshot.selectedZoneIds.has(zone.name) || snapshot.highlightedZoneIds.has(zone.name)
-    ctx.strokeStyle = emphasized ? getSelectionStrokeColor() : visual.stroke
-    ctx.lineWidth = (emphasized ? 3 : 2) / Math.max(ctx.getTransform().a, 1e-6)
+    const interactionState = resolveInteractionState(
+      snapshot.selectedZoneIds.has(zone.name),
+      snapshot.highlightedZoneIds.has(zone.name),
+      hoverStateForTarget(snapshot, 'zone', zone.name),
+    )
+    const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
+    ctx.strokeStyle = interactionVisual?.color ?? visual.stroke
+    ctx.globalAlpha = (interactionVisual?.alpha ?? 1) * layer.opacity
+    ctx.lineWidth = (interactionVisual?.widthPx ?? 2) / Math.max(ctx.getTransform().a, 1e-6)
     ctx.stroke()
   }
 
@@ -159,6 +166,15 @@ function renderPlants(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnap
   for (const entry of entries) {
     const selected = entry.selected
     const highlighted = snapshot.highlightedPlantIds.has(entry.plant.id)
+    const sameSpeciesHover = Boolean(
+      snapshot.hoveredCanonicalName && entry.plant.canonicalName === snapshot.hoveredCanonicalName,
+    )
+    const interactionState = resolveInteractionState(
+      selected,
+      highlighted || sameSpeciesHover,
+      hoverStateForTarget(snapshot, 'plant', entry.plant.id),
+    )
+    const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
 
     ctx.beginPath()
     ctx.arc(entry.plant.position.x, entry.plant.position.y, entry.radiusWorld, 0, Math.PI * 2)
@@ -166,16 +182,17 @@ function renderPlants(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnap
     ctx.globalAlpha = 0.55 * layer.opacity
     ctx.fill()
     ctx.globalAlpha = layer.opacity
-    ctx.strokeStyle = selected ? getSelectionStrokeColor() : entry.color
-    ctx.lineWidth = selected ? worldLineWidth * 2.5 : worldLineWidth
+    ctx.strokeStyle = selected ? interactionVisual?.color ?? entry.color : entry.color
+    ctx.lineWidth = selected ? (interactionVisual?.widthPx ?? 1.5) / snapshot.viewport.scale : worldLineWidth
     ctx.stroke()
 
-    if (highlighted || (snapshot.hoveredCanonicalName && entry.plant.canonicalName === snapshot.hoveredCanonicalName)) {
+    if (interactionState && !selected) {
+      const ringVisual = getCanvasInteractionStrokeVisual(interactionState)
       ctx.beginPath()
       ctx.arc(entry.plant.position.x, entry.plant.position.y, entry.radiusWorld * 1.4, 0, Math.PI * 2)
-      ctx.strokeStyle = getSelectionStrokeColor()
-      ctx.globalAlpha = 0.5 * layer.opacity
-      ctx.lineWidth = worldLineWidth * 1.5
+      ctx.strokeStyle = ringVisual.color
+      ctx.globalAlpha = ringVisual.alpha * layer.opacity
+      ctx.lineWidth = ringVisual.widthPx / snapshot.viewport.scale
       ctx.stroke()
     }
 
@@ -218,7 +235,12 @@ function renderAnnotations(ctx: CanvasRenderingContext2D, snapshot: SceneRendere
 
   for (const annotation of snapshot.scene.annotations) {
     if (annotation.annotationType !== 'text') continue
-    drawAnnotationText(ctx, annotation, snapshot.viewport, snapshot.selectedAnnotationIds.has(annotation.id), layer.opacity)
+    const interactionState = resolveInteractionState(
+      snapshot.selectedAnnotationIds.has(annotation.id),
+      false,
+      hoverStateForTarget(snapshot, 'annotation', annotation.id),
+    )
+    drawAnnotationText(ctx, annotation, snapshot.viewport, interactionState, layer.opacity)
   }
 }
 
@@ -226,7 +248,7 @@ function drawAnnotationText(
   ctx: CanvasRenderingContext2D,
   annotation: SceneAnnotationEntity,
   viewport: SceneViewportState,
-  selected: boolean,
+  interactionState: CanvasInteractionVisualState | null,
   opacity: number,
 ): void {
   const screenBounds = getAnnotationScreenBounds(annotation, viewport)
@@ -239,9 +261,11 @@ function drawAnnotationText(
   ctx.textAlign = 'left'
   ctx.textBaseline = 'top'
 
-  if (selected) {
-    ctx.strokeStyle = getSelectionStrokeColor()
-    ctx.lineWidth = 1
+  if (interactionState) {
+    const visual = getCanvasInteractionStrokeVisual(interactionState)
+    ctx.strokeStyle = visual.color
+    ctx.globalAlpha = visual.alpha * opacity
+    ctx.lineWidth = visual.widthPx
     ctx.strokeRect(screenBounds.x - 4, screenBounds.y - 2, screenBounds.width + 8, screenBounds.height + 4)
   }
 
@@ -273,4 +297,27 @@ function applyViewport(ctx: CanvasRenderingContext2D, viewport: SceneViewportSta
   ctx.setTransform(current.a, current.b, current.c, current.d, 0, 0)
   ctx.translate(viewport.x, viewport.y)
   ctx.scale(viewport.scale, viewport.scale)
+}
+
+function resolveInteractionState(
+  selected: boolean,
+  highlighted: boolean,
+  hoverState: SceneRendererHoverState | null,
+): CanvasInteractionVisualState | null {
+  if (selected) return 'selected'
+  if (hoverState) return hoverState
+  return highlighted ? 'hover' : null
+}
+
+function hoverStateForTarget(
+  snapshot: SceneRendererSnapshot,
+  kind: 'plant' | 'zone' | 'annotation',
+  id: string,
+): SceneRendererHoverState | null {
+  const hoverTarget = snapshot.hoverTarget
+  if (!hoverTarget) return null
+  if (hoverTarget.kind === kind && hoverTarget.id === id) return hoverTarget.state
+  if (hoverTarget.kind !== 'group') return null
+  const group = snapshot.scene.groups.find((entry) => entry.id === hoverTarget.id)
+  return group?.memberIds.includes(id) ? hoverTarget.state : null
 }
