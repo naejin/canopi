@@ -48,8 +48,10 @@ interface SvgPath {
 const TOOLBAR_MARGIN_PX = 8
 const TOOLBAR_GAP_PX = 14
 const ROTATION_HANDLE_RESERVE_PX = 42
-const TOOLBAR_WIDTH_PX = 142
 const TOOLBAR_HEIGHT_PX = 34
+const TOOLBAR_BUTTON_SIZE_PX = 28
+const TOOLBAR_BUTTON_GAP_PX = 4
+const TOOLBAR_PADDING_INLINE_PX = 8
 const TOOLBAR_Z_INDEX = 28
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
@@ -237,7 +239,13 @@ export function createSelectionActionToolbar(
       root.replaceChildren(...availableActionButtons.map(({ button }) => button))
       renderedActionIds = nextActionIds
     }
-    const placement = resolveToolbarPlacement(selection.bounds, options.camera, options.container)
+    root.style.display = 'flex'
+    const placement = resolveToolbarPlacement(
+      selection.bounds,
+      options.camera,
+      options.container,
+      resolveRenderedToolbarWidth(root, availableActionButtons.length),
+    )
     Object.assign(root.style, {
       display: 'flex',
       left: `${placement.left}px`,
@@ -421,6 +429,7 @@ function resolveToolbarPlacement(
   bounds: SceneBounds,
   camera: CameraController,
   container: HTMLElement,
+  toolbarWidth: number,
 ): { left: number; top: number } {
   const topLeft = camera.worldToScreen({ x: bounds.minX, y: bounds.minY })
   const bottomRight = camera.worldToScreen({ x: bounds.maxX, y: bounds.maxY })
@@ -429,8 +438,8 @@ function resolveToolbarPlacement(
     width: rootFallbackNumber(container.clientWidth, container.getBoundingClientRect().width),
     height: rootFallbackNumber(container.clientHeight, container.getBoundingClientRect().height),
   }
-  const maxLeft = Math.max(TOOLBAR_MARGIN_PX, size.width - TOOLBAR_WIDTH_PX - TOOLBAR_MARGIN_PX)
-  const left = clamp(rect.left + rect.width / 2 - TOOLBAR_WIDTH_PX / 2, TOOLBAR_MARGIN_PX, maxLeft)
+  const maxLeft = Math.max(TOOLBAR_MARGIN_PX, size.width - toolbarWidth - TOOLBAR_MARGIN_PX)
+  const left = clamp(rect.left + rect.width / 2 - toolbarWidth / 2, TOOLBAR_MARGIN_PX, maxLeft)
   const aboveTop = rect.top - TOOLBAR_HEIGHT_PX - ROTATION_HANDLE_RESERVE_PX
   if (aboveTop >= TOOLBAR_MARGIN_PX) {
     return { left, top: aboveTop }
@@ -440,6 +449,13 @@ function resolveToolbarPlacement(
     left,
     top: clamp(rect.bottom + TOOLBAR_GAP_PX, TOOLBAR_MARGIN_PX, maxTop),
   }
+}
+
+function resolveRenderedToolbarWidth(root: HTMLElement, actionCount: number): number {
+  if (Number.isFinite(root.offsetWidth) && root.offsetWidth > 0) return root.offsetWidth
+  return actionCount * TOOLBAR_BUTTON_SIZE_PX
+    + Math.max(0, actionCount - 1) * TOOLBAR_BUTTON_GAP_PX
+    + TOOLBAR_PADDING_INLINE_PX
 }
 
 function normalizeRect(left: number, top: number, right: number, bottom: number): {
