@@ -1,12 +1,14 @@
 import type { CameraController } from '../camera'
-import type { ScenePoint } from '../scene'
+import type { ScenePoint, SceneStore } from '../scene'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
 import { appendTextAnnotationToDraft } from './tool-actions'
 import type { SceneToolAdapter } from './tool-adapter'
+import { isSceneLayerOpenForCreation } from './layer-guards'
 
 export interface TextAnnotationToolContext {
   readonly container: HTMLElement
   readonly camera: CameraController
+  readonly getSceneStore: () => SceneStore
   readonly sceneEdits: SceneEditCoordinator
 }
 
@@ -22,6 +24,10 @@ export function createTextAnnotationTool(context: TextAnnotationToolContext): Te
   let textWorldPosition: ScenePoint | null = null
 
   function pointerDown(world: ScenePoint): void {
+    if (!isAnnotationsLayerOpen()) {
+      cancel()
+      return
+    }
     if (textarea) {
       commitText()
       return
@@ -92,6 +98,10 @@ export function createTextAnnotationTool(context: TextAnnotationToolContext): Te
     }
 
     const text = activeTextarea.value.trim()
+    if (!isAnnotationsLayerOpen()) {
+      cancel()
+      return
+    }
     cancel()
     if (!text) return
 
@@ -108,6 +118,10 @@ export function createTextAnnotationTool(context: TextAnnotationToolContext): Te
     textarea?.remove()
     textarea = null
     textWorldPosition = null
+  }
+
+  function isAnnotationsLayerOpen(): boolean {
+    return isSceneLayerOpenForCreation(context.getSceneStore().persisted, 'annotations')
   }
 
   return {

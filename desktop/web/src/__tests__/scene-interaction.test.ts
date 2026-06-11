@@ -2995,6 +2995,25 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('does not create text Annotations on a locked Annotations Layer', () => {
+    store.updatePersisted((draft) => {
+      draft.layers = draft.layers.map((layer) => (
+        layer.name === 'annotations' ? { ...layer, locked: true } : layer
+      ))
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('text')
+
+    events.pointerDown({ x: 24, y: 32 }, { button: 0 })
+
+    expect(container.querySelector('textarea')).toBeNull()
+    expect(store.persisted.annotations).toHaveLength(0)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    controller.dispose()
+  })
+
   it('cancels a pending text Annotation with Escape', () => {
     const onSceneEditCommit = vi.fn()
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })

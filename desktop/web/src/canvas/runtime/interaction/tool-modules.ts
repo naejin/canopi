@@ -81,6 +81,7 @@ export function createSceneToolModules(context: SceneToolModulesContext): SceneT
   const textTool = createTextAnnotationTool({
     container: context.container,
     camera: context.camera,
+    getSceneStore: context.getSceneStore,
     sceneEdits: context.sceneEdits,
   })
   const zoneDrawingTool = createZoneDrawingTool({
