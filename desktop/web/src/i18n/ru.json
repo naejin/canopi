@@ -131,6 +131,13 @@
       "confirm": "Подтвердить",
       "cancel": "Отмена"
     },
+    "selectionActions": {
+      "ariaLabel": "Действия с выделением",
+      "duplicate": "Дублировать",
+      "bringForward": "На передний план",
+      "sendBackward": "На задний план",
+      "delete": "Удалить"
+    },
     "grid": {
       "grid": "Сетка",
       "gridDesc": "Переключить наложение сетки",

@@ -131,6 +131,13 @@
       "confirm": "Confirmar",
       "cancel": "Cancelar"
     },
+    "selectionActions": {
+      "ariaLabel": "Acciones de selección",
+      "duplicate": "Duplicar",
+      "bringForward": "Traer adelante",
+      "sendBackward": "Enviar atrás",
+      "delete": "Eliminar"
+    },
     "grid": {
       "grid": "Cuadrícula",
       "gridDesc": "Mostrar/ocultar la cuadrícula",

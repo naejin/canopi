@@ -131,6 +131,13 @@
       "confirm": "확인",
       "cancel": "취소"
     },
+    "selectionActions": {
+      "ariaLabel": "선택 작업",
+      "duplicate": "복제",
+      "bringForward": "앞으로 보내기",
+      "sendBackward": "뒤로 보내기",
+      "delete": "삭제"
+    },
     "grid": {
       "grid": "격자",
       "gridDesc": "격자 오버레이 전환",

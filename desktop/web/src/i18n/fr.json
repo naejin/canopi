@@ -131,6 +131,13 @@
       "confirm": "Confirmer",
       "cancel": "Annuler"
     },
+    "selectionActions": {
+      "ariaLabel": "Actions de sélection",
+      "duplicate": "Dupliquer",
+      "bringForward": "Avancer",
+      "sendBackward": "Reculer",
+      "delete": "Supprimer"
+    },
     "grid": {
       "grid": "Grille",
       "gridDesc": "Afficher/masquer la grille",

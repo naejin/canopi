@@ -131,6 +131,13 @@
       "confirm": "確認",
       "cancel": "キャンセル"
     },
+    "selectionActions": {
+      "ariaLabel": "選択アクション",
+      "duplicate": "複製",
+      "bringForward": "前面へ",
+      "sendBackward": "背面へ",
+      "delete": "削除"
+    },
     "grid": {
       "grid": "グリッド",
       "gridDesc": "グリッドの表示/非表示",

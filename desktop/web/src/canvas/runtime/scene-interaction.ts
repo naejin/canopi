@@ -16,7 +16,7 @@ import {
   hideInteractionPreview,
   showInteractionPreview,
 } from './interaction/overlay-ui'
-import { cursorForTool, isEditableTarget } from './interaction/pointer-utils'
+import { allowsNativeContextMenuTarget, cursorForTool, isEditableTarget } from './interaction/pointer-utils'
 import {
   appendPlantStampSourceToDraft,
 } from './interaction/tool-actions'
@@ -35,6 +35,11 @@ import {
   type SceneInteractionSharedGestures,
 } from './interaction/shared-gestures'
 import type { SceneEditCoordinator } from './scene-runtime/transactions'
+import {
+  createSelectionActionToolbar,
+  type SelectionActionToolbarController,
+} from './interaction/selection-action-toolbar'
+import type { CanvasDesignObjectSelectionModel, CanvasSceneEditCommandSurface } from './runtime'
 
 type InteractionTool = 'select' | 'hand' | 'rectangle' | 'text' | 'plant-stamp' | 'object-stamp' | 'plant-spacing' | string
 
@@ -49,6 +54,11 @@ export interface SceneInteractionDeps {
   setSelection: (ids: Iterable<string>) => void
   clearSelection: () => void
   sceneEdits: SceneEditCoordinator
+  getDesignObjectSelection: () => CanvasDesignObjectSelectionModel
+  selectionCommands: Pick<
+    CanvasSceneEditCommandSurface,
+    'duplicateSelected' | 'deleteSelected' | 'bringToFront' | 'sendToBack'
+  >
   setTool: (name: string) => void
   render: (kind: 'scene' | 'viewport') => void
   readSnapToGridEnabled: () => boolean
@@ -66,6 +76,7 @@ export class SceneInteractionController {
   private readonly _tools: SceneToolModules
   private readonly _frame: SceneInteractionFrame
   private readonly _sharedGestures: SceneInteractionSharedGestures
+  private readonly _selectionToolbar: SelectionActionToolbarController
   private _tool: InteractionTool = 'select'
 
   constructor(private readonly _deps: SceneInteractionDeps) {
@@ -107,6 +118,12 @@ export class SceneInteractionController {
       refreshViewportDependent: () => this._refreshViewportDependentMeasurements(),
       refreshSelectionDependent: () => this._refreshSelectionDependentMeasurements(),
     })
+    this._selectionToolbar = createSelectionActionToolbar({
+      container: this._deps.container,
+      camera: this._deps.camera,
+      getSelection: this._deps.getDesignObjectSelection,
+      commands: this._deps.selectionCommands,
+    })
     this._frame = createSceneInteractionFrame({
       container: this._deps.container,
       handlers: {
@@ -116,6 +133,7 @@ export class SceneInteractionController {
         pointerUp: this._onPointerUp,
         keyDown: this._onKeyDown,
         keyUp: this._onKeyUp,
+        contextMenu: this._onContextMenu,
         wheel: this._onWheel,
         dragOver: this._onDragOver,
         dragLeave: this._onDragLeave,
@@ -140,6 +158,7 @@ export class SceneInteractionController {
   dispose(): void {
     this._frame.dispose(() => {
       this._deps.setHoveredEntityId(null)
+      this._selectionToolbar.dispose()
       this._tools.dispose()
       this._preview.remove()
       this._tooltip.dispose()
@@ -168,6 +187,7 @@ export class SceneInteractionController {
 
   private readonly _onPointerDown = (event: PointerEvent): void => {
     if (event.button !== 0 && event.button !== 1) return
+    if (this._selectionToolbar.contains(event.target)) return
     if (this._tools.shouldIgnorePointerEvent(event.target)) return
 
     const containerRect = this._deps.container.getBoundingClientRect()
@@ -252,6 +272,7 @@ export class SceneInteractionController {
   }
 
   private readonly _onPointerMove = (event: PointerEvent): void => {
+    if (this._selectionToolbar.contains(event.target)) return
     if (this._tools.shouldIgnorePointerEvent(event.target)) return
 
     if (!this._frame.hasPointerGesture()) {
@@ -315,6 +336,11 @@ export class SceneInteractionController {
     this._deps.setViewport(this._deps.camera.zoomAroundScreenPoint(screen, factor))
     this._deps.render('viewport')
     this._refreshViewportDependentMeasurements()
+  }
+
+  private readonly _onContextMenu = (event: MouseEvent): void => {
+    if (allowsNativeContextMenuTarget(event.target)) return
+    event.preventDefault()
   }
 
   private readonly _onDragOver = (event: DragEvent): void => {
@@ -391,13 +417,17 @@ export class SceneInteractionController {
   }
 
   private _refreshViewportDependentMeasurements(): void {
-    if (this._tools.refreshViewportDependent()) return
+    if (this._tools.refreshViewportDependent()) {
+      this._selectionToolbar.refresh()
+      return
+    }
 
     this._refreshSelectionDependentMeasurements()
   }
 
   private _refreshSelectionDependentMeasurements(): void {
     this._tools.refreshSelectionDependent()
+    this._selectionToolbar.refresh()
   }
 
   /** Snap a world-space point to grid and/or guides. Used for placement (stamp, text). */

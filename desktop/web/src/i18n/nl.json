@@ -131,6 +131,13 @@
       "confirm": "Bevestigen",
       "cancel": "Annuleren"
     },
+    "selectionActions": {
+      "ariaLabel": "Selectieacties",
+      "duplicate": "Dupliceren",
+      "bringForward": "Naar voren",
+      "sendBackward": "Naar achteren",
+      "delete": "Verwijderen"
+    },
     "grid": {
       "grid": "Raster",
       "gridDesc": "Rasteroverlay in-/uitschakelen",

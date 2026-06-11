@@ -131,6 +131,13 @@
       "confirm": "确认",
       "cancel": "取消"
     },
+    "selectionActions": {
+      "ariaLabel": "选择操作",
+      "duplicate": "复制",
+      "bringForward": "前移",
+      "sendBackward": "后移",
+      "delete": "删除"
+    },
     "grid": {
       "grid": "网格",
       "gridDesc": "显示/隐藏网格",

@@ -131,6 +131,13 @@
       "confirm": "Confirm",
       "cancel": "Cancel"
     },
+    "selectionActions": {
+      "ariaLabel": "Selection actions",
+      "duplicate": "Duplicate",
+      "bringForward": "Bring forward",
+      "sendBackward": "Send backward",
+      "delete": "Delete"
+    },
     "grid": {
       "grid": "Grid",
       "gridDesc": "Toggle grid overlay",

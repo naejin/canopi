@@ -7,6 +7,7 @@ export interface SceneInteractionFrameHandlers {
   readonly pointerUp: (event: PointerEvent) => void
   readonly keyDown: (event: KeyboardEvent) => void
   readonly keyUp: (event: KeyboardEvent) => void
+  readonly contextMenu: (event: MouseEvent) => void
   readonly wheel: (event: WheelEvent) => void
   readonly dragOver: (event: DragEvent) => void
   readonly dragLeave: (event: DragEvent) => void
@@ -99,6 +100,7 @@ class DefaultSceneInteractionFrame implements SceneInteractionFrame {
     window.addEventListener('pointerup', handlers.pointerUp)
     window.addEventListener('keydown', handlers.keyDown)
     window.addEventListener('keyup', handlers.keyUp)
+    container.addEventListener('contextmenu', handlers.contextMenu)
     container.addEventListener('wheel', handlers.wheel, { passive: false })
     container.addEventListener('dragover', handlers.dragOver)
     container.addEventListener('dragleave', handlers.dragLeave)
@@ -115,6 +117,7 @@ class DefaultSceneInteractionFrame implements SceneInteractionFrame {
     window.removeEventListener('pointerup', handlers.pointerUp)
     window.removeEventListener('keydown', handlers.keyDown)
     window.removeEventListener('keyup', handlers.keyUp)
+    container.removeEventListener('contextmenu', handlers.contextMenu)
     container.removeEventListener('wheel', handlers.wheel)
     container.removeEventListener('dragover', handlers.dragOver)
     container.removeEventListener('dragleave', handlers.dragLeave)

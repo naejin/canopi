@@ -13,6 +13,7 @@ function createHandlers(): SceneInteractionFrameHandlers {
     pointerUp: vi.fn(),
     keyDown: vi.fn(),
     keyUp: vi.fn(),
+    contextMenu: vi.fn(),
     wheel: vi.fn(),
     dragOver: vi.fn(),
     dragLeave: vi.fn(),
@@ -53,6 +54,10 @@ describe('Scene Interaction Frame', () => {
       keyUp: (event) => {
         received.push(`keyup:${event.code}`)
       },
+      contextMenu: (event) => {
+        event.preventDefault()
+        received.push('contextmenu')
+      },
       wheel: (event) => {
         event.preventDefault()
         received.push(`wheel:${harness.screenPointFrom(event).x}:${event.deltaY}`)
@@ -69,6 +74,8 @@ describe('Scene Interaction Frame', () => {
     harness.pointerMoveClient({ x: 35, y: 48 }, { pointerId: 7, altKey: true })
     harness.holdSpace()
     harness.releaseSpace()
+    const contextMenu = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+    container.dispatchEvent(contextMenu)
     const wheel = harness.wheel({ x: 44, y: 55 }, { deltaY: -120 })
     harness.pointerLeave({ x: 44, y: 55 }, { pointerId: 7 })
     harness.pointerUpClient({ x: 35, y: 48 }, { pointerId: 7 })
@@ -76,6 +83,7 @@ describe('Scene Interaction Frame', () => {
     harness.pointerDown({ x: 99, y: 99 }, { pointerId: 8 })
 
     expect(wheel.defaultPrevented).toBe(true)
+    expect(contextMenu.defaultPrevented).toBe(true)
     expect(harness.listenerLog?.containerAdds('pointerdown')).toHaveLength(1)
     expect(harness.listenerLog?.containerRemoves('pointerdown')).toHaveLength(1)
     expect(received).toEqual([
@@ -83,6 +91,7 @@ describe('Scene Interaction Frame', () => {
       'move:7:25:28:true',
       'keydown:Space',
       'keyup:Space',
+      'contextmenu',
       'wheel:44:-120',
       'leave:7',
       'up:7',
@@ -108,6 +117,7 @@ describe('Scene Interaction Frame', () => {
     frame.attach()
     expect(addContainerListener.mock.calls.filter(([event]) => event === 'pointerdown')).toHaveLength(1)
     expect(addWindowListener.mock.calls.filter(([event]) => event === 'pointermove')).toHaveLength(1)
+    expect(addContainerListener.mock.calls.filter(([event]) => event === 'contextmenu')).toHaveLength(1)
 
     frame.transitionTool({
       toolName: 'plant-stamp',
@@ -121,6 +131,7 @@ describe('Scene Interaction Frame', () => {
     frame.dispose(disposeCleanup)
 
     expect(removeContainerListener.mock.calls.filter(([event]) => event === 'pointerdown')).toHaveLength(1)
+    expect(removeContainerListener.mock.calls.filter(([event]) => event === 'contextmenu')).toHaveLength(1)
     expect(removeWindowListener.mock.calls.filter(([event]) => event === 'pointermove')).toHaveLength(1)
     expect(disposeCleanup).toHaveBeenCalledTimes(1)
   })

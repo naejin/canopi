@@ -20,3 +20,12 @@ export function isEditableTarget(target: EventTarget | null): boolean {
   const tag = target.tagName
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable
 }
+
+export function allowsNativeContextMenuTarget(target: EventTarget | null): boolean {
+  const element = target instanceof HTMLElement
+    ? target
+    : (target instanceof Node ? target.parentElement : null)
+  if (!element) return false
+  if (isEditableTarget(element)) return true
+  return element.closest('input, textarea, select, [contenteditable="true"], [role="menu"], [role="dialog"], dialog') !== null
+}

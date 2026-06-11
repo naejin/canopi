@@ -38,6 +38,8 @@ function createInteractionDeps(
   overrides: Partial<Pick<SceneInteractionDeps,
     | 'render'
     | 'sceneEdits'
+    | 'getDesignObjectSelection'
+    | 'selectionCommands'
     | 'setTool'
     | 'setHoveredEntityId'
     | 'setViewport'
@@ -91,6 +93,17 @@ function createInteractionDeps(
     setSelection,
     clearSelection,
     sceneEdits,
+    getDesignObjectSelection: overrides.getDesignObjectSelection ?? (() => ({
+      editableTargets: [],
+      blockedTargets: [],
+      bounds: null,
+    })),
+    selectionCommands: overrides.selectionCommands ?? {
+      duplicateSelected: vi.fn(),
+      deleteSelected: vi.fn(),
+      bringToFront: vi.fn(),
+      sendToBack: vi.fn(),
+    },
     setTool: (overrides.setTool ?? ((name: string) => {
       void name
     })) as SceneInteractionDeps['setTool'],
@@ -207,6 +220,137 @@ describe('SceneInteractionController', () => {
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-drag')
     expect(deps.setSelection).toHaveBeenCalledWith(new Set(['plant-1']))
     controller.dispose()
+  })
+
+  it('shows a focus-preserving Selection Action Toolbar near editable selections', () => {
+    Object.defineProperty(container, 'clientWidth', { configurable: true, value: 400 })
+    Object.defineProperty(container, 'clientHeight', { configurable: true, value: 300 })
+    const priorFocus = document.createElement('button')
+    document.body.appendChild(priorFocus)
+    priorFocus.focus()
+    const deps = {
+      ...createInteractionDeps(container, store, camera),
+      getDesignObjectSelection: () => ({
+        editableTargets: [{ kind: 'zone' as const, id: 'zone-1' }],
+        blockedTargets: [],
+        bounds: { minX: 160, minY: 100, maxX: 220, maxY: 150 },
+      }),
+      selectionCommands: {
+        duplicateSelected: vi.fn(),
+        deleteSelected: vi.fn(),
+        bringToFront: vi.fn(),
+        sendToBack: vi.fn(),
+      },
+    }
+    const controller = new SceneInteractionController(deps as any)
+
+    controller.refreshMeasurements()
+
+    const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')
+    expect(toolbar).not.toBeNull()
+    expect(toolbar?.style.display).toBe('flex')
+    expect(toolbar?.getAttribute('role')).toBe('toolbar')
+    expect(toolbar?.getAttribute('aria-label')).toBe('Selection actions')
+    expect(document.activeElement).toBe(priorFocus)
+    expect(Number.parseFloat(toolbar?.style.top ?? '0')).toBeLessThan(100)
+    expect(toolbar?.querySelectorAll('button')).toHaveLength(4)
+    const duplicate = toolbar?.querySelector<HTMLButtonElement>('[data-selection-action-command="duplicate"]')
+    expect(duplicate?.getAttribute('aria-label')).toContain('Duplicate')
+    expect(duplicate?.querySelector('svg')).not.toBeNull()
+    expect(duplicate?.querySelector('[data-selection-action-tooltip]')?.textContent).toContain('Duplicate')
+
+    controller.dispose()
+    priorFocus.remove()
+  })
+
+  it('dispatches Selection Action Toolbar commands by mouse or focused key activation only', () => {
+    const duplicateSelected = vi.fn()
+    const deleteSelected = vi.fn()
+    const deps = {
+      ...createInteractionDeps(container, store, camera),
+      getDesignObjectSelection: () => ({
+        editableTargets: [{ kind: 'zone' as const, id: 'zone-1' }],
+        blockedTargets: [],
+        bounds: { minX: 160, minY: 100, maxX: 220, maxY: 150 },
+      }),
+      selectionCommands: {
+        duplicateSelected,
+        deleteSelected,
+        bringToFront: vi.fn(),
+        sendToBack: vi.fn(),
+      },
+    }
+    const controller = new SceneInteractionController(deps as any)
+
+    controller.refreshMeasurements()
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+    expect(duplicateSelected).not.toHaveBeenCalled()
+
+    const duplicate = container.querySelector<HTMLButtonElement>('[data-selection-action-command="duplicate"]')!
+    expect(duplicate.tabIndex).toBe(0)
+    duplicate.click()
+    expect(duplicateSelected).toHaveBeenCalledTimes(1)
+
+    duplicate.focus()
+    duplicate.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+    expect(duplicateSelected).toHaveBeenCalledTimes(2)
+
+    const remove = container.querySelector<HTMLButtonElement>('[data-selection-action-command="delete"]')!
+    remove.focus()
+    remove.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true }))
+    expect(deleteSelected).toHaveBeenCalledTimes(1)
+
+    controller.dispose()
+  })
+
+  it('suppresses native context menus only on canvas interaction surfaces', () => {
+    const deps = {
+      ...createInteractionDeps(container, store, camera),
+      getDesignObjectSelection: () => ({
+        editableTargets: [{ kind: 'zone' as const, id: 'zone-1' }],
+        blockedTargets: [],
+        bounds: { minX: 160, minY: 100, maxX: 220, maxY: 150 },
+      }),
+    }
+    const controller = new SceneInteractionController(deps as any)
+    controller.refreshMeasurements()
+
+    const canvasContext = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+    container.dispatchEvent(canvasContext)
+    expect(canvasContext.defaultPrevented).toBe(true)
+
+    const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
+    const toolbarContext = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+    toolbar.dispatchEvent(toolbarContext)
+    expect(toolbarContext.defaultPrevented).toBe(true)
+
+    const canvasInput = document.createElement('input')
+    container.appendChild(canvasInput)
+    const inputContext = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+    canvasInput.dispatchEvent(inputContext)
+    expect(inputContext.defaultPrevented).toBe(false)
+
+    const canvasMenu = document.createElement('div')
+    canvasMenu.setAttribute('role', 'menu')
+    container.appendChild(canvasMenu)
+    const menuContext = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+    canvasMenu.dispatchEvent(menuContext)
+    expect(menuContext.defaultPrevented).toBe(false)
+
+    const canvasDialog = document.createElement('dialog')
+    container.appendChild(canvasDialog)
+    const dialogContext = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+    canvasDialog.dispatchEvent(dialogContext)
+    expect(dialogContext.defaultPrevented).toBe(false)
+
+    const outsidePanel = document.createElement('div')
+    document.body.appendChild(outsidePanel)
+    const outsideContext = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+    outsidePanel.dispatchEvent(outsideContext)
+    expect(outsideContext.defaultPrevented).toBe(false)
+
+    controller.dispose()
+    outsidePanel.remove()
   })
 
   it('does not select or drag locked Design Objects from SceneStore', () => {

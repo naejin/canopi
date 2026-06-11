@@ -131,6 +131,13 @@
       "confirm": "Confirmar",
       "cancel": "Cancelar"
     },
+    "selectionActions": {
+      "ariaLabel": "Ações de seleção",
+      "duplicate": "Duplicar",
+      "bringForward": "Trazer para frente",
+      "sendBackward": "Enviar para trás",
+      "delete": "Excluir"
+    },
     "grid": {
       "grid": "Grade",
       "gridDesc": "Mostrar/ocultar a grade",

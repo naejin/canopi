@@ -227,6 +227,8 @@ export class SceneCanvasRuntime {
       setSelection: (ids) => this._setSelection(ids),
       clearSelection: () => this._setSelection([]),
       sceneEdits: this._sceneEdits,
+      getDesignObjectSelection: () => this._querySurface.getDesignObjectSelection(),
+      selectionCommands: this._commandSurface.sceneEdits,
       setTool: (name) => this._commandSurface.tools.setTool(name),
       render: (kind) => this._invalidate(kind),
       readSnapToGridEnabled: () => this._appAdapter.settings.readSnapToGridEnabled(),

@@ -131,6 +131,13 @@
       "confirm": "Bestätigen",
       "cancel": "Abbrechen"
     },
+    "selectionActions": {
+      "ariaLabel": "Auswahlaktionen",
+      "duplicate": "Duplizieren",
+      "bringForward": "Nach vorne",
+      "sendBackward": "Nach hinten",
+      "delete": "Entfernen"
+    },
     "grid": {
       "grid": "Raster",
       "gridDesc": "Rasterüberlagerung umschalten",
