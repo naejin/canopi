@@ -48,6 +48,7 @@ vi.mock('pixi.js', () => {
   class MockText {
     visible = true
     alpha = 1
+    rotation = 0
     text = ''
     style: unknown = {}
     anchor = { set: vi.fn() }
@@ -200,6 +201,81 @@ describe('createPixiSceneRenderer', () => {
     ).toBe(removeChildrenCallsAfterSceneRender)
     expect(pixi.__pixiMockState.apps[0]?.render).toHaveBeenCalledTimes(2)
 
+    renderer.dispose()
+  })
+
+  it('applies text annotation rotation in world space', async () => {
+    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
+    const pixi = await import('pixi.js') as unknown as {
+      __pixiMockState: {
+        texts: Array<{
+          text: string
+          rotation: number
+          position: { set: ReturnType<typeof vi.fn> }
+        }>
+      }
+    }
+
+    const host = document.createElement('div')
+    Object.defineProperty(host, 'clientWidth', { configurable: true, value: 400 })
+    Object.defineProperty(host, 'clientHeight', { configurable: true, value: 300 })
+
+    const renderer = await createPixiSceneRenderer().initialize({ container: host }, {
+      backendId: 'pixi',
+      capabilities: {
+        domCanvas: true,
+        canvas2d: true,
+        offscreenCanvas: false,
+        offscreenCanvas2d: false,
+        webgl: true,
+        webgl2: true,
+        webgpu: false,
+        imageBitmap: false,
+        createImageBitmap: false,
+        worker: false,
+        devicePixelRatio: 1,
+        prefersReducedMotion: null,
+      },
+    } as never)
+
+    const snapshot: SceneRendererSnapshot = {
+      scene: {
+        plants: [],
+        zones: [],
+        annotations: [{
+          kind: 'annotation',
+          locked: false,
+          id: 'annotation-1',
+          annotationType: 'text',
+          position: { x: 25, y: 35 },
+          text: 'Hello',
+          fontSize: 16,
+          rotationDeg: 90,
+        }],
+        groups: [],
+        layers: [],
+        plantSpeciesColors: {},
+        guides: [],
+      },
+      viewport: { x: 10, y: 20, scale: 2 },
+      selectedPlantIds: new Set<string>(),
+      selectedZoneIds: new Set<string>(),
+      selectedAnnotationIds: new Set<string>(),
+      highlightedPlantIds: new Set<string>(),
+      highlightedZoneIds: new Set<string>(),
+      sizeMode: 'default' as const,
+      colorByAttr: null,
+      localizedCommonNames: new Map(),
+      hoveredCanonicalName: null,
+      selectionLabels: [],
+      speciesCache: new Map(),
+    }
+
+    renderer.renderScene(snapshot)
+
+    const annotationText = pixi.__pixiMockState.texts.find((text) => text.text === 'Hello')
+    expect(annotationText?.position.set).toHaveBeenCalledWith(25, 35)
+    expect(annotationText?.rotation).toBeCloseTo(Math.PI / 2)
     renderer.dispose()
   })
 

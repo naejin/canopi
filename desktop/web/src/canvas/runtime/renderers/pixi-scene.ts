@@ -1,5 +1,5 @@
 import { Application, Container, Graphics, Text, TextStyle } from 'pixi.js'
-import { getAnnotationScreenBounds, getAnnotationWorldBounds } from '../annotation-layout'
+import { getAnnotationWorldCorners } from '../annotation-layout'
 import {
   buildPlantPresentationEntries,
   getStackBadgeOffsetPx,
@@ -527,13 +527,13 @@ function drawAnnotationText(
   annotation: SceneAnnotationEntity,
   viewport: SceneRendererSnapshot['viewport'],
 ): void {
-  const screenBounds = getAnnotationScreenBounds(annotation, viewport)
   text.text = annotation.text
   text.style = new TextStyle({
     fontSize: annotation.fontSize / viewport.scale,
     fill: getAnnotationTextColor(),
   })
-  text.position.set(screenBounds.x, screenBounds.y)
+  text.position.set(annotation.position.x, annotation.position.y)
+  text.rotation = ((annotation.rotationDeg ?? 0) * Math.PI) / 180
   text.anchor.set(0, 0)
 }
 
@@ -543,16 +543,10 @@ function drawAnnotationHighlight(
   viewportScale: number,
   state: CanvasInteractionVisualState,
 ): void {
-  const bounds = getAnnotationWorldBounds(annotation, viewportScale)
+  const corners = getAnnotationWorldCorners(annotation, viewportScale, { x: 4, y: 2 })
   const visual = getCanvasInteractionStrokeVisual(state)
   highlight.clear()
-  highlight
-    .rect(
-      bounds.x - 4 / viewportScale,
-      bounds.y - 2 / viewportScale,
-      bounds.width + 8 / viewportScale,
-      bounds.height + 4 / viewportScale,
-    )
+  drawClosedZonePath(highlight, corners)
     .stroke({
       color: toPixiColor(visual.color, 0),
       width: screenPxToWorldPx(visual.widthPx, viewportScale),

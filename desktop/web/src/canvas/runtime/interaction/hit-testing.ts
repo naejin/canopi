@@ -1,5 +1,5 @@
 import { rectsIntersect, type SimpleRect } from '../../operations'
-import { getAnnotationWorldBounds } from '../annotation-layout'
+import { getAnnotationWorldBounds, isPointInAnnotationText } from '../annotation-layout'
 import {
   getPlantWorldBounds,
   hitTestPlant,
@@ -389,13 +389,7 @@ function pointsBounds(points: readonly ScenePoint[]): SimpleRect {
 }
 
 function hitAnnotation(annotation: SceneAnnotationEntity, point: ScenePoint, viewportScale: number): boolean {
-  const bounds = getAnnotationWorldBounds(annotation, viewportScale)
-  return (
-    point.x >= bounds.x &&
-    point.x <= bounds.x + bounds.width &&
-    point.y >= bounds.y &&
-    point.y <= bounds.y + bounds.height
-  )
+  return isPointInAnnotationText(annotation, point, viewportScale)
 }
 
 function annotationBounds(annotation: SceneAnnotationEntity, viewportScale: number): SimpleRect {

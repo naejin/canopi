@@ -172,4 +172,28 @@ describe('scene hit testing', () => {
     expect(queryRectTopLevel(scene, { x: 3, y: 0, width: 0.01, height: 0.01 }, 1, new Map(), getPlantContext))
       .toEqual([])
   })
+
+  it('hit-tests rotated text annotations by their oriented text geometry', () => {
+    const scene = createScene()
+    scene.plants = []
+    scene.annotations = [{
+      kind: 'annotation',
+      id: 'annotation-1',
+      locked: false,
+      annotationType: 'text',
+      position: { x: 10, y: 20 },
+      text: 'ABCD',
+      fontSize: 10,
+      rotationDeg: 90,
+    }]
+
+    expect(hitTestTopLevel(scene, { x: 0, y: 30 }, 1, new Map(), getPlantContext))
+      .toEqual({ kind: 'annotation', id: 'annotation-1' })
+    expect(hitTestTopLevel(scene, { x: 20, y: 25 }, 1, new Map(), getPlantContext))
+      .toBeNull()
+    expect(queryRectTopLevel(scene, { x: 0, y: 30, width: 0.01, height: 0.01 }, 1, new Map(), getPlantContext))
+      .toEqual([{ kind: 'annotation', id: 'annotation-1' }])
+    expect(queryRectTopLevel(scene, { x: 20, y: 25, width: 0.01, height: 0.01 }, 1, new Map(), getPlantContext))
+      .toEqual([])
+  })
 })

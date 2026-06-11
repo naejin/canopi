@@ -134,6 +134,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 
 - Annotation geometry comes from shared helpers in `runtime/annotation-layout.ts`.
 - Annotation text is readable presentation anchored to a design position; its visible text bounds are screen-space and should not be treated as physical world geometry.
+- Annotation `rotationDeg` is visible geometry. Renderers, hit testing, band selection, grouping, zoom-to-fit, and selection/read-model bounds must consume the rotated frame helpers from `annotation-layout.ts` rather than reading unrotated text bounds directly.
 - Use the same annotation bounds for hit testing, band select, grouping, zoom-to-fit, and selection outlines.
 - Visible text should win hit testing over underlying zones/plants when it is on top.
 

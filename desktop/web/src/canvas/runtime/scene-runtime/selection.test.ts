@@ -155,6 +155,25 @@ describe('scene design object selection model', () => {
     expect(model.bounds?.maxY).toBeCloseTo(7)
   })
 
+  it('uses rotated annotation readable bounds for selected Annotation bounds', () => {
+    const scene = makeScene()
+    scene.groups = []
+    scene.annotations[0] = {
+      ...scene.annotations[0]!,
+      position: { x: 10, y: 20 },
+      text: 'ABCD',
+      fontSize: 10,
+      rotationDeg: 90,
+    }
+
+    const model = readModel(scene, ['annotation-1'])
+
+    expect(model.bounds?.minX).toBeCloseTo(-2.5)
+    expect(model.bounds?.minY).toBeCloseTo(20)
+    expect(model.bounds?.maxX).toBeCloseTo(10)
+    expect(model.bounds?.maxY).toBeCloseTo(44)
+  })
+
   it('reports hidden Layer selections without editable bounds', () => {
     const scene = makeScene()
     scene.groups = []

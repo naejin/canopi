@@ -1,4 +1,4 @@
-import { getAnnotationScreenBounds, getAnnotationTextMetrics } from '../annotation-layout'
+import { getAnnotationScreenFrame } from '../annotation-layout'
 import {
   buildPlantPresentationEntries,
   getStackBadgeOffsetPx,
@@ -277,12 +277,13 @@ function drawAnnotationText(
   interactionState: CanvasInteractionVisualState | null,
   opacity: number,
 ): void {
-  const screenBounds = getAnnotationScreenBounds(annotation, viewport)
-  const metrics = getAnnotationTextMetrics(annotation)
+  const frame = getAnnotationScreenFrame(annotation, viewport)
   const lines = annotation.text.split('\n')
 
   ctx.save()
   ctx.setTransform(1, 0, 0, 1, 0, 0)
+  ctx.translate(frame.origin.x, frame.origin.y)
+  ctx.rotate((frame.rotationDeg * Math.PI) / 180)
   ctx.font = `${annotation.fontSize}px Inter, sans-serif`
   ctx.textAlign = 'left'
   ctx.textBaseline = 'top'
@@ -292,13 +293,13 @@ function drawAnnotationText(
     ctx.strokeStyle = visual.color
     ctx.globalAlpha = visual.alpha * opacity
     ctx.lineWidth = visual.widthPx
-    ctx.strokeRect(screenBounds.x - 4, screenBounds.y - 2, screenBounds.width + 8, screenBounds.height + 4)
+    ctx.strokeRect(-4, -2, frame.widthPx + 8, frame.heightPx + 4)
   }
 
   ctx.fillStyle = getAnnotationTextColor()
   ctx.globalAlpha = opacity
   lines.forEach((line, index) => {
-    ctx.fillText(line, screenBounds.x, screenBounds.y + index * metrics.lineHeightPx)
+    ctx.fillText(line, 0, index * frame.lineHeightPx)
   })
   ctx.restore()
 }
