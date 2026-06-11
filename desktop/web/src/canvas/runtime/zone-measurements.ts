@@ -64,6 +64,11 @@ export function createRectangularZoneMeasurements(points: readonly ScenePoint[])
   return createClosedPolygonMeasurements(corners)
 }
 
+export function createLinearZoneMeasurements(start: ScenePoint, end: ScenePoint): ZoneMeasurementLabel[] {
+  if (distance(start, end) < 0.5) return []
+  return [createEdgeLabel('edge-0', start, end)]
+}
+
 export function createPolygonalZoneMeasurements(points: readonly ScenePoint[]): ZoneMeasurementLabel[] {
   return createClosedPolygonMeasurements(points)
 }

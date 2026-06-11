@@ -133,6 +133,18 @@ describe('command registry canvas tool switching', () => {
     expect(activeTool.value).toBe('polygon')
   })
 
+  it('exposes the Line tool through the shared command graph', () => {
+    const setTool = vi.fn()
+    mountCanvasCommandSurface({ tools: { setTool } })
+
+    getCommand('canvas.tool.line').action()
+
+    expect(getCommand('canvas.tool.line').shortcut).toBe('L')
+    expect(activePanel.value).toBe('canvas')
+    expect(setTool).toHaveBeenCalledWith('line')
+    expect(activeTool.value).toBe('line')
+  })
+
   it('exposes Object Stamp through the shared command graph', () => {
     const setTool = vi.fn()
     mountCanvasCommandSurface({ tools: { setTool } })
@@ -168,6 +180,7 @@ describe('command registry canvas tool switching', () => {
     expect(getCommand('nav.plantDb').shortcut).toBe(PANEL_SHORTCUTS.plantDb)
     expect(getCommand('nav.location').shortcut).toBeUndefined()
     expect(getCommand('canvas.tool.select').shortcut).toBe(TOOL_SHORTCUTS.select)
+    expect(getCommand('canvas.tool.line').shortcut).toBe(TOOL_SHORTCUTS.line)
     expect(getCommand('canvas.tool.text').shortcut).toBe(TOOL_SHORTCUTS.text)
   })
 
@@ -379,7 +392,9 @@ describe('command registry canvas tool switching', () => {
 
     const primaryTool = (tool: string) => appCommandGraphToolbarProjection.value.primaryTools
       .find((entry) => entry.tool === tool)!
-    const shapeTool = (tool: string) => appCommandGraphToolbarProjection.value.shapeTools
+    const creationTool = (tool: string) => appCommandGraphToolbarProjection.value.creationTools
+      .find((entry) => entry.tool === tool)!
+    const reuseTool = (tool: string) => appCommandGraphToolbarProjection.value.reuseTools
       .find((entry) => entry.tool === tool)!
     const historyAction = (id: string) => appCommandGraphToolbarProjection.value.historyActions
       .find((entry) => entry.id === id)!
@@ -392,11 +407,23 @@ describe('command registry canvas tool switching', () => {
       disabled: false,
       shortcut: TOOL_SHORTCUTS.select,
     })
-    expect(shapeTool('ellipse')).toMatchObject({
+    expect(creationTool('line')).toMatchObject({
+      commandId: 'canvas.tool.line',
+      active: false,
+      disabled: false,
+      shortcut: TOOL_SHORTCUTS.line,
+    })
+    expect(creationTool('ellipse')).toMatchObject({
       commandId: 'canvas.tool.ellipse',
       active: false,
       disabled: false,
       shortcut: TOOL_SHORTCUTS.ellipse,
+    })
+    expect(reuseTool('plant-spacing')).toMatchObject({
+      commandId: 'canvas.tool.plantSpacing',
+      active: false,
+      disabled: false,
+      shortcut: TOOL_SHORTCUTS.plantSpacing,
     })
     expect(historyAction('undo')).toMatchObject({
       commandId: 'edit.undo',
@@ -437,7 +464,7 @@ describe('command registry canvas tool switching', () => {
     expect(settingToggle('grid')).toMatchObject({ disabled: false, pressed: true })
     expect(settingToggle('snap')).toMatchObject({ disabled: false, pressed: true })
 
-    shapeTool('ellipse').action()
+    creationTool('ellipse').action()
     historyAction('undo').action()
     settingToggle('grid').action()
     settingToggle('snap').action()

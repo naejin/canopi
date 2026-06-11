@@ -93,7 +93,7 @@
       "freeform": "자유 형태",
       "freeformDesc": "자유롭게 도형 그리기",
       "line": "선",
-      "lineDesc": "선 및 폴리라인 그리기",
+      "lineDesc": "선형 구역 그리기",
       "text": "텍스트",
       "textDesc": "텍스트 라벨 추가",
       "measure": "측정",

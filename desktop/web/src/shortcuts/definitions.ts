@@ -29,6 +29,7 @@ export const VIEW_SHORTCUTS = {
 export const TOOL_SHORTCUTS = {
   select: 'V',
   hand: 'H',
+  line: 'L',
   rectangle: 'R',
   ellipse: 'E',
   polygon: 'P',
@@ -46,6 +47,8 @@ export const canvasToolKeys: Record<string, string> = {
   V: 'select',
   h: 'hand',
   H: 'hand',
+  l: 'line',
+  L: 'line',
   r: 'rectangle',
   R: 'rectangle',
   e: 'ellipse',

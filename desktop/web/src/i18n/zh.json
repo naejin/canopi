@@ -93,7 +93,7 @@
       "freeform": "自由形状",
       "freeformDesc": "手绘自由形状",
       "line": "线条",
-      "lineDesc": "绘制直线和折线",
+      "lineDesc": "绘制线性区域",
       "text": "文本",
       "textDesc": "添加文字标签",
       "measure": "测量",

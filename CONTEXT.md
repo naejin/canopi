@@ -94,7 +94,7 @@ A presentation choice for how placed plants are visually sized in a design. The 
 _Avoid_: Object scale, canvas scale, plant display mode
 
 **Zone**:
-A named area in a design, optionally typed by ecological or functional purpose. A design may contain many zones, and zones may overlap placed plants or other zones.
+A named spatial feature in a design, optionally typed by ecological or functional purpose. A design may contain many zones, and zones may overlap placed plants, other zones, or linear boundaries.
 _Avoid_: Shape, polygon, region
 
 **Zone Draft**:
@@ -109,8 +109,12 @@ _Avoid_: Polygon, shape
 A zone whose boundary is an ellipse. An elliptical zone is still a zone; "elliptical" describes its boundary geometry.
 _Avoid_: Oval, shape
 
+**Linear Zone**:
+A zone whose geometry is one straight zone edge with two endpoints. A linear zone represents a boundary, row, path, or other linear feature rather than an enclosed area.
+_Avoid_: Line object, measurement guide, spacing guide
+
 **Zone Edge**:
-One straight boundary segment of a zone. A polygonal zone has many zone edges; a rectangular zone has four zone edges; an elliptical zone has no zone edges.
+One straight boundary segment of a zone. A linear zone has one zone edge, a polygonal zone has many zone edges, a rectangular zone has four zone edges, and an elliptical zone has no zone edges.
 _Avoid_: Line, stroke
 
 **Zone Measurement**:

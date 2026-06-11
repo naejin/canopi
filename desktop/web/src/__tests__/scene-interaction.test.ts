@@ -1951,6 +1951,103 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('creates a linear zone from the Line tool drag', () => {
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('line')
+
+    events.pointerDown({ x: 10, y: 20 }, { button: 0 })
+    events.pointerMove({ x: 40, y: 60 }, { button: 0 })
+
+    const preview = Array.from(container.children)
+      .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
+    expect(preview?.style.left).toBe('10px')
+    expect(preview?.style.top).toBe('20px')
+    expect(preview?.style.width).toBe('50px')
+
+    events.pointerUp({ x: 40, y: 60 }, { button: 0 })
+
+    expect(store.persisted.zones).toHaveLength(1)
+    expect(store.persisted.zones[0]).toMatchObject({
+      zoneType: 'line',
+      points: [
+        { x: 10, y: 20 },
+        { x: 40, y: 60 },
+      ],
+    })
+    expect(store.toCanopiFile().zones[0]).toMatchObject({
+      zone_type: 'line',
+      locked: false,
+      points: [
+        { x: 10, y: 20 },
+        { x: 40, y: 60 },
+      ],
+    })
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-line')
+    expect(deps.setSelection).toHaveBeenCalledTimes(1)
+    controller.dispose()
+  })
+
+  it('shows live linear zone length while drawing without persisting it', () => {
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('line')
+
+    events.pointerDown({ x: 10, y: 20 }, { button: 0 })
+    events.pointerMove({ x: 70, y: 20 }, { button: 0 })
+
+    expect(zoneMeasurementTexts(container)).toEqual(['60 m'])
+    expect(store.persisted.zones).toHaveLength(0)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    controller.dispose()
+  })
+
+  it('previews and commits linear zones from snap-adjusted grid points', () => {
+    // At scale=4, gridInterval() returns 5m.
+    camera.setViewport({ x: 0, y: 0, scale: 4 })
+    snapToGridEnabled.value = true
+
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('line')
+
+    events.pointerDown({ x: 43, y: 87 }, { button: 0 })
+    events.pointerMove({ x: 148, y: 254 }, { button: 0 })
+
+    const preview = Array.from(container.children)
+      .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
+    expect(preview?.style.left).toBe('40px')
+    expect(preview?.style.top).toBe('80px')
+
+    events.pointerUp({ x: 148, y: 254 }, { button: 0 })
+
+    expect(store.persisted.zones[0]).toMatchObject({
+      zoneType: 'line',
+      points: [
+        { x: 10, y: 20 },
+        { x: 35, y: 65 },
+      ],
+    })
+    controller.dispose()
+  })
+
+  it('does not commit too-short linear zones', () => {
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('line')
+
+    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
+    events.pointerMove({ x: 10.2, y: 10.2 }, { button: 0 })
+    events.pointerUp({ x: 10.2, y: 10.2 }, { button: 0 })
+
+    expect(store.persisted.zones).toHaveLength(0)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    controller.dispose()
+  })
+
   it('creates an elliptical zone from the ellipse tool drag', () => {
     const onSceneEditCommit = vi.fn()
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
@@ -2433,6 +2530,90 @@ describe('SceneInteractionController', () => {
 
     expect(selectedObjectIds.value.size).toBe(0)
     expect(zoneMeasurementTexts(container)).toEqual([])
+    controller.dispose()
+  })
+
+  it('shows selected linear zone length from stroke-proximity hit testing', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [{
+        kind: 'zone',
+        locked: false,
+        name: 'line-1',
+        zoneType: 'line',
+        points: [
+          { x: 10, y: 10 },
+          { x: 110, y: 10 },
+        ],
+        fillColor: null,
+        notes: null,
+      }]
+    })
+
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    events.pointerDown({ x: 50, y: 13 }, { button: 0 })
+    events.pointerUp({ x: 50, y: 13 }, { button: 0 })
+
+    expect(selectedObjectIds.value).toEqual(new Set(['line-1']))
+    expect(zoneMeasurementTexts(container)).toEqual(['100 m'])
+    controller.dispose()
+  })
+
+  it('does not select linear zones from empty bounding-box space', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [{
+        kind: 'zone',
+        locked: false,
+        name: 'line-1',
+        zoneType: 'line',
+        points: [
+          { x: 10, y: 10 },
+          { x: 110, y: 60 },
+        ],
+        fillColor: null,
+        notes: null,
+      }]
+    })
+
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    events.pointerDown({ x: 60, y: 60 }, { button: 0 })
+    events.pointerUp({ x: 60, y: 60 }, { button: 0 })
+
+    expect(selectedObjectIds.value.size).toBe(0)
+    expect(zoneMeasurementTexts(container)).toEqual([])
+    controller.dispose()
+  })
+
+  it('band-selects linear zones when the selection rectangle crosses the segment', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [{
+        kind: 'zone',
+        locked: false,
+        name: 'line-1',
+        zoneType: 'line',
+        points: [
+          { x: 10, y: 50 },
+          { x: 110, y: 50 },
+        ],
+        fillColor: null,
+        notes: null,
+      }]
+    })
+
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    events.pointerDown({ x: 40, y: 40 }, { button: 0 })
+    events.pointerMove({ x: 80, y: 60 }, { button: 0 })
+    events.pointerUp({ x: 80, y: 60 }, { button: 0 })
+
+    expect(selectedObjectIds.value).toEqual(new Set(['line-1']))
     controller.dispose()
   })
 
@@ -3440,6 +3621,52 @@ describe('SceneInteractionController', () => {
     })
     expect(selectedObjectIds.value).toEqual(new Set(['Kitchen bed copy 2']))
     expect(onSceneEditCommit).toHaveBeenCalledTimes(1)
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-object-stamp')
+    controller.dispose()
+  })
+
+  it('samples a linear zone with Object Stamp and places anchored clones', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [{
+        kind: 'zone',
+        locked: false,
+        name: 'Hedgerow',
+        zoneType: 'line',
+        points: [
+          { x: 10, y: 20 },
+          { x: 50, y: 60 },
+        ],
+        fillColor: '#A06B1F',
+        notes: 'Boundary',
+      }]
+    })
+
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('object-stamp')
+
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
+    events.pointerMove({ x: 120, y: 150 }, { button: 0 })
+
+    const preview = Array.from(container.children)
+      .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
+    expect(preview?.style.borderTop).toContain('solid')
+
+    events.pointerDown({ x: 120, y: 150 }, { button: 0 })
+
+    expect(store.persisted.zones).toHaveLength(2)
+    expect(store.persisted.zones[1]).toMatchObject({
+      name: 'Hedgerow copy',
+      zoneType: 'line',
+      points: [
+        { x: 110, y: 140 },
+        { x: 150, y: 180 },
+      ],
+      fillColor: '#A06B1F',
+      notes: 'Boundary',
+    })
+    expect(selectedObjectIds.value).toEqual(new Set(['Hedgerow copy']))
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-object-stamp')
     controller.dispose()
   })

@@ -94,7 +94,8 @@ export interface AppCommandGraphToolbarActionCommand {
 
 export interface AppCommandGraphToolbarProjection {
   readonly primaryTools: AppCommandGraphToolbarToolCommand[]
-  readonly shapeTools: AppCommandGraphToolbarToolCommand[]
+  readonly creationTools: AppCommandGraphToolbarToolCommand[]
+  readonly reuseTools: AppCommandGraphToolbarToolCommand[]
   readonly historyActions: AppCommandGraphToolbarActionCommand[]
   readonly settingsToggles: AppCommandGraphToolbarActionCommand[]
 }
@@ -143,19 +144,27 @@ const PANEL_LABELS: Record<Panel, () => string> = {
 const TOOLBAR_PRIMARY_TOOLS = [
   { tool: 'select', commandId: 'canvas.tool.select', description: () => t('canvas.tools.selectDesc') },
   { tool: 'hand', commandId: 'canvas.tool.hand', description: () => t('canvas.tools.handDesc') },
-  { tool: 'object-stamp', commandId: 'canvas.tool.objectStamp', description: () => t('canvas.tools.objectStampDesc') },
-  { tool: 'plant-spacing', commandId: 'canvas.tool.plantSpacing', description: () => t('canvas.tools.plantSpacingDesc') },
 ] as const satisfies readonly {
   readonly tool: string
   readonly commandId: AppCommandId
   readonly description: () => string
 }[]
 
-const TOOLBAR_SHAPE_TOOLS = [
+const TOOLBAR_CREATION_TOOLS = [
+  { tool: 'line', commandId: 'canvas.tool.line', description: () => t('canvas.tools.lineDesc') },
   { tool: 'rectangle', commandId: 'canvas.tool.rectangle', description: () => t('canvas.tools.rectangleDesc') },
   { tool: 'ellipse', commandId: 'canvas.tool.ellipse', description: () => t('canvas.tools.ellipseDesc') },
   { tool: 'polygon', commandId: 'canvas.tool.polygon', description: () => t('canvas.tools.polygonDesc') },
   { tool: 'text', commandId: 'canvas.tool.text', description: () => t('canvas.tools.textDesc') },
+] as const satisfies readonly {
+  readonly tool: string
+  readonly commandId: AppCommandId
+  readonly description: () => string
+}[]
+
+const TOOLBAR_REUSE_TOOLS = [
+  { tool: 'object-stamp', commandId: 'canvas.tool.objectStamp', description: () => t('canvas.tools.objectStampDesc') },
+  { tool: 'plant-spacing', commandId: 'canvas.tool.plantSpacing', description: () => t('canvas.tools.plantSpacingDesc') },
 ] as const satisfies readonly {
   readonly tool: string
   readonly commandId: AppCommandId
@@ -349,7 +358,8 @@ export const appCommandGraphToolbarProjection = computed<AppCommandGraphToolbarP
 
   return {
     primaryTools: TOOLBAR_PRIMARY_TOOLS.map((entry) => toolbarToolProjection(entry, state)),
-    shapeTools: TOOLBAR_SHAPE_TOOLS.map((entry) => toolbarToolProjection(entry, state)),
+    creationTools: TOOLBAR_CREATION_TOOLS.map((entry) => toolbarToolProjection(entry, state)),
+    reuseTools: TOOLBAR_REUSE_TOOLS.map((entry) => toolbarToolProjection(entry, state)),
     historyActions: TOOLBAR_HISTORY_ACTIONS.map((entry) => toolbarActionProjection(entry, state)),
     settingsToggles: TOOLBAR_SETTINGS_TOGGLES.map((entry) => toolbarToggleProjection(entry, state)),
   }

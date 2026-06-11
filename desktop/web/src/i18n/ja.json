@@ -93,7 +93,7 @@
       "freeform": "フリーフォーム",
       "freeformDesc": "フリーハンドで図形を描画",
       "line": "直線",
-      "lineDesc": "直線やポリラインを描画",
+      "lineDesc": "線形ゾーンを描画",
       "text": "テキスト",
       "textDesc": "テキストラベルを追加",
       "measure": "計測",

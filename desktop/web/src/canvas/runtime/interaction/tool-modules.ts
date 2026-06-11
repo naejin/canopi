@@ -127,6 +127,7 @@ export function createSceneToolModules(context: SceneToolModulesContext): SceneT
   return new SceneToolModuleRegistry(new Map([
     ['plant-stamp', createPlantStampToolAdapter(plantStampTool)],
     ['text', createTextAnnotationToolAdapter(textTool)],
+    ['line', zoneDrawingAdapters.line],
     ['rectangle', zoneDrawingAdapters.rectangle],
     ['ellipse', zoneDrawingAdapters.ellipse],
     ['polygon', zoneDrawingAdapters.polygon],

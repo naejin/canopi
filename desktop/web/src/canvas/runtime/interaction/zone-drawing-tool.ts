@@ -5,6 +5,7 @@ import type { SceneEditCoordinator } from '../scene-runtime/transactions'
 import {
   createEllipticalZoneMeasurements,
   createEllipticalZoneMeasurementsFromRect,
+  createLinearZoneMeasurements,
   createPolygonalZoneDraftMeasurements,
   createPolygonalZoneMeasurements,
   createRectangularZoneMeasurements,
@@ -15,16 +16,17 @@ import { createPolygonDraftOverlay } from './polygon-draft-overlay'
 import { createZoneMeasurementOverlay } from './zone-measurement-overlay'
 import {
   appendEllipseZoneToDraft,
+  appendLineZoneToDraft,
   appendPolygonZoneToDraft,
   appendRectangleZoneToDraft,
 } from './tool-actions'
 import { isEditableTarget } from './pointer-utils'
 import type { SceneToolAdapter } from './tool-adapter'
 
-type BoxZoneMode = 'rectangle' | 'ellipse'
+type DragZoneMode = 'line' | 'rectangle' | 'ellipse'
 
-interface ActiveBoxZoneDraft {
-  readonly mode: BoxZoneMode
+interface ActiveDragZoneDraft {
+  readonly mode: DragZoneMode
   readonly startWorld: ScenePoint
   readonly startScreen: ScenePoint
 }
@@ -44,9 +46,9 @@ export interface ZoneDrawingToolContext {
 
 export interface ZoneDrawingTool {
   readonly hasPolygonDraft: () => boolean
-  readonly beginBox: (mode: BoxZoneMode, world: ScenePoint) => void
-  readonly updateBox: (rawWorld: ScenePoint) => void
-  readonly commitBox: (rawWorld: ScenePoint) => void
+  readonly beginDrag: (mode: DragZoneMode, world: ScenePoint) => void
+  readonly updateDrag: (rawWorld: ScenePoint) => void
+  readonly commitDrag: (rawWorld: ScenePoint) => void
   readonly handlePolygonPointerDown: (world: ScenePoint) => void
   readonly updatePolygonPointerMove: (rawWorld: ScenePoint) => void
   readonly handlePolygonKeyDown: (event: KeyboardEvent) => boolean
@@ -63,15 +65,15 @@ export interface ZoneDrawingTool {
 export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDrawingTool {
   const polygonDraftOverlay = createPolygonDraftOverlay(context.container)
   const zoneMeasurements = createZoneMeasurementOverlay(context.container)
-  let activeBox: ActiveBoxZoneDraft | null = null
+  let activeDrag: ActiveDragZoneDraft | null = null
   let polygonDraftVertices: ScenePoint[] = []
   let polygonActiveWorld: ScenePoint | null = null
   let polygonRedoVertices: ScenePoint[] = []
 
-  function beginBox(mode: BoxZoneMode, world: ScenePoint): void {
+  function beginDrag(mode: DragZoneMode, world: ScenePoint): void {
     const snappedWorld = context.applySnapping(world)
     const snappedScreen = context.camera.worldToScreen(snappedWorld)
-    activeBox = {
+    activeDrag = {
       mode,
       startWorld: snappedWorld,
       startScreen: snappedScreen,
@@ -79,35 +81,50 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
     showInteractionPreview(context.preview, mode, snappedScreen, snappedScreen)
   }
 
-  function updateBox(rawWorld: ScenePoint): void {
-    if (!activeBox) return
+  function updateDrag(rawWorld: ScenePoint): void {
+    if (!activeDrag) return
     const endWorld = context.applySnapping(rawWorld)
     showInteractionPreview(
       context.preview,
-      activeBox.mode,
-      activeBox.startScreen,
+      activeDrag.mode,
+      activeDrag.startScreen,
       context.camera.worldToScreen(endWorld),
     )
-    if (activeBox.mode === 'rectangle') {
-      updateDraftRectangleMeasurements(activeBox.startWorld, endWorld)
+    if (activeDrag.mode === 'line') {
+      updateDraftLineMeasurements(activeDrag.startWorld, endWorld)
+    } else if (activeDrag.mode === 'rectangle') {
+      updateDraftRectangleMeasurements(activeDrag.startWorld, endWorld)
     } else {
-      updateDraftEllipseMeasurements(activeBox.startWorld, endWorld)
+      updateDraftEllipseMeasurements(activeDrag.startWorld, endWorld)
     }
   }
 
-  function commitBox(rawWorld: ScenePoint): void {
-    if (!activeBox) return
-    const box = activeBox
-    activeBox = null
-    const rect = computeSelectionRect(box.startWorld, context.applySnapping(rawWorld))
+  function commitDrag(rawWorld: ScenePoint): void {
+    if (!activeDrag) return
+    const drag = activeDrag
+    activeDrag = null
+    const endWorld = context.applySnapping(rawWorld)
+
+    if (drag.mode === 'line') {
+      context.sceneEdits.run('interaction-line', (tx) => {
+        let zoneName: string | null = null
+        tx.mutate((draft) => {
+          zoneName = appendLineZoneToDraft(draft, drag.startWorld, endWorld)
+        })
+        if (zoneName) tx.setSelection([zoneName])
+      })
+      return
+    }
+
+    const rect = computeSelectionRect(drag.startWorld, endWorld)
     if (rect.width < 0.5 || rect.height < 0.5) return
 
     context.sceneEdits.run(
-      box.mode === 'rectangle' ? 'interaction-rectangle' : 'interaction-ellipse',
+      drag.mode === 'rectangle' ? 'interaction-rectangle' : 'interaction-ellipse',
       (tx) => {
         let zoneName: string | null = null
         tx.mutate((draft) => {
-          zoneName = box.mode === 'rectangle'
+          zoneName = drag.mode === 'rectangle'
             ? appendRectangleZoneToDraft(draft, rect)
             : appendEllipseZoneToDraft(draft, rect)
         })
@@ -118,7 +135,7 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
 
   function handlePolygonPointerDown(world: ScenePoint): void {
     const point = context.applySnapping(world)
-    activeBox = null
+    activeDrag = null
     zoneMeasurements.hide()
 
     if (shouldClosePolygonAt(point)) {
@@ -247,8 +264,15 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
   }
 
   function cancelTransient(options: { preservePolygonDraft?: boolean } = {}): void {
-    activeBox = null
+    activeDrag = null
     if (!options.preservePolygonDraft) cancelPolygonDraft()
+  }
+
+  function updateDraftLineMeasurements(startWorld: ScenePoint, endWorld: ScenePoint): void {
+    zoneMeasurements.update(
+      createLinearZoneMeasurements(startWorld, endWorld),
+      context.camera,
+    )
   }
 
   function updateDraftRectangleMeasurements(startWorld: ScenePoint, endWorld: ScenePoint): void {
@@ -312,6 +336,14 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
       return
     }
 
+    if (zone.zoneType === 'line' && zone.points.length >= 2) {
+      zoneMeasurements.update(
+        createLinearZoneMeasurements(zone.points[0]!, zone.points[1]!),
+        context.camera,
+      )
+      return
+    }
+
     if (zone.zoneType === 'polygon') {
       zoneMeasurements.update(
         createPolygonalZoneMeasurements(zone.points),
@@ -338,9 +370,9 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
 
   return {
     hasPolygonDraft: () => polygonDraftVertices.length > 0,
-    beginBox,
-    updateBox,
-    commitBox,
+    beginDrag,
+    updateDrag,
+    commitDrag,
     handlePolygonPointerDown,
     updatePolygonPointerMove,
     handlePolygonKeyDown,
@@ -356,6 +388,7 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
 }
 
 export interface ZoneDrawingToolAdapters {
+  readonly line: SceneToolAdapter
   readonly rectangle: SceneToolAdapter
   readonly ellipse: SceneToolAdapter
   readonly polygon: SceneToolAdapter
@@ -366,15 +399,15 @@ export function createZoneDrawingToolAdapters(tool: ZoneDrawingTool): ZoneDrawin
     tool.cancelTransient({ preservePolygonDraft: options.preserveActiveDraft })
   }
 
-  function createBoxAdapter(mode: BoxZoneMode): SceneToolAdapter {
+  function createDragAdapter(mode: DragZoneMode): SceneToolAdapter {
     return {
       onDeactivate: () => tool.cancelTransient(),
       pointerDown({ event, rawWorld, beginDrag }) {
         event.preventDefault()
-        tool.beginBox(mode, rawWorld)
+        tool.beginDrag(mode, rawWorld)
         beginDrag({
-          update: ({ rawWorld }) => tool.updateBox(rawWorld),
-          commit: ({ rawWorld }) => tool.commitBox(rawWorld),
+          update: ({ rawWorld }) => tool.updateDrag(rawWorld),
+          commit: ({ rawWorld }) => tool.commitDrag(rawWorld),
         })
         return true
       },
@@ -383,8 +416,9 @@ export function createZoneDrawingToolAdapters(tool: ZoneDrawingTool): ZoneDrawin
   }
 
   return {
-    rectangle: createBoxAdapter('rectangle'),
-    ellipse: createBoxAdapter('ellipse'),
+    line: createDragAdapter('line'),
+    rectangle: createDragAdapter('rectangle'),
+    ellipse: createDragAdapter('ellipse'),
     polygon: {
       onDeactivate: () => tool.cancelTransient(),
       shouldIgnorePointerUpWithoutCapture: tool.hasPolygonDraft,

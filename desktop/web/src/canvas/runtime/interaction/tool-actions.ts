@@ -73,6 +73,33 @@ export function appendEllipseZoneToDraft(
   return zoneName
 }
 
+export function appendLineZoneToDraft(
+  draft: ScenePersistedState,
+  start: ScenePoint,
+  end: ScenePoint,
+): string | null {
+  if (!isValidLine(start, end)) return null
+
+  const zoneId = createUuid()
+  const zoneName = `zone-${zoneId}`
+  draft.zones = [
+    ...draft.zones,
+    {
+      kind: 'zone',
+      name: zoneName,
+      zoneType: 'line',
+      points: [
+        { x: start.x, y: start.y },
+        { x: end.x, y: end.y },
+      ],
+      fillColor: null,
+      notes: null,
+      locked: false,
+    },
+  ]
+  return zoneName
+}
+
 export function appendPolygonZoneToDraft(
   draft: ScenePersistedState,
   points: readonly ScenePoint[],
@@ -160,6 +187,10 @@ export function appendTextAnnotationToDraft(
 
 function isValidPolygon(points: readonly ScenePoint[]): boolean {
   return points.length >= 3 && Math.abs(polygonArea(points)) >= 0.25
+}
+
+function isValidLine(start: ScenePoint, end: ScenePoint): boolean {
+  return Math.hypot(end.x - start.x, end.y - start.y) >= 0.5
 }
 
 function polygonArea(points: readonly ScenePoint[]): number {

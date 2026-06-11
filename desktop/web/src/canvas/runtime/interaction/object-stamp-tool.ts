@@ -327,6 +327,15 @@ export function createObjectStampTool(context: ObjectStampToolContext): ObjectSt
     if (source.kind === 'zone') {
       const previewZone = cloneZoneForObjectStamp(source.zone)
       previewZone.points = translateZonePoints(source.zone, objectStampDelta(source, anchorWorld))
+      if (previewZone.zoneType === 'line' && previewZone.points.length >= 2) {
+        showInteractionPreview(
+          context.preview,
+          'line',
+          context.camera.worldToScreen(previewZone.points[0]!),
+          context.camera.worldToScreen(previewZone.points[1]!),
+        )
+        return
+      }
       const bounds = zoneWorldBounds(previewZone)
       if (!bounds) {
         hideInteractionPreview(context.preview)
