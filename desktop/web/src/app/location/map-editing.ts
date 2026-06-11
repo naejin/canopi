@@ -2,10 +2,9 @@ import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
 import { basemapStyle } from '../settings/state'
 import {
-  createMapLibreHost,
-  type MapLibreHost,
-  type MapLibreHostContext,
-} from '../../maplibre/host'
+  createMapLibreSurfaceAdapter,
+  type MapLibreSurfaceAdapter,
+} from '../../maplibre/surface-adapter'
 import {
   createLocationMapLibreMap,
   readLocationMapViewState,
@@ -32,13 +31,12 @@ export interface LocationMapEditingHost {
 
 export function useLocationMapEditingHost(workbench: LocationWorkbench): LocationMapEditingHost {
   const mapContainerRef = useRef<HTMLDivElement>(null)
-  const hostRef = useRef<MapLibreHost | null>(null)
-  const mapRef = useRef<LocationMapLibreMap | null>(null)
+  const surfaceRef = useRef<MapLibreSurfaceAdapter<LocationMapLibreMap> | null>(null)
   const savedLocationRef = useRef(workbench.saved.location)
   const workbenchRef = useRef(workbench)
   savedLocationRef.current = workbench.saved.location
   workbenchRef.current = workbench
-  if (!hostRef.current) hostRef.current = createMapLibreHost()
+  if (!surfaceRef.current) surfaceRef.current = createMapLibreSurfaceAdapter()
 
   const mapInitFailed = useSignal(false)
   const pinState = useSignal<PinOverlayState>({ visible: false, x: 0, y: 0, clamped: false, angle: 0 })
@@ -47,16 +45,16 @@ export function useLocationMapEditingHost(workbench: LocationWorkbench): Locatio
   useEffect(() => {
     const container = mapContainerRef.current
     if (!container) return
-    const host = hostRef.current
-    if (!host) return
+    const surface = surfaceRef.current
+    if (!surface) return
 
     mapInitFailed.value = false
-    host.attach(container)
+    surface.attach(container)
 
     const onMove = () => updateCurrentPinPosition()
     const onDragStart = () => workbenchRef.current.clearPendingMapResult()
 
-    host.requestMap({
+    surface.requestMap({
       key: preferredBasemapStyle,
       createMap: (maplibre, target, preservedView) => {
         const savedLoc = savedLocationRef.current
@@ -70,34 +68,24 @@ export function useLocationMapEditingHost(workbench: LocationWorkbench): Locatio
           },
         )
       },
-      captureViewState: (context) => readLocationMapViewState(asLocationMap(context)),
+      captureViewState: (context) => readLocationMapViewState(context.map),
       onCreate: (context) => {
-        const map = asLocationMap(context)
-        map.on('move', onMove)
-        map.on('moveend', onMove)
-        map.on('dragstart', onDragStart)
-        mapRef.current = map
-        updatePinPosition(map)
+        context.lifetime.on('move', onMove)
+        context.lifetime.on('moveend', onMove)
+        context.lifetime.on('dragstart', onDragStart)
+        updatePinPosition(context.map)
       },
       onResize: (context) => {
-        updatePinPosition(asLocationMap(context))
-      },
-      onDestroy: (context) => {
-        const map = asLocationMap(context)
-        map.off('move', onMove)
-        map.off('moveend', onMove)
-        map.off('dragstart', onDragStart)
-        if (mapRef.current === map) mapRef.current = null
+        updatePinPosition(context.map)
       },
       onCreateError: (error) => {
         container.replaceChildren()
-        mapRef.current = null
         mapInitFailed.value = true
         console.error('[LocationTab] Failed to initialize MapLibre map', error)
       },
     })
     return () => {
-      host.destroy()
+      surface.destroy()
     }
   }, [preferredBasemapStyle])
 
@@ -107,7 +95,7 @@ export function useLocationMapEditingHost(workbench: LocationWorkbench): Locatio
 
   function previewSearchResult(result: LocationSearchResult): void {
     const next = workbench.previewSearchResultOnMap(result)
-    const map = mapRef.current
+    const map = surfaceRef.current?.map
     if (!map) return
     map.easeTo({
       center: [next.lon, next.lat],
@@ -118,7 +106,7 @@ export function useLocationMapEditingHost(workbench: LocationWorkbench): Locatio
   }
 
   function commitMapLocation(): boolean {
-    const center = mapRef.current?.getCenter()
+    const center = surfaceRef.current?.map?.getCenter()
     return workbench.commitMapLocation(center ? { lat: center.lat, lon: center.lng } : null)
   }
 
@@ -144,12 +132,8 @@ export function useLocationMapEditingHost(workbench: LocationWorkbench): Locatio
   }
 
   function updateCurrentPinPosition(): void {
-    const map = mapRef.current
+    const map = surfaceRef.current?.map
     if (map) updatePinPosition(map)
-  }
-
-  function asLocationMap(context: MapLibreHostContext): LocationMapLibreMap {
-    return context.map as unknown as LocationMapLibreMap
   }
 
   return {

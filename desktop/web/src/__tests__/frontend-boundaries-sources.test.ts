@@ -152,10 +152,12 @@ describe('frontend boundary sources', () => {
 
     expect(mapSurfaceControllerSource).toContain('readCanvasMapSurfaceSnapshot')
     expect(mapSurfaceControllerSource).not.toContain('../../maplibre/loader')
+    expect(lifecycleSource).toContain('../../maplibre/surface-adapter')
     expect(lifecycleSource).toContain('../../maplibre/host')
     expect(lifecycleSource).not.toContain('components/canvas/maplibre-loader')
     expect(sourceExists('../components/canvas/maplibre-loader.ts')).toBe(false)
     expect(sourceExists('../maplibre/host.ts')).toBe(true)
+    expect(sourceExists('../maplibre/surface-adapter.ts')).toBe(true)
     expect(sourceExists('../maplibre/loader.ts')).toBe(true)
     expectNoImportsMatching('../maplibre/host.ts', [
       /(^|\/)app(\/|$)/,
@@ -473,10 +475,10 @@ describe('frontend boundary sources', () => {
     expect(workflowSource).toContain('../../ipc/community')
   })
 
-  it('keeps the Design Template world map on the MapLibre Host path', () => {
+  it('keeps the Design Template world map on the MapLibre Surface Adapter path', () => {
     const worldMapSource = readSource('../components/world-map/WorldMapSurface.tsx')
 
-    expect(worldMapSource).toContain('../../maplibre/host')
+    expect(worldMapSource).toContain('../../maplibre/surface-adapter')
     expect(worldMapSource).not.toContain("maplibre-gl")
     expect(worldMapSource).not.toContain('createMapLibreBasemapStyle')
     expect(worldMapSource).not.toContain('new ResizeObserver')
