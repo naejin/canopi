@@ -136,6 +136,7 @@
       "duplicate": "Duplicate",
       "bringForward": "Bring forward",
       "sendBackward": "Send backward",
+      "selectSameSpecies": "Select same species",
       "group": "Group",
       "ungroup": "Ungroup",
       "lock": "Lock",

@@ -9,6 +9,7 @@ type SelectionActionCommandSurface = Pick<
   | 'deleteSelected'
   | 'bringToFront'
   | 'sendToBack'
+  | 'selectSameSpecies'
   | 'lockSelected'
   | 'unlockSelected'
   | 'groupSelected'
@@ -113,6 +114,20 @@ export function createSelectionActionToolbar(
       ],
       isAvailable: hasEditableSelection,
       run: () => options.commands.sendToBack(),
+    },
+    {
+      id: 'select-same-species',
+      labelKey: 'canvas.selectionActions.selectSameSpecies',
+      shortcut: null,
+      icon: [
+        { d: 'M6 13c0-3 2-5 5-5', fill: 'none' },
+        { d: 'M11 8c0 4-2 6-5 6', fill: 'none' },
+        { d: 'M11 8c-3 0-5-2-5-5', fill: 'none' },
+        { d: 'M14 16c0-2 1.5-3.5 3.5-3.5', fill: 'none' },
+        { d: 'M17.5 12.5c0 2.5-1.5 4-3.5 4', fill: 'none' },
+      ],
+      isAvailable: isSelectSameSpeciesAvailable,
+      run: () => options.commands.selectSameSpecies(),
     },
     {
       id: 'group',
@@ -435,4 +450,9 @@ function isUngroupAvailable(selection: CanvasDesignObjectSelectionModel): boolea
 
 function isLockAvailable(selection: CanvasDesignObjectSelectionModel): boolean {
   return selection.blockedTargets.length === 0 && selection.editableTargets.length > 0
+}
+
+function isSelectSameSpeciesAvailable(selection: CanvasDesignObjectSelectionModel): boolean {
+  return selection.blockedTargets.length === 0
+    && selection.sameSpeciesReferenceCanonicalName !== null
 }

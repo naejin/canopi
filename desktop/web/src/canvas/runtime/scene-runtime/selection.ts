@@ -12,6 +12,7 @@ import type {
 } from '../runtime'
 import type { SceneLayerEntity, ScenePersistedState } from '../scene'
 import { isSceneDesignObjectLocked } from '../scene'
+import { getSameSpeciesReferenceCanonicalName } from './species-selection'
 
 export type SceneSelectionTarget = CanvasDesignObjectSelectionTarget
 
@@ -127,6 +128,7 @@ export function getDesignObjectSelectionModel(
     editableTargets,
     blockedTargets,
     bounds: getCombinedTargetBounds(persisted, editableTargets, options),
+    sameSpeciesReferenceCanonicalName: getSameSpeciesReferenceCanonicalName(persisted, editableTargets),
   }
 }
 

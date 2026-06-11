@@ -49,6 +49,7 @@ export function createTestCanvasCommandSurface(
       duplicateSelected: () => {},
       deleteSelected: () => {},
       selectAll: () => {},
+      selectSameSpecies: () => {},
       bringToFront: () => {},
       sendToBack: () => {},
       lockSelected: () => {},

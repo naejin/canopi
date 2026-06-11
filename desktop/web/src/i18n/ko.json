@@ -136,6 +136,7 @@
       "duplicate": "복제",
       "bringForward": "앞으로 보내기",
       "sendBackward": "뒤로 보내기",
+      "selectSameSpecies": "같은 종 선택",
       "group": "그룹화",
       "ungroup": "그룹 해제",
       "lock": "잠금",

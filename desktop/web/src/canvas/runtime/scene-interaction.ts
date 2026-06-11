@@ -70,6 +70,7 @@ export interface SceneInteractionDeps {
     | 'deleteSelected'
     | 'bringToFront'
     | 'sendToBack'
+    | 'selectSameSpecies'
     | 'lockSelected'
     | 'unlockSelected'
     | 'groupSelected'

@@ -25,6 +25,11 @@ import {
   setsEqual,
   type SceneSelectionTarget,
 } from './selection'
+import {
+  applySpeciesSelection,
+  getSameSpeciesReferenceCanonicalName,
+  getSelectablePlantIdsForSpecies,
+} from './species-selection'
 import type { SceneEditCoordinator } from './transactions'
 
 const EMPTY_PLANT_COLOR_CONTEXT: SelectedPlantColorContext = {
@@ -153,6 +158,25 @@ export class SceneRuntimeMutationController {
 
     if (setsEqual(ids, this._sceneStore.session.selectedEntityIds)) return
     this._selection.set(ids)
+    this._invalidateScene()
+  }
+
+  selectSameSpecies(canonicalName?: string, options: { additive?: boolean } = {}): void {
+    const persisted = this._sceneStore.persisted
+    const referenceCanonicalName = canonicalName
+      ?? getSameSpeciesReferenceCanonicalName(persisted, this._getSelectionModel().editableTargets)
+    if (!referenceCanonicalName) return
+
+    const speciesPlantIds = getSelectablePlantIdsForSpecies(persisted, referenceCanonicalName)
+    if (speciesPlantIds.length === 0) return
+
+    const nextSelection = applySpeciesSelection(
+      this._sceneStore.session.selectedEntityIds,
+      speciesPlantIds,
+      options.additive === true,
+    )
+    if (setsEqual(nextSelection, this._sceneStore.session.selectedEntityIds)) return
+    this._selection.set(nextSelection)
     this._invalidateScene()
   }
 

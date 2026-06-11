@@ -52,6 +52,7 @@ export function createTestCanvasQuerySurface({
       editableTargets: [],
       blockedTargets: [],
       bounds: null,
+      sameSpeciesReferenceCanonicalName: null,
     }),
     getPlantSizeMode: () => 'default',
     getPlantColorByAttr: () => null,

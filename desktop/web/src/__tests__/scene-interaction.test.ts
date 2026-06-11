@@ -10,7 +10,7 @@ import { selectedObjectIds } from '../canvas/session-state'
 import { snapToGridEnabled, snapToGuidesEnabled } from '../app/canvas-settings/signals'
 import { plantSpacingIntervalM } from '../app/settings/state'
 import { CameraController } from '../canvas/runtime/camera'
-import { SceneStore } from '../canvas/runtime/scene'
+import { SceneStore, type ScenePlantEntity } from '../canvas/runtime/scene'
 import { SceneInteractionController, type SceneInteractionDeps } from '../canvas/runtime/scene-interaction'
 import type { CanvasDesignObjectSelectionModel } from '../canvas/runtime/runtime'
 import { SceneRuntimeEditCoordinator } from '../canvas/runtime/scene-runtime/transactions'
@@ -98,12 +98,14 @@ function createInteractionDeps(
       editableTargets: [],
       blockedTargets: [],
       bounds: null,
+      sameSpeciesReferenceCanonicalName: null,
     })),
     selectionCommands: overrides.selectionCommands ?? {
       duplicateSelected: vi.fn(),
       deleteSelected: vi.fn(),
       bringToFront: vi.fn(),
       sendToBack: vi.fn(),
+      selectSameSpecies: vi.fn(),
       lockSelected: vi.fn(),
       unlockSelected: vi.fn(),
       groupSelected: vi.fn(),
@@ -154,6 +156,31 @@ function nextAnimationFrame(): Promise<void> {
   return new Promise((resolve) => {
     requestAnimationFrame(() => resolve())
   })
+}
+
+function makePlant(
+  id: string,
+  canonicalName: string,
+  position: { x: number; y: number },
+  overrides: Partial<ScenePlantEntity> = {},
+): ScenePlantEntity {
+  return {
+    kind: 'plant',
+    id,
+    locked: false,
+    canonicalName,
+    commonName: canonicalName,
+    color: null,
+    stratum: null,
+    canopySpreadM: 2,
+    position,
+    rotationDeg: null,
+    scale: 2,
+    notes: null,
+    plantedDate: null,
+    quantity: 1,
+    ...overrides,
+  }
 }
 
 describe('SceneInteractionController', () => {
@@ -227,6 +254,89 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('selects all visible editable same-Species plants on Select-tool double-click without scene edits', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [
+        makePlant('apple-1', 'Malus domestica', { x: 20, y: 30 }),
+        makePlant('apple-2', 'Malus domestica', { x: 620, y: 30 }),
+        makePlant('pear-1', 'Pyrus communis', { x: 80, y: 30 }),
+        makePlant('locked-apple', 'Malus domestica', { x: 120, y: 30 }, { locked: true }),
+        makePlant('grouped-apple', 'Malus domestica', { x: 160, y: 30 }),
+      ]
+      draft.groups = [{
+        kind: 'group',
+        id: 'group-1',
+        locked: false,
+        name: null,
+        layer: 'plants',
+        position: { x: 160, y: 30 },
+        rotationDeg: null,
+        memberIds: ['grouped-apple'],
+      }]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    events.pointerDown({ x: 20, y: 30 }, { button: 0, detail: 1 })
+    events.pointerUp({ x: 20, y: 30 }, { button: 0, detail: 1 })
+    vi.mocked(deps.setSelection).mockClear()
+
+    events.pointerDown({ x: 20, y: 30 }, { button: 0, detail: 2 })
+    events.pointerUp({ x: 20, y: 30 }, { button: 0, detail: 2 })
+
+    expect(selectedObjectIds.value).toEqual(new Set(['apple-1', 'apple-2']))
+    expect(deps.setSelection).toHaveBeenCalledWith(new Set(['apple-1', 'apple-2']))
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    controller.dispose()
+  })
+
+  it('toggles same-Species plant sets with Shift double-click', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [
+        makePlant('apple-1', 'Malus domestica', { x: 20, y: 30 }),
+        makePlant('apple-2', 'Malus domestica', { x: 80, y: 30 }),
+        makePlant('pear-1', 'Pyrus communis', { x: 140, y: 30 }),
+      ]
+    })
+    const deps = createInteractionDeps(container, store, camera)
+    deps.setSelection(['apple-1', 'apple-2', 'pear-1'])
+    vi.mocked(deps.setSelection).mockClear()
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    events.pointerDown({ x: 20, y: 30 }, { button: 0, detail: 2, shiftKey: true })
+    events.pointerUp({ x: 20, y: 30 }, { button: 0, detail: 2, shiftKey: true })
+
+    expect(selectedObjectIds.value).toEqual(new Set(['pear-1']))
+
+    events.pointerDown({ x: 20, y: 30 }, { button: 0, detail: 2, shiftKey: true })
+    events.pointerUp({ x: 20, y: 30 }, { button: 0, detail: 2, shiftKey: true })
+
+    expect(selectedObjectIds.value).toEqual(new Set(['pear-1', 'apple-1', 'apple-2']))
+    controller.dispose()
+  })
+
+  it('does not run Species Selection outside the Select tool', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [
+        makePlant('apple-1', 'Malus domestica', { x: 20, y: 30 }),
+        makePlant('apple-2', 'Malus domestica', { x: 80, y: 30 }),
+      ]
+    })
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('hand')
+
+    events.pointerDown({ x: 20, y: 30 }, { button: 0, detail: 2 })
+    events.pointerUp({ x: 20, y: 30 }, { button: 0, detail: 2 })
+
+    expect(selectedObjectIds.value).toEqual(new Set())
+    expect(deps.setSelection).not.toHaveBeenCalled()
+    controller.dispose()
+  })
+
   it('shows a focus-preserving Selection Action Toolbar near editable selections', () => {
     Object.defineProperty(container, 'clientWidth', { configurable: true, value: 400 })
     Object.defineProperty(container, 'clientHeight', { configurable: true, value: 300 })
@@ -239,12 +349,14 @@ describe('SceneInteractionController', () => {
         editableTargets: [{ kind: 'zone' as const, id: 'zone-1' }],
         blockedTargets: [],
         bounds: { minX: 160, minY: 100, maxX: 220, maxY: 150 },
+        sameSpeciesReferenceCanonicalName: null,
       }),
       selectionCommands: {
         duplicateSelected: vi.fn(),
         deleteSelected: vi.fn(),
         bringToFront: vi.fn(),
         sendToBack: vi.fn(),
+        selectSameSpecies: vi.fn(),
         lockSelected: vi.fn(),
         unlockSelected: vi.fn(),
         groupSelected: vi.fn(),
@@ -281,12 +393,14 @@ describe('SceneInteractionController', () => {
         editableTargets: [{ kind: 'zone' as const, id: 'zone-1' }],
         blockedTargets: [],
         bounds: { minX: 160, minY: 100, maxX: 220, maxY: 150 },
+        sameSpeciesReferenceCanonicalName: null,
       }),
       selectionCommands: {
         duplicateSelected,
         deleteSelected,
         bringToFront: vi.fn(),
         sendToBack: vi.fn(),
+        selectSameSpecies: vi.fn(),
         lockSelected: vi.fn(),
         unlockSelected: vi.fn(),
         groupSelected: vi.fn(),
@@ -329,12 +443,14 @@ describe('SceneInteractionController', () => {
         ],
         blockedTargets: [],
         bounds: { minX: 10, minY: 10, maxX: 40, maxY: 40 },
+        sameSpeciesReferenceCanonicalName: null,
       }),
       selectionCommands: {
         duplicateSelected: vi.fn(),
         deleteSelected: vi.fn(),
         bringToFront: vi.fn(),
         sendToBack: vi.fn(),
+        selectSameSpecies: vi.fn(),
         lockSelected: vi.fn(),
         unlockSelected: vi.fn(),
         groupSelected,
@@ -357,15 +473,16 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
-  it('filters Group and Ungroup actions by selection eligibility', () => {
-    const ungroupSelected = vi.fn()
+  it('shows Select Same Species only for one clear plant Species selection', () => {
+    const selectSameSpecies = vi.fn()
     let selectionModel: CanvasDesignObjectSelectionModel = {
       editableTargets: [
-        { kind: 'plant' as const, id: 'plant-1' },
-        { kind: 'zone' as const, id: 'zone-1' },
+        { kind: 'plant' as const, id: 'apple-1' },
+        { kind: 'plant' as const, id: 'apple-2' },
       ],
       blockedTargets: [],
-      bounds: { minX: 10, minY: 10, maxX: 40, maxY: 40 },
+      bounds: { minX: 10, minY: 10, maxX: 60, maxY: 40 },
+      sameSpeciesReferenceCanonicalName: 'Malus domestica',
     }
     const deps = {
       ...createInteractionDeps(container, store, camera),
@@ -375,6 +492,58 @@ describe('SceneInteractionController', () => {
         deleteSelected: vi.fn(),
         bringToFront: vi.fn(),
         sendToBack: vi.fn(),
+        selectSameSpecies,
+        lockSelected: vi.fn(),
+        unlockSelected: vi.fn(),
+        groupSelected: vi.fn(),
+        ungroupSelected: vi.fn(),
+      },
+    }
+    const controller = new SceneInteractionController(deps as any)
+
+    controller.refreshMeasurements()
+
+    const selectSame = container.querySelector<HTMLButtonElement>('[data-selection-action-command="select-same-species"]')
+    expect(selectSame).not.toBeNull()
+    expect(selectSame?.getAttribute('aria-label')).toContain('Select same species')
+    selectSame?.click()
+    expect(selectSameSpecies).toHaveBeenCalledTimes(1)
+
+    selectionModel = {
+      editableTargets: [
+        { kind: 'plant' as const, id: 'apple-1' },
+        { kind: 'zone' as const, id: 'zone-1' },
+      ],
+      blockedTargets: [],
+      bounds: { minX: 10, minY: 10, maxX: 60, maxY: 40 },
+      sameSpeciesReferenceCanonicalName: null,
+    }
+    controller.refreshMeasurements()
+
+    expect(container.querySelector('[data-selection-action-command="select-same-species"]')).toBeNull()
+    controller.dispose()
+  })
+
+  it('filters Group and Ungroup actions by selection eligibility', () => {
+    const ungroupSelected = vi.fn()
+    let selectionModel: CanvasDesignObjectSelectionModel = {
+      editableTargets: [
+        { kind: 'plant' as const, id: 'plant-1' },
+        { kind: 'zone' as const, id: 'zone-1' },
+      ],
+      blockedTargets: [],
+      bounds: { minX: 10, minY: 10, maxX: 40, maxY: 40 },
+      sameSpeciesReferenceCanonicalName: null,
+    }
+    const deps = {
+      ...createInteractionDeps(container, store, camera),
+      getDesignObjectSelection: () => selectionModel,
+      selectionCommands: {
+        duplicateSelected: vi.fn(),
+        deleteSelected: vi.fn(),
+        bringToFront: vi.fn(),
+        sendToBack: vi.fn(),
+        selectSameSpecies: vi.fn(),
         lockSelected: vi.fn(),
         unlockSelected: vi.fn(),
         groupSelected: vi.fn(),
@@ -398,6 +567,7 @@ describe('SceneInteractionController', () => {
         layerName: null,
       }],
       bounds: { minX: 10, minY: 10, maxX: 40, maxY: 40 },
+      sameSpeciesReferenceCanonicalName: null,
     }
     controller.refreshMeasurements()
     expect(container.querySelector('[data-selection-action-command="group"]')).toBeNull()
@@ -407,6 +577,7 @@ describe('SceneInteractionController', () => {
       editableTargets: [{ kind: 'group' as const, id: 'group-1' }],
       blockedTargets: [],
       bounds: { minX: 10, minY: 10, maxX: 40, maxY: 40 },
+      sameSpeciesReferenceCanonicalName: null,
     }
     controller.refreshMeasurements()
 
@@ -429,12 +600,14 @@ describe('SceneInteractionController', () => {
         editableTargets: [{ kind: 'zone' as const, id: 'zone-1' }],
         blockedTargets: [],
         bounds: { minX: 160, minY: 100, maxX: 220, maxY: 150 },
+        sameSpeciesReferenceCanonicalName: null,
       }),
       selectionCommands: {
         duplicateSelected: vi.fn(),
         deleteSelected: vi.fn(),
         bringToFront: vi.fn(),
         sendToBack: vi.fn(),
+        selectSameSpecies: vi.fn(),
         lockSelected,
         unlockSelected: vi.fn(),
         groupSelected: vi.fn(),

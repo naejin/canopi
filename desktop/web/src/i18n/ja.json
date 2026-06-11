@@ -136,6 +136,7 @@
       "duplicate": "複製",
       "bringForward": "前面へ",
       "sendBackward": "背面へ",
+      "selectSameSpecies": "同じ種を選択",
       "group": "グループ化",
       "ungroup": "グループ解除",
       "lock": "ロック",

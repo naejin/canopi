@@ -550,6 +550,7 @@ describe('scene canvas runtime', () => {
       editableTargets: [{ kind: 'zone', id: 'zone-1' }],
       blockedTargets: [],
       bounds: { minX: 0, minY: 0, maxX: 5, maxY: 5 },
+      sameSpeciesReferenceCanonicalName: null,
     })
   })
 
@@ -568,6 +569,7 @@ describe('scene canvas runtime', () => {
         layerName: 'zones',
       }],
       bounds: null,
+      sameSpeciesReferenceCanonicalName: null,
     })
   })
 

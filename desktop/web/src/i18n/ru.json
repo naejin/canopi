@@ -136,6 +136,7 @@
       "duplicate": "Дублировать",
       "bringForward": "На передний план",
       "sendBackward": "На задний план",
+      "selectSameSpecies": "Выбрать тот же вид",
       "group": "Сгруппировать",
       "ungroup": "Разгруппировать",
       "lock": "Заблокировать",

@@ -45,6 +45,7 @@ interface SceneCanvasCommandSurfaceOptions {
     | 'duplicateSelected'
     | 'deleteSelected'
     | 'selectAll'
+    | 'selectSameSpecies'
     | 'bringToFront'
     | 'sendToBack'
     | 'lockSelected'
@@ -119,6 +120,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       duplicateSelected: () => this.options.mutations.duplicateSelected(),
       deleteSelected: () => this.options.mutations.deleteSelected(),
       selectAll: () => this.options.mutations.selectAll(),
+      selectSameSpecies: (canonicalName, options) => this.options.mutations.selectSameSpecies(canonicalName, options),
       bringToFront: () => this.options.mutations.bringToFront(),
       sendToBack: () => this.options.mutations.sendToBack(),
       lockSelected: () => this.options.mutations.lockSelected(),

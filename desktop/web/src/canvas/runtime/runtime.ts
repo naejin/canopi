@@ -38,6 +38,7 @@ export interface CanvasDesignObjectSelectionModel {
   readonly editableTargets: readonly CanvasDesignObjectSelectionTarget[]
   readonly blockedTargets: readonly CanvasDesignObjectSelectionBlockedTarget[]
   readonly bounds: SceneBounds | null
+  readonly sameSpeciesReferenceCanonicalName: string | null
 }
 
 export interface CanvasQueryRevision {
@@ -69,6 +70,7 @@ export interface CanvasSceneEditCommandSurface {
   duplicateSelected(): void
   deleteSelected(): void
   selectAll(): void
+  selectSameSpecies(canonicalName?: string, options?: { additive?: boolean }): void
   bringToFront(): void
   sendToBack(): void
   lockSelected(): void

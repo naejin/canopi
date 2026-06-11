@@ -328,6 +328,69 @@ describe('scene runtime mutation controller', () => {
     expect(sceneStore.session.selectedEntityIds).toEqual(new Set(['zone-1', 'annotation-1']))
   })
 
+  it('selectSameSpecies selects eligible same-Species plants without dirtying the document', () => {
+    const file = makeFile()
+    file.plants = [
+      ...file.plants,
+      {
+        id: 'plant-3',
+        canonical_name: 'Pyrus communis',
+        common_name: 'Pear',
+        color: null,
+        position: { x: 30, y: 30 },
+        rotation: null,
+        scale: null,
+        notes: null,
+        planted_date: null,
+        quantity: 1,
+        locked: false,
+      },
+      {
+        id: 'plant-4',
+        canonical_name: 'Malus domestica',
+        common_name: 'Apple',
+        color: null,
+        position: { x: 40, y: 40 },
+        rotation: null,
+        scale: null,
+        notes: null,
+        planted_date: null,
+        quantity: 1,
+        locked: true,
+      },
+      {
+        id: 'plant-5',
+        canonical_name: 'Malus domestica',
+        common_name: 'Apple',
+        color: null,
+        position: { x: 50, y: 50 },
+        rotation: null,
+        scale: null,
+        notes: null,
+        planted_date: null,
+        quantity: 1,
+        locked: false,
+      },
+    ]
+    file.groups = [{
+      id: 'group-1',
+      name: null,
+      layer: 'plants',
+      position: { x: 50, y: 50 },
+      rotation: null,
+      member_ids: ['plant-5'],
+      locked: false,
+    }]
+    const { controller, sceneStore, state } = createController(file)
+    sceneStore.setSelection(['plant-1'])
+
+    controller.selectSameSpecies()
+
+    expect(sceneStore.session.selectedEntityIds).toEqual(new Set(['plant-1', 'plant-2']))
+    expect(state.dirtyTypes).toEqual([])
+    expect(state.invalidations).toBe(1)
+  })
+
   it('updates species colors through the presentation seam', () => {
     const { controller, sceneStore, state } = createController()
 

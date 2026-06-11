@@ -156,6 +156,23 @@ describe('scene design object selection model', () => {
     expect(model.bounds).toBeNull()
   })
 
+  it('reports a same-Species reference only for clear editable plant selections', () => {
+    const scene = makeScene()
+    scene.groups = []
+
+    expect(readModel(scene, ['plant-1']).sameSpeciesReferenceCanonicalName)
+      .toBe('Malus domestica')
+
+    scene.plants[1] = {
+      ...scene.plants[1]!,
+      locked: false,
+    }
+    expect(readModel(scene, ['plant-1', 'plant-2']).sameSpeciesReferenceCanonicalName)
+      .toBeNull()
+    expect(readModel(scene, ['plant-1', 'zone-1']).sameSpeciesReferenceCanonicalName)
+      .toBeNull()
+  })
+
   it('combines Object Group member geometry and annotation readable bounds', () => {
     const model = readModel(makeScene(), ['group-1', 'annotation-1'])
 

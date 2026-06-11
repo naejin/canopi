@@ -136,6 +136,7 @@
       "duplicate": "Dupliquer",
       "bringForward": "Avancer",
       "sendBackward": "Reculer",
+      "selectSameSpecies": "Sélectionner la même espèce",
       "group": "Grouper",
       "ungroup": "Dégrouper",
       "lock": "Verrouiller",

@@ -3,6 +3,10 @@ import type { CameraController } from '../camera'
 import type { PlantPresentationContext } from '../plant-presentation'
 import type { ScenePoint, SceneStore } from '../scene'
 import { isSceneDesignObjectLocked } from '../scene'
+import {
+  applySpeciesSelection,
+  getSelectablePlantIdsForSpecies,
+} from '../scene-runtime/species-selection'
 import type { SceneEditCoordinator, SceneEditTransaction } from '../scene-runtime/transactions'
 import type { SpeciesCacheEntry } from '../species-cache'
 import {
@@ -103,7 +107,7 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
     return true
   }
 
-  beginSelectionGesture({ event, screen, world }: SharedGesturePointerDownContext): boolean {
+  beginSelectionGesture({ event, screen, world, tool }: SharedGesturePointerDownContext): boolean {
     this.startScreen = screen
     this.startWorld = world
     const scene = this.context.getSceneStore().persisted
@@ -125,6 +129,21 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
         this.context.render('scene')
       }
       showInteractionPreview(this.context.preview, 'band', screen, screen)
+      return true
+    }
+
+    if (tool === 'select' && event.detail >= 2 && hit.kind === 'plant') {
+      const plant = scene.plants.find((entry) => entry.id === hit.id)
+      if (!plant) return true
+      const speciesPlantIds = getSelectablePlantIdsForSpecies(scene, plant.canonicalName)
+      if (speciesPlantIds.length === 0) return true
+      this.context.setSelection(applySpeciesSelection(
+        this.context.getSelection(),
+        speciesPlantIds,
+        additive,
+      ))
+      this.context.render('scene')
+      this.context.refreshSelectionDependent()
       return true
     }
 
