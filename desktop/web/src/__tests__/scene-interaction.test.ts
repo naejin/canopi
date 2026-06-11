@@ -1405,6 +1405,40 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('drags only editable objects from a mixed locked and unlocked selection', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [
+        makePlant('editable-plant', 'Malus domestica', { x: 20, y: 30 }),
+        makePlant('locked-plant', 'Malus domestica', { x: 60, y: 30 }, { locked: true }),
+      ]
+    })
+
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+      onSceneEditCommit,
+    })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
+    events.pointerUp({ x: 20, y: 30 }, { button: 0 })
+    events.pointerDown({ x: 60, y: 30 }, { button: 0, shiftKey: true })
+    events.pointerUp({ x: 60, y: 30 }, { button: 0, shiftKey: true })
+    vi.mocked(deps.setSelection).mockClear()
+
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
+    events.pointerMove({ x: 35, y: 45 }, { button: 0 })
+    events.pointerUp({ x: 35, y: 45 }, { button: 0 })
+
+    expect(selectedObjectIds.value).toEqual(new Set(['editable-plant', 'locked-plant']))
+    expect(store.persisted.plants.find((plant) => plant.id === 'editable-plant')?.position).toEqual({ x: 35, y: 45 })
+    expect(store.persisted.plants.find((plant) => plant.id === 'locked-plant')?.position).toEqual({ x: 60, y: 30 })
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-drag')
+    expect(deps.setSelection).not.toHaveBeenCalled()
+    controller.dispose()
+  })
+
   it('does not select groups that contain locked Design Object members', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{

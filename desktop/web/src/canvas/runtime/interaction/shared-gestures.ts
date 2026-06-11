@@ -1,6 +1,7 @@
 import { computeSelectionRect } from '../../operations'
 import type { CameraController } from '../camera'
 import type { PlantPresentationContext } from '../plant-presentation'
+import type { CanvasDesignObjectSelectionModel } from '../runtime'
 import type { ScenePoint, SceneStore } from '../scene'
 import { isDirectSceneDesignObjectLocked, isSceneDesignObjectLocked } from '../scene'
 import {
@@ -29,6 +30,7 @@ export interface SceneInteractionSharedGestureContext {
   readonly getSpeciesCache: () => ReadonlyMap<string, SpeciesCacheEntry>
   readonly getPlantPresentationContext: (viewportScale: number) => PlantPresentationContext
   readonly getSelection: () => ReadonlySet<string>
+  readonly getDesignObjectSelection: () => CanvasDesignObjectSelectionModel
   readonly setSelection: (ids: Iterable<string>) => void
   readonly clearSelection: () => void
   readonly sceneEdits: SceneEditCoordinator
@@ -182,7 +184,7 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
     this.mode = 'dragging'
     this.bandAdditive = false
     this.dragEdit = this.context.sceneEdits.begin('interaction-drag')
-    captureSceneDragState(this.dragState, scene, this.context.getSelection())
+    captureSceneDragState(this.dragState, scene, editableSelectionIds(this.context.getDesignObjectSelection()))
     this.dragSnapRef =
       this.dragState.plantStarts.get(hit.id) ??
       this.dragState.annotationStarts.get(hit.id) ??
@@ -290,4 +292,8 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
       y: snapped.y - this.dragSnapRef.y,
     }
   }
+}
+
+function editableSelectionIds(selection: CanvasDesignObjectSelectionModel): Set<string> {
+  return new Set(selection.editableTargets.map((target) => target.id))
 }

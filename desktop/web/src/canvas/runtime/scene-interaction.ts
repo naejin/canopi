@@ -131,6 +131,7 @@ export class SceneInteractionController {
       camera: this._deps.camera,
       getSceneStore: this._deps.getSceneStore,
       getSelection: this._deps.getSelection,
+      getDesignObjectSelection: this._deps.getDesignObjectSelection,
       setSelection: this._deps.setSelection,
       clearSelection: this._deps.clearSelection,
       sceneEdits: this._deps.sceneEdits,
