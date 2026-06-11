@@ -10,7 +10,7 @@ import { selectedObjectIds } from '../canvas/session-state'
 import { snapToGridEnabled, snapToGuidesEnabled } from '../app/canvas-settings/signals'
 import { plantSpacingIntervalM } from '../app/settings/state'
 import { CameraController } from '../canvas/runtime/camera'
-import { SceneStore, type ScenePlantEntity, type SceneZoneEntity } from '../canvas/runtime/scene'
+import { SceneStore, type ScenePlantEntity, type ScenePoint, type SceneZoneEntity } from '../canvas/runtime/scene'
 import { SceneInteractionController, type SceneInteractionDeps } from '../canvas/runtime/scene-interaction'
 import type { CanvasDesignObjectSelectionModel } from '../canvas/runtime/runtime'
 import { getDesignObjectSelectionModel } from '../canvas/runtime/scene-runtime/selection'
@@ -214,6 +214,60 @@ function getDesignObjectSelectionFromStore(
       plantContext: createPlantPresentationContext(camera.viewport.scale),
     },
   )
+}
+
+function rotationHandleCenter(container: HTMLElement): ScenePoint {
+  const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')
+  if (!handle) throw new Error('Expected rotation handle to be visible')
+  if (handle.style.display === 'none') throw new Error('Expected rotation handle to be visible')
+  const left = Number.parseFloat(handle.style.left)
+  const top = Number.parseFloat(handle.style.top)
+  if (!Number.isFinite(left) || !Number.isFinite(top)) {
+    throw new Error('Expected rotation handle to be positioned')
+  }
+  return {
+    x: left + 14,
+    y: top + 14,
+  }
+}
+
+function selectionBoundsCenter(selection: CanvasDesignObjectSelectionModel): ScenePoint {
+  if (!selection.bounds) throw new Error('Expected selection bounds')
+  return {
+    x: selection.bounds.minX + (selection.bounds.maxX - selection.bounds.minX) / 2,
+    y: selection.bounds.minY + (selection.bounds.maxY - selection.bounds.minY) / 2,
+  }
+}
+
+function quarterTurnClockwise(pivot: ScenePoint, point: ScenePoint): ScenePoint {
+  const dx = point.x - pivot.x
+  const dy = point.y - pivot.y
+  return {
+    x: pivot.x - dy,
+    y: pivot.y + dx,
+  }
+}
+
+function expectPointCloseTo(actual: ScenePoint | undefined, expected: ScenePoint): void {
+  expect(actual?.x).toBeCloseTo(expected.x)
+  expect(actual?.y).toBeCloseTo(expected.y)
+}
+
+function pointsCenter(points: readonly ScenePoint[]): ScenePoint {
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  for (const point of points) {
+    if (point.x < minX) minX = point.x
+    if (point.y < minY) minY = point.y
+    if (point.x > maxX) maxX = point.x
+    if (point.y > maxY) maxY = point.y
+  }
+  return {
+    x: minX + (maxX - minX) / 2,
+    y: minY + (maxY - minY) / 2,
+  }
 }
 
 describe('SceneInteractionController', () => {
@@ -934,6 +988,178 @@ describe('SceneInteractionController', () => {
     })
     controller.refreshMeasurements()
     expect(handle?.style.display).toBe('none')
+    controller.dispose()
+  })
+
+  it('rotates multi-plant selections around one shared Rotation Pivot without plant orientation', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [
+        makePlant('plant-1', 'Malus domestica', { x: 60, y: 120 }),
+        makePlant('plant-2', 'Pyrus communis', { x: 90, y: 120 }),
+      ]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+      onSceneEditCommit,
+    })
+    const controller = new SceneInteractionController(deps as any)
+    deps.setSelection(['plant-1', 'plant-2'])
+    controller.refreshMeasurements()
+    const selection = getDesignObjectSelectionFromStore(store, camera)
+    const pivot = selectionBoundsCenter(selection)
+    const start = rotationHandleCenter(container)
+    const end = quarterTurnClockwise(pivot, start)
+
+    events.pointerDown(start, {
+      button: 0,
+      target: container.querySelector<HTMLElement>('[data-rotation-handle]')!,
+    })
+    events.pointerMove(end, { button: 0 })
+    events.pointerUp(end, { button: 0 })
+
+    expectPointCloseTo(store.persisted.plants[0]?.position, quarterTurnClockwise(pivot, { x: 60, y: 120 }))
+    expectPointCloseTo(store.persisted.plants[1]?.position, quarterTurnClockwise(pivot, { x: 90, y: 120 }))
+    expect(store.persisted.plants[0]?.rotationDeg).toBeNull()
+    expect(store.persisted.plants[1]?.rotationDeg).toBeNull()
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-rotate')
+    controller.dispose()
+  })
+
+  it('rotates mixed selections through one Rotation Handle transaction', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 60, y: 120 })]
+      draft.zones = [
+        makeRectZone('line-1', [
+          { x: 90, y: 120 },
+          { x: 110, y: 120 },
+        ], { zoneType: 'line' }),
+        makeRectZone('rect-1', [
+          { x: 130, y: 110 },
+          { x: 150, y: 110 },
+          { x: 150, y: 130 },
+          { x: 130, y: 130 },
+        ]),
+      ]
+      draft.annotations = [{
+        kind: 'annotation',
+        id: 'annotation-1',
+        locked: false,
+        annotationType: 'text',
+        position: { x: 170, y: 120 },
+        text: 'A',
+        fontSize: 20,
+        rotationDeg: null,
+      }]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+      onSceneEditCommit,
+    })
+    const controller = new SceneInteractionController(deps as any)
+    deps.setSelection(['plant-1', 'line-1', 'rect-1', 'annotation-1'])
+    controller.refreshMeasurements()
+    const selection = getDesignObjectSelectionFromStore(store, camera)
+    const pivot = selectionBoundsCenter(selection)
+    const start = rotationHandleCenter(container)
+    const end = quarterTurnClockwise(pivot, start)
+
+    events.pointerDown(start, {
+      button: 0,
+      target: container.querySelector<HTMLElement>('[data-rotation-handle]')!,
+    })
+    events.pointerMove(end, { button: 0 })
+    events.pointerUp(end, { button: 0 })
+
+    const line = store.persisted.zones.find((zone) => zone.name === 'line-1')
+    const rect = store.persisted.zones.find((zone) => zone.name === 'rect-1')
+    expectPointCloseTo(store.persisted.plants[0]?.position, quarterTurnClockwise(pivot, { x: 60, y: 120 }))
+    expectPointCloseTo(line?.points[0], quarterTurnClockwise(pivot, { x: 90, y: 120 }))
+    expectPointCloseTo(line?.points[1], quarterTurnClockwise(pivot, { x: 110, y: 120 }))
+    expectPointCloseTo(pointsCenter(rect?.points ?? []), quarterTurnClockwise(pivot, { x: 140, y: 120 }))
+    expect(rect?.rotationDeg).toBeCloseTo(90)
+    expectPointCloseTo(store.persisted.annotations[0]?.position, quarterTurnClockwise(pivot, { x: 170, y: 120 }))
+    expect(store.persisted.annotations[0]?.rotationDeg).toBeCloseTo(90)
+    expect(onSceneEditCommit).toHaveBeenCalledTimes(1)
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-rotate')
+    controller.dispose()
+  })
+
+  it('rotates Object Groups by mutating member geometry instead of group rotation', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 60, y: 120 })]
+      draft.zones = [makeRectZone('line-1', [
+        { x: 90, y: 120 },
+        { x: 110, y: 120 },
+      ], { zoneType: 'line' })]
+      draft.groups = [{
+        kind: 'group',
+        id: 'group-1',
+        locked: false,
+        name: 'Group',
+        layer: 'plants',
+        position: { x: 85, y: 120 },
+        rotationDeg: null,
+        memberIds: ['plant-1', 'line-1'],
+      }]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+      onSceneEditCommit,
+    })
+    const controller = new SceneInteractionController(deps as any)
+    deps.setSelection(['group-1'])
+    controller.refreshMeasurements()
+    const selection = getDesignObjectSelectionFromStore(store, camera)
+    const pivot = selectionBoundsCenter(selection)
+    const start = rotationHandleCenter(container)
+    const end = quarterTurnClockwise(pivot, start)
+
+    events.pointerDown(start, {
+      button: 0,
+      target: container.querySelector<HTMLElement>('[data-rotation-handle]')!,
+    })
+    events.pointerMove(end, { button: 0 })
+    events.pointerUp(end, { button: 0 })
+
+    const line = store.persisted.zones.find((zone) => zone.name === 'line-1')
+    const group = store.persisted.groups[0]
+    expectPointCloseTo(store.persisted.plants[0]?.position, quarterTurnClockwise(pivot, { x: 60, y: 120 }))
+    expectPointCloseTo(line?.points[0], quarterTurnClockwise(pivot, { x: 90, y: 120 }))
+    expectPointCloseTo(line?.points[1], quarterTurnClockwise(pivot, { x: 110, y: 120 }))
+    expectPointCloseTo(group?.position, quarterTurnClockwise(pivot, { x: 85, y: 120 }))
+    expect(group?.rotationDeg).toBeNull()
+    expect(group?.memberIds).toEqual(['plant-1', 'line-1'])
+    expect(onSceneEditCommit).toHaveBeenCalledTimes(1)
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-rotate')
+    controller.dispose()
+  })
+
+  it('hides the Rotation Handle for Object Groups that contain locked members', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 60, y: 120 }, { locked: true })]
+      draft.groups = [{
+        kind: 'group',
+        id: 'group-1',
+        locked: false,
+        name: 'Group',
+        layer: 'plants',
+        position: { x: 60, y: 120 },
+        rotationDeg: null,
+        memberIds: ['plant-1'],
+      }]
+    })
+    const deps = createInteractionDeps(container, store, camera, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    })
+    const controller = new SceneInteractionController(deps as any)
+
+    deps.setSelection(['group-1'])
+    controller.refreshMeasurements()
+
+    expect(container.querySelector<HTMLElement>('[data-rotation-handle]')?.style.display).toBe('none')
     controller.dispose()
   })
 
