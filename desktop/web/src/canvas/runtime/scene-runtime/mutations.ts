@@ -19,7 +19,6 @@ import {
 } from './clipboard'
 import {
   getDesignObjectSelectionModel,
-  getSelectedPlantIds,
   getSelectedTopLevelTargets,
   getSelectionLayer,
   setsEqual,
@@ -291,7 +290,7 @@ export class SceneRuntimeMutationController {
   }
 
   getSelectedPlantColorContext(): SelectedPlantColorContext {
-    const selectedPlantIds = getSelectedPlantIds(this._sceneStore.persisted, this._sceneStore.session.selectedEntityIds)
+    const selectedPlantIds = this._getEditableSelectedPlantIds()
     const selectedPlants = this._sceneStore.persisted.plants.filter((plant) => selectedPlantIds.has(plant.id))
     if (selectedPlants.length === 0) return EMPTY_PLANT_COLOR_CONTEXT
 
@@ -335,7 +334,7 @@ export class SceneRuntimeMutationController {
   }
 
   setSelectedPlantColor(color: string | null): number {
-    const selectedPlantIds = getSelectedPlantIds(this._sceneStore.persisted, this._sceneStore.session.selectedEntityIds)
+    const selectedPlantIds = this._getEditableSelectedPlantIds()
     const nextColor = normalizeHexColor(color)
     let changed = 0
     this._sceneEdits.run('set-selected-plant-color', (tx) => {
@@ -415,6 +414,10 @@ export class SceneRuntimeMutationController {
 
   private _getEditableTopLevelTargets(): readonly SceneSelectionTarget[] {
     return this._getSelectionModel().editableTargets
+  }
+
+  private _getEditableSelectedPlantIds(): Set<string> {
+    return resolveSelectedEntitySets(this._sceneStore.persisted, this._getEditableTopLevelTargets()).plantIds
   }
 
   private _getSelectionModel() {

@@ -418,6 +418,61 @@ describe('scene canvas runtime', () => {
     })
   })
 
+  it('excludes a locked Plant selected for unlock from plant color edits', async () => {
+    const runtime = new SceneCanvasRuntime()
+    const { container } = await initRuntimeWithStubbedRenderer(runtime)
+    const events = createSceneInteractionEventHarness(container)
+    const file = fileWithOnlyPlants('plant-1')
+    file.plants = file.plants.map((plant) => ({ ...plant, locked: true }))
+    runtime.documentSurface.loadDocument(file)
+    setInteractionViewport(runtime)
+    runtime.commandSurface.tools.setTool('select')
+
+    clickAt(events, { x: 10, y: 10 })
+
+    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+    expect(runtime.querySurface.getDesignObjectSelection().lockedTargets).toEqual([
+      { kind: 'plant', id: 'plant-1' },
+    ])
+    expect(runtime.querySurface.getSelectedPlantColorContext().plantIds).toEqual([])
+
+    const changed = runtime.commandSurface.plantPresentation.setSelectedPlantColor('#228833')
+
+    expect(changed).toBe(0)
+    expect(runtime.querySurface.getSceneSnapshot().plants[0]?.color).toBeNull()
+    events.dispose()
+    runtime.destroy()
+  })
+
+  it('applies selected plant color only to editable Plants in a mixed locked selection', async () => {
+    const runtime = new SceneCanvasRuntime()
+    const { container } = await initRuntimeWithStubbedRenderer(runtime)
+    const events = createSceneInteractionEventHarness(container)
+    const file = makeFile()
+    file.plants = file.plants.map((plant) => (
+      plant.id === 'plant-2' ? { ...plant, locked: true } : plant
+    ))
+    runtime.documentSurface.loadDocument(file)
+    setInteractionViewport(runtime)
+    runtime.commandSurface.tools.setTool('select')
+
+    clickAt(events, { x: 10, y: 10 })
+    events.pointerDown({ x: 20, y: 20 }, { button: 0, shiftKey: true })
+    events.pointerUp({ x: 20, y: 20 }, { button: 0, shiftKey: true })
+
+    expect(selectedObjectIds.value).toEqual(new Set(['plant-1', 'plant-2']))
+    expect(runtime.querySurface.getSelectedPlantColorContext().plantIds).toEqual(['plant-1'])
+
+    const changed = runtime.commandSurface.plantPresentation.setSelectedPlantColor('#228833')
+    const plants = runtime.querySurface.getSceneSnapshot().plants
+
+    expect(changed).toBe(1)
+    expect(plants.find((plant) => plant.id === 'plant-1')?.color).toBe('#228833')
+    expect(plants.find((plant) => plant.id === 'plant-2')?.color).toBeNull()
+    events.dispose()
+    runtime.destroy()
+  })
+
   it('toggles snap-to-grid through shared canvas state', () => {
     const runtime = new SceneCanvasRuntime({
       appAdapter: createAppCanvasRuntimeAppAdapter(),
