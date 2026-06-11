@@ -1,5 +1,5 @@
 import { rectsIntersect, type SimpleRect } from '../../operations'
-import { getAnnotationWorldBounds, isPointInAnnotationText } from '../annotation-layout'
+import { getAnnotationWorldCorners, isPointInAnnotationText } from '../annotation-layout'
 import {
   getPlantWorldBounds,
   hitTestPlant,
@@ -128,7 +128,7 @@ export function queryRectTopLevel(
       const zone = scene.zones.find((entry) => entry.name === memberId)
       if (zone && zoneIntersectsRect(zone, rect)) return true
       const annotation = scene.annotations.find((entry) => entry.id === memberId)
-      return annotation ? rectsIntersect(rect, annotationBounds(annotation, viewportScale)) : false
+      return annotation ? annotationIntersectsRect(annotation, rect, viewportScale) : false
     })
     if (hit) targets.push({ kind: 'group', id: group.id })
   }
@@ -150,7 +150,7 @@ export function queryRectTopLevel(
   for (const annotation of scene.annotations) {
     if (groupedMembers.has(annotation.id)) continue
     if (!isLayerInteractive(scene, 'annotations')) continue
-    if (rectsIntersect(rect, annotationBounds(annotation, viewportScale))) {
+    if (annotationIntersectsRect(annotation, rect, viewportScale)) {
       targets.push({ kind: 'annotation', id: annotation.id })
     }
   }
@@ -392,8 +392,12 @@ function hitAnnotation(annotation: SceneAnnotationEntity, point: ScenePoint, vie
   return isPointInAnnotationText(annotation, point, viewportScale)
 }
 
-function annotationBounds(annotation: SceneAnnotationEntity, viewportScale: number): SimpleRect {
-  return getAnnotationWorldBounds(annotation, viewportScale)
+function annotationIntersectsRect(
+  annotation: SceneAnnotationEntity,
+  rect: SimpleRect,
+  viewportScale: number,
+): boolean {
+  return polygonIntersectsRect(getAnnotationWorldCorners(annotation, viewportScale), rect)
 }
 
 function isLayerInteractive(scene: ScenePersistedState, layerName: string): boolean {

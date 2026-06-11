@@ -196,4 +196,26 @@ describe('scene hit testing', () => {
     expect(queryRectTopLevel(scene, { x: 20, y: 25, width: 0.01, height: 0.01 }, 1, new Map(), getPlantContext))
       .toEqual([])
   })
+
+  it('band-selects rotated text annotations by their oriented geometry instead of empty AABB corners', () => {
+    const scene = createScene()
+    scene.plants = []
+    scene.annotations = [{
+      kind: 'annotation',
+      id: 'annotation-1',
+      locked: false,
+      annotationType: 'text',
+      position: { x: 0, y: 0 },
+      text: 'ABCD',
+      fontSize: 10,
+      rotationDeg: 45,
+    }]
+
+    expect(hitTestTopLevel(scene, { x: 16, y: 2 }, 1, new Map(), getPlantContext))
+      .toBeNull()
+    expect(queryRectTopLevel(scene, { x: 16, y: 2, width: 0.01, height: 0.01 }, 1, new Map(), getPlantContext))
+      .toEqual([])
+    expect(queryRectTopLevel(scene, { x: 8, y: 8, width: 0.01, height: 0.01 }, 1, new Map(), getPlantContext))
+      .toEqual([{ kind: 'annotation', id: 'annotation-1' }])
+  })
 })
