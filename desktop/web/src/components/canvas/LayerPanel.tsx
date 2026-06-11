@@ -5,10 +5,12 @@ import {
   readCanvasLayerPresentation,
   setCanvasLayerPresentationActiveLayer,
   setCanvasLayerPresentationContourIntervalMeters,
+  setCanvasLayerPresentationLocked,
   setCanvasLayerPresentationOpacity,
   setCanvasLayerPresentationVisibility,
   toggleCanvasLayerPresentationPanel,
 } from '../../app/canvas-layer-presentation/presentation'
+import { ButtonTooltip } from '../shared/ButtonTooltip'
 import styles from './LayerPanel.module.css'
 
 function ChevronIcon({ direction }: { direction: 'left' | 'right' }) {
@@ -30,6 +32,30 @@ function EyeIcon({ open }: { open: boolean }) {
         strokeLinejoin="round"
       />
       {open ? <circle cx="8" cy="8" r="2.2" fill="currentColor" /> : <path d="M2 2L14 14" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />}
+    </svg>
+  )
+}
+
+function LockIcon({ locked }: { locked: boolean }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <rect x="4" y="7" width="8" height="6.2" rx="1.2" stroke="currentColor" strokeWidth="1.3" />
+      {locked ? (
+        <path
+          d="M5.8 7V5.4C5.8 4.1 6.8 3.1 8 3.1C9.2 3.1 10.2 4.1 10.2 5.4V7"
+          stroke="currentColor"
+          strokeWidth="1.3"
+          strokeLinecap="round"
+        />
+      ) : (
+        <path
+          d="M5.8 7V5.4C5.8 4.1 6.8 3.1 8 3.1C9 3.1 9.8 3.8 10.1 4.7"
+          stroke="currentColor"
+          strokeWidth="1.3"
+          strokeLinecap="round"
+        />
+      )}
+      <path d="M8 9.2V11" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
     </svg>
   )
 }
@@ -68,6 +94,7 @@ export function LayerPanel() {
 
       <div role="list">
         {presentation.rows.map((row) => {
+          const lockLabel = row.locked ? t('canvas.layers.unlockLayer') : t('canvas.layers.lockLayer')
           return (
             <div key={row.id}>
               <div
@@ -75,6 +102,7 @@ export function LayerPanel() {
                 className={styles.layerRow}
                 data-active={row.active ? 'true' : 'false'}
                 data-hidden={row.visible ? 'false' : 'true'}
+                data-locked={row.locked ? 'true' : 'false'}
               >
                 <button
                   type="button"
@@ -93,6 +121,22 @@ export function LayerPanel() {
                 >
                   {row.label}
                 </button>
+                {row.canLock ? (
+                  <button
+                    type="button"
+                    className={styles.lockBtn}
+                    aria-label={`${lockLabel}: ${row.label}`}
+                    aria-pressed={row.locked}
+                    onClick={() => {
+                      setCanvasLayerPresentationLocked(row.id, !row.locked)
+                    }}
+                  >
+                    <LockIcon locked={row.locked} />
+                    <ButtonTooltip label={lockLabel} side="left" />
+                  </button>
+                ) : (
+                  <span className={styles.lockSlot} aria-hidden="true" />
+                )}
               </div>
               {row.active && <LayerDetail row={row} />}
             </div>

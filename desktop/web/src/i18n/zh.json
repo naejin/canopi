@@ -281,6 +281,8 @@
       "annotations": "注释",
       "visibility": "切换可见性",
       "lock": "切换锁定",
+      "lockLayer": "锁定图层",
+      "unlockLayer": "解锁图层",
       "opacity": "不透明度",
       "mapSection": "地图图层",
       "basemap": "底图",

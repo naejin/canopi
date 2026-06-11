@@ -281,6 +281,8 @@
       "annotations": "주석",
       "visibility": "가시성 전환",
       "lock": "잠금 전환",
+      "lockLayer": "레이어 잠금",
+      "unlockLayer": "레이어 잠금 해제",
       "opacity": "불투명도",
       "mapSection": "지도 레이어",
       "basemap": "기본 지도",

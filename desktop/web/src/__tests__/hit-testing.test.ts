@@ -63,4 +63,14 @@ describe('scene hit testing', () => {
     expect(hitTestVisibleTopLevel(scene, { x: 10, y: 20 }, 10, new Map(), getPlantContext))
       .toEqual({ kind: 'plant', id: 'plant-1' })
   })
+
+  it('hides hidden-Layer targets from editable and hover hit testing', () => {
+    const scene = createScene()
+    scene.layers = [{ kind: 'layer', name: 'plants', visible: false, locked: false, opacity: 1 }]
+
+    expect(hitTestTopLevel(scene, { x: 10, y: 20 }, 10, new Map(), getPlantContext))
+      .toBeNull()
+    expect(hitTestVisibleTopLevel(scene, { x: 10, y: 20 }, 10, new Map(), getPlantContext))
+      .toBeNull()
+  })
 })

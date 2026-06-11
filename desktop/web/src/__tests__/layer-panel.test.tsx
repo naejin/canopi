@@ -10,6 +10,7 @@ import {
   contourIntervalMeters,
   hillshadeOpacity,
   hillshadeVisible,
+  layerLockState,
   layerOpacity,
   layerPanelOpen,
   layerVisibility,
@@ -19,6 +20,12 @@ import { setSettings } from '../ipc/settings'
 import { currentDesign } from './support/design-session-state'
 import { locale } from '../app/settings/state'
 import { flushSettingsProjection, hydrateSettingsProjection } from '../app/settings/projection'
+import { setCurrentCanvasSession } from '../canvas/session'
+import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
+import {
+  createTestCanvasCommandSurface,
+  createTestCanvasRuntimeSurfaces,
+} from './support/canvas-runtime-surfaces'
 
 describe('LayerPanel', () => {
   let container: HTMLDivElement
@@ -54,6 +61,7 @@ describe('LayerPanel', () => {
     activeLayerName.value = 'base'
     basemapStyle.value = 'street'
     layerVisibility.value = { base: true, contours: false, plants: true, zones: true, annotations: true }
+    layerLockState.value = { plants: false, zones: false, annotations: false }
     layerOpacity.value = { base: 1, contours: 1, plants: 1, zones: 1, annotations: 1 }
     contourIntervalMeters.value = 0
     hillshadeVisible.value = false
@@ -90,6 +98,7 @@ describe('LayerPanel', () => {
       hillshade_opacity: 0.55,
       plant_spacing_interval_m: 0.5,
     })
+    setCurrentCanvasSession(null)
   })
 
   afterEach(() => {
@@ -98,6 +107,7 @@ describe('LayerPanel', () => {
     vi.useRealTimers()
     render(null, container)
     container.remove()
+    setCurrentCanvasSession(null)
   })
 
   it('treats the base row as basemap visibility', async () => {
@@ -128,6 +138,51 @@ describe('LayerPanel', () => {
 
     expect(container.querySelector('select')).toBeNull()
     expect(basemapStyle.value).toBe('street')
+  })
+
+  it('exposes scene Layer lock controls through Canvas Layer Presentation', async () => {
+    const layerCommands = {
+      setSceneLayerVisibility: vi.fn(() => true),
+      setSceneLayerOpacity: vi.fn(() => true),
+      setSceneLayerLocked: vi.fn(() => true),
+    }
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      commands: createTestCanvasCommandSurface({ layers: layerCommands }),
+      queries: createTestCanvasQuerySurface({
+        scene: {
+          plantSpeciesColors: {},
+          layers: [
+            { kind: 'layer', name: 'annotations', visible: true, locked: false, opacity: 1 },
+            { kind: 'layer', name: 'plants', visible: true, locked: true, opacity: 1 },
+            { kind: 'layer', name: 'zones', visible: true, locked: false, opacity: 1 },
+          ],
+          plants: [],
+          zones: [],
+          annotations: [],
+          groups: [],
+          guides: [],
+        },
+      }),
+    }))
+
+    await act(async () => {
+      render(<LayerPanel />, container)
+    })
+
+    const plantsLock = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.getAttribute('aria-label') === 'Unlock layer: Plants')
+    expect(plantsLock).toBeTruthy()
+    expect(plantsLock?.getAttribute('aria-pressed')).toBe('true')
+
+    const basemapLock = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.getAttribute('aria-label')?.includes('layer: Basemap'))
+    expect(basemapLock).toBeUndefined()
+
+    await act(async () => {
+      plantsLock?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(layerCommands.setSceneLayerLocked).toHaveBeenCalledWith('plants', false)
   })
 
   it('exposes terrain controls without coupling them to the basemap toggle', async () => {

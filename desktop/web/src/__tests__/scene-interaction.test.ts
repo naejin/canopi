@@ -495,6 +495,42 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('does not show direct unlock affordances for Design Objects blocked by locked Layers', () => {
+    store.updatePersisted((draft) => {
+      draft.layers = draft.layers.map((layer) => (
+        layer.name === 'plants' ? { ...layer, locked: true } : layer
+      ))
+      draft.plants = [{
+        kind: 'plant',
+        id: 'locked-layer-plant',
+        locked: true,
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 20, y: 30 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    events.pointerMove({ x: 20, y: 30 })
+
+    const affordance = container.querySelector<HTMLElement>('[data-locked-object-affordance]')
+    expect(affordance).not.toBeNull()
+    expect(affordance?.style.display).toBe('none')
+    expect(affordance?.dataset.lockedObjectId).toBeUndefined()
+    expect(selectedObjectIds.value).toEqual(new Set())
+    controller.dispose()
+  })
+
   it('suppresses native context menus only on canvas interaction surfaces', () => {
     const deps = {
       ...createInteractionDeps(container, store, camera),

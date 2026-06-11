@@ -281,6 +281,8 @@
       "annotations": "Anmerkungen",
       "visibility": "Sichtbarkeit umschalten",
       "lock": "Sperre umschalten",
+      "lockLayer": "Ebene sperren",
+      "unlockLayer": "Ebene entsperren",
       "opacity": "Deckkraft",
       "mapSection": "Kartenebenen",
       "basemap": "Basiskarte",

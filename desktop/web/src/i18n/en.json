@@ -281,6 +281,8 @@
       "annotations": "Annotations",
       "visibility": "Toggle visibility",
       "lock": "Toggle lock",
+      "lockLayer": "Lock layer",
+      "unlockLayer": "Unlock layer",
       "opacity": "Opacity",
       "mapSection": "Map Layers",
       "basemap": "Basemap",

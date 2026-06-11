@@ -281,6 +281,8 @@
       "annotations": "Annotations",
       "visibility": "Basculer la visibilité",
       "lock": "Basculer le verrouillage",
+      "lockLayer": "Verrouiller le calque",
+      "unlockLayer": "Déverrouiller le calque",
       "opacity": "Opacité",
       "mapSection": "Couches de carte",
       "basemap": "Fond de carte",

@@ -281,6 +281,8 @@
       "annotations": "Annotaties",
       "visibility": "Zichtbaarheid in-/uitschakelen",
       "lock": "Vergrendeling in-/uitschakelen",
+      "lockLayer": "Laag vergrendelen",
+      "unlockLayer": "Laag ontgrendelen",
       "opacity": "Dekking",
       "mapSection": "Kaartlagen",
       "basemap": "Basiskaart",

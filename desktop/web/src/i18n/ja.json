@@ -281,6 +281,8 @@
       "annotations": "注釈",
       "visibility": "表示/非表示を切替",
       "lock": "ロックを切替",
+      "lockLayer": "レイヤーをロック",
+      "unlockLayer": "レイヤーのロックを解除",
       "opacity": "不透明度",
       "mapSection": "地図レイヤー",
       "basemap": "ベースマップ",

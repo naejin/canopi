@@ -281,6 +281,8 @@
       "annotations": "Annotazioni",
       "visibility": "Attiva/disattiva visibilità",
       "lock": "Attiva/disattiva blocco",
+      "lockLayer": "Blocca livello",
+      "unlockLayer": "Sblocca livello",
       "opacity": "Opacità",
       "mapSection": "Livelli mappa",
       "basemap": "Mappa base",

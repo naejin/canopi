@@ -52,12 +52,14 @@
 
 .collapseBtn:hover,
 .toggleBtn:hover,
+.lockBtn:hover,
 .layerName:hover {
   background: var(--color-control-hover);
 }
 
 .collapseBtn:focus-visible,
 .toggleBtn:focus-visible,
+.lockBtn:focus-visible,
 .layerName:focus-visible,
 .mapSlider:focus-visible {
   outline: 2px solid var(--color-accent);
@@ -66,7 +68,7 @@
 
 .layerRow {
   display: grid;
-  grid-template-columns: var(--control-size-sm) 1fr;
+  grid-template-columns: var(--control-size-sm) minmax(0, 1fr) var(--control-size-sm);
   align-items: center;
   gap: var(--space-1);
   padding: var(--space-1) var(--space-2);
@@ -85,9 +87,14 @@
   opacity: 0.55;
 }
 
+.layerRow[data-locked="true"] {
+  background: var(--color-primary-bg);
+}
+
 .toggleBtn,
+.lockBtn,
 .layerName {
-  border: none;
+  border: 1px solid transparent;
   background: transparent;
   color: var(--color-text);
   border-radius: var(--radius-sm);
@@ -95,9 +102,25 @@
   transition: background-color var(--transition-fast);
 }
 
-.toggleBtn {
+.toggleBtn,
+.lockBtn,
+.lockSlot {
   width: var(--control-size-sm);
   height: var(--control-size-sm);
+}
+
+.toggleBtn,
+.lockBtn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lockBtn[aria-pressed="true"] {
+  color: var(--color-primary);
+  background: var(--color-control-active);
+  border-color: var(--color-primary);
 }
 
 .layerName {
@@ -105,6 +128,10 @@
   padding: var(--space-1);
   font-size: var(--text-sm);
   font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .layerDetail {
