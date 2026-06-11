@@ -53,6 +53,7 @@ export interface SceneToolModulesContext {
   readonly switchTool: (name: string) => void
   readonly applySnapping: (point: ScenePoint) => ScenePoint
   readonly getContainerRect: () => DOMRect
+  readonly notifyTransientHistoryChange: () => void
 }
 
 export interface SceneToolModules {
@@ -66,6 +67,10 @@ export interface SceneToolModules {
   pointerMoveWithoutCapture(context: SceneToolPointerEvent): boolean
   pointerMoveWithCapture(context: SceneToolCapturedPointerContext): boolean
   keyDown(event: KeyboardEvent): boolean
+  canUndoTransientHistory(): boolean
+  canRedoTransientHistory(): boolean
+  undoTransientHistory(): boolean
+  redoTransientHistory(): boolean
   cancelTransient(options?: SceneToolTransientOptions): void
   refreshViewportDependent(): boolean
   refreshSelectionDependent(): void
@@ -88,6 +93,7 @@ export function createSceneToolModules(context: SceneToolModulesContext): SceneT
     sceneEdits: context.sceneEdits,
     render: context.render,
     applySnapping: context.applySnapping,
+    notifyTransientHistoryChange: context.notifyTransientHistoryChange,
   })
   const zoneDrawingAdapters = createZoneDrawingToolAdapters(zoneDrawingTool)
   const plantStampTool = createPlantStampTool({
@@ -180,6 +186,22 @@ class SceneToolModuleRegistry implements SceneToolModules {
 
   keyDown(event: KeyboardEvent): boolean {
     return this.activeAdapter()?.keyDown?.(event) ?? false
+  }
+
+  canUndoTransientHistory(): boolean {
+    return this.activeAdapter()?.canUndoTransientHistory?.() ?? false
+  }
+
+  canRedoTransientHistory(): boolean {
+    return this.activeAdapter()?.canRedoTransientHistory?.() ?? false
+  }
+
+  undoTransientHistory(): boolean {
+    return this.activeAdapter()?.undoTransientHistory?.() ?? false
+  }
+
+  redoTransientHistory(): boolean {
+    return this.activeAdapter()?.redoTransientHistory?.() ?? false
   }
 
   cancelTransient(options?: SceneToolTransientOptions): void {

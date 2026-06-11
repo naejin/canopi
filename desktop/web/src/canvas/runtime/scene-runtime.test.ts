@@ -1024,6 +1024,37 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
+  it('routes history commands through polygonal zone draft vertices before scene history', async () => {
+    const runtime = new SceneCanvasRuntime()
+    const { container } = await initRuntimeWithStubbedRenderer(runtime)
+    const events = createSceneInteractionEventHarness(container)
+    runtime.documentSurface.loadDocument(makeFile())
+    setInteractionViewport(runtime)
+    runtime.commandSurface.tools.setTool('polygon')
+
+    events.pointerDown({ x: 10, y: 10 })
+    events.pointerDown({ x: 60, y: 10 })
+    events.pointerMove({ x: 60, y: 50 })
+
+    expect(runtime.commandSurface.history.canUndo.value).toBe(true)
+    expect(runtime.commandSurface.history.canRedo.value).toBe(false)
+
+    runtime.commandSurface.history.undo()
+
+    const afterUndo = container.querySelector<SVGPolylineElement>('[data-polygon-draft-line]')
+    expect(afterUndo?.getAttribute('points')).toBe('10,10 60,50')
+    expect(runtime.querySurface.getSceneSnapshot().zones).toHaveLength(1)
+    expect(runtime.commandSurface.history.canRedo.value).toBe(true)
+
+    runtime.commandSurface.history.redo()
+
+    const afterRedo = container.querySelector<SVGPolylineElement>('[data-polygon-draft-line]')
+    expect(afterRedo?.getAttribute('points')).toBe('10,10 60,10 60,50')
+    expect(runtime.querySurface.getSceneSnapshot().zones).toHaveLength(1)
+    events.dispose()
+    runtime.destroy()
+  })
+
   it('invalidates the scene after select-all and lock mutations', () => {
     const runtime = new SceneCanvasRuntime()
     runtime.documentSurface.loadDocument(makeFile())

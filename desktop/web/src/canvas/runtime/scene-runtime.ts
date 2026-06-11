@@ -61,6 +61,7 @@ export class SceneCanvasRuntime {
   private readonly _sceneRevision = signal(0)
   private readonly _plantNamesQueryRevision = signal(0)
   private readonly _viewportRevision = signal(0)
+  private readonly _transientHistoryRevision = signal(0)
   private readonly _revision: CanvasQueryRevision = {
     scene: this._sceneRevision,
     plantNames: this._plantNamesQueryRevision,
@@ -143,6 +144,7 @@ export class SceneCanvasRuntime {
       disposeInteraction: () => {
         this._interaction?.dispose()
         this._interaction = null
+        this._notifyTransientHistoryChanged()
       },
       disposeEffects: () => {
         for (const dispose of this._disposeEffects.splice(0)) dispose()
@@ -174,6 +176,13 @@ export class SceneCanvasRuntime {
       sceneStore: this._sceneStore,
       camera: this._camera,
       history: this._history,
+      transientHistory: {
+        revision: this._transientHistoryRevision,
+        canUndo: () => this._interaction?.canUndoTransientHistory() ?? false,
+        canRedo: () => this._interaction?.canRedoTransientHistory() ?? false,
+        undo: () => this._interaction?.undoTransientHistory() ?? false,
+        redo: () => this._interaction?.redoTransientHistory() ?? false,
+      },
       documents: this._documents,
       mutations: this._mutations,
       sceneEdits: this._sceneEdits,
@@ -225,6 +234,7 @@ export class SceneCanvasRuntime {
       readPlantSpacingIntervalMeters: () => this._appAdapter.settings.readPlantSpacingIntervalMeters(),
       commitPlantSpacingIntervalMeters: (meters) => this._appAdapter.settings.commitPlantSpacingIntervalMeters(meters),
       getLocalizedCommonNames: () => this._presentation.getLocalizedCommonNames(),
+      notifyTransientHistoryChange: () => this._notifyTransientHistoryChanged(),
       setHoveredEntityId: (id) => {
         this._setHoveredEntityId(id)
       },
@@ -353,6 +363,10 @@ export class SceneCanvasRuntime {
 
   private _incrementViewportRevision(): void {
     this._viewportRevision.value += 1
+  }
+
+  private _notifyTransientHistoryChanged(): void {
+    this._transientHistoryRevision.value += 1
   }
 
   private _renderChrome(): void {

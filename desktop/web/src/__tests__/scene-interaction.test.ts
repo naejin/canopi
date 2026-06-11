@@ -2493,6 +2493,121 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('undoes and redoes polygonal zone draft vertices without dirtying the scene', () => {
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('polygon')
+
+    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
+    events.pointerDown({ x: 60, y: 10 }, { button: 0 })
+    events.pointerMove({ x: 60, y: 50 }, { button: 0 })
+
+    expect(controller.canUndoTransientHistory()).toBe(true)
+    expect(controller.undoTransientHistory()).toBe(true)
+
+    const afterUndo = container.querySelector<SVGPolylineElement>('[data-polygon-draft-line]')
+    expect(afterUndo?.getAttribute('points')).toBe('10,10 60,50')
+    expect(controller.canRedoTransientHistory()).toBe(true)
+
+    expect(controller.redoTransientHistory()).toBe(true)
+
+    const afterRedo = container.querySelector<SVGPolylineElement>('[data-polygon-draft-line]')
+    expect(afterRedo?.getAttribute('points')).toBe('10,10 60,10 60,50')
+    expect(store.persisted.zones).toHaveLength(0)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    controller.dispose()
+  })
+
+  it('undoes the only polygonal zone draft vertex and can redo it', () => {
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('polygon')
+
+    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
+
+    expect(controller.undoTransientHistory()).toBe(true)
+    expect(container.querySelector('[data-polygon-draft-line]')).toBeNull()
+    expect(controller.canUndoTransientHistory()).toBe(false)
+    expect(controller.canRedoTransientHistory()).toBe(true)
+
+    expect(controller.redoTransientHistory()).toBe(true)
+
+    const afterRedo = container.querySelector<SVGPolylineElement>('[data-polygon-draft-line]')
+    expect(afterRedo?.getAttribute('points')).toBe('10,10 10,10')
+    expect(store.persisted.zones).toHaveLength(0)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    controller.dispose()
+  })
+
+  it('clears polygonal zone draft redo when a new vertex branches the draft', () => {
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('polygon')
+
+    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
+    events.pointerDown({ x: 60, y: 10 }, { button: 0 })
+    expect(controller.undoTransientHistory()).toBe(true)
+    expect(controller.canRedoTransientHistory()).toBe(true)
+
+    events.pointerDown({ x: 60, y: 50 }, { button: 0 })
+
+    expect(controller.canRedoTransientHistory()).toBe(false)
+    expect(controller.redoTransientHistory()).toBe(false)
+    controller.dispose()
+  })
+
+  it('commits only visible polygonal zone draft vertices after undo', () => {
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('polygon')
+
+    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
+    events.pointerDown({ x: 60, y: 10 }, { button: 0 })
+    events.pointerDown({ x: 60, y: 50 }, { button: 0 })
+    events.pointerDown({ x: 10, y: 50 }, { button: 0 })
+    expect(controller.undoTransientHistory()).toBe(true)
+    events.keyDown({ key: 'Enter' })
+
+    expect(store.persisted.zones).toHaveLength(1)
+    expect(store.persisted.zones[0]).toMatchObject({
+      zoneType: 'polygon',
+      points: [
+        { x: 10, y: 10 },
+        { x: 60, y: 10 },
+        { x: 60, y: 50 },
+      ],
+    })
+    expect(controller.canRedoTransientHistory()).toBe(false)
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-polygon')
+    controller.dispose()
+  })
+
+  it('clears polygonal zone draft redo on cancellation and tool switch', () => {
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('polygon')
+
+    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
+    events.pointerDown({ x: 60, y: 10 }, { button: 0 })
+    expect(controller.undoTransientHistory()).toBe(true)
+    expect(controller.canRedoTransientHistory()).toBe(true)
+    events.keyDown({ key: 'Escape' })
+    expect(controller.canRedoTransientHistory()).toBe(false)
+
+    events.pointerDown({ x: 20, y: 20 }, { button: 0 })
+    events.pointerDown({ x: 80, y: 20 }, { button: 0 })
+    expect(controller.undoTransientHistory()).toBe(true)
+    expect(controller.canRedoTransientHistory()).toBe(true)
+    controller.setTool('select')
+
+    expect(controller.canUndoTransientHistory()).toBe(false)
+    expect(controller.canRedoTransientHistory()).toBe(false)
+    controller.dispose()
+  })
+
   it('preserves polygonal zone drafts while space-panning the canvas', () => {
     const onSceneEditCommit = vi.fn()
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })

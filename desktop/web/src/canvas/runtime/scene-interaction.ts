@@ -57,6 +57,7 @@ export interface SceneInteractionDeps {
   commitPlantSpacingIntervalMeters: (meters: number) => void
   setHoveredEntityId: (id: string | null) => void
   getLocalizedCommonNames: () => ReadonlyMap<string, string | null>
+  notifyTransientHistoryChange?: () => void
 }
 
 export class SceneInteractionController {
@@ -87,6 +88,7 @@ export class SceneInteractionController {
       switchTool: (name) => this._switchTool(name),
       applySnapping: (point) => this._applySnapping(point),
       getContainerRect: () => this._frame.currentContainerRect(),
+      notifyTransientHistoryChange: () => this._deps.notifyTransientHistoryChange?.(),
     })
     this._sharedGestures = createSceneInteractionSharedGestures({
       container: this._deps.container,
@@ -146,6 +148,22 @@ export class SceneInteractionController {
 
   refreshMeasurements(): void {
     this._refreshViewportDependentMeasurements()
+  }
+
+  canUndoTransientHistory(): boolean {
+    return this._tools.canUndoTransientHistory()
+  }
+
+  canRedoTransientHistory(): boolean {
+    return this._tools.canRedoTransientHistory()
+  }
+
+  undoTransientHistory(): boolean {
+    return this._tools.undoTransientHistory()
+  }
+
+  redoTransientHistory(): boolean {
+    return this._tools.redoTransientHistory()
   }
 
   private readonly _onPointerDown = (event: PointerEvent): void => {

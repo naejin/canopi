@@ -39,6 +39,10 @@ export interface SceneToolAdapter {
   readonly pointerMoveWithoutCapture?: (context: SceneToolPointerEvent) => boolean
   readonly pointerMoveWithCapture?: (context: SceneToolCapturedPointerContext) => boolean
   readonly keyDown?: (event: KeyboardEvent) => boolean
+  readonly canUndoTransientHistory?: () => boolean
+  readonly canRedoTransientHistory?: () => boolean
+  readonly undoTransientHistory?: () => boolean
+  readonly redoTransientHistory?: () => boolean
   readonly cancelTransient?: (options?: SceneToolTransientOptions) => void
   readonly refreshViewportDependent?: () => boolean | void
   readonly refreshSelectionDependent?: () => void

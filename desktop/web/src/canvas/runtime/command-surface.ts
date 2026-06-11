@@ -1,3 +1,4 @@
+import { computed, type ReadonlySignal } from '@preact/signals'
 import { setCanvasTool } from '../session-state'
 import type { CanvasRuntimeSettingsAdapter } from './app-adapter'
 import type { CameraController } from './camera'
@@ -26,6 +27,13 @@ interface SceneCanvasCommandSurfaceOptions {
   readonly sceneStore: Pick<SceneStore, 'persisted'>
   readonly camera: Pick<CameraController, 'zoomIn' | 'zoomOut' | 'zoomToFit' | 'viewport'>
   readonly history: Pick<SceneHistory, 'canUndo' | 'canRedo' | 'undo' | 'redo'>
+  readonly transientHistory: {
+    readonly revision: ReadonlySignal<number>
+    readonly canUndo: () => boolean
+    readonly canRedo: () => boolean
+    readonly undo: () => boolean
+    readonly redo: () => boolean
+  }
   readonly documents: Pick<
     SceneRuntimeDocumentBridge,
     'historyRuntime' | 'applyPresentationBackfills'
@@ -82,6 +90,15 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
   readonly plantPresentation: CanvasPlantPresentationCommandSurface
 
   constructor(private readonly options: SceneCanvasCommandSurfaceOptions) {
+    const canUndo = computed(() => {
+      void options.transientHistory.revision.value
+      return options.transientHistory.canUndo() || options.history.canUndo.value
+    })
+    const canRedo = computed(() => {
+      void options.transientHistory.revision.value
+      return options.transientHistory.canRedo() || options.history.canRedo.value
+    })
+
     this.tools = {
       setTool: (name) => this.setTool(name),
     }
@@ -91,8 +108,8 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       zoomToFit: () => this.zoomToFit(),
     }
     this.history = {
-      get canUndo() { return options.history.canUndo },
-      get canRedo() { return options.history.canRedo },
+      canUndo,
+      canRedo,
       undo: () => this.undo(),
       redo: () => this.redo(),
     }
@@ -154,6 +171,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
   }
 
   private undo(): void {
+    if (this.options.transientHistory.undo()) return
     this.options.history.undo(this.options.documents.historyRuntime())
     this.options.syncCanvasSignalsFromScene()
     this.options.incrementSceneRevision()
@@ -161,6 +179,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
   }
 
   private redo(): void {
+    if (this.options.transientHistory.redo()) return
     this.options.history.redo(this.options.documents.historyRuntime())
     this.options.syncCanvasSignalsFromScene()
     this.options.incrementSceneRevision()

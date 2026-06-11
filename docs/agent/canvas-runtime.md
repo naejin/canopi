@@ -103,7 +103,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - Rectangular and polygonal Zones use the same measurement model: horizontal edge-length labels at readable edge midpoints plus one area label for the whole Zone.
 - Elliptical Zones use width, height, and area measurements because they have no Zone Edges.
 - Elliptical Zone drawing uses drag-to-bounding-box interaction. The snapped drag start and current pointer define opposite box corners; the stored geometry derives center and radii from that normalized box.
-- Polygonal Zone drawing uses click-to-place vertices. The draft remains transient until the user closes it; Escape cancels the draft, Backspace removes the last vertex, and closing creates one scene edit.
+- Polygonal Zone drawing uses click-to-place vertices. The Zone Draft remains transient until the user closes it; Escape cancels the draft, Backspace removes the last vertex, Undo/Redo step through draft vertices before committed Scene Edit history, and closing creates one scene edit.
 - During polygonal Zone drawing, live measurements include committed edge lengths, the active edge to the pointer, and once the preview has enough points to form a polygon, the closing edge back to the first point plus live area.
 - Format Zone Measurement values compactly: centimeters for distances below one meter, meters for ordinary distances, square centimeters for areas below one square meter, square meters for ordinary areas, and hectares for large areas.
 - Live Zone Measurements must describe the geometry that will actually be created, including snap-to-grid and snap-to-guides effects while drawing.

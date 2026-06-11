@@ -39,6 +39,7 @@ export interface ZoneDrawingToolContext {
   readonly sceneEdits: SceneEditCoordinator
   readonly render: (kind: 'scene' | 'viewport') => void
   readonly applySnapping: (point: ScenePoint) => ScenePoint
+  readonly notifyTransientHistoryChange: () => void
 }
 
 export interface ZoneDrawingTool {
@@ -49,6 +50,10 @@ export interface ZoneDrawingTool {
   readonly handlePolygonPointerDown: (world: ScenePoint) => void
   readonly updatePolygonPointerMove: (rawWorld: ScenePoint) => void
   readonly handlePolygonKeyDown: (event: KeyboardEvent) => boolean
+  readonly canUndoPolygonDraft: () => boolean
+  readonly canRedoPolygonDraft: () => boolean
+  readonly undoPolygonDraft: () => boolean
+  readonly redoPolygonDraft: () => boolean
   readonly cancelTransient: (options?: { preservePolygonDraft?: boolean }) => void
   readonly refreshViewportDependent: () => boolean
   readonly refreshSelectedZoneMeasurements: () => void
@@ -61,6 +66,7 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
   let activeBox: ActiveBoxZoneDraft | null = null
   let polygonDraftVertices: ScenePoint[] = []
   let polygonActiveWorld: ScenePoint | null = null
+  let polygonRedoVertices: ScenePoint[] = []
 
   function beginBox(mode: BoxZoneMode, world: ScenePoint): void {
     const snappedWorld = context.applySnapping(world)
@@ -133,9 +139,11 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
       context.render('scene')
     }
     polygonDraftVertices = [...polygonDraftVertices, point]
+    polygonRedoVertices = []
     polygonActiveWorld = point
     polygonDraftOverlay.update(polygonDraftVertices, polygonActiveWorld, context.camera)
     updateDraftPolygonMeasurements()
+    context.notifyTransientHistoryChange()
   }
 
   function updatePolygonPointerMove(rawWorld: ScenePoint): void {
@@ -153,7 +161,7 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
     }
     if (event.key === 'Backspace') {
       event.preventDefault()
-      removeLastPolygonVertex()
+      undoPolygonDraft()
       return true
     }
     if (event.key === 'Enter') {
@@ -187,22 +195,53 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
     }
   }
 
-  function removeLastPolygonVertex(): void {
+  function canUndoPolygonDraft(): boolean {
+    return polygonDraftVertices.length > 0
+  }
+
+  function canRedoPolygonDraft(): boolean {
+    return polygonRedoVertices.length > 0
+  }
+
+  function undoPolygonDraft(): boolean {
+    const removed = polygonDraftVertices[polygonDraftVertices.length - 1]
+    if (!removed) return false
+    polygonRedoVertices = [...polygonRedoVertices, removed]
     polygonDraftVertices = polygonDraftVertices.slice(0, -1)
     if (polygonDraftVertices.length === 0) {
-      cancelPolygonDraft()
-      return
+      polygonActiveWorld = null
+      polygonDraftOverlay.hide()
+      zoneMeasurements.hide()
+      context.notifyTransientHistoryChange()
+      return true
     }
     polygonDraftOverlay.update(polygonDraftVertices, polygonActiveWorld, context.camera)
     updateDraftPolygonMeasurements()
+    context.notifyTransientHistoryChange()
+    return true
+  }
+
+  function redoPolygonDraft(): boolean {
+    const restored = polygonRedoVertices[polygonRedoVertices.length - 1]
+    if (!restored) return false
+    polygonRedoVertices = polygonRedoVertices.slice(0, -1)
+    polygonDraftVertices = [...polygonDraftVertices, restored]
+    if (polygonActiveWorld === null) polygonActiveWorld = restored
+    polygonDraftOverlay.update(polygonDraftVertices, polygonActiveWorld, context.camera)
+    updateDraftPolygonMeasurements()
+    context.notifyTransientHistoryChange()
+    return true
   }
 
   function cancelPolygonDraft(): void {
     const hadDraft = polygonDraftVertices.length > 0 || polygonActiveWorld !== null
+    const hadTransientHistory = hadDraft || polygonRedoVertices.length > 0
     polygonDraftVertices = []
     polygonActiveWorld = null
+    polygonRedoVertices = []
     polygonDraftOverlay.hide()
     if (hadDraft) zoneMeasurements.hide()
+    if (hadTransientHistory) context.notifyTransientHistoryChange()
   }
 
   function cancelTransient(options: { preservePolygonDraft?: boolean } = {}): void {
@@ -303,6 +342,10 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
     handlePolygonPointerDown,
     updatePolygonPointerMove,
     handlePolygonKeyDown,
+    canUndoPolygonDraft,
+    canRedoPolygonDraft,
+    undoPolygonDraft,
+    redoPolygonDraft,
     cancelTransient,
     refreshViewportDependent,
     refreshSelectedZoneMeasurements,
@@ -359,6 +402,10 @@ export function createZoneDrawingToolAdapters(tool: ZoneDrawingTool): ZoneDrawin
         if (isEditableTarget(event.target)) return false
         return tool.handlePolygonKeyDown(event)
       },
+      canUndoTransientHistory: tool.canUndoPolygonDraft,
+      canRedoTransientHistory: tool.canRedoPolygonDraft,
+      undoTransientHistory: tool.undoPolygonDraft,
+      redoTransientHistory: tool.redoPolygonDraft,
       cancelTransient,
       refreshViewportDependent: tool.refreshViewportDependent,
       refreshSelectionDependent: tool.refreshSelectedZoneMeasurements,

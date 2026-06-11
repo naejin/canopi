@@ -24,6 +24,7 @@ import {
   commands,
   getAppCommand,
   getMenuDefinitions,
+  handleAppCommandKeyDown,
   runAppCommand,
 } from '../commands/registry'
 import { EDIT_SHORTCUTS, PANEL_SHORTCUTS, TOOL_SHORTCUTS } from '../shortcuts/definitions'
@@ -449,6 +450,35 @@ describe('command registry canvas tool switching', () => {
     expect(toggleGrid).toHaveBeenCalledTimes(1)
     expect(toggleSnapToGrid).toHaveBeenCalledTimes(1)
     expect(toggleRulers).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves editable undo shortcuts to native text editing', () => {
+    const undo = vi.fn()
+    mountCanvasCommandSurface({
+      history: {
+        canUndo: signal(true),
+        undo,
+      },
+    })
+    const input = document.createElement('input')
+    let handled = true
+    input.addEventListener('keydown', (event) => {
+      handled = handleAppCommandKeyDown(event)
+    })
+    document.body.append(input)
+
+    const event = new KeyboardEvent('keydown', {
+      key: 'z',
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    })
+    input.dispatchEvent(event)
+
+    expect(handled).toBe(false)
+    expect(event.defaultPrevented).toBe(false)
+    expect(undo).not.toHaveBeenCalled()
+    input.remove()
   })
 
   it('toggles theme through the settings projection seam', () => {

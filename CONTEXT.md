@@ -97,6 +97,10 @@ _Avoid_: Object scale, canvas scale, plant display mode
 A named area in a design, optionally typed by ecological or functional purpose. A design may contain many zones, and zones may overlap placed plants or other zones.
 _Avoid_: Shape, polygon, region
 
+**Zone Draft**:
+An in-progress zone boundary that a user is still drawing. A zone draft is not part of the design until the user finishes it as a Zone.
+_Avoid_: Temporary shape, unsaved polygon, canvas draft
+
 **Polygonal Zone**:
 A zone whose boundary is defined by three or more zone edges. A polygonal zone is still a zone; "polygonal" describes its boundary geometry.
 _Avoid_: Polygon, shape
