@@ -199,6 +199,88 @@ describe('projectTargetsToMapFeatures', () => {
     })
   })
 
+  it('projects a rotated rectangular Zone target to its oriented polygon', () => {
+    const result = projectTargetsToMapFeatures(
+      [{ kind: 'zone', zone_name: 'rotated-bed' }],
+      createScene({
+        zones: [{
+          name: 'rotated-bed',
+          zoneType: 'rect',
+          rotationDeg: 90,
+          points: [
+            { x: 0, y: 0 },
+            { x: 10, y: 0 },
+            { x: 10, y: 4 },
+            { x: 0, y: 4 },
+          ],
+        }],
+      }),
+      LOCATION,
+    )
+    const expected = projectTargetsToMapFeatures(
+      [{ kind: 'zone', zone_name: 'rotated-bed' }],
+      createScene({
+        zones: [{
+          name: 'rotated-bed',
+          zoneType: 'polygon',
+          points: [
+            { x: 7, y: -3 },
+            { x: 7, y: 7 },
+            { x: 3, y: 7 },
+            { x: 3, y: -3 },
+          ],
+        }],
+      }),
+      LOCATION,
+    )
+
+    expect(result.features).toHaveLength(1)
+    expect(result.features[0]?.geometry.type).toBe('Polygon')
+    expect(result.features[0]).toEqual(expected.features[0])
+  })
+
+  it('projects a rotated elliptical Zone target to its oriented polygon', () => {
+    const result = projectTargetsToMapFeatures(
+      [{ kind: 'zone', zone_name: 'ellipse-bed' }],
+      createScene({
+        zones: [{
+          name: 'ellipse-bed',
+          zoneType: 'ellipse',
+          rotationDeg: 90,
+          points: [
+            { x: 0, y: 0 },
+            { x: 4, y: 1 },
+          ],
+        }],
+      }),
+      LOCATION,
+    )
+    const expectedMajorAxisPoint = projectTargetsToMapFeatures(
+      [{ kind: 'placed_plant', plant_id: 'edge' }],
+      createScene({
+        plants: [
+          { id: 'edge', canonicalName: 'Malus domestica', position: { x: 0, y: 4 } },
+        ],
+        zones: [],
+      }),
+      LOCATION,
+    )
+
+    expect(result.features).toHaveLength(1)
+    expect(result.features[0]?.geometry.type).toBe('Polygon')
+    const ring = result.features[0]?.geometry.type === 'Polygon'
+      ? result.features[0].geometry.coordinates[0]
+      : []
+    const expected = expectedMajorAxisPoint.features[0]?.geometry.type === 'Point'
+      ? expectedMajorAxisPoint.features[0].geometry.coordinates
+      : null
+
+    expect(ring).toHaveLength(49)
+    expect(ring?.[0]?.[0]).toBeCloseTo(expected![0], 10)
+    expect(ring?.[0]?.[1]).toBeCloseTo(expected![1], 10)
+    expect(ring?.[0]).toEqual(ring?.[ring.length - 1])
+  })
+
   it('reports missing scene-backed targets and treats manual and none as intentionally empty', () => {
     const missingSpecies = speciesTarget('Pyrus communis')
     const missingPlant: PanelTarget = { kind: 'placed_plant', plant_id: 'missing-plant' }

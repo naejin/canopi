@@ -1,4 +1,9 @@
 import { getActiveProjectionBackend } from '../canvas/projection'
+import type { SceneZoneEntity } from '../canvas/runtime/scene'
+import {
+  getEllipticalZonePolygon,
+  getRectangularZoneCorners,
+} from '../canvas/runtime/zone-geometry'
 import {
   indexTargetScene,
   resolveTargetsInScene,
@@ -6,6 +11,7 @@ import {
   type TargetSceneIndex,
   type TargetSceneInput,
   type TargetScenePoint,
+  type TargetZoneRef,
 } from './identity'
 import type { PanelTarget } from '../types/design'
 
@@ -27,6 +33,7 @@ export interface TargetMapZoneRef {
   readonly name: string
   readonly zoneType?: string
   readonly points: readonly TargetMapProjectionPoint[]
+  readonly rotationDeg?: number
 }
 
 export interface TargetMapProjectionScene {
@@ -151,8 +158,8 @@ export function projectTargetResolutionToMapFeatures(
     }
 
     const key = `zone:${ref.id}`
-    const points = ref.zone.points
     if (ref.zone.zoneType === 'line') {
+      const points = ref.zone.points
       if (!points || points.length < 2) {
         pushSkipped(key, ref.id)
         continue
@@ -171,6 +178,7 @@ export function projectTargetResolutionToMapFeatures(
       continue
     }
 
+    const points = getZoneProjectionPoints(ref.zone)
     if (!points || points.length < 3) {
       pushSkipped(key, ref.id)
       continue
@@ -210,6 +218,33 @@ export function projectTargetsToMapFeatures(
 ): TargetMapProjectionResult {
   const index = isTargetSceneIndex(scene) ? scene : indexTargetScene(scene)
   return projectTargetResolutionToMapFeatures(resolveTargetsInScene(values, index), location)
+}
+
+function getZoneProjectionPoints(zone: TargetZoneRef): readonly TargetMapProjectionPoint[] | null {
+  if (!zone.points) return null
+
+  if (zone.zoneType === 'rect') {
+    return getRectangularZoneCorners(targetZoneToSceneZone(zone))
+  }
+
+  if (zone.zoneType === 'ellipse') {
+    return getEllipticalZonePolygon(targetZoneToSceneZone(zone))
+  }
+
+  return zone.points
+}
+
+function targetZoneToSceneZone(zone: TargetZoneRef): SceneZoneEntity {
+  return {
+    kind: 'zone',
+    name: zone.name,
+    locked: false,
+    zoneType: zone.zoneType ?? 'polygon',
+    points: zone.points ? zone.points.map((point) => ({ x: point.x, y: point.y })) : [],
+    rotationDeg: zone.rotationDeg ?? 0,
+    fillColor: null,
+    notes: null,
+  }
 }
 
 export const targetMapProjection = {
