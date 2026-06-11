@@ -124,6 +124,7 @@ describe('document format contract', () => {
       zones: [{
         name: 'Canvas zone',
         zone_type: 'polygon',
+        rotation: 0,
         points: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }],
         fill_color: null,
         notes: null,
@@ -286,6 +287,7 @@ describe('document format contract', () => {
       zones: [{
         name: 'North bed',
         zone_type: 'planting',
+        rotation: 0,
         points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }],
         fill_color: '#99CC66',
         notes: null,

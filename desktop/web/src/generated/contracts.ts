@@ -524,6 +524,7 @@ export type Zone = {
 	locked: boolean,
 	zone_type: string,
 	points: Position[],
+	rotation: number,
 	fill_color: string | null,
 	notes: string | null,
 };

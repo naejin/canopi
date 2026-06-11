@@ -50,6 +50,7 @@ const FIXTURE: CanopiFile = {
     {
       name: 'Orchard',
       zone_type: 'planting',
+      rotation: 0,
       points: [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }],
       fill_color: '#99CC66',
       notes: 'Main orchard area',

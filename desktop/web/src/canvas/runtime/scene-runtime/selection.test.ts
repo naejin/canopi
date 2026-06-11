@@ -55,6 +55,7 @@ function makeScene(): ScenePersistedState {
           { x: 8, y: 6 },
           { x: 0, y: 6 },
         ],
+        rotationDeg: 0,
         fillColor: null,
         notes: null,
       },

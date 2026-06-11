@@ -51,6 +51,7 @@ export interface SceneZoneEntity {
   locked: boolean
   zoneType: string
   points: ScenePoint[]
+  rotationDeg: number
   fillColor: string | null
   notes: string | null
 }

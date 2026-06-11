@@ -542,6 +542,7 @@ describe('Canvas map surface lifecycle', () => {
         locked: false,
         name: 'orchard',
         zoneType: 'polygon',
+        rotationDeg: 0,
         points: [
           { x: 0, y: 0 },
           { x: 10, y: 0 },

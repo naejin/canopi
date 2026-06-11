@@ -20,6 +20,7 @@ import {
   appendPolygonZoneToDraft,
   appendRectangleZoneToDraft,
 } from './tool-actions'
+import { getRectangularZoneCorners } from '../zone-geometry'
 import { isEditableTarget } from './pointer-utils'
 import type { SceneToolAdapter } from './tool-adapter'
 
@@ -330,7 +331,7 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
 
     if (zone.zoneType === 'ellipse' && zone.points.length >= 2) {
       zoneMeasurements.update(
-        createEllipticalZoneMeasurements(zone.points[0]!, zone.points[1]!),
+        createEllipticalZoneMeasurements(zone.points[0]!, zone.points[1]!, zone.rotationDeg),
         context.camera,
       )
       return
@@ -358,7 +359,7 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
     }
 
     zoneMeasurements.update(
-      createRectangularZoneMeasurements(zone.points),
+      createRectangularZoneMeasurements(getRectangularZoneCorners(zone) ?? zone.points),
       context.camera,
     )
   }

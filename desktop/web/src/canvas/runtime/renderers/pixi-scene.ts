@@ -18,6 +18,7 @@ import {
   type CanvasInteractionVisualState,
 } from '../scene-visuals'
 import type { SceneRendererDefinition, SceneRendererHoverState, SceneRendererInstance, SceneRendererSnapshot } from './scene-types'
+import { getEllipticalZonePolygon, getRectangularZoneCorners } from '../zone-geometry'
 import type { SceneAnnotationEntity, SceneZoneEntity } from '../scene'
 
 const BACKGROUND_COLOR = 0x000000
@@ -215,6 +216,15 @@ function drawZone(
   graphics.clear()
 
   if (zone.zoneType === 'rect' && zone.points.length >= 4) {
+    if (Math.abs(zone.rotationDeg) > 0.000001) {
+      const corners = getRectangularZoneCorners(zone)
+      if (!corners) return
+      drawClosedZonePath(graphics, corners)
+        .fill({ color: fillColor, alpha: 0.2 })
+        .stroke({ color: strokeColor, width: strokeWidth, alpha: 1 })
+      return
+    }
+
     const start = zone.points[0]!
     const end = zone.points[2]!
     graphics.rect(start.x, start.y, end.x - start.x, end.y - start.y)
@@ -224,6 +234,15 @@ function drawZone(
   }
 
   if (zone.zoneType === 'ellipse' && zone.points.length >= 2) {
+    if (Math.abs(zone.rotationDeg) > 0.000001) {
+      const polygon = getEllipticalZonePolygon(zone)
+      if (!polygon) return
+      drawClosedZonePath(graphics, polygon)
+        .fill({ color: fillColor, alpha: 0.2 })
+        .stroke({ color: strokeColor, width: strokeWidth, alpha: 1 })
+      return
+    }
+
     const center = zone.points[0]!
     const radii = zone.points[1]!
     graphics.ellipse(center.x, center.y, radii.x, radii.y)
@@ -246,6 +265,17 @@ function drawZone(
   }
 
   graphics.stroke({ color: strokeColor, width: strokeWidth, alpha: strokeAlpha })
+}
+
+function drawClosedZonePath(graphics: Graphics, points: readonly { x: number; y: number }[]): Graphics {
+  const first = points[0]
+  if (!first) return graphics
+  graphics.moveTo(first.x, first.y)
+  for (let index = 1; index < points.length; index += 1) {
+    const point = points[index]!
+    graphics.lineTo(point.x, point.y)
+  }
+  return graphics.closePath()
 }
 
 function syncPlants(

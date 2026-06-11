@@ -245,6 +245,7 @@ describe('createPixiSceneRenderer', () => {
             { x: 50, y: 60 },
             { x: 30, y: 20 },
           ],
+          rotationDeg: 0,
           fillColor: null,
           notes: null,
         }],
@@ -272,6 +273,92 @@ describe('createPixiSceneRenderer', () => {
 
     const ellipseGraphic = pixi.__pixiMockState.graphics.find((graphics) => graphics.ellipse.mock.calls.length > 0)
     expect(ellipseGraphic?.ellipse).toHaveBeenCalledWith(50, 60, 30, 20)
+    renderer.dispose()
+  })
+
+  it('renders rotated rectangular zones as oriented paths', async () => {
+    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
+    const pixi = await import('pixi.js') as unknown as {
+      __pixiMockState: {
+        graphics: Array<{
+          rect: ReturnType<typeof vi.fn>
+          moveTo: ReturnType<typeof vi.fn>
+          lineTo: ReturnType<typeof vi.fn>
+        }>
+      }
+    }
+
+    const host = document.createElement('div')
+    Object.defineProperty(host, 'clientWidth', { configurable: true, value: 400 })
+    Object.defineProperty(host, 'clientHeight', { configurable: true, value: 300 })
+
+    const renderer = await createPixiSceneRenderer().initialize({ container: host }, {
+      backendId: 'pixi',
+      capabilities: {
+        domCanvas: true,
+        canvas2d: true,
+        offscreenCanvas: false,
+        offscreenCanvas2d: false,
+        webgl: true,
+        webgl2: true,
+        webgpu: false,
+        imageBitmap: false,
+        createImageBitmap: false,
+        worker: false,
+        devicePixelRatio: 1,
+        prefersReducedMotion: null,
+      },
+    } as never)
+
+    const snapshot: SceneRendererSnapshot = {
+      scene: {
+        plants: [],
+        zones: [{
+          kind: 'zone',
+          locked: false,
+          name: 'zone-1',
+          zoneType: 'rect',
+          points: [
+            { x: 0, y: 0 },
+            { x: 10, y: 0 },
+            { x: 10, y: 4 },
+            { x: 0, y: 4 },
+          ],
+          rotationDeg: 90,
+          fillColor: null,
+          notes: null,
+        }],
+        annotations: [],
+        groups: [],
+        layers: [],
+        plantSpeciesColors: {},
+        guides: [],
+      },
+      viewport: { x: 0, y: 0, scale: 1 },
+      selectedPlantIds: new Set<string>(),
+      selectedZoneIds: new Set<string>(),
+      selectedAnnotationIds: new Set<string>(),
+      highlightedPlantIds: new Set<string>(),
+      highlightedZoneIds: new Set<string>(),
+      sizeMode: 'default' as const,
+      colorByAttr: null,
+      localizedCommonNames: new Map(),
+      hoveredCanonicalName: null,
+      selectionLabels: [],
+      speciesCache: new Map(),
+    }
+
+    renderer.renderScene(snapshot)
+
+    const zoneGraphic = pixi.__pixiMockState.graphics.find((graphics) =>
+      graphics.rect.mock.calls.length > 0 || graphics.moveTo.mock.calls.length > 0,
+    )
+    expect(zoneGraphic).toBeDefined()
+    expect(zoneGraphic?.rect).not.toHaveBeenCalled()
+    expect(zoneGraphic?.moveTo).toHaveBeenCalledWith(7, -3)
+    expect(zoneGraphic?.lineTo).toHaveBeenCalledWith(7, 7)
+    expect(zoneGraphic?.lineTo).toHaveBeenCalledWith(3, 7)
+    expect(zoneGraphic?.lineTo).toHaveBeenCalledWith(3, -3)
     renderer.dispose()
   })
 
@@ -338,6 +425,7 @@ describe('createPixiSceneRenderer', () => {
             { x: 10, y: 10 },
             { x: 0, y: 10 },
           ],
+          rotationDeg: 0,
           fillColor: null,
           notes: null,
         }],
@@ -423,6 +511,7 @@ describe('createPixiSceneRenderer', () => {
               { x: 10, y: 10 },
               { x: 0, y: 10 },
             ],
+            rotationDeg: 0,
             fillColor: null,
             notes: null,
           },
@@ -437,6 +526,7 @@ describe('createPixiSceneRenderer', () => {
               { x: 30, y: 10 },
               { x: 20, y: 10 },
             ],
+            rotationDeg: 0,
             fillColor: null,
             notes: null,
           },

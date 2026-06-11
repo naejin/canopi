@@ -43,6 +43,7 @@ function makeFile(): CanopiFile {
       {
         name: 'zone-1',
         zone_type: 'rect',
+        rotation: 0,
         points: [
           { x: 0, y: 0 },
           { x: 5, y: 0 },

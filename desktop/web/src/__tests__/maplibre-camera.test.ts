@@ -105,6 +105,7 @@ function createScene(): ScenePersistedState {
         locked: false,
         name: 'zone-1',
         zoneType: 'rect',
+        rotationDeg: 0,
         points: [
           { x: -60, y: -30 },
           { x: 60, y: -30 },

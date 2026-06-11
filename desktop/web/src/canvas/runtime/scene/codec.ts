@@ -163,6 +163,7 @@ function hydrateZoneEntity(zone: Zone): SceneZoneEntity {
     locked: zone.locked ?? false,
     zoneType: zone.zone_type,
     points: zone.points.map(clonePoint),
+    rotationDeg: zone.rotation ?? 0,
     fillColor: zone.fill_color,
     notes: zone.notes,
   }
@@ -174,6 +175,7 @@ function serializeZoneEntity(zone: SceneZoneEntity): Zone {
     locked: zone.locked,
     zone_type: zone.zoneType,
     points: zone.points.map(clonePoint),
+    rotation: zone.rotationDeg,
     fill_color: zone.fillColor,
     notes: zone.notes,
   }

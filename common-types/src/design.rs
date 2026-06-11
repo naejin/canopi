@@ -217,6 +217,7 @@ pub struct Zone {
     pub locked: bool,
     pub zone_type: String,
     pub points: Vec<Position>,
+    pub rotation: f64,
     pub fill_color: Option<String>,
     pub notes: Option<String>,
 }
@@ -228,6 +229,8 @@ struct ZoneInput {
     locked: bool,
     zone_type: String,
     points: Vec<Position>,
+    #[serde(default)]
+    rotation: f64,
     fill_color: Option<String>,
     notes: Option<String>,
 }
@@ -243,6 +246,7 @@ impl<'de> Deserialize<'de> for Zone {
             locked: input.locked,
             zone_type: input.zone_type,
             points: input.points,
+            rotation: input.rotation,
             fill_color: input.fill_color,
             notes: input.notes,
         })
@@ -496,10 +500,12 @@ mod tests {
         assert!(!file.zones[0].locked);
         assert!(!file.annotations[0].locked);
         assert!(!file.groups[0].locked);
+        assert_eq!(file.zones[0].rotation, 0.0);
 
         let value = serde_json::to_value(&file).expect("canopi file should serialize");
         assert_eq!(value["plants"][0]["locked"], json!(false));
         assert_eq!(value["zones"][0]["locked"], json!(false));
+        assert_eq!(value["zones"][0]["rotation"], json!(0.0));
         assert_eq!(value["annotations"][0]["locked"], json!(false));
         assert_eq!(value["groups"][0]["locked"], json!(false));
     }
