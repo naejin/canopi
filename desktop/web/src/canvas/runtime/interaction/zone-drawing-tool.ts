@@ -153,18 +153,20 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
   }
 
   function handlePolygonKeyDown(event: KeyboardEvent): boolean {
-    if (polygonDraftVertices.length === 0) return false
+    const hasDraftVertices = polygonDraftVertices.length > 0
+    const hasRedoVertices = polygonRedoVertices.length > 0
+    if (!hasDraftVertices && !hasRedoVertices) return false
     if (event.key === 'Escape') {
       event.preventDefault()
       cancelPolygonDraft()
       return true
     }
-    if (event.key === 'Backspace') {
+    if (event.key === 'Backspace' && hasDraftVertices) {
       event.preventDefault()
       undoPolygonDraft()
       return true
     }
-    if (event.key === 'Enter') {
+    if (event.key === 'Enter' && hasDraftVertices) {
       event.preventDefault()
       commitPolygonDraft()
       return true

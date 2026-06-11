@@ -2541,6 +2541,26 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('cancels redo-only polygonal zone draft history with Escape', () => {
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('polygon')
+
+    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
+    expect(controller.undoTransientHistory()).toBe(true)
+    expect(controller.canRedoTransientHistory()).toBe(true)
+
+    events.keyDown({ key: 'Escape' })
+
+    expect(controller.canRedoTransientHistory()).toBe(false)
+    expect(controller.redoTransientHistory()).toBe(false)
+    expect(container.querySelector('[data-polygon-draft-line]')).toBeNull()
+    expect(store.persisted.zones).toHaveLength(0)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    controller.dispose()
+  })
+
   it('clears polygonal zone draft redo when a new vertex branches the draft', () => {
     const deps = createInteractionDeps(container, store, camera)
     const controller = new SceneInteractionController(deps as any)
