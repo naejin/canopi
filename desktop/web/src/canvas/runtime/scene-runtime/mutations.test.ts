@@ -441,4 +441,19 @@ describe('scene runtime mutation controller', () => {
     expect(state.dirtyTypes).toEqual([])
     expect(state.invalidations).toBe(0)
   })
+
+  it('sets a species default color when no placed Plants of that species exist', () => {
+    const file = makeFile()
+    file.plants = []
+    const { controller, sceneStore, state } = createController(file)
+
+    const changed = controller.setPlantColorForSpecies('Malus domestica', '#C44230')
+
+    expect(changed).toBe(0)
+    expect(sceneStore.persisted.plantSpeciesColors).toEqual({
+      'Malus domestica': '#C44230',
+    })
+    expect(state.plantSpeciesColorSyncs).toBe(1)
+    expect(state.dirtyTypes).toEqual(['set-plant-color-for-species'])
+  })
 })
