@@ -48,6 +48,11 @@ export function createTestCanvasQuerySurface({
     getViewport: () => viewport,
     getViewportScreenSize: () => ({ width: 400, height: 300 }),
     getSelection: () => new Set(),
+    getDesignObjectSelection: () => ({
+      editableTargets: [],
+      blockedTargets: [],
+      bounds: null,
+    }),
     getPlantSizeMode: () => 'default',
     getPlantColorByAttr: () => null,
     getSelectedPlantColorContext: () => ({

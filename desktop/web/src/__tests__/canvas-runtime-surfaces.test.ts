@@ -26,6 +26,11 @@ function createQuerySurface() {
     getViewportScreenSize: () => ({ width: 400, height: 300 }),
     viewportRevision: signal(0),
     getSelection: () => new Set<string>(),
+    getDesignObjectSelection: () => ({
+      editableTargets: [],
+      blockedTargets: [],
+      bounds: null,
+    }),
     getPlantSizeMode: () => 'default',
     getPlantColorByAttr: () => null,
     getSelectedPlantColorContext: () => ({

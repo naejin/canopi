@@ -540,6 +540,37 @@ describe('scene canvas runtime', () => {
     expect(selectedObjectIds.value.size).toBe(0)
   })
 
+  it('describes editable top-level Design Object selection with visual bounds', () => {
+    const runtime = new SceneCanvasRuntime()
+    runtime.documentSurface.loadDocument(fileWithOnlyZone())
+
+    runtime.commandSurface.sceneEdits.selectAll()
+
+    expect(runtime.querySurface.getDesignObjectSelection()).toEqual({
+      editableTargets: [{ kind: 'zone', id: 'zone-1' }],
+      blockedTargets: [],
+      bounds: { minX: 0, minY: 0, maxX: 5, maxY: 5 },
+    })
+  })
+
+  it('describes selected Design Objects blocked by locked Layers', () => {
+    const runtime = new SceneCanvasRuntime()
+    runtime.documentSurface.loadDocument(fileWithOnlyZone())
+    runtime.commandSurface.sceneEdits.selectAll()
+
+    runtime.commandSurface.layers.setSceneLayerLocked('zones', true)
+
+    expect(runtime.querySurface.getDesignObjectSelection()).toEqual({
+      editableTargets: [],
+      blockedTargets: [{
+        target: { kind: 'zone', id: 'zone-1' },
+        reason: 'locked-layer',
+        layerName: 'zones',
+      }],
+      bounds: null,
+    })
+  })
+
   it('refreshes Zone Measurements when runtime selection changes', async () => {
     const runtime = new SceneCanvasRuntime()
     const file = makeFile()

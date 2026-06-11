@@ -2,6 +2,7 @@ import type { ReadonlySignal } from '@preact/signals'
 import type { CanopiFile, PlacedPlant } from '../../types/design'
 import type { ColorByAttribute, PlantSizeMode } from '../plant-display-state'
 import type { SelectedPlantColorContext } from '../plant-color-context'
+import type { SceneBounds } from './camera'
 import type { ScenePersistedState, SceneViewportState } from './scene'
 
 export interface CanvasRuntimeDocumentMetadata {
@@ -9,6 +10,34 @@ export interface CanvasRuntimeDocumentMetadata {
   description?: string | null
   location?: { lat: number; lon: number; altitude_m?: number | null } | null
   northBearingDeg?: number | null
+}
+
+export type CanvasDesignObjectSelectionTarget =
+  | { kind: 'plant'; id: string }
+  | { kind: 'zone'; id: string }
+  | { kind: 'annotation'; id: string }
+  | { kind: 'group'; id: string }
+
+export type CanvasDesignObjectSelectionMissingTarget = { kind: 'missing'; id: string }
+
+export type CanvasDesignObjectSelectionBlockReason =
+  | 'grouped-member'
+  | 'hidden-layer'
+  | 'locked-layer'
+  | 'locked-design-object'
+  | 'missing-design-object'
+
+export interface CanvasDesignObjectSelectionBlockedTarget {
+  readonly target: CanvasDesignObjectSelectionTarget | CanvasDesignObjectSelectionMissingTarget
+  readonly reason: CanvasDesignObjectSelectionBlockReason
+  readonly layerName: string | null
+  readonly groupId?: string
+}
+
+export interface CanvasDesignObjectSelectionModel {
+  readonly editableTargets: readonly CanvasDesignObjectSelectionTarget[]
+  readonly blockedTargets: readonly CanvasDesignObjectSelectionBlockedTarget[]
+  readonly bounds: SceneBounds | null
 }
 
 export interface CanvasQueryRevision {
@@ -86,6 +115,7 @@ export interface CanvasQuerySurface {
   getViewportScreenSize(): { width: number; height: number }
   readonly viewportRevision: ReadonlySignal<number>
   getSelection(): Set<string>
+  getDesignObjectSelection(): CanvasDesignObjectSelectionModel
   getPlantSizeMode(): PlantSizeMode
   getPlantColorByAttr(): ColorByAttribute | null
   getSelectedPlantColorContext(): SelectedPlantColorContext

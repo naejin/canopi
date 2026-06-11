@@ -1,10 +1,24 @@
-import type { ScenePersistedState } from '../scene'
+import { getAnnotationWorldBounds } from '../annotation-layout'
+import type { SceneBounds } from '../camera'
+import {
+  getPlantWorldBounds,
+  type PlantPresentationContext,
+} from '../plant-presentation'
+import type {
+  CanvasDesignObjectSelectionBlockedTarget,
+  CanvasDesignObjectSelectionMissingTarget,
+  CanvasDesignObjectSelectionModel,
+  CanvasDesignObjectSelectionTarget,
+} from '../runtime'
+import type { SceneLayerEntity, ScenePersistedState } from '../scene'
+import { isSceneDesignObjectLocked } from '../scene'
 
-export type SceneSelectionTarget =
-  | { kind: 'plant'; id: string }
-  | { kind: 'zone'; id: string }
-  | { kind: 'annotation'; id: string }
-  | { kind: 'group'; id: string }
+export type SceneSelectionTarget = CanvasDesignObjectSelectionTarget
+
+export interface SceneSelectionReadModelOptions {
+  readonly annotationViewportScale: number
+  readonly plantContext: PlantPresentationContext
+}
 
 export function getSelectedZoneIds(
   persisted: ScenePersistedState,
@@ -100,6 +114,22 @@ export function getSelectedTopLevelTargets(
   return targets
 }
 
+export function getDesignObjectSelectionModel(
+  persisted: ScenePersistedState,
+  selectedIds: ReadonlySet<string>,
+  options: SceneSelectionReadModelOptions,
+): CanvasDesignObjectSelectionModel {
+  const topLevelTargets = getSelectedTopLevelTargets(persisted, selectedIds)
+  const blockedTargets = getBlockedSelectionTargets(persisted, selectedIds)
+  const blockedKeys = new Set(blockedTargets.map((blocked) => targetKey(blocked.target)))
+  const editableTargets = topLevelTargets.filter((target) => !blockedKeys.has(targetKey(target)))
+  return {
+    editableTargets,
+    blockedTargets,
+    bounds: getCombinedTargetBounds(persisted, editableTargets, options),
+  }
+}
+
 export function setsEqual(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
   if (left.size !== right.size) return false
   for (const value of left) {
@@ -112,4 +142,206 @@ export function getSelectionLayer(target: SceneSelectionTarget): string {
   if (target.kind === 'zone') return 'zones'
   if (target.kind === 'annotation') return 'annotations'
   return 'plants'
+}
+
+export function getCombinedTargetBounds(
+  persisted: ScenePersistedState,
+  targets: readonly SceneSelectionTarget[],
+  options: SceneSelectionReadModelOptions,
+): SceneBounds | null {
+  let combined: SceneBounds | null = null
+  for (const target of targets) {
+    const bounds = getTargetBounds(persisted, target, options)
+    if (!bounds) continue
+    combined = combined
+      ? {
+          minX: Math.min(combined.minX, bounds.minX),
+          minY: Math.min(combined.minY, bounds.minY),
+          maxX: Math.max(combined.maxX, bounds.maxX),
+          maxY: Math.max(combined.maxY, bounds.maxY),
+        }
+      : bounds
+  }
+  return combined
+}
+
+export function getTargetBounds(
+  persisted: ScenePersistedState,
+  target: SceneSelectionTarget,
+  options: SceneSelectionReadModelOptions,
+): SceneBounds | null {
+  if (target.kind === 'group') {
+    const group = persisted.groups.find((entry) => entry.id === target.id)
+    if (!group) return null
+    return getCombinedTargetBounds(
+      persisted,
+      group.memberIds
+        .map((memberId) => resolveTarget(persisted, memberId))
+        .filter((member): member is SceneSelectionTarget => member !== null),
+      options,
+    )
+  }
+
+  const plant = target.kind === 'plant'
+    ? persisted.plants.find((entry) => entry.id === target.id)
+    : null
+  if (plant) {
+    const bounds = getPlantWorldBounds(plant, options.plantContext)
+    return {
+      minX: bounds.x,
+      minY: bounds.y,
+      maxX: bounds.x + bounds.width,
+      maxY: bounds.y + bounds.height,
+    }
+  }
+
+  const zone = target.kind === 'zone'
+    ? persisted.zones.find((entry) => entry.name === target.id)
+    : null
+  if (zone && zone.points.length > 0) {
+    if (zone.zoneType === 'ellipse' && zone.points.length >= 2) {
+      const center = zone.points[0]!
+      const radii = zone.points[1]!
+      return {
+        minX: center.x - radii.x,
+        minY: center.y - radii.y,
+        maxX: center.x + radii.x,
+        maxY: center.y + radii.y,
+      }
+    }
+
+    return pointsBounds(zone.points)
+  }
+
+  const annotation = target.kind === 'annotation'
+    ? persisted.annotations.find((entry) => entry.id === target.id)
+    : null
+  if (!annotation) return null
+  const bounds = getAnnotationWorldBounds(annotation, options.annotationViewportScale)
+  return {
+    minX: bounds.x,
+    minY: bounds.y,
+    maxX: bounds.x + bounds.width,
+    maxY: bounds.y + bounds.height,
+  }
+}
+
+function getBlockedSelectionTargets(
+  persisted: ScenePersistedState,
+  selectedIds: ReadonlySet<string>,
+): CanvasDesignObjectSelectionBlockedTarget[] {
+  const blockedTargets: CanvasDesignObjectSelectionBlockedTarget[] = []
+  const seen = new Set<string>()
+  const groupedMemberIds = new Map<string, string>()
+  for (const group of persisted.groups) {
+    for (const memberId of group.memberIds) groupedMemberIds.set(memberId, group.id)
+  }
+
+  for (const selectedId of selectedIds) {
+    const target = resolveTarget(persisted, selectedId)
+    if (!target) {
+      pushBlocked(blockedTargets, seen, {
+        target: { kind: 'missing', id: selectedId },
+        reason: 'missing-design-object',
+        layerName: null,
+      })
+      continue
+    }
+
+    const groupId = groupedMemberIds.get(selectedId)
+    if (groupId) {
+      pushBlocked(blockedTargets, seen, {
+        target,
+        reason: 'grouped-member',
+        layerName: getSelectionLayer(target),
+        groupId,
+      })
+      continue
+    }
+
+    const layerName = getTargetLayerName(persisted, target)
+    const layer = layerName ? findLayer(persisted, layerName) : null
+    if (layer?.visible === false) {
+      pushBlocked(blockedTargets, seen, {
+        target,
+        reason: 'hidden-layer',
+        layerName,
+      })
+      continue
+    }
+    if (layer?.locked === true) {
+      pushBlocked(blockedTargets, seen, {
+        target,
+        reason: 'locked-layer',
+        layerName,
+      })
+      continue
+    }
+    if (isSceneDesignObjectLocked(persisted, target.id)) {
+      pushBlocked(blockedTargets, seen, {
+        target,
+        reason: 'locked-design-object',
+        layerName,
+      })
+    }
+  }
+
+  return blockedTargets
+}
+
+function pushBlocked(
+  blockedTargets: CanvasDesignObjectSelectionBlockedTarget[],
+  seen: Set<string>,
+  blocked: CanvasDesignObjectSelectionBlockedTarget,
+): void {
+  const key = targetKey(blocked.target)
+  if (seen.has(key)) return
+  seen.add(key)
+  blockedTargets.push(blocked)
+}
+
+function resolveTarget(
+  persisted: ScenePersistedState,
+  id: string,
+): SceneSelectionTarget | null {
+  if (persisted.groups.some((group) => group.id === id)) return { kind: 'group', id }
+  if (persisted.plants.some((plant) => plant.id === id)) return { kind: 'plant', id }
+  if (persisted.zones.some((zone) => zone.name === id)) return { kind: 'zone', id }
+  if (persisted.annotations.some((annotation) => annotation.id === id)) return { kind: 'annotation', id }
+  return null
+}
+
+function getTargetLayerName(
+  persisted: ScenePersistedState,
+  target: SceneSelectionTarget,
+): string | null {
+  if (target.kind === 'group') {
+    return persisted.groups.find((group) => group.id === target.id)?.layer ?? null
+  }
+  return getSelectionLayer(target)
+}
+
+function findLayer(
+  persisted: ScenePersistedState,
+  layerName: string,
+): SceneLayerEntity | null {
+  return persisted.layers.find((layer) => layer.name === layerName) ?? null
+}
+
+function targetKey(target: SceneSelectionTarget | CanvasDesignObjectSelectionMissingTarget): string {
+  return `${target.kind}:${target.id}`
+}
+
+function pointsBounds(points: readonly { x: number; y: number }[]): SceneBounds {
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  for (const point of points) {
+    if (point.x < minX) minX = point.x
+    if (point.y < minY) minY = point.y
+    if (point.x > maxX) maxX = point.x
+    if (point.y > maxY) maxY = point.y
+  }
+  return { minX, minY, maxX, maxY }
 }

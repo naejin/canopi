@@ -240,6 +240,22 @@ describe('scene runtime mutation controller', () => {
     expect(state.invalidations).toBe(0)
   })
 
+  it('does not delete a selected Design Object after its Layer becomes locked', () => {
+    const file = makeFile()
+    file.layers = file.layers.map((layer) =>
+      layer.name === 'zones' ? { ...layer, locked: true } : layer,
+    )
+    const { controller, sceneStore, state } = createController(file)
+    sceneStore.setSelection(['zone-1'])
+
+    controller.deleteSelected()
+
+    expect(sceneStore.persisted.zones.map((zone) => zone.name)).toEqual(['zone-1'])
+    expect(sceneStore.session.selectedEntityIds).toEqual(new Set(['zone-1']))
+    expect(state.dirtyTypes).toEqual([])
+    expect(state.invalidations).toBe(0)
+  })
+
   it('selectAll skips grouped members and locked entities', () => {
     const file = makeFile()
     file.groups = [
@@ -298,6 +314,18 @@ describe('scene runtime mutation controller', () => {
     controller.selectAll()
 
     expect(sceneStore.session.selectedEntityIds).toEqual(new Set(['plant-1', 'plant-2', 'zone-1']))
+  })
+
+  it('selectAll skips Design Objects on locked Layers', () => {
+    const file = makeFile()
+    file.layers = file.layers.map((layer) =>
+      layer.name === 'plants' ? { ...layer, locked: true } : layer,
+    )
+    const { controller, sceneStore } = createController(file)
+
+    controller.selectAll()
+
+    expect(sceneStore.session.selectedEntityIds).toEqual(new Set(['zone-1', 'annotation-1']))
   })
 
   it('updates species colors through the presentation seam', () => {

@@ -2,10 +2,11 @@ import type { PlacedPlant } from '../../types/design'
 import type { ColorByAttribute, PlantSizeMode } from '../plant-display-state'
 import type { SelectedPlantColorContext } from '../plant-color-context'
 import type { CameraController } from './camera'
-import type { CanvasQueryRevision, CanvasQuerySurface } from './runtime'
+import type { CanvasDesignObjectSelectionModel, CanvasQueryRevision, CanvasQuerySurface } from './runtime'
 import type { ScenePersistedState, SceneStore, SceneViewportState } from './scene'
 import type { SceneRuntimeMutationController } from './scene-runtime/mutations'
 import type { SceneRuntimePresentationController } from './scene-runtime/presentation'
+import { getDesignObjectSelectionModel } from './scene-runtime/selection'
 
 interface SceneCanvasQuerySurfaceOptions {
   readonly revision: CanvasQueryRevision
@@ -16,7 +17,10 @@ interface SceneCanvasQuerySurfaceOptions {
     SceneRuntimeMutationController,
     'getPlantSizeMode' | 'getPlantColorByAttr' | 'getSelectedPlantColorContext'
   >
-  readonly presentation: Pick<SceneRuntimePresentationController, 'getLocalizedCommonNames'>
+  readonly presentation: Pick<
+    SceneRuntimePresentationController,
+    'createPlantPresentationContext' | 'getLocalizedCommonNames'
+  >
 }
 
 export function createSceneCanvasQuerySurface(
@@ -34,6 +38,17 @@ class SceneCanvasQueryRole implements CanvasQuerySurface {
   getViewport(): SceneViewportState { return this.options.camera.viewport }
   getViewportScreenSize(): { width: number; height: number } { return this.options.camera.screenSize }
   getSelection(): Set<string> { return new Set(this.options.sceneStore.session.selectedEntityIds) }
+  getDesignObjectSelection(): CanvasDesignObjectSelectionModel {
+    const viewportScale = this.options.camera.viewport.scale
+    return getDesignObjectSelectionModel(
+      this.options.sceneStore.persisted,
+      this.options.sceneStore.session.selectedEntityIds,
+      {
+        annotationViewportScale: viewportScale,
+        plantContext: this.options.presentation.createPlantPresentationContext(viewportScale),
+      },
+    )
+  }
   getPlantSizeMode(): PlantSizeMode { return this.options.mutations.getPlantSizeMode() }
   getPlantColorByAttr(): ColorByAttribute | null { return this.options.mutations.getPlantColorByAttr() }
   getSelectedPlantColorContext(): SelectedPlantColorContext {

@@ -1,11 +1,6 @@
 import type { ColorByAttribute, PlantSizeMode } from '../../plant-display-state'
 import { createUuid } from '../../../utils/ids'
-import { getAnnotationWorldBounds } from '../annotation-layout'
-import type { SceneBounds } from '../camera'
-import {
-  getPlantWorldBounds,
-  type PlantPresentationContext,
-} from '../plant-presentation'
+import type { PlantPresentationContext } from '../plant-presentation'
 import { normalizeHexColor } from '../../plant-colors'
 import type { SelectedPlantColorContext } from '../../plant-color-context'
 import type {
@@ -24,10 +19,12 @@ import {
   type SceneClipboardPayload,
 } from './clipboard'
 import {
+  getDesignObjectSelectionModel,
   getSelectedPlantIds,
   getSelectedTopLevelTargets,
   getSelectionLayer,
   setsEqual,
+  type SceneSelectionTarget,
 } from './selection'
 import type { SceneEditCoordinator } from './transactions'
 
@@ -74,7 +71,7 @@ export class SceneRuntimeMutationController {
 
   copy(): void {
     const persisted = this._sceneStore.persisted
-    const selected = getEditableTopLevelTargets(persisted, this._sceneStore.session.selectedEntityIds)
+    const selected = this._getEditableTopLevelTargets()
     this._clipboard = createClipboardPayload(persisted, selected)
   }
 
@@ -97,7 +94,7 @@ export class SceneRuntimeMutationController {
 
   deleteSelected(): void {
     const persisted = this._sceneStore.persisted
-    const selected = getEditableTopLevelTargets(persisted, this._sceneStore.session.selectedEntityIds)
+    const selected = this._getEditableTopLevelTargets()
     if (selected.length === 0) return
 
     const deleted = resolveSelectedEntitySets(persisted, selected)
@@ -127,23 +124,23 @@ export class SceneRuntimeMutationController {
     const persisted = this._sceneStore.persisted
     const ids = new Set<string>()
     const groupedMemberIds = new Set(persisted.groups.flatMap((group) => group.memberIds))
-    const layerVisibility = sceneLayerVisibility(persisted)
+    const layerState = sceneLayerState(persisted)
 
-    if (layerVisibility.plants !== false) {
+    if (isSceneLayerEditable(layerState.plants)) {
       for (const plant of persisted.plants) {
         if (groupedMemberIds.has(plant.id) || plant.locked) continue
         ids.add(plant.id)
       }
     }
 
-    if (layerVisibility.zones !== false) {
+    if (isSceneLayerEditable(layerState.zones)) {
       for (const zone of persisted.zones) {
         if (groupedMemberIds.has(zone.name) || zone.locked) continue
         ids.add(zone.name)
       }
     }
 
-    if (layerVisibility.annotations !== false) {
+    if (isSceneLayerEditable(layerState.annotations)) {
       for (const annotation of persisted.annotations) {
         if (groupedMemberIds.has(annotation.id) || annotation.locked) continue
         ids.add(annotation.id)
@@ -151,7 +148,7 @@ export class SceneRuntimeMutationController {
     }
 
     for (const group of persisted.groups) {
-      if (layerVisibility[group.layer] === false || isSceneDesignObjectLocked(persisted, group.id)) continue
+      if (!isSceneLayerEditable(layerState[group.layer]) || isSceneDesignObjectLocked(persisted, group.id)) continue
       ids.add(group.id)
     }
 
@@ -169,7 +166,7 @@ export class SceneRuntimeMutationController {
   }
 
   lockSelected(): void {
-    const selected = getSelectedTopLevelTargets(this._sceneStore.persisted, this._sceneStore.session.selectedEntityIds)
+    const selected = this._getEditableTopLevelTargets()
     if (selected.length === 0) return
     const selectedIds = selected.map((target) => target.id)
     this._sceneEdits.run('lock-selected', (tx) => {
@@ -193,27 +190,16 @@ export class SceneRuntimeMutationController {
   }
 
   groupSelected(): void {
-    const persisted = this._sceneStore.persisted
-    const selected = getSelectedTopLevelTargets(persisted, this._sceneStore.session.selectedEntityIds)
+    const selectionModel = this._getSelectionModel()
+    const selected = selectionModel.editableTargets
     if (selected.length < 2 || selected.some((target) => target.kind === 'group')) return
 
     const layer = getSelectionLayer(selected[0]!)
     if (!selected.every((target) => getSelectionLayer(target) === layer)) return
 
     const memberIds = selected.map((target) => target.id)
-    const viewportScale = this._presentation.getViewportScale()
-    const plantContext = this._presentation.createPlantPresentationContext(viewportScale)
-    const bounds = memberIds
-      .map((memberId) => getMemberBounds(memberId, persisted, viewportScale, plantContext))
-      .filter((value): value is SceneBounds => value !== null)
-    if (bounds.length === 0) return
-
-    let minX = Infinity
-    let minY = Infinity
-    for (const boundsEntry of bounds) {
-      if (boundsEntry.minX < minX) minX = boundsEntry.minX
-      if (boundsEntry.minY < minY) minY = boundsEntry.minY
-    }
+    const bounds = selectionModel.bounds
+    if (!bounds) return
 
     const nextGroup: SceneObjectGroupEntity = {
       kind: 'group',
@@ -221,7 +207,7 @@ export class SceneRuntimeMutationController {
       locked: false,
       name: null,
       layer,
-      position: { x: minX, y: minY },
+      position: { x: bounds.minX, y: bounds.minY },
       rotationDeg: null,
       memberIds,
     }
@@ -237,7 +223,7 @@ export class SceneRuntimeMutationController {
   ungroupSelected(): void {
     const persisted = this._sceneStore.persisted
     const selectedGroupIds = new Set(
-      getEditableTopLevelTargets(persisted, this._sceneStore.session.selectedEntityIds)
+      this._getEditableTopLevelTargets()
         .filter((target) => target.kind === 'group')
         .map((target) => target.id),
     )
@@ -389,7 +375,7 @@ export class SceneRuntimeMutationController {
 
   private _reorderSelected(position: 'start' | 'end'): void {
     const persisted = this._sceneStore.persisted
-    const selected = getEditableTopLevelTargets(persisted, this._sceneStore.session.selectedEntityIds)
+    const selected = this._getEditableTopLevelTargets()
     if (selected.length === 0) return
 
     const resolved = resolveSelectedEntitySets(persisted, selected)
@@ -403,25 +389,41 @@ export class SceneRuntimeMutationController {
       })
     })
   }
+
+  private _getEditableTopLevelTargets(): readonly SceneSelectionTarget[] {
+    return this._getSelectionModel().editableTargets
+  }
+
+  private _getSelectionModel() {
+    const viewportScale = this._presentation.getViewportScale()
+    return getDesignObjectSelectionModel(
+      this._sceneStore.persisted,
+      this._sceneStore.session.selectedEntityIds,
+      {
+        annotationViewportScale: viewportScale,
+        plantContext: this._presentation.createPlantPresentationContext(viewportScale),
+      },
+    )
+  }
 }
 
-function getEditableTopLevelTargets(
+function sceneLayerState(
   persisted: ScenePersistedState,
-  selectedIds: ReadonlySet<string>,
-): ReturnType<typeof getSelectedTopLevelTargets> {
-  return getSelectedTopLevelTargets(persisted, selectedIds)
-    .filter((target) => !isSceneDesignObjectLocked(persisted, target.id))
+): Readonly<Record<string, { visible: boolean; locked: boolean } | undefined>> {
+  return Object.fromEntries(
+    persisted.layers.map((layer) => [layer.name, { visible: layer.visible, locked: layer.locked }]),
+  )
 }
 
-function sceneLayerVisibility(
-  persisted: ScenePersistedState,
-): Readonly<Record<string, boolean | undefined>> {
-  return Object.fromEntries(persisted.layers.map((layer) => [layer.name, layer.visible]))
+function isSceneLayerEditable(
+  layer: { visible: boolean; locked: boolean } | undefined,
+): boolean {
+  return layer?.visible !== false && layer?.locked !== true
 }
 
 function resolveSelectedEntitySets(
   persisted: ScenePersistedState,
-  selected: ReturnType<typeof getSelectedTopLevelTargets>,
+  selected: readonly SceneSelectionTarget[],
 ): {
   plantIds: Set<string>
   zoneIds: Set<string>
@@ -476,61 +478,4 @@ function reorderSceneEntities<T>(
   return position === 'start'
     ? [...selected, ...rest]
     : [...rest, ...selected]
-}
-
-function getMemberBounds(
-  memberId: string,
-  persisted: ScenePersistedState,
-  annotationViewportScale: number,
-  plantContext: PlantPresentationContext,
-): SceneBounds | null {
-  const plant = persisted.plants.find((entry) => entry.id === memberId)
-  if (plant) {
-    const bounds = getPlantWorldBounds(plant, {
-      ...plantContext,
-      viewport: { x: 0, y: 0, scale: annotationViewportScale },
-    })
-    return {
-      minX: bounds.x,
-      minY: bounds.y,
-      maxX: bounds.x + bounds.width,
-      maxY: bounds.y + bounds.height,
-    }
-  }
-
-  const zone = persisted.zones.find((entry) => entry.name === memberId)
-  if (zone && zone.points.length > 0) {
-    if (zone.zoneType === 'ellipse' && zone.points.length >= 2) {
-      const center = zone.points[0]!
-      const radii = zone.points[1]!
-      return {
-        minX: center.x - radii.x,
-        minY: center.y - radii.y,
-        maxX: center.x + radii.x,
-        maxY: center.y + radii.y,
-      }
-    }
-
-    let minX = Infinity
-    let minY = Infinity
-    let maxX = -Infinity
-    let maxY = -Infinity
-    for (const point of zone.points) {
-      if (point.x < minX) minX = point.x
-      if (point.x > maxX) maxX = point.x
-      if (point.y < minY) minY = point.y
-      if (point.y > maxY) maxY = point.y
-    }
-    return { minX, minY, maxX, maxY }
-  }
-
-  const annotation = persisted.annotations.find((entry) => entry.id === memberId)
-  if (!annotation) return null
-  const bounds = getAnnotationWorldBounds(annotation, annotationViewportScale)
-  return {
-    minX: bounds.x,
-    minY: bounds.y,
-    maxX: bounds.x + bounds.width,
-    maxY: bounds.y + bounds.height,
-  }
 }
