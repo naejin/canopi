@@ -57,7 +57,12 @@ export interface SceneInteractionDeps {
   getDesignObjectSelection: () => CanvasDesignObjectSelectionModel
   selectionCommands: Pick<
     CanvasSceneEditCommandSurface,
-    'duplicateSelected' | 'deleteSelected' | 'bringToFront' | 'sendToBack'
+    | 'duplicateSelected'
+    | 'deleteSelected'
+    | 'bringToFront'
+    | 'sendToBack'
+    | 'groupSelected'
+    | 'ungroupSelected'
   >
   setTool: (name: string) => void
   render: (kind: 'scene' | 'viewport') => void

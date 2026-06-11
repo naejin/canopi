@@ -12,6 +12,7 @@ import { plantSpacingIntervalM } from '../app/settings/state'
 import { CameraController } from '../canvas/runtime/camera'
 import { SceneStore } from '../canvas/runtime/scene'
 import { SceneInteractionController, type SceneInteractionDeps } from '../canvas/runtime/scene-interaction'
+import type { CanvasDesignObjectSelectionModel } from '../canvas/runtime/runtime'
 import { SceneRuntimeEditCoordinator } from '../canvas/runtime/scene-runtime/transactions'
 import {
   CANVAS_NOTICE_MARGIN_PX,
@@ -103,6 +104,8 @@ function createInteractionDeps(
       deleteSelected: vi.fn(),
       bringToFront: vi.fn(),
       sendToBack: vi.fn(),
+      groupSelected: vi.fn(),
+      ungroupSelected: vi.fn(),
     },
     setTool: (overrides.setTool ?? ((name: string) => {
       void name
@@ -240,6 +243,8 @@ describe('SceneInteractionController', () => {
         deleteSelected: vi.fn(),
         bringToFront: vi.fn(),
         sendToBack: vi.fn(),
+        groupSelected: vi.fn(),
+        ungroupSelected: vi.fn(),
       },
     }
     const controller = new SceneInteractionController(deps as any)
@@ -278,6 +283,8 @@ describe('SceneInteractionController', () => {
         deleteSelected,
         bringToFront: vi.fn(),
         sendToBack: vi.fn(),
+        groupSelected: vi.fn(),
+        ungroupSelected: vi.fn(),
       },
     }
     const controller = new SceneInteractionController(deps as any)
@@ -294,12 +301,113 @@ describe('SceneInteractionController', () => {
     duplicate.focus()
     duplicate.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
     expect(duplicateSelected).toHaveBeenCalledTimes(2)
+    controller.refreshMeasurements()
+    expect(document.activeElement).toBe(duplicate)
 
     const remove = container.querySelector<HTMLButtonElement>('[data-selection-action-command="delete"]')!
     remove.focus()
     remove.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true }))
     expect(deleteSelected).toHaveBeenCalledTimes(1)
 
+    controller.dispose()
+  })
+
+  it('shows Group for groupable same-layer selections and dispatches through the command surface', () => {
+    const groupSelected = vi.fn()
+    const deps = {
+      ...createInteractionDeps(container, store, camera),
+      getDesignObjectSelection: () => ({
+        editableTargets: [
+          { kind: 'plant' as const, id: 'plant-1' },
+          { kind: 'plant' as const, id: 'plant-2' },
+        ],
+        blockedTargets: [],
+        bounds: { minX: 10, minY: 10, maxX: 40, maxY: 40 },
+      }),
+      selectionCommands: {
+        duplicateSelected: vi.fn(),
+        deleteSelected: vi.fn(),
+        bringToFront: vi.fn(),
+        sendToBack: vi.fn(),
+        groupSelected,
+        ungroupSelected: vi.fn(),
+      },
+    }
+    const controller = new SceneInteractionController(deps as any)
+
+    controller.refreshMeasurements()
+
+    const group = container.querySelector<HTMLButtonElement>('[data-selection-action-command="group"]')
+    expect(group).not.toBeNull()
+    expect(container.querySelector('[data-selection-action-command="ungroup"]')).toBeNull()
+    expect(group?.getAttribute('aria-label')).toContain('Group')
+    expect(group?.querySelector('[data-selection-action-tooltip]')?.textContent).toContain('Group')
+
+    group?.click()
+
+    expect(groupSelected).toHaveBeenCalledTimes(1)
+    controller.dispose()
+  })
+
+  it('filters Group and Ungroup actions by selection eligibility', () => {
+    const ungroupSelected = vi.fn()
+    let selectionModel: CanvasDesignObjectSelectionModel = {
+      editableTargets: [
+        { kind: 'plant' as const, id: 'plant-1' },
+        { kind: 'zone' as const, id: 'zone-1' },
+      ],
+      blockedTargets: [],
+      bounds: { minX: 10, minY: 10, maxX: 40, maxY: 40 },
+    }
+    const deps = {
+      ...createInteractionDeps(container, store, camera),
+      getDesignObjectSelection: () => selectionModel,
+      selectionCommands: {
+        duplicateSelected: vi.fn(),
+        deleteSelected: vi.fn(),
+        bringToFront: vi.fn(),
+        sendToBack: vi.fn(),
+        groupSelected: vi.fn(),
+        ungroupSelected,
+      },
+    }
+    const controller = new SceneInteractionController(deps as any)
+
+    controller.refreshMeasurements()
+    expect(container.querySelector('[data-selection-action-command="group"]')).toBeNull()
+    expect(container.querySelector('[data-selection-action-command="ungroup"]')).toBeNull()
+
+    selectionModel = {
+      editableTargets: [
+        { kind: 'plant' as const, id: 'plant-1' },
+        { kind: 'plant' as const, id: 'plant-2' },
+      ],
+      blockedTargets: [{
+        target: { kind: 'missing' as const, id: 'missing-object' },
+        reason: 'missing-design-object' as const,
+        layerName: null,
+      }],
+      bounds: { minX: 10, minY: 10, maxX: 40, maxY: 40 },
+    }
+    controller.refreshMeasurements()
+    expect(container.querySelector('[data-selection-action-command="group"]')).toBeNull()
+    expect(container.querySelector('[data-selection-action-command="ungroup"]')).toBeNull()
+
+    selectionModel = {
+      editableTargets: [{ kind: 'group' as const, id: 'group-1' }],
+      blockedTargets: [],
+      bounds: { minX: 10, minY: 10, maxX: 40, maxY: 40 },
+    }
+    controller.refreshMeasurements()
+
+    expect(container.querySelector('[data-selection-action-command="group"]')).toBeNull()
+    const ungroup = container.querySelector<HTMLButtonElement>('[data-selection-action-command="ungroup"]')
+    expect(ungroup).not.toBeNull()
+    expect(ungroup?.getAttribute('aria-label')).toContain('Ungroup')
+
+    ungroup?.click()
+
+    expect(ungroupSelected).toHaveBeenCalledTimes(1)
     controller.dispose()
   })
 

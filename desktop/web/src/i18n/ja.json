@@ -136,6 +136,8 @@
       "duplicate": "複製",
       "bringForward": "前面へ",
       "sendBackward": "背面へ",
+      "group": "グループ化",
+      "ungroup": "グループ解除",
       "delete": "削除"
     },
     "grid": {

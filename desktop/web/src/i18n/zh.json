@@ -136,6 +136,8 @@
       "duplicate": "复制",
       "bringForward": "前移",
       "sendBackward": "后移",
+      "group": "组合",
+      "ungroup": "取消组合",
       "delete": "删除"
     },
     "grid": {

@@ -1,10 +1,16 @@
 import { t } from '../../../i18n'
 import type { CameraController, SceneBounds } from '../camera'
 import type { CanvasDesignObjectSelectionModel, CanvasSceneEditCommandSurface } from '../runtime'
+import { getSelectionLayer } from '../scene-runtime/selection'
 
 type SelectionActionCommandSurface = Pick<
   CanvasSceneEditCommandSurface,
-  'duplicateSelected' | 'deleteSelected' | 'bringToFront' | 'sendToBack'
+  | 'duplicateSelected'
+  | 'deleteSelected'
+  | 'bringToFront'
+  | 'sendToBack'
+  | 'groupSelected'
+  | 'ungroupSelected'
 >
 
 interface SelectionActionToolbarOptions {
@@ -25,6 +31,7 @@ interface SelectionAction {
   readonly labelKey: string
   readonly shortcut: string | null
   readonly icon: readonly SvgPath[]
+  readonly isAvailable: (selection: CanvasDesignObjectSelectionModel) => boolean
   readonly run: () => void
 }
 
@@ -78,6 +85,7 @@ export function createSelectionActionToolbar(
         { d: 'M8 7h9v9H8z', fill: 'none' },
         { d: 'M5 4h9v9H5z', fill: 'none' },
       ],
+      isAvailable: hasEditableSelection,
       run: () => options.commands.duplicateSelected(),
     },
     {
@@ -89,6 +97,7 @@ export function createSelectionActionToolbar(
         { d: 'M4 8h8v8H4z', fill: 'none' },
         { points: '14,5 17,5 17,8' },
       ],
+      isAvailable: hasEditableSelection,
       run: () => options.commands.bringToFront(),
     },
     {
@@ -100,7 +109,36 @@ export function createSelectionActionToolbar(
         { d: 'M4 8h8v8H4z', fill: 'none' },
         { points: '6,15 3,15 3,12' },
       ],
+      isAvailable: hasEditableSelection,
       run: () => options.commands.sendToBack(),
+    },
+    {
+      id: 'group',
+      labelKey: 'canvas.selectionActions.group',
+      shortcut: 'Cmd+G',
+      icon: [
+        { d: 'M5 5h5v5H5z', fill: 'none' },
+        { d: 'M10 10h5v5h-5z', fill: 'none' },
+        { d: 'M4 12v4h4', fill: 'none' },
+        { d: 'M16 8V4h-4', fill: 'none' },
+      ],
+      isAvailable: isGroupAvailable,
+      run: () => options.commands.groupSelected(),
+    },
+    {
+      id: 'ungroup',
+      labelKey: 'canvas.selectionActions.ungroup',
+      shortcut: 'Shift+Cmd+G',
+      icon: [
+        { d: 'M5 5h5v5H5z', fill: 'none' },
+        { d: 'M10 10h5v5h-5z', fill: 'none' },
+        { d: 'M4 16h4', fill: 'none' },
+        { d: 'M4 16v-4', fill: 'none' },
+        { d: 'M16 4h-4', fill: 'none' },
+        { d: 'M16 4v4', fill: 'none' },
+      ],
+      isAvailable: isUngroupAvailable,
+      run: () => options.commands.ungroupSelected(),
     },
     {
       id: 'delete',
@@ -111,6 +149,7 @@ export function createSelectionActionToolbar(
         { d: 'M9 7V5h4v2', fill: 'none' },
         { d: 'M8 9l1 7h4l1-7', fill: 'none' },
       ],
+      isAvailable: hasEditableSelection,
       run: () => options.commands.deleteSelected(),
     },
   ]
@@ -122,7 +161,7 @@ export function createSelectionActionToolbar(
       refresh()
     }),
   }))
-  root.replaceChildren(...actionButtons.map(({ button }) => button))
+  let renderedActionIds = ''
   options.container.appendChild(root)
 
   function refresh(): void {
@@ -135,6 +174,12 @@ export function createSelectionActionToolbar(
       return
     }
 
+    const availableActionButtons = actionButtons.filter(({ action }) => action.isAvailable(selection))
+    const nextActionIds = availableActionButtons.map(({ action }) => action.id).join('|')
+    if (nextActionIds !== renderedActionIds) {
+      root.replaceChildren(...availableActionButtons.map(({ button }) => button))
+      renderedActionIds = nextActionIds
+    }
     const placement = resolveToolbarPlacement(selection.bounds, options.camera, options.container)
     Object.assign(root.style, {
       display: 'flex',
@@ -145,6 +190,10 @@ export function createSelectionActionToolbar(
 
   function hide(): void {
     root.style.display = 'none'
+    if (renderedActionIds !== '') {
+      root.replaceChildren()
+      renderedActionIds = ''
+    }
   }
 
   refresh()
@@ -352,4 +401,20 @@ function rootFallbackNumber(...values: readonly number[]): number {
 
 function stopCanvasEvent(event: Event): void {
   event.stopPropagation()
+}
+
+function hasEditableSelection(selection: CanvasDesignObjectSelectionModel): boolean {
+  return selection.editableTargets.length > 0
+}
+
+function isGroupAvailable(selection: CanvasDesignObjectSelectionModel): boolean {
+  if (selection.blockedTargets.length > 0 || selection.editableTargets.length < 2) return false
+  if (selection.editableTargets.some((target) => target.kind === 'group')) return false
+  const layer = getSelectionLayer(selection.editableTargets[0]!)
+  return selection.editableTargets.every((target) => getSelectionLayer(target) === layer)
+}
+
+function isUngroupAvailable(selection: CanvasDesignObjectSelectionModel): boolean {
+  return selection.blockedTargets.length === 0
+    && selection.editableTargets.some((target) => target.kind === 'group')
 }

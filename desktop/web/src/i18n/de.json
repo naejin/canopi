@@ -136,6 +136,8 @@
       "duplicate": "Duplizieren",
       "bringForward": "Nach vorne",
       "sendBackward": "Nach hinten",
+      "group": "Gruppieren",
+      "ungroup": "Gruppierung aufheben",
       "delete": "Entfernen"
     },
     "grid": {
