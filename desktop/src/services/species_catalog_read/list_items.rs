@@ -1,82 +1,34 @@
 use common_types::species::SpeciesListItem;
-use rusqlite::{Connection, OptionalExtension};
+use rusqlite::{Connection, OptionalExtension, params};
 
-use super::common_names::{
-    get_common_name, get_locale_best_common_name, get_secondary_common_name,
-};
+use crate::db::query_builder::{species_list_common_name_join_sql, species_list_select_sql};
 
-pub fn hydrate_species_list_items(
+use super::list_projection::map_species_list_row;
+
+fn hydrate_species_list_items(
     conn: &Connection,
     canonical_names: &[String],
     locale: &str,
-    all_favorites: bool,
 ) -> Result<Vec<SpeciesListItem>, String> {
     let mut items = Vec::with_capacity(canonical_names.len());
+    let select_sql = species_list_select_sql("?1");
+    let common_name_join = species_list_common_name_join_sql("?1", "?2");
+    let sql = format!(
+        "{select_sql}
+         FROM species s
+         {common_name_join}
+         WHERE s.canonical_name = ?3
+         LIMIT 1"
+    );
+    let mut stmt = conn
+        .prepare(&sql)
+        .map_err(|e| format!("Failed to prepare species list item projection: {e}"))?;
 
     for canonical_name in canonical_names {
-        let row: Option<SpeciesListItem> = conn
-            .query_row(
-                "SELECT s.canonical_name,
-                        s.slug,
-                        s.common_name,
-                        s.family,
-                        s.genus,
-                        s.height_max_m,
-                        s.hardiness_zone_min,
-                        s.hardiness_zone_max,
-                        s.growth_rate,
-                        s.stratum,
-                        s.edibility_rating,
-                        s.medicinal_rating,
-                        s.width_max_m,
-                        s.id
-                 FROM species s
-                 WHERE s.canonical_name = ?1
-                 LIMIT 1",
-                [canonical_name],
-                |row| {
-                    Ok((
-                        SpeciesListItem {
-                            canonical_name: row.get(0)?,
-                            slug: row.get(1)?,
-                            common_name: row.get(2)?,
-                            common_name_2: None,
-                            is_name_fallback: false,
-                            family: row.get(3)?,
-                            genus: row.get(4)?,
-                            height_max_m: row.get(5)?,
-                            hardiness_zone_min: row.get(6)?,
-                            hardiness_zone_max: row.get(7)?,
-                            growth_rate: row.get(8)?,
-                            stratum: row.get(9)?,
-                            edibility_rating: row.get(10)?,
-                            medicinal_rating: row.get(11)?,
-                            width_max_m: row.get(12)?,
-                            is_favorite: all_favorites,
-                        },
-                        row.get::<_, String>(13)?,
-                    ))
-                },
-            )
+        let row: Option<SpeciesListItem> = stmt
+            .query_row(params![locale, "en", canonical_name], map_species_list_row)
             .optional()
-            .map_err(|e| format!("Failed to hydrate species '{canonical_name}': {e}"))?
-            .map(|(mut item, species_id)| {
-                if let Some(common_name) = get_locale_best_common_name(conn, &species_id, locale) {
-                    item.common_name_2 = get_secondary_common_name(
-                        conn,
-                        &species_id,
-                        locale,
-                        &common_name,
-                        &item.canonical_name,
-                    );
-                    item.common_name = Some(common_name);
-                } else {
-                    item.common_name =
-                        get_common_name(conn, &species_id, locale).or(item.common_name);
-                    item.is_name_fallback = locale != "en";
-                }
-                item
-            });
+            .map_err(|e| format!("Failed to hydrate species '{canonical_name}': {e}"))?;
 
         if let Some(item) = row {
             items.push(item);
@@ -91,5 +43,5 @@ pub(super) fn read_projection(
     canonical_names: &[String],
     locale: &str,
 ) -> Result<Vec<SpeciesListItem>, String> {
-    hydrate_species_list_items(conn, canonical_names, locale, false)
+    hydrate_species_list_items(conn, canonical_names, locale)
 }

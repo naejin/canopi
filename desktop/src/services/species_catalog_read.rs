@@ -15,6 +15,7 @@ mod detail_row_map;
 mod filters;
 mod flower;
 mod list_items;
+mod list_projection;
 mod media;
 mod relationships;
 mod replacement;
@@ -177,13 +178,60 @@ mod tests {
         let conn = test_support::test_conn();
         let catalog = SpeciesCatalogRead::new(&conn);
         let rows = catalog
-            .list_items_for_canonical_names(&["Apple".to_owned(), "Missing".to_owned()], "fr")
+            .list_items_for_canonical_names(
+                &["Apple".to_owned(), "Missing".to_owned(), "Plum".to_owned()],
+                "fr",
+            )
             .unwrap();
 
-        assert_eq!(rows.len(), 1);
+        assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].canonical_name, "Apple");
         assert_eq!(rows[0].common_name.as_deref(), Some("Pommier"));
+        assert_eq!(rows[0].common_name_2.as_deref(), Some("Pomme"));
+        assert!(!rows[0].is_name_fallback);
         assert!(!rows[0].is_favorite);
+        assert_eq!(rows[1].canonical_name, "Plum");
+        assert_eq!(rows[1].common_name.as_deref(), Some("Plum"));
+        assert!(rows[1].common_name_2.is_none());
+        assert!(rows[1].is_name_fallback);
+    }
+
+    #[test]
+    fn list_item_projection_preserves_primary_english_common_name_fallbacks() {
+        let conn = test_support::test_conn();
+        conn.execute(
+            "INSERT INTO species (
+                id, slug, canonical_name, common_name, family, genus, growth_rate, width_max_m,
+                hardiness_zone_min, hardiness_zone_max, edibility_rating, medicinal_rating,
+                stratum, height_max_m, tolerates_full_sun, tolerates_semi_shade,
+                tolerates_full_shade, flower_color
+             )
+             VALUES ('s7', 'fig', 'Fig', 'Storage fig', 'Moraceae', 'Ficus', 'Medium', 3.0,
+                7, 10, 5, 1, 'canopy', 5.0, 1, 0, 0, NULL)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO species_common_names (
+                id, species_id, language, common_name, source, is_primary
+             )
+             VALUES ('cn-10', 's7', 'en', 'Common fig', 'fixture', 1)",
+            [],
+        )
+        .unwrap();
+        let catalog = SpeciesCatalogRead::new(&conn);
+
+        let french_rows = catalog
+            .list_items_for_canonical_names(&["Fig".to_owned()], "fr")
+            .unwrap();
+        let english_rows = catalog
+            .list_items_for_canonical_names(&["Fig".to_owned()], "en")
+            .unwrap();
+
+        assert_eq!(french_rows[0].common_name.as_deref(), Some("Common fig"));
+        assert!(french_rows[0].is_name_fallback);
+        assert_eq!(english_rows[0].common_name.as_deref(), Some("Common fig"));
+        assert!(!english_rows[0].is_name_fallback);
     }
 
     #[test]
@@ -443,6 +491,7 @@ mod tests {
             include_str!("species_catalog_read/filters.rs"),
             include_str!("species_catalog_read/flower.rs"),
             include_str!("species_catalog_read/list_items.rs"),
+            include_str!("species_catalog_read/list_projection.rs"),
             include_str!("species_catalog_read/media.rs"),
             include_str!("species_catalog_read/relationships.rs"),
             include_str!("species_catalog_read/search.rs"),
