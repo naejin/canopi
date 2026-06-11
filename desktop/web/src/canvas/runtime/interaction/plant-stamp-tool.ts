@@ -1,10 +1,12 @@
 import { clearPlantStampSource, readPlantStampSource } from '../../plant-stamp-source'
 import { appendPlantStampSourceToDraft } from './tool-actions'
-import type { ScenePoint } from '../scene'
+import type { ScenePoint, SceneStore } from '../scene'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
 import type { SceneToolAdapter } from './tool-adapter'
+import { isSceneLayerOpenForCreation } from './layer-guards'
 
 export interface PlantStampToolContext {
+  readonly getSceneStore: () => SceneStore
   readonly sceneEdits: SceneEditCoordinator
   readonly applySnapping: (point: ScenePoint) => ScenePoint
 }
@@ -18,6 +20,7 @@ export function createPlantStampTool(context: PlantStampToolContext): PlantStamp
   function pointerDown(world: ScenePoint): void {
     const source = readPlantStampSource()
     if (!source) return
+    if (!isSceneLayerOpenForCreation(context.getSceneStore().persisted, 'plants')) return
 
     context.sceneEdits.run('interaction-stamp-plant', (tx) => {
       tx.mutate((draft) => {

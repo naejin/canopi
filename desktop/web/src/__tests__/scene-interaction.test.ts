@@ -4393,6 +4393,31 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('does not place Plant Stamp plants on a locked Plants Layer', () => {
+    store.updatePersisted((draft) => {
+      draft.layers = draft.layers.map((layer) => (
+        layer.name === 'plants' ? { ...layer, locked: true } : layer
+      ))
+    })
+    selectPlantStampSource({
+      canonical_name: 'Malus domestica',
+      common_name: 'Apple',
+      stratum: 'high',
+      width_max_m: 4,
+    })
+
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('plant-stamp')
+
+    events.pointerDown({ x: 50, y: 70 }, { button: 0 })
+
+    expect(store.persisted.plants).toHaveLength(0)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    controller.dispose()
+  })
+
   it('clears Plant Stamp source on controller dispose without writing scene data', () => {
     selectPlantStampSource({
       canonical_name: 'Malus domestica',
@@ -5371,6 +5396,62 @@ describe('SceneInteractionController', () => {
     })
     expect(preview?.style.display).toBe('none')
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-drop')
+    controller.dispose()
+  })
+
+  it('does not create plant placements from drag-and-drop payloads on a locked Plants Layer', () => {
+    store.updatePersisted((draft) => {
+      draft.layers = draft.layers.map((layer) => (
+        layer.name === 'plants' ? { ...layer, locked: true } : layer
+      ))
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    const dragData = new Map<string, string>()
+    const dataTransfer = {
+      effectAllowed: 'none',
+      setData(type: string, value: string) {
+        dragData.set(type, value)
+      },
+      getData(type: string) {
+        return dragData.get(type) ?? ''
+      },
+    }
+    writePlantStampDragData(dataTransfer, {
+      canonical_name: 'Pyrus communis',
+      common_name: 'Pear',
+      stratum: 'mid',
+      width_max_m: 3,
+    })
+
+    const dragOverEvent = new Event('dragover', { bubbles: true, cancelable: true }) as DragEvent
+    Object.defineProperties(dragOverEvent, {
+      clientX: { configurable: true, value: 80 },
+      clientY: { configurable: true, value: 90 },
+      dataTransfer: {
+        configurable: true,
+        value: dataTransfer,
+      },
+    })
+    const dropEvent = new Event('drop', { bubbles: true, cancelable: true }) as DragEvent
+    Object.defineProperties(dropEvent, {
+      clientX: { configurable: true, value: 80 },
+      clientY: { configurable: true, value: 90 },
+      dataTransfer: {
+        configurable: true,
+        value: dataTransfer,
+      },
+    })
+    const preview = Array.from(container.children)
+      .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
+
+    ;(controller as any)._onDragOver(dragOverEvent)
+    ;(controller as any)._onDrop(dropEvent)
+
+    expect(store.persisted.plants).toHaveLength(0)
+    expect(preview?.style.display).toBe('none')
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
     controller.dispose()
   })
 

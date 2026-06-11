@@ -20,6 +20,7 @@ import { allowsNativeContextMenuTarget, cursorForTool, isEditableTarget } from '
 import {
   appendPlantStampSourceToDraft,
 } from './interaction/tool-actions'
+import { isSceneLayerOpenForCreation } from './interaction/layer-guards'
 import { readPlantStampDropSource } from '../plant-stamp-source'
 import {
   createSceneToolModules,
@@ -396,7 +397,13 @@ export class SceneInteractionController {
 
   private readonly _onDragOver = (event: DragEvent): void => {
     event.preventDefault()
-    if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+    const canDropPlant = readPlantStampDropSource(event) !== null
+      && isSceneLayerOpenForCreation(this._deps.getSceneStore().persisted, 'plants')
+    if (event.dataTransfer) event.dataTransfer.dropEffect = canDropPlant ? 'copy' : 'none'
+    if (!canDropPlant) {
+      hideInteractionPreview(this._preview)
+      return
+    }
     const screen = this._screenPoint(event)
     showInteractionPreview(this._preview, 'band', screen, {
       x: screen.x + 12,
@@ -413,6 +420,7 @@ export class SceneInteractionController {
     hideInteractionPreview(this._preview)
     const source = readPlantStampDropSource(event)
     if (!source) return
+    if (!isSceneLayerOpenForCreation(this._deps.getSceneStore().persisted, 'plants')) return
     const world = this._applySnapping(this._deps.camera.screenToWorld(this._screenPoint(event)))
     this._deps.sceneEdits.run('interaction-drop', (tx) => {
       tx.mutate((draft) => {

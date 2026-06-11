@@ -97,6 +97,7 @@ export function createSceneToolModules(context: SceneToolModulesContext): SceneT
   })
   const zoneDrawingAdapters = createZoneDrawingToolAdapters(zoneDrawingTool)
   const plantStampTool = createPlantStampTool({
+    getSceneStore: context.getSceneStore,
     sceneEdits: context.sceneEdits,
     applySnapping: context.applySnapping,
   })
