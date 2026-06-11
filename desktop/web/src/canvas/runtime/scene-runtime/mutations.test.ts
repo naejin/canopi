@@ -425,6 +425,73 @@ describe('scene runtime mutation controller', () => {
     expect(state.dirtyTypes).toEqual(['set-plant-color-for-species'])
   })
 
+  it('does not recolor Plants inside locked Object Groups through species-wide color edits', () => {
+    const file = makeFile()
+    file.groups = [{
+      id: 'group-1',
+      name: null,
+      layer: 'plants',
+      position: { x: 20, y: 20 },
+      rotation: null,
+      member_ids: ['plant-2'],
+      locked: true,
+    }]
+    const { controller, sceneStore, state } = createController(file)
+
+    const changed = controller.setPlantColorForSpecies('Malus domestica', '#C44230')
+
+    expect(changed).toBe(1)
+    expect(sceneStore.persisted.plants.find((plant) => plant.id === 'plant-1')?.color).toBe('#C44230')
+    expect(sceneStore.persisted.plants.find((plant) => plant.id === 'plant-2')?.color).toBeNull()
+    expect(sceneStore.persisted.plantSpeciesColors).toEqual({
+      'Malus domestica': '#C44230',
+    })
+    expect(state.plantSpeciesColorSyncs).toBe(1)
+    expect(state.dirtyTypes).toEqual(['set-plant-color-for-species'])
+  })
+
+  it('does not recolor Plants inside Object Groups locked by another member', () => {
+    const file = makeFile()
+    file.plants = [
+      ...file.plants,
+      {
+        id: 'plant-3',
+        canonical_name: 'Pyrus communis',
+        common_name: 'Pear',
+        color: null,
+        position: { x: 30, y: 30 },
+        rotation: null,
+        scale: null,
+        notes: null,
+        planted_date: null,
+        quantity: 1,
+        locked: true,
+      },
+    ]
+    file.groups = [{
+      id: 'group-1',
+      name: null,
+      layer: 'plants',
+      position: { x: 20, y: 20 },
+      rotation: null,
+      member_ids: ['plant-2', 'plant-3'],
+      locked: false,
+    }]
+    const { controller, sceneStore, state } = createController(file)
+
+    const changed = controller.setPlantColorForSpecies('Malus domestica', '#C44230')
+
+    expect(changed).toBe(1)
+    expect(sceneStore.persisted.plants.find((plant) => plant.id === 'plant-1')?.color).toBe('#C44230')
+    expect(sceneStore.persisted.plants.find((plant) => plant.id === 'plant-2')?.color).toBeNull()
+    expect(sceneStore.persisted.plants.find((plant) => plant.id === 'plant-3')?.color).toBeNull()
+    expect(sceneStore.persisted.plantSpeciesColors).toEqual({
+      'Malus domestica': '#C44230',
+    })
+    expect(state.plantSpeciesColorSyncs).toBe(1)
+    expect(state.dirtyTypes).toEqual(['set-plant-color-for-species'])
+  })
+
   it('does not create a species color edit while the Plants Layer is locked', () => {
     const file = makeFile()
     file.layers = file.layers.map((layer) =>

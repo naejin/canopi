@@ -456,12 +456,28 @@ function getSpeciesPlantColorEditTargets(
   const plantIds = new Set<string>()
   const editablePlantIds = new Set<string>()
   const layerState = sceneLayerState(persisted)
+  const groupLockedMemberIds = getEffectivelyLockedGroupMemberIds(persisted)
   for (const plant of persisted.plants) {
     if (plant.canonicalName !== canonicalName) continue
     plantIds.add(plant.id)
-    if (isSceneLayerEditable(layerState.plants) && !plant.locked) editablePlantIds.add(plant.id)
+    if (
+      isSceneLayerEditable(layerState.plants)
+      && !plant.locked
+      && !groupLockedMemberIds.has(plant.id)
+    ) {
+      editablePlantIds.add(plant.id)
+    }
   }
   return { plantIds, editablePlantIds }
+}
+
+function getEffectivelyLockedGroupMemberIds(persisted: ScenePersistedState): Set<string> {
+  const memberIds = new Set<string>()
+  for (const group of persisted.groups) {
+    if (!isSceneDesignObjectLocked(persisted, group.id)) continue
+    for (const memberId of group.memberIds) memberIds.add(memberId)
+  }
+  return memberIds
 }
 
 function resolveSelectedEntitySets(
