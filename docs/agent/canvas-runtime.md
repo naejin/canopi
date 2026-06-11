@@ -162,6 +162,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - `manual` and `none` targets intentionally resolve to empty sets and are not errors.
 - Panel-origin hover and selection are presentation inputs. Resolving them must not mutate real canvas selection, labels, dirty state, or history.
 - App-owned Target presentation state is exposed through `app/panel-targets/presentation.ts`; runtime adapters and map surface controllers should consume that seam instead of raw `app/panel-targets/state.ts` signals.
+- Target map overlays for Zones must project effective Zone geometry. Rectangular and Elliptical Zone targets use the rotation-aware helpers in `canvas/runtime/zone-geometry.ts`; do not project raw persisted points for oriented Zone types.
 - Canvas-origin hover remains separate.
 
 ## Canvas2D Tab Components
