@@ -472,6 +472,41 @@ describe('SceneInteractionController', () => {
     priorFocus.remove()
   })
 
+  it('keeps Selection Action Toolbar tooltips above the Rotation Handle', () => {
+    Object.defineProperty(container, 'clientWidth', { configurable: true, value: 400 })
+    Object.defineProperty(container, 'clientHeight', { configurable: true, value: 300 })
+    store.updatePersisted((draft) => {
+      draft.zones = [makeRectZone('zone-1', [
+        { x: 160, y: 120 },
+        { x: 220, y: 120 },
+        { x: 220, y: 170 },
+        { x: 160, y: 170 },
+      ])]
+    })
+    const deps = createInteractionDeps(container, store, camera, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    })
+    const controller = new SceneInteractionController(deps as any)
+
+    deps.setSelection(['zone-1'])
+    controller.refreshMeasurements()
+
+    const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
+    const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
+    const duplicate = toolbar.querySelector<HTMLButtonElement>('[data-selection-action-command="duplicate"]')!
+    const tooltip = duplicate.querySelector<HTMLElement>('[data-selection-action-tooltip]')!
+    duplicate.dispatchEvent(new Event('pointerenter'))
+
+    expect(toolbar.style.display).toBe('flex')
+    expect(handle.style.display).toBe('inline-flex')
+    expect(tooltip.style.display).toBe('inline-flex')
+    expect(tooltip.style.bottom).toBe('100%')
+    expect(tooltip.style.marginBottom).toBe('var(--space-1)')
+    expect(tooltip.style.top).toBe('')
+    expect(Number.parseInt(toolbar.style.zIndex, 10)).toBeGreaterThan(Number.parseInt(handle.style.zIndex, 10))
+    controller.dispose()
+  })
+
   it('dispatches Selection Action Toolbar commands by mouse or focused key activation only', () => {
     const duplicateSelected = vi.fn()
     const deleteSelected = vi.fn()

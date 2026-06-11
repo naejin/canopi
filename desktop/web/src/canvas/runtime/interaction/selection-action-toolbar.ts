@@ -50,6 +50,7 @@ const TOOLBAR_GAP_PX = 14
 const ROTATION_HANDLE_RESERVE_PX = 42
 const TOOLBAR_WIDTH_PX = 142
 const TOOLBAR_HEIGHT_PX = 34
+const TOOLBAR_Z_INDEX = 28
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
 export function createSelectionActionToolbar(
@@ -60,14 +61,16 @@ export function createSelectionActionToolbar(
   root.setAttribute('role', 'toolbar')
   root.style.cssText = [
     'position: absolute',
-    'z-index: 26',
+    `z-index: ${TOOLBAR_Z_INDEX}`,
     'display: none',
     'align-items: center',
     'gap: var(--space-1)',
     'height: 34px',
     'padding: var(--space-1)',
     'background: var(--color-surface)',
-    'border: 1px solid var(--color-border-strong, var(--color-border))',
+    'border-width: 1px',
+    'border-style: solid',
+    'border-color: var(--color-border-strong)',
     'border-radius: var(--radius-md)',
     'box-shadow: 0 2px 6px rgba(44, 36, 24, 0.10)',
     'box-sizing: border-box',
@@ -343,14 +346,19 @@ function createTooltip(action: SelectionAction): HTMLSpanElement {
   tooltip.style.cssText = [
     'position: absolute',
     'left: 50%',
-    'top: calc(100% + var(--space-1))',
+    'bottom: 100%',
+    'margin-bottom: var(--space-1)',
+    'z-index: 1',
     'display: none',
     'gap: var(--space-2)',
     'align-items: center',
     'padding: var(--space-1) var(--space-2)',
     'background: var(--color-surface)',
-    'border: 1px solid var(--color-border-strong, var(--color-border))',
+    'border-width: 1px',
+    'border-style: solid',
+    'border-color: var(--color-border-strong)',
     'border-radius: var(--radius-sm)',
+    'box-shadow: var(--shadow-sm)',
     'font-size: var(--text-xs)',
     'font-weight: 600',
     'line-height: 1.2',
