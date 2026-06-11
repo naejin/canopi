@@ -95,13 +95,9 @@ function createInteractionDeps(
     setSelection,
     clearSelection,
     sceneEdits,
-    getDesignObjectSelection: overrides.getDesignObjectSelection ?? (() => ({
-      editableTargets: [],
-      lockedTargets: [],
-      blockedTargets: [],
-      bounds: null,
-      sameSpeciesReferenceCanonicalName: null,
-    })),
+    getDesignObjectSelection: overrides.getDesignObjectSelection ?? (() =>
+      getDesignObjectSelectionFromStore(store, camera)
+    ),
     selectionCommands: overrides.selectionCommands ?? {
       duplicateSelected: vi.fn(),
       deleteSelected: vi.fn(),
