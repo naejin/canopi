@@ -138,6 +138,9 @@
       "sendBackward": "Manda indietro",
       "group": "Raggruppa",
       "ungroup": "Separa",
+      "lock": "Blocca",
+      "locked": "Bloccato",
+      "unlock": "Sblocca",
       "delete": "Elimina"
     },
     "grid": {

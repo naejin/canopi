@@ -9,6 +9,8 @@ type SelectionActionCommandSurface = Pick<
   | 'deleteSelected'
   | 'bringToFront'
   | 'sendToBack'
+  | 'lockSelected'
+  | 'unlockSelected'
   | 'groupSelected'
   | 'ungroupSelected'
 >
@@ -139,6 +141,18 @@ export function createSelectionActionToolbar(
       ],
       isAvailable: isUngroupAvailable,
       run: () => options.commands.ungroupSelected(),
+    },
+    {
+      id: 'lock',
+      labelKey: 'canvas.selectionActions.lock',
+      shortcut: 'Cmd+L',
+      icon: [
+        { d: 'M7 9V7a3 3 0 016 0v2', fill: 'none' },
+        { d: 'M5 9h10v7H5z', fill: 'none' },
+        { d: 'M10 12v2', fill: 'none' },
+      ],
+      isAvailable: isLockAvailable,
+      run: () => options.commands.lockSelected(),
     },
     {
       id: 'delete',
@@ -417,4 +431,8 @@ function isGroupAvailable(selection: CanvasDesignObjectSelectionModel): boolean 
 function isUngroupAvailable(selection: CanvasDesignObjectSelectionModel): boolean {
   return selection.blockedTargets.length === 0
     && selection.editableTargets.some((target) => target.kind === 'group')
+}
+
+function isLockAvailable(selection: CanvasDesignObjectSelectionModel): boolean {
+  return selection.blockedTargets.length === 0 && selection.editableTargets.length > 0
 }

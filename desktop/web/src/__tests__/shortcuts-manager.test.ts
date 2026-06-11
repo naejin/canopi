@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { signal } from '@preact/signals'
-import { activeTool } from '../canvas/session-state'
+import { activeTool, selectedObjectIds } from '../canvas/session-state'
 import { activePanel, sidePanel } from '../app/shell/state'
 import * as documentActions from '../app/document-session/actions'
 import { commandPaletteOpen, initShortcuts } from '../shortcuts/manager'
@@ -22,6 +22,7 @@ describe('shortcut manager canvas tool switching', () => {
     activePanel.value = 'canvas'
     sidePanel.value = null
     activeTool.value = 'select'
+    selectedObjectIds.value = new Set()
     setCurrentCanvasSession(null)
     currentDesign.value = null
     nonCanvasRevision.value = 0
@@ -33,6 +34,7 @@ describe('shortcut manager canvas tool switching', () => {
   afterEach(() => {
     setCurrentCanvasSession(null)
     activeTool.value = 'select'
+    selectedObjectIds.value = new Set()
     currentDesign.value = null
     commandPaletteOpen.value = false
   })
@@ -203,7 +205,7 @@ describe('shortcut manager canvas tool switching', () => {
     expect(redo).toHaveBeenCalledTimes(1)
   })
 
-  it('routes canvas edit, ordering, lock-or-unlock, and grouping shortcuts through the App Command Graph adapter', () => {
+  it('routes canvas edit, ordering, lock, and grouping shortcuts through the App Command Graph adapter', () => {
     const copy = vi.fn()
     const paste = vi.fn()
     const duplicateSelected = vi.fn()
@@ -211,6 +213,7 @@ describe('shortcut manager canvas tool switching', () => {
     const selectAll = vi.fn()
     const bringToFront = vi.fn()
     const sendToBack = vi.fn()
+    const lockSelected = vi.fn()
     const unlockSelected = vi.fn()
     const groupSelected = vi.fn()
     const ungroupSelected = vi.fn()
@@ -223,6 +226,7 @@ describe('shortcut manager canvas tool switching', () => {
         selectAll,
         bringToFront,
         sendToBack,
+        lockSelected,
         unlockSelected,
         groupSelected,
         ungroupSelected,
@@ -236,6 +240,9 @@ describe('shortcut manager canvas tool switching', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', ctrlKey: true }))
     window.dispatchEvent(new KeyboardEvent('keydown', { key: ']' }))
     window.dispatchEvent(new KeyboardEvent('keydown', { key: '[' }))
+    selectedObjectIds.value = new Set(['plant-1'])
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'l', ctrlKey: true }))
+    selectedObjectIds.value = new Set()
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'l', ctrlKey: true }))
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', ctrlKey: true }))
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'G', ctrlKey: true, shiftKey: true }))
@@ -247,7 +254,8 @@ describe('shortcut manager canvas tool switching', () => {
     expect(selectAll).toHaveBeenCalledTimes(1)
     expect(bringToFront).toHaveBeenCalledTimes(1)
     expect(sendToBack).toHaveBeenCalledTimes(1)
-    expect(unlockSelected).toHaveBeenCalledTimes(1)
+    expect(lockSelected).toHaveBeenCalledTimes(1)
+    expect(unlockSelected).not.toHaveBeenCalled()
     expect(groupSelected).toHaveBeenCalledTimes(1)
     expect(ungroupSelected).toHaveBeenCalledTimes(1)
   })

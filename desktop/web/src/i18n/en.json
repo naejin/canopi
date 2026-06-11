@@ -138,6 +138,9 @@
       "sendBackward": "Send backward",
       "group": "Group",
       "ungroup": "Ungroup",
+      "lock": "Lock",
+      "locked": "Locked",
+      "unlock": "Unlock",
       "delete": "Delete"
     },
     "grid": {

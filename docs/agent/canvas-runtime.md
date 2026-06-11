@@ -37,6 +37,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - Canvas Layer Presentation (`app/canvas-layer-presentation/presentation.ts`) owns the visible Layer catalog and authority-correct row commands for scene Layers, basemap, contours, and hillshading. UI callers should consume that seam instead of hard-coding `base`, `contours`, or `hillshading` routing.
 - Design Object lock state lives on persisted scene entities in `SceneStore`. Production code must read and mutate object locks through scene queries/edits, never through standalone mirror signals.
 - A group is effectively locked for mutating canvas interactions when the group itself is locked or any existing member Design Object is locked. Missing member IDs do not lock a group.
+- Locked Design Objects stay hover-discoverable through visible hit testing but must not become editable selections. Direct object unlock affordances are runtime-owned overlays and must write through Scene Edit transactions. Do not reintroduce implicit unlock-all behavior through `unlockSelected()` or shortcuts.
 - Guide creation is a scene edit owned by the runtime. The `guides` signal is a chrome projection, not document authority.
 - Runtime chrome rendering and interaction snapping read guides from `SceneStore.persisted.guides`; do not read the `guides` signal in production runtime behavior.
 - Canvas signals such as selected object IDs, size mode, color mode, layer state, and guides are UI mirrors, not runtime authority.

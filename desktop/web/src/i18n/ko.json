@@ -138,6 +138,9 @@
       "sendBackward": "뒤로 보내기",
       "group": "그룹화",
       "ungroup": "그룹 해제",
+      "lock": "잠금",
+      "locked": "잠김",
+      "unlock": "잠금 해제",
       "delete": "삭제"
     },
     "grid": {

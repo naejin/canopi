@@ -138,6 +138,9 @@
       "sendBackward": "背面へ",
       "group": "グループ化",
       "ungroup": "グループ解除",
+      "lock": "ロック",
+      "locked": "ロック中",
+      "unlock": "ロック解除",
       "delete": "削除"
     },
     "grid": {

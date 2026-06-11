@@ -138,6 +138,9 @@
       "sendBackward": "Naar achteren",
       "group": "Groeperen",
       "ungroup": "Groep opheffen",
+      "lock": "Vergrendelen",
+      "locked": "Vergrendeld",
+      "unlock": "Ontgrendelen",
       "delete": "Verwijderen"
     },
     "grid": {

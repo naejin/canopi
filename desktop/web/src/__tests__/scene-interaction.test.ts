@@ -104,6 +104,8 @@ function createInteractionDeps(
       deleteSelected: vi.fn(),
       bringToFront: vi.fn(),
       sendToBack: vi.fn(),
+      lockSelected: vi.fn(),
+      unlockSelected: vi.fn(),
       groupSelected: vi.fn(),
       ungroupSelected: vi.fn(),
     },
@@ -243,6 +245,8 @@ describe('SceneInteractionController', () => {
         deleteSelected: vi.fn(),
         bringToFront: vi.fn(),
         sendToBack: vi.fn(),
+        lockSelected: vi.fn(),
+        unlockSelected: vi.fn(),
         groupSelected: vi.fn(),
         ungroupSelected: vi.fn(),
       },
@@ -258,7 +262,7 @@ describe('SceneInteractionController', () => {
     expect(toolbar?.getAttribute('aria-label')).toBe('Selection actions')
     expect(document.activeElement).toBe(priorFocus)
     expect(Number.parseFloat(toolbar?.style.top ?? '0')).toBeLessThan(100)
-    expect(toolbar?.querySelectorAll('button')).toHaveLength(4)
+    expect(toolbar?.querySelectorAll('button')).toHaveLength(5)
     const duplicate = toolbar?.querySelector<HTMLButtonElement>('[data-selection-action-command="duplicate"]')
     expect(duplicate?.getAttribute('aria-label')).toContain('Duplicate')
     expect(duplicate?.querySelector('svg')).not.toBeNull()
@@ -283,6 +287,8 @@ describe('SceneInteractionController', () => {
         deleteSelected,
         bringToFront: vi.fn(),
         sendToBack: vi.fn(),
+        lockSelected: vi.fn(),
+        unlockSelected: vi.fn(),
         groupSelected: vi.fn(),
         ungroupSelected: vi.fn(),
       },
@@ -329,6 +335,8 @@ describe('SceneInteractionController', () => {
         deleteSelected: vi.fn(),
         bringToFront: vi.fn(),
         sendToBack: vi.fn(),
+        lockSelected: vi.fn(),
+        unlockSelected: vi.fn(),
         groupSelected,
         ungroupSelected: vi.fn(),
       },
@@ -367,6 +375,8 @@ describe('SceneInteractionController', () => {
         deleteSelected: vi.fn(),
         bringToFront: vi.fn(),
         sendToBack: vi.fn(),
+        lockSelected: vi.fn(),
+        unlockSelected: vi.fn(),
         groupSelected: vi.fn(),
         ungroupSelected,
       },
@@ -408,6 +418,80 @@ describe('SceneInteractionController', () => {
     ungroup?.click()
 
     expect(ungroupSelected).toHaveBeenCalledTimes(1)
+    controller.dispose()
+  })
+
+  it('shows Lock for editable selections and dispatches through the command surface', () => {
+    const lockSelected = vi.fn()
+    const deps = {
+      ...createInteractionDeps(container, store, camera),
+      getDesignObjectSelection: () => ({
+        editableTargets: [{ kind: 'zone' as const, id: 'zone-1' }],
+        blockedTargets: [],
+        bounds: { minX: 160, minY: 100, maxX: 220, maxY: 150 },
+      }),
+      selectionCommands: {
+        duplicateSelected: vi.fn(),
+        deleteSelected: vi.fn(),
+        bringToFront: vi.fn(),
+        sendToBack: vi.fn(),
+        lockSelected,
+        unlockSelected: vi.fn(),
+        groupSelected: vi.fn(),
+        ungroupSelected: vi.fn(),
+      },
+    }
+    const controller = new SceneInteractionController(deps as any)
+
+    controller.refreshMeasurements()
+
+    const lock = container.querySelector<HTMLButtonElement>('[data-selection-action-command="lock"]')
+    expect(lock).not.toBeNull()
+    expect(lock?.getAttribute('aria-label')).toContain('Lock')
+    lock?.click()
+
+    expect(lockSelected).toHaveBeenCalledTimes(1)
+    controller.dispose()
+  })
+
+  it('shows a direct unlock affordance when hovering a locked Design Object', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [{
+        kind: 'plant',
+        id: 'locked-plant',
+        locked: true,
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        stratum: null,
+        canopySpreadM: 2,
+        position: { x: 20, y: 30 },
+        rotationDeg: null,
+        scale: 2,
+        notes: null,
+        plantedDate: null,
+        quantity: 1,
+      }]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    events.pointerMove({ x: 20, y: 30 })
+
+    const affordance = container.querySelector<HTMLElement>('[data-locked-object-affordance]')
+    expect(affordance).not.toBeNull()
+    expect(affordance?.dataset.lockedObjectId).toBe('locked-plant')
+    const unlock = affordance?.querySelector<HTMLButtonElement>('[data-locked-object-unlock]')
+    expect(unlock?.getAttribute('aria-label')).toContain('Unlock')
+    expect(selectedObjectIds.value).toEqual(new Set())
+
+    unlock?.click()
+
+    expect(store.persisted.plants[0]?.locked).toBe(false)
+    expect(onSceneEditCommit).toHaveBeenCalledWith('unlock-design-object')
+    expect(selectedObjectIds.value).toEqual(new Set())
     controller.dispose()
   })
 

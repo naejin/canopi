@@ -9,7 +9,7 @@ import type { CameraController } from './camera'
 import type { PlantPresentationContext } from './plant-presentation'
 import type { SpeciesCacheEntry } from './species-cache'
 import type { SceneViewportState } from './scene'
-import { hitTestVisibleTopLevel } from './interaction/hit-testing'
+import { hitTestVisibleTopLevel, type TopLevelTarget } from './interaction/hit-testing'
 import { createHoverTooltip, type HoverTooltipController } from './interaction/hover-tooltip'
 import {
   createInteractionPreview,
@@ -40,6 +40,15 @@ import {
   type SelectionActionToolbarController,
 } from './interaction/selection-action-toolbar'
 import type { CanvasDesignObjectSelectionModel, CanvasSceneEditCommandSurface } from './runtime'
+import {
+  createLockedObjectAffordance,
+  type LockedObjectAffordanceController,
+} from './interaction/locked-object-affordance'
+import {
+  getLockedSceneDesignObjectIds,
+  setSceneDesignObjectLocks,
+} from './scene/locks'
+import type { ScenePersistedState } from './scene'
 
 type InteractionTool = 'select' | 'hand' | 'rectangle' | 'text' | 'plant-stamp' | 'object-stamp' | 'plant-spacing' | string
 
@@ -61,6 +70,8 @@ export interface SceneInteractionDeps {
     | 'deleteSelected'
     | 'bringToFront'
     | 'sendToBack'
+    | 'lockSelected'
+    | 'unlockSelected'
     | 'groupSelected'
     | 'ungroupSelected'
   >
@@ -82,6 +93,7 @@ export class SceneInteractionController {
   private readonly _frame: SceneInteractionFrame
   private readonly _sharedGestures: SceneInteractionSharedGestures
   private readonly _selectionToolbar: SelectionActionToolbarController
+  private readonly _lockedAffordance: LockedObjectAffordanceController
   private _tool: InteractionTool = 'select'
 
   constructor(private readonly _deps: SceneInteractionDeps) {
@@ -129,6 +141,10 @@ export class SceneInteractionController {
       getSelection: this._deps.getDesignObjectSelection,
       commands: this._deps.selectionCommands,
     })
+    this._lockedAffordance = createLockedObjectAffordance({
+      container: this._deps.container,
+      onUnlock: (id) => this._unlockLockedObject(id),
+    })
     this._frame = createSceneInteractionFrame({
       container: this._deps.container,
       handlers: {
@@ -164,6 +180,7 @@ export class SceneInteractionController {
     this._frame.dispose(() => {
       this._deps.setHoveredEntityId(null)
       this._selectionToolbar.dispose()
+      this._lockedAffordance.dispose()
       this._tools.dispose()
       this._preview.remove()
       this._tooltip.dispose()
@@ -193,6 +210,7 @@ export class SceneInteractionController {
   private readonly _onPointerDown = (event: PointerEvent): void => {
     if (event.button !== 0 && event.button !== 1) return
     if (this._selectionToolbar.contains(event.target)) return
+    if (this._lockedAffordance.contains(event.target)) return
     if (this._tools.shouldIgnorePointerEvent(event.target)) return
 
     const containerRect = this._deps.container.getBoundingClientRect()
@@ -235,12 +253,14 @@ export class SceneInteractionController {
   private readonly _onPointerLeave = (): void => {
     this._deps.setHoveredEntityId(null)
     this._tooltip.hide()
+    this._lockedAffordance.hide()
   }
 
   private _updateHover(event: PointerEvent): void {
     if (this._tools.shouldSuppressHover()) {
       this._deps.setHoveredEntityId(null)
       this._tooltip.hide()
+      this._lockedAffordance.hide()
       return
     }
 
@@ -249,6 +269,7 @@ export class SceneInteractionController {
       || event.clientY < rect.top || event.clientY > rect.bottom) {
       this._deps.setHoveredEntityId(null)
       this._tooltip.hide()
+      this._lockedAffordance.hide()
       return
     }
     const screen = { x: event.clientX - rect.left, y: event.clientY - rect.top }
@@ -263,6 +284,7 @@ export class SceneInteractionController {
     if (hit) {
       this._deps.setHoveredEntityId(hit.id)
     }
+    this._syncLockedObjectAffordance(hit, screen, this._deps.getSceneStore().persisted)
 
     if (hit?.kind === 'plant') {
       const plant = this._deps.getSceneStore().persisted.plants.find((p) => p.id === hit.id)
@@ -278,6 +300,7 @@ export class SceneInteractionController {
 
   private readonly _onPointerMove = (event: PointerEvent): void => {
     if (this._selectionToolbar.contains(event.target)) return
+    if (this._lockedAffordance.contains(event.target)) return
     if (this._tools.shouldIgnorePointerEvent(event.target)) return
 
     if (!this._frame.hasPointerGesture()) {
@@ -414,6 +437,7 @@ export class SceneInteractionController {
       clearHover: () => {
         this._deps.setHoveredEntityId(null)
         this._tooltip.hide()
+        this._lockedAffordance.hide()
       },
       resetCursor: () => {
         this._deps.container.style.cursor = cursorForTool(this._tool)
@@ -456,4 +480,42 @@ export class SceneInteractionController {
     if (this._tool !== name) this.setTool(name)
   }
 
+  private _syncLockedObjectAffordance(
+    hit: TopLevelTarget | null,
+    screen: ScenePoint,
+    scene: ScenePersistedState,
+  ): void {
+    if (!hit || isTargetLayerLocked(scene, hit)) {
+      this._lockedAffordance.hide()
+      return
+    }
+    if (!getLockedSceneDesignObjectIds(scene).has(hit.id)) {
+      this._lockedAffordance.hide()
+      return
+    }
+    this._lockedAffordance.show({
+      id: hit.id,
+      screenX: screen.x,
+      screenY: screen.y,
+    })
+  }
+
+  private _unlockLockedObject(id: string): void {
+    const committed = this._deps.sceneEdits.run('unlock-design-object', (tx) => {
+      tx.mutate((draft) => setSceneDesignObjectLocks(draft, [id], false))
+    })
+    if (committed) this._lockedAffordance.hide()
+  }
+
+}
+
+function isTargetLayerLocked(scene: ScenePersistedState, target: TopLevelTarget): boolean {
+  const layerName = target.kind === 'plant'
+    ? 'plants'
+    : target.kind === 'zone'
+      ? 'zones'
+      : target.kind === 'annotation'
+        ? 'annotations'
+        : scene.groups.find((group) => group.id === target.id)?.layer
+  return scene.layers.find((layer) => layer.name === layerName)?.locked === true
 }

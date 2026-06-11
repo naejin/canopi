@@ -1103,11 +1103,10 @@ describe('scene canvas runtime', () => {
 
     invalidate.mockClear()
     runtime.commandSurface.sceneEdits.unlockSelected()
-    expect(invalidate).toHaveBeenCalledTimes(1)
-    expect(invalidate).toHaveBeenLastCalledWith('scene')
+    expect(invalidate).not.toHaveBeenCalled()
   })
 
-  it('locks and unlocks selected Design Objects through scene edit history and serialization', () => {
+  it('locks selected Design Objects through scene edit history and serialization', () => {
     const cleanState = createCleanStateAdapterProbe()
     const runtime = new SceneCanvasRuntime({ appAdapter: cleanState.adapter })
     const file = fileWithOnlyPlants('plant-1')
@@ -1134,7 +1133,7 @@ describe('scene canvas runtime', () => {
 
     runtime.commandSurface.sceneEdits.unlockSelected()
     expect(runtime.documentSurface.serializeDocument({ name: file.name }, file).plants.find((plant) => plant.id === 'plant-1')?.locked)
-      .toBe(false)
+      .toBe(true)
   })
 
   it('edits layer state through the scene edit history and projection signals', () => {

@@ -138,6 +138,9 @@
       "sendBackward": "Reculer",
       "group": "Grouper",
       "ungroup": "Dégrouper",
+      "lock": "Verrouiller",
+      "locked": "Verrouillé",
+      "unlock": "Déverrouiller",
       "delete": "Supprimer"
     },
     "grid": {

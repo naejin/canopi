@@ -138,6 +138,9 @@
       "sendBackward": "Enviar para trás",
       "group": "Agrupar",
       "ungroup": "Desagrupar",
+      "lock": "Bloquear",
+      "locked": "Bloqueado",
+      "unlock": "Desbloquear",
       "delete": "Excluir"
     },
     "grid": {

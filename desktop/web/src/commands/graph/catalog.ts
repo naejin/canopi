@@ -371,11 +371,8 @@ export const APP_COMMANDS: readonly AppCommandDefinition[] = [
   },
   {
     id: 'canvas.lockOrUnlockSelected',
-    run: (state) => runCanvas(state, (canvas) => {
-      if (state.canvasHasSelection) canvas.sceneEdits.lockSelected()
-      else canvas.sceneEdits.unlockSelected()
-    }),
-    disabled: (state) => !state.canvas,
+    run: (state) => runCanvas(state, (canvas) => canvas.sceneEdits.lockSelected()),
+    disabled: (state) => !state.canvas || !state.canvasHasSelection,
   },
   {
     id: 'canvas.groupSelected',

@@ -9,7 +9,6 @@ import type {
   SceneStore,
 } from '../scene'
 import {
-  clearSceneDesignObjectLocks,
   isSceneDesignObjectLocked,
   setSceneDesignObjectLocks,
 } from '../scene'
@@ -181,10 +180,10 @@ export class SceneRuntimeMutationController {
     const persisted = this._sceneStore.persisted
     const selected = getSelectedTopLevelTargets(persisted, this._sceneStore.session.selectedEntityIds)
     const selectedIds = selected.map((target) => target.id)
+    if (selectedIds.length === 0) return
     this._sceneEdits.run('unlock-selected', (tx) => {
       tx.mutate((draft) => {
-        if (selectedIds.length > 0) setSceneDesignObjectLocks(draft, selectedIds, false)
-        else clearSceneDesignObjectLocks(draft)
+        setSceneDesignObjectLocks(draft, selectedIds, false)
       })
     })
   }
