@@ -57,6 +57,16 @@ describe('shortcut manager canvas tool switching', () => {
     expect(activeTool.value).toBe('ellipse')
   })
 
+  it('routes the Line tool shortcut through the live canvas session', () => {
+    const setTool = vi.fn()
+    mountCanvasCommandSurface({ tools: { setTool } })
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'l' }))
+
+    expect(setTool).toHaveBeenCalledWith('line')
+    expect(activeTool.value).toBe('line')
+  })
+
   it('routes the polygon tool shortcut through the live canvas session', () => {
     const setTool = vi.fn()
     mountCanvasCommandSurface({ tools: { setTool } })

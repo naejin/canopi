@@ -93,7 +93,7 @@
       "freeform": "Forme libre",
       "freeformDesc": "Dessiner des formes à main levée",
       "line": "Ligne",
-      "lineDesc": "Dessiner des lignes et polylignes",
+      "lineDesc": "Dessiner des zones linéaires",
       "text": "Texte",
       "textDesc": "Ajouter des étiquettes texte",
       "measure": "Mesure",

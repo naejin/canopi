@@ -172,6 +172,33 @@ describe('projectTargetsToMapFeatures', () => {
     expect(ring?.[0]).toEqual(ring?.[ring.length - 1])
   })
 
+  it('projects a Linear Zone target to a line feature', () => {
+    const result = projectTargetsToMapFeatures(
+      [{ kind: 'zone', zone_name: 'hedgerow' }],
+      createScene({
+        zones: [
+          {
+            name: 'hedgerow',
+            zoneType: 'line',
+            points: [
+              { x: 0, y: 0 },
+              { x: 12, y: -6 },
+            ],
+          },
+        ],
+      }),
+      LOCATION,
+    )
+
+    expect(result.unresolvedTargets).toEqual([])
+    expect(result.skippedSceneIds).toEqual([])
+    expect(result.features).toHaveLength(1)
+    expect(result.features[0]?.properties).toEqual({ kind: 'zone', sceneId: 'hedgerow' })
+    expect(result.features[0]?.geometry).toMatchObject({
+      type: 'LineString',
+    })
+  })
+
   it('reports missing scene-backed targets and treats manual and none as intentionally empty', () => {
     const missingSpecies = speciesTarget('Pyrus communis')
     const missingPlant: PanelTarget = { kind: 'placed_plant', plant_id: 'missing-plant' }

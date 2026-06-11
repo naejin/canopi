@@ -156,6 +156,46 @@ describe('CanvasToolbar', () => {
     expect(setTool).toHaveBeenCalledWith('ellipse')
   })
 
+  it('orders toolbar tools by navigation, creation, and reuse groups', async () => {
+    await act(async () => {
+      render(<CanvasToolbar />, container)
+      await Promise.resolve()
+    })
+
+    const tools = Array.from(container.querySelectorAll<HTMLButtonElement>('button[data-tool]'))
+      .map((button) => button.dataset.tool)
+
+    expect(tools).toEqual([
+      'select',
+      'hand',
+      'line',
+      'rectangle',
+      'ellipse',
+      'polygon',
+      'text',
+      'object-stamp',
+      'plant-spacing',
+    ])
+  })
+
+  it('exposes the Line shape tool in the toolbar', async () => {
+    await act(async () => {
+      render(<CanvasToolbar />, container)
+      await Promise.resolve()
+    })
+
+    const button = container.querySelector<HTMLButtonElement>('button[data-tool="line"]')
+    expect(button).not.toBeNull()
+    expect(button?.getAttribute('aria-keyshortcuts')).toBe('L')
+
+    await act(async () => {
+      button?.click()
+      await Promise.resolve()
+    })
+
+    expect(setTool).toHaveBeenCalledWith('line')
+  })
+
   it('keeps an open side panel when clicking a toolbar tool', async () => {
     sidePanel.value = 'plant-db'
 

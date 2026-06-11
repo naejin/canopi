@@ -38,7 +38,7 @@ export function hitTestTopLevel(
         return { kind: 'group', id: group.id }
       }
       const zone = scene.zones.find((entry) => entry.name === memberId)
-      if (zone && hitZone(zone, point)) return { kind: 'group', id: group.id }
+      if (zone && hitZone(zone, point, viewportScale)) return { kind: 'group', id: group.id }
       const annotation = scene.annotations.find((entry) => entry.id === memberId)
       if (annotation && hitAnnotation(annotation, point, viewportScale)) return { kind: 'group', id: group.id }
     }
@@ -64,7 +64,7 @@ export function hitTestTopLevel(
     const zone = scene.zones[i]!
     if (groupedMembers.has(zone.name)) continue
     if (!isLayerInteractive(scene, 'zones')) continue
-    if (hitZone(zone, point)) return { kind: 'zone', id: zone.name }
+    if (hitZone(zone, point, viewportScale)) return { kind: 'zone', id: zone.name }
   }
 
   return null
@@ -118,7 +118,9 @@ export function queryRectTopLevel(
   return targets
 }
 
-function hitZone(zone: SceneZoneEntity, point: ScenePoint): boolean {
+const LINE_HIT_TOLERANCE_PX = 6
+
+function hitZone(zone: SceneZoneEntity, point: ScenePoint, viewportScale: number): boolean {
   if (zone.zoneType === 'rect' && zone.points.length >= 4) {
     const bounds = zoneBounds(zone)
     return point.x >= bounds.x && point.x <= bounds.x + bounds.width && point.y >= bounds.y && point.y <= bounds.y + bounds.height
@@ -136,11 +138,20 @@ function hitZone(zone: SceneZoneEntity, point: ScenePoint): boolean {
     return pointInOrOnPolygon(point, zone.points)
   }
 
+  if (zone.zoneType === 'line' && zone.points.length >= 2) {
+    const toleranceWorld = LINE_HIT_TOLERANCE_PX / Math.max(viewportScale, 1e-6)
+    return pointNearSegment(point, zone.points[0]!, zone.points[1]!, toleranceWorld)
+  }
+
   const bounds = zoneBounds(zone)
   return point.x >= bounds.x && point.x <= bounds.x + bounds.width && point.y >= bounds.y && point.y <= bounds.y + bounds.height
 }
 
 function zoneIntersectsRect(zone: SceneZoneEntity, rect: SimpleRect): boolean {
+  if (zone.zoneType === 'line' && zone.points.length >= 2) {
+    return segmentIntersectsRect(zone.points[0]!, zone.points[1]!, rect)
+  }
+
   if (zone.zoneType === 'polygon' && zone.points.length >= 3) {
     return polygonIntersectsRect(zone.points, rect)
   }
@@ -167,6 +178,18 @@ function polygonIntersectsRect(polygon: readonly ScenePoint[], rect: SimpleRect)
   }
 
   return false
+}
+
+function segmentIntersectsRect(start: ScenePoint, end: ScenePoint, rect: SimpleRect): boolean {
+  if (!rectsIntersect(pointsBounds([start, end]), rect)) return false
+
+  const rectPoint = rect.width <= GEOMETRY_EPSILON && rect.height <= GEOMETRY_EPSILON
+  if (rectPoint) return pointOnSegment({ x: rect.x, y: rect.y }, start, end)
+
+  if (pointInRect(start, rect) || pointInRect(end, rect)) return true
+
+  return rectEdgeSegments(rectCorners(rect))
+    .some(([rectStart, rectEnd]) => segmentsIntersect(start, end, rectStart, rectEnd))
 }
 
 const GEOMETRY_EPSILON = 0.000001
@@ -262,6 +285,22 @@ function pointOnSegment(point: ScenePoint, start: ScenePoint, end: ScenePoint): 
     point.y >= Math.min(start.y, end.y) - GEOMETRY_EPSILON &&
     point.y <= Math.max(start.y, end.y) + GEOMETRY_EPSILON
   )
+}
+
+function pointNearSegment(point: ScenePoint, start: ScenePoint, end: ScenePoint, tolerance: number): boolean {
+  const dx = end.x - start.x
+  const dy = end.y - start.y
+  const lengthSquared = dx * dx + dy * dy
+  if (lengthSquared <= GEOMETRY_EPSILON) {
+    return Math.hypot(point.x - start.x, point.y - start.y) <= tolerance
+  }
+
+  const t = Math.max(0, Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared))
+  const projected = {
+    x: start.x + t * dx,
+    y: start.y + t * dy,
+  }
+  return Math.hypot(point.x - projected.x, point.y - projected.y) <= tolerance + GEOMETRY_EPSILON
 }
 
 function orientation(a: ScenePoint, b: ScenePoint, c: ScenePoint): number {

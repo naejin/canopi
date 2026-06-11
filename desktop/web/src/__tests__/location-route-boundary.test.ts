@@ -33,12 +33,14 @@ describe('location route boundary', () => {
     expect(tabSource).not.toContain('computeSavedPinState')
   })
 
-  it('keeps the MapLibre map editing host off the shared Location barrel', () => {
+  it('keeps Location map editing behind MapLibre surface seams', () => {
     const barrelSource = readSource('../app/location/index.ts')
     const mapEditingSource = readSource('../app/location/map-editing.ts')
     const tabSource = readSource('../components/canvas/LocationTab.tsx')
 
-    expect(mapEditingSource).toContain('../maplibre/host')
+    expect(mapEditingSource).toContain('../../maplibre/surface-adapter')
+    expect(mapEditingSource).toContain('../../maplibre/location-map')
+    expect(mapEditingSource).not.toContain('../maplibre/host')
     expect(mapEditingSource).not.toContain("maplibre-gl")
     expect(mapEditingSource).not.toContain('createMapLibreBasemapStyle')
     expect(barrelSource).not.toContain('./map-editing')

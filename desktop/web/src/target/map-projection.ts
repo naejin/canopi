@@ -25,6 +25,7 @@ export interface TargetMapPlantRef {
 
 export interface TargetMapZoneRef {
   readonly name: string
+  readonly zoneType?: string
   readonly points: readonly TargetMapProjectionPoint[]
 }
 
@@ -45,7 +46,7 @@ export interface TargetMapPlantFeature {
   }
 }
 
-export interface TargetMapZoneFeature {
+export interface TargetMapPolygonZoneFeature {
   readonly type: 'Feature'
   readonly geometry: {
     readonly type: 'Polygon'
@@ -57,6 +58,19 @@ export interface TargetMapZoneFeature {
   }
 }
 
+export interface TargetMapLineZoneFeature {
+  readonly type: 'Feature'
+  readonly geometry: {
+    readonly type: 'LineString'
+    readonly coordinates: readonly (readonly [number, number])[]
+  }
+  readonly properties: {
+    readonly kind: 'zone'
+    readonly sceneId: string
+  }
+}
+
+export type TargetMapZoneFeature = TargetMapPolygonZoneFeature | TargetMapLineZoneFeature
 export type TargetMapFeature = TargetMapPlantFeature | TargetMapZoneFeature
 export type TargetMapSkippedReason = 'missing_location' | null
 
@@ -97,6 +111,17 @@ export function projectTargetResolutionToMapFeatures(
     skippedSceneIds.push(sceneId)
   }
 
+  const projectPoint = (point: TargetMapProjectionPoint): readonly [number, number] => {
+    const geo = projectionBackend.worldToGeo(
+      point.x,
+      point.y,
+      location.lat,
+      location.lon,
+      location.northBearingDeg ?? 0,
+    )
+    return [geo.lng, geo.lat]
+  }
+
   for (const ref of resolution.resolvedRefs) {
     if (ref.kind === 'plant') {
       const key = `plant:${ref.id}`
@@ -126,20 +151,31 @@ export function projectTargetResolutionToMapFeatures(
     }
 
     const key = `zone:${ref.id}`
-    if (!ref.zone.points || ref.zone.points.length < 3) {
+    const points = ref.zone.points
+    if (ref.zone.zoneType === 'line') {
+      if (!points || points.length < 2) {
+        pushSkipped(key, ref.id)
+        continue
+      }
+      features.push({
+        type: 'Feature',
+        geometry: {
+          type: 'LineString',
+          coordinates: points.map(projectPoint),
+        },
+        properties: {
+          kind: 'zone',
+          sceneId: ref.zone.name,
+        },
+      })
+      continue
+    }
+
+    if (!points || points.length < 3) {
       pushSkipped(key, ref.id)
       continue
     }
-    const ring = ref.zone.points.map((point): readonly [number, number] => {
-      const geo = projectionBackend.worldToGeo(
-        point.x,
-        point.y,
-        location.lat,
-        location.lon,
-        location.northBearingDeg ?? 0,
-      )
-      return [geo.lng, geo.lat]
-    })
+    const ring = points.map(projectPoint)
     const first = ring[0]!
     const last = ring[ring.length - 1]!
     const closedRing = first[0] === last[0] && first[1] === last[1]

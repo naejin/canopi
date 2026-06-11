@@ -93,7 +93,7 @@
       "freeform": "Freeform",
       "freeformDesc": "Draw freehand shapes",
       "line": "Line",
-      "lineDesc": "Draw lines and polylines",
+      "lineDesc": "Draw linear zones",
       "text": "Text",
       "textDesc": "Add text labels",
       "measure": "Measure",

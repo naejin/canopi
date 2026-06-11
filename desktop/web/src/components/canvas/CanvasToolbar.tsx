@@ -18,6 +18,7 @@ import {
   HandIcon,
   UndoIcon,
   RedoIcon,
+  LineIcon,
   RectangleIcon,
   EllipseIcon,
   PolygonIcon,
@@ -39,12 +40,13 @@ type IconComponent = (props: { className?: string }) => ComponentChildren
 const TOOL_ICONS: Record<string, IconComponent> = {
   select: SelectIcon,
   hand: HandIcon,
-  'object-stamp': ObjectStampIcon,
-  'plant-spacing': SpacingIcon,
+  line: LineIcon,
   rectangle: RectangleIcon,
   ellipse: EllipseIcon,
   polygon: PolygonIcon,
   text: TextIcon,
+  'object-stamp': ObjectStampIcon,
+  'plant-spacing': SpacingIcon,
 }
 
 const ACTION_ICONS: Record<string, IconComponent> = {
@@ -75,7 +77,8 @@ export function CanvasToolbar() {
   const toolbarProjection = appCommandGraphToolbarProjection.value
   const allTools = [
     ...toolbarProjection.primaryTools,
-    ...toolbarProjection.shapeTools,
+    ...toolbarProjection.creationTools,
+    ...toolbarProjection.reuseTools,
   ]
 
   const toolbarRef = useRef<HTMLDivElement>(null)
@@ -230,7 +233,11 @@ export function CanvasToolbar() {
 
       <div className={styles.separator} role="separator" aria-hidden="true" />
 
-      {toolbarProjection.shapeTools.map(renderToolButton)}
+      {toolbarProjection.creationTools.map(renderToolButton)}
+
+      <div className={styles.separator} role="separator" aria-hidden="true" />
+
+      {toolbarProjection.reuseTools.map(renderToolButton)}
 
       <div className={styles.separator} role="separator" aria-hidden="true" />
 

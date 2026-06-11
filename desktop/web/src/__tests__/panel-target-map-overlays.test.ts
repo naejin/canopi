@@ -40,6 +40,18 @@ function createScene() {
       fillColor: null,
       notes: null,
     },
+    {
+      kind: 'zone',
+      locked: false,
+      name: 'hedgerow',
+      zoneType: 'line',
+      points: [
+        { x: 0, y: 0 },
+        { x: 12, y: -6 },
+      ],
+      fillColor: null,
+      notes: null,
+    },
   ]
   return scene
 }
@@ -66,6 +78,34 @@ describe('panel-target map overlays', () => {
     expect(overlay.layers.map((layer) => layer.type)).toEqual(['fill', 'line', 'circle'])
     expect(overlay.source.data.features).toHaveLength(2)
     expect(overlay.hasRenderableFeatures).toBe(true)
+  })
+
+  it('renders Linear Zone targets through line overlays without fill', () => {
+    const projection = targets.resolve(
+      [{ kind: 'zone', zone_name: 'hedgerow' }],
+      targets.indexScene(createScene()),
+    )
+
+    const overlay = createPanelTargetMapOverlayContract(
+      'selection',
+      projectTargetResolutionToMapFeatures(projection, LOCATION),
+    )
+
+    expect(overlay.source.data.features).toHaveLength(1)
+    expect(overlay.source.data.features[0]?.geometry.type).toBe('LineString')
+
+    const fillLayer = overlay.layers.find(
+      (layer) => layer.id === 'panel-target-selection-zones-fill',
+    )
+    const lineLayer = overlay.layers.find(
+      (layer) => layer.id === 'panel-target-selection-zones-line',
+    )
+    expect(fillLayer?.filter).toEqual([
+      'all',
+      ['==', ['get', 'kind'], 'zone'],
+      ['==', ['geometry-type'], 'Polygon'],
+    ])
+    expect(lineLayer?.filter).toEqual(['==', ['get', 'kind'], 'zone'])
   })
 
   it('preserves empty overlays without inventing renderable features', () => {

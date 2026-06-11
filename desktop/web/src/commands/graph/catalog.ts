@@ -47,6 +47,7 @@ export type AppCommandId =
   | 'view.toggleTheme'
   | 'canvas.tool.select'
   | 'canvas.tool.hand'
+  | 'canvas.tool.line'
   | 'canvas.tool.rectangle'
   | 'canvas.tool.ellipse'
   | 'canvas.tool.polygon'
@@ -266,6 +267,13 @@ export const APP_COMMANDS: readonly AppCommandDefinition[] = [
     shortcut: TOOL_SHORTCUTS.hand,
     palette: true,
     run: () => switchTool('hand'),
+  },
+  {
+    id: 'canvas.tool.line',
+    label: () => t('canvas.tools.line'),
+    shortcut: TOOL_SHORTCUTS.line,
+    palette: true,
+    run: () => switchTool('line'),
   },
   {
     id: 'canvas.tool.rectangle',

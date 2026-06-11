@@ -16,6 +16,7 @@ interface AppCommandShortcutMatch {
 const TOOL_COMMAND_IDS: Record<string, AppCommandId> = {
   select: 'canvas.tool.select',
   hand: 'canvas.tool.hand',
+  line: 'canvas.tool.line',
   rectangle: 'canvas.tool.rectangle',
   ellipse: 'canvas.tool.ellipse',
   polygon: 'canvas.tool.polygon',
