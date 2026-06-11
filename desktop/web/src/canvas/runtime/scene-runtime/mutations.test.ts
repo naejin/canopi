@@ -405,4 +405,40 @@ describe('scene runtime mutation controller', () => {
     expect(state.dirtyTypes).toEqual(['set-plant-color-for-species'])
     expect(state.invalidations).toBe(1)
   })
+
+  it('does not recolor locked Plants through species-wide color edits', () => {
+    const file = makeFile()
+    file.plants = file.plants.map((plant) =>
+      plant.id === 'plant-2' ? { ...plant, locked: true } : plant,
+    )
+    const { controller, sceneStore, state } = createController(file)
+
+    const changed = controller.setPlantColorForSpecies('Malus domestica', '#C44230')
+
+    expect(changed).toBe(1)
+    expect(sceneStore.persisted.plants.find((plant) => plant.id === 'plant-1')?.color).toBe('#C44230')
+    expect(sceneStore.persisted.plants.find((plant) => plant.id === 'plant-2')?.color).toBeNull()
+    expect(sceneStore.persisted.plantSpeciesColors).toEqual({
+      'Malus domestica': '#C44230',
+    })
+    expect(state.plantSpeciesColorSyncs).toBe(1)
+    expect(state.dirtyTypes).toEqual(['set-plant-color-for-species'])
+  })
+
+  it('does not create a species color edit while the Plants Layer is locked', () => {
+    const file = makeFile()
+    file.layers = file.layers.map((layer) =>
+      layer.name === 'plants' ? { ...layer, locked: true } : layer,
+    )
+    const { controller, sceneStore, state } = createController(file)
+
+    const changed = controller.setPlantColorForSpecies('Malus domestica', '#C44230')
+
+    expect(changed).toBe(0)
+    expect(sceneStore.persisted.plants.map((plant) => plant.color)).toEqual([null, null])
+    expect(sceneStore.persisted.plantSpeciesColors).toEqual({})
+    expect(state.plantSpeciesColorSyncs).toBe(0)
+    expect(state.dirtyTypes).toEqual([])
+    expect(state.invalidations).toBe(0)
+  })
 })

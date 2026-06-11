@@ -356,12 +356,14 @@ export class SceneRuntimeMutationController {
 
   setPlantColorForSpecies(canonicalName: string, color: string | null): number {
     const nextColor = normalizeHexColor(color)
+    const editablePlantIds = getEditableSpeciesPlantIds(this._sceneStore.persisted, canonicalName)
+    if (editablePlantIds.size === 0) return 0
     let changed = 0
 
     this._sceneEdits.run('set-plant-color-for-species', (tx) => {
       tx.mutate((persisted) => {
         persisted.plants = persisted.plants.map((plant) => {
-          if (plant.canonicalName !== canonicalName) return plant
+          if (!editablePlantIds.has(plant.id)) return plant
           const currentColor = normalizeHexColor(plant.color)
           if (currentColor === nextColor) return plant
           changed += 1
@@ -445,6 +447,17 @@ function isSceneLayerEditable(
   layer: { visible: boolean; locked: boolean } | undefined,
 ): boolean {
   return layer?.visible !== false && layer?.locked !== true
+}
+
+function getEditableSpeciesPlantIds(persisted: ScenePersistedState, canonicalName: string): Set<string> {
+  const ids = new Set<string>()
+  const layerState = sceneLayerState(persisted)
+  if (!isSceneLayerEditable(layerState.plants)) return ids
+  for (const plant of persisted.plants) {
+    if (plant.canonicalName !== canonicalName || plant.locked) continue
+    ids.add(plant.id)
+  }
+  return ids
 }
 
 function resolveSelectedEntitySets(
