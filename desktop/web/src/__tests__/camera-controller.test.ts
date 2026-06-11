@@ -36,6 +36,7 @@ function createScene(): ScenePersistedState {
           { x: 30, y: 40 },
           { x: 0, y: 40 },
         ],
+        rotationDeg: 0,
         fillColor: null,
         notes: null,
       },
@@ -138,6 +139,7 @@ describe('computeSceneBounds', () => {
         { x: 50, y: 60 },
         { x: 30, y: 20 },
       ],
+      rotationDeg: 0,
       fillColor: null,
       notes: null,
     }]
@@ -147,6 +149,31 @@ describe('computeSceneBounds', () => {
       minY: 40,
       maxX: 80,
       maxY: 80,
+    })
+  })
+
+  it('includes oriented Elliptical Zone bounds', () => {
+    const scene = createScene()
+    scene.plants = []
+    scene.zones = [{
+      kind: 'zone',
+      locked: false,
+      name: 'ellipse-1',
+      zoneType: 'ellipse',
+      points: [
+        { x: 0, y: 0 },
+        { x: 4, y: 1 },
+      ],
+      rotationDeg: 90,
+      fillColor: null,
+      notes: null,
+    }]
+
+    expect(computeSceneBounds(scene)).toEqual({
+      minX: -1,
+      minY: -4,
+      maxX: 1,
+      maxY: 4,
     })
   })
 

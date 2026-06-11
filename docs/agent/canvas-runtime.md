@@ -97,6 +97,12 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - `canvas/plant-stamp-source.ts` owns Plant Stamp Source selection plus drag data parsing/serialization. Plant Stamp tool modules consume that seam and clear the selected source on adapter deactivation/disposal; Species Catalog UI modules call it instead of writing source state or hand-assembling drag payloads.
 - Guard Scene Edit ownership with source boundary tests in `scene-interaction-tool-boundary.test.ts`, focused tool-module tests such as `plant-spacing-tool.test.ts`, and user-equivalent frame lifecycle tests in `scene-interaction.test.ts` or `scene-interaction-frame.test.ts`. Add tests before moving another tool concern across the router/module boundary.
 
+## Zone Geometry
+
+- Zone file data carries orientation as `Zone.rotation`; scene runtime entities expose it as `SceneZoneEntity.rotationDeg`. Missing rotation from older documents hydrates to `0`, and new saves serialize an explicit numeric rotation.
+- Rectangular and Elliptical Zones are oriented shapes. Rendering, hit testing, band selection, object stamp previews, selection/group bounds, zoom-to-fit, and Zone Measurements must consume the shared helpers in `canvas/runtime/zone-geometry.ts` instead of duplicating axis-aligned bounds.
+- Linear and Polygonal Zones still derive geometry from their saved points; keep their rotation value at `0` unless a future feature deliberately defines oriented behavior for those Zone types.
+
 ## Zone Measurements
 
 - Zone Measurements are derived presentation for zone geometry, not persisted design objects or annotations.

@@ -31,23 +31,38 @@ export function createEllipticalZoneMeasurementsFromRect(rect: ZoneMeasurementRe
   )
 }
 
-export function createEllipticalZoneMeasurements(center: ScenePoint, radii: ScenePoint): ZoneMeasurementLabel[] {
+export function createEllipticalZoneMeasurements(
+  center: ScenePoint,
+  radii: ScenePoint,
+  rotationDeg = 0,
+): ZoneMeasurementLabel[] {
   const width = Math.abs(radii.x) * 2
   const height = Math.abs(radii.y) * 2
   if (width < 0.5 || height < 0.5) return []
+
+  const widthPosition = rotatePointAround(
+    { x: center.x, y: center.y - Math.abs(radii.y) },
+    center,
+    rotationDeg,
+  )
+  const heightPosition = rotatePointAround(
+    { x: center.x + Math.abs(radii.x), y: center.y },
+    center,
+    rotationDeg,
+  )
 
   return [
     {
       id: 'ellipse-width',
       kind: 'dimension',
       text: `W ${formatMetricDistance(width)}`,
-      worldPosition: { x: center.x, y: center.y - Math.abs(radii.y) },
+      worldPosition: widthPosition,
     },
     {
       id: 'ellipse-height',
       kind: 'dimension',
       text: `H ${formatMetricDistance(height)}`,
-      worldPosition: { x: center.x + Math.abs(radii.x), y: center.y },
+      worldPosition: heightPosition,
     },
     {
       id: 'area',
@@ -196,4 +211,20 @@ function formatMetricNumber(value: number): string {
 
 function pointsEqual(a: ScenePoint, b: ScenePoint): boolean {
   return Math.abs(a.x - b.x) < 0.0001 && Math.abs(a.y - b.y) < 0.0001
+}
+
+function rotatePointAround(point: ScenePoint, center: ScenePoint, degrees: number): ScenePoint {
+  const radians = (degrees * Math.PI) / 180
+  const dx = point.x - center.x
+  const dy = point.y - center.y
+  const cos = Math.cos(radians)
+  const sin = Math.sin(radians)
+  return {
+    x: cleanMetric(center.x + dx * cos - dy * sin),
+    y: cleanMetric(center.y + dx * sin + dy * cos),
+  }
+}
+
+function cleanMetric(value: number): number {
+  return Math.abs(value) < 0.0000001 ? 0 : value
 }

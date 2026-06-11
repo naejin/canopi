@@ -52,6 +52,7 @@ describe('scene store', () => {
             { x: 10, y: 8 },
             { x: 0, y: 8 },
           ],
+          rotation: 0,
           fill_color: '#ddeeff',
           notes: null,
         },
@@ -182,6 +183,7 @@ describe('scene store', () => {
           name: 'zone-1',
           zone_type: 'polygon',
           points: [{ x: 0, y: 0 }],
+          rotation: 0,
           fill_color: null,
           notes: null,
           locked: true,
@@ -224,6 +226,49 @@ describe('scene store', () => {
     expect(serialized.zones[0]?.locked).toBe(true)
     expect(serialized.annotations[0]?.locked).toBe(true)
     expect(serialized.groups[0]?.locked).toBe(true)
+  })
+
+  it('hydrates and serializes shaped Zone orientation', () => {
+    const file = {
+      version: 2,
+      name: 'Oriented zones',
+      description: null,
+      location: null,
+      north_bearing_deg: 0,
+      plant_species_colors: {},
+      layers: [],
+      plants: [],
+      zones: [
+        {
+          name: 'zone-1',
+          locked: false,
+          zone_type: 'rect',
+          points: [
+            { x: 0, y: 0 },
+            { x: 10, y: 0 },
+            { x: 10, y: 5 },
+            { x: 0, y: 5 },
+          ],
+          rotation: 35,
+          fill_color: null,
+          notes: null,
+        },
+      ],
+      annotations: [],
+      consortiums: [],
+      groups: [],
+      timeline: [],
+      budget: [],
+      budget_currency: 'EUR',
+      created_at: '2026-04-01T10:00:00.000Z',
+      updated_at: '2026-04-01T12:00:00.000Z',
+      extra: {},
+    } as CanopiFile
+
+    const store = SceneStore.fromCanopi(file)
+
+    expect(store.persisted.zones[0]?.rotationDeg).toBe(35)
+    expect(store.toCanopiFile({ now: new Date(file.updated_at) }).zones[0]?.rotation).toBe(35)
   })
 
   it('serializes runtime plant presentation metadata back into the existing placed-plant fields only', () => {

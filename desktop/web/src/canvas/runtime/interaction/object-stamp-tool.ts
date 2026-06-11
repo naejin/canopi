@@ -15,6 +15,7 @@ import {
   getPlantWorldBounds,
   type PlantPresentationContext,
 } from '../plant-presentation'
+import { getZoneWorldBounds } from '../zone-geometry'
 import type { SpeciesCacheEntry } from '../species-cache'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
 import { hitTestTopLevel } from './hit-testing'
@@ -336,7 +337,7 @@ export function createObjectStampTool(context: ObjectStampToolContext): ObjectSt
         )
         return
       }
-      const bounds = zoneWorldBounds(previewZone)
+      const bounds = getZoneWorldBounds(previewZone)
       if (!bounds) {
         hideInteractionPreview(context.preview)
         return
@@ -533,29 +534,6 @@ function uniqueZoneName(baseName: string, existingNames: Set<string>): string {
   return candidate
 }
 
-function zoneWorldBounds(zone: SceneZoneEntity): { x: number; y: number; width: number; height: number } | null {
-  if (zone.zoneType === 'ellipse' && zone.points.length >= 2) {
-    const center = zone.points[0]!
-    const radii = zone.points[1]!
-    return {
-      x: center.x - radii.x,
-      y: center.y - radii.y,
-      width: radii.x * 2,
-      height: radii.y * 2,
-    }
-  }
-
-  if (zone.points.length === 0) return null
-  const xs = zone.points.map((point) => point.x)
-  const ys = zone.points.map((point) => point.y)
-  return {
-    x: Math.min(...xs),
-    y: Math.min(...ys),
-    width: Math.max(...xs) - Math.min(...xs),
-    height: Math.max(...ys) - Math.min(...ys),
-  }
-}
-
 function objectStampGroupBounds(
   source: ObjectStampGroupSource,
   delta: ScenePoint,
@@ -573,7 +551,7 @@ function objectStampGroupBounds(
   for (const zone of source.zones) {
     const previewZone = cloneZoneForObjectStamp(zone)
     previewZone.points = translateZonePoints(zone, delta)
-    const zoneBounds = zoneWorldBounds(previewZone)
+    const zoneBounds = getZoneWorldBounds(previewZone)
     if (zoneBounds) bounds.push(zoneBounds)
   }
 

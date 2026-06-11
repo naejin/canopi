@@ -2,6 +2,7 @@ import { zoomLevel, zoomReference } from '../view-state'
 import type { ScenePersistedState, ScenePoint, SceneViewportState } from './scene'
 import { getAnnotationWorldBounds } from './annotation-layout'
 import { getPlantWorldBounds, type PlantPresentationContext } from './plant-presentation'
+import { getZoneWorldBounds } from './zone-geometry'
 
 const DEFAULT_VIEWPORT_METERS = 100
 const DEFAULT_FIT_PADDING = 0.1
@@ -191,15 +192,10 @@ export function computeSceneBounds(
   }
 
   for (const zone of scene.zones) {
-    if (zone.zoneType === 'ellipse' && zone.points.length >= 2) {
-      const center = zone.points[0]!
-      const radii = zone.points[1]!
-      includePoint({ x: center.x - radii.x, y: center.y - radii.y })
-      includePoint({ x: center.x + radii.x, y: center.y + radii.y })
-      continue
-    }
-
-    for (const point of zone.points) includePoint(point)
+    const bounds = getZoneWorldBounds(zone)
+    if (!bounds) continue
+    includePoint({ x: bounds.x, y: bounds.y })
+    includePoint({ x: bounds.x + bounds.width, y: bounds.y + bounds.height })
   }
 
   for (const annotation of scene.annotations) {

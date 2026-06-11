@@ -33,6 +33,7 @@ export function appendRectangleZoneToDraft(
       kind: 'zone',
       name: zoneName,
       zoneType: 'rect',
+      rotationDeg: 0,
       points: [
         { x: rect.x, y: rect.y },
         { x: rect.x + rect.width, y: rect.y },
@@ -61,6 +62,7 @@ export function appendEllipseZoneToDraft(
       kind: 'zone',
       name: zoneName,
       zoneType: 'ellipse',
+      rotationDeg: 0,
       points: [
         { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 },
         { x: rect.width / 2, y: rect.height / 2 },
@@ -88,6 +90,7 @@ export function appendLineZoneToDraft(
       kind: 'zone',
       name: zoneName,
       zoneType: 'line',
+      rotationDeg: 0,
       points: [
         { x: start.x, y: start.y },
         { x: end.x, y: end.y },
@@ -114,6 +117,7 @@ export function appendPolygonZoneToDraft(
       kind: 'zone',
       name: zoneName,
       zoneType: 'polygon',
+      rotationDeg: 0,
       points: points.map((point) => ({ x: point.x, y: point.y })),
       fillColor: null,
       notes: null,

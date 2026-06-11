@@ -21,6 +21,7 @@ import {
   getStackBadgeTextColor,
   resolveZoneVisual,
 } from '../scene-visuals'
+import { getRectangularZoneCorners } from '../zone-geometry'
 import type { SceneRendererDefinition, SceneRendererInstance, SceneRendererSnapshot } from './scene-types'
 
 export function createCanvas2DSceneRenderer(): SceneRendererDefinition {
@@ -119,6 +120,12 @@ function renderZones(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnaps
 
 function drawZonePath(ctx: CanvasRenderingContext2D, zone: SceneZoneEntity): void {
   if (zone.zoneType === 'rect' && zone.points.length >= 4) {
+    if (Math.abs(zone.rotationDeg) > 0.000001) {
+      const corners = getRectangularZoneCorners(zone)
+      if (corners) drawClosedPath(ctx, corners)
+      return
+    }
+
     const start = zone.points[0]!
     const end = zone.points[2]!
     ctx.rect(start.x, start.y, end.x - start.x, end.y - start.y)
@@ -128,7 +135,15 @@ function drawZonePath(ctx: CanvasRenderingContext2D, zone: SceneZoneEntity): voi
   if (zone.zoneType === 'ellipse' && zone.points.length >= 2) {
     const center = zone.points[0]!
     const radii = zone.points[1]!
-    ctx.ellipse(center.x, center.y, radii.x, radii.y, 0, 0, Math.PI * 2)
+    ctx.ellipse(
+      center.x,
+      center.y,
+      Math.abs(radii.x),
+      Math.abs(radii.y),
+      (zone.rotationDeg * Math.PI) / 180,
+      0,
+      Math.PI * 2,
+    )
     return
   }
 
@@ -140,6 +155,17 @@ function drawZonePath(ctx: CanvasRenderingContext2D, zone: SceneZoneEntity): voi
     ctx.lineTo(point.x, point.y)
   }
   if (zone.zoneType !== 'line') ctx.closePath()
+}
+
+function drawClosedPath(ctx: CanvasRenderingContext2D, points: readonly { x: number; y: number }[]): void {
+  const first = points[0]
+  if (!first) return
+  ctx.moveTo(first.x, first.y)
+  for (let index = 1; index < points.length; index += 1) {
+    const point = points[index]!
+    ctx.lineTo(point.x, point.y)
+  }
+  ctx.closePath()
 }
 
 function renderPlants(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnapshot): void {

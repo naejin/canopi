@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest'
 
-import { queryRectTopLevel } from '../canvas/runtime/interaction/hit-testing'
+import { hitTestTopLevel, queryRectTopLevel } from '../canvas/runtime/interaction/hit-testing'
 import type { PlantPresentationContext } from '../canvas/runtime/plant-presentation'
 import type { ScenePersistedState } from '../canvas/runtime/scene'
 
 function createScene(): ScenePersistedState {
   return {
     plantSpeciesColors: {},
-    layers: [{ kind: 'layer', name: 'plants', visible: true, locked: false, opacity: 1 }],
+    layers: [
+      { kind: 'layer', name: 'plants', visible: true, locked: false, opacity: 1 },
+      { kind: 'layer', name: 'zones', visible: true, locked: false, opacity: 1 },
+    ],
     plants: [{
       kind: 'plant',
       locked: false,
@@ -52,5 +55,101 @@ describe('scene hit testing', () => {
     )
 
     expect(targets).toEqual([{ kind: 'plant', id: 'plant-1' }])
+  })
+
+  it('hit-tests rotated Rectangular Zones by their oriented geometry', () => {
+    const scene = createScene()
+    scene.plants = []
+    scene.zones = [{
+      kind: 'zone',
+      name: 'zone-1',
+      locked: false,
+      zoneType: 'rect',
+      points: [
+        { x: 0, y: 0 },
+        { x: 10, y: 0 },
+        { x: 10, y: 4 },
+        { x: 0, y: 4 },
+      ],
+      rotationDeg: 45,
+      fillColor: null,
+      notes: null,
+    }]
+
+    expect(hitTestTopLevel(scene, { x: 5, y: 2 }, 1, new Map(), getPlantContext))
+      .toEqual({ kind: 'zone', id: 'zone-1' })
+    expect(hitTestTopLevel(scene, { x: 1, y: 1 }, 1, new Map(), getPlantContext))
+      .toBeNull()
+  })
+
+  it('band-selects rotated Rectangular Zones by their oriented geometry', () => {
+    const scene = createScene()
+    scene.plants = []
+    scene.zones = [{
+      kind: 'zone',
+      name: 'zone-1',
+      locked: false,
+      zoneType: 'rect',
+      points: [
+        { x: 0, y: 0 },
+        { x: 10, y: 0 },
+        { x: 10, y: 4 },
+        { x: 0, y: 4 },
+      ],
+      rotationDeg: 45,
+      fillColor: null,
+      notes: null,
+    }]
+
+    expect(queryRectTopLevel(scene, { x: 5, y: 2, width: 0.01, height: 0.01 }, 1, new Map(), getPlantContext))
+      .toEqual([{ kind: 'zone', id: 'zone-1' }])
+    expect(queryRectTopLevel(scene, { x: 1, y: 1, width: 0.01, height: 0.01 }, 1, new Map(), getPlantContext))
+      .toEqual([])
+  })
+
+  it('hit-tests rotated Elliptical Zones by their oriented geometry', () => {
+    const scene = createScene()
+    scene.plants = []
+    scene.zones = [{
+      kind: 'zone',
+      name: 'zone-1',
+      locked: false,
+      zoneType: 'ellipse',
+      points: [
+        { x: 0, y: 0 },
+        { x: 4, y: 1 },
+      ],
+      rotationDeg: 90,
+      fillColor: null,
+      notes: null,
+    }]
+
+    expect(hitTestTopLevel(scene, { x: 0, y: 0 }, 1, new Map(), getPlantContext))
+      .toEqual({ kind: 'zone', id: 'zone-1' })
+    expect(hitTestTopLevel(scene, { x: 3, y: 0 }, 1, new Map(), getPlantContext))
+      .toBeNull()
+  })
+
+  it('band-selects rotated Elliptical Zones by their oriented geometry', () => {
+    const scene = createScene()
+    scene.plants = []
+    scene.zones = [{
+      kind: 'zone',
+      name: 'zone-1',
+      locked: false,
+      zoneType: 'ellipse',
+      points: [
+        { x: 0, y: 0 },
+        { x: 4, y: 1 },
+      ],
+      rotationDeg: 90,
+      fillColor: null,
+      notes: null,
+    }]
+
+    expect(queryRectTopLevel(scene, { x: 0, y: 3, width: 0.01, height: 0.01 }, 1, new Map(), getPlantContext))
+      .toEqual([{ kind: 'zone', id: 'zone-1' }])
+    expect(queryRectTopLevel(scene, { x: 3, y: 0, width: 0.01, height: 0.01 }, 1, new Map(), getPlantContext))
+      .toEqual([])
   })
 })

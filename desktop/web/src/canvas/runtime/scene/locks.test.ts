@@ -33,6 +33,7 @@ function sceneWithGroup(): ScenePersistedState {
         name: 'zone-1',
         locked: false,
         zoneType: 'rect',
+        rotationDeg: 0,
         points: [
           { x: 0, y: 0 },
           { x: 10, y: 0 },

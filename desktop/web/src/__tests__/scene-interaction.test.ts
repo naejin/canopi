@@ -1939,6 +1939,7 @@ describe('SceneInteractionController', () => {
     expect(store.persisted.zones).toHaveLength(1)
     expect(store.persisted.zones[0]).toMatchObject({
       zoneType: 'rect',
+      rotationDeg: 0,
       points: [
         { x: 10, y: 20 },
         { x: 40, y: 20 },
@@ -1971,6 +1972,7 @@ describe('SceneInteractionController', () => {
     expect(store.persisted.zones).toHaveLength(1)
     expect(store.persisted.zones[0]).toMatchObject({
       zoneType: 'line',
+      rotationDeg: 0,
       points: [
         { x: 10, y: 20 },
         { x: 40, y: 60 },
@@ -1978,6 +1980,7 @@ describe('SceneInteractionController', () => {
     })
     expect(store.toCanopiFile().zones[0]).toMatchObject({
       zone_type: 'line',
+      rotation: 0,
       locked: false,
       points: [
         { x: 10, y: 20 },
@@ -2025,6 +2028,7 @@ describe('SceneInteractionController', () => {
 
     expect(store.persisted.zones[0]).toMatchObject({
       zoneType: 'line',
+      rotationDeg: 0,
       points: [
         { x: 10, y: 20 },
         { x: 35, y: 65 },
@@ -2066,6 +2070,7 @@ describe('SceneInteractionController', () => {
     expect(store.persisted.zones).toHaveLength(1)
     expect(store.persisted.zones[0]).toMatchObject({
       zoneType: 'ellipse',
+      rotationDeg: 0,
       points: [
         { x: 40, y: 60 },
         { x: 30, y: 40 },
@@ -2073,6 +2078,7 @@ describe('SceneInteractionController', () => {
     })
     expect(store.toCanopiFile().zones[0]).toMatchObject({
       zone_type: 'ellipse',
+      rotation: 0,
       locked: false,
       points: [
         { x: 40, y: 60 },
@@ -2095,6 +2101,7 @@ describe('SceneInteractionController', () => {
 
     expect(store.persisted.zones[0]).toMatchObject({
       zoneType: 'ellipse',
+      rotationDeg: 0,
       points: [
         { x: 60, y: 50 },
         { x: 50, y: 40 },
@@ -2127,6 +2134,7 @@ describe('SceneInteractionController', () => {
 
     expect(store.persisted.zones[0]).toMatchObject({
       zoneType: 'ellipse',
+      rotationDeg: 0,
       points: [
         { x: 22.5, y: 42.5 },
         { x: 12.5, y: 22.5 },
@@ -2161,6 +2169,7 @@ describe('SceneInteractionController', () => {
         locked: false,
         name: 'ellipse-1',
         zoneType: 'ellipse',
+        rotationDeg: 0,
         points: [
           { x: 50, y: 60 },
           { x: 30, y: 20 },
@@ -2193,6 +2202,7 @@ describe('SceneInteractionController', () => {
           locked: false,
           name: 'ellipse-1',
           zoneType: 'ellipse',
+          rotationDeg: 0,
           points: [
             { x: 50, y: 60 },
             { x: 30, y: 20 },
@@ -2205,6 +2215,7 @@ describe('SceneInteractionController', () => {
           locked: false,
           name: 'ellipse-2',
           zoneType: 'ellipse',
+          rotationDeg: 0,
           points: [
             { x: 150, y: 60 },
             { x: 30, y: 20 },
@@ -2252,6 +2263,7 @@ describe('SceneInteractionController', () => {
         locked: false,
         name: 'zone-ellipse',
         zoneType: 'ellipse',
+        rotationDeg: 0,
         points: [
           { x: 50, y: 50 },
           { x: 30, y: 20 },
@@ -2280,6 +2292,7 @@ describe('SceneInteractionController', () => {
         locked: false,
         name: 'zone-ellipse',
         zoneType: 'ellipse',
+        rotationDeg: 0,
         points: [
           { x: 50, y: 50 },
           { x: 30, y: 20 },
@@ -2326,6 +2339,7 @@ describe('SceneInteractionController', () => {
     expect(store.persisted.zones).toHaveLength(1)
     expect(store.persisted.zones[0]).toMatchObject({
       zoneType: 'polygon',
+      rotationDeg: 0,
       points: [
         { x: 10, y: 10 },
         { x: 60, y: 10 },
@@ -2334,6 +2348,7 @@ describe('SceneInteractionController', () => {
     })
     expect(store.toCanopiFile().zones[0]).toMatchObject({
       zone_type: 'polygon',
+      rotation: 0,
       locked: false,
       points: [
         { x: 10, y: 10 },
@@ -2431,6 +2446,7 @@ describe('SceneInteractionController', () => {
         locked: false,
         name: 'polygon-1',
         zoneType: 'polygon',
+        rotationDeg: 0,
         points: [
           { x: 10, y: 10 },
           { x: 60, y: 10 },
@@ -2465,6 +2481,7 @@ describe('SceneInteractionController', () => {
           locked: false,
           name: 'polygon-1',
           zoneType: 'polygon',
+          rotationDeg: 0,
           points: [
             { x: 10, y: 10 },
             { x: 60, y: 10 },
@@ -2478,6 +2495,7 @@ describe('SceneInteractionController', () => {
           locked: false,
           name: 'polygon-2',
           zoneType: 'polygon',
+          rotationDeg: 0,
           points: [
             { x: 100, y: 10 },
             { x: 150, y: 10 },
@@ -2511,6 +2529,7 @@ describe('SceneInteractionController', () => {
         locked: false,
         name: 'polygon-1',
         zoneType: 'polygon',
+        rotationDeg: 0,
         points: [
           { x: 10, y: 10 },
           { x: 60, y: 10 },
@@ -2540,6 +2559,7 @@ describe('SceneInteractionController', () => {
         locked: false,
         name: 'line-1',
         zoneType: 'line',
+        rotationDeg: 0,
         points: [
           { x: 10, y: 10 },
           { x: 110, y: 10 },
@@ -2568,6 +2588,7 @@ describe('SceneInteractionController', () => {
         locked: false,
         name: 'line-1',
         zoneType: 'line',
+        rotationDeg: 0,
         points: [
           { x: 10, y: 10 },
           { x: 110, y: 60 },
@@ -2596,6 +2617,7 @@ describe('SceneInteractionController', () => {
         locked: false,
         name: 'line-1',
         zoneType: 'line',
+        rotationDeg: 0,
         points: [
           { x: 10, y: 50 },
           { x: 110, y: 50 },
@@ -2630,6 +2652,7 @@ describe('SceneInteractionController', () => {
 
     expect(store.persisted.zones[0]).toMatchObject({
       zoneType: 'polygon',
+      rotationDeg: 0,
       points: [
         { x: 10, y: 10 },
         { x: 60, y: 10 },
@@ -2775,6 +2798,7 @@ describe('SceneInteractionController', () => {
     expect(store.persisted.zones).toHaveLength(1)
     expect(store.persisted.zones[0]).toMatchObject({
       zoneType: 'polygon',
+      rotationDeg: 0,
       points: [
         { x: 10, y: 10 },
         { x: 60, y: 10 },
@@ -2908,6 +2932,7 @@ describe('SceneInteractionController', () => {
     expect(store.persisted.zones).toHaveLength(1)
     expect(store.persisted.zones[0]).toMatchObject({
       zoneType: 'rect',
+      rotationDeg: 0,
       points: [
         { x: 10, y: 20 },
         { x: 35, y: 20 },
@@ -2949,6 +2974,7 @@ describe('SceneInteractionController', () => {
 
     expect(store.persisted.zones[0]).toMatchObject({
       zoneType: 'rect',
+      rotationDeg: 0,
       points: [
         { x: 12, y: 22 },
         { x: 36, y: 22 },
@@ -2987,6 +3013,7 @@ describe('SceneInteractionController', () => {
         locked: false,
         name: 'zone-1',
         zoneType: 'rect',
+        rotationDeg: 0,
         points: [
           { x: 10, y: 10 },
           { x: 110, y: 10 },
@@ -3024,6 +3051,7 @@ describe('SceneInteractionController', () => {
           locked: false,
           name: 'zone-1',
           zoneType: 'rect',
+          rotationDeg: 0,
           points: [
             { x: 10, y: 10 },
             { x: 110, y: 10 },
@@ -3038,6 +3066,7 @@ describe('SceneInteractionController', () => {
           locked: false,
           name: 'zone-2',
           zoneType: 'rect',
+          rotationDeg: 0,
           points: [
             { x: 150, y: 10 },
             { x: 250, y: 10 },
@@ -3073,6 +3102,7 @@ describe('SceneInteractionController', () => {
         locked: false,
         name: 'zone-1',
         zoneType: 'rect',
+        rotationDeg: 0,
         points: [
           { x: 10, y: 10 },
           { x: 110, y: 10 },
@@ -3113,6 +3143,7 @@ describe('SceneInteractionController', () => {
         locked: false,
         name: 'zone-1',
         zoneType: 'rect',
+        rotationDeg: 0,
         points: [
           { x: 10, y: 10 },
           { x: 30, y: 10 },
@@ -3148,6 +3179,7 @@ describe('SceneInteractionController', () => {
         locked: false,
         name: 'zone-1',
         zoneType: 'rect',
+        rotationDeg: 0,
         points: [
           { x: 10, y: 10 },
           { x: 110, y: 10 },
@@ -3563,6 +3595,7 @@ describe('SceneInteractionController', () => {
           locked: false,
           name: 'Kitchen bed',
           zoneType: 'rect',
+          rotationDeg: 0,
           points: [
             { x: 10, y: 20 },
             { x: 50, y: 20 },
@@ -3577,6 +3610,7 @@ describe('SceneInteractionController', () => {
           locked: false,
           name: 'Kitchen bed copy',
           zoneType: 'rect',
+          rotationDeg: 0,
           points: [
             { x: 200, y: 200 },
             { x: 220, y: 200 },
@@ -3610,6 +3644,7 @@ describe('SceneInteractionController', () => {
     expect(clone).toMatchObject({
       name: 'Kitchen bed copy 2',
       zoneType: 'rect',
+      rotationDeg: 0,
       points: [
         { x: 105, y: 140 },
         { x: 145, y: 140 },
@@ -3632,6 +3667,7 @@ describe('SceneInteractionController', () => {
         locked: false,
         name: 'Hedgerow',
         zoneType: 'line',
+        rotationDeg: 0,
         points: [
           { x: 10, y: 20 },
           { x: 50, y: 60 },
@@ -3659,6 +3695,7 @@ describe('SceneInteractionController', () => {
     expect(store.persisted.zones[1]).toMatchObject({
       name: 'Hedgerow copy',
       zoneType: 'line',
+      rotationDeg: 0,
       points: [
         { x: 110, y: 140 },
         { x: 150, y: 180 },
@@ -3753,6 +3790,7 @@ describe('SceneInteractionController', () => {
         locked: false,
         name: 'Oval bed',
         zoneType: 'ellipse',
+        rotationDeg: 0,
         points: [
           { x: 50, y: 60 },
           { x: 20, y: 10 },
@@ -3773,6 +3811,7 @@ describe('SceneInteractionController', () => {
     expect(store.persisted.zones[1]).toMatchObject({
       name: 'Oval bed copy',
       zoneType: 'ellipse',
+      rotationDeg: 0,
       points: [
         { x: 100, y: 100 },
         { x: 20, y: 10 },
@@ -3787,6 +3826,7 @@ describe('SceneInteractionController', () => {
         kind: 'zone',
         name: 'Kitchen bed',
         zoneType: 'rect',
+        rotationDeg: 0,
         points: [
           { x: 10, y: 10 },
           { x: 60, y: 10 },
@@ -3892,6 +3932,7 @@ describe('SceneInteractionController', () => {
         locked: false,
         name: 'Kitchen bed',
         zoneType: 'rect',
+        rotationDeg: 0,
         points: [
           { x: 10, y: 20 },
           { x: 30, y: 20 },
@@ -4177,6 +4218,7 @@ describe('SceneInteractionController', () => {
         locked: false,
         name: 'zone-1',
         zoneType: 'rect',
+        rotationDeg: 0,
         points: [
           { x: 10, y: 10 },
           { x: 110, y: 10 },

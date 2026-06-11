@@ -13,6 +13,11 @@ import type {
   SceneZoneEntity,
 } from '../scene'
 import type { SpeciesCacheEntry } from '../species-cache'
+import {
+  getEllipticalZonePolygon,
+  getRectangularZoneCorners,
+  pointInEllipticalZone,
+} from '../zone-geometry'
 
 export type TopLevelTarget =
   | { kind: 'plant'; id: string }
@@ -122,16 +127,12 @@ const LINE_HIT_TOLERANCE_PX = 6
 
 function hitZone(zone: SceneZoneEntity, point: ScenePoint, viewportScale: number): boolean {
   if (zone.zoneType === 'rect' && zone.points.length >= 4) {
-    const bounds = zoneBounds(zone)
-    return point.x >= bounds.x && point.x <= bounds.x + bounds.width && point.y >= bounds.y && point.y <= bounds.y + bounds.height
+    const corners = getRectangularZoneCorners(zone)
+    return corners ? pointInOrOnPolygon(point, corners) : false
   }
 
   if (zone.zoneType === 'ellipse' && zone.points.length >= 2) {
-    const center = zone.points[0]!
-    const radii = zone.points[1]!
-    const nx = (point.x - center.x) / Math.max(radii.x, 0.001)
-    const ny = (point.y - center.y) / Math.max(radii.y, 0.001)
-    return nx * nx + ny * ny <= 1
+    return pointInEllipticalZone(zone, point)
   }
 
   if (zone.zoneType === 'polygon' && zone.points.length >= 3) {
@@ -148,6 +149,16 @@ function hitZone(zone: SceneZoneEntity, point: ScenePoint, viewportScale: number
 }
 
 function zoneIntersectsRect(zone: SceneZoneEntity, rect: SimpleRect): boolean {
+  if (zone.zoneType === 'rect' && zone.points.length >= 4) {
+    const corners = getRectangularZoneCorners(zone)
+    return corners ? polygonIntersectsRect(corners, rect) : false
+  }
+
+  if (zone.zoneType === 'ellipse' && zone.points.length >= 2) {
+    const polygon = getEllipticalZonePolygon(zone)
+    return polygon ? polygonIntersectsRect(polygon, rect) : false
+  }
+
   if (zone.zoneType === 'line' && zone.points.length >= 2) {
     return segmentIntersectsRect(zone.points[0]!, zone.points[1]!, rect)
   }

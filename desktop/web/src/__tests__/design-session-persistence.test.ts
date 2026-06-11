@@ -108,7 +108,7 @@ describe('Design Session persistence', () => {
     const session = makeSession((metadata, doc) => ({
       ...doc,
       name: metadata.name,
-      zones: [{ name: 'canvas-zone', zone_type: 'bed', points: [], fill_color: null, notes: null, locked: false }],
+      zones: [{ name: 'canvas-zone', zone_type: 'bed', rotation: 0, points: [], fill_color: null, notes: null, locked: false }],
     }))
     store.replaceCurrentDesignState(design, null, design.name)
 
@@ -119,7 +119,7 @@ describe('Design Session persistence', () => {
     })
 
     expect(result?.name).toBe('Snapshot')
-    expect(result?.zones).toEqual([{ name: 'canvas-zone', zone_type: 'bed', points: [], fill_color: null, notes: null, locked: false }])
+    expect(result?.zones).toEqual([{ name: 'canvas-zone', zone_type: 'bed', rotation: 0, points: [], fill_color: null, notes: null, locked: false }])
     expect(store.readCurrentDesign()).toBe(result)
   })
 
