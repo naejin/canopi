@@ -16,6 +16,7 @@ export interface TargetPlantRef {
 
 export interface TargetZoneRef {
   readonly name: string
+  readonly zoneType?: string
   readonly points?: readonly TargetScenePoint[]
 }
 

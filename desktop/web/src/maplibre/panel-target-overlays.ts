@@ -18,11 +18,21 @@ export interface PanelTargetMapOverlaySourceSpec {
   readonly data: PanelTargetMapOverlayFeatureCollection
 }
 
+type PanelTargetMapOverlayKindFilter =
+  readonly ['==', readonly ['get', 'kind'], 'plant' | 'zone']
+
+type PanelTargetMapOverlayGeometryFilter =
+  readonly ['==', readonly ['geometry-type'], 'Polygon' | 'LineString' | 'Point']
+
+type PanelTargetMapOverlayLayerFilter =
+  | PanelTargetMapOverlayKindFilter
+  | readonly ['all', PanelTargetMapOverlayKindFilter, PanelTargetMapOverlayGeometryFilter]
+
 export interface PanelTargetMapOverlayLayerSpec {
   readonly id: string
   readonly source: string
   readonly type: 'circle' | 'fill' | 'line'
-  readonly filter: readonly ['==', readonly ['get', 'kind'], 'plant' | 'zone']
+  readonly filter: PanelTargetMapOverlayLayerFilter
   readonly paint: Readonly<Record<string, string | number>>
 }
 
@@ -69,7 +79,7 @@ function createLayerSpecs(
       id: `${prefix}-zones-fill`,
       source: sourceId,
       type: 'fill',
-      filter: ['==', ['get', 'kind'], 'zone'],
+      filter: ['all', ['==', ['get', 'kind'], 'zone'], ['==', ['geometry-type'], 'Polygon']],
       paint: {
         'fill-color': style.zoneFillColor,
         'fill-opacity': style.zoneFillOpacity,
