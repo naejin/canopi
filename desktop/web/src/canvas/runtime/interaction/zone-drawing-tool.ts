@@ -23,6 +23,7 @@ import {
 import { getRectangularZoneCorners } from '../zone-geometry'
 import { isEditableTarget } from './pointer-utils'
 import type { SceneToolAdapter } from './tool-adapter'
+import { isSceneLayerOpenForCreation } from './layer-guards'
 
 type DragZoneMode = 'line' | 'rectangle' | 'ellipse'
 
@@ -72,6 +73,7 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
   let polygonRedoVertices: ScenePoint[] = []
 
   function beginDrag(mode: DragZoneMode, world: ScenePoint): void {
+    if (!isZonesLayerOpen()) return
     const snappedWorld = context.applySnapping(world)
     const snappedScreen = context.camera.worldToScreen(snappedWorld)
     activeDrag = {
@@ -104,6 +106,7 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
     if (!activeDrag) return
     const drag = activeDrag
     activeDrag = null
+    if (!isZonesLayerOpen()) return
     const endWorld = context.applySnapping(rawWorld)
 
     if (drag.mode === 'line') {
@@ -135,6 +138,10 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
   }
 
   function handlePolygonPointerDown(world: ScenePoint): void {
+    if (!isZonesLayerOpen()) {
+      cancelPolygonDraft()
+      return
+    }
     const point = context.applySnapping(world)
     activeDrag = null
     zoneMeasurements.hide()
@@ -202,6 +209,10 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
 
   function commitPolygonDraft(): void {
     if (polygonDraftVertices.length < 3) return
+    if (!isZonesLayerOpen()) {
+      cancelPolygonDraft()
+      return
+    }
     const committed = context.sceneEdits.run('interaction-polygon', (tx) => {
       let zoneName: string | null = null
       tx.mutate((draft) => {
@@ -367,6 +378,10 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
   function dispose(): void {
     polygonDraftOverlay.dispose()
     zoneMeasurements.dispose()
+  }
+
+  function isZonesLayerOpen(): boolean {
+    return isSceneLayerOpenForCreation(context.getSceneStore().persisted, 'zones')
   }
 
   return {

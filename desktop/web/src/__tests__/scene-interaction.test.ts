@@ -3115,6 +3115,26 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('does not create rectangle zones on a locked Zones Layer', () => {
+    store.updatePersisted((draft) => {
+      draft.layers = draft.layers.map((layer) => (
+        layer.name === 'zones' ? { ...layer, locked: true } : layer
+      ))
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('rectangle')
+
+    events.pointerDown({ x: 10, y: 20 }, { button: 0 })
+    events.pointerMove({ x: 40, y: 60 }, { button: 0 })
+    events.pointerUp({ x: 40, y: 60 }, { button: 0 })
+
+    expect(store.persisted.zones).toHaveLength(0)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    controller.dispose()
+  })
+
   it('creates a linear zone from the Line tool drag', () => {
     const onSceneEditCommit = vi.fn()
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
@@ -3152,6 +3172,26 @@ describe('SceneInteractionController', () => {
     })
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-line')
     expect(deps.setSelection).toHaveBeenCalledTimes(1)
+    controller.dispose()
+  })
+
+  it('does not create linear zones on a locked Zones Layer', () => {
+    store.updatePersisted((draft) => {
+      draft.layers = draft.layers.map((layer) => (
+        layer.name === 'zones' ? { ...layer, locked: true } : layer
+      ))
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('line')
+
+    events.pointerDown({ x: 10, y: 20 }, { button: 0 })
+    events.pointerMove({ x: 40, y: 60 }, { button: 0 })
+    events.pointerUp({ x: 40, y: 60 }, { button: 0 })
+
+    expect(store.persisted.zones).toHaveLength(0)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
     controller.dispose()
   })
 
@@ -3250,6 +3290,26 @@ describe('SceneInteractionController', () => {
     })
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-ellipse')
     expect(deps.setSelection).toHaveBeenCalledTimes(1)
+    controller.dispose()
+  })
+
+  it('does not create elliptical zones on a locked Zones Layer', () => {
+    store.updatePersisted((draft) => {
+      draft.layers = draft.layers.map((layer) => (
+        layer.name === 'zones' ? { ...layer, locked: true } : layer
+      ))
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('ellipse')
+
+    events.pointerDown({ x: 10, y: 20 }, { button: 0 })
+    events.pointerMove({ x: 70, y: 100 }, { button: 0 })
+    events.pointerUp({ x: 70, y: 100 }, { button: 0 })
+
+    expect(store.persisted.zones).toHaveLength(0)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
     controller.dispose()
   })
 
@@ -3521,6 +3581,28 @@ describe('SceneInteractionController', () => {
     })
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-polygon')
     expect(deps.setSelection).toHaveBeenCalledTimes(1)
+    controller.dispose()
+  })
+
+  it('does not create polygonal zones on a locked Zones Layer', () => {
+    store.updatePersisted((draft) => {
+      draft.layers = draft.layers.map((layer) => (
+        layer.name === 'zones' ? { ...layer, locked: true } : layer
+      ))
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('polygon')
+
+    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
+    events.pointerDown({ x: 60, y: 10 }, { button: 0 })
+    events.pointerDown({ x: 60, y: 40 }, { button: 0 })
+    events.keyDown({ key: 'Enter', cancelable: true })
+
+    expect(store.persisted.zones).toHaveLength(0)
+    expect(container.querySelector('[data-polygon-draft-line]')).toBeNull()
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
     controller.dispose()
   })
 
