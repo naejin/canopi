@@ -105,8 +105,12 @@ _Avoid_: Temporary shape, unsaved polygon, canvas draft
 A zone whose boundary is defined by three or more zone edges. A polygonal zone is still a zone; "polygonal" describes its boundary geometry.
 _Avoid_: Polygon, shape
 
+**Rectangular Zone**:
+A zone whose boundary is defined by four right-angled zone edges. A rectangular zone may be rotated in the design; "rectangular" describes the zone geometry, not its alignment to the canvas.
+_Avoid_: Axis-aligned rectangle, box, shape
+
 **Elliptical Zone**:
-A zone whose boundary is an ellipse. An elliptical zone is still a zone; "elliptical" describes its boundary geometry.
+A zone whose boundary is an ellipse. An elliptical zone may be rotated in the design; "elliptical" describes its boundary geometry, not its alignment to the canvas.
 _Avoid_: Oval, shape
 
 **Linear Zone**:
@@ -127,10 +131,30 @@ _Avoid_: Label, comment
 
 **Design Object**:
 A canvas-positioned part of a design, such as a placed plant, zone, annotation, or object group. Design objects are the things users arrange spatially in the design.
-_Avoid_: Canvas object, shape
+_Avoid_: Canvas object, shape, element
+
+**Rotation Pivot**:
+The point around which one or more selected design objects turn during a rotation.
+_Avoid_: Origin, anchor, center point
+
+**Rotation Handle**:
+The on-canvas control a user drags to rotate the current design object selection.
+_Avoid_: Rotation button, spin control, transform widget
+
+**Selection Action Toolbar**:
+A compact contextual canvas toolbar for commands that act on the current editable design object selection, such as locking, grouping, or precision transforms.
+_Avoid_: Canvas toolbar, inspector, floating card
+
+**Species Selection**:
+A canvas selection gesture that selects visible editable placed plants of the same species as a reference placed plant. Species selection uses Canonical Name identity and is temporary interaction state, not a planning Target.
+_Avoid_: Species target, select similar, same common name
+
+**Design Object Rotation**:
+A scene edit that turns one or more selected design objects around a rotation pivot, changing their visible orientation or geometry in the design.
+_Avoid_: Orientation field, group transform, element rotation
 
 **Design Object Lock**:
-A saved editing constraint on a design object that prevents direct selection, transformation, deletion, and reuse as an object stamp source while leaving the object visible in the design. A design object lock belongs to the design, not only to the design session, and is stored with the locked design object rather than in a separate top-level lock list. If an object group contains a locked design object, the object group cannot be moved, deleted, stamped, or otherwise edited in a way that mutates the locked member.
+A saved editing constraint on a design object that prevents direct selection, transformation, deletion, and reuse as an object stamp source while leaving the object visible and discoverable in the design. A design object lock belongs to the design, not only to the design session, and is stored with the locked design object rather than in a separate top-level lock list. If an object group contains a locked design object, the object group cannot be moved, deleted, stamped, or otherwise edited in a way that mutates the locked member.
 _Avoid_: Selection lock, runtime lock
 
 **Visual Footprint**:
@@ -138,8 +162,8 @@ The visible on-screen presence of a design object or its readable presentation a
 _Avoid_: Object scale, canvas scale, display size
 
 **Layer**:
-A visibility and locking group for design objects. A design has many layers, and each layer controls whether its objects are visible, locked, and how opaque they appear.
-_Avoid_: Category, folder
+A fixed visibility and locking group for design objects. A design has many layers, and each layer controls whether its objects are visible, locked, and how opaque they appear; layers are not arbitrary user-created folders.
+_Avoid_: Category, folder, custom layer
 
 **Scene Edit**:
 A runtime change to canvas-owned design state, including placed plants, zones, annotations, object groups, layers, plant species colors, and guides. A scene edit is the canvas mutation concept that owns undo/redo history, dirty-state updates, mirror projections, and render invalidation for canvas state.
@@ -150,7 +174,7 @@ The canvas runtime interaction seam for pointer and keyboard gesture lifetime: c
 _Avoid_: Interaction controller, tool router, event handler blob
 
 **Object Group**:
-A named or unnamed collection of design objects that move or transform together. An object group may contain placed plants, zones, annotations, or other design objects.
+A named or unnamed collection of design objects whose members move or transform together. An object group may contain placed plants, zones, annotations, or other design objects; the group itself is not a separate visible design shape.
 _Avoid_: Layer, selection
 
 **Plant Stamp**:

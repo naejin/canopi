@@ -73,6 +73,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - `SceneInteractionController` owns live pointer capture and generic drag routing; tool modules own tool-specific drag state.
 - Hit testing and selection geometry must stay scene-side.
 - Off-canvas drag continuation, multi-drag, and additive selection behavior are part of the runtime contract.
+- Species Selection is a Select-tool canvas selection gesture: double-clicking a visible editable top-level Placed Plant selects all visible editable top-level Placed Plants with the same Canonical Name across the design, excluding grouped members, locked Design Objects, hidden Layers, and locked Layers. Shift+double-click applies the same Species set additively/toggling against the current selection. It must not mutate Design data, Target Presentation, dirty state, or document history.
 - Plant hit testing must use the same shared presentation context as renderers and fit/bounds logic.
 - Interaction selection writes go through the runtime-owned selection seam.
 - Document-level keyboard handlers must guard with `isEditableTarget(event.target)` so Delete/Backspace/etc. do not fire while typing.
@@ -88,6 +89,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - Tool modules own tool-specific state machines, including setup, per-event handling, refresh-after-viewport-change behavior, cancellation, and teardown for their own transient state.
 - Shared tool context may expose only runtime-owned seams and stable projections: `SceneStore`, `CameraController`, Scene Edit transactions, selection setters/readers, hit testing, snapping/grid/guide reads, render invalidation, localized Species names, plant presentation context, settings commands or projections, and DOM overlay containers.
 - Tool modules may create DOM overlays for tool-owned chrome, but the module that creates an overlay owns its cleanup. Router-owned overlays stay router-owned until a later bead deliberately moves them behind a tool module.
+- Selection transform affordances such as the Rotation Handle, live rotation readout, and Selection Action Toolbar should be runtime-owned DOM overlays coordinated by the Scene Interaction Frame/shared selection behavior. They must not be renderer-owned projections or outer Preact chrome that reaches into runtime internals.
 - Scene edits from tools must go through `SceneEditCoordinator`; modules must not mutate persisted scene arrays outside an edit transaction except for explicitly transient draft state owned by the runtime.
 - Tool modules must treat `setTool()` changes, `dispose()`, document replacement, Escape cancellation, source invalidation, and viewport refresh as lifecycle events that leave no stale overlays, listeners, selections, previews, or pointer capture behind.
 - Do not install module-level `effect()` or global listeners from a tool module unless that module also owns an explicit disposer and `import.meta.hot.dispose()` cleanup. Prefer router-dispatched events for canvas tool input.
