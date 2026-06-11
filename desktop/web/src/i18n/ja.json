@@ -144,6 +144,9 @@
       "unlock": "ロック解除",
       "delete": "削除"
     },
+    "rotationHandle": {
+      "label": "回転"
+    },
     "grid": {
       "grid": "グリッド",
       "gridDesc": "グリッドの表示/非表示",

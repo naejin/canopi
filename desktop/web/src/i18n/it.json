@@ -144,6 +144,9 @@
       "unlock": "Sblocca",
       "delete": "Elimina"
     },
+    "rotationHandle": {
+      "label": "Ruota"
+    },
     "grid": {
       "grid": "Griglia",
       "gridDesc": "Mostra/nascondi la griglia",

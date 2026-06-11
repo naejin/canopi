@@ -144,6 +144,9 @@
       "unlock": "Unlock",
       "delete": "Delete"
     },
+    "rotationHandle": {
+      "label": "Rotate"
+    },
     "grid": {
       "grid": "Grid",
       "gridDesc": "Toggle grid overlay",

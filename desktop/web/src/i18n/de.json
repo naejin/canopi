@@ -144,6 +144,9 @@
       "unlock": "Entsperren",
       "delete": "Entfernen"
     },
+    "rotationHandle": {
+      "label": "Drehen"
+    },
     "grid": {
       "grid": "Raster",
       "gridDesc": "Rasterüberlagerung umschalten",

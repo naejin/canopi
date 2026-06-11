@@ -144,6 +144,9 @@
       "unlock": "Ontgrendelen",
       "delete": "Verwijderen"
     },
+    "rotationHandle": {
+      "label": "Draaien"
+    },
     "grid": {
       "grid": "Raster",
       "gridDesc": "Rasteroverlay in-/uitschakelen",

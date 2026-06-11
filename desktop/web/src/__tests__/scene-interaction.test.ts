@@ -10,9 +10,10 @@ import { selectedObjectIds } from '../canvas/session-state'
 import { snapToGridEnabled, snapToGuidesEnabled } from '../app/canvas-settings/signals'
 import { plantSpacingIntervalM } from '../app/settings/state'
 import { CameraController } from '../canvas/runtime/camera'
-import { SceneStore, type ScenePlantEntity } from '../canvas/runtime/scene'
+import { SceneStore, type ScenePlantEntity, type SceneZoneEntity } from '../canvas/runtime/scene'
 import { SceneInteractionController, type SceneInteractionDeps } from '../canvas/runtime/scene-interaction'
 import type { CanvasDesignObjectSelectionModel } from '../canvas/runtime/runtime'
+import { getDesignObjectSelectionModel } from '../canvas/runtime/scene-runtime/selection'
 import { SceneRuntimeEditCoordinator } from '../canvas/runtime/scene-runtime/transactions'
 import {
   CANVAS_NOTICE_MARGIN_PX,
@@ -181,6 +182,38 @@ function makePlant(
     quantity: 1,
     ...overrides,
   }
+}
+
+function makeRectZone(
+  name: string,
+  points: SceneZoneEntity['points'],
+  overrides: Partial<SceneZoneEntity> = {},
+): SceneZoneEntity {
+  return {
+    kind: 'zone',
+    name,
+    locked: false,
+    zoneType: 'rect',
+    points,
+    rotationDeg: 0,
+    fillColor: null,
+    notes: null,
+    ...overrides,
+  }
+}
+
+function getDesignObjectSelectionFromStore(
+  store: SceneStore,
+  camera: CameraController,
+): CanvasDesignObjectSelectionModel {
+  return getDesignObjectSelectionModel(
+    store.persisted,
+    store.session.selectedEntityIds,
+    {
+      annotationViewportScale: camera.viewport.scale,
+      plantContext: createPlantPresentationContext(camera.viewport.scale),
+    },
+  )
 }
 
 describe('SceneInteractionController', () => {
@@ -624,6 +657,283 @@ describe('SceneInteractionController', () => {
     lock?.click()
 
     expect(lockSelected).toHaveBeenCalledTimes(1)
+    controller.dispose()
+  })
+
+  it('shows a Rotation Handle for one eligible rotatable selection but not for a Placed Plant', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [makeRectZone('zone-1', [
+        { x: 20, y: 40 },
+        { x: 120, y: 40 },
+        { x: 120, y: 100 },
+        { x: 20, y: 100 },
+      ])]
+      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 180, y: 90 })]
+    })
+    const deps = createInteractionDeps(container, store, camera, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    })
+    const controller = new SceneInteractionController(deps as any)
+
+    deps.setSelection(['zone-1'])
+    controller.refreshMeasurements()
+
+    const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')
+    expect(handle).not.toBeNull()
+    expect(handle?.style.display).toBe('inline-flex')
+
+    deps.setSelection(['plant-1'])
+    controller.refreshMeasurements()
+
+    expect(handle?.style.display).toBe('none')
+    controller.dispose()
+  })
+
+  it('shows a Rotation Handle for one selected text annotation', () => {
+    store.updatePersisted((draft) => {
+      draft.annotations = [{
+        kind: 'annotation',
+        id: 'annotation-1',
+        locked: false,
+        annotationType: 'text',
+        position: { x: 80, y: 90 },
+        text: 'Label',
+        fontSize: 20,
+        rotationDeg: null,
+      }]
+    })
+    const deps = createInteractionDeps(container, store, camera, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    })
+    const controller = new SceneInteractionController(deps as any)
+
+    deps.setSelection(['annotation-1'])
+    controller.refreshMeasurements()
+
+    const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')
+    expect(handle).not.toBeNull()
+    expect(handle?.style.display).toBe('inline-flex')
+    controller.dispose()
+  })
+
+  it('drags the Rotation Handle to rotate a selected Zone with live readout and one Scene Edit', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [makeRectZone('zone-1', [
+        { x: 20, y: 80 },
+        { x: 120, y: 80 },
+        { x: 120, y: 140 },
+        { x: 20, y: 140 },
+      ])]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+      onSceneEditCommit,
+    })
+    const controller = new SceneInteractionController(deps as any)
+    deps.setSelection(['zone-1'])
+    controller.refreshMeasurements()
+
+    const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
+    const start = {
+      x: Number.parseFloat(handle.style.left) + 14,
+      y: Number.parseFloat(handle.style.top) + 14,
+    }
+
+    events.pointerDown(start, { button: 0, target: handle })
+    events.pointerMove({ x: 128, y: 110 }, { button: 0 })
+
+    expect(store.persisted.zones[0]?.rotationDeg).toBeCloseTo(90)
+    expect(container.querySelector<HTMLElement>('[data-rotation-handle-readout]')?.textContent).toBe('+90°')
+
+    events.pointerUp({ x: 128, y: 110 }, { button: 0 })
+
+    expect(store.persisted.zones[0]?.rotationDeg).toBeCloseTo(90)
+    expect(onSceneEditCommit).toHaveBeenCalledTimes(1)
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-rotate')
+    controller.dispose()
+  })
+
+  it('snaps Rotation Handle drags to 15 degree increments while Shift is held', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [makeRectZone('zone-1', [
+        { x: 20, y: 80 },
+        { x: 120, y: 80 },
+        { x: 120, y: 140 },
+        { x: 20, y: 140 },
+      ])]
+    })
+    const deps = createInteractionDeps(container, store, camera, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    })
+    const controller = new SceneInteractionController(deps as any)
+    deps.setSelection(['zone-1'])
+    controller.refreshMeasurements()
+
+    const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
+    const start = {
+      x: Number.parseFloat(handle.style.left) + 14,
+      y: Number.parseFloat(handle.style.top) + 14,
+    }
+
+    events.pointerDown(start, { button: 0, target: handle })
+    events.pointerMove({ x: 82, y: 53 }, { button: 0, shiftKey: true })
+
+    expect(store.persisted.zones[0]?.rotationDeg).toBe(15)
+    expect(container.querySelector<HTMLElement>('[data-rotation-handle-readout]')?.textContent).toBe('+15°')
+    controller.dispose()
+  })
+
+  it('aborts an active Rotation Handle drag on Escape without creating history', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [makeRectZone('zone-1', [
+        { x: 20, y: 80 },
+        { x: 120, y: 80 },
+        { x: 120, y: 140 },
+        { x: 20, y: 140 },
+      ])]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+      onSceneEditCommit,
+    })
+    const controller = new SceneInteractionController(deps as any)
+    deps.setSelection(['zone-1'])
+    controller.refreshMeasurements()
+
+    const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
+    const start = {
+      x: Number.parseFloat(handle.style.left) + 14,
+      y: Number.parseFloat(handle.style.top) + 14,
+    }
+
+    events.pointerDown(start, { button: 0, target: handle })
+    events.pointerMove({ x: 128, y: 110 }, { button: 0 })
+    expect(store.persisted.zones[0]?.rotationDeg).toBeCloseTo(90)
+
+    events.keyDown({ key: 'Escape', code: 'Escape' })
+    events.pointerUp({ x: 128, y: 110 }, { button: 0 })
+
+    expect(store.persisted.zones[0]?.rotationDeg).toBe(0)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    expect(container.querySelector<HTMLElement>('[data-rotation-handle-readout]')?.style.display).toBe('none')
+    controller.dispose()
+  })
+
+  it('commits a Rotation Handle drag on pointer-up outside the canvas', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [makeRectZone('zone-1', [
+        { x: 20, y: 80 },
+        { x: 120, y: 80 },
+        { x: 120, y: 140 },
+        { x: 20, y: 140 },
+      ])]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+      onSceneEditCommit,
+    })
+    const controller = new SceneInteractionController(deps as any)
+    deps.setSelection(['zone-1'])
+    controller.refreshMeasurements()
+
+    const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
+    const start = {
+      x: Number.parseFloat(handle.style.left) + 14,
+      y: Number.parseFloat(handle.style.top) + 14,
+    }
+
+    events.pointerDown(start, { button: 0, target: handle })
+    events.pointerMove({ x: 128, y: 110 }, { button: 0 })
+    events.pointerUp({ x: 500, y: 110 }, { button: 0 })
+
+    expect(store.persisted.zones[0]?.rotationDeg).toBeCloseTo(90)
+    expect(onSceneEditCommit).toHaveBeenCalledTimes(1)
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-rotate')
+    controller.dispose()
+  })
+
+  it('aborts tiny Rotation Handle deltas without dirtying history', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [makeRectZone('zone-1', [
+        { x: 20, y: 80 },
+        { x: 120, y: 80 },
+        { x: 120, y: 140 },
+        { x: 20, y: 140 },
+      ])]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+      onSceneEditCommit,
+    })
+    const controller = new SceneInteractionController(deps as any)
+    deps.setSelection(['zone-1'])
+    controller.refreshMeasurements()
+
+    const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
+    const start = {
+      x: Number.parseFloat(handle.style.left) + 14,
+      y: Number.parseFloat(handle.style.top) + 14,
+    }
+
+    events.pointerDown(start, { button: 0, target: handle })
+    events.pointerMove({ x: start.x + 0.1, y: start.y }, { button: 0 })
+    events.pointerUp({ x: start.x + 0.1, y: start.y }, { button: 0 })
+
+    expect(store.persisted.zones[0]?.rotationDeg).toBe(0)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    controller.dispose()
+  })
+
+  it('hides the Rotation Handle for locked Design Objects, hidden Layers, and locked Layers', () => {
+    const deps = createInteractionDeps(container, store, camera, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    })
+    const controller = new SceneInteractionController(deps as any)
+    deps.setSelection(['zone-1'])
+
+    store.updatePersisted((draft) => {
+      draft.zones = [makeRectZone('zone-1', [
+        { x: 20, y: 80 },
+        { x: 120, y: 80 },
+        { x: 120, y: 140 },
+        { x: 20, y: 140 },
+      ], { locked: true })]
+    })
+    controller.refreshMeasurements()
+    const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')
+    expect(handle?.style.display).toBe('none')
+
+    store.updatePersisted((draft) => {
+      draft.layers = draft.layers.map((layer) => (
+        layer.name === 'zones' ? { ...layer, visible: false, locked: false } : layer
+      ))
+      draft.zones = [makeRectZone('zone-1', [
+        { x: 20, y: 80 },
+        { x: 120, y: 80 },
+        { x: 120, y: 140 },
+        { x: 20, y: 140 },
+      ])]
+    })
+    controller.refreshMeasurements()
+    expect(handle?.style.display).toBe('none')
+
+    store.updatePersisted((draft) => {
+      draft.layers = draft.layers.map((layer) => (
+        layer.name === 'zones' ? { ...layer, visible: true, locked: true } : layer
+      ))
+      draft.zones = [makeRectZone('zone-1', [
+        { x: 20, y: 80 },
+        { x: 120, y: 80 },
+        { x: 120, y: 140 },
+        { x: 20, y: 140 },
+      ])]
+    })
+    controller.refreshMeasurements()
+    expect(handle?.style.display).toBe('none')
     controller.dispose()
   })
 

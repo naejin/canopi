@@ -144,6 +144,9 @@
       "unlock": "Desbloquear",
       "delete": "Excluir"
     },
+    "rotationHandle": {
+      "label": "Girar"
+    },
     "grid": {
       "grid": "Grade",
       "gridDesc": "Mostrar/ocultar a grade",

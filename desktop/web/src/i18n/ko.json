@@ -144,6 +144,9 @@
       "unlock": "잠금 해제",
       "delete": "삭제"
     },
+    "rotationHandle": {
+      "label": "회전"
+    },
     "grid": {
       "grid": "격자",
       "gridDesc": "격자 오버레이 전환",

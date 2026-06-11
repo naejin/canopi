@@ -39,6 +39,10 @@ import {
   createSelectionActionToolbar,
   type SelectionActionToolbarController,
 } from './interaction/selection-action-toolbar'
+import {
+  createSelectionRotationHandle,
+  type SelectionRotationHandleController,
+} from './interaction/selection-rotation-handle'
 import type { CanvasDesignObjectSelectionModel, CanvasSceneEditCommandSurface } from './runtime'
 import {
   createLockedObjectAffordance,
@@ -94,6 +98,7 @@ export class SceneInteractionController {
   private readonly _frame: SceneInteractionFrame
   private readonly _sharedGestures: SceneInteractionSharedGestures
   private readonly _selectionToolbar: SelectionActionToolbarController
+  private readonly _rotationHandle: SelectionRotationHandleController
   private readonly _lockedAffordance: LockedObjectAffordanceController
   private _tool: InteractionTool = 'select'
 
@@ -142,6 +147,15 @@ export class SceneInteractionController {
       getSelection: this._deps.getDesignObjectSelection,
       commands: this._deps.selectionCommands,
     })
+    this._rotationHandle = createSelectionRotationHandle({
+      container: this._deps.container,
+      camera: this._deps.camera,
+      getSceneStore: this._deps.getSceneStore,
+      getSelection: this._deps.getDesignObjectSelection,
+      sceneEdits: this._deps.sceneEdits,
+      render: this._deps.render,
+      refreshSelectionDependent: () => this._refreshSelectionDependentMeasurements(),
+    })
     this._lockedAffordance = createLockedObjectAffordance({
       container: this._deps.container,
       onUnlock: (id) => this._unlockLockedObject(id),
@@ -181,6 +195,7 @@ export class SceneInteractionController {
     this._frame.dispose(() => {
       this._deps.setHoveredEntityId(null)
       this._selectionToolbar.dispose()
+      this._rotationHandle.dispose()
       this._lockedAffordance.dispose()
       this._tools.dispose()
       this._preview.remove()
@@ -223,6 +238,13 @@ export class SceneInteractionController {
       startWorld: world,
       containerRect,
     })
+
+    if (event.button === 0 && this._rotationHandle.contains(event.target)) {
+      const rotationDrag = this._rotationHandle.pointerDown({ event, rawWorld: world })
+      if (rotationDrag) this._frame.beginToolPointerDrag(rotationDrag)
+      else this._frame.clearPointerGesture()
+      return
+    }
 
     if (this._sharedGestures.beginPan({
       event,
@@ -407,6 +429,12 @@ export class SceneInteractionController {
   }
 
   private readonly _onKeyDown = (event: KeyboardEvent): void => {
+    if (event.key === 'Escape' && this._rotationHandle.cancelActiveDrag()) {
+      event.preventDefault()
+      this._frame.clearPointerGesture()
+      return
+    }
+
     if (this._tools.keyDown(event)) return
 
     if (
@@ -433,7 +461,10 @@ export class SceneInteractionController {
   private _cancelTransientInteraction(options: SceneInteractionTransientCleanupOptions = {}): void {
     this._frame.cleanupTransient(options, {
       clearPointerGesture: () => this._frame.clearPointerGesture(),
-      cancelSharedGestures: () => this._sharedGestures.cancel(),
+      cancelSharedGestures: () => {
+        this._sharedGestures.cancel()
+        this._rotationHandle.cancelActiveDrag()
+      },
       cancelToolTransient: (cleanupOptions) => this._tools.cancelTransient(cleanupOptions),
       clearHover: () => {
         this._deps.setHoveredEntityId(null)
@@ -448,6 +479,7 @@ export class SceneInteractionController {
 
   private _refreshViewportDependentMeasurements(): void {
     if (this._tools.refreshViewportDependent()) {
+      this._rotationHandle.refresh()
       this._selectionToolbar.refresh()
       return
     }
@@ -457,6 +489,7 @@ export class SceneInteractionController {
 
   private _refreshSelectionDependentMeasurements(): void {
     this._tools.refreshSelectionDependent()
+    this._rotationHandle.refresh()
     this._selectionToolbar.refresh()
   }
 

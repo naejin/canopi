@@ -12,6 +12,7 @@ import type {
 } from '../runtime'
 import type { SceneLayerEntity, ScenePersistedState } from '../scene'
 import { isSceneDesignObjectLocked } from '../scene'
+import { getZoneWorldBounds } from '../zone-geometry'
 import { getSameSpeciesReferenceCanonicalName } from './species-selection'
 
 export type SceneSelectionTarget = CanvasDesignObjectSelectionTarget
@@ -201,18 +202,14 @@ export function getTargetBounds(
     ? persisted.zones.find((entry) => entry.name === target.id)
     : null
   if (zone && zone.points.length > 0) {
-    if (zone.zoneType === 'ellipse' && zone.points.length >= 2) {
-      const center = zone.points[0]!
-      const radii = zone.points[1]!
-      return {
-        minX: center.x - radii.x,
-        minY: center.y - radii.y,
-        maxX: center.x + radii.x,
-        maxY: center.y + radii.y,
-      }
+    const bounds = getZoneWorldBounds(zone)
+    if (!bounds) return null
+    return {
+      minX: bounds.x,
+      minY: bounds.y,
+      maxX: bounds.x + bounds.width,
+      maxY: bounds.y + bounds.height,
     }
-
-    return pointsBounds(zone.points)
   }
 
   const annotation = target.kind === 'annotation'
@@ -332,18 +329,4 @@ function findLayer(
 
 function targetKey(target: SceneSelectionTarget | CanvasDesignObjectSelectionMissingTarget): string {
   return `${target.kind}:${target.id}`
-}
-
-function pointsBounds(points: readonly { x: number; y: number }[]): SceneBounds {
-  let minX = Infinity
-  let minY = Infinity
-  let maxX = -Infinity
-  let maxY = -Infinity
-  for (const point of points) {
-    if (point.x < minX) minX = point.x
-    if (point.y < minY) minY = point.y
-    if (point.x > maxX) maxX = point.x
-    if (point.y > maxY) maxY = point.y
-  }
-  return { minX, minY, maxX, maxY }
 }

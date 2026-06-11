@@ -139,6 +139,22 @@ describe('scene design object selection model', () => {
     expect(model.bounds?.maxY).toBeGreaterThan(10)
   })
 
+  it('uses oriented Zone geometry for selected Zone bounds', () => {
+    const scene = makeScene()
+    scene.groups = []
+    scene.zones[0] = {
+      ...scene.zones[0]!,
+      rotationDeg: 90,
+    }
+
+    const model = readModel(scene, ['zone-1'])
+
+    expect(model.bounds?.minX).toBeCloseTo(1)
+    expect(model.bounds?.minY).toBeCloseTo(-1)
+    expect(model.bounds?.maxX).toBeCloseTo(7)
+    expect(model.bounds?.maxY).toBeCloseTo(7)
+  })
+
   it('reports hidden Layer selections without editable bounds', () => {
     const scene = makeScene()
     scene.groups = []

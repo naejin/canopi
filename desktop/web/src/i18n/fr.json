@@ -144,6 +144,9 @@
       "unlock": "Déverrouiller",
       "delete": "Supprimer"
     },
+    "rotationHandle": {
+      "label": "Pivoter"
+    },
     "grid": {
       "grid": "Grille",
       "gridDesc": "Afficher/masquer la grille",
