@@ -134,6 +134,7 @@ function createRuntime(
     getSelection: () => new Set(),
     getDesignObjectSelection: () => ({
       editableTargets: [],
+      lockedTargets: [],
       blockedTargets: [],
       bounds: null,
       sameSpeciesReferenceCanonicalName: null,

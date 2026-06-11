@@ -97,6 +97,7 @@ function createInteractionDeps(
     sceneEdits,
     getDesignObjectSelection: overrides.getDesignObjectSelection ?? (() => ({
       editableTargets: [],
+      lockedTargets: [],
       blockedTargets: [],
       bounds: null,
       sameSpeciesReferenceCanonicalName: null,
@@ -567,6 +568,7 @@ describe('SceneInteractionController', () => {
         { kind: 'plant' as const, id: 'apple-1' },
         { kind: 'plant' as const, id: 'apple-2' },
       ],
+      lockedTargets: [],
       blockedTargets: [],
       bounds: { minX: 10, minY: 10, maxX: 60, maxY: 40 },
       sameSpeciesReferenceCanonicalName: 'Malus domestica',
@@ -601,6 +603,7 @@ describe('SceneInteractionController', () => {
         { kind: 'plant' as const, id: 'apple-1' },
         { kind: 'zone' as const, id: 'zone-1' },
       ],
+      lockedTargets: [],
       blockedTargets: [],
       bounds: { minX: 10, minY: 10, maxX: 60, maxY: 40 },
       sameSpeciesReferenceCanonicalName: null,
@@ -618,6 +621,7 @@ describe('SceneInteractionController', () => {
         { kind: 'plant' as const, id: 'plant-1' },
         { kind: 'zone' as const, id: 'zone-1' },
       ],
+      lockedTargets: [],
       blockedTargets: [],
       bounds: { minX: 10, minY: 10, maxX: 40, maxY: 40 },
       sameSpeciesReferenceCanonicalName: null,
@@ -648,6 +652,7 @@ describe('SceneInteractionController', () => {
         { kind: 'plant' as const, id: 'plant-1' },
         { kind: 'plant' as const, id: 'plant-2' },
       ],
+      lockedTargets: [],
       blockedTargets: [{
         target: { kind: 'missing' as const, id: 'missing-object' },
         reason: 'missing-design-object' as const,
@@ -662,6 +667,7 @@ describe('SceneInteractionController', () => {
 
     selectionModel = {
       editableTargets: [{ kind: 'group' as const, id: 'group-1' }],
+      lockedTargets: [],
       blockedTargets: [],
       bounds: { minX: 10, minY: 10, maxX: 40, maxY: 40 },
       sameSpeciesReferenceCanonicalName: null,
@@ -1290,7 +1296,7 @@ describe('SceneInteractionController', () => {
     outsidePanel.remove()
   })
 
-  it('does not select or drag locked Design Objects from SceneStore', () => {
+  it('selects locked Design Objects for toolbar unlock without allowing drag mutations', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
@@ -1310,7 +1316,26 @@ describe('SceneInteractionController', () => {
       }]
     })
 
-    const deps = createInteractionDeps(container, store, camera)
+    const onSceneEditCommit = vi.fn()
+    const baseDeps = createInteractionDeps(container, store, camera, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+      onSceneEditCommit,
+    })
+    const unlockSelected = vi.fn(() => {
+      baseDeps.sceneEdits.run('unlock-selected', (tx) => {
+        tx.mutate((draft) => {
+          const plant = draft.plants.find((entry) => entry.id === 'locked-plant')
+          if (plant) plant.locked = false
+        })
+      })
+    })
+    const deps = {
+      ...baseDeps,
+      selectionCommands: {
+        ...baseDeps.selectionCommands,
+        unlockSelected,
+      },
+    }
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('select')
 
@@ -1318,8 +1343,30 @@ describe('SceneInteractionController', () => {
     events.pointerMove({ x: 35, y: 45 }, { button: 0 })
     events.pointerUp({ x: 35, y: 45 }, { button: 0 })
 
-    expect(selectedObjectIds.value).toEqual(new Set())
+    expect(selectedObjectIds.value).toEqual(new Set(['locked-plant']))
     expect(store.persisted.plants[0]?.position).toEqual({ x: 20, y: 30 })
+
+    const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')
+    expect(toolbar?.style.display).toBe('flex')
+    expect(toolbar?.querySelector<HTMLButtonElement>('[data-selection-action-command="duplicate"]')?.disabled).toBe(true)
+    expect(toolbar?.querySelector<HTMLButtonElement>('[data-selection-action-command="bring-forward"]')?.disabled).toBe(true)
+    expect(toolbar?.querySelector<HTMLButtonElement>('[data-selection-action-command="send-backward"]')?.disabled).toBe(true)
+    expect(toolbar?.querySelector<HTMLButtonElement>('[data-selection-action-command="delete"]')?.disabled).toBe(true)
+    expect(toolbar?.querySelector('[data-selection-action-command="lock"]')).toBeNull()
+    const unlock = toolbar?.querySelector<HTMLButtonElement>('[data-selection-action-command="unlock"]')
+    expect(unlock?.disabled).toBe(false)
+    expect(unlock?.getAttribute('aria-label')).toContain('Unlock')
+
+    unlock?.click()
+    controller.refreshMeasurements()
+
+    expect(unlockSelected).toHaveBeenCalledTimes(1)
+    expect(onSceneEditCommit).toHaveBeenCalledWith('unlock-selected')
+    expect(store.persisted.plants[0]?.locked).toBe(false)
+    expect(selectedObjectIds.value).toEqual(new Set(['locked-plant']))
+    expect(container.querySelector('[data-selection-action-command="unlock"]')).toBeNull()
+    expect(container.querySelector<HTMLButtonElement>('[data-selection-action-command="lock"]')?.disabled).toBe(false)
+    expect(container.querySelector<HTMLButtonElement>('[data-selection-action-command="duplicate"]')?.disabled).toBe(false)
     controller.dispose()
   })
 

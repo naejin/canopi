@@ -549,6 +549,7 @@ describe('scene canvas runtime', () => {
 
     expect(runtime.querySurface.getDesignObjectSelection()).toEqual({
       editableTargets: [{ kind: 'zone', id: 'zone-1' }],
+      lockedTargets: [],
       blockedTargets: [],
       bounds: { minX: 0, minY: 0, maxX: 5, maxY: 5 },
       sameSpeciesReferenceCanonicalName: null,
@@ -564,6 +565,7 @@ describe('scene canvas runtime', () => {
 
     expect(runtime.querySurface.getDesignObjectSelection()).toEqual({
       editableTargets: [],
+      lockedTargets: [],
       blockedTargets: [{
         target: { kind: 'zone', id: 'zone-1' },
         reason: 'locked-layer',

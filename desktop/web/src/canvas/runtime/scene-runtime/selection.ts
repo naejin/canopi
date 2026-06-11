@@ -11,7 +11,7 @@ import type {
   CanvasDesignObjectSelectionTarget,
 } from '../runtime'
 import type { SceneLayerEntity, ScenePersistedState } from '../scene'
-import { isSceneDesignObjectLocked } from '../scene'
+import { isDirectSceneDesignObjectLocked, isSceneDesignObjectLocked } from '../scene'
 import { getZoneWorldBounds } from '../zone-geometry'
 import { getSameSpeciesReferenceCanonicalName } from './species-selection'
 
@@ -124,11 +124,21 @@ export function getDesignObjectSelectionModel(
   const topLevelTargets = getSelectedTopLevelTargets(persisted, selectedIds)
   const blockedTargets = getBlockedSelectionTargets(persisted, selectedIds)
   const blockedKeys = new Set(blockedTargets.map((blocked) => targetKey(blocked.target)))
+  const lockedTargets = blockedTargets
+    .filter((blocked): blocked is CanvasDesignObjectSelectionBlockedTarget & {
+      target: CanvasDesignObjectSelectionTarget
+    } =>
+      blocked.reason === 'locked-design-object'
+      && blocked.target.kind !== 'missing'
+      && isDirectSceneDesignObjectLocked(persisted, blocked.target.id),
+    )
+    .map((blocked) => blocked.target)
   const editableTargets = topLevelTargets.filter((target) => !blockedKeys.has(targetKey(target)))
   return {
     editableTargets,
+    lockedTargets,
     blockedTargets,
-    bounds: getCombinedTargetBounds(persisted, editableTargets, options),
+    bounds: getCombinedTargetBounds(persisted, [...editableTargets, ...lockedTargets], options),
     sameSpeciesReferenceCanonicalName: getSameSpeciesReferenceCanonicalName(persisted, editableTargets),
   }
 }

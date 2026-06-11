@@ -35,6 +35,7 @@ interface SelectionAction {
   readonly shortcut: string | null
   readonly icon: readonly SvgPath[]
   readonly isAvailable: (selection: CanvasDesignObjectSelectionModel) => boolean
+  readonly isEnabled: (selection: CanvasDesignObjectSelectionModel) => boolean
   readonly run: () => void
 }
 
@@ -88,7 +89,8 @@ export function createSelectionActionToolbar(
         { d: 'M8 7h9v9H8z', fill: 'none' },
         { d: 'M5 4h9v9H5z', fill: 'none' },
       ],
-      isAvailable: hasEditableSelection,
+      isAvailable: hasPrimaryActionSelection,
+      isEnabled: hasUnlockedEditableSelection,
       run: () => options.commands.duplicateSelected(),
     },
     {
@@ -100,7 +102,8 @@ export function createSelectionActionToolbar(
         { d: 'M4 8h8v8H4z', fill: 'none' },
         { points: '14,5 17,5 17,8' },
       ],
-      isAvailable: hasEditableSelection,
+      isAvailable: hasPrimaryActionSelection,
+      isEnabled: hasUnlockedEditableSelection,
       run: () => options.commands.bringToFront(),
     },
     {
@@ -112,7 +115,8 @@ export function createSelectionActionToolbar(
         { d: 'M4 8h8v8H4z', fill: 'none' },
         { points: '6,15 3,15 3,12' },
       ],
-      isAvailable: hasEditableSelection,
+      isAvailable: hasPrimaryActionSelection,
+      isEnabled: hasUnlockedEditableSelection,
       run: () => options.commands.sendToBack(),
     },
     {
@@ -127,6 +131,7 @@ export function createSelectionActionToolbar(
         { d: 'M17.5 12.5c0 2.5-1.5 4-3.5 4', fill: 'none' },
       ],
       isAvailable: isSelectSameSpeciesAvailable,
+      isEnabled: isSelectSameSpeciesAvailable,
       run: () => options.commands.selectSameSpecies(),
     },
     {
@@ -140,6 +145,7 @@ export function createSelectionActionToolbar(
         { d: 'M16 8V4h-4', fill: 'none' },
       ],
       isAvailable: isGroupAvailable,
+      isEnabled: isGroupAvailable,
       run: () => options.commands.groupSelected(),
     },
     {
@@ -155,6 +161,7 @@ export function createSelectionActionToolbar(
         { d: 'M16 4v4', fill: 'none' },
       ],
       isAvailable: isUngroupAvailable,
+      isEnabled: isUngroupAvailable,
       run: () => options.commands.ungroupSelected(),
     },
     {
@@ -167,7 +174,21 @@ export function createSelectionActionToolbar(
         { d: 'M10 12v2', fill: 'none' },
       ],
       isAvailable: isLockAvailable,
+      isEnabled: isLockAvailable,
       run: () => options.commands.lockSelected(),
+    },
+    {
+      id: 'unlock',
+      labelKey: 'canvas.selectionActions.unlock',
+      shortcut: null,
+      icon: [
+        { d: 'M7 9V7a3 3 0 015.2-2', fill: 'none' },
+        { d: 'M5 9h10v7H5z', fill: 'none' },
+        { d: 'M10 12v2', fill: 'none' },
+      ],
+      isAvailable: hasLockedSelection,
+      isEnabled: hasLockedSelection,
+      run: () => options.commands.unlockSelected(),
     },
     {
       id: 'delete',
@@ -178,7 +199,8 @@ export function createSelectionActionToolbar(
         { d: 'M9 7V5h4v2', fill: 'none' },
         { d: 'M8 9l1 7h4l1-7', fill: 'none' },
       ],
-      isAvailable: hasEditableSelection,
+      isAvailable: hasPrimaryActionSelection,
+      isEnabled: hasUnlockedEditableSelection,
       run: () => options.commands.deleteSelected(),
     },
   ]
@@ -198,12 +220,15 @@ export function createSelectionActionToolbar(
     for (const { action, button } of actionButtons) refreshButtonLabel(button, action)
 
     const selection = options.getSelection()
-    if (selection.editableTargets.length === 0 || !selection.bounds) {
+    if (!hasToolbarSelection(selection) || hasStructuralSelectionBlocker(selection) || !selection.bounds) {
       hide()
       return
     }
 
     const availableActionButtons = actionButtons.filter(({ action }) => action.isAvailable(selection))
+    for (const { action, button } of availableActionButtons) {
+      setButtonEnabled(button, action.isEnabled(selection))
+    }
     const nextActionIds = availableActionButtons.map(({ action }) => action.id).join('|')
     if (nextActionIds !== renderedActionIds) {
       root.replaceChildren(...availableActionButtons.map(({ button }) => button))
@@ -280,15 +305,26 @@ function createActionButton(action: SelectionAction, run: () => void): HTMLButto
   })
   button.addEventListener('click', (event) => {
     event.stopPropagation()
+    if (button.disabled) return
     run()
   })
   button.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter' && event.key !== ' ') return
     event.preventDefault()
     event.stopPropagation()
+    if (button.disabled) return
     run()
   })
   return button
+}
+
+function setButtonEnabled(button: HTMLButtonElement, enabled: boolean): void {
+  button.disabled = !enabled
+  button.tabIndex = enabled ? 0 : -1
+  button.setAttribute('aria-disabled', enabled ? 'false' : 'true')
+  button.style.cursor = enabled ? 'pointer' : 'not-allowed'
+  button.style.color = enabled ? 'var(--color-text)' : 'var(--color-text-muted)'
+  button.style.opacity = enabled ? '1' : '0.42'
 }
 
 function refreshButtonLabel(button: HTMLButtonElement, action: Pick<SelectionAction, 'labelKey' | 'shortcut'>): void {
@@ -432,8 +468,35 @@ function stopCanvasEvent(event: Event): void {
   event.stopPropagation()
 }
 
-function hasEditableSelection(selection: CanvasDesignObjectSelectionModel): boolean {
+function hasToolbarSelection(selection: CanvasDesignObjectSelectionModel): boolean {
+  return selection.editableTargets.length > 0 || hasLockedSelection(selection)
+}
+
+function hasPrimaryActionSelection(selection: CanvasDesignObjectSelectionModel): boolean {
+  return hasToolbarSelection(selection)
+}
+
+function hasUnlockedEditableSelection(selection: CanvasDesignObjectSelectionModel): boolean {
   return selection.editableTargets.length > 0
+    && !hasLockedSelection(selection)
+    && !hasStructuralSelectionBlocker(selection)
+}
+
+function hasLockedSelection(selection: CanvasDesignObjectSelectionModel): boolean {
+  return lockedTargets(selection).length > 0
+}
+
+function hasStructuralSelectionBlocker(selection: CanvasDesignObjectSelectionModel): boolean {
+  const lockedKeys = new Set(lockedTargets(selection).map(targetKey))
+  return selection.blockedTargets.some((blocked) =>
+    blocked.reason !== 'locked-design-object'
+    || blocked.target.kind === 'missing'
+    || !lockedKeys.has(targetKey(blocked.target)),
+  )
+}
+
+function lockedTargets(selection: CanvasDesignObjectSelectionModel): readonly { kind: string; id: string }[] {
+  return selection.lockedTargets ?? []
 }
 
 function isGroupAvailable(selection: CanvasDesignObjectSelectionModel): boolean {
@@ -449,10 +512,14 @@ function isUngroupAvailable(selection: CanvasDesignObjectSelectionModel): boolea
 }
 
 function isLockAvailable(selection: CanvasDesignObjectSelectionModel): boolean {
-  return selection.blockedTargets.length === 0 && selection.editableTargets.length > 0
+  return hasUnlockedEditableSelection(selection)
 }
 
 function isSelectSameSpeciesAvailable(selection: CanvasDesignObjectSelectionModel): boolean {
   return selection.blockedTargets.length === 0
     && selection.sameSpeciesReferenceCanonicalName !== null
+}
+
+function targetKey(target: { kind: string; id: string }): string {
+  return `${target.kind}:${target.id}`
 }

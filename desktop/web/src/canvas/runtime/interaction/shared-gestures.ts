@@ -2,7 +2,7 @@ import { computeSelectionRect } from '../../operations'
 import type { CameraController } from '../camera'
 import type { PlantPresentationContext } from '../plant-presentation'
 import type { ScenePoint, SceneStore } from '../scene'
-import { isSceneDesignObjectLocked } from '../scene'
+import { isDirectSceneDesignObjectLocked, isSceneDesignObjectLocked } from '../scene'
 import {
   applySpeciesSelection,
   getSelectablePlantIdsForSpecies,
@@ -118,7 +118,8 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
       this.context.getSpeciesCache(),
       this.context.getPlantPresentationContext,
     )
-    const hit = rawHit && !isSceneDesignObjectLocked(scene, rawHit.id) ? rawHit : null
+    const lockedHit = rawHit && isDirectSceneDesignObjectLocked(scene, rawHit.id) ? rawHit : null
+    const hit = rawHit && (!isSceneDesignObjectLocked(scene, rawHit.id) || lockedHit) ? rawHit : null
     const additive = hasAdditiveModifier(event)
 
     if (!hit) {
@@ -129,6 +130,21 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
         this.context.render('scene')
       }
       showInteractionPreview(this.context.preview, 'band', screen, screen)
+      return true
+    }
+
+    if (lockedHit) {
+      const currentSelection = new Set(this.context.getSelection())
+      if (additive) {
+        if (currentSelection.has(lockedHit.id)) currentSelection.delete(lockedHit.id)
+        else currentSelection.add(lockedHit.id)
+      } else {
+        currentSelection.clear()
+        currentSelection.add(lockedHit.id)
+      }
+      this.context.setSelection(currentSelection)
+      this.context.render('scene')
+      this.context.refreshSelectionDependent()
       return true
     }
 

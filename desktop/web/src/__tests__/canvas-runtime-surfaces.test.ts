@@ -28,6 +28,7 @@ function createQuerySurface() {
     getSelection: () => new Set<string>(),
     getDesignObjectSelection: () => ({
       editableTargets: [],
+      lockedTargets: [],
       blockedTargets: [],
       bounds: null,
       sameSpeciesReferenceCanonicalName: null,

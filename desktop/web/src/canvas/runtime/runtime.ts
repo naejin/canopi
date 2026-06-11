@@ -36,6 +36,7 @@ export interface CanvasDesignObjectSelectionBlockedTarget {
 
 export interface CanvasDesignObjectSelectionModel {
   readonly editableTargets: readonly CanvasDesignObjectSelectionTarget[]
+  readonly lockedTargets: readonly CanvasDesignObjectSelectionTarget[]
   readonly blockedTargets: readonly CanvasDesignObjectSelectionBlockedTarget[]
   readonly bounds: SceneBounds | null
   readonly sameSpeciesReferenceCanonicalName: string | null

@@ -40,6 +40,7 @@ function createRuntime(): CanvasQuerySurface {
     getSelection: () => new Set(),
     getDesignObjectSelection: () => ({
       editableTargets: [],
+      lockedTargets: [],
       blockedTargets: [],
       bounds: null,
       sameSpeciesReferenceCanonicalName: null,

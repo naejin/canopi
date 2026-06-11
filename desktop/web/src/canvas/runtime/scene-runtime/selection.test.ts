@@ -113,16 +113,20 @@ describe('scene design object selection model', () => {
     })
   })
 
-  it('reports directly locked Design Objects without making them editable', () => {
+  it('reports directly locked Design Objects as selected locked targets with bounds', () => {
     const model = readModel(makeScene(), ['plant-2'])
 
     expect(model.editableTargets).toEqual([])
+    expect(model.lockedTargets).toEqual([{ kind: 'plant', id: 'plant-2' }])
     expect(model.blockedTargets).toEqual([{
       target: { kind: 'plant', id: 'plant-2' },
       reason: 'locked-design-object',
       layerName: 'plants',
     }])
-    expect(model.bounds).toBeNull()
+    expect(model.bounds?.minX).toBeLessThan(30)
+    expect(model.bounds?.minY).toBeLessThan(30)
+    expect(model.bounds?.maxX).toBeGreaterThan(30)
+    expect(model.bounds?.maxY).toBeGreaterThan(30)
   })
 
   it('uses plant Visual Footprint bounds for selected plants', () => {

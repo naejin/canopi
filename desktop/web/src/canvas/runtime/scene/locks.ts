@@ -5,7 +5,7 @@ export function isSceneDesignObjectLocked(state: ScenePersistedState, id: string
     || isSceneGroupLockedByMember(state, id)
 }
 
-function isDirectSceneDesignObjectLocked(state: ScenePersistedState, id: string): boolean {
+export function isDirectSceneDesignObjectLocked(state: ScenePersistedState, id: string): boolean {
   return state.plants.some((plant) => plant.id === id && plant.locked)
     || state.zones.some((zone) => zone.name === id && zone.locked)
     || state.annotations.some((annotation) => annotation.id === id && annotation.locked)

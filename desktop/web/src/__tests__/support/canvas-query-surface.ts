@@ -50,6 +50,7 @@ export function createTestCanvasQuerySurface({
     getSelection: () => new Set(),
     getDesignObjectSelection: () => ({
       editableTargets: [],
+      lockedTargets: [],
       blockedTargets: [],
       bounds: null,
       sameSpeciesReferenceCanonicalName: null,
