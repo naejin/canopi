@@ -324,11 +324,11 @@ export class SceneInteractionController {
   }
 
   private readonly _onPointerMove = (event: PointerEvent): void => {
-    if (this._selectionToolbar.contains(event.target)) return
-    if (this._lockedAffordance.contains(event.target)) return
-    if (this._tools.shouldIgnorePointerEvent(event.target)) return
-
     if (!this._frame.hasPointerGesture()) {
+      if (this._selectionToolbar.contains(event.target)) return
+      if (this._lockedAffordance.contains(event.target)) return
+      if (this._tools.shouldIgnorePointerEvent(event.target)) return
+
       const screen = this._screenPoint(event)
       const rawWorld = this._deps.camera.screenToWorld(screen)
       if (this._tools.pointerMoveWithoutCapture({ event, screen, rawWorld })) return

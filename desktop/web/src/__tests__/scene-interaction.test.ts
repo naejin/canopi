@@ -22,6 +22,7 @@ import {
 import {
   createSceneInteractionEventHarness,
   type SceneInteractionEventHarness,
+  type SceneInteractionPointerOptions,
 } from './support/scene-interaction-frame'
 
 function createPlantPresentationContext(viewportScale: number) {
@@ -250,6 +251,43 @@ function expectPointCloseTo(actual: ScenePoint | undefined, expected: ScenePoint
   expect(actual?.y).toBeCloseTo(expected.y)
 }
 
+function pointerMoveWithEventTarget(
+  events: SceneInteractionEventHarness,
+  screen: ScenePoint,
+  target: EventTarget,
+  options: SceneInteractionPointerOptions = {},
+): PointerEvent {
+  const {
+    pointerId = 1,
+    pointerType = 'mouse',
+    isPrimary = true,
+    button = 0,
+    buttons = 1,
+    bubbles = true,
+    cancelable = true,
+    target: _dispatchTarget,
+    ...mouseOptions
+  } = options
+  const client = events.clientPoint(screen)
+  const event = new MouseEvent('pointermove', {
+    ...mouseOptions,
+    bubbles,
+    cancelable,
+    button,
+    buttons,
+    clientX: client.x,
+    clientY: client.y,
+  })
+  Object.defineProperties(event, {
+    pointerId: { configurable: true, value: pointerId },
+    pointerType: { configurable: true, value: pointerType },
+    isPrimary: { configurable: true, value: isPrimary },
+    target: { configurable: true, value: target },
+  })
+  window.dispatchEvent(event)
+  return event as PointerEvent
+}
+
 function pointsCenter(points: readonly ScenePoint[]): ScenePoint {
   let minX = Infinity
   let minY = Infinity
@@ -335,6 +373,56 @@ describe('SceneInteractionController', () => {
     expect(store.persisted.plants[0]?.position).toEqual({ x: 35, y: 45 })
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-drag')
     expect(deps.setSelection).toHaveBeenCalledWith(new Set(['plant-1']))
+    controller.dispose()
+  })
+
+  it('keeps active drag and rotation gestures moving when pointermove targets runtime overlays', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
+      draft.zones = [makeRectZone('zone-1', [
+        { x: 80, y: 80 },
+        { x: 140, y: 80 },
+        { x: 140, y: 120 },
+        { x: 80, y: 120 },
+      ])]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+      onSceneEditCommit,
+    })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    deps.setSelection(['plant-1'])
+    controller.refreshMeasurements()
+    const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
+    expect(toolbar.style.display).toBe('flex')
+
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
+    const toolbarMove = pointerMoveWithEventTarget(events, { x: 35, y: 45 }, toolbar, { button: 0 })
+    expect(toolbarMove.target).toBe(toolbar)
+    events.pointerUp({ x: 35, y: 45 }, { button: 0 })
+
+    expect(store.persisted.plants[0]?.position).toEqual({ x: 35, y: 45 })
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-drag')
+
+    deps.setSelection(['zone-1'])
+    controller.refreshMeasurements()
+    const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
+    const lockedAffordance = container.querySelector<HTMLElement>('[data-locked-object-affordance]')!
+    const pivot = selectionBoundsCenter(getDesignObjectSelectionFromStore(store, camera))
+    const start = rotationHandleCenter(container)
+    const end = quarterTurnClockwise(pivot, start)
+
+    events.pointerDown(start, { button: 0, target: handle })
+    const affordanceMove = pointerMoveWithEventTarget(events, end, lockedAffordance, { button: 0 })
+    expect(affordanceMove.target).toBe(lockedAffordance)
+
+    expect(store.persisted.zones[0]?.rotationDeg).toBeCloseTo(90)
+
+    events.pointerUp(end, { button: 0 })
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-rotate')
     controller.dispose()
   })
 
