@@ -438,6 +438,103 @@ describe('createPixiSceneRenderer', () => {
     renderer.dispose()
   })
 
+  it('uses interaction stroke alpha for rotated Pixi zones', async () => {
+    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
+    const pixi = await import('pixi.js') as unknown as {
+      __pixiMockState: {
+        graphics: Array<{
+          moveTo: ReturnType<typeof vi.fn>
+          stroke: ReturnType<typeof vi.fn>
+        }>
+      }
+    }
+
+    const host = document.createElement('div')
+    Object.defineProperty(host, 'clientWidth', { configurable: true, value: 400 })
+    Object.defineProperty(host, 'clientHeight', { configurable: true, value: 300 })
+
+    const renderer = await createPixiSceneRenderer().initialize({ container: host }, {
+      backendId: 'pixi',
+      capabilities: {
+        domCanvas: true,
+        canvas2d: true,
+        offscreenCanvas: false,
+        offscreenCanvas2d: false,
+        webgl: true,
+        webgl2: true,
+        webgpu: false,
+        imageBitmap: false,
+        createImageBitmap: false,
+        worker: false,
+        devicePixelRatio: 1,
+        prefersReducedMotion: null,
+      },
+    } as never)
+
+    const snapshot: SceneRendererSnapshot = {
+      scene: {
+        plants: [],
+        zones: [
+          {
+            kind: 'zone',
+            locked: false,
+            name: 'rotated-rect',
+            zoneType: 'rect',
+            points: [
+              { x: 0, y: 0 },
+              { x: 10, y: 0 },
+              { x: 10, y: 4 },
+              { x: 0, y: 4 },
+            ],
+            rotationDeg: 90,
+            fillColor: null,
+            notes: null,
+          },
+          {
+            kind: 'zone',
+            locked: false,
+            name: 'rotated-ellipse',
+            zoneType: 'ellipse',
+            points: [
+              { x: 40, y: 40 },
+              { x: 8, y: 4 },
+            ],
+            rotationDeg: 45,
+            fillColor: null,
+            notes: null,
+          },
+        ],
+        annotations: [],
+        groups: [],
+        layers: [],
+        plantSpeciesColors: {},
+        guides: [],
+      },
+      viewport: { x: 0, y: 0, scale: 1 },
+      selectedPlantIds: new Set<string>(),
+      selectedZoneIds: new Set<string>(),
+      selectedAnnotationIds: new Set<string>(),
+      highlightedPlantIds: new Set<string>(),
+      highlightedZoneIds: new Set<string>(['rotated-rect', 'rotated-ellipse']),
+      sizeMode: 'default' as const,
+      colorByAttr: null,
+      localizedCommonNames: new Map(),
+      hoveredCanonicalName: null,
+      selectionLabels: [],
+      speciesCache: new Map(),
+    }
+
+    renderer.renderScene(snapshot)
+
+    const rotatedZoneStrokes = pixi.__pixiMockState.graphics
+      .filter((graphics) => graphics.moveTo.mock.calls.length > 0)
+      .map((graphics) => graphics.stroke.mock.calls[0]?.[0])
+
+    expect(rotatedZoneStrokes).toHaveLength(2)
+    expect(rotatedZoneStrokes.map((stroke) => stroke?.alpha)).toEqual([0.72, 0.72])
+    renderer.dispose()
+  })
+
   it('keeps zone and plant strokes screen-readable across viewport scale', async () => {
     const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
     const pixi = await import('pixi.js') as unknown as {

@@ -221,7 +221,7 @@ function drawZone(
       if (!corners) return
       drawClosedZonePath(graphics, corners)
         .fill({ color: fillColor, alpha: 0.2 })
-        .stroke({ color: strokeColor, width: strokeWidth, alpha: 1 })
+        .stroke({ color: strokeColor, width: strokeWidth, alpha: strokeAlpha })
       return
     }
 
@@ -239,7 +239,7 @@ function drawZone(
       if (!polygon) return
       drawClosedZonePath(graphics, polygon)
         .fill({ color: fillColor, alpha: 0.2 })
-        .stroke({ color: strokeColor, width: strokeWidth, alpha: 1 })
+        .stroke({ color: strokeColor, width: strokeWidth, alpha: strokeAlpha })
       return
     }
 
