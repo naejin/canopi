@@ -19,7 +19,16 @@ export interface PlantStampSourceInput {
 }
 
 type WritableDragData = Pick<DataTransfer, 'setData'> & { effectAllowed?: string }
-type ReadableDragData = Pick<DataTransfer, 'getData'>
+type DragDataTypes = {
+  readonly types?: {
+    readonly length: number
+    readonly [index: number]: string | undefined
+    includes?(type: string): boolean
+    item?(index: number): string | null
+    contains?(type: string): boolean
+  }
+}
+type ReadableDragData = Pick<DataTransfer, 'getData'> & DragDataTypes
 
 const selectedPlantStampSource = signal<PlantStampSource | null>(null)
 
@@ -87,8 +96,32 @@ export function readPlantStampDragData(
   return null
 }
 
+export function hasPlantStampDragData(
+  dataTransfer: ReadableDragData | null | undefined,
+): boolean {
+  if (!dataTransfer) return false
+  if (hasDragDataType(dataTransfer, PLANT_STAMP_MIME)) return true
+  if (hasDragDataType(dataTransfer, LEGACY_TEXT_MIME)) return true
+  return readPlantStampDragData(dataTransfer) !== null
+}
+
 export function readPlantStampDropSource(event: DragEvent): PlantStampSource | null {
   return readPlantStampDragData(event.dataTransfer)
+}
+
+function hasDragDataType(dataTransfer: DragDataTypes, type: string): boolean {
+  const types = dataTransfer.types
+  if (!types) return false
+
+  if (typeof types.includes === 'function') return types.includes(type)
+
+  if (typeof types.contains === 'function') return types.contains(type)
+
+  for (let i = 0; i < types.length; i += 1) {
+    const item = typeof types.item === 'function' ? types.item(i) : types[i]
+    if (item === type) return true
+  }
+  return false
 }
 
 function parsePlantStampSource(raw: string): PlantStampSource | null {

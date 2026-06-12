@@ -5588,17 +5588,23 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
-  it('creates plant placements from drag-and-drop payloads', () => {
+  it('creates plant placements from drag-and-drop payloads through protected dragover data', () => {
     const onSceneEditCommit = vi.fn()
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
     const controller = new SceneInteractionController(deps as any)
     const dragData = new Map<string, string>()
+    let protectedDragData = true
     const dataTransfer = {
       effectAllowed: 'none',
+      dropEffect: 'none',
+      get types() {
+        return Array.from(dragData.keys())
+      },
       setData(type: string, value: string) {
         dragData.set(type, value)
       },
       getData(type: string) {
+        if (protectedDragData) return ''
         return dragData.get(type) ?? ''
       },
     }
@@ -5630,9 +5636,14 @@ describe('SceneInteractionController', () => {
     const preview = Array.from(container.children)
       .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
 
-    ;(controller as any)._onDragOver(dragOverEvent)
+    container.dispatchEvent(dragOverEvent)
+    expect(dragOverEvent.defaultPrevented).toBe(true)
+    expect(dataTransfer.dropEffect).toBe('copy')
     expect(preview?.style.display).toBe('block')
-    ;(controller as any)._onDrop(dropEvent)
+
+    protectedDragData = false
+    container.dispatchEvent(dropEvent)
+    expect(dropEvent.defaultPrevented).toBe(true)
 
     expect(store.persisted.plants).toHaveLength(1)
     expect(store.persisted.plants[0]).toMatchObject({

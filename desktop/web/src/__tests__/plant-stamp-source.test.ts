@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   beginPlantStampFromSpecies,
   clearPlantStampSource,
+  hasPlantStampDragData,
   readPlantStampDragData,
   readPlantStampSource,
   selectPlantStampSource,
@@ -75,6 +76,32 @@ describe('Plant Stamp source', () => {
       stratum: 'high',
       width_max_m: 4,
     })
+  })
+
+  it('detects drag data from MIME types while browser-protected payload data is hidden', () => {
+    const values = new Map<string, string>()
+    let protectedDragData = true
+    const dataTransfer = {
+      effectAllowed: 'none',
+      get types() {
+        return Array.from(values.keys())
+      },
+      setData(type: string, value: string) {
+        values.set(type, value)
+      },
+      getData(type: string) {
+        if (protectedDragData) return ''
+        return values.get(type) ?? ''
+      },
+    }
+
+    writePlantStampDragData(dataTransfer, species())
+
+    expect(hasPlantStampDragData(dataTransfer)).toBe(true)
+    expect(readPlantStampDragData(dataTransfer)).toBeNull()
+
+    protectedDragData = false
+    expect(readPlantStampDragData(dataTransfer)?.canonical_name).toBe('Malus domestica')
   })
 
   it('rejects invalid drag data at the seam', () => {

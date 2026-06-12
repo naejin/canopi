@@ -21,7 +21,7 @@ import {
   appendPlantStampSourceToDraft,
 } from './interaction/tool-actions'
 import { isSceneLayerOpenForCreation } from './interaction/layer-guards'
-import { readPlantStampDropSource } from '../plant-stamp-source'
+import { hasPlantStampDragData, readPlantStampDropSource } from '../plant-stamp-source'
 import {
   createSceneToolModules,
   type SceneToolModules,
@@ -398,7 +398,7 @@ export class SceneInteractionController {
 
   private readonly _onDragOver = (event: DragEvent): void => {
     event.preventDefault()
-    const canDropPlant = readPlantStampDropSource(event) !== null
+    const canDropPlant = hasPlantStampDragData(event.dataTransfer)
       && isSceneLayerOpenForCreation(this._deps.getSceneStore().persisted, 'plants')
     if (event.dataTransfer) event.dataTransfer.dropEffect = canDropPlant ? 'copy' : 'none'
     if (!canDropPlant) {
