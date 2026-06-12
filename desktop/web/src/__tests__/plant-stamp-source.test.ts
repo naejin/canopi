@@ -104,6 +104,30 @@ describe('Plant Stamp source', () => {
     expect(readPlantStampDragData(dataTransfer)?.canonical_name).toBe('Malus domestica')
   })
 
+  it('does not trust protected text drag types without readable plant payload data', () => {
+    const values = new Map<string, string>()
+    let protectedDragData = true
+    const dataTransfer = {
+      get types() {
+        return Array.from(values.keys())
+      },
+      setData(type: string, value: string) {
+        values.set(type, value)
+      },
+      getData(type: string) {
+        if (protectedDragData) return ''
+        return values.get(type) ?? ''
+      },
+    }
+    dataTransfer.setData('text/plain', JSON.stringify(species()))
+
+    expect(hasPlantStampDragData(dataTransfer)).toBe(false)
+
+    protectedDragData = false
+    expect(readPlantStampDragData(dataTransfer)?.canonical_name).toBe('Malus domestica')
+    expect(hasPlantStampDragData(dataTransfer)).toBe(true)
+  })
+
   it('rejects invalid drag data at the seam', () => {
     const dataTransfer = dragDataStore()
     dataTransfer.setData('text/plain', JSON.stringify({ common_name: 'No identity' }))

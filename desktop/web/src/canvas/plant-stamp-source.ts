@@ -101,7 +101,6 @@ export function hasPlantStampDragData(
 ): boolean {
   if (!dataTransfer) return false
   if (hasDragDataType(dataTransfer, PLANT_STAMP_MIME)) return true
-  if (hasDragDataType(dataTransfer, LEGACY_TEXT_MIME)) return true
   return readPlantStampDragData(dataTransfer) !== null
 }
 

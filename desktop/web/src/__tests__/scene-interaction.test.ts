@@ -5657,6 +5657,36 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('does not show plant drop feedback for protected ordinary text drags', () => {
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    const dataTransfer = {
+      dropEffect: 'copy',
+      types: ['text/plain'],
+      getData() {
+        return ''
+      },
+    }
+    const dragOverEvent = new Event('dragover', { bubbles: true, cancelable: true }) as DragEvent
+    Object.defineProperties(dragOverEvent, {
+      clientX: { configurable: true, value: 80 },
+      clientY: { configurable: true, value: 90 },
+      dataTransfer: {
+        configurable: true,
+        value: dataTransfer,
+      },
+    })
+    const preview = Array.from(container.children)
+      .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
+
+    container.dispatchEvent(dragOverEvent)
+
+    expect(dragOverEvent.defaultPrevented).toBe(true)
+    expect(dataTransfer.dropEffect).toBe('none')
+    expect(preview?.style.display).toBe('none')
+    controller.dispose()
+  })
+
   it('does not create plant placements from drag-and-drop payloads on a locked Plants Layer', () => {
     store.updatePersisted((draft) => {
       draft.layers = draft.layers.map((layer) => (
