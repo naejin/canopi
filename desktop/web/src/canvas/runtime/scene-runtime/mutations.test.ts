@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { CanopiFile } from '../../../types/design'
-import { SceneStore } from '../scene'
+import { resolvePlantSymbolForPlant, SceneStore } from '../scene'
 import { SceneRuntimeMutationController } from './mutations'
 import { SceneRuntimeEditCoordinator } from './transactions'
 
@@ -486,13 +486,57 @@ describe('scene runtime mutation controller', () => {
     const { controller, sceneStore, state } = createController(file)
 
     const changed = controller.setPlantSymbolForSpecies('Malus domestica', 'tree')
+    const lockedPlant = sceneStore.persisted.plants.find((plant) => plant.id === 'plant-2')!
 
     expect(changed).toBe(1)
     expect(sceneStore.persisted.plants.find((plant) => plant.id === 'plant-1')?.symbol).toBe('tree')
-    expect(sceneStore.persisted.plants.find((plant) => plant.id === 'plant-2')?.symbol ?? null).toBeNull()
+    expect(lockedPlant.symbol).toBe('round')
+    expect(resolvePlantSymbolForPlant(lockedPlant, sceneStore.persisted.plantSpeciesSymbols)).toBe('round')
     expect(sceneStore.persisted.plantSpeciesSymbols).toEqual({
       'Malus domestica': 'tree',
     })
+    expect(state.dirtyTypes).toEqual(['set-plant-symbol-for-species'])
+  })
+
+  it('does not resymbol locked Plants when clearing a species symbol default', () => {
+    const file = makeFile()
+    file.plant_species_symbols = { 'Malus domestica': 'tree' }
+    file.plants = file.plants.map((plant) =>
+      plant.id === 'plant-2' ? { ...plant, locked: true } : plant,
+    )
+    const { controller, sceneStore, state } = createController(file)
+
+    const changed = controller.clearPlantSpeciesSymbol('Malus domestica')
+    const lockedPlant = sceneStore.persisted.plants.find((plant) => plant.id === 'plant-2')!
+
+    expect(changed).toBe(true)
+    expect(sceneStore.persisted.plantSpeciesSymbols).toEqual({})
+    expect(sceneStore.persisted.plants.find((plant) => plant.id === 'plant-1')?.symbol ?? null).toBeNull()
+    expect(lockedPlant.symbol).toBe('tree')
+    expect(resolvePlantSymbolForPlant(lockedPlant, sceneStore.persisted.plantSpeciesSymbols)).toBe('tree')
+    expect(state.dirtyTypes).toEqual(['clear-plant-species-symbol'])
+  })
+
+  it('does not resymbol Plants inside locked Object Groups through species-wide symbol edits', () => {
+    const file = makeFile()
+    file.groups = [{
+      id: 'group-1',
+      name: null,
+      layer: 'plants',
+      position: { x: 20, y: 20 },
+      rotation: null,
+      member_ids: ['plant-2'],
+      locked: true,
+    }]
+    const { controller, sceneStore, state } = createController(file)
+
+    const changed = controller.setPlantSymbolForSpecies('Malus domestica', 'tree')
+    const groupedPlant = sceneStore.persisted.plants.find((plant) => plant.id === 'plant-2')!
+
+    expect(changed).toBe(1)
+    expect(sceneStore.persisted.plants.find((plant) => plant.id === 'plant-1')?.symbol).toBe('tree')
+    expect(groupedPlant.symbol).toBe('round')
+    expect(resolvePlantSymbolForPlant(groupedPlant, sceneStore.persisted.plantSpeciesSymbols)).toBe('round')
     expect(state.dirtyTypes).toEqual(['set-plant-symbol-for-species'])
   })
 

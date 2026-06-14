@@ -476,8 +476,18 @@ export class SceneRuntimeMutationController {
     this._sceneEdits.run('set-plant-symbol-for-species', (tx) => {
       tx.mutate((persisted) => {
         persisted.plants = persisted.plants.map((plant) => {
-          if (!speciesTargets.editablePlantIds.has(plant.id)) return plant
-          const currentSymbol = plant.symbol == null ? null : resolvePlantSymbolId(plant.symbol)
+          if (!speciesTargets.plantIds.has(plant.id)) return plant
+          if (!speciesTargets.editablePlantIds.has(plant.id)) {
+            if (plant.symbol != null) return plant
+            const currentEffectiveSymbol = resolvePlantSymbolForPlant(plant, persisted.plantSpeciesSymbols)
+            if (currentEffectiveSymbol === nextSymbol) return plant
+            return {
+              ...plant,
+              symbol: currentEffectiveSymbol,
+            }
+          }
+
+          const currentSymbol = getExplicitPlantSymbol(plant)
           if (currentSymbol === nextSymbol) return plant
           changed += 1
           return {
@@ -512,8 +522,19 @@ export class SceneRuntimeMutationController {
   clearPlantSpeciesSymbol(canonicalName: string): boolean {
     const hadSymbol = Object.prototype.hasOwnProperty.call(this._sceneStore.persisted.plantSpeciesSymbols, canonicalName)
     if (!hadSymbol) return false
+    const speciesTargets = getSpeciesPlantEditTargets(this._sceneStore.persisted, canonicalName)
     this._sceneEdits.run('clear-plant-species-symbol', (tx) => {
       tx.mutate((persisted) => {
+        persisted.plants = persisted.plants.map((plant) => {
+          if (!speciesTargets.plantIds.has(plant.id)) return plant
+          if (speciesTargets.editablePlantIds.has(plant.id) || plant.symbol != null) return plant
+          const currentEffectiveSymbol = resolvePlantSymbolForPlant(plant, persisted.plantSpeciesSymbols)
+          if (currentEffectiveSymbol === resolvePlantSymbolId(null)) return plant
+          return {
+            ...plant,
+            symbol: currentEffectiveSymbol,
+          }
+        })
         const nextSpeciesSymbols = { ...persisted.plantSpeciesSymbols }
         delete nextSpeciesSymbols[canonicalName]
         persisted.plantSpeciesSymbols = nextSpeciesSymbols
@@ -594,6 +615,10 @@ function getSpeciesPlantEditTargets(
     }
   }
   return { plantIds, editablePlantIds }
+}
+
+function getExplicitPlantSymbol(plant: { symbol?: string | null }): PlantSymbolId | null {
+  return plant.symbol == null ? null : resolvePlantSymbolId(plant.symbol)
 }
 
 function getEffectivelyLockedGroupMemberIds(persisted: ScenePersistedState): Set<string> {
