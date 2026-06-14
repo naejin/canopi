@@ -27,7 +27,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 
 ## Scene Ownership
 
-- `SceneStore` owns canvas scene state: plants, zones, annotations, groups, Design Object locks, layers, plant species colors, selection, viewport, hover, and presentation modes.
+- `SceneStore` owns canvas scene state: plants, zones, annotations, groups, Design Object locks, layers, plant species colors, plant species symbols, selection, viewport, hover, and presentation modes.
 - Non-canvas document sections are not owned by `SceneStore`: consortiums, timeline, budget, `budget_currency`, location, description, and document extra.
 - Commands, tools, save/load, and document replacement mutate scene state, not renderer objects.
 - Canvas-owned document fields serialize from the live scene, not stale document input copies.
@@ -143,8 +143,12 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 
 ## Plant Presentation
 
-- Plant geometry, color, and stack badges come from `runtime/plant-presentation.ts`.
+- Plant geometry, color, Plant Symbol resolution, and stack badges come from `runtime/plant-presentation.ts`.
 - Visual Footprint is the shared presentation boundary for symbolic plant sizing; rendering, hit testing, band select, grouping bounds, and zoom-to-fit must consume the same computed footprint. Additional click/touch padding is allowed only as an explicit interaction affordance.
+- Plant Symbols are built-in marker recipes drawn inside the existing circular Visual Footprint. They must not change hit testing, band select, grouping bounds, zoom-to-fit bounds, stack badge placement, hover rings, selection rings, or locked-state rings.
+- Render Plant Symbols with Pixi and Canvas2D native primitives rather than runtime SVG parsing, image textures, DOM overlays, or a new icon dependency. At low zoom where the symbol is not readable, collapse all symbols to the same dot/round marker.
+- Plant Symbols apply to default symbolic marker mode. Canopy spread mode remains physical circle geometry when canopy spread is known; only the missing-canopy symbolic fallback should use the selected Plant Symbol.
+- Plant Symbols stay upright and ignore placed plant rotation unless a future feature deliberately defines oriented marker symbols.
 - Stack badges indicate placed plants whose centers collapse to nearly the same screen position, not all plants whose symbolic Visual Footprints overlap. Badge placement should derive from the current plant visual radius instead of fixed legacy dot-size assumptions.
 - Do not reintroduce per-plant labels on canvas. Identification is through hover tooltip and per-species selection labels.
 - Hover tooltip is an HTML overlay managed by `SceneInteractionController` through `runtime/interaction/hover-tooltip.ts`.

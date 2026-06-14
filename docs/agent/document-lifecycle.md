@@ -37,7 +37,7 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 
 ## Document Authority
 
-- Canvas scene state is owned by `SceneStore`: plants, zones, annotations, groups, Design Object locks, plant species colors, layers, and canvas session state.
+- Canvas scene state is owned by `SceneStore`: plants, zones, annotations, groups, Design Object locks, plant species colors, plant species symbols, layers, and canvas session state.
 - Non-canvas document state is owned by the document layer: consortiums, timeline, budget, `budget_currency`, location, description, and top-level unknown `extra` fields. Mutations belong behind `app/design-edit/`.
 - Non-canvas state must not be pushed into `SceneStore`.
 - Canvas state should not be mirrored into standalone signals when a computed value or runtime query surface is enough.
@@ -57,6 +57,7 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 - Attached canvas serialization delegates full Design file composition through `app/canvas-runtime/app-adapter.ts`, which calls `composeDocumentForSave()`. Runtime core should not import `app/contracts/document`.
 - Design file save composition is driven by generated field ownership metadata from `common-types/src/design.rs` via `DOCUMENT_FILE_FIELD_OWNERS`. Do not hand-maintain parallel top-level field merge lists in frontend save code.
 - Shared `extra` subfields need an explicit ownership entry near `composeDocumentForSave()`; currently `extra.guides` is scene-owned.
+- Plant Symbols are v3 scene-owned fields: top-level `plant_species_symbols` stores per-species defaults, and each placed plant may carry an optional explicit `symbol`. Old files migrate with an empty `plant_species_symbols` map and missing placed-plant symbols, which render as `round` through the Plant Symbol fallback.
 
 ## Adding Document Fields
 

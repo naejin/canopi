@@ -124,6 +124,8 @@ Use this guide when changing Preact components, signals, i18n, CSS, panels, bott
 - Use only font weights `400` and `600`.
 - Use spacing, font-size, radius, control-size, slider, and transition tokens. If a component needs a one-off size, define a scoped CSS custom property.
 - Icon-only chrome buttons with hover/focus tooltips should use `components/shared/ButtonTooltip.tsx` instead of native `title`, especially in rail toolbars and panel bars where locale changes must update immediately.
+- Plant Symbol selection should use a separate toolbar button/popover next to Plant Color, with Plant Color first and Plant Symbol second. The symbol popover grid is icon-only with tooltips, grouped as habit symbols (`tree`, `shrub`, `herbaceous`, `climber`) and abstract symbols (`round`, `square`, `triangle`, `cross`); use explicit apply actions for selection vs species default, matching Plant Color intent.
+- Plant Symbol picker options should render in neutral UI ink, with a separate preview showing the chosen symbol in the effective plant color. The toolbar button may show the current shared symbol when selected editable plants agree; mixed selections use a generic symbol affordance and explain the mixed/inherited state in the popover.
 
 ## Canvas2D Components
 

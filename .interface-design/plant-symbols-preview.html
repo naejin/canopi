@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Canopi Plant Symbols Preview</title>
+  <style>
+    :root {
+      --color-primary: #A06B1F;
+      --color-bg: #E6E0D4;
+      --color-surface: #EDE8DD;
+      --color-canvas: #F6F2EA;
+      --color-text: #2C2418;
+      --color-text-muted: #6B5F4E;
+      --color-border: rgb(60 45 30 / 0.16);
+      --color-border-strong: rgb(60 45 30 / 0.28);
+      --plant-color: #2E7D32;
+      --radius-md: 5px;
+      --radius-lg: 7px;
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-6: 24px;
+      --text-xs: 11px;
+      --text-sm: 12px;
+      --text-base: 13px;
+      --text-md: 14px;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--color-text);
+      background: var(--color-bg);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: var(--space-6);
+      background:
+        linear-gradient(90deg, rgb(60 45 30 / 0.05) 1px, transparent 1px),
+        linear-gradient(rgb(60 45 30 / 0.05) 1px, transparent 1px),
+        var(--color-bg);
+      background-size: 24px 24px;
+    }
+
+    main {
+      max-width: 1040px;
+      margin: 0 auto;
+      display: grid;
+      gap: var(--space-6);
+    }
+
+    header,
+    section {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+    }
+
+    header {
+      padding: var(--space-4);
+      display: grid;
+      gap: var(--space-2);
+    }
+
+    h1,
+    h2,
+    p {
+      margin: 0;
+    }
+
+    h1 {
+      font-size: 20px;
+      line-height: 1.2;
+      font-weight: 600;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      font-size: var(--text-xs);
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--color-text-muted);
+    }
+
+    p,
+    .note {
+      font-size: var(--text-sm);
+      line-height: 1.45;
+      color: var(--color-text-muted);
+    }
+
+    .panel {
+      padding: var(--space-4);
+      display: grid;
+      gap: var(--space-4);
+    }
+
+    .symbolGrid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: var(--space-3);
+    }
+
+    .symbolCard {
+      min-width: 0;
+      display: grid;
+      gap: var(--space-2);
+      padding: var(--space-3);
+      background: var(--color-canvas);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+    }
+
+    .symbolStage {
+      min-height: 132px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      background:
+        linear-gradient(90deg, rgb(60 45 30 / 0.06) 1px, transparent 1px),
+        linear-gradient(rgb(60 45 30 / 0.06) 1px, transparent 1px),
+        #FBF8F1;
+      background-size: 16px 16px;
+    }
+
+    .labelRow {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: var(--space-2);
+    }
+
+    .label {
+      font-size: var(--text-sm);
+      font-weight: 600;
+      color: var(--color-text);
+    }
+
+    .groupLabel {
+      font-size: var(--text-xs);
+      color: var(--color-text-muted);
+    }
+
+    .footprint {
+      width: 96px;
+      height: 96px;
+      overflow: visible;
+    }
+
+    .footprintBox {
+      fill: none;
+      stroke: var(--color-border-strong);
+      stroke-width: 0.35;
+      stroke-dasharray: 1.2 1;
+      vector-effect: non-scaling-stroke;
+    }
+
+    .footprintCircle {
+      fill: none;
+      stroke: var(--color-primary);
+      stroke-width: 0.35;
+      stroke-dasharray: 1.2 1;
+      opacity: 0.75;
+      vector-effect: non-scaling-stroke;
+    }
+
+    .symbolFill {
+      fill: currentColor;
+      fill-opacity: 0.58;
+      stroke: currentColor;
+      stroke-width: 1.2;
+      stroke-linejoin: round;
+      vector-effect: non-scaling-stroke;
+    }
+
+    .symbolStroke {
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2.4;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vector-effect: non-scaling-stroke;
+    }
+
+    .symbolSolid {
+      fill: currentColor;
+      fill-opacity: 0.62;
+      stroke: currentColor;
+      stroke-width: 1.2;
+      stroke-linejoin: round;
+      vector-effect: non-scaling-stroke;
+    }
+
+    .symbolLeaf {
+      fill: currentColor;
+      fill-opacity: 0.62;
+      stroke: currentColor;
+      stroke-width: 0.9;
+      stroke-linejoin: round;
+      vector-effect: non-scaling-stroke;
+    }
+
+    .symbolIcon {
+      color: var(--plant-color);
+    }
+
+    .scaleRows {
+      display: grid;
+      gap: var(--space-4);
+    }
+
+    .scaleRow {
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      gap: var(--space-3);
+      align-items: center;
+    }
+
+    .scaleLabel {
+      display: grid;
+      gap: 2px;
+      font-size: var(--text-xs);
+      color: var(--color-text-muted);
+    }
+
+    .scaleLabel strong {
+      color: var(--color-text);
+      font-weight: 600;
+    }
+
+    .scaleStrip {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+      min-height: 44px;
+      padding: var(--space-2);
+      background: var(--color-canvas);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      overflow-x: auto;
+    }
+
+    .scaleItem {
+      display: grid;
+      justify-items: center;
+      gap: var(--space-1);
+      min-width: 44px;
+      font-size: var(--text-xs);
+      color: var(--color-text-muted);
+    }
+
+    .tinySymbol {
+      overflow: visible;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-3);
+      font-size: var(--text-xs);
+      color: var(--color-text-muted);
+    }
+
+    .legendItem {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-1);
+    }
+
+    .legendCircle,
+    .legendBox {
+      width: 14px;
+      height: 14px;
+      border: 1px dashed var(--color-primary);
+      flex: 0 0 auto;
+    }
+
+    .legendCircle {
+      border-radius: 999px;
+    }
+
+    .legendBox {
+      border-color: var(--color-border-strong);
+    }
+
+    @media (max-width: 760px) {
+      body {
+        padding: var(--space-3);
+      }
+
+      .symbolGrid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .scaleRow {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Plant Symbols Preview</h1>
+      <p>Throwaway design preview. Every glyph is drawn in the same normalized marker footprint as the current round plant marker: a 16 x 16 box centered on the plant point. The dashed circle shows the current round glyph edge.</p>
+      <div class="legend" aria-label="Preview guides">
+        <span class="legendItem"><span class="legendCircle" aria-hidden="true"></span>Current round glyph edge</span>
+        <span class="legendItem"><span class="legendBox" aria-hidden="true"></span>Shared 16 x 16 marker footprint</span>
+      </div>
+    </header>
+
+    <section class="panel" aria-labelledby="large-preview">
+      <h2 id="large-preview">Large Inspection</h2>
+      <div class="symbolGrid">
+        <article class="symbolCard">
+          <div class="symbolStage">
+            <svg class="footprint symbolIcon" viewBox="0 0 24 24" role="img" aria-label="Tree symbol">
+              <rect class="footprintBox" x="4" y="4" width="16" height="16"></rect>
+              <circle class="footprintCircle" cx="12" cy="12" r="8"></circle>
+              <use href="#symbol-tree"></use>
+            </svg>
+          </div>
+          <div class="labelRow"><span class="label">Tree</span><span class="groupLabel">Habit</span></div>
+        </article>
+
+        <article class="symbolCard">
+          <div class="symbolStage">
+            <svg class="footprint symbolIcon" viewBox="0 0 24 24" role="img" aria-label="Shrub symbol">
+              <rect class="footprintBox" x="4" y="4" width="16" height="16"></rect>
+              <circle class="footprintCircle" cx="12" cy="12" r="8"></circle>
+              <use href="#symbol-shrub"></use>
+            </svg>
+          </div>
+          <div class="labelRow"><span class="label">Shrub</span><span class="groupLabel">Habit</span></div>
+        </article>
+
+        <article class="symbolCard">
+          <div class="symbolStage">
+            <svg class="footprint symbolIcon" viewBox="0 0 24 24" role="img" aria-label="Herbaceous symbol">
+              <rect class="footprintBox" x="4" y="4" width="16" height="16"></rect>
+              <circle class="footprintCircle" cx="12" cy="12" r="8"></circle>
+              <use href="#symbol-herbaceous"></use>
+            </svg>
+          </div>
+          <div class="labelRow"><span class="label">Herbaceous</span><span class="groupLabel">Habit</span></div>
+        </article>
+
+        <article class="symbolCard">
+          <div class="symbolStage">
+            <svg class="footprint symbolIcon" viewBox="0 0 24 24" role="img" aria-label="Climber symbol">
+              <rect class="footprintBox" x="4" y="4" width="16" height="16"></rect>
+              <circle class="footprintCircle" cx="12" cy="12" r="8"></circle>
+              <use href="#symbol-climber"></use>
+            </svg>
+          </div>
+          <div class="labelRow"><span class="label">Climber</span><span class="groupLabel">Habit</span></div>
+        </article>
+
+        <article class="symbolCard">
+          <div class="symbolStage">
+            <svg class="footprint symbolIcon" viewBox="0 0 24 24" role="img" aria-label="Round symbol">
+              <rect class="footprintBox" x="4" y="4" width="16" height="16"></rect>
+              <circle class="footprintCircle" cx="12" cy="12" r="8"></circle>
+              <use href="#symbol-round"></use>
+            </svg>
+          </div>
+          <div class="labelRow"><span class="label">Round</span><span class="groupLabel">Abstract</span></div>
+        </article>
+
+        <article class="symbolCard">
+          <div class="symbolStage">
+            <svg class="footprint symbolIcon" viewBox="0 0 24 24" role="img" aria-label="Square symbol">
+              <rect class="footprintBox" x="4" y="4" width="16" height="16"></rect>
+              <circle class="footprintCircle" cx="12" cy="12" r="8"></circle>
+              <use href="#symbol-square"></use>
+            </svg>
+          </div>
+          <div class="labelRow"><span class="label">Square</span><span class="groupLabel">Abstract</span></div>
+        </article>
+
+        <article class="symbolCard">
+          <div class="symbolStage">
+            <svg class="footprint symbolIcon" viewBox="0 0 24 24" role="img" aria-label="Triangle symbol">
+              <rect class="footprintBox" x="4" y="4" width="16" height="16"></rect>
+              <circle class="footprintCircle" cx="12" cy="12" r="8"></circle>
+              <use href="#symbol-triangle"></use>
+            </svg>
+          </div>
+          <div class="labelRow"><span class="label">Triangle</span><span class="groupLabel">Abstract</span></div>
+        </article>
+
+        <article class="symbolCard">
+          <div class="symbolStage">
+            <svg class="footprint symbolIcon" viewBox="0 0 24 24" role="img" aria-label="Cross symbol">
+              <rect class="footprintBox" x="4" y="4" width="16" height="16"></rect>
+              <circle class="footprintCircle" cx="12" cy="12" r="8"></circle>
+              <use href="#symbol-cross"></use>
+            </svg>
+          </div>
+          <div class="labelRow"><span class="label">Cross</span><span class="groupLabel">Abstract</span></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="scale-preview">
+      <h2 id="scale-preview">Scaling Check</h2>
+      <p class="note">These rows use the same normalized glyphs at smaller display sizes. The 13.5px row corresponds to the current symbolic marker's approximate maximum diameter.</p>
+      <div class="scaleRows">
+        <div class="scaleRow">
+          <div class="scaleLabel"><strong>13.5px diameter</strong><span>Current symbolic max</span></div>
+          <div class="scaleStrip" aria-label="Symbols at 13.5 pixel diameter">
+            <span class="scaleItem"><svg class="tinySymbol symbolIcon" width="13.5" height="13.5" viewBox="0 0 24 24"><use href="#symbol-tree"></use></svg>Tree</span>
+            <span class="scaleItem"><svg class="tinySymbol symbolIcon" width="13.5" height="13.5" viewBox="0 0 24 24"><use href="#symbol-shrub"></use></svg>Shrub</span>
+            <span class="scaleItem"><svg class="tinySymbol symbolIcon" width="13.5" height="13.5" viewBox="0 0 24 24"><use href="#symbol-herbaceous"></use></svg>Herb</span>
+            <span class="scaleItem"><svg class="tinySymbol symbolIcon" width="13.5" height="13.5" viewBox="0 0 24 24"><use href="#symbol-climber"></use></svg>Climber</span>
+            <span class="scaleItem"><svg class="tinySymbol symbolIcon" width="13.5" height="13.5" viewBox="0 0 24 24"><use href="#symbol-round"></use></svg>Round</span>
+            <span class="scaleItem"><svg class="tinySymbol symbolIcon" width="13.5" height="13.5" viewBox="0 0 24 24"><use href="#symbol-square"></use></svg>Square</span>
+            <span class="scaleItem"><svg class="tinySymbol symbolIcon" width="13.5" height="13.5" viewBox="0 0 24 24"><use href="#symbol-triangle"></use></svg>Triangle</span>
+            <span class="scaleItem"><svg class="tinySymbol symbolIcon" width="13.5" height="13.5" viewBox="0 0 24 24"><use href="#symbol-cross"></use></svg>Cross</span>
+          </div>
+        </div>
+
+        <div class="scaleRow">
+          <div class="scaleLabel"><strong>24px diameter</strong><span>Picker button scale</span></div>
+          <div class="scaleStrip" aria-label="Symbols at 24 pixel diameter">
+            <span class="scaleItem"><svg class="tinySymbol symbolIcon" width="24" height="24" viewBox="0 0 24 24"><use href="#symbol-tree"></use></svg>Tree</span>
+            <span class="scaleItem"><svg class="tinySymbol symbolIcon" width="24" height="24" viewBox="0 0 24 24"><use href="#symbol-shrub"></use></svg>Shrub</span>
+            <span class="scaleItem"><svg class="tinySymbol symbolIcon" width="24" height="24" viewBox="0 0 24 24"><use href="#symbol-herbaceous"></use></svg>Herb</span>
+            <span class="scaleItem"><svg class="tinySymbol symbolIcon" width="24" height="24" viewBox="0 0 24 24"><use href="#symbol-climber"></use></svg>Climber</span>
+            <span class="scaleItem"><svg class="tinySymbol symbolIcon" width="24" height="24" viewBox="0 0 24 24"><use href="#symbol-round"></use></svg>Round</span>
+            <span class="scaleItem"><svg class="tinySymbol symbolIcon" width="24" height="24" viewBox="0 0 24 24"><use href="#symbol-square"></use></svg>Square</span>
+            <span class="scaleItem"><svg class="tinySymbol symbolIcon" width="24" height="24" viewBox="0 0 24 24"><use href="#symbol-triangle"></use></svg>Triangle</span>
+            <span class="scaleItem"><svg class="tinySymbol symbolIcon" width="24" height="24" viewBox="0 0 24 24"><use href="#symbol-cross"></use></svg>Cross</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <svg width="0" height="0" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="position: absolute;">
+    <defs>
+      <g id="symbol-tree">
+        <path class="symbolFill" d="M12 4.4c-1.9 0-3.6 1.1-4.3 2.8-1.8.4-3.1 2-3.1 3.9 0 2.3 1.8 4.1 4.1 4.1.7 1.1 1.9 1.8 3.3 1.8s2.6-.7 3.3-1.8c2.3 0 4.1-1.8 4.1-4.1 0-1.9-1.3-3.5-3.1-3.9-.7-1.7-2.4-2.8-4.3-2.8Z"></path>
+        <path class="symbolSolid" d="M10.7 15.3h2.6v4.7h-2.6z"></path>
+      </g>
+
+      <g id="symbol-shrub">
+        <path class="symbolFill" d="M4.8 16.2c0-2.1 1.5-3.8 3.5-4.1.5-2.2 2.4-3.8 4.7-3.8 2.5 0 4.5 1.8 4.8 4.2 1.2.7 2 2 2 3.5 0 2.1-1.6 3.6-3.9 3.6H8.7c-2.3 0-3.9-1.4-3.9-3.4Z"></path>
+      </g>
+
+      <g id="symbol-herbaceous">
+        <path class="symbolSolid" d="M10.9 11.8h2.2v8h-2.2z"></path>
+        <path class="symbolLeaf" d="M11.6 11.8c-3.3-.1-5.6-2.2-6-5.7 3.4.1 5.8 1.9 6.4 4.8l-.4.9Z"></path>
+        <path class="symbolLeaf" d="M12.4 11.8c3.3-.1 5.6-2.2 6-5.7-3.4.1-5.8 1.9-6.4 4.8l.4.9Z"></path>
+      </g>
+
+      <g id="symbol-climber">
+        <path class="symbolStroke" d="M7.2 19.1c5.6-.7 8.2-3.3 6.5-5.5-1.4-1.9-5.4-.7-5.4-3.6 0-2.5 2.8-4.3 7.3-4.9"></path>
+        <path class="symbolLeaf" d="M15.4 5.1c2.4.1 4 1.3 4.3 3.4-2.4.1-3.9-1.2-4.3-3.4Z"></path>
+      </g>
+
+      <g id="symbol-round">
+        <circle class="symbolSolid" cx="12" cy="12" r="8"></circle>
+      </g>
+
+      <g id="symbol-square">
+        <path class="symbolSolid" d="M6.4 6.4h11.2v11.2H6.4z"></path>
+      </g>
+
+      <g id="symbol-triangle">
+        <path class="symbolSolid" d="M12 4.8 18.9 18H5.1L12 4.8Z"></path>
+      </g>
+
+      <g id="symbol-cross">
+        <path class="symbolSolid" d="M10.2 5.3h3.6v5h5v3.4h-5v5h-3.6v-5h-5v-3.4h5v-5Z"></path>
+      </g>
+    </defs>
+  </svg>
+</body>
+</html>

@@ -93,6 +93,14 @@ _Avoid_: Species, plant record, catalog item
 A presentation choice for how placed plants are visually sized in a design. The default plant size mode shows placed plants as symbolic position markers; canopy spread mode shows their physical canopy footprint.
 _Avoid_: Object scale, canvas scale, plant display mode
 
+**Plant Symbol**:
+A user-chosen built-in marker shape used to visually distinguish placed plants in a design. A placed plant may have its own plant symbol, and a design may define a default plant symbol for a species' placed plants; the symbol sits within the placed plant's Visual Footprint and is design-owned presentation, not Species Catalog data, physical geometry, or imported artwork.
+_Avoid_: Custom icon, uploaded icon, SVG asset
+
+**Plant Habit Symbol**:
+A plant symbol that suggests a broad growth habit such as tree, shrub, herbaceous plant, or climber. A plant habit symbol is a user-applied visual cue, not a botanical classification, catalog value, or validation rule.
+_Avoid_: Growth form value, inferred species icon, botanical claim
+
 **Zone**:
 A named spatial feature in a design, optionally typed by ecological or functional purpose. A design may contain many zones, and zones may overlap placed plants, other zones, or linear boundaries.
 _Avoid_: Shape, polygon, region
@@ -166,7 +174,7 @@ A fixed visibility and locking group for design objects. A design has many layer
 _Avoid_: Category, folder, custom layer
 
 **Scene Edit**:
-A runtime change to canvas-owned design state, including placed plants, zones, annotations, object groups, layers, plant species colors, and guides. A scene edit is the canvas mutation concept that owns undo/redo history, dirty-state updates, mirror projections, and render invalidation for canvas state.
+A runtime change to canvas-owned design state, including placed plants, zones, annotations, object groups, layers, plant species colors, plant species symbols, and guides. A scene edit is the canvas mutation concept that owns undo/redo history, dirty-state updates, mirror projections, and render invalidation for canvas state.
 _Avoid_: Canvas mutation, layer signal write, scene patch
 
 **Scene Interaction Frame**:
