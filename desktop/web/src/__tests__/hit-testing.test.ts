@@ -7,6 +7,7 @@ import type { ScenePersistedState } from '../canvas/runtime/scene'
 function createScene(): ScenePersistedState {
   return {
     plantSpeciesColors: {},
+    plantSpeciesSymbols: {},
     layers: [
       { kind: 'layer', name: 'plants', visible: true, locked: false, opacity: 1 },
       { kind: 'layer', name: 'zones', visible: true, locked: false, opacity: 1 },

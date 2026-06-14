@@ -2,6 +2,17 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 
 pub const DEFAULT_BUDGET_CURRENCY: &str = "EUR";
+pub const DEFAULT_PLANT_SYMBOL_ID: &str = "round";
+pub const PLANT_SYMBOL_IDS: &[&str] = &[
+    "round",
+    "square",
+    "triangle",
+    "cross",
+    "tree",
+    "shrub",
+    "herbaceous",
+    "climber",
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DesignFileFieldOwner {
@@ -49,6 +60,10 @@ pub const DESIGN_FILE_FIELDS: &[DesignFileField] = &[
     },
     DesignFileField {
         key: "plant_species_colors",
+        owner: DesignFileFieldOwner::Scene,
+    },
+    DesignFileField {
+        key: "plant_species_symbols",
         owner: DesignFileFieldOwner::Scene,
     },
     DesignFileField {
@@ -109,6 +124,8 @@ pub struct CanopiFile {
     pub location: Option<Location>,
     pub north_bearing_deg: Option<f64>,
     pub plant_species_colors: std::collections::HashMap<String, String>,
+    #[serde(default)]
+    pub plant_species_symbols: std::collections::HashMap<String, String>,
     pub layers: Vec<Layer>,
     pub plants: Vec<PlacedPlant>,
     pub zones: Vec<Zone>,
@@ -157,6 +174,8 @@ pub struct PlacedPlant {
     pub common_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub symbol: Option<String>,
     pub position: Position,
     pub rotation: Option<f64>,
     pub scale: Option<f64>,
@@ -175,6 +194,8 @@ struct PlacedPlantInput {
     common_name: Option<String>,
     #[serde(default)]
     color: Option<String>,
+    #[serde(default)]
+    symbol: Option<String>,
     position: Position,
     rotation: Option<f64>,
     scale: Option<f64>,
@@ -195,6 +216,7 @@ impl<'de> Deserialize<'de> for PlacedPlant {
             canonical_name: input.canonical_name,
             common_name: input.common_name,
             color: input.color,
+            symbol: input.symbol,
             position: input.position,
             rotation: input.rotation,
             scale: input.scale,

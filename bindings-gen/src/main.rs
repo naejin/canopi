@@ -86,6 +86,17 @@ fn write_known_canopi_keys(path: &PathBuf) -> Result<(), Box<dyn std::error::Err
         "export const DEFAULT_BUDGET_CURRENCY = {:?}\n",
         common_types::design::DEFAULT_BUDGET_CURRENCY,
     )?;
+    writeln!(
+        file,
+        "export const DEFAULT_PLANT_SYMBOL_ID = {:?}\n",
+        common_types::design::DEFAULT_PLANT_SYMBOL_ID,
+    )?;
+    file.push_str("export const PLANT_SYMBOL_IDS = [\n");
+    for symbol in common_types::design::PLANT_SYMBOL_IDS {
+        let _ = writeln!(file, "  {:?},", symbol);
+    }
+    file.push_str("] as const\n");
+    file.push_str("export type PlantSymbolId = (typeof PLANT_SYMBOL_IDS)[number]\n\n");
 
     file.push_str("export const KNOWN_CANOPI_KEYS = [\n");
     for field in common_types::design::DESIGN_FILE_FIELDS {

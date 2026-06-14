@@ -56,6 +56,7 @@ describe('createCanvas2DSceneRenderer', () => {
         groups: [],
         layers: [],
         plantSpeciesColors: {},
+        plantSpeciesSymbols: {},
         guides: [],
       },
       viewport: { x: 10, y: 20, scale: 2 },

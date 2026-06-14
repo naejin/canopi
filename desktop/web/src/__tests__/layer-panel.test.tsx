@@ -151,6 +151,7 @@ describe('LayerPanel', () => {
       queries: createTestCanvasQuerySurface({
         scene: {
           plantSpeciesColors: {},
+          plantSpeciesSymbols: {},
           layers: [
             { kind: 'layer', name: 'annotations', visible: true, locked: false, opacity: 1 },
             { kind: 'layer', name: 'plants', visible: true, locked: true, opacity: 1 },

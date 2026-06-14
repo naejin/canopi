@@ -23,6 +23,9 @@ describe('scene store', () => {
       plant_species_colors: {
         oak: '#228833',
       },
+      plant_species_symbols: {
+        'Quercus robur': 'tree',
+      },
       layers: [
         { name: 'base', visible: true, locked: false, opacity: 1 },
       ],
@@ -33,6 +36,7 @@ describe('scene store', () => {
           canonical_name: 'Quercus robur',
           common_name: 'English oak',
           color: '#228833',
+          symbol: 'square',
           position: { x: 12, y: 18 },
           rotation: 45,
           scale: 1.2,
@@ -120,12 +124,13 @@ describe('scene store', () => {
     expect(roundTripped.groups).toEqual(file.groups)
     expect(roundTripped.layers).toEqual(file.layers)
     expect(roundTripped.plant_species_colors).toEqual(file.plant_species_colors)
+    expect(roundTripped.plant_species_symbols).toEqual(file.plant_species_symbols)
     expect(roundTripped.extra).toEqual({ guides: file.extra?.guides })
     expect(roundTripped.name).toBe('Untitled')
     expect(roundTripped.description).toBeNull()
     expect(roundTripped.location).toBeNull()
     expect(roundTripped.north_bearing_deg).toBe(0)
-    expect(roundTripped.version).toBe(2)
+    expect(roundTripped.version).toBe(3)
     // Non-canvas sections must be empty placeholders, NOT the input values
     expect(roundTripped.consortiums).toEqual([])
     expect(roundTripped.timeline).toEqual([])
@@ -137,6 +142,7 @@ describe('scene store', () => {
     const session = createDefaultSceneSessionState()
 
     expect(persisted.layers).toHaveLength(7)
+    expect(persisted.plantSpeciesSymbols).toEqual({})
     expect(persisted.layers.map((layer: { name: string; visible: boolean }) => [layer.name, layer.visible])).toEqual([
       ['base', true],
       ['contours', false],
@@ -151,7 +157,7 @@ describe('scene store', () => {
     expect(session.activeLayerName).toBe('zones')
     expect(session.plantSizeMode).toBe('default')
     expect(session.plantColorByAttr).toBe(null)
-    expect(serializeScenePersistedState(persisted, { now: new Date('2026-04-02T00:00:00.000Z') }).version).toBe(2)
+    expect(serializeScenePersistedState(persisted, { now: new Date('2026-04-02T00:00:00.000Z') }).version).toBe(3)
   })
 
   it('hydrates and serializes embedded Design Object lock state', () => {

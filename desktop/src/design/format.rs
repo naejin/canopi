@@ -3,7 +3,7 @@ use std::path::Path;
 
 /// The current file-format version this build produces and migrates to.
 /// Bump when adding a new migration step (and add the corresponding match arm).
-const CURRENT_VERSION: u32 = 2;
+const CURRENT_VERSION: u32 = 3;
 
 /// Save a `CanopiFile` to disk atomically.
 ///
@@ -87,6 +87,7 @@ fn migrate_design_value(value: &mut serde_json::Value) {
         }
         match version {
             1 => migrate_v1_to_v2(value),
+            2 => migrate_v2_to_v3(value),
             _ => {
                 tracing::warn!("Unknown file version {version} during migration, stopping");
                 break;
@@ -100,6 +101,13 @@ fn migrate_v1_to_v2(value: &mut serde_json::Value) {
     migrate_legacy_budget_targets(value);
     migrate_legacy_consortiums(value);
     value["version"] = serde_json::json!(2);
+}
+
+fn migrate_v2_to_v3(value: &mut serde_json::Value) {
+    if value.get("plant_species_symbols").is_none() {
+        value["plant_species_symbols"] = serde_json::json!({});
+    }
+    value["version"] = serde_json::json!(3);
 }
 
 fn species_target(canonical_name: &str) -> serde_json::Value {
@@ -354,6 +362,7 @@ pub fn create_default() -> CanopiFile {
         location: None,
         north_bearing_deg: None,
         plant_species_colors: std::collections::HashMap::new(),
+        plant_species_symbols: std::collections::HashMap::new(),
         layers,
         plants: Vec::new(),
         zones: Vec::new(),
@@ -378,7 +387,7 @@ mod tests {
     #[test]
     fn test_create_default_has_seven_layers() {
         let design = create_default();
-        assert_eq!(design.version, 2);
+        assert_eq!(design.version, 3);
         assert_eq!(design.name, "Untitled");
         assert_eq!(design.layers.len(), 7);
     }
@@ -613,7 +622,7 @@ mod tests {
             .expect("write legacy file");
         let loaded = load_from_file(&path).expect("legacy panel targets should migrate");
 
-        assert_eq!(loaded.version, 2);
+        assert_eq!(loaded.version, 3);
         assert_eq!(loaded.timeline[0].targets.len(), 3);
         assert!(matches!(
             loaded.timeline[0].targets[0],
@@ -687,7 +696,7 @@ mod tests {
         save_to_file(&path, &loaded).expect("v2 file should save");
         let reloaded = load_from_file(&path).expect("saved v2 file should reload");
 
-        assert_eq!(reloaded.version, 2);
+        assert_eq!(reloaded.version, 3);
         assert_eq!(reloaded.location.as_ref().map(|l| l.lat), Some(48.8566));
         assert_eq!(reloaded.consortiums.len(), 1);
         assert_eq!(reloaded.timeline.len(), 1);
@@ -712,6 +721,30 @@ mod tests {
 
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(path.with_extension("canopi.prev"));
+    }
+
+    #[test]
+    fn test_v2_files_migrate_to_v3_with_empty_plant_symbol_defaults() {
+        use serde_json::json;
+
+        let dir = std::env::temp_dir();
+        let path: PathBuf = dir.join("canopi_test_v3_plant_symbols.canopi");
+
+        let mut value = serde_json::to_value(create_default()).expect("default design serializes");
+        value["version"] = json!(2);
+        value
+            .as_object_mut()
+            .expect("default design serializes to object")
+            .remove("plant_species_symbols");
+
+        std::fs::write(&path, serde_json::to_string_pretty(&value).unwrap())
+            .expect("write v2 file");
+        let loaded = load_from_file(&path).expect("v2 file should load");
+
+        assert_eq!(loaded.version, 3);
+        assert!(loaded.plant_species_symbols.is_empty());
+
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

@@ -5,6 +5,7 @@ import type { ScenePersistedState } from '../canvas/runtime/scene'
 function createScene(): ScenePersistedState {
   return {
     plantSpeciesColors: {},
+    plantSpeciesSymbols: {},
     layers: [],
     plants: [
       {

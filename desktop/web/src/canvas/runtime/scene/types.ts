@@ -34,6 +34,7 @@ export interface ScenePlantEntity {
   canonicalName: string
   commonName: string | null
   color: string | null
+  symbol?: string | null
   stratum: string | null
   canopySpreadM: number | null
   position: ScenePoint
@@ -93,6 +94,7 @@ export type SceneEntity =
 
 export interface ScenePersistedState {
   plantSpeciesColors: Record<string, string>
+  plantSpeciesSymbols: Record<string, string>
   layers: SceneLayerEntity[]
   plants: ScenePlantEntity[]
   zones: SceneZoneEntity[]

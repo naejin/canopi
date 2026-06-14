@@ -27,6 +27,7 @@ export function createDefaultSceneSessionState(overrides: Partial<SceneSessionSt
 export function createDefaultScenePersistedState(_now: Date = new Date()): ScenePersistedState {
   return {
     plantSpeciesColors: {},
+    plantSpeciesSymbols: {},
     layers: SCENE_LAYER_NAMES.map((name) => ({
       kind: 'layer',
       name,

@@ -1,5 +1,6 @@
 export * from './types'
 export * from './defaults'
 export * from './codec'
+export * from './plant-symbols'
 export * from './locks'
 export * from './store'

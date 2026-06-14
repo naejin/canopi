@@ -25,6 +25,7 @@ export interface SceneSerializeOptions {
 export function hydrateScenePersistedState(file: CanopiFile): ScenePersistedState {
   return {
     plantSpeciesColors: { ...file.plant_species_colors },
+    plantSpeciesSymbols: { ...(file.plant_species_symbols ?? {}) },
     layers: file.layers.map(hydrateLayerEntity),
     plants: file.plants.map(hydratePlantEntity),
     zones: file.zones.map(hydrateZoneEntity),
@@ -41,12 +42,13 @@ export function serializeScenePersistedState(
   const now = options.now ?? new Date()
 
   return {
-    version: 2,
+    version: 3,
     name: 'Untitled',
     description: null,
     location: null,
     north_bearing_deg: 0,
     plant_species_colors: { ...state.plantSpeciesColors },
+    plant_species_symbols: { ...state.plantSpeciesSymbols },
     layers: state.layers.map(serializeLayerEntity),
     plants: state.plants.map(serializePlantEntity),
     zones: state.zones.map(serializeZoneEntity),
@@ -66,6 +68,7 @@ export function cloneScenePersistedState(state: ScenePersistedState): ScenePersi
   return {
     ...state,
     plantSpeciesColors: { ...state.plantSpeciesColors },
+    plantSpeciesSymbols: { ...state.plantSpeciesSymbols },
     layers: state.layers.map(cloneLayerEntity),
     plants: state.plants.map(clonePlantEntity),
     zones: state.zones.map(cloneZoneEntity),
@@ -116,6 +119,7 @@ function hydratePlantEntity(plant: PlacedPlant): ScenePlantEntity {
     canonicalName: plant.canonical_name,
     commonName: plant.common_name,
     color: plant.color,
+    symbol: plant.symbol ?? null,
     stratum: null,
     canopySpreadM: plant.scale,
     position: {
@@ -131,7 +135,7 @@ function hydratePlantEntity(plant: PlacedPlant): ScenePlantEntity {
 }
 
 function serializePlantEntity(plant: ScenePlantEntity): PlacedPlant {
-  return {
+  const serialized: PlacedPlant = {
     id: plant.id,
     locked: plant.locked,
     canonical_name: plant.canonicalName,
@@ -147,6 +151,10 @@ function serializePlantEntity(plant: ScenePlantEntity): PlacedPlant {
     planted_date: plant.plantedDate,
     quantity: plant.quantity,
   }
+  if (plant.symbol != null) {
+    serialized.symbol = plant.symbol
+  }
+  return serialized
 }
 
 function clonePlantEntity(plant: ScenePlantEntity): ScenePlantEntity {

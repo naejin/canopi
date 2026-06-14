@@ -64,6 +64,7 @@ function projectWorldToExpectedMapScreen(
 function createScene(): ScenePersistedState {
   return {
     plantSpeciesColors: {},
+    plantSpeciesSymbols: {},
     layers: [],
     plants: [
       {
