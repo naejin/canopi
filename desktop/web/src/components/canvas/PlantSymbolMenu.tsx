@@ -43,10 +43,11 @@ export function PlantSymbolMenu({ buttonRef }: PlantSymbolMenuProps) {
 
   useEffect(() => {
     if (!menuOpen) return
-    const initialSymbol = context.sharedCurrentSymbol === 'mixed'
-      ? context.inheritedSymbol ?? (context.sharedEffectiveSymbol === 'mixed' ? DEFAULT_PLANT_SYMBOL_ID : context.sharedEffectiveSymbol)
-      : context.sharedCurrentSymbol ?? context.inheritedSymbol ?? DEFAULT_PLANT_SYMBOL_ID
-    setActiveSymbol(initialSymbol)
+    setActiveSymbol(resolveInitialSymbol(
+      context.sharedCurrentSymbol,
+      context.inheritedSymbol,
+      context.sharedEffectiveSymbol,
+    ))
   }, [menuOpen, selectionKey, context.sharedCurrentSymbol, context.sharedEffectiveSymbol, context.inheritedSymbol])
 
   useEffect(() => {
@@ -80,7 +81,11 @@ export function PlantSymbolMenu({ buttonRef }: PlantSymbolMenuProps) {
     singleSpeciesLabel
       ? singleSpeciesLabel
       : t('canvas.plantSymbol.selectedCount', { count: context.plantIds.length })
-  const statusText = describeCurrentSymbol(context.sharedCurrentSymbol, context.inheritedSymbol)
+  const statusText = describeCurrentSymbol(
+    context.sharedCurrentSymbol,
+    context.inheritedSymbol,
+    context.sharedEffectiveSymbol,
+  )
   const previewColor = resolvePreviewColor(context.plantIds[0] ?? null)
 
   const applyToSelection = () => {
@@ -211,13 +216,27 @@ function symbolLabel(symbol: PlantSymbolId): string {
   return t(`canvas.plantSymbol.names.${symbol}`, symbol)
 }
 
+function resolveInitialSymbol(
+  current: PlantSymbolId | 'mixed' | null,
+  inherited: PlantSymbolId | null,
+  effective: PlantSymbolId | 'mixed',
+): PlantSymbolId {
+  if (current === 'mixed') {
+    return inherited ?? (effective === 'mixed' ? DEFAULT_PLANT_SYMBOL_ID : effective)
+  }
+  return current ?? inherited ?? (effective === 'mixed' ? DEFAULT_PLANT_SYMBOL_ID : effective)
+}
+
 function describeCurrentSymbol(
   current: PlantSymbolId | 'mixed' | null,
   inherited: PlantSymbolId | null,
+  effective: PlantSymbolId | 'mixed',
 ): string {
   if (current === 'mixed') return t('canvas.plantSymbol.mixed')
   if (current) return t('canvas.plantSymbol.current', { symbol: symbolLabel(current) })
-  return t('canvas.plantSymbol.inherited', { symbol: symbolLabel(inherited ?? DEFAULT_PLANT_SYMBOL_ID) })
+  if (inherited) return t('canvas.plantSymbol.inherited', { symbol: symbolLabel(inherited) })
+  if (effective === 'mixed') return t('canvas.plantSymbol.mixed')
+  return t('canvas.plantSymbol.inherited', { symbol: symbolLabel(effective) })
 }
 
 function resolvePreviewColor(plantId: string | null): string {

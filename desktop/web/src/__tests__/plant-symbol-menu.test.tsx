@@ -93,6 +93,63 @@ describe('PlantSymbolMenu', () => {
     expect(plantSymbolMenuOpen.value).toBe(false)
   })
 
+  it('keeps a shared inherited effective symbol when applying an unchanged multi-species selection', async () => {
+    getSelectedPlantSymbolContext.mockReturnValue({
+      plantIds: ['plant-1', 'plant-2'],
+      singleSpeciesCanonicalName: null,
+      singleSpeciesCommonName: null,
+      sharedCurrentSymbol: null,
+      sharedEffectiveSymbol: 'tree',
+      inheritedSymbol: null,
+      singleSpeciesDefaultSymbol: null,
+      canClearSelectedSymbol: false,
+    })
+
+    await act(async () => {
+      render(<PlantSymbolMenu buttonRef={buttonRef} />, container)
+      await Promise.resolve()
+    })
+
+    const treeButton = container.querySelector<HTMLButtonElement>('button[aria-label="Tree"]')
+    expect(treeButton?.getAttribute('aria-selected')).toBe('true')
+    expect(container.textContent).toContain('Inherited: Tree')
+
+    const setSymbolButton = [...container.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('Set symbol'),
+    ) as HTMLButtonElement
+
+    await act(async () => {
+      setSymbolButton.click()
+      await Promise.resolve()
+    })
+
+    expect(setSelectedPlantSymbol).toHaveBeenCalledWith('tree')
+    expect(setSelectedPlantSymbol).not.toHaveBeenCalledWith('round')
+  })
+
+  it('describes mixed inherited effective symbols without presenting them as inherited round', async () => {
+    getSelectedPlantSymbolContext.mockReturnValue({
+      plantIds: ['plant-1', 'plant-2'],
+      singleSpeciesCanonicalName: null,
+      singleSpeciesCommonName: null,
+      sharedCurrentSymbol: null,
+      sharedEffectiveSymbol: 'mixed',
+      inheritedSymbol: null,
+      singleSpeciesDefaultSymbol: null,
+      canClearSelectedSymbol: false,
+    })
+
+    await act(async () => {
+      render(<PlantSymbolMenu buttonRef={buttonRef} />, container)
+      await Promise.resolve()
+    })
+
+    const roundButton = container.querySelector<HTMLButtonElement>('button[aria-label="Round"]')
+    expect(roundButton?.getAttribute('aria-selected')).toBe('true')
+    expect(container.textContent).toContain('Mixed symbols')
+    expect(container.textContent).not.toContain('Inherited: Round')
+  })
+
   it('clears selected plant symbol overrides back to inherited symbols', async () => {
     getSelectedPlantSymbolContext.mockReturnValue({
       plantIds: ['plant-1'],
