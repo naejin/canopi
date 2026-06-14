@@ -217,6 +217,27 @@
         "black": "黒"
       }
     },
+    "plantSymbol": {
+      "label": "植物シンボル",
+      "toolbarDesc": "選択した植物シンボルを編集",
+      "selectedCount": "{{count}}件選択",
+      "preview": "プレビュー",
+      "setSymbol": "シンボルを設定",
+      "clearSymbol": "シンボルをクリア",
+      "mixed": "シンボルが混在",
+      "current": "現在: {{symbol}}",
+      "inherited": "継承: {{symbol}}",
+      "names": {
+        "round": "円",
+        "square": "四角",
+        "triangle": "三角",
+        "cross": "十字",
+        "tree": "高木",
+        "shrub": "低木",
+        "herbaceous": "草本",
+        "climber": "つる植物"
+      }
+    },
     "group": {
       "group": "グループ化",
       "ungroup": "グループ解除"

@@ -217,6 +217,27 @@
         "black": "黑色"
       }
     },
+    "plantSymbol": {
+      "label": "植物符号",
+      "toolbarDesc": "编辑所选植物符号",
+      "selectedCount": "已选择 {{count}} 项",
+      "preview": "预览",
+      "setSymbol": "设置符号",
+      "clearSymbol": "清除符号",
+      "mixed": "混合符号",
+      "current": "当前：{{symbol}}",
+      "inherited": "继承：{{symbol}}",
+      "names": {
+        "round": "圆形",
+        "square": "方形",
+        "triangle": "三角形",
+        "cross": "十字",
+        "tree": "树",
+        "shrub": "灌木",
+        "herbaceous": "草本",
+        "climber": "藤本"
+      }
+    },
     "group": {
       "group": "编组",
       "ungroup": "取消编组"

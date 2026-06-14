@@ -217,6 +217,27 @@
         "black": "Чёрный"
       }
     },
+    "plantSymbol": {
+      "label": "Символ растения",
+      "toolbarDesc": "Изменить символы выбранных растений",
+      "selectedCount": "Выбрано: {{count}}",
+      "preview": "Предпросмотр",
+      "setSymbol": "Задать символ",
+      "clearSymbol": "Очистить символ",
+      "mixed": "Смешанные символы",
+      "current": "Текущий: {{symbol}}",
+      "inherited": "Унаследовано: {{symbol}}",
+      "names": {
+        "round": "Круг",
+        "square": "Квадрат",
+        "triangle": "Треугольник",
+        "cross": "Крест",
+        "tree": "Дерево",
+        "shrub": "Кустарник",
+        "herbaceous": "Травянистое",
+        "climber": "Вьющееся"
+      }
+    },
     "group": {
       "group": "Группировать",
       "ungroup": "Разгруппировать"

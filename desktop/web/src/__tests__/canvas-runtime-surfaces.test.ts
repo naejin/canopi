@@ -43,6 +43,15 @@ function createQuerySurface() {
       suggestedColor: null,
       singleSpeciesDefaultColor: null,
     }),
+    getSelectedPlantSymbolContext: () => ({
+      plantIds: [],
+      singleSpeciesCanonicalName: null,
+      singleSpeciesCommonName: null,
+      sharedCurrentSymbol: null,
+      sharedEffectiveSymbol: 'round',
+      inheritedSymbol: null,
+      canClearSelectedSymbol: false,
+    }),
     getPlacedPlants: () => [],
     getLocalizedCommonNames: () => new Map<string, string | null>(),
   } satisfies CanvasQuerySurface
@@ -93,6 +102,7 @@ function createCommandSurface() {
       setPlantColorByAttr: () => {},
       ensureSpeciesCacheEntries: async () => true,
       setSelectedPlantColor: () => 0,
+      setSelectedPlantSymbol: () => 0,
       setPlantColorForSpecies: () => 0,
       clearPlantSpeciesColor: () => false,
     },

@@ -217,6 +217,27 @@
         "black": "Schwarz"
       }
     },
+    "plantSymbol": {
+      "label": "Pflanzensymbol",
+      "toolbarDesc": "Symbole ausgewählter Pflanzen bearbeiten",
+      "selectedCount": "{{count}} ausgewählt",
+      "preview": "Vorschau",
+      "setSymbol": "Symbol setzen",
+      "clearSymbol": "Symbol löschen",
+      "mixed": "Gemischte Symbole",
+      "current": "Aktuell: {{symbol}}",
+      "inherited": "Geerbt: {{symbol}}",
+      "names": {
+        "round": "Rund",
+        "square": "Quadrat",
+        "triangle": "Dreieck",
+        "cross": "Kreuz",
+        "tree": "Baum",
+        "shrub": "Strauch",
+        "herbaceous": "Krautig",
+        "climber": "Kletterpflanze"
+      }
+    },
     "group": {
       "group": "Gruppieren",
       "ungroup": "Gruppierung aufheben"

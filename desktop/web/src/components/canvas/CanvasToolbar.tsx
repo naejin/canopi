@@ -3,6 +3,7 @@ import type { ComponentChildren } from 'preact'
 import { useRef } from 'preact/hooks'
 import { locale } from '../../app/settings/state'
 import { plantColorMenuOpen } from '../../canvas/plant-color-menu-state'
+import { plantSymbolMenuOpen } from '../../canvas/plant-symbol-menu-state'
 import {
   appCommandGraphToolbarProjection,
   type AppCommandGraphToolbarActionCommand,
@@ -29,8 +30,10 @@ import {
   SnapIcon,
   RulerIcon,
   PaletteIcon,
+  PlantSymbolIcon,
 } from './toolbar-icons'
 import { PlantColorMenu } from './PlantColorMenu'
+import { PlantSymbolMenu } from './PlantSymbolMenu'
 import { ButtonTooltip } from '../shared/ButtonTooltip'
 
 import styles from './CanvasToolbar.module.css'
@@ -83,6 +86,7 @@ export function CanvasToolbar() {
 
   const toolbarRef = useRef<HTMLDivElement>(null)
   const plantColorButtonRef = useRef<HTMLButtonElement>(null)
+  const plantSymbolButtonRef = useRef<HTMLButtonElement>(null)
   const plantColorContext = querySurface?.getSelectedPlantColorContext() ?? {
     plantIds: [],
     singleSpeciesCanonicalName: null,
@@ -90,13 +94,31 @@ export function CanvasToolbar() {
     sharedCurrentColor: null,
     suggestedColor: null,
   }
+  const plantSymbolContext = querySurface?.getSelectedPlantSymbolContext() ?? {
+    plantIds: [],
+    singleSpeciesCanonicalName: null,
+    singleSpeciesCommonName: null,
+    sharedCurrentSymbol: null,
+    sharedEffectiveSymbol: 'round',
+    inheritedSymbol: null,
+    canClearSelectedSymbol: false,
+  }
   const hasSelectedPlants = plantColorContext.plantIds.length > 0
+  const hasSelectedSymbolPlants = plantSymbolContext.plantIds.length > 0
 
   useSignalEffect(() => {
     if (!plantColorMenuOpen.value) return
     currentCanvasSelection.value
     if (!querySurface || querySurface.getSelectedPlantColorContext().plantIds.length === 0) {
       plantColorMenuOpen.value = false
+    }
+  })
+
+  useSignalEffect(() => {
+    if (!plantSymbolMenuOpen.value) return
+    currentCanvasSelection.value
+    if (!querySurface || querySurface.getSelectedPlantSymbolContext().plantIds.length === 0) {
+      plantSymbolMenuOpen.value = false
     }
   })
 
@@ -173,7 +195,7 @@ export function CanvasToolbar() {
 
     return (
       <button
-        ref={id === 'plant-color' ? plantColorButtonRef : undefined}
+        ref={id === 'plant-color' ? plantColorButtonRef : id === 'plant-symbol' ? plantSymbolButtonRef : undefined}
         key={id}
         data-command={options?.commandId}
         type="button"
@@ -255,10 +277,25 @@ export function CanvasToolbar() {
           !hasSelectedPlants,
           () => {
             if (!hasSelectedPlants) return
+            plantSymbolMenuOpen.value = false
             plantColorMenuOpen.value = !plantColorMenuOpen.value
           },
         )}
         {plantColorMenuOpen.value && hasSelectedPlants && <PlantColorMenu buttonRef={plantColorButtonRef} />}
+        {renderActionButton(
+          'plant-symbol',
+          t('canvas.plantSymbol.label'),
+          t('canvas.plantSymbol.toolbarDesc'),
+          PlantSymbolIcon,
+          plantSymbolMenuOpen.value,
+          !hasSelectedSymbolPlants,
+          () => {
+            if (!hasSelectedSymbolPlants) return
+            plantColorMenuOpen.value = false
+            plantSymbolMenuOpen.value = !plantSymbolMenuOpen.value
+          },
+        )}
+        {plantSymbolMenuOpen.value && hasSelectedSymbolPlants && <PlantSymbolMenu buttonRef={plantSymbolButtonRef} />}
       </div>
 
       <div className={styles.separator} role="separator" aria-hidden="true" />

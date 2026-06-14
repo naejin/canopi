@@ -149,6 +149,15 @@ function createRuntime(
       suggestedColor: null,
       singleSpeciesDefaultColor: null,
     }),
+    getSelectedPlantSymbolContext: () => ({
+      plantIds: [],
+      singleSpeciesCanonicalName: null,
+      singleSpeciesCommonName: null,
+      sharedCurrentSymbol: null,
+      sharedEffectiveSymbol: 'round',
+      inheritedSymbol: null,
+      canClearSelectedSymbol: false,
+    }),
     getPlacedPlants: () => [],
     getLocalizedCommonNames: () => new Map(),
   }

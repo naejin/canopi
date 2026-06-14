@@ -2,6 +2,8 @@ import type { ReadonlySignal } from '@preact/signals'
 import type { CanopiFile, PlacedPlant } from '../../types/design'
 import type { ColorByAttribute, PlantSizeMode } from '../plant-display-state'
 import type { SelectedPlantColorContext } from '../plant-color-context'
+import type { SelectedPlantSymbolContext } from '../plant-symbol-context'
+import type { PlantSymbolId } from './scene'
 import type { SceneBounds } from './camera'
 import type { ScenePersistedState, SceneViewportState } from './scene'
 
@@ -97,6 +99,7 @@ export interface CanvasPlantPresentationCommandSurface {
   setPlantColorByAttr(attr: ColorByAttribute | null): void
   ensureSpeciesCacheEntries(canonicalNames: string[], activeLocale: string): Promise<boolean>
   setSelectedPlantColor(color: string | null): number
+  setSelectedPlantSymbol(symbol: PlantSymbolId | null): number
   setPlantColorForSpecies(canonicalName: string, color: string | null): number
   clearPlantSpeciesColor(canonicalName: string): boolean
 }
@@ -122,6 +125,7 @@ export interface CanvasQuerySurface {
   getPlantSizeMode(): PlantSizeMode
   getPlantColorByAttr(): ColorByAttribute | null
   getSelectedPlantColorContext(): SelectedPlantColorContext
+  getSelectedPlantSymbolContext(): SelectedPlantSymbolContext
   getPlacedPlants(): PlacedPlant[]
   getLocalizedCommonNames(): ReadonlyMap<string, string | null>
 }

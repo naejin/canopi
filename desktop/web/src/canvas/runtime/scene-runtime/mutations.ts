@@ -3,13 +3,17 @@ import { createUuid } from '../../../utils/ids'
 import type { PlantPresentationContext } from '../plant-presentation'
 import { normalizeHexColor } from '../../plant-colors'
 import type { SelectedPlantColorContext } from '../../plant-color-context'
+import type { SelectedPlantSymbolContext } from '../../plant-symbol-context'
 import type {
+  PlantSymbolId,
   SceneObjectGroupEntity,
   ScenePersistedState,
   SceneStore,
 } from '../scene'
 import {
   isSceneDesignObjectLocked,
+  resolvePlantSymbolForPlant,
+  resolvePlantSymbolId,
   setSceneDesignObjectLocks,
 } from '../scene'
 import {
@@ -38,6 +42,16 @@ const EMPTY_PLANT_COLOR_CONTEXT: SelectedPlantColorContext = {
   sharedCurrentColor: null,
   suggestedColor: null,
   singleSpeciesDefaultColor: null,
+}
+
+const EMPTY_PLANT_SYMBOL_CONTEXT: SelectedPlantSymbolContext = {
+  plantIds: [],
+  singleSpeciesCanonicalName: null,
+  singleSpeciesCommonName: null,
+  sharedCurrentSymbol: null,
+  sharedEffectiveSymbol: 'round',
+  inheritedSymbol: null,
+  canClearSelectedSymbol: false,
 }
 
 interface SceneRuntimeMutationControllerOptions {
@@ -333,6 +347,48 @@ export class SceneRuntimeMutationController {
     }
   }
 
+  getSelectedPlantSymbolContext(): SelectedPlantSymbolContext {
+    const selectedPlantIds = this._getEditableSelectedPlantIds()
+    const selectedPlants = this._sceneStore.persisted.plants.filter((plant) => selectedPlantIds.has(plant.id))
+    if (selectedPlants.length === 0) return EMPTY_PLANT_SYMBOL_CONTEXT
+
+    const plantIds = selectedPlants.map((plant) => plant.id)
+    const canonicalNames = new Set(selectedPlants.map((plant) => plant.canonicalName))
+    const commonNames = new Set(
+      selectedPlants
+        .map((plant) => plant.commonName)
+        .filter((value): value is string => typeof value === 'string' && value.length > 0),
+    )
+    const explicitSymbols = selectedPlants.map((plant) =>
+      plant.symbol == null ? null : resolvePlantSymbolId(plant.symbol),
+    )
+    const effectiveSymbols = selectedPlants.map((plant) =>
+      resolvePlantSymbolForPlant(plant, this._sceneStore.persisted.plantSpeciesSymbols),
+    )
+    const uniqueExplicitSymbols = new Set(explicitSymbols)
+    const uniqueEffectiveSymbols = new Set(effectiveSymbols)
+    const singleSpeciesCanonicalName = canonicalNames.size === 1 ? [...canonicalNames][0]! : null
+    const singleSpeciesCommonName = singleSpeciesCanonicalName && commonNames.size === 1
+      ? [...commonNames][0]!
+      : null
+
+    return {
+      plantIds,
+      singleSpeciesCanonicalName,
+      singleSpeciesCommonName,
+      sharedCurrentSymbol: uniqueExplicitSymbols.size === 1
+        ? [...uniqueExplicitSymbols][0]!
+        : 'mixed',
+      sharedEffectiveSymbol: uniqueEffectiveSymbols.size === 1
+        ? [...uniqueEffectiveSymbols][0]!
+        : 'mixed',
+      inheritedSymbol: singleSpeciesCanonicalName
+        ? resolvePlantSymbolId(this._sceneStore.persisted.plantSpeciesSymbols[singleSpeciesCanonicalName])
+        : null,
+      canClearSelectedSymbol: selectedPlants.some((plant) => plant.symbol != null),
+    }
+  }
+
   setSelectedPlantColor(color: string | null): number {
     const selectedPlantIds = this._getEditableSelectedPlantIds()
     const nextColor = normalizeHexColor(color)
@@ -347,6 +403,26 @@ export class SceneRuntimeMutationController {
           return {
             ...plant,
             color: nextColor,
+          }
+        })
+      })
+    })
+    return changed
+  }
+
+  setSelectedPlantSymbol(symbol: PlantSymbolId | null): number {
+    const selectedPlantIds = this._getEditableSelectedPlantIds()
+    const nextSymbol = symbol === null ? null : resolvePlantSymbolId(symbol)
+    let changed = 0
+    this._sceneEdits.run('set-selected-plant-symbol', (tx) => {
+      tx.mutate((persisted) => {
+        persisted.plants = persisted.plants.map((plant) => {
+          if (!selectedPlantIds.has(plant.id)) return plant
+          if ((plant.symbol ?? null) === nextSymbol) return plant
+          changed += 1
+          return {
+            ...plant,
+            symbol: nextSymbol,
           }
         })
       })

@@ -1,6 +1,7 @@
 import type { PlacedPlant } from '../../types/design'
 import type { ColorByAttribute, PlantSizeMode } from '../plant-display-state'
 import type { SelectedPlantColorContext } from '../plant-color-context'
+import type { SelectedPlantSymbolContext } from '../plant-symbol-context'
 import type { CameraController } from './camera'
 import type { CanvasDesignObjectSelectionModel, CanvasQueryRevision, CanvasQuerySurface } from './runtime'
 import type { ScenePersistedState, SceneStore, SceneViewportState } from './scene'
@@ -15,7 +16,7 @@ interface SceneCanvasQuerySurfaceOptions {
   readonly viewportRevision: CanvasQueryRevision['viewport']
   readonly mutations: Pick<
     SceneRuntimeMutationController,
-    'getPlantSizeMode' | 'getPlantColorByAttr' | 'getSelectedPlantColorContext'
+    'getPlantSizeMode' | 'getPlantColorByAttr' | 'getSelectedPlantColorContext' | 'getSelectedPlantSymbolContext'
   >
   readonly presentation: Pick<
     SceneRuntimePresentationController,
@@ -53,6 +54,9 @@ class SceneCanvasQueryRole implements CanvasQuerySurface {
   getPlantColorByAttr(): ColorByAttribute | null { return this.options.mutations.getPlantColorByAttr() }
   getSelectedPlantColorContext(): SelectedPlantColorContext {
     return this.options.mutations.getSelectedPlantColorContext()
+  }
+  getSelectedPlantSymbolContext(): SelectedPlantSymbolContext {
+    return this.options.mutations.getSelectedPlantSymbolContext()
   }
   getPlacedPlants(): PlacedPlant[] { return this.options.sceneStore.toCanopiFile().plants }
   getLocalizedCommonNames(): ReadonlyMap<string, string | null> {

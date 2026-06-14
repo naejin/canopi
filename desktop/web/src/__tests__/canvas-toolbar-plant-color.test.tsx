@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CanvasToolbar } from '../components/canvas/CanvasToolbar'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { plantColorMenuOpen } from '../canvas/plant-color-menu-state'
+import { plantSymbolMenuOpen } from '../canvas/plant-symbol-menu-state'
 import { activeTool, selectedObjectIds } from '../canvas/session-state'
 import { activePanel, sidePanel } from '../app/shell/state'
 import {
@@ -23,6 +24,7 @@ describe('CanvasToolbar', () => {
   const canUndo = signal(false)
   const canRedo = signal(false)
   const getSelectedPlantColorContext = vi.fn()
+  const getSelectedPlantSymbolContext = vi.fn()
   const setTool = vi.fn()
   const undo = vi.fn()
   const redo = vi.fn()
@@ -45,6 +47,7 @@ describe('CanvasToolbar', () => {
     toggleRulers.mockReset()
     selectedObjectIds.value = new Set()
     plantColorMenuOpen.value = false
+    plantSymbolMenuOpen.value = false
     activePanel.value = 'canvas'
     sidePanel.value = null
     gridVisible.value = true
@@ -68,6 +71,28 @@ describe('CanvasToolbar', () => {
         sharedCurrentColor: null,
         suggestedColor: '#C8A51E',
         singleSpeciesDefaultColor: null,
+      }
+    })
+    getSelectedPlantSymbolContext.mockImplementation(() => {
+      if (selectedObjectIds.value.size === 0) {
+        return {
+          plantIds: [],
+          singleSpeciesCanonicalName: null,
+          singleSpeciesCommonName: null,
+          sharedCurrentSymbol: null,
+          sharedEffectiveSymbol: 'round',
+          inheritedSymbol: null,
+          canClearSelectedSymbol: false,
+        }
+      }
+      return {
+        plantIds: ['plant-1'],
+        singleSpeciesCanonicalName: 'Malus domestica',
+        singleSpeciesCommonName: 'Apple',
+        sharedCurrentSymbol: null,
+        sharedEffectiveSymbol: 'round',
+        inheritedSymbol: null,
+        canClearSelectedSymbol: false,
       }
     })
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
@@ -94,6 +119,7 @@ describe('CanvasToolbar', () => {
       queries: {
         ...createTestCanvasQuerySurface(),
         getSelectedPlantColorContext,
+        getSelectedPlantSymbolContext,
       },
     }))
   })
@@ -104,6 +130,7 @@ describe('CanvasToolbar', () => {
     activeTool.value = 'select'
     selectedObjectIds.value = new Set()
     plantColorMenuOpen.value = false
+    plantSymbolMenuOpen.value = false
     activePanel.value = 'canvas'
     sidePanel.value = null
     gridVisible.value = true
@@ -136,6 +163,32 @@ describe('CanvasToolbar', () => {
 
     expect(plantColorMenuOpen.value).toBe(true)
     expect(container.querySelector('[role="dialog"]')).not.toBeNull()
+  })
+
+  it('shows a separate plant symbol button after plant color and opens the symbol popover', async () => {
+    selectedObjectIds.value = new Set(['plant-1'])
+
+    await act(async () => {
+      render(<CanvasToolbar />, container)
+      await Promise.resolve()
+    })
+
+    const toolbarLabels = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
+      .map((button) => button.getAttribute('aria-label'))
+    const plantColorIndex = toolbarLabels.indexOf('Plant color')
+    expect(plantColorIndex).toBeGreaterThan(-1)
+    expect(toolbarLabels[plantColorIndex + 1]).toBe('Plant symbol')
+
+    const symbolButton = container.querySelector<HTMLButtonElement>('button[aria-label="Plant symbol"]')
+    expect(symbolButton).not.toBeNull()
+    expect(symbolButton?.disabled).toBe(false)
+
+    await act(async () => {
+      symbolButton?.click()
+      await Promise.resolve()
+    })
+
+    expect(container.querySelector('[role="dialog"][aria-label="Plant symbol"]')).not.toBeNull()
   })
 
   it('exposes the ellipse shape tool in the toolbar', async () => {

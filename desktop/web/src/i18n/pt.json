@@ -217,6 +217,27 @@
         "black": "Preto"
       }
     },
+    "plantSymbol": {
+      "label": "Símbolo da planta",
+      "toolbarDesc": "Editar símbolos das plantas selecionadas",
+      "selectedCount": "{{count}} selecionadas",
+      "preview": "Visualização",
+      "setSymbol": "Definir símbolo",
+      "clearSymbol": "Limpar símbolo",
+      "mixed": "Símbolos mistos",
+      "current": "Atual: {{symbol}}",
+      "inherited": "Herdado: {{symbol}}",
+      "names": {
+        "round": "Redondo",
+        "square": "Quadrado",
+        "triangle": "Triângulo",
+        "cross": "Cruz",
+        "tree": "Árvore",
+        "shrub": "Arbusto",
+        "herbaceous": "Herbácea",
+        "climber": "Trepadeira"
+      }
+    },
     "group": {
       "group": "Agrupar",
       "ungroup": "Desagrupar"

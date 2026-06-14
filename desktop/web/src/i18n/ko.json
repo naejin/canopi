@@ -217,6 +217,27 @@
         "black": "검정"
       }
     },
+    "plantSymbol": {
+      "label": "식물 심볼",
+      "toolbarDesc": "선택한 식물 심볼 편집",
+      "selectedCount": "{{count}}개 선택됨",
+      "preview": "미리보기",
+      "setSymbol": "심볼 설정",
+      "clearSymbol": "심볼 지우기",
+      "mixed": "여러 심볼",
+      "current": "현재: {{symbol}}",
+      "inherited": "상속됨: {{symbol}}",
+      "names": {
+        "round": "원형",
+        "square": "사각형",
+        "triangle": "삼각형",
+        "cross": "십자",
+        "tree": "나무",
+        "shrub": "관목",
+        "herbaceous": "초본",
+        "climber": "덩굴"
+      }
+    },
     "group": {
       "group": "그룹",
       "ungroup": "그룹 해제"

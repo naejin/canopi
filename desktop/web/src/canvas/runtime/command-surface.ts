@@ -55,6 +55,7 @@ interface SceneCanvasCommandSurfaceOptions {
     | 'setPlantSizeMode'
     | 'setPlantColorByAttr'
     | 'setSelectedPlantColor'
+    | 'setSelectedPlantSymbol'
     | 'setPlantColorForSpecies'
     | 'clearPlantSpeciesColor'
   >
@@ -144,6 +145,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       ensureSpeciesCacheEntries: (canonicalNames, activeLocale) =>
         this.ensureSpeciesCacheEntries(canonicalNames, activeLocale),
       setSelectedPlantColor: (color) => this.options.mutations.setSelectedPlantColor(color),
+      setSelectedPlantSymbol: (symbol) => this.options.mutations.setSelectedPlantSymbol(symbol),
       setPlantColorForSpecies: (canonicalName, color) =>
         this.options.mutations.setPlantColorForSpecies(canonicalName, color),
       clearPlantSpeciesColor: (canonicalName) => this.options.mutations.clearPlantSpeciesColor(canonicalName),

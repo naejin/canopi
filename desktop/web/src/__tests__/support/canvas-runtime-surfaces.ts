@@ -72,6 +72,7 @@ export function createTestCanvasCommandSurface(
       setPlantColorByAttr: () => {},
       ensureSpeciesCacheEntries: async () => true,
       setSelectedPlantColor: () => 0,
+      setSelectedPlantSymbol: () => 0,
       setPlantColorForSpecies: () => 0,
       clearPlantSpeciesColor: () => false,
     },

@@ -217,6 +217,27 @@
         "black": "Zwart"
       }
     },
+    "plantSymbol": {
+      "label": "Plantsymbool",
+      "toolbarDesc": "Symbolen van geselecteerde planten bewerken",
+      "selectedCount": "{{count}} geselecteerd",
+      "preview": "Voorbeeld",
+      "setSymbol": "Symbool instellen",
+      "clearSymbol": "Symbool wissen",
+      "mixed": "Gemengde symbolen",
+      "current": "Huidig: {{symbol}}",
+      "inherited": "Overgenomen: {{symbol}}",
+      "names": {
+        "round": "Rond",
+        "square": "Vierkant",
+        "triangle": "Driehoek",
+        "cross": "Kruis",
+        "tree": "Boom",
+        "shrub": "Struik",
+        "herbaceous": "Kruidachtig",
+        "climber": "Klimplant"
+      }
+    },
     "group": {
       "group": "Groeperen",
       "ungroup": "Groep opheffen"

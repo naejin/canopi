@@ -1,5 +1,6 @@
 import { batch } from '@preact/signals'
 import { plantColorMenuOpen } from '../../plant-color-menu-state'
+import { plantSymbolMenuOpen } from '../../plant-symbol-menu-state'
 import { syncPlantSpeciesColorDefaults } from '../../plant-species-color-defaults'
 import type { CanopiFile } from '../../../types/design'
 import { plantColorByAttr, plantSizeMode } from '../../plant-display-state'
@@ -15,6 +16,7 @@ export function resetTransientRuntimeState(
   setTool('select')
   clearCanvasSelection()
   plantColorMenuOpen.value = false
+  plantSymbolMenuOpen.value = false
 }
 
 function syncCanvasSignalsFromDocument(

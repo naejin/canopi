@@ -65,6 +65,15 @@ export function createTestCanvasQuerySurface({
       suggestedColor: null,
       singleSpeciesDefaultColor: null,
     }),
+    getSelectedPlantSymbolContext: () => ({
+      plantIds: [],
+      singleSpeciesCanonicalName: null,
+      singleSpeciesCommonName: null,
+      sharedCurrentSymbol: null,
+      sharedEffectiveSymbol: 'round',
+      inheritedSymbol: null,
+      canClearSelectedSymbol: false,
+    }),
     getPlacedPlants: () => [...currentPlants],
     getLocalizedCommonNames: () => currentLocalizedNames,
     bumpSceneRevision: () => {

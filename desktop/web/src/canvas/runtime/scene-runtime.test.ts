@@ -418,6 +418,22 @@ describe('scene canvas runtime', () => {
     })
   })
 
+  it('applies selected plant symbols through grouped selection', () => {
+    const runtime = new SceneCanvasRuntime()
+    runtime.documentSurface.loadDocument(fileWithGroupedPair())
+    runtime.commandSurface.sceneEdits.selectAll()
+
+    const changed = runtime.commandSurface.plantPresentation.setSelectedPlantSymbol('triangle')
+
+    expect(changed).toBe(2)
+    expect(runtime.querySurface.getSelectedPlantSymbolContext()).toMatchObject({
+      plantIds: ['plant-1', 'plant-2'],
+      sharedCurrentSymbol: 'triangle',
+      sharedEffectiveSymbol: 'triangle',
+      singleSpeciesCanonicalName: 'Malus domestica',
+    })
+  })
+
   it('excludes a locked Plant selected for unlock from plant color edits', async () => {
     const runtime = new SceneCanvasRuntime()
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
@@ -440,6 +456,29 @@ describe('scene canvas runtime', () => {
 
     expect(changed).toBe(0)
     expect(runtime.querySurface.getSceneSnapshot().plants[0]?.color).toBeNull()
+    events.dispose()
+    runtime.destroy()
+  })
+
+  it('excludes a locked Plant selected for unlock from plant symbol edits', async () => {
+    const runtime = new SceneCanvasRuntime()
+    const { container } = await initRuntimeWithStubbedRenderer(runtime)
+    const events = createSceneInteractionEventHarness(container)
+    const file = fileWithOnlyPlants('plant-1')
+    file.plants = file.plants.map((plant) => ({ ...plant, locked: true }))
+    runtime.documentSurface.loadDocument(file)
+    setInteractionViewport(runtime)
+    runtime.commandSurface.tools.setTool('select')
+
+    clickAt(events, { x: 10, y: 10 })
+
+    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+    expect(runtime.querySurface.getSelectedPlantSymbolContext().plantIds).toEqual([])
+
+    const changed = runtime.commandSurface.plantPresentation.setSelectedPlantSymbol('triangle')
+
+    expect(changed).toBe(0)
+    expect(runtime.querySurface.getSceneSnapshot().plants[0]?.symbol ?? null).toBeNull()
     events.dispose()
     runtime.destroy()
   })

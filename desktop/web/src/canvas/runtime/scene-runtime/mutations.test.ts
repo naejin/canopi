@@ -406,6 +406,44 @@ describe('scene runtime mutation controller', () => {
     expect(state.invalidations).toBe(1)
   })
 
+  it('updates selected plant symbols through the presentation seam', () => {
+    const { controller, sceneStore, state } = createController()
+    sceneStore.setSelection(['plant-1', 'plant-2'])
+
+    const changed = controller.setSelectedPlantSymbol('triangle')
+
+    expect(changed).toBe(2)
+    expect(sceneStore.persisted.plants.map((plant) => plant.symbol)).toEqual(['triangle', 'triangle'])
+    expect(controller.getSelectedPlantSymbolContext()).toMatchObject({
+      plantIds: ['plant-1', 'plant-2'],
+      sharedCurrentSymbol: 'triangle',
+      sharedEffectiveSymbol: 'triangle',
+      canClearSelectedSymbol: true,
+    })
+    expect(state.dirtyTypes).toEqual(['set-selected-plant-symbol'])
+    expect(state.invalidations).toBe(1)
+  })
+
+  it('clears selected plant symbols back to inherited symbols', () => {
+    const file = makeFile()
+    file.plant_species_symbols = { 'Malus domestica': 'tree' }
+    file.plants = file.plants.map((plant) => ({ ...plant, symbol: 'triangle' }))
+    const { controller, sceneStore, state } = createController(file)
+    sceneStore.setSelection(['plant-1', 'plant-2'])
+
+    const changed = controller.setSelectedPlantSymbol(null)
+
+    expect(changed).toBe(2)
+    expect(sceneStore.persisted.plants.map((plant) => plant.symbol ?? null)).toEqual([null, null])
+    expect(controller.getSelectedPlantSymbolContext()).toMatchObject({
+      sharedCurrentSymbol: null,
+      sharedEffectiveSymbol: 'tree',
+      inheritedSymbol: 'tree',
+      canClearSelectedSymbol: false,
+    })
+    expect(state.dirtyTypes).toEqual(['set-selected-plant-symbol'])
+  })
+
   it('does not recolor locked Plants through species-wide color edits', () => {
     const file = makeFile()
     file.plants = file.plants.map((plant) =>
