@@ -50,7 +50,7 @@ describe('Plant Spacing sequence math', () => {
 
   it('creates generated plants in order while copying only Plant Spacing fields', () => {
     const plants = createPlantSpacingGeneratedPlants(
-      sourcePlant(),
+      sourcePlant({ symbol: 'triangle' }),
       [{ x: 2, y: 0 }, { x: 4, y: 0 }],
       (index) => `generated-${index}`,
     )
@@ -63,6 +63,7 @@ describe('Plant Spacing sequence math', () => {
       canonicalName: 'Malus domestica',
       commonName: 'Apple',
       color: '#884422',
+      symbol: 'triangle',
       stratum: 'tree',
       canopySpreadM: 3,
       rotationDeg: 15,

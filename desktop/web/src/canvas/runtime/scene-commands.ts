@@ -7,11 +7,13 @@ export type SceneDiffKind =
   | 'annotations'
   | 'groups'
   | 'plantSpeciesColors'
+  | 'plantSpeciesSymbols'
   | 'guides'
   | 'selection'
 
 type PersistedPatchKey =
   | 'plantSpeciesColors'
+  | 'plantSpeciesSymbols'
   | 'layers'
   | 'plants'
   | 'zones'
@@ -43,6 +45,7 @@ export interface SceneCommand {
 
 const PATCH_KEYS: PersistedPatchKey[] = [
   'plantSpeciesColors',
+  'plantSpeciesSymbols',
   'layers',
   'plants',
   'zones',
@@ -53,6 +56,7 @@ const PATCH_KEYS: PersistedPatchKey[] = [
 
 const DIFF_BY_KEY: Record<PersistedPatchKey, SceneDiffKind> = {
   plantSpeciesColors: 'plantSpeciesColors',
+  plantSpeciesSymbols: 'plantSpeciesSymbols',
   layers: 'layers',
   plants: 'plants',
   zones: 'zones',

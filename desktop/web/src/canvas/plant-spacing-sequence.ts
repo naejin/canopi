@@ -71,6 +71,7 @@ export function createPlantSpacingGeneratedPlants(
     canonicalName: source.canonicalName,
     commonName: source.commonName,
     color: source.color,
+    ...(source.symbol != null ? { symbol: source.symbol } : {}),
     stratum: source.stratum,
     canopySpreadM: source.canopySpreadM,
     position: { ...position },

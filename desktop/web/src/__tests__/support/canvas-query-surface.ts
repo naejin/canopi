@@ -72,6 +72,7 @@ export function createTestCanvasQuerySurface({
       sharedCurrentSymbol: null,
       sharedEffectiveSymbol: 'round',
       inheritedSymbol: null,
+      singleSpeciesDefaultSymbol: null,
       canClearSelectedSymbol: false,
     }),
     getPlacedPlants: () => [...currentPlants],

@@ -57,7 +57,9 @@ interface SceneCanvasCommandSurfaceOptions {
     | 'setSelectedPlantColor'
     | 'setSelectedPlantSymbol'
     | 'setPlantColorForSpecies'
+    | 'setPlantSymbolForSpecies'
     | 'clearPlantSpeciesColor'
+    | 'clearPlantSpeciesSymbol'
   >
   readonly sceneEdits: SceneEditCoordinator
   readonly presentation: Pick<
@@ -148,7 +150,10 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       setSelectedPlantSymbol: (symbol) => this.options.mutations.setSelectedPlantSymbol(symbol),
       setPlantColorForSpecies: (canonicalName, color) =>
         this.options.mutations.setPlantColorForSpecies(canonicalName, color),
+      setPlantSymbolForSpecies: (canonicalName, symbol) =>
+        this.options.mutations.setPlantSymbolForSpecies(canonicalName, symbol),
       clearPlantSpeciesColor: (canonicalName) => this.options.mutations.clearPlantSpeciesColor(canonicalName),
+      clearPlantSpeciesSymbol: (canonicalName) => this.options.mutations.clearPlantSpeciesSymbol(canonicalName),
     }
   }
 

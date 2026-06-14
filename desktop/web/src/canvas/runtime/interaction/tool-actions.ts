@@ -1,5 +1,10 @@
 import type { PlantStampSource } from '../../plant-stamp-source'
-import type { ScenePersistedState, ScenePoint, SceneStore } from '../scene'
+import {
+  resolvePlantSymbolId,
+  type ScenePersistedState,
+  type ScenePoint,
+  type SceneStore,
+} from '../scene'
 import { createUuid } from '../../../utils/ids'
 
 export interface SceneRect {
@@ -133,6 +138,13 @@ export function appendPlantStampSourceToDraft(
   world: ScenePoint,
 ): string {
   const id = createUuid()
+  const hasSpeciesSymbol = Object.prototype.hasOwnProperty.call(
+    draft.plantSpeciesSymbols,
+    source.canonical_name,
+  )
+  const speciesSymbol = hasSpeciesSymbol
+    ? resolvePlantSymbolId(draft.plantSpeciesSymbols[source.canonical_name])
+    : null
   draft.plants = [
     ...draft.plants,
     {
@@ -141,6 +153,7 @@ export function appendPlantStampSourceToDraft(
       canonicalName: source.canonical_name,
       commonName: source.common_name,
       color: draft.plantSpeciesColors[source.canonical_name] ?? null,
+      ...(speciesSymbol ? { symbol: speciesSymbol } : {}),
       stratum: source.stratum,
       canopySpreadM: source.width_max_m,
       position: world,

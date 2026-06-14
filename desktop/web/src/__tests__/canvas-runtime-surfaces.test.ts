@@ -50,6 +50,7 @@ function createQuerySurface() {
       sharedCurrentSymbol: null,
       sharedEffectiveSymbol: 'round',
       inheritedSymbol: null,
+      singleSpeciesDefaultSymbol: null,
       canClearSelectedSymbol: false,
     }),
     getPlacedPlants: () => [],
@@ -104,7 +105,9 @@ function createCommandSurface() {
       setSelectedPlantColor: () => 0,
       setSelectedPlantSymbol: () => 0,
       setPlantColorForSpecies: () => 0,
+      setPlantSymbolForSpecies: () => 0,
       clearPlantSpeciesColor: () => false,
+      clearPlantSpeciesSymbol: () => false,
     },
   } satisfies CanvasCommandSurface
 }

@@ -434,6 +434,28 @@ describe('scene canvas runtime', () => {
     })
   })
 
+  it('sets species plant symbols through undoable scene history', () => {
+    const runtime = new SceneCanvasRuntime()
+    runtime.documentSurface.loadDocument(fileWithGroupedPair())
+
+    const changed = runtime.commandSurface.plantPresentation.setPlantSymbolForSpecies('Malus domestica', 'tree')
+
+    expect(changed).toBe(2)
+    expect(runtime.querySurface.getSceneSnapshot().plantSpeciesSymbols).toEqual({
+      'Malus domestica': 'tree',
+    })
+    expect(runtime.querySurface.getSceneSnapshot().plants.map((plant) => plant.symbol)).toEqual(['tree', 'tree'])
+
+    runtime.commandSurface.history.undo()
+    expect(runtime.querySurface.getSceneSnapshot().plantSpeciesSymbols).toEqual({})
+    expect(runtime.querySurface.getSceneSnapshot().plants.map((plant) => plant.symbol ?? null)).toEqual([null, null])
+
+    runtime.commandSurface.history.redo()
+    expect(runtime.querySurface.getSceneSnapshot().plantSpeciesSymbols).toEqual({
+      'Malus domestica': 'tree',
+    })
+  })
+
   it('excludes a locked Plant selected for unlock from plant color edits', async () => {
     const runtime = new SceneCanvasRuntime()
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
@@ -1066,7 +1088,9 @@ describe('scene canvas runtime', () => {
     const runtime = new SceneCanvasRuntime()
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
-    runtime.documentSurface.loadDocument(makeFile())
+    const file = makeFile()
+    file.plants = file.plants.map((plant) => ({ ...plant, symbol: 'triangle' }))
+    runtime.documentSurface.loadDocument(file)
     setInteractionViewport(runtime)
 
     clickAt(events, { x: 20, y: 20 })
@@ -1086,6 +1110,7 @@ describe('scene canvas runtime', () => {
     runtime.commandSurface.sceneEdits.paste()
     const pasted = runtime.querySurface.getSceneSnapshot().plants[2]!
     expect(pasted.canonicalName).toBe('Malus domestica')
+    expect(pasted.symbol).toBe('triangle')
     expect(pasted.position).toEqual({ x: 40, y: 40 })
     events.dispose()
     runtime.destroy()

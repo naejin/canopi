@@ -7,5 +7,6 @@ export interface SelectedPlantSymbolContext {
   sharedCurrentSymbol: PlantSymbolId | 'mixed' | null
   sharedEffectiveSymbol: PlantSymbolId | 'mixed'
   inheritedSymbol: PlantSymbolId | null
+  singleSpeciesDefaultSymbol: PlantSymbolId | null
   canClearSelectedSymbol: boolean
 }

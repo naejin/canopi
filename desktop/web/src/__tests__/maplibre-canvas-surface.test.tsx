@@ -62,6 +62,7 @@ function createRuntime(): CanvasQuerySurface {
       sharedCurrentSymbol: null,
       sharedEffectiveSymbol: 'round',
       inheritedSymbol: null,
+      singleSpeciesDefaultSymbol: null,
       canClearSelectedSymbol: false,
     }),
     getPlacedPlants: () => [],

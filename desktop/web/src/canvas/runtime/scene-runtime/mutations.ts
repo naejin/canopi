@@ -51,6 +51,7 @@ const EMPTY_PLANT_SYMBOL_CONTEXT: SelectedPlantSymbolContext = {
   sharedCurrentSymbol: null,
   sharedEffectiveSymbol: 'round',
   inheritedSymbol: null,
+  singleSpeciesDefaultSymbol: null,
   canClearSelectedSymbol: false,
 }
 
@@ -371,6 +372,12 @@ export class SceneRuntimeMutationController {
     const singleSpeciesCommonName = singleSpeciesCanonicalName && commonNames.size === 1
       ? [...commonNames][0]!
       : null
+    const singleSpeciesDefaultSymbol = singleSpeciesCanonicalName
+      ? this._sceneStore.persisted.plantSpeciesSymbols[singleSpeciesCanonicalName]
+      : undefined
+    const normalizedSingleSpeciesDefaultSymbol = singleSpeciesDefaultSymbol == null
+      ? null
+      : resolvePlantSymbolId(singleSpeciesDefaultSymbol)
 
     return {
       plantIds,
@@ -383,8 +390,9 @@ export class SceneRuntimeMutationController {
         ? [...uniqueEffectiveSymbols][0]!
         : 'mixed',
       inheritedSymbol: singleSpeciesCanonicalName
-        ? resolvePlantSymbolId(this._sceneStore.persisted.plantSpeciesSymbols[singleSpeciesCanonicalName])
+        ? resolvePlantSymbolId(singleSpeciesDefaultSymbol)
         : null,
+      singleSpeciesDefaultSymbol: normalizedSingleSpeciesDefaultSymbol,
       canClearSelectedSymbol: selectedPlants.some((plant) => plant.symbol != null),
     }
   }
@@ -432,7 +440,7 @@ export class SceneRuntimeMutationController {
 
   setPlantColorForSpecies(canonicalName: string, color: string | null): number {
     const nextColor = normalizeHexColor(color)
-    const speciesTargets = getSpeciesPlantColorEditTargets(this._sceneStore.persisted, canonicalName)
+    const speciesTargets = getSpeciesPlantEditTargets(this._sceneStore.persisted, canonicalName)
     if (speciesTargets.plantIds.size > 0 && speciesTargets.editablePlantIds.size === 0) return 0
     let changed = 0
 
@@ -459,6 +467,34 @@ export class SceneRuntimeMutationController {
     return changed
   }
 
+  setPlantSymbolForSpecies(canonicalName: string, symbol: PlantSymbolId): number {
+    const nextSymbol = resolvePlantSymbolId(symbol)
+    const speciesTargets = getSpeciesPlantEditTargets(this._sceneStore.persisted, canonicalName)
+    if (speciesTargets.plantIds.size > 0 && speciesTargets.editablePlantIds.size === 0) return 0
+    let changed = 0
+
+    this._sceneEdits.run('set-plant-symbol-for-species', (tx) => {
+      tx.mutate((persisted) => {
+        persisted.plants = persisted.plants.map((plant) => {
+          if (!speciesTargets.editablePlantIds.has(plant.id)) return plant
+          const currentSymbol = plant.symbol == null ? null : resolvePlantSymbolId(plant.symbol)
+          if (currentSymbol === nextSymbol) return plant
+          changed += 1
+          return {
+            ...plant,
+            symbol: nextSymbol,
+          }
+        })
+        persisted.plantSpeciesSymbols = {
+          ...persisted.plantSpeciesSymbols,
+          [canonicalName]: nextSymbol,
+        }
+      })
+    })
+
+    return changed
+  }
+
   clearPlantSpeciesColor(canonicalName: string): boolean {
     const hadColor = normalizeHexColor(this._sceneStore.persisted.plantSpeciesColors[canonicalName] ?? null) !== null
     if (!hadColor) return false
@@ -469,6 +505,19 @@ export class SceneRuntimeMutationController {
         persisted.plantSpeciesColors = nextSpeciesColors
       })
       this._presentation.syncPlantSpeciesColors()
+    })
+    return true
+  }
+
+  clearPlantSpeciesSymbol(canonicalName: string): boolean {
+    const hadSymbol = Object.prototype.hasOwnProperty.call(this._sceneStore.persisted.plantSpeciesSymbols, canonicalName)
+    if (!hadSymbol) return false
+    this._sceneEdits.run('clear-plant-species-symbol', (tx) => {
+      tx.mutate((persisted) => {
+        const nextSpeciesSymbols = { ...persisted.plantSpeciesSymbols }
+        delete nextSpeciesSymbols[canonicalName]
+        persisted.plantSpeciesSymbols = nextSpeciesSymbols
+      })
     })
     return true
   }
@@ -525,7 +574,7 @@ function isSceneLayerEditable(
   return layer?.visible !== false && layer?.locked !== true
 }
 
-function getSpeciesPlantColorEditTargets(
+function getSpeciesPlantEditTargets(
   persisted: ScenePersistedState,
   canonicalName: string,
 ): { plantIds: Set<string>; editablePlantIds: Set<string> } {

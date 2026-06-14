@@ -4611,10 +4611,13 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
-  it('places plant-stamp plants using species default color', () => {
+  it('places plant-stamp plants using species default color and symbol', () => {
     store.updatePersisted((draft) => {
       draft.plantSpeciesColors = {
         'Malus domestica': '#C44230',
+      }
+      draft.plantSpeciesSymbols = {
+        'Malus domestica': 'tree',
       }
     })
     selectPlantStampSource({
@@ -4635,6 +4638,7 @@ describe('SceneInteractionController', () => {
       canonicalName: 'Malus domestica',
       commonName: 'Apple',
       color: '#C44230',
+      symbol: 'tree',
       position: { x: 50, y: 70 },
     })
     controller.dispose()
@@ -4791,6 +4795,7 @@ describe('SceneInteractionController', () => {
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: '#C44230',
+        symbol: 'triangle',
         stratum: 'high',
         canopySpreadM: 4,
         position: { x: 50, y: 60 },
@@ -4825,6 +4830,7 @@ describe('SceneInteractionController', () => {
       canonicalName: 'Malus domestica',
       commonName: 'Apple',
       color: '#C44230',
+      symbol: 'triangle',
       stratum: 'high',
       canopySpreadM: 4,
       position: { x: 96, y: 117 },

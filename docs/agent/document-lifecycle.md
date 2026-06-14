@@ -58,6 +58,7 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 - Design file save composition is driven by generated field ownership metadata from `common-types/src/design.rs` via `DOCUMENT_FILE_FIELD_OWNERS`. Do not hand-maintain parallel top-level field merge lists in frontend save code.
 - Shared `extra` subfields need an explicit ownership entry near `composeDocumentForSave()`; currently `extra.guides` is scene-owned.
 - Plant Symbols are v3 scene-owned fields: top-level `plant_species_symbols` stores per-species defaults, and each placed plant may carry an optional explicit `symbol`. Old files migrate with an empty `plant_species_symbols` map and missing placed-plant symbols, which render as `round` through the Plant Symbol fallback.
+- A species default of `round` is explicit and must be stored as `plant_species_symbols[canonicalName] = "round"`; clearing a species default deletes the key and does not rewrite placed-plant symbols.
 
 ## Adding Document Fields
 

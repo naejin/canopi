@@ -82,6 +82,7 @@ describe('CanvasToolbar', () => {
           sharedCurrentSymbol: null,
           sharedEffectiveSymbol: 'round',
           inheritedSymbol: null,
+          singleSpeciesDefaultSymbol: null,
           canClearSelectedSymbol: false,
         }
       }
@@ -92,6 +93,7 @@ describe('CanvasToolbar', () => {
         sharedCurrentSymbol: null,
         sharedEffectiveSymbol: 'round',
         inheritedSymbol: null,
+        singleSpeciesDefaultSymbol: null,
         canClearSelectedSymbol: false,
       }
     })

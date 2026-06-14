@@ -165,7 +165,7 @@ cargo build --release
 
 ### Current Layout
 
-- Left: canvas toolbar with drawing tools, plant color action, and grid/snap/ruler toggles.
+- Left: canvas toolbar with drawing tools, plant color and plant symbol actions, and grid/snap/ruler toggles.
 - Center: canvas workspace.
 - Right: `PanelBar` plus sliding plant search and favorites panels.
 - Bottom: bottom panel with Timeline, Budget, and Consortium tabs.

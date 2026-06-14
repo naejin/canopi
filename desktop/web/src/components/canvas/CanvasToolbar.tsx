@@ -101,6 +101,7 @@ export function CanvasToolbar() {
     sharedCurrentSymbol: null,
     sharedEffectiveSymbol: 'round',
     inheritedSymbol: null,
+    singleSpeciesDefaultSymbol: null,
     canClearSelectedSymbol: false,
   }
   const hasSelectedPlants = plantColorContext.plantIds.length > 0
