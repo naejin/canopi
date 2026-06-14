@@ -15,7 +15,7 @@ export function resolvePlantSymbolId(symbol: string | null | undefined): PlantSy
 }
 
 export function resolvePlantSymbolForPlant(
-  plant: { canonicalName: string; symbol: string | null | undefined },
+  plant: { canonicalName: string; symbol?: string | null },
   plantSpeciesSymbols: Readonly<Record<string, string>>,
 ): PlantSymbolId {
   return resolvePlantSymbolId(plant.symbol ?? plantSpeciesSymbols[plant.canonicalName])

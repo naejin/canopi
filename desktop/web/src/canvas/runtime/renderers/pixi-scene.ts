@@ -5,7 +5,9 @@ import {
   getStackBadgeOffsetPx,
   layoutPlantPresentation,
   STACK_BADGE_RADIUS_PX,
+  type PlantPresentationEntry,
 } from '../plant-presentation'
+import { PLANT_SYMBOL_RECIPES } from '../plant-symbol-recipes'
 import { computeSelectionLabels } from '../selection-labels'
 import {
   getAnnotationTextColor,
@@ -19,7 +21,7 @@ import {
 } from '../scene-visuals'
 import type { SceneRendererDefinition, SceneRendererHoverState, SceneRendererInstance, SceneRendererSnapshot } from './scene-types'
 import { getEllipticalZonePolygon, getRectangularZoneCorners } from '../zone-geometry'
-import type { SceneAnnotationEntity, SceneZoneEntity } from '../scene'
+import type { PlantSymbolId, SceneAnnotationEntity, SceneZoneEntity } from '../scene'
 
 const BACKGROUND_COLOR = 0x000000
 const ZONE_STROKE_PX = 2
@@ -299,6 +301,7 @@ function syncPlants(
     sizeMode: snapshot.sizeMode,
     colorByAttr: snapshot.colorByAttr,
     speciesCache: snapshot.speciesCache,
+    plantSpeciesSymbols: snapshot.scene.plantSpeciesSymbols,
     localizedCommonNames: snapshot.localizedCommonNames,
   }, snapshot.selectedPlantIds)
   const layout = layoutPlantPresentation(entries, snapshot.viewport.scale)
@@ -381,7 +384,7 @@ function syncPlants(
 
 function drawPlant(
   graphics: Graphics,
-  entry: ReturnType<typeof buildPlantPresentationEntries>[number],
+  entry: PlantPresentationEntry,
   hoveredCanonicalName: string | null,
   highlighted: boolean,
   hoverState: SceneRendererHoverState | null,
@@ -395,17 +398,30 @@ function drawPlant(
   const x = entry.plant.position.x
   const y = entry.plant.position.y
   const r = entry.radiusWorld
+  const renderedSymbol = resolveRenderedPlantSymbol(entry)
+  const selectedStrokeColor = toPixiColor(interactionVisual?.color ?? entry.color, color)
+  const strokeColor = renderedSymbol === 'round' && selected ? selectedStrokeColor : color
+  const strokeWidthPx = renderedSymbol === 'round' && selected
+    ? interactionVisual?.widthPx ?? PLANT_STROKE_PX
+    : PLANT_STROKE_PX
   graphics.clear()
-  graphics.circle(x, y, r)
-    .fill({ color, alpha: 0.55 })
-    .stroke({
-      color: toPixiColor(selected ? interactionVisual?.color : entry.color, color),
-      width: screenPxToWorldPx(
-        selected ? interactionVisual?.widthPx ?? PLANT_STROKE_PX : PLANT_STROKE_PX,
-        viewportScale,
-      ),
-      alpha: 1,
-    })
+  drawPlantSymbolGlyph(
+    graphics,
+    renderedSymbol,
+    entry,
+    color,
+    strokeColor,
+    screenPxToWorldPx(strokeWidthPx, viewportScale),
+    viewportScale,
+  )
+  if (selected && renderedSymbol !== 'round') {
+    graphics.circle(x, y, r)
+      .stroke({
+        color: selectedStrokeColor,
+        width: screenPxToWorldPx(interactionVisual?.widthPx ?? PLANT_STROKE_PX, viewportScale),
+        alpha: 1,
+      })
+  }
   if (interactionState && !selected) {
     const ringVisual = getCanvasInteractionStrokeVisual(interactionState)
     graphics.circle(x, y, r * 1.4)
@@ -415,6 +431,88 @@ function drawPlant(
         alpha: ringVisual.alpha,
       })
   }
+}
+
+function resolveRenderedPlantSymbol(entry: PlantPresentationEntry): PlantSymbolId {
+  return entry.lod === 'dot' || entry.usesCanopyRadius ? 'round' : entry.symbol
+}
+
+function drawPlantSymbolGlyph(
+  graphics: Graphics,
+  symbol: PlantSymbolId,
+  entry: PlantPresentationEntry,
+  fillColor: number,
+  strokeColor: number,
+  worldLineWidth: number,
+  viewportScale: number,
+): void {
+  const x = entry.plant.position.x
+  const y = entry.plant.position.y
+  const r = entry.radiusWorld
+  const lineWidth = Math.max(worldLineWidth, screenPxToWorldPx(1.6, viewportScale))
+
+  for (const command of PLANT_SYMBOL_RECIPES[symbol]) {
+    switch (command.kind) {
+      case 'circle':
+        fillAndStrokePixiSymbolCommand(
+          graphics.circle(x + command.cx * r, y + command.cy * r, command.radius * r),
+          command.fill,
+          command.stroke,
+          fillColor,
+          strokeColor,
+          lineWidth,
+        )
+        break
+      case 'rect':
+        fillAndStrokePixiSymbolCommand(
+          graphics.rect(x + command.x * r, y + command.y * r, command.width * r, command.height * r),
+          command.fill,
+          command.stroke,
+          fillColor,
+          strokeColor,
+          lineWidth,
+        )
+        break
+      case 'path': {
+        const first = command.points[0]
+        if (!first) break
+        graphics.moveTo(x + first[0] * r, y + first[1] * r)
+        for (let index = 1; index < command.points.length; index += 1) {
+          const point = command.points[index]!
+          graphics.lineTo(x + point[0] * r, y + point[1] * r)
+        }
+        if (command.closed) graphics.closePath()
+        fillAndStrokePixiSymbolCommand(
+          graphics,
+          command.fill,
+          command.stroke,
+          fillColor,
+          strokeColor,
+          lineWidth,
+        )
+        break
+      }
+      case 'lines':
+        for (const segment of command.segments) {
+          graphics.moveTo(x + segment[0] * r, y + segment[1] * r)
+            .lineTo(x + segment[2] * r, y + segment[3] * r)
+        }
+        graphics.stroke({ color: strokeColor, width: lineWidth, alpha: 1 })
+        break
+    }
+  }
+}
+
+function fillAndStrokePixiSymbolCommand(
+  graphics: Graphics,
+  fill: boolean,
+  stroke: boolean,
+  fillColor: number,
+  strokeColor: number,
+  lineWidth: number,
+): void {
+  if (fill) graphics.fill({ color: fillColor, alpha: 0.55 })
+  if (stroke) graphics.stroke({ color: strokeColor, width: lineWidth, alpha: 1 })
 }
 
 function screenPxToWorldPx(px: number, viewportScale: number): number {

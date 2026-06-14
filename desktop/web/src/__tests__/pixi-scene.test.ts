@@ -103,6 +103,66 @@ describe('createPixiSceneRenderer', () => {
     pixi.__pixiMockState.texts.length = 0
   })
 
+  it('draws plant symbol glyphs at readable zoom and collapses them to dots at low zoom', async () => {
+    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
+    const pixi = await import('pixi.js') as unknown as {
+      __pixiMockState: {
+        graphics: Array<{
+          circle: ReturnType<typeof vi.fn>
+          rect: ReturnType<typeof vi.fn>
+          lineTo: ReturnType<typeof vi.fn>
+        }>
+      }
+    }
+
+    const host = document.createElement('div')
+    Object.defineProperty(host, 'clientWidth', { configurable: true, value: 400 })
+    Object.defineProperty(host, 'clientHeight', { configurable: true, value: 300 })
+
+    const renderer = await createPixiSceneRenderer().initialize({ container: host }, {
+      backendId: 'pixi',
+      capabilities: {
+        domCanvas: true,
+        canvas2d: true,
+        offscreenCanvas: false,
+        offscreenCanvas2d: false,
+        webgl: true,
+        webgl2: true,
+        webgpu: false,
+        imageBitmap: false,
+        createImageBitmap: false,
+        worker: false,
+        devicePixelRatio: 1,
+        prefersReducedMotion: null,
+      },
+    } as never)
+
+    const snapshot = createRendererSnapshot({
+      plants: [
+        createPlant({ id: 'square', symbol: 'square', position: { x: 10, y: 10 } }),
+        createPlant({ id: 'triangle', canonicalName: 'Pyrus communis', position: { x: 30, y: 10 } }),
+      ],
+      plantSpeciesSymbols: { 'Pyrus communis': 'triangle' },
+      viewport: { x: 0, y: 0, scale: 8 },
+    })
+
+    renderer.renderScene(snapshot)
+
+    expect(pixi.__pixiMockState.graphics.some((graphics) => graphics.rect.mock.calls.length > 0)).toBe(true)
+    expect(pixi.__pixiMockState.graphics.some((graphics) => graphics.lineTo.mock.calls.length > 0)).toBe(true)
+
+    vi.clearAllMocks()
+    renderer.renderScene({
+      ...snapshot,
+      viewport: { x: 0, y: 0, scale: 0.25 },
+    })
+
+    expect(pixi.__pixiMockState.graphics.some((graphics) => graphics.circle.mock.calls.length > 0)).toBe(true)
+    expect(pixi.__pixiMockState.graphics.some((graphics) => graphics.rect.mock.calls.length > 0)).toBe(false)
+    expect(pixi.__pixiMockState.graphics.some((graphics) => graphics.lineTo.mock.calls.length > 0)).toBe(false)
+    renderer.dispose()
+  })
+
   it('retains plant and annotation display objects across viewport updates', async () => {
     const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
     const pixi = await import('pixi.js') as unknown as {
@@ -746,3 +806,56 @@ describe('createPixiSceneRenderer', () => {
     renderer.dispose()
   })
 })
+
+function createRendererSnapshot(overrides: {
+  plants?: SceneRendererSnapshot['scene']['plants']
+  plantSpeciesSymbols?: Record<string, string>
+  viewport?: SceneRendererSnapshot['viewport']
+} = {}): SceneRendererSnapshot {
+  return {
+    scene: {
+      plants: overrides.plants ?? [],
+      zones: [],
+      annotations: [],
+      groups: [],
+      layers: [],
+      plantSpeciesColors: {},
+      plantSpeciesSymbols: overrides.plantSpeciesSymbols ?? {},
+      guides: [],
+    },
+    viewport: overrides.viewport ?? { x: 0, y: 0, scale: 1 },
+    selectedPlantIds: new Set<string>(),
+    selectedZoneIds: new Set<string>(),
+    selectedAnnotationIds: new Set<string>(),
+    highlightedPlantIds: new Set<string>(),
+    highlightedZoneIds: new Set<string>(),
+    sizeMode: 'default',
+    colorByAttr: null,
+    localizedCommonNames: new Map(),
+    hoveredCanonicalName: null,
+    selectionLabels: [],
+    speciesCache: new Map(),
+  }
+}
+
+function createPlant(
+  overrides: Partial<SceneRendererSnapshot['scene']['plants'][number]> = {},
+): SceneRendererSnapshot['scene']['plants'][number] {
+  return {
+    kind: 'plant',
+    locked: false,
+    id: 'plant-1',
+    canonicalName: 'Malus domestica',
+    commonName: 'Apple',
+    color: null,
+    stratum: null,
+    canopySpreadM: null,
+    position: { x: 10, y: 10 },
+    rotationDeg: null,
+    scale: null,
+    notes: null,
+    plantedDate: null,
+    quantity: 1,
+    ...overrides,
+  }
+}

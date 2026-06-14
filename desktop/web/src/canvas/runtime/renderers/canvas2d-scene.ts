@@ -6,9 +6,11 @@ import {
   STACK_BADGE_RADIUS_PX,
   type PlantPresentationEntry,
 } from '../plant-presentation'
+import { PLANT_SYMBOL_RECIPES } from '../plant-symbol-recipes'
 import { computeSelectionLabels } from '../selection-labels'
 import type {
   SceneAnnotationEntity,
+  PlantSymbolId,
   SceneViewportState,
   SceneZoneEntity,
 } from '../scene'
@@ -185,6 +187,7 @@ function renderPlants(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnap
     sizeMode: snapshot.sizeMode,
     colorByAttr: snapshot.colorByAttr,
     speciesCache: snapshot.speciesCache,
+    plantSpeciesSymbols: snapshot.scene.plantSpeciesSymbols,
     localizedCommonNames: snapshot.localizedCommonNames,
   }, snapshot.selectedPlantIds)
   const layout = layoutPlantPresentation(entries, snapshot.viewport.scale)
@@ -201,16 +204,32 @@ function renderPlants(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnap
       hoverStateForTarget(snapshot, 'plant', entry.plant.id),
     )
     const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
+    const renderedSymbol = resolveRenderedPlantSymbol(entry)
+    const selectedStrokeColor = interactionVisual?.color ?? entry.color
+    const glyphStrokeColor = renderedSymbol === 'round' && selected ? selectedStrokeColor : entry.color
+    const glyphLineWidth = renderedSymbol === 'round' && selected
+      ? (interactionVisual?.widthPx ?? 1.5) / snapshot.viewport.scale
+      : worldLineWidth
 
-    ctx.beginPath()
-    ctx.arc(entry.plant.position.x, entry.plant.position.y, entry.radiusWorld, 0, Math.PI * 2)
-    ctx.fillStyle = entry.color
-    ctx.globalAlpha = 0.55 * layer.opacity
-    ctx.fill()
-    ctx.globalAlpha = layer.opacity
-    ctx.strokeStyle = selected ? interactionVisual?.color ?? entry.color : entry.color
-    ctx.lineWidth = selected ? (interactionVisual?.widthPx ?? 1.5) / snapshot.viewport.scale : worldLineWidth
-    ctx.stroke()
+    drawPlantSymbolGlyph(
+      ctx,
+      renderedSymbol,
+      entry,
+      entry.color,
+      glyphStrokeColor,
+      glyphLineWidth,
+      layer.opacity,
+      snapshot.viewport.scale,
+    )
+
+    if (selected && renderedSymbol !== 'round') {
+      ctx.beginPath()
+      ctx.arc(entry.plant.position.x, entry.plant.position.y, entry.radiusWorld, 0, Math.PI * 2)
+      ctx.globalAlpha = layer.opacity
+      ctx.strokeStyle = selectedStrokeColor
+      ctx.lineWidth = (interactionVisual?.widthPx ?? 1.5) / snapshot.viewport.scale
+      ctx.stroke()
+    }
 
     if (interactionState && !selected) {
       const ringVisual = getCanvasInteractionStrokeVisual(interactionState)
@@ -229,6 +248,85 @@ function renderPlants(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnap
   }
 
   ctx.globalAlpha = 1
+}
+
+function resolveRenderedPlantSymbol(entry: PlantPresentationEntry): PlantSymbolId {
+  return entry.lod === 'dot' || entry.usesCanopyRadius ? 'round' : entry.symbol
+}
+
+function drawPlantSymbolGlyph(
+  ctx: CanvasRenderingContext2D,
+  symbol: PlantSymbolId,
+  entry: PlantPresentationEntry,
+  fillColor: string,
+  strokeColor: string,
+  worldLineWidth: number,
+  opacity: number,
+  viewportScale: number,
+): void {
+  const x = entry.plant.position.x
+  const y = entry.plant.position.y
+  const r = entry.radiusWorld
+  const lineWidth = Math.max(worldLineWidth, 1.6 / Math.max(viewportScale, 0.001))
+
+  ctx.fillStyle = fillColor
+  ctx.strokeStyle = strokeColor
+  ctx.lineWidth = lineWidth
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+
+  for (const command of PLANT_SYMBOL_RECIPES[symbol]) {
+    switch (command.kind) {
+      case 'circle':
+        ctx.beginPath()
+        ctx.arc(x + command.cx * r, y + command.cy * r, command.radius * r, 0, Math.PI * 2)
+        fillAndStrokeCanvasSymbolCommand(ctx, command.fill, command.stroke, opacity)
+        break
+      case 'rect':
+        ctx.beginPath()
+        ctx.rect(x + command.x * r, y + command.y * r, command.width * r, command.height * r)
+        fillAndStrokeCanvasSymbolCommand(ctx, command.fill, command.stroke, opacity)
+        break
+      case 'path': {
+        const first = command.points[0]
+        if (!first) break
+        ctx.beginPath()
+        ctx.moveTo(x + first[0] * r, y + first[1] * r)
+        for (let index = 1; index < command.points.length; index += 1) {
+          const point = command.points[index]!
+          ctx.lineTo(x + point[0] * r, y + point[1] * r)
+        }
+        if (command.closed) ctx.closePath()
+        fillAndStrokeCanvasSymbolCommand(ctx, command.fill, command.stroke, opacity)
+        break
+      }
+      case 'lines':
+        ctx.globalAlpha = opacity
+        ctx.beginPath()
+        for (const segment of command.segments) {
+          ctx.moveTo(x + segment[0] * r, y + segment[1] * r)
+          ctx.lineTo(x + segment[2] * r, y + segment[3] * r)
+        }
+        ctx.stroke()
+        break
+    }
+  }
+}
+
+function fillAndStrokeCanvasSymbolCommand(
+  ctx: CanvasRenderingContext2D,
+  fill: boolean,
+  stroke: boolean,
+  opacity: number,
+): void {
+  if (fill) {
+    ctx.globalAlpha = 0.55 * opacity
+    ctx.fill()
+  }
+  if (stroke) {
+    ctx.globalAlpha = opacity
+    ctx.stroke()
+  }
 }
 
 function drawStackBadge(

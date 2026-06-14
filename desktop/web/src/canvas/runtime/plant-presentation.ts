@@ -7,7 +7,13 @@ import {
   type PlantLOD,
 } from '../plants'
 import { worldToScreen } from './annotation-layout'
-import type { ScenePlantEntity, ScenePoint, SceneViewportState } from './scene'
+import {
+  resolvePlantSymbolForPlant,
+  type PlantSymbolId,
+  type ScenePlantEntity,
+  type ScenePoint,
+  type SceneViewportState,
+} from './scene'
 import type { SpeciesCacheEntry } from './species-cache'
 
 const STACK_THRESHOLD_PX = 5
@@ -20,6 +26,7 @@ export interface PlantPresentationContext {
   sizeMode: PlantSizeMode
   colorByAttr: ColorByAttribute | null
   speciesCache: ReadonlyMap<string, SpeciesCacheEntry>
+  plantSpeciesSymbols?: Readonly<Record<string, string>>
   localizedCommonNames?: ReadonlyMap<string, string | null>
   zoomReference?: number
 }
@@ -30,6 +37,8 @@ export interface PlantPresentationEntry {
   radiusScreenPx: number
   color: string
   baseColor: string
+  symbol: PlantSymbolId
+  usesCanopyRadius: boolean
   stackPriority: number
   lod: PlantLOD
   screenPoint: ScenePoint
@@ -87,10 +96,12 @@ export function buildPlantPresentationEntries(
 ): PlantPresentationEntry[] {
   const lod = getPlantLOD(context.viewport.scale)
   return plants.map((plant) => {
-    const radiusWorld = resolvePlantRadiusWorld(plant, context)
+    const radiusPresentation = resolvePlantRadiusPresentation(plant, context)
+    const radiusWorld = radiusPresentation.radiusWorld
     const radiusScreenPx = radiusWorld * context.viewport.scale
     const baseColor = resolvePlantBaseColor(plant, context.speciesCache)
     const color = resolvePlantDisplayColor(plant, context.colorByAttr, context.speciesCache)
+    const symbol = resolvePlantSymbolForPlant(plant, context.plantSpeciesSymbols ?? {})
     const selected = selectedPlantIds.has(plant.id)
     const screenPoint = worldToScreen(plant.position, context.viewport)
     const hitBoundsScreen = getPlantScreenHitBounds(plant, context)
@@ -100,6 +111,8 @@ export function buildPlantPresentationEntries(
       radiusScreenPx,
       color,
       baseColor,
+      symbol,
+      usesCanopyRadius: radiusPresentation.usesCanopyRadius,
       stackPriority: getStackPriority(plant, selected),
       lod,
       screenPoint,
@@ -293,13 +306,22 @@ function resolvePlantRadiusWorld(
   plant: ScenePlantEntity,
   context: PlantPresentationContext,
 ): number {
+  return resolvePlantRadiusPresentation(plant, context).radiusWorld
+}
+
+function resolvePlantRadiusPresentation(
+  plant: ScenePlantEntity,
+  context: PlantPresentationContext,
+): { radiusWorld: number; usesCanopyRadius: boolean } {
   if (context.sizeMode === 'canopy') {
     const canopySpreadM = resolvePlantCanopySpreadM(plant, context.speciesCache)
-    if (canopySpreadM && canopySpreadM > 0) return canopySpreadM / 2
-    return getSymbolicPlantRadiusWorld(context.viewport.scale)
+    if (canopySpreadM && canopySpreadM > 0) {
+      return { radiusWorld: canopySpreadM / 2, usesCanopyRadius: true }
+    }
+    return { radiusWorld: getSymbolicPlantRadiusWorld(context.viewport.scale), usesCanopyRadius: false }
   }
 
-  return getSymbolicPlantRadiusWorld(context.viewport.scale)
+  return { radiusWorld: getSymbolicPlantRadiusWorld(context.viewport.scale), usesCanopyRadius: false }
 }
 
 function getSymbolicPlantRadiusWorld(viewportScale: number): number {

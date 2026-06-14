@@ -8,6 +8,63 @@ describe('createCanvas2DSceneRenderer', () => {
     vi.restoreAllMocks()
   })
 
+  it('draws plant symbol glyphs at readable zoom and collapses them to dots at low zoom', async () => {
+    const ctx = createMockCanvasContext()
+    const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext') as unknown as {
+      mockImplementation(implementation: (contextId: string) => CanvasRenderingContext2D | null): void
+    }
+    getContextSpy.mockImplementation((contextId: string) => {
+      return contextId === '2d' ? ctx as unknown as CanvasRenderingContext2D : null
+    })
+
+    const host = document.createElement('div')
+    Object.defineProperty(host, 'clientWidth', { configurable: true, value: 400 })
+    Object.defineProperty(host, 'clientHeight', { configurable: true, value: 300 })
+
+    const renderer = await createCanvas2DSceneRenderer().initialize({ container: host }, {
+      backendId: 'canvas2d',
+      capabilities: {
+        domCanvas: true,
+        canvas2d: true,
+        offscreenCanvas: false,
+        offscreenCanvas2d: false,
+        webgl: false,
+        webgl2: false,
+        webgpu: false,
+        imageBitmap: false,
+        createImageBitmap: false,
+        worker: false,
+        devicePixelRatio: 1,
+        prefersReducedMotion: null,
+      },
+    } as never)
+
+    const snapshot = createRendererSnapshot({
+      plants: [
+        createPlant({ id: 'square', symbol: 'square', position: { x: 10, y: 10 } }),
+        createPlant({ id: 'triangle', canonicalName: 'Pyrus communis', position: { x: 30, y: 10 } }),
+      ],
+      plantSpeciesSymbols: { 'Pyrus communis': 'triangle' },
+      viewport: { x: 0, y: 0, scale: 8 },
+    })
+
+    renderer.renderScene(snapshot)
+
+    expect(ctx.rect).toHaveBeenCalled()
+    expect(ctx.lineTo).toHaveBeenCalled()
+
+    vi.clearAllMocks()
+    renderer.renderScene({
+      ...snapshot,
+      viewport: { x: 0, y: 0, scale: 0.25 },
+    })
+
+    expect(ctx.arc).toHaveBeenCalled()
+    expect(ctx.rect).not.toHaveBeenCalled()
+    expect(ctx.lineTo).not.toHaveBeenCalled()
+    renderer.dispose()
+  })
+
   it('applies text annotation rotation in screen space', async () => {
     const ctx = createMockCanvasContext()
     const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext') as unknown as {
@@ -81,6 +138,59 @@ describe('createCanvas2DSceneRenderer', () => {
     renderer.dispose()
   })
 })
+
+function createRendererSnapshot(overrides: {
+  plants?: SceneRendererSnapshot['scene']['plants']
+  plantSpeciesSymbols?: Record<string, string>
+  viewport?: SceneRendererSnapshot['viewport']
+} = {}): SceneRendererSnapshot {
+  return {
+    scene: {
+      plants: overrides.plants ?? [],
+      zones: [],
+      annotations: [],
+      groups: [],
+      layers: [],
+      plantSpeciesColors: {},
+      plantSpeciesSymbols: overrides.plantSpeciesSymbols ?? {},
+      guides: [],
+    },
+    viewport: overrides.viewport ?? { x: 10, y: 20, scale: 2 },
+    selectedPlantIds: new Set<string>(),
+    selectedZoneIds: new Set<string>(),
+    selectedAnnotationIds: new Set<string>(),
+    highlightedPlantIds: new Set<string>(),
+    highlightedZoneIds: new Set<string>(),
+    sizeMode: 'default',
+    colorByAttr: null,
+    localizedCommonNames: new Map(),
+    hoveredCanonicalName: null,
+    selectionLabels: [],
+    speciesCache: new Map(),
+  }
+}
+
+function createPlant(
+  overrides: Partial<SceneRendererSnapshot['scene']['plants'][number]> = {},
+): SceneRendererSnapshot['scene']['plants'][number] {
+  return {
+    kind: 'plant',
+    locked: false,
+    id: 'plant-1',
+    canonicalName: 'Malus domestica',
+    commonName: 'Apple',
+    color: null,
+    stratum: null,
+    canopySpreadM: null,
+    position: { x: 10, y: 10 },
+    rotationDeg: null,
+    scale: null,
+    notes: null,
+    plantedDate: null,
+    quantity: 1,
+    ...overrides,
+  }
+}
 
 function createMockCanvasContext() {
   return {

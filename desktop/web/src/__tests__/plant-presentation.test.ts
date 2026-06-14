@@ -89,9 +89,33 @@ describe('plant presentation service', () => {
     expect(colorByPresentation.color).toBe('#8BC34A')
   })
 
+  it('resolves Plant Symbols without changing the Visual Footprint', () => {
+    const entries = buildPlantPresentationEntries([
+      createPlant({ id: 'explicit', symbol: 'triangle' }),
+      createPlant({ id: 'species-default', canonicalName: 'Pyrus communis' }),
+      createPlant({ id: 'unknown', symbol: 'spiral' }),
+    ], {
+      viewport: createViewport(),
+      zoomReference: 8,
+      sizeMode: 'default',
+      colorByAttr: null,
+      speciesCache: new Map(),
+      plantSpeciesSymbols: {
+        'Pyrus communis': 'climber',
+      },
+    }, new Set())
+
+    expect(entries.map((entry) => entry.symbol)).toEqual(['triangle', 'climber', 'round'])
+    expect(entries.map((entry) => entry.radiusScreenPx)).toEqual([
+      entries[0]!.radiusScreenPx,
+      entries[0]!.radiusScreenPx,
+      entries[0]!.radiusScreenPx,
+    ])
+  })
+
   it('matches canopy sizing from species detail and uses symbolic fallback when missing', () => {
-    const canopyPlant = createPlant({ id: 'canopy-plant' })
-    const fallbackPlant = createPlant({ id: 'fallback-plant', canonicalName: 'Pyrus communis' })
+    const canopyPlant = createPlant({ id: 'canopy-plant', symbol: 'square' })
+    const fallbackPlant = createPlant({ id: 'fallback-plant', canonicalName: 'Pyrus communis', symbol: 'triangle' })
     const speciesCache = new Map([
       ['Malus domestica', { width_max_m: 4 }],
     ])
@@ -113,8 +137,11 @@ describe('plant presentation service', () => {
 
     expect(canopyPresentation.radiusWorld).toBe(2)
     expect(canopyPresentation.radiusScreenPx).toBe(32)
+    expect(canopyPresentation.usesCanopyRadius).toBe(true)
     expect(fallbackPresentation.radiusScreenPx).toBeCloseTo(4.05, 2)
     expect(fallbackPresentation.radiusWorld).toBeCloseTo(4.05 / 16, 2)
+    expect(fallbackPresentation.usesCanopyRadius).toBe(false)
+    expect(fallbackPresentation.symbol).toBe('triangle')
   })
 
   it('computes screen hit bounds from the resolved Visual Footprint plus interaction padding', () => {
