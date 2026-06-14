@@ -107,6 +107,7 @@ describe('document format contract', () => {
       ...BASE_DOCUMENT,
       version: 202,
       plant_species_colors: { 'Canvas species': '#112233' },
+      plant_species_symbols: { 'Canvas species': 'tree' },
       layers: [{ name: 'plants', visible: true, locked: true, opacity: 0.8 }],
       plants: [{
         id: 'canvas-plant',
@@ -223,6 +224,37 @@ describe('document format contract', () => {
     expect(normalized.budget).toEqual([])
     expect(normalized.extra).toMatchObject({
       future_panel_field: { preserve: true },
+    })
+  })
+
+  it('preserves Plant Symbol species defaults through load normalization and save composition', () => {
+    const normalized = normalizeLoadedDocument({
+      ...RAW_DOCUMENT,
+      plant_species_symbols: {
+        'Malus domestica': 'tree',
+      },
+    } as unknown as CanopiFile)
+
+    expect(normalized.plant_species_symbols).toEqual({
+      'Malus domestica': 'tree',
+    })
+    expect(normalized.extra).not.toHaveProperty('plant_species_symbols')
+
+    const saved = composeDocumentForSave({
+      metadata: { name: 'Saved symbols' },
+      document: BASE_DOCUMENT,
+      canvas: {
+        ...BASE_DOCUMENT,
+        plant_species_symbols: {
+          'Malus domestica': 'tree',
+          'Pyrus communis': 'round',
+        },
+      },
+    })
+
+    expect(saved.plant_species_symbols).toEqual({
+      'Malus domestica': 'tree',
+      'Pyrus communis': 'round',
     })
   })
 

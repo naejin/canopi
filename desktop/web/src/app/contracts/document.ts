@@ -114,6 +114,7 @@ function normalizeDocumentKnownFields(file: CanopiFile): CanopiFile {
     location: file.location ?? null,
     north_bearing_deg: file.north_bearing_deg ?? null,
     plant_species_colors: file.plant_species_colors,
+    plant_species_symbols: file.plant_species_symbols ?? {},
     layers: file.layers,
     plants: file.plants,
     zones: file.zones,
