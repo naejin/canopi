@@ -43,6 +43,7 @@ export interface SceneInteractionSharedGestureContext {
   readonly applySnapping: (point: ScenePoint) => ScenePoint
   readonly refreshViewportDependent: () => void
   readonly refreshSelectionDependent: () => void
+  readonly beginAnnotationTextEdit: (annotationId: string) => boolean
 }
 
 export interface SharedGesturePointerDownContext {
@@ -171,6 +172,14 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
       ))
       this.context.render('scene')
       this.context.refreshSelectionDependent()
+      return true
+    }
+
+    if (tool === 'select' && event.detail >= 2 && hit.kind === 'annotation') {
+      this.context.setSelection([hit.id])
+      this.context.render('scene')
+      this.context.refreshSelectionDependent()
+      this.context.beginAnnotationTextEdit(hit.id)
       return true
     }
 

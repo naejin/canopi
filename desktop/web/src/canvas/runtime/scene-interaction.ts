@@ -35,6 +35,10 @@ import {
   createSceneInteractionSharedGestures,
   type SceneInteractionSharedGestures,
 } from './interaction/shared-gestures'
+import {
+  createAnnotationInlineEditor,
+  type AnnotationInlineEditorController,
+} from './interaction/annotation-inline-editor'
 import type { SceneEditCoordinator } from './scene-runtime/transactions'
 import {
   createSelectionActionToolbar,
@@ -107,6 +111,7 @@ export class SceneInteractionController {
   private readonly _tools: SceneToolModules
   private readonly _frame: SceneInteractionFrame
   private readonly _sharedGestures: SceneInteractionSharedGestures
+  private readonly _annotationEditor: AnnotationInlineEditorController
   private readonly _selectionToolbar: SelectionActionToolbarController
   private readonly _contextMenu: CanvasContextMenuController
   private readonly _rotationHandle: SelectionRotationHandleController
@@ -135,6 +140,13 @@ export class SceneInteractionController {
       getContainerRect: () => this._frame.currentContainerRect(),
       notifyTransientHistoryChange: () => this._deps.notifyTransientHistoryChange?.(),
     })
+    this._annotationEditor = createAnnotationInlineEditor({
+      container: this._deps.container,
+      camera: this._deps.camera,
+      getSceneStore: this._deps.getSceneStore,
+      sceneEdits: this._deps.sceneEdits,
+      refreshSelectionDependent: () => this._refreshSelectionDependentMeasurements(),
+    })
     this._sharedGestures = createSceneInteractionSharedGestures({
       container: this._deps.container,
       preview: this._preview,
@@ -152,6 +164,7 @@ export class SceneInteractionController {
       applySnapping: (point) => this._applySnapping(point),
       refreshViewportDependent: () => this._refreshViewportDependentMeasurements(),
       refreshSelectionDependent: () => this._refreshSelectionDependentMeasurements(),
+      beginAnnotationTextEdit: (annotationId) => this._annotationEditor.start(annotationId),
     })
     this._selectionToolbar = createSelectionActionToolbar({
       container: this._deps.container,
@@ -198,6 +211,7 @@ export class SceneInteractionController {
   }
 
   setTool(name: string): void {
+    if (this._tool !== name) this._annotationEditor.cancel()
     this._tool = name
     this._frame.transitionTool({
       toolName: name,
@@ -215,6 +229,7 @@ export class SceneInteractionController {
       this._contextMenu.dispose()
       this._rotationHandle.dispose()
       this._lockedAffordance.dispose()
+      this._annotationEditor.dispose()
       this._sharedGestures.dispose()
       this._tools.dispose()
       this._preview.remove()
@@ -245,6 +260,8 @@ export class SceneInteractionController {
   private readonly _onPointerDown = (event: PointerEvent): void => {
     if (event.button !== 0 && event.button !== 1) return
     this._contextMenu.hide()
+    if (this._annotationEditor.contains(event.target)) return
+    if (this._annotationEditor.hasActiveEditor()) this._annotationEditor.commit()
     if (this._selectionToolbar.contains(event.target)) return
     if (this._contextMenu.contains(event.target)) return
     if (this._lockedAffordance.contains(event.target)) return
@@ -414,6 +431,7 @@ export class SceneInteractionController {
   private readonly _onContextMenu = (event: MouseEvent): void => {
     if (allowsNativeContextMenuTarget(event.target)) return
     event.preventDefault()
+    if (this._annotationEditor.hasActiveEditor()) this._annotationEditor.commit()
     const screen = this._screenPoint(event)
     const world = this._deps.camera.screenToWorld(screen)
     const selection = this._retargetContextMenuSelection(world)
@@ -501,6 +519,8 @@ export class SceneInteractionController {
 
     if (this._tools.keyDown(event)) return
 
+    if (this._beginSelectedAnnotationTextEditFromKeyboard(event)) return
+
     if (
       event.code !== 'Space'
       || this._frame.isSpaceHeld()
@@ -542,6 +562,7 @@ export class SceneInteractionController {
   }
 
   private _refreshViewportDependentMeasurements(): void {
+    this._annotationEditor.refresh()
     if (this._tools.refreshViewportDependent()) {
       this._rotationHandle.refresh()
       this._selectionToolbar.refresh()
@@ -552,6 +573,7 @@ export class SceneInteractionController {
   }
 
   private _refreshSelectionDependentMeasurements(): void {
+    this._annotationEditor.refresh()
     this._tools.refreshSelectionDependent()
     this._rotationHandle.refresh()
     this._selectionToolbar.refresh()
@@ -576,6 +598,28 @@ export class SceneInteractionController {
   private _switchTool(name: string): void {
     this._deps.setTool(name)
     if (this._tool !== name) this.setTool(name)
+  }
+
+  private _beginSelectedAnnotationTextEditFromKeyboard(event: KeyboardEvent): boolean {
+    if (this._tool !== 'select') return false
+    if (event.key !== 'Enter' && event.key !== 'F2') return false
+    if (isEditableTarget(event.target)) return false
+    if (this._tools.shouldSuppressSharedKeyboard(event)) return false
+
+    const selection = this._deps.getDesignObjectSelection()
+    if (
+      selection.editableTargets.length !== 1
+      || (selection.lockedTargets?.length ?? 0) > 0
+      || (selection.blockedTargets?.length ?? 0) > 0
+    ) return false
+
+    const target = selection.editableTargets[0]
+    if (target?.kind !== 'annotation') return false
+    if (!this._annotationEditor.start(target.id)) return false
+
+    event.preventDefault()
+    event.stopPropagation()
+    return true
   }
 
   private _syncLockedObjectAffordance(
