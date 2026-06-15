@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -119,6 +120,15 @@ describe('PlantSymbolMenu', () => {
     expect(triangleSvg).toBeTruthy()
     expect(previewSvg?.getAttribute('viewBox')).toBe('-1.2 -1.2 2.4 2.4')
     expect(triangleSvg?.getAttribute('viewBox')).toBe('-1.2 -1.2 2.4 2.4')
+  })
+
+  it('uses a defined preview sizing token for the symbol preview frame', () => {
+    const css = readFileSync('src/components/canvas/PlantSymbolMenu.module.css', 'utf8')
+    const previewRule = css.match(/\.preview\s*{(?<body>[^}]*)}/)?.groups?.body ?? ''
+
+    expect(previewRule).toContain('--symbol-preview-min-height:')
+    expect(previewRule).toContain('min-height: var(--symbol-preview-min-height);')
+    expect(previewRule).not.toContain('var(--space-10)')
   })
 
   it('updates the selected plant name when localized plant names refresh', async () => {
