@@ -6,7 +6,10 @@ import {
   STACK_BADGE_RADIUS_PX,
   type PlantPresentationEntry,
 } from '../plant-presentation'
-import { PLANT_SYMBOL_RECIPES } from '../plant-symbol-recipes'
+import {
+  DEFAULT_PLANT_SYMBOL_LINE_STROKE_WIDTH,
+  PLANT_SYMBOL_RECIPES,
+} from '../plant-symbol-recipes'
 import { computeSelectionLabels } from '../selection-labels'
 import type {
   SceneAnnotationEntity,
@@ -302,12 +305,17 @@ function drawPlantSymbolGlyph(
       }
       case 'lines':
         ctx.globalAlpha = opacity
+        ctx.lineWidth = lineWidth * (
+          (command.strokeWidth ?? DEFAULT_PLANT_SYMBOL_LINE_STROKE_WIDTH) /
+          DEFAULT_PLANT_SYMBOL_LINE_STROKE_WIDTH
+        )
         ctx.beginPath()
         for (const segment of command.segments) {
           ctx.moveTo(x + segment[0] * r, y + segment[1] * r)
           ctx.lineTo(x + segment[2] * r, y + segment[3] * r)
         }
         ctx.stroke()
+        ctx.lineWidth = lineWidth
         break
     }
   }

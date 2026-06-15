@@ -1,5 +1,8 @@
 import type { PlantSymbolId } from '../../canvas/runtime/scene'
-import { PLANT_SYMBOL_RECIPES } from '../../canvas/runtime/plant-symbol-recipes'
+import {
+  DEFAULT_PLANT_SYMBOL_LINE_STROKE_WIDTH,
+  PLANT_SYMBOL_RECIPES,
+} from '../../canvas/runtime/plant-symbol-recipes'
 
 interface PlantSymbolGlyphProps {
   symbol: PlantSymbolId
@@ -76,7 +79,7 @@ export function PlantSymbolGlyph({ symbol, className }: PlantSymbolGlyphProps) {
                     x2={segment[2]}
                     y2={segment[3]}
                     stroke="currentColor"
-                    strokeWidth={0.16}
+                    strokeWidth={command.strokeWidth ?? DEFAULT_PLANT_SYMBOL_LINE_STROKE_WIDTH}
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />

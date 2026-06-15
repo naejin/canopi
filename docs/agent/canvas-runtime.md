@@ -145,7 +145,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 
 - Plant geometry, color, Plant Symbol resolution, and stack badges come from `runtime/plant-presentation.ts`.
 - Visual Footprint is the shared presentation boundary for symbolic plant sizing; rendering, hit testing, band select, grouping bounds, and zoom-to-fit must consume the same computed footprint. Additional click/touch padding is allowed only as an explicit interaction affordance.
-- Plant Symbols are built-in marker recipes drawn inside the existing circular Visual Footprint. They must not change hit testing, band select, grouping bounds, zoom-to-fit bounds, stack badge placement, hover rings, selection rings, or locked-state rings.
+- Plant Symbols are built-in marker recipes visually composed within the existing circular Visual Footprint. The Visual Footprint is the interaction and layout boundary; glyph recipes should be optically balanced and may be inset instead of filling that boundary edge-to-edge. They must not change hit testing, band select, grouping bounds, zoom-to-fit bounds, stack badge placement, hover rings, selection rings, or locked-state rings.
 - Render Plant Symbols with Pixi and Canvas2D native primitives rather than runtime SVG parsing, image textures, DOM overlays, or a new icon dependency. At low zoom where the symbol is not readable, collapse all symbols to the same dot/round marker.
 - Plant Symbols apply to default symbolic marker mode. Canopy spread mode remains physical circle geometry when canopy spread is known; only the missing-canopy symbolic fallback should use the selected Plant Symbol.
 - Plant Symbols stay upright and ignore placed plant rotation unless a future feature deliberately defines oriented marker symbols.

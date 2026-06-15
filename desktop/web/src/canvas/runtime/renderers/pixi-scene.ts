@@ -7,7 +7,10 @@ import {
   STACK_BADGE_RADIUS_PX,
   type PlantPresentationEntry,
 } from '../plant-presentation'
-import { PLANT_SYMBOL_RECIPES } from '../plant-symbol-recipes'
+import {
+  DEFAULT_PLANT_SYMBOL_LINE_STROKE_WIDTH,
+  PLANT_SYMBOL_RECIPES,
+} from '../plant-symbol-recipes'
 import { computeSelectionLabels } from '../selection-labels'
 import {
   getAnnotationTextColor,
@@ -497,7 +500,14 @@ function drawPlantSymbolGlyph(
           graphics.moveTo(x + segment[0] * r, y + segment[1] * r)
             .lineTo(x + segment[2] * r, y + segment[3] * r)
         }
-        graphics.stroke({ color: strokeColor, width: lineWidth, alpha: 1 })
+        graphics.stroke({
+          color: strokeColor,
+          width: lineWidth * (
+            (command.strokeWidth ?? DEFAULT_PLANT_SYMBOL_LINE_STROKE_WIDTH) /
+            DEFAULT_PLANT_SYMBOL_LINE_STROKE_WIDTH
+          ),
+          alpha: 1,
+        })
         break
     }
   }
