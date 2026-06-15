@@ -221,6 +221,7 @@ All canvas tools must follow these behaviors. They are not optional — they are
 - Mouse leaving canvas during rubber-band or move: sticks to edge (same as drawing tools)
 - Escape during rubber-band: cancels band
 - Delete key: removes selected objects
+- The contextual Selection Action Toolbar stays inside the visible canvas with an 8px margin, flips when close to an edge, and stays visually attached to the selected object. Single non-rotatable selections use a close above-selection placement. Rotatable selections keep the Rotation Handle above the object and place the toolbar close below by default.
 
 ### Hand/Pan tool
 - Click+drag: pans canvas via Konva `stage.draggable(true)`
@@ -229,7 +230,9 @@ All canvas tools must follow these behaviors. They are not optional — they are
 ### Text tool
 - Click to place text insertion point (HTML textarea overlay)
 - Type to enter text
-- Click elsewhere, Enter, or Escape to commit
+- Click elsewhere or Enter commits text
+- Shift+Enter inserts a line break
+- Escape cancels editing and restores the previous text when editing an existing Annotation
 - Empty text on commit: discarded
 
 ### Plant stamp tool
