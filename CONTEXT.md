@@ -153,6 +153,10 @@ _Avoid_: Rotation button, spin control, transform widget
 A compact contextual canvas toolbar for commands that act on the current editable design object selection, such as locking, grouping, or precision transforms.
 _Avoid_: Canvas toolbar, inspector, floating card
 
+**Canvas Context Menu**:
+A compact canvas-scoped menu for common edit commands such as Copy, Paste, and Delete. A canvas context menu may act on the current editable design object selection or on a canvas point for paste placement, but it is not the Selection Action Toolbar.
+_Avoid_: Browser menu, right-click menu, action bar
+
 **Species Selection**:
 A canvas selection gesture that selects visible editable placed plants of the same species as a reference placed plant. Species selection uses Canonical Name identity and is temporary interaction state, not a planning Target.
 _Avoid_: Species target, select similar, same common name

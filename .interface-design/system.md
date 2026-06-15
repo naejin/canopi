@@ -166,6 +166,17 @@ Inputs use exactly:
 - `border: 1px solid var(--color-border)` or `var(--color-border-strong)` when the overlay needs stronger separation
 - `border-radius: var(--radius-md)`
 
+Context menus use exactly:
+- `background: var(--color-surface)`
+- `border: 1px solid var(--color-border-strong)`
+- `border-radius: var(--radius-md)`
+- `box-shadow: var(--shadow-md)`
+- `padding: var(--space-1)`
+- menu items at `min-height: var(--control-size-md)` with `font-size: var(--text-sm)` and `font-weight: 600`
+- hover via `--color-control-hover`, disabled text via `--color-text-muted`
+
+Canvas context menus must be compact, clamp or flip inside the visible canvas, and sit above canvas overlays without covering the app title bar, panels, or editable native controls.
+
 ## Component Sizing
 
 These sizes are tokenized and must be reused across retained surfaces.
