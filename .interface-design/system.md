@@ -222,6 +222,7 @@ All canvas tools must follow these behaviors. They are not optional — they are
 - Escape during rubber-band: cancels band
 - Delete key: removes selected objects
 - The contextual Selection Action Toolbar stays inside the visible canvas with an 8px margin, flips when close to an edge, and stays visually attached to the selected object. Single non-rotatable selections use a close above-selection placement. Rotatable selections keep the Rotation Handle above the object and place the toolbar close below by default.
+- Click+drag on a selected Design Object hides the Selection Action Toolbar and Rotation Handle while the drag is active, then restores them after release or cancel using the final selection geometry. Passive hover presentation, including the plant Hover Tooltip, clears when a drag starts and does not reappear until the next passive hover movement.
 
 ### Hand/Pan tool
 - Click+drag: pans canvas via Konva `stage.draggable(true)`
