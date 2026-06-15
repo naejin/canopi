@@ -54,6 +54,7 @@ const TOOLBAR_BUTTON_GAP_PX = 4
 const TOOLBAR_PADDING_INLINE_PX = 8
 const TOOLBAR_Z_INDEX = 28
 const SVG_NS = 'http://www.w3.org/2000/svg'
+const ACTION_ICON_STROKE_WIDTH = '1.5'
 
 export function createSelectionActionToolbar(
   options: SelectionActionToolbarOptions,
@@ -417,7 +418,7 @@ function createIcon(paths: readonly SvgPath[]): SVGSVGElement {
     if (pathSpec.points) element.setAttribute('points', pathSpec.points)
     element.setAttribute('fill', pathSpec.fill ?? 'none')
     element.setAttribute('stroke', 'currentColor')
-    element.setAttribute('stroke-width', '1.7')
+    element.setAttribute('stroke-width', ACTION_ICON_STROKE_WIDTH)
     element.setAttribute('stroke-linecap', 'round')
     element.setAttribute('stroke-linejoin', 'round')
     svg.appendChild(element)

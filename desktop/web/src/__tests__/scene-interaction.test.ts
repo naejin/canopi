@@ -550,6 +550,9 @@ describe('SceneInteractionController', () => {
     const duplicate = toolbar?.querySelector<HTMLButtonElement>('[data-selection-action-command="duplicate"]')
     expect(duplicate?.getAttribute('aria-label')).toContain('Duplicate')
     expect(duplicate?.querySelector('svg')).not.toBeNull()
+    const duplicateIconStrokes = Array.from(duplicate?.querySelectorAll<SVGElement>('path, polyline') ?? [])
+      .map((element) => element.getAttribute('stroke-width'))
+    expect(duplicateIconStrokes).toEqual(['1.5', '1.5'])
     expect(duplicate?.querySelector('[data-selection-action-tooltip]')?.textContent).toContain('Duplicate')
 
     controller.dispose()

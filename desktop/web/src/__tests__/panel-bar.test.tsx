@@ -50,6 +50,16 @@ describe('PanelBar', () => {
     return button
   }
 
+  it('renders panel icons with normal toolbar stroke weight', async () => {
+    await act(async () => {
+      render(<PanelBar />, container)
+    })
+
+    const strokes = Array.from(container.querySelectorAll<SVGElement>('nav[aria-label="Panels"] svg'))
+      .map((icon) => icon.getAttribute('stroke-width') ?? icon.getAttribute('strokeWidth'))
+    expect(strokes).toEqual(['1.5', '1.5', '1.5', '1.5'])
+  })
+
   it('renders the location entry point and routes to the location shell', async () => {
     await act(async () => {
       render(<PanelBar />, container)
