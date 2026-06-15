@@ -148,6 +148,32 @@ describe('PlantColorMenu', () => {
     expect(plantColorMenuOpen.value).toBe(false)
   })
 
+  it('stops the action surface at the two apply buttons', async () => {
+    getSelectedPlantColorContext.mockReturnValue({
+      plantIds: ['plant-1'],
+      singleSpeciesCanonicalName: 'Malus domestica',
+      singleSpeciesCommonName: 'Apple',
+      sharedCurrentColor: '#C8A51E',
+      suggestedColor: '#C8A51E',
+      singleSpeciesDefaultColor: '#C8A51E',
+    })
+
+    await act(async () => {
+      render(<PlantColorMenu buttonRef={buttonRef} />, container)
+      await Promise.resolve()
+    })
+
+    const actionButtons = [...container.querySelectorAll('button')]
+      .map((button) => button.textContent?.trim())
+      .filter(Boolean)
+
+    expect(actionButtons).toContain('Set color')
+    expect(actionButtons).toContain('Set for all Apple')
+    expect(container.textContent).not.toContain('Sets the default color')
+    expect(actionButtons.some((label) => label?.includes('Clear color'))).toBe(false)
+    expect(actionButtons.some((label) => label?.includes('Clear species default'))).toBe(false)
+  })
+
   it('hides the species-wide action for mixed-species selections', async () => {
     getSelectedPlantColorContext.mockReturnValue({
       plantIds: ['plant-1', 'plant-2'],
@@ -273,31 +299,4 @@ describe('PlantColorMenu', () => {
     expect(setSelectedPlantColor).toHaveBeenCalledWith('#123ABC')
   })
 
-  it('clears the species default separately from selected plant overrides', async () => {
-    getSelectedPlantColorContext.mockReturnValue({
-      plantIds: ['plant-1'],
-      singleSpeciesCanonicalName: 'Malus domestica',
-      singleSpeciesCommonName: 'Apple',
-      sharedCurrentColor: '#C8A51E',
-      suggestedColor: '#C8A51E',
-      singleSpeciesDefaultColor: '#C8A51E',
-    })
-
-    await act(async () => {
-      render(<PlantColorMenu buttonRef={buttonRef} />, container)
-      await Promise.resolve()
-    })
-
-    const clearSpeciesButton = [...container.querySelectorAll('button')].find((button) =>
-      button.textContent?.includes('Clear species default'),
-    ) as HTMLButtonElement
-
-    await act(async () => {
-      clearSpeciesButton.click()
-      await Promise.resolve()
-    })
-
-    expect(clearPlantSpeciesColor).toHaveBeenCalledWith('Malus domestica')
-    expect(plantColorMenuOpen.value).toBe(false)
-  })
 })
