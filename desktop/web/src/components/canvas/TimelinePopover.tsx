@@ -162,11 +162,11 @@ export function TimelinePopover({
         {dateError.value && (
           <div className={styles.error}>{dateError.value}</div>
         )}
-        <input
-          type="text"
-          className={styles.input}
+        <textarea
+          className={`${styles.input} ${styles.notesTextarea}`}
+          rows={4}
           value={form.value.description}
-          onInput={(e) => updateField('description', (e.target as HTMLInputElement).value)}
+          onInput={(e) => updateField('description', (e.target as HTMLTextAreaElement).value)}
           placeholder={t('canvas.timeline.notes')}
         />
         {speciesList.length > 0 && (
