@@ -676,6 +676,37 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('keeps the Selection Action Toolbar clear of the Rotation Handle near the bottom edge', () => {
+    Object.defineProperty(container, 'clientWidth', { configurable: true, value: 400 })
+    Object.defineProperty(container, 'clientHeight', { configurable: true, value: 300 })
+    store.updatePersisted((draft) => {
+      draft.zones = [makeRectZone('zone-1', [
+        { x: 160, y: 260 },
+        { x: 220, y: 260 },
+        { x: 220, y: 292 },
+        { x: 160, y: 292 },
+      ])]
+    })
+    const deps = createInteractionDeps(container, store, camera, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    })
+    const controller = new SceneInteractionController(deps as any)
+    deps.setSelection(['zone-1'])
+
+    controller.refreshMeasurements()
+
+    const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
+    const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
+    const toolbarTop = Number.parseFloat(toolbar.style.top)
+    const handleTop = Number.parseFloat(handle.style.top)
+
+    expect(toolbar.style.display).toBe('flex')
+    expect(handle.style.display).toBe('inline-flex')
+    expect(toolbarTop + 34).toBeLessThanOrEqual(handleTop)
+    expect(toolbarTop).toBeGreaterThanOrEqual(8)
+    controller.dispose()
+  })
+
   it('keeps the Selection Action Toolbar inside the right canvas edge', () => {
     Object.defineProperty(container, 'clientWidth', { configurable: true, value: 200 })
     Object.defineProperty(container, 'clientHeight', { configurable: true, value: 300 })

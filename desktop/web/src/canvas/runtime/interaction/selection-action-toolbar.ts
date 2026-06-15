@@ -52,6 +52,8 @@ const TOOLBAR_BUTTON_SIZE_PX = 28
 const TOOLBAR_BUTTON_GAP_PX = 4
 const TOOLBAR_PADDING_INLINE_PX = 8
 const TOOLBAR_Z_INDEX = 28
+const ROTATION_HANDLE_SIZE_PX = 28
+const ROTATION_HANDLE_GAP_PX = 14
 const SVG_NS = 'http://www.w3.org/2000/svg'
 const ACTION_ICON_STROKE_WIDTH = '1.5'
 
@@ -444,13 +446,19 @@ function resolveToolbarPlacement(
   const left = clamp(rect.left + rect.width / 2 - toolbarWidth / 2, TOOLBAR_MARGIN_PX, maxLeft)
   const maxTop = Math.max(TOOLBAR_MARGIN_PX, size.height - TOOLBAR_HEIGHT_PX - TOOLBAR_MARGIN_PX)
   const aboveTop = rect.top - TOOLBAR_HEIGHT_PX - TOOLBAR_GAP_PX
+  const aboveRotationHandleTop = rect.top
+    - ROTATION_HANDLE_GAP_PX
+    - ROTATION_HANDLE_SIZE_PX
+    - TOOLBAR_GAP_PX
+    - TOOLBAR_HEIGHT_PX
   const belowTop = rect.bottom + TOOLBAR_GAP_PX
   const canPlaceAbove = aboveTop >= TOOLBAR_MARGIN_PX
+  const canPlaceAboveRotationHandle = aboveRotationHandleTop >= TOOLBAR_MARGIN_PX
   const canPlaceBelow = belowTop + TOOLBAR_HEIGHT_PX <= size.height - TOOLBAR_MARGIN_PX
 
   if (isRotatableToolbarSelection(selection)) {
     if (canPlaceBelow) return { left, top: belowTop }
-    if (canPlaceAbove) return { left, top: aboveTop }
+    if (canPlaceAboveRotationHandle) return { left, top: aboveRotationHandleTop }
     return { left, top: clamp(belowTop, TOOLBAR_MARGIN_PX, maxTop) }
   }
 
