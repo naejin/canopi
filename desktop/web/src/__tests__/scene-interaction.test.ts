@@ -548,7 +548,7 @@ describe('SceneInteractionController', () => {
     expect(toolbar?.getAttribute('role')).toBe('toolbar')
     expect(toolbar?.getAttribute('aria-label')).toBe('Selection actions')
     expect(document.activeElement).toBe(priorFocus)
-    expect(Number.parseFloat(toolbar?.style.top ?? '0')).toBeLessThan(100)
+    expect(Number.parseFloat(toolbar?.style.top ?? '0')).toBe(158)
     expect(toolbar?.querySelectorAll('button')).toHaveLength(5)
     const duplicate = toolbar?.querySelector<HTMLButtonElement>('[data-selection-action-command="duplicate"]')
     expect(duplicate?.getAttribute('aria-label')).toContain('Duplicate')
@@ -560,6 +560,58 @@ describe('SceneInteractionController', () => {
 
     controller.dispose()
     priorFocus.remove()
+  })
+
+  it('keeps the Selection Action Toolbar close above a single non-rotatable Plant', () => {
+    Object.defineProperty(container, 'clientWidth', { configurable: true, value: 400 })
+    Object.defineProperty(container, 'clientHeight', { configurable: true, value: 300 })
+    const deps = {
+      ...createInteractionDeps(container, store, camera),
+      getDesignObjectSelection: () => ({
+        editableTargets: [{ kind: 'plant' as const, id: 'plant-1' }],
+        lockedTargets: [],
+        blockedTargets: [],
+        bounds: { minX: 100, minY: 100, maxX: 100, maxY: 100 },
+        sameSpeciesReferenceCanonicalName: null,
+      }),
+    }
+    const controller = new SceneInteractionController(deps as any)
+
+    controller.refreshMeasurements()
+
+    const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
+    expect(toolbar.style.display).toBe('flex')
+    expect(Number.parseFloat(toolbar.style.top)).toBe(58)
+    controller.dispose()
+  })
+
+  it('flips the Selection Action Toolbar near top and bottom canvas edges', () => {
+    Object.defineProperty(container, 'clientWidth', { configurable: true, value: 200 })
+    Object.defineProperty(container, 'clientHeight', { configurable: true, value: 140 })
+    let bounds = { minX: 80, minY: 6, maxX: 80, maxY: 6 }
+    const deps = {
+      ...createInteractionDeps(container, store, camera),
+      getDesignObjectSelection: () => ({
+        editableTargets: [{ kind: 'plant' as const, id: 'plant-1' }],
+        lockedTargets: [],
+        blockedTargets: [],
+        bounds,
+        sameSpeciesReferenceCanonicalName: null,
+      }),
+    }
+    const controller = new SceneInteractionController(deps as any)
+
+    controller.refreshMeasurements()
+
+    const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
+    expect(Number.parseFloat(toolbar.style.top)).toBe(14)
+
+    bounds = { minX: 80, minY: 116, maxX: 80, maxY: 116 }
+    controller.refreshMeasurements()
+
+    expect(Number.parseFloat(toolbar.style.top)).toBe(74)
+    expect(Number.parseFloat(toolbar.style.top) + 34).toBeLessThanOrEqual(140 - 8)
+    controller.dispose()
   })
 
   it('keeps the Selection Action Toolbar inside the right canvas edge', () => {

@@ -46,8 +46,7 @@ interface SvgPath {
 }
 
 const TOOLBAR_MARGIN_PX = 8
-const TOOLBAR_GAP_PX = 14
-const ROTATION_HANDLE_RESERVE_PX = 42
+const TOOLBAR_GAP_PX = 8
 const TOOLBAR_HEIGHT_PX = 34
 const TOOLBAR_BUTTON_SIZE_PX = 28
 const TOOLBAR_BUTTON_GAP_PX = 4
@@ -242,6 +241,7 @@ export function createSelectionActionToolbar(
     }
     root.style.display = 'flex'
     const placement = resolveToolbarPlacement(
+      selection,
       selection.bounds,
       options.camera,
       options.container,
@@ -427,6 +427,7 @@ function createIcon(paths: readonly SvgPath[]): SVGSVGElement {
 }
 
 function resolveToolbarPlacement(
+  selection: CanvasDesignObjectSelectionModel,
   bounds: SceneBounds,
   camera: CameraController,
   container: HTMLElement,
@@ -441,15 +442,21 @@ function resolveToolbarPlacement(
   }
   const maxLeft = Math.max(TOOLBAR_MARGIN_PX, size.width - toolbarWidth - TOOLBAR_MARGIN_PX)
   const left = clamp(rect.left + rect.width / 2 - toolbarWidth / 2, TOOLBAR_MARGIN_PX, maxLeft)
-  const aboveTop = rect.top - TOOLBAR_HEIGHT_PX - ROTATION_HANDLE_RESERVE_PX
-  if (aboveTop >= TOOLBAR_MARGIN_PX) {
-    return { left, top: aboveTop }
-  }
   const maxTop = Math.max(TOOLBAR_MARGIN_PX, size.height - TOOLBAR_HEIGHT_PX - TOOLBAR_MARGIN_PX)
-  return {
-    left,
-    top: clamp(rect.bottom + TOOLBAR_GAP_PX, TOOLBAR_MARGIN_PX, maxTop),
+  const aboveTop = rect.top - TOOLBAR_HEIGHT_PX - TOOLBAR_GAP_PX
+  const belowTop = rect.bottom + TOOLBAR_GAP_PX
+  const canPlaceAbove = aboveTop >= TOOLBAR_MARGIN_PX
+  const canPlaceBelow = belowTop + TOOLBAR_HEIGHT_PX <= size.height - TOOLBAR_MARGIN_PX
+
+  if (isRotatableToolbarSelection(selection)) {
+    if (canPlaceBelow) return { left, top: belowTop }
+    if (canPlaceAbove) return { left, top: aboveTop }
+    return { left, top: clamp(belowTop, TOOLBAR_MARGIN_PX, maxTop) }
   }
+
+  if (canPlaceAbove) return { left, top: aboveTop }
+  if (canPlaceBelow) return { left, top: belowTop }
+  return { left, top: clamp(aboveTop, TOOLBAR_MARGIN_PX, maxTop) }
 }
 
 function resolveRenderedToolbarWidth(root: HTMLElement, actionCount: number): number {
@@ -491,6 +498,13 @@ function rootFallbackNumber(...values: readonly number[]): number {
 
 function stopCanvasEvent(event: Event): void {
   event.stopPropagation()
+}
+
+function isRotatableToolbarSelection(selection: CanvasDesignObjectSelectionModel): boolean {
+  if (!selection.bounds || selection.blockedTargets.length > 0 || selection.editableTargets.length === 0) return false
+  if (selection.editableTargets.length > 1) return true
+  const target = selection.editableTargets[0]!
+  return target.kind === 'zone' || target.kind === 'annotation' || target.kind === 'group'
 }
 
 function hasToolbarSelection(selection: CanvasDesignObjectSelectionModel): boolean {
