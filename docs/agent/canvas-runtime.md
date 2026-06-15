@@ -144,6 +144,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - Annotation `rotationDeg` is visible geometry. Renderers, hit testing, band selection, grouping, zoom-to-fit, and selection/read-model bounds must consume the rotated frame helpers from `annotation-layout.ts` rather than reading unrotated text bounds directly.
 - Use the same annotation bounds for hit testing, band select, grouping, zoom-to-fit, and selection outlines.
 - Visible text should win hit testing over underlying zones/plants when it is on top.
+- Creating a new text Annotation is owned by `interaction/text-annotation-tool.ts`; editing an existing text Annotation in place is owned by `interaction/annotation-inline-editor.ts` and is started from Select-tool interaction only after the Design Object selection read model says the target is editable.
 
 ## Plant Presentation
 

@@ -213,6 +213,7 @@ describe('Canvas Layer Presentation', () => {
         detail: {
           type: 'contours',
           contourIntervalMeters: 12,
+          hasLocation: true,
         },
       },
       {
@@ -226,6 +227,7 @@ describe('Canvas Layer Presentation', () => {
         canLock: false,
         detail: {
           type: 'hillshade',
+          hasLocation: true,
         },
       },
     ])
