@@ -25,6 +25,7 @@ interface SelectionActionToolbarOptions {
 
 export interface SelectionActionToolbarController {
   refresh(): void
+  hide(): void
   contains(target: EventTarget | null): boolean
   dispose(): void
 }
@@ -268,6 +269,7 @@ export function createSelectionActionToolbar(
 
   return {
     refresh,
+    hide,
     contains(target) {
       return target instanceof Node && root.contains(target)
     },

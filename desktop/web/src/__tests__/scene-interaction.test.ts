@@ -160,6 +160,12 @@ function zoneMeasurementTexts(container: HTMLElement): string[] {
     .map((label) => label.textContent ?? '')
 }
 
+function plantHoverTooltip(container: HTMLElement): HTMLElement {
+  const tooltip = container.querySelector<HTMLElement>('[data-hover-tooltip]')
+  if (!tooltip) throw new Error('Expected Plant Hover Tooltip')
+  return tooltip
+}
+
 function nextAnimationFrame(): Promise<void> {
   return new Promise((resolve) => {
     requestAnimationFrame(() => resolve())
@@ -438,6 +444,134 @@ describe('SceneInteractionController', () => {
 
     expect(container.querySelector('[data-plant-drag-distance-label]')).toBeNull()
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-drag')
+    controller.dispose()
+  })
+
+  it('hides Selection Action Toolbar and Rotation Handle while dragging a selected Design Object', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [makeRectZone('zone-1', [
+        { x: 20, y: 80 },
+        { x: 120, y: 80 },
+        { x: 120, y: 140 },
+        { x: 20, y: 140 },
+      ])]
+    })
+    const deps = createInteractionDeps(container, store, camera, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+    deps.setSelection(['zone-1'])
+    controller.refreshMeasurements()
+    const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
+    const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
+    expect(toolbar.style.display).toBe('flex')
+    expect(handle.style.display).toBe('inline-flex')
+
+    events.pointerDown({ x: 70, y: 110 }, { button: 0 })
+
+    expect(toolbar.style.display).toBe('none')
+    expect(handle.style.display).toBe('none')
+
+    events.pointerMove({ x: 90, y: 130 }, { button: 0 })
+    events.pointerUp({ x: 90, y: 130 }, { button: 0 })
+
+    expect(toolbar.style.display).toBe('flex')
+    expect(handle.style.display).toBe('inline-flex')
+    controller.dispose()
+  })
+
+  it('clears Plant Hover Tooltip presentation while dragging a selected Plant', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 }, { commonName: 'Apple' })]
+    })
+    const setHoveredEntityId = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { setHoveredEntityId })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+    deps.setSelection(['plant-1'])
+
+    events.pointerMove({ x: 20, y: 30 })
+    const tooltip = plantHoverTooltip(container)
+    expect(tooltip.style.display).toBe('block')
+    expect(setHoveredEntityId).toHaveBeenCalledWith('plant-1')
+    setHoveredEntityId.mockClear()
+
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
+
+    expect(tooltip.style.display).toBe('none')
+    expect(setHoveredEntityId).toHaveBeenCalledWith(null)
+
+    events.pointerMove({ x: 35, y: 45 }, { button: 0 })
+    events.pointerUp({ x: 35, y: 45 }, { button: 0 })
+
+    expect(tooltip.style.display).toBe('none')
+    controller.dispose()
+  })
+
+  it('restores selection overlays after a no-op Design Object drag without history', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [makeRectZone('zone-1', [
+        { x: 20, y: 80 },
+        { x: 120, y: 80 },
+        { x: 120, y: 140 },
+        { x: 20, y: 140 },
+      ])]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+      onSceneEditCommit,
+    })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+    deps.setSelection(['zone-1'])
+    controller.refreshMeasurements()
+    const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
+    const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
+
+    events.pointerDown({ x: 70, y: 110 }, { button: 0 })
+    expect(toolbar.style.display).toBe('none')
+    expect(handle.style.display).toBe('none')
+    events.pointerUp({ x: 70, y: 110 }, { button: 0 })
+
+    expect(toolbar.style.display).toBe('flex')
+    expect(handle.style.display).toBe('inline-flex')
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    controller.dispose()
+  })
+
+  it('restores selection overlays when a Design Object drag is canceled by a tool change', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [makeRectZone('zone-1', [
+        { x: 20, y: 80 },
+        { x: 120, y: 80 },
+        { x: 120, y: 140 },
+        { x: 20, y: 140 },
+      ])]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+      onSceneEditCommit,
+    })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+    deps.setSelection(['zone-1'])
+    controller.refreshMeasurements()
+    const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
+    const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
+
+    events.pointerDown({ x: 70, y: 110 }, { button: 0 })
+    events.pointerMove({ x: 90, y: 130 }, { button: 0 })
+    expect(toolbar.style.display).toBe('none')
+    expect(handle.style.display).toBe('none')
+    controller.setTool('rectangle')
+
+    expect(toolbar.style.display).toBe('flex')
+    expect(handle.style.display).toBe('inline-flex')
+    expect(store.persisted.zones[0]?.points[0]).toEqual({ x: 20, y: 80 })
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
     controller.dispose()
   })
 

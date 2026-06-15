@@ -118,6 +118,7 @@ export class SceneInteractionController {
   private readonly _rotationHandle: SelectionRotationHandleController
   private readonly _lockedAffordance: LockedObjectAffordanceController
   private _tool: InteractionTool = 'select'
+  private _designObjectDragPresentationSuppressed = false
 
   constructor(private readonly _deps: SceneInteractionDeps) {
     this._preview = createInteractionPreview(this._deps.container)
@@ -166,6 +167,8 @@ export class SceneInteractionController {
       applySnapping: (point) => this._applySnapping(point),
       refreshViewportDependent: () => this._refreshViewportDependentMeasurements(),
       refreshSelectionDependent: () => this._refreshSelectionDependentMeasurements(),
+      beginDesignObjectDragPresentation: () => this._beginDesignObjectDragPresentation(),
+      endDesignObjectDragPresentation: () => this._endDesignObjectDragPresentation(),
       beginAnnotationTextEdit: (annotationId) => this._annotationEditor.start(annotationId),
     })
     this._selectionToolbar = createSelectionActionToolbar({
@@ -314,25 +317,19 @@ export class SceneInteractionController {
   }
 
   private readonly _onPointerLeave = (): void => {
-    this._deps.setHoveredEntityId(null)
-    this._tooltip.hide()
-    this._lockedAffordance.hide()
+    this._clearPassiveHoverPresentation()
   }
 
   private _updateHover(event: PointerEvent): void {
     if (this._tools.shouldSuppressHover()) {
-      this._deps.setHoveredEntityId(null)
-      this._tooltip.hide()
-      this._lockedAffordance.hide()
+      this._clearPassiveHoverPresentation()
       return
     }
 
     const rect = this._deps.container.getBoundingClientRect()
     if (event.clientX < rect.left || event.clientX > rect.right
       || event.clientY < rect.top || event.clientY > rect.bottom) {
-      this._deps.setHoveredEntityId(null)
-      this._tooltip.hide()
-      this._lockedAffordance.hide()
+      this._clearPassiveHoverPresentation()
       return
     }
     const screen = { x: event.clientX - rect.left, y: event.clientY - rect.top }
@@ -552,11 +549,7 @@ export class SceneInteractionController {
         this._rotationHandle.cancelActiveDrag()
       },
       cancelToolTransient: (cleanupOptions) => this._tools.cancelTransient(cleanupOptions),
-      clearHover: () => {
-        this._deps.setHoveredEntityId(null)
-        this._tooltip.hide()
-        this._lockedAffordance.hide()
-      },
+      clearHover: () => this._clearPassiveHoverPresentation(),
       resetCursor: () => {
         this._deps.container.style.cursor = cursorForTool(this._tool)
       },
@@ -577,8 +570,32 @@ export class SceneInteractionController {
   private _refreshSelectionDependentMeasurements(): void {
     this._annotationEditor.refresh()
     this._tools.refreshSelectionDependent()
+    if (this._designObjectDragPresentationSuppressed) {
+      this._rotationHandle.hide()
+      this._selectionToolbar.hide()
+      return
+    }
     this._rotationHandle.refresh()
     this._selectionToolbar.refresh()
+  }
+
+  private _beginDesignObjectDragPresentation(): void {
+    this._designObjectDragPresentationSuppressed = true
+    this._rotationHandle.hide()
+    this._selectionToolbar.hide()
+    this._clearPassiveHoverPresentation()
+  }
+
+  private _endDesignObjectDragPresentation(): void {
+    if (!this._designObjectDragPresentationSuppressed) return
+    this._designObjectDragPresentationSuppressed = false
+    this._refreshSelectionDependentMeasurements()
+  }
+
+  private _clearPassiveHoverPresentation(): void {
+    this._deps.setHoveredEntityId(null)
+    this._tooltip.hide()
+    this._lockedAffordance.hide()
   }
 
   /** Snap a world-space point to grid and/or guides. Used for placement (stamp, text). */

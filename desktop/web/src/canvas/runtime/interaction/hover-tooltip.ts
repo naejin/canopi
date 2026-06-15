@@ -9,6 +9,7 @@ const MAX_WIDTH_PX = 260
 
 export function createHoverTooltip(container: HTMLElement): HoverTooltipController {
   const el = document.createElement('div')
+  el.dataset.hoverTooltip = 'true'
   el.style.cssText = [
     'position: absolute',
     'pointer-events: none',
