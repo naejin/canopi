@@ -97,8 +97,7 @@ export class SceneRuntimeMutationController {
     const persisted = this._sceneStore.persisted
     const selectionOptions = this._getSelectionReadModelOptions()
     const selected = this._getSelectionModel(selectionOptions).editableTargets
-    const bounds = getCombinedTargetBounds(persisted, selected, selectionOptions)
-    this._clipboard = createClipboardPayload(persisted, selected, centerOfBounds(bounds))
+    this._clipboard = createClipboardPayload(persisted, selected)
     this._normalPasteCount = 0
   }
 
@@ -117,12 +116,14 @@ export class SceneRuntimeMutationController {
   }
 
   pasteAt(point: ScenePoint): void {
-    if (!this._clipboard?.sourceCenter) return
+    if (!this._clipboard) return
+    const sourceCenter = this._getClipboardSourceCenter(this._clipboard)
+    if (!sourceCenter) return
 
     let nextSelection = new Set<string>()
     const offset = {
-      x: point.x - this._clipboard.sourceCenter.x,
-      y: point.y - this._clipboard.sourceCenter.y,
+      x: point.x - sourceCenter.x,
+      y: point.y - sourceCenter.y,
     }
     this._sceneEdits.run('paste', (tx) => {
       tx.mutate((draft) => {
@@ -613,6 +614,21 @@ export class SceneRuntimeMutationController {
       annotationViewportScale: viewportScale,
       plantContext: this._presentation.createPlantPresentationContext(viewportScale),
     }
+  }
+
+  private _getClipboardSourceCenter(payload: SceneClipboardPayload): ScenePoint | null {
+    const clipboardScene: ScenePersistedState = {
+      ...this._sceneStore.persisted,
+      plants: payload.plants,
+      zones: payload.zones,
+      annotations: payload.annotations,
+      groups: payload.groups,
+    }
+    return centerOfBounds(getCombinedTargetBounds(
+      clipboardScene,
+      payload.sourceTargets,
+      this._getSelectionReadModelOptions(),
+    ))
   }
 }
 

@@ -53,6 +53,23 @@ function createPlant(id: string, x: number, y: number, canonical = 'Quercus robu
   }
 }
 
+function createAnnotation(
+  id: string,
+  x: number,
+  y: number,
+  text = 'Scale dependent annotation',
+): CanopiFile['annotations'][number] {
+  return {
+    id,
+    annotation_type: 'text',
+    position: { x, y },
+    text,
+    font_size: 20,
+    rotation: null,
+    locked: false,
+  }
+}
+
 function createRuntimeHost(options: TestCanvasRuntimeHostOptions = {}) {
   return createLiveTestCanvasRuntimeHost(options)
 }
@@ -119,6 +136,36 @@ describe('Canvas runtime surfaces', () => {
       expect(pasted).toHaveLength(4)
       expect(pasted[2]?.position).toEqual({ x: 98, y: 50 })
       expect(pasted[3]?.position).toEqual({ x: 102, y: 50 })
+    } finally {
+      host.destroy()
+    }
+  })
+
+  it('context-pastes copied annotations at the clicked point after viewport scale changes', () => {
+    const host = createRuntimeHost()
+    const { commands, documents, queries } = host.surfaces
+
+    try {
+      documents.loadDocument({
+        ...BASE_FILE,
+        annotations: [createAnnotation('annotation-1', 10, 20)],
+      })
+
+      commands.sceneEdits.selectAll()
+      commands.sceneEdits.copy()
+      commands.viewport.zoomIn()
+      commands.viewport.zoomIn()
+      commands.sceneEdits.pasteAt({ x: 100, y: 50 })
+
+      const scene = queries.getSceneSnapshot()
+      expect(scene.annotations).toHaveLength(2)
+      expect(scene.annotations[1]?.id).not.toBe('annotation-1')
+
+      const selection = queries.getDesignObjectSelection()
+      expect(selection.editableTargets).toEqual([{ kind: 'annotation', id: scene.annotations[1]!.id }])
+      expect(selection.bounds).not.toBeNull()
+      expect((selection.bounds!.minX + selection.bounds!.maxX) / 2).toBeCloseTo(100, 5)
+      expect((selection.bounds!.minY + selection.bounds!.maxY) / 2).toBeCloseTo(50, 5)
     } finally {
       host.destroy()
     }

@@ -14,13 +14,12 @@ export interface SceneClipboardPayload {
   zones: SceneZoneEntity[]
   annotations: SceneAnnotationEntity[]
   groups: SceneObjectGroupEntity[]
-  sourceCenter: ScenePoint | null
+  sourceTargets: SceneSelectionTarget[]
 }
 
 export function createClipboardPayload(
   persisted: ScenePersistedState,
   selected: readonly SceneSelectionTarget[],
-  sourceCenter: ScenePoint | null,
 ): SceneClipboardPayload | null {
   if (selected.length === 0) return null
 
@@ -57,7 +56,7 @@ export function createClipboardPayload(
     zones: persisted.zones.filter((zone) => zoneIds.has(zone.name)).map(cloneZoneEntity),
     annotations: persisted.annotations.filter((annotation) => annotationIds.has(annotation.id)).map(cloneAnnotationEntity),
     groups: persisted.groups.filter((group) => groupIds.has(group.id)).map(cloneGroupEntity),
-    sourceCenter,
+    sourceTargets: selected.map(cloneSelectionTarget),
   }
 }
 
@@ -152,6 +151,10 @@ function cloneGroupEntity(group: SceneObjectGroupEntity): SceneObjectGroupEntity
     position: { ...group.position },
     memberIds: [...group.memberIds],
   }
+}
+
+function cloneSelectionTarget(target: SceneSelectionTarget): SceneSelectionTarget {
+  return { ...target }
 }
 
 function clonePlantWithOffset(plant: ScenePlantEntity, offset: ScenePoint): ScenePlantEntity {
