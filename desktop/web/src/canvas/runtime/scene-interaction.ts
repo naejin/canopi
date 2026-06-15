@@ -9,7 +9,7 @@ import type { CameraController } from './camera'
 import type { PlantPresentationContext } from './plant-presentation'
 import type { SpeciesCacheEntry } from './species-cache'
 import type { SceneViewportState } from './scene'
-import { hitTestVisibleTopLevel, type TopLevelTarget } from './interaction/hit-testing'
+import { hitTestTopLevel, hitTestVisibleTopLevel, type TopLevelTarget } from './interaction/hit-testing'
 import { createHoverTooltip, type HoverTooltipController } from './interaction/hover-tooltip'
 import {
   createInteractionPreview,
@@ -41,6 +41,10 @@ import {
   type SelectionActionToolbarController,
 } from './interaction/selection-action-toolbar'
 import {
+  createCanvasContextMenu,
+  type CanvasContextMenuController,
+} from './interaction/canvas-context-menu'
+import {
   createSelectionRotationHandle,
   type SelectionRotationHandleController,
 } from './interaction/selection-rotation-handle'
@@ -51,6 +55,8 @@ import {
 } from './interaction/locked-object-affordance'
 import {
   getLockedSceneDesignObjectIds,
+  isDirectSceneDesignObjectLocked,
+  isSceneDesignObjectLocked,
   setSceneDesignObjectLocks,
 } from './scene/locks'
 import type { ScenePersistedState } from './scene'
@@ -71,6 +77,9 @@ export interface SceneInteractionDeps {
   getDesignObjectSelection: () => CanvasDesignObjectSelectionModel
   selectionCommands: Pick<
     CanvasSceneEditCommandSurface,
+    | 'copy'
+    | 'pasteAt'
+    | 'canPaste'
     | 'duplicateSelected'
     | 'deleteSelected'
     | 'bringToFront'
@@ -99,6 +108,7 @@ export class SceneInteractionController {
   private readonly _frame: SceneInteractionFrame
   private readonly _sharedGestures: SceneInteractionSharedGestures
   private readonly _selectionToolbar: SelectionActionToolbarController
+  private readonly _contextMenu: CanvasContextMenuController
   private readonly _rotationHandle: SelectionRotationHandleController
   private readonly _lockedAffordance: LockedObjectAffordanceController
   private _tool: InteractionTool = 'select'
@@ -149,6 +159,11 @@ export class SceneInteractionController {
       getSelection: this._deps.getDesignObjectSelection,
       commands: this._deps.selectionCommands,
     })
+    this._contextMenu = createCanvasContextMenu({
+      container: this._deps.container,
+      commands: this._deps.selectionCommands,
+      getSelection: this._deps.getDesignObjectSelection,
+    })
     this._rotationHandle = createSelectionRotationHandle({
       container: this._deps.container,
       camera: this._deps.camera,
@@ -197,6 +212,7 @@ export class SceneInteractionController {
     this._frame.dispose(() => {
       this._deps.setHoveredEntityId(null)
       this._selectionToolbar.dispose()
+      this._contextMenu.dispose()
       this._rotationHandle.dispose()
       this._lockedAffordance.dispose()
       this._tools.dispose()
@@ -227,7 +243,9 @@ export class SceneInteractionController {
 
   private readonly _onPointerDown = (event: PointerEvent): void => {
     if (event.button !== 0 && event.button !== 1) return
+    this._contextMenu.hide()
     if (this._selectionToolbar.contains(event.target)) return
+    if (this._contextMenu.contains(event.target)) return
     if (this._lockedAffordance.contains(event.target)) return
     if (this._tools.shouldIgnorePointerEvent(event.target)) return
 
@@ -326,6 +344,7 @@ export class SceneInteractionController {
   private readonly _onPointerMove = (event: PointerEvent): void => {
     if (!this._frame.hasPointerGesture()) {
       if (this._selectionToolbar.contains(event.target)) return
+      if (this._contextMenu.contains(event.target)) return
       if (this._lockedAffordance.contains(event.target)) return
       if (this._tools.shouldIgnorePointerEvent(event.target)) return
 
@@ -394,6 +413,13 @@ export class SceneInteractionController {
   private readonly _onContextMenu = (event: MouseEvent): void => {
     if (allowsNativeContextMenuTarget(event.target)) return
     event.preventDefault()
+    const screen = this._screenPoint(event)
+    const world = this._deps.camera.screenToWorld(screen)
+    this._retargetContextMenuSelection(world)
+    this._contextMenu.show({
+      screen,
+      world,
+    })
   }
 
   private readonly _onDragOver = (event: DragEvent): void => {
@@ -435,6 +461,24 @@ export class SceneInteractionController {
       x: event.clientX - rect.left,
       y: event.clientY - rect.top,
     }
+  }
+
+  private _retargetContextMenuSelection(world: ScenePoint): void {
+    const scene = this._deps.getSceneStore().persisted
+    const hit = hitTestTopLevel(
+      scene,
+      world,
+      this._deps.camera.viewport.scale,
+      this._deps.getSpeciesCache(),
+      this._deps.getPlantPresentationContext,
+    )
+    if (!hit) return
+    const directlyLocked = isDirectSceneDesignObjectLocked(scene, hit.id)
+    if (isSceneDesignObjectLocked(scene, hit.id) && !directlyLocked) return
+    if (this._deps.getSelection().has(hit.id)) return
+    this._deps.setSelection(new Set([hit.id]))
+    this._deps.render('scene')
+    this._refreshSelectionDependentMeasurements()
   }
 
   private readonly _onKeyDown = (event: KeyboardEvent): void => {

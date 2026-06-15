@@ -144,6 +144,12 @@
       "unlock": "Unlock",
       "delete": "Delete"
     },
+    "contextMenu": {
+      "ariaLabel": "Canvas edit commands",
+      "copy": "Copy",
+      "paste": "Paste",
+      "delete": "Delete"
+    },
     "rotationHandle": {
       "label": "Rotate"
     },

@@ -144,6 +144,12 @@
       "unlock": "Desbloquear",
       "delete": "Excluir"
     },
+    "contextMenu": {
+      "ariaLabel": "Comandos de edição da tela",
+      "copy": "Copiar",
+      "paste": "Colar",
+      "delete": "Excluir"
+    },
     "rotationHandle": {
       "label": "Girar"
     },

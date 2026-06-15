@@ -144,6 +144,12 @@
       "unlock": "Entsperren",
       "delete": "Entfernen"
     },
+    "contextMenu": {
+      "ariaLabel": "Leinwand-Bearbeitungsbefehle",
+      "copy": "Kopieren",
+      "paste": "Einfügen",
+      "delete": "Entfernen"
+    },
     "rotationHandle": {
       "label": "Drehen"
     },

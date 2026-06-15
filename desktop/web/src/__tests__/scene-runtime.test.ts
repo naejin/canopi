@@ -68,6 +68,62 @@ describe('Canvas runtime surfaces', () => {
     clearCanvasSelection()
   })
 
+  it('pastes copied Design Objects one meter to the right and advances repeated pastes', () => {
+    const host = createRuntimeHost()
+    const { commands, documents, queries } = host.surfaces
+
+    try {
+      documents.loadDocument({
+        ...BASE_FILE,
+        plants: [createPlant('plant-1', 10, 20)],
+      })
+
+      commands.sceneEdits.selectAll()
+      commands.sceneEdits.copy()
+      commands.sceneEdits.paste()
+      commands.sceneEdits.paste()
+
+      const pasted = queries.getPlacedPlants()
+      expect(pasted).toHaveLength(3)
+      expect(pasted[1]?.position).toEqual({ x: 11, y: 20 })
+      expect(pasted[2]?.position).toEqual({ x: 12, y: 20 })
+
+      commands.history.undo()
+      expect(queries.getPlacedPlants()).toHaveLength(2)
+
+      commands.history.undo()
+      expect(queries.getPlacedPlants()).toHaveLength(1)
+    } finally {
+      host.destroy()
+    }
+  })
+
+  it('pastes copied Design Objects at a canvas point using the copied selection center as anchor', () => {
+    const host = createRuntimeHost()
+    const { commands, documents, queries } = host.surfaces
+
+    try {
+      documents.loadDocument({
+        ...BASE_FILE,
+        plants: [
+          createPlant('plant-1', 10, 20),
+          createPlant('plant-2', 14, 20),
+        ],
+      })
+
+      commands.sceneEdits.selectAll()
+      commands.sceneEdits.copy()
+      commands.sceneEdits.pasteAt({ x: 100, y: 50 })
+
+      const pasted = queries.getPlacedPlants()
+      expect(pasted).toHaveLength(4)
+      expect(pasted[2]?.position).toEqual({ x: 98, y: 50 })
+      expect(pasted[3]?.position).toEqual({ x: 102, y: 50 })
+    } finally {
+      host.destroy()
+    }
+  })
+
   it('duplicates plants and supports undo/redo from scene-owned history', () => {
     const host = createRuntimeHost()
     const { commands, documents, queries } = host.surfaces
@@ -86,13 +142,56 @@ describe('Canvas runtime surfaces', () => {
 
       const duplicated = queries.getPlacedPlants()
       expect(duplicated).toHaveLength(2)
-      expect(duplicated[1]?.position).toEqual({ x: 30, y: 40 })
+      expect(duplicated[1]?.position).toEqual({ x: 11, y: 20 })
+
+      commands.sceneEdits.duplicateSelected()
+      const duplicatedAgain = queries.getPlacedPlants()
+      expect(duplicatedAgain).toHaveLength(3)
+      expect(duplicatedAgain[2]?.position).toEqual({ x: 12, y: 20 })
 
       commands.history.undo()
-      expect(queries.getPlacedPlants()).toHaveLength(1)
+      expect(queries.getPlacedPlants()).toHaveLength(2)
 
       commands.history.redo()
-      expect(queries.getPlacedPlants()).toHaveLength(2)
+      expect(queries.getPlacedPlants()).toHaveLength(3)
+    } finally {
+      host.destroy()
+    }
+  })
+
+  it('duplicates Object Groups one meter to the right while preserving member layout', () => {
+    const host = createRuntimeHost()
+    const { commands, documents, queries } = host.surfaces
+
+    try {
+      documents.loadDocument({
+        ...BASE_FILE,
+        plants: [
+          createPlant('plant-1', 10, 20),
+          createPlant('plant-2', 12, 20),
+        ],
+      })
+
+      commands.sceneEdits.selectAll()
+      commands.sceneEdits.groupSelected()
+      const originalGroupId = [...selectedObjectIds.value][0]!
+
+      commands.sceneEdits.duplicateSelected()
+
+      const scene = queries.getSceneSnapshot()
+      expect(scene.groups).toHaveLength(2)
+      expect(scene.plants).toHaveLength(4)
+      const clonedGroup = scene.groups.find((group) => group.id !== originalGroupId)!
+      const clonedMembers = clonedGroup.memberIds
+        .map((id) => scene.plants.find((plant) => plant.id === id)?.position)
+        .filter((position): position is { x: number; y: number } => position !== undefined)
+        .sort((left, right) => left.x - right.x)
+
+      expect(clonedMembers).toEqual([
+        { x: 11, y: 20 },
+        { x: 13, y: 20 },
+      ])
+      expect(selectedObjectIds.value).toEqual(new Set([clonedGroup.id]))
     } finally {
       host.destroy()
     }

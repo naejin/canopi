@@ -100,6 +100,9 @@ function createInteractionDeps(
       getDesignObjectSelectionFromStore(store, camera)
     ),
     selectionCommands: overrides.selectionCommands ?? {
+      copy: vi.fn(),
+      pasteAt: vi.fn(),
+      canPaste: vi.fn(() => false),
       duplicateSelected: vi.fn(),
       deleteSelected: vi.fn(),
       bringToFront: vi.fn(),
@@ -1444,6 +1447,184 @@ describe('SceneInteractionController', () => {
 
     controller.dispose()
     outsidePanel.remove()
+  })
+
+  it('opens a Canvas Context Menu with disabled edit commands on empty canvas', () => {
+    const controller = new SceneInteractionController(createInteractionDeps(container, store, camera) as any)
+    const point = events.clientPoint({ x: 320, y: 260 })
+
+    const canvasContext = new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: point.x,
+      clientY: point.y,
+    })
+    container.dispatchEvent(canvasContext)
+
+    expect(canvasContext.defaultPrevented).toBe(true)
+    const menu = container.querySelector<HTMLElement>('[data-canvas-context-menu]')
+    expect(menu).not.toBeNull()
+    expect(menu?.getAttribute('role')).toBe('menu')
+    const copy = menu?.querySelector<HTMLButtonElement>('[data-canvas-context-command="copy"]')
+    const paste = menu?.querySelector<HTMLButtonElement>('[data-canvas-context-command="paste"]')
+    const remove = menu?.querySelector<HTMLButtonElement>('[data-canvas-context-command="delete"]')
+    expect(copy?.textContent).toBe('Copy')
+    expect(paste?.textContent).toBe('Paste')
+    expect(remove?.textContent).toBe('Delete')
+    expect(copy?.disabled).toBe(true)
+    expect(paste?.disabled).toBe(true)
+    expect(remove?.disabled).toBe(true)
+
+    controller.dispose()
+  })
+
+  it('keeps the Canvas Context Menu visible inside the canvas edge', () => {
+    Object.defineProperty(container, 'clientWidth', { configurable: true, value: 400 })
+    Object.defineProperty(container, 'clientHeight', { configurable: true, value: 300 })
+    const controller = new SceneInteractionController(createInteractionDeps(container, store, camera) as any)
+    const point = events.clientPoint({ x: 396, y: 296 })
+
+    container.dispatchEvent(new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: point.x,
+      clientY: point.y,
+    }))
+
+    const menu = container.querySelector<HTMLElement>('[data-canvas-context-menu]')!
+    expect(menu.style.display).toBe('block')
+    expect(Number.parseFloat(menu.style.left)).toBeLessThanOrEqual(244)
+    expect(Number.parseFloat(menu.style.top)).toBeLessThanOrEqual(200)
+    expect(Number.parseInt(menu.style.zIndex, 10)).toBeGreaterThan(28)
+
+    controller.dispose()
+  })
+
+  it('dispatches Canvas Context Menu edit commands through the scene edit surface', () => {
+    const copy = vi.fn()
+    const pasteAt = vi.fn()
+    const deleteSelected = vi.fn()
+    const baseDeps = createInteractionDeps(container, store, camera, {
+      getDesignObjectSelection: () => ({
+        editableTargets: [{ kind: 'plant' as const, id: 'plant-1' }],
+        lockedTargets: [],
+        blockedTargets: [],
+        bounds: { minX: 20, minY: 20, maxX: 24, maxY: 24 },
+        sameSpeciesReferenceCanonicalName: 'Malus domestica',
+      }),
+    })
+    const deps = {
+      ...baseDeps,
+      selectionCommands: {
+        ...baseDeps.selectionCommands,
+        copy,
+        pasteAt,
+        canPaste: vi.fn(() => true),
+        deleteSelected,
+      },
+    }
+    const controller = new SceneInteractionController(deps as any)
+
+    const openMenu = () => {
+      const point = events.clientPoint({ x: 80, y: 90 })
+      container.dispatchEvent(new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: point.x,
+        clientY: point.y,
+      }))
+      return container.querySelector<HTMLElement>('[data-canvas-context-menu]')!
+    }
+
+    let menu = openMenu()
+    const copyButton = menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="copy"]')!
+    expect(copyButton.disabled).toBe(false)
+    copyButton.click()
+    expect(copy).toHaveBeenCalledTimes(1)
+    expect(menu.style.display).toBe('none')
+
+    menu = openMenu()
+    const pasteButton = menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="paste"]')!
+    expect(pasteButton.disabled).toBe(false)
+    pasteButton.click()
+    expect(pasteAt).toHaveBeenCalledWith({ x: 80, y: 90 })
+
+    menu = openMenu()
+    const deleteButton = menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="delete"]')!
+    expect(deleteButton.disabled).toBe(false)
+    deleteButton.click()
+    expect(deleteSelected).toHaveBeenCalledTimes(1)
+
+    controller.dispose()
+  })
+
+  it('updates Canvas Context Menu target selection like a design tool', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [
+        makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 }),
+        makePlant('plant-2', 'Pyrus communis', { x: 80, y: 30 }),
+      ]
+    })
+    const deps = createInteractionDeps(container, store, camera, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    deps.setSelection(['plant-1'])
+    vi.mocked(deps.setSelection).mockClear()
+    const plantTwoContext = events.clientPoint({ x: 80, y: 30 })
+    container.dispatchEvent(new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: plantTwoContext.x,
+      clientY: plantTwoContext.y,
+    }))
+
+    expect(selectedObjectIds.value).toEqual(new Set(['plant-2']))
+    expect(deps.setSelection).toHaveBeenCalledWith(new Set(['plant-2']))
+
+    deps.setSelection(['plant-1', 'plant-2'])
+    vi.mocked(deps.setSelection).mockClear()
+    container.dispatchEvent(new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: plantTwoContext.x,
+      clientY: plantTwoContext.y,
+    }))
+
+    expect(selectedObjectIds.value).toEqual(new Set(['plant-1', 'plant-2']))
+    expect(deps.setSelection).not.toHaveBeenCalled()
+
+    controller.dispose()
+  })
+
+  it('selects directly locked Canvas Context Menu targets with mutation commands disabled', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [
+        makePlant('locked-plant', 'Malus domestica', { x: 20, y: 30 }, { locked: true }),
+      ]
+    })
+    const deps = createInteractionDeps(container, store, camera, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+    const point = events.clientPoint({ x: 20, y: 30 })
+
+    container.dispatchEvent(new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: point.x,
+      clientY: point.y,
+    }))
+
+    expect(selectedObjectIds.value).toEqual(new Set(['locked-plant']))
+    const menu = container.querySelector<HTMLElement>('[data-canvas-context-menu]')!
+    expect(menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="copy"]')?.disabled).toBe(true)
+    expect(menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="delete"]')?.disabled).toBe(true)
+
+    controller.dispose()
   })
 
   it('selects locked Design Objects for toolbar unlock without allowing drag mutations', () => {

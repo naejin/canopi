@@ -77,6 +77,8 @@ function createCommandSurface() {
     sceneEdits: {
       copy: () => {},
       paste: () => {},
+      pasteAt: () => {},
+      canPaste: () => false,
       duplicateSelected: () => {},
       deleteSelected: () => {},
       selectAll: () => {},

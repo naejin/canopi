@@ -3,7 +3,7 @@ import type { CanopiFile, PlacedPlant } from '../../types/design'
 import type { ColorByAttribute, PlantSizeMode } from '../plant-display-state'
 import type { SelectedPlantColorContext } from '../plant-color-context'
 import type { SelectedPlantSymbolContext } from '../plant-symbol-context'
-import type { PlantSymbolId } from './scene'
+import type { PlantSymbolId, ScenePoint } from './scene'
 import type { SceneBounds } from './camera'
 import type { ScenePersistedState, SceneViewportState } from './scene'
 
@@ -70,6 +70,8 @@ export interface CanvasHistoryCommandSurface {
 export interface CanvasSceneEditCommandSurface {
   copy(): void
   paste(): void
+  pasteAt(point: ScenePoint): void
+  canPaste(): boolean
   duplicateSelected(): void
   deleteSelected(): void
   selectAll(): void

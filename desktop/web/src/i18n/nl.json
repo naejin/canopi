@@ -144,6 +144,12 @@
       "unlock": "Ontgrendelen",
       "delete": "Verwijderen"
     },
+    "contextMenu": {
+      "ariaLabel": "Canvasbewerkingsopdrachten",
+      "copy": "Kopiëren",
+      "paste": "Plakken",
+      "delete": "Verwijderen"
+    },
     "rotationHandle": {
       "label": "Draaien"
     },

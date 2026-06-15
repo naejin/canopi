@@ -46,6 +46,8 @@ export function createTestCanvasCommandSurface(
     sceneEdits: {
       copy: () => {},
       paste: () => {},
+      pasteAt: () => {},
+      canPaste: () => false,
       duplicateSelected: () => {},
       deleteSelected: () => {},
       selectAll: () => {},

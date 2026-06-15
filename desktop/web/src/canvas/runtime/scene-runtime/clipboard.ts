@@ -3,23 +3,24 @@ import type {
   SceneObjectGroupEntity,
   ScenePersistedState,
   ScenePlantEntity,
+  ScenePoint,
   SceneZoneEntity,
 } from '../scene'
 import type { SceneSelectionTarget } from './selection'
 import { createUuid } from '../../../utils/ids'
-
-const CLIPBOARD_OFFSET = 20
 
 export interface SceneClipboardPayload {
   plants: ScenePlantEntity[]
   zones: SceneZoneEntity[]
   annotations: SceneAnnotationEntity[]
   groups: SceneObjectGroupEntity[]
+  sourceCenter: ScenePoint | null
 }
 
 export function createClipboardPayload(
   persisted: ScenePersistedState,
   selected: readonly SceneSelectionTarget[],
+  sourceCenter: ScenePoint | null,
 ): SceneClipboardPayload | null {
   if (selected.length === 0) return null
 
@@ -56,32 +57,34 @@ export function createClipboardPayload(
     zones: persisted.zones.filter((zone) => zoneIds.has(zone.name)).map(cloneZoneEntity),
     annotations: persisted.annotations.filter((annotation) => annotationIds.has(annotation.id)).map(cloneAnnotationEntity),
     groups: persisted.groups.filter((group) => groupIds.has(group.id)).map(cloneGroupEntity),
+    sourceCenter,
   }
 }
 
 export function pasteClipboardPayload(
   payload: SceneClipboardPayload,
   draft: ScenePersistedState,
+  offset: ScenePoint,
 ): Set<string> {
   const nextSelection = new Set<string>()
   const existingZoneNames = new Set(draft.zones.map((zone) => zone.name))
   const sourceToCloneId = new Map<string, string>()
 
   for (const plant of payload.plants) {
-    const clone = clonePlantWithOffset(plant)
+    const clone = clonePlantWithOffset(plant, offset)
     draft.plants.push(clone)
     sourceToCloneId.set(plant.id, clone.id)
   }
 
   for (const zone of payload.zones) {
-    const clone = cloneZoneWithOffset(zone, existingZoneNames)
+    const clone = cloneZoneWithOffset(zone, existingZoneNames, offset)
     existingZoneNames.add(clone.name)
     draft.zones.push(clone)
     sourceToCloneId.set(zone.name, clone.name)
   }
 
   for (const annotation of payload.annotations) {
-    const clone = cloneAnnotationWithOffset(annotation)
+    const clone = cloneAnnotationWithOffset(annotation, offset)
     draft.annotations.push(clone)
     sourceToCloneId.set(annotation.id, clone.id)
   }
@@ -95,8 +98,8 @@ export function pasteClipboardPayload(
       ...group,
       id: createUuid(),
       position: {
-        x: group.position.x + CLIPBOARD_OFFSET,
-        y: group.position.y + CLIPBOARD_OFFSET,
+        x: group.position.x + offset.x,
+        y: group.position.y + offset.y,
       },
       memberIds,
     }
@@ -151,36 +154,40 @@ function cloneGroupEntity(group: SceneObjectGroupEntity): SceneObjectGroupEntity
   }
 }
 
-function clonePlantWithOffset(plant: ScenePlantEntity): ScenePlantEntity {
+function clonePlantWithOffset(plant: ScenePlantEntity, offset: ScenePoint): ScenePlantEntity {
   return {
     ...clonePlantEntity(plant),
     id: createUuid(),
     position: {
-      x: plant.position.x + CLIPBOARD_OFFSET,
-      y: plant.position.y + CLIPBOARD_OFFSET,
+      x: plant.position.x + offset.x,
+      y: plant.position.y + offset.y,
     },
   }
 }
 
-function cloneZoneWithOffset(zone: SceneZoneEntity, existingNames: Set<string>): SceneZoneEntity {
+function cloneZoneWithOffset(
+  zone: SceneZoneEntity,
+  existingNames: Set<string>,
+  offset: ScenePoint,
+): SceneZoneEntity {
   const nextName = uniqueZoneName(zone.name, existingNames)
   return {
     ...cloneZoneEntity(zone),
     name: nextName,
     points: zone.points.map((point) => ({
-      x: point.x + CLIPBOARD_OFFSET,
-      y: point.y + CLIPBOARD_OFFSET,
+      x: point.x + offset.x,
+      y: point.y + offset.y,
     })),
   }
 }
 
-function cloneAnnotationWithOffset(annotation: SceneAnnotationEntity): SceneAnnotationEntity {
+function cloneAnnotationWithOffset(annotation: SceneAnnotationEntity, offset: ScenePoint): SceneAnnotationEntity {
   return {
     ...cloneAnnotationEntity(annotation),
     id: createUuid(),
     position: {
-      x: annotation.position.x + CLIPBOARD_OFFSET,
-      y: annotation.position.y + CLIPBOARD_OFFSET,
+      x: annotation.position.x + offset.x,
+      y: annotation.position.y + offset.y,
     },
   }
 }

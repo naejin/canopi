@@ -144,6 +144,12 @@
       "unlock": "잠금 해제",
       "delete": "삭제"
     },
+    "contextMenu": {
+      "ariaLabel": "캔버스 편집 명령",
+      "copy": "복사",
+      "paste": "붙여넣기",
+      "delete": "삭제"
+    },
     "rotationHandle": {
       "label": "회전"
     },

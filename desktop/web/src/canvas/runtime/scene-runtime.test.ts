@@ -1111,7 +1111,7 @@ describe('scene canvas runtime', () => {
     const pasted = runtime.querySurface.getSceneSnapshot().plants[2]!
     expect(pasted.canonicalName).toBe('Malus domestica')
     expect(pasted.symbol).toBe('triangle')
-    expect(pasted.position).toEqual({ x: 40, y: 40 })
+    expect(pasted.position).toEqual({ x: 21, y: 20 })
     events.dispose()
     runtime.destroy()
   })

@@ -144,6 +144,12 @@
       "unlock": "Déverrouiller",
       "delete": "Supprimer"
     },
+    "contextMenu": {
+      "ariaLabel": "Commandes d'édition de la zone de dessin",
+      "copy": "Copier",
+      "paste": "Coller",
+      "delete": "Supprimer"
+    },
     "rotationHandle": {
       "label": "Pivoter"
     },

@@ -42,6 +42,8 @@ interface SceneCanvasCommandSurfaceOptions {
     SceneRuntimeMutationController,
     | 'copy'
     | 'paste'
+    | 'pasteAt'
+    | 'canPaste'
     | 'duplicateSelected'
     | 'deleteSelected'
     | 'selectAll'
@@ -120,6 +122,8 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     this.sceneEdits = {
       copy: () => this.options.mutations.copy(),
       paste: () => this.options.mutations.paste(),
+      pasteAt: (point) => this.options.mutations.pasteAt(point),
+      canPaste: () => this.options.mutations.canPaste(),
       duplicateSelected: () => this.options.mutations.duplicateSelected(),
       deleteSelected: () => this.options.mutations.deleteSelected(),
       selectAll: () => this.options.mutations.selectAll(),

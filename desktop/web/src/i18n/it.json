@@ -144,6 +144,12 @@
       "unlock": "Sblocca",
       "delete": "Elimina"
     },
+    "contextMenu": {
+      "ariaLabel": "Comandi di modifica della tela",
+      "copy": "Copia",
+      "paste": "Incolla",
+      "delete": "Elimina"
+    },
     "rotationHandle": {
       "label": "Ruota"
     },

@@ -7,6 +7,7 @@ import type { SelectedPlantSymbolContext } from '../../plant-symbol-context'
 import type {
   PlantSymbolId,
   SceneObjectGroupEntity,
+  ScenePoint,
   ScenePersistedState,
   SceneStore,
 } from '../scene'
@@ -22,10 +23,12 @@ import {
   type SceneClipboardPayload,
 } from './clipboard'
 import {
+  getCombinedTargetBounds,
   getDesignObjectSelectionModel,
   getSelectedTopLevelTargets,
   getSelectionLayer,
   setsEqual,
+  type SceneSelectionReadModelOptions,
   type SceneSelectionTarget,
 } from './selection'
 import {
@@ -55,6 +58,8 @@ const EMPTY_PLANT_SYMBOL_CONTEXT: SelectedPlantSymbolContext = {
   canClearSelectedSymbol: false,
 }
 
+const NORMAL_PASTE_OFFSET_M: ScenePoint = { x: 1, y: 0 }
+
 interface SceneRuntimeMutationControllerOptions {
   sceneStore: SceneStore
   selection: {
@@ -78,6 +83,7 @@ export class SceneRuntimeMutationController {
   private readonly _presentation: SceneRuntimeMutationControllerOptions['presentation']
   private readonly _invalidateScene: () => void
   private _clipboard: SceneClipboardPayload | null = null
+  private _normalPasteCount = 0
 
   constructor(options: SceneRuntimeMutationControllerOptions) {
     this._sceneStore = options.sceneStore
@@ -89,20 +95,45 @@ export class SceneRuntimeMutationController {
 
   copy(): void {
     const persisted = this._sceneStore.persisted
-    const selected = this._getEditableTopLevelTargets()
-    this._clipboard = createClipboardPayload(persisted, selected)
+    const selectionOptions = this._getSelectionReadModelOptions()
+    const selected = this._getSelectionModel(selectionOptions).editableTargets
+    const bounds = getCombinedTargetBounds(persisted, selected, selectionOptions)
+    this._clipboard = createClipboardPayload(persisted, selected, centerOfBounds(bounds))
+    this._normalPasteCount = 0
   }
 
   paste(): void {
     if (!this._clipboard) return
 
     let nextSelection = new Set<string>()
+    const offset = normalPasteOffset(this._normalPasteCount + 1)
     this._sceneEdits.run('paste', (tx) => {
       tx.mutate((draft) => {
-        nextSelection = pasteClipboardPayload(this._clipboard!, draft)
+        nextSelection = pasteClipboardPayload(this._clipboard!, draft, offset)
       })
       if (nextSelection.size > 0) tx.setSelection(nextSelection)
     })
+    if (nextSelection.size > 0) this._normalPasteCount += 1
+  }
+
+  pasteAt(point: ScenePoint): void {
+    if (!this._clipboard?.sourceCenter) return
+
+    let nextSelection = new Set<string>()
+    const offset = {
+      x: point.x - this._clipboard.sourceCenter.x,
+      y: point.y - this._clipboard.sourceCenter.y,
+    }
+    this._sceneEdits.run('paste', (tx) => {
+      tx.mutate((draft) => {
+        nextSelection = pasteClipboardPayload(this._clipboard!, draft, offset)
+      })
+      if (nextSelection.size > 0) tx.setSelection(nextSelection)
+    })
+  }
+
+  canPaste(): boolean {
+    return this._clipboard !== null
   }
 
   duplicateSelected(): void {
@@ -568,16 +599,37 @@ export class SceneRuntimeMutationController {
     return resolveSelectedEntitySets(this._sceneStore.persisted, this._getEditableTopLevelTargets()).plantIds
   }
 
-  private _getSelectionModel() {
-    const viewportScale = this._presentation.getViewportScale()
+  private _getSelectionModel(options = this._getSelectionReadModelOptions()) {
     return getDesignObjectSelectionModel(
       this._sceneStore.persisted,
       this._sceneStore.session.selectedEntityIds,
-      {
-        annotationViewportScale: viewportScale,
-        plantContext: this._presentation.createPlantPresentationContext(viewportScale),
-      },
+      options,
     )
+  }
+
+  private _getSelectionReadModelOptions(): SceneSelectionReadModelOptions {
+    const viewportScale = this._presentation.getViewportScale()
+    return {
+      annotationViewportScale: viewportScale,
+      plantContext: this._presentation.createPlantPresentationContext(viewportScale),
+    }
+  }
+}
+
+function normalPasteOffset(step: number): ScenePoint {
+  return {
+    x: NORMAL_PASTE_OFFSET_M.x * step,
+    y: NORMAL_PASTE_OFFSET_M.y * step,
+  }
+}
+
+function centerOfBounds(
+  bounds: { minX: number; minY: number; maxX: number; maxY: number } | null,
+): ScenePoint | null {
+  if (!bounds) return null
+  return {
+    x: bounds.minX + (bounds.maxX - bounds.minX) / 2,
+    y: bounds.minY + (bounds.maxY - bounds.minY) / 2,
   }
 }
 

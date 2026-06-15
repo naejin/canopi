@@ -144,6 +144,12 @@
       "unlock": "Desbloquear",
       "delete": "Eliminar"
     },
+    "contextMenu": {
+      "ariaLabel": "Comandos de edición del lienzo",
+      "copy": "Copiar",
+      "paste": "Pegar",
+      "delete": "Eliminar"
+    },
     "rotationHandle": {
       "label": "Girar"
     },
