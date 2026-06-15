@@ -415,11 +415,8 @@ export class SceneInteractionController {
     event.preventDefault()
     const screen = this._screenPoint(event)
     const world = this._deps.camera.screenToWorld(screen)
-    this._retargetContextMenuSelection(world)
-    this._contextMenu.show({
-      screen,
-      world,
-    })
+    const selection = this._retargetContextMenuSelection(world)
+    this._contextMenu.show(selection ? { screen, world, selection } : { screen, world })
   }
 
   private readonly _onDragOver = (event: DragEvent): void => {
@@ -463,7 +460,7 @@ export class SceneInteractionController {
     }
   }
 
-  private _retargetContextMenuSelection(world: ScenePoint): void {
+  private _retargetContextMenuSelection(world: ScenePoint): CanvasDesignObjectSelectionModel | null {
     const scene = this._deps.getSceneStore().persisted
     const hit = hitTestTopLevel(
       scene,
@@ -472,13 +469,23 @@ export class SceneInteractionController {
       this._deps.getSpeciesCache(),
       this._deps.getPlantPresentationContext,
     )
-    if (!hit) return
+    if (!hit) {
+      const visibleHit = hitTestVisibleTopLevel(
+        scene,
+        world,
+        this._deps.camera.viewport.scale,
+        this._deps.getSpeciesCache(),
+        this._deps.getPlantPresentationContext,
+      )
+      return visibleHit ? disabledContextMenuSelection() : null
+    }
     const directlyLocked = isDirectSceneDesignObjectLocked(scene, hit.id)
-    if (isSceneDesignObjectLocked(scene, hit.id) && !directlyLocked) return
-    if (this._deps.getSelection().has(hit.id)) return
+    if (isSceneDesignObjectLocked(scene, hit.id) && !directlyLocked) return disabledContextMenuSelection()
+    if (this._deps.getSelection().has(hit.id)) return null
     this._deps.setSelection(new Set([hit.id]))
     this._deps.render('scene')
     this._refreshSelectionDependentMeasurements()
+    return null
   }
 
   private readonly _onKeyDown = (event: KeyboardEvent): void => {
@@ -594,6 +601,16 @@ export class SceneInteractionController {
     if (committed) this._lockedAffordance.hide()
   }
 
+}
+
+function disabledContextMenuSelection(): CanvasDesignObjectSelectionModel {
+  return {
+    editableTargets: [],
+    lockedTargets: [],
+    blockedTargets: [],
+    bounds: null,
+    sameSpeciesReferenceCanonicalName: null,
+  }
 }
 
 function isTargetLayerLocked(scene: ScenePersistedState, target: TopLevelTarget): boolean {

@@ -16,6 +16,7 @@ interface CanvasContextMenuOptions {
 export interface CanvasContextMenuShowOptions {
   readonly screen: ScenePoint
   readonly world: ScenePoint
+  readonly selection?: CanvasDesignObjectSelectionModel
 }
 
 export interface CanvasContextMenuController {
@@ -91,9 +92,9 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
   root.replaceChildren(...buttons)
   options.container.appendChild(root)
 
-  function show({ screen, world }: CanvasContextMenuShowOptions): void {
+  function show({ screen, world, selection: selectionOverride }: CanvasContextMenuShowOptions): void {
     activeWorld = world
-    const selection = options.getSelection()
+    const selection = selectionOverride ?? options.getSelection()
     refreshLabelsAndStates(selection)
     root.style.display = 'block'
     const placement = resolveMenuPlacement(screen, options.container, root)
