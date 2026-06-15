@@ -13,6 +13,7 @@ import {
 
 describe('PlantColorMenu', () => {
   let container: HTMLDivElement
+  let querySurface: ReturnType<typeof createTestCanvasQuerySurface>
   const setSelectedPlantColor = vi.fn()
   const setPlantColorForSpecies = vi.fn()
   const clearPlantSpeciesColor = vi.fn()
@@ -29,6 +30,7 @@ describe('PlantColorMenu', () => {
     clearPlantSpeciesColor.mockReset()
     ensureSpeciesCacheEntries.mockClear()
     getSelectedPlantColorContext.mockReset()
+    querySurface = createTestCanvasQuerySurface()
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
       commands: createTestCanvasCommandSurface({
         plantPresentation: {
@@ -39,7 +41,7 @@ describe('PlantColorMenu', () => {
         },
       }),
       queries: {
-        ...createTestCanvasQuerySurface(),
+        ...querySurface,
         getSelectedPlantColorContext,
       },
     }))
@@ -88,6 +90,34 @@ describe('PlantColorMenu', () => {
 
     expect(setSelectedPlantColor).toHaveBeenCalledWith('#C44230')
     expect(plantColorMenuOpen.value).toBe(false)
+  })
+
+  it('updates the selected plant name when localized plant names refresh', async () => {
+    let commonName = 'Apple'
+    getSelectedPlantColorContext.mockImplementation(() => ({
+      plantIds: ['plant-1'],
+      singleSpeciesCanonicalName: 'Malus domestica',
+      singleSpeciesCommonName: commonName,
+      sharedCurrentColor: null,
+      suggestedColor: '#C8A51E',
+      singleSpeciesDefaultColor: null,
+    }))
+
+    await act(async () => {
+      render(<PlantColorMenu buttonRef={buttonRef} />, container)
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('Apple')
+
+    commonName = 'Pommier'
+    await act(async () => {
+      querySurface.bumpPlantNamesRevision()
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('Pommier')
+    expect(container.textContent).not.toContain('Apple')
   })
 
   it('applies the selected color to all placed instances of the selected species', async () => {

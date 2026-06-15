@@ -126,6 +126,7 @@ Use this guide when changing Preact components, signals, i18n, CSS, panels, bott
 - Icon-only chrome buttons with hover/focus tooltips should use `components/shared/ButtonTooltip.tsx` instead of native `title`, especially in rail toolbars and panel bars where locale changes must update immediately.
 - Plant Symbol selection should use a separate toolbar button/popover next to Plant Color, with Plant Color first and Plant Symbol second. The symbol popover grid is icon-only with tooltips, grouped as habit symbols (`tree`, `shrub`, `herbaceous`, `climber`) and abstract symbols (`round`, `square`, `triangle`, `cross`); use explicit apply actions for selection vs species default, matching Plant Color intent.
 - Plant Symbol picker options should render in neutral UI ink, with a separate preview showing the chosen symbol in the effective plant color. The toolbar button may show the current shared symbol when selected editable plants agree; mixed selections use a generic symbol affordance and explain the mixed/inherited state in the popover.
+- Plant Color and Plant Symbol popovers display selected Placed Plant Common Names from the canvas query surface. They must subscribe to plant-name query revision changes so open popovers update when localized Common Names refresh after a language change.
 
 ## Canvas2D Components
 

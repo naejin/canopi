@@ -48,6 +48,7 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
   void plantSpeciesColorDefaults.value
   const commandSurface = currentCanvasPlantPresentationCommandSurface.value
   const querySurface = currentCanvasQuerySurface.value
+  void querySurface?.revision.plantNames.value
   const activeLocale = locale.value
   const menuOpen = plantColorMenuOpen.value
   const context = querySurface?.getSelectedPlantColorContext() ?? {

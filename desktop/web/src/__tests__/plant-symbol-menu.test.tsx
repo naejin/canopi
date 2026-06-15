@@ -13,6 +13,7 @@ import {
 
 describe('PlantSymbolMenu', () => {
   let container: HTMLDivElement
+  let querySurface: ReturnType<typeof createTestCanvasQuerySurface>
   const setSelectedPlantSymbol = vi.fn()
   const setPlantSymbolForSpecies = vi.fn()
   const clearPlantSpeciesSymbol = vi.fn()
@@ -27,6 +28,7 @@ describe('PlantSymbolMenu', () => {
     setPlantSymbolForSpecies.mockReset()
     clearPlantSpeciesSymbol.mockReset()
     getSelectedPlantSymbolContext.mockReset()
+    querySurface = createTestCanvasQuerySurface()
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
       commands: createTestCanvasCommandSurface({
         plantPresentation: {
@@ -36,7 +38,7 @@ describe('PlantSymbolMenu', () => {
         },
       }),
       queries: {
-        ...createTestCanvasQuerySurface(),
+        ...querySurface,
         getSelectedPlantSymbolContext,
       },
     }))
@@ -91,6 +93,36 @@ describe('PlantSymbolMenu', () => {
 
     expect(setSelectedPlantSymbol).toHaveBeenCalledWith('triangle')
     expect(plantSymbolMenuOpen.value).toBe(false)
+  })
+
+  it('updates the selected plant name when localized plant names refresh', async () => {
+    let commonName = 'Apple'
+    getSelectedPlantSymbolContext.mockImplementation(() => ({
+      plantIds: ['plant-1'],
+      singleSpeciesCanonicalName: 'Malus domestica',
+      singleSpeciesCommonName: commonName,
+      sharedCurrentSymbol: null,
+      sharedEffectiveSymbol: 'round',
+      inheritedSymbol: null,
+      singleSpeciesDefaultSymbol: null,
+      canClearSelectedSymbol: false,
+    }))
+
+    await act(async () => {
+      render(<PlantSymbolMenu buttonRef={buttonRef} />, container)
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('Apple')
+
+    commonName = 'Pommier'
+    await act(async () => {
+      querySurface.bumpPlantNamesRevision()
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('Pommier')
+    expect(container.textContent).not.toContain('Apple')
   })
 
   it('keeps a shared inherited effective symbol when applying an unchanged multi-species selection', async () => {

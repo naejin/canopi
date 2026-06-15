@@ -1372,4 +1372,24 @@ describe('scene canvas runtime', () => {
     expect(localizedSnapshot?.localizedCommonNames.get('Malus domestica')).toBe('Pommier')
     runtime.destroy()
   })
+
+  it('uses localized common names in selected plant presentation contexts', async () => {
+    vi.mocked(getCommonNames).mockImplementation(async (_canonicalNames, activeLocale) => ({
+      'Malus domestica': activeLocale === 'fr' ? 'Pommier' : 'Apple',
+    }))
+
+    const runtime = new SceneCanvasRuntime({
+      appAdapter: createAppCanvasRuntimeAppAdapter(),
+    })
+    runtime.documentSurface.loadDocument(makeFile())
+    runtime.commandSurface.sceneEdits.selectAll()
+
+    locale.value = 'fr'
+    await runtime.commandSurface.plantPresentation.ensureSpeciesCacheEntries(['Malus domestica'], 'fr')
+
+    expect(getCommonNames).toHaveBeenCalledWith(['Malus domestica'], 'fr')
+    expect(runtime.querySurface.getLocalizedCommonNames().get('Malus domestica')).toBe('Pommier')
+    expect(runtime.querySurface.getSelectedPlantColorContext().singleSpeciesCommonName).toBe('Pommier')
+    expect(runtime.querySurface.getSelectedPlantSymbolContext().singleSpeciesCommonName).toBe('Pommier')
+  })
 })

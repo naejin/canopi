@@ -168,6 +168,7 @@ export class SceneCanvasRuntime {
         syncPlantSpeciesColors: () => syncPlantSpeciesColorDefaults(this._sceneStore.persisted.plantSpeciesColors),
         getViewportScale: () => this._camera.viewport.scale,
         createPlantPresentationContext: (viewportScale) => this._presentation.createPlantPresentationContext(viewportScale),
+        getLocalizedCommonNames: () => this._presentation.getLocalizedCommonNames(),
         getSuggestedPlantColor: (canonicalName) => this._presentation.getSuggestedPlantColor(canonicalName),
       },
       invalidateScene: () => this._invalidate('scene'),

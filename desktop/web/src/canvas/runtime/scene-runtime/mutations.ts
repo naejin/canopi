@@ -71,6 +71,7 @@ interface SceneRuntimeMutationControllerOptions {
     syncPlantSpeciesColors(): void
     getViewportScale(): number
     createPlantPresentationContext(viewportScale?: number): PlantPresentationContext
+    getLocalizedCommonNames(): ReadonlyMap<string, string | null>
     getSuggestedPlantColor(canonicalName: string): string | null
   }
   invalidateScene(): void
@@ -343,11 +344,6 @@ export class SceneRuntimeMutationController {
 
     const plantIds = selectedPlants.map((plant) => plant.id)
     const canonicalNames = new Set(selectedPlants.map((plant) => plant.canonicalName))
-    const commonNames = new Set(
-      selectedPlants
-        .map((plant) => plant.commonName)
-        .filter((value): value is string => typeof value === 'string' && value.length > 0),
-    )
     const colors = new Set(
       selectedPlants
         .map((plant) => normalizeHexColor(plant.color))
@@ -355,8 +351,8 @@ export class SceneRuntimeMutationController {
     )
     const hasUncolored = selectedPlants.some((plant) => normalizeHexColor(plant.color) === null)
     const singleSpeciesCanonicalName = canonicalNames.size === 1 ? [...canonicalNames][0]! : null
-    const singleSpeciesCommonName = singleSpeciesCanonicalName && commonNames.size === 1
-      ? [...commonNames][0]!
+    const singleSpeciesCommonName = singleSpeciesCanonicalName
+      ? this._singleSpeciesCommonName(singleSpeciesCanonicalName, selectedPlants)
       : null
     const sharedCurrentColor =
       colors.size > 1 || (colors.size === 1 && hasUncolored)
@@ -387,11 +383,6 @@ export class SceneRuntimeMutationController {
 
     const plantIds = selectedPlants.map((plant) => plant.id)
     const canonicalNames = new Set(selectedPlants.map((plant) => plant.canonicalName))
-    const commonNames = new Set(
-      selectedPlants
-        .map((plant) => plant.commonName)
-        .filter((value): value is string => typeof value === 'string' && value.length > 0),
-    )
     const explicitSymbols = selectedPlants.map((plant) =>
       plant.symbol == null ? null : resolvePlantSymbolId(plant.symbol),
     )
@@ -401,8 +392,8 @@ export class SceneRuntimeMutationController {
     const uniqueExplicitSymbols = new Set(explicitSymbols)
     const uniqueEffectiveSymbols = new Set(effectiveSymbols)
     const singleSpeciesCanonicalName = canonicalNames.size === 1 ? [...canonicalNames][0]! : null
-    const singleSpeciesCommonName = singleSpeciesCanonicalName && commonNames.size === 1
-      ? [...commonNames][0]!
+    const singleSpeciesCommonName = singleSpeciesCanonicalName
+      ? this._singleSpeciesCommonName(singleSpeciesCanonicalName, selectedPlants)
       : null
     const singleSpeciesDefaultSymbol = singleSpeciesCanonicalName
       ? this._sceneStore.persisted.plantSpeciesSymbols[singleSpeciesCanonicalName]
@@ -427,6 +418,20 @@ export class SceneRuntimeMutationController {
       singleSpeciesDefaultSymbol: normalizedSingleSpeciesDefaultSymbol,
       canClearSelectedSymbol: selectedPlants.some((plant) => plant.symbol != null),
     }
+  }
+
+  private _singleSpeciesCommonName(
+    canonicalName: string,
+    plants: ReadonlyArray<{ commonName: string | null }>,
+  ): string | null {
+    const localizedName = this._presentation.getLocalizedCommonNames().get(canonicalName)
+    if (localizedName && localizedName.length > 0) return localizedName
+    const commonNames = new Set(
+      plants
+        .map((plant) => plant.commonName)
+        .filter((value): value is string => typeof value === 'string' && value.length > 0),
+    )
+    return commonNames.size === 1 ? [...commonNames][0]! : null
   }
 
   setSelectedPlantColor(color: string | null): number {
