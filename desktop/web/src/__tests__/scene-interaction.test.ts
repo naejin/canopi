@@ -3846,7 +3846,7 @@ describe('SceneInteractionController', () => {
     controller.setTool('select')
     deps.setSelection(['annotation-1'])
 
-    events.keyDown({ key: 'F2', cancelable: true })
+    events.keyDown({ key: 'F2', cancelable: true, target: container })
     const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
     expect(textarea.value).toBe('Line one')
 
@@ -3862,7 +3862,7 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
-  it('opens selected text Annotation editing from Enter for keyboard access', () => {
+  it('opens selected text Annotation editing from Enter when the canvas has keyboard focus', () => {
     store.updatePersisted((draft) => {
       draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Keyboard note')]
     })
@@ -3871,11 +3871,33 @@ describe('SceneInteractionController', () => {
     controller.setTool('select')
     deps.setSelection(['annotation-1'])
 
-    const event = events.keyDown({ key: 'Enter', cancelable: true })
+    const event = events.keyDown({ key: 'Enter', cancelable: true, target: container })
 
     expect(event.defaultPrevented).toBe(true)
     expect(container.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('Keyboard note')
     controller.dispose()
+  })
+
+  it('does not intercept Annotation edit shortcuts from focused controls outside the canvas', () => {
+    store.updatePersisted((draft) => {
+      draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Keyboard note')]
+    })
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+    deps.setSelection(['annotation-1'])
+    const externalButton = document.createElement('button')
+    document.body.appendChild(externalButton)
+    externalButton.focus()
+
+    const enterEvent = events.keyDown({ key: 'Enter', cancelable: true, target: externalButton })
+    const f2Event = events.keyDown({ key: 'F2', cancelable: true, target: externalButton })
+
+    expect(enterEvent.defaultPrevented).toBe(false)
+    expect(f2Event.defaultPrevented).toBe(false)
+    expect(container.querySelector('textarea')).toBeNull()
+    controller.dispose()
+    externalButton.remove()
   })
 
   it('cancels existing text Annotation edits with Escape without history', () => {
@@ -3948,7 +3970,7 @@ describe('SceneInteractionController', () => {
     controller.setTool('select')
     deps.setSelection(['annotation-1'])
 
-    events.keyDown({ key: 'F2', cancelable: true })
+    events.keyDown({ key: 'F2', cancelable: true, target: container })
     const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
     textarea.value = '   '
     textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
@@ -3984,7 +4006,7 @@ describe('SceneInteractionController', () => {
     controller.setTool('select')
 
     deps.setSelection(['locked-annotation'])
-    events.keyDown({ key: 'F2', cancelable: true })
+    events.keyDown({ key: 'F2', cancelable: true, target: container })
     expect(container.querySelector('textarea')).toBeNull()
 
     store.updatePersisted((draft) => {

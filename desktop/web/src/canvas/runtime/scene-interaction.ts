@@ -603,6 +603,7 @@ export class SceneInteractionController {
   private _beginSelectedAnnotationTextEditFromKeyboard(event: KeyboardEvent): boolean {
     if (this._tool !== 'select') return false
     if (event.key !== 'Enter' && event.key !== 'F2') return false
+    if (!isCanvasKeyboardShortcutTarget(event.target, this._deps.container)) return false
     if (isEditableTarget(event.target)) return false
     if (this._tools.shouldSuppressSharedKeyboard(event)) return false
 
@@ -676,4 +677,29 @@ function isTargetLayerLocked(scene: ScenePersistedState, target: TopLevelTarget)
         ? 'annotations'
         : scene.groups.find((group) => group.id === target.id)?.layer
   return scene.layers.find((layer) => layer.name === layerName)?.locked === true
+}
+
+function isCanvasKeyboardShortcutTarget(target: EventTarget | null, container: HTMLElement): boolean {
+  if (target === window) return true
+  if (!(target instanceof Node)) return false
+  if (!container.contains(target)) return false
+  const element = target instanceof HTMLElement ? target : target.parentElement
+  if (!element) return false
+  if (isKeyboardInteractiveElement(element)) return false
+  return true
+}
+
+function isKeyboardInteractiveElement(element: HTMLElement): boolean {
+  return element.closest([
+    'button',
+    'a[href]',
+    'input',
+    'textarea',
+    'select',
+    '[contenteditable="true"]',
+    '[role="button"]',
+    '[role="menu"]',
+    '[role="dialog"]',
+    'dialog',
+  ].join(',')) !== null
 }
