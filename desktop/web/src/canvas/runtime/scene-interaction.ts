@@ -462,25 +462,28 @@ export class SceneInteractionController {
 
   private _retargetContextMenuSelection(world: ScenePoint): CanvasDesignObjectSelectionModel | null {
     const scene = this._deps.getSceneStore().persisted
+    const viewportScale = this._deps.camera.viewport.scale
+    const speciesCache = this._deps.getSpeciesCache()
+    const getPlantContext = this._deps.getPlantPresentationContext
+    const visibleHit = hitTestVisibleTopLevel(
+      scene,
+      world,
+      viewportScale,
+      speciesCache,
+      getPlantContext,
+    )
+    if (visibleHit && isContextMenuTargetStructurallyBlocked(scene, visibleHit)) {
+      return disabledContextMenuSelection()
+    }
     const hit = hitTestTopLevel(
       scene,
       world,
-      this._deps.camera.viewport.scale,
-      this._deps.getSpeciesCache(),
-      this._deps.getPlantPresentationContext,
+      viewportScale,
+      speciesCache,
+      getPlantContext,
     )
-    if (!hit) {
-      const visibleHit = hitTestVisibleTopLevel(
-        scene,
-        world,
-        this._deps.camera.viewport.scale,
-        this._deps.getSpeciesCache(),
-        this._deps.getPlantPresentationContext,
-      )
-      return visibleHit ? disabledContextMenuSelection() : null
-    }
-    const directlyLocked = isDirectSceneDesignObjectLocked(scene, hit.id)
-    if (isSceneDesignObjectLocked(scene, hit.id) && !directlyLocked) return disabledContextMenuSelection()
+    if (!hit) return visibleHit ? disabledContextMenuSelection() : null
+    if (isContextMenuTargetStructurallyBlocked(scene, hit)) return disabledContextMenuSelection()
     if (this._deps.getSelection().has(hit.id)) return null
     this._deps.setSelection(new Set([hit.id]))
     this._deps.render('scene')
@@ -611,6 +614,12 @@ function disabledContextMenuSelection(): CanvasDesignObjectSelectionModel {
     bounds: null,
     sameSpeciesReferenceCanonicalName: null,
   }
+}
+
+function isContextMenuTargetStructurallyBlocked(scene: ScenePersistedState, target: TopLevelTarget): boolean {
+  if (isTargetLayerLocked(scene, target)) return true
+  return isSceneDesignObjectLocked(scene, target.id)
+    && !isDirectSceneDesignObjectLocked(scene, target.id)
 }
 
 function isTargetLayerLocked(scene: ScenePersistedState, target: TopLevelTarget): boolean {

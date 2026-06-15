@@ -1721,6 +1721,72 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('disables Canvas Context Menu edits for a topmost blocked hit over an editable target', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [
+        makeRectZone('editable-zone', [
+          { x: 110, y: 20 },
+          { x: 130, y: 20 },
+          { x: 130, y: 40 },
+          { x: 110, y: 40 },
+        ]),
+      ]
+      draft.plants = [
+        makePlant('locked-layer-plant', 'Malus domestica', { x: 120, y: 30 }),
+      ]
+      draft.layers = draft.layers.map((layer) =>
+        layer.name === 'plants' ? { ...layer, locked: true } : layer,
+      )
+    })
+    const copy = vi.fn()
+    const pasteAt = vi.fn()
+    const deleteSelected = vi.fn()
+    const baseDeps = createInteractionDeps(container, store, camera, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    })
+    const deps = {
+      ...baseDeps,
+      selectionCommands: {
+        ...baseDeps.selectionCommands,
+        copy,
+        pasteAt,
+        canPaste: vi.fn(() => true),
+        deleteSelected,
+      },
+    }
+    const controller = new SceneInteractionController(deps as any)
+
+    const point = events.clientPoint({ x: 120, y: 30 })
+    container.dispatchEvent(new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: point.x,
+      clientY: point.y,
+    }))
+
+    expect(selectedObjectIds.value).toEqual(new Set())
+    expect(deps.setSelection).not.toHaveBeenCalled()
+
+    const menu = container.querySelector<HTMLElement>('[data-canvas-context-menu]')!
+    const copyButton = menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="copy"]')!
+    const pasteButton = menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="paste"]')!
+    const deleteButton = menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="delete"]')!
+
+    expect(copyButton.disabled).toBe(true)
+    expect(pasteButton.disabled).toBe(false)
+    expect(deleteButton.disabled).toBe(true)
+
+    copyButton.click()
+    deleteButton.click()
+    pasteButton.click()
+
+    expect(copy).not.toHaveBeenCalled()
+    expect(deleteSelected).not.toHaveBeenCalled()
+    expect(pasteAt).toHaveBeenCalledWith({ x: 120, y: 30 })
+
+    controller.dispose()
+  })
+
   it('updates Canvas Context Menu target selection like a design tool', () => {
     store.updatePersisted((draft) => {
       draft.plants = [
