@@ -95,6 +95,32 @@ describe('PlantSymbolMenu', () => {
     expect(plantSymbolMenuOpen.value).toBe(false)
   })
 
+  it('renders option and preview glyphs in padded SVG frames', async () => {
+    getSelectedPlantSymbolContext.mockReturnValue({
+      plantIds: ['plant-1'],
+      singleSpeciesCanonicalName: 'Malus domestica',
+      singleSpeciesCommonName: 'Apple',
+      sharedCurrentSymbol: null,
+      sharedEffectiveSymbol: 'round',
+      inheritedSymbol: null,
+      singleSpeciesDefaultSymbol: null,
+      canClearSelectedSymbol: false,
+    })
+
+    await act(async () => {
+      render(<PlantSymbolMenu buttonRef={buttonRef} />, container)
+      await Promise.resolve()
+    })
+
+    const [previewSvg] = container.querySelectorAll('svg')
+    const triangleSvg = container.querySelector('button[aria-label="Triangle"] svg')
+
+    expect(previewSvg).toBeTruthy()
+    expect(triangleSvg).toBeTruthy()
+    expect(previewSvg?.getAttribute('viewBox')).toBe('-1.2 -1.2 2.4 2.4')
+    expect(triangleSvg?.getAttribute('viewBox')).toBe('-1.2 -1.2 2.4 2.4')
+  })
+
   it('updates the selected plant name when localized plant names refresh', async () => {
     let commonName = 'Apple'
     getSelectedPlantSymbolContext.mockImplementation(() => ({
