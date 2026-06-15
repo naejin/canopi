@@ -8,6 +8,7 @@ import {
 } from '../plant-presentation'
 import {
   DEFAULT_PLANT_SYMBOL_LINE_STROKE_WIDTH,
+  DEFAULT_PLANT_SYMBOL_SHAPE_STROKE_WIDTH,
   PLANT_SYMBOL_RECIPES,
 } from '../plant-symbol-recipes'
 import { computeSelectionLabels } from '../selection-labels'
@@ -300,7 +301,12 @@ function drawPlantSymbolGlyph(
           ctx.lineTo(x + point[0] * r, y + point[1] * r)
         }
         if (command.closed) ctx.closePath()
+        ctx.lineWidth = lineWidth * (
+          (command.strokeWidth ?? DEFAULT_PLANT_SYMBOL_SHAPE_STROKE_WIDTH) /
+          DEFAULT_PLANT_SYMBOL_SHAPE_STROKE_WIDTH
+        )
         fillAndStrokeCanvasSymbolCommand(ctx, command.fill, command.stroke, opacity)
+        ctx.lineWidth = lineWidth
         break
       }
       case 'lines':
