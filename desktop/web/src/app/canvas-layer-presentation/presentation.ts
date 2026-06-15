@@ -21,9 +21,13 @@ export type CanvasLayerPresentationDetail =
     }
   | {
       readonly type: 'contours'
+      readonly hasLocation: boolean
       readonly contourIntervalMeters: number
     }
-  | { readonly type: 'hillshade' }
+  | {
+      readonly type: 'hillshade'
+      readonly hasLocation: boolean
+    }
 
 export interface CanvasLayerPresentationRow {
   readonly id: string
@@ -112,6 +116,7 @@ export function readCanvasLayerPresentation(): CanvasLayerPresentation {
       canLock: false,
       detail: {
         type: 'contours',
+        hasLocation: savedLocation.hasLocation,
         contourIntervalMeters: contourIntervalMeters.value,
       },
     },
@@ -124,7 +129,7 @@ export function readCanvasLayerPresentation(): CanvasLayerPresentation {
       opacity: hillshadeOpacity.value,
       locked: false,
       canLock: false,
-      detail: { type: 'hillshade' },
+      detail: { type: 'hillshade', hasLocation: savedLocation.hasLocation },
     },
   ]
 
