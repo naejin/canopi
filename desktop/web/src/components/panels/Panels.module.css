@@ -110,7 +110,8 @@
   position: absolute;
   top: calc(var(--ruler-size) + var(--space-1));
   left: calc(var(--ruler-size) + var(--space-2));
-  z-index: 20;
+  /* Above ruler/scale-bar chrome, below toolbar-hosted plant styling popovers. */
+  z-index: 18;
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
