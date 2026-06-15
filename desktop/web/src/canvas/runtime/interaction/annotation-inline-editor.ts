@@ -8,6 +8,7 @@ export interface AnnotationInlineEditorContext {
   readonly camera: CameraController
   readonly getSceneStore: () => SceneStore
   readonly sceneEdits: SceneEditCoordinator
+  readonly canEditAnnotation: (annotationId: string) => boolean
   readonly refreshSelectionDependent: () => void
 }
 
@@ -91,6 +92,7 @@ export function createAnnotationInlineEditor(
 
     const annotation = findAnnotation(edit.annotationId)
     if (!annotation) return
+    if (!context.canEditAnnotation(edit.annotationId)) return
     if (rawText.trim().length === 0) {
       const committed = context.sceneEdits.run('interaction-annotation-text', (tx) => {
         tx.mutate((draft) => {

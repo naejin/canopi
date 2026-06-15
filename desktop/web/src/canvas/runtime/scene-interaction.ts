@@ -39,6 +39,7 @@ import {
   createAnnotationInlineEditor,
   type AnnotationInlineEditorController,
 } from './interaction/annotation-inline-editor'
+import { getDesignObjectSelectionModel } from './scene-runtime/selection'
 import type { SceneEditCoordinator } from './scene-runtime/transactions'
 import {
   createSelectionActionToolbar,
@@ -145,6 +146,7 @@ export class SceneInteractionController {
       camera: this._deps.camera,
       getSceneStore: this._deps.getSceneStore,
       sceneEdits: this._deps.sceneEdits,
+      canEditAnnotation: (annotationId) => this._canEditAnnotation(annotationId),
       refreshSelectionDependent: () => this._refreshSelectionDependentMeasurements(),
     })
     this._sharedGestures = createSceneInteractionSharedGestures({
@@ -621,6 +623,23 @@ export class SceneInteractionController {
     event.preventDefault()
     event.stopPropagation()
     return true
+  }
+
+  private _canEditAnnotation(annotationId: string): boolean {
+    const viewportScale = this._deps.camera.viewport.scale
+    const selection = getDesignObjectSelectionModel(
+      this._deps.getSceneStore().persisted,
+      new Set([annotationId]),
+      {
+        annotationViewportScale: viewportScale,
+        plantContext: this._deps.getPlantPresentationContext(viewportScale),
+      },
+    )
+    return selection.editableTargets.length === 1
+      && selection.editableTargets[0]?.kind === 'annotation'
+      && selection.editableTargets[0].id === annotationId
+      && selection.lockedTargets.length === 0
+      && selection.blockedTargets.length === 0
   }
 
   private _syncLockedObjectAffordance(

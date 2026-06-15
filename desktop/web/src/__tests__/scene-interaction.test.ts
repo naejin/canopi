@@ -3960,6 +3960,82 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('does not commit existing text Annotation edits after the Annotation becomes locked before blur commit', async () => {
+    store.updatePersisted((draft) => {
+      draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Original note')]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 2 })
+    const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
+    textarea.value = 'Blocked edit'
+    store.updatePersisted((draft) => {
+      draft.annotations = draft.annotations.map((annotation) => (
+        annotation.id === 'annotation-1' ? { ...annotation, locked: true } : annotation
+      ))
+    })
+    textarea.dispatchEvent(new FocusEvent('blur'))
+    await nextAnimationFrame()
+
+    expect(store.persisted.annotations[0]?.text).toBe('Original note')
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    expect(container.querySelector('textarea')).toBeNull()
+    controller.dispose()
+  })
+
+  it('does not commit existing text Annotation edits after the Annotations Layer becomes locked', () => {
+    store.updatePersisted((draft) => {
+      draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Original note')]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 2 })
+    const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
+    textarea.value = 'Locked layer edit'
+    store.updatePersisted((draft) => {
+      draft.layers = draft.layers.map((layer) => (
+        layer.name === 'annotations' ? { ...layer, locked: true } : layer
+      ))
+    })
+    textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+
+    expect(store.persisted.annotations[0]?.text).toBe('Original note')
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    expect(container.querySelector('textarea')).toBeNull()
+    controller.dispose()
+  })
+
+  it('does not commit existing text Annotation edits after the Annotations Layer becomes hidden', () => {
+    store.updatePersisted((draft) => {
+      draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Original note')]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 2 })
+    const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
+    textarea.value = 'Hidden layer edit'
+    store.updatePersisted((draft) => {
+      draft.layers = draft.layers.map((layer) => (
+        layer.name === 'annotations' ? { ...layer, visible: false } : layer
+      ))
+    })
+    textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+
+    expect(store.persisted.annotations[0]?.text).toBe('Original note')
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    expect(container.querySelector('textarea')).toBeNull()
+    controller.dispose()
+  })
+
   it('deletes an existing text Annotation when committed text is empty', () => {
     store.updatePersisted((draft) => {
       draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Delete me')]
@@ -3978,6 +4054,33 @@ describe('SceneInteractionController', () => {
     expect(store.persisted.annotations).toHaveLength(0)
     expect(selectedObjectIds.value.size).toBe(0)
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-annotation-text')
+    expect(container.querySelector('textarea')).toBeNull()
+    controller.dispose()
+  })
+
+  it('does not delete an existing text Annotation after it becomes locked before empty commit', () => {
+    store.updatePersisted((draft) => {
+      draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Delete me')]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+    deps.setSelection(['annotation-1'])
+
+    events.keyDown({ key: 'F2', cancelable: true, target: container })
+    const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
+    textarea.value = '   '
+    store.updatePersisted((draft) => {
+      draft.annotations = draft.annotations.map((annotation) => (
+        annotation.id === 'annotation-1' ? { ...annotation, locked: true } : annotation
+      ))
+    })
+    textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+
+    expect(store.persisted.annotations).toHaveLength(1)
+    expect(store.persisted.annotations[0]?.text).toBe('Delete me')
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
     expect(container.querySelector('textarea')).toBeNull()
     controller.dispose()
   })
