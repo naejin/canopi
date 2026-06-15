@@ -177,11 +177,22 @@ function cloneZoneWithOffset(
   return {
     ...cloneZoneEntity(zone),
     name: nextName,
-    points: zone.points.map((point) => ({
-      x: point.x + offset.x,
-      y: point.y + offset.y,
-    })),
+    points: cloneZonePointsWithOffset(zone, offset),
   }
+}
+
+function cloneZonePointsWithOffset(zone: SceneZoneEntity, offset: ScenePoint): ScenePoint[] {
+  if (zone.zoneType === 'ellipse') {
+    return zone.points.map((point, index) =>
+      index === 0
+        ? { x: point.x + offset.x, y: point.y + offset.y }
+        : { ...point },
+    )
+  }
+  return zone.points.map((point) => ({
+    x: point.x + offset.x,
+    y: point.y + offset.y,
+  }))
 }
 
 function cloneAnnotationWithOffset(annotation: SceneAnnotationEntity, offset: ScenePoint): SceneAnnotationEntity {

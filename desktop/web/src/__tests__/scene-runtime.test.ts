@@ -53,6 +53,27 @@ function createPlant(id: string, x: number, y: number, canonical = 'Quercus robu
   }
 }
 
+function createEllipseZone(
+  name: string,
+  x: number,
+  y: number,
+  radiusX: number,
+  radiusY: number,
+): CanopiFile['zones'][number] {
+  return {
+    name,
+    zone_type: 'ellipse',
+    points: [
+      { x, y },
+      { x: radiusX, y: radiusY },
+    ],
+    rotation: 0,
+    fill_color: null,
+    notes: null,
+    locked: false,
+  }
+}
+
 function createAnnotation(
   id: string,
   x: number,
@@ -166,6 +187,59 @@ describe('Canvas runtime surfaces', () => {
       expect(selection.bounds).not.toBeNull()
       expect((selection.bounds!.minX + selection.bounds!.maxX) / 2).toBeCloseTo(100, 5)
       expect((selection.bounds!.minY + selection.bounds!.maxY) / 2).toBeCloseTo(50, 5)
+    } finally {
+      host.destroy()
+    }
+  })
+
+  it('preserves elliptical Zone radii when pasting, duplicating, and context-pasting', () => {
+    const host = createRuntimeHost()
+    const { commands, documents, queries } = host.surfaces
+
+    try {
+      documents.loadDocument({
+        ...BASE_FILE,
+        zones: [createEllipseZone('ellipse-bed', 10, 20, 3, 2)],
+      })
+
+      commands.sceneEdits.selectAll()
+      commands.sceneEdits.copy()
+      commands.sceneEdits.paste()
+
+      let scene = queries.getSceneSnapshot()
+      expect(scene.zones[1]?.points).toEqual([
+        { x: 11, y: 20 },
+        { x: 3, y: 2 },
+      ])
+      expect(queries.getSelection()).toEqual(new Set([scene.zones[1]!.name]))
+
+      commands.sceneEdits.duplicateSelected()
+
+      scene = queries.getSceneSnapshot()
+      expect(scene.zones[2]?.points).toEqual([
+        { x: 12, y: 20 },
+        { x: 3, y: 2 },
+      ])
+
+      commands.sceneEdits.copy()
+      commands.sceneEdits.pasteAt({ x: 100, y: 50 })
+
+      scene = queries.getSceneSnapshot()
+      expect(scene.zones[3]?.points).toEqual([
+        { x: 100, y: 50 },
+        { x: 3, y: 2 },
+      ])
+      expect(queries.getSelection()).toEqual(new Set([scene.zones[3]!.name]))
+
+      commands.history.undo()
+      expect(queries.getSceneSnapshot().zones).toHaveLength(3)
+
+      commands.history.redo()
+      scene = queries.getSceneSnapshot()
+      expect(scene.zones[3]?.points).toEqual([
+        { x: 100, y: 50 },
+        { x: 3, y: 2 },
+      ])
     } finally {
       host.destroy()
     }

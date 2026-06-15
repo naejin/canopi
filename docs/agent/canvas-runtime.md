@@ -117,6 +117,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 
 - Zone file data carries orientation as `Zone.rotation`; scene runtime entities expose it as `SceneZoneEntity.rotationDeg`. Missing rotation from older documents hydrates to `0`, and new saves serialize an explicit numeric rotation.
 - Rectangular and Elliptical Zones are oriented shapes. Rendering, hit testing, band selection, object stamp previews, selection/group bounds, zoom-to-fit, and Zone Measurements must consume the shared helpers in `canvas/runtime/zone-geometry.ts` instead of duplicating axis-aligned bounds.
+- Elliptical Zones store `points[0]` as the world center and `points[1]` as the radius vector. Translation-style edits, Paste, Duplicate, and Object Stamp must offset only the center while preserving the radius vector; linear, polygonal, and rectangular Zones continue to translate their world points.
 - Linear and Polygonal Zones still derive geometry from their saved points; keep their rotation value at `0` unless a future feature deliberately defines oriented behavior for those Zone types.
 
 ## Zone Measurements
