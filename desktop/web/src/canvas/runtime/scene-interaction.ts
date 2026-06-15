@@ -215,6 +215,7 @@ export class SceneInteractionController {
       this._contextMenu.dispose()
       this._rotationHandle.dispose()
       this._lockedAffordance.dispose()
+      this._sharedGestures.dispose()
       this._tools.dispose()
       this._preview.remove()
       this._tooltip.dispose()

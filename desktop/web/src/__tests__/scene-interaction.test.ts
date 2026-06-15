@@ -379,6 +379,43 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('shows nearest non-dragged Plant distances while dragging selected Plants', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [
+        makePlant('plant-1', 'Malus domestica', { x: 0, y: 0 }),
+        makePlant('plant-2', 'Malus domestica', { x: -20, y: -20 }),
+        makePlant('plant-3', 'Pyrus communis', { x: 6, y: 8 }),
+        makePlant('plant-4', 'Prunus avium', { x: 3, y: 9 }),
+        makePlant('plant-5', 'Cydonia oblonga', { x: 13, y: 4 }),
+        makePlant('plant-6', 'Mespilus germanica', { x: 103, y: 4 }),
+      ]
+    })
+
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+    deps.setSelection(['plant-1', 'plant-2'])
+
+    events.pointerDown({ x: 0, y: 0 })
+    events.pointerMove({ x: 3, y: 4 })
+
+    const labels = Array.from(container.querySelectorAll<HTMLElement>('[data-plant-drag-distance-label]'))
+    const lines = Array.from(container.querySelectorAll<SVGLineElement>('[data-plant-drag-distance-line]'))
+
+    expect(store.persisted.plants.find((plant) => plant.id === 'plant-1')?.position).toEqual({ x: 3, y: 4 })
+    expect(labels.map((label) => label.textContent)).toEqual(['5 m', '5 m', '10 m'])
+    expect(lines).toHaveLength(3)
+    expect(container.textContent).not.toContain('100 m')
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+
+    events.pointerUp({ x: 3, y: 4 })
+
+    expect(container.querySelector('[data-plant-drag-distance-label]')).toBeNull()
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-drag')
+    controller.dispose()
+  })
+
   it('keeps active drag and rotation gestures moving when pointermove targets runtime overlays', () => {
     store.updatePersisted((draft) => {
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
@@ -5193,22 +5230,25 @@ describe('SceneInteractionController', () => {
     camera.setViewport({ x: 0, y: 0, scale: 4 })
     snapToGridEnabled.value = true
     store.updatePersisted((draft) => {
-      draft.plants = [{
-        kind: 'plant',
-        locked: false,
-        id: 'plant-1',
-        canonicalName: 'Malus domestica',
-        commonName: 'Apple',
-        color: null,
-        stratum: null,
-        canopySpreadM: 2,
-        position: { x: 50, y: 50 },
-        rotationDeg: null,
-        scale: 2,
-        notes: null,
-        plantedDate: null,
-        quantity: 1,
-      }]
+      draft.plants = [
+        {
+          kind: 'plant',
+          locked: false,
+          id: 'plant-1',
+          canonicalName: 'Malus domestica',
+          commonName: 'Apple',
+          color: null,
+          stratum: null,
+          canopySpreadM: 2,
+          position: { x: 50, y: 50 },
+          rotationDeg: null,
+          scale: 2,
+          notes: null,
+          plantedDate: null,
+          quantity: 1,
+        },
+        makePlant('plant-2', 'Pyrus communis', { x: 70, y: 60 }),
+      ]
     })
 
     const onSceneEditCommit = vi.fn()
@@ -5223,9 +5263,12 @@ describe('SceneInteractionController', () => {
     // delta = (60-50, 60-50) = (10,10). Final = (60,60).
     events.pointerDown({ x: 201, y: 202 }, { button: 0 })
     events.pointerMove({ x: 232, y: 248 }, { button: 0 })
+    expect(Array.from(container.querySelectorAll<HTMLElement>('[data-plant-drag-distance-label]'))
+      .map((label) => label.textContent)).toEqual(['10 m'])
     events.pointerUp({ x: 232, y: 248 }, { button: 0 })
 
     expect(store.persisted.plants[0]?.position).toEqual({ x: 60, y: 60 })
+    expect(container.querySelector('[data-plant-drag-distance-label]')).toBeNull()
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-drag')
     controller.dispose()
   })
