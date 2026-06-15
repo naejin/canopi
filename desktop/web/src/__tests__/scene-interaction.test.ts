@@ -1558,6 +1558,101 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('keeps Canvas Context Menu Copy and Delete disabled for mixed editable and locked selections', () => {
+    const copy = vi.fn()
+    const pasteAt = vi.fn()
+    const deleteSelected = vi.fn()
+    const baseDeps = createInteractionDeps(container, store, camera, {
+      getDesignObjectSelection: () => ({
+        editableTargets: [{ kind: 'plant' as const, id: 'editable-plant' }],
+        lockedTargets: [{ kind: 'plant' as const, id: 'locked-plant' }],
+        blockedTargets: [{
+          target: { kind: 'plant' as const, id: 'locked-plant' },
+          reason: 'locked-design-object' as const,
+          layerName: 'plants',
+        }],
+        bounds: { minX: 20, minY: 20, maxX: 60, maxY: 24 },
+        sameSpeciesReferenceCanonicalName: null,
+      }),
+    })
+    const deps = {
+      ...baseDeps,
+      selectionCommands: {
+        ...baseDeps.selectionCommands,
+        copy,
+        pasteAt,
+        canPaste: vi.fn(() => true),
+        deleteSelected,
+      },
+    }
+    const controller = new SceneInteractionController(deps as any)
+    const point = events.clientPoint({ x: 80, y: 90 })
+
+    container.dispatchEvent(new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: point.x,
+      clientY: point.y,
+    }))
+
+    const menu = container.querySelector<HTMLElement>('[data-canvas-context-menu]')!
+    const copyButton = menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="copy"]')!
+    const pasteButton = menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="paste"]')!
+    const deleteButton = menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="delete"]')!
+
+    expect(copyButton.disabled).toBe(true)
+    expect(pasteButton.disabled).toBe(false)
+    expect(deleteButton.disabled).toBe(true)
+
+    copyButton.click()
+    deleteButton.click()
+
+    expect(copy).not.toHaveBeenCalled()
+    expect(deleteSelected).not.toHaveBeenCalled()
+
+    controller.dispose()
+  })
+
+  it('keeps Canvas Context Menu Copy and Delete disabled for mixed editable and structurally blocked selections', () => {
+    const baseDeps = createInteractionDeps(container, store, camera, {
+      getDesignObjectSelection: () => ({
+        editableTargets: [{ kind: 'plant' as const, id: 'editable-plant' }],
+        lockedTargets: [],
+        blockedTargets: [{
+          target: { kind: 'plant' as const, id: 'grouped-plant' },
+          reason: 'grouped-member' as const,
+          layerName: 'plants',
+          groupId: 'group-1',
+        }],
+        bounds: { minX: 20, minY: 20, maxX: 60, maxY: 24 },
+        sameSpeciesReferenceCanonicalName: null,
+      }),
+    })
+    const deps = {
+      ...baseDeps,
+      selectionCommands: {
+        ...baseDeps.selectionCommands,
+        canPaste: vi.fn(() => true),
+      },
+    }
+    const controller = new SceneInteractionController(deps as any)
+    const point = events.clientPoint({ x: 80, y: 90 })
+
+    container.dispatchEvent(new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: point.x,
+      clientY: point.y,
+    }))
+
+    const menu = container.querySelector<HTMLElement>('[data-canvas-context-menu]')!
+    expect(menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="copy"]')?.disabled).toBe(true)
+    expect(menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="paste"]')?.disabled).toBe(false)
+    expect(menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="delete"]')?.disabled).toBe(true)
+
+    controller.dispose()
+  })
+
   it('updates Canvas Context Menu target selection like a design tool', () => {
     store.updatePersisted((draft) => {
       draft.plants = [

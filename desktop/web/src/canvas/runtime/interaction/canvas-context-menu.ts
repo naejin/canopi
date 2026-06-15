@@ -68,7 +68,7 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
     {
       id: 'copy',
       labelKey: 'canvas.contextMenu.copy',
-      isEnabled: hasEditableSelection,
+      isEnabled: hasEditableOnlySelection,
       run: () => options.commands.copy(),
     },
     {
@@ -80,7 +80,7 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
     {
       id: 'delete',
       labelKey: 'canvas.contextMenu.delete',
-      isEnabled: hasEditableSelection,
+      isEnabled: hasEditableOnlySelection,
       run: () => options.commands.deleteSelected(),
     },
   ]
@@ -190,8 +190,14 @@ function actionsHeight(): number {
   return MENU_ITEM_HEIGHT_PX * 3 + MENU_PADDING_BLOCK_PX
 }
 
-function hasEditableSelection(selection: CanvasDesignObjectSelectionModel): boolean {
+function hasEditableOnlySelection(selection: CanvasDesignObjectSelectionModel): boolean {
   return selection.editableTargets.length > 0
+    && lockedTargets(selection).length === 0
+    && selection.blockedTargets.length === 0
+}
+
+function lockedTargets(selection: CanvasDesignObjectSelectionModel): readonly { kind: string; id: string }[] {
+  return selection.lockedTargets ?? []
 }
 
 function clamp(value: number, min: number, max: number): number {
