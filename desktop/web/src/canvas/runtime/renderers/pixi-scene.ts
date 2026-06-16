@@ -26,6 +26,7 @@ import {
 import type { SceneRendererDefinition, SceneRendererHoverState, SceneRendererInstance, SceneRendererSnapshot } from './scene-types'
 import { getEllipticalZonePolygon, getRectangularZoneCorners } from '../zone-geometry'
 import type { PlantSymbolId, SceneAnnotationEntity, SceneZoneEntity } from '../scene'
+import { isSceneObjectGroupMemberTarget } from '../scene'
 
 const BACKGROUND_COLOR = 0x000000
 const ZONE_STROKE_PX = 2
@@ -753,5 +754,7 @@ function hoverStateForTarget(
   if (hoverTarget.kind === kind && hoverTarget.id === id) return hoverTarget.state
   if (hoverTarget.kind !== 'group') return null
   const group = snapshot.scene.groups.find((entry) => entry.id === hoverTarget.id)
-  return group?.memberIds.includes(id) ? hoverTarget.state : null
+  return group?.members.some((member) => isSceneObjectGroupMemberTarget(member, { kind, id }))
+    ? hoverTarget.state
+    : null
 }

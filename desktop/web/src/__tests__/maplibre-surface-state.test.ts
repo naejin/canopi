@@ -68,15 +68,28 @@ describe('maplibre surface state adapter', () => {
 
   it('computes scene extent from all geometry-bearing entities', () => {
     const scene = createDefaultScenePersistedState()
+    scene.plants.push({
+      kind: 'plant',
+      id: 'plant-1',
+      locked: false,
+      canonicalName: 'Malus domestica',
+      commonName: null,
+      color: null,
+      stratum: null,
+      canopySpreadM: null,
+      position: { x: 30, y: 40 },
+      rotationDeg: null,
+      scale: null,
+      notes: null,
+      plantedDate: null,
+      quantity: null,
+    })
     scene.groups.push({
       kind: 'group',
       locked: false,
       id: 'group-1',
       name: 'orchard',
-      layer: 'zones',
-      position: { x: 30, y: 40 },
-      rotationDeg: null,
-      memberIds: [],
+      members: [{ kind: 'plant', id: 'plant-1' }],
     })
 
     expect(computeSceneExtentMeters(scene)).toBeCloseTo(50, 8)

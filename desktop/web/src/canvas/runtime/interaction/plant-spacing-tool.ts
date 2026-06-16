@@ -17,7 +17,7 @@ import {
   type PlantPresentationContext,
 } from '../plant-presentation'
 import type { ScenePlantEntity, ScenePoint, SceneStore } from '../scene'
-import { isSceneDesignObjectLocked } from '../scene'
+import { isSceneDesignObjectLocked, isSceneObjectGroupMemberTarget } from '../scene'
 import type { SpeciesCacheEntry } from '../species-cache'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
 import { hitTestTopLevel } from './hit-testing'
@@ -297,7 +297,11 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
     const layer = scene.layers.find((entry) => entry.name === 'plants')
     if (layer?.visible === false || layer?.locked === true) return false
     if (!scene.plants.some((plant) => plant.id === candidate.sourceId)) return false
-    return !scene.groups.some((group) => group.memberIds.includes(candidate.sourceId))
+    return !scene.groups.some((group) =>
+      group.members.some((member) =>
+        isSceneObjectGroupMemberTarget(member, { kind: 'plant', id: candidate.sourceId }),
+      ),
+    )
   }
 
   function clearUnavailableSource(): void {

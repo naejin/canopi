@@ -155,11 +155,10 @@ export type ObjectGroup = {
 	id: string,
 	locked: boolean,
 	name: string | null,
-	layer: string,
-	position: Position,
-	rotation: number | null,
-	member_ids: string[],
+	members: ObjectGroupMember[],
 };
+
+export type ObjectGroupMember = { kind: "plant"; id: string } | { kind: "zone"; id: string } | { kind: "annotation"; id: string };
 
 export type PaginatedResult<T> = {
 	items: T[],

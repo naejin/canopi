@@ -639,10 +639,7 @@ describe('SceneInteractionController', () => {
         id: 'group-1',
         locked: false,
         name: null,
-        layer: 'plants',
-        position: { x: 160, y: 30 },
-        rotationDeg: null,
-        memberIds: ['grouped-apple'],
+        members: [{ kind: 'plant', id: 'grouped-apple' }],
       }]
     })
     const onSceneEditCommit = vi.fn()
@@ -952,14 +949,14 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
-  it('shows Group for groupable same-layer selections and dispatches through the command surface', () => {
+  it('shows Group for mixed concrete selections and dispatches through the command surface', () => {
     const groupSelected = vi.fn()
     const deps = {
       ...createInteractionDeps(container, store, camera),
       getDesignObjectSelection: () => ({
         editableTargets: [
           { kind: 'plant' as const, id: 'plant-1' },
-          { kind: 'plant' as const, id: 'plant-2' },
+          { kind: 'zone' as const, id: 'zone-1' },
         ],
         blockedTargets: [],
         bounds: { minX: 10, minY: 10, maxX: 40, maxY: 40 },
@@ -1047,6 +1044,7 @@ describe('SceneInteractionController', () => {
   })
 
   it('filters Group and Ungroup actions by selection eligibility', () => {
+    const groupSelected = vi.fn()
     const ungroupSelected = vi.fn()
     let selectionModel: CanvasDesignObjectSelectionModel = {
       editableTargets: [
@@ -1069,15 +1067,18 @@ describe('SceneInteractionController', () => {
         selectSameSpecies: vi.fn(),
         lockSelected: vi.fn(),
         unlockSelected: vi.fn(),
-        groupSelected: vi.fn(),
+        groupSelected,
         ungroupSelected,
       },
     }
     const controller = new SceneInteractionController(deps as any)
 
     controller.refreshMeasurements()
-    expect(container.querySelector('[data-selection-action-command="group"]')).toBeNull()
+    const mixedGroup = container.querySelector<HTMLButtonElement>('[data-selection-action-command="group"]')
+    expect(mixedGroup).not.toBeNull()
     expect(container.querySelector('[data-selection-action-command="ungroup"]')).toBeNull()
+    mixedGroup?.click()
+    expect(groupSelected).toHaveBeenCalledTimes(1)
 
     selectionModel = {
       editableTargets: [
@@ -1096,6 +1097,23 @@ describe('SceneInteractionController', () => {
     controller.refreshMeasurements()
     expect(container.querySelector('[data-selection-action-command="group"]')).toBeNull()
     expect(container.querySelector('[data-selection-action-command="ungroup"]')).toBeNull()
+
+    selectionModel = {
+      editableTargets: [
+        { kind: 'group' as const, id: 'group-1' },
+        { kind: 'annotation' as const, id: 'annotation-1' },
+      ],
+      lockedTargets: [],
+      blockedTargets: [],
+      bounds: { minX: 10, minY: 10, maxX: 40, maxY: 40 },
+      sameSpeciesReferenceCanonicalName: null,
+    }
+    controller.refreshMeasurements()
+    const regroup = container.querySelector<HTMLButtonElement>('[data-selection-action-command="group"]')
+    expect(regroup).not.toBeNull()
+    expect(container.querySelector('[data-selection-action-command="ungroup"]')).not.toBeNull()
+    regroup?.click()
+    expect(groupSelected).toHaveBeenCalledTimes(2)
 
     selectionModel = {
       editableTargets: [{ kind: 'group' as const, id: 'group-1' }],
@@ -1536,10 +1554,10 @@ describe('SceneInteractionController', () => {
         id: 'group-1',
         locked: false,
         name: 'Group',
-        layer: 'plants',
-        position: { x: 85, y: 120 },
-        rotationDeg: null,
-        memberIds: ['plant-1', 'line-1'],
+        members: [
+          { kind: 'plant', id: 'plant-1' },
+          { kind: 'zone', id: 'line-1' },
+        ],
       }]
     })
     const onSceneEditCommit = vi.fn()
@@ -1567,9 +1585,10 @@ describe('SceneInteractionController', () => {
     expectPointCloseTo(store.persisted.plants[0]?.position, quarterTurnClockwise(pivot, { x: 60, y: 120 }))
     expectPointCloseTo(line?.points[0], quarterTurnClockwise(pivot, { x: 90, y: 120 }))
     expectPointCloseTo(line?.points[1], quarterTurnClockwise(pivot, { x: 110, y: 120 }))
-    expectPointCloseTo(group?.position, quarterTurnClockwise(pivot, { x: 85, y: 120 }))
-    expect(group?.rotationDeg).toBeNull()
-    expect(group?.memberIds).toEqual(['plant-1', 'line-1'])
+    expect(group?.members).toEqual([
+      { kind: 'plant', id: 'plant-1' },
+      { kind: 'zone', id: 'line-1' },
+    ])
     expect(onSceneEditCommit).toHaveBeenCalledTimes(1)
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-rotate')
     controller.dispose()
@@ -1583,10 +1602,7 @@ describe('SceneInteractionController', () => {
         id: 'group-1',
         locked: false,
         name: 'Group',
-        layer: 'plants',
-        position: { x: 60, y: 120 },
-        rotationDeg: null,
-        memberIds: ['plant-1'],
+        members: [{ kind: 'plant', id: 'plant-1' }],
       }]
     })
     const deps = createInteractionDeps(container, store, camera, {
@@ -2266,10 +2282,7 @@ describe('SceneInteractionController', () => {
         id: 'group-1',
         locked: false,
         name: null,
-        layer: 'plants',
-        position: { x: 20, y: 30 },
-        rotationDeg: null,
-        memberIds: ['locked-member'],
+        members: [{ kind: 'plant', id: 'locked-member' }],
       }]
     })
 
@@ -2426,10 +2439,7 @@ describe('SceneInteractionController', () => {
         id: 'group-1',
         locked: false,
         name: 'Grouped row',
-        layer: 'plants',
-        position: { x: 20, y: 30 },
-        rotationDeg: null,
-        memberIds: ['grouped-plant'],
+        members: [{ kind: 'plant', id: 'grouped-plant' }],
       }]
     })
     const deps = createInteractionDeps(container, store, camera)
@@ -4232,10 +4242,10 @@ describe('SceneInteractionController', () => {
         id: 'group-1',
         locked: false,
         name: null,
-        layer: 'annotations',
-        position: { x: 200, y: 32 },
-        rotationDeg: null,
-        memberIds: ['grouped-annotation', 'missing-partner'],
+        members: [
+          { kind: 'annotation', id: 'grouped-annotation' },
+          { kind: 'annotation', id: 'missing-partner' },
+        ],
       }]
     })
     const deps = createInteractionDeps(container, store, camera)
@@ -5594,10 +5604,7 @@ describe('SceneInteractionController', () => {
         locked: false,
         id: 'group-1',
         name: null,
-        layer: 'zones',
-        position: { x: 0, y: 0 },
-        rotationDeg: null,
-        memberIds: ['zone-1'],
+        members: [{ kind: 'zone', id: 'zone-1' }],
       }]
     })
 
@@ -6471,10 +6478,11 @@ describe('SceneInteractionController', () => {
         locked: false,
         id: 'group-1',
         name: 'Guild unit',
-        layer: 'plants',
-        position: { x: 10, y: 20 },
-        rotationDeg: 5,
-        memberIds: ['plant-1', 'Kitchen bed', 'annotation-1'],
+        members: [
+          { kind: 'plant', id: 'plant-1' },
+          { kind: 'zone', id: 'Kitchen bed' },
+          { kind: 'annotation', id: 'annotation-1' },
+        ],
       }]
     })
 
@@ -6527,13 +6535,18 @@ describe('SceneInteractionController', () => {
     })
     expect(cloneGroup).toMatchObject({
       name: 'Guild unit',
-      layer: 'plants',
-      position: { x: 70, y: 100 },
-      rotationDeg: 5,
-      memberIds: [clonePlant.id, cloneZone.name, cloneAnnotation.id],
+      members: [
+        { kind: 'plant', id: clonePlant.id },
+        { kind: 'zone', id: cloneZone.name },
+        { kind: 'annotation', id: cloneAnnotation.id },
+      ],
     })
     expect(cloneGroup.id).not.toBe('group-1')
-    expect(store.persisted.groups[0]?.memberIds).toEqual(['plant-1', 'Kitchen bed', 'annotation-1'])
+    expect(store.persisted.groups[0]?.members).toEqual([
+      { kind: 'plant', id: 'plant-1' },
+      { kind: 'zone', id: 'Kitchen bed' },
+      { kind: 'annotation', id: 'annotation-1' },
+    ])
     expect(selectedObjectIds.value).toEqual(new Set([cloneGroup.id]))
     expect(onSceneEditCommit).toHaveBeenCalledTimes(1)
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-object-stamp')
@@ -6562,11 +6575,8 @@ describe('SceneInteractionController', () => {
         kind: 'group',
         id: 'group-1',
         name: 'Guild unit',
-        layer: 'plants',
-        position: { x: 38, y: 38 },
-        rotationDeg: null,
-        memberIds: ['plant-1'],
         locked: false,
+        members: [{ kind: 'plant', id: 'plant-1' }],
       }]
     })
 
@@ -6626,10 +6636,7 @@ describe('SceneInteractionController', () => {
         id: 'group-1',
         locked: false,
         name: 'Guild unit',
-        layer: 'plants',
-        position: { x: 38, y: 38 },
-        rotationDeg: null,
-        memberIds: ['plant-1'],
+        members: [{ kind: 'plant', id: 'plant-1' }],
       }]
     })
 

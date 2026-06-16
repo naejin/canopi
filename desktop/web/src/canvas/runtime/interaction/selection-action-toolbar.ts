@@ -1,7 +1,6 @@
 import { t } from '../../../i18n'
 import type { CameraController, SceneBounds } from '../camera'
 import type { CanvasDesignObjectSelectionModel, CanvasSceneEditCommandSurface } from '../runtime'
-import { getSelectionLayer } from '../scene-runtime/selection'
 
 type SelectionActionCommandSurface = Pick<
   CanvasSceneEditCommandSurface,
@@ -549,10 +548,7 @@ function lockedTargets(selection: CanvasDesignObjectSelectionModel): readonly { 
 }
 
 function isGroupAvailable(selection: CanvasDesignObjectSelectionModel): boolean {
-  if (selection.blockedTargets.length > 0 || selection.editableTargets.length < 2) return false
-  if (selection.editableTargets.some((target) => target.kind === 'group')) return false
-  const layer = getSelectionLayer(selection.editableTargets[0]!)
-  return selection.editableTargets.every((target) => getSelectionLayer(target) === layer)
+  return selection.blockedTargets.length === 0 && selection.editableTargets.length >= 2
 }
 
 function isUngroupAvailable(selection: CanvasDesignObjectSelectionModel): boolean {

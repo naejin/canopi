@@ -71,6 +71,7 @@ pub fn load_from_file(path: &Path) -> Result<CanopiFile, String> {
     }
 
     migrate_design_value(&mut value);
+    report_legacy_object_group_migration_issues(path, &value);
 
     // Deserialize — unknown fields survive in `extra`.
     let file: CanopiFile = serde_json::from_value(value)
@@ -108,6 +109,111 @@ fn migrate_v2_to_v3(value: &mut serde_json::Value) {
         value["plant_species_symbols"] = serde_json::json!({});
     }
     value["version"] = serde_json::json!(3);
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+struct LegacyObjectGroupMigrationReport {
+    ambiguous_members: Vec<String>,
+    missing_members: Vec<String>,
+    dropped_groups: Vec<String>,
+}
+
+fn report_legacy_object_group_migration_issues(path: &Path, value: &serde_json::Value) {
+    let report = collect_legacy_object_group_migration_report(value);
+    if report == LegacyObjectGroupMigrationReport::default() {
+        return;
+    }
+
+    tracing::warn!(
+        "Migrated legacy Object Groups while loading {}: ambiguous members [{}], missing members [{}], dropped groups [{}]",
+        path.display(),
+        report.ambiguous_members.join(", "),
+        report.missing_members.join(", "),
+        report.dropped_groups.join(", "),
+    );
+}
+
+fn collect_legacy_object_group_migration_report(
+    value: &serde_json::Value,
+) -> LegacyObjectGroupMigrationReport {
+    let plant_ids = collect_string_field_set(value, "plants", "id");
+    let zone_names = collect_string_field_set(value, "zones", "name");
+    let annotation_ids = collect_string_field_set(value, "annotations", "id");
+    let mut report = LegacyObjectGroupMigrationReport::default();
+
+    let Some(groups) = value.get("groups").and_then(|groups| groups.as_array()) else {
+        return report;
+    };
+
+    for group in groups {
+        if group.get("members").is_some() {
+            continue;
+        }
+        let group_id = group
+            .get("id")
+            .and_then(|id| id.as_str())
+            .unwrap_or("<missing group id>");
+        let Some(member_ids) = group
+            .get("member_ids")
+            .and_then(|member_ids| member_ids.as_array())
+        else {
+            continue;
+        };
+
+        let mut resolved = std::collections::HashSet::<String>::new();
+        for member_id in member_ids {
+            let Some(member_id) = member_id.as_str() else {
+                continue;
+            };
+            let matches = [
+                plant_ids.contains(member_id),
+                zone_names.contains(member_id),
+                annotation_ids.contains(member_id),
+            ]
+            .into_iter()
+            .filter(|matched| *matched)
+            .count();
+            match matches {
+                0 => report
+                    .missing_members
+                    .push(format!("{group_id}:{member_id}")),
+                1 => {
+                    let kind = if plant_ids.contains(member_id) {
+                        "plant"
+                    } else if zone_names.contains(member_id) {
+                        "zone"
+                    } else {
+                        "annotation"
+                    };
+                    resolved.insert(format!("{kind}:{member_id}"));
+                }
+                _ => report
+                    .ambiguous_members
+                    .push(format!("{group_id}:{member_id}")),
+            }
+        }
+
+        if resolved.len() < 2 {
+            report.dropped_groups.push(group_id.to_owned());
+        }
+    }
+
+    report
+}
+
+fn collect_string_field_set(
+    value: &serde_json::Value,
+    collection_key: &str,
+    field_key: &str,
+) -> std::collections::HashSet<String> {
+    value
+        .get(collection_key)
+        .and_then(|entries| entries.as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| entry.get(field_key).and_then(|field| field.as_str()))
+        .map(str::to_owned)
+        .collect()
 }
 
 fn species_target(canonical_name: &str) -> serde_json::Value {
@@ -501,6 +607,52 @@ mod tests {
 
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(path.with_extension("canopi.prev"));
+    }
+
+    #[test]
+    fn legacy_object_group_migration_report_identifies_dropped_members_and_groups() {
+        use serde_json::json;
+
+        let value = json!({
+            "plants": [
+                { "id": "plant-1" },
+                { "id": "shared-id" }
+            ],
+            "zones": [
+                { "name": "zone-1" },
+                { "name": "shared-id" }
+            ],
+            "annotations": [
+                { "id": "annotation-1" }
+            ],
+            "groups": [
+                {
+                    "id": "group-1",
+                    "member_ids": ["plant-1", "zone-1", "annotation-1", "shared-id", "missing-id"]
+                },
+                {
+                    "id": "dropped-group",
+                    "member_ids": ["shared-id", "missing-id"]
+                }
+            ]
+        });
+
+        let report = collect_legacy_object_group_migration_report(&value);
+
+        assert_eq!(
+            report,
+            LegacyObjectGroupMigrationReport {
+                ambiguous_members: vec![
+                    "group-1:shared-id".to_owned(),
+                    "dropped-group:shared-id".to_owned(),
+                ],
+                missing_members: vec![
+                    "group-1:missing-id".to_owned(),
+                    "dropped-group:missing-id".to_owned(),
+                ],
+                dropped_groups: vec!["dropped-group".to_owned()],
+            },
+        );
     }
 
     #[test]

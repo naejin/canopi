@@ -3,13 +3,20 @@ import { getAnnotationWorldBounds } from '../annotation-layout'
 import type {
   SceneAnnotationEntity,
   SceneObjectGroupEntity,
+  SceneObjectGroupMember,
   ScenePersistedState,
   ScenePlantEntity,
   ScenePoint,
   SceneStore,
   SceneZoneEntity,
 } from '../scene'
-import { isSceneDesignObjectLocked } from '../scene'
+import {
+  cloneSceneObjectGroupMembers,
+  isSceneDesignObjectLocked,
+  resolveSceneObjectGroupMembers,
+  sceneObjectGroupMemberKey,
+  sceneObjectGroupMemberLayerName,
+} from '../scene'
 import type { CameraController } from '../camera'
 import {
   getPlantWorldBounds,
@@ -229,7 +236,7 @@ export function createObjectStampTool(context: ObjectStampToolContext): ObjectSt
             const clone = clonePlantForObjectStamp(plant)
             clone.id = createUuid()
             clone.position = translatePoint(plant.position, delta)
-            sourceToCloneId.set(plant.id, clone.id)
+            sourceToCloneId.set(sceneObjectGroupMemberKey({ kind: 'plant', id: plant.id }), clone.id)
             return clone
           })
 
@@ -238,7 +245,7 @@ export function createObjectStampTool(context: ObjectStampToolContext): ObjectSt
             clone.name = uniqueZoneName(zone.name, existingZoneNames)
             existingZoneNames.add(clone.name)
             clone.points = translateZonePoints(zone, delta)
-            sourceToCloneId.set(zone.name, clone.name)
+            sourceToCloneId.set(sceneObjectGroupMemberKey({ kind: 'zone', id: zone.name }), clone.name)
             return clone
           })
 
@@ -246,19 +253,21 @@ export function createObjectStampTool(context: ObjectStampToolContext): ObjectSt
             const clone = cloneAnnotationForObjectStamp(annotation)
             clone.id = createUuid()
             clone.position = translatePoint(annotation.position, delta)
-            sourceToCloneId.set(annotation.id, clone.id)
+            sourceToCloneId.set(sceneObjectGroupMemberKey({ kind: 'annotation', id: annotation.id }), clone.id)
             return clone
           })
 
-          const memberIds = source.group.memberIds
-            .map((memberId) => sourceToCloneId.get(memberId) ?? null)
-            .filter((memberId): memberId is string => memberId !== null)
-          if (memberIds.length === 0) return
+          const members = source.group.members
+            .map((member): SceneObjectGroupMember | null => {
+              const cloneId = sourceToCloneId.get(sceneObjectGroupMemberKey(member))
+              return cloneId ? { kind: member.kind, id: cloneId } : null
+            })
+            .filter((member): member is SceneObjectGroupMember => member !== null)
+          if (members.length < 2) return
 
           const cloneGroup = cloneGroupForObjectStamp(source.group)
           cloneGroup.id = createUuid()
-          cloneGroup.position = translatePoint(source.group.position, delta)
-          cloneGroup.memberIds = memberIds
+          cloneGroup.members = members
 
           draft.plants = [...draft.plants, ...clonedPlants]
           draft.zones = [...draft.zones, ...clonedZones]
@@ -288,8 +297,12 @@ export function createObjectStampTool(context: ObjectStampToolContext): ObjectSt
       return layer?.visible !== false && layer?.locked !== true
     }
     if (source.kind === 'group') {
-      const layer = scene.layers.find((entry) => entry.name === source.group.layer)
-      return layer?.visible !== false && layer?.locked !== true
+      const members = resolveSceneObjectGroupMembers(scene, source.group)
+      return members.length > 0
+        && members.every((member) => {
+          const layer = scene.layers.find((entry) => entry.name === sceneObjectGroupMemberLayerName(member))
+          return layer?.visible !== false && layer?.locked !== true
+        })
     }
     return false
   }
@@ -466,8 +479,7 @@ function cloneAnnotationForObjectStamp(annotation: SceneAnnotationEntity): Scene
 function cloneGroupForObjectStamp(group: SceneObjectGroupEntity): SceneObjectGroupEntity {
   return {
     ...group,
-    position: { ...group.position },
-    memberIds: [...group.memberIds],
+    members: cloneSceneObjectGroupMembers(group.members),
   }
 }
 
@@ -479,20 +491,22 @@ function cloneGroupMembersForObjectStamp(
   const zones: SceneZoneEntity[] = []
   const annotations: SceneAnnotationEntity[] = []
 
-  for (const memberId of group.memberIds) {
-    const plant = scene.plants.find((entry) => entry.id === memberId)
+  for (const member of resolveSceneObjectGroupMembers(scene, group)) {
+    const plant = member.kind === 'plant' ? scene.plants.find((entry) => entry.id === member.id) : null
     if (plant) {
       plants.push(clonePlantForObjectStamp(plant))
       continue
     }
 
-    const zone = scene.zones.find((entry) => entry.name === memberId)
+    const zone = member.kind === 'zone' ? scene.zones.find((entry) => entry.name === member.id) : null
     if (zone) {
       zones.push(cloneZoneForObjectStamp(zone))
       continue
     }
 
-    const annotation = scene.annotations.find((entry) => entry.id === memberId)
+    const annotation = member.kind === 'annotation'
+      ? scene.annotations.find((entry) => entry.id === member.id)
+      : null
     if (annotation) annotations.push(cloneAnnotationForObjectStamp(annotation))
   }
 

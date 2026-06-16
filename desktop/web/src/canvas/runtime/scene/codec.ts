@@ -17,6 +17,7 @@ import type {
   SceneSessionState,
   SceneZoneEntity,
 } from './types'
+import { cloneSceneObjectGroupMembers } from './group-members'
 
 export interface SceneSerializeOptions {
   now?: Date
@@ -234,13 +235,7 @@ function hydrateGroupEntity(group: ObjectGroup): SceneObjectGroupEntity {
     id: group.id,
     locked: group.locked ?? false,
     name: group.name,
-    layer: group.layer,
-    position: {
-      x: group.position.x,
-      y: group.position.y,
-    },
-    rotationDeg: group.rotation,
-    memberIds: [...group.member_ids],
+    members: cloneSceneObjectGroupMembers(group.members),
   }
 }
 
@@ -249,21 +244,14 @@ function serializeGroupEntity(group: SceneObjectGroupEntity): ObjectGroup {
     id: group.id,
     locked: group.locked,
     name: group.name,
-    layer: group.layer,
-    position: {
-      x: group.position.x,
-      y: group.position.y,
-    },
-    rotation: group.rotationDeg,
-    member_ids: [...group.memberIds],
+    members: cloneSceneObjectGroupMembers(group.members),
   }
 }
 
 function cloneGroupEntity(group: SceneObjectGroupEntity): SceneObjectGroupEntity {
   return {
     ...group,
-    position: { ...group.position },
-    memberIds: [...group.memberIds],
+    members: cloneSceneObjectGroupMembers(group.members),
   }
 }
 

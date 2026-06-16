@@ -78,10 +78,10 @@ function makeScene(): ScenePersistedState {
         id: 'group-1',
         locked: false,
         name: null,
-        layer: 'plants',
-        position: { x: 10, y: 10 },
-        rotationDeg: null,
-        memberIds: ['plant-1', 'zone-1'],
+        members: [
+          { kind: 'plant', id: 'plant-1' },
+          { kind: 'zone', id: 'zone-1' },
+        ],
       },
     ],
   }
@@ -226,5 +226,47 @@ describe('scene design object selection model', () => {
       maxX: 98,
       maxY: 85,
     })
+  })
+
+  it('blocks a cross-Layer Object Group when any member Layer is hidden', () => {
+    const scene = makeScene()
+    scene.layers = scene.layers.map((layer) =>
+      layer.name === 'zones' ? { ...layer, visible: false } : layer,
+    )
+
+    const groupModel = readModel(scene, ['group-1'])
+    expect(groupModel.editableTargets).toEqual([])
+    expect(groupModel.blockedTargets).toEqual([{
+      target: { kind: 'group', id: 'group-1' },
+      reason: 'hidden-layer',
+      layerName: 'zones',
+    }])
+    expect(groupModel.bounds).toBeNull()
+
+    const visibleMemberModel = readModel(scene, ['plant-1'])
+    expect(visibleMemberModel.editableTargets).toEqual([])
+    expect(visibleMemberModel.blockedTargets).toEqual([{
+      target: { kind: 'plant', id: 'plant-1' },
+      reason: 'grouped-member',
+      layerName: 'plants',
+      groupId: 'group-1',
+    }])
+  })
+
+  it('treats an Object Group on a locked member Layer as a structural blocker', () => {
+    const scene = makeScene()
+    scene.layers = scene.layers.map((layer) =>
+      layer.name === 'zones' ? { ...layer, locked: true } : layer,
+    )
+
+    const model = readModel(scene, ['group-1'])
+
+    expect(model.editableTargets).toEqual([])
+    expect(model.lockedTargets).toEqual([])
+    expect(model.blockedTargets).toEqual([{
+      target: { kind: 'group', id: 'group-1' },
+      reason: 'locked-layer',
+      layerName: 'zones',
+    }])
   })
 })

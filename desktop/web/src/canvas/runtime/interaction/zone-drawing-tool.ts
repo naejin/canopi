@@ -1,6 +1,7 @@
 import { computeSelectionRect } from '../../operations'
 import type { CameraController } from '../camera'
 import type { ScenePoint, SceneStore } from '../scene'
+import { isSceneObjectGroupMemberTarget } from '../scene'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
 import {
   createEllipticalZoneMeasurements,
@@ -329,7 +330,12 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
       zoneMeasurements.hide()
       return
     }
-    if (scene.groups.some((group) => group.id === selectedId || group.memberIds.includes(selectedId))) {
+    if (scene.groups.some((group) =>
+      group.id === selectedId
+      || group.members.some((member) =>
+        isSceneObjectGroupMemberTarget(member, { kind: 'zone', id: selectedId }),
+      ),
+    )) {
       zoneMeasurements.hide()
       return
     }

@@ -306,7 +306,6 @@ function localComputeSceneExtentMeters(scene: ScenePersistedState): number | nul
     for (const point of zone.points) includePoint(point.x, point.y)
   }
   for (const annotation of scene.annotations) includePoint(annotation.position.x, annotation.position.y)
-  for (const group of scene.groups) includePoint(group.position.x, group.position.y)
 
   return hasGeometry ? maxDistanceMeters : null
 }

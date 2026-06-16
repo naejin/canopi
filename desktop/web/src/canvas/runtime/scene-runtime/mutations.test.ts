@@ -156,11 +156,11 @@ describe('scene runtime mutation controller', () => {
       {
         id: 'group-1',
         name: null,
-        layer: 'plants',
-        position: { x: 10, y: 10 },
-        rotation: null,
-        member_ids: ['plant-1', 'plant-2'],
         locked: false,
+        members: [
+          { kind: 'plant', id: 'plant-1' },
+          { kind: 'plant', id: 'plant-2' },
+        ],
       },
     ]
     const { controller, sceneStore, state } = createController(file)
@@ -184,20 +184,17 @@ describe('scene runtime mutation controller', () => {
       {
         id: 'group-1',
         name: null,
-        layer: 'plants',
-        position: { x: 10, y: 10 },
-        rotation: null,
-        member_ids: ['plant-1', 'plant-2'],
         locked: false,
+        members: [
+          { kind: 'plant', id: 'plant-1' },
+          { kind: 'plant', id: 'plant-2' },
+        ],
       },
       {
         id: 'group-2',
         name: null,
-        layer: 'plants',
-        position: { x: 30, y: 30 },
-        rotation: null,
-        member_ids: ['missing-member'],
         locked: false,
+        members: [{ kind: 'plant', id: 'missing-member' }],
       },
     ]
     const { controller, sceneStore, state } = createController(file)
@@ -223,11 +220,11 @@ describe('scene runtime mutation controller', () => {
       {
         id: 'group-1',
         name: null,
-        layer: 'plants',
-        position: { x: 10, y: 10 },
-        rotation: null,
-        member_ids: ['plant-1', 'plant-2'],
         locked: false,
+        members: [
+          { kind: 'plant', id: 'plant-1' },
+          { kind: 'plant', id: 'plant-2' },
+        ],
       },
     ]
     const { controller, sceneStore, state } = createController(file)
@@ -264,11 +261,11 @@ describe('scene runtime mutation controller', () => {
       {
         id: 'group-1',
         name: null,
-        layer: 'plants',
-        position: { x: 10, y: 10 },
-        rotation: null,
-        member_ids: ['plant-1', 'plant-2'],
         locked: false,
+        members: [
+          { kind: 'plant', id: 'plant-1' },
+          { kind: 'plant', id: 'plant-2' },
+        ],
       },
     ]
     file.zones = file.zones.map((zone) =>
@@ -291,11 +288,11 @@ describe('scene runtime mutation controller', () => {
       {
         id: 'group-1',
         name: null,
-        layer: 'plants',
-        position: { x: 10, y: 10 },
-        rotation: null,
-        member_ids: ['plant-1', 'plant-2'],
         locked: false,
+        members: [
+          { kind: 'plant', id: 'plant-1' },
+          { kind: 'plant', id: 'plant-2' },
+        ],
       },
     ]
     const { controller, sceneStore, state } = createController(file)
@@ -328,6 +325,95 @@ describe('scene runtime mutation controller', () => {
     controller.selectAll()
 
     expect(sceneStore.session.selectedEntityIds).toEqual(new Set(['zone-1', 'annotation-1']))
+  })
+
+  it('groups mixed concrete Design Objects into typed Object Group members', () => {
+    const { controller, sceneStore, state } = createController()
+    sceneStore.setSelection(['plant-1', 'zone-1', 'annotation-1'])
+
+    controller.groupSelected()
+
+    expect(sceneStore.persisted.groups).toHaveLength(1)
+    const group = sceneStore.persisted.groups[0]!
+    expect(group.members).toEqual([
+      { kind: 'plant', id: 'plant-1' },
+      { kind: 'zone', id: 'zone-1' },
+      { kind: 'annotation', id: 'annotation-1' },
+    ])
+    expect(sceneStore.session.selectedEntityIds).toEqual(new Set([group.id]))
+    expect(state.dirtyTypes).toEqual(['group-selected'])
+  })
+
+  it('flattens one selected Object Group into its existing identity when grouping with another object', () => {
+    const file = makeFile()
+    file.groups = [{
+      id: 'group-1',
+      name: 'Guild',
+      locked: false,
+      members: [
+        { kind: 'plant', id: 'plant-1' },
+        { kind: 'zone', id: 'zone-1' },
+      ],
+    }]
+    const { controller, sceneStore } = createController(file)
+    sceneStore.setSelection(['group-1', 'annotation-1'])
+
+    controller.groupSelected()
+
+    expect(sceneStore.persisted.groups).toEqual([{
+      kind: 'group',
+      id: 'group-1',
+      name: 'Guild',
+      locked: false,
+      members: [
+        { kind: 'plant', id: 'plant-1' },
+        { kind: 'zone', id: 'zone-1' },
+        { kind: 'annotation', id: 'annotation-1' },
+      ],
+    }])
+    expect(sceneStore.session.selectedEntityIds).toEqual(new Set(['group-1']))
+  })
+
+  it('merges multiple selected Object Groups into the topmost selected group', () => {
+    const file = makeFile()
+    file.groups = [
+      {
+        id: 'group-low',
+        name: 'Low',
+        locked: false,
+        members: [
+          { kind: 'plant', id: 'plant-1' },
+          { kind: 'zone', id: 'zone-1' },
+        ],
+      },
+      {
+        id: 'group-top',
+        name: 'Top',
+        locked: false,
+        members: [
+          { kind: 'plant', id: 'plant-2' },
+          { kind: 'annotation', id: 'annotation-1' },
+        ],
+      },
+    ]
+    const { controller, sceneStore } = createController(file)
+    sceneStore.setSelection(['group-low', 'group-top'])
+
+    controller.groupSelected()
+
+    expect(sceneStore.persisted.groups).toEqual([{
+      kind: 'group',
+      id: 'group-top',
+      name: 'Top',
+      locked: false,
+      members: [
+        { kind: 'plant', id: 'plant-1' },
+        { kind: 'zone', id: 'zone-1' },
+        { kind: 'plant', id: 'plant-2' },
+        { kind: 'annotation', id: 'annotation-1' },
+      ],
+    }])
+    expect(sceneStore.session.selectedEntityIds).toEqual(new Set(['group-top']))
   })
 
   it('selectSameSpecies selects eligible same-Species plants without dirtying the document', () => {
@@ -377,11 +463,8 @@ describe('scene runtime mutation controller', () => {
     file.groups = [{
       id: 'group-1',
       name: null,
-      layer: 'plants',
-      position: { x: 50, y: 50 },
-      rotation: null,
-      member_ids: ['plant-5'],
       locked: false,
+      members: [{ kind: 'plant', id: 'plant-5' }],
     }]
     const { controller, sceneStore, state } = createController(file)
     sceneStore.setSelection(['plant-1'])
@@ -523,11 +606,8 @@ describe('scene runtime mutation controller', () => {
     file.groups = [{
       id: 'group-1',
       name: null,
-      layer: 'plants',
-      position: { x: 20, y: 20 },
-      rotation: null,
-      member_ids: ['plant-2'],
       locked: true,
+      members: [{ kind: 'plant', id: 'plant-2' }],
     }]
     const { controller, sceneStore, state } = createController(file)
 
@@ -581,11 +661,8 @@ describe('scene runtime mutation controller', () => {
     file.groups = [{
       id: 'group-1',
       name: null,
-      layer: 'plants',
-      position: { x: 20, y: 20 },
-      rotation: null,
-      member_ids: ['plant-2'],
       locked: true,
+      members: [{ kind: 'plant', id: 'plant-2' }],
     }]
     const { controller, sceneStore, state } = createController(file)
 
@@ -622,11 +699,11 @@ describe('scene runtime mutation controller', () => {
     file.groups = [{
       id: 'group-1',
       name: null,
-      layer: 'plants',
-      position: { x: 20, y: 20 },
-      rotation: null,
-      member_ids: ['plant-2', 'plant-3'],
       locked: false,
+      members: [
+        { kind: 'plant', id: 'plant-2' },
+        { kind: 'plant', id: 'plant-3' },
+      ],
     }]
     const { controller, sceneStore, state } = createController(file)
 

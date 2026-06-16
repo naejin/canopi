@@ -116,7 +116,7 @@ pub const DESIGN_FILE_FIELDS: &[DesignFileField] = &[
     },
 ];
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Serialize, Type)]
 pub struct CanopiFile {
     pub version: u32,
     pub name: String,
@@ -148,6 +148,73 @@ pub struct CanopiFile {
     #[serde(flatten)]
     #[specta(skip)]
     pub extra: std::collections::HashMap<String, serde_json::Value>,
+}
+
+#[derive(Deserialize)]
+struct CanopiFileInput {
+    version: u32,
+    name: String,
+    description: Option<String>,
+    location: Option<Location>,
+    north_bearing_deg: Option<f64>,
+    plant_species_colors: std::collections::HashMap<String, String>,
+    #[serde(default)]
+    plant_species_symbols: std::collections::HashMap<String, String>,
+    layers: Vec<Layer>,
+    plants: Vec<PlacedPlant>,
+    zones: Vec<Zone>,
+    #[serde(default)]
+    annotations: Vec<Annotation>,
+    #[serde(default)]
+    consortiums: Vec<Consortium>,
+    #[serde(default)]
+    groups: Vec<ObjectGroupInput>,
+    #[serde(default)]
+    timeline: Vec<TimelineAction>,
+    #[serde(default)]
+    budget: Vec<BudgetItem>,
+    #[serde(default = "default_budget_currency")]
+    budget_currency: String,
+    created_at: String,
+    updated_at: String,
+    #[serde(flatten)]
+    extra: std::collections::HashMap<String, serde_json::Value>,
+}
+
+impl<'de> Deserialize<'de> for CanopiFile {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let input = CanopiFileInput::deserialize(deserializer)?;
+        let groups = migrate_object_groups(
+            input.groups,
+            &input.plants,
+            &input.zones,
+            &input.annotations,
+        );
+        Ok(Self {
+            version: input.version,
+            name: input.name,
+            description: input.description,
+            location: input.location,
+            north_bearing_deg: input.north_bearing_deg,
+            plant_species_colors: input.plant_species_colors,
+            plant_species_symbols: input.plant_species_symbols,
+            layers: input.layers,
+            plants: input.plants,
+            zones: input.zones,
+            annotations: input.annotations,
+            consortiums: input.consortiums,
+            groups,
+            timeline: input.timeline,
+            budget: input.budget,
+            budget_currency: input.budget_currency,
+            created_at: input.created_at,
+            updated_at: input.updated_at,
+            extra: input.extra,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -390,15 +457,23 @@ pub fn default_budget_currency() -> String {
     DEFAULT_BUDGET_CURRENCY.to_owned()
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(tag = "kind")]
+pub enum ObjectGroupMember {
+    #[serde(rename = "plant")]
+    Plant { id: String },
+    #[serde(rename = "zone")]
+    Zone { id: String },
+    #[serde(rename = "annotation")]
+    Annotation { id: String },
+}
+
 #[derive(Debug, Clone, Serialize, Type)]
 pub struct ObjectGroup {
     pub id: String,
     pub locked: bool,
     pub name: Option<String>,
-    pub layer: String,
-    pub position: Position,
-    pub rotation: Option<f64>,
-    pub member_ids: Vec<String>,
+    pub members: Vec<ObjectGroupMember>,
 }
 
 #[derive(Deserialize)]
@@ -407,27 +482,88 @@ struct ObjectGroupInput {
     #[serde(default)]
     locked: bool,
     name: Option<String>,
-    layer: String,
-    position: Position,
-    rotation: Option<f64>,
-    member_ids: Vec<String>,
+    #[serde(default)]
+    members: Option<Vec<ObjectGroupMember>>,
+    #[serde(default)]
+    member_ids: Option<Vec<String>>,
 }
 
-impl<'de> Deserialize<'de> for ObjectGroup {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let input = ObjectGroupInput::deserialize(deserializer)?;
-        Ok(Self {
-            id: input.id,
-            locked: input.locked,
-            name: input.name,
-            layer: input.layer,
-            position: input.position,
-            rotation: input.rotation,
-            member_ids: input.member_ids,
+fn migrate_object_groups(
+    groups: Vec<ObjectGroupInput>,
+    plants: &[PlacedPlant],
+    zones: &[Zone],
+    annotations: &[Annotation],
+) -> Vec<ObjectGroup> {
+    groups
+        .into_iter()
+        .filter_map(|group| {
+            if let Some(members) = group.members {
+                return Some(ObjectGroup {
+                    id: group.id,
+                    locked: group.locked,
+                    name: group.name,
+                    members: dedupe_object_group_members(members),
+                });
+            }
+
+            let members = group
+                .member_ids
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|id| resolve_legacy_group_member(&id, plants, zones, annotations))
+                .fold(Vec::new(), |mut resolved, member| {
+                    push_unique_object_group_member(&mut resolved, member);
+                    resolved
+                });
+            if members.len() < 2 {
+                return None;
+            }
+            Some(ObjectGroup {
+                id: group.id,
+                locked: group.locked,
+                name: group.name,
+                members,
+            })
         })
+        .collect()
+}
+
+fn resolve_legacy_group_member(
+    id: &str,
+    plants: &[PlacedPlant],
+    zones: &[Zone],
+    annotations: &[Annotation],
+) -> Option<ObjectGroupMember> {
+    let mut resolved = Vec::new();
+    if plants.iter().any(|plant| plant.id == id) {
+        resolved.push(ObjectGroupMember::Plant { id: id.to_owned() });
+    }
+    if zones.iter().any(|zone| zone.name == id) {
+        resolved.push(ObjectGroupMember::Zone { id: id.to_owned() });
+    }
+    if annotations.iter().any(|annotation| annotation.id == id) {
+        resolved.push(ObjectGroupMember::Annotation { id: id.to_owned() });
+    }
+    if resolved.len() == 1 {
+        resolved.pop()
+    } else {
+        None
+    }
+}
+
+fn dedupe_object_group_members(members: Vec<ObjectGroupMember>) -> Vec<ObjectGroupMember> {
+    members.into_iter().fold(Vec::new(), |mut deduped, member| {
+        push_unique_object_group_member(&mut deduped, member);
+        deduped
+    })
+}
+
+fn push_unique_object_group_member(
+    members: &mut Vec<ObjectGroupMember>,
+    member: ObjectGroupMember,
+) {
+    if !members.contains(&member) {
+        members.push(member);
     }
 }
 
@@ -530,5 +666,128 @@ mod tests {
         assert_eq!(value["zones"][0]["rotation"], json!(0.0));
         assert_eq!(value["annotations"][0]["locked"], json!(false));
         assert_eq!(value["groups"][0]["locked"], json!(false));
+    }
+
+    #[test]
+    fn legacy_object_groups_migrate_to_typed_concrete_members() {
+        let file: CanopiFile = serde_json::from_value(json!({
+            "version": 3,
+            "name": "Legacy groups",
+            "description": null,
+            "location": null,
+            "north_bearing_deg": 0.0,
+            "plant_species_colors": {},
+            "layers": [
+                { "name": "plants", "visible": true, "locked": false, "opacity": 1.0 },
+                { "name": "zones", "visible": true, "locked": false, "opacity": 1.0 },
+                { "name": "annotations", "visible": true, "locked": false, "opacity": 1.0 }
+            ],
+            "plants": [
+                {
+                    "id": "plant-1",
+                    "canonical_name": "Malus domestica",
+                    "common_name": "Apple",
+                    "position": { "x": 1.0, "y": 2.0 },
+                    "rotation": null,
+                    "scale": null,
+                    "notes": null,
+                    "planted_date": null,
+                    "quantity": 1
+                },
+                {
+                    "id": "shared-id",
+                    "canonical_name": "Pyrus communis",
+                    "common_name": "Pear",
+                    "position": { "x": 3.0, "y": 4.0 },
+                    "rotation": null,
+                    "scale": null,
+                    "notes": null,
+                    "planted_date": null,
+                    "quantity": 1
+                }
+            ],
+            "zones": [
+                {
+                    "name": "zone-1",
+                    "zone_type": "rect",
+                    "points": [
+                        { "x": 0.0, "y": 0.0 },
+                        { "x": 1.0, "y": 0.0 },
+                        { "x": 1.0, "y": 1.0 }
+                    ],
+                    "fill_color": null,
+                    "notes": null
+                },
+                {
+                    "name": "shared-id",
+                    "zone_type": "line",
+                    "points": [
+                        { "x": 0.0, "y": 0.0 },
+                        { "x": 2.0, "y": 0.0 }
+                    ],
+                    "fill_color": null,
+                    "notes": null
+                }
+            ],
+            "annotations": [
+                {
+                    "id": "annotation-1",
+                    "annotation_type": "text",
+                    "position": { "x": 2.0, "y": 3.0 },
+                    "text": "Note",
+                    "font_size": 16.0,
+                    "rotation": null
+                }
+            ],
+            "consortiums": [],
+            "groups": [
+                {
+                    "id": "group-1",
+                    "name": "Guild",
+                    "layer": "plants",
+                    "position": { "x": 0.0, "y": 0.0 },
+                    "rotation": null,
+                    "member_ids": ["plant-1", "zone-1", "annotation-1", "shared-id", "missing-id"]
+                },
+                {
+                    "id": "dropped-group",
+                    "name": null,
+                    "layer": "plants",
+                    "position": { "x": 0.0, "y": 0.0 },
+                    "rotation": null,
+                    "member_ids": ["shared-id", "missing-id"]
+                }
+            ],
+            "timeline": [],
+            "budget": [],
+            "budget_currency": "EUR",
+            "created_at": "2026-04-02T00:00:00.000Z",
+            "updated_at": "2026-04-02T00:00:00.000Z"
+        }))
+        .expect("legacy object groups should migrate");
+
+        assert_eq!(file.groups.len(), 1);
+        assert_eq!(file.groups[0].id, "group-1");
+        assert_eq!(
+            file.groups[0].members,
+            vec![
+                ObjectGroupMember::Plant {
+                    id: "plant-1".to_string()
+                },
+                ObjectGroupMember::Zone {
+                    id: "zone-1".to_string()
+                },
+                ObjectGroupMember::Annotation {
+                    id: "annotation-1".to_string()
+                },
+            ],
+        );
+
+        let value = serde_json::to_value(&file).expect("canopi file should serialize");
+        assert!(value["groups"][0].get("members").is_some());
+        assert!(value["groups"][0].get("member_ids").is_none());
+        assert!(value["groups"][0].get("layer").is_none());
+        assert!(value["groups"][0].get("position").is_none());
+        assert!(value["groups"][0].get("rotation").is_none());
     }
 }

@@ -144,10 +144,7 @@ describe('document format contract', () => {
         id: 'canvas-group',
         locked: false,
         name: null,
-        layer: 'plants',
-        position: { x: 10, y: 20 },
-        rotation: null,
-        member_ids: ['canvas-plant'],
+        members: [{ kind: 'plant', id: 'canvas-plant' }],
       }],
       updated_at: '2026-04-13T02:00:00.000Z',
       extra: {
@@ -204,6 +201,55 @@ describe('document format contract', () => {
 
     expect(roundTripped.extra).toEqual({})
     expect(roundTripped.updated_at).toBe(now.toISOString())
+  })
+
+  it('round-trips typed Object Group members through the scene codec without legacy group authority', () => {
+    const file = {
+      ...BASE_DOCUMENT,
+      groups: [{
+        id: 'group-1',
+        locked: false,
+        name: 'Guild',
+        members: [
+          { kind: 'plant', id: 'plant-1' },
+          { kind: 'zone', id: 'zone-1' },
+          { kind: 'annotation', id: 'annotation-1' },
+        ],
+      }],
+    } satisfies CanopiFile
+
+    const scene = hydrateScenePersistedState(file)
+    expect(scene.groups).toEqual([{
+      kind: 'group',
+      id: 'group-1',
+      locked: false,
+      name: 'Guild',
+      members: [
+        { kind: 'plant', id: 'plant-1' },
+        { kind: 'zone', id: 'zone-1' },
+        { kind: 'annotation', id: 'annotation-1' },
+      ],
+    }])
+    expect(scene.groups[0]).not.toHaveProperty('memberIds')
+    expect(scene.groups[0]).not.toHaveProperty('layer')
+    expect(scene.groups[0]).not.toHaveProperty('position')
+    expect(scene.groups[0]).not.toHaveProperty('rotationDeg')
+
+    const serialized = serializeScenePersistedState(scene)
+    expect(serialized.groups).toEqual([{
+      id: 'group-1',
+      locked: false,
+      name: 'Guild',
+      members: [
+        { kind: 'plant', id: 'plant-1' },
+        { kind: 'zone', id: 'zone-1' },
+        { kind: 'annotation', id: 'annotation-1' },
+      ],
+    }])
+    expect(serialized.groups[0]).not.toHaveProperty('member_ids')
+    expect(serialized.groups[0]).not.toHaveProperty('layer')
+    expect(serialized.groups[0]).not.toHaveProperty('position')
+    expect(serialized.groups[0]).not.toHaveProperty('rotation')
   })
 
   it('defaults document-owned arrays that Rust defaults but generated TypeScript marks optional', () => {
@@ -338,10 +384,7 @@ describe('document format contract', () => {
         id: 'group-1',
         locked: false,
         name: 'Trees',
-        layer: 'plants',
-        position: { x: 10, y: 20 },
-        rotation: null,
-        member_ids: ['plant-1'],
+        members: [{ kind: 'plant', id: 'plant-1' }],
       }],
       updated_at: '2026-04-13T12:00:00.000Z',
       extra: {
@@ -371,6 +414,16 @@ describe('document format contract', () => {
     expect(saved.zones).toEqual(canvas.zones)
     expect(saved.annotations).toEqual(canvas.annotations)
     expect(saved.groups).toEqual(canvas.groups)
+    expect(saved.groups).toEqual([{
+      id: 'group-1',
+      locked: false,
+      name: 'Trees',
+      members: [{ kind: 'plant', id: 'plant-1' }],
+    }])
+    expect(saved.groups[0]).not.toHaveProperty('member_ids')
+    expect(saved.groups[0]).not.toHaveProperty('layer')
+    expect(saved.groups[0]).not.toHaveProperty('position')
+    expect(saved.groups[0]).not.toHaveProperty('rotation')
     expect(saved.extra).toEqual({
       guides: [{ id: 'new-guide', axis: 'v', position: 42 }],
       future_panel_field: { preserve: true },

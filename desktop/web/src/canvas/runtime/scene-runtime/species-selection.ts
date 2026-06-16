@@ -1,4 +1,4 @@
-import type { ScenePersistedState } from '../scene'
+import { getSceneGroupedMemberKeys, sceneTargetKey, type ScenePersistedState } from '../scene'
 import type { SceneSelectionTarget } from './selection'
 
 export function getSelectablePlantIdsForSpecies(
@@ -6,13 +6,13 @@ export function getSelectablePlantIdsForSpecies(
   canonicalName: string,
 ): string[] {
   if (!isPlantsLayerEditable(scene)) return []
-  const groupedMemberIds = new Set(scene.groups.flatMap((group) => group.memberIds))
+  const groupedMemberKeys = getSceneGroupedMemberKeys(scene)
 
   return scene.plants
     .filter((plant) =>
       plant.canonicalName === canonicalName
       && !plant.locked
-      && !groupedMemberIds.has(plant.id),
+      && !groupedMemberKeys.has(sceneTargetKey({ kind: 'plant', id: plant.id })),
     )
     .map((plant) => plant.id)
 }

@@ -208,8 +208,8 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
     this.dragSnapRef =
       this.dragState.plantStarts.get(hit.id) ??
       this.dragState.annotationStarts.get(hit.id) ??
-      this.dragState.groupStarts.get(hit.id) ??
-      this.dragState.zoneStarts.get(hit.id)?.[0] ?? null
+      this.dragState.zoneStarts.get(hit.id)?.[0] ??
+      firstCapturedDragStart(this.dragState)
     this.activeDraggedPlantId = this.dragState.plantStarts.has(hit.id) ? hit.id : null
     this.context.beginDesignObjectDragPresentation()
     this.distanceOverlay.hide()
@@ -337,4 +337,13 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
 
 function editableSelectionIds(selection: CanvasDesignObjectSelectionModel): Set<string> {
   return new Set(selection.editableTargets.map((target) => target.id))
+}
+
+function firstCapturedDragStart(
+  state: ReturnType<typeof createSceneDragState>,
+): ScenePoint | null {
+  return state.plantStarts.values().next().value
+    ?? state.annotationStarts.values().next().value
+    ?? state.zoneStarts.values().next().value?.[0]
+    ?? null
 }

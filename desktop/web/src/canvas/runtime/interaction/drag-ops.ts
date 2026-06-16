@@ -1,10 +1,9 @@
-import type { ScenePersistedState, ScenePoint, SceneStore } from '../scene'
+import { resolveSceneObjectGroupMembers, type ScenePersistedState, type ScenePoint, type SceneStore } from '../scene'
 
 export interface SceneDragState {
   plantStarts: Map<string, ScenePoint>
   zoneStarts: Map<string, ScenePoint[]>
   annotationStarts: Map<string, ScenePoint>
-  groupStarts: Map<string, ScenePoint>
 }
 
 export function createSceneDragState(): SceneDragState {
@@ -12,7 +11,6 @@ export function createSceneDragState(): SceneDragState {
     plantStarts: new Map(),
     zoneStarts: new Map(),
     annotationStarts: new Map(),
-    groupStarts: new Map(),
   }
 }
 
@@ -20,7 +18,6 @@ export function resetSceneDragState(state: SceneDragState): void {
   state.plantStarts.clear()
   state.zoneStarts.clear()
   state.annotationStarts.clear()
-  state.groupStarts.clear()
 }
 
 export function captureSceneDragState(
@@ -50,13 +47,14 @@ export function captureSceneDragState(
 
   for (const group of scene.groups) {
     if (!selection.has(group.id)) continue
-    state.groupStarts.set(group.id, { ...group.position })
-    for (const memberId of group.memberIds) {
-      const plant = scene.plants.find((entry) => entry.id === memberId)
+    for (const member of resolveSceneObjectGroupMembers(scene, group)) {
+      const plant = member.kind === 'plant' ? scene.plants.find((entry) => entry.id === member.id) : null
       if (plant) state.plantStarts.set(plant.id, { ...plant.position })
-      const zone = scene.zones.find((entry) => entry.name === memberId)
+      const zone = member.kind === 'zone' ? scene.zones.find((entry) => entry.name === member.id) : null
       if (zone) state.zoneStarts.set(zone.name, zone.points.map((point) => ({ ...point })))
-      const annotation = scene.annotations.find((entry) => entry.id === memberId)
+      const annotation = member.kind === 'annotation'
+        ? scene.annotations.find((entry) => entry.id === member.id)
+        : null
       if (annotation) state.annotationStarts.set(annotation.id, { ...annotation.position })
     }
   }
@@ -119,17 +117,6 @@ export function applySceneDragDeltaToDraft(
     if (!start) return annotation
     return {
       ...annotation,
-      position: {
-        x: start.x + delta.x,
-        y: start.y + delta.y,
-      },
-    }
-  })
-  draft.groups = draft.groups.map((group) => {
-    const start = state.groupStarts.get(group.id)
-    if (!start) return group
-    return {
-      ...group,
       position: {
         x: start.x + delta.x,
         y: start.y + delta.y,

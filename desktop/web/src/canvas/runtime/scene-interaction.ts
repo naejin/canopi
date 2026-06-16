@@ -5,6 +5,7 @@ import type {
   SceneStore,
   ScenePoint,
 } from './scene'
+import { resolveSceneObjectGroupMembers, sceneObjectGroupMemberLayerName } from './scene'
 import type { CameraController } from './camera'
 import type { PlantPresentationContext } from './plant-presentation'
 import type { SpeciesCacheEntry } from './species-cache'
@@ -705,14 +706,20 @@ function isContextMenuTargetStructurallyBlocked(scene: ScenePersistedState, targ
 }
 
 function isTargetLayerLocked(scene: ScenePersistedState, target: TopLevelTarget): boolean {
-  const layerName = target.kind === 'plant'
-    ? 'plants'
+  const layerNames = target.kind === 'plant'
+    ? ['plants']
     : target.kind === 'zone'
-      ? 'zones'
+      ? ['zones']
       : target.kind === 'annotation'
-        ? 'annotations'
-        : scene.groups.find((group) => group.id === target.id)?.layer
-  return scene.layers.find((layer) => layer.name === layerName)?.locked === true
+        ? ['annotations']
+        : groupLayerNames(scene, target.id)
+  return layerNames.some((layerName) => scene.layers.find((layer) => layer.name === layerName)?.locked === true)
+}
+
+function groupLayerNames(scene: ScenePersistedState, groupId: string): string[] {
+  const group = scene.groups.find((entry) => entry.id === groupId)
+  if (!group) return []
+  return [...new Set(resolveSceneObjectGroupMembers(scene, group).map(sceneObjectGroupMemberLayerName))]
 }
 
 function isCanvasKeyboardShortcutTarget(target: EventTarget | null, container: HTMLElement): boolean {

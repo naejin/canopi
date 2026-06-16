@@ -62,10 +62,12 @@ function sceneWithGroup(): ScenePersistedState {
         id: 'group-1',
         locked: false,
         name: null,
-        layer: 'plants',
-        position: { x: 0, y: 0 },
-        rotationDeg: null,
-        memberIds: ['plant-1', 'zone-1', 'annotation-1', 'missing-member'],
+        members: [
+          { kind: 'plant', id: 'plant-1' },
+          { kind: 'zone', id: 'zone-1' },
+          { kind: 'annotation', id: 'annotation-1' },
+          { kind: 'plant', id: 'missing-member' },
+        ],
       },
     ],
   }

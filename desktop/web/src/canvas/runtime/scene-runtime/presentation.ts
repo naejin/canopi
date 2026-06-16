@@ -9,6 +9,7 @@ import { CanvasSpeciesCache } from '../species-cache'
 import type { SceneRendererHoverTarget, SceneRendererSnapshot } from '../renderers/scene-types'
 import type { ScenePersistedState, SceneStore, SceneViewportState } from '../scene'
 import { isSceneDesignObjectLocked } from '../scene'
+import { resolveSceneObjectGroupMembers, sceneObjectGroupMemberLayerName } from '../scene'
 import {
   getSelectedAnnotationIds,
   getSelectedPlantIds,
@@ -201,9 +202,8 @@ function getRendererHoverTarget(
 
   const target = resolveHoverTarget(scene, hoveredId)
   if (!target) return null
-  const layerName = getHoverTargetLayer(scene, target)
-  const layer = layerName ? scene.layers.find((entry) => entry.name === layerName) : null
-  const state = layer?.locked === true
+  const layerLocked = isHoverTargetLayerLocked(scene, target)
+  const state = layerLocked
     ? 'locked-layer'
     : isSceneDesignObjectLocked(scene, target.id)
       ? 'locked-design-object'
@@ -222,14 +222,24 @@ function resolveHoverTarget(
   return null
 }
 
-function getHoverTargetLayer(
+function isHoverTargetLayerLocked(
   scene: ScenePersistedState,
   target: Omit<SceneRendererHoverTarget, 'state'>,
-): string | null {
+): boolean {
+  return getHoverTargetLayers(scene, target)
+    .some((layerName) => scene.layers.find((entry) => entry.name === layerName)?.locked === true)
+}
+
+function getHoverTargetLayers(
+  scene: ScenePersistedState,
+  target: Omit<SceneRendererHoverTarget, 'state'>,
+): string[] {
   if (target.kind === 'group') {
-    return scene.groups.find((group) => group.id === target.id)?.layer ?? null
+    const group = scene.groups.find((entry) => entry.id === target.id)
+    if (!group) return []
+    return [...new Set(resolveSceneObjectGroupMembers(scene, group).map(sceneObjectGroupMemberLayerName))]
   }
-  if (target.kind === 'zone') return 'zones'
-  if (target.kind === 'annotation') return 'annotations'
-  return 'plants'
+  if (target.kind === 'zone') return ['zones']
+  if (target.kind === 'annotation') return ['annotations']
+  return ['plants']
 }

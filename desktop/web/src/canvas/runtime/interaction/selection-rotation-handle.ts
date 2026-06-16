@@ -1,7 +1,7 @@
 import { t } from '../../../i18n'
 import type { CameraController, SceneBounds } from '../camera'
 import type { CanvasDesignObjectSelectionModel, CanvasDesignObjectSelectionTarget } from '../runtime'
-import type { ScenePersistedState, ScenePoint, SceneStore } from '../scene'
+import { resolveSceneObjectGroupMembers, type ScenePersistedState, type ScenePoint, type SceneStore } from '../scene'
 import type { SceneEditCoordinator, SceneEditTransaction } from '../scene-runtime/transactions'
 import type { SceneInteractionPointerDrag, SceneInteractionPointerEvent } from './frame'
 
@@ -37,16 +37,16 @@ interface ActiveRotationDrag {
   lastDeltaDeg: number
 }
 
-interface RotatableTarget {
-  readonly kind: 'plant' | 'zone' | 'annotation' | 'group'
-  readonly id: string
-}
+type RotatableTarget =
+  | { readonly kind: 'plant'; readonly id: string }
+  | { readonly kind: 'zone'; readonly id: string }
+  | { readonly kind: 'annotation'; readonly id: string }
+  | { readonly kind: 'group'; readonly id: string }
 
 interface RotationTransformState {
   readonly plants: Map<string, ScenePoint>
   readonly zones: Map<string, ZoneRotationStart>
   readonly annotations: Map<string, AnnotationRotationStart>
-  readonly groups: Map<string, GroupRotationStart>
 }
 
 interface ZoneRotationStart {
@@ -58,10 +58,6 @@ interface ZoneRotationStart {
 interface AnnotationRotationStart {
   readonly position: ScenePoint
   readonly rotationDeg: number
-}
-
-interface GroupRotationStart {
-  readonly position: ScenePoint
 }
 
 const HANDLE_SIZE_PX = 28
@@ -286,7 +282,6 @@ function captureRotationTransformState(
     state.plants.size === 0
     && state.zones.size === 0
     && state.annotations.size === 0
-    && state.groups.size === 0
   ) {
     return null
   }
@@ -298,7 +293,6 @@ function createRotationTransformState(): RotationTransformState {
     plants: new Map(),
     zones: new Map(),
     annotations: new Map(),
-    groups: new Map(),
   }
 }
 
@@ -310,25 +304,24 @@ function captureTopLevelTarget(
   if (target.kind === 'group') {
     const group = scene.groups.find((entry) => entry.id === target.id)
     if (!group) return
-    state.groups.set(group.id, { position: { ...group.position } })
-    for (const memberId of group.memberIds) captureMemberTarget(scene, state, memberId)
+    for (const member of resolveSceneObjectGroupMembers(scene, group)) captureMemberTarget(scene, state, member)
     return
   }
-  captureMemberTarget(scene, state, target.id)
+  captureMemberTarget(scene, state, target)
 }
 
 function captureMemberTarget(
   scene: ScenePersistedState,
   state: RotationTransformState,
-  id: string,
+  target: { kind: 'plant' | 'zone' | 'annotation'; id: string },
 ): void {
-  const plant = scene.plants.find((entry) => entry.id === id)
+  const plant = target.kind === 'plant' ? scene.plants.find((entry) => entry.id === target.id) : null
   if (plant) {
     state.plants.set(plant.id, { ...plant.position })
     return
   }
 
-  const zone = scene.zones.find((entry) => entry.name === id)
+  const zone = target.kind === 'zone' ? scene.zones.find((entry) => entry.name === target.id) : null
   if (zone) {
     state.zones.set(zone.name, {
       zoneType: zone.zoneType,
@@ -338,7 +331,9 @@ function captureMemberTarget(
     return
   }
 
-  const annotation = scene.annotations.find((entry) => entry.id === id)
+  const annotation = target.kind === 'annotation'
+    ? scene.annotations.find((entry) => entry.id === target.id)
+    : null
   if (annotation) {
     state.annotations.set(annotation.id, {
       position: { ...annotation.position },
@@ -408,14 +403,6 @@ function applyRotationTransformToDraft(
     return rotateZone(zone, start, pivot, deltaDeg)
   })
 
-  draft.groups = draft.groups.map((group) => {
-    const start = state.groups.get(group.id)
-    if (!start) return group
-    return {
-      ...group,
-      position: rotatePointAround(start.position, pivot, deltaDeg),
-    }
-  })
 }
 
 function rotateZone(

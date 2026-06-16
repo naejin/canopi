@@ -68,15 +68,17 @@ export interface SceneAnnotationEntity {
   rotationDeg: number | null
 }
 
+export type SceneObjectGroupMember =
+  | { kind: 'plant'; id: string }
+  | { kind: 'zone'; id: string }
+  | { kind: 'annotation'; id: string }
+
 export interface SceneObjectGroupEntity {
   kind: 'group'
   id: string
   locked: boolean
   name: string | null
-  layer: string
-  position: ScenePoint
-  rotationDeg: number | null
-  memberIds: string[]
+  members: SceneObjectGroupMember[]
 }
 
 export interface SceneGuide {

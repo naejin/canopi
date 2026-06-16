@@ -303,8 +303,9 @@ describe('Canvas runtime surfaces', () => {
       expect(scene.groups).toHaveLength(2)
       expect(scene.plants).toHaveLength(4)
       const clonedGroup = scene.groups.find((group) => group.id !== originalGroupId)!
-      const clonedMembers = clonedGroup.memberIds
-        .map((id) => scene.plants.find((plant) => plant.id === id)?.position)
+      const clonedMembers = clonedGroup.members
+        .filter((member) => member.kind === 'plant')
+        .map((member) => scene.plants.find((plant) => plant.id === member.id)?.position)
         .filter((position): position is { x: number; y: number } => position !== undefined)
         .sort((left, right) => left.x - right.x)
 
@@ -336,7 +337,10 @@ describe('Canvas runtime surfaces', () => {
 
       const afterGroup = queries.getSceneSnapshot()
       expect(afterGroup.groups).toHaveLength(1)
-      expect(afterGroup.groups[0]?.memberIds).toEqual(['plant-1', 'plant-2'])
+      expect(afterGroup.groups[0]?.members).toEqual([
+        { kind: 'plant', id: 'plant-1' },
+        { kind: 'plant', id: 'plant-2' },
+      ])
 
       commands.sceneEdits.ungroupSelected()
       expect(queries.getSceneSnapshot().groups).toHaveLength(0)

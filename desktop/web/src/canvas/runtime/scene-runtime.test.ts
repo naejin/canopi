@@ -136,11 +136,11 @@ function fileWithGroupedPair(): CanopiFile {
     {
       id: 'group-1',
       name: null,
-      layer: 'plants',
-      position: { x: 10, y: 10 },
-      rotation: null,
-      member_ids: ['plant-1', 'plant-2'],
       locked: false,
+      members: [
+        { kind: 'plant', id: 'plant-1' },
+        { kind: 'plant', id: 'plant-2' },
+      ],
     },
   ]
   return file
@@ -386,11 +386,11 @@ describe('scene canvas runtime', () => {
       {
         id: 'group-1',
         name: null,
-        layer: 'plants',
-        position: { x: 10, y: 10 },
-        rotation: null,
-        member_ids: ['plant-1', 'plant-2'],
         locked: false,
+        members: [
+          { kind: 'plant', id: 'plant-1' },
+          { kind: 'plant', id: 'plant-2' },
+        ],
       },
     ]
     file.zones = file.zones.map((zone) =>
@@ -1125,11 +1125,11 @@ describe('scene canvas runtime', () => {
     file.groups = [{
       id: 'group-1',
       name: 'Pair',
-      layer: 'plants',
-      position: { x: 10, y: 10 },
-      rotation: null,
-      member_ids: ['plant-1', 'plant-2'],
       locked: false,
+      members: [
+        { kind: 'plant', id: 'plant-1' },
+        { kind: 'plant', id: 'plant-2' },
+      ],
     }]
     runtime.documentSurface.loadDocument(file)
     setInteractionViewport(runtime)
@@ -1142,9 +1142,9 @@ describe('scene canvas runtime', () => {
     expect(runtime.querySurface.getSceneSnapshot().plants).toHaveLength(4)
     const stampedGroup = runtime.querySurface.getSceneSnapshot().groups[1]!
     expect(selectedObjectIds.value).toEqual(new Set([stampedGroup.id]))
-    expect(stampedGroup.memberIds).toHaveLength(2)
-    expect(stampedGroup.memberIds).not.toContain('plant-1')
-    expect(stampedGroup.memberIds).not.toContain('plant-2')
+    expect(stampedGroup.members).toHaveLength(2)
+    expect(stampedGroup.members.map((member) => member.id)).not.toContain('plant-1')
+    expect(stampedGroup.members.map((member) => member.id)).not.toContain('plant-2')
 
     runtime.commandSurface.history.undo()
     expect(runtime.querySurface.getSceneSnapshot().groups).toHaveLength(1)

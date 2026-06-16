@@ -7,15 +7,24 @@ import type { SelectedPlantSymbolContext } from '../../plant-symbol-context'
 import type {
   PlantSymbolId,
   SceneObjectGroupEntity,
+  SceneObjectGroupMember,
   ScenePoint,
   ScenePersistedState,
   SceneStore,
 } from '../scene'
 import {
+  dedupeSceneObjectGroupMembers,
+  getSceneGroupedMemberKeys,
   isSceneDesignObjectLocked,
+  resolveSceneObjectGroupMembers,
   resolvePlantSymbolForPlant,
   resolvePlantSymbolId,
+  sceneObjectGroupMemberFromTarget,
+  sceneObjectGroupMemberKey,
+  sceneObjectGroupMemberLayerName,
+  sceneTargetKey,
   setSceneDesignObjectLocks,
+  type SceneConcreteDesignObjectTarget,
 } from '../scene'
 import {
   createClipboardPayload,
@@ -26,7 +35,6 @@ import {
   getCombinedTargetBounds,
   getDesignObjectSelectionModel,
   getSelectedTopLevelTargets,
-  getSelectionLayer,
   setsEqual,
   type SceneSelectionReadModelOptions,
   type SceneSelectionTarget,
@@ -159,13 +167,15 @@ export class SceneRuntimeMutationController {
           .filter((group) => !deleted.groupIds.has(group.id))
           .map((group) => ({
             ...group,
-            memberIds: group.memberIds.filter((memberId) =>
-              !deleted.plantIds.has(memberId)
-              && !deleted.zoneIds.has(memberId)
-              && !deleted.annotationIds.has(memberId),
+            members: group.members.filter((member) =>
+              !(
+                (member.kind === 'plant' && deleted.plantIds.has(member.id))
+                || (member.kind === 'zone' && deleted.zoneIds.has(member.id))
+                || (member.kind === 'annotation' && deleted.annotationIds.has(member.id))
+              ),
             ),
           }))
-          .filter((group) => group.memberIds.length >= 2)
+          .filter((group) => group.members.length >= 2)
       })
       tx.setSelection([])
     })
@@ -174,32 +184,35 @@ export class SceneRuntimeMutationController {
   selectAll(): void {
     const persisted = this._sceneStore.persisted
     const ids = new Set<string>()
-    const groupedMemberIds = new Set(persisted.groups.flatMap((group) => group.memberIds))
+    const groupedMemberKeys = getSceneGroupedMemberKeys(persisted)
     const layerState = sceneLayerState(persisted)
 
     if (isSceneLayerEditable(layerState.plants)) {
       for (const plant of persisted.plants) {
-        if (groupedMemberIds.has(plant.id) || plant.locked) continue
+        if (groupedMemberKeys.has(sceneTargetKey({ kind: 'plant', id: plant.id })) || plant.locked) continue
         ids.add(plant.id)
       }
     }
 
     if (isSceneLayerEditable(layerState.zones)) {
       for (const zone of persisted.zones) {
-        if (groupedMemberIds.has(zone.name) || zone.locked) continue
+        if (groupedMemberKeys.has(sceneTargetKey({ kind: 'zone', id: zone.name })) || zone.locked) continue
         ids.add(zone.name)
       }
     }
 
     if (isSceneLayerEditable(layerState.annotations)) {
       for (const annotation of persisted.annotations) {
-        if (groupedMemberIds.has(annotation.id) || annotation.locked) continue
+        if (groupedMemberKeys.has(sceneTargetKey({ kind: 'annotation', id: annotation.id })) || annotation.locked) continue
         ids.add(annotation.id)
       }
     }
 
     for (const group of persisted.groups) {
-      if (!isSceneLayerEditable(layerState[group.layer]) || isSceneDesignObjectLocked(persisted, group.id)) continue
+      if (
+        !isSceneObjectGroupLayerEditable(persisted, group, layerState)
+        || isSceneDesignObjectLocked(persisted, group.id)
+      ) continue
       ids.add(group.id)
     }
 
@@ -260,33 +273,30 @@ export class SceneRuntimeMutationController {
   }
 
   groupSelected(): void {
+    const persisted = this._sceneStore.persisted
     const selectionModel = this._getSelectionModel()
-    const selected = selectionModel.editableTargets
-    if (selected.length < 2 || selected.some((target) => target.kind === 'group')) return
-
-    const layer = getSelectionLayer(selected[0]!)
-    if (!selected.every((target) => getSelectionLayer(target) === layer)) return
-
-    const memberIds = selected.map((target) => target.id)
-    const bounds = selectionModel.bounds
-    if (!bounds) return
-
-    const nextGroup: SceneObjectGroupEntity = {
-      kind: 'group',
-      id: createUuid(),
-      locked: false,
-      name: null,
-      layer,
-      position: { x: bounds.minX, y: bounds.minY },
-      rotationDeg: null,
-      memberIds,
-    }
+    const plan = createGroupSelectedPlan(persisted, selectionModel.editableTargets)
+    if (!plan) return
 
     this._sceneEdits.run('group-selected', (tx) => {
       tx.mutate((draft) => {
-        draft.groups.push(nextGroup)
+        if (plan.survivorGroupId) {
+          draft.groups = draft.groups
+            .filter((group) => group.id === plan.survivorGroupId || !plan.removedGroupIds.has(group.id))
+            .map((group) => group.id === plan.survivorGroupId
+              ? { ...group, members: plan.members.map((member) => ({ ...member })) }
+              : group)
+          return
+        }
+        draft.groups.push({
+          kind: 'group',
+          id: plan.nextGroupId,
+          locked: false,
+          name: null,
+          members: plan.members.map((member) => ({ ...member })),
+        })
       })
-      tx.setSelection([nextGroup.id])
+      tx.setSelection([plan.nextGroupId])
     })
   }
 
@@ -299,9 +309,15 @@ export class SceneRuntimeMutationController {
     )
     if (selectedGroupIds.size === 0) return
 
+    const layerState = sceneLayerState(persisted)
     const memberIds = persisted.groups
       .filter((group) => selectedGroupIds.has(group.id))
-      .flatMap((group) => group.memberIds)
+      .flatMap((group) => resolveSceneObjectGroupMembers(persisted, group))
+      .filter((target) =>
+        isSceneLayerEditable(layerState[sceneObjectGroupMemberLayerName(target)])
+        && !isConcreteDesignObjectTargetLocked(persisted, target),
+      )
+      .map((target) => target.id)
 
     this._sceneEdits.run('ungroup-selected', (tx) => {
       tx.mutate((draft) => {
@@ -668,6 +684,63 @@ function isSceneLayerEditable(
   return layer?.visible !== false && layer?.locked !== true
 }
 
+function isSceneObjectGroupLayerEditable(
+  persisted: ScenePersistedState,
+  group: SceneObjectGroupEntity,
+  layerState: Readonly<Record<string, { visible: boolean; locked: boolean } | undefined>>,
+): boolean {
+  const members = resolveSceneObjectGroupMembers(persisted, group)
+  if (members.length === 0) return false
+  return members.every((member) => isSceneLayerEditable(layerState[sceneObjectGroupMemberLayerName(member)]))
+}
+
+interface GroupSelectedPlan {
+  nextGroupId: string
+  survivorGroupId: string | null
+  removedGroupIds: Set<string>
+  members: SceneObjectGroupMember[]
+}
+
+function createGroupSelectedPlan(
+  persisted: ScenePersistedState,
+  selected: readonly SceneSelectionTarget[],
+): GroupSelectedPlan | null {
+  if (selected.length < 2) return null
+  const selectedGroupIds = new Set<string>()
+  const members: SceneObjectGroupMember[] = []
+
+  for (const target of selected) {
+    if (target.kind === 'group') {
+      const group = persisted.groups.find((entry) => entry.id === target.id)
+      if (!group) continue
+      selectedGroupIds.add(group.id)
+      for (const member of resolveSceneObjectGroupMembers(persisted, group)) {
+        members.push({ kind: member.kind, id: member.id })
+      }
+      continue
+    }
+
+    const member = sceneObjectGroupMemberFromTarget(target)
+    if (member) members.push(member)
+  }
+
+  const dedupedMembers = dedupeSceneObjectGroupMembers(members)
+  if (dedupedMembers.length < 2) return null
+
+  const survivor = [...persisted.groups]
+    .reverse()
+    .find((group) => selectedGroupIds.has(group.id)) ?? null
+  const removedGroupIds = new Set(selectedGroupIds)
+  if (survivor) removedGroupIds.delete(survivor.id)
+
+  return {
+    nextGroupId: survivor?.id ?? createUuid(),
+    survivorGroupId: survivor?.id ?? null,
+    removedGroupIds,
+    members: dedupedMembers,
+  }
+}
+
 function getSpeciesPlantEditTargets(
   persisted: ScenePersistedState,
   canonicalName: string,
@@ -675,14 +748,14 @@ function getSpeciesPlantEditTargets(
   const plantIds = new Set<string>()
   const editablePlantIds = new Set<string>()
   const layerState = sceneLayerState(persisted)
-  const groupLockedMemberIds = getEffectivelyLockedGroupMemberIds(persisted)
+  const groupLockedMemberKeys = getEffectivelyLockedGroupMemberKeys(persisted)
   for (const plant of persisted.plants) {
     if (plant.canonicalName !== canonicalName) continue
     plantIds.add(plant.id)
     if (
       isSceneLayerEditable(layerState.plants)
       && !plant.locked
-      && !groupLockedMemberIds.has(plant.id)
+      && !groupLockedMemberKeys.has(sceneTargetKey({ kind: 'plant', id: plant.id }))
     ) {
       editablePlantIds.add(plant.id)
     }
@@ -694,13 +767,13 @@ function getExplicitPlantSymbol(plant: { symbol?: string | null }): PlantSymbolI
   return plant.symbol == null ? null : resolvePlantSymbolId(plant.symbol)
 }
 
-function getEffectivelyLockedGroupMemberIds(persisted: ScenePersistedState): Set<string> {
-  const memberIds = new Set<string>()
+function getEffectivelyLockedGroupMemberKeys(persisted: ScenePersistedState): Set<string> {
+  const memberKeys = new Set<string>()
   for (const group of persisted.groups) {
     if (!isSceneDesignObjectLocked(persisted, group.id)) continue
-    for (const memberId of group.memberIds) memberIds.add(memberId)
+    for (const member of group.members) memberKeys.add(sceneObjectGroupMemberKey(member))
   }
-  return memberIds
+  return memberKeys
 }
 
 function resolveSelectedEntitySets(
@@ -734,14 +807,27 @@ function resolveSelectedEntitySets(
     groupIds.add(target.id)
     const group = persisted.groups.find((entry) => entry.id === target.id)
     if (!group) continue
-    for (const memberId of group.memberIds) {
-      if (persisted.plants.some((plant) => plant.id === memberId)) plantIds.add(memberId)
-      else if (persisted.zones.some((zone) => zone.name === memberId)) zoneIds.add(memberId)
-      else if (persisted.annotations.some((annotation) => annotation.id === memberId)) annotationIds.add(memberId)
+    for (const member of resolveSceneObjectGroupMembers(persisted, group)) {
+      if (member.kind === 'plant') plantIds.add(member.id)
+      else if (member.kind === 'zone') zoneIds.add(member.id)
+      else annotationIds.add(member.id)
     }
   }
 
   return { plantIds, zoneIds, annotationIds, groupIds }
+}
+
+function isConcreteDesignObjectTargetLocked(
+  persisted: ScenePersistedState,
+  target: SceneConcreteDesignObjectTarget,
+): boolean {
+  if (target.kind === 'plant') {
+    return persisted.plants.some((plant) => plant.id === target.id && plant.locked)
+  }
+  if (target.kind === 'zone') {
+    return persisted.zones.some((zone) => zone.name === target.id && zone.locked)
+  }
+  return persisted.annotations.some((annotation) => annotation.id === target.id && annotation.locked)
 }
 
 function reorderSceneEntities<T>(

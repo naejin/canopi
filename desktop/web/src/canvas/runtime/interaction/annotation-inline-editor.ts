@@ -100,9 +100,11 @@ export function createAnnotationInlineEditor(
           draft.groups = draft.groups
             .map((group) => ({
               ...group,
-              memberIds: group.memberIds.filter((memberId) => memberId !== edit.annotationId),
+              members: group.members.filter((member) =>
+                !(member.kind === 'annotation' && member.id === edit.annotationId),
+              ),
             }))
-            .filter((group) => group.memberIds.length >= 2)
+            .filter((group) => group.members.length >= 2)
         })
         tx.setSelection([])
       })

@@ -1,6 +1,7 @@
 import type {
   SceneAnnotationEntity,
   SceneObjectGroupEntity,
+  SceneObjectGroupMember,
   ScenePersistedState,
   ScenePlantEntity,
   ScenePoint,
@@ -8,6 +9,11 @@ import type {
 } from '../scene'
 import type { SceneSelectionTarget } from './selection'
 import { createUuid } from '../../../utils/ids'
+import {
+  cloneSceneObjectGroupMembers,
+  resolveSceneObjectGroupMembers,
+  sceneObjectGroupMemberKey,
+} from '../scene'
 
 export interface SceneClipboardPayload {
   plants: ScenePlantEntity[]
@@ -44,10 +50,10 @@ export function createClipboardPayload(
     groupIds.add(target.id)
     const group = persisted.groups.find((entry) => entry.id === target.id)
     if (!group) continue
-    for (const memberId of group.memberIds) {
-      if (persisted.plants.some((plant) => plant.id === memberId)) plantIds.add(memberId)
-      else if (persisted.zones.some((zone) => zone.name === memberId)) zoneIds.add(memberId)
-      else if (persisted.annotations.some((annotation) => annotation.id === memberId)) annotationIds.add(memberId)
+    for (const member of resolveSceneObjectGroupMembers(persisted, group)) {
+      if (member.kind === 'plant') plantIds.add(member.id)
+      else if (member.kind === 'zone') zoneIds.add(member.id)
+      else annotationIds.add(member.id)
     }
   }
 
@@ -72,35 +78,34 @@ export function pasteClipboardPayload(
   for (const plant of payload.plants) {
     const clone = clonePlantWithOffset(plant, offset)
     draft.plants.push(clone)
-    sourceToCloneId.set(plant.id, clone.id)
+    sourceToCloneId.set(sceneObjectGroupMemberKey({ kind: 'plant', id: plant.id }), clone.id)
   }
 
   for (const zone of payload.zones) {
     const clone = cloneZoneWithOffset(zone, existingZoneNames, offset)
     existingZoneNames.add(clone.name)
     draft.zones.push(clone)
-    sourceToCloneId.set(zone.name, clone.name)
+    sourceToCloneId.set(sceneObjectGroupMemberKey({ kind: 'zone', id: zone.name }), clone.name)
   }
 
   for (const annotation of payload.annotations) {
     const clone = cloneAnnotationWithOffset(annotation, offset)
     draft.annotations.push(clone)
-    sourceToCloneId.set(annotation.id, clone.id)
+    sourceToCloneId.set(sceneObjectGroupMemberKey({ kind: 'annotation', id: annotation.id }), clone.id)
   }
 
   for (const group of payload.groups) {
-    const memberIds = group.memberIds
-      .map((memberId) => sourceToCloneId.get(memberId) ?? null)
-      .filter((memberId): memberId is string => memberId !== null)
-    if (memberIds.length === 0) continue
+    const members = group.members
+      .map((member): SceneObjectGroupMember | null => {
+        const cloneId = sourceToCloneId.get(sceneObjectGroupMemberKey(member))
+        return cloneId ? { kind: member.kind, id: cloneId } : null
+      })
+      .filter((member): member is SceneObjectGroupMember => member !== null)
+    if (members.length < 2) continue
     const cloneGroup: SceneObjectGroupEntity = {
       ...group,
       id: createUuid(),
-      position: {
-        x: group.position.x + offset.x,
-        y: group.position.y + offset.y,
-      },
-      memberIds,
+      members,
     }
     draft.groups.push(cloneGroup)
     nextSelection.add(cloneGroup.id)
@@ -109,15 +114,15 @@ export function pasteClipboardPayload(
   if (nextSelection.size > 0) return nextSelection
 
   for (const plant of payload.plants) {
-    const cloneId = sourceToCloneId.get(plant.id)
+    const cloneId = sourceToCloneId.get(sceneObjectGroupMemberKey({ kind: 'plant', id: plant.id }))
     if (cloneId) nextSelection.add(cloneId)
   }
   for (const zone of payload.zones) {
-    const cloneName = sourceToCloneId.get(zone.name)
+    const cloneName = sourceToCloneId.get(sceneObjectGroupMemberKey({ kind: 'zone', id: zone.name }))
     if (cloneName) nextSelection.add(cloneName)
   }
   for (const annotation of payload.annotations) {
-    const cloneId = sourceToCloneId.get(annotation.id)
+    const cloneId = sourceToCloneId.get(sceneObjectGroupMemberKey({ kind: 'annotation', id: annotation.id }))
     if (cloneId) nextSelection.add(cloneId)
   }
 
@@ -148,8 +153,7 @@ function cloneAnnotationEntity(annotation: SceneAnnotationEntity): SceneAnnotati
 function cloneGroupEntity(group: SceneObjectGroupEntity): SceneObjectGroupEntity {
   return {
     ...group,
-    position: { ...group.position },
-    memberIds: [...group.memberIds],
+    members: cloneSceneObjectGroupMembers(group.members),
   }
 }
 

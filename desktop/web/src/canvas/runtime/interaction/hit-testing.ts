@@ -7,10 +7,18 @@ import {
 } from '../plant-presentation'
 import type {
   SceneAnnotationEntity,
+  SceneObjectGroupEntity,
   ScenePersistedState,
   ScenePlantEntity,
   ScenePoint,
   SceneZoneEntity,
+} from '../scene'
+import {
+  getSceneGroupedMemberKeys,
+  resolveSceneObjectGroupMembers,
+  sceneObjectGroupMemberLayerName,
+  sceneTargetKey,
+  type SceneConcreteDesignObjectTarget,
 } from '../scene'
 import type { SpeciesCacheEntry } from '../species-cache'
 import {
@@ -67,33 +75,36 @@ function hitTestTopLevelWithLayerFilter(
   getPlantContext: (viewportScale: number) => PlantPresentationContext,
   isLayerHitEligible: (scene: ScenePersistedState, layerName: string) => boolean,
 ): TopLevelTarget | null {
-  const groupedMembers = new Set(scene.groups.flatMap((group) => group.memberIds))
+  const groupedMemberKeys = getSceneGroupedMemberKeys(scene)
 
   for (let i = scene.groups.length - 1; i >= 0; i -= 1) {
     const group = scene.groups[i]!
-    if (!isLayerHitEligible(scene, group.layer)) continue
-    for (const memberId of group.memberIds) {
-      const plant = scene.plants.find((entry) => entry.id === memberId)
+    const members = resolveSceneObjectGroupMembers(scene, group)
+    if (!isGroupLayerHitEligible(scene, group, isLayerHitEligible, members)) continue
+    for (const member of members) {
+      const plant = member.kind === 'plant' ? scene.plants.find((entry) => entry.id === member.id) : null
       if (plant && hitTestPlant(plant, point, plantPresentationContext(getPlantContext, viewportScale, speciesCache))) {
         return { kind: 'group', id: group.id }
       }
-      const zone = scene.zones.find((entry) => entry.name === memberId)
+      const zone = member.kind === 'zone' ? scene.zones.find((entry) => entry.name === member.id) : null
       if (zone && hitZone(zone, point, viewportScale)) return { kind: 'group', id: group.id }
-      const annotation = scene.annotations.find((entry) => entry.id === memberId)
+      const annotation = member.kind === 'annotation'
+        ? scene.annotations.find((entry) => entry.id === member.id)
+        : null
       if (annotation && hitAnnotation(annotation, point, viewportScale)) return { kind: 'group', id: group.id }
     }
   }
 
   for (let i = scene.annotations.length - 1; i >= 0; i -= 1) {
     const annotation = scene.annotations[i]!
-    if (groupedMembers.has(annotation.id)) continue
+    if (groupedMemberKeys.has(sceneTargetKey({ kind: 'annotation', id: annotation.id }))) continue
     if (!isLayerHitEligible(scene, 'annotations')) continue
     if (hitAnnotation(annotation, point, viewportScale)) return { kind: 'annotation', id: annotation.id }
   }
 
   for (let i = scene.plants.length - 1; i >= 0; i -= 1) {
     const plant = scene.plants[i]!
-    if (groupedMembers.has(plant.id)) continue
+    if (groupedMemberKeys.has(sceneTargetKey({ kind: 'plant', id: plant.id }))) continue
     if (!isLayerHitEligible(scene, 'plants')) continue
     if (hitTestPlant(plant, point, plantPresentationContext(getPlantContext, viewportScale, speciesCache))) {
       return { kind: 'plant', id: plant.id }
@@ -102,12 +113,24 @@ function hitTestTopLevelWithLayerFilter(
 
   for (let i = scene.zones.length - 1; i >= 0; i -= 1) {
     const zone = scene.zones[i]!
-    if (groupedMembers.has(zone.name)) continue
+    if (groupedMemberKeys.has(sceneTargetKey({ kind: 'zone', id: zone.name }))) continue
     if (!isLayerHitEligible(scene, 'zones')) continue
     if (hitZone(zone, point, viewportScale)) return { kind: 'zone', id: zone.name }
   }
 
   return null
+}
+
+function isGroupLayerHitEligible(
+  scene: ScenePersistedState,
+  _group: SceneObjectGroupEntity,
+  isLayerHitEligible: (scene: ScenePersistedState, layerName: string) => boolean,
+  members: readonly SceneConcreteDesignObjectTarget[],
+): boolean {
+  if (members.length === 0) return false
+  return members.every((member) =>
+    isLayerHitEligible(scene, sceneObjectGroupMemberLayerName(member)),
+  )
 }
 
 export function queryRectTopLevel(
@@ -118,23 +141,26 @@ export function queryRectTopLevel(
   getPlantContext: (viewportScale: number) => PlantPresentationContext,
 ): TopLevelTarget[] {
   const targets: TopLevelTarget[] = []
-  const groupedMembers = new Set(scene.groups.flatMap((group) => group.memberIds))
+  const groupedMemberKeys = getSceneGroupedMemberKeys(scene)
 
   for (const group of scene.groups) {
-    if (!isLayerInteractive(scene, group.layer)) continue
-    const hit = group.memberIds.some((memberId) => {
-      const plant = scene.plants.find((entry) => entry.id === memberId)
+    const members = resolveSceneObjectGroupMembers(scene, group)
+    if (!isGroupLayerHitEligible(scene, group, isLayerInteractive, members)) continue
+    const hit = members.some((member) => {
+      const plant = member.kind === 'plant' ? scene.plants.find((entry) => entry.id === member.id) : null
       if (plant && rectsIntersect(rect, plantBounds(plant, viewportScale, speciesCache, getPlantContext))) return true
-      const zone = scene.zones.find((entry) => entry.name === memberId)
+      const zone = member.kind === 'zone' ? scene.zones.find((entry) => entry.name === member.id) : null
       if (zone && zoneIntersectsRect(zone, rect)) return true
-      const annotation = scene.annotations.find((entry) => entry.id === memberId)
+      const annotation = member.kind === 'annotation'
+        ? scene.annotations.find((entry) => entry.id === member.id)
+        : null
       return annotation ? annotationIntersectsRect(annotation, rect, viewportScale) : false
     })
     if (hit) targets.push({ kind: 'group', id: group.id })
   }
 
   for (const plant of scene.plants) {
-    if (groupedMembers.has(plant.id)) continue
+    if (groupedMemberKeys.has(sceneTargetKey({ kind: 'plant', id: plant.id }))) continue
     if (!isLayerInteractive(scene, 'plants')) continue
     if (rectsIntersect(rect, plantBounds(plant, viewportScale, speciesCache, getPlantContext))) {
       targets.push({ kind: 'plant', id: plant.id })
@@ -142,13 +168,13 @@ export function queryRectTopLevel(
   }
 
   for (const zone of scene.zones) {
-    if (groupedMembers.has(zone.name)) continue
+    if (groupedMemberKeys.has(sceneTargetKey({ kind: 'zone', id: zone.name }))) continue
     if (!isLayerInteractive(scene, 'zones')) continue
     if (zoneIntersectsRect(zone, rect)) targets.push({ kind: 'zone', id: zone.name })
   }
 
   for (const annotation of scene.annotations) {
-    if (groupedMembers.has(annotation.id)) continue
+    if (groupedMemberKeys.has(sceneTargetKey({ kind: 'annotation', id: annotation.id }))) continue
     if (!isLayerInteractive(scene, 'annotations')) continue
     if (annotationIntersectsRect(annotation, rect, viewportScale)) {
       targets.push({ kind: 'annotation', id: annotation.id })
