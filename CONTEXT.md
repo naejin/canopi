@@ -186,7 +186,7 @@ The canvas runtime interaction seam for pointer and keyboard gesture lifetime: c
 _Avoid_: Interaction controller, tool router, event handler blob
 
 **Object Group**:
-A named or unnamed collection of design objects whose members move or transform together. An object group may contain placed plants, zones, annotations, or other design objects; the group itself is not a separate visible design shape.
+A named or unnamed flat collection of design objects whose members move or transform together. An object group may contain placed plants, zones, or annotations across Layers; the group itself is not a separate visible design shape and object groups do not nest inside object groups.
 _Avoid_: Layer, selection
 
 **Plant Stamp**:
