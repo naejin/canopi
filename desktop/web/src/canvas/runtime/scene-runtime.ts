@@ -1,212 +1,137 @@
-import { signal } from '@preact/signals'
-import {
-  createDetachedCanvasRuntimeAppAdapter,
-  type CanvasRuntimeAppAdapter,
-} from './app-adapter'
 import { setCanvasSelection } from '../session-state'
-import { syncPlantSpeciesColorDefaults } from '../plant-species-color-defaults'
 import { refreshCanvasColorCache } from '../theme-refresh'
 import { createUuid } from '../../utils/ids'
-import { CameraController } from './camera'
 import { SceneInteractionController } from './scene-interaction'
-import { createSceneCanvasCommandSurface } from './command-surface'
-import { RendererHost } from './renderers'
-import { createCanvas2DSceneRenderer } from './renderers/canvas2d-scene'
-import { createPixiSceneRenderer } from './renderers/pixi-scene'
-import type { SceneRendererContext, SceneRendererInstance } from './renderers/scene-types'
-import { SceneStore } from './scene'
 import {
   resetTransientRuntimeState,
-  syncCanvasSignalsFromDocument,
   syncCanvasSignalsFromScene,
   syncGuideSignalsFromScene,
-  syncPresentationSignalsFromSceneSession,
 } from './scene-runtime/scene-sync'
-import { SceneRuntimeChromeCoordinator } from './scene-runtime/chrome-coordinator'
-import { SceneRuntimeDocumentBridge } from './scene-runtime/document'
-import { createSceneCanvasDocumentSurface } from './document-surface'
-import { createSceneCanvasQuerySurface } from './query-surface'
+import type { SceneRuntimeDocumentBridge } from './scene-runtime/document'
 import { installSceneRuntimeEffects } from './scene-runtime/effects'
-import { SceneRuntimeRenderScheduler, type SceneRuntimeRenderKind } from './scene-runtime/render-scheduler'
+import type { SceneRuntimeRenderKind } from './scene-runtime/render-scheduler'
 import type { ScenePersistedState } from './scene'
-import { SceneHistory } from './scene-history'
-import { SceneRuntimeMutationController } from './scene-runtime/mutations'
-import { SceneRuntimePresentationController } from './scene-runtime/presentation'
 import {
-  SceneRuntimeEditCoordinator,
-  type SceneEditCoordinator,
-} from './scene-runtime/transactions'
-import {
-  createDetachedSceneRuntimePanelTargetAdapter,
-  type SceneRuntimePanelTargetAdapter,
-} from './scene-runtime/panel-target-adapter'
+  createSceneRuntimeConstruction,
+  type SceneRuntimeConstruction,
+  type SceneRuntimeConstructionOptions,
+} from './scene-runtime/construction'
 import type {
   CanvasCommandSurface,
   CanvasDocumentSurface,
   CanvasQuerySurface,
-  CanvasQueryRevision,
 } from './runtime'
 import { targets, speciesTarget } from '../../target'
 
 type RuntimeInvalidationKind = 'scene' | 'viewport' | 'chrome'
 
-export interface SceneCanvasRuntimeOptions {
-  appAdapter?: CanvasRuntimeAppAdapter
-  targetPresentation?: SceneRuntimePanelTargetAdapter
-}
+export type SceneCanvasRuntimeOptions = SceneRuntimeConstructionOptions
 
 export class SceneCanvasRuntime {
-  private readonly _sceneStore = new SceneStore()
-  private readonly _camera = new CameraController()
-  private readonly _sceneRevision = signal(0)
-  private readonly _plantNamesQueryRevision = signal(0)
-  private readonly _viewportRevision = signal(0)
-  private readonly _transientHistoryRevision = signal(0)
-  private readonly _revision: CanvasQueryRevision = {
-    scene: this._sceneRevision,
-    plantNames: this._plantNamesQueryRevision,
-    viewport: this._viewportRevision,
-  }
-  private readonly _rendererHost = new RendererHost<SceneRendererContext, SceneRendererInstance>({
-    backends: [
-      createPixiSceneRenderer(),
-      createCanvas2DSceneRenderer(),
-    ],
-  })
-  private readonly _rendering = new SceneRuntimeRenderScheduler({
-    getRendererHost: () => this._rendererHost,
-    getViewport: () => this._camera.viewport,
-    prepareSceneSnapshot: async () => {
-      const presentationRevision = this._currentPresentationRevision()
-      const presentation = await this._presentation.refreshCurrentPresentationData()
-      this._applyPresentationBackfillsIfCurrent(presentationRevision, presentation.backfills)
-      return this._presentation.buildRendererSnapshot()
-    },
-    renderChrome: () => this._renderChrome(),
-  })
-  private readonly _presentation: SceneRuntimePresentationController
-  private readonly _chrome = new SceneRuntimeChromeCoordinator()
+  private readonly _construction: SceneRuntimeConstruction
   private _interaction: SceneInteractionController | null = null
-  private readonly _appAdapter: CanvasRuntimeAppAdapter
-  private readonly _history: SceneHistory
-  private readonly _commandSurface: CanvasCommandSurface
-  private readonly _sceneEdits: SceneEditCoordinator
-  private readonly _mutations: SceneRuntimeMutationController
-  private readonly _documents: SceneRuntimeDocumentBridge
-  private readonly _documentSurface: CanvasDocumentSurface
-  private readonly _querySurface: CanvasQuerySurface
-  private readonly _panelTargetAdapter: SceneRuntimePanelTargetAdapter
-  private readonly _disposeEffects: Array<() => void> = []
 
   constructor(options: SceneCanvasRuntimeOptions = {}) {
-    this._appAdapter = options.appAdapter ?? createDetachedCanvasRuntimeAppAdapter()
-    this._history = new SceneHistory({
-      reportCleanState: (clean) => this._appAdapter.cleanState.setCanvasClean(clean),
-    })
-    this._panelTargetAdapter = options.targetPresentation ?? createDetachedSceneRuntimePanelTargetAdapter()
-    this._presentation = new SceneRuntimePresentationController({
-      sceneStore: this._sceneStore,
-      getViewport: () => this._camera.viewport,
-      getLocale: () => this._appAdapter.settings.readLocale(),
+    this._construction = createSceneRuntimeConstruction(options, {
       resolveHighlightedTargets: (scene) => this._resolveHighlightedTargets(scene),
-      onPlantNamesChanged: () => {
-        this._incrementPlantNamesRevision()
-      },
-    })
-    this._documents = new SceneRuntimeDocumentBridge({
-      sceneStore: this._sceneStore,
-      history: this._history,
+      currentPresentationRevision: () => this._currentPresentationRevision(),
+      applyPresentationBackfillsIfCurrent: (revision, backfills) =>
+        this._applyPresentationBackfillsIfCurrent(revision, backfills),
+      incrementPlantNamesRevision: () => this._incrementPlantNamesRevision(),
       setSelection: (ids) => this._setSelection(ids),
       resetTransientRuntimeState: () => this._resetTransientRuntimeState(),
-      clearHoveredTargets: () => this._syncHoveredCanvasTargets(null),
-      clearPanelOriginTargets: () => this._panelTargetAdapter.clearPanelOriginTargets(),
-      composeDocumentForSave: (input) => this._appAdapter.document.composeDocumentForSave(input),
-      syncCanvasSignalsFromDocument: (file) =>
-        syncCanvasSignalsFromDocument(file, this._appAdapter.settings.layerProjections),
+      syncHoveredCanvasTargets: (id) => this._syncHoveredCanvasTargets(id),
       syncCanvasSignalsFromScene: () => this._syncCanvasSignalsFromScene(),
-      invalidateScene: () => this._invalidate('scene'),
+      invalidate: (kind) => this._invalidate(kind),
       incrementSceneRevision: () => this._incrementSceneRevision(),
       incrementViewportRevision: () => this._incrementViewportRevision(),
-    })
-    this._documentSurface = createSceneCanvasDocumentSurface({
-      documents: this._documents,
-      camera: this._camera,
-      chrome: this._chrome,
-      rendering: this._rendering,
-      getSceneSnapshot: () => this._sceneStore.persisted,
-      createPlantPresentationContext: (viewportScale) =>
-        this._presentation.createPlantPresentationContext(viewportScale),
       setViewport: (viewport, options) => this._setViewport(viewport, options),
-      invalidateViewport: () => this._invalidate('viewport'),
       renderChrome: () => this._renderChrome(),
       addGuide: (axis, worldPosition) => this._addGuide(axis, worldPosition),
-      clearHoveredEntity: () => this._setHoveredEntityId(null, { invalidate: false }),
+      setHoveredEntityId: (id, options) => this._setHoveredEntityId(id, options),
       disposeInteraction: () => {
         this._interaction?.dispose()
         this._interaction = null
         this._notifyTransientHistoryChanged()
       },
-      disposeEffects: () => {
-        for (const dispose of this._disposeEffects.splice(0)) dispose()
-      },
-    })
-    this._sceneEdits = new SceneRuntimeEditCoordinator({
-      sceneStore: this._sceneStore,
-      captureSnapshot: () => this._documents.captureCommandSnapshot(),
-      markDirty: (before, type) => this._documents.markDirty(before, type),
-      setSelection: (ids) => this._setSelection(ids),
-      invalidate: (kind) => this._invalidate(kind),
-    })
-    this._mutations = new SceneRuntimeMutationController({
-      sceneStore: this._sceneStore,
-      selection: {
-        set: (ids) => this._setSelection(ids),
-      },
-      sceneEdits: this._sceneEdits,
-      presentation: {
-        syncSignals: () => syncPresentationSignalsFromSceneSession(this._sceneStore),
-        syncPlantSpeciesColors: () => syncPlantSpeciesColorDefaults(this._sceneStore.persisted.plantSpeciesColors),
-        getViewportScale: () => this._camera.viewport.scale,
-        createPlantPresentationContext: (viewportScale) => this._presentation.createPlantPresentationContext(viewportScale),
-        getLocalizedCommonNames: () => this._presentation.getLocalizedCommonNames(),
-        getSuggestedPlantColor: (canonicalName) => this._presentation.getSuggestedPlantColor(canonicalName),
-      },
-      invalidateScene: () => this._invalidate('scene'),
-    })
-    this._commandSurface = createSceneCanvasCommandSurface({
-      sceneStore: this._sceneStore,
-      camera: this._camera,
-      history: this._history,
-      transientHistory: {
-        revision: this._transientHistoryRevision,
-        canUndo: () => this._interaction?.canUndoTransientHistory() ?? false,
-        canRedo: () => this._interaction?.canRedoTransientHistory() ?? false,
-        undo: () => this._interaction?.undoTransientHistory() ?? false,
-        redo: () => this._interaction?.redoTransientHistory() ?? false,
-      },
-      documents: this._documents,
-      mutations: this._mutations,
-      sceneEdits: this._sceneEdits,
-      presentation: this._presentation,
-      settings: this._appAdapter.settings,
-      setViewport: (viewport) => this._setViewport(viewport),
+      notifyTransientHistoryChanged: () => this._notifyTransientHistoryChanged(),
+      canUndoTransientHistory: () => this._interaction?.canUndoTransientHistory() ?? false,
+      canRedoTransientHistory: () => this._interaction?.canRedoTransientHistory() ?? false,
+      undoTransientHistory: () => this._interaction?.undoTransientHistory() ?? false,
+      redoTransientHistory: () => this._interaction?.redoTransientHistory() ?? false,
       setInteractionTool: (name) => {
         this._interaction?.setTool(name)
       },
-      syncCanvasSignalsFromScene: () => this._syncCanvasSignalsFromScene(),
-      incrementSceneRevision: () => this._incrementSceneRevision(),
-      currentPresentationRevision: () => this._currentPresentationRevision(),
-      invalidate: (kind) => this._invalidate(kind),
-    })
-    this._querySurface = createSceneCanvasQuerySurface({
-      revision: this._revision,
-      sceneStore: this._sceneStore,
-      camera: this._camera,
-      viewportRevision: this._viewportRevision,
-      mutations: this._mutations,
-      presentation: this._presentation,
     })
     this._installEffects()
+  }
+
+  private get _sceneStore(): SceneRuntimeConstruction['sceneStore'] {
+    return this._construction.sceneStore
+  }
+
+  private get _camera(): SceneRuntimeConstruction['camera'] {
+    return this._construction.camera
+  }
+
+  private get _sceneRevision(): SceneRuntimeConstruction['sceneRevision'] {
+    return this._construction.sceneRevision
+  }
+
+  private get _plantNamesQueryRevision(): SceneRuntimeConstruction['plantNamesQueryRevision'] {
+    return this._construction.plantNamesQueryRevision
+  }
+
+  private get _viewportRevision(): SceneRuntimeConstruction['viewportRevision'] {
+    return this._construction.viewportRevision
+  }
+
+  private get _transientHistoryRevision(): SceneRuntimeConstruction['transientHistoryRevision'] {
+    return this._construction.transientHistoryRevision
+  }
+
+  private get _rendering(): SceneRuntimeConstruction['rendering'] {
+    return this._construction.rendering
+  }
+
+  private get _presentation(): SceneRuntimeConstruction['presentation'] {
+    return this._construction.presentation
+  }
+
+  private get _chrome(): SceneRuntimeConstruction['chrome'] {
+    return this._construction.chrome
+  }
+
+  private get _appAdapter(): SceneRuntimeConstruction['appAdapter'] {
+    return this._construction.appAdapter
+  }
+
+  private get _commandSurface(): CanvasCommandSurface {
+    return this._construction.commandSurface
+  }
+
+  private get _sceneEdits(): SceneRuntimeConstruction['sceneEdits'] {
+    return this._construction.sceneEdits
+  }
+
+  private get _documents(): SceneRuntimeDocumentBridge {
+    return this._construction.documents
+  }
+
+  private get _documentSurface(): CanvasDocumentSurface {
+    return this._construction.documentSurface
+  }
+
+  private get _querySurface(): CanvasQuerySurface {
+    return this._construction.querySurface
+  }
+
+  private get _panelTargetAdapter(): SceneRuntimeConstruction['panelTargetAdapter'] {
+    return this._construction.panelTargetAdapter
+  }
+
+  private get _disposeEffects(): SceneRuntimeConstruction['disposeEffects'] {
+    return this._construction.disposeEffects
   }
 
   async init(container: HTMLElement): Promise<void> {

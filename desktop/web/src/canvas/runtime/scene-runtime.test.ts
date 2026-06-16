@@ -162,11 +162,11 @@ async function initRuntimeWithStubbedRenderer(runtime: SceneCanvasRuntime) {
   Object.defineProperty(container, 'clientHeight', { configurable: true, value: 300 })
 
   const renderer = createRendererStub()
-  ;(runtime as any)._rendererHost = {
+  ;(runtime as any)._construction.replaceRendererHost({
     initialize: async () => renderer,
     run: async (operation: (instance: typeof renderer) => unknown) => operation(renderer),
     dispose: async () => {},
-  }
+  })
 
   await runtime.init(container)
   return { container, renderer }

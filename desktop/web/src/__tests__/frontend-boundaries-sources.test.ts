@@ -691,13 +691,13 @@ describe('frontend boundary sources', () => {
 
   it('routes canvas clean-state reporting through the Canvas Runtime App Adapter', () => {
     const historySource = readSource('../canvas/runtime/scene-history.ts')
-    const runtimeSource = readSource('../canvas/runtime/scene-runtime.ts')
+    const constructionSource = readSource('../canvas/runtime/scene-runtime/construction.ts')
     const runtimeAdapterSource = readSource('../canvas/runtime/app-adapter.ts')
     const appAdapterSource = readSource('../app/canvas-runtime/app-adapter.ts')
     const hostSource = readSource('../app/canvas-runtime/host.ts')
 
     expect(historySource).toContain('reportCleanState')
-    expect(runtimeSource).toContain('CanvasRuntimeAppAdapter')
+    expect(constructionSource).toContain('CanvasRuntimeAppAdapter')
     expect(runtimeAdapterSource).toContain('CanvasRuntimeCleanStateAdapter')
     expect(appAdapterSource).toContain('setCanvasClean')
     expect(hostSource).toContain('createAppCanvasRuntimeAppAdapter')
@@ -706,6 +706,9 @@ describe('frontend boundary sources', () => {
       /app\/document-session\/store$/,
     ])
     expectNoImportsMatching('../canvas/runtime/scene-runtime.ts', [
+      /app\/document-session\/store$/,
+    ])
+    expectNoImportsMatching('../canvas/runtime/scene-runtime/construction.ts', [
       /app\/document-session\/store$/,
     ])
   })

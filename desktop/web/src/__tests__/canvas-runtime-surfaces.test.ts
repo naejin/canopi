@@ -223,6 +223,26 @@ describe('canvas runtime surfaces', () => {
     expect(runtimeSource).not.toContain('return this._setSceneLayerState(name, { visible })')
   })
 
+  it('keeps runtime construction wiring behind the construction module', () => {
+    const runtimeSource = readPackageSource('../canvas/runtime/scene-runtime.ts')
+    const constructionSource = readPackageSource('../canvas/runtime/scene-runtime/construction.ts')
+
+    expect(runtimeSource).toContain("from './scene-runtime/construction'")
+    expect(constructionSource).toContain('createSceneRuntimeConstruction')
+    expect(constructionSource).toContain('new SceneStore()')
+    expect(constructionSource).toContain('new CameraController()')
+    expect(constructionSource).toContain('new SceneRuntimeDocumentBridge')
+    expect(constructionSource).toContain('new SceneRuntimeEditCoordinator')
+    expect(constructionSource).toContain('createSceneCanvasCommandSurface')
+    expect(constructionSource).toContain('createSceneCanvasQuerySurface')
+    expect(constructionSource).toContain('createSceneCanvasDocumentSurface')
+    expect(runtimeSource).not.toContain('createSceneCanvasCommandSurface({')
+    expect(runtimeSource).not.toContain('createSceneCanvasQuerySurface({')
+    expect(runtimeSource).not.toContain('createSceneCanvasDocumentSurface({')
+    expect(runtimeSource).not.toContain('new SceneRuntimeDocumentBridge({')
+    expect(runtimeSource).not.toContain('new SceneRuntimeEditCoordinator({')
+  })
+
   it('publishes explicit facades instead of the mounted runtime', () => {
     const runtime = new SceneCanvasRuntime()
     const surfaces = createCanvasRuntimeSurfaces(runtime)
