@@ -69,23 +69,26 @@ describe('Scene Interaction tool module boundaries', () => {
     expect(sharedGesturesSource).toContain('interaction-drag')
   })
 
-  it('keeps Annotation Text editor state behind the text tool module', () => {
+  it('keeps Annotation Text creation editor state behind the text tool module', () => {
     const interactionSource = readSource('../canvas/runtime/scene-interaction.ts')
     const toolModulesSource = readSource('../canvas/runtime/interaction/tool-modules.ts')
     const textToolSource = readSource('../canvas/runtime/interaction/text-annotation-tool.ts')
+    const inlineEditorSource = readSource('../canvas/runtime/interaction/annotation-inline-editor.ts')
 
     expect(interactionSource).toContain('createSceneToolModules')
     expect(interactionSource).not.toContain('createTextAnnotationTool')
     expect(interactionSource).not.toContain('createTextAnnotationToolAdapter')
+    expect(interactionSource).toContain('createAnnotationInlineEditor')
     expect(toolModulesSource).toContain('createTextAnnotationTool')
     expect(toolModulesSource).toContain('createTextAnnotationToolAdapter')
     expect(interactionSource).not.toContain('_textTool')
-    expect(interactionSource).not.toContain('hasActiveEditor')
     expect(interactionSource).not.toContain('HTMLTextAreaElement')
     expect(interactionSource).not.toContain('_textarea')
     expect(interactionSource).not.toContain('_textWorldPosition')
     expect(textToolSource).toContain('appendTextAnnotationToDraft')
     expect(textToolSource).toContain('createTextAnnotationToolAdapter')
+    expect(inlineEditorSource).toContain('HTMLTextAreaElement')
+    expect(inlineEditorSource).toContain('hasActiveEditor')
   })
 
   it('keeps Zone drawing draft state behind the zone drawing tool module', () => {

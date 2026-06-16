@@ -62,6 +62,23 @@ describe('CameraController', () => {
     expect(after.y).toBeCloseTo(before.y)
   })
 
+  it('clamps viewport scale between the unchanged minimum and precision maximum', () => {
+    const camera = new CameraController()
+    camera.initialize({ width: 1000, height: 800 })
+
+    expect(camera.setViewport({ x: 0, y: 0, scale: 5000 }).scale).toBe(1000)
+    expect(camera.setViewport({ x: 0, y: 0, scale: 0.001 }).scale).toBe(0.1)
+  })
+
+  it('lets zoom-in reach the precision maximum without exceeding it', () => {
+    const camera = new CameraController()
+    camera.initialize({ width: 1000, height: 800 })
+    camera.setViewport({ x: 0, y: 0, scale: 990 })
+
+    expect(camera.zoomIn().scale).toBe(1000)
+    expect(camera.zoomIn().scale).toBe(1000)
+  })
+
   it('fits to the scene bounds', () => {
     const camera = new CameraController()
     camera.initialize({ width: 1000, height: 800 })

@@ -313,11 +313,13 @@ describe('InteractiveTimeline hover cleanup', () => {
     const dialog = document.body.querySelector('[role="dialog"]') as HTMLDivElement | null
     expect(dialog).toBeTruthy()
 
-    const notesInput = dialog!.querySelector('input[type="text"]') as HTMLInputElement | null
+    const notesInput = dialog!.querySelector('textarea') as HTMLTextAreaElement | null
     expect(notesInput).toBeTruthy()
+    expect(notesInput?.rows).toBe(4)
+    expect(dialog!.querySelector('input[type="text"]')).toBeNull()
 
     await act(async () => {
-      notesInput!.value = 'Water deeply'
+      notesInput!.value = 'Water deeply\nCheck mulch after settling'
       notesInput!.dispatchEvent(new Event('input', { bubbles: true }))
     })
 
@@ -329,7 +331,7 @@ describe('InteractiveTimeline hover cleanup', () => {
       saveButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    expect(currentDesign.value?.timeline[0]?.description).toBe('Water deeply')
+    expect(currentDesign.value?.timeline[0]?.description).toBe('Water deeply\nCheck mulch after settling')
     expect(document.body.querySelector('[role="dialog"]')).toBeNull()
   })
 

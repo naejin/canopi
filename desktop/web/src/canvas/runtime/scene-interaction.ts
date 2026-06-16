@@ -35,6 +35,11 @@ import {
   createSceneInteractionSharedGestures,
   type SceneInteractionSharedGestures,
 } from './interaction/shared-gestures'
+import {
+  createAnnotationInlineEditor,
+  type AnnotationInlineEditorController,
+} from './interaction/annotation-inline-editor'
+import { getDesignObjectSelectionModel } from './scene-runtime/selection'
 import type { SceneEditCoordinator } from './scene-runtime/transactions'
 import {
   createSelectionActionToolbar,
@@ -107,11 +112,13 @@ export class SceneInteractionController {
   private readonly _tools: SceneToolModules
   private readonly _frame: SceneInteractionFrame
   private readonly _sharedGestures: SceneInteractionSharedGestures
+  private readonly _annotationEditor: AnnotationInlineEditorController
   private readonly _selectionToolbar: SelectionActionToolbarController
   private readonly _contextMenu: CanvasContextMenuController
   private readonly _rotationHandle: SelectionRotationHandleController
   private readonly _lockedAffordance: LockedObjectAffordanceController
   private _tool: InteractionTool = 'select'
+  private _designObjectDragPresentationSuppressed = false
 
   constructor(private readonly _deps: SceneInteractionDeps) {
     this._preview = createInteractionPreview(this._deps.container)
@@ -135,6 +142,14 @@ export class SceneInteractionController {
       getContainerRect: () => this._frame.currentContainerRect(),
       notifyTransientHistoryChange: () => this._deps.notifyTransientHistoryChange?.(),
     })
+    this._annotationEditor = createAnnotationInlineEditor({
+      container: this._deps.container,
+      camera: this._deps.camera,
+      getSceneStore: this._deps.getSceneStore,
+      sceneEdits: this._deps.sceneEdits,
+      canEditAnnotation: (annotationId) => this._canEditAnnotation(annotationId),
+      refreshSelectionDependent: () => this._refreshSelectionDependentMeasurements(),
+    })
     this._sharedGestures = createSceneInteractionSharedGestures({
       container: this._deps.container,
       preview: this._preview,
@@ -152,6 +167,9 @@ export class SceneInteractionController {
       applySnapping: (point) => this._applySnapping(point),
       refreshViewportDependent: () => this._refreshViewportDependentMeasurements(),
       refreshSelectionDependent: () => this._refreshSelectionDependentMeasurements(),
+      beginDesignObjectDragPresentation: () => this._beginDesignObjectDragPresentation(),
+      endDesignObjectDragPresentation: () => this._endDesignObjectDragPresentation(),
+      beginAnnotationTextEdit: (annotationId) => this._annotationEditor.start(annotationId),
     })
     this._selectionToolbar = createSelectionActionToolbar({
       container: this._deps.container,
@@ -198,6 +216,7 @@ export class SceneInteractionController {
   }
 
   setTool(name: string): void {
+    if (this._tool !== name) this._annotationEditor.cancel()
     this._tool = name
     this._frame.transitionTool({
       toolName: name,
@@ -215,6 +234,8 @@ export class SceneInteractionController {
       this._contextMenu.dispose()
       this._rotationHandle.dispose()
       this._lockedAffordance.dispose()
+      this._annotationEditor.dispose()
+      this._sharedGestures.dispose()
       this._tools.dispose()
       this._preview.remove()
       this._tooltip.dispose()
@@ -244,6 +265,8 @@ export class SceneInteractionController {
   private readonly _onPointerDown = (event: PointerEvent): void => {
     if (event.button !== 0 && event.button !== 1) return
     this._contextMenu.hide()
+    if (this._annotationEditor.contains(event.target)) return
+    if (this._annotationEditor.hasActiveEditor()) this._annotationEditor.commit()
     if (this._selectionToolbar.contains(event.target)) return
     if (this._contextMenu.contains(event.target)) return
     if (this._lockedAffordance.contains(event.target)) return
@@ -294,25 +317,19 @@ export class SceneInteractionController {
   }
 
   private readonly _onPointerLeave = (): void => {
-    this._deps.setHoveredEntityId(null)
-    this._tooltip.hide()
-    this._lockedAffordance.hide()
+    this._clearPassiveHoverPresentation()
   }
 
   private _updateHover(event: PointerEvent): void {
     if (this._tools.shouldSuppressHover()) {
-      this._deps.setHoveredEntityId(null)
-      this._tooltip.hide()
-      this._lockedAffordance.hide()
+      this._clearPassiveHoverPresentation()
       return
     }
 
     const rect = this._deps.container.getBoundingClientRect()
     if (event.clientX < rect.left || event.clientX > rect.right
       || event.clientY < rect.top || event.clientY > rect.bottom) {
-      this._deps.setHoveredEntityId(null)
-      this._tooltip.hide()
-      this._lockedAffordance.hide()
+      this._clearPassiveHoverPresentation()
       return
     }
     const screen = { x: event.clientX - rect.left, y: event.clientY - rect.top }
@@ -413,6 +430,7 @@ export class SceneInteractionController {
   private readonly _onContextMenu = (event: MouseEvent): void => {
     if (allowsNativeContextMenuTarget(event.target)) return
     event.preventDefault()
+    if (this._annotationEditor.hasActiveEditor()) this._annotationEditor.commit()
     const screen = this._screenPoint(event)
     const world = this._deps.camera.screenToWorld(screen)
     const selection = this._retargetContextMenuSelection(world)
@@ -500,6 +518,8 @@ export class SceneInteractionController {
 
     if (this._tools.keyDown(event)) return
 
+    if (this._beginSelectedAnnotationTextEditFromKeyboard(event)) return
+
     if (
       event.code !== 'Space'
       || this._frame.isSpaceHeld()
@@ -529,11 +549,7 @@ export class SceneInteractionController {
         this._rotationHandle.cancelActiveDrag()
       },
       cancelToolTransient: (cleanupOptions) => this._tools.cancelTransient(cleanupOptions),
-      clearHover: () => {
-        this._deps.setHoveredEntityId(null)
-        this._tooltip.hide()
-        this._lockedAffordance.hide()
-      },
+      clearHover: () => this._clearPassiveHoverPresentation(),
       resetCursor: () => {
         this._deps.container.style.cursor = cursorForTool(this._tool)
       },
@@ -541,6 +557,7 @@ export class SceneInteractionController {
   }
 
   private _refreshViewportDependentMeasurements(): void {
+    this._annotationEditor.refresh()
     if (this._tools.refreshViewportDependent()) {
       this._rotationHandle.refresh()
       this._selectionToolbar.refresh()
@@ -551,9 +568,34 @@ export class SceneInteractionController {
   }
 
   private _refreshSelectionDependentMeasurements(): void {
+    this._annotationEditor.refresh()
     this._tools.refreshSelectionDependent()
+    if (this._designObjectDragPresentationSuppressed) {
+      this._rotationHandle.hide()
+      this._selectionToolbar.hide()
+      return
+    }
     this._rotationHandle.refresh()
     this._selectionToolbar.refresh()
+  }
+
+  private _beginDesignObjectDragPresentation(): void {
+    this._designObjectDragPresentationSuppressed = true
+    this._rotationHandle.hide()
+    this._selectionToolbar.hide()
+    this._clearPassiveHoverPresentation()
+  }
+
+  private _endDesignObjectDragPresentation(): void {
+    if (!this._designObjectDragPresentationSuppressed) return
+    this._designObjectDragPresentationSuppressed = false
+    this._refreshSelectionDependentMeasurements()
+  }
+
+  private _clearPassiveHoverPresentation(): void {
+    this._deps.setHoveredEntityId(null)
+    this._tooltip.hide()
+    this._lockedAffordance.hide()
   }
 
   /** Snap a world-space point to grid and/or guides. Used for placement (stamp, text). */
@@ -575,6 +617,46 @@ export class SceneInteractionController {
   private _switchTool(name: string): void {
     this._deps.setTool(name)
     if (this._tool !== name) this.setTool(name)
+  }
+
+  private _beginSelectedAnnotationTextEditFromKeyboard(event: KeyboardEvent): boolean {
+    if (this._tool !== 'select') return false
+    if (event.key !== 'Enter' && event.key !== 'F2') return false
+    if (!isCanvasKeyboardShortcutTarget(event.target, this._deps.container)) return false
+    if (isEditableTarget(event.target)) return false
+    if (this._tools.shouldSuppressSharedKeyboard(event)) return false
+
+    const selection = this._deps.getDesignObjectSelection()
+    if (
+      selection.editableTargets.length !== 1
+      || (selection.lockedTargets?.length ?? 0) > 0
+      || (selection.blockedTargets?.length ?? 0) > 0
+    ) return false
+
+    const target = selection.editableTargets[0]
+    if (target?.kind !== 'annotation') return false
+    if (!this._annotationEditor.start(target.id)) return false
+
+    event.preventDefault()
+    event.stopPropagation()
+    return true
+  }
+
+  private _canEditAnnotation(annotationId: string): boolean {
+    const viewportScale = this._deps.camera.viewport.scale
+    const selection = getDesignObjectSelectionModel(
+      this._deps.getSceneStore().persisted,
+      new Set([annotationId]),
+      {
+        annotationViewportScale: viewportScale,
+        plantContext: this._deps.getPlantPresentationContext(viewportScale),
+      },
+    )
+    return selection.editableTargets.length === 1
+      && selection.editableTargets[0]?.kind === 'annotation'
+      && selection.editableTargets[0].id === annotationId
+      && selection.lockedTargets.length === 0
+      && selection.blockedTargets.length === 0
   }
 
   private _syncLockedObjectAffordance(
@@ -631,4 +713,29 @@ function isTargetLayerLocked(scene: ScenePersistedState, target: TopLevelTarget)
         ? 'annotations'
         : scene.groups.find((group) => group.id === target.id)?.layer
   return scene.layers.find((layer) => layer.name === layerName)?.locked === true
+}
+
+function isCanvasKeyboardShortcutTarget(target: EventTarget | null, container: HTMLElement): boolean {
+  if (target === window) return true
+  if (!(target instanceof Node)) return false
+  if (!container.contains(target)) return false
+  const element = target instanceof HTMLElement ? target : target.parentElement
+  if (!element) return false
+  if (isKeyboardInteractiveElement(element)) return false
+  return true
+}
+
+function isKeyboardInteractiveElement(element: HTMLElement): boolean {
+  return element.closest([
+    'button',
+    'a[href]',
+    'input',
+    'textarea',
+    'select',
+    '[contenteditable="true"]',
+    '[role="button"]',
+    '[role="menu"]',
+    '[role="dialog"]',
+    'dialog',
+  ].join(',')) !== null
 }

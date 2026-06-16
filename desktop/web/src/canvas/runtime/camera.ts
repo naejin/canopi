@@ -10,7 +10,7 @@ const FIT_MAX_ITERATIONS = 20
 const FIT_CONVERGENCE_THRESHOLD = 0.0001
 const ZOOM_FACTOR = 1.1
 const ZOOM_MIN = 0.1
-const ZOOM_MAX = 200
+const ZOOM_MAX = 1000
 
 export interface CameraScreenSize {
   width: number

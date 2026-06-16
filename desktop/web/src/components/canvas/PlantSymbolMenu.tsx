@@ -102,17 +102,6 @@ export function PlantSymbolMenu({ buttonRef }: PlantSymbolMenuProps) {
     closeMenu(buttonRef)
   }
 
-  const clearSelectedPlantSymbols = () => {
-    commandSurface?.setSelectedPlantSymbol(null)
-    closeMenu(buttonRef)
-  }
-
-  const clearSpeciesSymbol = () => {
-    if (!context.singleSpeciesCanonicalName) return
-    commandSurface?.clearPlantSpeciesSymbol(context.singleSpeciesCanonicalName)
-    closeMenu(buttonRef)
-  }
-
   return (
     <div
       className={styles.menu}
@@ -157,28 +146,11 @@ export function PlantSymbolMenu({ buttonRef }: PlantSymbolMenuProps) {
           {t('canvas.plantSymbol.setSymbol')}
         </button>
         {context.singleSpeciesCanonicalName && singleSpeciesLabel && (
-          <>
-            <button type="button" className={styles.secondaryAction} onClick={applyToSpecies}>
-              {t('canvas.plantSymbol.setSymbolForSpecies', { species: singleSpeciesLabel })}
-            </button>
-            <div className={styles.helpText}>{t('canvas.plantSymbol.speciesDefaultHint')}</div>
-          </>
+          <button type="button" className={styles.secondaryAction} onClick={applyToSpecies}>
+            {t('canvas.plantSymbol.setSymbolForSpecies', { species: singleSpeciesLabel })}
+          </button>
         )}
       </div>
-
-      <button
-        type="button"
-        className={styles.clearAction}
-        disabled={!context.canClearSelectedSymbol}
-        onClick={clearSelectedPlantSymbols}
-      >
-        {t('canvas.plantSymbol.clearSymbol')}
-      </button>
-      {context.singleSpeciesCanonicalName && context.singleSpeciesDefaultSymbol && (
-        <button type="button" className={styles.clearAction} onClick={clearSpeciesSymbol}>
-          {t('canvas.plantSymbol.clearSpeciesSymbol')}
-        </button>
-      )}
     </div>
   )
 }

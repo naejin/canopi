@@ -14,7 +14,7 @@ export function PlantSymbolGlyph({ symbol, className }: PlantSymbolGlyphProps) {
   return (
     <svg
       className={className}
-      viewBox="-1 -1 2 2"
+      viewBox="-1.2 -1.2 2.4 2.4"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"

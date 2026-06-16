@@ -77,6 +77,15 @@ export function createCanvas2DSceneRenderer(): SceneRendererDefinition {
             snapshot.selectedPlantIds,
             viewport,
             snapshot.localizedCommonNames,
+            {
+              plantContext: {
+                viewport,
+                sizeMode: snapshot.sizeMode,
+                colorByAttr: snapshot.colorByAttr,
+                speciesCache: snapshot.speciesCache,
+                localizedCommonNames: snapshot.localizedCommonNames,
+              },
+            },
           )
           snapshot = { ...snapshot, viewport, selectionLabels: labels }
           redraw()

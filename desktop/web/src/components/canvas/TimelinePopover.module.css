@@ -90,6 +90,15 @@
   font-size: var(--text-xs);
 }
 
+.notesTextarea {
+  min-height: calc(var(--control-size-md) * 2);
+  padding: var(--space-2);
+  line-height: 1.4;
+  resize: vertical;
+  overflow-y: auto;
+  font-family: inherit;
+}
+
 .error {
   font-size: var(--text-xs);
   color: var(--color-danger);

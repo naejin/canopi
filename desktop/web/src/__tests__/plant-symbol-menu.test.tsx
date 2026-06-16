@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -95,6 +96,41 @@ describe('PlantSymbolMenu', () => {
     expect(plantSymbolMenuOpen.value).toBe(false)
   })
 
+  it('renders option and preview glyphs in padded SVG frames', async () => {
+    getSelectedPlantSymbolContext.mockReturnValue({
+      plantIds: ['plant-1'],
+      singleSpeciesCanonicalName: 'Malus domestica',
+      singleSpeciesCommonName: 'Apple',
+      sharedCurrentSymbol: null,
+      sharedEffectiveSymbol: 'round',
+      inheritedSymbol: null,
+      singleSpeciesDefaultSymbol: null,
+      canClearSelectedSymbol: false,
+    })
+
+    await act(async () => {
+      render(<PlantSymbolMenu buttonRef={buttonRef} />, container)
+      await Promise.resolve()
+    })
+
+    const [previewSvg] = container.querySelectorAll('svg')
+    const triangleSvg = container.querySelector('button[aria-label="Triangle"] svg')
+
+    expect(previewSvg).toBeTruthy()
+    expect(triangleSvg).toBeTruthy()
+    expect(previewSvg?.getAttribute('viewBox')).toBe('-1.2 -1.2 2.4 2.4')
+    expect(triangleSvg?.getAttribute('viewBox')).toBe('-1.2 -1.2 2.4 2.4')
+  })
+
+  it('uses a defined preview sizing token for the symbol preview frame', () => {
+    const css = readFileSync('src/components/canvas/PlantSymbolMenu.module.css', 'utf8')
+    const previewRule = css.match(/\.preview\s*{(?<body>[^}]*)}/)?.groups?.body ?? ''
+
+    expect(previewRule).toContain('--symbol-preview-min-height:')
+    expect(previewRule).toContain('min-height: var(--symbol-preview-min-height);')
+    expect(previewRule).not.toContain('var(--space-10)')
+  })
+
   it('updates the selected plant name when localized plant names refresh', async () => {
     let commonName = 'Apple'
     getSelectedPlantSymbolContext.mockImplementation(() => ({
@@ -182,37 +218,6 @@ describe('PlantSymbolMenu', () => {
     expect(container.textContent).not.toContain('Inherited: Round')
   })
 
-  it('clears selected plant symbol overrides back to inherited symbols', async () => {
-    getSelectedPlantSymbolContext.mockReturnValue({
-      plantIds: ['plant-1'],
-      singleSpeciesCanonicalName: 'Malus domestica',
-      singleSpeciesCommonName: 'Apple',
-      sharedCurrentSymbol: 'tree',
-      sharedEffectiveSymbol: 'tree',
-      inheritedSymbol: 'round',
-      singleSpeciesDefaultSymbol: 'round',
-      canClearSelectedSymbol: true,
-    })
-
-    await act(async () => {
-      render(<PlantSymbolMenu buttonRef={buttonRef} />, container)
-      await Promise.resolve()
-    })
-
-    const clearSymbolButton = [...container.querySelectorAll('button')].find((button) =>
-      button.textContent?.includes('Clear symbol'),
-    ) as HTMLButtonElement
-    expect(clearSymbolButton.disabled).toBe(false)
-
-    await act(async () => {
-      clearSymbolButton.click()
-      await Promise.resolve()
-    })
-
-    expect(setSelectedPlantSymbol).toHaveBeenCalledWith(null)
-    expect(plantSymbolMenuOpen.value).toBe(false)
-  })
-
   it('applies the selected symbol to all placed instances of the selected species', async () => {
     getSelectedPlantSymbolContext.mockReturnValue({
       plantIds: ['plant-1'],
@@ -249,7 +254,7 @@ describe('PlantSymbolMenu', () => {
     expect(plantSymbolMenuOpen.value).toBe(false)
   })
 
-  it('clears the species symbol default separately from selected plant overrides', async () => {
+  it('stops the action surface at the two apply buttons', async () => {
     getSelectedPlantSymbolContext.mockReturnValue({
       plantIds: ['plant-1'],
       singleSpeciesCanonicalName: 'Malus domestica',
@@ -266,16 +271,15 @@ describe('PlantSymbolMenu', () => {
       await Promise.resolve()
     })
 
-    const clearSpeciesButton = [...container.querySelectorAll('button')].find((button) =>
-      button.textContent?.includes('Clear species default'),
-    ) as HTMLButtonElement
+    const actionButtons = [...container.querySelectorAll('button')]
+      .map((button) => button.textContent?.trim())
+      .filter(Boolean)
 
-    await act(async () => {
-      clearSpeciesButton.click()
-      await Promise.resolve()
-    })
-
-    expect(clearPlantSpeciesSymbol).toHaveBeenCalledWith('Malus domestica')
-    expect(plantSymbolMenuOpen.value).toBe(false)
+    expect(actionButtons).toContain('Set symbol')
+    expect(actionButtons).toContain('Set for all Apple')
+    expect(container.textContent).not.toContain('Sets the default symbol')
+    expect(actionButtons.some((label) => label?.includes('Clear symbol'))).toBe(false)
+    expect(actionButtons.some((label) => label?.includes('Clear species default'))).toBe(false)
   })
+
 })
