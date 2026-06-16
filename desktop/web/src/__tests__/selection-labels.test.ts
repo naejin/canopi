@@ -53,6 +53,30 @@ describe('selection labels', () => {
     expect(result[0]!.screenPoint.x).toBe(5) // centroid x = (0+10)/2
   })
 
+  it('places a selected plant label below the glyph at low zoom', () => {
+    const result = computeSelectionLabels(
+      [createPlant({ id: 'a', position: { x: 10, y: 20 } })],
+      new Set(['a']),
+      createViewport({ scale: 1 }),
+      new Map(),
+    )
+
+    expect(result[0]!.screenPoint.x).toBe(10)
+    expect(result[0]!.screenPoint.y).toBeCloseTo(25, 2)
+  })
+
+  it('keeps the selected plant label offset balanced at high zoom', () => {
+    const result = computeSelectionLabels(
+      [createPlant({ id: 'a', position: { x: 10, y: 20 } })],
+      new Set(['a']),
+      createViewport({ scale: 1000 }),
+      new Map(),
+    )
+
+    expect(result[0]!.screenPoint.x).toBe(10000)
+    expect(result[0]!.screenPoint.y).toBeCloseTo(20008, 2)
+  })
+
   it('produces separate labels for different species', () => {
     const plants = [
       createPlant({ id: 'a', canonicalName: 'Malus domestica', position: { x: 0, y: 0 } }),

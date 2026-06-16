@@ -198,8 +198,6 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
     ?? context.singleSpeciesDefaultColor
     ?? context.suggestedColor
     ?? DEFAULT_PLANT_COLOR
-  const canClearSelected = context.sharedCurrentColor !== null
-
   const applyToSelection = () => {
     if (!normalizedActiveColor) return
     commandSurface?.setSelectedPlantColor(normalizedActiveColor)
@@ -209,17 +207,6 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
   const applyToSpecies = () => {
     if (!normalizedActiveColor || !context.singleSpeciesCanonicalName) return
     commandSurface?.setPlantColorForSpecies(context.singleSpeciesCanonicalName, normalizedActiveColor)
-    closeMenu(buttonRef)
-  }
-
-  const clearSelectedPlantColors = () => {
-    commandSurface?.setSelectedPlantColor(null)
-    closeMenu(buttonRef)
-  }
-
-  const clearSpeciesColor = () => {
-    if (!context.singleSpeciesCanonicalName) return
-    commandSurface?.clearPlantSpeciesColor(context.singleSpeciesCanonicalName)
     closeMenu(buttonRef)
   }
 
@@ -390,23 +377,11 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
           {t('canvas.plantColor.setColor')}
         </button>
         {context.singleSpeciesCanonicalName && singleSpeciesLabel && (
-          <>
-            <button type="button" className={styles.secondaryAction} disabled={!canApply} onClick={applyToSpecies}>
-              {t('canvas.plantColor.setColorForSpecies', { species: singleSpeciesLabel })}
-            </button>
-            <div className={styles.helpText}>{t('canvas.plantColor.speciesDefaultHint')}</div>
-          </>
+          <button type="button" className={styles.secondaryAction} disabled={!canApply} onClick={applyToSpecies}>
+            {t('canvas.plantColor.setColorForSpecies', { species: singleSpeciesLabel })}
+          </button>
         )}
       </div>
-
-      <button type="button" className={styles.clearAction} disabled={!canClearSelected} onClick={clearSelectedPlantColors}>
-        {t('canvas.plantColor.clearColor')}
-      </button>
-      {context.singleSpeciesCanonicalName && context.singleSpeciesDefaultColor && (
-        <button type="button" className={styles.clearAction} onClick={clearSpeciesColor}>
-          {t('canvas.plantColor.clearSpeciesColor')}
-        </button>
-      )}
     </div>
   )
 }

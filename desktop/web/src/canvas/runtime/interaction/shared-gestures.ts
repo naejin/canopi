@@ -18,6 +18,10 @@ import {
 } from './drag-ops'
 import { hitTestTopLevel, queryRectTopLevel } from './hit-testing'
 import { showInteractionPreview, hideInteractionPreview } from './overlay-ui'
+import {
+  createPlantDragDistanceOverlay,
+  type PlantDragDistanceOverlayController,
+} from './plant-drag-distance-overlay'
 import { hasAdditiveModifier } from './pointer-utils'
 
 type SharedGestureMode = 'idle' | 'panning' | 'dragging' | 'band'
@@ -39,6 +43,9 @@ export interface SceneInteractionSharedGestureContext {
   readonly applySnapping: (point: ScenePoint) => ScenePoint
   readonly refreshViewportDependent: () => void
   readonly refreshSelectionDependent: () => void
+  readonly beginDesignObjectDragPresentation: () => void
+  readonly endDesignObjectDragPresentation: () => void
+  readonly beginAnnotationTextEdit: (annotationId: string) => boolean
 }
 
 export interface SharedGesturePointerDownContext {
@@ -71,6 +78,7 @@ export interface SceneInteractionSharedGestures {
   pointerMove(context: SharedGesturePointerMoveContext): boolean
   pointerUp(context: SharedGesturePointerUpContext): SharedGesturePointerUpResult
   cancel(): void
+  dispose(): void
 }
 
 export function createSceneInteractionSharedGestures(
@@ -88,8 +96,12 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
   private bandAdditive = false
   private dragSnapRef: ScenePoint | null = null
   private lastDragDelta: ScenePoint = { x: 0, y: 0 }
+  private activeDraggedPlantId: string | null = null
+  private readonly distanceOverlay: PlantDragDistanceOverlayController
 
-  constructor(private readonly context: SceneInteractionSharedGestureContext) {}
+  constructor(private readonly context: SceneInteractionSharedGestureContext) {
+    this.distanceOverlay = createPlantDragDistanceOverlay(context.container)
+  }
 
   get active(): boolean {
     return this.mode !== 'idle'
@@ -165,6 +177,14 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
       return true
     }
 
+    if (tool === 'select' && event.detail >= 2 && hit.kind === 'annotation') {
+      this.context.setSelection([hit.id])
+      this.context.render('scene')
+      this.context.refreshSelectionDependent()
+      this.context.beginAnnotationTextEdit(hit.id)
+      return true
+    }
+
     const currentSelection = new Set(this.context.getSelection())
     if (additive) {
       if (currentSelection.has(hit.id)) currentSelection.delete(hit.id)
@@ -190,6 +210,9 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
       this.dragState.annotationStarts.get(hit.id) ??
       this.dragState.groupStarts.get(hit.id) ??
       this.dragState.zoneStarts.get(hit.id)?.[0] ?? null
+    this.activeDraggedPlantId = this.dragState.plantStarts.has(hit.id) ? hit.id : null
+    this.context.beginDesignObjectDragPresentation()
+    this.distanceOverlay.hide()
     return true
   }
 
@@ -212,6 +235,12 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
       this.lastDragDelta = delta
       this.dragEdit?.mutate((draft) => {
         applySceneDragDeltaToDraft(draft, this.dragState, delta)
+      })
+      this.distanceOverlay.update({
+        scene: this.context.getSceneStore().persisted,
+        activePlantId: this.activeDraggedPlantId,
+        draggedPlantIds: new Set(this.dragState.plantStarts.keys()),
+        camera: this.context.camera,
       })
       this.context.render('scene')
       this.context.refreshSelectionDependent()
@@ -238,6 +267,9 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
         this.context.render('scene')
       }
       this.dragEdit = null
+      this.distanceOverlay.hide()
+      this.activeDraggedPlantId = null
+      this.context.endDesignObjectDragPresentation()
     }
 
     if (this.mode === 'band' && this.startWorld) {
@@ -264,6 +296,7 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
   }
 
   cancel(): void {
+    const wasDragging = this.mode === 'dragging'
     this.mode = 'idle'
     this.startScreen = null
     this.startWorld = null
@@ -271,9 +304,17 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
     this.dragEdit = null
     this.dragSnapRef = null
     this.lastDragDelta = { x: 0, y: 0 }
+    this.activeDraggedPlantId = null
     resetSceneDragState(this.dragState)
     this.bandAdditive = false
     hideInteractionPreview(this.context.preview)
+    this.distanceOverlay.hide()
+    if (wasDragging) this.context.endDesignObjectDragPresentation()
+  }
+
+  dispose(): void {
+    this.cancel()
+    this.distanceOverlay.dispose()
   }
 
   private computeDragDelta(rawWorld: ScenePoint): ScenePoint {

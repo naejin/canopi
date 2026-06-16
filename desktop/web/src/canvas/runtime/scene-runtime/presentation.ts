@@ -91,9 +91,18 @@ export class SceneRuntimePresentationController {
     const highlightedTargets = this._resolveHighlightedTargets(scene)
     const localizedCommonNames = this.getLocalizedCommonNames()
 
+    const viewport = this._getViewport()
+    const plantContext = {
+      viewport,
+      sizeMode: session.plantSizeMode,
+      colorByAttr: session.plantColorByAttr,
+      speciesCache: this._speciesCache.getCache(),
+      localizedCommonNames,
+    }
+
     return {
       scene,
-      viewport: this._getViewport(),
+      viewport,
       selectedPlantIds: getSelectedPlantIds(scene, session.selectedEntityIds),
       selectedZoneIds: getSelectedZoneIds(scene, session.selectedEntityIds),
       selectedAnnotationIds: getSelectedAnnotationIds(scene, session.selectedEntityIds),
@@ -108,8 +117,9 @@ export class SceneRuntimePresentationController {
       selectionLabels: computeSelectionLabels(
         scene.plants,
         session.selectedEntityIds,
-        this._getViewport(),
+        viewport,
         localizedCommonNames,
+        { plantContext },
       ),
     }
   }

@@ -17,6 +17,7 @@ interface SelectionRotationHandleOptions {
 
 export interface SelectionRotationHandleController {
   refresh(): void
+  hide(): void
   pointerDown(context: SelectionRotationHandlePointerDownContext): SceneInteractionPointerDrag | null
   cancelActiveDrag(): boolean
   contains(target: EventTarget | null): boolean
@@ -251,6 +252,7 @@ export function createSelectionRotationHandle(
 
   return {
     refresh,
+    hide,
     pointerDown,
     cancelActiveDrag,
     contains(target) {

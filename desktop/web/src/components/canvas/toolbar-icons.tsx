@@ -397,19 +397,23 @@ export function PlantSymbolIcon({ className }: IconProps) {
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
+      data-icon="plant-symbol-marker"
     >
-      <circle cx="7" cy="7" r="3" stroke="currentColor" strokeWidth="1.5" />
-      <path
-        d="M13 5L16 10H10L13 5Z"
+      <circle
+        data-icon-part="marker"
+        cx="10"
+        cy="10"
+        r="6.5"
         stroke="currentColor"
         strokeWidth="1.5"
-        strokeLinejoin="round"
       />
       <path
-        d="M6 14H14M10 10V18"
+        data-icon-part="sprout"
+        d="M10 14V8.8M10 9.6C8.6 8.2 7.1 7.8 5.8 8.4C6.5 9.9 8.2 10.4 10 9.6ZM10 9.6C11 7.9 12.8 7.2 14.2 7.6C13.8 9.3 12.1 10.2 10 9.6Z"
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </svg>
   )

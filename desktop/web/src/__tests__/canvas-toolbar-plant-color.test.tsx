@@ -193,6 +193,23 @@ describe('CanvasToolbar', () => {
     expect(container.querySelector('[role="dialog"][aria-label="Plant symbol"]')).not.toBeNull()
   })
 
+  it('uses a simple neutral marker icon for the plant symbol action', async () => {
+    selectedObjectIds.value = new Set(['plant-1'])
+
+    await act(async () => {
+      render(<CanvasToolbar />, container)
+      await Promise.resolve()
+    })
+
+    const symbolButton = container.querySelector<HTMLButtonElement>('button[aria-label="Plant symbol"]')
+    const symbolIcon = symbolButton?.querySelector('svg[data-icon="plant-symbol-marker"]')
+
+    expect(symbolIcon).toBeTruthy()
+    expect(symbolIcon?.querySelector('[data-icon-part="marker"]')).toBeTruthy()
+    expect(symbolIcon?.querySelector('[data-icon-part="sprout"]')).toBeTruthy()
+    expect(symbolIcon?.outerHTML).not.toMatch(/#[0-9a-f]{3,8}|green/i)
+  })
+
   it('exposes the ellipse shape tool in the toolbar', async () => {
     await act(async () => {
       render(<CanvasToolbar />, container)

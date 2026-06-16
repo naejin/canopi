@@ -19,6 +19,7 @@ import { basemapStyle } from '../app/settings/state'
 import { setSettings } from '../ipc/settings'
 import { currentDesign } from './support/design-session-state'
 import { locale } from '../app/settings/state'
+import { activePanel, sidePanel } from '../app/shell/state'
 import { flushSettingsProjection, hydrateSettingsProjection } from '../app/settings/projection'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
@@ -66,6 +67,8 @@ describe('LayerPanel', () => {
     contourIntervalMeters.value = 0
     hillshadeVisible.value = false
     hillshadeOpacity.value = 0.55
+    activePanel.value = 'canvas'
+    sidePanel.value = 'favorites'
     hydrateSettingsProjection({
       locale: 'en',
       theme: 'light',
@@ -99,6 +102,8 @@ describe('LayerPanel', () => {
       plant_spacing_interval_m: 0.5,
     })
     setCurrentCanvasSession(null)
+    activePanel.value = 'canvas'
+    sidePanel.value = null
   })
 
   afterEach(() => {
@@ -138,6 +143,50 @@ describe('LayerPanel', () => {
 
     expect(container.querySelector('select')).toBeNull()
     expect(basemapStyle.value).toBe('street')
+  })
+
+  it('shows Design Location buttons in map layer details when no Location is saved', async () => {
+    currentDesign.value = { ...currentDesign.value!, location: null }
+
+    await act(async () => {
+      render(<LayerPanel />, container)
+    })
+
+    expect(container.textContent).not.toContain('Set a design location first')
+    expect(container.textContent).not.toContain('Set a design location to enable map layers')
+
+    let locationButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent === 'Design Location')
+    expect(locationButton).toBeTruthy()
+
+    await act(async () => {
+      locationButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(activePanel.value).toBe('location')
+    expect(sidePanel.value).toBeNull()
+
+    activePanel.value = 'canvas'
+    sidePanel.value = 'favorites'
+    await act(async () => {
+      activeLayerName.value = 'contours'
+      await Promise.resolve()
+    })
+
+    locationButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent === 'Design Location')
+    expect(locationButton).toBeTruthy()
+    expect(container.querySelector<HTMLInputElement>('input[aria-label="Contour interval"]')).toBeNull()
+
+    await act(async () => {
+      activeLayerName.value = 'hillshading'
+      await Promise.resolve()
+    })
+
+    locationButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent === 'Design Location')
+    expect(locationButton).toBeTruthy()
+    expect(container.querySelector<HTMLInputElement>('input[aria-label="Hillshade opacity"]')).toBeNull()
   })
 
   it('exposes scene Layer lock controls through Canvas Layer Presentation', async () => {
