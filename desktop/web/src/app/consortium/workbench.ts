@@ -56,7 +56,6 @@ export function useConsortiumCanvasWorkbench({
 }: ConsortiumCanvasWorkbenchOptions): ConsortiumCanvasWorkbench {
   const cachedRectRef = useRef<DOMRect | null>(null)
   const hoveredCanonical = useSignal<string | null>(null)
-  const dragState = useRef<ConsortiumDragState | null>(null)
   const barsRef = useRef(bars)
   const consortiumsRef = useRef(consortiums)
   const rowHeightsRef = useRef<number[]>(rowHeights)
@@ -127,19 +126,28 @@ export function useConsortiumCanvasWorkbench({
     const bar = barsRef.current.find((candidate) => candidate.canonicalName === hit.canonicalName)
     if (!bar) return
 
-    dragState.current = beginConsortiumDrag({
+    const drag = beginConsortiumDrag({
       hit,
       bar,
       startMouseX: event.clientX,
       cachedRect: rect,
     })
-  }, [canvasRef])
+    if (!drag) return
+    const activeDrag: ConsortiumDragState = drag
+
+    planningFrame.beginActiveDrag<ConsortiumDragState>(activeDrag, {
+      commit: commitConsortiumDrag,
+      abort: (currentDrag) => {
+        currentDrag.edit.abort()
+      },
+    })
+  }, [canvasRef, planningFrame])
 
   const handleMouseMove = useCallback((event: MouseEvent) => {
     const canvas = canvasRef.current
     if (!canvas) return
 
-    const drag = dragState.current
+    const drag = planningFrame.getActiveDrag<ConsortiumDragState>()
     const rect = drag?.cachedRect ?? (cachedRectRef.current ??= canvas.getBoundingClientRect())
     const mouseX = event.clientX - rect.left
     const mouseY = event.clientY - rect.top
@@ -187,19 +195,16 @@ export function useConsortiumCanvasWorkbench({
   }, [canvasRef, hoveredCanonical, planningFrame])
 
   const handleCanvasMouseMove = useCallback((event: MouseEvent) => {
-    if (!dragState.current) handleMouseMove(event)
-  }, [handleMouseMove])
+    if (!planningFrame.getActiveDrag<ConsortiumDragState>()) handleMouseMove(event)
+  }, [handleMouseMove, planningFrame])
 
   const handleMouseUp = useCallback(() => {
-    if (dragState.current) {
-      commitConsortiumDrag(dragState.current)
-      dragState.current = null
-    }
-  }, [])
+    planningFrame.finishActiveDrag<ConsortiumDragState>()
+  }, [planningFrame])
 
   documentHandlersRef.current = {
     handleMouseMove: (event: MouseEvent) => {
-      if (dragState.current) handleMouseMove(event)
+      if (planningFrame.getActiveDrag<ConsortiumDragState>()) handleMouseMove(event)
     },
     handleMouseUp: () => {
       handleMouseUp()
@@ -213,8 +218,7 @@ export function useConsortiumCanvasWorkbench({
     })
     return () => {
       disposeDocumentListeners()
-      commitConsortiumDrag(dragState.current)
-      dragState.current = null
+      planningFrame.finishActiveDrag<ConsortiumDragState>()
       planningFrame.cleanup()
     }
   }, [canvasRef, planningFrame])

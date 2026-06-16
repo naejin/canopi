@@ -39,8 +39,29 @@ export interface PlanningCanvasItemTarget {
   readonly targets: readonly PanelTarget[]
 }
 
+export type PlanningCanvasDragFinishMode = 'commit' | 'abort'
+
+export interface PlanningCanvasActiveDragLifecycle<TDrag> {
+  beforeFinish?(drag: TDrag, mode: PlanningCanvasDragFinishMode): void
+  commit(drag: TDrag): void
+  abort(drag: TDrag): void
+  afterFinish?(drag: TDrag, mode: PlanningCanvasDragFinishMode): void
+}
+
+interface ActivePlanningCanvasDrag {
+  readonly drag: unknown
+  readonly lifecycle: PlanningCanvasActiveDragLifecycle<unknown>
+}
+
 export interface PlanningCanvasInteractionFrame {
   installDocumentListeners(options: PlanningCanvasDocumentListenerOptions): () => void
+  beginActiveDrag<TDrag>(
+    drag: TDrag,
+    lifecycle: PlanningCanvasActiveDragLifecycle<TDrag>,
+  ): void
+  getActiveDrag<TDrag>(): TDrag | null
+  finishActiveDrag<TDrag>(): TDrag | null
+  abortActiveDrag<TDrag>(): TDrag | null
   setHoveredItem(item: PlanningCanvasItemTarget, applyLocalHover: () => void): void
   clearHover(): void
   setSelectedItem(item: PlanningCanvasItemTarget, applyLocalSelection: () => void): void
@@ -59,6 +80,8 @@ export function createPlanningCanvasInteractionFrame({
   targetPresentation,
   documentEvents,
 }: PlanningCanvasInteractionFrameOptions): PlanningCanvasInteractionFrame {
+  let activeDrag: ActivePlanningCanvasDrag | null = null
+
   const clearHover = (): void => {
     setHoveredId(null)
     clearLocalHover()
@@ -69,6 +92,25 @@ export function createPlanningCanvasInteractionFrame({
     setSelectedId(null)
     clearLocalSelection()
     targetPresentation.clearSelectedTargets()
+  }
+
+  const finishActiveDrag = (mode: PlanningCanvasDragFinishMode): unknown | null => {
+    const active = activeDrag
+    if (!active) return null
+
+    const { drag, lifecycle } = active
+    try {
+      lifecycle.beforeFinish?.(drag, mode)
+      if (mode === 'commit') {
+        lifecycle.commit(drag)
+      } else {
+        lifecycle.abort(drag)
+      }
+    } finally {
+      if (activeDrag === active) activeDrag = null
+      lifecycle.afterFinish?.(drag, mode)
+    }
+    return drag
   }
 
   return {
@@ -105,6 +147,28 @@ export function createPlanningCanvasInteractionFrame({
       }
     },
 
+    beginActiveDrag<TDrag>(
+      drag: TDrag,
+      lifecycle: PlanningCanvasActiveDragLifecycle<TDrag>,
+    ): void {
+      activeDrag = {
+        drag,
+        lifecycle: lifecycle as PlanningCanvasActiveDragLifecycle<unknown>,
+      }
+    },
+
+    getActiveDrag<TDrag>(): TDrag | null {
+      return (activeDrag?.drag ?? null) as TDrag | null
+    },
+
+    finishActiveDrag<TDrag>(): TDrag | null {
+      return finishActiveDrag('commit') as TDrag | null
+    },
+
+    abortActiveDrag<TDrag>(): TDrag | null {
+      return finishActiveDrag('abort') as TDrag | null
+    },
+
     setHoveredItem(item, applyLocalHover) {
       setHoveredId(item.id)
       targetPresentation.setHoveredTargets(item.targets)
@@ -130,6 +194,7 @@ export function createPlanningCanvasInteractionFrame({
     },
 
     cleanup() {
+      finishActiveDrag('abort')
       clearHover()
       clearSelection()
     },

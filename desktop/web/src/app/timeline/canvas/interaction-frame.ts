@@ -137,7 +137,6 @@ export function createTimelineActionInteractionFrame({
     cancelAnimationFrame: (id) => cancelAnimationFrame(id),
   },
 }: TimelineActionInteractionFrameOptions): TimelineActionInteractionFrame {
-  let dragState: TimelineDragState | null = null
   let pendingClick: PendingTimelineClick | null = null
   let dragOriginMs: number | null = null
   let dragOriginDate: Date | null = null
@@ -159,7 +158,7 @@ export function createTimelineActionInteractionFrame({
 
   const autoScrollTick = (): void => {
     if (autoScrollRafId == null) return
-    const drag = dragState
+    const drag = planningFrame.getActiveDrag<TimelineDragState>()
     if (!isTimelineEditDrag(drag)) {
       stopAutoScroll()
       return
@@ -203,13 +202,30 @@ export function createTimelineActionInteractionFrame({
     }))
   }
 
+  const beginTimelineDrag = (drag: TimelineDragState | null): void => {
+    if (!drag) return
+
+    planningFrame.beginActiveDrag(drag, {
+      beforeFinish: () => {
+        stopAutoScroll()
+      },
+      commit: (activeDrag) => {
+        commitTimelineDrag(activeDrag)
+      },
+      abort: (activeDrag) => {
+        if (isTimelineEditDrag(activeDrag)) activeDrag.edit.abort()
+      },
+      afterFinish: (activeDrag) => {
+        if (activeDrag.type === 'resize' || activeDrag.type === 'pan') {
+          document.body.style.cursor = ''
+        }
+        restoreFrozenOrigin()
+      },
+    })
+  }
+
   const finishDrag = (event: MouseEvent | null): void => {
-    stopAutoScroll()
-    const drag = dragState
-    commitTimelineDrag(drag)
-    if (drag?.type === 'resize' || drag?.type === 'pan') document.body.style.cursor = ''
-    restoreFrozenOrigin()
-    dragState = null
+    planningFrame.finishActiveDrag<TimelineDragState>()
 
     if (!event) {
       pendingClick = null
@@ -230,12 +246,7 @@ export function createTimelineActionInteractionFrame({
   }
 
   const abortActiveDrag = (): void => {
-    stopAutoScroll()
-    const drag = dragState
-    if (isTimelineEditDrag(drag)) drag.edit.abort()
-    if (drag?.type === 'resize' || drag?.type === 'pan') document.body.style.cursor = ''
-    restoreFrozenOrigin()
-    dragState = null
+    planningFrame.abortActiveDrag<TimelineDragState>()
     pendingClick = null
   }
 
@@ -304,11 +315,11 @@ export function createTimelineActionInteractionFrame({
 
       if (event.button === 1) {
         event.preventDefault()
-        dragState = createTimelinePanDrag({
+        beginTimelineDrag(createTimelinePanDrag({
           startMouseX: event.clientX,
           startScrollX: view.getScrollX(),
           cachedRect: rect,
-        })
+        }))
         document.body.style.cursor = 'grabbing'
         return
       }
@@ -342,11 +353,11 @@ export function createTimelineActionInteractionFrame({
             date: toISODate(clickDate),
           },
         }
-        dragState = createTimelinePanDrag({
+        beginTimelineDrag(createTimelinePanDrag({
           startMouseX: event.clientX,
           startScrollX: view.getScrollX(),
           cachedRect: rect,
-        })
+        }))
         return
       }
 
@@ -367,12 +378,12 @@ export function createTimelineActionInteractionFrame({
       autoScrollAccumPx = 0
 
       if (hit.edge === 'left' || hit.edge === 'right') {
-        dragState = createTimelineResizeDrag({
+        beginTimelineDrag(createTimelineResizeDrag({
           hit,
           startMouseX: event.clientX,
           cachedRect: rect,
           pxPerDaySnapshot: view.getPxPerDay(),
-        })
+        }))
         document.body.style.cursor = 'ew-resize'
         return
       }
@@ -387,16 +398,16 @@ export function createTimelineActionInteractionFrame({
           actionId: hit.action.id,
         },
       }
-      dragState = createTimelineMoveDrag({
+      beginTimelineDrag(createTimelineMoveDrag({
         hit,
         startMouseX: event.clientX,
         cachedRect: rect,
         pxPerDaySnapshot: view.getPxPerDay(),
-      })
+      }))
     },
 
     handleCanvasMouseMove(event: MouseEvent): void {
-      if (dragState) return
+      if (planningFrame.getActiveDrag<TimelineDragState>()) return
 
       const canvas = canvasRef.current
       if (!canvas) return
@@ -438,7 +449,7 @@ export function createTimelineActionInteractionFrame({
     },
 
     handleDocumentMouseMove(event: MouseEvent): void {
-      const drag = dragState
+      const drag = planningFrame.getActiveDrag<TimelineDragState>()
       if (drag?.type === 'pan') {
         if (document.body.style.cursor !== 'grabbing') document.body.style.cursor = 'grabbing'
         hover.hideTooltip()
@@ -461,13 +472,13 @@ export function createTimelineActionInteractionFrame({
     },
 
     handleDocumentMouseLeave(): void {
-      if (isTimelineEditDrag(dragState)) stopAutoScroll()
+      if (isTimelineEditDrag(planningFrame.getActiveDrag<TimelineDragState>())) stopAutoScroll()
     },
 
     handleWheel(event: WheelEvent): void {
       if (!(event.ctrlKey || event.metaKey)) return
       event.preventDefault()
-      if (isTimelineEditDrag(dragState)) return
+      if (isTimelineEditDrag(planningFrame.getActiveDrag<TimelineDragState>())) return
       if (popover.isOpen()) popover.close()
 
       const factor = event.deltaY > 0 ? 0.9 : 1.1
