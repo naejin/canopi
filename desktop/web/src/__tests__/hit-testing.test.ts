@@ -155,6 +155,36 @@ describe('scene hit testing', () => {
       .toBeNull()
   })
 
+  it('keeps large Elliptical Zone boundary hits screen-stable at high zoom', () => {
+    const scene = createScene()
+    scene.plants = []
+    scene.zones = [{
+      kind: 'zone',
+      name: 'zone-1',
+      locked: false,
+      zoneType: 'ellipse',
+      points: [
+        { x: 0, y: 0 },
+        { x: 100, y: 100 },
+      ],
+      rotationDeg: 0,
+      fillColor: null,
+      notes: null,
+    }]
+    const midpointBetweenFixedSamplesRad = (3.75 * Math.PI) / 180
+
+    expect(hitTestTopLevel(
+      scene,
+      {
+        x: Math.cos(midpointBetweenFixedSamplesRad) * 100,
+        y: Math.sin(midpointBetweenFixedSamplesRad) * 100,
+      },
+      100,
+      new Map(),
+      getPlantContext,
+    )).toEqual({ kind: 'zone', id: 'zone-1' })
+  })
+
   it('band-selects rotated Elliptical Zones by their oriented geometry', () => {
     const scene = createScene()
     scene.plants = []

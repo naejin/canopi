@@ -184,6 +184,8 @@ export function queryRectTopLevel(
 }
 
 const LINE_HIT_TOLERANCE_PX = 6
+const ELLIPSE_BOUNDARY_MAX_SAGITTA_PX = LINE_HIT_TOLERANCE_PX / 2
+const MIN_ELLIPSE_BOUNDARY_SEGMENTS = 48
 
 function hitZone(zone: SceneZoneEntity, point: ScenePoint, viewportScale: number): boolean {
   const toleranceWorld = LINE_HIT_TOLERANCE_PX / Math.max(viewportScale, 1e-6)
@@ -194,7 +196,7 @@ function hitZone(zone: SceneZoneEntity, point: ScenePoint, viewportScale: number
   }
 
   if (zone.zoneType === 'ellipse' && zone.points.length >= 2) {
-    const polygon = getEllipticalZonePolygon(zone)
+    const polygon = getEllipticalZonePolygon(zone, ellipseBoundarySegmentCount(zone, viewportScale))
     return polygon ? pointNearPolygonBoundary(point, polygon, toleranceWorld) : false
   }
 
@@ -230,6 +232,15 @@ function zoneIntersectsRect(zone: SceneZoneEntity, rect: SimpleRect): boolean {
   }
 
   return rectsIntersect(rect, zoneBounds(zone))
+}
+
+function ellipseBoundarySegmentCount(zone: SceneZoneEntity, viewportScale: number): number {
+  const radii = zone.points[1]!
+  const maxRadiusPx = Math.max(Math.abs(radii.x), Math.abs(radii.y)) * Math.max(viewportScale, 1e-6)
+  if (maxRadiusPx <= ELLIPSE_BOUNDARY_MAX_SAGITTA_PX) return MIN_ELLIPSE_BOUNDARY_SEGMENTS
+  const halfAngle = Math.acos(1 - (ELLIPSE_BOUNDARY_MAX_SAGITTA_PX / maxRadiusPx))
+  if (!Number.isFinite(halfAngle) || halfAngle <= 0) return MIN_ELLIPSE_BOUNDARY_SEGMENTS
+  return Math.max(MIN_ELLIPSE_BOUNDARY_SEGMENTS, Math.ceil(Math.PI / halfAngle))
 }
 
 function polygonIntersectsRect(polygon: readonly ScenePoint[], rect: SimpleRect): boolean {
