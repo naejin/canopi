@@ -82,7 +82,10 @@ export function createSelectionActionToolbar(
     'color: var(--color-text)',
     'pointer-events: auto',
   ].join(';')
-  root.addEventListener('pointerdown', stopCanvasEvent)
+  root.addEventListener('pointerdown', (event) => {
+    hideAllTooltips()
+    stopCanvasEvent(event)
+  })
   root.addEventListener('pointermove', stopCanvasEvent)
   root.addEventListener('pointerup', stopCanvasEvent)
   root.addEventListener('click', stopCanvasEvent)
@@ -238,6 +241,7 @@ export function createSelectionActionToolbar(
     }
     const nextActionIds = availableActionButtons.map(({ action }) => action.id).join('|')
     if (nextActionIds !== renderedActionIds) {
+      hideAllTooltips()
       root.replaceChildren(...availableActionButtons.map(({ button }) => button))
       renderedActionIds = nextActionIds
     }
@@ -257,10 +261,17 @@ export function createSelectionActionToolbar(
   }
 
   function hide(): void {
+    hideAllTooltips()
     root.style.display = 'none'
     if (renderedActionIds !== '') {
       root.replaceChildren()
       renderedActionIds = ''
+    }
+  }
+
+  function hideAllTooltips(): void {
+    for (const tooltip of root.querySelectorAll<HTMLElement>('[data-selection-action-tooltip]')) {
+      tooltip.style.display = 'none'
     }
   }
 
@@ -273,6 +284,7 @@ export function createSelectionActionToolbar(
       return target instanceof Node && root.contains(target)
     },
     dispose() {
+      hideAllTooltips()
       root.remove()
     },
   }
@@ -300,6 +312,9 @@ function createActionButton(action: SelectionAction, run: () => void): HTMLButto
   button.appendChild(createIcon(action.icon))
   button.appendChild(createTooltip(action))
   refreshButtonLabel(button, action)
+  button.addEventListener('pointerdown', () => {
+    hideTooltip(button)
+  })
   button.addEventListener('pointerenter', () => {
     button.style.background = 'var(--color-primary-bg)'
     showTooltip(button)
@@ -320,6 +335,7 @@ function createActionButton(action: SelectionAction, run: () => void): HTMLButto
   })
   button.addEventListener('click', (event) => {
     event.stopPropagation()
+    hideTooltip(button)
     if (button.disabled) return
     run()
   })

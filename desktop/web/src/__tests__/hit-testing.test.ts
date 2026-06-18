@@ -78,7 +78,7 @@ describe('scene hit testing', () => {
       .toBeNull()
   })
 
-  it('hit-tests rotated Rectangular Zones by their oriented geometry', () => {
+  it('hit-tests rotated Rectangular Zones by oriented boundary proximity', () => {
     const scene = createScene()
     scene.plants = []
     scene.zones = [{
@@ -97,9 +97,11 @@ describe('scene hit testing', () => {
       notes: null,
     }]
 
-    expect(hitTestTopLevel(scene, { x: 5, y: 2 }, 1, new Map(), getPlantContext))
+    expect(hitTestTopLevel(scene, { x: 6.4, y: 0.6 }, 10, new Map(), getPlantContext))
       .toEqual({ kind: 'zone', id: 'zone-1' })
-    expect(hitTestTopLevel(scene, { x: 1, y: 1 }, 1, new Map(), getPlantContext))
+    expect(hitTestTopLevel(scene, { x: 5, y: 2 }, 10, new Map(), getPlantContext))
+      .toBeNull()
+    expect(hitTestTopLevel(scene, { x: -5, y: -5 }, 10, new Map(), getPlantContext))
       .toBeNull()
   })
 
@@ -128,7 +130,7 @@ describe('scene hit testing', () => {
       .toEqual([])
   })
 
-  it('hit-tests rotated Elliptical Zones by their oriented geometry', () => {
+  it('hit-tests rotated Elliptical Zones by oriented boundary proximity', () => {
     const scene = createScene()
     scene.plants = []
     scene.zones = [{
@@ -145,9 +147,11 @@ describe('scene hit testing', () => {
       notes: null,
     }]
 
-    expect(hitTestTopLevel(scene, { x: 0, y: 0 }, 1, new Map(), getPlantContext))
+    expect(hitTestTopLevel(scene, { x: 0, y: 4 }, 10, new Map(), getPlantContext))
       .toEqual({ kind: 'zone', id: 'zone-1' })
-    expect(hitTestTopLevel(scene, { x: 3, y: 0 }, 1, new Map(), getPlantContext))
+    expect(hitTestTopLevel(scene, { x: 0, y: 0 }, 10, new Map(), getPlantContext))
+      .toBeNull()
+    expect(hitTestTopLevel(scene, { x: 3, y: 0 }, 10, new Map(), getPlantContext))
       .toBeNull()
   })
 

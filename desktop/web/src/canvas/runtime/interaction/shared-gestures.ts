@@ -16,7 +16,7 @@ import {
   createSceneDragState,
   resetSceneDragState,
 } from './drag-ops'
-import { hitTestTopLevel, queryRectTopLevel } from './hit-testing'
+import { hitTestTopLevel, queryRectTopLevel, type TopLevelTarget } from './hit-testing'
 import { showInteractionPreview, hideInteractionPreview } from './overlay-ui'
 import {
   createPlantDragDistanceOverlay,
@@ -25,6 +25,9 @@ import {
 import { hasAdditiveModifier } from './pointer-utils'
 
 type SharedGestureMode = 'idle' | 'panning' | 'dragging' | 'band'
+
+const DOUBLE_CLICK_INTERVAL_MS = 500
+const DOUBLE_CLICK_DISTANCE_PX = 6
 
 export interface SceneInteractionSharedGestureContext {
   readonly container: HTMLElement
@@ -62,6 +65,7 @@ export interface SharedGesturePointerMoveContext {
 }
 
 export interface SharedGesturePointerUpContext {
+  readonly screen: ScenePoint
   readonly rawWorld: ScenePoint
   readonly preserveActiveDraft: boolean
 }
@@ -97,6 +101,14 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
   private dragSnapRef: ScenePoint | null = null
   private lastDragDelta: ScenePoint = { x: 0, y: 0 }
   private activeDraggedPlantId: string | null = null
+  private activeClickTarget: TopLevelTarget | null = null
+  private activeClickScreen: ScenePoint | null = null
+  private activeClickAdditive = false
+  private lastClick: {
+    readonly target: TopLevelTarget
+    readonly screen: ScenePoint
+    readonly timeStamp: number
+  } | null = null
   private readonly distanceOverlay: PlantDragDistanceOverlayController
 
   constructor(private readonly context: SceneInteractionSharedGestureContext) {
@@ -124,6 +136,9 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
   beginSelectionGesture({ event, screen, world, tool }: SharedGesturePointerDownContext): boolean {
     this.startScreen = screen
     this.startWorld = world
+    this.activeClickTarget = null
+    this.activeClickScreen = null
+    this.activeClickAdditive = false
     const scene = this.context.getSceneStore().persisted
     const rawHit = hitTestTopLevel(
       scene,
@@ -177,7 +192,16 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
       return true
     }
 
-    if (tool === 'select' && event.detail >= 2 && hit.kind === 'annotation') {
+    const recognizedAnnotationDoubleClick = tool === 'select'
+      && event.button === 0
+      && !additive
+      && hit.kind === 'annotation'
+      && (
+        event.detail >= 2
+        || this.isRecognizedDoubleClick(hit, screen)
+      )
+    if (recognizedAnnotationDoubleClick) {
+      this.lastClick = null
       this.context.setSelection([hit.id])
       this.context.render('scene')
       this.context.refreshSelectionDependent()
@@ -211,6 +235,9 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
       this.dragState.zoneStarts.get(hit.id)?.[0] ??
       firstCapturedDragStart(this.dragState)
     this.activeDraggedPlantId = this.dragState.plantStarts.has(hit.id) ? hit.id : null
+    this.activeClickTarget = hit
+    this.activeClickScreen = screen
+    this.activeClickAdditive = additive
     this.context.beginDesignObjectDragPresentation()
     this.distanceOverlay.hide()
     return true
@@ -255,7 +282,7 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
     return false
   }
 
-  pointerUp({ rawWorld, preserveActiveDraft }: SharedGesturePointerUpContext): SharedGesturePointerUpResult {
+  pointerUp({ screen, rawWorld, preserveActiveDraft }: SharedGesturePointerUpContext): SharedGesturePointerUpResult {
     const preserve = this.mode === 'panning' && preserveActiveDraft
 
     if (this.mode === 'dragging' && this.dragEdit) {
@@ -265,14 +292,16 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
       else {
         this.dragEdit.abort()
         this.context.render('scene')
+        this.recordClickCandidate()
       }
+      if (moved) this.lastClick = null
       this.dragEdit = null
       this.distanceOverlay.hide()
       this.activeDraggedPlantId = null
       this.context.endDesignObjectDragPresentation()
     }
 
-    if (this.mode === 'band' && this.startWorld) {
+    if (this.mode === 'band' && this.startWorld && this.startScreen && distance(this.startScreen, screen) > 2) {
       const rect = computeSelectionRect(this.startWorld, rawWorld)
       const scene = this.context.getSceneStore().persisted
       const current = this.bandAdditive
@@ -305,6 +334,9 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
     this.dragSnapRef = null
     this.lastDragDelta = { x: 0, y: 0 }
     this.activeDraggedPlantId = null
+    this.activeClickTarget = null
+    this.activeClickScreen = null
+    this.activeClickAdditive = false
     resetSceneDragState(this.dragState)
     this.bandAdditive = false
     hideInteractionPreview(this.context.preview)
@@ -333,6 +365,30 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
       y: snapped.y - this.dragSnapRef.y,
     }
   }
+
+  private isRecognizedDoubleClick(target: TopLevelTarget, screen: ScenePoint): boolean {
+    const previous = this.lastClick
+    if (!previous) return false
+    if (previous.target.kind !== target.kind || previous.target.id !== target.id) return false
+    if (performance.now() - previous.timeStamp > DOUBLE_CLICK_INTERVAL_MS) return false
+    return Math.hypot(previous.screen.x - screen.x, previous.screen.y - screen.y) <= DOUBLE_CLICK_DISTANCE_PX
+  }
+
+  private recordClickCandidate(): void {
+    if (!this.activeClickTarget || !this.activeClickScreen || this.activeClickAdditive) {
+      this.lastClick = null
+      return
+    }
+    this.lastClick = {
+      target: this.activeClickTarget,
+      screen: this.activeClickScreen,
+      timeStamp: performance.now(),
+    }
+  }
+}
+
+function distance(a: ScenePoint, b: ScenePoint): number {
+  return Math.hypot(b.x - a.x, b.y - a.y)
 }
 
 function editableSelectionIds(selection: CanvasDesignObjectSelectionModel): Set<string> {

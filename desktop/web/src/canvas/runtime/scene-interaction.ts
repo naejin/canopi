@@ -54,6 +54,10 @@ import {
   createSelectionRotationHandle,
   type SelectionRotationHandleController,
 } from './interaction/selection-rotation-handle'
+import {
+  createZoneControlPoints,
+  type ZoneControlPointController,
+} from './interaction/zone-control-points'
 import type { CanvasDesignObjectSelectionModel, CanvasSceneEditCommandSurface } from './runtime'
 import {
   createLockedObjectAffordance,
@@ -117,6 +121,7 @@ export class SceneInteractionController {
   private readonly _selectionToolbar: SelectionActionToolbarController
   private readonly _contextMenu: CanvasContextMenuController
   private readonly _rotationHandle: SelectionRotationHandleController
+  private readonly _zoneControlPoints: ZoneControlPointController
   private readonly _lockedAffordance: LockedObjectAffordanceController
   private _tool: InteractionTool = 'select'
   private _designObjectDragPresentationSuppressed = false
@@ -170,7 +175,7 @@ export class SceneInteractionController {
       refreshSelectionDependent: () => this._refreshSelectionDependentMeasurements(),
       beginDesignObjectDragPresentation: () => this._beginDesignObjectDragPresentation(),
       endDesignObjectDragPresentation: () => this._endDesignObjectDragPresentation(),
-      beginAnnotationTextEdit: (annotationId) => this._annotationEditor.start(annotationId),
+      beginAnnotationTextEdit: (annotationId) => this._beginAnnotationTextEdit(annotationId),
     })
     this._selectionToolbar = createSelectionActionToolbar({
       container: this._deps.container,
@@ -191,6 +196,18 @@ export class SceneInteractionController {
       sceneEdits: this._deps.sceneEdits,
       render: this._deps.render,
       refreshSelectionDependent: () => this._refreshSelectionDependentMeasurements(),
+    })
+    this._zoneControlPoints = createZoneControlPoints({
+      container: this._deps.container,
+      camera: this._deps.camera,
+      getSceneStore: this._deps.getSceneStore,
+      getSelection: this._deps.getDesignObjectSelection,
+      sceneEdits: this._deps.sceneEdits,
+      applySnapping: (point) => this._applySnapping(point),
+      render: this._deps.render,
+      refreshSelectionDependent: () => this._refreshSelectionDependentMeasurements(),
+      beginDragPresentation: () => this._beginDesignObjectDragPresentation(),
+      endDragPresentation: () => this._endDesignObjectDragPresentation(),
     })
     this._lockedAffordance = createLockedObjectAffordance({
       container: this._deps.container,
@@ -226,6 +243,7 @@ export class SceneInteractionController {
         this._deps.container.style.cursor = cursorForTool(toolName)
       },
     })
+    this._refreshSelectionDependentMeasurements()
   }
 
   dispose(): void {
@@ -234,6 +252,7 @@ export class SceneInteractionController {
       this._selectionToolbar.dispose()
       this._contextMenu.dispose()
       this._rotationHandle.dispose()
+      this._zoneControlPoints.dispose()
       this._lockedAffordance.dispose()
       this._annotationEditor.dispose()
       this._sharedGestures.dispose()
@@ -286,6 +305,13 @@ export class SceneInteractionController {
     if (event.button === 0 && this._rotationHandle.contains(event.target)) {
       const rotationDrag = this._rotationHandle.pointerDown({ event, rawWorld: world })
       if (rotationDrag) this._frame.beginToolPointerDrag(rotationDrag)
+      else this._frame.clearPointerGesture()
+      return
+    }
+
+    if (event.button === 0 && this._zoneControlPoints.contains(event.target)) {
+      const zoneControlPointDrag = this._zoneControlPoints.pointerDown({ event, rawWorld: world })
+      if (zoneControlPointDrag) this._frame.beginToolPointerDrag(zoneControlPointDrag)
       else this._frame.clearPointerGesture()
       return
     }
@@ -363,6 +389,7 @@ export class SceneInteractionController {
     if (!this._frame.hasPointerGesture()) {
       if (this._selectionToolbar.contains(event.target)) return
       if (this._contextMenu.contains(event.target)) return
+      if (this._zoneControlPoints.contains(event.target)) return
       if (this._lockedAffordance.contains(event.target)) return
       if (this._tools.shouldIgnorePointerEvent(event.target)) return
 
@@ -411,6 +438,7 @@ export class SceneInteractionController {
       toolDrag.commit({ event, screen, rawWorld })
     }
     const sharedResult = this._sharedGestures.pointerUp({
+      screen,
       rawWorld,
       preserveActiveDraft: this._tools.shouldPreserveTransientOnPan(),
     })
@@ -511,6 +539,12 @@ export class SceneInteractionController {
   }
 
   private readonly _onKeyDown = (event: KeyboardEvent): void => {
+    if (event.key === 'Escape' && this._zoneControlPoints.cancelActiveDrag()) {
+      event.preventDefault()
+      this._frame.clearPointerGesture()
+      return
+    }
+
     if (event.key === 'Escape' && this._rotationHandle.cancelActiveDrag()) {
       event.preventDefault()
       this._frame.clearPointerGesture()
@@ -548,6 +582,7 @@ export class SceneInteractionController {
       cancelSharedGestures: () => {
         this._sharedGestures.cancel()
         this._rotationHandle.cancelActiveDrag()
+        this._zoneControlPoints.cancelActiveDrag()
       },
       cancelToolTransient: (cleanupOptions) => this._tools.cancelTransient(cleanupOptions),
       clearHover: () => this._clearPassiveHoverPresentation(),
@@ -560,8 +595,14 @@ export class SceneInteractionController {
   private _refreshViewportDependentMeasurements(): void {
     this._annotationEditor.refresh()
     if (this._tools.refreshViewportDependent()) {
-      this._rotationHandle.refresh()
-      this._selectionToolbar.refresh()
+      this._zoneControlPoints.refresh(this._canShowSelectAffordances())
+      if (this._canShowSelectAffordances()) {
+        this._rotationHandle.refresh()
+        this._selectionToolbar.refresh()
+      } else {
+        this._rotationHandle.hide()
+        this._selectionToolbar.hide()
+      }
       return
     }
 
@@ -571,13 +612,19 @@ export class SceneInteractionController {
   private _refreshSelectionDependentMeasurements(): void {
     this._annotationEditor.refresh()
     this._tools.refreshSelectionDependent()
-    if (this._designObjectDragPresentationSuppressed) {
+    const canShowSelectAffordances = this._canShowSelectAffordances()
+    this._zoneControlPoints.refresh(canShowSelectAffordances)
+    if (this._designObjectDragPresentationSuppressed || !canShowSelectAffordances) {
       this._rotationHandle.hide()
       this._selectionToolbar.hide()
       return
     }
     this._rotationHandle.refresh()
     this._selectionToolbar.refresh()
+  }
+
+  private _canShowSelectAffordances(): boolean {
+    return this._tool === 'select' && !this._annotationEditor.hasActiveEditor()
   }
 
   private _beginDesignObjectDragPresentation(): void {
@@ -636,11 +683,17 @@ export class SceneInteractionController {
 
     const target = selection.editableTargets[0]
     if (target?.kind !== 'annotation') return false
-    if (!this._annotationEditor.start(target.id)) return false
+    if (!this._beginAnnotationTextEdit(target.id)) return false
 
     event.preventDefault()
     event.stopPropagation()
     return true
+  }
+
+  private _beginAnnotationTextEdit(annotationId: string): boolean {
+    const started = this._annotationEditor.start(annotationId)
+    if (started) this._refreshSelectionDependentMeasurements()
+    return started
   }
 
   private _canEditAnnotation(annotationId: string): boolean {

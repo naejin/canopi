@@ -24,7 +24,6 @@ import type { SpeciesCacheEntry } from '../species-cache'
 import {
   getEllipticalZonePolygon,
   getRectangularZoneCorners,
-  pointInEllipticalZone,
 } from '../zone-geometry'
 
 export type TopLevelTarget =
@@ -187,21 +186,23 @@ export function queryRectTopLevel(
 const LINE_HIT_TOLERANCE_PX = 6
 
 function hitZone(zone: SceneZoneEntity, point: ScenePoint, viewportScale: number): boolean {
+  const toleranceWorld = LINE_HIT_TOLERANCE_PX / Math.max(viewportScale, 1e-6)
+
   if (zone.zoneType === 'rect' && zone.points.length >= 4) {
     const corners = getRectangularZoneCorners(zone)
-    return corners ? pointInOrOnPolygon(point, corners) : false
+    return corners ? pointNearPolygonBoundary(point, corners, toleranceWorld) : false
   }
 
   if (zone.zoneType === 'ellipse' && zone.points.length >= 2) {
-    return pointInEllipticalZone(zone, point)
+    const polygon = getEllipticalZonePolygon(zone)
+    return polygon ? pointNearPolygonBoundary(point, polygon, toleranceWorld) : false
   }
 
   if (zone.zoneType === 'polygon' && zone.points.length >= 3) {
-    return pointInOrOnPolygon(point, zone.points)
+    return pointNearPolygonBoundary(point, zone.points, toleranceWorld)
   }
 
   if (zone.zoneType === 'line' && zone.points.length >= 2) {
-    const toleranceWorld = LINE_HIT_TOLERANCE_PX / Math.max(viewportScale, 1e-6)
     return pointNearSegment(point, zone.points[0]!, zone.points[1]!, toleranceWorld)
   }
 
@@ -293,6 +294,20 @@ function pointInPolygon(point: ScenePoint, polygon: readonly ScenePoint[]): bool
 function pointOnPolygonBoundary(point: ScenePoint, polygon: readonly ScenePoint[]): boolean {
   for (let index = 0; index < polygon.length; index += 1) {
     if (pointOnSegment(point, polygon[index]!, polygon[(index + 1) % polygon.length]!)) return true
+  }
+
+  return false
+}
+
+function pointNearPolygonBoundary(
+  point: ScenePoint,
+  polygon: readonly ScenePoint[],
+  tolerance: number,
+): boolean {
+  for (let index = 0; index < polygon.length; index += 1) {
+    if (pointNearSegment(point, polygon[index]!, polygon[(index + 1) % polygon.length]!, tolerance)) {
+      return true
+    }
   }
 
   return false

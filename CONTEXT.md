@@ -133,6 +133,10 @@ _Avoid_: Line, stroke
 A derived physical size description of a zone or zone edge, such as width, height, edge length, or area. A zone measurement describes the zone's current geometry; it is not a separate design object.
 _Avoid_: Shape metadata, annotation, label
 
+**Zone Control Point**:
+An on-canvas point a designer can drag to reshape a selected zone. Zone control points are editing affordances for a zone's geometry; they are not separate design objects or zone measurements.
+_Avoid_: Shape handle, vertex handle, resize knob
+
 **Annotation**:
 A text note positioned in a design. An annotation explains or labels part of the design without becoming a zone, placed plant, or timeline action.
 _Avoid_: Label, comment
@@ -350,6 +354,9 @@ A **Zone Edge** is part of a zone boundary. A line is an independently drawn des
 
 **Zone Measurement vs Annotation**:
 A **Zone Measurement** is derived from a zone's geometry. An **Annotation** is authored text in the design.
+
+**Zone Control Point vs Zone Measurement**:
+A **Zone Control Point** is an editing affordance for reshaping a selected zone. A **Zone Measurement** is read-only derived information about a zone's current geometry.
 
 **Canvas Object vs Design Object**:
 Use **Design Object** for a spatial part of a Design. "Canvas object" is implementation language and should not be the canonical product term.

@@ -263,6 +263,27 @@ function rotationHandleCenter(container: HTMLElement): ScenePoint {
   }
 }
 
+function zoneControlPointCenter(container: HTMLElement, kind: string, index: number): ScenePoint {
+  const handle = container.querySelector<HTMLElement>(
+    `[data-zone-control-point-kind="${kind}"][data-zone-control-point-index="${index}"]`,
+  )
+  if (!handle) throw new Error(`Expected ${kind} Zone Control Point ${index}`)
+  const screenX = Number.parseFloat(handle.dataset.zoneControlPointScreenX ?? '')
+  const screenY = Number.parseFloat(handle.dataset.zoneControlPointScreenY ?? '')
+  if (Number.isFinite(screenX) && Number.isFinite(screenY)) {
+    return { x: screenX, y: screenY }
+  }
+  const left = Number.parseFloat(handle.style.left)
+  const top = Number.parseFloat(handle.style.top)
+  if (!Number.isFinite(left) || !Number.isFinite(top)) {
+    throw new Error('Expected Zone Control Point to be positioned')
+  }
+  return {
+    x: left + 10,
+    y: top + 10,
+  }
+}
+
 function selectionBoundsCenter(selection: CanvasDesignObjectSelectionModel): ScenePoint {
   if (!selection.bounds) throw new Error('Expected selection bounds')
   return {
@@ -468,13 +489,13 @@ describe('SceneInteractionController', () => {
     expect(toolbar.style.display).toBe('flex')
     expect(handle.style.display).toBe('inline-flex')
 
-    events.pointerDown({ x: 70, y: 110 }, { button: 0 })
+    events.pointerDown({ x: 20, y: 110 }, { button: 0 })
 
     expect(toolbar.style.display).toBe('none')
     expect(handle.style.display).toBe('none')
 
-    events.pointerMove({ x: 90, y: 130 }, { button: 0 })
-    events.pointerUp({ x: 90, y: 130 }, { button: 0 })
+    events.pointerMove({ x: 40, y: 130 }, { button: 0 })
+    events.pointerUp({ x: 40, y: 130 }, { button: 0 })
 
     expect(toolbar.style.display).toBe('flex')
     expect(handle.style.display).toBe('inline-flex')
@@ -530,10 +551,10 @@ describe('SceneInteractionController', () => {
     const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
     const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
 
-    events.pointerDown({ x: 70, y: 110 }, { button: 0 })
+    events.pointerDown({ x: 20, y: 110 }, { button: 0 })
     expect(toolbar.style.display).toBe('none')
     expect(handle.style.display).toBe('none')
-    events.pointerUp({ x: 70, y: 110 }, { button: 0 })
+    events.pointerUp({ x: 20, y: 110 }, { button: 0 })
 
     expect(toolbar.style.display).toBe('flex')
     expect(handle.style.display).toBe('inline-flex')
@@ -562,14 +583,14 @@ describe('SceneInteractionController', () => {
     const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
     const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
 
-    events.pointerDown({ x: 70, y: 110 }, { button: 0 })
-    events.pointerMove({ x: 90, y: 130 }, { button: 0 })
+    events.pointerDown({ x: 20, y: 110 }, { button: 0 })
+    events.pointerMove({ x: 40, y: 130 }, { button: 0 })
     expect(toolbar.style.display).toBe('none')
     expect(handle.style.display).toBe('none')
     controller.setTool('rectangle')
 
-    expect(toolbar.style.display).toBe('flex')
-    expect(handle.style.display).toBe('inline-flex')
+    expect(toolbar.style.display).toBe('none')
+    expect(handle.style.display).toBe('none')
     expect(store.persisted.zones[0]?.points[0]).toEqual({ x: 20, y: 80 })
     expect(onSceneEditCommit).not.toHaveBeenCalled()
     controller.dispose()
@@ -898,6 +919,55 @@ describe('SceneInteractionController', () => {
     expect(tooltip.style.marginBottom).toBe('var(--space-1)')
     expect(tooltip.style.top).toBe('')
     expect(Number.parseInt(toolbar.style.zIndex, 10)).toBeGreaterThan(Number.parseInt(handle.style.zIndex, 10))
+    controller.dispose()
+  })
+
+  it('hides Selection Action Toolbar, Rotation Handle, and stale tooltips outside Select affordance states', () => {
+    Object.defineProperty(container, 'clientWidth', { configurable: true, value: 400 })
+    Object.defineProperty(container, 'clientHeight', { configurable: true, value: 300 })
+    store.updatePersisted((draft) => {
+      draft.zones = [makeRectZone('zone-1', [
+        { x: 80, y: 80 },
+        { x: 160, y: 80 },
+        { x: 160, y: 140 },
+        { x: 80, y: 140 },
+      ])]
+      draft.annotations = [makeTextAnnotation('annotation-1', { x: 220, y: 100 }, 'Edit me')]
+    })
+    const deps = createInteractionDeps(container, store, camera, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+    deps.setSelection(['zone-1'])
+    controller.refreshMeasurements()
+
+    const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
+    const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
+    const duplicate = toolbar.querySelector<HTMLButtonElement>('[data-selection-action-command="duplicate"]')!
+    const tooltip = duplicate.querySelector<HTMLElement>('[data-selection-action-tooltip]')!
+    duplicate.dispatchEvent(new Event('pointerenter'))
+    expect(toolbar.style.display).toBe('flex')
+    expect(handle.style.display).toBe('inline-flex')
+    expect(tooltip.style.display).toBe('inline-flex')
+
+    controller.setTool('rectangle')
+
+    expect(toolbar.style.display).toBe('none')
+    expect(handle.style.display).toBe('none')
+    expect(tooltip.style.display).toBe('none')
+
+    controller.setTool('select')
+    deps.setSelection(['annotation-1'])
+    controller.refreshMeasurements()
+    expect(toolbar.style.display).toBe('flex')
+    expect(handle.style.display).toBe('inline-flex')
+
+    events.keyDown({ key: 'F2', cancelable: true, target: container })
+
+    expect(container.querySelector('textarea')).not.toBeNull()
+    expect(toolbar.style.display).toBe('none')
+    expect(handle.style.display).toBe('none')
     controller.dispose()
   })
 
@@ -1985,7 +2055,7 @@ describe('SceneInteractionController', () => {
 
     deps.setSelection(['plant-1'])
     vi.mocked(deps.setSelection).mockClear()
-    const point = events.clientPoint({ x: 120, y: 30 })
+    const point = events.clientPoint({ x: 110, y: 30 })
     container.dispatchEvent(new MouseEvent('contextmenu', {
       bubbles: true,
       cancelable: true,
@@ -2011,7 +2081,7 @@ describe('SceneInteractionController', () => {
 
     expect(copy).not.toHaveBeenCalled()
     expect(deleteSelected).not.toHaveBeenCalled()
-    expect(pasteAt).toHaveBeenCalledWith({ x: 120, y: 30 })
+    expect(pasteAt).toHaveBeenCalledWith({ x: 110, y: 30 })
 
     controller.dispose()
   })
@@ -3980,6 +4050,45 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('opens existing text Annotation editing from two primary clicks without pointer detail', () => {
+    store.updatePersisted((draft) => {
+      draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Portable note')]
+    })
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 1 })
+    events.pointerUp({ x: 26, y: 34 }, { button: 0, detail: 1 })
+    events.pointerDown({ x: 27, y: 35 }, { button: 0, detail: 1 })
+
+    expect(selectedObjectIds.value).toEqual(new Set(['annotation-1']))
+    expect(container.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('Portable note')
+    controller.dispose()
+  })
+
+  it('does not open existing text Annotation editing when the second click is additive or too far away', () => {
+    store.updatePersisted((draft) => {
+      draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Portable note')]
+    })
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 1 })
+    events.pointerUp({ x: 26, y: 34 }, { button: 0, detail: 1 })
+    events.pointerDown({ x: 27, y: 35 }, { button: 0, detail: 1, shiftKey: true })
+    expect(container.querySelector('textarea')).toBeNull()
+
+    events.pointerUp({ x: 27, y: 35 }, { button: 0, detail: 1, shiftKey: true })
+    events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 1 })
+    events.pointerUp({ x: 26, y: 34 }, { button: 0, detail: 1 })
+    events.pointerDown({ x: 60, y: 70 }, { button: 0, detail: 1 })
+
+    expect(container.querySelector('textarea')).toBeNull()
+    controller.dispose()
+  })
+
   it('opens selected text Annotation editing from F2 and keeps Shift+Enter inside the editor', () => {
     store.updatePersisted((draft) => {
       draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Line one')]
@@ -4648,8 +4757,8 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('select')
 
-    events.pointerDown({ x: 50, y: 60 }, { button: 0 })
-    events.pointerUp({ x: 50, y: 60 }, { button: 0 })
+    events.pointerDown({ x: 80, y: 60 }, { button: 0 })
+    events.pointerUp({ x: 80, y: 60 }, { button: 0 })
 
     expect(zoneMeasurementTexts(container)).toEqual([
       'W 60 m',
@@ -4695,12 +4804,12 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('select')
 
-    events.pointerDown({ x: 50, y: 60 }, { button: 0 })
-    events.pointerUp({ x: 50, y: 60 }, { button: 0 })
+    events.pointerDown({ x: 80, y: 60 }, { button: 0 })
+    events.pointerUp({ x: 80, y: 60 }, { button: 0 })
     expect(zoneMeasurementTexts(container)).not.toEqual([])
 
-    events.pointerDown({ x: 150, y: 60 }, { button: 0, shiftKey: true })
-    events.pointerUp({ x: 150, y: 60 }, { button: 0 })
+    events.pointerDown({ x: 180, y: 60 }, { button: 0, shiftKey: true })
+    events.pointerUp({ x: 180, y: 60 }, { button: 0 })
 
     expect(zoneMeasurementTexts(container)).toEqual([])
     controller.dispose()
@@ -4742,8 +4851,8 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('select')
 
-    events.pointerDown({ x: 50, y: 50 }, { button: 0 })
-    events.pointerUp({ x: 50, y: 50 }, { button: 0 })
+    events.pointerDown({ x: 80, y: 50 }, { button: 0 })
+    events.pointerUp({ x: 80, y: 50 }, { button: 0 })
 
     expect(selectedObjectIds.value).toEqual(new Set(['zone-ellipse']))
     expect(deps.setSelection).toHaveBeenCalledWith(new Set(['zone-ellipse']))
@@ -4772,9 +4881,9 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('select')
 
-    events.pointerDown({ x: 50, y: 50 }, { button: 0 })
-    events.pointerMove({ x: 60, y: 65 }, { button: 0 })
-    events.pointerUp({ x: 60, y: 65 }, { button: 0 })
+    events.pointerDown({ x: 80, y: 50 }, { button: 0 })
+    events.pointerMove({ x: 90, y: 65 }, { button: 0 })
+    events.pointerUp({ x: 90, y: 65 }, { button: 0 })
 
     expect(selectedObjectIds.value).toEqual(new Set(['zone-ellipse']))
     expect(store.persisted.zones[0]?.points).toEqual([
@@ -4948,8 +5057,8 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('select')
 
-    events.pointerDown({ x: 40, y: 20 }, { button: 0 })
-    events.pointerUp({ x: 40, y: 20 }, { button: 0 })
+    events.pointerDown({ x: 40, y: 10 }, { button: 0 })
+    events.pointerUp({ x: 40, y: 10 }, { button: 0 })
 
     expect(zoneMeasurementTexts(container)).toEqual([
       '50 m',
@@ -4998,12 +5107,12 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('select')
 
-    events.pointerDown({ x: 40, y: 20 }, { button: 0 })
-    events.pointerUp({ x: 40, y: 20 }, { button: 0 })
+    events.pointerDown({ x: 40, y: 10 }, { button: 0 })
+    events.pointerUp({ x: 40, y: 10 }, { button: 0 })
     expect(zoneMeasurementTexts(container)).not.toEqual([])
 
-    events.pointerDown({ x: 130, y: 20 }, { button: 0, shiftKey: true })
-    events.pointerUp({ x: 130, y: 20 }, { button: 0 })
+    events.pointerDown({ x: 130, y: 10 }, { button: 0, shiftKey: true })
+    events.pointerUp({ x: 130, y: 10 }, { button: 0 })
 
     expect(zoneMeasurementTexts(container)).toEqual([])
     controller.dispose()
@@ -5516,8 +5625,8 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('select')
 
-    events.pointerDown({ x: 20, y: 20 }, { button: 0 })
-    events.pointerUp({ x: 20, y: 20 }, { button: 0 })
+    events.pointerDown({ x: 10, y: 20 }, { button: 0 })
+    events.pointerUp({ x: 10, y: 20 }, { button: 0 })
 
     expect(selectedObjectIds.value).toEqual(new Set(['zone-1']))
     expect(zoneMeasurementTexts(container)).toEqual([
@@ -5570,12 +5679,12 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('select')
 
-    events.pointerDown({ x: 20, y: 20 }, { button: 0 })
-    events.pointerUp({ x: 20, y: 20 }, { button: 0 })
+    events.pointerDown({ x: 10, y: 20 }, { button: 0 })
+    events.pointerUp({ x: 10, y: 20 }, { button: 0 })
     expect(zoneMeasurementTexts(container)).not.toEqual([])
 
-    events.pointerDown({ x: 160, y: 20 }, { button: 0, shiftKey: true })
-    events.pointerUp({ x: 160, y: 20 }, { button: 0 })
+    events.pointerDown({ x: 150, y: 20 }, { button: 0, shiftKey: true })
+    events.pointerUp({ x: 150, y: 20 }, { button: 0 })
 
     expect(selectedObjectIds.value).toEqual(new Set(['zone-1', 'zone-2']))
     expect(zoneMeasurementTexts(container)).toEqual([])
@@ -5612,8 +5721,8 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('select')
 
-    events.pointerDown({ x: 20, y: 20 }, { button: 0 })
-    events.pointerUp({ x: 20, y: 20 }, { button: 0 })
+    events.pointerDown({ x: 10, y: 20 }, { button: 0 })
+    events.pointerUp({ x: 10, y: 20 }, { button: 0 })
 
     expect(selectedObjectIds.value).toEqual(new Set(['group-1']))
     expect(zoneMeasurementTexts(container)).toEqual([])
@@ -5643,8 +5752,8 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('select')
 
-    events.pointerDown({ x: 20, y: 20 }, { button: 0 })
-    events.pointerUp({ x: 20, y: 20 }, { button: 0 })
+    events.pointerDown({ x: 10, y: 20 }, { button: 0 })
+    events.pointerUp({ x: 10, y: 20 }, { button: 0 })
 
     expect(zoneMeasurementTexts(container)).toEqual([
       '100 m',
@@ -5682,6 +5791,215 @@ describe('SceneInteractionController', () => {
     controller.refreshMeasurements()
 
     expect(zoneMeasurementTexts(container)).toEqual([])
+    controller.dispose()
+  })
+
+  it('selects Zones by boundary proximity while interior clicks pass through', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [makeRectZone('zone-1', [
+        { x: 10, y: 10 },
+        { x: 110, y: 10 },
+        { x: 110, y: 90 },
+        { x: 10, y: 90 },
+      ])]
+    })
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    events.pointerDown({ x: 60, y: 50 }, { button: 0 })
+    events.pointerUp({ x: 60, y: 50 }, { button: 0 })
+
+    expect(selectedObjectIds.value).toEqual(new Set())
+    expect(deps.setSelection).not.toHaveBeenCalledWith(new Set(['zone-1']))
+
+    events.pointerDown({ x: 10, y: 50 }, { button: 0 })
+    events.pointerUp({ x: 10, y: 50 }, { button: 0 })
+
+    expect(selectedObjectIds.value).toEqual(new Set(['zone-1']))
+    controller.dispose()
+  })
+
+  it('prioritizes Placed Plants over Zone boundary hits', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [makeRectZone('zone-1', [
+        { x: 10, y: 10 },
+        { x: 110, y: 10 },
+        { x: 110, y: 90 },
+        { x: 10, y: 90 },
+      ])]
+      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 10, y: 50 })]
+    })
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    events.pointerDown({ x: 10, y: 50 }, { button: 0 })
+    events.pointerUp({ x: 10, y: 50 }, { button: 0 })
+
+    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+    controller.dispose()
+  })
+
+  it('reshapes Linear Zones by dragging endpoint Zone Control Points with live measurements', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [{
+        kind: 'zone',
+        locked: false,
+        name: 'line-1',
+        zoneType: 'line',
+        rotationDeg: 0,
+        points: [
+          { x: 10, y: 10 },
+          { x: 60, y: 10 },
+        ],
+        fillColor: null,
+        notes: null,
+      }]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    events.pointerDown({ x: 30, y: 10 }, { button: 0 })
+    events.pointerUp({ x: 30, y: 10 }, { button: 0 })
+
+    const handle = container.querySelector<HTMLElement>(
+      '[data-zone-control-point-kind="line-endpoint"][data-zone-control-point-index="1"]',
+    )!
+    const start = zoneControlPointCenter(container, 'line-endpoint', 1)
+    events.pointerDown(start, { button: 0, target: handle })
+    events.pointerMove({ x: 80, y: 10 }, { button: 0 })
+
+    expect(store.persisted.zones[0]?.points[1]).toEqual({ x: 80, y: 10 })
+    expect(zoneMeasurementTexts(container)).toEqual(['70 m'])
+
+    events.pointerUp({ x: 80, y: 10 }, { button: 0 })
+
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-zone-control-point')
+    controller.dispose()
+  })
+
+  it('reshapes Polygonal Zones by dragging existing vertex Zone Control Points', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [{
+        kind: 'zone',
+        locked: false,
+        name: 'poly-1',
+        zoneType: 'polygon',
+        rotationDeg: 0,
+        points: [
+          { x: 10, y: 10 },
+          { x: 60, y: 10 },
+          { x: 10, y: 60 },
+        ],
+        fillColor: null,
+        notes: null,
+      }]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    events.pointerDown({ x: 10, y: 30 }, { button: 0 })
+    events.pointerUp({ x: 10, y: 30 }, { button: 0 })
+
+    const handle = container.querySelector<HTMLElement>(
+      '[data-zone-control-point-kind="polygon-vertex"][data-zone-control-point-index="1"]',
+    )!
+    const start = zoneControlPointCenter(container, 'polygon-vertex', 1)
+    events.pointerDown(start, { button: 0, target: handle })
+    events.pointerMove({ x: 80, y: 10 }, { button: 0 })
+
+    expect(store.persisted.zones[0]?.points[1]).toEqual({ x: 80, y: 10 })
+    expect(zoneMeasurementTexts(container)).toContain('1750 m²')
+
+    events.pointerUp({ x: 80, y: 10 }, { button: 0 })
+
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-zone-control-point')
+    controller.dispose()
+  })
+
+  it('resizes Rectangular Zones from corner Zone Control Points while preserving rectangle geometry', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [makeRectZone('rect-1', [
+        { x: 10, y: 10 },
+        { x: 60, y: 10 },
+        { x: 60, y: 50 },
+        { x: 10, y: 50 },
+      ])]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    events.pointerDown({ x: 10, y: 30 }, { button: 0 })
+    events.pointerUp({ x: 10, y: 30 }, { button: 0 })
+
+    const handle = container.querySelector<HTMLElement>(
+      '[data-zone-control-point-kind="rect-corner"][data-zone-control-point-index="2"]',
+    )!
+    const start = zoneControlPointCenter(container, 'rect-corner', 2)
+    events.pointerDown(start, { button: 0, target: handle })
+    events.pointerMove({ x: 90, y: 70 }, { button: 0 })
+
+    expect(store.persisted.zones[0]?.points).toEqual([
+      { x: 10, y: 10 },
+      { x: 90, y: 10 },
+      { x: 90, y: 70 },
+      { x: 10, y: 70 },
+    ])
+    expect(zoneMeasurementTexts(container)).toContain('4800 m²')
+
+    events.pointerUp({ x: 90, y: 70 }, { button: 0 })
+
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-zone-control-point')
+    controller.dispose()
+  })
+
+  it('resizes Elliptical Zones from cardinal Zone Control Points with live measurements', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [{
+        kind: 'zone',
+        locked: false,
+        name: 'ellipse-1',
+        zoneType: 'ellipse',
+        rotationDeg: 0,
+        points: [
+          { x: 50, y: 50 },
+          { x: 20, y: 10 },
+        ],
+        fillColor: null,
+        notes: null,
+      }]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    events.pointerDown({ x: 70, y: 50 }, { button: 0 })
+    events.pointerUp({ x: 70, y: 50 }, { button: 0 })
+
+    const handle = container.querySelector<HTMLElement>(
+      '[data-zone-control-point-kind="ellipse-east"][data-zone-control-point-index="0"]',
+    )!
+    const start = zoneControlPointCenter(container, 'ellipse-east', 0)
+    events.pointerDown(start, { button: 0, target: handle })
+    events.pointerMove({ x: 90, y: 50 }, { button: 0 })
+
+    expect(store.persisted.zones[0]?.points).toEqual([
+      { x: 60, y: 50 },
+      { x: 30, y: 10 },
+    ])
+    expect(zoneMeasurementTexts(container)).toEqual(['W 60 m', 'H 20 m', '942 m²'])
+
+    events.pointerUp({ x: 90, y: 50 }, { button: 0 })
+
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-zone-control-point')
     controller.dispose()
   })
 
@@ -6149,7 +6467,7 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('object-stamp')
 
-    events.pointerDown({ x: 25, y: 30 }, { button: 0 })
+    events.pointerDown({ x: 10, y: 30 }, { button: 0 })
     expect(store.persisted.zones).toHaveLength(2)
     expect(onSceneEditCommit).not.toHaveBeenCalled()
 
@@ -6167,10 +6485,10 @@ describe('SceneInteractionController', () => {
       zoneType: 'rect',
       rotationDeg: 0,
       points: [
-        { x: 105, y: 140 },
-        { x: 145, y: 140 },
-        { x: 145, y: 180 },
-        { x: 105, y: 180 },
+        { x: 120, y: 140 },
+        { x: 160, y: 140 },
+        { x: 160, y: 180 },
+        { x: 120, y: 180 },
       ],
       fillColor: '#A06B1F',
       notes: 'Annuals',
@@ -6325,7 +6643,7 @@ describe('SceneInteractionController', () => {
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('object-stamp')
 
-    events.pointerDown({ x: 50, y: 60 }, { button: 0 })
+    events.pointerDown({ x: 70, y: 60 }, { button: 0 })
     events.pointerDown({ x: 100, y: 100 }, { button: 0 })
 
     expect(store.persisted.zones).toHaveLength(2)
@@ -6334,7 +6652,7 @@ describe('SceneInteractionController', () => {
       zoneType: 'ellipse',
       rotationDeg: 0,
       points: [
-        { x: 100, y: 100 },
+        { x: 80, y: 100 },
         { x: 20, y: 10 },
       ],
     })
