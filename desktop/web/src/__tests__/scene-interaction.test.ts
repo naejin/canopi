@@ -922,6 +922,49 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('clears Selection Action Toolbar tooltips when selection refreshes with unchanged actions', () => {
+    Object.defineProperty(container, 'clientWidth', { configurable: true, value: 400 })
+    Object.defineProperty(container, 'clientHeight', { configurable: true, value: 300 })
+    store.updatePersisted((draft) => {
+      draft.zones = [
+        makeRectZone('zone-1', [
+          { x: 80, y: 80 },
+          { x: 140, y: 80 },
+          { x: 140, y: 120 },
+          { x: 80, y: 120 },
+        ]),
+        makeRectZone('zone-2', [
+          { x: 180, y: 80 },
+          { x: 240, y: 80 },
+          { x: 240, y: 120 },
+          { x: 180, y: 120 },
+        ]),
+      ]
+    })
+    const deps = createInteractionDeps(container, store, camera, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    })
+    const controller = new SceneInteractionController(deps as any)
+
+    deps.setSelection(['zone-1'])
+    controller.refreshMeasurements()
+    const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
+    const duplicate = toolbar.querySelector<HTMLButtonElement>('[data-selection-action-command="duplicate"]')!
+    const tooltip = duplicate.querySelector<HTMLElement>('[data-selection-action-tooltip]')!
+    duplicate.dispatchEvent(new Event('pointerenter'))
+
+    expect(toolbar.style.display).toBe('flex')
+    expect(tooltip.style.display).toBe('inline-flex')
+
+    deps.setSelection(['zone-2'])
+    controller.refreshMeasurements()
+
+    expect(toolbar.style.display).toBe('flex')
+    expect(tooltip.style.display).toBe('none')
+    expect(toolbar.querySelectorAll('button')).toHaveLength(5)
+    controller.dispose()
+  })
+
   it('hides Selection Action Toolbar, Rotation Handle, and stale tooltips outside Select affordance states', () => {
     Object.defineProperty(container, 'clientWidth', { configurable: true, value: 400 })
     Object.defineProperty(container, 'clientHeight', { configurable: true, value: 300 })
@@ -5897,6 +5940,47 @@ describe('SceneInteractionController', () => {
     events.pointerUp({ x: 80, y: 10 }, { button: 0 })
 
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-zone-control-point')
+    controller.dispose()
+  })
+
+  it('does not reshape Linear Zones or commit edits from no-op Zone Control Point taps', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [{
+        kind: 'zone',
+        locked: false,
+        name: 'line-1',
+        zoneType: 'line',
+        rotationDeg: 0,
+        points: [
+          { x: 10, y: 10 },
+          { x: 60, y: 10 },
+        ],
+        fillColor: null,
+        notes: null,
+      }]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    events.pointerDown({ x: 30, y: 10 }, { button: 0 })
+    events.pointerUp({ x: 30, y: 10 }, { button: 0 })
+
+    const handle = container.querySelector<HTMLElement>(
+      '[data-zone-control-point-kind="line-endpoint"][data-zone-control-point-index="1"]',
+    )!
+    const start = zoneControlPointCenter(container, 'line-endpoint', 1)
+    const hitTargetOffset = { x: start.x + 5, y: start.y }
+    events.pointerDown(hitTargetOffset, { button: 0, target: handle })
+    events.pointerUp(hitTargetOffset, { button: 0, target: handle })
+
+    expect(store.persisted.zones[0]?.points).toEqual([
+      { x: 10, y: 10 },
+      { x: 60, y: 10 },
+    ])
+    expect(zoneMeasurementTexts(container)).toEqual(['50 m'])
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
     controller.dispose()
   })
 

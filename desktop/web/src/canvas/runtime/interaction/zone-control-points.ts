@@ -54,12 +54,15 @@ interface ActiveZoneControlPointDrag {
   readonly zoneId: string
   readonly controlPoint: ZoneControlPoint
   readonly startZone: SceneZoneEntity
+  readonly startScreen: ScenePoint
   changed: boolean
+  movedPastDragThreshold: boolean
 }
 
 const CONTROL_POINT_HIT_SIZE_PX = 20
 const CONTROL_POINT_MARK_SIZE_PX = 8
 const CONTROL_POINT_Z_INDEX = 29
+const CONTROL_POINT_DRAG_THRESHOLD_PX = 2
 const MIN_ZONE_DIMENSION_M = 0.5
 const MIN_POLYGON_AREA_M2 = 0.25
 const GEOMETRY_EPSILON = 0.000001
@@ -110,7 +113,7 @@ export function createZoneControlPoints(
     root.style.display = 'none'
   }
 
-  function pointerDown({ event }: ZoneControlPointPointerDownContext): SceneInteractionPointerDrag | null {
+  function pointerDown({ event, rawWorld }: ZoneControlPointPointerDownContext): SceneInteractionPointerDrag | null {
     if (event.button !== 0) return null
     const element = closestControlPointElement(event.target)
     const controlPoint = element ? controlPoints.get(element.dataset.zoneControlPoint ?? '') : null
@@ -126,7 +129,9 @@ export function createZoneControlPoints(
       zoneId: zone.name,
       controlPoint,
       startZone: cloneZone(zone),
+      startScreen: options.camera.worldToScreen(rawWorld),
       changed: false,
+      movedPastDragThreshold: false,
     }
     root.dataset.zoneControlPointActive = 'true'
     options.beginDragPresentation()
@@ -138,13 +143,22 @@ export function createZoneControlPoints(
   }
 
   function updateDrag(context: SceneInteractionPointerEvent): void {
+    const drag = activeDrag
+    if (!drag) return
+    if (
+      !drag.movedPastDragThreshold
+      && screenDistance(drag.startScreen, context.screen) <= CONTROL_POINT_DRAG_THRESHOLD_PX
+    ) return
+    drag.movedPastDragThreshold = true
     applyActiveDrag(context.rawWorld)
   }
 
   function commitDrag(context: SceneInteractionPointerEvent): void {
     const drag = activeDrag
     if (!drag) return
-    applyActiveDrag(context.rawWorld)
+    const movedPastDragThreshold = drag.movedPastDragThreshold
+      || screenDistance(drag.startScreen, context.screen) > CONTROL_POINT_DRAG_THRESHOLD_PX
+    if (movedPastDragThreshold) applyActiveDrag(context.rawWorld)
     activeDrag = null
     delete root.dataset.zoneControlPointActive
 
@@ -260,6 +274,10 @@ export function createZoneControlPoints(
     })
     return handle
   }
+}
+
+function screenDistance(a: ScenePoint, b: ScenePoint): number {
+  return Math.hypot(b.x - a.x, b.y - a.y)
 }
 
 function closestControlPointElement(target: EventTarget | null): HTMLElement | null {

@@ -223,6 +223,7 @@ export function createSelectionActionToolbar(
     }),
   }))
   let renderedActionIds = ''
+  let renderedSelectionKey = ''
   options.container.appendChild(root)
 
   function refresh(): void {
@@ -240,11 +241,17 @@ export function createSelectionActionToolbar(
       setButtonEnabled(button, action.isEnabled(selection))
     }
     const nextActionIds = availableActionButtons.map(({ action }) => action.id).join('|')
-    if (nextActionIds !== renderedActionIds) {
+    const nextSelectionKey = selectionTooltipKey(selection)
+    const actionSetChanged = nextActionIds !== renderedActionIds
+    const selectionChanged = nextSelectionKey !== renderedSelectionKey
+    if (actionSetChanged || selectionChanged) {
       hideAllTooltips()
+    }
+    if (actionSetChanged) {
       root.replaceChildren(...availableActionButtons.map(({ button }) => button))
       renderedActionIds = nextActionIds
     }
+    renderedSelectionKey = nextSelectionKey
     root.style.display = 'flex'
     const placement = resolveToolbarPlacement(
       selection,
@@ -267,6 +274,7 @@ export function createSelectionActionToolbar(
       root.replaceChildren()
       renderedActionIds = ''
     }
+    renderedSelectionKey = ''
   }
 
   function hideAllTooltips(): void {
@@ -288,6 +296,17 @@ export function createSelectionActionToolbar(
       root.remove()
     },
   }
+}
+
+function selectionTooltipKey(selection: CanvasDesignObjectSelectionModel): string {
+  return [
+    targetListKey(selection.editableTargets),
+    targetListKey(selection.lockedTargets ?? []),
+  ].join('|')
+}
+
+function targetListKey(targets: readonly { readonly kind: string; readonly id: string }[]): string {
+  return targets.map((target) => `${target.kind}:${target.id}`).join(',')
 }
 
 function createActionButton(action: SelectionAction, run: () => void): HTMLButtonElement {
