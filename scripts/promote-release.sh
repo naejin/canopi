@@ -185,8 +185,28 @@ if [[ "${#release_files[@]}" -eq 0 ]]; then
   exit 1
 fi
 
+release_version="$(python3 - "$metadata_path" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+metadata = json.loads(Path(sys.argv[1]).read_text())
+print(metadata["release_version"])
+PY
+)"
+release_notes_path="$repo_root/docs/release-notes/v${release_version}.md"
 notes_file="$tmpdir/release-notes.md"
-python3 - "$metadata_path" "$run_id" <<'PY' > "$notes_file"
+
+if [[ -f "$release_notes_path" ]]; then
+  log "Using release notes from $release_notes_path"
+  cp "$release_notes_path" "$notes_file"
+else
+  printf '# Canopi %s Release Notes\n\n' "$release_version" > "$notes_file"
+fi
+
+{
+  printf "\n## Release Artifact Metadata\n\n"
+  python3 - "$metadata_path" "$run_id" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -194,8 +214,6 @@ from pathlib import Path
 metadata = json.loads(Path(sys.argv[1]).read_text())
 run_id = sys.argv[2]
 
-print("Release candidate promoted from GitHub Actions artifacts.")
-print()
 print(f"- Source run: {run_id}")
 print(f"- Source ref: {metadata['ref']}")
 print(f"- Source commit: {metadata['head_sha']}")
@@ -206,6 +224,19 @@ print(f"- Expected DB schema version: {metadata['expected_db_schema_version']}")
 print()
 print("Promoted artifacts were checksum-verified before upload.")
 PY
+  printf "\n## Download Links\n\n"
+  printf -- "-- This section links to assets attached to this release.\n\n"
+  for release_file in "${release_files[@]}"; do
+    release_name="$(basename "$release_file")"
+    printf -- '- [%s](https://github.com/%s/releases/download/%s/%s)\n' \
+      "$release_name" \
+      "$repo" \
+      "$tag" \
+      "$release_name"
+  done
+  printf -- "- [SHA256SUMS.txt](https://github.com/%s/releases/download/%s/SHA256SUMS.txt)\n" "$repo" "$tag"
+  printf -- "- [release-metadata.json](https://github.com/%s/releases/download/%s/release-metadata.json)\n\n" "$repo" "$tag"
+} >> "$notes_file"
 
 if gh release view "$tag" --repo "$repo" >/dev/null 2>&1; then
   log "Updating existing release $repo@$tag"
