@@ -4082,8 +4082,27 @@ describe('SceneInteractionController', () => {
 
     events.pointerUp({ x: 27, y: 35 }, { button: 0, detail: 1, shiftKey: true })
     events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 1 })
+    expect(container.querySelector('textarea')).toBeNull()
     events.pointerUp({ x: 26, y: 34 }, { button: 0, detail: 1 })
     events.pointerDown({ x: 60, y: 70 }, { button: 0, detail: 1 })
+
+    expect(container.querySelector('textarea')).toBeNull()
+    controller.dispose()
+  })
+
+  it('does not open existing text Annotation editing after an intervening empty click without pointer detail', () => {
+    store.updatePersisted((draft) => {
+      draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Portable note')]
+    })
+    const deps = createInteractionDeps(container, store, camera)
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 1 })
+    events.pointerUp({ x: 26, y: 34 }, { button: 0, detail: 1 })
+    events.pointerDown({ x: 200, y: 200 }, { button: 0, detail: 1 })
+    events.pointerUp({ x: 200, y: 200 }, { button: 0, detail: 1 })
+    events.pointerDown({ x: 27, y: 35 }, { button: 0, detail: 1 })
 
     expect(container.querySelector('textarea')).toBeNull()
     controller.dispose()

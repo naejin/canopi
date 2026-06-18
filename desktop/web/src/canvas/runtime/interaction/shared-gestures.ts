@@ -284,6 +284,7 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
 
   pointerUp({ screen, rawWorld, preserveActiveDraft }: SharedGesturePointerUpContext): SharedGesturePointerUpResult {
     const preserve = this.mode === 'panning' && preserveActiveDraft
+    let recordedClickCandidate = false
 
     if (this.mode === 'dragging' && this.dragEdit) {
       const moved = Math.abs(this.lastDragDelta.x) > 0.001
@@ -293,6 +294,7 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
         this.dragEdit.abort()
         this.context.render('scene')
         this.recordClickCandidate()
+        recordedClickCandidate = true
       }
       if (moved) this.lastClick = null
       this.dragEdit = null
@@ -321,6 +323,7 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
       this.context.render('scene')
     }
 
+    if (!recordedClickCandidate) this.lastClick = null
     return { preserveActiveDraft: preserve }
   }
 
