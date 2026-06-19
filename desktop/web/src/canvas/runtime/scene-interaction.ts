@@ -493,11 +493,14 @@ export class SceneInteractionController {
     if (!source) return
     if (!isSceneLayerOpenForCreation(this._deps.getSceneStore().persisted, 'plants')) return
     const world = this._applySnapping(this._deps.camera.screenToWorld(this._screenPoint(event)))
-    this._deps.sceneEdits.run('interaction-drop', (tx) => {
+    let placedPlantId: string | null = null
+    const committed = this._deps.sceneEdits.run('interaction-drop', (tx) => {
       tx.mutate((draft) => {
-        appendPlantStampSourceToDraft(draft, source, world)
+        placedPlantId = appendPlantStampSourceToDraft(draft, source, world)
       })
+      if (placedPlantId) tx.setSelection([placedPlantId])
     })
+    if (committed) this._switchTool('select')
   }
 
   private _screenPoint(event: Pick<MouseEvent, 'clientX' | 'clientY'>, rect = this._frame.currentContainerRect()): ScenePoint {
