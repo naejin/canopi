@@ -298,4 +298,18 @@ describe('Saved Object Stamp Workbench', () => {
     expect(deleteStamp).toHaveBeenCalledWith('stamp-2')
     expect(workbench.library.value.items.map((stamp) => stamp.name)).toEqual(['Renamed'])
   })
+
+  it('arms placement through the canvas placement adapter', () => {
+    const stamp = makeStamp('stamp-1', 'Guild', 0)
+    const beginPlacement = vi.fn(() => true)
+    const workbench = createSavedObjectStampWorkbench({
+      getSavedObjectStamps: async () => [stamp],
+      createSavedObjectStamp: async () => stamp,
+      getCanvasQuerySurface: () => null,
+      beginPlacement,
+    })
+
+    expect(workbench.placeStamp(stamp)).toBe(true)
+    expect(beginPlacement).toHaveBeenCalledWith(stamp)
+  })
 })

@@ -208,6 +208,13 @@ function SavedObjectStampRow({
       />
       <span className={styles.savedStampSummary}>{savedStampSummary(stamp)}</span>
       <div className={styles.savedStampActions}>
+        <button
+          type="button"
+          className={styles.savedStampPrimaryButton}
+          onClick={() => savedObjectStampWorkbench.placeStamp(stamp)}
+        >
+          {t('savedObjectStamps.place')}
+        </button>
         {confirmingDelete ? (
           <>
             <button

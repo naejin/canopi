@@ -5,6 +5,10 @@ import {
   selectPlantStampSource,
   writePlantStampDragData,
 } from '../canvas/plant-stamp-source'
+import {
+  clearSavedObjectStampSource,
+  selectSavedObjectStampSource,
+} from '../canvas/saved-object-stamp-source'
 import { guides } from '../canvas/scene-metadata-state'
 import { selectedObjectIds } from '../canvas/session-state'
 import { snapToGridEnabled, snapToGuidesEnabled } from '../app/canvas-settings/signals'
@@ -377,6 +381,7 @@ describe('SceneInteractionController', () => {
     store = new SceneStore()
     selectedObjectIds.value = new Set()
     clearPlantStampSource()
+    clearSavedObjectStampSource()
     snapToGridEnabled.value = false
     snapToGuidesEnabled.value = false
     guides.value = []
@@ -388,6 +393,7 @@ describe('SceneInteractionController', () => {
     container.remove()
     selectedObjectIds.value = new Set()
     clearPlantStampSource()
+    clearSavedObjectStampSource()
     snapToGridEnabled.value = false
     snapToGuidesEnabled.value = false
     guides.value = []
@@ -6972,6 +6978,159 @@ describe('SceneInteractionController', () => {
     expect(selectedObjectIds.value).toEqual(new Set([cloneGroup.id]))
     expect(onSceneEditCommit).toHaveBeenCalledTimes(1)
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-object-stamp')
+    controller.dispose()
+  })
+
+  it('places Saved Object Stamps with full ghost preview and selected unlocked copies', () => {
+    selectSavedObjectStampSource({
+      version: 1,
+      anchor: { x: 12, y: 24 },
+      plants: [{
+        id: 'plant-1',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: '#C44230',
+        symbol: 'tree',
+        position: { x: 12, y: 24 },
+        rotationDeg: 15,
+        scale: 4,
+      }],
+      zones: [{
+        id: 'zone-1',
+        name: 'Kitchen bed',
+        zoneType: 'rect',
+        points: [
+          { x: 2, y: 10 },
+          { x: 22, y: 10 },
+          { x: 22, y: 30 },
+          { x: 2, y: 30 },
+        ],
+        rotationDeg: 0,
+        fillColor: '#A06B1F',
+      }],
+      annotations: [{
+        id: 'annotation-1',
+        annotationType: 'text',
+        position: { x: 30, y: 20 },
+        text: 'Guild',
+        fontSize: 16,
+        rotationDeg: 5,
+      }],
+      groups: [{
+        id: 'group-1',
+        name: 'Guild unit',
+        members: [
+          { kind: 'plant', id: 'plant-1' },
+          { kind: 'zone', id: 'zone-1' },
+          { kind: 'annotation', id: 'annotation-1' },
+        ],
+      }],
+    })
+
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('saved-object-stamp')
+
+    events.pointerMove({ x: 100, y: 120 }, { button: 0 })
+    expect(container.querySelectorAll('[data-saved-object-stamp-ghost]')).toHaveLength(3)
+
+    events.pointerDown({ x: 100, y: 120 }, { button: 0 })
+
+    expect(store.persisted.plants).toHaveLength(1)
+    expect(store.persisted.zones).toHaveLength(1)
+    expect(store.persisted.annotations).toHaveLength(1)
+    expect(store.persisted.groups).toHaveLength(1)
+
+    const plant = store.persisted.plants[0]!
+    const zone = store.persisted.zones[0]!
+    const annotation = store.persisted.annotations[0]!
+    const group = store.persisted.groups[0]!
+
+    expect(plant).toMatchObject({
+      locked: false,
+      canonicalName: 'Malus domestica',
+      commonName: 'Apple',
+      color: '#C44230',
+      symbol: 'tree',
+      position: { x: 100, y: 120 },
+      rotationDeg: 15,
+      scale: 4,
+      notes: null,
+      plantedDate: null,
+      quantity: null,
+    })
+    expect(zone).toMatchObject({
+      locked: false,
+      name: 'Kitchen bed',
+      points: [
+        { x: 90, y: 106 },
+        { x: 110, y: 106 },
+        { x: 110, y: 126 },
+        { x: 90, y: 126 },
+      ],
+      fillColor: '#A06B1F',
+      notes: null,
+    })
+    expect(annotation).toMatchObject({
+      locked: false,
+      position: { x: 118, y: 116 },
+      text: 'Guild',
+      fontSize: 16,
+      rotationDeg: 5,
+    })
+    expect(group).toMatchObject({
+      name: 'Guild unit',
+      locked: false,
+      members: [
+        { kind: 'plant', id: plant.id },
+        { kind: 'zone', id: zone.name },
+        { kind: 'annotation', id: annotation.id },
+      ],
+    })
+    expect(selectedObjectIds.value).toEqual(new Set([group.id]))
+    expect(onSceneEditCommit).toHaveBeenCalledTimes(1)
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-saved-object-stamp')
+    expect(container.querySelector('[data-saved-object-stamp-ghost]')).toBeNull()
+    controller.dispose()
+  })
+
+  it('blocks Saved Object Stamp placement when any target Layer is locked', () => {
+    store.updatePersisted((draft) => {
+      draft.layers = draft.layers.map((layer) =>
+        layer.name === 'zones' ? { ...layer, locked: true } : layer,
+      )
+    })
+    selectSavedObjectStampSource({
+      version: 1,
+      anchor: { x: 0, y: 0 },
+      plants: [],
+      zones: [{
+        id: 'zone-1',
+        name: 'Kitchen bed',
+        zoneType: 'rect',
+        points: [
+          { x: 0, y: 0 },
+          { x: 10, y: 0 },
+          { x: 10, y: 10 },
+          { x: 0, y: 10 },
+        ],
+        rotationDeg: 0,
+        fillColor: null,
+      }],
+      annotations: [],
+      groups: [],
+    })
+
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('saved-object-stamp')
+
+    events.pointerDown({ x: 100, y: 120 }, { button: 0 })
+
+    expect(store.persisted.zones).toHaveLength(0)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
     controller.dispose()
   })
 

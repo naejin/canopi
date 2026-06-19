@@ -123,7 +123,7 @@
 .savedStampsTitleGroup {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: calc(var(--space-1) / 2);
   min-width: 0;
 }
 
@@ -171,7 +171,7 @@
     "grip name actions"
     "grip summary actions";
   column-gap: var(--space-2);
-  row-gap: 2px;
+  row-gap: calc(var(--space-1) / 2);
   align-items: center;
   min-width: 0;
   padding: var(--space-2);
@@ -227,6 +227,7 @@
   gap: var(--space-1);
 }
 
+.savedStampPrimaryButton,
 .savedStampSecondaryButton,
 .savedStampDangerButton {
   min-height: 24px;
@@ -236,6 +237,11 @@
   font-size: var(--text-xs);
   font-weight: 600;
   cursor: pointer;
+}
+
+.savedStampPrimaryButton {
+  color: var(--color-primary-contrast);
+  background: var(--color-primary);
 }
 
 .savedStampSecondaryButton {

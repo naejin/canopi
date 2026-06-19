@@ -17,6 +17,10 @@ import {
   readPlantStampSource,
   selectPlantStampSource,
 } from '../plant-stamp-source'
+import {
+  clearSavedObjectStampSource,
+  selectSavedObjectStampSource,
+} from '../saved-object-stamp-source'
 import { activeTool, selectedObjectIds } from '../session-state'
 import {
   hoveredCanvasTargets,
@@ -335,6 +339,7 @@ describe('scene canvas runtime', () => {
     selectedObjectIds.value = new Set()
     plantColorMenuOpen.value = false
     clearPlantStampSource()
+    clearSavedObjectStampSource()
     snapToGridEnabled.value = false
     guides.value = []
     hoveredCanvasTargets.value = []
@@ -1149,6 +1154,63 @@ describe('scene canvas runtime', () => {
     runtime.commandSurface.history.undo()
     expect(runtime.querySurface.getSceneSnapshot().groups).toHaveLength(1)
     expect(runtime.querySurface.getSceneSnapshot().plants).toHaveLength(2)
+    events.dispose()
+    runtime.destroy()
+  })
+
+  it('records Saved Object Stamp placement as one undoable scene edit', async () => {
+    const runtime = new SceneCanvasRuntime()
+    const { container } = await initRuntimeWithStubbedRenderer(runtime)
+    const events = createSceneInteractionEventHarness(container)
+    const file = makeFile()
+    file.plants = []
+    file.zones = []
+    file.annotations = []
+    file.groups = []
+    runtime.documentSurface.loadDocument(file)
+    setInteractionViewport(runtime)
+    selectSavedObjectStampSource({
+      version: 1,
+      anchor: { x: 10, y: 10 },
+      plants: [{
+        id: 'plant-1',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: null,
+        symbol: null,
+        position: { x: 10, y: 10 },
+        rotationDeg: null,
+        scale: 2,
+      }],
+      zones: [{
+        id: 'zone-1',
+        name: 'Bed',
+        zoneType: 'rect',
+        points: [
+          { x: 0, y: 0 },
+          { x: 20, y: 0 },
+          { x: 20, y: 20 },
+          { x: 0, y: 20 },
+        ],
+        rotationDeg: 0,
+        fillColor: null,
+      }],
+      annotations: [],
+      groups: [],
+    })
+    runtime.commandSurface.tools.setTool('saved-object-stamp')
+
+    events.pointerDown({ x: 40, y: 40 })
+
+    expect(runtime.querySurface.getSceneSnapshot().plants).toHaveLength(1)
+    expect(runtime.querySurface.getSceneSnapshot().zones).toHaveLength(1)
+    expect(runtime.commandSurface.history.canUndo.value).toBe(true)
+
+    runtime.commandSurface.history.undo()
+
+    expect(runtime.querySurface.getSceneSnapshot().plants).toHaveLength(0)
+    expect(runtime.querySurface.getSceneSnapshot().zones).toHaveLength(0)
+    expect(runtime.commandSurface.history.canRedo.value).toBe(true)
     events.dispose()
     runtime.destroy()
   })

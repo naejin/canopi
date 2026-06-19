@@ -857,6 +857,7 @@
     "title": "Carimbos salvos",
     "description": "Para reutilizar grupos de plantas, zonas e anotações.",
     "saveSelection": "Salvar seleção",
+    "place": "Colocar",
     "selectHint": "Selecione plantas, zonas, anotações ou grupos para salvá-los juntos.",
     "loading": "Carregando carimbos salvos...",
     "empty": "Salve uma seleção para reutilizá-la aqui.",

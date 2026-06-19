@@ -20,6 +20,10 @@ import {
   createPlantStampTool,
   createPlantStampToolAdapter,
 } from './plant-stamp-tool'
+import {
+  createSavedObjectStampTool,
+  createSavedObjectStampToolAdapter,
+} from './saved-object-stamp-tool'
 import type {
   SceneToolAdapter,
   SceneToolCapturedPointerContext,
@@ -111,6 +115,15 @@ export function createSceneToolModules(context: SceneToolModulesContext): SceneT
     sceneEdits: context.sceneEdits,
     applySnapping: context.applySnapping,
   })
+  const savedObjectStampTool = createSavedObjectStampTool({
+    preview: context.preview,
+    camera: context.camera,
+    getSceneStore: context.getSceneStore,
+    getPlantPresentationContext: context.getPlantPresentationContext,
+    sceneEdits: context.sceneEdits,
+    applySnapping: context.applySnapping,
+    switchTool: context.switchTool,
+  })
   const plantSpacingTool = createPlantSpacingTool({
     container: context.container,
     camera: context.camera,
@@ -134,6 +147,9 @@ export function createSceneToolModules(context: SceneToolModulesContext): SceneT
     ['ellipse', zoneDrawingAdapters.ellipse],
     ['polygon', zoneDrawingAdapters.polygon],
     ['object-stamp', createObjectStampToolAdapter(objectStampTool, {
+      switchTool: context.switchTool,
+    })],
+    ['saved-object-stamp', createSavedObjectStampToolAdapter(savedObjectStampTool, {
       switchTool: context.switchTool,
     })],
     ['plant-spacing', createPlantSpacingToolAdapter(plantSpacingTool)],

@@ -857,6 +857,7 @@
     "title": "Sellos guardados",
     "description": "Para reutilizar grupos de plantas, zonas y anotaciones.",
     "saveSelection": "Guardar selección",
+    "place": "Colocar",
     "selectHint": "Selecciona plantas, zonas, anotaciones o grupos para guardarlos juntos.",
     "loading": "Cargando sellos guardados...",
     "empty": "Guarda una selección para reutilizarla aquí.",

@@ -857,6 +857,7 @@
     "title": "Gespeicherte Stempel",
     "description": "Zum Wiederverwenden von Gruppen aus Pflanzen, Zonen und Anmerkungen.",
     "saveSelection": "Auswahl speichern",
+    "place": "Platzieren",
     "selectHint": "Wählen Sie Pflanzen, Zonen, Anmerkungen oder Gruppen aus, um sie zusammen zu speichern.",
     "loading": "Gespeicherte Stempel werden geladen...",
     "empty": "Speichern Sie eine Auswahl, um sie hier wiederzuverwenden.",

@@ -857,6 +857,7 @@
     "title": "Tampons enregistrés",
     "description": "Pour réutiliser des groupes de plantes, zones et annotations.",
     "saveSelection": "Enregistrer la sélection",
+    "place": "Placer",
     "selectHint": "Sélectionnez des plantes, zones, annotations ou groupes à enregistrer ensemble.",
     "loading": "Chargement des tampons enregistrés...",
     "empty": "Enregistrez une sélection pour la réutiliser ici.",

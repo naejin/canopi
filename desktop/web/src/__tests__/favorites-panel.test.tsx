@@ -39,6 +39,7 @@ describe('FavoritesPanel', () => {
   let renameStampMock: ReturnType<typeof vi.fn>
   let deleteStampMock: ReturnType<typeof vi.fn>
   let reorderStampMock: ReturnType<typeof vi.fn>
+  let placeStampMock: ReturnType<typeof vi.fn>
   let stampLibrary: Signal<{
     items: SavedStampFixture[]
     loading: boolean
@@ -71,6 +72,7 @@ describe('FavoritesPanel', () => {
     renameStampMock = vi.fn(async () => null)
     deleteStampMock = vi.fn(async () => true)
     reorderStampMock = vi.fn(async () => {})
+    placeStampMock = vi.fn(() => true)
     stampLibrary = signal({
       items: [{
         id: 'stamp-1',
@@ -108,6 +110,7 @@ describe('FavoritesPanel', () => {
         renameStamp: renameStampMock,
         deleteStamp: deleteStampMock,
         reorderStamps: reorderStampMock,
+        placeStamp: placeStampMock,
       },
     }))
     ;({ FavoritesPanel } = await import('../components/panels/FavoritesPanel'))
@@ -164,6 +167,17 @@ describe('FavoritesPanel', () => {
     })
 
     expect(saveSelectionMock).toHaveBeenCalledTimes(1)
+
+    const placeButton = [...container.querySelectorAll('button')]
+      .find((button) => button.textContent === 'Place')
+    expect(placeButton).toBeTruthy()
+
+    await act(async () => {
+      placeButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flushEffects()
+    })
+
+    expect(placeStampMock).toHaveBeenCalledWith(stampLibrary.value.items[0])
   })
 
   it('manages Saved Stamps with inline rename two-step delete and a reorder grip', async () => {

@@ -857,6 +857,7 @@
     "title": "Opgeslagen stempels",
     "description": "Voor herbruikbare groepen planten, zones en annotaties.",
     "saveSelection": "Selectie opslaan",
+    "place": "Plaatsen",
     "selectHint": "Selecteer planten, zones, annotaties of groepen om ze samen op te slaan.",
     "loading": "Opgeslagen stempels laden...",
     "empty": "Sla een selectie op om deze hier opnieuw te gebruiken.",

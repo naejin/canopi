@@ -6,10 +6,10 @@ import type {
   SceneObjectGroupMember,
   ScenePersistedState,
   ScenePlantEntity,
-  ScenePoint,
   SceneZoneEntity,
 } from '../../canvas/runtime/scene'
 import { currentCanvasQuerySurface } from '../../canvas/session'
+import { beginSavedObjectStampPlacement } from '../../canvas/saved-object-stamp-source'
 import {
   createSavedObjectStamp as createSavedObjectStampIpc,
   deleteSavedObjectStamp as deleteSavedObjectStampIpc,
@@ -18,6 +18,12 @@ import {
   reorderSavedObjectStamps as reorderSavedObjectStampsIpc,
 } from '../../ipc/saved-object-stamps'
 import type { SavedObjectStamp } from '../../types/saved-object-stamps'
+import type {
+  SavedObjectStampAnnotation,
+  SavedObjectStampPayload,
+  SavedObjectStampPlant,
+  SavedObjectStampZone,
+} from '../../canvas/saved-object-stamp-payload'
 
 export interface SavedObjectStampLibraryView {
   readonly items: readonly SavedObjectStamp[]
@@ -39,6 +45,7 @@ export interface SavedObjectStampWorkbench {
   renameStamp(id: string, name: string): Promise<SavedObjectStamp | null>
   deleteStamp(id: string): Promise<boolean>
   reorderStamps(ids: string[]): Promise<void>
+  placeStamp(stamp: SavedObjectStamp): boolean
 }
 
 interface SavedObjectStampWorkbenchOptions {
@@ -48,50 +55,7 @@ interface SavedObjectStampWorkbenchOptions {
   readonly deleteSavedObjectStamp?: (id: string) => Promise<boolean>
   readonly reorderSavedObjectStamps?: (ids: string[]) => Promise<SavedObjectStamp[]>
   readonly getCanvasQuerySurface?: () => CanvasQuerySurface | null
-}
-
-interface SavedObjectStampPayload {
-  readonly version: 1
-  readonly anchor: ScenePoint
-  readonly plants: SavedObjectStampPlant[]
-  readonly zones: SavedObjectStampZone[]
-  readonly annotations: SavedObjectStampAnnotation[]
-  readonly groups: SavedObjectStampGroup[]
-}
-
-interface SavedObjectStampPlant {
-  readonly id: string
-  readonly canonicalName: string
-  readonly commonName: string | null
-  readonly color: string | null
-  readonly symbol?: string | null
-  readonly position: ScenePoint
-  readonly rotationDeg: number | null
-  readonly scale: number | null
-}
-
-interface SavedObjectStampZone {
-  readonly id: string
-  readonly name: string
-  readonly zoneType: string
-  readonly points: ScenePoint[]
-  readonly rotationDeg: number
-  readonly fillColor: string | null
-}
-
-interface SavedObjectStampAnnotation {
-  readonly id: string
-  readonly annotationType: string
-  readonly position: ScenePoint
-  readonly text: string
-  readonly fontSize: number
-  readonly rotationDeg: number | null
-}
-
-interface SavedObjectStampGroup {
-  readonly id: string
-  readonly name: string | null
-  readonly members: SceneObjectGroupMember[]
+  readonly beginPlacement?: (stamp: SavedObjectStamp) => boolean
 }
 
 interface NormalizedSelection {
@@ -106,6 +70,7 @@ export function createSavedObjectStampWorkbench({
   deleteSavedObjectStamp = deleteSavedObjectStampIpc,
   reorderSavedObjectStamps = reorderSavedObjectStampsIpc,
   getCanvasQuerySurface = () => currentCanvasQuerySurface.value,
+  beginPlacement = beginSavedObjectStampPlacement,
 }: SavedObjectStampWorkbenchOptions = {}): SavedObjectStampWorkbench {
   const items = signal<SavedObjectStamp[]>([])
   const loading = signal(false)
@@ -190,6 +155,10 @@ export function createSavedObjectStampWorkbench({
     })
   }
 
+  function placeStamp(stamp: SavedObjectStamp): boolean {
+    return beginPlacement(stamp)
+  }
+
   return {
     library,
     selection,
@@ -198,6 +167,7 @@ export function createSavedObjectStampWorkbench({
     renameStamp,
     deleteStamp,
     reorderStamps,
+    placeStamp,
   }
 }
 
