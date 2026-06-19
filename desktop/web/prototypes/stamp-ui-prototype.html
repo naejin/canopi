@@ -1,0 +1,854 @@
+<!doctype html>
+<!--
+  PROTOTYPE - throwaway static mockup.
+  Open this file directly in a browser to compare Saved Object Stamp row UI ideas.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Canopi Saved Stamp UI Prototype</title>
+    <style>
+      :root {
+        --color-primary: #a06b1f;
+        --color-primary-hover: #875813;
+        --color-primary-contrast: #fff7e8;
+        --color-bg: #e6e0d4;
+        --color-surface: #ede8dd;
+        --color-surface-alt: #f6f2ea;
+        --color-text: #2c2418;
+        --color-text-muted: #6b5f4e;
+        --color-border: #3c2d1e29;
+        --color-border-strong: #3c2d1e45;
+        --color-control-hover: #a06b1f18;
+        --color-danger: #9d3d2f;
+        --color-danger-bg: #9d3d2f14;
+        --canvas-bg: #f6f2ea;
+        --plant-leaf: #5f7f45;
+        --plant-fruit: #c45a2c;
+        --plant-flower: #c99a2e;
+        --space-1: 4px;
+        --space-2: 8px;
+        --space-3: 12px;
+        --space-4: 16px;
+        --space-6: 24px;
+        --space-8: 32px;
+        --text-xs: 11px;
+        --text-sm: 12px;
+        --text-base: 13px;
+        --text-md: 14px;
+        --text-lg: 16px;
+        --line-height: 1.45;
+        --line-height-tight: 1.2;
+        --radius-sm: 3px;
+        --radius-md: 5px;
+        --radius-lg: 7px;
+        --radius-full: 9999px;
+        --control-size-xs: 20px;
+        --control-size-sm: 24px;
+        --control-size-md: 28px;
+        --control-size-lg: 32px;
+        --icon-size-md: 16px;
+        --transition-fast: 80ms ease;
+        --shadow-md: 0 8px 24px #2c241830;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          linear-gradient(90deg, #3c2d1e12 1px, transparent 1px) 0 0 / 24px 24px,
+          linear-gradient(#3c2d1e10 1px, transparent 1px) 0 0 / 24px 24px,
+          var(--color-bg);
+        color: var(--color-text);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: var(--text-sm);
+        line-height: var(--line-height);
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      .page {
+        width: min(1180px, calc(100vw - var(--space-8)));
+        margin: 0 auto;
+        padding: var(--space-8) 0;
+      }
+
+      .masthead {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: var(--space-4);
+        margin-bottom: var(--space-4);
+      }
+
+      .eyebrow,
+      .section-label,
+      .count {
+        font-size: var(--text-xs);
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+      }
+
+      h1,
+      h2,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        margin-top: var(--space-1);
+        color: var(--color-text);
+        font-size: var(--text-lg);
+        font-weight: 600;
+        line-height: var(--line-height-tight);
+      }
+
+      .masthead p {
+        max-width: 520px;
+        color: var(--color-text-muted);
+        font-size: var(--text-sm);
+        font-weight: 400;
+      }
+
+      .frame {
+        border: 1px solid var(--color-border-strong);
+        border-radius: var(--radius-lg);
+        background: var(--color-surface);
+        box-shadow: var(--shadow-md);
+      }
+
+      .panel-head {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: var(--space-3);
+        padding: var(--space-3);
+        border-bottom: 1px solid var(--color-border);
+      }
+
+      .panel-title {
+        display: flex;
+        align-items: baseline;
+        gap: var(--space-2);
+        min-width: 0;
+      }
+
+      .panel-title h2 {
+        color: var(--color-text);
+        font-size: var(--text-md);
+        font-weight: 600;
+      }
+
+      .count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: var(--control-size-xs);
+        height: var(--control-size-xs);
+        border-radius: var(--radius-full);
+        background: var(--color-primary);
+        color: var(--color-primary-contrast);
+      }
+
+      .top-actions {
+        display: flex;
+        gap: var(--space-1);
+      }
+
+      .text-button {
+        min-height: var(--control-size-md);
+        border: 1px solid var(--color-border-strong);
+        border-radius: var(--radius-md);
+        padding: 0 var(--space-3);
+        background: var(--color-surface-alt);
+        color: var(--color-text);
+        font-size: var(--text-xs);
+        font-weight: 600;
+        cursor: pointer;
+        transition:
+          background-color var(--transition-fast),
+          border-color var(--transition-fast),
+          color var(--transition-fast);
+      }
+
+      .text-button.primary {
+        border-color: var(--color-primary);
+        background: var(--color-primary);
+        color: var(--color-primary-contrast);
+      }
+
+      .text-button:hover {
+        border-color: var(--color-primary);
+        background: var(--color-control-hover);
+      }
+
+      .text-button.primary:hover {
+        border-color: var(--color-primary-hover);
+        background: var(--color-primary-hover);
+      }
+
+      .variants {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: var(--space-3);
+        padding: var(--space-3);
+      }
+
+      .variant {
+        min-width: 0;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        background: var(--color-bg);
+      }
+
+      .variant-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-2);
+        padding: var(--space-2);
+        border-bottom: 1px solid var(--color-border);
+      }
+
+      .variant-name {
+        color: var(--color-text);
+        font-size: var(--text-xs);
+        font-weight: 600;
+      }
+
+      .variant-note {
+        color: var(--color-text-muted);
+        font-size: var(--text-xs);
+        font-weight: 400;
+        font-style: italic;
+      }
+
+      .stamp-list {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-1);
+        padding: var(--space-2);
+      }
+
+      .stamp {
+        min-width: 0;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        background: var(--color-surface);
+        transition:
+          background-color var(--transition-fast),
+          border-color var(--transition-fast);
+      }
+
+      .stamp:hover,
+      .stamp.selected {
+        border-color: var(--color-border-strong);
+        background: var(--color-surface-alt);
+      }
+
+      .stamp-a {
+        display: grid;
+        grid-template-columns: var(--control-size-sm) 54px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: var(--space-2);
+        padding: var(--space-1) var(--space-1) var(--space-1) 0;
+      }
+
+      .stamp-b {
+        display: grid;
+        grid-template-columns: 44px minmax(0, 1fr) 34px 34px 34px auto;
+        align-items: center;
+        gap: var(--space-1);
+        min-height: 46px;
+        padding: var(--space-1) var(--space-1) var(--space-1) var(--space-2);
+      }
+
+      .stamp-c {
+        display: grid;
+        grid-template-columns: 72px minmax(0, 1fr) auto;
+        grid-template-areas: "preview body actions";
+        align-items: stretch;
+        gap: var(--space-2);
+        min-height: 72px;
+        padding: var(--space-2) var(--space-1) var(--space-2) var(--space-2);
+      }
+
+      .grip {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        align-self: stretch;
+        width: var(--control-size-sm);
+        min-height: var(--control-size-lg);
+        border: 0;
+        border-radius: var(--radius-sm);
+        background: transparent;
+        color: var(--color-text-muted);
+        cursor: grab;
+      }
+
+      .grip svg {
+        width: var(--icon-size-md);
+        height: var(--icon-size-md);
+        fill: currentColor;
+      }
+
+      .preview {
+        width: 54px;
+        height: 38px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-sm);
+        background: var(--canvas-bg);
+      }
+
+      .stamp-c .preview {
+        grid-area: preview;
+        width: 72px;
+        height: 56px;
+        align-self: center;
+      }
+
+      .zone {
+        fill: #a06b1f24;
+        stroke: var(--color-primary);
+        stroke-width: 1.2;
+      }
+
+      .plant-leaf {
+        fill: var(--plant-leaf);
+      }
+
+      .plant-fruit {
+        fill: var(--plant-fruit);
+      }
+
+      .plant-flower {
+        fill: var(--plant-flower);
+      }
+
+      .note-line {
+        fill: none;
+        stroke: var(--color-text-muted);
+        stroke-linecap: round;
+        stroke-width: 1.4;
+      }
+
+      .identity,
+      .body {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-1);
+        min-width: 0;
+      }
+
+      .stamp-c .body {
+        grid-area: body;
+        justify-content: center;
+      }
+
+      .name-row {
+        display: flex;
+        align-items: center;
+        gap: var(--space-1);
+        min-width: 0;
+      }
+
+      .name {
+        overflow: hidden;
+        color: var(--color-text);
+        font-size: var(--text-sm);
+        font-weight: 600;
+        line-height: var(--line-height-tight);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .code {
+        flex: 0 0 auto;
+        color: var(--color-text-muted);
+        font-size: var(--text-xs);
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0.06em;
+      }
+
+      .summary,
+      .caption {
+        overflow: hidden;
+        color: var(--color-text-muted);
+        font-size: var(--text-xs);
+        font-weight: 400;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-1);
+      }
+
+      .chip,
+      .metric {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-sm);
+        background: #f6f2ea99;
+        color: var(--color-text-muted);
+        font-size: var(--text-xs);
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .chip {
+        min-height: var(--control-size-xs);
+        padding: 0 var(--space-1);
+      }
+
+      .metric {
+        flex-direction: column;
+        width: 34px;
+        min-height: var(--control-size-md);
+        line-height: 1;
+      }
+
+      .metric strong {
+        color: var(--color-text);
+        font-size: var(--text-xs);
+        font-weight: 600;
+      }
+
+      .metric span {
+        color: var(--color-text-muted);
+        font-size: var(--text-xs);
+        font-weight: 600;
+      }
+
+      .actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: var(--space-1);
+        padding-left: var(--space-2);
+        border-left: 1px solid var(--color-border);
+      }
+
+      .stamp-b .actions {
+        padding-left: var(--space-1);
+        border-left: 0;
+      }
+
+      .stamp-c .actions {
+        grid-area: actions;
+        flex-direction: column;
+        align-self: stretch;
+      }
+
+      .icon-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: var(--control-size-sm);
+        min-width: var(--control-size-sm);
+        height: var(--control-size-sm);
+        border: 1px solid transparent;
+        border-radius: var(--radius-sm);
+        background: transparent;
+        color: var(--color-text-muted);
+        cursor: pointer;
+        transition:
+          background-color var(--transition-fast),
+          border-color var(--transition-fast),
+          color var(--transition-fast);
+      }
+
+      .icon-button svg {
+        width: var(--icon-size-md);
+        height: var(--icon-size-md);
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 1.7;
+      }
+
+      .icon-button:hover {
+        border-color: var(--color-border);
+        background: var(--color-control-hover);
+        color: var(--color-text);
+      }
+
+      .icon-button.primary {
+        border-color: var(--color-primary);
+        background: var(--color-primary);
+        color: var(--color-primary-contrast);
+      }
+
+      .icon-button.primary:hover {
+        border-color: var(--color-primary-hover);
+        background: var(--color-primary-hover);
+      }
+
+      .icon-button.danger {
+        color: var(--color-danger);
+      }
+
+      .icon-button.danger:hover {
+        border-color: var(--color-danger);
+        background: var(--color-danger-bg);
+      }
+
+      .rename-input {
+        min-width: 0;
+        width: 100%;
+        height: var(--control-size-sm);
+        border: 1px solid var(--color-border-strong);
+        border-radius: var(--radius-sm);
+        background: var(--color-surface-alt);
+        color: var(--color-text);
+        padding: 0 var(--space-1);
+        font-size: var(--text-sm);
+        font-weight: 600;
+      }
+
+      .delete-strip {
+        display: flex;
+        align-items: center;
+        gap: var(--space-1);
+        color: var(--color-danger);
+        font-size: var(--text-xs);
+        font-weight: 600;
+      }
+
+      @media (max-width: 980px) {
+        .variants {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 520px) {
+        .page {
+          width: calc(100vw - var(--space-4));
+          padding: var(--space-4) 0;
+        }
+
+        .masthead,
+        .panel-head {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .stamp-a,
+        .stamp-b,
+        .stamp-c {
+          grid-template-columns: minmax(0, 1fr) auto;
+          grid-template-areas: "body actions";
+        }
+
+        .grip,
+        .preview,
+        .stamp-b .code,
+        .stamp-b .metric,
+        .stamp-c .preview {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header class="masthead">
+        <div>
+          <span class="eyebrow">Throwaway static prototype</span>
+          <h1>Saved Object Stamp rows</h1>
+        </div>
+        <p>
+          Isolated mockup only. The rows below test right-side actions, compact identity,
+          inline rename, and trash-based delete without loading the app shell.
+        </p>
+      </header>
+
+      <section class="frame" aria-label="Saved Object Stamp UI prototype">
+        <div class="panel-head">
+          <div class="panel-title">
+            <h2>Saved stamps</h2>
+            <span class="count">3</span>
+          </div>
+          <div class="top-actions" aria-label="Library actions">
+            <button class="text-button primary" type="button">Save selection</button>
+            <button class="text-button" type="button">Import</button>
+          </div>
+        </div>
+
+        <div class="variants">
+          <section class="variant" aria-labelledby="variant-a">
+            <div class="variant-head">
+              <div>
+                <span class="section-label">A</span>
+                <h2 id="variant-a" class="variant-name">Rail row</h2>
+              </div>
+              <span class="variant-note">stamp body drags to canvas</span>
+            </div>
+            <div class="stamp-list">
+              <article class="stamp stamp-a selected">
+                <button class="grip" type="button" aria-label="Reorder stamp">
+                  <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <circle cx="5" cy="4" r="1"></circle>
+                    <circle cx="11" cy="4" r="1"></circle>
+                    <circle cx="5" cy="8" r="1"></circle>
+                    <circle cx="11" cy="8" r="1"></circle>
+                    <circle cx="5" cy="12" r="1"></circle>
+                    <circle cx="11" cy="12" r="1"></circle>
+                  </svg>
+                </button>
+                <svg class="preview" viewBox="0 0 54 38" aria-hidden="true">
+                  <rect class="zone" x="8" y="8" width="36" height="18" transform="rotate(-8 26 17)"></rect>
+                  <circle class="plant-leaf" cx="16" cy="16" r="3.2"></circle>
+                  <circle class="plant-fruit" cx="27" cy="15" r="2.6"></circle>
+                  <circle class="plant-flower" cx="36" cy="21" r="2.4"></circle>
+                  <path class="note-line" d="M14 31h22M14 34h14"></path>
+                </svg>
+                <div class="identity">
+                  <div class="name-row">
+                    <span class="name">Comfrey, Lemon balm, Fava</span>
+                    <span class="code">ST-01</span>
+                  </div>
+                  <span class="summary">86 objects</span>
+                  <div class="chips">
+                    <span class="chip">74 plants</span>
+                    <span class="chip">8 zones</span>
+                    <span class="chip">4 notes</span>
+                  </div>
+                </div>
+                <div class="actions" aria-label="Stamp actions">
+                  <button class="icon-button primary" type="button" aria-label="Place stamp">
+                    <svg viewBox="0 0 16 16" aria-hidden="true">
+                      <path d="M8 2v12"></path>
+                      <path d="M3 7.5h10"></path>
+                      <path d="M10 4.5 13 7.5 10 10.5"></path>
+                    </svg>
+                  </button>
+                  <button class="icon-button" type="button" aria-label="Rename stamp">
+                    <svg viewBox="0 0 16 16" aria-hidden="true">
+                      <path d="M3 11.5 2.5 14 5 13.5 12.5 6 10.5 4z"></path>
+                      <path d="M9.5 5 11 3.5 12.5 5 11 6.5"></path>
+                    </svg>
+                  </button>
+                  <button class="icon-button" type="button" aria-label="Export stamp">
+                    <svg viewBox="0 0 16 16" aria-hidden="true">
+                      <path d="M8 2v7"></path>
+                      <path d="M5.5 4.5 8 2 10.5 4.5"></path>
+                      <path d="M3 8v5h10V8"></path>
+                    </svg>
+                  </button>
+                  <button class="icon-button danger" type="button" aria-label="Delete stamp">
+                    <svg viewBox="0 0 16 16" aria-hidden="true">
+                      <path d="M3 5h10"></path>
+                      <path d="M6 5V3h4v2"></path>
+                      <path d="M5 5 5.5 13h5L11 5"></path>
+                      <path d="M7 7v4"></path>
+                      <path d="M9 7v4"></path>
+                    </svg>
+                  </button>
+                </div>
+              </article>
+
+              <article class="stamp stamp-a">
+                <button class="grip" type="button" aria-label="Reorder stamp">
+                  <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <circle cx="5" cy="4" r="1"></circle>
+                    <circle cx="11" cy="4" r="1"></circle>
+                    <circle cx="5" cy="8" r="1"></circle>
+                    <circle cx="11" cy="8" r="1"></circle>
+                    <circle cx="5" cy="12" r="1"></circle>
+                    <circle cx="11" cy="12" r="1"></circle>
+                  </svg>
+                </button>
+                <svg class="preview" viewBox="0 0 54 38" aria-hidden="true">
+                  <rect class="zone" x="9" y="10" width="30" height="14"></rect>
+                  <circle class="plant-leaf" cx="17" cy="17" r="2.8"></circle>
+                  <circle class="plant-leaf" cx="25" cy="17" r="2.8"></circle>
+                  <circle class="plant-fruit" cx="33" cy="17" r="2.8"></circle>
+                </svg>
+                <div class="identity">
+                  <div class="name-row">
+                    <input class="rename-input" value="Kitchen guild" aria-label="Rename Kitchen guild" />
+                  </div>
+                  <span class="summary">Inline rename state</span>
+                </div>
+                <div class="actions" aria-label="Stamp actions">
+                  <button class="icon-button primary" type="button" aria-label="Place stamp">
+                    <svg viewBox="0 0 16 16" aria-hidden="true">
+                      <path d="M8 2v12"></path>
+                      <path d="M3 7.5h10"></path>
+                      <path d="M10 4.5 13 7.5 10 10.5"></path>
+                    </svg>
+                  </button>
+                  <button class="icon-button" type="button" aria-label="Confirm rename">
+                    <svg viewBox="0 0 16 16" aria-hidden="true">
+                      <path d="M3 8.5 6.5 12 13 4"></path>
+                    </svg>
+                  </button>
+                  <button class="icon-button" type="button" aria-label="Cancel rename">
+                    <svg viewBox="0 0 16 16" aria-hidden="true">
+                      <path d="M4 4 12 12"></path>
+                      <path d="M12 4 4 12"></path>
+                    </svg>
+                  </button>
+                </div>
+              </article>
+            </div>
+          </section>
+
+          <section class="variant" aria-labelledby="variant-b">
+            <div class="variant-head">
+              <div>
+                <span class="section-label">B</span>
+                <h2 id="variant-b" class="variant-name">Ledger strip</h2>
+              </div>
+              <span class="variant-note">fast scanning</span>
+            </div>
+            <div class="stamp-list">
+              <article class="stamp stamp-b selected">
+                <span class="code">ST-01</span>
+                <div class="body">
+                  <span class="name">Comfrey, Lemon balm, Fava</span>
+                  <span class="caption">86 objects ready to place</span>
+                </div>
+                <span class="metric"><strong>74</strong><span>P</span></span>
+                <span class="metric"><strong>8</strong><span>Z</span></span>
+                <span class="metric"><strong>4</strong><span>A</span></span>
+                <div class="actions" aria-label="Stamp actions">
+                  <button class="icon-button primary" type="button" aria-label="Place stamp">
+                    <svg viewBox="0 0 16 16" aria-hidden="true">
+                      <path d="M8 2v12"></path>
+                      <path d="M3 7.5h10"></path>
+                      <path d="M10 4.5 13 7.5 10 10.5"></path>
+                    </svg>
+                  </button>
+                  <button class="icon-button" type="button" aria-label="Rename stamp">
+                    <svg viewBox="0 0 16 16" aria-hidden="true">
+                      <path d="M3 11.5 2.5 14 5 13.5 12.5 6 10.5 4z"></path>
+                      <path d="M9.5 5 11 3.5 12.5 5 11 6.5"></path>
+                    </svg>
+                  </button>
+                  <button class="icon-button danger" type="button" aria-label="Delete stamp">
+                    <svg viewBox="0 0 16 16" aria-hidden="true">
+                      <path d="M3 5h10"></path>
+                      <path d="M6 5V3h4v2"></path>
+                      <path d="M5 5 5.5 13h5L11 5"></path>
+                      <path d="M7 7v4"></path>
+                      <path d="M9 7v4"></path>
+                    </svg>
+                  </button>
+                </div>
+              </article>
+
+              <article class="stamp stamp-b">
+                <span class="code">ST-02</span>
+                <div class="body">
+                  <span class="name">Berry edge</span>
+                  <span class="caption">confirm delete state</span>
+                </div>
+                <span class="metric"><strong>12</strong><span>P</span></span>
+                <span class="metric"><strong>3</strong><span>Z</span></span>
+                <span class="metric"><strong>2</strong><span>A</span></span>
+                <div class="actions" aria-label="Delete confirmation actions">
+                  <span class="delete-strip">Delete?</span>
+                  <button class="icon-button danger" type="button" aria-label="Confirm delete">
+                    <svg viewBox="0 0 16 16" aria-hidden="true">
+                      <path d="M3 8.5 6.5 12 13 4"></path>
+                    </svg>
+                  </button>
+                  <button class="icon-button" type="button" aria-label="Cancel delete">
+                    <svg viewBox="0 0 16 16" aria-hidden="true">
+                      <path d="M4 4 12 12"></path>
+                      <path d="M12 4 4 12"></path>
+                    </svg>
+                  </button>
+                </div>
+              </article>
+            </div>
+          </section>
+
+          <section class="variant" aria-labelledby="variant-c">
+            <div class="variant-head">
+              <div>
+                <span class="section-label">C</span>
+                <h2 id="variant-c" class="variant-name">Shelf label</h2>
+              </div>
+              <span class="variant-note">stronger object preview</span>
+            </div>
+            <div class="stamp-list">
+              <article class="stamp stamp-c selected">
+                <svg class="preview" viewBox="0 0 72 56" aria-hidden="true">
+                  <rect class="zone" x="10" y="12" width="48" height="24" transform="rotate(-10 34 24)"></rect>
+                  <circle class="plant-leaf" cx="20" cy="23" r="3.4"></circle>
+                  <circle class="plant-fruit" cx="32" cy="22" r="3"></circle>
+                  <circle class="plant-flower" cx="45" cy="28" r="2.8"></circle>
+                  <circle class="plant-leaf" cx="53" cy="24" r="2.4"></circle>
+                  <path class="note-line" d="M18 44h34M18 48h20"></path>
+                </svg>
+                <div class="body">
+                  <div class="name-row">
+                    <span class="name">Comfrey, Lemon balm, Fava</span>
+                    <span class="code">ST-01</span>
+                  </div>
+                  <div class="chips">
+                    <span class="chip">74 plants</span>
+                    <span class="chip">8 zones</span>
+                    <span class="chip">4 notes</span>
+                  </div>
+                </div>
+                <div class="actions" aria-label="Stamp actions">
+                  <button class="icon-button primary" type="button" aria-label="Place stamp">
+                    <svg viewBox="0 0 16 16" aria-hidden="true">
+                      <path d="M8 2v12"></path>
+                      <path d="M3 7.5h10"></path>
+                      <path d="M10 4.5 13 7.5 10 10.5"></path>
+                    </svg>
+                  </button>
+                  <button class="icon-button" type="button" aria-label="Rename stamp">
+                    <svg viewBox="0 0 16 16" aria-hidden="true">
+                      <path d="M3 11.5 2.5 14 5 13.5 12.5 6 10.5 4z"></path>
+                      <path d="M9.5 5 11 3.5 12.5 5 11 6.5"></path>
+                    </svg>
+                  </button>
+                  <button class="icon-button" type="button" aria-label="Export stamp">
+                    <svg viewBox="0 0 16 16" aria-hidden="true">
+                      <path d="M8 2v7"></path>
+                      <path d="M5.5 4.5 8 2 10.5 4.5"></path>
+                      <path d="M3 8v5h10V8"></path>
+                    </svg>
+                  </button>
+                  <button class="icon-button danger" type="button" aria-label="Delete stamp">
+                    <svg viewBox="0 0 16 16" aria-hidden="true">
+                      <path d="M3 5h10"></path>
+                      <path d="M6 5V3h4v2"></path>
+                      <path d="M5 5 5.5 13h5L11 5"></path>
+                      <path d="M7 7v4"></path>
+                      <path d="M9 7v4"></path>
+                    </svg>
+                  </button>
+                </div>
+              </article>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
