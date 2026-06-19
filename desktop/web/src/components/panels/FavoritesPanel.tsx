@@ -1,4 +1,4 @@
-import { useEffect } from 'preact/hooks'
+import { useEffect, useState } from 'preact/hooks'
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
 import { speciesCatalogWorkbench } from '../../app/plant-browser'
@@ -28,6 +28,7 @@ export function FavoritesPanel() {
   const items = favoritesView.items
   const count = items.length
   const isLoading = favoritesView.loading
+  const savedStampItems = savedStampsView.items
 
   return (
     <div className={styles.panel}>
@@ -102,8 +103,12 @@ export function FavoritesPanel() {
             </div>
           ) : (
             <div className={styles.savedStampsList} role="list" aria-label={t('savedObjectStamps.title')}>
-              {savedStampsView.items.map((stamp) => (
-                <SavedObjectStampRow key={stamp.id} stamp={stamp} />
+              {savedStampItems.map((stamp) => (
+                <SavedObjectStampRow
+                  key={stamp.id}
+                  stamp={stamp}
+                  stamps={savedStampItems}
+                />
               ))}
             </div>
           )}
@@ -120,13 +125,129 @@ export function FavoritesPanel() {
   )
 }
 
-function SavedObjectStampRow({ stamp }: { stamp: SavedObjectStamp }) {
+function SavedObjectStampRow({
+  stamp,
+  stamps,
+}: {
+  stamp: SavedObjectStamp
+  stamps: readonly SavedObjectStamp[]
+}) {
+  const [draftName, setDraftName] = useState(stamp.name)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+
+  useEffect(() => {
+    setDraftName(stamp.name)
+  }, [stamp.name])
+
+  function commitRename(): void {
+    const next = draftName.trim()
+    if (next.length === 0) {
+      setDraftName(stamp.name)
+      return
+    }
+    if (next !== stamp.name) {
+      void savedObjectStampWorkbench.renameStamp(stamp.id, next)
+    }
+  }
+
+  function handleGripDragStart(event: DragEvent): void {
+    const { dataTransfer } = event
+    if (!dataTransfer) return
+    dataTransfer.setData('application/x-canopi-saved-stamp-reorder', stamp.id)
+    dataTransfer.setData('text/plain', stamp.id)
+    dataTransfer.effectAllowed = 'move'
+  }
+
+  function handleDragOver(event: DragEvent): void {
+    if (!event.dataTransfer || !Array.from(event.dataTransfer.types).includes('application/x-canopi-saved-stamp-reorder')) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+  }
+
+  function handleDrop(event: DragEvent): void {
+    const sourceId = event.dataTransfer?.getData('application/x-canopi-saved-stamp-reorder')
+    if (!sourceId || sourceId === stamp.id) return
+    event.preventDefault()
+    const nextIds = moveBefore(stamps.map((item) => item.id), sourceId, stamp.id)
+    void savedObjectStampWorkbench.reorderStamps(nextIds)
+  }
+
   return (
-    <div className={styles.savedStampRow} role="listitem">
-      <span className={styles.savedStampName}>{stamp.name}</span>
+    <div
+      className={styles.savedStampRow}
+      role="listitem"
+      data-saved-stamp-row={stamp.id}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      <button
+        type="button"
+        className={styles.savedStampGrip}
+        draggable
+        aria-label={t('savedObjectStamps.reorderLabel')}
+        onDragStart={handleGripDragStart}
+      >
+        <span aria-hidden="true">⋮⋮</span>
+      </button>
+      <input
+        className={styles.savedStampNameInput}
+        aria-label={t('savedObjectStamps.renameLabel')}
+        value={draftName}
+        onInput={(event) => setDraftName((event.currentTarget as HTMLInputElement).value)}
+        onBlur={commitRename}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            commitRename()
+            ;(event.currentTarget as HTMLInputElement).blur()
+          }
+          if (event.key === 'Escape') {
+            setDraftName(stamp.name)
+            ;(event.currentTarget as HTMLInputElement).blur()
+          }
+        }}
+      />
       <span className={styles.savedStampSummary}>{savedStampSummary(stamp)}</span>
+      <div className={styles.savedStampActions}>
+        {confirmingDelete ? (
+          <>
+            <button
+              type="button"
+              className={styles.savedStampDangerButton}
+              onClick={() => void savedObjectStampWorkbench.deleteStamp(stamp.id)}
+            >
+              {t('savedObjectStamps.confirmDelete')}
+            </button>
+            <button
+              type="button"
+              className={styles.savedStampSecondaryButton}
+              onClick={() => setConfirmingDelete(false)}
+            >
+              {t('savedObjectStamps.cancelDelete')}
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            className={styles.savedStampSecondaryButton}
+            onClick={() => setConfirmingDelete(true)}
+          >
+            {t('savedObjectStamps.delete')}
+          </button>
+        )}
+      </div>
     </div>
   )
+}
+
+function moveBefore(ids: string[], sourceId: string, targetId: string): string[] {
+  const withoutSource = ids.filter((id) => id !== sourceId)
+  const targetIndex = withoutSource.indexOf(targetId)
+  if (targetIndex < 0) return ids
+  return [
+    ...withoutSource.slice(0, targetIndex),
+    sourceId,
+    ...withoutSource.slice(targetIndex),
+  ]
 }
 
 function savedStampSummary(stamp: SavedObjectStamp): string {

@@ -867,7 +867,12 @@
     "summaryAnnotationOne": "{{count}} annotazione",
     "summaryAnnotationOther": "{{count}} annotazioni",
     "summaryEmpty": "Nessun oggetto visibile",
-    "summaryUnavailable": "Anteprima non disponibile"
+    "summaryUnavailable": "Anteprima non disponibile",
+    "renameLabel": "Rinomina timbro salvato",
+    "delete": "Elimina",
+    "confirmDelete": "Conferma eliminazione",
+    "cancelDelete": "Annulla",
+    "reorderLabel": "Riordina timbro salvato"
   },
   "adaptation": {
     "title": "Adattamento modello",

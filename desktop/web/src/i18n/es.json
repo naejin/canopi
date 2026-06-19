@@ -867,7 +867,12 @@
     "summaryAnnotationOne": "{{count}} anotación",
     "summaryAnnotationOther": "{{count}} anotaciones",
     "summaryEmpty": "Sin objetos visibles",
-    "summaryUnavailable": "Vista previa no disponible"
+    "summaryUnavailable": "Vista previa no disponible",
+    "renameLabel": "Renombrar sello guardado",
+    "delete": "Eliminar",
+    "confirmDelete": "Confirmar eliminación",
+    "cancelDelete": "Cancelar",
+    "reorderLabel": "Reordenar sello guardado"
   },
   "adaptation": {
     "title": "Adaptación de plantilla",

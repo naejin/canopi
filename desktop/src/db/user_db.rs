@@ -163,6 +163,56 @@ pub fn get_saved_object_stamps(
     stmt.query_map([], saved_object_stamp_from_row)?.collect()
 }
 
+pub fn rename_saved_object_stamp(
+    conn: &Connection,
+    id: &str,
+    name: &str,
+) -> Result<SavedObjectStampRow, rusqlite::Error> {
+    conn.execute(
+        "UPDATE saved_object_stamps
+         SET name = ?2, updated_at = datetime('now')
+         WHERE id = ?1",
+        (id, name),
+    )?;
+    get_saved_object_stamp(conn, id)
+}
+
+pub fn delete_saved_object_stamp(conn: &Connection, id: &str) -> Result<bool, rusqlite::Error> {
+    let deleted = conn.execute("DELETE FROM saved_object_stamps WHERE id = ?1", [id])?;
+    Ok(deleted > 0)
+}
+
+pub fn reorder_saved_object_stamps(
+    conn: &Connection,
+    ids: &[String],
+) -> Result<(), rusqlite::Error> {
+    let tx = conn.unchecked_transaction()?;
+    {
+        let mut stmt = tx.prepare(
+            "UPDATE saved_object_stamps
+             SET sort_order = ?2, updated_at = datetime('now')
+             WHERE id = ?1",
+        )?;
+        for (index, id) in ids.iter().enumerate() {
+            stmt.execute((id, index as i32))?;
+        }
+    }
+    tx.commit()
+}
+
+fn get_saved_object_stamp(
+    conn: &Connection,
+    id: &str,
+) -> Result<SavedObjectStampRow, rusqlite::Error> {
+    conn.query_row(
+        "SELECT id, name, payload_json, sort_order, created_at, updated_at
+         FROM saved_object_stamps
+         WHERE id = ?1",
+        [id],
+        saved_object_stamp_from_row,
+    )
+}
+
 fn saved_object_stamp_from_row(
     row: &rusqlite::Row<'_>,
 ) -> Result<SavedObjectStampRow, rusqlite::Error> {
@@ -292,5 +342,38 @@ mod tests {
             r#"{"plants":[{"id":"plant-1"}],"zones":[],"annotations":[],"groups":[]}"#
         );
         assert_eq!(stamps[0].sort_order, 0);
+    }
+
+    #[test]
+    fn test_saved_object_stamps_can_be_renamed_deleted_and_reordered() {
+        let conn = test_db();
+        let first = create_saved_object_stamp(&conn, "First", r#"{"plants":[]}"#).unwrap();
+        let second = create_saved_object_stamp(&conn, "Second", r#"{"plants":[]}"#).unwrap();
+
+        let renamed = rename_saved_object_stamp(&conn, &first.id, "Renamed").unwrap();
+        assert_eq!(renamed.name, "Renamed");
+
+        reorder_saved_object_stamps(&conn, &[second.id.clone(), first.id.clone()]).unwrap();
+        let reordered = get_saved_object_stamps(&conn).unwrap();
+        assert_eq!(
+            reordered
+                .iter()
+                .map(|stamp| stamp.id.as_str())
+                .collect::<Vec<_>>(),
+            [second.id.as_str(), first.id.as_str()]
+        );
+        assert_eq!(reordered[0].sort_order, 0);
+        assert_eq!(reordered[1].sort_order, 1);
+
+        assert!(delete_saved_object_stamp(&conn, &second.id).unwrap());
+        assert!(!delete_saved_object_stamp(&conn, &second.id).unwrap());
+        let remaining = get_saved_object_stamps(&conn).unwrap();
+        assert_eq!(
+            remaining
+                .iter()
+                .map(|stamp| stamp.id.as_str())
+                .collect::<Vec<_>>(),
+            [first.id.as_str()]
+        );
     }
 }

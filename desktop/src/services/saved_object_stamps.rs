@@ -20,6 +20,34 @@ pub fn get_saved_object_stamps(user_db: &UserDb) -> Result<Vec<SavedObjectStamp>
         .map_err(|e| format!("Failed to read Saved Object Stamps: {e}"))
 }
 
+pub fn rename_saved_object_stamp(
+    user_db: &UserDb,
+    id: String,
+    name: String,
+) -> Result<SavedObjectStamp, String> {
+    let conn = db::acquire(&user_db.0, "UserDb");
+    crate::db::user_db::rename_saved_object_stamp(&conn, &id, &name)
+        .map(row_to_saved_object_stamp)
+        .map_err(|e| format!("Failed to rename Saved Object Stamp '{id}': {e}"))
+}
+
+pub fn delete_saved_object_stamp(user_db: &UserDb, id: String) -> Result<bool, String> {
+    let conn = db::acquire(&user_db.0, "UserDb");
+    crate::db::user_db::delete_saved_object_stamp(&conn, &id)
+        .map_err(|e| format!("Failed to delete Saved Object Stamp '{id}': {e}"))
+}
+
+pub fn reorder_saved_object_stamps(
+    user_db: &UserDb,
+    ids: Vec<String>,
+) -> Result<Vec<SavedObjectStamp>, String> {
+    let conn = db::acquire(&user_db.0, "UserDb");
+    crate::db::user_db::reorder_saved_object_stamps(&conn, &ids)
+        .and_then(|()| crate::db::user_db::get_saved_object_stamps(&conn))
+        .map(|rows| rows.into_iter().map(row_to_saved_object_stamp).collect())
+        .map_err(|e| format!("Failed to reorder Saved Object Stamps: {e}"))
+}
+
 fn row_to_saved_object_stamp(row: crate::db::user_db::SavedObjectStampRow) -> SavedObjectStamp {
     SavedObjectStamp {
         id: row.id,
@@ -57,5 +85,29 @@ mod tests {
 
         assert_eq!(saved.name, "Apple guild");
         assert_eq!(stamps, vec![saved]);
+    }
+
+    #[test]
+    fn renames_deletes_and_reorders_saved_object_stamps() {
+        let user_db = test_user_db();
+        let first = super::create_saved_object_stamp(&user_db, "First".to_owned(), "{}".to_owned())
+            .unwrap();
+        let second =
+            super::create_saved_object_stamp(&user_db, "Second".to_owned(), "{}".to_owned())
+                .unwrap();
+
+        let renamed =
+            super::rename_saved_object_stamp(&user_db, first.id.clone(), "Renamed".to_owned())
+                .unwrap();
+        super::reorder_saved_object_stamps(&user_db, vec![second.id.clone(), first.id.clone()])
+            .unwrap();
+        assert!(super::delete_saved_object_stamp(&user_db, second.id.clone()).unwrap());
+
+        let stamps = super::get_saved_object_stamps(&user_db).unwrap();
+
+        assert_eq!(renamed.name, "Renamed");
+        assert_eq!(stamps.len(), 1);
+        assert_eq!(stamps[0].id, first.id);
+        assert_eq!(stamps[0].name, "Renamed");
     }
 }

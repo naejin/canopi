@@ -867,7 +867,12 @@
     "summaryAnnotationOne": "{{count}} annotation",
     "summaryAnnotationOther": "{{count}} annotations",
     "summaryEmpty": "No visible objects",
-    "summaryUnavailable": "Preview unavailable"
+    "summaryUnavailable": "Preview unavailable",
+    "renameLabel": "Rename saved stamp",
+    "delete": "Delete",
+    "confirmDelete": "Confirm delete",
+    "cancelDelete": "Cancel",
+    "reorderLabel": "Reorder saved stamp"
   },
   "adaptation": {
     "title": "Template Adaptation",

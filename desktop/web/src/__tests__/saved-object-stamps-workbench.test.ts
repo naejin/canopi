@@ -6,6 +6,15 @@ import type { SavedObjectStamp } from '../types/saved-object-stamps'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 
 describe('Saved Object Stamp Workbench', () => {
+  const makeStamp = (id: string, name: string, sortOrder: number): SavedObjectStamp => ({
+    id,
+    name,
+    payload_json: JSON.stringify({ plants: [], zones: [], annotations: [], groups: [] }),
+    sort_order: sortOrder,
+    created_at: `2026-06-19T09:00:0${sortOrder}Z`,
+    updated_at: `2026-06-19T09:00:0${sortOrder}Z`,
+  })
+
   it('saves the current locked plant selection as an unlocked visible stamp payload', async () => {
     const scene = createDefaultScenePersistedState()
     scene.plants = [{
@@ -248,5 +257,45 @@ describe('Saved Object Stamp Workbench', () => {
     const saved = await workbench.saveCurrentSelection()
 
     expect(saved?.name).toBe('1 zone, 1 annotation')
+  })
+
+  it('renames deletes and reorders saved stamps through the library adapters', async () => {
+    const first = makeStamp('stamp-1', 'First', 0)
+    const second = makeStamp('stamp-2', 'Second', 1)
+    let persistedFirst = first
+    const renameStamp = vi.fn(async (id: string, name: string): Promise<SavedObjectStamp> => {
+      persistedFirst = {
+        ...persistedFirst,
+        id,
+        name,
+        updated_at: '2026-06-19T10:00:00Z',
+      }
+      return persistedFirst
+    })
+    const deleteStamp = vi.fn(async () => true)
+    const reorderStamps = vi.fn(async (ids: string[]): Promise<SavedObjectStamp[]> => (
+      ids.map((id, index) => ({
+        ...(id === first.id ? persistedFirst : second),
+        sort_order: index,
+      }))
+    ))
+    const workbench = createSavedObjectStampWorkbench({
+      getSavedObjectStamps: async () => [first, second],
+      createSavedObjectStamp: async () => first,
+      renameSavedObjectStamp: renameStamp,
+      deleteSavedObjectStamp: deleteStamp,
+      reorderSavedObjectStamps: reorderStamps,
+      getCanvasQuerySurface: () => null,
+    })
+
+    await workbench.loadLibrary()
+    await workbench.renameStamp('stamp-1', 'Renamed')
+    await workbench.reorderStamps(['stamp-2', 'stamp-1'])
+    await workbench.deleteStamp('stamp-2')
+
+    expect(renameStamp).toHaveBeenCalledWith('stamp-1', 'Renamed')
+    expect(reorderStamps).toHaveBeenCalledWith(['stamp-2', 'stamp-1'])
+    expect(deleteStamp).toHaveBeenCalledWith('stamp-2')
+    expect(workbench.library.value.items.map((stamp) => stamp.name)).toEqual(['Renamed'])
   })
 })

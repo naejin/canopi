@@ -867,7 +867,12 @@
     "summaryAnnotationOne": "注釈 {{count}} 件",
     "summaryAnnotationOther": "注釈 {{count}} 件",
     "summaryEmpty": "表示オブジェクトなし",
-    "summaryUnavailable": "プレビュー不可"
+    "summaryUnavailable": "プレビュー不可",
+    "renameLabel": "保存済みスタンプの名前を変更",
+    "delete": "削除",
+    "confirmDelete": "削除を確認",
+    "cancelDelete": "キャンセル",
+    "reorderLabel": "保存済みスタンプを並べ替え"
   },
   "adaptation": {
     "title": "テンプレート適応",

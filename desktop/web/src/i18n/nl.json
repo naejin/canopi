@@ -867,7 +867,12 @@
     "summaryAnnotationOne": "{{count}} annotatie",
     "summaryAnnotationOther": "{{count}} annotaties",
     "summaryEmpty": "Geen zichtbare objecten",
-    "summaryUnavailable": "Voorbeeld niet beschikbaar"
+    "summaryUnavailable": "Voorbeeld niet beschikbaar",
+    "renameLabel": "Opgeslagen stempel hernoemen",
+    "delete": "Verwijderen",
+    "confirmDelete": "Verwijderen bevestigen",
+    "cancelDelete": "Annuleren",
+    "reorderLabel": "Opgeslagen stempel herschikken"
   },
   "adaptation": {
     "title": "Sjabloonaanpassing",

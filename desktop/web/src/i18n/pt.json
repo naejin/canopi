@@ -867,7 +867,12 @@
     "summaryAnnotationOne": "{{count}} anotação",
     "summaryAnnotationOther": "{{count}} anotações",
     "summaryEmpty": "Nenhum objeto visível",
-    "summaryUnavailable": "Prévia indisponível"
+    "summaryUnavailable": "Prévia indisponível",
+    "renameLabel": "Renomear carimbo salvo",
+    "delete": "Excluir",
+    "confirmDelete": "Confirmar exclusão",
+    "cancelDelete": "Cancelar",
+    "reorderLabel": "Reordenar carimbo salvo"
   },
   "adaptation": {
     "title": "Adaptação do modelo",

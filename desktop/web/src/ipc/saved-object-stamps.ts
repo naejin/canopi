@@ -11,3 +11,18 @@ export async function createSavedObjectStamp(
 ): Promise<SavedObjectStamp> {
   return invoke('create_saved_object_stamp', { name, payloadJson })
 }
+
+export async function renameSavedObjectStamp(
+  id: string,
+  name: string,
+): Promise<SavedObjectStamp> {
+  return invoke('rename_saved_object_stamp', { id, name })
+}
+
+export async function deleteSavedObjectStamp(id: string): Promise<boolean> {
+  return invoke('delete_saved_object_stamp', { id })
+}
+
+export async function reorderSavedObjectStamps(ids: string[]): Promise<SavedObjectStamp[]> {
+  return invoke('reorder_saved_object_stamps', { ids })
+}

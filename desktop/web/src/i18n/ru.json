@@ -867,7 +867,12 @@
     "summaryAnnotationOne": "{{count}} аннотация",
     "summaryAnnotationOther": "{{count}} аннотаций",
     "summaryEmpty": "Нет видимых объектов",
-    "summaryUnavailable": "Предпросмотр недоступен"
+    "summaryUnavailable": "Предпросмотр недоступен",
+    "renameLabel": "Переименовать сохраненный штамп",
+    "delete": "Удалить",
+    "confirmDelete": "Подтвердить удаление",
+    "cancelDelete": "Отмена",
+    "reorderLabel": "Изменить порядок сохраненного штампа"
   },
   "adaptation": {
     "title": "Адаптация шаблона",

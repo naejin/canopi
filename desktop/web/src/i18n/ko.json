@@ -867,7 +867,12 @@
     "summaryAnnotationOne": "주석 {{count}}개",
     "summaryAnnotationOther": "주석 {{count}}개",
     "summaryEmpty": "보이는 객체 없음",
-    "summaryUnavailable": "미리보기 사용할 수 없음"
+    "summaryUnavailable": "미리보기 사용할 수 없음",
+    "renameLabel": "저장된 스탬프 이름 변경",
+    "delete": "삭제",
+    "confirmDelete": "삭제 확인",
+    "cancelDelete": "취소",
+    "reorderLabel": "저장된 스탬프 순서 변경"
   },
   "adaptation": {
     "title": "템플릿 적응",

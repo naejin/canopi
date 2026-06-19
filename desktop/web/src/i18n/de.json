@@ -867,7 +867,12 @@
     "summaryAnnotationOne": "{{count}} Anmerkung",
     "summaryAnnotationOther": "{{count}} Anmerkungen",
     "summaryEmpty": "Keine sichtbaren Objekte",
-    "summaryUnavailable": "Vorschau nicht verfügbar"
+    "summaryUnavailable": "Vorschau nicht verfügbar",
+    "renameLabel": "Gespeicherten Stempel umbenennen",
+    "delete": "Löschen",
+    "confirmDelete": "Löschen bestätigen",
+    "cancelDelete": "Abbrechen",
+    "reorderLabel": "Gespeicherten Stempel neu anordnen"
   },
   "adaptation": {
     "title": "Vorlagenanpassung",

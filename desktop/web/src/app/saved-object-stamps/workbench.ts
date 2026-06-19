@@ -12,7 +12,10 @@ import type {
 import { currentCanvasQuerySurface } from '../../canvas/session'
 import {
   createSavedObjectStamp as createSavedObjectStampIpc,
+  deleteSavedObjectStamp as deleteSavedObjectStampIpc,
   getSavedObjectStamps as getSavedObjectStampsIpc,
+  renameSavedObjectStamp as renameSavedObjectStampIpc,
+  reorderSavedObjectStamps as reorderSavedObjectStampsIpc,
 } from '../../ipc/saved-object-stamps'
 import type { SavedObjectStamp } from '../../types/saved-object-stamps'
 
@@ -33,11 +36,17 @@ export interface SavedObjectStampWorkbench {
   readonly selection: ReadonlySignal<SavedObjectStampSelectionView>
   loadLibrary(): Promise<void>
   saveCurrentSelection(): Promise<SavedObjectStamp | null>
+  renameStamp(id: string, name: string): Promise<SavedObjectStamp | null>
+  deleteStamp(id: string): Promise<boolean>
+  reorderStamps(ids: string[]): Promise<void>
 }
 
 interface SavedObjectStampWorkbenchOptions {
   readonly getSavedObjectStamps?: () => Promise<SavedObjectStamp[]>
   readonly createSavedObjectStamp?: (name: string, payloadJson: string) => Promise<SavedObjectStamp>
+  readonly renameSavedObjectStamp?: (id: string, name: string) => Promise<SavedObjectStamp>
+  readonly deleteSavedObjectStamp?: (id: string) => Promise<boolean>
+  readonly reorderSavedObjectStamps?: (ids: string[]) => Promise<SavedObjectStamp[]>
   readonly getCanvasQuerySurface?: () => CanvasQuerySurface | null
 }
 
@@ -93,6 +102,9 @@ interface NormalizedSelection {
 export function createSavedObjectStampWorkbench({
   getSavedObjectStamps = getSavedObjectStampsIpc,
   createSavedObjectStamp = createSavedObjectStampIpc,
+  renameSavedObjectStamp = renameSavedObjectStampIpc,
+  deleteSavedObjectStamp = deleteSavedObjectStampIpc,
+  reorderSavedObjectStamps = reorderSavedObjectStampsIpc,
   getCanvasQuerySurface = () => currentCanvasQuerySurface.value,
 }: SavedObjectStampWorkbenchOptions = {}): SavedObjectStampWorkbench {
   const items = signal<SavedObjectStamp[]>([])
@@ -148,11 +160,44 @@ export function createSavedObjectStampWorkbench({
     return saved
   }
 
+  async function renameStamp(id: string, name: string): Promise<SavedObjectStamp | null> {
+    const nextName = name.trim()
+    if (nextName.length === 0) return null
+    const renamed = await renameSavedObjectStamp(id, nextName)
+    batch(() => {
+      items.value = items.value.map((stamp) => stamp.id === id ? renamed : stamp)
+      revision.value += 1
+    })
+    return renamed
+  }
+
+  async function deleteStamp(id: string): Promise<boolean> {
+    const deleted = await deleteSavedObjectStamp(id)
+    if (deleted) {
+      batch(() => {
+        items.value = items.value.filter((stamp) => stamp.id !== id)
+        revision.value += 1
+      })
+    }
+    return deleted
+  }
+
+  async function reorderStamps(ids: string[]): Promise<void> {
+    const reordered = await reorderSavedObjectStamps(ids)
+    batch(() => {
+      items.value = [...reordered].sort(compareSavedObjectStamps)
+      revision.value += 1
+    })
+  }
+
   return {
     library,
     selection,
     loadLibrary,
     saveCurrentSelection,
+    renameStamp,
+    deleteStamp,
+    reorderStamps,
   }
 }
 

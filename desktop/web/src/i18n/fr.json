@@ -867,7 +867,12 @@
     "summaryAnnotationOne": "{{count}} annotation",
     "summaryAnnotationOther": "{{count}} annotations",
     "summaryEmpty": "Aucun objet visible",
-    "summaryUnavailable": "Aperçu indisponible"
+    "summaryUnavailable": "Aperçu indisponible",
+    "renameLabel": "Renommer le tampon enregistré",
+    "delete": "Supprimer",
+    "confirmDelete": "Confirmer la suppression",
+    "cancelDelete": "Annuler",
+    "reorderLabel": "Réorganiser le tampon enregistré"
   },
   "adaptation": {
     "title": "Adaptation du modèle",
