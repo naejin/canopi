@@ -859,6 +859,7 @@
     "title": "Timbri salvati",
     "description": "Per riutilizzare gruppi di piante, zone e annotazioni.",
     "saveSelection": "Salva selezione",
+    "import": "Importa",
     "place": "Posiziona",
     "export": "Esporta",
     "selectHint": "Seleziona piante, zone, annotazioni o gruppi da salvare insieme.",

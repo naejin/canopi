@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
-import { save } from '@tauri-apps/plugin-dialog'
+import { open, save } from '@tauri-apps/plugin-dialog'
 import type { CanopiFile } from '../types/design'
 import type { SavedObjectStamp } from '../types/saved-object-stamps'
 
@@ -39,4 +39,14 @@ export async function exportSavedObjectStampCanopiFile(
   })
   if (!filePath) throw new Error('Dialog cancelled')
   return invoke('export_saved_object_stamp_canopi_file', { path: filePath, content })
+}
+
+export async function importSavedObjectStampCanopiFile(): Promise<CanopiFile> {
+  const selected = await open({
+    filters: [{ name: 'Canopi Design', extensions: ['canopi'] }],
+    multiple: false,
+  })
+  if (!selected) throw new Error('Dialog cancelled')
+  const filePath = typeof selected === 'string' ? selected : selected[0]!
+  return invoke('load_saved_object_stamp_canopi_file', { path: filePath })
 }

@@ -859,6 +859,7 @@
     "title": "Opgeslagen stempels",
     "description": "Voor herbruikbare groepen planten, zones en annotaties.",
     "saveSelection": "Selectie opslaan",
+    "import": "Importeren",
     "place": "Plaatsen",
     "export": "Exporteren",
     "selectHint": "Selecteer planten, zones, annotaties of groepen om ze samen op te slaan.",

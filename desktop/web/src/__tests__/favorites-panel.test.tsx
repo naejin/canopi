@@ -65,6 +65,7 @@ describe('FavoritesPanel', () => {
   let reorderStampMock: ReturnType<typeof vi.fn>
   let placeStampMock: ReturnType<typeof vi.fn>
   let exportStampMock: ReturnType<typeof vi.fn>
+  let importStampFileMock: ReturnType<typeof vi.fn>
   let stampLibrary: Signal<{
     items: SavedStampFixture[]
     loading: boolean
@@ -99,6 +100,7 @@ describe('FavoritesPanel', () => {
     reorderStampMock = vi.fn(async () => {})
     placeStampMock = vi.fn(() => true)
     exportStampMock = vi.fn(async () => '/tmp/Pommier, Lavande.canopi')
+    importStampFileMock = vi.fn(async () => null)
     stampLibrary = signal({
       items: [{
         id: 'stamp-1',
@@ -175,6 +177,7 @@ describe('FavoritesPanel', () => {
         reorderStamps: reorderStampMock,
         placeStamp: placeStampMock,
         exportStamp: exportStampMock,
+        importStampFile: importStampFileMock,
       },
     }))
     ;({ FavoritesPanel } = await import('../components/panels/FavoritesPanel'))
@@ -231,6 +234,17 @@ describe('FavoritesPanel', () => {
     })
 
     expect(saveSelectionMock).toHaveBeenCalledTimes(1)
+
+    const importButton = [...container.querySelectorAll('button')]
+      .find((button) => button.textContent === 'Import')
+    expect(importButton).toBeTruthy()
+
+    await act(async () => {
+      importButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flushEffects()
+    })
+
+    expect(importStampFileMock).toHaveBeenCalledTimes(1)
 
     const placeButton = [...container.querySelectorAll('button')]
       .find((button) => button.textContent === 'Place')

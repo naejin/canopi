@@ -377,4 +377,119 @@ describe('Saved Object Stamp Workbench', () => {
       budget: [],
     })
   })
+
+  it('imports a Canopi file as a saved stamp without touching the Design Session', async () => {
+    const file: CanopiFile = {
+      version: 3,
+      name: 'Imported design',
+      description: 'Ignored description',
+      location: { lat: 45, lon: 3, altitude_m: null },
+      north_bearing_deg: 12,
+      plant_species_colors: {},
+      plant_species_symbols: {},
+      layers: [{ name: 'plants', visible: true, locked: true, opacity: 1 }],
+      plants: [{
+        id: 'source-plant',
+        locked: true,
+        canonical_name: 'Malus domestica',
+        common_name: 'Apple',
+        color: null,
+        symbol: null,
+        position: { x: 2, y: 3 },
+        rotation: null,
+        scale: null,
+        notes: 'private note',
+        planted_date: '2026-04-01',
+        quantity: 4,
+      }],
+      zones: [],
+      annotations: [],
+      consortiums: [],
+      groups: [],
+      timeline: [],
+      budget: [],
+      budget_currency: 'USD',
+      created_at: '2026-06-01T00:00:00.000Z',
+      updated_at: '2026-06-02T00:00:00.000Z',
+      extra: { guides: [{ axis: 'h', position: 10 }] },
+    }
+    const importSavedObjectStampFile = vi.fn(async (): Promise<CanopiFile> => file)
+    const createStamp = vi.fn(async (name: string, payloadJson: string): Promise<SavedObjectStamp> => ({
+      id: 'stamp-imported',
+      name,
+      payload_json: payloadJson,
+      sort_order: 0,
+      created_at: '2026-06-19T09:00:00Z',
+      updated_at: '2026-06-19T09:00:00Z',
+    }))
+    const getCanvasQuerySurface = vi.fn(() => {
+      throw new Error('Design Session should not be read during import')
+    })
+    const workbench = createSavedObjectStampWorkbench({
+      getSavedObjectStamps: async () => [],
+      createSavedObjectStamp: createStamp,
+      importSavedObjectStampFile,
+      getCanvasQuerySurface,
+    })
+
+    const saved = await workbench.importStampFile()
+
+    expect(saved?.name).toBe('Imported design')
+    expect(getCanvasQuerySurface).not.toHaveBeenCalled()
+    expect(createStamp).toHaveBeenCalledTimes(1)
+    const payload = JSON.parse(createStamp.mock.calls[0]![1])
+    expect(payload).toMatchObject({
+      version: 1,
+      anchor: { x: 2, y: 3 },
+      plants: [{
+        id: 'source-plant',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+      }],
+      zones: [],
+      annotations: [],
+      groups: [],
+    })
+    expect(payload.plants[0]).not.toHaveProperty('locked')
+    expect(payload.plants[0]).not.toHaveProperty('notes')
+    expect(payload.plants[0]).not.toHaveProperty('plantedDate')
+    expect(payload.plants[0]).not.toHaveProperty('quantity')
+    expect(workbench.library.value.items).toEqual([saved])
+  })
+
+  it('does not create a saved stamp from an empty Canopi import', async () => {
+    const importSavedObjectStampFile = vi.fn(async (): Promise<CanopiFile> => ({
+      version: 3,
+      name: 'Empty design',
+      description: null,
+      location: null,
+      north_bearing_deg: 0,
+      plant_species_colors: {},
+      plant_species_symbols: {},
+      layers: [],
+      plants: [],
+      zones: [],
+      annotations: [],
+      consortiums: [],
+      groups: [],
+      timeline: [],
+      budget: [],
+      budget_currency: 'EUR',
+      created_at: '2026-06-01T00:00:00.000Z',
+      updated_at: '2026-06-02T00:00:00.000Z',
+      extra: {},
+    }))
+    const createStamp = vi.fn()
+    const workbench = createSavedObjectStampWorkbench({
+      getSavedObjectStamps: async () => [],
+      createSavedObjectStamp: createStamp,
+      importSavedObjectStampFile,
+      getCanvasQuerySurface: () => null,
+    })
+
+    const saved = await workbench.importStampFile()
+
+    expect(saved).toBeNull()
+    expect(createStamp).not.toHaveBeenCalled()
+  })
 })

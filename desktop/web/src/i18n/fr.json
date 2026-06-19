@@ -859,6 +859,7 @@
     "title": "Tampons enregistrés",
     "description": "Pour réutiliser des groupes de plantes, zones et annotations.",
     "saveSelection": "Enregistrer la sélection",
+    "import": "Importer",
     "place": "Placer",
     "export": "Exporter",
     "selectHint": "Sélectionnez des plantes, zones, annotations ou groupes à enregistrer ensemble.",

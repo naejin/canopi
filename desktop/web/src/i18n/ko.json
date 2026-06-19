@@ -859,6 +859,7 @@
     "title": "저장된 스탬프",
     "description": "식물, 구역, 주석 묶음을 다시 사용합니다.",
     "saveSelection": "선택 저장",
+    "import": "가져오기",
     "place": "배치",
     "export": "내보내기",
     "selectHint": "식물, 구역, 주석 또는 그룹을 선택해 함께 저장하세요.",

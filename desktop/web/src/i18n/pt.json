@@ -859,6 +859,7 @@
     "title": "Carimbos salvos",
     "description": "Para reutilizar grupos de plantas, zonas e anotações.",
     "saveSelection": "Salvar seleção",
+    "import": "Importar",
     "place": "Colocar",
     "export": "Exportar",
     "selectHint": "Selecione plantas, zonas, anotações ou grupos para salvá-los juntos.",

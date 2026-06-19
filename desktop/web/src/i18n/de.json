@@ -859,6 +859,7 @@
     "title": "Gespeicherte Stempel",
     "description": "Zum Wiederverwenden von Gruppen aus Pflanzen, Zonen und Anmerkungen.",
     "saveSelection": "Auswahl speichern",
+    "import": "Importieren",
     "place": "Platzieren",
     "export": "Exportieren",
     "selectHint": "Wählen Sie Pflanzen, Zonen, Anmerkungen oder Gruppen aus, um sie zusammen zu speichern.",

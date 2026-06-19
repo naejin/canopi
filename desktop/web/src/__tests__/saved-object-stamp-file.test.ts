@@ -1,6 +1,40 @@
 import { describe, expect, it } from 'vitest'
 import type { SavedObjectStampPayload } from '../canvas/saved-object-stamp-payload'
-import { composeSavedObjectStampCanopiFile } from '../app/saved-object-stamps/file'
+import {
+  composeSavedObjectStampCanopiFile,
+  importedSavedObjectStampName,
+  savedObjectStampPayloadFromCanopiFile,
+} from '../app/saved-object-stamps/file'
+import type { CanopiFile } from '../types/design'
+
+function canopiFile(overrides: Partial<CanopiFile> = {}): CanopiFile {
+  return {
+    version: 3,
+    name: 'Imported guild',
+    description: 'Do not import this as stamp metadata',
+    location: { lat: 45, lon: 3, altitude_m: 20 },
+    north_bearing_deg: 15,
+    plant_species_colors: { 'Malus domestica': '#112233' },
+    plant_species_symbols: { 'Malus domestica': 'tree' },
+    layers: [
+      { name: 'plants', visible: true, locked: true, opacity: 0.5 },
+      { name: 'zones', visible: false, locked: false, opacity: 1 },
+      { name: 'annotations', visible: true, locked: false, opacity: 1 },
+    ],
+    plants: [],
+    zones: [],
+    annotations: [],
+    consortiums: [],
+    groups: [],
+    timeline: [],
+    budget: [],
+    budget_currency: 'USD',
+    created_at: '2026-06-01T00:00:00.000Z',
+    updated_at: '2026-06-02T00:00:00.000Z',
+    extra: { guides: [{ axis: 'h', position: 10 }] },
+    ...overrides,
+  }
+}
 
 describe('Saved Object Stamp file composition', () => {
   it('exports a minimal Canopi file with only visible stamp geometry', () => {
@@ -146,5 +180,111 @@ describe('Saved Object Stamp file composition', () => {
     })
 
     expect(file.groups).toEqual([])
+  })
+
+  it('imports only visible geometry from a Canopi file and strips non-visual metadata', () => {
+    const payload = savedObjectStampPayloadFromCanopiFile(canopiFile({
+      plants: [{
+        id: 'source-plant',
+        locked: true,
+        canonical_name: 'Malus domestica',
+        common_name: 'Apple',
+        color: '#C44230',
+        symbol: 'tree',
+        position: { x: 10, y: 20 },
+        rotation: 30,
+        scale: 2,
+        notes: 'nursery note',
+        planted_date: '2026-04-01',
+        quantity: 5,
+      }],
+      zones: [{
+        name: 'Hidden bed',
+        locked: false,
+        zone_type: 'polygon',
+        points: [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 4 }],
+        rotation: 0,
+        fill_color: '#D8B35A',
+        notes: 'hidden zone note',
+      }],
+      annotations: [{
+        id: 'note-1',
+        locked: true,
+        annotation_type: 'text',
+        position: { x: 14, y: 16 },
+        text: 'Guild edge',
+        font_size: 14,
+        rotation: 10,
+      }],
+      groups: [{
+        id: 'group-1',
+        locked: true,
+        name: 'Visible pair',
+        members: [
+          { kind: 'plant', id: 'source-plant' },
+          { kind: 'zone', id: 'Hidden bed' },
+          { kind: 'annotation', id: 'note-1' },
+        ],
+      }],
+    }))
+
+    expect(payload).toEqual({
+      version: 1,
+      anchor: { x: 12, y: 18 },
+      plants: [{
+        id: 'source-plant',
+        canonicalName: 'Malus domestica',
+        commonName: 'Apple',
+        color: '#C44230',
+        symbol: 'tree',
+        position: { x: 10, y: 20 },
+        rotationDeg: 30,
+        scale: 2,
+      }],
+      zones: [],
+      annotations: [{
+        id: 'note-1',
+        annotationType: 'text',
+        position: { x: 14, y: 16 },
+        text: 'Guild edge',
+        fontSize: 14,
+        rotationDeg: 10,
+      }],
+      groups: [{
+        id: 'group-1',
+        name: 'Visible pair',
+        members: [
+          { kind: 'plant', id: 'source-plant' },
+          { kind: 'annotation', id: 'note-1' },
+        ],
+      }],
+    })
+  })
+
+  it('rejects empty imports and falls back to a composition name when the file name is blank', () => {
+    const emptyPayload = savedObjectStampPayloadFromCanopiFile(canopiFile({
+      name: '',
+      plants: [],
+      zones: [],
+      annotations: [],
+      groups: [],
+    }))
+    const visibleZonePayload = savedObjectStampPayloadFromCanopiFile(canopiFile({
+      name: '  ',
+      layers: [{ name: 'zones', visible: true, locked: false, opacity: 1 }],
+      zones: [{
+        name: 'Bed',
+        locked: true,
+        zone_type: 'rect',
+        points: [{ x: 0, y: 0 }, { x: 4, y: 4 }],
+        rotation: 0,
+        fill_color: null,
+        notes: null,
+      }],
+    }))
+
+    expect(emptyPayload).toBeNull()
+    expect(importedSavedObjectStampName(canopiFile({ name: '  ' }), visibleZonePayload!))
+      .toBe('1 zone, 0 annotations')
   })
 })

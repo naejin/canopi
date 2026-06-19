@@ -859,6 +859,7 @@
     "title": "Sellos guardados",
     "description": "Para reutilizar grupos de plantas, zonas y anotaciones.",
     "saveSelection": "Guardar selección",
+    "import": "Importar",
     "place": "Colocar",
     "export": "Exportar",
     "selectHint": "Selecciona plantas, zonas, anotaciones o grupos para guardarlos juntos.",

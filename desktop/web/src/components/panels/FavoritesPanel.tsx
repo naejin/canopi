@@ -84,14 +84,23 @@ export function FavoritesPanel() {
               <span className={styles.count}>{savedStampsView.items.length}</span>
             )}
           </div>
-          <button
-            type="button"
-            className={styles.saveStampButton}
-            disabled={!savedStampSelection.canSave}
-            onClick={() => void savedObjectStampWorkbench.saveCurrentSelection()}
-          >
-            {t('savedObjectStamps.saveSelection')}
-          </button>
+          <div className={styles.savedStampsActions}>
+            <button
+              type="button"
+              className={styles.saveStampButton}
+              disabled={!savedStampSelection.canSave}
+              onClick={() => void savedObjectStampWorkbench.saveCurrentSelection()}
+            >
+              {t('savedObjectStamps.saveSelection')}
+            </button>
+            <button
+              type="button"
+              className={styles.importStampButton}
+              onClick={() => void savedObjectStampWorkbench.importStampFile()}
+            >
+              {t('savedObjectStamps.import')}
+            </button>
+          </div>
           {!savedStampSelection.canSave && (
             <span className={styles.savedStampsHint}>
               {t('savedObjectStamps.selectHint')}

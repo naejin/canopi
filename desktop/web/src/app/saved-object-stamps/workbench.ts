@@ -16,6 +16,7 @@ import {
   deleteSavedObjectStamp as deleteSavedObjectStampIpc,
   exportSavedObjectStampCanopiFile,
   getSavedObjectStamps as getSavedObjectStampsIpc,
+  importSavedObjectStampCanopiFile,
   renameSavedObjectStamp as renameSavedObjectStampIpc,
   reorderSavedObjectStamps as reorderSavedObjectStampsIpc,
 } from '../../ipc/saved-object-stamps'
@@ -27,7 +28,11 @@ import type {
   SavedObjectStampPlant,
   SavedObjectStampZone,
 } from '../../canvas/saved-object-stamp-payload'
-import { composeSavedObjectStampCanopiFile } from './file'
+import {
+  composeSavedObjectStampCanopiFile,
+  importedSavedObjectStampName,
+  savedObjectStampPayloadFromCanopiFile,
+} from './file'
 
 export interface SavedObjectStampLibraryView {
   readonly items: readonly SavedObjectStamp[]
@@ -51,6 +56,7 @@ export interface SavedObjectStampWorkbench {
   reorderStamps(ids: string[]): Promise<void>
   placeStamp(stamp: SavedObjectStamp): boolean
   exportStamp(stamp: SavedObjectStamp): Promise<string | null>
+  importStampFile(): Promise<SavedObjectStamp | null>
 }
 
 interface SavedObjectStampWorkbenchOptions {
@@ -60,6 +66,7 @@ interface SavedObjectStampWorkbenchOptions {
   readonly deleteSavedObjectStamp?: (id: string) => Promise<boolean>
   readonly reorderSavedObjectStamps?: (ids: string[]) => Promise<SavedObjectStamp[]>
   readonly exportSavedObjectStamp?: (content: CanopiFile, defaultName: string) => Promise<string>
+  readonly importSavedObjectStampFile?: () => Promise<CanopiFile>
   readonly getCanvasQuerySurface?: () => CanvasQuerySurface | null
   readonly beginPlacement?: (stamp: SavedObjectStamp) => boolean
 }
@@ -76,6 +83,7 @@ export function createSavedObjectStampWorkbench({
   deleteSavedObjectStamp = deleteSavedObjectStampIpc,
   reorderSavedObjectStamps = reorderSavedObjectStampsIpc,
   exportSavedObjectStamp = exportSavedObjectStampCanopiFile,
+  importSavedObjectStampFile = importSavedObjectStampCanopiFile,
   getCanvasQuerySurface = () => currentCanvasQuerySurface.value,
   beginPlacement = beginSavedObjectStampPlacement,
 }: SavedObjectStampWorkbenchOptions = {}): SavedObjectStampWorkbench {
@@ -180,6 +188,29 @@ export function createSavedObjectStampWorkbench({
     }
   }
 
+  async function importStampFile(): Promise<SavedObjectStamp | null> {
+    let file: CanopiFile
+    try {
+      file = await importSavedObjectStampFile()
+    } catch (error) {
+      if (isDialogCancelled(error)) return null
+      throw error
+    }
+
+    const payload = savedObjectStampPayloadFromCanopiFile(file)
+    if (!payload) return null
+
+    const saved = await createSavedObjectStamp(
+      importedSavedObjectStampName(file, payload),
+      JSON.stringify(payload),
+    )
+    batch(() => {
+      items.value = [...items.value, saved].sort(compareSavedObjectStamps)
+      revision.value += 1
+    })
+    return saved
+  }
+
   return {
     library,
     selection,
@@ -190,6 +221,7 @@ export function createSavedObjectStampWorkbench({
     reorderStamps,
     placeStamp,
     exportStamp,
+    importStampFile,
   }
 }
 

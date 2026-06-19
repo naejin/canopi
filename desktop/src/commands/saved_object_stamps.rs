@@ -50,3 +50,8 @@ pub fn export_saved_object_stamp_canopi_file(
 ) -> Result<String, String> {
     crate::services::design_files::export_design_file(path, content)
 }
+
+#[tauri::command]
+pub fn load_saved_object_stamp_canopi_file(path: String) -> Result<CanopiFile, String> {
+    crate::services::design_files::load_design_file(path)
+}
