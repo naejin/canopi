@@ -67,4 +67,12 @@ describe('i18n completeness', () => {
       expect(collectMissingKeys(en as TranslationTree, translations)).toEqual([])
     })
   }
+
+  it('uses French planche terminology for the Saved Stamp library only', () => {
+    expect(fr.savedObjectStamps.title).toBe('Planches')
+    expect(fr.savedObjectStamps.loading).toContain('planches')
+    expect(fr.savedObjectStamps.rename).toContain('planche')
+    expect(fr.canvas.tools.plantStamp).toContain('Tampon')
+    expect(fr.canvas.tools.objectStamp).toContain('Tampon')
+  })
 })

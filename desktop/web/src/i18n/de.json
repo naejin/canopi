@@ -862,6 +862,7 @@
     "import": "Importieren",
     "place": "Platzieren",
     "export": "Exportieren",
+    "rename": "Umbenennen",
     "selectHint": "Wählen Sie Pflanzen, Zonen, Anmerkungen oder Gruppen aus, um sie zusammen zu speichern.",
     "loading": "Gespeicherte Stempel werden geladen...",
     "empty": "Speichern Sie eine Auswahl, um sie hier wiederzuverwenden.",
@@ -873,11 +874,15 @@
     "summaryAnnotationOther": "{{count}} Anmerkungen",
     "summaryEmpty": "Keine sichtbaren Objekte",
     "summaryUnavailable": "Vorschau nicht verfügbar",
-    "renameLabel": "Gespeicherten Stempel umbenennen",
+    "nameInput": "Stempelname",
+    "confirmRename": "Umbenennen bestätigen",
+    "cancelRename": "Umbenennen abbrechen",
     "delete": "Löschen",
+    "deleteConfirmCopy": "Diesen gespeicherten Stempel löschen?",
     "confirmDelete": "Löschen bestätigen",
-    "cancelDelete": "Abbrechen",
-    "reorderLabel": "Gespeicherten Stempel neu anordnen"
+    "cancelDelete": "Löschen abbrechen",
+    "reorderLabel": "Gespeicherten Stempel neu anordnen",
+    "resizeFrame": "Bereich Gespeicherte Stempel anpassen"
   },
   "adaptation": {
     "title": "Vorlagenanpassung",

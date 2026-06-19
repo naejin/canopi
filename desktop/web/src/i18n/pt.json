@@ -862,6 +862,7 @@
     "import": "Importar",
     "place": "Colocar",
     "export": "Exportar",
+    "rename": "Renomear",
     "selectHint": "Selecione plantas, zonas, anotações ou grupos para salvá-los juntos.",
     "loading": "Carregando carimbos salvos...",
     "empty": "Salve uma seleção para reutilizá-la aqui.",
@@ -873,11 +874,15 @@
     "summaryAnnotationOther": "{{count}} anotações",
     "summaryEmpty": "Nenhum objeto visível",
     "summaryUnavailable": "Prévia indisponível",
-    "renameLabel": "Renomear carimbo salvo",
+    "nameInput": "Nome do carimbo",
+    "confirmRename": "Confirmar renomeação",
+    "cancelRename": "Cancelar renomeação",
     "delete": "Excluir",
+    "deleteConfirmCopy": "Excluir este carimbo salvo?",
     "confirmDelete": "Confirmar exclusão",
-    "cancelDelete": "Cancelar",
-    "reorderLabel": "Reordenar carimbo salvo"
+    "cancelDelete": "Cancelar exclusão",
+    "reorderLabel": "Reordenar carimbo salvo",
+    "resizeFrame": "Redimensionar quadro de Carimbos salvos"
   },
   "adaptation": {
     "title": "Adaptação do modelo",

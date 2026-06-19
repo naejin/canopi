@@ -862,6 +862,7 @@
     "import": "インポート",
     "place": "配置",
     "export": "エクスポート",
+    "rename": "名前を変更",
     "selectHint": "植物、ゾーン、注釈、またはグループを選択して一緒に保存します。",
     "loading": "保存済みスタンプを読み込み中...",
     "empty": "選択を保存するとここで再利用できます。",
@@ -873,11 +874,15 @@
     "summaryAnnotationOther": "注釈 {{count}} 件",
     "summaryEmpty": "表示オブジェクトなし",
     "summaryUnavailable": "プレビュー不可",
-    "renameLabel": "保存済みスタンプの名前を変更",
+    "nameInput": "スタンプ名",
+    "confirmRename": "名前変更を確定",
+    "cancelRename": "名前変更をキャンセル",
     "delete": "削除",
+    "deleteConfirmCopy": "この保存済みスタンプを削除しますか？",
     "confirmDelete": "削除を確認",
-    "cancelDelete": "キャンセル",
-    "reorderLabel": "保存済みスタンプを並べ替え"
+    "cancelDelete": "削除をキャンセル",
+    "reorderLabel": "保存済みスタンプを並べ替え",
+    "resizeFrame": "保存済みスタンプ枠のサイズ変更"
   },
   "adaptation": {
     "title": "テンプレート適応",

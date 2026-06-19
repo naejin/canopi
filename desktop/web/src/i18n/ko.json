@@ -862,6 +862,7 @@
     "import": "가져오기",
     "place": "배치",
     "export": "내보내기",
+    "rename": "이름 변경",
     "selectHint": "식물, 구역, 주석 또는 그룹을 선택해 함께 저장하세요.",
     "loading": "저장된 스탬프를 불러오는 중...",
     "empty": "선택 항목을 저장하면 여기에서 다시 사용할 수 있습니다.",
@@ -873,11 +874,15 @@
     "summaryAnnotationOther": "주석 {{count}}개",
     "summaryEmpty": "보이는 객체 없음",
     "summaryUnavailable": "미리보기 사용할 수 없음",
-    "renameLabel": "저장된 스탬프 이름 변경",
+    "nameInput": "스탬프 이름",
+    "confirmRename": "이름 변경 확인",
+    "cancelRename": "이름 변경 취소",
     "delete": "삭제",
+    "deleteConfirmCopy": "이 저장된 스탬프를 삭제할까요?",
     "confirmDelete": "삭제 확인",
-    "cancelDelete": "취소",
-    "reorderLabel": "저장된 스탬프 순서 변경"
+    "cancelDelete": "삭제 취소",
+    "reorderLabel": "저장된 스탬프 순서 변경",
+    "resizeFrame": "저장된 스탬프 프레임 크기 조정"
   },
   "adaptation": {
     "title": "템플릿 적응",

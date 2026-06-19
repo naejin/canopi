@@ -862,6 +862,7 @@
     "import": "导入",
     "place": "放置",
     "export": "导出",
+    "rename": "重命名",
     "selectHint": "选择植物、区域、注释或组合后一起保存。",
     "loading": "正在加载已保存图章...",
     "empty": "保存一个选择后可在这里复用。",
@@ -873,11 +874,15 @@
     "summaryAnnotationOther": "{{count}} 条注释",
     "summaryEmpty": "没有可见对象",
     "summaryUnavailable": "预览不可用",
-    "renameLabel": "重命名已保存图章",
+    "nameInput": "图章名称",
+    "confirmRename": "确认重命名",
+    "cancelRename": "取消重命名",
     "delete": "删除",
+    "deleteConfirmCopy": "删除这个已保存图章？",
     "confirmDelete": "确认删除",
-    "cancelDelete": "取消",
-    "reorderLabel": "重新排序已保存图章"
+    "cancelDelete": "取消删除",
+    "reorderLabel": "重新排序已保存图章",
+    "resizeFrame": "调整已保存图章框架大小"
   },
   "adaptation": {
     "title": "模板适配",

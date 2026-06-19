@@ -245,6 +245,7 @@ function SavedStampsResizeHandle({
       className={styles.savedStampsResizeHandle}
       role="separator"
       aria-orientation="horizontal"
+      aria-label={t('savedObjectStamps.resizeFrame')}
       tabIndex={0}
       onPointerDown={(event) => {
         if (event.button !== 0) return
@@ -539,11 +540,11 @@ function SavedObjectStampRow({
         onBlur={onPreviewClear}
       >
         {confirmingDelete ? (
-          <span className={styles.savedStampDeleteCopy}>{t('savedObjectStamps.confirmDelete')}</span>
+          <span className={styles.savedStampDeleteCopy}>{t('savedObjectStamps.deleteConfirmCopy')}</span>
         ) : isRenaming ? (
           <input
             className={styles.savedStampNameInput}
-            aria-label={t('savedObjectStamps.renameLabel')}
+            aria-label={t('savedObjectStamps.nameInput')}
             value={draftName}
             onInput={(event) => setDraftName((event.currentTarget as HTMLInputElement).value)}
             onBlur={commitRename}
@@ -577,10 +578,10 @@ function SavedObjectStampRow({
             <button
               type="button"
               className={styles.savedStampSecondaryButton}
-              aria-label={t('canvas.plantSpacing.cancel')}
+              aria-label={t('savedObjectStamps.cancelDelete')}
               onClick={() => setConfirmingDelete(false)}
             >
-              {t('canvas.plantSpacing.cancel')}
+              {t('savedObjectStamps.cancelDelete')}
             </button>
           </>
         ) : (
@@ -602,13 +603,13 @@ function SavedObjectStampRow({
             {isRenaming ? (
               <>
                 <SavedStampIconButton
-                  label={t('canvas.plantSpacing.confirm')}
+                  label={t('savedObjectStamps.confirmRename')}
                   onClick={commitRename}
                 >
                   <CheckIcon />
                 </SavedStampIconButton>
                 <SavedStampIconButton
-                  label={t('canvas.plantSpacing.cancel')}
+                  label={t('savedObjectStamps.cancelRename')}
                   onClick={cancelRename}
                 >
                   <CancelIcon />
@@ -617,7 +618,7 @@ function SavedObjectStampRow({
             ) : (
               <>
                 <SavedStampIconButton
-                  label={t('savedObjectStamps.renameLabel')}
+                  label={t('savedObjectStamps.rename')}
                   onClick={() => {
                     setConfirmingDelete(false)
                     setDraftName(stamp.name)

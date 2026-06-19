@@ -862,6 +862,7 @@
     "import": "Import",
     "place": "Place",
     "export": "Export",
+    "rename": "Rename",
     "selectHint": "Select plants, zones, annotations, or groups to save them together.",
     "loading": "Loading saved stamps...",
     "empty": "Save a selection to reuse it here.",
@@ -873,11 +874,15 @@
     "summaryAnnotationOther": "{{count}} annotations",
     "summaryEmpty": "No visible objects",
     "summaryUnavailable": "Preview unavailable",
-    "renameLabel": "Rename saved stamp",
+    "nameInput": "Stamp name",
+    "confirmRename": "Confirm rename",
+    "cancelRename": "Cancel rename",
     "delete": "Delete",
+    "deleteConfirmCopy": "Delete this saved stamp?",
     "confirmDelete": "Confirm delete",
-    "cancelDelete": "Cancel",
-    "reorderLabel": "Reorder saved stamp"
+    "cancelDelete": "Cancel delete",
+    "reorderLabel": "Reorder saved stamp",
+    "resizeFrame": "Resize Saved Stamps frame"
   },
   "adaptation": {
     "title": "Template Adaptation",

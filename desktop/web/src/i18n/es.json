@@ -862,6 +862,7 @@
     "import": "Importar",
     "place": "Colocar",
     "export": "Exportar",
+    "rename": "Renombrar",
     "selectHint": "Selecciona plantas, zonas, anotaciones o grupos para guardarlos juntos.",
     "loading": "Cargando sellos guardados...",
     "empty": "Guarda una selección para reutilizarla aquí.",
@@ -873,11 +874,15 @@
     "summaryAnnotationOther": "{{count}} anotaciones",
     "summaryEmpty": "Sin objetos visibles",
     "summaryUnavailable": "Vista previa no disponible",
-    "renameLabel": "Renombrar sello guardado",
+    "nameInput": "Nombre del sello",
+    "confirmRename": "Confirmar cambio de nombre",
+    "cancelRename": "Cancelar cambio de nombre",
     "delete": "Eliminar",
+    "deleteConfirmCopy": "¿Eliminar este sello guardado?",
     "confirmDelete": "Confirmar eliminación",
-    "cancelDelete": "Cancelar",
-    "reorderLabel": "Reordenar sello guardado"
+    "cancelDelete": "Cancelar eliminación",
+    "reorderLabel": "Reordenar sello guardado",
+    "resizeFrame": "Redimensionar el marco de Sellos guardados"
   },
   "adaptation": {
     "title": "Adaptación de plantilla",

@@ -856,14 +856,15 @@
     "dragHint": "Glisser sur le canevas pour placer"
   },
   "savedObjectStamps": {
-    "title": "Tampons enregistrés",
-    "description": "Pour réutiliser des groupes de plantes, zones et annotations.",
+    "title": "Planches",
+    "description": "Pour réutiliser des ensembles de plantes, zones et annotations.",
     "saveSelection": "Enregistrer la sélection",
     "import": "Importer",
     "place": "Placer",
     "export": "Exporter",
+    "rename": "Renommer la planche",
     "selectHint": "Sélectionnez des plantes, zones, annotations ou groupes à enregistrer ensemble.",
-    "loading": "Chargement des tampons enregistrés...",
+    "loading": "Chargement des planches...",
     "empty": "Enregistrez une sélection pour la réutiliser ici.",
     "summaryPlantOne": "{{count}} plante",
     "summaryPlantOther": "{{count}} plantes",
@@ -873,11 +874,15 @@
     "summaryAnnotationOther": "{{count}} annotations",
     "summaryEmpty": "Aucun objet visible",
     "summaryUnavailable": "Aperçu indisponible",
-    "renameLabel": "Renommer le tampon enregistré",
+    "nameInput": "Nom de la planche",
+    "confirmRename": "Confirmer le renommage",
+    "cancelRename": "Annuler le renommage",
     "delete": "Supprimer",
+    "deleteConfirmCopy": "Supprimer cette planche ?",
     "confirmDelete": "Confirmer la suppression",
-    "cancelDelete": "Annuler",
-    "reorderLabel": "Réorganiser le tampon enregistré"
+    "cancelDelete": "Annuler la suppression",
+    "reorderLabel": "Réorganiser la planche",
+    "resizeFrame": "Redimensionner le cadre Planches"
   },
   "adaptation": {
     "title": "Adaptation du modèle",

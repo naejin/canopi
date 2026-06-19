@@ -862,6 +862,7 @@
     "import": "Importa",
     "place": "Posiziona",
     "export": "Esporta",
+    "rename": "Rinomina",
     "selectHint": "Seleziona piante, zone, annotazioni o gruppi da salvare insieme.",
     "loading": "Caricamento dei timbri salvati...",
     "empty": "Salva una selezione per riutilizzarla qui.",
@@ -873,11 +874,15 @@
     "summaryAnnotationOther": "{{count}} annotazioni",
     "summaryEmpty": "Nessun oggetto visibile",
     "summaryUnavailable": "Anteprima non disponibile",
-    "renameLabel": "Rinomina timbro salvato",
+    "nameInput": "Nome del timbro",
+    "confirmRename": "Conferma rinomina",
+    "cancelRename": "Annulla rinomina",
     "delete": "Elimina",
+    "deleteConfirmCopy": "Eliminare questo timbro salvato?",
     "confirmDelete": "Conferma eliminazione",
-    "cancelDelete": "Annulla",
-    "reorderLabel": "Riordina timbro salvato"
+    "cancelDelete": "Annulla eliminazione",
+    "reorderLabel": "Riordina timbro salvato",
+    "resizeFrame": "Ridimensiona il riquadro Timbri salvati"
   },
   "adaptation": {
     "title": "Adattamento modello",

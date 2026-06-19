@@ -247,7 +247,7 @@ describe('FavoritesPanel', () => {
     expect(loadStampLibraryMock).toHaveBeenCalledTimes(1)
     expect(container.textContent).toContain('Saved Stamps')
     expect(container.textContent).toContain('For reusable groups of plants, zones, and annotations.')
-    expect(container.querySelector<HTMLInputElement>('input[aria-label="Rename saved stamp"]')).toBeNull()
+    expect(container.querySelector<HTMLInputElement>('input[aria-label="Stamp name"]')).toBeNull()
     expect(container.textContent).toContain('Pommier, Lavande')
     expect(container.textContent).toContain('2 plants · 1 zone · 1 annotation')
 
@@ -341,21 +341,21 @@ describe('FavoritesPanel', () => {
 
     expect(container.querySelector('button[aria-label="Place"]')).toBeTruthy()
     expect(container.querySelector('button[aria-label="Export"]')).toBeTruthy()
-    expect(container.querySelector('button[aria-label="Rename saved stamp"]')).toBeTruthy()
+    expect(container.querySelector('button[aria-label="Rename"]')).toBeTruthy()
     expect(container.querySelector('button[aria-label="Delete"]')).toBeTruthy()
 
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('button[aria-label="Rename saved stamp"]')!
+      container.querySelector<HTMLButtonElement>('button[aria-label="Rename"]')!
         .dispatchEvent(new MouseEvent('click', { bubbles: true }))
       await flushEffects()
     })
 
-    const renameInput = container.querySelector<HTMLInputElement>('input[aria-label="Rename saved stamp"]')
+    const renameInput = container.querySelector<HTMLInputElement>('input[aria-label="Stamp name"]')
     expect(renameInput).toBeTruthy()
     expect(container.querySelector('button[aria-label="Place"]')).toBeTruthy()
     expect(container.querySelector('button[aria-label="Export"]')).toBeTruthy()
-    expect(container.querySelector('button[aria-label="Confirm"]')).toBeTruthy()
-    expect(container.querySelector('button[aria-label="Cancel"]')).toBeTruthy()
+    expect(container.querySelector('button[aria-label="Confirm rename"]')).toBeTruthy()
+    expect(container.querySelector('button[aria-label="Cancel rename"]')).toBeTruthy()
 
     await act(async () => {
       renameInput!.value = 'Kitchen guild'
@@ -369,11 +369,11 @@ describe('FavoritesPanel', () => {
     expect(renameStampMock).toHaveBeenCalledWith('stamp-1', 'Kitchen guild')
 
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('button[aria-label="Rename saved stamp"]')!
+      container.querySelector<HTMLButtonElement>('button[aria-label="Rename"]')!
         .dispatchEvent(new MouseEvent('click', { bubbles: true }))
       await flushEffects()
     })
-    const emptyRenameInput = container.querySelector<HTMLInputElement>('input[aria-label="Rename saved stamp"]')
+    const emptyRenameInput = container.querySelector<HTMLInputElement>('input[aria-label="Stamp name"]')
     await act(async () => {
       emptyRenameInput!.value = '   '
       emptyRenameInput!.dispatchEvent(new Event('input', { bubbles: true }))
@@ -381,7 +381,7 @@ describe('FavoritesPanel', () => {
       await flushEffects()
     })
     expect(renameStampMock).toHaveBeenCalledTimes(1)
-    expect(container.querySelector<HTMLInputElement>('input[aria-label="Rename saved stamp"]')).toBeNull()
+    expect(container.querySelector<HTMLInputElement>('input[aria-label="Stamp name"]')).toBeNull()
     expect(container.textContent).toContain('Pommier, Lavande')
 
     const deleteButton = container.querySelector<HTMLButtonElement>('button[aria-label="Delete"]')
@@ -391,14 +391,14 @@ describe('FavoritesPanel', () => {
       deleteButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
       await flushEffects()
     })
-    expect(container.textContent).toContain('Confirm delete')
+    expect(container.textContent).toContain('Delete this saved stamp?')
     expect(container.querySelector('button[aria-label="Place"]')).toBeNull()
     expect(container.querySelector('button[aria-label="Export"]')).toBeNull()
-    expect(container.querySelector('button[aria-label="Rename saved stamp"]')).toBeNull()
+    expect(container.querySelector('button[aria-label="Rename"]')).toBeNull()
     expect(container.querySelector('button[aria-label="Confirm delete"]')).toBeTruthy()
-    expect(container.querySelector('button[aria-label="Cancel"]')).toBeTruthy()
+    expect(container.querySelector('button[aria-label="Cancel delete"]')).toBeTruthy()
 
-    const cancelButton = container.querySelector<HTMLButtonElement>('button[aria-label="Cancel"]')
+    const cancelButton = container.querySelector<HTMLButtonElement>('button[aria-label="Cancel delete"]')
     await act(async () => {
       cancelButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
       await flushEffects()

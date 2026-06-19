@@ -862,6 +862,7 @@
     "import": "Importeren",
     "place": "Plaatsen",
     "export": "Exporteren",
+    "rename": "Hernoemen",
     "selectHint": "Selecteer planten, zones, annotaties of groepen om ze samen op te slaan.",
     "loading": "Opgeslagen stempels laden...",
     "empty": "Sla een selectie op om deze hier opnieuw te gebruiken.",
@@ -873,11 +874,15 @@
     "summaryAnnotationOther": "{{count}} annotaties",
     "summaryEmpty": "Geen zichtbare objecten",
     "summaryUnavailable": "Voorbeeld niet beschikbaar",
-    "renameLabel": "Opgeslagen stempel hernoemen",
+    "nameInput": "Stempelnaam",
+    "confirmRename": "Hernoemen bevestigen",
+    "cancelRename": "Hernoemen annuleren",
     "delete": "Verwijderen",
+    "deleteConfirmCopy": "Deze opgeslagen stempel verwijderen?",
     "confirmDelete": "Verwijderen bevestigen",
-    "cancelDelete": "Annuleren",
-    "reorderLabel": "Opgeslagen stempel herschikken"
+    "cancelDelete": "Verwijderen annuleren",
+    "reorderLabel": "Opgeslagen stempel herschikken",
+    "resizeFrame": "Frame Opgeslagen stempels aanpassen"
   },
   "adaptation": {
     "title": "Sjabloonaanpassing",
