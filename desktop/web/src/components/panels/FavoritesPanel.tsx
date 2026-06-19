@@ -54,31 +54,41 @@ export function FavoritesPanel() {
         {/* Header — always visible */}
         <div className={styles.header}>
           <span className={styles.title}>{t('nav.favorites')}</span>
-          {count > 0 && (
-            <span className={styles.count}>{count}</span>
-          )}
         </div>
 
-        {/* Content area */}
-        {isLoading ? (
-          <div className={styles.loading} aria-live="polite" aria-busy="true">
-            {t('plantDb.loading')}
+        <section
+          className={styles.plantsFrame}
+          data-favorites-plants-frame
+          aria-labelledby="favorite-plants-title"
+        >
+          <div className={styles.frameHeader}>
+            <span id="favorite-plants-title" className={styles.title}>{t('canvas.layers.plants')}</span>
+            {count > 0 && (
+              <span className={styles.count}>{count}</span>
+            )}
           </div>
-        ) : count === 0 ? (
-          <div className={styles.empty} aria-live="polite">
-            <svg className={styles.emptyIcon} width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-            </svg>
-            <span className={styles.emptyTitle}>{t('favorites.empty')}</span>
-            <span className={styles.emptyHint}>{t('favorites.emptyHint')}</span>
+          <div className={styles.plantsFrameBody}>
+            {isLoading ? (
+              <div className={styles.loading} aria-live="polite" aria-busy="true">
+                {t('plantDb.loading')}
+              </div>
+            ) : count === 0 ? (
+              <div className={styles.empty} aria-live="polite">
+                <svg className={styles.emptyIcon} width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                </svg>
+                <span className={styles.emptyTitle}>{t('favorites.empty')}</span>
+                <span className={styles.emptyHint}>{t('favorites.emptyHint')}</span>
+              </div>
+            ) : (
+              <div className={styles.list} role="list" aria-label={t('canvas.layers.plants')}>
+                {items.map((plant) => (
+                  <PlantRow key={plant.canonical_name} plant={plant} variant="favorites" />
+                ))}
+              </div>
+            )}
           </div>
-        ) : (
-          <div className={styles.list} role="list" aria-label={t('nav.favorites')}>
-            {items.map((plant) => (
-              <PlantRow key={plant.canonical_name} plant={plant} />
-            ))}
-          </div>
-        )}
+        </section>
 
         {shouldShowSavedStampsPrototype() ? (
           <SavedStampsPrototype stamps={savedStampItems} />
@@ -95,7 +105,7 @@ export function FavoritesPanel() {
               aria-labelledby="saved-object-stamps-title"
               style={{ height: `${resolveSavedStampsFrameHeight(savedStampsFrameHeight.value, mainRef.current)}px` }}
             >
-            <div className={styles.savedStampsHeader}>
+            <div className={styles.frameHeader}>
               <div className={styles.savedStampsTitleGroup}>
                 <span id="saved-object-stamps-title" className={styles.title}>
                   {t('savedObjectStamps.title')}

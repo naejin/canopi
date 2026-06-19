@@ -18,9 +18,10 @@ function fmtHeight(m: number): string {
 
 interface Props {
   plant: SpeciesListItem
+  variant?: 'catalog' | 'favorites'
 }
 
-export function PlantRow({ plant }: Props) {
+export function PlantRow({ plant, variant = 'catalog' }: Props) {
   void locale.value
   const session = currentCanvasToolCommandSurface.value
 
@@ -61,6 +62,9 @@ export function PlantRow({ plant }: Props) {
       ? `Z${plant.hardiness_zone_min}–${plant.hardiness_zone_max}`
       : `Z${plant.hardiness_zone_min}`
     : null
+  const metadataTags = variant === 'favorites'
+    ? favoriteMetadataTags(plant)
+    : catalogMetadataTags(plant, hardiness)
 
   return (
     <div
@@ -88,16 +92,9 @@ export function PlantRow({ plant }: Props) {
           )}
         </div>
         <div className={styles.tagRow}>
-          {plant.family && <span className={styles.tag} style={{ color: 'var(--color-family)' }}>{plant.family}</span>}
-          {hardiness && <span className={styles.tag} style={{ color: 'var(--color-hardiness)' }}>{hardiness}</span>}
-          {plant.height_max_m !== null && <span className={styles.tag} style={{ color: 'var(--color-height)' }}>↕{fmtHeight(plant.height_max_m)}m</span>}
-          {plant.stratum && (() => {
-            const key = STRATUM_I18N_KEY[plant.stratum]
-            return <span className={styles.tag} style={{ color: 'var(--color-accent)' }}>{key ? t(key) : plant.stratum}</span>
-          })()}
-          {plant.edibility_rating !== null && plant.edibility_rating > 0 && (
-            <span className={styles.tag} style={{ color: 'var(--color-edible)' }}>{t('plantDb.edible')} {plant.edibility_rating}/5</span>
-          )}
+          {metadataTags.map((tag) => (
+            <span key={tag.label} className={styles.tag} style={{ color: tag.color }}>{tag.label}</span>
+          ))}
         </div>
       </div>
 
@@ -128,4 +125,48 @@ export function PlantRow({ plant }: Props) {
       </div>
     </div>
   )
+}
+
+interface PlantRowMetadataTag {
+  readonly label: string
+  readonly color: string
+}
+
+function catalogMetadataTags(plant: SpeciesListItem, hardiness: string | null): PlantRowMetadataTag[] {
+  const tags: PlantRowMetadataTag[] = []
+  if (plant.family) tags.push({ label: plant.family, color: 'var(--color-family)' })
+  if (hardiness) tags.push({ label: hardiness, color: 'var(--color-hardiness)' })
+  if (plant.height_max_m !== null) {
+    tags.push({ label: `↕${fmtHeight(plant.height_max_m)}m`, color: 'var(--color-height)' })
+  }
+  if (plant.stratum) {
+    const key = STRATUM_I18N_KEY[plant.stratum]
+    tags.push({ label: key ? t(key) : plant.stratum, color: 'var(--color-accent)' })
+  }
+  if (plant.edibility_rating !== null && plant.edibility_rating > 0) {
+    tags.push({
+      label: `${t('plantDb.edible')} ${plant.edibility_rating}/5`,
+      color: 'var(--color-edible)',
+    })
+  }
+  return tags
+}
+
+function favoriteMetadataTags(plant: SpeciesListItem): PlantRowMetadataTag[] {
+  return [
+    ...plant.climate_zones.map((zone) => ({
+      label: translateFilterValue('climateZone_', zone),
+      color: 'var(--color-hardiness)',
+    })),
+    ...plant.life_cycles.map((cycle) => ({
+      label: translateFilterValue('lifeCycle_', cycle),
+      color: 'var(--color-accent)',
+    })),
+  ]
+}
+
+function translateFilterValue(prefix: string, value: string): string {
+  const key = `filters.${prefix}${value}`
+  const translated = t(key)
+  return translated === key ? value : translated
 }

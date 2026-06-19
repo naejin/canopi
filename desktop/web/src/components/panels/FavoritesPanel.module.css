@@ -59,6 +59,25 @@
   min-height: 96px;
 }
 
+.plantsFrame {
+  --favorites-frame-min-height: 120px;
+
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: var(--favorites-frame-min-height);
+  overflow: hidden;
+  background: var(--color-bg);
+}
+
+.plantsFrameBody {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
 /* ── Empty state — not dead-center, visually weighted toward top ── */
 
 .empty {
@@ -116,6 +135,16 @@
   background: var(--color-bg);
 }
 
+.frameHeader,
+.savedStampsHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) calc(var(--space-2) - 2px);
+  border-bottom: 1px solid var(--color-border);
+}
+
 .savedStampsResizeHandle {
   flex: 0 0 var(--space-2);
   position: relative;
@@ -146,13 +175,6 @@
 .savedStampsResizeHandle:hover::before,
 .savedStampsResizeHandle:focus-visible::before {
   opacity: 1;
-}
-
-.savedStampsHeader {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-2);
 }
 
 .savedStampsTitleGroup {

@@ -66,6 +66,8 @@ mod tests {
             hardiness_zone_max: None,
             growth_rate: None,
             stratum: None,
+            climate_zones: Vec::new(),
+            life_cycles: Vec::new(),
             edibility_rating: None,
             medicinal_rating: None,
             width_max_m: None,

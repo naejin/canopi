@@ -272,6 +272,21 @@ describe('FavoritesPanel', () => {
     expect(exportStampMock).toHaveBeenCalledWith(stampLibrary.value.items[0])
   })
 
+  it('renders plant favorites and Saved Stamps as sibling frames', async () => {
+    await act(async () => {
+      render(<FavoritesPanel />, container)
+      await flushEffects()
+    })
+
+    const plantsFrame = container.querySelector<HTMLElement>('[data-favorites-plants-frame]')
+    const stampsFrame = container.querySelector<HTMLElement>('[data-saved-stamps-frame]')
+
+    expect(plantsFrame).toBeTruthy()
+    expect(stampsFrame).toBeTruthy()
+    expect(plantsFrame?.textContent).toContain('Plants')
+    expect(stampsFrame?.textContent).toContain('Saved Stamps')
+  })
+
   it('manages Saved Stamps with inline rename two-step delete and a reorder grip', async () => {
     await act(async () => {
       render(<FavoritesPanel />, container)

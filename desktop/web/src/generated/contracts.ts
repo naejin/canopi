@@ -476,6 +476,8 @@ export type SpeciesListItem = {
 	hardiness_zone_max: number | null,
 	growth_rate: string | null,
 	stratum: string | null,
+	climate_zones: string[],
+	life_cycles: string[],
 	edibility_rating: number | null,
 	medicinal_rating: number | null,
 	width_max_m: number | null,

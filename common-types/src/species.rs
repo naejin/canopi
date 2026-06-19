@@ -15,6 +15,8 @@ pub struct SpeciesListItem {
     pub hardiness_zone_max: Option<i32>,
     pub growth_rate: Option<String>,
     pub stratum: Option<String>,
+    pub climate_zones: Vec<String>,
+    pub life_cycles: Vec<String>,
     pub edibility_rating: Option<i32>,
     pub medicinal_rating: Option<i32>,
     pub width_max_m: Option<f32>,

@@ -15,6 +15,10 @@ const SPECIES_LIST_ITEM_COLUMNS: &[&str] = &[
     "hardiness_zone_max",
     "growth_rate",
     "stratum",
+    "climate_zones",
+    "is_annual",
+    "is_biennial",
+    "is_perennial",
     "edibility_rating",
     "medicinal_rating",
     "width_max_m",
@@ -35,6 +39,11 @@ impl<'row, 'stmt> SpeciesListCursor<'row, 'stmt> {
 
     fn read_flag(&self, column: &'static str) -> rusqlite::Result<bool> {
         self.read::<i32>(column).map(|value| value != 0)
+    }
+
+    fn read_optional_flag(&self, column: &'static str) -> rusqlite::Result<bool> {
+        self.read::<Option<i32>>(column)
+            .map(|value| value.unwrap_or(0) != 0)
     }
 }
 
@@ -61,11 +70,42 @@ pub(super) fn map_species_list_row_with_favorite(
         hardiness_zone_max: cursor.read("hardiness_zone_max")?,
         growth_rate: cursor.read("growth_rate")?,
         stratum: cursor.read("stratum")?,
+        climate_zones: parse_json_array_field(cursor.read("climate_zones")?),
+        life_cycles: life_cycles_from_flags(
+            cursor.read_optional_flag("is_annual")?,
+            cursor.read_optional_flag("is_biennial")?,
+            cursor.read_optional_flag("is_perennial")?,
+        ),
         edibility_rating: cursor.read("edibility_rating")?,
         medicinal_rating: cursor.read("medicinal_rating")?,
         width_max_m: cursor.read("width_max_m")?,
         is_favorite,
     })
+}
+
+fn parse_json_array_field(value: Option<String>) -> Vec<String> {
+    let Some(value) = value else {
+        return Vec::new();
+    };
+    match serde_json::from_str::<Vec<String>>(&value) {
+        Ok(items) => items,
+        Err(_) if value.trim().is_empty() => Vec::new(),
+        Err(_) => vec![value],
+    }
+}
+
+fn life_cycles_from_flags(is_annual: bool, is_biennial: bool, is_perennial: bool) -> Vec<String> {
+    let mut values = Vec::new();
+    if is_annual {
+        values.push("Annual".to_owned());
+    }
+    if is_biennial {
+        values.push("Biennial".to_owned());
+    }
+    if is_perennial {
+        values.push("Perennial".to_owned());
+    }
+    values
 }
 
 #[cfg(test)]
@@ -87,6 +127,8 @@ mod tests {
                 "height_max_m" => "4.0 AS height_max_m".to_owned(),
                 "hardiness_zone_min" => "4 AS hardiness_zone_min".to_owned(),
                 "hardiness_zone_max" => "8 AS hardiness_zone_max".to_owned(),
+                "climate_zones" => "'[\"Temperate\",\"Continental\"]' AS climate_zones".to_owned(),
+                "is_perennial" => "1 AS is_perennial".to_owned(),
                 "width_max_m" => "3.0 AS width_max_m".to_owned(),
                 "edibility_rating" => "5 AS edibility_rating".to_owned(),
                 "medicinal_rating" => "1 AS medicinal_rating".to_owned(),
@@ -109,6 +151,8 @@ mod tests {
         assert_eq!(item.height_max_m, Some(4.0));
         assert_eq!(item.hardiness_zone_min, Some(4));
         assert_eq!(item.hardiness_zone_max, Some(8));
+        assert_eq!(item.climate_zones, vec!["Temperate", "Continental"]);
+        assert_eq!(item.life_cycles, vec!["Perennial"]);
         assert_eq!(item.width_max_m, Some(3.0));
         assert_eq!(item.edibility_rating, Some(5));
         assert_eq!(item.medicinal_rating, Some(1));

@@ -36,6 +36,10 @@ pub(crate) fn species_list_select_sql(locale_placeholder: &str) -> String {
                 s.hardiness_zone_max AS hardiness_zone_max,
                 s.growth_rate AS growth_rate,
                 s.stratum AS stratum,
+                s.climate_zones AS climate_zones,
+                s.is_annual AS is_annual,
+                s.is_biennial AS is_biennial,
+                s.is_perennial AS is_perennial,
                 s.edibility_rating AS edibility_rating,
                 s.medicinal_rating AS medicinal_rating,
                 s.width_max_m AS width_max_m"

@@ -18,6 +18,8 @@ export function makeSpeciesListItem(canonicalName: string, isFavorite = false): 
     hardiness_zone_max: null,
     growth_rate: null,
     stratum: null,
+    climate_zones: [],
+    life_cycles: [],
     edibility_rating: null,
     medicinal_rating: null,
     width_max_m: null,

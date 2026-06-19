@@ -116,6 +116,10 @@ mod tests {
                 hardiness_zone_max INTEGER,
                 growth_rate TEXT,
                 stratum TEXT,
+                climate_zones TEXT DEFAULT '[]',
+                is_annual INTEGER DEFAULT 0,
+                is_biennial INTEGER DEFAULT 0,
+                is_perennial INTEGER DEFAULT 0,
                 edibility_rating INTEGER,
                 medicinal_rating INTEGER,
                 width_max_m REAL
@@ -178,6 +182,10 @@ mod tests {
                 hardiness_zone_max INTEGER,
                 growth_rate TEXT,
                 stratum TEXT,
+                climate_zones TEXT DEFAULT '[]',
+                is_annual INTEGER DEFAULT 0,
+                is_biennial INTEGER DEFAULT 0,
+                is_perennial INTEGER DEFAULT 0,
                 edibility_rating INTEGER,
                 medicinal_rating INTEGER,
                 width_max_m REAL
@@ -840,6 +848,10 @@ mod tests {
                 hardiness_zone_max INTEGER,
                 growth_rate TEXT,
                 stratum TEXT,
+                climate_zones TEXT DEFAULT '[]',
+                is_annual INTEGER DEFAULT 0,
+                is_biennial INTEGER DEFAULT 0,
+                is_perennial INTEGER DEFAULT 0,
                 edibility_rating INTEGER,
                 medicinal_rating INTEGER,
                 width_max_m REAL
