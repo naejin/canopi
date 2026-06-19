@@ -7148,7 +7148,8 @@ describe('SceneInteractionController', () => {
     controller.setTool('saved-object-stamp')
 
     events.pointerMove({ x: 100, y: 120 }, { button: 0 })
-    expect(container.querySelectorAll('[data-saved-object-stamp-ghost]')).toHaveLength(3)
+    expect(container.querySelectorAll('[data-saved-object-stamp-ghost]')).toHaveLength(1)
+    expect(container.querySelectorAll('[data-saved-object-stamp-part]')).toHaveLength(3)
 
     events.pointerDown({ x: 100, y: 120 }, { button: 0 })
 
@@ -7249,7 +7250,8 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
-  it('places Saved Object Stamps from drag-and-drop payloads with full ghost preview', () => {
+  it('places Saved Object Stamps from drag-and-drop payloads with full geometry ghost preview', () => {
+    camera.setViewport({ x: 0, y: 0, scale: 2 })
     const onSceneEditCommit = vi.fn()
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
     const controller = new SceneInteractionController(deps as any)
@@ -7284,12 +7286,26 @@ describe('SceneInteractionController', () => {
           commonName: 'Apple',
           color: '#C44230',
           symbol: 'tree',
-          position: { x: 0, y: 0 },
+          position: { x: -4, y: 0 },
           rotationDeg: null,
           scale: 4,
         }],
-        zones: [],
-        annotations: [],
+        zones: [{
+          id: 'zone-1',
+          name: 'Kitchen bed',
+          zoneType: 'rect',
+          points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 6 }, { x: 0, y: 6 }],
+          rotationDeg: 30,
+          fillColor: '#CBA24A',
+        }],
+        annotations: [{
+          id: 'annotation-1',
+          annotationType: 'text',
+          position: { x: 2, y: -5 },
+          text: 'Guild',
+          fontSize: 11,
+          rotationDeg: 45,
+        }],
         groups: [],
       }),
     })
@@ -7311,6 +7327,12 @@ describe('SceneInteractionController', () => {
     expect(dragOverEvent.defaultPrevented).toBe(true)
     expect(dataTransfer.dropEffect).toBe('copy')
     expect(container.querySelectorAll('[data-saved-object-stamp-ghost]')).toHaveLength(1)
+    expect(container.querySelector('[data-saved-object-stamp-part="zone"]')?.tagName.toLowerCase())
+      .toBe('polygon')
+    expect(container.querySelector('[data-saved-object-stamp-part="plant-symbol"] path')).toBeTruthy()
+    const annotationGhost = container.querySelector<SVGTextElement>('[data-saved-object-stamp-part="annotation"]')
+    expect(annotationGhost?.getAttribute('font-size')).toBe('11')
+    expect(annotationGhost?.getAttribute('transform')).toContain('rotate(45')
 
     protectedDragData = false
     container.dispatchEvent(dropEvent)
@@ -7322,10 +7344,25 @@ describe('SceneInteractionController', () => {
       commonName: 'Apple',
       color: '#C44230',
       symbol: 'tree',
-      position: { x: 80, y: 90 },
+      position: { x: 36, y: 45 },
       locked: false,
     })
-    expect(selectedObjectIds.value).toEqual(new Set([store.persisted.plants[0]!.id]))
+    expect(store.persisted.zones[0]).toMatchObject({
+      name: 'Kitchen bed',
+      rotationDeg: 30,
+      fillColor: '#CBA24A',
+    })
+    expect(store.persisted.annotations[0]).toMatchObject({
+      text: 'Guild',
+      fontSize: 11,
+      rotationDeg: 45,
+      position: { x: 42, y: 40 },
+    })
+    expect(selectedObjectIds.value).toEqual(new Set([
+      store.persisted.plants[0]!.id,
+      store.persisted.zones[0]!.name,
+      store.persisted.annotations[0]!.id,
+    ]))
     expect(container.querySelector('[data-saved-object-stamp-ghost]')).toBeNull()
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-saved-object-stamp')
     controller.dispose()

@@ -1,13 +1,20 @@
 import { clearSavedObjectStampSource, readSavedObjectStampSource } from '../../saved-object-stamp-source'
 import type { SavedObjectStampPayload } from '../../saved-object-stamp-payload'
 import { createUuid } from '../../../utils/ids'
-import { getAnnotationWorldBounds } from '../annotation-layout'
+import { getAnnotationScreenFrame } from '../annotation-layout'
 import type { CameraController } from '../camera'
 import {
-  getPlantWorldBounds,
+  buildPlantPresentationEntries,
+  type PlantPresentationEntry,
   type PlantPresentationContext,
 } from '../plant-presentation'
+import {
+  DEFAULT_PLANT_SYMBOL_LINE_STROKE_WIDTH,
+  DEFAULT_PLANT_SYMBOL_SHAPE_STROKE_WIDTH,
+  PLANT_SYMBOL_RECIPES,
+} from '../plant-symbol-recipes'
 import type {
+  PlantSymbolId,
   SceneAnnotationEntity,
   SceneObjectGroupEntity,
   SceneObjectGroupMember,
@@ -21,10 +28,17 @@ import {
   sceneObjectGroupMemberKey,
 } from '../scene'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
-import { getZoneWorldBounds } from '../zone-geometry'
+import { getAnnotationTextColor, resolveZoneVisual } from '../scene-visuals'
+import { getEllipticalZonePolygon, getRectangularZoneCorners } from '../zone-geometry'
 import { isSceneLayerOpenForCreation, type SceneCreationLayerName } from './layer-guards'
 import { isEditableTarget } from './pointer-utils'
 import type { SceneToolAdapter } from './tool-adapter'
+
+const SVG_NS = 'http://www.w3.org/2000/svg'
+const STAMP_GHOST_OPACITY = 0.62
+const STAMP_GHOST_ANNOTATION_OPACITY = 0.68
+const ZONE_STROKE_WIDTH_PX = 2
+const PLANT_SYMBOL_STROKE_WIDTH_PX = 1.6
 
 export interface SavedObjectStampPlacementContext {
   readonly preview: HTMLDivElement
@@ -282,12 +296,15 @@ function showSavedObjectStampGhosts(
 ): void {
   const preview = context.preview
   preview.replaceChildren()
+  const screenSize = context.camera.screenSize
+  const width = Math.max(1, screenSize.width)
+  const height = Math.max(1, screenSize.height)
   Object.assign(preview.style, {
     display: 'block',
     left: '0',
     top: '0',
-    width: '0',
-    height: '0',
+    width: `${width}px`,
+    height: `${height}px`,
     border: '0',
     borderRadius: '0',
     background: 'transparent',
@@ -297,56 +314,35 @@ function showSavedObjectStampGhosts(
     zIndex: '2',
   })
 
-  const plantContext = context.getPlantPresentationContext(context.camera.viewport.scale)
-  for (const plant of source.plants) {
-    const ghostPlant = scenePlantFromSavedPlant(plant, delta)
-    const bounds = getPlantWorldBounds(ghostPlant, plantContext)
-    const ghost = document.createElement('div')
-    ghost.dataset.savedObjectStampGhost = 'plant'
-    Object.assign(ghost.style, {
-      position: 'absolute',
-      borderRadius: '50%',
-      border: '1px solid var(--canvas-selection-stroke)',
-      background: ghostPlant.color ?? 'var(--canvas-selection)',
-      opacity: '0.38',
-    })
-    positionGhost(context, ghost, bounds)
-    preview.appendChild(ghost)
-  }
+  const svg = createSvgElement('svg')
+  svg.dataset.savedObjectStampGhost = 'root'
+  setSvgAttributes(svg, {
+    width,
+    height,
+    viewBox: `0 0 ${width} ${height}`,
+    'aria-hidden': 'true',
+    focusable: 'false',
+  })
+  Object.assign(svg.style, {
+    position: 'absolute',
+    inset: '0',
+    width: '100%',
+    height: '100%',
+    overflow: 'visible',
+  })
+  preview.appendChild(svg)
 
   for (const zone of source.zones) {
-    const ghostZone = sceneZoneFromSavedZone(zone, delta)
-    const bounds = getZoneWorldBounds(ghostZone)
-    if (!bounds) continue
-    const ghost = document.createElement('div')
-    ghost.dataset.savedObjectStampGhost = 'zone'
-    Object.assign(ghost.style, {
-      position: 'absolute',
-      border: '1px solid var(--canvas-selection-stroke)',
-      borderRadius: ghostZone.zoneType === 'ellipse' ? '50%' : '0',
-      background: ghostZone.fillColor ?? 'var(--canvas-selection)',
-      opacity: '0.28',
-    })
-    positionGhost(context, ghost, bounds)
-    preview.appendChild(ghost)
+    appendZoneGhost(svg, context, sceneZoneFromSavedZone(zone, delta))
+  }
+
+  const plantContext = context.getPlantPresentationContext(context.camera.viewport.scale)
+  for (const plant of source.plants) {
+    appendPlantGhost(svg, context, scenePlantFromSavedPlant(plant, delta), plantContext)
   }
 
   for (const annotation of source.annotations) {
-    const ghostAnnotation = sceneAnnotationFromSavedAnnotation(annotation, delta)
-    const bounds = getAnnotationWorldBounds(ghostAnnotation, context.camera.viewport.scale)
-    const ghost = document.createElement('div')
-    ghost.dataset.savedObjectStampGhost = 'annotation'
-    ghost.textContent = ghostAnnotation.text
-    Object.assign(ghost.style, {
-      position: 'absolute',
-      color: 'var(--canvas-annotation-text)',
-      fontSize: `${Math.max(8, ghostAnnotation.fontSize * context.camera.viewport.scale)}px`,
-      lineHeight: '1.2',
-      opacity: '0.42',
-      whiteSpace: 'pre',
-    })
-    positionGhost(context, ghost, bounds)
-    preview.appendChild(ghost)
+    appendAnnotationGhost(svg, context, sceneAnnotationFromSavedAnnotation(annotation, delta))
   }
 }
 
@@ -355,21 +351,245 @@ export function clearSavedObjectStampGhosts(preview: HTMLElement): void {
   preview.style.display = 'none'
 }
 
-function positionGhost(
+function appendZoneGhost(
+  svg: SVGSVGElement,
   context: SavedObjectStampPlacementContext,
-  ghost: HTMLElement,
-  bounds: { x: number; y: number; width: number; height: number },
+  zone: SceneZoneEntity,
 ): void {
-  const start = context.camera.worldToScreen({ x: bounds.x, y: bounds.y })
-  const end = context.camera.worldToScreen({ x: bounds.x + bounds.width, y: bounds.y + bounds.height })
-  const x = Math.min(start.x, end.x)
-  const y = Math.min(start.y, end.y)
-  Object.assign(ghost.style, {
-    left: `${x}px`,
-    top: `${y}px`,
-    width: `${Math.max(1, Math.abs(end.x - start.x))}px`,
-    height: `${Math.max(1, Math.abs(end.y - start.y))}px`,
+  const visual = resolveZoneVisual(zone)
+  const paint = {
+    fill: zone.zoneType === 'line' ? 'none' : visual.fill,
+    'fill-opacity': zone.zoneType === 'line' ? '0' : '0.2',
+    stroke: visual.stroke,
+    'stroke-width': ZONE_STROKE_WIDTH_PX,
+    'stroke-linecap': 'round',
+    'stroke-linejoin': 'round',
+    opacity: STAMP_GHOST_OPACITY,
+  }
+
+  if (zone.zoneType === 'ellipse' && zone.points.length >= 2) {
+    const center = context.camera.worldToScreen(zone.points[0]!)
+    const radii = zone.points[1]!
+    const ellipse = createSvgElement('ellipse')
+    ellipse.dataset.savedObjectStampPart = 'zone'
+    setSvgAttributes(ellipse, {
+      ...paint,
+      cx: center.x,
+      cy: center.y,
+      rx: Math.abs(radii.x * context.camera.viewport.scale),
+      ry: Math.abs(radii.y * context.camera.viewport.scale),
+      transform: `rotate(${formatNumber(zone.rotationDeg)} ${formatNumber(center.x)} ${formatNumber(center.y)})`,
+    })
+    svg.appendChild(ellipse)
+    return
+  }
+
+  const points = zoneScreenPoints(zone, context.camera)
+  if (points.length === 0) return
+
+  const element = createSvgElement(zone.zoneType === 'line' ? 'polyline' : 'polygon')
+  element.dataset.savedObjectStampPart = 'zone'
+  setSvgAttributes(element, {
+    ...paint,
+    points: svgPoints(points),
   })
+  svg.appendChild(element)
+}
+
+function zoneScreenPoints(zone: SceneZoneEntity, camera: CameraController): ScenePoint[] {
+  if (zone.zoneType === 'rect') {
+    return (getRectangularZoneCorners(zone) ?? []).map((point) => camera.worldToScreen(point))
+  }
+  if (zone.zoneType === 'ellipse') {
+    return (getEllipticalZonePolygon(zone) ?? []).map((point) => camera.worldToScreen(point))
+  }
+  return zone.points.map((point) => camera.worldToScreen(point))
+}
+
+function appendPlantGhost(
+  svg: SVGSVGElement,
+  context: SavedObjectStampPlacementContext,
+  plant: ScenePlantEntity,
+  plantContext: PlantPresentationContext,
+): void {
+  const entry = buildPlantPresentationEntries([plant], plantContext, new Set())[0]
+  if (!entry) return
+
+  const group = createSvgElement('g')
+  group.dataset.savedObjectStampPart = 'plant-symbol'
+  setSvgAttributes(group, {
+    opacity: STAMP_GHOST_OPACITY,
+    'stroke-linecap': 'round',
+    'stroke-linejoin': 'round',
+  })
+  appendPlantSymbolCommands(group, context.camera, entry, renderedPlantSymbol(entry))
+  svg.appendChild(group)
+}
+
+function renderedPlantSymbol(entry: PlantPresentationEntry): PlantSymbolId {
+  return entry.lod === 'dot' || entry.usesCanopyRadius ? 'round' : entry.symbol
+}
+
+function appendPlantSymbolCommands(
+  group: SVGGElement,
+  camera: CameraController,
+  entry: PlantPresentationEntry,
+  symbol: PlantSymbolId,
+): void {
+  const center = camera.worldToScreen(entry.plant.position)
+  const radius = entry.radiusWorld * camera.viewport.scale
+
+  for (const command of PLANT_SYMBOL_RECIPES[symbol]) {
+    switch (command.kind) {
+      case 'circle': {
+        const circle = createSvgElement('circle')
+        setSvgAttributes(circle, {
+          cx: center.x + command.cx * radius,
+          cy: center.y + command.cy * radius,
+          r: command.radius * radius,
+        })
+        applyPlantSymbolPaint(circle, entry.color, command.fill, command.stroke, PLANT_SYMBOL_STROKE_WIDTH_PX)
+        group.appendChild(circle)
+        break
+      }
+      case 'rect': {
+        const rect = createSvgElement('rect')
+        setSvgAttributes(rect, {
+          x: center.x + command.x * radius,
+          y: center.y + command.y * radius,
+          width: command.width * radius,
+          height: command.height * radius,
+        })
+        applyPlantSymbolPaint(rect, entry.color, command.fill, command.stroke, PLANT_SYMBOL_STROKE_WIDTH_PX)
+        group.appendChild(rect)
+        break
+      }
+      case 'path': {
+        const path = createSvgElement('path')
+        setSvgAttributes(path, {
+          d: svgPathData(command.points.map(([x, y]) => ({
+            x: center.x + x * radius,
+            y: center.y + y * radius,
+          })), command.closed),
+        })
+        const strokeWidth = PLANT_SYMBOL_STROKE_WIDTH_PX * (
+          (command.strokeWidth ?? DEFAULT_PLANT_SYMBOL_SHAPE_STROKE_WIDTH) /
+          DEFAULT_PLANT_SYMBOL_SHAPE_STROKE_WIDTH
+        )
+        applyPlantSymbolPaint(path, entry.color, command.fill, command.stroke, strokeWidth)
+        group.appendChild(path)
+        break
+      }
+      case 'lines': {
+        const path = createSvgElement('path')
+        const d = command.segments
+          .map(([x1, y1, x2, y2]) => (
+            `M ${formatNumber(center.x + x1 * radius)} ${formatNumber(center.y + y1 * radius)} `
+            + `L ${formatNumber(center.x + x2 * radius)} ${formatNumber(center.y + y2 * radius)}`
+          ))
+          .join(' ')
+        setSvgAttributes(path, { d })
+        const strokeWidth = PLANT_SYMBOL_STROKE_WIDTH_PX * (
+          (command.strokeWidth ?? DEFAULT_PLANT_SYMBOL_LINE_STROKE_WIDTH) /
+          DEFAULT_PLANT_SYMBOL_LINE_STROKE_WIDTH
+        )
+        applyPlantSymbolPaint(path, entry.color, false, true, strokeWidth)
+        group.appendChild(path)
+        break
+      }
+    }
+  }
+}
+
+function applyPlantSymbolPaint(
+  element: SVGElement,
+  color: string,
+  fill: boolean,
+  stroke: boolean,
+  strokeWidth: number,
+): void {
+  setSvgAttributes(element, {
+    fill: fill ? color : 'none',
+    'fill-opacity': fill ? '0.55' : '0',
+    stroke: stroke ? color : 'none',
+    'stroke-opacity': stroke ? '1' : '0',
+    'stroke-width': stroke ? strokeWidth : 0,
+  })
+}
+
+function appendAnnotationGhost(
+  svg: SVGSVGElement,
+  context: SavedObjectStampPlacementContext,
+  annotation: SceneAnnotationEntity,
+): void {
+  if (annotation.annotationType !== 'text') return
+  const frame = getAnnotationScreenFrame(annotation, context.camera.viewport)
+  const text = createSvgElement('text')
+  text.dataset.savedObjectStampPart = 'annotation'
+  setSvgAttributes(text, {
+    x: frame.origin.x,
+    y: frame.origin.y,
+    fill: getAnnotationTextColor(),
+    'font-family': 'Inter, sans-serif',
+    'font-size': annotation.fontSize,
+    opacity: STAMP_GHOST_ANNOTATION_OPACITY,
+    transform: `rotate(${formatNumber(frame.rotationDeg)} ${formatNumber(frame.origin.x)} ${formatNumber(frame.origin.y)})`,
+    'dominant-baseline': 'text-before-edge',
+  })
+  text.style.whiteSpace = 'pre'
+  text.setAttribute('xml:space', 'preserve')
+
+  const lines = annotation.text.split('\n')
+  if (lines.length === 1) {
+    text.textContent = lines[0] ?? ''
+  } else {
+    lines.forEach((line, index) => {
+      const tspan = createSvgElement('tspan')
+      tspan.textContent = line
+      setSvgAttributes(tspan, {
+        x: frame.origin.x,
+        y: frame.origin.y + frame.lineHeightPx * index,
+      })
+      text.appendChild(tspan)
+    })
+  }
+  svg.appendChild(text)
+}
+
+function createSvgElement<K extends keyof SVGElementTagNameMap>(tag: K): SVGElementTagNameMap[K] {
+  return document.createElementNS(SVG_NS, tag)
+}
+
+function setSvgAttributes(
+  element: SVGElement,
+  attributes: Record<string, string | number>,
+): void {
+  for (const [name, value] of Object.entries(attributes)) {
+    element.setAttribute(name, typeof value === 'number' ? formatNumber(value) : value)
+  }
+}
+
+function svgPoints(points: readonly ScenePoint[]): string {
+  return points
+    .map((point) => `${formatNumber(point.x)},${formatNumber(point.y)}`)
+    .join(' ')
+}
+
+function svgPathData(points: readonly ScenePoint[], closed: boolean): string {
+  const first = points[0]
+  if (!first) return ''
+  const segments = [`M ${formatNumber(first.x)} ${formatNumber(first.y)}`]
+  for (let index = 1; index < points.length; index += 1) {
+    const point = points[index]!
+    segments.push(`L ${formatNumber(point.x)} ${formatNumber(point.y)}`)
+  }
+  if (closed) segments.push('Z')
+  return segments.join(' ')
+}
+
+function formatNumber(value: number): string {
+  if (Math.abs(value) < 0.000001) return '0'
+  return Number(value.toFixed(3)).toString()
 }
 
 function scenePlantFromSavedPlant(

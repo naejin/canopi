@@ -221,24 +221,26 @@ function SavedObjectStampRow({
       >
         <span aria-hidden="true">⋮⋮</span>
       </button>
-      <input
-        className={styles.savedStampNameInput}
-        aria-label={t('savedObjectStamps.renameLabel')}
-        value={draftName}
-        onInput={(event) => setDraftName((event.currentTarget as HTMLInputElement).value)}
-        onBlur={commitRename}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') {
-            commitRename()
-            ;(event.currentTarget as HTMLInputElement).blur()
-          }
-          if (event.key === 'Escape') {
-            setDraftName(stamp.name)
-            ;(event.currentTarget as HTMLInputElement).blur()
-          }
-        }}
-      />
-      <span className={styles.savedStampSummary}>{savedStampSummary(stamp)}</span>
+      <div className={styles.savedStampContent}>
+        <input
+          className={styles.savedStampNameInput}
+          aria-label={t('savedObjectStamps.renameLabel')}
+          value={draftName}
+          onInput={(event) => setDraftName((event.currentTarget as HTMLInputElement).value)}
+          onBlur={commitRename}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              commitRename()
+              ;(event.currentTarget as HTMLInputElement).blur()
+            }
+            if (event.key === 'Escape') {
+              setDraftName(stamp.name)
+              ;(event.currentTarget as HTMLInputElement).blur()
+            }
+          }}
+        />
+        <span className={styles.savedStampSummary}>{savedStampSummary(stamp)}</span>
+      </div>
       <div className={styles.savedStampActions}>
         <button
           type="button"
