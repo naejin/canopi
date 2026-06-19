@@ -1,9 +1,9 @@
 import "./styles/global.css";
 import styles from "./App.module.css";
 import { t } from "./i18n";
-import { useCallback, useRef } from "preact/hooks";
+import { useCallback, useEffect, useRef } from "preact/hooks";
 import { lazy, Suspense } from "preact/compat";
-import { activePanel, sidePanel, sidePanelWidth } from "./app/shell/state";
+import { activePanel, navigateTo, sidePanel, sidePanelWidth } from "./app/shell/state";
 import { commitSidePanelWidth } from "./app/shell/controller";
 import { TitleBar } from "./components/shared/TitleBar";
 import { DegradedBanner } from "./components/shared/DegradedBanner";
@@ -52,6 +52,14 @@ export function App() {
   const panel = activePanel.value;
   const side = sidePanel.value;
   const width = sidePanelWidth.value;
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    if (!new URLSearchParams(window.location.search).has("stampPrototype")) return;
+    if (activePanel.peek() !== "canvas" || sidePanel.peek() !== "favorites") {
+      navigateTo("favorites");
+    }
+  }, []);
 
   const showCanvas = panel === "canvas";
   const showLocation = panel === "location";

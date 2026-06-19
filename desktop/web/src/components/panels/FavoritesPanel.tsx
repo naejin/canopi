@@ -11,6 +11,7 @@ import type { SavedObjectStamp } from '../../types/saved-object-stamps'
 import { PlantRow } from '../plant-db/PlantRow'
 import { PlantDetailCard } from '../plant-detail/PlantDetailCard'
 import plantDetailStyles from '../plant-detail/PlantDetail.module.css'
+import { SavedStampsPrototype, shouldShowSavedStampsPrototype } from './SavedStampsPrototype'
 import styles from './FavoritesPanel.module.css'
 
 export function FavoritesPanel() {
@@ -70,62 +71,66 @@ export function FavoritesPanel() {
           </div>
         )}
 
-        <section className={styles.savedStampsSection} aria-labelledby="saved-object-stamps-title">
-          <div className={styles.savedStampsHeader}>
-            <div className={styles.savedStampsTitleGroup}>
-              <span id="saved-object-stamps-title" className={styles.title}>
-                {t('savedObjectStamps.title')}
-              </span>
-              <span className={styles.savedStampsDescription}>
-                {t('savedObjectStamps.description')}
-              </span>
+        {shouldShowSavedStampsPrototype() ? (
+          <SavedStampsPrototype stamps={savedStampItems} />
+        ) : (
+          <section className={styles.savedStampsSection} aria-labelledby="saved-object-stamps-title">
+            <div className={styles.savedStampsHeader}>
+              <div className={styles.savedStampsTitleGroup}>
+                <span id="saved-object-stamps-title" className={styles.title}>
+                  {t('savedObjectStamps.title')}
+                </span>
+                <span className={styles.savedStampsDescription}>
+                  {t('savedObjectStamps.description')}
+                </span>
+              </div>
+              {savedStampsView.items.length > 0 && (
+                <span className={styles.count}>{savedStampsView.items.length}</span>
+              )}
             </div>
-            {savedStampsView.items.length > 0 && (
-              <span className={styles.count}>{savedStampsView.items.length}</span>
+            <div className={styles.savedStampsActions}>
+              <button
+                type="button"
+                className={styles.saveStampButton}
+                disabled={!savedStampSelection.canSave}
+                onClick={() => void savedObjectStampWorkbench.saveCurrentSelection()}
+              >
+                {t('savedObjectStamps.saveSelection')}
+              </button>
+              <button
+                type="button"
+                className={styles.importStampButton}
+                onClick={() => void savedObjectStampWorkbench.importStampFile()}
+              >
+                {t('savedObjectStamps.import')}
+              </button>
+            </div>
+            {!savedStampSelection.canSave && (
+              <span className={styles.savedStampsHint}>
+                {t('savedObjectStamps.selectHint')}
+              </span>
             )}
-          </div>
-          <div className={styles.savedStampsActions}>
-            <button
-              type="button"
-              className={styles.saveStampButton}
-              disabled={!savedStampSelection.canSave}
-              onClick={() => void savedObjectStampWorkbench.saveCurrentSelection()}
-            >
-              {t('savedObjectStamps.saveSelection')}
-            </button>
-            <button
-              type="button"
-              className={styles.importStampButton}
-              onClick={() => void savedObjectStampWorkbench.importStampFile()}
-            >
-              {t('savedObjectStamps.import')}
-            </button>
-          </div>
-          {!savedStampSelection.canSave && (
-            <span className={styles.savedStampsHint}>
-              {t('savedObjectStamps.selectHint')}
-            </span>
-          )}
-          {savedStampsView.loading ? (
-            <div className={styles.savedStampsLoading} aria-live="polite" aria-busy="true">
-              {t('savedObjectStamps.loading')}
-            </div>
-          ) : savedStampsView.items.length === 0 ? (
-            <div className={styles.savedStampsEmpty} aria-live="polite">
-              {t('savedObjectStamps.empty')}
-            </div>
-          ) : (
-            <div className={styles.savedStampsList} role="list" aria-label={t('savedObjectStamps.title')}>
-              {savedStampItems.map((stamp) => (
-                <SavedObjectStampRow
-                  key={stamp.id}
-                  stamp={stamp}
-                  stamps={savedStampItems}
-                />
-              ))}
-            </div>
-          )}
-        </section>
+            {savedStampsView.loading ? (
+              <div className={styles.savedStampsLoading} aria-live="polite" aria-busy="true">
+                {t('savedObjectStamps.loading')}
+              </div>
+            ) : savedStampsView.items.length === 0 ? (
+              <div className={styles.savedStampsEmpty} aria-live="polite">
+                {t('savedObjectStamps.empty')}
+              </div>
+            ) : (
+              <div className={styles.savedStampsList} role="list" aria-label={t('savedObjectStamps.title')}>
+                {savedStampItems.map((stamp) => (
+                  <SavedObjectStampRow
+                    key={stamp.id}
+                    stamp={stamp}
+                    stamps={savedStampItems}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        )}
       </div>
 
       {/* Detail card — slides in when a row is clicked */}
