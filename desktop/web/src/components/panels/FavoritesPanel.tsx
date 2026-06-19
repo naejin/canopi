@@ -8,6 +8,11 @@ import {
 } from '../../app/settings/state'
 import { speciesCatalogWorkbench } from '../../app/plant-browser'
 import { savedObjectStampWorkbench } from '../../app/saved-object-stamps'
+import {
+  createSavedObjectStampThumbnailSignature,
+  SAVED_OBJECT_STAMP_THUMBNAIL_HEIGHT,
+  SAVED_OBJECT_STAMP_THUMBNAIL_WIDTH,
+} from '../../app/saved-object-stamps/thumbnail-renderer'
 import { commitSavedStampsFrameHeight } from '../../app/favorites/controller'
 import {
   clearSavedObjectStampDragSource,
@@ -22,33 +27,12 @@ import { SavedStampsPrototype, shouldShowSavedStampsPrototype } from './SavedSta
 import styles from './FavoritesPanel.module.css'
 
 const SAVED_STAMP_PREVIEW_DELAY_MS = 120
-const SAVED_STAMP_PREVIEW_WIDTH = 180
-const SAVED_STAMP_PREVIEW_HEIGHT = 150
 const SAVED_STAMP_PREVIEW_GAP = 8
 const SAVED_STAMP_PREVIEW_MARGIN = 8
 
 interface SavedStampPreview {
   readonly stamp: SavedObjectStamp
   readonly anchorRect: DOMRect
-}
-
-interface StampPreviewPoint {
-  readonly x: number
-  readonly y: number
-}
-
-interface StampPreviewPayload {
-  readonly plants?: readonly {
-    readonly position?: StampPreviewPoint
-    readonly color?: string | null
-  }[]
-  readonly zones?: readonly {
-    readonly points?: readonly StampPreviewPoint[]
-    readonly fillColor?: string | null
-  }[]
-  readonly annotations?: readonly {
-    readonly position?: StampPreviewPoint
-  }[]
 }
 
 export function FavoritesPanel() {
@@ -367,8 +351,8 @@ function SavedStampRecognitionOverlay({
       style={{
         left: `${position.left}px`,
         top: `${position.top}px`,
-        width: `${SAVED_STAMP_PREVIEW_WIDTH}px`,
-        height: `${SAVED_STAMP_PREVIEW_HEIGHT}px`,
+        width: `${SAVED_OBJECT_STAMP_THUMBNAIL_WIDTH}px`,
+        height: `${SAVED_OBJECT_STAMP_THUMBNAIL_HEIGHT}px`,
       }}
     >
       <SavedStampThumbnailSvg stamp={preview.stamp} />
@@ -378,9 +362,9 @@ function SavedStampRecognitionOverlay({
 
 function savedStampPreviewPosition(anchorRect: DOMRect, panel: HTMLElement | null): { left: number, top: number } {
   const panelRect = panel?.getBoundingClientRect()
-  const desiredLeft = (panelRect?.left ?? anchorRect.left) - SAVED_STAMP_PREVIEW_WIDTH - SAVED_STAMP_PREVIEW_GAP
-  const maxLeft = Math.max(SAVED_STAMP_PREVIEW_MARGIN, window.innerWidth - SAVED_STAMP_PREVIEW_WIDTH - SAVED_STAMP_PREVIEW_MARGIN)
-  const maxTop = Math.max(SAVED_STAMP_PREVIEW_MARGIN, window.innerHeight - SAVED_STAMP_PREVIEW_HEIGHT - SAVED_STAMP_PREVIEW_MARGIN)
+  const desiredLeft = (panelRect?.left ?? anchorRect.left) - SAVED_OBJECT_STAMP_THUMBNAIL_WIDTH - SAVED_STAMP_PREVIEW_GAP
+  const maxLeft = Math.max(SAVED_STAMP_PREVIEW_MARGIN, window.innerWidth - SAVED_OBJECT_STAMP_THUMBNAIL_WIDTH - SAVED_STAMP_PREVIEW_MARGIN)
+  const maxTop = Math.max(SAVED_STAMP_PREVIEW_MARGIN, window.innerHeight - SAVED_OBJECT_STAMP_THUMBNAIL_HEIGHT - SAVED_STAMP_PREVIEW_MARGIN)
 
   return {
     left: Math.round(Math.min(maxLeft, Math.max(SAVED_STAMP_PREVIEW_MARGIN, desiredLeft))),
@@ -389,101 +373,57 @@ function savedStampPreviewPosition(anchorRect: DOMRect, panel: HTMLElement | nul
 }
 
 function SavedStampThumbnailSvg({ stamp }: { stamp: SavedObjectStamp }) {
-  const payload = parseStampPreviewPayload(stamp.payload_json)
-  const points = stampPreviewPoints(payload)
-  if (!payload || points.length === 0) {
+  const signature = createSavedObjectStampThumbnailSignature(stamp.payload_json)
+  if (signature.fallback) {
     return (
-      <svg className={styles.savedStampThumbnailSvg} viewBox={`0 0 ${SAVED_STAMP_PREVIEW_WIDTH} ${SAVED_STAMP_PREVIEW_HEIGHT}`} aria-hidden="true">
+      <svg className={styles.savedStampThumbnailSvg} viewBox={`0 0 ${signature.width} ${signature.height}`} aria-hidden="true">
         <path className={styles.savedStampThumbnailFallback} d="M54 76h72M90 40v72" />
       </svg>
     )
   }
 
-  const project = createStampPreviewProjector(points)
   return (
-    <svg className={styles.savedStampThumbnailSvg} viewBox={`0 0 ${SAVED_STAMP_PREVIEW_WIDTH} ${SAVED_STAMP_PREVIEW_HEIGHT}`} aria-hidden="true">
-      {payload.zones?.slice(0, 3).map((zone, index) => {
-        const projected = zone.points?.map(project).filter(isFinitePreviewPoint) ?? []
-        if (projected.length < 2) return null
+    <svg className={styles.savedStampThumbnailSvg} viewBox={`0 0 ${signature.width} ${signature.height}`} aria-hidden="true">
+      {signature.zones.map((zone, index) => {
+        const points = zone.points.map((point) => `${point.x},${point.y}`).join(' ')
+        const ZoneElement = zone.closed ? 'polygon' : 'polyline'
         return (
-          <polygon
+          <ZoneElement
             key={`zone-${index}`}
             className={styles.savedStampThumbnailZone}
-            points={projected.map((point) => `${point.x},${point.y}`).join(' ')}
+            points={points}
+            style={zone.fillColor ? { fill: zone.fillColor } : undefined}
           />
         )
       })}
-      {payload.plants?.slice(0, 24).map((plant, index) => {
-        if (!plant.position) return null
-        const point = project(plant.position)
-        if (!isFinitePreviewPoint(point)) return null
-        return (
+      {signature.plants.map((plant, index) => (
+        <g key={`plant-${index}`}>
+          {plant.cluster && (
+            <circle
+              className={styles.savedStampThumbnailPlantCluster}
+              cx={plant.x}
+              cy={plant.y}
+              r={plant.radius + 2}
+            />
+          )}
           <circle
-            key={`plant-${index}`}
             className={styles.savedStampThumbnailPlant}
-            cx={point.x}
-            cy={point.y}
-            r="4"
+            cx={plant.x}
+            cy={plant.y}
+            r={plant.radius}
             style={plant.color ? { fill: plant.color } : undefined}
           />
-        )
-      })}
-      {payload.annotations?.slice(0, 4).map((annotation, index) => {
-        if (!annotation.position) return null
-        const point = project(annotation.position)
-        if (!isFinitePreviewPoint(point)) return null
-        return (
-          <path
-            key={`annotation-${index}`}
-            className={styles.savedStampThumbnailAnnotation}
-            d={`M${point.x - 10} ${point.y}h20`}
-          />
-        )
-      })}
+        </g>
+      ))}
+      {signature.annotations.map((annotation, index) => (
+        <path
+          key={`annotation-${index}`}
+          className={styles.savedStampThumbnailAnnotation}
+          d={`M${annotation.x1} ${annotation.y1}L${annotation.x2} ${annotation.y2}`}
+        />
+      ))}
     </svg>
   )
-}
-
-function parseStampPreviewPayload(payloadJson: string): StampPreviewPayload | null {
-  try {
-    const payload = JSON.parse(payloadJson) as StampPreviewPayload
-    return payload && typeof payload === 'object' ? payload : null
-  } catch {
-    return null
-  }
-}
-
-function stampPreviewPoints(payload: StampPreviewPayload | null): StampPreviewPoint[] {
-  if (!payload) return []
-  return [
-    ...(payload.plants ?? []).flatMap((plant) => plant.position ? [plant.position] : []),
-    ...(payload.zones ?? []).flatMap((zone) => [...(zone.points ?? [])]),
-    ...(payload.annotations ?? []).flatMap((annotation) => annotation.position ? [annotation.position] : []),
-  ].filter(isFinitePreviewPoint)
-}
-
-function createStampPreviewProjector(points: readonly StampPreviewPoint[]) {
-  const minX = Math.min(...points.map((point) => point.x))
-  const maxX = Math.max(...points.map((point) => point.x))
-  const minY = Math.min(...points.map((point) => point.y))
-  const maxY = Math.max(...points.map((point) => point.y))
-  const width = Math.max(1, maxX - minX)
-  const height = Math.max(1, maxY - minY)
-  const padding = 14
-  const availableWidth = SAVED_STAMP_PREVIEW_WIDTH - padding * 2
-  const availableHeight = SAVED_STAMP_PREVIEW_HEIGHT - padding * 2
-  const scale = Math.min(availableWidth / width, availableHeight / height)
-  const offsetX = (SAVED_STAMP_PREVIEW_WIDTH - width * scale) / 2
-  const offsetY = (SAVED_STAMP_PREVIEW_HEIGHT - height * scale) / 2
-
-  return (point: StampPreviewPoint): StampPreviewPoint => ({
-    x: Math.round((offsetX + (point.x - minX) * scale) * 10) / 10,
-    y: Math.round((offsetY + (point.y - minY) * scale) * 10) / 10,
-  })
-}
-
-function isFinitePreviewPoint(point: StampPreviewPoint): boolean {
-  return Number.isFinite(point.x) && Number.isFinite(point.y)
 }
 
 function SavedObjectStampRow({
