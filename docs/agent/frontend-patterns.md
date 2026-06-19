@@ -87,6 +87,16 @@ Use this guide when changing Preact components, signals, i18n, CSS, panels, bott
 - Canvas-origin hover uses `hoveredCanvasTargets` and remains separate.
 - Bottom panel height is a per-tab settings preference. Read the active resolved height through `bottomPanelView`; commit manual resize through `commitBottomPanelHeight()` so only the active Bottom Panel Tab receives the concrete height.
 
+## Saved Object Stamps
+
+- Saved Object Stamps are personal reusable arrangements, not Design Templates and not Species favorites. Keep them in the existing Favorites side panel as a section below Species favorites; do not add a separate PanelBar route unless a later product decision changes the navigation model.
+- A Saved Object Stamp Workbench should own library state, manual ordering, inline rename/delete, import/export, current-selection save, default-name generation, and placement intent. Components should consume that workbench instead of calling IPC, Design Session actions, or canvas internals directly.
+- Saving a selection as a Saved Object Stamp should be available from the Selection Action Toolbar, the Canvas Context Menu, and the Saved Stamps section. The panel action should be enabled only when the current canvas selection can produce a saved stamp, with unavailable states explained through panel copy or tooltips.
+- Default stamp names are generated once at save/import time and then become user-owned text. Use the three most frequent selected plant species names at most, displayed by localized Common Name with Canonical Name fallback; ties follow first appearance in the saved arrangement. If no plants are present, use Zone and Annotation counts.
+- The Saved Stamps section should use dense rows or cards with a composition summary, an inline dotted reorder grip, a place action, rename, delete, and export. The reorder grip only reorders within the panel; dragging the stamp body starts canvas placement.
+- Delete uses an inline two-step confirmation state, not `window.confirm()`. Rename uses an in-place text field. Import and export actions use frontend file dialogs and remain scoped to stamp library behavior, not main Design open/save behavior.
+- User-visible strings for Saved Object Stamps, including empty states, action labels, import/export status, and errors, must go through `t()` and be added to all 11 locale files.
+
 ## Design Template Import
 
 - `app/design-template-import/workflow.ts` owns Design Template import orchestration: download the template, then hand it to the Design Session action seam.

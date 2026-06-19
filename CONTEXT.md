@@ -209,6 +209,10 @@ _Avoid_: Plant stamp payload, plant stamp signal, dragged plant JSON
 An interaction for sampling an existing design object and placing repeated copies of it. An object stamp starts from a design object already in the design, not from Species Catalog data.
 _Avoid_: Plant stamp, copy/paste
 
+**Saved Object Stamp**:
+A named personal reusable snapshot of one or more design objects that a designer can save and place into designs later, primarily for multi-object arrangements of placed plants, zones, annotations, and captured object groups. Saved object stamps preserve visible arrangement details while excluding non-visual planning details and lock state; placing one creates unlocked ordinary design objects, selects the newly placed objects without implying a new object group, and leaves the original source objects unchanged.
+_Avoid_: Template, Design Template, favorite plant, object group
+
 **Plant Spacing**:
 An interaction for repeating a sampled placed plant along a chosen spacing guide at a chosen interval. Plant spacing starts from a placed plant already in the design and creates additional placed plants of the same species.
 _Avoid_: Line tool, interval tool, linear stamp
@@ -320,6 +324,9 @@ A **Design** is the agroecological plan. A **Design Session** is the active app 
 **Design Session vs Design Edit**:
 A **Design Session** owns lifecycle, persistence, dirty baselines, and active Design identity. A **Design Edit** changes non-canvas Design state inside that session and owns no-op detection, preview transactions, and non-canvas dirty marking for those changes.
 
+**Design Template vs Saved Object Stamp**:
+A **Design Template** starts a whole Design. A **Saved Object Stamp** reuses a visible canvas arrangement inside a Design and should not be called a template.
+
 **Problem Report vs Diagnostic Bundle**:
 A **Problem Report** is the user's account of what went wrong. A **Diagnostic Bundle** is optional supporting evidence the user can attach or share.
 
@@ -410,6 +417,9 @@ Use **Consortium** for Canopi's broader stratified, time-aware plant assembly. U
 **Plant Stamp vs Object Stamp**:
 A **Plant Stamp** places placed plants from a chosen species. An **Object Stamp** copies an existing design object already in the design.
 
+**Object Stamp vs Saved Object Stamp**:
+An **Object Stamp** samples an editable design object during the current placement interaction. A **Saved Object Stamp** is named and reusable later, usually as a multi-object arrangement; directly locked source objects may be captured into a saved object stamp but place as unlocked copies.
+
 **Plant Stamp vs Plant Stamp Source**:
 A **Plant Stamp** is the placement interaction. A **Plant Stamp Source** is the runtime Species-derived source the interaction uses to create placed plants.
 
@@ -479,6 +489,10 @@ Developer: "It is a zone. A layer controls visibility and locking; the zone is t
 Designer: "Can I stamp this existing apple tree several more times?"
 
 Developer: "Yes. Use Object Stamp to sample that placed plant, then place copies. Use Plant Stamp when you are starting from a species in the Species Catalog."
+
+Designer: "Can I save this small guild of trees, shrubs, zones, and annotations to reuse in another corner?"
+
+Developer: "Yes. Save it as a Saved Object Stamp so the arrangement can be placed again later. It is different from a Design Template, which starts a whole design."
 
 Designer: "Can I repeat this apple tree every three meters along this row?"
 

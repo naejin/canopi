@@ -13,6 +13,14 @@ Use this guide when changing SQLite schema contracts, plant search, filters, spe
 - Species table name is `species`.
 - User DB migrations also use `PRAGMA user_version`; check before adding migrations.
 
+## User DB Personal Libraries
+
+- The user DB is separate from the bundled plant DB. It stores local app data such as settings, favorites, recently viewed Species, Recent Designs, and personal libraries that should survive normal app updates.
+- Saved Object Stamps belong in the user DB, not in the plant DB and not in the settings JSON blob. Add an incremental user DB migration for a dedicated table rather than extending plant catalog schema or `.canopi` Design save composition.
+- Saved Object Stamp rows should support stable identity, user-owned name, persisted manual order, timestamps, and an opaque normalized payload JSON for the visible canvas arrangement. Use prepared statements and keep library CRUD in focused user DB/service modules.
+- Manual Saved Object Stamp ordering should update explicit order fields in the user DB. Do not rely on recently used ordering, and do not reorder stamps as a side effect of placement.
+- Saved Object Stamp import/export uses `.canopi` files for portability, but imported/exported stamp files are not Recent Designs and should not be recorded through recent-file database helpers.
+
 ## Schema Update Checklist
 
 When canopi-data removes or adds columns, update atomically:

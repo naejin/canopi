@@ -60,6 +60,14 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 - Plant Symbols are v3 scene-owned fields: top-level `plant_species_symbols` stores per-species defaults, and each placed plant may carry an optional explicit `symbol`. Old files migrate with an empty `plant_species_symbols` map and missing placed-plant symbols, which render as `round` through the Plant Symbol fallback.
 - A species default of `round` is explicit and must be stored as `plant_species_symbols[canonicalName] = "round"`; clearing a species default deletes the key and does not rewrite placed-plant symbols.
 
+## Saved Object Stamp Import And Export
+
+- Saved Object Stamps are personal library entries, not part of normal Design Session save composition, dirty state, autosave, or replacement guards.
+- Exporting a Saved Object Stamp writes one valid `.canopi` file containing only the visible canvas objects and captured Object Groups needed for that stamp, with safe default values for required Design fields. Do not export Location, Budget Items, Timeline Actions, Consortiums, description, or non-visual object metadata.
+- Importing a Saved Object Stamp from `.canopi` adds a library entry only. It must not open or replace the current Design Session, must not mark the current Design dirty, and must not require the dirty-design guard.
+- Stamp import should read `.canopi` files through a lower-level format-loading path or a stamp-specific command that does not record Recent Designs. Do not reuse `design_files::load_design()` for stamp import unless its recent-file side effect is bypassed deliberately.
+- Frontend code owns native import/export dialogs; Rust commands should perform file read/write or payload normalization only, matching the existing Linux dialog boundary.
+
 ## Adding Document Fields
 
 - Add document-level fields to the shared `CanopiFile` contract.
