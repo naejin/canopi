@@ -249,6 +249,7 @@ export type Settings = {
 	recent_files_max: number,
 	last_active_panel: string,
 	side_panel_width: number | null,
+	saved_stamps_frame_height: number | null,
 	bottom_panel_open: boolean,
 	bottom_panel_timeline_height: number | null,
 	bottom_panel_budget_height: number | null,

@@ -25,10 +25,13 @@ import {
 } from '../canvas-settings/bottom-panel-state'
 import { sidePanelWidth } from '../shell/state'
 import {
+  DEFAULT_SAVED_STAMPS_FRAME_HEIGHT,
+  MIN_FAVORITES_FRAME_HEIGHT,
   autoSaveIntervalMs,
   basemapStyle,
   locale,
   plantSpacingIntervalM,
+  savedStampsFrameHeight,
   theme,
 } from './state'
 
@@ -44,6 +47,9 @@ export interface SettingsProjectionDraft {
   plantSpacingIntervalM: number
   sidePanel: {
     width: number | null
+  }
+  savedStamps: {
+    frameHeight: number
   }
   bottomPanel: {
     open: boolean
@@ -96,6 +102,11 @@ function normalizeSidePanelWidth(value: number | null): number | null {
   return Math.max(MIN_SIDE_PANEL_WIDTH, Math.round(value))
 }
 
+function normalizeSavedStampsFrameHeight(value: number | null): number {
+  if (value === null || !Number.isFinite(value)) return DEFAULT_SAVED_STAMPS_FRAME_HEIGHT
+  return Math.max(MIN_FAVORITES_FRAME_HEIGHT, Math.round(value))
+}
+
 function normalizeBottomPanelHeight(value: number | null): number | null {
   if (value === null || !Number.isFinite(value)) return null
   return Math.max(MIN_BOTTOM_PANEL_HEIGHT, Math.round(value))
@@ -131,6 +142,9 @@ function createDraftFromProjection(): SettingsProjectionDraft {
     sidePanel: {
       width: sidePanelWidth.value,
     },
+    savedStamps: {
+      frameHeight: savedStampsFrameHeight.value,
+    },
     bottomPanel: {
       open: bottomPanelOpen.value,
       heights: { ...bottomPanelHeights.value },
@@ -163,6 +177,9 @@ function normalizeDraft(draft: SettingsProjectionDraft): SettingsProjectionDraft
     sidePanel: {
       width: normalizeSidePanelWidth(draft.sidePanel.width),
     },
+    savedStamps: {
+      frameHeight: normalizeSavedStampsFrameHeight(draft.savedStamps.frameHeight),
+    },
     bottomPanel: {
       open: draft.bottomPanel.open,
       heights: normalizeBottomPanelHeights(draft.bottomPanel.heights),
@@ -190,6 +207,7 @@ function applyDraftToProjection(draft: SettingsProjectionDraft): void {
     autoSaveIntervalMs.value = draft.autoSaveIntervalMs
     plantSpacingIntervalM.value = draft.plantSpacingIntervalM
     sidePanelWidth.value = draft.sidePanel.width
+    savedStampsFrameHeight.value = draft.savedStamps.frameHeight
     bottomPanelOpen.value = draft.bottomPanel.open
     bottomPanelHeights.value = draft.bottomPanel.heights
     bottomPanelTab.value = draft.bottomPanel.tab
@@ -219,6 +237,7 @@ function settingsFromDraft(base: Settings, draft: SettingsProjectionDraft): Sett
     auto_save_interval_s: Math.round(draft.autoSaveIntervalMs / 1000),
     plant_spacing_interval_m: draft.plantSpacingIntervalM,
     side_panel_width: draft.sidePanel.width,
+    saved_stamps_frame_height: draft.savedStamps.frameHeight,
     bottom_panel_open: draft.bottomPanel.open,
     bottom_panel_timeline_height: draft.bottomPanel.heights.timeline,
     bottom_panel_budget_height: draft.bottomPanel.heights.budget,
@@ -289,6 +308,9 @@ export function hydrateSettingsProjection(settings: Settings): void {
     plantSpacingIntervalM: settings.plant_spacing_interval_m,
     sidePanel: {
       width: settings.side_panel_width,
+    },
+    savedStamps: {
+      frameHeight: normalizeSavedStampsFrameHeight(settings.saved_stamps_frame_height),
     },
     bottomPanel: {
       open: settings.bottom_panel_open,

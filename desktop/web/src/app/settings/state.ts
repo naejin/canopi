@@ -11,3 +11,9 @@ export const autoSaveIntervalMs = signal<number>(60_000)
 
 /** Plant Spacing Interval in meters — app tool preference, not design data. */
 export const plantSpacingIntervalM = signal<number>(FALLBACK_PLANT_SPACING_INTERVAL_M)
+
+export const DEFAULT_SAVED_STAMPS_FRAME_HEIGHT = 220
+export const MIN_FAVORITES_FRAME_HEIGHT = 120
+
+/** Saved Stamps frame height in pixels — app preference, not design data. */
+export const savedStampsFrameHeight = signal<number>(DEFAULT_SAVED_STAMPS_FRAME_HEIGHT)

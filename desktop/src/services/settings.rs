@@ -195,6 +195,7 @@ mod tests {
             theme: Theme::Dark,
             map_style: BasemapStyle::Satellite,
             side_panel_width: Some(444),
+            saved_stamps_frame_height: Some(260),
             ..Default::default()
         };
 
@@ -205,6 +206,7 @@ mod tests {
         assert_eq!(stored.theme, Theme::Dark);
         assert_eq!(stored.map_style, BasemapStyle::Satellite);
         assert_eq!(stored.side_panel_width, Some(444));
+        assert_eq!(stored.saved_stamps_frame_height, Some(260));
         assert_eq!(stored.bottom_panel_timeline_height, None);
         assert_eq!(stored.bottom_panel_budget_height, None);
         assert_eq!(stored.bottom_panel_consortium_height, None);

@@ -56,6 +56,7 @@ describe('FavoritesPanel', () => {
   let container: HTMLDivElement
   let FavoritesPanel: typeof import('../components/panels/FavoritesPanel').FavoritesPanel
   let locale: typeof import('../app/settings/state').locale
+  let savedStampsFrameHeight: typeof import('../app/settings/state').savedStampsFrameHeight
   let workbench: SpeciesCatalogWorkbench
   let getFavoritesMock: ReturnType<typeof vi.fn>
   let loadStampLibraryMock: ReturnType<typeof vi.fn>
@@ -85,7 +86,9 @@ describe('FavoritesPanel', () => {
     vi.resetModules()
     const settings = await import('../app/settings/state')
     locale = settings.locale
+    savedStampsFrameHeight = settings.savedStampsFrameHeight
     locale.value = 'en'
+    savedStampsFrameHeight.value = 220
     getFavoritesMock = vi.fn(async () => [
       makeSpeciesListItem('Malus domestica', true),
     ])
@@ -334,5 +337,119 @@ describe('FavoritesPanel', () => {
     })
 
     expect(deleteStampMock).toHaveBeenCalledWith('stamp-1')
+  })
+
+  it('previews Saved Stamps frame resize and commits the preference when dragging ends', async () => {
+    savedStampsFrameHeight.value = 240
+
+    await act(async () => {
+      render(<FavoritesPanel />, container)
+      await flushEffects()
+    })
+
+    const main = container.querySelector<HTMLElement>('[data-favorites-main]')
+    const frame = container.querySelector<HTMLElement>('[data-saved-stamps-frame]')
+    const handle = container.querySelector<HTMLElement>(
+      '[role="separator"][aria-orientation="horizontal"]',
+    )
+
+    expect(main).toBeTruthy()
+    expect(frame).toBeTruthy()
+    expect(handle).toBeTruthy()
+    if (!main || !frame || !handle) return
+
+    main.getBoundingClientRect = () => ({
+      width: 320,
+      height: 520,
+      top: 0,
+      right: 320,
+      bottom: 520,
+      left: 0,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    })
+    Object.assign(handle, {
+      setPointerCapture: vi.fn(),
+      releasePointerCapture: vi.fn(),
+    })
+
+    expect(frame.style.height).toBe('240px')
+
+    await act(async () => {
+      handle.dispatchEvent(new PointerEvent('pointerdown', {
+        bubbles: true,
+        button: 0,
+        pointerId: 1,
+        clientY: 300,
+      }))
+      handle.dispatchEvent(new PointerEvent('pointermove', {
+        bubbles: true,
+        pointerId: 1,
+        clientY: 250,
+      }))
+    })
+
+    expect(frame.style.height).toBe('290px')
+    expect(savedStampsFrameHeight.value).toBe(240)
+
+    await act(async () => {
+      handle.dispatchEvent(new PointerEvent('pointerup', {
+        bubbles: true,
+        pointerId: 1,
+        clientY: 250,
+      }))
+    })
+
+    expect(savedStampsFrameHeight.value).toBe(290)
+  })
+
+  it('clamps the Saved Stamps frame to leave room for plant favorites', async () => {
+    const originalResizeObserver = globalThis.ResizeObserver
+    class FakeResizeObserver {
+      static instances: FakeResizeObserver[] = []
+      constructor(readonly callback: ResizeObserverCallback) {
+        FakeResizeObserver.instances.push(this)
+      }
+      observe = vi.fn()
+      disconnect = vi.fn()
+      unobserve = vi.fn()
+    }
+    ;(globalThis as { ResizeObserver?: typeof ResizeObserver }).ResizeObserver = FakeResizeObserver as typeof ResizeObserver
+    savedStampsFrameHeight.value = 280
+
+    try {
+      await act(async () => {
+        render(<FavoritesPanel />, container)
+        await flushEffects()
+      })
+
+      const main = container.querySelector<HTMLElement>('[data-favorites-main]')
+      const frame = container.querySelector<HTMLElement>('[data-saved-stamps-frame]')
+      expect(main).toBeTruthy()
+      expect(frame).toBeTruthy()
+      if (!main || !frame) throw new Error('Favorites panel frames were not rendered')
+
+      main.getBoundingClientRect = () => ({
+        width: 320,
+        height: 360,
+        top: 0,
+        right: 320,
+        bottom: 360,
+        left: 0,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      })
+
+      await act(async () => {
+        FakeResizeObserver.instances[0]?.callback([], {} as ResizeObserver)
+        await flushEffects()
+      })
+
+      expect(frame.style.height).toBe('240px')
+    } finally {
+      ;(globalThis as { ResizeObserver?: typeof ResizeObserver }).ResizeObserver = originalResizeObserver
+    }
   })
 })

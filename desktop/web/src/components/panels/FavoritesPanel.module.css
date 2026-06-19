@@ -104,15 +104,48 @@
 /* ── Saved Object Stamps ── */
 
 .savedStampsSection {
-  --saved-stamp-list-max-height: min(32vh, 220px);
+  --favorites-frame-min-height: 120px;
 
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+  min-height: var(--favorites-frame-min-height);
+  overflow: hidden;
   padding: var(--space-2) var(--space-2) var(--space-3);
-  border-top: 1px solid var(--color-border);
   background: var(--color-bg);
+}
+
+.savedStampsResizeHandle {
+  flex: 0 0 var(--space-2);
+  position: relative;
+  cursor: row-resize;
+  background: var(--color-bg);
+  border-top: 1px solid var(--color-border);
+  transition: background-color var(--transition-fast);
+}
+
+.savedStampsResizeHandle::before {
+  content: "";
+  position: absolute;
+  left: var(--space-3);
+  right: var(--space-3);
+  top: calc(50% - var(--slider-track-size) / 2);
+  height: var(--slider-track-size);
+  background: var(--color-border-strong);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.savedStampsResizeHandle:hover,
+.savedStampsResizeHandle:focus-visible {
+  background: var(--color-control-hover);
+  outline: 0;
+}
+
+.savedStampsResizeHandle:hover::before,
+.savedStampsResizeHandle:focus-visible::before {
+  opacity: 1;
 }
 
 .savedStampsHeader {
@@ -186,10 +219,11 @@
 }
 
 .savedStampsList {
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  max-height: var(--saved-stamp-list-max-height);
   overflow-y: auto;
   padding-right: var(--space-1);
 }

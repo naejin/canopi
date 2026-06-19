@@ -1,8 +1,13 @@
-import { useEffect, useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { t } from '../../i18n'
-import { locale } from '../../app/settings/state'
+import {
+  MIN_FAVORITES_FRAME_HEIGHT,
+  locale,
+  savedStampsFrameHeight,
+} from '../../app/settings/state'
 import { speciesCatalogWorkbench } from '../../app/plant-browser'
 import { savedObjectStampWorkbench } from '../../app/saved-object-stamps'
+import { commitSavedStampsFrameHeight } from '../../app/favorites/controller'
 import {
   clearSavedObjectStampDragSource,
   writeSavedObjectStampDragData,
@@ -21,6 +26,8 @@ export function FavoritesPanel() {
   const savedStampSelection = savedObjectStampWorkbench.selection.value
   const lang = locale.value
   const selected = speciesCatalogWorkbench.selectedCanonicalName.value
+  const mainRef = useRef<HTMLDivElement>(null)
+  const savedStampsFrameRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
     void speciesCatalogWorkbench.loadFavorites()
@@ -39,7 +46,9 @@ export function FavoritesPanel() {
     <div className={styles.panel}>
       {/* Search + list view */}
       <div
+        ref={mainRef}
         className={`${styles.main} ${selected !== null ? plantDetailStyles.detailHidden : ''}`}
+        data-favorites-main
         aria-hidden={selected !== null}
       >
         {/* Header — always visible */}
@@ -74,7 +83,18 @@ export function FavoritesPanel() {
         {shouldShowSavedStampsPrototype() ? (
           <SavedStampsPrototype stamps={savedStampItems} />
         ) : (
-          <section className={styles.savedStampsSection} aria-labelledby="saved-object-stamps-title">
+          <>
+            <SavedStampsResizeHandle
+              mainRef={mainRef}
+              frameRef={savedStampsFrameRef}
+            />
+            <section
+              ref={savedStampsFrameRef}
+              className={styles.savedStampsSection}
+              data-saved-stamps-frame
+              aria-labelledby="saved-object-stamps-title"
+              style={{ height: `${resolveSavedStampsFrameHeight(savedStampsFrameHeight.value, mainRef.current)}px` }}
+            >
             <div className={styles.savedStampsHeader}>
               <div className={styles.savedStampsTitleGroup}>
                 <span id="saved-object-stamps-title" className={styles.title}>
@@ -130,6 +150,7 @@ export function FavoritesPanel() {
               </div>
             )}
           </section>
+          </>
         )}
       </div>
 
@@ -141,6 +162,108 @@ export function FavoritesPanel() {
       )}
     </div>
   )
+}
+
+function SavedStampsResizeHandle({
+  mainRef,
+  frameRef,
+}: {
+  mainRef: { current: HTMLDivElement | null }
+  frameRef: { current: HTMLElement | null }
+}) {
+  const handleRef = useRef<HTMLDivElement>(null)
+  const cleanupRef = useRef<((commit: boolean) => void) | null>(null)
+
+  useEffect(() => {
+    return () => { cleanupRef.current?.(false) }
+  }, [])
+
+  return (
+    <div
+      ref={handleRef}
+      className={styles.savedStampsResizeHandle}
+      role="separator"
+      aria-orientation="horizontal"
+      tabIndex={0}
+      onPointerDown={(event) => {
+        if (event.button !== 0) return
+        event.preventDefault()
+
+        const handle = handleRef.current
+        const frame = frameRef.current
+        if (!handle || !frame) return
+        handle.setPointerCapture(event.pointerId)
+
+        const startY = event.clientY
+        const startHeight = currentSavedStampsFrameHeight(frame)
+        const pointerId = event.pointerId
+        let lastClientY = event.clientY
+
+        const clampHeight = (clientY: number) =>
+          resolveSavedStampsFrameHeight(startHeight + (startY - clientY), mainRef.current)
+
+        const onMove = (moveEvent: PointerEvent) => {
+          lastClientY = moveEvent.clientY
+          frame.style.height = `${clampHeight(moveEvent.clientY)}px`
+        }
+
+        let cleaned = false
+        const cleanup = (commit: boolean) => {
+          if (cleaned) return
+          cleaned = true
+          handle.removeEventListener('pointermove', onMove)
+          handle.removeEventListener('pointerup', onUp)
+          handle.removeEventListener('lostpointercapture', onLost)
+          document.body.style.cursor = ''
+          document.body.style.userSelect = ''
+          if (commit) commitSavedStampsFrameHeight(clampHeight(lastClientY))
+          cleanupRef.current = null
+        }
+
+        const onUp = (upEvent: PointerEvent) => {
+          lastClientY = upEvent.clientY
+          handle.releasePointerCapture(pointerId)
+          cleanup(true)
+        }
+
+        const onLost = () => {
+          cleanup(true)
+        }
+
+        handle.addEventListener('pointermove', onMove)
+        handle.addEventListener('pointerup', onUp)
+        handle.addEventListener('lostpointercapture', onLost)
+        document.body.style.cursor = 'row-resize'
+        document.body.style.userSelect = 'none'
+        cleanupRef.current = cleanup
+      }}
+    />
+  )
+}
+
+function currentSavedStampsFrameHeight(frame: HTMLElement): number {
+  const styledHeight = Number.parseFloat(frame.style.height)
+  if (Number.isFinite(styledHeight)) return styledHeight
+
+  const measuredHeight = frame.getBoundingClientRect().height
+  if (Number.isFinite(measuredHeight) && measuredHeight > 0) return measuredHeight
+
+  return savedStampsFrameHeight.value
+}
+
+function resolveSavedStampsFrameHeight(
+  height: number,
+  container: HTMLElement | null,
+): number {
+  const roundedHeight = Number.isFinite(height)
+    ? Math.round(height)
+    : savedStampsFrameHeight.value
+  const containerHeight = container?.getBoundingClientRect().height ?? 0
+  const maxHeight = Number.isFinite(containerHeight) && containerHeight > MIN_FAVORITES_FRAME_HEIGHT * 2
+    ? Math.max(MIN_FAVORITES_FRAME_HEIGHT, Math.round(containerHeight - MIN_FAVORITES_FRAME_HEIGHT))
+    : Number.POSITIVE_INFINITY
+
+  return Math.max(MIN_FAVORITES_FRAME_HEIGHT, Math.min(maxHeight, roundedHeight))
 }
 
 function SavedObjectStampRow({

@@ -25,7 +25,14 @@ import {
   snapToGuidesEnabled,
 } from '../app/canvas-settings/signals'
 import { sidePanelWidth } from '../app/shell/state'
-import { autoSaveIntervalMs, basemapStyle, locale, plantSpacingIntervalM, theme } from '../app/settings/state'
+import {
+  autoSaveIntervalMs,
+  basemapStyle,
+  locale,
+  plantSpacingIntervalM,
+  savedStampsFrameHeight,
+  theme,
+} from '../app/settings/state'
 import {
   flushSettingsProjection,
   hydrateSettingsProjection,
@@ -66,6 +73,7 @@ function baseSettings(overrides: Partial<Settings> = {}): Settings {
     hillshade_visible: false,
     hillshade_opacity: 0.55,
     plant_spacing_interval_m: 0.5,
+    saved_stamps_frame_height: 220,
     ...overrides,
   }
 }
@@ -87,6 +95,7 @@ function resetProjectionSignals(): void {
   hillshadeVisible.value = false
   hillshadeOpacity.value = 0.55
   plantSpacingIntervalM.value = 0.5
+  savedStampsFrameHeight.value = 220
 }
 
 function readSource(path: string): string {
@@ -120,6 +129,7 @@ describe('settings projection', () => {
       snap_to_guides: false,
       auto_save_interval_s: 45,
       side_panel_width: 460,
+      saved_stamps_frame_height: 280,
       bottom_panel_open: true,
       bottom_panel_timeline_height: 320,
       bottom_panel_budget_height: null,
@@ -141,6 +151,7 @@ describe('settings projection', () => {
     expect(snapToGridEnabled.value).toBe(true)
     expect(snapToGuidesEnabled.value).toBe(false)
     expect(sidePanelWidth.value).toBe(460)
+    expect(savedStampsFrameHeight.value).toBe(280)
     expect(bottomPanelOpen.value).toBe(true)
     expect(bottomPanelHeights.value).toEqual({
       timeline: 320,
@@ -174,6 +185,7 @@ describe('settings projection', () => {
       settings.snapToGuides = false
       settings.autoSaveIntervalMs = 15_000
       settings.sidePanel.width = 440
+      settings.savedStamps.frameHeight = 260
       settings.bottomPanel.open = true
       settings.bottomPanel.heights.timeline = 280
       settings.bottomPanel.heights.budget = 300
@@ -199,6 +211,7 @@ describe('settings projection', () => {
       default_currency: 'USD',
       default_design_dir: '/designs',
       side_panel_width: 440,
+      saved_stamps_frame_height: 260,
       bottom_panel_open: true,
       bottom_panel_timeline_height: 280,
       bottom_panel_budget_height: 300,
@@ -226,6 +239,7 @@ describe('settings projection', () => {
       hillshade_opacity: Number.NaN,
       plant_spacing_interval_m: 0,
       side_panel_width: Number.NaN,
+      saved_stamps_frame_height: 80,
       bottom_panel_timeline_height: 120,
       bottom_panel_budget_height: Number.NaN,
     }))
@@ -238,6 +252,7 @@ describe('settings projection', () => {
     expect(hillshadeOpacity.value).toBe(0.55)
     expect(plantSpacingIntervalM.value).toBe(0.5)
     expect(sidePanelWidth.value).toBe(null)
+    expect(savedStampsFrameHeight.value).toBe(120)
     expect(bottomPanelHeights.value).toEqual({
       timeline: 140,
       budget: null,
@@ -251,6 +266,7 @@ describe('settings projection', () => {
       settings.mapLayers.hillshadeOpacity = 3
       settings.plantSpacingIntervalM = Number.POSITIVE_INFINITY
       settings.sidePanel.width = 120
+      settings.savedStamps.frameHeight = Number.POSITIVE_INFINITY
       settings.bottomPanel.heights.consortium = 139.6
     }, { persist: 'none' })
 
@@ -263,6 +279,7 @@ describe('settings projection', () => {
       hillshade_opacity: 1,
       plant_spacing_interval_m: 0.5,
       side_panel_width: 320,
+      saved_stamps_frame_height: 220,
       bottom_panel_consortium_height: 140,
     }))
   })

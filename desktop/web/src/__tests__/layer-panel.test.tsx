@@ -86,6 +86,7 @@ describe('LayerPanel', () => {
       recent_files_max: 20,
       last_active_panel: 'canvas',
       side_panel_width: null,
+      saved_stamps_frame_height: 220,
       bottom_panel_open: false,
       bottom_panel_timeline_height: null,
       bottom_panel_budget_height: null,
