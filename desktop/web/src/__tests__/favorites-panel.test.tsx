@@ -52,6 +52,30 @@ function dragStartEvent(dataTransfer: ReturnType<typeof dragDataStore>): DragEve
   return event
 }
 
+function elementRect({
+  left = 0,
+  top = 0,
+  width = 0,
+  height = 0,
+}: {
+  left?: number
+  top?: number
+  width?: number
+  height?: number
+}): DOMRect {
+  return {
+    width,
+    height,
+    top,
+    right: left + width,
+    bottom: top + height,
+    left,
+    x: left,
+    y: top,
+    toJSON: () => ({}),
+  }
+}
+
 describe('FavoritesPanel', () => {
   let container: HTMLDivElement
   let FavoritesPanel: typeof import('../components/panels/FavoritesPanel').FavoritesPanel
@@ -392,6 +416,71 @@ describe('FavoritesPanel', () => {
     })
 
     expect(deleteStampMock).toHaveBeenCalledWith('stamp-1')
+  })
+
+  it('shows a clamped visual-only thumbnail from row-body hover and Place focus', async () => {
+    await act(async () => {
+      render(<FavoritesPanel />, container)
+      await flushEffects()
+    })
+
+    const main = container.querySelector<HTMLElement>('[data-favorites-main]')
+    const body = container.querySelector<HTMLElement>('[data-saved-stamp-body="stamp-1"]')
+    const placeButton = container.querySelector<HTMLButtonElement>('button[aria-label="Place"]')
+    const exportButton = container.querySelector<HTMLButtonElement>('button[aria-label="Export"]')
+    expect(main).toBeTruthy()
+    expect(body).toBeTruthy()
+    expect(placeButton).toBeTruthy()
+    expect(exportButton).toBeTruthy()
+    if (!main || !body || !placeButton || !exportButton) return
+
+    main.getBoundingClientRect = () => elementRect({ left: 260, top: 36, width: 280, height: 520 })
+    body.getBoundingClientRect = () => elementRect({ left: 280, top: 520, width: 220, height: 36 })
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 600 })
+    vi.useFakeTimers()
+
+    try {
+      await act(async () => {
+        body.dispatchEvent(new PointerEvent('pointerenter', { bubbles: false }))
+        vi.advanceTimersByTime(119)
+      })
+      expect(container.querySelector('[data-saved-stamp-thumbnail-overlay]')).toBeNull()
+
+      await act(async () => {
+        vi.advanceTimersByTime(1)
+        await Promise.resolve()
+      })
+
+      const hoverOverlay = container.querySelector<HTMLElement>('[data-saved-stamp-thumbnail-overlay]')
+      expect(hoverOverlay).toBeTruthy()
+      expect(hoverOverlay?.style.width).toBe('180px')
+      expect(hoverOverlay?.style.height).toBe('150px')
+      expect(hoverOverlay?.style.left).toBe('72px')
+      expect(hoverOverlay?.style.top).toBe('442px')
+      expect(hoverOverlay?.textContent).not.toContain('Pommier')
+      expect(hoverOverlay?.textContent).not.toContain('2 plants')
+
+      await act(async () => {
+        body.dispatchEvent(new PointerEvent('pointerleave', { bubbles: false }))
+        await Promise.resolve()
+      })
+      expect(container.querySelector('[data-saved-stamp-thumbnail-overlay]')).toBeNull()
+
+      await act(async () => {
+        placeButton.dispatchEvent(new FocusEvent('focus', { bubbles: false }))
+        await Promise.resolve()
+      })
+      expect(container.querySelector('[data-saved-stamp-thumbnail-overlay]')).toBeTruthy()
+
+      await act(async () => {
+        placeButton.dispatchEvent(new FocusEvent('blur', { bubbles: false }))
+        exportButton.dispatchEvent(new FocusEvent('focus', { bubbles: false }))
+        await Promise.resolve()
+      })
+      expect(container.querySelector('[data-saved-stamp-thumbnail-overlay]')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('previews Saved Stamps frame resize and commits the preference when dragging ends', async () => {

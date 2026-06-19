@@ -21,6 +21,36 @@ import plantDetailStyles from '../plant-detail/PlantDetail.module.css'
 import { SavedStampsPrototype, shouldShowSavedStampsPrototype } from './SavedStampsPrototype'
 import styles from './FavoritesPanel.module.css'
 
+const SAVED_STAMP_PREVIEW_DELAY_MS = 120
+const SAVED_STAMP_PREVIEW_WIDTH = 180
+const SAVED_STAMP_PREVIEW_HEIGHT = 150
+const SAVED_STAMP_PREVIEW_GAP = 8
+const SAVED_STAMP_PREVIEW_MARGIN = 8
+
+interface SavedStampPreview {
+  readonly stamp: SavedObjectStamp
+  readonly anchorRect: DOMRect
+}
+
+interface StampPreviewPoint {
+  readonly x: number
+  readonly y: number
+}
+
+interface StampPreviewPayload {
+  readonly plants?: readonly {
+    readonly position?: StampPreviewPoint
+    readonly color?: string | null
+  }[]
+  readonly zones?: readonly {
+    readonly points?: readonly StampPreviewPoint[]
+    readonly fillColor?: string | null
+  }[]
+  readonly annotations?: readonly {
+    readonly position?: StampPreviewPoint
+  }[]
+}
+
 export function FavoritesPanel() {
   const favoritesView = speciesCatalogWorkbench.favorites.value
   const favoritesRevision = favoritesView.revision
@@ -30,6 +60,8 @@ export function FavoritesPanel() {
   const selected = speciesCatalogWorkbench.selectedCanonicalName.value
   const mainRef = useRef<HTMLDivElement>(null)
   const savedStampsFrameRef = useRef<HTMLElement>(null)
+  const previewTimerRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null)
+  const [preview, setPreview] = useState<SavedStampPreview | null>(null)
 
   useEffect(() => {
     void speciesCatalogWorkbench.loadFavorites()
@@ -39,10 +71,38 @@ export function FavoritesPanel() {
     void savedObjectStampWorkbench.loadLibrary()
   }, [lang])
 
+  useEffect(() => {
+    return () => clearPreviewTimer(previewTimerRef)
+  }, [])
+
   const items = favoritesView.items
   const count = items.length
   const isLoading = favoritesView.loading
   const savedStampItems = savedStampsView.items
+
+  function showStampPreview(stamp: SavedObjectStamp, anchor: HTMLElement): void {
+    clearPreviewTimer(previewTimerRef)
+    setPreview({
+      stamp,
+      anchorRect: anchor.getBoundingClientRect(),
+    })
+  }
+
+  function scheduleStampPreview(stamp: SavedObjectStamp, anchor: HTMLElement): void {
+    clearPreviewTimer(previewTimerRef)
+    previewTimerRef.current = globalThis.setTimeout(() => {
+      previewTimerRef.current = null
+      setPreview({
+        stamp,
+        anchorRect: anchor.getBoundingClientRect(),
+      })
+    }, SAVED_STAMP_PREVIEW_DELAY_MS)
+  }
+
+  function hideStampPreview(): void {
+    clearPreviewTimer(previewTimerRef)
+    setPreview(null)
+  }
 
   return (
     <div className={styles.panel}>
@@ -157,6 +217,9 @@ export function FavoritesPanel() {
                     key={stamp.id}
                     stamp={stamp}
                     stamps={savedStampItems}
+                    onPreviewRequest={showStampPreview}
+                    onPreviewSchedule={scheduleStampPreview}
+                    onPreviewClear={hideStampPreview}
                   />
                 ))}
               </div>
@@ -165,6 +228,8 @@ export function FavoritesPanel() {
           </>
         )}
       </div>
+
+      <SavedStampRecognitionOverlay preview={preview} panelRef={mainRef} />
 
       {/* Detail card — slides in when a row is clicked */}
       {selected !== null && (
@@ -278,12 +343,161 @@ function resolveSavedStampsFrameHeight(
   return Math.max(MIN_FAVORITES_FRAME_HEIGHT, Math.min(maxHeight, roundedHeight))
 }
 
+function clearPreviewTimer(ref: { current: ReturnType<typeof globalThis.setTimeout> | null }): void {
+  if (ref.current === null) return
+  globalThis.clearTimeout(ref.current)
+  ref.current = null
+}
+
+function SavedStampRecognitionOverlay({
+  preview,
+  panelRef,
+}: {
+  preview: SavedStampPreview | null
+  panelRef: { current: HTMLElement | null }
+}) {
+  if (!preview) return null
+  const position = savedStampPreviewPosition(preview.anchorRect, panelRef.current)
+
+  return (
+    <div
+      className={styles.savedStampThumbnailOverlay}
+      data-saved-stamp-thumbnail-overlay
+      aria-hidden="true"
+      style={{
+        left: `${position.left}px`,
+        top: `${position.top}px`,
+        width: `${SAVED_STAMP_PREVIEW_WIDTH}px`,
+        height: `${SAVED_STAMP_PREVIEW_HEIGHT}px`,
+      }}
+    >
+      <SavedStampThumbnailSvg stamp={preview.stamp} />
+    </div>
+  )
+}
+
+function savedStampPreviewPosition(anchorRect: DOMRect, panel: HTMLElement | null): { left: number, top: number } {
+  const panelRect = panel?.getBoundingClientRect()
+  const desiredLeft = (panelRect?.left ?? anchorRect.left) - SAVED_STAMP_PREVIEW_WIDTH - SAVED_STAMP_PREVIEW_GAP
+  const maxLeft = Math.max(SAVED_STAMP_PREVIEW_MARGIN, window.innerWidth - SAVED_STAMP_PREVIEW_WIDTH - SAVED_STAMP_PREVIEW_MARGIN)
+  const maxTop = Math.max(SAVED_STAMP_PREVIEW_MARGIN, window.innerHeight - SAVED_STAMP_PREVIEW_HEIGHT - SAVED_STAMP_PREVIEW_MARGIN)
+
+  return {
+    left: Math.round(Math.min(maxLeft, Math.max(SAVED_STAMP_PREVIEW_MARGIN, desiredLeft))),
+    top: Math.round(Math.min(maxTop, Math.max(SAVED_STAMP_PREVIEW_MARGIN, anchorRect.top))),
+  }
+}
+
+function SavedStampThumbnailSvg({ stamp }: { stamp: SavedObjectStamp }) {
+  const payload = parseStampPreviewPayload(stamp.payload_json)
+  const points = stampPreviewPoints(payload)
+  if (!payload || points.length === 0) {
+    return (
+      <svg className={styles.savedStampThumbnailSvg} viewBox={`0 0 ${SAVED_STAMP_PREVIEW_WIDTH} ${SAVED_STAMP_PREVIEW_HEIGHT}`} aria-hidden="true">
+        <path className={styles.savedStampThumbnailFallback} d="M54 76h72M90 40v72" />
+      </svg>
+    )
+  }
+
+  const project = createStampPreviewProjector(points)
+  return (
+    <svg className={styles.savedStampThumbnailSvg} viewBox={`0 0 ${SAVED_STAMP_PREVIEW_WIDTH} ${SAVED_STAMP_PREVIEW_HEIGHT}`} aria-hidden="true">
+      {payload.zones?.slice(0, 3).map((zone, index) => {
+        const projected = zone.points?.map(project).filter(isFinitePreviewPoint) ?? []
+        if (projected.length < 2) return null
+        return (
+          <polygon
+            key={`zone-${index}`}
+            className={styles.savedStampThumbnailZone}
+            points={projected.map((point) => `${point.x},${point.y}`).join(' ')}
+          />
+        )
+      })}
+      {payload.plants?.slice(0, 24).map((plant, index) => {
+        if (!plant.position) return null
+        const point = project(plant.position)
+        if (!isFinitePreviewPoint(point)) return null
+        return (
+          <circle
+            key={`plant-${index}`}
+            className={styles.savedStampThumbnailPlant}
+            cx={point.x}
+            cy={point.y}
+            r="4"
+            style={plant.color ? { fill: plant.color } : undefined}
+          />
+        )
+      })}
+      {payload.annotations?.slice(0, 4).map((annotation, index) => {
+        if (!annotation.position) return null
+        const point = project(annotation.position)
+        if (!isFinitePreviewPoint(point)) return null
+        return (
+          <path
+            key={`annotation-${index}`}
+            className={styles.savedStampThumbnailAnnotation}
+            d={`M${point.x - 10} ${point.y}h20`}
+          />
+        )
+      })}
+    </svg>
+  )
+}
+
+function parseStampPreviewPayload(payloadJson: string): StampPreviewPayload | null {
+  try {
+    const payload = JSON.parse(payloadJson) as StampPreviewPayload
+    return payload && typeof payload === 'object' ? payload : null
+  } catch {
+    return null
+  }
+}
+
+function stampPreviewPoints(payload: StampPreviewPayload | null): StampPreviewPoint[] {
+  if (!payload) return []
+  return [
+    ...(payload.plants ?? []).flatMap((plant) => plant.position ? [plant.position] : []),
+    ...(payload.zones ?? []).flatMap((zone) => [...(zone.points ?? [])]),
+    ...(payload.annotations ?? []).flatMap((annotation) => annotation.position ? [annotation.position] : []),
+  ].filter(isFinitePreviewPoint)
+}
+
+function createStampPreviewProjector(points: readonly StampPreviewPoint[]) {
+  const minX = Math.min(...points.map((point) => point.x))
+  const maxX = Math.max(...points.map((point) => point.x))
+  const minY = Math.min(...points.map((point) => point.y))
+  const maxY = Math.max(...points.map((point) => point.y))
+  const width = Math.max(1, maxX - minX)
+  const height = Math.max(1, maxY - minY)
+  const padding = 14
+  const availableWidth = SAVED_STAMP_PREVIEW_WIDTH - padding * 2
+  const availableHeight = SAVED_STAMP_PREVIEW_HEIGHT - padding * 2
+  const scale = Math.min(availableWidth / width, availableHeight / height)
+  const offsetX = (SAVED_STAMP_PREVIEW_WIDTH - width * scale) / 2
+  const offsetY = (SAVED_STAMP_PREVIEW_HEIGHT - height * scale) / 2
+
+  return (point: StampPreviewPoint): StampPreviewPoint => ({
+    x: Math.round((offsetX + (point.x - minX) * scale) * 10) / 10,
+    y: Math.round((offsetY + (point.y - minY) * scale) * 10) / 10,
+  })
+}
+
+function isFinitePreviewPoint(point: StampPreviewPoint): boolean {
+  return Number.isFinite(point.x) && Number.isFinite(point.y)
+}
+
 function SavedObjectStampRow({
   stamp,
   stamps,
+  onPreviewRequest,
+  onPreviewSchedule,
+  onPreviewClear,
 }: {
   stamp: SavedObjectStamp
   stamps: readonly SavedObjectStamp[]
+  onPreviewRequest: (stamp: SavedObjectStamp, anchor: HTMLElement) => void
+  onPreviewSchedule: (stamp: SavedObjectStamp, anchor: HTMLElement) => void
+  onPreviewClear: () => void
 }) {
   const [draftName, setDraftName] = useState(stamp.name)
   const [isRenaming, setIsRenaming] = useState(false)
@@ -372,6 +586,17 @@ function SavedObjectStampRow({
         draggable={!isRenaming && !confirmingDelete}
         onDragStart={handleStampDragStart}
         onDragEnd={handleStampDragEnd}
+        tabIndex={confirmingDelete ? -1 : 0}
+        onPointerEnter={(event) => {
+          if (isRenaming || confirmingDelete) return
+          onPreviewSchedule(stamp, event.currentTarget as HTMLElement)
+        }}
+        onPointerLeave={onPreviewClear}
+        onFocus={(event) => {
+          if (isRenaming || confirmingDelete) return
+          onPreviewRequest(stamp, event.currentTarget as HTMLElement)
+        }}
+        onBlur={onPreviewClear}
       >
         {confirmingDelete ? (
           <span className={styles.savedStampDeleteCopy}>{t('savedObjectStamps.confirmDelete')}</span>
@@ -423,6 +648,8 @@ function SavedObjectStampRow({
             <SavedStampIconButton
               label={t('savedObjectStamps.place')}
               onClick={() => savedObjectStampWorkbench.placeStamp(stamp)}
+              onFocus={(anchor) => onPreviewRequest(stamp, anchor)}
+              onBlur={onPreviewClear}
             >
               <PlaceIcon />
             </SavedStampIconButton>
@@ -483,11 +710,15 @@ function SavedStampIconButton({
   onClick,
   children,
   danger = false,
+  onFocus,
+  onBlur,
 }: {
   label: string
   onClick: () => void
   children: ComponentChildren
   danger?: boolean
+  onFocus?: (anchor: HTMLElement) => void
+  onBlur?: () => void
 }) {
   return (
     <button
@@ -498,6 +729,8 @@ function SavedStampIconButton({
         event.stopPropagation()
         onClick()
       }}
+      onFocus={(event) => onFocus?.(event.currentTarget)}
+      onBlur={onBlur}
     >
       {children}
       <ButtonTooltip label={label} side="left" />
