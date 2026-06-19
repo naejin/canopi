@@ -7170,52 +7170,61 @@ describe('SceneInteractionController', () => {
         makePlant('plant-1', 'Malus domestica', { x: 30, y: 30 }),
       ]
     })
+    const sourceControl = document.createElement('button')
+    document.body.appendChild(sourceControl)
+    sourceControl.focus()
+    expect(document.activeElement).toBe(sourceControl)
     const setTool = vi.fn()
     const deps = createInteractionDeps(container, store, camera, { setTool })
     const controller = new SceneInteractionController(deps as any)
-    controller.setTool('plant-stamp')
-    const dragData = new Map<string, string>()
-    const dataTransfer = {
-      effectAllowed: 'none',
-      setData(type: string, value: string) {
-        dragData.set(type, value)
-      },
-      getData(type: string) {
-        return dragData.get(type) ?? ''
-      },
+    try {
+      controller.setTool('plant-stamp')
+      const dragData = new Map<string, string>()
+      const dataTransfer = {
+        effectAllowed: 'none',
+        setData(type: string, value: string) {
+          dragData.set(type, value)
+        },
+        getData(type: string) {
+          return dragData.get(type) ?? ''
+        },
+      }
+      writePlantStampDragData(dataTransfer, {
+        canonical_name: 'Pyrus communis',
+        common_name: 'Pear',
+        stratum: 'mid',
+        width_max_m: 3,
+      })
+
+      const dropEvent = new Event('drop', { bubbles: true, cancelable: true }) as DragEvent
+      Object.defineProperties(dropEvent, {
+        clientX: { configurable: true, value: 120 },
+        clientY: { configurable: true, value: 90 },
+        dataTransfer: {
+          configurable: true,
+          value: dataTransfer,
+        },
+      })
+
+      container.dispatchEvent(dropEvent)
+      const droppedPlant = store.persisted.plants.find((plant) => plant.id !== 'plant-1')
+
+      expect(droppedPlant).toBeDefined()
+      expect(selectedObjectIds.value).toEqual(new Set([droppedPlant!.id]))
+      expect(setTool).toHaveBeenCalledWith('select')
+      expect(document.activeElement).toBe(container)
+
+      events.pointerDown({ x: 120, y: 90 }, { button: 0 })
+      events.pointerMove({ x: 140, y: 100 }, { button: 0 })
+      events.pointerUp({ x: 140, y: 100 }, { button: 0 })
+
+      expect(store.persisted.plants.find((plant) => plant.id === droppedPlant!.id)?.position)
+        .toEqual({ x: 140, y: 100 })
+      expect(store.persisted.plants).toHaveLength(2)
+    } finally {
+      controller.dispose()
+      sourceControl.remove()
     }
-    writePlantStampDragData(dataTransfer, {
-      canonical_name: 'Pyrus communis',
-      common_name: 'Pear',
-      stratum: 'mid',
-      width_max_m: 3,
-    })
-
-    const dropEvent = new Event('drop', { bubbles: true, cancelable: true }) as DragEvent
-    Object.defineProperties(dropEvent, {
-      clientX: { configurable: true, value: 120 },
-      clientY: { configurable: true, value: 90 },
-      dataTransfer: {
-        configurable: true,
-        value: dataTransfer,
-      },
-    })
-
-    container.dispatchEvent(dropEvent)
-    const droppedPlant = store.persisted.plants.find((plant) => plant.id !== 'plant-1')
-
-    expect(droppedPlant).toBeDefined()
-    expect(selectedObjectIds.value).toEqual(new Set([droppedPlant!.id]))
-    expect(setTool).toHaveBeenCalledWith('select')
-
-    events.pointerDown({ x: 30, y: 30 }, { button: 0 })
-    events.pointerMove({ x: 50, y: 40 }, { button: 0 })
-    events.pointerUp({ x: 50, y: 40 }, { button: 0 })
-
-    expect(store.persisted.plants.find((plant) => plant.id === 'plant-1')?.position)
-      .toEqual({ x: 50, y: 40 })
-    expect(store.persisted.plants).toHaveLength(2)
-    controller.dispose()
   })
 
   it('does not show plant drop feedback for protected ordinary text drags', () => {

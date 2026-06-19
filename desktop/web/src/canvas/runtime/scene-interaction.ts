@@ -500,7 +500,10 @@ export class SceneInteractionController {
       })
       if (placedPlantId) tx.setSelection([placedPlantId])
     })
-    if (committed) this._switchTool('select')
+    if (committed) {
+      this._switchTool('select')
+      this._focusInteractionHost()
+    }
   }
 
   private _screenPoint(event: Pick<MouseEvent, 'clientX' | 'clientY'>, rect = this._frame.currentContainerRect()): ScenePoint {
@@ -668,6 +671,13 @@ export class SceneInteractionController {
   private _switchTool(name: string): void {
     this._deps.setTool(name)
     if (this._tool !== name) this.setTool(name)
+  }
+
+  private _focusInteractionHost(): void {
+    if (!this._deps.container.hasAttribute('tabindex')) {
+      this._deps.container.tabIndex = -1
+    }
+    this._deps.container.focus({ preventScroll: true })
   }
 
   private _beginSelectedAnnotationTextEditFromKeyboard(event: KeyboardEvent): boolean {
