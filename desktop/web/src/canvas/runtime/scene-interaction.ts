@@ -100,6 +100,9 @@ export interface SceneInteractionDeps {
     | 'groupSelected'
     | 'ungroupSelected'
   >
+  contextualCommands?: {
+    readonly saveSelectionAsObjectStamp?: () => void
+  }
   setTool: (name: string) => void
   render: (kind: 'scene' | 'viewport') => void
   readSnapToGridEnabled: () => boolean
@@ -183,11 +186,13 @@ export class SceneInteractionController {
       camera: this._deps.camera,
       getSelection: this._deps.getDesignObjectSelection,
       commands: this._deps.selectionCommands,
+      saveSelectionAsObjectStamp: this._deps.contextualCommands?.saveSelectionAsObjectStamp,
     })
     this._contextMenu = createCanvasContextMenu({
       container: this._deps.container,
       commands: this._deps.selectionCommands,
       getSelection: this._deps.getDesignObjectSelection,
+      saveSelectionAsObjectStamp: this._deps.contextualCommands?.saveSelectionAsObjectStamp,
     })
     this._rotationHandle = createSelectionRotationHandle({
       container: this._deps.container,

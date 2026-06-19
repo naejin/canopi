@@ -137,6 +137,7 @@
       "bringForward": "Nach vorne",
       "sendBackward": "Nach hinten",
       "selectSameSpecies": "Gleiche Art auswählen",
+      "saveObjectStamp": "Als gespeicherten Stempel sichern",
       "group": "Gruppieren",
       "ungroup": "Gruppierung aufheben",
       "lock": "Sperren",
@@ -148,6 +149,7 @@
       "ariaLabel": "Leinwand-Bearbeitungsbefehle",
       "copy": "Kopieren",
       "paste": "Einfügen",
+      "saveObjectStamp": "Als gespeicherten Stempel sichern",
       "delete": "Entfernen"
     },
     "rotationHandle": {

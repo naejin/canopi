@@ -137,6 +137,7 @@
       "bringForward": "앞으로 보내기",
       "sendBackward": "뒤로 보내기",
       "selectSameSpecies": "같은 종 선택",
+      "saveObjectStamp": "저장된 스탬프로 저장",
       "group": "그룹화",
       "ungroup": "그룹 해제",
       "lock": "잠금",
@@ -148,6 +149,7 @@
       "ariaLabel": "캔버스 편집 명령",
       "copy": "복사",
       "paste": "붙여넣기",
+      "saveObjectStamp": "저장된 스탬프로 저장",
       "delete": "삭제"
     },
     "rotationHandle": {

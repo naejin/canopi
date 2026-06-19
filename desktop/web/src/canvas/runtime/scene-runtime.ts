@@ -155,6 +155,11 @@ export class SceneCanvasRuntime {
       sceneEdits: this._sceneEdits,
       getDesignObjectSelection: () => this._querySurface.getDesignObjectSelection(),
       selectionCommands: this._commandSurface.sceneEdits,
+      contextualCommands: {
+        saveSelectionAsObjectStamp: () => {
+          void this._appAdapter.savedObjectStamps?.saveCurrentSelection()
+        },
+      },
       setTool: (name) => this._commandSurface.tools.setTool(name),
       render: (kind) => this._invalidate(kind),
       readSnapToGridEnabled: () => this._appAdapter.settings.readSnapToGridEnabled(),

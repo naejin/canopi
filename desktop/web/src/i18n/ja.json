@@ -137,6 +137,7 @@
       "bringForward": "前面へ",
       "sendBackward": "背面へ",
       "selectSameSpecies": "同じ種を選択",
+      "saveObjectStamp": "保存済みスタンプとして保存",
       "group": "グループ化",
       "ungroup": "グループ解除",
       "lock": "ロック",
@@ -148,6 +149,7 @@
       "ariaLabel": "キャンバス編集コマンド",
       "copy": "コピー",
       "paste": "貼り付け",
+      "saveObjectStamp": "保存済みスタンプとして保存",
       "delete": "削除"
     },
     "rotationHandle": {

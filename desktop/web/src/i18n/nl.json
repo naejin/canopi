@@ -137,6 +137,7 @@
       "bringForward": "Naar voren",
       "sendBackward": "Naar achteren",
       "selectSameSpecies": "Zelfde soort selecteren",
+      "saveObjectStamp": "Opslaan als opgeslagen stempel",
       "group": "Groeperen",
       "ungroup": "Groep opheffen",
       "lock": "Vergrendelen",
@@ -148,6 +149,7 @@
       "ariaLabel": "Canvasbewerkingsopdrachten",
       "copy": "Kopiëren",
       "paste": "Plakken",
+      "saveObjectStamp": "Opslaan als opgeslagen stempel",
       "delete": "Verwijderen"
     },
     "rotationHandle": {

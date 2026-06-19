@@ -137,6 +137,7 @@
       "bringForward": "Avancer",
       "sendBackward": "Reculer",
       "selectSameSpecies": "Sélectionner la même espèce",
+      "saveObjectStamp": "Enregistrer comme tampon",
       "group": "Grouper",
       "ungroup": "Dégrouper",
       "lock": "Verrouiller",
@@ -148,6 +149,7 @@
       "ariaLabel": "Commandes d'édition de la zone de dessin",
       "copy": "Copier",
       "paste": "Coller",
+      "saveObjectStamp": "Enregistrer comme tampon",
       "delete": "Supprimer"
     },
     "rotationHandle": {

@@ -16,6 +16,7 @@ import { mutateSettingsProjection } from '../settings/projection'
 import { locale, plantSpacingIntervalM, theme } from '../settings/state'
 import { composeDocumentForSave } from '../contracts/document'
 import { setCanvasClean } from '../document-session/store'
+import { savedObjectStampWorkbench } from '../saved-object-stamps'
 
 const APP_OWNED_LAYER_PROJECTIONS = new Set(['base', 'contours'])
 
@@ -23,6 +24,9 @@ export function createAppCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter {
   return {
     cleanState: { setCanvasClean },
     document: { composeDocumentForSave },
+    savedObjectStamps: {
+      saveCurrentSelection: () => savedObjectStampWorkbench.saveCurrentSelection(),
+    },
     settings: {
       readLocale: () => locale.value,
       readChromeOverlay: () => ({

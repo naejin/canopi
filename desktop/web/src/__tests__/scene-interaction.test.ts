@@ -1069,6 +1069,56 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('dispatches Selection Action Toolbar Save as Saved Object Stamp for editable and locked selections', () => {
+    const saveSelectionAsObjectStamp = vi.fn()
+    let selectionModel: CanvasDesignObjectSelectionModel = {
+      editableTargets: [{ kind: 'zone' as const, id: 'zone-1' }],
+      lockedTargets: [],
+      blockedTargets: [],
+      bounds: { minX: 160, minY: 100, maxX: 220, maxY: 150 },
+      sameSpeciesReferenceCanonicalName: null,
+    }
+    const deps = {
+      ...createInteractionDeps(container, store, camera),
+      getDesignObjectSelection: () => selectionModel,
+      contextualCommands: {
+        saveSelectionAsObjectStamp,
+      },
+    }
+    const controller = new SceneInteractionController(deps as any)
+
+    controller.refreshMeasurements()
+    const save = container.querySelector<HTMLButtonElement>(
+      '[data-selection-action-command="save-object-stamp"]',
+    )!
+    expect(save).not.toBeNull()
+    expect(save.disabled).toBe(false)
+    expect(save.getAttribute('aria-label')).toContain('Save as Saved Stamp')
+    save.click()
+    expect(saveSelectionAsObjectStamp).toHaveBeenCalledTimes(1)
+
+    selectionModel = {
+      editableTargets: [],
+      lockedTargets: [{ kind: 'plant' as const, id: 'locked-plant' }],
+      blockedTargets: [{
+        target: { kind: 'plant' as const, id: 'locked-plant' },
+        reason: 'locked-design-object' as const,
+        layerName: 'plants',
+      }],
+      bounds: { minX: 20, minY: 20, maxX: 24, maxY: 24 },
+      sameSpeciesReferenceCanonicalName: null,
+    }
+    controller.refreshMeasurements()
+    const lockedSave = container.querySelector<HTMLButtonElement>(
+      '[data-selection-action-command="save-object-stamp"]',
+    )!
+    expect(lockedSave.disabled).toBe(false)
+    lockedSave.click()
+    expect(saveSelectionAsObjectStamp).toHaveBeenCalledTimes(2)
+
+    controller.dispose()
+  })
+
   it('shows Group for mixed concrete selections and dispatches through the command surface', () => {
     const groupSelected = vi.fn()
     const deps = {
@@ -1969,6 +2019,70 @@ describe('SceneInteractionController', () => {
     expect(deleteButton.disabled).toBe(false)
     deleteButton.click()
     expect(deleteSelected).toHaveBeenCalledTimes(1)
+
+    controller.dispose()
+  })
+
+  it('dispatches Canvas Context Menu Save as Saved Object Stamp and disables it for structural blockers', () => {
+    const saveSelectionAsObjectStamp = vi.fn()
+    let selectionModel: CanvasDesignObjectSelectionModel = {
+      editableTargets: [{ kind: 'plant' as const, id: 'plant-1' }],
+      lockedTargets: [],
+      blockedTargets: [],
+      bounds: { minX: 20, minY: 20, maxX: 24, maxY: 24 },
+      sameSpeciesReferenceCanonicalName: null,
+    }
+    const baseDeps = createInteractionDeps(container, store, camera, {
+      getDesignObjectSelection: () => selectionModel,
+    })
+    const deps = {
+      ...baseDeps,
+      contextualCommands: {
+        saveSelectionAsObjectStamp,
+      },
+    }
+    const controller = new SceneInteractionController(deps as any)
+
+    const openMenu = () => {
+      const point = events.clientPoint({ x: 80, y: 90 })
+      container.dispatchEvent(new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: point.x,
+        clientY: point.y,
+      }))
+      return container.querySelector<HTMLElement>('[data-canvas-context-menu]')!
+    }
+
+    let menu = openMenu()
+    const saveButton = menu.querySelector<HTMLButtonElement>(
+      '[data-canvas-context-command="save-object-stamp"]',
+    )!
+    expect(saveButton).not.toBeNull()
+    expect(saveButton.textContent).toBe('Save as Saved Stamp')
+    expect(saveButton.disabled).toBe(false)
+    saveButton.click()
+    expect(saveSelectionAsObjectStamp).toHaveBeenCalledTimes(1)
+
+    selectionModel = {
+      editableTargets: [{ kind: 'plant' as const, id: 'editable-plant' }],
+      lockedTargets: [],
+      blockedTargets: [{
+        target: { kind: 'plant' as const, id: 'grouped-plant' },
+        reason: 'grouped-member' as const,
+        layerName: 'plants',
+        groupId: 'group-1',
+      }],
+      bounds: { minX: 20, minY: 20, maxX: 60, maxY: 24 },
+      sameSpeciesReferenceCanonicalName: null,
+    }
+    menu = openMenu()
+    const blockedSaveButton = menu.querySelector<HTMLButtonElement>(
+      '[data-canvas-context-command="save-object-stamp"]',
+    )!
+    expect(blockedSaveButton.disabled).toBe(true)
+    blockedSaveButton.click()
+    expect(saveSelectionAsObjectStamp).toHaveBeenCalledTimes(1)
 
     controller.dispose()
   })

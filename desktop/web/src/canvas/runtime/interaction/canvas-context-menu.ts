@@ -1,6 +1,7 @@
 import { t } from '../../../i18n'
 import type { CanvasDesignObjectSelectionModel, CanvasSceneEditCommandSurface } from '../runtime'
 import type { ScenePoint } from '../scene'
+import { canSaveSelectionAsObjectStamp } from './contextual-selection-actions'
 
 type CanvasContextMenuCommandSurface = Pick<
   CanvasSceneEditCommandSurface,
@@ -11,6 +12,7 @@ interface CanvasContextMenuOptions {
   readonly container: HTMLElement
   readonly commands: CanvasContextMenuCommandSurface
   readonly getSelection: () => CanvasDesignObjectSelectionModel
+  readonly saveSelectionAsObjectStamp?: () => void
 }
 
 export interface CanvasContextMenuShowOptions {
@@ -27,7 +29,7 @@ export interface CanvasContextMenuController {
 }
 
 interface CanvasContextMenuAction {
-  readonly id: 'copy' | 'paste' | 'delete'
+  readonly id: 'copy' | 'paste' | 'save-object-stamp' | 'delete'
   readonly labelKey: string
   readonly isEnabled: (selection: CanvasDesignObjectSelectionModel) => boolean
   readonly run: (world: ScenePoint) => void
@@ -78,6 +80,14 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
       isEnabled: () => options.commands.canPaste(),
       run: (world) => options.commands.pasteAt(world),
     },
+    ...options.saveSelectionAsObjectStamp
+      ? [{
+          id: 'save-object-stamp' as const,
+          labelKey: 'canvas.contextMenu.saveObjectStamp',
+          isEnabled: canSaveSelectionAsObjectStamp,
+          run: () => options.saveSelectionAsObjectStamp?.(),
+        }]
+      : [],
     {
       id: 'delete',
       labelKey: 'canvas.contextMenu.delete',
@@ -97,7 +107,7 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
     const selection = selectionOverride ?? options.getSelection()
     refreshLabelsAndStates(selection)
     root.style.display = 'block'
-    const placement = resolveMenuPlacement(screen, options.container, root)
+    const placement = resolveMenuPlacement(screen, options.container, root, actions.length)
     root.style.left = `${placement.left}px`
     root.style.top = `${placement.top}px`
   }
@@ -175,20 +185,21 @@ function resolveMenuPlacement(
   screen: ScenePoint,
   container: HTMLElement,
   root: HTMLElement,
+  actionCount: number,
 ): { left: number; top: number } {
   const rect = container.getBoundingClientRect()
   const containerWidth = rootFallbackNumber(container.clientWidth, rect.width)
   const containerHeight = rootFallbackNumber(container.clientHeight, rect.height)
   const width = rootFallbackNumber(root.offsetWidth, MENU_WIDTH_PX)
-  const height = rootFallbackNumber(root.offsetHeight, actionsHeight())
+  const height = rootFallbackNumber(root.offsetHeight, actionsHeight(actionCount))
   return {
     left: clamp(screen.x, MENU_MARGIN_PX, Math.max(MENU_MARGIN_PX, containerWidth - width - MENU_MARGIN_PX)),
     top: clamp(screen.y, MENU_MARGIN_PX, Math.max(MENU_MARGIN_PX, containerHeight - height - MENU_MARGIN_PX)),
   }
 }
 
-function actionsHeight(): number {
-  return MENU_ITEM_HEIGHT_PX * 3 + MENU_PADDING_BLOCK_PX
+function actionsHeight(actionCount: number): number {
+  return MENU_ITEM_HEIGHT_PX * actionCount + MENU_PADDING_BLOCK_PX
 }
 
 function hasEditableOnlySelection(selection: CanvasDesignObjectSelectionModel): boolean {

@@ -28,6 +28,10 @@ export interface CanvasRuntimeDocumentAdapter {
   composeDocumentForSave(input: CanvasRuntimeDocumentCompositionInput): CanopiFile
 }
 
+export interface CanvasRuntimeSavedObjectStampAdapter {
+  saveCurrentSelection(): void | Promise<unknown>
+}
+
 export interface CanvasRuntimeSettingsAdapter {
   readLocale(): string
   readChromeOverlay(): CanvasRuntimeChromeSettingsSnapshot
@@ -53,6 +57,7 @@ export interface CanvasRuntimeLayerProjectionAdapter {
 export interface CanvasRuntimeAppAdapter {
   readonly cleanState: CanvasRuntimeCleanStateAdapter
   readonly document: CanvasRuntimeDocumentAdapter
+  readonly savedObjectStamps?: CanvasRuntimeSavedObjectStampAdapter
   readonly settings: CanvasRuntimeSettingsAdapter
 }
 
@@ -70,6 +75,9 @@ export function createDetachedCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter
     },
     document: {
       composeDocumentForSave: composeDetachedCanvasDocument,
+    },
+    savedObjectStamps: {
+      saveCurrentSelection: () => {},
     },
     settings: {
       readLocale: () => 'en',

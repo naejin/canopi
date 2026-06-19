@@ -137,6 +137,7 @@
       "bringForward": "Traer adelante",
       "sendBackward": "Enviar atrás",
       "selectSameSpecies": "Seleccionar misma especie",
+      "saveObjectStamp": "Guardar como sello guardado",
       "group": "Agrupar",
       "ungroup": "Desagrupar",
       "lock": "Bloquear",
@@ -148,6 +149,7 @@
       "ariaLabel": "Comandos de edición del lienzo",
       "copy": "Copiar",
       "paste": "Pegar",
+      "saveObjectStamp": "Guardar como sello guardado",
       "delete": "Eliminar"
     },
     "rotationHandle": {

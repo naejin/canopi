@@ -137,6 +137,7 @@
       "bringForward": "Trazer para frente",
       "sendBackward": "Enviar para trás",
       "selectSameSpecies": "Selecionar mesma espécie",
+      "saveObjectStamp": "Salvar como carimbo salvo",
       "group": "Agrupar",
       "ungroup": "Desagrupar",
       "lock": "Bloquear",
@@ -148,6 +149,7 @@
       "ariaLabel": "Comandos de edição da tela",
       "copy": "Copiar",
       "paste": "Colar",
+      "saveObjectStamp": "Salvar como carimbo salvo",
       "delete": "Excluir"
     },
     "rotationHandle": {

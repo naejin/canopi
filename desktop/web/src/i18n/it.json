@@ -137,6 +137,7 @@
       "bringForward": "Porta avanti",
       "sendBackward": "Manda indietro",
       "selectSameSpecies": "Seleziona stessa specie",
+      "saveObjectStamp": "Salva come timbro salvato",
       "group": "Raggruppa",
       "ungroup": "Separa",
       "lock": "Blocca",
@@ -148,6 +149,7 @@
       "ariaLabel": "Comandi di modifica della tela",
       "copy": "Copia",
       "paste": "Incolla",
+      "saveObjectStamp": "Salva come timbro salvato",
       "delete": "Elimina"
     },
     "rotationHandle": {

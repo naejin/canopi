@@ -1,6 +1,7 @@
 import { t } from '../../../i18n'
 import type { CameraController, SceneBounds } from '../camera'
 import type { CanvasDesignObjectSelectionModel, CanvasSceneEditCommandSurface } from '../runtime'
+import { canSaveSelectionAsObjectStamp } from './contextual-selection-actions'
 
 type SelectionActionCommandSurface = Pick<
   CanvasSceneEditCommandSurface,
@@ -20,6 +21,7 @@ interface SelectionActionToolbarOptions {
   readonly camera: CameraController
   readonly getSelection: () => CanvasDesignObjectSelectionModel
   readonly commands: SelectionActionCommandSurface
+  readonly saveSelectionAsObjectStamp?: () => void
 }
 
 export interface SelectionActionToolbarController {
@@ -143,6 +145,21 @@ export function createSelectionActionToolbar(
       isAvailable: isSelectSameSpeciesAvailable,
       isEnabled: isSelectSameSpeciesAvailable,
       run: () => options.commands.selectSameSpecies(),
+    },
+    {
+      id: 'save-object-stamp',
+      labelKey: 'canvas.selectionActions.saveObjectStamp',
+      shortcut: null,
+      icon: [
+        { d: 'M7 4h6v5a3 3 0 01-6 0V4z', fill: 'none' },
+        { d: 'M6 12h8l1 4H5z', fill: 'none' },
+        { d: 'M7 16h6', fill: 'none' },
+      ],
+      isAvailable: (selection) =>
+        options.saveSelectionAsObjectStamp !== undefined
+        && canSaveSelectionAsObjectStamp(selection),
+      isEnabled: canSaveSelectionAsObjectStamp,
+      run: () => options.saveSelectionAsObjectStamp?.(),
     },
     {
       id: 'group',
