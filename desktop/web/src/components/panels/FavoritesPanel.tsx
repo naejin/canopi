@@ -1,3 +1,4 @@
+import type { ComponentChildren } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { t } from '../../i18n'
 import {
@@ -15,6 +16,7 @@ import {
 import type { SavedObjectStamp } from '../../types/saved-object-stamps'
 import { PlantRow } from '../plant-db/PlantRow'
 import { PlantDetailCard } from '../plant-detail/PlantDetailCard'
+import { ButtonTooltip } from '../shared/ButtonTooltip'
 import plantDetailStyles from '../plant-detail/PlantDetail.module.css'
 import { SavedStampsPrototype, shouldShowSavedStampsPrototype } from './SavedStampsPrototype'
 import styles from './FavoritesPanel.module.css'
@@ -284,6 +286,7 @@ function SavedObjectStampRow({
   stamps: readonly SavedObjectStamp[]
 }) {
   const [draftName, setDraftName] = useState(stamp.name)
+  const [isRenaming, setIsRenaming] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   useEffect(() => {
@@ -294,11 +297,18 @@ function SavedObjectStampRow({
     const next = draftName.trim()
     if (next.length === 0) {
       setDraftName(stamp.name)
+      setIsRenaming(false)
       return
     }
     if (next !== stamp.name) {
       void savedObjectStampWorkbench.renameStamp(stamp.id, next)
     }
+    setIsRenaming(false)
+  }
+
+  function cancelRename(): void {
+    setDraftName(stamp.name)
+    setIsRenaming(false)
   }
 
   function handleGripDragStart(event: DragEvent): void {
@@ -344,9 +354,6 @@ function SavedObjectStampRow({
       className={styles.savedStampRow}
       role="listitem"
       data-saved-stamp-row={stamp.id}
-      draggable
-      onDragStart={handleStampDragStart}
-      onDragEnd={handleStampDragEnd}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
@@ -357,48 +364,47 @@ function SavedObjectStampRow({
         aria-label={t('savedObjectStamps.reorderLabel')}
         onDragStart={handleGripDragStart}
       >
-        <span aria-hidden="true">⋮⋮</span>
+        <SixDotGripIcon />
       </button>
-      <div className={styles.savedStampContent}>
-        <input
-          className={styles.savedStampNameInput}
-          aria-label={t('savedObjectStamps.renameLabel')}
-          value={draftName}
-          onInput={(event) => setDraftName((event.currentTarget as HTMLInputElement).value)}
-          onBlur={commitRename}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              commitRename()
-              ;(event.currentTarget as HTMLInputElement).blur()
-            }
-            if (event.key === 'Escape') {
-              setDraftName(stamp.name)
-              ;(event.currentTarget as HTMLInputElement).blur()
-            }
-          }}
-        />
-        <span className={styles.savedStampSummary}>{savedStampSummary(stamp)}</span>
+      <div
+        className={styles.savedStampContent}
+        data-saved-stamp-body={stamp.id}
+        draggable={!isRenaming && !confirmingDelete}
+        onDragStart={handleStampDragStart}
+        onDragEnd={handleStampDragEnd}
+      >
+        {confirmingDelete ? (
+          <span className={styles.savedStampDeleteCopy}>{t('savedObjectStamps.confirmDelete')}</span>
+        ) : isRenaming ? (
+          <input
+            className={styles.savedStampNameInput}
+            aria-label={t('savedObjectStamps.renameLabel')}
+            value={draftName}
+            onInput={(event) => setDraftName((event.currentTarget as HTMLInputElement).value)}
+            onBlur={commitRename}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                commitRename()
+                ;(event.currentTarget as HTMLInputElement).blur()
+              }
+              if (event.key === 'Escape') {
+                cancelRename()
+                ;(event.currentTarget as HTMLInputElement).blur()
+              }
+            }}
+          />
+        ) : (
+          <span className={styles.savedStampName}>{stamp.name}</span>
+        )}
+        {!confirmingDelete && <span className={styles.savedStampSummary}>{savedStampSummary(stamp)}</span>}
       </div>
       <div className={styles.savedStampActions}>
-        <button
-          type="button"
-          className={styles.savedStampPrimaryButton}
-          onClick={() => savedObjectStampWorkbench.placeStamp(stamp)}
-        >
-          {t('savedObjectStamps.place')}
-        </button>
-        <button
-          type="button"
-          className={styles.savedStampSecondaryButton}
-          onClick={() => void savedObjectStampWorkbench.exportStamp(stamp)}
-        >
-          {t('savedObjectStamps.export')}
-        </button>
         {confirmingDelete ? (
           <>
             <button
               type="button"
               className={styles.savedStampDangerButton}
+              aria-label={t('savedObjectStamps.confirmDelete')}
               onClick={() => void savedObjectStampWorkbench.deleteStamp(stamp.id)}
             >
               {t('savedObjectStamps.confirmDelete')}
@@ -406,22 +412,164 @@ function SavedObjectStampRow({
             <button
               type="button"
               className={styles.savedStampSecondaryButton}
+              aria-label={t('canvas.plantSpacing.cancel')}
               onClick={() => setConfirmingDelete(false)}
             >
-              {t('savedObjectStamps.cancelDelete')}
+              {t('canvas.plantSpacing.cancel')}
             </button>
           </>
         ) : (
-          <button
-            type="button"
-            className={styles.savedStampSecondaryButton}
-            onClick={() => setConfirmingDelete(true)}
-          >
-            {t('savedObjectStamps.delete')}
-          </button>
+          <>
+            <SavedStampIconButton
+              label={t('savedObjectStamps.place')}
+              onClick={() => savedObjectStampWorkbench.placeStamp(stamp)}
+            >
+              <PlaceIcon />
+            </SavedStampIconButton>
+            <SavedStampIconButton
+              label={t('savedObjectStamps.export')}
+              onClick={() => void savedObjectStampWorkbench.exportStamp(stamp)}
+            >
+              <ExportIcon />
+            </SavedStampIconButton>
+            {isRenaming ? (
+              <>
+                <SavedStampIconButton
+                  label={t('canvas.plantSpacing.confirm')}
+                  onClick={commitRename}
+                >
+                  <CheckIcon />
+                </SavedStampIconButton>
+                <SavedStampIconButton
+                  label={t('canvas.plantSpacing.cancel')}
+                  onClick={cancelRename}
+                >
+                  <CancelIcon />
+                </SavedStampIconButton>
+              </>
+            ) : (
+              <>
+                <SavedStampIconButton
+                  label={t('savedObjectStamps.renameLabel')}
+                  onClick={() => {
+                    setConfirmingDelete(false)
+                    setDraftName(stamp.name)
+                    setIsRenaming(true)
+                  }}
+                >
+                  <PencilIcon />
+                </SavedStampIconButton>
+                <SavedStampIconButton
+                  label={t('savedObjectStamps.delete')}
+                  onClick={() => {
+                    setIsRenaming(false)
+                    setConfirmingDelete(true)
+                  }}
+                  danger
+                >
+                  <TrashIcon />
+                </SavedStampIconButton>
+              </>
+            )}
+          </>
         )}
       </div>
     </div>
+  )
+}
+
+function SavedStampIconButton({
+  label,
+  onClick,
+  children,
+  danger = false,
+}: {
+  label: string
+  onClick: () => void
+  children: ComponentChildren
+  danger?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      className={`${styles.savedStampIconButton} ${danger ? styles.savedStampIconButtonDanger : ''}`}
+      aria-label={label}
+      onClick={(event) => {
+        event.stopPropagation()
+        onClick()
+      }}
+    >
+      {children}
+      <ButtonTooltip label={label} side="left" />
+    </button>
+  )
+}
+
+function SixDotGripIcon() {
+  return (
+    <span className={styles.savedStampGripDots} aria-hidden="true">
+      <span />
+      <span />
+      <span />
+      <span />
+      <span />
+      <span />
+    </span>
+  )
+}
+
+function PlaceIcon() {
+  return (
+    <svg className={styles.savedStampActionIcon} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8 3v10" />
+      <path d="M3 8h10" />
+    </svg>
+  )
+}
+
+function ExportIcon() {
+  return (
+    <svg className={styles.savedStampActionIcon} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8 10V3" />
+      <path d="M5.5 5.5 8 3l2.5 2.5" />
+      <path d="M4 9.5v2.5h8V9.5" />
+    </svg>
+  )
+}
+
+function PencilIcon() {
+  return (
+    <svg className={styles.savedStampActionIcon} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3.5 11.5 3 13l1.5-.5 7-7L10.5 4.5l-7 7Z" />
+      <path d="m9.5 5.5 1 1" />
+    </svg>
+  )
+}
+
+function CheckIcon() {
+  return (
+    <svg className={styles.savedStampActionIcon} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m3.5 8.5 3 3 6-7" />
+    </svg>
+  )
+}
+
+function CancelIcon() {
+  return (
+    <svg className={styles.savedStampActionIcon} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m4.5 4.5 7 7" />
+      <path d="m11.5 4.5-7 7" />
+    </svg>
+  )
+}
+
+function TrashIcon() {
+  return (
+    <svg className={styles.savedStampActionIcon} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 4.5h10" />
+      <path d="M6.5 4.5V3h3v1.5" />
+      <path d="M5 6.5v6h6v-6" />
+    </svg>
   )
 }
 
