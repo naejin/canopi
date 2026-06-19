@@ -7228,7 +7228,12 @@ describe('SceneInteractionController', () => {
       expect(document.activeElement).toBe(container)
       expect(focusSpy).toHaveBeenCalledTimes(2)
 
-      events.pointerDown({ x: 120, y: 90 }, { button: 0 })
+      sourceControl.focus()
+      expect(document.activeElement).toBe(sourceControl)
+
+      const firstDragPointerDown = events.pointerDown({ x: 120, y: 90 }, { button: 0 })
+      expect(firstDragPointerDown.defaultPrevented).toBe(true)
+      expect(document.activeElement).toBe(container)
       events.pointerMove({ x: 140, y: 100 }, { button: 0 })
       events.pointerUp({ x: 140, y: 100 }, { button: 0 })
 

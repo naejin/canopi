@@ -294,6 +294,8 @@ export class SceneInteractionController {
     if (this._lockedAffordance.contains(event.target)) return
     if (this._tools.shouldIgnorePointerEvent(event.target)) return
 
+    this._claimInteractionPointerDown(event)
+
     const containerRect = this._deps.container.getBoundingClientRect()
     const screen = this._screenPoint(event, containerRect)
     const world = this._deps.camera.screenToWorld(screen)
@@ -680,6 +682,11 @@ export class SceneInteractionController {
       this._deps.container.tabIndex = -1
     }
     this._deps.container.focus({ preventScroll: true })
+  }
+
+  private _claimInteractionPointerDown(event: PointerEvent): void {
+    if (event.cancelable) event.preventDefault()
+    this._focusInteractionHost()
   }
 
   private _activateInteractionHostAfterDrop(): void {
