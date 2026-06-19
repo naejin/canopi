@@ -24,6 +24,17 @@ import {
 import { isSceneLayerOpenForCreation } from './interaction/layer-guards'
 import { hasPlantStampDragData, readPlantStampDropSource } from '../plant-stamp-source'
 import {
+  clearSavedObjectStampDragSource,
+  hasSavedObjectStampDragData,
+  readSavedObjectStampDragPreviewSource,
+  readSavedObjectStampDropSource,
+} from '../saved-object-stamp-source'
+import {
+  clearSavedObjectStampGhosts,
+  placeSavedObjectStampAt,
+  previewSavedObjectStampAt,
+} from './interaction/saved-object-stamp-tool'
+import {
   createSceneToolModules,
   type SceneToolModules,
 } from './interaction/tool-modules'
@@ -477,6 +488,15 @@ export class SceneInteractionController {
 
   private readonly _onDragOver = (event: DragEvent): void => {
     event.preventDefault()
+    if (hasSavedObjectStampDragData(event.dataTransfer)) {
+      const source = readSavedObjectStampDragPreviewSource(event.dataTransfer)
+      const canDropStamp = source !== null
+        && previewSavedObjectStampAt(this._savedObjectStampPlacementContext(), source, this._dragEventWorld(event))
+      if (event.dataTransfer) event.dataTransfer.dropEffect = canDropStamp ? 'copy' : 'none'
+      if (!canDropStamp) clearSavedObjectStampGhosts(this._preview)
+      return
+    }
+
     const canDropPlant = hasPlantStampDragData(event.dataTransfer)
       && isSceneLayerOpenForCreation(this._deps.getSceneStore().persisted, 'plants')
     if (event.dataTransfer) event.dataTransfer.dropEffect = canDropPlant ? 'copy' : 'none'
@@ -493,11 +513,28 @@ export class SceneInteractionController {
 
   private readonly _onDragLeave = (): void => {
     hideInteractionPreview(this._preview)
+    clearSavedObjectStampGhosts(this._preview)
   }
 
   private readonly _onDrop = (event: DragEvent): void => {
     event.preventDefault()
     hideInteractionPreview(this._preview)
+    clearSavedObjectStampGhosts(this._preview)
+    const savedObjectStampSource = readSavedObjectStampDropSource(event)
+    if (savedObjectStampSource) {
+      clearSavedObjectStampDragSource()
+      const committed = placeSavedObjectStampAt(
+        this._savedObjectStampPlacementContext(),
+        savedObjectStampSource,
+        this._dragEventWorld(event),
+      )
+      if (committed) {
+        this._switchTool('select')
+        this._activateInteractionHostAfterDrop()
+      }
+      return
+    }
+
     const source = readPlantStampDropSource(event)
     if (!source) return
     if (!isSceneLayerOpenForCreation(this._deps.getSceneStore().persisted, 'plants')) return
@@ -513,6 +550,21 @@ export class SceneInteractionController {
       this._switchTool('select')
       this._activateInteractionHostAfterDrop()
     }
+  }
+
+  private _savedObjectStampPlacementContext() {
+    return {
+      preview: this._preview,
+      camera: this._deps.camera,
+      getSceneStore: this._deps.getSceneStore,
+      getPlantPresentationContext: this._deps.getPlantPresentationContext,
+      sceneEdits: this._deps.sceneEdits,
+      applySnapping: (point: ScenePoint) => this._applySnapping(point),
+    }
+  }
+
+  private _dragEventWorld(event: DragEvent): ScenePoint {
+    return this._deps.camera.screenToWorld(this._screenPoint(event))
   }
 
   private _screenPoint(event: Pick<MouseEvent, 'clientX' | 'clientY'>, rect = this._frame.currentContainerRect()): ScenePoint {

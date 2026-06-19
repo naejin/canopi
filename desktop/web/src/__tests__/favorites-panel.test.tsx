@@ -3,6 +3,7 @@ import { signal, type Signal } from '@preact/signals'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SpeciesCatalogWorkbench } from '../app/plant-browser/workbench'
+import { readSavedObjectStampDragData } from '../canvas/saved-object-stamp-source'
 import type { SpeciesListItem } from '../types/species'
 import {
   createTestSpeciesCatalogWorkbench,
@@ -26,6 +27,29 @@ async function flushEffects(): Promise<void> {
   await Promise.resolve()
   await new Promise((resolve) => setTimeout(resolve, 0))
   await Promise.resolve()
+}
+
+function dragDataStore() {
+  const values = new Map<string, string>()
+  return {
+    values,
+    effectAllowed: 'none',
+    setData(type: string, value: string) {
+      values.set(type, value)
+    },
+    getData(type: string) {
+      return values.get(type) ?? ''
+    },
+  }
+}
+
+function dragStartEvent(dataTransfer: ReturnType<typeof dragDataStore>): DragEvent {
+  const event = new Event('dragstart', { bubbles: true, cancelable: true }) as DragEvent
+  Object.defineProperty(event, 'dataTransfer', {
+    configurable: true,
+    value: dataTransfer,
+  })
+  return event
 }
 
 describe('FavoritesPanel', () => {
@@ -78,9 +102,46 @@ describe('FavoritesPanel', () => {
         id: 'stamp-1',
         name: 'Pommier, Lavande',
         payload_json: JSON.stringify({
-          plants: [{ id: 'plant-1' }, { id: 'plant-2' }],
-          zones: [{ id: 'zone-1' }],
-          annotations: [{ id: 'annotation-1' }],
+          version: 1,
+          anchor: { x: 10, y: 10 },
+          plants: [
+            {
+              id: 'plant-1',
+              canonicalName: 'Malus domestica',
+              commonName: 'Apple',
+              color: null,
+              symbol: null,
+              position: { x: 10, y: 10 },
+              rotationDeg: null,
+              scale: 2,
+            },
+            {
+              id: 'plant-2',
+              canonicalName: 'Lavandula angustifolia',
+              commonName: 'Lavender',
+              color: null,
+              symbol: null,
+              position: { x: 12, y: 10 },
+              rotationDeg: null,
+              scale: 1,
+            },
+          ],
+          zones: [{
+            id: 'zone-1',
+            name: 'Bed',
+            zoneType: 'rect',
+            points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }],
+            rotationDeg: 0,
+            fillColor: null,
+          }],
+          annotations: [{
+            id: 'annotation-1',
+            annotationType: 'text',
+            position: { x: 10, y: 8 },
+            text: 'Guild',
+            fontSize: 12,
+            rotationDeg: null,
+          }],
           groups: [],
         }),
         sort_order: 0,
@@ -203,7 +264,16 @@ describe('FavoritesPanel', () => {
     const grip = container.querySelector<HTMLElement>('[aria-label="Reorder saved stamp"]')
     expect(grip).toBeTruthy()
     expect(grip?.getAttribute('draggable')).toBe('true')
-    expect(container.querySelector('[data-saved-stamp-row="stamp-1"]')?.getAttribute('draggable')).not.toBe('true')
+    const row = container.querySelector<HTMLElement>('[data-saved-stamp-row="stamp-1"]')
+    expect(row?.getAttribute('draggable')).toBe('true')
+
+    const placementDragData = dragDataStore()
+    row!.dispatchEvent(dragStartEvent(placementDragData))
+    expect(readSavedObjectStampDragData(placementDragData)?.plants).toHaveLength(2)
+
+    const reorderDragData = dragDataStore()
+    grip!.dispatchEvent(dragStartEvent(reorderDragData))
+    expect(readSavedObjectStampDragData(reorderDragData)).toBeNull()
 
     const deleteButton = [...container.querySelectorAll('button')]
       .find((button) => button.textContent === 'Delete')

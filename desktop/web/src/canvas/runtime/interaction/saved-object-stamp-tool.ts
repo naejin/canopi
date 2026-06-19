@@ -26,13 +26,16 @@ import { isSceneLayerOpenForCreation, type SceneCreationLayerName } from './laye
 import { isEditableTarget } from './pointer-utils'
 import type { SceneToolAdapter } from './tool-adapter'
 
-export interface SavedObjectStampToolContext {
+export interface SavedObjectStampPlacementContext {
   readonly preview: HTMLDivElement
   readonly camera: CameraController
   readonly getSceneStore: () => SceneStore
   readonly getPlantPresentationContext: (viewportScale: number) => PlantPresentationContext
   readonly sceneEdits: SceneEditCoordinator
   readonly applySnapping: (point: ScenePoint) => ScenePoint
+}
+
+export interface SavedObjectStampToolContext extends SavedObjectStampPlacementContext {
   readonly switchTool: (name: string) => void
 }
 
@@ -52,38 +55,22 @@ export function createSavedObjectStampTool(context: SavedObjectStampToolContext)
   function pointerDown(world: ScenePoint): void {
     const source = readSavedObjectStampSource()
     if (!source || !canPlaceSavedObjectStamp(context.getSceneStore().persisted, source)) return
-    const anchor = context.applySnapping(world)
-    const committed = placeSavedObjectStamp(source, anchor)
+    const committed = placeSavedObjectStampAt(context, source, world)
     if (committed) {
       clear()
       context.switchTool('select')
     }
   }
 
-  function placeSavedObjectStamp(source: SavedObjectStampPayload, anchorWorld: ScenePoint): boolean {
-    const delta = stampDelta(source, anchorWorld)
-    let selection: string[] = []
-    return context.sceneEdits.run('interaction-saved-object-stamp', (tx) => {
-      tx.mutate((draft) => {
-        const copied = copySavedObjectStampToDraft(draft, source, delta)
-        selection = copied.selection
-      })
-      if (selection.length > 0) tx.setSelection(selection)
-    })
-  }
-
   function updatePreview(world: ScenePoint): void {
     const source = readSavedObjectStampSource()
-    if (!source || !canPlaceSavedObjectStamp(context.getSceneStore().persisted, source)) {
-      hideSavedObjectStampGhosts(context.preview)
-      return
-    }
-    showSavedObjectStampGhosts(context, source, stampDelta(source, context.applySnapping(world)))
+    if (!source) clearSavedObjectStampGhosts(context.preview)
+    else previewSavedObjectStampAt(context, source, world)
   }
 
   function clear(): void {
     clearSavedObjectStampSource()
-    hideSavedObjectStampGhosts(context.preview)
+    clearSavedObjectStampGhosts(context.preview)
   }
 
   return {
@@ -245,7 +232,37 @@ function selectedTopLevelIds(
   return selection
 }
 
-function canPlaceSavedObjectStamp(scene: ScenePersistedState, source: SavedObjectStampPayload): boolean {
+export function placeSavedObjectStampAt(
+  context: SavedObjectStampPlacementContext,
+  source: SavedObjectStampPayload,
+  rawAnchorWorld: ScenePoint,
+): boolean {
+  if (!canPlaceSavedObjectStamp(context.getSceneStore().persisted, source)) return false
+  const delta = stampDelta(source, context.applySnapping(rawAnchorWorld))
+  let selection: string[] = []
+  return context.sceneEdits.run('interaction-saved-object-stamp', (tx) => {
+    tx.mutate((draft) => {
+      const copied = copySavedObjectStampToDraft(draft, source, delta)
+      selection = copied.selection
+    })
+    if (selection.length > 0) tx.setSelection(selection)
+  })
+}
+
+export function previewSavedObjectStampAt(
+  context: SavedObjectStampPlacementContext,
+  source: SavedObjectStampPayload,
+  rawAnchorWorld: ScenePoint,
+): boolean {
+  if (!canPlaceSavedObjectStamp(context.getSceneStore().persisted, source)) {
+    clearSavedObjectStampGhosts(context.preview)
+    return false
+  }
+  showSavedObjectStampGhosts(context, source, stampDelta(source, context.applySnapping(rawAnchorWorld)))
+  return true
+}
+
+export function canPlaceSavedObjectStamp(scene: ScenePersistedState, source: SavedObjectStampPayload): boolean {
   if (source.plants.length + source.zones.length + source.annotations.length === 0) return false
   return requiredLayers(source).every((layerName) => isSceneLayerOpenForCreation(scene, layerName))
 }
@@ -259,7 +276,7 @@ function requiredLayers(source: SavedObjectStampPayload): SceneCreationLayerName
 }
 
 function showSavedObjectStampGhosts(
-  context: SavedObjectStampToolContext,
+  context: SavedObjectStampPlacementContext,
   source: SavedObjectStampPayload,
   delta: ScenePoint,
 ): void {
@@ -333,13 +350,13 @@ function showSavedObjectStampGhosts(
   }
 }
 
-function hideSavedObjectStampGhosts(preview: HTMLElement): void {
+export function clearSavedObjectStampGhosts(preview: HTMLElement): void {
   preview.replaceChildren()
   preview.style.display = 'none'
 }
 
 function positionGhost(
-  context: SavedObjectStampToolContext,
+  context: SavedObjectStampPlacementContext,
   ghost: HTMLElement,
   bounds: { x: number; y: number; width: number; height: number },
 ): void {

@@ -8,6 +8,7 @@ import {
 import {
   clearSavedObjectStampSource,
   selectSavedObjectStampSource,
+  writeSavedObjectStampDragData,
 } from '../canvas/saved-object-stamp-source'
 import { guides } from '../canvas/scene-metadata-state'
 import { selectedObjectIds } from '../canvas/session-state'
@@ -7242,6 +7243,157 @@ describe('SceneInteractionController', () => {
     controller.setTool('saved-object-stamp')
 
     events.pointerDown({ x: 100, y: 120 }, { button: 0 })
+
+    expect(store.persisted.zones).toHaveLength(0)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    controller.dispose()
+  })
+
+  it('places Saved Object Stamps from drag-and-drop payloads with full ghost preview', () => {
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    const dragData = new Map<string, string>()
+    let protectedDragData = true
+    const dataTransfer = {
+      effectAllowed: 'none',
+      dropEffect: 'none',
+      get types() {
+        return Array.from(dragData.keys())
+      },
+      setData(type: string, value: string) {
+        dragData.set(type, value)
+      },
+      getData(type: string) {
+        if (protectedDragData) return ''
+        return dragData.get(type) ?? ''
+      },
+    }
+    writeSavedObjectStampDragData(dataTransfer, {
+      id: 'stamp-1',
+      name: 'Guild',
+      sort_order: 0,
+      created_at: '2026-06-19T09:00:00Z',
+      updated_at: '2026-06-19T09:00:00Z',
+      payload_json: JSON.stringify({
+        version: 1,
+        anchor: { x: 0, y: 0 },
+        plants: [{
+          id: 'plant-1',
+          canonicalName: 'Malus domestica',
+          commonName: 'Apple',
+          color: '#C44230',
+          symbol: 'tree',
+          position: { x: 0, y: 0 },
+          rotationDeg: null,
+          scale: 4,
+        }],
+        zones: [],
+        annotations: [],
+        groups: [],
+      }),
+    })
+
+    const dragOverEvent = new Event('dragover', { bubbles: true, cancelable: true }) as DragEvent
+    Object.defineProperties(dragOverEvent, {
+      clientX: { configurable: true, value: 80 },
+      clientY: { configurable: true, value: 90 },
+      dataTransfer: { configurable: true, value: dataTransfer },
+    })
+    const dropEvent = new Event('drop', { bubbles: true, cancelable: true }) as DragEvent
+    Object.defineProperties(dropEvent, {
+      clientX: { configurable: true, value: 80 },
+      clientY: { configurable: true, value: 90 },
+      dataTransfer: { configurable: true, value: dataTransfer },
+    })
+
+    container.dispatchEvent(dragOverEvent)
+    expect(dragOverEvent.defaultPrevented).toBe(true)
+    expect(dataTransfer.dropEffect).toBe('copy')
+    expect(container.querySelectorAll('[data-saved-object-stamp-ghost]')).toHaveLength(1)
+
+    protectedDragData = false
+    container.dispatchEvent(dropEvent)
+    expect(dropEvent.defaultPrevented).toBe(true)
+
+    expect(store.persisted.plants).toHaveLength(1)
+    expect(store.persisted.plants[0]).toMatchObject({
+      canonicalName: 'Malus domestica',
+      commonName: 'Apple',
+      color: '#C44230',
+      symbol: 'tree',
+      position: { x: 80, y: 90 },
+      locked: false,
+    })
+    expect(selectedObjectIds.value).toEqual(new Set([store.persisted.plants[0]!.id]))
+    expect(container.querySelector('[data-saved-object-stamp-ghost]')).toBeNull()
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-saved-object-stamp')
+    controller.dispose()
+  })
+
+  it('blocks Saved Object Stamp drops when any target Layer is locked', () => {
+    store.updatePersisted((draft) => {
+      draft.layers = draft.layers.map((layer) =>
+        layer.name === 'zones' ? { ...layer, locked: true } : layer,
+      )
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    const dragData = new Map<string, string>()
+    const dataTransfer = {
+      effectAllowed: 'none',
+      dropEffect: 'copy',
+      get types() {
+        return Array.from(dragData.keys())
+      },
+      setData(type: string, value: string) {
+        dragData.set(type, value)
+      },
+      getData(type: string) {
+        return dragData.get(type) ?? ''
+      },
+    }
+    writeSavedObjectStampDragData(dataTransfer, {
+      id: 'stamp-1',
+      name: 'Bed',
+      sort_order: 0,
+      created_at: '2026-06-19T09:00:00Z',
+      updated_at: '2026-06-19T09:00:00Z',
+      payload_json: JSON.stringify({
+        version: 1,
+        anchor: { x: 0, y: 0 },
+        plants: [],
+        zones: [{
+          id: 'zone-1',
+          name: 'Kitchen bed',
+          zoneType: 'rect',
+          points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }],
+          rotationDeg: 0,
+          fillColor: null,
+        }],
+        annotations: [],
+        groups: [],
+      }),
+    })
+    const dragOverEvent = new Event('dragover', { bubbles: true, cancelable: true }) as DragEvent
+    Object.defineProperties(dragOverEvent, {
+      clientX: { configurable: true, value: 80 },
+      clientY: { configurable: true, value: 90 },
+      dataTransfer: { configurable: true, value: dataTransfer },
+    })
+    const dropEvent = new Event('drop', { bubbles: true, cancelable: true }) as DragEvent
+    Object.defineProperties(dropEvent, {
+      clientX: { configurable: true, value: 80 },
+      clientY: { configurable: true, value: 90 },
+      dataTransfer: { configurable: true, value: dataTransfer },
+    })
+
+    container.dispatchEvent(dragOverEvent)
+    expect(dataTransfer.dropEffect).toBe('none')
+    expect(container.querySelector('[data-saved-object-stamp-ghost]')).toBeNull()
+
+    container.dispatchEvent(dropEvent)
 
     expect(store.persisted.zones).toHaveLength(0)
     expect(onSceneEditCommit).not.toHaveBeenCalled()

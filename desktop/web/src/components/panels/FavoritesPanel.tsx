@@ -3,6 +3,10 @@ import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
 import { speciesCatalogWorkbench } from '../../app/plant-browser'
 import { savedObjectStampWorkbench } from '../../app/saved-object-stamps'
+import {
+  clearSavedObjectStampDragSource,
+  writeSavedObjectStampDragData,
+} from '../../canvas/saved-object-stamp-source'
 import type { SavedObjectStamp } from '../../types/saved-object-stamps'
 import { PlantRow } from '../plant-db/PlantRow'
 import { PlantDetailCard } from '../plant-detail/PlantDetailCard'
@@ -151,11 +155,27 @@ function SavedObjectStampRow({
   }
 
   function handleGripDragStart(event: DragEvent): void {
+    event.stopPropagation()
     const { dataTransfer } = event
     if (!dataTransfer) return
     dataTransfer.setData('application/x-canopi-saved-stamp-reorder', stamp.id)
     dataTransfer.setData('text/plain', stamp.id)
     dataTransfer.effectAllowed = 'move'
+  }
+
+  function handleStampDragStart(event: DragEvent): void {
+    const target = event.target
+    if (target instanceof HTMLElement && target.closest('button, input')) {
+      event.preventDefault()
+      return
+    }
+    if (!writeSavedObjectStampDragData(event.dataTransfer, stamp)) {
+      event.preventDefault()
+    }
+  }
+
+  function handleStampDragEnd(): void {
+    clearSavedObjectStampDragSource()
   }
 
   function handleDragOver(event: DragEvent): void {
@@ -177,6 +197,9 @@ function SavedObjectStampRow({
       className={styles.savedStampRow}
       role="listitem"
       data-saved-stamp-row={stamp.id}
+      draggable
+      onDragStart={handleStampDragStart}
+      onDragEnd={handleStampDragEnd}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
