@@ -860,6 +860,7 @@
     "description": "For reusable groups of plants, zones, and annotations.",
     "saveSelection": "Save selection",
     "place": "Place",
+    "export": "Export",
     "selectHint": "Select plants, zones, annotations, or groups to save them together.",
     "loading": "Loading saved stamps...",
     "empty": "Save a selection to reuse it here.",

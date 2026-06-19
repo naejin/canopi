@@ -10,13 +10,16 @@ import type {
 } from '../../canvas/runtime/scene'
 import { currentCanvasQuerySurface } from '../../canvas/session'
 import { beginSavedObjectStampPlacement } from '../../canvas/saved-object-stamp-source'
+import { parseSavedObjectStampPayload } from '../../canvas/saved-object-stamp-payload'
 import {
   createSavedObjectStamp as createSavedObjectStampIpc,
   deleteSavedObjectStamp as deleteSavedObjectStampIpc,
+  exportSavedObjectStampCanopiFile,
   getSavedObjectStamps as getSavedObjectStampsIpc,
   renameSavedObjectStamp as renameSavedObjectStampIpc,
   reorderSavedObjectStamps as reorderSavedObjectStampsIpc,
 } from '../../ipc/saved-object-stamps'
+import type { CanopiFile } from '../../types/design'
 import type { SavedObjectStamp } from '../../types/saved-object-stamps'
 import type {
   SavedObjectStampAnnotation,
@@ -24,6 +27,7 @@ import type {
   SavedObjectStampPlant,
   SavedObjectStampZone,
 } from '../../canvas/saved-object-stamp-payload'
+import { composeSavedObjectStampCanopiFile } from './file'
 
 export interface SavedObjectStampLibraryView {
   readonly items: readonly SavedObjectStamp[]
@@ -46,6 +50,7 @@ export interface SavedObjectStampWorkbench {
   deleteStamp(id: string): Promise<boolean>
   reorderStamps(ids: string[]): Promise<void>
   placeStamp(stamp: SavedObjectStamp): boolean
+  exportStamp(stamp: SavedObjectStamp): Promise<string | null>
 }
 
 interface SavedObjectStampWorkbenchOptions {
@@ -54,6 +59,7 @@ interface SavedObjectStampWorkbenchOptions {
   readonly renameSavedObjectStamp?: (id: string, name: string) => Promise<SavedObjectStamp>
   readonly deleteSavedObjectStamp?: (id: string) => Promise<boolean>
   readonly reorderSavedObjectStamps?: (ids: string[]) => Promise<SavedObjectStamp[]>
+  readonly exportSavedObjectStamp?: (content: CanopiFile, defaultName: string) => Promise<string>
   readonly getCanvasQuerySurface?: () => CanvasQuerySurface | null
   readonly beginPlacement?: (stamp: SavedObjectStamp) => boolean
 }
@@ -69,6 +75,7 @@ export function createSavedObjectStampWorkbench({
   renameSavedObjectStamp = renameSavedObjectStampIpc,
   deleteSavedObjectStamp = deleteSavedObjectStampIpc,
   reorderSavedObjectStamps = reorderSavedObjectStampsIpc,
+  exportSavedObjectStamp = exportSavedObjectStampCanopiFile,
   getCanvasQuerySurface = () => currentCanvasQuerySurface.value,
   beginPlacement = beginSavedObjectStampPlacement,
 }: SavedObjectStampWorkbenchOptions = {}): SavedObjectStampWorkbench {
@@ -159,6 +166,20 @@ export function createSavedObjectStampWorkbench({
     return beginPlacement(stamp)
   }
 
+  async function exportStamp(stamp: SavedObjectStamp): Promise<string | null> {
+    const payload = parseSavedObjectStampPayload(stamp.payload_json)
+    if (!payload) return null
+    try {
+      return await exportSavedObjectStamp(
+        composeSavedObjectStampCanopiFile({ name: stamp.name, payload }),
+        savedObjectStampFileName(stamp.name),
+      )
+    } catch (error) {
+      if (isDialogCancelled(error)) return null
+      throw error
+    }
+  }
+
   return {
     library,
     selection,
@@ -168,7 +189,17 @@ export function createSavedObjectStampWorkbench({
     deleteStamp,
     reorderStamps,
     placeStamp,
+    exportStamp,
   }
+}
+
+function isDialogCancelled(error: unknown): boolean {
+  return error instanceof Error && error.message === 'Dialog cancelled'
+}
+
+function savedObjectStampFileName(name: string): string {
+  const base = name.trim() || 'Saved Object Stamp'
+  return `${base.replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ')}.canopi`
 }
 
 function readSelectionView(query: CanvasQuerySurface): SavedObjectStampSelectionView {

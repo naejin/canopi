@@ -860,6 +860,7 @@
     "description": "用于复用植物、区域和注释组合。",
     "saveSelection": "保存所选内容",
     "place": "放置",
+    "export": "导出",
     "selectHint": "选择植物、区域、注释或组合后一起保存。",
     "loading": "正在加载已保存图章...",
     "empty": "保存一个选择后可在这里复用。",

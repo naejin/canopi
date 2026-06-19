@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import type { CanvasQuerySurface } from '../canvas/runtime/runtime'
 import { createSavedObjectStampWorkbench } from '../app/saved-object-stamps/workbench'
+import type { CanopiFile } from '../types/design'
 import type { SavedObjectStamp } from '../types/saved-object-stamps'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 
@@ -311,5 +312,69 @@ describe('Saved Object Stamp Workbench', () => {
 
     expect(workbench.placeStamp(stamp)).toBe(true)
     expect(beginPlacement).toHaveBeenCalledWith(stamp)
+  })
+
+  it('exports a saved stamp as a Canopi file without touching the Design Session', async () => {
+    const stamp: SavedObjectStamp = {
+      id: 'stamp-1',
+      name: 'Apple guild',
+      payload_json: JSON.stringify({
+        version: 1,
+        anchor: { x: 0, y: 0 },
+        plants: [{
+          id: 'plant-1',
+          canonicalName: 'Malus domestica',
+          commonName: 'Apple',
+          color: null,
+          symbol: null,
+          position: { x: 0, y: 0 },
+          rotationDeg: null,
+          scale: null,
+        }],
+        zones: [],
+        annotations: [],
+        groups: [],
+      }),
+      sort_order: 0,
+      created_at: '2026-06-19T09:00:00Z',
+      updated_at: '2026-06-19T09:00:00Z',
+    }
+    const exportSavedObjectStamp = vi.fn(async (
+      _file: CanopiFile,
+      _defaultName: string,
+    ): Promise<string> => '/tmp/Apple guild.canopi')
+    const getCanvasQuerySurface = vi.fn(() => {
+      throw new Error('Design Session should not be read during export')
+    })
+    const workbench = createSavedObjectStampWorkbench({
+      getSavedObjectStamps: async () => [stamp],
+      createSavedObjectStamp: async () => stamp,
+      exportSavedObjectStamp,
+      getCanvasQuerySurface,
+    })
+
+    const path = await workbench.exportStamp(stamp)
+
+    expect(path).toBe('/tmp/Apple guild.canopi')
+    expect(getCanvasQuerySurface).not.toHaveBeenCalled()
+    expect(exportSavedObjectStamp).toHaveBeenCalledTimes(1)
+    const [file, defaultName] = exportSavedObjectStamp.mock.calls[0]!
+    expect(defaultName).toBe('Apple guild.canopi')
+    expect(file).toMatchObject({
+      name: 'Apple guild',
+      location: null,
+      description: null,
+      plants: [{
+        id: 'plant-1',
+        locked: false,
+        canonical_name: 'Malus domestica',
+        notes: null,
+        planted_date: null,
+        quantity: null,
+      }],
+      consortiums: [],
+      timeline: [],
+      budget: [],
+    })
   })
 })

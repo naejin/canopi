@@ -15,6 +15,13 @@ pub fn save_design(user_db: &UserDb, path: String, content: CanopiFile) -> Resul
     Ok(path)
 }
 
+pub fn export_design_file(path: String, content: CanopiFile) -> Result<String, String> {
+    let dest = std::path::PathBuf::from(&path);
+    format::save_to_file(&dest, &content)?;
+    tracing::info!("Design '{}' exported to {}", content.name, path);
+    Ok(path)
+}
+
 pub fn load_design(user_db: &UserDb, path: String) -> Result<CanopiFile, String> {
     let dest = std::path::PathBuf::from(&path);
     let design = format::load_from_file(&dest)?;
@@ -57,7 +64,7 @@ fn try_record_recent(user_db: &UserDb, path: &str, name: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::{get_recent_files, load_design, save_design};
+    use super::{export_design_file, get_recent_files, load_design, save_design};
     use crate::db::UserDb;
     use common_types::design::CanopiFile;
     use rusqlite::Connection;
@@ -108,6 +115,24 @@ mod tests {
         assert_eq!(recent.len(), 1);
         assert_eq!(recent[0].path, saved_path);
         assert_eq!(recent[0].name, "Service Demo");
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn export_design_file_round_trips_without_recording_recent_file() {
+        let user_db = test_user_db();
+        let design = test_design("Stamp Export");
+        let path = temp_design_path("stamp_export");
+
+        let saved_path =
+            export_design_file(path.to_string_lossy().into_owned(), design.clone()).unwrap();
+        let loaded = crate::design::format::load_from_file(&path).unwrap();
+        let recent = get_recent_files(&user_db).unwrap();
+
+        assert_eq!(saved_path, path.to_string_lossy());
+        assert_eq!(loaded.name, "Stamp Export");
+        assert!(recent.is_empty());
 
         let _ = std::fs::remove_file(path);
     }

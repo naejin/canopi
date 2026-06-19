@@ -238,6 +238,13 @@ function SavedObjectStampRow({
         >
           {t('savedObjectStamps.place')}
         </button>
+        <button
+          type="button"
+          className={styles.savedStampSecondaryButton}
+          onClick={() => void savedObjectStampWorkbench.exportStamp(stamp)}
+        >
+          {t('savedObjectStamps.export')}
+        </button>
         {confirmingDelete ? (
           <>
             <button

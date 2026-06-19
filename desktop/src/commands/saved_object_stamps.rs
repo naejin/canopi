@@ -1,4 +1,5 @@
 use crate::db::UserDb;
+use common_types::design::CanopiFile;
 use common_types::saved_object_stamps::SavedObjectStamp;
 
 #[tauri::command]
@@ -40,4 +41,12 @@ pub fn reorder_saved_object_stamps(
     ids: Vec<String>,
 ) -> Result<Vec<SavedObjectStamp>, String> {
     crate::services::saved_object_stamps::reorder_saved_object_stamps(&user_db, ids)
+}
+
+#[tauri::command]
+pub fn export_saved_object_stamp_canopi_file(
+    path: String,
+    content: CanopiFile,
+) -> Result<String, String> {
+    crate::services::design_files::export_design_file(path, content)
 }
