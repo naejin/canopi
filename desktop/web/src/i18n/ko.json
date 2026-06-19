@@ -853,6 +853,22 @@
     "emptyHint": "검색 패널에서 식물에 별표를 눌러 여기에 추가하세요",
     "dragHint": "캔버스로 드래그하여 배치"
   },
+  "savedObjectStamps": {
+    "title": "저장된 스탬프",
+    "description": "식물, 구역, 주석 묶음을 다시 사용합니다.",
+    "saveSelection": "선택 저장",
+    "selectHint": "식물, 구역, 주석 또는 그룹을 선택해 함께 저장하세요.",
+    "loading": "저장된 스탬프를 불러오는 중...",
+    "empty": "선택 항목을 저장하면 여기에서 다시 사용할 수 있습니다.",
+    "summaryPlantOne": "식물 {{count}}개",
+    "summaryPlantOther": "식물 {{count}}개",
+    "summaryZoneOne": "구역 {{count}}개",
+    "summaryZoneOther": "구역 {{count}}개",
+    "summaryAnnotationOne": "주석 {{count}}개",
+    "summaryAnnotationOther": "주석 {{count}}개",
+    "summaryEmpty": "보이는 객체 없음",
+    "summaryUnavailable": "미리보기 사용할 수 없음"
+  },
   "adaptation": {
     "title": "템플릿 적응",
     "incompatible": "호환되지 않는 식물",

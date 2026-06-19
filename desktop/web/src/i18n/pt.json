@@ -853,6 +853,22 @@
     "emptyHint": "Marque plantas no painel de pesquisa para adicioná-las aqui",
     "dragHint": "Arraste para a tela para posicionar"
   },
+  "savedObjectStamps": {
+    "title": "Carimbos salvos",
+    "description": "Para reutilizar grupos de plantas, zonas e anotações.",
+    "saveSelection": "Salvar seleção",
+    "selectHint": "Selecione plantas, zonas, anotações ou grupos para salvá-los juntos.",
+    "loading": "Carregando carimbos salvos...",
+    "empty": "Salve uma seleção para reutilizá-la aqui.",
+    "summaryPlantOne": "{{count}} planta",
+    "summaryPlantOther": "{{count}} plantas",
+    "summaryZoneOne": "{{count}} zona",
+    "summaryZoneOther": "{{count}} zonas",
+    "summaryAnnotationOne": "{{count}} anotação",
+    "summaryAnnotationOther": "{{count}} anotações",
+    "summaryEmpty": "Nenhum objeto visível",
+    "summaryUnavailable": "Prévia indisponível"
+  },
   "adaptation": {
     "title": "Adaptação do modelo",
     "incompatible": "Plantas incompatíveis",

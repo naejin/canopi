@@ -853,6 +853,22 @@
     "emptyHint": "Star plants from the search panel to add them here",
     "dragHint": "Drag to canvas to place"
   },
+  "savedObjectStamps": {
+    "title": "Saved Stamps",
+    "description": "For reusable groups of plants, zones, and annotations.",
+    "saveSelection": "Save selection",
+    "selectHint": "Select plants, zones, annotations, or groups to save them together.",
+    "loading": "Loading saved stamps...",
+    "empty": "Save a selection to reuse it here.",
+    "summaryPlantOne": "{{count}} plant",
+    "summaryPlantOther": "{{count}} plants",
+    "summaryZoneOne": "{{count}} zone",
+    "summaryZoneOther": "{{count}} zones",
+    "summaryAnnotationOne": "{{count}} annotation",
+    "summaryAnnotationOther": "{{count}} annotations",
+    "summaryEmpty": "No visible objects",
+    "summaryUnavailable": "Preview unavailable"
+  },
   "adaptation": {
     "title": "Template Adaptation",
     "incompatible": "Incompatible plants",

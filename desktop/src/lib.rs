@@ -75,6 +75,8 @@ pub fn run() {
             commands::favorites::toggle_favorite,
             commands::favorites::get_favorites,
             commands::favorites::get_recently_viewed,
+            commands::saved_object_stamps::get_saved_object_stamps,
+            commands::saved_object_stamps::create_saved_object_stamp,
             commands::design::new_design,
             commands::design::save_design,
             commands::design::load_design,

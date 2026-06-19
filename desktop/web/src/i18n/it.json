@@ -853,6 +853,22 @@
     "emptyHint": "Segna le piante dal pannello di ricerca per aggiungerle qui",
     "dragHint": "Trascina sulla tela per posizionare"
   },
+  "savedObjectStamps": {
+    "title": "Timbri salvati",
+    "description": "Per riutilizzare gruppi di piante, zone e annotazioni.",
+    "saveSelection": "Salva selezione",
+    "selectHint": "Seleziona piante, zone, annotazioni o gruppi da salvare insieme.",
+    "loading": "Caricamento dei timbri salvati...",
+    "empty": "Salva una selezione per riutilizzarla qui.",
+    "summaryPlantOne": "{{count}} pianta",
+    "summaryPlantOther": "{{count}} piante",
+    "summaryZoneOne": "{{count}} zona",
+    "summaryZoneOther": "{{count}} zone",
+    "summaryAnnotationOne": "{{count}} annotazione",
+    "summaryAnnotationOther": "{{count}} annotazioni",
+    "summaryEmpty": "Nessun oggetto visibile",
+    "summaryUnavailable": "Anteprima non disponibile"
+  },
   "adaptation": {
     "title": "Adattamento modello",
     "incompatible": "Piante incompatibili",

@@ -853,6 +853,22 @@
     "emptyHint": "Отметьте растения в панели поиска, чтобы добавить их сюда",
     "dragHint": "Перетащите на холст для размещения"
   },
+  "savedObjectStamps": {
+    "title": "Сохраненные штампы",
+    "description": "Для повторного использования групп растений, зон и аннотаций.",
+    "saveSelection": "Сохранить выделение",
+    "selectHint": "Выберите растения, зоны, аннотации или группы, чтобы сохранить их вместе.",
+    "loading": "Загрузка сохраненных штампов...",
+    "empty": "Сохраните выделение, чтобы использовать его здесь повторно.",
+    "summaryPlantOne": "{{count}} растение",
+    "summaryPlantOther": "{{count}} растений",
+    "summaryZoneOne": "{{count}} зона",
+    "summaryZoneOther": "{{count}} зон",
+    "summaryAnnotationOne": "{{count}} аннотация",
+    "summaryAnnotationOther": "{{count}} аннотаций",
+    "summaryEmpty": "Нет видимых объектов",
+    "summaryUnavailable": "Предпросмотр недоступен"
+  },
   "adaptation": {
     "title": "Адаптация шаблона",
     "incompatible": "Несовместимые растения",

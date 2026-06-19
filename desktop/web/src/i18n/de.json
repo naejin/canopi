@@ -853,6 +853,22 @@
     "emptyHint": "Markieren Sie Pflanzen im Suchpanel, um sie hier hinzuzufügen",
     "dragHint": "Auf die Fläche ziehen zum Platzieren"
   },
+  "savedObjectStamps": {
+    "title": "Gespeicherte Stempel",
+    "description": "Zum Wiederverwenden von Gruppen aus Pflanzen, Zonen und Anmerkungen.",
+    "saveSelection": "Auswahl speichern",
+    "selectHint": "Wählen Sie Pflanzen, Zonen, Anmerkungen oder Gruppen aus, um sie zusammen zu speichern.",
+    "loading": "Gespeicherte Stempel werden geladen...",
+    "empty": "Speichern Sie eine Auswahl, um sie hier wiederzuverwenden.",
+    "summaryPlantOne": "{{count}} Pflanze",
+    "summaryPlantOther": "{{count}} Pflanzen",
+    "summaryZoneOne": "{{count}} Zone",
+    "summaryZoneOther": "{{count}} Zonen",
+    "summaryAnnotationOne": "{{count}} Anmerkung",
+    "summaryAnnotationOther": "{{count}} Anmerkungen",
+    "summaryEmpty": "Keine sichtbaren Objekte",
+    "summaryUnavailable": "Vorschau nicht verfügbar"
+  },
   "adaptation": {
     "title": "Vorlagenanpassung",
     "incompatible": "Inkompatible Pflanzen",

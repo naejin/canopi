@@ -30,6 +30,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .register::<common_types::health::PlantDbStatus>()
         .register::<common_types::health::SubsystemHealth>()
         .register::<common_types::location::GeoResult>()
+        .register::<common_types::saved_object_stamps::SavedObjectStamp>()
         .register::<common_types::settings::Locale>()
         .register::<common_types::settings::Settings>()
         .register::<common_types::settings::Theme>()

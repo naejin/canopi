@@ -853,6 +853,22 @@
     "emptyHint": "Markeer planten in het zoekpaneel om ze hier toe te voegen",
     "dragHint": "Sleep naar canvas om te plaatsen"
   },
+  "savedObjectStamps": {
+    "title": "Opgeslagen stempels",
+    "description": "Voor herbruikbare groepen planten, zones en annotaties.",
+    "saveSelection": "Selectie opslaan",
+    "selectHint": "Selecteer planten, zones, annotaties of groepen om ze samen op te slaan.",
+    "loading": "Opgeslagen stempels laden...",
+    "empty": "Sla een selectie op om deze hier opnieuw te gebruiken.",
+    "summaryPlantOne": "{{count}} plant",
+    "summaryPlantOther": "{{count}} planten",
+    "summaryZoneOne": "{{count}} zone",
+    "summaryZoneOther": "{{count}} zones",
+    "summaryAnnotationOne": "{{count}} annotatie",
+    "summaryAnnotationOther": "{{count}} annotaties",
+    "summaryEmpty": "Geen zichtbare objecten",
+    "summaryUnavailable": "Voorbeeld niet beschikbaar"
+  },
   "adaptation": {
     "title": "Sjabloonaanpassing",
     "incompatible": "Onverenigbare planten",

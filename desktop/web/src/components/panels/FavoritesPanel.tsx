@@ -2,6 +2,8 @@ import { useEffect } from 'preact/hooks'
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
 import { speciesCatalogWorkbench } from '../../app/plant-browser'
+import { savedObjectStampWorkbench } from '../../app/saved-object-stamps'
+import type { SavedObjectStamp } from '../../types/saved-object-stamps'
 import { PlantRow } from '../plant-db/PlantRow'
 import { PlantDetailCard } from '../plant-detail/PlantDetailCard'
 import plantDetailStyles from '../plant-detail/PlantDetail.module.css'
@@ -10,12 +12,18 @@ import styles from './FavoritesPanel.module.css'
 export function FavoritesPanel() {
   const favoritesView = speciesCatalogWorkbench.favorites.value
   const favoritesRevision = favoritesView.revision
+  const savedStampsView = savedObjectStampWorkbench.library.value
+  const savedStampSelection = savedObjectStampWorkbench.selection.value
   const lang = locale.value
   const selected = speciesCatalogWorkbench.selectedCanonicalName.value
 
   useEffect(() => {
     void speciesCatalogWorkbench.loadFavorites()
   }, [favoritesRevision, lang])
+
+  useEffect(() => {
+    void savedObjectStampWorkbench.loadLibrary()
+  }, [lang])
 
   const items = favoritesView.items
   const count = items.length
@@ -56,6 +64,50 @@ export function FavoritesPanel() {
             ))}
           </div>
         )}
+
+        <section className={styles.savedStampsSection} aria-labelledby="saved-object-stamps-title">
+          <div className={styles.savedStampsHeader}>
+            <div className={styles.savedStampsTitleGroup}>
+              <span id="saved-object-stamps-title" className={styles.title}>
+                {t('savedObjectStamps.title')}
+              </span>
+              <span className={styles.savedStampsDescription}>
+                {t('savedObjectStamps.description')}
+              </span>
+            </div>
+            {savedStampsView.items.length > 0 && (
+              <span className={styles.count}>{savedStampsView.items.length}</span>
+            )}
+          </div>
+          <button
+            type="button"
+            className={styles.saveStampButton}
+            disabled={!savedStampSelection.canSave}
+            onClick={() => void savedObjectStampWorkbench.saveCurrentSelection()}
+          >
+            {t('savedObjectStamps.saveSelection')}
+          </button>
+          {!savedStampSelection.canSave && (
+            <span className={styles.savedStampsHint}>
+              {t('savedObjectStamps.selectHint')}
+            </span>
+          )}
+          {savedStampsView.loading ? (
+            <div className={styles.savedStampsLoading} aria-live="polite" aria-busy="true">
+              {t('savedObjectStamps.loading')}
+            </div>
+          ) : savedStampsView.items.length === 0 ? (
+            <div className={styles.savedStampsEmpty} aria-live="polite">
+              {t('savedObjectStamps.empty')}
+            </div>
+          ) : (
+            <div className={styles.savedStampsList} role="list" aria-label={t('savedObjectStamps.title')}>
+              {savedStampsView.items.map((stamp) => (
+                <SavedObjectStampRow key={stamp.id} stamp={stamp} />
+              ))}
+            </div>
+          )}
+        </section>
       </div>
 
       {/* Detail card — slides in when a row is clicked */}
@@ -66,4 +118,41 @@ export function FavoritesPanel() {
       )}
     </div>
   )
+}
+
+function SavedObjectStampRow({ stamp }: { stamp: SavedObjectStamp }) {
+  return (
+    <div className={styles.savedStampRow} role="listitem">
+      <span className={styles.savedStampName}>{stamp.name}</span>
+      <span className={styles.savedStampSummary}>{savedStampSummary(stamp)}</span>
+    </div>
+  )
+}
+
+function savedStampSummary(stamp: SavedObjectStamp): string {
+  try {
+    const payload = JSON.parse(stamp.payload_json) as {
+      plants?: unknown[]
+      zones?: unknown[]
+      annotations?: unknown[]
+    }
+    const parts = [
+      countPart(payload.plants?.length ?? 0, 'summaryPlantOne', 'summaryPlantOther'),
+      countPart(payload.zones?.length ?? 0, 'summaryZoneOne', 'summaryZoneOther'),
+      countPart(payload.annotations?.length ?? 0, 'summaryAnnotationOne', 'summaryAnnotationOther'),
+    ].filter((part): part is string => part !== null)
+    return parts.length > 0 ? parts.join(' · ') : t('savedObjectStamps.summaryEmpty')
+  } catch {
+    return t('savedObjectStamps.summaryUnavailable')
+  }
+}
+
+function countPart(
+  count: number,
+  singularKey: string,
+  pluralKey: string,
+): string | null {
+  if (count <= 0) return null
+  const key = count === 1 ? singularKey : pluralKey
+  return t(`savedObjectStamps.${key}`, { count })
 }

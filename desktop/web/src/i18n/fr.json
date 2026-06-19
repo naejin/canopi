@@ -853,6 +853,22 @@
     "emptyHint": "Marquez des plantes depuis le panneau de recherche pour les ajouter ici",
     "dragHint": "Glisser sur le canevas pour placer"
   },
+  "savedObjectStamps": {
+    "title": "Tampons enregistrés",
+    "description": "Pour réutiliser des groupes de plantes, zones et annotations.",
+    "saveSelection": "Enregistrer la sélection",
+    "selectHint": "Sélectionnez des plantes, zones, annotations ou groupes à enregistrer ensemble.",
+    "loading": "Chargement des tampons enregistrés...",
+    "empty": "Enregistrez une sélection pour la réutiliser ici.",
+    "summaryPlantOne": "{{count}} plante",
+    "summaryPlantOther": "{{count}} plantes",
+    "summaryZoneOne": "{{count}} zone",
+    "summaryZoneOther": "{{count}} zones",
+    "summaryAnnotationOne": "{{count}} annotation",
+    "summaryAnnotationOther": "{{count}} annotations",
+    "summaryEmpty": "Aucun objet visible",
+    "summaryUnavailable": "Aperçu indisponible"
+  },
   "adaptation": {
     "title": "Adaptation du modèle",
     "incompatible": "Plantes incompatibles",

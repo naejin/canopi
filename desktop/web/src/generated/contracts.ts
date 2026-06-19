@@ -223,6 +223,15 @@ export type ReplacementSuggestion = {
 	height_max_m: number | null,
 };
 
+export type SavedObjectStamp = {
+	id: string,
+	name: string,
+	payload_json: string,
+	sort_order: number,
+	created_at: string,
+	updated_at: string,
+};
+
 export type Settings = {
 	locale: Locale,
 	theme: Theme,

@@ -853,6 +853,22 @@
     "emptyHint": "Marca plantas desde el panel de búsqueda para añadirlas aquí",
     "dragHint": "Arrastra al lienzo para colocar"
   },
+  "savedObjectStamps": {
+    "title": "Sellos guardados",
+    "description": "Para reutilizar grupos de plantas, zonas y anotaciones.",
+    "saveSelection": "Guardar selección",
+    "selectHint": "Selecciona plantas, zonas, anotaciones o grupos para guardarlos juntos.",
+    "loading": "Cargando sellos guardados...",
+    "empty": "Guarda una selección para reutilizarla aquí.",
+    "summaryPlantOne": "{{count}} planta",
+    "summaryPlantOther": "{{count}} plantas",
+    "summaryZoneOne": "{{count}} zona",
+    "summaryZoneOther": "{{count}} zonas",
+    "summaryAnnotationOne": "{{count}} anotación",
+    "summaryAnnotationOther": "{{count}} anotaciones",
+    "summaryEmpty": "Sin objetos visibles",
+    "summaryUnavailable": "Vista previa no disponible"
+  },
   "adaptation": {
     "title": "Adaptación de plantilla",
     "incompatible": "Plantas incompatibles",

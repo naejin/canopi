@@ -3,6 +3,7 @@ pub mod content;
 pub mod design;
 pub mod health;
 pub mod location;
+pub mod saved_object_stamps;
 pub mod settings;
 pub mod species;
 pub mod support;

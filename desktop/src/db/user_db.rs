@@ -1,7 +1,17 @@
 use rusqlite::Connection;
 
 #[allow(dead_code)]
-const CURRENT_SCHEMA_VERSION: i32 = 2;
+const CURRENT_SCHEMA_VERSION: i32 = 3;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SavedObjectStampRow {
+    pub id: String,
+    pub name: String,
+    pub payload_json: String,
+    pub sort_order: i32,
+    pub created_at: String,
+    pub updated_at: String,
+}
 
 /// Initialize user database schema using incremental PRAGMA user_version migration.
 pub fn init(conn: &Connection) -> Result<(), rusqlite::Error> {
@@ -14,6 +24,10 @@ pub fn init(conn: &Connection) -> Result<(), rusqlite::Error> {
     if version < 2 {
         conn.execute_batch(include_str!("../../migrations/v2_recently_viewed.sql"))?;
         conn.pragma_update(None, "user_version", 2)?;
+    }
+    if version < 3 {
+        conn.execute_batch(include_str!("../../migrations/v3_saved_object_stamps.sql"))?;
+        conn.pragma_update(None, "user_version", 3)?;
     }
 
     Ok(())
@@ -110,6 +124,58 @@ pub fn get_recently_viewed_names(
     Ok(names)
 }
 
+pub fn create_saved_object_stamp(
+    conn: &Connection,
+    name: &str,
+    payload_json: &str,
+) -> Result<SavedObjectStampRow, rusqlite::Error> {
+    conn.execute(
+        "INSERT INTO saved_object_stamps (id, name, payload_json, sort_order, created_at, updated_at)
+         VALUES (
+            'stamp-' || lower(hex(randomblob(16))),
+            ?1,
+            ?2,
+            COALESCE((SELECT MAX(sort_order) + 1 FROM saved_object_stamps), 0),
+            datetime('now'),
+            datetime('now')
+         )",
+        (name, payload_json),
+    )?;
+
+    let id = conn.last_insert_rowid();
+    conn.query_row(
+        "SELECT id, name, payload_json, sort_order, created_at, updated_at
+         FROM saved_object_stamps
+         WHERE rowid = ?1",
+        [id],
+        saved_object_stamp_from_row,
+    )
+}
+
+pub fn get_saved_object_stamps(
+    conn: &Connection,
+) -> Result<Vec<SavedObjectStampRow>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT id, name, payload_json, sort_order, created_at, updated_at
+         FROM saved_object_stamps
+         ORDER BY sort_order ASC, created_at ASC, id ASC",
+    )?;
+    stmt.query_map([], saved_object_stamp_from_row)?.collect()
+}
+
+fn saved_object_stamp_from_row(
+    row: &rusqlite::Row<'_>,
+) -> Result<SavedObjectStampRow, rusqlite::Error> {
+    Ok(SavedObjectStampRow {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        payload_json: row.get(2)?,
+        sort_order: row.get(3)?,
+        created_at: row.get(4)?,
+        updated_at: row.get(5)?,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -129,6 +195,14 @@ mod tests {
              CREATE TABLE recently_viewed (
                  canonical_name TEXT PRIMARY KEY,
                  viewed_at TEXT NOT NULL DEFAULT (datetime('now'))
+             );
+             CREATE TABLE saved_object_stamps (
+                 id TEXT PRIMARY KEY,
+                 name TEXT NOT NULL,
+                 payload_json TEXT NOT NULL,
+                 sort_order INTEGER NOT NULL,
+                 created_at TEXT NOT NULL,
+                 updated_at TEXT NOT NULL
              );
              CREATE TRIGGER IF NOT EXISTS limit_recently_viewed
              AFTER INSERT ON recently_viewed
@@ -191,5 +265,32 @@ mod tests {
         set_setting(&conn, "locale", "fr").unwrap();
         let val = get_setting(&conn, "locale").unwrap();
         assert_eq!(val.as_deref(), Some("fr"));
+    }
+
+    #[test]
+    fn test_saved_object_stamp_round_trip_preserves_payload_and_order() {
+        let conn = test_db();
+
+        let saved = create_saved_object_stamp(
+            &conn,
+            "Apple guild",
+            r#"{"plants":[{"id":"plant-1"}],"zones":[],"annotations":[],"groups":[]}"#,
+        )
+        .unwrap();
+
+        assert_eq!(saved.name, "Apple guild");
+        assert_eq!(saved.sort_order, 0);
+        assert!(saved.created_at.len() > 0);
+        assert_eq!(saved.updated_at, saved.created_at);
+
+        let stamps = get_saved_object_stamps(&conn).unwrap();
+        assert_eq!(stamps.len(), 1);
+        assert_eq!(stamps[0].id, saved.id);
+        assert_eq!(stamps[0].name, "Apple guild");
+        assert_eq!(
+            stamps[0].payload_json,
+            r#"{"plants":[{"id":"plant-1"}],"zones":[],"annotations":[],"groups":[]}"#
+        );
+        assert_eq!(stamps[0].sort_order, 0);
     }
 }
