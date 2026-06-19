@@ -366,9 +366,6 @@
         grid-template-columns:
           var(--control-size-sm)
           minmax(0, 1fr)
-          var(--control-size-lg)
-          var(--control-size-lg)
-          var(--control-size-lg)
           auto;
         align-items: center;
         gap: var(--space-1);
@@ -409,35 +406,13 @@
         fill: currentColor;
       }
 
-      .metric {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        flex-direction: column;
-        width: var(--control-size-lg);
-        min-height: var(--control-size-md);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-sm);
-        background: #f6f2ea99;
-        color: var(--color-text-muted);
-        font-size: var(--text-xs);
-        font-weight: 600;
-        font-variant-numeric: tabular-nums;
-        line-height: 1;
-      }
-
-      .metric strong {
-        color: var(--color-text);
-        font-size: var(--text-xs);
-        font-weight: 600;
-      }
-
       .actions {
         display: flex;
         align-items: center;
         justify-content: flex-end;
         gap: var(--space-1);
         padding-left: var(--space-1);
+        border-left: 1px solid var(--color-border);
       }
 
       .icon-button {
@@ -669,12 +644,9 @@
                 </svg>
               </button>
               <span class="stamp-main">
-                <span class="name">Consoude, Mélisse, Fève</span>
-                <span class="summary">Bordure comestible · sous-bois</span>
+                <span class="name">Consoude officinale, Mélisse citronnelle, Fève d'hiver</span>
+                <span class="summary">74 plantes · 8 zones · 4 annotations · bordure comestible</span>
               </span>
-              <span class="metric"><strong>74</strong><span>P</span></span>
-              <span class="metric"><strong>8</strong><span>Z</span></span>
-              <span class="metric"><strong>4</strong><span>A</span></span>
               <span class="actions" aria-label="Actions">
                 <button class="icon-button primary" type="button" aria-label="Placer la planche">
                   <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -720,12 +692,9 @@
                 </svg>
               </button>
               <span class="stamp-main">
-                <input class="rename-input" value="Mélisse, Fève" aria-label="Renommer Mélisse, Fève" />
-                <span class="summary">Renommage en place</span>
+                <input class="rename-input" value="Mélisse, Fève de printemps" aria-label="Renommer Mélisse, Fève de printemps" />
+                <span class="summary">2 plantes · 3 zones · 4 annotations</span>
               </span>
-              <span class="metric"><strong>2</strong><span>P</span></span>
-              <span class="metric"><strong>3</strong><span>Z</span></span>
-              <span class="metric"><strong>4</strong><span>A</span></span>
               <span class="actions" aria-label="Actions de renommage">
                 <button class="icon-button primary" type="button" aria-label="Placer la planche">
                   <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -770,9 +739,6 @@
                 <span class="danger-copy">Supprimer cette planche ?</span>
                 <span class="summary">Cette action retire la planche de vos favoris.</span>
               </span>
-              <span class="metric"><strong>12</strong><span>P</span></span>
-              <span class="metric"><strong>3</strong><span>Z</span></span>
-              <span class="metric"><strong>2</strong><span>A</span></span>
               <span class="actions" aria-label="Confirmation de suppression">
                 <button class="icon-button danger" type="button" aria-label="Confirmer la suppression">
                   <svg viewBox="0 0 16 16" aria-hidden="true">
