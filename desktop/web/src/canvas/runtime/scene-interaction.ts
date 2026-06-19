@@ -125,6 +125,7 @@ export class SceneInteractionController {
   private readonly _lockedAffordance: LockedObjectAffordanceController
   private _tool: InteractionTool = 'select'
   private _designObjectDragPresentationSuppressed = false
+  private _pendingInteractionHostFocusFrame: number | null = null
 
   constructor(private readonly _deps: SceneInteractionDeps) {
     this._preview = createInteractionPreview(this._deps.container)
@@ -247,6 +248,7 @@ export class SceneInteractionController {
   }
 
   dispose(): void {
+    this._cancelPendingInteractionHostFocus()
     this._frame.dispose(() => {
       this._deps.setHoveredEntityId(null)
       this._selectionToolbar.dispose()
@@ -502,7 +504,7 @@ export class SceneInteractionController {
     })
     if (committed) {
       this._switchTool('select')
-      this._focusInteractionHost()
+      this._activateInteractionHostAfterDrop()
     }
   }
 
@@ -678,6 +680,21 @@ export class SceneInteractionController {
       this._deps.container.tabIndex = -1
     }
     this._deps.container.focus({ preventScroll: true })
+  }
+
+  private _activateInteractionHostAfterDrop(): void {
+    this._focusInteractionHost()
+    this._cancelPendingInteractionHostFocus()
+    this._pendingInteractionHostFocusFrame = window.requestAnimationFrame(() => {
+      this._pendingInteractionHostFocusFrame = null
+      this._focusInteractionHost()
+    })
+  }
+
+  private _cancelPendingInteractionHostFocus(): void {
+    if (this._pendingInteractionHostFocusFrame === null) return
+    window.cancelAnimationFrame(this._pendingInteractionHostFocusFrame)
+    this._pendingInteractionHostFocusFrame = null
   }
 
   private _beginSelectedAnnotationTextEditFromKeyboard(event: KeyboardEvent): boolean {

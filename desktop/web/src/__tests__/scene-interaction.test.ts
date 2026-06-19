@@ -7164,7 +7164,7 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
-  it('returns to Select after a plant drop so the next canvas gesture edits objects', () => {
+  it('returns to Select and reactivates the canvas after a native plant drop', async () => {
     store.updatePersisted((draft) => {
       draft.plants = [
         makePlant('plant-1', 'Malus domestica', { x: 30, y: 30 }),
@@ -7177,6 +7177,12 @@ describe('SceneInteractionController', () => {
     const setTool = vi.fn()
     const deps = createInteractionDeps(container, store, camera, { setTool })
     const controller = new SceneInteractionController(deps as any)
+    const originalFocus = container.focus.bind(container)
+    let nativeDropInProgress = false
+    const focusSpy = vi.spyOn(container, 'focus').mockImplementation((options?: FocusOptions) => {
+      if (nativeDropInProgress) return
+      originalFocus(options)
+    })
     try {
       controller.setTool('plant-stamp')
       const dragData = new Map<string, string>()
@@ -7206,13 +7212,21 @@ describe('SceneInteractionController', () => {
         },
       })
 
-      container.dispatchEvent(dropEvent)
+      nativeDropInProgress = true
+      try {
+        container.dispatchEvent(dropEvent)
+      } finally {
+        nativeDropInProgress = false
+      }
       const droppedPlant = store.persisted.plants.find((plant) => plant.id !== 'plant-1')
 
       expect(droppedPlant).toBeDefined()
       expect(selectedObjectIds.value).toEqual(new Set([droppedPlant!.id]))
       expect(setTool).toHaveBeenCalledWith('select')
+      expect(document.activeElement).toBe(sourceControl)
+      await nextAnimationFrame()
       expect(document.activeElement).toBe(container)
+      expect(focusSpy).toHaveBeenCalledTimes(2)
 
       events.pointerDown({ x: 120, y: 90 }, { button: 0 })
       events.pointerMove({ x: 140, y: 100 }, { button: 0 })
@@ -7222,6 +7236,7 @@ describe('SceneInteractionController', () => {
         .toEqual({ x: 140, y: 100 })
       expect(store.persisted.plants).toHaveLength(2)
     } finally {
+      focusSpy.mockRestore()
       controller.dispose()
       sourceControl.remove()
     }
