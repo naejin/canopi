@@ -330,7 +330,7 @@ mod tests {
 
         assert_eq!(saved.name, "Apple guild");
         assert_eq!(saved.sort_order, 0);
-        assert!(saved.created_at.len() > 0);
+        assert!(!saved.created_at.is_empty());
         assert_eq!(saved.updated_at, saved.created_at);
 
         let stamps = get_saved_object_stamps(&conn).unwrap();
