@@ -431,7 +431,7 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
-  it('shows nearest non-dragged Plant distances while dragging selected Plants', () => {
+  it('shows the two nearest non-dragged Placed Plant distances while dragging selected Plants', () => {
     store.updatePersisted((draft) => {
       draft.plants = [
         makePlant('plant-1', 'Malus domestica', { x: 0, y: 0 }),
@@ -456,8 +456,9 @@ describe('SceneInteractionController', () => {
     const lines = Array.from(container.querySelectorAll<SVGLineElement>('[data-plant-drag-distance-line]'))
 
     expect(store.persisted.plants.find((plant) => plant.id === 'plant-1')?.position).toEqual({ x: 3, y: 4 })
-    expect(labels.map((label) => label.textContent)).toEqual(['5 m', '5 m', '10 m'])
-    expect(lines).toHaveLength(3)
+    expect(labels.map((label) => label.textContent)).toEqual(['5 m', '5 m'])
+    expect(lines).toHaveLength(2)
+    expect(container.textContent).not.toContain('10 m')
     expect(container.textContent).not.toContain('100 m')
     expect(onSceneEditCommit).not.toHaveBeenCalled()
 

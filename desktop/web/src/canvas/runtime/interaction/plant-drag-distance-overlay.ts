@@ -3,7 +3,7 @@ import type { ScenePersistedState, ScenePlantEntity, ScenePoint } from '../scene
 import { formatMetricDistance } from '../zone-measurements'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
-const MAX_DISTANCE_GUIDES = 3
+const MAX_DISTANCE_GUIDES = 2
 
 export interface PlantDragDistanceOverlayController {
   update(options: {

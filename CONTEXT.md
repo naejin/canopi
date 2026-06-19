@@ -177,6 +177,10 @@ _Avoid_: Selection lock, runtime lock
 The visible on-screen presence of a design object or its readable presentation aids at the current zoom level. A visual footprint may differ from the object's real-world geometry when readability requires it.
 _Avoid_: Object scale, canvas scale, display size
 
+**Plant Drag Distance Guide**:
+A temporary on-canvas distance cue shown while dragging a placed plant. A plant drag distance guide describes the center-to-center distance from the active dragged placed plant to nearby non-dragged placed plants, and it is not saved in the design.
+_Avoid_: Plant spacing interval, zone measurement, ruler
+
 **Layer**:
 A fixed visibility and locking group for design objects. A design has many layers, and each layer controls whether its objects are visible, locked, and how opaque they appear; layers are not arbitrary user-created folders.
 _Avoid_: Category, folder, custom layer
@@ -417,6 +421,9 @@ A **Spacing Guide** is temporary interaction guidance for plant spacing. A **Des
 
 **Plant Spacing Interval vs Canopy Spread**:
 A **Plant Spacing Interval** positions plant centers. Canopy spread describes a plant's visible or biological size.
+
+**Plant Drag Distance Guide vs Plant Spacing Interval**:
+A **Plant Drag Distance Guide** is temporary feedback while moving an existing placed plant. A **Plant Spacing Interval** is the chosen repeat spacing used by Plant Spacing to create additional placed plants.
 
 **Stratum vs Layer**:
 Use **Stratum** for vertical ecological position in a consortium. Use **Layer** for design-object visibility and locking.
