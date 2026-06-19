@@ -1,12 +1,19 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import type { CanvasQuerySurface } from '../canvas/runtime/runtime'
 import { createSavedObjectStampWorkbench } from '../app/saved-object-stamps/workbench'
 import type { CanopiFile } from '../types/design'
 import type { SavedObjectStamp } from '../types/saved-object-stamps'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
+import { setCanvasRuntimeSurfaces } from '../canvas/session'
+import { setCanvasSelection } from '../canvas/session-state'
 
 describe('Saved Object Stamp Workbench', () => {
+  afterEach(() => {
+    setCanvasRuntimeSurfaces(null)
+    setCanvasSelection([])
+  })
+
   const makeStamp = (id: string, name: string, sortOrder: number): SavedObjectStamp => ({
     id,
     name,
@@ -43,7 +50,11 @@ describe('Saved Object Stamp Workbench', () => {
       getDesignObjectSelection: () => ({
         editableTargets: [],
         lockedTargets: [{ kind: 'plant' as const, id: 'source-plant-9' }],
-        blockedTargets: [],
+        blockedTargets: [{
+          target: { kind: 'plant' as const, id: 'source-plant-9' },
+          reason: 'locked-design-object' as const,
+          layerName: 'plants',
+        }],
         bounds: { minX: 10, minY: 20, maxX: 14, maxY: 28 },
         sameSpeciesReferenceCanonicalName: null,
       }),
@@ -82,6 +93,95 @@ describe('Saved Object Stamp Workbench', () => {
     expect(payload.plants[0]).not.toHaveProperty('notes')
     expect(payload.plants[0]).not.toHaveProperty('plantedDate')
     expect(payload.plants[0]).not.toHaveProperty('quantity')
+  })
+
+  it('captures the effective Plant Symbol inherited from species defaults', async () => {
+    const scene = createDefaultScenePersistedState()
+    scene.plantSpeciesSymbols = { 'Malus domestica': 'tree' }
+    scene.plants = [{
+      kind: 'plant',
+      id: 'source-plant-default-symbol',
+      locked: false,
+      canonicalName: 'Malus domestica',
+      commonName: 'Apple',
+      color: null,
+      symbol: null,
+      stratum: null,
+      canopySpreadM: null,
+      position: { x: 4, y: 5 },
+      rotationDeg: null,
+      scale: null,
+      notes: null,
+      plantedDate: null,
+      quantity: null,
+    }]
+    const query = {
+      ...createTestCanvasQuerySurface({ scene }),
+      getDesignObjectSelection: () => ({
+        editableTargets: [{ kind: 'plant' as const, id: 'source-plant-default-symbol' }],
+        lockedTargets: [],
+        blockedTargets: [],
+        bounds: { minX: 3, minY: 4, maxX: 5, maxY: 6 },
+        sameSpeciesReferenceCanonicalName: null,
+      }),
+    } satisfies CanvasQuerySurface
+    const createStamp = vi.fn(async (name: string, payloadJson: string): Promise<SavedObjectStamp> => ({
+      id: 'stamp-symbol',
+      name,
+      payload_json: payloadJson,
+      sort_order: 0,
+      created_at: '2026-06-19T09:00:00Z',
+      updated_at: '2026-06-19T09:00:00Z',
+    }))
+    const workbench = createSavedObjectStampWorkbench({
+      getSavedObjectStamps: async () => [],
+      createSavedObjectStamp: createStamp,
+      getCanvasQuerySurface: () => query,
+    })
+
+    await workbench.saveCurrentSelection()
+
+    const payload = JSON.parse(createStamp.mock.calls[0]![1])
+    expect(payload.plants[0].symbol).toBe('tree')
+  })
+
+  it('updates selection availability when the canvas selection changes without a scene edit', () => {
+    let selectedIds = new Set<string>()
+    const query = {
+      ...createTestCanvasQuerySurface(),
+      getSelection: () => new Set(selectedIds),
+      getDesignObjectSelection: () => selectedIds.size === 0
+        ? {
+            editableTargets: [],
+            lockedTargets: [],
+            blockedTargets: [],
+            bounds: null,
+            sameSpeciesReferenceCanonicalName: null,
+          }
+        : {
+            editableTargets: [{ kind: 'plant' as const, id: 'plant-1' }],
+            lockedTargets: [],
+            blockedTargets: [],
+            bounds: { minX: 0, minY: 0, maxX: 2, maxY: 2 },
+            sameSpeciesReferenceCanonicalName: null,
+          },
+    } satisfies CanvasQuerySurface
+    setCanvasRuntimeSurfaces({
+      queries: query,
+      commands: {} as never,
+      documents: {} as never,
+    })
+    const workbench = createSavedObjectStampWorkbench({
+      getSavedObjectStamps: async () => [],
+      getCanvasQuerySurface: undefined,
+    })
+
+    expect(workbench.selection.value.canSave).toBe(false)
+
+    selectedIds = new Set(['plant-1'])
+    setCanvasSelection(selectedIds)
+
+    expect(workbench.selection.value.canSave).toBe(true)
   })
 
   it('does not save when the selection has structural blockers', async () => {

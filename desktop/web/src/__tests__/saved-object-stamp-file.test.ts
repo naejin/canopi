@@ -143,7 +143,7 @@ describe('Saved Object Stamp file composition', () => {
       name: 'Guild',
       members: [
         { kind: 'plant', id: 'plant-source' },
-        { kind: 'zone', id: 'zone-source' },
+        { kind: 'zone', id: 'Kitchen bed' },
         { kind: 'annotation', id: 'annotation-source' },
       ],
     }])
@@ -259,6 +259,98 @@ describe('Saved Object Stamp file composition', () => {
         ],
       }],
     })
+  })
+
+  it('imports Plant Symbols inherited from species defaults as explicit stamp symbols', () => {
+    const payload = savedObjectStampPayloadFromCanopiFile(canopiFile({
+      plant_species_symbols: { 'Malus domestica': 'tree' },
+      plants: [{
+        id: 'source-plant',
+        locked: false,
+        canonical_name: 'Malus domestica',
+        common_name: 'Apple',
+        color: null,
+        symbol: null,
+        position: { x: 10, y: 20 },
+        rotation: null,
+        scale: null,
+        notes: null,
+        planted_date: null,
+        quantity: null,
+      }],
+    }))
+
+    expect(payload?.plants[0]?.symbol).toBe('tree')
+  })
+
+  it('round-trips exported Zone group membership through a stamp import', () => {
+    const file = composeSavedObjectStampCanopiFile({
+      name: 'Zone pair',
+      payload: {
+        version: 1,
+        anchor: { x: 0, y: 0 },
+        plants: [{
+          id: 'plant-source',
+          canonicalName: 'Malus domestica',
+          commonName: null,
+          color: null,
+          symbol: null,
+          position: { x: 0, y: 0 },
+          rotationDeg: null,
+          scale: null,
+        }],
+        zones: [{
+          id: 'zone-source',
+          name: 'Kitchen bed',
+          zoneType: 'rect',
+          points: [{ x: 0, y: 0 }, { x: 4, y: 4 }],
+          rotationDeg: 0,
+          fillColor: null,
+        }],
+        annotations: [],
+        groups: [{
+          id: 'group-source',
+          name: 'Plant and zone',
+          members: [
+            { kind: 'plant', id: 'plant-source' },
+            { kind: 'zone', id: 'zone-source' },
+          ],
+        }],
+      },
+      now: new Date('2026-06-19T12:00:00.000Z'),
+    })
+
+    const payload = savedObjectStampPayloadFromCanopiFile(file)
+
+    expect(file.groups[0]?.members).toEqual([
+      { kind: 'plant', id: 'plant-source' },
+      { kind: 'zone', id: 'Kitchen bed' },
+    ])
+    expect(payload?.groups).toEqual([{
+      id: 'group-source',
+      name: 'Plant and zone',
+      members: [
+        { kind: 'plant', id: 'plant-source' },
+        { kind: 'zone', id: 'zone-1' },
+      ],
+    }])
+  })
+
+  it('imports Elliptical Zone anchors from visible bounds instead of radii coordinates', () => {
+    const payload = savedObjectStampPayloadFromCanopiFile(canopiFile({
+      layers: [{ name: 'zones', visible: true, locked: false, opacity: 1 }],
+      zones: [{
+        name: 'Pond edge',
+        locked: false,
+        zone_type: 'ellipse',
+        points: [{ x: 100, y: 100 }, { x: 10, y: 6 }],
+        rotation: 0,
+        fill_color: null,
+        notes: null,
+      }],
+    }))
+
+    expect(payload?.anchor).toEqual({ x: 100, y: 100 })
   })
 
   it('rejects empty imports and falls back to a composition name when the file name is blank', () => {

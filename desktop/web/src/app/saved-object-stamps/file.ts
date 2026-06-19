@@ -1,6 +1,7 @@
 import type { SavedObjectStampPayload } from '../../canvas/saved-object-stamp-payload'
 import type { ObjectGroup, CanopiFile } from '../../types/design'
-import type { ScenePoint } from '../../canvas/runtime/scene'
+import { resolvePlantSymbolId, type ScenePoint } from '../../canvas/runtime/scene'
+import { getZoneWorldBounds } from '../../canvas/runtime/zone-geometry'
 
 interface ComposeSavedObjectStampCanopiFileOptions {
   readonly name: string
@@ -85,7 +86,7 @@ export function savedObjectStampPayloadFromCanopiFile(file: CanopiFile): SavedOb
           canonicalName: plant.canonical_name,
           commonName: plant.common_name,
           color: plant.color ?? null,
-          symbol: plant.symbol ?? null,
+          symbol: resolvePlantSymbolId(plant.symbol ?? file.plant_species_symbols?.[plant.canonical_name]),
           position: { ...plant.position },
           rotationDeg: plant.rotation,
           scale: plant.scale,
@@ -156,10 +157,19 @@ export function importedSavedObjectStampName(
 }
 
 function validCapturedGroups(payload: SavedObjectStampPayload): ObjectGroup[] {
-  const validMemberKeys = new Set<string>([
-    ...payload.plants.map((plant) => memberKey({ kind: 'plant', id: plant.id })),
-    ...payload.zones.map((zone) => memberKey({ kind: 'zone', id: zone.id })),
-    ...payload.annotations.map((annotation) => memberKey({ kind: 'annotation', id: annotation.id })),
+  const exportedMembersByPayloadKey = new Map<string, ObjectGroup['members'][number]>([
+    ...payload.plants.map((plant) => [
+      memberKey({ kind: 'plant', id: plant.id }),
+      { kind: 'plant' as const, id: plant.id },
+    ] as const),
+    ...payload.zones.map((zone) => [
+      memberKey({ kind: 'zone', id: zone.id }),
+      { kind: 'zone' as const, id: zone.name },
+    ] as const),
+    ...payload.annotations.map((annotation) => [
+      memberKey({ kind: 'annotation', id: annotation.id }),
+      { kind: 'annotation' as const, id: annotation.id },
+    ] as const),
   ])
 
   return payload.groups
@@ -167,7 +177,9 @@ function validCapturedGroups(payload: SavedObjectStampPayload): ObjectGroup[] {
       id: group.id,
       locked: false,
       name: group.name,
-      members: group.members.filter((member) => validMemberKeys.has(memberKey(member))),
+      members: group.members
+        .map((member) => exportedMembersByPayloadKey.get(memberKey(member)) ?? null)
+        .filter((member): member is ObjectGroup['members'][number] => member !== null),
     }))
     .filter((group) => group.members.length >= 2)
 }
@@ -191,7 +203,7 @@ function anchorForPayloadObjects(
 ): ScenePoint {
   const points = [
     ...plants.map((plant) => plant.position),
-    ...zones.flatMap((zone) => zone.points),
+    ...zones.flatMap(zoneAnchorPoints),
     ...annotations.map((annotation) => annotation.position),
   ]
   if (points.length === 0) return { x: 0, y: 0 }
@@ -210,6 +222,24 @@ function anchorForPayloadObjects(
     x: (bounds.minX + bounds.maxX) / 2,
     y: (bounds.minY + bounds.maxY) / 2,
   }
+}
+
+function zoneAnchorPoints(zone: SavedObjectStampPayload['zones'][number]): ScenePoint[] {
+  const bounds = getZoneWorldBounds({
+    kind: 'zone',
+    name: zone.name,
+    locked: false,
+    zoneType: zone.zoneType,
+    points: zone.points.map((point) => ({ ...point })),
+    rotationDeg: zone.rotationDeg,
+    fillColor: zone.fillColor,
+    notes: null,
+  })
+  if (!bounds) return []
+  return [
+    { x: bounds.x, y: bounds.y },
+    { x: bounds.x + bounds.width, y: bounds.y + bounds.height },
+  ]
 }
 
 function fallbackStampName(payload: SavedObjectStampPayload): string {

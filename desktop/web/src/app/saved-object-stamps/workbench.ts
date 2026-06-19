@@ -1,14 +1,16 @@
 import { batch, computed, signal, type ReadonlySignal } from '@preact/signals'
 import type { CanvasDesignObjectSelectionTarget, CanvasQuerySurface } from '../../canvas/runtime/runtime'
-import type {
-  SceneAnnotationEntity,
-  SceneObjectGroupEntity,
-  SceneObjectGroupMember,
-  ScenePersistedState,
-  ScenePlantEntity,
-  SceneZoneEntity,
+import {
+  resolvePlantSymbolForPlant,
+  type SceneAnnotationEntity,
+  type SceneObjectGroupEntity,
+  type SceneObjectGroupMember,
+  type ScenePersistedState,
+  type ScenePlantEntity,
+  type SceneZoneEntity,
 } from '../../canvas/runtime/scene'
-import { currentCanvasQuerySurface } from '../../canvas/session'
+import { currentCanvasQuerySurface, currentCanvasSelection } from '../../canvas/session'
+import { canSaveSelectionAsObjectStamp } from '../../canvas/runtime/interaction/contextual-selection-actions'
 import { beginSavedObjectStampPlacement } from '../../canvas/saved-object-stamp-source'
 import { parseSavedObjectStampPayload } from '../../canvas/saved-object-stamp-payload'
 import {
@@ -100,6 +102,7 @@ export function createSavedObjectStampWorkbench({
 
   const selection = computed<SavedObjectStampSelectionView>(() => {
     selectionRevision.value
+    void currentCanvasSelection.value
     const query = getCanvasQuerySurface()
     if (!query) {
       return { canSave: false, reason: 'no-canvas', selectedCount: 0 }
@@ -237,13 +240,14 @@ function savedObjectStampFileName(name: string): string {
 function readSelectionView(query: CanvasQuerySurface): SavedObjectStampSelectionView {
   const selection = query.getDesignObjectSelection()
   const selectedCount = selection.editableTargets.length + selection.lockedTargets.length
-  if (selection.blockedTargets.length > 0) {
-    return { canSave: false, reason: 'structural-blocker', selectedCount }
+  if (canSaveSelectionAsObjectStamp(selection)) return { canSave: true, reason: null, selectedCount }
+  return {
+    canSave: false,
+    reason: selectedCount === 0 && selection.blockedTargets.length === 0
+      ? 'empty-selection'
+      : 'structural-blocker',
+    selectedCount,
   }
-  if (selectedCount === 0) {
-    return { canSave: false, reason: 'empty-selection', selectedCount }
-  }
-  return { canSave: true, reason: null, selectedCount }
 }
 
 function normalizeCurrentSelection(query: CanvasQuerySurface): NormalizedSelection | null {
@@ -262,7 +266,7 @@ function normalizeCurrentSelection(query: CanvasQuerySurface): NormalizedSelecti
     .map((plant, index) => {
       const id = `plant-${index + 1}`
       idMap.set(concreteKey({ kind: 'plant', id: plant.id }), id)
-      return savedPlantFromScene(plant, id)
+      return savedPlantFromScene(plant, id, scene.plantSpeciesSymbols)
     })
   const zones = scene.zones
     .filter((zone) => selected.zones.has(zone.name))
@@ -338,13 +342,17 @@ function collectSelectedGroups(
   return scene.groups.filter((group) => selectedGroupIds.has(group.id))
 }
 
-function savedPlantFromScene(plant: ScenePlantEntity, id: string): SavedObjectStampPlant {
+function savedPlantFromScene(
+  plant: ScenePlantEntity,
+  id: string,
+  plantSpeciesSymbols: Readonly<Record<string, string>>,
+): SavedObjectStampPlant {
   return {
     id,
     canonicalName: plant.canonicalName,
     commonName: plant.commonName,
     color: plant.color,
-    symbol: plant.symbol ?? null,
+    symbol: resolvePlantSymbolForPlant(plant, plantSpeciesSymbols),
     position: { ...plant.position },
     rotationDeg: plant.rotationDeg,
     scale: plant.scale,
