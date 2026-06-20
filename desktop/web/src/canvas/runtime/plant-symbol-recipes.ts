@@ -27,6 +27,15 @@ export type PlantSymbolRecipeCommand =
     strokeWidth?: number
   }
   | {
+    kind: 'curvePath'
+    start: PlantSymbolRecipePoint
+    segments: readonly PlantSymbolRecipeCurveSegment[]
+    closed: boolean
+    fill: boolean
+    stroke: boolean
+    strokeWidth?: number
+  }
+  | {
     kind: 'lines'
     segments: readonly PlantSymbolRecipeSegment[]
     strokeWidth?: number
@@ -34,9 +43,28 @@ export type PlantSymbolRecipeCommand =
 
 export type PlantSymbolRecipePoint = readonly [x: number, y: number]
 export type PlantSymbolRecipeSegment = readonly [x1: number, y1: number, x2: number, y2: number]
+export type PlantSymbolRecipeCurveSegment =
+  | {
+    kind: 'line'
+    to: PlantSymbolRecipePoint
+  }
+  | {
+    kind: 'cubic'
+    control1: PlantSymbolRecipePoint
+    control2: PlantSymbolRecipePoint
+    to: PlantSymbolRecipePoint
+  }
 
 export const DEFAULT_PLANT_SYMBOL_SHAPE_STROKE_WIDTH = 0.14
 export const DEFAULT_PLANT_SYMBOL_LINE_STROKE_WIDTH = 0.16
+
+const SHRUB_CANOPY_SEGMENTS: readonly PlantSymbolRecipeCurveSegment[] = [
+  { kind: 'line', to: [-0.92, 0.2] },
+  { kind: 'cubic', control1: [-0.9, -0.08], control2: [-0.62, -0.3], to: [-0.34, -0.22] },
+  { kind: 'cubic', control1: [-0.24, -0.52], control2: [0.24, -0.58], to: [0.36, -0.22] },
+  { kind: 'cubic', control1: [0.66, -0.3], control2: [0.92, -0.08], to: [0.92, 0.2] },
+  { kind: 'line', to: [0.92, 0.56] },
+]
 
 export const PLANT_SYMBOL_RECIPES: Record<PlantSymbolId, readonly PlantSymbolRecipeCommand[]> = {
   round: [
@@ -63,21 +91,23 @@ export const PLANT_SYMBOL_RECIPES: Record<PlantSymbolId, readonly PlantSymbolRec
   ],
   shrub: [
     {
-      kind: 'path',
-      points: [
-        [-0.94, 0.54],
-        [-0.74, -0.13],
-        [-0.28, -0.5],
-        [0.28, -0.5],
-        [0.74, -0.13],
-        [0.94, 0.54],
-      ],
+      kind: 'curvePath',
+      start: [-0.92, 0.56],
+      segments: SHRUB_CANOPY_SEGMENTS,
+      closed: true,
+      fill: true,
+      stroke: false,
+    },
+    {
+      kind: 'curvePath',
+      start: [-0.92, 0.56],
+      segments: SHRUB_CANOPY_SEGMENTS,
       closed: false,
       fill: false,
       stroke: true,
-      strokeWidth: 0.24,
+      strokeWidth: 0.14,
     },
-    { kind: 'lines', strokeWidth: 0.22, segments: [[-0.86, 0.56, 0.86, 0.56]] },
+    { kind: 'lines', strokeWidth: 0.22, segments: [[-0.88, 0.56, 0.88, 0.56]] },
   ],
   herbaceous: [
     {
@@ -104,22 +134,38 @@ export const PLANT_SYMBOL_RECIPES: Record<PlantSymbolId, readonly PlantSymbolRec
   ],
   groundcover: [
     {
-      kind: 'path',
-      points: [
-        [-0.96, 0.42],
-        [-0.72, 0.05],
-        [-0.42, 0.28],
-        [-0.12, -0.08],
-        [0.2, 0.26],
-        [0.52, -0.02],
-        [0.92, 0.34],
+      kind: 'curvePath',
+      start: [0, 0.72],
+      segments: [
+        { kind: 'cubic', control1: [-0.18, 0.5], control2: [-0.48, 0.34], to: [-0.9, 0.28] },
       ],
       closed: false,
       fill: false,
       stroke: true,
       strokeWidth: 0.24,
     },
-    { kind: 'lines', strokeWidth: 0.2, segments: [[-0.9, 0.56, 0.9, 0.56]] },
+    {
+      kind: 'curvePath',
+      start: [0, 0.72],
+      segments: [
+        { kind: 'cubic', control1: [0.02, 0.46], control2: [0.08, 0.2], to: [0.2, 0] },
+      ],
+      closed: false,
+      fill: false,
+      stroke: true,
+      strokeWidth: 0.24,
+    },
+    {
+      kind: 'curvePath',
+      start: [0, 0.72],
+      segments: [
+        { kind: 'cubic', control1: [0.2, 0.5], control2: [0.52, 0.34], to: [0.92, 0.26] },
+      ],
+      closed: false,
+      fill: false,
+      stroke: true,
+      strokeWidth: 0.24,
+    },
   ],
   wave: [
     {

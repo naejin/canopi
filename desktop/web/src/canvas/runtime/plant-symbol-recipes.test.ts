@@ -15,7 +15,7 @@ describe('plant symbol recipes', () => {
     }
   })
 
-  it('uses the approved updated Option A proportions', () => {
+  it('uses the approved built-in Plant Symbol recipes', () => {
     expect(PLANT_SYMBOL_RECIPES.round).toEqual([
       { kind: 'circle', cx: 0, cy: 0, radius: 1, fill: true, stroke: true },
     ])
@@ -44,21 +44,35 @@ describe('plant symbol recipes', () => {
     ])
     expect(PLANT_SYMBOL_RECIPES.shrub).toEqual([
       {
-        kind: 'path',
-        points: [
-          [-0.94, 0.54],
-          [-0.74, -0.13],
-          [-0.28, -0.5],
-          [0.28, -0.5],
-          [0.74, -0.13],
-          [0.94, 0.54],
+        kind: 'curvePath',
+        start: [-0.92, 0.56],
+        segments: [
+          { kind: 'line', to: [-0.92, 0.2] },
+          { kind: 'cubic', control1: [-0.9, -0.08], control2: [-0.62, -0.3], to: [-0.34, -0.22] },
+          { kind: 'cubic', control1: [-0.24, -0.52], control2: [0.24, -0.58], to: [0.36, -0.22] },
+          { kind: 'cubic', control1: [0.66, -0.3], control2: [0.92, -0.08], to: [0.92, 0.2] },
+          { kind: 'line', to: [0.92, 0.56] },
+        ],
+        closed: true,
+        fill: true,
+        stroke: false,
+      },
+      {
+        kind: 'curvePath',
+        start: [-0.92, 0.56],
+        segments: [
+          { kind: 'line', to: [-0.92, 0.2] },
+          { kind: 'cubic', control1: [-0.9, -0.08], control2: [-0.62, -0.3], to: [-0.34, -0.22] },
+          { kind: 'cubic', control1: [-0.24, -0.52], control2: [0.24, -0.58], to: [0.36, -0.22] },
+          { kind: 'cubic', control1: [0.66, -0.3], control2: [0.92, -0.08], to: [0.92, 0.2] },
+          { kind: 'line', to: [0.92, 0.56] },
         ],
         closed: false,
         fill: false,
         stroke: true,
-        strokeWidth: 0.24,
+        strokeWidth: 0.14,
       },
-      { kind: 'lines', strokeWidth: 0.22, segments: [[-0.86, 0.56, 0.86, 0.56]] },
+      { kind: 'lines', strokeWidth: 0.22, segments: [[-0.88, 0.56, 0.88, 0.56]] },
     ])
     expect(PLANT_SYMBOL_RECIPES.herbaceous).toEqual([
       {
@@ -85,22 +99,38 @@ describe('plant symbol recipes', () => {
     ])
     expect(PLANT_SYMBOL_RECIPES.groundcover).toEqual([
       {
-        kind: 'path',
-        points: [
-          [-0.96, 0.42],
-          [-0.72, 0.05],
-          [-0.42, 0.28],
-          [-0.12, -0.08],
-          [0.2, 0.26],
-          [0.52, -0.02],
-          [0.92, 0.34],
+        kind: 'curvePath',
+        start: [0, 0.72],
+        segments: [
+          { kind: 'cubic', control1: [-0.18, 0.5], control2: [-0.48, 0.34], to: [-0.9, 0.28] },
         ],
         closed: false,
         fill: false,
         stroke: true,
         strokeWidth: 0.24,
       },
-      { kind: 'lines', strokeWidth: 0.2, segments: [[-0.9, 0.56, 0.9, 0.56]] },
+      {
+        kind: 'curvePath',
+        start: [0, 0.72],
+        segments: [
+          { kind: 'cubic', control1: [0.02, 0.46], control2: [0.08, 0.2], to: [0.2, 0] },
+        ],
+        closed: false,
+        fill: false,
+        stroke: true,
+        strokeWidth: 0.24,
+      },
+      {
+        kind: 'curvePath',
+        start: [0, 0.72],
+        segments: [
+          { kind: 'cubic', control1: [0.2, 0.5], control2: [0.52, 0.34], to: [0.92, 0.26] },
+        ],
+        closed: false,
+        fill: false,
+        stroke: true,
+        strokeWidth: 0.24,
+      },
     ])
     expect(PLANT_SYMBOL_RECIPES.wave).toEqual([
       {
@@ -143,6 +173,18 @@ function recipeBounds(recipe: readonly PlantSymbolRecipeCommand[]) {
         for (const [x, y] of command.points) {
           xs.push(x)
           ys.push(y)
+        }
+        break
+      case 'curvePath':
+        xs.push(command.start[0])
+        ys.push(command.start[1])
+        for (const segment of command.segments) {
+          if (segment.kind === 'cubic') {
+            xs.push(segment.control1[0], segment.control2[0])
+            ys.push(segment.control1[1], segment.control2[1])
+          }
+          xs.push(segment.to[0])
+          ys.push(segment.to[1])
         }
         break
       case 'lines':

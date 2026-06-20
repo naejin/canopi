@@ -319,6 +319,31 @@ function drawPlantSymbolGlyph(
         ctx.lineWidth = lineWidth
         break
       }
+      case 'curvePath':
+        ctx.beginPath()
+        ctx.moveTo(x + command.start[0] * r, y + command.start[1] * r)
+        for (const segment of command.segments) {
+          if (segment.kind === 'line') {
+            ctx.lineTo(x + segment.to[0] * r, y + segment.to[1] * r)
+          } else {
+            ctx.bezierCurveTo(
+              x + segment.control1[0] * r,
+              y + segment.control1[1] * r,
+              x + segment.control2[0] * r,
+              y + segment.control2[1] * r,
+              x + segment.to[0] * r,
+              y + segment.to[1] * r,
+            )
+          }
+        }
+        if (command.closed) ctx.closePath()
+        ctx.lineWidth = lineWidth * (
+          (command.strokeWidth ?? DEFAULT_PLANT_SYMBOL_SHAPE_STROKE_WIDTH) /
+          DEFAULT_PLANT_SYMBOL_SHAPE_STROKE_WIDTH
+        )
+        fillAndStrokeCanvasSymbolCommand(ctx, command.fill, command.stroke, opacity)
+        ctx.lineWidth = lineWidth
+        break
       case 'lines':
         ctx.globalAlpha = opacity
         ctx.lineWidth = lineWidth * (

@@ -65,6 +65,51 @@ describe('createCanvas2DSceneRenderer', () => {
     renderer.dispose()
   })
 
+  it('draws curved plant symbol recipes with native Canvas2D curves', async () => {
+    const ctx = createMockCanvasContext()
+    const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext') as unknown as {
+      mockImplementation(implementation: (contextId: string) => CanvasRenderingContext2D | null): void
+    }
+    getContextSpy.mockImplementation((contextId: string) => {
+      return contextId === '2d' ? ctx as unknown as CanvasRenderingContext2D : null
+    })
+
+    const host = document.createElement('div')
+    Object.defineProperty(host, 'clientWidth', { configurable: true, value: 400 })
+    Object.defineProperty(host, 'clientHeight', { configurable: true, value: 300 })
+
+    const renderer = await createCanvas2DSceneRenderer().initialize({ container: host }, {
+      backendId: 'canvas2d',
+      capabilities: {
+        domCanvas: true,
+        canvas2d: true,
+        offscreenCanvas: false,
+        offscreenCanvas2d: false,
+        webgl: false,
+        webgl2: false,
+        webgpu: false,
+        imageBitmap: false,
+        createImageBitmap: false,
+        worker: false,
+        devicePixelRatio: 1,
+        prefersReducedMotion: null,
+      },
+    } as never)
+
+    renderer.renderScene(createRendererSnapshot({
+      plants: [
+        createPlant({ id: 'shrub', symbol: 'shrub', position: { x: 10, y: 10 } }),
+        createPlant({ id: 'groundcover', symbol: 'groundcover', position: { x: 30, y: 10 } }),
+      ],
+      viewport: { x: 0, y: 0, scale: 8 },
+    }))
+
+    expect(ctx.bezierCurveTo).toHaveBeenCalled()
+    expect(ctx.fill).toHaveBeenCalled()
+    expect(ctx.stroke).toHaveBeenCalled()
+    renderer.dispose()
+  })
+
   it('applies text annotation rotation in screen space', async () => {
     const ctx = createMockCanvasContext()
     const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext') as unknown as {
@@ -203,6 +248,7 @@ function createMockCanvasContext() {
     ellipse: vi.fn(),
     moveTo: vi.fn(),
     lineTo: vi.fn(),
+    bezierCurveTo: vi.fn(),
     closePath: vi.fn(),
     fill: vi.fn(),
     stroke: vi.fn(),

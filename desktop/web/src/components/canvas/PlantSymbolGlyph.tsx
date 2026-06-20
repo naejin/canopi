@@ -71,6 +71,38 @@ export function PlantSymbolGlyph({ symbol, className }: PlantSymbolGlyphProps) {
               />
             )
           }
+          case 'curvePath': {
+            const d = [
+              `M ${command.start[0]} ${command.start[1]}`,
+              ...command.segments.map((segment) => {
+                if (segment.kind === 'line') return `L ${segment.to[0]} ${segment.to[1]}`
+                return [
+                  'C',
+                  segment.control1[0],
+                  segment.control1[1],
+                  segment.control2[0],
+                  segment.control2[1],
+                  segment.to[0],
+                  segment.to[1],
+                ].join(' ')
+              }),
+              command.closed ? 'Z' : '',
+            ].join(' ')
+            return (
+              <path
+                key={index}
+                d={d}
+                fill={command.fill ? 'currentColor' : 'none'}
+                fillOpacity={command.fill ? 0.55 : undefined}
+                stroke={command.stroke ? 'currentColor' : 'none'}
+                strokeWidth={command.stroke
+                  ? command.strokeWidth ?? DEFAULT_PLANT_SYMBOL_SHAPE_STROKE_WIDTH
+                  : undefined}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            )
+          }
           case 'lines':
             return (
               <g key={index}>

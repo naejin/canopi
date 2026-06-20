@@ -509,6 +509,35 @@ function drawPlantSymbolGlyph(
         )
         break
       }
+      case 'curvePath':
+        graphics.moveTo(x + command.start[0] * r, y + command.start[1] * r)
+        for (const segment of command.segments) {
+          if (segment.kind === 'line') {
+            graphics.lineTo(x + segment.to[0] * r, y + segment.to[1] * r)
+          } else {
+            graphics.bezierCurveTo(
+              x + segment.control1[0] * r,
+              y + segment.control1[1] * r,
+              x + segment.control2[0] * r,
+              y + segment.control2[1] * r,
+              x + segment.to[0] * r,
+              y + segment.to[1] * r,
+            )
+          }
+        }
+        if (command.closed) graphics.closePath()
+        fillAndStrokePixiSymbolCommand(
+          graphics,
+          command.fill,
+          command.stroke,
+          fillColor,
+          strokeColor,
+          lineWidth * (
+            (command.strokeWidth ?? DEFAULT_PLANT_SYMBOL_SHAPE_STROKE_WIDTH) /
+            DEFAULT_PLANT_SYMBOL_SHAPE_STROKE_WIDTH
+          ),
+        )
+        break
       case 'lines':
         for (const segment of command.segments) {
           graphics.moveTo(x + segment[0] * r, y + segment[1] * r)

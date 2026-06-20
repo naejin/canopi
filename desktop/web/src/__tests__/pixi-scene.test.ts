@@ -35,6 +35,7 @@ vi.mock('pixi.js', () => {
     ellipse = vi.fn(() => this)
     moveTo = vi.fn(() => this)
     lineTo = vi.fn(() => this)
+    bezierCurveTo = vi.fn(() => this)
     closePath = vi.fn(() => this)
     fill = vi.fn(() => this)
     stroke = vi.fn(() => this)
@@ -160,6 +161,54 @@ describe('createPixiSceneRenderer', () => {
     expect(pixi.__pixiMockState.graphics.some((graphics) => graphics.circle.mock.calls.length > 0)).toBe(true)
     expect(pixi.__pixiMockState.graphics.some((graphics) => graphics.rect.mock.calls.length > 0)).toBe(false)
     expect(pixi.__pixiMockState.graphics.some((graphics) => graphics.lineTo.mock.calls.length > 0)).toBe(false)
+    renderer.dispose()
+  })
+
+  it('draws curved plant symbol recipes with native Pixi curves', async () => {
+    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
+    const pixi = await import('pixi.js') as unknown as {
+      __pixiMockState: {
+        graphics: Array<{
+          bezierCurveTo: ReturnType<typeof vi.fn>
+          fill: ReturnType<typeof vi.fn>
+          stroke: ReturnType<typeof vi.fn>
+        }>
+      }
+    }
+
+    const host = document.createElement('div')
+    Object.defineProperty(host, 'clientWidth', { configurable: true, value: 400 })
+    Object.defineProperty(host, 'clientHeight', { configurable: true, value: 300 })
+
+    const renderer = await createPixiSceneRenderer().initialize({ container: host }, {
+      backendId: 'pixi',
+      capabilities: {
+        domCanvas: true,
+        canvas2d: true,
+        offscreenCanvas: false,
+        offscreenCanvas2d: false,
+        webgl: true,
+        webgl2: true,
+        webgpu: false,
+        imageBitmap: false,
+        createImageBitmap: false,
+        worker: false,
+        devicePixelRatio: 1,
+        prefersReducedMotion: null,
+      },
+    } as never)
+
+    renderer.renderScene(createRendererSnapshot({
+      plants: [
+        createPlant({ id: 'shrub', symbol: 'shrub', position: { x: 10, y: 10 } }),
+        createPlant({ id: 'groundcover', symbol: 'groundcover', position: { x: 30, y: 10 } }),
+      ],
+      viewport: { x: 0, y: 0, scale: 8 },
+    }))
+
+    expect(pixi.__pixiMockState.graphics.some((graphics) => graphics.bezierCurveTo.mock.calls.length > 0)).toBe(true)
+    expect(pixi.__pixiMockState.graphics.some((graphics) => graphics.fill.mock.calls.length > 0)).toBe(true)
+    expect(pixi.__pixiMockState.graphics.some((graphics) => graphics.stroke.mock.calls.length > 0)).toBe(true)
     renderer.dispose()
   })
 
