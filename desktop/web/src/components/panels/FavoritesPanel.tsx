@@ -29,6 +29,11 @@ import styles from './FavoritesPanel.module.css'
 const SAVED_STAMP_PREVIEW_DELAY_MS = 120
 const SAVED_STAMP_PREVIEW_GAP = 8
 const SAVED_STAMP_PREVIEW_MARGIN = 8
+// Lead the pointer slightly in the drag direction so compact rows do not feel sticky.
+const SAVED_STAMP_REORDER_DOWN_THRESHOLD = 0.4
+const SAVED_STAMP_REORDER_UP_THRESHOLD = 0.6
+
+type SavedStampReorderDirection = 'up' | 'down'
 
 interface SavedStampPreview {
   readonly stamp: SavedObjectStamp
@@ -39,6 +44,8 @@ interface SavedStampReorderSession {
   readonly pointerId: number
   readonly sourceId: string
   readonly grip: HTMLElement
+  direction: SavedStampReorderDirection | null
+  lastClientY: number
   latestIds: readonly string[]
 }
 
@@ -142,6 +149,8 @@ export function FavoritesPanel() {
       pointerId: event.pointerId,
       sourceId,
       grip: event.currentTarget,
+      direction: null,
+      lastClientY: event.clientY,
       latestIds: ids,
     }
     event.currentTarget.setPointerCapture(event.pointerId)
@@ -191,7 +200,10 @@ export function FavoritesPanel() {
     const session = savedStampReorderSessionRef.current
     if (!session || session.pointerId !== event.pointerId) return
     event.preventDefault()
-    previewSavedStampReorder(reorderSavedStampIdsForPointer(session.sourceId, event.clientY))
+    const direction = savedStampReorderDirectionForPointer(session, event.clientY)
+    session.direction = direction
+    session.lastClientY = event.clientY
+    previewSavedStampReorder(reorderSavedStampIdsForPointer(session.sourceId, event.clientY, direction))
   }
 
   function finishSavedStampReorder(event: PointerEvent): void {
@@ -247,7 +259,20 @@ export function FavoritesPanel() {
     }
   }
 
-  function reorderSavedStampIdsForPointer(sourceId: string, clientY: number): readonly string[] {
+  function savedStampReorderDirectionForPointer(
+    session: SavedStampReorderSession,
+    clientY: number,
+  ): SavedStampReorderDirection | null {
+    if (clientY > session.lastClientY) return 'down'
+    if (clientY < session.lastClientY) return 'up'
+    return session.direction
+  }
+
+  function reorderSavedStampIdsForPointer(
+    sourceId: string,
+    clientY: number,
+    direction: SavedStampReorderDirection | null,
+  ): readonly string[] {
     const rows = [...savedStampsListRef.current?.querySelectorAll<HTMLElement>('[data-saved-stamp-row]') ?? []]
     const visibleIds = rows
       .map((row) => row.dataset.savedStampRow)
@@ -255,11 +280,12 @@ export function FavoritesPanel() {
     const displayedIds = visibleIds.length > 0 ? visibleIds : orderedSavedStampItems.map((item) => item.id)
     const withoutSourceIds = displayedIds.filter((id) => id !== sourceId)
     const targetRows = rows.filter((row) => row.dataset.savedStampRow !== sourceId)
+    const threshold = savedStampReorderThreshold(direction)
     let insertIndex = withoutSourceIds.length
 
     for (let index = 0; index < targetRows.length; index += 1) {
       const rect = targetRows[index]!.getBoundingClientRect()
-      if (clientY < rect.top + rect.height / 2) {
+      if (clientY < rect.top + rect.height * threshold) {
         insertIndex = index
         break
       }
@@ -270,6 +296,12 @@ export function FavoritesPanel() {
       sourceId,
       ...withoutSourceIds.slice(insertIndex),
     ]
+  }
+
+  function savedStampReorderThreshold(direction: SavedStampReorderDirection | null): number {
+    if (direction === 'down') return SAVED_STAMP_REORDER_DOWN_THRESHOLD
+    if (direction === 'up') return SAVED_STAMP_REORDER_UP_THRESHOLD
+    return 0.5
   }
 
   return (
