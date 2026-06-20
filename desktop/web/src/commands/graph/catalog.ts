@@ -12,6 +12,7 @@ import {
   recordFrontendDiagnostic,
 } from '../../app/problem-report/diagnostics'
 import { openProblemReportDialog } from '../../app/problem-report/submission'
+import { openAboutCanopiDialog } from '../../app/about/state'
 import { mutateSettingsProjection } from '../../app/settings/projection'
 import {
   currentCanvasHasSelection,
@@ -39,6 +40,7 @@ export type AppCommandId =
   | 'view.zoomIn'
   | 'view.zoomOut'
   | 'view.fitToContent'
+  | 'help.aboutCanopi'
   | 'help.reportProblem'
   | 'nav.canvas'
   | 'nav.location'
@@ -116,6 +118,10 @@ function cycleTheme(): void {
 
 function showProblemReportDialog(): void {
   openProblemReportDialog()
+}
+
+function showAboutCanopiDialog(): void {
+  openAboutCanopiDialog()
 }
 
 function runCanvas(
@@ -213,6 +219,12 @@ export const APP_COMMANDS: readonly AppCommandDefinition[] = [
     palette: true,
     run: (state) => runCanvas(state, (canvas) => canvas.viewport.zoomToFit()),
     disabled: (state) => !state.canvas,
+  },
+  {
+    id: 'help.aboutCanopi',
+    label: () => t('menu.help.aboutCanopi'),
+    palette: true,
+    run: showAboutCanopiDialog,
   },
   {
     id: 'help.reportProblem',

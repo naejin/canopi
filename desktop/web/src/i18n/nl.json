@@ -702,13 +702,20 @@
     "view.zoomOut": "Uitzoomen",
     "view.fitToContent": "Aanpassen aan inhoud",
     "help": "Help",
-    "help.reportProblem": "Probleem melden"
+    "help.reportProblem": "Probleem melden",
+    "help.aboutCanopi": "Over Canopi"
   },
   "titleBar": {
     "unsavedChanges": "Niet-opgeslagen wijzigingen",
     "untitledDesign": "Naamloos ontwerp",
     "renameDesignName": "Ontwerpnaam wijzigen",
     "designNameInput": "Ontwerpnaam"
+  },
+  "about": {
+    "title": "Over Canopi",
+    "version": "Versie {{version}}",
+    "licenseLabel": "Licentie",
+    "copyrightLabel": "Copyright"
   },
   "window": {
     "minimize": "Minimaliseren",

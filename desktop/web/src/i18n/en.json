@@ -839,13 +839,20 @@
     "view.zoomIn": "Zoom In",
     "view.zoomOut": "Zoom Out",
     "view.fitToContent": "Fit to Content",
-    "help.reportProblem": "Report a Problem"
+    "help.reportProblem": "Report a Problem",
+    "help.aboutCanopi": "About Canopi"
   },
   "titleBar": {
     "unsavedChanges": "Unsaved changes",
     "untitledDesign": "Untitled Design",
     "renameDesignName": "Rename design name",
     "designNameInput": "Design name"
+  },
+  "about": {
+    "title": "About Canopi",
+    "version": "Version {{version}}",
+    "licenseLabel": "License",
+    "copyrightLabel": "Copyright"
   },
   "window": {
     "minimize": "Minimize",

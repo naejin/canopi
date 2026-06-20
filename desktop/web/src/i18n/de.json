@@ -702,13 +702,20 @@
     "view.zoomOut": "Verkleinern",
     "view.fitToContent": "An Inhalt anpassen",
     "help": "Hilfe",
-    "help.reportProblem": "Problem melden"
+    "help.reportProblem": "Problem melden",
+    "help.aboutCanopi": "Über Canopi"
   },
   "titleBar": {
     "unsavedChanges": "Ungespeicherte Änderungen",
     "untitledDesign": "Unbenannter Entwurf",
     "renameDesignName": "Entwurf umbenennen",
     "designNameInput": "Entwurfsname"
+  },
+  "about": {
+    "title": "Über Canopi",
+    "version": "Version {{version}}",
+    "licenseLabel": "Lizenz",
+    "copyrightLabel": "Copyright"
   },
   "window": {
     "minimize": "Minimieren",

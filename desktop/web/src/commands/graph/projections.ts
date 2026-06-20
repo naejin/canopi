@@ -113,7 +113,7 @@ const MENU_COMMAND_ORDER: Record<AppMenuId, readonly (AppCommandId | 'separator'
   ],
   edit: ['edit.undo', 'edit.redo'],
   view: ['view.zoomIn', 'view.zoomOut', 'view.fitToContent'],
-  help: ['help.reportProblem'],
+  help: ['help.aboutCanopi', 'separator', 'help.reportProblem'],
 }
 
 const MENU_LABELS: Record<AppMenuId, () => string> = {

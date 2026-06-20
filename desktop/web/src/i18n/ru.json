@@ -702,13 +702,20 @@
     "view.zoomOut": "Уменьшить",
     "view.fitToContent": "По содержимому",
     "help": "Справка",
-    "help.reportProblem": "Сообщить о проблеме"
+    "help.reportProblem": "Сообщить о проблеме",
+    "help.aboutCanopi": "О Canopi"
   },
   "titleBar": {
     "unsavedChanges": "Несохранённые изменения",
     "untitledDesign": "Безымянный дизайн",
     "renameDesignName": "Переименовать дизайн",
     "designNameInput": "Название дизайна"
+  },
+  "about": {
+    "title": "О Canopi",
+    "version": "Версия {{version}}",
+    "licenseLabel": "Лицензия",
+    "copyrightLabel": "Copyright"
   },
   "window": {
     "minimize": "Свернуть",

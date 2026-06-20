@@ -702,13 +702,20 @@
     "view.zoomOut": "縮小",
     "view.fitToContent": "コンテンツに合わせる",
     "help": "ヘルプ",
-    "help.reportProblem": "問題を報告"
+    "help.reportProblem": "問題を報告",
+    "help.aboutCanopi": "Canopi について"
   },
   "titleBar": {
     "unsavedChanges": "未保存の変更",
     "untitledDesign": "無題のデザイン",
     "renameDesignName": "デザイン名を変更",
     "designNameInput": "デザイン名"
+  },
+  "about": {
+    "title": "Canopi について",
+    "version": "バージョン {{version}}",
+    "licenseLabel": "ライセンス",
+    "copyrightLabel": "Copyright"
   },
   "window": {
     "minimize": "最小化",

@@ -8,6 +8,7 @@ import { commitSidePanelWidth } from "./app/shell/controller";
 import { TitleBar } from "./components/shared/TitleBar";
 import { DegradedBanner } from "./components/shared/DegradedBanner";
 import { CommandPalette } from "./components/shared/CommandPalette";
+import { AboutCanopiDialog } from "./components/shared/AboutCanopiDialog";
 import { ProblemReportDialog } from "./components/shared/ProblemReportDialog";
 import { CanvasPanel } from "./components/panels/CanvasPanel";
 import { PanelBar } from "./components/panels/PanelBar";
@@ -157,6 +158,7 @@ export function App() {
         {(showCanvas || showLocation) && <PanelBar />}
       </div>
       <CommandPalette />
+      <AboutCanopiDialog />
       <ProblemReportDialog />
     </div>
   );

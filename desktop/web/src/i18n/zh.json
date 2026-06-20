@@ -702,13 +702,20 @@
     "view.zoomOut": "缩小",
     "view.fitToContent": "适应内容",
     "help": "帮助",
-    "help.reportProblem": "报告问题"
+    "help.reportProblem": "报告问题",
+    "help.aboutCanopi": "关于 Canopi"
   },
   "titleBar": {
     "unsavedChanges": "未保存的更改",
     "untitledDesign": "未命名设计",
     "renameDesignName": "重命名设计",
     "designNameInput": "设计名称"
+  },
+  "about": {
+    "title": "关于 Canopi",
+    "version": "版本 {{version}}",
+    "licenseLabel": "许可证",
+    "copyrightLabel": "版权"
   },
   "window": {
     "minimize": "最小化",

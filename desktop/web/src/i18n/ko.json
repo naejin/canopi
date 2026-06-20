@@ -702,13 +702,20 @@
     "view.zoomOut": "축소",
     "view.fitToContent": "콘텐츠에 맞추기",
     "help": "도움말",
-    "help.reportProblem": "문제 신고"
+    "help.reportProblem": "문제 신고",
+    "help.aboutCanopi": "Canopi 정보"
   },
   "titleBar": {
     "unsavedChanges": "저장되지 않은 변경사항",
     "untitledDesign": "제목 없는 디자인",
     "renameDesignName": "디자인 이름 바꾸기",
     "designNameInput": "디자인 이름"
+  },
+  "about": {
+    "title": "Canopi 정보",
+    "version": "버전 {{version}}",
+    "licenseLabel": "라이선스",
+    "copyrightLabel": "Copyright"
   },
   "window": {
     "minimize": "최소화",
