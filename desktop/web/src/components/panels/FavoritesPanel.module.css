@@ -254,7 +254,7 @@
   display: grid;
   grid-template-columns: var(--control-size-sm) minmax(0, 1fr) auto;
   grid-template-areas: "grip content actions";
-  column-gap: var(--space-2);
+  column-gap: var(--space-1);
   align-items: center;
   min-width: 0;
   min-height: calc(var(--control-size-md) + var(--space-2));
@@ -428,9 +428,30 @@
   border-color: var(--color-border-strong);
 }
 
+.savedStampIconButtonSuccess {
+  color: var(--color-success);
+  background: var(--color-success-bg);
+  border-color: var(--color-success);
+}
+
+.savedStampIconButtonSuccess:hover,
+.savedStampIconButtonSuccess:focus-visible {
+  color: var(--color-success);
+  background: var(--color-success-bg);
+  border-color: var(--color-success);
+}
+
+.savedStampIconButtonDanger {
+  color: var(--color-danger);
+  background: var(--color-danger-bg);
+  border-color: var(--color-danger);
+}
+
 .savedStampIconButtonDanger:hover,
 .savedStampIconButtonDanger:focus-visible {
   color: var(--color-danger);
+  background: var(--color-danger-bg);
+  border-color: var(--color-danger);
 }
 
 .savedStampActionIcon {

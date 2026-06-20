@@ -352,8 +352,8 @@ describe('FavoritesPanel', () => {
 
     const renameInput = container.querySelector<HTMLInputElement>('input[aria-label="Stamp name"]')
     expect(renameInput).toBeTruthy()
-    expect(container.querySelector('button[aria-label="Place"]')).toBeTruthy()
-    expect(container.querySelector('button[aria-label="Export"]')).toBeTruthy()
+    expect(container.querySelector('button[aria-label="Place"]')).toBeNull()
+    expect(container.querySelector('button[aria-label="Export"]')).toBeNull()
     expect(container.querySelector('button[aria-label="Confirm rename"]')).toBeTruthy()
     expect(container.querySelector('button[aria-label="Cancel rename"]')).toBeTruthy()
 
@@ -481,6 +481,29 @@ describe('FavoritesPanel', () => {
     expect(renameStampMock).not.toHaveBeenCalled()
     expect(container.querySelector<HTMLInputElement>('input[aria-label="Stamp name"]')).toBeNull()
     expect(container.textContent).toContain('Pommier, Lavande')
+  })
+
+  it('starts Saved Stamp rename as a focused edit mode with the whole name selected', async () => {
+    await act(async () => {
+      render(<FavoritesPanel />, container)
+      await flushEffects()
+    })
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="Rename"]')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flushEffects()
+    })
+
+    const renameInput = container.querySelector<HTMLInputElement>('input[aria-label="Stamp name"]')
+    expect(renameInput).toBeTruthy()
+    expect(document.activeElement).toBe(renameInput)
+    expect(renameInput?.selectionStart).toBe(0)
+    expect(renameInput?.selectionEnd).toBe('Pommier, Lavande'.length)
+    expect(container.querySelector('button[aria-label="Place"]')).toBeNull()
+    expect(container.querySelector('button[aria-label="Export"]')).toBeNull()
+    expect(container.querySelector('button[aria-label="Confirm rename"]')).toBeTruthy()
+    expect(container.querySelector('button[aria-label="Cancel rename"]')).toBeTruthy()
   })
 
   it('shows a clamped visual-only thumbnail from row-body hover and Place focus', async () => {

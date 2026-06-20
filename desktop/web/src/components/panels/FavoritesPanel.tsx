@@ -477,10 +477,19 @@ function SavedObjectStampRow({
   const [draftName, setDraftName] = useState(stamp.name)
   const [isRenaming, setIsRenaming] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const renameInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     setDraftName(stamp.name)
   }, [stamp.name])
+
+  useEffect(() => {
+    if (!isRenaming) return
+    const input = renameInputRef.current
+    if (!input) return
+    input.focus()
+    input.setSelectionRange(0, input.value.length)
+  }, [isRenaming])
 
   function commitRename(): void {
     const next = draftName.trim()
@@ -577,6 +586,7 @@ function SavedObjectStampRow({
           <span className={styles.savedStampDeleteCopy}>{t('savedObjectStamps.deleteConfirmCopy')}</span>
         ) : isRenaming ? (
           <input
+            ref={renameInputRef}
             className={styles.savedStampNameInput}
             aria-label={t('savedObjectStamps.nameInput')}
             value={draftName}
@@ -594,12 +604,12 @@ function SavedObjectStampRow({
             }}
             onKeyDown={(event) => {
               if (event.key === 'Enter') {
+                event.preventDefault()
                 commitRename()
-                ;(event.currentTarget as HTMLInputElement).blur()
               }
               if (event.key === 'Escape') {
+                event.preventDefault()
                 cancelRename()
-                ;(event.currentTarget as HTMLInputElement).blur()
               }
             }}
           />
@@ -628,6 +638,24 @@ function SavedObjectStampRow({
               {t('savedObjectStamps.cancelDelete')}
             </button>
           </>
+        ) : isRenaming ? (
+          <>
+            <SavedStampIconButton
+              label={t('savedObjectStamps.confirmRename')}
+              onClick={commitRename}
+              tone="success"
+            >
+              <CheckIcon />
+            </SavedStampIconButton>
+            <SavedStampIconButton
+              label={t('savedObjectStamps.cancelRename')}
+              onClick={cancelRename}
+              tone="danger"
+              renameCancel
+            >
+              <CancelIcon />
+            </SavedStampIconButton>
+          </>
         ) : (
           <>
             <SavedStampIconButton
@@ -644,46 +672,26 @@ function SavedObjectStampRow({
             >
               <ExportIcon />
             </SavedStampIconButton>
-            {isRenaming ? (
-              <>
-                <SavedStampIconButton
-                  label={t('savedObjectStamps.confirmRename')}
-                  onClick={commitRename}
-                >
-                  <CheckIcon />
-                </SavedStampIconButton>
-                <SavedStampIconButton
-                  label={t('savedObjectStamps.cancelRename')}
-                  onClick={cancelRename}
-                  renameCancel
-                >
-                  <CancelIcon />
-                </SavedStampIconButton>
-              </>
-            ) : (
-              <>
-                <SavedStampIconButton
-                  label={t('savedObjectStamps.rename')}
-                  onClick={() => {
-                    setConfirmingDelete(false)
-                    setDraftName(stamp.name)
-                    setIsRenaming(true)
-                  }}
-                >
-                  <PencilIcon />
-                </SavedStampIconButton>
-                <SavedStampIconButton
-                  label={t('savedObjectStamps.delete')}
-                  onClick={() => {
-                    setIsRenaming(false)
-                    setConfirmingDelete(true)
-                  }}
-                  danger
-                >
-                  <TrashIcon />
-                </SavedStampIconButton>
-              </>
-            )}
+            <SavedStampIconButton
+              label={t('savedObjectStamps.rename')}
+              onClick={() => {
+                setConfirmingDelete(false)
+                setDraftName(stamp.name)
+                setIsRenaming(true)
+              }}
+            >
+              <PencilIcon />
+            </SavedStampIconButton>
+            <SavedStampIconButton
+              label={t('savedObjectStamps.delete')}
+              onClick={() => {
+                setIsRenaming(false)
+                setConfirmingDelete(true)
+              }}
+              tone="danger"
+            >
+              <TrashIcon />
+            </SavedStampIconButton>
           </>
         )}
       </div>
@@ -695,23 +703,29 @@ function SavedStampIconButton({
   label,
   onClick,
   children,
-  danger = false,
   onFocus,
   onBlur,
   renameCancel = false,
+  tone = 'default',
 }: {
   label: string
   onClick: () => void
   children: ComponentChildren
-  danger?: boolean
   onFocus?: (anchor: HTMLElement) => void
   onBlur?: () => void
   renameCancel?: boolean
+  tone?: 'default' | 'success' | 'danger'
 }) {
+  const toneClass = tone === 'success'
+    ? styles.savedStampIconButtonSuccess
+    : tone === 'danger'
+      ? styles.savedStampIconButtonDanger
+      : ''
+
   return (
     <button
       type="button"
-      className={`${styles.savedStampIconButton} ${danger ? styles.savedStampIconButtonDanger : ''}`}
+      className={`${styles.savedStampIconButton} ${toneClass}`}
       aria-label={label}
       data-saved-stamp-rename-cancel={renameCancel ? 'true' : undefined}
       onClick={(event) => {
