@@ -31,6 +31,8 @@ const SAVED_STAMP_PREVIEW_GAP = 8
 const SAVED_STAMP_PREVIEW_MARGIN = 8
 const SAVED_STAMP_REORDER_MIME = 'application/x-canopi-saved-stamp-reorder'
 
+type SavedStampReorderPlacement = 'before' | 'after'
+
 interface SavedStampPreview {
   readonly stamp: SavedObjectStamp
   readonly anchorRect: DOMRect
@@ -123,7 +125,7 @@ export function FavoritesPanel() {
 
   function previewSavedStampReorder(ids: readonly string[]): void {
     if (savedStampReorderCommittedRef.current) return
-    setSavedStampReorderPreviewIds(ids)
+    setSavedStampReorderPreviewIds((current) => sameIdOrder(current, ids) ? current : ids)
   }
 
   function commitSavedStampReorder(ids: readonly string[]): void {
@@ -140,6 +142,41 @@ export function FavoritesPanel() {
     if (savedStampReorderCommittedRef.current) return
     savedStampReorderSourceIdRef.current = null
     setSavedStampReorderPreviewIds(null)
+  }
+
+  function previewSavedStampReorderAfterLast(event: DragEvent): void {
+    if (!isSavedStampReorderDrag(event) || isSavedStampRowEventTarget(event.target)) return
+    const sourceId = currentSavedStampReorderSourceId()
+    const lastStamp = orderedSavedStampItems[orderedSavedStampItems.length - 1]
+    if (!sourceId || !lastStamp || sourceId === lastStamp.id) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    previewSavedStampReorder(moveRelativeTo(
+      orderedSavedStampItems.map((item) => item.id),
+      sourceId,
+      lastStamp.id,
+      'after',
+    ))
+  }
+
+  function commitSavedStampReorderAfterLast(event: DragEvent): void {
+    if (!isSavedStampReorderDrag(event) || isSavedStampRowEventTarget(event.target)) return
+    const sourceId = event.dataTransfer.getData(SAVED_STAMP_REORDER_MIME) || currentSavedStampReorderSourceId()
+    const lastStamp = orderedSavedStampItems[orderedSavedStampItems.length - 1]
+    if (!sourceId || !lastStamp) return
+    if (sourceId === lastStamp.id) {
+      if (!savedStampReorderPreviewIds || sameIdOrder(savedStampItems.map((item) => item.id), savedStampReorderPreviewIds)) return
+      event.preventDefault()
+      commitSavedStampReorder(savedStampReorderPreviewIds)
+      return
+    }
+    event.preventDefault()
+    commitSavedStampReorder(moveRelativeTo(
+      orderedSavedStampItems.map((item) => item.id),
+      sourceId,
+      lastStamp.id,
+      'after',
+    ))
   }
 
   return (
@@ -251,7 +288,13 @@ export function FavoritesPanel() {
                 {t('savedObjectStamps.empty')}
               </div>
             ) : (
-              <div className={styles.savedStampsList} role="list" aria-label={t('savedObjectStamps.title')}>
+              <div
+                className={styles.savedStampsList}
+                role="list"
+                aria-label={t('savedObjectStamps.title')}
+                onDragOver={previewSavedStampReorderAfterLast}
+                onDrop={commitSavedStampReorderAfterLast}
+              >
                 {orderedSavedStampItems.map((stamp) => (
                   <SavedObjectStampRow
                     key={stamp.id}
@@ -611,14 +654,24 @@ function SavedObjectStampRow({
     event.dataTransfer.dropEffect = 'move'
     const sourceId = event.dataTransfer.getData(SAVED_STAMP_REORDER_MIME) || onReorderSourceId()
     if (!sourceId || sourceId === stamp.id) return
-    onReorderPreview(moveBefore(stamps.map((item) => item.id), sourceId, stamp.id))
+    onReorderPreview(moveRelativeTo(
+      stamps.map((item) => item.id),
+      sourceId,
+      stamp.id,
+      reorderPlacementForRow(event.currentTarget, event.clientY),
+    ))
   }
 
   function handleDrop(event: DragEvent): void {
     const sourceId = event.dataTransfer?.getData(SAVED_STAMP_REORDER_MIME) || onReorderSourceId()
     if (!sourceId || sourceId === stamp.id) return
     event.preventDefault()
-    const nextIds = moveBefore(stamps.map((item) => item.id), sourceId, stamp.id)
+    const nextIds = moveRelativeTo(
+      stamps.map((item) => item.id),
+      sourceId,
+      stamp.id,
+      reorderPlacementForRow(event.currentTarget, event.clientY),
+    )
     onReorderCommit(nextIds)
   }
 
@@ -885,15 +938,44 @@ function TrashIcon() {
   )
 }
 
-function moveBefore(ids: string[], sourceId: string, targetId: string): string[] {
+function isSavedStampReorderDrag(event: DragEvent): event is DragEvent & { dataTransfer: DataTransfer } {
+  return Boolean(event.dataTransfer && Array.from(event.dataTransfer.types).includes(SAVED_STAMP_REORDER_MIME))
+}
+
+function isSavedStampRowEventTarget(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && target.closest('[data-saved-stamp-row]') !== null
+}
+
+function reorderPlacementForRow(
+  target: EventTarget | null,
+  clientY: number,
+): SavedStampReorderPlacement {
+  if (!(target instanceof HTMLElement)) return 'before'
+  const rect = target.getBoundingClientRect()
+  if (!Number.isFinite(rect.height) || rect.height <= 0) return 'before'
+  return clientY >= rect.top + rect.height / 2 ? 'after' : 'before'
+}
+
+function moveRelativeTo(
+  ids: string[],
+  sourceId: string,
+  targetId: string,
+  placement: SavedStampReorderPlacement,
+): string[] {
   const withoutSource = ids.filter((id) => id !== sourceId)
   const targetIndex = withoutSource.indexOf(targetId)
   if (targetIndex < 0) return ids
+  const insertIndex = placement === 'after' ? targetIndex + 1 : targetIndex
   return [
-    ...withoutSource.slice(0, targetIndex),
+    ...withoutSource.slice(0, insertIndex),
     sourceId,
-    ...withoutSource.slice(targetIndex),
+    ...withoutSource.slice(insertIndex),
   ]
+}
+
+function sameIdOrder(left: readonly string[] | null, right: readonly string[]): boolean {
+  if (!left || left.length !== right.length) return false
+  return left.every((id, index) => id === right[index])
 }
 
 function savedStampSummary(stamp: SavedObjectStamp): string {

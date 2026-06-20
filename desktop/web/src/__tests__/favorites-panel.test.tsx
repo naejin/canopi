@@ -56,20 +56,31 @@ function dragStartEvent(dataTransfer: ReturnType<typeof dragDataStore>): DragEve
   return event
 }
 
-function dragEvent(type: 'dragover' | 'drop' | 'dragend', dataTransfer: ReturnType<typeof dragDataStore>): DragEvent {
+function dragEvent(
+  type: 'dragover' | 'drop' | 'dragend',
+  dataTransfer: ReturnType<typeof dragDataStore>,
+  init: { clientY?: number } = {},
+): DragEvent {
   const event = new Event(type, { bubbles: true, cancelable: true }) as DragEvent
   Object.defineProperty(event, 'dataTransfer', {
     configurable: true,
     value: dataTransfer,
   })
+  Object.defineProperty(event, 'clientY', {
+    configurable: true,
+    value: init.clientY ?? 0,
+  })
   return event
 }
 
-function protectedDragOverEvent(dataTransfer: ReturnType<typeof dragDataStore>): DragEvent {
+function protectedDragOverEvent(
+  dataTransfer: ReturnType<typeof dragDataStore>,
+  init: { clientY?: number } = {},
+): DragEvent {
   return dragEvent('dragover', {
     ...dataTransfer,
     getData: () => '',
-  })
+  }, init)
 }
 
 function elementRect({
@@ -556,10 +567,11 @@ describe('FavoritesPanel', () => {
     const targetRow = container.querySelector<HTMLElement>('[data-saved-stamp-row="stamp-1"]')
     expect(sourceGrip).toBeTruthy()
     expect(targetRow).toBeTruthy()
+    targetRow!.getBoundingClientRect = () => elementRect({ top: 100, height: 40 })
 
     await act(async () => {
       sourceGrip!.dispatchEvent(dragStartEvent(dataTransfer))
-      targetRow!.dispatchEvent(protectedDragOverEvent(dataTransfer))
+      targetRow!.dispatchEvent(protectedDragOverEvent(dataTransfer, { clientY: 110 }))
       await flushEffects()
     })
 
@@ -569,12 +581,105 @@ describe('FavoritesPanel', () => {
     expect(visibleNames()[2]).toContain('Berry guild')
 
     await act(async () => {
-      targetRow!.dispatchEvent(dragEvent('drop', dataTransfer))
+      targetRow!.dispatchEvent(dragEvent('drop', dataTransfer, { clientY: 110 }))
       await flushEffects()
     })
 
     expect(reorderStampMock).toHaveBeenCalledTimes(1)
     expect(reorderStampMock).toHaveBeenCalledWith(['stamp-3', 'stamp-1', 'stamp-2'])
+  })
+
+  it('reorders Saved Stamps after the hovered row when dragging through the lower half', async () => {
+    const baseStamp = stampLibrary.value.items[0]!
+    stampLibrary.value = {
+      ...stampLibrary.value,
+      items: [
+        { ...baseStamp, id: 'stamp-1', name: 'Alpha guild', sort_order: 0 },
+        { ...baseStamp, id: 'stamp-2', name: 'Berry guild', sort_order: 1 },
+        { ...baseStamp, id: 'stamp-3', name: 'Canopy guild', sort_order: 2 },
+      ],
+    }
+
+    await act(async () => {
+      render(<FavoritesPanel />, container)
+      await flushEffects()
+    })
+
+    const visibleNames = () => [...container.querySelectorAll<HTMLElement>('[data-saved-stamp-row]')]
+      .map((row) => row.textContent ?? '')
+    const dataTransfer = dragDataStore()
+    const sourceGrip = container.querySelector<HTMLElement>(
+      '[data-saved-stamp-row="stamp-1"] [aria-label="Reorder saved stamp"]',
+    )
+    const targetRow = container.querySelector<HTMLElement>('[data-saved-stamp-row="stamp-3"]')
+    expect(sourceGrip).toBeTruthy()
+    expect(targetRow).toBeTruthy()
+    targetRow!.getBoundingClientRect = () => elementRect({ top: 180, height: 40 })
+
+    await act(async () => {
+      sourceGrip!.dispatchEvent(dragStartEvent(dataTransfer))
+      targetRow!.dispatchEvent(protectedDragOverEvent(dataTransfer, { clientY: 212 }))
+      await flushEffects()
+    })
+
+    expect(reorderStampMock).not.toHaveBeenCalled()
+    expect(visibleNames()[0]).toContain('Berry guild')
+    expect(visibleNames()[1]).toContain('Canopy guild')
+    expect(visibleNames()[2]).toContain('Alpha guild')
+
+    await act(async () => {
+      targetRow!.dispatchEvent(dragEvent('drop', dataTransfer, { clientY: 212 }))
+      await flushEffects()
+    })
+
+    expect(reorderStampMock).toHaveBeenCalledTimes(1)
+    expect(reorderStampMock).toHaveBeenCalledWith(['stamp-2', 'stamp-3', 'stamp-1'])
+  })
+
+  it('reorders Saved Stamps after the bottom row from the list space below it', async () => {
+    const baseStamp = stampLibrary.value.items[0]!
+    stampLibrary.value = {
+      ...stampLibrary.value,
+      items: [
+        { ...baseStamp, id: 'stamp-1', name: 'Alpha guild', sort_order: 0 },
+        { ...baseStamp, id: 'stamp-2', name: 'Berry guild', sort_order: 1 },
+        { ...baseStamp, id: 'stamp-3', name: 'Canopy guild', sort_order: 2 },
+      ],
+    }
+
+    await act(async () => {
+      render(<FavoritesPanel />, container)
+      await flushEffects()
+    })
+
+    const visibleNames = () => [...container.querySelectorAll<HTMLElement>('[data-saved-stamp-row]')]
+      .map((row) => row.textContent ?? '')
+    const dataTransfer = dragDataStore()
+    const sourceGrip = container.querySelector<HTMLElement>(
+      '[data-saved-stamp-row="stamp-1"] [aria-label="Reorder saved stamp"]',
+    )
+    const savedStampsList = container.querySelector<HTMLElement>('[data-saved-stamps-frame] [role="list"]')
+    expect(sourceGrip).toBeTruthy()
+    expect(savedStampsList).toBeTruthy()
+
+    await act(async () => {
+      sourceGrip!.dispatchEvent(dragStartEvent(dataTransfer))
+      savedStampsList!.dispatchEvent(protectedDragOverEvent(dataTransfer, { clientY: 260 }))
+      await flushEffects()
+    })
+
+    expect(reorderStampMock).not.toHaveBeenCalled()
+    expect(visibleNames()[0]).toContain('Berry guild')
+    expect(visibleNames()[1]).toContain('Canopy guild')
+    expect(visibleNames()[2]).toContain('Alpha guild')
+
+    await act(async () => {
+      savedStampsList!.dispatchEvent(dragEvent('drop', dataTransfer, { clientY: 260 }))
+      await flushEffects()
+    })
+
+    expect(reorderStampMock).toHaveBeenCalledTimes(1)
+    expect(reorderStampMock).toHaveBeenCalledWith(['stamp-2', 'stamp-3', 'stamp-1'])
   })
 
   it('shows a clamped visual-only thumbnail from row-body hover and Place focus', async () => {
