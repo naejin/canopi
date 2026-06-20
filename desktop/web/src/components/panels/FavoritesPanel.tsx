@@ -29,6 +29,7 @@ import styles from './FavoritesPanel.module.css'
 const SAVED_STAMP_PREVIEW_DELAY_MS = 120
 const SAVED_STAMP_PREVIEW_GAP = 8
 const SAVED_STAMP_PREVIEW_MARGIN = 8
+const SAVED_STAMP_REORDER_MIME = 'application/x-canopi-saved-stamp-reorder'
 
 interface SavedStampPreview {
   readonly stamp: SavedObjectStamp
@@ -48,6 +49,7 @@ export function FavoritesPanel() {
   const savedStampsFrameRef = useRef<HTMLElement>(null)
   const previewTimerRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null)
   const savedStampReorderCommittedRef = useRef(false)
+  const savedStampReorderSourceIdRef = useRef<string | null>(null)
   const [, setLayoutRevision] = useState(0)
   const [preview, setPreview] = useState<SavedStampPreview | null>(null)
   const [savedStampReorderPreviewIds, setSavedStampReorderPreviewIds] = useState<readonly string[] | null>(null)
@@ -109,9 +111,14 @@ export function FavoritesPanel() {
     setPreview(null)
   }
 
-  function beginSavedStampReorder(ids: readonly string[]): void {
+  function beginSavedStampReorder(sourceId: string, ids: readonly string[]): void {
     savedStampReorderCommittedRef.current = false
+    savedStampReorderSourceIdRef.current = sourceId
     setSavedStampReorderPreviewIds(ids)
+  }
+
+  function currentSavedStampReorderSourceId(): string | null {
+    return savedStampReorderSourceIdRef.current
   }
 
   function previewSavedStampReorder(ids: readonly string[]): void {
@@ -121,6 +128,7 @@ export function FavoritesPanel() {
 
   function commitSavedStampReorder(ids: readonly string[]): void {
     savedStampReorderCommittedRef.current = true
+    savedStampReorderSourceIdRef.current = null
     setSavedStampReorderPreviewIds(ids)
     void savedObjectStampWorkbench.reorderStamps([...ids]).finally(() => {
       savedStampReorderCommittedRef.current = false
@@ -130,6 +138,7 @@ export function FavoritesPanel() {
 
   function cancelSavedStampReorder(): void {
     if (savedStampReorderCommittedRef.current) return
+    savedStampReorderSourceIdRef.current = null
     setSavedStampReorderPreviewIds(null)
   }
 
@@ -252,6 +261,7 @@ export function FavoritesPanel() {
                     onPreviewSchedule={scheduleStampPreview}
                     onPreviewClear={hideStampPreview}
                     onReorderBegin={beginSavedStampReorder}
+                    onReorderSourceId={currentSavedStampReorderSourceId}
                     onReorderPreview={previewSavedStampReorder}
                     onReorderCommit={commitSavedStampReorder}
                     onReorderCancel={cancelSavedStampReorder}
@@ -515,6 +525,7 @@ function SavedObjectStampRow({
   onPreviewSchedule,
   onPreviewClear,
   onReorderBegin,
+  onReorderSourceId,
   onReorderPreview,
   onReorderCommit,
   onReorderCancel,
@@ -524,7 +535,8 @@ function SavedObjectStampRow({
   onPreviewRequest: (stamp: SavedObjectStamp, anchor: HTMLElement) => void
   onPreviewSchedule: (stamp: SavedObjectStamp, anchor: HTMLElement) => void
   onPreviewClear: () => void
-  onReorderBegin: (ids: readonly string[]) => void
+  onReorderBegin: (sourceId: string, ids: readonly string[]) => void
+  onReorderSourceId: () => string | null
   onReorderPreview: (ids: readonly string[]) => void
   onReorderCommit: (ids: readonly string[]) => void
   onReorderCancel: () => void
@@ -568,10 +580,10 @@ function SavedObjectStampRow({
     event.stopPropagation()
     const { dataTransfer } = event
     if (!dataTransfer) return
-    dataTransfer.setData('application/x-canopi-saved-stamp-reorder', stamp.id)
+    dataTransfer.setData(SAVED_STAMP_REORDER_MIME, stamp.id)
     dataTransfer.setData('text/plain', stamp.id)
     dataTransfer.effectAllowed = 'move'
-    onReorderBegin(stamps.map((item) => item.id))
+    onReorderBegin(stamp.id, stamps.map((item) => item.id))
   }
 
   function handleGripDragEnd(): void {
@@ -594,16 +606,16 @@ function SavedObjectStampRow({
   }
 
   function handleDragOver(event: DragEvent): void {
-    if (!event.dataTransfer || !Array.from(event.dataTransfer.types).includes('application/x-canopi-saved-stamp-reorder')) return
+    if (!event.dataTransfer || !Array.from(event.dataTransfer.types).includes(SAVED_STAMP_REORDER_MIME)) return
     event.preventDefault()
     event.dataTransfer.dropEffect = 'move'
-    const sourceId = event.dataTransfer.getData('application/x-canopi-saved-stamp-reorder')
+    const sourceId = event.dataTransfer.getData(SAVED_STAMP_REORDER_MIME) || onReorderSourceId()
     if (!sourceId || sourceId === stamp.id) return
     onReorderPreview(moveBefore(stamps.map((item) => item.id), sourceId, stamp.id))
   }
 
   function handleDrop(event: DragEvent): void {
-    const sourceId = event.dataTransfer?.getData('application/x-canopi-saved-stamp-reorder')
+    const sourceId = event.dataTransfer?.getData(SAVED_STAMP_REORDER_MIME) || onReorderSourceId()
     if (!sourceId || sourceId === stamp.id) return
     event.preventDefault()
     const nextIds = moveBefore(stamps.map((item) => item.id), sourceId, stamp.id)

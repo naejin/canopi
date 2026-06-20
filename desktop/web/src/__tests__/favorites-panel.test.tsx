@@ -65,6 +65,13 @@ function dragEvent(type: 'dragover' | 'drop' | 'dragend', dataTransfer: ReturnTy
   return event
 }
 
+function protectedDragOverEvent(dataTransfer: ReturnType<typeof dragDataStore>): DragEvent {
+  return dragEvent('dragover', {
+    ...dataTransfer,
+    getData: () => '',
+  })
+}
+
 function elementRect({
   left = 0,
   top = 0,
@@ -552,7 +559,7 @@ describe('FavoritesPanel', () => {
 
     await act(async () => {
       sourceGrip!.dispatchEvent(dragStartEvent(dataTransfer))
-      targetRow!.dispatchEvent(dragEvent('dragover', dataTransfer))
+      targetRow!.dispatchEvent(protectedDragOverEvent(dataTransfer))
       await flushEffects()
     })
 
