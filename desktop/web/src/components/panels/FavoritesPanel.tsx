@@ -43,8 +43,11 @@ export function FavoritesPanel() {
   const lang = locale.value
   const selected = speciesCatalogWorkbench.selectedCanonicalName.value
   const mainRef = useRef<HTMLDivElement>(null)
+  const headerRef = useRef<HTMLDivElement>(null)
+  const resizeHandleRef = useRef<HTMLDivElement>(null)
   const savedStampsFrameRef = useRef<HTMLElement>(null)
   const previewTimerRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null)
+  const [, setLayoutRevision] = useState(0)
   const [preview, setPreview] = useState<SavedStampPreview | null>(null)
 
   useEffect(() => {
@@ -59,10 +62,25 @@ export function FavoritesPanel() {
     return () => clearPreviewTimer(previewTimerRef)
   }, [])
 
+  useEffect(() => {
+    const main = mainRef.current
+    if (!main) return
+
+    setLayoutRevision((revision) => revision + 1)
+    if (typeof ResizeObserver === 'undefined') return
+
+    const observer = new ResizeObserver(() => {
+      setLayoutRevision((revision) => revision + 1)
+    })
+    observer.observe(main)
+    return () => observer.disconnect()
+  }, [])
+
   const items = favoritesView.items
   const count = items.length
   const isLoading = favoritesView.loading
   const savedStampItems = savedStampsView.items
+  const savedStampsChrome = [headerRef.current, resizeHandleRef.current]
 
   function showStampPreview(stamp: SavedObjectStamp, anchor: HTMLElement): void {
     clearPreviewTimer(previewTimerRef)
@@ -98,7 +116,7 @@ export function FavoritesPanel() {
         aria-hidden={selected !== null}
       >
         {/* Header — always visible */}
-        <div className={styles.header}>
+        <div ref={headerRef} className={styles.header}>
           <span className={styles.title}>{t('nav.favorites')}</span>
         </div>
 
@@ -142,6 +160,8 @@ export function FavoritesPanel() {
           <>
             <SavedStampsResizeHandle
               mainRef={mainRef}
+              headerRef={headerRef}
+              handleRef={resizeHandleRef}
               frameRef={savedStampsFrameRef}
             />
             <section
@@ -149,7 +169,7 @@ export function FavoritesPanel() {
               className={styles.savedStampsSection}
               data-saved-stamps-frame
               aria-labelledby="saved-object-stamps-title"
-              style={{ height: `${resolveSavedStampsFrameHeight(savedStampsFrameHeight.value, mainRef.current)}px` }}
+              style={{ height: `${resolveSavedStampsFrameHeight(savedStampsFrameHeight.value, mainRef.current, savedStampsChrome)}px` }}
             >
             <div className={styles.frameHeader}>
               <div className={styles.savedStampsTitleGroup}>
@@ -227,12 +247,15 @@ export function FavoritesPanel() {
 
 function SavedStampsResizeHandle({
   mainRef,
+  headerRef,
+  handleRef,
   frameRef,
 }: {
   mainRef: { current: HTMLDivElement | null }
+  headerRef: { current: HTMLElement | null }
+  handleRef: { current: HTMLDivElement | null }
   frameRef: { current: HTMLElement | null }
 }) {
-  const handleRef = useRef<HTMLDivElement>(null)
   const cleanupRef = useRef<((commit: boolean) => void) | null>(null)
 
   useEffect(() => {
@@ -262,7 +285,10 @@ function SavedStampsResizeHandle({
         let lastClientY = event.clientY
 
         const clampHeight = (clientY: number) =>
-          resolveSavedStampsFrameHeight(startHeight + (startY - clientY), mainRef.current)
+          resolveSavedStampsFrameHeight(startHeight + (startY - clientY), mainRef.current, [
+            headerRef.current,
+            handleRef.current,
+          ])
 
         const onMove = (moveEvent: PointerEvent) => {
           lastClientY = moveEvent.clientY
@@ -316,16 +342,24 @@ function currentSavedStampsFrameHeight(frame: HTMLElement): number {
 function resolveSavedStampsFrameHeight(
   height: number,
   container: HTMLElement | null,
+  chromeElements: readonly (HTMLElement | null)[] = [],
 ): number {
   const roundedHeight = Number.isFinite(height)
     ? Math.round(height)
     : savedStampsFrameHeight.value
   const containerHeight = container?.getBoundingClientRect().height ?? 0
-  const maxHeight = Number.isFinite(containerHeight) && containerHeight > MIN_FAVORITES_FRAME_HEIGHT * 2
-    ? Math.max(MIN_FAVORITES_FRAME_HEIGHT, Math.round(containerHeight - MIN_FAVORITES_FRAME_HEIGHT))
+  const chromeHeight = chromeElements.reduce((sum, element) => sum + measuredElementHeight(element), 0)
+  const frameSpaceHeight = containerHeight - chromeHeight
+  const maxHeight = Number.isFinite(frameSpaceHeight) && frameSpaceHeight > 0
+    ? Math.max(MIN_FAVORITES_FRAME_HEIGHT, Math.round(frameSpaceHeight - MIN_FAVORITES_FRAME_HEIGHT))
     : Number.POSITIVE_INFINITY
 
   return Math.max(MIN_FAVORITES_FRAME_HEIGHT, Math.min(maxHeight, roundedHeight))
+}
+
+function measuredElementHeight(element: HTMLElement | null): number {
+  const height = element?.getBoundingClientRect().height ?? 0
+  return Number.isFinite(height) && height > 0 ? height : 0
 }
 
 function clearPreviewTimer(ref: { current: ReturnType<typeof globalThis.setTimeout> | null }): void {
@@ -547,7 +581,17 @@ function SavedObjectStampRow({
             aria-label={t('savedObjectStamps.nameInput')}
             value={draftName}
             onInput={(event) => setDraftName((event.currentTarget as HTMLInputElement).value)}
-            onBlur={commitRename}
+            onBlur={(event) => {
+              const relatedTarget = event.relatedTarget
+              if (
+                relatedTarget instanceof HTMLElement &&
+                relatedTarget.closest('[data-saved-stamp-rename-cancel="true"]')
+              ) {
+                cancelRename()
+                return
+              }
+              commitRename()
+            }}
             onKeyDown={(event) => {
               if (event.key === 'Enter') {
                 commitRename()
@@ -611,6 +655,7 @@ function SavedObjectStampRow({
                 <SavedStampIconButton
                   label={t('savedObjectStamps.cancelRename')}
                   onClick={cancelRename}
+                  renameCancel
                 >
                   <CancelIcon />
                 </SavedStampIconButton>
@@ -653,6 +698,7 @@ function SavedStampIconButton({
   danger = false,
   onFocus,
   onBlur,
+  renameCancel = false,
 }: {
   label: string
   onClick: () => void
@@ -660,12 +706,14 @@ function SavedStampIconButton({
   danger?: boolean
   onFocus?: (anchor: HTMLElement) => void
   onBlur?: () => void
+  renameCancel?: boolean
 }) {
   return (
     <button
       type="button"
       className={`${styles.savedStampIconButton} ${danger ? styles.savedStampIconButtonDanger : ''}`}
       aria-label={label}
+      data-saved-stamp-rename-cancel={renameCancel ? 'true' : undefined}
       onClick={(event) => {
         event.stopPropagation()
         onClick()

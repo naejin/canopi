@@ -418,6 +418,71 @@ describe('FavoritesPanel', () => {
     expect(deleteStampMock).toHaveBeenCalledWith('stamp-1')
   })
 
+  it('cancels Saved Stamp rename drafts on Escape without saving', async () => {
+    await act(async () => {
+      render(<FavoritesPanel />, container)
+      await flushEffects()
+    })
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="Rename"]')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flushEffects()
+    })
+
+    const renameInput = container.querySelector<HTMLInputElement>('input[aria-label="Stamp name"]')
+    expect(renameInput).toBeTruthy()
+
+    await act(async () => {
+      renameInput!.focus()
+      renameInput!.value = 'Discarded guild'
+      renameInput!.dispatchEvent(new Event('input', { bubbles: true }))
+      renameInput!.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }))
+      await flushEffects()
+    })
+
+    expect(renameStampMock).not.toHaveBeenCalled()
+    expect(container.querySelector<HTMLInputElement>('input[aria-label="Stamp name"]')).toBeNull()
+    expect(container.textContent).toContain('Pommier, Lavande')
+  })
+
+  it('cancels Saved Stamp rename drafts from the Cancel action without saving', async () => {
+    await act(async () => {
+      render(<FavoritesPanel />, container)
+      await flushEffects()
+    })
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="Rename"]')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flushEffects()
+    })
+
+    const renameInput = container.querySelector<HTMLInputElement>('input[aria-label="Stamp name"]')
+    const cancelButton = container.querySelector<HTMLButtonElement>('button[aria-label="Cancel rename"]')
+    expect(renameInput).toBeTruthy()
+    expect(cancelButton).toBeTruthy()
+
+    await act(async () => {
+      renameInput!.focus()
+      renameInput!.value = 'Discarded guild'
+      renameInput!.dispatchEvent(new Event('input', { bubbles: true }))
+      await flushEffects()
+    })
+    await act(async () => {
+      renameInput!.dispatchEvent(new FocusEvent('blur', {
+        bubbles: true,
+        relatedTarget: cancelButton,
+      }))
+      cancelButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flushEffects()
+    })
+
+    expect(renameStampMock).not.toHaveBeenCalled()
+    expect(container.querySelector<HTMLInputElement>('input[aria-label="Stamp name"]')).toBeNull()
+    expect(container.textContent).toContain('Pommier, Lavande')
+  })
+
   it('shows a clamped visual-only thumbnail from row-body hover and Place focus', async () => {
     await act(async () => {
       render(<FavoritesPanel />, container)
@@ -570,9 +635,14 @@ describe('FavoritesPanel', () => {
 
       const main = container.querySelector<HTMLElement>('[data-favorites-main]')
       const frame = container.querySelector<HTMLElement>('[data-saved-stamps-frame]')
+      const handle = container.querySelector<HTMLElement>(
+        '[role="separator"][aria-orientation="horizontal"]',
+      )
       expect(main).toBeTruthy()
       expect(frame).toBeTruthy()
-      if (!main || !frame) throw new Error('Favorites panel frames were not rendered')
+      expect(handle).toBeTruthy()
+      expect(FakeResizeObserver.instances).toHaveLength(1)
+      if (!main || !frame || !handle) throw new Error('Favorites panel frames were not rendered')
 
       main.getBoundingClientRect = () => ({
         width: 320,
@@ -585,13 +655,17 @@ describe('FavoritesPanel', () => {
         y: 0,
         toJSON: () => ({}),
       })
+      const header = main.firstElementChild as HTMLElement
+      header.getBoundingClientRect = () => elementRect({ height: 40 })
+      handle.getBoundingClientRect = () => elementRect({ height: 8 })
 
       await act(async () => {
-        FakeResizeObserver.instances[0]?.callback([], {} as ResizeObserver)
+        FakeResizeObserver.instances[0]!.callback([], {} as ResizeObserver)
         await flushEffects()
       })
 
-      expect(frame.style.height).toBe('240px')
+      expect(frame.style.height).toBe('192px')
+      expect(savedStampsFrameHeight.value).toBe(280)
     } finally {
       ;(globalThis as { ResizeObserver?: typeof ResizeObserver }).ResizeObserver = originalResizeObserver
     }
