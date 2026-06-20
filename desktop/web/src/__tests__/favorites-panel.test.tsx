@@ -31,11 +31,15 @@ async function flushEffects(): Promise<void> {
 
 function dragDataStore() {
   const values = new Map<string, string>()
+  const types: string[] = []
   return {
     values,
+    types,
     effectAllowed: 'none',
+    dropEffect: 'none',
     setData(type: string, value: string) {
       values.set(type, value)
+      if (!types.includes(type)) types.push(type)
     },
     getData(type: string) {
       return values.get(type) ?? ''
@@ -45,6 +49,15 @@ function dragDataStore() {
 
 function dragStartEvent(dataTransfer: ReturnType<typeof dragDataStore>): DragEvent {
   const event = new Event('dragstart', { bubbles: true, cancelable: true }) as DragEvent
+  Object.defineProperty(event, 'dataTransfer', {
+    configurable: true,
+    value: dataTransfer,
+  })
+  return event
+}
+
+function dragEvent(type: 'dragover' | 'drop' | 'dragend', dataTransfer: ReturnType<typeof dragDataStore>): DragEvent {
+  const event = new Event(type, { bubbles: true, cancelable: true }) as DragEvent
   Object.defineProperty(event, 'dataTransfer', {
     configurable: true,
     value: dataTransfer,
@@ -504,6 +517,57 @@ describe('FavoritesPanel', () => {
     expect(container.querySelector('button[aria-label="Export"]')).toBeNull()
     expect(container.querySelector('button[aria-label="Confirm rename"]')).toBeTruthy()
     expect(container.querySelector('button[aria-label="Cancel rename"]')).toBeTruthy()
+  })
+
+  it('previews Saved Stamp reorder during drag and persists once on drop', async () => {
+    const baseStamp = stampLibrary.value.items[0]!
+    stampLibrary.value = {
+      ...stampLibrary.value,
+      items: [
+        { ...baseStamp, id: 'stamp-1', name: 'Alpha guild', sort_order: 0 },
+        { ...baseStamp, id: 'stamp-2', name: 'Berry guild', sort_order: 1 },
+        { ...baseStamp, id: 'stamp-3', name: 'Canopy guild', sort_order: 2 },
+      ],
+    }
+
+    await act(async () => {
+      render(<FavoritesPanel />, container)
+      await flushEffects()
+    })
+
+    const visibleNames = () => [...container.querySelectorAll<HTMLElement>('[data-saved-stamp-row]')]
+      .map((row) => row.textContent ?? '')
+
+    expect(visibleNames()[0]).toContain('Alpha guild')
+    expect(visibleNames()[1]).toContain('Berry guild')
+    expect(visibleNames()[2]).toContain('Canopy guild')
+
+    const dataTransfer = dragDataStore()
+    const sourceGrip = container.querySelector<HTMLElement>(
+      '[data-saved-stamp-row="stamp-3"] [aria-label="Reorder saved stamp"]',
+    )
+    const targetRow = container.querySelector<HTMLElement>('[data-saved-stamp-row="stamp-1"]')
+    expect(sourceGrip).toBeTruthy()
+    expect(targetRow).toBeTruthy()
+
+    await act(async () => {
+      sourceGrip!.dispatchEvent(dragStartEvent(dataTransfer))
+      targetRow!.dispatchEvent(dragEvent('dragover', dataTransfer))
+      await flushEffects()
+    })
+
+    expect(reorderStampMock).not.toHaveBeenCalled()
+    expect(visibleNames()[0]).toContain('Canopy guild')
+    expect(visibleNames()[1]).toContain('Alpha guild')
+    expect(visibleNames()[2]).toContain('Berry guild')
+
+    await act(async () => {
+      targetRow!.dispatchEvent(dragEvent('drop', dataTransfer))
+      await flushEffects()
+    })
+
+    expect(reorderStampMock).toHaveBeenCalledTimes(1)
+    expect(reorderStampMock).toHaveBeenCalledWith(['stamp-3', 'stamp-1', 'stamp-2'])
   })
 
   it('shows a clamped visual-only thumbnail from row-body hover and Place focus', async () => {

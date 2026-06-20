@@ -47,8 +47,10 @@ export function FavoritesPanel() {
   const resizeHandleRef = useRef<HTMLDivElement>(null)
   const savedStampsFrameRef = useRef<HTMLElement>(null)
   const previewTimerRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null)
+  const savedStampReorderCommittedRef = useRef(false)
   const [, setLayoutRevision] = useState(0)
   const [preview, setPreview] = useState<SavedStampPreview | null>(null)
+  const [savedStampReorderPreviewIds, setSavedStampReorderPreviewIds] = useState<readonly string[] | null>(null)
 
   useEffect(() => {
     void speciesCatalogWorkbench.loadFavorites()
@@ -80,6 +82,7 @@ export function FavoritesPanel() {
   const count = items.length
   const isLoading = favoritesView.loading
   const savedStampItems = savedStampsView.items
+  const orderedSavedStampItems = orderSavedStampsForPreview(savedStampItems, savedStampReorderPreviewIds)
   const savedStampsChrome = [headerRef.current, resizeHandleRef.current]
 
   function showStampPreview(stamp: SavedObjectStamp, anchor: HTMLElement): void {
@@ -104,6 +107,30 @@ export function FavoritesPanel() {
   function hideStampPreview(): void {
     clearPreviewTimer(previewTimerRef)
     setPreview(null)
+  }
+
+  function beginSavedStampReorder(ids: readonly string[]): void {
+    savedStampReorderCommittedRef.current = false
+    setSavedStampReorderPreviewIds(ids)
+  }
+
+  function previewSavedStampReorder(ids: readonly string[]): void {
+    if (savedStampReorderCommittedRef.current) return
+    setSavedStampReorderPreviewIds(ids)
+  }
+
+  function commitSavedStampReorder(ids: readonly string[]): void {
+    savedStampReorderCommittedRef.current = true
+    setSavedStampReorderPreviewIds(ids)
+    void savedObjectStampWorkbench.reorderStamps([...ids]).finally(() => {
+      savedStampReorderCommittedRef.current = false
+      setSavedStampReorderPreviewIds(null)
+    })
+  }
+
+  function cancelSavedStampReorder(): void {
+    if (savedStampReorderCommittedRef.current) return
+    setSavedStampReorderPreviewIds(null)
   }
 
   return (
@@ -216,14 +243,18 @@ export function FavoritesPanel() {
               </div>
             ) : (
               <div className={styles.savedStampsList} role="list" aria-label={t('savedObjectStamps.title')}>
-                {savedStampItems.map((stamp) => (
+                {orderedSavedStampItems.map((stamp) => (
                   <SavedObjectStampRow
                     key={stamp.id}
                     stamp={stamp}
-                    stamps={savedStampItems}
+                    stamps={orderedSavedStampItems}
                     onPreviewRequest={showStampPreview}
                     onPreviewSchedule={scheduleStampPreview}
                     onPreviewClear={hideStampPreview}
+                    onReorderBegin={beginSavedStampReorder}
+                    onReorderPreview={previewSavedStampReorder}
+                    onReorderCommit={commitSavedStampReorder}
+                    onReorderCancel={cancelSavedStampReorder}
                   />
                 ))}
               </div>
@@ -362,6 +393,22 @@ function measuredElementHeight(element: HTMLElement | null): number {
   return Number.isFinite(height) && height > 0 ? height : 0
 }
 
+function orderSavedStampsForPreview(
+  stamps: readonly SavedObjectStamp[],
+  orderedIds: readonly string[] | null,
+): readonly SavedObjectStamp[] {
+  if (!orderedIds) return stamps
+  const byId = new Map(stamps.map((stamp) => [stamp.id, stamp]))
+  const ordered: SavedObjectStamp[] = []
+  for (const id of orderedIds) {
+    const stamp = byId.get(id)
+    if (!stamp) continue
+    ordered.push(stamp)
+    byId.delete(id)
+  }
+  return [...ordered, ...byId.values()]
+}
+
 function clearPreviewTimer(ref: { current: ReturnType<typeof globalThis.setTimeout> | null }): void {
   if (ref.current === null) return
   globalThis.clearTimeout(ref.current)
@@ -467,12 +514,20 @@ function SavedObjectStampRow({
   onPreviewRequest,
   onPreviewSchedule,
   onPreviewClear,
+  onReorderBegin,
+  onReorderPreview,
+  onReorderCommit,
+  onReorderCancel,
 }: {
   stamp: SavedObjectStamp
   stamps: readonly SavedObjectStamp[]
   onPreviewRequest: (stamp: SavedObjectStamp, anchor: HTMLElement) => void
   onPreviewSchedule: (stamp: SavedObjectStamp, anchor: HTMLElement) => void
   onPreviewClear: () => void
+  onReorderBegin: (ids: readonly string[]) => void
+  onReorderPreview: (ids: readonly string[]) => void
+  onReorderCommit: (ids: readonly string[]) => void
+  onReorderCancel: () => void
 }) {
   const [draftName, setDraftName] = useState(stamp.name)
   const [isRenaming, setIsRenaming] = useState(false)
@@ -516,6 +571,11 @@ function SavedObjectStampRow({
     dataTransfer.setData('application/x-canopi-saved-stamp-reorder', stamp.id)
     dataTransfer.setData('text/plain', stamp.id)
     dataTransfer.effectAllowed = 'move'
+    onReorderBegin(stamps.map((item) => item.id))
+  }
+
+  function handleGripDragEnd(): void {
+    onReorderCancel()
   }
 
   function handleStampDragStart(event: DragEvent): void {
@@ -537,6 +597,9 @@ function SavedObjectStampRow({
     if (!event.dataTransfer || !Array.from(event.dataTransfer.types).includes('application/x-canopi-saved-stamp-reorder')) return
     event.preventDefault()
     event.dataTransfer.dropEffect = 'move'
+    const sourceId = event.dataTransfer.getData('application/x-canopi-saved-stamp-reorder')
+    if (!sourceId || sourceId === stamp.id) return
+    onReorderPreview(moveBefore(stamps.map((item) => item.id), sourceId, stamp.id))
   }
 
   function handleDrop(event: DragEvent): void {
@@ -544,7 +607,7 @@ function SavedObjectStampRow({
     if (!sourceId || sourceId === stamp.id) return
     event.preventDefault()
     const nextIds = moveBefore(stamps.map((item) => item.id), sourceId, stamp.id)
-    void savedObjectStampWorkbench.reorderStamps(nextIds)
+    onReorderCommit(nextIds)
   }
 
   return (
@@ -561,6 +624,7 @@ function SavedObjectStampRow({
         draggable
         aria-label={t('savedObjectStamps.reorderLabel')}
         onDragStart={handleGripDragStart}
+        onDragEnd={handleGripDragEnd}
       >
         <SixDotGripIcon />
       </button>
