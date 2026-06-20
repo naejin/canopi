@@ -52,6 +52,7 @@ export function FavoritesPanel() {
   const previewTimerRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null)
   const savedStampReorderCommittedRef = useRef(false)
   const savedStampReorderSourceIdRef = useRef<string | null>(null)
+  const savedStampItemsRef = useRef<readonly SavedObjectStamp[]>([])
   const [, setLayoutRevision] = useState(0)
   const [preview, setPreview] = useState<SavedStampPreview | null>(null)
   const [savedStampReorderPreviewIds, setSavedStampReorderPreviewIds] = useState<readonly string[] | null>(null)
@@ -86,8 +87,13 @@ export function FavoritesPanel() {
   const count = items.length
   const isLoading = favoritesView.loading
   const savedStampItems = savedStampsView.items
+  savedStampItemsRef.current = savedStampItems
   const orderedSavedStampItems = orderSavedStampsForPreview(savedStampItems, savedStampReorderPreviewIds)
   const savedStampsChrome = [headerRef.current, resizeHandleRef.current]
+
+  useEffect(() => {
+    clearSavedStampReorderPreviewIfLibraryMatches()
+  }, [savedStampsView.revision, savedStampReorderPreviewIds])
 
   function showStampPreview(stamp: SavedObjectStamp, anchor: HTMLElement): void {
     clearPreviewTimer(previewTimerRef)
@@ -132,16 +138,31 @@ export function FavoritesPanel() {
     savedStampReorderCommittedRef.current = true
     savedStampReorderSourceIdRef.current = null
     setSavedStampReorderPreviewIds(ids)
-    void savedObjectStampWorkbench.reorderStamps([...ids]).finally(() => {
-      savedStampReorderCommittedRef.current = false
-      setSavedStampReorderPreviewIds(null)
-    })
+    void savedObjectStampWorkbench.reorderStamps([...ids]).then(
+      () => {
+        clearSavedStampReorderPreviewIfLibraryMatches()
+      },
+      (error) => {
+        savedStampReorderCommittedRef.current = false
+        setSavedStampReorderPreviewIds(null)
+        throw error
+      },
+    )
   }
 
   function cancelSavedStampReorder(): void {
     if (savedStampReorderCommittedRef.current) return
     savedStampReorderSourceIdRef.current = null
     setSavedStampReorderPreviewIds(null)
+  }
+
+  function clearSavedStampReorderPreviewIfLibraryMatches(): void {
+    setSavedStampReorderPreviewIds((current) => {
+      if (!current) return current
+      if (!sameIdOrder(savedStampItemsRef.current.map((item) => item.id), current)) return current
+      savedStampReorderCommittedRef.current = false
+      return null
+    })
   }
 
   function previewSavedStampReorderAfterLast(event: DragEvent): void {

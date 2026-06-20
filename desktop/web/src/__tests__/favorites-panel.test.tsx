@@ -587,6 +587,15 @@ describe('FavoritesPanel', () => {
 
     expect(reorderStampMock).toHaveBeenCalledTimes(1)
     expect(reorderStampMock).toHaveBeenCalledWith(['stamp-3', 'stamp-1', 'stamp-2'])
+
+    await act(async () => {
+      sourceGrip!.dispatchEvent(dragEvent('dragend', dataTransfer))
+      await flushEffects()
+    })
+
+    expect(visibleNames()[0]).toContain('Canopy guild')
+    expect(visibleNames()[1]).toContain('Alpha guild')
+    expect(visibleNames()[2]).toContain('Berry guild')
   })
 
   it('reorders Saved Stamps after the hovered row when dragging through the lower half', async () => {
