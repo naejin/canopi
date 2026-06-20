@@ -21,6 +21,22 @@ export function markDesignEdited(): void {
   designSessionStore.markDocumentDirty()
 }
 
+export function setDesignName(name: string): void {
+  const nextName = name.trim()
+  if (nextName.length === 0) return
+  if (nextName === designSessionStore.readDesignName()) return
+
+  const design = designSessionStore.readCurrentDesign()
+  if (!design) return
+
+  designSessionStore.replaceCurrentDesignState(
+    { ...design, name: nextName },
+    designSessionStore.readDesignPath(),
+    nextName,
+  )
+  designSessionStore.markDocumentDirty()
+}
+
 export function editDesignArray<K extends keyof CanopiFile>(
   key: K,
   updater: (arr: CanopiFile[K]) => CanopiFile[K],

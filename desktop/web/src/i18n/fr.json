@@ -703,7 +703,10 @@
     "help.reportProblem": "Signaler un problème"
   },
   "titleBar": {
-    "unsavedChanges": "Modifications non enregistrées"
+    "unsavedChanges": "Modifications non enregistrées",
+    "untitledDesign": "Planche sans titre",
+    "renameDesignName": "Renommer la planche",
+    "designNameInput": "Nom de la planche"
   },
   "window": {
     "minimize": "Réduire",

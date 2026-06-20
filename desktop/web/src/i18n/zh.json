@@ -703,7 +703,10 @@
     "help.reportProblem": "报告问题"
   },
   "titleBar": {
-    "unsavedChanges": "未保存的更改"
+    "unsavedChanges": "未保存的更改",
+    "untitledDesign": "未命名设计",
+    "renameDesignName": "重命名设计",
+    "designNameInput": "设计名称"
   },
   "window": {
     "minimize": "最小化",

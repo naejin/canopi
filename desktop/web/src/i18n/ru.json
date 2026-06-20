@@ -703,7 +703,10 @@
     "help.reportProblem": "Сообщить о проблеме"
   },
   "titleBar": {
-    "unsavedChanges": "Несохранённые изменения"
+    "unsavedChanges": "Несохранённые изменения",
+    "untitledDesign": "Безымянный дизайн",
+    "renameDesignName": "Переименовать дизайн",
+    "designNameInput": "Название дизайна"
   },
   "window": {
     "minimize": "Свернуть",

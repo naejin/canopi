@@ -703,7 +703,10 @@
     "help.reportProblem": "Segnala un problema"
   },
   "titleBar": {
-    "unsavedChanges": "Modifiche non salvate"
+    "unsavedChanges": "Modifiche non salvate",
+    "untitledDesign": "Progetto senza titolo",
+    "renameDesignName": "Rinomina progetto",
+    "designNameInput": "Nome del progetto"
   },
   "window": {
     "minimize": "Riduci a icona",

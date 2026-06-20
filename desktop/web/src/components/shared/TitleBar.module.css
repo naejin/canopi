@@ -29,14 +29,57 @@
   font-weight: 400;
 }
 
-.fileName {
+.fileName,
+.fileNameButton,
+.fileNameInput {
   font-size: var(--text-sm);
   color: var(--color-text);
   font-weight: 600;
   max-width: 280px;
+}
+
+.fileName,
+.fileNameText {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.fileNameButton {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  height: var(--control-size-md);
+  padding: 0 var(--space-1);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: default;
+}
+
+.fileNameButton:hover,
+.fileNameButton:focus-visible {
+  background: var(--color-control-hover);
+  border-color: var(--color-border);
+  outline: 0;
+}
+
+.fileNameText {
+  display: block;
+  min-width: 0;
+}
+
+.fileNameInput {
+  width: min(280px, 44vw);
+  height: var(--control-size-md);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  font-family: var(--font-sans);
+  text-align: center;
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
 }
 
 .dirtyDot {

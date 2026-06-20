@@ -840,7 +840,10 @@
     "help.reportProblem": "Report a Problem"
   },
   "titleBar": {
-    "unsavedChanges": "Unsaved changes"
+    "unsavedChanges": "Unsaved changes",
+    "untitledDesign": "Untitled Design",
+    "renameDesignName": "Rename design name",
+    "designNameInput": "Design name"
   },
   "window": {
     "minimize": "Minimize",

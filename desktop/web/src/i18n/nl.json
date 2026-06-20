@@ -703,7 +703,10 @@
     "help.reportProblem": "Probleem melden"
   },
   "titleBar": {
-    "unsavedChanges": "Niet-opgeslagen wijzigingen"
+    "unsavedChanges": "Niet-opgeslagen wijzigingen",
+    "untitledDesign": "Naamloos ontwerp",
+    "renameDesignName": "Ontwerpnaam wijzigen",
+    "designNameInput": "Ontwerpnaam"
   },
   "window": {
     "minimize": "Minimaliseren",

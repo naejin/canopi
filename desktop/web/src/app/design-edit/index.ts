@@ -3,6 +3,7 @@ export {
   editCurrentDesign,
   editDesignArray,
   markDesignEdited,
+  setDesignName,
   type DesignArrayEditKey,
   type DesignArrayEditTransaction,
 } from './core'

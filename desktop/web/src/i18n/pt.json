@@ -703,7 +703,10 @@
     "help.reportProblem": "Relatar um problema"
   },
   "titleBar": {
-    "unsavedChanges": "Alterações não salvas"
+    "unsavedChanges": "Alterações não salvas",
+    "untitledDesign": "Design sem título",
+    "renameDesignName": "Renomear design",
+    "designNameInput": "Nome do design"
   },
   "window": {
     "minimize": "Minimizar",

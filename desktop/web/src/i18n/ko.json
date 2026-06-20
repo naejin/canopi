@@ -703,7 +703,10 @@
     "help.reportProblem": "문제 신고"
   },
   "titleBar": {
-    "unsavedChanges": "저장되지 않은 변경사항"
+    "unsavedChanges": "저장되지 않은 변경사항",
+    "untitledDesign": "제목 없는 디자인",
+    "renameDesignName": "디자인 이름 바꾸기",
+    "designNameInput": "디자인 이름"
   },
   "window": {
     "minimize": "최소화",

@@ -703,7 +703,10 @@
     "help.reportProblem": "Problem melden"
   },
   "titleBar": {
-    "unsavedChanges": "Ungespeicherte Änderungen"
+    "unsavedChanges": "Ungespeicherte Änderungen",
+    "untitledDesign": "Unbenannter Entwurf",
+    "renameDesignName": "Entwurf umbenennen",
+    "designNameInput": "Entwurfsname"
   },
   "window": {
     "minimize": "Minimieren",

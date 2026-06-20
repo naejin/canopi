@@ -1,4 +1,6 @@
 import { getCurrentWindow } from '@tauri-apps/api/window'
+import { useEffect, useRef, useState } from 'preact/hooks'
+import { setDesignName } from '../../app/design-edit'
 import { designName, designDirty } from '../../app/document-session/store'
 import { activePanel } from '../../app/shell/state'
 import { locale, theme } from '../../app/settings/state'
@@ -16,6 +18,7 @@ const LOCALE_ITEMS: DropdownItem<string>[] = LOCALES.map((code) => ({
 }))
 
 const appWindow = getCurrentWindow()
+const FALLBACK_DESIGN_NAME = 'Untitled'
 
 function LocalePicker() {
   const handleChange = (code: string) => {
@@ -45,8 +48,25 @@ export function TitleBar() {
   const showsDocumentName = activePanel.value === 'canvas' || activePanel.value === 'location'
   const name = designName.value
   const dirty = designDirty.value
+  const visibleName = visibleDesignName(name)
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [draftName, setDraftName] = useState(visibleName)
+  const nameInputRef = useRef<HTMLInputElement>(null)
   // Subscribe to locale so aria-labels re-render on language change
   void locale.value
+
+  useEffect(() => {
+    if (isEditingName) return
+    setDraftName(visibleName)
+  }, [isEditingName, visibleName])
+
+  useEffect(() => {
+    if (!isEditingName) return
+    const input = nameInputRef.current
+    if (!input) return
+    input.focus()
+    input.setSelectionRange(0, input.value.length)
+  }, [isEditingName])
 
   // From Tauri docs: use e.buttons === 1 (left button held) and e.detail
   // to distinguish single click (drag) from double click (maximize).
@@ -55,13 +75,36 @@ export function TitleBar() {
     if (e.buttons !== 1) return
     // Don't drag if clicking on a window control button
     const target = e.target as HTMLElement
-    if (target.closest('button, [role="menu"], [role="menubar"], [role="menuitem"]')) return
+    if (target.closest('button, input, [role="menu"], [role="menubar"], [role="menuitem"]')) return
 
     if (e.detail === 2) {
       void appWindow.toggleMaximize()
     } else {
       void appWindow.startDragging()
     }
+  }
+
+  function beginDesignNameEdit(): void {
+    setDraftName(visibleName)
+    setIsEditingName(true)
+  }
+
+  function commitDesignNameEdit(): void {
+    const nextName = draftName.trim()
+    if (
+      nextName.length > 0 &&
+      nextName !== name &&
+      !isVisibleFallbackName(name, nextName)
+    ) {
+      setDesignName(nextName)
+    }
+    setDraftName(visibleDesignName(designName.value))
+    setIsEditingName(false)
+  }
+
+  function cancelDesignNameEdit(): void {
+    setDraftName(visibleName)
+    setIsEditingName(false)
   }
 
   return (
@@ -79,11 +122,41 @@ export function TitleBar() {
 
       {/* Center: file name + draggable spacer */}
       <div className={styles.dragRegion}>
-        {showsDocumentName && name && name !== 'Untitled' && (
-          <span className={styles.fileName}>
-            {name}
-            {dirty && <span className={styles.dirtyDot} aria-label={t('titleBar.unsavedChanges')} />}
-          </span>
+        {showsDocumentName && name && (
+          isEditingName ? (
+            <input
+              ref={nameInputRef}
+              className={styles.fileNameInput}
+              aria-label={t('titleBar.designNameInput')}
+              value={draftName}
+              onInput={(event) => setDraftName((event.currentTarget as HTMLInputElement).value)}
+              onBlur={commitDesignNameEdit}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  commitDesignNameEdit()
+                }
+                if (event.key === 'Escape') {
+                  event.preventDefault()
+                  cancelDesignNameEdit()
+                }
+              }}
+            />
+          ) : (
+            <button
+              type="button"
+              className={styles.fileNameButton}
+              aria-label={t('titleBar.renameDesignName')}
+              onDblClick={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                beginDesignNameEdit()
+              }}
+            >
+              <span className={styles.fileNameText}>{visibleName}</span>
+              {dirty && <span className={styles.dirtyDot} aria-label={t('titleBar.unsavedChanges')} />}
+            </button>
+          )
         )}
       </div>
 
@@ -145,4 +218,12 @@ export function TitleBar() {
       </div>
     </div>
   )
+}
+
+function visibleDesignName(name: string): string {
+  return name === FALLBACK_DESIGN_NAME ? t('titleBar.untitledDesign') : name
+}
+
+function isVisibleFallbackName(currentName: string, draftName: string): boolean {
+  return currentName === FALLBACK_DESIGN_NAME && draftName === t('titleBar.untitledDesign')
 }

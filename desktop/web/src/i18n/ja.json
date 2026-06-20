@@ -703,7 +703,10 @@
     "help.reportProblem": "問題を報告"
   },
   "titleBar": {
-    "unsavedChanges": "未保存の変更"
+    "unsavedChanges": "未保存の変更",
+    "untitledDesign": "無題のデザイン",
+    "renameDesignName": "デザイン名を変更",
+    "designNameInput": "デザイン名"
   },
   "window": {
     "minimize": "最小化",
