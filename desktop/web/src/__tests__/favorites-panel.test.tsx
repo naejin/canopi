@@ -770,6 +770,73 @@ describe('FavoritesPanel', () => {
     expect(visibleNames()[2]).toContain('Alpha guild')
   })
 
+  it('keeps downward Saved Stamp reorder active if pointer capture is lost during row reflow', async () => {
+    const baseStamp = stampLibrary.value.items[0]!
+    stampLibrary.value = {
+      ...stampLibrary.value,
+      items: [
+        { ...baseStamp, id: 'stamp-1', name: 'Alpha guild', sort_order: 0 },
+        { ...baseStamp, id: 'stamp-2', name: 'Berry guild', sort_order: 1 },
+        { ...baseStamp, id: 'stamp-3', name: 'Canopy guild', sort_order: 2 },
+      ],
+    }
+
+    await act(async () => {
+      render(<FavoritesPanel />, container)
+      await flushEffects()
+    })
+
+    installSavedStampRowRects(container)
+    const visibleNames = () => [...container.querySelectorAll<HTMLElement>('[data-saved-stamp-row]')]
+      .map((row) => row.textContent ?? '')
+    const sourceGrip = container.querySelector<HTMLElement>(
+      '[data-saved-stamp-row="stamp-1"] [aria-label="Reorder saved stamp"]',
+    )
+    expect(sourceGrip).toBeTruthy()
+    preparePointerGrip(sourceGrip!)
+
+    await act(async () => {
+      sourceGrip!.dispatchEvent(new PointerEvent('pointerdown', {
+        bubbles: true,
+        button: 0,
+        pointerId: 7,
+        clientY: 110,
+      }))
+      sourceGrip!.dispatchEvent(new PointerEvent('pointermove', {
+        bubbles: true,
+        pointerId: 7,
+        clientY: 152,
+      }))
+      sourceGrip!.dispatchEvent(new PointerEvent('lostpointercapture', {
+        bubbles: true,
+        pointerId: 7,
+      }))
+      document.dispatchEvent(new PointerEvent('pointermove', {
+        bubbles: true,
+        pointerId: 7,
+        clientY: 252,
+      }))
+      await flushEffects()
+    })
+
+    expect(reorderStampMock).not.toHaveBeenCalled()
+    expect(visibleNames()[0]).toContain('Berry guild')
+    expect(visibleNames()[1]).toContain('Canopy guild')
+    expect(visibleNames()[2]).toContain('Alpha guild')
+
+    await act(async () => {
+      document.dispatchEvent(new PointerEvent('pointerup', {
+        bubbles: true,
+        pointerId: 7,
+        clientY: 252,
+      }))
+      await flushEffects()
+    })
+
+    expect(reorderStampMock).toHaveBeenCalledTimes(1)
+    expect(reorderStampMock).toHaveBeenCalledWith(['stamp-2', 'stamp-3', 'stamp-1'])
+  })
+
   it('shows a clamped visual-only thumbnail from row-body hover and Place focus', async () => {
     await act(async () => {
       render(<FavoritesPanel />, container)

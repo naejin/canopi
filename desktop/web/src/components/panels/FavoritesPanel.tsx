@@ -56,6 +56,7 @@ export function FavoritesPanel() {
   const previewTimerRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null)
   const savedStampReorderCommittedRef = useRef(false)
   const savedStampReorderSessionRef = useRef<SavedStampReorderSession | null>(null)
+  const savedStampReorderCleanupRef = useRef<(() => void) | null>(null)
   const savedStampItemsRef = useRef<readonly SavedObjectStamp[]>([])
   const savedStampsListRef = useRef<HTMLDivElement>(null)
   const [, setLayoutRevision] = useState(0)
@@ -72,6 +73,10 @@ export function FavoritesPanel() {
 
   useEffect(() => {
     return () => clearPreviewTimer(previewTimerRef)
+  }, [])
+
+  useEffect(() => {
+    return () => savedStampReorderCleanupRef.current?.()
   }, [])
 
   useEffect(() => {
@@ -140,6 +145,7 @@ export function FavoritesPanel() {
       latestIds: ids,
     }
     event.currentTarget.setPointerCapture(event.pointerId)
+    installSavedStampReorderDocumentListeners()
     setSavedStampReorderPreviewIds(ids)
   }
 
@@ -192,10 +198,11 @@ export function FavoritesPanel() {
     const session = savedStampReorderSessionRef.current
     if (!session || session.pointerId !== event.pointerId) return
     event.preventDefault()
+    clearSavedStampReorderDocumentListeners()
     savedStampReorderSessionRef.current = null
-    session.grip.releasePointerCapture(event.pointerId)
+    releaseSavedStampReorderPointerCapture(session.grip, event.pointerId)
 
-    if (sameIdOrder(savedStampItems.map((item) => item.id), session.latestIds)) {
+    if (sameIdOrder(savedStampItemsRef.current.map((item) => item.id), session.latestIds)) {
       setSavedStampReorderPreviewIds(null)
       return
     }
@@ -205,7 +212,39 @@ export function FavoritesPanel() {
   function abortSavedStampReorder(event: PointerEvent): void {
     const session = savedStampReorderSessionRef.current
     if (!session || session.pointerId !== event.pointerId) return
+    clearSavedStampReorderDocumentListeners()
+    releaseSavedStampReorderPointerCapture(session.grip, event.pointerId)
     cancelSavedStampReorder()
+  }
+
+  function installSavedStampReorderDocumentListeners(): void {
+    clearSavedStampReorderDocumentListeners()
+
+    const onMove = (event: PointerEvent) => updateSavedStampReorder(event)
+    const onUp = (event: PointerEvent) => finishSavedStampReorder(event)
+    const onCancel = (event: PointerEvent) => abortSavedStampReorder(event)
+
+    document.addEventListener('pointermove', onMove)
+    document.addEventListener('pointerup', onUp)
+    document.addEventListener('pointercancel', onCancel)
+    savedStampReorderCleanupRef.current = () => {
+      document.removeEventListener('pointermove', onMove)
+      document.removeEventListener('pointerup', onUp)
+      document.removeEventListener('pointercancel', onCancel)
+      savedStampReorderCleanupRef.current = null
+    }
+  }
+
+  function clearSavedStampReorderDocumentListeners(): void {
+    savedStampReorderCleanupRef.current?.()
+  }
+
+  function releaseSavedStampReorderPointerCapture(grip: HTMLElement, pointerId: number): void {
+    try {
+      grip.releasePointerCapture(pointerId)
+    } catch {
+      // Capture may already be lost after row reflow; document listeners own session cleanup.
+    }
   }
 
   function reorderSavedStampIdsForPointer(sourceId: string, clientY: number): readonly string[] {
@@ -356,9 +395,6 @@ export function FavoritesPanel() {
                     onPreviewSchedule={scheduleStampPreview}
                     onPreviewClear={hideStampPreview}
                     onReorderBegin={beginSavedStampReorder}
-                    onReorderMove={updateSavedStampReorder}
-                    onReorderFinish={finishSavedStampReorder}
-                    onReorderCancel={abortSavedStampReorder}
                   />
                 ))}
               </div>
@@ -618,18 +654,12 @@ function SavedObjectStampRow({
   onPreviewSchedule,
   onPreviewClear,
   onReorderBegin,
-  onReorderMove,
-  onReorderFinish,
-  onReorderCancel,
 }: {
   stamp: SavedObjectStamp
   onPreviewRequest: (stamp: SavedObjectStamp, anchor: HTMLElement) => void
   onPreviewSchedule: (stamp: SavedObjectStamp, anchor: HTMLElement) => void
   onPreviewClear: () => void
   onReorderBegin: (sourceId: string, event: PointerEvent) => void
-  onReorderMove: (event: PointerEvent) => void
-  onReorderFinish: (event: PointerEvent) => void
-  onReorderCancel: (event: PointerEvent) => void
 }) {
   const [draftName, setDraftName] = useState(stamp.name)
   const [isRenaming, setIsRenaming] = useState(false)
@@ -692,10 +722,6 @@ function SavedObjectStampRow({
         className={styles.savedStampGrip}
         aria-label={t('savedObjectStamps.reorderLabel')}
         onPointerDown={(event) => onReorderBegin(stamp.id, event)}
-        onPointerMove={onReorderMove}
-        onPointerUp={onReorderFinish}
-        onPointerCancel={onReorderCancel}
-        onLostPointerCapture={onReorderCancel}
       >
         <SixDotGripIcon />
       </button>
