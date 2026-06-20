@@ -173,6 +173,15 @@ describe('PlantSymbolMenu', () => {
     expect(previewRule).not.toContain('var(--space-10)')
   })
 
+  it('sizes the popover for two five-symbol rows', () => {
+    const css = readFileSync('src/components/canvas/PlantSymbolMenu.module.css', 'utf8')
+    const menuRule = css.match(/\.menu\s*{(?<body>[^}]*)}/)?.groups?.body ?? ''
+    const gridRule = css.match(/\.grid\s*{(?<body>[^}]*)}/)?.groups?.body ?? ''
+
+    expect(menuRule).toContain('width: calc(5 * var(--symbol-size) + 4 * var(--space-2) + 2 * var(--space-3));')
+    expect(gridRule).toContain('grid-template-columns: repeat(5, var(--symbol-size));')
+  })
+
   it('updates the selected plant name when localized plant names refresh', async () => {
     let commonName = 'Apple'
     getSelectedPlantSymbolContext.mockImplementation(() => ({
