@@ -29,13 +29,17 @@ import styles from './FavoritesPanel.module.css'
 const SAVED_STAMP_PREVIEW_DELAY_MS = 120
 const SAVED_STAMP_PREVIEW_GAP = 8
 const SAVED_STAMP_PREVIEW_MARGIN = 8
-const SAVED_STAMP_REORDER_MIME = 'application/x-canopi-saved-stamp-reorder'
-
-type SavedStampReorderPlacement = 'before' | 'after'
 
 interface SavedStampPreview {
   readonly stamp: SavedObjectStamp
   readonly anchorRect: DOMRect
+}
+
+interface SavedStampReorderSession {
+  readonly pointerId: number
+  readonly sourceId: string
+  readonly grip: HTMLElement
+  latestIds: readonly string[]
 }
 
 export function FavoritesPanel() {
@@ -51,8 +55,9 @@ export function FavoritesPanel() {
   const savedStampsFrameRef = useRef<HTMLElement>(null)
   const previewTimerRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null)
   const savedStampReorderCommittedRef = useRef(false)
-  const savedStampReorderSourceIdRef = useRef<string | null>(null)
+  const savedStampReorderSessionRef = useRef<SavedStampReorderSession | null>(null)
   const savedStampItemsRef = useRef<readonly SavedObjectStamp[]>([])
+  const savedStampsListRef = useRef<HTMLDivElement>(null)
   const [, setLayoutRevision] = useState(0)
   const [preview, setPreview] = useState<SavedStampPreview | null>(null)
   const [savedStampReorderPreviewIds, setSavedStampReorderPreviewIds] = useState<readonly string[] | null>(null)
@@ -119,24 +124,35 @@ export function FavoritesPanel() {
     setPreview(null)
   }
 
-  function beginSavedStampReorder(sourceId: string, ids: readonly string[]): void {
-    savedStampReorderCommittedRef.current = false
-    savedStampReorderSourceIdRef.current = sourceId
-    setSavedStampReorderPreviewIds(ids)
-  }
+  function beginSavedStampReorder(sourceId: string, event: PointerEvent): void {
+    if (event.button !== 0 || !(event.currentTarget instanceof HTMLElement)) return
+    event.preventDefault()
+    event.stopPropagation()
+    clearPreviewTimer(previewTimerRef)
+    setPreview(null)
 
-  function currentSavedStampReorderSourceId(): string | null {
-    return savedStampReorderSourceIdRef.current
+    const ids = orderedSavedStampItems.map((item) => item.id)
+    savedStampReorderCommittedRef.current = false
+    savedStampReorderSessionRef.current = {
+      pointerId: event.pointerId,
+      sourceId,
+      grip: event.currentTarget,
+      latestIds: ids,
+    }
+    event.currentTarget.setPointerCapture(event.pointerId)
+    setSavedStampReorderPreviewIds(ids)
   }
 
   function previewSavedStampReorder(ids: readonly string[]): void {
     if (savedStampReorderCommittedRef.current) return
+    const session = savedStampReorderSessionRef.current
+    if (session) session.latestIds = ids
     setSavedStampReorderPreviewIds((current) => sameIdOrder(current, ids) ? current : ids)
   }
 
   function commitSavedStampReorder(ids: readonly string[]): void {
     savedStampReorderCommittedRef.current = true
-    savedStampReorderSourceIdRef.current = null
+    savedStampReorderSessionRef.current = null
     setSavedStampReorderPreviewIds(ids)
     void savedObjectStampWorkbench.reorderStamps([...ids]).then(
       () => {
@@ -152,7 +168,7 @@ export function FavoritesPanel() {
 
   function cancelSavedStampReorder(): void {
     if (savedStampReorderCommittedRef.current) return
-    savedStampReorderSourceIdRef.current = null
+    savedStampReorderSessionRef.current = null
     setSavedStampReorderPreviewIds(null)
   }
 
@@ -165,39 +181,56 @@ export function FavoritesPanel() {
     })
   }
 
-  function previewSavedStampReorderAfterLast(event: DragEvent): void {
-    if (!isSavedStampReorderDrag(event) || isSavedStampRowEventTarget(event.target)) return
-    const sourceId = currentSavedStampReorderSourceId()
-    const lastStamp = orderedSavedStampItems[orderedSavedStampItems.length - 1]
-    if (!sourceId || !lastStamp || sourceId === lastStamp.id) return
+  function updateSavedStampReorder(event: PointerEvent): void {
+    const session = savedStampReorderSessionRef.current
+    if (!session || session.pointerId !== event.pointerId) return
     event.preventDefault()
-    event.dataTransfer.dropEffect = 'move'
-    previewSavedStampReorder(moveRelativeTo(
-      orderedSavedStampItems.map((item) => item.id),
-      sourceId,
-      lastStamp.id,
-      'after',
-    ))
+    previewSavedStampReorder(reorderSavedStampIdsForPointer(session.sourceId, event.clientY))
   }
 
-  function commitSavedStampReorderAfterLast(event: DragEvent): void {
-    if (!isSavedStampReorderDrag(event) || isSavedStampRowEventTarget(event.target)) return
-    const sourceId = event.dataTransfer.getData(SAVED_STAMP_REORDER_MIME) || currentSavedStampReorderSourceId()
-    const lastStamp = orderedSavedStampItems[orderedSavedStampItems.length - 1]
-    if (!sourceId || !lastStamp) return
-    if (sourceId === lastStamp.id) {
-      if (!savedStampReorderPreviewIds || sameIdOrder(savedStampItems.map((item) => item.id), savedStampReorderPreviewIds)) return
-      event.preventDefault()
-      commitSavedStampReorder(savedStampReorderPreviewIds)
+  function finishSavedStampReorder(event: PointerEvent): void {
+    const session = savedStampReorderSessionRef.current
+    if (!session || session.pointerId !== event.pointerId) return
+    event.preventDefault()
+    savedStampReorderSessionRef.current = null
+    session.grip.releasePointerCapture(event.pointerId)
+
+    if (sameIdOrder(savedStampItems.map((item) => item.id), session.latestIds)) {
+      setSavedStampReorderPreviewIds(null)
       return
     }
-    event.preventDefault()
-    commitSavedStampReorder(moveRelativeTo(
-      orderedSavedStampItems.map((item) => item.id),
+    commitSavedStampReorder(session.latestIds)
+  }
+
+  function abortSavedStampReorder(event: PointerEvent): void {
+    const session = savedStampReorderSessionRef.current
+    if (!session || session.pointerId !== event.pointerId) return
+    cancelSavedStampReorder()
+  }
+
+  function reorderSavedStampIdsForPointer(sourceId: string, clientY: number): readonly string[] {
+    const rows = [...savedStampsListRef.current?.querySelectorAll<HTMLElement>('[data-saved-stamp-row]') ?? []]
+    const visibleIds = rows
+      .map((row) => row.dataset.savedStampRow)
+      .filter((id): id is string => Boolean(id))
+    const displayedIds = visibleIds.length > 0 ? visibleIds : orderedSavedStampItems.map((item) => item.id)
+    const withoutSourceIds = displayedIds.filter((id) => id !== sourceId)
+    const targetRows = rows.filter((row) => row.dataset.savedStampRow !== sourceId)
+    let insertIndex = withoutSourceIds.length
+
+    for (let index = 0; index < targetRows.length; index += 1) {
+      const rect = targetRows[index]!.getBoundingClientRect()
+      if (clientY < rect.top + rect.height / 2) {
+        insertIndex = index
+        break
+      }
+    }
+
+    return [
+      ...withoutSourceIds.slice(0, insertIndex),
       sourceId,
-      lastStamp.id,
-      'after',
-    ))
+      ...withoutSourceIds.slice(insertIndex),
+    ]
   }
 
   return (
@@ -310,25 +343,22 @@ export function FavoritesPanel() {
               </div>
             ) : (
               <div
+                ref={savedStampsListRef}
                 className={styles.savedStampsList}
                 role="list"
                 aria-label={t('savedObjectStamps.title')}
-                onDragOver={previewSavedStampReorderAfterLast}
-                onDrop={commitSavedStampReorderAfterLast}
               >
                 {orderedSavedStampItems.map((stamp) => (
                   <SavedObjectStampRow
                     key={stamp.id}
                     stamp={stamp}
-                    stamps={orderedSavedStampItems}
                     onPreviewRequest={showStampPreview}
                     onPreviewSchedule={scheduleStampPreview}
                     onPreviewClear={hideStampPreview}
                     onReorderBegin={beginSavedStampReorder}
-                    onReorderSourceId={currentSavedStampReorderSourceId}
-                    onReorderPreview={previewSavedStampReorder}
-                    onReorderCommit={commitSavedStampReorder}
-                    onReorderCancel={cancelSavedStampReorder}
+                    onReorderMove={updateSavedStampReorder}
+                    onReorderFinish={finishSavedStampReorder}
+                    onReorderCancel={abortSavedStampReorder}
                   />
                 ))}
               </div>
@@ -584,26 +614,22 @@ function SavedStampThumbnailSvg({ stamp }: { stamp: SavedObjectStamp }) {
 
 function SavedObjectStampRow({
   stamp,
-  stamps,
   onPreviewRequest,
   onPreviewSchedule,
   onPreviewClear,
   onReorderBegin,
-  onReorderSourceId,
-  onReorderPreview,
-  onReorderCommit,
+  onReorderMove,
+  onReorderFinish,
   onReorderCancel,
 }: {
   stamp: SavedObjectStamp
-  stamps: readonly SavedObjectStamp[]
   onPreviewRequest: (stamp: SavedObjectStamp, anchor: HTMLElement) => void
   onPreviewSchedule: (stamp: SavedObjectStamp, anchor: HTMLElement) => void
   onPreviewClear: () => void
-  onReorderBegin: (sourceId: string, ids: readonly string[]) => void
-  onReorderSourceId: () => string | null
-  onReorderPreview: (ids: readonly string[]) => void
-  onReorderCommit: (ids: readonly string[]) => void
-  onReorderCancel: () => void
+  onReorderBegin: (sourceId: string, event: PointerEvent) => void
+  onReorderMove: (event: PointerEvent) => void
+  onReorderFinish: (event: PointerEvent) => void
+  onReorderCancel: (event: PointerEvent) => void
 }) {
   const [draftName, setDraftName] = useState(stamp.name)
   const [isRenaming, setIsRenaming] = useState(false)
@@ -640,20 +666,6 @@ function SavedObjectStampRow({
     setIsRenaming(false)
   }
 
-  function handleGripDragStart(event: DragEvent): void {
-    event.stopPropagation()
-    const { dataTransfer } = event
-    if (!dataTransfer) return
-    dataTransfer.setData(SAVED_STAMP_REORDER_MIME, stamp.id)
-    dataTransfer.setData('text/plain', stamp.id)
-    dataTransfer.effectAllowed = 'move'
-    onReorderBegin(stamp.id, stamps.map((item) => item.id))
-  }
-
-  function handleGripDragEnd(): void {
-    onReorderCancel()
-  }
-
   function handleStampDragStart(event: DragEvent): void {
     const target = event.target
     if (target instanceof HTMLElement && target.closest('button, input')) {
@@ -669,48 +681,21 @@ function SavedObjectStampRow({
     clearSavedObjectStampDragSource()
   }
 
-  function handleDragOver(event: DragEvent): void {
-    if (!event.dataTransfer || !Array.from(event.dataTransfer.types).includes(SAVED_STAMP_REORDER_MIME)) return
-    event.preventDefault()
-    event.dataTransfer.dropEffect = 'move'
-    const sourceId = event.dataTransfer.getData(SAVED_STAMP_REORDER_MIME) || onReorderSourceId()
-    if (!sourceId || sourceId === stamp.id) return
-    onReorderPreview(moveRelativeTo(
-      stamps.map((item) => item.id),
-      sourceId,
-      stamp.id,
-      reorderPlacementForRow(event.currentTarget, event.clientY),
-    ))
-  }
-
-  function handleDrop(event: DragEvent): void {
-    const sourceId = event.dataTransfer?.getData(SAVED_STAMP_REORDER_MIME) || onReorderSourceId()
-    if (!sourceId || sourceId === stamp.id) return
-    event.preventDefault()
-    const nextIds = moveRelativeTo(
-      stamps.map((item) => item.id),
-      sourceId,
-      stamp.id,
-      reorderPlacementForRow(event.currentTarget, event.clientY),
-    )
-    onReorderCommit(nextIds)
-  }
-
   return (
     <div
       className={styles.savedStampRow}
       role="listitem"
       data-saved-stamp-row={stamp.id}
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
     >
       <button
         type="button"
         className={styles.savedStampGrip}
-        draggable
         aria-label={t('savedObjectStamps.reorderLabel')}
-        onDragStart={handleGripDragStart}
-        onDragEnd={handleGripDragEnd}
+        onPointerDown={(event) => onReorderBegin(stamp.id, event)}
+        onPointerMove={onReorderMove}
+        onPointerUp={onReorderFinish}
+        onPointerCancel={onReorderCancel}
+        onLostPointerCapture={onReorderCancel}
       >
         <SixDotGripIcon />
       </button>
@@ -957,41 +942,6 @@ function TrashIcon() {
       <path d="M5 6.5v6h6v-6" />
     </svg>
   )
-}
-
-function isSavedStampReorderDrag(event: DragEvent): event is DragEvent & { dataTransfer: DataTransfer } {
-  return Boolean(event.dataTransfer && Array.from(event.dataTransfer.types).includes(SAVED_STAMP_REORDER_MIME))
-}
-
-function isSavedStampRowEventTarget(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement && target.closest('[data-saved-stamp-row]') !== null
-}
-
-function reorderPlacementForRow(
-  target: EventTarget | null,
-  clientY: number,
-): SavedStampReorderPlacement {
-  if (!(target instanceof HTMLElement)) return 'before'
-  const rect = target.getBoundingClientRect()
-  if (!Number.isFinite(rect.height) || rect.height <= 0) return 'before'
-  return clientY >= rect.top + rect.height / 2 ? 'after' : 'before'
-}
-
-function moveRelativeTo(
-  ids: string[],
-  sourceId: string,
-  targetId: string,
-  placement: SavedStampReorderPlacement,
-): string[] {
-  const withoutSource = ids.filter((id) => id !== sourceId)
-  const targetIndex = withoutSource.indexOf(targetId)
-  if (targetIndex < 0) return ids
-  const insertIndex = placement === 'after' ? targetIndex + 1 : targetIndex
-  return [
-    ...withoutSource.slice(0, insertIndex),
-    sourceId,
-    ...withoutSource.slice(insertIndex),
-  ]
 }
 
 function sameIdOrder(left: readonly string[] | null, right: readonly string[]): boolean {
