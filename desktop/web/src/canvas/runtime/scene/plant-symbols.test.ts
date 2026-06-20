@@ -4,6 +4,8 @@ import { resolvePlantSymbolForPlant, resolvePlantSymbolId } from './plant-symbol
 describe('plant symbols', () => {
   it('resolves missing and unknown Plant Symbol IDs to round', () => {
     expect(resolvePlantSymbolId('triangle')).toBe('triangle')
+    expect(resolvePlantSymbolId('groundcover')).toBe('groundcover')
+    expect(resolvePlantSymbolId('wave')).toBe('wave')
     expect(resolvePlantSymbolId(null)).toBe('round')
     expect(resolvePlantSymbolId(undefined)).toBe('round')
     expect(resolvePlantSymbolId('spiral')).toBe('round')

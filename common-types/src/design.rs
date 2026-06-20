@@ -12,6 +12,8 @@ pub const PLANT_SYMBOL_IDS: &[&str] = &[
     "shrub",
     "herbaceous",
     "climber",
+    "groundcover",
+    "wave",
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

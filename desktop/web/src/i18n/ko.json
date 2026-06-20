@@ -246,7 +246,9 @@
         "tree": "나무",
         "shrub": "관목",
         "herbaceous": "초본",
-        "climber": "덩굴"
+        "climber": "덩굴",
+        "groundcover": "지피식물",
+        "wave": "물결"
       }
     },
     "group": {

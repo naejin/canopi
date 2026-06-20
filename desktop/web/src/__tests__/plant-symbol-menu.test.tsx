@@ -96,6 +96,48 @@ describe('PlantSymbolMenu', () => {
     expect(plantSymbolMenuOpen.value).toBe(false)
   })
 
+  it('offers groundcover in the habit row and wave in the abstract row', async () => {
+    getSelectedPlantSymbolContext.mockReturnValue({
+      plantIds: ['plant-1'],
+      singleSpeciesCanonicalName: 'Malus domestica',
+      singleSpeciesCommonName: 'Apple',
+      sharedCurrentSymbol: null,
+      sharedEffectiveSymbol: 'round',
+      inheritedSymbol: null,
+      singleSpeciesDefaultSymbol: null,
+      canClearSelectedSymbol: false,
+    })
+
+    await act(async () => {
+      render(<PlantSymbolMenu buttonRef={buttonRef} />, container)
+      await Promise.resolve()
+    })
+
+    const symbolRows = container.querySelectorAll('[role="listbox"]')
+    expect(symbolRows[0]?.textContent).toBe('')
+    expect(symbolRows[0]?.querySelector('button[aria-label="Groundcover"]')).toBeTruthy()
+    expect(symbolRows[1]?.querySelector('button[aria-label="Wave"]')).toBeTruthy()
+
+    const waveButton = symbolRows[1]?.querySelector<HTMLButtonElement>('button[aria-label="Wave"]')
+    expect(waveButton?.textContent).toBe('')
+
+    await act(async () => {
+      waveButton?.click()
+      await Promise.resolve()
+    })
+
+    const setSymbolButton = [...container.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('Set symbol'),
+    ) as HTMLButtonElement
+
+    await act(async () => {
+      setSymbolButton.click()
+      await Promise.resolve()
+    })
+
+    expect(setSelectedPlantSymbol).toHaveBeenCalledWith('wave')
+  })
+
   it('renders option and preview glyphs in padded SVG frames', async () => {
     getSelectedPlantSymbolContext.mockReturnValue({
       plantIds: ['plant-1'],

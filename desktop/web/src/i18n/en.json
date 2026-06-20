@@ -246,7 +246,9 @@
         "tree": "Tree",
         "shrub": "Shrub",
         "herbaceous": "Herbaceous",
-        "climber": "Climber"
+        "climber": "Climber",
+        "groundcover": "Groundcover",
+        "wave": "Wave"
       }
     },
     "group": {

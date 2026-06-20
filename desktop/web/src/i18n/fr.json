@@ -246,7 +246,9 @@
         "tree": "Arbre",
         "shrub": "Arbuste",
         "herbaceous": "Herbacée",
-        "climber": "Grimpante"
+        "climber": "Grimpante",
+        "groundcover": "Couvre-sol",
+        "wave": "Onde"
       }
     },
     "group": {

@@ -15,8 +15,8 @@ interface PlantSymbolMenuProps {
   buttonRef: { current: HTMLButtonElement | null }
 }
 
-const HABIT_SYMBOLS: readonly PlantSymbolId[] = ['tree', 'shrub', 'herbaceous', 'climber']
-const ABSTRACT_SYMBOLS: readonly PlantSymbolId[] = ['round', 'square', 'triangle', 'cross']
+const HABIT_SYMBOLS: readonly PlantSymbolId[] = ['tree', 'shrub', 'herbaceous', 'climber', 'groundcover']
+const ABSTRACT_SYMBOLS: readonly PlantSymbolId[] = ['round', 'square', 'triangle', 'cross', 'wave']
 
 function closeMenu(buttonRef?: { current: HTMLButtonElement | null }) {
   plantSymbolMenuOpen.value = false

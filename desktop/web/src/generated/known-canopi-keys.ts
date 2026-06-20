@@ -12,6 +12,8 @@ export const PLANT_SYMBOL_IDS = [
   "shrub",
   "herbaceous",
   "climber",
+  "groundcover",
+  "wave",
 ] as const
 export type PlantSymbolId = (typeof PLANT_SYMBOL_IDS)[number]
 

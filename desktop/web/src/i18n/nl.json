@@ -246,7 +246,9 @@
         "tree": "Boom",
         "shrub": "Struik",
         "herbaceous": "Kruidachtig",
-        "climber": "Klimplant"
+        "climber": "Klimplant",
+        "groundcover": "Bodembedekker",
+        "wave": "Golf"
       }
     },
     "group": {

@@ -246,7 +246,9 @@
         "tree": "Baum",
         "shrub": "Strauch",
         "herbaceous": "Krautig",
-        "climber": "Kletterpflanze"
+        "climber": "Kletterpflanze",
+        "groundcover": "Bodendecker",
+        "wave": "Welle"
       }
     },
     "group": {

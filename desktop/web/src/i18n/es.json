@@ -246,7 +246,9 @@
         "tree": "Árbol",
         "shrub": "Arbusto",
         "herbaceous": "Herbácea",
-        "climber": "Trepadora"
+        "climber": "Trepadora",
+        "groundcover": "Cobertura vegetal",
+        "wave": "Onda"
       }
     },
     "group": {

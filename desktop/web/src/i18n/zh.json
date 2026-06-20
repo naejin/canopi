@@ -246,7 +246,9 @@
         "tree": "树",
         "shrub": "灌木",
         "herbaceous": "草本",
-        "climber": "藤本"
+        "climber": "藤本",
+        "groundcover": "地被",
+        "wave": "波浪"
       }
     },
     "group": {

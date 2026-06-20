@@ -83,6 +83,45 @@ describe('plant symbol recipes', () => {
         ],
       },
     ])
+    expect(PLANT_SYMBOL_RECIPES.groundcover).toEqual([
+      {
+        kind: 'path',
+        points: [
+          [-0.96, 0.42],
+          [-0.72, 0.05],
+          [-0.42, 0.28],
+          [-0.12, -0.08],
+          [0.2, 0.26],
+          [0.52, -0.02],
+          [0.92, 0.34],
+        ],
+        closed: false,
+        fill: false,
+        stroke: true,
+        strokeWidth: 0.24,
+      },
+      { kind: 'lines', strokeWidth: 0.2, segments: [[-0.9, 0.56, 0.9, 0.56]] },
+    ])
+    expect(PLANT_SYMBOL_RECIPES.wave).toEqual([
+      {
+        kind: 'path',
+        points: [
+          [-0.92, 0.12],
+          [-0.7, -0.08],
+          [-0.48, -0.22],
+          [-0.23, -0.16],
+          [0.02, 0.02],
+          [0.27, 0.18],
+          [0.52, 0.14],
+          [0.74, -0.02],
+          [0.92, -0.18],
+        ],
+        closed: false,
+        fill: false,
+        stroke: true,
+        strokeWidth: 0.26,
+      },
+    ])
   })
 })
 
