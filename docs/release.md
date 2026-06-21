@@ -64,6 +64,8 @@ scripts/promote-release.sh --run-id <run-id> --tag v<version> --title "Canopi <v
 
 This script downloads artifacts from the specified run, requires the manifest artifact, verifies `SHA256SUMS.txt`, creates or updates the GitHub Release, and uploads packaged artifacts plus manifest.
 
+When `docs/release-notes/v<version>.md` exists, the script uses it as the base release body and appends release metadata plus explicit download links.
+
 ## 5. Publish The Draft Release
 
 ```bash
