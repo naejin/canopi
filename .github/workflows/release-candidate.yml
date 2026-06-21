@@ -50,23 +50,79 @@ jobs:
           echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - id: version
-        name: Verify requested release version
+        name: Verify release version metadata
         shell: bash
         run: |
           set -euo pipefail
-          actual_version="$(python3 - <<'PY'
-          import json
-          from pathlib import Path
-          print(json.loads(Path("desktop/tauri.conf.json").read_text())["version"])
-          PY
-          )"
           requested_version="${{ inputs.release_version }}"
-          echo "Requested release version: $requested_version"
-          echo "App version from desktop/tauri.conf.json: $actual_version"
-          if [[ "$actual_version" != "$requested_version" ]]; then
-            echo "::error::desktop/tauri.conf.json version '$actual_version' does not match workflow input '$requested_version'."
-            exit 1
-          fi
+          REQUESTED_VERSION="$requested_version" python3 - <<'PY'
+          import json
+          import os
+          import re
+          import sys
+          from pathlib import Path
+
+          requested_version = os.environ["REQUESTED_VERSION"]
+
+          def read_json_version(path: str) -> str:
+              data = json.loads(Path(path).read_text())
+              version = data.get("version")
+              if not isinstance(version, str) or not version:
+                  raise SystemExit(f"::error::{path} must define a non-empty string version.")
+              return version
+
+          def read_package_lock_root_version(path: str) -> str:
+              data = json.loads(Path(path).read_text())
+              root = data.get("packages", {}).get("")
+              version = root.get("version") if isinstance(root, dict) else None
+              if not isinstance(version, str) or not version:
+                  raise SystemExit(f"::error::{path} packages[''] must define a non-empty string version.")
+              return version
+
+          def read_cargo_workspace_version(path: str) -> str:
+              text = Path(path).read_text()
+              match = re.search(r"(?ms)^\[workspace\.package\]\s*(?P<body>.*?)(?:^\[|\Z)", text)
+              if not match:
+                  raise SystemExit(f"::error::{path} must define [workspace.package].")
+              version_match = re.search(r'(?m)^\s*version\s*=\s*"([^"]+)"\s*$', match.group("body"))
+              if not version_match:
+                  raise SystemExit(f"::error::{path} [workspace.package] must define version.")
+              return version_match.group(1)
+
+          versions = {
+              "desktop/tauri.conf.json": read_json_version("desktop/tauri.conf.json"),
+              "Cargo.toml [workspace.package]": read_cargo_workspace_version("Cargo.toml"),
+              "desktop/web/package.json": read_json_version("desktop/web/package.json"),
+              "desktop/web/package-lock.json": read_json_version("desktop/web/package-lock.json"),
+              "desktop/web/package-lock.json packages['']": read_package_lock_root_version("desktop/web/package-lock.json"),
+          }
+
+          print(f"Requested release version: {requested_version}")
+          for source, version in versions.items():
+              print(f"{source}: {version}")
+
+          tauri_version = versions["desktop/tauri.conf.json"]
+          failed = False
+          if tauri_version != requested_version:
+              print(
+                  f"::error::desktop/tauri.conf.json version '{tauri_version}' does not match workflow input '{requested_version}'.",
+                  file=sys.stderr,
+              )
+              failed = True
+
+          for source, version in versions.items():
+              if source == "desktop/tauri.conf.json":
+                  continue
+              if version != tauri_version:
+                  print(
+                      f"::error::{source} version '{version}' does not match desktop/tauri.conf.json version '{tauri_version}'.",
+                      file=sys.stderr,
+                  )
+                  failed = True
+
+          if failed:
+              raise SystemExit(1)
+          PY
 
       - id: schema
         name: Read expected plant DB schema version

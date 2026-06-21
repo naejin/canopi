@@ -37,6 +37,7 @@ cargo build --release
 - Release candidate workflow: `.github/workflows/release-candidate.yml`.
 - Promotion script: `scripts/promote-release.sh`.
 - DB release upload script: `scripts/publish-db-release.sh`.
+- `desktop/tauri.conf.json` is the app release-version authority. Keep `Cargo.toml`, `desktop/web/package.json`, and `desktop/web/package-lock.json` synchronized with it; the About dialog reads the Tauri config version, and release-candidate preflight validates drift.
 - Linux bundles are deb and AppImage, not RPM.
 - Debian dependencies in `tauri.conf.json` intentionally use alternatives for Ubuntu t64 transitions. Tauri merges custom depends with detected depends.
 - See `docs/release.md` for the detailed human release process.

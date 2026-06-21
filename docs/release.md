@@ -7,10 +7,15 @@ Scripts are the source of truth. This section provides the operator sequence.
 1. Develop on a feature branch.
 2. Open a PR into `main`.
 3. Merge only after CI is green.
-4. Refresh the bundled DB release if the DB changed.
-5. Run the `Release Candidate` workflow from `main` for the exact version to ship.
-6. Smoke the packaged CI artifacts for Linux, macOS Apple Silicon, macOS Intel, and Windows.
-7. Promote the exact verified run to a GitHub Release with `scripts/promote-release.sh`.
+4. Bump the app release version in `desktop/tauri.conf.json` and keep `Cargo.toml`, `desktop/web/package.json`, and `desktop/web/package-lock.json` in sync.
+5. Refresh the bundled DB release if the DB changed.
+6. Run the `Release Candidate` workflow from `main` for the exact version to ship.
+7. Smoke the packaged CI artifacts for Linux, macOS Apple Silicon, macOS Intel, and Windows.
+8. Promote the exact verified run to a GitHub Release with `scripts/promote-release.sh`.
+
+## Version Authority
+
+`desktop/tauri.conf.json` is the app release-version authority. The About dialog reads this version, and the release-candidate preflight fails if `Cargo.toml`, `desktop/web/package.json`, or `desktop/web/package-lock.json` drift from it.
 
 ## 1. Publish Or Refresh The Bundled DB
 
@@ -30,7 +35,7 @@ From GitHub Actions, run `Release Candidate` with:
 - `db_release_tag`: usually `canopi-core-db`
 - `db_asset_name`: usually `canopi-core.db`
 
-The workflow preflight validates: candidate ref resolves cleanly, requested release version matches app config, bundled DB asset exists and is non-empty, bundled DB schema version matches the app expectation, packaged artifacts exist before checksum manifest upload.
+The workflow preflight validates: candidate ref resolves cleanly, requested release version matches app config, app version metadata is synchronized, bundled DB asset exists and is non-empty, bundled DB schema version matches the app expectation, packaged artifacts exist before checksum manifest upload.
 
 ## 3. Smoke-Test The Exact CI Artifacts
 

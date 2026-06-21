@@ -6,6 +6,13 @@ import { CANOPI_LICENSE, CANOPI_VERSION } from '../app/about/metadata'
 import { locale } from '../app/settings/state'
 import { runAppCommand } from '../commands/registry'
 import { AboutCanopiDialog } from '../components/shared/AboutCanopiDialog'
+import tauriConfigText from '../../../tauri.conf.json?raw'
+
+function readTauriConfigVersion(): string {
+  const config = JSON.parse(tauriConfigText) as { version?: unknown }
+  if (typeof config.version !== 'string') throw new Error('Missing Tauri version')
+  return config.version
+}
 
 describe('AboutCanopiDialog', () => {
   let container: HTMLDivElement
@@ -50,5 +57,9 @@ describe('AboutCanopiDialog', () => {
 
     expect(aboutCanopiDialogOpen.value).toBe(false)
     expect(container.querySelector('[role="dialog"]')).toBeNull()
+  })
+
+  it('uses the Tauri app version as About metadata', () => {
+    expect(CANOPI_VERSION).toBe(readTauriConfigVersion())
   })
 })
