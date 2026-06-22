@@ -4,13 +4,10 @@ import {
   type ConsortiumBarLayout,
   type ConsortiumHitResult,
 } from '../../canvas/consortium-renderer'
-import { getConsortiumCanonicalName } from '../../target'
-import type { Consortium } from '../../types/design'
 import {
   beginConsortiumDocumentEdit,
   type ConsortiumDocumentEditTransaction,
   moveConsortiumEntryInArray,
-  reorderConsortiumEntryInArray,
 } from '../design-edit'
 import {
   CONSORTIUM_STRATUM_COUNT,
@@ -44,8 +41,6 @@ export interface ConsortiumResizeDragState {
 
 export interface ConsortiumDragSnapshot {
   readonly bars: readonly ConsortiumBarLayout[]
-  readonly consortiums: readonly Consortium[]
-  readonly rowHeights: readonly number[]
   readonly rowOffsets: readonly number[]
   readonly canvasWidth: number
 }
@@ -121,50 +116,11 @@ function previewConsortiumMoveDrag(
   const bar = snapshot.bars.find((candidate) => candidate.canonicalName === drag.canonicalName)
   if (!bar) return
 
-  if (newStratum === bar.stratum && adjustedStart === bar.startPhase && newEnd === bar.endPhase) {
-    previewConsortiumSameStratumReorder(drag, snapshot, pointer.mouseY, rowIndex, bar)
-    return
-  }
-
   if (bar.startPhase === adjustedStart && bar.endPhase === newEnd && bar.stratum === newStratum) return
   drag.edit.preview((consortiums) => moveConsortiumEntryInArray(
     consortiums,
     drag.canonicalName,
     { stratum: newStratum, startPhase: adjustedStart, endPhase: newEnd },
-  ))
-}
-
-function previewConsortiumSameStratumReorder(
-  drag: ConsortiumMoveDragState,
-  snapshot: ConsortiumDragSnapshot,
-  mouseY: number,
-  rowIndex: number,
-  bar: ConsortiumBarLayout,
-): void {
-  const rowY = snapshot.rowOffsets[rowIndex]!
-  const rowHeight = snapshot.rowHeights[rowIndex] ?? 36
-  const targetSubLane = Math.max(
-    0,
-    Math.min(
-      bar.totalSubLanes - 1,
-      Math.floor((mouseY - rowY) / (rowHeight / bar.totalSubLanes)),
-    ),
-  )
-  if (targetSubLane === bar.subLane) return
-
-  const sameStratum = snapshot.bars.filter((candidate) => candidate.stratum === bar.stratum)
-  const targetBar = sameStratum[targetSubLane]
-  if (!targetBar) return
-
-  const targetArrayIdx = snapshot.consortiums.findIndex(
-    (consortium) => getConsortiumCanonicalName(consortium) === targetBar.canonicalName,
-  )
-  if (targetArrayIdx === -1) return
-
-  drag.edit.preview((consortiums) => reorderConsortiumEntryInArray(
-    consortiums,
-    drag.canonicalName,
-    targetArrayIdx,
   ))
 }
 

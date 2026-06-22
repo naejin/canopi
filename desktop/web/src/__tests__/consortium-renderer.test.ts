@@ -105,6 +105,62 @@ describe('buildConsortiumBars', () => {
     expect(bars[1]!.totalSubLanes).toBe(2)
   })
 
+  it('shares one Consortium Lane for non-overlapping entries in the same Stratum', () => {
+    const entries: Consortium[] = [
+      createConsortium({ canonical_name: 'Malus domestica', stratum: 'emergent', start_phase: 0, end_phase: 0 }),
+      createConsortium({ canonical_name: 'Prunus avium', stratum: 'emergent', start_phase: 4, end_phase: 4 }),
+    ]
+    const plants: PlacedPlant[] = [
+      createPlant({ id: 'p1', canonical_name: 'Malus domestica', common_name: 'Apple' }),
+      createPlant({ id: 'p2', canonical_name: 'Prunus avium', common_name: 'Cherry' }),
+    ]
+
+    const bars = buildConsortiumBars(entries, plants, {})
+
+    expect(bars).toHaveLength(2)
+    expect(bars.map((bar) => bar.subLane)).toEqual([0, 0])
+    expect(bars.map((bar) => bar.totalSubLanes)).toEqual([1, 1])
+  })
+
+  it('keeps entries in separate Consortium Lanes when their inclusive phase spans touch', () => {
+    const entries: Consortium[] = [
+      createConsortium({ canonical_name: 'Malus domestica', stratum: 'emergent', start_phase: 0, end_phase: 1 }),
+      createConsortium({ canonical_name: 'Prunus avium', stratum: 'emergent', start_phase: 1, end_phase: 3 }),
+    ]
+    const plants: PlacedPlant[] = [
+      createPlant({ id: 'p1', canonical_name: 'Malus domestica', common_name: 'Apple' }),
+      createPlant({ id: 'p2', canonical_name: 'Prunus avium', common_name: 'Cherry' }),
+    ]
+
+    const bars = buildConsortiumBars(entries, plants, {})
+
+    expect(bars.map((bar) => bar.subLane)).toEqual([0, 1])
+    expect(bars.map((bar) => bar.totalSubLanes)).toEqual([2, 2])
+  })
+
+  it('uses saved consortium order as the tie-breaker for entries starting in the same phase', () => {
+    const entries: Consortium[] = [
+      createConsortium({ canonical_name: 'Malus domestica', stratum: 'emergent', start_phase: 0, end_phase: 0 }),
+      createConsortium({ canonical_name: 'Prunus avium', stratum: 'emergent', start_phase: 0, end_phase: 0 }),
+      createConsortium({ canonical_name: 'Acer campestre', stratum: 'emergent', start_phase: 1, end_phase: 1 }),
+    ]
+    const plants: PlacedPlant[] = [
+      createPlant({ id: 'p1', canonical_name: 'Malus domestica', common_name: 'Apple' }),
+      createPlant({ id: 'p2', canonical_name: 'Prunus avium', common_name: 'Cherry' }),
+      createPlant({ id: 'p3', canonical_name: 'Acer campestre', common_name: 'Field maple' }),
+    ]
+
+    const bars = buildConsortiumBars(entries, plants, {})
+
+    expect(bars.map((bar) => bar.canonicalName)).toEqual([
+      'Malus domestica',
+      'Prunus avium',
+      'Acer campestre',
+    ])
+    expect(bars.map((bar) => bar.subLane)).toEqual([0, 1, 0])
+    expect(bars.map((bar) => bar.totalSubLanes)).toEqual([2, 2, 2])
+  })
+
   it('returns empty array for empty inputs', () => {
     const bars = buildConsortiumBars([], [], {})
     expect(bars).toEqual([])

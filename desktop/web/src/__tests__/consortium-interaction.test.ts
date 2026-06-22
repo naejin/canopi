@@ -170,4 +170,90 @@ describe('Consortium interaction', () => {
     })
     expect(nonCanvasRevision.value).toBe(1)
   })
+
+  it('does not treat vertical movement within a Stratum as manual Consortium Lane reordering', () => {
+    currentDesign.value = makeDesign([
+      makeConsortium('Malus domestica', { stratum: 'high', start_phase: 0, end_phase: 2 }),
+      makeConsortium('Acer campestre', { stratum: 'high', start_phase: 0, end_phase: 2 }),
+    ])
+    const originalOrder = currentDesign.value.consortiums
+    const snapshot = buildSnapshot()
+    const bar = snapshot.bars.find((candidate) => candidate.canonicalName === 'Malus domestica')!
+    const highRowIndex = stratumToRow('high')
+    const highRowY = snapshot.rowOffsets[highRowIndex]!
+    const highRowHeight = snapshot.rowHeights[highRowIndex]!
+    const drag = beginConsortiumDrag({
+      hit: { canonicalName: bar.canonicalName, edge: 'body' },
+      bar,
+      startMouseX: phaseToX(0, CONTENT_WIDTH),
+      cachedRect: makeRect(),
+    })
+
+    previewConsortiumDrag(drag, snapshot, {
+      mouseX: phaseToX(0, CONTENT_WIDTH),
+      mouseY: highRowY + highRowHeight * 0.75,
+    })
+
+    expect(currentDesign.value!.consortiums).toBe(originalOrder)
+  })
+
+  it('recomputes derived Consortium Lanes after a move preview changes phase overlap', () => {
+    currentDesign.value = makeDesign([
+      makeConsortium('Malus domestica', { stratum: 'high', start_phase: 0, end_phase: 0 }),
+      makeConsortium('Acer campestre', { stratum: 'high', start_phase: 1, end_phase: 1 }),
+    ])
+    const initialSnapshot = buildSnapshot()
+    expect(initialSnapshot.bars.map((bar) => bar.subLane)).toEqual([0, 0])
+    const bar = initialSnapshot.bars.find((candidate) => candidate.canonicalName === 'Malus domestica')!
+    const drag = beginConsortiumDrag({
+      hit: { canonicalName: bar.canonicalName, edge: 'body' },
+      bar,
+      startMouseX: phaseToX(0, CONTENT_WIDTH),
+      cachedRect: makeRect(),
+    })
+
+    previewConsortiumDrag(drag, initialSnapshot, {
+      mouseX: phaseToX(1, CONTENT_WIDTH),
+      mouseY: rowCenterY('high', initialSnapshot.rowHeights, initialSnapshot.rowOffsets),
+    })
+
+    const nextSnapshot = buildSnapshot()
+    expect(currentDesign.value!.consortiums[0]).toMatchObject({
+      stratum: 'high',
+      start_phase: 1,
+      end_phase: 1,
+    })
+    expect(nextSnapshot.bars.map((bar) => bar.subLane)).toEqual([0, 1])
+    expect(nextSnapshot.bars.map((bar) => bar.totalSubLanes)).toEqual([2, 2])
+  })
+
+  it('recomputes derived Consortium Lanes after a resize preview changes phase overlap', () => {
+    currentDesign.value = makeDesign([
+      makeConsortium('Malus domestica', { stratum: 'high', start_phase: 0, end_phase: 0 }),
+      makeConsortium('Acer campestre', { stratum: 'high', start_phase: 1, end_phase: 1 }),
+    ])
+    const initialSnapshot = buildSnapshot()
+    expect(initialSnapshot.bars.map((bar) => bar.subLane)).toEqual([0, 0])
+    const bar = initialSnapshot.bars.find((candidate) => candidate.canonicalName === 'Malus domestica')!
+    const drag = beginConsortiumDrag({
+      hit: { canonicalName: bar.canonicalName, edge: 'right' },
+      bar,
+      startMouseX: phaseToX(1, CONTENT_WIDTH),
+      cachedRect: makeRect(),
+    })
+
+    previewConsortiumDrag(drag, initialSnapshot, {
+      mouseX: phaseToX(2, CONTENT_WIDTH),
+      mouseY: rowCenterY('high', initialSnapshot.rowHeights, initialSnapshot.rowOffsets),
+    })
+
+    const nextSnapshot = buildSnapshot()
+    expect(currentDesign.value!.consortiums[0]).toMatchObject({
+      stratum: 'high',
+      start_phase: 0,
+      end_phase: 1,
+    })
+    expect(nextSnapshot.bars.map((bar) => bar.subLane)).toEqual([0, 1])
+    expect(nextSnapshot.bars.map((bar) => bar.totalSubLanes)).toEqual([2, 2])
+  })
 })

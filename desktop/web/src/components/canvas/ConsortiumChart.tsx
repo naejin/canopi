@@ -16,7 +16,7 @@ import styles from './ConsortiumChart.module.css'
 export function ConsortiumChart() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
-  const { consortiums, projection, activeLocale } = useConsortiumPlanningSurface()
+  const { projection, activeLocale } = useConsortiumPlanningSurface()
   const bars = projection.bars
   const rowHeights = useMemo(() => computeRowHeights(bars), [bars])
   const rowOffsets = useMemo(() => computeRowYOffsets(rowHeights), [rowHeights])
@@ -24,7 +24,6 @@ export function ConsortiumChart() {
   const workbench = useConsortiumCanvasWorkbench({
     canvasRef,
     bars,
-    consortiums,
     rowHeights,
     rowOffsets,
   })

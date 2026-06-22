@@ -72,15 +72,36 @@ export function buildConsortiumBars(
     else byStratum.set(bar.stratum, [bar])
   }
 
-  // Sub-lane order follows array position (user-reorderable, no auto-sort).
   for (const group of byStratum.values()) {
-    for (let i = 0; i < group.length; i++) {
-      group[i]!.subLane = i
-      group[i]!.totalSubLanes = group.length
-    }
+    packConsortiumLanes(group)
   }
 
   return bars
+}
+
+function packConsortiumLanes(group: ConsortiumPlanningBar[]): void {
+  const laneEndPhases: number[] = []
+  const ordered = group
+    .map((bar, originalIndex) => ({ bar, originalIndex }))
+    .sort((a, b) => (
+      a.bar.startPhase - b.bar.startPhase
+      || a.originalIndex - b.originalIndex
+    ))
+
+  for (const { bar } of ordered) {
+    let laneIndex = laneEndPhases.findIndex((endPhase) => endPhase < bar.startPhase)
+    if (laneIndex === -1) {
+      laneIndex = laneEndPhases.length
+      laneEndPhases.push(bar.endPhase)
+    } else {
+      laneEndPhases[laneIndex] = bar.endPhase
+    }
+    bar.subLane = laneIndex
+  }
+
+  for (const bar of group) {
+    bar.totalSubLanes = laneEndPhases.length
+  }
 }
 
 export function filterActiveConsortiumEntries(

@@ -10,7 +10,6 @@ import {
   type ConsortiumBarLayout,
 } from '../../canvas/consortium-renderer'
 import { consortiumTarget } from '../../target'
-import type { Consortium } from '../../types/design'
 import {
   beginConsortiumDrag,
   commitConsortiumDrag,
@@ -33,7 +32,6 @@ interface ConsortiumDocumentHandlers {
 export interface ConsortiumCanvasWorkbenchOptions {
   readonly canvasRef: MutableDomRef<HTMLCanvasElement>
   readonly bars: readonly ConsortiumBarLayout[]
-  readonly consortiums: readonly Consortium[]
   readonly rowHeights: number[]
   readonly rowOffsets: number[]
 }
@@ -50,14 +48,12 @@ export interface ConsortiumCanvasWorkbench {
 export function useConsortiumCanvasWorkbench({
   canvasRef,
   bars,
-  consortiums,
   rowHeights,
   rowOffsets,
 }: ConsortiumCanvasWorkbenchOptions): ConsortiumCanvasWorkbench {
   const cachedRectRef = useRef<DOMRect | null>(null)
   const hoveredCanonical = useSignal<string | null>(null)
   const barsRef = useRef(bars)
-  const consortiumsRef = useRef(consortiums)
   const rowHeightsRef = useRef<number[]>(rowHeights)
   const rowOffsetsRef = useRef<number[]>(rowOffsets)
   const documentHandlersRef = useRef<ConsortiumDocumentHandlers>({
@@ -98,7 +94,6 @@ export function useConsortiumCanvasWorkbench({
   const planningFrame = planningFrameRef.current
 
   barsRef.current = bars
-  consortiumsRef.current = consortiums
   rowHeightsRef.current = rowHeights
   rowOffsetsRef.current = rowOffsets
 
@@ -157,8 +152,6 @@ export function useConsortiumCanvasWorkbench({
         drag,
         {
           bars: barsRef.current,
-          consortiums: consortiumsRef.current,
-          rowHeights: rowHeightsRef.current,
           rowOffsets: rowOffsetsRef.current,
           canvasWidth: rect.width,
         },

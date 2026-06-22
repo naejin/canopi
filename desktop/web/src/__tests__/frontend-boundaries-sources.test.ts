@@ -975,6 +975,6 @@ describe('frontend boundary sources', () => {
     expect(interactionSource).toContain('../design-edit')
     expect(interactionSource).toContain('beginConsortiumDocumentEdit')
     expect(interactionSource).toContain('moveConsortiumEntryInArray')
-    expect(interactionSource).toContain('reorderConsortiumEntryInArray')
+    expect(interactionSource).not.toContain('reorderConsortiumEntryInArray')
   })
 })
