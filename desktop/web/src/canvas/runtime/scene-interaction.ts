@@ -69,6 +69,10 @@ import {
   createZoneControlPoints,
   type ZoneControlPointController,
 } from './interaction/zone-control-points'
+import {
+  createMeasurementGuideControlPoints,
+  type MeasurementGuideControlPointController,
+} from './interaction/measurement-guide-control-points'
 import type { CanvasDesignObjectSelectionModel, CanvasSceneEditCommandSurface } from './runtime'
 import {
   createLockedObjectAffordance,
@@ -137,6 +141,7 @@ export class SceneInteractionController {
   private readonly _contextMenu: CanvasContextMenuController
   private readonly _rotationHandle: SelectionRotationHandleController
   private readonly _zoneControlPoints: ZoneControlPointController
+  private readonly _measurementGuideControlPoints: MeasurementGuideControlPointController
   private readonly _lockedAffordance: LockedObjectAffordanceController
   private _tool: InteractionTool = 'select'
   private _designObjectDragPresentationSuppressed = false
@@ -227,6 +232,18 @@ export class SceneInteractionController {
       beginDragPresentation: () => this._beginDesignObjectDragPresentation(),
       endDragPresentation: () => this._endDesignObjectDragPresentation(),
     })
+    this._measurementGuideControlPoints = createMeasurementGuideControlPoints({
+      container: this._deps.container,
+      camera: this._deps.camera,
+      getSceneStore: this._deps.getSceneStore,
+      getSelection: this._deps.getDesignObjectSelection,
+      sceneEdits: this._deps.sceneEdits,
+      applySnapping: (point) => this._applySnapping(point),
+      render: this._deps.render,
+      refreshSelectionDependent: () => this._refreshSelectionDependentMeasurements(),
+      beginDragPresentation: () => this._beginDesignObjectDragPresentation(),
+      endDragPresentation: () => this._endDesignObjectDragPresentation(),
+    })
     this._lockedAffordance = createLockedObjectAffordance({
       container: this._deps.container,
       onUnlock: (id) => this._unlockLockedObject(id),
@@ -272,6 +289,7 @@ export class SceneInteractionController {
       this._contextMenu.dispose()
       this._rotationHandle.dispose()
       this._zoneControlPoints.dispose()
+      this._measurementGuideControlPoints.dispose()
       this._lockedAffordance.dispose()
       this._annotationEditor.dispose()
       this._sharedGestures.dispose()
@@ -333,6 +351,13 @@ export class SceneInteractionController {
     if (event.button === 0 && this._zoneControlPoints.contains(event.target)) {
       const zoneControlPointDrag = this._zoneControlPoints.pointerDown({ event, rawWorld: world })
       if (zoneControlPointDrag) this._frame.beginToolPointerDrag(zoneControlPointDrag)
+      else this._frame.clearPointerGesture()
+      return
+    }
+
+    if (event.button === 0 && this._measurementGuideControlPoints.contains(event.target)) {
+      const guideControlPointDrag = this._measurementGuideControlPoints.pointerDown({ event, rawWorld: world })
+      if (guideControlPointDrag) this._frame.beginToolPointerDrag(guideControlPointDrag)
       else this._frame.clearPointerGesture()
       return
     }
@@ -411,6 +436,7 @@ export class SceneInteractionController {
       if (this._selectionToolbar.contains(event.target)) return
       if (this._contextMenu.contains(event.target)) return
       if (this._zoneControlPoints.contains(event.target)) return
+      if (this._measurementGuideControlPoints.contains(event.target)) return
       if (this._lockedAffordance.contains(event.target)) return
       if (this._tools.shouldIgnorePointerEvent(event.target)) return
 
@@ -613,6 +639,12 @@ export class SceneInteractionController {
       return
     }
 
+    if (event.key === 'Escape' && this._measurementGuideControlPoints.cancelActiveDrag()) {
+      event.preventDefault()
+      this._frame.clearPointerGesture()
+      return
+    }
+
     if (event.key === 'Escape' && this._rotationHandle.cancelActiveDrag()) {
       event.preventDefault()
       this._frame.clearPointerGesture()
@@ -651,6 +683,7 @@ export class SceneInteractionController {
         this._sharedGestures.cancel()
         this._rotationHandle.cancelActiveDrag()
         this._zoneControlPoints.cancelActiveDrag()
+        this._measurementGuideControlPoints.cancelActiveDrag()
       },
       cancelToolTransient: (cleanupOptions) => this._tools.cancelTransient(cleanupOptions),
       clearHover: () => this._clearPassiveHoverPresentation(),
@@ -664,6 +697,7 @@ export class SceneInteractionController {
     this._annotationEditor.refresh()
     if (this._tools.refreshViewportDependent()) {
       this._zoneControlPoints.refresh(this._canShowSelectAffordances())
+      this._measurementGuideControlPoints.refresh(this._canShowSelectAffordances())
       if (this._canShowSelectAffordances()) {
         this._rotationHandle.refresh()
         this._selectionToolbar.refresh()
@@ -682,6 +716,7 @@ export class SceneInteractionController {
     this._tools.refreshSelectionDependent()
     const canShowSelectAffordances = this._canShowSelectAffordances()
     this._zoneControlPoints.refresh(canShowSelectAffordances)
+    this._measurementGuideControlPoints.refresh(canShowSelectAffordances)
     if (this._designObjectDragPresentationSuppressed || !canShowSelectAffordances) {
       this._rotationHandle.hide()
       this._selectionToolbar.hide()
@@ -860,7 +895,9 @@ function isTargetLayerLocked(scene: ScenePersistedState, target: TopLevelTarget)
       ? ['zones']
       : target.kind === 'annotation'
         ? ['annotations']
-        : groupLayerNames(scene, target.id)
+        : target.kind === 'measurement-guide'
+          ? ['measurement-guides']
+          : groupLayerNames(scene, target.id)
   return layerNames.some((layerName) => scene.layers.find((layer) => layer.name === layerName)?.locked === true)
 }
 

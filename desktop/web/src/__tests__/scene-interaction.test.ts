@@ -18,6 +18,7 @@ import { CameraController } from '../canvas/runtime/camera'
 import {
   SceneStore,
   type SceneAnnotationEntity,
+  type SceneMeasurementGuideEntity,
   type ScenePlantEntity,
   type ScenePoint,
   type SceneZoneEntity,
@@ -240,6 +241,22 @@ function makeTextAnnotation(
   }
 }
 
+function makeMeasurementGuide(
+  id: string,
+  start: ScenePoint,
+  end: ScenePoint,
+  overrides: Partial<SceneMeasurementGuideEntity> = {},
+): SceneMeasurementGuideEntity {
+  return {
+    kind: 'measurement-guide',
+    id,
+    locked: false,
+    start,
+    end,
+    ...overrides,
+  }
+}
+
 function getDesignObjectSelectionFromStore(
   store: SceneStore,
   camera: CameraController,
@@ -283,6 +300,27 @@ function zoneControlPointCenter(container: HTMLElement, kind: string, index: num
   const top = Number.parseFloat(handle.style.top)
   if (!Number.isFinite(left) || !Number.isFinite(top)) {
     throw new Error('Expected Zone Control Point to be positioned')
+  }
+  return {
+    x: left + 10,
+    y: top + 10,
+  }
+}
+
+function measurementGuideControlPointCenter(container: HTMLElement, index: number): ScenePoint {
+  const handle = container.querySelector<HTMLElement>(
+    `[data-measurement-guide-control-point-index="${index}"]`,
+  )
+  if (!handle) throw new Error(`Expected Measurement Guide Control Point ${index}`)
+  const screenX = Number.parseFloat(handle.dataset.measurementGuideControlPointScreenX ?? '')
+  const screenY = Number.parseFloat(handle.dataset.measurementGuideControlPointScreenY ?? '')
+  if (Number.isFinite(screenX) && Number.isFinite(screenY)) {
+    return { x: screenX, y: screenY }
+  }
+  const left = Number.parseFloat(handle.style.left)
+  const top = Number.parseFloat(handle.style.top)
+  if (!Number.isFinite(left) || !Number.isFinite(top)) {
+    throw new Error('Expected Measurement Guide Control Point to be positioned')
   }
   return {
     x: left + 10,
@@ -1175,6 +1213,16 @@ describe('SceneInteractionController', () => {
     lockedSave.click()
     expect(saveSelectionAsObjectStamp).toHaveBeenCalledTimes(2)
 
+    selectionModel = {
+      editableTargets: [{ kind: 'measurement-guide' as const, id: 'measurement-guide-1' }],
+      lockedTargets: [],
+      blockedTargets: [],
+      bounds: { minX: 10, minY: 10, maxX: 60, maxY: 10 },
+      sameSpeciesReferenceCanonicalName: null,
+    }
+    controller.refreshMeasurements()
+    expect(container.querySelector('[data-selection-action-command="save-object-stamp"]')).toBeNull()
+
     controller.dispose()
   })
 
@@ -1216,6 +1264,45 @@ describe('SceneInteractionController', () => {
     group?.click()
 
     expect(groupSelected).toHaveBeenCalledTimes(1)
+    controller.dispose()
+  })
+
+  it('does not expose Object Group actions for Measurement Guide selections', () => {
+    let selectionModel: CanvasDesignObjectSelectionModel = {
+      editableTargets: [
+        { kind: 'plant' as const, id: 'plant-1' },
+        { kind: 'measurement-guide' as const, id: 'measurement-guide-1' },
+      ],
+      lockedTargets: [],
+      blockedTargets: [],
+      bounds: { minX: 10, minY: 10, maxX: 60, maxY: 40 },
+      sameSpeciesReferenceCanonicalName: null,
+    }
+    const deps = {
+      ...createInteractionDeps(container, store, camera),
+      getDesignObjectSelection: () => selectionModel,
+    }
+    const controller = new SceneInteractionController(deps as any)
+
+    controller.refreshMeasurements()
+
+    expect(container.querySelector('[data-selection-action-command="group"]')).toBeNull()
+    expect(container.querySelector('[data-selection-action-command="ungroup"]')).toBeNull()
+
+    selectionModel = {
+      editableTargets: [
+        { kind: 'plant' as const, id: 'plant-1' },
+        { kind: 'zone' as const, id: 'zone-1' },
+        { kind: 'measurement-guide' as const, id: 'measurement-guide-1' },
+      ],
+      lockedTargets: [],
+      blockedTargets: [],
+      bounds: { minX: 10, minY: 10, maxX: 60, maxY: 40 },
+      sameSpeciesReferenceCanonicalName: null,
+    }
+    controller.refreshMeasurements()
+
+    expect(container.querySelector('[data-selection-action-command="group"]')).toBeNull()
     controller.dispose()
   })
 
@@ -1408,6 +1495,9 @@ describe('SceneInteractionController', () => {
         { x: 20, y: 100 },
       ])]
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 180, y: 90 })]
+      draft.measurementGuides = [
+        makeMeasurementGuide('measurement-guide-1', { x: 20, y: 140 }, { x: 120, y: 140 }),
+      ]
     })
     const deps = createInteractionDeps(container, store, camera, {
       getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
@@ -1422,6 +1512,16 @@ describe('SceneInteractionController', () => {
     expect(handle?.style.display).toBe('inline-flex')
 
     deps.setSelection(['plant-1'])
+    controller.refreshMeasurements()
+
+    expect(handle?.style.display).toBe('none')
+
+    deps.setSelection(['measurement-guide-1'])
+    controller.refreshMeasurements()
+
+    expect(handle?.style.display).toBe('none')
+
+    deps.setSelection(['plant-1', 'measurement-guide-1'])
     controller.refreshMeasurements()
 
     expect(handle?.style.display).toBe('none')
@@ -6164,6 +6264,85 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('drags Measurement Guide endpoints with live distance labels', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = []
+      draft.zones = []
+      draft.annotations = []
+      draft.measurementGuides = [
+        makeMeasurementGuide('measurement-guide-1', { x: 10, y: 10 }, { x: 60, y: 10 }),
+      ]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    events.pointerDown({ x: 30, y: 10 }, { button: 0 })
+    events.pointerUp({ x: 30, y: 10 }, { button: 0 })
+
+    const handle = container.querySelector<HTMLElement>(
+      '[data-measurement-guide-control-point-index="1"]',
+    )!
+    const start = measurementGuideControlPointCenter(container, 1)
+    events.pointerDown(start, { button: 0, target: handle })
+    events.pointerMove({ x: 80, y: 10 }, { button: 0 })
+
+    expect(store.persisted.measurementGuides?.[0]?.end).toEqual({ x: 80, y: 10 })
+    expect(zoneMeasurementTexts(container)).toEqual(['70 m'])
+
+    events.pointerUp({ x: 80, y: 10 }, { button: 0 })
+
+    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-measurement-guide-control-point')
+    controller.dispose()
+  })
+
+  it('aborts Measurement Guide endpoint drags on Escape and skips no-op commits', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = []
+      draft.zones = []
+      draft.annotations = []
+      draft.measurementGuides = [
+        makeMeasurementGuide('measurement-guide-1', { x: 10, y: 10 }, { x: 60, y: 10 }),
+      ]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('select')
+
+    events.pointerDown({ x: 30, y: 10 }, { button: 0 })
+    events.pointerUp({ x: 30, y: 10 }, { button: 0 })
+
+    let handle = container.querySelector<HTMLElement>(
+      '[data-measurement-guide-control-point-index="1"]',
+    )!
+    let start = measurementGuideControlPointCenter(container, 1)
+    events.pointerDown(start, { button: 0, target: handle })
+    events.pointerMove({ x: 80, y: 10 }, { button: 0 })
+    events.keyDown({ key: 'Escape' })
+
+    expect(store.persisted.measurementGuides?.[0]).toMatchObject({
+      start: { x: 10, y: 10 },
+      end: { x: 60, y: 10 },
+    })
+    expect(zoneMeasurementTexts(container)).toEqual([])
+
+    handle = container.querySelector<HTMLElement>(
+      '[data-measurement-guide-control-point-index="1"]',
+    )!
+    start = measurementGuideControlPointCenter(container, 1)
+    events.pointerDown(start, { button: 0, target: handle })
+    events.pointerUp(start, { button: 0, target: handle })
+
+    expect(store.persisted.measurementGuides?.[0]).toMatchObject({
+      start: { x: 10, y: 10 },
+      end: { x: 60, y: 10 },
+    })
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    controller.dispose()
+  })
+
   it('reshapes Polygonal Zones by dragging existing vertex Zone Control Points', () => {
     store.updatePersisted((draft) => {
       draft.zones = [{
@@ -6464,6 +6643,32 @@ describe('SceneInteractionController', () => {
     events.pointerDown({ x: 53, y: 67 }, { button: 0 })
 
     expect(store.persisted.plants[0]?.position).toEqual({ x: 15, y: 15 })
+    controller.dispose()
+  })
+
+  it('ignores Measurement Guides in Object Stamp sampling and placement', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = []
+      draft.zones = []
+      draft.annotations = []
+      draft.measurementGuides = [
+        makeMeasurementGuide('measurement-guide-1', { x: 20, y: 40 }, { x: 120, y: 40 }),
+      ]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const controller = new SceneInteractionController(deps as any)
+    controller.setTool('object-stamp')
+
+    events.pointerDown({ x: 60, y: 40 }, { button: 0 })
+    events.pointerMove({ x: 150, y: 90 }, { button: 0 })
+    events.pointerDown({ x: 150, y: 90 }, { button: 0 })
+
+    expect(store.persisted.measurementGuides).toHaveLength(1)
+    expect(store.persisted.plants).toHaveLength(0)
+    expect(store.persisted.zones).toHaveLength(0)
+    expect(store.persisted.annotations).toHaveLength(0)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
     controller.dispose()
   })
 

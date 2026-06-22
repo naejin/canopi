@@ -18,6 +18,7 @@ export type CanvasDesignObjectSelectionTarget =
   | { kind: 'plant'; id: string }
   | { kind: 'zone'; id: string }
   | { kind: 'annotation'; id: string }
+  | { kind: 'measurement-guide'; id: string }
   | { kind: 'group'; id: string }
 
 export type CanvasDesignObjectSelectionMissingTarget = { kind: 'missing'; id: string }

@@ -593,6 +593,7 @@ function stopCanvasEvent(event: Event): void {
 
 function isRotatableToolbarSelection(selection: CanvasDesignObjectSelectionModel): boolean {
   if (!selection.bounds || selection.blockedTargets.length > 0 || selection.editableTargets.length === 0) return false
+  if (selection.editableTargets.some((target) => target.kind === 'measurement-guide')) return false
   if (selection.editableTargets.length > 1) return true
   const target = selection.editableTargets[0]!
   return target.kind === 'zone' || target.kind === 'annotation' || target.kind === 'group'
@@ -630,7 +631,9 @@ function lockedTargets(selection: CanvasDesignObjectSelectionModel): readonly { 
 }
 
 function isGroupAvailable(selection: CanvasDesignObjectSelectionModel): boolean {
-  return selection.blockedTargets.length === 0 && selection.editableTargets.length >= 2
+  return selection.blockedTargets.length === 0
+    && selection.editableTargets.length >= 2
+    && !selection.editableTargets.some((target) => target.kind === 'measurement-guide')
 }
 
 function isUngroupAvailable(selection: CanvasDesignObjectSelectionModel): boolean {

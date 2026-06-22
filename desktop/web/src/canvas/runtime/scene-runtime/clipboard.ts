@@ -1,5 +1,6 @@
 import type {
   SceneAnnotationEntity,
+  SceneMeasurementGuideEntity,
   SceneObjectGroupEntity,
   SceneObjectGroupMember,
   ScenePersistedState,
@@ -19,6 +20,7 @@ export interface SceneClipboardPayload {
   plants: ScenePlantEntity[]
   zones: SceneZoneEntity[]
   annotations: SceneAnnotationEntity[]
+  measurementGuides: SceneMeasurementGuideEntity[]
   groups: SceneObjectGroupEntity[]
   sourceTargets: SceneSelectionTarget[]
 }
@@ -32,6 +34,7 @@ export function createClipboardPayload(
   const plantIds = new Set<string>()
   const zoneIds = new Set<string>()
   const annotationIds = new Set<string>()
+  const measurementGuideIds = new Set<string>()
   const groupIds = new Set<string>()
 
   for (const target of selected) {
@@ -45,6 +48,10 @@ export function createClipboardPayload(
     }
     if (target.kind === 'annotation') {
       annotationIds.add(target.id)
+      continue
+    }
+    if (target.kind === 'measurement-guide') {
+      measurementGuideIds.add(target.id)
       continue
     }
     groupIds.add(target.id)
@@ -61,6 +68,9 @@ export function createClipboardPayload(
     plants: persisted.plants.filter((plant) => plantIds.has(plant.id)).map(clonePlantEntity),
     zones: persisted.zones.filter((zone) => zoneIds.has(zone.name)).map(cloneZoneEntity),
     annotations: persisted.annotations.filter((annotation) => annotationIds.has(annotation.id)).map(cloneAnnotationEntity),
+    measurementGuides: (persisted.measurementGuides ?? [])
+      .filter((guide) => measurementGuideIds.has(guide.id))
+      .map(cloneMeasurementGuideEntity),
     groups: persisted.groups.filter((group) => groupIds.has(group.id)).map(cloneGroupEntity),
     sourceTargets: selected.map(cloneSelectionTarget),
   }
@@ -95,6 +105,12 @@ export function pasteClipboardPayload(
     sourceToCloneId.set(sceneObjectGroupMemberKey({ kind: 'annotation', id: annotation.id }), clone.id)
   }
 
+  for (const guide of payload.measurementGuides) {
+    const clone = cloneMeasurementGuideWithOffset(guide, offset)
+    draft.measurementGuides = [...(draft.measurementGuides ?? []), clone]
+    sourceToCloneId.set(measurementGuideKey(guide.id), clone.id)
+  }
+
   for (const group of payload.groups) {
     const members = group.members
       .map((member): SceneObjectGroupMember | null => {
@@ -126,6 +142,10 @@ export function pasteClipboardPayload(
     const cloneId = sourceToCloneId.get(sceneObjectGroupMemberKey({ kind: 'annotation', id: annotation.id }))
     if (cloneId) nextSelection.add(cloneId)
   }
+  for (const guide of payload.measurementGuides) {
+    const cloneId = sourceToCloneId.get(measurementGuideKey(guide.id))
+    if (cloneId) nextSelection.add(cloneId)
+  }
 
   return nextSelection
 }
@@ -148,6 +168,14 @@ function cloneAnnotationEntity(annotation: SceneAnnotationEntity): SceneAnnotati
   return {
     ...annotation,
     position: { ...annotation.position },
+  }
+}
+
+function cloneMeasurementGuideEntity(guide: SceneMeasurementGuideEntity): SceneMeasurementGuideEntity {
+  return {
+    ...guide,
+    start: { ...guide.start },
+    end: { ...guide.end },
   }
 }
 
@@ -214,6 +242,29 @@ function cloneAnnotationWithOffset(annotation: SceneAnnotationEntity, offset: Sc
       y: annotation.position.y + offset.y,
     },
   }
+}
+
+function cloneMeasurementGuideWithOffset(
+  guide: SceneMeasurementGuideEntity,
+  offset: ScenePoint,
+): SceneMeasurementGuideEntity {
+  return {
+    ...cloneMeasurementGuideEntity(guide),
+    id: `measurement-guide-${createUuid()}`,
+    locked: false,
+    start: {
+      x: guide.start.x + offset.x,
+      y: guide.start.y + offset.y,
+    },
+    end: {
+      x: guide.end.x + offset.x,
+      y: guide.end.y + offset.y,
+    },
+  }
+}
+
+function measurementGuideKey(id: string): string {
+  return `measurement-guide:${id}`
 }
 
 function uniqueZoneName(baseName: string, existingNames: Set<string>): string {

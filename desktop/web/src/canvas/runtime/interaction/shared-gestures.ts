@@ -232,6 +232,7 @@ class DefaultSceneInteractionSharedGestures implements SceneInteractionSharedGes
     this.dragSnapRef =
       this.dragState.plantStarts.get(hit.id) ??
       this.dragState.annotationStarts.get(hit.id) ??
+      this.dragState.measurementGuideStarts.get(hit.id)?.start ??
       this.dragState.zoneStarts.get(hit.id)?.[0] ??
       firstCapturedDragStart(this.dragState)
     this.activeDraggedPlantId = this.dragState.plantStarts.has(hit.id) ? hit.id : null
@@ -403,6 +404,7 @@ function firstCapturedDragStart(
 ): ScenePoint | null {
   return state.plantStarts.values().next().value
     ?? state.annotationStarts.values().next().value
+    ?? state.measurementGuideStarts.values().next().value?.start
     ?? state.zoneStarts.values().next().value?.[0]
     ?? null
 }

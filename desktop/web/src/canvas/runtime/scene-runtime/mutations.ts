@@ -194,6 +194,8 @@ export class SceneRuntimeMutationController {
         draft.plants = draft.plants.filter((plant) => !deleted.plantIds.has(plant.id))
         draft.zones = draft.zones.filter((zone) => !deleted.zoneIds.has(zone.name))
         draft.annotations = draft.annotations.filter((annotation) => !deleted.annotationIds.has(annotation.id))
+        draft.measurementGuides = (draft.measurementGuides ?? [])
+          .filter((guide) => !deleted.measurementGuideIds.has(guide.id))
         draft.groups = draft.groups
           .filter((group) => !deleted.groupIds.has(group.id))
           .map((group) => ({
@@ -236,6 +238,13 @@ export class SceneRuntimeMutationController {
       for (const annotation of persisted.annotations) {
         if (groupedMemberKeys.has(sceneTargetKey({ kind: 'annotation', id: annotation.id })) || annotation.locked) continue
         ids.add(annotation.id)
+      }
+    }
+
+    if (isSceneLayerEditable(layerState['measurement-guides'])) {
+      for (const guide of persisted.measurementGuides ?? []) {
+        if (guide.locked) continue
+        ids.add(guide.id)
       }
     }
 
@@ -639,6 +648,12 @@ export class SceneRuntimeMutationController {
         draft.plants = reorderSceneEntities(draft.plants, resolved.plantIds, position, (plant) => plant.id)
         draft.zones = reorderSceneEntities(draft.zones, resolved.zoneIds, position, (zone) => zone.name)
         draft.annotations = reorderSceneEntities(draft.annotations, resolved.annotationIds, position, (annotation) => annotation.id)
+        draft.measurementGuides = reorderSceneEntities(
+          draft.measurementGuides ?? [],
+          resolved.measurementGuideIds,
+          position,
+          (guide) => guide.id,
+        )
         draft.groups = reorderSceneEntities(draft.groups, resolved.groupIds, position, (group) => group.id)
       })
     })
@@ -674,6 +689,7 @@ export class SceneRuntimeMutationController {
       plants: payload.plants,
       zones: payload.zones,
       annotations: payload.annotations,
+      measurementGuides: payload.measurementGuides,
       groups: payload.groups,
     }
     return centerOfBounds(getCombinedTargetBounds(
@@ -814,11 +830,13 @@ function resolveSelectedEntitySets(
   plantIds: Set<string>
   zoneIds: Set<string>
   annotationIds: Set<string>
+  measurementGuideIds: Set<string>
   groupIds: Set<string>
 } {
   const plantIds = new Set<string>()
   const zoneIds = new Set<string>()
   const annotationIds = new Set<string>()
+  const measurementGuideIds = new Set<string>()
   const groupIds = new Set<string>()
 
   for (const target of selected) {
@@ -834,6 +852,10 @@ function resolveSelectedEntitySets(
       annotationIds.add(target.id)
       continue
     }
+    if (target.kind === 'measurement-guide') {
+      measurementGuideIds.add(target.id)
+      continue
+    }
 
     groupIds.add(target.id)
     const group = persisted.groups.find((entry) => entry.id === target.id)
@@ -845,7 +867,7 @@ function resolveSelectedEntitySets(
     }
   }
 
-  return { plantIds, zoneIds, annotationIds, groupIds }
+  return { plantIds, zoneIds, annotationIds, measurementGuideIds, groupIds }
 }
 
 function isConcreteDesignObjectTargetLocked(

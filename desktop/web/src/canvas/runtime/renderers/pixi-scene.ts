@@ -245,7 +245,13 @@ function syncMeasurementGuides(
       graphicsById.set(guide.id, graphics)
       worldLayer.addChild(graphics)
     }
-    drawMeasurementGuide(graphics, guide, snapshot.viewport.scale)
+    drawMeasurementGuide(
+      graphics,
+      guide,
+      snapshot.selectedMeasurementGuideIds.has(guide.id),
+      hoverStateForTarget(snapshot, 'measurement-guide', guide.id),
+      snapshot.viewport.scale,
+    )
     graphics.visible = true
 
     let text = labelById.get(guide.id)
@@ -255,9 +261,15 @@ function syncMeasurementGuides(
       labelLayer.addChild(text)
     }
     text.text = presentation.text
+    const interactionState = resolveInteractionState(
+      snapshot.selectedMeasurementGuideIds.has(guide.id),
+      false,
+      hoverStateForTarget(snapshot, 'measurement-guide', guide.id),
+    )
+    const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
     text.style = new TextStyle({
       fontSize: 11,
-      fill: toPixiColor(getAnnotationTextColor(), 0),
+      fill: toPixiColor(interactionVisual?.color ?? getAnnotationTextColor(), 0),
     })
     text.position.set(presentation.labelScreenPoint.x, presentation.labelScreenPoint.y)
     text.anchor.set(0.5, 0.5)
@@ -289,13 +301,18 @@ function syncMeasurementGuides(
 function drawMeasurementGuide(
   graphics: Graphics,
   guide: SceneMeasurementGuideEntity,
+  selected: boolean,
+  hoverState: SceneRendererHoverState | null,
   viewportScale: number,
 ): void {
   const presentation = createMeasurementGuidePresentation(guide, { x: 0, y: 0, scale: viewportScale })
   if (!presentation) return
 
-  const color = toPixiColor(getAnnotationTextColor(), 0)
-  const strokeWidth = screenPxToWorldPx(1.5, viewportScale)
+  const interactionState = resolveInteractionState(selected, false, hoverState)
+  const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
+  const color = toPixiColor(interactionVisual?.color ?? getAnnotationTextColor(), 0)
+  const strokeWidth = screenPxToWorldPx(interactionVisual?.widthPx ?? 1.5, viewportScale)
+  const strokeAlpha = interactionVisual?.alpha ?? 1
   graphics.clear()
   drawDashedMeasurementGuideLine(
     graphics,
@@ -316,7 +333,7 @@ function drawMeasurementGuide(
     presentation.normalWorld,
     screenPxToWorldPx(MEASUREMENT_GUIDE_TICK_HALF_PX, viewportScale),
   )
-  graphics.stroke({ color, width: strokeWidth, alpha: 1 })
+  graphics.stroke({ color, width: strokeWidth, alpha: strokeAlpha })
 }
 
 function drawDashedMeasurementGuideLine(
@@ -997,12 +1014,13 @@ function resolveInteractionState(
 
 function hoverStateForTarget(
   snapshot: SceneRendererSnapshot,
-  kind: 'plant' | 'zone' | 'annotation',
+  kind: 'plant' | 'zone' | 'annotation' | 'measurement-guide',
   id: string,
 ): SceneRendererHoverState | null {
   const hoverTarget = snapshot.hoverTarget
   if (!hoverTarget) return null
   if (hoverTarget.kind === kind && hoverTarget.id === id) return hoverTarget.state
+  if (kind === 'measurement-guide') return null
   if (hoverTarget.kind !== 'group') return null
   const group = snapshot.scene.groups.find((entry) => entry.id === hoverTarget.id)
   return group?.members.some((member) => isSceneObjectGroupMemberTarget(member, { kind, id }))

@@ -2,6 +2,7 @@ import type { CanvasDesignObjectSelectionModel } from '../runtime'
 
 export function canSaveSelectionAsObjectStamp(selection: CanvasDesignObjectSelectionModel): boolean {
   return selection.editableTargets.length + lockedTargets(selection).length > 0
+    && !hasMeasurementGuideTarget(selection)
     && !hasStructuralSelectionBlocker(selection)
 }
 
@@ -16,6 +17,11 @@ function hasStructuralSelectionBlocker(selection: CanvasDesignObjectSelectionMod
 
 function lockedTargets(selection: CanvasDesignObjectSelectionModel): readonly { kind: string; id: string }[] {
   return selection.lockedTargets ?? []
+}
+
+function hasMeasurementGuideTarget(selection: CanvasDesignObjectSelectionModel): boolean {
+  return selection.editableTargets.some((target) => target.kind === 'measurement-guide')
+    || lockedTargets(selection).some((target) => target.kind === 'measurement-guide')
 }
 
 function targetKey(target: { kind: string; id: string }): string {

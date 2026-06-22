@@ -1,6 +1,6 @@
 import { t } from '../../../i18n'
 import type { CameraController, SceneBounds } from '../camera'
-import type { CanvasDesignObjectSelectionModel, CanvasDesignObjectSelectionTarget } from '../runtime'
+import type { CanvasDesignObjectSelectionModel } from '../runtime'
 import { resolveSceneObjectGroupMembers, type ScenePersistedState, type ScenePoint, type SceneStore } from '../scene'
 import type { SceneEditCoordinator, SceneEditTransaction } from '../scene-runtime/transactions'
 import type { SceneInteractionPointerDrag, SceneInteractionPointerEvent } from './frame'
@@ -263,9 +263,10 @@ export function createSelectionRotationHandle(
 
 function isRotatableSelection(selection: CanvasDesignObjectSelectionModel): selection is CanvasDesignObjectSelectionModel & {
   readonly bounds: SceneBounds
-  readonly editableTargets: readonly CanvasDesignObjectSelectionTarget[]
+  readonly editableTargets: readonly RotatableTarget[]
 } {
   if (!selection.bounds || selection.blockedTargets.length > 0 || selection.editableTargets.length === 0) return false
+  if (selection.editableTargets.some((target) => target.kind === 'measurement-guide')) return false
   if (selection.editableTargets.length > 1) return true
   const target = selection.editableTargets[0]!
   return target.kind === 'zone' || target.kind === 'annotation' || target.kind === 'group'

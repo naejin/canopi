@@ -13,6 +13,7 @@ export type SceneRendererHoverTarget =
   | { kind: 'plant'; id: string; state: SceneRendererHoverState }
   | { kind: 'zone'; id: string; state: SceneRendererHoverState }
   | { kind: 'annotation'; id: string; state: SceneRendererHoverState }
+  | { kind: 'measurement-guide'; id: string; state: SceneRendererHoverState }
   | { kind: 'group'; id: string; state: SceneRendererHoverState }
 
 export interface SceneRendererSnapshot {
@@ -21,6 +22,7 @@ export interface SceneRendererSnapshot {
   readonly selectedPlantIds: ReadonlySet<string>
   readonly selectedZoneIds: ReadonlySet<string>
   readonly selectedAnnotationIds: ReadonlySet<string>
+  readonly selectedMeasurementGuideIds: ReadonlySet<string>
   readonly highlightedPlantIds: ReadonlySet<string>
   readonly highlightedZoneIds: ReadonlySet<string>
   readonly sizeMode: PlantSizeMode

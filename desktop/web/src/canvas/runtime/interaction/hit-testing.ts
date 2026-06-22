@@ -7,6 +7,7 @@ import {
 } from '../plant-presentation'
 import type {
   SceneAnnotationEntity,
+  SceneMeasurementGuideEntity,
   SceneObjectGroupEntity,
   ScenePersistedState,
   ScenePlantEntity,
@@ -30,6 +31,7 @@ export type TopLevelTarget =
   | { kind: 'plant'; id: string }
   | { kind: 'zone'; id: string }
   | { kind: 'annotation'; id: string }
+  | { kind: 'measurement-guide'; id: string }
   | { kind: 'group'; id: string }
 
 export function hitTestTopLevel(
@@ -110,6 +112,14 @@ function hitTestTopLevelWithLayerFilter(
     }
   }
 
+  for (let i = (scene.measurementGuides ?? []).length - 1; i >= 0; i -= 1) {
+    const guide = (scene.measurementGuides ?? [])[i]!
+    if (!isLayerHitEligible(scene, 'measurement-guides')) continue
+    if (hitMeasurementGuide(guide, point, viewportScale)) {
+      return { kind: 'measurement-guide', id: guide.id }
+    }
+  }
+
   for (let i = scene.zones.length - 1; i >= 0; i -= 1) {
     const zone = scene.zones[i]!
     if (groupedMemberKeys.has(sceneTargetKey({ kind: 'zone', id: zone.name }))) continue
@@ -163,6 +173,13 @@ export function queryRectTopLevel(
     if (!isLayerInteractive(scene, 'plants')) continue
     if (rectsIntersect(rect, plantBounds(plant, viewportScale, speciesCache, getPlantContext))) {
       targets.push({ kind: 'plant', id: plant.id })
+    }
+  }
+
+  for (const guide of scene.measurementGuides ?? []) {
+    if (!isLayerInteractive(scene, 'measurement-guides')) continue
+    if (measurementGuideIntersectsRect(guide, rect)) {
+      targets.push({ kind: 'measurement-guide', id: guide.id })
     }
   }
 
@@ -232,6 +249,22 @@ function zoneIntersectsRect(zone: SceneZoneEntity, rect: SimpleRect): boolean {
   }
 
   return rectsIntersect(rect, zoneBounds(zone))
+}
+
+function hitMeasurementGuide(
+  guide: SceneMeasurementGuideEntity,
+  point: ScenePoint,
+  viewportScale: number,
+): boolean {
+  const toleranceWorld = LINE_HIT_TOLERANCE_PX / Math.max(viewportScale, 1e-6)
+  return pointNearSegment(point, guide.start, guide.end, toleranceWorld)
+}
+
+function measurementGuideIntersectsRect(
+  guide: SceneMeasurementGuideEntity,
+  rect: SimpleRect,
+): boolean {
+  return segmentIntersectsRect(guide.start, guide.end, rect)
 }
 
 function ellipseBoundarySegmentCount(zone: SceneZoneEntity, viewportScale: number): number {

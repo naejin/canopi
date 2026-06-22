@@ -90,6 +90,17 @@ export function getSelectedPlantIds(
   return resolved
 }
 
+export function getSelectedMeasurementGuideIds(
+  persisted: ScenePersistedState,
+  selectedIds: ReadonlySet<string>,
+): Set<string> {
+  const resolved = new Set<string>()
+  for (const guide of persisted.measurementGuides ?? []) {
+    if (selectedIds.has(guide.id)) resolved.add(guide.id)
+  }
+  return resolved
+}
+
 export function getSelectedTopLevelTargets(
   persisted: ScenePersistedState,
   selectedIds: ReadonlySet<string>,
@@ -137,6 +148,14 @@ export function getSelectedTopLevelTargets(
     if (seen.has(key)) continue
     seen.add(key)
     targets.push({ kind: 'annotation', id: annotation.id })
+  }
+
+  for (const guide of persisted.measurementGuides ?? []) {
+    if (!selectedIds.has(guide.id)) continue
+    const key = `measurement-guide:${guide.id}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    targets.push({ kind: 'measurement-guide', id: guide.id })
   }
 
   return targets
@@ -202,6 +221,7 @@ export function setsEqual(left: ReadonlySet<string>, right: ReadonlySet<string>)
 export function getSelectionLayer(target: SceneSelectionTarget): string {
   if (target.kind === 'zone') return 'zones'
   if (target.kind === 'annotation') return 'annotations'
+  if (target.kind === 'measurement-guide') return 'measurement-guides'
   return 'plants'
 }
 
@@ -271,13 +291,25 @@ export function getTargetBounds(
   const annotation = target.kind === 'annotation'
     ? persisted.annotations.find((entry) => entry.id === target.id)
     : null
-  if (!annotation) return null
-  const bounds = getAnnotationWorldBounds(annotation, options.annotationViewportScale)
+  if (annotation) {
+    const bounds = getAnnotationWorldBounds(annotation, options.annotationViewportScale)
+    return {
+      minX: bounds.x,
+      minY: bounds.y,
+      maxX: bounds.x + bounds.width,
+      maxY: bounds.y + bounds.height,
+    }
+  }
+
+  const guide = target.kind === 'measurement-guide'
+    ? (persisted.measurementGuides ?? []).find((entry) => entry.id === target.id)
+    : null
+  if (!guide) return null
   return {
-    minX: bounds.x,
-    minY: bounds.y,
-    maxX: bounds.x + bounds.width,
-    maxY: bounds.y + bounds.height,
+    minX: Math.min(guide.start.x, guide.end.x),
+    minY: Math.min(guide.start.y, guide.end.y),
+    maxX: Math.max(guide.start.x, guide.end.x),
+    maxY: Math.max(guide.start.y, guide.end.y),
   }
 }
 
@@ -360,6 +392,7 @@ function resolveTarget(
   if (persisted.plants.some((plant) => plant.id === id)) return { kind: 'plant', id }
   if (persisted.zones.some((zone) => zone.name === id)) return { kind: 'zone', id }
   if (persisted.annotations.some((annotation) => annotation.id === id)) return { kind: 'annotation', id }
+  if ((persisted.measurementGuides ?? []).some((guide) => guide.id === id)) return { kind: 'measurement-guide', id }
   return null
 }
 

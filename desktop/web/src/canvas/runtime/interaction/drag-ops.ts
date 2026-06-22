@@ -1,9 +1,18 @@
-import { resolveSceneObjectGroupMembers, type ScenePersistedState, type ScenePoint, type SceneStore } from '../scene'
+import {
+  resolveSceneObjectGroupMembers,
+  type SceneMeasurementGuideEntity,
+  type ScenePersistedState,
+  type ScenePoint,
+  type SceneStore,
+} from '../scene'
+
+type MeasurementGuideDragStart = Pick<SceneMeasurementGuideEntity, 'start' | 'end'>
 
 export interface SceneDragState {
   plantStarts: Map<string, ScenePoint>
   zoneStarts: Map<string, ScenePoint[]>
   annotationStarts: Map<string, ScenePoint>
+  measurementGuideStarts: Map<string, MeasurementGuideDragStart>
 }
 
 export function createSceneDragState(): SceneDragState {
@@ -11,6 +20,7 @@ export function createSceneDragState(): SceneDragState {
     plantStarts: new Map(),
     zoneStarts: new Map(),
     annotationStarts: new Map(),
+    measurementGuideStarts: new Map(),
   }
 }
 
@@ -18,6 +28,7 @@ export function resetSceneDragState(state: SceneDragState): void {
   state.plantStarts.clear()
   state.zoneStarts.clear()
   state.annotationStarts.clear()
+  state.measurementGuideStarts.clear()
 }
 
 export function captureSceneDragState(
@@ -42,6 +53,15 @@ export function captureSceneDragState(
   for (const annotation of scene.annotations) {
     if (selection.has(annotation.id)) {
       state.annotationStarts.set(annotation.id, { ...annotation.position })
+    }
+  }
+
+  for (const guide of scene.measurementGuides ?? []) {
+    if (selection.has(guide.id)) {
+      state.measurementGuideStarts.set(guide.id, {
+        start: { ...guide.start },
+        end: { ...guide.end },
+      })
     }
   }
 
@@ -120,6 +140,21 @@ export function applySceneDragDeltaToDraft(
       position: {
         x: start.x + delta.x,
         y: start.y + delta.y,
+      },
+    }
+  })
+  draft.measurementGuides = (draft.measurementGuides ?? []).map((guide) => {
+    const start = state.measurementGuideStarts.get(guide.id)
+    if (!start) return guide
+    return {
+      ...guide,
+      start: {
+        x: start.start.x + delta.x,
+        y: start.start.y + delta.y,
+      },
+      end: {
+        x: start.end.x + delta.x,
+        y: start.end.y + delta.y,
       },
     }
   })

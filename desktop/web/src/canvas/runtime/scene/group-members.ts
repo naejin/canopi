@@ -11,6 +11,7 @@ export type SceneConcreteDesignObjectTarget =
 
 export type SceneDesignObjectTarget =
   | SceneConcreteDesignObjectTarget
+  | { kind: 'measurement-guide'; id: string }
   | { kind: 'group'; id: string }
 
 export function cloneSceneObjectGroupMember(
@@ -36,7 +37,7 @@ export function sceneTargetKey(target: SceneDesignObjectTarget): string {
 export function sceneObjectGroupMemberFromTarget(
   target: SceneDesignObjectTarget,
 ): SceneObjectGroupMember | null {
-  if (target.kind === 'group') return null
+  if (target.kind === 'group' || target.kind === 'measurement-guide') return null
   return { kind: target.kind, id: target.id }
 }
 

@@ -145,14 +145,20 @@ function renderMeasurementGuides(ctx: CanvasRenderingContext2D, snapshot: SceneR
   const tickHalfWorld = MEASUREMENT_GUIDE_TICK_HALF_PX / viewportScale
 
   ctx.save()
-  ctx.strokeStyle = guideColor
-  ctx.lineWidth = 1.5 / viewportScale
-  ctx.globalAlpha = layer.opacity
-  ctx.setLineDash([dashWorld, gapWorld])
 
   for (const guide of snapshot.scene.measurementGuides ?? []) {
     const presentation = createMeasurementGuidePresentation(guide, snapshot.viewport)
     if (!presentation) continue
+    const interactionState = resolveInteractionState(
+      snapshot.selectedMeasurementGuideIds.has(guide.id),
+      false,
+      hoverStateForTarget(snapshot, 'measurement-guide', guide.id),
+    )
+    const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
+    ctx.strokeStyle = interactionVisual?.color ?? guideColor
+    ctx.lineWidth = (interactionVisual?.widthPx ?? 1.5) / viewportScale
+    ctx.globalAlpha = (interactionVisual?.alpha ?? 1) * layer.opacity
+    ctx.setLineDash([dashWorld, gapWorld])
 
     ctx.beginPath()
     ctx.moveTo(guide.start.x, guide.start.y)
@@ -170,14 +176,20 @@ function renderMeasurementGuides(ctx: CanvasRenderingContext2D, snapshot: SceneR
 
   ctx.save()
   ctx.setTransform(1, 0, 0, 1, 0, 0)
-  ctx.fillStyle = guideColor
-  ctx.globalAlpha = layer.opacity
   ctx.font = '400 11px Inter, sans-serif'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   for (const guide of snapshot.scene.measurementGuides ?? []) {
     const presentation = createMeasurementGuidePresentation(guide, snapshot.viewport)
     if (!presentation) continue
+    const interactionState = resolveInteractionState(
+      snapshot.selectedMeasurementGuideIds.has(guide.id),
+      false,
+      hoverStateForTarget(snapshot, 'measurement-guide', guide.id),
+    )
+    const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
+    ctx.fillStyle = interactionVisual?.color ?? guideColor
+    ctx.globalAlpha = (interactionVisual?.alpha ?? 1) * layer.opacity
     ctx.fillText(
       presentation.text,
       presentation.labelScreenPoint.x,
@@ -590,12 +602,13 @@ function resolveInteractionState(
 
 function hoverStateForTarget(
   snapshot: SceneRendererSnapshot,
-  kind: 'plant' | 'zone' | 'annotation',
+  kind: 'plant' | 'zone' | 'annotation' | 'measurement-guide',
   id: string,
 ): SceneRendererHoverState | null {
   const hoverTarget = snapshot.hoverTarget
   if (!hoverTarget) return null
   if (hoverTarget.kind === kind && hoverTarget.id === id) return hoverTarget.state
+  if (kind === 'measurement-guide') return null
   if (hoverTarget.kind !== 'group') return null
   const group = snapshot.scene.groups.find((entry) => entry.id === hoverTarget.id)
   return group?.members.some((member) => isSceneObjectGroupMemberTarget(member, { kind, id }))

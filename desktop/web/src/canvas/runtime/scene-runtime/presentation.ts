@@ -12,6 +12,7 @@ import { isSceneDesignObjectLocked } from '../scene'
 import { resolveSceneObjectGroupMembers, sceneObjectGroupMemberLayerName } from '../scene'
 import {
   getSelectedAnnotationIds,
+  getSelectedMeasurementGuideIds,
   getSelectedPlantIds,
   getSelectedZoneIds,
 } from './selection'
@@ -107,6 +108,7 @@ export class SceneRuntimePresentationController {
       selectedPlantIds: getSelectedPlantIds(scene, session.selectedEntityIds),
       selectedZoneIds: getSelectedZoneIds(scene, session.selectedEntityIds),
       selectedAnnotationIds: getSelectedAnnotationIds(scene, session.selectedEntityIds),
+      selectedMeasurementGuideIds: getSelectedMeasurementGuideIds(scene, session.selectedEntityIds),
       highlightedPlantIds: new Set(highlightedTargets.plantIds),
       highlightedZoneIds: new Set(highlightedTargets.zoneIds),
       sizeMode: session.plantSizeMode,
@@ -225,6 +227,7 @@ function resolveHoverTarget(
   if (scene.plants.some((plant) => plant.id === id)) return { kind: 'plant', id }
   if (scene.zones.some((zone) => zone.name === id)) return { kind: 'zone', id }
   if (scene.annotations.some((annotation) => annotation.id === id)) return { kind: 'annotation', id }
+  if ((scene.measurementGuides ?? []).some((guide) => guide.id === id)) return { kind: 'measurement-guide', id }
   return null
 }
 
@@ -247,5 +250,6 @@ function getHoverTargetLayers(
   }
   if (target.kind === 'zone') return ['zones']
   if (target.kind === 'annotation') return ['annotations']
+  if (target.kind === 'measurement-guide') return ['measurement-guides']
   return ['plants']
 }
