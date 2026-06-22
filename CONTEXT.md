@@ -285,6 +285,14 @@ _Avoid_: Panel view model, budget row helper, tab bridge
 A stratified, time-aware plant assembly in a design. A consortium describes which species participate, which stratum they occupy, and which succession phases they span.
 _Avoid_: Guild, companion planting group
 
+**Consortium Entry**:
+One species' participation in a consortium, with one Stratum and one Succession Phase span. The span includes both its starting and ending succession phases, and the entry is species-level planning, not an individual placed plant.
+_Avoid_: Plant row, plant bar, placed plant entry
+
+**Consortium Lane**:
+A derived visual track within a Stratum that can contain multiple Consortium Entries when their Succession Phase spans do not overlap. Overlapping entries are presented in separate consortium lanes, and designers do not manage consortium lanes directly.
+_Avoid_: Row, sub-lane, slot
+
 **Stratum**:
 A vertical layer in a consortium, such as emergent, high, medium, or low. A consortium entry belongs to one stratum.
 _Avoid_: Layer, row, height band
@@ -529,6 +537,14 @@ Developer: "No. The budget item workbench edits budget items. The planning proje
 Designer: "Is the high canopy row a layer?"
 
 Developer: "No. In the consortium it is a stratum. Layers control design-object visibility and locking."
+
+Designer: "When I drag apple in the consortium, am I moving one placed apple tree?"
+
+Developer: "No. You are moving the apple consortium entry, which describes that species' stratum and succession phase span."
+
+Designer: "Can two species share the same line in the emergent stratum?"
+
+Developer: "Yes, if their consortium entries occupy different succession phases. They are sharing a consortium lane, not becoming the same consortium entry."
 
 Designer: "If a template includes a species outside my hardiness zone, does Canopi replace it?"
 
