@@ -212,6 +212,80 @@ describe('createPixiSceneRenderer', () => {
     renderer.dispose()
   })
 
+  it('renders Measurement Guides with screen-space distance labels and layer visibility', async () => {
+    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
+    const pixi = await import('pixi.js') as unknown as {
+      __pixiMockState: {
+        graphics: Array<{
+          moveTo: ReturnType<typeof vi.fn>
+          lineTo: ReturnType<typeof vi.fn>
+          stroke: ReturnType<typeof vi.fn>
+        }>
+        texts: Array<{
+          text: string
+          position: { set: ReturnType<typeof vi.fn> }
+        }>
+      }
+    }
+
+    const host = document.createElement('div')
+    Object.defineProperty(host, 'clientWidth', { configurable: true, value: 400 })
+    Object.defineProperty(host, 'clientHeight', { configurable: true, value: 300 })
+
+    const renderer = await createPixiSceneRenderer().initialize({ container: host }, {
+      backendId: 'pixi',
+      capabilities: {
+        domCanvas: true,
+        canvas2d: true,
+        offscreenCanvas: false,
+        offscreenCanvas2d: false,
+        webgl: true,
+        webgl2: true,
+        webgpu: false,
+        imageBitmap: false,
+        createImageBitmap: false,
+        worker: false,
+        devicePixelRatio: 1,
+        prefersReducedMotion: null,
+      },
+    } as never)
+
+    const snapshot = createRendererSnapshot({
+      measurementGuides: [{
+        kind: 'measurement-guide',
+        id: 'guide-1',
+        locked: false,
+        start: { x: 10, y: 10 },
+        end: { x: 40, y: 10 },
+      }],
+      layers: [{ kind: 'layer', name: 'measurement-guides', visible: true, locked: false, opacity: 1 }],
+      viewport: { x: 0, y: 0, scale: 2 },
+    })
+
+    renderer.renderScene(snapshot)
+
+    const guideGraphic = pixi.__pixiMockState.graphics.find((graphics) =>
+      graphics.moveTo.mock.calls.some(([x, y]) => x === 10 && y === 10)
+      && graphics.lineTo.mock.calls.some(([x, y]) => x === 40 && y === 7.5),
+    )
+    expect(guideGraphic?.stroke.mock.calls[0]?.[0]).toMatchObject({ width: 0.75 })
+    const label = pixi.__pixiMockState.texts.find((text) => text.text === '30 m')
+    expect(label?.position.set).toHaveBeenCalledWith(50, 15)
+
+    vi.clearAllMocks()
+    renderer.renderScene({
+      ...snapshot,
+      scene: {
+        ...snapshot.scene,
+        layers: [{ kind: 'layer', name: 'measurement-guides', visible: false, locked: false, opacity: 1 }],
+      },
+    })
+
+    expect(pixi.__pixiMockState.graphics.some((graphics) => graphics.lineTo.mock.calls.length > 0)).toBe(false)
+    expect(pixi.__pixiMockState.texts.some((text) => text.position.set.mock.calls.length > 0)).toBe(false)
+    renderer.dispose()
+  })
+
   it('retains plant and annotation display objects across viewport updates', async () => {
     const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
     const pixi = await import('pixi.js') as unknown as {
@@ -858,6 +932,8 @@ describe('createPixiSceneRenderer', () => {
 
 function createRendererSnapshot(overrides: {
   plants?: SceneRendererSnapshot['scene']['plants']
+  measurementGuides?: SceneRendererSnapshot['scene']['measurementGuides']
+  layers?: SceneRendererSnapshot['scene']['layers']
   plantSpeciesSymbols?: Record<string, string>
   viewport?: SceneRendererSnapshot['viewport']
 } = {}): SceneRendererSnapshot {
@@ -867,9 +943,10 @@ function createRendererSnapshot(overrides: {
       zones: [],
       annotations: [],
       groups: [],
-      layers: [],
+      layers: overrides.layers ?? [],
       plantSpeciesColors: {},
       plantSpeciesSymbols: overrides.plantSpeciesSymbols ?? {},
+      measurementGuides: overrides.measurementGuides ?? [],
       guides: [],
     },
     viewport: overrides.viewport ?? { x: 0, y: 0, scale: 1 },

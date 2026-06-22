@@ -31,13 +31,18 @@ export function createDefaultScenePersistedState(_now: Date = new Date()): Scene
     layers: SCENE_LAYER_NAMES.map((name) => ({
       kind: 'layer',
       name,
-      visible: name === 'base' || name === 'zones' || name === 'plants' || name === 'annotations',
+      visible: name === 'base'
+        || name === 'zones'
+        || name === 'plants'
+        || name === 'measurement-guides'
+        || name === 'annotations',
       locked: false,
       opacity: 1,
     })),
     plants: [],
     zones: [],
     annotations: [],
+    measurementGuides: [],
     groups: [],
     guides: [],
   }

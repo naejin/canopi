@@ -108,6 +108,27 @@ export function appendLineZoneToDraft(
   return zoneName
 }
 
+export function appendMeasurementGuideToDraft(
+  draft: ScenePersistedState,
+  start: ScenePoint,
+  end: ScenePoint,
+): string | null {
+  if (!isValidLine(start, end)) return null
+
+  const guideId = `measurement-guide-${createUuid()}`
+  draft.measurementGuides = [
+    ...(draft.measurementGuides ?? []),
+    {
+      kind: 'measurement-guide',
+      id: guideId,
+      locked: false,
+      start: { x: start.x, y: start.y },
+      end: { x: end.x, y: end.y },
+    },
+  ]
+  return guideId
+}
+
 export function appendPolygonZoneToDraft(
   draft: ScenePersistedState,
   points: readonly ScenePoint[],

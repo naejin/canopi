@@ -221,6 +221,46 @@ export function LineIcon({ className }: IconProps) {
   )
 }
 
+export function MeasurementGuideIcon({ className }: IconProps) {
+  return (
+    <svg
+      className={className}
+      width="20"
+      height="20"
+      viewBox="0 0 20 20"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <line
+        x1="3"
+        y1="12"
+        x2="17"
+        y2="12"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeDasharray="2 2"
+      />
+      <line x1="3" y1="8" x2="3" y2="16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <line x1="17" y1="8" x2="17" y2="16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path
+        d="M7.5 6H12.5"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M8 4.5L7 6L8 7.5M12 4.5L13 6L12 7.5"
+        stroke="currentColor"
+        strokeWidth="1"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 export function TextIcon({ className }: IconProps) {
   return (
     <svg

@@ -7,6 +7,7 @@ export const SCENE_LAYER_NAMES = [
   'zones',
   'water',
   'plants',
+  'measurement-guides',
   'annotations',
 ] as const
 
@@ -69,6 +70,14 @@ export interface SceneAnnotationEntity {
   rotationDeg: number | null
 }
 
+export interface SceneMeasurementGuideEntity {
+  kind: 'measurement-guide'
+  id: string
+  locked: boolean
+  start: ScenePoint
+  end: ScenePoint
+}
+
 export type SceneObjectGroupMember =
   | { kind: 'plant'; id: string }
   | { kind: 'zone'; id: string }
@@ -93,6 +102,7 @@ export type SceneEntity =
   | ScenePlantEntity
   | SceneZoneEntity
   | SceneAnnotationEntity
+  | SceneMeasurementGuideEntity
   | SceneObjectGroupEntity
 
 export interface ScenePersistedState {
@@ -102,6 +112,7 @@ export interface ScenePersistedState {
   plants: ScenePlantEntity[]
   zones: SceneZoneEntity[]
   annotations: SceneAnnotationEntity[]
+  measurementGuides?: SceneMeasurementGuideEntity[]
   groups: SceneObjectGroupEntity[]
   guides: SceneGuide[]
 }

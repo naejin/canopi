@@ -20,6 +20,7 @@ const RAW_DOCUMENT = {
   plants: [],
   zones: [],
   annotations: [],
+  measurement_guides: [],
   consortiums: [],
   groups: [],
   timeline: [],
@@ -139,6 +140,12 @@ describe('document format contract', () => {
         font_size: 12,
         rotation: null,
         locked: false,
+      }],
+      measurement_guides: [{
+        id: 'canvas-measurement-guide',
+        locked: false,
+        start: { x: 2, y: 3 },
+        end: { x: 12, y: 3 },
       }],
       groups: [{
         id: 'canvas-group',

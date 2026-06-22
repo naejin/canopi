@@ -5,7 +5,7 @@ import type { CanopiFile } from '../types/design'
 // Minimal fixture covering one of each entity type, with both populated and null optional fields.
 // Non-canvas sections are placeholders here because the scene codec no longer owns them.
 const FIXTURE: CanopiFile = {
-  version: 4,
+  version: 5,
   name: 'Round-trip test',
   description: 'A test design',
   location: { lat: 48.8566, lon: 2.3522, altitude_m: null },
@@ -75,6 +75,14 @@ const FIXTURE: CanopiFile = {
       locked: false,
     },
   ],
+  measurement_guides: [
+    {
+      id: 'measurement-guide-1',
+      locked: false,
+      start: { x: -10, y: 5 },
+      end: { x: 25, y: 5 },
+    },
+  ],
   groups: [
     {
       id: 'group-1',
@@ -107,6 +115,7 @@ describe('file format round-trip', () => {
     expect(serialized.updated_at).toBe(now.toISOString())
     expect(serialized).toEqual({
       ...FIXTURE,
+      version: 5,
       name: 'Untitled',
       description: null,
       location: null,

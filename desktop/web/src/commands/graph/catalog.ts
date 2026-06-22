@@ -54,6 +54,7 @@ export type AppCommandId =
   | 'canvas.tool.ellipse'
   | 'canvas.tool.polygon'
   | 'canvas.tool.text'
+  | 'canvas.tool.measurementGuide'
   | 'canvas.tool.objectStamp'
   | 'canvas.tool.plantSpacing'
   | 'canvas.toggleGrid'
@@ -314,6 +315,12 @@ export const APP_COMMANDS: readonly AppCommandDefinition[] = [
     shortcut: TOOL_SHORTCUTS.text,
     palette: true,
     run: () => switchTool('text'),
+  },
+  {
+    id: 'canvas.tool.measurementGuide',
+    label: () => t('canvas.tools.measurementGuide'),
+    palette: true,
+    run: () => switchTool('measurement-guide'),
   },
   {
     id: 'canvas.tool.objectStamp',

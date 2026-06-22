@@ -6,7 +6,7 @@ import { getCurrentCanvasLayerCommandSurface, currentCanvasQuerySurface } from '
 import type { BasemapStyle } from '../../generated/contracts'
 import { t } from '../../i18n'
 
-const SCENE_LAYER_ROW_IDS = ['annotations', 'plants', 'zones'] as const
+const SCENE_LAYER_ROW_IDS = ['annotations', 'plants', 'measurement-guides', 'zones'] as const
 const MAP_LAYER_IDS = new Set(['base', 'contours'])
 
 export type CanvasLayerPresentationAuthority = 'scene' | 'map-settings' | 'terrain-settings'

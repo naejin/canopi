@@ -182,10 +182,76 @@ describe('createCanvas2DSceneRenderer', () => {
     expect(ctx.fillText).toHaveBeenCalledWith('Hello', 0, 0)
     renderer.dispose()
   })
+
+  it('draws Measurement Guides as dashed lines with end ticks and labels', async () => {
+    const ctx = createMockCanvasContext()
+    const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext') as unknown as {
+      mockImplementation(implementation: (contextId: string) => CanvasRenderingContext2D | null): void
+    }
+    getContextSpy.mockImplementation((contextId: string) => {
+      return contextId === '2d' ? ctx as unknown as CanvasRenderingContext2D : null
+    })
+
+    const host = document.createElement('div')
+    Object.defineProperty(host, 'clientWidth', { configurable: true, value: 400 })
+    Object.defineProperty(host, 'clientHeight', { configurable: true, value: 300 })
+
+    const renderer = await createCanvas2DSceneRenderer().initialize({ container: host }, {
+      backendId: 'canvas2d',
+      capabilities: {
+        domCanvas: true,
+        canvas2d: true,
+        offscreenCanvas: false,
+        offscreenCanvas2d: false,
+        webgl: false,
+        webgl2: false,
+        webgpu: false,
+        imageBitmap: false,
+        createImageBitmap: false,
+        worker: false,
+        devicePixelRatio: 1,
+        prefersReducedMotion: null,
+      },
+    } as never)
+
+    const snapshot = createRendererSnapshot({
+      measurementGuides: [{
+        kind: 'measurement-guide',
+        id: 'guide-1',
+        locked: false,
+        start: { x: 10, y: 10 },
+        end: { x: 40, y: 10 },
+      }],
+      layers: [{ kind: 'layer', name: 'measurement-guides', visible: true, locked: false, opacity: 1 }],
+      viewport: { x: 0, y: 0, scale: 2 },
+    })
+
+    renderer.renderScene(snapshot)
+
+    expect(ctx.setLineDash).toHaveBeenCalledWith(expect.arrayContaining([expect.any(Number)]))
+    expect(ctx.moveTo).toHaveBeenCalledWith(10, 10)
+    expect(ctx.lineTo).toHaveBeenCalledWith(40, 10)
+    expect(ctx.fillText).toHaveBeenCalledWith('30 m', 50, 15)
+
+    vi.clearAllMocks()
+    renderer.renderScene({
+      ...snapshot,
+      scene: {
+        ...snapshot.scene,
+        layers: [{ kind: 'layer', name: 'measurement-guides', visible: false, locked: false, opacity: 1 }],
+      },
+    })
+
+    expect(ctx.lineTo).not.toHaveBeenCalled()
+    expect(ctx.fillText).not.toHaveBeenCalled()
+    renderer.dispose()
+  })
 })
 
 function createRendererSnapshot(overrides: {
   plants?: SceneRendererSnapshot['scene']['plants']
+  measurementGuides?: SceneRendererSnapshot['scene']['measurementGuides']
+  layers?: SceneRendererSnapshot['scene']['layers']
   plantSpeciesSymbols?: Record<string, string>
   viewport?: SceneRendererSnapshot['viewport']
 } = {}): SceneRendererSnapshot {
@@ -195,9 +261,10 @@ function createRendererSnapshot(overrides: {
       zones: [],
       annotations: [],
       groups: [],
-      layers: [],
+      layers: overrides.layers ?? [],
       plantSpeciesColors: {},
       plantSpeciesSymbols: overrides.plantSpeciesSymbols ?? {},
+      measurementGuides: overrides.measurementGuides ?? [],
       guides: [],
     },
     viewport: overrides.viewport ?? { x: 10, y: 20, scale: 2 },
@@ -252,6 +319,7 @@ function createMockCanvasContext() {
     closePath: vi.fn(),
     fill: vi.fn(),
     stroke: vi.fn(),
+    setLineDash: vi.fn(),
     arc: vi.fn(),
     save: vi.fn(),
     restore: vi.fn(),

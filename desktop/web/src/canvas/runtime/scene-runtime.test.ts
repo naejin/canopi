@@ -1259,6 +1259,106 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
+  it('records Measurement Guide creation as one undoable scene edit', async () => {
+    const runtime = new SceneCanvasRuntime()
+    const { container } = await initRuntimeWithStubbedRenderer(runtime)
+    const events = createSceneInteractionEventHarness(container)
+    const file = makeFile()
+    file.layers = [
+      ...file.layers,
+      { name: 'measurement-guides', visible: true, locked: false, opacity: 1 },
+    ]
+    file.measurement_guides = []
+    runtime.documentSurface.loadDocument(file)
+    setInteractionViewport(runtime)
+    runtime.commandSurface.tools.setTool('measurement-guide')
+
+    events.pointerDown({ x: 10, y: 10 })
+    events.pointerMove({ x: 40, y: 10 })
+
+    expect(zoneMeasurementTexts(container)).toEqual(['30 m'])
+
+    events.pointerUp({ x: 40, y: 10 })
+
+    const created = runtime.querySurface.getSceneSnapshot().measurementGuides
+    expect(created).toHaveLength(1)
+    const createdGuide = created?.[0]!
+    expect(createdGuide).toMatchObject({
+      kind: 'measurement-guide',
+      locked: false,
+      start: { x: 10, y: 10 },
+      end: { x: 40, y: 10 },
+    })
+    expect(runtime.commandSurface.history.canUndo.value).toBe(true)
+
+    const serialized = runtime.documentSurface.serializeDocument({ name: file.name }, file)
+    expect(serialized.measurement_guides).toEqual([
+      {
+        id: createdGuide.id,
+        locked: false,
+        start: { x: 10, y: 10 },
+        end: { x: 40, y: 10 },
+      },
+    ])
+
+    runtime.commandSurface.history.undo()
+    expect(runtime.querySurface.getSceneSnapshot().measurementGuides).toHaveLength(0)
+    expect(runtime.commandSurface.history.canRedo.value).toBe(true)
+
+    runtime.commandSurface.history.redo()
+    expect(runtime.querySurface.getSceneSnapshot().measurementGuides).toHaveLength(1)
+    events.dispose()
+    runtime.destroy()
+  })
+
+  it('does not create Measurement Guides when their layer is locked or hidden', async () => {
+    const lockedRuntime = new SceneCanvasRuntime()
+    const { container: lockedContainer } = await initRuntimeWithStubbedRenderer(lockedRuntime)
+    const lockedEvents = createSceneInteractionEventHarness(lockedContainer)
+    const lockedFile = makeFile()
+    lockedFile.layers = [
+      ...lockedFile.layers,
+      { name: 'measurement-guides', visible: true, locked: true, opacity: 1 },
+    ]
+    lockedFile.measurement_guides = []
+    lockedRuntime.documentSurface.loadDocument(lockedFile)
+    setInteractionViewport(lockedRuntime)
+    lockedRuntime.commandSurface.tools.setTool('measurement-guide')
+
+    lockedEvents.pointerDown({ x: 10, y: 10 })
+    lockedEvents.pointerMove({ x: 40, y: 10 })
+    lockedEvents.pointerUp({ x: 40, y: 10 })
+
+    expect(zoneMeasurementTexts(lockedContainer)).toEqual([])
+    expect(lockedRuntime.querySurface.getSceneSnapshot().measurementGuides).toHaveLength(0)
+    expect(lockedRuntime.commandSurface.history.canUndo.value).toBe(false)
+    lockedEvents.dispose()
+    lockedRuntime.destroy()
+
+    const hiddenRuntime = new SceneCanvasRuntime()
+    const { container: hiddenContainer } = await initRuntimeWithStubbedRenderer(hiddenRuntime)
+    const hiddenEvents = createSceneInteractionEventHarness(hiddenContainer)
+    const hiddenFile = makeFile()
+    hiddenFile.layers = [
+      ...hiddenFile.layers,
+      { name: 'measurement-guides', visible: false, locked: false, opacity: 1 },
+    ]
+    hiddenFile.measurement_guides = []
+    hiddenRuntime.documentSurface.loadDocument(hiddenFile)
+    setInteractionViewport(hiddenRuntime)
+    hiddenRuntime.commandSurface.tools.setTool('measurement-guide')
+
+    hiddenEvents.pointerDown({ x: 10, y: 10 })
+    hiddenEvents.pointerMove({ x: 40, y: 10 })
+    hiddenEvents.pointerUp({ x: 40, y: 10 })
+
+    expect(zoneMeasurementTexts(hiddenContainer)).toEqual([])
+    expect(hiddenRuntime.querySurface.getSceneSnapshot().measurementGuides).toHaveLength(0)
+    expect(hiddenRuntime.commandSurface.history.canUndo.value).toBe(false)
+    hiddenEvents.dispose()
+    hiddenRuntime.destroy()
+  })
+
   it('routes history commands through polygonal zone draft vertices before scene history', async () => {
     const runtime = new SceneCanvasRuntime()
     const { container } = await initRuntimeWithStubbedRenderer(runtime)

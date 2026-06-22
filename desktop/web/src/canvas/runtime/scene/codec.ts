@@ -2,6 +2,7 @@ import type {
   Annotation,
   CanopiFile,
   Layer,
+  MeasurementGuide,
   ObjectGroup,
   PlacedPlant,
   Zone,
@@ -11,6 +12,7 @@ import type {
   SceneAnnotationEntity,
   SceneGuide,
   SceneLayerEntity,
+  SceneMeasurementGuideEntity,
   SceneObjectGroupEntity,
   ScenePersistedState,
   ScenePlantEntity,
@@ -31,6 +33,7 @@ export function hydrateScenePersistedState(file: CanopiFile): ScenePersistedStat
     plants: file.plants.map(hydratePlantEntity),
     zones: file.zones.map(hydrateZoneEntity),
     annotations: (file.annotations ?? []).map(hydrateAnnotationEntity),
+    measurementGuides: (file.measurement_guides ?? []).map(hydrateMeasurementGuideEntity),
     groups: (file.groups ?? []).map(hydrateGroupEntity),
     guides: hydrateGuides(file.extra?.guides),
   }
@@ -43,7 +46,7 @@ export function serializeScenePersistedState(
   const now = options.now ?? new Date()
 
   return {
-    version: 4,
+    version: 5,
     name: 'Untitled',
     description: null,
     location: null,
@@ -54,6 +57,7 @@ export function serializeScenePersistedState(
     plants: state.plants.map(serializePlantEntity),
     zones: state.zones.map(serializeZoneEntity),
     annotations: state.annotations.map(serializeAnnotationEntity),
+    measurement_guides: (state.measurementGuides ?? []).map(serializeMeasurementGuideEntity),
     consortiums: [],
     groups: state.groups.map(serializeGroupEntity),
     timeline: [],
@@ -74,6 +78,7 @@ export function cloneScenePersistedState(state: ScenePersistedState): ScenePersi
     plants: state.plants.map(clonePlantEntity),
     zones: state.zones.map(cloneZoneEntity),
     annotations: state.annotations.map(cloneAnnotationEntity),
+    measurementGuides: (state.measurementGuides ?? []).map(cloneMeasurementGuideEntity),
     groups: state.groups.map(cloneGroupEntity),
     guides: state.guides.map(cloneGuide),
   }
@@ -228,6 +233,38 @@ function cloneAnnotationEntity(annotation: SceneAnnotationEntity): SceneAnnotati
   return {
     ...annotation,
     position: clonePoint(annotation.position),
+  }
+}
+
+function hydrateMeasurementGuideEntity(
+  guide: MeasurementGuide,
+  index: number,
+): SceneMeasurementGuideEntity {
+  return {
+    kind: 'measurement-guide',
+    id: guide.id || `measurement-guide-${index + 1}`,
+    locked: guide.locked ?? false,
+    start: clonePoint(guide.start),
+    end: clonePoint(guide.end),
+  }
+}
+
+function serializeMeasurementGuideEntity(guide: SceneMeasurementGuideEntity): MeasurementGuide {
+  return {
+    id: guide.id,
+    locked: guide.locked,
+    start: clonePoint(guide.start),
+    end: clonePoint(guide.end),
+  }
+}
+
+function cloneMeasurementGuideEntity(
+  guide: SceneMeasurementGuideEntity,
+): SceneMeasurementGuideEntity {
+  return {
+    ...guide,
+    start: clonePoint(guide.start),
+    end: clonePoint(guide.end),
   }
 }
 

@@ -1,6 +1,6 @@
 import type { ScenePersistedState } from '../scene'
 
-export type SceneCreationLayerName = 'plants' | 'zones' | 'annotations'
+export type SceneCreationLayerName = 'plants' | 'zones' | 'annotations' | 'measurement-guides'
 
 export function isSceneLayerOpenForCreation(
   scene: ScenePersistedState,

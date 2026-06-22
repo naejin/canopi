@@ -39,6 +39,7 @@ export type CanopiFile = {
 	plants: PlacedPlant[],
 	zones: Zone[],
 	annotations?: Annotation[],
+	measurement_guides?: MeasurementGuide[],
 	consortiums?: Consortium[],
 	groups?: ObjectGroup[],
 	timeline?: TimelineAction[],
@@ -149,6 +150,13 @@ export type Location = {
 	lat: number,
 	lon: number,
 	altitude_m: number | null,
+};
+
+export type MeasurementGuide = {
+	id?: string,
+	locked?: boolean,
+	start: Position,
+	end: Position,
 };
 
 export type ObjectGroup = {

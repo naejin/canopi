@@ -1,6 +1,12 @@
 import { Application, Container, Graphics, Text, TextStyle } from 'pixi.js'
 import { getAnnotationWorldCorners } from '../annotation-layout'
 import {
+  createMeasurementGuidePresentation,
+  MEASUREMENT_GUIDE_DASH_PX,
+  MEASUREMENT_GUIDE_GAP_PX,
+  MEASUREMENT_GUIDE_TICK_HALF_PX,
+} from '../measurement-guides'
+import {
   buildPlantPresentationEntries,
   getStackBadgeOffsetPx,
   layoutPlantPresentation,
@@ -25,7 +31,7 @@ import {
 } from '../scene-visuals'
 import type { SceneRendererDefinition, SceneRendererHoverState, SceneRendererInstance, SceneRendererSnapshot } from './scene-types'
 import { getEllipticalZonePolygon, getRectangularZoneCorners } from '../zone-geometry'
-import type { PlantSymbolId, SceneAnnotationEntity, SceneZoneEntity } from '../scene'
+import type { PlantSymbolId, SceneAnnotationEntity, SceneMeasurementGuideEntity, ScenePoint, SceneZoneEntity } from '../scene'
 import { isSceneObjectGroupMemberTarget } from '../scene'
 
 const BACKGROUND_COLOR = 0x000000
@@ -62,23 +68,29 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
 
       const world = new Container()
       const zonesLayer = new Container()
+      const measurementGuideLayer = new Container()
       const plantsLayer = new Container()
       const plantsOverlayLayer = new Container()
       const annotationTextLayer = new Container()
       const annotationHighlightLayer = new Container()
       world.addChild(zonesLayer)
+      world.addChild(measurementGuideLayer)
       world.addChild(plantsLayer)
       world.addChild(plantsOverlayLayer)
       world.addChild(annotationTextLayer)
       world.addChild(annotationHighlightLayer)
+      const measurementGuideLabelLayer = new Container()
       const pinnedPlantNameLabelLayer = new Container()
       const selectionLabelLayer = new Container()
       app.stage.addChild(world)
+      app.stage.addChild(measurementGuideLabelLayer)
       app.stage.addChild(pinnedPlantNameLabelLayer)
       app.stage.addChild(selectionLabelLayer)
 
       let snapshot: SceneRendererSnapshot | null = null
       const zoneGraphicsByName = new Map<string, Graphics>()
+      const measurementGuideGraphicsById = new Map<string, Graphics>()
+      const measurementGuideLabelById = new Map<string, Text>()
       const plantGraphicsById = new Map<string, Graphics>()
       const plantBadgeGraphicsById = new Map<string, Graphics>()
       const plantBadgeTextById = new Map<string, Text>()
@@ -104,6 +116,14 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
         renderScene(nextSnapshot) {
           snapshot = nextSnapshot
           syncZones(zonesLayer, zoneGraphicsByName, nextSnapshot, true)
+          syncMeasurementGuides(
+            measurementGuideLayer,
+            measurementGuideLabelLayer,
+            measurementGuideGraphicsById,
+            measurementGuideLabelById,
+            nextSnapshot,
+            true,
+          )
           syncPlants(
             plantsLayer,
             plantsOverlayLayer,
@@ -160,6 +180,14 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
           )
           snapshot = { ...snapshot, viewport, pinnedPlantNameLabels, selectionLabels: labels }
           syncZones(zonesLayer, zoneGraphicsByName, snapshot, false)
+          syncMeasurementGuides(
+            measurementGuideLayer,
+            measurementGuideLabelLayer,
+            measurementGuideGraphicsById,
+            measurementGuideLabelById,
+            snapshot,
+            false,
+          )
           syncPlants(
             plantsLayer,
             plantsOverlayLayer,
@@ -188,6 +216,141 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
       return instance
     },
   }
+}
+
+function syncMeasurementGuides(
+  worldLayer: Container,
+  labelLayer: Container,
+  graphicsById: Map<string, Graphics>,
+  labelById: Map<string, Text>,
+  snapshot: SceneRendererSnapshot,
+  reconcileRemoved: boolean,
+): void {
+  const layer = getSceneLayerStyle(snapshot.scene, 'measurement-guides')
+  worldLayer.visible = layer.visible
+  worldLayer.alpha = layer.opacity
+  labelLayer.visible = layer.visible
+  labelLayer.alpha = layer.opacity
+  if (!layer.visible) return
+
+  const nextIds = new Set<string>()
+  for (const guide of snapshot.scene.measurementGuides ?? []) {
+    const presentation = createMeasurementGuidePresentation(guide, snapshot.viewport)
+    if (!presentation) continue
+
+    nextIds.add(guide.id)
+    let graphics = graphicsById.get(guide.id)
+    if (!graphics) {
+      graphics = new Graphics()
+      graphicsById.set(guide.id, graphics)
+      worldLayer.addChild(graphics)
+    }
+    drawMeasurementGuide(graphics, guide, snapshot.viewport.scale)
+    graphics.visible = true
+
+    let text = labelById.get(guide.id)
+    if (!text) {
+      text = new Text()
+      labelById.set(guide.id, text)
+      labelLayer.addChild(text)
+    }
+    text.text = presentation.text
+    text.style = new TextStyle({
+      fontSize: 11,
+      fill: toPixiColor(getAnnotationTextColor(), 0),
+    })
+    text.position.set(presentation.labelScreenPoint.x, presentation.labelScreenPoint.y)
+    text.anchor.set(0.5, 0.5)
+    text.visible = true
+  }
+
+  for (const [guideId, graphics] of graphicsById) {
+    if (nextIds.has(guideId)) continue
+    if (reconcileRemoved) {
+      graphics.removeFromParent()
+      graphics.destroy()
+      graphicsById.delete(guideId)
+    } else {
+      graphics.visible = false
+    }
+  }
+  for (const [guideId, text] of labelById) {
+    if (nextIds.has(guideId)) continue
+    if (reconcileRemoved) {
+      text.removeFromParent()
+      text.destroy()
+      labelById.delete(guideId)
+    } else {
+      text.visible = false
+    }
+  }
+}
+
+function drawMeasurementGuide(
+  graphics: Graphics,
+  guide: SceneMeasurementGuideEntity,
+  viewportScale: number,
+): void {
+  const presentation = createMeasurementGuidePresentation(guide, { x: 0, y: 0, scale: viewportScale })
+  if (!presentation) return
+
+  const color = toPixiColor(getAnnotationTextColor(), 0)
+  const strokeWidth = screenPxToWorldPx(1.5, viewportScale)
+  graphics.clear()
+  drawDashedMeasurementGuideLine(
+    graphics,
+    guide.start,
+    guide.end,
+    screenPxToWorldPx(MEASUREMENT_GUIDE_DASH_PX, viewportScale),
+    screenPxToWorldPx(MEASUREMENT_GUIDE_GAP_PX, viewportScale),
+  )
+  drawMeasurementGuideTick(
+    graphics,
+    guide.start,
+    presentation.normalWorld,
+    screenPxToWorldPx(MEASUREMENT_GUIDE_TICK_HALF_PX, viewportScale),
+  )
+  drawMeasurementGuideTick(
+    graphics,
+    guide.end,
+    presentation.normalWorld,
+    screenPxToWorldPx(MEASUREMENT_GUIDE_TICK_HALF_PX, viewportScale),
+  )
+  graphics.stroke({ color, width: strokeWidth, alpha: 1 })
+}
+
+function drawDashedMeasurementGuideLine(
+  graphics: Graphics,
+  start: ScenePoint,
+  end: ScenePoint,
+  dashLength: number,
+  gapLength: number,
+): void {
+  const dx = end.x - start.x
+  const dy = end.y - start.y
+  const length = Math.hypot(dx, dy)
+  if (length <= 0) return
+
+  const unit = { x: dx / length, y: dy / length }
+  let cursor = 0
+  while (cursor < length) {
+    const segmentEnd = Math.min(cursor + dashLength, length)
+    if (segmentEnd > cursor) {
+      graphics.moveTo(start.x + unit.x * cursor, start.y + unit.y * cursor)
+        .lineTo(start.x + unit.x * segmentEnd, start.y + unit.y * segmentEnd)
+    }
+    cursor += dashLength + gapLength
+  }
+}
+
+function drawMeasurementGuideTick(
+  graphics: Graphics,
+  point: ScenePoint,
+  normal: ScenePoint,
+  halfLength: number,
+): void {
+  graphics.moveTo(point.x - normal.x * halfLength, point.y - normal.y * halfLength)
+    .lineTo(point.x + normal.x * halfLength, point.y + normal.y * halfLength)
 }
 
 function syncZones(

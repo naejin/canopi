@@ -119,6 +119,7 @@ function normalizeDocumentKnownFields(file: CanopiFile): CanopiFile {
     plants: file.plants,
     zones: file.zones,
     annotations: file.annotations ?? [],
+    measurement_guides: file.measurement_guides ?? [],
     consortiums: file.consortiums ?? [],
     groups: file.groups ?? [],
     timeline: file.timeline ?? [],

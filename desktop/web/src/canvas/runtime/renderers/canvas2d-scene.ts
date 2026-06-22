@@ -7,6 +7,12 @@ import {
   type PlantPresentationEntry,
 } from '../plant-presentation'
 import {
+  createMeasurementGuidePresentation,
+  MEASUREMENT_GUIDE_DASH_PX,
+  MEASUREMENT_GUIDE_GAP_PX,
+  MEASUREMENT_GUIDE_TICK_HALF_PX,
+} from '../measurement-guides'
+import {
   DEFAULT_PLANT_SYMBOL_LINE_STROKE_WIDTH,
   DEFAULT_PLANT_SYMBOL_SHAPE_STROKE_WIDTH,
   PLANT_SYMBOL_RECIPES,
@@ -116,6 +122,7 @@ export function createCanvas2DSceneRenderer(): SceneRendererDefinition {
         ctx.clearRect(0, 0, canvas.width, canvas.height)
         applyViewport(ctx, snapshot.viewport)
         renderZones(ctx, snapshot)
+        renderMeasurementGuides(ctx, snapshot)
         renderPlants(ctx, snapshot)
         renderPinnedPlantNameLabels(ctx, snapshot)
         renderSelectionLabels(ctx, snapshot)
@@ -125,6 +132,70 @@ export function createCanvas2DSceneRenderer(): SceneRendererDefinition {
       return instance
     },
   }
+}
+
+function renderMeasurementGuides(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnapshot): void {
+  const layer = getSceneLayerStyle(snapshot.scene, 'measurement-guides')
+  if (!layer.visible) return
+
+  const guideColor = getAnnotationTextColor()
+  const viewportScale = Math.max(snapshot.viewport.scale, 0.001)
+  const dashWorld = MEASUREMENT_GUIDE_DASH_PX / viewportScale
+  const gapWorld = MEASUREMENT_GUIDE_GAP_PX / viewportScale
+  const tickHalfWorld = MEASUREMENT_GUIDE_TICK_HALF_PX / viewportScale
+
+  ctx.save()
+  ctx.strokeStyle = guideColor
+  ctx.lineWidth = 1.5 / viewportScale
+  ctx.globalAlpha = layer.opacity
+  ctx.setLineDash([dashWorld, gapWorld])
+
+  for (const guide of snapshot.scene.measurementGuides ?? []) {
+    const presentation = createMeasurementGuidePresentation(guide, snapshot.viewport)
+    if (!presentation) continue
+
+    ctx.beginPath()
+    ctx.moveTo(guide.start.x, guide.start.y)
+    ctx.lineTo(guide.end.x, guide.end.y)
+    ctx.stroke()
+
+    ctx.setLineDash([])
+    ctx.beginPath()
+    drawMeasurementGuideTick(ctx, guide.start, presentation.normalWorld, tickHalfWorld)
+    drawMeasurementGuideTick(ctx, guide.end, presentation.normalWorld, tickHalfWorld)
+    ctx.stroke()
+    ctx.setLineDash([dashWorld, gapWorld])
+  }
+  ctx.restore()
+
+  ctx.save()
+  ctx.setTransform(1, 0, 0, 1, 0, 0)
+  ctx.fillStyle = guideColor
+  ctx.globalAlpha = layer.opacity
+  ctx.font = '400 11px Inter, sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  for (const guide of snapshot.scene.measurementGuides ?? []) {
+    const presentation = createMeasurementGuidePresentation(guide, snapshot.viewport)
+    if (!presentation) continue
+    ctx.fillText(
+      presentation.text,
+      presentation.labelScreenPoint.x,
+      presentation.labelScreenPoint.y,
+    )
+  }
+  ctx.restore()
+  ctx.globalAlpha = 1
+}
+
+function drawMeasurementGuideTick(
+  ctx: CanvasRenderingContext2D,
+  point: { x: number; y: number },
+  normal: { x: number; y: number },
+  halfLength: number,
+): void {
+  ctx.moveTo(point.x - normal.x * halfLength, point.y - normal.y * halfLength)
+  ctx.lineTo(point.x + normal.x * halfLength, point.y + normal.y * halfLength)
 }
 
 function renderZones(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnapshot): void {

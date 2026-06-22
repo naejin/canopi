@@ -24,6 +24,7 @@ import {
   EllipseIcon,
   PolygonIcon,
   TextIcon,
+  MeasurementGuideIcon,
   ObjectStampIcon,
   SpacingIcon,
   GridIcon,
@@ -48,6 +49,7 @@ const TOOL_ICONS: Record<string, IconComponent> = {
   ellipse: EllipseIcon,
   polygon: PolygonIcon,
   text: TextIcon,
+  'measurement-guide': MeasurementGuideIcon,
   'object-stamp': ObjectStampIcon,
   'plant-spacing': SpacingIcon,
 }

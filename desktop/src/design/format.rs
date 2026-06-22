@@ -3,7 +3,7 @@ use std::path::Path;
 
 /// The current file-format version this build produces and migrates to.
 /// Bump when adding a new migration step (and add the corresponding match arm).
-const CURRENT_VERSION: u32 = 4;
+const CURRENT_VERSION: u32 = 5;
 
 /// Save a `CanopiFile` to disk atomically.
 ///
@@ -90,6 +90,7 @@ fn migrate_design_value(value: &mut serde_json::Value) {
             1 => migrate_v1_to_v2(value),
             2 => migrate_v2_to_v3(value),
             3 => migrate_v3_to_v4(value),
+            4 => migrate_v4_to_v5(value),
             _ => {
                 tracing::warn!("Unknown file version {version} during migration, stopping");
                 break;
@@ -124,6 +125,43 @@ fn migrate_v3_to_v4(value: &mut serde_json::Value) {
         }
     }
     value["version"] = serde_json::json!(4);
+}
+
+fn migrate_v4_to_v5(value: &mut serde_json::Value) {
+    if value.get("measurement_guides").is_none() {
+        value["measurement_guides"] = serde_json::json!([]);
+    }
+    ensure_measurement_guides_layer(value);
+    value["version"] = serde_json::json!(5);
+}
+
+fn ensure_measurement_guides_layer(value: &mut serde_json::Value) {
+    let Some(layers) = value
+        .get_mut("layers")
+        .and_then(|layers| layers.as_array_mut())
+    else {
+        return;
+    };
+    if layers
+        .iter()
+        .any(|layer| layer.get("name").and_then(|name| name.as_str()) == Some("measurement-guides"))
+    {
+        return;
+    }
+
+    let insert_index = layers
+        .iter()
+        .position(|layer| layer.get("name").and_then(|name| name.as_str()) == Some("annotations"))
+        .unwrap_or(layers.len());
+    layers.insert(
+        insert_index,
+        serde_json::json!({
+            "name": "measurement-guides",
+            "visible": true,
+            "locked": false,
+            "opacity": 1.0,
+        }),
+    );
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -469,6 +507,12 @@ pub fn create_default() -> CanopiFile {
             opacity: 1.0,
         },
         Layer {
+            name: "measurement-guides".into(),
+            visible: true,
+            locked: false,
+            opacity: 1.0,
+        },
+        Layer {
             name: "annotations".into(),
             visible: true,
             locked: false,
@@ -488,6 +532,7 @@ pub fn create_default() -> CanopiFile {
         plants: Vec::new(),
         zones: Vec::new(),
         annotations: Vec::new(),
+        measurement_guides: Vec::new(),
         consortiums: Vec::new(),
         groups: Vec::new(),
         timeline: Vec::new(),
@@ -506,11 +551,12 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
-    fn test_create_default_has_seven_layers() {
+    fn test_create_default_has_eight_layers() {
         let design = create_default();
-        assert_eq!(design.version, 4);
+        assert_eq!(design.version, 5);
         assert_eq!(design.name, "Untitled");
-        assert_eq!(design.layers.len(), 7);
+        assert_eq!(design.layers.len(), 8);
+        assert!(design.measurement_guides.is_empty());
     }
 
     #[test]
@@ -530,6 +576,7 @@ mod tests {
                 ("zones", true),
                 ("water", false),
                 ("plants", true),
+                ("measurement-guides", true),
                 ("annotations", true),
             ]),
         );
@@ -547,7 +594,7 @@ mod tests {
         let loaded = load_from_file(&path).expect("load should succeed");
         assert_eq!(loaded.name, original.name);
         assert_eq!(loaded.version, original.version);
-        assert_eq!(loaded.layers.len(), 7);
+        assert_eq!(loaded.layers.len(), 8);
 
         // Clean up
         let _ = std::fs::remove_file(&path);
@@ -789,7 +836,7 @@ mod tests {
             .expect("write legacy file");
         let loaded = load_from_file(&path).expect("legacy panel targets should migrate");
 
-        assert_eq!(loaded.version, 4);
+        assert_eq!(loaded.version, 5);
         assert_eq!(loaded.timeline[0].targets.len(), 3);
         assert!(matches!(
             loaded.timeline[0].targets[0],
@@ -863,7 +910,7 @@ mod tests {
         save_to_file(&path, &loaded).expect("v2 file should save");
         let reloaded = load_from_file(&path).expect("saved v2 file should reload");
 
-        assert_eq!(reloaded.version, 4);
+        assert_eq!(reloaded.version, 5);
         assert_eq!(reloaded.location.as_ref().map(|l| l.lat), Some(48.8566));
         assert_eq!(reloaded.consortiums.len(), 1);
         assert_eq!(reloaded.timeline.len(), 1);
@@ -908,7 +955,7 @@ mod tests {
             .expect("write v2 file");
         let loaded = load_from_file(&path).expect("v2 file should load");
 
-        assert_eq!(loaded.version, 4);
+        assert_eq!(loaded.version, 5);
         assert!(loaded.plant_species_symbols.is_empty());
 
         let _ = std::fs::remove_file(&path);
@@ -955,9 +1002,48 @@ mod tests {
             .expect("write v3 file");
         let loaded = load_from_file(&path).expect("v3 file should load");
 
-        assert_eq!(loaded.version, 4);
+        assert_eq!(loaded.version, 5);
         assert!(!loaded.plants[0].pinned_name);
         assert!(loaded.plants[1].pinned_name);
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_v4_files_migrate_to_v5_with_measurement_guides_layer() {
+        use serde_json::json;
+
+        let dir = std::env::temp_dir();
+        let path: PathBuf = dir.join("canopi_test_v5_measurement_guides.canopi");
+
+        let mut value = serde_json::to_value(create_default()).expect("default design serializes");
+        value["version"] = json!(4);
+        value
+            .as_object_mut()
+            .expect("default design serializes to object")
+            .remove("measurement_guides");
+        value["layers"] = json!([
+            { "name": "base", "visible": true, "locked": false, "opacity": 1.0 },
+            { "name": "zones", "visible": true, "locked": false, "opacity": 1.0 },
+            { "name": "plants", "visible": true, "locked": false, "opacity": 1.0 },
+            { "name": "annotations", "visible": true, "locked": false, "opacity": 1.0 }
+        ]);
+
+        std::fs::write(&path, serde_json::to_string_pretty(&value).unwrap())
+            .expect("write v4 file");
+        let loaded = load_from_file(&path).expect("v4 file should load");
+
+        assert_eq!(loaded.version, 5);
+        assert!(loaded.measurement_guides.is_empty());
+        assert!(
+            loaded.layers.iter().any(|layer| {
+                layer.name == "measurement-guides"
+                    && layer.visible
+                    && !layer.locked
+                    && (layer.opacity - 1.0).abs() < f32::EPSILON
+            }),
+            "migration should add a visible unlocked Measurement Guides layer",
+        );
 
         let _ = std::fs::remove_file(&path);
     }

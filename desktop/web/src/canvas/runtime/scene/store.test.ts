@@ -63,6 +63,12 @@ describe('scene store', () => {
         },
       ],
       annotations: [],
+      measurement_guides: [{
+        id: 'measurement-guide-1',
+        locked: false,
+        start: { x: 1, y: 1 },
+        end: { x: 4, y: 1 },
+      }],
       consortiums: [{ target: consortiumTarget('Quercus robur'), stratum: 'high', start_phase: 0, end_phase: 3 }],
       groups: [
         {
@@ -119,6 +125,7 @@ describe('scene store', () => {
     expect(roundTripped.plants).toEqual(file.plants)
     expect(roundTripped.zones).toEqual(file.zones)
     expect(roundTripped.annotations).toEqual(file.annotations)
+    expect(roundTripped.measurement_guides).toEqual(file.measurement_guides)
     expect(roundTripped.groups).toEqual(file.groups)
     expect(roundTripped.layers).toEqual(file.layers)
     expect(roundTripped.plant_species_colors).toEqual(file.plant_species_colors)
@@ -128,7 +135,7 @@ describe('scene store', () => {
     expect(roundTripped.description).toBeNull()
     expect(roundTripped.location).toBeNull()
     expect(roundTripped.north_bearing_deg).toBe(0)
-    expect(roundTripped.version).toBe(4)
+    expect(roundTripped.version).toBe(5)
     // Non-canvas sections must be empty placeholders, NOT the input values
     expect(roundTripped.consortiums).toEqual([])
     expect(roundTripped.timeline).toEqual([])
@@ -139,7 +146,7 @@ describe('scene store', () => {
     const persisted = createDefaultScenePersistedState(new Date('2026-04-02T00:00:00.000Z'))
     const session = createDefaultSceneSessionState()
 
-    expect(persisted.layers).toHaveLength(7)
+    expect(persisted.layers).toHaveLength(8)
     expect(persisted.plantSpeciesSymbols).toEqual({})
     expect(persisted.layers.map((layer: { name: string; visible: boolean }) => [layer.name, layer.visible])).toEqual([
       ['base', true],
@@ -148,14 +155,16 @@ describe('scene store', () => {
       ['zones', true],
       ['water', false],
       ['plants', true],
+      ['measurement-guides', true],
       ['annotations', true],
     ])
     expect(persisted.plants).toHaveLength(0)
+    expect(persisted.measurementGuides).toEqual([])
     expect(session.selectedEntityIds.size).toBe(0)
     expect(session.activeLayerName).toBe('zones')
     expect(session.plantSizeMode).toBe('default')
     expect(session.plantColorByAttr).toBe(null)
-    expect(serializeScenePersistedState(persisted, { now: new Date('2026-04-02T00:00:00.000Z') }).version).toBe(4)
+    expect(serializeScenePersistedState(persisted, { now: new Date('2026-04-02T00:00:00.000Z') }).version).toBe(5)
   })
 
   it('hydrates and serializes embedded Design Object lock state', () => {

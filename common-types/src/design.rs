@@ -85,6 +85,10 @@ pub const DESIGN_FILE_FIELDS: &[DesignFileField] = &[
         owner: DesignFileFieldOwner::Scene,
     },
     DesignFileField {
+        key: "measurement_guides",
+        owner: DesignFileFieldOwner::Scene,
+    },
+    DesignFileField {
         key: "consortiums",
         owner: DesignFileFieldOwner::Document,
     },
@@ -134,6 +138,8 @@ pub struct CanopiFile {
     #[serde(default)]
     pub annotations: Vec<Annotation>,
     #[serde(default)]
+    pub measurement_guides: Vec<MeasurementGuide>,
+    #[serde(default)]
     pub consortiums: Vec<Consortium>,
     #[serde(default)]
     pub groups: Vec<ObjectGroup>,
@@ -167,6 +173,8 @@ struct CanopiFileInput {
     zones: Vec<Zone>,
     #[serde(default)]
     annotations: Vec<Annotation>,
+    #[serde(default)]
+    measurement_guides: Vec<MeasurementGuideInput>,
     #[serde(default)]
     consortiums: Vec<Consortium>,
     #[serde(default)]
@@ -207,6 +215,11 @@ impl<'de> Deserialize<'de> for CanopiFile {
             plants: input.plants,
             zones: input.zones,
             annotations: input.annotations,
+            measurement_guides: input
+                .measurement_guides
+                .into_iter()
+                .map(MeasurementGuide::from)
+                .collect(),
             consortiums: input.consortiums,
             groups,
             timeline: input.timeline,
@@ -358,6 +371,37 @@ pub struct Annotation {
     pub text: String,
     pub font_size: f64,
     pub rotation: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize, Type)]
+pub struct MeasurementGuide {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub locked: bool,
+    pub start: Position,
+    pub end: Position,
+}
+
+#[derive(Deserialize)]
+struct MeasurementGuideInput {
+    #[serde(default)]
+    id: String,
+    #[serde(default)]
+    locked: bool,
+    start: Position,
+    end: Position,
+}
+
+impl From<MeasurementGuideInput> for MeasurementGuide {
+    fn from(input: MeasurementGuideInput) -> Self {
+        Self {
+            id: input.id,
+            locked: input.locked,
+            start: input.start,
+            end: input.end,
+        }
+    }
 }
 
 #[derive(Deserialize)]

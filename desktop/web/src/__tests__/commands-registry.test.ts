@@ -145,6 +145,21 @@ describe('command registry canvas tool switching', () => {
     expect(activeTool.value).toBe('line')
   })
 
+  it('exposes the Measurement Guide tool through the shared command graph', () => {
+    const setTool = vi.fn()
+    mountCanvasCommandSurface({ tools: { setTool } })
+
+    getCommand('canvas.tool.measurementGuide').action()
+
+    expect(activePanel.value).toBe('canvas')
+    expect(setTool).toHaveBeenCalledWith('measurement-guide')
+    expect(activeTool.value).toBe('measurement-guide')
+    expect(appCommandGraphToolbarProjection.value.creationTools.some((tool) =>
+      tool.tool === 'measurement-guide'
+      && tool.commandId === 'canvas.tool.measurementGuide',
+    )).toBe(true)
+  })
+
   it('exposes Object Stamp through the shared command graph', () => {
     const setTool = vi.fn()
     mountCanvasCommandSurface({ tools: { setTool } })

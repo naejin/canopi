@@ -245,6 +245,7 @@ describe('CanvasToolbar', () => {
       'ellipse',
       'polygon',
       'text',
+      'measurement-guide',
       'object-stamp',
       'plant-spacing',
     ])

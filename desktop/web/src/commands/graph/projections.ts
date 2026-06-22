@@ -156,6 +156,7 @@ const TOOLBAR_CREATION_TOOLS = [
   { tool: 'ellipse', commandId: 'canvas.tool.ellipse', description: () => t('canvas.tools.ellipseDesc') },
   { tool: 'polygon', commandId: 'canvas.tool.polygon', description: () => t('canvas.tools.polygonDesc') },
   { tool: 'text', commandId: 'canvas.tool.text', description: () => t('canvas.tools.textDesc') },
+  { tool: 'measurement-guide', commandId: 'canvas.tool.measurementGuide', description: () => t('canvas.tools.measurementGuideDesc') },
 ] as const satisfies readonly {
   readonly tool: string
   readonly commandId: AppCommandId

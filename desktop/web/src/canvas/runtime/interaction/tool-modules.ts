@@ -13,6 +13,10 @@ import {
   createObjectStampToolAdapter,
 } from './object-stamp-tool'
 import {
+  createMeasurementGuideTool,
+  createMeasurementGuideToolAdapter,
+} from './measurement-guide-tool'
+import {
   createPlantSpacingTool,
   createPlantSpacingToolAdapter,
 } from './plant-spacing-tool'
@@ -138,11 +142,20 @@ export function createSceneToolModules(context: SceneToolModulesContext): SceneT
     applySnapping: context.applySnapping,
     getContainerRect: context.getContainerRect,
   })
+  const measurementGuideTool = createMeasurementGuideTool({
+    container: context.container,
+    preview: context.preview,
+    camera: context.camera,
+    getSceneStore: context.getSceneStore,
+    sceneEdits: context.sceneEdits,
+    applySnapping: context.applySnapping,
+  })
 
   return new SceneToolModuleRegistry(new Map([
     ['plant-stamp', createPlantStampToolAdapter(plantStampTool)],
     ['text', createTextAnnotationToolAdapter(textTool)],
     ['line', zoneDrawingAdapters.line],
+    ['measurement-guide', createMeasurementGuideToolAdapter(measurementGuideTool)],
     ['rectangle', zoneDrawingAdapters.rectangle],
     ['ellipse', zoneDrawingAdapters.ellipse],
     ['polygon', zoneDrawingAdapters.polygon],
