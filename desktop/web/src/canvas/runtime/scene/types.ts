@@ -35,6 +35,7 @@ export interface ScenePlantEntity {
   commonName: string | null
   color: string | null
   symbol?: string | null
+  pinnedName?: boolean
   stratum: string | null
   canopySpreadM: number | null
   position: ScenePoint

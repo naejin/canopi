@@ -147,8 +147,39 @@ export class SceneRuntimeMutationController {
   }
 
   duplicateSelected(): void {
-    this.copy()
-    this.paste()
+    const persisted = this._sceneStore.persisted
+    const selectionOptions = this._getSelectionReadModelOptions()
+    const selected = this._getSelectionModel(selectionOptions).editableTargets
+    const payload = createClipboardPayload(persisted, selected)
+    if (!payload) return
+
+    let nextSelection = new Set<string>()
+    this._sceneEdits.run('duplicate-selected', (tx) => {
+      tx.mutate((draft) => {
+        nextSelection = pasteClipboardPayload(payload, draft, NORMAL_PASTE_OFFSET_M, { preservePinnedNames: true })
+      })
+      if (nextSelection.size > 0) tx.setSelection(nextSelection)
+    })
+  }
+
+  toggleSelectedPlantNamePins(): void {
+    const selectedPlantIds = this._getEditableSelectedPlantIds()
+    if (selectedPlantIds.size === 0) return
+
+    const selectedPlants = this._sceneStore.persisted.plants.filter((plant) => selectedPlantIds.has(plant.id))
+    const shouldPin = selectedPlants.some((plant) => !plant.pinnedName)
+
+    this._sceneEdits.run(shouldPin ? 'pin-plant-names' : 'unpin-plant-names', (tx) => {
+      tx.mutate((persisted) => {
+        persisted.plants = persisted.plants.map((plant) => {
+          if (!selectedPlantIds.has(plant.id) || plant.pinnedName === shouldPin) return plant
+          return {
+            ...plant,
+            pinnedName: shouldPin,
+          }
+        })
+      })
+    })
   }
 
   deleteSelected(): void {

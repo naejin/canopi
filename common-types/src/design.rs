@@ -245,6 +245,8 @@ pub struct PlacedPlant {
     pub color: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub symbol: Option<String>,
+    #[serde(default)]
+    pub pinned_name: bool,
     pub position: Position,
     pub rotation: Option<f64>,
     pub scale: Option<f64>,
@@ -265,6 +267,8 @@ struct PlacedPlantInput {
     color: Option<String>,
     #[serde(default)]
     symbol: Option<String>,
+    #[serde(default)]
+    pinned_name: bool,
     position: Position,
     rotation: Option<f64>,
     scale: Option<f64>,
@@ -286,6 +290,7 @@ impl<'de> Deserialize<'de> for PlacedPlant {
             common_name: input.common_name,
             color: input.color,
             symbol: input.symbol,
+            pinned_name: input.pinned_name,
             position: input.position,
             rotation: input.rotation,
             scale: input.scale,

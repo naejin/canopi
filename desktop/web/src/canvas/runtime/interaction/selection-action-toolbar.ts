@@ -6,6 +6,7 @@ import { canSaveSelectionAsObjectStamp } from './contextual-selection-actions'
 type SelectionActionCommandSurface = Pick<
   CanvasSceneEditCommandSurface,
   | 'duplicateSelected'
+  | 'toggleSelectedPlantNamePins'
   | 'deleteSelected'
   | 'bringToFront'
   | 'sendToBack'
@@ -130,6 +131,35 @@ export function createSelectionActionToolbar(
       isAvailable: hasPrimaryActionSelection,
       isEnabled: hasUnlockedEditableSelection,
       run: () => options.commands.sendToBack(),
+    },
+    {
+      id: 'pin-plant-name',
+      labelKey: 'canvas.selectionActions.unpinPlantName',
+      shortcut: null,
+      icon: [
+        { d: 'M5 6h10', fill: 'none' },
+        { d: 'M5 10h7', fill: 'none' },
+        { d: 'M7 14h6', fill: 'none' },
+        { d: 'M13 4l2 2-2 2', fill: 'none' },
+      ],
+      isAvailable: isPlantNameUnpinAvailable,
+      isEnabled: isPlantNameUnpinAvailable,
+      run: () => options.commands.toggleSelectedPlantNamePins(),
+    },
+    {
+      id: 'pin-plant-name',
+      labelKey: 'canvas.selectionActions.pinPlantName',
+      shortcut: null,
+      icon: [
+        { d: 'M5 6h10', fill: 'none' },
+        { d: 'M5 10h7', fill: 'none' },
+        { d: 'M7 14h6', fill: 'none' },
+        { d: 'M15 4v5', fill: 'none' },
+        { d: 'M12.5 6.5h5', fill: 'none' },
+      ],
+      isAvailable: isPlantNamePinAvailable,
+      isEnabled: isPlantNamePinAvailable,
+      run: () => options.commands.toggleSelectedPlantNamePins(),
     },
     {
       id: 'select-same-species',
@@ -615,6 +645,20 @@ function isLockAvailable(selection: CanvasDesignObjectSelectionModel): boolean {
 function isSelectSameSpeciesAvailable(selection: CanvasDesignObjectSelectionModel): boolean {
   return selection.blockedTargets.length === 0
     && selection.sameSpeciesReferenceCanonicalName !== null
+}
+
+function isPlantNamePinAvailable(selection: CanvasDesignObjectSelectionModel): boolean {
+  const pinning = selection.plantNamePinning
+  return selection.blockedTargets.length === 0
+    && (pinning?.plantIds.length ?? 0) > 0
+    && pinning?.allPinned !== true
+}
+
+function isPlantNameUnpinAvailable(selection: CanvasDesignObjectSelectionModel): boolean {
+  const pinning = selection.plantNamePinning
+  return selection.blockedTargets.length === 0
+    && (pinning?.plantIds.length ?? 0) > 0
+    && pinning?.allPinned === true
 }
 
 function targetKey(target: { kind: string; id: string }): string {

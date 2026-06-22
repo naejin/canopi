@@ -85,7 +85,7 @@ describe('Saved Object Stamp file composition', () => {
     })
 
     expect(file).toMatchObject({
-      version: 3,
+      version: 4,
       name: 'Apple guild',
       description: null,
       location: null,
@@ -112,6 +112,7 @@ describe('Saved Object Stamp file composition', () => {
       common_name: 'Apple',
       color: '#C44230',
       symbol: 'tree',
+      pinned_name: false,
       position: { x: 10, y: 20 },
       rotation: 15,
       scale: 2,

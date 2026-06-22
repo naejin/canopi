@@ -49,6 +49,7 @@ export function createTestCanvasCommandSurface(
       pasteAt: () => {},
       canPaste: () => false,
       duplicateSelected: () => {},
+      toggleSelectedPlantNamePins: () => {},
       deleteSelected: () => {},
       selectAll: () => {},
       selectSameSpecies: () => {},

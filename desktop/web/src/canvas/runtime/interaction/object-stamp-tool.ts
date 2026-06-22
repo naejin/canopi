@@ -458,6 +458,7 @@ export function createObjectStampToolAdapter(
 function clonePlantForObjectStamp(plant: ScenePlantEntity): ScenePlantEntity {
   return {
     ...plant,
+    pinnedName: false,
     position: { ...plant.position },
   }
 }

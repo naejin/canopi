@@ -14,10 +14,11 @@ export type DesignSummary = Contracts.DesignSummary
 export type AutosaveEntry = Contracts.AutosaveEntry
 export type Consortium = Contracts.Consortium
 
-export interface PlacedPlant extends Omit<Contracts.PlacedPlant, 'id' | 'color' | 'symbol'> {
+export interface PlacedPlant extends Omit<Contracts.PlacedPlant, 'id' | 'color' | 'symbol' | 'pinned_name'> {
   id: string
   color: string | null
   symbol?: string | null
+  pinned_name?: boolean
 }
 
 export interface CanopiFile extends Omit<

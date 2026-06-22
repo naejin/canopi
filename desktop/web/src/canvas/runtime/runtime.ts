@@ -42,6 +42,10 @@ export interface CanvasDesignObjectSelectionModel {
   readonly blockedTargets: readonly CanvasDesignObjectSelectionBlockedTarget[]
   readonly bounds: SceneBounds | null
   readonly sameSpeciesReferenceCanonicalName: string | null
+  readonly plantNamePinning?: {
+    readonly plantIds: readonly string[]
+    readonly allPinned: boolean
+  }
 }
 
 export interface CanvasQueryRevision {
@@ -73,6 +77,7 @@ export interface CanvasSceneEditCommandSurface {
   pasteAt(point: ScenePoint): void
   canPaste(): boolean
   duplicateSelected(): void
+  toggleSelectedPlantNamePins(): void
   deleteSelected(): void
   selectAll(): void
   selectSameSpecies(canonicalName?: string, options?: { additive?: boolean }): void

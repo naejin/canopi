@@ -11,7 +11,7 @@ import {
   DEFAULT_PLANT_SYMBOL_SHAPE_STROKE_WIDTH,
   PLANT_SYMBOL_RECIPES,
 } from '../plant-symbol-recipes'
-import { computeSelectionLabels } from '../selection-labels'
+import { computePinnedPlantNameLabels, computeSelectionLabels } from '../selection-labels'
 import type {
   SceneAnnotationEntity,
   PlantSymbolId,
@@ -88,7 +88,21 @@ export function createCanvas2DSceneRenderer(): SceneRendererDefinition {
               },
             },
           )
-          snapshot = { ...snapshot, viewport, selectionLabels: labels }
+          const pinnedPlantNameLabels = computePinnedPlantNameLabels(
+            snapshot.scene.plants,
+            viewport,
+            snapshot.localizedCommonNames,
+            {
+              plantContext: {
+                viewport,
+                sizeMode: snapshot.sizeMode,
+                colorByAttr: snapshot.colorByAttr,
+                speciesCache: snapshot.speciesCache,
+                localizedCommonNames: snapshot.localizedCommonNames,
+              },
+            },
+          )
+          snapshot = { ...snapshot, viewport, pinnedPlantNameLabels, selectionLabels: labels }
           redraw()
         },
       }
@@ -103,6 +117,7 @@ export function createCanvas2DSceneRenderer(): SceneRendererDefinition {
         applyViewport(ctx, snapshot.viewport)
         renderZones(ctx, snapshot)
         renderPlants(ctx, snapshot)
+        renderPinnedPlantNameLabels(ctx, snapshot)
         renderSelectionLabels(ctx, snapshot)
         renderAnnotations(ctx, snapshot)
       }
@@ -464,6 +479,25 @@ function renderSelectionLabels(ctx: CanvasRenderingContext2D, snapshot: SceneRen
     ctx.fillText(label.text, label.screenPoint.x, label.screenPoint.y)
   }
   ctx.restore()
+}
+
+function renderPinnedPlantNameLabels(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnapshot): void {
+  const labels = snapshot.pinnedPlantNameLabels ?? []
+  if (labels.length === 0) return
+  const layer = getSceneLayerStyle(snapshot.scene, 'plants')
+  if (!layer.visible) return
+  ctx.save()
+  ctx.setTransform(1, 0, 0, 1, 0, 0)
+  for (const label of labels) {
+    ctx.fillStyle = getPlantLabelColor()
+    ctx.globalAlpha = layer.opacity
+    ctx.font = `${label.fontStyle === 'italic' ? 'italic ' : ''}600 12px Inter, sans-serif`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'top'
+    ctx.fillText(label.text, label.screenPoint.x, label.screenPoint.y)
+  }
+  ctx.restore()
+  ctx.globalAlpha = 1
 }
 
 function applyViewport(ctx: CanvasRenderingContext2D, viewport: SceneViewportState): void {

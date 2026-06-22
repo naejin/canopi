@@ -136,6 +136,8 @@
       "duplicate": "Duplicate",
       "bringForward": "Bring forward",
       "sendBackward": "Send backward",
+      "pinPlantName": "Pin plant name",
+      "unpinPlantName": "Unpin plant name",
       "selectSameSpecies": "Select same species",
       "saveObjectStamp": "Save as Saved Stamp",
       "group": "Group",

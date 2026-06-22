@@ -473,6 +473,7 @@ export function createPlantSpacingToolAdapter(tool: PlantSpacingTool): SceneTool
 function clonePlantForPlantSpacing(plant: ScenePlantEntity): ScenePlantEntity {
   return {
     ...plant,
+    pinnedName: false,
     position: { ...plant.position },
   }
 }

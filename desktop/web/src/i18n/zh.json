@@ -136,6 +136,8 @@
       "duplicate": "复制",
       "bringForward": "前移",
       "sendBackward": "后移",
+      "pinPlantName": "固定植物名称",
+      "unpinPlantName": "取消固定植物名称",
       "selectSameSpecies": "选择同种植物",
       "saveObjectStamp": "另存为已保存图章",
       "group": "组合",

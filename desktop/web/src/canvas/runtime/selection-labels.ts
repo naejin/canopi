@@ -13,6 +13,13 @@ export interface SelectionLabel {
   screenPoint: ScenePoint
 }
 
+export interface PlantNameLabel {
+  plantId: string
+  text: string
+  fontStyle: 'normal' | 'italic'
+  screenPoint: ScenePoint
+}
+
 export interface SelectionLabelOptions {
   plantContext?: PlantPresentationContext
 }
@@ -62,6 +69,37 @@ export function computeSelectionLabels(
   }
 
   // Sort by screen Y and nudge overlapping labels apart
+  labels.sort((a, b) => a.screenPoint.y - b.screenPoint.y)
+  for (let i = 1; i < labels.length; i++) {
+    const prev = labels[i - 1]!
+    const curr = labels[i]!
+    const overlap = (prev.screenPoint.y + LABEL_OVERLAP_PX) - curr.screenPoint.y
+    if (overlap > 0) {
+      curr.screenPoint.y += overlap
+    }
+  }
+
+  return labels
+}
+
+export function computePinnedPlantNameLabels(
+  plants: readonly ScenePlantEntity[],
+  viewport: SceneViewportState,
+  localizedCommonNames: ReadonlyMap<string, string | null>,
+  options: SelectionLabelOptions = {},
+): PlantNameLabel[] {
+  const labels: PlantNameLabel[] = []
+  for (const plant of plants) {
+    if (!plant.pinnedName) continue
+    const screenPoint = worldToScreen(plant.position, viewport)
+    screenPoint.y += plantLabelOffsetPx([plant], viewport, options.plantContext)
+
+    const localizedName = localizedCommonNames.get(plant.canonicalName) ?? plant.commonName
+    const text = localizedName || abbreviateCanonical(plant.canonicalName)
+    const fontStyle = localizedName ? 'normal' as const : 'italic' as const
+    labels.push({ plantId: plant.id, text, fontStyle, screenPoint })
+  }
+
   labels.sort((a, b) => a.screenPoint.y - b.screenPoint.y)
   for (let i = 1; i < labels.length; i++) {
     const prev = labels[i - 1]!

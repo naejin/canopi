@@ -22,7 +22,7 @@ export function composeSavedObjectStampCanopiFile({
 }: ComposeSavedObjectStampCanopiFileOptions): CanopiFile {
   const timestamp = now.toISOString()
   return {
-    version: 3,
+    version: 4,
     name,
     description: null,
     location: null,
@@ -37,6 +37,7 @@ export function composeSavedObjectStampCanopiFile({
       common_name: plant.commonName,
       color: plant.color,
       symbol: plant.symbol ?? null,
+      pinned_name: false,
       position: { ...plant.position },
       rotation: plant.rotationDeg,
       scale: plant.scale,

@@ -280,6 +280,40 @@ describe('Canvas runtime surfaces', () => {
     }
   })
 
+  it('toggles pinned plant names for selected plants and persists the state', () => {
+    const host = createRuntimeHost()
+    const { commands, documents, queries } = host.surfaces
+
+    try {
+      documents.loadDocument({
+        ...BASE_FILE,
+        plants: [
+          { ...createPlant('plant-1', 10, 20), pinned_name: true },
+          createPlant('plant-2', 20, 20),
+        ],
+        zones: [createEllipseZone('zone-1', 0, 0, 5, 5)],
+      })
+
+      commands.sceneEdits.selectAll()
+      commands.sceneEdits.toggleSelectedPlantNamePins()
+
+      expect(queries.getPlacedPlants().map((plant) => plant.pinned_name ?? false)).toEqual([true, true])
+
+      commands.sceneEdits.toggleSelectedPlantNamePins()
+
+      expect(queries.getPlacedPlants().map((plant) => plant.pinned_name ?? false)).toEqual([false, false])
+      expect(
+        documents
+          .serializeDocument({ name: 'Pinned names' }, { ...BASE_FILE, name: 'Pinned names' })
+          .plants
+          .map((plant) => plant.pinned_name ?? false),
+      ).toEqual([false, false])
+      expect(queries.getSceneSnapshot().zones).toHaveLength(1)
+    } finally {
+      host.destroy()
+    }
+  })
+
   it('duplicates Object Groups one meter to the right while preserving member layout', () => {
     const host = createRuntimeHost()
     const { commands, documents, queries } = host.surfaces

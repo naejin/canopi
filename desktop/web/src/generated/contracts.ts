@@ -175,6 +175,7 @@ export type PlacedPlant = {
 	common_name: string | null,
 	color?: string | null,
 	symbol?: string | null,
+	pinned_name?: boolean,
 	position: Position,
 	rotation: number | null,
 	scale: number | null,

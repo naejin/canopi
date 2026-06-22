@@ -5,7 +5,7 @@ import type { CanopiFile } from '../types/design'
 // Minimal fixture covering one of each entity type, with both populated and null optional fields.
 // Non-canvas sections are placeholders here because the scene codec no longer owns them.
 const FIXTURE: CanopiFile = {
-  version: 3,
+  version: 4,
   name: 'Round-trip test',
   description: 'A test design',
   location: { lat: 48.8566, lon: 2.3522, altitude_m: null },
@@ -29,6 +29,7 @@ const FIXTURE: CanopiFile = {
       common_name: 'English Oak',
       color: '#228833',
       symbol: 'square',
+      pinned_name: false,
       position: { x: 100, y: 200 },
       rotation: 45,
       scale: 3.5,
@@ -42,6 +43,7 @@ const FIXTURE: CanopiFile = {
       canonical_name: 'Malus domestica',
       common_name: null,
       color: null,
+      pinned_name: false,
       position: { x: -50.5, y: 300.75 },
       rotation: null,
       scale: null,

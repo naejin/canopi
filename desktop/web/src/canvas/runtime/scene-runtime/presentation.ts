@@ -1,4 +1,4 @@
-import { computeSelectionLabels } from '../selection-labels'
+import { computePinnedPlantNameLabels, computeSelectionLabels } from '../selection-labels'
 import { CanvasPlantLabelResolver } from '../plant-labels'
 import {
   resolvePlantCanopySpreadM,
@@ -115,6 +115,12 @@ export class SceneRuntimePresentationController {
       localizedCommonNames,
       hoveredCanonicalName: hoveredPlant?.canonicalName ?? null,
       hoverTarget: getRendererHoverTarget(scene, session.hoveredEntityId),
+      pinnedPlantNameLabels: computePinnedPlantNameLabels(
+        scene.plants,
+        viewport,
+        localizedCommonNames,
+        { plantContext },
+      ),
       selectionLabels: computeSelectionLabels(
         scene.plants,
         session.selectedEntityIds,

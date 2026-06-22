@@ -43,7 +43,7 @@ export function serializeScenePersistedState(
   const now = options.now ?? new Date()
 
   return {
-    version: 3,
+    version: 4,
     name: 'Untitled',
     description: null,
     location: null,
@@ -121,6 +121,7 @@ function hydratePlantEntity(plant: PlacedPlant): ScenePlantEntity {
     commonName: plant.common_name,
     color: plant.color,
     symbol: plant.symbol ?? null,
+    pinnedName: plant.pinned_name ?? false,
     stratum: null,
     canopySpreadM: plant.scale,
     position: {
@@ -142,6 +143,7 @@ function serializePlantEntity(plant: ScenePlantEntity): PlacedPlant {
     canonical_name: plant.canonicalName,
     common_name: plant.commonName,
     color: plant.color,
+    pinned_name: plant.pinnedName === true,
     position: {
       x: plant.position.x,
       y: plant.position.y,

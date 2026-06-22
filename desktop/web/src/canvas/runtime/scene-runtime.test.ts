@@ -34,6 +34,7 @@ import { locale, plantSpacingIntervalM } from '../../app/settings/state'
 import type { CanopiFile, PanelTarget } from '../../types/design'
 import { speciesTarget } from '../../target'
 import { SceneCanvasRuntime } from './scene-runtime.ts'
+import type { PlantNameLabel } from './selection-labels'
 import type { SceneRuntimePanelTargetAdapter } from './scene-runtime/panel-target-adapter'
 import type {
   CanvasRuntimeAppAdapter,
@@ -674,6 +675,10 @@ describe('scene canvas runtime', () => {
       blockedTargets: [],
       bounds: { minX: 0, minY: 0, maxX: 5, maxY: 5 },
       sameSpeciesReferenceCanonicalName: null,
+      plantNamePinning: {
+        plantIds: [],
+        allPinned: false,
+      },
     })
   })
 
@@ -694,6 +699,10 @@ describe('scene canvas runtime', () => {
       }],
       bounds: null,
       sameSpeciesReferenceCanonicalName: null,
+      plantNamePinning: {
+        plantIds: [],
+        allPinned: false,
+      },
     })
   })
 
@@ -1094,7 +1103,7 @@ describe('scene canvas runtime', () => {
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
     const file = makeFile()
-    file.plants = file.plants.map((plant) => ({ ...plant, symbol: 'triangle' }))
+    file.plants = file.plants.map((plant) => ({ ...plant, symbol: 'triangle', pinned_name: true }))
     runtime.documentSurface.loadDocument(file)
     setInteractionViewport(runtime)
 
@@ -1107,6 +1116,7 @@ describe('scene canvas runtime', () => {
 
     expect(runtime.querySurface.getSceneSnapshot().plants).toHaveLength(3)
     const stampedId = runtime.querySurface.getSceneSnapshot().plants[2]!.id
+    expect(runtime.querySurface.getSceneSnapshot().plants[2]!.pinnedName).toBe(false)
     expect(selectedObjectIds.value).toEqual(new Set([stampedId]))
 
     runtime.commandSurface.history.undo()
@@ -1116,6 +1126,7 @@ describe('scene canvas runtime', () => {
     const pasted = runtime.querySurface.getSceneSnapshot().plants[2]!
     expect(pasted.canonicalName).toBe('Malus domestica')
     expect(pasted.symbol).toBe('triangle')
+    expect(pasted.pinnedName).toBe(false)
     expect(pasted.position).toEqual({ x: 21, y: 20 })
     events.dispose()
     runtime.destroy()
@@ -1203,6 +1214,7 @@ describe('scene canvas runtime', () => {
     events.pointerDown({ x: 40, y: 40 })
 
     expect(runtime.querySurface.getSceneSnapshot().plants).toHaveLength(1)
+    expect(runtime.querySurface.getSceneSnapshot().plants[0]?.pinnedName).toBe(false)
     expect(runtime.querySurface.getSceneSnapshot().zones).toHaveLength(1)
     expect(runtime.commandSurface.history.canUndo.value).toBe(true)
 
@@ -1221,7 +1233,11 @@ describe('scene canvas runtime', () => {
     const runtime = new SceneCanvasRuntime({ appAdapter: cleanState.adapter })
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
-    runtime.documentSurface.loadDocument(makeFile())
+    const file = makeFile()
+    file.plants = file.plants.map((plant) =>
+      plant.id === 'plant-1' ? { ...plant, pinned_name: true } : plant,
+    )
+    runtime.documentSurface.loadDocument(file)
     setInteractionViewport(runtime)
     runtime.commandSurface.tools.setTool('plant-spacing')
 
@@ -1230,6 +1246,7 @@ describe('scene canvas runtime', () => {
     events.pointerDown({ x: 20, y: 10 })
 
     expect(runtime.querySurface.getSceneSnapshot().plants).toHaveLength(4)
+    expect(runtime.querySurface.getSceneSnapshot().plants.slice(2).map((plant) => plant.pinnedName)).toEqual([false, false])
     expect(runtime.commandSurface.history.canUndo.value).toBe(true)
 
     runtime.commandSurface.history.undo()
@@ -1432,6 +1449,36 @@ describe('scene canvas runtime', () => {
 
     const localizedSnapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
     expect(localizedSnapshot?.localizedCommonNames.get('Malus domestica')).toBe('Pommier')
+    runtime.destroy()
+  })
+
+  it('keeps pinned plant name labels visible and localized in renderer snapshots', async () => {
+    vi.mocked(getCommonNames)
+      .mockResolvedValueOnce({ 'Malus domestica': 'Apple' })
+      .mockResolvedValueOnce({ 'Malus domestica': 'Pommier' })
+
+    const runtime = new SceneCanvasRuntime({
+      appAdapter: createAppCanvasRuntimeAppAdapter(),
+    })
+    runtime.documentSurface.loadDocument(makeFile())
+    const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
+    runtime.commandSurface.sceneEdits.selectAll()
+    runtime.commandSurface.sceneEdits.toggleSelectedPlantNamePins()
+    expect(runtime.querySurface.getSceneSnapshot().plants.map((plant) => plant.pinnedName)).toEqual([true, true])
+
+    await vi.waitFor(() => {
+      const snapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
+      expect(snapshot?.pinnedPlantNameLabels?.map((label: PlantNameLabel) => label.text)).toEqual(['Apple', 'Apple'])
+    })
+    const initialRenderCount = renderer.renderScene.mock.calls.length
+
+    locale.value = 'fr'
+    await vi.waitFor(() => {
+      expect(renderer.renderScene.mock.calls.length).toBeGreaterThan(initialRenderCount)
+    })
+
+    const localizedSnapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
+    expect(localizedSnapshot?.pinnedPlantNameLabels?.map((label: PlantNameLabel) => label.text)).toEqual(['Pommier', 'Pommier'])
     runtime.destroy()
   })
 

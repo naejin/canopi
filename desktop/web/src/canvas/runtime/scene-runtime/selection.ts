@@ -160,12 +160,34 @@ export function getDesignObjectSelectionModel(
     )
     .map((blocked) => blocked.target)
   const editableTargets = topLevelTargets.filter((target) => !blockedKeys.has(targetKey(target)))
+  const plantNamePinning = getPlantNamePinning(persisted, editableTargets)
   return {
     editableTargets,
     lockedTargets,
     blockedTargets,
     bounds: getCombinedTargetBounds(persisted, [...editableTargets, ...lockedTargets], options),
     sameSpeciesReferenceCanonicalName: getSameSpeciesReferenceCanonicalName(persisted, editableTargets),
+    plantNamePinning,
+  }
+}
+
+function getPlantNamePinning(
+  persisted: ScenePersistedState,
+  editableTargets: readonly SceneSelectionTarget[],
+): CanvasDesignObjectSelectionModel['plantNamePinning'] {
+  const plantIds = editableTargets
+    .filter((target): target is Extract<SceneSelectionTarget, { kind: 'plant' }> => target.kind === 'plant')
+    .map((target) => target.id)
+  if (plantIds.length === 0) {
+    return {
+      plantIds: [],
+      allPinned: false,
+    }
+  }
+  const pinnedById = new Map(persisted.plants.map((plant) => [plant.id, plant.pinnedName]))
+  return {
+    plantIds,
+    allPinned: plantIds.every((id) => pinnedById.get(id) === true),
   }
 }
 

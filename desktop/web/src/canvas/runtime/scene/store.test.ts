@@ -37,6 +37,7 @@ describe('scene store', () => {
           common_name: 'English oak',
           color: '#228833',
           symbol: 'square',
+          pinned_name: false,
           position: { x: 12, y: 18 },
           rotation: 45,
           scale: 1.2,
@@ -127,7 +128,7 @@ describe('scene store', () => {
     expect(roundTripped.description).toBeNull()
     expect(roundTripped.location).toBeNull()
     expect(roundTripped.north_bearing_deg).toBe(0)
-    expect(roundTripped.version).toBe(3)
+    expect(roundTripped.version).toBe(4)
     // Non-canvas sections must be empty placeholders, NOT the input values
     expect(roundTripped.consortiums).toEqual([])
     expect(roundTripped.timeline).toEqual([])
@@ -154,7 +155,7 @@ describe('scene store', () => {
     expect(session.activeLayerName).toBe('zones')
     expect(session.plantSizeMode).toBe('default')
     expect(session.plantColorByAttr).toBe(null)
-    expect(serializeScenePersistedState(persisted, { now: new Date('2026-04-02T00:00:00.000Z') }).version).toBe(3)
+    expect(serializeScenePersistedState(persisted, { now: new Date('2026-04-02T00:00:00.000Z') }).version).toBe(4)
   })
 
   it('hydrates and serializes embedded Design Object lock state', () => {
@@ -287,6 +288,7 @@ describe('scene store', () => {
           canonical_name: 'Quercus robur',
           common_name: 'English oak',
           color: null,
+          pinned_name: false,
           position: { x: 12, y: 18 },
           rotation: null,
           scale: 1.2,

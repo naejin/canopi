@@ -12,7 +12,7 @@ import {
   DEFAULT_PLANT_SYMBOL_SHAPE_STROKE_WIDTH,
   PLANT_SYMBOL_RECIPES,
 } from '../plant-symbol-recipes'
-import { computeSelectionLabels } from '../selection-labels'
+import { computePinnedPlantNameLabels, computeSelectionLabels } from '../selection-labels'
 import {
   getAnnotationTextColor,
   getCanvasInteractionStrokeVisual,
@@ -71,8 +71,10 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
       world.addChild(plantsOverlayLayer)
       world.addChild(annotationTextLayer)
       world.addChild(annotationHighlightLayer)
+      const pinnedPlantNameLabelLayer = new Container()
       const selectionLabelLayer = new Container()
       app.stage.addChild(world)
+      app.stage.addChild(pinnedPlantNameLabelLayer)
       app.stage.addChild(selectionLabelLayer)
 
       let snapshot: SceneRendererSnapshot | null = null
@@ -82,6 +84,7 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
       const plantBadgeTextById = new Map<string, Text>()
       const annotationTextById = new Map<string, Text>()
       const annotationHighlightById = new Map<string, Graphics>()
+      const pinnedPlantNameLabelById = new Map<string, Text>()
       const selectionLabelBySpecies = new Map<string, Text>()
 
       const instance: SceneRendererInstance = {
@@ -118,6 +121,7 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
             nextSnapshot,
             true,
           )
+          syncPinnedPlantNameLabels(pinnedPlantNameLabelLayer, pinnedPlantNameLabelById, nextSnapshot)
           syncSelectionLabels(selectionLabelLayer, selectionLabelBySpecies, nextSnapshot)
           world.position.set(nextSnapshot.viewport.x, nextSnapshot.viewport.y)
           world.scale.set(nextSnapshot.viewport.scale)
@@ -140,7 +144,21 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
               },
             },
           )
-          snapshot = { ...snapshot, viewport, selectionLabels: labels }
+          const pinnedPlantNameLabels = computePinnedPlantNameLabels(
+            snapshot.scene.plants,
+            viewport,
+            snapshot.localizedCommonNames,
+            {
+              plantContext: {
+                viewport,
+                sizeMode: snapshot.sizeMode,
+                colorByAttr: snapshot.colorByAttr,
+                speciesCache: snapshot.speciesCache,
+                localizedCommonNames: snapshot.localizedCommonNames,
+              },
+            },
+          )
+          snapshot = { ...snapshot, viewport, pinnedPlantNameLabels, selectionLabels: labels }
           syncZones(zonesLayer, zoneGraphicsByName, snapshot, false)
           syncPlants(
             plantsLayer,
@@ -159,6 +177,7 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
             snapshot,
             false,
           )
+          syncPinnedPlantNameLabels(pinnedPlantNameLabelLayer, pinnedPlantNameLabelById, snapshot)
           syncSelectionLabels(selectionLabelLayer, selectionLabelBySpecies, snapshot)
           world.position.set(viewport.x, viewport.y)
           world.scale.set(viewport.scale)
@@ -736,6 +755,46 @@ function syncSelectionLabels(
     text.removeFromParent()
     text.destroy()
     labelBySpecies.delete(species)
+  }
+}
+
+function syncPinnedPlantNameLabels(
+  layer: Container,
+  labelByPlantId: Map<string, Text>,
+  snapshot: SceneRendererSnapshot,
+): void {
+  const plantLayer = getSceneLayerStyle(snapshot.scene, 'plants')
+  layer.visible = plantLayer.visible
+  layer.alpha = plantLayer.opacity
+  const labels = snapshot.pinnedPlantNameLabels ?? []
+  const nextPlantIds = new Set(labels.map((label) => label.plantId))
+
+  if (plantLayer.visible) {
+    for (const label of labels) {
+      let text = labelByPlantId.get(label.plantId)
+      if (!text) {
+        text = new Text()
+        labelByPlantId.set(label.plantId, text)
+        layer.addChild(text)
+      }
+      text.text = label.text
+      text.style = new TextStyle({
+        fontSize: 12,
+        fontWeight: '600',
+        fontStyle: label.fontStyle,
+        fill: toPixiColor(getPlantLabelColor(), 0),
+      })
+      text.position.set(label.screenPoint.x, label.screenPoint.y)
+      text.anchor.set(0.5, 0)
+      text.visible = true
+    }
+  }
+
+  for (const [plantId, text] of labelByPlantId) {
+    if (plantLayer.visible && nextPlantIds.has(plantId)) continue
+    text.removeFromParent()
+    text.destroy()
+    labelByPlantId.delete(plantId)
   }
 }
 

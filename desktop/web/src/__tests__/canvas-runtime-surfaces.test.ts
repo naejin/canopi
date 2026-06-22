@@ -80,6 +80,7 @@ function createCommandSurface() {
       pasteAt: () => {},
       canPaste: () => false,
       duplicateSelected: () => {},
+      toggleSelectedPlantNamePins: () => {},
       deleteSelected: () => {},
       selectAll: () => {},
       selectSameSpecies: () => {},

@@ -136,6 +136,8 @@
       "duplicate": "Dupliceren",
       "bringForward": "Naar voren",
       "sendBackward": "Naar achteren",
+      "pinPlantName": "Plantnaam vastzetten",
+      "unpinPlantName": "Plantnaam losmaken",
       "selectSameSpecies": "Zelfde soort selecteren",
       "saveObjectStamp": "Opslaan als opgeslagen stempel",
       "group": "Groeperen",

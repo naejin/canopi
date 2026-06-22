@@ -136,6 +136,8 @@
       "duplicate": "Дублировать",
       "bringForward": "На передний план",
       "sendBackward": "На задний план",
+      "pinPlantName": "Закрепить название растения",
+      "unpinPlantName": "Открепить название растения",
       "selectSameSpecies": "Выбрать тот же вид",
       "saveObjectStamp": "Сохранить как сохраненный штамп",
       "group": "Сгруппировать",

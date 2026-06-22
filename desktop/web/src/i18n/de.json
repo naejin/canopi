@@ -136,6 +136,8 @@
       "duplicate": "Duplizieren",
       "bringForward": "Nach vorne",
       "sendBackward": "Nach hinten",
+      "pinPlantName": "Pflanzenname anheften",
+      "unpinPlantName": "Pflanzenname lösen",
       "selectSameSpecies": "Gleiche Art auswählen",
       "saveObjectStamp": "Als gespeicherten Stempel sichern",
       "group": "Gruppieren",

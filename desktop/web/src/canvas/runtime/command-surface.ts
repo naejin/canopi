@@ -45,6 +45,7 @@ interface SceneCanvasCommandSurfaceOptions {
     | 'pasteAt'
     | 'canPaste'
     | 'duplicateSelected'
+    | 'toggleSelectedPlantNamePins'
     | 'deleteSelected'
     | 'selectAll'
     | 'selectSameSpecies'
@@ -125,6 +126,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       pasteAt: (point) => this.options.mutations.pasteAt(point),
       canPaste: () => this.options.mutations.canPaste(),
       duplicateSelected: () => this.options.mutations.duplicateSelected(),
+      toggleSelectedPlantNamePins: () => this.options.mutations.toggleSelectedPlantNamePins(),
       deleteSelected: () => this.options.mutations.deleteSelected(),
       selectAll: () => this.options.mutations.selectAll(),
       selectSameSpecies: (canonicalName, options) => this.options.mutations.selectSameSpecies(canonicalName, options),

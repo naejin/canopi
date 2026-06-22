@@ -54,6 +54,10 @@ export function createTestCanvasQuerySurface({
       blockedTargets: [],
       bounds: null,
       sameSpeciesReferenceCanonicalName: null,
+      plantNamePinning: {
+        plantIds: [],
+        allPinned: false,
+      },
     }),
     getPlantSizeMode: () => 'default',
     getPlantColorByAttr: () => null,

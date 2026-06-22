@@ -142,6 +142,7 @@ function copySavedObjectStampToDraft(
       commonName: plant.commonName,
       color: plant.color,
       symbol: plant.symbol ?? null,
+      pinnedName: false,
       stratum: null,
       canopySpreadM: plant.scale,
       position: translatePoint(plant.position, delta),

@@ -102,6 +102,7 @@ export interface SceneInteractionDeps {
     | 'pasteAt'
     | 'canPaste'
     | 'duplicateSelected'
+    | 'toggleSelectedPlantNamePins'
     | 'deleteSelected'
     | 'bringToFront'
     | 'sendToBack'

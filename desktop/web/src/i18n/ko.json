@@ -136,6 +136,8 @@
       "duplicate": "복제",
       "bringForward": "앞으로 보내기",
       "sendBackward": "뒤로 보내기",
+      "pinPlantName": "식물 이름 고정",
+      "unpinPlantName": "식물 이름 고정 해제",
       "selectSameSpecies": "같은 종 선택",
       "saveObjectStamp": "저장된 스탬프로 저장",
       "group": "그룹화",

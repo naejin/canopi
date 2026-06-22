@@ -194,7 +194,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - Plant Symbols apply to default symbolic marker mode. Canopy spread mode remains physical circle geometry when canopy spread is known; only the missing-canopy symbolic fallback should use the selected Plant Symbol.
 - Plant Symbols stay upright and ignore placed plant rotation unless a future feature deliberately defines oriented marker symbols.
 - Stack badges indicate placed plants whose centers collapse to nearly the same screen position, not all plants whose symbolic Visual Footprints overlap. Badge placement should derive from the current plant visual radius instead of fixed legacy dot-size assumptions.
-- Do not reintroduce per-plant labels on canvas. Identification is through hover tooltip and per-species selection labels.
+- Do not reintroduce general per-plant labels on canvas. Identification is through hover tooltip and per-species selection labels, except for explicit Pinned Plant Names, which are persisted per placed plant and render as always-visible labels.
 - Hover tooltip is an HTML overlay managed by `SceneInteractionController` through `runtime/interaction/hover-tooltip.ts`.
 - Hover species highlight flows through renderer snapshots.
 - Selection labels are computed per species at centroid by `runtime/selection-labels.ts` and must track viewport changes.

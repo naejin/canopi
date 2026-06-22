@@ -136,6 +136,8 @@
       "duplicate": "複製",
       "bringForward": "前面へ",
       "sendBackward": "背面へ",
+      "pinPlantName": "植物名を固定",
+      "unpinPlantName": "植物名の固定を解除",
       "selectSameSpecies": "同じ種を選択",
       "saveObjectStamp": "保存済みスタンプとして保存",
       "group": "グループ化",

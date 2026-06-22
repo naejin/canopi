@@ -70,13 +70,14 @@ export function pasteClipboardPayload(
   payload: SceneClipboardPayload,
   draft: ScenePersistedState,
   offset: ScenePoint,
+  options: { preservePinnedNames?: boolean } = {},
 ): Set<string> {
   const nextSelection = new Set<string>()
   const existingZoneNames = new Set(draft.zones.map((zone) => zone.name))
   const sourceToCloneId = new Map<string, string>()
 
   for (const plant of payload.plants) {
-    const clone = clonePlantWithOffset(plant, offset)
+    const clone = clonePlantWithOffset(plant, offset, options)
     draft.plants.push(clone)
     sourceToCloneId.set(sceneObjectGroupMemberKey({ kind: 'plant', id: plant.id }), clone.id)
   }
@@ -161,10 +162,15 @@ function cloneSelectionTarget(target: SceneSelectionTarget): SceneSelectionTarge
   return { ...target }
 }
 
-function clonePlantWithOffset(plant: ScenePlantEntity, offset: ScenePoint): ScenePlantEntity {
+function clonePlantWithOffset(
+  plant: ScenePlantEntity,
+  offset: ScenePoint,
+  options: { preservePinnedNames?: boolean },
+): ScenePlantEntity {
   return {
     ...clonePlantEntity(plant),
     id: createUuid(),
+    pinnedName: options.preservePinnedNames === true ? plant.pinnedName === true : false,
     position: {
       x: plant.position.x + offset.x,
       y: plant.position.y + offset.y,

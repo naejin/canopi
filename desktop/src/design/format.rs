@@ -3,7 +3,7 @@ use std::path::Path;
 
 /// The current file-format version this build produces and migrates to.
 /// Bump when adding a new migration step (and add the corresponding match arm).
-const CURRENT_VERSION: u32 = 3;
+const CURRENT_VERSION: u32 = 4;
 
 /// Save a `CanopiFile` to disk atomically.
 ///
@@ -89,6 +89,7 @@ fn migrate_design_value(value: &mut serde_json::Value) {
         match version {
             1 => migrate_v1_to_v2(value),
             2 => migrate_v2_to_v3(value),
+            3 => migrate_v3_to_v4(value),
             _ => {
                 tracing::warn!("Unknown file version {version} during migration, stopping");
                 break;
@@ -109,6 +110,20 @@ fn migrate_v2_to_v3(value: &mut serde_json::Value) {
         value["plant_species_symbols"] = serde_json::json!({});
     }
     value["version"] = serde_json::json!(3);
+}
+
+fn migrate_v3_to_v4(value: &mut serde_json::Value) {
+    if let Some(plants) = value
+        .get_mut("plants")
+        .and_then(|plants| plants.as_array_mut())
+    {
+        for plant in plants {
+            if plant.get("pinned_name").is_none() {
+                plant["pinned_name"] = serde_json::json!(false);
+            }
+        }
+    }
+    value["version"] = serde_json::json!(4);
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -493,7 +508,7 @@ mod tests {
     #[test]
     fn test_create_default_has_seven_layers() {
         let design = create_default();
-        assert_eq!(design.version, 3);
+        assert_eq!(design.version, 4);
         assert_eq!(design.name, "Untitled");
         assert_eq!(design.layers.len(), 7);
     }
@@ -774,7 +789,7 @@ mod tests {
             .expect("write legacy file");
         let loaded = load_from_file(&path).expect("legacy panel targets should migrate");
 
-        assert_eq!(loaded.version, 3);
+        assert_eq!(loaded.version, 4);
         assert_eq!(loaded.timeline[0].targets.len(), 3);
         assert!(matches!(
             loaded.timeline[0].targets[0],
@@ -848,7 +863,7 @@ mod tests {
         save_to_file(&path, &loaded).expect("v2 file should save");
         let reloaded = load_from_file(&path).expect("saved v2 file should reload");
 
-        assert_eq!(reloaded.version, 3);
+        assert_eq!(reloaded.version, 4);
         assert_eq!(reloaded.location.as_ref().map(|l| l.lat), Some(48.8566));
         assert_eq!(reloaded.consortiums.len(), 1);
         assert_eq!(reloaded.timeline.len(), 1);
@@ -876,7 +891,7 @@ mod tests {
     }
 
     #[test]
-    fn test_v2_files_migrate_to_v3_with_empty_plant_symbol_defaults() {
+    fn test_v2_files_migrate_to_current_with_empty_plant_symbol_defaults() {
         use serde_json::json;
 
         let dir = std::env::temp_dir();
@@ -893,8 +908,56 @@ mod tests {
             .expect("write v2 file");
         let loaded = load_from_file(&path).expect("v2 file should load");
 
-        assert_eq!(loaded.version, 3);
+        assert_eq!(loaded.version, 4);
         assert!(loaded.plant_species_symbols.is_empty());
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_v3_files_migrate_to_v4_with_unpinned_plant_names() {
+        use serde_json::json;
+
+        let dir = std::env::temp_dir();
+        let path: PathBuf = dir.join("canopi_test_v4_pinned_names.canopi");
+
+        let mut value = serde_json::to_value(create_default()).expect("default design serializes");
+        value["version"] = json!(3);
+        value["plants"] = json!([
+            {
+                "id": "plant-1",
+                "locked": false,
+                "canonical_name": "Malus domestica",
+                "common_name": "Apple",
+                "position": { "x": 0.0, "y": 0.0 },
+                "rotation": null,
+                "scale": null,
+                "notes": null,
+                "planted_date": null,
+                "quantity": 1
+            },
+            {
+                "id": "plant-2",
+                "locked": false,
+                "canonical_name": "Pyrus communis",
+                "common_name": "Pear",
+                "pinned_name": true,
+                "position": { "x": 1.0, "y": 0.0 },
+                "rotation": null,
+                "scale": null,
+                "notes": null,
+                "planted_date": null,
+                "quantity": 1
+            }
+        ]);
+
+        std::fs::write(&path, serde_json::to_string_pretty(&value).unwrap())
+            .expect("write v3 file");
+        let loaded = load_from_file(&path).expect("v3 file should load");
+
+        assert_eq!(loaded.version, 4);
+        assert!(!loaded.plants[0].pinned_name);
+        assert!(loaded.plants[1].pinned_name);
 
         let _ = std::fs::remove_file(&path);
     }

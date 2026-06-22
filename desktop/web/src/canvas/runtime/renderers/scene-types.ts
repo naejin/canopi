@@ -1,6 +1,6 @@
 import type { RendererBackendContext, RendererBackendDefinition, RendererBackendInstance } from './types'
 import type { ScenePersistedState, SceneViewportState } from '../scene'
-import type { SelectionLabel } from '../selection-labels'
+import type { PlantNameLabel, SelectionLabel } from '../selection-labels'
 import type { ColorByAttribute, PlantSizeMode } from '../../plant-display-state'
 import type { SpeciesCacheEntry } from '../species-cache'
 
@@ -29,6 +29,7 @@ export interface SceneRendererSnapshot {
   readonly localizedCommonNames: ReadonlyMap<string, string | null>
   readonly hoveredCanonicalName: string | null
   readonly hoverTarget?: SceneRendererHoverTarget | null
+  readonly pinnedPlantNameLabels?: readonly PlantNameLabel[]
   readonly selectionLabels: readonly SelectionLabel[]
 }
 

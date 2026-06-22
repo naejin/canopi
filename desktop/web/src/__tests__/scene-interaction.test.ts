@@ -115,6 +115,7 @@ function createInteractionDeps(
       pasteAt: vi.fn(),
       canPaste: vi.fn(() => false),
       duplicateSelected: vi.fn(),
+      toggleSelectedPlantNamePins: vi.fn(),
       deleteSelected: vi.fn(),
       bringToFront: vi.fn(),
       sendToBack: vi.fn(),
@@ -750,6 +751,7 @@ describe('SceneInteractionController', () => {
       }),
       selectionCommands: {
         duplicateSelected: vi.fn(),
+        toggleSelectedPlantNamePins: vi.fn(),
         deleteSelected: vi.fn(),
         bringToFront: vi.fn(),
         sendToBack: vi.fn(),
@@ -782,6 +784,62 @@ describe('SceneInteractionController', () => {
 
     controller.dispose()
     priorFocus.remove()
+  })
+
+  it('shows a Selection Action Toolbar plant-name pin button only for editable plant selections', () => {
+    Object.defineProperty(container, 'clientWidth', { configurable: true, value: 400 })
+    Object.defineProperty(container, 'clientHeight', { configurable: true, value: 300 })
+    const toggleSelectedPlantNamePins = vi.fn()
+    let selection: CanvasDesignObjectSelectionModel = {
+      editableTargets: [
+        { kind: 'plant', id: 'plant-1' },
+        { kind: 'zone', id: 'zone-1' },
+      ],
+      lockedTargets: [],
+      blockedTargets: [],
+      bounds: { minX: 160, minY: 100, maxX: 220, maxY: 150 },
+      sameSpeciesReferenceCanonicalName: null,
+      plantNamePinning: {
+        plantIds: ['plant-1'],
+        allPinned: false,
+      },
+    }
+    const deps = {
+      ...createInteractionDeps(container, store, camera),
+      getDesignObjectSelection: () => selection,
+      selectionCommands: {
+        duplicateSelected: vi.fn(),
+        toggleSelectedPlantNamePins,
+        deleteSelected: vi.fn(),
+        bringToFront: vi.fn(),
+        sendToBack: vi.fn(),
+        selectSameSpecies: vi.fn(),
+        lockSelected: vi.fn(),
+        unlockSelected: vi.fn(),
+        groupSelected: vi.fn(),
+        ungroupSelected: vi.fn(),
+      },
+    }
+    const controller = new SceneInteractionController(deps as any)
+
+    controller.refreshMeasurements()
+    const pin = container.querySelector<HTMLButtonElement>('[data-selection-action-command="pin-plant-name"]')!
+    expect(pin).not.toBeNull()
+    expect(pin.getAttribute('aria-label')).toBe('Pin plant name')
+    pin.click()
+    expect(toggleSelectedPlantNamePins).toHaveBeenCalledTimes(1)
+
+    selection = {
+      ...selection,
+      editableTargets: [{ kind: 'zone', id: 'zone-1' }],
+      plantNamePinning: {
+        plantIds: [],
+        allPinned: false,
+      },
+    }
+    controller.refreshMeasurements()
+    expect(container.querySelector('[data-selection-action-command="pin-plant-name"]')).toBeNull()
+    controller.dispose()
   })
 
   it('keeps the Selection Action Toolbar close above a single non-rotatable Plant', () => {
