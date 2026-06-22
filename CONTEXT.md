@@ -16,6 +16,10 @@ _Avoid_: Document session, file session, canvas session
 A non-canvas change to Design-owned state, including Location, Budget Items, Timeline Actions, Consortiums, description, and extra fields. Design Edit owns no-op detection, preview/commit/abort transaction behavior, and non-canvas dirty-state marking behind the Design Session seam. It does not own canvas scene state, save/load lifecycle, or UI draft state.
 _Avoid_: Document mutation, panel action, direct currentDesign write
 
+**Design Report**:
+A printable or exportable representation of a design for sharing or printing. A design report may include a fitted canvas view and selected planning sections, but it is not itself a saved design or part of the design state.
+_Avoid_: PDF file, canvas export, print snapshot
+
 **App Command Graph**:
 The app runtime seam for user command identity, labels, availability, shortcuts, dispatch, and chrome projections such as menus, palettes, toolbars, and panel navigation. The app command graph coordinates command access to Design Session, canvas, settings, and shell state without owning those domain states.
 _Avoid_: Menu registry, shortcut map, toolbar state
@@ -133,6 +137,10 @@ _Avoid_: Line, stroke
 A derived physical size description of a zone or zone edge, such as width, height, edge length, or area. A zone measurement describes the zone's current geometry; it is not a separate design object.
 _Avoid_: Shape metadata, annotation, label
 
+**Measurement Guide**:
+A persistent straight measuring aid in a design with two endpoints and an always-visible distance. A measurement guide helps a designer read distance without making the line an ecological boundary, spacing instruction, or text note.
+_Avoid_: Linear Zone, Spacing Guide, ruler line
+
 **Zone Control Point**:
 An on-canvas point a designer can drag to reshape a selected zone. Zone control points are editing affordances for a zone's geometry; they are not separate design objects or zone measurements.
 _Avoid_: Shape handle, vertex handle, resize knob
@@ -142,7 +150,7 @@ A text note positioned in a design. An annotation explains or labels part of the
 _Avoid_: Label, comment
 
 **Design Object**:
-A canvas-positioned part of a design, such as a placed plant, zone, annotation, or object group. Design objects are the things users arrange spatially in the design.
+A canvas-positioned part of a design, such as a placed plant, zone, annotation, measurement guide, or object group. Design objects are the things users arrange spatially in the design.
 _Avoid_: Canvas object, shape, element
 
 **Rotation Pivot**:
@@ -180,6 +188,10 @@ _Avoid_: Object scale, canvas scale, display size
 **Plant Drag Distance Guide**:
 A temporary on-canvas distance cue shown while dragging a placed plant. A plant drag distance guide describes the center-to-center distance from the active dragged placed plant to nearby non-dragged placed plants, and it is not saved in the design.
 _Avoid_: Plant spacing interval, zone measurement, ruler
+
+**Pinned Plant Name**:
+A persistent visible name label attached to an individual placed plant in a design. A pinned plant name is a presentation aid and does not prevent editing, moving, deleting, or otherwise changing the placed plant.
+_Avoid_: Locked plant name, Design Object Lock, annotation
 
 **Layer**:
 A fixed visibility and locking group for design objects. A design has many layers, and each layer controls whether its objects are visible, locked, and how opaque they appear; layers are not arbitrary user-created folders.
@@ -329,6 +341,9 @@ Use **Design** for the user's agroecological plan. Reserve "document" and "file"
 **Design vs Design Session**:
 A **Design** is the agroecological plan. A **Design Session** is the active app runtime context around that design, including lifecycle and persistence behavior.
 
+**Design vs Design Report**:
+A **Design** is the saved agroecological plan. A **Design Report** is an exported or printed representation of that plan and does not become part of the design state.
+
 **Design Session vs Design Edit**:
 A **Design Session** owns lifecycle, persistence, dirty baselines, and active Design identity. A **Design Edit** changes non-canvas Design state inside that session and owns no-op detection, preview transactions, and non-canvas dirty marking for those changes.
 
@@ -373,6 +388,12 @@ A **Zone Edge** is part of a zone boundary. A line is an independently drawn des
 
 **Zone Measurement vs Annotation**:
 A **Zone Measurement** is derived from a zone's geometry. An **Annotation** is authored text in the design.
+
+**Measurement Guide vs Linear Zone**:
+A **Measurement Guide** is a persistent aid for reading distance. A **Linear Zone** is a zone with ecological or functional meaning, such as a boundary, row, or path.
+
+**Measurement Guide vs Spacing Guide**:
+A **Measurement Guide** stays in the design as a distance aid. A **Spacing Guide** is temporary interaction guidance used by Plant Spacing and does not stay in the design.
 
 **Zone Control Point vs Zone Measurement**:
 A **Zone Control Point** is an editing affordance for reshaping a selected zone. A **Zone Measurement** is read-only derived information about a zone's current geometry.
@@ -442,6 +463,9 @@ A **Plant Spacing Interval** positions plant centers. Canopy spread describes a 
 
 **Plant Drag Distance Guide vs Plant Spacing Interval**:
 A **Plant Drag Distance Guide** is temporary feedback while moving an existing placed plant. A **Plant Spacing Interval** is the chosen repeat spacing used by Plant Spacing to create additional placed plants.
+
+**Pinned Plant Name vs Design Object Lock**:
+A **Pinned Plant Name** keeps a placed plant's name visible. A **Design Object Lock** prevents editing a design object; pinning a name does not lock the placed plant.
 
 **Stratum vs Layer**:
 Use **Stratum** for vertical ecological position in a consortium. Use **Layer** for design-object visibility and locking.
