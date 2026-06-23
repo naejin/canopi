@@ -2769,6 +2769,183 @@ mod tests {
     }
 
     #[test]
+    fn renderer_preserves_representative_report_invariants_without_snapshots() {
+        let input = DesignReportInput {
+            metadata: DesignReportMetadataInput {
+                description: Some("Representative dense report".to_string()),
+                location: Some(DesignReportLocationInput {
+                    lat: 48.8566,
+                    lon: 2.3522,
+                    altitude_m: Some(35.0),
+                }),
+            },
+            canvas: DesignReportCanvasInput {
+                image: Some(DesignReportCanvasImageInput {
+                    data_base64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC".to_string(),
+                    width_px: 1,
+                    height_px: 1,
+                }),
+                legend: Some(DesignReportCanvasLegendInput::PinnedPlantNames {
+                    title: "Legend".to_string(),
+                    entries: vec![DesignReportPinnedPlantNameLegendEntryInput {
+                        label: "Apple".to_string(),
+                        color: "#AA0000".to_string(),
+                        symbol: "tree".to_string(),
+                        count: 2,
+                    }],
+                }),
+                ..report_input_without_metadata().canvas
+            },
+            timeline: Some(DesignReportTimelineInput {
+                overview_rows: vec![DesignReportTimelineOverviewRowInput {
+                    action_type: "planting".to_string(),
+                    label: "Planting".to_string(),
+                    color: "#7D6049".to_string(),
+                    count: 2,
+                    date_range: "Mar 1, 2026 - Mar 10, 2026; 1 unscheduled".to_string(),
+                }],
+                actions: vec![
+                    DesignReportTimelineActionInput {
+                        action_type: "planting".to_string(),
+                        action_type_label: "Planting".to_string(),
+                        description: "Plant dense guild".to_string(),
+                        start_date: "Mar 1, 2026".to_string(),
+                        end_date: "Mar 10, 2026".to_string(),
+                        recurrence: "None".to_string(),
+                        target: "Apple".to_string(),
+                        dependencies: "None".to_string(),
+                        status: "Open".to_string(),
+                    },
+                    DesignReportTimelineActionInput {
+                        action_type: "planting".to_string(),
+                        action_type_label: "Planting".to_string(),
+                        description: "".to_string(),
+                        start_date: "Not scheduled".to_string(),
+                        end_date: "Not scheduled".to_string(),
+                        recurrence: "None".to_string(),
+                        target: "North guild".to_string(),
+                        dependencies: "1 dependency".to_string(),
+                        status: "Open".to_string(),
+                    },
+                ],
+                ..timeline_input_with_actions(0)
+            }),
+            budget: Some(DesignReportBudgetInput {
+                rows: vec![DesignReportBudgetRowInput {
+                    target: "Manual".to_string(),
+                    category: "Tools".to_string(),
+                    description: "".to_string(),
+                    quantity: "0".to_string(),
+                    unit_cost: "$0.00".to_string(),
+                    line_total: "$0.00".to_string(),
+                    currency: "USD".to_string(),
+                }],
+                totals: vec![DesignReportBudgetTotalInput {
+                    label: "Grand total".to_string(),
+                    currency: "USD".to_string(),
+                    amount: "$0.00".to_string(),
+                }],
+                ..budget_input_with_rows(0)
+            }),
+            consortium: Some(DesignReportConsortiumInput {
+                chart_rows: vec![DesignReportConsortiumChartRowInput {
+                    stratum: "High".to_string(),
+                    cells: vec![
+                        DesignReportConsortiumChartCellInput {
+                            entries: vec![DesignReportConsortiumChartEntryInput {
+                                label: "Apple".to_string(),
+                                color: "#AA0000".to_string(),
+                            }],
+                        },
+                        DesignReportConsortiumChartCellInput { entries: vec![] },
+                        DesignReportConsortiumChartCellInput {
+                            entries: vec![DesignReportConsortiumChartEntryInput {
+                                label: "Pear".to_string(),
+                                color: "#00AA00".to_string(),
+                            }],
+                        },
+                    ],
+                }],
+                rows: vec![DesignReportConsortiumRowInput {
+                    plant: "Apple".to_string(),
+                    canonical_name: Some("Malus domestica".to_string()),
+                    stratum: "High".to_string(),
+                    start_phase: "Placenta 1".to_string(),
+                    end_phase: "Secondaire 1".to_string(),
+                    count: "2".to_string(),
+                }],
+                ..consortium_input_with_rows(0)
+            }),
+            ..report_input_without_metadata()
+        };
+
+        let bytes = render_design_report_pdf(&input).unwrap();
+        let parsed = printpdf::PdfDocument::parse(
+            &bytes,
+            &PdfParseOptions {
+                fail_on_error: false,
+            },
+            &mut Vec::new(),
+        )
+        .unwrap();
+        let full_text = parsed
+            .pages
+            .iter()
+            .map(|page| page.extract_text(&parsed.resources).join("\n"))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(parsed.pages.len() >= 4);
+        assert!(parsed.pages.iter().all(|page| !page.ops.is_empty()));
+        assert!(parsed.pages.iter().enumerate().all(|(index, page)| {
+            page.extract_text(&parsed.resources)
+                .join("\n")
+                .contains(&format!("Page {}", index + 1))
+        }));
+        assert!(
+            parsed
+                .pages
+                .first()
+                .expect("first report page")
+                .ops
+                .iter()
+                .any(|op| matches!(op, Op::UseXobject { .. }))
+        );
+        assert!(parsed.pages.iter().any(|page| {
+            page.ops
+                .iter()
+                .any(|op| matches!(op, Op::DrawPolygon { .. }))
+        }));
+        for expected in [
+            "Timeline",
+            "Budget",
+            "Consortium",
+            "Succession chart",
+            "Grand total",
+        ] {
+            assert!(
+                full_text.contains(expected),
+                "missing report section text {expected:?}"
+            );
+        }
+        for leaked in [
+            "Stratum |",
+            "Plant | Canonical name",
+            "Manual | Tools",
+            "#AA0000",
+            "plant-uuid",
+            "Hidden app chrome note",
+            "�",
+            "Ã",
+        ] {
+            assert!(
+                !full_text.contains(leaked),
+                "representative report leaked {leaked:?}: {full_text:?}",
+            );
+        }
+    }
+
+    #[test]
     fn renderer_paginates_timeline_rows_with_repeated_headers() {
         let input = DesignReportInput {
             timeline: Some(timeline_input_with_actions(18)),

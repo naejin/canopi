@@ -44,6 +44,8 @@ const BASE_DESIGN: CanopiFile = {
   extra: {},
 }
 
+const SUPPORTED_REPORT_LOCALES = ['en', 'fr', 'es', 'pt', 'it', 'zh', 'de', 'ja', 'ko', 'nl', 'ru'] as const
+
 function reportPlant(id: string, canonicalName: string, commonName: string, x = 0): CanopiFile['plants'][number] {
   return {
     id,
@@ -57,6 +59,130 @@ function reportPlant(id: string, canonicalName: string, commonName: string, x = 
     planted_date: null,
     quantity: 1,
     locked: false,
+  }
+}
+
+function collectStrings(value: unknown): string[] {
+  if (typeof value === 'string') return [value]
+  if (Array.isArray(value)) return value.flatMap(collectStrings)
+  if (value && typeof value === 'object') {
+    return Object.values(value).flatMap(collectStrings)
+  }
+  return []
+}
+
+function representativeDenseReportDesign(): CanopiFile {
+  return {
+    ...BASE_DESIGN,
+    name: 'Dense multilingual report',
+    description: 'Representative report with all printable sections',
+    location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
+    plant_species_colors: {
+      'Malus domestica': '#AA0000',
+      'Pyrus communis': '#00AA00',
+      'Prunus avium': '#0000AA',
+    },
+    layers: [
+      { name: 'plants', visible: true, locked: false, opacity: 1 },
+      { name: 'zones', visible: true, locked: false, opacity: 1 },
+      { name: 'annotations', visible: false, locked: false, opacity: 1 },
+      { name: 'measurement-guides', visible: true, locked: false, opacity: 1 },
+    ],
+    plants: [
+      { ...reportPlant('apple-uuid-1', 'Malus domestica', 'Apple'), color: '#AA0000', pinned_name: true },
+      reportPlant('apple-uuid-2', 'Malus domestica', 'Apple', 2),
+      reportPlant('pear-uuid-1', 'Pyrus communis', 'Pear', 4),
+      reportPlant('cherry-uuid-1', 'Prunus avium', 'Cherry', 8),
+    ],
+    zones: [{
+      name: 'North guild',
+      zone_type: 'polygon',
+      points: [{ x: 0, y: 0 }, { x: 18, y: 0 }, { x: 18, y: 12 }],
+      rotation: 0,
+      fill_color: '#D8C8A0',
+      notes: null,
+      locked: false,
+    }],
+    annotations: [{
+      id: 'hidden-annotation-uuid',
+      annotation_type: 'text',
+      text: 'Hidden app chrome note',
+      position: { x: 4, y: 4 },
+      rotation: 0,
+      font_size: 14,
+      locked: false,
+    }],
+    measurement_guides: [{
+      id: 'guide-uuid',
+      locked: false,
+      start: { x: 0, y: 0 },
+      end: { x: 0, y: 8 },
+    }],
+    timeline: [
+      {
+        id: 'timeline-plant',
+        action_type: 'planting',
+        description: 'Plant dense guild',
+        start_date: '2026-03-01',
+        end_date: '2026-03-10',
+        recurrence: null,
+        targets: [{ kind: 'species', canonical_name: 'Malus domestica' }],
+        depends_on: [],
+        completed: false,
+        order: 1,
+      },
+      {
+        id: 'timeline-unscheduled',
+        action_type: 'planting',
+        description: '   ',
+        start_date: null,
+        end_date: null,
+        recurrence: null,
+        targets: [{ kind: 'zone', zone_name: 'North guild' }],
+        depends_on: ['timeline-plant'],
+        completed: false,
+        order: 2,
+      },
+    ],
+    budget_currency: 'USD',
+    budget: [
+      {
+        target: { kind: 'manual' },
+        category: 'tools',
+        description: '   ',
+        quantity: 0,
+        unit_cost: 0,
+        currency: 'USD',
+      },
+      {
+        target: { kind: 'none' },
+        category: 'materials',
+        description: 'Mulch delivery',
+        quantity: 0,
+        unit_cost: 0,
+        currency: 'EUR',
+      },
+    ],
+    consortiums: [
+      {
+        target: { kind: 'species', canonical_name: 'Malus domestica' },
+        stratum: 'high',
+        start_phase: 0,
+        end_phase: 2,
+      },
+      {
+        target: { kind: 'species', canonical_name: 'Pyrus communis' },
+        stratum: 'medium',
+        start_phase: 1,
+        end_phase: 4,
+      },
+      {
+        target: { kind: 'species', canonical_name: 'Prunus avium' },
+        stratum: 'low',
+        start_phase: 3,
+        end_phase: 6,
+      },
+    ],
   }
 }
 
@@ -171,6 +297,51 @@ describe('Design Report export input', () => {
       const input = buildDesignReportInput(BASE_DESIGN)
 
       expect(input.labels.page_number).toBe(expected)
+    }
+  })
+
+  it('builds a representative dense report for every supported locale without missing localized text', () => {
+    for (const language of SUPPORTED_REPORT_LOCALES) {
+      locale.value = language
+      const canvasImageRenderer = vi.fn(() => ({
+        data_base64: 'white-png',
+        width_px: 1200,
+        height_px: 800,
+      }))
+
+      const input = buildDesignReportInput(representativeDenseReportDesign(), {
+        querySurface: createTestCanvasQuerySurface({
+          localizedNames: new Map([
+            ['Malus domestica', 'Localized apple'],
+            ['Pyrus communis', 'Localized pear'],
+            ['Prunus avium', 'Localized cherry'],
+          ]),
+        }),
+        canvasImageRenderer,
+      })
+      const allStrings = collectStrings(input)
+
+      expect(input.metadata.description).toBeTruthy()
+      expect(input.metadata.location).toEqual(expect.objectContaining({ lat: 48.8566, lon: 2.3522 }))
+      expect(input.canvas.page.background).toBe('#FFFFFF')
+      expect(input.canvas.image).toEqual(expect.objectContaining({ width_px: 1200, height_px: 800 }))
+      expect(input.canvas.visible_layer_names.length).toBeGreaterThan(0)
+      expect(input.canvas.annotations).toEqual([])
+      expect(input.canvas.measurement_guides).toHaveLength(1)
+      expect(input.canvas.legend).toEqual(expect.objectContaining({ kind: 'pinned-plant-names' }))
+      expect(input.timeline?.overview_rows.length).toBeGreaterThan(0)
+      expect(input.timeline?.actions.some((action) => action.description === '')).toBe(true)
+      expect(input.budget?.rows).toHaveLength(2)
+      expect(input.budget?.totals).toEqual(expect.arrayContaining([
+        expect.objectContaining({ currency: 'USD' }),
+        expect.objectContaining({ currency: 'EUR' }),
+      ]))
+      expect(input.consortium?.chart_rows.length).toBeGreaterThan(0)
+      expect(input.consortium?.rows.length).toBeGreaterThan(0)
+      expect(canvasImageRenderer).toHaveBeenCalledWith(expect.objectContaining({ background: '#FFFFFF' }))
+      expect(allStrings).not.toContain('Hidden app chrome note')
+      expect(allStrings.some((value) => /^(canvas|designReport)\./.test(value))).toBe(false)
+      expect(allStrings.some((value) => value.includes('�') || value.includes('Ã'))).toBe(false)
     }
   })
 
