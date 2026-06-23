@@ -966,12 +966,20 @@
       "none": "Keine",
       "notScheduled": "Nicht geplant",
       "completed": "Abgeschlossen",
-      "open": "Offen"
+      "open": "Offen",
+      "dependencyCountOne": "{{count}} Abhängigkeit",
+      "dependencyCountMany": "{{count}} Abhängigkeiten"
     },
     "budget": {
       "target": "Ziel",
       "category": "Kategorie",
-      "totals": "Summen"
+      "totals": "Summen",
+      "categories": {
+        "plants": "Pflanzen",
+        "materials": "Materialien",
+        "labor": "Arbeit",
+        "tools": "Werkzeuge"
+      }
     },
     "consortium": {
       "chart": "Sukzessionsdiagramm",
@@ -992,6 +1000,7 @@
       "noVisibleCanvasObjects": "Keine sichtbaren Canvas-Objekte",
       "pinned": "Fixiert",
       "colorBy": "Färben nach",
+      "pageNumber": "Seite {page} von {count}",
       "altitude": "Höhe"
     }
   }

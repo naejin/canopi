@@ -57,6 +57,7 @@ export interface DesignReportLabelsInput {
   readonly no_visible_canvas_objects: string
   readonly pinned: string
   readonly color_by: string
+  readonly page_number: string
 }
 
 export interface DesignReportPlantInput {
@@ -308,6 +309,7 @@ function buildReportLabels(): DesignReportLabelsInput {
     no_visible_canvas_objects: t('designReport.document.noVisibleCanvasObjects'),
     pinned: t('designReport.document.pinned'),
     color_by: t('designReport.document.colorBy'),
+    page_number: t('designReport.document.pageNumber'),
   }
 }
 
@@ -362,7 +364,7 @@ function buildCanvasInput(
     bounds,
     visible_layer_names: file.layers
       .filter((layer) => layer.visible)
-      .map((layer) => layer.name),
+      .map((layer) => reportLayerLabel(layer.name)),
     plants,
     zones,
     annotations,
@@ -430,7 +432,7 @@ function buildCanvasLegend(
     return {
       kind: 'color-by',
       title: t('canvas.display.legend'),
-      attribute: colorByAttr,
+      attribute: plantColorByAttributeLabel(colorByAttr),
       entries: getLegendEntries(colorByAttr).map((entry) => ({
         label: entry.label,
         color: entry.color,
@@ -524,9 +526,7 @@ function reportTimelineAction(
     end_date: formatTimelineDateValue(action.end_date, activeLocale),
     recurrence: nonEmptyString(action.recurrence) ?? t('designReport.timeline.none'),
     target: timelineTargetsLabel(action.targets, file, localizedNames),
-    dependencies: action.depends_on && action.depends_on.length > 0
-      ? action.depends_on.join(', ')
-      : t('designReport.timeline.none'),
+    dependencies: timelineDependenciesLabel(action.depends_on),
     status: action.completed ? t('designReport.timeline.completed') : t('designReport.timeline.open'),
   }
 }
@@ -606,7 +606,7 @@ function timelineTargetLabel(
       return localizedSpeciesName(target.canonical_name, file, localizedNames)
     case 'placed_plant': {
       const plant = file.plants.find((candidate) => candidate.id === target.plant_id)
-      return plant ? localizedPlantName(plant, localizedNames) : target.plant_id
+      return plant ? localizedPlantName(plant, localizedNames) : null
     }
     case 'zone':
       return target.zone_name
@@ -676,7 +676,7 @@ function reportBudgetRow(
     lineTotal,
     input: {
       target: timelineTargetLabel(item.target, file, localizedNames) ?? t('designReport.timeline.none'),
-      category: item.category,
+      category: budgetCategoryLabel(item.category),
       description: item.description,
       quantity: formatReportNumber(quantity, activeLocale),
       unit_cost: formatBudgetCurrency(item.unit_cost, currency, activeLocale),
@@ -818,6 +818,72 @@ function formatReportNumber(value: number, activeLocale: string): string {
 
 function isLayerVisible(file: CanopiFile, layerName: string): boolean {
   return file.layers.find((layer) => layer.name === layerName)?.visible !== false
+}
+
+const REPORT_LAYER_LABEL_KEYS: Record<string, string> = {
+  annotations: 'canvas.layers.annotations',
+  base: 'canvas.layers.basemap',
+  climate: 'canvas.layers.climate',
+  contours: 'canvas.layers.contours',
+  'measurement-guides': 'canvas.layers.measurement-guides',
+  plants: 'canvas.layers.plants',
+  zones: 'canvas.layers.zones',
+  water: 'canvas.layers.water',
+  hillshading: 'canvas.terrain.hillshade',
+}
+
+const PLANT_COLOR_BY_ATTRIBUTE_LABEL_KEYS: Record<string, string> = {
+  edibility: 'canvas.display.edibility',
+  flower: 'canvas.display.flower',
+  hardiness: 'canvas.display.hardiness',
+  lifecycle: 'canvas.display.lifecycle',
+  nitrogen: 'canvas.display.nitrogen',
+  stratum: 'canvas.display.stratum',
+}
+
+const BUDGET_CATEGORY_LABEL_KEYS: Record<string, string> = {
+  labor: 'designReport.budget.categories.labor',
+  materials: 'designReport.budget.categories.materials',
+  plants: 'designReport.budget.categories.plants',
+  tools: 'designReport.budget.categories.tools',
+}
+
+function reportLayerLabel(layerName: string): string {
+  return localizedKeyOrHumanized(REPORT_LAYER_LABEL_KEYS[layerName], layerName)
+}
+
+function plantColorByAttributeLabel(attribute: string): string {
+  return localizedKeyOrHumanized(PLANT_COLOR_BY_ATTRIBUTE_LABEL_KEYS[attribute], attribute)
+}
+
+function budgetCategoryLabel(category: string): string {
+  return localizedKeyOrHumanized(BUDGET_CATEGORY_LABEL_KEYS[category], category)
+}
+
+function timelineDependenciesLabel(dependencies: readonly string[] | null | undefined): string {
+  const count = dependencies?.filter((dependency) => nonEmptyString(dependency) !== null).length ?? 0
+  if (count === 0) return t('designReport.timeline.none')
+  if (count === 1) return t('designReport.timeline.dependencyCountOne', { count })
+  return t('designReport.timeline.dependencyCountMany', { count })
+}
+
+function localizedKeyOrHumanized(key: string | undefined, fallbackValue: string): string {
+  if (!key) return humanizeReportToken(fallbackValue)
+  const translated = t(key)
+  return translated === key ? humanizeReportToken(fallbackValue) : translated
+}
+
+function humanizeReportToken(value: string): string {
+  const words = value
+    .replace(/[_-]+/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+  if (words.length === 0) return value
+  return words
+    .map((word) => word.charAt(0).toLocaleUpperCase(locale.value) + word.slice(1))
+    .join(' ')
 }
 
 function choosePageOrientation(bounds: DesignReportBounds | null): DesignReportPageOrientation {

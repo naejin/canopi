@@ -966,12 +966,20 @@
       "none": "Nenhuma",
       "notScheduled": "Não programado",
       "completed": "Concluído",
-      "open": "Aberto"
+      "open": "Aberto",
+      "dependencyCountOne": "{{count}} dependência",
+      "dependencyCountMany": "{{count}} dependências"
     },
     "budget": {
       "target": "Alvo",
       "category": "Categoria",
-      "totals": "Totais"
+      "totals": "Totais",
+      "categories": {
+        "plants": "Plantas",
+        "materials": "Materiais",
+        "labor": "Mão de obra",
+        "tools": "Ferramentas"
+      }
     },
     "consortium": {
       "chart": "Gráfico de sucessão",
@@ -992,6 +1000,7 @@
       "noVisibleCanvasObjects": "Nenhum objeto visível no canvas",
       "pinned": "Fixado",
       "colorBy": "Colorir por",
+      "pageNumber": "Página {page} de {count}",
       "altitude": "altitude"
     }
   }

@@ -966,12 +966,20 @@
       "none": "Ninguna",
       "notScheduled": "Sin programar",
       "completed": "Completado",
-      "open": "Abierto"
+      "open": "Abierto",
+      "dependencyCountOne": "{{count}} dependencia",
+      "dependencyCountMany": "{{count}} dependencias"
     },
     "budget": {
       "target": "Objetivo",
       "category": "Categoría",
-      "totals": "Totales"
+      "totals": "Totales",
+      "categories": {
+        "plants": "Plantas",
+        "materials": "Materiales",
+        "labor": "Mano de obra",
+        "tools": "Herramientas"
+      }
     },
     "consortium": {
       "chart": "Diagrama de sucesión",
@@ -992,6 +1000,7 @@
       "noVisibleCanvasObjects": "No hay objetos visibles en el lienzo",
       "pinned": "Fijado",
       "colorBy": "Colorear por",
+      "pageNumber": "Página {page} de {count}",
       "altitude": "altitud"
     }
   }

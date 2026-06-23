@@ -966,12 +966,20 @@
       "none": "Нет",
       "notScheduled": "Не запланировано",
       "completed": "Завершено",
-      "open": "Открыто"
+      "open": "Открыто",
+      "dependencyCountOne": "{{count}} зависимость",
+      "dependencyCountMany": "{{count}} зависимости"
     },
     "budget": {
       "target": "Цель",
       "category": "Категория",
-      "totals": "Итоги"
+      "totals": "Итоги",
+      "categories": {
+        "plants": "Растения",
+        "materials": "Материалы",
+        "labor": "Труд",
+        "tools": "Инструменты"
+      }
     },
     "consortium": {
       "chart": "Диаграмма сукцессии",
@@ -992,6 +1000,7 @@
       "noVisibleCanvasObjects": "Нет видимых объектов на холсте",
       "pinned": "Закреплено",
       "colorBy": "Окраска по",
+      "pageNumber": "Страница {page} из {count}",
       "altitude": "высота"
     }
   }

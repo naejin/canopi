@@ -30,6 +30,12 @@ pub struct DesignReportLabelsInput {
     pub no_visible_canvas_objects: String,
     pub pinned: String,
     pub color_by: String,
+    #[serde(default = "default_page_number_template")]
+    pub page_number: String,
+}
+
+fn default_page_number_template() -> String {
+    "Page {page} of {count}".to_string()
 }
 
 impl Default for DesignReportLabelsInput {
@@ -44,6 +50,7 @@ impl Default for DesignReportLabelsInput {
             no_visible_canvas_objects: "No visible canvas objects".to_string(),
             pinned: "Pinned".to_string(),
             color_by: "Color by".to_string(),
+            page_number: default_page_number_template(),
         }
     }
 }
@@ -103,6 +110,7 @@ pub struct DesignReportBounds {
     pub max_y: f64,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 pub struct DesignReportPlantInput {
     pub id: String,
@@ -117,6 +125,7 @@ pub struct DesignReportPlantInput {
     pub y: f64,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 pub struct DesignReportZoneInput {
     pub name: String,
@@ -131,6 +140,7 @@ pub struct DesignReportPointInput {
     pub y: f64,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 pub struct DesignReportAnnotationInput {
     pub id: String,
@@ -139,6 +149,7 @@ pub struct DesignReportAnnotationInput {
     pub y: f64,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 pub struct DesignReportMeasurementGuideInput {
     pub id: String,
@@ -161,6 +172,7 @@ pub enum DesignReportCanvasLegendInput {
     },
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 pub struct DesignReportPinnedPlantNameLegendEntryInput {
     pub label: String,
@@ -169,6 +181,7 @@ pub struct DesignReportPinnedPlantNameLegendEntryInput {
     pub count: u32,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 pub struct DesignReportColorByLegendEntryInput {
     pub label: String,
@@ -197,6 +210,7 @@ pub struct DesignReportTimelineColumnsInput {
     pub status: String,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 pub struct DesignReportTimelineOverviewRowInput {
     pub action_type: String,
@@ -206,6 +220,7 @@ pub struct DesignReportTimelineOverviewRowInput {
     pub date_range: String,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 pub struct DesignReportTimelineActionInput {
     pub action_type: String,
@@ -288,6 +303,7 @@ pub struct DesignReportConsortiumChartCellInput {
     pub entries: Vec<DesignReportConsortiumChartEntryInput>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 pub struct DesignReportConsortiumChartEntryInput {
     pub label: String,
@@ -534,10 +550,22 @@ pub(crate) fn build_design_report_layout(input: &DesignReportInput) -> DesignRep
 
     let page_count = pages.len();
     for (index, page) in pages.iter_mut().enumerate() {
-        page.page_number_label = format!("Page {} of {page_count}", index + 1);
+        page.page_number_label =
+            format_page_number_label(&input.labels.page_number, index + 1, page_count);
     }
 
     DesignReportLayout { pages }
+}
+
+fn format_page_number_label(template: &str, page_number: usize, page_count: usize) -> String {
+    let trimmed = template.trim();
+    if trimmed.is_empty() {
+        return format!("Page {page_number} of {page_count}");
+    }
+
+    trimmed
+        .replace("{page}", &page_number.to_string())
+        .replace("{count}", &page_count.to_string())
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1039,12 +1067,9 @@ fn render_canvas_objects(
             .collect();
         if points.len() >= 2 {
             draw_polyline(ops, &points, true);
-            if let Some(first) = points.first() {
-                let fill = zone
-                    .fill_color
-                    .as_deref()
-                    .map(|value| format!(", {value}"))
-                    .unwrap_or_default();
+            if let Some(first) = points.first()
+                && !zone.name.trim().is_empty()
+            {
                 text_at_point(
                     ops,
                     fonts,
@@ -1052,7 +1077,7 @@ fn render_canvas_objects(
                     first.y.0 + 5.0,
                     7.0,
                     ReportFont::Regular,
-                    &format!("{} ({}){fill}", zone.name, zone.zone_type),
+                    &zone.name,
                 );
             }
         }
@@ -1070,18 +1095,11 @@ fn render_canvas_objects(
             .unwrap_or(POINT_MARK_RADIUS_MM)
             .clamp(POINT_MARK_RADIUS_MM, 6.0);
         draw_cross(ops, point, radius_mm);
-        let mut label = plant
+        let label = plant
             .common_name
             .as_deref()
             .unwrap_or(plant.canonical_name.as_str())
             .to_string();
-        if let Some(symbol) = plant.symbol.as_deref() {
-            label.push_str(&format!(" [{symbol}]"));
-        }
-        if let Some(color) = plant.color.as_deref() {
-            label.push_str(&format!(" {color}"));
-        }
-        label.push_str(&format!(" #{id}", id = plant.id));
         text_at_point(
             ops,
             fonts,
@@ -1113,7 +1131,7 @@ fn render_canvas_objects(
             point.y.0,
             8.0,
             ReportFont::Regular,
-            &format!("{} #{id}", annotation.text, id = annotation.id),
+            &annotation.text,
         );
     }
 }
@@ -1143,10 +1161,7 @@ fn render_canvas_legend(
                     y_mm,
                     7.5,
                     ReportFont::Regular,
-                    &format!(
-                        "[{}] {} {}{}",
-                        entry.symbol, entry.label, entry.color, count
-                    ),
+                    &format!("{}{}", entry.label, count),
                 );
                 y_mm -= 4.5;
             }
@@ -1176,7 +1191,7 @@ fn render_canvas_legend(
                     y_mm,
                     7.5,
                     ReportFont::Regular,
-                    &format!("{} {}", entry.color, entry.label),
+                    &entry.label,
                 );
                 y_mm -= 4.5;
             }
@@ -1213,11 +1228,10 @@ fn render_measurement_guide(
     draw_polyline(ops, &tick_points(end, normal_x, normal_y, tick_half), false);
 
     let label_offset = Mm(3.0).into_pt().0;
-    let label = if guide.label.trim().is_empty() {
-        guide.id.as_str()
-    } else {
-        guide.label.as_str()
-    };
+    let label = guide.label.trim();
+    if label.is_empty() {
+        return;
+    }
     text_at_point(
         ops,
         fonts,
@@ -1267,10 +1281,7 @@ fn render_timeline_section(
                 cursor_y,
                 7.5,
                 ReportFont::Regular,
-                &format!(
-                    "{} ({}) - {} [{} {}]",
-                    row.label, row.count, row.date_range, row.action_type, row.color
-                ),
+                &format!("{} ({}) - {}", row.label, row.count, row.date_range),
             );
             cursor_y -= 4.8;
         }
@@ -1352,9 +1363,8 @@ fn render_timeline_action_row(
         7.2,
         ReportFont::Regular,
         &format!(
-            "{} ({}) | {} | {} | {} | {}",
+            "{} | {} | {} | {} | {}",
             action.action_type_label,
-            action.action_type,
             action.start_date,
             action.end_date,
             action.target,
@@ -1604,7 +1614,7 @@ fn render_consortium_chart(
                 } else {
                     cell.entries
                         .iter()
-                        .map(|entry| format!("{} {}", entry.label, entry.color))
+                        .map(|entry| entry.label.clone())
                         .collect::<Vec<_>>()
                         .join(", ")
                 }
@@ -2254,7 +2264,9 @@ mod tests {
         assert!(text.contains("Pinned: Pommier"));
         assert!(text.contains("5 m"));
         assert!(text.contains("Legend"));
-        assert!(text.contains("[tree] Pommier #112233"));
+        assert!(text.contains("Pommier"));
+        assert!(!text.contains("[tree]"));
+        assert!(!text.contains("#112233"));
     }
 
     #[test]
@@ -2281,6 +2293,124 @@ mod tests {
         assert!(second_text.contains("Action type"));
         assert!(second_text.contains("Action 13"));
         assert!(second_text.contains("Page 3 of"));
+    }
+
+    #[test]
+    fn renderer_omits_internal_ids_and_raw_implementation_values_from_report_text() {
+        let input = DesignReportInput {
+            canvas: DesignReportCanvasInput {
+                bounds: Some(DesignReportBounds {
+                    min_x: 0.0,
+                    min_y: 0.0,
+                    max_x: 20.0,
+                    max_y: 20.0,
+                }),
+                zones: vec![DesignReportZoneInput {
+                    name: "North bed".to_string(),
+                    zone_type: "debug-zone-type".to_string(),
+                    fill_color: Some("#AABBCC".to_string()),
+                    points: vec![
+                        DesignReportPointInput { x: 0.0, y: 0.0 },
+                        DesignReportPointInput { x: 10.0, y: 0.0 },
+                        DesignReportPointInput { x: 10.0, y: 10.0 },
+                    ],
+                }],
+                plants: vec![DesignReportPlantInput {
+                    id: "plant-uuid-123".to_string(),
+                    canonical_name: "Malus domestica".to_string(),
+                    common_name: Some("Pommier".to_string()),
+                    color: Some("#112233".to_string()),
+                    symbol: Some("tree".to_string()),
+                    pinned_name_label: None,
+                    radius_m: Some(2.0),
+                    x: 5.0,
+                    y: 5.0,
+                }],
+                annotations: vec![DesignReportAnnotationInput {
+                    id: "annotation-uuid-456".to_string(),
+                    text: "Irrigation note".to_string(),
+                    x: 7.0,
+                    y: 7.0,
+                }],
+                legend: Some(DesignReportCanvasLegendInput::ColorBy {
+                    title: "Légende".to_string(),
+                    attribute: "Strate".to_string(),
+                    entries: vec![DesignReportColorByLegendEntryInput {
+                        label: "Haut".to_string(),
+                        color: "#00AA00".to_string(),
+                    }],
+                }),
+                ..report_input_without_metadata().canvas
+            },
+            timeline: Some(DesignReportTimelineInput {
+                overview_rows: vec![DesignReportTimelineOverviewRowInput {
+                    action_type: "planting".to_string(),
+                    label: "Plantation".to_string(),
+                    color: "#7D6049".to_string(),
+                    count: 1,
+                    date_range: "1 mars 2026".to_string(),
+                }],
+                actions: vec![DesignReportTimelineActionInput {
+                    action_type: "planting".to_string(),
+                    action_type_label: "Plantation".to_string(),
+                    description: "Installer les plants".to_string(),
+                    start_date: "1 mars 2026".to_string(),
+                    end_date: "1 mars 2026".to_string(),
+                    recurrence: "Aucune".to_string(),
+                    target: "Pommier".to_string(),
+                    dependencies: "1 dépendance".to_string(),
+                    status: "Terminé".to_string(),
+                }],
+                ..timeline_input_with_actions(0)
+            }),
+            consortium: Some(DesignReportConsortiumInput {
+                chart_rows: vec![DesignReportConsortiumChartRowInput {
+                    stratum: "Haut".to_string(),
+                    cells: vec![DesignReportConsortiumChartCellInput {
+                        entries: vec![DesignReportConsortiumChartEntryInput {
+                            label: "Pommier".to_string(),
+                            color: "#00AA00".to_string(),
+                        }],
+                    }],
+                }],
+                ..consortium_input_with_rows(0)
+            }),
+            ..report_input_without_metadata()
+        };
+        let layout = build_design_report_layout(&input);
+        let text = layout
+            .pages
+            .iter()
+            .enumerate()
+            .map(|(index, page_layout)| {
+                page_text(&render_test_page(&input, page_layout, index)).join("\n")
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(text.contains("North bed"));
+        assert!(text.contains("Pommier"));
+        assert!(text.contains("Irrigation note"));
+        assert!(text.contains("Color by: Strate"));
+        assert!(text.contains("Plantation (1) - 1 mars 2026"));
+
+        for leaked in [
+            "debug-zone-type",
+            "#AABBCC",
+            "#112233",
+            "#00AA00",
+            "#7D6049",
+            "[tree]",
+            "plant-uuid-123",
+            "annotation-uuid-456",
+            "(planting)",
+            "[planting",
+        ] {
+            assert!(
+                !text.contains(leaked),
+                "report text leaked implementation value {leaked:?}: {text:?}",
+            );
+        }
     }
 
     #[test]
@@ -2372,7 +2502,7 @@ mod tests {
                 measurement_guides: vec![],
                 legend: Some(DesignReportCanvasLegendInput::ColorBy {
                     title: "Légende".to_string(),
-                    attribute: "stratum".to_string(),
+                    attribute: "Strate".to_string(),
                     entries: vec![DesignReportColorByLegendEntryInput {
                         label: "Haut".to_string(),
                         color: "#00AA00".to_string(),
@@ -2393,8 +2523,9 @@ mod tests {
         assert!(first_text.contains("Vue d’ensemble"));
         assert!(first_text.contains("Emplacement: 48.85660, 2.35220"));
         assert!(first_text.contains("Calques visibles: par défaut"));
-        assert!(first_text.contains("Colorier par: stratum"));
+        assert!(first_text.contains("Colorier par: Strate"));
         assert!(first_text.contains("Aucun objet visible sur le canevas"));
+        assert!(first_text.contains("Page 1 sur"));
         assert!(!first_text.contains("Visible layers"));
         assert!(!first_text.contains("Color by:"));
 
@@ -2502,6 +2633,7 @@ mod tests {
             no_visible_canvas_objects: "Aucun objet visible sur le canevas".to_string(),
             pinned: "Épinglé".to_string(),
             color_by: "Colorier par".to_string(),
+            page_number: "Page {page} sur {count}".to_string(),
         }
     }
 

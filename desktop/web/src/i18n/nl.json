@@ -966,12 +966,20 @@
       "none": "Geen",
       "notScheduled": "Niet gepland",
       "completed": "Voltooid",
-      "open": "Open"
+      "open": "Open",
+      "dependencyCountOne": "{{count}} afhankelijkheid",
+      "dependencyCountMany": "{{count}} afhankelijkheden"
     },
     "budget": {
       "target": "Doel",
       "category": "Categorie",
-      "totals": "Totalen"
+      "totals": "Totalen",
+      "categories": {
+        "plants": "Planten",
+        "materials": "Materialen",
+        "labor": "Arbeid",
+        "tools": "Gereedschap"
+      }
     },
     "consortium": {
       "chart": "Successiediagram",
@@ -992,6 +1000,7 @@
       "noVisibleCanvasObjects": "Geen zichtbare canvasobjecten",
       "pinned": "Vastgezet",
       "colorBy": "Kleuren op",
+      "pageNumber": "Pagina {page} van {count}",
       "altitude": "hoogte"
     }
   }

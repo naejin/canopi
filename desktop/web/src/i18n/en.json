@@ -966,12 +966,20 @@
       "none": "None",
       "notScheduled": "Not scheduled",
       "completed": "Completed",
-      "open": "Open"
+      "open": "Open",
+      "dependencyCountOne": "{{count}} dependency",
+      "dependencyCountMany": "{{count}} dependencies"
     },
     "budget": {
       "target": "Target",
       "category": "Category",
-      "totals": "Totals"
+      "totals": "Totals",
+      "categories": {
+        "plants": "Plants",
+        "materials": "Materials",
+        "labor": "Labor",
+        "tools": "Tools"
+      }
     },
     "consortium": {
       "chart": "Succession chart",
@@ -992,6 +1000,7 @@
       "noVisibleCanvasObjects": "No visible canvas objects",
       "pinned": "Pinned",
       "colorBy": "Color by",
+      "pageNumber": "Page {page} of {count}",
       "altitude": "altitude"
     }
   }

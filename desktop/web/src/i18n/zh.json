@@ -966,12 +966,20 @@
       "none": "无",
       "notScheduled": "未计划",
       "completed": "已完成",
-      "open": "未完成"
+      "open": "未完成",
+      "dependencyCountOne": "{{count}} 个依赖项",
+      "dependencyCountMany": "{{count}} 个依赖项"
     },
     "budget": {
       "target": "目标",
       "category": "类别",
-      "totals": "总计"
+      "totals": "总计",
+      "categories": {
+        "plants": "植物",
+        "materials": "材料",
+        "labor": "人工",
+        "tools": "工具"
+      }
     },
     "consortium": {
       "chart": "演替图",
@@ -992,6 +1000,7 @@
       "noVisibleCanvasObjects": "没有可见的画布对象",
       "pinned": "已固定",
       "colorBy": "按条件着色",
+      "pageNumber": "第 {page} 页，共 {count} 页",
       "altitude": "海拔"
     }
   }

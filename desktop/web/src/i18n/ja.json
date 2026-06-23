@@ -966,12 +966,20 @@
       "none": "なし",
       "notScheduled": "未定",
       "completed": "完了",
-      "open": "未完了"
+      "open": "未完了",
+      "dependencyCountOne": "{{count}} 件の依存関係",
+      "dependencyCountMany": "{{count}} 件の依存関係"
     },
     "budget": {
       "target": "対象",
       "category": "カテゴリ",
-      "totals": "合計"
+      "totals": "合計",
+      "categories": {
+        "plants": "植物",
+        "materials": "資材",
+        "labor": "労務",
+        "tools": "道具"
+      }
     },
     "consortium": {
       "chart": "遷移チャート",
@@ -992,6 +1000,7 @@
       "noVisibleCanvasObjects": "表示可能なキャンバスオブジェクトはありません",
       "pinned": "固定",
       "colorBy": "色分け",
+      "pageNumber": "{count} ページ中 {page} ページ",
       "altitude": "標高"
     }
   }

@@ -966,12 +966,20 @@
       "none": "없음",
       "notScheduled": "예약 없음",
       "completed": "완료됨",
-      "open": "열림"
+      "open": "열림",
+      "dependencyCountOne": "{{count}}개 종속성",
+      "dependencyCountMany": "{{count}}개 종속성"
     },
     "budget": {
       "target": "대상",
       "category": "범주",
-      "totals": "합계"
+      "totals": "합계",
+      "categories": {
+        "plants": "식물",
+        "materials": "자재",
+        "labor": "인건비",
+        "tools": "도구"
+      }
     },
     "consortium": {
       "chart": "천이 차트",
@@ -992,6 +1000,7 @@
       "noVisibleCanvasObjects": "보이는 캔버스 객체가 없습니다",
       "pinned": "고정됨",
       "colorBy": "색상 기준",
+      "pageNumber": "{count}페이지 중 {page}페이지",
       "altitude": "고도"
     }
   }

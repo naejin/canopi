@@ -121,7 +121,7 @@ describe('Design Report export input', () => {
     expect(input.metadata).toEqual({})
     expect(input.canvas.page.background).toBe('#FFFFFF')
     expect(input.canvas.page.orientation).toBe('landscape')
-    expect(input.canvas.visible_layer_names).toEqual(['plants'])
+    expect(input.canvas.visible_layer_names).toEqual(['Plants'])
     expect(input.canvas.plants.map((plant) => plant.id)).toEqual(['plant-1', 'plant-2'])
     expect(input.canvas.zones).toEqual([])
     expect(input.canvas.bounds).toEqual({ min_x: 0, min_y: 0, max_x: 160, max_y: 40 })
@@ -146,7 +146,32 @@ describe('Design Report export input', () => {
       no_visible_canvas_objects: 'Aucun objet visible sur le canevas',
       pinned: 'Épinglé',
       color_by: 'Colorier par',
+      page_number: 'Page {page} sur {count}',
     })
+  })
+
+  it('snapshots localized page number formats for supported report locales', () => {
+    const cases = [
+      ['en', 'Page {page} of {count}'],
+      ['fr', 'Page {page} sur {count}'],
+      ['es', 'Página {page} de {count}'],
+      ['pt', 'Página {page} de {count}'],
+      ['it', 'Pagina {page} di {count}'],
+      ['zh', '第 {page} 页，共 {count} 页'],
+      ['de', 'Seite {page} von {count}'],
+      ['ja', '{count} ページ中 {page} ページ'],
+      ['ko', '{count}페이지 중 {page}페이지'],
+      ['nl', 'Pagina {page} van {count}'],
+      ['ru', 'Страница {page} из {count}'],
+    ] as const
+
+    for (const [language, expected] of cases) {
+      locale.value = language
+
+      const input = buildDesignReportInput(BASE_DESIGN)
+
+      expect(input.labels.page_number).toBe(expected)
+    }
   })
 
   it('exports current serialized Design Session state without clearing dirty state', async () => {
@@ -391,7 +416,7 @@ describe('Design Report export input', () => {
     expect(input.canvas.legend).toEqual(expect.objectContaining({
       kind: 'color-by',
       title: 'Legend',
-      attribute: 'flower',
+      attribute: 'Flower',
       entries: expect.arrayContaining([
         expect.objectContaining({ label: 'White' }),
       ]),
@@ -488,7 +513,7 @@ describe('Design Report export input', () => {
           end_date: expect.stringContaining('mars'),
           recurrence: 'yearly',
           target: 'Pommier',
-          dependencies: 'mulch',
+          dependencies: '1 dépendance',
           status: 'Terminé',
         }),
         expect.objectContaining({
@@ -589,7 +614,7 @@ describe('Design Report export input', () => {
       rows: [
         expect.objectContaining({
           target: 'Pommier',
-          category: 'plants',
+          category: 'Plantes',
           description: 'Bare-root apple tree with a deliberately long description',
           quantity: '2',
           unit_cost: expect.stringContaining('€'),
@@ -598,7 +623,7 @@ describe('Design Report export input', () => {
         }),
         expect.objectContaining({
           target: 'Manuel',
-          category: 'materials',
+          category: 'Matériaux',
           description: 'Compost delivery',
           quantity: '2,5',
           unit_cost: expect.stringContaining('€'),
