@@ -700,6 +700,7 @@
     "file.open": "Открыть дизайн",
     "file.save": "Сохранить",
     "file.saveAs": "Сохранить как",
+    "file.exportDesignReportPdf": "Экспортировать отчет о дизайне в PDF",
     "file.exit": "Выход",
     "edit.undo": "Отменить",
     "edit.redo": "Повторить",

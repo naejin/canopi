@@ -838,6 +838,7 @@
     "file.open": "Open Design",
     "file.save": "Save",
     "file.saveAs": "Save As",
+    "file.exportDesignReportPdf": "Export Design Report PDF",
     "file.exit": "Exit",
     "edit.undo": "Undo",
     "edit.redo": "Redo",

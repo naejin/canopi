@@ -108,6 +108,7 @@ const MENU_COMMAND_ORDER: Record<AppMenuId, readonly (AppCommandId | 'separator'
     'separator',
     'file.save',
     'file.saveAs',
+    'file.exportDesignReportPdf',
     'separator',
     'file.exit',
   ],

@@ -700,6 +700,7 @@
     "file.open": "Apri design",
     "file.save": "Salva",
     "file.saveAs": "Salva con nome",
+    "file.exportDesignReportPdf": "Esporta report del design in PDF",
     "file.exit": "Esci",
     "edit.undo": "Annulla",
     "edit.redo": "Ripristina",

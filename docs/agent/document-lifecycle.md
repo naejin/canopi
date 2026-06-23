@@ -68,6 +68,13 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 - Stamp import should read `.canopi` files through a lower-level format-loading path or a stamp-specific command that does not record Recent Designs. Do not reuse `design_files::load_design()` for stamp import unless its recent-file side effect is bypassed deliberately.
 - Frontend code owns native import/export dialogs; Rust commands should perform file read/write or payload normalization only, matching the existing Linux dialog boundary.
 
+## Design Report Export
+
+- Design Report PDF export starts in `desktop/web/src/app/design-report/actions.ts`. It must build report input from the current Design Session with `buildPersistedDesignSessionContent()` and the current `CanvasDocumentSurface`; do not mark the Design saved or clear dirty state during export.
+- The frontend owns the save dialog in `desktop/web/src/ipc/design-report.ts`. The Rust command should receive structured report input plus the chosen path and should only render/write the PDF.
+- Rust report rendering lives behind `desktop/src/services/design_report/`. Keep it separate from the legacy native canvas snapshot PDF path in `services::export` and `platform::export_pdf`.
+- Empty report sections should be omitted before rendering. Later Timeline, Budget, Consortium, legend, or Measurement Guide sections should extend the structured report input and renderer layout instead of screenshotting the app UI.
+
 ## Adding Document Fields
 
 - Add document-level fields to the shared `CanopiFile` contract.

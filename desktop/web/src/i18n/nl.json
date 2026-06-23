@@ -700,6 +700,7 @@
     "file.open": "Ontwerp openen",
     "file.save": "Opslaan",
     "file.saveAs": "Opslaan als",
+    "file.exportDesignReportPdf": "Ontwerprapport als PDF exporteren",
     "file.exit": "Afsluiten",
     "edit.undo": "Ongedaan maken",
     "edit.redo": "Opnieuw",

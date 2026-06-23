@@ -700,6 +700,7 @@
     "file.open": "Abrir diseno",
     "file.save": "Guardar",
     "file.saveAs": "Guardar como",
+    "file.exportDesignReportPdf": "Exportar informe de diseno en PDF",
     "file.exit": "Salir",
     "edit.undo": "Deshacer",
     "edit.redo": "Rehacer",

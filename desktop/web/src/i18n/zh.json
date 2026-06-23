@@ -700,6 +700,7 @@
     "file.open": "打开设计",
     "file.save": "保存",
     "file.saveAs": "另存为",
+    "file.exportDesignReportPdf": "导出设计报告 PDF",
     "file.exit": "退出",
     "edit.undo": "撤销",
     "edit.redo": "重做",

@@ -700,6 +700,7 @@
     "file.open": "デザインを開く",
     "file.save": "保存",
     "file.saveAs": "名前を付けて保存",
+    "file.exportDesignReportPdf": "デザインレポートをPDFで書き出す",
     "file.exit": "終了",
     "edit.undo": "元に戻す",
     "edit.redo": "やり直し",

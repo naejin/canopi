@@ -95,6 +95,7 @@ pub fn run() {
             commands::export::read_file_bytes,
             commands::export::export_native_png,
             commands::export::export_native_pdf,
+            commands::design_report::export_design_report_pdf,
             commands::health::get_health,
             commands::problem_report::create_problem_report,
             commands::problem_report::show_problem_report_folder,
