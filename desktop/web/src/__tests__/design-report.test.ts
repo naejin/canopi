@@ -326,6 +326,135 @@ describe('Design Report export input', () => {
     }))
   })
 
+  it('requests a white-background canvas image from the visible scene presentation', () => {
+    const scene = createDefaultScenePersistedState()
+    scene.layers = [
+      { kind: 'layer', name: 'zones', visible: true, locked: false, opacity: 1 },
+      { kind: 'layer', name: 'plants', visible: true, locked: false, opacity: 1 },
+      { kind: 'layer', name: 'annotations', visible: false, locked: false, opacity: 1 },
+      { kind: 'layer', name: 'measurement-guides', visible: true, locked: false, opacity: 1 },
+    ]
+    scene.zones = [{
+      kind: 'zone',
+      name: 'North bed',
+      locked: false,
+      zoneType: 'polygon',
+      points: [{ x: 0, y: 0 }, { x: 30, y: 0 }, { x: 30, y: 20 }],
+      rotationDeg: 0,
+      fillColor: '#C8D7B5',
+      notes: null,
+    }]
+    scene.plants = Array.from({ length: 24 }, (_, index) => ({
+      kind: 'plant' as const,
+      id: `plant-${index + 1}`,
+      locked: false,
+      canonicalName: 'Malus domestica',
+      commonName: 'Apple',
+      color: '#112233',
+      symbol: index % 2 === 0 ? 'tree' : 'shrub',
+      pinnedName: index === 0,
+      stratum: 'high',
+      canopySpreadM: null,
+      position: { x: index % 8 * 4, y: Math.floor(index / 8) * 4 },
+      rotationDeg: null,
+      scale: null,
+      notes: null,
+      plantedDate: null,
+      quantity: 1,
+    }))
+    scene.annotations = [{
+      kind: 'annotation',
+      id: 'hidden-note',
+      locked: false,
+      annotationType: 'text',
+      position: { x: 5, y: 5 },
+      text: 'Hidden annotation',
+      fontSize: 16,
+      rotationDeg: 0,
+    }]
+    scene.measurementGuides = [{
+      kind: 'measurement-guide',
+      id: 'guide-1',
+      locked: false,
+      start: { x: 0, y: 0 },
+      end: { x: 0, y: 12 },
+    }]
+    const canvasImageRenderer = vi.fn(() => ({
+      data_base64: 'png-bytes',
+      width_px: 1200,
+      height_px: 800,
+    }))
+
+    const input = buildDesignReportInput({
+      ...BASE_DESIGN,
+      layers: scene.layers.map(({ name, visible, locked, opacity }) => ({ name, visible, locked, opacity })),
+      plants: scene.plants.map((plant) => ({
+        id: plant.id,
+        canonical_name: plant.canonicalName,
+        common_name: plant.commonName,
+        color: plant.color,
+        symbol: plant.symbol,
+        pinned_name: plant.pinnedName,
+        position: plant.position,
+        rotation: plant.rotationDeg,
+        scale: plant.scale,
+        notes: plant.notes,
+        planted_date: plant.plantedDate,
+        quantity: plant.quantity,
+        locked: plant.locked,
+      })),
+      zones: [{
+        name: 'North bed',
+        zone_type: 'polygon',
+        points: [{ x: 0, y: 0 }, { x: 30, y: 0 }, { x: 30, y: 20 }],
+        rotation: 0,
+        fill_color: '#C8D7B5',
+        notes: null,
+        locked: false,
+      }],
+      annotations: [{
+        id: 'hidden-note',
+        annotation_type: 'text',
+        text: 'Hidden annotation',
+        position: { x: 5, y: 5 },
+        rotation: 0,
+        font_size: 16,
+        locked: false,
+      }],
+      measurement_guides: [{
+        id: 'guide-1',
+        locked: false,
+        start: { x: 0, y: 0 },
+        end: { x: 0, y: 12 },
+      }],
+    }, {
+      querySurface: createTestCanvasQuerySurface({
+        scene,
+        localizedNames: new Map([['Malus domestica', 'Pommier']]),
+      }),
+      canvasImageRenderer,
+    })
+
+    expect(input.canvas.image).toEqual({
+      data_base64: 'png-bytes',
+      width_px: 1200,
+      height_px: 800,
+    })
+    expect(canvasImageRenderer).toHaveBeenCalledWith(expect.objectContaining({
+      background: '#FFFFFF',
+      bounds: { min_x: 0, min_y: 0, max_x: 30, max_y: 20 },
+      localizedNames: new Map([['Malus domestica', 'Pommier']]),
+      page: expect.objectContaining({ background: '#FFFFFF', orientation: 'landscape' }),
+      scene: expect.objectContaining({
+        annotations: [expect.objectContaining({ text: 'Hidden annotation' })],
+        measurementGuides: [expect.objectContaining({ id: 'guide-1' })],
+        plants: expect.arrayContaining([expect.objectContaining({ pinnedName: true, symbol: 'tree' })]),
+        zones: [expect.objectContaining({ fillColor: '#C8D7B5' })],
+      }),
+      sizeMode: 'default',
+    }))
+  })
+
   it('omits pinned labels, measurement guides and pinned legend when their layers are hidden', () => {
     const scene = createDefaultScenePersistedState()
     scene.plants = [{

@@ -4,6 +4,10 @@ import { getLegendEntries } from '../../canvas/display-modes'
 import { actionColor } from '../../canvas/timeline-renderer'
 import { buildPinnedPlantNameLegendEntries } from '../../canvas/pinned-plant-name-legend'
 import { hydrateScenePersistedState } from '../../canvas/runtime/scene/codec'
+import type { ScenePersistedState, SceneViewportState } from '../../canvas/runtime/scene'
+import type { SceneRendererSnapshot } from '../../canvas/runtime/renderers/scene-types'
+import { renderCanvas2DSceneSnapshot } from '../../canvas/runtime/renderers/canvas2d-scene'
+import { computePinnedPlantNameLabels } from '../../canvas/runtime/selection-labels'
 import { formatMetricDistance } from '../../canvas/runtime/zone-measurements'
 import { ACTION_TYPES } from '../planning-projection/timeline'
 import { buildConsortiumPlanningProjection, type ConsortiumPlanningBar } from '../planning-projection/consortium'
@@ -93,6 +97,12 @@ export interface DesignReportMeasurementGuideInput {
   readonly label: string
 }
 
+export interface DesignReportCanvasImageInput {
+  readonly data_base64: string
+  readonly width_px: number
+  readonly height_px: number
+}
+
 export interface DesignReportPinnedPlantNameLegendInput {
   readonly kind: 'pinned-plant-names'
   readonly title: string
@@ -126,6 +136,7 @@ export interface DesignReportCanvasInput {
   readonly zones: readonly DesignReportZoneInput[]
   readonly annotations: readonly DesignReportAnnotationInput[]
   readonly measurement_guides: readonly DesignReportMeasurementGuideInput[]
+  readonly image: DesignReportCanvasImageInput | null
   readonly legend: DesignReportCanvasLegendInput | null
 }
 
@@ -265,20 +276,43 @@ interface CurrentDesignReportOptions {
   readonly session?: CanvasDocumentSurface | null
   readonly querySurface?: CanvasQuerySurface | null
   readonly store?: DesignSessionStore
+  readonly canvasImageRenderer?: DesignReportCanvasImageRenderer | null
 }
 
 interface DesignReportInputOptions {
   readonly querySurface?: CanvasQuerySurface | null
+  readonly canvasImageRenderer?: DesignReportCanvasImageRenderer | null
 }
+
+export interface DesignReportCanvasImageRenderRequest {
+  readonly scene: ScenePersistedState
+  readonly bounds: DesignReportBounds
+  readonly page: DesignReportCanvasPageInput
+  readonly background: '#FFFFFF'
+  readonly localizedNames: ReadonlyMap<string, string | null>
+  readonly sizeMode: ReturnType<CanvasQuerySurface['getPlantSizeMode']>
+  readonly colorByAttr: ReturnType<CanvasQuerySurface['getPlantColorByAttr']>
+}
+
+export type DesignReportCanvasImageRenderer = (
+  request: DesignReportCanvasImageRenderRequest,
+) => DesignReportCanvasImageInput | null
 
 const A4_PORTRAIT = { width_mm: 210, height_mm: 297 } as const
 const REPORT_MARGIN_MM = 14
+const REPORT_CANVAS_IMAGE_PX_PER_MM = 5
 
 export function buildDesignReportInput(
   file: CanopiFile,
   options: DesignReportInputOptions = {},
 ): DesignReportInput {
-  const canvas = buildCanvasInput(file, options.querySurface ?? null)
+  const canvas = buildCanvasInput(
+    file,
+    options.querySurface ?? null,
+    options.canvasImageRenderer === undefined
+      ? renderDesignReportCanvasImage
+      : options.canvasImageRenderer,
+  )
   const timeline = buildTimelineInput(file, options.querySurface ?? null)
   const budget = buildBudgetInput(file, options.querySurface ?? null)
   const consortium = buildConsortiumInput(file, options.querySurface ?? null)
@@ -317,6 +351,7 @@ export function buildCurrentDesignReportInput({
   session = getCurrentCanvasDocumentSurface(),
   querySurface = getCurrentCanvasQuerySurface(),
   store = designSessionStore,
+  canvasImageRenderer,
 }: CurrentDesignReportOptions = {}): DesignReportInput | null {
   if (!store.hasCurrentDesign()) return null
 
@@ -325,7 +360,7 @@ export function buildCurrentDesignReportInput({
     name: store.readDesignName(),
     store,
   })
-  return buildDesignReportInput(file, { querySurface })
+  return buildDesignReportInput(file, { querySurface, canvasImageRenderer })
 }
 
 export async function exportCurrentDesignReportPdf(
@@ -339,6 +374,7 @@ export async function exportCurrentDesignReportPdf(
 function buildCanvasInput(
   file: CanopiFile,
   querySurface: CanvasQuerySurface | null,
+  canvasImageRenderer: DesignReportCanvasImageRenderer | null,
 ): DesignReportCanvasInput {
   const localizedNames = querySurface?.getLocalizedCommonNames() ?? new Map<string, string | null>()
   const plants = isLayerVisible(file, 'plants')
@@ -358,6 +394,20 @@ function buildCanvasInput(
     margin_mm: REPORT_MARGIN_MM,
     background: '#FFFFFF',
   } as const
+  const scene = querySurface?.getSceneSnapshot() ?? hydrateScenePersistedState(file)
+  const sizeMode = querySurface?.getPlantSizeMode() ?? 'default'
+  const colorByAttr = querySurface?.getPlantColorByAttr() ?? null
+  const image = bounds && canvasImageRenderer
+    ? canvasImageRenderer({
+      scene,
+      bounds,
+      page,
+      background: '#FFFFFF',
+      localizedNames,
+      sizeMode,
+      colorByAttr,
+    })
+    : null
 
   return {
     page,
@@ -369,6 +419,7 @@ function buildCanvasInput(
     zones,
     annotations,
     measurement_guides: measurementGuides,
+    image,
     legend: buildCanvasLegend(file, querySurface),
   }
 }
@@ -948,4 +999,111 @@ function localizedPlantName(
   localizedNames: ReadonlyMap<string, string | null>,
 ): string {
   return localizedNames.get(plant.canonical_name) ?? plant.common_name ?? plant.canonical_name
+}
+
+function renderDesignReportCanvasImage(
+  request: DesignReportCanvasImageRenderRequest,
+): DesignReportCanvasImageInput | null {
+  if (typeof document === 'undefined') return null
+
+  const canvas = document.createElement('canvas')
+  const dimensions = reportCanvasImageDimensions(request.bounds, request.page)
+  canvas.width = dimensions.widthPx
+  canvas.height = dimensions.heightPx
+
+  try {
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return null
+
+    const viewport = reportCanvasImageViewport(request.bounds, dimensions.widthPx, dimensions.heightPx)
+    const speciesCache = new Map()
+    const plantContext = {
+      viewport,
+      sizeMode: request.sizeMode,
+      colorByAttr: request.colorByAttr,
+      speciesCache,
+      plantSpeciesSymbols: request.scene.plantSpeciesSymbols,
+      localizedCommonNames: request.localizedNames,
+    }
+    const snapshot: SceneRendererSnapshot = {
+      scene: request.scene,
+      viewport,
+      selectedPlantIds: new Set<string>(),
+      selectedZoneIds: new Set<string>(),
+      selectedAnnotationIds: new Set<string>(),
+      selectedMeasurementGuideIds: new Set<string>(),
+      highlightedPlantIds: new Set<string>(),
+      highlightedZoneIds: new Set<string>(),
+      sizeMode: request.sizeMode,
+      colorByAttr: request.colorByAttr,
+      speciesCache,
+      localizedCommonNames: request.localizedNames,
+      hoveredCanonicalName: null,
+      pinnedPlantNameLabels: computePinnedPlantNameLabels(
+        request.scene.plants,
+        viewport,
+        request.localizedNames,
+        { plantContext },
+      ),
+      selectionLabels: [],
+    }
+
+    renderCanvas2DSceneSnapshot(ctx, snapshot, {
+      widthPx: dimensions.widthPx,
+      heightPx: dimensions.heightPx,
+      background: request.background,
+    })
+    const dataUrl = canvas.toDataURL('image/png')
+    const payload = dataUrl.startsWith('data:image/png;base64,')
+      ? dataUrl.slice('data:image/png;base64,'.length)
+      : null
+    if (!payload) return null
+    return {
+      data_base64: payload,
+      width_px: dimensions.widthPx,
+      height_px: dimensions.heightPx,
+    }
+  } catch {
+    return null
+  }
+}
+
+function reportCanvasImageDimensions(
+  bounds: DesignReportBounds,
+  page: DesignReportCanvasPageInput,
+): { widthPx: number; heightPx: number } {
+  const maxWidthPx = Math.max(1, Math.round((page.width_mm - page.margin_mm * 2) * REPORT_CANVAS_IMAGE_PX_PER_MM))
+  const maxHeightPx = Math.max(1, Math.round((page.height_mm - page.margin_mm * 2) * REPORT_CANVAS_IMAGE_PX_PER_MM))
+  const boundsWidth = Math.max(bounds.max_x - bounds.min_x, 1)
+  const boundsHeight = Math.max(bounds.max_y - bounds.min_y, 1)
+  const aspectRatio = boundsWidth / boundsHeight
+  let widthPx = maxWidthPx
+  let heightPx = Math.max(1, Math.round(widthPx / aspectRatio))
+
+  if (heightPx > maxHeightPx) {
+    heightPx = maxHeightPx
+    widthPx = Math.max(1, Math.round(heightPx * aspectRatio))
+  }
+
+  return { widthPx, heightPx }
+}
+
+function reportCanvasImageViewport(
+  bounds: DesignReportBounds,
+  widthPx: number,
+  heightPx: number,
+): SceneViewportState {
+  const paddingRatio = 0.08
+  const contentWidth = Math.max(bounds.max_x - bounds.min_x, 1)
+  const contentHeight = Math.max(bounds.max_y - bounds.min_y, 1)
+  const scale = Math.min(
+    (widthPx * (1 - paddingRatio * 2)) / contentWidth,
+    (heightPx * (1 - paddingRatio * 2)) / contentHeight,
+  )
+
+  return {
+    x: (widthPx - contentWidth * scale) / 2 - bounds.min_x * scale,
+    y: (heightPx - contentHeight * scale) / 2 - bounds.min_y * scale,
+    scale,
+  }
 }

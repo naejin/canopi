@@ -1,6 +1,8 @@
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use printpdf::{
     FontId, LineDashPattern, Mm, Op, ParsedFont, PdfDocument, PdfFontHandle, PdfPage,
-    PdfSaveOptions, Point, Pt, Rect, TextItem, serialize_pdf_into_bytes,
+    PdfSaveOptions, Point, Pt, RawImage, Rect, TextItem, XObjectId, XObjectTransform,
+    serialize_pdf_into_bytes,
 };
 use serde::Deserialize;
 
@@ -83,6 +85,8 @@ pub struct DesignReportCanvasInput {
     #[serde(default)]
     pub measurement_guides: Vec<DesignReportMeasurementGuideInput>,
     #[serde(default)]
+    pub image: Option<DesignReportCanvasImageInput>,
+    #[serde(default)]
     pub legend: Option<DesignReportCanvasLegendInput>,
 }
 
@@ -156,6 +160,13 @@ pub struct DesignReportMeasurementGuideInput {
     pub start: DesignReportPointInput,
     pub end: DesignReportPointInput,
     pub label: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DesignReportCanvasImageInput {
+    pub data_base64: String,
+    pub width_px: usize,
+    pub height_px: usize,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -425,11 +436,21 @@ pub(crate) fn render_design_report_pdf(input: &DesignReportInput) -> Result<Vec<
     let mut document = PdfDocument::new(&input.title);
     set_report_metadata(&mut document);
     let fonts = load_report_fonts(&mut document)?;
+    let canvas_image = input
+        .canvas
+        .image
+        .as_ref()
+        .map(|image| load_canvas_image_resource(&mut document, image))
+        .transpose()?;
 
     for (page_index, page_layout) in layout.pages.iter().enumerate() {
-        document
-            .pages
-            .push(render_page(input, page_layout, page_index, &fonts));
+        document.pages.push(render_page(
+            input,
+            page_layout,
+            page_index,
+            &fonts,
+            canvas_image.as_ref(),
+        ));
     }
 
     let mut warnings = Vec::new();
@@ -438,6 +459,40 @@ pub(crate) fn render_design_report_pdf(input: &DesignReportInput) -> Result<Vec<
         return Err("Design Report renderer produced an empty PDF".to_string());
     }
     Ok(bytes)
+}
+
+#[derive(Debug, Clone)]
+struct CanvasImageResource {
+    id: XObjectId,
+    width_px: usize,
+    height_px: usize,
+}
+
+fn load_canvas_image_resource(
+    document: &mut PdfDocument,
+    input: &DesignReportCanvasImageInput,
+) -> Result<CanvasImageResource, String> {
+    if input.width_px == 0 || input.height_px == 0 {
+        return Err("Design Report canvas image dimensions must be greater than zero".to_string());
+    }
+
+    let payload = input
+        .data_base64
+        .split_once(',')
+        .map(|(_, value)| value)
+        .unwrap_or(input.data_base64.as_str());
+    let bytes = BASE64_STANDARD
+        .decode(payload)
+        .map_err(|error| format!("Failed to decode Design Report canvas image: {error}"))?;
+    let mut warnings = Vec::new();
+    let image = RawImage::decode_from_bytes(&bytes, &mut warnings)
+        .map_err(|error| format!("Failed to read Design Report canvas image: {error}"))?;
+    let id = document.add_image(&image);
+    Ok(CanvasImageResource {
+        id,
+        width_px: input.width_px,
+        height_px: input.height_px,
+    })
 }
 
 fn set_report_metadata(document: &mut PdfDocument) {
@@ -793,6 +848,7 @@ fn render_page(
     layout: &DesignReportPageLayout,
     _: usize,
     fonts: &ReportFonts,
+    canvas_image: Option<&CanvasImageResource>,
 ) -> PdfPage {
     let mut ops = Vec::new();
     let page_width = layout.width_mm;
@@ -1016,7 +1072,11 @@ fn render_page(
         frame.width_mm,
         frame.height_mm,
     );
-    render_canvas_objects(&mut ops, fonts, input, frame);
+    if let Some(image) = canvas_image {
+        render_canvas_image(&mut ops, image, frame);
+    } else {
+        render_canvas_objects(&mut ops, fonts, input, frame);
+    }
     text(
         &mut ops,
         fonts,
@@ -1036,6 +1096,36 @@ struct CanvasFrame {
     y_mm: f32,
     width_mm: f32,
     height_mm: f32,
+}
+
+fn render_canvas_image(ops: &mut Vec<Op>, image: &CanvasImageResource, frame: CanvasFrame) {
+    let frame_width_pt = Mm(frame.width_mm).into_pt().0;
+    let frame_height_pt = Mm(frame.height_mm).into_pt().0;
+    let image_width_pt = image.width_px as f32;
+    let image_height_pt = image.height_px as f32;
+    if image_width_pt <= 0.0 || image_height_pt <= 0.0 {
+        return;
+    }
+
+    let scale = (frame_width_pt / image_width_pt)
+        .min(frame_height_pt / image_height_pt)
+        .max(0.0);
+    let rendered_width_pt = image_width_pt * scale;
+    let rendered_height_pt = image_height_pt * scale;
+    let translate_x = Mm(frame.x_mm).into_pt().0 + (frame_width_pt - rendered_width_pt) / 2.0;
+    let translate_y = Mm(frame.y_mm).into_pt().0 + (frame_height_pt - rendered_height_pt) / 2.0;
+
+    ops.push(Op::UseXobject {
+        id: image.id.clone(),
+        transform: XObjectTransform {
+            translate_x: Some(Pt(translate_x)),
+            translate_y: Some(Pt(translate_y)),
+            scale_x: Some(scale),
+            scale_y: Some(scale),
+            dpi: Some(72.0),
+            ..XObjectTransform::default()
+        },
+    });
 }
 
 fn render_canvas_objects(
@@ -2270,6 +2360,80 @@ mod tests {
     }
 
     #[test]
+    fn renderer_embeds_canvas_image_instead_of_reconstructing_dense_object_labels() {
+        let input = DesignReportInput {
+            canvas: DesignReportCanvasInput {
+                image: Some(DesignReportCanvasImageInput {
+                    data_base64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC".to_string(),
+                    width_px: 1,
+                    height_px: 1,
+                }),
+                plants: (1..=32)
+                    .map(|index| DesignReportPlantInput {
+                        id: format!("plant-{index}"),
+                        canonical_name: "Malus domestica".to_string(),
+                        common_name: Some(format!("Dense plant {index}")),
+                        color: Some("#112233".to_string()),
+                        symbol: Some("tree".to_string()),
+                        pinned_name_label: None,
+                        radius_m: Some(1.0),
+                        x: index as f64,
+                        y: index as f64,
+                    })
+                    .collect(),
+                zones: vec![DesignReportZoneInput {
+                    name: "Dense zone".to_string(),
+                    zone_type: "polygon".to_string(),
+                    fill_color: Some("#AABBCC".to_string()),
+                    points: vec![
+                        DesignReportPointInput { x: 0.0, y: 0.0 },
+                        DesignReportPointInput { x: 30.0, y: 0.0 },
+                        DesignReportPointInput { x: 30.0, y: 20.0 },
+                    ],
+                }],
+                annotations: vec![DesignReportAnnotationInput {
+                    id: "annotation-1".to_string(),
+                    text: "Dense annotation".to_string(),
+                    x: 12.0,
+                    y: 12.0,
+                }],
+                measurement_guides: vec![DesignReportMeasurementGuideInput {
+                    id: "guide-1".to_string(),
+                    start: DesignReportPointInput { x: 0.0, y: 0.0 },
+                    end: DesignReportPointInput { x: 0.0, y: 5.0 },
+                    label: "5 m".to_string(),
+                }],
+                ..report_input_without_metadata().canvas
+            },
+            ..report_input_without_metadata()
+        };
+
+        let bytes = render_design_report_pdf(&input).unwrap();
+        let parsed = printpdf::PdfDocument::parse(
+            &bytes,
+            &PdfParseOptions {
+                fail_on_error: false,
+            },
+            &mut Vec::new(),
+        )
+        .unwrap();
+        let first_page = parsed.pages.first().expect("first report page");
+        let text = first_page.extract_text(&parsed.resources).join("\n");
+
+        assert!(
+            first_page
+                .ops
+                .iter()
+                .any(|op| matches!(op, Op::UseXobject { .. })),
+            "first report page should embed the rendered canvas image",
+        );
+        assert!(!text.contains("Dense plant"));
+        assert!(!text.contains("Dense zone"));
+        assert!(!text.contains("Dense annotation"));
+        assert!(!text.contains("5 m"));
+    }
+
+    #[test]
     fn renderer_paginates_timeline_rows_with_repeated_headers() {
         let input = DesignReportInput {
             timeline: Some(timeline_input_with_actions(18)),
@@ -2614,6 +2778,7 @@ mod tests {
                     y: 20.0,
                 }],
                 measurement_guides: vec![],
+                image: None,
                 legend: None,
             },
             timeline: None,
@@ -2776,7 +2941,7 @@ mod tests {
         layout: &DesignReportPageLayout,
         page_index: usize,
     ) -> PdfPage {
-        render_page(input, layout, page_index, &test_report_fonts())
+        render_page(input, layout, page_index, &test_report_fonts(), None)
     }
 
     fn test_report_fonts() -> ReportFonts {
