@@ -953,5 +953,20 @@
     "includeCurrentDesign": "Aktuelles Design einschließen",
     "includeCurrentDesignDescription": "Fügt eine .canopi-Kopie mit Canvas-Inhalten, Notizen, Zeitplan, Budget und gespeichertem Standort hinzu.",
     "currentDesignUnavailable": "Es ist kein aktuelles Design zum Anhängen verfügbar."
+  },
+  "designReport": {
+    "timeline": {
+      "overview": "Übersicht",
+      "actions": "Aktionen",
+      "recurrence": "Wiederholung",
+      "target": "Ziel",
+      "dependencies": "Abhängigkeiten",
+      "status": "Status",
+      "manual": "Manuell",
+      "none": "Keine",
+      "notScheduled": "Nicht geplant",
+      "completed": "Abgeschlossen",
+      "open": "Offen"
+    }
   }
 }

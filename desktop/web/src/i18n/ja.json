@@ -953,5 +953,20 @@
     "includeCurrentDesign": "現在のデザインを含める",
     "includeCurrentDesignDescription": "キャンバス内容、メモ、タイムライン、予算、保存済みの位置を含む .canopi コピーを追加します。",
     "currentDesignUnavailable": "添付できる現在のデザインがありません。"
+  },
+  "designReport": {
+    "timeline": {
+      "overview": "概要",
+      "actions": "アクション",
+      "recurrence": "繰り返し",
+      "target": "対象",
+      "dependencies": "依存関係",
+      "status": "状態",
+      "manual": "手動",
+      "none": "なし",
+      "notScheduled": "未定",
+      "completed": "完了",
+      "open": "未完了"
+    }
   }
 }

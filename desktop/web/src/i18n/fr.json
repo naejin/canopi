@@ -953,5 +953,20 @@
     "includeCurrentDesign": "Inclure le design actuel",
     "includeCurrentDesignDescription": "Ajoute une copie .canopi avec le contenu du canevas, les notes, le calendrier, le budget et l’emplacement enregistré.",
     "currentDesignUnavailable": "Aucun design actuel n’est disponible à joindre."
+  },
+  "designReport": {
+    "timeline": {
+      "overview": "Vue d’ensemble",
+      "actions": "Actions",
+      "recurrence": "Récurrence",
+      "target": "Cible",
+      "dependencies": "Dépendances",
+      "status": "Statut",
+      "manual": "Manuel",
+      "none": "Aucune",
+      "notScheduled": "Non planifié",
+      "completed": "Terminé",
+      "open": "Ouvert"
+    }
   }
 }

@@ -953,5 +953,20 @@
     "includeCurrentDesign": "현재 디자인 포함",
     "includeCurrentDesignDescription": "캔버스 내용, 메모, 일정, 예산, 저장된 위치가 포함된 .canopi 사본을 추가합니다.",
     "currentDesignUnavailable": "첨부할 현재 디자인이 없습니다."
+  },
+  "designReport": {
+    "timeline": {
+      "overview": "개요",
+      "actions": "작업",
+      "recurrence": "반복",
+      "target": "대상",
+      "dependencies": "종속성",
+      "status": "상태",
+      "manual": "수동",
+      "none": "없음",
+      "notScheduled": "예약 없음",
+      "completed": "완료됨",
+      "open": "열림"
+    }
   }
 }

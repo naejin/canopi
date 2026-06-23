@@ -1,12 +1,15 @@
 import { getCurrentCanvasDocumentSurface, getCurrentCanvasQuerySurface } from '../../canvas/session'
 import type { CanvasDocumentSurface, CanvasQuerySurface } from '../../canvas/runtime/runtime'
 import { getLegendEntries } from '../../canvas/display-modes'
+import { actionColor } from '../../canvas/timeline-renderer'
 import { buildPinnedPlantNameLegendEntries } from '../../canvas/pinned-plant-name-legend'
 import { hydrateScenePersistedState } from '../../canvas/runtime/scene/codec'
 import { formatMetricDistance } from '../../canvas/runtime/zone-measurements'
+import { ACTION_TYPES } from '../planning-projection/timeline'
+import { locale } from '../settings/state'
 import { buildPersistedDesignSessionContent } from '../document-session/persistence'
 import { designSessionStore, type DesignSessionStore } from '../document-session/store'
-import type { Annotation, CanopiFile, Location, MeasurementGuide, PlacedPlant, Zone } from '../../types/design'
+import type { Annotation, CanopiFile, Location, MeasurementGuide, PanelTarget, PlacedPlant, TimelineAction, Zone } from '../../types/design'
 import { exportDesignReportPdf } from '../../ipc/design-report'
 import { t } from '../../i18n'
 
@@ -105,6 +108,48 @@ export interface DesignReportInput {
   readonly title: string
   readonly metadata: DesignReportMetadataInput
   readonly canvas: DesignReportCanvasInput
+  readonly timeline: DesignReportTimelineInput | null
+}
+
+export interface DesignReportTimelineColumnsInput {
+  readonly action_type: string
+  readonly description: string
+  readonly start_date: string
+  readonly end_date: string
+  readonly recurrence: string
+  readonly target: string
+  readonly dependencies: string
+  readonly status: string
+}
+
+export interface DesignReportTimelineOverviewRowInput {
+  readonly action_type: string
+  readonly label: string
+  readonly color: string
+  readonly count: number
+  readonly date_range: string
+}
+
+export interface DesignReportTimelineActionInput {
+  readonly id: string
+  readonly action_type: string
+  readonly action_type_label: string
+  readonly description: string
+  readonly start_date: string
+  readonly end_date: string
+  readonly recurrence: string
+  readonly target: string
+  readonly dependencies: string
+  readonly status: string
+}
+
+export interface DesignReportTimelineInput {
+  readonly title: string
+  readonly overview_title: string
+  readonly table_title: string
+  readonly columns: DesignReportTimelineColumnsInput
+  readonly overview_rows: readonly DesignReportTimelineOverviewRowInput[]
+  readonly actions: readonly DesignReportTimelineActionInput[]
 }
 
 interface CurrentDesignReportOptions {
@@ -125,6 +170,7 @@ export function buildDesignReportInput(
   options: DesignReportInputOptions = {},
 ): DesignReportInput {
   const canvas = buildCanvasInput(file, options.querySurface ?? null)
+  const timeline = buildTimelineInput(file, options.querySurface ?? null)
   const description = nonEmptyString(file.description)
 
   return {
@@ -134,6 +180,7 @@ export function buildDesignReportInput(
       ...(file.location ? { location: file.location } : {}),
     },
     canvas,
+    timeline,
   }
 }
 
@@ -285,6 +332,171 @@ function buildCanvasLegend(
       count: entry.count,
     })),
   }
+}
+
+function buildTimelineInput(
+  file: CanopiFile,
+  querySurface: CanvasQuerySurface | null,
+): DesignReportTimelineInput | null {
+  if (file.timeline.length === 0) return null
+
+  const activeLocale = locale.value
+  const localizedNames = querySurface?.getLocalizedCommonNames() ?? new Map<string, string | null>()
+  const sortedActions = [...file.timeline].sort(compareTimelineActions)
+
+  return {
+    title: t('canvas.timeline.title'),
+    overview_title: t('designReport.timeline.overview'),
+    table_title: t('designReport.timeline.actions'),
+    columns: {
+      action_type: t('canvas.timeline.actionType'),
+      description: t('canvas.timeline.description'),
+      start_date: t('canvas.timeline.startDate'),
+      end_date: t('canvas.timeline.endDate'),
+      recurrence: t('designReport.timeline.recurrence'),
+      target: t('designReport.timeline.target'),
+      dependencies: t('designReport.timeline.dependencies'),
+      status: t('designReport.timeline.status'),
+    },
+    overview_rows: buildTimelineOverviewRows(file.timeline, activeLocale),
+    actions: sortedActions.map((action) => reportTimelineAction(action, file, localizedNames, activeLocale)),
+  }
+}
+
+function buildTimelineOverviewRows(
+  actions: readonly TimelineAction[],
+  activeLocale: string,
+): DesignReportTimelineOverviewRowInput[] {
+  const rows: DesignReportTimelineOverviewRowInput[] = []
+  for (const actionType of ACTION_TYPES) {
+    const matching = actions.filter((action) => normalizeTimelineActionType(action.action_type) === actionType)
+    if (matching.length === 0) continue
+    rows.push({
+      action_type: actionType,
+      label: timelineActionTypeLabel(actionType),
+      color: actionColor(actionType),
+      count: matching.length,
+      date_range: timelineActionsDateRange(matching, activeLocale),
+    })
+  }
+  return rows
+}
+
+function reportTimelineAction(
+  action: TimelineAction,
+  file: CanopiFile,
+  localizedNames: ReadonlyMap<string, string | null>,
+  activeLocale: string,
+): DesignReportTimelineActionInput {
+  return {
+    id: action.id,
+    action_type: action.action_type,
+    action_type_label: timelineActionTypeLabel(action.action_type),
+    description: action.description,
+    start_date: formatTimelineDateValue(action.start_date, activeLocale),
+    end_date: formatTimelineDateValue(action.end_date, activeLocale),
+    recurrence: nonEmptyString(action.recurrence) ?? t('designReport.timeline.none'),
+    target: timelineTargetsLabel(action.targets, file, localizedNames),
+    dependencies: action.depends_on && action.depends_on.length > 0
+      ? action.depends_on.join(', ')
+      : t('designReport.timeline.none'),
+    status: action.completed ? t('designReport.timeline.completed') : t('designReport.timeline.open'),
+  }
+}
+
+function compareTimelineActions(left: TimelineAction, right: TimelineAction): number {
+  return (
+    left.order - right.order
+    || compareNullableStrings(left.start_date, right.start_date)
+    || left.description.localeCompare(right.description)
+    || left.id.localeCompare(right.id)
+  )
+}
+
+function compareNullableStrings(left: string | null, right: string | null): number {
+  if (left === right) return 0
+  if (left === null) return 1
+  if (right === null) return -1
+  return left.localeCompare(right)
+}
+
+function normalizeTimelineActionType(actionType: string): string {
+  return ACTION_TYPES.includes(actionType as never) ? actionType : 'other'
+}
+
+function timelineActionTypeLabel(actionType: string): string {
+  return t(`canvas.timeline.type_${normalizeTimelineActionType(actionType)}`)
+}
+
+function timelineActionsDateRange(
+  actions: readonly TimelineAction[],
+  activeLocale: string,
+): string {
+  const dates = actions
+    .flatMap((action) => [action.start_date, action.end_date])
+    .filter((value): value is string => value !== null && !Number.isNaN(Date.parse(value)))
+    .sort()
+  if (dates.length === 0) return t('designReport.timeline.notScheduled')
+
+  const first = formatTimelineDateValue(dates[0]!, activeLocale)
+  const last = formatTimelineDateValue(dates[dates.length - 1]!, activeLocale)
+  return first === last ? first : `${first} - ${last}`
+}
+
+function formatTimelineDateValue(
+  value: string | null,
+  activeLocale: string,
+): string {
+  if (!value) return t('designReport.timeline.notScheduled')
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat(activeLocale, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  }).format(date)
+}
+
+function timelineTargetsLabel(
+  targets: readonly PanelTarget[],
+  file: CanopiFile,
+  localizedNames: ReadonlyMap<string, string | null>,
+): string {
+  if (targets.length === 0) return t('designReport.timeline.none')
+  const labels = targets
+    .map((target) => timelineTargetLabel(target, file, localizedNames))
+    .filter(nonEmptyString)
+  return labels.length > 0 ? labels.join(', ') : t('designReport.timeline.none')
+}
+
+function timelineTargetLabel(
+  target: PanelTarget,
+  file: CanopiFile,
+  localizedNames: ReadonlyMap<string, string | null>,
+): string | null {
+  switch (target.kind) {
+    case 'species':
+      return localizedSpeciesName(target.canonical_name, file, localizedNames)
+    case 'placed_plant': {
+      const plant = file.plants.find((candidate) => candidate.id === target.plant_id)
+      return plant ? localizedPlantName(plant, localizedNames) : target.plant_id
+    }
+    case 'zone':
+      return target.zone_name
+    case 'manual':
+      return t('designReport.timeline.manual')
+    case 'none':
+      return t('designReport.timeline.none')
+  }
+}
+
+function localizedSpeciesName(
+  canonicalName: string,
+  file: CanopiFile,
+  localizedNames: ReadonlyMap<string, string | null>,
+): string {
+  const plant = file.plants.find((candidate) => candidate.canonical_name === canonicalName)
+  return localizedNames.get(canonicalName) ?? plant?.common_name ?? canonicalName
 }
 
 function isLayerVisible(file: CanopiFile, layerName: string): boolean {

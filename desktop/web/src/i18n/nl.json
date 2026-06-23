@@ -953,5 +953,20 @@
     "includeCurrentDesign": "Huidig ontwerp opnemen",
     "includeCurrentDesignDescription": "Voegt een .canopi-kopie toe met canvasinhoud, notities, planning, budget en opgeslagen locatie.",
     "currentDesignUnavailable": "Er is geen huidig ontwerp beschikbaar om bij te voegen."
+  },
+  "designReport": {
+    "timeline": {
+      "overview": "Overzicht",
+      "actions": "Acties",
+      "recurrence": "Herhaling",
+      "target": "Doel",
+      "dependencies": "Afhankelijkheden",
+      "status": "Status",
+      "manual": "Handmatig",
+      "none": "Geen",
+      "notScheduled": "Niet gepland",
+      "completed": "Voltooid",
+      "open": "Open"
+    }
   }
 }

@@ -9,6 +9,8 @@ pub struct DesignReportInput {
     pub title: String,
     pub metadata: DesignReportMetadataInput,
     pub canvas: DesignReportCanvasInput,
+    #[serde(default)]
+    pub timeline: Option<DesignReportTimelineInput>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -138,6 +140,50 @@ pub struct DesignReportColorByLegendEntryInput {
     pub color: String,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct DesignReportTimelineInput {
+    pub title: String,
+    pub overview_title: String,
+    pub table_title: String,
+    pub columns: DesignReportTimelineColumnsInput,
+    pub overview_rows: Vec<DesignReportTimelineOverviewRowInput>,
+    pub actions: Vec<DesignReportTimelineActionInput>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DesignReportTimelineColumnsInput {
+    pub action_type: String,
+    pub description: String,
+    pub start_date: String,
+    pub end_date: String,
+    pub recurrence: String,
+    pub target: String,
+    pub dependencies: String,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DesignReportTimelineOverviewRowInput {
+    pub action_type: String,
+    pub label: String,
+    pub color: String,
+    pub count: u32,
+    pub date_range: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DesignReportTimelineActionInput {
+    pub action_type: String,
+    pub action_type_label: String,
+    pub description: String,
+    pub start_date: String,
+    pub end_date: String,
+    pub recurrence: String,
+    pub target: String,
+    pub dependencies: String,
+    pub status: String,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct DesignReportLayout {
     pages: Vec<DesignReportPageLayout>,
@@ -156,12 +202,22 @@ pub(crate) struct DesignReportPageLayout {
 pub(crate) enum DesignReportSection {
     Metadata,
     Canvas,
+    Timeline {
+        start_index: usize,
+        end_index: usize,
+        include_overview: bool,
+    },
 }
 
 const PAGE_TITLE_Y_OFFSET_MM: f32 = 16.0;
 const PAGE_NUMBER_Y_MM: f32 = 8.0;
 const CANVAS_TOP_GAP_MM: f32 = 34.0;
 const POINT_MARK_RADIUS_MM: f32 = 1.3;
+const REPORT_PORTRAIT_WIDTH_MM: f32 = 210.0;
+const REPORT_PORTRAIT_HEIGHT_MM: f32 = 297.0;
+const TIMELINE_ROW_VERTICAL_PADDING_MM: f32 = 4.0;
+const TIMELINE_LINE_HEIGHT_MM: f32 = 4.2;
+const TIMELINE_HEADER_HEIGHT_MM: f32 = 10.0;
 
 pub fn export_design_report_pdf(input: &DesignReportInput, path: String) -> Result<String, String> {
     let bytes = render_design_report_pdf(input)?;
@@ -199,15 +255,107 @@ pub(crate) fn build_design_report_layout(input: &DesignReportInput) -> DesignRep
     }
     sections.push(DesignReportSection::Canvas);
 
-    DesignReportLayout {
-        pages: vec![DesignReportPageLayout {
-            orientation: input.canvas.page.orientation,
-            width_mm: input.canvas.page.width_mm,
-            height_mm: input.canvas.page.height_mm,
-            sections,
-            page_number_label: "Page 1 of 1".to_string(),
-        }],
+    let mut pages = vec![DesignReportPageLayout {
+        orientation: input.canvas.page.orientation,
+        width_mm: input.canvas.page.width_mm,
+        height_mm: input.canvas.page.height_mm,
+        sections,
+        page_number_label: String::new(),
+    }];
+
+    if let Some(timeline) = input.timeline.as_ref()
+        && !timeline.actions.is_empty()
+    {
+        for chunk in build_timeline_page_chunks(timeline, input.canvas.page.margin_mm) {
+            pages.push(DesignReportPageLayout {
+                orientation: DesignReportPageOrientation::Portrait,
+                width_mm: REPORT_PORTRAIT_WIDTH_MM,
+                height_mm: REPORT_PORTRAIT_HEIGHT_MM,
+                sections: vec![DesignReportSection::Timeline {
+                    start_index: chunk.start_index,
+                    end_index: chunk.end_index,
+                    include_overview: chunk.include_overview,
+                }],
+                page_number_label: String::new(),
+            });
+        }
     }
+
+    let page_count = pages.len();
+    for (index, page) in pages.iter_mut().enumerate() {
+        page.page_number_label = format!("Page {} of {page_count}", index + 1);
+    }
+
+    DesignReportLayout { pages }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct TimelinePageChunk {
+    start_index: usize,
+    end_index: usize,
+    include_overview: bool,
+}
+
+fn build_timeline_page_chunks(
+    timeline: &DesignReportTimelineInput,
+    margin_mm: f32,
+) -> Vec<TimelinePageChunk> {
+    let mut chunks = Vec::new();
+    let mut start_index = 0;
+    let mut used_height = 0.0;
+    let mut include_overview = true;
+    let mut available_height = timeline_rows_available_height(timeline, margin_mm, true);
+
+    for (index, action) in timeline.actions.iter().enumerate() {
+        let row_height = estimate_timeline_row_height(action);
+        if index > start_index && used_height + row_height > available_height {
+            chunks.push(TimelinePageChunk {
+                start_index,
+                end_index: index,
+                include_overview,
+            });
+            start_index = index;
+            used_height = 0.0;
+            include_overview = false;
+            available_height = timeline_rows_available_height(timeline, margin_mm, false);
+        }
+        used_height += row_height;
+    }
+
+    chunks.push(TimelinePageChunk {
+        start_index,
+        end_index: timeline.actions.len(),
+        include_overview,
+    });
+    chunks
+}
+
+fn timeline_rows_available_height(
+    timeline: &DesignReportTimelineInput,
+    margin_mm: f32,
+    include_overview: bool,
+) -> f32 {
+    let page_body = REPORT_PORTRAIT_HEIGHT_MM - margin_mm - PAGE_NUMBER_Y_MM - 24.0;
+    let overview_height = if include_overview {
+        8.0 + timeline.overview_rows.len() as f32 * 4.8
+    } else {
+        0.0
+    };
+    (page_body - overview_height - TIMELINE_HEADER_HEIGHT_MM - 16.0).max(40.0)
+}
+
+fn estimate_timeline_row_height(action: &DesignReportTimelineActionInput) -> f32 {
+    let wrapped_lines = [
+        wrap_text(&action.description, 58).len(),
+        wrap_text(&action.target, 24).len(),
+        wrap_text(&action.dependencies, 24).len(),
+        wrap_text(&action.recurrence, 24).len(),
+    ]
+    .into_iter()
+    .max()
+    .unwrap_or(1)
+    .max(1);
+    TIMELINE_ROW_VERTICAL_PADDING_MM + wrapped_lines as f32 * TIMELINE_LINE_HEIGHT_MM + 8.0
 }
 
 fn render_page(input: &DesignReportInput, layout: &DesignReportPageLayout, _: usize) -> PdfPage {
@@ -232,6 +380,34 @@ fn render_page(input: &DesignReportInput, layout: &DesignReportPageLayout, _: us
         &input.title,
     );
     cursor_y -= 10.0;
+
+    if let Some(DesignReportSection::Timeline {
+        start_index,
+        end_index,
+        include_overview,
+    }) = layout.sections.first()
+    {
+        if let Some(timeline) = input.timeline.as_ref() {
+            render_timeline_section(
+                &mut ops,
+                timeline,
+                *start_index,
+                *end_index,
+                *include_overview,
+                margin,
+                cursor_y,
+            );
+        }
+        text(
+            &mut ops,
+            margin,
+            PAGE_NUMBER_Y_MM,
+            8.0,
+            BuiltinFont::Helvetica,
+            &layout.page_number_label,
+        );
+        return PdfPage::new(Mm(layout.width_mm), Mm(layout.height_mm), ops);
+    }
 
     if layout.sections.contains(&DesignReportSection::Metadata) {
         text(
@@ -547,6 +723,167 @@ fn render_measurement_guide(
         BuiltinFont::HelveticaBold,
         label,
     );
+}
+
+fn render_timeline_section(
+    ops: &mut Vec<Op>,
+    timeline: &DesignReportTimelineInput,
+    start_index: usize,
+    end_index: usize,
+    include_overview: bool,
+    margin: f32,
+    mut cursor_y: f32,
+) -> f32 {
+    text(
+        ops,
+        margin,
+        cursor_y,
+        12.0,
+        BuiltinFont::HelveticaBold,
+        &timeline.title,
+    );
+    cursor_y -= 8.0;
+
+    if include_overview {
+        text(
+            ops,
+            margin,
+            cursor_y,
+            9.0,
+            BuiltinFont::HelveticaBold,
+            &timeline.overview_title,
+        );
+        cursor_y -= 5.0;
+        for row in &timeline.overview_rows {
+            text(
+                ops,
+                margin,
+                cursor_y,
+                7.5,
+                BuiltinFont::Helvetica,
+                &format!(
+                    "{} ({}) - {} [{} {}]",
+                    row.label, row.count, row.date_range, row.action_type, row.color
+                ),
+            );
+            cursor_y -= 4.8;
+        }
+        cursor_y -= 3.0;
+    }
+
+    text(
+        ops,
+        margin,
+        cursor_y,
+        9.0,
+        BuiltinFont::HelveticaBold,
+        &timeline.table_title,
+    );
+    cursor_y -= 5.0;
+    cursor_y = render_timeline_table_header(ops, &timeline.columns, margin, cursor_y);
+
+    for action in &timeline.actions[start_index..end_index] {
+        cursor_y = render_timeline_action_row(ops, &timeline.columns, action, margin, cursor_y);
+    }
+
+    cursor_y
+}
+
+fn render_timeline_table_header(
+    ops: &mut Vec<Op>,
+    columns: &DesignReportTimelineColumnsInput,
+    margin: f32,
+    mut cursor_y: f32,
+) -> f32 {
+    text(
+        ops,
+        margin,
+        cursor_y,
+        7.5,
+        BuiltinFont::HelveticaBold,
+        &format!(
+            "{} | {} | {} | {} | {}",
+            columns.action_type,
+            columns.start_date,
+            columns.end_date,
+            columns.target,
+            columns.status
+        ),
+    );
+    cursor_y -= 4.6;
+    text(
+        ops,
+        margin,
+        cursor_y,
+        7.5,
+        BuiltinFont::HelveticaBold,
+        &format!(
+            "{} | {} | {}",
+            columns.description, columns.recurrence, columns.dependencies
+        ),
+    );
+    cursor_y - 5.5
+}
+
+fn render_timeline_action_row(
+    ops: &mut Vec<Op>,
+    columns: &DesignReportTimelineColumnsInput,
+    action: &DesignReportTimelineActionInput,
+    margin: f32,
+    mut cursor_y: f32,
+) -> f32 {
+    text(
+        ops,
+        margin,
+        cursor_y,
+        7.2,
+        BuiltinFont::Helvetica,
+        &format!(
+            "{} ({}) | {} | {} | {} | {}",
+            action.action_type_label,
+            action.action_type,
+            action.start_date,
+            action.end_date,
+            action.target,
+            action.status
+        ),
+    );
+    cursor_y -= 4.4;
+
+    for line in wrap_text(
+        &format!("{}: {}", columns.description, action.description),
+        95,
+    ) {
+        text(
+            ops,
+            margin + 3.0,
+            cursor_y,
+            7.0,
+            BuiltinFont::Helvetica,
+            &line,
+        );
+        cursor_y -= TIMELINE_LINE_HEIGHT_MM;
+    }
+
+    for line in wrap_text(
+        &format!(
+            "{}: {} | {}: {}",
+            columns.recurrence, action.recurrence, columns.dependencies, action.dependencies
+        ),
+        95,
+    ) {
+        text(
+            ops,
+            margin + 3.0,
+            cursor_y,
+            7.0,
+            BuiltinFont::Helvetica,
+            &line,
+        );
+        cursor_y -= TIMELINE_LINE_HEIGHT_MM;
+    }
+
+    cursor_y - 2.5
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -901,6 +1238,32 @@ mod tests {
         assert!(text.contains("[tree] Pommier #112233"));
     }
 
+    #[test]
+    fn renderer_paginates_timeline_rows_with_repeated_headers() {
+        let input = DesignReportInput {
+            timeline: Some(timeline_input_with_actions(18)),
+            ..report_input_without_metadata()
+        };
+
+        let layout = build_design_report_layout(&input);
+
+        assert!(layout.pages.len() > 2);
+
+        let first_timeline_page = render_page(&input, &layout.pages[1], 1);
+        let first_text = page_text(&first_timeline_page).join("\n");
+        assert!(first_text.contains("Timeline"));
+        assert!(first_text.contains("Overview"));
+        assert!(first_text.contains("Action type"));
+        assert!(first_text.contains("Action 1"));
+        assert!(first_text.contains("Long wrapped description"));
+
+        let second_timeline_page = render_page(&input, &layout.pages[2], 2);
+        let second_text = page_text(&second_timeline_page).join("\n");
+        assert!(second_text.contains("Action type"));
+        assert!(second_text.contains("Action 13"));
+        assert!(second_text.contains("Page 3 of"));
+    }
+
     fn report_input_without_metadata() -> DesignReportInput {
         DesignReportInput {
             title: "Landscape report".to_string(),
@@ -944,6 +1307,47 @@ mod tests {
                 measurement_guides: vec![],
                 legend: None,
             },
+            timeline: None,
+        }
+    }
+
+    fn timeline_input_with_actions(count: usize) -> DesignReportTimelineInput {
+        DesignReportTimelineInput {
+            title: "Timeline".to_string(),
+            overview_title: "Overview".to_string(),
+            table_title: "Actions".to_string(),
+            columns: DesignReportTimelineColumnsInput {
+                action_type: "Action type".to_string(),
+                description: "Description".to_string(),
+                start_date: "Start".to_string(),
+                end_date: "End".to_string(),
+                recurrence: "Recurrence".to_string(),
+                target: "Target".to_string(),
+                dependencies: "Dependencies".to_string(),
+                status: "Status".to_string(),
+            },
+            overview_rows: vec![DesignReportTimelineOverviewRowInput {
+                action_type: "planting".to_string(),
+                label: "Planting".to_string(),
+                color: "#7D6049".to_string(),
+                count: count as u32,
+                date_range: "Mar 1, 2026 - Mar 18, 2026".to_string(),
+            }],
+            actions: (1..=count)
+                .map(|index| DesignReportTimelineActionInput {
+                    action_type: "planting".to_string(),
+                    action_type_label: "Planting".to_string(),
+                    description: format!(
+                        "Action {index}: Long wrapped description with enough words to span more than one printable line."
+                    ),
+                    start_date: format!("Mar {index}, 2026"),
+                    end_date: format!("Mar {index}, 2026"),
+                    recurrence: "None".to_string(),
+                    target: "Pommier".to_string(),
+                    dependencies: "None".to_string(),
+                    status: "Open".to_string(),
+                })
+                .collect(),
         }
     }
 

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
+import { locale } from '../app/settings/state'
 import type { CanopiFile } from '../types/design'
 import {
   buildDesignReportInput,
@@ -51,6 +52,7 @@ describe('Design Report export input', () => {
     nonCanvasRevision.value = 0
     nonCanvasSavedRevision.value = 0
     canvasClean.value = true
+    locale.value = 'en'
   })
 
   it('omits empty metadata and fits the canvas page to visible layers', () => {
@@ -358,6 +360,109 @@ describe('Design Report export input', () => {
     }))
     expect(input.canvas.legend).not.toEqual(expect.objectContaining({
       kind: 'pinned-plant-names',
+    }))
+  })
+
+  it('omits empty timelines and snapshots localized timeline rows when actions exist', () => {
+    locale.value = 'fr'
+
+    expect(buildDesignReportInput(BASE_DESIGN).timeline).toBeNull()
+
+    const input = buildDesignReportInput({
+      ...BASE_DESIGN,
+      plants: [{
+        id: 'plant-1',
+        canonical_name: 'Malus domestica',
+        common_name: 'Apple',
+        color: null,
+        position: { x: 0, y: 0 },
+        rotation: null,
+        scale: null,
+        notes: null,
+        planted_date: null,
+        quantity: 1,
+        locked: false,
+      }],
+      zones: [{
+        name: 'North bed',
+        zone_type: 'bed',
+        points: [],
+        rotation: 0,
+        fill_color: null,
+        notes: null,
+        locked: false,
+      }],
+      timeline: [
+        {
+          id: 'mulch',
+          action_type: 'other',
+          description: 'Add mulch before first heat wave',
+          start_date: null,
+          end_date: null,
+          recurrence: null,
+          targets: [{ kind: 'zone', zone_name: 'North bed' }],
+          depends_on: null,
+          completed: false,
+          order: 2,
+        },
+        {
+          id: 'plant',
+          action_type: 'planting',
+          description: 'Plant apple guild and water deeply',
+          start_date: '2026-03-01',
+          end_date: '2026-03-10',
+          recurrence: 'yearly',
+          targets: [{ kind: 'species', canonical_name: 'Malus domestica' }],
+          depends_on: ['mulch'],
+          completed: true,
+          order: 1,
+        },
+      ],
+    }, {
+      querySurface: createTestCanvasQuerySurface({
+        localizedNames: new Map([['Malus domestica', 'Pommier']]),
+      }),
+    })
+
+    expect(input.timeline).toEqual(expect.objectContaining({
+      title: 'Calendrier',
+      overview_title: 'Vue d’ensemble',
+      table_title: 'Actions',
+      columns: expect.objectContaining({
+        action_type: "Type d'action",
+        recurrence: 'Récurrence',
+        dependencies: 'Dépendances',
+      }),
+      overview_rows: expect.arrayContaining([
+        expect.objectContaining({
+          action_type: 'planting',
+          label: 'Plantation',
+          count: 1,
+          date_range: expect.stringContaining('mars'),
+        }),
+      ]),
+      actions: [
+        expect.objectContaining({
+          id: 'plant',
+          action_type_label: 'Plantation',
+          description: 'Plant apple guild and water deeply',
+          start_date: expect.stringContaining('mars'),
+          end_date: expect.stringContaining('mars'),
+          recurrence: 'yearly',
+          target: 'Pommier',
+          dependencies: 'mulch',
+          status: 'Terminé',
+        }),
+        expect.objectContaining({
+          id: 'mulch',
+          action_type_label: 'Autre',
+          start_date: 'Non planifié',
+          end_date: 'Non planifié',
+          target: 'North bed',
+          dependencies: 'Aucune',
+          status: 'Ouvert',
+        }),
+      ],
     }))
   })
 })

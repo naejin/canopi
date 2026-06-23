@@ -953,5 +953,20 @@
       "nextMonth": "Next month",
       "chooseDate": "Choose date"
     }
+  },
+  "designReport": {
+    "timeline": {
+      "overview": "Overview",
+      "actions": "Actions",
+      "recurrence": "Recurrence",
+      "target": "Target",
+      "dependencies": "Dependencies",
+      "status": "Status",
+      "manual": "Manual",
+      "none": "None",
+      "notScheduled": "Not scheduled",
+      "completed": "Completed",
+      "open": "Open"
+    }
   }
 }

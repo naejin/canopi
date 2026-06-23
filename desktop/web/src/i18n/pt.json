@@ -953,5 +953,20 @@
     "includeCurrentDesign": "Incluir o Design atual",
     "includeCurrentDesignDescription": "Adiciona uma cópia .canopi com conteúdo da tela, notas, cronograma, orçamento e local salvo.",
     "currentDesignUnavailable": "Não há um Design atual disponível para anexar."
+  },
+  "designReport": {
+    "timeline": {
+      "overview": "Visão geral",
+      "actions": "Ações",
+      "recurrence": "Recorrência",
+      "target": "Alvo",
+      "dependencies": "Dependências",
+      "status": "Estado",
+      "manual": "Manual",
+      "none": "Nenhuma",
+      "notScheduled": "Não programado",
+      "completed": "Concluído",
+      "open": "Aberto"
+    }
   }
 }

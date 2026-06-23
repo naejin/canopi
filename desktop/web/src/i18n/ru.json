@@ -953,5 +953,20 @@
     "includeCurrentDesign": "Включить текущий дизайн",
     "includeCurrentDesignDescription": "Добавляет копию .canopi с содержимым холста, заметками, графиком, бюджетом и сохраненным местоположением.",
     "currentDesignUnavailable": "Нет текущего дизайна, доступного для вложения."
+  },
+  "designReport": {
+    "timeline": {
+      "overview": "Обзор",
+      "actions": "Действия",
+      "recurrence": "Повторение",
+      "target": "Цель",
+      "dependencies": "Зависимости",
+      "status": "Статус",
+      "manual": "Вручную",
+      "none": "Нет",
+      "notScheduled": "Не запланировано",
+      "completed": "Завершено",
+      "open": "Открыто"
+    }
   }
 }

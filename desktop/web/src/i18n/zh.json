@@ -953,5 +953,20 @@
     "includeCurrentDesign": "包含当前设计",
     "includeCurrentDesignDescription": "添加一个 .canopi 副本，其中包含画布内容、备注、时间线、预算和已保存的位置。",
     "currentDesignUnavailable": "没有可附加的当前设计。"
+  },
+  "designReport": {
+    "timeline": {
+      "overview": "概览",
+      "actions": "操作",
+      "recurrence": "重复",
+      "target": "目标",
+      "dependencies": "依赖项",
+      "status": "状态",
+      "manual": "手动",
+      "none": "无",
+      "notScheduled": "未计划",
+      "completed": "已完成",
+      "open": "未完成"
+    }
   }
 }
