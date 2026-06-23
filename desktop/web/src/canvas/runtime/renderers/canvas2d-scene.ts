@@ -10,6 +10,7 @@ import {
   createMeasurementGuidePresentation,
   MEASUREMENT_GUIDE_DASH_PX,
   MEASUREMENT_GUIDE_GAP_PX,
+  MEASUREMENT_GUIDE_LABEL_FONT_SIZE_PX,
   MEASUREMENT_GUIDE_TICK_HALF_PX,
 } from '../measurement-guides'
 import {
@@ -176,7 +177,7 @@ function renderMeasurementGuides(ctx: CanvasRenderingContext2D, snapshot: SceneR
 
   ctx.save()
   ctx.setTransform(1, 0, 0, 1, 0, 0)
-  ctx.font = '400 11px Inter, sans-serif'
+  ctx.font = `400 ${MEASUREMENT_GUIDE_LABEL_FONT_SIZE_PX}px Inter, sans-serif`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   for (const guide of snapshot.scene.measurementGuides ?? []) {
@@ -190,11 +191,11 @@ function renderMeasurementGuides(ctx: CanvasRenderingContext2D, snapshot: SceneR
     const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
     ctx.fillStyle = interactionVisual?.color ?? guideColor
     ctx.globalAlpha = (interactionVisual?.alpha ?? 1) * layer.opacity
-    ctx.fillText(
-      presentation.text,
-      presentation.labelScreenPoint.x,
-      presentation.labelScreenPoint.y,
-    )
+    ctx.save()
+    ctx.translate(presentation.labelScreenPoint.x, presentation.labelScreenPoint.y)
+    ctx.rotate(presentation.labelRotationRad)
+    ctx.fillText(presentation.text, 0, 0)
+    ctx.restore()
   }
   ctx.restore()
   ctx.globalAlpha = 1

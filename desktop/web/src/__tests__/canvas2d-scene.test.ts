@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { MEASUREMENT_GUIDE_LABEL_OFFSET_PX } from '../canvas/runtime/measurement-guides'
 import { createCanvas2DSceneRenderer } from '../canvas/runtime/renderers/canvas2d-scene'
 import type { SceneRendererSnapshot } from '../canvas/runtime/renderers/scene-types'
 
@@ -220,8 +221,8 @@ describe('createCanvas2DSceneRenderer', () => {
         kind: 'measurement-guide',
         id: 'guide-1',
         locked: false,
-        start: { x: 10, y: 10 },
-        end: { x: 40, y: 10 },
+        start: { x: 40, y: 10 },
+        end: { x: 10, y: 40 },
       }],
       layers: [{ kind: 'layer', name: 'measurement-guides', visible: true, locked: false, opacity: 1 }],
       viewport: { x: 0, y: 0, scale: 2 },
@@ -230,9 +231,18 @@ describe('createCanvas2DSceneRenderer', () => {
     renderer.renderScene(snapshot)
 
     expect(ctx.setLineDash).toHaveBeenCalledWith(expect.arrayContaining([expect.any(Number)]))
-    expect(ctx.moveTo).toHaveBeenCalledWith(10, 10)
-    expect(ctx.lineTo).toHaveBeenCalledWith(40, 10)
-    expect(ctx.fillText).toHaveBeenCalledWith('30 m', 50, 15)
+    expect(ctx.moveTo).toHaveBeenCalledWith(40, 10)
+    expect(ctx.lineTo).toHaveBeenCalledWith(10, 40)
+    const expectedLabelPoint = {
+      x: 50 - MEASUREMENT_GUIDE_LABEL_OFFSET_PX * Math.SQRT1_2,
+      y: 50 - MEASUREMENT_GUIDE_LABEL_OFFSET_PX * Math.SQRT1_2,
+    }
+    const labelTranslateCall = ctx.translate.mock.calls.find(([x, y]) =>
+      Math.abs(x - expectedLabelPoint.x) < 0.0001 && Math.abs(y - expectedLabelPoint.y) < 0.0001
+    )
+    expect(labelTranslateCall).toBeDefined()
+    expect(ctx.rotate).toHaveBeenCalledWith(-Math.PI / 4)
+    expect(ctx.fillText).toHaveBeenCalledWith('42 m', 0, 0)
 
     vi.clearAllMocks()
     renderer.renderScene({

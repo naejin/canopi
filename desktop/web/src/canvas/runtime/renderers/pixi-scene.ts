@@ -4,6 +4,7 @@ import {
   createMeasurementGuidePresentation,
   MEASUREMENT_GUIDE_DASH_PX,
   MEASUREMENT_GUIDE_GAP_PX,
+  MEASUREMENT_GUIDE_LABEL_FONT_SIZE_PX,
   MEASUREMENT_GUIDE_TICK_HALF_PX,
 } from '../measurement-guides'
 import {
@@ -268,10 +269,11 @@ function syncMeasurementGuides(
     )
     const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
     text.style = new TextStyle({
-      fontSize: 11,
+      fontSize: MEASUREMENT_GUIDE_LABEL_FONT_SIZE_PX,
       fill: toPixiColor(interactionVisual?.color ?? getAnnotationTextColor(), 0),
     })
     text.position.set(presentation.labelScreenPoint.x, presentation.labelScreenPoint.y)
+    text.rotation = presentation.labelRotationRad
     text.anchor.set(0.5, 0.5)
     text.visible = true
   }

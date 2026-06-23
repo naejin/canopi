@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { MEASUREMENT_GUIDE_LABEL_OFFSET_PX } from '../canvas/runtime/measurement-guides'
 import type { SceneRendererSnapshot } from '../canvas/runtime/renderers/scene-types'
 
 vi.mock('pixi.js', () => {
@@ -223,6 +224,7 @@ describe('createPixiSceneRenderer', () => {
         }>
         texts: Array<{
           text: string
+          rotation: number
           position: { set: ReturnType<typeof vi.fn> }
         }>
       }
@@ -255,8 +257,8 @@ describe('createPixiSceneRenderer', () => {
         kind: 'measurement-guide',
         id: 'guide-1',
         locked: false,
-        start: { x: 10, y: 10 },
-        end: { x: 40, y: 10 },
+        start: { x: 40, y: 10 },
+        end: { x: 10, y: 40 },
       }],
       layers: [{ kind: 'layer', name: 'measurement-guides', visible: true, locked: false, opacity: 1 }],
       viewport: { x: 0, y: 0, scale: 2 },
@@ -265,12 +267,19 @@ describe('createPixiSceneRenderer', () => {
     renderer.renderScene(snapshot)
 
     const guideGraphic = pixi.__pixiMockState.graphics.find((graphics) =>
-      graphics.moveTo.mock.calls.some(([x, y]) => x === 10 && y === 10)
-      && graphics.lineTo.mock.calls.some(([x, y]) => x === 40 && y === 7.5),
+      graphics.moveTo.mock.calls.some(([x, y]) => x === 40 && y === 10)
+      && graphics.lineTo.mock.calls.some(([x, y]) => x === 10 && y === 40),
     )
     expect(guideGraphic?.stroke.mock.calls[0]?.[0]).toMatchObject({ width: 0.75 })
-    const label = pixi.__pixiMockState.texts.find((text) => text.text === '30 m')
-    expect(label?.position.set).toHaveBeenCalledWith(50, 15)
+    const label = pixi.__pixiMockState.texts.find((text) => text.text === '42 m')
+    const expectedLabelPoint = {
+      x: 50 - MEASUREMENT_GUIDE_LABEL_OFFSET_PX * Math.SQRT1_2,
+      y: 50 - MEASUREMENT_GUIDE_LABEL_OFFSET_PX * Math.SQRT1_2,
+    }
+    const labelPositionCall = label?.position.set.mock.calls[0]
+    expect(labelPositionCall?.[0]).toBeCloseTo(expectedLabelPoint.x)
+    expect(labelPositionCall?.[1]).toBeCloseTo(expectedLabelPoint.y)
+    expect(label?.rotation).toBeCloseTo(-Math.PI / 4)
 
     vi.clearAllMocks()
     renderer.renderScene({
