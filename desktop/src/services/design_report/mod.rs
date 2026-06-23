@@ -1128,16 +1128,13 @@ fn render_page(
             render_canvas_legend(&mut ops, fonts, margin, cursor_y, legend, &input.labels) - 3.0;
     }
 
-    let canvas_y = margin + 10.0;
-    let canvas_height = (cursor_y - canvas_y - 8.0).max(60.0);
-    let canvas_width = (page_width - margin * 2.0).max(60.0);
-    let frame = CanvasFrame {
-        x_mm: margin,
-        y_mm: canvas_y,
-        width_mm: canvas_width,
-        height_mm: canvas_height.min(page_height - CANVAS_TOP_GAP_MM - canvas_y),
-    };
+    let frame = canvas_frame_for_page(page_width, page_height, margin, cursor_y, canvas_image);
 
+    if let Some(image) = canvas_image {
+        render_canvas_image(&mut ops, image, frame);
+    } else {
+        render_canvas_objects(&mut ops, fonts, input, frame);
+    }
     draw_rect(
         &mut ops,
         frame.x_mm,
@@ -1145,11 +1142,6 @@ fn render_page(
         frame.width_mm,
         frame.height_mm,
     );
-    if let Some(image) = canvas_image {
-        render_canvas_image(&mut ops, image, frame);
-    } else {
-        render_canvas_objects(&mut ops, fonts, input, frame);
-    }
     text(
         &mut ops,
         fonts,
@@ -1169,6 +1161,46 @@ struct CanvasFrame {
     y_mm: f32,
     width_mm: f32,
     height_mm: f32,
+}
+
+fn canvas_frame_for_page(
+    page_width_mm: f32,
+    page_height_mm: f32,
+    margin_mm: f32,
+    cursor_y_mm: f32,
+    canvas_image: Option<&CanvasImageResource>,
+) -> CanvasFrame {
+    let max_width = (page_width_mm - margin_mm * 2.0).max(60.0);
+    let bottom_y = margin_mm + 10.0;
+    let max_height = (cursor_y_mm - bottom_y - 8.0)
+        .max(60.0)
+        .min(page_height_mm - CANVAS_TOP_GAP_MM - bottom_y);
+    let top_y = bottom_y + max_height;
+    let mut width = max_width;
+    let mut height = max_height;
+
+    if let Some(image) = canvas_image {
+        let image_width = image.width_px as f32;
+        let image_height = image.height_px as f32;
+        if image_width > 0.0 && image_height > 0.0 {
+            let image_aspect = image_width / image_height;
+            if image_aspect.is_finite() && image_aspect > 0.0 {
+                let full_width_height = max_width / image_aspect;
+                if full_width_height <= max_height {
+                    height = full_width_height;
+                } else {
+                    width = max_height * image_aspect;
+                }
+            }
+        }
+    }
+
+    CanvasFrame {
+        x_mm: margin_mm + (max_width - width) / 2.0,
+        y_mm: top_y - height,
+        width_mm: width.max(1.0),
+        height_mm: height.max(1.0),
+    }
 }
 
 fn render_canvas_image(ops: &mut Vec<Op>, image: &CanvasImageResource, frame: CanvasFrame) {
@@ -2769,6 +2801,91 @@ mod tests {
     }
 
     #[test]
+    fn renderer_paints_canvas_image_before_frame_border() {
+        let input = DesignReportInput {
+            canvas: DesignReportCanvasInput {
+                image: Some(DesignReportCanvasImageInput {
+                    data_base64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC".to_string(),
+                    width_px: 1200,
+                    height_px: 800,
+                }),
+                ..report_input_without_metadata().canvas
+            },
+            ..report_input_without_metadata()
+        };
+        let layout = build_design_report_layout(&input);
+        let image = CanvasImageResource {
+            id: XObjectId("test-canvas-image".to_string()),
+            width_px: 1200,
+            height_px: 800,
+        };
+        let page = render_page(
+            &input,
+            &layout.pages[0],
+            0,
+            &test_report_fonts(),
+            Some(&image),
+        );
+
+        let image_index = page
+            .ops
+            .iter()
+            .position(|op| matches!(op, Op::UseXobject { .. }))
+            .expect("first report page should embed the rendered canvas image");
+        let border_index_after_image = page
+            .ops
+            .iter()
+            .enumerate()
+            .skip(image_index + 1)
+            .find_map(|(index, op)| matches!(op, Op::DrawLine { .. }).then_some(index))
+            .expect("first report page should draw a frame border after the canvas image");
+
+        assert!(
+            border_index_after_image > image_index,
+            "canvas image must be painted before the frame border so the white image cannot cover the border",
+        );
+    }
+
+    #[test]
+    fn renderer_fits_canvas_frame_to_embedded_image_aspect() {
+        for (label, width_px, height_px, expected_aspect) in
+            [("wide", 1600, 400, 4.0), ("tall", 400, 1600, 0.25)]
+        {
+            let input = DesignReportInput {
+                canvas: DesignReportCanvasInput {
+                    image: Some(DesignReportCanvasImageInput {
+                        data_base64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC".to_string(),
+                        width_px,
+                        height_px,
+                    }),
+                    ..report_input_without_metadata().canvas
+                },
+                ..report_input_without_metadata()
+            };
+            let layout = build_design_report_layout(&input);
+            let image = CanvasImageResource {
+                id: XObjectId(format!("{label}-canvas-image")),
+                width_px,
+                height_px,
+            };
+            let page = render_page(
+                &input,
+                &layout.pages[0],
+                0,
+                &test_report_fonts(),
+                Some(&image),
+            );
+
+            let frame_aspect = last_line_rect_aspect(&page).expect("canvas frame border");
+
+            assert!(
+                (frame_aspect - expected_aspect).abs() < 0.05,
+                "{label} canvas frame should fit the embedded image aspect; got {frame_aspect}",
+            );
+        }
+    }
+
+    #[test]
     fn renderer_preserves_representative_report_invariants_without_snapshots() {
         let input = DesignReportInput {
             metadata: DesignReportMetadataInput {
@@ -3646,6 +3763,37 @@ mod tests {
                 _ => None,
             })
             .collect()
+    }
+
+    fn last_line_rect_aspect(page: &PdfPage) -> Option<f32> {
+        page.ops.iter().rev().find_map(|op| match op {
+            Op::DrawLine { line } => {
+                let min_x = line
+                    .points
+                    .iter()
+                    .map(|point| point.p.x.0)
+                    .fold(f32::INFINITY, f32::min);
+                let max_x = line
+                    .points
+                    .iter()
+                    .map(|point| point.p.x.0)
+                    .fold(f32::NEG_INFINITY, f32::max);
+                let min_y = line
+                    .points
+                    .iter()
+                    .map(|point| point.p.y.0)
+                    .fold(f32::INFINITY, f32::min);
+                let max_y = line
+                    .points
+                    .iter()
+                    .map(|point| point.p.y.0)
+                    .fold(f32::NEG_INFINITY, f32::max);
+                let width = max_x - min_x;
+                let height = max_y - min_y;
+                (width > 0.0 && height > 0.0).then_some(width / height)
+            }
+            _ => None,
+        })
     }
 
     #[derive(Debug)]
