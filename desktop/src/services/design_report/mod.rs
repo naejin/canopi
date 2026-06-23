@@ -1,8 +1,8 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use printpdf::{
-    FontId, LineDashPattern, Mm, Op, ParsedFont, PdfDocument, PdfFontHandle, PdfPage,
-    PdfSaveOptions, Point, Pt, RawImage, Rect, TextItem, XObjectId, XObjectTransform,
-    serialize_pdf_into_bytes,
+    Color, FontId, LineDashPattern, Mm, Op, PaintMode, ParsedFont, PdfDocument, PdfFontHandle,
+    PdfPage, PdfSaveOptions, Point, Pt, RawImage, Rect, Rgb, TextItem, WindingOrder, XObjectId,
+    XObjectTransform, serialize_pdf_into_bytes,
 };
 use serde::Deserialize;
 
@@ -389,6 +389,18 @@ const BUDGET_COLUMN_LAYOUT: [(f32, usize); 6] = [
 const CONSORTIUM_ROW_VERTICAL_PADDING_MM: f32 = 4.0;
 const CONSORTIUM_LINE_HEIGHT_MM: f32 = 4.2;
 const CONSORTIUM_HEADER_HEIGHT_MM: f32 = 10.0;
+const CONSORTIUM_CHART_WIDTH_MM: f32 = 182.0;
+const CONSORTIUM_CHART_STRATUM_WIDTH_MM: f32 = 28.0;
+const CONSORTIUM_CHART_LINE_HEIGHT_MM: f32 = 3.8;
+const CONSORTIUM_CHART_SWATCH_MM: f32 = 2.3;
+const CONSORTIUM_TABLE_COLUMN_LAYOUT: [(f32, usize); 6] = [
+    (0.0, 24),
+    (42.0, 28),
+    (82.0, 16),
+    (111.0, 18),
+    (139.0, 18),
+    (170.0, 8),
+];
 const REPORT_FONT_INDEX: usize = 0;
 const REPORT_REGULAR_FONT: &[u8] = include_bytes!("fonts/NotoSans-Regular.ttf");
 const REPORT_BOLD_FONT: &[u8] = include_bytes!("fonts/NotoSans-Bold.ttf");
@@ -845,23 +857,63 @@ fn estimate_consortium_chart_height(consortium: &DesignReportConsortiumInput) ->
     if consortium.chart_rows.is_empty() {
         return 0.0;
     }
-    15.0 + consortium.chart_rows.len() as f32 * 9.2
+    let phase_width = consortium_chart_phase_width(consortium);
+    let phase_chars = consortium_chart_cell_chars(phase_width);
+    let header_lines = consortium
+        .phases
+        .iter()
+        .map(|phase| wrap_text(phase, phase_chars).len())
+        .chain([wrap_text(&consortium.columns.stratum, 14).len()])
+        .max()
+        .unwrap_or(1)
+        .max(1);
+    let row_heights = consortium
+        .chart_rows
+        .iter()
+        .map(|row| estimate_consortium_chart_row_height(row, phase_chars))
+        .sum::<f32>();
+    13.0 + header_lines as f32 * CONSORTIUM_CHART_LINE_HEIGHT_MM + row_heights
 }
 
 fn estimate_consortium_row_height(row: &DesignReportConsortiumRowInput) -> f32 {
     let canonical = row.canonical_name.as_deref().unwrap_or("-");
-    let wrapped_lines = [
-        wrap_text(&row.plant, 28).len(),
-        wrap_text(canonical, 32).len(),
-        wrap_text(&row.stratum, 16).len(),
-        wrap_text(&row.start_phase, 18).len(),
-        wrap_text(&row.end_phase, 18).len(),
-    ]
-    .into_iter()
-    .max()
-    .unwrap_or(1)
-    .max(1);
+    let cells = [
+        row.plant.as_str(),
+        canonical,
+        row.stratum.as_str(),
+        row.start_phase.as_str(),
+        row.end_phase.as_str(),
+        row.count.as_str(),
+    ];
+    let wrapped_lines = cells
+        .iter()
+        .zip(CONSORTIUM_TABLE_COLUMN_LAYOUT)
+        .map(|(value, (_, max_chars))| wrap_text(value, max_chars).len())
+        .max()
+        .unwrap_or(1)
+        .max(1);
     CONSORTIUM_ROW_VERTICAL_PADDING_MM + wrapped_lines as f32 * CONSORTIUM_LINE_HEIGHT_MM + 8.0
+}
+
+fn estimate_consortium_chart_row_height(
+    row: &DesignReportConsortiumChartRowInput,
+    phase_chars: usize,
+) -> f32 {
+    let stratum_lines = wrap_text(&row.stratum, 14).len().max(1);
+    let cell_lines = row
+        .cells
+        .iter()
+        .map(|cell| {
+            cell.entries
+                .iter()
+                .map(|entry| wrap_text(&entry.label, phase_chars).len().max(1))
+                .sum::<usize>()
+                .max(1)
+        })
+        .max()
+        .unwrap_or(1)
+        .max(1);
+    (stratum_lines.max(cell_lines) as f32 * CONSORTIUM_CHART_LINE_HEIGHT_MM + 5.0).max(9.0)
 }
 
 fn render_page(
@@ -1744,50 +1796,159 @@ fn render_consortium_chart(
     );
     cursor_y -= 5.0;
 
-    for line in wrap_text(
-        &format!(
-            "{} | {}",
-            consortium.columns.stratum,
-            consortium.phases.join(" | ")
-        ),
-        112,
-    ) {
-        text(ops, fonts, margin, cursor_y, 6.8, ReportFont::Bold, &line);
-        cursor_y -= 4.0;
-    }
+    let phase_count = consortium_chart_phase_count(consortium);
+    let phase_width = consortium_chart_phase_width(consortium);
+    let phase_chars = consortium_chart_cell_chars(phase_width);
+    let header_height =
+        render_consortium_chart_header(ops, fonts, consortium, margin, cursor_y, phase_count);
+    cursor_y -= header_height;
 
     for row in &consortium.chart_rows {
-        let cells = row
-            .cells
-            .iter()
-            .map(|cell| {
-                if cell.entries.is_empty() {
-                    "-".to_string()
-                } else {
-                    cell.entries
-                        .iter()
-                        .map(|entry| entry.label.clone())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                }
-            })
-            .collect::<Vec<_>>();
-        for line in wrap_text(&format!("{} | {}", row.stratum, cells.join(" | ")), 112) {
-            text(
-                ops,
-                fonts,
-                margin,
-                cursor_y,
-                6.6,
-                ReportFont::Regular,
-                &line,
-            );
-            cursor_y -= CONSORTIUM_LINE_HEIGHT_MM;
+        let row_height = estimate_consortium_chart_row_height(row, phase_chars);
+        let row_bottom_y = cursor_y - row_height;
+        draw_rect(
+            ops,
+            margin,
+            row_bottom_y,
+            CONSORTIUM_CHART_STRATUM_WIDTH_MM,
+            row_height,
+        );
+        render_wrapped_text_lines(
+            ops,
+            fonts,
+            margin + 1.2,
+            cursor_y - 3.8,
+            &wrap_text(&row.stratum, 14),
+            ConsortiumTextStyle::regular(6.4, CONSORTIUM_CHART_LINE_HEIGHT_MM),
+        );
+
+        for phase_index in 0..phase_count {
+            let cell_x =
+                margin + CONSORTIUM_CHART_STRATUM_WIDTH_MM + phase_index as f32 * phase_width;
+            draw_rect(ops, cell_x, row_bottom_y, phase_width, row_height);
+            if let Some(cell) = row.cells.get(phase_index) {
+                render_consortium_chart_cell(
+                    ops,
+                    fonts,
+                    cell,
+                    cell_x + 1.1,
+                    cursor_y - 3.8,
+                    phase_chars,
+                );
+            } else {
+                text(
+                    ops,
+                    fonts,
+                    cell_x + 1.1,
+                    cursor_y - 3.8,
+                    6.2,
+                    ReportFont::Regular,
+                    "-",
+                );
+            }
         }
-        cursor_y -= 1.5;
+        cursor_y -= row_height;
     }
 
     cursor_y
+}
+
+fn render_consortium_chart_header(
+    ops: &mut Vec<Op>,
+    fonts: &ReportFonts,
+    consortium: &DesignReportConsortiumInput,
+    margin: f32,
+    cursor_y: f32,
+    phase_count: usize,
+) -> f32 {
+    let phase_width = consortium_chart_phase_width(consortium);
+    let phase_chars = consortium_chart_cell_chars(phase_width);
+    let header_lines = consortium
+        .phases
+        .iter()
+        .map(|phase| wrap_text(phase, phase_chars).len())
+        .chain([wrap_text(&consortium.columns.stratum, 14).len()])
+        .max()
+        .unwrap_or(1)
+        .max(1);
+    let header_height = header_lines as f32 * CONSORTIUM_CHART_LINE_HEIGHT_MM + 3.0;
+    let bottom_y = cursor_y - header_height;
+
+    draw_rect(
+        ops,
+        margin,
+        bottom_y,
+        CONSORTIUM_CHART_STRATUM_WIDTH_MM,
+        header_height,
+    );
+    render_wrapped_text_lines(
+        ops,
+        fonts,
+        margin + 1.2,
+        cursor_y - 3.5,
+        &wrap_text(&consortium.columns.stratum, 14),
+        ConsortiumTextStyle::bold(6.5, CONSORTIUM_CHART_LINE_HEIGHT_MM),
+    );
+
+    for phase_index in 0..phase_count {
+        let cell_x = margin + CONSORTIUM_CHART_STRATUM_WIDTH_MM + phase_index as f32 * phase_width;
+        draw_rect(ops, cell_x, bottom_y, phase_width, header_height);
+        if let Some(phase) = consortium.phases.get(phase_index) {
+            render_wrapped_text_lines(
+                ops,
+                fonts,
+                cell_x + 1.1,
+                cursor_y - 3.5,
+                &wrap_text(phase, phase_chars),
+                ConsortiumTextStyle::bold(6.5, CONSORTIUM_CHART_LINE_HEIGHT_MM),
+            );
+        }
+    }
+
+    header_height
+}
+
+fn render_consortium_chart_cell(
+    ops: &mut Vec<Op>,
+    fonts: &ReportFonts,
+    cell: &DesignReportConsortiumChartCellInput,
+    x_mm: f32,
+    mut cursor_y: f32,
+    max_chars: usize,
+) {
+    if cell.entries.is_empty() {
+        text(ops, fonts, x_mm, cursor_y, 6.2, ReportFont::Regular, "-");
+        return;
+    }
+
+    for entry in &cell.entries {
+        if let Some(color) = parse_report_hex_color(&entry.color) {
+            draw_filled_rect(
+                ops,
+                x_mm,
+                cursor_y - CONSORTIUM_CHART_SWATCH_MM + 0.5,
+                CONSORTIUM_CHART_SWATCH_MM,
+                CONSORTIUM_CHART_SWATCH_MM,
+                color,
+            );
+        }
+        let label_lines = wrap_text(&entry.label, max_chars)
+            .into_iter()
+            .collect::<Vec<_>>();
+        let label_x = x_mm + CONSORTIUM_CHART_SWATCH_MM + 1.1;
+        for line in &label_lines {
+            text(
+                ops,
+                fonts,
+                label_x,
+                cursor_y,
+                6.2,
+                ReportFont::Regular,
+                line,
+            );
+            cursor_y -= CONSORTIUM_CHART_LINE_HEIGHT_MM;
+        }
+    }
 }
 
 fn render_consortium_table_header(
@@ -1795,81 +1956,193 @@ fn render_consortium_table_header(
     fonts: &ReportFonts,
     columns: &DesignReportConsortiumColumnsInput,
     margin: f32,
-    mut cursor_y: f32,
+    cursor_y: f32,
 ) -> f32 {
-    text(
+    let height = render_consortium_table_cells(
         ops,
         fonts,
         margin,
         cursor_y,
-        7.5,
+        7.4,
         ReportFont::Bold,
-        &format!(
-            "{} | {} | {} | {}",
-            columns.plant, columns.canonical_name, columns.stratum, columns.count
-        ),
+        [
+            columns.plant.as_str(),
+            columns.canonical_name.as_str(),
+            columns.stratum.as_str(),
+            columns.start_phase.as_str(),
+            columns.end_phase.as_str(),
+            columns.count.as_str(),
+        ],
     );
-    cursor_y -= 4.6;
-    text(
-        ops,
-        fonts,
-        margin,
-        cursor_y,
-        7.5,
-        ReportFont::Bold,
-        &format!("{} | {}", columns.start_phase, columns.end_phase),
-    );
-    cursor_y - 5.5
+    cursor_y - height - 3.0
 }
 
 fn render_consortium_row(
     ops: &mut Vec<Op>,
     fonts: &ReportFonts,
-    columns: &DesignReportConsortiumColumnsInput,
+    _: &DesignReportConsortiumColumnsInput,
     row: &DesignReportConsortiumRowInput,
     margin: f32,
-    mut cursor_y: f32,
+    cursor_y: f32,
 ) -> f32 {
     let canonical = row.canonical_name.as_deref().unwrap_or("-");
-    for line in wrap_text(
-        &format!(
-            "{} | {} | {} | {}",
-            row.plant, canonical, row.stratum, row.count
-        ),
-        112,
-    ) {
-        text(
-            ops,
-            fonts,
-            margin,
-            cursor_y,
-            7.2,
-            ReportFont::Regular,
-            &line,
-        );
-        cursor_y -= CONSORTIUM_LINE_HEIGHT_MM;
+    let height = render_consortium_table_cells(
+        ops,
+        fonts,
+        margin,
+        cursor_y,
+        7.0,
+        ReportFont::Regular,
+        [
+            row.plant.as_str(),
+            canonical,
+            row.stratum.as_str(),
+            row.start_phase.as_str(),
+            row.end_phase.as_str(),
+            row.count.as_str(),
+        ],
+    );
+
+    cursor_y - height - 2.5
+}
+
+fn render_consortium_table_cells(
+    ops: &mut Vec<Op>,
+    fonts: &ReportFonts,
+    margin: f32,
+    cursor_y: f32,
+    font_size: f32,
+    font: ReportFont,
+    cells: [&str; 6],
+) -> f32 {
+    let wrapped_cells = cells
+        .into_iter()
+        .zip(CONSORTIUM_TABLE_COLUMN_LAYOUT)
+        .map(|(value, (offset, max_chars))| (offset, wrap_text(value, max_chars)))
+        .collect::<Vec<_>>();
+    let line_count = wrapped_cells
+        .iter()
+        .map(|(_, lines)| lines.len())
+        .max()
+        .unwrap_or(1)
+        .max(1);
+
+    for line_index in 0..line_count {
+        let line_y = cursor_y - line_index as f32 * CONSORTIUM_LINE_HEIGHT_MM;
+        for (offset, lines) in &wrapped_cells {
+            if let Some(line) = lines.get(line_index) {
+                text(ops, fonts, margin + offset, line_y, font_size, font, line);
+            }
+        }
     }
 
-    for line in wrap_text(
-        &format!(
-            "{}: {} | {}: {}",
-            columns.start_phase, row.start_phase, columns.end_phase, row.end_phase
-        ),
-        112,
-    ) {
-        text(
-            ops,
-            fonts,
-            margin + 3.0,
-            cursor_y,
-            7.0,
-            ReportFont::Regular,
-            &line,
-        );
-        cursor_y -= CONSORTIUM_LINE_HEIGHT_MM;
+    line_count as f32 * CONSORTIUM_LINE_HEIGHT_MM
+}
+
+fn consortium_chart_phase_count(consortium: &DesignReportConsortiumInput) -> usize {
+    consortium
+        .chart_rows
+        .iter()
+        .map(|row| row.cells.len())
+        .chain([consortium.phases.len()])
+        .max()
+        .unwrap_or(1)
+        .max(1)
+}
+
+fn consortium_chart_phase_width(consortium: &DesignReportConsortiumInput) -> f32 {
+    let phase_count = consortium_chart_phase_count(consortium) as f32;
+    ((CONSORTIUM_CHART_WIDTH_MM - CONSORTIUM_CHART_STRATUM_WIDTH_MM) / phase_count).max(12.0)
+}
+
+fn consortium_chart_cell_chars(width_mm: f32) -> usize {
+    ((width_mm - CONSORTIUM_CHART_SWATCH_MM - 3.0) / 1.8)
+        .floor()
+        .max(6.0) as usize
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ConsortiumTextStyle {
+    size_pt: f32,
+    font: ReportFont,
+    line_height_mm: f32,
+}
+
+impl ConsortiumTextStyle {
+    fn regular(size_pt: f32, line_height_mm: f32) -> Self {
+        Self {
+            size_pt,
+            font: ReportFont::Regular,
+            line_height_mm,
+        }
     }
 
-    cursor_y - 2.5
+    fn bold(size_pt: f32, line_height_mm: f32) -> Self {
+        Self {
+            size_pt,
+            font: ReportFont::Bold,
+            line_height_mm,
+        }
+    }
+}
+
+fn render_wrapped_text_lines(
+    ops: &mut Vec<Op>,
+    fonts: &ReportFonts,
+    x_mm: f32,
+    mut y_mm: f32,
+    lines: &[String],
+    style: ConsortiumTextStyle,
+) {
+    for line in lines {
+        text(ops, fonts, x_mm, y_mm, style.size_pt, style.font, line);
+        y_mm -= style.line_height_mm;
+    }
+}
+
+fn draw_filled_rect(
+    ops: &mut Vec<Op>,
+    x_mm: f32,
+    y_mm: f32,
+    width_mm: f32,
+    height_mm: f32,
+    color: Color,
+) {
+    let mut rect = Rect::from_xywh(
+        Mm(x_mm).into(),
+        Mm(y_mm).into(),
+        Mm(width_mm).into(),
+        Mm(height_mm).into(),
+    );
+    rect.mode = Some(PaintMode::Fill);
+    rect.winding_order = Some(WindingOrder::NonZero);
+    ops.push(Op::SetFillColor { col: color });
+    ops.push(Op::DrawPolygon {
+        polygon: rect.to_polygon(),
+    });
+    ops.push(Op::SetFillColor {
+        col: report_rgb_color(0, 0, 0),
+    });
+}
+
+fn parse_report_hex_color(value: &str) -> Option<Color> {
+    let hex = value.trim().strip_prefix('#').unwrap_or(value.trim());
+    if hex.len() != 6 {
+        return None;
+    }
+    let red = u8::from_str_radix(&hex[0..2], 16).ok()?;
+    let green = u8::from_str_radix(&hex[2..4], 16).ok()?;
+    let blue = u8::from_str_radix(&hex[4..6], 16).ok()?;
+    Some(report_rgb_color(red, green, blue))
+}
+
+fn report_rgb_color(red: u8, green: u8, blue: u8) -> Color {
+    Color::Rgb(Rgb {
+        r: red as f32 / 255.0,
+        g: green as f32 / 255.0,
+        b: blue as f32 / 255.0,
+        icc_profile: None,
+    })
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -2777,7 +3050,9 @@ mod tests {
         assert!(first_text.contains("Placenta 1"));
         assert!(first_text.contains("High"));
         assert!(first_text.contains("Poirier"));
-        assert!(first_text.contains("Plant | Canonical name"));
+        assert!(first_text.contains("Plant"));
+        assert!(first_text.contains("Canonical name"));
+        assert!(!first_text.contains("Plant | Canonical name"));
         assert!(first_text.contains("Consortium plant 1"));
 
         let rendered_pages = layout.pages[1..]
@@ -2787,7 +3062,7 @@ mod tests {
         assert!(
             rendered_pages
                 .iter()
-                .filter(|text| text.contains("Plant | Canonical name"))
+                .filter(|text| text.contains("Plant") && text.contains("Canonical name"))
                 .count()
                 > 1
         );
@@ -2795,6 +3070,73 @@ mod tests {
             rendered_pages
                 .iter()
                 .any(|text| text.contains("Consortium plant 24"))
+        );
+    }
+
+    #[test]
+    fn renderer_prints_consortium_chart_as_cells_with_color_swatches() {
+        let input = DesignReportInput {
+            consortium: Some(DesignReportConsortiumInput {
+                phases: vec![
+                    "Pioneer".to_string(),
+                    "Establishment".to_string(),
+                    "Canopy".to_string(),
+                ],
+                chart_rows: vec![DesignReportConsortiumChartRowInput {
+                    stratum: "High".to_string(),
+                    cells: vec![
+                        DesignReportConsortiumChartCellInput {
+                            entries: vec![
+                                DesignReportConsortiumChartEntryInput {
+                                    label: "Very long localized apple cultivar name".to_string(),
+                                    color: "#AA0000".to_string(),
+                                },
+                                DesignReportConsortiumChartEntryInput {
+                                    label: "Pear".to_string(),
+                                    color: "#00AA00".to_string(),
+                                },
+                            ],
+                        },
+                        DesignReportConsortiumChartCellInput { entries: vec![] },
+                        DesignReportConsortiumChartCellInput {
+                            entries: vec![DesignReportConsortiumChartEntryInput {
+                                label: "Cherry".to_string(),
+                                color: "#0000AA".to_string(),
+                            }],
+                        },
+                    ],
+                }],
+                rows: vec![DesignReportConsortiumRowInput {
+                    plant: "Very long localized apple cultivar name".to_string(),
+                    canonical_name: Some("Malus domestica".to_string()),
+                    stratum: "High".to_string(),
+                    start_phase: "Pioneer".to_string(),
+                    end_phase: "Canopy".to_string(),
+                    count: "3".to_string(),
+                }],
+                ..consortium_input_with_rows(0)
+            }),
+            ..report_input_without_metadata()
+        };
+        let layout = build_design_report_layout(&input);
+        let page = render_test_page(&input, &layout.pages[1], 1);
+        let text = page_text(&page).join("\n");
+
+        assert!(text.contains("Succession chart"));
+        assert!(text.contains("Pioneer"));
+        assert!(text.contains("Establishment"));
+        assert!(text.contains("Canopy"));
+        assert!(text.contains("Very long localized apple"));
+        assert!(text.contains("Pear"));
+        assert!(text.contains("Cherry"));
+        assert!(!text.contains("Stratum |"));
+        assert!(!text.contains("High |"));
+        assert!(!text.contains("#AA0000"));
+        assert!(
+            page.ops
+                .iter()
+                .any(|op| matches!(op, Op::DrawPolygon { .. })),
+            "chart entries should render color swatches",
         );
     }
 
