@@ -388,7 +388,6 @@ const BUDGET_COLUMN_LAYOUT: [(f32, usize); 6] = [
     (123.0, 18),
     (157.0, 10),
 ];
-const CONSORTIUM_ROW_VERTICAL_PADDING_MM: f32 = 4.0;
 const CONSORTIUM_LINE_HEIGHT_MM: f32 = 4.2;
 const CONSORTIUM_HEADER_HEIGHT_MM: f32 = 10.0;
 const CONSORTIUM_CHART_WIDTH_MM: f32 = 182.0;
@@ -913,7 +912,7 @@ fn estimate_consortium_row_height(row: &DesignReportConsortiumRowInput) -> f32 {
         .max()
         .unwrap_or(1)
         .max(1);
-    CONSORTIUM_ROW_VERTICAL_PADDING_MM + wrapped_lines as f32 * CONSORTIUM_LINE_HEIGHT_MM + 8.0
+    wrapped_lines as f32 * CONSORTIUM_LINE_HEIGHT_MM + 2.5
 }
 
 fn estimate_consortium_chart_row_height(
@@ -2127,7 +2126,7 @@ fn consortium_chart_phase_width(consortium: &DesignReportConsortiumInput) -> f32
 }
 
 fn consortium_chart_cell_chars(width_mm: f32) -> usize {
-    ((width_mm - CONSORTIUM_CHART_SWATCH_MM - 3.0) / 1.8)
+    ((width_mm - CONSORTIUM_CHART_SWATCH_MM - 3.0) / 1.35)
         .floor()
         .max(6.0) as usize
 }
@@ -3376,7 +3375,7 @@ mod tests {
     #[test]
     fn renderer_paginates_consortium_rows_with_chart_and_repeated_headers() {
         let input = DesignReportInput {
-            consortium: Some(consortium_input_with_rows(24)),
+            consortium: Some(consortium_input_with_rows(48)),
             ..report_input_without_metadata()
         };
 
@@ -3410,7 +3409,72 @@ mod tests {
         assert!(
             rendered_pages
                 .iter()
-                .any(|text| text.contains("Consortium plant 24"))
+                .any(|text| text.contains("Consortium plant 48"))
+        );
+    }
+
+    #[test]
+    fn renderer_keeps_ten_row_consortium_on_single_section_page() {
+        let mut consortium = consortium_input_with_rows(10);
+        consortium.phases = vec![
+            "Placenta 1".to_string(),
+            "Placenta 2".to_string(),
+            "Placenta 3".to_string(),
+            "Secondaire 1".to_string(),
+            "Secondaire 2".to_string(),
+            "Secondaire 3".to_string(),
+            "Climax".to_string(),
+        ];
+        consortium.chart_rows = [
+            "Canopée haute",
+            "Canopée basse",
+            "Arbustif",
+            "Herbacée",
+            "Couvre-sol",
+            "Racinaire",
+            "Grimpante",
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(row_index, stratum)| DesignReportConsortiumChartRowInput {
+            stratum: stratum.to_string(),
+            cells: (0..7)
+                .map(|phase_index| {
+                    let label = match (row_index + phase_index) % 3 {
+                        0 => "Consoude officinale",
+                        1 => "Mélisse et Féverolle",
+                        _ => "Eucalyptus Gunii",
+                    };
+                    DesignReportConsortiumChartCellInput {
+                        entries: vec![DesignReportConsortiumChartEntryInput {
+                            label: label.to_string(),
+                            color: "#00AA00".to_string(),
+                        }],
+                    }
+                })
+                .collect(),
+        })
+        .collect();
+        let input = DesignReportInput {
+            consortium: Some(consortium),
+            ..report_input_without_metadata()
+        };
+
+        let layout = build_design_report_layout(&input);
+        let consortium_page_count = layout
+            .pages
+            .iter()
+            .filter(|page| {
+                page.sections
+                    .iter()
+                    .any(|section| matches!(section, DesignReportSection::Consortium { .. }))
+            })
+            .count();
+
+        assert_eq!(
+            consortium_page_count, 1,
+            "ten-row Consortium sections should not create a sparse continuation page: {:?}",
+            layout.pages,
         );
     }
 
@@ -3479,6 +3543,56 @@ mod tests {
                 .any(|op| matches!(op, Op::DrawPolygon { .. })),
             "chart entries should render color swatches",
         );
+    }
+
+    #[test]
+    fn renderer_keeps_normal_consortium_chart_words_together() {
+        let input = DesignReportInput {
+            consortium: Some(DesignReportConsortiumInput {
+                phases: vec![
+                    "Placenta 1".to_string(),
+                    "Placenta 2".to_string(),
+                    "Placenta 3".to_string(),
+                    "Secondaire 1".to_string(),
+                    "Secondaire 2".to_string(),
+                    "Secondaire 3".to_string(),
+                    "Climax".to_string(),
+                ],
+                chart_rows: vec![DesignReportConsortiumChartRowInput {
+                    stratum: "Herbacée".to_string(),
+                    cells: (0..7)
+                        .map(|_| DesignReportConsortiumChartCellInput {
+                            entries: vec![DesignReportConsortiumChartEntryInput {
+                                label: "Consoude officinale".to_string(),
+                                color: "#00AA00".to_string(),
+                            }],
+                        })
+                        .collect(),
+                }],
+                rows: vec![DesignReportConsortiumRowInput {
+                    plant: "Consoude officinale".to_string(),
+                    canonical_name: Some("Symphytum officinale".to_string()),
+                    stratum: "Herbacée".to_string(),
+                    start_phase: "Secondaire 1".to_string(),
+                    end_phase: "Secondaire 1".to_string(),
+                    count: "1".to_string(),
+                }],
+                ..consortium_input_with_rows(0)
+            }),
+            ..report_input_without_metadata()
+        };
+        let layout = build_design_report_layout(&input);
+        let page = render_test_page(&input, &layout.pages[1], 1);
+        let lines = page_text(&page);
+
+        for fragment in ["Secondair", "officinal"] {
+            assert!(
+                !lines.iter().any(|line| line == fragment),
+                "Consortium chart should not split normal words into {:?}: {:?}",
+                fragment,
+                lines,
+            );
+        }
     }
 
     #[test]
