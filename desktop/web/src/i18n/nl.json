@@ -965,6 +965,8 @@
       "manual": "Handmatig",
       "none": "Geen",
       "notScheduled": "Niet gepland",
+      "dateRangeWithUnscheduledOne": "{{dateRange}}; {{count}} niet gepland",
+      "dateRangeWithUnscheduledMany": "{{dateRange}}; {{count}} niet gepland",
       "completed": "Voltooid",
       "open": "Open",
       "dependencyCountOne": "{{count}} afhankelijkheid",

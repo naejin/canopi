@@ -965,6 +965,8 @@
       "manual": "手动",
       "none": "无",
       "notScheduled": "未计划",
+      "dateRangeWithUnscheduledOne": "{{dateRange}}；{{count}} 个未计划",
+      "dateRangeWithUnscheduledMany": "{{dateRange}}；{{count}} 个未计划",
       "completed": "已完成",
       "open": "未完成",
       "dependencyCountOne": "{{count}} 个依赖项",

@@ -965,6 +965,8 @@
       "manual": "Manual",
       "none": "None",
       "notScheduled": "Not scheduled",
+      "dateRangeWithUnscheduledOne": "{{dateRange}}; {{count}} unscheduled",
+      "dateRangeWithUnscheduledMany": "{{dateRange}}; {{count}} unscheduled",
       "completed": "Completed",
       "open": "Open",
       "dependencyCountOne": "{{count}} dependency",

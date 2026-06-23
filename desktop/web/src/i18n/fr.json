@@ -965,6 +965,8 @@
       "manual": "Manuel",
       "none": "Aucune",
       "notScheduled": "Non planifié",
+      "dateRangeWithUnscheduledOne": "{{dateRange}} ; {{count}} non planifiée",
+      "dateRangeWithUnscheduledMany": "{{dateRange}} ; {{count}} non planifiées",
       "completed": "Terminé",
       "open": "Ouvert",
       "dependencyCountOne": "{{count}} dépendance",

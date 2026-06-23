@@ -658,6 +658,95 @@ describe('Design Report export input', () => {
     }))
   })
 
+  it('summarizes mixed scheduled timeline groups without losing unscheduled actions', () => {
+    locale.value = 'fr'
+
+    const input = buildDesignReportInput({
+      ...BASE_DESIGN,
+      plants: [{
+        id: 'plant-1',
+        canonical_name: 'Malus domestica',
+        common_name: 'Apple',
+        color: null,
+        position: { x: 0, y: 0 },
+        rotation: null,
+        scale: null,
+        notes: null,
+        planted_date: null,
+        quantity: 1,
+        locked: false,
+      }],
+      zones: [{
+        name: 'North bed',
+        zone_type: 'bed',
+        points: [],
+        rotation: 0,
+        fill_color: null,
+        notes: null,
+        locked: false,
+      }],
+      timeline: [
+        {
+          id: 'plant',
+          action_type: 'planting',
+          description: 'Plant apple guild',
+          start_date: '2026-03-01',
+          end_date: '2026-03-10',
+          recurrence: null,
+          targets: [{ kind: 'species', canonical_name: 'Malus domestica' }],
+          depends_on: [],
+          completed: false,
+          order: 1,
+        },
+        {
+          id: 'inspect',
+          action_type: 'planting',
+          description: '   ',
+          start_date: null,
+          end_date: null,
+          recurrence: null,
+          targets: [
+            { kind: 'species', canonical_name: 'Malus domestica' },
+            { kind: 'zone', zone_name: 'North bed' },
+            { kind: 'manual' },
+          ],
+          depends_on: ['', 'plant'],
+          completed: false,
+          order: 2,
+        },
+      ],
+    }, {
+      querySurface: createTestCanvasQuerySurface({
+        localizedNames: new Map([['Malus domestica', 'Pommier']]),
+      }),
+    })
+
+    expect(input.timeline?.overview_rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        action_type: 'planting',
+        count: 2,
+        date_range: expect.stringMatching(/mars.*1 non planifiée/),
+      }),
+    ]))
+    expect(input.timeline?.actions).toEqual([
+      expect.objectContaining({
+        id: 'plant',
+        recurrence: 'Aucune',
+        target: 'Pommier',
+        dependencies: 'Aucune',
+      }),
+      expect.objectContaining({
+        id: 'inspect',
+        description: '',
+        start_date: 'Non planifié',
+        end_date: 'Non planifié',
+        recurrence: 'Aucune',
+        target: 'Pommier, North bed, Manuel',
+        dependencies: '1 dépendance',
+      }),
+    ])
+  })
+
   it('omits derived empty budget rows and snapshots user-entered budget totals with locale formatting', () => {
     locale.value = 'fr'
 

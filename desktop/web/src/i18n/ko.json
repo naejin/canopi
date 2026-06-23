@@ -965,6 +965,8 @@
       "manual": "수동",
       "none": "없음",
       "notScheduled": "예약 없음",
+      "dateRangeWithUnscheduledOne": "{{dateRange}}; 예약 없음 {{count}}개",
+      "dateRangeWithUnscheduledMany": "{{dateRange}}; 예약 없음 {{count}}개",
       "completed": "완료됨",
       "open": "열림",
       "dependencyCountOne": "{{count}}개 종속성",

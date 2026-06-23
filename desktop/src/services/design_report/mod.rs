@@ -1463,20 +1463,22 @@ fn render_timeline_action_row(
     );
     cursor_y -= 4.4;
 
-    for line in wrap_text(
-        &format!("{}: {}", columns.description, action.description),
-        95,
-    ) {
-        text(
-            ops,
-            fonts,
-            margin + 3.0,
-            cursor_y,
-            7.0,
-            ReportFont::Regular,
-            &line,
-        );
-        cursor_y -= TIMELINE_LINE_HEIGHT_MM;
+    if !action.description.trim().is_empty() {
+        for line in wrap_text(
+            &format!("{}: {}", columns.description, action.description.trim()),
+            95,
+        ) {
+            text(
+                ops,
+                fonts,
+                margin + 3.0,
+                cursor_y,
+                7.0,
+                ReportFont::Regular,
+                &line,
+            );
+            cursor_y -= TIMELINE_LINE_HEIGHT_MM;
+        }
     }
 
     for line in wrap_text(
@@ -2457,6 +2459,40 @@ mod tests {
         assert!(second_text.contains("Action type"));
         assert!(second_text.contains("Action 13"));
         assert!(second_text.contains("Page 3 of"));
+    }
+
+    #[test]
+    fn renderer_omits_blank_timeline_description_lines() {
+        let input = DesignReportInput {
+            timeline: Some(DesignReportTimelineInput {
+                overview_rows: vec![DesignReportTimelineOverviewRowInput {
+                    action_type: "planting".to_string(),
+                    label: "Planting".to_string(),
+                    color: "#7D6049".to_string(),
+                    count: 1,
+                    date_range: "Not scheduled".to_string(),
+                }],
+                actions: vec![DesignReportTimelineActionInput {
+                    action_type: "planting".to_string(),
+                    action_type_label: "Planting".to_string(),
+                    description: "".to_string(),
+                    start_date: "Not scheduled".to_string(),
+                    end_date: "Not scheduled".to_string(),
+                    recurrence: "None".to_string(),
+                    target: "None".to_string(),
+                    dependencies: "None".to_string(),
+                    status: "Open".to_string(),
+                }],
+                ..timeline_input_with_actions(0)
+            }),
+            ..report_input_without_metadata()
+        };
+        let layout = build_design_report_layout(&input);
+        let text = page_text(&render_test_page(&input, &layout.pages[1], 1)).join("\n");
+
+        assert!(text.contains("Planting | Not scheduled | Not scheduled | None | Open"));
+        assert!(text.contains("Recurrence: None | Dependencies: None"));
+        assert!(!text.contains("Description:"));
     }
 
     #[test]

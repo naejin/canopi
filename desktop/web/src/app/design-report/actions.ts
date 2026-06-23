@@ -572,7 +572,7 @@ function reportTimelineAction(
     id: action.id,
     action_type: action.action_type,
     action_type_label: timelineActionTypeLabel(action.action_type),
-    description: action.description,
+    description: nonEmptyString(action.description) ?? '',
     start_date: formatTimelineDateValue(action.start_date, activeLocale),
     end_date: formatTimelineDateValue(action.end_date, activeLocale),
     recurrence: nonEmptyString(action.recurrence) ?? t('designReport.timeline.none'),
@@ -610,15 +610,31 @@ function timelineActionsDateRange(
   actions: readonly TimelineAction[],
   activeLocale: string,
 ): string {
+  const unscheduledCount = actions.filter((action) => !timelineActionHasScheduledDate(action)).length
   const dates = actions
     .flatMap((action) => [action.start_date, action.end_date])
-    .filter((value): value is string => value !== null && !Number.isNaN(Date.parse(value)))
+    .filter(isValidTimelineDate)
     .sort()
   if (dates.length === 0) return t('designReport.timeline.notScheduled')
 
   const first = formatTimelineDateValue(dates[0]!, activeLocale)
   const last = formatTimelineDateValue(dates[dates.length - 1]!, activeLocale)
-  return first === last ? first : `${first} - ${last}`
+  const dateRange = first === last ? first : `${first} - ${last}`
+  if (unscheduledCount === 0) return dateRange
+  return t(
+    unscheduledCount === 1
+      ? 'designReport.timeline.dateRangeWithUnscheduledOne'
+      : 'designReport.timeline.dateRangeWithUnscheduledMany',
+    { dateRange, count: unscheduledCount },
+  )
+}
+
+function timelineActionHasScheduledDate(action: TimelineAction): boolean {
+  return isValidTimelineDate(action.start_date) || isValidTimelineDate(action.end_date)
+}
+
+function isValidTimelineDate(value: string | null): value is string {
+  return value !== null && !Number.isNaN(Date.parse(value))
 }
 
 function formatTimelineDateValue(

@@ -965,6 +965,8 @@
       "manual": "手動",
       "none": "なし",
       "notScheduled": "未定",
+      "dateRangeWithUnscheduledOne": "{{dateRange}}；未定 {{count}} 件",
+      "dateRangeWithUnscheduledMany": "{{dateRange}}；未定 {{count}} 件",
       "completed": "完了",
       "open": "未完了",
       "dependencyCountOne": "{{count}} 件の依存関係",

@@ -965,6 +965,8 @@
       "manual": "Вручную",
       "none": "Нет",
       "notScheduled": "Не запланировано",
+      "dateRangeWithUnscheduledOne": "{{dateRange}}; {{count}} без расписания",
+      "dateRangeWithUnscheduledMany": "{{dateRange}}; {{count}} без расписания",
       "completed": "Завершено",
       "open": "Открыто",
       "dependencyCountOne": "{{count}} зависимость",
