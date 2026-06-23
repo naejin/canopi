@@ -68,10 +68,12 @@ describe('i18n completeness', () => {
     })
   }
 
-  it('uses French planche terminology for the Saved Stamp library only', () => {
+  it('uses French planche terminology for saved object stamps but keeps stamp tools as tampons', () => {
     expect(fr.savedObjectStamps.title).toBe('Planches')
     expect(fr.savedObjectStamps.loading).toContain('planches')
     expect(fr.savedObjectStamps.rename).toContain('planche')
+    expect(fr.canvas.selectionActions.saveObjectStamp).toBe('Enregistrer comme planche')
+    expect(fr.canvas.contextMenu.saveObjectStamp).toBe('Enregistrer comme planche')
     expect(fr.canvas.tools.plantStamp).toContain('Tampon')
     expect(fr.canvas.tools.objectStamp).toContain('Tampon')
   })

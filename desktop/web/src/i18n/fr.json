@@ -141,7 +141,7 @@
       "pinPlantName": "Épingler le nom de la plante",
       "unpinPlantName": "Détacher le nom de la plante",
       "selectSameSpecies": "Sélectionner la même espèce",
-      "saveObjectStamp": "Enregistrer comme tampon",
+      "saveObjectStamp": "Enregistrer comme planche",
       "group": "Grouper",
       "ungroup": "Dégrouper",
       "lock": "Verrouiller",
@@ -153,7 +153,7 @@
       "ariaLabel": "Commandes d'édition de la zone de dessin",
       "copy": "Copier",
       "paste": "Coller",
-      "saveObjectStamp": "Enregistrer comme tampon",
+      "saveObjectStamp": "Enregistrer comme planche",
       "delete": "Supprimer"
     },
     "rotationHandle": {
