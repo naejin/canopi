@@ -1337,6 +1337,71 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
+  it('selects a newly created Measurement Guide instead of keeping a stale object selection', async () => {
+    const runtime = new SceneCanvasRuntime()
+    const { container } = await initRuntimeWithStubbedRenderer(runtime)
+    const events = createSceneInteractionEventHarness(container)
+    const file = makeFile()
+    file.layers = [
+      ...file.layers,
+      { name: 'measurement-guides', visible: true, locked: false, opacity: 1 },
+    ]
+    file.measurement_guides = []
+    runtime.documentSurface.loadDocument(file)
+    setInteractionViewport(runtime)
+    runtime.commandSurface.tools.setTool('select')
+
+    clickAt(events, { x: 10, y: 10 })
+    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+
+    runtime.commandSurface.tools.setTool('measurement-guide')
+    events.pointerDown({ x: 100, y: 10 })
+    events.pointerMove({ x: 140, y: 10 })
+    events.pointerUp({ x: 140, y: 10 })
+
+    const createdGuide = runtime.querySurface.getSceneSnapshot().measurementGuides?.[0]
+    expect(createdGuide).toBeDefined()
+    expect(selectedObjectIds.value).toEqual(new Set([createdGuide!.id]))
+    expect(runtime.querySurface.getDesignObjectSelection().editableTargets).toEqual([
+      { kind: 'measurement-guide', id: createdGuide!.id },
+    ])
+
+    runtime.commandSurface.sceneEdits.deleteSelected()
+
+    expect(runtime.querySurface.getSceneSnapshot().measurementGuides).toHaveLength(0)
+    expect(runtime.querySurface.getSceneSnapshot().plants).toHaveLength(2)
+    events.dispose()
+    runtime.destroy()
+  })
+
+  it('keeps the current selection when a Measurement Guide drag creates no guide', async () => {
+    const runtime = new SceneCanvasRuntime()
+    const { container } = await initRuntimeWithStubbedRenderer(runtime)
+    const events = createSceneInteractionEventHarness(container)
+    const file = makeFile()
+    file.layers = [
+      ...file.layers,
+      { name: 'measurement-guides', visible: true, locked: false, opacity: 1 },
+    ]
+    file.measurement_guides = []
+    runtime.documentSurface.loadDocument(file)
+    setInteractionViewport(runtime)
+    runtime.commandSurface.tools.setTool('select')
+
+    clickAt(events, { x: 10, y: 10 })
+    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+
+    runtime.commandSurface.tools.setTool('measurement-guide')
+    events.pointerDown({ x: 100, y: 10 })
+    events.pointerUp({ x: 100, y: 10 })
+
+    expect(runtime.querySurface.getSceneSnapshot().measurementGuides).toHaveLength(0)
+    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+    expect(runtime.commandSurface.history.canUndo.value).toBe(false)
+    events.dispose()
+    runtime.destroy()
+  })
+
   it('selects and moves Measurement Guides as undoable Design Objects', async () => {
     const runtime = new SceneCanvasRuntime()
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
@@ -1528,6 +1593,11 @@ describe('scene canvas runtime', () => {
     lockedFile.measurement_guides = []
     lockedRuntime.documentSurface.loadDocument(lockedFile)
     setInteractionViewport(lockedRuntime)
+    lockedRuntime.commandSurface.tools.setTool('select')
+
+    clickAt(lockedEvents, { x: 10, y: 10 })
+    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+
     lockedRuntime.commandSurface.tools.setTool('measurement-guide')
 
     lockedEvents.pointerDown({ x: 10, y: 10 })
@@ -1536,6 +1606,7 @@ describe('scene canvas runtime', () => {
 
     expect(zoneMeasurementTexts(lockedContainer)).toEqual([])
     expect(lockedRuntime.querySurface.getSceneSnapshot().measurementGuides).toHaveLength(0)
+    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
     expect(lockedRuntime.commandSurface.history.canUndo.value).toBe(false)
     lockedEvents.dispose()
     lockedRuntime.destroy()
@@ -1551,6 +1622,11 @@ describe('scene canvas runtime', () => {
     hiddenFile.measurement_guides = []
     hiddenRuntime.documentSurface.loadDocument(hiddenFile)
     setInteractionViewport(hiddenRuntime)
+    hiddenRuntime.commandSurface.tools.setTool('select')
+
+    clickAt(hiddenEvents, { x: 10, y: 10 })
+    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+
     hiddenRuntime.commandSurface.tools.setTool('measurement-guide')
 
     hiddenEvents.pointerDown({ x: 10, y: 10 })
@@ -1559,6 +1635,7 @@ describe('scene canvas runtime', () => {
 
     expect(zoneMeasurementTexts(hiddenContainer)).toEqual([])
     expect(hiddenRuntime.querySurface.getSceneSnapshot().measurementGuides).toHaveLength(0)
+    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
     expect(hiddenRuntime.commandSurface.history.canUndo.value).toBe(false)
     hiddenEvents.dispose()
     hiddenRuntime.destroy()

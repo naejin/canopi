@@ -72,9 +72,11 @@ export function createMeasurementGuideTool(
 
     const endWorld = context.applySnapping(rawWorld)
     context.sceneEdits.run('interaction-measurement-guide', (tx) => {
+      let guideId: string | null = null
       tx.mutate((sceneDraft) => {
-        appendMeasurementGuideToDraft(sceneDraft, draft.startWorld, endWorld)
+        guideId = appendMeasurementGuideToDraft(sceneDraft, draft.startWorld, endWorld)
       })
+      if (guideId) tx.setSelection([guideId])
     })
   }
 
