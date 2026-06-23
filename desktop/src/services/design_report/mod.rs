@@ -380,6 +380,7 @@ const TIMELINE_COLUMN_LAYOUT: [(f32, usize); 5] =
 const BUDGET_ROW_VERTICAL_PADDING_MM: f32 = 4.0;
 const BUDGET_LINE_HEIGHT_MM: f32 = 4.2;
 const BUDGET_HEADER_HEIGHT_MM: f32 = 10.0;
+const BUDGET_TABLE_RULE_WIDTH_MM: f32 = 178.0;
 const BUDGET_COLUMN_LAYOUT: [(f32, usize); 6] = [
     (0.0, 22),
     (39.0, 17),
@@ -1718,6 +1719,8 @@ fn render_budget_table_header(
             columns.currency.as_str(),
         ],
     );
+    draw_budget_table_rule(ops, margin, cursor_y + 1.6);
+    draw_budget_table_rule(ops, margin, cursor_y - height - 1.0);
     cursor_y - height - 3.0
 }
 
@@ -1745,6 +1748,7 @@ fn render_budget_row(
             row.currency.as_str(),
         ],
     );
+    draw_budget_table_rule(ops, margin, cursor_y - height - 0.8);
     cursor_y -= height + 1.2;
 
     if !row.description.trim().is_empty() {
@@ -1799,6 +1803,23 @@ fn render_budget_cells(
     }
 
     line_count as f32 * BUDGET_LINE_HEIGHT_MM
+}
+
+fn draw_budget_table_rule(ops: &mut Vec<Op>, margin: f32, y_mm: f32) {
+    draw_polyline(
+        ops,
+        &[
+            Point {
+                x: Mm(margin).into(),
+                y: Mm(y_mm).into(),
+            },
+            Point {
+                x: Mm(margin + BUDGET_TABLE_RULE_WIDTH_MM).into(),
+                y: Mm(y_mm).into(),
+            },
+        ],
+        false,
+    );
 }
 
 fn render_consortium_section(
@@ -3156,7 +3177,8 @@ mod tests {
             ..report_input_without_metadata()
         };
         let layout = build_design_report_layout(&input);
-        let text = page_text(&render_test_page(&input, &layout.pages[1], 1)).join("\n");
+        let page = render_test_page(&input, &layout.pages[1], 1);
+        let text = page_text(&page).join("\n");
 
         assert!(text.contains("Planting"));
         assert!(text.contains("Not scheduled"));
@@ -3338,13 +3360,18 @@ mod tests {
             ..report_input_without_metadata()
         };
         let layout = build_design_report_layout(&input);
-        let text = page_text(&render_test_page(&input, &layout.pages[1], 1)).join("\n");
+        let page = render_test_page(&input, &layout.pages[1], 1);
+        let text = page_text(&page).join("\n");
 
         assert!(text.contains("Budget"));
         assert!(text.contains("Manual"));
         assert!(text.contains("Tools"));
         assert!(text.contains("$0.00"));
         assert!(text.contains("Grand total (USD): $0.00"));
+        assert!(
+            page.ops.iter().any(|op| matches!(op, Op::DrawLine { .. })),
+            "sparse zero-value Budget pages should render as a ruled table, not loose text on a blank page",
+        );
         assert!(!text.contains("Manual | Tools"));
         assert!(!text.contains("Description:"));
     }
