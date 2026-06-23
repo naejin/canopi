@@ -1,6 +1,6 @@
 use printpdf::{
-    BuiltinFont, Mm, Op, PdfDocument, PdfFontHandle, PdfPage, PdfSaveOptions, Point, Pt, Rect,
-    TextItem, serialize_pdf_into_bytes,
+    BuiltinFont, LineDashPattern, Mm, Op, PdfDocument, PdfFontHandle, PdfPage, PdfSaveOptions,
+    Point, Pt, Rect, TextItem, serialize_pdf_into_bytes,
 };
 use serde::Deserialize;
 
@@ -36,6 +36,10 @@ pub struct DesignReportCanvasInput {
     pub zones: Vec<DesignReportZoneInput>,
     #[serde(default)]
     pub annotations: Vec<DesignReportAnnotationInput>,
+    #[serde(default)]
+    pub measurement_guides: Vec<DesignReportMeasurementGuideInput>,
+    #[serde(default)]
+    pub legend: Option<DesignReportCanvasLegendInput>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -69,6 +73,8 @@ pub struct DesignReportPlantInput {
     pub common_name: Option<String>,
     pub color: Option<String>,
     pub symbol: Option<String>,
+    #[serde(default)]
+    pub pinned_name_label: Option<String>,
     pub radius_m: Option<f64>,
     pub x: f64,
     pub y: f64,
@@ -94,6 +100,42 @@ pub struct DesignReportAnnotationInput {
     pub text: String,
     pub x: f64,
     pub y: f64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DesignReportMeasurementGuideInput {
+    pub id: String,
+    pub start: DesignReportPointInput,
+    pub end: DesignReportPointInput,
+    pub label: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum DesignReportCanvasLegendInput {
+    PinnedPlantNames {
+        title: String,
+        entries: Vec<DesignReportPinnedPlantNameLegendEntryInput>,
+    },
+    ColorBy {
+        title: String,
+        attribute: String,
+        entries: Vec<DesignReportColorByLegendEntryInput>,
+    },
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DesignReportPinnedPlantNameLegendEntryInput {
+    pub label: String,
+    pub color: String,
+    pub symbol: String,
+    pub count: u32,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DesignReportColorByLegendEntryInput {
+    pub label: String,
+    pub color: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -261,6 +303,11 @@ fn render_page(input: &DesignReportInput, layout: &DesignReportPageLayout, _: us
         BuiltinFont::Helvetica,
         &visible_layers,
     );
+    cursor_y -= 7.0;
+
+    if let Some(legend) = &input.canvas.legend {
+        cursor_y = render_canvas_legend(&mut ops, margin, cursor_y, legend) - 3.0;
+    }
 
     let canvas_y = margin + 10.0;
     let canvas_height = (cursor_y - canvas_y - 8.0).max(60.0);
@@ -341,6 +388,10 @@ fn render_canvas_objects(ops: &mut Vec<Op>, input: &DesignReportInput, frame: Ca
         }
     }
 
+    for guide in &input.canvas.measurement_guides {
+        render_measurement_guide(ops, guide, transform);
+    }
+
     for plant in &input.canvas.plants {
         let point = transform.point(plant.x, plant.y);
         let radius_mm = plant
@@ -369,6 +420,16 @@ fn render_canvas_objects(ops: &mut Vec<Op>, input: &DesignReportInput, frame: Ca
             BuiltinFont::Helvetica,
             &label,
         );
+        if let Some(pinned_label) = plant.pinned_name_label.as_deref() {
+            text_at_point(
+                ops,
+                point.x.0 + 3.2,
+                point.y.0 + 9.0,
+                7.2,
+                BuiltinFont::HelveticaBold,
+                &format!("Pinned: {pinned_label}"),
+            );
+        }
     }
 
     for annotation in &input.canvas.annotations {
@@ -382,6 +443,110 @@ fn render_canvas_objects(ops: &mut Vec<Op>, input: &DesignReportInput, frame: Ca
             &format!("{} #{id}", annotation.text, id = annotation.id),
         );
     }
+}
+
+fn render_canvas_legend(
+    ops: &mut Vec<Op>,
+    x_mm: f32,
+    mut y_mm: f32,
+    legend: &DesignReportCanvasLegendInput,
+) -> f32 {
+    match legend {
+        DesignReportCanvasLegendInput::PinnedPlantNames { title, entries } => {
+            text(ops, x_mm, y_mm, 9.0, BuiltinFont::HelveticaBold, title);
+            y_mm -= 5.0;
+            for entry in entries {
+                let count = if entry.count > 1 {
+                    format!(" x{}", entry.count)
+                } else {
+                    String::new()
+                };
+                text(
+                    ops,
+                    x_mm,
+                    y_mm,
+                    7.5,
+                    BuiltinFont::Helvetica,
+                    &format!(
+                        "[{}] {} {}{}",
+                        entry.symbol, entry.label, entry.color, count
+                    ),
+                );
+                y_mm -= 4.5;
+            }
+        }
+        DesignReportCanvasLegendInput::ColorBy {
+            title,
+            attribute,
+            entries,
+        } => {
+            text(ops, x_mm, y_mm, 9.0, BuiltinFont::HelveticaBold, title);
+            y_mm -= 5.0;
+            text(
+                ops,
+                x_mm,
+                y_mm,
+                7.5,
+                BuiltinFont::Helvetica,
+                &format!("Color by: {attribute}"),
+            );
+            y_mm -= 4.5;
+            for entry in entries {
+                text(
+                    ops,
+                    x_mm,
+                    y_mm,
+                    7.5,
+                    BuiltinFont::Helvetica,
+                    &format!("{} {}", entry.color, entry.label),
+                );
+                y_mm -= 4.5;
+            }
+        }
+    }
+    y_mm
+}
+
+fn render_measurement_guide(
+    ops: &mut Vec<Op>,
+    guide: &DesignReportMeasurementGuideInput,
+    transform: CanvasTransform,
+) {
+    let start = transform.point(guide.start.x, guide.start.y);
+    let end = transform.point(guide.end.x, guide.end.y);
+    let dx = end.x.0 - start.x.0;
+    let dy = end.y.0 - start.y.0;
+    let length = (dx * dx + dy * dy).sqrt();
+    if length <= f32::EPSILON {
+        return;
+    }
+
+    draw_dashed_polyline(ops, &[start, end]);
+
+    let normal_x = -dy / length;
+    let normal_y = dx / length;
+    let tick_half = Mm(2.0).into_pt().0;
+    draw_polyline(
+        ops,
+        &tick_points(start, normal_x, normal_y, tick_half),
+        false,
+    );
+    draw_polyline(ops, &tick_points(end, normal_x, normal_y, tick_half), false);
+
+    let label_offset = Mm(3.0).into_pt().0;
+    let label = if guide.label.trim().is_empty() {
+        guide.id.as_str()
+    } else {
+        guide.label.as_str()
+    };
+    text_at_point(
+        ops,
+        (start.x.0 + end.x.0) / 2.0 + normal_x * label_offset,
+        (start.y.0 + end.y.0) / 2.0 + normal_y * label_offset,
+        7.0,
+        BuiltinFont::HelveticaBold,
+        label,
+    );
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -484,6 +649,45 @@ fn draw_polyline(ops: &mut Vec<Op>, points: &[Point], closed: bool) {
     };
     ops.push(Op::SetOutlineThickness { pt: Pt(0.6) });
     ops.push(Op::DrawLine { line });
+}
+
+fn draw_dashed_polyline(ops: &mut Vec<Op>, points: &[Point]) {
+    ops.push(Op::SetLineDashPattern {
+        dash: LineDashPattern {
+            offset: 0,
+            dash_1: Some(3),
+            gap_1: Some(2),
+            dash_2: None,
+            gap_2: None,
+            dash_3: None,
+            gap_3: None,
+        },
+    });
+    draw_polyline(ops, points, false);
+    ops.push(Op::SetLineDashPattern {
+        dash: LineDashPattern {
+            offset: 0,
+            dash_1: None,
+            gap_1: None,
+            dash_2: None,
+            gap_2: None,
+            dash_3: None,
+            gap_3: None,
+        },
+    });
+}
+
+fn tick_points(point: Point, normal_x: f32, normal_y: f32, tick_half: f32) -> [Point; 2] {
+    [
+        Point {
+            x: Pt(point.x.0 - normal_x * tick_half),
+            y: Pt(point.y.0 - normal_y * tick_half),
+        },
+        Point {
+            x: Pt(point.x.0 + normal_x * tick_half),
+            y: Pt(point.y.0 + normal_y * tick_half),
+        },
+    ]
 }
 
 fn draw_cross(ops: &mut Vec<Op>, point: Point, radius_mm: f32) {
@@ -646,6 +850,57 @@ mod tests {
         assert!(error.contains("Failed to write Design Report PDF"));
     }
 
+    #[test]
+    fn renderer_includes_canvas_aids_and_legend_text() {
+        let input = DesignReportInput {
+            canvas: DesignReportCanvasInput {
+                bounds: Some(DesignReportBounds {
+                    min_x: 0.0,
+                    min_y: 0.0,
+                    max_x: 20.0,
+                    max_y: 20.0,
+                }),
+                plants: vec![DesignReportPlantInput {
+                    id: "plant-1".to_string(),
+                    canonical_name: "Malus domestica".to_string(),
+                    common_name: None,
+                    color: Some("#112233".to_string()),
+                    symbol: Some("tree".to_string()),
+                    pinned_name_label: Some("Pommier".to_string()),
+                    radius_m: Some(2.0),
+                    x: 10.0,
+                    y: 10.0,
+                }],
+                measurement_guides: vec![DesignReportMeasurementGuideInput {
+                    id: "guide-1".to_string(),
+                    start: DesignReportPointInput { x: 10.0, y: 10.0 },
+                    end: DesignReportPointInput { x: 13.0, y: 14.0 },
+                    label: "5 m".to_string(),
+                }],
+                legend: Some(DesignReportCanvasLegendInput::PinnedPlantNames {
+                    title: "Legend".to_string(),
+                    entries: vec![DesignReportPinnedPlantNameLegendEntryInput {
+                        label: "Pommier".to_string(),
+                        color: "#112233".to_string(),
+                        symbol: "tree".to_string(),
+                        count: 1,
+                    }],
+                }),
+                ..report_input_without_metadata().canvas
+            },
+            ..report_input_without_metadata()
+        };
+        let layout = build_design_report_layout(&input);
+
+        let page = render_page(&input, &layout.pages[0], 0);
+        let text = page_text(&page).join("\n");
+
+        assert!(text.contains("Pinned: Pommier"));
+        assert!(text.contains("5 m"));
+        assert!(text.contains("Legend"));
+        assert!(text.contains("[tree] Pommier #112233"));
+    }
+
     fn report_input_without_metadata() -> DesignReportInput {
         DesignReportInput {
             title: "Landscape report".to_string(),
@@ -674,6 +929,7 @@ mod tests {
                     common_name: Some("Apple".to_string()),
                     color: None,
                     symbol: None,
+                    pinned_name_label: None,
                     radius_m: Some(2.0),
                     x: 10.0,
                     y: 12.0,
@@ -685,7 +941,28 @@ mod tests {
                     x: 90.0,
                     y: 20.0,
                 }],
+                measurement_guides: vec![],
+                legend: None,
             },
         }
+    }
+
+    fn page_text(page: &PdfPage) -> Vec<String> {
+        page.ops
+            .iter()
+            .filter_map(|op| match op {
+                Op::ShowText { items } => Some(
+                    items
+                        .iter()
+                        .filter_map(|item| match item {
+                            TextItem::Text(value) => Some(value.as_str()),
+                            _ => None,
+                        })
+                        .collect::<Vec<_>>()
+                        .join(""),
+                ),
+                _ => None,
+            })
+            .collect()
     }
 }

@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { setCurrentCanvasSession } from '../canvas/session'
+import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import type { CanopiFile } from '../types/design'
 import {
   buildDesignReportInput,
   exportCurrentDesignReportPdf,
 } from '../app/design-report/actions'
+import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 import { createTestCanvasDocumentSurface, createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
 import {
   canvasClean,
@@ -157,5 +159,205 @@ describe('Design Report export input', () => {
     expect(designDirty.value).toBe(true)
     expect(nonCanvasRevision.value).toBe(1)
     expect(canvasClean.value).toBe(false)
+  })
+
+  it('snapshots visible pinned plant names, measurement guides and pinned legend from the live canvas presentation', async () => {
+    const serializedPlant = {
+      id: 'plant-1',
+      canonical_name: 'Malus domestica',
+      common_name: 'Apple',
+      color: '#112233',
+      symbol: 'tree',
+      pinned_name: true,
+      position: { x: 10, y: 20 },
+      rotation: null,
+      scale: null,
+      notes: null,
+      planted_date: null,
+      quantity: 1,
+      locked: false,
+    }
+    const serializedDesign: CanopiFile = {
+      ...BASE_DESIGN,
+      name: 'Pinned guide report',
+      layers: [
+        { name: 'plants', visible: true, locked: false, opacity: 1 },
+        { name: 'measurement-guides', visible: true, locked: false, opacity: 1 },
+      ],
+      plants: [serializedPlant],
+      measurement_guides: [{
+        id: 'guide-1',
+        locked: false,
+        start: { x: 10, y: 20 },
+        end: { x: 13, y: 24 },
+      }],
+    }
+    const scene = createDefaultScenePersistedState()
+    scene.layers = serializedDesign.layers.map((layer) => ({ kind: 'layer', ...layer }))
+    scene.plants = [{
+      kind: 'plant',
+      id: serializedPlant.id,
+      locked: false,
+      canonicalName: serializedPlant.canonical_name,
+      commonName: serializedPlant.common_name,
+      color: serializedPlant.color,
+      symbol: serializedPlant.symbol,
+      pinnedName: true,
+      stratum: null,
+      canopySpreadM: null,
+      position: serializedPlant.position,
+      rotationDeg: null,
+      scale: null,
+      notes: null,
+      plantedDate: null,
+      quantity: 1,
+    }]
+    const query = createTestCanvasQuerySurface({
+      scene,
+      localizedNames: new Map([['Malus domestica', 'Pommier']]),
+    })
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      queries: query,
+      documents: createTestCanvasDocumentSurface({
+        serializeDocument: () => serializedDesign,
+      }),
+    }))
+    replaceCurrentDesignState(serializedDesign, null, serializedDesign.name)
+
+    await exportCurrentDesignReportPdf()
+
+    expect(reportIpc.exportDesignReportPdf).toHaveBeenCalledWith(
+      expect.objectContaining({
+        canvas: expect.objectContaining({
+          plants: [expect.objectContaining({
+            id: 'plant-1',
+            pinned_name_label: 'Pommier',
+          })],
+          measurement_guides: [{
+            id: 'guide-1',
+            start: { x: 10, y: 20 },
+            end: { x: 13, y: 24 },
+            label: '5 m',
+          }],
+          legend: {
+            kind: 'pinned-plant-names',
+            title: 'Legend',
+            entries: [{
+              label: 'Pommier',
+              color: '#112233',
+              symbol: 'tree',
+              count: 1,
+            }],
+          },
+        }),
+      }),
+      'Pinned guide report Design Report.pdf',
+    )
+    const [exportedInput] = vi.mocked(reportIpc.exportDesignReportPdf).mock.calls[0]!
+    query.setLocalizedNames(new Map([['Malus domestica', 'Apple']]))
+    expect(exportedInput.canvas.plants[0]?.pinned_name_label).toBe('Pommier')
+    expect(exportedInput.canvas.legend).toEqual(expect.objectContaining({
+      entries: [expect.objectContaining({ label: 'Pommier' })],
+    }))
+  })
+
+  it('omits pinned labels, measurement guides and pinned legend when their layers are hidden', () => {
+    const scene = createDefaultScenePersistedState()
+    scene.plants = [{
+      kind: 'plant',
+      id: 'live-plant',
+      locked: false,
+      canonicalName: 'Malus domestica',
+      commonName: 'Apple',
+      color: '#112233',
+      symbol: 'tree',
+      pinnedName: true,
+      stratum: null,
+      canopySpreadM: null,
+      position: { x: 10, y: 20 },
+      rotationDeg: null,
+      scale: null,
+      notes: null,
+      plantedDate: null,
+      quantity: 1,
+    }]
+
+    const input = buildDesignReportInput({
+      ...BASE_DESIGN,
+      layers: [
+        { name: 'plants', visible: false, locked: false, opacity: 1 },
+        { name: 'measurement-guides', visible: false, locked: false, opacity: 1 },
+      ],
+      plants: [{
+        id: 'plant-1',
+        canonical_name: 'Malus domestica',
+        common_name: 'Apple',
+        color: '#112233',
+        symbol: 'tree',
+        pinned_name: true,
+        position: { x: 10, y: 20 },
+        rotation: null,
+        scale: null,
+        notes: null,
+        planted_date: null,
+        quantity: 1,
+        locked: false,
+      }],
+      measurement_guides: [{
+        id: 'guide-1',
+        locked: false,
+        start: { x: 10, y: 20 },
+        end: { x: 13, y: 24 },
+      }],
+    }, {
+      querySurface: createTestCanvasQuerySurface({
+        scene,
+        localizedNames: new Map([['Malus domestica', 'Pommier']]),
+      }),
+    })
+
+    expect(input.canvas.plants).toEqual([])
+    expect(input.canvas.measurement_guides).toEqual([])
+    expect(input.canvas.legend).toBeNull()
+  })
+
+  it('uses the color-by legend instead of the pinned-name legend when color by is active', () => {
+    const input = buildDesignReportInput({
+      ...BASE_DESIGN,
+      layers: [{ name: 'plants', visible: true, locked: false, opacity: 1 }],
+      plants: [{
+        id: 'plant-1',
+        canonical_name: 'Malus domestica',
+        common_name: 'Apple',
+        color: '#112233',
+        symbol: 'tree',
+        pinned_name: true,
+        position: { x: 10, y: 20 },
+        rotation: null,
+        scale: null,
+        notes: null,
+        planted_date: null,
+        quantity: 1,
+        locked: false,
+      }],
+    }, {
+      querySurface: createTestCanvasQuerySurface({
+        plantColorByAttr: 'flower',
+        localizedNames: new Map([['Malus domestica', 'Pommier']]),
+      }),
+    })
+
+    expect(input.canvas.legend?.kind).toBe('color-by')
+    expect(input.canvas.legend).toEqual(expect.objectContaining({
+      kind: 'color-by',
+      title: 'Legend',
+      attribute: 'flower',
+      entries: expect.arrayContaining([
+        expect.objectContaining({ label: 'White' }),
+      ]),
+    }))
+    expect(input.canvas.legend).not.toEqual(expect.objectContaining({
+      kind: 'pinned-plant-names',
+    }))
   })
 })
