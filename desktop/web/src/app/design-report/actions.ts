@@ -744,7 +744,7 @@ function reportBudgetRow(
     input: {
       target: timelineTargetLabel(item.target, file, localizedNames) ?? t('designReport.timeline.none'),
       category: budgetCategoryLabel(item.category),
-      description: item.description,
+      description: nonEmptyString(item.description) ?? '',
       quantity: formatReportNumber(quantity, activeLocale),
       unit_cost: formatBudgetCurrency(item.unit_cost, currency, activeLocale),
       line_total: formatBudgetCurrency(lineTotal, currency, activeLocale),

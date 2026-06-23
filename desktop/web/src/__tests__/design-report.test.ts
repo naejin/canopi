@@ -856,6 +856,66 @@ describe('Design Report export input', () => {
     }))
   })
 
+  it('keeps zero-value budget rows intentional across multiple currencies', () => {
+    locale.value = 'en'
+
+    const input = buildDesignReportInput({
+      ...BASE_DESIGN,
+      budget_currency: 'USD',
+      budget: [
+        {
+          target: { kind: 'manual' },
+          category: 'tools',
+          description: '   ',
+          quantity: 0,
+          unit_cost: 0,
+          currency: 'USD',
+        },
+        {
+          target: { kind: 'none' },
+          category: 'materials',
+          description: 'Imported mulch',
+          quantity: 0,
+          unit_cost: 0,
+          currency: 'EUR',
+        },
+      ],
+    })
+
+    expect(input.budget).toEqual(expect.objectContaining({
+      rows: [
+        expect.objectContaining({
+          target: 'Manual',
+          category: 'Tools',
+          description: '',
+          quantity: '0',
+          unit_cost: expect.stringContaining('$0.00'),
+          line_total: expect.stringContaining('$0.00'),
+          currency: 'USD',
+        }),
+        expect.objectContaining({
+          target: 'None',
+          category: 'Materials',
+          description: 'Imported mulch',
+          quantity: '0',
+          unit_cost: expect.stringContaining('€0.00'),
+          line_total: expect.stringContaining('€0.00'),
+          currency: 'EUR',
+        }),
+      ],
+      totals: expect.arrayContaining([
+        expect.objectContaining({
+          currency: 'USD',
+          amount: expect.stringContaining('$0.00'),
+        }),
+        expect.objectContaining({
+          currency: 'EUR',
+          amount: expect.stringContaining('€0.00'),
+        }),
+      ]),
+    }))
+  })
+
   it('omits untouched default consortiums and snapshots complete localized changed consortiums', () => {
     locale.value = 'fr'
     const plants = [

@@ -378,6 +378,14 @@ const TIMELINE_HEADER_HEIGHT_MM: f32 = 10.0;
 const BUDGET_ROW_VERTICAL_PADDING_MM: f32 = 4.0;
 const BUDGET_LINE_HEIGHT_MM: f32 = 4.2;
 const BUDGET_HEADER_HEIGHT_MM: f32 = 10.0;
+const BUDGET_COLUMN_LAYOUT: [(f32, usize); 6] = [
+    (0.0, 22),
+    (39.0, 17),
+    (70.0, 8),
+    (90.0, 18),
+    (123.0, 18),
+    (157.0, 10),
+];
 const CONSORTIUM_ROW_VERTICAL_PADDING_MM: f32 = 4.0;
 const CONSORTIUM_LINE_HEIGHT_MM: f32 = 4.2;
 const CONSORTIUM_HEADER_HEIGHT_MM: f32 = 10.0;
@@ -745,16 +753,29 @@ fn budget_rows_available_height(budget: &DesignReportBudgetInput, margin_mm: f32
 }
 
 fn estimate_budget_row_height(row: &DesignReportBudgetRowInput) -> f32 {
-    let wrapped_lines = [
-        wrap_text(&row.target, 26).len(),
-        wrap_text(&row.category, 18).len(),
-        wrap_text(&row.description, 62).len(),
-    ]
-    .into_iter()
-    .max()
-    .unwrap_or(1)
-    .max(1);
-    BUDGET_ROW_VERTICAL_PADDING_MM + wrapped_lines as f32 * BUDGET_LINE_HEIGHT_MM + 8.0
+    let cells = [
+        row.target.as_str(),
+        row.category.as_str(),
+        row.quantity.as_str(),
+        row.unit_cost.as_str(),
+        row.line_total.as_str(),
+        row.currency.as_str(),
+    ];
+    let wrapped_cell_lines = cells
+        .iter()
+        .zip(BUDGET_COLUMN_LAYOUT)
+        .map(|(value, (_, max_chars))| wrap_text(value, max_chars).len())
+        .max()
+        .unwrap_or(1)
+        .max(1);
+    let description_lines = if row.description.trim().is_empty() {
+        0
+    } else {
+        wrap_text(&format!("Description: {}", row.description.trim()), 95).len()
+    };
+    BUDGET_ROW_VERTICAL_PADDING_MM
+        + (wrapped_cell_lines + description_lines) as f32 * BUDGET_LINE_HEIGHT_MM
+        + 8.0
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1521,14 +1542,20 @@ fn render_budget_section(
         &budget.title,
     );
     cursor_y -= 8.0;
-    cursor_y = render_budget_table_header(ops, fonts, &budget.columns, margin, cursor_y);
+    if chunk.start_index < chunk.end_index {
+        cursor_y = render_budget_table_header(ops, fonts, &budget.columns, margin, cursor_y);
 
-    for row in &budget.rows[chunk.start_index..chunk.end_index] {
-        cursor_y = render_budget_row(ops, fonts, &budget.columns, row, margin, cursor_y);
+        for row in &budget.rows[chunk.start_index..chunk.end_index] {
+            cursor_y = render_budget_row(ops, fonts, &budget.columns, row, margin, cursor_y);
+        }
     }
 
     if chunk.include_totals {
-        cursor_y -= 2.0;
+        cursor_y -= if chunk.start_index < chunk.end_index {
+            2.0
+        } else {
+            1.0
+        };
         for total in &budget.totals {
             text(
                 ops,
@@ -1551,34 +1578,25 @@ fn render_budget_table_header(
     fonts: &ReportFonts,
     columns: &DesignReportBudgetColumnsInput,
     margin: f32,
-    mut cursor_y: f32,
+    cursor_y: f32,
 ) -> f32 {
-    text(
+    let height = render_budget_cells(
         ops,
         fonts,
         margin,
         cursor_y,
-        7.5,
+        7.4,
         ReportFont::Bold,
-        &format!(
-            "{} | {} | {} | {}",
-            columns.target, columns.category, columns.quantity, columns.currency
-        ),
+        [
+            columns.target.as_str(),
+            columns.category.as_str(),
+            columns.quantity.as_str(),
+            columns.unit_cost.as_str(),
+            columns.line_total.as_str(),
+            columns.currency.as_str(),
+        ],
     );
-    cursor_y -= 4.6;
-    text(
-        ops,
-        fonts,
-        margin,
-        cursor_y,
-        7.5,
-        ReportFont::Bold,
-        &format!(
-            "{} | {} | {}",
-            columns.description, columns.unit_cost, columns.line_total
-        ),
-    );
-    cursor_y - 5.5
+    cursor_y - height - 3.0
 }
 
 fn render_budget_row(
@@ -1589,34 +1607,76 @@ fn render_budget_row(
     margin: f32,
     mut cursor_y: f32,
 ) -> f32 {
-    text(
+    let height = render_budget_cells(
         ops,
         fonts,
         margin,
         cursor_y,
-        7.2,
+        7.0,
         ReportFont::Regular,
-        &format!(
-            "{} | {} | {} | {} | {} | {}",
-            row.target, row.category, row.quantity, row.unit_cost, row.line_total, row.currency
-        ),
+        [
+            row.target.as_str(),
+            row.category.as_str(),
+            row.quantity.as_str(),
+            row.unit_cost.as_str(),
+            row.line_total.as_str(),
+            row.currency.as_str(),
+        ],
     );
-    cursor_y -= 4.4;
+    cursor_y -= height + 1.2;
 
-    for line in wrap_text(&format!("{}: {}", columns.description, row.description), 95) {
-        text(
-            ops,
-            fonts,
-            margin + 3.0,
-            cursor_y,
-            7.0,
-            ReportFont::Regular,
-            &line,
-        );
-        cursor_y -= BUDGET_LINE_HEIGHT_MM;
+    if !row.description.trim().is_empty() {
+        for line in wrap_text(
+            &format!("{}: {}", columns.description, row.description.trim()),
+            95,
+        ) {
+            text(
+                ops,
+                fonts,
+                margin + 3.0,
+                cursor_y,
+                7.0,
+                ReportFont::Regular,
+                &line,
+            );
+            cursor_y -= BUDGET_LINE_HEIGHT_MM;
+        }
     }
 
     cursor_y - 2.5
+}
+
+fn render_budget_cells(
+    ops: &mut Vec<Op>,
+    fonts: &ReportFonts,
+    margin: f32,
+    cursor_y: f32,
+    font_size: f32,
+    font: ReportFont,
+    cells: [&str; 6],
+) -> f32 {
+    let wrapped_cells = cells
+        .into_iter()
+        .zip(BUDGET_COLUMN_LAYOUT)
+        .map(|(value, (offset, max_chars))| (offset, wrap_text(value, max_chars)))
+        .collect::<Vec<_>>();
+    let line_count = wrapped_cells
+        .iter()
+        .map(|(_, lines)| lines.len())
+        .max()
+        .unwrap_or(1)
+        .max(1);
+
+    for line_index in 0..line_count {
+        let line_y = cursor_y - line_index as f32 * BUDGET_LINE_HEIGHT_MM;
+        for (offset, lines) in &wrapped_cells {
+            if let Some(line) = lines.get(line_index) {
+                text(ops, fonts, margin + offset, line_y, font_size, font, line);
+            }
+        }
+    }
+
+    line_count as f32 * BUDGET_LINE_HEIGHT_MM
 }
 
 fn render_consortium_section(
@@ -2627,15 +2687,76 @@ mod tests {
         let first_budget_page = render_test_page(&input, &layout.pages[1], 1);
         let first_text = page_text(&first_budget_page).join("\n");
         assert!(first_text.contains("Budget"));
-        assert!(first_text.contains("Target | Category"));
+        assert!(first_text.contains("Target"));
+        assert!(first_text.contains("Category"));
+        assert!(first_text.contains("Unit cost"));
         assert!(first_text.contains("Bare-root tree 1"));
 
         let second_budget_page = render_test_page(&input, &layout.pages[2], 2);
         let second_text = page_text(&second_budget_page).join("\n");
-        assert!(second_text.contains("Target | Category"));
+        assert!(second_text.contains("Target"));
+        assert!(second_text.contains("Category"));
+        assert!(second_text.contains("Unit cost"));
         assert!(second_text.contains("Bare-root tree 14"));
         assert!(second_text.contains("Grand total"));
         assert!(second_text.contains("EUR 450.00"));
+    }
+
+    #[test]
+    fn renderer_prints_zero_budget_rows_without_pipe_dump_or_blank_description() {
+        let input = DesignReportInput {
+            budget: Some(DesignReportBudgetInput {
+                rows: vec![DesignReportBudgetRowInput {
+                    target: "Manual".to_string(),
+                    category: "Tools".to_string(),
+                    description: "".to_string(),
+                    quantity: "0".to_string(),
+                    unit_cost: "$0.00".to_string(),
+                    line_total: "$0.00".to_string(),
+                    currency: "USD".to_string(),
+                }],
+                totals: vec![DesignReportBudgetTotalInput {
+                    label: "Grand total".to_string(),
+                    currency: "USD".to_string(),
+                    amount: "$0.00".to_string(),
+                }],
+                ..budget_input_with_rows(0)
+            }),
+            ..report_input_without_metadata()
+        };
+        let layout = build_design_report_layout(&input);
+        let text = page_text(&render_test_page(&input, &layout.pages[1], 1)).join("\n");
+
+        assert!(text.contains("Budget"));
+        assert!(text.contains("Manual"));
+        assert!(text.contains("Tools"));
+        assert!(text.contains("$0.00"));
+        assert!(text.contains("Grand total (USD): $0.00"));
+        assert!(!text.contains("Manual | Tools"));
+        assert!(!text.contains("Description:"));
+    }
+
+    #[test]
+    fn renderer_prints_totals_only_budget_without_empty_table_header() {
+        let input = DesignReportInput {
+            budget: Some(DesignReportBudgetInput {
+                rows: vec![],
+                totals: vec![DesignReportBudgetTotalInput {
+                    label: "Grand total".to_string(),
+                    currency: "USD".to_string(),
+                    amount: "$0.00".to_string(),
+                }],
+                ..budget_input_with_rows(0)
+            }),
+            ..report_input_without_metadata()
+        };
+        let layout = build_design_report_layout(&input);
+        let text = page_text(&render_test_page(&input, &layout.pages[1], 1)).join("\n");
+
+        assert!(text.contains("Budget"));
+        assert!(text.contains("Grand total (USD): $0.00"));
+        assert!(!text.contains("Target"));
+        assert!(!text.contains("Category"));
     }
 
     #[test]
