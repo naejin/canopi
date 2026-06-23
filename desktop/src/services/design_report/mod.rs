@@ -2577,6 +2577,7 @@ mod tests {
     use std::sync::atomic::{AtomicU64, Ordering};
 
     static TEST_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+    const WIDE_WHITE_CANVAS_PNG_BASE64: &str = "iVBORw0KGgoAAAANSUhEUgAAAAwAAAAECAIAAAA1REndAAAAD0lEQVR4nGP4TwRgoK8iAHlbj3FlgojyAAAAAElFTkSuQmCC";
 
     struct TempTestDir {
         root: PathBuf,
@@ -2945,7 +2946,7 @@ mod tests {
     }
 
     #[test]
-    fn renderer_preserves_representative_report_invariants_without_snapshots() {
+    fn renderer_preserves_representative_pdf_artifact_invariants_without_snapshots() {
         let input = DesignReportInput {
             metadata: DesignReportMetadataInput {
                 description: Some("Representative dense report".to_string()),
@@ -2957,9 +2958,9 @@ mod tests {
             },
             canvas: DesignReportCanvasInput {
                 image: Some(DesignReportCanvasImageInput {
-                    data_base64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC".to_string(),
-                    width_px: 1,
-                    height_px: 1,
+                    data_base64: WIDE_WHITE_CANVAS_PNG_BASE64.to_string(),
+                    width_px: 12,
+                    height_px: 4,
                 }),
                 legend: Some(DesignReportCanvasLegendInput::PinnedPlantNames {
                     title: "Legend".to_string(),
@@ -3070,40 +3071,63 @@ mod tests {
             .map(|page| page.extract_text(&parsed.resources).join("\n"))
             .collect::<Vec<_>>()
             .join("\n");
+        let page_texts = parsed
+            .pages
+            .iter()
+            .map(|page| page.extract_text(&parsed.resources).join("\n"))
+            .collect::<Vec<_>>();
 
-        assert!(parsed.pages.len() >= 4);
-        assert!(parsed.pages.iter().all(|page| !page.ops.is_empty()));
-        assert!(parsed.pages.iter().enumerate().all(|(index, page)| {
-            page.extract_text(&parsed.resources)
-                .join("\n")
-                .contains(&format!("Page {}", index + 1))
-        }));
-        assert!(
-            parsed
-                .pages
-                .first()
-                .expect("first report page")
-                .ops
-                .iter()
-                .any(|op| matches!(op, Op::UseXobject { .. }))
+        assert_eq!(
+            parsed.pages.len(),
+            4,
+            "representative artifact should stay page-dense: first page plus one page each for Timeline, Budget, and Consortium; got {} pages with text {page_texts:?}",
+            parsed.pages.len(),
         );
-        assert!(parsed.pages.iter().any(|page| {
-            page.ops
-                .iter()
-                .any(|op| matches!(op, Op::DrawPolygon { .. }))
-        }));
-        for expected in [
-            "Timeline",
-            "Budget",
-            "Consortium",
-            "Succession chart",
-            "Grand total",
-        ] {
+        for (index, page) in parsed.pages.iter().enumerate() {
+            let page_number = index + 1;
             assert!(
-                full_text.contains(expected),
-                "missing report section text {expected:?}"
+                !page.ops.is_empty(),
+                "PDF artifact page {page_number} should contain drawing operations",
             );
+            assert_page_text_contains(
+                page_number,
+                "page footer",
+                &page_texts[index],
+                &format!("Page {page_number}"),
+            );
+            assert_page_density(page_number, &page_texts[index], 4);
         }
+
+        let first_page = parsed.pages.first().expect("first report page");
+        let image = input
+            .canvas
+            .image
+            .as_ref()
+            .expect("representative artifact includes a canvas image");
+        assert_first_page_canvas_artifact(first_page, image, &input.canvas.page);
+        assert_no_full_page_background_paint(first_page, &input.canvas.page);
+
+        assert_page_text_contains(
+            1,
+            "overview/design",
+            &page_texts[0],
+            "Representative dense report",
+        );
+        assert_page_text_contains(1, "overview/design", &page_texts[0], "Visible layers");
+        assert_page_text_contains(2, "Timeline", &page_texts[1], "Timeline");
+        assert_page_text_contains(2, "Timeline", &page_texts[1], "Actions");
+        assert_page_text_contains(3, "Budget", &page_texts[2], "Budget");
+        assert_page_text_contains(3, "Budget", &page_texts[2], "Grand total");
+        assert_page_text_contains(4, "Consortium", &page_texts[3], "Consortium");
+        assert_page_text_contains(4, "Consortium", &page_texts[3], "Succession chart");
+        assert!(
+            parsed.pages.iter().any(|page| {
+                page.ops
+                    .iter()
+                    .any(|op| matches!(op, Op::DrawPolygon { .. }))
+            }),
+            "representative artifact should contain filled chart or legend swatches",
+        );
         for leaked in [
             "Action type |",
             "Planting |",
@@ -3114,14 +3138,17 @@ mod tests {
             "#AA0000",
             "plant-uuid",
             "Hidden app chrome note",
+            "designReport.",
+            "canvas.",
             "�",
             "Ã",
         ] {
-            assert!(
-                !full_text.contains(leaked),
-                "representative report leaked {leaked:?}: {full_text:?}",
-            );
+            assert_report_text_excludes("representative artifact", &full_text, leaked);
         }
+        assert!(
+            !contains_hex_color_text(&full_text),
+            "representative artifact leaked raw hex color text: {full_text:?}",
+        );
     }
 
     #[test]
@@ -3951,6 +3978,222 @@ mod tests {
                 _ => None,
             })
             .collect()
+    }
+
+    fn assert_page_text_contains(page_number: usize, section: &str, text: &str, expected: &str) {
+        assert!(
+            text.contains(expected),
+            "PDF artifact page {page_number} ({section}) missing {expected:?}: {text:?}",
+        );
+    }
+
+    fn assert_report_text_excludes(section: &str, text: &str, leaked: &str) {
+        assert!(
+            !text.contains(leaked),
+            "PDF artifact {section} leaked {leaked:?}: {text:?}",
+        );
+    }
+
+    fn assert_page_density(page_number: usize, text: &str, min_meaningful_lines: usize) {
+        let meaningful_lines = text
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty() && !line.starts_with("Page "))
+            .count();
+        assert!(
+            meaningful_lines >= min_meaningful_lines,
+            "PDF artifact page {page_number} is too sparse ({meaningful_lines} meaningful lines): {text:?}",
+        );
+    }
+
+    fn assert_first_page_canvas_artifact(
+        page: &PdfPage,
+        image: &DesignReportCanvasImageInput,
+        page_input: &DesignReportCanvasPageInput,
+    ) {
+        let (frame_bounds, is_closed, point_count) = last_canvas_frame_bounds(page)
+            .expect("first PDF artifact page should draw a canvas frame");
+        assert!(
+            is_closed && point_count >= 4,
+            "first PDF artifact page canvas frame should be a continuous rectangle; closed={is_closed}, points={point_count}",
+        );
+
+        let page_body_width_pt = Mm(page_input.width_mm - page_input.margin_mm * 2.0)
+            .into_pt()
+            .0;
+        assert!(
+            frame_bounds.width_pt() >= page_body_width_pt * 0.85,
+            "first PDF artifact page has excessive empty horizontal margin around canvas frame: frame={frame_bounds:?}, page={page_input:?}",
+        );
+        assert!(
+            frame_bounds.height_pt() >= Mm(50.0).into_pt().0,
+            "first PDF artifact page canvas frame is too shallow for readable design content: frame={frame_bounds:?}",
+        );
+
+        let image_bounds = first_xobject_bounds(page, image)
+            .expect("first PDF artifact page should embed the rendered canvas image");
+        assert_rects_aligned(
+            image_bounds,
+            frame_bounds,
+            1.0,
+            "first PDF artifact page canvas image should fill the framed design area",
+        );
+    }
+
+    fn assert_no_full_page_background_paint(
+        page: &PdfPage,
+        page_input: &DesignReportCanvasPageInput,
+    ) {
+        let page_width_pt = Mm(page_input.width_mm).into_pt().0;
+        let page_height_pt = Mm(page_input.height_mm).into_pt().0;
+        for op in &page.ops {
+            if let Op::DrawPolygon { polygon } = op
+                && polygon.mode == PaintMode::Fill
+                && let Some(bounds) = polygon_bounds(polygon)
+            {
+                assert!(
+                    bounds.width_pt() < page_width_pt * 0.9
+                        || bounds.height_pt() < page_height_pt * 0.9,
+                    "first PDF artifact page should rely on the PDF white page background, not paint a full-page colored rectangle: {bounds:?}",
+                );
+            }
+        }
+    }
+
+    fn assert_rects_aligned(
+        actual: RectBoundsPt,
+        expected: RectBoundsPt,
+        tolerance_pt: f32,
+        message: &str,
+    ) {
+        assert!(
+            (actual.min_x - expected.min_x).abs() <= tolerance_pt
+                && (actual.max_x - expected.max_x).abs() <= tolerance_pt
+                && (actual.min_y - expected.min_y).abs() <= tolerance_pt
+                && (actual.max_y - expected.max_y).abs() <= tolerance_pt,
+            "{message}; actual={actual:?}, expected={expected:?}",
+        );
+    }
+
+    fn last_canvas_frame_bounds(page: &PdfPage) -> Option<(RectBoundsPt, bool, usize)> {
+        page.ops.iter().rev().find_map(|op| match op {
+            Op::DrawLine { line } => {
+                let bounds = line_bounds(line)?;
+                (bounds.width_pt() > 50.0 && bounds.height_pt() > 50.0).then_some((
+                    bounds,
+                    line.is_closed,
+                    line.points.len(),
+                ))
+            }
+            Op::DrawPolygon { polygon } if polygon.mode == PaintMode::Stroke => {
+                let bounds = polygon_bounds(polygon)?;
+                let point_count = polygon
+                    .rings
+                    .iter()
+                    .map(|ring| ring.points.len())
+                    .sum::<usize>();
+                (bounds.width_pt() > 50.0 && bounds.height_pt() > 50.0).then_some((
+                    bounds,
+                    true,
+                    point_count,
+                ))
+            }
+            _ => None,
+        })
+    }
+
+    fn first_xobject_bounds(
+        page: &PdfPage,
+        image: &DesignReportCanvasImageInput,
+    ) -> Option<RectBoundsPt> {
+        let mut current_matrix = None;
+        for op in &page.ops {
+            match op {
+                Op::SetTransformationMatrix { matrix } => {
+                    current_matrix = Some(matrix.as_array());
+                }
+                Op::RestoreGraphicsState => {
+                    current_matrix = None;
+                }
+                Op::UseXobject { transform, .. } => {
+                    if let Some([a, _, _, d, e, f]) = current_matrix {
+                        return Some(RectBoundsPt {
+                            min_x: e,
+                            min_y: f,
+                            max_x: e + a,
+                            max_y: f + d,
+                        });
+                    }
+                    let x = transform.translate_x.map(|value| value.0).unwrap_or(0.0);
+                    let y = transform.translate_y.map(|value| value.0).unwrap_or(0.0);
+                    let scale_x = transform.scale_x.unwrap_or(1.0);
+                    let scale_y = transform.scale_y.unwrap_or(1.0);
+                    return Some(RectBoundsPt {
+                        min_x: x,
+                        min_y: y,
+                        max_x: x + image.width_px as f32 * scale_x,
+                        max_y: y + image.height_px as f32 * scale_y,
+                    });
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+
+    #[derive(Debug, Clone, Copy)]
+    struct RectBoundsPt {
+        min_x: f32,
+        min_y: f32,
+        max_x: f32,
+        max_y: f32,
+    }
+
+    impl RectBoundsPt {
+        fn width_pt(self) -> f32 {
+            self.max_x - self.min_x
+        }
+
+        fn height_pt(self) -> f32 {
+            self.max_y - self.min_y
+        }
+    }
+
+    fn line_bounds(line: &printpdf::Line) -> Option<RectBoundsPt> {
+        line_point_bounds(line.points.iter())
+    }
+
+    fn polygon_bounds(polygon: &printpdf::Polygon) -> Option<RectBoundsPt> {
+        line_point_bounds(polygon.rings.iter().flat_map(|ring| ring.points.iter()))
+    }
+
+    fn line_point_bounds<'a>(
+        points: impl Iterator<Item = &'a printpdf::LinePoint>,
+    ) -> Option<RectBoundsPt> {
+        let mut min_x = f32::INFINITY;
+        let mut min_y = f32::INFINITY;
+        let mut max_x = f32::NEG_INFINITY;
+        let mut max_y = f32::NEG_INFINITY;
+        let mut has_point = false;
+        for point in points {
+            min_x = min_x.min(point.p.x.0);
+            min_y = min_y.min(point.p.y.0);
+            max_x = max_x.max(point.p.x.0);
+            max_y = max_y.max(point.p.y.0);
+            has_point = true;
+        }
+        has_point.then_some(RectBoundsPt {
+            min_x,
+            min_y,
+            max_x,
+            max_y,
+        })
+    }
+
+    fn contains_hex_color_text(text: &str) -> bool {
+        text.as_bytes().windows(7).any(|candidate| {
+            candidate[0] == b'#' && candidate[1..].iter().all(|byte| byte.is_ascii_hexdigit())
+        })
     }
 
     fn last_line_rect_aspect(page: &PdfPage) -> Option<f32> {
