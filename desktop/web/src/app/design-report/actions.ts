@@ -103,6 +103,8 @@ export interface DesignReportCanvasImageInput {
   readonly height_px: number
 }
 
+export type DesignReportPrintableMapLayerId = 'base' | 'contours' | 'hillshading'
+
 export interface DesignReportPinnedPlantNameLegendInput {
   readonly kind: 'pinned-plant-names'
   readonly title: string
@@ -290,6 +292,7 @@ export interface DesignReportCanvasImageRenderRequest {
   readonly page: DesignReportCanvasPageInput
   readonly background: '#FFFFFF'
   readonly localizedNames: ReadonlyMap<string, string | null>
+  readonly printMapLayers: readonly DesignReportPrintableMapLayerId[]
   readonly sizeMode: ReturnType<CanvasQuerySurface['getPlantSizeMode']>
   readonly colorByAttr: ReturnType<CanvasQuerySurface['getPlantColorByAttr']>
 }
@@ -404,6 +407,7 @@ function buildCanvasInput(
       page,
       background: '#FFFFFF',
       localizedNames,
+      printMapLayers: printableMapLayers(file),
       sizeMode,
       colorByAttr,
     })
@@ -899,6 +903,16 @@ const REPORT_LAYER_LABEL_KEYS: Record<string, string> = {
   hillshading: 'canvas.terrain.hillshade',
 }
 
+const PRINTABLE_MAP_LAYER_NAMES = new Set<DesignReportPrintableMapLayerId>(['base', 'contours', 'hillshading'])
+
+function printableMapLayers(file: CanopiFile): DesignReportPrintableMapLayerId[] {
+  return file.layers
+    .filter((layer): layer is typeof layer & { name: DesignReportPrintableMapLayerId } => (
+      PRINTABLE_MAP_LAYER_NAMES.has(layer.name as DesignReportPrintableMapLayerId) && layer.visible
+    ))
+    .map((layer) => layer.name)
+}
+
 const PLANT_COLOR_BY_ATTRIBUTE_LABEL_KEYS: Record<string, string> = {
   edibility: 'canvas.display.edibility',
   flower: 'canvas.display.flower',
@@ -1068,6 +1082,11 @@ function renderDesignReportCanvasImage(
       widthPx: dimensions.widthPx,
       heightPx: dimensions.heightPx,
       background: request.background,
+      underlay: request.printMapLayers.length > 0
+        ? (underlayCtx, widthPx, heightPx) => {
+          renderDesignReportMapUnderlay(underlayCtx, request.printMapLayers, widthPx, heightPx)
+        }
+        : undefined,
     })
     const dataUrl = canvas.toDataURL('image/png')
     const payload = dataUrl.startsWith('data:image/png;base64,')
@@ -1082,6 +1101,75 @@ function renderDesignReportCanvasImage(
   } catch {
     return null
   }
+}
+
+function renderDesignReportMapUnderlay(
+  ctx: CanvasRenderingContext2D,
+  layers: readonly DesignReportPrintableMapLayerId[],
+  widthPx: number,
+  heightPx: number,
+): void {
+  const visible = new Set(layers)
+
+  if (visible.has('base')) {
+    ctx.save()
+    ctx.fillStyle = '#f8f6f0'
+    ctx.globalAlpha = 0.7
+    ctx.fillRect(0, 0, widthPx, heightPx)
+    ctx.strokeStyle = '#cfc3ad'
+    ctx.globalAlpha = 0.32
+    ctx.lineWidth = 1
+    const step = Math.max(36, Math.min(widthPx, heightPx) / 8)
+    for (let x = 0; x <= widthPx; x += step) {
+      ctx.beginPath()
+      ctx.moveTo(x, 0)
+      ctx.lineTo(x, heightPx)
+      ctx.stroke()
+    }
+    for (let y = 0; y <= heightPx; y += step) {
+      ctx.beginPath()
+      ctx.moveTo(0, y)
+      ctx.lineTo(widthPx, y)
+      ctx.stroke()
+    }
+    ctx.restore()
+  }
+
+  if (visible.has('hillshading')) {
+    ctx.save()
+    ctx.strokeStyle = '#b8aa94'
+    ctx.globalAlpha = 0.16
+    ctx.lineWidth = 9
+    const spacing = Math.max(42, Math.min(widthPx, heightPx) / 7)
+    for (let offset = -heightPx; offset < widthPx; offset += spacing) {
+      ctx.beginPath()
+      ctx.moveTo(offset, heightPx)
+      ctx.lineTo(offset + heightPx, 0)
+      ctx.stroke()
+    }
+    ctx.restore()
+  }
+
+  if (visible.has('contours')) {
+    ctx.save()
+    ctx.strokeStyle = '#8b7355'
+    ctx.globalAlpha = 0.46
+    ctx.lineWidth = 1.2
+    const contourCount = 7
+    for (let index = 0; index < contourCount; index += 1) {
+      const yBase = ((index + 1) / (contourCount + 1)) * heightPx
+      ctx.beginPath()
+      for (let x = 0; x <= widthPx; x += 18) {
+        const y = yBase + Math.sin((x / widthPx) * Math.PI * 2 + index * 0.8) * Math.min(14, heightPx * 0.05)
+        if (x === 0) ctx.moveTo(x, y)
+        else ctx.lineTo(x, y)
+      }
+      ctx.stroke()
+    }
+    ctx.restore()
+  }
+
+  ctx.globalAlpha = 1
 }
 
 function reportCanvasImageDimensions(

@@ -43,6 +43,7 @@ export interface Canvas2DSceneSnapshotRenderOptions {
   readonly heightPx: number
   readonly dpr?: number
   readonly background?: string | null
+  readonly underlay?: ((ctx: CanvasRenderingContext2D, widthPx: number, heightPx: number) => void) | null
 }
 
 export function createCanvas2DSceneRenderer(): SceneRendererDefinition {
@@ -156,6 +157,11 @@ export function renderCanvas2DSceneSnapshot(
     ctx.fillStyle = options.background
     ctx.globalAlpha = 1
     ctx.fillRect(0, 0, widthPx, heightPx)
+  }
+  if (options.underlay) {
+    ctx.save()
+    options.underlay(ctx, widthPx, heightPx)
+    ctx.restore()
   }
 
   applyViewport(ctx, snapshot.viewport)

@@ -500,6 +500,9 @@ describe('Design Report export input', () => {
   it('requests a white-background canvas image from the visible scene presentation', () => {
     const scene = createDefaultScenePersistedState()
     scene.layers = [
+      { kind: 'layer', name: 'base', visible: true, locked: false, opacity: 1 },
+      { kind: 'layer', name: 'contours', visible: true, locked: false, opacity: 1 },
+      { kind: 'layer', name: 'hillshading', visible: false, locked: false, opacity: 1 },
       { kind: 'layer', name: 'zones', visible: true, locked: false, opacity: 1 },
       { kind: 'layer', name: 'plants', visible: true, locked: false, opacity: 1 },
       { kind: 'layer', name: 'annotations', visible: false, locked: false, opacity: 1 },
@@ -615,6 +618,7 @@ describe('Design Report export input', () => {
       background: '#FFFFFF',
       bounds: { min_x: 0, min_y: 0, max_x: 30, max_y: 20 },
       localizedNames: new Map([['Malus domestica', 'Pommier']]),
+      printMapLayers: ['base', 'contours'],
       page: expect.objectContaining({ background: '#FFFFFF', orientation: 'landscape' }),
       scene: expect.objectContaining({
         annotations: [expect.objectContaining({ text: 'Hidden annotation' })],
