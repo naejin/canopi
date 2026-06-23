@@ -967,6 +967,11 @@
       "notScheduled": "未定",
       "completed": "完了",
       "open": "未完了"
+    },
+    "budget": {
+      "target": "対象",
+      "category": "カテゴリ",
+      "totals": "合計"
     }
   }
 }

@@ -7,11 +7,13 @@ import { hydrateScenePersistedState } from '../../canvas/runtime/scene/codec'
 import { formatMetricDistance } from '../../canvas/runtime/zone-measurements'
 import { ACTION_TYPES } from '../planning-projection/timeline'
 import { locale } from '../settings/state'
+import { formatBudgetCurrency } from '../budget/formatting'
 import { buildPersistedDesignSessionContent } from '../document-session/persistence'
 import { designSessionStore, type DesignSessionStore } from '../document-session/store'
-import type { Annotation, CanopiFile, Location, MeasurementGuide, PanelTarget, PlacedPlant, TimelineAction, Zone } from '../../types/design'
+import type { Annotation, BudgetItem, CanopiFile, Location, MeasurementGuide, PanelTarget, PlacedPlant, TimelineAction, Zone } from '../../types/design'
 import { exportDesignReportPdf } from '../../ipc/design-report'
 import { t } from '../../i18n'
+import { DEFAULT_BUDGET_CURRENCY } from '../../generated/known-canopi-keys'
 
 export type DesignReportPageOrientation = 'portrait' | 'landscape'
 
@@ -109,6 +111,7 @@ export interface DesignReportInput {
   readonly metadata: DesignReportMetadataInput
   readonly canvas: DesignReportCanvasInput
   readonly timeline: DesignReportTimelineInput | null
+  readonly budget: DesignReportBudgetInput | null
 }
 
 export interface DesignReportTimelineColumnsInput {
@@ -152,6 +155,45 @@ export interface DesignReportTimelineInput {
   readonly actions: readonly DesignReportTimelineActionInput[]
 }
 
+export interface DesignReportBudgetColumnsInput {
+  readonly target: string
+  readonly category: string
+  readonly description: string
+  readonly quantity: string
+  readonly unit_cost: string
+  readonly line_total: string
+  readonly currency: string
+}
+
+export interface DesignReportBudgetRowInput {
+  readonly target: string
+  readonly category: string
+  readonly description: string
+  readonly quantity: string
+  readonly unit_cost: string
+  readonly line_total: string
+  readonly currency: string
+}
+
+export interface DesignReportBudgetTotalInput {
+  readonly label: string
+  readonly currency: string
+  readonly amount: string
+}
+
+export interface DesignReportBudgetInput {
+  readonly title: string
+  readonly columns: DesignReportBudgetColumnsInput
+  readonly rows: readonly DesignReportBudgetRowInput[]
+  readonly totals: readonly DesignReportBudgetTotalInput[]
+}
+
+interface BudgetReportRowComputation {
+  readonly input: DesignReportBudgetRowInput
+  readonly currency: string
+  readonly lineTotal: number
+}
+
 interface CurrentDesignReportOptions {
   readonly session?: CanvasDocumentSurface | null
   readonly querySurface?: CanvasQuerySurface | null
@@ -171,6 +213,7 @@ export function buildDesignReportInput(
 ): DesignReportInput {
   const canvas = buildCanvasInput(file, options.querySurface ?? null)
   const timeline = buildTimelineInput(file, options.querySurface ?? null)
+  const budget = buildBudgetInput(file, options.querySurface ?? null)
   const description = nonEmptyString(file.description)
 
   return {
@@ -181,6 +224,7 @@ export function buildDesignReportInput(
     },
     canvas,
     timeline,
+    budget,
   }
 }
 
@@ -497,6 +541,96 @@ function localizedSpeciesName(
 ): string {
   const plant = file.plants.find((candidate) => candidate.canonical_name === canonicalName)
   return localizedNames.get(canonicalName) ?? plant?.common_name ?? canonicalName
+}
+
+function buildBudgetInput(
+  file: CanopiFile,
+  querySurface: CanvasQuerySurface | null,
+): DesignReportBudgetInput | null {
+  if (file.budget.length === 0 && file.budget_currency === DEFAULT_BUDGET_CURRENCY) return null
+
+  const activeLocale = locale.value
+  const localizedNames = querySurface?.getLocalizedCommonNames() ?? new Map<string, string | null>()
+  const rowComputations = file.budget.map((item) => reportBudgetRow(item, file, localizedNames, activeLocale))
+  const rows = rowComputations.map((row) => row.input)
+  const totals = buildBudgetTotals(rowComputations, activeLocale)
+  if (rows.length === 0 && totals.length === 0) {
+    totals.push({
+      label: t('canvas.budget.grandTotal'),
+      currency: file.budget_currency,
+      amount: formatBudgetCurrency(0, file.budget_currency, activeLocale),
+    })
+  }
+
+  return {
+    title: t('canvas.budget.title'),
+    columns: {
+      target: t('designReport.budget.target'),
+      category: t('designReport.budget.category'),
+      description: t('canvas.budget.description'),
+      quantity: t('canvas.budget.quantity'),
+      unit_cost: t('canvas.budget.unitCost'),
+      line_total: t('canvas.budget.lineTotal'),
+      currency: t('canvas.budget.currency'),
+    },
+    rows,
+    totals,
+  }
+}
+
+function reportBudgetRow(
+  item: BudgetItem,
+  file: CanopiFile,
+  localizedNames: ReadonlyMap<string, string | null>,
+  activeLocale: string,
+): BudgetReportRowComputation {
+  const currency = item.currency || file.budget_currency
+  const quantity = budgetItemQuantity(item, file)
+  const lineTotal = quantity * item.unit_cost
+
+  return {
+    currency,
+    lineTotal,
+    input: {
+      target: timelineTargetLabel(item.target, file, localizedNames) ?? t('designReport.timeline.none'),
+      category: item.category,
+      description: item.description,
+      quantity: formatReportNumber(quantity, activeLocale),
+      unit_cost: formatBudgetCurrency(item.unit_cost, currency, activeLocale),
+      line_total: formatBudgetCurrency(lineTotal, currency, activeLocale),
+      currency,
+    },
+  }
+}
+
+function budgetItemQuantity(item: BudgetItem, file: CanopiFile): number {
+  const { target } = item
+  if (item.category === 'plants' && target.kind === 'species') {
+    const count = file.plants.filter((plant) => plant.canonical_name === target.canonical_name).length
+    if (count > 0) return count
+  }
+  return item.quantity
+}
+
+function buildBudgetTotals(
+  rows: readonly BudgetReportRowComputation[],
+  activeLocale: string,
+): DesignReportBudgetTotalInput[] {
+  const totals = new Map<string, number>()
+  for (const row of rows) {
+    totals.set(row.currency, (totals.get(row.currency) ?? 0) + row.lineTotal)
+  }
+  return [...totals.entries()].map(([currency, amount]) => ({
+    label: t('canvas.budget.grandTotal'),
+    currency,
+    amount: formatBudgetCurrency(amount, currency, activeLocale),
+  }))
+}
+
+function formatReportNumber(value: number, activeLocale: string): string {
+  return new Intl.NumberFormat(activeLocale, {
+    maximumFractionDigits: 2,
+  }).format(value)
 }
 
 function isLayerVisible(file: CanopiFile, layerName: string): boolean {

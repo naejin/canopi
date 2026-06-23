@@ -967,6 +967,11 @@
       "notScheduled": "未计划",
       "completed": "已完成",
       "open": "未完成"
+    },
+    "budget": {
+      "target": "目标",
+      "category": "类别",
+      "totals": "总计"
     }
   }
 }

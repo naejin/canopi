@@ -967,6 +967,11 @@
       "notScheduled": "Non pianificato",
       "completed": "Completato",
       "open": "Aperto"
+    },
+    "budget": {
+      "target": "Destinazione",
+      "category": "Categoria",
+      "totals": "Totali"
     }
   }
 }

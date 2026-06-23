@@ -967,6 +967,11 @@
       "notScheduled": "Niet gepland",
       "completed": "Voltooid",
       "open": "Open"
+    },
+    "budget": {
+      "target": "Doel",
+      "category": "Categorie",
+      "totals": "Totalen"
     }
   }
 }

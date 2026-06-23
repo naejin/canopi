@@ -11,6 +11,8 @@ pub struct DesignReportInput {
     pub canvas: DesignReportCanvasInput,
     #[serde(default)]
     pub timeline: Option<DesignReportTimelineInput>,
+    #[serde(default)]
+    pub budget: Option<DesignReportBudgetInput>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -184,6 +186,43 @@ pub struct DesignReportTimelineActionInput {
     pub status: String,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct DesignReportBudgetInput {
+    pub title: String,
+    pub columns: DesignReportBudgetColumnsInput,
+    pub rows: Vec<DesignReportBudgetRowInput>,
+    pub totals: Vec<DesignReportBudgetTotalInput>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DesignReportBudgetColumnsInput {
+    pub target: String,
+    pub category: String,
+    pub description: String,
+    pub quantity: String,
+    pub unit_cost: String,
+    pub line_total: String,
+    pub currency: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DesignReportBudgetRowInput {
+    pub target: String,
+    pub category: String,
+    pub description: String,
+    pub quantity: String,
+    pub unit_cost: String,
+    pub line_total: String,
+    pub currency: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DesignReportBudgetTotalInput {
+    pub label: String,
+    pub currency: String,
+    pub amount: String,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct DesignReportLayout {
     pages: Vec<DesignReportPageLayout>,
@@ -207,6 +246,11 @@ pub(crate) enum DesignReportSection {
         end_index: usize,
         include_overview: bool,
     },
+    Budget {
+        start_index: usize,
+        end_index: usize,
+        include_totals: bool,
+    },
 }
 
 const PAGE_TITLE_Y_OFFSET_MM: f32 = 16.0;
@@ -218,6 +262,9 @@ const REPORT_PORTRAIT_HEIGHT_MM: f32 = 297.0;
 const TIMELINE_ROW_VERTICAL_PADDING_MM: f32 = 4.0;
 const TIMELINE_LINE_HEIGHT_MM: f32 = 4.2;
 const TIMELINE_HEADER_HEIGHT_MM: f32 = 10.0;
+const BUDGET_ROW_VERTICAL_PADDING_MM: f32 = 4.0;
+const BUDGET_LINE_HEIGHT_MM: f32 = 4.2;
+const BUDGET_HEADER_HEIGHT_MM: f32 = 10.0;
 
 pub fn export_design_report_pdf(input: &DesignReportInput, path: String) -> Result<String, String> {
     let bytes = render_design_report_pdf(input)?;
@@ -275,6 +322,24 @@ pub(crate) fn build_design_report_layout(input: &DesignReportInput) -> DesignRep
                     start_index: chunk.start_index,
                     end_index: chunk.end_index,
                     include_overview: chunk.include_overview,
+                }],
+                page_number_label: String::new(),
+            });
+        }
+    }
+
+    if let Some(budget) = input.budget.as_ref()
+        && (!budget.rows.is_empty() || !budget.totals.is_empty())
+    {
+        for chunk in build_budget_page_chunks(budget, input.canvas.page.margin_mm) {
+            pages.push(DesignReportPageLayout {
+                orientation: DesignReportPageOrientation::Portrait,
+                width_mm: REPORT_PORTRAIT_WIDTH_MM,
+                height_mm: REPORT_PORTRAIT_HEIGHT_MM,
+                sections: vec![DesignReportSection::Budget {
+                    start_index: chunk.start_index,
+                    end_index: chunk.end_index,
+                    include_totals: chunk.include_totals,
                 }],
                 page_number_label: String::new(),
             });
@@ -358,6 +423,71 @@ fn estimate_timeline_row_height(action: &DesignReportTimelineActionInput) -> f32
     TIMELINE_ROW_VERTICAL_PADDING_MM + wrapped_lines as f32 * TIMELINE_LINE_HEIGHT_MM + 8.0
 }
 
+#[derive(Debug, Clone, Copy)]
+struct BudgetPageChunk {
+    start_index: usize,
+    end_index: usize,
+    include_totals: bool,
+}
+
+fn build_budget_page_chunks(
+    budget: &DesignReportBudgetInput,
+    margin_mm: f32,
+) -> Vec<BudgetPageChunk> {
+    if budget.rows.is_empty() {
+        return vec![BudgetPageChunk {
+            start_index: 0,
+            end_index: 0,
+            include_totals: true,
+        }];
+    }
+
+    let available_height = budget_rows_available_height(budget, margin_mm);
+    let mut chunks = Vec::new();
+    let mut start_index = 0;
+    let mut used_height = 0.0;
+
+    for (index, row) in budget.rows.iter().enumerate() {
+        let row_height = estimate_budget_row_height(row);
+        if index > start_index && used_height + row_height > available_height {
+            chunks.push(BudgetPageChunk {
+                start_index,
+                end_index: index,
+                include_totals: false,
+            });
+            start_index = index;
+            used_height = 0.0;
+        }
+        used_height += row_height;
+    }
+
+    chunks.push(BudgetPageChunk {
+        start_index,
+        end_index: budget.rows.len(),
+        include_totals: true,
+    });
+    chunks
+}
+
+fn budget_rows_available_height(budget: &DesignReportBudgetInput, margin_mm: f32) -> f32 {
+    let page_body = REPORT_PORTRAIT_HEIGHT_MM - margin_mm - PAGE_NUMBER_Y_MM - 24.0;
+    let totals_height = 7.0 + budget.totals.len() as f32 * 4.8;
+    (page_body - totals_height - BUDGET_HEADER_HEIGHT_MM - 16.0).max(40.0)
+}
+
+fn estimate_budget_row_height(row: &DesignReportBudgetRowInput) -> f32 {
+    let wrapped_lines = [
+        wrap_text(&row.target, 26).len(),
+        wrap_text(&row.category, 18).len(),
+        wrap_text(&row.description, 62).len(),
+    ]
+    .into_iter()
+    .max()
+    .unwrap_or(1)
+    .max(1);
+    BUDGET_ROW_VERTICAL_PADDING_MM + wrapped_lines as f32 * BUDGET_LINE_HEIGHT_MM + 8.0
+}
+
 fn render_page(input: &DesignReportInput, layout: &DesignReportPageLayout, _: usize) -> PdfPage {
     let mut ops = Vec::new();
     let page_width = layout.width_mm;
@@ -394,6 +524,34 @@ fn render_page(input: &DesignReportInput, layout: &DesignReportPageLayout, _: us
                 *start_index,
                 *end_index,
                 *include_overview,
+                margin,
+                cursor_y,
+            );
+        }
+        text(
+            &mut ops,
+            margin,
+            PAGE_NUMBER_Y_MM,
+            8.0,
+            BuiltinFont::Helvetica,
+            &layout.page_number_label,
+        );
+        return PdfPage::new(Mm(layout.width_mm), Mm(layout.height_mm), ops);
+    }
+
+    if let Some(DesignReportSection::Budget {
+        start_index,
+        end_index,
+        include_totals,
+    }) = layout.sections.first()
+    {
+        if let Some(budget) = input.budget.as_ref() {
+            render_budget_section(
+                &mut ops,
+                budget,
+                *start_index,
+                *end_index,
+                *include_totals,
                 margin,
                 cursor_y,
             );
@@ -886,6 +1044,115 @@ fn render_timeline_action_row(
     cursor_y - 2.5
 }
 
+fn render_budget_section(
+    ops: &mut Vec<Op>,
+    budget: &DesignReportBudgetInput,
+    start_index: usize,
+    end_index: usize,
+    include_totals: bool,
+    margin: f32,
+    mut cursor_y: f32,
+) -> f32 {
+    text(
+        ops,
+        margin,
+        cursor_y,
+        12.0,
+        BuiltinFont::HelveticaBold,
+        &budget.title,
+    );
+    cursor_y -= 8.0;
+    cursor_y = render_budget_table_header(ops, &budget.columns, margin, cursor_y);
+
+    for row in &budget.rows[start_index..end_index] {
+        cursor_y = render_budget_row(ops, &budget.columns, row, margin, cursor_y);
+    }
+
+    if include_totals {
+        cursor_y -= 2.0;
+        for total in &budget.totals {
+            text(
+                ops,
+                margin,
+                cursor_y,
+                8.0,
+                BuiltinFont::HelveticaBold,
+                &format!("{} ({}): {}", total.label, total.currency, total.amount),
+            );
+            cursor_y -= 4.8;
+        }
+    }
+
+    cursor_y
+}
+
+fn render_budget_table_header(
+    ops: &mut Vec<Op>,
+    columns: &DesignReportBudgetColumnsInput,
+    margin: f32,
+    mut cursor_y: f32,
+) -> f32 {
+    text(
+        ops,
+        margin,
+        cursor_y,
+        7.5,
+        BuiltinFont::HelveticaBold,
+        &format!(
+            "{} | {} | {} | {}",
+            columns.target, columns.category, columns.quantity, columns.currency
+        ),
+    );
+    cursor_y -= 4.6;
+    text(
+        ops,
+        margin,
+        cursor_y,
+        7.5,
+        BuiltinFont::HelveticaBold,
+        &format!(
+            "{} | {} | {}",
+            columns.description, columns.unit_cost, columns.line_total
+        ),
+    );
+    cursor_y - 5.5
+}
+
+fn render_budget_row(
+    ops: &mut Vec<Op>,
+    columns: &DesignReportBudgetColumnsInput,
+    row: &DesignReportBudgetRowInput,
+    margin: f32,
+    mut cursor_y: f32,
+) -> f32 {
+    text(
+        ops,
+        margin,
+        cursor_y,
+        7.2,
+        BuiltinFont::Helvetica,
+        &format!(
+            "{} | {} | {} | {} | {} | {}",
+            row.target, row.category, row.quantity, row.unit_cost, row.line_total, row.currency
+        ),
+    );
+    cursor_y -= 4.4;
+
+    for line in wrap_text(&format!("{}: {}", columns.description, row.description), 95) {
+        text(
+            ops,
+            margin + 3.0,
+            cursor_y,
+            7.0,
+            BuiltinFont::Helvetica,
+            &line,
+        );
+        cursor_y -= BUDGET_LINE_HEIGHT_MM;
+    }
+
+    cursor_y - 2.5
+}
+
 #[derive(Debug, Clone, Copy)]
 struct CanvasTransform {
     bounds: DesignReportBounds,
@@ -1264,6 +1531,31 @@ mod tests {
         assert!(second_text.contains("Page 3 of"));
     }
 
+    #[test]
+    fn renderer_paginates_budget_rows_with_repeated_headers_and_totals() {
+        let input = DesignReportInput {
+            budget: Some(budget_input_with_rows(20)),
+            ..report_input_without_metadata()
+        };
+
+        let layout = build_design_report_layout(&input);
+
+        assert!(layout.pages.len() > 2);
+
+        let first_budget_page = render_page(&input, &layout.pages[1], 1);
+        let first_text = page_text(&first_budget_page).join("\n");
+        assert!(first_text.contains("Budget"));
+        assert!(first_text.contains("Target | Category"));
+        assert!(first_text.contains("Bare-root tree 1"));
+
+        let second_budget_page = render_page(&input, &layout.pages[2], 2);
+        let second_text = page_text(&second_budget_page).join("\n");
+        assert!(second_text.contains("Target | Category"));
+        assert!(second_text.contains("Bare-root tree 14"));
+        assert!(second_text.contains("Grand total"));
+        assert!(second_text.contains("EUR 450.00"));
+    }
+
     fn report_input_without_metadata() -> DesignReportInput {
         DesignReportInput {
             title: "Landscape report".to_string(),
@@ -1308,6 +1600,7 @@ mod tests {
                 legend: None,
             },
             timeline: None,
+            budget: None,
         }
     }
 
@@ -1348,6 +1641,39 @@ mod tests {
                     status: "Open".to_string(),
                 })
                 .collect(),
+        }
+    }
+
+    fn budget_input_with_rows(count: usize) -> DesignReportBudgetInput {
+        DesignReportBudgetInput {
+            title: "Budget".to_string(),
+            columns: DesignReportBudgetColumnsInput {
+                target: "Target".to_string(),
+                category: "Category".to_string(),
+                description: "Description".to_string(),
+                quantity: "Qty".to_string(),
+                unit_cost: "Unit cost".to_string(),
+                line_total: "Total".to_string(),
+                currency: "Currency".to_string(),
+            },
+            rows: (1..=count)
+                .map(|index| DesignReportBudgetRowInput {
+                    target: "Pommier".to_string(),
+                    category: "plants".to_string(),
+                    description: format!(
+                        "Bare-root tree {index} with a wrapped description for print layout"
+                    ),
+                    quantity: "2".to_string(),
+                    unit_cost: "EUR 7.50".to_string(),
+                    line_total: "EUR 15.00".to_string(),
+                    currency: "EUR".to_string(),
+                })
+                .collect(),
+            totals: vec![DesignReportBudgetTotalInput {
+                label: "Grand total".to_string(),
+                currency: "EUR".to_string(),
+                amount: "EUR 450.00".to_string(),
+            }],
         }
     }
 

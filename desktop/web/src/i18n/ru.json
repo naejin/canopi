@@ -967,6 +967,11 @@
       "notScheduled": "Не запланировано",
       "completed": "Завершено",
       "open": "Открыто"
+    },
+    "budget": {
+      "target": "Цель",
+      "category": "Категория",
+      "totals": "Итоги"
     }
   }
 }

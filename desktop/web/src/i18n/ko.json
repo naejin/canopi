@@ -967,6 +967,11 @@
       "notScheduled": "예약 없음",
       "completed": "완료됨",
       "open": "열림"
+    },
+    "budget": {
+      "target": "대상",
+      "category": "범주",
+      "totals": "합계"
     }
   }
 }

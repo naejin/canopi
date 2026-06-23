@@ -465,4 +465,113 @@ describe('Design Report export input', () => {
       ],
     }))
   })
+
+  it('omits derived empty budget rows and snapshots user-entered budget totals with locale formatting', () => {
+    locale.value = 'fr'
+
+    expect(buildDesignReportInput({
+      ...BASE_DESIGN,
+      plants: [{
+        id: 'plant-1',
+        canonical_name: 'Malus domestica',
+        common_name: 'Apple',
+        color: null,
+        position: { x: 0, y: 0 },
+        rotation: null,
+        scale: null,
+        notes: null,
+        planted_date: null,
+        quantity: 1,
+        locked: false,
+      }],
+    }).budget).toBeNull()
+
+    const input = buildDesignReportInput({
+      ...BASE_DESIGN,
+      budget_currency: 'EUR',
+      plants: [
+        {
+          id: 'plant-1',
+          canonical_name: 'Malus domestica',
+          common_name: 'Apple',
+          color: null,
+          position: { x: 0, y: 0 },
+          rotation: null,
+          scale: null,
+          notes: null,
+          planted_date: null,
+          quantity: 1,
+          locked: false,
+        },
+        {
+          id: 'plant-2',
+          canonical_name: 'Malus domestica',
+          common_name: 'Apple',
+          color: null,
+          position: { x: 1, y: 1 },
+          rotation: null,
+          scale: null,
+          notes: null,
+          planted_date: null,
+          quantity: 1,
+          locked: false,
+        },
+      ],
+      budget: [
+        {
+          target: { kind: 'species', canonical_name: 'Malus domestica' },
+          category: 'plants',
+          description: 'Bare-root apple tree with a deliberately long description',
+          quantity: 0,
+          unit_cost: 7.5,
+          currency: 'EUR',
+        },
+        {
+          target: { kind: 'manual' },
+          category: 'materials',
+          description: 'Compost delivery',
+          quantity: 2.5,
+          unit_cost: 12,
+          currency: 'EUR',
+        },
+      ],
+    }, {
+      querySurface: createTestCanvasQuerySurface({
+        localizedNames: new Map([['Malus domestica', 'Pommier']]),
+      }),
+    })
+
+    expect(input.budget).toEqual(expect.objectContaining({
+      title: 'Budget',
+      columns: expect.objectContaining({
+        target: 'Cible',
+        quantity: 'Qté',
+        line_total: 'Total',
+      }),
+      rows: [
+        expect.objectContaining({
+          target: 'Pommier',
+          category: 'plants',
+          description: 'Bare-root apple tree with a deliberately long description',
+          quantity: '2',
+          unit_cost: expect.stringContaining('€'),
+          line_total: expect.stringContaining('15'),
+          currency: 'EUR',
+        }),
+        expect.objectContaining({
+          target: 'Manuel',
+          category: 'materials',
+          description: 'Compost delivery',
+          quantity: '2,5',
+          unit_cost: expect.stringContaining('€'),
+          line_total: expect.stringContaining('30'),
+          currency: 'EUR',
+        }),
+      ],
+      totals: [expect.objectContaining({
+        currency: 'EUR',
+        amount: expect.stringContaining('45'),
+      })],
+    }))
+  })
 })
