@@ -982,6 +982,17 @@
       "startPhase": "시작 단계",
       "endPhase": "종료 단계",
       "count": "수량"
+    },
+    "document": {
+      "overview": "개요",
+      "location": "위치",
+      "design": "디자인",
+      "visibleLayers": "보이는 레이어",
+      "defaultVisibleLayers": "기본값",
+      "noVisibleCanvasObjects": "보이는 캔버스 객체가 없습니다",
+      "pinned": "고정됨",
+      "colorBy": "색상 기준",
+      "altitude": "고도"
     }
   }
 }

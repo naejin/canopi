@@ -982,6 +982,17 @@
       "startPhase": "Fase iniziale",
       "endPhase": "Fase finale",
       "count": "Conteggio"
+    },
+    "document": {
+      "overview": "Panoramica",
+      "location": "Posizione",
+      "design": "Progetto",
+      "visibleLayers": "Livelli visibili",
+      "defaultVisibleLayers": "predefinito",
+      "noVisibleCanvasObjects": "Nessun oggetto visibile sul canvas",
+      "pinned": "Fissato",
+      "colorBy": "Colora per",
+      "altitude": "altitudine"
     }
   }
 }

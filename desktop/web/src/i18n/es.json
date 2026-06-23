@@ -982,6 +982,17 @@
       "startPhase": "Fase inicial",
       "endPhase": "Fase final",
       "count": "Cantidad"
+    },
+    "document": {
+      "overview": "Resumen",
+      "location": "Ubicación",
+      "design": "Diseño",
+      "visibleLayers": "Capas visibles",
+      "defaultVisibleLayers": "predeterminado",
+      "noVisibleCanvasObjects": "No hay objetos visibles en el lienzo",
+      "pinned": "Fijado",
+      "colorBy": "Colorear por",
+      "altitude": "altitud"
     }
   }
 }

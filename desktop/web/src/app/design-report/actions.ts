@@ -47,6 +47,18 @@ export interface DesignReportMetadataInput {
   readonly location?: Location
 }
 
+export interface DesignReportLabelsInput {
+  readonly overview: string
+  readonly location: string
+  readonly altitude: string
+  readonly design: string
+  readonly visible_layers: string
+  readonly default_visible_layers: string
+  readonly no_visible_canvas_objects: string
+  readonly pinned: string
+  readonly color_by: string
+}
+
 export interface DesignReportPlantInput {
   readonly id: string
   readonly canonical_name: string
@@ -118,6 +130,7 @@ export interface DesignReportCanvasInput {
 
 export interface DesignReportInput {
   readonly title: string
+  readonly labels: DesignReportLabelsInput
   readonly metadata: DesignReportMetadataInput
   readonly canvas: DesignReportCanvasInput
   readonly timeline: DesignReportTimelineInput | null
@@ -272,6 +285,7 @@ export function buildDesignReportInput(
 
   return {
     title: nonEmptyString(file.name) ?? 'Untitled Design',
+    labels: buildReportLabels(),
     metadata: {
       ...(description ? { description } : {}),
       ...(file.location ? { location: file.location } : {}),
@@ -280,6 +294,20 @@ export function buildDesignReportInput(
     timeline,
     budget,
     consortium,
+  }
+}
+
+function buildReportLabels(): DesignReportLabelsInput {
+  return {
+    overview: t('designReport.document.overview'),
+    location: t('designReport.document.location'),
+    altitude: t('designReport.document.altitude'),
+    design: t('designReport.document.design'),
+    visible_layers: t('designReport.document.visibleLayers'),
+    default_visible_layers: t('designReport.document.defaultVisibleLayers'),
+    no_visible_canvas_objects: t('designReport.document.noVisibleCanvasObjects'),
+    pinned: t('designReport.document.pinned'),
+    color_by: t('designReport.document.colorBy'),
   }
 }
 

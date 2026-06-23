@@ -982,6 +982,17 @@
       "startPhase": "Start phase",
       "endPhase": "End phase",
       "count": "Count"
+    },
+    "document": {
+      "overview": "Overview",
+      "location": "Location",
+      "design": "Design",
+      "visibleLayers": "Visible layers",
+      "defaultVisibleLayers": "default",
+      "noVisibleCanvasObjects": "No visible canvas objects",
+      "pinned": "Pinned",
+      "colorBy": "Color by",
+      "altitude": "altitude"
     }
   }
 }

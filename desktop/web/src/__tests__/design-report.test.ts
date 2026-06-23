@@ -127,6 +127,28 @@ describe('Design Report export input', () => {
     expect(input.canvas.bounds).toEqual({ min_x: 0, min_y: 0, max_x: 160, max_y: 40 })
   })
 
+  it('snapshots localized document labels used by the PDF renderer', () => {
+    locale.value = 'fr'
+
+    const input = buildDesignReportInput({
+      ...BASE_DESIGN,
+      description: 'Plan imprimable',
+      location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
+    })
+
+    expect(input.labels).toEqual({
+      overview: 'Vue d’ensemble',
+      location: 'Emplacement',
+      altitude: 'altitude',
+      design: 'Design',
+      visible_layers: 'Calques visibles',
+      default_visible_layers: 'par défaut',
+      no_visible_canvas_objects: 'Aucun objet visible sur le canevas',
+      pinned: 'Épinglé',
+      color_by: 'Colorier par',
+    })
+  })
+
   it('exports current serialized Design Session state without clearing dirty state', async () => {
     replaceCurrentDesignState(
       {

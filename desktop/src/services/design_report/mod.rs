@@ -7,6 +7,8 @@ use serde::Deserialize;
 #[derive(Debug, Clone, Deserialize)]
 pub struct DesignReportInput {
     pub title: String,
+    #[serde(default)]
+    pub labels: DesignReportLabelsInput,
     pub metadata: DesignReportMetadataInput,
     pub canvas: DesignReportCanvasInput,
     #[serde(default)]
@@ -15,6 +17,35 @@ pub struct DesignReportInput {
     pub budget: Option<DesignReportBudgetInput>,
     #[serde(default)]
     pub consortium: Option<DesignReportConsortiumInput>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DesignReportLabelsInput {
+    pub overview: String,
+    pub location: String,
+    pub altitude: String,
+    pub design: String,
+    pub visible_layers: String,
+    pub default_visible_layers: String,
+    pub no_visible_canvas_objects: String,
+    pub pinned: String,
+    pub color_by: String,
+}
+
+impl Default for DesignReportLabelsInput {
+    fn default() -> Self {
+        Self {
+            overview: "Overview".to_string(),
+            location: "Location".to_string(),
+            altitude: "altitude".to_string(),
+            design: "Design".to_string(),
+            visible_layers: "Visible layers".to_string(),
+            default_visible_layers: "default".to_string(),
+            no_visible_canvas_objects: "No visible canvas objects".to_string(),
+            pinned: "Pinned".to_string(),
+            color_by: "Color by".to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -764,7 +795,7 @@ fn render_page(input: &DesignReportInput, layout: &DesignReportPageLayout, _: us
             cursor_y,
             11.0,
             BuiltinFont::HelveticaBold,
-            "Overview",
+            &input.labels.overview,
         );
         cursor_y -= 6.0;
 
@@ -785,7 +816,7 @@ fn render_page(input: &DesignReportInput, layout: &DesignReportPageLayout, _: us
         if let Some(location) = &input.metadata.location {
             let altitude = location
                 .altitude_m
-                .map(|value| format!(", altitude {value:.1} m"))
+                .map(|value| format!(", {} {value:.1} m", input.labels.altitude))
                 .unwrap_or_default();
             text(
                 &mut ops,
@@ -794,8 +825,8 @@ fn render_page(input: &DesignReportInput, layout: &DesignReportPageLayout, _: us
                 9.0,
                 BuiltinFont::Helvetica,
                 &format!(
-                    "Location: {:.5}, {:.5}{altitude}",
-                    location.lat, location.lon
+                    "{}: {:.5}, {:.5}{altitude}",
+                    input.labels.location, location.lat, location.lon
                 ),
             );
             cursor_y -= 7.0;
@@ -808,14 +839,18 @@ fn render_page(input: &DesignReportInput, layout: &DesignReportPageLayout, _: us
         cursor_y,
         11.0,
         BuiltinFont::HelveticaBold,
-        "Design",
+        &input.labels.design,
     );
     cursor_y -= 6.0;
     let visible_layers = if input.canvas.visible_layer_names.is_empty() {
-        "Visible layers: default".to_string()
+        format!(
+            "{}: {}",
+            input.labels.visible_layers, input.labels.default_visible_layers
+        )
     } else {
         format!(
-            "Visible layers: {}",
+            "{}: {}",
+            input.labels.visible_layers,
             input.canvas.visible_layer_names.join(", ")
         )
     };
@@ -830,7 +865,7 @@ fn render_page(input: &DesignReportInput, layout: &DesignReportPageLayout, _: us
     cursor_y -= 7.0;
 
     if let Some(legend) = &input.canvas.legend {
-        cursor_y = render_canvas_legend(&mut ops, margin, cursor_y, legend) - 3.0;
+        cursor_y = render_canvas_legend(&mut ops, margin, cursor_y, legend, &input.labels) - 3.0;
     }
 
     let canvas_y = margin + 10.0;
@@ -879,7 +914,7 @@ fn render_canvas_objects(ops: &mut Vec<Op>, input: &DesignReportInput, frame: Ca
             frame.y_mm + frame.height_mm - 8.0,
             9.0,
             BuiltinFont::Helvetica,
-            "No visible canvas objects",
+            &input.labels.no_visible_canvas_objects,
         );
         return;
     };
@@ -951,7 +986,7 @@ fn render_canvas_objects(ops: &mut Vec<Op>, input: &DesignReportInput, frame: Ca
                 point.y.0 + 9.0,
                 7.2,
                 BuiltinFont::HelveticaBold,
-                &format!("Pinned: {pinned_label}"),
+                &format!("{}: {pinned_label}", input.labels.pinned),
             );
         }
     }
@@ -974,6 +1009,7 @@ fn render_canvas_legend(
     x_mm: f32,
     mut y_mm: f32,
     legend: &DesignReportCanvasLegendInput,
+    labels: &DesignReportLabelsInput,
 ) -> f32 {
     match legend {
         DesignReportCanvasLegendInput::PinnedPlantNames { title, entries } => {
@@ -1012,7 +1048,7 @@ fn render_canvas_legend(
                 y_mm,
                 7.5,
                 BuiltinFont::Helvetica,
-                &format!("Color by: {attribute}"),
+                &format!("{}: {attribute}", labels.color_by),
             );
             y_mm -= 4.5;
             for entry in entries {
@@ -1687,24 +1723,54 @@ fn draw_cross(ops: &mut Vec<Op>, point: Point, radius_mm: f32) {
 }
 
 fn wrap_text(value: &str, max_chars: usize) -> Vec<String> {
+    if max_chars == 0 {
+        return vec![value.to_string()];
+    }
+
     let mut lines = Vec::new();
     let mut current = String::new();
 
     for word in value.split_whitespace() {
-        if !current.is_empty() && current.len() + 1 + word.len() > max_chars {
-            lines.push(current);
-            current = String::new();
+        for segment in split_text_token(word, max_chars) {
+            let segment_len = segment.chars().count();
+            let current_len = current.chars().count();
+            if !current.is_empty() && current_len + 1 + segment_len > max_chars {
+                lines.push(current);
+                current = String::new();
+            }
+
+            if !current.is_empty() {
+                current.push(' ');
+            }
+            current.push_str(&segment);
+
+            if current.chars().count() >= max_chars {
+                lines.push(current);
+                current = String::new();
+            }
         }
-        if !current.is_empty() {
-            current.push(' ');
-        }
-        current.push_str(word);
     }
 
     if !current.is_empty() {
         lines.push(current);
     }
     lines
+}
+
+fn split_text_token(value: &str, max_chars: usize) -> Vec<String> {
+    let mut segments = Vec::new();
+    let mut current = String::new();
+    for character in value.chars() {
+        if current.chars().count() >= max_chars {
+            segments.push(current);
+            current = String::new();
+        }
+        current.push(character);
+    }
+    if !current.is_empty() {
+        segments.push(current);
+    }
+    segments
 }
 
 fn has_metadata_section(metadata: &DesignReportMetadataInput) -> bool {
@@ -1961,9 +2027,104 @@ mod tests {
         );
     }
 
+    #[test]
+    fn renderer_localizes_document_labels_and_keeps_dense_report_text_printable() {
+        let input = DesignReportInput {
+            title: "Rapport complet".to_string(),
+            labels: french_report_labels(),
+            metadata: DesignReportMetadataInput {
+                description: Some(
+                    "Description avec un mot treslongtreslongtreslongtreslongtreslongtreslong pour verifier le retour a la ligne."
+                        .to_string(),
+                ),
+                location: Some(DesignReportLocationInput {
+                    lat: 48.8566,
+                    lon: 2.3522,
+                    altitude_m: Some(35.0),
+                }),
+            },
+            canvas: DesignReportCanvasInput {
+                bounds: None,
+                visible_layer_names: vec![],
+                plants: vec![],
+                zones: vec![],
+                annotations: vec![],
+                measurement_guides: vec![],
+                legend: Some(DesignReportCanvasLegendInput::ColorBy {
+                    title: "Légende".to_string(),
+                    attribute: "stratum".to_string(),
+                    entries: vec![DesignReportColorByLegendEntryInput {
+                        label: "Haut".to_string(),
+                        color: "#00AA00".to_string(),
+                    }],
+                }),
+                ..report_input_without_metadata().canvas
+            },
+            timeline: Some(timeline_input_with_actions(18)),
+            budget: Some(budget_input_with_rows(20)),
+            consortium: Some(consortium_input_with_rows(24)),
+        };
+
+        let layout = build_design_report_layout(&input);
+        assert!(layout.pages.len() > 5);
+
+        let first_page = render_page(&input, &layout.pages[0], 0);
+        let first_text = page_text(&first_page).join("\n");
+        assert!(first_text.contains("Vue d’ensemble"));
+        assert!(first_text.contains("Emplacement: 48.85660, 2.35220"));
+        assert!(first_text.contains("Calques visibles: par défaut"));
+        assert!(first_text.contains("Colorier par: stratum"));
+        assert!(first_text.contains("Aucun objet visible sur le canevas"));
+        assert!(!first_text.contains("Visible layers"));
+        assert!(!first_text.contains("Color by:"));
+
+        for page_layout in &layout.pages {
+            let page = render_page(&input, page_layout, 0);
+            for positioned in page_text_positions(&page) {
+                if positioned.text.starts_with("Page ") {
+                    continue;
+                }
+                assert!(
+                    positioned.y_pt >= Mm(12.0).into_pt().0,
+                    "text below printable body: {:?}",
+                    positioned
+                );
+                assert!(
+                    positioned.y_pt <= Mm(page_layout.height_mm).into_pt().0,
+                    "text above page: {:?}",
+                    positioned
+                );
+                assert!(
+                    positioned.text.chars().count() <= 128,
+                    "text line too long to print cleanly: {:?}",
+                    positioned
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn wrap_text_splits_long_tokens_to_keep_pdf_lines_readable() {
+        let lines = wrap_text("prefix abcdefghijklmnopqrstuvwxyz suffix", 8);
+
+        assert!(lines.iter().all(|line| line.chars().count() <= 8));
+        assert_eq!(
+            lines,
+            vec![
+                "prefix".to_string(),
+                "abcdefgh".to_string(),
+                "ijklmnop".to_string(),
+                "qrstuvwx".to_string(),
+                "yz".to_string(),
+                "suffix".to_string(),
+            ]
+        );
+    }
+
     fn report_input_without_metadata() -> DesignReportInput {
         DesignReportInput {
             title: "Landscape report".to_string(),
+            labels: DesignReportLabelsInput::default(),
             metadata: DesignReportMetadataInput {
                 description: None,
                 location: None,
@@ -2007,6 +2168,20 @@ mod tests {
             timeline: None,
             budget: None,
             consortium: None,
+        }
+    }
+
+    fn french_report_labels() -> DesignReportLabelsInput {
+        DesignReportLabelsInput {
+            overview: "Vue d’ensemble".to_string(),
+            location: "Emplacement".to_string(),
+            altitude: "altitude".to_string(),
+            design: "Design".to_string(),
+            visible_layers: "Calques visibles".to_string(),
+            default_visible_layers: "par défaut".to_string(),
+            no_visible_canvas_objects: "Aucun objet visible sur le canevas".to_string(),
+            pinned: "Épinglé".to_string(),
+            color_by: "Colorier par".to_string(),
         }
     }
 
@@ -2161,5 +2336,39 @@ mod tests {
                 _ => None,
             })
             .collect()
+    }
+
+    #[derive(Debug)]
+    struct PositionedText {
+        text: String,
+        y_pt: f32,
+    }
+
+    fn page_text_positions(page: &PdfPage) -> Vec<PositionedText> {
+        let mut cursor_y_pt = 0.0;
+        let mut positions = Vec::new();
+        for op in &page.ops {
+            match op {
+                Op::SetTextCursor { pos } => {
+                    cursor_y_pt = pos.y.0;
+                }
+                Op::ShowText { items } => {
+                    let text = items
+                        .iter()
+                        .filter_map(|item| match item {
+                            TextItem::Text(value) => Some(value.as_str()),
+                            _ => None,
+                        })
+                        .collect::<Vec<_>>()
+                        .join("");
+                    positions.push(PositionedText {
+                        text,
+                        y_pt: cursor_y_pt,
+                    });
+                }
+                _ => {}
+            }
+        }
+        positions
     }
 }

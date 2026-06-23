@@ -982,6 +982,17 @@
       "startPhase": "Startfase",
       "endPhase": "Eindfase",
       "count": "Aantal"
+    },
+    "document": {
+      "overview": "Overzicht",
+      "location": "Locatie",
+      "design": "Ontwerp",
+      "visibleLayers": "Zichtbare lagen",
+      "defaultVisibleLayers": "standaard",
+      "noVisibleCanvasObjects": "Geen zichtbare canvasobjecten",
+      "pinned": "Vastgezet",
+      "colorBy": "Kleuren op",
+      "altitude": "hoogte"
     }
   }
 }

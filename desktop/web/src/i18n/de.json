@@ -982,6 +982,17 @@
       "startPhase": "Startphase",
       "endPhase": "Endphase",
       "count": "Anzahl"
+    },
+    "document": {
+      "overview": "Übersicht",
+      "location": "Standort",
+      "design": "Design",
+      "visibleLayers": "Sichtbare Ebenen",
+      "defaultVisibleLayers": "Standard",
+      "noVisibleCanvasObjects": "Keine sichtbaren Canvas-Objekte",
+      "pinned": "Fixiert",
+      "colorBy": "Färben nach",
+      "altitude": "Höhe"
     }
   }
 }

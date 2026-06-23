@@ -982,6 +982,17 @@
       "startPhase": "开始阶段",
       "endPhase": "结束阶段",
       "count": "数量"
+    },
+    "document": {
+      "overview": "概览",
+      "location": "位置",
+      "design": "设计",
+      "visibleLayers": "可见图层",
+      "defaultVisibleLayers": "默认",
+      "noVisibleCanvasObjects": "没有可见的画布对象",
+      "pinned": "已固定",
+      "colorBy": "按条件着色",
+      "altitude": "海拔"
     }
   }
 }

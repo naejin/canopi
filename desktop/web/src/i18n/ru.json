@@ -982,6 +982,17 @@
       "startPhase": "Начальная фаза",
       "endPhase": "Конечная фаза",
       "count": "Количество"
+    },
+    "document": {
+      "overview": "Обзор",
+      "location": "Местоположение",
+      "design": "Дизайн",
+      "visibleLayers": "Видимые слои",
+      "defaultVisibleLayers": "по умолчанию",
+      "noVisibleCanvasObjects": "Нет видимых объектов на холсте",
+      "pinned": "Закреплено",
+      "colorBy": "Окраска по",
+      "altitude": "высота"
     }
   }
 }

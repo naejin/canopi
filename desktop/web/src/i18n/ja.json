@@ -982,6 +982,17 @@
       "startPhase": "開始フェーズ",
       "endPhase": "終了フェーズ",
       "count": "数"
+    },
+    "document": {
+      "overview": "概要",
+      "location": "場所",
+      "design": "デザイン",
+      "visibleLayers": "表示レイヤー",
+      "defaultVisibleLayers": "既定",
+      "noVisibleCanvasObjects": "表示可能なキャンバスオブジェクトはありません",
+      "pinned": "固定",
+      "colorBy": "色分け",
+      "altitude": "標高"
     }
   }
 }

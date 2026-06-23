@@ -982,6 +982,17 @@
       "startPhase": "Phase de début",
       "endPhase": "Phase de fin",
       "count": "Nombre"
+    },
+    "document": {
+      "overview": "Vue d’ensemble",
+      "location": "Emplacement",
+      "design": "Design",
+      "visibleLayers": "Calques visibles",
+      "defaultVisibleLayers": "par défaut",
+      "noVisibleCanvasObjects": "Aucun objet visible sur le canevas",
+      "pinned": "Épinglé",
+      "colorBy": "Colorier par",
+      "altitude": "altitude"
     }
   }
 }
