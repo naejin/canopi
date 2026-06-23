@@ -1,6 +1,6 @@
 use printpdf::{
-    BuiltinFont, LineDashPattern, Mm, Op, PdfDocument, PdfFontHandle, PdfPage, PdfSaveOptions,
-    Point, Pt, Rect, TextItem, serialize_pdf_into_bytes,
+    FontId, LineDashPattern, Mm, Op, ParsedFont, PdfDocument, PdfFontHandle, PdfPage,
+    PdfSaveOptions, Point, Pt, Rect, TextItem, serialize_pdf_into_bytes,
 };
 use serde::Deserialize;
 
@@ -354,6 +354,44 @@ const BUDGET_HEADER_HEIGHT_MM: f32 = 10.0;
 const CONSORTIUM_ROW_VERTICAL_PADDING_MM: f32 = 4.0;
 const CONSORTIUM_LINE_HEIGHT_MM: f32 = 4.2;
 const CONSORTIUM_HEADER_HEIGHT_MM: f32 = 10.0;
+const REPORT_FONT_INDEX: usize = 0;
+const REPORT_REGULAR_FONT: &[u8] = include_bytes!("fonts/NotoSans-Regular.ttf");
+const REPORT_BOLD_FONT: &[u8] = include_bytes!("fonts/NotoSans-Bold.ttf");
+const REPORT_CJK_FONT: &[u8] = include_bytes!("fonts/DroidSansFallbackFull.ttf");
+const REPORT_HANGUL_FONT: &[u8] = include_bytes!("fonts/NotoSansCJK-Regular.ttc");
+
+#[derive(Debug, Clone)]
+struct ReportFonts {
+    regular: FontId,
+    bold: FontId,
+    cjk: FontId,
+    hangul: FontId,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ReportFont {
+    Regular,
+    Bold,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReportFontFace {
+    Regular,
+    Bold,
+    Cjk,
+    Hangul,
+}
+
+impl ReportFonts {
+    fn handle(&self, face: ReportFontFace) -> PdfFontHandle {
+        match face {
+            ReportFontFace::Regular => PdfFontHandle::External(self.regular.clone()),
+            ReportFontFace::Bold => PdfFontHandle::External(self.bold.clone()),
+            ReportFontFace::Cjk => PdfFontHandle::External(self.cjk.clone()),
+            ReportFontFace::Hangul => PdfFontHandle::External(self.hangul.clone()),
+        }
+    }
+}
 
 pub fn export_design_report_pdf(input: &DesignReportInput, path: String) -> Result<String, String> {
     let bytes = render_design_report_pdf(input)?;
@@ -369,11 +407,13 @@ pub fn export_design_report_pdf(input: &DesignReportInput, path: String) -> Resu
 pub(crate) fn render_design_report_pdf(input: &DesignReportInput) -> Result<Vec<u8>, String> {
     let layout = build_design_report_layout(input);
     let mut document = PdfDocument::new(&input.title);
+    set_report_metadata(&mut document);
+    let fonts = load_report_fonts(&mut document)?;
 
     for (page_index, page_layout) in layout.pages.iter().enumerate() {
         document
             .pages
-            .push(render_page(input, page_layout, page_index));
+            .push(render_page(input, page_layout, page_index, &fonts));
     }
 
     let mut warnings = Vec::new();
@@ -382,6 +422,45 @@ pub(crate) fn render_design_report_pdf(input: &DesignReportInput) -> Result<Vec<
         return Err("Design Report renderer produced an empty PDF".to_string());
     }
     Ok(bytes)
+}
+
+fn set_report_metadata(document: &mut PdfDocument) {
+    let now = printpdf::OffsetDateTime::now_utc();
+    document.metadata.info.creation_date = now;
+    document.metadata.info.modification_date = now;
+    document.metadata.info.metadata_date = now;
+    document.metadata.info.creator = "Canopi".to_string();
+    document.metadata.info.producer = "Canopi Design Report".to_string();
+}
+
+fn load_report_fonts(document: &mut PdfDocument) -> Result<ReportFonts, String> {
+    let regular = load_report_font(document, REPORT_REGULAR_FONT, "Noto Sans Regular")?;
+    let bold = load_report_font(document, REPORT_BOLD_FONT, "Noto Sans Bold")?;
+    let cjk = load_report_font(document, REPORT_CJK_FONT, "Droid Sans Fallback")?;
+    let hangul = load_report_font(document, REPORT_HANGUL_FONT, "Noto Sans CJK Hangul")?;
+    Ok(ReportFonts {
+        regular,
+        bold,
+        cjk,
+        hangul,
+    })
+}
+
+fn load_report_font(
+    document: &mut PdfDocument,
+    bytes: &[u8],
+    label: &'static str,
+) -> Result<FontId, String> {
+    let mut warnings = Vec::new();
+    let font = ParsedFont::from_bytes(bytes, REPORT_FONT_INDEX, &mut warnings)
+        .ok_or_else(|| format!("Failed to parse bundled Design Report font: {label}"))?;
+    if !warnings.is_empty() {
+        tracing::debug!(
+            ?warnings,
+            "Parsed bundled Design Report font with non-fatal warnings"
+        );
+    }
+    Ok(document.add_font(&font))
 }
 
 pub(crate) fn build_design_report_layout(input: &DesignReportInput) -> DesignReportLayout {
@@ -681,7 +760,12 @@ fn estimate_consortium_row_height(row: &DesignReportConsortiumRowInput) -> f32 {
     CONSORTIUM_ROW_VERTICAL_PADDING_MM + wrapped_lines as f32 * CONSORTIUM_LINE_HEIGHT_MM + 8.0
 }
 
-fn render_page(input: &DesignReportInput, layout: &DesignReportPageLayout, _: usize) -> PdfPage {
+fn render_page(
+    input: &DesignReportInput,
+    layout: &DesignReportPageLayout,
+    _: usize,
+    fonts: &ReportFonts,
+) -> PdfPage {
     let mut ops = Vec::new();
     let page_width = layout.width_mm;
     let page_height = layout.height_mm;
@@ -696,10 +780,11 @@ fn render_page(input: &DesignReportInput, layout: &DesignReportPageLayout, _: us
 
     text(
         &mut ops,
+        fonts,
         margin,
         cursor_y,
         18.0,
-        BuiltinFont::HelveticaBold,
+        ReportFont::Bold,
         &input.title,
     );
     cursor_y -= 10.0;
@@ -713,20 +798,24 @@ fn render_page(input: &DesignReportInput, layout: &DesignReportPageLayout, _: us
         if let Some(timeline) = input.timeline.as_ref() {
             render_timeline_section(
                 &mut ops,
+                fonts,
                 timeline,
-                *start_index,
-                *end_index,
-                *include_overview,
+                TimelinePageChunk {
+                    start_index: *start_index,
+                    end_index: *end_index,
+                    include_overview: *include_overview,
+                },
                 margin,
                 cursor_y,
             );
         }
         text(
             &mut ops,
+            fonts,
             margin,
             PAGE_NUMBER_Y_MM,
             8.0,
-            BuiltinFont::Helvetica,
+            ReportFont::Regular,
             &layout.page_number_label,
         );
         return PdfPage::new(Mm(layout.width_mm), Mm(layout.height_mm), ops);
@@ -741,20 +830,24 @@ fn render_page(input: &DesignReportInput, layout: &DesignReportPageLayout, _: us
         if let Some(budget) = input.budget.as_ref() {
             render_budget_section(
                 &mut ops,
+                fonts,
                 budget,
-                *start_index,
-                *end_index,
-                *include_totals,
+                BudgetPageChunk {
+                    start_index: *start_index,
+                    end_index: *end_index,
+                    include_totals: *include_totals,
+                },
                 margin,
                 cursor_y,
             );
         }
         text(
             &mut ops,
+            fonts,
             margin,
             PAGE_NUMBER_Y_MM,
             8.0,
-            BuiltinFont::Helvetica,
+            ReportFont::Regular,
             &layout.page_number_label,
         );
         return PdfPage::new(Mm(layout.width_mm), Mm(layout.height_mm), ops);
@@ -769,20 +862,24 @@ fn render_page(input: &DesignReportInput, layout: &DesignReportPageLayout, _: us
         if let Some(consortium) = input.consortium.as_ref() {
             render_consortium_section(
                 &mut ops,
+                fonts,
                 consortium,
-                *start_index,
-                *end_index,
-                *include_chart,
+                ConsortiumPageChunk {
+                    start_index: *start_index,
+                    end_index: *end_index,
+                    include_chart: *include_chart,
+                },
                 margin,
                 cursor_y,
             );
         }
         text(
             &mut ops,
+            fonts,
             margin,
             PAGE_NUMBER_Y_MM,
             8.0,
-            BuiltinFont::Helvetica,
+            ReportFont::Regular,
             &layout.page_number_label,
         );
         return PdfPage::new(Mm(layout.width_mm), Mm(layout.height_mm), ops);
@@ -791,10 +888,11 @@ fn render_page(input: &DesignReportInput, layout: &DesignReportPageLayout, _: us
     if layout.sections.contains(&DesignReportSection::Metadata) {
         text(
             &mut ops,
+            fonts,
             margin,
             cursor_y,
             11.0,
-            BuiltinFont::HelveticaBold,
+            ReportFont::Bold,
             &input.labels.overview,
         );
         cursor_y -= 6.0;
@@ -803,10 +901,11 @@ fn render_page(input: &DesignReportInput, layout: &DesignReportPageLayout, _: us
             for line in wrap_text(description, 86) {
                 text(
                     &mut ops,
+                    fonts,
                     margin,
                     cursor_y,
                     9.0,
-                    BuiltinFont::Helvetica,
+                    ReportFont::Regular,
                     &line,
                 );
                 cursor_y -= 5.0;
@@ -820,10 +919,11 @@ fn render_page(input: &DesignReportInput, layout: &DesignReportPageLayout, _: us
                 .unwrap_or_default();
             text(
                 &mut ops,
+                fonts,
                 margin,
                 cursor_y,
                 9.0,
-                BuiltinFont::Helvetica,
+                ReportFont::Regular,
                 &format!(
                     "{}: {:.5}, {:.5}{altitude}",
                     input.labels.location, location.lat, location.lon
@@ -835,10 +935,11 @@ fn render_page(input: &DesignReportInput, layout: &DesignReportPageLayout, _: us
 
     text(
         &mut ops,
+        fonts,
         margin,
         cursor_y,
         11.0,
-        BuiltinFont::HelveticaBold,
+        ReportFont::Bold,
         &input.labels.design,
     );
     cursor_y -= 6.0;
@@ -856,16 +957,18 @@ fn render_page(input: &DesignReportInput, layout: &DesignReportPageLayout, _: us
     };
     text(
         &mut ops,
+        fonts,
         margin,
         cursor_y,
         8.0,
-        BuiltinFont::Helvetica,
+        ReportFont::Regular,
         &visible_layers,
     );
     cursor_y -= 7.0;
 
     if let Some(legend) = &input.canvas.legend {
-        cursor_y = render_canvas_legend(&mut ops, margin, cursor_y, legend, &input.labels) - 3.0;
+        cursor_y =
+            render_canvas_legend(&mut ops, fonts, margin, cursor_y, legend, &input.labels) - 3.0;
     }
 
     let canvas_y = margin + 10.0;
@@ -885,13 +988,14 @@ fn render_page(input: &DesignReportInput, layout: &DesignReportPageLayout, _: us
         frame.width_mm,
         frame.height_mm,
     );
-    render_canvas_objects(&mut ops, input, frame);
+    render_canvas_objects(&mut ops, fonts, input, frame);
     text(
         &mut ops,
+        fonts,
         margin,
         PAGE_NUMBER_Y_MM,
         8.0,
-        BuiltinFont::Helvetica,
+        ReportFont::Regular,
         &layout.page_number_label,
     );
 
@@ -906,14 +1010,20 @@ struct CanvasFrame {
     height_mm: f32,
 }
 
-fn render_canvas_objects(ops: &mut Vec<Op>, input: &DesignReportInput, frame: CanvasFrame) {
+fn render_canvas_objects(
+    ops: &mut Vec<Op>,
+    fonts: &ReportFonts,
+    input: &DesignReportInput,
+    frame: CanvasFrame,
+) {
     let Some(bounds) = input.canvas.bounds else {
         text(
             ops,
+            fonts,
             frame.x_mm + 5.0,
             frame.y_mm + frame.height_mm - 8.0,
             9.0,
-            BuiltinFont::Helvetica,
+            ReportFont::Regular,
             &input.labels.no_visible_canvas_objects,
         );
         return;
@@ -937,10 +1047,11 @@ fn render_canvas_objects(ops: &mut Vec<Op>, input: &DesignReportInput, frame: Ca
                     .unwrap_or_default();
                 text_at_point(
                     ops,
+                    fonts,
                     first.x.0,
                     first.y.0 + 5.0,
                     7.0,
-                    BuiltinFont::Helvetica,
+                    ReportFont::Regular,
                     &format!("{} ({}){fill}", zone.name, zone.zone_type),
                 );
             }
@@ -948,7 +1059,7 @@ fn render_canvas_objects(ops: &mut Vec<Op>, input: &DesignReportInput, frame: Ca
     }
 
     for guide in &input.canvas.measurement_guides {
-        render_measurement_guide(ops, guide, transform);
+        render_measurement_guide(ops, fonts, guide, transform);
     }
 
     for plant in &input.canvas.plants {
@@ -973,19 +1084,21 @@ fn render_canvas_objects(ops: &mut Vec<Op>, input: &DesignReportInput, frame: Ca
         label.push_str(&format!(" #{id}", id = plant.id));
         text_at_point(
             ops,
+            fonts,
             point.x.0 + 3.2,
             point.y.0 + 1.8,
             7.0,
-            BuiltinFont::Helvetica,
+            ReportFont::Regular,
             &label,
         );
         if let Some(pinned_label) = plant.pinned_name_label.as_deref() {
             text_at_point(
                 ops,
+                fonts,
                 point.x.0 + 3.2,
                 point.y.0 + 9.0,
                 7.2,
-                BuiltinFont::HelveticaBold,
+                ReportFont::Bold,
                 &format!("{}: {pinned_label}", input.labels.pinned),
             );
         }
@@ -995,10 +1108,11 @@ fn render_canvas_objects(ops: &mut Vec<Op>, input: &DesignReportInput, frame: Ca
         let point = transform.point(annotation.x, annotation.y);
         text_at_point(
             ops,
+            fonts,
             point.x.0,
             point.y.0,
             8.0,
-            BuiltinFont::Helvetica,
+            ReportFont::Regular,
             &format!("{} #{id}", annotation.text, id = annotation.id),
         );
     }
@@ -1006,6 +1120,7 @@ fn render_canvas_objects(ops: &mut Vec<Op>, input: &DesignReportInput, frame: Ca
 
 fn render_canvas_legend(
     ops: &mut Vec<Op>,
+    fonts: &ReportFonts,
     x_mm: f32,
     mut y_mm: f32,
     legend: &DesignReportCanvasLegendInput,
@@ -1013,7 +1128,7 @@ fn render_canvas_legend(
 ) -> f32 {
     match legend {
         DesignReportCanvasLegendInput::PinnedPlantNames { title, entries } => {
-            text(ops, x_mm, y_mm, 9.0, BuiltinFont::HelveticaBold, title);
+            text(ops, fonts, x_mm, y_mm, 9.0, ReportFont::Bold, title);
             y_mm -= 5.0;
             for entry in entries {
                 let count = if entry.count > 1 {
@@ -1023,10 +1138,11 @@ fn render_canvas_legend(
                 };
                 text(
                     ops,
+                    fonts,
                     x_mm,
                     y_mm,
                     7.5,
-                    BuiltinFont::Helvetica,
+                    ReportFont::Regular,
                     &format!(
                         "[{}] {} {}{}",
                         entry.symbol, entry.label, entry.color, count
@@ -1040,24 +1156,26 @@ fn render_canvas_legend(
             attribute,
             entries,
         } => {
-            text(ops, x_mm, y_mm, 9.0, BuiltinFont::HelveticaBold, title);
+            text(ops, fonts, x_mm, y_mm, 9.0, ReportFont::Bold, title);
             y_mm -= 5.0;
             text(
                 ops,
+                fonts,
                 x_mm,
                 y_mm,
                 7.5,
-                BuiltinFont::Helvetica,
+                ReportFont::Regular,
                 &format!("{}: {attribute}", labels.color_by),
             );
             y_mm -= 4.5;
             for entry in entries {
                 text(
                     ops,
+                    fonts,
                     x_mm,
                     y_mm,
                     7.5,
-                    BuiltinFont::Helvetica,
+                    ReportFont::Regular,
                     &format!("{} {}", entry.color, entry.label),
                 );
                 y_mm -= 4.5;
@@ -1069,6 +1187,7 @@ fn render_canvas_legend(
 
 fn render_measurement_guide(
     ops: &mut Vec<Op>,
+    fonts: &ReportFonts,
     guide: &DesignReportMeasurementGuideInput,
     transform: CanvasTransform,
 ) {
@@ -1101,50 +1220,53 @@ fn render_measurement_guide(
     };
     text_at_point(
         ops,
+        fonts,
         (start.x.0 + end.x.0) / 2.0 + normal_x * label_offset,
         (start.y.0 + end.y.0) / 2.0 + normal_y * label_offset,
         7.0,
-        BuiltinFont::HelveticaBold,
+        ReportFont::Bold,
         label,
     );
 }
 
 fn render_timeline_section(
     ops: &mut Vec<Op>,
+    fonts: &ReportFonts,
     timeline: &DesignReportTimelineInput,
-    start_index: usize,
-    end_index: usize,
-    include_overview: bool,
+    chunk: TimelinePageChunk,
     margin: f32,
     mut cursor_y: f32,
 ) -> f32 {
     text(
         ops,
+        fonts,
         margin,
         cursor_y,
         12.0,
-        BuiltinFont::HelveticaBold,
+        ReportFont::Bold,
         &timeline.title,
     );
     cursor_y -= 8.0;
 
-    if include_overview {
+    if chunk.include_overview {
         text(
             ops,
+            fonts,
             margin,
             cursor_y,
             9.0,
-            BuiltinFont::HelveticaBold,
+            ReportFont::Bold,
             &timeline.overview_title,
         );
         cursor_y -= 5.0;
         for row in &timeline.overview_rows {
             text(
                 ops,
+                fonts,
                 margin,
                 cursor_y,
                 7.5,
-                BuiltinFont::Helvetica,
+                ReportFont::Regular,
                 &format!(
                     "{} ({}) - {} [{} {}]",
                     row.label, row.count, row.date_range, row.action_type, row.color
@@ -1157,17 +1279,19 @@ fn render_timeline_section(
 
     text(
         ops,
+        fonts,
         margin,
         cursor_y,
         9.0,
-        BuiltinFont::HelveticaBold,
+        ReportFont::Bold,
         &timeline.table_title,
     );
     cursor_y -= 5.0;
-    cursor_y = render_timeline_table_header(ops, &timeline.columns, margin, cursor_y);
+    cursor_y = render_timeline_table_header(ops, fonts, &timeline.columns, margin, cursor_y);
 
-    for action in &timeline.actions[start_index..end_index] {
-        cursor_y = render_timeline_action_row(ops, &timeline.columns, action, margin, cursor_y);
+    for action in &timeline.actions[chunk.start_index..chunk.end_index] {
+        cursor_y =
+            render_timeline_action_row(ops, fonts, &timeline.columns, action, margin, cursor_y);
     }
 
     cursor_y
@@ -1175,16 +1299,18 @@ fn render_timeline_section(
 
 fn render_timeline_table_header(
     ops: &mut Vec<Op>,
+    fonts: &ReportFonts,
     columns: &DesignReportTimelineColumnsInput,
     margin: f32,
     mut cursor_y: f32,
 ) -> f32 {
     text(
         ops,
+        fonts,
         margin,
         cursor_y,
         7.5,
-        BuiltinFont::HelveticaBold,
+        ReportFont::Bold,
         &format!(
             "{} | {} | {} | {} | {}",
             columns.action_type,
@@ -1197,10 +1323,11 @@ fn render_timeline_table_header(
     cursor_y -= 4.6;
     text(
         ops,
+        fonts,
         margin,
         cursor_y,
         7.5,
-        BuiltinFont::HelveticaBold,
+        ReportFont::Bold,
         &format!(
             "{} | {} | {}",
             columns.description, columns.recurrence, columns.dependencies
@@ -1211,6 +1338,7 @@ fn render_timeline_table_header(
 
 fn render_timeline_action_row(
     ops: &mut Vec<Op>,
+    fonts: &ReportFonts,
     columns: &DesignReportTimelineColumnsInput,
     action: &DesignReportTimelineActionInput,
     margin: f32,
@@ -1218,10 +1346,11 @@ fn render_timeline_action_row(
 ) -> f32 {
     text(
         ops,
+        fonts,
         margin,
         cursor_y,
         7.2,
-        BuiltinFont::Helvetica,
+        ReportFont::Regular,
         &format!(
             "{} ({}) | {} | {} | {} | {}",
             action.action_type_label,
@@ -1240,10 +1369,11 @@ fn render_timeline_action_row(
     ) {
         text(
             ops,
+            fonts,
             margin + 3.0,
             cursor_y,
             7.0,
-            BuiltinFont::Helvetica,
+            ReportFont::Regular,
             &line,
         );
         cursor_y -= TIMELINE_LINE_HEIGHT_MM;
@@ -1258,10 +1388,11 @@ fn render_timeline_action_row(
     ) {
         text(
             ops,
+            fonts,
             margin + 3.0,
             cursor_y,
             7.0,
-            BuiltinFont::Helvetica,
+            ReportFont::Regular,
             &line,
         );
         cursor_y -= TIMELINE_LINE_HEIGHT_MM;
@@ -1272,37 +1403,38 @@ fn render_timeline_action_row(
 
 fn render_budget_section(
     ops: &mut Vec<Op>,
+    fonts: &ReportFonts,
     budget: &DesignReportBudgetInput,
-    start_index: usize,
-    end_index: usize,
-    include_totals: bool,
+    chunk: BudgetPageChunk,
     margin: f32,
     mut cursor_y: f32,
 ) -> f32 {
     text(
         ops,
+        fonts,
         margin,
         cursor_y,
         12.0,
-        BuiltinFont::HelveticaBold,
+        ReportFont::Bold,
         &budget.title,
     );
     cursor_y -= 8.0;
-    cursor_y = render_budget_table_header(ops, &budget.columns, margin, cursor_y);
+    cursor_y = render_budget_table_header(ops, fonts, &budget.columns, margin, cursor_y);
 
-    for row in &budget.rows[start_index..end_index] {
-        cursor_y = render_budget_row(ops, &budget.columns, row, margin, cursor_y);
+    for row in &budget.rows[chunk.start_index..chunk.end_index] {
+        cursor_y = render_budget_row(ops, fonts, &budget.columns, row, margin, cursor_y);
     }
 
-    if include_totals {
+    if chunk.include_totals {
         cursor_y -= 2.0;
         for total in &budget.totals {
             text(
                 ops,
+                fonts,
                 margin,
                 cursor_y,
                 8.0,
-                BuiltinFont::HelveticaBold,
+                ReportFont::Bold,
                 &format!("{} ({}): {}", total.label, total.currency, total.amount),
             );
             cursor_y -= 4.8;
@@ -1314,16 +1446,18 @@ fn render_budget_section(
 
 fn render_budget_table_header(
     ops: &mut Vec<Op>,
+    fonts: &ReportFonts,
     columns: &DesignReportBudgetColumnsInput,
     margin: f32,
     mut cursor_y: f32,
 ) -> f32 {
     text(
         ops,
+        fonts,
         margin,
         cursor_y,
         7.5,
-        BuiltinFont::HelveticaBold,
+        ReportFont::Bold,
         &format!(
             "{} | {} | {} | {}",
             columns.target, columns.category, columns.quantity, columns.currency
@@ -1332,10 +1466,11 @@ fn render_budget_table_header(
     cursor_y -= 4.6;
     text(
         ops,
+        fonts,
         margin,
         cursor_y,
         7.5,
-        BuiltinFont::HelveticaBold,
+        ReportFont::Bold,
         &format!(
             "{} | {} | {}",
             columns.description, columns.unit_cost, columns.line_total
@@ -1346,6 +1481,7 @@ fn render_budget_table_header(
 
 fn render_budget_row(
     ops: &mut Vec<Op>,
+    fonts: &ReportFonts,
     columns: &DesignReportBudgetColumnsInput,
     row: &DesignReportBudgetRowInput,
     margin: f32,
@@ -1353,10 +1489,11 @@ fn render_budget_row(
 ) -> f32 {
     text(
         ops,
+        fonts,
         margin,
         cursor_y,
         7.2,
-        BuiltinFont::Helvetica,
+        ReportFont::Regular,
         &format!(
             "{} | {} | {} | {} | {} | {}",
             row.target, row.category, row.quantity, row.unit_cost, row.line_total, row.currency
@@ -1367,10 +1504,11 @@ fn render_budget_row(
     for line in wrap_text(&format!("{}: {}", columns.description, row.description), 95) {
         text(
             ops,
+            fonts,
             margin + 3.0,
             cursor_y,
             7.0,
-            BuiltinFont::Helvetica,
+            ReportFont::Regular,
             &line,
         );
         cursor_y -= BUDGET_LINE_HEIGHT_MM;
@@ -1381,41 +1519,42 @@ fn render_budget_row(
 
 fn render_consortium_section(
     ops: &mut Vec<Op>,
+    fonts: &ReportFonts,
     consortium: &DesignReportConsortiumInput,
-    start_index: usize,
-    end_index: usize,
-    include_chart: bool,
+    chunk: ConsortiumPageChunk,
     margin: f32,
     mut cursor_y: f32,
 ) -> f32 {
     text(
         ops,
+        fonts,
         margin,
         cursor_y,
         12.0,
-        BuiltinFont::HelveticaBold,
+        ReportFont::Bold,
         &consortium.title,
     );
     cursor_y -= 8.0;
 
-    if include_chart {
-        cursor_y = render_consortium_chart(ops, consortium, margin, cursor_y);
+    if chunk.include_chart {
+        cursor_y = render_consortium_chart(ops, fonts, consortium, margin, cursor_y);
         cursor_y -= 3.0;
     }
 
     text(
         ops,
+        fonts,
         margin,
         cursor_y,
         9.0,
-        BuiltinFont::HelveticaBold,
+        ReportFont::Bold,
         &consortium.table_title,
     );
     cursor_y -= 5.0;
-    cursor_y = render_consortium_table_header(ops, &consortium.columns, margin, cursor_y);
+    cursor_y = render_consortium_table_header(ops, fonts, &consortium.columns, margin, cursor_y);
 
-    for row in &consortium.rows[start_index..end_index] {
-        cursor_y = render_consortium_row(ops, &consortium.columns, row, margin, cursor_y);
+    for row in &consortium.rows[chunk.start_index..chunk.end_index] {
+        cursor_y = render_consortium_row(ops, fonts, &consortium.columns, row, margin, cursor_y);
     }
 
     cursor_y
@@ -1423,6 +1562,7 @@ fn render_consortium_section(
 
 fn render_consortium_chart(
     ops: &mut Vec<Op>,
+    fonts: &ReportFonts,
     consortium: &DesignReportConsortiumInput,
     margin: f32,
     mut cursor_y: f32,
@@ -1433,10 +1573,11 @@ fn render_consortium_chart(
 
     text(
         ops,
+        fonts,
         margin,
         cursor_y,
         9.0,
-        BuiltinFont::HelveticaBold,
+        ReportFont::Bold,
         &consortium.chart_title,
     );
     cursor_y -= 5.0;
@@ -1449,14 +1590,7 @@ fn render_consortium_chart(
         ),
         112,
     ) {
-        text(
-            ops,
-            margin,
-            cursor_y,
-            6.8,
-            BuiltinFont::HelveticaBold,
-            &line,
-        );
+        text(ops, fonts, margin, cursor_y, 6.8, ReportFont::Bold, &line);
         cursor_y -= 4.0;
     }
 
@@ -1477,7 +1611,15 @@ fn render_consortium_chart(
             })
             .collect::<Vec<_>>();
         for line in wrap_text(&format!("{} | {}", row.stratum, cells.join(" | ")), 112) {
-            text(ops, margin, cursor_y, 6.6, BuiltinFont::Helvetica, &line);
+            text(
+                ops,
+                fonts,
+                margin,
+                cursor_y,
+                6.6,
+                ReportFont::Regular,
+                &line,
+            );
             cursor_y -= CONSORTIUM_LINE_HEIGHT_MM;
         }
         cursor_y -= 1.5;
@@ -1488,16 +1630,18 @@ fn render_consortium_chart(
 
 fn render_consortium_table_header(
     ops: &mut Vec<Op>,
+    fonts: &ReportFonts,
     columns: &DesignReportConsortiumColumnsInput,
     margin: f32,
     mut cursor_y: f32,
 ) -> f32 {
     text(
         ops,
+        fonts,
         margin,
         cursor_y,
         7.5,
-        BuiltinFont::HelveticaBold,
+        ReportFont::Bold,
         &format!(
             "{} | {} | {} | {}",
             columns.plant, columns.canonical_name, columns.stratum, columns.count
@@ -1506,10 +1650,11 @@ fn render_consortium_table_header(
     cursor_y -= 4.6;
     text(
         ops,
+        fonts,
         margin,
         cursor_y,
         7.5,
-        BuiltinFont::HelveticaBold,
+        ReportFont::Bold,
         &format!("{} | {}", columns.start_phase, columns.end_phase),
     );
     cursor_y - 5.5
@@ -1517,6 +1662,7 @@ fn render_consortium_table_header(
 
 fn render_consortium_row(
     ops: &mut Vec<Op>,
+    fonts: &ReportFonts,
     columns: &DesignReportConsortiumColumnsInput,
     row: &DesignReportConsortiumRowInput,
     margin: f32,
@@ -1530,7 +1676,15 @@ fn render_consortium_row(
         ),
         112,
     ) {
-        text(ops, margin, cursor_y, 7.2, BuiltinFont::Helvetica, &line);
+        text(
+            ops,
+            fonts,
+            margin,
+            cursor_y,
+            7.2,
+            ReportFont::Regular,
+            &line,
+        );
         cursor_y -= CONSORTIUM_LINE_HEIGHT_MM;
     }
 
@@ -1543,10 +1697,11 @@ fn render_consortium_row(
     ) {
         text(
             ops,
+            fonts,
             margin + 3.0,
             cursor_y,
             7.0,
-            BuiltinFont::Helvetica,
+            ReportFont::Regular,
             &line,
         );
         cursor_y -= CONSORTIUM_LINE_HEIGHT_MM;
@@ -1593,9 +1748,18 @@ impl CanvasTransform {
     }
 }
 
-fn text(ops: &mut Vec<Op>, x_mm: f32, y_mm: f32, size_pt: f32, font: BuiltinFont, value: &str) {
+fn text(
+    ops: &mut Vec<Op>,
+    fonts: &ReportFonts,
+    x_mm: f32,
+    y_mm: f32,
+    size_pt: f32,
+    font: ReportFont,
+    value: &str,
+) {
     text_at_point(
         ops,
+        fonts,
         Mm(x_mm).into_pt().0,
         Mm(y_mm).into_pt().0,
         size_pt,
@@ -1606,27 +1770,120 @@ fn text(ops: &mut Vec<Op>, x_mm: f32, y_mm: f32, size_pt: f32, font: BuiltinFont
 
 fn text_at_point(
     ops: &mut Vec<Op>,
+    fonts: &ReportFonts,
     x_pt: f32,
     y_pt: f32,
     size_pt: f32,
-    font: BuiltinFont,
+    font: ReportFont,
     value: &str,
 ) {
-    ops.push(Op::StartTextSection);
-    ops.push(Op::SetFont {
-        font: PdfFontHandle::Builtin(font),
-        size: Pt(size_pt),
-    });
-    ops.push(Op::SetTextCursor {
-        pos: Point {
-            x: Pt(x_pt),
-            y: Pt(y_pt),
-        },
-    });
-    ops.push(Op::ShowText {
-        items: vec![TextItem::Text(value.to_string())],
-    });
-    ops.push(Op::EndTextSection);
+    let mut cursor_x_pt = x_pt;
+    for run in report_text_runs(value, font) {
+        ops.push(Op::StartTextSection);
+        ops.push(Op::SetFont {
+            font: fonts.handle(run.face),
+            size: Pt(size_pt),
+        });
+        ops.push(Op::SetTextCursor {
+            pos: Point {
+                x: Pt(cursor_x_pt),
+                y: Pt(y_pt),
+            },
+        });
+        ops.push(Op::ShowText {
+            items: vec![TextItem::Text(run.text.clone())],
+        });
+        ops.push(Op::EndTextSection);
+        cursor_x_pt += estimate_text_width_pt(&run.text, size_pt);
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ReportTextRun {
+    face: ReportFontFace,
+    text: String,
+}
+
+fn report_text_runs(value: &str, font: ReportFont) -> Vec<ReportTextRun> {
+    let mut runs = Vec::new();
+    let mut current_face = None;
+    let mut current_text = String::new();
+
+    for character in value.chars() {
+        let face = if character.is_whitespace() {
+            current_face.unwrap_or_else(|| report_font_face(font))
+        } else if is_hangul_report_character(character) {
+            ReportFontFace::Hangul
+        } else if is_cjk_report_character(character) {
+            ReportFontFace::Cjk
+        } else {
+            report_font_face(font)
+        };
+
+        if current_face.is_some_and(|active| active != face) {
+            runs.push(ReportTextRun {
+                face: current_face.expect("face is set when flushing report text run"),
+                text: std::mem::take(&mut current_text),
+            });
+        }
+        current_face = Some(face);
+        current_text.push(character);
+    }
+
+    if let Some(face) = current_face {
+        runs.push(ReportTextRun {
+            face,
+            text: current_text,
+        });
+    }
+
+    runs
+}
+
+fn report_font_face(font: ReportFont) -> ReportFontFace {
+    match font {
+        ReportFont::Regular => ReportFontFace::Regular,
+        ReportFont::Bold => ReportFontFace::Bold,
+    }
+}
+
+fn is_hangul_report_character(character: char) -> bool {
+    matches!(
+        character as u32,
+        0x1100..=0x11FF | 0x3130..=0x318F | 0xA960..=0xA97F | 0xAC00..=0xD7AF
+    )
+}
+
+fn is_cjk_report_character(character: char) -> bool {
+    matches!(
+        character as u32,
+        0x2E80..=0x2FFF
+            | 0x3000..=0x303F
+            | 0x3040..=0x30FF
+            | 0x3100..=0x312F
+            | 0x31A0..=0x31BF
+            | 0x31F0..=0x31FF
+            | 0x3400..=0x4DBF
+            | 0x4E00..=0x9FFF
+            | 0xF900..=0xFAFF
+            | 0xFF00..=0xFFEF
+            | 0x20000..=0x2FA1F
+    )
+}
+
+fn estimate_text_width_pt(value: &str, size_pt: f32) -> f32 {
+    value
+        .chars()
+        .map(|character| {
+            if is_hangul_report_character(character) || is_cjk_report_character(character) {
+                size_pt
+            } else if character.is_whitespace() {
+                size_pt * 0.3
+            } else {
+                size_pt * 0.55
+            }
+        })
+        .sum()
 }
 
 fn draw_rect(ops: &mut Vec<Op>, x_mm: f32, y_mm: f32, width_mm: f32, height_mm: f32) {
@@ -1789,6 +2046,7 @@ fn write_bytes_to_path(path: &str, bytes: &[u8]) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use printpdf::PdfParseOptions;
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -1869,7 +2127,69 @@ mod tests {
         let bytes = std::fs::read(&written_path).unwrap();
         assert!(bytes.starts_with(b"%PDF-"));
         assert!(bytes.len() > 500);
+        assert!(
+            bytes.len() < 1_500_000,
+            "small reports should subset bundled fonts instead of embedding every font in full"
+        );
         assert_eq!(Path::new(&written_path), output_path.as_path());
+    }
+
+    #[test]
+    fn renderer_serializes_supported_language_text_as_readable_unicode() {
+        let supported_language_text = [
+            "English report",
+            "Planche Pérenne",
+            "Diseño con olivo",
+            "Entwurf mit Äpfeln",
+            "Progettazione €",
+            "Ontwerp met bessen",
+            "Relatório com maçã",
+            "Экспорт отчета",
+            "デザインレポート",
+            "디자인 보고서",
+            "设计报告",
+        ]
+        .join(" | ");
+        let input = DesignReportInput {
+            title: supported_language_text.clone(),
+            metadata: DesignReportMetadataInput {
+                description: Some(supported_language_text.clone()),
+                location: None,
+            },
+            ..report_input_without_metadata()
+        };
+
+        let bytes = render_design_report_pdf(&input).unwrap();
+        let parsed = printpdf::PdfDocument::parse(
+            &bytes,
+            &PdfParseOptions {
+                fail_on_error: false,
+            },
+            &mut Vec::new(),
+        )
+        .unwrap();
+        let extracted = parsed
+            .extract_text()
+            .into_iter()
+            .flatten()
+            .collect::<String>();
+
+        for sample in supported_language_text.split(" | ") {
+            assert!(
+                extracted.contains(sample),
+                "expected extracted PDF text to contain {sample:?}, got {extracted:?}",
+            );
+        }
+        assert_ne!(
+            parsed.metadata.info.creation_date.unix_timestamp(),
+            0,
+            "PDF creation date should not use the printpdf epoch placeholder",
+        );
+        assert_ne!(
+            parsed.metadata.info.modification_date.unix_timestamp(),
+            0,
+            "PDF modification date should not use the printpdf epoch placeholder",
+        );
     }
 
     #[test]
@@ -1928,7 +2248,7 @@ mod tests {
         };
         let layout = build_design_report_layout(&input);
 
-        let page = render_page(&input, &layout.pages[0], 0);
+        let page = render_test_page(&input, &layout.pages[0], 0);
         let text = page_text(&page).join("\n");
 
         assert!(text.contains("Pinned: Pommier"));
@@ -1948,7 +2268,7 @@ mod tests {
 
         assert!(layout.pages.len() > 2);
 
-        let first_timeline_page = render_page(&input, &layout.pages[1], 1);
+        let first_timeline_page = render_test_page(&input, &layout.pages[1], 1);
         let first_text = page_text(&first_timeline_page).join("\n");
         assert!(first_text.contains("Timeline"));
         assert!(first_text.contains("Overview"));
@@ -1956,7 +2276,7 @@ mod tests {
         assert!(first_text.contains("Action 1"));
         assert!(first_text.contains("Long wrapped description"));
 
-        let second_timeline_page = render_page(&input, &layout.pages[2], 2);
+        let second_timeline_page = render_test_page(&input, &layout.pages[2], 2);
         let second_text = page_text(&second_timeline_page).join("\n");
         assert!(second_text.contains("Action type"));
         assert!(second_text.contains("Action 13"));
@@ -1974,13 +2294,13 @@ mod tests {
 
         assert!(layout.pages.len() > 2);
 
-        let first_budget_page = render_page(&input, &layout.pages[1], 1);
+        let first_budget_page = render_test_page(&input, &layout.pages[1], 1);
         let first_text = page_text(&first_budget_page).join("\n");
         assert!(first_text.contains("Budget"));
         assert!(first_text.contains("Target | Category"));
         assert!(first_text.contains("Bare-root tree 1"));
 
-        let second_budget_page = render_page(&input, &layout.pages[2], 2);
+        let second_budget_page = render_test_page(&input, &layout.pages[2], 2);
         let second_text = page_text(&second_budget_page).join("\n");
         assert!(second_text.contains("Target | Category"));
         assert!(second_text.contains("Bare-root tree 14"));
@@ -1999,7 +2319,7 @@ mod tests {
 
         assert!(layout.pages.len() > 2);
 
-        let first_consortium_page = render_page(&input, &layout.pages[1], 1);
+        let first_consortium_page = render_test_page(&input, &layout.pages[1], 1);
         let first_text = page_text(&first_consortium_page).join("\n");
         assert!(first_text.contains("Consortium"));
         assert!(first_text.contains("Succession chart"));
@@ -2011,7 +2331,7 @@ mod tests {
 
         let rendered_pages = layout.pages[1..]
             .iter()
-            .map(|page_layout| page_text(&render_page(&input, page_layout, 0)).join("\n"))
+            .map(|page_layout| page_text(&render_test_page(&input, page_layout, 0)).join("\n"))
             .collect::<Vec<_>>();
         assert!(
             rendered_pages
@@ -2068,7 +2388,7 @@ mod tests {
         let layout = build_design_report_layout(&input);
         assert!(layout.pages.len() > 5);
 
-        let first_page = render_page(&input, &layout.pages[0], 0);
+        let first_page = render_test_page(&input, &layout.pages[0], 0);
         let first_text = page_text(&first_page).join("\n");
         assert!(first_text.contains("Vue d’ensemble"));
         assert!(first_text.contains("Emplacement: 48.85660, 2.35220"));
@@ -2079,7 +2399,7 @@ mod tests {
         assert!(!first_text.contains("Color by:"));
 
         for page_layout in &layout.pages {
-            let page = render_page(&input, page_layout, 0);
+            let page = render_test_page(&input, page_layout, 0);
             for positioned in page_text_positions(&page) {
                 if positioned.text.starts_with("Page ") {
                     continue;
@@ -2316,6 +2636,23 @@ mod tests {
                     count: index.to_string(),
                 })
                 .collect(),
+        }
+    }
+
+    fn render_test_page(
+        input: &DesignReportInput,
+        layout: &DesignReportPageLayout,
+        page_index: usize,
+    ) -> PdfPage {
+        render_page(input, layout, page_index, &test_report_fonts())
+    }
+
+    fn test_report_fonts() -> ReportFonts {
+        ReportFonts {
+            regular: FontId("test-regular".to_string()),
+            bold: FontId("test-bold".to_string()),
+            cjk: FontId("test-cjk".to_string()),
+            hangul: FontId("test-hangul".to_string()),
         }
     }
 
