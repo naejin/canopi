@@ -880,6 +880,68 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
+  it('refreshes the Selection Action Toolbar plant-name pin action while it stays mounted', () => {
+    Object.defineProperty(container, 'clientWidth', { configurable: true, value: 400 })
+    Object.defineProperty(container, 'clientHeight', { configurable: true, value: 300 })
+    const makeSelection = (allPinned: boolean): CanvasDesignObjectSelectionModel => ({
+      editableTargets: [{ kind: 'plant', id: 'plant-1' }],
+      lockedTargets: [],
+      blockedTargets: [],
+      bounds: { minX: 160, minY: 100, maxX: 220, maxY: 150 },
+      sameSpeciesReferenceCanonicalName: null,
+      plantNamePinning: {
+        plantIds: ['plant-1'],
+        allPinned,
+      },
+    })
+    let selection = makeSelection(false)
+    const toggleSelectedPlantNamePins = vi.fn(() => {
+      selection = makeSelection(!selection.plantNamePinning!.allPinned)
+    })
+    const deps = {
+      ...createInteractionDeps(container, store, camera),
+      getDesignObjectSelection: () => selection,
+      selectionCommands: {
+        duplicateSelected: vi.fn(),
+        toggleSelectedPlantNamePins,
+        deleteSelected: vi.fn(),
+        bringToFront: vi.fn(),
+        sendToBack: vi.fn(),
+        selectSameSpecies: vi.fn(),
+        lockSelected: vi.fn(),
+        unlockSelected: vi.fn(),
+        groupSelected: vi.fn(),
+        ungroupSelected: vi.fn(),
+      },
+    }
+    const controller = new SceneInteractionController(deps as any)
+
+    controller.refreshMeasurements()
+    const pin = container.querySelector<HTMLButtonElement>('[data-selection-action-command="pin-plant-name"]')!
+    expect(pin).not.toBeNull()
+    expect(pin.getAttribute('aria-label')).toBe('Pin plant name')
+
+    pin.click()
+
+    expect(toggleSelectedPlantNamePins).toHaveBeenCalledTimes(1)
+    expect(container.querySelector('[data-selection-action-command="pin-plant-name"]')).toBeNull()
+    const unpin = container.querySelector<HTMLButtonElement>('[data-selection-action-command="unpin-plant-name"]')!
+    expect(unpin).not.toBeNull()
+    expect(unpin).not.toBe(pin)
+    expect(unpin.getAttribute('aria-label')).toBe('Unpin plant name')
+    expect(unpin.querySelector('[data-selection-action-tooltip]')?.textContent).toContain('Unpin plant name')
+
+    unpin.click()
+
+    expect(toggleSelectedPlantNamePins).toHaveBeenCalledTimes(2)
+    expect(container.querySelector('[data-selection-action-command="unpin-plant-name"]')).toBeNull()
+    const pinAgain = container.querySelector<HTMLButtonElement>('[data-selection-action-command="pin-plant-name"]')!
+    expect(pinAgain).not.toBeNull()
+    expect(pinAgain.getAttribute('aria-label')).toBe('Pin plant name')
+    expect(pinAgain.querySelector('[data-selection-action-tooltip]')?.textContent).toContain('Pin plant name')
+    controller.dispose()
+  })
+
   it('keeps the Selection Action Toolbar close above a single non-rotatable Plant', () => {
     Object.defineProperty(container, 'clientWidth', { configurable: true, value: 400 })
     Object.defineProperty(container, 'clientHeight', { configurable: true, value: 300 })

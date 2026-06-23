@@ -133,7 +133,7 @@ export function createSelectionActionToolbar(
       run: () => options.commands.sendToBack(),
     },
     {
-      id: 'pin-plant-name',
+      id: 'unpin-plant-name',
       labelKey: 'canvas.selectionActions.unpinPlantName',
       shortcut: null,
       icon: [
