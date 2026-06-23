@@ -972,6 +972,16 @@
       "target": "対象",
       "category": "カテゴリ",
       "totals": "合計"
+    },
+    "consortium": {
+      "chart": "遷移チャート",
+      "table": "コンソーシアム項目",
+      "plant": "植物",
+      "canonicalName": "標準名",
+      "stratum": "階層",
+      "startPhase": "開始フェーズ",
+      "endPhase": "終了フェーズ",
+      "count": "数"
     }
   }
 }

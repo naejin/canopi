@@ -972,6 +972,16 @@
       "target": "目标",
       "category": "类别",
       "totals": "总计"
+    },
+    "consortium": {
+      "chart": "演替图",
+      "table": "群落条目",
+      "plant": "植物",
+      "canonicalName": "规范名称",
+      "stratum": "层级",
+      "startPhase": "开始阶段",
+      "endPhase": "结束阶段",
+      "count": "数量"
     }
   }
 }

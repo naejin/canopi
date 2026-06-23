@@ -972,6 +972,16 @@
       "target": "Objetivo",
       "category": "Categoría",
       "totals": "Totales"
+    },
+    "consortium": {
+      "chart": "Diagrama de sucesión",
+      "table": "Entradas del consorcio",
+      "plant": "Planta",
+      "canonicalName": "Nombre canónico",
+      "stratum": "Estrato",
+      "startPhase": "Fase inicial",
+      "endPhase": "Fase final",
+      "count": "Cantidad"
     }
   }
 }

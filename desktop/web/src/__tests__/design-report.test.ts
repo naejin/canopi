@@ -44,6 +44,22 @@ const BASE_DESIGN: CanopiFile = {
   extra: {},
 }
 
+function reportPlant(id: string, canonicalName: string, commonName: string, x = 0): CanopiFile['plants'][number] {
+  return {
+    id,
+    canonical_name: canonicalName,
+    common_name: commonName,
+    color: null,
+    position: { x, y: 0 },
+    rotation: null,
+    scale: null,
+    notes: null,
+    planted_date: null,
+    quantity: 1,
+    locked: false,
+  }
+}
+
 describe('Design Report export input', () => {
   afterEach(() => {
     vi.clearAllMocks()
@@ -573,5 +589,118 @@ describe('Design Report export input', () => {
         amount: expect.stringContaining('45'),
       })],
     }))
+  })
+
+  it('omits untouched default consortiums and snapshots complete localized changed consortiums', () => {
+    locale.value = 'fr'
+    const plants = [
+      reportPlant('apple-1', 'Malus domestica', 'Apple'),
+      reportPlant('apple-2', 'Malus domestica', 'Apple', 1),
+      reportPlant('pear-1', 'Pyrus communis', 'Pear', 2),
+    ]
+    const defaultConsortiums: CanopiFile['consortiums'] = [
+      {
+        target: { kind: 'species', canonical_name: 'Malus domestica' },
+        stratum: 'unassigned',
+        start_phase: 0,
+        end_phase: 2,
+      },
+      {
+        target: { kind: 'species', canonical_name: 'Pyrus communis' },
+        stratum: 'unassigned',
+        start_phase: 0,
+        end_phase: 2,
+      },
+    ]
+
+    expect(buildDesignReportInput({
+      ...BASE_DESIGN,
+      plants,
+      consortiums: defaultConsortiums,
+    }).consortium).toBeNull()
+
+    const input = buildDesignReportInput({
+      ...BASE_DESIGN,
+      plant_species_colors: {
+        'Malus domestica': '#AA0000',
+        'Pyrus communis': '#00AA00',
+      },
+      plants,
+      consortiums: [
+        ...defaultConsortiums.slice(0, 1),
+        {
+          target: { kind: 'species', canonical_name: 'Pyrus communis' },
+          stratum: 'high',
+          start_phase: 1,
+          end_phase: 4,
+        },
+        {
+          target: { kind: 'species', canonical_name: 'Prunus avium' },
+          stratum: 'low',
+          start_phase: 3,
+          end_phase: 6,
+        },
+      ],
+    }, {
+      querySurface: createTestCanvasQuerySurface({
+        localizedNames: new Map([
+          ['Malus domestica', 'Pommier'],
+          ['Pyrus communis', 'Poirier'],
+          ['Prunus avium', 'Cerisier'],
+        ]),
+      }),
+    })
+
+    expect(input.consortium).toEqual(expect.objectContaining({
+      title: 'Consortium',
+      chart_title: 'Diagramme de succession',
+      table_title: 'Entrées du consortium',
+      phases: expect.arrayContaining(['Placenta 1', 'Secondaire 2']),
+      columns: expect.objectContaining({
+        plant: 'Plante',
+        canonical_name: 'Nom canonique',
+        stratum: 'Strate',
+        start_phase: 'Phase de début',
+        end_phase: 'Phase de fin',
+        count: 'Nombre',
+      }),
+      chart_rows: expect.arrayContaining([
+        expect.objectContaining({
+          stratum: 'Haut',
+          cells: expect.arrayContaining([
+            expect.objectContaining({
+              entries: [expect.objectContaining({ label: 'Poirier', color: '#00AA00' })],
+            }),
+          ]),
+        }),
+        expect.objectContaining({
+          stratum: 'Non assigné',
+          cells: expect.arrayContaining([
+            expect.objectContaining({
+              entries: [expect.objectContaining({ label: 'Pommier', color: '#AA0000' })],
+            }),
+          ]),
+        }),
+      ]),
+      rows: [
+        expect.objectContaining({
+          plant: 'Poirier',
+          canonical_name: 'Pyrus communis',
+          stratum: 'Haut',
+          start_phase: 'Placenta 2',
+          end_phase: 'Secondaire 2',
+          count: '1',
+        }),
+        expect.objectContaining({
+          plant: 'Pommier',
+          canonical_name: 'Malus domestica',
+          stratum: 'Non assigné',
+          start_phase: 'Placenta 1',
+          end_phase: 'Placenta 3',
+          count: '2',
+        }),
+      ],
+    }))
+    expect(input.consortium?.rows).toHaveLength(2)
   })
 })

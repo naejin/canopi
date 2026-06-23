@@ -972,6 +972,16 @@
       "target": "Doel",
       "category": "Categorie",
       "totals": "Totalen"
+    },
+    "consortium": {
+      "chart": "Successiediagram",
+      "table": "Consortiumitems",
+      "plant": "Plant",
+      "canonicalName": "Canonieke naam",
+      "stratum": "Stratum",
+      "startPhase": "Startfase",
+      "endPhase": "Eindfase",
+      "count": "Aantal"
     }
   }
 }

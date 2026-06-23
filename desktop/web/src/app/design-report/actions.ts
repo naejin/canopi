@@ -6,11 +6,21 @@ import { buildPinnedPlantNameLegendEntries } from '../../canvas/pinned-plant-nam
 import { hydrateScenePersistedState } from '../../canvas/runtime/scene/codec'
 import { formatMetricDistance } from '../../canvas/runtime/zone-measurements'
 import { ACTION_TYPES } from '../planning-projection/timeline'
+import { buildConsortiumPlanningProjection, type ConsortiumPlanningBar } from '../planning-projection/consortium'
+import {
+  CONSORTIUM_STRATA,
+  CONSORTIUM_SUCCESSION_PHASES,
+  DEFAULT_CONSORTIUM_END_PHASE,
+  DEFAULT_CONSORTIUM_START_PHASE,
+  DEFAULT_CONSORTIUM_STRATUM,
+  clampSuccessionPhaseIndex,
+  stratumToRow,
+} from '../consortium/time-model'
 import { locale } from '../settings/state'
 import { formatBudgetCurrency } from '../budget/formatting'
 import { buildPersistedDesignSessionContent } from '../document-session/persistence'
 import { designSessionStore, type DesignSessionStore } from '../document-session/store'
-import type { Annotation, BudgetItem, CanopiFile, Location, MeasurementGuide, PanelTarget, PlacedPlant, TimelineAction, Zone } from '../../types/design'
+import type { Annotation, BudgetItem, CanopiFile, Consortium, Location, MeasurementGuide, PanelTarget, PlacedPlant, TimelineAction, Zone } from '../../types/design'
 import { exportDesignReportPdf } from '../../ipc/design-report'
 import { t } from '../../i18n'
 import { DEFAULT_BUDGET_CURRENCY } from '../../generated/known-canopi-keys'
@@ -112,6 +122,7 @@ export interface DesignReportInput {
   readonly canvas: DesignReportCanvasInput
   readonly timeline: DesignReportTimelineInput | null
   readonly budget: DesignReportBudgetInput | null
+  readonly consortium: DesignReportConsortiumInput | null
 }
 
 export interface DesignReportTimelineColumnsInput {
@@ -188,6 +199,48 @@ export interface DesignReportBudgetInput {
   readonly totals: readonly DesignReportBudgetTotalInput[]
 }
 
+export interface DesignReportConsortiumColumnsInput {
+  readonly plant: string
+  readonly canonical_name: string
+  readonly stratum: string
+  readonly start_phase: string
+  readonly end_phase: string
+  readonly count: string
+}
+
+export interface DesignReportConsortiumChartEntryInput {
+  readonly label: string
+  readonly color: string
+}
+
+export interface DesignReportConsortiumChartCellInput {
+  readonly entries: readonly DesignReportConsortiumChartEntryInput[]
+}
+
+export interface DesignReportConsortiumChartRowInput {
+  readonly stratum: string
+  readonly cells: readonly DesignReportConsortiumChartCellInput[]
+}
+
+export interface DesignReportConsortiumRowInput {
+  readonly plant: string
+  readonly canonical_name: string | null
+  readonly stratum: string
+  readonly start_phase: string
+  readonly end_phase: string
+  readonly count: string
+}
+
+export interface DesignReportConsortiumInput {
+  readonly title: string
+  readonly chart_title: string
+  readonly table_title: string
+  readonly phases: readonly string[]
+  readonly columns: DesignReportConsortiumColumnsInput
+  readonly chart_rows: readonly DesignReportConsortiumChartRowInput[]
+  readonly rows: readonly DesignReportConsortiumRowInput[]
+}
+
 interface BudgetReportRowComputation {
   readonly input: DesignReportBudgetRowInput
   readonly currency: string
@@ -214,6 +267,7 @@ export function buildDesignReportInput(
   const canvas = buildCanvasInput(file, options.querySurface ?? null)
   const timeline = buildTimelineInput(file, options.querySurface ?? null)
   const budget = buildBudgetInput(file, options.querySurface ?? null)
+  const consortium = buildConsortiumInput(file, options.querySurface ?? null)
   const description = nonEmptyString(file.description)
 
   return {
@@ -225,6 +279,7 @@ export function buildDesignReportInput(
     canvas,
     timeline,
     budget,
+    consortium,
   }
 }
 
@@ -625,6 +680,106 @@ function buildBudgetTotals(
     currency,
     amount: formatBudgetCurrency(amount, currency, activeLocale),
   }))
+}
+
+function buildConsortiumInput(
+  file: CanopiFile,
+  querySurface: CanvasQuerySurface | null,
+): DesignReportConsortiumInput | null {
+  const localizedNames = querySurface?.getLocalizedCommonNames() ?? new Map<string, string | null>()
+  const projection = buildConsortiumPlanningProjection({
+    consortiums: file.consortiums,
+    plants: file.plants,
+    speciesColors: file.plant_species_colors,
+    localizedNames,
+  })
+  if (projection.activeEntries.length === 0) return null
+  if (!projection.activeEntries.some(hasNonDefaultConsortiumValues)) return null
+
+  const activeLocale = locale.value
+  const phases = CONSORTIUM_SUCCESSION_PHASES.map((phase) => t(phase.labelKey))
+  const bars = [...projection.bars].sort(compareConsortiumBars)
+
+  return {
+    title: t('canvas.consortium.title'),
+    chart_title: t('designReport.consortium.chart'),
+    table_title: t('designReport.consortium.table'),
+    phases,
+    columns: {
+      plant: t('designReport.consortium.plant'),
+      canonical_name: t('designReport.consortium.canonicalName'),
+      stratum: t('designReport.consortium.stratum'),
+      start_phase: t('designReport.consortium.startPhase'),
+      end_phase: t('designReport.consortium.endPhase'),
+      count: t('designReport.consortium.count'),
+    },
+    chart_rows: buildConsortiumChartRows(bars),
+    rows: bars.map((bar) => reportConsortiumRow(bar, activeLocale)),
+  }
+}
+
+function hasNonDefaultConsortiumValues(entry: Consortium): boolean {
+  return (
+    entry.stratum !== DEFAULT_CONSORTIUM_STRATUM ||
+    entry.start_phase !== DEFAULT_CONSORTIUM_START_PHASE ||
+    entry.end_phase !== DEFAULT_CONSORTIUM_END_PHASE
+  )
+}
+
+function buildConsortiumChartRows(
+  bars: readonly ConsortiumPlanningBar[],
+): DesignReportConsortiumChartRowInput[] {
+  const rows: DesignReportConsortiumChartRowInput[] = []
+  for (const stratum of CONSORTIUM_STRATA) {
+    const stratumBars = bars.filter((bar) => bar.stratum === stratum)
+    if (stratumBars.length === 0) continue
+    rows.push({
+      stratum: consortiumStratumLabel(stratum),
+      cells: CONSORTIUM_SUCCESSION_PHASES.map((_, phaseIndex) => ({
+        entries: stratumBars
+          .filter((bar) => bar.startPhase <= phaseIndex && bar.endPhase >= phaseIndex)
+          .map((bar) => ({
+            label: bar.commonName,
+            color: bar.color,
+          })),
+      })),
+    })
+  }
+  return rows
+}
+
+function reportConsortiumRow(
+  bar: ConsortiumPlanningBar,
+  activeLocale: string,
+): DesignReportConsortiumRowInput {
+  return {
+    plant: bar.commonName,
+    canonical_name: bar.commonName === bar.canonicalName ? null : bar.canonicalName,
+    stratum: consortiumStratumLabel(bar.stratum),
+    start_phase: consortiumPhaseLabel(bar.startPhase),
+    end_phase: consortiumPhaseLabel(bar.endPhase),
+    count: formatReportNumber(bar.count, activeLocale),
+  }
+}
+
+function compareConsortiumBars(left: ConsortiumPlanningBar, right: ConsortiumPlanningBar): number {
+  return (
+    stratumToRow(left.stratum) - stratumToRow(right.stratum)
+    || left.startPhase - right.startPhase
+    || left.endPhase - right.endPhase
+    || left.commonName.localeCompare(right.commonName)
+    || left.canonicalName.localeCompare(right.canonicalName)
+  )
+}
+
+function consortiumStratumLabel(stratum: string): string {
+  const key = (CONSORTIUM_STRATA as readonly string[]).includes(stratum) ? stratum : DEFAULT_CONSORTIUM_STRATUM
+  return t(`canvas.consortium.${key}`)
+}
+
+function consortiumPhaseLabel(phaseIndex: number): string {
+  const phase = CONSORTIUM_SUCCESSION_PHASES[clampSuccessionPhaseIndex(phaseIndex)]
+  return phase ? t(phase.labelKey) : String(phaseIndex + 1)
 }
 
 function formatReportNumber(value: number, activeLocale: string): string {

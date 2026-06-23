@@ -972,6 +972,16 @@
       "target": "Target",
       "category": "Category",
       "totals": "Totals"
+    },
+    "consortium": {
+      "chart": "Succession chart",
+      "table": "Consortium entries",
+      "plant": "Plant",
+      "canonicalName": "Canonical name",
+      "stratum": "Stratum",
+      "startPhase": "Start phase",
+      "endPhase": "End phase",
+      "count": "Count"
     }
   }
 }

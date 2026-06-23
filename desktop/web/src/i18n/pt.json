@@ -972,6 +972,16 @@
       "target": "Alvo",
       "category": "Categoria",
       "totals": "Totais"
+    },
+    "consortium": {
+      "chart": "Gráfico de sucessão",
+      "table": "Entradas do consórcio",
+      "plant": "Planta",
+      "canonicalName": "Nome canônico",
+      "stratum": "Estrato",
+      "startPhase": "Fase inicial",
+      "endPhase": "Fase final",
+      "count": "Quantidade"
     }
   }
 }

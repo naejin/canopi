@@ -13,6 +13,8 @@ pub struct DesignReportInput {
     pub timeline: Option<DesignReportTimelineInput>,
     #[serde(default)]
     pub budget: Option<DesignReportBudgetInput>,
+    #[serde(default)]
+    pub consortium: Option<DesignReportConsortiumInput>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -223,6 +225,54 @@ pub struct DesignReportBudgetTotalInput {
     pub amount: String,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct DesignReportConsortiumInput {
+    pub title: String,
+    pub chart_title: String,
+    pub table_title: String,
+    pub phases: Vec<String>,
+    pub columns: DesignReportConsortiumColumnsInput,
+    pub chart_rows: Vec<DesignReportConsortiumChartRowInput>,
+    pub rows: Vec<DesignReportConsortiumRowInput>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DesignReportConsortiumColumnsInput {
+    pub plant: String,
+    pub canonical_name: String,
+    pub stratum: String,
+    pub start_phase: String,
+    pub end_phase: String,
+    pub count: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DesignReportConsortiumChartRowInput {
+    pub stratum: String,
+    pub cells: Vec<DesignReportConsortiumChartCellInput>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DesignReportConsortiumChartCellInput {
+    pub entries: Vec<DesignReportConsortiumChartEntryInput>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DesignReportConsortiumChartEntryInput {
+    pub label: String,
+    pub color: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DesignReportConsortiumRowInput {
+    pub plant: String,
+    pub canonical_name: Option<String>,
+    pub stratum: String,
+    pub start_phase: String,
+    pub end_phase: String,
+    pub count: String,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct DesignReportLayout {
     pages: Vec<DesignReportPageLayout>,
@@ -251,6 +301,11 @@ pub(crate) enum DesignReportSection {
         end_index: usize,
         include_totals: bool,
     },
+    Consortium {
+        start_index: usize,
+        end_index: usize,
+        include_chart: bool,
+    },
 }
 
 const PAGE_TITLE_Y_OFFSET_MM: f32 = 16.0;
@@ -265,6 +320,9 @@ const TIMELINE_HEADER_HEIGHT_MM: f32 = 10.0;
 const BUDGET_ROW_VERTICAL_PADDING_MM: f32 = 4.0;
 const BUDGET_LINE_HEIGHT_MM: f32 = 4.2;
 const BUDGET_HEADER_HEIGHT_MM: f32 = 10.0;
+const CONSORTIUM_ROW_VERTICAL_PADDING_MM: f32 = 4.0;
+const CONSORTIUM_LINE_HEIGHT_MM: f32 = 4.2;
+const CONSORTIUM_HEADER_HEIGHT_MM: f32 = 10.0;
 
 pub fn export_design_report_pdf(input: &DesignReportInput, path: String) -> Result<String, String> {
     let bytes = render_design_report_pdf(input)?;
@@ -340,6 +398,24 @@ pub(crate) fn build_design_report_layout(input: &DesignReportInput) -> DesignRep
                     start_index: chunk.start_index,
                     end_index: chunk.end_index,
                     include_totals: chunk.include_totals,
+                }],
+                page_number_label: String::new(),
+            });
+        }
+    }
+
+    if let Some(consortium) = input.consortium.as_ref()
+        && (!consortium.rows.is_empty() || !consortium.chart_rows.is_empty())
+    {
+        for chunk in build_consortium_page_chunks(consortium, input.canvas.page.margin_mm) {
+            pages.push(DesignReportPageLayout {
+                orientation: DesignReportPageOrientation::Portrait,
+                width_mm: REPORT_PORTRAIT_WIDTH_MM,
+                height_mm: REPORT_PORTRAIT_HEIGHT_MM,
+                sections: vec![DesignReportSection::Consortium {
+                    start_index: chunk.start_index,
+                    end_index: chunk.end_index,
+                    include_chart: chunk.include_chart,
                 }],
                 page_number_label: String::new(),
             });
@@ -488,6 +564,92 @@ fn estimate_budget_row_height(row: &DesignReportBudgetRowInput) -> f32 {
     BUDGET_ROW_VERTICAL_PADDING_MM + wrapped_lines as f32 * BUDGET_LINE_HEIGHT_MM + 8.0
 }
 
+#[derive(Debug, Clone, Copy)]
+struct ConsortiumPageChunk {
+    start_index: usize,
+    end_index: usize,
+    include_chart: bool,
+}
+
+fn build_consortium_page_chunks(
+    consortium: &DesignReportConsortiumInput,
+    margin_mm: f32,
+) -> Vec<ConsortiumPageChunk> {
+    if consortium.rows.is_empty() {
+        return vec![ConsortiumPageChunk {
+            start_index: 0,
+            end_index: 0,
+            include_chart: true,
+        }];
+    }
+
+    let mut chunks = Vec::new();
+    let mut start_index = 0;
+    let mut used_height = 0.0;
+    let mut include_chart = true;
+    let mut available_height = consortium_rows_available_height(consortium, margin_mm, true);
+
+    for (index, row) in consortium.rows.iter().enumerate() {
+        let row_height = estimate_consortium_row_height(row);
+        if index > start_index && used_height + row_height > available_height {
+            chunks.push(ConsortiumPageChunk {
+                start_index,
+                end_index: index,
+                include_chart,
+            });
+            start_index = index;
+            used_height = 0.0;
+            include_chart = false;
+            available_height = consortium_rows_available_height(consortium, margin_mm, false);
+        }
+        used_height += row_height;
+    }
+
+    chunks.push(ConsortiumPageChunk {
+        start_index,
+        end_index: consortium.rows.len(),
+        include_chart,
+    });
+    chunks
+}
+
+fn consortium_rows_available_height(
+    consortium: &DesignReportConsortiumInput,
+    margin_mm: f32,
+    include_chart: bool,
+) -> f32 {
+    let page_body = REPORT_PORTRAIT_HEIGHT_MM - margin_mm - PAGE_NUMBER_Y_MM - 24.0;
+    let chart_height = if include_chart {
+        estimate_consortium_chart_height(consortium)
+    } else {
+        0.0
+    };
+    (page_body - chart_height - CONSORTIUM_HEADER_HEIGHT_MM - 16.0).max(40.0)
+}
+
+fn estimate_consortium_chart_height(consortium: &DesignReportConsortiumInput) -> f32 {
+    if consortium.chart_rows.is_empty() {
+        return 0.0;
+    }
+    15.0 + consortium.chart_rows.len() as f32 * 9.2
+}
+
+fn estimate_consortium_row_height(row: &DesignReportConsortiumRowInput) -> f32 {
+    let canonical = row.canonical_name.as_deref().unwrap_or("-");
+    let wrapped_lines = [
+        wrap_text(&row.plant, 28).len(),
+        wrap_text(canonical, 32).len(),
+        wrap_text(&row.stratum, 16).len(),
+        wrap_text(&row.start_phase, 18).len(),
+        wrap_text(&row.end_phase, 18).len(),
+    ]
+    .into_iter()
+    .max()
+    .unwrap_or(1)
+    .max(1);
+    CONSORTIUM_ROW_VERTICAL_PADDING_MM + wrapped_lines as f32 * CONSORTIUM_LINE_HEIGHT_MM + 8.0
+}
+
 fn render_page(input: &DesignReportInput, layout: &DesignReportPageLayout, _: usize) -> PdfPage {
     let mut ops = Vec::new();
     let page_width = layout.width_mm;
@@ -552,6 +714,34 @@ fn render_page(input: &DesignReportInput, layout: &DesignReportPageLayout, _: us
                 *start_index,
                 *end_index,
                 *include_totals,
+                margin,
+                cursor_y,
+            );
+        }
+        text(
+            &mut ops,
+            margin,
+            PAGE_NUMBER_Y_MM,
+            8.0,
+            BuiltinFont::Helvetica,
+            &layout.page_number_label,
+        );
+        return PdfPage::new(Mm(layout.width_mm), Mm(layout.height_mm), ops);
+    }
+
+    if let Some(DesignReportSection::Consortium {
+        start_index,
+        end_index,
+        include_chart,
+    }) = layout.sections.first()
+    {
+        if let Some(consortium) = input.consortium.as_ref() {
+            render_consortium_section(
+                &mut ops,
+                consortium,
+                *start_index,
+                *end_index,
+                *include_chart,
                 margin,
                 cursor_y,
             );
@@ -1153,6 +1343,182 @@ fn render_budget_row(
     cursor_y - 2.5
 }
 
+fn render_consortium_section(
+    ops: &mut Vec<Op>,
+    consortium: &DesignReportConsortiumInput,
+    start_index: usize,
+    end_index: usize,
+    include_chart: bool,
+    margin: f32,
+    mut cursor_y: f32,
+) -> f32 {
+    text(
+        ops,
+        margin,
+        cursor_y,
+        12.0,
+        BuiltinFont::HelveticaBold,
+        &consortium.title,
+    );
+    cursor_y -= 8.0;
+
+    if include_chart {
+        cursor_y = render_consortium_chart(ops, consortium, margin, cursor_y);
+        cursor_y -= 3.0;
+    }
+
+    text(
+        ops,
+        margin,
+        cursor_y,
+        9.0,
+        BuiltinFont::HelveticaBold,
+        &consortium.table_title,
+    );
+    cursor_y -= 5.0;
+    cursor_y = render_consortium_table_header(ops, &consortium.columns, margin, cursor_y);
+
+    for row in &consortium.rows[start_index..end_index] {
+        cursor_y = render_consortium_row(ops, &consortium.columns, row, margin, cursor_y);
+    }
+
+    cursor_y
+}
+
+fn render_consortium_chart(
+    ops: &mut Vec<Op>,
+    consortium: &DesignReportConsortiumInput,
+    margin: f32,
+    mut cursor_y: f32,
+) -> f32 {
+    if consortium.chart_rows.is_empty() {
+        return cursor_y;
+    }
+
+    text(
+        ops,
+        margin,
+        cursor_y,
+        9.0,
+        BuiltinFont::HelveticaBold,
+        &consortium.chart_title,
+    );
+    cursor_y -= 5.0;
+
+    for line in wrap_text(
+        &format!(
+            "{} | {}",
+            consortium.columns.stratum,
+            consortium.phases.join(" | ")
+        ),
+        112,
+    ) {
+        text(
+            ops,
+            margin,
+            cursor_y,
+            6.8,
+            BuiltinFont::HelveticaBold,
+            &line,
+        );
+        cursor_y -= 4.0;
+    }
+
+    for row in &consortium.chart_rows {
+        let cells = row
+            .cells
+            .iter()
+            .map(|cell| {
+                if cell.entries.is_empty() {
+                    "-".to_string()
+                } else {
+                    cell.entries
+                        .iter()
+                        .map(|entry| format!("{} {}", entry.label, entry.color))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                }
+            })
+            .collect::<Vec<_>>();
+        for line in wrap_text(&format!("{} | {}", row.stratum, cells.join(" | ")), 112) {
+            text(ops, margin, cursor_y, 6.6, BuiltinFont::Helvetica, &line);
+            cursor_y -= CONSORTIUM_LINE_HEIGHT_MM;
+        }
+        cursor_y -= 1.5;
+    }
+
+    cursor_y
+}
+
+fn render_consortium_table_header(
+    ops: &mut Vec<Op>,
+    columns: &DesignReportConsortiumColumnsInput,
+    margin: f32,
+    mut cursor_y: f32,
+) -> f32 {
+    text(
+        ops,
+        margin,
+        cursor_y,
+        7.5,
+        BuiltinFont::HelveticaBold,
+        &format!(
+            "{} | {} | {} | {}",
+            columns.plant, columns.canonical_name, columns.stratum, columns.count
+        ),
+    );
+    cursor_y -= 4.6;
+    text(
+        ops,
+        margin,
+        cursor_y,
+        7.5,
+        BuiltinFont::HelveticaBold,
+        &format!("{} | {}", columns.start_phase, columns.end_phase),
+    );
+    cursor_y - 5.5
+}
+
+fn render_consortium_row(
+    ops: &mut Vec<Op>,
+    columns: &DesignReportConsortiumColumnsInput,
+    row: &DesignReportConsortiumRowInput,
+    margin: f32,
+    mut cursor_y: f32,
+) -> f32 {
+    let canonical = row.canonical_name.as_deref().unwrap_or("-");
+    for line in wrap_text(
+        &format!(
+            "{} | {} | {} | {}",
+            row.plant, canonical, row.stratum, row.count
+        ),
+        112,
+    ) {
+        text(ops, margin, cursor_y, 7.2, BuiltinFont::Helvetica, &line);
+        cursor_y -= CONSORTIUM_LINE_HEIGHT_MM;
+    }
+
+    for line in wrap_text(
+        &format!(
+            "{}: {} | {}: {}",
+            columns.start_phase, row.start_phase, columns.end_phase, row.end_phase
+        ),
+        112,
+    ) {
+        text(
+            ops,
+            margin + 3.0,
+            cursor_y,
+            7.0,
+            BuiltinFont::Helvetica,
+            &line,
+        );
+        cursor_y -= CONSORTIUM_LINE_HEIGHT_MM;
+    }
+
+    cursor_y - 2.5
+}
+
 #[derive(Debug, Clone, Copy)]
 struct CanvasTransform {
     bounds: DesignReportBounds,
@@ -1556,6 +1922,45 @@ mod tests {
         assert!(second_text.contains("EUR 450.00"));
     }
 
+    #[test]
+    fn renderer_paginates_consortium_rows_with_chart_and_repeated_headers() {
+        let input = DesignReportInput {
+            consortium: Some(consortium_input_with_rows(24)),
+            ..report_input_without_metadata()
+        };
+
+        let layout = build_design_report_layout(&input);
+
+        assert!(layout.pages.len() > 2);
+
+        let first_consortium_page = render_page(&input, &layout.pages[1], 1);
+        let first_text = page_text(&first_consortium_page).join("\n");
+        assert!(first_text.contains("Consortium"));
+        assert!(first_text.contains("Succession chart"));
+        assert!(first_text.contains("Placenta 1"));
+        assert!(first_text.contains("High"));
+        assert!(first_text.contains("Poirier"));
+        assert!(first_text.contains("Plant | Canonical name"));
+        assert!(first_text.contains("Consortium plant 1"));
+
+        let rendered_pages = layout.pages[1..]
+            .iter()
+            .map(|page_layout| page_text(&render_page(&input, page_layout, 0)).join("\n"))
+            .collect::<Vec<_>>();
+        assert!(
+            rendered_pages
+                .iter()
+                .filter(|text| text.contains("Plant | Canonical name"))
+                .count()
+                > 1
+        );
+        assert!(
+            rendered_pages
+                .iter()
+                .any(|text| text.contains("Consortium plant 24"))
+        );
+    }
+
     fn report_input_without_metadata() -> DesignReportInput {
         DesignReportInput {
             title: "Landscape report".to_string(),
@@ -1601,6 +2006,7 @@ mod tests {
             },
             timeline: None,
             budget: None,
+            consortium: None,
         }
     }
 
@@ -1674,6 +2080,67 @@ mod tests {
                 currency: "EUR".to_string(),
                 amount: "EUR 450.00".to_string(),
             }],
+        }
+    }
+
+    fn consortium_input_with_rows(count: usize) -> DesignReportConsortiumInput {
+        DesignReportConsortiumInput {
+            title: "Consortium".to_string(),
+            chart_title: "Succession chart".to_string(),
+            table_title: "Consortium entries".to_string(),
+            phases: vec![
+                "Placenta 1".to_string(),
+                "Placenta 2".to_string(),
+                "Placenta 3".to_string(),
+                "Secondary 1".to_string(),
+                "Secondary 2".to_string(),
+                "Secondary 3".to_string(),
+                "Climax".to_string(),
+            ],
+            columns: DesignReportConsortiumColumnsInput {
+                plant: "Plant".to_string(),
+                canonical_name: "Canonical name".to_string(),
+                stratum: "Stratum".to_string(),
+                start_phase: "Start".to_string(),
+                end_phase: "End".to_string(),
+                count: "Count".to_string(),
+            },
+            chart_rows: vec![DesignReportConsortiumChartRowInput {
+                stratum: "High".to_string(),
+                cells: vec![
+                    DesignReportConsortiumChartCellInput {
+                        entries: vec![DesignReportConsortiumChartEntryInput {
+                            label: "Poirier".to_string(),
+                            color: "#00AA00".to_string(),
+                        }],
+                    },
+                    DesignReportConsortiumChartCellInput {
+                        entries: vec![DesignReportConsortiumChartEntryInput {
+                            label: "Poirier".to_string(),
+                            color: "#00AA00".to_string(),
+                        }],
+                    },
+                    DesignReportConsortiumChartCellInput { entries: vec![] },
+                    DesignReportConsortiumChartCellInput { entries: vec![] },
+                    DesignReportConsortiumChartCellInput { entries: vec![] },
+                    DesignReportConsortiumChartCellInput { entries: vec![] },
+                    DesignReportConsortiumChartCellInput { entries: vec![] },
+                ],
+            }],
+            rows: (1..=count)
+                .map(|index| DesignReportConsortiumRowInput {
+                    plant: format!("Consortium plant {index}"),
+                    canonical_name: Some(format!("Species canonical {index}")),
+                    stratum: if index % 2 == 0 {
+                        "High".to_string()
+                    } else {
+                        "Unassigned".to_string()
+                    },
+                    start_phase: "Placenta 1".to_string(),
+                    end_phase: "Secondary 2".to_string(),
+                    count: index.to_string(),
+                })
+                .collect(),
         }
     }
 

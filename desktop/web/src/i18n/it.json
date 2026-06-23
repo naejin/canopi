@@ -972,6 +972,16 @@
       "target": "Destinazione",
       "category": "Categoria",
       "totals": "Totali"
+    },
+    "consortium": {
+      "chart": "Diagramma di successione",
+      "table": "Voci del consorzio",
+      "plant": "Pianta",
+      "canonicalName": "Nome canonico",
+      "stratum": "Strato",
+      "startPhase": "Fase iniziale",
+      "endPhase": "Fase finale",
+      "count": "Conteggio"
     }
   }
 }

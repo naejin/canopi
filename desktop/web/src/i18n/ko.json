@@ -972,6 +972,16 @@
       "target": "대상",
       "category": "범주",
       "totals": "합계"
+    },
+    "consortium": {
+      "chart": "천이 차트",
+      "table": "컨소시엄 항목",
+      "plant": "식물",
+      "canonicalName": "표준명",
+      "stratum": "층위",
+      "startPhase": "시작 단계",
+      "endPhase": "종료 단계",
+      "count": "수량"
     }
   }
 }

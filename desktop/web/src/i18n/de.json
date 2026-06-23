@@ -972,6 +972,16 @@
       "target": "Ziel",
       "category": "Kategorie",
       "totals": "Summen"
+    },
+    "consortium": {
+      "chart": "Sukzessionsdiagramm",
+      "table": "Konsortiumseinträge",
+      "plant": "Pflanze",
+      "canonicalName": "Kanonischer Name",
+      "stratum": "Schicht",
+      "startPhase": "Startphase",
+      "endPhase": "Endphase",
+      "count": "Anzahl"
     }
   }
 }

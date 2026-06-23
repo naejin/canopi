@@ -972,6 +972,16 @@
       "target": "Cible",
       "category": "Catégorie",
       "totals": "Totaux"
+    },
+    "consortium": {
+      "chart": "Diagramme de succession",
+      "table": "Entrées du consortium",
+      "plant": "Plante",
+      "canonicalName": "Nom canonique",
+      "stratum": "Strate",
+      "startPhase": "Phase de début",
+      "endPhase": "Phase de fin",
+      "count": "Nombre"
     }
   }
 }
