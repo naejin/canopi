@@ -375,6 +375,8 @@ const REPORT_PORTRAIT_HEIGHT_MM: f32 = 297.0;
 const TIMELINE_ROW_VERTICAL_PADDING_MM: f32 = 4.0;
 const TIMELINE_LINE_HEIGHT_MM: f32 = 4.2;
 const TIMELINE_HEADER_HEIGHT_MM: f32 = 10.0;
+const TIMELINE_COLUMN_LAYOUT: [(f32, usize); 5] =
+    [(0.0, 18), (35.0, 16), (66.0, 16), (97.0, 28), (153.0, 14)];
 const BUDGET_ROW_VERTICAL_PADDING_MM: f32 = 4.0;
 const BUDGET_LINE_HEIGHT_MM: f32 = 4.2;
 const BUDGET_HEADER_HEIGHT_MM: f32 = 10.0;
@@ -699,17 +701,36 @@ fn timeline_rows_available_height(
 }
 
 fn estimate_timeline_row_height(action: &DesignReportTimelineActionInput) -> f32 {
-    let wrapped_lines = [
-        wrap_text(&action.description, 58).len(),
-        wrap_text(&action.target, 24).len(),
-        wrap_text(&action.dependencies, 24).len(),
-        wrap_text(&action.recurrence, 24).len(),
+    let primary_lines = [
+        wrap_text(&action.action_type_label, TIMELINE_COLUMN_LAYOUT[0].1).len(),
+        wrap_text(&action.start_date, TIMELINE_COLUMN_LAYOUT[1].1).len(),
+        wrap_text(&action.end_date, TIMELINE_COLUMN_LAYOUT[2].1).len(),
+        wrap_text(&action.target, TIMELINE_COLUMN_LAYOUT[3].1).len(),
+        wrap_text(&action.status, TIMELINE_COLUMN_LAYOUT[4].1).len(),
     ]
     .into_iter()
     .max()
     .unwrap_or(1)
     .max(1);
-    TIMELINE_ROW_VERTICAL_PADDING_MM + wrapped_lines as f32 * TIMELINE_LINE_HEIGHT_MM + 8.0
+    let description_lines = if action.description.trim().is_empty() {
+        0
+    } else {
+        wrap_text(&action.description, 95).len().max(1)
+    };
+    let detail_lines = wrap_text(
+        &format!(
+            "{}; {}",
+            action.recurrence.trim(),
+            action.dependencies.trim()
+        ),
+        95,
+    )
+    .len()
+    .max(1);
+
+    TIMELINE_ROW_VERTICAL_PADDING_MM
+        + (primary_lines + description_lines + detail_lines) as f32 * TIMELINE_LINE_HEIGHT_MM
+        + 4.0
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1508,38 +1529,24 @@ fn render_timeline_table_header(
     fonts: &ReportFonts,
     columns: &DesignReportTimelineColumnsInput,
     margin: f32,
-    mut cursor_y: f32,
+    cursor_y: f32,
 ) -> f32 {
-    text(
+    let height = render_timeline_cells(
         ops,
         fonts,
         margin,
         cursor_y,
         7.5,
         ReportFont::Bold,
-        &format!(
-            "{} | {} | {} | {} | {}",
-            columns.action_type,
-            columns.start_date,
-            columns.end_date,
-            columns.target,
-            columns.status
-        ),
+        [
+            columns.action_type.as_str(),
+            columns.start_date.as_str(),
+            columns.end_date.as_str(),
+            columns.target.as_str(),
+            columns.status.as_str(),
+        ],
     );
-    cursor_y -= 4.6;
-    text(
-        ops,
-        fonts,
-        margin,
-        cursor_y,
-        7.5,
-        ReportFont::Bold,
-        &format!(
-            "{} | {} | {}",
-            columns.description, columns.recurrence, columns.dependencies
-        ),
-    );
-    cursor_y - 5.5
+    cursor_y - height - 3.0
 }
 
 fn render_timeline_action_row(
@@ -1550,23 +1557,22 @@ fn render_timeline_action_row(
     margin: f32,
     mut cursor_y: f32,
 ) -> f32 {
-    text(
+    let height = render_timeline_cells(
         ops,
         fonts,
         margin,
         cursor_y,
         7.2,
         ReportFont::Regular,
-        &format!(
-            "{} | {} | {} | {} | {}",
-            action.action_type_label,
-            action.start_date,
-            action.end_date,
-            action.target,
-            action.status
-        ),
+        [
+            action.action_type_label.as_str(),
+            action.start_date.as_str(),
+            action.end_date.as_str(),
+            action.target.as_str(),
+            action.status.as_str(),
+        ],
     );
-    cursor_y -= 4.4;
+    cursor_y -= height + 1.2;
 
     if !action.description.trim().is_empty() {
         for line in wrap_text(
@@ -1588,7 +1594,7 @@ fn render_timeline_action_row(
 
     for line in wrap_text(
         &format!(
-            "{}: {} | {}: {}",
+            "{}: {}; {}: {}",
             columns.recurrence, action.recurrence, columns.dependencies, action.dependencies
         ),
         95,
@@ -1606,6 +1612,39 @@ fn render_timeline_action_row(
     }
 
     cursor_y - 2.5
+}
+
+fn render_timeline_cells(
+    ops: &mut Vec<Op>,
+    fonts: &ReportFonts,
+    margin: f32,
+    cursor_y: f32,
+    font_size: f32,
+    font: ReportFont,
+    cells: [&str; 5],
+) -> f32 {
+    let wrapped_cells = cells
+        .into_iter()
+        .zip(TIMELINE_COLUMN_LAYOUT)
+        .map(|(value, (offset, max_chars))| (offset, wrap_text(value, max_chars)))
+        .collect::<Vec<_>>();
+    let line_count = wrapped_cells
+        .iter()
+        .map(|(_, lines)| lines.len())
+        .max()
+        .unwrap_or(1)
+        .max(1);
+
+    for line_index in 0..line_count {
+        let line_y = cursor_y - line_index as f32 * TIMELINE_LINE_HEIGHT_MM;
+        for (offset, lines) in &wrapped_cells {
+            if let Some(line) = lines.get(line_index) {
+                text(ops, fonts, margin + offset, line_y, font_size, font, line);
+            }
+        }
+    }
+
+    line_count as f32 * TIMELINE_LINE_HEIGHT_MM
 }
 
 fn render_budget_section(
@@ -3046,6 +3085,9 @@ mod tests {
             );
         }
         for leaked in [
+            "Action type |",
+            "Planting |",
+            "Recurrence: None |",
             "Stratum |",
             "Plant | Canonical name",
             "Manual | Tools",
@@ -3089,7 +3131,7 @@ mod tests {
     }
 
     #[test]
-    fn renderer_omits_blank_timeline_description_lines() {
+    fn renderer_prints_timeline_rows_without_pipe_dump_or_blank_description() {
         let input = DesignReportInput {
             timeline: Some(DesignReportTimelineInput {
                 overview_rows: vec![DesignReportTimelineOverviewRowInput {
@@ -3117,8 +3159,13 @@ mod tests {
         let layout = build_design_report_layout(&input);
         let text = page_text(&render_test_page(&input, &layout.pages[1], 1)).join("\n");
 
-        assert!(text.contains("Planting | Not scheduled | Not scheduled | None | Open"));
-        assert!(text.contains("Recurrence: None | Dependencies: None"));
+        assert!(text.contains("Planting"));
+        assert!(text.contains("Not scheduled"));
+        assert!(text.contains("None"));
+        assert!(text.contains("Open"));
+        assert!(text.contains("Recurrence: None; Dependencies: None"));
+        assert!(!text.contains("Planting |"));
+        assert!(!text.contains("Recurrence: None | Dependencies: None"));
         assert!(!text.contains("Description:"));
     }
 

@@ -793,6 +793,7 @@ describe('Design Report export input', () => {
       table_title: 'Actions',
       columns: expect.objectContaining({
         action_type: "Type d'action",
+        start_date: 'Début',
         recurrence: 'Récurrence',
         dependencies: 'Dépendances',
       }),
