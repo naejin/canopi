@@ -8,6 +8,8 @@ import { t } from '../../i18n'
 import { PlantSymbolGlyph } from './PlantSymbolGlyph'
 import styles from './DisplayLegend.module.css'
 
+const DISPLAY_LEGEND_TOP_RESERVED_PX = 32
+
 export function DisplayLegend() {
   void locale.value
   const attr = plantColorByAttr.value
@@ -22,10 +24,12 @@ export function DisplayLegend() {
     const pinnedEntries = buildPinnedPlantNameLegendEntries(querySurface)
     if (pinnedEntries.length === 0) return null
 
+    const legendStyle = getLegendStyle()
+
     return (
       <div
         className={styles.legend}
-        style={{ bottom: `${SCALE_BAR_RESERVED_BOTTOM_PX}px` }}
+        style={legendStyle}
         data-pinned-plant-name-legend
       >
         <div className={styles.title}>{t('canvas.display.legend')}</div>
@@ -59,7 +63,7 @@ export function DisplayLegend() {
   const entries = getLegendEntries(attr)
 
   return (
-    <div className={styles.legend} style={{ bottom: `${SCALE_BAR_RESERVED_BOTTOM_PX}px` }}>
+    <div className={styles.legend} style={getLegendStyle()}>
       <div className={styles.title}>{t('canvas.display.legend')}</div>
       <div className={styles.entries}>
         {entries.map((e) => (
@@ -71,4 +75,12 @@ export function DisplayLegend() {
       </div>
     </div>
   )
+}
+
+function getLegendStyle() {
+  return {
+    bottom: `${SCALE_BAR_RESERVED_BOTTOM_PX}px`,
+    maxHeight: `calc(100% - ${SCALE_BAR_RESERVED_BOTTOM_PX}px - ${DISPLAY_LEGEND_TOP_RESERVED_PX}px)`,
+    overflowY: 'auto',
+  }
 }

@@ -3,10 +3,13 @@ import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { plantColorByAttr, plantSizeMode } from '../canvas/plant-display-state'
 import { createDefaultScenePersistedState, type ScenePlantEntity } from '../canvas/runtime/scene'
+import { SCALE_BAR_RESERVED_BOTTOM_PX } from '../canvas/scale-bar'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { DisplayLegend } from '../components/canvas/DisplayLegend'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 import { createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
+
+const DISPLAY_LEGEND_TOP_RESERVED_PX = 32
 
 describe('DisplayLegend', () => {
   let container: HTMLDivElement
@@ -88,6 +91,32 @@ describe('DisplayLegend', () => {
 
     expect(container.querySelectorAll('[data-pinned-plant-name-entry]')).toHaveLength(3)
     expect([...container.querySelectorAll('[data-pinned-plant-name-count]')].map((el) => el.textContent)).toEqual(['2'])
+  })
+
+  it('lets large pinned-name legends use available canvas height before scrolling', async () => {
+    const scene = createDefaultScenePersistedState()
+    scene.plants = Array.from({ length: 12 }, (_, index) =>
+      plant({
+        id: `plant-${index}`,
+        canonicalName: `Species ${index}`,
+        commonName: `Species ${index}`,
+        pinnedName: true,
+        color: `#1122${index.toString(16).padStart(2, '0')}`,
+      }),
+    )
+    const query = createTestCanvasQuerySurface({ scene })
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ queries: query }))
+
+    await act(async () => {
+      render(<DisplayLegend />, container)
+      await Promise.resolve()
+    })
+
+    const legend = container.querySelector<HTMLElement>('[data-pinned-plant-name-legend]')
+    expect(legend?.style.maxHeight).toBe(
+      `calc(100% - ${SCALE_BAR_RESERVED_BOTTOM_PX + DISPLAY_LEGEND_TOP_RESERVED_PX}px)`,
+    )
+    expect(legend?.style.overflowY).toBe('auto')
   })
 
   it('updates pinned plant names when pins or localized names change', async () => {
