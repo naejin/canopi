@@ -26,12 +26,13 @@ export function getLocationNoticeReadModel({
 }: LocationNoticeReadModelInput): LocationNoticeReadModel {
   const mapSurfaceVisible = saved.hasDesign && saved.hasLocation && mapVisible
   const tone = getLocationNoticeTone(mapSurface)
+  const statusText = mapSurfaceVisible ? getLocationNoticeStatusText(mapSurface, t) : ''
 
   return {
-    visible: mapSurfaceVisible,
+    visible: mapSurfaceVisible && statusText !== '',
     mapSurfaceVisible,
     tone,
-    statusText: mapSurfaceVisible ? getLocationNoticeStatusText(saved, mapSurface, t) : '',
+    statusText,
     locationKey: saved.key,
   }
 }
@@ -42,11 +43,7 @@ function getLocationNoticeTone(mapSurface: MapLibreCanvasSurfaceState): Location
   return 'loading'
 }
 
-function getLocationNoticeStatusText(
-  saved: SavedLocationPresentation,
-  mapSurface: MapLibreCanvasSurfaceState,
-  t: (key: string) => string,
-): string {
+function getLocationNoticeStatusText(mapSurface: MapLibreCanvasSurfaceState, t: (key: string) => string): string {
   if (mapSurface.status === 'error') {
     return `${t('canvas.layers.basemapError')}: ${mapSurface.errorMessage ?? ''}`.trim()
   }
@@ -55,12 +52,12 @@ function getLocationNoticeStatusText(
     return t('canvas.layers.basemapLoading')
   }
 
-  const terrainStatus = mapSurface.terrainStatus === 'error'
-    ? ` • ${t('canvas.layers.mapSection')}: ${mapSurface.terrainErrorMessage ?? ''}`
-    : ''
-  const precisionWarning = mapSurface.precisionWarning
-    ? ` • ${t('canvas.layers.precisionWarning')}`
-    : ''
+  const messages = [
+    mapSurface.terrainStatus === 'error'
+      ? `${t('canvas.layers.mapSection')}: ${mapSurface.terrainErrorMessage ?? ''}`.trim()
+      : '',
+    mapSurface.precisionWarning ? t('canvas.layers.precisionWarning') : '',
+  ].filter(Boolean)
 
-  return `${saved.summary ?? ''}${terrainStatus}${precisionWarning}`
+  return messages.join(' • ')
 }

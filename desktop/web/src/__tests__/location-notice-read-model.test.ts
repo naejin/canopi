@@ -24,7 +24,7 @@ function translate(key: string): string {
 }
 
 describe('Location Notice read model', () => {
-  it('builds ready notice text from saved Location and MapLibre readiness facts', () => {
+  it('builds ready notice text from actionable MapLibre readiness facts', () => {
     const saved = getSavedLocationPresentation(true, {
       lat: 48.8566,
       lon: 2.3522,
@@ -47,7 +47,30 @@ describe('Location Notice read model', () => {
       visible: true,
       mapSurfaceVisible: true,
       tone: 'ready',
-      statusText: '48.8566, 2.3522 (35 m) • Map Layers: dem fetch failed • Precision warning',
+      statusText: 'Map Layers: dem fetch failed • Precision warning',
+      locationKey: '48.8566:2.3522:35',
+    })
+  })
+
+  it('hides for a ready map with no actionable map status', () => {
+    const saved = getSavedLocationPresentation(true, {
+      lat: 48.8566,
+      lon: 2.3522,
+      altitude_m: 35,
+    })
+
+    const model = getLocationNoticeReadModel({
+      saved,
+      mapVisible: true,
+      mapSurface: READY_MAP_STATE,
+      t: translate,
+    })
+
+    expect(model).toEqual({
+      visible: false,
+      mapSurfaceVisible: true,
+      tone: 'ready',
+      statusText: '',
       locationKey: '48.8566:2.3522:35',
     })
   })

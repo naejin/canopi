@@ -350,7 +350,7 @@ describe('CanvasPanel basemap feedback', () => {
     expect(container.querySelector('[data-map-active="true"]')).not.toBeNull()
   })
 
-  it('shows the saved location once the basemap becomes active', async () => {
+  it('hides the clean ready Location Notice once the basemap becomes active', async () => {
     currentDesign.value = {
       version: 2,
       name: 'Demo',
@@ -384,8 +384,7 @@ describe('CanvasPanel basemap feedback', () => {
       render(<CanvasPanel />, container)
     })
 
-    const status = container.querySelector('[role="status"]')
-    expect(status?.textContent).toContain('48.8566, 2.3522 (35 m)')
+    expect(container.querySelector('[role="status"]')).toBeNull()
     expect(container.querySelector('[data-map-active="true"]')).toBeTruthy()
   })
 
@@ -458,8 +457,7 @@ describe('CanvasPanel basemap feedback', () => {
     })
 
     expect(container.querySelector('[data-map-active="true"]')).toBeTruthy()
-    const status = container.querySelector('[role="status"]')
-    expect(status?.textContent).toContain('48.8566, 2.3522 (35 m)')
+    expect(container.querySelector('[role="status"]')).toBeNull()
   })
 
   it('shows a basemap error when the surface reports a load failure', async () => {
@@ -536,8 +534,8 @@ describe('CanvasPanel basemap feedback', () => {
     })
 
     const status = container.querySelector('[role="status"]')
-    expect(status?.textContent).toContain('48.8566, 2.3522 (35 m)')
     expect(status?.textContent).toContain('Map Layers: dem fetch failed')
+    expect(status?.textContent).not.toContain('48.8566, 2.3522')
     expect(container.querySelector('[data-map-active="true"]')).toBeTruthy()
   })
 
@@ -577,5 +575,6 @@ describe('CanvasPanel basemap feedback', () => {
 
     const status = container.querySelector('[role="status"]')
     expect(status?.textContent).toContain('Precision may degrade for large designs')
+    expect(status?.textContent).not.toContain('48.8566, 2.3522')
   })
 })
