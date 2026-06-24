@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ScenePlantEntity, SceneViewportState } from '../canvas/runtime/scene'
-import { computeSelectionLabels } from '../canvas/runtime/selection-labels'
+import { computePinnedPlantNameLabels, computeSelectionLabels } from '../canvas/runtime/selection-labels'
 
 function createViewport(overrides: Partial<SceneViewportState> = {}): SceneViewportState {
   return { x: 0, y: 0, scale: 8, ...overrides }
@@ -37,20 +37,17 @@ describe('selection labels', () => {
     expect(result).toEqual([])
   })
 
-  it('computes one label per species at the centroid of selected plants', () => {
-    const plants = [
-      createPlant({ id: 'a', position: { x: 0, y: 0 } }),
-      createPlant({ id: 'b', position: { x: 10, y: 0 } }),
-    ]
+  it('computes one label for a single selected unpinned plant', () => {
+    const plants = [createPlant({ id: 'a', position: { x: 10, y: 20 } })]
     const result = computeSelectionLabels(
       plants,
-      new Set(['a', 'b']),
+      new Set(['a']),
       createViewport({ scale: 1 }),
       new Map(),
     )
     expect(result).toHaveLength(1)
     expect(result[0]!.canonicalName).toBe('Malus domestica')
-    expect(result[0]!.screenPoint.x).toBe(5) // centroid x = (0+10)/2
+    expect(result[0]!.screenPoint.x).toBe(10)
   })
 
   it('places a selected plant label below the glyph at low zoom', () => {
@@ -77,7 +74,7 @@ describe('selection labels', () => {
     expect(result[0]!.screenPoint.y).toBeCloseTo(20008, 2)
   })
 
-  it('produces separate labels for different species', () => {
+  it('returns empty array when multiple plants are selected', () => {
     const plants = [
       createPlant({ id: 'a', canonicalName: 'Malus domestica', position: { x: 0, y: 0 } }),
       createPlant({ id: 'b', canonicalName: 'Pyrus communis', position: { x: 10, y: 0 } }),
@@ -88,7 +85,27 @@ describe('selection labels', () => {
       createViewport({ scale: 1 }),
       new Map(),
     )
-    expect(result).toHaveLength(2)
+    expect(result).toEqual([])
+  })
+
+  it('returns empty array when one plant is selected with another design object', () => {
+    const result = computeSelectionLabels(
+      [createPlant({ id: 'a' })],
+      new Set(['a', 'zone-1']),
+      createViewport(),
+      new Map(),
+    )
+    expect(result).toEqual([])
+  })
+
+  it('returns empty array when the single selected plant already has a pinned name', () => {
+    const result = computeSelectionLabels(
+      [createPlant({ id: 'a', pinnedName: true })],
+      new Set(['a']),
+      createViewport(),
+      new Map(),
+    )
+    expect(result).toEqual([])
   })
 
   it('uses localized common name when available', () => {
@@ -114,20 +131,17 @@ describe('selection labels', () => {
     expect(result[0]!.fontStyle).toBe('italic')
   })
 
-  it('nudges overlapping labels apart', () => {
+  it('does not nudge overlapping pinned plant names', () => {
     const plants = [
-      createPlant({ id: 'a', canonicalName: 'Malus domestica', position: { x: 0, y: 0 } }),
-      createPlant({ id: 'b', canonicalName: 'Pyrus communis', position: { x: 0, y: 0.5 } }),
+      createPlant({ id: 'a', pinnedName: true, position: { x: 0, y: 0 } }),
+      createPlant({ id: 'b', pinnedName: true, position: { x: 0, y: 0 } }),
     ]
-    const result = computeSelectionLabels(
+    const result = computePinnedPlantNameLabels(
       plants,
-      new Set(['a', 'b']),
       createViewport({ scale: 8 }),
       new Map(),
     )
     expect(result).toHaveLength(2)
-    // Labels should be nudged apart (second one pushed down)
-    expect(result[1]!.screenPoint.y).toBeGreaterThan(result[0]!.screenPoint.y)
-    expect(result[1]!.screenPoint.y - result[0]!.screenPoint.y).toBeGreaterThanOrEqual(16)
+    expect(result[1]!.screenPoint).toEqual(result[0]!.screenPoint)
   })
 })

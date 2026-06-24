@@ -105,6 +105,7 @@ export class SceneRuntimePresentationController {
     return {
       scene,
       viewport,
+      selectedEntityIds: session.selectedEntityIds,
       selectedPlantIds: getSelectedPlantIds(scene, session.selectedEntityIds),
       selectedZoneIds: getSelectedZoneIds(scene, session.selectedEntityIds),
       selectedAnnotationIds: getSelectedAnnotationIds(scene, session.selectedEntityIds),

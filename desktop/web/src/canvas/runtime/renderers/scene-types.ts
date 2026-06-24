@@ -19,6 +19,7 @@ export type SceneRendererHoverTarget =
 export interface SceneRendererSnapshot {
   readonly scene: ScenePersistedState
   readonly viewport: SceneViewportState
+  readonly selectedEntityIds?: ReadonlySet<string>
   readonly selectedPlantIds: ReadonlySet<string>
   readonly selectedZoneIds: ReadonlySet<string>
   readonly selectedAnnotationIds: ReadonlySet<string>

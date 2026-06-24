@@ -189,6 +189,10 @@ _Avoid_: Object scale, canvas scale, display size
 A temporary on-canvas distance cue shown while dragging a placed plant. A plant drag distance guide describes the center-to-center distance from the active dragged placed plant to nearby non-dragged placed plants, and it is not saved in the design.
 _Avoid_: Plant spacing interval, zone measurement, ruler
 
+**Selection Label**:
+A temporary visible name label shown only when one unpinned placed plant is the current selection. A selection label helps identify the current selection and is not saved in the design.
+_Avoid_: Pinned Plant Name, annotation, hover tooltip
+
 **Pinned Plant Name**:
 A persistent visible name label attached to an individual placed plant in a design. A pinned plant name is a presentation aid and does not prevent editing, moving, deleting, or otherwise changing the placed plant.
 _Avoid_: Locked plant name, Design Object Lock, annotation

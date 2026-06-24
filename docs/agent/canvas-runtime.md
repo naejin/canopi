@@ -194,10 +194,10 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - Plant Symbols apply to default symbolic marker mode. Canopy spread mode remains physical circle geometry when canopy spread is known; only the missing-canopy symbolic fallback should use the selected Plant Symbol.
 - Plant Symbols stay upright and ignore placed plant rotation unless a future feature deliberately defines oriented marker symbols.
 - Stack badges indicate placed plants whose centers collapse to nearly the same screen position, not all plants whose symbolic Visual Footprints overlap. Badge placement should derive from the current plant visual radius instead of fixed legacy dot-size assumptions.
-- Do not reintroduce general per-plant labels on canvas. Identification is through hover tooltip and per-species selection labels, except for explicit Pinned Plant Names, which are persisted per placed plant and render as always-visible labels.
+- Do not reintroduce general per-plant labels on canvas. Identification is through hover tooltip and single-plant Selection Labels, except for explicit Pinned Plant Names, which are persisted per placed plant and render as always-visible labels.
 - Hover tooltip is an HTML overlay managed by `SceneInteractionController` through `runtime/interaction/hover-tooltip.ts`.
 - Hover species highlight flows through renderer snapshots.
-- Selection labels are computed per species at centroid by `runtime/selection-labels.ts` and must track viewport changes.
+- Selection Labels are temporary identification for the current selection only. Render them only when the whole canvas selection is exactly one unpinned Placed Plant; multi-selection, mixed-object selection, and selected pinned plants should not render transient plant names.
 - Size mode and color mode are independent axes. Do not reintroduce a combined plant display mode.
 - Default Plant Size Mode dots are symbolic position markers. Size them with a smooth absolute-scale Visual Footprint curve with soft screen-readable limits, not a hard pixel cap or design-reference-relative sizing. Target about 2px minimum, about 6.75px asymptotic maximum, and gradual growth from roughly 2.2px at 1 px/m to roughly 6.3px at 200 px/m.
 - Canopy spread mode is physical geometry when canopy spread is known. Plants with missing canopy spread use the symbolic Visual Footprint fallback rather than misleading physical circles.

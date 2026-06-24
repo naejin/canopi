@@ -152,7 +152,7 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
           if (!snapshot) return
           const labels = computeSelectionLabels(
             snapshot.scene.plants,
-            snapshot.selectedPlantIds,
+            snapshot.selectedEntityIds ?? snapshot.selectedPlantIds,
             viewport,
             snapshot.localizedCommonNames,
             {

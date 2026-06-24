@@ -111,6 +111,75 @@ describe('createCanvas2DSceneRenderer', () => {
     renderer.dispose()
   })
 
+  it('does not restore selection labels for mixed selections on viewport changes', async () => {
+    const ctx = createMockCanvasContext()
+    const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext') as unknown as {
+      mockImplementation(implementation: (contextId: string) => CanvasRenderingContext2D | null): void
+    }
+    getContextSpy.mockImplementation((contextId: string) => {
+      return contextId === '2d' ? ctx as unknown as CanvasRenderingContext2D : null
+    })
+
+    const host = document.createElement('div')
+    Object.defineProperty(host, 'clientWidth', { configurable: true, value: 400 })
+    Object.defineProperty(host, 'clientHeight', { configurable: true, value: 300 })
+
+    const renderer = await createCanvas2DSceneRenderer().initialize({ container: host }, {
+      backendId: 'canvas2d',
+      capabilities: {
+        domCanvas: true,
+        canvas2d: true,
+        offscreenCanvas: false,
+        offscreenCanvas2d: false,
+        webgl: false,
+        webgl2: false,
+        webgpu: false,
+        imageBitmap: false,
+        createImageBitmap: false,
+        worker: false,
+        devicePixelRatio: 1,
+        prefersReducedMotion: null,
+      },
+    } as never)
+
+    const snapshot = createRendererSnapshot({
+      plants: [createPlant({ id: 'plant-1', position: { x: 10, y: 10 } })],
+      zones: [{
+        kind: 'zone',
+        locked: false,
+        name: 'zone-1',
+        zoneType: 'rect',
+        points: [
+          { x: 0, y: 0 },
+          { x: 20, y: 0 },
+          { x: 20, y: 10 },
+          { x: 0, y: 10 },
+        ],
+        rotationDeg: 0,
+        fillColor: null,
+        notes: null,
+      }],
+      selectedEntityIds: new Set(['plant-1', 'zone-1']),
+      selectedPlantIds: new Set(['plant-1']),
+      selectedZoneIds: new Set(['zone-1']),
+      selectionLabels: [{
+        canonicalName: 'Malus domestica',
+        text: 'Apple',
+        fontStyle: 'normal',
+        screenPoint: { x: 10, y: 15 },
+      }],
+      viewport: { x: 0, y: 0, scale: 2 },
+    })
+
+    renderer.renderScene(snapshot)
+    vi.clearAllMocks()
+
+    renderer.setViewport({ x: 3, y: 4, scale: 3 })
+
+    expect(ctx.fillText).not.toHaveBeenCalledWith('Apple', expect.any(Number), expect.any(Number))
+    renderer.dispose()
+  })
+
   it('applies text annotation rotation in screen space', async () => {
     const ctx = createMockCanvasContext()
     const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext') as unknown as {
@@ -261,15 +330,20 @@ describe('createCanvas2DSceneRenderer', () => {
 
 function createRendererSnapshot(overrides: {
   plants?: SceneRendererSnapshot['scene']['plants']
+  zones?: SceneRendererSnapshot['scene']['zones']
   measurementGuides?: SceneRendererSnapshot['scene']['measurementGuides']
   layers?: SceneRendererSnapshot['scene']['layers']
   plantSpeciesSymbols?: Record<string, string>
   viewport?: SceneRendererSnapshot['viewport']
+  selectedEntityIds?: SceneRendererSnapshot['selectedEntityIds']
+  selectedPlantIds?: SceneRendererSnapshot['selectedPlantIds']
+  selectedZoneIds?: SceneRendererSnapshot['selectedZoneIds']
+  selectionLabels?: SceneRendererSnapshot['selectionLabels']
 } = {}): SceneRendererSnapshot {
   return {
     scene: {
       plants: overrides.plants ?? [],
-      zones: [],
+      zones: overrides.zones ?? [],
       annotations: [],
       groups: [],
       layers: overrides.layers ?? [],
@@ -279,8 +353,9 @@ function createRendererSnapshot(overrides: {
       guides: [],
     },
     viewport: overrides.viewport ?? { x: 10, y: 20, scale: 2 },
-    selectedPlantIds: new Set<string>(),
-    selectedZoneIds: new Set<string>(),
+    selectedEntityIds: overrides.selectedEntityIds,
+    selectedPlantIds: overrides.selectedPlantIds ?? new Set<string>(),
+    selectedZoneIds: overrides.selectedZoneIds ?? new Set<string>(),
     selectedAnnotationIds: new Set<string>(),
     selectedMeasurementGuideIds: new Set<string>(),
     highlightedPlantIds: new Set<string>(),
@@ -289,7 +364,7 @@ function createRendererSnapshot(overrides: {
     colorByAttr: null,
     localizedCommonNames: new Map(),
     hoveredCanonicalName: null,
-    selectionLabels: [],
+    selectionLabels: overrides.selectionLabels ?? [],
     speciesCache: new Map(),
   }
 }
