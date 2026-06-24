@@ -1,7 +1,7 @@
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { setDesignName } from '../../app/design-edit'
-import { designName, designDirty } from '../../app/document-session/store'
+import { currentDesign, designName, designDirty } from '../../app/document-session/store'
 import { activePanel } from '../../app/shell/state'
 import { locale, theme } from '../../app/settings/state'
 import { mutateSettingsProjection } from '../../app/settings/projection'
@@ -45,7 +45,8 @@ function LocalePicker() {
 }
 
 export function TitleBar() {
-  const showsDocumentName = activePanel.value === 'canvas' || activePanel.value === 'location'
+  const hasActiveDesign = currentDesign.value !== null
+  const showsDocumentName = hasActiveDesign && (activePanel.value === 'canvas' || activePanel.value === 'location')
   const name = designName.value
   const dirty = designDirty.value
   const visibleName = visibleDesignName(name)
@@ -67,6 +68,12 @@ export function TitleBar() {
     input.focus()
     input.setSelectionRange(0, input.value.length)
   }, [isEditingName])
+
+  useEffect(() => {
+    if (hasActiveDesign || !isEditingName) return
+    setIsEditingName(false)
+    setDraftName(visibleDesignName(designName.value))
+  }, [hasActiveDesign, isEditingName])
 
   // From Tauri docs: use e.buttons === 1 (left button held) and e.detail
   // to distinguish single click (drag) from double click (maximize).
@@ -122,7 +129,9 @@ export function TitleBar() {
 
       {/* Center: file name + draggable spacer */}
       <div className={styles.dragRegion}>
-        {showsDocumentName && name && (
+        {!hasActiveDesign ? (
+          <span className={styles.fileName}>Canopi</span>
+        ) : showsDocumentName && name && (
           isEditingName ? (
             <input
               ref={nameInputRef}
