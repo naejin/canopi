@@ -12,6 +12,10 @@ _Avoid_: Document, file, project
 The active runtime context for a Design in the app. A design session includes the current Design state, dirty baselines, save/autosave behavior, queued Design loads, lifecycle workflows, and an optional attached canvas runtime.
 _Avoid_: Document session, file session, canvas session
 
+**Welcome Screen**:
+The app-opening state shown when no Design Session is active. A welcome screen may offer entry points such as creating a new design, opening an existing design, or reopening a recent design, but it is not itself a Design and does not have a user-editable Design name.
+_Avoid_: Homepage, empty design, untitled design
+
 **Design Edit**:
 A non-canvas change to Design-owned state, including Location, Budget Items, Timeline Actions, Consortiums, description, and extra fields. Design Edit owns no-op detection, preview/commit/abort transaction behavior, and non-canvas dirty-state marking behind the Design Session seam. It does not own canvas scene state, save/load lifecycle, or UI draft state.
 _Avoid_: Document mutation, panel action, direct currentDesign write

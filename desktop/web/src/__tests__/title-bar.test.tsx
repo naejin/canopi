@@ -26,7 +26,7 @@ import {
   designName,
   replaceCurrentDesignState,
   resetDirtyBaselines,
-} from '../app/document-session/store'
+} from './support/design-session-state'
 import { TitleBar } from '../components/shared/TitleBar'
 
 function makeDesign(name: string): CanopiFile {
@@ -78,6 +78,21 @@ describe('TitleBar', () => {
   afterEach(() => {
     render(null, container)
     container.remove()
+  })
+
+  it('shows the app title on the Welcome Screen without exposing design rename', async () => {
+    currentDesign.value = null
+    designName.value = 'Untitled'
+
+    await act(async () => {
+      render(<TitleBar />, container)
+      await flushEffects()
+    })
+
+    expect(container.textContent).toContain('Canopi')
+    expect(container.textContent).not.toContain('Untitled Design')
+    expect(container.querySelector('button[aria-label="Rename design name"]')).toBeNull()
+    expect(container.querySelector('input[aria-label="Design name"]')).toBeNull()
   })
 
   it('edits the Design name from the title bar without persisting unchanged fallback text', async () => {
