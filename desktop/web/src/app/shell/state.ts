@@ -1,11 +1,11 @@
 import { signal, batch } from "@preact/signals";
 
-export type Panel = "plant-db" | "canvas" | "favorites" | "location";
+export type Panel = "plant-db" | "canvas" | "favorites" | "location" | "design-notebook";
 
 // Panels that open as a sidebar alongside the canvas instead of replacing it.
-export type SidePanel = "plant-db" | "favorites";
+export type SidePanel = "plant-db" | "favorites" | "design-notebook";
 
-const SIDE_PANELS = new Set<Panel>(["plant-db", "favorites"]);
+const SIDE_PANELS = new Set<Panel>(["plant-db", "favorites", "design-notebook"]);
 
 export const activePanel = signal<Panel>("canvas");
 

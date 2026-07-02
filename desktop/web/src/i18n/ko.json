@@ -5,7 +5,24 @@
     "worldMap": "세계 지도",
     "learning": "학습",
     "savedDesigns": "저장된 설계",
+    "designNotebook": "디자인 노트북",
     "favorites": "즐겨찾기"
+  },
+  "designNotebook": {
+    "title": "디자인 노트북",
+    "allDesigns": "모든 디자인",
+    "viewsLabel": "노트북 보기",
+    "visibleCount": "{{count}}개 디자인 표시",
+    "searchLabel": "디자인 검색",
+    "searchPlaceholder": "디자인 검색...",
+    "clearSearch": "검색 지우기",
+    "loading": "디자인을 불러오는 중...",
+    "loadError": "디자인 노트북을 사용할 수 없습니다.",
+    "emptyTitle": "아직 저장된 디자인이 없습니다",
+    "emptyText": "디자인을 저장하면 노트북에 추가됩니다.",
+    "noResultsTitle": "일치하는 디자인 없음",
+    "noResultsText": "다른 이름이나 경로를 시도하세요.",
+    "plantCount": "{{count}}개 식물"
   },
   "plantDb": {
     "title": "식물 데이터베이스",

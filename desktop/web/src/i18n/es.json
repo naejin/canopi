@@ -5,7 +5,24 @@
     "worldMap": "Mapa mundial",
     "learning": "Aprendizaje",
     "savedDesigns": "Diseños guardados",
+    "designNotebook": "Cuaderno de diseños",
     "favorites": "Favoritos"
+  },
+  "designNotebook": {
+    "title": "Cuaderno de diseños",
+    "allDesigns": "Todos los diseños",
+    "viewsLabel": "Vistas del cuaderno",
+    "visibleCount": "{{count}} diseños visibles",
+    "searchLabel": "Buscar diseños",
+    "searchPlaceholder": "Buscar diseños...",
+    "clearSearch": "Borrar búsqueda",
+    "loading": "Cargando diseños...",
+    "loadError": "El cuaderno de diseños no está disponible.",
+    "emptyTitle": "Aún no hay diseños guardados",
+    "emptyText": "Guarda un diseño para añadirlo al cuaderno.",
+    "noResultsTitle": "No hay diseños coincidentes",
+    "noResultsText": "Prueba con otro nombre o ruta.",
+    "plantCount": "{{count}} plantas"
   },
   "plantDb": {
     "title": "Base de plantas",

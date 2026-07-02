@@ -5,7 +5,24 @@
     "worldMap": "世界地图",
     "learning": "学习",
     "savedDesigns": "已保存的设计",
+    "designNotebook": "设计笔记本",
     "favorites": "收藏夹"
+  },
+  "designNotebook": {
+    "title": "设计笔记本",
+    "allDesigns": "所有设计",
+    "viewsLabel": "笔记本视图",
+    "visibleCount": "{{count}} 个可见设计",
+    "searchLabel": "搜索设计",
+    "searchPlaceholder": "搜索设计...",
+    "clearSearch": "清除搜索",
+    "loading": "正在加载设计...",
+    "loadError": "设计笔记本不可用。",
+    "emptyTitle": "还没有保存的设计",
+    "emptyText": "保存设计后会添加到笔记本。",
+    "noResultsTitle": "没有匹配的设计",
+    "noResultsText": "尝试其他名称或路径。",
+    "plantCount": "{{count}} 株"
   },
   "plantDb": {
     "title": "植物数据库",

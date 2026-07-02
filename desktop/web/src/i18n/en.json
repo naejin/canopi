@@ -5,7 +5,24 @@
     "worldMap": "World Map",
     "learning": "Learning",
     "savedDesigns": "Saved Designs",
+    "designNotebook": "Design Notebook",
     "favorites": "Favorites"
+  },
+  "designNotebook": {
+    "title": "Design Notebook",
+    "allDesigns": "All Designs",
+    "viewsLabel": "Notebook views",
+    "visibleCount": "{{count}} visible designs",
+    "searchLabel": "Search designs",
+    "searchPlaceholder": "Search designs...",
+    "clearSearch": "Clear search",
+    "loading": "Loading designs...",
+    "loadError": "Design Notebook is unavailable.",
+    "emptyTitle": "No saved Designs yet",
+    "emptyText": "Save a Design to add it to the notebook.",
+    "noResultsTitle": "No matching Designs",
+    "noResultsText": "Try a different name or path.",
+    "plantCount": "{{count}} plants"
   },
   "plantDb": {
     "title": "Plant Database",

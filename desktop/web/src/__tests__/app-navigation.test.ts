@@ -29,6 +29,13 @@ describe('app navigation', () => {
     expect(sidePanel.value).toBe('favorites')
   })
 
+  it('opens the Design Notebook as an app-level sidebar panel', () => {
+    navigateTo('design-notebook')
+
+    expect(activePanel.value).toBe('canvas')
+    expect(sidePanel.value).toBe('design-notebook')
+  })
+
   it('returns to the canvas-only layout when navigating home', () => {
     navigateTo('favorites')
     navigateTo('canvas')
@@ -39,9 +46,9 @@ describe('app navigation', () => {
 
   it('routes sidebar navigation back through the canvas shell from location', () => {
     navigateTo('location')
-    navigateTo('plant-db')
+    navigateTo('design-notebook')
 
     expect(activePanel.value).toBe('canvas')
-    expect(sidePanel.value).toBe('plant-db')
+    expect(sidePanel.value).toBe('design-notebook')
   })
 })

@@ -9,6 +9,7 @@ vi.mock('../components/shared/ProblemReportDialog', () => ({ ProblemReportDialog
 vi.mock('../components/panels/CanvasPanel', () => ({ CanvasPanel: () => <div data-testid="canvas-panel" /> }))
 vi.mock('../components/panels/PanelBar', () => ({ PanelBar: () => <div data-testid="panel-bar" /> }))
 vi.mock('../components/panels/PlantDbPanel', () => ({ PlantDbPanel: () => <div data-testid="plant-db-panel" /> }))
+vi.mock('../components/panels/DesignNotebookPanel', () => ({ DesignNotebookPanel: () => <div data-testid="design-notebook-panel" /> }))
 vi.mock('../app/shell/controller', () => ({ commitSidePanelWidth: vi.fn() }))
 
 import { App } from '../app'
@@ -55,6 +56,20 @@ describe('App sidebar width', () => {
     const style = sidePanelElement(container).getAttribute('style')
     expect(style).toContain('--side-panel-width: clamp(320px, 35vw, 90vw)')
     expect(style).not.toContain('520px')
+  })
+
+  it('mounts the Design Notebook as a right-side panel', async () => {
+    sidePanel.value = 'design-notebook'
+
+    await act(async () => {
+      render(<App />, container)
+    })
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    expect(container.querySelector('[data-testid="design-notebook-panel"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="canvas-panel"]')).not.toBeNull()
   })
 
   it('renders a saved width and commits resize drags through the settings controller', async () => {

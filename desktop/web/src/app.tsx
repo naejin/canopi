@@ -28,6 +28,11 @@ const FavoritesPanel = lazy(async () => {
   return { default: module.FavoritesPanel };
 });
 
+const DesignNotebookPanel = lazy(async () => {
+  const module = await import("./components/panels/DesignNotebookPanel");
+  return { default: module.DesignNotebookPanel };
+});
+
 const LocationPanel = lazy(async () => {
   const module = await import("./components/panels/LocationPanel");
   return { default: module.LocationPanel };
@@ -38,7 +43,9 @@ function SidePanelContent({ side }: { side: string }) {
     ? PlantDbPanel
     : side === "favorites"
       ? FavoritesPanel
-      : null;
+      : side === "design-notebook"
+        ? DesignNotebookPanel
+        : null;
 
   if (!Panel) return null;
 

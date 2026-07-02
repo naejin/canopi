@@ -46,6 +46,7 @@ export type AppCommandId =
   | 'nav.location'
   | 'nav.plantDb'
   | 'nav.favorites'
+  | 'nav.designNotebook'
   | 'view.toggleTheme'
   | 'canvas.tool.select'
   | 'canvas.tool.hand'
@@ -260,6 +261,12 @@ export const APP_COMMANDS: readonly AppCommandDefinition[] = [
     palette: true,
     run: () => switchPanel('favorites'),
     disabled: (state) => !state.hasDesign,
+  },
+  {
+    id: 'nav.designNotebook',
+    label: () => t('nav.designNotebook'),
+    palette: true,
+    run: () => switchPanel('design-notebook'),
   },
   {
     id: 'view.toggleTheme',

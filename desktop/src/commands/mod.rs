@@ -2,6 +2,7 @@ pub mod adaptation;
 pub mod community;
 pub mod content;
 pub mod design;
+pub mod design_notebook;
 pub mod export;
 pub mod favorites;
 pub mod geocoding;

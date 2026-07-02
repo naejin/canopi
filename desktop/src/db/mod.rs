@@ -1,3 +1,4 @@
+pub mod design_notebook;
 pub mod plant_db;
 pub(crate) mod plant_filter_fields;
 pub mod query_builder;

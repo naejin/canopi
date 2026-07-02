@@ -5,7 +5,24 @@
     "worldMap": "世界地図",
     "learning": "学習",
     "savedDesigns": "保存済みデザイン",
+    "designNotebook": "デザインノート",
     "favorites": "お気に入り"
+  },
+  "designNotebook": {
+    "title": "デザインノート",
+    "allDesigns": "すべてのデザイン",
+    "viewsLabel": "ノートの表示",
+    "visibleCount": "{{count}} 件の表示中デザイン",
+    "searchLabel": "デザインを検索",
+    "searchPlaceholder": "デザインを検索...",
+    "clearSearch": "検索をクリア",
+    "loading": "デザインを読み込み中...",
+    "loadError": "デザインノートを利用できません。",
+    "emptyTitle": "保存済みデザインはまだありません",
+    "emptyText": "デザインを保存するとノートに追加されます。",
+    "noResultsTitle": "一致するデザインがありません",
+    "noResultsText": "別の名前またはパスを試してください。",
+    "plantCount": "{{count}} 株"
   },
   "plantDb": {
     "title": "植物データベース",

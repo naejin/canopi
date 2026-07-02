@@ -57,7 +57,7 @@ describe('PanelBar', () => {
 
     const strokes = Array.from(container.querySelectorAll<SVGElement>('nav[aria-label="Panels"] svg'))
       .map((icon) => icon.getAttribute('stroke-width') ?? icon.getAttribute('strokeWidth'))
-    expect(strokes).toEqual(['1.5', '1.5', '1.5', '1.5'])
+    expect(strokes).toEqual(['1.5', '1.5', '1.5', '1.5', '1.5'])
   })
 
   it('renders the location entry point and routes to the location shell', async () => {
@@ -87,6 +87,7 @@ describe('PanelBar', () => {
     expect(panelButton('Design Canvas').getAttribute('aria-pressed')).toBe('true')
     expect(panelButton('Design Location').disabled).toBe(true)
     expect(panelButton('Plant Database').disabled).toBe(true)
+    expect(panelButton('Design Notebook').disabled).toBe(false)
     expect(panelButton('Favorites').disabled).toBe(true)
   })
 
@@ -102,6 +103,7 @@ describe('PanelBar', () => {
     expect(sidePanel.value).toBe('plant-db')
     expect(panelButton('Plant Database').disabled).toBe(false)
     expect(panelButton('Plant Database').getAttribute('aria-pressed')).toBe('true')
+    expect(panelButton('Design Notebook').disabled).toBe(false)
     expect(panelButton('Favorites').disabled).toBe(true)
 
     await act(async () => {

@@ -193,6 +193,7 @@ describe('command registry canvas tool switching', () => {
   it('uses the shared shortcut definitions for panel navigation and tools', () => {
     expect(getCommand('nav.canvas').shortcut).toBe(PANEL_SHORTCUTS.canvas)
     expect(getCommand('nav.plantDb').shortcut).toBe(PANEL_SHORTCUTS.plantDb)
+    expect(getCommand('nav.designNotebook').shortcut).toBeUndefined()
     expect(getCommand('nav.location').shortcut).toBeUndefined()
     expect(getCommand('canvas.tool.select').shortcut).toBe(TOOL_SHORTCUTS.select)
     expect(getCommand('canvas.tool.line').shortcut).toBe(TOOL_SHORTCUTS.line)
@@ -353,11 +354,24 @@ describe('command registry canvas tool switching', () => {
       disabled: true,
       active: false,
     })
+    expect(panelCommand('design-notebook')).toMatchObject({
+      commandId: 'nav.designNotebook',
+      disabled: false,
+      active: false,
+    })
     expect(panelCommand('favorites')).toMatchObject({
       commandId: 'nav.favorites',
       disabled: true,
       active: false,
     })
+    expect(runAppCommand('nav.designNotebook')).toBe(true)
+    expect(activePanel.value).toBe('canvas')
+    expect(sidePanel.value).toBe('design-notebook')
+    expect(panelCommand('design-notebook')).toMatchObject({ disabled: false, active: true })
+    expect(runAppCommand('nav.designNotebook')).toBe(true)
+    expect(activePanel.value).toBe('canvas')
+    expect(sidePanel.value).toBe(null)
+
     expect(runAppCommand('nav.plantDb')).toBe(true)
     expect(activePanel.value).toBe('canvas')
     expect(sidePanel.value).toBe('plant-db')

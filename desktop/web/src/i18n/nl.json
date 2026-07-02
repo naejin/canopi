@@ -5,7 +5,24 @@
     "worldMap": "Wereldkaart",
     "learning": "Leren",
     "savedDesigns": "Opgeslagen ontwerpen",
+    "designNotebook": "Ontwerpnotitieboek",
     "favorites": "Favorieten"
+  },
+  "designNotebook": {
+    "title": "Ontwerpnotitieboek",
+    "allDesigns": "Alle ontwerpen",
+    "viewsLabel": "Notitieboekweergaven",
+    "visibleCount": "{{count}} zichtbare ontwerpen",
+    "searchLabel": "Ontwerpen zoeken",
+    "searchPlaceholder": "Ontwerpen zoeken...",
+    "clearSearch": "Zoekopdracht wissen",
+    "loading": "Ontwerpen laden...",
+    "loadError": "Het ontwerpnotitieboek is niet beschikbaar.",
+    "emptyTitle": "Nog geen opgeslagen ontwerpen",
+    "emptyText": "Sla een ontwerp op om het aan het notitieboek toe te voegen.",
+    "noResultsTitle": "Geen overeenkomende ontwerpen",
+    "noResultsText": "Probeer een andere naam of pad.",
+    "plantCount": "{{count}} planten"
   },
   "plantDb": {
     "title": "Plantendatabase",

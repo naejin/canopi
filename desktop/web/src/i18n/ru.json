@@ -5,7 +5,24 @@
     "worldMap": "Карта мира",
     "learning": "Обучение",
     "savedDesigns": "Сохранённые проекты",
+    "designNotebook": "Блокнот дизайнов",
     "favorites": "Избранное"
+  },
+  "designNotebook": {
+    "title": "Блокнот дизайнов",
+    "allDesigns": "Все дизайны",
+    "viewsLabel": "Виды блокнота",
+    "visibleCount": "{{count}} видимых дизайнов",
+    "searchLabel": "Искать дизайны",
+    "searchPlaceholder": "Искать дизайны...",
+    "clearSearch": "Очистить поиск",
+    "loading": "Загрузка дизайнов...",
+    "loadError": "Блокнот дизайнов недоступен.",
+    "emptyTitle": "Сохранённых дизайнов пока нет",
+    "emptyText": "Сохраните дизайн, чтобы добавить его в блокнот.",
+    "noResultsTitle": "Нет подходящих дизайнов",
+    "noResultsText": "Попробуйте другое имя или путь.",
+    "plantCount": "{{count}} растений"
   },
   "plantDb": {
     "title": "База растений",

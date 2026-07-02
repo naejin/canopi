@@ -1,7 +1,7 @@
 use rusqlite::Connection;
 
 #[allow(dead_code)]
-const CURRENT_SCHEMA_VERSION: i32 = 3;
+const CURRENT_SCHEMA_VERSION: i32 = 4;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SavedObjectStampRow {
@@ -28,6 +28,10 @@ pub fn init(conn: &Connection) -> Result<(), rusqlite::Error> {
     if version < 3 {
         conn.execute_batch(include_str!("../../migrations/v3_saved_object_stamps.sql"))?;
         conn.pragma_update(None, "user_version", 3)?;
+    }
+    if version < 4 {
+        conn.execute_batch(include_str!("../../migrations/v4_design_notebook.sql"))?;
+        conn.pragma_update(None, "user_version", 4)?;
     }
 
     Ok(())
@@ -375,5 +379,16 @@ mod tests {
                 .collect::<Vec<_>>(),
             [first.id.as_str()]
         );
+    }
+
+    #[test]
+    fn init_creates_design_notebook_tables() {
+        let conn = Connection::open_in_memory().unwrap();
+        init(&conn).unwrap();
+
+        conn.query_row("SELECT COUNT(*) FROM design_notebook_entries", [], |_| {
+            Ok(())
+        })
+        .unwrap();
     }
 }

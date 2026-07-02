@@ -86,6 +86,7 @@ pub fn run() {
             commands::design::save_design,
             commands::design::load_design,
             commands::design::get_recent_files,
+            commands::design_notebook::get_design_notebook_entries,
             commands::design::autosave_design,
             commands::design::list_autosaves,
             commands::design::recover_autosave,

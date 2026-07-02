@@ -67,6 +67,11 @@ export async function getRecentFiles(): Promise<DesignSummary[]> {
   return invoke('get_recent_files')
 }
 
+/** Get saved Design references for the Design Notebook. */
+export async function getDesignNotebookEntries(): Promise<DesignSummary[]> {
+  return invoke('get_design_notebook_entries')
+}
+
 /** Silent autosave to app data dir. */
 export async function autosaveDesign(content: CanopiFile, path: string | null): Promise<void> {
   return invoke('autosave_design', { content, path })

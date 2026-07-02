@@ -5,7 +5,24 @@
     "worldMap": "Weltkarte",
     "learning": "Lernen",
     "savedDesigns": "Gespeicherte Entwürfe",
+    "designNotebook": "Design-Notizbuch",
     "favorites": "Favoriten"
+  },
+  "designNotebook": {
+    "title": "Design-Notizbuch",
+    "allDesigns": "Alle Designs",
+    "viewsLabel": "Notizbuchansichten",
+    "visibleCount": "{{count}} sichtbare Designs",
+    "searchLabel": "Designs suchen",
+    "searchPlaceholder": "Designs suchen...",
+    "clearSearch": "Suche löschen",
+    "loading": "Designs werden geladen...",
+    "loadError": "Das Design-Notizbuch ist nicht verfügbar.",
+    "emptyTitle": "Noch keine gespeicherten Designs",
+    "emptyText": "Speichern Sie ein Design, um es zum Notizbuch hinzuzufügen.",
+    "noResultsTitle": "Keine passenden Designs",
+    "noResultsText": "Versuchen Sie einen anderen Namen oder Pfad.",
+    "plantCount": "{{count}} Pflanzen"
   },
   "plantDb": {
     "title": "Pflanzendatenbank",

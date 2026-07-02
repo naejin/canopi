@@ -130,6 +130,7 @@ const PANEL_COMMAND_GROUPS = {
   ],
   side: [
     { panel: 'plant-db', commandId: 'nav.plantDb' },
+    { panel: 'design-notebook', commandId: 'nav.designNotebook' },
     { panel: 'favorites', commandId: 'nav.favorites' },
   ],
 } as const satisfies Record<string, readonly { panel: Panel, commandId: AppCommandId }[]>
@@ -138,6 +139,7 @@ const PANEL_LABELS: Record<Panel, () => string> = {
   canvas: () => t('nav.canvas'),
   location: () => t('canvas.location.title'),
   'plant-db': () => t('nav.plantDb'),
+  'design-notebook': () => t('nav.designNotebook'),
   favorites: () => t('nav.favorites'),
 }
 
@@ -205,6 +207,7 @@ const TOOLBAR_SETTINGS_TOGGLES = [
 
 function isPanelChromeDisabled(panel: Panel, state: AppCommandState): boolean {
   if (panel === 'canvas') return false
+  if (panel === 'design-notebook') return false
   if (isPanelCommandActive(panel, state)) return false
   return !state.hasDesign
 }

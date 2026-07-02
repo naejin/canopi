@@ -14,6 +14,7 @@ pub fn save_design(user_db: &UserDb, path: String, content: CanopiFile) -> Resul
     let dest = std::path::PathBuf::from(&path);
     format::save_to_file(&dest, &content)?;
     try_record_recent(user_db, &path, &content.name);
+    try_record_notebook_reference(user_db, &path, &content);
     tracing::info!("Design '{}' saved to {}", content.name, path);
     Ok(path)
 }
@@ -29,6 +30,7 @@ pub fn load_design(user_db: &UserDb, path: String) -> Result<CanopiFile, String>
     let dest = std::path::PathBuf::from(&path);
     let design = format::load_from_file(&dest)?;
     try_record_recent(user_db, &path, &design.name);
+    try_record_notebook_reference(user_db, &path, &design);
     tracing::info!("Design '{}' loaded from {}", design.name, path);
     Ok(design)
 }
@@ -75,6 +77,18 @@ fn try_record_recent(user_db: &UserDb, path: &str, name: &str) {
     let conn = db::acquire(&user_db.0, "UserDb");
     if let Err(error) = crate::db::recent_files::record_recent_file(&conn, path, name) {
         tracing::warn!("Failed to record recent file '{}': {error}", path);
+    }
+}
+
+fn try_record_notebook_reference(user_db: &UserDb, path: &str, design: &CanopiFile) {
+    let conn = db::acquire(&user_db.0, "UserDb");
+    if let Err(error) = crate::db::design_notebook::record_design_reference(
+        &conn,
+        path,
+        &design.name,
+        design.plants.len() as u32,
+    ) {
+        tracing::warn!("Failed to record Design Notebook entry '{}': {error}", path);
     }
 }
 
@@ -211,6 +225,31 @@ mod tests {
         assert_eq!(recent.len(), 1);
         assert_eq!(recent[0].path, saved_path);
         assert_eq!(recent[0].name, "Service Demo");
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn save_and_load_design_records_design_notebook_entry() {
+        let user_db = test_user_db();
+        let design = test_design("Notebook Demo");
+        let path = temp_design_path("notebook_round_trip");
+
+        let saved_path = save_design(
+            &user_db,
+            path.to_string_lossy().into_owned(),
+            design.clone(),
+        )
+        .unwrap();
+        let _ = load_design(&user_db, saved_path.clone()).unwrap();
+        let notebook_entries = {
+            let conn = crate::db::acquire(&user_db.0, "UserDb");
+            crate::db::design_notebook::get_design_notebook_entries(&conn).unwrap()
+        };
+
+        assert_eq!(notebook_entries.len(), 1);
+        assert_eq!(notebook_entries[0].path, saved_path);
+        assert_eq!(notebook_entries[0].name, "Notebook Demo");
 
         let _ = std::fs::remove_file(path);
     }

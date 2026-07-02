@@ -5,7 +5,24 @@
     "worldMap": "Carte du monde",
     "learning": "Apprentissage",
     "savedDesigns": "Designs sauvegardés",
+    "designNotebook": "Carnet de designs",
     "favorites": "Favoris"
+  },
+  "designNotebook": {
+    "title": "Carnet de designs",
+    "allDesigns": "Tous les designs",
+    "viewsLabel": "Vues du carnet",
+    "visibleCount": "{{count}} designs visibles",
+    "searchLabel": "Rechercher des designs",
+    "searchPlaceholder": "Rechercher des designs...",
+    "clearSearch": "Effacer la recherche",
+    "loading": "Chargement des designs...",
+    "loadError": "Le carnet de designs est indisponible.",
+    "emptyTitle": "Aucun design sauvegardé",
+    "emptyText": "Sauvegardez un design pour l'ajouter au carnet.",
+    "noResultsTitle": "Aucun design correspondant",
+    "noResultsText": "Essayez un autre nom ou chemin.",
+    "plantCount": "{{count}} plantes"
   },
   "plantDb": {
     "title": "Base de plantes",
