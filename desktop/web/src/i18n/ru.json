@@ -728,6 +728,7 @@
     "file.open": "Открыть дизайн",
     "file.save": "Сохранить",
     "file.saveAs": "Сохранить как",
+    "file.exportDesignReportPdf": "Экспортировать отчет о дизайне в PDF",
     "file.exit": "Выход",
     "edit.undo": "Отменить",
     "edit.redo": "Повторить",
@@ -980,5 +981,57 @@
     "includeCurrentDesign": "Включить текущий дизайн",
     "includeCurrentDesignDescription": "Добавляет копию .canopi с содержимым холста, заметками, графиком, бюджетом и сохраненным местоположением.",
     "currentDesignUnavailable": "Нет текущего дизайна, доступного для вложения."
+  },
+  "designReport": {
+    "timeline": {
+      "overview": "Обзор",
+      "actions": "Действия",
+      "recurrence": "Повторение",
+      "target": "Цель",
+      "dependencies": "Зависимости",
+      "status": "Статус",
+      "manual": "Вручную",
+      "none": "Нет",
+      "notScheduled": "Не запланировано",
+      "dateRangeWithUnscheduledOne": "{{dateRange}}; {{count}} без расписания",
+      "dateRangeWithUnscheduledMany": "{{dateRange}}; {{count}} без расписания",
+      "completed": "Завершено",
+      "open": "Открыто",
+      "dependencyCountOne": "{{count}} зависимость",
+      "dependencyCountMany": "{{count}} зависимости"
+    },
+    "budget": {
+      "target": "Цель",
+      "category": "Категория",
+      "totals": "Итоги",
+      "categories": {
+        "plants": "Растения",
+        "materials": "Материалы",
+        "labor": "Труд",
+        "tools": "Инструменты"
+      }
+    },
+    "consortium": {
+      "chart": "Диаграмма сукцессии",
+      "table": "Записи консорциума",
+      "plant": "Растение",
+      "canonicalName": "Каноническое название",
+      "stratum": "Ярус",
+      "startPhase": "Начальная фаза",
+      "endPhase": "Конечная фаза",
+      "count": "Количество"
+    },
+    "document": {
+      "overview": "Обзор",
+      "location": "Местоположение",
+      "design": "Дизайн",
+      "visibleLayers": "Видимые слои",
+      "defaultVisibleLayers": "по умолчанию",
+      "noVisibleCanvasObjects": "Нет видимых объектов на холсте",
+      "pinned": "Закреплено",
+      "colorBy": "Окраска по",
+      "pageNumber": "Страница {page} из {count}",
+      "altitude": "высота"
+    }
   }
 }

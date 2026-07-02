@@ -7,6 +7,7 @@ import {
 import type {
   CanvasQuerySurface,
 } from '../../canvas/runtime/runtime'
+import type { ColorByAttribute, PlantSizeMode } from '../../canvas/plant-display-state'
 import type { PlacedPlant } from '../../types/design'
 
 interface TestCanvasQuerySurfaceOptions {
@@ -14,6 +15,8 @@ interface TestCanvasQuerySurfaceOptions {
   readonly viewport?: SceneViewportState
   readonly plants?: readonly PlacedPlant[]
   readonly localizedNames?: ReadonlyMap<string, string | null>
+  readonly plantSizeMode?: PlantSizeMode
+  readonly plantColorByAttr?: ColorByAttribute | null
 }
 
 export type TestCanvasQuerySurface = CanvasQuerySurface & {
@@ -29,6 +32,8 @@ export function createTestCanvasQuerySurface({
   viewport = { x: 0, y: 0, scale: 1 },
   plants = [],
   localizedNames = new Map(),
+  plantSizeMode = 'default',
+  plantColorByAttr = null,
 }: TestCanvasQuerySurfaceOptions = {}): TestCanvasQuerySurface {
   const sceneRevision = signal(0)
   const plantNamesRevision = signal(0)
@@ -59,8 +64,8 @@ export function createTestCanvasQuerySurface({
         allPinned: false,
       },
     }),
-    getPlantSizeMode: () => 'default',
-    getPlantColorByAttr: () => null,
+    getPlantSizeMode: () => plantSizeMode,
+    getPlantColorByAttr: () => plantColorByAttr,
     getSelectedPlantColorContext: () => ({
       plantIds: [],
       singleSpeciesCanonicalName: null,

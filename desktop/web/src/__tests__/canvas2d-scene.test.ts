@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { MEASUREMENT_GUIDE_LABEL_OFFSET_PX } from '../canvas/runtime/measurement-guides'
-import { createCanvas2DSceneRenderer } from '../canvas/runtime/renderers/canvas2d-scene'
+import { createCanvas2DSceneRenderer, renderCanvas2DSceneSnapshot } from '../canvas/runtime/renderers/canvas2d-scene'
 import type { SceneRendererSnapshot } from '../canvas/runtime/renderers/scene-types'
 
 describe('createCanvas2DSceneRenderer', () => {
@@ -64,6 +64,40 @@ describe('createCanvas2DSceneRenderer', () => {
     expect(ctx.rect).not.toHaveBeenCalled()
     expect(ctx.lineTo).not.toHaveBeenCalled()
     renderer.dispose()
+  })
+
+  it('paints a print underlay after the background without leaking canvas state', () => {
+    const ctx = createMockCanvasContext()
+    const calls: string[] = []
+    ctx.fillRect.mockImplementation(() => {
+      calls.push('background')
+    })
+    ctx.save.mockImplementation(() => {
+      calls.push('save')
+    })
+    ctx.restore.mockImplementation(() => {
+      calls.push('restore')
+    })
+    const underlay = vi.fn((underlayCtx: CanvasRenderingContext2D, widthPx: number, heightPx: number) => {
+      calls.push('underlay')
+      underlayCtx.globalAlpha = 0.25
+      expect(widthPx).toBe(200)
+      expect(heightPx).toBe(120)
+    })
+
+    renderCanvas2DSceneSnapshot(
+      ctx as unknown as CanvasRenderingContext2D,
+      createRendererSnapshot(),
+      {
+        widthPx: 200,
+        heightPx: 120,
+        background: '#FFFFFF',
+        underlay,
+      },
+    )
+
+    expect(underlay).toHaveBeenCalledWith(ctx, 200, 120)
+    expect(calls.slice(0, 4)).toEqual(['background', 'save', 'underlay', 'restore'])
   })
 
   it('draws curved plant symbol recipes with native Canvas2D curves', async () => {
@@ -395,6 +429,7 @@ function createMockCanvasContext() {
   return {
     setTransform: vi.fn(),
     clearRect: vi.fn(),
+    fillRect: vi.fn(),
     translate: vi.fn(),
     scale: vi.fn(),
     beginPath: vi.fn(),

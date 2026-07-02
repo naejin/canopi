@@ -728,6 +728,7 @@
     "file.open": "打开设计",
     "file.save": "保存",
     "file.saveAs": "另存为",
+    "file.exportDesignReportPdf": "导出设计报告 PDF",
     "file.exit": "退出",
     "edit.undo": "撤销",
     "edit.redo": "重做",
@@ -980,5 +981,57 @@
     "includeCurrentDesign": "包含当前设计",
     "includeCurrentDesignDescription": "添加一个 .canopi 副本，其中包含画布内容、备注、时间线、预算和已保存的位置。",
     "currentDesignUnavailable": "没有可附加的当前设计。"
+  },
+  "designReport": {
+    "timeline": {
+      "overview": "概览",
+      "actions": "操作",
+      "recurrence": "重复",
+      "target": "目标",
+      "dependencies": "依赖项",
+      "status": "状态",
+      "manual": "手动",
+      "none": "无",
+      "notScheduled": "未计划",
+      "dateRangeWithUnscheduledOne": "{{dateRange}}；{{count}} 个未计划",
+      "dateRangeWithUnscheduledMany": "{{dateRange}}；{{count}} 个未计划",
+      "completed": "已完成",
+      "open": "未完成",
+      "dependencyCountOne": "{{count}} 个依赖项",
+      "dependencyCountMany": "{{count}} 个依赖项"
+    },
+    "budget": {
+      "target": "目标",
+      "category": "类别",
+      "totals": "总计",
+      "categories": {
+        "plants": "植物",
+        "materials": "材料",
+        "labor": "人工",
+        "tools": "工具"
+      }
+    },
+    "consortium": {
+      "chart": "演替图",
+      "table": "群落条目",
+      "plant": "植物",
+      "canonicalName": "规范名称",
+      "stratum": "层级",
+      "startPhase": "开始阶段",
+      "endPhase": "结束阶段",
+      "count": "数量"
+    },
+    "document": {
+      "overview": "概览",
+      "location": "位置",
+      "design": "设计",
+      "visibleLayers": "可见图层",
+      "defaultVisibleLayers": "默认",
+      "noVisibleCanvasObjects": "没有可见的画布对象",
+      "pinned": "已固定",
+      "colorBy": "按条件着色",
+      "pageNumber": "第 {page} 页，共 {count} 页",
+      "altitude": "海拔"
+    }
   }
 }

@@ -728,6 +728,7 @@
     "file.open": "Ontwerp openen",
     "file.save": "Opslaan",
     "file.saveAs": "Opslaan als",
+    "file.exportDesignReportPdf": "Ontwerprapport als PDF exporteren",
     "file.exit": "Afsluiten",
     "edit.undo": "Ongedaan maken",
     "edit.redo": "Opnieuw",
@@ -980,5 +981,57 @@
     "includeCurrentDesign": "Huidig ontwerp opnemen",
     "includeCurrentDesignDescription": "Voegt een .canopi-kopie toe met canvasinhoud, notities, planning, budget en opgeslagen locatie.",
     "currentDesignUnavailable": "Er is geen huidig ontwerp beschikbaar om bij te voegen."
+  },
+  "designReport": {
+    "timeline": {
+      "overview": "Overzicht",
+      "actions": "Acties",
+      "recurrence": "Herhaling",
+      "target": "Doel",
+      "dependencies": "Afhankelijkheden",
+      "status": "Status",
+      "manual": "Handmatig",
+      "none": "Geen",
+      "notScheduled": "Niet gepland",
+      "dateRangeWithUnscheduledOne": "{{dateRange}}; {{count}} niet gepland",
+      "dateRangeWithUnscheduledMany": "{{dateRange}}; {{count}} niet gepland",
+      "completed": "Voltooid",
+      "open": "Open",
+      "dependencyCountOne": "{{count}} afhankelijkheid",
+      "dependencyCountMany": "{{count}} afhankelijkheden"
+    },
+    "budget": {
+      "target": "Doel",
+      "category": "Categorie",
+      "totals": "Totalen",
+      "categories": {
+        "plants": "Planten",
+        "materials": "Materialen",
+        "labor": "Arbeid",
+        "tools": "Gereedschap"
+      }
+    },
+    "consortium": {
+      "chart": "Successiediagram",
+      "table": "Consortiumitems",
+      "plant": "Plant",
+      "canonicalName": "Canonieke naam",
+      "stratum": "Stratum",
+      "startPhase": "Startfase",
+      "endPhase": "Eindfase",
+      "count": "Aantal"
+    },
+    "document": {
+      "overview": "Overzicht",
+      "location": "Locatie",
+      "design": "Ontwerp",
+      "visibleLayers": "Zichtbare lagen",
+      "defaultVisibleLayers": "standaard",
+      "noVisibleCanvasObjects": "Geen zichtbare canvasobjecten",
+      "pinned": "Vastgezet",
+      "colorBy": "Kleuren op",
+      "pageNumber": "Pagina {page} van {count}",
+      "altitude": "hoogte"
+    }
   }
 }

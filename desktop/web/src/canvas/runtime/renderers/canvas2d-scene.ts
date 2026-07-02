@@ -39,6 +39,14 @@ import {
 import type { SceneRendererDefinition, SceneRendererHoverState, SceneRendererInstance, SceneRendererSnapshot } from './scene-types'
 import { getRectangularZoneCorners } from '../zone-geometry'
 
+export interface Canvas2DSceneSnapshotRenderOptions {
+  readonly widthPx: number
+  readonly heightPx: number
+  readonly dpr?: number
+  readonly background?: string | null
+  readonly underlay?: ((ctx: CanvasRenderingContext2D, widthPx: number, heightPx: number) => void) | null
+}
+
 export function createCanvas2DSceneRenderer(): SceneRendererDefinition {
   return {
     id: 'canvas2d',
@@ -57,10 +65,14 @@ export function createCanvas2DSceneRenderer(): SceneRendererDefinition {
 
       const dpr = Math.max(window.devicePixelRatio || 1, 1)
       let snapshot: SceneRendererSnapshot | null = null
+      let logicalWidth = Math.max(1, context.container.clientWidth)
+      let logicalHeight = Math.max(1, context.container.clientHeight)
 
       const resize = (width: number, height: number): void => {
-        canvas.width = Math.max(1, Math.round(width * dpr))
-        canvas.height = Math.max(1, Math.round(height * dpr))
+        logicalWidth = Math.max(1, width)
+        logicalHeight = Math.max(1, height)
+        canvas.width = Math.max(1, Math.round(logicalWidth * dpr))
+        canvas.height = Math.max(1, Math.round(logicalHeight * dpr))
       }
 
       resize(context.container.clientWidth, context.container.clientHeight)
@@ -119,20 +131,47 @@ export function createCanvas2DSceneRenderer(): SceneRendererDefinition {
         const ctx = canvas.getContext('2d')
         if (!ctx) return
 
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-        ctx.clearRect(0, 0, canvas.width, canvas.height)
-        applyViewport(ctx, snapshot.viewport)
-        renderZones(ctx, snapshot)
-        renderMeasurementGuides(ctx, snapshot)
-        renderPlants(ctx, snapshot)
-        renderPinnedPlantNameLabels(ctx, snapshot)
-        renderSelectionLabels(ctx, snapshot)
-        renderAnnotations(ctx, snapshot)
+        renderCanvas2DSceneSnapshot(ctx, snapshot, {
+          widthPx: logicalWidth,
+          heightPx: logicalHeight,
+          dpr,
+        })
       }
 
       return instance
     },
   }
+}
+
+export function renderCanvas2DSceneSnapshot(
+  ctx: CanvasRenderingContext2D,
+  snapshot: SceneRendererSnapshot,
+  options: Canvas2DSceneSnapshotRenderOptions,
+): void {
+  const dpr = Math.max(options.dpr ?? 1, 1)
+  const widthPx = Math.max(1, options.widthPx)
+  const heightPx = Math.max(1, options.heightPx)
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  ctx.clearRect(0, 0, widthPx, heightPx)
+  if (options.background) {
+    ctx.fillStyle = options.background
+    ctx.globalAlpha = 1
+    ctx.fillRect(0, 0, widthPx, heightPx)
+  }
+  if (options.underlay) {
+    ctx.save()
+    options.underlay(ctx, widthPx, heightPx)
+    ctx.restore()
+  }
+
+  applyViewport(ctx, snapshot.viewport)
+  renderZones(ctx, snapshot)
+  renderMeasurementGuides(ctx, snapshot)
+  renderPlants(ctx, snapshot)
+  renderPinnedPlantNameLabels(ctx, snapshot)
+  renderSelectionLabels(ctx, snapshot)
+  renderAnnotations(ctx, snapshot)
 }
 
 function renderMeasurementGuides(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnapshot): void {

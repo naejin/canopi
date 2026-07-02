@@ -728,6 +728,7 @@
     "file.open": "Design offnen",
     "file.save": "Speichern",
     "file.saveAs": "Speichern unter",
+    "file.exportDesignReportPdf": "Designbericht als PDF exportieren",
     "file.exit": "Beenden",
     "edit.undo": "Ruckgangig",
     "edit.redo": "Wiederholen",
@@ -980,5 +981,57 @@
     "includeCurrentDesign": "Aktuelles Design einschließen",
     "includeCurrentDesignDescription": "Fügt eine .canopi-Kopie mit Canvas-Inhalten, Notizen, Zeitplan, Budget und gespeichertem Standort hinzu.",
     "currentDesignUnavailable": "Es ist kein aktuelles Design zum Anhängen verfügbar."
+  },
+  "designReport": {
+    "timeline": {
+      "overview": "Übersicht",
+      "actions": "Aktionen",
+      "recurrence": "Wiederholung",
+      "target": "Ziel",
+      "dependencies": "Abhängigkeiten",
+      "status": "Status",
+      "manual": "Manuell",
+      "none": "Keine",
+      "notScheduled": "Nicht geplant",
+      "dateRangeWithUnscheduledOne": "{{dateRange}}; {{count}} nicht geplant",
+      "dateRangeWithUnscheduledMany": "{{dateRange}}; {{count}} nicht geplant",
+      "completed": "Abgeschlossen",
+      "open": "Offen",
+      "dependencyCountOne": "{{count}} Abhängigkeit",
+      "dependencyCountMany": "{{count}} Abhängigkeiten"
+    },
+    "budget": {
+      "target": "Ziel",
+      "category": "Kategorie",
+      "totals": "Summen",
+      "categories": {
+        "plants": "Pflanzen",
+        "materials": "Materialien",
+        "labor": "Arbeit",
+        "tools": "Werkzeuge"
+      }
+    },
+    "consortium": {
+      "chart": "Sukzessionsdiagramm",
+      "table": "Konsortiumseinträge",
+      "plant": "Pflanze",
+      "canonicalName": "Kanonischer Name",
+      "stratum": "Schicht",
+      "startPhase": "Startphase",
+      "endPhase": "Endphase",
+      "count": "Anzahl"
+    },
+    "document": {
+      "overview": "Übersicht",
+      "location": "Standort",
+      "design": "Design",
+      "visibleLayers": "Sichtbare Ebenen",
+      "defaultVisibleLayers": "Standard",
+      "noVisibleCanvasObjects": "Keine sichtbaren Canvas-Objekte",
+      "pinned": "Fixiert",
+      "colorBy": "Färben nach",
+      "pageNumber": "Seite {page} von {count}",
+      "altitude": "Höhe"
+    }
   }
 }
