@@ -22,7 +22,19 @@
     "emptyText": "Salva un design per aggiungerlo al quaderno.",
     "noResultsTitle": "Nessun design corrispondente",
     "noResultsText": "Prova un altro nome o percorso.",
-    "plantCount": "{{count}} piante"
+    "plantCount": "{{count}} piante",
+    "newSectionName": "Nome nuova sezione",
+    "newSectionPlaceholder": "Nuova sezione",
+    "createSection": "Crea sezione",
+    "unsectioned": "Senza sezione",
+    "noSection": "Nessuna sezione",
+    "moveToSection": "Sposta {{name}} in una sezione",
+    "renameSection": "Rinomina sezione {{name}}",
+    "deleteSection": "Elimina sezione {{name}}",
+    "sectionName": "Nome sezione",
+    "saveSectionName": "Salva nome sezione",
+    "cancelRename": "Annulla rinomina",
+    "sectionEmpty": "Nessun design in questa sezione"
   },
   "plantDb": {
     "title": "Database piante",

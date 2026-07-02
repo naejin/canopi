@@ -22,7 +22,19 @@
     "emptyText": "デザインを保存するとノートに追加されます。",
     "noResultsTitle": "一致するデザインがありません",
     "noResultsText": "別の名前またはパスを試してください。",
-    "plantCount": "{{count}} 株"
+    "plantCount": "{{count}} 株",
+    "newSectionName": "新しいセクション名",
+    "newSectionPlaceholder": "新しいセクション",
+    "createSection": "セクションを作成",
+    "unsectioned": "セクションなし",
+    "noSection": "セクションなし",
+    "moveToSection": "{{name}} をセクションへ移動",
+    "renameSection": "セクション {{name}} の名前を変更",
+    "deleteSection": "セクション {{name}} を削除",
+    "sectionName": "セクション名",
+    "saveSectionName": "セクション名を保存",
+    "cancelRename": "名前変更をキャンセル",
+    "sectionEmpty": "このセクションにデザインはありません"
   },
   "plantDb": {
     "title": "植物データベース",

@@ -22,7 +22,19 @@
     "emptyText": "Save a Design to add it to the notebook.",
     "noResultsTitle": "No matching Designs",
     "noResultsText": "Try a different name or path.",
-    "plantCount": "{{count}} plants"
+    "plantCount": "{{count}} plants",
+    "newSectionName": "New section name",
+    "newSectionPlaceholder": "New section",
+    "createSection": "Create section",
+    "unsectioned": "Unsectioned",
+    "noSection": "No section",
+    "moveToSection": "Move {{name}} to section",
+    "renameSection": "Rename section {{name}}",
+    "deleteSection": "Delete section {{name}}",
+    "sectionName": "Section name",
+    "saveSectionName": "Save section name",
+    "cancelRename": "Cancel rename",
+    "sectionEmpty": "No designs in this section"
   },
   "plantDb": {
     "title": "Plant Database",

@@ -22,7 +22,19 @@
     "emptyText": "Сохраните дизайн, чтобы добавить его в блокнот.",
     "noResultsTitle": "Нет подходящих дизайнов",
     "noResultsText": "Попробуйте другое имя или путь.",
-    "plantCount": "{{count}} растений"
+    "plantCount": "{{count}} растений",
+    "newSectionName": "Название новой секции",
+    "newSectionPlaceholder": "Новая секция",
+    "createSection": "Создать секцию",
+    "unsectioned": "Без секции",
+    "noSection": "Без секции",
+    "moveToSection": "Переместить {{name}} в секцию",
+    "renameSection": "Переименовать секцию {{name}}",
+    "deleteSection": "Удалить секцию {{name}}",
+    "sectionName": "Название секции",
+    "saveSectionName": "Сохранить название секции",
+    "cancelRename": "Отменить переименование",
+    "sectionEmpty": "В этой секции нет дизайнов"
   },
   "plantDb": {
     "title": "База растений",

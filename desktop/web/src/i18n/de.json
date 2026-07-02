@@ -22,7 +22,19 @@
     "emptyText": "Speichern Sie ein Design, um es zum Notizbuch hinzuzufügen.",
     "noResultsTitle": "Keine passenden Designs",
     "noResultsText": "Versuchen Sie einen anderen Namen oder Pfad.",
-    "plantCount": "{{count}} Pflanzen"
+    "plantCount": "{{count}} Pflanzen",
+    "newSectionName": "Name des neuen Abschnitts",
+    "newSectionPlaceholder": "Neuer Abschnitt",
+    "createSection": "Abschnitt erstellen",
+    "unsectioned": "Ohne Abschnitt",
+    "noSection": "Kein Abschnitt",
+    "moveToSection": "{{name}} in Abschnitt verschieben",
+    "renameSection": "Abschnitt {{name}} umbenennen",
+    "deleteSection": "Abschnitt {{name}} löschen",
+    "sectionName": "Abschnittsname",
+    "saveSectionName": "Abschnittsname speichern",
+    "cancelRename": "Umbenennen abbrechen",
+    "sectionEmpty": "Keine Designs in diesem Abschnitt"
   },
   "plantDb": {
     "title": "Pflanzendatenbank",

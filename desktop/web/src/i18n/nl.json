@@ -22,7 +22,19 @@
     "emptyText": "Sla een ontwerp op om het aan het notitieboek toe te voegen.",
     "noResultsTitle": "Geen overeenkomende ontwerpen",
     "noResultsText": "Probeer een andere naam of pad.",
-    "plantCount": "{{count}} planten"
+    "plantCount": "{{count}} planten",
+    "newSectionName": "Naam nieuwe sectie",
+    "newSectionPlaceholder": "Nieuwe sectie",
+    "createSection": "Sectie maken",
+    "unsectioned": "Zonder sectie",
+    "noSection": "Geen sectie",
+    "moveToSection": "Verplaats {{name}} naar sectie",
+    "renameSection": "Sectie {{name}} hernoemen",
+    "deleteSection": "Sectie {{name}} verwijderen",
+    "sectionName": "Sectienaam",
+    "saveSectionName": "Sectienaam opslaan",
+    "cancelRename": "Hernoemen annuleren",
+    "sectionEmpty": "Geen ontwerpen in deze sectie"
   },
   "plantDb": {
     "title": "Plantendatabase",

@@ -627,6 +627,29 @@ pub struct DesignSummary {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct DesignNotebookSection {
+    pub id: String,
+    pub name: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct DesignNotebookEntry {
+    pub path: String,
+    pub name: String,
+    pub updated_at: String,
+    pub plant_count: u32,
+    pub section_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct DesignNotebookSnapshot {
+    pub entries: Vec<DesignNotebookEntry>,
+    pub sections: Vec<DesignNotebookSection>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct AutosaveEntry {
     pub path: String,
     pub name: String,

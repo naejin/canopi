@@ -81,6 +81,26 @@ export type DbStatus = {
 	full_db_size_bytes: string | null,
 };
 
+export type DesignNotebookEntry = {
+	path: string,
+	name: string,
+	updated_at: string,
+	plant_count: number,
+	section_id: string | null,
+};
+
+export type DesignNotebookSection = {
+	id: string,
+	name: string,
+	created_at: string,
+	updated_at: string,
+};
+
+export type DesignNotebookSnapshot = {
+	entries: DesignNotebookEntry[],
+	sections: DesignNotebookSection[],
+};
+
 export type DesignSummary = {
 	path: string,
 	name: string,

@@ -1,4 +1,6 @@
-use common_types::design::DesignSummary;
+use common_types::design::{
+    DesignNotebookEntry, DesignNotebookSection, DesignNotebookSnapshot, DesignSummary,
+};
 use std::path::Path;
 
 use crate::db::{self, UserDb};
@@ -16,6 +18,12 @@ struct NotebookFilterResult {
     stale_paths: Vec<String>,
 }
 
+#[derive(Debug)]
+struct NotebookSectionedFilterResult {
+    visible: Vec<DesignNotebookEntry>,
+    stale_paths: Vec<String>,
+}
+
 pub fn get_design_notebook_entries(user_db: &UserDb) -> Result<Vec<DesignSummary>, String> {
     let entries = {
         let conn = db::acquire(&user_db.0, "UserDb");
@@ -26,6 +34,79 @@ pub fn get_design_notebook_entries(user_db: &UserDb) -> Result<Vec<DesignSummary
     let filtered = filter_design_notebook_entries(entries, notebook_path_status);
     prune_stale_design_notebook_entries(user_db, &filtered.stale_paths);
     Ok(filtered.visible)
+}
+
+pub fn get_design_notebook(user_db: &UserDb) -> Result<DesignNotebookSnapshot, String> {
+    let (entries, sections) = {
+        let conn = db::acquire(&user_db.0, "UserDb");
+        let entries = crate::db::design_notebook::get_design_notebook_entries_with_sections(&conn)
+            .map_err(|e| format!("Failed to get Design Notebook entries: {e}"))?;
+        let sections = crate::db::design_notebook::get_notebook_sections(&conn)
+            .map_err(|e| format!("Failed to get Design Notebook sections: {e}"))?;
+        (entries, sections)
+    };
+
+    let filtered = filter_design_notebook_sectioned_entries(entries, notebook_path_status);
+    prune_stale_design_notebook_entries(user_db, &filtered.stale_paths);
+    Ok(DesignNotebookSnapshot {
+        entries: filtered.visible,
+        sections,
+    })
+}
+
+pub fn create_notebook_section(
+    user_db: &UserDb,
+    name: &str,
+) -> Result<DesignNotebookSection, String> {
+    let name = normalize_section_name(name)?;
+    let conn = db::acquire(&user_db.0, "UserDb");
+    crate::db::design_notebook::create_notebook_section(&conn, name)
+        .map_err(|e| format!("Failed to create Notebook Section: {e}"))
+}
+
+pub fn rename_notebook_section(
+    user_db: &UserDb,
+    section_id: &str,
+    name: &str,
+) -> Result<(), String> {
+    let name = normalize_section_name(name)?;
+    let conn = db::acquire(&user_db.0, "UserDb");
+    crate::db::design_notebook::rename_notebook_section(&conn, section_id, name)
+        .map_err(|e| format!("Failed to rename Notebook Section: {e}"))
+}
+
+pub fn delete_notebook_section(user_db: &UserDb, section_id: &str) -> Result<(), String> {
+    let conn = db::acquire(&user_db.0, "UserDb");
+    crate::db::design_notebook::delete_notebook_section(&conn, section_id)
+        .map_err(|e| format!("Failed to delete Notebook Section: {e}"))
+}
+
+pub fn move_design_reference_to_section(
+    user_db: &UserDb,
+    path: &str,
+    section_id: Option<String>,
+) -> Result<(), String> {
+    if path.trim().is_empty() {
+        return Err("Design path is required".to_owned());
+    }
+
+    let conn = db::acquire(&user_db.0, "UserDb");
+    match section_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|id| !id.is_empty())
+    {
+        Some(section_id) => {
+            crate::db::design_notebook::assign_design_reference_to_section(&conn, path, section_id)
+                .map_err(|e| format!("Failed to move Design into Notebook Section: {e}"))?;
+        }
+        None => {
+            crate::db::design_notebook::remove_design_reference_from_section(&conn, path)
+                .map_err(|e| format!("Failed to remove Design from Notebook Section: {e}"))?;
+        }
+    }
+
+    Ok(())
 }
 
 fn filter_design_notebook_entries(
@@ -48,6 +129,36 @@ fn filter_design_notebook_entries(
         visible,
         stale_paths,
     }
+}
+
+fn filter_design_notebook_sectioned_entries(
+    entries: Vec<DesignNotebookEntry>,
+    mut status_for_path: impl FnMut(&Path) -> NotebookPathStatus,
+) -> NotebookSectionedFilterResult {
+    let mut visible = Vec::new();
+    let mut stale_paths = Vec::new();
+
+    for entry in entries {
+        let path = entry.path.clone();
+        match status_for_path(Path::new(&path)) {
+            NotebookPathStatus::Available => visible.push(entry),
+            NotebookPathStatus::Stale => stale_paths.push(path),
+            NotebookPathStatus::Unavailable => {}
+        }
+    }
+
+    NotebookSectionedFilterResult {
+        visible,
+        stale_paths,
+    }
+}
+
+fn normalize_section_name(name: &str) -> Result<&str, String> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err("Notebook Section name is required".to_owned());
+    }
+    Ok(trimmed)
 }
 
 fn notebook_path_status(path: &Path) -> NotebookPathStatus {
@@ -179,5 +290,71 @@ mod tests {
         assert_eq!(result.visible.len(), 1);
         assert_eq!(result.visible[0].path, "/available.canopi");
         assert_eq!(result.stale_paths, vec!["/stale.canopi"]);
+    }
+
+    #[test]
+    fn notebook_snapshot_includes_sections_and_membership() {
+        let user_db = test_user_db();
+        let design_path = temp_design_path("sectioned");
+        std::fs::write(&design_path, "{}").unwrap();
+        {
+            let conn = db::acquire(&user_db.0, "UserDb");
+            crate::db::design_notebook::record_design_reference(
+                &conn,
+                &design_path.to_string_lossy(),
+                "Sectioned Design",
+                4,
+            )
+            .unwrap();
+        }
+        let section = super::create_notebook_section(&user_db, "Client work").unwrap();
+        super::move_design_reference_to_section(
+            &user_db,
+            design_path.to_string_lossy().as_ref(),
+            Some(section.id.clone()),
+        )
+        .unwrap();
+
+        let snapshot = super::get_design_notebook(&user_db).unwrap();
+
+        assert_eq!(snapshot.sections.len(), 1);
+        assert_eq!(snapshot.sections[0].name, "Client work");
+        assert_eq!(snapshot.entries.len(), 1);
+        assert_eq!(snapshot.entries[0].section_id, Some(section.id));
+
+        let _ = std::fs::remove_file(design_path);
+    }
+
+    #[test]
+    fn deleting_section_keeps_design_references_unsectioned() {
+        let user_db = test_user_db();
+        let design_path = temp_design_path("deleted_section");
+        std::fs::write(&design_path, "{}").unwrap();
+        {
+            let conn = db::acquire(&user_db.0, "UserDb");
+            crate::db::design_notebook::record_design_reference(
+                &conn,
+                &design_path.to_string_lossy(),
+                "Unsectioned Design",
+                2,
+            )
+            .unwrap();
+        }
+        let section = super::create_notebook_section(&user_db, "Temporary").unwrap();
+        super::move_design_reference_to_section(
+            &user_db,
+            design_path.to_string_lossy().as_ref(),
+            Some(section.id.clone()),
+        )
+        .unwrap();
+
+        super::delete_notebook_section(&user_db, &section.id).unwrap();
+        let snapshot = super::get_design_notebook(&user_db).unwrap();
+
+        assert!(snapshot.sections.is_empty());
+        assert_eq!(snapshot.entries.len(), 1);
+        assert_eq!(snapshot.entries[0].section_id, None);
+
+        let _ = std::fs::remove_file(design_path);
     }
 }

@@ -22,7 +22,19 @@
     "emptyText": "Salve um design para adicioná-lo ao caderno.",
     "noResultsTitle": "Nenhum design correspondente",
     "noResultsText": "Tente outro nome ou caminho.",
-    "plantCount": "{{count}} plantas"
+    "plantCount": "{{count}} plantas",
+    "newSectionName": "Nome da nova seção",
+    "newSectionPlaceholder": "Nova seção",
+    "createSection": "Criar seção",
+    "unsectioned": "Sem seção",
+    "noSection": "Sem seção",
+    "moveToSection": "Mover {{name}} para uma seção",
+    "renameSection": "Renomear seção {{name}}",
+    "deleteSection": "Excluir seção {{name}}",
+    "sectionName": "Nome da seção",
+    "saveSectionName": "Salvar nome da seção",
+    "cancelRename": "Cancelar renomeação",
+    "sectionEmpty": "Não há designs nesta seção"
   },
   "plantDb": {
     "title": "Base de plantas",

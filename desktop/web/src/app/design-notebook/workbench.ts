@@ -1,12 +1,23 @@
 import { computed, signal, type ReadonlySignal } from '@preact/signals'
-import { getDesignNotebookEntries } from '../../ipc/design'
+import {
+  createNotebookSection,
+  deleteNotebookSection,
+  getDesignNotebook,
+  moveDesignReferenceToSection,
+  renameNotebookSection,
+} from '../../ipc/design'
 import { openDesignFromPath } from '../document-session/actions'
 import { designPath } from '../document-session/store'
-import type { DesignSummary } from '../../types/design'
+import type {
+  DesignNotebookEntry,
+  DesignNotebookSection,
+  DesignNotebookSnapshot,
+} from '../../types/design'
 
 export interface DesignNotebookView {
-  readonly entries: readonly DesignSummary[]
-  readonly visibleEntries: readonly DesignSummary[]
+  readonly entries: readonly DesignNotebookEntry[]
+  readonly visibleEntries: readonly DesignNotebookEntry[]
+  readonly sections: readonly DesignNotebookSection[]
   readonly searchQuery: string
   readonly activePath: string | null
   readonly loading: boolean
@@ -19,23 +30,36 @@ export interface DesignNotebookWorkbench {
   refresh(): Promise<void>
   setSearchQuery(query: string): void
   openEntry(path: string): Promise<void>
+  createSection(name: string): Promise<void>
+  renameSection(sectionId: string, name: string): Promise<void>
+  deleteSection(sectionId: string): Promise<void>
+  moveEntryToSection(path: string, sectionId: string | null): Promise<void>
   dispose(): void
 }
 
 interface CreateDesignNotebookWorkbenchOptions {
-  readonly loadEntries?: typeof getDesignNotebookEntries
+  readonly loadNotebook?: typeof getDesignNotebook
   readonly openDesign?: typeof openDesignFromPath
+  readonly createSection?: typeof createNotebookSection
+  readonly renameSection?: typeof renameNotebookSection
+  readonly deleteSection?: typeof deleteNotebookSection
+  readonly moveEntryToSection?: typeof moveDesignReferenceToSection
   readonly activePath?: ReadonlySignal<string | null>
 }
 
 export function createDesignNotebookWorkbench(
   options: CreateDesignNotebookWorkbenchOptions = {},
 ): DesignNotebookWorkbench {
-  const loadEntries = options.loadEntries ?? getDesignNotebookEntries
+  const loadNotebook = options.loadNotebook ?? getDesignNotebook
   const openDesign = options.openDesign ?? openDesignFromPath
+  const createSectionAdapter = options.createSection ?? createNotebookSection
+  const renameSectionAdapter = options.renameSection ?? renameNotebookSection
+  const deleteSectionAdapter = options.deleteSection ?? deleteNotebookSection
+  const moveEntryToSectionAdapter = options.moveEntryToSection ?? moveDesignReferenceToSection
   const activePath = options.activePath ?? designPath
 
-  const entries = signal<readonly DesignSummary[]>([])
+  const entries = signal<readonly DesignNotebookEntry[]>([])
+  const sections = signal<readonly DesignNotebookSection[]>([])
   const searchQuery = signal('')
   const loading = signal(false)
   const loadError = signal(false)
@@ -53,6 +77,7 @@ export function createDesignNotebookWorkbench(
       visibleEntries: normalizedQuery.length === 0
         ? sourceEntries
         : sourceEntries.filter((entry) => matchesNotebookQuery(entry, normalizedQuery)),
+      sections: sections.value,
       searchQuery: query,
       activePath: activePath.value,
       loading: loading.value,
@@ -66,13 +91,14 @@ export function createDesignNotebookWorkbench(
     loadError.value = false
 
     try {
-      const nextEntries = await loadEntries()
+      const snapshot = await loadNotebook()
       if (isStale(requestGeneration)) return
-      entries.value = nextEntries
+      writeSnapshot(snapshot)
       loadError.value = false
     } catch {
       if (isStale(requestGeneration)) return
       entries.value = []
+      sections.value = []
       loadError.value = true
     } finally {
       if (!isStale(requestGeneration)) {
@@ -85,12 +111,54 @@ export function createDesignNotebookWorkbench(
     return disposed || requestGeneration !== generation
   }
 
+  function writeSnapshot(snapshot: DesignNotebookSnapshot): void {
+    entries.value = snapshot.entries
+    sections.value = snapshot.sections
+  }
+
   function setSearchQuery(query: string): void {
     searchQuery.value = query
   }
 
   async function openEntry(path: string): Promise<void> {
     await openDesign(path)
+  }
+
+  async function createSection(name: string): Promise<void> {
+    const normalizedName = normalizeSectionName(name)
+    if (!normalizedName) return
+    const section = await createSectionAdapter(normalizedName)
+    sections.value = [...sections.value, section]
+  }
+
+  async function renameSection(sectionId: string, name: string): Promise<void> {
+    const normalizedName = normalizeSectionName(name)
+    if (!normalizedName) return
+    await renameSectionAdapter(sectionId, normalizedName)
+    sections.value = sections.value.map((section) =>
+      section.id === sectionId
+        ? { ...section, name: normalizedName }
+        : section
+    )
+  }
+
+  async function deleteSection(sectionId: string): Promise<void> {
+    await deleteSectionAdapter(sectionId)
+    sections.value = sections.value.filter((section) => section.id !== sectionId)
+    entries.value = entries.value.map((entry) =>
+      entry.section_id === sectionId
+        ? { ...entry, section_id: null }
+        : entry
+    )
+  }
+
+  async function moveEntryToSection(path: string, sectionId: string | null): Promise<void> {
+    await moveEntryToSectionAdapter(path, sectionId)
+    entries.value = entries.value.map((entry) =>
+      entry.path === path
+        ? { ...entry, section_id: sectionId }
+        : entry
+    )
   }
 
   function dispose(): void {
@@ -104,6 +172,10 @@ export function createDesignNotebookWorkbench(
     refresh: load,
     setSearchQuery,
     openEntry,
+    createSection,
+    renameSection,
+    deleteSection,
+    moveEntryToSection,
     dispose,
   }
 }
@@ -114,7 +186,11 @@ function normalizeSearch(value: string): string {
   return value.trim().toLocaleLowerCase()
 }
 
-function matchesNotebookQuery(entry: DesignSummary, normalizedQuery: string): boolean {
+function normalizeSectionName(value: string): string {
+  return value.trim()
+}
+
+function matchesNotebookQuery(entry: DesignNotebookEntry, normalizedQuery: string): boolean {
   return normalizeSearch(entry.name).includes(normalizedQuery)
     || normalizeSearch(entry.path).includes(normalizedQuery)
 }

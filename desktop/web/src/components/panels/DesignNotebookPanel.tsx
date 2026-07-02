@@ -1,11 +1,13 @@
-import { useEffect } from 'preact/hooks'
+import type { ComponentChildren } from 'preact'
+import { useEffect, useState } from 'preact/hooks'
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
 import {
   designNotebookWorkbench,
   type DesignNotebookWorkbench,
 } from '../../app/design-notebook'
-import type { DesignSummary } from '../../types/design'
+import type { DesignNotebookEntry, DesignNotebookSection } from '../../types/design'
+import { Dropdown, type DropdownItem } from '../shared/Dropdown'
 import styles from './DesignNotebookPanel.module.css'
 
 interface DesignNotebookPanelProps {
@@ -17,10 +19,44 @@ export function DesignNotebookPanel({
 }: DesignNotebookPanelProps) {
   const lang = locale.value
   const view = workbench.view.value
+  const [newSectionName, setNewSectionName] = useState('')
+  const [renamingSectionId, setRenamingSectionId] = useState<string | null>(null)
+  const [renameDraft, setRenameDraft] = useState('')
 
   useEffect(() => {
     void workbench.load()
   }, [workbench])
+
+  const unsectionedEntries = view.visibleEntries.filter((entry) => entry.section_id === null)
+  const sectionEntries = (sectionId: string) =>
+    view.visibleEntries.filter((entry) => entry.section_id === sectionId)
+
+  function createSection(): void {
+    const name = newSectionName.trim()
+    if (!name) return
+    void workbench.createSection(name).then(() => {
+      setNewSectionName('')
+    })
+  }
+
+  function beginRename(section: DesignNotebookSection): void {
+    setRenamingSectionId(section.id)
+    setRenameDraft(section.name)
+  }
+
+  function saveRename(sectionId: string): void {
+    const name = renameDraft.trim()
+    if (!name) return
+    void workbench.renameSection(sectionId, name).then(() => {
+      setRenamingSectionId(null)
+      setRenameDraft('')
+    })
+  }
+
+  function cancelRename(): void {
+    setRenamingSectionId(null)
+    setRenameDraft('')
+  }
 
   return (
     <section className={styles.panel} aria-label={t('designNotebook.title')}>
@@ -67,6 +103,31 @@ export function DesignNotebookPanel({
         </button>
       </div>
 
+      <div className={styles.sectionCreate}>
+        <input
+          className={styles.sectionInput}
+          aria-label={t('designNotebook.newSectionName')}
+          value={newSectionName}
+          placeholder={t('designNotebook.newSectionPlaceholder')}
+          onInput={(event) => setNewSectionName((event.currentTarget as HTMLInputElement).value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              createSection()
+            }
+          }}
+        />
+        <button
+          className={styles.sectionCreateButton}
+          type="button"
+          aria-label={t('designNotebook.createSection')}
+          disabled={newSectionName.trim().length === 0}
+          onClick={createSection}
+        >
+          {t('designNotebook.createSection')}
+        </button>
+      </div>
+
       <div className={styles.list} role="list">
         {view.loading && view.entries.length === 0 ? (
           <div className={styles.feedback}>{t('designNotebook.loading')}</div>
@@ -83,17 +144,111 @@ export function DesignNotebookPanel({
             text={t('designNotebook.noResultsText')}
           />
         ) : (
-          view.visibleEntries.map((entry) => (
-            <NotebookRow
-              key={entry.path}
-              entry={entry}
-              lang={lang}
-              active={entry.path === view.activePath}
-              onOpen={() => {
-                void workbench.openEntry(entry.path)
-              }}
-            />
-          ))
+          <>
+            {unsectionedEntries.length > 0 && (
+              <NotebookSectionGroup title={t('designNotebook.unsectioned')}>
+                {unsectionedEntries.map((entry) => (
+                  <NotebookRow
+                    key={entry.path}
+                    entry={entry}
+                    lang={lang}
+                    active={entry.path === view.activePath}
+                    sections={view.sections}
+                    onOpen={() => {
+                      void workbench.openEntry(entry.path)
+                    }}
+                    onMove={(sectionId) => {
+                      void workbench.moveEntryToSection(entry.path, sectionId)
+                    }}
+                  />
+                ))}
+              </NotebookSectionGroup>
+            )}
+
+            {view.sections.map((section) => (
+              <NotebookSectionGroup
+                key={section.id}
+                title={section.name}
+                actions={renamingSectionId === section.id ? (
+                  <div className={styles.sectionRenameControls}>
+                    <input
+                      className={styles.sectionInput}
+                      aria-label={t('designNotebook.sectionName')}
+                      value={renameDraft}
+                      onInput={(event) => setRenameDraft((event.currentTarget as HTMLInputElement).value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault()
+                          saveRename(section.id)
+                        }
+                        if (event.key === 'Escape') {
+                          event.preventDefault()
+                          cancelRename()
+                        }
+                      }}
+                    />
+                    <button
+                      className={styles.sectionIconButton}
+                      type="button"
+                      aria-label={t('designNotebook.saveSectionName')}
+                      disabled={renameDraft.trim().length === 0}
+                      onClick={() => saveRename(section.id)}
+                    >
+                      <CheckIcon />
+                    </button>
+                    <button
+                      className={styles.sectionIconButton}
+                      type="button"
+                      aria-label={t('designNotebook.cancelRename')}
+                      onClick={cancelRename}
+                    >
+                      <CloseIcon />
+                    </button>
+                  </div>
+                ) : (
+                  <div className={styles.sectionHeaderActions}>
+                    <button
+                      className={styles.sectionIconButton}
+                      type="button"
+                      aria-label={t('designNotebook.renameSection', { name: section.name })}
+                      onClick={() => beginRename(section)}
+                    >
+                      <PencilIcon />
+                    </button>
+                    <button
+                      className={styles.sectionIconButton}
+                      type="button"
+                      aria-label={t('designNotebook.deleteSection', { name: section.name })}
+                      onClick={() => {
+                        void workbench.deleteSection(section.id)
+                      }}
+                    >
+                      <TrashIcon />
+                    </button>
+                  </div>
+                )}
+              >
+                {sectionEntries(section.id).map((entry) => (
+                  <NotebookRow
+                    key={entry.path}
+                    entry={entry}
+                    lang={lang}
+                    active={entry.path === view.activePath}
+                    sections={view.sections}
+                    onOpen={() => {
+                      void workbench.openEntry(entry.path)
+                    }}
+                    onMove={(sectionId) => {
+                      void workbench.moveEntryToSection(entry.path, sectionId)
+                    }}
+                  />
+                ))}
+                {sectionEntries(section.id).length === 0 && (
+                  <div className={styles.sectionEmpty}>{t('designNotebook.sectionEmpty')}</div>
+                )}
+              </NotebookSectionGroup>
+            ))}
+          </>
         )}
       </div>
     </section>
@@ -109,42 +264,121 @@ function EmptyState({ title, text }: { readonly title: string; readonly text: st
   )
 }
 
+function NotebookSectionGroup({
+  title,
+  actions,
+  children,
+}: {
+  readonly title: string
+  readonly actions?: ComponentChildren
+  readonly children: ComponentChildren
+}) {
+  return (
+    <section className={styles.sectionGroup} aria-label={title}>
+      <header className={styles.sectionHeader}>
+        <h3 className={styles.sectionTitle}>{title}</h3>
+        {actions}
+      </header>
+      {children}
+    </section>
+  )
+}
+
 function NotebookRow({
   entry,
   lang,
   active,
+  sections,
   onOpen,
+  onMove,
 }: {
-  readonly entry: DesignSummary
+  readonly entry: DesignNotebookEntry
   readonly lang: string
   readonly active: boolean
+  readonly sections: readonly DesignNotebookSection[]
   readonly onOpen: () => void
+  readonly onMove: (sectionId: string | null) => void
 }) {
   const date = formatDate(entry.updated_at, lang)
+  const currentSectionName = sections.find((section) => section.id === entry.section_id)?.name
+  const items: DropdownItem<string>[] = [
+    { value: '', label: t('designNotebook.noSection') },
+    ...sections.map((section) => ({ value: section.id, label: section.name })),
+  ]
 
   return (
-    <button
+    <div
       className={`${styles.row}${active ? ` ${styles.rowActive}` : ''}`}
-      type="button"
       role="listitem"
-      aria-current={active ? 'true' : undefined}
-      data-design-path={entry.path}
-      onClick={onOpen}
     >
-      <span className={styles.rowMain}>
-        <span className={styles.rowName}>{entry.name}</span>
-        <span className={styles.rowPath}>{entry.path}</span>
-      </span>
-      <span className={styles.rowMeta}>
-        {date}
-        {entry.plant_count > 0 && (
-          <>
-            <span className={styles.metaSeparator} aria-hidden="true">·</span>
-            <span>{t('designNotebook.plantCount', { count: entry.plant_count })}</span>
-          </>
-        )}
-      </span>
-    </button>
+      <button
+        className={styles.rowOpen}
+        type="button"
+        aria-current={active ? 'true' : undefined}
+        data-design-path={entry.path}
+        onClick={onOpen}
+      >
+        <span className={styles.rowMain}>
+          <span className={styles.rowName}>{entry.name}</span>
+          <span className={styles.rowPath}>{entry.path}</span>
+        </span>
+        <span className={styles.rowMeta}>
+          {date}
+          {entry.plant_count > 0 && (
+            <>
+              <span className={styles.metaSeparator} aria-hidden="true">·</span>
+              <span>{t('designNotebook.plantCount', { count: entry.plant_count })}</span>
+            </>
+          )}
+        </span>
+      </button>
+      <div className={styles.rowActions}>
+        <Dropdown
+          trigger={currentSectionName ?? t('designNotebook.noSection')}
+          items={items}
+          value={entry.section_id ?? ''}
+          onChange={(value) => onMove(value === '' ? null : value)}
+          ariaLabel={t('designNotebook.moveToSection', { name: entry.name })}
+          className={styles.sectionDropdown}
+          triggerClassName={styles.sectionDropdownTrigger}
+          menuClassName={styles.sectionDropdownMenu}
+          optionClassName={styles.sectionDropdownOption}
+          preserveOverlays
+        />
+      </div>
+    </div>
+  )
+}
+
+function PencilIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+      <path d="M8.7 2.1 10.9 4.3 4.6 10.6l-2.6.4.4-2.6z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function TrashIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+      <path d="M2.3 3.7h8.4M5.2 5.4v3.8M7.8 5.4v3.8M4 3.7l.5-1h4l.5 1M3.4 3.7l.4 7h5.4l.4-7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function CheckIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+      <path d="m2.6 6.7 2.4 2.2 5.4-5.6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function CloseIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+      <path d="M3.5 3.5 9.5 9.5M9.5 3.5 3.5 9.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
   )
 }
 

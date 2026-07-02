@@ -12,6 +12,9 @@ export type SpeciesPanelTarget = Contracts.SpeciesPanelTarget
 export type TimelineAction = Contracts.TimelineAction
 export type BudgetItem = Contracts.BudgetItem
 export type DesignSummary = Contracts.DesignSummary
+export type DesignNotebookEntry = Contracts.DesignNotebookEntry
+export type DesignNotebookSection = Contracts.DesignNotebookSection
+export type DesignNotebookSnapshot = Contracts.DesignNotebookSnapshot
 export type AutosaveEntry = Contracts.AutosaveEntry
 export type Consortium = Contracts.Consortium
 

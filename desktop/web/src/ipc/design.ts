@@ -1,6 +1,12 @@
 import { invoke } from '@tauri-apps/api/core'
 import { save, open } from '@tauri-apps/plugin-dialog'
-import type { CanopiFile, DesignSummary, AutosaveEntry } from '../types/design'
+import type {
+  AutosaveEntry,
+  CanopiFile,
+  DesignNotebookSection,
+  DesignNotebookSnapshot,
+  DesignSummary,
+} from '../types/design'
 import { designPath } from '../app/document-session/store'
 
 // ---------------------------------------------------------------------------
@@ -70,6 +76,30 @@ export async function getRecentFiles(): Promise<DesignSummary[]> {
 /** Get saved Design references for the Design Notebook. */
 export async function getDesignNotebookEntries(): Promise<DesignSummary[]> {
   return invoke('get_design_notebook_entries')
+}
+
+/** Get saved Design references plus user-owned Notebook Section organization. */
+export async function getDesignNotebook(): Promise<DesignNotebookSnapshot> {
+  return invoke('get_design_notebook')
+}
+
+export async function createNotebookSection(name: string): Promise<DesignNotebookSection> {
+  return invoke('create_notebook_section', { name })
+}
+
+export async function renameNotebookSection(sectionId: string, name: string): Promise<void> {
+  return invoke('rename_notebook_section', { sectionId, name })
+}
+
+export async function deleteNotebookSection(sectionId: string): Promise<void> {
+  return invoke('delete_notebook_section', { sectionId })
+}
+
+export async function moveDesignReferenceToSection(
+  path: string,
+  sectionId: string | null,
+): Promise<void> {
+  return invoke('move_design_reference_to_section', { path, sectionId })
 }
 
 /** Silent autosave to app data dir. */

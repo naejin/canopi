@@ -22,7 +22,19 @@
     "emptyText": "保存设计后会添加到笔记本。",
     "noResultsTitle": "没有匹配的设计",
     "noResultsText": "尝试其他名称或路径。",
-    "plantCount": "{{count}} 株"
+    "plantCount": "{{count}} 株",
+    "newSectionName": "新分区名称",
+    "newSectionPlaceholder": "新分区",
+    "createSection": "创建分区",
+    "unsectioned": "未分区",
+    "noSection": "无分区",
+    "moveToSection": "将 {{name}} 移至分区",
+    "renameSection": "重命名分区 {{name}}",
+    "deleteSection": "删除分区 {{name}}",
+    "sectionName": "分区名称",
+    "saveSectionName": "保存分区名称",
+    "cancelRename": "取消重命名",
+    "sectionEmpty": "此分区中没有设计"
   },
   "plantDb": {
     "title": "植物数据库",
