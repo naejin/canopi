@@ -157,6 +157,10 @@
   background: var(--color-control-active);
 }
 
+.sectionDragging {
+  opacity: 0.48;
+}
+
 .sectionHeader {
   display: flex;
   align-items: center;
@@ -180,6 +184,12 @@
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--color-text-muted);
+  cursor: grab;
+  user-select: none;
+}
+
+.sectionTitle:active {
+  cursor: grabbing;
 }
 
 .sectionRenameInput {
@@ -247,10 +257,6 @@
   background: transparent;
   color: var(--color-text);
   transition: background-color var(--transition-fast);
-}
-
-.row[draggable="true"] {
-  cursor: grab;
 }
 
 .rowDragging {

@@ -53,28 +53,43 @@ describe('DesignNotebookPanel', () => {
     })
   }
 
-  function dispatchDrag(
-    target: HTMLElement,
+  function dispatchPointer(
+    target: EventTarget,
     type: string,
-    init: { readonly clientY?: number } = {},
-  ): DragEvent {
-    const dataTransfer = {
-      dropEffect: '',
-      effectAllowed: '',
-      setData: vi.fn(),
-      getData: vi.fn(),
-    }
-    const event = new Event(type, { bubbles: true, cancelable: true }) as DragEvent
-    Object.defineProperty(event, 'clientY', { value: init.clientY ?? 0 })
-    Object.defineProperty(event, 'dataTransfer', { value: dataTransfer })
+    init: {
+      readonly clientX?: number
+      readonly clientY?: number
+      readonly pointerId?: number
+      readonly button?: number
+    } = {},
+  ): PointerEvent {
+    const event = new PointerEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      clientX: init.clientX ?? 0,
+      clientY: init.clientY ?? 0,
+      pointerId: init.pointerId ?? 1,
+      button: init.button ?? 0,
+    })
     target.dispatchEvent(event)
     return event
+  }
+
+  function preparePointerTarget(target: HTMLElement): void {
+    target.setPointerCapture = vi.fn()
+    target.releasePointerCapture = vi.fn()
   }
 
   function notebookRow(path: string): HTMLElement {
     const row = container.querySelector<HTMLElement>(`[data-notebook-entry-row="${path}"]`)
     if (!row) throw new Error(`Missing notebook row ${path}`)
     return row
+  }
+
+  function notebookSection(sectionId: string): HTMLElement {
+    const section = container.querySelector<HTMLElement>(`[data-notebook-section-id="${sectionId}"]`)
+    if (!section) throw new Error(`Missing notebook section ${sectionId}`)
+    return section
   }
 
   beforeEach(() => {
@@ -313,9 +328,68 @@ describe('DesignNotebookPanel', () => {
     expect(container.querySelector('button[aria-label="Add current design to notebook"]')).toBeNull()
   })
 
-  it('drags Design rows within a section and into another section', async () => {
+  it('drags Notebook Sections directly by title', async () => {
+    const reorderSections = vi.fn().mockResolvedValue(undefined)
+    const workbench = createDesignNotebookWorkbench({
+      loadNotebook: vi.fn().mockResolvedValue({
+        sections: [
+          {
+            id: 'section-first',
+            name: 'First Section',
+            sort_order: 0,
+            created_at: '2026-06-20T08:00:00.000Z',
+            updated_at: '2026-06-20T08:00:00.000Z',
+          },
+          {
+            id: 'section-second',
+            name: 'Second Section',
+            sort_order: 1,
+            created_at: '2026-06-21T08:00:00.000Z',
+            updated_at: '2026-06-21T08:00:00.000Z',
+          },
+        ],
+        entries: [
+          {
+            path: '/designs/first.canopi',
+            name: 'First Design',
+            updated_at: '2026-06-20T08:00:00.000Z',
+            plant_count: 1,
+            section_id: 'section-first',
+            sort_order: 0,
+          },
+        ],
+      }),
+      openDesign: vi.fn(),
+      reorderSections,
+    })
+
+    await act(async () => {
+      render(<DesignNotebookPanel workbench={workbench} />, container)
+    })
+    await act(flushEffects)
+
+    const firstSection = notebookSection('section-first')
+    const secondSection = notebookSection('section-second')
+    const secondTitle = secondSection.querySelector<HTMLElement>('h3')
+    if (!secondTitle) throw new Error('Missing second section title')
+    preparePointerTarget(secondTitle)
+    setElementRect(firstSection, 100, 80)
+    setElementRect(secondSection, 180, 80)
+
+    await act(async () => {
+      dispatchPointer(secondTitle, 'pointerdown', { pointerId: 8, clientX: 12, clientY: 200 })
+      dispatchPointer(document, 'pointermove', { pointerId: 8, clientX: 12, clientY: 120 })
+      dispatchPointer(document, 'pointerup', { pointerId: 8, clientX: 12, clientY: 120 })
+      await flushEffects()
+    })
+
+    expect(reorderSections).toHaveBeenCalledWith(['section-second', 'section-first'])
+  })
+
+  it('drags Design rows directly within a section and into another section without opening the row', async () => {
     const moveEntryToSection = vi.fn().mockResolvedValue(undefined)
     const reorderEntries = vi.fn().mockResolvedValue(undefined)
+    const openDesign = vi.fn().mockResolvedValue(undefined)
     const workbench = createDesignNotebookWorkbench({
       loadNotebook: vi.fn().mockResolvedValue({
         sections: [
@@ -361,7 +435,7 @@ describe('DesignNotebookPanel', () => {
           },
         ],
       }),
-      openDesign: vi.fn(),
+      openDesign,
       moveEntryToSection,
       reorderEntries,
     })
@@ -373,16 +447,21 @@ describe('DesignNotebookPanel', () => {
 
     const firstRow = notebookRow('/designs/first.canopi')
     const secondRow = notebookRow('/designs/second.canopi')
+    const firstRowBody = firstRow.querySelector<HTMLElement>('button[data-design-path="/designs/first.canopi"]')
+    if (!firstRowBody) throw new Error('Missing first row body')
+    preparePointerTarget(firstRowBody)
     setElementRect(firstRow, 100)
     setElementRect(secondRow, 140)
 
     await act(async () => {
-      dispatchDrag(firstRow, 'dragstart')
-      dispatchDrag(secondRow, 'dragover', { clientY: 175 })
-      dispatchDrag(secondRow, 'drop', { clientY: 175 })
+      dispatchPointer(firstRowBody, 'pointerdown', { pointerId: 9, clientX: 12, clientY: 110 })
+      dispatchPointer(document, 'pointermove', { pointerId: 9, clientX: 12, clientY: 175 })
+      dispatchPointer(document, 'pointerup', { pointerId: 9, clientX: 12, clientY: 175 })
+      firstRowBody.dispatchEvent(new MouseEvent('click', { bubbles: true }))
       await flushEffects()
     })
 
+    expect(openDesign).not.toHaveBeenCalled()
     expect(moveEntryToSection).not.toHaveBeenCalled()
     expect(reorderEntries).toHaveBeenCalledWith([
       '/designs/second.canopi',
@@ -392,15 +471,20 @@ describe('DesignNotebookPanel', () => {
 
     const firstRowAfterReorder = notebookRow('/designs/first.canopi')
     const homeRow = notebookRow('/designs/home.canopi')
+    const firstRowBodyAfterReorder = firstRowAfterReorder.querySelector<HTMLElement>('button[data-design-path="/designs/first.canopi"]')
+    if (!firstRowBodyAfterReorder) throw new Error('Missing first row body after reorder')
+    preparePointerTarget(firstRowBodyAfterReorder)
     setElementRect(homeRow, 220)
 
     await act(async () => {
-      dispatchDrag(firstRowAfterReorder, 'dragstart')
-      dispatchDrag(homeRow, 'dragover', { clientY: 260 })
-      dispatchDrag(homeRow, 'drop', { clientY: 260 })
+      dispatchPointer(firstRowBodyAfterReorder, 'pointerdown', { pointerId: 10, clientX: 12, clientY: 150 })
+      dispatchPointer(document, 'pointermove', { pointerId: 10, clientX: 12, clientY: 260 })
+      dispatchPointer(document, 'pointerup', { pointerId: 10, clientX: 12, clientY: 260 })
+      firstRowBodyAfterReorder.dispatchEvent(new MouseEvent('click', { bubbles: true }))
       await flushEffects()
     })
 
+    expect(openDesign).not.toHaveBeenCalled()
     expect(moveEntryToSection).toHaveBeenCalledWith('/designs/first.canopi', 'section-home')
     expect(reorderEntries).toHaveBeenLastCalledWith([
       '/designs/second.canopi',

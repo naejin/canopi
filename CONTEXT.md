@@ -25,7 +25,7 @@ The app-level workspace for finding, organizing, and switching between saved Des
 _Avoid_: File browser, recent list, project folder
 
 **Notebook Section**:
-A user-named grouping inside the Design Notebook. A notebook section organizes saved Design references one-to-many: a saved Design reference belongs to at most one notebook section, and section membership is personal app organization rather than saved Design content.
+A user-named, manually ordered grouping inside the Design Notebook. A notebook section organizes saved Design references one-to-many: a saved Design reference belongs to at most one notebook section, and section membership is personal app organization rather than saved Design content.
 _Avoid_: Folder, tag, category
 
 **Design Edit**:

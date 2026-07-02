@@ -10,6 +10,8 @@ import type { DesignNotebookEntry, DesignNotebookSection } from '../../types/des
 import { Dropdown, type DropdownItem } from '../shared/Dropdown'
 import styles from './DesignNotebookPanel.module.css'
 
+const NOTEBOOK_DRAG_THRESHOLD_PX = 4
+
 interface DesignNotebookPanelProps {
   readonly workbench?: DesignNotebookWorkbench
 }
@@ -23,25 +25,52 @@ interface NotebookDropTarget {
   readonly position: NotebookDropPosition
 }
 
+interface NotebookPointerDragSession {
+  readonly kind: 'entry' | 'section'
+  readonly pointerId: number
+  readonly sourceId: string
+  readonly sourceElement: HTMLElement
+  readonly startClientX: number
+  readonly startClientY: number
+  readonly baseEntries: readonly DesignNotebookEntry[]
+  readonly baseSections: readonly DesignNotebookSection[]
+  readonly baseSectionIds: readonly string[]
+  dragging: boolean
+  latestEntries: readonly DesignNotebookEntry[]
+  latestSectionIds: readonly string[]
+  latestDropTarget: NotebookDropTarget | null
+}
+
 export function DesignNotebookPanel({
   workbench = designNotebookWorkbench,
 }: DesignNotebookPanelProps) {
   const lang = locale.value
   const view = workbench.view.value
+  const listRef = useRef<HTMLDivElement>(null)
   const renameInputRef = useRef<HTMLInputElement>(null)
-  const draggedPathRef = useRef<string | null>(null)
-  const dropTargetRef = useRef<NotebookDropTarget | null>(null)
+  const pointerDragSessionRef = useRef<NotebookPointerDragSession | null>(null)
+  const pointerDragCleanupRef = useRef<(() => void) | null>(null)
+  const suppressNextOpenPathRef = useRef<string | null>(null)
   const [newSectionName, setNewSectionName] = useState('')
   const [sectionEditorOpen, setSectionEditorOpen] = useState(false)
   const [renamingSectionId, setRenamingSectionId] = useState<string | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
   const [addCurrentSectionId, setAddCurrentSectionId] = useState<string>('')
   const [draggedPath, setDraggedPath] = useState<string | null>(null)
+  const [draggedSectionId, setDraggedSectionId] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<NotebookDropTarget | null>(null)
+  const [entryPreviewEntries, setEntryPreviewEntries] =
+    useState<readonly DesignNotebookEntry[] | null>(null)
+  const [sectionPreviewIds, setSectionPreviewIds] =
+    useState<readonly string[] | null>(null)
 
   useEffect(() => {
     void workbench.load()
   }, [workbench])
+
+  useEffect(() => {
+    return () => clearPointerDragListeners()
+  }, [])
 
   useEffect(() => {
     if (!renamingSectionId) return
@@ -49,8 +78,12 @@ export function DesignNotebookPanel({
     renameInputRef.current?.select()
   }, [renamingSectionId])
 
-  const orderedSections = view.sections
-  const orderedEntries = entriesInNotebookDisplayOrder(view.entries, orderedSections)
+  const orderedSections = orderItemsForPreview(
+    view.sections,
+    sectionPreviewIds,
+    (section) => section.id,
+  )
+  const orderedEntries = entryPreviewEntries ?? entriesInNotebookDisplayOrder(view.entries, orderedSections)
   const unsectionedEntries = entriesForSection(orderedEntries, null)
   const shouldShowUnsectioned = unsectionedEntries.length > 0 || draggedPath !== null
   const addSectionItems: DropdownItem<string>[] = [
@@ -89,77 +122,213 @@ export function DesignNotebookPanel({
     setRenameDraft('')
   }
 
-  function beginEntryDrag(path: string, event: DragEvent): void {
-    if (event.dataTransfer) {
-      event.dataTransfer.effectAllowed = 'move'
-      event.dataTransfer.setData('text/plain', path)
+  function beginEntryPointerDrag(path: string, event: PointerEvent): void {
+    beginPointerDrag('entry', path, event)
+  }
+
+  function beginSectionPointerDrag(sectionId: string, event: PointerEvent): void {
+    beginPointerDrag('section', sectionId, event)
+  }
+
+  function beginPointerDrag(
+    kind: NotebookPointerDragSession['kind'],
+    sourceId: string,
+    event: PointerEvent,
+  ): void {
+    if (event.button !== 0 || !(event.currentTarget instanceof HTMLElement)) return
+    clearPointerDragListeners()
+    pointerDragSessionRef.current = {
+      kind,
+      pointerId: event.pointerId,
+      sourceId,
+      sourceElement: event.currentTarget,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      baseEntries: orderedEntries,
+      baseSections: orderedSections,
+      baseSectionIds: orderedSections.map((section) => section.id),
+      dragging: false,
+      latestEntries: orderedEntries,
+      latestSectionIds: orderedSections.map((section) => section.id),
+      latestDropTarget: null,
     }
-    draggedPathRef.current = path
-    dropTargetRef.current = null
-    setDraggedPath(path)
-    setDropTarget(null)
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId)
+    } catch {
+      // Document listeners own the drag lifecycle if capture is unavailable.
+    }
+    installPointerDragListeners()
   }
 
-  function updateEntryDropTarget(entry: DesignNotebookEntry, event: DragEvent): void {
-    const sourcePath = draggedPathRef.current
-    if (!sourcePath || sourcePath === entry.path || !(event.currentTarget instanceof HTMLElement)) return
-    event.preventDefault()
-    event.stopPropagation()
-    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
-    setCurrentDropTarget(dropTargetForEntry(entry, event.currentTarget, event.clientY, orderedEntries, sourcePath))
+  function installPointerDragListeners(): void {
+    const onMove = (event: PointerEvent) => updatePointerDrag(event)
+    const onUp = (event: PointerEvent) => finishPointerDrag(event)
+    const onCancel = (event: PointerEvent) => cancelPointerDrag(event)
+
+    document.addEventListener('pointermove', onMove)
+    document.addEventListener('pointerup', onUp)
+    document.addEventListener('pointercancel', onCancel)
+    pointerDragCleanupRef.current = () => {
+      document.removeEventListener('pointermove', onMove)
+      document.removeEventListener('pointerup', onUp)
+      document.removeEventListener('pointercancel', onCancel)
+      pointerDragCleanupRef.current = null
+    }
   }
 
-  function updateSectionDropTarget(sectionId: string | null, event: DragEvent): void {
-    if (!draggedPathRef.current) return
-    event.preventDefault()
-    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
-    setCurrentDropTarget({
-      sectionId,
-      beforePath: null,
-      rowPath: null,
-      position: 'inside',
-    })
+  function clearPointerDragListeners(): void {
+    pointerDragCleanupRef.current?.()
   }
 
-  function dropEntry(event: DragEvent): void {
+  function updatePointerDrag(event: PointerEvent): void {
+    const session = pointerDragSessionRef.current
+    if (!session || session.pointerId !== event.pointerId) return
+    const movedEnough = Math.abs(event.clientX - session.startClientX) >= NOTEBOOK_DRAG_THRESHOLD_PX
+      || Math.abs(event.clientY - session.startClientY) >= NOTEBOOK_DRAG_THRESHOLD_PX
+    if (!session.dragging && !movedEnough) return
+
     event.preventDefault()
-    event.stopPropagation()
-    const sourcePath = draggedPathRef.current
-    const target = dropTargetRef.current
-    clearDragState()
-    if (!sourcePath || !target) return
+    if (!session.dragging) {
+      session.dragging = true
+      if (session.kind === 'entry') setDraggedPath(session.sourceId)
+      else setDraggedSectionId(session.sourceId)
+    }
 
-    const currentEntries = entriesInNotebookDisplayOrder(view.entries, orderedSections)
-    const source = currentEntries.find((entry) => entry.path === sourcePath)
-    const nextEntries = entriesAfterDrop(currentEntries, orderedSections, sourcePath, target)
-    if (!source || !nextEntries) return
+    if (session.kind === 'entry') {
+      updateEntryPointerDrag(session, event.clientY)
+    } else {
+      updateSectionPointerDrag(session, event.clientY)
+    }
+  }
 
-    const currentPaths = currentEntries.map((entry) => entry.path)
-    const nextPaths = nextEntries.map((entry) => entry.path)
+  function updateEntryPointerDrag(
+    session: NotebookPointerDragSession,
+    clientY: number,
+  ): void {
+    const target = dropTargetForPointer(listRef.current, session, clientY)
+    if (!target) return
+    const nextEntries = entriesAfterDrop(session.baseEntries, session.baseSections, session.sourceId, target)
+    if (!nextEntries) return
+    session.latestDropTarget = target
+    session.latestEntries = nextEntries
+    setDropTarget(target)
+    setEntryPreviewEntries(nextEntries)
+  }
+
+  function updateSectionPointerDrag(
+    session: NotebookPointerDragSession,
+    clientY: number,
+  ): void {
+    const nextSectionIds = sectionOrderForPointer(listRef.current, session, clientY)
+    session.latestSectionIds = nextSectionIds
+    setSectionPreviewIds(nextSectionIds)
+  }
+
+  function finishPointerDrag(event: PointerEvent): void {
+    const session = pointerDragSessionRef.current
+    if (!session || session.pointerId !== event.pointerId) return
+    if (session.dragging) event.preventDefault()
+    clearPointerDragListeners()
+    releasePointerCapture(session)
+    pointerDragSessionRef.current = null
+
+    if (!session.dragging) {
+      clearDragPreview()
+      return
+    }
+
+    if (session.kind === 'entry') {
+      commitEntryPointerDrag(session)
+    } else {
+      commitSectionPointerDrag(session)
+    }
+  }
+
+  function cancelPointerDrag(event: PointerEvent): void {
+    const session = pointerDragSessionRef.current
+    if (!session || session.pointerId !== event.pointerId) return
+    clearPointerDragListeners()
+    releasePointerCapture(session)
+    pointerDragSessionRef.current = null
+    clearDragPreview()
+  }
+
+  function releasePointerCapture(session: NotebookPointerDragSession): void {
+    try {
+      session.sourceElement.releasePointerCapture(session.pointerId)
+    } catch {
+      // The source can re-render during preview; document listeners already cleaned up.
+    }
+  }
+
+  function commitEntryPointerDrag(session: NotebookPointerDragSession): void {
+    suppressRowOpenOnce(session.sourceId)
+    const target = session.latestDropTarget
+    const source = session.baseEntries.find((entry) => entry.path === session.sourceId)
+    if (!target || !source) {
+      clearDragPreview()
+      return
+    }
+
+    const currentPaths = session.baseEntries.map((entry) => entry.path)
+    const nextPaths = session.latestEntries.map((entry) => entry.path)
     const sectionChanged = source.section_id !== target.sectionId
     const orderChanged = !sameIdOrder(currentPaths, nextPaths)
-    if (!sectionChanged && !orderChanged) return
+    if (!sectionChanged && !orderChanged) {
+      clearDragPreview()
+      return
+    }
 
     void (async () => {
       if (sectionChanged) {
-        await workbench.moveEntryToSection(sourcePath, target.sectionId)
+        await workbench.moveEntryToSection(session.sourceId, target.sectionId)
       }
       if (orderChanged) {
         await workbench.reorderEntries(nextPaths)
       }
     })()
+      .catch(() => {
+        void workbench.refresh()
+      })
+      .finally(clearDragPreview)
   }
 
-  function clearDragState(): void {
-    draggedPathRef.current = null
-    dropTargetRef.current = null
+  function commitSectionPointerDrag(session: NotebookPointerDragSession): void {
+    if (sameIdOrder(session.baseSectionIds, session.latestSectionIds)) {
+      clearDragPreview()
+      return
+    }
+
+    void workbench.reorderSections(session.latestSectionIds)
+      .catch(() => {
+        void workbench.refresh()
+      })
+      .finally(clearDragPreview)
+  }
+
+  function suppressRowOpenOnce(path: string): void {
+    suppressNextOpenPathRef.current = path
+    window.setTimeout(() => {
+      if (suppressNextOpenPathRef.current === path) {
+        suppressNextOpenPathRef.current = null
+      }
+    }, 0)
+  }
+
+  function openEntryFromRow(path: string): void {
+    if (suppressNextOpenPathRef.current === path) {
+      suppressNextOpenPathRef.current = null
+      return
+    }
+    void workbench.openEntry(path)
+  }
+
+  function clearDragPreview(): void {
     setDraggedPath(null)
+    setDraggedSectionId(null)
     setDropTarget(null)
-  }
-
-  function setCurrentDropTarget(target: NotebookDropTarget): void {
-    dropTargetRef.current = target
-    setDropTarget(target)
+    setEntryPreviewEntries(null)
+    setSectionPreviewIds(null)
   }
 
   return (
@@ -246,7 +415,7 @@ export function DesignNotebookPanel({
         )}
       </header>
 
-      <div className={styles.list} role="list">
+      <div ref={listRef} className={styles.list} role="list">
         {view.loading && view.entries.length === 0 ? (
           <div className={styles.feedback}>{t('designNotebook.loading')}</div>
         ) : view.loadError ? (
@@ -262,9 +431,8 @@ export function DesignNotebookPanel({
               <NotebookSectionGroup
                 sectionId={null}
                 title={t('designNotebook.unsectioned')}
+                dragging={false}
                 dropActive={isSectionDropTarget(dropTarget, null)}
-                onDragOver={(event) => updateSectionDropTarget(null, event)}
-                onDrop={dropEntry}
               >
                 {unsectionedEntries.map((entry) => (
                   <NotebookRow
@@ -275,15 +443,12 @@ export function DesignNotebookPanel({
                     dragging={entry.path === draggedPath}
                     dropPosition={dropPositionForRow(dropTarget, entry.path)}
                     onOpen={() => {
-                      void workbench.openEntry(entry.path)
+                      openEntryFromRow(entry.path)
                     }}
                     onRemove={() => {
                       void workbench.removeEntry(entry.path)
                     }}
-                    onDragStart={(event) => beginEntryDrag(entry.path, event)}
-                    onDragOver={(event) => updateEntryDropTarget(entry, event)}
-                    onDrop={dropEntry}
-                    onDragEnd={clearDragState}
+                    onPointerDown={(event) => beginEntryPointerDrag(entry.path, event)}
                   />
                 ))}
                 {unsectionedEntries.length === 0 && (
@@ -301,6 +466,7 @@ export function DesignNotebookPanel({
                   key={section.id}
                   sectionId={section.id}
                   title={section.name}
+                  dragging={section.id === draggedSectionId}
                   titleEditor={renaming ? (
                     <input
                       ref={renameInputRef}
@@ -334,9 +500,8 @@ export function DesignNotebookPanel({
                     </button>
                   )}
                   dropActive={isSectionDropTarget(dropTarget, section.id)}
+                  onTitlePointerDown={(event) => beginSectionPointerDrag(section.id, event)}
                   onTitleDoubleClick={() => beginRename(section)}
-                  onDragOver={(event) => updateSectionDropTarget(section.id, event)}
-                  onDrop={dropEntry}
                 >
                   {entries.map((entry) => (
                     <NotebookRow
@@ -347,15 +512,12 @@ export function DesignNotebookPanel({
                       dragging={entry.path === draggedPath}
                       dropPosition={dropPositionForRow(dropTarget, entry.path)}
                       onOpen={() => {
-                        void workbench.openEntry(entry.path)
+                        openEntryFromRow(entry.path)
                       }}
                       onRemove={() => {
                         void workbench.removeEntry(entry.path)
                       }}
-                      onDragStart={(event) => beginEntryDrag(entry.path, event)}
-                      onDragOver={(event) => updateEntryDropTarget(entry, event)}
-                      onDrop={dropEntry}
-                      onDragEnd={clearDragState}
+                      onPointerDown={(event) => beginEntryPointerDrag(entry.path, event)}
                     />
                   ))}
                   {entries.length === 0 && (
@@ -390,36 +552,40 @@ function sectionNameForId(
 function NotebookSectionGroup({
   sectionId,
   title,
+  dragging,
   titleEditor,
   actions,
   dropActive,
+  onTitlePointerDown,
   onTitleDoubleClick,
-  onDragOver,
-  onDrop,
   children,
 }: {
   readonly sectionId: string | null
   readonly title: string
+  readonly dragging: boolean
   readonly titleEditor?: ComponentChildren
   readonly actions?: ComponentChildren
   readonly dropActive: boolean
+  readonly onTitlePointerDown?: (event: PointerEvent) => void
   readonly onTitleDoubleClick?: () => void
-  readonly onDragOver: (event: DragEvent) => void
-  readonly onDrop: (event: DragEvent) => void
   readonly children: ComponentChildren
 }) {
   return (
     <section
-      className={classNames(styles.sectionGroup, dropActive && styles.sectionDropTarget)}
+      className={classNames(
+        styles.sectionGroup,
+        dragging && styles.sectionDragging,
+        dropActive && styles.sectionDropTarget,
+      )}
       aria-label={title}
       data-notebook-section-id={notebookEntrySectionKey(sectionId)}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
+      data-notebook-section-row={sectionId ?? undefined}
     >
       <header className={styles.sectionHeader}>
         {titleEditor ?? (
           <h3
             className={styles.sectionTitle}
+            onPointerDown={onTitlePointerDown}
             onDblClick={onTitleDoubleClick}
           >
             {title}
@@ -440,10 +606,7 @@ function NotebookRow({
   dropPosition,
   onOpen,
   onRemove,
-  onDragStart,
-  onDragOver,
-  onDrop,
-  onDragEnd,
+  onPointerDown,
 }: {
   readonly entry: DesignNotebookEntry
   readonly lang: string
@@ -452,10 +615,7 @@ function NotebookRow({
   readonly dropPosition: NotebookDropPosition | null
   readonly onOpen: () => void
   readonly onRemove: () => void
-  readonly onDragStart: (event: DragEvent) => void
-  readonly onDragOver: (event: DragEvent) => void
-  readonly onDrop: (event: DragEvent) => void
-  readonly onDragEnd: () => void
+  readonly onPointerDown: (event: PointerEvent) => void
 }) {
   const date = formatDate(entry.updated_at, lang)
 
@@ -469,19 +629,15 @@ function NotebookRow({
         dropPosition === 'after' && styles.rowDropAfter,
       )}
       role="listitem"
-      draggable
       data-notebook-entry-row={entry.path}
       data-notebook-entry-section={notebookEntrySectionKey(entry.section_id)}
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-      onDragEnd={onDragEnd}
     >
       <button
         className={styles.rowOpen}
         type="button"
         aria-current={active ? 'true' : undefined}
         data-design-path={entry.path}
+        onPointerDown={onPointerDown}
         onClick={onOpen}
       >
         <span className={styles.rowMain}>
@@ -512,35 +668,109 @@ function NotebookRow({
   )
 }
 
-function dropTargetForEntry(
-  entry: DesignNotebookEntry,
+function dropTargetForPointer(
+  list: HTMLElement | null,
+  session: NotebookPointerDragSession,
+  clientY: number,
+): NotebookDropTarget | null {
+  const rows = [...(list?.querySelectorAll<HTMLElement>('[data-notebook-entry-row]') ?? [])]
+  for (const row of rows) {
+    const path = row.dataset.notebookEntryRow
+    if (!path || path === session.sourceId) continue
+
+    const rect = row.getBoundingClientRect()
+    if (clientY < rect.top + rect.height / 2 || clientY <= rect.bottom) {
+      return dropTargetForRowElement(row, clientY, session)
+    }
+  }
+
+  const sections = [...(list?.querySelectorAll<HTMLElement>('[data-notebook-section-id]') ?? [])]
+  let fallback: NotebookDropTarget | null = null
+  for (const section of sections) {
+    const target = dropTargetForSectionElement(section)
+
+    fallback = target
+    const rect = section.getBoundingClientRect()
+    if (clientY <= rect.bottom) return target
+  }
+  return fallback
+}
+
+function dropTargetForRowElement(
   row: HTMLElement,
   clientY: number,
-  entries: readonly DesignNotebookEntry[],
-  sourcePath: string,
-): NotebookDropTarget {
-  const sectionId = entry.section_id
+  session: NotebookPointerDragSession,
+): NotebookDropTarget | null {
+  const path = row.dataset.notebookEntryRow
+  if (!path || path === session.sourceId) return null
+
+  const entries = session.latestEntries.length > 0
+    ? session.latestEntries
+    : session.baseEntries
+  const entry = entries.find((candidate) => candidate.path === path)
+  const sectionId = entry?.section_id ?? sectionIdFromKey(row.dataset.notebookEntrySection)
   const rect = row.getBoundingClientRect()
   const insertAfter = clientY >= rect.top + rect.height / 2
   const targetSectionEntries = entriesForSection(entries, sectionId)
-    .filter((sectionEntry) => sectionEntry.path !== sourcePath)
+    .filter((sectionEntry) => sectionEntry.path !== session.sourceId)
 
   if (!insertAfter) {
     return {
       sectionId,
-      beforePath: entry.path,
-      rowPath: entry.path,
+      beforePath: path,
+      rowPath: path,
       position: 'before',
     }
   }
 
-  const targetIndex = targetSectionEntries.findIndex((sectionEntry) => sectionEntry.path === entry.path)
+  const targetIndex = targetSectionEntries.findIndex((sectionEntry) => sectionEntry.path === path)
   return {
     sectionId,
     beforePath: targetSectionEntries[targetIndex + 1]?.path ?? null,
-    rowPath: entry.path,
+    rowPath: path,
     position: 'after',
   }
+}
+
+function dropTargetForSectionElement(section: HTMLElement): NotebookDropTarget {
+  return {
+    sectionId: sectionIdFromKey(section.dataset.notebookSectionId),
+    beforePath: null,
+    rowPath: null,
+    position: 'inside',
+  }
+}
+
+function sectionOrderForPointer(
+  list: HTMLElement | null,
+  session: NotebookPointerDragSession,
+  clientY: number,
+): readonly string[] {
+  const sectionRows = [...(list?.querySelectorAll<HTMLElement>('[data-notebook-section-row]') ?? [])]
+  const visibleIds = sectionRows
+    .map((section) => section.dataset.notebookSectionRow)
+    .filter((sectionId): sectionId is string => Boolean(sectionId))
+  const orderedIds = visibleIds.length > 0 ? visibleIds : session.latestSectionIds
+  const remainingIds = orderedIds.filter((sectionId) => sectionId !== session.sourceId)
+  let insertIndex = remainingIds.length
+
+  for (const section of sectionRows) {
+    const sectionId = section.dataset.notebookSectionRow
+    if (!sectionId || sectionId === session.sourceId) continue
+
+    const rect = section.getBoundingClientRect()
+    if (clientY < rect.top + rect.height / 2) {
+      insertIndex = Math.max(0, remainingIds.indexOf(sectionId))
+      break
+    }
+  }
+
+  const nextSectionIds = [...remainingIds]
+  nextSectionIds.splice(insertIndex, 0, session.sourceId)
+  for (const sectionId of session.baseSectionIds) {
+    if (!nextSectionIds.includes(sectionId)) nextSectionIds.push(sectionId)
+  }
+  return nextSectionIds
 }
 
 function entriesAfterDrop(
@@ -608,6 +838,25 @@ function entriesForSection(
   return entries.filter((entry) => entry.section_id === sectionId)
 }
 
+function orderItemsForPreview<T>(
+  items: readonly T[],
+  orderedIds: readonly string[] | null,
+  idForItem: (item: T) => string,
+): readonly T[] {
+  if (!orderedIds) return items
+
+  const itemsById = new Map(items.map((item) => [idForItem(item), item]))
+  const orderedItems: T[] = []
+  for (const id of orderedIds) {
+    const item = itemsById.get(id)
+    if (!item) continue
+    orderedItems.push(item)
+    itemsById.delete(id)
+  }
+  orderedItems.push(...itemsById.values())
+  return orderedItems
+}
+
 function isSectionDropTarget(target: NotebookDropTarget | null, sectionId: string | null): boolean {
   return target?.position === 'inside' && target.sectionId === sectionId
 }
@@ -621,6 +870,10 @@ function dropPositionForRow(
 
 function notebookEntrySectionKey(sectionId: string | null): string {
   return sectionId ?? 'unsectioned'
+}
+
+function sectionIdFromKey(sectionKey: string | undefined): string | null {
+  return sectionKey && sectionKey !== 'unsectioned' ? sectionKey : null
 }
 
 function sameIdOrder(left: readonly string[], right: readonly string[]): boolean {
