@@ -102,6 +102,10 @@ export async function moveDesignReferenceToSection(
   return invoke('move_design_reference_to_section', { path, sectionId })
 }
 
+export async function setDesignReferencePinned(path: string, pinned: boolean): Promise<void> {
+  return invoke('set_design_reference_pinned', { path, pinned })
+}
+
 /** Silent autosave to app data dir. */
 export async function autosaveDesign(content: CanopiFile, path: string | null): Promise<void> {
   return invoke('autosave_design', { content, path })

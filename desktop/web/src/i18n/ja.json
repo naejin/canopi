@@ -11,6 +11,8 @@
   "designNotebook": {
     "title": "デザインノート",
     "allDesigns": "すべてのデザイン",
+    "allDesignsLabel": "すべてのデザイン",
+    "pinnedDesigns": "ピン留めしたデザイン",
     "viewsLabel": "ノートの表示",
     "visibleCount": "{{count}} 件の表示中デザイン",
     "searchLabel": "デザインを検索",
@@ -31,6 +33,8 @@
     "moveToSection": "{{name}} をセクションへ移動",
     "renameSection": "セクション {{name}} の名前を変更",
     "deleteSection": "セクション {{name}} を削除",
+    "pinDesign": "{{name}} をピン留め",
+    "unpinDesign": "{{name}} のピン留めを解除",
     "sectionName": "セクション名",
     "saveSectionName": "セクション名を保存",
     "cancelRename": "名前変更をキャンセル",

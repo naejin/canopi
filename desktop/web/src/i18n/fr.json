@@ -11,6 +11,8 @@
   "designNotebook": {
     "title": "Carnet de designs",
     "allDesigns": "Tous les designs",
+    "allDesignsLabel": "Tous les designs",
+    "pinnedDesigns": "Designs épinglés",
     "viewsLabel": "Vues du carnet",
     "visibleCount": "{{count}} designs visibles",
     "searchLabel": "Rechercher des designs",
@@ -31,6 +33,8 @@
     "moveToSection": "Déplacer {{name}} vers une section",
     "renameSection": "Renommer la section {{name}}",
     "deleteSection": "Supprimer la section {{name}}",
+    "pinDesign": "Épingler {{name}}",
+    "unpinDesign": "Désépingler {{name}}",
     "sectionName": "Nom de section",
     "saveSectionName": "Enregistrer le nom de section",
     "cancelRename": "Annuler le renommage",

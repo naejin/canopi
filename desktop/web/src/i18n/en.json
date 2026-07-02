@@ -11,6 +11,8 @@
   "designNotebook": {
     "title": "Design Notebook",
     "allDesigns": "All Designs",
+    "allDesignsLabel": "All designs",
+    "pinnedDesigns": "Pinned designs",
     "viewsLabel": "Notebook views",
     "visibleCount": "{{count}} visible designs",
     "searchLabel": "Search designs",
@@ -31,6 +33,8 @@
     "moveToSection": "Move {{name}} to section",
     "renameSection": "Rename section {{name}}",
     "deleteSection": "Delete section {{name}}",
+    "pinDesign": "Pin {{name}}",
+    "unpinDesign": "Unpin {{name}}",
     "sectionName": "Section name",
     "saveSectionName": "Save section name",
     "cancelRename": "Cancel rename",

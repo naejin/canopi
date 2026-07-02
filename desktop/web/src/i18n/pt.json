@@ -11,6 +11,8 @@
   "designNotebook": {
     "title": "Caderno de designs",
     "allDesigns": "Todos os designs",
+    "allDesignsLabel": "Todos os designs",
+    "pinnedDesigns": "Designs fixados",
     "viewsLabel": "Visualizações do caderno",
     "visibleCount": "{{count}} designs visíveis",
     "searchLabel": "Pesquisar designs",
@@ -31,6 +33,8 @@
     "moveToSection": "Mover {{name}} para uma seção",
     "renameSection": "Renomear seção {{name}}",
     "deleteSection": "Excluir seção {{name}}",
+    "pinDesign": "Fixar {{name}}",
+    "unpinDesign": "Desafixar {{name}}",
     "sectionName": "Nome da seção",
     "saveSectionName": "Salvar nome da seção",
     "cancelRename": "Cancelar renomeação",

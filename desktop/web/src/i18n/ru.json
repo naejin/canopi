@@ -11,6 +11,8 @@
   "designNotebook": {
     "title": "Блокнот дизайнов",
     "allDesigns": "Все дизайны",
+    "allDesignsLabel": "Все дизайны",
+    "pinnedDesigns": "Закреплённые дизайны",
     "viewsLabel": "Виды блокнота",
     "visibleCount": "{{count}} видимых дизайнов",
     "searchLabel": "Искать дизайны",
@@ -31,6 +33,8 @@
     "moveToSection": "Переместить {{name}} в секцию",
     "renameSection": "Переименовать секцию {{name}}",
     "deleteSection": "Удалить секцию {{name}}",
+    "pinDesign": "Закрепить {{name}}",
+    "unpinDesign": "Открепить {{name}}",
     "sectionName": "Название секции",
     "saveSectionName": "Сохранить название секции",
     "cancelRename": "Отменить переименование",

@@ -11,6 +11,8 @@
   "designNotebook": {
     "title": "Ontwerpnotitieboek",
     "allDesigns": "Alle ontwerpen",
+    "allDesignsLabel": "Alle ontwerpen",
+    "pinnedDesigns": "Vastgemaakte ontwerpen",
     "viewsLabel": "Notitieboekweergaven",
     "visibleCount": "{{count}} zichtbare ontwerpen",
     "searchLabel": "Ontwerpen zoeken",
@@ -31,6 +33,8 @@
     "moveToSection": "Verplaats {{name}} naar sectie",
     "renameSection": "Sectie {{name}} hernoemen",
     "deleteSection": "Sectie {{name}} verwijderen",
+    "pinDesign": "{{name}} vastmaken",
+    "unpinDesign": "{{name}} losmaken",
     "sectionName": "Sectienaam",
     "saveSectionName": "Sectienaam opslaan",
     "cancelRename": "Hernoemen annuleren",

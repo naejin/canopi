@@ -49,3 +49,12 @@ pub fn move_design_reference_to_section(
 ) -> Result<(), String> {
     crate::services::design_notebook::move_design_reference_to_section(&user_db, &path, section_id)
 }
+
+#[tauri::command]
+pub fn set_design_reference_pinned(
+    user_db: tauri::State<'_, UserDb>,
+    path: String,
+    pinned: bool,
+) -> Result<(), String> {
+    crate::services::design_notebook::set_design_reference_pinned(&user_db, &path, pinned)
+}

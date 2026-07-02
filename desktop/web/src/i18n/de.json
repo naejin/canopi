@@ -11,6 +11,8 @@
   "designNotebook": {
     "title": "Design-Notizbuch",
     "allDesigns": "Alle Designs",
+    "allDesignsLabel": "Alle Designs",
+    "pinnedDesigns": "Angeheftete Designs",
     "viewsLabel": "Notizbuchansichten",
     "visibleCount": "{{count}} sichtbare Designs",
     "searchLabel": "Designs suchen",
@@ -31,6 +33,8 @@
     "moveToSection": "{{name}} in Abschnitt verschieben",
     "renameSection": "Abschnitt {{name}} umbenennen",
     "deleteSection": "Abschnitt {{name}} löschen",
+    "pinDesign": "{{name}} anheften",
+    "unpinDesign": "{{name}} lösen",
     "sectionName": "Abschnittsname",
     "saveSectionName": "Abschnittsname speichern",
     "cancelRename": "Umbenennen abbrechen",

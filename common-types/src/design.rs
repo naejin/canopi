@@ -640,6 +640,7 @@ pub struct DesignNotebookEntry {
     pub name: String,
     pub updated_at: String,
     pub plant_count: u32,
+    pub pinned: bool,
     pub section_id: Option<String>,
 }
 

@@ -18,6 +18,7 @@ describe('design notebook workbench', () => {
             name: 'Terrace Guild',
             updated_at: '2026-06-20T08:00:00.000Z',
             plant_count: 12,
+            pinned: false,
             section_id: null,
           },
           {
@@ -25,6 +26,7 @@ describe('design notebook workbench', () => {
             name: 'Forest Edge',
             updated_at: '2026-06-22T08:00:00.000Z',
             plant_count: 7,
+            pinned: false,
             section_id: null,
           },
         ],
@@ -88,6 +90,7 @@ describe('design notebook workbench', () => {
             name: 'Forest Edge',
             updated_at: '2026-06-22T08:00:00.000Z',
             plant_count: 7,
+            pinned: false,
             section_id: null,
           },
         ],
@@ -111,5 +114,44 @@ describe('design notebook workbench', () => {
     expect(deleteSection).toHaveBeenCalledWith('section-client')
     expect(workbench.view.value.sections.map((section) => section.id)).toEqual(['section-home'])
     expect(workbench.view.value.entries[0]?.section_id).toBeNull()
+  })
+
+  it('filters the Pinned view and updates pinned state locally after persistence', async () => {
+    const setEntryPinned = vi.fn().mockResolvedValue(undefined)
+    const workbench = createDesignNotebookWorkbench({
+      loadNotebook: vi.fn().mockResolvedValue({
+        sections: [],
+        entries: [
+          {
+            path: '/designs/home.canopi',
+            name: 'Home',
+            updated_at: '2026-06-20T08:00:00.000Z',
+            plant_count: 3,
+            pinned: true,
+            section_id: null,
+          },
+          {
+            path: '/designs/client.canopi',
+            name: 'Client',
+            updated_at: '2026-06-22T08:00:00.000Z',
+            plant_count: 7,
+            pinned: false,
+            section_id: null,
+          },
+        ],
+      }),
+      openDesign: vi.fn(),
+      setEntryPinned,
+    })
+
+    await workbench.load()
+    workbench.setViewMode('pinned')
+
+    expect(workbench.view.value.visibleEntries.map((entry) => entry.name)).toEqual(['Home'])
+
+    await workbench.setEntryPinned('/designs/client.canopi', true)
+
+    expect(setEntryPinned).toHaveBeenCalledWith('/designs/client.canopi', true)
+    expect(workbench.view.value.visibleEntries.map((entry) => entry.name)).toEqual(['Home', 'Client'])
   })
 })

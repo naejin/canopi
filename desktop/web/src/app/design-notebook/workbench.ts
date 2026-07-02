@@ -5,6 +5,7 @@ import {
   getDesignNotebook,
   moveDesignReferenceToSection,
   renameNotebookSection,
+  setDesignReferencePinned,
 } from '../../ipc/design'
 import { openDesignFromPath } from '../document-session/actions'
 import { designPath } from '../document-session/store'
@@ -14,10 +15,13 @@ import type {
   DesignNotebookSnapshot,
 } from '../../types/design'
 
+export type DesignNotebookViewMode = 'all' | 'pinned'
+
 export interface DesignNotebookView {
   readonly entries: readonly DesignNotebookEntry[]
   readonly visibleEntries: readonly DesignNotebookEntry[]
   readonly sections: readonly DesignNotebookSection[]
+  readonly viewMode: DesignNotebookViewMode
   readonly searchQuery: string
   readonly activePath: string | null
   readonly loading: boolean
@@ -28,8 +32,10 @@ export interface DesignNotebookWorkbench {
   readonly view: ReadonlySignal<DesignNotebookView>
   load(): Promise<void>
   refresh(): Promise<void>
+  setViewMode(mode: DesignNotebookViewMode): void
   setSearchQuery(query: string): void
   openEntry(path: string): Promise<void>
+  setEntryPinned(path: string, pinned: boolean): Promise<void>
   createSection(name: string): Promise<void>
   renameSection(sectionId: string, name: string): Promise<void>
   deleteSection(sectionId: string): Promise<void>
@@ -44,6 +50,7 @@ interface CreateDesignNotebookWorkbenchOptions {
   readonly renameSection?: typeof renameNotebookSection
   readonly deleteSection?: typeof deleteNotebookSection
   readonly moveEntryToSection?: typeof moveDesignReferenceToSection
+  readonly setEntryPinned?: typeof setDesignReferencePinned
   readonly activePath?: ReadonlySignal<string | null>
 }
 
@@ -56,10 +63,12 @@ export function createDesignNotebookWorkbench(
   const renameSectionAdapter = options.renameSection ?? renameNotebookSection
   const deleteSectionAdapter = options.deleteSection ?? deleteNotebookSection
   const moveEntryToSectionAdapter = options.moveEntryToSection ?? moveDesignReferenceToSection
+  const setEntryPinnedAdapter = options.setEntryPinned ?? setDesignReferencePinned
   const activePath = options.activePath ?? designPath
 
   const entries = signal<readonly DesignNotebookEntry[]>([])
   const sections = signal<readonly DesignNotebookSection[]>([])
+  const viewMode = signal<DesignNotebookViewMode>('all')
   const searchQuery = signal('')
   const loading = signal(false)
   const loadError = signal(false)
@@ -70,14 +79,18 @@ export function createDesignNotebookWorkbench(
   const view = computed<DesignNotebookView>(() => {
     const query = searchQuery.value
     const normalizedQuery = normalizeSearch(query)
-    const sourceEntries = entries.value
+    const mode = viewMode.value
+    const sourceEntries = mode === 'pinned'
+      ? entries.value.filter((entry) => entry.pinned)
+      : entries.value
 
     return {
-      entries: sourceEntries,
+      entries: entries.value,
       visibleEntries: normalizedQuery.length === 0
         ? sourceEntries
         : sourceEntries.filter((entry) => matchesNotebookQuery(entry, normalizedQuery)),
       sections: sections.value,
+      viewMode: mode,
       searchQuery: query,
       activePath: activePath.value,
       loading: loading.value,
@@ -120,8 +133,21 @@ export function createDesignNotebookWorkbench(
     searchQuery.value = query
   }
 
+  function setViewMode(mode: DesignNotebookViewMode): void {
+    viewMode.value = mode
+  }
+
   async function openEntry(path: string): Promise<void> {
     await openDesign(path)
+  }
+
+  async function setEntryPinned(path: string, pinned: boolean): Promise<void> {
+    await setEntryPinnedAdapter(path, pinned)
+    entries.value = entries.value.map((entry) =>
+      entry.path === path
+        ? { ...entry, pinned }
+        : entry
+    )
   }
 
   async function createSection(name: string): Promise<void> {
@@ -170,8 +196,10 @@ export function createDesignNotebookWorkbench(
     view,
     load,
     refresh: load,
+    setViewMode,
     setSearchQuery,
     openEntry,
+    setEntryPinned,
     createSection,
     renameSection,
     deleteSection,

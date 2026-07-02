@@ -1,7 +1,7 @@
 use rusqlite::Connection;
 
 #[allow(dead_code)]
-const CURRENT_SCHEMA_VERSION: i32 = 5;
+const CURRENT_SCHEMA_VERSION: i32 = 6;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SavedObjectStampRow {
@@ -38,6 +38,12 @@ pub fn init(conn: &Connection) -> Result<(), rusqlite::Error> {
             "../../migrations/v5_design_notebook_sections.sql"
         ))?;
         conn.pragma_update(None, "user_version", 5)?;
+    }
+    if version < 6 {
+        conn.execute_batch(include_str!(
+            "../../migrations/v6_design_notebook_pinned.sql"
+        ))?;
+        conn.pragma_update(None, "user_version", 6)?;
     }
 
     Ok(())
@@ -413,5 +419,33 @@ mod tests {
             |_| Ok(()),
         )
         .unwrap();
+    }
+
+    #[test]
+    fn init_creates_design_notebook_pinned_column() {
+        let conn = Connection::open_in_memory().unwrap();
+        init(&conn).unwrap();
+
+        conn.execute(
+            "INSERT INTO design_notebook_entries (
+                path,
+                name,
+                updated_at,
+                plant_count,
+                created_at,
+                last_opened
+             )
+             VALUES ('/designs/default.canopi', 'Default', datetime('now'), 0, datetime('now'), datetime('now'))",
+            [],
+        )
+        .unwrap();
+        let pinned: bool = conn
+            .query_row(
+                "SELECT pinned FROM design_notebook_entries WHERE path = '/designs/default.canopi'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(!pinned);
     }
 }

@@ -98,8 +98,23 @@ export function DesignNotebookPanel({
       </div>
 
       <div className={styles.viewStrip} aria-label={t('designNotebook.viewsLabel')}>
-        <button className={styles.viewPill} type="button" aria-pressed="true">
+        <button
+          className={styles.viewPill}
+          type="button"
+          aria-label={t('designNotebook.allDesignsLabel')}
+          aria-pressed={view.viewMode === 'all'}
+          onClick={() => workbench.setViewMode('all')}
+        >
           {t('designNotebook.allDesigns')}
+        </button>
+        <button
+          className={styles.viewPill}
+          type="button"
+          aria-label={t('designNotebook.pinnedDesigns')}
+          aria-pressed={view.viewMode === 'pinned'}
+          onClick={() => workbench.setViewMode('pinned')}
+        >
+          {t('designNotebook.pinnedDesigns')}
         </button>
       </div>
 
@@ -159,6 +174,9 @@ export function DesignNotebookPanel({
                     }}
                     onMove={(sectionId) => {
                       void workbench.moveEntryToSection(entry.path, sectionId)
+                    }}
+                    onPin={(pinned) => {
+                      void workbench.setEntryPinned(entry.path, pinned)
                     }}
                   />
                 ))}
@@ -241,6 +259,9 @@ export function DesignNotebookPanel({
                     onMove={(sectionId) => {
                       void workbench.moveEntryToSection(entry.path, sectionId)
                     }}
+                    onPin={(pinned) => {
+                      void workbench.setEntryPinned(entry.path, pinned)
+                    }}
                   />
                 ))}
                 {sectionEntries(section.id).length === 0 && (
@@ -291,6 +312,7 @@ function NotebookRow({
   sections,
   onOpen,
   onMove,
+  onPin,
 }: {
   readonly entry: DesignNotebookEntry
   readonly lang: string
@@ -298,6 +320,7 @@ function NotebookRow({
   readonly sections: readonly DesignNotebookSection[]
   readonly onOpen: () => void
   readonly onMove: (sectionId: string | null) => void
+  readonly onPin: (pinned: boolean) => void
 }) {
   const date = formatDate(entry.updated_at, lang)
   const currentSectionName = sections.find((section) => section.id === entry.section_id)?.name
@@ -333,6 +356,15 @@ function NotebookRow({
         </span>
       </button>
       <div className={styles.rowActions}>
+        <button
+          className={styles.rowIconButton}
+          type="button"
+          aria-label={t(entry.pinned ? 'designNotebook.unpinDesign' : 'designNotebook.pinDesign', { name: entry.name })}
+          aria-pressed={entry.pinned}
+          onClick={() => onPin(!entry.pinned)}
+        >
+          <PinIcon pinned={entry.pinned} />
+        </button>
         <Dropdown
           trigger={currentSectionName ?? t('designNotebook.noSection')}
           items={items}
@@ -347,6 +379,14 @@ function NotebookRow({
         />
       </div>
     </div>
+  )
+}
+
+function PinIcon({ pinned }: { readonly pinned: boolean }) {
+  return (
+    <svg width="13" height="13" viewBox="0 0 13 13" fill={pinned ? 'currentColor' : 'none'} aria-hidden="true">
+      <path d="M4.2 1.8h4.6l-.7 3 2.1 2.2v1H7.3L6.8 11H6.2L5.7 8H2.8V7l2.1-2.2z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   )
 }
 

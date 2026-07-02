@@ -11,6 +11,8 @@
   "designNotebook": {
     "title": "디자인 노트북",
     "allDesigns": "모든 디자인",
+    "allDesignsLabel": "모든 디자인",
+    "pinnedDesigns": "고정된 디자인",
     "viewsLabel": "노트북 보기",
     "visibleCount": "{{count}}개 디자인 표시",
     "searchLabel": "디자인 검색",
@@ -31,6 +33,8 @@
     "moveToSection": "{{name}}을(를) 섹션으로 이동",
     "renameSection": "{{name}} 섹션 이름 변경",
     "deleteSection": "{{name}} 섹션 삭제",
+    "pinDesign": "{{name}} 고정",
+    "unpinDesign": "{{name}} 고정 해제",
     "sectionName": "섹션 이름",
     "saveSectionName": "섹션 이름 저장",
     "cancelRename": "이름 변경 취소",

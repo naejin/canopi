@@ -11,6 +11,8 @@
   "designNotebook": {
     "title": "设计笔记本",
     "allDesigns": "所有设计",
+    "allDesignsLabel": "所有设计",
+    "pinnedDesigns": "置顶设计",
     "viewsLabel": "笔记本视图",
     "visibleCount": "{{count}} 个可见设计",
     "searchLabel": "搜索设计",
@@ -31,6 +33,8 @@
     "moveToSection": "将 {{name}} 移至分区",
     "renameSection": "重命名分区 {{name}}",
     "deleteSection": "删除分区 {{name}}",
+    "pinDesign": "置顶 {{name}}",
+    "unpinDesign": "取消置顶 {{name}}",
     "sectionName": "分区名称",
     "saveSectionName": "保存分区名称",
     "cancelRename": "取消重命名",

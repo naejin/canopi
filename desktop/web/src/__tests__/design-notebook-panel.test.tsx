@@ -34,6 +34,7 @@ describe('DesignNotebookPanel', () => {
             name: 'Terrace Guild',
             updated_at: '2026-06-20T08:00:00.000Z',
             plant_count: 12,
+            pinned: false,
             section_id: null,
           },
           {
@@ -41,6 +42,7 @@ describe('DesignNotebookPanel', () => {
             name: 'Forest Edge',
             updated_at: '2026-06-22T08:00:00.000Z',
             plant_count: 7,
+            pinned: false,
             section_id: null,
           },
         ],
@@ -93,6 +95,7 @@ describe('DesignNotebookPanel', () => {
             name: 'Forest Edge',
             updated_at: '2026-06-22T08:00:00.000Z',
             plant_count: 7,
+            pinned: false,
             section_id: null,
           },
         ],
@@ -171,5 +174,66 @@ describe('DesignNotebookPanel', () => {
 
     expect(container.textContent).not.toContain('Consulting')
     expect(workbench.view.value.entries[0]?.section_id).toBeNull()
+  })
+
+  it('filters to pinned designs and pins rows from the ledger', async () => {
+    const setEntryPinned = vi.fn().mockResolvedValue(undefined)
+    const workbench = createDesignNotebookWorkbench({
+      loadNotebook: vi.fn().mockResolvedValue({
+        sections: [],
+        entries: [
+          {
+            path: '/designs/home.canopi',
+            name: 'Home',
+            updated_at: '2026-06-20T08:00:00.000Z',
+            plant_count: 3,
+            pinned: true,
+            section_id: null,
+          },
+          {
+            path: '/designs/client.canopi',
+            name: 'Client',
+            updated_at: '2026-06-22T08:00:00.000Z',
+            plant_count: 7,
+            pinned: false,
+            section_id: null,
+          },
+        ],
+      }),
+      openDesign: vi.fn(),
+      setEntryPinned,
+    })
+
+    await act(async () => {
+      render(<DesignNotebookPanel workbench={workbench} />, container)
+    })
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="Pinned designs"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(container.textContent).toContain('Home')
+    expect(container.textContent).not.toContain('Client')
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="All designs"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="Pin Client"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="Pinned designs"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(setEntryPinned).toHaveBeenCalledWith('/designs/client.canopi', true)
+    expect(container.textContent).toContain('Client')
   })
 })
