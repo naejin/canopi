@@ -186,6 +186,46 @@ describe('design notebook workbench', () => {
     expect(workbench.view.value.visibleEntries.map((entry) => entry.name)).toEqual(['Home', 'Client'])
   })
 
+  it('removes a saved Design reference without changing the active Design Session path', async () => {
+    const activePath = signal<string | null>('/designs/forest-edge.canopi')
+    const removeEntry = vi.fn().mockResolvedValue(undefined)
+    const workbench = createDesignNotebookWorkbench({
+      activePath,
+      loadNotebook: vi.fn().mockResolvedValue({
+        sections: [],
+        entries: [
+          {
+            path: '/designs/forest-edge.canopi',
+            name: 'Forest Edge',
+            updated_at: '2026-06-22T08:00:00.000Z',
+            plant_count: 7,
+            pinned: true,
+            section_id: null,
+            sort_order: 0,
+          },
+          {
+            path: '/designs/home.canopi',
+            name: 'Home',
+            updated_at: '2026-06-20T08:00:00.000Z',
+            plant_count: 3,
+            pinned: false,
+            section_id: null,
+            sort_order: 1,
+          },
+        ],
+      }),
+      openDesign: vi.fn(),
+      removeEntry,
+    })
+
+    await workbench.load()
+    await workbench.removeEntry('/designs/forest-edge.canopi')
+
+    expect(removeEntry).toHaveBeenCalledWith('/designs/forest-edge.canopi')
+    expect(workbench.view.value.entries.map((entry) => entry.path)).toEqual(['/designs/home.canopi'])
+    expect(workbench.view.value.activePath).toBe('/designs/forest-edge.canopi')
+  })
+
   it('loads Recent Designs as a capped menu projection', async () => {
     const workbench = createDesignNotebookWorkbench({
       loadNotebook: vi.fn().mockResolvedValue({ sections: [], entries: [] }),

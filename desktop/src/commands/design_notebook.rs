@@ -60,6 +60,14 @@ pub fn set_design_reference_pinned(
 }
 
 #[tauri::command]
+pub fn remove_design_reference(
+    user_db: tauri::State<'_, UserDb>,
+    path: String,
+) -> Result<(), String> {
+    crate::services::design_notebook::remove_design_reference(&user_db, &path)
+}
+
+#[tauri::command]
 pub fn reorder_notebook_sections(
     user_db: tauri::State<'_, UserDb>,
     section_ids: Vec<String>,

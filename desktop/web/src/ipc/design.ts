@@ -106,6 +106,10 @@ export async function setDesignReferencePinned(path: string, pinned: boolean): P
   return invoke('set_design_reference_pinned', { path, pinned })
 }
 
+export async function removeDesignReference(path: string): Promise<void> {
+  return invoke('remove_design_reference', { path })
+}
+
 export async function reorderNotebookSections(sectionIds: string[]): Promise<void> {
   return invoke('reorder_notebook_sections', { sectionIds })
 }

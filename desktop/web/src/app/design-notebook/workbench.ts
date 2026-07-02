@@ -6,6 +6,7 @@ import {
   getRecentFiles,
   moveDesignReferenceToSection,
   renameNotebookSection,
+  removeDesignReference,
   reorderDesignReferences,
   reorderNotebookSections,
   setDesignReferencePinned,
@@ -52,6 +53,7 @@ export interface DesignNotebookWorkbench {
   openEntry(path: string): Promise<void>
   addCurrentDesignToNotebook(sectionId: string | null): Promise<boolean>
   setEntryPinned(path: string, pinned: boolean): Promise<void>
+  removeEntry(path: string): Promise<void>
   createSection(name: string): Promise<void>
   renameSection(sectionId: string, name: string): Promise<void>
   deleteSection(sectionId: string): Promise<void>
@@ -72,6 +74,7 @@ interface CreateDesignNotebookWorkbenchOptions {
   readonly deleteSection?: typeof deleteNotebookSection
   readonly moveEntryToSection?: typeof moveDesignReferenceToSection
   readonly setEntryPinned?: typeof setDesignReferencePinned
+  readonly removeEntry?: typeof removeDesignReference
   readonly reorderSections?: typeof reorderNotebookSections
   readonly reorderEntries?: typeof reorderDesignReferences
   readonly activePath?: ReadonlySignal<string | null>
@@ -91,6 +94,7 @@ export function createDesignNotebookWorkbench(
   const deleteSectionAdapter = options.deleteSection ?? deleteNotebookSection
   const moveEntryToSectionAdapter = options.moveEntryToSection ?? moveDesignReferenceToSection
   const setEntryPinnedAdapter = options.setEntryPinned ?? setDesignReferencePinned
+  const removeEntryAdapter = options.removeEntry ?? removeDesignReference
   const reorderSectionsAdapter = options.reorderSections ?? reorderNotebookSections
   const reorderEntriesAdapter = options.reorderEntries ?? reorderDesignReferences
   const activePath = options.activePath ?? designPath
@@ -215,6 +219,12 @@ export function createDesignNotebookWorkbench(
     )
   }
 
+  async function removeEntry(path: string): Promise<void> {
+    if (path.trim().length === 0) return
+    await removeEntryAdapter(path)
+    entries.value = entries.value.filter((entry) => entry.path !== path)
+  }
+
   async function createSection(name: string): Promise<void> {
     const normalizedName = normalizeSectionName(name)
     if (!normalizedName) return
@@ -291,6 +301,7 @@ export function createDesignNotebookWorkbench(
     openEntry,
     addCurrentDesignToNotebook,
     setEntryPinned,
+    removeEntry,
     createSection,
     renameSection,
     deleteSection,

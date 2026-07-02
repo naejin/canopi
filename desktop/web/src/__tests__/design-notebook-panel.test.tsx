@@ -148,6 +148,37 @@ describe('DesignNotebookPanel', () => {
     expect(container.querySelector('button[aria-current="true"]')?.textContent).toContain('Forest Edge')
   })
 
+  it('renders a command header without duplicating the All Designs view label', async () => {
+    const workbench = createDesignNotebookWorkbench({
+      loadNotebook: vi.fn().mockResolvedValue({
+        sections: [],
+        entries: [
+          {
+            path: '/designs/forest-edge.canopi',
+            name: 'Forest Edge',
+            updated_at: '2026-06-22T08:00:00.000Z',
+            plant_count: 7,
+            pinned: false,
+            section_id: null,
+            sort_order: 0,
+          },
+        ],
+      }),
+      openDesign: vi.fn(),
+    })
+
+    await act(async () => {
+      render(<DesignNotebookPanel workbench={workbench} />, container)
+    })
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    expect(container.querySelector('button[aria-label="New section"]')).not.toBeNull()
+    expect(container.querySelector('input[aria-label="New section name"]')).toBeNull()
+    expect(container.textContent?.match(/All Designs/g)).toHaveLength(1)
+  })
+
   it('creates, renames, deletes sections and moves rows between them', async () => {
     const workbench = createDesignNotebookWorkbench({
       loadNotebook: vi.fn().mockResolvedValue({
@@ -182,6 +213,11 @@ describe('DesignNotebookPanel', () => {
     })
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="New section"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
     const sectionName = container.querySelector<HTMLInputElement>('input[aria-label="New section name"]')
@@ -302,6 +338,56 @@ describe('DesignNotebookPanel', () => {
 
     expect(setEntryPinned).toHaveBeenCalledWith('/designs/client.canopi', true)
     expect(container.textContent).toContain('Client')
+  })
+
+  it('removes a Design reference from the row overflow while keeping frequent actions visible', async () => {
+    const removeEntry = vi.fn().mockResolvedValue(undefined)
+    const workbench = createDesignNotebookWorkbench({
+      loadNotebook: vi.fn().mockResolvedValue({
+        sections: [],
+        entries: [
+          {
+            path: '/designs/forest-edge.canopi',
+            name: 'Forest Edge',
+            updated_at: '2026-06-22T08:00:00.000Z',
+            plant_count: 7,
+            pinned: false,
+            section_id: null,
+            sort_order: 0,
+          },
+        ],
+      }),
+      openDesign: vi.fn(),
+      removeEntry,
+    })
+
+    await act(async () => {
+      render(<DesignNotebookPanel workbench={workbench} />, container)
+    })
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    expect(container.querySelector('button[aria-label="Pin Forest Edge"]')).not.toBeNull()
+    expect(container.querySelector('button[aria-label="Move Forest Edge to section"]')).not.toBeNull()
+    expect(container.textContent).not.toContain('Remove from Notebook')
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="More actions for Forest Edge"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    const removeButton = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
+      .find((button) => button.textContent?.includes('Remove from Notebook'))
+    if (!removeButton) throw new Error('Missing Remove from Notebook action')
+
+    await act(async () => {
+      removeButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    expect(removeEntry).toHaveBeenCalledWith('/designs/forest-edge.canopi')
+    expect(container.textContent).not.toContain('Forest Edge')
   })
 
   it('shows an add-current affordance that saves before adding an unsaved Design', async () => {

@@ -48,7 +48,15 @@ export interface MenuSeparator {
   type: 'separator'
 }
 
-export type MenuEntry = MenuAction | MenuLabel | MenuSeparator
+export interface MenuSubmenu {
+  type: 'submenu'
+  id: string
+  label: string
+  disabled: boolean
+  items: MenuAction[]
+}
+
+export type MenuEntry = MenuAction | MenuLabel | MenuSeparator | MenuSubmenu
 
 export interface MenuDefinition {
   id: AppMenuId
@@ -135,8 +143,8 @@ const PANEL_COMMAND_GROUPS = {
     { panel: 'location', commandId: 'nav.location' },
   ],
   side: [
-    { panel: 'plant-db', commandId: 'nav.plantDb' },
     { panel: 'design-notebook', commandId: 'nav.designNotebook' },
+    { panel: 'plant-db', commandId: 'nav.plantDb' },
     { panel: 'favorites', commandId: 'nav.favorites' },
   ],
 } as const satisfies Record<string, readonly { panel: Panel, commandId: AppCommandId }[]>
@@ -392,17 +400,16 @@ export function getMenuDefinitions(): MenuDefinition[] {
 function getFileMenuEntries(separator: MenuSeparator): MenuEntry[] {
   const staticEntries = MENU_COMMAND_ORDER.file.map((entry) => staticMenuEntry('file', entry, separator))
   const recentEntries = designNotebookWorkbench.view.value.recentEntries
-  if (recentEntries.length === 0) return staticEntries
 
   const openIndex = staticEntries.findIndex((entry) => entry.type === 'action' && entry.id === 'file.open')
   if (openIndex < 0) return staticEntries
-  const restStart = staticEntries[openIndex + 1]?.type === 'separator' ? openIndex + 2 : openIndex + 1
 
-  return [
-    ...staticEntries.slice(0, openIndex + 1),
-    separator,
-    { type: 'label', label: t('designNotebook.recentDesigns') },
-    ...recentEntries.map((entry): MenuAction => ({
+  const openRecent: MenuSubmenu = {
+    type: 'submenu',
+    id: 'file.openRecent',
+    label: t('designNotebook.openRecent'),
+    disabled: recentEntries.length === 0,
+    items: recentEntries.slice(0, 5).map((entry): MenuAction => ({
       type: 'action',
       id: `recent:${entry.path}`,
       label: entry.name,
@@ -411,8 +418,12 @@ function getFileMenuEntries(separator: MenuSeparator): MenuEntry[] {
       },
       disabled: false,
     })),
-    separator,
-    ...staticEntries.slice(restStart),
+  }
+
+  return [
+    ...staticEntries.slice(0, openIndex + 1),
+    openRecent,
+    ...staticEntries.slice(openIndex + 1),
   ]
 }
 

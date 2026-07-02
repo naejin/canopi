@@ -24,6 +24,7 @@ export type {
   MenuEntry,
   MenuLabel,
   MenuSeparator,
+  MenuSubmenu,
 } from './projections'
 export {
   isCommandPaletteEscapeEvent,

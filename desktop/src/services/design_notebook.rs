@@ -123,6 +123,16 @@ pub fn set_design_reference_pinned(
         .map_err(|e| format!("Failed to update pinned Design state: {e}"))
 }
 
+pub fn remove_design_reference(user_db: &UserDb, path: &str) -> Result<(), String> {
+    if path.trim().is_empty() {
+        return Err("Design path is required".to_owned());
+    }
+
+    let conn = db::acquire(&user_db.0, "UserDb");
+    crate::db::design_notebook::remove_design_reference(&conn, path)
+        .map_err(|e| format!("Failed to remove Design from Notebook: {e}"))
+}
+
 pub fn reorder_notebook_sections(user_db: &UserDb, section_ids: Vec<String>) -> Result<(), String> {
     validate_order_values(&section_ids, "Notebook Section id")?;
     let conn = db::acquire(&user_db.0, "UserDb");
@@ -422,6 +432,34 @@ mod tests {
         super::set_design_reference_pinned(&user_db, design_path.to_string_lossy().as_ref(), false)
             .unwrap();
         assert!(!super::get_design_notebook(&user_db).unwrap().entries[0].pinned);
+
+        let _ = std::fs::remove_file(design_path);
+    }
+
+    #[test]
+    fn removing_design_reference_preserves_design_file() {
+        let user_db = test_user_db();
+        let design_path = temp_design_path("remove_reference");
+        std::fs::write(&design_path, "{}").unwrap();
+        {
+            let conn = db::acquire(&user_db.0, "UserDb");
+            crate::db::design_notebook::record_design_reference(
+                &conn,
+                &design_path.to_string_lossy(),
+                "Removable Design",
+                2,
+            )
+            .unwrap();
+        }
+
+        super::remove_design_reference(&user_db, design_path.to_string_lossy().as_ref()).unwrap();
+        let snapshot = super::get_design_notebook(&user_db).unwrap();
+
+        assert!(snapshot.entries.is_empty());
+        assert!(
+            design_path.exists(),
+            "removing a notebook reference must not delete the Design file"
+        );
 
         let _ = std::fs::remove_file(design_path);
     }

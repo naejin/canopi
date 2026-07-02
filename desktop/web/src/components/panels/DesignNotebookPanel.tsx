@@ -40,6 +40,7 @@ export function DesignNotebookPanel({
   const reorderSessionRef = useRef<NotebookReorderSession | null>(null)
   const reorderCleanupRef = useRef<(() => void) | null>(null)
   const [newSectionName, setNewSectionName] = useState('')
+  const [sectionEditorOpen, setSectionEditorOpen] = useState(false)
   const [renamingSectionId, setRenamingSectionId] = useState<string | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
   const [addCurrentSectionId, setAddCurrentSectionId] = useState<string>('')
@@ -65,6 +66,7 @@ export function DesignNotebookPanel({
     if (!name) return
     void workbench.createSection(name).then(() => {
       setNewSectionName('')
+      setSectionEditorOpen(false)
     })
   }
 
@@ -282,16 +284,91 @@ export function DesignNotebookPanel({
   return (
     <section className={styles.panel} aria-label={t('designNotebook.title')}>
       <header className={styles.header}>
-        <div className={styles.titleGroup}>
-          <h2 className={styles.title}>{t('designNotebook.title')}</h2>
-          <span className={styles.subtitle}>{t('designNotebook.allDesigns')}</span>
+        <div className={styles.headerMain}>
+          <div className={styles.titleGroup}>
+            <h2 className={styles.title}>{t('designNotebook.title')}</h2>
+            <span className={styles.count} aria-label={t('designNotebook.visibleCount', { count: view.visibleEntries.length })}>
+              {view.visibleEntries.length}
+            </span>
+          </div>
+          <div className={styles.headerActions}>
+            {view.canAddCurrentDesign && view.sections.length > 0 && (
+              <Dropdown
+                trigger={sectionNameForId(view.sections, addCurrentSectionId) ?? t('designNotebook.noSection')}
+                items={[
+                  { value: '', label: t('designNotebook.noSection') },
+                  ...view.sections.map((section) => ({ value: section.id, label: section.name })),
+                ]}
+                value={addCurrentSectionId}
+                onChange={setAddCurrentSectionId}
+                ariaLabel={t('designNotebook.addCurrentSection')}
+                className={styles.sectionDropdown}
+                triggerClassName={styles.sectionDropdownTrigger}
+                menuClassName={styles.sectionDropdownMenu}
+                optionClassName={styles.sectionDropdownOption}
+                preserveOverlays
+              />
+            )}
+            {view.canAddCurrentDesign && (
+              <button
+                className={styles.headerButton}
+                type="button"
+                aria-label={t('designNotebook.addCurrentDesign')}
+                onClick={() => {
+                  void workbench.addCurrentDesignToNotebook(addCurrentSectionId || null)
+                }}
+              >
+                <PlusIcon />
+                <span>{t('designNotebook.addCurrentButton')}</span>
+              </button>
+            )}
+            <button
+              className={styles.headerButton}
+              type="button"
+              aria-label={t('designNotebook.newSectionAction')}
+              aria-expanded={sectionEditorOpen}
+              onClick={() => setSectionEditorOpen((open) => !open)}
+            >
+              <PlusIcon />
+              <span>{t('designNotebook.newSectionAction')}</span>
+            </button>
+          </div>
         </div>
-        <span className={styles.count} aria-label={t('designNotebook.visibleCount', { count: view.visibleEntries.length })}>
-          {view.visibleEntries.length}
-        </span>
+
+        {sectionEditorOpen && (
+          <div className={styles.headerEditor}>
+            <input
+              className={styles.sectionInput}
+              aria-label={t('designNotebook.newSectionName')}
+              value={newSectionName}
+              placeholder={t('designNotebook.newSectionPlaceholder')}
+              onInput={(event) => setNewSectionName((event.currentTarget as HTMLInputElement).value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  createSection()
+                }
+                if (event.key === 'Escape') {
+                  event.preventDefault()
+                  setSectionEditorOpen(false)
+                  setNewSectionName('')
+                }
+              }}
+            />
+            <button
+              className={styles.sectionCreateButton}
+              type="button"
+              aria-label={t('designNotebook.createSection')}
+              disabled={newSectionName.trim().length === 0}
+              onClick={createSection}
+            >
+              {t('designNotebook.createSection')}
+            </button>
+          </div>
+        )}
       </header>
 
-      <div className={styles.searchRegion}>
+      <div className={styles.controlBand}>
         <div className={styles.searchWrap}>
           <input
             className={styles.searchInput}
@@ -316,94 +393,27 @@ export function DesignNotebookPanel({
             </button>
           )}
         </div>
-      </div>
 
-      <div className={styles.viewStrip} aria-label={t('designNotebook.viewsLabel')}>
-        <button
-          className={styles.viewPill}
-          type="button"
-          aria-label={t('designNotebook.allDesignsLabel')}
-          aria-pressed={view.viewMode === 'all'}
-          onClick={() => workbench.setViewMode('all')}
-        >
-          {t('designNotebook.allDesigns')}
-        </button>
-        <button
-          className={styles.viewPill}
-          type="button"
-          aria-label={t('designNotebook.pinnedDesigns')}
-          aria-pressed={view.viewMode === 'pinned'}
-          onClick={() => workbench.setViewMode('pinned')}
-        >
-          {t('designNotebook.pinnedDesigns')}
-        </button>
-      </div>
-
-      {view.canAddCurrentDesign && (
-        <div className={styles.addCurrent}>
-          <div className={styles.addCurrentText}>
-            <span className={styles.addCurrentTitle}>{t('designNotebook.addCurrentTitle')}</span>
-            <span className={styles.addCurrentHint}>
-              {view.currentDesignPath
-                ? t('designNotebook.addCurrentSavedHint')
-                : t('designNotebook.addCurrentUnsavedHint')}
-            </span>
-          </div>
-          <div className={styles.addCurrentActions}>
-            {view.sections.length > 0 && (
-              <Dropdown
-                trigger={sectionNameForId(view.sections, addCurrentSectionId) ?? t('designNotebook.noSection')}
-                items={[
-                  { value: '', label: t('designNotebook.noSection') },
-                  ...view.sections.map((section) => ({ value: section.id, label: section.name })),
-                ]}
-                value={addCurrentSectionId}
-                onChange={setAddCurrentSectionId}
-                ariaLabel={t('designNotebook.addCurrentSection')}
-                className={styles.sectionDropdown}
-                triggerClassName={styles.sectionDropdownTrigger}
-                menuClassName={styles.sectionDropdownMenu}
-                optionClassName={styles.sectionDropdownOption}
-                preserveOverlays
-              />
-            )}
-            <button
-              className={styles.addCurrentButton}
-              type="button"
-              aria-label={t('designNotebook.addCurrentDesign')}
-              onClick={() => {
-                void workbench.addCurrentDesignToNotebook(addCurrentSectionId || null)
-              }}
-            >
-              {t('designNotebook.addCurrentButton')}
-            </button>
-          </div>
+        <div className={styles.viewStrip} aria-label={t('designNotebook.viewsLabel')}>
+          <button
+            className={styles.viewPill}
+            type="button"
+            aria-label={t('designNotebook.allDesignsLabel')}
+            aria-pressed={view.viewMode === 'all'}
+            onClick={() => workbench.setViewMode('all')}
+          >
+            {t('designNotebook.allDesigns')}
+          </button>
+          <button
+            className={styles.viewPill}
+            type="button"
+            aria-label={t('designNotebook.pinnedDesigns')}
+            aria-pressed={view.viewMode === 'pinned'}
+            onClick={() => workbench.setViewMode('pinned')}
+          >
+            {t('designNotebook.pinnedDesigns')}
+          </button>
         </div>
-      )}
-
-      <div className={styles.sectionCreate}>
-        <input
-          className={styles.sectionInput}
-          aria-label={t('designNotebook.newSectionName')}
-          value={newSectionName}
-          placeholder={t('designNotebook.newSectionPlaceholder')}
-          onInput={(event) => setNewSectionName((event.currentTarget as HTMLInputElement).value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault()
-              createSection()
-            }
-          }}
-        />
-        <button
-          className={styles.sectionCreateButton}
-          type="button"
-          aria-label={t('designNotebook.createSection')}
-          disabled={newSectionName.trim().length === 0}
-          onClick={createSection}
-        >
-          {t('designNotebook.createSection')}
-        </button>
       </div>
 
       <div ref={listRef} className={styles.list} role="list">
@@ -440,6 +450,9 @@ export function DesignNotebookPanel({
                     }}
                     onPin={(pinned) => {
                       void workbench.setEntryPinned(entry.path, pinned)
+                    }}
+                    onRemove={() => {
+                      void workbench.removeEntry(entry.path)
                     }}
                     onReorderBegin={beginEntryReorder}
                   />
@@ -528,6 +541,9 @@ export function DesignNotebookPanel({
                     onPin={(pinned) => {
                       void workbench.setEntryPinned(entry.path, pinned)
                     }}
+                    onRemove={() => {
+                      void workbench.removeEntry(entry.path)
+                    }}
                     onReorderBegin={beginEntryReorder}
                   />
                 ))}
@@ -605,6 +621,7 @@ function NotebookRow({
   onOpen,
   onMove,
   onPin,
+  onRemove,
   onReorderBegin,
 }: {
   readonly entry: DesignNotebookEntry
@@ -614,8 +631,10 @@ function NotebookRow({
   readonly onOpen: () => void
   readonly onMove: (sectionId: string | null) => void
   readonly onPin: (pinned: boolean) => void
+  readonly onRemove: () => void
   readonly onReorderBegin: (path: string, event: PointerEvent) => void
 }) {
+  const [overflowOpen, setOverflowOpen] = useState(false)
   const date = formatDate(entry.updated_at, lang)
   const currentSectionName = sections.find((section) => section.id === entry.section_id)?.name
   const items: DropdownItem<string>[] = [
@@ -681,6 +700,41 @@ function NotebookRow({
           optionClassName={styles.sectionDropdownOption}
           preserveOverlays
         />
+        <div
+          className={styles.rowOverflow}
+          onBlur={(event) => {
+            const nextTarget = event.relatedTarget
+            if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) {
+              setOverflowOpen(false)
+            }
+          }}
+        >
+          <button
+            className={styles.rowIconButton}
+            type="button"
+            aria-label={t('designNotebook.rowActions', { name: entry.name })}
+            aria-haspopup="menu"
+            aria-expanded={overflowOpen}
+            onClick={() => setOverflowOpen((open) => !open)}
+          >
+            <MoreIcon />
+          </button>
+          {overflowOpen && (
+            <div className={styles.rowOverflowMenu} role="menu">
+              <button
+                className={styles.rowOverflowItem}
+                role="menuitem"
+                type="button"
+                onClick={() => {
+                  setOverflowOpen(false)
+                  onRemove()
+                }}
+              >
+                {t('designNotebook.removeFromNotebook')}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -766,6 +820,24 @@ function CloseIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
       <path d="M3.5 3.5 9.5 9.5M9.5 3.5 3.5 9.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function PlusIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+      <path d="M6.5 2.5v8M2.5 6.5h8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function MoreIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+      <circle cx="3" cy="6.5" r="1" fill="currentColor" />
+      <circle cx="6.5" cy="6.5" r="1" fill="currentColor" />
+      <circle cx="10" cy="6.5" r="1" fill="currentColor" />
     </svg>
   )
 }

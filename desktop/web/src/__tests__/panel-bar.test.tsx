@@ -50,6 +50,11 @@ describe('PanelBar', () => {
     return button
   }
 
+  function panelButtonLabels(): string[] {
+    return Array.from(container.querySelectorAll<HTMLButtonElement>('nav[aria-label="Panels"] button'))
+      .map((button) => button.getAttribute('aria-label') ?? '')
+  }
+
   it('renders panel icons with normal toolbar stroke weight', async () => {
     await act(async () => {
       render(<PanelBar />, container)
@@ -58,6 +63,20 @@ describe('PanelBar', () => {
     const strokes = Array.from(container.querySelectorAll<SVGElement>('nav[aria-label="Panels"] svg'))
       .map((icon) => icon.getAttribute('stroke-width') ?? icon.getAttribute('strokeWidth'))
     expect(strokes).toEqual(['1.5', '1.5', '1.5', '1.5', '1.5'])
+  })
+
+  it('orders the Design Notebook before plant-library panels', async () => {
+    await act(async () => {
+      render(<PanelBar />, container)
+    })
+
+    expect(panelButtonLabels()).toEqual([
+      'Design Canvas',
+      'Design Location',
+      'Design Notebook',
+      'Plant Database',
+      'Favorites',
+    ])
   })
 
   it('renders the location entry point and routes to the location shell', async () => {

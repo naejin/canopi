@@ -31,6 +31,7 @@ export type {
   MenuEntry,
   MenuLabel,
   MenuSeparator,
+  MenuSubmenu,
 } from './graph'
 
 export const commandPaletteOpen = signal(false)

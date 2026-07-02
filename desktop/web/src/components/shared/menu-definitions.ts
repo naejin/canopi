@@ -6,4 +6,5 @@ export {
   type MenuEntry,
   type MenuLabel,
   type MenuSeparator,
+  type MenuSubmenu,
 } from '../../commands/registry'
