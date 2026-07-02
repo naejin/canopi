@@ -1,6 +1,7 @@
-import { useRef } from 'preact/hooks'
+import { useEffect, useRef } from 'preact/hooks'
 import { useSignal, useSignalEffect } from '@preact/signals'
 import { appCommandGraphChromeProjection, type MenuDefinition, type MenuEntry } from './menu-definitions'
+import { designNotebookWorkbench } from '../../app/design-notebook'
 import styles from './MenuBar.module.css'
 
 const wrapPrev = (i: number, len: number) => i > 0 ? i - 1 : len - 1
@@ -13,6 +14,10 @@ export function MenuBar() {
   const focusedItemIndex = useRef(-1)
 
   const menus = appCommandGraphChromeProjection.value.menus
+
+  useEffect(() => {
+    void designNotebookWorkbench.loadRecentDesigns()
+  }, [])
 
   // Close on click-outside (pointerup)
   useSignalEffect(() => {
@@ -185,6 +190,9 @@ export function MenuBar() {
                 {menu.items.map((entry, i) => {
                   if (entry.type === 'separator') {
                     return <div key={`sep-${i}`} className={styles.separator} role="separator" />
+                  }
+                  if (entry.type === 'label') {
+                    return <div key={`label-${i}`} className={styles.label}>{entry.label}</div>
                   }
                   return (
                     <button

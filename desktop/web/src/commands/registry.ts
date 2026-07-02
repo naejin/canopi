@@ -29,6 +29,7 @@ export type {
   MenuAction,
   MenuDefinition,
   MenuEntry,
+  MenuLabel,
   MenuSeparator,
 } from './graph'
 

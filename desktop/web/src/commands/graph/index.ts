@@ -22,6 +22,7 @@ export type {
   MenuAction,
   MenuDefinition,
   MenuEntry,
+  MenuLabel,
   MenuSeparator,
 } from './projections'
 export {

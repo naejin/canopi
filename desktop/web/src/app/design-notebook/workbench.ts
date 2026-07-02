@@ -3,6 +3,7 @@ import {
   createNotebookSection,
   deleteNotebookSection,
   getDesignNotebook,
+  getRecentFiles,
   moveDesignReferenceToSection,
   renameNotebookSection,
   setDesignReferencePinned,
@@ -13,7 +14,10 @@ import type {
   DesignNotebookEntry,
   DesignNotebookSection,
   DesignNotebookSnapshot,
+  DesignSummary,
 } from '../../types/design'
+
+const MAX_RECENT_DESIGNS = 5
 
 export type DesignNotebookViewMode = 'all' | 'pinned'
 
@@ -21,6 +25,7 @@ export interface DesignNotebookView {
   readonly entries: readonly DesignNotebookEntry[]
   readonly visibleEntries: readonly DesignNotebookEntry[]
   readonly sections: readonly DesignNotebookSection[]
+  readonly recentEntries: readonly DesignSummary[]
   readonly viewMode: DesignNotebookViewMode
   readonly searchQuery: string
   readonly activePath: string | null
@@ -31,6 +36,7 @@ export interface DesignNotebookView {
 export interface DesignNotebookWorkbench {
   readonly view: ReadonlySignal<DesignNotebookView>
   load(): Promise<void>
+  loadRecentDesigns(): Promise<void>
   refresh(): Promise<void>
   setViewMode(mode: DesignNotebookViewMode): void
   setSearchQuery(query: string): void
@@ -45,6 +51,7 @@ export interface DesignNotebookWorkbench {
 
 interface CreateDesignNotebookWorkbenchOptions {
   readonly loadNotebook?: typeof getDesignNotebook
+  readonly loadRecentDesigns?: typeof getRecentFiles
   readonly openDesign?: typeof openDesignFromPath
   readonly createSection?: typeof createNotebookSection
   readonly renameSection?: typeof renameNotebookSection
@@ -58,6 +65,7 @@ export function createDesignNotebookWorkbench(
   options: CreateDesignNotebookWorkbenchOptions = {},
 ): DesignNotebookWorkbench {
   const loadNotebook = options.loadNotebook ?? getDesignNotebook
+  const loadRecentDesignsAdapter = options.loadRecentDesigns ?? getRecentFiles
   const openDesign = options.openDesign ?? openDesignFromPath
   const createSectionAdapter = options.createSection ?? createNotebookSection
   const renameSectionAdapter = options.renameSection ?? renameNotebookSection
@@ -68,6 +76,7 @@ export function createDesignNotebookWorkbench(
 
   const entries = signal<readonly DesignNotebookEntry[]>([])
   const sections = signal<readonly DesignNotebookSection[]>([])
+  const recentEntries = signal<readonly DesignSummary[]>([])
   const viewMode = signal<DesignNotebookViewMode>('all')
   const searchQuery = signal('')
   const loading = signal(false)
@@ -90,6 +99,7 @@ export function createDesignNotebookWorkbench(
         ? sourceEntries
         : sourceEntries.filter((entry) => matchesNotebookQuery(entry, normalizedQuery)),
       sections: sections.value,
+      recentEntries: recentEntries.value,
       viewMode: mode,
       searchQuery: query,
       activePath: activePath.value,
@@ -117,6 +127,14 @@ export function createDesignNotebookWorkbench(
       if (!isStale(requestGeneration)) {
         loading.value = false
       }
+    }
+  }
+
+  async function loadRecentDesigns(): Promise<void> {
+    try {
+      recentEntries.value = (await loadRecentDesignsAdapter()).slice(0, MAX_RECENT_DESIGNS)
+    } catch {
+      recentEntries.value = []
     }
   }
 
@@ -195,6 +213,7 @@ export function createDesignNotebookWorkbench(
   return {
     view,
     load,
+    loadRecentDesigns,
     refresh: load,
     setViewMode,
     setSearchQuery,

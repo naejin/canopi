@@ -5,6 +5,7 @@ import {
   rulersVisible,
   snapToGridEnabled,
 } from '../../app/canvas-settings/signals'
+import { designNotebookWorkbench } from '../../app/design-notebook'
 import { locale } from '../../app/settings/state'
 import { currentCanvasTool } from '../../canvas/session'
 import { t } from '../../i18n'
@@ -31,18 +32,23 @@ export interface Command {
 
 export interface MenuAction {
   type: 'action'
-  id: AppCommandId
+  id: string
   label: string
   shortcut?: string
   action: () => void
   disabled: boolean
 }
 
+export interface MenuLabel {
+  type: 'label'
+  label: string
+}
+
 export interface MenuSeparator {
   type: 'separator'
 }
 
-export type MenuEntry = MenuAction | MenuSeparator
+export type MenuEntry = MenuAction | MenuLabel | MenuSeparator
 
 export interface MenuDefinition {
   id: AppMenuId
@@ -376,23 +382,58 @@ export function getMenuDefinitions(): MenuDefinition[] {
     return {
       id: menuId,
       label: MENU_LABELS[menuId](),
-      items: MENU_COMMAND_ORDER[menuId].map((entry): MenuEntry => {
-        if (entry === 'separator') return separator
-        const command = getAppCommandDefinition(entry)
-        if (!command || !command.label) {
-          throw new Error(`Missing app command '${entry}' for menu '${menuId}'`)
-        }
-        return {
-          type: 'action',
-          id: command.id,
-          label: command.label(),
-          shortcut: command.shortcut,
-          action: () => {
-            runCatalogCommand(command.id)
-          },
-          disabled: isCatalogCommandDisabled(command.id),
-        }
-      }),
+      items: menuId === 'file'
+        ? getFileMenuEntries(separator)
+        : MENU_COMMAND_ORDER[menuId].map((entry) => staticMenuEntry(menuId, entry, separator)),
     }
   })
+}
+
+function getFileMenuEntries(separator: MenuSeparator): MenuEntry[] {
+  const staticEntries = MENU_COMMAND_ORDER.file.map((entry) => staticMenuEntry('file', entry, separator))
+  const recentEntries = designNotebookWorkbench.view.value.recentEntries
+  if (recentEntries.length === 0) return staticEntries
+
+  const openIndex = staticEntries.findIndex((entry) => entry.type === 'action' && entry.id === 'file.open')
+  if (openIndex < 0) return staticEntries
+  const restStart = staticEntries[openIndex + 1]?.type === 'separator' ? openIndex + 2 : openIndex + 1
+
+  return [
+    ...staticEntries.slice(0, openIndex + 1),
+    separator,
+    { type: 'label', label: t('designNotebook.recentDesigns') },
+    ...recentEntries.map((entry): MenuAction => ({
+      type: 'action',
+      id: `recent:${entry.path}`,
+      label: entry.name,
+      action: () => {
+        void designNotebookWorkbench.openEntry(entry.path)
+      },
+      disabled: false,
+    })),
+    separator,
+    ...staticEntries.slice(restStart),
+  ]
+}
+
+function staticMenuEntry(
+  menuId: AppMenuId,
+  entry: AppCommandId | 'separator',
+  separator: MenuSeparator,
+): MenuEntry {
+  if (entry === 'separator') return separator
+  const command = getAppCommandDefinition(entry)
+  if (!command || !command.label) {
+    throw new Error(`Missing app command '${entry}' for menu '${menuId}'`)
+  }
+  return {
+    type: 'action',
+    id: command.id,
+    label: command.label(),
+    shortcut: command.shortcut,
+    action: () => {
+      runCatalogCommand(command.id)
+    },
+    disabled: isCatalogCommandDisabled(command.id),
+  }
 }
