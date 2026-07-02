@@ -36,6 +36,8 @@
     "deleteSection": "セクション {{name}} を削除",
     "pinDesign": "{{name}} をピン留め",
     "unpinDesign": "{{name}} のピン留めを解除",
+    "reorderDesign": "{{name}} を並べ替え",
+    "reorderSection": "セクション {{name}} を並べ替え",
     "sectionName": "セクション名",
     "saveSectionName": "セクション名を保存",
     "cancelRename": "名前変更をキャンセル",

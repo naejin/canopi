@@ -32,6 +32,43 @@ describe('DesignNotebookPanel', () => {
     }
   }
 
+  async function flushEffects(): Promise<void> {
+    await Promise.resolve()
+    await Promise.resolve()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await Promise.resolve()
+  }
+
+  function elementRect(top: number, height = 40): DOMRect {
+    return {
+      width: 260,
+      height,
+      top,
+      right: 260,
+      bottom: top + height,
+      left: 0,
+      x: 0,
+      y: top,
+      toJSON: () => ({}),
+    }
+  }
+
+  function installNotebookRowRects(selector: string): void {
+    const rows = [...container.querySelectorAll<HTMLElement>(selector)]
+    rows.forEach((row) => {
+      row.getBoundingClientRect = () => {
+        const currentRows = [...container.querySelectorAll<HTMLElement>(selector)]
+        const index = currentRows.indexOf(row)
+        return elementRect(100 + index * 40)
+      }
+    })
+  }
+
+  function preparePointerGrip(grip: HTMLElement): void {
+    grip.setPointerCapture = vi.fn()
+    grip.releasePointerCapture = vi.fn()
+  }
+
   beforeEach(() => {
     container = document.createElement('div')
     document.body.innerHTML = ''
@@ -60,6 +97,7 @@ describe('DesignNotebookPanel', () => {
             plant_count: 12,
             pinned: false,
             section_id: null,
+            sort_order: 0,
           },
           {
             path: '/designs/forest-edge.canopi',
@@ -68,6 +106,7 @@ describe('DesignNotebookPanel', () => {
             plant_count: 7,
             pinned: false,
             section_id: null,
+            sort_order: 1,
           },
         ],
       }),
@@ -121,6 +160,7 @@ describe('DesignNotebookPanel', () => {
             plant_count: 7,
             pinned: false,
             section_id: null,
+            sort_order: 0,
           },
         ],
       }),
@@ -128,6 +168,7 @@ describe('DesignNotebookPanel', () => {
       createSection: vi.fn().mockResolvedValue({
         id: 'section-client',
         name: 'Client work',
+        sort_order: 0,
         created_at: '2026-06-22T08:00:00.000Z',
         updated_at: '2026-06-22T08:00:00.000Z',
       }),
@@ -213,6 +254,7 @@ describe('DesignNotebookPanel', () => {
             plant_count: 3,
             pinned: true,
             section_id: null,
+            sort_order: 0,
           },
           {
             path: '/designs/client.canopi',
@@ -221,6 +263,7 @@ describe('DesignNotebookPanel', () => {
             plant_count: 7,
             pinned: false,
             section_id: null,
+            sort_order: 1,
           },
         ],
       }),
@@ -279,6 +322,7 @@ describe('DesignNotebookPanel', () => {
             plant_count: 0,
             pinned: false,
             section_id: null,
+            sort_order: 0,
           },
         ],
       })
@@ -310,5 +354,142 @@ describe('DesignNotebookPanel', () => {
     expect(saveAsCurrent).toHaveBeenCalledTimes(1)
     expect(container.textContent).toContain('Current Design')
     expect(container.querySelector('button[aria-label="Add current design to notebook"]')).toBeNull()
+  })
+
+  it('reorders only from explicit handles while row body click opens the Design', async () => {
+    const openDesign = vi.fn().mockResolvedValue(undefined)
+    const reorderSections = vi.fn().mockResolvedValue(undefined)
+    const reorderEntries = vi.fn().mockResolvedValue(undefined)
+    const workbench = createDesignNotebookWorkbench({
+      loadNotebook: vi.fn().mockResolvedValue({
+        sections: [
+          {
+            id: 'section-first',
+            name: 'First Section',
+            sort_order: 0,
+            created_at: '2026-06-20T08:00:00.000Z',
+            updated_at: '2026-06-20T08:00:00.000Z',
+          },
+          {
+            id: 'section-second',
+            name: 'Second Section',
+            sort_order: 1,
+            created_at: '2026-06-21T08:00:00.000Z',
+            updated_at: '2026-06-21T08:00:00.000Z',
+          },
+        ],
+        entries: [
+          {
+            path: '/designs/first.canopi',
+            name: 'First Design',
+            updated_at: '2026-06-20T08:00:00.000Z',
+            plant_count: 1,
+            pinned: false,
+            section_id: null,
+            sort_order: 0,
+          },
+          {
+            path: '/designs/second.canopi',
+            name: 'Second Design',
+            updated_at: '2026-06-21T08:00:00.000Z',
+            plant_count: 2,
+            pinned: false,
+            section_id: null,
+            sort_order: 1,
+          },
+        ],
+      }),
+      openDesign,
+      reorderSections,
+      reorderEntries,
+    })
+
+    await act(async () => {
+      render(<DesignNotebookPanel workbench={workbench} />, container)
+    })
+    await act(async () => {
+      await flushEffects()
+    })
+
+    const firstRowBody = container.querySelector<HTMLButtonElement>('button[data-design-path="/designs/first.canopi"]')
+    if (!firstRowBody) throw new Error('Missing first Design row')
+    await act(async () => {
+      firstRowBody.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+    expect(openDesign).toHaveBeenCalledWith('/designs/first.canopi')
+    expect(reorderEntries).not.toHaveBeenCalled()
+
+    await act(async () => {
+      firstRowBody.dispatchEvent(new PointerEvent('pointerdown', {
+        bubbles: true,
+        button: 0,
+        pointerId: 7,
+        clientY: 150,
+      }))
+      firstRowBody.dispatchEvent(new PointerEvent('pointermove', {
+        bubbles: true,
+        pointerId: 7,
+        clientY: 110,
+      }))
+      firstRowBody.dispatchEvent(new PointerEvent('pointerup', {
+        bubbles: true,
+        pointerId: 7,
+        clientY: 110,
+      }))
+      await flushEffects()
+    })
+    expect(reorderEntries).not.toHaveBeenCalled()
+
+    const sectionGrip = container.querySelector<HTMLElement>('button[aria-label="Reorder section Second Section"]')
+    if (!sectionGrip) throw new Error('Missing section reorder handle')
+    installNotebookRowRects('[data-notebook-section-row]')
+    preparePointerGrip(sectionGrip)
+    await act(async () => {
+      sectionGrip.dispatchEvent(new PointerEvent('pointerdown', {
+        bubbles: true,
+        button: 0,
+        pointerId: 8,
+        clientY: 150,
+      }))
+      sectionGrip.dispatchEvent(new PointerEvent('pointermove', {
+        bubbles: true,
+        pointerId: 8,
+        clientY: 110,
+      }))
+      sectionGrip.dispatchEvent(new PointerEvent('pointerup', {
+        bubbles: true,
+        pointerId: 8,
+        clientY: 110,
+      }))
+      await flushEffects()
+    })
+    expect(reorderSections).toHaveBeenCalledWith(['section-second', 'section-first'])
+
+    const rowGrip = container.querySelector<HTMLElement>('button[aria-label="Reorder Second Design"]')
+    if (!rowGrip) throw new Error('Missing row reorder handle')
+    installNotebookRowRects('[data-notebook-entry-row]')
+    preparePointerGrip(rowGrip)
+    await act(async () => {
+      rowGrip.dispatchEvent(new PointerEvent('pointerdown', {
+        bubbles: true,
+        button: 0,
+        pointerId: 9,
+        clientY: 150,
+      }))
+      rowGrip.dispatchEvent(new PointerEvent('pointermove', {
+        bubbles: true,
+        pointerId: 9,
+        clientY: 110,
+      }))
+      rowGrip.dispatchEvent(new PointerEvent('pointerup', {
+        bubbles: true,
+        pointerId: 9,
+        clientY: 110,
+      }))
+      await flushEffects()
+    })
+
+    expect(reorderEntries).toHaveBeenCalledWith(['/designs/second.canopi', '/designs/first.canopi'])
   })
 })

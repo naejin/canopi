@@ -36,6 +36,8 @@
     "deleteSection": "Elimina sezione {{name}}",
     "pinDesign": "Fissa {{name}}",
     "unpinDesign": "Rimuovi fissaggio di {{name}}",
+    "reorderDesign": "Riordina {{name}}",
+    "reorderSection": "Riordina sezione {{name}}",
     "sectionName": "Nome sezione",
     "saveSectionName": "Salva nome sezione",
     "cancelRename": "Annulla rinomina",

@@ -13,10 +13,19 @@ pub fn record_design_reference(
             name,
             updated_at,
             plant_count,
+            sort_order,
             created_at,
             last_opened
          )
-         VALUES (?1, ?2, datetime('now'), ?3, datetime('now'), datetime('now'))
+         VALUES (
+            ?1,
+            ?2,
+            datetime('now'),
+            ?3,
+            COALESCE((SELECT MAX(sort_order) + 1 FROM design_notebook_entries), 0),
+            datetime('now'),
+            datetime('now')
+         )
          ON CONFLICT(path) DO UPDATE SET
             name = excluded.name,
             updated_at = excluded.updated_at,
@@ -33,7 +42,7 @@ pub fn get_design_notebook_entries(
     let mut stmt = conn.prepare(
         "SELECT path, name, updated_at, plant_count
          FROM design_notebook_entries
-         ORDER BY last_opened DESC, created_at DESC, path ASC",
+         ORDER BY sort_order ASC, last_opened DESC, created_at DESC, path ASC",
     )?;
 
     let rows = stmt.query_map([], |row| {
@@ -65,14 +74,20 @@ pub fn create_notebook_section(
     name: &str,
 ) -> Result<DesignNotebookSection, rusqlite::Error> {
     conn.execute(
-        "INSERT INTO design_notebook_sections (id, name, created_at, updated_at)
-         VALUES ('section-' || lower(hex(randomblob(16))), ?1, datetime('now'), datetime('now'))",
+        "INSERT INTO design_notebook_sections (id, name, sort_order, created_at, updated_at)
+         VALUES (
+            'section-' || lower(hex(randomblob(16))),
+            ?1,
+            COALESCE((SELECT MAX(sort_order) + 1 FROM design_notebook_sections), 0),
+            datetime('now'),
+            datetime('now')
+         )",
         rusqlite::params![name],
     )?;
 
     let row_id = conn.last_insert_rowid();
     conn.query_row(
-        "SELECT id, name, created_at, updated_at
+        "SELECT id, name, sort_order, created_at, updated_at
          FROM design_notebook_sections
          WHERE rowid = ?1",
         rusqlite::params![row_id],
@@ -84,9 +99,9 @@ pub fn get_notebook_sections(
     conn: &Connection,
 ) -> Result<Vec<DesignNotebookSection>, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT id, name, created_at, updated_at
+        "SELECT id, name, sort_order, created_at, updated_at
          FROM design_notebook_sections
-         ORDER BY created_at ASC, id ASC",
+         ORDER BY sort_order ASC, created_at ASC, id ASC",
     )?;
 
     let rows = stmt.query_map([], notebook_section_from_row)?;
@@ -149,6 +164,42 @@ pub fn set_design_reference_pinned(
     Ok(())
 }
 
+pub fn reorder_notebook_sections(
+    conn: &Connection,
+    section_ids: &[String],
+) -> Result<(), rusqlite::Error> {
+    let tx = conn.unchecked_transaction()?;
+    {
+        let mut stmt = tx.prepare(
+            "UPDATE design_notebook_sections
+             SET sort_order = ?2, updated_at = datetime('now')
+             WHERE id = ?1",
+        )?;
+        for (index, section_id) in section_ids.iter().enumerate() {
+            stmt.execute((section_id, index as i32))?;
+        }
+    }
+    tx.commit()
+}
+
+pub fn reorder_design_references(
+    conn: &Connection,
+    paths: &[String],
+) -> Result<(), rusqlite::Error> {
+    let tx = conn.unchecked_transaction()?;
+    {
+        let mut stmt = tx.prepare(
+            "UPDATE design_notebook_entries
+             SET sort_order = ?2
+             WHERE path = ?1",
+        )?;
+        for (index, path) in paths.iter().enumerate() {
+            stmt.execute((path, index as i32))?;
+        }
+    }
+    tx.commit()
+}
+
 pub fn remove_design_reference_from_section(
     conn: &Connection,
     path: &str,
@@ -164,10 +215,10 @@ pub fn get_design_notebook_entries_with_sections(
     conn: &Connection,
 ) -> Result<Vec<DesignNotebookEntry>, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT e.path, e.name, e.updated_at, e.plant_count, e.pinned, m.section_id
+        "SELECT e.path, e.name, e.updated_at, e.plant_count, e.pinned, m.section_id, e.sort_order
          FROM design_notebook_entries e
          LEFT JOIN design_notebook_section_memberships m ON m.path = e.path
-         ORDER BY e.last_opened DESC, e.created_at DESC, e.path ASC",
+         ORDER BY e.sort_order ASC, e.last_opened DESC, e.created_at DESC, e.path ASC",
     )?;
 
     let rows = stmt.query_map([], |row| {
@@ -178,6 +229,7 @@ pub fn get_design_notebook_entries_with_sections(
             plant_count: row.get(3)?,
             pinned: row.get(4)?,
             section_id: row.get(5)?,
+            sort_order: row.get(6)?,
         })
     })?;
 
@@ -190,8 +242,9 @@ fn notebook_section_from_row(
     Ok(DesignNotebookSection {
         id: row.get(0)?,
         name: row.get(1)?,
-        created_at: row.get(2)?,
-        updated_at: row.get(3)?,
+        sort_order: row.get(2)?,
+        created_at: row.get(3)?,
+        updated_at: row.get(4)?,
     })
 }
 
@@ -207,6 +260,7 @@ mod tests {
                 name TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 plant_count INTEGER NOT NULL DEFAULT 0,
+                sort_order INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL,
                 last_opened TEXT NOT NULL,
                 pinned INTEGER NOT NULL DEFAULT 0
@@ -215,6 +269,7 @@ mod tests {
             CREATE TABLE design_notebook_sections (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
+                sort_order INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
@@ -315,5 +370,50 @@ mod tests {
 
         super::set_design_reference_pinned(&conn, "/designs/forest.canopi", false).unwrap();
         assert!(!super::get_design_notebook_entries_with_sections(&conn).unwrap()[0].pinned);
+    }
+
+    #[test]
+    fn reorders_notebook_sections_and_design_references() {
+        let conn = test_db();
+        let first_section = super::create_notebook_section(&conn, "First").unwrap();
+        let second_section = super::create_notebook_section(&conn, "Second").unwrap();
+        super::record_design_reference(&conn, "/designs/first.canopi", "First", 1).unwrap();
+        super::record_design_reference(&conn, "/designs/second.canopi", "Second", 2).unwrap();
+
+        super::reorder_notebook_sections(
+            &conn,
+            &[second_section.id.clone(), first_section.id.clone()],
+        )
+        .unwrap();
+        super::reorder_design_references(
+            &conn,
+            &[
+                "/designs/second.canopi".to_owned(),
+                "/designs/first.canopi".to_owned(),
+            ],
+        )
+        .unwrap();
+
+        let sections = super::get_notebook_sections(&conn).unwrap();
+        assert_eq!(
+            sections
+                .iter()
+                .map(|section| section.id.as_str())
+                .collect::<Vec<_>>(),
+            [second_section.id.as_str(), first_section.id.as_str()]
+        );
+        assert_eq!(sections[0].sort_order, 0);
+        assert_eq!(sections[1].sort_order, 1);
+
+        let entries = super::get_design_notebook_entries_with_sections(&conn).unwrap();
+        assert_eq!(
+            entries
+                .iter()
+                .map(|entry| entry.path.as_str())
+                .collect::<Vec<_>>(),
+            ["/designs/second.canopi", "/designs/first.canopi"]
+        );
+        assert_eq!(entries[0].sort_order, 0);
+        assert_eq!(entries[1].sort_order, 1);
     }
 }

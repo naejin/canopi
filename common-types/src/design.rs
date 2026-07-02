@@ -630,6 +630,7 @@ pub struct DesignSummary {
 pub struct DesignNotebookSection {
     pub id: String,
     pub name: String,
+    pub sort_order: i32,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -642,6 +643,7 @@ pub struct DesignNotebookEntry {
     pub plant_count: u32,
     pub pinned: bool,
     pub section_id: Option<String>,
+    pub sort_order: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]

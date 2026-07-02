@@ -6,6 +6,8 @@ import {
   getRecentFiles,
   moveDesignReferenceToSection,
   renameNotebookSection,
+  reorderDesignReferences,
+  reorderNotebookSections,
   setDesignReferencePinned,
 } from '../../ipc/design'
 import {
@@ -54,6 +56,8 @@ export interface DesignNotebookWorkbench {
   renameSection(sectionId: string, name: string): Promise<void>
   deleteSection(sectionId: string): Promise<void>
   moveEntryToSection(path: string, sectionId: string | null): Promise<void>
+  reorderSections(sectionIds: readonly string[]): Promise<void>
+  reorderEntries(paths: readonly string[]): Promise<void>
   dispose(): void
 }
 
@@ -68,6 +72,8 @@ interface CreateDesignNotebookWorkbenchOptions {
   readonly deleteSection?: typeof deleteNotebookSection
   readonly moveEntryToSection?: typeof moveDesignReferenceToSection
   readonly setEntryPinned?: typeof setDesignReferencePinned
+  readonly reorderSections?: typeof reorderNotebookSections
+  readonly reorderEntries?: typeof reorderDesignReferences
   readonly activePath?: ReadonlySignal<string | null>
   readonly currentDesign?: ReadonlySignal<CanopiFile | null>
 }
@@ -85,6 +91,8 @@ export function createDesignNotebookWorkbench(
   const deleteSectionAdapter = options.deleteSection ?? deleteNotebookSection
   const moveEntryToSectionAdapter = options.moveEntryToSection ?? moveDesignReferenceToSection
   const setEntryPinnedAdapter = options.setEntryPinned ?? setDesignReferencePinned
+  const reorderSectionsAdapter = options.reorderSections ?? reorderNotebookSections
+  const reorderEntriesAdapter = options.reorderEntries ?? reorderDesignReferences
   const activePath = options.activePath ?? designPath
   const currentDesign = options.currentDesign ?? currentDesignSignal
 
@@ -211,7 +219,7 @@ export function createDesignNotebookWorkbench(
     const normalizedName = normalizeSectionName(name)
     if (!normalizedName) return
     const section = await createSectionAdapter(normalizedName)
-    sections.value = [...sections.value, section]
+    sections.value = [...sections.value, section].sort(compareNotebookSections)
   }
 
   async function renameSection(sectionId: string, name: string): Promise<void> {
@@ -244,6 +252,30 @@ export function createDesignNotebookWorkbench(
     )
   }
 
+  async function reorderSections(sectionIds: readonly string[]): Promise<void> {
+    const nextOrder = [...sectionIds]
+    await reorderSectionsAdapter(nextOrder)
+    sections.value = applyManualOrder(
+      sections.value,
+      nextOrder,
+      (section) => section.id,
+      (section, sortOrder) => ({ ...section, sort_order: sortOrder }),
+      compareNotebookSections,
+    )
+  }
+
+  async function reorderEntries(paths: readonly string[]): Promise<void> {
+    const nextOrder = [...paths]
+    await reorderEntriesAdapter(nextOrder)
+    entries.value = applyManualOrder(
+      entries.value,
+      nextOrder,
+      (entry) => entry.path,
+      (entry, sortOrder) => ({ ...entry, sort_order: sortOrder }),
+      compareNotebookEntries,
+    )
+  }
+
   function dispose(): void {
     disposed = true
     generation += 1
@@ -263,6 +295,8 @@ export function createDesignNotebookWorkbench(
     renameSection,
     deleteSection,
     moveEntryToSection,
+    reorderSections,
+    reorderEntries,
     dispose,
   }
 }
@@ -280,4 +314,32 @@ function normalizeSectionName(value: string): string {
 function matchesNotebookQuery(entry: DesignNotebookEntry, normalizedQuery: string): boolean {
   return normalizeSearch(entry.name).includes(normalizedQuery)
     || normalizeSearch(entry.path).includes(normalizedQuery)
+}
+
+function applyManualOrder<T>(
+  items: readonly T[],
+  orderedKeys: readonly string[],
+  keyForItem: (item: T) => string,
+  withSortOrder: (item: T, sortOrder: number) => T,
+  compare: (left: T, right: T) => number,
+): readonly T[] {
+  const orderByKey = new Map(orderedKeys.map((key, index) => [key, index]))
+  return items
+    .map((item) => {
+      const order = orderByKey.get(keyForItem(item))
+      return order === undefined ? item : withSortOrder(item, order)
+    })
+    .sort(compare)
+}
+
+function compareNotebookSections(left: DesignNotebookSection, right: DesignNotebookSection): number {
+  return left.sort_order - right.sort_order
+    || left.created_at.localeCompare(right.created_at)
+    || left.id.localeCompare(right.id)
+}
+
+function compareNotebookEntries(left: DesignNotebookEntry, right: DesignNotebookEntry): number {
+  return left.sort_order - right.sort_order
+    || right.updated_at.localeCompare(left.updated_at)
+    || left.path.localeCompare(right.path)
 }

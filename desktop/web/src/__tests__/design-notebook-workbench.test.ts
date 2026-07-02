@@ -44,6 +44,7 @@ describe('design notebook workbench', () => {
             plant_count: 12,
             pinned: false,
             section_id: null,
+            sort_order: 0,
           },
           {
             path: '/designs/forest-edge.canopi',
@@ -52,6 +53,7 @@ describe('design notebook workbench', () => {
             plant_count: 7,
             pinned: false,
             section_id: null,
+            sort_order: 1,
           },
         ],
       }),
@@ -92,6 +94,7 @@ describe('design notebook workbench', () => {
     const createSection = vi.fn().mockResolvedValue({
       id: 'section-client',
       name: 'Client work',
+      sort_order: 1,
       created_at: '2026-06-22T08:00:00.000Z',
       updated_at: '2026-06-22T08:00:00.000Z',
     })
@@ -104,6 +107,7 @@ describe('design notebook workbench', () => {
           {
             id: 'section-home',
             name: 'Home',
+            sort_order: 0,
             created_at: '2026-06-20T08:00:00.000Z',
             updated_at: '2026-06-20T08:00:00.000Z',
           },
@@ -116,6 +120,7 @@ describe('design notebook workbench', () => {
             plant_count: 7,
             pinned: false,
             section_id: null,
+            sort_order: 0,
           },
         ],
       }),
@@ -153,6 +158,7 @@ describe('design notebook workbench', () => {
             plant_count: 3,
             pinned: true,
             section_id: null,
+            sort_order: 0,
           },
           {
             path: '/designs/client.canopi',
@@ -161,6 +167,7 @@ describe('design notebook workbench', () => {
             plant_count: 7,
             pinned: false,
             section_id: null,
+            sort_order: 1,
           },
         ],
       }),
@@ -217,6 +224,7 @@ describe('design notebook workbench', () => {
             plant_count: 0,
             pinned: false,
             section_id: null,
+            sort_order: 0,
           },
         ],
       })
@@ -277,6 +285,7 @@ describe('design notebook workbench', () => {
             plant_count: 0,
             pinned: false,
             section_id: null,
+            sort_order: 0,
           },
         ],
       }),
@@ -286,5 +295,70 @@ describe('design notebook workbench', () => {
     await workbench.load()
 
     expect(workbench.view.value.canAddCurrentDesign).toBe(false)
+  })
+
+  it('persists manual Notebook Section and row order through public commands', async () => {
+    const reorderSections = vi.fn().mockResolvedValue(undefined)
+    const reorderEntries = vi.fn().mockResolvedValue(undefined)
+    const workbench = createDesignNotebookWorkbench({
+      loadNotebook: vi.fn().mockResolvedValue({
+        sections: [
+          {
+            id: 'section-first',
+            name: 'First',
+            sort_order: 0,
+            created_at: '2026-06-20T08:00:00.000Z',
+            updated_at: '2026-06-20T08:00:00.000Z',
+          },
+          {
+            id: 'section-second',
+            name: 'Second',
+            sort_order: 1,
+            created_at: '2026-06-21T08:00:00.000Z',
+            updated_at: '2026-06-21T08:00:00.000Z',
+          },
+        ],
+        entries: [
+          {
+            path: '/designs/first.canopi',
+            name: 'First Design',
+            updated_at: '2026-06-20T08:00:00.000Z',
+            plant_count: 1,
+            pinned: false,
+            section_id: null,
+            sort_order: 0,
+          },
+          {
+            path: '/designs/second.canopi',
+            name: 'Second Design',
+            updated_at: '2026-06-21T08:00:00.000Z',
+            plant_count: 2,
+            pinned: false,
+            section_id: null,
+            sort_order: 1,
+          },
+        ],
+      }),
+      openDesign: vi.fn(),
+      reorderSections,
+      reorderEntries,
+    })
+
+    await workbench.load()
+    await workbench.reorderSections(['section-second', 'section-first'])
+    await workbench.reorderEntries(['/designs/second.canopi', '/designs/first.canopi'])
+
+    expect(reorderSections).toHaveBeenCalledWith(['section-second', 'section-first'])
+    expect(reorderEntries).toHaveBeenCalledWith(['/designs/second.canopi', '/designs/first.canopi'])
+    expect(workbench.view.value.sections.map((section) => section.id)).toEqual([
+      'section-second',
+      'section-first',
+    ])
+    expect(workbench.view.value.entries.map((entry) => entry.path)).toEqual([
+      '/designs/second.canopi',
+      '/designs/first.canopi',
+    ])
+    expect(workbench.view.value.sections.map((section) => section.sort_order)).toEqual([0, 1])
+    expect(workbench.view.value.entries.map((entry) => entry.sort_order)).toEqual([0, 1])
   })
 })

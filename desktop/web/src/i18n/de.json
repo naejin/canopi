@@ -36,6 +36,8 @@
     "deleteSection": "Abschnitt {{name}} löschen",
     "pinDesign": "{{name}} anheften",
     "unpinDesign": "{{name}} lösen",
+    "reorderDesign": "{{name}} neu anordnen",
+    "reorderSection": "Abschnitt {{name}} neu anordnen",
     "sectionName": "Abschnittsname",
     "saveSectionName": "Abschnittsname speichern",
     "cancelRename": "Umbenennen abbrechen",

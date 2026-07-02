@@ -36,6 +36,8 @@
     "deleteSection": "Sectie {{name}} verwijderen",
     "pinDesign": "{{name}} vastmaken",
     "unpinDesign": "{{name}} losmaken",
+    "reorderDesign": "{{name}} herschikken",
+    "reorderSection": "Sectie {{name}} herschikken",
     "sectionName": "Sectienaam",
     "saveSectionName": "Sectienaam opslaan",
     "cancelRename": "Hernoemen annuleren",

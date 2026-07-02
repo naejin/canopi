@@ -36,6 +36,8 @@
     "deleteSection": "Удалить секцию {{name}}",
     "pinDesign": "Закрепить {{name}}",
     "unpinDesign": "Открепить {{name}}",
+    "reorderDesign": "Изменить порядок {{name}}",
+    "reorderSection": "Изменить порядок секции {{name}}",
     "sectionName": "Название секции",
     "saveSectionName": "Сохранить название секции",
     "cancelRename": "Отменить переименование",

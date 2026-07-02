@@ -36,6 +36,8 @@
     "deleteSection": "Eliminar sección {{name}}",
     "pinDesign": "Fijar {{name}}",
     "unpinDesign": "Desfijar {{name}}",
+    "reorderDesign": "Reordenar {{name}}",
+    "reorderSection": "Reordenar sección {{name}}",
     "sectionName": "Nombre de sección",
     "saveSectionName": "Guardar nombre de sección",
     "cancelRename": "Cancelar cambio de nombre",

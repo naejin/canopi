@@ -106,6 +106,14 @@ export async function setDesignReferencePinned(path: string, pinned: boolean): P
   return invoke('set_design_reference_pinned', { path, pinned })
 }
 
+export async function reorderNotebookSections(sectionIds: string[]): Promise<void> {
+  return invoke('reorder_notebook_sections', { sectionIds })
+}
+
+export async function reorderDesignReferences(paths: string[]): Promise<void> {
+  return invoke('reorder_design_references', { paths })
+}
+
 /** Silent autosave to app data dir. */
 export async function autosaveDesign(content: CanopiFile, path: string | null): Promise<void> {
   return invoke('autosave_design', { content, path })

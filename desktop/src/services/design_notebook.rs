@@ -123,6 +123,20 @@ pub fn set_design_reference_pinned(
         .map_err(|e| format!("Failed to update pinned Design state: {e}"))
 }
 
+pub fn reorder_notebook_sections(user_db: &UserDb, section_ids: Vec<String>) -> Result<(), String> {
+    validate_order_values(&section_ids, "Notebook Section id")?;
+    let conn = db::acquire(&user_db.0, "UserDb");
+    crate::db::design_notebook::reorder_notebook_sections(&conn, &section_ids)
+        .map_err(|e| format!("Failed to reorder Notebook Sections: {e}"))
+}
+
+pub fn reorder_design_references(user_db: &UserDb, paths: Vec<String>) -> Result<(), String> {
+    validate_order_values(&paths, "Design path")?;
+    let conn = db::acquire(&user_db.0, "UserDb");
+    crate::db::design_notebook::reorder_design_references(&conn, &paths)
+        .map_err(|e| format!("Failed to reorder Design Notebook entries: {e}"))
+}
+
 fn filter_design_notebook_entries(
     entries: Vec<DesignSummary>,
     mut status_for_path: impl FnMut(&Path) -> NotebookPathStatus,
@@ -175,6 +189,13 @@ fn normalize_section_name(name: &str) -> Result<&str, String> {
     Ok(trimmed)
 }
 
+fn validate_order_values(values: &[String], label: &str) -> Result<(), String> {
+    if values.iter().any(|value| value.trim().is_empty()) {
+        return Err(format!("{label} is required"));
+    }
+    Ok(())
+}
+
 fn notebook_path_status(path: &Path) -> NotebookPathStatus {
     match path.metadata() {
         Ok(metadata) if metadata.is_file() => NotebookPathStatus::Available,
@@ -217,6 +238,12 @@ mod tests {
 
     fn test_user_db() -> UserDb {
         let conn = Connection::open_in_memory().unwrap();
+        crate::db::user_db::init(&conn).unwrap();
+        UserDb(Mutex::new(conn))
+    }
+
+    fn test_user_db_at(path: &std::path::Path) -> UserDb {
+        let conn = Connection::open(path).unwrap();
         crate::db::user_db::init(&conn).unwrap();
         UserDb(Mutex::new(conn))
     }
@@ -397,5 +424,81 @@ mod tests {
         assert!(!super::get_design_notebook(&user_db).unwrap().entries[0].pinned);
 
         let _ = std::fs::remove_file(design_path);
+    }
+
+    #[test]
+    fn manual_order_survives_user_db_reopen() {
+        let db_path = temp_design_path("ordered_user_db").with_extension("db");
+        let first_design_path = temp_design_path("ordered_first");
+        let second_design_path = temp_design_path("ordered_second");
+        std::fs::write(&first_design_path, "{}").unwrap();
+        std::fs::write(&second_design_path, "{}").unwrap();
+
+        let (first_section_id, second_section_id) = {
+            let user_db = test_user_db_at(&db_path);
+            {
+                let conn = db::acquire(&user_db.0, "UserDb");
+                crate::db::design_notebook::record_design_reference(
+                    &conn,
+                    &first_design_path.to_string_lossy(),
+                    "First Design",
+                    1,
+                )
+                .unwrap();
+                crate::db::design_notebook::record_design_reference(
+                    &conn,
+                    &second_design_path.to_string_lossy(),
+                    "Second Design",
+                    2,
+                )
+                .unwrap();
+            }
+            let first_section = super::create_notebook_section(&user_db, "First Section").unwrap();
+            let second_section =
+                super::create_notebook_section(&user_db, "Second Section").unwrap();
+
+            super::reorder_notebook_sections(
+                &user_db,
+                vec![second_section.id.clone(), first_section.id.clone()],
+            )
+            .unwrap();
+            super::reorder_design_references(
+                &user_db,
+                vec![
+                    second_design_path.to_string_lossy().to_string(),
+                    first_design_path.to_string_lossy().to_string(),
+                ],
+            )
+            .unwrap();
+
+            (first_section.id, second_section.id)
+        };
+
+        let reopened = test_user_db_at(&db_path);
+        let snapshot = super::get_design_notebook(&reopened).unwrap();
+
+        assert_eq!(
+            snapshot
+                .sections
+                .iter()
+                .map(|section| section.id.as_str())
+                .collect::<Vec<_>>(),
+            [second_section_id.as_str(), first_section_id.as_str()]
+        );
+        assert_eq!(
+            snapshot
+                .entries
+                .iter()
+                .map(|entry| entry.path.as_str())
+                .collect::<Vec<_>>(),
+            [
+                second_design_path.to_string_lossy().as_ref(),
+                first_design_path.to_string_lossy().as_ref(),
+            ]
+        );
+
+        let _ = std::fs::remove_file(first_design_path);
+        let _ = std::fs::remove_file(second_design_path);
+        let _ = std::fs::remove_file(db_path);
     }
 }

@@ -36,6 +36,8 @@
     "deleteSection": "{{name}} 섹션 삭제",
     "pinDesign": "{{name}} 고정",
     "unpinDesign": "{{name}} 고정 해제",
+    "reorderDesign": "{{name}} 순서 변경",
+    "reorderSection": "{{name}} 섹션 순서 변경",
     "sectionName": "섹션 이름",
     "saveSectionName": "섹션 이름 저장",
     "cancelRename": "이름 변경 취소",

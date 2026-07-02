@@ -58,3 +58,19 @@ pub fn set_design_reference_pinned(
 ) -> Result<(), String> {
     crate::services::design_notebook::set_design_reference_pinned(&user_db, &path, pinned)
 }
+
+#[tauri::command]
+pub fn reorder_notebook_sections(
+    user_db: tauri::State<'_, UserDb>,
+    section_ids: Vec<String>,
+) -> Result<(), String> {
+    crate::services::design_notebook::reorder_notebook_sections(&user_db, section_ids)
+}
+
+#[tauri::command]
+pub fn reorder_design_references(
+    user_db: tauri::State<'_, UserDb>,
+    paths: Vec<String>,
+) -> Result<(), String> {
+    crate::services::design_notebook::reorder_design_references(&user_db, paths)
+}

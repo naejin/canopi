@@ -1,7 +1,7 @@
 use rusqlite::Connection;
 
 #[allow(dead_code)]
-const CURRENT_SCHEMA_VERSION: i32 = 6;
+const CURRENT_SCHEMA_VERSION: i32 = 7;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SavedObjectStampRow {
@@ -44,6 +44,12 @@ pub fn init(conn: &Connection) -> Result<(), rusqlite::Error> {
             "../../migrations/v6_design_notebook_pinned.sql"
         ))?;
         conn.pragma_update(None, "user_version", 6)?;
+    }
+    if version < 7 {
+        conn.execute_batch(include_str!(
+            "../../migrations/v7_design_notebook_order.sql"
+        ))?;
+        conn.pragma_update(None, "user_version", 7)?;
     }
 
     Ok(())
@@ -447,5 +453,54 @@ mod tests {
             )
             .unwrap();
         assert!(!pinned);
+    }
+
+    #[test]
+    fn init_creates_design_notebook_order_columns() {
+        let conn = Connection::open_in_memory().unwrap();
+        init(&conn).unwrap();
+
+        conn.execute(
+            "INSERT INTO design_notebook_sections (
+                id,
+                name,
+                created_at,
+                updated_at
+             )
+             VALUES ('section-default', 'Default', datetime('now'), datetime('now'))",
+            [],
+        )
+        .unwrap();
+        let section_order: i32 = conn
+            .query_row(
+                "SELECT sort_order FROM design_notebook_sections WHERE id = 'section-default'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        conn.execute(
+            "INSERT INTO design_notebook_entries (
+                path,
+                name,
+                updated_at,
+                plant_count,
+                created_at,
+                last_opened
+             )
+             VALUES ('/designs/default.canopi', 'Default', datetime('now'), 0, datetime('now'), datetime('now'))",
+            [],
+        )
+        .unwrap();
+        let entry_order: i32 = conn
+            .query_row(
+                "SELECT sort_order FROM design_notebook_entries WHERE path = '/designs/default.canopi'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        assert_eq!(section_order, 0);
+        assert_eq!(entry_order, 0);
     }
 }

@@ -290,6 +290,7 @@
 
 .sectionTitle {
   margin: 0;
+  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -337,6 +338,53 @@
   background: var(--color-control-hover);
 }
 
+.sectionReorderGrip,
+.rowReorderGrip {
+  width: var(--control-size-sm);
+  height: var(--control-size-md);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  transition: color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.sectionReorderGrip:hover,
+.sectionReorderGrip:focus-visible,
+.rowReorderGrip:hover,
+.rowReorderGrip:focus-visible {
+  color: var(--color-primary);
+  background: var(--color-control-hover);
+}
+
+.sectionReorderGrip:active,
+.rowReorderGrip:active {
+  cursor: grabbing;
+}
+
+.reorderGripDots {
+  --notebook-grip-dot-size: 3px;
+
+  display: grid;
+  grid-template-columns: repeat(2, var(--notebook-grip-dot-size));
+  gap: var(--notebook-grip-dot-size);
+  justify-content: center;
+}
+
+.reorderGripDots span {
+  width: var(--notebook-grip-dot-size);
+  height: var(--notebook-grip-dot-size);
+  border-radius: var(--radius-full);
+  background: currentColor;
+}
+
 .sectionIconButton:disabled {
   opacity: 0.45;
   cursor: default;
@@ -355,7 +403,7 @@
   width: 100%;
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: var(--control-size-sm) minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-1);
   border-bottom: 1px solid var(--color-border);
@@ -403,6 +451,10 @@
   color: var(--color-text);
   text-align: left;
   cursor: pointer;
+}
+
+.rowReorderGrip {
+  margin-left: var(--space-1);
 }
 
 .rowMain {
@@ -538,7 +590,9 @@
   .sectionInput,
   .addCurrentButton,
   .sectionCreateButton,
+  .sectionReorderGrip,
   .sectionIconButton,
+  .rowReorderGrip,
   .rowIconButton,
   .viewPill,
   .row {

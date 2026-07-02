@@ -36,6 +36,8 @@
     "deleteSection": "删除分区 {{name}}",
     "pinDesign": "置顶 {{name}}",
     "unpinDesign": "取消置顶 {{name}}",
+    "reorderDesign": "重新排序 {{name}}",
+    "reorderSection": "重新排序分区 {{name}}",
     "sectionName": "分区名称",
     "saveSectionName": "保存分区名称",
     "cancelRename": "取消重命名",

@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact'
-import { useEffect, useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
 import {
@@ -10,8 +10,25 @@ import type { DesignNotebookEntry, DesignNotebookSection } from '../../types/des
 import { Dropdown, type DropdownItem } from '../shared/Dropdown'
 import styles from './DesignNotebookPanel.module.css'
 
+const NOTEBOOK_REORDER_DOWN_THRESHOLD = 0.4
+const NOTEBOOK_REORDER_UP_THRESHOLD = 0.6
+
 interface DesignNotebookPanelProps {
   readonly workbench?: DesignNotebookWorkbench
+}
+
+type NotebookReorderKind = 'section' | 'entry'
+type NotebookReorderDirection = 'up' | 'down'
+
+interface NotebookReorderSession {
+  readonly kind: NotebookReorderKind
+  readonly pointerId: number
+  readonly sourceId: string
+  readonly grip: HTMLElement
+  readonly selector: string
+  direction: NotebookReorderDirection | null
+  lastClientY: number
+  latestIds: readonly string[]
 }
 
 export function DesignNotebookPanel({
@@ -19,18 +36,29 @@ export function DesignNotebookPanel({
 }: DesignNotebookPanelProps) {
   const lang = locale.value
   const view = workbench.view.value
+  const listRef = useRef<HTMLDivElement>(null)
+  const reorderSessionRef = useRef<NotebookReorderSession | null>(null)
+  const reorderCleanupRef = useRef<(() => void) | null>(null)
   const [newSectionName, setNewSectionName] = useState('')
   const [renamingSectionId, setRenamingSectionId] = useState<string | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
   const [addCurrentSectionId, setAddCurrentSectionId] = useState<string>('')
+  const [sectionReorderPreviewIds, setSectionReorderPreviewIds] = useState<readonly string[] | null>(null)
+  const [entryReorderPreviewPaths, setEntryReorderPreviewPaths] = useState<readonly string[] | null>(null)
 
   useEffect(() => {
     void workbench.load()
   }, [workbench])
 
-  const unsectionedEntries = view.visibleEntries.filter((entry) => entry.section_id === null)
+  useEffect(() => {
+    return () => reorderCleanupRef.current?.()
+  }, [])
+
+  const orderedSections = orderItemsForPreview(view.sections, sectionReorderPreviewIds, (section) => section.id)
+  const orderedVisibleEntries = orderItemsForPreview(view.visibleEntries, entryReorderPreviewPaths, (entry) => entry.path)
+  const unsectionedEntries = orderedVisibleEntries.filter((entry) => entry.section_id === null)
   const sectionEntries = (sectionId: string) =>
-    view.visibleEntries.filter((entry) => entry.section_id === sectionId)
+    orderedVisibleEntries.filter((entry) => entry.section_id === sectionId)
 
   function createSection(): void {
     const name = newSectionName.trim()
@@ -57,6 +85,198 @@ export function DesignNotebookPanel({
   function cancelRename(): void {
     setRenamingSectionId(null)
     setRenameDraft('')
+  }
+
+  function beginSectionReorder(sectionId: string, event: PointerEvent): void {
+    beginNotebookReorder({
+      kind: 'section',
+      sourceId: sectionId,
+      event,
+      ids: orderedSections.map((section) => section.id),
+      selector: '[data-notebook-section-row]',
+    })
+  }
+
+  function beginEntryReorder(path: string, event: PointerEvent): void {
+    const source = orderedVisibleEntries.find((entry) => entry.path === path)
+    const sectionKey = notebookEntrySectionKey(source?.section_id ?? null)
+    beginNotebookReorder({
+      kind: 'entry',
+      sourceId: path,
+      event,
+      ids: orderedVisibleEntries
+        .filter((entry) => notebookEntrySectionKey(entry.section_id) === sectionKey)
+        .map((entry) => entry.path),
+      selector: `[data-notebook-entry-row][data-notebook-entry-section="${sectionKey}"]`,
+    })
+  }
+
+  function beginNotebookReorder({
+    kind,
+    sourceId,
+    event,
+    ids,
+    selector,
+  }: {
+    readonly kind: NotebookReorderKind
+    readonly sourceId: string
+    readonly event: PointerEvent
+    readonly ids: readonly string[]
+    readonly selector: string
+  }): void {
+    if (event.button !== 0 || !(event.currentTarget instanceof HTMLElement)) return
+    event.preventDefault()
+    event.stopPropagation()
+
+    reorderSessionRef.current = {
+      kind,
+      pointerId: event.pointerId,
+      sourceId,
+      grip: event.currentTarget,
+      selector,
+      direction: null,
+      lastClientY: event.clientY,
+      latestIds: ids,
+    }
+    event.currentTarget.setPointerCapture(event.pointerId)
+    installReorderDocumentListeners()
+    previewNotebookReorder(kind, ids)
+  }
+
+  function installReorderDocumentListeners(): void {
+    clearReorderDocumentListeners()
+
+    const onMove = (event: PointerEvent) => updateNotebookReorder(event)
+    const onUp = (event: PointerEvent) => finishNotebookReorder(event)
+    const onCancel = (event: PointerEvent) => abortNotebookReorder(event)
+
+    document.addEventListener('pointermove', onMove)
+    document.addEventListener('pointerup', onUp)
+    document.addEventListener('pointercancel', onCancel)
+    reorderCleanupRef.current = () => {
+      document.removeEventListener('pointermove', onMove)
+      document.removeEventListener('pointerup', onUp)
+      document.removeEventListener('pointercancel', onCancel)
+      reorderCleanupRef.current = null
+    }
+  }
+
+  function clearReorderDocumentListeners(): void {
+    reorderCleanupRef.current?.()
+  }
+
+  function updateNotebookReorder(event: PointerEvent): void {
+    const session = reorderSessionRef.current
+    if (!session || session.pointerId !== event.pointerId) return
+    event.preventDefault()
+    const direction = reorderDirectionForPointer(session, event.clientY)
+    session.direction = direction
+    session.lastClientY = event.clientY
+    const ids = reorderIdsForPointer(session, event.clientY, direction)
+    session.latestIds = ids
+    previewNotebookReorder(session.kind, ids)
+  }
+
+  function finishNotebookReorder(event: PointerEvent): void {
+    const session = reorderSessionRef.current
+    if (!session || session.pointerId !== event.pointerId) return
+    event.preventDefault()
+    clearReorderDocumentListeners()
+    reorderSessionRef.current = null
+    releaseNotebookReorderPointerCapture(session.grip, event.pointerId)
+
+    const currentIds = currentReorderIds(session)
+    if (sameIdOrder(currentIds, session.latestIds)) {
+      previewNotebookReorder(session.kind, null)
+      return
+    }
+    commitNotebookReorder(session.kind, session.latestIds)
+  }
+
+  function abortNotebookReorder(event: PointerEvent): void {
+    const session = reorderSessionRef.current
+    if (!session || session.pointerId !== event.pointerId) return
+    clearReorderDocumentListeners()
+    reorderSessionRef.current = null
+    releaseNotebookReorderPointerCapture(session.grip, event.pointerId)
+    previewNotebookReorder(session.kind, null)
+  }
+
+  function releaseNotebookReorderPointerCapture(grip: HTMLElement, pointerId: number): void {
+    try {
+      grip.releasePointerCapture(pointerId)
+    } catch {
+      // Row reflow can drop capture before pointerup; document listeners own cleanup.
+    }
+  }
+
+  function reorderDirectionForPointer(
+    session: NotebookReorderSession,
+    clientY: number,
+  ): NotebookReorderDirection | null {
+    if (clientY > session.lastClientY) return 'down'
+    if (clientY < session.lastClientY) return 'up'
+    return session.direction
+  }
+
+  function reorderIdsForPointer(
+    session: NotebookReorderSession,
+    clientY: number,
+    direction: NotebookReorderDirection | null,
+  ): readonly string[] {
+    const rows = [...listRef.current?.querySelectorAll<HTMLElement>(session.selector) ?? []]
+    const visibleIds = rows
+      .map((row) => notebookRowIdForKind(row, session.kind))
+      .filter((id): id is string => Boolean(id))
+    const displayedIds = visibleIds.length > 0 ? visibleIds : session.latestIds
+    const withoutSourceIds = displayedIds.filter((id) => id !== session.sourceId)
+    const targetRows = rows.filter((row) => notebookRowIdForKind(row, session.kind) !== session.sourceId)
+    const threshold = reorderThreshold(direction)
+    let insertIndex = withoutSourceIds.length
+
+    for (let index = 0; index < targetRows.length; index += 1) {
+      const rect = targetRows[index]!.getBoundingClientRect()
+      if (clientY < rect.top + rect.height * threshold) {
+        insertIndex = index
+        break
+      }
+    }
+
+    return [
+      ...withoutSourceIds.slice(0, insertIndex),
+      session.sourceId,
+      ...withoutSourceIds.slice(insertIndex),
+    ]
+  }
+
+  function reorderThreshold(direction: NotebookReorderDirection | null): number {
+    if (direction === 'down') return NOTEBOOK_REORDER_DOWN_THRESHOLD
+    if (direction === 'up') return NOTEBOOK_REORDER_UP_THRESHOLD
+    return 0.5
+  }
+
+  function currentReorderIds(session: NotebookReorderSession): readonly string[] {
+    if (session.kind === 'section') return orderedSections.map((section) => section.id)
+    const source = orderedVisibleEntries.find((entry) => entry.path === session.sourceId)
+    const sectionKey = notebookEntrySectionKey(source?.section_id ?? null)
+    return orderedVisibleEntries
+      .filter((entry) => notebookEntrySectionKey(entry.section_id) === sectionKey)
+      .map((entry) => entry.path)
+  }
+
+  function previewNotebookReorder(kind: NotebookReorderKind, ids: readonly string[] | null): void {
+    if (kind === 'section') setSectionReorderPreviewIds(ids)
+    else setEntryReorderPreviewPaths(ids)
+  }
+
+  function commitNotebookReorder(kind: NotebookReorderKind, ids: readonly string[]): void {
+    previewNotebookReorder(kind, ids)
+    const persist = kind === 'section'
+      ? workbench.reorderSections(ids)
+      : workbench.reorderEntries(ids)
+    void persist.finally(() => {
+      previewNotebookReorder(kind, null)
+    })
   }
 
   return (
@@ -186,7 +406,7 @@ export function DesignNotebookPanel({
         </button>
       </div>
 
-      <div className={styles.list} role="list">
+      <div ref={listRef} className={styles.list} role="list">
         {view.loading && view.entries.length === 0 ? (
           <div className={styles.feedback}>{t('designNotebook.loading')}</div>
         ) : view.loadError ? (
@@ -221,15 +441,18 @@ export function DesignNotebookPanel({
                     onPin={(pinned) => {
                       void workbench.setEntryPinned(entry.path, pinned)
                     }}
+                    onReorderBegin={beginEntryReorder}
                   />
                 ))}
               </NotebookSectionGroup>
             )}
 
-            {view.sections.map((section) => (
+            {orderedSections.map((section) => (
               <NotebookSectionGroup
                 key={section.id}
+                sectionId={section.id}
                 title={section.name}
+                onReorderBegin={beginSectionReorder}
                 actions={renamingSectionId === section.id ? (
                   <div className={styles.sectionRenameControls}>
                     <input
@@ -305,6 +528,7 @@ export function DesignNotebookPanel({
                     onPin={(pinned) => {
                       void workbench.setEntryPinned(entry.path, pinned)
                     }}
+                    onReorderBegin={beginEntryReorder}
                   />
                 ))}
                 {sectionEntries(section.id).length === 0 && (
@@ -336,17 +560,35 @@ function sectionNameForId(
 }
 
 function NotebookSectionGroup({
+  sectionId,
   title,
   actions,
+  onReorderBegin,
   children,
 }: {
+  readonly sectionId?: string
   readonly title: string
   readonly actions?: ComponentChildren
+  readonly onReorderBegin?: (sectionId: string, event: PointerEvent) => void
   readonly children: ComponentChildren
 }) {
   return (
-    <section className={styles.sectionGroup} aria-label={title}>
+    <section
+      className={styles.sectionGroup}
+      aria-label={title}
+      data-notebook-section-row={sectionId}
+    >
       <header className={styles.sectionHeader}>
+        {sectionId && onReorderBegin && (
+          <button
+            className={styles.sectionReorderGrip}
+            type="button"
+            aria-label={t('designNotebook.reorderSection', { name: title })}
+            onPointerDown={(event) => onReorderBegin(sectionId, event)}
+          >
+            <SixDotGripIcon />
+          </button>
+        )}
         <h3 className={styles.sectionTitle}>{title}</h3>
         {actions}
       </header>
@@ -363,6 +605,7 @@ function NotebookRow({
   onOpen,
   onMove,
   onPin,
+  onReorderBegin,
 }: {
   readonly entry: DesignNotebookEntry
   readonly lang: string
@@ -371,6 +614,7 @@ function NotebookRow({
   readonly onOpen: () => void
   readonly onMove: (sectionId: string | null) => void
   readonly onPin: (pinned: boolean) => void
+  readonly onReorderBegin: (path: string, event: PointerEvent) => void
 }) {
   const date = formatDate(entry.updated_at, lang)
   const currentSectionName = sections.find((section) => section.id === entry.section_id)?.name
@@ -383,7 +627,17 @@ function NotebookRow({
     <div
       className={`${styles.row}${active ? ` ${styles.rowActive}` : ''}`}
       role="listitem"
+      data-notebook-entry-row={entry.path}
+      data-notebook-entry-section={notebookEntrySectionKey(entry.section_id)}
     >
+      <button
+        className={styles.rowReorderGrip}
+        type="button"
+        aria-label={t('designNotebook.reorderDesign', { name: entry.name })}
+        onPointerDown={(event) => onReorderBegin(entry.path, event)}
+      >
+        <SixDotGripIcon />
+      </button>
       <button
         className={styles.rowOpen}
         type="button"
@@ -429,6 +683,50 @@ function NotebookRow({
         />
       </div>
     </div>
+  )
+}
+
+function orderItemsForPreview<T>(
+  items: readonly T[],
+  orderedIds: readonly string[] | null,
+  idForItem: (item: T) => string,
+): readonly T[] {
+  if (!orderedIds) return items
+  const byId = new Map(items.map((item) => [idForItem(item), item]))
+  const ordered: T[] = []
+  for (const id of orderedIds) {
+    const item = byId.get(id)
+    if (!item) continue
+    ordered.push(item)
+    byId.delete(id)
+  }
+  return [...ordered, ...byId.values()]
+}
+
+function notebookEntrySectionKey(sectionId: string | null): string {
+  return sectionId ?? 'unsectioned'
+}
+
+function notebookRowIdForKind(row: HTMLElement, kind: NotebookReorderKind): string | undefined {
+  return kind === 'section'
+    ? row.dataset.notebookSectionRow
+    : row.dataset.notebookEntryRow
+}
+
+function sameIdOrder(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((id, index) => id === right[index])
+}
+
+function SixDotGripIcon() {
+  return (
+    <span className={styles.reorderGripDots} aria-hidden="true">
+      <span />
+      <span />
+      <span />
+      <span />
+      <span />
+      <span />
+    </span>
   )
 }
 
