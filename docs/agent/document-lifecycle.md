@@ -15,6 +15,7 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 - `desktop/web/src/app/consortium/workflow.ts` owns the Consortium sync workflow adapter and effect.
 - `desktop/web/src/app/design-edit/` owns non-canvas Design edits through the Design Session store, including no-op detection, dirty marking, array preview/commit/abort transactions, and feature-specific writes for Location, Budget Items, Timeline Actions, and Consortiums.
 - `desktop/src/services/design_files.rs` owns Recent Design recording and listing. Recent Design listing should check saved path availability before returning entries, prune definitely stale paths from the user DB, and hide ambiguous filesystem states without deleting them.
+- The Design Notebook is app-level saved-Design organization. Notebook switching and File-menu Recent Design opens must use `app/document-session/actions.ts` intent-shaped operations such as `openDesignFromPath()` so dirty checks, attached/detached replacement, queued loads, zoom-to-fit, baselines, and workflows stay in the Design Session seam.
 - `desktop/web/src/app/document-session/use-canvas-document-session.ts` is a DOM-ref adapter for `CanvasPanel`; keep lifecycle ordering out of the hook.
 - `desktop/web/src/state/design.ts` is low-level Design Session store implementation. Production code should import `app/document-session/store.ts`, not this file, unless the store seam itself is being changed. Broad frontend and canvas-runtime tests should use `desktop/web/src/__tests__/support/design-session-state.ts` instead of importing low-level signals directly.
 - `desktop/web/src/app/canvas-runtime/host.ts` publishes `CanvasRuntimeSurfaces` for the live Design Session. Document lifecycle code should consume role-specific canvas surfaces instead of a raw `SceneCanvasRuntime`.
@@ -25,6 +26,7 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 - No component may replace the active document directly.
 - No panel may call document replacement directly.
 - Destructive document flows must use the shared guard path: dirty check -> confirm -> replace.
+- Design Notebook panels and menu Recent Design rows may initiate switching, but they must delegate to the Design Session action seam and must not call load IPC, state-machine requests, or store replacement directly.
 - Production reads of active Design identity and dirty state should use the read-only projections from `app/document-session/store.ts`.
 - Production writes to active Design identity, dirty baselines, pending loads, autosave failure, or canvas-clean bridge state must go through `app/document-session/store.ts`.
 - Production writes to non-canvas Design fields must go through `app/design-edit/` instead of importing `app/document-session/store.ts` or low-level Design signals directly.

@@ -89,6 +89,16 @@ Use this guide when changing Preact components, signals, i18n, CSS, panels, bott
 - Canvas-origin hover uses `hoveredCanvasTargets` and remains separate.
 - Bottom panel height is a per-tab settings preference. Read the active resolved height through `bottomPanelView`; commit manual resize through `commitBottomPanelHeight()` so only the active Bottom Panel Tab receives the concrete height.
 
+## Design Notebook
+
+- The Design Notebook is an app-level side panel, enabled even on the Welcome Screen. It should be exposed through the App Command Graph and PanelBar like other right-rail panels, but it is not design-dependent like Favorites.
+- A Design Notebook Workbench should own frontend state for saved Design references, Notebook Sections, pinned state, manual ordering, search, active-path projection, Recent Designs, and refresh/error states. Components, MenuBar projections, and panel rows should consume that workbench instead of calling Design IPC or Recent Design controllers directly.
+- File menu Recent Designs should be an inline dynamic section below Open Design, capped to five entries and omitted when empty. Recent Design menu entries should not become palette commands or shortcut targets.
+- Notebook switching must call the Design Session action seam such as `openDesignFromPath()`. The notebook panel should stay open after switching and highlight the active row by saved path, not by Design name.
+- The notebook panel should use a single searchable ledger, not a two-pane file-manager layout: header, search, compact view controls for All/Pinned/Recent, then Notebook Section headers and dense rows. Follow `.interface-design/system.md`: parchment/ochre chrome, ruled separators, tokenized spacing/type, no green UI chrome, no nested card stacks.
+- Notebook rows are navigation items: row click opens that Design; row handles are only for reordering or moving within notebook organization. Row actions for v1 should stay scoped to Pin/Unpin, Add/Move to Section, Remove from Notebook, and section rename/reorder/delete. Do not add Reveal in File Manager until a validated backend command exists.
+- Notebook entry names come from the saved Design file. Do not add a separate notebook label for a Design; only Notebook Section names are user-owned editable text.
+
 ## Saved Object Stamps
 
 - Saved Object Stamps are personal reusable arrangements, not Design Templates and not Species favorites. Keep them in the existing Favorites side panel as a section below Species favorites; do not add a separate PanelBar route unless a later product decision changes the navigation model.

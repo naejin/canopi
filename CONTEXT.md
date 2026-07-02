@@ -20,6 +20,18 @@ _Avoid_: Homepage, empty design, untitled design
 A previously opened or saved design reference that lets the user reopen that design from the app-opening experience. A recent design points to a saved design location; if that location is definitely gone, the reference is stale rather than a design the user can reopen.
 _Avoid_: Recent file, recent document, history item
 
+**Design Notebook**:
+The app-level workspace for finding, organizing, and switching between saved Designs. A design notebook stores organizing metadata and references to saved Design locations only; the saved `.canopi` Design remains the authority for design content and Design name, and switching to a notebook entry starts a different Design Session rather than merging designs.
+_Avoid_: File browser, recent list, project folder
+
+**Notebook Section**:
+A user-named, manually ordered grouping inside the Design Notebook. A notebook section organizes saved Design references one-to-many: a saved Design reference belongs to at most one notebook section, while built-in views such as pinned or recent Designs are notebook views rather than user sections.
+_Avoid_: Folder, tag, category
+
+**Notebook View**:
+An automatic Design Notebook list such as all saved Design references, pinned Designs, or recent Designs. A notebook view helps users find saved Designs but does not own section membership.
+_Avoid_: Section, folder, smart folder
+
 **Design Edit**:
 A non-canvas change to Design-owned state, including Location, Budget Items, Timeline Actions, Consortiums, description, and extra fields. Design Edit owns no-op detection, preview/commit/abort transaction behavior, and non-canvas dirty-state marking behind the Design Session seam. It does not own canvas scene state, save/load lifecycle, or UI draft state.
 _Avoid_: Document mutation, panel action, direct currentDesign write
