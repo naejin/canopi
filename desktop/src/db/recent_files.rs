@@ -44,7 +44,6 @@ pub fn get_recent_files(
 }
 
 /// Remove a recent file entry (for files that no longer exist on disk).
-#[allow(dead_code)]
 pub fn remove_recent_file(conn: &Connection, path: &str) -> Result<(), rusqlite::Error> {
     conn.execute(
         "DELETE FROM recent_files WHERE path = ?1",

@@ -1,7 +1,10 @@
 use common_types::design::{AutosaveEntry, CanopiFile, DesignSummary};
+use std::path::Path;
 
 use crate::db::{self, UserDb};
 use crate::design::{autosave, format};
+
+const RECENT_DESIGNS_LIMIT: usize = 20;
 
 pub fn new_design() -> Result<CanopiFile, String> {
     Ok(format::create_default())
@@ -38,9 +41,15 @@ pub fn load_design_file(path: String) -> Result<CanopiFile, String> {
 }
 
 pub fn get_recent_files(user_db: &UserDb) -> Result<Vec<DesignSummary>, String> {
-    let conn = db::acquire(&user_db.0, "UserDb");
-    crate::db::recent_files::get_recent_files(&conn, 20)
-        .map_err(|e| format!("Failed to get recent files: {e}"))
+    let recent = {
+        let conn = db::acquire(&user_db.0, "UserDb");
+        crate::db::recent_files::get_recent_files(&conn, u32::MAX)
+            .map_err(|e| format!("Failed to get recent files: {e}"))?
+    };
+
+    let filtered = filter_recent_designs(recent, RECENT_DESIGNS_LIMIT, recent_design_path_status);
+    prune_stale_recent_designs(user_db, &filtered.stale_paths);
+    Ok(filtered.visible)
 }
 
 pub fn autosave_design(
@@ -69,11 +78,82 @@ fn try_record_recent(user_db: &UserDb, path: &str, name: &str) {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RecentDesignPathStatus {
+    Available,
+    Stale,
+    Unavailable,
+}
+
+#[derive(Debug, Clone)]
+struct RecentDesignFilterResult {
+    visible: Vec<DesignSummary>,
+    stale_paths: Vec<String>,
+}
+
+fn filter_recent_designs(
+    recent: Vec<DesignSummary>,
+    limit: usize,
+    mut status_for_path: impl FnMut(&Path) -> RecentDesignPathStatus,
+) -> RecentDesignFilterResult {
+    let mut visible = Vec::new();
+    let mut stale_paths = Vec::new();
+
+    for file in recent {
+        let path = file.path.clone();
+        match status_for_path(Path::new(&path)) {
+            RecentDesignPathStatus::Available => {
+                if visible.len() < limit {
+                    visible.push(file);
+                }
+            }
+            RecentDesignPathStatus::Stale => stale_paths.push(path),
+            RecentDesignPathStatus::Unavailable => {}
+        }
+    }
+
+    RecentDesignFilterResult {
+        visible,
+        stale_paths,
+    }
+}
+
+fn recent_design_path_status(path: &Path) -> RecentDesignPathStatus {
+    match path.metadata() {
+        Ok(metadata) if metadata.is_file() => RecentDesignPathStatus::Available,
+        Ok(_) => RecentDesignPathStatus::Stale,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => RecentDesignPathStatus::Stale,
+        Err(error) => {
+            tracing::warn!(
+                "Recent Design '{}' could not be checked for availability: {error}",
+                path.display()
+            );
+            RecentDesignPathStatus::Unavailable
+        }
+    }
+}
+
+fn prune_stale_recent_designs(user_db: &UserDb, paths: &[String]) {
+    if paths.is_empty() {
+        return;
+    }
+
+    let conn = db::acquire(&user_db.0, "UserDb");
+    for path in paths {
+        if let Err(error) = crate::db::recent_files::remove_recent_file(&conn, path) {
+            tracing::warn!("Failed to prune stale Recent Design '{}': {error}", path);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{export_design_file, get_recent_files, load_design, load_design_file, save_design};
+    use super::{
+        RecentDesignPathStatus, export_design_file, filter_recent_designs, get_recent_files,
+        load_design, load_design_file, save_design,
+    };
     use crate::db::UserDb;
-    use common_types::design::CanopiFile;
+    use common_types::design::{CanopiFile, DesignSummary};
     use rusqlite::Connection;
     use std::path::PathBuf;
     use std::sync::Mutex;
@@ -101,6 +181,15 @@ mod tests {
                 .as_nanos(),
         );
         std::env::temp_dir().join(unique)
+    }
+
+    fn design_summary(path: &str, name: &str) -> DesignSummary {
+        DesignSummary {
+            path: path.to_owned(),
+            name: name.to_owned(),
+            updated_at: "2026-07-02T00:00:00Z".to_owned(),
+            plant_count: 0,
+        }
     }
 
     #[test]
@@ -168,5 +257,68 @@ mod tests {
         let result = load_design(&user_db, path.to_string_lossy().into_owned());
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn recent_designs_prune_missing_paths() {
+        let user_db = test_user_db();
+        let existing_path = temp_design_path("existing_recent");
+        let missing_path = temp_design_path("missing_recent");
+
+        save_design(
+            &user_db,
+            existing_path.to_string_lossy().into_owned(),
+            test_design("Existing Design"),
+        )
+        .unwrap();
+        {
+            let conn = crate::db::acquire(&user_db.0, "UserDb");
+            crate::db::recent_files::record_recent_file(
+                &conn,
+                &missing_path.to_string_lossy(),
+                "Missing Design",
+            )
+            .unwrap();
+        }
+
+        let recent = get_recent_files(&user_db).unwrap();
+        let stored = {
+            let conn = crate::db::acquire(&user_db.0, "UserDb");
+            crate::db::recent_files::get_recent_files(&conn, 20).unwrap()
+        };
+
+        assert_eq!(recent.len(), 1);
+        assert_eq!(recent[0].path, existing_path.to_string_lossy());
+        assert!(
+            stored
+                .iter()
+                .all(|file| file.path != missing_path.to_string_lossy()),
+            "missing Recent Design should be removed from persisted recent designs"
+        );
+
+        let _ = std::fs::remove_file(existing_path);
+    }
+
+    #[test]
+    fn recent_design_filter_hides_unavailable_paths_without_pruning() {
+        let result = filter_recent_designs(
+            vec![
+                design_summary("/available.canopi", "Available"),
+                design_summary("/stale.canopi", "Stale"),
+                design_summary("/unavailable.canopi", "Unavailable"),
+            ],
+            20,
+            |path| match path.to_string_lossy().as_ref() {
+                "/available.canopi" => RecentDesignPathStatus::Available,
+                "/stale.canopi" => RecentDesignPathStatus::Stale,
+                "/unavailable.canopi" => RecentDesignPathStatus::Unavailable,
+                other => panic!("unexpected path {other}"),
+            },
+        );
+
+        assert_eq!(result.visible.len(), 1);
+        assert_eq!(result.visible[0].path, "/available.canopi");
+        assert_eq!(result.visible[0].name, "Available");
+        assert_eq!(result.stale_paths, vec!["/stale.canopi"]);
     }
 }

@@ -14,6 +14,7 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 - `desktop/web/src/app/document-session/workflows.ts` is the Design Session workflow registry.
 - `desktop/web/src/app/consortium/workflow.ts` owns the Consortium sync workflow adapter and effect.
 - `desktop/web/src/app/design-edit/` owns non-canvas Design edits through the Design Session store, including no-op detection, dirty marking, array preview/commit/abort transactions, and feature-specific writes for Location, Budget Items, Timeline Actions, and Consortiums.
+- `desktop/src/services/design_files.rs` owns Recent Design recording and listing. Recent Design listing should check saved path availability before returning entries, prune definitely stale paths from the user DB, and hide ambiguous filesystem states without deleting them.
 - `desktop/web/src/app/document-session/use-canvas-document-session.ts` is a DOM-ref adapter for `CanvasPanel`; keep lifecycle ordering out of the hook.
 - `desktop/web/src/state/design.ts` is low-level Design Session store implementation. Production code should import `app/document-session/store.ts`, not this file, unless the store seam itself is being changed. Broad frontend and canvas-runtime tests should use `desktop/web/src/__tests__/support/design-session-state.ts` instead of importing low-level signals directly.
 - `desktop/web/src/app/canvas-runtime/host.ts` publishes `CanvasRuntimeSurfaces` for the live Design Session. Document lifecycle code should consume role-specific canvas surfaces instead of a raw `SceneCanvasRuntime`.
