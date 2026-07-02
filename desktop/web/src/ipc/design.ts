@@ -87,6 +87,13 @@ export async function createNotebookSection(name: string): Promise<DesignNoteboo
   return invoke('create_notebook_section', { name })
 }
 
+export async function addDesignReferenceToNotebook(
+  path: string,
+  content: CanopiFile,
+): Promise<void> {
+  return invoke('add_design_reference_to_notebook', { path, content })
+}
+
 export async function renameNotebookSection(sectionId: string, name: string): Promise<void> {
   return invoke('rename_notebook_section', { sectionId, name })
 }

@@ -420,7 +420,7 @@ export function DesignNotebookPanel({
           <div className={styles.feedback}>{t('designNotebook.loading')}</div>
         ) : view.loadError ? (
           <div className={styles.feedback}>{t('designNotebook.loadError')}</div>
-        ) : view.entries.length === 0 ? (
+        ) : view.entries.length === 0 && view.sections.length === 0 ? (
           <EmptyState
             title={t('designNotebook.emptyTitle')}
             text={t('designNotebook.emptyText')}

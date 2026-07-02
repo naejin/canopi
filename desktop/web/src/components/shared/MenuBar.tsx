@@ -60,6 +60,17 @@ export function MenuBar() {
     })
   }
 
+  const refreshMenuData = (menuId: string) => {
+    if (menuId === 'file') {
+      void designNotebookWorkbench.loadRecentDesigns()
+    }
+  }
+
+  const openRootMenu = (menuId: string) => {
+    openMenuId.value = menuId
+    refreshMenuData(menuId)
+  }
+
   const openSubmenu = (entry: MenuEntry): boolean => {
     if (entry.type !== 'submenu' || entry.disabled) return false
     openSubmenuId.value = entry.id
@@ -98,7 +109,7 @@ export function MenuBar() {
         const idx = menus.findIndex((m) => m.id === menu.id)
         const prev = menus[wrapPrev(idx, menus.length)]
         if (prev) {
-          openMenuId.value = prev.id
+          openRootMenu(prev.id)
           focusedItemIndex.current = -1
           focusFirstItemAfterRender()
         }
@@ -117,7 +128,7 @@ export function MenuBar() {
         const idx = menus.findIndex((m) => m.id === menu.id)
         const next = menus[wrapNext(idx, menus.length)]
         if (next) {
-          openMenuId.value = next.id
+          openRootMenu(next.id)
           openSubmenuId.value = null
           focusedItemIndex.current = -1
           focusFirstItemAfterRender()
@@ -195,7 +206,7 @@ export function MenuBar() {
       case 'Enter':
       case ' ': {
         e.preventDefault()
-        openMenuId.value = menuId
+        openRootMenu(menuId)
         openSubmenuId.value = null
         focusedItemIndex.current = -1
         focusFirstItemAfterRender()
@@ -206,7 +217,7 @@ export function MenuBar() {
         const prev = menus[wrapPrev(idx, menus.length)]
         if (prev) {
           triggerRefs.current.get(prev.id)?.focus()
-          if (openMenuId.value) openMenuId.value = prev.id
+          if (openMenuId.value) openRootMenu(prev.id)
           openSubmenuId.value = null
         }
         break
@@ -216,7 +227,7 @@ export function MenuBar() {
         const next = menus[wrapNext(idx, menus.length)]
         if (next) {
           triggerRefs.current.get(next.id)?.focus()
-          if (openMenuId.value) openMenuId.value = next.id
+          if (openMenuId.value) openRootMenu(next.id)
           openSubmenuId.value = null
         }
         break
@@ -225,14 +236,16 @@ export function MenuBar() {
   }
 
   const handleTriggerClick = (id: string) => {
-    openMenuId.value = openMenuId.value === id ? null : id
+    const nextMenuId = openMenuId.value === id ? null : id
+    openMenuId.value = nextMenuId
+    if (nextMenuId) refreshMenuData(nextMenuId)
     openSubmenuId.value = null
     focusedItemIndex.current = -1
   }
 
   const handleTriggerEnter = (id: string) => {
     if (openMenuId.value != null && openMenuId.value !== id) {
-      openMenuId.value = id
+      openRootMenu(id)
       openSubmenuId.value = null
       focusedItemIndex.current = -1
     }

@@ -1,4 +1,6 @@
-use common_types::design::{DesignNotebookSection, DesignNotebookSnapshot, DesignSummary};
+use common_types::design::{
+    CanopiFile, DesignNotebookSection, DesignNotebookSnapshot, DesignSummary,
+};
 
 use crate::db::UserDb;
 
@@ -22,6 +24,15 @@ pub fn create_notebook_section(
     name: String,
 ) -> Result<DesignNotebookSection, String> {
     crate::services::design_notebook::create_notebook_section(&user_db, &name)
+}
+
+#[tauri::command]
+pub fn add_design_reference_to_notebook(
+    user_db: tauri::State<'_, UserDb>,
+    path: String,
+    content: CanopiFile,
+) -> Result<(), String> {
+    crate::services::design_notebook::add_design_reference(&user_db, &path, &content)
 }
 
 #[tauri::command]

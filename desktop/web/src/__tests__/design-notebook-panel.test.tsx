@@ -279,9 +279,70 @@ describe('DesignNotebookPanel', () => {
     expect(container.textContent).not.toContain('Forest Edge')
   })
 
+  it('renders Notebook Sections even when no Design rows are listed', async () => {
+    const renameSection = vi.fn().mockResolvedValue(undefined)
+    const deleteSection = vi.fn().mockResolvedValue(undefined)
+    const workbench = createDesignNotebookWorkbench({
+      loadNotebook: vi.fn().mockResolvedValue({
+        sections: [
+          {
+            id: 'section-empty',
+            name: 'Empty Section',
+            sort_order: 0,
+            created_at: '2026-06-22T08:00:00.000Z',
+            updated_at: '2026-06-22T08:00:00.000Z',
+          },
+        ],
+        entries: [],
+      }),
+      openDesign: vi.fn(),
+      renameSection,
+      deleteSection,
+    })
+
+    await act(async () => {
+      render(<DesignNotebookPanel workbench={workbench} />, container)
+    })
+    await act(flushEffects)
+
+    const sectionTitle = container.querySelector<HTMLElement>('[data-notebook-section-id="section-empty"] h3')
+    if (!sectionTitle) throw new Error('Missing empty section title')
+
+    expect(container.textContent).toContain('Empty Section')
+    expect(container.textContent).not.toContain('No designs yet')
+
+    await act(async () => {
+      sectionTitle.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+    })
+
+    const renameInput = container.querySelector<HTMLInputElement>('input[aria-label="Section name"]')
+    if (!renameInput) throw new Error('Missing empty section rename input')
+
+    await act(async () => {
+      renameInput.value = 'Renamed Empty Section'
+      renameInput.dispatchEvent(new InputEvent('input', { bubbles: true }))
+    })
+
+    await act(async () => {
+      renameInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      await Promise.resolve()
+    })
+
+    expect(renameSection).toHaveBeenCalledWith('section-empty', 'Renamed Empty Section')
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="Delete section Renamed Empty Section"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    expect(deleteSection).toHaveBeenCalledWith('section-empty')
+  })
+
   it('shows an add-current affordance that saves before adding an unsaved Design', async () => {
     const activePath = signal<string | null>(null)
     const currentDesign = signal<CanopiFile | null>(testDesign())
+    const addDesignReference = vi.fn().mockResolvedValue(undefined)
     const saveAsCurrent = vi.fn().mockImplementation(async () => {
       activePath.value = '/designs/current.canopi'
     })
@@ -307,6 +368,7 @@ describe('DesignNotebookPanel', () => {
       openDesign: vi.fn(),
       saveAsCurrent,
       saveCurrent: vi.fn(),
+      addDesignReference,
     })
 
     await act(async () => {

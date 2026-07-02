@@ -1,5 +1,6 @@
 import { computed, signal, type ReadonlySignal } from '@preact/signals'
 import {
+  addDesignReferenceToNotebook,
   createNotebookSection,
   deleteNotebookSection,
   getDesignNotebook,
@@ -61,6 +62,7 @@ interface CreateDesignNotebookWorkbenchOptions {
   readonly openDesign?: typeof openDesignFromPath
   readonly saveCurrent?: typeof saveCurrentDesign
   readonly saveAsCurrent?: typeof saveAsCurrentDesign
+  readonly addDesignReference?: typeof addDesignReferenceToNotebook
   readonly createSection?: typeof createNotebookSection
   readonly renameSection?: typeof renameNotebookSection
   readonly deleteSection?: typeof deleteNotebookSection
@@ -80,6 +82,7 @@ export function createDesignNotebookWorkbench(
   const openDesign = options.openDesign ?? openDesignFromPath
   const saveCurrent = options.saveCurrent ?? saveCurrentDesign
   const saveAsCurrent = options.saveAsCurrent ?? saveAsCurrentDesign
+  const addDesignReferenceAdapter = options.addDesignReference ?? addDesignReferenceToNotebook
   const createSectionAdapter = options.createSection ?? createNotebookSection
   const renameSectionAdapter = options.renameSection ?? renameNotebookSection
   const deleteSectionAdapter = options.deleteSection ?? deleteNotebookSection
@@ -98,6 +101,7 @@ export function createDesignNotebookWorkbench(
 
   let disposed = false
   let generation = 0
+  let recentGeneration = 0
 
   const view = computed<DesignNotebookView>(() => {
     const currentPath = activePath.value
@@ -139,15 +143,23 @@ export function createDesignNotebookWorkbench(
   }
 
   async function loadRecentDesigns(): Promise<void> {
+    const requestGeneration = ++recentGeneration
     try {
-      recentEntries.value = (await loadRecentDesignsAdapter()).slice(0, MAX_RECENT_DESIGNS)
+      const nextRecentEntries = (await loadRecentDesignsAdapter()).slice(0, MAX_RECENT_DESIGNS)
+      if (isRecentStale(requestGeneration)) return
+      recentEntries.value = nextRecentEntries
     } catch {
+      if (isRecentStale(requestGeneration)) return
       recentEntries.value = []
     }
   }
 
   function isStale(requestGeneration: number): boolean {
     return disposed || requestGeneration !== generation
+  }
+
+  function isRecentStale(requestGeneration: number): boolean {
+    return disposed || requestGeneration !== recentGeneration
   }
 
   function writeSnapshot(snapshot: DesignNotebookSnapshot): void {
@@ -170,11 +182,14 @@ export function createDesignNotebookWorkbench(
     }
 
     const savedPath = activePath.value
-    if (!savedPath) return false
+    const savedDesign = currentDesign.value
+    if (!savedPath || savedDesign === null) return false
 
+    await addDesignReferenceAdapter(savedPath, savedDesign)
     await load()
-    if (sectionId) {
-      await moveEntryToSection(savedPath, sectionId)
+    const targetSectionId = validSectionId(sectionId, sections.value)
+    if (targetSectionId) {
+      await moveEntryToSection(savedPath, targetSectionId)
     }
 
     return entries.value.some((entry) => entry.path === savedPath)
@@ -250,6 +265,7 @@ export function createDesignNotebookWorkbench(
   function dispose(): void {
     disposed = true
     generation += 1
+    recentGeneration += 1
   }
 
   return {
@@ -274,6 +290,15 @@ export const designNotebookWorkbench = createDesignNotebookWorkbench()
 
 function normalizeSectionName(value: string): string {
   return value.trim()
+}
+
+function validSectionId(
+  sectionId: string | null,
+  availableSections: readonly DesignNotebookSection[],
+): string | null {
+  const normalized = sectionId?.trim()
+  if (!normalized) return null
+  return availableSections.some((section) => section.id === normalized) ? normalized : null
 }
 
 function applyManualOrder<T>(

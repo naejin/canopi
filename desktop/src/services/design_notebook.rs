@@ -1,5 +1,5 @@
 use common_types::design::{
-    DesignNotebookEntry, DesignNotebookSection, DesignNotebookSnapshot, DesignSummary,
+    CanopiFile, DesignNotebookEntry, DesignNotebookSection, DesignNotebookSnapshot, DesignSummary,
 };
 use std::path::Path;
 
@@ -62,6 +62,25 @@ pub fn create_notebook_section(
     let conn = db::acquire(&user_db.0, "UserDb");
     crate::db::design_notebook::create_notebook_section(&conn, name)
         .map_err(|e| format!("Failed to create Notebook Section: {e}"))
+}
+
+pub fn add_design_reference(
+    user_db: &UserDb,
+    path: &str,
+    design: &CanopiFile,
+) -> Result<(), String> {
+    if path.trim().is_empty() {
+        return Err("Design path is required".to_owned());
+    }
+
+    let conn = db::acquire(&user_db.0, "UserDb");
+    crate::db::design_notebook::record_design_reference(
+        &conn,
+        path,
+        &design.name,
+        design.plants.len() as u32,
+    )
+    .map_err(|e| format!("Failed to add Design to Notebook: {e}"))
 }
 
 pub fn rename_notebook_section(

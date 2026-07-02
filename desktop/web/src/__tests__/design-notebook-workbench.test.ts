@@ -1,9 +1,23 @@
 import { signal } from '@preact/signals'
 import { describe, expect, it, vi } from 'vitest'
 import { createDesignNotebookWorkbench } from '../app/design-notebook/workbench'
-import type { CanopiFile } from '../types/design'
+import type { CanopiFile, DesignSummary } from '../types/design'
 
 describe('design notebook workbench', () => {
+  function deferred<T>(): {
+    readonly promise: Promise<T>
+    readonly resolve: (value: T) => void
+    readonly reject: (error: unknown) => void
+  } {
+    let resolve!: (value: T) => void
+    let reject!: (error: unknown) => void
+    const promise = new Promise<T>((promiseResolve, promiseReject) => {
+      resolve = promiseResolve
+      reject = promiseReject
+    })
+    return { promise, resolve, reject }
+  }
+
   function testDesign(): CanopiFile {
     return {
       version: 1,
@@ -199,17 +213,68 @@ describe('design notebook workbench', () => {
     expect(workbench.view.value.recentEntries.map((entry) => entry.name)).toEqual(['A', 'B', 'C', 'D', 'E'])
   })
 
+  it('keeps newer Recent Design refreshes when older loads resolve later', async () => {
+    const firstLoad = deferred<DesignSummary[]>()
+    const secondLoad = deferred<DesignSummary[]>()
+    const workbench = createDesignNotebookWorkbench({
+      loadNotebook: vi.fn().mockResolvedValue({ sections: [], entries: [] }),
+      loadRecentDesigns: vi.fn()
+        .mockReturnValueOnce(firstLoad.promise)
+        .mockReturnValueOnce(secondLoad.promise),
+      openDesign: vi.fn(),
+    })
+
+    const firstRefresh = workbench.loadRecentDesigns()
+    const secondRefresh = workbench.loadRecentDesigns()
+
+    secondLoad.resolve([
+      { path: '/new.canopi', name: 'New', updated_at: '2026-06-02T00:00:00.000Z', plant_count: 2 },
+    ])
+    await secondRefresh
+
+    expect(workbench.view.value.recentEntries.map((entry) => entry.name)).toEqual(['New'])
+
+    firstLoad.resolve([
+      { path: '/old.canopi', name: 'Old', updated_at: '2026-06-01T00:00:00.000Z', plant_count: 1 },
+    ])
+    await firstRefresh
+
+    expect(workbench.view.value.recentEntries.map((entry) => entry.name)).toEqual(['New'])
+  })
+
   it('saves an unsaved current Design before adding it to a Notebook Section', async () => {
     const activePath = signal<string | null>(null)
     const currentDesign = signal<CanopiFile | null>(testDesign())
+    const savedDesign = { ...testDesign(), name: 'Saved Current Design' }
     const saveAsCurrent = vi.fn().mockImplementation(async () => {
       activePath.value = '/designs/current.canopi'
+      currentDesign.value = savedDesign
     })
+    const addDesignReference = vi.fn().mockResolvedValue(undefined)
     const moveEntryToSection = vi.fn().mockResolvedValue(undefined)
     const loadNotebook = vi.fn()
-      .mockResolvedValueOnce({ sections: [], entries: [] })
       .mockResolvedValueOnce({
-        sections: [],
+        sections: [
+          {
+            id: 'section-client',
+            name: 'Client work',
+            sort_order: 0,
+            created_at: '2026-06-22T08:00:00.000Z',
+            updated_at: '2026-06-22T08:00:00.000Z',
+          },
+        ],
+        entries: [],
+      })
+      .mockResolvedValueOnce({
+        sections: [
+          {
+            id: 'section-client',
+            name: 'Client work',
+            sort_order: 0,
+            created_at: '2026-06-22T08:00:00.000Z',
+            updated_at: '2026-06-22T08:00:00.000Z',
+          },
+        ],
         entries: [
           {
             path: '/designs/current.canopi',
@@ -228,6 +293,7 @@ describe('design notebook workbench', () => {
       openDesign: vi.fn(),
       saveAsCurrent,
       saveCurrent: vi.fn(),
+      addDesignReference,
       moveEntryToSection,
     })
 
@@ -236,8 +302,63 @@ describe('design notebook workbench', () => {
 
     expect(added).toBe(true)
     expect(saveAsCurrent).toHaveBeenCalledTimes(1)
+    expect(addDesignReference).toHaveBeenCalledWith('/designs/current.canopi', savedDesign)
     expect(moveEntryToSection).toHaveBeenCalledWith('/designs/current.canopi', 'section-client')
     expect(workbench.view.value.entries[0]?.path).toBe('/designs/current.canopi')
+  })
+
+  it('does not move Add Current into a deleted Notebook Section', async () => {
+    const activePath = signal<string | null>('/designs/current.canopi')
+    const currentDesign = signal<CanopiFile | null>(testDesign())
+    const addDesignReference = vi.fn().mockResolvedValue(undefined)
+    const deleteSection = vi.fn().mockResolvedValue(undefined)
+    const moveEntryToSection = vi.fn().mockResolvedValue(undefined)
+    const loadNotebook = vi.fn()
+      .mockResolvedValueOnce({
+        sections: [
+          {
+            id: 'section-client',
+            name: 'Client work',
+            sort_order: 0,
+            created_at: '2026-06-22T08:00:00.000Z',
+            updated_at: '2026-06-22T08:00:00.000Z',
+          },
+        ],
+        entries: [],
+      })
+      .mockResolvedValueOnce({
+        sections: [],
+        entries: [
+          {
+            path: '/designs/current.canopi',
+            name: 'Current Design',
+            updated_at: '2026-06-22T08:00:00.000Z',
+            plant_count: 0,
+            section_id: null,
+            sort_order: 0,
+          },
+        ],
+      })
+    const workbench = createDesignNotebookWorkbench({
+      activePath,
+      currentDesign,
+      loadNotebook,
+      openDesign: vi.fn(),
+      saveCurrent: vi.fn(),
+      saveAsCurrent: vi.fn(),
+      addDesignReference,
+      deleteSection,
+      moveEntryToSection,
+    })
+
+    await workbench.load()
+    await workbench.deleteSection('section-client')
+    const added = await workbench.addCurrentDesignToNotebook('section-client')
+
+    expect(added).toBe(true)
+    expect(addDesignReference).toHaveBeenCalledWith('/designs/current.canopi', testDesign())
+    expect(moveEntryToSection).not.toHaveBeenCalled()
+    expect(workbench.view.value.entries[0]?.section_id).toBeNull()
   })
 
   it('does not create a notebook entry when Save As is cancelled', async () => {

@@ -21,16 +21,20 @@ vi.mock('../app/document-session/actions', async (importOriginal) => {
 
 import { getRecentFiles } from '../ipc/design'
 import { openDesignFromPath } from '../app/document-session/actions'
+import { designNotebookWorkbench } from '../app/design-notebook'
 import { MenuBar } from '../components/shared/MenuBar'
 
 describe('MenuBar Recent Designs', () => {
   let container: HTMLDivElement
 
-  beforeEach(() => {
+  beforeEach(async () => {
     container = document.createElement('div')
     document.body.innerHTML = ''
     document.body.appendChild(container)
     locale.value = 'en'
+    vi.mocked(getRecentFiles).mockResolvedValue([])
+    await designNotebookWorkbench.loadRecentDesigns()
+    vi.mocked(getRecentFiles).mockReset()
     vi.mocked(openDesignFromPath).mockClear()
   })
 
@@ -66,6 +70,33 @@ describe('MenuBar Recent Designs', () => {
     expect(openRecent.disabled).toBe(true)
     expect(openRecent.getAttribute('aria-haspopup')).toBe('menu')
     expect(container.textContent).not.toContain('Forest Edge')
+  })
+
+  it('refreshes Open Recent when the File menu opens after mount', async () => {
+    vi.mocked(getRecentFiles)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { path: '/designs/new.canopi', name: 'Newly Saved', updated_at: '2026-06-25T00:00:00.000Z', plant_count: 1 },
+      ])
+
+    await renderAndOpenFileMenu()
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    const openRecent = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
+      .find((button) => button.textContent?.includes('Open Recent'))
+    if (!openRecent) throw new Error('Missing Open Recent item')
+
+    expect(getRecentFiles).toHaveBeenCalledTimes(2)
+    expect(openRecent.disabled).toBe(false)
+
+    await act(async () => {
+      openRecent.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }))
+    })
+
+    expect(container.textContent).toContain('Newly Saved')
   })
 
   it('opens recent designs from an Open Recent submenu capped to five entries', async () => {

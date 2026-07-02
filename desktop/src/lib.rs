@@ -89,6 +89,7 @@ pub fn run() {
             commands::design_notebook::get_design_notebook_entries,
             commands::design_notebook::get_design_notebook,
             commands::design_notebook::create_notebook_section,
+            commands::design_notebook::add_design_reference_to_notebook,
             commands::design_notebook::rename_notebook_section,
             commands::design_notebook::delete_notebook_section,
             commands::design_notebook::move_design_reference_to_section,
