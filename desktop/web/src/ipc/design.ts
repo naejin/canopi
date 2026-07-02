@@ -102,10 +102,6 @@ export async function moveDesignReferenceToSection(
   return invoke('move_design_reference_to_section', { path, sectionId })
 }
 
-export async function setDesignReferencePinned(path: string, pinned: boolean): Promise<void> {
-  return invoke('set_design_reference_pinned', { path, pinned })
-}
-
 export async function removeDesignReference(path: string): Promise<void> {
   return invoke('remove_design_reference', { path })
 }

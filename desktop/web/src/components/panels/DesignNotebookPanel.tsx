@@ -10,25 +10,17 @@ import type { DesignNotebookEntry, DesignNotebookSection } from '../../types/des
 import { Dropdown, type DropdownItem } from '../shared/Dropdown'
 import styles from './DesignNotebookPanel.module.css'
 
-const NOTEBOOK_REORDER_DOWN_THRESHOLD = 0.4
-const NOTEBOOK_REORDER_UP_THRESHOLD = 0.6
-
 interface DesignNotebookPanelProps {
   readonly workbench?: DesignNotebookWorkbench
 }
 
-type NotebookReorderKind = 'section' | 'entry'
-type NotebookReorderDirection = 'up' | 'down'
+type NotebookDropPosition = 'before' | 'after' | 'inside'
 
-interface NotebookReorderSession {
-  readonly kind: NotebookReorderKind
-  readonly pointerId: number
-  readonly sourceId: string
-  readonly grip: HTMLElement
-  readonly selector: string
-  direction: NotebookReorderDirection | null
-  lastClientY: number
-  latestIds: readonly string[]
+interface NotebookDropTarget {
+  readonly sectionId: string | null
+  readonly beforePath: string | null
+  readonly rowPath: string | null
+  readonly position: NotebookDropPosition
 }
 
 export function DesignNotebookPanel({
@@ -36,30 +28,35 @@ export function DesignNotebookPanel({
 }: DesignNotebookPanelProps) {
   const lang = locale.value
   const view = workbench.view.value
-  const listRef = useRef<HTMLDivElement>(null)
-  const reorderSessionRef = useRef<NotebookReorderSession | null>(null)
-  const reorderCleanupRef = useRef<(() => void) | null>(null)
+  const renameInputRef = useRef<HTMLInputElement>(null)
+  const draggedPathRef = useRef<string | null>(null)
+  const dropTargetRef = useRef<NotebookDropTarget | null>(null)
   const [newSectionName, setNewSectionName] = useState('')
   const [sectionEditorOpen, setSectionEditorOpen] = useState(false)
   const [renamingSectionId, setRenamingSectionId] = useState<string | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
   const [addCurrentSectionId, setAddCurrentSectionId] = useState<string>('')
-  const [sectionReorderPreviewIds, setSectionReorderPreviewIds] = useState<readonly string[] | null>(null)
-  const [entryReorderPreviewPaths, setEntryReorderPreviewPaths] = useState<readonly string[] | null>(null)
+  const [draggedPath, setDraggedPath] = useState<string | null>(null)
+  const [dropTarget, setDropTarget] = useState<NotebookDropTarget | null>(null)
 
   useEffect(() => {
     void workbench.load()
   }, [workbench])
 
   useEffect(() => {
-    return () => reorderCleanupRef.current?.()
-  }, [])
+    if (!renamingSectionId) return
+    renameInputRef.current?.focus()
+    renameInputRef.current?.select()
+  }, [renamingSectionId])
 
-  const orderedSections = orderItemsForPreview(view.sections, sectionReorderPreviewIds, (section) => section.id)
-  const orderedVisibleEntries = orderItemsForPreview(view.visibleEntries, entryReorderPreviewPaths, (entry) => entry.path)
-  const unsectionedEntries = orderedVisibleEntries.filter((entry) => entry.section_id === null)
-  const sectionEntries = (sectionId: string) =>
-    orderedVisibleEntries.filter((entry) => entry.section_id === sectionId)
+  const orderedSections = view.sections
+  const orderedEntries = entriesInNotebookDisplayOrder(view.entries, orderedSections)
+  const unsectionedEntries = entriesForSection(orderedEntries, null)
+  const shouldShowUnsectioned = unsectionedEntries.length > 0 || draggedPath !== null
+  const addSectionItems: DropdownItem<string>[] = [
+    { value: '', label: t('designNotebook.noSection') },
+    ...view.sections.map((section) => ({ value: section.id, label: section.name })),
+  ]
 
   function createSection(): void {
     const name = newSectionName.trim()
@@ -75,9 +72,12 @@ export function DesignNotebookPanel({
     setRenameDraft(section.name)
   }
 
-  function saveRename(sectionId: string): void {
+  function commitRename(sectionId: string): void {
     const name = renameDraft.trim()
-    if (!name) return
+    if (!name) {
+      cancelRename()
+      return
+    }
     void workbench.renameSection(sectionId, name).then(() => {
       setRenamingSectionId(null)
       setRenameDraft('')
@@ -89,196 +89,77 @@ export function DesignNotebookPanel({
     setRenameDraft('')
   }
 
-  function beginSectionReorder(sectionId: string, event: PointerEvent): void {
-    beginNotebookReorder({
-      kind: 'section',
-      sourceId: sectionId,
-      event,
-      ids: orderedSections.map((section) => section.id),
-      selector: '[data-notebook-section-row]',
-    })
+  function beginEntryDrag(path: string, event: DragEvent): void {
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move'
+      event.dataTransfer.setData('text/plain', path)
+    }
+    draggedPathRef.current = path
+    dropTargetRef.current = null
+    setDraggedPath(path)
+    setDropTarget(null)
   }
 
-  function beginEntryReorder(path: string, event: PointerEvent): void {
-    const source = orderedVisibleEntries.find((entry) => entry.path === path)
-    const sectionKey = notebookEntrySectionKey(source?.section_id ?? null)
-    beginNotebookReorder({
-      kind: 'entry',
-      sourceId: path,
-      event,
-      ids: orderedVisibleEntries
-        .filter((entry) => notebookEntrySectionKey(entry.section_id) === sectionKey)
-        .map((entry) => entry.path),
-      selector: `[data-notebook-entry-row][data-notebook-entry-section="${sectionKey}"]`,
-    })
-  }
-
-  function beginNotebookReorder({
-    kind,
-    sourceId,
-    event,
-    ids,
-    selector,
-  }: {
-    readonly kind: NotebookReorderKind
-    readonly sourceId: string
-    readonly event: PointerEvent
-    readonly ids: readonly string[]
-    readonly selector: string
-  }): void {
-    if (event.button !== 0 || !(event.currentTarget instanceof HTMLElement)) return
+  function updateEntryDropTarget(entry: DesignNotebookEntry, event: DragEvent): void {
+    const sourcePath = draggedPathRef.current
+    if (!sourcePath || sourcePath === entry.path || !(event.currentTarget instanceof HTMLElement)) return
     event.preventDefault()
     event.stopPropagation()
-
-    reorderSessionRef.current = {
-      kind,
-      pointerId: event.pointerId,
-      sourceId,
-      grip: event.currentTarget,
-      selector,
-      direction: null,
-      lastClientY: event.clientY,
-      latestIds: ids,
-    }
-    event.currentTarget.setPointerCapture(event.pointerId)
-    installReorderDocumentListeners()
-    previewNotebookReorder(kind, ids)
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
+    setCurrentDropTarget(dropTargetForEntry(entry, event.currentTarget, event.clientY, orderedEntries, sourcePath))
   }
 
-  function installReorderDocumentListeners(): void {
-    clearReorderDocumentListeners()
-
-    const onMove = (event: PointerEvent) => updateNotebookReorder(event)
-    const onUp = (event: PointerEvent) => finishNotebookReorder(event)
-    const onCancel = (event: PointerEvent) => abortNotebookReorder(event)
-
-    document.addEventListener('pointermove', onMove)
-    document.addEventListener('pointerup', onUp)
-    document.addEventListener('pointercancel', onCancel)
-    reorderCleanupRef.current = () => {
-      document.removeEventListener('pointermove', onMove)
-      document.removeEventListener('pointerup', onUp)
-      document.removeEventListener('pointercancel', onCancel)
-      reorderCleanupRef.current = null
-    }
-  }
-
-  function clearReorderDocumentListeners(): void {
-    reorderCleanupRef.current?.()
-  }
-
-  function updateNotebookReorder(event: PointerEvent): void {
-    const session = reorderSessionRef.current
-    if (!session || session.pointerId !== event.pointerId) return
+  function updateSectionDropTarget(sectionId: string | null, event: DragEvent): void {
+    if (!draggedPathRef.current) return
     event.preventDefault()
-    const direction = reorderDirectionForPointer(session, event.clientY)
-    session.direction = direction
-    session.lastClientY = event.clientY
-    const ids = reorderIdsForPointer(session, event.clientY, direction)
-    session.latestIds = ids
-    previewNotebookReorder(session.kind, ids)
-  }
-
-  function finishNotebookReorder(event: PointerEvent): void {
-    const session = reorderSessionRef.current
-    if (!session || session.pointerId !== event.pointerId) return
-    event.preventDefault()
-    clearReorderDocumentListeners()
-    reorderSessionRef.current = null
-    releaseNotebookReorderPointerCapture(session.grip, event.pointerId)
-
-    const currentIds = currentReorderIds(session)
-    if (sameIdOrder(currentIds, session.latestIds)) {
-      previewNotebookReorder(session.kind, null)
-      return
-    }
-    commitNotebookReorder(session.kind, session.latestIds)
-  }
-
-  function abortNotebookReorder(event: PointerEvent): void {
-    const session = reorderSessionRef.current
-    if (!session || session.pointerId !== event.pointerId) return
-    clearReorderDocumentListeners()
-    reorderSessionRef.current = null
-    releaseNotebookReorderPointerCapture(session.grip, event.pointerId)
-    previewNotebookReorder(session.kind, null)
-  }
-
-  function releaseNotebookReorderPointerCapture(grip: HTMLElement, pointerId: number): void {
-    try {
-      grip.releasePointerCapture(pointerId)
-    } catch {
-      // Row reflow can drop capture before pointerup; document listeners own cleanup.
-    }
-  }
-
-  function reorderDirectionForPointer(
-    session: NotebookReorderSession,
-    clientY: number,
-  ): NotebookReorderDirection | null {
-    if (clientY > session.lastClientY) return 'down'
-    if (clientY < session.lastClientY) return 'up'
-    return session.direction
-  }
-
-  function reorderIdsForPointer(
-    session: NotebookReorderSession,
-    clientY: number,
-    direction: NotebookReorderDirection | null,
-  ): readonly string[] {
-    const rows = [...listRef.current?.querySelectorAll<HTMLElement>(session.selector) ?? []]
-    const visibleIds = rows
-      .map((row) => notebookRowIdForKind(row, session.kind))
-      .filter((id): id is string => Boolean(id))
-    const displayedIds = visibleIds.length > 0 ? visibleIds : session.latestIds
-    const withoutSourceIds = displayedIds.filter((id) => id !== session.sourceId)
-    const targetRows = rows.filter((row) => notebookRowIdForKind(row, session.kind) !== session.sourceId)
-    const threshold = reorderThreshold(direction)
-    let insertIndex = withoutSourceIds.length
-
-    for (let index = 0; index < targetRows.length; index += 1) {
-      const rect = targetRows[index]!.getBoundingClientRect()
-      if (clientY < rect.top + rect.height * threshold) {
-        insertIndex = index
-        break
-      }
-    }
-
-    return [
-      ...withoutSourceIds.slice(0, insertIndex),
-      session.sourceId,
-      ...withoutSourceIds.slice(insertIndex),
-    ]
-  }
-
-  function reorderThreshold(direction: NotebookReorderDirection | null): number {
-    if (direction === 'down') return NOTEBOOK_REORDER_DOWN_THRESHOLD
-    if (direction === 'up') return NOTEBOOK_REORDER_UP_THRESHOLD
-    return 0.5
-  }
-
-  function currentReorderIds(session: NotebookReorderSession): readonly string[] {
-    if (session.kind === 'section') return orderedSections.map((section) => section.id)
-    const source = orderedVisibleEntries.find((entry) => entry.path === session.sourceId)
-    const sectionKey = notebookEntrySectionKey(source?.section_id ?? null)
-    return orderedVisibleEntries
-      .filter((entry) => notebookEntrySectionKey(entry.section_id) === sectionKey)
-      .map((entry) => entry.path)
-  }
-
-  function previewNotebookReorder(kind: NotebookReorderKind, ids: readonly string[] | null): void {
-    if (kind === 'section') setSectionReorderPreviewIds(ids)
-    else setEntryReorderPreviewPaths(ids)
-  }
-
-  function commitNotebookReorder(kind: NotebookReorderKind, ids: readonly string[]): void {
-    previewNotebookReorder(kind, ids)
-    const persist = kind === 'section'
-      ? workbench.reorderSections(ids)
-      : workbench.reorderEntries(ids)
-    void persist.finally(() => {
-      previewNotebookReorder(kind, null)
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
+    setCurrentDropTarget({
+      sectionId,
+      beforePath: null,
+      rowPath: null,
+      position: 'inside',
     })
+  }
+
+  function dropEntry(event: DragEvent): void {
+    event.preventDefault()
+    event.stopPropagation()
+    const sourcePath = draggedPathRef.current
+    const target = dropTargetRef.current
+    clearDragState()
+    if (!sourcePath || !target) return
+
+    const currentEntries = entriesInNotebookDisplayOrder(view.entries, orderedSections)
+    const source = currentEntries.find((entry) => entry.path === sourcePath)
+    const nextEntries = entriesAfterDrop(currentEntries, orderedSections, sourcePath, target)
+    if (!source || !nextEntries) return
+
+    const currentPaths = currentEntries.map((entry) => entry.path)
+    const nextPaths = nextEntries.map((entry) => entry.path)
+    const sectionChanged = source.section_id !== target.sectionId
+    const orderChanged = !sameIdOrder(currentPaths, nextPaths)
+    if (!sectionChanged && !orderChanged) return
+
+    void (async () => {
+      if (sectionChanged) {
+        await workbench.moveEntryToSection(sourcePath, target.sectionId)
+      }
+      if (orderChanged) {
+        await workbench.reorderEntries(nextPaths)
+      }
+    })()
+  }
+
+  function clearDragState(): void {
+    draggedPathRef.current = null
+    dropTargetRef.current = null
+    setDraggedPath(null)
+    setDropTarget(null)
+  }
+
+  function setCurrentDropTarget(target: NotebookDropTarget): void {
+    dropTargetRef.current = target
+    setDropTarget(target)
   }
 
   return (
@@ -295,10 +176,7 @@ export function DesignNotebookPanel({
             {view.canAddCurrentDesign && view.sections.length > 0 && (
               <Dropdown
                 trigger={sectionNameForId(view.sections, addCurrentSectionId) ?? t('designNotebook.noSection')}
-                items={[
-                  { value: '', label: t('designNotebook.noSection') },
-                  ...view.sections.map((section) => ({ value: section.id, label: section.name })),
-                ]}
+                items={addSectionItems}
                 value={addCurrentSectionId}
                 onChange={setAddCurrentSectionId}
                 ariaLabel={t('designNotebook.addCurrentSection')}
@@ -368,55 +246,7 @@ export function DesignNotebookPanel({
         )}
       </header>
 
-      <div className={styles.controlBand}>
-        <div className={styles.searchWrap}>
-          <input
-            className={styles.searchInput}
-            type="search"
-            aria-label={t('designNotebook.searchLabel')}
-            placeholder={t('designNotebook.searchPlaceholder')}
-            value={view.searchQuery}
-            onInput={(event) => {
-              workbench.setSearchQuery((event.currentTarget as HTMLInputElement).value)
-            }}
-          />
-          {view.searchQuery.length > 0 && (
-            <button
-              className={styles.searchClear}
-              type="button"
-              aria-label={t('designNotebook.clearSearch')}
-              onClick={() => workbench.setSearchQuery('')}
-            >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                <path d="M3 3l6 6M9 3 3 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-            </button>
-          )}
-        </div>
-
-        <div className={styles.viewStrip} aria-label={t('designNotebook.viewsLabel')}>
-          <button
-            className={styles.viewPill}
-            type="button"
-            aria-label={t('designNotebook.allDesignsLabel')}
-            aria-pressed={view.viewMode === 'all'}
-            onClick={() => workbench.setViewMode('all')}
-          >
-            {t('designNotebook.allDesigns')}
-          </button>
-          <button
-            className={styles.viewPill}
-            type="button"
-            aria-label={t('designNotebook.pinnedDesigns')}
-            aria-pressed={view.viewMode === 'pinned'}
-            onClick={() => workbench.setViewMode('pinned')}
-          >
-            {t('designNotebook.pinnedDesigns')}
-          </button>
-        </div>
-      </div>
-
-      <div ref={listRef} className={styles.list} role="list">
+      <div className={styles.list} role="list">
         {view.loading && view.entries.length === 0 ? (
           <div className={styles.feedback}>{t('designNotebook.loading')}</div>
         ) : view.loadError ? (
@@ -426,57 +256,63 @@ export function DesignNotebookPanel({
             title={t('designNotebook.emptyTitle')}
             text={t('designNotebook.emptyText')}
           />
-        ) : view.visibleEntries.length === 0 ? (
-          <EmptyState
-            title={t('designNotebook.noResultsTitle')}
-            text={t('designNotebook.noResultsText')}
-          />
         ) : (
           <>
-            {unsectionedEntries.length > 0 && (
-              <NotebookSectionGroup title={t('designNotebook.unsectioned')}>
+            {shouldShowUnsectioned && (
+              <NotebookSectionGroup
+                sectionId={null}
+                title={t('designNotebook.unsectioned')}
+                dropActive={isSectionDropTarget(dropTarget, null)}
+                onDragOver={(event) => updateSectionDropTarget(null, event)}
+                onDrop={dropEntry}
+              >
                 {unsectionedEntries.map((entry) => (
                   <NotebookRow
                     key={entry.path}
                     entry={entry}
                     lang={lang}
                     active={entry.path === view.activePath}
-                    sections={view.sections}
+                    dragging={entry.path === draggedPath}
+                    dropPosition={dropPositionForRow(dropTarget, entry.path)}
                     onOpen={() => {
                       void workbench.openEntry(entry.path)
-                    }}
-                    onMove={(sectionId) => {
-                      void workbench.moveEntryToSection(entry.path, sectionId)
-                    }}
-                    onPin={(pinned) => {
-                      void workbench.setEntryPinned(entry.path, pinned)
                     }}
                     onRemove={() => {
                       void workbench.removeEntry(entry.path)
                     }}
-                    onReorderBegin={beginEntryReorder}
+                    onDragStart={(event) => beginEntryDrag(entry.path, event)}
+                    onDragOver={(event) => updateEntryDropTarget(entry, event)}
+                    onDrop={dropEntry}
+                    onDragEnd={clearDragState}
                   />
                 ))}
+                {unsectionedEntries.length === 0 && (
+                  <div className={styles.sectionEmpty}>{t('designNotebook.sectionEmpty')}</div>
+                )}
               </NotebookSectionGroup>
             )}
 
-            {orderedSections.map((section) => (
-              <NotebookSectionGroup
-                key={section.id}
-                sectionId={section.id}
-                title={section.name}
-                onReorderBegin={beginSectionReorder}
-                actions={renamingSectionId === section.id ? (
-                  <div className={styles.sectionRenameControls}>
+            {orderedSections.map((section) => {
+              const entries = entriesForSection(orderedEntries, section.id)
+              const renaming = renamingSectionId === section.id
+
+              return (
+                <NotebookSectionGroup
+                  key={section.id}
+                  sectionId={section.id}
+                  title={section.name}
+                  titleEditor={renaming ? (
                     <input
-                      className={styles.sectionInput}
+                      ref={renameInputRef}
+                      className={styles.sectionRenameInput}
                       aria-label={t('designNotebook.sectionName')}
                       value={renameDraft}
                       onInput={(event) => setRenameDraft((event.currentTarget as HTMLInputElement).value)}
+                      onBlur={() => commitRename(section.id)}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter') {
                           event.preventDefault()
-                          saveRename(section.id)
+                          commitRename(section.id)
                         }
                         if (event.key === 'Escape') {
                           event.preventDefault()
@@ -484,34 +320,8 @@ export function DesignNotebookPanel({
                         }
                       }}
                     />
-                    <button
-                      className={styles.sectionIconButton}
-                      type="button"
-                      aria-label={t('designNotebook.saveSectionName')}
-                      disabled={renameDraft.trim().length === 0}
-                      onClick={() => saveRename(section.id)}
-                    >
-                      <CheckIcon />
-                    </button>
-                    <button
-                      className={styles.sectionIconButton}
-                      type="button"
-                      aria-label={t('designNotebook.cancelRename')}
-                      onClick={cancelRename}
-                    >
-                      <CloseIcon />
-                    </button>
-                  </div>
-                ) : (
-                  <div className={styles.sectionHeaderActions}>
-                    <button
-                      className={styles.sectionIconButton}
-                      type="button"
-                      aria-label={t('designNotebook.renameSection', { name: section.name })}
-                      onClick={() => beginRename(section)}
-                    >
-                      <PencilIcon />
-                    </button>
+                  ) : undefined}
+                  actions={!renaming && (
                     <button
                       className={styles.sectionIconButton}
                       type="button"
@@ -522,36 +332,38 @@ export function DesignNotebookPanel({
                     >
                       <TrashIcon />
                     </button>
-                  </div>
-                )}
-              >
-                {sectionEntries(section.id).map((entry) => (
-                  <NotebookRow
-                    key={entry.path}
-                    entry={entry}
-                    lang={lang}
-                    active={entry.path === view.activePath}
-                    sections={view.sections}
-                    onOpen={() => {
-                      void workbench.openEntry(entry.path)
-                    }}
-                    onMove={(sectionId) => {
-                      void workbench.moveEntryToSection(entry.path, sectionId)
-                    }}
-                    onPin={(pinned) => {
-                      void workbench.setEntryPinned(entry.path, pinned)
-                    }}
-                    onRemove={() => {
-                      void workbench.removeEntry(entry.path)
-                    }}
-                    onReorderBegin={beginEntryReorder}
-                  />
-                ))}
-                {sectionEntries(section.id).length === 0 && (
-                  <div className={styles.sectionEmpty}>{t('designNotebook.sectionEmpty')}</div>
-                )}
-              </NotebookSectionGroup>
-            ))}
+                  )}
+                  dropActive={isSectionDropTarget(dropTarget, section.id)}
+                  onTitleDoubleClick={() => beginRename(section)}
+                  onDragOver={(event) => updateSectionDropTarget(section.id, event)}
+                  onDrop={dropEntry}
+                >
+                  {entries.map((entry) => (
+                    <NotebookRow
+                      key={entry.path}
+                      entry={entry}
+                      lang={lang}
+                      active={entry.path === view.activePath}
+                      dragging={entry.path === draggedPath}
+                      dropPosition={dropPositionForRow(dropTarget, entry.path)}
+                      onOpen={() => {
+                        void workbench.openEntry(entry.path)
+                      }}
+                      onRemove={() => {
+                        void workbench.removeEntry(entry.path)
+                      }}
+                      onDragStart={(event) => beginEntryDrag(entry.path, event)}
+                      onDragOver={(event) => updateEntryDropTarget(entry, event)}
+                      onDrop={dropEntry}
+                      onDragEnd={clearDragState}
+                    />
+                  ))}
+                  {entries.length === 0 && (
+                    <div className={styles.sectionEmpty}>{t('designNotebook.sectionEmpty')}</div>
+                  )}
+                </NotebookSectionGroup>
+              )
+            })}
           </>
         )}
       </div>
@@ -578,34 +390,41 @@ function sectionNameForId(
 function NotebookSectionGroup({
   sectionId,
   title,
+  titleEditor,
   actions,
-  onReorderBegin,
+  dropActive,
+  onTitleDoubleClick,
+  onDragOver,
+  onDrop,
   children,
 }: {
-  readonly sectionId?: string
+  readonly sectionId: string | null
   readonly title: string
+  readonly titleEditor?: ComponentChildren
   readonly actions?: ComponentChildren
-  readonly onReorderBegin?: (sectionId: string, event: PointerEvent) => void
+  readonly dropActive: boolean
+  readonly onTitleDoubleClick?: () => void
+  readonly onDragOver: (event: DragEvent) => void
+  readonly onDrop: (event: DragEvent) => void
   readonly children: ComponentChildren
 }) {
   return (
     <section
-      className={styles.sectionGroup}
+      className={classNames(styles.sectionGroup, dropActive && styles.sectionDropTarget)}
       aria-label={title}
-      data-notebook-section-row={sectionId}
+      data-notebook-section-id={notebookEntrySectionKey(sectionId)}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
     >
       <header className={styles.sectionHeader}>
-        {sectionId && onReorderBegin && (
-          <button
-            className={styles.sectionReorderGrip}
-            type="button"
-            aria-label={t('designNotebook.reorderSection', { name: title })}
-            onPointerDown={(event) => onReorderBegin(sectionId, event)}
+        {titleEditor ?? (
+          <h3
+            className={styles.sectionTitle}
+            onDblClick={onTitleDoubleClick}
           >
-            <SixDotGripIcon />
-          </button>
+            {title}
+          </h3>
         )}
-        <h3 className={styles.sectionTitle}>{title}</h3>
         {actions}
       </header>
       {children}
@@ -617,46 +436,47 @@ function NotebookRow({
   entry,
   lang,
   active,
-  sections,
+  dragging,
+  dropPosition,
   onOpen,
-  onMove,
-  onPin,
   onRemove,
-  onReorderBegin,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
 }: {
   readonly entry: DesignNotebookEntry
   readonly lang: string
   readonly active: boolean
-  readonly sections: readonly DesignNotebookSection[]
+  readonly dragging: boolean
+  readonly dropPosition: NotebookDropPosition | null
   readonly onOpen: () => void
-  readonly onMove: (sectionId: string | null) => void
-  readonly onPin: (pinned: boolean) => void
   readonly onRemove: () => void
-  readonly onReorderBegin: (path: string, event: PointerEvent) => void
+  readonly onDragStart: (event: DragEvent) => void
+  readonly onDragOver: (event: DragEvent) => void
+  readonly onDrop: (event: DragEvent) => void
+  readonly onDragEnd: () => void
 }) {
-  const [overflowOpen, setOverflowOpen] = useState(false)
   const date = formatDate(entry.updated_at, lang)
-  const currentSectionName = sections.find((section) => section.id === entry.section_id)?.name
-  const items: DropdownItem<string>[] = [
-    { value: '', label: t('designNotebook.noSection') },
-    ...sections.map((section) => ({ value: section.id, label: section.name })),
-  ]
 
   return (
     <div
-      className={`${styles.row}${active ? ` ${styles.rowActive}` : ''}`}
+      className={classNames(
+        styles.row,
+        active && styles.rowActive,
+        dragging && styles.rowDragging,
+        dropPosition === 'before' && styles.rowDropBefore,
+        dropPosition === 'after' && styles.rowDropAfter,
+      )}
       role="listitem"
+      draggable
       data-notebook-entry-row={entry.path}
       data-notebook-entry-section={notebookEntrySectionKey(entry.section_id)}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onDragEnd={onDragEnd}
     >
-      <button
-        className={styles.rowReorderGrip}
-        type="button"
-        aria-label={t('designNotebook.reorderDesign', { name: entry.name })}
-        onPointerDown={(event) => onReorderBegin(entry.path, event)}
-      >
-        <SixDotGripIcon />
-      </button>
       <button
         className={styles.rowOpen}
         type="button"
@@ -682,122 +502,133 @@ function NotebookRow({
         <button
           className={styles.rowIconButton}
           type="button"
-          aria-label={t(entry.pinned ? 'designNotebook.unpinDesign' : 'designNotebook.pinDesign', { name: entry.name })}
-          aria-pressed={entry.pinned}
-          onClick={() => onPin(!entry.pinned)}
+          aria-label={t('designNotebook.removeDesignFromNotebook', { name: entry.name })}
+          onClick={onRemove}
         >
-          <PinIcon pinned={entry.pinned} />
+          <TrashIcon />
         </button>
-        <Dropdown
-          trigger={currentSectionName ?? t('designNotebook.noSection')}
-          items={items}
-          value={entry.section_id ?? ''}
-          onChange={(value) => onMove(value === '' ? null : value)}
-          ariaLabel={t('designNotebook.moveToSection', { name: entry.name })}
-          className={styles.sectionDropdown}
-          triggerClassName={styles.sectionDropdownTrigger}
-          menuClassName={styles.sectionDropdownMenu}
-          optionClassName={styles.sectionDropdownOption}
-          preserveOverlays
-        />
-        <div
-          className={styles.rowOverflow}
-          onBlur={(event) => {
-            const nextTarget = event.relatedTarget
-            if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) {
-              setOverflowOpen(false)
-            }
-          }}
-        >
-          <button
-            className={styles.rowIconButton}
-            type="button"
-            aria-label={t('designNotebook.rowActions', { name: entry.name })}
-            aria-haspopup="menu"
-            aria-expanded={overflowOpen}
-            onClick={() => setOverflowOpen((open) => !open)}
-          >
-            <MoreIcon />
-          </button>
-          {overflowOpen && (
-            <div className={styles.rowOverflowMenu} role="menu">
-              <button
-                className={styles.rowOverflowItem}
-                role="menuitem"
-                type="button"
-                onClick={() => {
-                  setOverflowOpen(false)
-                  onRemove()
-                }}
-              >
-                {t('designNotebook.removeFromNotebook')}
-              </button>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   )
 }
 
-function orderItemsForPreview<T>(
-  items: readonly T[],
-  orderedIds: readonly string[] | null,
-  idForItem: (item: T) => string,
-): readonly T[] {
-  if (!orderedIds) return items
-  const byId = new Map(items.map((item) => [idForItem(item), item]))
-  const ordered: T[] = []
-  for (const id of orderedIds) {
-    const item = byId.get(id)
-    if (!item) continue
-    ordered.push(item)
-    byId.delete(id)
+function dropTargetForEntry(
+  entry: DesignNotebookEntry,
+  row: HTMLElement,
+  clientY: number,
+  entries: readonly DesignNotebookEntry[],
+  sourcePath: string,
+): NotebookDropTarget {
+  const sectionId = entry.section_id
+  const rect = row.getBoundingClientRect()
+  const insertAfter = clientY >= rect.top + rect.height / 2
+  const targetSectionEntries = entriesForSection(entries, sectionId)
+    .filter((sectionEntry) => sectionEntry.path !== sourcePath)
+
+  if (!insertAfter) {
+    return {
+      sectionId,
+      beforePath: entry.path,
+      rowPath: entry.path,
+      position: 'before',
+    }
   }
-  return [...ordered, ...byId.values()]
+
+  const targetIndex = targetSectionEntries.findIndex((sectionEntry) => sectionEntry.path === entry.path)
+  return {
+    sectionId,
+    beforePath: targetSectionEntries[targetIndex + 1]?.path ?? null,
+    rowPath: entry.path,
+    position: 'after',
+  }
+}
+
+function entriesAfterDrop(
+  entries: readonly DesignNotebookEntry[],
+  sections: readonly DesignNotebookSection[],
+  sourcePath: string,
+  target: NotebookDropTarget,
+): readonly DesignNotebookEntry[] | null {
+  const source = entries.find((entry) => entry.path === sourcePath)
+  if (!source) return null
+
+  const sectionOrder: Array<string | null> = [null, ...sections.map((section) => section.id)]
+  const entriesBySection = new Map<string, DesignNotebookEntry[]>()
+  for (const sectionId of sectionOrder) {
+    entriesBySection.set(notebookEntrySectionKey(sectionId), [])
+  }
+
+  for (const entry of entries) {
+    if (entry.path === sourcePath) continue
+    const key = notebookEntrySectionKey(entry.section_id)
+    const sectionEntries = entriesBySection.get(key) ?? []
+    sectionEntries.push(entry)
+    entriesBySection.set(key, sectionEntries)
+  }
+
+  const movedEntry = { ...source, section_id: target.sectionId }
+  const targetKey = notebookEntrySectionKey(target.sectionId)
+  const targetEntries = entriesBySection.get(targetKey) ?? []
+  const insertIndex = target.beforePath
+    ? targetEntries.findIndex((entry) => entry.path === target.beforePath)
+    : targetEntries.length
+  targetEntries.splice(insertIndex < 0 ? targetEntries.length : insertIndex, 0, movedEntry)
+  entriesBySection.set(targetKey, targetEntries)
+
+  const orderedEntries: DesignNotebookEntry[] = []
+  const orderedKeys = new Set<string>()
+  for (const sectionId of sectionOrder) {
+    const key = notebookEntrySectionKey(sectionId)
+    orderedKeys.add(key)
+    orderedEntries.push(...(entriesBySection.get(key) ?? []))
+  }
+  for (const [key, sectionEntries] of entriesBySection.entries()) {
+    if (!orderedKeys.has(key)) orderedEntries.push(...sectionEntries)
+  }
+  return orderedEntries
+}
+
+function entriesInNotebookDisplayOrder(
+  entries: readonly DesignNotebookEntry[],
+  sections: readonly DesignNotebookSection[],
+): readonly DesignNotebookEntry[] {
+  const orderedEntries: DesignNotebookEntry[] = [
+    ...entriesForSection(entries, null),
+  ]
+  for (const section of sections) {
+    orderedEntries.push(...entriesForSection(entries, section.id))
+  }
+  return orderedEntries
+}
+
+function entriesForSection(
+  entries: readonly DesignNotebookEntry[],
+  sectionId: string | null,
+): readonly DesignNotebookEntry[] {
+  return entries.filter((entry) => entry.section_id === sectionId)
+}
+
+function isSectionDropTarget(target: NotebookDropTarget | null, sectionId: string | null): boolean {
+  return target?.position === 'inside' && target.sectionId === sectionId
+}
+
+function dropPositionForRow(
+  target: NotebookDropTarget | null,
+  rowPath: string,
+): NotebookDropPosition | null {
+  return target?.rowPath === rowPath ? target.position : null
 }
 
 function notebookEntrySectionKey(sectionId: string | null): string {
   return sectionId ?? 'unsectioned'
 }
 
-function notebookRowIdForKind(row: HTMLElement, kind: NotebookReorderKind): string | undefined {
-  return kind === 'section'
-    ? row.dataset.notebookSectionRow
-    : row.dataset.notebookEntryRow
-}
-
 function sameIdOrder(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((id, index) => id === right[index])
 }
 
-function SixDotGripIcon() {
-  return (
-    <span className={styles.reorderGripDots} aria-hidden="true">
-      <span />
-      <span />
-      <span />
-      <span />
-      <span />
-      <span />
-    </span>
-  )
-}
-
-function PinIcon({ pinned }: { readonly pinned: boolean }) {
-  return (
-    <svg width="13" height="13" viewBox="0 0 13 13" fill={pinned ? 'currentColor' : 'none'} aria-hidden="true">
-      <path d="M4.2 1.8h4.6l-.7 3 2.1 2.2v1H7.3L6.8 11H6.2L5.7 8H2.8V7l2.1-2.2z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
-function PencilIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
-      <path d="M8.7 2.1 10.9 4.3 4.6 10.6l-2.6.4.4-2.6z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
+function classNames(...values: Array<string | false | null | undefined>): string {
+  return values.filter(Boolean).join(' ')
 }
 
 function TrashIcon() {
@@ -808,36 +639,10 @@ function TrashIcon() {
   )
 }
 
-function CheckIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
-      <path d="m2.6 6.7 2.4 2.2 5.4-5.6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
-function CloseIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
-      <path d="M3.5 3.5 9.5 9.5M9.5 3.5 3.5 9.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-    </svg>
-  )
-}
-
 function PlusIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
       <path d="M6.5 2.5v8M2.5 6.5h8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-    </svg>
-  )
-}
-
-function MoreIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
-      <circle cx="3" cy="6.5" r="1" fill="currentColor" />
-      <circle cx="6.5" cy="6.5" r="1" fill="currentColor" />
-      <circle cx="10" cy="6.5" r="1" fill="currentColor" />
     </svg>
   )
 }

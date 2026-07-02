@@ -1,7 +1,7 @@
 use rusqlite::Connection;
 
 #[allow(dead_code)]
-const CURRENT_SCHEMA_VERSION: i32 = 7;
+const CURRENT_SCHEMA_VERSION: i32 = 8;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SavedObjectStampRow {
@@ -40,9 +40,6 @@ pub fn init(conn: &Connection) -> Result<(), rusqlite::Error> {
         conn.pragma_update(None, "user_version", 5)?;
     }
     if version < 6 {
-        conn.execute_batch(include_str!(
-            "../../migrations/v6_design_notebook_pinned.sql"
-        ))?;
         conn.pragma_update(None, "user_version", 6)?;
     }
     if version < 7 {
@@ -50,6 +47,12 @@ pub fn init(conn: &Connection) -> Result<(), rusqlite::Error> {
             "../../migrations/v7_design_notebook_order.sql"
         ))?;
         conn.pragma_update(None, "user_version", 7)?;
+    }
+    if version < 8 {
+        conn.execute_batch(include_str!(
+            "../../migrations/v8_design_notebook_drop_pinned.sql"
+        ))?;
+        conn.pragma_update(None, "user_version", 8)?;
     }
 
     Ok(())
@@ -428,31 +431,67 @@ mod tests {
     }
 
     #[test]
-    fn init_creates_design_notebook_pinned_column() {
+    fn init_does_not_create_design_notebook_pinned_column() {
         let conn = Connection::open_in_memory().unwrap();
         init(&conn).unwrap();
 
-        conn.execute(
-            "INSERT INTO design_notebook_entries (
+        let columns = conn
+            .prepare("PRAGMA table_info(design_notebook_entries)")
+            .unwrap()
+            .query_map([], |row| row.get::<_, String>(1))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+
+        assert!(!columns.iter().any(|column| column == "pinned"));
+    }
+
+    #[test]
+    fn init_removes_existing_design_notebook_pinned_column() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE design_notebook_entries (
+                path TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                plant_count INTEGER NOT NULL DEFAULT 0,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                last_opened TEXT NOT NULL,
+                pinned INTEGER NOT NULL DEFAULT 0
+             );
+             INSERT INTO design_notebook_entries (
                 path,
                 name,
                 updated_at,
                 plant_count,
+                sort_order,
                 created_at,
-                last_opened
+                last_opened,
+                pinned
              )
-             VALUES ('/designs/default.canopi', 'Default', datetime('now'), 0, datetime('now'), datetime('now'))",
-            [],
+             VALUES ('/designs/default.canopi', 'Default', datetime('now'), 0, 0, datetime('now'), datetime('now'), 1);
+             PRAGMA user_version = 7;",
         )
         .unwrap();
-        let pinned: bool = conn
-            .query_row(
-                "SELECT pinned FROM design_notebook_entries WHERE path = '/designs/default.canopi'",
-                [],
-                |row| row.get(0),
-            )
+
+        init(&conn).unwrap();
+
+        let columns = conn
+            .prepare("PRAGMA table_info(design_notebook_entries)")
+            .unwrap()
+            .query_map([], |row| row.get::<_, String>(1))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
             .unwrap();
-        assert!(!pinned);
+        let design_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM design_notebook_entries", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+
+        assert!(!columns.iter().any(|column| column == "pinned"));
+        assert_eq!(design_count, 1);
     }
 
     #[test]

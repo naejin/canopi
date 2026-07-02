@@ -94,103 +94,6 @@
   min-width: 0;
 }
 
-.controlBand {
-  display: grid;
-  gap: var(--space-2);
-  padding: var(--space-2);
-  border-bottom: 1px solid var(--color-border);
-  flex-shrink: 0;
-}
-
-.searchWrap {
-  position: relative;
-  min-width: 0;
-}
-
-.searchInput {
-  width: 100%;
-  min-height: var(--control-size-md);
-  padding: var(--space-1) var(--space-2);
-  padding-right: var(--control-size-md);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  line-height: var(--line-height);
-  transition: border-color var(--transition-fast), background-color var(--transition-fast);
-}
-
-.searchInput:focus {
-  outline: none;
-  border-color: var(--color-accent);
-}
-
-.searchInput::placeholder {
-  color: var(--color-text-muted);
-  font-size: var(--text-xs);
-}
-
-.searchInput::-webkit-search-cancel-button {
-  -webkit-appearance: none;
-  display: none;
-}
-
-.searchClear {
-  position: absolute;
-  right: var(--space-1);
-  top: 50%;
-  transform: translateY(-50%);
-  width: var(--control-size-sm);
-  height: var(--control-size-sm);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  transition: color var(--transition-fast), background-color var(--transition-fast);
-}
-
-.searchClear:hover {
-  color: var(--color-text);
-  background: var(--color-control-hover);
-}
-
-.viewStrip {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  min-width: 0;
-}
-
-.viewPill {
-  min-height: var(--control-size-sm);
-  padding: 0 var(--space-2);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-full);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-size: var(--text-xs);
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
-}
-
-.viewPill:hover {
-  background: var(--color-control-hover);
-}
-
-.viewPill[aria-pressed="true"] {
-  border-color: var(--color-primary);
-  background: var(--color-control-active);
-  color: var(--color-primary);
-}
-
 .sectionInput {
   min-width: 0;
   min-height: var(--control-size-md);
@@ -246,7 +149,12 @@
 }
 
 .sectionGroup {
+  position: relative;
   border-bottom: 1px solid var(--color-border);
+}
+
+.sectionDropTarget .sectionHeader {
+  background: var(--color-control-active);
 }
 
 .sectionHeader {
@@ -274,20 +182,24 @@
   color: var(--color-text-muted);
 }
 
-.sectionHeaderActions,
-.sectionRenameControls {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
+.sectionRenameInput {
+  flex: 1;
   min-width: 0;
+  min-height: var(--control-size-md);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--line-height);
+  transition: border-color var(--transition-fast), background-color var(--transition-fast);
 }
 
-.sectionRenameControls {
-  flex: 1;
-}
-
-.sectionRenameControls .sectionInput {
-  flex: 1;
+.sectionRenameInput:focus {
+  outline: none;
+  border-color: var(--color-accent);
 }
 
 .sectionIconButton {
@@ -310,53 +222,6 @@
   background: var(--color-control-hover);
 }
 
-.sectionReorderGrip,
-.rowReorderGrip {
-  width: var(--control-size-sm);
-  height: var(--control-size-md);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: grab;
-  touch-action: none;
-  user-select: none;
-  transition: color var(--transition-fast), background-color var(--transition-fast);
-}
-
-.sectionReorderGrip:hover,
-.sectionReorderGrip:focus-visible,
-.rowReorderGrip:hover,
-.rowReorderGrip:focus-visible {
-  color: var(--color-primary);
-  background: var(--color-control-hover);
-}
-
-.sectionReorderGrip:active,
-.rowReorderGrip:active {
-  cursor: grabbing;
-}
-
-.reorderGripDots {
-  --notebook-grip-dot-size: 3px;
-
-  display: grid;
-  grid-template-columns: repeat(2, var(--notebook-grip-dot-size));
-  gap: var(--notebook-grip-dot-size);
-  justify-content: center;
-}
-
-.reorderGripDots span {
-  width: var(--notebook-grip-dot-size);
-  height: var(--notebook-grip-dot-size);
-  border-radius: var(--radius-full);
-  background: currentColor;
-}
-
 .sectionIconButton:disabled {
   opacity: 0.45;
   cursor: default;
@@ -375,13 +240,41 @@
   width: 100%;
   min-width: 0;
   display: grid;
-  grid-template-columns: var(--control-size-sm) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-1);
   border-bottom: 1px solid var(--color-border);
   background: transparent;
   color: var(--color-text);
   transition: background-color var(--transition-fast);
+}
+
+.row[draggable="true"] {
+  cursor: grab;
+}
+
+.rowDragging {
+  opacity: 0.48;
+}
+
+.rowDropBefore::after,
+.rowDropAfter::after {
+  content: "";
+  position: absolute;
+  left: var(--space-2);
+  right: var(--space-2);
+  height: 2px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  pointer-events: none;
+}
+
+.rowDropBefore::after {
+  top: 0;
+}
+
+.rowDropAfter::after {
+  bottom: -1px;
 }
 
 .row:hover {
@@ -423,10 +316,6 @@
   color: var(--color-text);
   text-align: left;
   cursor: pointer;
-}
-
-.rowReorderGrip {
-  margin-left: var(--space-1);
 }
 
 .rowMain {
@@ -495,50 +384,8 @@
 }
 
 .rowIconButton:hover,
-.rowIconButton[aria-pressed="true"] {
-  color: var(--color-primary);
-  background: var(--color-control-hover);
-}
-
-.rowOverflow {
-  position: relative;
-}
-
-.rowOverflowMenu {
-  --notebook-overflow-menu-width: 160px;
-
-  position: absolute;
-  top: calc(100% + var(--space-1));
-  right: 0;
-  min-width: var(--notebook-overflow-menu-width);
-  padding: var(--space-1);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-md);
-  z-index: 20;
-}
-
-.rowOverflowItem {
-  width: 100%;
-  min-height: var(--control-size-md);
-  display: flex;
-  align-items: center;
-  padding: var(--space-1) var(--space-2);
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  text-align: left;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background-color var(--transition-fast), color var(--transition-fast);
-}
-
-.rowOverflowItem:hover,
-.rowOverflowItem:focus-visible {
+.rowIconButton:focus-visible {
+  color: var(--color-danger);
   background: var(--color-control-hover);
   outline: none;
 }
@@ -600,17 +447,12 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .searchInput,
-  .searchClear,
   .sectionInput,
+  .sectionRenameInput,
   .headerButton,
   .sectionCreateButton,
-  .sectionReorderGrip,
   .sectionIconButton,
-  .rowReorderGrip,
   .rowIconButton,
-  .rowOverflowItem,
-  .viewPill,
   .row {
     transition: none;
   }

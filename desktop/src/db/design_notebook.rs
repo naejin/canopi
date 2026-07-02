@@ -150,20 +150,6 @@ pub fn assign_design_reference_to_section(
     Ok(())
 }
 
-pub fn set_design_reference_pinned(
-    conn: &Connection,
-    path: &str,
-    pinned: bool,
-) -> Result<(), rusqlite::Error> {
-    conn.execute(
-        "UPDATE design_notebook_entries
-         SET pinned = ?2
-         WHERE path = ?1",
-        rusqlite::params![path, pinned],
-    )?;
-    Ok(())
-}
-
 pub fn reorder_notebook_sections(
     conn: &Connection,
     section_ids: &[String],
@@ -215,7 +201,7 @@ pub fn get_design_notebook_entries_with_sections(
     conn: &Connection,
 ) -> Result<Vec<DesignNotebookEntry>, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT e.path, e.name, e.updated_at, e.plant_count, e.pinned, m.section_id, e.sort_order
+        "SELECT e.path, e.name, e.updated_at, e.plant_count, m.section_id, e.sort_order
          FROM design_notebook_entries e
          LEFT JOIN design_notebook_section_memberships m ON m.path = e.path
          ORDER BY e.sort_order ASC, e.last_opened DESC, e.created_at DESC, e.path ASC",
@@ -227,9 +213,8 @@ pub fn get_design_notebook_entries_with_sections(
             name: row.get(1)?,
             updated_at: row.get(2)?,
             plant_count: row.get(3)?,
-            pinned: row.get(4)?,
-            section_id: row.get(5)?,
-            sort_order: row.get(6)?,
+            section_id: row.get(4)?,
+            sort_order: row.get(5)?,
         })
     })?;
 
@@ -262,8 +247,7 @@ mod tests {
                 plant_count INTEGER NOT NULL DEFAULT 0,
                 sort_order INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL,
-                last_opened TEXT NOT NULL,
-                pinned INTEGER NOT NULL DEFAULT 0
+                last_opened TEXT NOT NULL
             );
 
             CREATE TABLE design_notebook_sections (
@@ -358,18 +342,6 @@ mod tests {
             super::get_design_notebook_entries_with_sections(&conn).unwrap()[0].section_id,
             None
         );
-    }
-
-    #[test]
-    fn pins_and_unpins_design_references() {
-        let conn = test_db();
-        super::record_design_reference(&conn, "/designs/forest.canopi", "Forest Edge", 7).unwrap();
-
-        super::set_design_reference_pinned(&conn, "/designs/forest.canopi", true).unwrap();
-        assert!(super::get_design_notebook_entries_with_sections(&conn).unwrap()[0].pinned);
-
-        super::set_design_reference_pinned(&conn, "/designs/forest.canopi", false).unwrap();
-        assert!(!super::get_design_notebook_entries_with_sections(&conn).unwrap()[0].pinned);
     }
 
     #[test]

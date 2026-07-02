@@ -86,7 +86,6 @@ export type DesignNotebookEntry = {
 	name: string,
 	updated_at: string,
 	plant_count: number,
-	pinned: boolean,
 	section_id: string | null,
 	sort_order: number,
 };

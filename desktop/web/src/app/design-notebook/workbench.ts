@@ -9,7 +9,6 @@ import {
   removeDesignReference,
   reorderDesignReferences,
   reorderNotebookSections,
-  setDesignReferencePinned,
 } from '../../ipc/design'
 import {
   openDesignFromPath,
@@ -27,17 +26,13 @@ import type {
 
 const MAX_RECENT_DESIGNS = 5
 
-export type DesignNotebookViewMode = 'all' | 'pinned'
-
 export interface DesignNotebookView {
   readonly entries: readonly DesignNotebookEntry[]
   readonly visibleEntries: readonly DesignNotebookEntry[]
   readonly sections: readonly DesignNotebookSection[]
   readonly recentEntries: readonly DesignSummary[]
-  readonly viewMode: DesignNotebookViewMode
   readonly canAddCurrentDesign: boolean
   readonly currentDesignPath: string | null
-  readonly searchQuery: string
   readonly activePath: string | null
   readonly loading: boolean
   readonly loadError: boolean
@@ -48,11 +43,8 @@ export interface DesignNotebookWorkbench {
   load(): Promise<void>
   loadRecentDesigns(): Promise<void>
   refresh(): Promise<void>
-  setViewMode(mode: DesignNotebookViewMode): void
-  setSearchQuery(query: string): void
   openEntry(path: string): Promise<void>
   addCurrentDesignToNotebook(sectionId: string | null): Promise<boolean>
-  setEntryPinned(path: string, pinned: boolean): Promise<void>
   removeEntry(path: string): Promise<void>
   createSection(name: string): Promise<void>
   renameSection(sectionId: string, name: string): Promise<void>
@@ -73,7 +65,6 @@ interface CreateDesignNotebookWorkbenchOptions {
   readonly renameSection?: typeof renameNotebookSection
   readonly deleteSection?: typeof deleteNotebookSection
   readonly moveEntryToSection?: typeof moveDesignReferenceToSection
-  readonly setEntryPinned?: typeof setDesignReferencePinned
   readonly removeEntry?: typeof removeDesignReference
   readonly reorderSections?: typeof reorderNotebookSections
   readonly reorderEntries?: typeof reorderDesignReferences
@@ -93,7 +84,6 @@ export function createDesignNotebookWorkbench(
   const renameSectionAdapter = options.renameSection ?? renameNotebookSection
   const deleteSectionAdapter = options.deleteSection ?? deleteNotebookSection
   const moveEntryToSectionAdapter = options.moveEntryToSection ?? moveDesignReferenceToSection
-  const setEntryPinnedAdapter = options.setEntryPinned ?? setDesignReferencePinned
   const removeEntryAdapter = options.removeEntry ?? removeDesignReference
   const reorderSectionsAdapter = options.reorderSections ?? reorderNotebookSections
   const reorderEntriesAdapter = options.reorderEntries ?? reorderDesignReferences
@@ -103,8 +93,6 @@ export function createDesignNotebookWorkbench(
   const entries = signal<readonly DesignNotebookEntry[]>([])
   const sections = signal<readonly DesignNotebookSection[]>([])
   const recentEntries = signal<readonly DesignSummary[]>([])
-  const viewMode = signal<DesignNotebookViewMode>('all')
-  const searchQuery = signal('')
   const loading = signal(false)
   const loadError = signal(false)
 
@@ -112,26 +100,16 @@ export function createDesignNotebookWorkbench(
   let generation = 0
 
   const view = computed<DesignNotebookView>(() => {
-    const query = searchQuery.value
-    const normalizedQuery = normalizeSearch(query)
-    const mode = viewMode.value
     const currentPath = activePath.value
-    const sourceEntries = mode === 'pinned'
-      ? entries.value.filter((entry) => entry.pinned)
-      : entries.value
     const currentPathListed = currentPath !== null && entries.value.some((entry) => entry.path === currentPath)
 
     return {
       entries: entries.value,
-      visibleEntries: normalizedQuery.length === 0
-        ? sourceEntries
-        : sourceEntries.filter((entry) => matchesNotebookQuery(entry, normalizedQuery)),
+      visibleEntries: entries.value,
       sections: sections.value,
       recentEntries: recentEntries.value,
-      viewMode: mode,
       canAddCurrentDesign: currentDesign.value !== null && !currentPathListed,
       currentDesignPath: currentPath,
-      searchQuery: query,
       activePath: currentPath,
       loading: loading.value,
       loadError: loadError.value,
@@ -177,14 +155,6 @@ export function createDesignNotebookWorkbench(
     sections.value = snapshot.sections
   }
 
-  function setSearchQuery(query: string): void {
-    searchQuery.value = query
-  }
-
-  function setViewMode(mode: DesignNotebookViewMode): void {
-    viewMode.value = mode
-  }
-
   async function openEntry(path: string): Promise<void> {
     await openDesign(path)
   }
@@ -208,15 +178,6 @@ export function createDesignNotebookWorkbench(
     }
 
     return entries.value.some((entry) => entry.path === savedPath)
-  }
-
-  async function setEntryPinned(path: string, pinned: boolean): Promise<void> {
-    await setEntryPinnedAdapter(path, pinned)
-    entries.value = entries.value.map((entry) =>
-      entry.path === path
-        ? { ...entry, pinned }
-        : entry
-    )
   }
 
   async function removeEntry(path: string): Promise<void> {
@@ -296,11 +257,8 @@ export function createDesignNotebookWorkbench(
     load,
     loadRecentDesigns,
     refresh: load,
-    setViewMode,
-    setSearchQuery,
     openEntry,
     addCurrentDesignToNotebook,
-    setEntryPinned,
     removeEntry,
     createSection,
     renameSection,
@@ -314,17 +272,8 @@ export function createDesignNotebookWorkbench(
 
 export const designNotebookWorkbench = createDesignNotebookWorkbench()
 
-function normalizeSearch(value: string): string {
-  return value.trim().toLocaleLowerCase()
-}
-
 function normalizeSectionName(value: string): string {
   return value.trim()
-}
-
-function matchesNotebookQuery(entry: DesignNotebookEntry, normalizedQuery: string): boolean {
-  return normalizeSearch(entry.name).includes(normalizedQuery)
-    || normalizeSearch(entry.path).includes(normalizedQuery)
 }
 
 function applyManualOrder<T>(

@@ -39,8 +39,8 @@ describe('DesignNotebookPanel', () => {
     await Promise.resolve()
   }
 
-  function elementRect(top: number, height = 40): DOMRect {
-    return {
+  function setElementRect(element: HTMLElement, top: number, height = 40): void {
+    element.getBoundingClientRect = () => ({
       width: 260,
       height,
       top,
@@ -50,23 +50,31 @@ describe('DesignNotebookPanel', () => {
       x: 0,
       y: top,
       toJSON: () => ({}),
-    }
-  }
-
-  function installNotebookRowRects(selector: string): void {
-    const rows = [...container.querySelectorAll<HTMLElement>(selector)]
-    rows.forEach((row) => {
-      row.getBoundingClientRect = () => {
-        const currentRows = [...container.querySelectorAll<HTMLElement>(selector)]
-        const index = currentRows.indexOf(row)
-        return elementRect(100 + index * 40)
-      }
     })
   }
 
-  function preparePointerGrip(grip: HTMLElement): void {
-    grip.setPointerCapture = vi.fn()
-    grip.releasePointerCapture = vi.fn()
+  function dispatchDrag(
+    target: HTMLElement,
+    type: string,
+    init: { readonly clientY?: number } = {},
+  ): DragEvent {
+    const dataTransfer = {
+      dropEffect: '',
+      effectAllowed: '',
+      setData: vi.fn(),
+      getData: vi.fn(),
+    }
+    const event = new Event(type, { bubbles: true, cancelable: true }) as DragEvent
+    Object.defineProperty(event, 'clientY', { value: init.clientY ?? 0 })
+    Object.defineProperty(event, 'dataTransfer', { value: dataTransfer })
+    target.dispatchEvent(event)
+    return event
+  }
+
+  function notebookRow(path: string): HTMLElement {
+    const row = container.querySelector<HTMLElement>(`[data-notebook-entry-row="${path}"]`)
+    if (!row) throw new Error(`Missing notebook row ${path}`)
+    return row
   }
 
   beforeEach(() => {
@@ -80,7 +88,7 @@ describe('DesignNotebookPanel', () => {
     container.remove()
   })
 
-  it('renders a searchable All Designs ledger and opens rows through the workbench', async () => {
+  it('renders a minimal sectioned ledger and opens rows through the workbench', async () => {
     const activePath = signal<string | null>('/designs/terrace.canopi')
     const openDesign = vi.fn().mockImplementation(async (path: string) => {
       activePath.value = path
@@ -95,7 +103,6 @@ describe('DesignNotebookPanel', () => {
             name: 'Terrace Guild',
             updated_at: '2026-06-20T08:00:00.000Z',
             plant_count: 12,
-            pinned: false,
             section_id: null,
             sort_order: 0,
           },
@@ -104,7 +111,6 @@ describe('DesignNotebookPanel', () => {
             name: 'Forest Edge',
             updated_at: '2026-06-22T08:00:00.000Z',
             plant_count: 7,
-            pinned: false,
             section_id: null,
             sort_order: 1,
           },
@@ -116,25 +122,15 @@ describe('DesignNotebookPanel', () => {
     await act(async () => {
       render(<DesignNotebookPanel workbench={workbench} />, container)
     })
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    })
+    await act(flushEffects)
 
     expect(container.querySelector('[aria-label="Design Notebook"]')).not.toBeNull()
     expect(container.textContent).toContain('Terrace Guild')
     expect(container.textContent).toContain('Forest Edge')
+    expect(container.textContent).not.toContain('All Designs')
+    expect(container.textContent).not.toContain('Pinned designs')
+    expect(container.querySelector('input[aria-label="Search designs"]')).toBeNull()
     expect(container.querySelector('button[aria-current="true"]')?.textContent).toContain('Terrace Guild')
-
-    const search = container.querySelector<HTMLInputElement>('input[aria-label="Search designs"]')
-    if (!search) throw new Error('Missing notebook search input')
-
-    await act(async () => {
-      search.value = 'forest'
-      search.dispatchEvent(new InputEvent('input', { bubbles: true }))
-    })
-
-    expect(container.textContent).not.toContain('Terrace Guild')
-    expect(container.textContent).toContain('Forest Edge')
 
     const row = container.querySelector<HTMLButtonElement>('button[data-design-path="/designs/forest-edge.canopi"]')
     if (!row) throw new Error('Missing Forest Edge row')
@@ -148,7 +144,7 @@ describe('DesignNotebookPanel', () => {
     expect(container.querySelector('button[aria-current="true"]')?.textContent).toContain('Forest Edge')
   })
 
-  it('renders a command header without duplicating the All Designs view label', async () => {
+  it('creates, double-click renames, and deletes sections', async () => {
     const workbench = createDesignNotebookWorkbench({
       loadNotebook: vi.fn().mockResolvedValue({
         sections: [],
@@ -158,38 +154,6 @@ describe('DesignNotebookPanel', () => {
             name: 'Forest Edge',
             updated_at: '2026-06-22T08:00:00.000Z',
             plant_count: 7,
-            pinned: false,
-            section_id: null,
-            sort_order: 0,
-          },
-        ],
-      }),
-      openDesign: vi.fn(),
-    })
-
-    await act(async () => {
-      render(<DesignNotebookPanel workbench={workbench} />, container)
-    })
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    })
-
-    expect(container.querySelector('button[aria-label="New section"]')).not.toBeNull()
-    expect(container.querySelector('input[aria-label="New section name"]')).toBeNull()
-    expect(container.textContent?.match(/All Designs/g)).toHaveLength(1)
-  })
-
-  it('creates, renames, deletes sections and moves rows between them', async () => {
-    const workbench = createDesignNotebookWorkbench({
-      loadNotebook: vi.fn().mockResolvedValue({
-        sections: [],
-        entries: [
-          {
-            path: '/designs/forest-edge.canopi',
-            name: 'Forest Edge',
-            updated_at: '2026-06-22T08:00:00.000Z',
-            plant_count: 7,
-            pinned: false,
             section_id: null,
             sort_order: 0,
           },
@@ -205,15 +169,12 @@ describe('DesignNotebookPanel', () => {
       }),
       renameSection: vi.fn().mockResolvedValue(undefined),
       deleteSection: vi.fn().mockResolvedValue(undefined),
-      moveEntryToSection: vi.fn().mockResolvedValue(undefined),
     })
 
     await act(async () => {
       render(<DesignNotebookPanel workbench={workbench} />, container)
     })
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    })
+    await act(flushEffects)
 
     await act(async () => {
       container.querySelector<HTMLButtonElement>('button[aria-label="New section"]')
@@ -235,23 +196,12 @@ describe('DesignNotebookPanel', () => {
 
     expect(container.textContent).toContain('Client work')
 
+    const sectionTitle = container.querySelector<HTMLElement>('[data-notebook-section-id="section-client"] h3')
+    if (!sectionTitle) throw new Error('Missing section title')
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('button[aria-label="Move Forest Edge to section"]')
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    await act(async () => {
-      Array.from(container.querySelectorAll<HTMLButtonElement>('[role="option"]'))
-        .find((button) => button.textContent?.includes('Client work'))
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-      await Promise.resolve()
+      sectionTitle.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
     })
 
-    expect(workbench.view.value.entries[0]?.section_id).toBe('section-client')
-
-    await act(async () => {
-      container.querySelector<HTMLButtonElement>('button[aria-label="Rename section Client work"]')
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
     const renameInput = container.querySelector<HTMLInputElement>('input[aria-label="Section name"]')
     if (!renameInput) throw new Error('Missing rename input')
 
@@ -260,12 +210,12 @@ describe('DesignNotebookPanel', () => {
       renameInput.dispatchEvent(new InputEvent('input', { bubbles: true }))
     })
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('button[aria-label="Save section name"]')
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      renameInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
       await Promise.resolve()
     })
 
     expect(container.textContent).toContain('Consulting')
+    expect(container.querySelector('button[aria-label="Rename section Client work"]')).toBeNull()
 
     await act(async () => {
       container.querySelector<HTMLButtonElement>('button[aria-label="Delete section Consulting"]')
@@ -274,73 +224,9 @@ describe('DesignNotebookPanel', () => {
     })
 
     expect(container.textContent).not.toContain('Consulting')
-    expect(workbench.view.value.entries[0]?.section_id).toBeNull()
   })
 
-  it('filters to pinned designs and pins rows from the ledger', async () => {
-    const setEntryPinned = vi.fn().mockResolvedValue(undefined)
-    const workbench = createDesignNotebookWorkbench({
-      loadNotebook: vi.fn().mockResolvedValue({
-        sections: [],
-        entries: [
-          {
-            path: '/designs/home.canopi',
-            name: 'Home',
-            updated_at: '2026-06-20T08:00:00.000Z',
-            plant_count: 3,
-            pinned: true,
-            section_id: null,
-            sort_order: 0,
-          },
-          {
-            path: '/designs/client.canopi',
-            name: 'Client',
-            updated_at: '2026-06-22T08:00:00.000Z',
-            plant_count: 7,
-            pinned: false,
-            section_id: null,
-            sort_order: 1,
-          },
-        ],
-      }),
-      openDesign: vi.fn(),
-      setEntryPinned,
-    })
-
-    await act(async () => {
-      render(<DesignNotebookPanel workbench={workbench} />, container)
-    })
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    })
-
-    await act(async () => {
-      container.querySelector<HTMLButtonElement>('button[aria-label="Pinned designs"]')
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(container.textContent).toContain('Home')
-    expect(container.textContent).not.toContain('Client')
-
-    await act(async () => {
-      container.querySelector<HTMLButtonElement>('button[aria-label="All designs"]')
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    await act(async () => {
-      container.querySelector<HTMLButtonElement>('button[aria-label="Pin Client"]')
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-      await Promise.resolve()
-    })
-    await act(async () => {
-      container.querySelector<HTMLButtonElement>('button[aria-label="Pinned designs"]')
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(setEntryPinned).toHaveBeenCalledWith('/designs/client.canopi', true)
-    expect(container.textContent).toContain('Client')
-  })
-
-  it('removes a Design reference from the row overflow while keeping frequent actions visible', async () => {
+  it('removes a Design reference from a direct row delete button', async () => {
     const removeEntry = vi.fn().mockResolvedValue(undefined)
     const workbench = createDesignNotebookWorkbench({
       loadNotebook: vi.fn().mockResolvedValue({
@@ -351,7 +237,6 @@ describe('DesignNotebookPanel', () => {
             name: 'Forest Edge',
             updated_at: '2026-06-22T08:00:00.000Z',
             plant_count: 7,
-            pinned: false,
             section_id: null,
             sort_order: 0,
           },
@@ -364,25 +249,14 @@ describe('DesignNotebookPanel', () => {
     await act(async () => {
       render(<DesignNotebookPanel workbench={workbench} />, container)
     })
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    })
+    await act(flushEffects)
 
-    expect(container.querySelector('button[aria-label="Pin Forest Edge"]')).not.toBeNull()
-    expect(container.querySelector('button[aria-label="Move Forest Edge to section"]')).not.toBeNull()
-    expect(container.textContent).not.toContain('Remove from Notebook')
+    expect(container.querySelector('button[aria-label="More actions for Forest Edge"]')).toBeNull()
+    expect(container.querySelector('button[aria-label="Pin Forest Edge"]')).toBeNull()
 
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('button[aria-label="More actions for Forest Edge"]')
+      container.querySelector<HTMLButtonElement>('button[aria-label="Remove Forest Edge from Notebook"]')
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    const removeButton = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
-      .find((button) => button.textContent?.includes('Remove from Notebook'))
-    if (!removeButton) throw new Error('Missing Remove from Notebook action')
-
-    await act(async () => {
-      removeButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
       await Promise.resolve()
     })
 
@@ -406,7 +280,6 @@ describe('DesignNotebookPanel', () => {
             name: 'Current Design',
             updated_at: '2026-06-22T08:00:00.000Z',
             plant_count: 0,
-            pinned: false,
             section_id: null,
             sort_order: 0,
           },
@@ -424,9 +297,7 @@ describe('DesignNotebookPanel', () => {
     await act(async () => {
       render(<DesignNotebookPanel workbench={workbench} />, container)
     })
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    })
+    await act(flushEffects)
 
     const addButton = container.querySelector<HTMLButtonElement>('button[aria-label="Add current design to notebook"]')
     if (!addButton) throw new Error('Missing add-current button')
@@ -442,23 +313,22 @@ describe('DesignNotebookPanel', () => {
     expect(container.querySelector('button[aria-label="Add current design to notebook"]')).toBeNull()
   })
 
-  it('reorders only from explicit handles while row body click opens the Design', async () => {
-    const openDesign = vi.fn().mockResolvedValue(undefined)
-    const reorderSections = vi.fn().mockResolvedValue(undefined)
+  it('drags Design rows within a section and into another section', async () => {
+    const moveEntryToSection = vi.fn().mockResolvedValue(undefined)
     const reorderEntries = vi.fn().mockResolvedValue(undefined)
     const workbench = createDesignNotebookWorkbench({
       loadNotebook: vi.fn().mockResolvedValue({
         sections: [
           {
-            id: 'section-first',
-            name: 'First Section',
+            id: 'section-client',
+            name: 'Client work',
             sort_order: 0,
             created_at: '2026-06-20T08:00:00.000Z',
             updated_at: '2026-06-20T08:00:00.000Z',
           },
           {
-            id: 'section-second',
-            name: 'Second Section',
+            id: 'section-home',
+            name: 'Home',
             sort_order: 1,
             created_at: '2026-06-21T08:00:00.000Z',
             updated_at: '2026-06-21T08:00:00.000Z',
@@ -470,8 +340,7 @@ describe('DesignNotebookPanel', () => {
             name: 'First Design',
             updated_at: '2026-06-20T08:00:00.000Z',
             plant_count: 1,
-            pinned: false,
-            section_id: null,
+            section_id: 'section-client',
             sort_order: 0,
           },
           {
@@ -479,103 +348,64 @@ describe('DesignNotebookPanel', () => {
             name: 'Second Design',
             updated_at: '2026-06-21T08:00:00.000Z',
             plant_count: 2,
-            pinned: false,
-            section_id: null,
+            section_id: 'section-client',
             sort_order: 1,
+          },
+          {
+            path: '/designs/home.canopi',
+            name: 'Home Design',
+            updated_at: '2026-06-22T08:00:00.000Z',
+            plant_count: 3,
+            section_id: 'section-home',
+            sort_order: 2,
           },
         ],
       }),
-      openDesign,
-      reorderSections,
+      openDesign: vi.fn(),
+      moveEntryToSection,
       reorderEntries,
     })
 
     await act(async () => {
       render(<DesignNotebookPanel workbench={workbench} />, container)
     })
+    await act(flushEffects)
+
+    const firstRow = notebookRow('/designs/first.canopi')
+    const secondRow = notebookRow('/designs/second.canopi')
+    setElementRect(firstRow, 100)
+    setElementRect(secondRow, 140)
+
     await act(async () => {
+      dispatchDrag(firstRow, 'dragstart')
+      dispatchDrag(secondRow, 'dragover', { clientY: 175 })
+      dispatchDrag(secondRow, 'drop', { clientY: 175 })
       await flushEffects()
     })
 
-    const firstRowBody = container.querySelector<HTMLButtonElement>('button[data-design-path="/designs/first.canopi"]')
-    if (!firstRowBody) throw new Error('Missing first Design row')
-    await act(async () => {
-      firstRowBody.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-      await Promise.resolve()
-    })
-    expect(openDesign).toHaveBeenCalledWith('/designs/first.canopi')
-    expect(reorderEntries).not.toHaveBeenCalled()
+    expect(moveEntryToSection).not.toHaveBeenCalled()
+    expect(reorderEntries).toHaveBeenCalledWith([
+      '/designs/second.canopi',
+      '/designs/first.canopi',
+      '/designs/home.canopi',
+    ])
+
+    const firstRowAfterReorder = notebookRow('/designs/first.canopi')
+    const homeRow = notebookRow('/designs/home.canopi')
+    setElementRect(homeRow, 220)
 
     await act(async () => {
-      firstRowBody.dispatchEvent(new PointerEvent('pointerdown', {
-        bubbles: true,
-        button: 0,
-        pointerId: 7,
-        clientY: 150,
-      }))
-      firstRowBody.dispatchEvent(new PointerEvent('pointermove', {
-        bubbles: true,
-        pointerId: 7,
-        clientY: 110,
-      }))
-      firstRowBody.dispatchEvent(new PointerEvent('pointerup', {
-        bubbles: true,
-        pointerId: 7,
-        clientY: 110,
-      }))
-      await flushEffects()
-    })
-    expect(reorderEntries).not.toHaveBeenCalled()
-
-    const sectionGrip = container.querySelector<HTMLElement>('button[aria-label="Reorder section Second Section"]')
-    if (!sectionGrip) throw new Error('Missing section reorder handle')
-    installNotebookRowRects('[data-notebook-section-row]')
-    preparePointerGrip(sectionGrip)
-    await act(async () => {
-      sectionGrip.dispatchEvent(new PointerEvent('pointerdown', {
-        bubbles: true,
-        button: 0,
-        pointerId: 8,
-        clientY: 150,
-      }))
-      sectionGrip.dispatchEvent(new PointerEvent('pointermove', {
-        bubbles: true,
-        pointerId: 8,
-        clientY: 110,
-      }))
-      sectionGrip.dispatchEvent(new PointerEvent('pointerup', {
-        bubbles: true,
-        pointerId: 8,
-        clientY: 110,
-      }))
-      await flushEffects()
-    })
-    expect(reorderSections).toHaveBeenCalledWith(['section-second', 'section-first'])
-
-    const rowGrip = container.querySelector<HTMLElement>('button[aria-label="Reorder Second Design"]')
-    if (!rowGrip) throw new Error('Missing row reorder handle')
-    installNotebookRowRects('[data-notebook-entry-row]')
-    preparePointerGrip(rowGrip)
-    await act(async () => {
-      rowGrip.dispatchEvent(new PointerEvent('pointerdown', {
-        bubbles: true,
-        button: 0,
-        pointerId: 9,
-        clientY: 150,
-      }))
-      rowGrip.dispatchEvent(new PointerEvent('pointermove', {
-        bubbles: true,
-        pointerId: 9,
-        clientY: 110,
-      }))
-      rowGrip.dispatchEvent(new PointerEvent('pointerup', {
-        bubbles: true,
-        pointerId: 9,
-        clientY: 110,
-      }))
+      dispatchDrag(firstRowAfterReorder, 'dragstart')
+      dispatchDrag(homeRow, 'dragover', { clientY: 260 })
+      dispatchDrag(homeRow, 'drop', { clientY: 260 })
       await flushEffects()
     })
 
-    expect(reorderEntries).toHaveBeenCalledWith(['/designs/second.canopi', '/designs/first.canopi'])
+    expect(moveEntryToSection).toHaveBeenCalledWith('/designs/first.canopi', 'section-home')
+    expect(reorderEntries).toHaveBeenLastCalledWith([
+      '/designs/second.canopi',
+      '/designs/home.canopi',
+      '/designs/first.canopi',
+    ])
   })
 })

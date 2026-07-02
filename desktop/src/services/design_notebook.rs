@@ -109,20 +109,6 @@ pub fn move_design_reference_to_section(
     Ok(())
 }
 
-pub fn set_design_reference_pinned(
-    user_db: &UserDb,
-    path: &str,
-    pinned: bool,
-) -> Result<(), String> {
-    if path.trim().is_empty() {
-        return Err("Design path is required".to_owned());
-    }
-
-    let conn = db::acquire(&user_db.0, "UserDb");
-    crate::db::design_notebook::set_design_reference_pinned(&conn, path, pinned)
-        .map_err(|e| format!("Failed to update pinned Design state: {e}"))
-}
-
 pub fn remove_design_reference(user_db: &UserDb, path: &str) -> Result<(), String> {
     if path.trim().is_empty() {
         return Err("Design path is required".to_owned());
@@ -405,33 +391,6 @@ mod tests {
         assert!(snapshot.sections.is_empty());
         assert_eq!(snapshot.entries.len(), 1);
         assert_eq!(snapshot.entries[0].section_id, None);
-
-        let _ = std::fs::remove_file(design_path);
-    }
-
-    #[test]
-    fn pinning_design_reference_updates_snapshot() {
-        let user_db = test_user_db();
-        let design_path = temp_design_path("pinned");
-        std::fs::write(&design_path, "{}").unwrap();
-        {
-            let conn = db::acquire(&user_db.0, "UserDb");
-            crate::db::design_notebook::record_design_reference(
-                &conn,
-                &design_path.to_string_lossy(),
-                "Pinned Design",
-                2,
-            )
-            .unwrap();
-        }
-
-        super::set_design_reference_pinned(&user_db, design_path.to_string_lossy().as_ref(), true)
-            .unwrap();
-        assert!(super::get_design_notebook(&user_db).unwrap().entries[0].pinned);
-
-        super::set_design_reference_pinned(&user_db, design_path.to_string_lossy().as_ref(), false)
-            .unwrap();
-        assert!(!super::get_design_notebook(&user_db).unwrap().entries[0].pinned);
 
         let _ = std::fs::remove_file(design_path);
     }

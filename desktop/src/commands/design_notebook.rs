@@ -51,15 +51,6 @@ pub fn move_design_reference_to_section(
 }
 
 #[tauri::command]
-pub fn set_design_reference_pinned(
-    user_db: tauri::State<'_, UserDb>,
-    path: String,
-    pinned: bool,
-) -> Result<(), String> {
-    crate::services::design_notebook::set_design_reference_pinned(&user_db, &path, pinned)
-}
-
-#[tauri::command]
 pub fn remove_design_reference(
     user_db: tauri::State<'_, UserDb>,
     path: String,

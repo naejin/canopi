@@ -27,7 +27,7 @@ describe('design notebook workbench', () => {
     }
   }
 
-  it('loads a searchable saved-design ledger and opens rows through the document seam', async () => {
+  it('loads a saved-design ledger and opens rows through the document seam', async () => {
     const activePath = signal<string | null>('/designs/terrace.canopi')
     const openDesign = vi.fn().mockImplementation(async (path: string) => {
       activePath.value = path
@@ -42,7 +42,6 @@ describe('design notebook workbench', () => {
             name: 'Terrace Guild',
             updated_at: '2026-06-20T08:00:00.000Z',
             plant_count: 12,
-            pinned: false,
             section_id: null,
             sort_order: 0,
           },
@@ -51,7 +50,6 @@ describe('design notebook workbench', () => {
             name: 'Forest Edge',
             updated_at: '2026-06-22T08:00:00.000Z',
             plant_count: 7,
-            pinned: false,
             section_id: null,
             sort_order: 1,
           },
@@ -67,10 +65,10 @@ describe('design notebook workbench', () => {
       '/designs/forest-edge.canopi',
     ])
     expect(workbench.view.value.activePath).toBe('/designs/terrace.canopi')
-
-    workbench.setSearchQuery('forest')
-
-    expect(workbench.view.value.visibleEntries.map((entry) => entry.name)).toEqual(['Forest Edge'])
+    expect(workbench.view.value.visibleEntries.map((entry) => entry.name)).toEqual([
+      'Terrace Guild',
+      'Forest Edge',
+    ])
 
     await workbench.openEntry('/designs/forest-edge.canopi')
 
@@ -118,7 +116,6 @@ describe('design notebook workbench', () => {
             name: 'Forest Edge',
             updated_at: '2026-06-22T08:00:00.000Z',
             plant_count: 7,
-            pinned: false,
             section_id: null,
             sort_order: 0,
           },
@@ -145,47 +142,6 @@ describe('design notebook workbench', () => {
     expect(workbench.view.value.entries[0]?.section_id).toBeNull()
   })
 
-  it('filters the Pinned view and updates pinned state locally after persistence', async () => {
-    const setEntryPinned = vi.fn().mockResolvedValue(undefined)
-    const workbench = createDesignNotebookWorkbench({
-      loadNotebook: vi.fn().mockResolvedValue({
-        sections: [],
-        entries: [
-          {
-            path: '/designs/home.canopi',
-            name: 'Home',
-            updated_at: '2026-06-20T08:00:00.000Z',
-            plant_count: 3,
-            pinned: true,
-            section_id: null,
-            sort_order: 0,
-          },
-          {
-            path: '/designs/client.canopi',
-            name: 'Client',
-            updated_at: '2026-06-22T08:00:00.000Z',
-            plant_count: 7,
-            pinned: false,
-            section_id: null,
-            sort_order: 1,
-          },
-        ],
-      }),
-      openDesign: vi.fn(),
-      setEntryPinned,
-    })
-
-    await workbench.load()
-    workbench.setViewMode('pinned')
-
-    expect(workbench.view.value.visibleEntries.map((entry) => entry.name)).toEqual(['Home'])
-
-    await workbench.setEntryPinned('/designs/client.canopi', true)
-
-    expect(setEntryPinned).toHaveBeenCalledWith('/designs/client.canopi', true)
-    expect(workbench.view.value.visibleEntries.map((entry) => entry.name)).toEqual(['Home', 'Client'])
-  })
-
   it('removes a saved Design reference without changing the active Design Session path', async () => {
     const activePath = signal<string | null>('/designs/forest-edge.canopi')
     const removeEntry = vi.fn().mockResolvedValue(undefined)
@@ -199,7 +155,6 @@ describe('design notebook workbench', () => {
             name: 'Forest Edge',
             updated_at: '2026-06-22T08:00:00.000Z',
             plant_count: 7,
-            pinned: true,
             section_id: null,
             sort_order: 0,
           },
@@ -208,7 +163,6 @@ describe('design notebook workbench', () => {
             name: 'Home',
             updated_at: '2026-06-20T08:00:00.000Z',
             plant_count: 3,
-            pinned: false,
             section_id: null,
             sort_order: 1,
           },
@@ -262,7 +216,6 @@ describe('design notebook workbench', () => {
             name: 'Current Design',
             updated_at: '2026-06-22T08:00:00.000Z',
             plant_count: 0,
-            pinned: false,
             section_id: null,
             sort_order: 0,
           },
@@ -323,7 +276,6 @@ describe('design notebook workbench', () => {
             name: 'Current Design',
             updated_at: '2026-06-22T08:00:00.000Z',
             plant_count: 0,
-            pinned: false,
             section_id: null,
             sort_order: 0,
           },
@@ -364,7 +316,6 @@ describe('design notebook workbench', () => {
             name: 'First Design',
             updated_at: '2026-06-20T08:00:00.000Z',
             plant_count: 1,
-            pinned: false,
             section_id: null,
             sort_order: 0,
           },
@@ -373,7 +324,6 @@ describe('design notebook workbench', () => {
             name: 'Second Design',
             updated_at: '2026-06-21T08:00:00.000Z',
             plant_count: 2,
-            pinned: false,
             section_id: null,
             sort_order: 1,
           },

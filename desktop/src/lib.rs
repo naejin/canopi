@@ -92,7 +92,6 @@ pub fn run() {
             commands::design_notebook::rename_notebook_section,
             commands::design_notebook::delete_notebook_section,
             commands::design_notebook::move_design_reference_to_section,
-            commands::design_notebook::set_design_reference_pinned,
             commands::design_notebook::remove_design_reference,
             commands::design_notebook::reorder_notebook_sections,
             commands::design_notebook::reorder_design_references,

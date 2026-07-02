@@ -25,12 +25,8 @@ The app-level workspace for finding, organizing, and switching between saved Des
 _Avoid_: File browser, recent list, project folder
 
 **Notebook Section**:
-A user-named, manually ordered grouping inside the Design Notebook. A notebook section organizes saved Design references one-to-many: a saved Design reference belongs to at most one notebook section, while built-in views such as pinned or recent Designs are notebook views rather than user sections.
+A user-named grouping inside the Design Notebook. A notebook section organizes saved Design references one-to-many: a saved Design reference belongs to at most one notebook section, and section membership is personal app organization rather than saved Design content.
 _Avoid_: Folder, tag, category
-
-**Notebook View**:
-An automatic Design Notebook list such as all saved Design references, pinned Designs, or recent Designs. A notebook view helps users find saved Designs but does not own section membership.
-_Avoid_: Section, folder, smart folder
 
 **Design Edit**:
 A non-canvas change to Design-owned state, including Location, Budget Items, Timeline Actions, Consortiums, description, and extra fields. Design Edit owns no-op detection, preview/commit/abort transaction behavior, and non-canvas dirty-state marking behind the Design Session seam. It does not own canvas scene state, save/load lifecycle, or UI draft state.
