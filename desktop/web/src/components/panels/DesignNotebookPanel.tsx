@@ -22,6 +22,7 @@ export function DesignNotebookPanel({
   const [newSectionName, setNewSectionName] = useState('')
   const [renamingSectionId, setRenamingSectionId] = useState<string | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
+  const [addCurrentSectionId, setAddCurrentSectionId] = useState<string>('')
 
   useEffect(() => {
     void workbench.load()
@@ -117,6 +118,48 @@ export function DesignNotebookPanel({
           {t('designNotebook.pinnedDesigns')}
         </button>
       </div>
+
+      {view.canAddCurrentDesign && (
+        <div className={styles.addCurrent}>
+          <div className={styles.addCurrentText}>
+            <span className={styles.addCurrentTitle}>{t('designNotebook.addCurrentTitle')}</span>
+            <span className={styles.addCurrentHint}>
+              {view.currentDesignPath
+                ? t('designNotebook.addCurrentSavedHint')
+                : t('designNotebook.addCurrentUnsavedHint')}
+            </span>
+          </div>
+          <div className={styles.addCurrentActions}>
+            {view.sections.length > 0 && (
+              <Dropdown
+                trigger={sectionNameForId(view.sections, addCurrentSectionId) ?? t('designNotebook.noSection')}
+                items={[
+                  { value: '', label: t('designNotebook.noSection') },
+                  ...view.sections.map((section) => ({ value: section.id, label: section.name })),
+                ]}
+                value={addCurrentSectionId}
+                onChange={setAddCurrentSectionId}
+                ariaLabel={t('designNotebook.addCurrentSection')}
+                className={styles.sectionDropdown}
+                triggerClassName={styles.sectionDropdownTrigger}
+                menuClassName={styles.sectionDropdownMenu}
+                optionClassName={styles.sectionDropdownOption}
+                preserveOverlays
+              />
+            )}
+            <button
+              className={styles.addCurrentButton}
+              type="button"
+              aria-label={t('designNotebook.addCurrentDesign')}
+              onClick={() => {
+                void workbench.addCurrentDesignToNotebook(addCurrentSectionId || null)
+              }}
+            >
+              {t('designNotebook.addCurrentButton')}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className={styles.sectionCreate}>
         <input
@@ -283,6 +326,13 @@ function EmptyState({ title, text }: { readonly title: string; readonly text: st
       <p className={styles.emptyText}>{text}</p>
     </div>
   )
+}
+
+function sectionNameForId(
+  sections: readonly DesignNotebookSection[],
+  sectionId: string,
+): string | null {
+  return sections.find((section) => section.id === sectionId)?.name ?? null
 }
 
 function NotebookSectionGroup({

@@ -39,7 +39,13 @@
     "sectionName": "섹션 이름",
     "saveSectionName": "섹션 이름 저장",
     "cancelRename": "이름 변경 취소",
-    "sectionEmpty": "이 섹션에 디자인이 없습니다"
+    "sectionEmpty": "이 섹션에 디자인이 없습니다",
+    "addCurrentTitle": "현재 디자인",
+    "addCurrentSavedHint": "이 저장된 디자인을 노트북에 추가합니다.",
+    "addCurrentUnsavedHint": "노트북에 추가하기 전에 이 디자인을 저장합니다.",
+    "addCurrentSection": "현재 디자인의 노트북 섹션",
+    "addCurrentDesign": "현재 디자인을 노트북에 추가",
+    "addCurrentButton": "추가"
   },
   "plantDb": {
     "title": "식물 데이터베이스",

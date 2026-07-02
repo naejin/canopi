@@ -8,9 +8,14 @@ import {
   renameNotebookSection,
   setDesignReferencePinned,
 } from '../../ipc/design'
-import { openDesignFromPath } from '../document-session/actions'
-import { designPath } from '../document-session/store'
+import {
+  openDesignFromPath,
+  saveAsCurrentDesign,
+  saveCurrentDesign,
+} from '../document-session/actions'
+import { currentDesign as currentDesignSignal, designPath } from '../document-session/store'
 import type {
+  CanopiFile,
   DesignNotebookEntry,
   DesignNotebookSection,
   DesignNotebookSnapshot,
@@ -27,6 +32,8 @@ export interface DesignNotebookView {
   readonly sections: readonly DesignNotebookSection[]
   readonly recentEntries: readonly DesignSummary[]
   readonly viewMode: DesignNotebookViewMode
+  readonly canAddCurrentDesign: boolean
+  readonly currentDesignPath: string | null
   readonly searchQuery: string
   readonly activePath: string | null
   readonly loading: boolean
@@ -41,6 +48,7 @@ export interface DesignNotebookWorkbench {
   setViewMode(mode: DesignNotebookViewMode): void
   setSearchQuery(query: string): void
   openEntry(path: string): Promise<void>
+  addCurrentDesignToNotebook(sectionId: string | null): Promise<boolean>
   setEntryPinned(path: string, pinned: boolean): Promise<void>
   createSection(name: string): Promise<void>
   renameSection(sectionId: string, name: string): Promise<void>
@@ -53,12 +61,15 @@ interface CreateDesignNotebookWorkbenchOptions {
   readonly loadNotebook?: typeof getDesignNotebook
   readonly loadRecentDesigns?: typeof getRecentFiles
   readonly openDesign?: typeof openDesignFromPath
+  readonly saveCurrent?: typeof saveCurrentDesign
+  readonly saveAsCurrent?: typeof saveAsCurrentDesign
   readonly createSection?: typeof createNotebookSection
   readonly renameSection?: typeof renameNotebookSection
   readonly deleteSection?: typeof deleteNotebookSection
   readonly moveEntryToSection?: typeof moveDesignReferenceToSection
   readonly setEntryPinned?: typeof setDesignReferencePinned
   readonly activePath?: ReadonlySignal<string | null>
+  readonly currentDesign?: ReadonlySignal<CanopiFile | null>
 }
 
 export function createDesignNotebookWorkbench(
@@ -67,12 +78,15 @@ export function createDesignNotebookWorkbench(
   const loadNotebook = options.loadNotebook ?? getDesignNotebook
   const loadRecentDesignsAdapter = options.loadRecentDesigns ?? getRecentFiles
   const openDesign = options.openDesign ?? openDesignFromPath
+  const saveCurrent = options.saveCurrent ?? saveCurrentDesign
+  const saveAsCurrent = options.saveAsCurrent ?? saveAsCurrentDesign
   const createSectionAdapter = options.createSection ?? createNotebookSection
   const renameSectionAdapter = options.renameSection ?? renameNotebookSection
   const deleteSectionAdapter = options.deleteSection ?? deleteNotebookSection
   const moveEntryToSectionAdapter = options.moveEntryToSection ?? moveDesignReferenceToSection
   const setEntryPinnedAdapter = options.setEntryPinned ?? setDesignReferencePinned
   const activePath = options.activePath ?? designPath
+  const currentDesign = options.currentDesign ?? currentDesignSignal
 
   const entries = signal<readonly DesignNotebookEntry[]>([])
   const sections = signal<readonly DesignNotebookSection[]>([])
@@ -89,9 +103,11 @@ export function createDesignNotebookWorkbench(
     const query = searchQuery.value
     const normalizedQuery = normalizeSearch(query)
     const mode = viewMode.value
+    const currentPath = activePath.value
     const sourceEntries = mode === 'pinned'
       ? entries.value.filter((entry) => entry.pinned)
       : entries.value
+    const currentPathListed = currentPath !== null && entries.value.some((entry) => entry.path === currentPath)
 
     return {
       entries: entries.value,
@@ -101,8 +117,10 @@ export function createDesignNotebookWorkbench(
       sections: sections.value,
       recentEntries: recentEntries.value,
       viewMode: mode,
+      canAddCurrentDesign: currentDesign.value !== null && !currentPathListed,
+      currentDesignPath: currentPath,
       searchQuery: query,
-      activePath: activePath.value,
+      activePath: currentPath,
       loading: loading.value,
       loadError: loadError.value,
     }
@@ -157,6 +175,27 @@ export function createDesignNotebookWorkbench(
 
   async function openEntry(path: string): Promise<void> {
     await openDesign(path)
+  }
+
+  async function addCurrentDesignToNotebook(sectionId: string | null): Promise<boolean> {
+    if (currentDesign.value === null) return false
+
+    const pathBeforeSave = activePath.value
+    if (pathBeforeSave) {
+      await saveCurrent()
+    } else {
+      await saveAsCurrent()
+    }
+
+    const savedPath = activePath.value
+    if (!savedPath) return false
+
+    await load()
+    if (sectionId) {
+      await moveEntryToSection(savedPath, sectionId)
+    }
+
+    return entries.value.some((entry) => entry.path === savedPath)
   }
 
   async function setEntryPinned(path: string, pinned: boolean): Promise<void> {
@@ -218,6 +257,7 @@ export function createDesignNotebookWorkbench(
     setViewMode,
     setSearchQuery,
     openEntry,
+    addCurrentDesignToNotebook,
     setEntryPinned,
     createSection,
     renameSection,

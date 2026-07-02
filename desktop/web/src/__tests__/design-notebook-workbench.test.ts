@@ -1,8 +1,32 @@
 import { signal } from '@preact/signals'
 import { describe, expect, it, vi } from 'vitest'
 import { createDesignNotebookWorkbench } from '../app/design-notebook/workbench'
+import type { CanopiFile } from '../types/design'
 
 describe('design notebook workbench', () => {
+  function testDesign(): CanopiFile {
+    return {
+      version: 1,
+      name: 'Current Design',
+      description: null,
+      location: null,
+      north_bearing_deg: null,
+      plant_species_colors: {},
+      layers: [],
+      plants: [],
+      zones: [],
+      annotations: [],
+      consortiums: [],
+      groups: [],
+      timeline: [],
+      budget: [],
+      budget_currency: 'EUR',
+      created_at: '',
+      updated_at: '',
+      extra: {},
+    }
+  }
+
   it('loads a searchable saved-design ledger and opens rows through the document seam', async () => {
     const activePath = signal<string | null>('/designs/terrace.canopi')
     const openDesign = vi.fn().mockImplementation(async (path: string) => {
@@ -172,5 +196,95 @@ describe('design notebook workbench', () => {
     await workbench.loadRecentDesigns()
 
     expect(workbench.view.value.recentEntries.map((entry) => entry.name)).toEqual(['A', 'B', 'C', 'D', 'E'])
+  })
+
+  it('saves an unsaved current Design before adding it to a Notebook Section', async () => {
+    const activePath = signal<string | null>(null)
+    const currentDesign = signal<CanopiFile | null>(testDesign())
+    const saveAsCurrent = vi.fn().mockImplementation(async () => {
+      activePath.value = '/designs/current.canopi'
+    })
+    const moveEntryToSection = vi.fn().mockResolvedValue(undefined)
+    const loadNotebook = vi.fn()
+      .mockResolvedValueOnce({ sections: [], entries: [] })
+      .mockResolvedValueOnce({
+        sections: [],
+        entries: [
+          {
+            path: '/designs/current.canopi',
+            name: 'Current Design',
+            updated_at: '2026-06-22T08:00:00.000Z',
+            plant_count: 0,
+            pinned: false,
+            section_id: null,
+          },
+        ],
+      })
+    const workbench = createDesignNotebookWorkbench({
+      activePath,
+      currentDesign,
+      loadNotebook,
+      openDesign: vi.fn(),
+      saveAsCurrent,
+      saveCurrent: vi.fn(),
+      moveEntryToSection,
+    })
+
+    await workbench.load()
+    const added = await workbench.addCurrentDesignToNotebook('section-client')
+
+    expect(added).toBe(true)
+    expect(saveAsCurrent).toHaveBeenCalledTimes(1)
+    expect(moveEntryToSection).toHaveBeenCalledWith('/designs/current.canopi', 'section-client')
+    expect(workbench.view.value.entries[0]?.path).toBe('/designs/current.canopi')
+  })
+
+  it('does not create a notebook entry when Save As is cancelled', async () => {
+    const activePath = signal<string | null>(null)
+    const currentDesign = signal<CanopiFile | null>(testDesign())
+    const loadNotebook = vi.fn().mockResolvedValue({ sections: [], entries: [] })
+    const workbench = createDesignNotebookWorkbench({
+      activePath,
+      currentDesign,
+      loadNotebook,
+      openDesign: vi.fn(),
+      saveAsCurrent: vi.fn().mockResolvedValue(undefined),
+      saveCurrent: vi.fn(),
+      moveEntryToSection: vi.fn(),
+    })
+
+    await workbench.load()
+    const added = await workbench.addCurrentDesignToNotebook(null)
+
+    expect(added).toBe(false)
+    expect(loadNotebook).toHaveBeenCalledTimes(1)
+    expect(workbench.view.value.entries).toEqual([])
+  })
+
+  it('hides the add-current affordance once the active saved path is listed', async () => {
+    const activePath = signal<string | null>('/designs/current.canopi')
+    const currentDesign = signal<CanopiFile | null>(testDesign())
+    const workbench = createDesignNotebookWorkbench({
+      activePath,
+      currentDesign,
+      loadNotebook: vi.fn().mockResolvedValue({
+        sections: [],
+        entries: [
+          {
+            path: '/designs/current.canopi',
+            name: 'Current Design',
+            updated_at: '2026-06-22T08:00:00.000Z',
+            plant_count: 0,
+            pinned: false,
+            section_id: null,
+          },
+        ],
+      }),
+      openDesign: vi.fn(),
+    })
+
+    await workbench.load()
+
+    expect(workbench.view.value.canAddCurrentDesign).toBe(false)
   })
 })

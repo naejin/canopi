@@ -39,7 +39,13 @@
     "sectionName": "Nom de section",
     "saveSectionName": "Enregistrer le nom de section",
     "cancelRename": "Annuler le renommage",
-    "sectionEmpty": "Aucun design dans cette section"
+    "sectionEmpty": "Aucun design dans cette section",
+    "addCurrentTitle": "Design actuel",
+    "addCurrentSavedHint": "Ajouter ce design sauvegardé au carnet.",
+    "addCurrentUnsavedHint": "Sauvegardez ce design avant de l'ajouter au carnet.",
+    "addCurrentSection": "Section du carnet pour le design actuel",
+    "addCurrentDesign": "Ajouter le design actuel au carnet",
+    "addCurrentButton": "Ajouter"
   },
   "plantDb": {
     "title": "Base de plantes",

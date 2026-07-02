@@ -39,7 +39,13 @@
     "sectionName": "Название секции",
     "saveSectionName": "Сохранить название секции",
     "cancelRename": "Отменить переименование",
-    "sectionEmpty": "В этой секции нет дизайнов"
+    "sectionEmpty": "В этой секции нет дизайнов",
+    "addCurrentTitle": "Текущий дизайн",
+    "addCurrentSavedHint": "Добавьте этот сохранённый дизайн в блокнот.",
+    "addCurrentUnsavedHint": "Сохраните этот дизайн перед добавлением в блокнот.",
+    "addCurrentSection": "Секция блокнота для текущего дизайна",
+    "addCurrentDesign": "Добавить текущий дизайн в блокнот",
+    "addCurrentButton": "Добавить"
   },
   "plantDb": {
     "title": "База растений",

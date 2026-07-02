@@ -39,7 +39,13 @@
     "sectionName": "Sectienaam",
     "saveSectionName": "Sectienaam opslaan",
     "cancelRename": "Hernoemen annuleren",
-    "sectionEmpty": "Geen ontwerpen in deze sectie"
+    "sectionEmpty": "Geen ontwerpen in deze sectie",
+    "addCurrentTitle": "Huidig ontwerp",
+    "addCurrentSavedHint": "Voeg dit opgeslagen ontwerp toe aan het notitieboek.",
+    "addCurrentUnsavedHint": "Sla dit ontwerp op voordat je het aan het notitieboek toevoegt.",
+    "addCurrentSection": "Notitieboeksectie voor huidig ontwerp",
+    "addCurrentDesign": "Huidig ontwerp toevoegen aan notitieboek",
+    "addCurrentButton": "Toevoegen"
   },
   "plantDb": {
     "title": "Plantendatabase",

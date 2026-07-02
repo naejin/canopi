@@ -39,7 +39,13 @@
     "sectionName": "Nome sezione",
     "saveSectionName": "Salva nome sezione",
     "cancelRename": "Annulla rinomina",
-    "sectionEmpty": "Nessun design in questa sezione"
+    "sectionEmpty": "Nessun design in questa sezione",
+    "addCurrentTitle": "Design corrente",
+    "addCurrentSavedHint": "Aggiungi questo design salvato al quaderno.",
+    "addCurrentUnsavedHint": "Salva questo design prima di aggiungerlo al quaderno.",
+    "addCurrentSection": "Sezione del quaderno per il design corrente",
+    "addCurrentDesign": "Aggiungi design corrente al quaderno",
+    "addCurrentButton": "Aggiungi"
   },
   "plantDb": {
     "title": "Database piante",

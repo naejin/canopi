@@ -39,7 +39,13 @@
     "sectionName": "分区名称",
     "saveSectionName": "保存分区名称",
     "cancelRename": "取消重命名",
-    "sectionEmpty": "此分区中没有设计"
+    "sectionEmpty": "此分区中没有设计",
+    "addCurrentTitle": "当前设计",
+    "addCurrentSavedHint": "将此已保存设计添加到笔记本。",
+    "addCurrentUnsavedHint": "先保存此设计，再添加到笔记本。",
+    "addCurrentSection": "当前设计的笔记本分区",
+    "addCurrentDesign": "将当前设计添加到笔记本",
+    "addCurrentButton": "添加"
   },
   "plantDb": {
     "title": "植物数据库",

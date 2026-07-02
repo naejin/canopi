@@ -4,9 +4,33 @@ import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createDesignNotebookWorkbench } from '../app/design-notebook/workbench'
 import { DesignNotebookPanel } from '../components/panels/DesignNotebookPanel'
+import type { CanopiFile } from '../types/design'
 
 describe('DesignNotebookPanel', () => {
   let container: HTMLDivElement
+
+  function testDesign(): CanopiFile {
+    return {
+      version: 1,
+      name: 'Current Design',
+      description: null,
+      location: null,
+      north_bearing_deg: null,
+      plant_species_colors: {},
+      layers: [],
+      plants: [],
+      zones: [],
+      annotations: [],
+      consortiums: [],
+      groups: [],
+      timeline: [],
+      budget: [],
+      budget_currency: 'EUR',
+      created_at: '',
+      updated_at: '',
+      extra: {},
+    }
+  }
 
   beforeEach(() => {
     container = document.createElement('div')
@@ -235,5 +259,56 @@ describe('DesignNotebookPanel', () => {
 
     expect(setEntryPinned).toHaveBeenCalledWith('/designs/client.canopi', true)
     expect(container.textContent).toContain('Client')
+  })
+
+  it('shows an add-current affordance that saves before adding an unsaved Design', async () => {
+    const activePath = signal<string | null>(null)
+    const currentDesign = signal<CanopiFile | null>(testDesign())
+    const saveAsCurrent = vi.fn().mockImplementation(async () => {
+      activePath.value = '/designs/current.canopi'
+    })
+    const loadNotebook = vi.fn()
+      .mockResolvedValueOnce({ sections: [], entries: [] })
+      .mockResolvedValueOnce({
+        sections: [],
+        entries: [
+          {
+            path: '/designs/current.canopi',
+            name: 'Current Design',
+            updated_at: '2026-06-22T08:00:00.000Z',
+            plant_count: 0,
+            pinned: false,
+            section_id: null,
+          },
+        ],
+      })
+    const workbench = createDesignNotebookWorkbench({
+      activePath,
+      currentDesign,
+      loadNotebook,
+      openDesign: vi.fn(),
+      saveAsCurrent,
+      saveCurrent: vi.fn(),
+    })
+
+    await act(async () => {
+      render(<DesignNotebookPanel workbench={workbench} />, container)
+    })
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    const addButton = container.querySelector<HTMLButtonElement>('button[aria-label="Add current design to notebook"]')
+    if (!addButton) throw new Error('Missing add-current button')
+
+    await act(async () => {
+      addButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(saveAsCurrent).toHaveBeenCalledTimes(1)
+    expect(container.textContent).toContain('Current Design')
+    expect(container.querySelector('button[aria-label="Add current design to notebook"]')).toBeNull()
   })
 })

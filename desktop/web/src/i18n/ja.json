@@ -39,7 +39,13 @@
     "sectionName": "セクション名",
     "saveSectionName": "セクション名を保存",
     "cancelRename": "名前変更をキャンセル",
-    "sectionEmpty": "このセクションにデザインはありません"
+    "sectionEmpty": "このセクションにデザインはありません",
+    "addCurrentTitle": "現在のデザイン",
+    "addCurrentSavedHint": "この保存済みデザインをノートに追加します。",
+    "addCurrentUnsavedHint": "ノートに追加する前にこのデザインを保存します。",
+    "addCurrentSection": "現在のデザインのノートセクション",
+    "addCurrentDesign": "現在のデザインをノートに追加",
+    "addCurrentButton": "追加"
   },
   "plantDb": {
     "title": "植物データベース",

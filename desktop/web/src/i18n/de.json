@@ -39,7 +39,13 @@
     "sectionName": "Abschnittsname",
     "saveSectionName": "Abschnittsname speichern",
     "cancelRename": "Umbenennen abbrechen",
-    "sectionEmpty": "Keine Designs in diesem Abschnitt"
+    "sectionEmpty": "Keine Designs in diesem Abschnitt",
+    "addCurrentTitle": "Aktuelles Design",
+    "addCurrentSavedHint": "Dieses gespeicherte Design zum Notizbuch hinzufügen.",
+    "addCurrentUnsavedHint": "Speichern Sie dieses Design, bevor es zum Notizbuch hinzugefügt wird.",
+    "addCurrentSection": "Notizbuchabschnitt für das aktuelle Design",
+    "addCurrentDesign": "Aktuelles Design zum Notizbuch hinzufügen",
+    "addCurrentButton": "Hinzufügen"
   },
   "plantDb": {
     "title": "Pflanzendatenbank",

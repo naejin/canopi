@@ -39,7 +39,13 @@
     "sectionName": "Section name",
     "saveSectionName": "Save section name",
     "cancelRename": "Cancel rename",
-    "sectionEmpty": "No designs in this section"
+    "sectionEmpty": "No designs in this section",
+    "addCurrentTitle": "Current Design",
+    "addCurrentSavedHint": "Add this saved Design to the notebook.",
+    "addCurrentUnsavedHint": "Save this Design before adding it to the notebook.",
+    "addCurrentSection": "Notebook section for current Design",
+    "addCurrentDesign": "Add current design to notebook",
+    "addCurrentButton": "Add"
   },
   "plantDb": {
     "title": "Plant Database",
