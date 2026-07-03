@@ -292,6 +292,18 @@ mod tests {
     }
 
     #[test]
+    fn detail_projection_uses_english_common_names_for_english_locale_only() {
+        let conn = detail_projection_test_conn();
+        let catalog = SpeciesCatalogRead::new(&conn);
+
+        let french_detail = catalog.detail_for_canonical_name("Plum", "fr").unwrap();
+        let english_detail = catalog.detail_for_canonical_name("Plum", "en").unwrap();
+
+        assert_eq!(french_detail.common_name, None);
+        assert_eq!(english_detail.common_name.as_deref(), Some("Plum"));
+    }
+
+    #[test]
     fn relationship_projection_resolves_from_canonical_name() {
         let conn = test_support::test_conn();
         let catalog = SpeciesCatalogRead::new(&conn);
@@ -441,6 +453,12 @@ mod tests {
         conn.execute(
             "INSERT INTO species (id, slug, canonical_name)
              VALUES ('sp-2', 'pear', 'Pear')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO species (id, slug, canonical_name, common_name)
+             VALUES ('sp-3', 'plum', 'Plum', 'Plum')",
             [],
         )
         .unwrap();

@@ -50,7 +50,7 @@ pub fn get_detail(
         .query_row([canonical_name], map_detail_row)
         .map_err(|e| format!("Failed to fetch species detail for '{canonical_name}': {e}"))?;
 
-    detail.common_name = get_common_name(conn, &species_id, locale).or(detail.common_name);
+    detail.common_name = get_common_name(conn, &species_id, locale);
 
     // Parse distribution JSON arrays into readable comma-separated text
     detail.native_distribution = detail

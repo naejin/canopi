@@ -46,10 +46,13 @@ fn common_name_token_joins(
         let alias = format!("{alias_prefix}{index}");
         let token_placeholder = sql_builder.bind_text(format!("{token}%"));
         joins.push(format!(
-            "LEFT JOIN species_search_common_name_tokens {alias}
-             ON {alias}.species_id = s.id
-            AND {alias}.language = {locale_placeholder}
-            AND {alias}.token LIKE {token_placeholder}",
+            "LEFT JOIN (
+                SELECT species_id, MIN(first_token_position) AS first_token_position
+                FROM species_search_common_name_tokens
+                WHERE language = {locale_placeholder}
+                  AND token LIKE {token_placeholder}
+                GROUP BY species_id
+            ) {alias} ON {alias}.species_id = s.id",
             alias = alias
         ));
         aliases.push(alias);

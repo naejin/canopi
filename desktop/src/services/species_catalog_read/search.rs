@@ -399,6 +399,7 @@ mod tests {
                 ('fallback-lin', 'en', 'fallback', 1),
                 ('lindleya-mespiloides', 'en', 'lindleya', 0),
                 ('malus-domestica', 'en', 'apple', 0),
+                ('malus-domestica', 'fr', 'pomme', 0),
                 ('malus-domestica', 'fr', 'pommier', 0),
                 ('mentha-suaveolens', 'en', 'apple', 0),
                 ('mentha-suaveolens', 'en', 'mint', 1),
@@ -870,6 +871,41 @@ mod tests {
                 "expected Apple before Apple mint for {query:?}; got {names:?}"
             );
         }
+    }
+
+    #[test]
+    fn relevance_prefix_token_matches_return_each_species_once() {
+        let conn = relevance_fixture_db();
+
+        let result = search(
+            &conn,
+            search_request(
+                Some("po"),
+                SpeciesFilter::default(),
+                None,
+                Sort::Relevance,
+                10,
+                false,
+                "fr",
+            ),
+        )
+        .unwrap();
+        let malus_count = result
+            .items
+            .iter()
+            .filter(|item| item.canonical_name == "Malus domestica")
+            .count();
+
+        assert_eq!(
+            malus_count,
+            1,
+            "expected a Species with multiple matching prefix tokens once; got {:?}",
+            result
+                .items
+                .iter()
+                .map(|item| item.canonical_name.as_str())
+                .collect::<Vec<_>>()
+        );
     }
 
     #[test]

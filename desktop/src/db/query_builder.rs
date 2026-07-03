@@ -444,9 +444,12 @@ mod tests {
         let sql = plan.list().sql();
         let params = plan.list().params();
 
-        assert!(sql.contains("species_search_common_name_tokens scnt"));
-        assert!(sql.contains("scnt0.language = ?1"));
-        assert!(sql.contains("scnt0.token LIKE ?"));
+        assert!(sql.contains("FROM species_search_common_name_tokens"));
+        assert!(sql.contains("MIN(first_token_position) AS first_token_position"));
+        assert!(sql.contains("language = ?1"));
+        assert!(sql.contains("token LIKE ?"));
+        assert!(sql.contains("GROUP BY species_id"));
+        assert!(sql.contains(") scnt0 ON scnt0.species_id = s.id"));
         assert!(sql.contains("scnt0.species_id IS NOT NULL"));
         assert!(sql.contains("ORDER BY CASE"));
         assert!(
@@ -469,8 +472,9 @@ mod tests {
         let sql = plan.list().sql();
         let params = plan.list().params();
 
-        assert!(sql.contains("species_search_common_name_tokens scnt0"));
-        assert!(sql.contains("species_search_common_name_tokens scnt1"));
+        assert!(sql.contains("FROM species_search_common_name_tokens"));
+        assert!(sql.contains(") scnt0 ON scnt0.species_id = s.id"));
+        assert!(sql.contains(") scnt1 ON scnt1.species_id = s.id"));
         assert!(sql.contains("species_common_names scn_match"));
         assert!(sql.contains("matched_common_name"));
         assert!(sql.contains("scnt0.species_id IS NOT NULL AND scnt1.species_id IS NOT NULL"));
@@ -505,7 +509,8 @@ mod tests {
         let plan = SpeciesSearchPlan::build(request);
         let sql = plan.list().sql();
 
-        assert!(sql.contains("species_search_common_name_tokens scnt0"));
+        assert!(sql.contains("FROM species_search_common_name_tokens"));
+        assert!(sql.contains(") scnt0 ON scnt0.species_id = s.id"));
         assert!(sql.contains("scnt0.species_id IS NOT NULL"));
         assert!(!sql.contains("scnt_fb"));
         assert!(!sql.contains("bcn_en"));
@@ -553,9 +558,10 @@ mod tests {
         let sql = plan.list().sql();
         let params = plan.list().params();
 
-        assert!(sql.contains("species_search_common_name_tokens scnt0"));
-        assert!(sql.contains("species_search_common_name_tokens scnt3"));
-        assert!(!sql.contains("species_search_common_name_tokens scnt4"));
+        assert!(sql.contains("FROM species_search_common_name_tokens"));
+        assert!(sql.contains(") scnt0 ON scnt0.species_id = s.id"));
+        assert!(sql.contains(") scnt3 ON scnt3.species_id = s.id"));
+        assert!(!sql.contains(") scnt4 ON scnt4.species_id = s.id"));
         for expected_token in ["carleton%", "soap%", "pod%", "edelweiss%"] {
             assert!(
                 params
