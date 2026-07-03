@@ -88,6 +88,10 @@ _Avoid_: Plant catalog, plant database
 The interaction surface for browsing, filtering, selecting, favoriting, and inspecting species from the Species Catalog. The workbench coordinates Species Catalog UI state, but it does not own Species Catalog data and must not own Design workflows such as Site Adaptation.
 _Avoid_: Plant browser state, plant DB panel state
 
+**Species Catalog Search**:
+A text search interaction inside the Species Catalog Workbench. Species Catalog Search uses the selected app language for Common Name matching and display, while Canonical Name and botanical taxonomy remain language-neutral ways to find species.
+_Avoid_: Plant database search, global common-name search
+
 **Species Catalog Filter**:
 A search criterion that narrows Species Catalog results by Species attributes such as climate fit, growth form, ecological role, risk, use, or morphology. A species catalog filter is user-facing behavior even when its implementation is backed by generated metadata, SQL columns, related tables, or bespoke predicates.
 _Avoid_: Plant filter, SQL filter, column filter
@@ -102,8 +106,12 @@ The normalized name Canopi uses to identify a species. A species has one canonic
 _Avoid_: Scientific name, Latin name, species name
 
 **Common Name**:
-A local or everyday name for a species. A species may have many common names, and common names are display aids rather than stable identifiers.
+A language-scoped local or everyday name for a species. A species may have many common names, and common names are display aids rather than stable identifiers; a common name in one language should not stand in for a missing common name in another language.
 _Avoid_: Species identifier, primary key
+
+**Matched Common Name**:
+A selected-language Common Name that explains why a Species appeared in Species Catalog Search results. A matched common name may differ from the Species' primary displayed Common Name, but it should not come from another language.
+_Avoid_: English fallback match, hidden match
 
 **Placed Plant**:
 An instance of a species positioned inside a design. Multiple placed plants may refer to the same species.

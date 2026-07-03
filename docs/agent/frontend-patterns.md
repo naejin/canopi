@@ -58,7 +58,7 @@ Use this guide when changing Preact components, signals, i18n, CSS, panels, bott
 - In the Favorites side panel, Species favorite rows should emphasize climate zone and life cycle for quick planning context, not edibility ratings or USDA hardiness shorthand. Keep botanical names available as secondary text.
 - `app/plant-browser/search-session.ts` owns Species Catalog short-query policy: empty text browses with an exact count, one normalized text character clears locally without backend search, and active text searches of two or more normalized characters omit exact first-page counts so the count chip stays hidden.
 - `app/plant-browser/search-session.ts` should call search adapters with the structured generated `SpeciesSearchRequest`; `ipc/species.ts` is the flat Tauri argument adapter.
-- Species Catalog active text searches default to visible `Best match` backed by `Sort::Relevance`; explicit active-text sort selections override it, while the browse sort is preserved for empty text.
+- Species Catalog active text searches always use relevance ordering; browse mode uses deterministic Canonical Name ordering. Do not expose user-facing sort controls in the Species Catalog Workbench.
 
 ## Panel And Canvas Reactivity
 

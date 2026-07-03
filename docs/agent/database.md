@@ -70,12 +70,12 @@ When canopi-data removes or adds columns, update atomically:
 ## FTS5 Search
 
 - `species_search_fts` has weighted columns: canonical name, common names, family/genus, uses text, and other text.
-- `species_search_common_name_tokens` stores normalized Common Name tokens by species and language; relevance search uses it to boost Common Name token matches before BM25.
+- `species_search_common_name_tokens` stores normalized Common Name tokens by species and language; relevance search uses selected-language Common Name token prefix matches before BM25.
 - Query-side Common Name tokenization must stay aligned with `scripts/prepare-db.py` `common_name_tokens()`: split on Unicode word tokens, fold diacritics/case, and only plan token-table joins for relevance-ordered pages.
 - Use the full FTS table name in `MATCH`, not an alias.
 - Strip all FTS metacharacters before building MATCH queries.
 - Empty sanitized query means skip FTS.
-- Relevance text searches rank Common Name matches before BM25: active-locale exact phrase first for multi-word queries, then active-locale indexed query tokens, then fallback English exact phrase/tokens, then `bm25(species_search_fts, 8, 10, 5, 1, 1)` for canonical name, family, genus, and broader text matches.
+- Relevance text searches rank selected-language Common Name matches before BM25: exact displayed Common Name first, then displayed Common Names whose tokens start with the query tokens, then displayed Common Names that contain the query tokens later, then Matched Common Names from selected-language alternates, then `bm25(species_search_fts, 8, 10, 5, 1, 1)` for Canonical Name, family, genus, and broader text matches. Do not use English Common Names as ranking or display fallback when another UI language is selected.
 - `total_estimate` comes from count; visible rows come from list. If UI shows a new count with old rows during debounce, investigate frontend committed-result lifecycle first.
 - The Species Catalog Workbench may pass `include_total=false` for active text searches to keep first-page latency low; pagination must rely on `next_cursor`, not `total_estimate`.
 - Run the manual Species Catalog latency harness with `cargo test -p canopi-desktop services::species_catalog_read::search::tests::bundled_species_search_latency_harness_reports_list_and_count_timings -- --ignored --nocapture`.
@@ -93,10 +93,10 @@ When canopi-data removes or adds columns, update atomically:
 
 ## Common Names
 
-- Common name lookup order is `best_common_names`, then `species_common_names`, then `species.common_name`.
+- Common name lookup order is selected-language `best_common_names`, then selected-language `species_common_names`, then `species.common_name` only when the selected language is English.
 - `best_common_names` uses `is_primary`, then shortest non-canonical fallback.
 - `get_locale_best_common_name` returns locale-specific best name without fallback.
-- Search list rows include secondary names and fallback flags for disambiguation.
+- Search list rows include secondary names for disambiguation and may include a selected-language Matched Common Name to explain an active text search match.
 - Cross-workflow backend callers should share Species Catalog read behavior through `desktop/src/services/species_catalog_read.rs` and its projection modules instead of reaching directly into `plant_db` lookup helpers from unrelated services.
 - Site Adaptation compatibility and replacement reads belong behind `desktop/src/services/species_catalog_read/{compatibility,replacement,common_names}.rs`. Site Adaptation owns hardiness compatibility interpretation and response shaping; it should not own Species Catalog SQL, placeholder assembly, table names, localized Common Name lookup, or Species Catalog storage test fixtures.
 
