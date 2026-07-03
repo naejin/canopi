@@ -1,4 +1,4 @@
-pub(crate) const EXPECTED_PLANT_SCHEMA_VERSION: i32 = 9;
+pub(crate) const EXPECTED_PLANT_SCHEMA_VERSION: i32 = 10;
 
 #[cfg(test)]
 pub(crate) const REQUIRED_APP_TRANSLATION_FIELDS: &[&str] = &[
@@ -44,5 +44,21 @@ mod tests {
                 "required contract translation field '{field}' missing from schema contract"
             );
         }
+    }
+
+    #[test]
+    fn test_species_id_index_exists_for_search_hydration() {
+        let contract = load_schema_contract_fixture();
+        let species_indexes = contract
+            .indexes
+            .get("species")
+            .expect("species indexes should be defined");
+
+        assert!(
+            species_indexes
+                .iter()
+                .any(|index| index.name == "idx_species_id" && index.columns == "id"),
+            "generated Species Catalog search hydrates ranked ids through species.id"
+        );
     }
 }

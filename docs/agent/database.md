@@ -8,9 +8,10 @@ Use this guide when changing SQLite schema contracts, plant search, filters, spe
 - `prepare-db.py` reads from the contract. Update the contract when canopi-data changes column names.
 - Runtime schema validation lives in `desktop/src/db/schema_contract.rs`.
 - Startup warns on schema drift but does not block app startup.
-- Plant DB schema version is `PRAGMA user_version = 9` for the current core DB.
+- Plant DB schema version is `PRAGMA user_version = 10` for the current core DB.
 - canopi-data export schema version is tracked in the contract.
 - Species table name is `species`.
+- `prepare-db.py` builds `species` with `CREATE TABLE AS`; keep `idx_species_id` in the schema contract because search hydration joins ranked ids back through `species.id`.
 - User DB migrations also use `PRAGMA user_version`; check before adding migrations.
 
 ## User DB Personal Libraries
@@ -70,7 +71,7 @@ When canopi-data removes or adds columns, update atomically:
 ## FTS5 Search
 
 - `species_search_fts` has weighted columns: canonical name, common names, family/genus, uses text, and other text.
-- `species_search_common_name_tokens` stores normalized Common Name tokens by species and language; relevance search uses selected-language Common Name token prefix matches before BM25.
+- `species_search_common_name_tokens` stores normalized Common Name tokens by species and language; generated `species_search_name_entries` and `species_search_name_entry_tokens` store selected-language Common Name rows plus `__canonical__` and `__taxonomy__` rows for fast active search. Runtime relevance uses the generated entry index when present and falls back to FTS for older DB assets.
 - Query-side Common Name tokenization must stay aligned with `scripts/prepare-db.py` `common_name_tokens()`: split on Unicode word tokens, fold diacritics/case, and only plan token-table joins for relevance-ordered pages.
 - Use the full FTS table name in `MATCH`, not an alias.
 - Strip all FTS metacharacters before building MATCH queries.

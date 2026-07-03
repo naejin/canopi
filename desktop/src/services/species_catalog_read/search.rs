@@ -17,6 +17,7 @@ pub fn search(
     let plan = SpeciesSearchPlan::build(SpeciesSearchPlanRequest {
         search: request,
         use_common_name_token_index: supports_common_name_token_index(conn),
+        use_search_name_entry_index: supports_search_name_entry_index(conn),
     });
 
     let total_estimate = if let Some(count) = plan.count() {
@@ -73,9 +74,34 @@ fn supports_common_name_token_index(conn: &Connection) -> bool {
     .is_ok()
 }
 
+fn supports_search_name_entry_index(conn: &Connection) -> bool {
+    let entry_table_exists = conn
+        .query_row(
+            "SELECT 1 FROM sqlite_master
+             WHERE type = 'table' AND name = 'species_search_name_entries'",
+            [],
+            |_| Ok(()),
+        )
+        .is_ok();
+    let token_table_exists = conn
+        .query_row(
+            "SELECT 1 FROM sqlite_master
+             WHERE type = 'table' AND name = 'species_search_name_entry_tokens'",
+            [],
+            |_| Ok(()),
+        )
+        .is_ok();
+
+    let entry_kind_supported = conn
+        .prepare("SELECT entry_kind FROM species_search_name_entries LIMIT 0")
+        .is_ok();
+
+    entry_table_exists && token_table_exists && entry_kind_supported
+}
+
 #[cfg(test)]
 mod tests {
-    use super::search;
+    use super::{search, supports_search_name_entry_index};
     use crate::db::query_builder::{SpeciesSearchPlan, SpeciesSearchPlanRequest};
     use common_types::species::{Sort, SpeciesFilter, SpeciesSearchRequest};
     use rusqlite::{Connection, OpenFlags, params_from_iter};
@@ -434,6 +460,74 @@ mod tests {
         conn
     }
 
+    fn indexed_relevance_fixture_without_legacy_tokens() -> Connection {
+        let conn = relevance_fixture_db();
+        conn.execute_batch(
+            "DROP TABLE species_search_common_name_tokens;
+            CREATE TABLE species_search_name_entries (
+                entry_id INTEGER PRIMARY KEY,
+                species_id TEXT NOT NULL,
+                language TEXT NOT NULL,
+                entry_kind TEXT NOT NULL,
+                common_name TEXT NOT NULL,
+                normalized_name TEXT NOT NULL,
+                is_display_name INTEGER NOT NULL DEFAULT 0,
+                is_primary INTEGER NOT NULL DEFAULT 0,
+                source_rank INTEGER NOT NULL DEFAULT 0,
+                name_length INTEGER NOT NULL
+            );
+            CREATE TABLE species_search_name_entry_tokens (
+                entry_id INTEGER NOT NULL,
+                species_id TEXT NOT NULL,
+                language TEXT NOT NULL,
+                token TEXT NOT NULL,
+                first_token_position INTEGER NOT NULL,
+                PRIMARY KEY (entry_id, token)
+            );
+            CREATE INDEX idx_species_search_name_entries_language_norm
+                ON species_search_name_entries(language, normalized_name, species_id);
+            CREATE INDEX idx_species_search_name_entries_species_lang
+                ON species_search_name_entries(species_id, language);
+            CREATE INDEX idx_species_search_name_entry_tokens_language_token
+                ON species_search_name_entry_tokens(language, token, species_id, entry_id);
+
+            INSERT INTO species_search_name_entries (
+                entry_id, species_id, language, entry_kind, common_name, normalized_name,
+                is_display_name, is_primary, source_rank, name_length
+            ) VALUES
+                (1, 'melissa-officinalis', 'fr', 'common_name', 'Mélisse', 'melisse', 1, 1, 1, 7),
+                (2, 'clinopodium-alpinum', 'fr', 'common_name', 'Mélisse alpine', 'melisse alpine', 1, 1, 1, 14),
+                (3, 'clinopodium-nepeta', 'fr', 'common_name', 'Mélisse des champs', 'melisse des champs', 1, 1, 1, 18),
+                (4, 'viola-melissifolia', 'fr', 'common_name', 'Violette à feuilles de mélisse', 'violette a feuilles de melisse', 1, 1, 1, 28),
+                (5, 'moluccella-laevis', 'fr', 'common_name', 'Clochette d''Irlande', 'clochette d irlande', 1, 1, 1, 20),
+                (6, 'moluccella-laevis', 'fr', 'common_name', 'Mélisse des Moluques', 'melisse des moluques', 0, 0, 1, 20),
+                (7, 'lindleya-mespiloides', '__canonical__', 'canonical', 'Lindleya mespiloides', 'lindleya mespiloides', 0, 0, 2, 20);
+
+            INSERT INTO species_search_name_entry_tokens VALUES
+                (1, 'melissa-officinalis', 'fr', 'melisse', 0),
+                (2, 'clinopodium-alpinum', 'fr', 'melisse', 0),
+                (2, 'clinopodium-alpinum', 'fr', 'alpine', 1),
+                (3, 'clinopodium-nepeta', 'fr', 'melisse', 0),
+                (3, 'clinopodium-nepeta', 'fr', 'des', 1),
+                (3, 'clinopodium-nepeta', 'fr', 'champs', 2),
+                (4, 'viola-melissifolia', 'fr', 'violette', 0),
+                (4, 'viola-melissifolia', 'fr', 'a', 1),
+                (4, 'viola-melissifolia', 'fr', 'feuilles', 2),
+                (4, 'viola-melissifolia', 'fr', 'de', 3),
+                (4, 'viola-melissifolia', 'fr', 'melisse', 4),
+                (5, 'moluccella-laevis', 'fr', 'clochette', 0),
+                (5, 'moluccella-laevis', 'fr', 'd', 1),
+                (5, 'moluccella-laevis', 'fr', 'irlande', 2),
+                (6, 'moluccella-laevis', 'fr', 'melisse', 0),
+                (6, 'moluccella-laevis', 'fr', 'des', 1),
+                (6, 'moluccella-laevis', 'fr', 'moluques', 2),
+                (7, 'lindleya-mespiloides', '__canonical__', 'lindleya', 0),
+                (7, 'lindleya-mespiloides', '__canonical__', 'mespiloides', 1);",
+        )
+        .unwrap();
+        conn
+    }
+
     fn run_bundled_species_search_latency_harness() -> Result<(), String> {
         let Some(path) = bundled_species_search_db_path() else {
             eprintln!(
@@ -526,8 +620,8 @@ mod tests {
                 locale,
             ),
             use_common_name_token_index: true,
+            use_search_name_entry_index: supports_search_name_entry_index(conn),
         });
-
         let list_started = Instant::now();
         let list_rows = execute_species_search_list(conn, &plan)?;
         let list_elapsed = list_started.elapsed();
@@ -963,6 +1057,74 @@ mod tests {
                 Some("Mélisse des Moluques")
             );
         }
+    }
+
+    #[test]
+    fn active_search_uses_generated_name_entry_index_without_legacy_token_table() {
+        let conn = indexed_relevance_fixture_without_legacy_tokens();
+
+        let result = search(
+            &conn,
+            search_request(
+                Some("melis"),
+                SpeciesFilter::default(),
+                None,
+                Sort::Relevance,
+                10,
+                false,
+                "fr",
+            ),
+        )
+        .unwrap();
+        let names = result
+            .items
+            .iter()
+            .map(|item| item.canonical_name.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            &names[..5],
+            &[
+                "Melissa officinalis",
+                "Clinopodium alpinum",
+                "Clinopodium nepeta",
+                "Viola melissifolia",
+                "Moluccella laevis",
+            ],
+            "expected generated search-entry index to preserve French relevance ordering; got {names:?}",
+        );
+        assert_eq!(
+            result.items[4].matched_common_name.as_deref(),
+            Some("Mélisse des Moluques")
+        );
+    }
+
+    #[test]
+    fn indexed_active_search_keeps_canonical_name_matches_without_english_common_name_fallback() {
+        let conn = indexed_relevance_fixture_without_legacy_tokens();
+
+        let result = search(
+            &conn,
+            search_request(
+                Some("lind"),
+                SpeciesFilter::default(),
+                None,
+                Sort::Relevance,
+                10,
+                false,
+                "fr",
+            ),
+        )
+        .unwrap();
+        let names = result
+            .items
+            .iter()
+            .map(|item| item.canonical_name.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(names, vec!["Lindleya mespiloides"]);
+        assert!(result.items[0].matched_common_name.is_none());
+        assert!(result.items[0].common_name.is_none());
     }
 
     #[test]

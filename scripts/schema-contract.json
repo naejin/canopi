@@ -1,7 +1,7 @@
 {
-  "schema_version": 9,
+  "schema_version": 10,
   "min_export_schema_version": 11,
-  "description": "Maps canopi-data export columns to canopi-core.db species table. Update this file when canopi-data changes column names. v9: indexed species_search_common_name_tokens added for localized Common Name relevance ranking.",
+  "description": "Maps canopi-data export columns to canopi-core.db species table. Update this file when canopi-data changes column names. v10: generated species_search_name_entries/species_search_name_entry_tokens and idx_species_id added for candidate-first Species Catalog Search.",
   "columns": [
     {"name": "id", "type": "TEXT", "required": true},
     {"name": "slug", "type": "TEXT", "required": true},
@@ -197,6 +197,7 @@
   ],
   "indexes": {
     "species": [
+      {"name": "idx_species_id", "columns": "id"},
       {"name": "idx_species_canonical", "columns": "canonical_name"},
       {"name": "idx_species_slug", "columns": "slug"},
       {"name": "idx_species_family", "columns": "family"},

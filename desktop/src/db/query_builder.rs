@@ -49,6 +49,7 @@ mod tests {
                 locale: "en".to_owned(),
             },
             use_common_name_token_index: true,
+            use_search_name_entry_index: false,
         }
     }
 

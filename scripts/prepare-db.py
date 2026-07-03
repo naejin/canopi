@@ -281,6 +281,11 @@ def common_name_tokens(name: str) -> list[tuple[str, int]]:
     return tokens
 
 
+def normalize_search_name(name: str) -> str:
+    """Normalize a full Common Name for exact, prefix, and contains ranking."""
+    return " ".join(token for token, _position in common_name_tokens(name))
+
+
 def build_common_name_token_index(dst: sqlite3.Connection):
     """Build indexed active-locale Common Name tokens for relevance ranking."""
     dst.execute("""
@@ -323,6 +328,196 @@ def build_common_name_token_index(dst: sqlite3.Connection):
             ON species_search_common_name_tokens(language, token, species_id)
     """)
     print(f"  -> {len(token_positions):,} common name token rows")
+    dst.commit()
+
+
+def build_search_name_entry_index(dst: sqlite3.Connection):
+    """Build pre-ranked name entries for candidate-first active search."""
+    dst.execute("""
+        CREATE TABLE species_search_name_entries (
+            entry_id INTEGER PRIMARY KEY,
+            species_id TEXT NOT NULL,
+            language TEXT NOT NULL,
+            entry_kind TEXT NOT NULL,
+            common_name TEXT NOT NULL,
+            normalized_name TEXT NOT NULL,
+            is_display_name INTEGER NOT NULL DEFAULT 0,
+            is_primary INTEGER NOT NULL DEFAULT 0,
+            source_rank INTEGER NOT NULL DEFAULT 0,
+            name_length INTEGER NOT NULL,
+            UNIQUE (species_id, language, entry_kind, common_name)
+        )
+    """)
+    dst.execute("""
+        CREATE TABLE species_search_name_entry_tokens (
+            entry_id INTEGER NOT NULL,
+            species_id TEXT NOT NULL,
+            language TEXT NOT NULL,
+            token TEXT NOT NULL,
+            first_token_position INTEGER NOT NULL,
+            PRIMARY KEY (entry_id, token)
+        )
+    """)
+
+    display_names = {
+        (species_id, language, common_name)
+        for species_id, language, common_name in dst.execute("""
+            SELECT species_id, language, common_name
+            FROM best_common_names
+        """)
+    }
+    display_name_keys = {
+        (species_id, language) for species_id, language, _common_name in display_names
+    }
+
+    entries: dict[tuple[str, str, str, str], dict[str, int | str]] = {}
+
+    def add_entry(
+        species_id: str,
+        language: str,
+        entry_kind: str,
+        common_name: str,
+        is_display_name: int,
+        is_primary: int,
+        source_rank: int,
+    ) -> None:
+        normalized_name = normalize_search_name(common_name or "")
+        if not normalized_name:
+            return
+
+        key = (species_id, language, entry_kind, common_name)
+        existing = entries.get(key)
+        if existing is None:
+            entries[key] = {
+                "normalized_name": normalized_name,
+                "is_display_name": is_display_name,
+                "is_primary": is_primary,
+                "source_rank": source_rank,
+                "name_length": len(common_name),
+            }
+            return
+
+        existing["is_display_name"] = max(int(existing["is_display_name"]), is_display_name)
+        existing["is_primary"] = max(int(existing["is_primary"]), is_primary)
+        existing["source_rank"] = min(int(existing["source_rank"]), source_rank)
+
+    rows = dst.execute("""
+        SELECT scn.species_id, scn.language, scn.common_name, scn.is_primary, scn.source
+        FROM species_common_names scn
+        JOIN species s ON s.id = scn.species_id
+        WHERE scn.common_name != s.canonical_name
+    """)
+    for species_id, language, common_name, is_primary, source in rows:
+        add_entry(
+            species_id,
+            language,
+            "common_name",
+            common_name,
+            1 if (species_id, language, common_name) in display_names else 0,
+            int(is_primary or 0),
+            0 if source == "llm" else 1,
+        )
+
+    rows = dst.execute("""
+        SELECT s.id, s.common_name
+        FROM species s
+        WHERE s.common_name IS NOT NULL
+          AND s.common_name != ''
+          AND s.common_name != s.canonical_name
+    """)
+    for species_id, common_name in rows:
+        add_entry(
+            species_id,
+            "en",
+            "common_name",
+            common_name,
+            0 if (species_id, "en") in display_name_keys else 1,
+            0,
+            1,
+        )
+
+    rows = dst.execute("""
+        SELECT id, canonical_name, family, genus
+        FROM species
+    """)
+    for species_id, canonical_name, family, genus in rows:
+        add_entry(
+            species_id,
+            "__canonical__",
+            "canonical",
+            canonical_name,
+            0,
+            0,
+            2,
+        )
+        if family:
+            add_entry(species_id, "__taxonomy__", "taxonomy", family, 0, 0, 2)
+        if genus and genus != family:
+            add_entry(species_id, "__taxonomy__", "taxonomy", genus, 0, 0, 2)
+
+    entry_rows = [
+        (
+            species_id,
+            language,
+            entry_kind,
+            common_name,
+            str(entry["normalized_name"]),
+            int(entry["is_display_name"]),
+            int(entry["is_primary"]),
+            int(entry["source_rank"]),
+            int(entry["name_length"]),
+        )
+        for (species_id, language, entry_kind, common_name), entry in sorted(entries.items())
+    ]
+    dst.executemany(
+        """
+        INSERT INTO species_search_name_entries (
+            species_id, language, entry_kind, common_name, normalized_name,
+            is_display_name, is_primary, source_rank, name_length
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        entry_rows,
+    )
+
+    token_rows: list[tuple[int, str, str, str, int]] = []
+    rows = dst.execute("""
+        SELECT entry_id, species_id, language, common_name
+        FROM species_search_name_entries
+    """)
+    for entry_id, species_id, language, common_name in rows:
+        positions: dict[str, int] = {}
+        for token, position in common_name_tokens(common_name or ""):
+            previous_position = positions.get(token)
+            if previous_position is None or position < previous_position:
+                positions[token] = position
+        for token, position in sorted(positions.items()):
+            token_rows.append((entry_id, species_id, language, token, position))
+
+    dst.executemany(
+        """
+        INSERT INTO species_search_name_entry_tokens (
+            entry_id, species_id, language, token, first_token_position
+        ) VALUES (?, ?, ?, ?, ?)
+        """,
+        token_rows,
+    )
+    dst.execute("""
+        CREATE INDEX idx_species_search_name_entries_language_norm
+            ON species_search_name_entries(language, normalized_name, species_id)
+    """)
+    dst.execute("""
+        CREATE INDEX idx_species_search_name_entries_species_lang
+            ON species_search_name_entries(species_id, language)
+    """)
+    dst.execute("""
+        CREATE INDEX idx_species_search_name_entry_tokens_language_token
+            ON species_search_name_entry_tokens(language, token, species_id, entry_id)
+    """)
+    dst.execute("""
+        CREATE INDEX idx_species_search_name_entry_tokens_entry
+            ON species_search_name_entry_tokens(entry_id)
+    """)
+    print(f"  -> {len(entry_rows):,} search name entries, {len(token_rows):,} entry token rows")
     dst.commit()
 
 
@@ -453,7 +648,7 @@ def main():
     # Validate export schema version
     min_version = contract.get("min_export_schema_version", 0)
     if min_version > 0:
-        print("[0/10] Validating export schema version...")
+        print("[0/11] Validating export schema version...")
         export_version = validate_export_version(dst, min_version)
         if export_version is not None:
             print(f"  -> Export schema version: {export_version}")
@@ -462,41 +657,44 @@ def main():
     export_columns = get_export_columns(dst)
     print(f"  -> Export has {len(export_columns)} columns in species table")
 
-    print("[1/10] Creating core species table...")
+    print("[1/11] Creating core species table...")
     create_core_species_table(dst, contract["columns"], export_columns)
 
-    print("[2/10] Copying supporting tables...")
+    print("[2/11] Copying supporting tables...")
     copy_supporting_tables(dst, contract.get("supporting_tables", []))
 
     # Detach export DB — no longer needed
     dst.commit()
     dst.execute("DETACH DATABASE export_db")
 
-    print("[3/10] Building unified search index...")
+    print("[3/11] Building unified search index...")
     build_search_index(dst)
 
-    print("[4/10] Building best_common_names lookup table...")
+    print("[4/11] Building best_common_names lookup table...")
     build_best_common_names(dst)
 
-    print("[5/10] Building common name token index...")
+    print("[5/11] Building common name token index...")
     build_common_name_token_index(dst)
 
-    print("[6/10] Filtering orphaned relationships...")
+    print("[6/11] Building search name entry index...")
+    build_search_name_entry_index(dst)
+
+    print("[7/11] Filtering orphaned relationships...")
     filter_orphaned_relationships(dst)
 
-    print("[7/10] Populating translations...")
+    print("[8/11] Populating translations...")
     populate_translations(dst, contract.get("translations", {}))
     dst.commit()
 
-    print("[8/10] Creating B-tree indexes...")
+    print("[9/11] Creating B-tree indexes...")
     create_btree_indexes(dst, contract.get("indexes", {}))
     dst.commit()
 
-    print("[9/10] Optimizing (ANALYZE + VACUUM)...")
+    print("[10/11] Optimizing (ANALYZE + VACUUM)...")
     dst.execute("ANALYZE")
     dst.execute("VACUUM")
 
-    print("[10/10] Finalizing...")
+    print("[11/11] Finalizing...")
     # Set schema version so Rust backend can detect DB format
     dst.execute(f"PRAGMA user_version = {contract['schema_version']}")
     # Switch to DELETE journal mode — read-only at runtime
