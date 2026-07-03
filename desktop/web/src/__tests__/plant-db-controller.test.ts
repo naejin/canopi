@@ -48,6 +48,7 @@ function makePlant(canonicalName: string, isFavorite = false): SpeciesListItem {
     slug: canonicalName.toLowerCase().replace(/\s+/g, '-'),
     common_name: canonicalName,
     common_name_2: null,
+    matched_common_name: null,
     is_name_fallback: false,
     family: null,
     genus: null,
@@ -91,7 +92,7 @@ describe('Species Catalog Workbench lifecycle', () => {
 
     mocks.searchSpecies.mockClear()
     dispose()
-    plantDb.speciesCatalogWorkbench.setSort('Family')
+    plantDb.speciesCatalogWorkbench.setSearchText('lin')
     await flushMicrotasks()
 
     expect(mocks.searchSpecies).not.toHaveBeenCalled()

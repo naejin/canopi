@@ -10,7 +10,6 @@ import type {
   FilterOp,
   FilterOptions,
   PaginatedResult,
-  Sort,
   SpeciesFilter,
   SpeciesListItem,
   SpeciesSearchRequest,
@@ -83,7 +82,6 @@ export interface SpeciesCatalogWorkbench {
   clearSearchText(): void
   retrySearch(): void
   loadNextPage(): Promise<void>
-  setSort(sort: Sort): void
   setViewMode(mode: ViewMode): void
   patchFilters(patch: Partial<SpeciesFilter>): void
   clearFilters(): void
@@ -337,10 +335,6 @@ export function createSpeciesCatalogWorkbench({
 
     loadNextPage() {
       return plantSearchSession.loadNextPage()
-    },
-
-    setSort(sort) {
-      plantSearchSession.setSort(sort)
     },
 
     setViewMode(mode) {

@@ -58,6 +58,7 @@ mod tests {
             slug: canonical_name.to_lowercase().replace(' ', "-"),
             common_name: None,
             common_name_2: None,
+            matched_common_name: None,
             is_name_fallback: false,
             family: None,
             genus: None,
@@ -160,8 +161,8 @@ mod tests {
         let params = plan.list().params();
         assert!(sql.contains("FROM species s"));
         assert!(!sql.contains("species_search_fts"));
-        // locale param + "en" fallback param + limit param
-        assert_eq!(params.len(), 3);
+        // locale param + limit param
+        assert_eq!(params.len(), 2);
         assert!(plan.count().is_none());
     }
 
@@ -234,9 +235,11 @@ mod tests {
         ));
         let params = plan.list().params();
         assert!(
-            params
-                .iter()
-                .any(|param| matches!(param, Value::Text(value) if value == "lav*")),
+            params.iter().any(|param| matches!(
+                param,
+                Value::Text(value)
+                    if value == "{canonical_name family_genus uses_text other_text}: lav*"
+            )),
             "expected FTS prefix wildcard in params, got {params:?}"
         );
     }
@@ -416,11 +419,12 @@ mod tests {
         assert!(sql.contains("bm25("));
         assert!(sql.contains("OFFSET ?"));
         assert!(!sql.contains("s.canonical_name >"));
-        let offset_val = match params.last().unwrap() {
-            Value::Integer(n) => n.to_owned(),
-            _ => panic!("expected integer offset"),
-        };
-        assert_eq!(offset_val, 50);
+        assert!(
+            params
+                .iter()
+                .any(|param| matches!(param, Value::Integer(value) if *value == 50)),
+            "expected integer offset in params, got {params:?}"
+        );
 
         let items = vec![list_item("Lavandula alpha"), list_item("Lavandula beta")];
         assert_eq!(plan.next_cursor(&items, true).as_deref(), Some("offset:52"));
@@ -442,13 +446,13 @@ mod tests {
 
         assert!(sql.contains("species_search_common_name_tokens scnt"));
         assert!(sql.contains("scnt0.language = ?1"));
-        assert!(sql.contains("scnt0.token = ?"));
+        assert!(sql.contains("scnt0.token LIKE ?"));
         assert!(sql.contains("scnt0.species_id IS NOT NULL"));
         assert!(sql.contains("ORDER BY CASE"));
         assert!(
             params
                 .iter()
-                .any(|param| matches!(param, Value::Text(value) if value == "lin"))
+                .any(|param| matches!(param, Value::Text(value) if value == "lin%"))
         );
     }
 
@@ -467,17 +471,18 @@ mod tests {
 
         assert!(sql.contains("species_search_common_name_tokens scnt0"));
         assert!(sql.contains("species_search_common_name_tokens scnt1"));
-        assert!(sql.contains("bcn_loc.common_name = ?"));
+        assert!(sql.contains("species_common_names scn_match"));
+        assert!(sql.contains("matched_common_name"));
         assert!(sql.contains("scnt0.species_id IS NOT NULL AND scnt1.species_id IS NOT NULL"));
         assert!(
             params
                 .iter()
-                .any(|param| matches!(param, Value::Text(value) if value == "lin"))
+                .any(|param| matches!(param, Value::Text(value) if value == "lin%"))
         );
         assert!(
             params
                 .iter()
-                .any(|param| matches!(param, Value::Text(value) if value == "commun"))
+                .any(|param| matches!(param, Value::Text(value) if value == "commun%"))
         );
         assert!(
             params
@@ -487,7 +492,7 @@ mod tests {
     }
 
     #[test]
-    fn test_relevance_sort_tiers_fallback_language_below_active_locale() {
+    fn test_relevance_sort_does_not_add_fallback_language_tiers() {
         let mut request = request(
             Some("lin"),
             default_filter(),
@@ -501,13 +506,9 @@ mod tests {
         let sql = plan.list().sql();
 
         assert!(sql.contains("species_search_common_name_tokens scnt0"));
-        assert!(sql.contains("species_search_common_name_tokens scnt_fb0"));
         assert!(sql.contains("scnt0.species_id IS NOT NULL"));
-        assert!(sql.contains("scnt_fb0.species_id IS NOT NULL"));
-        assert!(
-            sql.find("scnt0.species_id IS NOT NULL").unwrap()
-                < sql.find("scnt_fb0.species_id IS NOT NULL").unwrap()
-        );
+        assert!(!sql.contains("scnt_fb"));
+        assert!(!sql.contains("bcn_en"));
     }
 
     #[test]
@@ -525,12 +526,12 @@ mod tests {
         assert!(
             params
                 .iter()
-                .any(|param| matches!(param, Value::Text(value) if value == "lin"))
+                .any(|param| matches!(param, Value::Text(value) if value == "lin%"))
         );
         assert!(
             params
                 .iter()
-                .any(|param| matches!(param, Value::Text(value) if value == "leon"))
+                .any(|param| matches!(param, Value::Text(value) if value == "leon%"))
         );
         assert!(
             !params
@@ -553,8 +554,9 @@ mod tests {
         let params = plan.list().params();
 
         assert!(sql.contains("species_search_common_name_tokens scnt0"));
-        assert!(sql.contains("species_search_common_name_tokens scnt4"));
-        for expected_token in ["carleton", "s", "soap", "pod", "edelweiss"] {
+        assert!(sql.contains("species_search_common_name_tokens scnt3"));
+        assert!(!sql.contains("species_search_common_name_tokens scnt4"));
+        for expected_token in ["carleton%", "soap%", "pod%", "edelweiss%"] {
             assert!(
                 params
                     .iter()
@@ -562,7 +564,7 @@ mod tests {
                 "expected indexed Common Name token {expected_token:?} in params, got {params:?}"
             );
         }
-        for raw_token in ["carleton's", "soap/pod"] {
+        for raw_token in ["carleton's", "s%", "soap/pod"] {
             assert!(
                 !params
                     .iter()
@@ -584,7 +586,7 @@ mod tests {
         ));
         let params = plan.list().params();
 
-        for expected_token in ["cœur", "smørrebrød", "æble", "łodz", "ðe"] {
+        for expected_token in ["cœur%", "smørrebrød%", "æble%", "łodz%", "ðe%"] {
             assert!(
                 params
                     .iter()
@@ -595,7 +597,7 @@ mod tests {
     }
 
     #[test]
-    fn test_explicit_non_name_sort_skips_common_name_relevance_tier() {
+    fn test_explicit_non_name_sort_skips_common_name_relevance_ordering() {
         let plan = SpeciesSearchPlan::build(request(
             Some("lin"),
             default_filter(),
@@ -608,7 +610,7 @@ mod tests {
 
         assert!(sql.contains("ORDER BY s.family"));
         assert!(!sql.contains("ORDER BY CASE"));
-        assert!(!sql.contains("species_search_common_name_tokens"));
+        assert!(sql.contains("species_search_common_name_tokens"));
     }
 
     #[test]
@@ -716,11 +718,19 @@ mod tests {
         let params = count.params();
         assert!(sql.contains("SELECT COUNT(*)"));
         assert!(sql.contains("species_search_fts MATCH"));
-        assert_eq!(params.len(), 1);
+        assert_eq!(params.len(), 3);
         match &params[0] {
-            Value::Text(s) => assert_eq!(s, "lavender*"),
+            Value::Text(s) => assert_eq!(s, "en"),
             _ => panic!("expected text param"),
         }
+        assert!(
+            params.iter().any(|param| matches!(
+                param,
+                Value::Text(value)
+                    if value == "{canonical_name family_genus uses_text other_text}: lavender*"
+            )),
+            "expected FTS prefix wildcard in params, got {params:?}"
+        );
     }
 
     #[test]

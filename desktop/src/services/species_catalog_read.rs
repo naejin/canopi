@@ -191,13 +191,13 @@ mod tests {
         assert!(!rows[0].is_name_fallback);
         assert!(!rows[0].is_favorite);
         assert_eq!(rows[1].canonical_name, "Plum");
-        assert_eq!(rows[1].common_name.as_deref(), Some("Plum"));
+        assert_eq!(rows[1].common_name, None);
         assert!(rows[1].common_name_2.is_none());
-        assert!(rows[1].is_name_fallback);
+        assert!(!rows[1].is_name_fallback);
     }
 
     #[test]
-    fn list_item_projection_preserves_primary_english_common_name_fallbacks() {
+    fn list_item_projection_uses_english_common_names_for_english_locale_only() {
         let conn = test_support::test_conn();
         conn.execute(
             "INSERT INTO species (
@@ -228,8 +228,8 @@ mod tests {
             .list_items_for_canonical_names(&["Fig".to_owned()], "en")
             .unwrap();
 
-        assert_eq!(french_rows[0].common_name.as_deref(), Some("Common fig"));
-        assert!(french_rows[0].is_name_fallback);
+        assert_eq!(french_rows[0].common_name, None);
+        assert!(!french_rows[0].is_name_fallback);
         assert_eq!(english_rows[0].common_name.as_deref(), Some("Common fig"));
         assert!(!english_rows[0].is_name_fallback);
     }

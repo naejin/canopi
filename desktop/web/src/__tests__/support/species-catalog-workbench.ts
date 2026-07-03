@@ -10,6 +10,7 @@ export function makeSpeciesListItem(canonicalName: string, isFavorite = false): 
     slug: canonicalName.toLowerCase().replace(/\s+/g, '-'),
     common_name: canonicalName,
     common_name_2: null,
+    matched_common_name: null,
     is_name_fallback: false,
     family: null,
     genus: null,

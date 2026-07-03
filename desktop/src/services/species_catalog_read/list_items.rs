@@ -12,12 +12,12 @@ fn hydrate_species_list_items(
 ) -> Result<Vec<SpeciesListItem>, String> {
     let mut items = Vec::with_capacity(canonical_names.len());
     let select_sql = species_list_select_sql("?1");
-    let common_name_join = species_list_common_name_join_sql("?1", "?2");
+    let common_name_join = species_list_common_name_join_sql("?1");
     let sql = format!(
         "{select_sql}
          FROM species s
          {common_name_join}
-         WHERE s.canonical_name = ?3
+         WHERE s.canonical_name = ?2
          LIMIT 1"
     );
     let mut stmt = conn
@@ -26,7 +26,7 @@ fn hydrate_species_list_items(
 
     for canonical_name in canonical_names {
         let row: Option<SpeciesListItem> = stmt
-            .query_row(params![locale, "en", canonical_name], map_species_list_row)
+            .query_row(params![locale, canonical_name], map_species_list_row)
             .optional()
             .map_err(|e| format!("Failed to hydrate species '{canonical_name}': {e}"))?;
 

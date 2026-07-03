@@ -3,7 +3,10 @@ use rusqlite::types::Value;
 
 use super::pagination::{SpeciesSearchPagePlan, cursor_clause};
 use super::predicates::PredicatePlan;
-use super::projection::{species_list_common_name_join_sql, species_list_select_sql};
+use super::projection::{
+    species_list_common_name_join_sql, species_list_matched_common_name_sql,
+    species_list_select_sql_with_matched_common_name,
+};
 use super::relevance::{CommonNameRelevancePlan, relevance_order_by};
 use super::sql::SqlBuilder;
 use super::text::SearchText;
@@ -51,7 +54,8 @@ impl SpeciesSearchPlan {
         );
         let count = if request.search.include_total {
             Some(build_count_statement(
-                search_text.fts_term(),
+                &request,
+                &search_text,
                 &request.search.filters,
             ))
         } else {
@@ -79,9 +83,23 @@ fn search_text_input(text: &str) -> Option<&str> {
     (!text.trim().is_empty()).then_some(text)
 }
 
-fn build_count_statement(search_term: Option<&str>, filters: &SpeciesFilter) -> SqlStatementPlan {
+fn build_count_statement(
+    request: &SpeciesSearchPlanRequest,
+    search_text: &SearchText,
+    filters: &SpeciesFilter,
+) -> SqlStatementPlan {
     let mut sql_builder = SqlBuilder::default();
-    let predicates = PredicatePlan::for_search(search_term, filters, &mut sql_builder);
+    let locale_placeholder = search_text
+        .common_name_query()
+        .map(|_| sql_builder.bind_text(request.search.locale.clone()));
+    let predicates = PredicatePlan::for_search(
+        search_text.fts_term(),
+        search_text.common_name_query(),
+        locale_placeholder.as_deref(),
+        request.use_common_name_token_index,
+        filters,
+        &mut sql_builder,
+    );
     let sql = format!(
         "SELECT COUNT(*) FROM species s {} {}",
         predicates.fts_join_sql(),
@@ -99,17 +117,13 @@ fn build_list_statement(
     let mut sql_builder = SqlBuilder::default();
 
     let locale_placeholder = sql_builder.bind_text(request.search.locale.clone());
-    let fallback_locale_placeholder = sql_builder.bind_text("en");
-    let common_name_join =
-        species_list_common_name_join_sql(&locale_placeholder, &fallback_locale_placeholder);
+    let common_name_join = species_list_common_name_join_sql(&locale_placeholder);
 
     let relevance_plan = match page {
         SpeciesSearchPagePlan::RelevanceOffset { .. } => Some(CommonNameRelevancePlan::build(
             search_text.common_name_query(),
             request.use_common_name_token_index,
             &locale_placeholder,
-            &fallback_locale_placeholder,
-            &request.search.locale,
             &mut sql_builder,
         )),
         SpeciesSearchPagePlan::Keyset { .. } => None,
@@ -117,6 +131,9 @@ fn build_list_statement(
 
     let mut predicates = PredicatePlan::for_search(
         search_text.fts_term(),
+        search_text.common_name_query(),
+        Some(&locale_placeholder),
+        request.use_common_name_token_index,
         &request.search.filters,
         &mut sql_builder,
     );
@@ -142,7 +159,15 @@ fn build_list_statement(
     };
 
     let limit_clause = page.limit_clause(request.search.limit, &mut sql_builder);
-    let select_sql = species_list_select_sql(&locale_placeholder);
+    let matched_common_name_sql = species_list_matched_common_name_sql(
+        search_text.common_name_query(),
+        &locale_placeholder,
+        &mut sql_builder,
+    );
+    let select_sql = species_list_select_sql_with_matched_common_name(
+        &locale_placeholder,
+        &matched_common_name_sql,
+    );
     let where_sql = predicates.where_sql();
 
     let sql = format!(

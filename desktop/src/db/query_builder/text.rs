@@ -36,11 +36,17 @@ pub(super) struct CommonNameQuery {
 /// Sanitize text for FTS5 MATCH, returning `None` if nothing useful remains.
 pub(crate) fn sanitize_fts_text(text: &str) -> Option<String> {
     let sanitized = text.replace(|c: char| FTS_META_CHARS.contains(c), "");
-    let trimmed = sanitized.trim();
-    if trimmed.is_empty() {
+    let terms = sanitized
+        .split_whitespace()
+        .map(|term| format!("{term}*"))
+        .collect::<Vec<_>>();
+    if terms.is_empty() {
         None
     } else {
-        Some(format!("{trimmed}*"))
+        Some(format!(
+            "{{canonical_name family_genus uses_text other_text}}: {}",
+            terms.join(" ")
+        ))
     }
 }
 
@@ -81,7 +87,7 @@ fn indexed_common_name_tokens(text: &str) -> Vec<String> {
 
 fn push_indexed_common_name_token(tokens: &mut Vec<String>, raw_token: &str) {
     let token = normalize_common_name_token(raw_token);
-    if !token.is_empty() && !tokens.contains(&token) {
+    if token.chars().count() >= 2 && !tokens.contains(&token) {
         tokens.push(token);
     }
 }
@@ -121,4 +127,105 @@ fn normalize_common_name_token(raw: &str) -> String {
         }
     }
     normalized
+}
+
+pub(super) fn normalized_common_name_sql(expr: &str) -> String {
+    let mut sql = format!("lower({expr})");
+    for (from, to) in [
+        ("à", "a"),
+        ("á", "a"),
+        ("â", "a"),
+        ("ã", "a"),
+        ("ä", "a"),
+        ("å", "a"),
+        ("ā", "a"),
+        ("ă", "a"),
+        ("ą", "a"),
+        ("À", "a"),
+        ("Á", "a"),
+        ("Â", "a"),
+        ("Ã", "a"),
+        ("Ä", "a"),
+        ("Å", "a"),
+        ("Ā", "a"),
+        ("Ă", "a"),
+        ("Ą", "a"),
+        ("ç", "c"),
+        ("ć", "c"),
+        ("č", "c"),
+        ("Ç", "c"),
+        ("Ć", "c"),
+        ("Č", "c"),
+        ("è", "e"),
+        ("é", "e"),
+        ("ê", "e"),
+        ("ë", "e"),
+        ("ē", "e"),
+        ("ė", "e"),
+        ("ę", "e"),
+        ("ě", "e"),
+        ("È", "e"),
+        ("É", "e"),
+        ("Ê", "e"),
+        ("Ë", "e"),
+        ("Ē", "e"),
+        ("Ė", "e"),
+        ("Ę", "e"),
+        ("Ě", "e"),
+        ("ì", "i"),
+        ("í", "i"),
+        ("î", "i"),
+        ("ï", "i"),
+        ("ī", "i"),
+        ("į", "i"),
+        ("İ", "i"),
+        ("Ì", "i"),
+        ("Í", "i"),
+        ("Î", "i"),
+        ("Ï", "i"),
+        ("Ī", "i"),
+        ("Į", "i"),
+        ("ñ", "n"),
+        ("ń", "n"),
+        ("ň", "n"),
+        ("Ñ", "n"),
+        ("Ń", "n"),
+        ("Ň", "n"),
+        ("ò", "o"),
+        ("ó", "o"),
+        ("ô", "o"),
+        ("õ", "o"),
+        ("ö", "o"),
+        ("ō", "o"),
+        ("ő", "o"),
+        ("Ò", "o"),
+        ("Ó", "o"),
+        ("Ô", "o"),
+        ("Õ", "o"),
+        ("Ö", "o"),
+        ("Ō", "o"),
+        ("Ő", "o"),
+        ("ù", "u"),
+        ("ú", "u"),
+        ("û", "u"),
+        ("ü", "u"),
+        ("ū", "u"),
+        ("ů", "u"),
+        ("ű", "u"),
+        ("ų", "u"),
+        ("Ù", "u"),
+        ("Ú", "u"),
+        ("Û", "u"),
+        ("Ü", "u"),
+        ("Ū", "u"),
+        ("Ů", "u"),
+        ("Ű", "u"),
+        ("Ų", "u"),
+        ("ý", "y"),
+        ("ÿ", "y"),
+        ("Ý", "y"),
+    ] {
+        sql = format!("replace({sql}, '{from}', '{to}')");
+    }
+    sql
 }

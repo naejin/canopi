@@ -7,6 +7,7 @@ const SPECIES_LIST_ITEM_COLUMNS: &[&str] = &[
     "slug",
     "common_name",
     "common_name_2",
+    "matched_common_name",
     "is_name_fallback",
     "family",
     "genus",
@@ -62,6 +63,7 @@ pub(super) fn map_species_list_row_with_favorite(
         slug: cursor.read("slug")?,
         common_name: cursor.read("common_name")?,
         common_name_2: cursor.read("common_name_2")?,
+        matched_common_name: cursor.read("matched_common_name")?,
         is_name_fallback: cursor.read_flag("is_name_fallback")?,
         family: cursor.read("family")?,
         genus: cursor.read("genus")?,
@@ -123,6 +125,7 @@ mod tests {
                 "slug" => "'malus-domestica' AS slug".to_owned(),
                 "common_name" => "'Apple' AS common_name".to_owned(),
                 "common_name_2" => "'Pomme' AS common_name_2".to_owned(),
+                "matched_common_name" => "'Malus' AS matched_common_name".to_owned(),
                 "is_name_fallback" => "1 AS is_name_fallback".to_owned(),
                 "height_max_m" => "4.0 AS height_max_m".to_owned(),
                 "hardiness_zone_min" => "4 AS hardiness_zone_min".to_owned(),
@@ -147,6 +150,7 @@ mod tests {
         assert_eq!(item.slug, "malus-domestica");
         assert_eq!(item.common_name.as_deref(), Some("Apple"));
         assert_eq!(item.common_name_2.as_deref(), Some("Pomme"));
+        assert_eq!(item.matched_common_name.as_deref(), Some("Malus"));
         assert!(item.is_name_fallback);
         assert_eq!(item.height_max_m, Some(4.0));
         assert_eq!(item.hardiness_zone_min, Some(4));

@@ -2,6 +2,7 @@ use common_types::species::SpeciesFilter;
 
 use super::filters::append_structured_filters;
 use super::sql::SqlBuilder;
+use super::text::CommonNameQuery;
 
 pub(super) struct PredicatePlan {
     fts_join: Option<&'static str>,
@@ -11,15 +12,42 @@ pub(super) struct PredicatePlan {
 impl PredicatePlan {
     pub(super) fn for_search(
         search_term: Option<&str>,
+        common_name_query: Option<&CommonNameQuery>,
+        locale_placeholder: Option<&str>,
+        use_common_name_token_index: bool,
         filters: &SpeciesFilter,
         sql_builder: &mut SqlBuilder,
     ) -> Self {
         let mut where_clauses = Vec::new();
-        let fts_join = search_term.map(|term| {
-            let placeholder = sql_builder.bind_text(term);
-            where_clauses.push(format!("species_search_fts MATCH {placeholder}"));
-            "JOIN species_search_fts ON species_search_fts.rowid = s.rowid"
-        });
+        let mut text_clauses = Vec::new();
+        let fts_join = search_term
+            .or_else(|| common_name_query.map(|_| ""))
+            .map(|term| {
+                if !term.is_empty() {
+                    let placeholder = sql_builder.bind_text(term);
+                    text_clauses.push(format!(
+                        "s.rowid IN (
+                        SELECT species_search_fts.rowid
+                        FROM species_search_fts
+                        WHERE species_search_fts MATCH {placeholder}
+                    )"
+                    ));
+                }
+                "JOIN species_search_fts ON species_search_fts.rowid = s.rowid"
+            });
+        if let (Some(query), Some(locale_placeholder)) = (common_name_query, locale_placeholder)
+            && use_common_name_token_index
+            && !query.tokens.is_empty()
+        {
+            text_clauses.push(common_name_token_prefix_predicate(
+                query,
+                locale_placeholder,
+                sql_builder,
+            ));
+        }
+        if !text_clauses.is_empty() {
+            where_clauses.push(format!("({})", text_clauses.join(" OR ")));
+        }
 
         append_structured_filters(&mut where_clauses, sql_builder, filters);
 
@@ -44,4 +72,29 @@ impl PredicatePlan {
             format!("WHERE {}", self.where_clauses.join(" AND "))
         }
     }
+}
+
+fn common_name_token_prefix_predicate(
+    query: &CommonNameQuery,
+    locale_placeholder: &str,
+    sql_builder: &mut SqlBuilder,
+) -> String {
+    query
+        .tokens
+        .iter()
+        .enumerate()
+        .map(|(index, token)| {
+            let alias = format!("scnt_match{index}");
+            let token_placeholder = sql_builder.bind_text(format!("{token}%"));
+            format!(
+                "EXISTS (
+                    SELECT 1 FROM species_search_common_name_tokens {alias}
+                    WHERE {alias}.species_id = s.id
+                      AND {alias}.language = {locale_placeholder}
+                      AND {alias}.token LIKE {token_placeholder}
+                )"
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" AND ")
 }

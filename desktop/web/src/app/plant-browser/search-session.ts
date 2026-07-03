@@ -4,7 +4,6 @@ import type {
   DynamicFilterOptions,
   FilterOp,
   PaginatedResult,
-  Sort,
   SpeciesFilter,
   SpeciesListItem,
   SpeciesSearchRequest,
@@ -19,7 +18,7 @@ export interface PlantSearchIntent {
   readonly text: string
   readonly filters: SpeciesFilter
   readonly extraFilters: readonly DynamicFilter[]
-  readonly sort: Sort
+  readonly sort: SpeciesSearchRequest['sort']
   readonly locale: string
 }
 
@@ -37,7 +36,6 @@ export interface PlantSearchSession {
   readonly results: ReadonlySignal<PlantSearchResultState>
   setText(text: string): void
   patchFilters(patch: Partial<SpeciesFilter>): void
-  setSort(sort: Sort): void
   retry(): void
   loadNextPage(): Promise<void>
   dispose(): void
@@ -56,7 +54,6 @@ export interface PlantSearchSessionSignals {
   readonly text: Signal<string>
   readonly filters: Signal<SpeciesFilter>
   readonly extraFilters: Signal<DynamicFilter[]>
-  readonly sort: Signal<Sort>
   readonly items: Signal<SpeciesListItem[]>
   readonly nextCursor: Signal<string | null>
   readonly totalEstimate: Signal<number>
@@ -172,8 +169,6 @@ export function createPlantSearchSession({
   const text = signal('')
   const filters = signal<SpeciesFilter>(createEmptySpeciesFilter())
   const extraFilters = signal<DynamicFilter[]>([])
-  const sort = signal<Sort>('Name')
-  const textSortOverride = signal<Sort | null>(null)
   const items = signal<SpeciesListItem[]>([])
   const nextCursor = signal<string | null>(null)
   const totalEstimate = signal(0)
@@ -184,12 +179,12 @@ export function createPlantSearchSession({
   const dynamicOptionsPending = signal<Record<string, Record<string, boolean>>>({})
   const dynamicOptionsErrors = signal<Record<string, Record<string, string>>>({})
 
-  const effectiveSort = computed<Sort>(() => {
+  const effectiveSort = computed<SpeciesSearchRequest['sort']>(() => {
     if (isActiveSpeciesSearchText(text.value)) {
-      return textSortOverride.value ?? 'Relevance'
+      return 'Relevance'
     }
 
-    return sort.value === 'Relevance' ? 'Name' : sort.value
+    return 'Name'
   })
 
   const intent = computed<PlantSearchIntent>(() => ({
@@ -428,7 +423,6 @@ export function createPlantSearchSession({
       text,
       filters,
       extraFilters,
-      sort,
       items,
       nextCursor,
       totalEstimate,
@@ -441,26 +435,10 @@ export function createPlantSearchSession({
     },
     start,
     setText(nextText) {
-      batch(() => {
-        text.value = nextText
-        if (!isActiveSpeciesSearchText(nextText)) {
-          textSortOverride.value = null
-        }
-      })
+      text.value = nextText
     },
     patchFilters(patch) {
       filters.value = { ...filters.value, ...patch }
-    },
-    setSort(nextSort) {
-      if (isActiveSpeciesSearchText(text.value)) {
-        textSortOverride.value = nextSort
-        return
-      }
-
-      batch(() => {
-        sort.value = nextSort === 'Relevance' ? 'Name' : nextSort
-        textSortOverride.value = null
-      })
     },
     addExtraFilter(field, op, values) {
       const without = extraFilters.value.filter((filter) => filter.field !== field)

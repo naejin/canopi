@@ -12,6 +12,7 @@ function makePlant(canonicalName: string): SpeciesListItem {
     slug: canonicalName.toLowerCase().replace(/\s+/g, '-'),
     common_name: canonicalName,
     common_name_2: null,
+    matched_common_name: null,
     is_name_fallback: false,
     family: null,
     genus: null,
@@ -172,7 +173,7 @@ describe('plant search session', () => {
     dispose()
   })
 
-  it('uses best match for active text until the user overrides that text search sort', async () => {
+  it('keeps active text on relevance ordering and browse on canonical-name ordering', async () => {
     vi.useFakeTimers()
     const locale = signal('en')
     const search = vi.fn<PlantSearchAdapter>()
@@ -181,14 +182,12 @@ describe('plant search session', () => {
     const dispose = session.start()
 
     await flushMicrotasks()
-    session.setSort('Height')
-    await flushMicrotasks()
     expect(search).toHaveBeenLastCalledWith(expect.objectContaining({
       text: '',
       filters: expect.any(Object),
       cursor: null,
       limit: 50,
-      sort: 'Height',
+      sort: 'Name',
       locale: 'en',
       include_total: true,
     }))
@@ -206,18 +205,6 @@ describe('plant search session', () => {
       include_total: false,
     }))
 
-    session.setSort('Family')
-    await flushMicrotasks()
-    expect(search).toHaveBeenLastCalledWith(expect.objectContaining({
-      text: 'lin',
-      filters: expect.any(Object),
-      cursor: null,
-      limit: 50,
-      sort: 'Family',
-      locale: 'en',
-      include_total: false,
-    }))
-
     session.setText('')
     vi.advanceTimersByTime(150)
     await flushMicrotasks()
@@ -226,7 +213,7 @@ describe('plant search session', () => {
       filters: expect.any(Object),
       cursor: null,
       limit: 50,
-      sort: 'Height',
+      sort: 'Name',
       locale: 'en',
       include_total: true,
     }))
@@ -249,12 +236,12 @@ describe('plant search session', () => {
     expect(session.results.value.items.map((item) => item.canonical_name)).toEqual(['Initial row'])
     expect(session.results.value.committedRevision).toBe(1)
 
-    session.setSort('Family')
+    session.patchFilters({ woody: true })
     await flushMicrotasks()
     expect(session.results.value.status).toBe('loading-first-page')
     expect(session.results.value.items.map((item) => item.canonical_name)).toEqual(['Initial row'])
 
-    session.setSort('Height')
+    session.patchFilters({ edible: true })
     await flushMicrotasks()
     expect(search).toHaveBeenCalledTimes(3)
 

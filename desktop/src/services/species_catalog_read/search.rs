@@ -124,9 +124,30 @@ mod tests {
                 medicinal_rating INTEGER,
                 width_max_m REAL
             );
+            CREATE TABLE species_search_text (
+                species_rowid INTEGER PRIMARY KEY,
+                canonical_name TEXT NOT NULL DEFAULT '',
+                common_names TEXT NOT NULL DEFAULT '',
+                family_genus TEXT NOT NULL DEFAULT '',
+                uses_text TEXT NOT NULL DEFAULT '',
+                other_text TEXT NOT NULL DEFAULT ''
+            );
             CREATE VIRTUAL TABLE species_search_fts USING fts5(
-                canonical_name, common_name,
-                content='species', content_rowid='rowid'
+                canonical_name,
+                common_names,
+                family_genus,
+                uses_text,
+                other_text,
+                content='species_search_text',
+                content_rowid='species_rowid',
+                tokenize='unicode61 remove_diacritics 2'
+            );
+            CREATE TABLE species_search_common_name_tokens (
+                species_id INTEGER NOT NULL,
+                language TEXT NOT NULL,
+                token TEXT NOT NULL,
+                first_token_position INTEGER NOT NULL,
+                PRIMARY KEY (species_id, language, token)
             );
             CREATE TABLE best_common_names (
                 species_id INTEGER NOT NULL,
@@ -160,6 +181,32 @@ mod tests {
                 (1, 'Lavandula alpha', 'fr', 1, 'test'),
                 (1, 'Lavande Alpha', 'fr', 0, 'test'),
                 (1, 'Lavande vraie', 'fr', 0, 'test');
+
+            INSERT INTO species_search_text (
+                species_rowid, canonical_name, common_names, family_genus, uses_text, other_text
+            )
+            SELECT s.rowid,
+                s.canonical_name,
+                TRIM(COALESCE(s.common_name, '') || ' ' || COALESCE(cn.all_names, '')),
+                TRIM(COALESCE(s.family, '') || ' ' || COALESCE(s.genus, '')),
+                '',
+                ''
+            FROM species s
+            LEFT JOIN (
+                SELECT species_id, GROUP_CONCAT(common_name, ' ') AS all_names
+                FROM species_common_names
+                GROUP BY species_id
+            ) cn ON cn.species_id = s.id;
+
+            INSERT INTO species_search_common_name_tokens VALUES
+                (1, 'en', 'lavender', 0),
+                (1, 'en', 'alpha', 1),
+                (1, 'fr', 'lavandula', 0),
+                (1, 'fr', 'lavande', 0),
+                (1, 'fr', 'alpha', 1),
+                (1, 'fr', 'vraie', 1),
+                (2, 'en', 'lavender', 0),
+                (2, 'en', 'beta', 1);
 
             INSERT INTO species_search_fts(species_search_fts) VALUES('rebuild');",
         )
@@ -244,7 +291,13 @@ mod tests {
                 ('communia-linensis', 'Communia linensis', 'communia-linensis', 'Commun flax', 'Linaceae', 'Communia', 0.6, 6, 9, 'Medium', 'Low', 1, 0, 0.2),
                 ('fallback-lin', 'Acmella fallback', 'acmella-fallback', 'Lin fallback', 'Asteraceae', 'Acmella', 0.4, 8, 10, 'Medium', 'Low', 1, 0, 0.2),
                 ('lindleya-mespiloides', 'Lindleya mespiloides', 'lindleya-mespiloides', 'Lindleya', 'Rosaceae', 'Lindleya', 3.0, 7, 10, 'Medium', 'Shrub', 0, 0, 2.0),
-                ('malus-domestica', 'Malus domestica', 'malus-domestica', 'Apple', 'Rosaceae', 'Malus', 4.0, 4, 8, 'Medium', 'Canopy', 5, 1, 3.0);
+                ('malus-domestica', 'Malus domestica', 'malus-domestica', 'Apple', 'Rosaceae', 'Malus', 4.0, 4, 8, 'Medium', 'Canopy', 5, 1, 3.0),
+                ('mentha-suaveolens', 'Mentha suaveolens', 'mentha-suaveolens', 'Apple mint', 'Lamiaceae', 'Mentha', 0.6, 5, 9, 'Fast', 'Low', 3, 2, 0.8),
+                ('melissa-officinalis', 'Melissa officinalis', 'melissa-officinalis', 'Lemon balm', 'Lamiaceae', 'Melissa', 0.7, 4, 9, 'Fast', 'Low', 4, 5, 0.7),
+                ('clinopodium-alpinum', 'Clinopodium alpinum', 'clinopodium-alpinum', 'Alpine savory', 'Lamiaceae', 'Clinopodium', 0.4, 5, 8, 'Medium', 'Low', 1, 2, 0.5),
+                ('clinopodium-nepeta', 'Clinopodium nepeta', 'clinopodium-nepeta', 'Lesser calamint', 'Lamiaceae', 'Clinopodium', 0.5, 5, 9, 'Medium', 'Low', 2, 2, 0.6),
+                ('viola-melissifolia', 'Viola melissifolia', 'viola-melissifolia', 'Violet', 'Violaceae', 'Viola', 0.2, 5, 8, 'Medium', 'Low', 0, 0, 0.2),
+                ('moluccella-laevis', 'Moluccella laevis', 'moluccella-laevis', 'Bells of Ireland', 'Lamiaceae', 'Moluccella', 0.9, 7, 10, 'Medium', 'Low', 0, 0, 0.4);
 
             INSERT INTO species_common_names VALUES
                 ('linum-usitatissimum', 'Common flax', 'en', 1, 'test'),
@@ -260,7 +313,20 @@ mod tests {
                 ('fallback-lin', 'Lin fallback', 'en', 1, 'test'),
                 ('lindleya-mespiloides', 'Lindleya', 'en', 1, 'test'),
                 ('malus-domestica', 'Apple', 'en', 1, 'test'),
-                ('malus-domestica', 'Pommier', 'fr', 1, 'test');
+                ('malus-domestica', 'Pommier', 'fr', 1, 'test'),
+                ('mentha-suaveolens', 'Apple mint', 'en', 1, 'test'),
+                ('melissa-officinalis', 'Lemon balm', 'en', 1, 'test'),
+                ('melissa-officinalis', 'Mélisse', 'fr', 1, 'test'),
+                ('clinopodium-alpinum', 'Alpine savory', 'en', 1, 'test'),
+                ('clinopodium-alpinum', 'Mélisse alpine', 'fr', 1, 'test'),
+                ('clinopodium-nepeta', 'Lesser calamint', 'en', 1, 'test'),
+                ('clinopodium-nepeta', 'Mélisse des champs', 'fr', 1, 'test'),
+                ('viola-melissifolia', 'Violet', 'en', 1, 'test'),
+                ('viola-melissifolia', 'Violette à feuilles de mélisse', 'fr', 1, 'test'),
+                ('moluccella-laevis', 'Bells of Ireland', 'en', 1, 'test'),
+                ('moluccella-laevis', 'Clochette d''Irlande', 'fr', 1, 'test'),
+                ('moluccella-laevis', 'Moluque verte', 'fr', 0, 'llm'),
+                ('moluccella-laevis', 'Mélisse des Moluques', 'fr', 0, 'test');
 
             INSERT INTO best_common_names VALUES
                 ('linum-usitatissimum', 'en', 'Common flax'),
@@ -276,7 +342,18 @@ mod tests {
                 ('fallback-lin', 'en', 'Lin fallback'),
                 ('lindleya-mespiloides', 'en', 'Lindleya'),
                 ('malus-domestica', 'en', 'Apple'),
-                ('malus-domestica', 'fr', 'Pommier');
+                ('malus-domestica', 'fr', 'Pommier'),
+                ('mentha-suaveolens', 'en', 'Apple mint'),
+                ('melissa-officinalis', 'en', 'Lemon balm'),
+                ('melissa-officinalis', 'fr', 'Mélisse'),
+                ('clinopodium-alpinum', 'en', 'Alpine savory'),
+                ('clinopodium-alpinum', 'fr', 'Mélisse alpine'),
+                ('clinopodium-nepeta', 'en', 'Lesser calamint'),
+                ('clinopodium-nepeta', 'fr', 'Mélisse des champs'),
+                ('viola-melissifolia', 'en', 'Violet'),
+                ('viola-melissifolia', 'fr', 'Violette à feuilles de mélisse'),
+                ('moluccella-laevis', 'en', 'Bells of Ireland'),
+                ('moluccella-laevis', 'fr', 'Clochette d''Irlande');
 
             INSERT INTO species_search_text (
                 species_rowid, canonical_name, common_names, family_genus, uses_text, other_text
@@ -322,7 +399,35 @@ mod tests {
                 ('fallback-lin', 'en', 'fallback', 1),
                 ('lindleya-mespiloides', 'en', 'lindleya', 0),
                 ('malus-domestica', 'en', 'apple', 0),
-                ('malus-domestica', 'fr', 'pommier', 0);",
+                ('malus-domestica', 'fr', 'pommier', 0),
+                ('mentha-suaveolens', 'en', 'apple', 0),
+                ('mentha-suaveolens', 'en', 'mint', 1),
+                ('melissa-officinalis', 'en', 'lemon', 0),
+                ('melissa-officinalis', 'en', 'balm', 1),
+                ('melissa-officinalis', 'fr', 'melisse', 0),
+                ('clinopodium-alpinum', 'en', 'alpine', 0),
+                ('clinopodium-alpinum', 'en', 'savory', 1),
+                ('clinopodium-alpinum', 'fr', 'melisse', 0),
+                ('clinopodium-alpinum', 'fr', 'alpine', 1),
+                ('clinopodium-nepeta', 'en', 'lesser', 0),
+                ('clinopodium-nepeta', 'en', 'calamint', 1),
+                ('clinopodium-nepeta', 'fr', 'melisse', 0),
+                ('clinopodium-nepeta', 'fr', 'des', 1),
+                ('clinopodium-nepeta', 'fr', 'champs', 2),
+                ('viola-melissifolia', 'en', 'violet', 0),
+                ('viola-melissifolia', 'fr', 'violette', 0),
+                ('viola-melissifolia', 'fr', 'feuilles', 2),
+                ('viola-melissifolia', 'fr', 'de', 3),
+                ('viola-melissifolia', 'fr', 'melisse', 4),
+                ('moluccella-laevis', 'en', 'bells', 0),
+                ('moluccella-laevis', 'en', 'ireland', 2),
+                ('moluccella-laevis', 'fr', 'clochette', 0),
+                ('moluccella-laevis', 'fr', 'irlande', 2),
+                ('moluccella-laevis', 'fr', 'moluque', 0),
+                ('moluccella-laevis', 'fr', 'verte', 1),
+                ('moluccella-laevis', 'fr', 'melisse', 0),
+                ('moluccella-laevis', 'fr', 'des', 1),
+                ('moluccella-laevis', 'fr', 'moluques', 2);",
         )
         .unwrap();
         conn
@@ -356,6 +461,38 @@ mod tests {
             ("en-broad-a", "en", "a"),
         ] {
             report_species_search_latency_case(&conn, case)?;
+        }
+
+        Ok(())
+    }
+
+    fn run_bundled_species_search_relevance_examples() -> Result<(), String> {
+        let Some(path) = bundled_species_search_db_path() else {
+            eprintln!(
+                "skipping species search relevance harness: no bundled database found; \
+                 run `python3 scripts/prepare-db.py` or set CANOPI_PLANT_DB_PATH"
+            );
+            return Ok(());
+        };
+        let conn = Connection::open_with_flags(
+            &path,
+            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )
+        .map_err(|error| {
+            format!(
+                "Failed to open Species Catalog database at {}: {error}",
+                path.display()
+            )
+        })?;
+
+        eprintln!("species_search_relevance db={}", path.display());
+        for case in [
+            ("en-apple", "en", "apple"),
+            ("en-appl", "en", "appl"),
+            ("fr-melisse", "fr", "melisse"),
+            ("fr-melis", "fr", "melis"),
+        ] {
+            report_species_search_relevance_case(&conn, case)?;
         }
 
         Ok(())
@@ -405,6 +542,43 @@ mod tests {
             millis(count_elapsed),
             list_rows,
             total_estimate
+        );
+        Ok(())
+    }
+
+    fn report_species_search_relevance_case(
+        conn: &Connection,
+        (label, locale, query): (&str, &str, &str),
+    ) -> Result<(), String> {
+        let result = search(
+            conn,
+            search_request(
+                Some(query),
+                SpeciesFilter::default(),
+                None,
+                Sort::Relevance,
+                10,
+                false,
+                locale,
+            ),
+        )?;
+        let rows = result
+            .items
+            .iter()
+            .take(6)
+            .map(|item| {
+                format!(
+                    "{} [{} | {} | matched={}]",
+                    item.canonical_name,
+                    item.common_name.as_deref().unwrap_or(""),
+                    item.common_name_2.as_deref().unwrap_or(""),
+                    item.matched_common_name.as_deref().unwrap_or(""),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        eprintln!(
+            "species_search_relevance case={label} locale={locale} query={query:?} rows={rows:?}"
         );
         Ok(())
     }
@@ -524,15 +698,15 @@ mod tests {
         assert_eq!(alpha.common_name_2.as_deref(), Some("Lavande vraie"));
         assert!(!alpha.is_name_fallback);
 
-        // Species 2 has no French names -> English fallback, no secondary
+        // Species 2 has no French names -> no Common Name fallback, no secondary
         let beta = result
             .items
             .iter()
             .find(|i| i.canonical_name == "Lavandula beta")
             .unwrap();
-        assert_eq!(beta.common_name.as_deref(), Some("Lavender Beta"));
+        assert_eq!(beta.common_name, None);
         assert_eq!(beta.common_name_2, None);
-        assert!(beta.is_name_fallback);
+        assert!(!beta.is_name_fallback);
     }
 
     #[test]
@@ -621,6 +795,7 @@ mod tests {
             ("fr", "lin commun", vec!["Linum usitatissimum"]),
             ("fr", "lind", vec!["Lindleya mespiloides"]),
             ("en", "apple", vec!["Malus domestica"]),
+            ("en", "appl", vec!["Malus domestica"]),
         ] {
             let result = search(
                 &conn,
@@ -654,7 +829,108 @@ mod tests {
     }
 
     #[test]
-    fn relevance_prefers_active_locale_common_name_whole_token() {
+    fn relevance_prefers_short_displayed_common_name_prefixes() {
+        let conn = relevance_fixture_db();
+
+        for query in ["apple", "appl"] {
+            let result = search(
+                &conn,
+                search_request(
+                    Some(query),
+                    SpeciesFilter::default(),
+                    None,
+                    Sort::Relevance,
+                    10,
+                    true,
+                    "en",
+                ),
+            )
+            .unwrap();
+            let names = result
+                .items
+                .iter()
+                .map(|item| item.canonical_name.as_str())
+                .collect::<Vec<_>>();
+
+            assert_eq!(
+                names.first().copied(),
+                Some("Malus domestica"),
+                "expected Apple before longer Apple Common Names for {query:?}; got {names:?}"
+            );
+            assert_eq!(result.items[0].matched_common_name, None);
+            assert!(
+                names
+                    .iter()
+                    .position(|name| *name == "Malus domestica")
+                    .unwrap()
+                    < names
+                        .iter()
+                        .position(|name| *name == "Mentha suaveolens")
+                        .unwrap(),
+                "expected Apple before Apple mint for {query:?}; got {names:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn relevance_orders_french_melisse_results_by_displayed_match_strength() {
+        let conn = relevance_fixture_db();
+
+        for query in ["melis", "melisse"] {
+            let result = search(
+                &conn,
+                search_request(
+                    Some(query),
+                    SpeciesFilter::default(),
+                    None,
+                    Sort::Relevance,
+                    10,
+                    true,
+                    "fr",
+                ),
+            )
+            .unwrap();
+            let names = result
+                .items
+                .iter()
+                .map(|item| item.canonical_name.as_str())
+                .collect::<Vec<_>>();
+            let index_of = |needle: &str| {
+                names
+                    .iter()
+                    .position(|name| *name == needle)
+                    .unwrap_or_else(|| panic!("expected {needle} in {names:?} for {query:?}"))
+            };
+
+            assert_eq!(
+                names.first().copied(),
+                Some("Melissa officinalis"),
+                "expected short displayed Mélisse result first for {query:?}; got {names:?}"
+            );
+            assert_eq!(result.items[0].matched_common_name, None);
+            assert!(index_of("Clinopodium alpinum") < index_of("Viola melissifolia"));
+            assert!(index_of("Clinopodium nepeta") < index_of("Viola melissifolia"));
+            assert!(index_of("Viola melissifolia") < index_of("Moluccella laevis"));
+
+            let moluccella = result
+                .items
+                .iter()
+                .find(|item| item.canonical_name == "Moluccella laevis")
+                .unwrap();
+            assert_eq!(
+                moluccella.common_name.as_deref(),
+                Some("Clochette d'Irlande")
+            );
+            assert_eq!(moluccella.common_name_2.as_deref(), Some("Moluque verte"));
+            assert_eq!(
+                moluccella.matched_common_name.as_deref(),
+                Some("Mélisse des Moluques")
+            );
+        }
+    }
+
+    #[test]
+    fn relevance_prefers_displayed_locale_common_name_prefixes() {
         let conn = relevance_fixture_db();
 
         let result = search(
@@ -676,8 +952,16 @@ mod tests {
             .map(|item| item.canonical_name.as_str())
             .collect::<Vec<_>>();
 
-        assert!(names[..2].contains(&"Linum usitatissimum"));
-        assert!(names[..2].contains(&"Linum bienne"));
+        for displayed_prefix_match in ["Linum usitatissimum", "Linum bienne", "Linum leonii"] {
+            let position = names
+                .iter()
+                .position(|name| *name == displayed_prefix_match)
+                .unwrap_or_else(|| panic!("expected {displayed_prefix_match} in {names:?}"));
+            assert!(
+                position < 3,
+                "expected displayed Common Name prefix matches first; got {names:?}"
+            );
+        }
         assert!(
             names
                 .iter()
@@ -692,7 +976,7 @@ mod tests {
     }
 
     #[test]
-    fn relevance_places_fallback_common_names_after_active_locale_names() {
+    fn relevance_ignores_english_common_name_fallbacks_for_non_english_searches() {
         let conn = relevance_fixture_db();
 
         let result = search(
@@ -720,7 +1004,10 @@ mod tests {
                 .unwrap_or_else(|| panic!("expected {needle} in {names:?}"))
         };
 
-        let fallback_index = index_of("Acmella fallback");
+        assert!(
+            !names.contains(&"Acmella fallback"),
+            "expected French search to ignore English-only Common Name fallback; got {names:?}"
+        );
         for active_locale_match in [
             "Linum usitatissimum",
             "Linum bienne",
@@ -728,23 +1015,8 @@ mod tests {
             "Linum communis",
             "Communia linensis",
         ] {
-            assert!(
-                index_of(active_locale_match) < fallback_index,
-                "expected active-locale match {active_locale_match} before fallback match; got {names:?}"
-            );
+            index_of(active_locale_match);
         }
-        assert!(
-            fallback_index < index_of("Lindleya mespiloides"),
-            "expected fallback common-name match before taxonomy-only match; got {names:?}"
-        );
-
-        let fallback = result
-            .items
-            .iter()
-            .find(|item| item.canonical_name == "Acmella fallback")
-            .unwrap();
-        assert_eq!(fallback.common_name.as_deref(), Some("Lin fallback"));
-        assert!(fallback.is_name_fallback);
     }
 
     #[test]
@@ -830,6 +1102,12 @@ mod tests {
     #[ignore = "manual latency harness; run with --ignored --nocapture"]
     fn bundled_species_search_latency_harness_reports_list_and_count_timings() {
         run_bundled_species_search_latency_harness().unwrap();
+    }
+
+    #[test]
+    #[ignore = "manual bundled database relevance check; run with --ignored --nocapture"]
+    fn bundled_species_search_relevance_examples_report_ordering() {
+        run_bundled_species_search_relevance_examples().unwrap();
     }
 
     #[test]

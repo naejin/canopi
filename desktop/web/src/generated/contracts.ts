@@ -499,6 +499,7 @@ export type SpeciesListItem = {
 	slug: string,
 	common_name: string | null,
 	common_name_2: string | null,
+	matched_common_name: string | null,
 	is_name_fallback: boolean,
 	family: string | null,
 	genus: string | null,

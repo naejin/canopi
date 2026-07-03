@@ -141,9 +141,23 @@ mod tests {
                 medicinal_rating INTEGER,
                 width_max_m REAL
             );
+            CREATE TABLE species_search_text (
+                species_rowid INTEGER PRIMARY KEY,
+                canonical_name TEXT NOT NULL DEFAULT '',
+                common_names TEXT NOT NULL DEFAULT '',
+                family_genus TEXT NOT NULL DEFAULT '',
+                uses_text TEXT NOT NULL DEFAULT '',
+                other_text TEXT NOT NULL DEFAULT ''
+            );
             CREATE VIRTUAL TABLE species_search_fts USING fts5(
-                canonical_name, common_name,
-                content='species', content_rowid='rowid'
+                canonical_name,
+                common_names,
+                family_genus,
+                uses_text,
+                other_text,
+                content='species_search_text',
+                content_rowid='species_rowid',
+                tokenize='unicode61 remove_diacritics 2'
             );
             CREATE TABLE best_common_names (
                 species_id TEXT NOT NULL,
@@ -177,6 +191,22 @@ mod tests {
                 ('sp-1', 'Pomme', 'fr', 0, 'test'),
                 ('sp-2', 'Lavender', 'en', 1, 'test'),
                 ('sp-2', 'Lavande', 'fr', 1, 'test');
+
+            INSERT INTO species_search_text (
+                species_rowid, canonical_name, common_names, family_genus, uses_text, other_text
+            )
+            SELECT s.rowid,
+                s.canonical_name,
+                TRIM(COALESCE(s.common_name, '') || ' ' || COALESCE(cn.all_names, '')),
+                TRIM(COALESCE(s.family, '') || ' ' || COALESCE(s.genus, '')),
+                '',
+                ''
+            FROM species s
+            LEFT JOIN (
+                SELECT species_id, GROUP_CONCAT(common_name, ' ') AS all_names
+                FROM species_common_names
+                GROUP BY species_id
+            ) cn ON cn.species_id = s.id;
 
             INSERT INTO species_search_fts(species_search_fts) VALUES('rebuild');",
         )

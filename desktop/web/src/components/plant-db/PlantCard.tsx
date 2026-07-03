@@ -8,6 +8,7 @@ import {
 } from '../../canvas/plant-stamp-source'
 import { STRATUM_I18N_KEY } from '../../types/constants'
 import type { SpeciesListItem } from '../../types/species'
+import { secondaryCommonNameForDisplay } from './common-name-display'
 import styles from './PlantDb.module.css'
 
 /** Format height to 1 decimal place max, dropping trailing .0 */
@@ -54,6 +55,8 @@ export function PlantCard({ plant }: Props) {
       ? `Z${plant.hardiness_zone_min}–${plant.hardiness_zone_max}`
       : `Z${plant.hardiness_zone_min}`
     : null
+  const showMatchedCommonName = speciesCatalogWorkbench.isActiveSearchText(speciesCatalogWorkbench.intent.value.text)
+  const secondaryCommonName = secondaryCommonNameForDisplay(plant, showMatchedCommonName)
 
   return (
     <div
@@ -73,8 +76,8 @@ export function PlantCard({ plant }: Props) {
             <span className={plant.is_name_fallback ? styles.cardNameFallback : styles.cardName}>
               {plant.common_name}
             </span>
-            {plant.common_name_2 && (
-              <span className={styles.cardNameSecondary}>{plant.common_name_2}</span>
+            {secondaryCommonName && (
+              <span className={styles.cardNameSecondary}>{secondaryCommonName}</span>
             )}
           </>
         ) : null}

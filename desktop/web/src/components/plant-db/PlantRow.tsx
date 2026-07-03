@@ -8,6 +8,7 @@ import {
 } from '../../canvas/plant-stamp-source'
 import { STRATUM_I18N_KEY } from '../../types/constants'
 import type { SpeciesListItem } from '../../types/species'
+import { secondaryCommonNameForDisplay } from './common-name-display'
 import styles from './PlantDb.module.css'
 
 /** Format height to 1 decimal place max, dropping trailing .0 */
@@ -65,6 +66,9 @@ export function PlantRow({ plant, variant = 'catalog' }: Props) {
   const metadataTags = variant === 'favorites'
     ? favoriteMetadataTags(plant)
     : catalogMetadataTags(plant, hardiness)
+  const showMatchedCommonName = variant === 'catalog'
+    && speciesCatalogWorkbench.isActiveSearchText(speciesCatalogWorkbench.intent.value.text)
+  const secondaryCommonName = secondaryCommonNameForDisplay(plant, showMatchedCommonName)
 
   return (
     <div
@@ -83,7 +87,7 @@ export function PlantRow({ plant, variant = 'catalog' }: Props) {
             <>
               <span className={plant.is_name_fallback ? styles.commonNameFallback : styles.commonName}>
                 {plant.common_name}
-                {plant.common_name_2 && <span className={styles.secondaryName}> · {plant.common_name_2}</span>}
+                {secondaryCommonName && <span className={styles.secondaryName}> · {secondaryCommonName}</span>}
               </span>
               <span className={styles.botanicalName}>{plant.canonical_name}</span>
             </>

@@ -27,24 +27,29 @@ pub fn get_common_name(conn: &Connection, species_id: &str, locale: &str) -> Opt
         return best;
     }
 
-    let best_en: Option<String> = conn
+    let primary_local: Option<String> = conn
         .query_row(
-            "SELECT common_name FROM best_common_names
-             WHERE species_id = ?1 AND language = 'en'
+            "SELECT common_name FROM species_common_names
+             WHERE species_id = ?1 AND language = ?2 AND is_primary = 1
+             ORDER BY LENGTH(common_name) ASC
              LIMIT 1",
-            [species_id],
+            [species_id, locale],
             |row| row.get(0),
         )
         .optional()
         .ok()
         .flatten();
-    if best_en.is_some() {
-        return best_en;
+    if primary_local.is_some() {
+        return primary_local;
+    }
+
+    if locale != "en" {
+        return None;
     }
 
     conn.query_row(
-        "SELECT common_name FROM species_common_names
-         WHERE species_id = ?1 AND language = 'en' AND is_primary = 1
+        "SELECT common_name FROM species
+         WHERE id = ?1
          LIMIT 1",
         [species_id],
         |row| row.get(0),
@@ -126,16 +131,16 @@ pub fn get_common_names_batch(
         .collect();
     let sql = format!(
         "SELECT s.canonical_name,
-                COALESCE(bcn_loc.common_name, bcn_en.common_name, scn_loc.common_name, scn_en.common_name, s.common_name) AS resolved_name
+                COALESCE(
+                    bcn_loc.common_name,
+                    scn_loc.common_name,
+                    CASE WHEN ?1 = 'en' THEN s.common_name ELSE NULL END
+                ) AS resolved_name
          FROM species s
          LEFT JOIN best_common_names bcn_loc
            ON bcn_loc.species_id = s.id AND bcn_loc.language = ?1
-         LEFT JOIN best_common_names bcn_en
-           ON bcn_en.species_id = s.id AND bcn_en.language = 'en'
          LEFT JOIN species_common_names scn_loc
            ON scn_loc.species_id = s.id AND scn_loc.language = ?1 AND scn_loc.is_primary = 1
-         LEFT JOIN species_common_names scn_en
-           ON scn_en.species_id = s.id AND scn_en.language = 'en' AND scn_en.is_primary = 1
          WHERE s.canonical_name IN ({})",
         placeholders.join(", "),
     );
