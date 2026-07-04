@@ -23,6 +23,9 @@ cd desktop/web && npm run build
 # Web Edition static build plus browser-boundary scan
 cd desktop/web && npm run build:web
 
+# Web Edition versioned release artifact
+cd desktop/web && npm run package:web
+
 # Release build
 cargo build --release
 ```
@@ -49,11 +52,12 @@ cargo build --release
 
 - Web Edition source belongs in this repository, not in `canopi-website`. Implement it as a separate browser Vite entry/build that reuses shared frontend modules behind browser-specific shell and adapter seams.
 - The Web Edition local build command is `cd desktop/web && npm run build:web`. It emits `desktop/web/dist-web/` and runs the browser-boundary scanner; keep `dist-web/` uncommitted.
+- The Web Edition artifact command is `cd desktop/web && npm run package:web`. It builds the web entry, scans browser chunks, and emits a versioned directory plus `.tar.gz` under `desktop/web/dist-web-artifacts/`; keep that output uncommitted.
 - The Canopi website should publish the built Web Edition artifact under a route such as `/app/`; it should not import Canopi app source as an Astro component package, workspace dependency, submodule, or copied component tree. See `docs/adr/0012-web-edition-static-app-bundle.md`.
 - Do not commit generated Web Edition `/app` assets to `canopi-website` long term. The production website deploy should download the versioned Web Edition release asset from the Canopi app release tag and verify its manifest/checksums before publishing it under `/app/`. A local script may copy from a sibling Canopi checkout for preview/dev only.
-- The web build should use a base path compatible with the website route, such as `/app/`, and the website deployment should serve `/app/*` with the Web Edition SPA fallback.
+- The web build uses the `/app/` base path. The package manifest records the required SPA fallback: serve `/app/*` as `/app/index.html` with status `200`.
 - Web Edition uses compile-time browser adapters, not runtime feature flags in shared modules. Web Edition build checks should reject Tauri-only imports in browser chunks and fail if any generated app, WASM, worker, catalog, template, or image-metadata asset exceeds the Cloudflare Pages per-asset limit. See `docs/adr/0021-web-edition-compile-time-adapters.md`.
-- Keep web catalog and DuckDB-WASM assets sharded/compressed enough for Cloudflare Pages limits; do not hide oversized files inside the website build.
+- Keep web catalog and DuckDB-WASM assets sharded/compressed enough for Cloudflare Pages limits; do not hide oversized files inside the website build. As of Cloudflare Pages docs last checked 2026-07-04, a single Pages asset is limited to 25 MiB and Free-plan sites contain up to 20,000 files. `npm run package:web` enforces those conservative limits.
 - Web Edition v1 is not offline-first: do not add service workers, PWA install flows, or app-managed precache behavior unless a later decision changes the cache/update model. See `docs/adr/0022-web-edition-not-offline-first.md`.
 
 ## CI Polling Cadence

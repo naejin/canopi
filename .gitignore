@@ -47,6 +47,7 @@ Thumbs.db
 *.deb
 desktop/resources/
 desktop/web/dist-web/
+desktop/web/dist-web-artifacts/
 
 # Beads / Dolt files (added by bd init)
 .dolt/

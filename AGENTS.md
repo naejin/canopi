@@ -65,6 +65,9 @@ npm run dev
 # Web Edition static build, from desktop/web
 npm run build:web
 
+# Web Edition release artifact, from desktop/web
+npm run package:web
+
 # Frontend tests
 cd desktop/web && npm test
 

@@ -11,6 +11,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [preact()],
+    base: isWebEdition ? "/app/" : undefined,
     resolve: {
       alias: {
         '#platform': platformAdapter,
