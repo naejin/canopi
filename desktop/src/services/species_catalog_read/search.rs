@@ -1191,6 +1191,43 @@ mod tests {
     }
 
     #[test]
+    fn indexed_active_search_preserves_broader_fts_only_matches() {
+        let conn = indexed_relevance_fixture_without_legacy_tokens();
+        conn.execute(
+            "UPDATE species_search_text
+             SET uses_text = 'pollinator habitat'
+             WHERE species_rowid = (
+                 SELECT rowid FROM species WHERE id = 'linum-bienne'
+             )",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO species_search_fts(species_search_fts) VALUES('rebuild')",
+            [],
+        )
+        .unwrap();
+
+        let result = search(
+            &conn,
+            search_request(
+                Some("pollinator"),
+                SpeciesFilter::default(),
+                None,
+                Sort::Relevance,
+                10,
+                true,
+                "en",
+            ),
+        )
+        .unwrap();
+
+        assert_eq!(result.total_estimate, 1);
+        assert_eq!(result.items.len(), 1);
+        assert_eq!(result.items[0].canonical_name, "Linum bienne");
+    }
+
+    #[test]
     fn relevance_prefers_displayed_locale_common_name_prefixes() {
         let conn = relevance_fixture_db();
 

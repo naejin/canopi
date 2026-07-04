@@ -355,9 +355,10 @@ fn indexed_name_search_cte(
 
     match mode {
         IndexedNameSearchMode::Broad => {
-            indexed_name_search_cte_broad(query, locale_placeholder, sql_builder)
+            indexed_name_search_cte_broad(search_text, query, locale_placeholder, sql_builder)
         }
         IndexedNameSearchMode::Staged { fallback_threshold } => indexed_name_search_cte_staged(
+            search_text,
             query,
             locale_placeholder,
             fallback_threshold,
@@ -367,6 +368,7 @@ fn indexed_name_search_cte(
 }
 
 fn indexed_name_search_cte_broad(
+    search_text: &SearchText,
     query: &super::text::CommonNameQuery,
     locale_placeholder: &str,
     sql_builder: &mut SqlBuilder,
@@ -463,17 +465,19 @@ fn indexed_name_search_cte_broad(
         )"
         .to_owned(),
     );
-    ctes.push(
-        "candidate_scores AS MATERIALIZED (
-            SELECT species_id,
-                   name_rank AS relevance_rank,
-                   token_position_sum,
-                   display_name_length,
-                   1000000.0 AS bm25_rank
-            FROM name_scores
-        )"
-        .to_owned(),
-    );
+    ctes.push(indexed_candidate_scores_cte(
+        "name_candidate_scores",
+        "name_scores",
+    ));
+    ctes.push(indexed_fts_candidate_scores_cte(
+        search_text.fts_term(),
+        None,
+        sql_builder,
+    ));
+    ctes.push(indexed_combined_candidate_scores_cte(&[
+        "name_candidate_scores",
+        "fts_candidate_scores",
+    ]));
 
     IndexedNameSearchCte {
         cte_sql: ctes.join(",\n"),
@@ -481,6 +485,7 @@ fn indexed_name_search_cte_broad(
 }
 
 fn indexed_name_search_cte_staged(
+    search_text: &SearchText,
     query: &super::text::CommonNameQuery,
     locale_placeholder: &str,
     fallback_threshold: u32,
@@ -565,24 +570,18 @@ fn indexed_name_search_cte_staged(
         "fallback_candidate_scores",
         "fallback_name_scores",
     ));
-    ctes.push(
-        "candidate_scores AS MATERIALIZED (
-            SELECT species_id,
-                   MIN(relevance_rank) AS relevance_rank,
-                   MIN(token_position_sum) AS token_position_sum,
-                   MIN(display_name_length) AS display_name_length,
-                   MIN(bm25_rank) AS bm25_rank
-            FROM (
-                SELECT species_id, relevance_rank, token_position_sum, display_name_length, bm25_rank
-                FROM selected_candidate_scores
-                UNION ALL
-                SELECT species_id, relevance_rank, token_position_sum, display_name_length, bm25_rank
-                FROM fallback_candidate_scores
-            )
-            GROUP BY species_id
-        )"
-        .to_owned(),
-    );
+    ctes.push(indexed_fts_candidate_scores_cte(
+        search_text.fts_term(),
+        Some(&format!(
+            "(SELECT count FROM selected_candidate_count) < {fallback_threshold_placeholder}"
+        )),
+        sql_builder,
+    ));
+    ctes.push(indexed_combined_candidate_scores_cte(&[
+        "selected_candidate_scores",
+        "fallback_candidate_scores",
+        "fts_candidate_scores",
+    ]));
 
     IndexedNameSearchCte {
         cte_sql: ctes.join(",\n"),
@@ -693,6 +692,69 @@ fn indexed_candidate_scores_cte(cte_name: &str, source_cte: &str) -> String {
                    display_name_length,
                    1000000.0 AS bm25_rank
             FROM {source_cte}
+        )"
+    )
+}
+
+fn indexed_fts_candidate_scores_cte(
+    fts_term: Option<&str>,
+    leading_condition: Option<&str>,
+    sql_builder: &mut SqlBuilder,
+) -> String {
+    let Some(fts_term) = fts_term else {
+        return "fts_candidate_scores AS MATERIALIZED (
+            SELECT s.id AS species_id,
+                   5 AS relevance_rank,
+                   2147483647 AS token_position_sum,
+                   2147483647 AS display_name_length,
+                   1000000.0 AS bm25_rank
+            FROM species s
+            WHERE 0
+        )"
+        .to_owned();
+    };
+
+    let fts_placeholder = sql_builder.bind_text(fts_term.to_owned());
+    let leading_sql = leading_condition
+        .map(|condition| format!("{condition}\n              AND "))
+        .unwrap_or_default();
+    format!(
+        "fts_candidate_scores AS MATERIALIZED (
+            SELECT s.id AS species_id,
+                   5 AS relevance_rank,
+                   2147483647 AS token_position_sum,
+                   2147483647 AS display_name_length,
+                   bm25(species_search_fts, 8, 10, 5, 1, 1) AS bm25_rank
+            FROM species_search_fts
+            JOIN species s ON s.rowid = species_search_fts.rowid
+            WHERE {leading_sql}species_search_fts MATCH {fts_placeholder}
+        )"
+    )
+}
+
+fn indexed_combined_candidate_scores_cte(candidate_ctes: &[&str]) -> String {
+    let union_sql = candidate_ctes
+        .iter()
+        .map(|cte_name| {
+            format!(
+                "SELECT species_id, relevance_rank, token_position_sum, display_name_length, bm25_rank
+                FROM {cte_name}"
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n                UNION ALL\n                ");
+
+    format!(
+        "candidate_scores AS MATERIALIZED (
+            SELECT species_id,
+                   MIN(relevance_rank) AS relevance_rank,
+                   MIN(token_position_sum) AS token_position_sum,
+                   MIN(display_name_length) AS display_name_length,
+                   MIN(bm25_rank) AS bm25_rank
+            FROM (
+                {union_sql}
+            )
+            GROUP BY species_id
         )"
     )
 }
