@@ -13,7 +13,7 @@ These instructions are for AI agents working in this repository. Optimize for lo
 
 ## Agent Docs Maintenance
 
-- Treat `AGENTS.md` and `docs/agent/*.md` as living operating docs, not append-only notes.
+- Treat `AGENTS.md`, `docs/agent/*.md`, and `docs/agents/*.md` as living operating docs, not append-only notes.
 - Update agent docs in the same change when code moves, architecture boundaries change, commands change, quality gates change, or a repeated gotcha becomes a durable rule.
 - Prefer replacing or deleting stale instructions over adding exceptions. If two rules conflict, resolve the conflict before ending the work.
 - Keep `AGENTS.md` focused on repo-wide rules. Put subsystem-specific details in `docs/agent/*.md` and link to them from here.
@@ -30,6 +30,7 @@ These instructions are for AI agents working in this repository. Optimize for lo
 - `bindings-gen/`: codegen for frontend transport bindings.
 - `scripts/`: database preparation and release tooling.
 - `docs/agent/`: subsystem-specific guidance for future agents.
+- `docs/agents/`: workflow context consumed by repo-local agent skills.
 - `.interface-design/`: design system documentation.
 
 ## Subsystem Guides
@@ -41,6 +42,14 @@ These instructions are for AI agents working in this repository. Optimize for lo
 - [Database](docs/agent/database.md): plant DB schema, query builder, FTS, translations, canopi-data export.
 - [Build and release](docs/agent/build-release.md): build commands, release workflow, platform/native rules.
 - [Problem reporting](docs/agent/problem-reporting.md): local Problem Reports, Diagnostic Bundle privacy boundary, reporting UI seams.
+
+## Agent Skills
+
+Repo-local skills live in the ignored `.agents/skills/` directory as flat skill folders copied from the public skill catalog. Do not force-add `.agents/` to git unless the repository policy changes.
+
+- [Issue tracker](docs/agents/issue-tracker.md): bd conventions for task, bug, feature, epic, chore, and decision tracking.
+- [Triage workflow](docs/agents/triage-workflow.md): readiness labels and durable brief conventions for bd beads.
+- [Domain docs](docs/agents/domain.md): project vocabulary and decision docs that skills should read before planning or editing.
 
 Read the relevant subsystem guide before changing that area. If a guide disagrees with current code, trust the code, fix the guide, and note it in the handoff.
 
