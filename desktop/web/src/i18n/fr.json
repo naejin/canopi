@@ -717,6 +717,12 @@
     "nativeDistribution": "Répartition indigène",
     "introducedDistribution": "Répartition introduite"
   },
+  "webSpeciesDetail": {
+    "commonNames": "Noms communs",
+    "source": "Source",
+    "credit": "Crédit",
+    "license": "Licence"
+  },
   "chips": {
     "fruitTrees": "Arbres fruitiers",
     "nitrogenFixers": "Fixateurs d'azote",

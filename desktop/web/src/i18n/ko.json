@@ -717,6 +717,12 @@
     "nativeDistribution": "자생 분포",
     "introducedDistribution": "도입 분포"
   },
+  "webSpeciesDetail": {
+    "commonNames": "일반 이름",
+    "source": "출처",
+    "credit": "크레딧",
+    "license": "라이선스"
+  },
   "chips": {
     "fruitTrees": "과일 나무",
     "nitrogenFixers": "질소 고정 식물",

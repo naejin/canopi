@@ -2,7 +2,7 @@
   height: 100%;
   min-height: 0;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   background: var(--color-surface);
   color: var(--color-text);
 }
@@ -157,6 +157,116 @@
 .favoriteButtonActive {
   border-color: var(--color-border-strong);
   color: var(--color-primary);
+}
+
+.detailShell {
+  display: grid;
+  gap: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  padding: var(--space-3);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+}
+
+.detailHero {
+  min-height: 120px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.detailImage {
+  width: 100%;
+  height: 180px;
+  display: block;
+  object-fit: cover;
+}
+
+.detailImageFallback {
+  min-height: 120px;
+  display: grid;
+  place-items: center;
+  padding: var(--space-3);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.detailBody {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.detailTitleRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--control-size-sm);
+  align-items: start;
+  gap: var(--space-2);
+}
+
+.detailNames {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.detailTitle {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.detailBotanical {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-style: italic;
+}
+
+.detailClose {
+  width: var(--control-size-sm);
+  height: var(--control-size-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.detailField {
+  display: grid;
+  grid-template-columns: minmax(96px, 0.45fr) minmax(0, 1fr);
+  gap: var(--space-2);
+}
+
+.detailFieldLabel,
+.detailAttribution dt {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.detailFieldValue {
+  min-width: 0;
+}
+
+.detailAttribution {
+  display: grid;
+  gap: var(--space-1);
+  margin: var(--space-1) 0 0;
+}
+
+.detailAttributionRow {
+  display: grid;
+  grid-template-columns: minmax(96px, 0.45fr) minmax(0, 1fr);
+  gap: var(--space-2);
+}
+
+.detailAttribution dd {
+  min-width: 0;
+  margin: 0;
 }
 
 .loadMoreButton {

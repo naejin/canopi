@@ -717,6 +717,12 @@
     "nativeDistribution": "Natuurlijke verspreiding",
     "introducedDistribution": "Geïntroduceerde verspreiding"
   },
+  "webSpeciesDetail": {
+    "commonNames": "Algemene namen",
+    "source": "Bron",
+    "credit": "Naamsvermelding",
+    "license": "Licentie"
+  },
   "chips": {
     "fruitTrees": "Fruitbomen",
     "nitrogenFixers": "Stikstofbinders",

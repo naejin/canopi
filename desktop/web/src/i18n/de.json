@@ -717,6 +717,12 @@
     "nativeDistribution": "Natürliche Verbreitung",
     "introducedDistribution": "Eingeführte Verbreitung"
   },
+  "webSpeciesDetail": {
+    "commonNames": "Trivialnamen",
+    "source": "Quelle",
+    "credit": "Bildnachweis",
+    "license": "Lizenz"
+  },
   "chips": {
     "fruitTrees": "Obstbäume",
     "nitrogenFixers": "Stickstofffixierer",

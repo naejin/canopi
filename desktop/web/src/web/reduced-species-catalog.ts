@@ -6,6 +6,7 @@ import type {
   SpeciesListItem,
   SpeciesSearchRequest,
 } from '../types/species'
+import type { SpeciesCatalogDetail } from '../app/plant-browser/workbench'
 import type { BrowserAppDataStore } from './browser-app-data'
 
 export interface ReducedSpeciesRow {
@@ -54,6 +55,7 @@ export interface ReducedSpeciesCatalogReader {
   ): Promise<SpeciesListItem[]>
   getFilterOptions(): Promise<FilterOptions>
   getDynamicFilterOptions(fields: readonly string[], locale: string): Promise<DynamicFilterOptions[]>
+  getSpeciesDetail(canonicalName: string, locale: string): Promise<SpeciesCatalogDetail | null>
 }
 
 export interface ReducedSpeciesCatalogAdapters {
@@ -62,6 +64,7 @@ export interface ReducedSpeciesCatalogAdapters {
   loadDynamicFilterOptions(fields: string[], locale: string): Promise<DynamicFilterOptions[]>
   getFavorites(locale: string): Promise<SpeciesListItem[]>
   getRecentlyViewed(locale: string, limit: number): Promise<SpeciesListItem[]>
+  getSpeciesDetail(canonicalName: string, locale: string): Promise<SpeciesCatalogDetail | null>
   toggleFavorite(canonicalName: string): Promise<boolean>
   recordRecentlyViewed(canonicalName: string, limit?: number): Promise<void>
 }
@@ -117,6 +120,10 @@ export function createReducedSpeciesCatalogAdapters({
       return reader.listSpeciesByCanonicalNames(names, locale, favoriteNameSet())
     },
 
+    getSpeciesDetail(canonicalName, locale) {
+      return reader.getSpeciesDetail(canonicalName, locale)
+    },
+
     async toggleFavorite(canonicalName) {
       const current = appDataStore.listFavoriteSpecies()
       const isFavorite = current.includes(canonicalName)
@@ -141,6 +148,7 @@ export function createInMemoryReducedSpeciesCatalogReader(
   const species = [...data.species].sort(compareSpeciesRows)
   const speciesByCanonicalName = new Map(species.map((row) => [row.canonical_name, row]))
   const namesByLocaleAndSpecies = buildNameIndex(data.names)
+  const imagesBySpecies = buildImageIndex(data.images)
   const filterOptions = buildFilterOptions(species)
 
   return {
@@ -199,7 +207,35 @@ export function createInMemoryReducedSpeciesCatalogReader(
         return []
       })
     },
+
+    async getSpeciesDetail(canonicalName, locale) {
+      const row = speciesByCanonicalName.get(canonicalName)
+      if (!row) return null
+      const localeNames = namesByLocaleAndSpecies.get(locale)?.get(row.id)
+      const commonNames = detailCommonNames(row, localeNames)
+
+      return {
+        canonical_name: row.canonical_name,
+        common_name: commonNames[0] ?? row.common_name,
+        common_names: commonNames,
+        climate_zones: [...row.climate_zones],
+        habit: row.habit,
+        growth_form: row.growth_form,
+        life_cycles: [...row.life_cycles],
+        image: detailImage(imagesBySpecies.get(row.id)?.[0] ?? null),
+      }
+    },
   }
+}
+
+function buildImageIndex(
+  images: readonly ReducedSpeciesImageRow[],
+): ReadonlyMap<string, readonly ReducedSpeciesImageRow[]> {
+  const bySpecies = new Map<string, ReducedSpeciesImageRow[]>()
+  for (const image of images) {
+    bySpecies.set(image.species_id, [...(bySpecies.get(image.species_id) ?? []), image])
+  }
+  return bySpecies
 }
 
 function buildNameIndex(
@@ -238,6 +274,25 @@ function compareNameRows(left: ReducedSpeciesNameRow, right: ReducedSpeciesNameR
     return left.common_name.length - right.common_name.length
   }
   return left.common_name.localeCompare(right.common_name, left.language, { sensitivity: 'base' })
+}
+
+function detailCommonNames(
+  row: ReducedSpeciesRow,
+  localeNames: SpeciesNameIndexEntry | undefined,
+): string[] {
+  const names = localeNames?.names.map((name) => name.common_name) ?? compact([row.common_name])
+  return [...new Set(names)]
+}
+
+function detailImage(image: ReducedSpeciesImageRow | null): SpeciesCatalogDetail['image'] {
+  if (!image) return null
+  return {
+    url: image.url,
+    source: image.source,
+    source_page_url: image.source_page_url,
+    credit: image.credit,
+    license: image.license,
+  }
 }
 
 function matchesSearchText(

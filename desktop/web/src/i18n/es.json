@@ -717,6 +717,12 @@
     "nativeDistribution": "Distribución nativa",
     "introducedDistribution": "Distribución introducida"
   },
+  "webSpeciesDetail": {
+    "commonNames": "Nombres comunes",
+    "source": "Fuente",
+    "credit": "Crédito",
+    "license": "Licencia"
+  },
   "chips": {
     "fruitTrees": "Árboles frutales",
     "nitrogenFixers": "Fijadores de nitrógeno",

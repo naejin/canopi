@@ -17,6 +17,7 @@ const liveSpeciesCatalogWorkbench = createSpeciesCatalogWorkbench({
   getFilterOptions: catalogAdapters.getFilterOptions,
   getFavorites: catalogAdapters.getFavorites,
   getRecentlyViewed: catalogAdapters.getRecentlyViewed,
+  getSpeciesDetail: catalogAdapters.getSpeciesDetail,
   toggleFavorite: catalogAdapters.toggleFavorite,
   onSpeciesSelected: catalogAdapters.recordRecentlyViewed,
 })

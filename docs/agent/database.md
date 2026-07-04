@@ -114,7 +114,7 @@ When canopi-data removes or adds columns, update atomically:
 - Search list rows include secondary names for disambiguation and may include a selected-language Matched Common Name to explain an active text search match.
 - Cross-workflow backend callers should share Species Catalog read behavior through `desktop/src/services/species_catalog_read.rs` and its projection modules instead of reaching directly into `plant_db` lookup helpers from unrelated services.
 - Site Adaptation compatibility and replacement reads belong behind `desktop/src/services/species_catalog_read/{compatibility,replacement,common_names}.rs`. Site Adaptation owns hardiness compatibility interpretation and response shaping; it should not own Species Catalog SQL, placeholder assembly, table names, localized Common Name lookup, or Species Catalog storage test fixtures.
-- Web Edition v1 omits Site Adaptation and excludes hardiness, height, and stratum from the reduced web catalog. Do not add those fields to the web export unless a later decision reintroduces Site Adaptation. See `docs/adr/0018-web-edition-omits-site-adaptation.md`.
+- Web Edition v1 omits Site Adaptation and excludes hardiness, height, and stratum from the reduced web catalog. The reduced web detail projection in `desktop/web/src/web/reduced-species-catalog.ts` may expose Canonical Name, selected-locale Common Names, climate zone, habit/growth form, life cycle, and one hero image metadata row only. Do not add excluded fields to the web export unless a later decision reintroduces Site Adaptation or expands Web Edition Plant Detail. See `docs/adr/0018-web-edition-omits-site-adaptation.md`.
 
 ## canopi-data Export
 

@@ -121,6 +121,30 @@ describe('Web Edition reduced Species Catalog adapter', () => {
     await expect(adapters.getFavorites('fr')).resolves.toEqual([])
   })
 
+  it('projects reduced Species detail with localized common names and hero image metadata', async () => {
+    const adapters = createReducedSpeciesCatalogAdapters({
+      appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
+      reader: createInMemoryReducedSpeciesCatalogReader(catalogFixture()),
+    })
+
+    await expect(adapters.getSpeciesDetail('Malus domestica', 'fr')).resolves.toEqual({
+      canonical_name: 'Malus domestica',
+      common_name: 'Pommier',
+      common_names: ['Pommier', 'Pomme commune'],
+      climate_zones: ['Temperate'],
+      habit: 'Tree',
+      growth_form: 'Tree',
+      life_cycles: ['Perennial'],
+      image: {
+        url: 'https://images.example.test/apple.jpg',
+        source: 'Wikimedia Commons',
+        source_page_url: 'https://commons.example.test/apple',
+        credit: 'Jane Gardener',
+        license: 'CC BY-SA 4.0',
+      },
+    })
+  })
+
   it('lets the Species Catalog Workbench adapter record recently viewed Species on selection', () => {
     const selected: string[] = []
     const workbench = createSpeciesCatalogWorkbench({
@@ -138,6 +162,42 @@ describe('Web Edition reduced Species Catalog adapter', () => {
     workbench.selectSpecies('Malus domestica')
 
     expect(selected).toEqual(['Malus domestica'])
+  })
+
+  it('loads reduced Species detail when a Species is selected', async () => {
+    const detail = {
+      canonical_name: 'Malus domestica',
+      common_name: 'Apple',
+      common_names: ['Apple'],
+      climate_zones: ['Temperate'],
+      habit: 'Tree',
+      growth_form: 'Tree',
+      life_cycles: ['Perennial'],
+      image: null,
+    }
+    const getSpeciesDetail = async () => detail
+    const workbench = createSpeciesCatalogWorkbench({
+      search: async () => ({ items: [], next_cursor: null, total_estimate: 0 }),
+      getSpeciesDetail,
+    })
+
+    workbench.selectSpecies('Malus domestica')
+
+    expect(workbench.detail.value).toMatchObject({
+      canonicalName: 'Malus domestica',
+      detail: null,
+      loading: true,
+      error: null,
+    })
+
+    await waitForMicrotasks()
+
+    expect(workbench.detail.value).toEqual({
+      canonicalName: 'Malus domestica',
+      detail,
+      loading: false,
+      error: null,
+    })
   })
 })
 
@@ -197,6 +257,13 @@ function catalogFixture(): ReducedSpeciesCatalogData {
         is_primary: true,
       },
       {
+        species_id: 'species-apple',
+        language: 'fr',
+        common_name: 'Pomme commune',
+        normalized_name: 'pomme commune',
+        is_primary: false,
+      },
+      {
         species_id: 'species-balm',
         language: 'fr',
         common_name: 'Melisse',
@@ -211,7 +278,16 @@ function catalogFixture(): ReducedSpeciesCatalogData {
         is_primary: true,
       },
     ],
-    images: [],
+    images: [
+      {
+        species_id: 'species-apple',
+        url: 'https://images.example.test/apple.jpg',
+        source: 'Wikimedia Commons',
+        source_page_url: 'https://commons.example.test/apple',
+        credit: 'Jane Gardener',
+        license: 'CC BY-SA 4.0',
+      },
+    ],
   }
 }
 
@@ -226,4 +302,9 @@ function memoryStorage(): BrowserStorageAdapter {
       values.delete(key)
     },
   }
+}
+
+async function waitForMicrotasks(): Promise<void> {
+  await Promise.resolve()
+  await Promise.resolve()
 }

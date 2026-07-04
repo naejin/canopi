@@ -31,6 +31,7 @@ type FavoriteItemsAdapter = (locale: string) => Promise<SpeciesListItem[]>
 type RecentlyViewedAdapter = (locale: string, limit: number) => Promise<SpeciesListItem[]>
 type ToggleFavoriteAdapter = (canonicalName: string) => Promise<boolean>
 type SpeciesSelectedAdapter = (canonicalName: string) => void | Promise<void>
+type SpeciesDetailAdapter = (canonicalName: string, locale: string) => Promise<SpeciesCatalogDetail | null>
 
 export interface SpeciesCatalogFilterStripView {
   readonly options: FilterOptions | null
@@ -57,6 +58,32 @@ export interface SpeciesCatalogSidebarView {
   readonly recentlyViewed: readonly SpeciesListItem[]
 }
 
+export interface SpeciesCatalogDetailImage {
+  readonly url: string
+  readonly source: string | null
+  readonly source_page_url: string | null
+  readonly credit: string | null
+  readonly license: string | null
+}
+
+export interface SpeciesCatalogDetail {
+  readonly canonical_name: string
+  readonly common_name: string | null
+  readonly common_names: readonly string[]
+  readonly climate_zones: readonly string[]
+  readonly habit: string | null
+  readonly growth_form: string | null
+  readonly life_cycles: readonly string[]
+  readonly image: SpeciesCatalogDetailImage | null
+}
+
+export interface SpeciesCatalogDetailView {
+  readonly canonicalName: string | null
+  readonly detail: SpeciesCatalogDetail | null
+  readonly loading: boolean
+  readonly error: string | null
+}
+
 export interface SpeciesCatalogWorkbench {
   readonly intent: ReadonlySignal<PlantSearchIntent>
   readonly results: ReadonlySignal<PlantSearchResultState>
@@ -67,6 +94,7 @@ export interface SpeciesCatalogWorkbench {
   readonly favorites: ReadonlySignal<SpeciesCatalogFavoritesView>
   readonly dynamicOptions: ReadonlySignal<SpeciesCatalogDynamicOptionsView>
   readonly sidebar: ReadonlySignal<SpeciesCatalogSidebarView>
+  readonly detail: ReadonlySignal<SpeciesCatalogDetailView>
   mount(): () => void
   dispose(): void
   ensureInitialSearch(): void
@@ -98,6 +126,7 @@ export interface SpeciesCatalogWorkbenchOptions {
   readonly getFavorites?: FavoriteItemsAdapter
   readonly getRecentlyViewed?: RecentlyViewedAdapter
   readonly toggleFavorite?: ToggleFavoriteAdapter
+  readonly getSpeciesDetail?: SpeciesDetailAdapter
   readonly onSpeciesSelected?: SpeciesSelectedAdapter
   readonly locale?: ReadonlySignal<string>
   readonly pageSize?: number
@@ -117,6 +146,7 @@ const emptyFilterOptionsAdapter: FilterOptionsAdapter = async () => null
 const emptyFavoriteItemsAdapter: FavoriteItemsAdapter = async () => []
 const emptyRecentlyViewedAdapter: RecentlyViewedAdapter = async () => []
 const emptyToggleFavoriteAdapter: ToggleFavoriteAdapter = async () => false
+const emptySpeciesDetailAdapter: SpeciesDetailAdapter = async () => null
 
 export function createSpeciesCatalogWorkbench({
   search = missingSearchAdapter,
@@ -125,6 +155,7 @@ export function createSpeciesCatalogWorkbench({
   getFavorites: getFavoritesAdapter = emptyFavoriteItemsAdapter,
   getRecentlyViewed: getRecentlyViewedAdapter = emptyRecentlyViewedAdapter,
   toggleFavorite: toggleFavoriteAdapter = emptyToggleFavoriteAdapter,
+  getSpeciesDetail: getSpeciesDetailAdapter = emptySpeciesDetailAdapter,
   onSpeciesSelected,
   locale: localeSignal = locale,
   pageSize,
@@ -140,6 +171,12 @@ export function createSpeciesCatalogWorkbench({
   const filterOptions = signal<FilterOptions | null>(null)
   const viewMode = signal<ViewMode>('list')
   const selectedCanonicalName = signal<string | null>(null)
+  const detail = signal<SpeciesCatalogDetailView>({
+    canonicalName: null,
+    detail: null,
+    loading: false,
+    error: null,
+  })
   const favoriteNames = signal<string[]>([])
   const favoriteItems = signal<SpeciesListItem[]>([])
   const favoriteItemsLoading = signal(false)
@@ -187,6 +224,7 @@ export function createSpeciesCatalogWorkbench({
 
   let favoriteItemsGeneration = 0
   let sidebarListsGeneration = 0
+  let detailGeneration = 0
   let controllerUsers = 0
   let disposeSearchSession: (() => void) | null = null
 
@@ -289,6 +327,36 @@ export function createSpeciesCatalogWorkbench({
     }
   }
 
+  async function loadSpeciesDetail(canonicalName: string): Promise<void> {
+    const generation = ++detailGeneration
+    const requestedLocale = localeSignal.value
+    detail.value = {
+      canonicalName,
+      detail: null,
+      loading: true,
+      error: null,
+    }
+
+    try {
+      const nextDetail = await getSpeciesDetailAdapter(canonicalName, requestedLocale)
+      if (generation !== detailGeneration || selectedCanonicalName.value !== canonicalName) return
+      detail.value = {
+        canonicalName,
+        detail: nextDetail,
+        loading: false,
+        error: null,
+      }
+    } catch (error) {
+      if (generation !== detailGeneration || selectedCanonicalName.value !== canonicalName) return
+      detail.value = {
+        canonicalName,
+        detail: null,
+        loading: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+
   return {
     intent: plantSearchSession.intent,
     results: plantSearchSession.results,
@@ -299,6 +367,7 @@ export function createSpeciesCatalogWorkbench({
     favorites,
     dynamicOptions,
     sidebar,
+    detail,
 
     mount() {
       controllerUsers += 1
@@ -370,6 +439,7 @@ export function createSpeciesCatalogWorkbench({
 
     selectSpecies(canonicalName) {
       selectedCanonicalName.value = canonicalName
+      void loadSpeciesDetail(canonicalName)
       try {
         void onSpeciesSelected?.(canonicalName)
       } catch {
@@ -378,7 +448,14 @@ export function createSpeciesCatalogWorkbench({
     },
 
     closeSpeciesDetail() {
+      detailGeneration += 1
       selectedCanonicalName.value = null
+      detail.value = {
+        canonicalName: null,
+        detail: null,
+        loading: false,
+        error: null,
+      }
     },
 
     toggleFavorite: toggleFavoriteAction,

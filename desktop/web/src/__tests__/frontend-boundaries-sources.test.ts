@@ -172,6 +172,24 @@ describe('frontend boundary sources', () => {
     }
   })
 
+  it('keeps Web Edition Species detail reduced and desktop-detail free', () => {
+    const webPanelSource = readSource('../web/WebSpeciesCatalogPanel.tsx')
+
+    expectNoImportsMatching('../web/WebSpeciesCatalogPanel.tsx', [
+      /components\/plant-detail/,
+      /app\/plant-detail/,
+      /ipc\/species/,
+    ])
+    expect(webPanelSource).not.toContain('height')
+    expect(webPanelSource).not.toContain('hardiness')
+    expect(webPanelSource).not.toContain('stratum')
+    expect(webPanelSource).not.toContain('uses')
+    expect(webPanelSource).not.toContain('soil')
+    expect(webPanelSource).not.toContain('ecology')
+    expect(webPanelSource).not.toContain('propagation')
+    expect(webPanelSource).not.toContain('related')
+  })
+
   it('keeps the remaining workflow components free of direct ipc imports', () => {
     const adaptationSource = readSource('../components/canvas/TemplateAdaptation.tsx')
     const welcomeSource = readSource('../components/shared/WelcomeScreen.tsx')

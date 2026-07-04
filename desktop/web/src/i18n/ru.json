@@ -717,6 +717,12 @@
     "nativeDistribution": "Естественный ареал",
     "introducedDistribution": "Интродуцированный ареал"
   },
+  "webSpeciesDetail": {
+    "commonNames": "Распространённые названия",
+    "source": "Источник",
+    "credit": "Автор",
+    "license": "Лицензия"
+  },
   "chips": {
     "fruitTrees": "Плодовые деревья",
     "nitrogenFixers": "Азотофиксаторы",

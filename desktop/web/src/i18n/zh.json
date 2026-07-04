@@ -717,6 +717,12 @@
     "nativeDistribution": "原生分布",
     "introducedDistribution": "引入分布"
   },
+  "webSpeciesDetail": {
+    "commonNames": "常用名",
+    "source": "来源",
+    "credit": "署名",
+    "license": "许可证"
+  },
   "chips": {
     "fruitTrees": "果树",
     "nitrogenFixers": "固氮植物",

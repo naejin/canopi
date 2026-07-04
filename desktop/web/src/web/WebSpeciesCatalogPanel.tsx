@@ -1,6 +1,7 @@
-import { useEffect } from 'preact/hooks'
+import { useEffect, useState } from 'preact/hooks'
 import { locale } from '../app/settings/state'
 import { speciesCatalogWorkbench } from '../app/plant-browser'
+import type { SpeciesCatalogDetailView } from '../app/plant-browser/workbench'
 import { t } from '../i18n'
 import type { SpeciesFilter, SpeciesListItem } from '../types/species'
 import styles from './WebSpeciesCatalogPanel.module.css'
@@ -18,6 +19,7 @@ export function WebSpeciesCatalogPanel({ mode }: WebSpeciesCatalogPanelProps) {
   const filterOptions = speciesCatalogWorkbench.filterStrip.value.options
   const favoritesView = speciesCatalogWorkbench.favorites.value
   const sidebar = speciesCatalogWorkbench.sidebar.value
+  const detailView = speciesCatalogWorkbench.detail.value
   const isCatalog = mode === 'catalog'
   const searching = speciesCatalogWorkbench.isSearchLoading(results.status)
   const visibleItems = isCatalog ? results.items : favoritesView.items
@@ -79,6 +81,8 @@ export function WebSpeciesCatalogPanel({ mode }: WebSpeciesCatalogPanelProps) {
         </div>
       )}
 
+      <WebSpeciesDetail view={detailView} />
+
       {isCatalog ? (
         <SpeciesList
           items={visibleItems}
@@ -108,6 +112,129 @@ export function WebSpeciesCatalogPanel({ mode }: WebSpeciesCatalogPanelProps) {
         </div>
       )}
     </section>
+  )
+}
+
+function WebSpeciesDetail({ view }: { readonly view: SpeciesCatalogDetailView }) {
+  const imageUrl = view.detail?.image?.url ?? null
+  const [imageFailed, setImageFailed] = useState(false)
+
+  useEffect(() => {
+    setImageFailed(false)
+  }, [imageUrl])
+
+  if (!view.canonicalName) return null
+
+  if (view.loading) {
+    return <div className={styles.detailShell}>{t('plantDetail.loading')}</div>
+  }
+
+  if (view.error) {
+    return <div className={styles.detailShell} role="alert">{view.error}</div>
+  }
+
+  if (!view.detail) return null
+
+  const detail = view.detail
+  const title = detail.common_name ?? detail.canonical_name
+  const commonNames = detail.common_names.filter((name) => name !== title)
+  const formValues = [...new Set([
+    ...compact([detail.habit, detail.growth_form]),
+  ])]
+  const showImage = detail.image !== null && !imageFailed
+
+  return (
+    <article className={styles.detailShell} data-testid="web-species-detail">
+      <div className={styles.detailHero}>
+        {showImage ? (
+          <img
+            src={detail.image!.url}
+            alt={title}
+            loading="lazy"
+            className={styles.detailImage}
+            onError={() => setImageFailed(true)}
+            data-testid="web-species-detail-image"
+          />
+        ) : (
+          <div className={styles.detailImageFallback}>{t('plantDetail.noPhotos')}</div>
+        )}
+      </div>
+      <div className={styles.detailBody}>
+        <div className={styles.detailTitleRow}>
+          <div className={styles.detailNames}>
+            <h3 className={styles.detailTitle}>{title}</h3>
+            <p className={styles.detailBotanical}>{detail.canonical_name}</p>
+          </div>
+          <button
+            type="button"
+            className={styles.detailClose}
+            onClick={() => { speciesCatalogWorkbench.closeSpeciesDetail() }}
+            aria-label={t('plantDetail.back')}
+          >
+            ×
+          </button>
+        </div>
+        {commonNames.length > 0 && (
+          <Field label={t('webSpeciesDetail.commonNames')} values={commonNames} />
+        )}
+        <Field label={t('plantDetail.climateZones')} values={detail.climate_zones} />
+        <Field label={t('plantDetail.growthForm')} values={formValues} />
+        <Field label={t('filters.lifecycle')} values={detail.life_cycles} />
+        {detail.image && (
+          <ImageAttribution image={detail.image} />
+        )}
+      </div>
+    </article>
+  )
+}
+
+function Field({
+  label,
+  values,
+}: {
+  readonly label: string
+  readonly values: readonly string[]
+}) {
+  if (values.length === 0) return null
+  return (
+    <div className={styles.detailField}>
+      <span className={styles.detailFieldLabel}>{label}</span>
+      <span className={styles.detailFieldValue}>{values.join(' · ')}</span>
+    </div>
+  )
+}
+
+function ImageAttribution({ image }: { readonly image: NonNullable<SpeciesCatalogDetailView['detail']>['image'] }) {
+  if (!image) return null
+  const entries = [
+    { label: t('webSpeciesDetail.source'), value: image.source, href: image.source_page_url },
+    { label: t('webSpeciesDetail.credit'), value: image.credit, href: null },
+    { label: t('webSpeciesDetail.license'), value: image.license, href: null },
+  ].filter((entry): entry is { label: string; value: string; href: string | null } => (
+    typeof entry.value === 'string' && entry.value.trim().length > 0
+  ))
+  if (entries.length === 0) return null
+
+  return (
+    <dl className={styles.detailAttribution}>
+      {entries.map((entry) => (
+        <div key={entry.label} className={styles.detailAttributionRow}>
+          <dt>{entry.label}</dt>
+          <dd>
+            {entry.href ? (
+              <a
+                href={entry.href}
+                target="_blank"
+                rel="noreferrer"
+                data-testid={entry.label === t('webSpeciesDetail.source') ? 'web-species-detail-source' : undefined}
+              >
+                {entry.value}
+              </a>
+            ) : entry.value}
+          </dd>
+        </div>
+      ))}
+    </dl>
   )
 }
 
@@ -238,6 +365,10 @@ function metadataLabel(item: SpeciesListItem): string {
     ...item.climate_zones,
     ...item.life_cycles,
   ].join(' · ')
+}
+
+function compact(values: readonly (string | null | undefined)[]): string[] {
+  return values.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
 }
 
 function translateFilterValue(field: ArrayFilterKey, value: string): string {

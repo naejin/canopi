@@ -7,6 +7,7 @@ import {
   type ReducedSpeciesNameRow,
   type ReducedSpeciesRow,
 } from './reduced-species-catalog'
+import type { SpeciesCatalogDetail } from '../app/plant-browser/workbench'
 import type {
   DynamicFilterOptions,
   FilterOptions,
@@ -68,6 +69,10 @@ export function createDuckDbReducedSpeciesCatalogReader(
       locale: string,
     ): Promise<DynamicFilterOptions[]> {
       return (await reader()).getDynamicFilterOptions(fields, locale)
+    },
+
+    async getSpeciesDetail(canonicalName: string, locale: string): Promise<SpeciesCatalogDetail | null> {
+      return (await reader()).getSpeciesDetail(canonicalName, locale)
     },
   }
 }

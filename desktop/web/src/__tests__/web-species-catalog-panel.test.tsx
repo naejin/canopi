@@ -46,6 +46,14 @@ const mockWorkbench = vi.hoisted(() => ({
       recentlyViewed: [makeSpeciesListItem('Melissa officinalis', 'Lemon balm')],
     },
   },
+  detail: {
+    value: {
+      canonicalName: null,
+      detail: null,
+      loading: false,
+      error: null,
+    } as import('../app/plant-browser/workbench').SpeciesCatalogDetailView,
+  },
   mount: vi.fn(() => vi.fn()),
   ensureInitialSearch: vi.fn(),
   loadFilterOptions: vi.fn(async () => {}),
@@ -54,6 +62,7 @@ const mockWorkbench = vi.hoisted(() => ({
   setSearchText: vi.fn(),
   patchFilters: vi.fn(),
   selectSpecies: vi.fn(),
+  closeSpeciesDetail: vi.fn(),
   toggleFavorite: vi.fn(async () => {}),
   loadNextPage: vi.fn(async () => {}),
   isSearchLoading: vi.fn(() => false),
@@ -133,6 +142,120 @@ describe('Web Edition Species Catalog panel', () => {
     expect(container.textContent).toContain('Lemon balm')
   })
 
+  it('renders reduced Species detail with lazy hero image metadata and only v1 fields', async () => {
+    mockWorkbench.detail.value = {
+      canonicalName: 'Malus domestica',
+      detail: {
+        canonical_name: 'Malus domestica',
+        common_name: 'Apple',
+        common_names: ['Apple', 'Paradise apple'],
+        climate_zones: ['Temperate'],
+        habit: 'Tree',
+        growth_form: 'Woody perennial',
+        life_cycles: ['Perennial'],
+        image: {
+          url: 'https://images.example.test/apple.jpg',
+          source: 'Wikimedia Commons',
+          source_page_url: 'https://commons.example.test/apple',
+          credit: 'Jane Gardener',
+          license: 'CC BY-SA 4.0',
+        },
+      },
+      loading: false,
+      error: null,
+    }
+
+    await act(async () => {
+      render(<WebSpeciesCatalogPanel mode="catalog" />, container)
+    })
+
+    const image = requiredElement<HTMLImageElement>('[data-testid="web-species-detail-image"]')
+    expect(image.getAttribute('src')).toBe('https://images.example.test/apple.jpg')
+    expect(image.getAttribute('loading')).toBe('lazy')
+    expect(container.textContent).toContain('Apple')
+    expect(container.textContent).toContain('Malus domestica')
+    expect(container.textContent).toContain('Paradise apple')
+    expect(container.textContent).toContain('Temperate')
+    expect(container.textContent).toContain('Tree')
+    expect(container.textContent).toContain('Woody perennial')
+    expect(container.textContent).toContain('Perennial')
+
+    const sourceLink = requiredElement<HTMLAnchorElement>('[data-testid="web-species-detail-source"]')
+    expect(sourceLink.href).toBe('https://commons.example.test/apple')
+    expect(container.textContent).toContain('Wikimedia Commons')
+    expect(container.textContent).toContain('Jane Gardener')
+    expect(container.textContent).toContain('CC BY-SA 4.0')
+    expect(container.textContent).not.toContain('Dimensions')
+    expect(container.textContent).not.toContain('Hardiness')
+    expect(container.textContent).not.toContain('Uses')
+    expect(container.textContent).not.toContain('Soil')
+    expect(container.textContent).not.toContain('Ecology')
+    expect(container.textContent).not.toContain('Propagation')
+    expect(container.textContent).not.toContain('Risk')
+    expect(container.textContent).not.toContain('Related species')
+  })
+
+  it('renders a clean fallback when image metadata is missing', async () => {
+    mockWorkbench.detail.value = {
+      canonicalName: 'Malus domestica',
+      detail: {
+        canonical_name: 'Malus domestica',
+        common_name: 'Apple',
+        common_names: ['Apple'],
+        climate_zones: ['Temperate'],
+        habit: 'Tree',
+        growth_form: null,
+        life_cycles: ['Perennial'],
+        image: null,
+      },
+      loading: false,
+      error: null,
+    }
+
+    await act(async () => {
+      render(<WebSpeciesCatalogPanel mode="catalog" />, container)
+    })
+
+    expect(container.querySelector('[data-testid="web-species-detail-image"]')).toBeNull()
+    expect(container.textContent).toContain('No photos available')
+  })
+
+  it('renders a clean fallback when the remote hero image fails to load', async () => {
+    mockWorkbench.detail.value = {
+      canonicalName: 'Malus domestica',
+      detail: {
+        canonical_name: 'Malus domestica',
+        common_name: 'Apple',
+        common_names: ['Apple'],
+        climate_zones: ['Temperate'],
+        habit: 'Tree',
+        growth_form: null,
+        life_cycles: ['Perennial'],
+        image: {
+          url: 'https://images.example.test/missing-apple.jpg',
+          source: null,
+          source_page_url: null,
+          credit: null,
+          license: null,
+        },
+      },
+      loading: false,
+      error: null,
+    }
+
+    await act(async () => {
+      render(<WebSpeciesCatalogPanel mode="catalog" />, container)
+    })
+
+    await act(async () => {
+      requiredElement<HTMLImageElement>('[data-testid="web-species-detail-image"]')
+        .dispatchEvent(new Event('error'))
+    })
+
+    expect(container.querySelector('[data-testid="web-species-detail-image"]')).toBeNull()
+    expect(container.textContent).toContain('No photos available')
+  })
+
   function requiredElement<T extends Element>(selector: string): T {
     const element = container.querySelector<T>(selector)
     if (!element) throw new Error(`Missing element ${selector}`)
@@ -174,6 +297,12 @@ function resetWorkbench(): void {
   mockWorkbench.sidebar.value = {
     favoriteNames: ['Prunus persica'],
     recentlyViewed: [makeSpeciesListItem('Melissa officinalis', 'Lemon balm')],
+  }
+  mockWorkbench.detail.value = {
+    canonicalName: null,
+    detail: null,
+    loading: false,
+    error: null,
   }
   mockWorkbench.mount.mockReturnValue(vi.fn())
   mockWorkbench.isSearchLoading.mockReturnValue(false)
