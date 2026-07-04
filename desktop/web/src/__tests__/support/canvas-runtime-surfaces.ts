@@ -71,8 +71,6 @@ export function createTestCanvasCommandSurface(
       setSceneLayerLocked: () => false,
     },
     plantPresentation: {
-      setPlantSizeMode: () => {},
-      setPlantColorByAttr: () => {},
       ensureSpeciesCacheEntries: async () => true,
       setSelectedPlantColor: () => 0,
       setSelectedPlantSymbol: () => 0,

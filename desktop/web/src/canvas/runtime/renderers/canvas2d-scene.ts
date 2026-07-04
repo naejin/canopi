@@ -100,8 +100,6 @@ export function createCanvas2DSceneRenderer(): SceneRendererDefinition {
             {
               plantContext: {
                 viewport,
-                sizeMode: snapshot.sizeMode,
-                colorByAttr: snapshot.colorByAttr,
                 speciesCache: snapshot.speciesCache,
                 localizedCommonNames: snapshot.localizedCommonNames,
               },
@@ -114,8 +112,6 @@ export function createCanvas2DSceneRenderer(): SceneRendererDefinition {
             {
               plantContext: {
                 viewport,
-                sizeMode: snapshot.sizeMode,
-                colorByAttr: snapshot.colorByAttr,
                 speciesCache: snapshot.speciesCache,
                 localizedCommonNames: snapshot.localizedCommonNames,
               },
@@ -336,8 +332,6 @@ function renderPlants(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnap
   const worldLineWidth = 1.5 / snapshot.viewport.scale
   const entries = buildPlantPresentationEntries(snapshot.scene.plants, {
     viewport: snapshot.viewport,
-    sizeMode: snapshot.sizeMode,
-    colorByAttr: snapshot.colorByAttr,
     speciesCache: snapshot.speciesCache,
     plantSpeciesSymbols: snapshot.scene.plantSpeciesSymbols,
     localizedCommonNames: snapshot.localizedCommonNames,

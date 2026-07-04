@@ -11,7 +11,6 @@ import { theme } from '../app/settings/state'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { currentDesign, nonCanvasRevision, nonCanvasSavedRevision } from './support/design-session-state'
 import * as documentActions from '../app/document-session/actions'
-import * as designReportActions from '../app/design-report/actions'
 import { problemReportDialogOpen } from '../app/problem-report/state'
 import {
   recentFrontendDiagnostics,
@@ -240,46 +239,11 @@ describe('command registry canvas tool switching', () => {
     expect(saveAsSpy).toHaveBeenCalledTimes(1)
   })
 
-  it('exposes Design Report PDF export from the File menu only when a design is loaded', () => {
-    const exportCommand = getAppCommand('file.exportDesignReportPdf')
-    const exportSpy = vi
-      .spyOn(designReportActions, 'exportCurrentDesignReportPdf')
-      .mockResolvedValue(null)
-
-    if (!exportCommand) throw new Error('Missing file.exportDesignReportPdf command')
-    expect(exportCommand.disabled()).toBe(true)
-
-    currentDesign.value = {
-      version: 2,
-      name: 'test',
-      description: null,
-      location: null,
-      north_bearing_deg: null,
-      plant_species_colors: {},
-      layers: [],
-      plants: [],
-      zones: [],
-      annotations: [],
-      consortiums: [],
-      groups: [],
-      timeline: [],
-      budget: [],
-      budget_currency: 'EUR',
-      created_at: '',
-      updated_at: '',
-      extra: {},
-    }
-
-    expect(exportCommand.disabled()).toBe(false)
-
-    const fileMenu = getMenuDefinitions().find((menu) => menu.id === 'file')
-    expect(fileMenu?.items.some((entry) => (
-      entry.type === 'action' && entry.id === 'file.exportDesignReportPdf' && !entry.disabled
-    ))).toBe(true)
-
-    exportCommand.action()
-
-    expect(exportSpy).toHaveBeenCalledTimes(1)
+  it('does not expose Design Report PDF export from the command graph', () => {
+    expect(commands.some((command) => String(command.id) === 'file.exportDesignReportPdf')).toBe(false)
+    expect(getMenuDefinitions().some((menu) =>
+      menu.items.some((entry) => entry.type === 'action' && entry.id === 'file.exportDesignReportPdf'),
+    )).toBe(false)
   })
 
   it('looks up disabled state and dispatch through the public App Command Graph seam', () => {

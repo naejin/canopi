@@ -31,7 +31,6 @@ import { SceneRuntimePresentationController } from './presentation'
 import { SceneRuntimeRenderScheduler } from './render-scheduler'
 import {
   syncCanvasSignalsFromDocument,
-  syncPresentationSignalsFromSceneSession,
 } from './scene-sync'
 import {
   SceneRuntimeEditCoordinator,
@@ -202,7 +201,6 @@ export function createSceneRuntimeConstruction(
     },
     sceneEdits,
     presentation: {
-      syncSignals: () => syncPresentationSignalsFromSceneSession(sceneStore),
       syncPlantSpeciesColors: () =>
         syncPlantSpeciesColorDefaults(sceneStore.persisted.plantSpeciesColors),
       getViewportScale: () => camera.viewport.scale,

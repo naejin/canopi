@@ -55,8 +55,6 @@ interface SceneCanvasCommandSurfaceOptions {
     | 'unlockSelected'
     | 'groupSelected'
     | 'ungroupSelected'
-    | 'setPlantSizeMode'
-    | 'setPlantColorByAttr'
     | 'setSelectedPlantColor'
     | 'setSelectedPlantSymbol'
     | 'setPlantColorForSpecies'
@@ -148,8 +146,6 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       setSceneLayerLocked: (name, locked) => this.setSceneLayerState(name, { locked }),
     }
     this.plantPresentation = {
-      setPlantSizeMode: (mode) => this.options.mutations.setPlantSizeMode(mode),
-      setPlantColorByAttr: (attr) => this.options.mutations.setPlantColorByAttr(attr),
       ensureSpeciesCacheEntries: (canonicalNames, activeLocale) =>
         this.ensureSpeciesCacheEntries(canonicalNames, activeLocale),
       setSelectedPlantColor: (color) => this.options.mutations.setSelectedPlantColor(color),

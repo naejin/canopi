@@ -3,7 +3,6 @@ pub mod community;
 pub mod content;
 pub mod design;
 pub mod design_notebook;
-pub mod design_report;
 pub mod export;
 pub mod favorites;
 pub mod geocoding;

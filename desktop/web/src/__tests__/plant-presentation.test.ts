@@ -4,7 +4,6 @@ import {
   buildPlantPresentationEntries,
   buildPlantPresentationSnapshot,
   getPlantScreenHitBounds,
-  plantPresentationService,
 } from '../canvas/runtime/plant-presentation'
 
 function createViewport(overrides: Partial<SceneViewportState> = {}): SceneViewportState {
@@ -50,8 +49,6 @@ describe('plant presentation service', () => {
       const entry = buildPlantPresentationEntries([createPlant()], {
         viewport: createViewport({ scale }),
         zoomReference: 8,
-        sizeMode: 'default',
-        colorByAttr: null,
         speciesCache: new Map(),
       }, new Set())[0]!
 
@@ -59,34 +56,22 @@ describe('plant presentation service', () => {
     }
   })
 
-  it('keeps override precedence for base color while allowing color-by display color', () => {
+  it('uses the resolved base color as the display color', () => {
     const plant = createPlant({ color: '#c44230' })
     const speciesCache = new Map([
       ['Malus domestica', {
         stratum: 'high',
-        hardiness_zone_min: 7,
       }],
     ])
 
-    const basePresentation = buildPlantPresentationEntries([plant], {
+    const presentation = buildPlantPresentationEntries([plant], {
       viewport: createViewport(),
       zoomReference: 8,
-      sizeMode: 'default',
-      colorByAttr: null,
-      speciesCache,
-    }, new Set())[0]!
-    const colorByPresentation = buildPlantPresentationEntries([plant], {
-      viewport: createViewport(),
-      zoomReference: 8,
-      sizeMode: 'default',
-      colorByAttr: 'hardiness',
       speciesCache,
     }, new Set())[0]!
 
-    expect(basePresentation.baseColor).toBe('#C44230')
-    expect(basePresentation.color).toBe('#C44230')
-    expect(colorByPresentation.baseColor).toBe('#C44230')
-    expect(colorByPresentation.color).toBe('#8BC34A')
+    expect(presentation.baseColor).toBe('#C44230')
+    expect(presentation.color).toBe('#C44230')
   })
 
   it('resolves Plant Symbols without changing the Visual Footprint', () => {
@@ -97,8 +82,6 @@ describe('plant presentation service', () => {
     ], {
       viewport: createViewport(),
       zoomReference: 8,
-      sizeMode: 'default',
-      colorByAttr: null,
       speciesCache: new Map(),
       plantSpeciesSymbols: {
         'Pyrus communis': 'climber',
@@ -113,7 +96,7 @@ describe('plant presentation service', () => {
     ])
   })
 
-  it('matches canopy sizing from species detail and uses symbolic fallback when missing', () => {
+  it('keeps species canopy metadata out of the symbolic Visual Footprint', () => {
     const canopyPlant = createPlant({ id: 'canopy-plant', symbol: 'square' })
     const fallbackPlant = createPlant({ id: 'fallback-plant', canonicalName: 'Pyrus communis', symbol: 'triangle' })
     const speciesCache = new Map([
@@ -123,21 +106,17 @@ describe('plant presentation service', () => {
     const canopyPresentation = buildPlantPresentationEntries([canopyPlant], {
       viewport: createViewport({ scale: 16 }),
       zoomReference: 8,
-      sizeMode: 'canopy',
-      colorByAttr: null,
       speciesCache,
     }, new Set())[0]!
     const fallbackPresentation = buildPlantPresentationEntries([fallbackPlant], {
       viewport: createViewport({ scale: 16 }),
       zoomReference: 8,
-      sizeMode: 'canopy',
-      colorByAttr: null,
       speciesCache,
     }, new Set())[0]!
 
-    expect(canopyPresentation.radiusWorld).toBe(2)
-    expect(canopyPresentation.radiusScreenPx).toBe(32)
-    expect(canopyPresentation.usesCanopyRadius).toBe(true)
+    expect(canopyPresentation.radiusScreenPx).toBeCloseTo(4.05, 2)
+    expect(canopyPresentation.radiusWorld).toBeCloseTo(4.05 / 16, 2)
+    expect(canopyPresentation.usesCanopyRadius).toBe(false)
     expect(fallbackPresentation.radiusScreenPx).toBeCloseTo(4.05, 2)
     expect(fallbackPresentation.radiusWorld).toBeCloseTo(4.05 / 16, 2)
     expect(fallbackPresentation.usesCanopyRadius).toBe(false)
@@ -149,8 +128,6 @@ describe('plant presentation service', () => {
     const context = {
       viewport: createViewport({ x: 5, y: 7, scale: 8 }),
       zoomReference: 8,
-      sizeMode: 'default',
-      colorByAttr: null,
       speciesCache: new Map(),
     } as const
     const entry = buildPlantPresentationEntries([plant], context, new Set())[0]!
@@ -173,8 +150,6 @@ describe('plant presentation service', () => {
     ], {
       viewport: createViewport({ scale: 8 }),
       zoomReference: 8,
-      sizeMode: 'default',
-      colorByAttr: null,
       speciesCache: new Map(),
     }, new Set(['selected']))
 
@@ -196,8 +171,6 @@ describe('plant presentation service', () => {
     ], {
       viewport: createViewport({ scale: 1 }),
       zoomReference: 8,
-      sizeMode: 'default',
-      colorByAttr: null,
       speciesCache: new Map(),
     }, new Set())
 
@@ -213,30 +186,16 @@ describe('plant presentation service', () => {
     ], {
       viewport: createViewport({ scale: 50 }),
       zoomReference: 8,
-      sizeMode: 'default',
-      colorByAttr: null,
       speciesCache: new Map(),
     }, new Set())
 
     expect(snapshot.stackBadges).toEqual([])
   })
 
-  it('resolves color-by attributes from normalized species detail', () => {
-    const color = plantPresentationService.resolveDisplayColor(
-      createPlant(),
-      'flower',
-      new Map([['Malus domestica', { resolved_flower_color: 'Yellow' }]]),
-    )
-
-    expect(color).toBe('#C8A51E')
-  })
-
   it('returns entries without label fields', () => {
     const entry = buildPlantPresentationEntries([createPlant()], {
       viewport: createViewport(),
       zoomReference: 8,
-      sizeMode: 'default',
-      colorByAttr: null,
       speciesCache: new Map(),
     }, new Set())[0]!
 
@@ -251,8 +210,6 @@ describe('plant presentation service', () => {
     const snapshot = buildPlantPresentationSnapshot([createPlant()], {
       viewport: createViewport(),
       zoomReference: 8,
-      sizeMode: 'default',
-      colorByAttr: null,
       speciesCache: new Map(),
     }, new Set())
 

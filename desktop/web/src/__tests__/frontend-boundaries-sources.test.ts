@@ -235,7 +235,6 @@ describe('frontend boundary sources', () => {
   it('keeps focused canvas callers on role-specific command surfaces', () => {
     const focusedCanvasCommandConsumers = [
       '../app/canvas-layer-presentation/presentation.ts',
-      '../components/canvas/DisplayModeControls.tsx',
       '../components/canvas/PlantColorMenu.tsx',
       '../components/canvas/ZoomControls.tsx',
       '../components/plant-db/PlantCard.tsx',
@@ -245,9 +244,6 @@ describe('frontend boundary sources', () => {
     expectNamedImportsFrom('../app/canvas-layer-presentation/presentation.ts', '../../canvas/session', [
       'getCurrentCanvasLayerCommandSurface',
       'currentCanvasQuerySurface',
-    ])
-    expectNamedImportsFrom('../components/canvas/DisplayModeControls.tsx', '../../canvas/session', [
-      'getCurrentCanvasPlantPresentationCommandSurface',
     ])
     expectNamedImportsFrom('../components/canvas/ZoomControls.tsx', '../../canvas/session', [
       'currentCanvasViewportCommandSurface',

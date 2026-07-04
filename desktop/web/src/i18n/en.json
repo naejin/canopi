@@ -204,22 +204,6 @@
       "minimap": "Minimap",
       "minimapDesc": "Toggle overview minimap"
     },
-    "display": {
-      "label": "Display Mode",
-      "colorBy": "Color by",
-      "sizeBy": "Display",
-      "default": "Default",
-      "canopy": "Canopy",
-      "canopySpread": "Canopy spread",
-      "legend": "Legend",
-      "stratum": "Stratum",
-      "hardiness": "Hardiness",
-      "lifecycle": "Life cycle",
-      "nitrogen": "Nitrogen",
-      "edibility": "Edibility",
-      "flower": "Flower",
-      "none": "None"
-    },
     "plantTooltip": {
       "stratum": "Stratum",
       "height": "Height",
@@ -472,6 +456,9 @@
       "zoomRange": "Zoom range",
       "offlineStatus": "Offline",
       "removeOffline": "Remove offline tiles"
+    },
+    "pinnedPlantNames": {
+      "legend": "Legend"
     }
   },
   "worldMap": {
@@ -866,7 +853,6 @@
     "file.open": "Open Design",
     "file.save": "Save",
     "file.saveAs": "Save As",
-    "file.exportDesignReportPdf": "Export Design Report PDF",
     "file.exit": "Exit",
     "edit.undo": "Undo",
     "edit.redo": "Redo",
@@ -980,58 +966,6 @@
       "previousMonth": "Previous month",
       "nextMonth": "Next month",
       "chooseDate": "Choose date"
-    }
-  },
-  "designReport": {
-    "timeline": {
-      "overview": "Overview",
-      "actions": "Actions",
-      "recurrence": "Recurrence",
-      "target": "Target",
-      "dependencies": "Dependencies",
-      "status": "Status",
-      "manual": "Manual",
-      "none": "None",
-      "notScheduled": "Not scheduled",
-      "dateRangeWithUnscheduledOne": "{{dateRange}}; {{count}} unscheduled",
-      "dateRangeWithUnscheduledMany": "{{dateRange}}; {{count}} unscheduled",
-      "completed": "Completed",
-      "open": "Open",
-      "dependencyCountOne": "{{count}} dependency",
-      "dependencyCountMany": "{{count}} dependencies"
-    },
-    "budget": {
-      "target": "Target",
-      "category": "Category",
-      "totals": "Totals",
-      "categories": {
-        "plants": "Plants",
-        "materials": "Materials",
-        "labor": "Labor",
-        "tools": "Tools"
-      }
-    },
-    "consortium": {
-      "chart": "Succession chart",
-      "table": "Consortium entries",
-      "plant": "Plant",
-      "canonicalName": "Canonical name",
-      "stratum": "Stratum",
-      "startPhase": "Start phase",
-      "endPhase": "End phase",
-      "count": "Count"
-    },
-    "document": {
-      "overview": "Overview",
-      "location": "Location",
-      "design": "Design",
-      "visibleLayers": "Visible layers",
-      "defaultVisibleLayers": "default",
-      "noVisibleCanvasObjects": "No visible canvas objects",
-      "pinned": "Pinned",
-      "colorBy": "Color by",
-      "pageNumber": "Page {page} of {count}",
-      "altitude": "altitude"
     }
   }
 }

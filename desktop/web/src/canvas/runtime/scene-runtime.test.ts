@@ -11,7 +11,6 @@ import {
 import { layerLockState, layerOpacity, layerVisibility } from '../../app/canvas-settings/signals'
 import { guides } from '../scene-metadata-state'
 import { plantColorMenuOpen } from '../plant-color-menu-state'
-import { plantColorByAttr, plantSizeMode } from '../plant-display-state'
 import {
   clearPlantStampSource,
   readPlantStampSource,
@@ -376,8 +375,6 @@ describe('scene canvas runtime', () => {
     layerVisibility.value = {}
     layerLockState.value = {}
     layerOpacity.value = {}
-    plantSizeMode.value = 'default'
-    plantColorByAttr.value = null
     plantSpacingIntervalM.value = 0.5
     vi.mocked(getCommonNames).mockReset()
     vi.mocked(getCommonNames).mockResolvedValue({})
@@ -603,21 +600,6 @@ describe('scene canvas runtime', () => {
     expect(toggleGridVisible).toHaveBeenCalledTimes(1)
     expect(toggleSnapToGrid).toHaveBeenCalledTimes(1)
     expect(toggleRulersVisible).toHaveBeenCalledTimes(1)
-  })
-
-  it('owns plant presentation state in scene session and mirrors it to canvas signals', () => {
-    const runtime = new SceneCanvasRuntime()
-    runtime.documentSurface.loadDocument(makeFile())
-
-    runtime.commandSurface.plantPresentation.setPlantSizeMode('canopy')
-    runtime.commandSurface.plantPresentation.setPlantColorByAttr('flower')
-
-    expect(runtime.querySurface.getPlantSizeMode()).toBe('canopy')
-    expect(runtime.querySurface.getPlantColorByAttr()).toBe('flower')
-    expect(runtime.querySurface.getPlantSizeMode()).toBe('canopy')
-    expect(runtime.querySurface.getPlantColorByAttr()).toBe('flower')
-    expect(plantSizeMode.value).toBe('canopy')
-    expect(plantColorByAttr.value).toBe('flower')
   })
 
   it('bumps query viewport revision on viewport-only camera changes', async () => {

@@ -1,4 +1,4 @@
-/* Legend card — quiet reference, floats above display controls */
+/* Legend card — quiet reference for pinned plant names. */
 .legend {
   position: absolute;
   left: 34px; /* past the 24px ruler gutter */
@@ -42,13 +42,6 @@
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
-}
-
-.dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
 }
 
 .symbolSwatch {

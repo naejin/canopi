@@ -15,8 +15,6 @@ import {
 function createPlantPresentationContext(viewportScale: number) {
   return {
     viewport: { x: 0, y: 0, scale: viewportScale },
-    sizeMode: 'default' as const,
-    colorByAttr: null,
     speciesCache: new Map(),
   }
 }

@@ -13,7 +13,6 @@ const RETAINED_CSS_MODULES = [
   '../components/panels/FavoritesPanel.module.css',
   '../components/canvas/CanvasToolbar.module.css',
   '../components/canvas/DisplayLegend.module.css',
-  '../components/canvas/DisplayModeControls.module.css',
   '../components/canvas/ZoomControls.module.css',
   '../components/canvas/BottomPanelLauncher.module.css',
   '../components/canvas/LayerPanel.module.css',

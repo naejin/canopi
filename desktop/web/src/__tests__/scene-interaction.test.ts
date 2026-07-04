@@ -40,8 +40,6 @@ import {
 function createPlantPresentationContext(viewportScale: number) {
   return {
     viewport: { x: 0, y: 0, scale: viewportScale },
-    sizeMode: 'default' as const,
-    colorByAttr: null,
     speciesCache: new Map(),
   }
 }
@@ -3685,7 +3683,7 @@ describe('SceneInteractionController', () => {
     controller.dispose()
   })
 
-  it('sizes Plant Spacing preview ghosts from canopy plant presentation', () => {
+  it('sizes Plant Spacing preview ghosts from the symbolic plant presentation', () => {
     plantSpacingIntervalM.value = 2
     camera.setViewport({ x: 0, y: 0, scale: 10 })
     store.setViewport({ x: 0, y: 0, scale: 10 })
@@ -3708,10 +3706,7 @@ describe('SceneInteractionController', () => {
       }]
     })
     const deps = createInteractionDeps(container, store, camera, {
-      getPlantPresentationContext: (viewportScale) => ({
-        ...createPlantPresentationContext(viewportScale),
-        sizeMode: 'canopy',
-      }),
+      getPlantPresentationContext: createPlantPresentationContext,
     })
     const controller = new SceneInteractionController(deps as any)
     controller.setTool('plant-spacing')
@@ -3720,14 +3715,14 @@ describe('SceneInteractionController', () => {
 
     const ghosts = container.querySelectorAll<HTMLElement>('[data-plant-spacing-ghost]')
     expect(ghosts).toHaveLength(2)
-    expect(ghosts[0]?.style.width).toBe('40px')
-    expect(ghosts[0]?.style.height).toBe('40px')
+    expect(parseFloat(ghosts[0]?.style.width ?? '')).toBeCloseTo(7.0645, 4)
+    expect(parseFloat(ghosts[0]?.style.height ?? '')).toBeCloseTo(7.0645, 4)
 
     events.wheel({ x: 0, y: 0 }, { deltaY: -120 })
 
     const resizedGhost = container.querySelector<HTMLElement>('[data-plant-spacing-ghost]')!
-    expect(resizedGhost.style.width).not.toBe('40px')
-    expect(resizedGhost.style.height).not.toBe('40px')
+    expect(parseFloat(resizedGhost.style.width)).not.toBeCloseTo(7.0645, 4)
+    expect(parseFloat(resizedGhost.style.height)).not.toBeCloseTo(7.0645, 4)
     controller.dispose()
   })
 

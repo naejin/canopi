@@ -1,5 +1,4 @@
 import type { PlacedPlant } from '../../types/design'
-import type { ColorByAttribute, PlantSizeMode } from '../plant-display-state'
 import type { SelectedPlantColorContext } from '../plant-color-context'
 import type { SelectedPlantSymbolContext } from '../plant-symbol-context'
 import type { CameraController } from './camera'
@@ -16,7 +15,7 @@ interface SceneCanvasQuerySurfaceOptions {
   readonly viewportRevision: CanvasQueryRevision['viewport']
   readonly mutations: Pick<
     SceneRuntimeMutationController,
-    'getPlantSizeMode' | 'getPlantColorByAttr' | 'getSelectedPlantColorContext' | 'getSelectedPlantSymbolContext'
+    'getSelectedPlantColorContext' | 'getSelectedPlantSymbolContext'
   >
   readonly presentation: Pick<
     SceneRuntimePresentationController,
@@ -50,8 +49,6 @@ class SceneCanvasQueryRole implements CanvasQuerySurface {
       },
     )
   }
-  getPlantSizeMode(): PlantSizeMode { return this.options.mutations.getPlantSizeMode() }
-  getPlantColorByAttr(): ColorByAttribute | null { return this.options.mutations.getPlantColorByAttr() }
   getSelectedPlantColorContext(): SelectedPlantColorContext {
     return this.options.mutations.getSelectedPlantColorContext()
   }

@@ -4,7 +4,6 @@ import { useCanvasDocumentSession } from '../../app/document-session/use-canvas-
 import { CanvasToolbar } from '../canvas/CanvasToolbar'
 import { CompassOverlay } from '../canvas/CompassOverlay'
 import { ZoomControls } from '../canvas/ZoomControls'
-import { DisplayModeControls } from '../canvas/DisplayModeControls'
 import { DisplayLegend } from '../canvas/DisplayLegend'
 import {
   MapLibreCanvasSurface,
@@ -165,8 +164,6 @@ export function CanvasPanel() {
           <div className={styles.canvasBar}>
             <BottomPanelLauncher />
             <div className={styles.canvasBarSpacer} />
-            <DisplayModeControls />
-            <div className={styles.canvasBarDivider} />
             <ZoomControls />
           </div>
         )}

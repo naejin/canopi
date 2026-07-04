@@ -1,5 +1,3 @@
-import { type ColorByAttribute, type PlantSizeMode } from '../plant-display-state'
-import { getColorForAttribute } from '../display-modes'
 import { DEFAULT_PLANT_COLOR, normalizeHexColor } from '../plant-colors'
 import {
   getPlantLOD,
@@ -23,8 +21,6 @@ export const STACK_BADGE_GAP_PX = 2
 
 export interface PlantPresentationContext {
   viewport: SceneViewportState
-  sizeMode: PlantSizeMode
-  colorByAttr: ColorByAttribute | null
   speciesCache: ReadonlyMap<string, SpeciesCacheEntry>
   plantSpeciesSymbols?: Readonly<Record<string, string>>
   localizedCommonNames?: ReadonlyMap<string, string | null>
@@ -96,11 +92,10 @@ export function buildPlantPresentationEntries(
 ): PlantPresentationEntry[] {
   const lod = getPlantLOD(context.viewport.scale)
   return plants.map((plant) => {
-    const radiusPresentation = resolvePlantRadiusPresentation(plant, context)
+    const radiusPresentation = resolvePlantRadiusPresentation(context)
     const radiusWorld = radiusPresentation.radiusWorld
     const radiusScreenPx = radiusWorld * context.viewport.scale
     const baseColor = resolvePlantBaseColor(plant, context.speciesCache)
-    const color = resolvePlantDisplayColor(plant, context.colorByAttr, context.speciesCache)
     const symbol = resolvePlantSymbolForPlant(plant, context.plantSpeciesSymbols ?? {})
     const selected = selectedPlantIds.has(plant.id)
     const screenPoint = worldToScreen(plant.position, context.viewport)
@@ -109,7 +104,7 @@ export function buildPlantPresentationEntries(
       plant,
       radiusWorld,
       radiusScreenPx,
-      color,
+      color: baseColor,
       baseColor,
       symbol,
       usesCanopyRadius: radiusPresentation.usesCanopyRadius,
@@ -137,7 +132,7 @@ export function getPlantWorldBounds(
   plant: ScenePlantEntity,
   context: PlantPresentationContext,
 ): PlantWorldBounds {
-  const radiusWorld = resolvePlantRadiusWorld(plant, context)
+  const radiusWorld = resolvePlantRadiusWorld(context)
   return {
     x: plant.position.x - radiusWorld,
     y: plant.position.y - radiusWorld,
@@ -151,7 +146,7 @@ export function getPlantScreenHitBounds(
   context: PlantPresentationContext,
 ): PlantScreenHitBounds {
   const screenPoint = worldToScreen(plant.position, context.viewport)
-  const radiusScreenPx = resolvePlantRadiusWorld(plant, context) * context.viewport.scale
+  const radiusScreenPx = resolvePlantRadiusWorld(context) * context.viewport.scale
   const hitRadiusPx = radiusScreenPx + 4
   return {
     center: screenPoint,
@@ -210,12 +205,9 @@ export function resolvePlantCanopySpreadM(
 
 export function resolvePlantDisplayColor(
   plant: ScenePlantEntity,
-  colorByAttr: ColorByAttribute | null,
   speciesCache: ReadonlyMap<string, SpeciesCacheEntry>,
 ): string {
-  const baseColor = resolvePlantBaseColor(plant, speciesCache)
-  if (colorByAttr === null) return baseColor
-  return resolvePlantColorByAttribute(plant, colorByAttr, speciesCache)
+  return resolvePlantBaseColor(plant, speciesCache)
 }
 
 export function resolveStackBadgeDecisions(
@@ -302,42 +294,19 @@ const SYMBOLIC_PLANT_MIN_SCREEN_PX = 2
 const SYMBOLIC_PLANT_MAX_SCREEN_PX = 6.75
 const SYMBOLIC_PLANT_HALF_GROWTH_SCALE = 21
 
-function resolvePlantRadiusWorld(
-  plant: ScenePlantEntity,
-  context: PlantPresentationContext,
-): number {
-  return resolvePlantRadiusPresentation(plant, context).radiusWorld
+function resolvePlantRadiusWorld(context: PlantPresentationContext): number {
+  return resolvePlantRadiusPresentation(context).radiusWorld
 }
 
 function resolvePlantRadiusPresentation(
-  plant: ScenePlantEntity,
   context: PlantPresentationContext,
 ): { radiusWorld: number; usesCanopyRadius: boolean } {
-  if (context.sizeMode === 'canopy') {
-    const canopySpreadM = resolvePlantCanopySpreadM(plant, context.speciesCache)
-    if (canopySpreadM && canopySpreadM > 0) {
-      return { radiusWorld: canopySpreadM / 2, usesCanopyRadius: true }
-    }
-    return { radiusWorld: getSymbolicPlantRadiusWorld(context.viewport.scale), usesCanopyRadius: false }
-  }
-
   return { radiusWorld: getSymbolicPlantRadiusWorld(context.viewport.scale), usesCanopyRadius: false }
 }
 
 function getSymbolicPlantRadiusWorld(viewportScale: number): number {
   const scale = Math.max(viewportScale, 0.001)
   return getSymbolicPlantRadiusScreenPx(scale) / scale
-}
-
-function resolvePlantColorByAttribute(
-  plant: ScenePlantEntity,
-  colorByAttr: ColorByAttribute,
-  speciesCache: ReadonlyMap<string, SpeciesCacheEntry>,
-): string {
-  if (colorByAttr === 'stratum') {
-    return getStratumColor(resolvePlantStratum(plant, speciesCache))
-  }
-  return getColorForAttribute(colorByAttr, speciesCache.get(plant.canonicalName))
 }
 
 function getSymbolicPlantRadiusScreenPx(viewportScale: number): number {

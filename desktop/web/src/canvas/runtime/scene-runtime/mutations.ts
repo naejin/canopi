@@ -1,4 +1,3 @@
-import type { ColorByAttribute, PlantSizeMode } from '../../plant-display-state'
 import { createUuid } from '../../../utils/ids'
 import type { PlantPresentationContext } from '../plant-presentation'
 import { normalizeHexColor } from '../../plant-colors'
@@ -75,7 +74,6 @@ interface SceneRuntimeMutationControllerOptions {
   }
   sceneEdits: SceneEditCoordinator
   presentation: {
-    syncSignals(): void
     syncPlantSpeciesColors(): void
     getViewportScale(): number
     createPlantPresentationContext(viewportScale?: number): PlantPresentationContext
@@ -365,32 +363,6 @@ export class SceneRuntimeMutationController {
       })
       tx.setSelection(memberIds)
     })
-  }
-
-  getPlantSizeMode(): PlantSizeMode {
-    return this._sceneStore.session.plantSizeMode
-  }
-
-  setPlantSizeMode(mode: PlantSizeMode): void {
-    if (this._sceneStore.session.plantSizeMode === mode) return
-    this._sceneStore.updateSession((session) => {
-      session.plantSizeMode = mode
-    })
-    this._presentation.syncSignals()
-    this._invalidateScene()
-  }
-
-  getPlantColorByAttr(): ColorByAttribute | null {
-    return this._sceneStore.session.plantColorByAttr
-  }
-
-  setPlantColorByAttr(attr: ColorByAttribute | null): void {
-    if (this._sceneStore.session.plantColorByAttr === attr) return
-    this._sceneStore.updateSession((session) => {
-      session.plantColorByAttr = attr
-    })
-    this._presentation.syncSignals()
-    this._invalidateScene()
   }
 
   getSelectedPlantColorContext(): SelectedPlantColorContext {

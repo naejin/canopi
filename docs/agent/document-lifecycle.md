@@ -49,6 +49,8 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 
 ## Save And Format Contract
 
+- Lightweight web-edition work must still create, open, edit, and export real Canopi Designs rather than a separate web sketch format. Browser storage/file adapters may replace Tauri filesystem dialogs, but they should feed the normal Design Session and save-composition seams. Unsupported web-edition sections should be preserved when loaded where possible and emitted as valid empty sections for new web-created Designs. See `docs/adr/0009-web-edition-uses-design-format.md`.
+- The web edition should provide browser-local Design drafts and autosave as a recovery/convenience layer, with explicit `.canopi` download/export as the durable portable save path. Do not introduce a backend requirement for storing user Designs. See `docs/adr/0010-web-edition-browser-drafts.md`.
 - Preserve `created_at` from loaded files.
 - Preserve loaded document sections on save: timeline, budget, consortiums, description, location, and extra fields.
 - Preserve per-object non-visual fields such as plant notes, planted date, quantity, and zone notes.
@@ -71,12 +73,10 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 - Stamp import should read `.canopi` files through a lower-level format-loading path or a stamp-specific command that does not record Recent Designs. Do not reuse `design_files::load_design()` for stamp import unless its recent-file side effect is bypassed deliberately.
 - Frontend code owns native import/export dialogs; Rust commands should perform file read/write or payload normalization only, matching the existing Linux dialog boundary.
 
-## Design Report Export
+## Export Boundaries
 
-- Design Report PDF export starts in `desktop/web/src/app/design-report/actions.ts`. It must build report input from the current Design Session with `buildPersistedDesignSessionContent()` and the current `CanvasDocumentSurface`; do not mark the Design saved or clear dirty state during export.
-- The frontend owns the save dialog in `desktop/web/src/ipc/design-report.ts`. The Rust command should receive structured report input plus the chosen path and should only render/write the PDF.
-- Rust report rendering lives behind `desktop/src/services/design_report/`. Keep it separate from the legacy native canvas snapshot PDF path in `services::export` and `platform::export_pdf`.
-- Empty report sections should be omitted before rendering. Later Timeline, Budget, Consortium, legend, or Measurement Guide sections should extend the structured report input and renderer layout instead of screenshotting the app UI.
+- Structured Design Report PDF export was removed in ADR 0011. Do not reintroduce `app/design-report`, `ipc/design-report`, `commands::design_report`, `services::design_report`, or report-specific PDF dependencies without a new decision record.
+- The remaining native PDF path is the canvas snapshot export under `services::export` and `platform::export_pdf`; keep it separate from Design Session save/load and dirty-state handling.
 
 ## Adding Document Fields
 

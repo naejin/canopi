@@ -172,7 +172,7 @@
   100% { transform: scale(1); opacity: 1; }
 }
 
-/* Thin utility bar between canvas and bottom panel — display controls, launcher, zoom */
+/* Thin utility bar between canvas and bottom panel — launcher and zoom */
 .canvasBar {
   display: flex;
   align-items: center;
@@ -188,13 +188,6 @@
   flex: 1;
   display: flex;
   justify-content: center;
-}
-
-.canvasBarDivider {
-  width: 1px;
-  height: 14px;
-  background: var(--color-border-strong);
-  flex-shrink: 0;
 }
 
 .canvasEmptyState {

@@ -1,6 +1,6 @@
 import { DEFAULT_PLANT_COLOR } from './plant-colors'
 
-// Re-export for canvas-internal consumers (display-modes.ts)
+// Re-export for canvas-internal consumers.
 export { STRATUM_I18N_KEY } from '../types/constants'
 
 // Strata color map — keyed by RAW DB values (lowercase).

@@ -91,14 +91,10 @@ describe('scene store', () => {
     const store = SceneStore.fromCanopi(file, {
       selectedEntityIds: new Set(['plant-1']),
       activeLayerName: 'plants',
-      plantSizeMode: 'canopy',
-      plantColorByAttr: 'flower',
     })
 
     expect(store.session.selectedEntityIds.has('plant-1')).toBe(true)
     expect(store.session.activeLayerName).toBe('plants')
-    expect(store.session.plantSizeMode).toBe('canopy')
-    expect(store.session.plantColorByAttr).toBe('flower')
     expect(store.persisted.plants[0]).toMatchObject({
       stratum: null,
       canopySpreadM: 1.2,
@@ -108,14 +104,10 @@ describe('scene store', () => {
     store.updateSession((draft) => {
       draft.hoveredEntityId = 'zone-a'
       draft.documentRevision = 3
-      draft.plantSizeMode = 'default'
-      draft.plantColorByAttr = 'stratum'
     })
 
     expect(store.session.hoveredEntityId).toBe('zone-a')
     expect(store.session.documentRevision).toBe(3)
-    expect(store.session.plantSizeMode).toBe('default')
-    expect(store.session.plantColorByAttr).toBe('stratum')
 
     // toCanopiFile serializes canvas-entity fields; non-canvas sections
     // (consortiums, timeline, budget) are emitted as empty placeholders —
@@ -162,8 +154,6 @@ describe('scene store', () => {
     expect(persisted.measurementGuides).toEqual([])
     expect(session.selectedEntityIds.size).toBe(0)
     expect(session.activeLayerName).toBe('zones')
-    expect(session.plantSizeMode).toBe('default')
-    expect(session.plantColorByAttr).toBe(null)
     expect(serializeScenePersistedState(persisted, { now: new Date('2026-04-02T00:00:00.000Z') }).version).toBe(5)
   })
 

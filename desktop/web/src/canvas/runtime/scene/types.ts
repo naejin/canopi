@@ -1,5 +1,3 @@
-import type { ColorByAttribute, PlantSizeMode } from '../../plant-display-state'
-
 export const SCENE_LAYER_NAMES = [
   'base',
   'contours',
@@ -12,8 +10,6 @@ export const SCENE_LAYER_NAMES = [
 ] as const
 
 export type SceneLayerName = (typeof SCENE_LAYER_NAMES)[number]
-export type ScenePlantSizeMode = PlantSizeMode
-export type SceneColorByAttribute = ColorByAttribute
 
 export interface ScenePoint {
   x: number
@@ -128,8 +124,6 @@ export interface SceneSessionState {
   hoveredEntityId: string | null
   activeEntityId: string | null
   activeLayerName: string | null
-  plantSizeMode: ScenePlantSizeMode
-  plantColorByAttr: SceneColorByAttribute | null
   viewport: SceneViewportState
   documentRevision: number
 }

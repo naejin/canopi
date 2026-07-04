@@ -204,22 +204,6 @@
       "minimap": "Minimapa",
       "minimapDesc": "Mostrar/ocultar el minimapa"
     },
-    "display": {
-      "label": "Modo de visualización",
-      "colorBy": "Colorear por",
-      "sizeBy": "Mostrar",
-      "default": "Predeterminado",
-      "canopy": "Dosel",
-      "canopySpread": "Extensión del dosel",
-      "legend": "Leyenda",
-      "stratum": "Estrato",
-      "hardiness": "Rusticidad",
-      "lifecycle": "Ciclo de vida",
-      "nitrogen": "Nitrógeno",
-      "edibility": "Comestibilidad",
-      "flower": "Flor",
-      "none": "Ninguno"
-    },
     "plantTooltip": {
       "stratum": "Estrato",
       "height": "Altura",
@@ -472,6 +456,9 @@
       "zoomRange": "Rango de zoom",
       "offlineStatus": "Sin conexión",
       "removeOffline": "Eliminar teselas sin conexión"
+    },
+    "pinnedPlantNames": {
+      "legend": "Leyenda"
     }
   },
   "worldMap": {
@@ -728,7 +715,6 @@
     "file.open": "Abrir diseno",
     "file.save": "Guardar",
     "file.saveAs": "Guardar como",
-    "file.exportDesignReportPdf": "Exportar informe de diseno en PDF",
     "file.exit": "Salir",
     "edit.undo": "Deshacer",
     "edit.redo": "Rehacer",
@@ -981,57 +967,5 @@
     "includeCurrentDesign": "Incluir el diseño actual",
     "includeCurrentDesignDescription": "Agrega una copia .canopi con contenido del lienzo, notas, cronograma, presupuesto y ubicación guardada.",
     "currentDesignUnavailable": "No hay un diseño actual disponible para adjuntar."
-  },
-  "designReport": {
-    "timeline": {
-      "overview": "Resumen",
-      "actions": "Acciones",
-      "recurrence": "Recurrencia",
-      "target": "Objetivo",
-      "dependencies": "Dependencias",
-      "status": "Estado",
-      "manual": "Manual",
-      "none": "Ninguna",
-      "notScheduled": "Sin programar",
-      "dateRangeWithUnscheduledOne": "{{dateRange}}; {{count}} sin programar",
-      "dateRangeWithUnscheduledMany": "{{dateRange}}; {{count}} sin programar",
-      "completed": "Completado",
-      "open": "Abierto",
-      "dependencyCountOne": "{{count}} dependencia",
-      "dependencyCountMany": "{{count}} dependencias"
-    },
-    "budget": {
-      "target": "Objetivo",
-      "category": "Categoría",
-      "totals": "Totales",
-      "categories": {
-        "plants": "Plantas",
-        "materials": "Materiales",
-        "labor": "Mano de obra",
-        "tools": "Herramientas"
-      }
-    },
-    "consortium": {
-      "chart": "Diagrama de sucesión",
-      "table": "Entradas del consorcio",
-      "plant": "Planta",
-      "canonicalName": "Nombre canónico",
-      "stratum": "Estrato",
-      "startPhase": "Fase inicial",
-      "endPhase": "Fase final",
-      "count": "Cantidad"
-    },
-    "document": {
-      "overview": "Resumen",
-      "location": "Ubicación",
-      "design": "Diseño",
-      "visibleLayers": "Capas visibles",
-      "defaultVisibleLayers": "predeterminado",
-      "noVisibleCanvasObjects": "No hay objetos visibles en el lienzo",
-      "pinned": "Fijado",
-      "colorBy": "Colorear por",
-      "pageNumber": "Página {page} de {count}",
-      "altitude": "altitud"
-    }
   }
 }

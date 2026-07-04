@@ -14,8 +14,6 @@ export function createDefaultSceneSessionState(overrides: Partial<SceneSessionSt
     hoveredEntityId: overrides.hoveredEntityId ?? null,
     activeEntityId: overrides.activeEntityId ?? null,
     activeLayerName: overrides.activeLayerName ?? 'zones',
-    plantSizeMode: overrides.plantSizeMode ?? 'default',
-    plantColorByAttr: overrides.plantColorByAttr ?? null,
     viewport: {
       ...createDefaultSceneViewportState(),
       ...(overrides.viewport ?? {}),

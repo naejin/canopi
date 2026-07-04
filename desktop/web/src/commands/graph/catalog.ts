@@ -6,7 +6,6 @@ import {
   saveAsCurrentDesign,
   saveCurrentDesign,
 } from '../../app/document-session/actions'
-import { exportCurrentDesignReportPdf } from '../../app/design-report/actions'
 import { activePanel, navigateTo, sidePanel, type Panel, type SidePanel } from '../../app/shell/state'
 import {
   diagnosticMessageFromError,
@@ -35,7 +34,6 @@ export type AppCommandId =
   | 'file.open'
   | 'file.save'
   | 'file.saveAs'
-  | 'file.exportDesignReportPdf'
   | 'file.exit'
   | 'edit.undo'
   | 'edit.redo'
@@ -177,13 +175,6 @@ export const APP_COMMANDS: readonly AppCommandDefinition[] = [
     shortcut: FILE_SHORTCUTS.saveDesignAs,
     palette: true,
     run: () => runAsyncCommand('Save design as', saveAsCurrentDesign),
-    disabled: (state) => !state.hasDesign,
-  },
-  {
-    id: 'file.exportDesignReportPdf',
-    label: () => t('menu.file.exportDesignReportPdf'),
-    palette: true,
-    run: () => runAsyncCommand('Export Design Report PDF', exportCurrentDesignReportPdf),
     disabled: (state) => !state.hasDesign,
   },
   {

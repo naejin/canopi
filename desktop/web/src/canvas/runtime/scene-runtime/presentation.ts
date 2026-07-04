@@ -70,15 +70,12 @@ export class SceneRuntimePresentationController {
   }
 
   createPlantPresentationContext(viewportScale = this._getViewport().scale): PlantPresentationContext {
-    const session = this._sceneStore.session
     return {
       viewport: {
         x: 0,
         y: 0,
         scale: viewportScale,
       },
-      sizeMode: session.plantSizeMode,
-      colorByAttr: session.plantColorByAttr,
       speciesCache: this._speciesCache.getCache(),
       localizedCommonNames: this.getLocalizedCommonNames(),
     }
@@ -96,8 +93,6 @@ export class SceneRuntimePresentationController {
     const viewport = this._getViewport()
     const plantContext = {
       viewport,
-      sizeMode: session.plantSizeMode,
-      colorByAttr: session.plantColorByAttr,
       speciesCache: this._speciesCache.getCache(),
       localizedCommonNames,
     }
@@ -112,8 +107,6 @@ export class SceneRuntimePresentationController {
       selectedMeasurementGuideIds: getSelectedMeasurementGuideIds(scene, session.selectedEntityIds),
       highlightedPlantIds: new Set(highlightedTargets.plantIds),
       highlightedZoneIds: new Set(highlightedTargets.zoneIds),
-      sizeMode: session.plantSizeMode,
-      colorByAttr: session.plantColorByAttr,
       speciesCache: this._speciesCache.getCache(),
       localizedCommonNames,
       hoveredCanonicalName: hoveredPlant?.canonicalName ?? null,
@@ -149,7 +142,6 @@ export class SceneRuntimePresentationController {
   }
 
   async refreshCurrentPresentationData(): Promise<ScenePresentationRefreshResult> {
-    const session = this._sceneStore.session
     const plants = this._sceneStore.persisted.plants
     const canonicalNames = [...new Set(plants.map((plant) => plant.canonicalName))]
     if (canonicalNames.length === 0) {
@@ -159,10 +151,7 @@ export class SceneRuntimePresentationController {
     const labelsChanged = await this._plantLabels.ensureEntries(canonicalNames, this._getLocale())
     if (labelsChanged) this._onPlantNamesChanged()
 
-    const needsSpeciesCache =
-      session.plantColorByAttr !== null
-      || session.plantSizeMode === 'canopy'
-      || plants.some((plant) => plant.stratum === null || plant.canopySpreadM === null)
+    const needsSpeciesCache = plants.some((plant) => plant.stratum === null || plant.canopySpreadM === null)
     if (!needsSpeciesCache) {
       return {
         changed: labelsChanged,

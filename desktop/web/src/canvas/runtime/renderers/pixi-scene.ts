@@ -158,8 +158,6 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
             {
               plantContext: {
                 viewport,
-                sizeMode: snapshot.sizeMode,
-                colorByAttr: snapshot.colorByAttr,
                 speciesCache: snapshot.speciesCache,
                 localizedCommonNames: snapshot.localizedCommonNames,
               },
@@ -172,8 +170,6 @@ export function createPixiSceneRenderer(): SceneRendererDefinition {
             {
               plantContext: {
                 viewport,
-                sizeMode: snapshot.sizeMode,
-                colorByAttr: snapshot.colorByAttr,
                 speciesCache: snapshot.speciesCache,
                 localizedCommonNames: snapshot.localizedCommonNames,
               },
@@ -513,8 +509,6 @@ function syncPlants(
 
   const entries = buildPlantPresentationEntries(snapshot.scene.plants, {
     viewport: snapshot.viewport,
-    sizeMode: snapshot.sizeMode,
-    colorByAttr: snapshot.colorByAttr,
     speciesCache: snapshot.speciesCache,
     plantSpeciesSymbols: snapshot.scene.plantSpeciesSymbols,
     localizedCommonNames: snapshot.localizedCommonNames,

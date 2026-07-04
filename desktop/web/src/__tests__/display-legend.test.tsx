@@ -1,7 +1,6 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { plantColorByAttr, plantSizeMode } from '../canvas/plant-display-state'
 import { createDefaultScenePersistedState, type ScenePlantEntity } from '../canvas/runtime/scene'
 import { SCALE_BAR_RESERVED_BOTTOM_PX } from '../canvas/scale-bar'
 import { setCurrentCanvasSession } from '../canvas/session'
@@ -18,35 +17,15 @@ describe('DisplayLegend', () => {
     container = document.createElement('div')
     document.body.innerHTML = ''
     document.body.appendChild(container)
-    plantColorByAttr.value = null
-    plantSizeMode.value = 'default'
   })
 
   afterEach(() => {
     render(null, container)
     container.remove()
     setCurrentCanvasSession(null)
-    plantColorByAttr.value = null
-    plantSizeMode.value = 'default'
   })
 
-  it('reacts to color-by signal changes while mounted', async () => {
-    await act(async () => {
-      render(<DisplayLegend />, container)
-      await Promise.resolve()
-    })
-
-    expect(container.textContent).not.toContain('Legend')
-
-    await act(async () => {
-      plantColorByAttr.value = 'flower'
-      await Promise.resolve()
-    })
-
-    expect(container.textContent).toContain('Legend')
-  })
-
-  it('shows grouped pinned plant names when neutral display settings are active', async () => {
+  it('shows grouped pinned plant names', async () => {
     const scene = createDefaultScenePersistedState()
     scene.plants = [
       plant({ id: 'plant-1', pinnedName: true, color: '#112233', symbol: 'tree' }),
@@ -150,7 +129,7 @@ describe('DisplayLegend', () => {
     expect(container.textContent).not.toContain('Apple')
   })
 
-  it('hides the pinned-name legend when display settings or plant layer visibility make it inapplicable', async () => {
+  it('hides the pinned-name legend when plant layer visibility makes it inapplicable', async () => {
     const scene = createDefaultScenePersistedState()
     scene.plants = [plant({ pinnedName: true })]
     const query = createTestCanvasQuerySurface({ scene })
@@ -164,21 +143,6 @@ describe('DisplayLegend', () => {
     expect(container.querySelector('[data-pinned-plant-name-legend]')).not.toBeNull()
 
     await act(async () => {
-      plantSizeMode.value = 'canopy'
-      await Promise.resolve()
-    })
-    expect(container.querySelector('[data-pinned-plant-name-legend]')).toBeNull()
-
-    await act(async () => {
-      plantSizeMode.value = 'default'
-      plantColorByAttr.value = 'flower'
-      await Promise.resolve()
-    })
-    expect(container.textContent).toContain('Legend')
-    expect(container.querySelector('[data-pinned-plant-name-legend]')).toBeNull()
-
-    await act(async () => {
-      plantColorByAttr.value = null
       scene.layers = scene.layers.map((layer) =>
         layer.name === 'plants' ? { ...layer, visible: false } : layer,
       )

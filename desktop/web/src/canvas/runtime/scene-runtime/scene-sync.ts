@@ -3,7 +3,6 @@ import { plantColorMenuOpen } from '../../plant-color-menu-state'
 import { plantSymbolMenuOpen } from '../../plant-symbol-menu-state'
 import { syncPlantSpeciesColorDefaults } from '../../plant-species-color-defaults'
 import type { CanopiFile } from '../../../types/design'
-import { plantColorByAttr, plantSizeMode } from '../../plant-display-state'
 import { guides, northBearingAvailable, northBearingDeg } from '../../scene-metadata-state'
 import { clearCanvasSelection, setCanvasSelection, setCanvasTool } from '../../session-state'
 import type { SceneStore } from '../scene'
@@ -47,19 +46,12 @@ function syncCanvasSignalsFromPersistedScene(
 
 export { syncCanvasSignalsFromDocument }
 
-export function syncPresentationSignalsFromSceneSession(sceneStore: SceneStore): void {
-  const session = sceneStore.session
-  plantSizeMode.value = session.plantSizeMode
-  plantColorByAttr.value = session.plantColorByAttr
-}
-
 export function syncCanvasSignalsFromScene(
   sceneStore: SceneStore,
   layerProjections: CanvasRuntimeLayerProjectionAdapter,
 ): void {
   syncCanvasSignalsFromPersistedScene(sceneStore, layerProjections)
   batch(() => {
-    syncPresentationSignalsFromSceneSession(sceneStore)
     setCanvasSelection(sceneStore.session.selectedEntityIds)
   })
 }

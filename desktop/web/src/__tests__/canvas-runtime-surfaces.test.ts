@@ -33,8 +33,6 @@ function createQuerySurface() {
       bounds: null,
       sameSpeciesReferenceCanonicalName: null,
     }),
-    getPlantSizeMode: () => 'default',
-    getPlantColorByAttr: () => null,
     getSelectedPlantColorContext: () => ({
       plantIds: [],
       singleSpeciesCanonicalName: null,
@@ -102,8 +100,6 @@ function createCommandSurface() {
       setSceneLayerLocked: () => false,
     },
     plantPresentation: {
-      setPlantSizeMode: () => {},
-      setPlantColorByAttr: () => {},
       ensureSpeciesCacheEntries: async () => true,
       setSelectedPlantColor: () => 0,
       setSelectedPlantSymbol: () => 0,

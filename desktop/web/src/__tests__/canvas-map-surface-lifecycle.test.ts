@@ -139,8 +139,6 @@ function createRuntime(
       bounds: null,
       sameSpeciesReferenceCanonicalName: null,
     }),
-    getPlantSizeMode: () => 'default',
-    getPlantColorByAttr: () => null,
     getSelectedPlantColorContext: () => ({
       plantIds: [],
       singleSpeciesCanonicalName: null,

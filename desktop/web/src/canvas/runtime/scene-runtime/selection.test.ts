@@ -92,8 +92,6 @@ function readModel(scene: ScenePersistedState, selectedIds: readonly string[]) {
     annotationViewportScale: 1,
     plantContext: {
       viewport: { x: 0, y: 0, scale: 1 },
-      sizeMode: 'default',
-      colorByAttr: null,
       speciesCache: new Map(),
       localizedCommonNames: new Map(),
     },

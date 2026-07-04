@@ -362,7 +362,7 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
 
   function ghostColor(plant: ScenePlantEntity): string {
     const plantContext = context.getPlantPresentationContext(context.camera.viewport.scale)
-    return resolvePlantDisplayColor(plant, plantContext.colorByAttr, plantContext.speciesCache)
+    return resolvePlantDisplayColor(plant, plantContext.speciesCache)
   }
 
   function ghostRadiusPx(plant: ScenePlantEntity): number {

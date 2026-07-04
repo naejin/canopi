@@ -158,8 +158,6 @@ describe('scene runtime presentation controller', () => {
     sceneStore.setSelection(['plant-1'])
     sceneStore.updateSession((session) => {
       session.hoveredEntityId = 'plant-1'
-      session.plantSizeMode = 'canopy'
-      session.plantColorByAttr = 'flower'
     })
 
     await controller.refreshSpeciesCacheEntries(['Malus domestica'], 'fr')
@@ -171,8 +169,8 @@ describe('scene runtime presentation controller', () => {
     expect(snapshot.highlightedZoneIds).toEqual(new Set(['zone-1']))
     expect(snapshot.hoveredCanonicalName).toBe('Malus domestica')
     expect(snapshot.localizedCommonNames.get('Malus domestica')).toBe('Pommier')
-    expect(snapshot.sizeMode).toBe('canopy')
-    expect(snapshot.colorByAttr).toBe('flower')
+    expect(snapshot).not.toHaveProperty('sizeMode')
+    expect(snapshot).not.toHaveProperty('colorByAttr')
   })
 
   it('marks hovered targets with locked hover reasons for renderer cues', () => {
@@ -213,12 +211,7 @@ describe('scene runtime presentation controller', () => {
       'Malus domestica': 'Pommier',
     })
 
-    const { controller, sceneStore } = createController()
-    sceneStore.updateSession((session) => {
-      session.plantSizeMode = 'default'
-      session.plantColorByAttr = null
-    })
-
+    const { controller } = createController()
     const result = await controller.refreshSpeciesCacheEntries(['Malus domestica'], 'fr')
 
     expect(result.changed).toBe(true)

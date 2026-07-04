@@ -51,7 +51,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - Movement, color, and other mutating commands must derive write targets from editable selection or explicit layer/lock filters. Raw selected IDs and broad species scopes may include locked targets for read-only affordances and must not be used directly for scene mutations.
 - Guide creation is a scene edit owned by the runtime. The `guides` signal is a chrome projection, not document authority.
 - Runtime chrome rendering and interaction snapping read guides from `SceneStore.persisted.guides`; do not read the `guides` signal in production runtime behavior.
-- Canvas signals such as selected object IDs, size mode, color mode, layer state, and guides are UI mirrors, not runtime authority.
+- Canvas signals such as selected object IDs, layer state, and guides are UI mirrors, not runtime authority.
 - Canvas Query Surface revision values are the app-facing freshness seam for scene entities, localized plant names, and viewport updates. If a caller needs to recompute from scene reads, subscribe to that surface; do not recreate `runtime-mirror-state.ts` or runtime mirror revision signals.
 - Canvas Map Surface reads saved Location and `north_bearing_deg` through the Location Workbench presentation seam, not `scene-metadata-state` or direct document-session imports.
 - Basemap, contour, and hillshade display settings remain app settings projections; do not route those map-surface settings through Scene Edit unless the document schema intentionally makes them canvas-owned.
@@ -191,16 +191,15 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - Selected Plant presentation contexts, including Plant Color and Plant Symbol popover contexts, should prefer the active localized Common Name from the runtime presentation cache and fall back to the persisted Placed Plant Common Name only when no localized name is available.
 - Plant Symbols are built-in marker recipes visually composed within the existing circular Visual Footprint. The Visual Footprint is the interaction and layout boundary; glyph recipes should be optically balanced and may be inset instead of filling that boundary edge-to-edge. They must not change hit testing, band select, grouping bounds, zoom-to-fit bounds, stack badge placement, hover rings, selection rings, or locked-state rings.
 - Render Plant Symbols with Pixi and Canvas2D native primitives rather than runtime SVG parsing, image textures, DOM overlays, or a new icon dependency. At low zoom where the symbol is not readable, collapse all symbols to the same dot/round marker.
-- Plant Symbols apply to default symbolic marker mode. Canopy spread mode remains physical circle geometry when canopy spread is known; only the missing-canopy symbolic fallback should use the selected Plant Symbol.
+- Plant Symbols apply inside the symbolic marker Visual Footprint. Do not reintroduce a separate canopy-spread display mode or other plant-size display modes without a new decision record.
 - Plant Symbols stay upright and ignore placed plant rotation unless a future feature deliberately defines oriented marker symbols.
 - Stack badges indicate placed plants whose centers collapse to nearly the same screen position, not all plants whose symbolic Visual Footprints overlap. Badge placement should derive from the current plant visual radius instead of fixed legacy dot-size assumptions.
 - Do not reintroduce general per-plant labels on canvas. Identification is through hover tooltip and single-plant Selection Labels, except for explicit Pinned Plant Names, which are persisted per placed plant and render as always-visible labels.
 - Hover tooltip is an HTML overlay managed by `SceneInteractionController` through `runtime/interaction/hover-tooltip.ts`.
 - Hover species highlight flows through renderer snapshots.
 - Selection Labels are temporary identification for the current selection only. Render them only when the whole canvas selection is exactly one unpinned Placed Plant; multi-selection, mixed-object selection, and selected pinned plants should not render transient plant names.
-- Size mode and color mode are independent axes. Do not reintroduce a combined plant display mode.
-- Default Plant Size Mode dots are symbolic position markers. Size them with a smooth absolute-scale Visual Footprint curve with soft screen-readable limits, not a hard pixel cap or design-reference-relative sizing. Target about 2px minimum, about 6.75px asymptotic maximum, and gradual growth from roughly 2.2px at 1 px/m to roughly 6.3px at 200 px/m.
-- Canopy spread mode is physical geometry when canopy spread is known. Plants with missing canopy spread use the symbolic Visual Footprint fallback rather than misleading physical circles.
+- Placed Plant markers are symbolic position markers. Size them with a smooth absolute-scale Visual Footprint curve with soft screen-readable limits, not a hard pixel cap, design-reference-relative sizing, or species canopy-spread geometry. Target about 2px minimum, about 6.75px asymptotic maximum, and gradual growth from roughly 2.2px at 1 px/m to roughly 6.3px at 200 px/m.
+- Do not reintroduce general Display by or Color by plant presentation controls without a new decision record. Manual Plant Color and per-species Plant Color remain supported.
 - Species-cache backfill may enrich metadata, but production geometry should not depend on ad hoc empty-cache fallbacks.
 
 ## Target Projection

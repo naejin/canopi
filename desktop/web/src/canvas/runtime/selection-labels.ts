@@ -92,8 +92,6 @@ function plantVisualRadiusPx(
 ): number {
   const bounds = getPlantWorldBounds(plant, {
     ...(plantContext ?? {
-      sizeMode: 'default' as const,
-      colorByAttr: null,
       speciesCache: EMPTY_SPECIES_CACHE,
     }),
     viewport,

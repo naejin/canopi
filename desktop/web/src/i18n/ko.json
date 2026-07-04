@@ -204,22 +204,6 @@
       "minimap": "미니맵",
       "minimapDesc": "개요 미니맵 전환"
     },
-    "display": {
-      "label": "표시 모드",
-      "colorBy": "색상 구분",
-      "sizeBy": "표시",
-      "default": "기본",
-      "canopy": "수관",
-      "canopySpread": "수관 범위",
-      "legend": "범례",
-      "stratum": "층위",
-      "hardiness": "내한성",
-      "lifecycle": "생활주기",
-      "nitrogen": "질소",
-      "edibility": "식용성",
-      "flower": "꽃색",
-      "none": "없음"
-    },
     "plantTooltip": {
       "stratum": "층위",
       "height": "높이",
@@ -472,6 +456,9 @@
       "zoomRange": "줌 범위",
       "offlineStatus": "오프라인",
       "removeOffline": "오프라인 타일 삭제"
+    },
+    "pinnedPlantNames": {
+      "legend": "범례"
     }
   },
   "worldMap": {
@@ -728,7 +715,6 @@
     "file.open": "디자인 열기",
     "file.save": "저장",
     "file.saveAs": "다른 이름으로 저장",
-    "file.exportDesignReportPdf": "디자인 보고서를 PDF로 내보내기",
     "file.exit": "종료",
     "edit.undo": "실행 취소",
     "edit.redo": "다시 실행",
@@ -981,57 +967,5 @@
     "includeCurrentDesign": "현재 디자인 포함",
     "includeCurrentDesignDescription": "캔버스 내용, 메모, 일정, 예산, 저장된 위치가 포함된 .canopi 사본을 추가합니다.",
     "currentDesignUnavailable": "첨부할 현재 디자인이 없습니다."
-  },
-  "designReport": {
-    "timeline": {
-      "overview": "개요",
-      "actions": "작업",
-      "recurrence": "반복",
-      "target": "대상",
-      "dependencies": "종속성",
-      "status": "상태",
-      "manual": "수동",
-      "none": "없음",
-      "notScheduled": "예약 없음",
-      "dateRangeWithUnscheduledOne": "{{dateRange}}; 예약 없음 {{count}}개",
-      "dateRangeWithUnscheduledMany": "{{dateRange}}; 예약 없음 {{count}}개",
-      "completed": "완료됨",
-      "open": "열림",
-      "dependencyCountOne": "{{count}}개 종속성",
-      "dependencyCountMany": "{{count}}개 종속성"
-    },
-    "budget": {
-      "target": "대상",
-      "category": "범주",
-      "totals": "합계",
-      "categories": {
-        "plants": "식물",
-        "materials": "자재",
-        "labor": "인건비",
-        "tools": "도구"
-      }
-    },
-    "consortium": {
-      "chart": "천이 차트",
-      "table": "컨소시엄 항목",
-      "plant": "식물",
-      "canonicalName": "표준명",
-      "stratum": "층위",
-      "startPhase": "시작 단계",
-      "endPhase": "종료 단계",
-      "count": "수량"
-    },
-    "document": {
-      "overview": "개요",
-      "location": "위치",
-      "design": "디자인",
-      "visibleLayers": "보이는 레이어",
-      "defaultVisibleLayers": "기본값",
-      "noVisibleCanvasObjects": "보이는 캔버스 객체가 없습니다",
-      "pinned": "고정됨",
-      "colorBy": "색상 기준",
-      "pageNumber": "{count}페이지 중 {page}페이지",
-      "altitude": "고도"
-    }
   }
 }

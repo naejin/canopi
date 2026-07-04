@@ -228,8 +228,6 @@ function plantBoundsContext(
 
   return {
     viewport: { x: 0, y: 0, scale: viewportScale },
-    sizeMode: 'default',
-    colorByAttr: null,
     speciesCache: new Map(),
     zoomReference: zoomReference.value > 0 ? zoomReference.value : 1,
   }

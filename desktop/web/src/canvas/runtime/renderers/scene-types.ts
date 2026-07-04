@@ -1,7 +1,6 @@
 import type { RendererBackendContext, RendererBackendDefinition, RendererBackendInstance } from './types'
 import type { ScenePersistedState, SceneViewportState } from '../scene'
 import type { PlantNameLabel, SelectionLabel } from '../selection-labels'
-import type { ColorByAttribute, PlantSizeMode } from '../../plant-display-state'
 import type { SpeciesCacheEntry } from '../species-cache'
 
 export type SceneRendererHoverState =
@@ -26,8 +25,6 @@ export interface SceneRendererSnapshot {
   readonly selectedMeasurementGuideIds: ReadonlySet<string>
   readonly highlightedPlantIds: ReadonlySet<string>
   readonly highlightedZoneIds: ReadonlySet<string>
-  readonly sizeMode: PlantSizeMode
-  readonly colorByAttr: ColorByAttribute | null
   readonly speciesCache: ReadonlyMap<string, SpeciesCacheEntry>
   readonly localizedCommonNames: ReadonlyMap<string, string | null>
   readonly hoveredCanonicalName: string | null

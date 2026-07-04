@@ -89,7 +89,6 @@ function createController(file = makeFile()) {
   const state = {
     invalidations: 0,
     dirtyTypes: [] as string[],
-    presentationSyncs: 0,
     plantSpeciesColorSyncs: 0,
   }
   const captureSnapshot = () => {
@@ -121,17 +120,12 @@ function createController(file = makeFile()) {
     },
     sceneEdits,
     presentation: {
-      syncSignals: () => {
-        state.presentationSyncs += 1
-      },
       syncPlantSpeciesColors: () => {
         state.plantSpeciesColorSyncs += 1
       },
       getViewportScale: () => 1,
       createPlantPresentationContext: (viewportScale = 1) => ({
         viewport: { x: 0, y: 0, scale: viewportScale },
-        sizeMode: 'default',
-        colorByAttr: null,
         speciesCache: new Map(),
         localizedCommonNames: new Map(),
       }),

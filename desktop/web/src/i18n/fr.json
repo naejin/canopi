@@ -204,22 +204,6 @@
       "minimap": "Mini-carte",
       "minimapDesc": "Afficher/masquer la mini-carte"
     },
-    "display": {
-      "label": "Mode d'affichage",
-      "colorBy": "Colorier par",
-      "sizeBy": "Affichage",
-      "default": "Par défaut",
-      "canopy": "Canopée",
-      "canopySpread": "Étendue de canopée",
-      "legend": "Légende",
-      "stratum": "Strate",
-      "hardiness": "Rusticité",
-      "lifecycle": "Cycle de vie",
-      "nitrogen": "Azote",
-      "edibility": "Comestibilité",
-      "flower": "Fleur",
-      "none": "Aucun"
-    },
     "plantTooltip": {
       "stratum": "Strate",
       "height": "Hauteur",
@@ -472,6 +456,9 @@
       "zoomRange": "Plage de zoom",
       "offlineStatus": "Hors ligne",
       "removeOffline": "Supprimer les tuiles hors ligne"
+    },
+    "pinnedPlantNames": {
+      "legend": "Légende"
     }
   },
   "worldMap": {
@@ -728,7 +715,6 @@
     "file.open": "Ouvrir un design",
     "file.save": "Enregistrer",
     "file.saveAs": "Enregistrer sous",
-    "file.exportDesignReportPdf": "Exporter le rapport de design en PDF",
     "file.exit": "Quitter",
     "edit.undo": "Annuler",
     "edit.redo": "Retablir",
@@ -981,57 +967,5 @@
     "includeCurrentDesign": "Inclure le design actuel",
     "includeCurrentDesignDescription": "Ajoute une copie .canopi avec le contenu du canevas, les notes, le calendrier, le budget et l’emplacement enregistré.",
     "currentDesignUnavailable": "Aucun design actuel n’est disponible à joindre."
-  },
-  "designReport": {
-    "timeline": {
-      "overview": "Vue d’ensemble",
-      "actions": "Actions",
-      "recurrence": "Récurrence",
-      "target": "Cible",
-      "dependencies": "Dépendances",
-      "status": "Statut",
-      "manual": "Manuel",
-      "none": "Aucune",
-      "notScheduled": "Non planifié",
-      "dateRangeWithUnscheduledOne": "{{dateRange}} ; {{count}} non planifiée",
-      "dateRangeWithUnscheduledMany": "{{dateRange}} ; {{count}} non planifiées",
-      "completed": "Terminé",
-      "open": "Ouvert",
-      "dependencyCountOne": "{{count}} dépendance",
-      "dependencyCountMany": "{{count}} dépendances"
-    },
-    "budget": {
-      "target": "Cible",
-      "category": "Catégorie",
-      "totals": "Totaux",
-      "categories": {
-        "plants": "Plantes",
-        "materials": "Matériaux",
-        "labor": "Main-d'œuvre",
-        "tools": "Outils"
-      }
-    },
-    "consortium": {
-      "chart": "Diagramme de succession",
-      "table": "Entrées du consortium",
-      "plant": "Plante",
-      "canonicalName": "Nom canonique",
-      "stratum": "Strate",
-      "startPhase": "Phase de début",
-      "endPhase": "Phase de fin",
-      "count": "Nombre"
-    },
-    "document": {
-      "overview": "Vue d’ensemble",
-      "location": "Emplacement",
-      "design": "Design",
-      "visibleLayers": "Calques visibles",
-      "defaultVisibleLayers": "par défaut",
-      "noVisibleCanvasObjects": "Aucun objet visible sur le canevas",
-      "pinned": "Épinglé",
-      "colorBy": "Colorier par",
-      "pageNumber": "Page {page} sur {count}",
-      "altitude": "altitude"
-    }
   }
 }

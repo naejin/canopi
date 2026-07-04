@@ -204,22 +204,6 @@
       "minimap": "ミニマップ",
       "minimapDesc": "ミニマップの表示/非表示"
     },
-    "display": {
-      "label": "表示モード",
-      "colorBy": "色分け",
-      "sizeBy": "表示",
-      "default": "デフォルト",
-      "canopy": "樹冠",
-      "canopySpread": "樹冠の広がり",
-      "legend": "凡例",
-      "stratum": "階層",
-      "hardiness": "耐寒性",
-      "lifecycle": "ライフサイクル",
-      "nitrogen": "窒素",
-      "edibility": "可食性",
-      "flower": "花色",
-      "none": "なし"
-    },
     "plantTooltip": {
       "stratum": "階層",
       "height": "高さ",
@@ -472,6 +456,9 @@
       "zoomRange": "ズーム範囲",
       "offlineStatus": "オフライン",
       "removeOffline": "オフラインタイルを削除"
+    },
+    "pinnedPlantNames": {
+      "legend": "凡例"
     }
   },
   "worldMap": {
@@ -728,7 +715,6 @@
     "file.open": "デザインを開く",
     "file.save": "保存",
     "file.saveAs": "名前を付けて保存",
-    "file.exportDesignReportPdf": "デザインレポートをPDFで書き出す",
     "file.exit": "終了",
     "edit.undo": "元に戻す",
     "edit.redo": "やり直し",
@@ -981,57 +967,5 @@
     "includeCurrentDesign": "現在のデザインを含める",
     "includeCurrentDesignDescription": "キャンバス内容、メモ、タイムライン、予算、保存済みの位置を含む .canopi コピーを追加します。",
     "currentDesignUnavailable": "添付できる現在のデザインがありません。"
-  },
-  "designReport": {
-    "timeline": {
-      "overview": "概要",
-      "actions": "アクション",
-      "recurrence": "繰り返し",
-      "target": "対象",
-      "dependencies": "依存関係",
-      "status": "状態",
-      "manual": "手動",
-      "none": "なし",
-      "notScheduled": "未定",
-      "dateRangeWithUnscheduledOne": "{{dateRange}}；未定 {{count}} 件",
-      "dateRangeWithUnscheduledMany": "{{dateRange}}；未定 {{count}} 件",
-      "completed": "完了",
-      "open": "未完了",
-      "dependencyCountOne": "{{count}} 件の依存関係",
-      "dependencyCountMany": "{{count}} 件の依存関係"
-    },
-    "budget": {
-      "target": "対象",
-      "category": "カテゴリ",
-      "totals": "合計",
-      "categories": {
-        "plants": "植物",
-        "materials": "資材",
-        "labor": "労務",
-        "tools": "道具"
-      }
-    },
-    "consortium": {
-      "chart": "遷移チャート",
-      "table": "コンソーシアム項目",
-      "plant": "植物",
-      "canonicalName": "標準名",
-      "stratum": "階層",
-      "startPhase": "開始フェーズ",
-      "endPhase": "終了フェーズ",
-      "count": "数"
-    },
-    "document": {
-      "overview": "概要",
-      "location": "場所",
-      "design": "デザイン",
-      "visibleLayers": "表示レイヤー",
-      "defaultVisibleLayers": "既定",
-      "noVisibleCanvasObjects": "表示可能なキャンバスオブジェクトはありません",
-      "pinned": "固定",
-      "colorBy": "色分け",
-      "pageNumber": "{count} ページ中 {page} ページ",
-      "altitude": "標高"
-    }
   }
 }

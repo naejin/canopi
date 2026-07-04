@@ -37,10 +37,6 @@ vi.mock('../components/canvas/DisplayLegend', () => ({
   DisplayLegend: () => <div data-testid="display-legend" />,
 }))
 
-vi.mock('../components/canvas/DisplayModeControls', () => ({
-  DisplayModeControls: () => <div data-testid="display-mode-controls" />,
-}))
-
 vi.mock('../components/canvas/ZoomControls', () => ({
   ZoomControls: () => <div data-testid="zoom-controls" />,
 }))
