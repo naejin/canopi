@@ -200,6 +200,7 @@ pub fn run() {
             };
             let plant_db_status = plant_db.status();
             app.manage(plant_db);
+            app.manage(services::plant_browser::SpeciesSearchCancellation::default());
 
             app.manage(AppHealth(Mutex::new(SubsystemHealth {
                 plant_db: plant_db_status,

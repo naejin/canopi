@@ -1,9 +1,122 @@
 use common_types::species::{
     PaginatedResult, SpeciesDetail, SpeciesListItem, SpeciesSearchRequest,
 };
+use rusqlite::InterruptHandle;
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicU64, Ordering},
+};
 
 use crate::db::{self, PlantDb, UserDb};
 use crate::services::species_catalog_read::SpeciesCatalogRead;
+
+const SPECIES_SEARCH_CANCELLED: &str =
+    "Species search cancelled because a newer query superseded it";
+
+#[derive(Clone, Default)]
+pub struct SpeciesSearchCancellation {
+    inner: Arc<SpeciesSearchCancellationInner>,
+}
+
+#[derive(Default)]
+struct SpeciesSearchCancellationInner {
+    next_generation: AtomicU64,
+    active: Mutex<Option<ActiveSpeciesSearch>>,
+}
+
+struct ActiveSpeciesSearch {
+    generation: u64,
+    interrupt: Arc<InterruptHandle>,
+}
+
+pub struct SpeciesSearchCancellationToken {
+    cancellation: SpeciesSearchCancellation,
+    generation: u64,
+}
+
+impl SpeciesSearchCancellation {
+    pub fn begin(&self, interrupt: Arc<InterruptHandle>) -> SpeciesSearchCancellationToken {
+        let generation = self
+            .inner
+            .next_generation
+            .fetch_add(1, Ordering::Relaxed)
+            .wrapping_add(1);
+        let previous = {
+            let mut active = self.inner.active.lock().unwrap_or_else(|error| {
+                tracing::warn!(
+                    "Recovered poisoned Species Search cancellation lock while starting search"
+                );
+                error.into_inner()
+            });
+            active.replace(ActiveSpeciesSearch {
+                generation,
+                interrupt,
+            })
+        };
+
+        if let Some(previous) = previous {
+            previous.interrupt.interrupt();
+        }
+
+        SpeciesSearchCancellationToken {
+            cancellation: self.clone(),
+            generation,
+        }
+    }
+
+    fn is_current(&self, generation: u64) -> bool {
+        let active = self.inner.active.lock().unwrap_or_else(|error| {
+            tracing::warn!(
+                "Recovered poisoned Species Search cancellation lock while checking search"
+            );
+            error.into_inner()
+        });
+        active
+            .as_ref()
+            .is_some_and(|active| active.generation == generation)
+    }
+
+    fn finish(&self, generation: u64) {
+        let mut active = self.inner.active.lock().unwrap_or_else(|error| {
+            tracing::warn!(
+                "Recovered poisoned Species Search cancellation lock while finishing search"
+            );
+            error.into_inner()
+        });
+        if active
+            .as_ref()
+            .is_some_and(|active| active.generation == generation)
+        {
+            *active = None;
+        }
+    }
+}
+
+impl SpeciesSearchCancellationToken {
+    fn ensure_current(&self) -> Result<(), String> {
+        self.cancellation
+            .is_current(self.generation)
+            .then_some(())
+            .ok_or_else(|| SPECIES_SEARCH_CANCELLED.to_owned())
+    }
+}
+
+impl Drop for SpeciesSearchCancellationToken {
+    fn drop(&mut self) {
+        self.cancellation.finish(self.generation);
+    }
+}
+
+pub fn is_active_species_search_request(request: &SpeciesSearchRequest) -> bool {
+    request
+        .text
+        .trim()
+        .chars()
+        .filter(|ch| !ch.is_whitespace())
+        .take(2)
+        .count()
+        >= 2
+}
 
 pub fn search_species(
     plant_db: &PlantDb,
@@ -30,8 +143,27 @@ pub async fn search_species_async(
     user_db: UserDb,
     request: SpeciesSearchRequest,
 ) -> Result<PaginatedResult<SpeciesListItem>, String> {
+    search_species_async_cancellable(plant_db, user_db, request, None).await
+}
+
+pub async fn search_species_async_cancellable(
+    plant_db: PlantDb,
+    user_db: UserDb,
+    request: SpeciesSearchRequest,
+    cancellation: Option<SpeciesSearchCancellationToken>,
+) -> Result<PaginatedResult<SpeciesListItem>, String> {
     crate::blocking::run_blocking("species search", move || {
-        search_species(&plant_db, &user_db, request)
+        if let Some(cancellation) = &cancellation {
+            cancellation.ensure_current()?;
+        }
+
+        let result = search_species(&plant_db, &user_db, request)?;
+
+        if let Some(cancellation) = &cancellation {
+            cancellation.ensure_current()?;
+        }
+
+        Ok(result)
     })
     .await
 }
@@ -124,7 +256,9 @@ pub fn get_recently_viewed(
 #[cfg(test)]
 mod tests {
     use super::{
-        get_favorites, get_recently_viewed, search_species, search_species_async, toggle_favorite,
+        SpeciesSearchCancellation, get_favorites, get_recently_viewed,
+        is_active_species_search_request, search_species, search_species_async,
+        search_species_async_cancellable, toggle_favorite,
     };
     use crate::db::{self, PlantDb, UserDb};
     use common_types::species::{Sort, SpeciesFilter, SpeciesSearchRequest};
@@ -320,6 +454,54 @@ mod tests {
         assert_eq!(result.items[0].canonical_name, "Malus domestica");
         assert_eq!(result.total_estimate, 1);
         assert!(result.items[0].is_favorite);
+    }
+
+    #[test]
+    fn newer_active_search_cancels_older_queued_search() {
+        let plant_db = test_plant_db();
+        let user_db = test_user_db();
+        let cancellation = SpeciesSearchCancellation::default();
+
+        let first = cancellation.begin(plant_db.interrupt_handle().unwrap());
+        let _second = cancellation.begin(plant_db.interrupt_handle().unwrap());
+
+        let error = tauri::async_runtime::block_on(search_species_async_cancellable(
+            plant_db,
+            user_db,
+            search_request("Malus", SpeciesFilter::default(), 10, true, "en"),
+            Some(first),
+        ))
+        .unwrap_err();
+
+        assert_eq!(
+            error,
+            "Species search cancelled because a newer query superseded it"
+        );
+    }
+
+    #[test]
+    fn active_search_cancellation_policy_matches_two_character_search_ux() {
+        assert!(is_active_species_search_request(&search_request(
+            "Ma",
+            SpeciesFilter::default(),
+            10,
+            false,
+            "en",
+        )));
+        assert!(!is_active_species_search_request(&search_request(
+            "M",
+            SpeciesFilter::default(),
+            10,
+            false,
+            "en",
+        )));
+        assert!(!is_active_species_search_request(&search_request(
+            "",
+            SpeciesFilter::default(),
+            10,
+            true,
+            "en",
+        )));
     }
 
     #[test]

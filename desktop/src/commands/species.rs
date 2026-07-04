@@ -18,6 +18,10 @@ use common_types::species::{
 pub async fn search_species(
     plant_db: tauri::State<'_, crate::db::PlantDb>,
     user_db: tauri::State<'_, crate::db::UserDb>,
+    search_cancellation: tauri::State<
+        '_,
+        crate::services::plant_browser::SpeciesSearchCancellation,
+    >,
     text: String,
     filters: SpeciesFilter,
     cursor: Option<String>,
@@ -35,12 +39,29 @@ pub async fn search_species(
         locale,
         include_total: include_total.unwrap_or(true),
     };
-    crate::services::plant_browser::search_species_async(
-        plant_db.inner().clone(),
-        user_db.inner().clone(),
-        request,
-    )
-    .await
+
+    let plant_db = plant_db.inner().clone();
+    let cancellation = if crate::services::plant_browser::is_active_species_search_request(&request)
+    {
+        plant_db
+            .interrupt_handle()
+            .map(|interrupt| search_cancellation.inner().begin(interrupt))
+    } else {
+        None
+    };
+
+    let user_db = user_db.inner().clone();
+    if let Some(cancellation) = cancellation {
+        crate::services::plant_browser::search_species_async_cancellable(
+            plant_db,
+            user_db,
+            request,
+            Some(cancellation),
+        )
+        .await
+    } else {
+        crate::services::plant_browser::search_species_async(plant_db, user_db, request).await
+    }
 }
 
 /// Fetch the full detail record for a species and record it in recently viewed.

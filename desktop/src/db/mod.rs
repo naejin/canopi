@@ -9,7 +9,7 @@ pub(crate) mod test_support;
 pub mod user_db;
 
 use common_types::health::PlantDbStatus;
-use rusqlite::Connection;
+use rusqlite::{Connection, InterruptHandle};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 /// Plant database availability boundary.
@@ -19,14 +19,21 @@ use std::sync::{Arc, Mutex, MutexGuard};
 /// fake in-memory connection that looks usable.
 #[derive(Clone)]
 pub enum PlantDb {
-    Available(Arc<Mutex<Connection>>),
+    Available {
+        connection: Arc<Mutex<Connection>>,
+        interrupt: Arc<InterruptHandle>,
+    },
     Missing,
     Corrupt,
 }
 
 impl PlantDb {
     pub fn available(connection: Connection) -> Self {
-        Self::Available(Arc::new(Mutex::new(connection)))
+        let interrupt = Arc::new(connection.get_interrupt_handle());
+        Self::Available {
+            connection: Arc::new(Mutex::new(connection)),
+            interrupt,
+        }
     }
 
     pub fn missing() -> Self {
@@ -39,9 +46,16 @@ impl PlantDb {
 
     pub fn status(&self) -> PlantDbStatus {
         match self {
-            Self::Available(_) => PlantDbStatus::Available,
+            Self::Available { .. } => PlantDbStatus::Available,
             Self::Missing => PlantDbStatus::Missing,
             Self::Corrupt => PlantDbStatus::Corrupt,
+        }
+    }
+
+    pub fn interrupt_handle(&self) -> Option<Arc<InterruptHandle>> {
+        match self {
+            Self::Available { interrupt, .. } => Some(Arc::clone(interrupt)),
+            Self::Missing | Self::Corrupt => None,
         }
     }
 }
@@ -77,7 +91,7 @@ pub fn plant_db_unavailable_error(status: PlantDbStatus) -> String {
 
 pub fn require_plant_db<'a>(plant_db: &'a PlantDb) -> Result<MutexGuard<'a, Connection>, String> {
     match plant_db {
-        PlantDb::Available(connection) => Ok(acquire(connection, "PlantDb")),
+        PlantDb::Available { connection, .. } => Ok(acquire(connection, "PlantDb")),
         PlantDb::Missing => Err(plant_db_unavailable_error(PlantDbStatus::Missing)),
         PlantDb::Corrupt => Err(plant_db_unavailable_error(PlantDbStatus::Corrupt)),
     }
