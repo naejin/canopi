@@ -50,7 +50,8 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 ## Save And Format Contract
 
 - Lightweight web-edition work must still create, open, edit, and export real Canopi Designs rather than a separate web sketch format. Browser storage/file adapters may replace Tauri filesystem dialogs, but they should feed the normal Design Session and save-composition seams. Unsupported web-edition sections should be preserved when loaded where possible and emitted as valid empty sections for new web-created Designs. See `docs/adr/0009-web-edition-uses-design-format.md`.
-- The web edition should provide browser-local Design drafts and autosave as a recovery/convenience layer, with explicit `.canopi` download/export as the durable portable save path. Do not introduce a backend requirement for storing user Designs. See `docs/adr/0010-web-edition-browser-drafts.md`.
+- The web edition should provide browser-local Design drafts and autosave as the active browser save target, with explicit `.canopi` download/export as the durable portable save path. It may list those drafts in a simple browser-local Drafts list, but that list must not reuse desktop Design Notebook semantics such as Notebook Sections, saved paths, or file reveal actions. Do not make direct save-back to an imported file the v1 foundation, and do not introduce a backend requirement for storing user Designs. Web Edition v1 exports `.canopi` only; do not expose browser PNG, SVG, PDF, CSV, report, or diagnostic bundle export flows. The Web Edition Browser App Shell should present those constraints directly instead of reusing desktop native file chrome. See `docs/adr/0010-web-edition-browser-drafts.md`, `docs/adr/0019-web-edition-canopi-export-only.md`, and `docs/adr/0020-web-edition-browser-app-shell.md`.
+- Platform-specific persistence, settings, and file adapters should be selected by the desktop or web Vite entry at compile time, not through runtime web-vs-Tauri feature flags inside shared Design Session modules. See `docs/adr/0021-web-edition-compile-time-adapters.md`.
 - Preserve `created_at` from loaded files.
 - Preserve loaded document sections on save: timeline, budget, consortiums, description, location, and extra fields.
 - Preserve per-object non-visual fields such as plant notes, planted date, quantity, and zone notes.
@@ -68,6 +69,7 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 ## Saved Object Stamp Import And Export
 
 - Saved Object Stamps are personal library entries, not part of normal Design Session save composition, dirty state, autosave, or replacement guards.
+- Web Edition v1 keeps Saved Object Stamps browser-local only and does not expose stamp import/export.
 - Exporting a Saved Object Stamp writes one valid `.canopi` file containing only the visible canvas objects and captured Object Groups needed for that stamp, with safe default values for required Design fields. Do not export Location, Budget Items, Timeline Actions, Consortiums, description, or non-visual object metadata.
 - Importing a Saved Object Stamp from `.canopi` adds a library entry only. It must not open or replace the current Design Session, must not mark the current Design dirty, and must not require the dirty-design guard.
 - Stamp import should read `.canopi` files through a lower-level format-loading path or a stamp-specific command that does not record Recent Designs. Do not reuse `design_files::load_design()` for stamp import unless its recent-file side effect is bypassed deliberately.
@@ -77,6 +79,7 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 
 - Structured Design Report PDF export was removed in ADR 0011. Do not reintroduce `app/design-report`, `ipc/design-report`, `commands::design_report`, `services::design_report`, or report-specific PDF dependencies without a new decision record.
 - The remaining native PDF path is the canvas snapshot export under `services::export` and `platform::export_pdf`; keep it separate from Design Session save/load and dirty-state handling.
+- Web Edition v1 does not expose native-style export flows other than `.canopi` download/export.
 
 ## Adding Document Fields
 
@@ -112,6 +115,7 @@ Use this guide when changing `.canopi` load/save, document replacement, dirty st
 ## Settings Persistence
 
 - Rust `Settings` in the user DB is the durable source of truth for user preferences.
+- Web Edition settings and personal app data are browser-local convenience state backed by browser storage, not cloud-synced durable state. Keep web adapters behind the same caller-shaped seams instead of importing browser storage directly from components. See `docs/adr/0014-web-edition-browser-local-app-data.md`.
 - Frontend signals are runtime projections.
 - `desktop/web/src/app/settings/projection.ts` owns hydration, snapshotting, mutation, queued persistence, and flush behavior.
 - Use `hydrateSettingsProjection()` after `get_settings`.

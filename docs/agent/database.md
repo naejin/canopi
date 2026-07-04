@@ -17,9 +17,11 @@ Use this guide when changing SQLite schema contracts, plant search, filters, spe
 ## User DB Personal Libraries
 
 - The user DB is separate from the bundled plant DB. It stores local app data such as settings, favorites, recently viewed Species, Recent Designs, and personal libraries that should survive normal app updates.
-- Design Notebook organization belongs in the user DB as a personal library of saved Design references, not in the plant DB, settings JSON, or `.canopi` Design save composition. Use incremental user DB migrations with dedicated tables for saved Design references, Notebook Sections, section membership, manual ordering, and timestamps.
+- These user DB rules apply to the desktop app. Web Edition v1 personal app data may be browser-local storage instead of a native user DB; keep shared UI behind caller-shaped app-data APIs. See `docs/adr/0014-web-edition-browser-local-app-data.md`.
+- Desktop Design Notebook organization belongs in the user DB as a personal library of saved Design references, not in the plant DB, settings JSON, or `.canopi` Design save composition. Use incremental user DB migrations with dedicated tables for saved Design references, Notebook Sections, section membership, manual ordering, and timestamps.
+- Web Edition v1 does not have the Design Notebook or notebook-style Design organization. Browser Drafts are browser-local convenience state, not user DB rows, saved path references, or Recent Designs.
 - Design Notebook references point to saved `.canopi` paths only. Listing should share Recent Design path-availability semantics: prune references whose paths are definitely stale, hide ambiguous or permission-blocked paths for the current read without deleting them, and never delete user Notebook Sections as a side effect of file availability checks.
-- Saved Object Stamps belong in the user DB, not in the plant DB and not in the settings JSON blob. Add an incremental user DB migration for a dedicated table rather than extending plant catalog schema or `.canopi` Design save composition.
+- Desktop Saved Object Stamps belong in the user DB, not in the plant DB and not in the settings JSON blob. Add an incremental user DB migration for a dedicated table rather than extending plant catalog schema or `.canopi` Design save composition.
 - Saved Object Stamp rows should support stable identity, user-owned name, persisted manual order, timestamps, and an opaque normalized payload JSON for the visible canvas arrangement. Use prepared statements and keep library CRUD in focused user DB/service modules.
 - Manual Saved Object Stamp ordering should update explicit order fields in the user DB. Do not rely on recently used ordering, and do not reorder stamps as a side effect of placement.
 - Saved Object Stamp import/export uses `.canopi` files for portability, but imported/exported stamp files are not Recent Designs and should not be recorded through recent-file database helpers.
@@ -42,7 +44,9 @@ When canopi-data removes or adds columns, update atomically:
 - Detail row mapping reads projected columns by name so projection order can change without remapping every field.
 - Search plans own count/list query construction and cursor semantics.
 - Species Catalog read projections own caller-oriented SQL shape, row mapping, parameter placeholders, and localized Common Name hydration before a workflow interprets the facts.
-- Treat the Species Catalog storage engine as an adapter behind Species Catalog read behavior. Desktop currently uses Rust + SQLite; lightweight web catalog work may use a browser-native adapter such as DuckDB-WASM + Parquet, but shared UI and workflows should not depend on a concrete storage engine. See `docs/adr/0008-species-catalog-storage-adapters.md`.
+- Treat the Species Catalog storage engine as an adapter behind Species Catalog read behavior. Desktop currently uses Rust + SQLite; Web Edition v1 uses a browser-native DuckDB-WASM adapter with generated reduced assets, but shared UI and workflows should not depend on a concrete storage engine. See `docs/adr/0008-species-catalog-storage-adapters.md`.
+- Web Edition catalog assets should be generated from canopi-data export lineage in this repository, not hand-maintained in `canopi-website`. The generator should emit reduced DuckDB-compatible assets, locale/search shards, and image metadata with deterministic names and size checks for the versioned Web Edition artifact.
+- Web Edition v1 detail hydration should project only hero image metadata, Canonical Name, Common Names, climate zone, habit or growth form, and life cycle. Do not recreate the desktop `SpeciesDetail` payload in the reduced DuckDB-WASM catalog.
 - `services/species_catalog_read/list_projection.rs` owns `SpeciesListItem` row mapping by projected column name. Search rows and canonical-name hydration for favorites/recently viewed must share this mapper so Common Name display, secondary names, fallback flags, and favorite-state defaults remain consistent.
 - Species Catalog search has one structured request contract: `common-types/src/species.rs` `SpeciesSearchRequest`. Tauri command arguments may stay flat for IPC compatibility, but commands, services, plant DB search, and query planning should adapt to that request object instead of growing parallel argument lists.
 - Species Catalog search planning is split by seam under `desktop/src/db/query_builder/`: `text.rs` owns FTS/Common Name normalization, `relevance.rs` owns Common Name ranking tiers and token joins, `predicates.rs` owns shared FTS/filter WHERE assembly, `pagination.rs` owns keyset/offset cursor behavior, and `projection.rs` owns reusable list row SELECT/Common Name join SQL fragments.
@@ -106,6 +110,7 @@ When canopi-data removes or adds columns, update atomically:
 - Search list rows include secondary names for disambiguation and may include a selected-language Matched Common Name to explain an active text search match.
 - Cross-workflow backend callers should share Species Catalog read behavior through `desktop/src/services/species_catalog_read.rs` and its projection modules instead of reaching directly into `plant_db` lookup helpers from unrelated services.
 - Site Adaptation compatibility and replacement reads belong behind `desktop/src/services/species_catalog_read/{compatibility,replacement,common_names}.rs`. Site Adaptation owns hardiness compatibility interpretation and response shaping; it should not own Species Catalog SQL, placeholder assembly, table names, localized Common Name lookup, or Species Catalog storage test fixtures.
+- Web Edition v1 omits Site Adaptation and excludes hardiness, height, and stratum from the reduced web catalog. Do not add those fields to the web export unless a later decision reintroduces Site Adaptation. See `docs/adr/0018-web-edition-omits-site-adaptation.md`.
 
 ## canopi-data Export
 
@@ -125,3 +130,4 @@ When canopi-data removes or adds columns, update atomically:
 - Cache LRU target is 500MB under the app data image-cache directory.
 - Use `convertFileSrc()` on frontend paths returned by Rust.
 - Do not reintroduce base64 image IPC.
+- Web Edition v1 image support is metadata-only and lazy: include at most one remote hero image per Species, plus source/credit/license fields where available. Do not bundle image binaries, prefetch galleries, add a backend image proxy, or port the desktop native image cache into the static web build. See `docs/adr/0008-species-catalog-storage-adapters.md`.

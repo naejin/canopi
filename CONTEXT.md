@@ -12,6 +12,14 @@ _Avoid_: Document, file, project
 The active runtime context for a Design in the app. A design session includes the current Design state, dirty baselines, save/autosave behavior, queued Design loads, lifecycle workflows, and an optional attached canvas runtime.
 _Avoid_: Document session, file session, canvas session
 
+**Web Edition**:
+A browser-accessible Canopi experience that creates, opens, edits, and exports real Designs. A web edition may omit desktop-only or planning-heavy surfaces, but it is not a separate sketch format, static catalog, or website-only demo.
+_Avoid_: Web sketch, catalog site, demo app
+
+**Browser App Shell**:
+The Web Edition workspace chrome for starting, opening, resuming, downloading, and navigating Designs in a browser. A browser app shell presents web-appropriate commands around the shared Canopi app core rather than reproducing desktop window or native file-management chrome.
+_Avoid_: Desktop title bar, website navigation, embedded widget
+
 **Welcome Screen**:
 The app-opening state shown when no Design Session is active. A welcome screen may offer entry points such as creating a new design, opening an existing design, or reopening a recent design, but it is not itself a Design and does not have a user-editable Design name.
 _Avoid_: Homepage, empty design, untitled design
@@ -21,8 +29,12 @@ A previously opened or saved design reference that lets the user reopen that des
 _Avoid_: Recent file, recent document, history item
 
 **Design Notebook**:
-The app-level workspace for finding, organizing, and switching between saved Designs. A design notebook stores organizing metadata and references to saved Design locations only; the saved `.canopi` Design remains the authority for design content and Design name, and switching to a notebook entry starts a different Design Session rather than merging designs.
+The desktop app-level workspace for finding, organizing, and switching between saved Designs. A design notebook stores organizing metadata and references to saved Design locations only; the saved `.canopi` Design remains the authority for design content and Design name, and switching to a notebook entry starts a different Design Session rather than merging designs.
 _Avoid_: File browser, recent list, project folder
+
+**Browser Draft**:
+A Web Edition Design saved in the current browser profile so it can be reopened later on the same device/browser. A browser draft is convenience state, not a portable `.canopi` file, Design Notebook entry, saved path reference, or cloud-synced library item.
+_Avoid_: Notebook entry, recent file, autosave backup
 
 **Notebook Section**:
 A user-named, manually ordered grouping inside the Design Notebook. A notebook section organizes saved Design references one-to-many: a saved Design reference belongs to at most one notebook section, and section membership is personal app organization rather than saved Design content.
@@ -31,10 +43,6 @@ _Avoid_: Folder, tag, category
 **Design Edit**:
 A non-canvas change to Design-owned state, including Location, Budget Items, Timeline Actions, Consortiums, description, and extra fields. Design Edit owns no-op detection, preview/commit/abort transaction behavior, and non-canvas dirty-state marking behind the Design Session seam. It does not own canvas scene state, save/load lifecycle, or UI draft state.
 _Avoid_: Document mutation, panel action, direct currentDesign write
-
-**Design Report**:
-A printable or exportable representation of a design for sharing or printing. A design report may include a fitted canvas view and selected planning sections, but it is not itself a saved design or part of the design state.
-_Avoid_: PDF file, canvas export, print snapshot
 
 **App Command Graph**:
 The app runtime seam for user command identity, labels, availability, shortcuts, dispatch, and chrome projections such as menus, palettes, toolbars, and panel navigation. The app command graph coordinates command access to Design Session, canvas, settings, and shell state without owning those domain states.
@@ -116,10 +124,6 @@ _Avoid_: English fallback match, hidden match
 **Placed Plant**:
 An instance of a species positioned inside a design. Multiple placed plants may refer to the same species.
 _Avoid_: Species, plant record, catalog item
-
-**Plant Size Mode**:
-A presentation choice for how placed plants are visually sized in a design. The default plant size mode shows placed plants as symbolic position markers; canopy spread mode shows their physical canopy footprint.
-_Avoid_: Object scale, canvas scale, plant display mode
 
 **Plant Symbol**:
 A user-chosen built-in marker shape used to visually distinguish placed plants in a design. A placed plant may have its own plant symbol, and a design may define a default plant symbol for a species' placed plants; the symbol sits within the placed plant's Visual Footprint and is design-owned presentation, not Species Catalog data, physical geometry, or imported artwork.
@@ -350,7 +354,7 @@ A reusable design that can be imported as the starting point for a new design. A
 _Avoid_: Community template, file template
 
 **Site Adaptation**:
-The process of checking whether species in a design or design template suit the target site. Site adaptation may surface compatibility results and replacement suggestions.
+The process of checking whether species in a design or design template suit the target site. Site adaptation may surface compatibility results and replacement suggestions. Web Edition v1 omits Site Adaptation; static web templates import as-is.
 _Avoid_: Template adaptation, plant review
 
 **Compatibility Check**:
@@ -368,9 +372,6 @@ Use **Design** for the user's agroecological plan. Reserve "document" and "file"
 
 **Design vs Design Session**:
 A **Design** is the agroecological plan. A **Design Session** is the active app runtime context around that design, including lifecycle and persistence behavior.
-
-**Design vs Design Report**:
-A **Design** is the saved agroecological plan. A **Design Report** is an exported or printed representation of that plan and does not become part of the design state.
 
 **Design Session vs Design Edit**:
 A **Design Session** owns lifecycle, persistence, dirty baselines, and active Design identity. A **Design Edit** changes non-canvas Design state inside that session and owns no-op detection, preview transactions, and non-canvas dirty marking for those changes.

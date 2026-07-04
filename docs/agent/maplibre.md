@@ -12,6 +12,7 @@ Use this guide when changing MapLibre surfaces, basemap rendering, terrain layer
 - Keep direct `maplibre-gl` imports, Map/Marker/Bounds construction, basemap style construction, and control construction in low-level modules under `desktop/web/src/maplibre/` or in tests.
 - In-canvas MapLibre remains isolated behind the Canvas Map Surface adapter and the MapLibre Host. Do not scatter MapLibre ownership across canvas runtime or renderers.
 - Location map editing uses the MapLibre Surface Adapter for map lifetime and keeps saved Location authority, pending search-result preview, pin projection, drag clearing, and map-center commits in `app/location/map-editing.ts`.
+- Web Edition v1 omits address geocoding; Location map editing should still support manual coordinate and map click or pin workflows. See `docs/adr/0016-web-edition-omits-geocoding.md`.
 - The Design Template world map uses the MapLibre Surface Adapter for map lifetime and keeps template marker creation, selection classes, fit-to-bounds, and selected-template fly-to behavior in `components/world-map/WorldMapSurface.tsx` with low-level constructors isolated under `maplibre/world-map.ts`.
 - `app/canvas-map-surface/snapshot.ts` owns in-canvas map snapshot inputs: canvas query surface freshness, saved Location, north bearing, basemap style, layer visibility/opacity, theme, terrain settings, and Target Presentation overlays. The mounted `components/canvas/maplibre-surface-controller.ts` should call that seam instead of importing those authorities directly.
 - `app/canvas-map-surface/reconciliation.ts` owns pure in-canvas map activation decisions: inactive, destroy, create, sync, or rebuild from snapshot inputs plus lifecycle state. `app/canvas-map-surface/lifecycle.ts` is the Canvas Map Surface adapter: it requests MapLibre Surface Adapter maps and owns camera sync, basemap presentation, terrain, Target Presentation overlays, readiness state, diagnostics, and MapLibre event reactions for the in-canvas surface.
@@ -41,6 +42,7 @@ Use this guide when changing MapLibre surfaces, basemap rendering, terrain layer
 - `layerVisibility.base` and `layerOpacity.base` mean shared hosted basemap visibility/opacity.
 - `gridVisible` is separate canvas chrome and must not be coupled to the base layer row.
 - `activeLayerName` can be any layer string used by scene and terrain layer UI.
+- Web Edition v1 scope is street basemap only: no satellite basemap, terrain contours, hillshade, offline tile download, service-worker tile precache, or offline map promise. See `docs/adr/0013-web-edition-map-scope.md` and `docs/adr/0022-web-edition-not-offline-first.md`.
 - Contours use `layerVisibility.contours` and `layerOpacity.contours`.
 - Hillshading uses `hillshadeVisible` and `hillshadeOpacity`.
 - Canvas Layer Presentation bridges scene/map/terrain layer asymmetry for `LayerPanel`, Canvas shell Location Notices, and Canvas Map Surface snapshots. Map readiness callers should consume its map-surface projection instead of recomputing base/contour/hillshade visibility.
