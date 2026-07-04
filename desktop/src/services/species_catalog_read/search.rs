@@ -548,17 +548,72 @@ mod tests {
         })?;
 
         eprintln!("species_search_latency db={}", path.display());
-        for case in [
-            ("fr-lin", "fr", "lin"),
-            ("fr-lin-commun", "fr", "lin commun"),
-            ("fr-lind", "fr", "lind"),
-            ("en-apple", "en", "apple"),
-            ("en-broad-a", "en", "a"),
-        ] {
+        for case in species_search_latency_cases() {
             report_species_search_latency_case(&conn, case)?;
         }
 
         Ok(())
+    }
+
+    #[derive(Clone, Copy)]
+    struct SpeciesSearchLatencyCase {
+        label: &'static str,
+        locale: &'static str,
+        query: &'static str,
+        include_total: bool,
+    }
+
+    fn species_search_latency_cases() -> &'static [SpeciesSearchLatencyCase] {
+        &[
+            SpeciesSearchLatencyCase {
+                label: "en-ap",
+                locale: "en",
+                query: "ap",
+                include_total: false,
+            },
+            SpeciesSearchLatencyCase {
+                label: "fr-me",
+                locale: "fr",
+                query: "me",
+                include_total: false,
+            },
+            SpeciesSearchLatencyCase {
+                label: "fr-po",
+                locale: "fr",
+                query: "po",
+                include_total: false,
+            },
+            SpeciesSearchLatencyCase {
+                label: "fr-lin",
+                locale: "fr",
+                query: "lin",
+                include_total: false,
+            },
+            SpeciesSearchLatencyCase {
+                label: "fr-lin-commun",
+                locale: "fr",
+                query: "lin commun",
+                include_total: false,
+            },
+            SpeciesSearchLatencyCase {
+                label: "fr-lind",
+                locale: "fr",
+                query: "lind",
+                include_total: false,
+            },
+            SpeciesSearchLatencyCase {
+                label: "en-apple",
+                locale: "en",
+                query: "apple",
+                include_total: false,
+            },
+            SpeciesSearchLatencyCase {
+                label: "en-broad-a-count-probe",
+                locale: "en",
+                query: "a",
+                include_total: true,
+            },
+        ]
     }
 
     fn run_bundled_species_search_relevance_examples() -> Result<(), String> {
@@ -607,17 +662,17 @@ mod tests {
 
     fn report_species_search_latency_case(
         conn: &Connection,
-        (label, locale, query): (&str, &str, &str),
+        case: &SpeciesSearchLatencyCase,
     ) -> Result<(), String> {
         let plan = SpeciesSearchPlan::build(SpeciesSearchPlanRequest {
             search: search_request(
-                Some(query),
+                Some(case.query),
                 SpeciesFilter::default(),
                 None,
                 Sort::Relevance,
                 20,
-                true,
-                locale,
+                case.include_total,
+                case.locale,
             ),
             use_common_name_token_index: true,
             use_search_name_entry_index: supports_search_name_entry_index(conn),
@@ -626,17 +681,25 @@ mod tests {
         let list_rows = execute_species_search_list(conn, &plan)?;
         let list_elapsed = list_started.elapsed();
 
-        let count_started = Instant::now();
-        let total_estimate = execute_species_search_count(conn, &plan)?;
-        let count_elapsed = count_started.elapsed();
+        let count = if case.include_total {
+            let count_started = Instant::now();
+            let total_estimate = execute_species_search_count(conn, &plan)?;
+            let count_elapsed = count_started.elapsed();
+            (millis(count_elapsed), total_estimate.to_string())
+        } else {
+            ("skipped".to_owned(), "skipped".to_owned())
+        };
 
         eprintln!(
-            "species_search_latency case={label} locale={locale} query={query:?} \
+            "species_search_latency case={} locale={} query={:?} \
              list_ms={} count_ms={} rows={} total_estimate={}",
+            case.label,
+            case.locale,
+            case.query,
             millis(list_elapsed),
-            millis(count_elapsed),
+            count.0,
             list_rows,
-            total_estimate
+            count.1
         );
         Ok(())
     }
@@ -1294,6 +1357,25 @@ mod tests {
                 .map(|item| item.canonical_name.as_str()),
             Some("Linum leonii")
         );
+    }
+
+    #[test]
+    fn latency_harness_covers_first_active_prefixes_without_counts() {
+        for (label, locale, query) in [
+            ("en-ap", "en", "ap"),
+            ("fr-me", "fr", "me"),
+            ("fr-po", "fr", "po"),
+        ] {
+            let case = species_search_latency_cases()
+                .iter()
+                .find(|case| case.label == label && case.locale == locale && case.query == query)
+                .unwrap_or_else(|| panic!("missing latency harness case {label}"));
+
+            assert!(
+                !case.include_total,
+                "first-active latency case {label} should match production active search"
+            );
+        }
     }
 
     #[test]
