@@ -128,6 +128,29 @@ describe('frontend boundary sources', () => {
     expect(boundaryScriptSource).toContain('ipc/design')
   })
 
+  it('keeps Web Edition shell sources free of desktop-only app chrome', () => {
+    const webSources = sourceFilesUnder('../web').filter(isTypescriptSource)
+    const forbiddenImports = [
+      /@tauri-apps/,
+      /(^|\/)ipc(\/|$)/,
+      /components\/shared\/TitleBar$/,
+      /components\/shared\/MenuBar$/,
+      /components\/shared\/ProblemReportDialog$/,
+      /components\/panels\/DesignNotebookPanel$/,
+      /app\/design-notebook(\/|$)/,
+      /app\/problem-report(\/|$)/,
+      /commands\/graph(\/|$)/,
+    ]
+
+    for (const sourcePath of webSources) {
+      const source = readSource(sourcePath)
+      expectNoImportsMatching(sourcePath, forbiddenImports)
+      expect(source, `${sourcePath} should not mention desktop-only chrome`).not.toContain('DesignNotebook')
+      expect(source, `${sourcePath} should not mention problem reporting`).not.toContain('ProblemReport')
+      expect(source, `${sourcePath} should not expose native save-as`).not.toContain('saveAs')
+    }
+  })
+
   it('keeps the remaining workflow components free of direct ipc imports', () => {
     const adaptationSource = readSource('../components/canvas/TemplateAdaptation.tsx')
     const welcomeSource = readSource('../components/shared/WelcomeScreen.tsx')

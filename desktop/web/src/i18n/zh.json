@@ -8,6 +8,13 @@
     "designNotebook": "设计笔记本",
     "favorites": "收藏夹"
   },
+  "webShell": {
+    "commands": "网页版命令",
+    "workspace": "网页版工作区",
+    "openCanopi": "打开 .canopi",
+    "downloadCanopi": "下载 .canopi",
+    "drafts": "草稿"
+  },
   "designNotebook": {
     "title": "设计笔记本",
     "recentDesigns": "最近设计",

@@ -8,6 +8,13 @@
     "designNotebook": "Блокнот дизайнов",
     "favorites": "Избранное"
   },
+  "webShell": {
+    "commands": "Команды веб-версии",
+    "workspace": "Рабочая область веб-версии",
+    "openCanopi": "Открыть .canopi",
+    "downloadCanopi": "Скачать .canopi",
+    "drafts": "Черновики"
+  },
   "designNotebook": {
     "title": "Блокнот дизайнов",
     "recentDesigns": "Недавние дизайны",

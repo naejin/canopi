@@ -8,6 +8,13 @@
     "designNotebook": "Carnet de designs",
     "favorites": "Favoris"
   },
+  "webShell": {
+    "commands": "Commandes de l'édition web",
+    "workspace": "Espace de travail web",
+    "openCanopi": "Ouvrir .canopi",
+    "downloadCanopi": "Télécharger .canopi",
+    "drafts": "Brouillons"
+  },
   "designNotebook": {
     "title": "Carnet de designs",
     "recentDesigns": "Designs récents",

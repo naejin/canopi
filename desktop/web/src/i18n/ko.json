@@ -8,6 +8,13 @@
     "designNotebook": "디자인 노트북",
     "favorites": "즐겨찾기"
   },
+  "webShell": {
+    "commands": "웹 에디션 명령",
+    "workspace": "웹 에디션 작업 공간",
+    "openCanopi": ".canopi 열기",
+    "downloadCanopi": ".canopi 다운로드",
+    "drafts": "초안"
+  },
   "designNotebook": {
     "title": "디자인 노트북",
     "recentDesigns": "최근 디자인",

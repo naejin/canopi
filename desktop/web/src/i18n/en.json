@@ -8,6 +8,13 @@
     "designNotebook": "Design Notebook",
     "favorites": "Favorites"
   },
+  "webShell": {
+    "commands": "Web Edition commands",
+    "workspace": "Web Edition workspace",
+    "openCanopi": "Open .canopi",
+    "downloadCanopi": "Download .canopi",
+    "drafts": "Drafts"
+  },
   "designNotebook": {
     "title": "Design Notebook",
     "recentDesigns": "Recent Designs",

@@ -8,6 +8,13 @@
     "designNotebook": "Ontwerpnotitieboek",
     "favorites": "Favorieten"
   },
+  "webShell": {
+    "commands": "Webeditie-opdrachten",
+    "workspace": "Webeditie-werkruimte",
+    "openCanopi": ".canopi openen",
+    "downloadCanopi": ".canopi downloaden",
+    "drafts": "Concepten"
+  },
   "designNotebook": {
     "title": "Ontwerpnotitieboek",
     "recentDesigns": "Recente ontwerpen",
