@@ -18,8 +18,10 @@ export interface LocationMapLibreMap extends MapLibreMapInstance {
   getZoom(): number
   getContainer(): HTMLElement
   project(lngLat: [number, number]): { x: number; y: number }
+  on(type: 'click', listener: (event?: { lngLat?: { lng: number; lat: number } }) => void): void
   on(type: 'load' | 'error' | 'sourcedata', listener: (event?: unknown) => void): void
   on(type: 'move' | 'moveend' | 'dragstart', listener: () => void): void
+  off(type: 'click', listener: (event?: { lngLat?: { lng: number; lat: number } }) => void): void
   off(type: 'load' | 'error' | 'sourcedata', listener: (event?: unknown) => void): void
   off(type: 'move' | 'moveend' | 'dragstart', listener: () => void): void
 }

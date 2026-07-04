@@ -318,7 +318,8 @@
       "addressLabel": "Address",
       "opacity": "Map opacity",
       "mapSatellite": "Satellite",
-      "mapUnavailable": "Map unavailable"
+      "mapUnavailable": "Map unavailable",
+      "setMapPin": "Set Map Pin"
     },
     "file": {
       "new": "New Design",

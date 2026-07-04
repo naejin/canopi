@@ -1,5 +1,6 @@
 import type { ComponentChildren } from "preact";
 import { useCallback, useEffect, useMemo, useState } from "preact/hooks";
+import { activePanel } from "../app/shell/state";
 import { locale, theme } from "../app/settings/state";
 import type { Locale, Theme } from "../types/settings";
 import styles from "./WebApp.module.css";
@@ -10,6 +11,7 @@ import {
   type BrowserDesignSessionController,
 } from "./browser-design-session";
 import { WebCanvasWorkspace } from "./WebCanvasWorkspace";
+import { WebLocationWorkspace } from "./WebLocationWorkspace";
 
 const LOCALES: readonly Locale[] = ["en", "fr", "es", "pt", "it", "zh", "de", "ja", "ko", "nl", "ru"];
 
@@ -64,10 +66,15 @@ export function WebApp({
         drafts={drafts}
         onSettingsChange={(settings) => persistBrowserSettings(appDataStore, settings)}
       >
-        {workspace ?? <WebCanvasWorkspace controller={controller} />}
+        {workspace ?? <WebWorkspace controller={controller} />}
       </BrowserAppShell>
     </div>
   );
+}
+
+function WebWorkspace({ controller }: { readonly controller: BrowserDesignSessionController }) {
+  if (activePanel.value === "location") return <WebLocationWorkspace />;
+  return <WebCanvasWorkspace controller={controller} />;
 }
 
 function applyStoredBrowserSettings(settings: Record<string, unknown> | null): void {

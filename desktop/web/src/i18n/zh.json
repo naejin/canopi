@@ -318,7 +318,8 @@
       "addressLabel": "地址",
       "opacity": "地图透明度",
       "mapSatellite": "卫星",
-      "mapUnavailable": "地图不可用"
+      "mapUnavailable": "地图不可用",
+      "setMapPin": "设置地图标记"
     },
     "file": {
       "new": "新建设计",

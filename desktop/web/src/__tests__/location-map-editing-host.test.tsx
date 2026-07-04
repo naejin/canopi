@@ -56,7 +56,7 @@ class FakeLocationMap {
   readonly easeTo = vi.fn((options: { center: [number, number] }) => {
     this.center = { lng: options.center[0], lat: options.center[1] }
   })
-  readonly handlers = new Map<string, Set<() => void>>()
+  readonly handlers = new Map<string, Set<(event?: unknown) => void>>()
   center = { lng: 2.3522, lat: 48.8566 }
   zoom = 10
   projected = { x: 120, y: 80 }
@@ -66,18 +66,18 @@ class FakeLocationMap {
     Object.defineProperty(container, 'clientHeight', { value: 180, configurable: true })
   }
 
-  on(event: string, handler: () => void): void {
+  on(event: string, handler: (event?: unknown) => void): void {
     const handlers = this.handlers.get(event) ?? new Set()
     handlers.add(handler)
     this.handlers.set(event, handlers)
   }
 
-  off(event: string, handler: () => void): void {
+  off(event: string, handler: (event?: unknown) => void): void {
     this.handlers.get(event)?.delete(handler)
   }
 
-  fire(event: string): void {
-    for (const handler of this.handlers.get(event) ?? []) handler()
+  fire(event: string, payload?: unknown): void {
+    for (const handler of this.handlers.get(event) ?? []) handler(payload)
   }
 
   getCenter() {
@@ -217,13 +217,18 @@ describe('Location map editing host', () => {
     expect(currentDesign.value?.location).toEqual({ lat: 40.7128, lon: -74.006, altitude_m: 35 })
 
     act(() => {
+      currentMap().fire('click', { lngLat: { lng: -0.1276, lat: 51.5072 } })
+    })
+    expect(currentDesign.value?.location).toEqual({ lat: 51.5072, lon: -0.1276, altitude_m: 35 })
+
+    act(() => {
       currentMap().projected = { x: 230, y: 170 }
       FakeResizeObserver.instances[0]?.callback()
     })
     expect(currentMap().resize).toHaveBeenCalled()
     expect(currentHost().pin).toMatchObject({ visible: true, x: 216, y: 156, clamped: true })
     expect(workbench?.pendingMapResult).toBeNull()
-    expect(nonCanvasRevision.value).toBe(2)
+    expect(nonCanvasRevision.value).toBe(3)
   })
 
   it('preserves the current map view when the basemap style rebuilds', async () => {

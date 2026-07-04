@@ -318,7 +318,8 @@
       "addressLabel": "Adresse",
       "opacity": "Kartendeckkraft",
       "mapSatellite": "Satellit",
-      "mapUnavailable": "Karte nicht verfügbar"
+      "mapUnavailable": "Karte nicht verfügbar",
+      "setMapPin": "Kartenpin setzen"
     },
     "file": {
       "new": "Neuer Entwurf",

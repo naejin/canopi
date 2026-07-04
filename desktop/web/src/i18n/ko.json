@@ -318,7 +318,8 @@
       "addressLabel": "주소",
       "opacity": "지도 불투명도",
       "mapSatellite": "위성",
-      "mapUnavailable": "지도를 사용할 수 없음"
+      "mapUnavailable": "지도를 사용할 수 없음",
+      "setMapPin": "지도 핀 설정"
     },
     "file": {
       "new": "새 설계",

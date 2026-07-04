@@ -318,7 +318,8 @@
       "addressLabel": "Adres",
       "opacity": "Kaartdekking",
       "mapSatellite": "Satelliet",
-      "mapUnavailable": "Kaart niet beschikbaar"
+      "mapUnavailable": "Kaart niet beschikbaar",
+      "setMapPin": "Kaartpin instellen"
     },
     "file": {
       "new": "Nieuw ontwerp",

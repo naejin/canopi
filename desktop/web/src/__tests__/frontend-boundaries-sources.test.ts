@@ -150,6 +150,10 @@ describe('frontend boundary sources', () => {
       /app\/document-session\/state-machine$/,
       /app\/problem-report(\/|$)/,
       /app\/settings\/projection$/,
+      /app\/location$/,
+      /app\/location\/index$/,
+      /app\/location\/search-controller$/,
+      /ipc\/geocoding$/,
       /commands\/registry$/,
       /commands\/graph(\/|$)/,
     ]
@@ -160,6 +164,7 @@ describe('frontend boundary sources', () => {
       expect(source, `${sourcePath} should not mention desktop-only chrome`).not.toContain('DesignNotebook')
       expect(source, `${sourcePath} should not mention problem reporting`).not.toContain('ProblemReport')
       expect(source, `${sourcePath} should not expose native save-as`).not.toContain('saveAs')
+      expect(source, `${sourcePath} should not expose web geocoding`).not.toContain('geocode')
     }
   })
 

@@ -318,7 +318,8 @@
       "addressLabel": "Адрес",
       "opacity": "Прозрачность карты",
       "mapSatellite": "Спутник",
-      "mapUnavailable": "Карта недоступна"
+      "mapUnavailable": "Карта недоступна",
+      "setMapPin": "Установить метку"
     },
     "file": {
       "new": "Новый проект",

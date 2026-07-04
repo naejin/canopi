@@ -318,7 +318,8 @@
       "addressLabel": "Endereço",
       "opacity": "Opacidade do mapa",
       "mapSatellite": "Satélite",
-      "mapUnavailable": "Mapa indisponível"
+      "mapUnavailable": "Mapa indisponível",
+      "setMapPin": "Definir marcador"
     },
     "file": {
       "new": "Novo design",

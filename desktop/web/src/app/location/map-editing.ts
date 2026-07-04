@@ -1,5 +1,6 @@
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
+import type { BasemapStyle } from '../../generated/contracts'
 import { basemapStyle } from '../settings/state'
 import {
   createMapLibreSurfaceAdapter,
@@ -12,24 +13,52 @@ import {
 } from '../../maplibre/location-map'
 import {
   computeSavedPinState,
-  type LocationWorkbench,
   type PinOverlayState,
-} from './workbench'
-import type { LocationSearchResult } from './search-controller'
+  type SavedLocationPresentation,
+} from './model'
 
 const DEFAULT_CENTER: [number, number] = [0, 20]
+
+interface LocationMapEditingWorkbench {
+  readonly saved: SavedLocationPresentation
+  readonly clearLocation: () => boolean
+  readonly clearPendingMapResult: () => void
+  readonly commitMapLocation: (center: { lat: number; lon: number } | null) => boolean
+  readonly previewMapLocation: (coords: { lat: number; lon: number }) => { lat: number; lon: number }
+  readonly previewSearchResultOnMap?: (result: LocationMapSearchResult) => { lat: number; lon: number }
+}
+
+interface LocationMapSearchResult {
+  readonly displayName: string
+  readonly lat: number
+  readonly lon: number
+}
+
+interface LocationMapClickEvent {
+  readonly lngLat?: {
+    readonly lng?: unknown
+    readonly lat?: unknown
+  }
+}
+
+export interface LocationMapEditingHostOptions {
+  readonly basemapStyle?: BasemapStyle
+}
 
 export interface LocationMapEditingHost {
   readonly mapContainerRef: { current: HTMLDivElement | null }
   readonly mapUnavailable: boolean
   readonly pin: PinOverlayState
-  readonly committedLocation: LocationWorkbench['saved']['location']
-  readonly previewSearchResult: (result: LocationSearchResult) => void
+  readonly committedLocation: SavedLocationPresentation['location']
+  readonly previewSearchResult: (result: LocationMapSearchResult) => void
   readonly commitMapLocation: () => boolean
   readonly clearLocation: () => boolean
 }
 
-export function useLocationMapEditingHost(workbench: LocationWorkbench): LocationMapEditingHost {
+export function useLocationMapEditingHost(
+  workbench: LocationMapEditingWorkbench,
+  options: LocationMapEditingHostOptions = {},
+): LocationMapEditingHost {
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const surfaceRef = useRef<MapLibreSurfaceAdapter<LocationMapLibreMap> | null>(null)
   const savedLocationRef = useRef(workbench.saved.location)
@@ -40,7 +69,7 @@ export function useLocationMapEditingHost(workbench: LocationWorkbench): Locatio
 
   const mapInitFailed = useSignal(false)
   const pinState = useSignal<PinOverlayState>({ visible: false, x: 0, y: 0, clamped: false, angle: 0 })
-  const preferredBasemapStyle = basemapStyle.value
+  const preferredBasemapStyle = options.basemapStyle ?? basemapStyle.value
 
   useEffect(() => {
     const container = mapContainerRef.current
@@ -53,6 +82,7 @@ export function useLocationMapEditingHost(workbench: LocationWorkbench): Locatio
 
     const onMove = () => updateCurrentPinPosition()
     const onDragStart = () => workbenchRef.current.clearPendingMapResult()
+    const onClick = (event?: unknown) => commitClickedLocation(event)
 
     surface.requestMap({
       key: preferredBasemapStyle,
@@ -73,6 +103,7 @@ export function useLocationMapEditingHost(workbench: LocationWorkbench): Locatio
         context.lifetime.on('move', onMove)
         context.lifetime.on('moveend', onMove)
         context.lifetime.on('dragstart', onDragStart)
+        context.lifetime.on('click', onClick)
         updatePinPosition(context.map)
       },
       onResize: (context) => {
@@ -81,7 +112,7 @@ export function useLocationMapEditingHost(workbench: LocationWorkbench): Locatio
       onCreateError: (error) => {
         container.replaceChildren()
         mapInitFailed.value = true
-        console.error('[LocationTab] Failed to initialize MapLibre map', error)
+        console.error('[LocationMapEditing] Failed to initialize MapLibre map', error)
       },
     })
     return () => {
@@ -93,8 +124,10 @@ export function useLocationMapEditingHost(workbench: LocationWorkbench): Locatio
     updateCurrentPinPosition()
   }, [workbench.saved.key])
 
-  function previewSearchResult(result: LocationSearchResult): void {
-    const next = workbench.previewSearchResultOnMap(result)
+  function previewSearchResult(result: LocationMapSearchResult): void {
+    const next = workbench.previewSearchResultOnMap
+      ? workbench.previewSearchResultOnMap(result)
+      : workbench.previewMapLocation(result)
     const map = surfaceRef.current?.map
     if (!map) return
     map.easeTo({
@@ -108,6 +141,21 @@ export function useLocationMapEditingHost(workbench: LocationWorkbench): Locatio
   function commitMapLocation(): boolean {
     const center = surfaceRef.current?.map?.getCenter()
     return workbench.commitMapLocation(center ? { lat: center.lat, lon: center.lng } : null)
+  }
+
+  function commitClickedLocation(event?: unknown): void {
+    const lngLat = isLocationMapClickEvent(event) ? event.lngLat : undefined
+    const lng = lngLat?.lng
+    const lat = lngLat?.lat
+    if (typeof lng !== 'number' || typeof lat !== 'number') return
+    workbenchRef.current.clearPendingMapResult()
+    workbenchRef.current.commitMapLocation({ lat, lon: lng })
+  }
+
+  function isLocationMapClickEvent(event: unknown): event is LocationMapClickEvent {
+    if (!event || typeof event !== 'object') return false
+    const lngLat = (event as { lngLat?: unknown }).lngLat
+    return Boolean(lngLat && typeof lngLat === 'object')
   }
 
   function updatePinPosition(map: LocationMapLibreMap) {

@@ -318,7 +318,8 @@
       "addressLabel": "住所",
       "opacity": "地図の不透明度",
       "mapSatellite": "衛星",
-      "mapUnavailable": "マップを利用できません"
+      "mapUnavailable": "マップを利用できません",
+      "setMapPin": "地図ピンを設定"
     },
     "file": {
       "new": "新規デザイン",
