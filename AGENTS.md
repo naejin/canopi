@@ -62,6 +62,9 @@ cargo tauri dev
 # Frontend only, from desktop/web
 npm run dev
 
+# Web Edition static build, from desktop/web
+npm run build:web
+
 # Frontend tests
 cd desktop/web && npm test
 

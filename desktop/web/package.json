@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --port 1420",
     "build": "tsc && vite build",
+    "build:web": "tsc && vite build --mode web && node scripts/check-web-build-boundaries.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "gen:types": "cargo run -p bindings-gen",

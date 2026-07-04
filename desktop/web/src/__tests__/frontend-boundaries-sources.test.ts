@@ -91,6 +91,43 @@ function expectNoImportsMatching(
 }
 
 describe('frontend boundary sources', () => {
+  it('exposes a separate Web Edition build entry behind compile-time platform adapters', () => {
+    const packageSource = readSource('../../package.json')
+    const viteSource = readSource('../../vite.config.ts')
+    const desktopEntrySource = readSource('../main.tsx')
+    const webEntrySource = readSource('../main.web.tsx')
+    const webHtmlSource = readSource('../../web.html')
+
+    expect(sourceExists('../../web.html')).toBe(true)
+    expect(sourceExists('../platform/desktop.ts')).toBe(true)
+    expect(sourceExists('../platform/browser.ts')).toBe(true)
+    expect(packageSource).toContain('"build:web"')
+    expect(viteSource).toContain("mode === 'web'")
+    expect(viteSource).toContain("'#platform'")
+    expect(viteSource).toContain('platform/browser.ts')
+    expect(viteSource).toContain('platform/desktop.ts')
+    expect(webHtmlSource).toContain('/src/main.web.tsx')
+    expect(desktopEntrySource).toContain('#platform')
+    expect(webEntrySource).toContain('#platform')
+    expect(webEntrySource).not.toContain('./app/shell/bootstrap')
+    expect(webEntrySource).not.toContain('./app/shell/close-guard')
+    expect(webEntrySource).not.toContain('@tauri-apps')
+    expect(webEntrySource).not.toContain('./app')
+  })
+
+  it('runs a Web Edition build artifact boundary check after browser bundling', () => {
+    const packageSource = readSource('../../package.json')
+    const boundaryScriptSource = readSource('../../scripts/check-web-build-boundaries.mjs')
+
+    expect(sourceExists('../../scripts/check-web-build-boundaries.mjs')).toBe(true)
+    expect(packageSource).toContain('vite build --mode web && node scripts/check-web-build-boundaries.mjs')
+    expect(boundaryScriptSource).toContain('dist-web')
+    expect(boundaryScriptSource).toContain('@tauri-apps')
+    expect(boundaryScriptSource).toContain('__TAURI__')
+    expect(boundaryScriptSource).toContain('app/shell/bootstrap')
+    expect(boundaryScriptSource).toContain('ipc/design')
+  })
+
   it('keeps the remaining workflow components free of direct ipc imports', () => {
     const adaptationSource = readSource('../components/canvas/TemplateAdaptation.tsx')
     const welcomeSource = readSource('../components/shared/WelcomeScreen.tsx')

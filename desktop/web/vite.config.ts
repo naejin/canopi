@@ -1,28 +1,43 @@
 import { defineConfig } from "vite";
 import preact from "@preact/preset-vite";
+import { fileURLToPath, URL } from "node:url";
 
-export default defineConfig({
-  plugins: [preact()],
-  server: {
-    port: 1420,
-    strictPort: true,
-  },
-  build: {
-    outDir: "dist",
-    emptyOutDir: true,
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (!id.includes("node_modules")) return undefined;
-          if (id.includes("maplibre-gl")) return "maplibre-gl";
-          if (id.includes("@tauri-apps")) return "tauri";
-          if (id.includes("i18next")) return "i18n";
-          return undefined;
+export default defineConfig(({ mode }) => {
+  const isWebEdition = mode === 'web';
+  const platformAdapter = fileURLToPath(new URL(
+    isWebEdition ? './src/platform/browser.ts' : './src/platform/desktop.ts',
+    import.meta.url,
+  ));
+
+  return {
+    plugins: [preact()],
+    resolve: {
+      alias: {
+        '#platform': platformAdapter,
+      },
+    },
+    server: {
+      port: 1420,
+      strictPort: true,
+    },
+    build: {
+      outDir: isWebEdition ? "dist-web" : "dist",
+      emptyOutDir: true,
+      rollupOptions: {
+        input: isWebEdition ? "web.html" : "index.html",
+        output: {
+          manualChunks(id) {
+            if (!id.includes("node_modules")) return undefined;
+            if (id.includes("maplibre-gl")) return "maplibre-gl";
+            if (id.includes("@tauri-apps")) return "tauri";
+            if (id.includes("i18next")) return "i18n";
+            return undefined;
+          },
         },
       },
     },
-  },
-  test: {
-    environment: "jsdom",
-  },
+    test: {
+      environment: "jsdom",
+    },
+  };
 });

@@ -20,6 +20,9 @@ cargo test --workspace
 # Frontend build
 cd desktop/web && npm run build
 
+# Web Edition static build plus browser-boundary scan
+cd desktop/web && npm run build:web
+
 # Release build
 cargo build --release
 ```
@@ -45,6 +48,7 @@ cargo build --release
 ## Web Edition Static Bundle
 
 - Web Edition source belongs in this repository, not in `canopi-website`. Implement it as a separate browser Vite entry/build that reuses shared frontend modules behind browser-specific shell and adapter seams.
+- The Web Edition local build command is `cd desktop/web && npm run build:web`. It emits `desktop/web/dist-web/` and runs the browser-boundary scanner; keep `dist-web/` uncommitted.
 - The Canopi website should publish the built Web Edition artifact under a route such as `/app/`; it should not import Canopi app source as an Astro component package, workspace dependency, submodule, or copied component tree. See `docs/adr/0012-web-edition-static-app-bundle.md`.
 - Do not commit generated Web Edition `/app` assets to `canopi-website` long term. The production website deploy should download the versioned Web Edition release asset from the Canopi app release tag and verify its manifest/checksums before publishing it under `/app/`. A local script may copy from a sibling Canopi checkout for preview/dev only.
 - The web build should use a base path compatible with the website route, such as `/app/`, and the website deployment should serve `/app/*` with the Web Edition SPA fallback.
