@@ -829,4 +829,64 @@ mod tests {
         assert!(!sql.contains("s.growth_form_type >="));
         assert!(!sql.contains("s.frost_tender IN"));
     }
+
+    #[test]
+    fn test_indexed_active_search_stages_selected_language_names_before_fallbacks() {
+        let mut plan_request = request(
+            Some("ap"),
+            default_filter(),
+            None,
+            Sort::Relevance,
+            20,
+            false,
+        );
+        plan_request.use_search_name_entry_index = true;
+
+        let plan = SpeciesSearchPlan::build(plan_request);
+        let sql = plan.list().sql();
+
+        assert!(sql.contains("selected_candidate_scores AS MATERIALIZED"));
+        assert!(sql.contains("selected_candidate_count AS MATERIALIZED"));
+        assert!(sql.contains("fallback_name_token_0 AS"));
+        assert!(sql.contains("WHERE (SELECT count FROM selected_candidate_count) <"));
+        assert_dense_statement_placeholders(plan.list());
+    }
+
+    #[test]
+    fn test_filtered_indexed_active_search_keeps_conservative_candidate_scan() {
+        let mut filters = default_filter();
+        filters.family = Some("Rosaceae".to_owned());
+        let mut plan_request = request(Some("ap"), filters, None, Sort::Relevance, 20, false);
+        plan_request.use_search_name_entry_index = true;
+
+        let plan = SpeciesSearchPlan::build(plan_request);
+        let sql = plan.list().sql();
+
+        assert!(!sql.contains("selected_candidate_scores"));
+        assert!(!sql.contains("selected_candidate_count"));
+        assert!(sql.contains("candidate_scores AS MATERIALIZED"));
+        assert!(sql.contains("'__canonical__'"));
+        assert_dense_statement_placeholders(plan.list());
+    }
+
+    #[test]
+    fn test_longer_indexed_active_search_keeps_broad_candidate_scan() {
+        let mut plan_request = request(
+            Some("apple"),
+            default_filter(),
+            None,
+            Sort::Relevance,
+            20,
+            false,
+        );
+        plan_request.use_search_name_entry_index = true;
+
+        let plan = SpeciesSearchPlan::build(plan_request);
+        let sql = plan.list().sql();
+
+        assert!(!sql.contains("selected_candidate_scores"));
+        assert!(!sql.contains("selected_candidate_count"));
+        assert!(sql.contains("candidate_scores AS MATERIALIZED"));
+        assert_dense_statement_placeholders(plan.list());
+    }
 }

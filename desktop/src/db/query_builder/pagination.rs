@@ -47,6 +47,14 @@ impl SpeciesSearchPagePlan {
         format!("LIMIT {limit_placeholder}{offset_clause}")
     }
 
+    pub(super) fn result_window_end(&self, limit: u32) -> u32 {
+        let offset = match self {
+            Self::RelevanceOffset { current_offset } => *current_offset,
+            Self::Keyset { .. } => 0,
+        };
+        offset.saturating_add(limit).saturating_add(1)
+    }
+
     pub(super) fn next_cursor(&self, items: &[SpeciesListItem], has_next: bool) -> Option<String> {
         if !has_next {
             return None;

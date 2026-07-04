@@ -1,6 +1,7 @@
 use common_types::species::{SpeciesFilter, SpeciesListItem, SpeciesSearchRequest};
 use rusqlite::types::Value;
 
+use super::filters::append_structured_filters;
 use super::pagination::{SpeciesSearchPagePlan, cursor_clause};
 use super::predicates::PredicatePlan;
 use super::projection::{
@@ -228,8 +229,12 @@ fn build_indexed_count_statement(
 ) -> SqlStatementPlan {
     let mut sql_builder = SqlBuilder::default();
     let locale_placeholder = sql_builder.bind_text(request.search.locale.clone());
-    let indexed_search =
-        indexed_name_search_cte(search_text, &locale_placeholder, &mut sql_builder);
+    let indexed_search = indexed_name_search_cte(
+        search_text,
+        &locale_placeholder,
+        IndexedNameSearchMode::Broad,
+        &mut sql_builder,
+    );
     let predicates = PredicatePlan::for_search(None, None, None, false, filters, &mut sql_builder);
     let sql = format!(
         "WITH {cte}
@@ -251,8 +256,20 @@ fn build_indexed_list_statement(
 ) -> SqlStatementPlan {
     let mut sql_builder = SqlBuilder::default();
     let locale_placeholder = sql_builder.bind_text(request.search.locale.clone());
-    let indexed_search =
-        indexed_name_search_cte(search_text, &locale_placeholder, &mut sql_builder);
+    let indexed_search_mode =
+        if should_stage_indexed_name_search(search_text, &request.search.filters) {
+            IndexedNameSearchMode::Staged {
+                fallback_threshold: page.result_window_end(request.search.limit),
+            }
+        } else {
+            IndexedNameSearchMode::Broad
+        };
+    let indexed_search = indexed_name_search_cte(
+        search_text,
+        &locale_placeholder,
+        indexed_search_mode,
+        &mut sql_builder,
+    );
     let common_name_join = species_list_common_name_join_sql(&locale_placeholder);
     let predicates = PredicatePlan::for_search(
         None,
@@ -321,14 +338,39 @@ struct IndexedNameSearchCte {
     cte_sql: String,
 }
 
+enum IndexedNameSearchMode {
+    Broad,
+    Staged { fallback_threshold: u32 },
+}
+
 fn indexed_name_search_cte(
     search_text: &SearchText,
     locale_placeholder: &str,
+    mode: IndexedNameSearchMode,
     sql_builder: &mut SqlBuilder,
 ) -> IndexedNameSearchCte {
     let query = search_text
         .common_name_query()
         .expect("indexed name search requires Common Name query tokens");
+
+    match mode {
+        IndexedNameSearchMode::Broad => {
+            indexed_name_search_cte_broad(query, locale_placeholder, sql_builder)
+        }
+        IndexedNameSearchMode::Staged { fallback_threshold } => indexed_name_search_cte_staged(
+            query,
+            locale_placeholder,
+            fallback_threshold,
+            sql_builder,
+        ),
+    }
+}
+
+fn indexed_name_search_cte_broad(
+    query: &super::text::CommonNameQuery,
+    locale_placeholder: &str,
+    sql_builder: &mut SqlBuilder,
+) -> IndexedNameSearchCte {
     let token_ctes = query
         .tokens
         .iter()
@@ -436,6 +478,237 @@ fn indexed_name_search_cte(
     IndexedNameSearchCte {
         cte_sql: ctes.join(",\n"),
     }
+}
+
+fn indexed_name_search_cte_staged(
+    query: &super::text::CommonNameQuery,
+    locale_placeholder: &str,
+    fallback_threshold: u32,
+    sql_builder: &mut SqlBuilder,
+) -> IndexedNameSearchCte {
+    let mut ctes = indexed_name_token_ctes(
+        "selected_name_token",
+        query,
+        &format!("language = {locale_placeholder}"),
+        None,
+        sql_builder,
+    );
+    ctes.push(indexed_name_entry_matches_cte(
+        "selected_name_entry_matches",
+        "selected_name_token",
+        query.tokens.len(),
+        &format!("e.language = {locale_placeholder} AND e.entry_kind = 'common_name'"),
+    ));
+
+    let display_query = query.tokens.join(" ");
+    let exact_display_placeholder = sql_builder.bind_text(display_query.clone());
+    let prefix_display_placeholder = sql_builder.bind_text(format!("{display_query}*"));
+    ctes.push(format!(
+        "selected_ranked_name_entries AS (
+            SELECT *,
+                   CASE
+                     WHEN is_display_name = 1
+                      AND normalized_name = {exact_display_placeholder}
+                     THEN 0
+                     WHEN is_display_name = 1
+                      AND normalized_name GLOB {prefix_display_placeholder}
+                     THEN 1
+                     WHEN is_display_name = 1 THEN 2
+                     ELSE 3
+                   END AS name_rank
+            FROM selected_name_entry_matches
+        )"
+    ));
+    ctes.push(indexed_name_scores_cte(
+        "selected_name_scores",
+        "selected_ranked_name_entries",
+    ));
+    ctes.push(indexed_candidate_scores_cte(
+        "selected_candidate_scores",
+        "selected_name_scores",
+    ));
+    ctes.push(
+        "selected_candidate_count AS MATERIALIZED (
+            SELECT COUNT(*) AS count FROM selected_candidate_scores
+        )"
+        .to_owned(),
+    );
+
+    let fallback_threshold_placeholder = sql_builder.bind_integer(fallback_threshold as i64);
+    ctes.extend(indexed_name_token_ctes(
+        "fallback_name_token",
+        query,
+        "language IN ('__canonical__', '__taxonomy__')",
+        Some(&format!(
+            "(SELECT count FROM selected_candidate_count) < {fallback_threshold_placeholder}"
+        )),
+        sql_builder,
+    ));
+    ctes.push(indexed_name_entry_matches_cte(
+        "fallback_name_entry_matches",
+        "fallback_name_token",
+        query.tokens.len(),
+        "e.language IN ('__canonical__', '__taxonomy__')",
+    ));
+    ctes.push(
+        "fallback_name_scores AS (
+            SELECT species_id,
+                   4 AS name_rank,
+                   MIN(token_position_sum) AS token_position_sum,
+                   2147483647 AS display_name_length
+            FROM fallback_name_entry_matches
+            GROUP BY species_id
+        )"
+        .to_owned(),
+    );
+    ctes.push(indexed_candidate_scores_cte(
+        "fallback_candidate_scores",
+        "fallback_name_scores",
+    ));
+    ctes.push(
+        "candidate_scores AS MATERIALIZED (
+            SELECT species_id,
+                   MIN(relevance_rank) AS relevance_rank,
+                   MIN(token_position_sum) AS token_position_sum,
+                   MIN(display_name_length) AS display_name_length,
+                   MIN(bm25_rank) AS bm25_rank
+            FROM (
+                SELECT species_id, relevance_rank, token_position_sum, display_name_length, bm25_rank
+                FROM selected_candidate_scores
+                UNION ALL
+                SELECT species_id, relevance_rank, token_position_sum, display_name_length, bm25_rank
+                FROM fallback_candidate_scores
+            )
+            GROUP BY species_id
+        )"
+        .to_owned(),
+    );
+
+    IndexedNameSearchCte {
+        cte_sql: ctes.join(",\n"),
+    }
+}
+
+fn indexed_name_token_ctes(
+    cte_prefix: &str,
+    query: &super::text::CommonNameQuery,
+    language_condition: &str,
+    leading_condition: Option<&str>,
+    sql_builder: &mut SqlBuilder,
+) -> Vec<String> {
+    query
+        .tokens
+        .iter()
+        .enumerate()
+        .map(|(index, token)| {
+            let token_placeholder = sql_builder.bind_text(format!("{token}*"));
+            let leading_sql = leading_condition
+                .map(|condition| format!("{condition}\n                      AND "))
+                .unwrap_or_default();
+            format!(
+                "{cte_prefix}_{index} AS (
+                    SELECT entry_id, first_token_position
+                    FROM species_search_name_entry_tokens
+                    WHERE {leading_sql}{language_condition}
+                      AND token GLOB {token_placeholder}
+                )"
+            )
+        })
+        .collect()
+}
+
+fn indexed_name_entry_matches_cte(
+    cte_name: &str,
+    token_cte_prefix: &str,
+    token_count: usize,
+    entry_condition: &str,
+) -> String {
+    let first_token = format!("{token_cte_prefix}_0");
+    let token_joins = indexed_token_joins(token_cte_prefix, token_count);
+    let token_position_sum = indexed_token_position_sum(token_count);
+
+    format!(
+        "{cte_name} AS (
+            SELECT e.species_id,
+                   e.language,
+                   e.entry_kind,
+                   e.common_name,
+                   e.normalized_name,
+                   e.is_display_name,
+                   e.is_primary,
+                   e.source_rank,
+                   e.name_length,
+                   {token_position_sum} AS token_position_sum
+            FROM {first_token} nt0
+            {token_joins}
+            JOIN species_search_name_entries e ON e.entry_id = nt0.entry_id
+            WHERE {entry_condition}
+        )"
+    )
+}
+
+fn indexed_token_joins(token_cte_prefix: &str, token_count: usize) -> String {
+    (1..token_count)
+        .map(|index| {
+            format!(
+                "JOIN {token_cte_prefix}_{index} nt{index}
+                   ON nt{index}.entry_id = nt0.entry_id"
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn indexed_token_position_sum(token_count: usize) -> String {
+    (0..token_count)
+        .map(|index| format!("nt{index}.first_token_position"))
+        .collect::<Vec<_>>()
+        .join(" + ")
+}
+
+fn indexed_name_scores_cte(cte_name: &str, source_cte: &str) -> String {
+    format!(
+        "{cte_name} AS (
+            SELECT species_id,
+                   MIN(name_rank) AS name_rank,
+                   MIN(token_position_sum) AS token_position_sum,
+                   MIN(CASE
+                       WHEN entry_kind = 'common_name' AND is_display_name = 1
+                       THEN name_length
+                       ELSE 2147483647
+                   END)
+                       AS display_name_length
+            FROM {source_cte}
+            GROUP BY species_id
+        )"
+    )
+}
+
+fn indexed_candidate_scores_cte(cte_name: &str, source_cte: &str) -> String {
+    format!(
+        "{cte_name} AS MATERIALIZED (
+            SELECT species_id,
+                   name_rank AS relevance_rank,
+                   token_position_sum,
+                   display_name_length,
+                   1000000.0 AS bm25_rank
+            FROM {source_cte}
+        )"
+    )
+}
+
+fn structured_filters_are_empty(filters: &SpeciesFilter) -> bool {
+    let mut where_clauses = Vec::new();
+    let mut sql_builder = SqlBuilder::default();
+    append_structured_filters(&mut where_clauses, &mut sql_builder, filters);
+    where_clauses.is_empty()
+}
+
+fn should_stage_indexed_name_search(search_text: &SearchText, filters: &SpeciesFilter) -> bool {
+    structured_filters_are_empty(filters)
+        && search_text.common_name_query().is_some_and(
+            |query| matches!(query.tokens.as_slice(), [token] if token.chars().count() == 2),
+        )
 }
 
 fn indexed_matched_common_name_sql(
