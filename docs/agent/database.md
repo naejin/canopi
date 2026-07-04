@@ -79,8 +79,12 @@ When canopi-data removes or adds columns, update atomically:
 - Relevance text searches rank selected-language Common Name matches before BM25: exact displayed Common Name first, then displayed Common Names whose tokens start with the query tokens, then displayed Common Names that contain the query tokens later, then Matched Common Names from selected-language alternates, then `bm25(species_search_fts, 8, 10, 5, 1, 1)` for Canonical Name, family, genus, and broader text matches. Do not use English Common Names as ranking or display fallback when another UI language is selected.
 - `total_estimate` comes from count; visible rows come from list. If UI shows a new count with old rows during debounce, investigate frontend committed-result lifecycle first.
 - The Species Catalog Workbench may pass `include_total=false` for active text searches to keep first-page latency low; pagination must rely on `next_cursor`, not `total_estimate`.
+- The Species Catalog Workbench treats two normalized text characters as the first active backend search; one-character text is a frontend short-query state. Preserve this UX unless there is an explicit product decision to change it.
+- Active Species Catalog Search must not put broad SQLite work on a synchronous invoke path. Long-running first-page list queries should run behind an async/background boundary with stale-result handling and a way to cancel or interrupt obsolete searches so newer input is not queued behind a shared plant DB read.
+- Short-prefix relevance optimization should preserve selected-language Common Name behavior. Prefer staging selected-language displayed and matched Common Name tiers before weaker Canonical Name, family, genus, or broader text matches instead of raising the minimum query length or reintroducing English Common Name fallback.
 - Run the manual Species Catalog latency harness with `cargo test -p canopi-desktop services::species_catalog_read::search::tests::bundled_species_search_latency_harness_reports_list_and_count_timings -- --ignored --nocapture`.
 - The harness opens `desktop/resources/canopi-core.db` by default, or `CANOPI_PLANT_DB_PATH` when set, and reports first-page list latency separately from total-count latency.
+- Keep two-character broad-prefix cases such as `en-ap`, `fr-me`, and `fr-po` in any search-performance regression coverage because they exercise the first real user-visible active search.
 
 ## Translations
 
