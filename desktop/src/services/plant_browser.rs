@@ -27,9 +27,15 @@ struct SpeciesSearchCancellationInner {
 struct ActiveSpeciesSearch {
     generation: u64,
     interrupt: Arc<InterruptHandle>,
+    is_running: bool,
 }
 
 pub struct SpeciesSearchCancellationToken {
+    cancellation: SpeciesSearchCancellation,
+    generation: u64,
+}
+
+struct SpeciesSearchRunningGuard {
     cancellation: SpeciesSearchCancellation,
     generation: u64,
 }
@@ -51,10 +57,13 @@ impl SpeciesSearchCancellation {
             active.replace(ActiveSpeciesSearch {
                 generation,
                 interrupt,
+                is_running: false,
             })
         };
 
-        if let Some(previous) = previous {
+        if let Some(previous) = previous
+            && previous.is_running
+        {
             previous.interrupt.interrupt();
         }
 
@@ -74,6 +83,40 @@ impl SpeciesSearchCancellation {
         active
             .as_ref()
             .is_some_and(|active| active.generation == generation)
+    }
+
+    fn mark_running(&self, generation: u64) -> Result<SpeciesSearchRunningGuard, String> {
+        let mut active = self.inner.active.lock().unwrap_or_else(|error| {
+            tracing::warn!(
+                "Recovered poisoned Species Search cancellation lock while marking search running"
+            );
+            error.into_inner()
+        });
+        let Some(active) = active.as_mut() else {
+            return Err(SPECIES_SEARCH_CANCELLED.to_owned());
+        };
+        if active.generation != generation {
+            return Err(SPECIES_SEARCH_CANCELLED.to_owned());
+        }
+        active.is_running = true;
+        Ok(SpeciesSearchRunningGuard {
+            cancellation: self.clone(),
+            generation,
+        })
+    }
+
+    fn finish_running(&self, generation: u64) {
+        let mut active = self.inner.active.lock().unwrap_or_else(|error| {
+            tracing::warn!(
+                "Recovered poisoned Species Search cancellation lock while marking search idle"
+            );
+            error.into_inner()
+        });
+        if let Some(active) = active.as_mut()
+            && active.generation == generation
+        {
+            active.is_running = false;
+        }
     }
 
     fn finish(&self, generation: u64) {
@@ -99,11 +142,21 @@ impl SpeciesSearchCancellationToken {
             .then_some(())
             .ok_or_else(|| SPECIES_SEARCH_CANCELLED.to_owned())
     }
+
+    fn mark_running(&self) -> Result<SpeciesSearchRunningGuard, String> {
+        self.cancellation.mark_running(self.generation)
+    }
 }
 
 impl Drop for SpeciesSearchCancellationToken {
     fn drop(&mut self) {
         self.cancellation.finish(self.generation);
+    }
+}
+
+impl Drop for SpeciesSearchRunningGuard {
+    fn drop(&mut self) {
+        self.cancellation.finish_running(self.generation);
     }
 }
 
@@ -129,10 +182,7 @@ pub fn search_species(
     };
 
     {
-        let conn = db::acquire(&user_db.0, "UserDb");
-        for item in &mut result.items {
-            item.is_favorite = crate::db::user_db::is_favorite(&conn, &item.canonical_name);
-        }
+        hydrate_search_favorites(user_db, &mut result.items);
     }
 
     Ok(result)
@@ -143,7 +193,10 @@ pub async fn search_species_async(
     user_db: UserDb,
     request: SpeciesSearchRequest,
 ) -> Result<PaginatedResult<SpeciesListItem>, String> {
-    search_species_async_cancellable(plant_db, user_db, request, None).await
+    crate::blocking::run_blocking("species search", move || {
+        search_species(&plant_db, &user_db, request)
+    })
+    .await
 }
 
 pub async fn search_species_async_cancellable(
@@ -157,7 +210,28 @@ pub async fn search_species_async_cancellable(
             cancellation.ensure_current()?;
         }
 
-        let result = search_species(&plant_db, &user_db, request)?;
+        let mut result = {
+            let conn = db::require_plant_db(&plant_db)?;
+            let _running = cancellation
+                .as_ref()
+                .map(|cancellation| cancellation.mark_running())
+                .transpose()?;
+            match SpeciesCatalogRead::new(&conn).search(request) {
+                Ok(result) => result,
+                Err(error) => {
+                    if let Some(cancellation) = &cancellation {
+                        cancellation.ensure_current()?;
+                    }
+                    return Err(error);
+                }
+            }
+        };
+
+        if let Some(cancellation) = &cancellation {
+            cancellation.ensure_current()?;
+        }
+
+        hydrate_search_favorites(&user_db, &mut result.items);
 
         if let Some(cancellation) = &cancellation {
             cancellation.ensure_current()?;
@@ -166,6 +240,13 @@ pub async fn search_species_async_cancellable(
         Ok(result)
     })
     .await
+}
+
+fn hydrate_search_favorites(user_db: &UserDb, items: &mut [SpeciesListItem]) {
+    let conn = db::acquire(&user_db.0, "UserDb");
+    for item in items {
+        item.is_favorite = crate::db::user_db::is_favorite(&conn, &item.canonical_name);
+    }
 }
 
 pub fn get_species_detail(
@@ -263,6 +344,14 @@ mod tests {
     use crate::db::{self, PlantDb, UserDb};
     use common_types::species::{Sort, SpeciesFilter, SpeciesSearchRequest};
     use rusqlite::Connection;
+    use std::{
+        sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+            mpsc,
+        },
+        time::Duration,
+    };
 
     fn test_plant_db() -> PlantDb {
         let conn = Connection::open_in_memory().unwrap();
@@ -476,6 +565,60 @@ mod tests {
         assert_eq!(
             error,
             "Species search cancelled because a newer query superseded it"
+        );
+    }
+
+    #[test]
+    fn queued_active_search_cancellation_does_not_interrupt_unrelated_plant_read() {
+        let plant_db = test_plant_db();
+        let cancellation = SpeciesSearchCancellation::default();
+        let reader_db = plant_db.clone();
+        let (started_tx, started_rx) = mpsc::channel();
+        let release_read = Arc::new(AtomicBool::new(false));
+        let release_reader = Arc::clone(&release_read);
+
+        let reader = std::thread::spawn(move || {
+            let conn = db::require_plant_db(&reader_db).unwrap();
+            let mut started_tx = Some(started_tx);
+            conn.progress_handler(
+                1,
+                Some(move || {
+                    if let Some(started_tx) = started_tx.take() {
+                        let _ = started_tx.send(());
+                    }
+                    while !release_reader.load(Ordering::SeqCst) {
+                        std::thread::sleep(Duration::from_millis(1));
+                    }
+                    false
+                }),
+            );
+
+            conn.query_row(
+                "WITH RECURSIVE cnt(x) AS (
+                     VALUES(0)
+                     UNION ALL
+                     SELECT x + 1 FROM cnt WHERE x < 1000
+                 )
+                 SELECT sum(x) FROM cnt",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .map(|_| ())
+            .map_err(|error| error.to_string())
+        });
+
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("unrelated plant DB read should start");
+
+        let _queued_search = cancellation.begin(plant_db.interrupt_handle().unwrap());
+        let _newer_search = cancellation.begin(plant_db.interrupt_handle().unwrap());
+        release_read.store(true, Ordering::SeqCst);
+
+        let read_result = reader.join().unwrap();
+        assert!(
+            read_result.is_ok(),
+            "queued active search cancellation interrupted an unrelated plant DB read: {read_result:?}"
         );
     }
 
