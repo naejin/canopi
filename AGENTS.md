@@ -95,6 +95,9 @@ cargo test --workspace
 # Generate plant DB
 python3 scripts/prepare-db.py
 
+# Generate reduced Web Edition Species Catalog assets
+cd desktop/web && npm run generate:web-catalog
+
 # Build release
 cargo build --release
 ```

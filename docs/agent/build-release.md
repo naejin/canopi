@@ -26,6 +26,9 @@ cd desktop/web && npm run build:web
 # Web Edition versioned release artifact
 cd desktop/web && npm run package:web
 
+# Reduced Web Edition Species Catalog assets
+cd desktop/web && npm run generate:web-catalog
+
 # Release build
 cargo build --release
 ```
@@ -53,6 +56,7 @@ cargo build --release
 - Web Edition source belongs in this repository, not in `canopi-website`. Implement it as a separate browser Vite entry/build that reuses shared frontend modules behind browser-specific shell and adapter seams.
 - The Web Edition local build command is `cd desktop/web && npm run build:web`. It emits `desktop/web/dist-web/` and runs the browser-boundary scanner; keep `dist-web/` uncommitted.
 - The Web Edition artifact command is `cd desktop/web && npm run package:web`. It builds the web entry, scans browser chunks, and emits a versioned directory plus `.tar.gz` under `desktop/web/dist-web-artifacts/`; keep that output uncommitted.
+- The reduced Web Edition Species Catalog command is `cd desktop/web && npm run generate:web-catalog`. It emits ignored DuckDB-loadable NDJSON shards under `desktop/web/public/canopi-catalog/`; run it from a checkout with local canopi-data exports when catalog assets are needed for packaging or adapter testing.
 - The Canopi website should publish the built Web Edition artifact under a route such as `/app/`; it should not import Canopi app source as an Astro component package, workspace dependency, submodule, or copied component tree. See `docs/adr/0012-web-edition-static-app-bundle.md`.
 - Do not commit generated Web Edition `/app` assets to `canopi-website` long term. The production website deploy should download the versioned Web Edition release asset from the Canopi app release tag and verify its manifest/checksums before publishing it under `/app/`. A local script may copy from a sibling Canopi checkout for preview/dev only.
 - The web build uses the `/app/` base path. The package manifest records the required SPA fallback: serve `/app/*` as `/app/index.html` with status `200`.

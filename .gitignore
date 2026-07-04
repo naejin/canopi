@@ -46,6 +46,7 @@ Thumbs.db
 *.AppImage
 *.deb
 desktop/resources/
+desktop/web/public/canopi-catalog/
 desktop/web/dist-web/
 desktop/web/dist-web-artifacts/
 
