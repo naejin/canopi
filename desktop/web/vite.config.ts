@@ -14,6 +14,18 @@ export default defineConfig(({ mode }) => {
       : './src/app/plant-browser/live.desktop.ts',
     import.meta.url,
   ));
+  const designTemplateImportWorkflowAdapter = fileURLToPath(new URL(
+    isWebEdition
+      ? './src/app/design-template-import/workflow.browser.ts'
+      : './src/app/design-template-import/workflow.desktop.ts',
+    import.meta.url,
+  ));
+  const designTemplateCatalogAdapter = fileURLToPath(new URL(
+    isWebEdition
+      ? './src/app/community/catalog.browser.ts'
+      : './src/app/community/catalog.desktop.ts',
+    import.meta.url,
+  ));
 
   return {
     plugins: [preact()],
@@ -22,6 +34,8 @@ export default defineConfig(({ mode }) => {
       alias: {
         '#platform': platformAdapter,
         '#species-catalog-live': speciesCatalogLiveAdapter,
+        '#design-template-import-workflow': designTemplateImportWorkflowAdapter,
+        '#design-template-catalog': designTemplateCatalogAdapter,
       },
     },
     server: {

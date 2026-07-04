@@ -48,6 +48,7 @@ describe('Web Edition Browser App Shell', () => {
       'nav.plantDb',
       'nav.favorites',
     ])
+    expect(commandIds(container)).not.toContain('nav.templates')
     expect(container.textContent).toContain('Open .canopi')
     expect(container.textContent).toContain('Download .canopi')
     expect(container.textContent).toContain('Drafts')
@@ -55,6 +56,21 @@ describe('Web Edition Browser App Shell', () => {
     expect(container.textContent).not.toContain('Problem Report')
     expect(container.textContent).not.toContain('Save As')
     expect(container.textContent).not.toContain('Exit')
+  })
+
+  it('shows the templates entry point only when static templates are configured', async () => {
+    await act(async () => {
+      render(<BrowserAppShell templatesEnabled />, container)
+    })
+
+    expect(commandIds(container)).toContain('nav.templates')
+
+    await act(async () => {
+      clickCommand(container, 'nav.templates')
+    })
+
+    expect(activePanel.value).toBe('templates')
+    expect(sidePanel.value).toBeNull()
   })
 
   it('routes shell commands through command handlers and browser-safe app state', async () => {

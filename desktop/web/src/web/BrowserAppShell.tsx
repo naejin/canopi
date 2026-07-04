@@ -25,6 +25,7 @@ export interface BrowserShellSettings {
 interface BrowserAppShellProps {
   readonly handlers?: BrowserShellCommandHandlers;
   readonly drafts?: readonly BrowserDraftSummary[];
+  readonly templatesEnabled?: boolean;
   readonly onSettingsChange?: (settings: BrowserShellSettings) => void;
   readonly children?: ComponentChildren;
 }
@@ -39,6 +40,7 @@ interface ShellCommand {
 export function BrowserAppShell({
   handlers = {},
   drafts = [],
+  templatesEnabled = false,
   onSettingsChange,
   children,
 }: BrowserAppShellProps) {
@@ -78,6 +80,9 @@ export function BrowserAppShell({
     },
     panelCommand("nav.canvas", t("nav.canvas"), "canvas", currentPanel, currentSidePanel),
     panelCommand("nav.location", t("canvas.location.title"), "location", currentPanel, currentSidePanel),
+    ...(templatesEnabled
+      ? [panelCommand("nav.templates", t("worldMap.title"), "templates", currentPanel, currentSidePanel)]
+      : []),
     panelCommand("nav.plantDb", t("nav.plantDb"), "plant-db", currentPanel, currentSidePanel),
     panelCommand("nav.favorites", t("nav.favorites"), "favorites", currentPanel, currentSidePanel),
   ];

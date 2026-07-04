@@ -31,6 +31,11 @@ export interface BrowserCanopiDownload {
   readonly text: string;
 }
 
+export interface BrowserTemplateCanopiFile {
+  readonly name: string;
+  readonly text: string;
+}
+
 export interface BrowserDesignFileAdapter {
   openCanopiFile(): Promise<BrowserOpenedCanopiFile | null>;
   downloadCanopiFile(download: BrowserCanopiDownload): Promise<void>;
@@ -46,6 +51,7 @@ interface BrowserDesignSessionControllerOptions {
 export interface BrowserDesignSessionController {
   newDesign(): Promise<void>;
   openCanopi(): Promise<boolean>;
+  openCanopiTemplate(template: BrowserTemplateCanopiFile): Promise<"opened">;
   downloadCanopi(): Promise<void>;
   saveCurrentDraft(): BrowserAppDataWriteResult<BrowserDraftSummary> | null;
   listDrafts(): readonly BrowserDraftSummary[];
@@ -94,6 +100,15 @@ export function createBrowserDesignSessionController({
     store.resetDirtyBaselines();
     saveCurrentDraft();
     return true;
+  }
+
+  async function openCanopiTemplate(template: BrowserTemplateCanopiFile): Promise<"opened"> {
+    const file = normalizeLoadedDocument(parseCanopiJson(template.text));
+    activeDraftId = null;
+    store.replaceCurrentDesignState(file, null, template.name);
+    store.resetDirtyBaselines();
+    saveCurrentDraft();
+    return "opened";
   }
 
   async function downloadCanopi(): Promise<void> {
@@ -185,6 +200,7 @@ export function createBrowserDesignSessionController({
   return {
     newDesign,
     openCanopi,
+    openCanopiTemplate,
     downloadCanopi,
     saveCurrentDraft,
     listDrafts: () => appDataStore.listDrafts(),

@@ -152,6 +152,7 @@ const PANEL_COMMAND_GROUPS = {
 const PANEL_LABELS: Record<Panel, () => string> = {
   canvas: () => t('nav.canvas'),
   location: () => t('canvas.location.title'),
+  templates: () => t('worldMap.title'),
   'plant-db': () => t('nav.plantDb'),
   'design-notebook': () => t('nav.designNotebook'),
   favorites: () => t('nav.favorites'),
@@ -222,6 +223,7 @@ const TOOLBAR_SETTINGS_TOGGLES = [
 function isPanelChromeDisabled(panel: Panel, state: AppCommandState): boolean {
   if (panel === 'canvas') return false
   if (panel === 'design-notebook') return false
+  if (panel === 'templates') return false
   if (isPanelCommandActive(panel, state)) return false
   return !state.hasDesign
 }
@@ -229,6 +231,7 @@ function isPanelChromeDisabled(panel: Panel, state: AppCommandState): boolean {
 function isPanelCommandActive(panel: Panel, state: AppCommandState): boolean {
   if (panel === 'canvas') return state.activePanel === 'canvas' && state.sidePanel === null
   if (panel === 'location') return state.activePanel === 'location'
+  if (panel === 'templates') return state.activePanel === 'templates'
   return state.activePanel === 'canvas' && state.sidePanel === panel
 }
 

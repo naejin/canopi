@@ -78,6 +78,31 @@ describe('browser Design Session lifecycle', () => {
     })
   })
 
+  it('opens fetched static templates as detached browser Designs with the template display name', async () => {
+    const templateFile = makeCanopiFile({
+      name: 'Downloaded Template',
+      description: 'Bundled example',
+      location: { lat: 45.5, lon: -73.6, altitude_m: null },
+    })
+    const store = createMemoryDesignSessionStore()
+    const controller = createBrowserDesignSessionController({
+      store,
+      fileAdapter: testFileAdapter(),
+      now: () => NOW,
+    })
+
+    await expect(controller.openCanopiTemplate({
+      name: 'Forest Edge',
+      text: JSON.stringify(templateFile),
+    })).resolves.toBe('opened')
+
+    expect(store.readCurrentDesign()?.name).toBe('Downloaded Template')
+    expect(store.readCurrentDesign()?.description).toBe('Bundled example')
+    expect(store.readDesignName()).toBe('Forest Edge')
+    expect(store.readDesignPath()).toBeNull()
+    expect(store.isDesignDirty()).toBe(false)
+  })
+
   it('downloads the current Design as .canopi JSON after browser edits', async () => {
     const adapter = testFileAdapter()
     const store = createMemoryDesignSessionStore()

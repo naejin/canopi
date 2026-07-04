@@ -1,6 +1,6 @@
 import { signal, batch } from "@preact/signals";
 
-export type Panel = "plant-db" | "canvas" | "favorites" | "location" | "design-notebook";
+export type Panel = "plant-db" | "canvas" | "favorites" | "location" | "templates" | "design-notebook";
 
 // Panels that open as a sidebar alongside the canvas instead of replacing it.
 export type SidePanel = "plant-db" | "favorites" | "design-notebook";
@@ -21,7 +21,7 @@ export const sidePanelWidth = signal<number | null>(null);
 /**
  * Navigate to a panel using the correct routing model:
  * - plant-db / favorites: open as sidebar alongside canvas (toggle if already open)
- * - canvas / location: full-screen primary panels
+ * - canvas / location / templates: full-screen primary panels
  */
 export function navigateTo(panel: Panel): void {
   batch(() => {

@@ -1,4 +1,5 @@
 import type { ComponentChildren } from "preact";
+import { lazy, Suspense } from "preact/compat";
 import { useCallback, useEffect, useMemo, useState } from "preact/hooks";
 import { activePanel, sidePanel } from "../app/shell/state";
 import { locale, theme } from "../app/settings/state";
@@ -13,18 +14,26 @@ import {
 import { WebCanvasWorkspace } from "./WebCanvasWorkspace";
 import { WebLocationWorkspace } from "./WebLocationWorkspace";
 import { WebSpeciesCatalogPanel } from "./WebSpeciesCatalogPanel";
+import { hasConfiguredStaticDesignTemplates } from "../app/community/catalog.browser";
+
+const WorldMapPanel = lazy(async () => {
+  const module = await import("../components/panels/WorldMapPanel");
+  return { default: module.WorldMapPanel };
+});
 
 const LOCALES: readonly Locale[] = ["en", "fr", "es", "pt", "it", "zh", "de", "ja", "ko", "nl", "ru"];
 
 interface WebAppProps {
   readonly controller?: BrowserDesignSessionController;
   readonly appDataStore?: BrowserAppDataStore;
+  readonly templatesEnabled?: boolean;
   readonly workspace?: ComponentChildren;
 }
 
 export function WebApp({
   controller = browserDesignSessionController,
   appDataStore = browserAppDataStore,
+  templatesEnabled = hasConfiguredStaticDesignTemplates(),
   workspace,
 }: WebAppProps) {
   const [draftRevision, setDraftRevision] = useState(0);
@@ -65,16 +74,30 @@ export function WebApp({
       <BrowserAppShell
         handlers={handlers}
         drafts={drafts}
+        templatesEnabled={templatesEnabled}
         onSettingsChange={(settings) => persistBrowserSettings(appDataStore, settings)}
       >
-        {workspace ?? <WebWorkspace controller={controller} />}
+        {workspace ?? <WebWorkspace controller={controller} templatesEnabled={templatesEnabled} />}
       </BrowserAppShell>
     </div>
   );
 }
 
-function WebWorkspace({ controller }: { readonly controller: BrowserDesignSessionController }) {
+function WebWorkspace({
+  controller,
+  templatesEnabled,
+}: {
+  readonly controller: BrowserDesignSessionController;
+  readonly templatesEnabled: boolean;
+}) {
   if (activePanel.value === "location") return <WebLocationWorkspace />;
+  if (templatesEnabled && activePanel.value === "templates") {
+    return (
+      <Suspense fallback={<div className={styles.workspaceMain} aria-hidden="true" />}>
+        <WorldMapPanel />
+      </Suspense>
+    );
+  }
   const currentSidePanel = sidePanel.value;
   return (
     <div className={styles.workspaceWithSidebar}>

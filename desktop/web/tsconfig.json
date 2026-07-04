@@ -21,6 +21,8 @@
     "paths": {
       "#platform": ["./src/platform/desktop.ts"],
       "#species-catalog-live": ["./src/app/plant-browser/live.desktop.ts"],
+      "#design-template-import-workflow": ["./src/app/design-template-import/workflow.desktop.ts"],
+      "#design-template-catalog": ["./src/app/community/catalog.desktop.ts"],
       "react": ["./node_modules/preact/compat/"],
       "react-dom": ["./node_modules/preact/compat/"]
     }

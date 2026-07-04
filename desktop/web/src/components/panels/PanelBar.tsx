@@ -18,6 +18,16 @@ const panelIcons: Record<AppCommandGraphPanelCommand['panel'], () => preact.JSX.
       <path d="M4 12h16" />
     </svg>
   ),
+  templates: () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={PANEL_ICON_STROKE_WIDTH} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 6.5h18" />
+      <path d="M5 6.5v12" />
+      <path d="M19 6.5v12" />
+      <path d="M7 18.5h10" />
+      <path d="M8.5 10.5h7" />
+      <path d="M8.5 13.5h4" />
+    </svg>
+  ),
   'plant-db': () => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={PANEL_ICON_STROKE_WIDTH} strokeLinecap="round" strokeLinejoin="round">
       <path d="M11 20A7 7 0 0 1 9.8 6.9C15.5 4.9 17 3.5 19 2c1 2 2 4.5 2 8 0 5.5-4.78 10-10 10Z" />
