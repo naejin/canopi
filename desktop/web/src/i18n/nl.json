@@ -16,7 +16,9 @@
     "drafts": "Concepten",
     "browserDrafts": "Browserconcepten",
     "browserDraftsHint": "Opgeslagen in deze browser. Download .canopi voor een bestandsback-up.",
-    "noDrafts": "Nog geen browserconcepten."
+    "noDrafts": "Nog geen browserconcepten.",
+    "emptyDesign": "Geen ontwerp geladen",
+    "emptyDesignHint": "Gebruik Nieuw of .canopi openen in de werkbalk om te beginnen."
   },
   "designNotebook": {
     "title": "Ontwerpnotitieboek",

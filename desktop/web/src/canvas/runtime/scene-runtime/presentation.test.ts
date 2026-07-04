@@ -8,6 +8,8 @@ vi.mock('../../../ipc/species', () => ({
 
 import type { CanopiFile } from '../../../types/design'
 import { SceneStore } from '../scene'
+import { CanvasPlantLabelResolver } from '../plant-labels'
+import { CanvasSpeciesCache } from '../species-cache'
 import { SceneRuntimePresentationController } from './presentation'
 import { getCommonNames, getFlowerColorBatch, getSpeciesBatch } from '../../../ipc/species'
 
@@ -85,6 +87,8 @@ function createController() {
     onPlantNamesChanged: () => {
       state.namesChanged += 1
     },
+    plantLabels: new CanvasPlantLabelResolver(),
+    speciesCache: new CanvasSpeciesCache(),
   })
   return { controller, sceneStore, state }
 }

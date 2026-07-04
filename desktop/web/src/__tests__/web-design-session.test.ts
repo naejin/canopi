@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createMemoryDesignSessionStore } from '../app/document-session/store'
+import type { CanvasDocumentSurface } from '../canvas/runtime/runtime'
 import { createBrowserAppDataStore, type BrowserStorageAdapter } from '../web/browser-app-data'
 import { createBrowserDesignSessionController, type BrowserDesignFileAdapter } from '../web/browser-design-session'
 import type { CanopiFile } from '../types/design'
@@ -161,6 +162,63 @@ describe('browser Design Session lifecycle', () => {
     expect(store.autosaveFailed.value).toBe(true)
     expect(controller.listDrafts()).toEqual([])
   })
+
+  it('serializes attached canvas state into Browser Drafts', async () => {
+    const store = createMemoryDesignSessionStore({
+      file: makeCanopiFile({ name: 'Canvas Draft' }),
+      path: null,
+      name: 'Canvas Draft',
+    })
+    const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore,
+      fileAdapter: testFileAdapter(),
+      now: () => NOW,
+    })
+    const canvas = testCanvasDocumentSurface({
+      serializeDocument: vi.fn((_metadata, doc) => ({
+        ...doc,
+        plants: [
+          {
+            id: 'plant-from-canvas',
+            locked: false,
+            canonical_name: 'Malus domestica',
+            common_name: null,
+            color: null,
+            position: { x: 12, y: 24 },
+            rotation: null,
+            scale: 1,
+            notes: null,
+            planted_date: null,
+            quantity: null,
+          },
+        ],
+      })),
+    })
+    controller.attachCanvasSession(canvas)
+
+    const saved = controller.saveCurrentDraft()
+
+    expect(saved?.ok).toBe(true)
+    expect(canvas.serializeDocument).toHaveBeenCalledOnce()
+    expect(appDataStore.loadDraft('draft-canvas-draft')?.plants).toEqual([
+      {
+        id: 'plant-from-canvas',
+        locked: false,
+        canonical_name: 'Malus domestica',
+        common_name: null,
+        color: null,
+        position: { x: 12, y: 24 },
+        rotation: null,
+        scale: 1,
+        notes: null,
+        planted_date: null,
+        quantity: null,
+      },
+    ])
+    expect(canvas.markSaved).toHaveBeenCalledOnce()
+  })
 })
 
 function testFileAdapter(
@@ -169,6 +227,27 @@ function testFileAdapter(
   return {
     openCanopiFile: vi.fn(async () => null),
     downloadCanopiFile: vi.fn(async () => undefined),
+    ...overrides,
+  }
+}
+
+function testCanvasDocumentSurface(
+  overrides: Partial<CanvasDocumentSurface> = {},
+): CanvasDocumentSurface {
+  return {
+    initializeViewport: vi.fn(),
+    attachRulersTo: vi.fn(),
+    showCanvasChrome: vi.fn(),
+    hideCanvasChrome: vi.fn(),
+    zoomToFit: vi.fn(),
+    loadDocument: vi.fn(),
+    replaceDocument: vi.fn(),
+    hasLoadedDocument: vi.fn(() => true),
+    serializeDocument: vi.fn((_metadata, doc) => doc),
+    markSaved: vi.fn(),
+    clearHistory: vi.fn(),
+    resize: vi.fn(),
+    destroy: vi.fn(),
     ...overrides,
   }
 }

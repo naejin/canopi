@@ -22,9 +22,11 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - `canvas/runtime/query-surface.ts` owns read-only surface behavior for scene snapshots, viewport facts, revisions, selection, placed plants, localized names, and plant presentation context. `SceneCanvasRuntime` compatibility methods delegate to that role.
 - `canvas/runtime/command-surface.ts` owns command surface behavior for tools, viewport changes, history, scene edits, chrome toggles, layer edits, and plant presentation writes. `SceneCanvasRuntime` compatibility methods delegate to that role.
 - `SceneCanvasRuntime` is the compatibility shell for initialization, interaction attachment, and private callbacks used by construction; it should not regain role-surface dependency assembly or low-level constructor wiring.
-- `app/canvas-runtime/host.ts` owns live runtime creation and publication of `CanvasRuntimeSurfaces` into the Design Session.
+- `app/canvas-runtime/host.ts` owns desktop live runtime creation and publication of `CanvasRuntimeSurfaces` into the Design Session.
+- `web/browser-canvas-runtime.ts` owns Web Edition runtime creation. It must stay browser-safe: no Tauri IPC, no desktop document lifecycle, no command graph, and no native Saved Object Stamp import/export path.
 - `canvas/runtime/app-adapter.ts` owns the runtime-facing `CanvasRuntimeAppAdapter` contract and detached fallback behavior.
 - `app/canvas-runtime/app-adapter.ts` owns production wiring from the adapter contract to app-owned document/session/settings modules.
+- `canvas/runtime/presentation-data.ts` owns the runtime-facing Species presentation interfaces. Desktop hosts pass IPC-backed `CanvasPlantLabelResolver` and `CanvasSpeciesCache`; web hosts use detached/browser adapters until the DuckDB-WASM catalog supplies real data.
 - Production files under `canvas/runtime/` must not import `app/**`; add behavior through `CanvasRuntimeSurfaces`, `CanvasRuntimeAppAdapter`, or a narrower runtime-owned interface instead.
 
 ## Scene Ownership

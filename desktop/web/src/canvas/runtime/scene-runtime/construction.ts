@@ -13,6 +13,10 @@ import { createCanvas2DSceneRenderer } from '../renderers/canvas2d-scene'
 import { createPixiSceneRenderer } from '../renderers/pixi-scene'
 import type { SceneRendererContext, SceneRendererInstance } from '../renderers/scene-types'
 import type {
+  CanvasPlantLabelSource,
+  CanvasSpeciesPresentationCache,
+} from '../presentation-data'
+import type {
   CanvasCommandSurface,
   CanvasDocumentSurface,
   CanvasQueryRevision,
@@ -42,6 +46,8 @@ type RuntimeInvalidationKind = 'scene' | 'viewport' | 'chrome'
 export interface SceneRuntimeConstructionOptions {
   appAdapter?: CanvasRuntimeAppAdapter
   targetPresentation?: SceneRuntimePanelTargetAdapter
+  speciesCache?: CanvasSpeciesPresentationCache
+  plantLabels?: CanvasPlantLabelSource
 }
 
 export interface SceneRuntimeConstructionCallbacks {
@@ -137,6 +143,8 @@ export function createSceneRuntimeConstruction(
     getLocale: () => appAdapter.settings.readLocale(),
     resolveHighlightedTargets: callbacks.resolveHighlightedTargets,
     onPlantNamesChanged: callbacks.incrementPlantNamesRevision,
+    speciesCache: options.speciesCache,
+    plantLabels: options.plantLabels,
   })
   const chrome = new SceneRuntimeChromeCoordinator()
   const disposeEffects: Array<() => void> = []

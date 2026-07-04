@@ -16,7 +16,9 @@
     "drafts": "下書き",
     "browserDrafts": "ブラウザー下書き",
     "browserDraftsHint": "このブラウザーに保存されます。.canopi をダウンロードしてファイルのバックアップを残してください。",
-    "noDrafts": "ブラウザー下書きはまだありません。"
+    "noDrafts": "ブラウザー下書きはまだありません。",
+    "emptyDesign": "デザインが読み込まれていません",
+    "emptyDesignHint": "ツールバーの新規または .canopi を開くから開始してください。"
   },
   "designNotebook": {
     "title": "デザインノート",

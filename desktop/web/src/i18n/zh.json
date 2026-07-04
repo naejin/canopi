@@ -16,7 +16,9 @@
     "drafts": "草稿",
     "browserDrafts": "浏览器草稿",
     "browserDraftsHint": "保存在此浏览器中。下载 .canopi 以保留文件备份。",
-    "noDrafts": "还没有浏览器草稿。"
+    "noDrafts": "还没有浏览器草稿。",
+    "emptyDesign": "未加载设计",
+    "emptyDesignHint": "使用工具栏中的新建或打开 .canopi 开始。"
   },
   "designNotebook": {
     "title": "设计笔记本",

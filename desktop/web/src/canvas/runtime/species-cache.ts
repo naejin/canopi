@@ -1,10 +1,14 @@
 import { getFlowerColorBatch, getSpeciesBatch } from '../../ipc/species'
 import { isPlantDbUnavailableError } from '../../ipc/plant-db-errors'
 import { getFlowerColorHex } from '../plant-colors'
+import type {
+  CanvasSpeciesPresentationCache,
+  SpeciesCacheEntry,
+} from './presentation-data'
 
-export type SpeciesCacheEntry = Record<string, unknown>
+export type { SpeciesCacheEntry } from './presentation-data'
 
-export class CanvasSpeciesCache {
+export class CanvasSpeciesCache implements CanvasSpeciesPresentationCache {
   private readonly _cache = new Map<string, SpeciesCacheEntry>()
 
   getCache(): Map<string, SpeciesCacheEntry> {

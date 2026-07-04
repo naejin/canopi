@@ -16,7 +16,9 @@
     "drafts": "Drafts",
     "browserDrafts": "Browser Drafts",
     "browserDraftsHint": "Stored in this browser. Download .canopi for a file backup.",
-    "noDrafts": "No Browser Drafts yet."
+    "noDrafts": "No Browser Drafts yet.",
+    "emptyDesign": "No Design loaded",
+    "emptyDesignHint": "Use New or Open .canopi in the toolbar to start."
   },
   "designNotebook": {
     "title": "Design Notebook",

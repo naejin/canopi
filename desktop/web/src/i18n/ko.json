@@ -16,7 +16,9 @@
     "drafts": "초안",
     "browserDrafts": "브라우저 초안",
     "browserDraftsHint": "이 브라우저에 저장됩니다. 파일 백업은 .canopi로 다운로드하세요.",
-    "noDrafts": "아직 브라우저 초안이 없습니다."
+    "noDrafts": "아직 브라우저 초안이 없습니다.",
+    "emptyDesign": "로드된 디자인 없음",
+    "emptyDesignHint": "도구 모음에서 새로 만들기 또는 .canopi 열기를 사용해 시작하세요."
   },
   "designNotebook": {
     "title": "디자인 노트북",

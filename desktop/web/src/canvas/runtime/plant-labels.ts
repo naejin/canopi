@@ -1,6 +1,7 @@
 import { getCommonNames } from '../../ipc/species'
+import type { CanvasPlantLabelSource } from './presentation-data'
 
-export class CanvasPlantLabelResolver {
+export class CanvasPlantLabelResolver implements CanvasPlantLabelSource {
   private readonly _byLocale = new Map<string, Map<string, string | null>>()
 
   getLocaleSnapshot(locale: string): ReadonlyMap<string, string | null> {

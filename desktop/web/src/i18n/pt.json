@@ -16,7 +16,9 @@
     "drafts": "Rascunhos",
     "browserDrafts": "Rascunhos do navegador",
     "browserDraftsHint": "Salvos neste navegador. Baixe .canopi para ter um arquivo de backup.",
-    "noDrafts": "Ainda não há rascunhos do navegador."
+    "noDrafts": "Ainda não há rascunhos do navegador.",
+    "emptyDesign": "Nenhum design carregado",
+    "emptyDesignHint": "Use Novo ou Abrir .canopi na barra de ferramentas para começar."
   },
   "designNotebook": {
     "title": "Caderno de designs",

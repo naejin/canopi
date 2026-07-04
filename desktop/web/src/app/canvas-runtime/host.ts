@@ -1,6 +1,8 @@
 import type { CanvasRuntimeHost, CanvasRuntimeSurfaces } from '../../canvas/runtime/runtime'
 import { SceneCanvasRuntime } from '../../canvas/runtime/scene-runtime'
 import { createCanvasRuntimeSurfaces } from '../../canvas/runtime/surfaces'
+import { CanvasPlantLabelResolver } from '../../canvas/runtime/plant-labels'
+import { CanvasSpeciesCache } from '../../canvas/runtime/species-cache'
 import { createAppCanvasRuntimeAppAdapter } from './app-adapter'
 import { createAppSceneRuntimePanelTargetAdapter } from './panel-target-adapter'
 
@@ -8,6 +10,8 @@ export function createAppCanvasRuntimeHost(): CanvasRuntimeHost {
   return createSceneCanvasRuntimeHost(new SceneCanvasRuntime({
     appAdapter: createAppCanvasRuntimeAppAdapter(),
     targetPresentation: createAppSceneRuntimePanelTargetAdapter(),
+    plantLabels: new CanvasPlantLabelResolver(),
+    speciesCache: new CanvasSpeciesCache(),
   }))
 }
 

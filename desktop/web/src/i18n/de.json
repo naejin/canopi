@@ -16,7 +16,9 @@
     "drafts": "Entwürfe",
     "browserDrafts": "Browser-Entwürfe",
     "browserDraftsHint": "In diesem Browser gespeichert. Lade .canopi als Dateisicherung herunter.",
-    "noDrafts": "Noch keine Browser-Entwürfe."
+    "noDrafts": "Noch keine Browser-Entwürfe.",
+    "emptyDesign": "Kein Design geladen",
+    "emptyDesignHint": "Nutze Neu oder .canopi öffnen in der Werkzeugleiste, um zu beginnen."
   },
   "designNotebook": {
     "title": "Design-Notizbuch",

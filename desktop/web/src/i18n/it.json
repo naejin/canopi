@@ -16,7 +16,9 @@
     "drafts": "Bozze",
     "browserDrafts": "Bozze del browser",
     "browserDraftsHint": "Salvate in questo browser. Scarica .canopi per avere un file di backup.",
-    "noDrafts": "Nessuna bozza del browser."
+    "noDrafts": "Nessuna bozza del browser.",
+    "emptyDesign": "Nessun design caricato",
+    "emptyDesignHint": "Usa Nuovo o Apri .canopi nella barra degli strumenti per iniziare."
   },
   "designNotebook": {
     "title": "Quaderno dei design",

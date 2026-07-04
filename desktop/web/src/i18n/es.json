@@ -16,7 +16,9 @@
     "drafts": "Borradores",
     "browserDrafts": "Borradores del navegador",
     "browserDraftsHint": "Guardados en este navegador. Descarga .canopi para tener un archivo de respaldo.",
-    "noDrafts": "Aún no hay borradores del navegador."
+    "noDrafts": "Aún no hay borradores del navegador.",
+    "emptyDesign": "No hay ningún diseño cargado",
+    "emptyDesignHint": "Usa Nuevo o Abrir .canopi en la barra de herramientas para empezar."
   },
   "designNotebook": {
     "title": "Cuaderno de diseños",

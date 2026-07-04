@@ -32,7 +32,7 @@ describe('Web Edition Browser App Shell', () => {
 
   it('renders the browser command set without desktop-only chrome or commands', async () => {
     await act(async () => {
-      render(<WebApp />, container)
+      render(<WebApp workspace={<div data-testid="stub-workspace" />} />, container)
     })
 
     expect(container.querySelector('[data-testid="browser-app-shell"]')).not.toBeNull()
@@ -143,7 +143,7 @@ describe('Web Edition Browser App Shell', () => {
     const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
 
     await act(async () => {
-      render(<WebApp appDataStore={appDataStore} />, container)
+      render(<WebApp appDataStore={appDataStore} workspace={<div data-testid="stub-workspace" />} />, container)
     })
     await act(async () => {
       clickCommand(container, 'settings.theme')
@@ -155,7 +155,7 @@ describe('Web Edition Browser App Shell', () => {
     locale.value = 'en'
 
     await act(async () => {
-      render(<WebApp appDataStore={appDataStore} />, container)
+      render(<WebApp appDataStore={appDataStore} workspace={<div data-testid="stub-workspace" />} />, container)
     })
 
     expect(theme.value).toBe('dark')

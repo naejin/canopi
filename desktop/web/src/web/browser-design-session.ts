@@ -9,6 +9,7 @@ import {
   type DesignSessionStore,
 } from "../app/document-session/store";
 import { buildPersistedDesignSessionContent } from "../app/document-session/persistence";
+import type { CanvasDocumentSurface } from "../canvas/runtime/runtime";
 import type { CanopiFile } from "../types/design";
 import {
   browserAppDataStore,
@@ -49,6 +50,7 @@ export interface BrowserDesignSessionController {
   saveCurrentDraft(): BrowserAppDataWriteResult<BrowserDraftSummary> | null;
   listDrafts(): readonly BrowserDraftSummary[];
   openDraft(id: string): boolean;
+  attachCanvasSession(session: CanvasDocumentSurface): () => void;
   installAutosave(options?: BrowserDesignSessionAutosaveOptions): () => void;
   handlers(): BrowserShellCommandHandlers;
 }
@@ -69,6 +71,7 @@ export function createBrowserDesignSessionController({
   now = () => new Date(),
 }: BrowserDesignSessionControllerOptions = {}): BrowserDesignSessionController {
   let activeDraftId: string | null = null;
+  let canvasSession: CanvasDocumentSurface | null = null;
 
   async function newDesign(): Promise<void> {
     const file = createEmptyWebCanopiFile(now());
@@ -99,7 +102,7 @@ export function createBrowserDesignSessionController({
 
     const name = current.name || store.readDesignName() || "Untitled";
     const content = buildPersistedDesignSessionContent({
-      session: null,
+      session: activeCanvasSession(),
       name,
       store,
     });
@@ -118,7 +121,7 @@ export function createBrowserDesignSessionController({
 
     const name = store.readCurrentDesign()?.name || store.readDesignName() || "Untitled";
     const content = buildPersistedDesignSessionContent({
-      session: null,
+      session: activeCanvasSession(),
       name,
       store,
     });
@@ -130,6 +133,7 @@ export function createBrowserDesignSessionController({
     if (result.ok) {
       const previousDraftId = activeDraftId;
       activeDraftId = result.value.id;
+      store.markSaved(activeCanvasSession());
       if (previousDraftId && previousDraftId !== result.value.id) {
         const deleted = appDataStore.deleteDraft(previousDraftId);
         if (!deleted.ok) store.setAutosaveFailed(true);
@@ -150,11 +154,26 @@ export function createBrowserDesignSessionController({
     return true;
   }
 
+  function attachCanvasSession(session: CanvasDocumentSurface): () => void {
+    canvasSession = session;
+    return () => {
+      if (canvasSession === session) {
+        canvasSession = null;
+      }
+    };
+  }
+
+  function activeCanvasSession(): CanvasDocumentSurface | null {
+    if (!canvasSession?.hasLoadedDocument()) return null;
+    return canvasSession;
+  }
+
   function installAutosave({ onDraftSaved }: BrowserDesignSessionAutosaveOptions = {}): () => void {
     let lastDesign = store.readCurrentDesign();
     return effect(() => {
       const current = store.currentDesign.value;
-      if (current === lastDesign) return;
+      const dirty = store.designDirty.value;
+      if (current === lastDesign && !dirty) return;
       lastDesign = current;
       if (!current) return;
 
@@ -170,6 +189,7 @@ export function createBrowserDesignSessionController({
     saveCurrentDraft,
     listDrafts: () => appDataStore.listDrafts(),
     openDraft,
+    attachCanvasSession,
     installAutosave,
     handlers() {
       return {

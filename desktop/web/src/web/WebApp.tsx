@@ -1,3 +1,4 @@
+import type { ComponentChildren } from "preact";
 import { useCallback, useEffect, useMemo, useState } from "preact/hooks";
 import { locale, theme } from "../app/settings/state";
 import type { Locale, Theme } from "../types/settings";
@@ -8,17 +9,20 @@ import {
   browserDesignSessionController,
   type BrowserDesignSessionController,
 } from "./browser-design-session";
+import { WebCanvasWorkspace } from "./WebCanvasWorkspace";
 
 const LOCALES: readonly Locale[] = ["en", "fr", "es", "pt", "it", "zh", "de", "ja", "ko", "nl", "ru"];
 
 interface WebAppProps {
   readonly controller?: BrowserDesignSessionController;
   readonly appDataStore?: BrowserAppDataStore;
+  readonly workspace?: ComponentChildren;
 }
 
 export function WebApp({
   controller = browserDesignSessionController,
   appDataStore = browserAppDataStore,
+  workspace,
 }: WebAppProps) {
   const [draftRevision, setDraftRevision] = useState(0);
   const refreshDrafts = useCallback(() => {
@@ -59,7 +63,9 @@ export function WebApp({
         handlers={handlers}
         drafts={drafts}
         onSettingsChange={(settings) => persistBrowserSettings(appDataStore, settings)}
-      />
+      >
+        {workspace ?? <WebCanvasWorkspace controller={controller} />}
+      </BrowserAppShell>
     </div>
   );
 }

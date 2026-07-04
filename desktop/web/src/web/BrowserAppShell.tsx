@@ -1,4 +1,5 @@
 import { useState } from "preact/hooks";
+import type { ComponentChildren } from "preact";
 import { activePanel, navigateTo, sidePanel, type Panel, type SidePanel } from "../app/shell/state";
 import { locale, theme } from "../app/settings/state";
 import type { Locale } from "../types/settings";
@@ -25,6 +26,7 @@ interface BrowserAppShellProps {
   readonly handlers?: BrowserShellCommandHandlers;
   readonly drafts?: readonly BrowserDraftSummary[];
   readonly onSettingsChange?: (settings: BrowserShellSettings) => void;
+  readonly children?: ComponentChildren;
 }
 
 interface ShellCommand {
@@ -38,6 +40,7 @@ export function BrowserAppShell({
   handlers = {},
   drafts = [],
   onSettingsChange,
+  children,
 }: BrowserAppShellProps) {
   const [draftsOpen, setDraftsOpen] = useState(false);
   const currentLocale = locale.value;
@@ -133,7 +136,9 @@ export function BrowserAppShell({
           )}
         </section>
       ) : null}
-      <main className={styles.workspace} aria-label={t("webShell.workspace")} />
+      <main className={styles.workspace} aria-label={t("webShell.workspace")}>
+        {children}
+      </main>
     </div>
   );
 }

@@ -1,11 +1,15 @@
 import { computePinnedPlantNameLabels, computeSelectionLabels } from '../selection-labels'
-import { CanvasPlantLabelResolver } from '../plant-labels'
 import {
   resolvePlantCanopySpreadM,
   resolvePlantStratum,
   type PlantPresentationContext,
 } from '../plant-presentation'
-import { CanvasSpeciesCache } from '../species-cache'
+import {
+  createDetachedCanvasPlantLabelSource,
+  createDetachedCanvasSpeciesPresentationCache,
+  type CanvasPlantLabelSource,
+  type CanvasSpeciesPresentationCache,
+} from '../presentation-data'
 import type { SceneRendererHoverTarget, SceneRendererSnapshot } from '../renderers/scene-types'
 import type { ScenePersistedState, SceneStore, SceneViewportState } from '../scene'
 import { isSceneDesignObjectLocked } from '../scene'
@@ -26,6 +30,8 @@ interface SceneRuntimePresentationControllerOptions {
     zoneIds: readonly string[]
   }
   onPlantNamesChanged(): void
+  speciesCache?: CanvasSpeciesPresentationCache
+  plantLabels?: CanvasPlantLabelSource
 }
 
 export interface ScenePresentationRefreshResult {
@@ -46,8 +52,8 @@ export class SceneRuntimePresentationController {
   private readonly _getLocale: () => string
   private readonly _resolveHighlightedTargets: SceneRuntimePresentationControllerOptions['resolveHighlightedTargets']
   private readonly _onPlantNamesChanged: () => void
-  private readonly _speciesCache = new CanvasSpeciesCache()
-  private readonly _plantLabels = new CanvasPlantLabelResolver()
+  private readonly _speciesCache: CanvasSpeciesPresentationCache
+  private readonly _plantLabels: CanvasPlantLabelSource
 
   constructor(options: SceneRuntimePresentationControllerOptions) {
     this._sceneStore = options.sceneStore
@@ -55,6 +61,8 @@ export class SceneRuntimePresentationController {
     this._getLocale = options.getLocale
     this._resolveHighlightedTargets = options.resolveHighlightedTargets
     this._onPlantNamesChanged = options.onPlantNamesChanged
+    this._speciesCache = options.speciesCache ?? createDetachedCanvasSpeciesPresentationCache()
+    this._plantLabels = options.plantLabels ?? createDetachedCanvasPlantLabelSource()
   }
 
   getSpeciesCache() {
