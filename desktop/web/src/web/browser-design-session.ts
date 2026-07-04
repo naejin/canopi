@@ -1,3 +1,4 @@
+import { effect } from "@preact/signals";
 import {
   DEFAULT_BUDGET_CURRENCY,
   normalizeLoadedDocument,
@@ -9,6 +10,12 @@ import {
 } from "../app/document-session/store";
 import { buildPersistedDesignSessionContent } from "../app/document-session/persistence";
 import type { CanopiFile } from "../types/design";
+import {
+  browserAppDataStore,
+  type BrowserAppDataStore,
+  type BrowserAppDataWriteResult,
+  type BrowserDraftSummary,
+} from "./browser-app-data";
 import type { BrowserShellCommandHandlers } from "./BrowserAppShell";
 
 const WEB_CANOPI_FILE_VERSION = 5;
@@ -31,6 +38,7 @@ export interface BrowserDesignFileAdapter {
 interface BrowserDesignSessionControllerOptions {
   readonly store?: DesignSessionStore;
   readonly fileAdapter?: BrowserDesignFileAdapter;
+  readonly appDataStore?: BrowserAppDataStore;
   readonly now?: () => Date;
 }
 
@@ -38,7 +46,15 @@ export interface BrowserDesignSessionController {
   newDesign(): Promise<void>;
   openCanopi(): Promise<boolean>;
   downloadCanopi(): Promise<void>;
+  saveCurrentDraft(): BrowserAppDataWriteResult<BrowserDraftSummary> | null;
+  listDrafts(): readonly BrowserDraftSummary[];
+  openDraft(id: string): boolean;
+  installAutosave(options?: BrowserDesignSessionAutosaveOptions): () => void;
   handlers(): BrowserShellCommandHandlers;
+}
+
+export interface BrowserDesignSessionAutosaveOptions {
+  readonly onDraftSaved?: () => void;
 }
 
 export const browserDesignFileAdapter: BrowserDesignFileAdapter = {
@@ -49,12 +65,17 @@ export const browserDesignFileAdapter: BrowserDesignFileAdapter = {
 export function createBrowserDesignSessionController({
   store = designSessionStore,
   fileAdapter = browserDesignFileAdapter,
+  appDataStore = browserAppDataStore,
   now = () => new Date(),
 }: BrowserDesignSessionControllerOptions = {}): BrowserDesignSessionController {
+  let activeDraftId: string | null = null;
+
   async function newDesign(): Promise<void> {
     const file = createEmptyWebCanopiFile(now());
+    activeDraftId = null;
     store.replaceCurrentDesignState(file, null, file.name);
     store.resetDirtyBaselines();
+    saveCurrentDraft();
   }
 
   async function openCanopi(): Promise<boolean> {
@@ -65,8 +86,10 @@ export function createBrowserDesignSessionController({
     }
 
     const file = normalizeLoadedDocument(parseCanopiJson(opened.text));
+    activeDraftId = null;
     store.replaceCurrentDesignState(file, null, file.name || nameFromFileName(opened.fileName));
     store.resetDirtyBaselines();
+    saveCurrentDraft();
     return true;
   }
 
@@ -87,17 +110,73 @@ export function createBrowserDesignSessionController({
     });
     store.replaceCurrentDesignState(content, null, content.name);
     store.markSaved(null);
+    saveCurrentDraft();
+  }
+
+  function saveCurrentDraft(): BrowserAppDataWriteResult<BrowserDraftSummary> | null {
+    if (!store.hasCurrentDesign()) return null;
+
+    const name = store.readCurrentDesign()?.name || store.readDesignName() || "Untitled";
+    const content = buildPersistedDesignSessionContent({
+      session: null,
+      name,
+      store,
+    });
+    const result = appDataStore.saveDraft({
+      file: content,
+      now: now().toISOString(),
+    });
+    store.setAutosaveFailed(!result.ok);
+    if (result.ok) {
+      const previousDraftId = activeDraftId;
+      activeDraftId = result.value.id;
+      if (previousDraftId && previousDraftId !== result.value.id) {
+        const deleted = appDataStore.deleteDraft(previousDraftId);
+        if (!deleted.ok) store.setAutosaveFailed(true);
+      }
+    }
+    return result;
+  }
+
+  function openDraft(id: string): boolean {
+    const draft = appDataStore.loadDraft(id);
+    if (!draft) return false;
+
+    const file = normalizeLoadedDocument(draft);
+    activeDraftId = id;
+    store.replaceCurrentDesignState(file, null, file.name || "Untitled");
+    store.resetDirtyBaselines();
+    saveCurrentDraft();
+    return true;
+  }
+
+  function installAutosave({ onDraftSaved }: BrowserDesignSessionAutosaveOptions = {}): () => void {
+    let lastDesign = store.readCurrentDesign();
+    return effect(() => {
+      const current = store.currentDesign.value;
+      if (current === lastDesign) return;
+      lastDesign = current;
+      if (!current) return;
+
+      const result = saveCurrentDraft();
+      if (result?.ok) onDraftSaved?.();
+    });
   }
 
   return {
     newDesign,
     openCanopi,
     downloadCanopi,
+    saveCurrentDraft,
+    listDrafts: () => appDataStore.listDrafts(),
+    openDraft,
+    installAutosave,
     handlers() {
       return {
         newDesign: () => void newDesign().catch(logBrowserDesignSessionError),
         openCanopi: () => void openCanopi().catch(logBrowserDesignSessionError),
         downloadCanopi: () => void downloadCanopi().catch(logBrowserDesignSessionError),
+        openDraft: (id) => openDraft(id),
         openDrafts: () => undefined,
       };
     },

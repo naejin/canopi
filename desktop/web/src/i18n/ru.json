@@ -13,7 +13,10 @@
     "workspace": "Рабочая область веб-версии",
     "openCanopi": "Открыть .canopi",
     "downloadCanopi": "Скачать .canopi",
-    "drafts": "Черновики"
+    "drafts": "Черновики",
+    "browserDrafts": "Черновики браузера",
+    "browserDraftsHint": "Хранятся в этом браузере. Скачайте .canopi, чтобы сохранить файл.",
+    "noDrafts": "Черновиков браузера пока нет."
   },
   "designNotebook": {
     "title": "Блокнот дизайнов",

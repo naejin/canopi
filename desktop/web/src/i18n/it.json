@@ -13,7 +13,10 @@
     "workspace": "Area di lavoro web",
     "openCanopi": "Apri .canopi",
     "downloadCanopi": "Scarica .canopi",
-    "drafts": "Bozze"
+    "drafts": "Bozze",
+    "browserDrafts": "Bozze del browser",
+    "browserDraftsHint": "Salvate in questo browser. Scarica .canopi per avere un file di backup.",
+    "noDrafts": "Nessuna bozza del browser."
   },
   "designNotebook": {
     "title": "Quaderno dei design",

@@ -13,7 +13,10 @@
     "workspace": "Área de trabalho web",
     "openCanopi": "Abrir .canopi",
     "downloadCanopi": "Baixar .canopi",
-    "drafts": "Rascunhos"
+    "drafts": "Rascunhos",
+    "browserDrafts": "Rascunhos do navegador",
+    "browserDraftsHint": "Salvos neste navegador. Baixe .canopi para ter um arquivo de backup.",
+    "noDrafts": "Ainda não há rascunhos do navegador."
   },
   "designNotebook": {
     "title": "Caderno de designs",

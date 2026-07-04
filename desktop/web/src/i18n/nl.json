@@ -13,7 +13,10 @@
     "workspace": "Webeditie-werkruimte",
     "openCanopi": ".canopi openen",
     "downloadCanopi": ".canopi downloaden",
-    "drafts": "Concepten"
+    "drafts": "Concepten",
+    "browserDrafts": "Browserconcepten",
+    "browserDraftsHint": "Opgeslagen in deze browser. Download .canopi voor een bestandsback-up.",
+    "noDrafts": "Nog geen browserconcepten."
   },
   "designNotebook": {
     "title": "Ontwerpnotitieboek",

@@ -13,7 +13,10 @@
     "workspace": "Web Edition workspace",
     "openCanopi": "Open .canopi",
     "downloadCanopi": "Download .canopi",
-    "drafts": "Drafts"
+    "drafts": "Drafts",
+    "browserDrafts": "Browser Drafts",
+    "browserDraftsHint": "Stored in this browser. Download .canopi for a file backup.",
+    "noDrafts": "No Browser Drafts yet."
   },
   "designNotebook": {
     "title": "Design Notebook",

@@ -13,7 +13,10 @@
     "workspace": "웹 에디션 작업 공간",
     "openCanopi": ".canopi 열기",
     "downloadCanopi": ".canopi 다운로드",
-    "drafts": "초안"
+    "drafts": "초안",
+    "browserDrafts": "브라우저 초안",
+    "browserDraftsHint": "이 브라우저에 저장됩니다. 파일 백업은 .canopi로 다운로드하세요.",
+    "noDrafts": "아직 브라우저 초안이 없습니다."
   },
   "designNotebook": {
     "title": "디자인 노트북",

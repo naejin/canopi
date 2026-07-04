@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createMemoryDesignSessionStore } from '../app/document-session/store'
+import { createBrowserAppDataStore, type BrowserStorageAdapter } from '../web/browser-app-data'
 import { createBrowserDesignSessionController, type BrowserDesignFileAdapter } from '../web/browser-design-session'
 import type { CanopiFile } from '../types/design'
 
@@ -101,6 +102,65 @@ describe('browser Design Session lifecycle', () => {
     expect(store.isDesignDirty()).toBe(false)
     expect(store.readDesignPath()).toBeNull()
   })
+
+  it('autosaves Browser Drafts and reopens them as detached Designs', async () => {
+    const store = createMemoryDesignSessionStore()
+    const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore,
+      fileAdapter: testFileAdapter(),
+      now: () => NOW,
+    })
+    const disposeAutosave = controller.installAutosave()
+
+    try {
+      await controller.newDesign()
+      store.mutateCurrentDesign((design) => ({
+        ...design,
+        name: 'Browser Patio',
+        description: 'Autosaved locally',
+      }))
+
+      expect(controller.listDrafts()).toEqual([
+        {
+          id: 'draft-browser-patio',
+          name: 'Browser Patio',
+          updatedAt: NOW.toISOString(),
+        },
+      ])
+
+      await controller.newDesign()
+      expect(controller.openDraft('draft-browser-patio')).toBe(true)
+
+      expect(store.readDesignPath()).toBeNull()
+      expect(store.readDesignName()).toBe('Browser Patio')
+      expect(store.readCurrentDesign()?.description).toBe('Autosaved locally')
+      expect(store.isDesignDirty()).toBe(false)
+    } finally {
+      disposeAutosave()
+    }
+  })
+
+  it('keeps the active Design intact when Browser Draft storage fails', async () => {
+    const storage = memoryStorage()
+    storage.failWrites = true
+    const store = createMemoryDesignSessionStore()
+    const appDataStore = createBrowserAppDataStore({ storage })
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore,
+      fileAdapter: testFileAdapter(),
+      now: () => NOW,
+    })
+
+    await controller.newDesign()
+
+    expect(store.readCurrentDesign()?.name).toBe('Untitled')
+    expect(store.readDesignPath()).toBeNull()
+    expect(store.autosaveFailed.value).toBe(true)
+    expect(controller.listDrafts()).toEqual([])
+  })
 })
 
 function testFileAdapter(
@@ -110,6 +170,25 @@ function testFileAdapter(
     openCanopiFile: vi.fn(async () => null),
     downloadCanopiFile: vi.fn(async () => undefined),
     ...overrides,
+  }
+}
+
+interface MemoryStorage extends BrowserStorageAdapter {
+  failWrites: boolean
+}
+
+function memoryStorage(): MemoryStorage {
+  const values = new Map<string, string>()
+  return {
+    failWrites: false,
+    getItem: (key) => values.get(key) ?? null,
+    setItem(key, value) {
+      if (this.failWrites) throw new Error('storage unavailable')
+      values.set(key, value)
+    },
+    removeItem: (key) => {
+      values.delete(key)
+    },
   }
 }
 

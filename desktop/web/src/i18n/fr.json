@@ -13,7 +13,10 @@
     "workspace": "Espace de travail web",
     "openCanopi": "Ouvrir .canopi",
     "downloadCanopi": "Télécharger .canopi",
-    "drafts": "Brouillons"
+    "drafts": "Brouillons",
+    "browserDrafts": "Brouillons du navigateur",
+    "browserDraftsHint": "Stockés dans ce navigateur. Téléchargez .canopi pour conserver un fichier.",
+    "noDrafts": "Aucun brouillon du navigateur."
   },
   "designNotebook": {
     "title": "Carnet de designs",

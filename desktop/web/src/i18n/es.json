@@ -13,7 +13,10 @@
     "workspace": "Espacio de trabajo web",
     "openCanopi": "Abrir .canopi",
     "downloadCanopi": "Descargar .canopi",
-    "drafts": "Borradores"
+    "drafts": "Borradores",
+    "browserDrafts": "Borradores del navegador",
+    "browserDraftsHint": "Guardados en este navegador. Descarga .canopi para tener un archivo de respaldo.",
+    "noDrafts": "Aún no hay borradores del navegador."
   },
   "designNotebook": {
     "title": "Cuaderno de diseños",
