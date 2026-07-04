@@ -62,12 +62,11 @@ fn row_to_saved_object_stamp(row: crate::db::user_db::SavedObjectStampRow) -> Sa
 #[cfg(test)]
 mod tests {
     use crate::db::{self, UserDb};
-    use std::sync::Mutex;
 
     fn test_user_db() -> UserDb {
         let conn = rusqlite::Connection::open_in_memory().unwrap();
         db::user_db::init(&conn).unwrap();
-        UserDb(Mutex::new(conn))
+        UserDb::new(conn)
     }
 
     #[test]

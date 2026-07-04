@@ -135,7 +135,7 @@ pub fn run() {
                 .map_err(|e| format!("Failed to open user DB: {e}"))?;
             db::user_db::init(&user_conn)
                 .map_err(|e| format!("Failed to init user DB: {e}"))?;
-            app.manage(db::UserDb(Mutex::new(user_conn)));
+            app.manage(db::UserDb::new(user_conn));
 
             tracing::info!("User DB initialized at {}", user_db_path.display());
 

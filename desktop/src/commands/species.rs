@@ -15,7 +15,7 @@ use common_types::species::{
     reason = "Tauri IPC currently exposes species search as flat named arguments"
 )]
 #[tauri::command]
-pub fn search_species(
+pub async fn search_species(
     plant_db: tauri::State<'_, crate::db::PlantDb>,
     user_db: tauri::State<'_, crate::db::UserDb>,
     text: String,
@@ -35,7 +35,12 @@ pub fn search_species(
         locale,
         include_total: include_total.unwrap_or(true),
     };
-    crate::services::plant_browser::search_species(&plant_db, &user_db, request)
+    crate::services::plant_browser::search_species_async(
+        plant_db.inner().clone(),
+        user_db.inner().clone(),
+        request,
+    )
+    .await
 }
 
 /// Fetch the full detail record for a species and record it in recently viewed.

@@ -249,18 +249,17 @@ mod tests {
     use common_types::design::DesignSummary;
     use rusqlite::Connection;
     use std::path::PathBuf;
-    use std::sync::Mutex;
 
     fn test_user_db() -> UserDb {
         let conn = Connection::open_in_memory().unwrap();
         crate::db::user_db::init(&conn).unwrap();
-        UserDb(Mutex::new(conn))
+        UserDb::new(conn)
     }
 
     fn test_user_db_at(path: &std::path::Path) -> UserDb {
         let conn = Connection::open(path).unwrap();
         crate::db::user_db::init(&conn).unwrap();
-        UserDb(Mutex::new(conn))
+        UserDb::new(conn)
     }
 
     fn temp_design_path(name: &str) -> PathBuf {

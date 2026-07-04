@@ -10,22 +10,23 @@ pub mod user_db;
 
 use common_types::health::PlantDbStatus;
 use rusqlite::Connection;
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 /// Plant database availability boundary.
 ///
 /// When the bundled plant DB is missing or corrupt, the app shell still starts,
 /// but species-dependent services must fail explicitly instead of receiving a
 /// fake in-memory connection that looks usable.
+#[derive(Clone)]
 pub enum PlantDb {
-    Available(Mutex<Connection>),
+    Available(Arc<Mutex<Connection>>),
     Missing,
     Corrupt,
 }
 
 impl PlantDb {
     pub fn available(connection: Connection) -> Self {
-        Self::Available(Mutex::new(connection))
+        Self::Available(Arc::new(Mutex::new(connection)))
     }
 
     pub fn missing() -> Self {
@@ -46,7 +47,14 @@ impl PlantDb {
 }
 
 /// User database — writable, serialized access via Mutex.
-pub struct UserDb(pub Mutex<Connection>);
+#[derive(Clone)]
+pub struct UserDb(pub Arc<Mutex<Connection>>);
+
+impl UserDb {
+    pub fn new(connection: Connection) -> Self {
+        Self(Arc::new(Mutex::new(connection)))
+    }
+}
 
 pub fn acquire<'a, T>(mutex: &'a Mutex<T>, name: &str) -> MutexGuard<'a, T> {
     mutex.lock().unwrap_or_else(|e| {

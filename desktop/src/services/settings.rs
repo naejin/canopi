@@ -105,12 +105,11 @@ mod tests {
     use crate::db::UserDb;
     use common_types::settings::{BasemapStyle, Locale, Settings, Theme};
     use rusqlite::Connection;
-    use std::sync::Mutex;
 
     fn test_user_db() -> UserDb {
         let conn = Connection::open_in_memory().unwrap();
         crate::db::user_db::init(&conn).unwrap();
-        UserDb(Mutex::new(conn))
+        UserDb::new(conn)
     }
 
     #[test]

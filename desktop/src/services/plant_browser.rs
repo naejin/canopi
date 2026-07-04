@@ -25,6 +25,17 @@ pub fn search_species(
     Ok(result)
 }
 
+pub async fn search_species_async(
+    plant_db: PlantDb,
+    user_db: UserDb,
+    request: SpeciesSearchRequest,
+) -> Result<PaginatedResult<SpeciesListItem>, String> {
+    crate::blocking::run_blocking("species search", move || {
+        search_species(&plant_db, &user_db, request)
+    })
+    .await
+}
+
 pub fn get_species_detail(
     plant_db: &PlantDb,
     user_db: &UserDb,
@@ -112,11 +123,12 @@ pub fn get_recently_viewed(
 
 #[cfg(test)]
 mod tests {
-    use super::{get_favorites, get_recently_viewed, search_species, toggle_favorite};
+    use super::{
+        get_favorites, get_recently_viewed, search_species, search_species_async, toggle_favorite,
+    };
     use crate::db::{self, PlantDb, UserDb};
     use common_types::species::{Sort, SpeciesFilter, SpeciesSearchRequest};
     use rusqlite::Connection;
-    use std::sync::Mutex;
 
     fn test_plant_db() -> PlantDb {
         let conn = Connection::open_in_memory().unwrap();
@@ -234,7 +246,7 @@ mod tests {
              END;",
         )
         .unwrap();
-        UserDb(Mutex::new(conn))
+        UserDb::new(conn)
     }
 
     fn search_request(
@@ -282,6 +294,26 @@ mod tests {
             &user_db,
             search_request("Malus", SpeciesFilter::default(), 10, true, "en"),
         )
+        .unwrap();
+
+        assert_eq!(result.items.len(), 1);
+        assert_eq!(result.items[0].canonical_name, "Malus domestica");
+        assert_eq!(result.total_estimate, 1);
+        assert!(result.items[0].is_favorite);
+    }
+
+    #[test]
+    fn async_search_preserves_search_response_contract() {
+        let plant_db = test_plant_db();
+        let user_db = test_user_db();
+
+        toggle_favorite(&user_db, "Malus domestica".to_owned()).unwrap();
+
+        let result = tauri::async_runtime::block_on(search_species_async(
+            plant_db.clone(),
+            user_db.clone(),
+            search_request("Malus", SpeciesFilter::default(), 10, true, "en"),
+        ))
         .unwrap();
 
         assert_eq!(result.items.len(), 1);
