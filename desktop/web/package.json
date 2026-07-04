@@ -16,6 +16,7 @@
     "prepare": "cd ../.. && husky desktop/web/.husky"
   },
   "dependencies": {
+    "@duckdb/duckdb-wasm": "^1.33.1-dev57.0",
     "@preact/signals": "^2.0.0",
     "@tanstack/virtual-core": "^3.13.23",
     "@tauri-apps/api": "^2.0.0",

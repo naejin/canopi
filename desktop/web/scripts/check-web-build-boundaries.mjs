@@ -1,14 +1,20 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const distRoot = resolve(root, "dist-web");
+const MAX_CLOUDFLARE_PAGES_ASSET_BYTES = 25 * 1024 * 1024;
+const FORBIDDEN_DUCKDB_WASM_PATTERN = "duckdb-.*\\\\.wasm";
 
 const scannedExtensions = new Set([".html", ".js", ".mjs"]);
+const forbiddenAssetNamePatterns = [
+  new RegExp(FORBIDDEN_DUCKDB_WASM_PATTERN, "i"),
+];
 const forbiddenPatterns = [
   "@tauri-apps",
   "__TAURI__",
+  "__TAURI_INTERNALS__",
   "app/shell/bootstrap",
   "app/shell/close-guard",
   "ipc/design",
@@ -29,11 +35,26 @@ if (!existsSync(distRoot)) {
 const violations = [];
 
 for (const filePath of filesUnder(distRoot)) {
-  if (!scannedExtensions.has(extensionOf(filePath))) continue;
-  const source = readFileSync(filePath, "utf8");
-  for (const pattern of forbiddenPatterns) {
-    if (source.includes(pattern)) {
-      violations.push(`${relative(root, filePath)} contains ${pattern}`);
+  const relativePath = relative(root, filePath);
+  const size = statSync(filePath).size;
+  if (size > MAX_CLOUDFLARE_PAGES_ASSET_BYTES) {
+    violations.push(
+      `${relativePath} is ${size} bytes; Cloudflare Pages allows at most ${MAX_CLOUDFLARE_PAGES_ASSET_BYTES} bytes per file`,
+    );
+  }
+
+  for (const pattern of forbiddenAssetNamePatterns) {
+    if (pattern.test(relativePath)) {
+      violations.push(`${relativePath} must not bundle DuckDB raw WASM; use CDN-selected DuckDB-WASM bundles`);
+    }
+  }
+
+  if (scannedExtensions.has(extensionOf(filePath))) {
+    const source = readFileSync(filePath, "utf8");
+    for (const pattern of forbiddenPatterns) {
+      if (source.includes(pattern)) {
+        violations.push(`${relativePath} contains ${pattern}`);
+      }
     }
   }
 }

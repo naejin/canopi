@@ -1,10 +1,4 @@
 import { batch, computed, signal, type ReadonlySignal } from '@preact/signals'
-import { getFavorites, getRecentlyViewed, toggleFavorite } from '../../ipc/favorites'
-import {
-  getDynamicFilterOptions,
-  getFilterOptions,
-  searchSpecies,
-} from '../../ipc/species'
 import type {
   DynamicFilterOptions,
   FilterOp,
@@ -36,6 +30,7 @@ type FilterOptionsAdapter = () => Promise<FilterOptions | null>
 type FavoriteItemsAdapter = (locale: string) => Promise<SpeciesListItem[]>
 type RecentlyViewedAdapter = (locale: string, limit: number) => Promise<SpeciesListItem[]>
 type ToggleFavoriteAdapter = (canonicalName: string) => Promise<boolean>
+type SpeciesSelectedAdapter = (canonicalName: string) => void | Promise<void>
 
 export interface SpeciesCatalogFilterStripView {
   readonly options: FilterOptions | null
@@ -103,6 +98,7 @@ export interface SpeciesCatalogWorkbenchOptions {
   readonly getFavorites?: FavoriteItemsAdapter
   readonly getRecentlyViewed?: RecentlyViewedAdapter
   readonly toggleFavorite?: ToggleFavoriteAdapter
+  readonly onSpeciesSelected?: SpeciesSelectedAdapter
   readonly locale?: ReadonlySignal<string>
   readonly pageSize?: number
   readonly textDebounceMs?: number
@@ -112,13 +108,24 @@ export type SpeciesCatalogSearchAdapter = (
   request: SpeciesSearchRequest,
 ) => Promise<PaginatedResult<SpeciesListItem>>
 
+const missingSearchAdapter: PlantSearchAdapter = async () => {
+  throw new Error('Species Catalog Workbench search adapter is not configured.')
+}
+
+const emptyDynamicFilterOptionsAdapter: DynamicFilterOptionsAdapter = async () => []
+const emptyFilterOptionsAdapter: FilterOptionsAdapter = async () => null
+const emptyFavoriteItemsAdapter: FavoriteItemsAdapter = async () => []
+const emptyRecentlyViewedAdapter: RecentlyViewedAdapter = async () => []
+const emptyToggleFavoriteAdapter: ToggleFavoriteAdapter = async () => false
+
 export function createSpeciesCatalogWorkbench({
-  search = searchSpecies,
-  loadDynamicFilterOptions = getDynamicFilterOptions,
-  getFilterOptions: getFilterOptionsAdapter = getFilterOptions,
-  getFavorites: getFavoritesAdapter = getFavorites,
-  getRecentlyViewed: getRecentlyViewedAdapter = getRecentlyViewed,
-  toggleFavorite: toggleFavoriteAdapter = toggleFavorite,
+  search = missingSearchAdapter,
+  loadDynamicFilterOptions = emptyDynamicFilterOptionsAdapter,
+  getFilterOptions: getFilterOptionsAdapter = emptyFilterOptionsAdapter,
+  getFavorites: getFavoritesAdapter = emptyFavoriteItemsAdapter,
+  getRecentlyViewed: getRecentlyViewedAdapter = emptyRecentlyViewedAdapter,
+  toggleFavorite: toggleFavoriteAdapter = emptyToggleFavoriteAdapter,
+  onSpeciesSelected,
   locale: localeSignal = locale,
   pageSize,
   textDebounceMs,
@@ -363,6 +370,11 @@ export function createSpeciesCatalogWorkbench({
 
     selectSpecies(canonicalName) {
       selectedCanonicalName.value = canonicalName
+      try {
+        void onSpeciesSelected?.(canonicalName)
+      } catch {
+        // Non-fatal: selection should still open even if recents persistence fails.
+      }
     },
 
     closeSpeciesDetail() {
@@ -379,14 +391,4 @@ export function createSpeciesCatalogWorkbench({
 
     isActiveSearchText: isActiveSpeciesSearchText,
   }
-}
-
-const liveSpeciesCatalogWorkbench = createSpeciesCatalogWorkbench()
-
-export const speciesCatalogWorkbench: SpeciesCatalogWorkbench = liveSpeciesCatalogWorkbench
-
-if (import.meta.hot) {
-  import.meta.hot.dispose(() => {
-    liveSpeciesCatalogWorkbench.dispose()
-  })
 }

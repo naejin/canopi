@@ -9,8 +9,6 @@ import { setCanvasRuntimeSurfaces } from '../canvas/session'
 import type { CanvasDocumentSurface, CanvasRuntimeHost } from '../canvas/runtime/runtime'
 import type { CanopiFile } from '../types/design'
 import { t } from '../i18n'
-import { CompassOverlay } from '../components/canvas/CompassOverlay'
-import { LayerPanel } from '../components/canvas/LayerPanel'
 import { ZoomControls } from '../components/canvas/ZoomControls'
 import panelStyles from '../components/panels/Panels.module.css'
 import { browserDesignSessionController, type BrowserDesignSessionController } from './browser-design-session'
@@ -105,16 +103,13 @@ export function WebCanvasWorkspace({
               data-testid="web-canvas-runtime-host"
             />
             <div ref={rulerOverlayRef} className={panelStyles.rulerOverlay} />
-            {hasDesign ? (
-              <CompassOverlay />
-            ) : (
+            {!hasDesign && (
               <div className={panelStyles.canvasEmptyState}>
                 <span className={panelStyles.emptyTitle}>{t('webShell.emptyDesign')}</span>
                 <span className={panelStyles.emptyHint}>{t('webShell.emptyDesignHint')}</span>
               </div>
             )}
           </div>
-          {hasDesign && <LayerPanel />}
         </div>
         {hasDesign && (
           <div className={panelStyles.canvasBar}>

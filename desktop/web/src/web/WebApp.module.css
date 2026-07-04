@@ -3,3 +3,34 @@
   background: var(--color-bg);
   color: var(--color-text);
 }
+
+.workspaceWithSidebar {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
+}
+
+.workspaceMain {
+  min-width: 0;
+  min-height: 0;
+}
+
+.speciesSidebar {
+  min-width: 0;
+  min-height: 0;
+  border-left: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+@media (max-width: 860px) {
+  .workspaceWithSidebar {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(280px, 42vh);
+  }
+
+  .speciesSidebar {
+    border-top: 1px solid var(--color-border);
+    border-left: 0;
+  }
+}

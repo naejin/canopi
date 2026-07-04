@@ -8,6 +8,12 @@ export default defineConfig(({ mode }) => {
     isWebEdition ? './src/platform/browser.ts' : './src/platform/desktop.ts',
     import.meta.url,
   ));
+  const speciesCatalogLiveAdapter = fileURLToPath(new URL(
+    isWebEdition
+      ? './src/app/plant-browser/live.browser.ts'
+      : './src/app/plant-browser/live.desktop.ts',
+    import.meta.url,
+  ));
 
   return {
     plugins: [preact()],
@@ -15,6 +21,7 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '#platform': platformAdapter,
+        '#species-catalog-live': speciesCatalogLiveAdapter,
       },
     },
     server: {

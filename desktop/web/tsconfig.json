@@ -20,6 +20,7 @@
     "types": ["vite/client"],
     "paths": {
       "#platform": ["./src/platform/desktop.ts"],
+      "#species-catalog-live": ["./src/app/plant-browser/live.desktop.ts"],
       "react": ["./node_modules/preact/compat/"],
       "react-dom": ["./node_modules/preact/compat/"]
     }

@@ -124,8 +124,12 @@ describe('frontend boundary sources', () => {
     expect(boundaryScriptSource).toContain('dist-web')
     expect(boundaryScriptSource).toContain('@tauri-apps')
     expect(boundaryScriptSource).toContain('__TAURI__')
+    expect(boundaryScriptSource).toContain('__TAURI_INTERNALS__')
     expect(boundaryScriptSource).toContain('app/shell/bootstrap')
     expect(boundaryScriptSource).toContain('ipc/design')
+    expect(boundaryScriptSource).toContain('MAX_CLOUDFLARE_PAGES_ASSET_BYTES')
+    expect(boundaryScriptSource).toContain('FORBIDDEN_DUCKDB_WASM_PATTERN')
+    expect(boundaryScriptSource).toContain('statSync')
   })
 
   it('keeps Web Edition shell sources free of desktop-only app chrome', () => {
@@ -467,6 +471,19 @@ describe('frontend boundary sources', () => {
       expect(source).not.toContain("setData('text/plain'")
       expect(source).not.toContain('setData("text/plain"')
     }
+  })
+
+  it('keeps the live Species Catalog Workbench behind platform adapters', () => {
+    const viteSource = readSource('../../vite.config.ts')
+    const indexSource = readSource('../app/plant-browser/index.ts')
+    const workbenchSource = readSource('../app/plant-browser/workbench.ts')
+
+    expect(viteSource).toContain("'#species-catalog-live'")
+    expect(viteSource).toContain('live.browser.ts')
+    expect(viteSource).toContain('live.desktop.ts')
+    expect(indexSource).toContain('#species-catalog-live')
+    expect(workbenchSource).not.toContain('../../ipc/species')
+    expect(workbenchSource).not.toContain('../../ipc/favorites')
   })
 
   it('keeps app commands behind the command graph seam', () => {
