@@ -21,7 +21,6 @@ describe('Web Edition shell projection', () => {
     ])
     expect(projection.panelBar.primary.map((command) => command.id)).toEqual([
       'nav.canvas',
-      'nav.location',
     ])
     expect(projection.panelBar.side.map((command) => command.id)).toEqual([
       'nav.plantDb',
@@ -42,6 +41,7 @@ describe('Web Edition shell projection', () => {
     expect(projectedIds).not.toContain('nav.timeline')
     expect(projectedIds).not.toContain('nav.budget')
     expect(projectedIds).not.toContain('nav.consortium')
+    expect(projectedIds).not.toContain('nav.location')
     expect(projectedIds).not.toContain('nav.siteAdaptation')
     expect(projectedIds).not.toContain('view.displayBy')
     expect(projectedIds).not.toContain('view.colorBy')

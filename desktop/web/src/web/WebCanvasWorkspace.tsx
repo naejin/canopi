@@ -1,4 +1,4 @@
-import { useSignalEffect } from '@preact/signals'
+import { untracked, useSignalEffect } from '@preact/signals'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import {
   designSessionStore,
@@ -8,12 +8,12 @@ import { locale } from '../app/settings/state'
 import { setCanvasRuntimeSurfaces } from '../canvas/session'
 import type { CanvasDocumentSurface, CanvasRuntimeHost } from '../canvas/runtime/runtime'
 import type { CanopiFile } from '../types/design'
-import { t } from '../i18n'
 import { ZoomControls } from '../components/canvas/ZoomControls'
 import panelStyles from '../components/panels/Panels.module.css'
 import { browserDesignSessionController, type BrowserDesignSessionController } from './browser-design-session'
 import { createBrowserCanvasRuntimeHost } from './browser-canvas-runtime'
 import { WebCanvasToolbar } from './WebCanvasToolbar'
+import { WebWelcomeScreen } from './WebWelcomeScreen'
 
 interface WebCanvasWorkspaceProps {
   readonly controller?: BrowserDesignSessionController
@@ -85,9 +85,11 @@ export function WebCanvasWorkspace({
   useSignalEffect(() => {
     const file = store.currentDesign.value
     if (!runtimeReady) return
-    const documents = runtimeRef.current?.host.surfaces.documents
-    if (!documents) return
-    syncCanvasDocument(documents, file)
+    untracked(() => {
+      const documents = runtimeRef.current?.host.surfaces.documents
+      if (!documents) return
+      syncCanvasDocument(documents, file)
+    })
   })
 
   return (
@@ -105,8 +107,7 @@ export function WebCanvasWorkspace({
             <div ref={rulerOverlayRef} className={panelStyles.rulerOverlay} />
             {!hasDesign && (
               <div className={panelStyles.canvasEmptyState}>
-                <span className={panelStyles.emptyTitle}>{t('webShell.emptyDesign')}</span>
-                <span className={panelStyles.emptyHint}>{t('webShell.emptyDesignHint')}</span>
+                <WebWelcomeScreen controller={controller} />
               </div>
             )}
           </div>

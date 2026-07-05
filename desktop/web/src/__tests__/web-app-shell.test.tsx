@@ -71,11 +71,11 @@ describe('Web Edition Browser App Shell', () => {
     expect(container.querySelector('[data-web-theme-control]')).not.toBeNull()
     expect(panelBarCommandIds(container)).toEqual([
       'nav.canvas',
-      'nav.location',
       'nav.plantDb',
       'nav.favorites',
     ])
     expect(panelBarCommandIds(container)).not.toContain('nav.templates')
+    expect(panelBarCommandIds(container)).not.toContain('nav.location')
     expect(container.textContent).not.toContain('Design Notebook')
     expect(container.textContent).not.toContain('Problem Report')
     expect(container.textContent).not.toContain('Save As')
@@ -205,14 +205,12 @@ describe('Web Edition Browser App Shell', () => {
     expect(container.querySelector('[data-testid="web-panel-bar"]')).not.toBeNull()
     expect(panelBarCommandIds(container)).toEqual([
       'nav.canvas',
-      'nav.location',
       'nav.templates',
       'nav.plantDb',
       'nav.favorites',
     ])
     expect(panelBarLabels(container)).toEqual([
       'Design Canvas',
-      'Design Location',
       'World Map',
       'Plant Database',
       'Favorites',
@@ -276,36 +274,15 @@ describe('Web Edition Browser App Shell', () => {
     expect(panelBarButton(container, 'nav.favorites').getAttribute('aria-pressed')).toBe('false')
   })
 
-  it('shows the no-Design state instead of editable Location controls when Location is opened without a Design', async () => {
-    const store = createMemoryDesignSessionStore()
-    const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
-    const controller = createBrowserDesignSessionController({
-      store,
-      appDataStore,
-      fileAdapter: testFileAdapter(),
-      now: () => new Date('2026-07-04T12:00:00.000Z'),
-      createDraftId: () => 'draft-no-design-location',
-    })
-
+  it('omits the Web Location feature from browser chrome', async () => {
     await act(async () => {
-      render(
-        <WebApp
-          controller={controller}
-          appDataStore={appDataStore}
-        />,
-        container,
-      )
+      render(<BrowserAppShell />, container)
     })
 
-    await act(async () => {
-      panelBarButton(container, 'nav.location').click()
-    })
-
-    expect(activePanel.value).toBe('location')
-    expect(container.querySelector('[data-testid="web-no-design-workspace"]')).not.toBeNull()
-    expect(container.textContent).toContain('No Design loaded')
+    expect(commandIds(container)).not.toContain('nav.location')
+    expect(panelBarCommandIds(container)).not.toContain('nav.location')
+    expect(container.textContent).not.toContain('Design Location')
     expect(container.querySelector('[data-testid="web-location-workspace"]')).toBeNull()
-    expect(container.querySelector('[data-testid="web-location-latitude"]')).toBeNull()
   })
 
   it('routes shell commands through command handlers and browser-safe app state', async () => {
@@ -328,7 +305,6 @@ describe('Web Edition Browser App Shell', () => {
     await act(async () => {
       clickCommand(container, 'nav.plantDb')
       clickCommand(container, 'nav.favorites')
-      clickCommand(container, 'nav.location')
       clickCommand(container, 'nav.canvas')
     })
 

@@ -182,6 +182,7 @@ describe('frontend boundary sources', () => {
       /app\/settings\/projection$/,
       /app\/location$/,
       /app\/location\/index$/,
+      /app\/location\/coordinate-workbench$/,
       /app\/location\/search-controller$/,
       /ipc\/geocoding$/,
       /commands\/registry$/,
@@ -195,6 +196,7 @@ describe('frontend boundary sources', () => {
       expect(source, `${sourcePath} should not mention problem reporting`).not.toContain('ProblemReport')
       expect(source, `${sourcePath} should not expose native save-as`).not.toContain('saveAs')
       expect(source, `${sourcePath} should not expose web geocoding`).not.toContain('geocode')
+      expect(source, `${sourcePath} should not mount Web Location`).not.toContain('WebLocation')
     }
   })
 

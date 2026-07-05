@@ -2,6 +2,10 @@ import { signal } from '@preact/signals'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  createDefaultLayerVisibility,
+  layerVisibility,
+} from '../app/canvas-settings/signals'
 import { createMemoryDesignSessionStore } from '../app/document-session/store'
 import { currentCanvasSession } from '../canvas/session'
 import type {
@@ -13,7 +17,7 @@ import type {
 } from '../canvas/runtime/runtime'
 import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import { createBrowserAppDataStore, type BrowserStorageAdapter } from '../web/browser-app-data'
-import { createBrowserDesignSessionController } from '../web/browser-design-session'
+import { createBrowserDesignSessionController, type BrowserDesignFileAdapter } from '../web/browser-design-session'
 import { WebCanvasWorkspace } from '../web/WebCanvasWorkspace'
 
 describe('Web Edition canvas workspace', () => {
@@ -23,6 +27,7 @@ describe('Web Edition canvas workspace', () => {
     render(null, container)
     container?.remove()
     currentCanvasSession.value = null
+    layerVisibility.value = createDefaultLayerVisibility()
   })
 
   it('mounts the shared canvas runtime surface without deferred desktop panels', async () => {
@@ -62,6 +67,89 @@ describe('Web Edition canvas workspace', () => {
     expect(container.textContent).not.toContain('Design Notebook')
     expect(container.textContent).not.toContain('Problem Report')
   })
+
+  it('shows a desktop-style browser-safe welcome screen without recent files when no Design is active', async () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    const store = createMemoryDesignSessionStore()
+    const fileAdapter: BrowserDesignFileAdapter = {
+      openCanopiFile: vi.fn(async () => null),
+      downloadCanopiFile: vi.fn(async () => undefined),
+    }
+    const controller = createBrowserDesignSessionController({
+      store,
+      fileAdapter,
+      appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
+      now: () => new Date('2026-07-04T12:00:00.000Z'),
+    })
+    const runtime = fakeRuntimeHost()
+
+    await act(async () => {
+      render(
+        <WebCanvasWorkspace
+          controller={controller}
+          store={store}
+          createRuntimeHost={() => runtime.host}
+        />,
+        container,
+      )
+    })
+
+    expect(runtime.documents.hideCanvasChrome).toHaveBeenCalled()
+    expect(container.querySelector('[data-testid="web-welcome-screen"]')).not.toBeNull()
+    expect(container.querySelector('img[alt="Canopi"]')).not.toBeNull()
+    expect(container.textContent).toContain('New Design')
+    expect(container.textContent).toContain('Open Design')
+    expect(container.textContent).not.toContain('Recent Files')
+    expect(container.textContent).not.toContain('No Design loaded')
+
+    await act(async () => {
+      buttonByText(container, 'Open Design').click()
+    })
+    expect(fileAdapter.openCanopiFile).toHaveBeenCalledOnce()
+
+    await act(async () => {
+      buttonByText(container, 'New Design').click()
+    })
+    expect(store.readCurrentDesign()?.name).toBe('Untitled')
+  })
+
+  it('does not reload the stale Design file from canvas-owned sync signals', async () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    const store = createMemoryDesignSessionStore()
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
+      now: () => new Date('2026-07-04T12:00:00.000Z'),
+    })
+    const runtime = fakeRuntimeHost({ writeLayerVisibilityOnceOnReplace: true })
+
+    await controller.newDesign()
+    await act(async () => {
+      render(
+        <WebCanvasWorkspace
+          controller={controller}
+          store={store}
+          createRuntimeHost={() => runtime.host}
+        />,
+        container,
+      )
+    })
+    vi.mocked(runtime.documents.replaceDocument).mockClear()
+
+    await act(async () => {
+      const current = store.readCurrentDesign()
+      if (!current) throw new Error('Expected current Design')
+      store.replaceCurrentDesignSnapshot({
+        ...current,
+        description: 'Updated outside the canvas',
+      })
+      await Promise.resolve()
+    })
+
+    expect(runtime.documents.replaceDocument).toHaveBeenCalledTimes(1)
+  })
 })
 
 interface MemoryStorage extends BrowserStorageAdapter {
@@ -83,11 +171,12 @@ function memoryStorage(): MemoryStorage {
   }
 }
 
-function fakeRuntimeHost(): {
+function fakeRuntimeHost(options: { readonly writeLayerVisibilityOnceOnReplace?: boolean } = {}): {
   host: CanvasRuntimeHost
   documents: CanvasDocumentSurface
 } {
   let loaded = false
+  let layerVisibilityWritesRemaining = options.writeLayerVisibilityOnceOnReplace ? 1 : 0
   const documents: CanvasDocumentSurface = {
     initializeViewport: vi.fn(),
     attachRulersTo: vi.fn(),
@@ -98,6 +187,10 @@ function fakeRuntimeHost(): {
       loaded = true
     }),
     replaceDocument: vi.fn(() => {
+      if (layerVisibilityWritesRemaining > 0) {
+        layerVisibilityWritesRemaining -= 1
+        layerVisibility.value = { ...layerVisibility.value }
+      }
       loaded = true
     }),
     hasLoadedDocument: vi.fn(() => loaded),
@@ -212,4 +305,11 @@ function fakeQuerySurface(): CanvasQuerySurface {
     getPlacedPlants: vi.fn(() => []),
     getLocalizedCommonNames: vi.fn(() => new Map()),
   }
+}
+
+function buttonByText(container: HTMLElement, text: string): HTMLButtonElement {
+  const button = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
+    .find((candidate) => candidate.textContent?.trim() === text)
+  if (!button) throw new Error(`Missing button ${text}`)
+  return button
 }

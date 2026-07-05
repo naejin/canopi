@@ -31,14 +31,7 @@ export interface LocationCoordinateWorkbench {
   readonly commitMapLocation: (center: { lat: number; lon: number } | null) => boolean
 }
 
-export interface LocationCoordinateWorkbenchOptions {
-  readonly altitudeMode?: 'editable' | 'omit'
-}
-
-export function useLocationCoordinateWorkbench(
-  options: LocationCoordinateWorkbenchOptions = {},
-): LocationCoordinateWorkbench {
-  const altitudeEditable = options.altitudeMode !== 'omit'
+export function useLocationCoordinateWorkbench(): LocationCoordinateWorkbench {
   const saved = useSavedLocationPresentation()
   const savedLocationRef = useRef(saved.location)
   savedLocationRef.current = saved.location
@@ -53,14 +46,14 @@ export function useLocationCoordinateWorkbench(
     const next = locationDraftFromSaved(currentDesign.value?.location ?? null)
     latDraft.value = next.lat
     lonDraft.value = next.lon
-    altitudeDraft.value = altitudeEditable ? next.altitude : ''
+    altitudeDraft.value = next.altitude
   })
 
   function readDraftFromSignals(): LocationDraft {
     return {
       lat: latDraft.value,
       lon: lonDraft.value,
-      altitude: altitudeEditable ? altitudeDraft.value : '',
+      altitude: altitudeDraft.value,
     }
   }
 
@@ -91,7 +84,7 @@ export function useLocationCoordinateWorkbench(
     const coords = pendingMapResult.value ?? center
     if (!coords) return false
     pendingMapResult.value = null
-    return setDesignLocation(buildLocationCommit(coords, altitudeEditable ? savedLocationRef.current : null))
+    return setDesignLocation(buildLocationCommit(coords, savedLocationRef.current))
   }
 
   return {
@@ -102,9 +95,7 @@ export function useLocationCoordinateWorkbench(
     pendingMapResult: pendingMapResult.value,
     setLatDraft: (value) => { latDraft.value = value },
     setLonDraft: (value) => { lonDraft.value = value },
-    setAltitudeDraft: (value) => {
-      if (altitudeEditable) altitudeDraft.value = value
-    },
+    setAltitudeDraft: (value) => { altitudeDraft.value = value },
     readDraft: readDraftFromSignals,
     saveDraft: saveDraftFromSignals,
     clearLocation: clearLocationFromWorkbench,

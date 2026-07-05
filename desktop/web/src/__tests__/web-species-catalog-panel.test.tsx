@@ -2,6 +2,7 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { locale } from '../app/settings/state'
+import { readPlantStampDragData } from '../canvas/plant-stamp-source'
 import type { SpeciesFilter, SpeciesListItem } from '../types/species'
 
 const mockWorkbench = vi.hoisted(() => ({
@@ -140,6 +141,49 @@ describe('Web Edition Species Catalog panel', () => {
     expect(mockWorkbench.loadFavorites).toHaveBeenCalledOnce()
     expect(container.textContent).toContain('Peach')
     expect(container.textContent).toContain('Lemon balm')
+  })
+
+  it('writes desktop Plant Stamp drag payloads from catalog rows', async () => {
+    await act(async () => {
+      render(<WebSpeciesCatalogPanel mode="catalog" />, container)
+    })
+
+    const row = requiredElement<HTMLElement>('[data-testid="web-species-row"]')
+    const dataTransfer = fakeDataTransfer()
+    expect(row.draggable).toBe(true)
+
+    await act(async () => {
+      dispatchDragStart(row, dataTransfer)
+    })
+
+    expect(dataTransfer.effectAllowed).toBe('copy')
+    expect(readPlantStampDragData(dataTransfer)).toEqual({
+      canonical_name: 'Malus domestica',
+      common_name: 'Apple',
+      stratum: null,
+      width_max_m: null,
+    })
+  })
+
+  it('writes desktop Plant Stamp drag payloads from favorites and recently viewed rows', async () => {
+    await act(async () => {
+      render(<WebSpeciesCatalogPanel mode="favorites" />, container)
+    })
+
+    const rows = Array.from(container.querySelectorAll<HTMLElement>('[data-testid="web-species-row"]'))
+    expect(rows).toHaveLength(2)
+
+    const favoriteTransfer = fakeDataTransfer()
+    await act(async () => {
+      dispatchDragStart(rows[0]!, favoriteTransfer)
+    })
+    expect(readPlantStampDragData(favoriteTransfer)?.canonical_name).toBe('Prunus persica')
+
+    const recentTransfer = fakeDataTransfer()
+    await act(async () => {
+      dispatchDragStart(rows[1]!, recentTransfer)
+    })
+    expect(readPlantStampDragData(recentTransfer)?.canonical_name).toBe('Melissa officinalis')
   })
 
   it('renders reduced Species detail with a lazy hero image and only v1 fields', async () => {
@@ -349,5 +393,33 @@ function makeSpeciesListItem(
     medicinal_rating: null,
     width_max_m: null,
     is_favorite: isFavorite,
+  }
+}
+
+function dispatchDragStart(element: HTMLElement, dataTransfer: FakeDataTransfer): void {
+  const event = new Event('dragstart', { bubbles: true, cancelable: true })
+  Object.defineProperty(event, 'dataTransfer', { value: dataTransfer })
+  element.dispatchEvent(event)
+}
+
+interface FakeDataTransfer {
+  readonly types: string[]
+  effectAllowed?: string
+  setData(type: string, value: string): void
+  getData(type: string): string
+}
+
+function fakeDataTransfer(): FakeDataTransfer {
+  const values = new Map<string, string>()
+  const types: string[] = []
+  return {
+    types,
+    setData(type: string, value: string) {
+      values.set(type, value)
+      if (!types.includes(type)) types.push(type)
+    },
+    getData(type: string) {
+      return values.get(type) ?? ''
+    },
   }
 }

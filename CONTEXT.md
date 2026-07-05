@@ -15,6 +15,7 @@ _Avoid_: Document session, file session, canvas session
 **Web Edition**:
 A browser-accessible Canopi experience that creates, opens, edits, and exports real Designs. A web edition may omit desktop-only or planning-heavy surfaces, but it is not a separate sketch format, static catalog, or website-only demo.
 _Avoid_: Web sketch, catalog site, demo app
+_Note_: Web Edition v1 omits the visible Location Workbench and Recent Design list while preserving real Design data such as saved Location values and browser-local autosave state behind the app surface.
 
 **Browser App Shell**:
 The Web Edition workspace chrome for starting, opening, resuming, downloading, and navigating Designs in a browser. A browser app shell presents web-appropriate commands around the shared Canopi app core rather than reproducing desktop window or native file-management chrome.
@@ -462,6 +463,7 @@ The **Scene Interaction Frame** owns cross-tool gesture lifetime, shared selecti
 
 **Location vs Location Workbench**:
 A **Location** is the saved site in a Design. The **Location Workbench** is the interaction surface that edits and presents that saved site.
+In Web Edition v1, Location may remain present in saved Design data, but no visible Location Workbench is mounted.
 
 **Planning Projection vs Design Authority**:
 A **Planning Projection** is derived runtime state for planning surfaces. It must not become the authority for Design planning entries, placed plants, or canvas scene state.

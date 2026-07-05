@@ -9,7 +9,6 @@ export type BrowserShellCommandId =
   | "file.downloadCanopi"
   | "settings.theme"
   | "nav.canvas"
-  | "nav.location"
   | "nav.templates"
   | "nav.plantDb"
   | "nav.favorites";
@@ -67,7 +66,6 @@ export function createBrowserShellProjection({
     panelBar: {
       primary: [
         panelCommand("nav.canvas", t("nav.canvas"), "canvas", currentPanel, currentSidePanel),
-        panelCommand("nav.location", t("canvas.location.title"), "location", currentPanel, currentSidePanel),
         ...(templatesEnabled
           ? [panelCommand("nav.templates", t("worldMap.title"), "templates", currentPanel, currentSidePanel)]
           : []),

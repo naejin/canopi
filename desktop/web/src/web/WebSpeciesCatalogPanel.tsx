@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks'
 import { locale } from '../app/settings/state'
 import { speciesCatalogWorkbench } from '../app/plant-browser'
+import { writePlantStampDragData } from '../canvas/plant-stamp-source'
 import type { SpeciesCatalogDetailView } from '../app/plant-browser/workbench'
 import { t } from '../i18n'
 import type { SpeciesFilter, SpeciesListItem } from '../types/species'
@@ -273,9 +274,37 @@ function SpeciesList({
 }
 
 function SpeciesRow({ item }: { readonly item: SpeciesListItem }) {
+  const handleDragStart = (event: DragEvent) => {
+    writePlantStampDragData(event.dataTransfer, item)
+    const preview = document.createElement('div')
+    preview.textContent = item.common_name || item.canonical_name
+    Object.assign(preview.style, {
+      position: 'absolute',
+      top: '-1000px',
+      left: '-1000px',
+      padding: '3px 8px',
+      background: 'var(--color-accent, #A06B1F)',
+      color: '#fff',
+      fontSize: '11px',
+      fontFamily: 'Inter, sans-serif',
+      borderRadius: '3px',
+      whiteSpace: 'nowrap',
+      pointerEvents: 'none',
+    })
+    document.body.appendChild(preview)
+    event.dataTransfer?.setDragImage?.(preview, -12, -12)
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => preview.remove())
+    } else {
+      preview.remove()
+    }
+  }
+
   return (
     <div
       className={styles.row}
+      draggable={true}
+      onDragStart={handleDragStart}
       onClick={() => { speciesCatalogWorkbench.selectSpecies(item.canonical_name) }}
       onKeyDown={(event) => {
         if (event.key !== 'Enter' && event.key !== ' ') return

@@ -27,14 +27,6 @@ const panelIcons: Record<string, () => preact.JSX.Element> = {
       <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
     </svg>
   ),
-  "nav.location": () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={PANEL_ICON_STROKE_WIDTH} strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="8" />
-      <path d="M12 4a11 11 0 0 1 0 16" />
-      <path d="M12 4a11 11 0 0 0 0 16" />
-      <path d="M4 12h16" />
-    </svg>
-  ),
   "nav.templates": () => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={PANEL_ICON_STROKE_WIDTH} strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 6.5h18" />
@@ -340,9 +332,6 @@ export function BrowserAppShell({
         break;
       case "nav.canvas":
         navigateTo("canvas");
-        break;
-      case "nav.location":
-        navigateTo("location");
         break;
       case "nav.templates":
         navigateTo("templates");
