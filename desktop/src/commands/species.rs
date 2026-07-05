@@ -97,7 +97,7 @@ pub fn get_common_names(
 }
 
 /// Batch-fetch detail records for multiple species by canonical name.
-/// Used for thematic coloring (plant display modes) — one IPC call for all placed plants.
+/// Used for canvas species metadata hydration — one IPC call for all placed plants.
 #[tauri::command]
 pub fn get_species_batch(
     plant_db: tauri::State<'_, crate::db::PlantDb>,

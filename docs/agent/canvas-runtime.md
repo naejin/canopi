@@ -32,7 +32,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 
 ## Scene Ownership
 
-- `SceneStore` owns canvas scene state: plants, zones, annotations, groups, Design Object locks, layers, plant species colors, plant species symbols, selection, viewport, hover, and presentation modes.
+- `SceneStore` owns canvas scene state: plants, zones, annotations, groups, Design Object locks, layers, plant species colors, plant species symbols, selection, viewport, hover, and plant presentation state.
 - Non-canvas document sections are not owned by `SceneStore`: consortiums, timeline, budget, `budget_currency`, location, description, and document extra.
 - Commands, tools, save/load, and document replacement mutate scene state, not renderer objects.
 - Canvas-owned document fields serialize from the live scene, not stale document input copies.

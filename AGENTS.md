@@ -42,6 +42,7 @@ These instructions are for AI agents working in this repository. Optimize for lo
 - [Database](docs/agent/database.md): plant DB schema, query builder, FTS, translations, canopi-data export.
 - [Build and release](docs/agent/build-release.md): build commands, release workflow, platform/native rules.
 - [Problem reporting](docs/agent/problem-reporting.md): local Problem Reports, Diagnostic Bundle privacy boundary, reporting UI seams.
+- [Web Edition website integration](docs/agent/web-edition-website-integration.md): handoff for publishing the built Web Edition artifact from the website repository.
 
 ## Agent Skills
 
@@ -185,10 +186,10 @@ cargo build --release
 
 - Left: canvas toolbar with drawing tools, plant color and plant symbol actions, and grid/snap/ruler toggles.
 - Center: canvas workspace.
-- Right: `PanelBar` plus sliding plant search and favorites panels.
+- Right: `PanelBar` with Canvas/Location primary navigation and Design Notebook, Species Catalog, and Favorites side panels.
 - Bottom: bottom panel with Timeline, Budget, and Consortium tabs.
 - Title bar: logo, file name, lang/theme toggle, menu controls, and window controls.
-- Legacy activity/status bar components may exist in the tree; check `App.tsx` before assuming a component is mounted.
+- Legacy activity/status bar components may exist in the tree; check `desktop/web/src/app.tsx` before assuming a component is mounted.
 
 ### Design Direction
 
