@@ -380,10 +380,11 @@ describe('settings projection', () => {
   it('keeps production settings-backed callers on the projection mutation seam', () => {
     const sources = [
       '../app/canvas-settings/controller.ts',
+      '../app/canvas-layer-presentation/presentation.ts',
       '../app/canvas-runtime/app-adapter.ts',
+      '../app/favorites/controller.ts',
       '../app/shell/controller.ts',
       '../components/shared/TitleBar.tsx',
-      '../components/shared/StatusBar.tsx',
       '../commands/graph/catalog.ts',
       '../utils/theme.ts',
     ].map(readSource)
