@@ -66,13 +66,8 @@ describe('Web Edition Browser App Shell', () => {
     expect(container.textContent).toContain('Open .canopi')
     expect(container.textContent).toContain('Download .canopi')
     expect(container.textContent).toContain('Drafts')
-    await act(async () => {
-      menuTrigger(container, 'settings').click()
-    })
-    expect(openMenuCommandIds(container)).toEqual([
-      'settings.language',
-      'settings.theme',
-    ])
+    expect(container.querySelector('[data-web-locale-control]')?.textContent).toContain('EN')
+    expect(container.querySelector('[data-web-theme-control]')).not.toBeNull()
     expect(panelBarCommandIds(container)).toEqual([
       'nav.canvas',
       'nav.location',
@@ -86,6 +81,19 @@ describe('Web Edition Browser App Shell', () => {
     expect(container.textContent).not.toContain('Exit')
   })
 
+  it('matches desktop title-bar chrome for logo and settings controls', async () => {
+    await act(async () => {
+      render(<WebApp workspace={<div data-testid="stub-workspace" />} />, container)
+    })
+
+    expect(container.querySelector('img[alt="Canopi"]')).not.toBeNull()
+    expect(Array.from(container.querySelectorAll('[data-web-menu-id]')).map((element) => element.textContent)).toEqual([
+      'File',
+    ])
+    expect(container.querySelector('[data-web-locale-control]')?.textContent).toContain('EN')
+    expect(container.querySelector<HTMLButtonElement>('[data-web-theme-control]')).not.toBeNull()
+  })
+
   it('omits desktop-only and deferred surfaces from rendered Web Edition chrome', async () => {
     await act(async () => {
       render(<BrowserAppShell templatesEnabled />, container)
@@ -94,9 +102,6 @@ describe('Web Edition Browser App Shell', () => {
       menuTrigger(container, 'file').click()
     })
     const fileMenuText = container.textContent ?? ''
-    await act(async () => {
-      menuTrigger(container, 'settings').click()
-    })
     const renderedChrome = `${fileMenuText} ${container.textContent ?? ''}`
     const forbiddenLabels = [
       'Save',
@@ -129,7 +134,8 @@ describe('Web Edition Browser App Shell', () => {
 
     expect(container.querySelector('[role="menubar"]')).not.toBeNull()
     expect(menuTrigger(container, 'file').textContent).toBe('File')
-    expect(menuTrigger(container, 'settings').textContent).toBe('Settings')
+    expect(container.querySelector('[data-web-locale-control]')?.textContent).toContain('EN')
+    expect(container.querySelector('[data-web-theme-control]')).not.toBeNull()
 
     await act(async () => {
       menuTrigger(container, 'file').click()
@@ -140,15 +146,6 @@ describe('Web Edition Browser App Shell', () => {
       'file.openCanopi',
       'file.downloadCanopi',
       'drafts.open',
-    ])
-
-    await act(async () => {
-      menuTrigger(container, 'settings').click()
-    })
-
-    expect(openMenuCommandIds(container)).toEqual([
-      'settings.language',
-      'settings.theme',
     ])
   })
 
@@ -252,11 +249,14 @@ describe('Web Edition Browser App Shell', () => {
       )
     })
 
+    expect(container.querySelector('[data-web-workspace-with-sidebar]')?.getAttribute('data-web-sidebar-open')).toBeNull()
+
     await act(async () => {
       panelBarButton(container, 'nav.plantDb').click()
     })
 
     expect(container.querySelector('[data-web-workspace-with-sidebar]')).not.toBeNull()
+    expect(container.querySelector('[data-web-workspace-with-sidebar]')?.getAttribute('data-web-sidebar-open')).toBe('true')
     expect(container.querySelector('[data-web-side-panel="plant-db"]')).not.toBeNull()
     expect(panelBarButton(container, 'nav.plantDb').getAttribute('aria-pressed')).toBe('true')
 
@@ -273,6 +273,7 @@ describe('Web Edition Browser App Shell', () => {
     })
 
     expect(container.querySelector('[data-web-side-panel]')).toBeNull()
+    expect(container.querySelector('[data-web-workspace-with-sidebar]')?.getAttribute('data-web-sidebar-open')).toBeNull()
     expect(panelBarButton(container, 'nav.favorites').getAttribute('aria-pressed')).toBe('false')
   })
 
@@ -293,8 +294,8 @@ describe('Web Edition Browser App Shell', () => {
     await clickShellCommand(container, 'file.openCanopi')
     await clickShellCommand(container, 'file.downloadCanopi')
     await clickShellCommand(container, 'drafts.open')
-    await clickShellCommand(container, 'settings.theme')
-    await clickShellCommand(container, 'settings.language')
+    await clickThemeControl(container)
+    await selectLocale(container, 'fr')
     await act(async () => {
       clickCommand(container, 'nav.plantDb')
       clickCommand(container, 'nav.favorites')
@@ -362,8 +363,8 @@ describe('Web Edition Browser App Shell', () => {
     await act(async () => {
       render(<WebApp appDataStore={appDataStore} workspace={<div data-testid="stub-workspace" />} />, container)
     })
-    await clickShellCommand(container, 'settings.theme')
-    await clickShellCommand(container, 'settings.language')
+    await clickThemeControl(container)
+    await selectLocale(container, 'fr')
 
     render(null, container)
     theme.value = 'light'
@@ -485,8 +486,27 @@ function ensureCommandMenuOpen(container: HTMLElement, id: string): void {
 
 function menuIdForCommand(id: string): string | null {
   if (id.startsWith('file.') || id === 'drafts.open') return 'file'
-  if (id.startsWith('settings.')) return 'settings'
   return null
+}
+
+async function clickThemeControl(container: HTMLElement): Promise<void> {
+  await act(async () => {
+    commandButton(container, 'settings.theme').click()
+  })
+}
+
+async function selectLocale(container: HTMLElement, code: string): Promise<void> {
+  const picker = container.querySelector<HTMLElement>('[data-web-locale-control]')
+  if (!picker) throw new Error('Missing locale control')
+  await act(async () => {
+    picker.querySelector<HTMLButtonElement>('button')?.click()
+  })
+  const option = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="option"]'))
+    .find((button) => button.textContent === code.toUpperCase())
+  if (!option) throw new Error(`Missing locale option ${code}`)
+  await act(async () => {
+    option.click()
+  })
 }
 
 function commandButton(container: HTMLElement, id: string): HTMLButtonElement {

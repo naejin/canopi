@@ -103,8 +103,13 @@ function WebWorkspace({
     );
   }
   const currentSidePanel = sidePanel.value;
+  const hasSidePanel = currentSidePanel !== null;
   return (
-    <div className={styles.workspaceWithSidebar} data-web-workspace-with-sidebar>
+    <div
+      className={`${styles.workspaceWithSidebar} ${hasSidePanel ? styles.workspaceWithSidebarOpen : ""}`}
+      data-web-workspace-with-sidebar
+      data-web-sidebar-open={hasSidePanel ? "true" : undefined}
+    >
       <div className={styles.workspaceMain}>
         <WebCanvasWorkspace controller={controller} />
       </div>

@@ -133,7 +133,12 @@ describe('frontend boundary sources', () => {
     expect(resolveWebEditionDevHtmlUrl('/app/web.html')).toBeNull()
     expect(viteSource).toContain('resolveWebEditionDevHtmlUrl')
     expect(cssRuleBody(webAppCss, '.root')).toContain('height: 100%')
+    expect(cssRuleBody(webAppCss, '.workspaceWithSidebar')).toContain('grid-template-columns: minmax(0, 1fr)')
+    expect(cssRuleBody(webAppCss, '.workspaceWithSidebarOpen')).toContain('minmax(320px, 380px)')
+    expect(cssRuleBody(webAppCss, '.workspaceMain')).toContain('display: flex')
     expect(cssRuleBody(browserShellCss, '.shell')).toContain('height: 100%')
+    expect(cssRuleBody(browserShellCss, '.workspaceShell')).toContain('overflow: hidden')
+    expect(cssRuleBody(browserShellCss, '.workspace')).toContain('display: flex')
   })
 
   it('runs a Web Edition build artifact boundary check after browser bundling', () => {

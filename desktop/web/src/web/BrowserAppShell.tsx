@@ -5,6 +5,7 @@ import { locale, theme } from "../app/settings/state";
 import type { Locale } from "../types/settings";
 import { t } from "../i18n";
 import { ButtonTooltip } from "../components/shared/ButtonTooltip";
+import { Dropdown, type DropdownItem } from "../components/shared/Dropdown";
 import type { BrowserDraftSummary } from "./browser-app-data";
 import {
   createBrowserShellProjection,
@@ -14,6 +15,10 @@ import {
 import styles from "./BrowserAppShell.module.css";
 
 const LOCALES: readonly Locale[] = ["en", "fr", "es", "pt", "it", "zh", "de", "ja", "ko", "nl", "ru"];
+const LOCALE_ITEMS: DropdownItem<Locale>[] = LOCALES.map((code) => ({
+  value: code,
+  label: code.toUpperCase(),
+}));
 const PANEL_ICON_STROKE_WIDTH = 1.5;
 
 const panelIcons: Record<string, () => preact.JSX.Element> = {
@@ -96,8 +101,6 @@ export function BrowserAppShell({
   const currentPanel = activePanel.value;
   const currentSidePanel = sidePanel.value;
   const projection = createBrowserShellProjection({
-    currentLocale,
-    currentTheme,
     currentPanel,
     currentSidePanel,
     downloadCanopiEnabled,
@@ -121,7 +124,12 @@ export function BrowserAppShell({
     <div className={styles.shell} data-testid="browser-app-shell">
       <header className={styles.header}>
         <div className={styles.leftChrome}>
-          <div className={styles.brand}>Canopi</div>
+          <img
+            src={new URL("../assets/canopi-logo.svg", import.meta.url).href}
+            className={styles.logo}
+            alt="Canopi"
+            draggable={false}
+          />
           <nav
             ref={menuBarRef}
             className={styles.menuBar}
@@ -191,7 +199,40 @@ export function BrowserAppShell({
             />
           ) : null}
         </div>
-        <div className={styles.headerSpacer} aria-hidden="true" />
+        <div className={styles.settings}>
+          <div data-web-locale-control>
+            <Dropdown
+              trigger={currentLocale.toUpperCase()}
+              items={LOCALE_ITEMS}
+              value={currentLocale}
+              onChange={changeLanguage}
+              menuDirection="down"
+              ariaLabel={t("status.language")}
+              className={styles.localePicker}
+              triggerClassName={styles.localeBtn}
+              menuClassName={styles.localeMenu}
+              optionClassName={styles.localeItem}
+              preserveOverlays
+            />
+          </div>
+          <button
+            className={styles.themeBtn}
+            type="button"
+            data-web-theme-control
+            data-web-command-id="settings.theme"
+            onClick={() => runBrowserShellCommand("settings.theme")}
+            aria-label={t("status.theme")}
+            title={t(currentTheme === "dark" ? "theme.light" : "theme.dark")}
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              {currentTheme === "dark" ? (
+                <circle cx="8" cy="8" r="4" stroke="currentColor" strokeWidth="1.5" />
+              ) : (
+                <path d="M13 8.5a5.5 5.5 0 0 1-7.5-7.5 6 6 0 1 0 7.5 7.5Z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+              )}
+            </svg>
+          </button>
+        </div>
       </header>
       {draftsOpen ? (
         <section
@@ -277,10 +318,6 @@ export function BrowserAppShell({
         handlers.openDrafts?.();
         setDraftsOpen((open) => !open);
         break;
-      case "settings.language":
-        cycleLanguage();
-        onSettingsChange?.({ locale: locale.value, theme: theme.value });
-        break;
       case "settings.theme":
         toggleTheme();
         onSettingsChange?.({ locale: locale.value, theme: theme.value });
@@ -302,11 +339,11 @@ export function BrowserAppShell({
         break;
     }
   }
-}
 
-function cycleLanguage(): void {
-  const currentIndex = LOCALES.indexOf(locale.value);
-  locale.value = LOCALES[(currentIndex + 1) % LOCALES.length] ?? "en";
+  function changeLanguage(nextLocale: Locale): void {
+    locale.value = nextLocale;
+    onSettingsChange?.({ locale: locale.value, theme: theme.value });
+  }
 }
 
 function toggleTheme(): void {

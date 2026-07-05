@@ -4,8 +4,6 @@ import { createBrowserShellProjection } from '../web/browser-shell-projection'
 describe('Web Edition shell projection', () => {
   it('groups only browser-safe commands for menu and right-rail chrome', () => {
     const projection = createBrowserShellProjection({
-      currentLocale: 'en',
-      currentTheme: 'light',
       currentPanel: 'canvas',
       currentSidePanel: null,
       downloadCanopiEnabled: false,
@@ -19,10 +17,6 @@ describe('Web Edition shell projection', () => {
       {
         id: 'file',
         commandIds: ['file.new', 'file.openCanopi', 'file.downloadCanopi', 'drafts.open'],
-      },
-      {
-        id: 'settings',
-        commandIds: ['settings.language', 'settings.theme'],
       },
     ])
     expect(projection.panelBar.primary.map((command) => command.id)).toEqual([

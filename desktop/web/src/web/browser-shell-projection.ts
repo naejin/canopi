@@ -1,15 +1,13 @@
 import type { Panel, SidePanel } from "../app/shell/state";
 import { t } from "../i18n";
-import type { Locale, Theme } from "../types/settings";
 
-export type BrowserShellMenuId = "file" | "settings";
+export type BrowserShellMenuId = "file";
 
 export type BrowserShellCommandId =
   | "file.new"
   | "file.openCanopi"
   | "file.downloadCanopi"
   | "drafts.open"
-  | "settings.language"
   | "settings.theme"
   | "nav.canvas"
   | "nav.location"
@@ -18,8 +16,6 @@ export type BrowserShellCommandId =
   | "nav.favorites";
 
 export interface BrowserShellProjectionInput {
-  readonly currentLocale: Locale;
-  readonly currentTheme: Theme;
   readonly currentPanel: Panel;
   readonly currentSidePanel: SidePanel | null;
   readonly downloadCanopiEnabled: boolean;
@@ -50,8 +46,6 @@ export interface BrowserShellChromeProjection {
 }
 
 export function createBrowserShellProjection({
-  currentLocale,
-  currentTheme,
   currentPanel,
   currentSidePanel,
   downloadCanopiEnabled,
@@ -69,14 +63,6 @@ export function createBrowserShellProjection({
             disabled: !downloadCanopiEnabled,
           }),
           command("drafts.open", t("webShell.drafts")),
-        ],
-      },
-      {
-        id: "settings",
-        label: t("webShell.settings"),
-        items: [
-          command("settings.language", currentLocale.toUpperCase()),
-          command("settings.theme", t(currentTheme === "dark" ? "theme.light" : "theme.dark")),
         ],
       },
     ],
