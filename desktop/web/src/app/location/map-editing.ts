@@ -100,6 +100,22 @@ export function useLocationMapEditingHost(
       },
       captureViewState: (context) => readLocationMapViewState(context.map),
       onCreate: (context) => {
+        const onMapRuntimeError = (event?: unknown) => {
+          if (!context.isCurrent()) return
+          if (isLocationMapVisiblyReady(context.map)) return
+
+          mapInitFailed.value = true
+          try {
+            surface.clearMap()
+          } catch (clearError) {
+            console.error('[LocationMapEditing] Failed to clear unavailable MapLibre map', clearError)
+          } finally {
+            container.replaceChildren()
+          }
+          console.error('[LocationMapEditing] MapLibre map failed before it became ready', event)
+        }
+
+        context.lifetime.on('error', onMapRuntimeError)
         context.lifetime.on('move', onMove)
         context.lifetime.on('moveend', onMove)
         context.lifetime.on('dragstart', onDragStart)
@@ -192,5 +208,32 @@ export function useLocationMapEditingHost(
     previewSearchResult,
     commitMapLocation,
     clearLocation: workbench.clearLocation,
+  }
+}
+
+function isLocationMapVisiblyReady(map: LocationMapLibreMap): boolean {
+  let inspectedReadiness = false
+
+  const readLoaded = readMapReadiness(map.loaded?.bind(map))
+  if (readLoaded !== null) {
+    inspectedReadiness = true
+    if (readLoaded) return true
+  }
+
+  const readStyleLoaded = readMapReadiness(map.isStyleLoaded?.bind(map))
+  if (readStyleLoaded !== null) {
+    inspectedReadiness = true
+    if (readStyleLoaded) return true
+  }
+
+  return !inspectedReadiness
+}
+
+function readMapReadiness(read: (() => boolean) | undefined): boolean | null {
+  if (!read) return null
+  try {
+    return read()
+  } catch {
+    return false
   }
 }

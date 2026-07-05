@@ -42,6 +42,57 @@ function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
   }
 }
 
+class FakeLocationTabMap {
+  readonly addControl = vi.fn()
+  readonly remove = vi.fn()
+  readonly resize = vi.fn()
+  readonly handlers = new Map<string, Set<(event?: unknown) => void>>()
+  readonly loaded = vi.fn(() => false)
+  readonly isStyleLoaded = vi.fn(() => false)
+
+  constructor(private readonly container: HTMLElement) {
+    Object.defineProperty(container, 'clientWidth', { value: 240, configurable: true })
+    Object.defineProperty(container, 'clientHeight', { value: 180, configurable: true })
+  }
+
+  on(event: string, handler: (event?: unknown) => void): void {
+    const handlers = this.handlers.get(event) ?? new Set()
+    handlers.add(handler)
+    this.handlers.set(event, handlers)
+  }
+
+  off(event: string, handler: (event?: unknown) => void): void {
+    this.handlers.get(event)?.delete(handler)
+  }
+
+  fire(event: string, payload?: unknown): void {
+    for (const handler of this.handlers.get(event) ?? []) handler(payload)
+  }
+
+  getCenter() {
+    return { lng: 2.3522, lat: 48.8566 }
+  }
+
+  getZoom() {
+    return 10
+  }
+
+  getContainer() {
+    return this.container
+  }
+
+  project() {
+    return { x: 120, y: 80 }
+  }
+
+  easeTo() {}
+}
+
+function requireFakeLocationTabMap(map: FakeLocationTabMap | null): FakeLocationTabMap {
+  if (!map) throw new Error('Fake Location tab map was not created')
+  return map
+}
+
 describe('LocationTab map failures', () => {
   let container: HTMLDivElement
   let consoleError: ReturnType<typeof vi.spyOn>
@@ -82,5 +133,57 @@ describe('LocationTab map failures', () => {
     })
     expect(container.querySelector('input')?.getAttribute('placeholder')).toBe('Search for a location...')
     expect(maplibreMock.navigationControlConstructor).not.toHaveBeenCalled()
+  })
+
+  it('surfaces MapLibre runtime errors before the style is ready', async () => {
+    let map: FakeLocationTabMap | null = null
+    maplibreMock.mapConstructor.mockImplementation(function (options: { container: HTMLElement }) {
+      map = new FakeLocationTabMap(options.container)
+      return map
+    })
+
+    await act(async () => {
+      render(<LocationTab />, container)
+    })
+
+    await vi.waitFor(() => {
+      expect(maplibreMock.mapConstructor).toHaveBeenCalledTimes(1)
+    })
+
+    const currentMap = requireFakeLocationTabMap(map)
+    await act(async () => {
+      currentMap.fire('error', { error: new Error('style worker failed') })
+    })
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('[role="alert"]')?.textContent).toContain('Map unavailable')
+    })
+    expect(container.querySelector('input')?.getAttribute('placeholder')).toBe('Search for a location...')
+    expect(currentMap.remove).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps a ready map mounted when MapLibre reports a nonfatal runtime error', async () => {
+    let map: FakeLocationTabMap | null = null
+    maplibreMock.mapConstructor.mockImplementation(function (options: { container: HTMLElement }) {
+      map = new FakeLocationTabMap(options.container)
+      map.loaded.mockReturnValue(true)
+      return map
+    })
+
+    await act(async () => {
+      render(<LocationTab />, container)
+    })
+
+    await vi.waitFor(() => {
+      expect(maplibreMock.mapConstructor).toHaveBeenCalledTimes(1)
+    })
+
+    const currentMap = requireFakeLocationTabMap(map)
+    await act(async () => {
+      currentMap.fire('error', { error: new Error('tile failed') })
+    })
+
+    expect(container.querySelector('[role="alert"]')).toBeNull()
+    expect(currentMap.remove).not.toHaveBeenCalled()
   })
 })
