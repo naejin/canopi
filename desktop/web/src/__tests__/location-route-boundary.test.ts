@@ -15,17 +15,13 @@ describe('location route boundary', () => {
     const appSource = readSource('../app.tsx')
     const panelSource = readSource('../components/panels/LocationPanel.tsx')
     const tabSource = readSource('../components/canvas/LocationTab.tsx')
-    const inputSource = readSource('../components/canvas/LocationInput.tsx')
 
     expect(appSource).toContain('import("./components/panels/LocationPanel")')
     expect(panelSource).toContain("LocationTab")
     expect(tabSource).not.toContain("ipc/geocoding")
-    expect(inputSource).not.toContain("ipc/geocoding")
-    for (const source of [tabSource, inputSource]) {
-      expect(source).not.toContain("document.addEventListener('pointerup'")
-      expect(source).not.toContain('search.closeDropdown')
-      expect(source).not.toContain('search.dispose')
-    }
+    expect(tabSource).not.toContain("document.addEventListener('pointerup'")
+    expect(tabSource).not.toContain('search.closeDropdown')
+    expect(tabSource).not.toContain('search.dispose')
     expect(tabSource).toContain('useLocationMapEditingHost')
     expect(tabSource).not.toContain("maplibre-gl")
     expect(tabSource).not.toContain('createMapLibreBasemapStyle')
@@ -56,7 +52,6 @@ describe('location route boundary', () => {
     const mapSurfaceControllerSource = readSource('../components/canvas/maplibre-surface-controller.ts')
     const mapSurfaceSnapshotSource = readSource('../app/canvas-map-surface/snapshot.ts')
     const tabSource = readSource('../components/canvas/LocationTab.tsx')
-    const inputSource = readSource('../components/canvas/LocationInput.tsx')
 
     for (const source of [
       canvasPanelSource,
@@ -65,7 +60,6 @@ describe('location route boundary', () => {
       compassOverlaySource,
       mapSurfaceSnapshotSource,
       tabSource,
-      inputSource,
     ]) {
       expect(source).toMatch(/app\/location|\.\.\/location/)
       expect(source).not.toContain('document-session/store')
@@ -84,5 +78,15 @@ describe('location route boundary', () => {
     expect(mapSurfaceControllerSource).not.toContain('setDesignLocation')
     expect(mapSurfaceControllerSource).not.toContain('clearDesignLocation')
     expect(mapSurfaceControllerSource).not.toContain('createLocationSearchController')
+  })
+
+  it('does not keep the obsolete standalone Location input surface', () => {
+    const appSource = readSource('../app.tsx')
+    const panelSource = readSource('../components/panels/LocationPanel.tsx')
+    const tabSource = readSource('../components/canvas/LocationTab.tsx')
+
+    expect(appSource).not.toContain('LocationInput')
+    expect(panelSource).not.toContain('LocationInput')
+    expect(tabSource).not.toContain('LocationInput')
   })
 })

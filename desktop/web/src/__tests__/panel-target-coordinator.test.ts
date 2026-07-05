@@ -3,12 +3,10 @@ import {
   clearHoveredPanelTargets,
   clearPanelOriginTargets,
   clearSelectedPanelTargetsForOrigin,
-  setHoveredPanelTargets,
-  setSelectedPanelTargets,
-} from "../app/panel-targets/coordinator";
-import {
   readPanelOriginTargets,
   setCanvasHoveredTargets,
+  setHoveredPanelTargets,
+  setSelectedPanelTargets,
 } from "../app/panel-targets/presentation";
 import {
   hoveredCanvasTargets,
@@ -18,7 +16,7 @@ import {
 } from "../app/panel-targets/state";
 import { speciesTarget } from "../target";
 
-describe("panel target coordinator", () => {
+describe("Target Presentation", () => {
   beforeEach(() => {
     hoveredPanelTargets.value = [];
     hoveredCanvasTargets.value = [];
