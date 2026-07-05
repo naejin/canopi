@@ -9,8 +9,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let types = TypeCollection::default()
         .register::<common_types::adaptation::CompatibilityResult>()
         .register::<common_types::adaptation::ReplacementSuggestion>()
-        .register::<common_types::content::DbStatus>()
-        .register::<common_types::content::Topic>()
         .register::<common_types::design::Annotation>()
         .register::<common_types::design::AutosaveEntry>()
         .register::<common_types::design::BudgetItem>()

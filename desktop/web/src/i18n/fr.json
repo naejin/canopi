@@ -3,7 +3,6 @@
     "plantDb": "Base de plantes",
     "canvas": "Zone de dessin",
     "worldMap": "Carte du monde",
-    "learning": "Apprentissage",
     "savedDesigns": "Designs sauvegardés",
     "designNotebook": "Carnet de designs",
     "favorites": "Favoris"
@@ -498,22 +497,6 @@
     "preview": "Aperçu",
     "openTemplate": "Ouvrir comme nouveau design"
   },
-  "learning": {
-    "emptyTitle": "Apprentissage",
-    "emptyText": "Apprenez les techniques de la préparation du sol à la syntropie",
-    "title": "Connaissances",
-    "search": "Rechercher des articles...",
-    "topics": "Sujets",
-    "noResults": "Aucun article trouvé",
-    "readMore": "Lire la suite",
-    "relatedPlants": "Plantes associées",
-    "articles": "Articles",
-    "composting": "Compostage",
-    "waterManagement": "Gestion de l'eau",
-    "companionPlanting": "Plantes compagnes",
-    "soilHealth": "Santé du sol",
-    "permaculture": "Principes de permaculture"
-  },
   "saved": {
     "title": "Designs sauvegardés",
     "emptyText": "Vos designs apparaîtront ici",
@@ -541,7 +524,6 @@
     "plantDb": "Aller à la base de plantes",
     "canvas": "Aller à la zone de dessin",
     "worldMap": "Aller à la carte du monde",
-    "learning": "Aller à l'apprentissage",
     "toggleTheme": "Changer le thème",
     "commandPalette": "Palette de commandes",
     "searchPlaceholder": "Entrez une commande...",

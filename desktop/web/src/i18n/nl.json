@@ -3,7 +3,6 @@
     "plantDb": "Plantendatabase",
     "canvas": "Ontwerpcanvas",
     "worldMap": "Wereldkaart",
-    "learning": "Leren",
     "savedDesigns": "Opgeslagen ontwerpen",
     "designNotebook": "Ontwerpnotitieboek",
     "favorites": "Favorieten"
@@ -498,22 +497,6 @@
     "preview": "Voorbeeld",
     "openTemplate": "Openen als nieuw ontwerp"
   },
-  "learning": {
-    "emptyTitle": "Leren",
-    "emptyText": "Leer technieken van bodemvoorbereiding tot syntropie",
-    "title": "Kennis",
-    "search": "Artikelen zoeken...",
-    "topics": "Onderwerpen",
-    "noResults": "Geen artikelen gevonden",
-    "readMore": "Lees meer",
-    "relatedPlants": "Gerelateerde planten",
-    "articles": "Artikelen",
-    "composting": "Composteren",
-    "waterManagement": "Waterbeheer",
-    "companionPlanting": "Mengteelt",
-    "soilHealth": "Bodemgezondheid",
-    "permaculture": "Permacultuurprincipes"
-  },
   "saved": {
     "title": "Opgeslagen ontwerpen",
     "emptyText": "Je ontwerpen verschijnen hier",
@@ -541,7 +524,6 @@
     "plantDb": "Ga naar Plantendatabase",
     "canvas": "Ga naar Ontwerpcanvas",
     "worldMap": "Ga naar Wereldkaart",
-    "learning": "Ga naar Leren",
     "toggleTheme": "Thema wisselen",
     "commandPalette": "Opdrachtenpalet",
     "searchPlaceholder": "Typ een opdracht...",

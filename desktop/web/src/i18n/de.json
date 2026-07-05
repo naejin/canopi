@@ -3,7 +3,6 @@
     "plantDb": "Pflanzendatenbank",
     "canvas": "Entwurfsfläche",
     "worldMap": "Weltkarte",
-    "learning": "Lernen",
     "savedDesigns": "Gespeicherte Entwürfe",
     "designNotebook": "Design-Notizbuch",
     "favorites": "Favoriten"
@@ -498,22 +497,6 @@
     "preview": "Vorschau",
     "openTemplate": "Als neues Design öffnen"
   },
-  "learning": {
-    "emptyTitle": "Lernen",
-    "emptyText": "Techniken von der Bodenvorbereitung bis zur Syntropie erlernen",
-    "title": "Wissen",
-    "search": "Artikel suchen...",
-    "topics": "Themen",
-    "noResults": "Keine Artikel gefunden",
-    "readMore": "Mehr lesen",
-    "relatedPlants": "Verwandte Pflanzen",
-    "articles": "Artikel",
-    "composting": "Kompostierung",
-    "waterManagement": "Wassermanagement",
-    "companionPlanting": "Mischkultur",
-    "soilHealth": "Bodengesundheit",
-    "permaculture": "Permakultur-Prinzipien"
-  },
   "saved": {
     "title": "Gespeicherte Entwürfe",
     "emptyText": "Ihre Entwürfe werden hier angezeigt",
@@ -541,7 +524,6 @@
     "plantDb": "Zur Pflanzendatenbank",
     "canvas": "Zur Entwurfsfläche",
     "worldMap": "Zur Weltkarte",
-    "learning": "Zum Lernen",
     "toggleTheme": "Erscheinungsbild wechseln",
     "commandPalette": "Befehlspalette",
     "searchPlaceholder": "Befehl eingeben...",

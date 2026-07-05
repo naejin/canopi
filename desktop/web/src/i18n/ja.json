@@ -3,7 +3,6 @@
     "plantDb": "植物データベース",
     "canvas": "デザインキャンバス",
     "worldMap": "世界地図",
-    "learning": "学習",
     "savedDesigns": "保存済みデザイン",
     "designNotebook": "デザインノート",
     "favorites": "お気に入り"
@@ -498,22 +497,6 @@
     "preview": "プレビュー",
     "openTemplate": "新しいデザインとして開く"
   },
-  "learning": {
-    "emptyTitle": "学習",
-    "emptyText": "土壌準備からシントロピー農法までの技術を学ぶ",
-    "title": "ナレッジ",
-    "search": "記事を検索...",
-    "topics": "トピック",
-    "noResults": "記事が見つかりません",
-    "readMore": "続きを読む",
-    "relatedPlants": "関連する植物",
-    "articles": "記事",
-    "composting": "堆肥化",
-    "waterManagement": "水管理",
-    "companionPlanting": "コンパニオンプランティング",
-    "soilHealth": "土壌の健康",
-    "permaculture": "パーマカルチャーの原則"
-  },
   "saved": {
     "title": "保存済みデザイン",
     "emptyText": "あなたのデザインがここに表示されます",
@@ -541,7 +524,6 @@
     "plantDb": "植物データベースへ移動",
     "canvas": "デザインキャンバスへ移動",
     "worldMap": "世界地図へ移動",
-    "learning": "学習へ移動",
     "toggleTheme": "テーマを切替",
     "commandPalette": "コマンドパレット",
     "searchPlaceholder": "コマンドを入力...",

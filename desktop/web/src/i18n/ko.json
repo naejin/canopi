@@ -3,7 +3,6 @@
     "plantDb": "식물 데이터베이스",
     "canvas": "설계 캔버스",
     "worldMap": "세계 지도",
-    "learning": "학습",
     "savedDesigns": "저장된 설계",
     "designNotebook": "디자인 노트북",
     "favorites": "즐겨찾기"
@@ -498,22 +497,6 @@
     "preview": "미리보기",
     "openTemplate": "새 설계로 열기"
   },
-  "learning": {
-    "emptyTitle": "학습",
-    "emptyText": "토양 준비부터 신트로피까지 기술을 배우세요",
-    "title": "지식",
-    "search": "기사 검색...",
-    "topics": "주제",
-    "noResults": "기사를 찾을 수 없습니다",
-    "readMore": "더 읽기",
-    "relatedPlants": "관련 식물",
-    "articles": "기사",
-    "composting": "퇴비",
-    "waterManagement": "수자원 관리",
-    "companionPlanting": "동반 식재",
-    "soilHealth": "토양 건강",
-    "permaculture": "퍼머컬처 원칙"
-  },
   "saved": {
     "title": "저장된 설계",
     "emptyText": "설계가 여기에 표시됩니다",
@@ -541,7 +524,6 @@
     "plantDb": "식물 데이터베이스로 이동",
     "canvas": "설계 캔버스로 이동",
     "worldMap": "세계 지도로 이동",
-    "learning": "학습으로 이동",
     "toggleTheme": "테마 전환",
     "commandPalette": "명령 팔레트",
     "searchPlaceholder": "명령을 입력하세요...",

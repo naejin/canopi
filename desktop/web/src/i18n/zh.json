@@ -3,7 +3,6 @@
     "plantDb": "植物数据库",
     "canvas": "设计画布",
     "worldMap": "世界地图",
-    "learning": "学习",
     "savedDesigns": "已保存的设计",
     "designNotebook": "设计笔记本",
     "favorites": "收藏夹"
@@ -498,22 +497,6 @@
     "preview": "预览",
     "openTemplate": "作为新设计打开"
   },
-  "learning": {
-    "emptyTitle": "学习",
-    "emptyText": "学习从土壤准备到共生农业的技术",
-    "title": "知识库",
-    "search": "搜索文章...",
-    "topics": "主题",
-    "noResults": "未找到文章",
-    "readMore": "阅读更多",
-    "relatedPlants": "相关植物",
-    "articles": "文章",
-    "composting": "堆肥",
-    "waterManagement": "水资源管理",
-    "companionPlanting": "伴生种植",
-    "soilHealth": "土壤健康",
-    "permaculture": "朴门永续原则"
-  },
   "saved": {
     "title": "已保存的设计",
     "emptyText": "您的设计将显示在这里",
@@ -541,7 +524,6 @@
     "plantDb": "前往植物数据库",
     "canvas": "前往设计画布",
     "worldMap": "前往世界地图",
-    "learning": "前往学习",
     "toggleTheme": "切换主题",
     "commandPalette": "命令面板",
     "searchPlaceholder": "输入命令...",

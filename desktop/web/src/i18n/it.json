@@ -3,7 +3,6 @@
     "plantDb": "Database piante",
     "canvas": "Tela di progettazione",
     "worldMap": "Mappa mondiale",
-    "learning": "Apprendimento",
     "savedDesigns": "Design salvati",
     "designNotebook": "Quaderno dei design",
     "favorites": "Preferiti"
@@ -498,22 +497,6 @@
     "preview": "Anteprima",
     "openTemplate": "Apri come nuovo design"
   },
-  "learning": {
-    "emptyTitle": "Apprendimento",
-    "emptyText": "Impara le tecniche dalla preparazione del suolo alla sintropia",
-    "title": "Conoscenza",
-    "search": "Cerca articoli...",
-    "topics": "Argomenti",
-    "noResults": "Nessun articolo trovato",
-    "readMore": "Leggi di più",
-    "relatedPlants": "Piante correlate",
-    "articles": "Articoli",
-    "composting": "Compostaggio",
-    "waterManagement": "Gestione dell'acqua",
-    "companionPlanting": "Consociazione",
-    "soilHealth": "Salute del suolo",
-    "permaculture": "Principi di permacultura"
-  },
   "saved": {
     "title": "Design salvati",
     "emptyText": "I tuoi design appariranno qui",
@@ -541,7 +524,6 @@
     "plantDb": "Vai al database piante",
     "canvas": "Vai alla tela",
     "worldMap": "Vai alla mappa mondiale",
-    "learning": "Vai all'apprendimento",
     "toggleTheme": "Cambia tema",
     "commandPalette": "Tavolozza comandi",
     "searchPlaceholder": "Digita un comando...",

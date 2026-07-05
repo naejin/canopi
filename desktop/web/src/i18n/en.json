@@ -3,7 +3,6 @@
     "plantDb": "Plant Database",
     "canvas": "Design Canvas",
     "worldMap": "World Map",
-    "learning": "Learning",
     "savedDesigns": "Saved Designs",
     "designNotebook": "Design Notebook",
     "favorites": "Favorites"
@@ -498,22 +497,6 @@
     "preview": "Preview",
     "openTemplate": "Open as new design"
   },
-  "learning": {
-    "emptyTitle": "Learning",
-    "emptyText": "Learn techniques from soil prep to syntropy",
-    "title": "Knowledge",
-    "search": "Search articles...",
-    "topics": "Topics",
-    "noResults": "No articles found",
-    "readMore": "Read more",
-    "relatedPlants": "Related plants",
-    "articles": "Articles",
-    "composting": "Composting",
-    "waterManagement": "Water management",
-    "companionPlanting": "Companion planting",
-    "soilHealth": "Soil health",
-    "permaculture": "Permaculture principles"
-  },
   "saved": {
     "title": "Saved Designs",
     "emptyText": "Your designs will appear here",
@@ -541,7 +524,6 @@
     "plantDb": "Go to Plant Database",
     "canvas": "Go to Design Canvas",
     "worldMap": "Go to World Map",
-    "learning": "Go to Learning",
     "toggleTheme": "Toggle Theme",
     "reportProblem": "Report a Problem",
     "commandPalette": "Command Palette",

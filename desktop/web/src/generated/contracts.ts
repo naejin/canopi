@@ -73,14 +73,6 @@ export type Consortium = {
 	end_phase: number,
 };
 
-export type DbStatus = {
-	core_db_available: boolean,
-	full_db_available: boolean,
-	species_count: string,
-	core_db_size_bytes: string,
-	full_db_size_bytes: string | null,
-};
-
 export type DesignNotebookEntry = {
 	path: string,
 	name: string,
@@ -555,13 +547,6 @@ export type TimelineAction = {
 	depends_on: string[] | null,
 	completed: boolean,
 	order: number,
-};
-
-export type Topic = {
-	slug: string,
-	title: string,
-	description: string | null,
-	category: string,
 };
 
 export type Zone = {

@@ -99,7 +99,6 @@ pub fn run() {
             commands::design::autosave_design,
             commands::design::list_autosaves,
             commands::design::recover_autosave,
-            commands::content::list_learning_topics,
             commands::export::export_file,
             commands::export::export_binary,
             commands::export::read_file_bytes,
