@@ -1,6 +1,7 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import preact from "@preact/preset-vite";
 import { fileURLToPath, URL } from "node:url";
+import { resolveWebEditionDevHtmlUrl } from "./src/web/dev-entry";
 
 export default defineConfig(({ mode }) => {
   const isWebEdition = mode === 'web';
@@ -28,7 +29,10 @@ export default defineConfig(({ mode }) => {
   ));
 
   return {
-    plugins: [preact()],
+    plugins: [
+      preact(),
+      webEditionDevEntryPlugin(isWebEdition),
+    ],
     base: isWebEdition ? "/app/" : undefined,
     resolve: {
       alias: {
@@ -63,3 +67,19 @@ export default defineConfig(({ mode }) => {
     },
   };
 });
+
+function webEditionDevEntryPlugin(enabled: boolean): Plugin {
+  return {
+    name: "canopi-web-edition-dev-entry",
+    apply: "serve",
+    configureServer(server) {
+      if (!enabled) return;
+
+      server.middlewares.use((request, _response, next) => {
+        const webEntryUrl = resolveWebEditionDevHtmlUrl(request.url);
+        if (webEntryUrl) request.url = webEntryUrl;
+        next();
+      });
+    },
+  };
+}

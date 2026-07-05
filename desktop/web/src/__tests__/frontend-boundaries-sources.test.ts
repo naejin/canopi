@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import * as fs from 'node:fs'
+import { resolveWebEditionDevHtmlUrl } from '../web/dev-entry'
 
 const { existsSync, readFileSync } = fs
 const fsWithDirectoryRead = fs as unknown as {
@@ -90,6 +91,11 @@ function expectNoImportsMatching(
   }
 }
 
+function cssRuleBody(source: string, selector: string): string {
+  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return source.match(new RegExp(`${escapedSelector}\\s*{(?<body>[^}]*)}`))?.groups?.body ?? ''
+}
+
 describe('frontend boundary sources', () => {
   it('exposes a separate Web Edition build entry behind compile-time platform adapters', () => {
     const packageSource = readSource('../../package.json')
@@ -114,6 +120,20 @@ describe('frontend boundary sources', () => {
     expect(webEntrySource).not.toContain('./app/shell/close-guard')
     expect(webEntrySource).not.toContain('@tauri-apps')
     expect(webEntrySource).not.toContain('./app')
+  })
+
+  it('serves the Web Edition entry from the advertised dev base route', () => {
+    const viteSource = readSource('../../vite.config.ts')
+    const webAppCss = readSource('../web/WebApp.module.css')
+    const browserShellCss = readSource('../web/BrowserAppShell.module.css')
+
+    expect(resolveWebEditionDevHtmlUrl('/app/')).toBe('/app/web.html')
+    expect(resolveWebEditionDevHtmlUrl('/app')).toBe('/app/web.html')
+    expect(resolveWebEditionDevHtmlUrl('/app/index.html?from=test')).toBe('/app/web.html?from=test')
+    expect(resolveWebEditionDevHtmlUrl('/app/web.html')).toBeNull()
+    expect(viteSource).toContain('resolveWebEditionDevHtmlUrl')
+    expect(cssRuleBody(webAppCss, '.root')).toContain('height: 100%')
+    expect(cssRuleBody(browserShellCss, '.shell')).toContain('height: 100%')
   })
 
   it('runs a Web Edition build artifact boundary check after browser bundling', () => {
