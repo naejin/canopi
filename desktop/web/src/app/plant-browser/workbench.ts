@@ -441,7 +441,9 @@ export function createSpeciesCatalogWorkbench({
       selectedCanonicalName.value = canonicalName
       void loadSpeciesDetail(canonicalName)
       try {
-        void onSpeciesSelected?.(canonicalName)
+        void Promise.resolve(onSpeciesSelected?.(canonicalName)).catch(() => {
+          // Non-fatal: selection should still open even if recents persistence fails.
+        })
       } catch {
         // Non-fatal: selection should still open even if recents persistence fails.
       }

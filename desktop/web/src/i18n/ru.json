@@ -10,10 +10,12 @@
   },
   "webShell": {
     "commands": "Команды веб-версии",
+    "panels": "Панели веб-версии",
     "workspace": "Рабочая область веб-версии",
     "openCanopi": "Открыть .canopi",
     "downloadCanopi": "Скачать .canopi",
     "drafts": "Черновики",
+    "settings": "Настройки",
     "browserDrafts": "Черновики браузера",
     "browserDraftsHint": "Хранятся в этом браузере. Скачайте .canopi, чтобы сохранить файл.",
     "noDrafts": "Черновиков браузера пока нет.",

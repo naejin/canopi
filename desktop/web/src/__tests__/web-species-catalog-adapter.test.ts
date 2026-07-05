@@ -199,6 +199,36 @@ describe('Web Edition reduced Species Catalog adapter', () => {
       error: null,
     })
   })
+
+  it('keeps Species detail selection usable when recently viewed persistence rejects', async () => {
+    const detail = {
+      canonical_name: 'Malus domestica',
+      common_name: 'Apple',
+      common_names: ['Apple'],
+      climate_zones: ['Temperate'],
+      habit: 'Tree',
+      growth_form: 'Tree',
+      life_cycles: ['Perennial'],
+      image: null,
+    }
+    const workbench = createSpeciesCatalogWorkbench({
+      search: async () => ({ items: [], next_cursor: null, total_estimate: 0 }),
+      getSpeciesDetail: async () => detail,
+      onSpeciesSelected: async () => {
+        throw new Error('storage quota exceeded')
+      },
+    })
+
+    workbench.selectSpecies('Malus domestica')
+    await waitForMicrotasks()
+
+    expect(workbench.detail.value).toEqual({
+      canonicalName: 'Malus domestica',
+      detail,
+      loading: false,
+      error: null,
+    })
+  })
 })
 
 function searchRequest(overrides: Partial<SpeciesSearchRequest> = {}): SpeciesSearchRequest {

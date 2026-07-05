@@ -109,6 +109,7 @@ describe('frontend boundary sources', () => {
     expect(webHtmlSource).toContain('/src/main.web.tsx')
     expect(desktopEntrySource).toContain('#platform')
     expect(webEntrySource).toContain('#platform')
+    expect(webEntrySource).toContain('maplibre-gl/dist/maplibre-gl.css')
     expect(webEntrySource).not.toContain('./app/shell/bootstrap')
     expect(webEntrySource).not.toContain('./app/shell/close-guard')
     expect(webEntrySource).not.toContain('@tauri-apps')

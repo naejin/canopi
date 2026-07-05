@@ -10,10 +10,12 @@
   },
   "webShell": {
     "commands": "Webeditie-opdrachten",
+    "panels": "Webeditie-panelen",
     "workspace": "Webeditie-werkruimte",
     "openCanopi": ".canopi openen",
     "downloadCanopi": ".canopi downloaden",
     "drafts": "Concepten",
+    "settings": "Instellingen",
     "browserDrafts": "Browserconcepten",
     "browserDraftsHint": "Opgeslagen in deze browser. Download .canopi voor een bestandsback-up.",
     "noDrafts": "Nog geen browserconcepten.",

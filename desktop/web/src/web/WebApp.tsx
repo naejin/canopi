@@ -44,6 +44,8 @@ export function WebApp({
     () => controller.listDrafts(),
     [controller, draftRevision],
   );
+  const hasDesign = controller.hasCurrentDesign();
+  const designIdentity = controller.readDesignIdentity();
   const handlers = useMemo<BrowserShellCommandHandlers>(() => ({
     newDesign: () => {
       void controller.newDesign().then(refreshDrafts, logWebAppCommandError);
@@ -74,6 +76,8 @@ export function WebApp({
       <BrowserAppShell
         handlers={handlers}
         drafts={drafts}
+        designIdentity={designIdentity}
+        downloadCanopiEnabled={hasDesign}
         templatesEnabled={templatesEnabled}
         onSettingsChange={(settings) => persistBrowserSettings(appDataStore, settings)}
       >
@@ -100,17 +104,17 @@ function WebWorkspace({
   }
   const currentSidePanel = sidePanel.value;
   return (
-    <div className={styles.workspaceWithSidebar}>
+    <div className={styles.workspaceWithSidebar} data-web-workspace-with-sidebar>
       <div className={styles.workspaceMain}>
         <WebCanvasWorkspace controller={controller} />
       </div>
       {currentSidePanel === "plant-db" && (
-        <aside className={styles.speciesSidebar}>
+        <aside className={styles.speciesSidebar} data-web-side-panel="plant-db">
           <WebSpeciesCatalogPanel mode="catalog" />
         </aside>
       )}
       {currentSidePanel === "favorites" && (
-        <aside className={styles.speciesSidebar}>
+        <aside className={styles.speciesSidebar} data-web-side-panel="favorites">
           <WebSpeciesCatalogPanel mode="favorites" />
         </aside>
       )}

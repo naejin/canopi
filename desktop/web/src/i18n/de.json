@@ -10,10 +10,12 @@
   },
   "webShell": {
     "commands": "Befehle der Web Edition",
+    "panels": "Panels der Web Edition",
     "workspace": "Arbeitsbereich der Web Edition",
     "openCanopi": ".canopi öffnen",
     "downloadCanopi": ".canopi herunterladen",
     "drafts": "Entwürfe",
+    "settings": "Einstellungen",
     "browserDrafts": "Browser-Entwürfe",
     "browserDraftsHint": "In diesem Browser gespeichert. Lade .canopi als Dateisicherung herunter.",
     "noDrafts": "Noch keine Browser-Entwürfe.",

@@ -1,13 +1,57 @@
-import { useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
-import { activePanel, navigateTo, sidePanel, type Panel, type SidePanel } from "../app/shell/state";
+import { activePanel, navigateTo, sidePanel } from "../app/shell/state";
 import { locale, theme } from "../app/settings/state";
 import type { Locale } from "../types/settings";
 import { t } from "../i18n";
+import { ButtonTooltip } from "../components/shared/ButtonTooltip";
 import type { BrowserDraftSummary } from "./browser-app-data";
+import {
+  createBrowserShellProjection,
+  type BrowserShellCommandId,
+  type BrowserShellProjectedCommand,
+} from "./browser-shell-projection";
 import styles from "./BrowserAppShell.module.css";
 
 const LOCALES: readonly Locale[] = ["en", "fr", "es", "pt", "it", "zh", "de", "ja", "ko", "nl", "ru"];
+const PANEL_ICON_STROKE_WIDTH = 1.5;
+
+const panelIcons: Record<string, () => preact.JSX.Element> = {
+  "nav.canvas": () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={PANEL_ICON_STROKE_WIDTH} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
+    </svg>
+  ),
+  "nav.location": () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={PANEL_ICON_STROKE_WIDTH} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 4a11 11 0 0 1 0 16" />
+      <path d="M12 4a11 11 0 0 0 0 16" />
+      <path d="M4 12h16" />
+    </svg>
+  ),
+  "nav.templates": () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={PANEL_ICON_STROKE_WIDTH} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 6.5h18" />
+      <path d="M5 6.5v12" />
+      <path d="M19 6.5v12" />
+      <path d="M7 18.5h10" />
+      <path d="M8.5 10.5h7" />
+      <path d="M8.5 13.5h4" />
+    </svg>
+  ),
+  "nav.plantDb": () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={PANEL_ICON_STROKE_WIDTH} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11 20A7 7 0 0 1 9.8 6.9C15.5 4.9 17 3.5 19 2c1 2 2 4.5 2 8 0 5.5-4.78 10-10 10Z" />
+      <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12" />
+    </svg>
+  ),
+  "nav.favorites": () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={PANEL_ICON_STROKE_WIDTH} strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+    </svg>
+  ),
+};
 
 export interface BrowserShellCommandHandlers {
   readonly newDesign?: () => void | Promise<void>;
@@ -22,24 +66,26 @@ export interface BrowserShellSettings {
   readonly theme: "light" | "dark";
 }
 
+export interface BrowserShellDesignIdentity {
+  readonly name: string;
+  readonly dirty: boolean;
+}
+
 interface BrowserAppShellProps {
   readonly handlers?: BrowserShellCommandHandlers;
   readonly drafts?: readonly BrowserDraftSummary[];
+  readonly designIdentity?: BrowserShellDesignIdentity | null;
+  readonly downloadCanopiEnabled?: boolean;
   readonly templatesEnabled?: boolean;
   readonly onSettingsChange?: (settings: BrowserShellSettings) => void;
   readonly children?: ComponentChildren;
 }
 
-interface ShellCommand {
-  readonly id: string;
-  readonly label: string;
-  readonly active?: boolean;
-  readonly run: () => void | Promise<void | boolean>;
-}
-
 export function BrowserAppShell({
   handlers = {},
   drafts = [],
+  designIdentity = null,
+  downloadCanopiEnabled = true,
   templatesEnabled = false,
   onSettingsChange,
   children,
@@ -49,62 +95,103 @@ export function BrowserAppShell({
   const currentTheme = theme.value;
   const currentPanel = activePanel.value;
   const currentSidePanel = sidePanel.value;
-
-  const commands: readonly ShellCommand[] = [
-    { id: "file.new", label: t("canvas.file.new"), run: () => handlers.newDesign?.() },
-    { id: "file.openCanopi", label: t("webShell.openCanopi"), run: () => handlers.openCanopi?.() },
-    { id: "file.downloadCanopi", label: t("webShell.downloadCanopi"), run: () => handlers.downloadCanopi?.() },
-    {
-      id: "drafts.open",
-      label: t("webShell.drafts"),
-      run: () => {
-        handlers.openDrafts?.();
-        setDraftsOpen((open) => !open);
-      },
-    },
-    {
-      id: "settings.language",
-      label: currentLocale.toUpperCase(),
-      run: () => {
-        cycleLanguage();
-        onSettingsChange?.({ locale: locale.value, theme: theme.value });
-      },
-    },
-    {
-      id: "settings.theme",
-      label: t(currentTheme === "dark" ? "theme.light" : "theme.dark"),
-      run: () => {
-        toggleTheme();
-        onSettingsChange?.({ locale: locale.value, theme: theme.value });
-      },
-    },
-    panelCommand("nav.canvas", t("nav.canvas"), "canvas", currentPanel, currentSidePanel),
-    panelCommand("nav.location", t("canvas.location.title"), "location", currentPanel, currentSidePanel),
-    ...(templatesEnabled
-      ? [panelCommand("nav.templates", t("worldMap.title"), "templates", currentPanel, currentSidePanel)]
-      : []),
-    panelCommand("nav.plantDb", t("nav.plantDb"), "plant-db", currentPanel, currentSidePanel),
-    panelCommand("nav.favorites", t("nav.favorites"), "favorites", currentPanel, currentSidePanel),
-  ];
+  const projection = createBrowserShellProjection({
+    currentLocale,
+    currentTheme,
+    currentPanel,
+    currentSidePanel,
+    downloadCanopiEnabled,
+    templatesEnabled,
+  });
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const menuBarRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!openMenuId) return;
+    const handleOutsidePointerUp = (event: Event) => {
+      if (menuBarRef.current?.contains(event.target as Node)) return;
+      setOpenMenuId(null);
+    };
+    document.addEventListener("pointerup", handleOutsidePointerUp);
+    return () => {
+      document.removeEventListener("pointerup", handleOutsidePointerUp);
+    };
+  }, [openMenuId]);
 
   return (
     <div className={styles.shell} data-testid="browser-app-shell">
       <header className={styles.header}>
-        <div className={styles.brand}>Canopi</div>
-        <nav className={styles.commands} aria-label={t("webShell.commands")}>
-          {commands.map((command) => (
-            <button
-              key={command.id}
-              type="button"
-              className={`${styles.command} ${command.active ? styles.commandActive : ""}`}
-              data-web-command-id={command.id}
-              aria-pressed={command.active === undefined ? undefined : command.active}
-              onClick={() => void command.run()}
-            >
-              {command.label}
-            </button>
-          ))}
-        </nav>
+        <div className={styles.leftChrome}>
+          <div className={styles.brand}>Canopi</div>
+          <nav
+            ref={menuBarRef}
+            className={styles.menuBar}
+            role="menubar"
+            aria-label={t("webShell.commands")}
+            onKeyDown={(event) => {
+              if (event.key !== "Escape") return;
+              event.preventDefault();
+              event.stopPropagation();
+              setOpenMenuId(null);
+            }}
+          >
+            {projection.menus.map((menu) => {
+              const isOpen = openMenuId === menu.id;
+              return (
+                <div key={menu.id} className={styles.menuGroup}>
+                  <button
+                    type="button"
+                    className={`${styles.menuTrigger} ${isOpen ? styles.menuTriggerOpen : ""}`}
+                    data-web-menu-id={menu.id}
+                    aria-expanded={isOpen}
+                    aria-haspopup="menu"
+                    onClick={() => setOpenMenuId((current) => current === menu.id ? null : menu.id)}
+                  >
+                    {menu.label}
+                  </button>
+                  {isOpen ? (
+                    <div
+                      className={styles.menu}
+                      role="menu"
+                      aria-label={menu.label}
+                      data-web-menu-open="true"
+                    >
+                      {menu.items.map((command) => (
+                        <button
+                          key={command.id}
+                          type="button"
+                          className={`${styles.menuItem} ${command.disabled ? styles.menuItemDisabled : ""}`}
+                          role="menuitem"
+                          data-web-command-id={command.id}
+                          aria-disabled={command.disabled || undefined}
+                          disabled={command.disabled}
+                          onClick={() => {
+                            setOpenMenuId(null);
+                            runBrowserShellCommand(command.id);
+                          }}
+                        >
+                          {command.label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </nav>
+        </div>
+        <div className={styles.designIdentity}>
+          <span className={styles.designTitle} data-web-design-title>
+            {designIdentity ? visibleDesignName(designIdentity.name) : "Canopi"}
+          </span>
+          {designIdentity?.dirty ? (
+            <span
+              className={styles.dirtyDot}
+              data-web-design-dirty
+              aria-label={t("titleBar.unsavedChanges")}
+            />
+          ) : null}
+        </div>
+        <div className={styles.headerSpacer} aria-hidden="true" />
       </header>
       {draftsOpen ? (
         <section
@@ -141,28 +228,80 @@ export function BrowserAppShell({
           )}
         </section>
       ) : null}
-      <main className={styles.workspace} aria-label={t("webShell.workspace")}>
-        {children}
-      </main>
+      <div className={styles.workspaceShell}>
+        <main className={styles.workspace} aria-label={t("webShell.workspace")}>
+          {children}
+        </main>
+        <nav className={styles.panelBar} data-testid="web-panel-bar" aria-label={t("webShell.panels")}>
+          {projection.panelBar.primary.map(renderPanelButton)}
+          <div className={styles.panelDivider} aria-hidden="true" />
+          {projection.panelBar.side.map(renderPanelButton)}
+        </nav>
+      </div>
     </div>
   );
-}
 
-function panelCommand(
-  id: string,
-  label: string,
-  panel: Panel,
-  currentPanel: Panel,
-  currentSidePanel: SidePanel | null,
-): ShellCommand {
-  return {
-    id,
-    label,
-    active: panel === "plant-db" || panel === "favorites"
-      ? currentSidePanel === panel
-      : currentPanel === panel,
-    run: () => navigateTo(panel),
-  };
+  function renderPanelButton(command: BrowserShellProjectedCommand) {
+    const Icon = panelIcons[command.id];
+    return (
+      <button
+        key={command.id}
+        type="button"
+        className={styles.panelButton}
+        data-web-command-id={command.id}
+        data-web-panelbar-command-id={command.id}
+        aria-label={command.label}
+        aria-pressed={command.active}
+        aria-disabled={command.disabled || undefined}
+        disabled={command.disabled}
+        onClick={() => runBrowserShellCommand(command.id)}
+      >
+        {Icon ? <Icon /> : command.label}
+        <ButtonTooltip label={command.label} side="left" />
+      </button>
+    );
+  }
+
+  function runBrowserShellCommand(id: BrowserShellCommandId): void {
+    switch (id) {
+      case "file.new":
+        void handlers.newDesign?.();
+        break;
+      case "file.openCanopi":
+        void handlers.openCanopi?.();
+        break;
+      case "file.downloadCanopi":
+        void handlers.downloadCanopi?.();
+        break;
+      case "drafts.open":
+        handlers.openDrafts?.();
+        setDraftsOpen((open) => !open);
+        break;
+      case "settings.language":
+        cycleLanguage();
+        onSettingsChange?.({ locale: locale.value, theme: theme.value });
+        break;
+      case "settings.theme":
+        toggleTheme();
+        onSettingsChange?.({ locale: locale.value, theme: theme.value });
+        break;
+      case "nav.canvas":
+        navigateTo("canvas");
+        break;
+      case "nav.location":
+        navigateTo("location");
+        break;
+      case "nav.templates":
+        navigateTo("templates");
+        break;
+      case "nav.plantDb":
+        navigateTo("plant-db");
+        break;
+      case "nav.favorites":
+        navigateTo("favorites");
+        break;
+    }
+  }
 }
 
 function cycleLanguage(): void {
@@ -182,4 +321,8 @@ function formatDraftDate(value: string, currentLocale: Locale): string {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
+}
+
+function visibleDesignName(name: string): string {
+  return name === "Untitled" ? t("titleBar.untitledDesign") : name;
 }

@@ -10,10 +10,12 @@
   },
   "webShell": {
     "commands": "Comandos de la edición web",
+    "panels": "Paneles de la edición web",
     "workspace": "Espacio de trabajo web",
     "openCanopi": "Abrir .canopi",
     "downloadCanopi": "Descargar .canopi",
     "drafts": "Borradores",
+    "settings": "Configuración",
     "browserDrafts": "Borradores del navegador",
     "browserDraftsHint": "Guardados en este navegador. Descarga .canopi para tener un archivo de respaldo.",
     "noDrafts": "Aún no hay borradores del navegador.",

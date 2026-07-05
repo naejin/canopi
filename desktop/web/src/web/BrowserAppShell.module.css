@@ -23,41 +23,132 @@
   white-space: nowrap;
 }
 
-.commands {
+.leftChrome {
   min-width: 0;
   display: flex;
-  flex: 1;
+  flex: 1 1 0;
   align-items: center;
-  gap: var(--space-1);
-  overflow-x: auto;
+  gap: var(--space-2);
 }
 
-.command {
-  min-height: var(--control-size-md);
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
+.menuBar {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 100%;
+  flex-shrink: 0;
+}
+
+.menuGroup {
+  position: relative;
+}
+
+.menuTrigger {
+  display: flex;
+  align-items: center;
+  height: var(--control-size-md);
+  border: none;
+  border-radius: var(--radius-sm);
   padding: 0 var(--space-2);
   background: transparent;
-  color: var(--color-text);
+  color: var(--color-text-muted);
   font: inherit;
-  font-size: var(--text-sm);
-  font-weight: 400;
+  font-size: var(--text-xs);
+  font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
 }
 
-.command:hover,
-.command:focus-visible {
-  border-color: var(--color-border);
+.menuTrigger:hover,
+.menuTrigger:focus-visible {
   background: var(--color-control-hover);
+  color: var(--color-text);
   outline: none;
 }
 
-.commandActive {
-  border-color: var(--color-border-strong);
-  background: var(--color-control-active);
-  color: var(--color-primary);
+.menuTriggerOpen {
+  background: var(--color-primary-bg);
+  color: var(--color-text);
+}
+
+.menu {
+  --menu-min-width: 180px;
+
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  z-index: 100;
+  min-width: var(--menu-min-width);
+  display: grid;
+  padding: var(--space-1) 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+}
+
+.menuItem {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  border: none;
+  padding: var(--space-1) var(--space-3);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-xs);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.menuItem:hover,
+.menuItem:focus-visible {
+  background: var(--color-primary-bg);
+  outline: none;
+}
+
+.menuItemDisabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.menuItemDisabled:hover,
+.menuItemDisabled:focus-visible {
+  background: transparent;
+}
+
+.headerSpacer {
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+.designIdentity {
+  min-width: 0;
+  max-width: min(320px, 34vw);
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+}
+
+.designTitle {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: var(--text-sm);
   font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dirtyDot {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--color-danger);
 }
 
 .draftsPanel {
@@ -137,4 +228,81 @@
 .workspace {
   flex: 1;
   min-height: 0;
+}
+
+.workspaceShell {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--panel-bar-width);
+}
+
+.panelBar {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  width: var(--panel-bar-width);
+  min-width: var(--panel-bar-width);
+  padding: var(--space-2) 0;
+  gap: var(--space-1);
+  border-left: 1px solid var(--color-border);
+  background: var(--panel-gradient);
+}
+
+.panelButton {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: var(--control-size-lg);
+  height: var(--control-size-xl);
+  border: none;
+  padding: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.panelButton:hover,
+.panelButton:focus-visible {
+  background: var(--color-control-hover);
+  color: var(--color-text);
+  outline: none;
+}
+
+.panelButton[aria-pressed="true"] {
+  background: var(--color-control-active);
+  color: var(--color-primary);
+}
+
+.panelButton[aria-pressed="true"]::before {
+  content: '';
+  position: absolute;
+  top: 8px;
+  right: 0;
+  bottom: 8px;
+  width: 2px;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  background: var(--color-accent);
+}
+
+.panelButton:disabled {
+  color: var(--color-text-muted);
+  opacity: 0.5;
+  cursor: default;
+}
+
+.panelButton:disabled:hover,
+.panelButton:disabled:focus-visible {
+  background: transparent;
+  color: var(--color-text-muted);
+}
+
+.panelDivider {
+  width: var(--icon-size-lg);
+  height: 1px;
+  margin: var(--space-1) auto;
+  background: var(--color-border);
 }

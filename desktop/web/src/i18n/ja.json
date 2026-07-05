@@ -10,10 +10,12 @@
   },
   "webShell": {
     "commands": "Web 版コマンド",
+    "panels": "Web 版パネル",
     "workspace": "Web 版ワークスペース",
     "openCanopi": ".canopi を開く",
     "downloadCanopi": ".canopi をダウンロード",
     "drafts": "下書き",
+    "settings": "設定",
     "browserDrafts": "ブラウザー下書き",
     "browserDraftsHint": "このブラウザーに保存されます。.canopi をダウンロードしてファイルのバックアップを残してください。",
     "noDrafts": "ブラウザー下書きはまだありません。",

@@ -34,6 +34,7 @@ interface BrowserAppDataDocument {
 }
 
 interface SaveDraftOptions {
+  readonly id?: string;
   readonly file: CanopiFile;
   readonly now: string;
 }
@@ -81,10 +82,11 @@ export function createBrowserAppDataStore({
   }
 
   return {
-    saveDraft({ file, now }) {
+    saveDraft({ id: requestedId, file, now }) {
       return write((current) => {
+        const id = normalizeDraftId(requestedId, file.name);
         const summary = {
-          id: draftIdFor(file.name),
+          id,
           name: file.name || "Untitled",
           updatedAt: now,
         };
@@ -267,4 +269,9 @@ function draftIdFor(name: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
   return `draft-${slug || "untitled"}`;
+}
+
+function normalizeDraftId(id: string | undefined, name: string): string {
+  const normalized = id?.trim();
+  return normalized && normalized.length > 0 ? normalized : draftIdFor(name);
 }

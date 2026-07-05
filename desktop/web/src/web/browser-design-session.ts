@@ -17,7 +17,7 @@ import {
   type BrowserAppDataWriteResult,
   type BrowserDraftSummary,
 } from "./browser-app-data";
-import type { BrowserShellCommandHandlers } from "./BrowserAppShell";
+import type { BrowserShellCommandHandlers, BrowserShellDesignIdentity } from "./BrowserAppShell";
 
 const WEB_CANOPI_FILE_VERSION = 5;
 
@@ -46,9 +46,12 @@ interface BrowserDesignSessionControllerOptions {
   readonly fileAdapter?: BrowserDesignFileAdapter;
   readonly appDataStore?: BrowserAppDataStore;
   readonly now?: () => Date;
+  readonly createDraftId?: () => string;
 }
 
 export interface BrowserDesignSessionController {
+  hasCurrentDesign(): boolean;
+  readDesignIdentity(): BrowserShellDesignIdentity | null;
   newDesign(): Promise<void>;
   openCanopi(): Promise<boolean>;
   openCanopiTemplate(template: BrowserTemplateCanopiFile): Promise<"opened">;
@@ -75,6 +78,7 @@ export function createBrowserDesignSessionController({
   fileAdapter = browserDesignFileAdapter,
   appDataStore = browserAppDataStore,
   now = () => new Date(),
+  createDraftId = createBrowserDraftId,
 }: BrowserDesignSessionControllerOptions = {}): BrowserDesignSessionController {
   let activeDraftId: string | null = null;
   let canvasSession: CanvasDocumentSurface | null = null;
@@ -135,12 +139,14 @@ export function createBrowserDesignSessionController({
     if (!store.hasCurrentDesign()) return null;
 
     const name = store.readCurrentDesign()?.name || store.readDesignName() || "Untitled";
+    const draftId = activeDraftId ?? createDraftId();
     const content = buildPersistedDesignSessionContent({
       session: activeCanvasSession(),
       name,
       store,
     });
     const result = appDataStore.saveDraft({
+      id: draftId,
       file: content,
       now: now().toISOString(),
     });
@@ -198,6 +204,15 @@ export function createBrowserDesignSessionController({
   }
 
   return {
+    hasCurrentDesign: () => store.currentDesign.value !== null,
+    readDesignIdentity() {
+      const design = store.currentDesign.value;
+      if (!design) return null;
+      return {
+        name: store.designName.value || design.name || "Untitled",
+        dirty: store.designDirty.value,
+      };
+    },
     newDesign,
     openCanopi,
     openCanopiTemplate,
@@ -265,16 +280,28 @@ async function openCanopiFile(): Promise<BrowserOpenedCanopiFile | null> {
 
   try {
     return await new Promise<BrowserOpenedCanopiFile | null>((resolve, reject) => {
+      let settled = false;
+      const finish = (value: BrowserOpenedCanopiFile | null) => {
+        if (settled) return;
+        settled = true;
+        resolve(value);
+      };
+      const fail = (error: unknown) => {
+        if (settled) return;
+        settled = true;
+        reject(error);
+      };
       input.addEventListener("change", () => {
         const file = input.files?.[0] ?? null;
         if (!file) {
-          resolve(null);
+          finish(null);
           return;
         }
         file.text()
-          .then((text) => resolve({ fileName: file.name, text }))
-          .catch(reject);
+          .then((text) => finish({ fileName: file.name, text }))
+          .catch(fail);
       }, { once: true });
+      input.addEventListener("cancel", () => finish(null), { once: true });
       input.click();
     });
   } finally {
@@ -305,6 +332,12 @@ function nameFromFileName(fileName: string): string {
 
 function safeFileStem(name: string): string {
   return name.replace(/[\\/:*?"<>|]+/g, " ").trim() || "Untitled";
+}
+
+function createBrowserDraftId(): string {
+  const randomUuid = globalThis.crypto?.randomUUID?.();
+  if (randomUuid) return `draft-${randomUuid}`;
+  return `draft-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function logBrowserDesignSessionError(error: unknown): void {

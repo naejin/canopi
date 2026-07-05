@@ -2,7 +2,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { createMemoryDesignSessionStore } from '../app/document-session/store'
 import type { CanvasDocumentSurface } from '../canvas/runtime/runtime'
 import { createBrowserAppDataStore, type BrowserStorageAdapter } from '../web/browser-app-data'
-import { createBrowserDesignSessionController, type BrowserDesignFileAdapter } from '../web/browser-design-session'
+import {
+  browserDesignFileAdapter,
+  createBrowserDesignSessionController,
+  type BrowserDesignFileAdapter,
+} from '../web/browser-design-session'
 import type { CanopiFile } from '../types/design'
 
 const NOW = new Date('2026-07-04T12:00:00.000Z')
@@ -129,14 +133,35 @@ describe('browser Design Session lifecycle', () => {
     expect(store.readDesignPath()).toBeNull()
   })
 
+  it('resolves browser Open .canopi as a no-op when the picker is cancelled', async () => {
+    const pending = browserDesignFileAdapter.openCanopiFile()
+    const input = document.body.querySelector<HTMLInputElement>('input[type="file"]')
+    expect(input).not.toBeNull()
+
+    try {
+      input!.dispatchEvent(new Event('cancel'))
+      const result = await Promise.race([
+        pending,
+        new Promise((resolve) => setTimeout(() => resolve('still-pending'), 0)),
+      ])
+
+      expect(result).toBeNull()
+      expect(document.body.contains(input)).toBe(false)
+    } finally {
+      input?.remove()
+    }
+  })
+
   it('autosaves Browser Drafts and reopens them as detached Designs', async () => {
     const store = createMemoryDesignSessionStore()
     const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
+    const draftIds = ['draft-browser-patio', 'draft-new-untitled']
     const controller = createBrowserDesignSessionController({
       store,
       appDataStore,
       fileAdapter: testFileAdapter(),
       now: () => NOW,
+      createDraftId: () => draftIds.shift() ?? 'draft-extra',
     })
     const disposeAutosave = controller.installAutosave()
 
@@ -166,6 +191,63 @@ describe('browser Design Session lifecycle', () => {
     } finally {
       disposeAutosave()
     }
+  })
+
+  it('keeps separate Browser Drafts for different Designs with the same name', async () => {
+    const store = createMemoryDesignSessionStore()
+    const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
+    const draftIds = ['draft-first-untitled', 'draft-second-untitled']
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore,
+      fileAdapter: testFileAdapter(),
+      now: () => NOW,
+      createDraftId: () => draftIds.shift() ?? 'draft-extra',
+    })
+
+    await controller.newDesign()
+    await controller.newDesign()
+
+    expect(controller.listDrafts()).toEqual([
+      {
+        id: 'draft-second-untitled',
+        name: 'Untitled',
+        updatedAt: NOW.toISOString(),
+      },
+      {
+        id: 'draft-first-untitled',
+        name: 'Untitled',
+        updatedAt: NOW.toISOString(),
+      },
+    ])
+  })
+
+  it('renames the active Browser Draft without leaving a stale draft row', async () => {
+    const store = createMemoryDesignSessionStore()
+    const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore,
+      fileAdapter: testFileAdapter(),
+      now: () => NOW,
+      createDraftId: () => 'draft-active-session',
+    })
+
+    await controller.newDesign()
+    store.mutateCurrentDesign((design) => ({
+      ...design,
+      name: 'Renamed Patio',
+    }))
+    controller.saveCurrentDraft()
+
+    expect(controller.listDrafts()).toEqual([
+      {
+        id: 'draft-active-session',
+        name: 'Renamed Patio',
+        updatedAt: NOW.toISOString(),
+      },
+    ])
+    expect(appDataStore.loadDraft('draft-active-session')?.name).toBe('Renamed Patio')
   })
 
   it('keeps the active Design intact when Browser Draft storage fails', async () => {
@@ -200,6 +282,7 @@ describe('browser Design Session lifecycle', () => {
       appDataStore,
       fileAdapter: testFileAdapter(),
       now: () => NOW,
+      createDraftId: () => 'draft-canvas-draft',
     })
     const canvas = testCanvasDocumentSurface({
       serializeDocument: vi.fn((_metadata, doc) => ({

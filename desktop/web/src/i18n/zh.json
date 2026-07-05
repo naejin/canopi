@@ -10,10 +10,12 @@
   },
   "webShell": {
     "commands": "网页版命令",
+    "panels": "网页版面板",
     "workspace": "网页版工作区",
     "openCanopi": "打开 .canopi",
     "downloadCanopi": "下载 .canopi",
     "drafts": "草稿",
+    "settings": "设置",
     "browserDrafts": "浏览器草稿",
     "browserDraftsHint": "保存在此浏览器中。下载 .canopi 以保留文件备份。",
     "noDrafts": "还没有浏览器草稿。",
