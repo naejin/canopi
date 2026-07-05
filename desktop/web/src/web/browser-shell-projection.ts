@@ -7,7 +7,6 @@ export type BrowserShellCommandId =
   | "file.new"
   | "file.openCanopi"
   | "file.downloadCanopi"
-  | "drafts.open"
   | "settings.theme"
   | "nav.canvas"
   | "nav.location"
@@ -62,7 +61,6 @@ export function createBrowserShellProjection({
           command("file.downloadCanopi", t("webShell.downloadCanopi"), {
             disabled: !downloadCanopiEnabled,
           }),
-          command("drafts.open", t("webShell.drafts")),
         ],
       },
     ],

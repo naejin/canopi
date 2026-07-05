@@ -56,6 +56,7 @@ export interface BrowserDesignSessionController {
   openCanopi(): Promise<boolean>;
   openCanopiTemplate(template: BrowserTemplateCanopiFile): Promise<"opened">;
   downloadCanopi(): Promise<void>;
+  renameDesign(name: string): void;
   saveCurrentDraft(): BrowserAppDataWriteResult<BrowserDraftSummary> | null;
   listDrafts(): readonly BrowserDraftSummary[];
   openDraft(id: string): boolean;
@@ -133,6 +134,22 @@ export function createBrowserDesignSessionController({
     store.replaceCurrentDesignState(content, null, content.name);
     store.markSaved(null);
     saveCurrentDraft();
+  }
+
+  function renameDesign(name: string): void {
+    const nextName = name.trim();
+    if (nextName.length === 0) return;
+    if (nextName === store.readDesignName()) return;
+
+    const design = store.readCurrentDesign();
+    if (!design) return;
+
+    store.replaceCurrentDesignState(
+      { ...design, name: nextName },
+      store.readDesignPath(),
+      nextName,
+    );
+    store.markDocumentDirty();
   }
 
   function saveCurrentDraft(): BrowserAppDataWriteResult<BrowserDraftSummary> | null {
@@ -217,6 +234,7 @@ export function createBrowserDesignSessionController({
     openCanopi,
     openCanopiTemplate,
     downloadCanopi,
+    renameDesign,
     saveCurrentDraft,
     listDrafts: () => appDataStore.listDrafts(),
     openDraft,
@@ -227,8 +245,6 @@ export function createBrowserDesignSessionController({
         newDesign: () => void newDesign().catch(logBrowserDesignSessionError),
         openCanopi: () => void openCanopi().catch(logBrowserDesignSessionError),
         downloadCanopi: () => void downloadCanopi().catch(logBrowserDesignSessionError),
-        openDraft: (id) => openDraft(id),
-        openDrafts: () => undefined,
       };
     },
   };

@@ -1,5 +1,6 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
+import { effect } from '@preact/signals'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryDesignSessionStore } from '../app/document-session/store'
 import { activePanel, sidePanel } from '../app/shell/state'
@@ -61,11 +62,11 @@ describe('Web Edition Browser App Shell', () => {
       'file.new',
       'file.openCanopi',
       'file.downloadCanopi',
-      'drafts.open',
     ])
     expect(container.textContent).toContain('Open .canopi')
     expect(container.textContent).toContain('Download .canopi')
-    expect(container.textContent).toContain('Drafts')
+    expect(container.textContent).not.toContain('Drafts')
+    expect(container.querySelector('[data-testid="browser-drafts-list"]')).toBeNull()
     expect(container.querySelector('[data-web-locale-control]')?.textContent).toContain('EN')
     expect(container.querySelector('[data-web-theme-control]')).not.toBeNull()
     expect(panelBarCommandIds(container)).toEqual([
@@ -145,7 +146,6 @@ describe('Web Edition Browser App Shell', () => {
       'file.new',
       'file.openCanopi',
       'file.downloadCanopi',
-      'drafts.open',
     ])
   })
 
@@ -161,7 +161,6 @@ describe('Web Edition Browser App Shell', () => {
       'file.new',
       'file.openCanopi',
       'file.downloadCanopi',
-      'drafts.open',
     ])
 
     await act(async () => {
@@ -282,7 +281,6 @@ describe('Web Edition Browser App Shell', () => {
       newDesign: vi.fn(),
       openCanopi: vi.fn(),
       downloadCanopi: vi.fn(),
-      openDrafts: vi.fn(),
     }
     const onSettingsChange = vi.fn()
 
@@ -293,7 +291,6 @@ describe('Web Edition Browser App Shell', () => {
     await clickShellCommand(container, 'file.new')
     await clickShellCommand(container, 'file.openCanopi')
     await clickShellCommand(container, 'file.downloadCanopi')
-    await clickShellCommand(container, 'drafts.open')
     await clickThemeControl(container)
     await selectLocale(container, 'fr')
     await act(async () => {
@@ -306,7 +303,6 @@ describe('Web Edition Browser App Shell', () => {
     expect(handlers.newDesign).toHaveBeenCalledOnce()
     expect(handlers.openCanopi).toHaveBeenCalledOnce()
     expect(handlers.downloadCanopi).toHaveBeenCalledOnce()
-    expect(handlers.openDrafts).toHaveBeenCalledOnce()
     expect(onSettingsChange).toHaveBeenLastCalledWith({ locale: 'fr', theme: 'dark' })
     expect(theme.value).toBe('dark')
     expect(locale.value).toBe('fr')
@@ -314,47 +310,42 @@ describe('Web Edition Browser App Shell', () => {
     expect(sidePanel.value).toBeNull()
   })
 
-  it('shows a simple Browser Drafts list without notebook affordances', async () => {
-    const handlers: BrowserShellCommandHandlers = {
-      openDraft: vi.fn(),
-      openDrafts: vi.fn(),
-    }
+  it('keeps Browser Drafts hidden from the Web shell while autosave remains internal', async () => {
+    const handlers: BrowserShellCommandHandlers = {}
 
     await act(async () => {
       render(
         <BrowserAppShell
           handlers={handlers}
-          drafts={[
-            {
-              id: 'draft-terrace',
-              name: 'Terrace Draft',
-              updatedAt: '2026-07-04T12:00:00.000Z',
-            },
-          ]}
         />,
         container,
       )
     })
 
-    await clickShellCommand(container, 'drafts.open')
-
-    expect(handlers.openDrafts).toHaveBeenCalledOnce()
-    expect(container.querySelector('[data-testid="browser-drafts-list"]')).not.toBeNull()
-    expect(container.textContent).toContain('Browser Drafts')
-    expect(container.textContent).toContain('Stored in this browser')
-    expect(container.textContent).toContain('Download .canopi')
-    expect(container.textContent).toContain('Terrace Draft')
+    expect(commandIds(container)).not.toContain('drafts.open')
+    expect(container.querySelector('[data-testid="browser-drafts-list"]')).toBeNull()
+    expect(container.textContent).not.toContain('Browser Drafts')
     expect(container.textContent).not.toContain('Design Notebook')
     expect(container.textContent).not.toContain('Section')
     expect(container.textContent).not.toContain('Reveal')
+  })
 
-    await act(async () => {
-      const draftButton = container.querySelector<HTMLButtonElement>('[data-browser-draft-id="draft-terrace"]')
-      if (!draftButton) throw new Error('draft row should render')
-      draftButton.click()
+  it('publishes the updated browser theme only after the document theme attribute changes', async () => {
+    const observedAttributes: Array<string | null> = []
+    document.documentElement.setAttribute('data-theme', 'light')
+    const dispose = effect(() => {
+      void theme.value
+      observedAttributes.push(document.documentElement.getAttribute('data-theme'))
     })
 
-    expect(handlers.openDraft).toHaveBeenCalledWith('draft-terrace')
+    await act(async () => {
+      render(<BrowserAppShell />, container)
+    })
+    await clickThemeControl(container)
+
+    dispose()
+    expect(theme.value).toBe('dark')
+    expect(observedAttributes.at(-1)).toBe('dark')
   })
 
   it('loads and saves browser-local settings through WebApp', async () => {
@@ -376,6 +367,52 @@ describe('Web Edition Browser App Shell', () => {
 
     expect(theme.value).toBe('dark')
     expect(locale.value).toBe('fr')
+  })
+
+  it('renames the active Browser Design from the top bar like desktop', async () => {
+    const store = createMemoryDesignSessionStore()
+    const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore,
+      fileAdapter: testFileAdapter(),
+      now: () => new Date('2026-07-04T12:00:00.000Z'),
+      createDraftId: () => 'draft-rename-state',
+    })
+
+    await act(async () => {
+      render(
+        <WebApp
+          controller={controller}
+          appDataStore={appDataStore}
+          workspace={<div data-testid="stub-workspace" />}
+        />,
+        container,
+      )
+    })
+    await clickShellCommand(container, 'file.new')
+
+    await act(async () => {
+      const titleButton = container.querySelector<HTMLButtonElement>('[data-web-design-title-button]')
+      if (!titleButton) throw new Error('Missing rename title button')
+      titleButton.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+    })
+    await act(async () => {
+      const input = container.querySelector<HTMLInputElement>('[data-web-design-title-input]')
+      if (!input) throw new Error('Missing rename title input')
+      input.value = 'Terrace Garden'
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => {
+      const input = container.querySelector<HTMLInputElement>('[data-web-design-title-input]')
+      if (!input) throw new Error('Missing rename title input')
+      input.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }))
+    })
+
+    expect(store.readDesignName()).toBe('Terrace Garden')
+    expect(store.readCurrentDesign()?.name).toBe('Terrace Garden')
+    expect(container.querySelector('[data-web-design-title]')?.textContent).toBe('Terrace Garden')
+    expect(appDataStore.listDrafts()[0]?.name).toBe('Terrace Garden')
   })
 
   it('enables Download .canopi only after a Browser Design is active', async () => {
@@ -485,7 +522,7 @@ function ensureCommandMenuOpen(container: HTMLElement, id: string): void {
 }
 
 function menuIdForCommand(id: string): string | null {
-  if (id.startsWith('file.') || id === 'drafts.open') return 'file'
+  if (id.startsWith('file.')) return 'file'
   return null
 }
 

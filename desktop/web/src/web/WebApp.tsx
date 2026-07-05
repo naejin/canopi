@@ -1,11 +1,12 @@
 import type { ComponentChildren } from "preact";
 import { lazy, Suspense } from "preact/compat";
-import { useCallback, useEffect, useMemo, useState } from "preact/hooks";
+import { useEffect, useMemo } from "preact/hooks";
 import { activePanel, sidePanel } from "../app/shell/state";
-import { locale, theme } from "../app/settings/state";
+import { locale } from "../app/settings/state";
 import type { Locale, Theme } from "../types/settings";
 import styles from "./WebApp.module.css";
 import { BrowserAppShell, type BrowserShellCommandHandlers, type BrowserShellSettings } from "./BrowserAppShell";
+import { applyBrowserTheme } from "./browser-theme";
 import { browserAppDataStore, type BrowserAppDataStore } from "./browser-app-data";
 import {
   browserDesignSessionController,
@@ -36,49 +37,34 @@ export function WebApp({
   templatesEnabled = hasConfiguredStaticDesignTemplates(),
   workspace,
 }: WebAppProps) {
-  const [draftRevision, setDraftRevision] = useState(0);
-  const refreshDrafts = useCallback(() => {
-    setDraftRevision((revision) => revision + 1);
-  }, []);
-  const drafts = useMemo(
-    () => controller.listDrafts(),
-    [controller, draftRevision],
-  );
   const hasDesign = controller.hasCurrentDesign();
   const designIdentity = controller.readDesignIdentity();
   const handlers = useMemo<BrowserShellCommandHandlers>(() => ({
     newDesign: () => {
-      void controller.newDesign().then(refreshDrafts, logWebAppCommandError);
+      void controller.newDesign().catch(logWebAppCommandError);
     },
     openCanopi: () => {
-      void controller.openCanopi().then(refreshDrafts, logWebAppCommandError);
+      void controller.openCanopi().catch(logWebAppCommandError);
     },
     downloadCanopi: () => {
-      void controller.downloadCanopi().then(refreshDrafts, logWebAppCommandError);
+      void controller.downloadCanopi().catch(logWebAppCommandError);
     },
-    openDrafts: refreshDrafts,
-    openDraft: (id) => {
-      controller.openDraft(id);
-      refreshDrafts();
-    },
-  }), [controller, refreshDrafts]);
+  }), [controller]);
 
   useEffect(() => {
     applyStoredBrowserSettings(appDataStore.loadSettings());
   }, [appDataStore]);
 
-  useEffect(() => (
-    controller.installAutosave({ onDraftSaved: refreshDrafts })
-  ), [controller, refreshDrafts]);
+  useEffect(() => controller.installAutosave(), [controller]);
 
   return (
     <div className={styles.root} data-canopi-web-root>
       <BrowserAppShell
         handlers={handlers}
-        drafts={drafts}
         designIdentity={designIdentity}
         downloadCanopiEnabled={hasDesign}
         templatesEnabled={templatesEnabled}
+        onRenameDesign={(name) => controller.renameDesign(name)}
         onSettingsChange={(settings) => persistBrowserSettings(appDataStore, settings)}
       >
         {workspace ?? <WebWorkspace controller={controller} templatesEnabled={templatesEnabled} />}
@@ -133,8 +119,7 @@ function applyStoredBrowserSettings(settings: Record<string, unknown> | null): v
     locale.value = settings.locale;
   }
   if (isTheme(settings.theme)) {
-    theme.value = settings.theme;
-    document.documentElement.setAttribute("data-theme", theme.value);
+    applyBrowserTheme(settings.theme);
   }
 }
 

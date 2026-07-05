@@ -16,7 +16,7 @@ describe('Web Edition shell projection', () => {
     }))).toEqual([
       {
         id: 'file',
-        commandIds: ['file.new', 'file.openCanopi', 'file.downloadCanopi', 'drafts.open'],
+        commandIds: ['file.new', 'file.openCanopi', 'file.downloadCanopi'],
       },
     ])
     expect(projection.panelBar.primary.map((command) => command.id)).toEqual([

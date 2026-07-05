@@ -6,7 +6,7 @@ import type { Locale } from "../types/settings";
 import { t } from "../i18n";
 import { ButtonTooltip } from "../components/shared/ButtonTooltip";
 import { Dropdown, type DropdownItem } from "../components/shared/Dropdown";
-import type { BrowserDraftSummary } from "./browser-app-data";
+import { applyBrowserTheme } from "./browser-theme";
 import {
   createBrowserShellProjection,
   type BrowserShellCommandId,
@@ -62,8 +62,6 @@ export interface BrowserShellCommandHandlers {
   readonly newDesign?: () => void | Promise<void>;
   readonly openCanopi?: () => void | Promise<boolean>;
   readonly downloadCanopi?: () => void | Promise<void>;
-  readonly openDrafts?: () => void;
-  readonly openDraft?: (id: string) => void | boolean | Promise<void | boolean>;
 }
 
 export interface BrowserShellSettings {
@@ -78,26 +76,26 @@ export interface BrowserShellDesignIdentity {
 
 interface BrowserAppShellProps {
   readonly handlers?: BrowserShellCommandHandlers;
-  readonly drafts?: readonly BrowserDraftSummary[];
   readonly designIdentity?: BrowserShellDesignIdentity | null;
   readonly downloadCanopiEnabled?: boolean;
   readonly templatesEnabled?: boolean;
+  readonly onRenameDesign?: (name: string) => void;
   readonly onSettingsChange?: (settings: BrowserShellSettings) => void;
   readonly children?: ComponentChildren;
 }
 
 export function BrowserAppShell({
   handlers = {},
-  drafts = [],
   designIdentity = null,
   downloadCanopiEnabled = true,
   templatesEnabled = false,
+  onRenameDesign,
   onSettingsChange,
   children,
 }: BrowserAppShellProps) {
-  const [draftsOpen, setDraftsOpen] = useState(false);
   const currentLocale = locale.value;
   const currentTheme = theme.value;
+  const visibleTitle = designIdentity ? visibleDesignName(designIdentity.name) : "Canopi";
   const currentPanel = activePanel.value;
   const currentSidePanel = sidePanel.value;
   const projection = createBrowserShellProjection({
@@ -107,7 +105,10 @@ export function BrowserAppShell({
     templatesEnabled,
   });
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [draftName, setDraftName] = useState(visibleTitle);
   const menuBarRef = useRef<HTMLElement>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (!openMenuId) return;
     const handleOutsidePointerUp = (event: Event) => {
@@ -119,6 +120,22 @@ export function BrowserAppShell({
       document.removeEventListener("pointerup", handleOutsidePointerUp);
     };
   }, [openMenuId]);
+  useEffect(() => {
+    if (isEditingName) return;
+    setDraftName(visibleTitle);
+  }, [isEditingName, visibleTitle]);
+  useEffect(() => {
+    if (!isEditingName) return;
+    const input = nameInputRef.current;
+    if (!input) return;
+    input.focus();
+    input.setSelectionRange(0, input.value.length);
+  }, [isEditingName]);
+  useEffect(() => {
+    if (designIdentity || !isEditingName) return;
+    setIsEditingName(false);
+    setDraftName(visibleTitle);
+  }, [designIdentity, isEditingName, visibleTitle]);
 
   return (
     <div className={styles.shell} data-testid="browser-app-shell">
@@ -188,16 +205,54 @@ export function BrowserAppShell({
           </nav>
         </div>
         <div className={styles.designIdentity}>
-          <span className={styles.designTitle} data-web-design-title>
-            {designIdentity ? visibleDesignName(designIdentity.name) : "Canopi"}
-          </span>
-          {designIdentity?.dirty ? (
-            <span
-              className={styles.dirtyDot}
-              data-web-design-dirty
-              aria-label={t("titleBar.unsavedChanges")}
+          {designIdentity && isEditingName ? (
+            <input
+              ref={nameInputRef}
+              className={styles.designTitleInput}
+              data-web-design-title-input
+              aria-label={t("titleBar.designNameInput")}
+              value={draftName}
+              onInput={(event) => setDraftName((event.currentTarget as HTMLInputElement).value)}
+              onBlur={commitDesignNameEdit}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  commitDesignNameEdit();
+                }
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  cancelDesignNameEdit();
+                }
+              }}
             />
-          ) : null}
+          ) : designIdentity ? (
+            <button
+              type="button"
+              className={styles.designTitleButton}
+              data-web-design-title-button
+              aria-label={t("titleBar.renameDesignName")}
+              onDblClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                beginDesignNameEdit();
+              }}
+            >
+              <span className={styles.designTitle} data-web-design-title>
+                {visibleTitle}
+              </span>
+              {designIdentity.dirty ? (
+                <span
+                  className={styles.dirtyDot}
+                  data-web-design-dirty
+                  aria-label={t("titleBar.unsavedChanges")}
+                />
+              ) : null}
+            </button>
+          ) : (
+            <span className={styles.designTitle} data-web-design-title>
+              {visibleTitle}
+            </span>
+          )}
         </div>
         <div className={styles.settings}>
           <div data-web-locale-control>
@@ -234,41 +289,6 @@ export function BrowserAppShell({
           </button>
         </div>
       </header>
-      {draftsOpen ? (
-        <section
-          className={styles.draftsPanel}
-          data-testid="browser-drafts-list"
-          aria-label={t("webShell.browserDrafts")}
-        >
-          <div className={styles.draftsHeader}>
-            <div>
-              <h2 className={styles.draftsTitle}>{t("webShell.browserDrafts")}</h2>
-              <p className={styles.draftsHint}>{t("webShell.browserDraftsHint")}</p>
-            </div>
-          </div>
-          {drafts.length === 0 ? (
-            <p className={styles.emptyDrafts}>{t("webShell.noDrafts")}</p>
-          ) : (
-            <div className={styles.draftRows} role="list">
-              {drafts.map((draft) => (
-                <button
-                  key={draft.id}
-                  type="button"
-                  className={styles.draftRow}
-                  data-browser-draft-id={draft.id}
-                  onClick={() => {
-                    setDraftsOpen(false);
-                    void handlers.openDraft?.(draft.id);
-                  }}
-                >
-                  <span className={styles.draftName}>{draft.name}</span>
-                  <span className={styles.draftUpdated}>{formatDraftDate(draft.updatedAt, currentLocale)}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
-      ) : null}
       <div className={styles.workspaceShell}>
         <main className={styles.workspace} aria-label={t("webShell.workspace")}>
           {children}
@@ -314,10 +334,6 @@ export function BrowserAppShell({
       case "file.downloadCanopi":
         void handlers.downloadCanopi?.();
         break;
-      case "drafts.open":
-        handlers.openDrafts?.();
-        setDraftsOpen((open) => !open);
-        break;
       case "settings.theme":
         toggleTheme();
         onSettingsChange?.({ locale: locale.value, theme: theme.value });
@@ -344,22 +360,44 @@ export function BrowserAppShell({
     locale.value = nextLocale;
     onSettingsChange?.({ locale: locale.value, theme: theme.value });
   }
+
+  function beginDesignNameEdit(): void {
+    if (!designIdentity) return;
+    setDraftName(visibleTitle);
+    setIsEditingName(true);
+  }
+
+  function commitDesignNameEdit(): void {
+    if (!designIdentity) {
+      setIsEditingName(false);
+      return;
+    }
+    const nextName = draftName.trim();
+    if (
+      nextName.length > 0 &&
+      nextName !== designIdentity.name &&
+      !isVisibleFallbackName(designIdentity.name, nextName)
+    ) {
+      onRenameDesign?.(nextName);
+    }
+    setDraftName(visibleTitle);
+    setIsEditingName(false);
+  }
+
+  function cancelDesignNameEdit(): void {
+    setDraftName(visibleTitle);
+    setIsEditingName(false);
+  }
 }
 
 function toggleTheme(): void {
-  theme.value = theme.value === "dark" ? "light" : "dark";
-  document.documentElement.setAttribute("data-theme", theme.value);
-}
-
-function formatDraftDate(value: string, currentLocale: Locale): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat(currentLocale, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
+  applyBrowserTheme(theme.value === "dark" ? "light" : "dark");
 }
 
 function visibleDesignName(name: string): string {
   return name === "Untitled" ? t("titleBar.untitledDesign") : name;
+}
+
+function isVisibleFallbackName(currentName: string, draftName: string): boolean {
+  return currentName === "Untitled" && draftName === t("titleBar.untitledDesign");
 }

@@ -33,7 +33,7 @@ The desktop app-level workspace for finding, organizing, and switching between s
 _Avoid_: File browser, recent list, project folder
 
 **Browser Draft**:
-A Web Edition Design saved in the current browser profile so it can be reopened later on the same device/browser. A browser draft is convenience state, not a portable `.canopi` file, Design Notebook entry, saved path reference, or cloud-synced library item.
+A Web Edition Design snapshot saved in the current browser profile to preserve active work for autosave and recovery. A browser draft is internal convenience state, not a visible workspace, portable `.canopi` file, Design Notebook entry, saved path reference, or cloud-synced library item.
 _Avoid_: Notebook entry, recent file, autosave backup
 
 **Notebook Section**:
