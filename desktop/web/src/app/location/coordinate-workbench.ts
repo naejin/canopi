@@ -31,7 +31,14 @@ export interface LocationCoordinateWorkbench {
   readonly commitMapLocation: (center: { lat: number; lon: number } | null) => boolean
 }
 
-export function useLocationCoordinateWorkbench(): LocationCoordinateWorkbench {
+export interface LocationCoordinateWorkbenchOptions {
+  readonly altitudeMode?: 'editable' | 'omit'
+}
+
+export function useLocationCoordinateWorkbench(
+  options: LocationCoordinateWorkbenchOptions = {},
+): LocationCoordinateWorkbench {
+  const altitudeEditable = options.altitudeMode !== 'omit'
   const saved = useSavedLocationPresentation()
   const savedLocationRef = useRef(saved.location)
   savedLocationRef.current = saved.location
@@ -46,14 +53,14 @@ export function useLocationCoordinateWorkbench(): LocationCoordinateWorkbench {
     const next = locationDraftFromSaved(currentDesign.value?.location ?? null)
     latDraft.value = next.lat
     lonDraft.value = next.lon
-    altitudeDraft.value = next.altitude
+    altitudeDraft.value = altitudeEditable ? next.altitude : ''
   })
 
   function readDraftFromSignals(): LocationDraft {
     return {
       lat: latDraft.value,
       lon: lonDraft.value,
-      altitude: altitudeDraft.value,
+      altitude: altitudeEditable ? altitudeDraft.value : '',
     }
   }
 
@@ -84,7 +91,7 @@ export function useLocationCoordinateWorkbench(): LocationCoordinateWorkbench {
     const coords = pendingMapResult.value ?? center
     if (!coords) return false
     pendingMapResult.value = null
-    return setDesignLocation(buildLocationCommit(coords, savedLocationRef.current))
+    return setDesignLocation(buildLocationCommit(coords, altitudeEditable ? savedLocationRef.current : null))
   }
 
   return {
@@ -95,7 +102,9 @@ export function useLocationCoordinateWorkbench(): LocationCoordinateWorkbench {
     pendingMapResult: pendingMapResult.value,
     setLatDraft: (value) => { latDraft.value = value },
     setLonDraft: (value) => { lonDraft.value = value },
-    setAltitudeDraft: (value) => { altitudeDraft.value = value },
+    setAltitudeDraft: (value) => {
+      if (altitudeEditable) altitudeDraft.value = value
+    },
     readDraft: readDraftFromSignals,
     saveDraft: saveDraftFromSignals,
     clearLocation: clearLocationFromWorkbench,

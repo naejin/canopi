@@ -142,7 +142,7 @@ describe('Web Edition Species Catalog panel', () => {
     expect(container.textContent).toContain('Lemon balm')
   })
 
-  it('renders reduced Species detail with lazy hero image metadata and only v1 fields', async () => {
+  it('renders reduced Species detail with a lazy hero image and only v1 fields', async () => {
     mockWorkbench.detail.value = {
       canonicalName: 'Malus domestica',
       detail: {
@@ -180,11 +180,10 @@ describe('Web Edition Species Catalog panel', () => {
     expect(container.textContent).toContain('Woody perennial')
     expect(container.textContent).toContain('Perennial')
 
-    const sourceLink = requiredElement<HTMLAnchorElement>('[data-testid="web-species-detail-source"]')
-    expect(sourceLink.href).toBe('https://commons.example.test/apple')
-    expect(container.textContent).toContain('Wikimedia Commons')
-    expect(container.textContent).toContain('Jane Gardener')
-    expect(container.textContent).toContain('CC BY-SA 4.0')
+    expect(container.querySelector('[data-testid="web-species-detail-source"]')).toBeNull()
+    expect(container.textContent).not.toContain('Wikimedia Commons')
+    expect(container.textContent).not.toContain('Jane Gardener')
+    expect(container.textContent).not.toContain('CC BY-SA 4.0')
     expect(container.textContent).not.toContain('Dimensions')
     expect(container.textContent).not.toContain('Hardiness')
     expect(container.textContent).not.toContain('Uses')

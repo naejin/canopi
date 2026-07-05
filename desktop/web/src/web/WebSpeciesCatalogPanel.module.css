@@ -241,8 +241,7 @@
   gap: var(--space-2);
 }
 
-.detailFieldLabel,
-.detailAttribution dt {
+.detailFieldLabel {
   color: var(--color-text-muted);
   font-size: var(--text-xs);
   font-weight: 600;
@@ -250,23 +249,6 @@
 
 .detailFieldValue {
   min-width: 0;
-}
-
-.detailAttribution {
-  display: grid;
-  gap: var(--space-1);
-  margin: var(--space-1) 0 0;
-}
-
-.detailAttributionRow {
-  display: grid;
-  grid-template-columns: minmax(96px, 0.45fr) minmax(0, 1fr);
-  gap: var(--space-2);
-}
-
-.detailAttribution dd {
-  min-width: 0;
-  margin: 0;
 }
 
 .loadMoreButton {

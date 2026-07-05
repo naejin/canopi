@@ -274,7 +274,7 @@ The real-world site associated with a design, expressed as latitude, longitude, 
 _Avoid_: Map pin, address
 
 **Location Workbench**:
-The interaction surface for searching, setting, clearing, presenting, and validating a design's location. The location workbench coordinates location drafts, geocoding results, altitude preservation, saved-site presentation, and map-readiness cues, but it does not own canvas scene data.
+The interaction surface for setting, clearing, presenting, and validating a design's location. A location workbench may support address search, coordinate entry, map picking, and altitude where the product surface offers them, but it does not own canvas scene data.
 _Avoid_: Map panel state, location input state, basemap status helper
 
 **Location Notice**:
@@ -573,7 +573,7 @@ Developer: "Layer visibility is canvas-owned design state. Changing it is a scen
 
 Designer: "Can I search for an address and keep the site's altitude?"
 
-Developer: "Yes. The location workbench handles the search result, saved location, and altitude preservation while the design stores only the location."
+Developer: "On desktop, yes. In the Web Edition, the location workbench sets the site from latitude and longitude coordinates or a map pick, without address search or altitude editing."
 
 Designer: "Can a timeline action apply to every apple tree in the design?"
 

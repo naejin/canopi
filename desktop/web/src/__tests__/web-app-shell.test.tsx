@@ -276,6 +276,38 @@ describe('Web Edition Browser App Shell', () => {
     expect(panelBarButton(container, 'nav.favorites').getAttribute('aria-pressed')).toBe('false')
   })
 
+  it('shows the no-Design state instead of editable Location controls when Location is opened without a Design', async () => {
+    const store = createMemoryDesignSessionStore()
+    const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore,
+      fileAdapter: testFileAdapter(),
+      now: () => new Date('2026-07-04T12:00:00.000Z'),
+      createDraftId: () => 'draft-no-design-location',
+    })
+
+    await act(async () => {
+      render(
+        <WebApp
+          controller={controller}
+          appDataStore={appDataStore}
+        />,
+        container,
+      )
+    })
+
+    await act(async () => {
+      panelBarButton(container, 'nav.location').click()
+    })
+
+    expect(activePanel.value).toBe('location')
+    expect(container.querySelector('[data-testid="web-no-design-workspace"]')).not.toBeNull()
+    expect(container.textContent).toContain('No Design loaded')
+    expect(container.querySelector('[data-testid="web-location-workspace"]')).toBeNull()
+    expect(container.querySelector('[data-testid="web-location-latitude"]')).toBeNull()
+  })
+
   it('routes shell commands through command handlers and browser-safe app state', async () => {
     const handlers: BrowserShellCommandHandlers = {
       newDesign: vi.fn(),

@@ -1,21 +1,18 @@
 import { locale } from '../app/settings/state'
 import { useLocationCoordinateWorkbench } from '../app/location/coordinate-workbench'
 import { useLocationMapEditingHost } from '../app/location/map-editing'
+import { navigateTo } from '../app/shell/state'
 import { t } from '../i18n'
 import styles from './WebLocationWorkspace.module.css'
 
 export function WebLocationWorkspace() {
   void locale.value
-  const workbench = useLocationCoordinateWorkbench()
+  const workbench = useLocationCoordinateWorkbench({ altitudeMode: 'omit' })
   const mapHost = useLocationMapEditingHost(workbench, { basemapStyle: 'street' })
   const pin = mapHost.pin
 
-  function saveManualLocation(): void {
+  function saveLocation(): void {
     workbench.saveDraft()
-  }
-
-  function saveMapLocation(): void {
-    mapHost.commitMapLocation()
   }
 
   function clearLocation(): void {
@@ -51,72 +48,44 @@ export function WebLocationWorkspace() {
         />
       )}
 
-      <section className={styles.controls} aria-label={t('canvas.location.title')}>
-        <h2 className={styles.title}>{t('canvas.location.title')}</h2>
-        <div className={styles.fields}>
-          <label className={styles.label}>
-            <span>{t('canvas.location.latitude')}</span>
-            <input
-              type="number"
-              className={styles.input}
-              value={workbench.latDraft}
-              onInput={(event) => { workbench.setLatDraft(event.currentTarget.value) }}
-              placeholder={t('canvas.location.latRange')}
-              step="0.0001"
-              min="-90"
-              max="90"
-              data-testid="web-location-latitude"
-            />
-          </label>
-          <label className={styles.label}>
-            <span>{t('canvas.location.longitude')}</span>
-            <input
-              type="number"
-              className={styles.input}
-              value={workbench.lonDraft}
-              onInput={(event) => { workbench.setLonDraft(event.currentTarget.value) }}
-              placeholder={t('canvas.location.lonRange')}
-              step="0.0001"
-              min="-180"
-              max="180"
-              data-testid="web-location-longitude"
-            />
-          </label>
-          <label className={styles.label}>
-            <span>{t('canvas.location.altitude')}</span>
-            <input
-              type="number"
-              className={styles.input}
-              value={workbench.altitudeDraft}
-              onInput={(event) => { workbench.setAltitudeDraft(event.currentTarget.value) }}
-              placeholder={t('canvas.location.optional')}
-              step="1"
-              data-testid="web-location-altitude"
-            />
-          </label>
-        </div>
-
-        <div className={styles.actions}>
+      <section className={styles.searchOverlay} aria-label={t('canvas.location.title')}>
+        <div className={styles.searchRow}>
+          <input
+            type="number"
+            className={styles.coordinateInput}
+            value={workbench.latDraft}
+            onInput={(event) => { workbench.setLatDraft(event.currentTarget.value) }}
+            aria-label={t('canvas.location.latitude')}
+            placeholder={t('canvas.location.latRange')}
+            step="0.0001"
+            min="-90"
+            max="90"
+            data-testid="web-location-latitude"
+          />
+          <input
+            type="number"
+            className={styles.coordinateInput}
+            value={workbench.lonDraft}
+            onInput={(event) => { workbench.setLonDraft(event.currentTarget.value) }}
+            aria-label={t('canvas.location.longitude')}
+            placeholder={t('canvas.location.lonRange')}
+            step="0.0001"
+            min="-180"
+            max="180"
+            data-testid="web-location-longitude"
+          />
           <button
             type="button"
-            className={styles.primaryButton}
-            onClick={saveManualLocation}
-            data-testid="web-location-save-manual"
+            className={styles.setBtn}
+            onClick={saveLocation}
+            data-testid="web-location-save"
           >
             {t('canvas.location.save')}
           </button>
-          <button
-            type="button"
-            className={styles.secondaryButton}
-            onClick={saveMapLocation}
-            data-testid="web-location-save-map"
-          >
-            {t('canvas.location.setMapPin')}
-          </button>
-          {workbench.saved.location && (
+          {mapHost.committedLocation && (
             <button
               type="button"
-              className={styles.secondaryButton}
+              className={styles.clearBtn}
               onClick={clearLocation}
               data-testid="web-location-clear"
             >
@@ -124,13 +93,19 @@ export function WebLocationWorkspace() {
             </button>
           )}
         </div>
-
-        {workbench.saved.location && (
-          <p className={styles.current}>
-            {t('canvas.location.current')}: {workbench.saved.summary}
-          </p>
-        )}
       </section>
+
+      <button
+        type="button"
+        className={styles.collapseBtn}
+        onClick={() => navigateTo('canvas')}
+        aria-label={t('commands.canvas')}
+        data-testid="web-location-collapse"
+      >
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M10.5 3.5L5.5 8L10.5 12.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
     </div>
   )
 }

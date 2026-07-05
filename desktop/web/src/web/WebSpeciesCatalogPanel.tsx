@@ -180,9 +180,6 @@ function WebSpeciesDetail({ view }: { readonly view: SpeciesCatalogDetailView })
         <Field label={t('plantDetail.climateZones')} values={detail.climate_zones} />
         <Field label={t('plantDetail.growthForm')} values={formValues} />
         <Field label={t('filters.lifecycle')} values={detail.life_cycles} />
-        {detail.image && (
-          <ImageAttribution image={detail.image} />
-        )}
       </div>
     </article>
   )
@@ -201,40 +198,6 @@ function Field({
       <span className={styles.detailFieldLabel}>{label}</span>
       <span className={styles.detailFieldValue}>{values.join(' · ')}</span>
     </div>
-  )
-}
-
-function ImageAttribution({ image }: { readonly image: NonNullable<SpeciesCatalogDetailView['detail']>['image'] }) {
-  if (!image) return null
-  const entries = [
-    { label: t('webSpeciesDetail.source'), value: image.source, href: image.source_page_url },
-    { label: t('webSpeciesDetail.credit'), value: image.credit, href: null },
-    { label: t('webSpeciesDetail.license'), value: image.license, href: null },
-  ].filter((entry): entry is { label: string; value: string; href: string | null } => (
-    typeof entry.value === 'string' && entry.value.trim().length > 0
-  ))
-  if (entries.length === 0) return null
-
-  return (
-    <dl className={styles.detailAttribution}>
-      {entries.map((entry) => (
-        <div key={entry.label} className={styles.detailAttributionRow}>
-          <dt>{entry.label}</dt>
-          <dd>
-            {entry.href ? (
-              <a
-                href={entry.href}
-                target="_blank"
-                rel="noreferrer"
-                data-testid={entry.label === t('webSpeciesDetail.source') ? 'web-species-detail-source' : undefined}
-              >
-                {entry.value}
-              </a>
-            ) : entry.value}
-          </dd>
-        </div>
-      ))}
-    </dl>
   )
 }
 

@@ -16,6 +16,7 @@ import { WebCanvasWorkspace } from "./WebCanvasWorkspace";
 import { WebLocationWorkspace } from "./WebLocationWorkspace";
 import { WebSpeciesCatalogPanel } from "./WebSpeciesCatalogPanel";
 import { hasConfiguredStaticDesignTemplates } from "../app/community/catalog.browser";
+import { t } from "../i18n";
 
 const WorldMapPanel = lazy(async () => {
   const module = await import("../components/panels/WorldMapPanel");
@@ -80,7 +81,10 @@ function WebWorkspace({
   readonly controller: BrowserDesignSessionController;
   readonly templatesEnabled: boolean;
 }) {
-  if (activePanel.value === "location") return <WebLocationWorkspace />;
+  const hasDesign = controller.hasCurrentDesign();
+  if (activePanel.value === "location") {
+    return hasDesign ? <WebLocationWorkspace /> : <WebNoDesignWorkspace />;
+  }
   if (templatesEnabled && activePanel.value === "templates") {
     return (
       <Suspense fallback={<div className={styles.workspaceMain} aria-hidden="true" />}>
@@ -109,6 +113,18 @@ function WebWorkspace({
           <WebSpeciesCatalogPanel mode="favorites" />
         </aside>
       )}
+    </div>
+  );
+}
+
+function WebNoDesignWorkspace() {
+  void locale.value;
+  return (
+    <div className={styles.emptyWorkspace} data-testid="web-no-design-workspace">
+      <div className={styles.emptyState}>
+        <span className={styles.emptyTitle}>{t("webShell.emptyDesign")}</span>
+        <span className={styles.emptyHint}>{t("webShell.emptyDesignHint")}</span>
+      </div>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { basemapStyle, locale } from '../app/settings/state'
+import { activePanel } from '../app/shell/state'
 import { REMOTE_BASEMAP_TILE_URL_TEMPLATE } from '../maplibre/config'
 import type { CanopiFile } from '../types/design'
 import { WebLocationWorkspace } from '../web/WebLocationWorkspace'
@@ -108,6 +109,7 @@ describe('Web Edition Location workspace', () => {
     currentDesign.value = makeDesign()
     nonCanvasRevision.value = 0
     locale.value = 'en'
+    activePanel.value = 'location'
     basemapStyle.value = 'street'
     map = null
     maplibreMock.mapConstructor.mockReset()
@@ -123,26 +125,34 @@ describe('Web Edition Location workspace', () => {
     container.remove()
     currentDesign.value = null
     nonCanvasRevision.value = 0
+    activePanel.value = 'canvas'
     vi.restoreAllMocks()
   })
 
-  it('saves manual coordinates without rendering address search controls', async () => {
+  it('saves manual coordinates through the desktop-style location row without altitude or address search', async () => {
+    currentDesign.value = makeDesign({
+      location: { lat: 1, lon: 2, altitude_m: 35 },
+    })
+
     await renderWorkspace()
 
     expect(container.querySelector('[data-testid="web-location-workspace"]')).not.toBeNull()
     expect(container.textContent).not.toContain('Address')
     expect(container.querySelector('input[placeholder="Search for a location..."]')).toBeNull()
+    expect(container.querySelector('[data-testid="web-location-altitude"]')).toBeNull()
+    expect(container.querySelector('[data-testid="web-location-save-map"]')).toBeNull()
+    expect(container.querySelector('[data-testid="web-location-save"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="web-location-clear"]')).not.toBeNull()
 
     setInput('web-location-latitude', '48.8566')
     setInput('web-location-longitude', '2.3522')
-    setInput('web-location-altitude', '35')
-    click('web-location-save-manual')
+    click('web-location-save')
 
-    expect(currentDesign.value?.location).toEqual({ lat: 48.8566, lon: 2.3522, altitude_m: 35 })
+    expect(currentDesign.value?.location).toEqual({ lat: 48.8566, lon: 2.3522, altitude_m: null })
     expect(nonCanvasRevision.value).toBe(1)
   })
 
-  it('uses the street basemap and saves clicked map coordinates', async () => {
+  it('uses the street basemap and saves clicked map coordinates without hidden altitude', async () => {
     basemapStyle.value = 'satellite'
     currentDesign.value = makeDesign({
       location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
@@ -162,10 +172,18 @@ describe('Web Edition Location workspace', () => {
       currentMap().fire('click', { lngLat: { lng: 13.405, lat: 52.52 } })
     })
 
-    expect(currentDesign.value?.location).toEqual({ lat: 52.52, lon: 13.405, altitude_m: 35 })
+    expect(currentDesign.value?.location).toEqual({ lat: 52.52, lon: 13.405, altitude_m: null })
   })
 
-  it('presents map failures without changing the saved Location', async () => {
+  it('keeps the desktop collapse button behavior', async () => {
+    await renderWorkspace()
+
+    click('web-location-collapse')
+
+    expect(activePanel.value).toBe('canvas')
+  })
+
+  it('presents map failures while keeping manual coordinate entry usable', async () => {
     const logError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     currentDesign.value = makeDesign({
       location: { lat: 40.7128, lon: -74.006, altitude_m: null },
@@ -177,10 +195,12 @@ describe('Web Edition Location workspace', () => {
     await renderWorkspace()
     await vi.waitFor(() => expect(container.querySelector('[role="alert"]')?.textContent).toContain('Map unavailable'))
 
-    click('web-location-save-map')
+    setInput('web-location-latitude', '45.5017')
+    setInput('web-location-longitude', '-73.5673')
+    click('web-location-save')
 
     expect(logError).toHaveBeenCalled()
-    expect(currentDesign.value?.location).toEqual({ lat: 40.7128, lon: -74.006, altitude_m: null })
+    expect(currentDesign.value?.location).toEqual({ lat: 45.5017, lon: -73.5673, altitude_m: null })
   })
 
   async function renderWorkspace(): Promise<void> {
