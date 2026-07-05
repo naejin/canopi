@@ -137,14 +137,15 @@ export function createSceneRuntimeConstruction(
   })
   const panelTargetAdapter =
     options.targetPresentation ?? createDetachedSceneRuntimePanelTargetAdapter()
+  const presentationData = appAdapter.presentationData
   const presentation = new SceneRuntimePresentationController({
     sceneStore,
     getViewport: () => camera.viewport,
     getLocale: () => appAdapter.settings.readLocale(),
     resolveHighlightedTargets: callbacks.resolveHighlightedTargets,
     onPlantNamesChanged: callbacks.incrementPlantNamesRevision,
-    speciesCache: options.speciesCache,
-    plantLabels: options.plantLabels,
+    speciesCache: options.speciesCache ?? presentationData?.speciesCache,
+    plantLabels: options.plantLabels ?? presentationData?.plantLabels,
   })
   const chrome = new SceneRuntimeChromeCoordinator()
   const disposeEffects: Array<() => void> = []

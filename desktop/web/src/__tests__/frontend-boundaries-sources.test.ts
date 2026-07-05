@@ -874,6 +874,29 @@ describe('frontend boundary sources', () => {
     }
   })
 
+  it('routes canvas presentation data through the Canvas Runtime App Adapter', () => {
+    const constructionSource = readSource('../canvas/runtime/scene-runtime/construction.ts')
+    const runtimeAdapterSource = readSource('../canvas/runtime/app-adapter.ts')
+    const appAdapterSource = readSource('../app/canvas-runtime/app-adapter.ts')
+    const hostSource = readSource('../app/canvas-runtime/host.ts')
+    const browserRuntimeSource = readSource('../web/browser-canvas-runtime.ts')
+
+    expect(runtimeAdapterSource).toContain('CanvasRuntimePresentationDataAdapter')
+    expect(constructionSource).toContain('appAdapter.presentationData')
+    expect(constructionSource).toContain('presentationData?.plantLabels')
+    expect(constructionSource).toContain('presentationData?.speciesCache')
+    expect(appAdapterSource).toContain('CanvasPlantLabelResolver')
+    expect(appAdapterSource).toContain('CanvasSpeciesCache')
+    expect(hostSource).not.toContain('CanvasPlantLabelResolver')
+    expect(hostSource).not.toContain('CanvasSpeciesCache')
+    expect(browserRuntimeSource).toContain('createDetachedCanvasPlantLabelSource')
+    expect(browserRuntimeSource).not.toContain('CanvasPlantLabelResolver')
+    expectNoImportsMatching('../canvas/runtime/scene-runtime/construction.ts', [
+      /plant-labels$/,
+      /species-cache$/,
+    ])
+  })
+
   it('keeps production Canvas Runtime core free of direct app imports', () => {
     const runtimeSourcePaths = sourceFilesUnder('../canvas/runtime').filter(isTypescriptSource)
 

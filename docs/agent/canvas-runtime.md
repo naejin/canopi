@@ -27,7 +27,7 @@ Use this guide when changing canvas state, scene runtime, renderer behavior, hit
 - `web/WebCanvasWorkspace.tsx` must not import the desktop `LayerPanel` or `CompassOverlay`; those transitively pull command graph, settings persistence, location index, and Tauri IPC paths into the browser bundle. Add browser-specific replacements under `desktop/web/src/web/` when those affordances return.
 - `canvas/runtime/app-adapter.ts` owns the runtime-facing `CanvasRuntimeAppAdapter` contract and detached fallback behavior.
 - `app/canvas-runtime/app-adapter.ts` owns production wiring from the adapter contract to app-owned document/session/settings modules.
-- `canvas/runtime/presentation-data.ts` owns the runtime-facing Species presentation interfaces. Desktop hosts pass IPC-backed `CanvasPlantLabelResolver` and `CanvasSpeciesCache`; web hosts use detached/browser adapters until the DuckDB-WASM catalog supplies real data.
+- `canvas/runtime/presentation-data.ts` owns the runtime-facing Species presentation interfaces. Production presentation-data sources should enter construction through `CanvasRuntimeAppAdapter.presentationData` or explicit test overrides. Desktop app adapters provide IPC-backed `CanvasPlantLabelResolver` and `CanvasSpeciesCache`; web hosts use detached/browser adapters until the DuckDB-WASM catalog supplies real data.
 - Production files under `canvas/runtime/` must not import `app/**`; add behavior through `CanvasRuntimeSurfaces`, `CanvasRuntimeAppAdapter`, or a narrower runtime-owned interface instead.
 
 ## Scene Ownership

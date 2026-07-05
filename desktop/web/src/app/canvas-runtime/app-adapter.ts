@@ -3,6 +3,8 @@ import type {
   CanvasRuntimeAppAdapter,
   CanvasRuntimeLayerProjectionSource,
 } from '../../canvas/runtime/app-adapter'
+import { CanvasPlantLabelResolver } from '../../canvas/runtime/plant-labels'
+import { CanvasSpeciesCache } from '../../canvas/runtime/species-cache'
 import {
   gridVisible,
   layerLockState,
@@ -21,11 +23,18 @@ import { savedObjectStampWorkbench } from '../saved-object-stamps'
 const APP_OWNED_LAYER_PROJECTIONS = new Set(['base', 'contours'])
 
 export function createAppCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter {
+  const plantLabels = new CanvasPlantLabelResolver()
+  const speciesCache = new CanvasSpeciesCache()
+
   return {
     cleanState: { setCanvasClean },
     document: { composeDocumentForSave },
     savedObjectStamps: {
       saveCurrentSelection: () => savedObjectStampWorkbench.saveCurrentSelection(),
+    },
+    presentationData: {
+      plantLabels,
+      speciesCache,
     },
     settings: {
       readLocale: () => locale.value,

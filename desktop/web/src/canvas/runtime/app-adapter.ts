@@ -1,5 +1,9 @@
 import type { CanopiFile } from '../../types/design'
 import { FALLBACK_PLANT_SPACING_INTERVAL_M } from '../plant-spacing-interval'
+import type {
+  CanvasPlantLabelSource,
+  CanvasSpeciesPresentationCache,
+} from './presentation-data'
 import type { CanvasRuntimeDocumentMetadata } from './runtime'
 
 export interface CanvasRuntimeLayerProjectionSource {
@@ -54,10 +58,16 @@ export interface CanvasRuntimeLayerProjectionAdapter {
   syncLayer(layer: CanvasRuntimeLayerProjectionSource): void
 }
 
+export interface CanvasRuntimePresentationDataAdapter {
+  readonly plantLabels?: CanvasPlantLabelSource
+  readonly speciesCache?: CanvasSpeciesPresentationCache
+}
+
 export interface CanvasRuntimeAppAdapter {
   readonly cleanState: CanvasRuntimeCleanStateAdapter
   readonly document: CanvasRuntimeDocumentAdapter
   readonly savedObjectStamps?: CanvasRuntimeSavedObjectStampAdapter
+  readonly presentationData?: CanvasRuntimePresentationDataAdapter
   readonly settings: CanvasRuntimeSettingsAdapter
 }
 
