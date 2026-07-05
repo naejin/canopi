@@ -23,7 +23,6 @@ import { PlantRow } from '../plant-db/PlantRow'
 import { PlantDetailCard } from '../plant-detail/PlantDetailCard'
 import { ButtonTooltip } from '../shared/ButtonTooltip'
 import plantDetailStyles from '../plant-detail/PlantDetail.module.css'
-import { SavedStampsPrototype, shouldShowSavedStampsPrototype } from './SavedStampsPrototype'
 import styles from './FavoritesPanel.module.css'
 
 const SAVED_STAMP_PREVIEW_DELAY_MS = 120
@@ -352,88 +351,82 @@ export function FavoritesPanel() {
           </div>
         </section>
 
-        {shouldShowSavedStampsPrototype() ? (
-          <SavedStampsPrototype stamps={savedStampItems} />
-        ) : (
-          <>
-            <SavedStampsResizeHandle
-              mainRef={mainRef}
-              headerRef={headerRef}
-              handleRef={resizeHandleRef}
-              frameRef={savedStampsFrameRef}
-            />
-            <section
-              ref={savedStampsFrameRef}
-              className={styles.savedStampsSection}
-              data-saved-stamps-frame
-              aria-labelledby="saved-object-stamps-title"
-              style={{ height: `${resolveSavedStampsFrameHeight(savedStampsFrameHeight.value, mainRef.current, savedStampsChrome)}px` }}
-            >
-            <div className={styles.frameHeader}>
-              <div className={styles.savedStampsTitleGroup}>
-                <span id="saved-object-stamps-title" className={styles.title}>
-                  {t('savedObjectStamps.title')}
-                </span>
-                <span className={styles.savedStampsDescription}>
-                  {t('savedObjectStamps.description')}
-                </span>
-              </div>
-              {savedStampsView.items.length > 0 && (
-                <span className={styles.count}>{savedStampsView.items.length}</span>
-              )}
-            </div>
-            <div className={styles.savedStampsActions}>
-              <button
-                type="button"
-                className={styles.saveStampButton}
-                disabled={!savedStampSelection.canSave}
-                onClick={() => void savedObjectStampWorkbench.saveCurrentSelection()}
-              >
-                {t('savedObjectStamps.saveSelection')}
-              </button>
-              <button
-                type="button"
-                className={styles.importStampButton}
-                onClick={() => void savedObjectStampWorkbench.importStampFile()}
-              >
-                {t('savedObjectStamps.import')}
-              </button>
-            </div>
-            {!savedStampSelection.canSave && (
-              <span className={styles.savedStampsHint}>
-                {t('savedObjectStamps.selectHint')}
+        <SavedStampsResizeHandle
+          mainRef={mainRef}
+          headerRef={headerRef}
+          handleRef={resizeHandleRef}
+          frameRef={savedStampsFrameRef}
+        />
+        <section
+          ref={savedStampsFrameRef}
+          className={styles.savedStampsSection}
+          data-saved-stamps-frame
+          aria-labelledby="saved-object-stamps-title"
+          style={{ height: `${resolveSavedStampsFrameHeight(savedStampsFrameHeight.value, mainRef.current, savedStampsChrome)}px` }}
+        >
+          <div className={styles.frameHeader}>
+            <div className={styles.savedStampsTitleGroup}>
+              <span id="saved-object-stamps-title" className={styles.title}>
+                {t('savedObjectStamps.title')}
               </span>
+              <span className={styles.savedStampsDescription}>
+                {t('savedObjectStamps.description')}
+              </span>
+            </div>
+            {savedStampsView.items.length > 0 && (
+              <span className={styles.count}>{savedStampsView.items.length}</span>
             )}
-            {savedStampsView.loading ? (
-              <div className={styles.savedStampsLoading} aria-live="polite" aria-busy="true">
-                {t('savedObjectStamps.loading')}
-              </div>
-            ) : savedStampsView.items.length === 0 ? (
-              <div className={styles.savedStampsEmpty} aria-live="polite">
-                {t('savedObjectStamps.empty')}
-              </div>
-            ) : (
-              <div
-                ref={savedStampsListRef}
-                className={styles.savedStampsList}
-                role="list"
-                aria-label={t('savedObjectStamps.title')}
-              >
-                {orderedSavedStampItems.map((stamp) => (
-                  <SavedObjectStampRow
-                    key={stamp.id}
-                    stamp={stamp}
-                    onPreviewRequest={showStampPreview}
-                    onPreviewSchedule={scheduleStampPreview}
-                    onPreviewClear={hideStampPreview}
-                    onReorderBegin={beginSavedStampReorder}
-                  />
-                ))}
-              </div>
-            )}
-          </section>
-          </>
-        )}
+          </div>
+          <div className={styles.savedStampsActions}>
+            <button
+              type="button"
+              className={styles.saveStampButton}
+              disabled={!savedStampSelection.canSave}
+              onClick={() => void savedObjectStampWorkbench.saveCurrentSelection()}
+            >
+              {t('savedObjectStamps.saveSelection')}
+            </button>
+            <button
+              type="button"
+              className={styles.importStampButton}
+              onClick={() => void savedObjectStampWorkbench.importStampFile()}
+            >
+              {t('savedObjectStamps.import')}
+            </button>
+          </div>
+          {!savedStampSelection.canSave && (
+            <span className={styles.savedStampsHint}>
+              {t('savedObjectStamps.selectHint')}
+            </span>
+          )}
+          {savedStampsView.loading ? (
+            <div className={styles.savedStampsLoading} aria-live="polite" aria-busy="true">
+              {t('savedObjectStamps.loading')}
+            </div>
+          ) : savedStampsView.items.length === 0 ? (
+            <div className={styles.savedStampsEmpty} aria-live="polite">
+              {t('savedObjectStamps.empty')}
+            </div>
+          ) : (
+            <div
+              ref={savedStampsListRef}
+              className={styles.savedStampsList}
+              role="list"
+              aria-label={t('savedObjectStamps.title')}
+            >
+              {orderedSavedStampItems.map((stamp) => (
+                <SavedObjectStampRow
+                  key={stamp.id}
+                  stamp={stamp}
+                  onPreviewRequest={showStampPreview}
+                  onPreviewSchedule={scheduleStampPreview}
+                  onPreviewClear={hideStampPreview}
+                  onReorderBegin={beginSavedStampReorder}
+                />
+              ))}
+            </div>
+          )}
+        </section>
       </div>
 
       <SavedStampRecognitionOverlay preview={preview} panelRef={mainRef} />

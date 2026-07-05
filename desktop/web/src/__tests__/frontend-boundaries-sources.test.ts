@@ -233,6 +233,19 @@ describe('frontend boundary sources', () => {
     expect(sourceExists('../components/canvas/TemplateAdaptation.tsx')).toBe(false)
   })
 
+  it('keeps Saved Object Stamps on the Favorites workbench instead of prototype entry points', () => {
+    const appSource = readSource('../app.tsx')
+    const favoritesSource = readSource('../components/panels/FavoritesPanel.tsx')
+
+    expect(sourceExists('../components/panels/SavedStampsPrototype.tsx')).toBe(false)
+    expect(sourceExists('../components/panels/SavedStampsPrototype.module.css')).toBe(false)
+    expect(appSource).not.toContain('stampPrototype')
+    expect(appSource).not.toContain('URLSearchParams')
+    expect(favoritesSource).toContain('savedObjectStampWorkbench')
+    expect(favoritesSource).toContain('data-saved-stamps-frame')
+    expect(favoritesSource).not.toContain('SavedStampsPrototype')
+  })
+
   it('keeps scene runtime panel-target app signals behind an injected adapter', () => {
     const runtimeSource = readSource('../canvas/runtime/scene-runtime.ts')
     const effectsSource = readSource('../canvas/runtime/scene-runtime/effects.ts')
