@@ -59,14 +59,6 @@ pub fn get_common_name(conn: &Connection, species_id: &str, locale: &str) -> Opt
     .flatten()
 }
 
-pub(super) fn localized_name_for_species_id(
-    conn: &Connection,
-    species_id: &str,
-    locale: &str,
-) -> Option<String> {
-    get_common_name(conn, species_id, locale)
-}
-
 pub fn get_locale_common_names(
     conn: &Connection,
     canonical_name: &str,

@@ -922,18 +922,6 @@
     "reorderLabel": "Reordenar sello guardado",
     "resizeFrame": "Redimensionar el marco de Sellos guardados"
   },
-  "adaptation": {
-    "title": "Adaptación de plantilla",
-    "incompatible": "Plantas incompatibles",
-    "compatible": "Compatible",
-    "hardinessWarning": "Desajuste de rusticidad ({{zones}} zonas)",
-    "suggestReplacement": "Sugerir reemplazo",
-    "acceptAll": "Aceptar todo",
-    "dismissAll": "Descartar todo",
-    "replacement": "Reemplazar con",
-    "keepOriginal": "Mantener original",
-    "reviewPlants": "Revisar plantas para su ubicación"
-  },
   "error": {
     "title": "Algo salió mal",
     "message": "La aplicación encontró un error inesperado. Puede intentar recargar.",

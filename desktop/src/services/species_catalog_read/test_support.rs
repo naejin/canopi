@@ -1,7 +1,5 @@
 use rusqlite::Connection;
 
-use crate::db::PlantDb;
-
 pub(crate) fn test_conn() -> Connection {
     let conn = Connection::open_in_memory().unwrap();
     conn.execute_batch(
@@ -182,8 +180,4 @@ pub(crate) fn test_conn() -> Connection {
     .unwrap();
 
     conn
-}
-
-pub(crate) fn test_plant_db() -> PlantDb {
-    PlantDb::available(test_conn())
 }

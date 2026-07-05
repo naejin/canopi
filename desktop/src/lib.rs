@@ -1,6 +1,5 @@
 mod blocking;
 mod commands;
-mod contracts;
 mod db;
 mod design;
 mod http;
@@ -112,8 +111,6 @@ pub fn run() {
             commands::tiles::get_offline_status,
             commands::tiles::remove_offline_tiles,
             commands::geocoding::geocode_address,
-            commands::adaptation::check_plant_compatibility,
-            commands::adaptation::suggest_replacements,
             commands::community::get_template_catalog,
             commands::community::get_template_preview,
             commands::community::download_template,

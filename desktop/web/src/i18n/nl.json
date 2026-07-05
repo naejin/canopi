@@ -922,18 +922,6 @@
     "reorderLabel": "Opgeslagen stempel herschikken",
     "resizeFrame": "Frame Opgeslagen stempels aanpassen"
   },
-  "adaptation": {
-    "title": "Sjabloonaanpassing",
-    "incompatible": "Onverenigbare planten",
-    "compatible": "Verenigbaar",
-    "hardinessWarning": "Winterhardheid verschil ({{zones}} zones)",
-    "suggestReplacement": "Vervanging voorstellen",
-    "acceptAll": "Alles accepteren",
-    "dismissAll": "Alles negeren",
-    "replacement": "Vervangen door",
-    "keepOriginal": "Origineel behouden",
-    "reviewPlants": "Controleer planten voor uw locatie"
-  },
   "error": {
     "title": "Er is iets misgegaan",
     "message": "De toepassing heeft een onverwachte fout aangetroffen. U kunt proberen opnieuw te laden.",

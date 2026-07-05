@@ -922,18 +922,6 @@
     "reorderLabel": "Reordenar carimbo salvo",
     "resizeFrame": "Redimensionar quadro de Carimbos salvos"
   },
-  "adaptation": {
-    "title": "Adaptação do modelo",
-    "incompatible": "Plantas incompatíveis",
-    "compatible": "Compatível",
-    "hardinessWarning": "Desajuste de rusticidade ({{zones}} zonas)",
-    "suggestReplacement": "Sugerir substituição",
-    "acceptAll": "Aceitar tudo",
-    "dismissAll": "Ignorar tudo",
-    "replacement": "Substituir por",
-    "keepOriginal": "Manter original",
-    "reviewPlants": "Verificar plantas para sua localização"
-  },
   "error": {
     "title": "Algo deu errado",
     "message": "O aplicativo encontrou um erro inesperado. Você pode tentar recarregar.",

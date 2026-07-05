@@ -1,4 +1,3 @@
-pub mod adaptation;
 pub mod design;
 pub mod health;
 pub mod location;

@@ -922,18 +922,6 @@
     "reorderLabel": "Riordina timbro salvato",
     "resizeFrame": "Ridimensiona il riquadro Timbri salvati"
   },
-  "adaptation": {
-    "title": "Adattamento modello",
-    "incompatible": "Piante incompatibili",
-    "compatible": "Compatibile",
-    "hardinessWarning": "Disallineamento rusticità ({{zones}} zone)",
-    "suggestReplacement": "Suggerisci sostituzione",
-    "acceptAll": "Accetta tutto",
-    "dismissAll": "Ignora tutto",
-    "replacement": "Sostituisci con",
-    "keepOriginal": "Mantieni originale",
-    "reviewPlants": "Verifica piante per la tua posizione"
-  },
   "error": {
     "title": "Qualcosa è andato storto",
     "message": "L'applicazione ha riscontrato un errore imprevisto. Puoi provare a ricaricare.",

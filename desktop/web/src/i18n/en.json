@@ -922,18 +922,6 @@
     "reorderLabel": "Reorder saved stamp",
     "resizeFrame": "Resize Saved Stamps frame"
   },
-  "adaptation": {
-    "title": "Template Adaptation",
-    "incompatible": "Incompatible plants",
-    "compatible": "Compatible",
-    "hardinessWarning": "Hardiness mismatch ({{zones}} zones)",
-    "suggestReplacement": "Suggest replacement",
-    "acceptAll": "Accept all",
-    "dismissAll": "Dismiss all",
-    "replacement": "Replace with",
-    "keepOriginal": "Keep original",
-    "reviewPlants": "Review plants for your location"
-  },
   "error": {
     "title": "Something went wrong",
     "message": "The application encountered an unexpected error. You can try reloading.",

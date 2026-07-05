@@ -922,18 +922,6 @@
     "reorderLabel": "Réorganiser la planche",
     "resizeFrame": "Redimensionner le cadre Planches"
   },
-  "adaptation": {
-    "title": "Adaptation du modèle",
-    "incompatible": "Plantes incompatibles",
-    "compatible": "Compatible",
-    "hardinessWarning": "Décalage de rusticité ({{zones}} zones)",
-    "suggestReplacement": "Suggérer un remplacement",
-    "acceptAll": "Tout accepter",
-    "dismissAll": "Tout ignorer",
-    "replacement": "Remplacer par",
-    "keepOriginal": "Garder l'original",
-    "reviewPlants": "Vérifier les plantes pour votre emplacement"
-  },
   "error": {
     "title": "Une erreur est survenue",
     "message": "L'application a rencontré une erreur inattendue. Vous pouvez essayer de recharger.",

@@ -1,4 +1,3 @@
-pub mod adaptation;
 pub mod community;
 pub mod design;
 pub mod design_notebook;

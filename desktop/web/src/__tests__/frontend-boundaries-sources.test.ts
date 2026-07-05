@@ -219,36 +219,18 @@ describe('frontend boundary sources', () => {
   })
 
   it('keeps the remaining workflow components free of direct ipc imports', () => {
-    const adaptationSource = readSource('../components/canvas/TemplateAdaptation.tsx')
     const welcomeSource = readSource('../components/shared/WelcomeScreen.tsx')
     const budgetSource = readSource('../components/canvas/BudgetTab.tsx')
 
-    expect(adaptationSource).not.toContain('ipc/adaptation')
     expect(welcomeSource).not.toContain('ipc/design')
     expect(budgetSource).not.toContain('ipc/design')
   })
 
-  it('keeps Site Adaptation sibling to the Species Catalog Workbench', () => {
-    const siteAdaptationSources = [
-      '../app/adaptation/index.ts',
-      '../app/adaptation/controller.ts',
-      '../components/canvas/TemplateAdaptation.tsx',
-    ]
-    const forbiddenImports = [
-      /(^|\/)app\/plant-browser(\/|$)/,
-      /(^|\/)plant-browser(\/|$)/,
-      /(^|\/)components\/plant-db(\/|$)/,
-      /(^|\/)plant-db(\/|$)/,
-      /(^|\/)components\/plant-detail(\/|$)/,
-      /(^|\/)plant-detail(\/|$)/,
-    ]
-
-    for (const sourcePath of siteAdaptationSources) {
-      const source = readSource(sourcePath)
-
-      expect(source).not.toContain('speciesCatalogWorkbench')
-      expectNoImportsMatching(sourcePath, forbiddenImports)
-    }
+  it('keeps retired Site Adaptation out of active frontend source', () => {
+    expect(sourceExists('../app/adaptation/index.ts')).toBe(false)
+    expect(sourceExists('../app/adaptation/controller.ts')).toBe(false)
+    expect(sourceExists('../ipc/adaptation.ts')).toBe(false)
+    expect(sourceExists('../components/canvas/TemplateAdaptation.tsx')).toBe(false)
   })
 
   it('keeps scene runtime panel-target app signals behind an injected adapter', () => {
