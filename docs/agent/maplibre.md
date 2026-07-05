@@ -53,6 +53,7 @@ Use this guide when changing MapLibre surfaces, basemap rendering, terrain layer
 
 - CSP in `tauri.conf.json` is strict. Add resource origins when adding tile or image sources.
 - MapLibre's default bundle starts workers from blob URLs. Keep both `worker-src` and the WebKit fallback `child-src` open to `blob:` in Tauri CSP.
+- Linux desktop startup sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` before Tauri initializes WebKitGTK. Keep this in process startup, not in developer shell instructions, because MapLibre/WebGL can freeze the WebKitGTK webview on affected systems when the default DMA-BUF renderer is used.
 - Blocking HTTP/file work must run behind an async Tauri command and `spawn_blocking`.
 - All `ureq` calls must set global timeouts and response size limits.
 - For large binary data, prefer `tauri::ipc::Response::new(bytes)` over JSON serialization.

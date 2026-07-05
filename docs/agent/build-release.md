@@ -98,6 +98,7 @@ gh run view <run-id> --json status,conclusion,jobs --jq '.status + " " + ((.conc
 - Linux native code uses Cairo PNG/PDF and inotify.
 - Cairo deps use `cairo-rs` with `png` and `pdf` features.
 - Linux system deps include GTK/WebKitGTK, librsvg, and patchelf.
+- Linux desktop startup sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` in process before Tauri/WebKitGTK initializes. Keep `cargo tauri dev` as the normal local command; do not move this workaround into shell-only launch instructions or release wrappers.
 - Do not add `libappindicator3-dev`.
 
 ## Cross-Platform File Replace
