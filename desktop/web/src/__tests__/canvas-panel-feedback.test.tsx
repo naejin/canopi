@@ -137,13 +137,13 @@ describe('CanvasPanel basemap feedback', () => {
     expect(container.querySelector('[role="img"][aria-label^="Compass"]')).toBeNull()
   })
 
-  it('does not show the compass until a saved Location has non-null north bearing metadata', async () => {
+  it('does not render the obsolete compass even when a saved Location has north bearing metadata', async () => {
     currentDesign.value = {
       version: 2,
       name: 'Demo',
       description: null,
       location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
-      north_bearing_deg: null,
+      north_bearing_deg: 32,
       plant_species_colors: {},
       layers: [],
       plants: [],
@@ -158,8 +158,8 @@ describe('CanvasPanel basemap feedback', () => {
       updated_at: '2026-04-12T00:00:00.000Z',
       extra: {},
     }
-    northBearingDeg.value = 0
-    northBearingAvailable.value = false
+    northBearingDeg.value = 32
+    northBearingAvailable.value = true
 
     await act(async () => {
       render(<CanvasPanel />, container)
@@ -382,38 +382,6 @@ describe('CanvasPanel basemap feedback', () => {
 
     expect(container.querySelector('[role="status"]')).toBeNull()
     expect(container.querySelector('[data-map-active="true"]')).toBeTruthy()
-  })
-
-  it('renders a display-only compass in canvas chrome', async () => {
-    currentDesign.value = {
-      version: 2,
-      name: 'Demo',
-      description: null,
-      location: { lat: 48.8566, lon: 2.3522, altitude_m: 35 },
-      north_bearing_deg: 32,
-      plant_species_colors: {},
-      layers: [],
-      plants: [],
-      zones: [],
-      annotations: [],
-      consortiums: [],
-      groups: [],
-      timeline: [],
-      budget: [],
-      budget_currency: 'EUR',
-      created_at: '2026-04-12T00:00:00.000Z',
-      updated_at: '2026-04-12T00:00:00.000Z',
-      extra: {},
-    }
-    northBearingDeg.value = 32
-    northBearingAvailable.value = true
-
-    await act(async () => {
-      render(<CanvasPanel />, container)
-    })
-
-    const compass = container.querySelector('[role="img"][aria-label^="Compass"]')
-    expect(compass?.getAttribute('aria-label')).toContain('32°')
   })
 
   it('keeps the canvas map surface active for terrain-only visibility', async () => {

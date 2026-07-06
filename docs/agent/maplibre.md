@@ -29,6 +29,7 @@ Use this guide when changing MapLibre surfaces, basemap rendering, terrain layer
 - Do not keep separate bearing math, zoom shortcuts, or equirectangular fallbacks in surface or overlay code.
 - Exact sync is correctness-critical. Do not add camera deadbands or tolerances that can suppress tiny pan/zoom changes.
 - Screen-lock validation is the standard: the same world point must land on the same screen pixel in canvas and map projections.
+- User-facing MapLibre maps are pan/zoom-only while Canopi has no user map-rotation workflow. Keep zoom controls when useful, but do not expose MapLibre compass controls or drag/touch rotation unless map rotation returns through an explicit product decision.
 
 ## Surface Shape
 

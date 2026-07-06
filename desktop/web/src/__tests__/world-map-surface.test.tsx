@@ -166,6 +166,16 @@ describe('WorldMapSurface', () => {
     await vi.waitFor(() => expect(maps).toHaveLength(1))
     await vi.waitFor(() => expect(markers).toHaveLength(2))
 
+    expect(maps[0]!.options).toMatchObject({
+      pitchWithRotate: false,
+      dragRotate: false,
+      touchZoomRotate: false,
+    })
+    expect(maplibreMock.navigationControlConstructor).toHaveBeenCalledWith({
+      visualizePitch: false,
+      showCompass: false,
+      showZoom: true,
+    })
     expect(markers[0]!.lngLat).toEqual([2.35, 48.85])
     expect(markers[1]!.lngLat).toEqual([13.4, 52.52])
     expect(maps[0]!.fitBounds).toHaveBeenCalledWith(

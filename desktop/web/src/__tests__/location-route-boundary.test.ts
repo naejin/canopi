@@ -48,16 +48,16 @@ describe('location route boundary', () => {
     const locationPanelSource = readSource('../components/panels/LocationPanel.tsx')
     const layerPanelSource = readSource('../components/canvas/LayerPanel.tsx')
     const layerPresentationSource = readSource('../app/canvas-layer-presentation/presentation.ts')
-    const compassOverlaySource = readSource('../components/canvas/CompassOverlay.tsx')
     const mapSurfaceControllerSource = readSource('../components/canvas/maplibre-surface-controller.ts')
     const mapSurfaceSnapshotSource = readSource('../app/canvas-map-surface/snapshot.ts')
     const tabSource = readSource('../components/canvas/LocationTab.tsx')
+
+    expect(canvasPanelSource).not.toContain('CompassOverlay')
 
     for (const source of [
       canvasPanelSource,
       locationPanelSource,
       layerPresentationSource,
-      compassOverlaySource,
       mapSurfaceSnapshotSource,
       tabSource,
     ]) {

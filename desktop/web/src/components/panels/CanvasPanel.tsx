@@ -2,7 +2,6 @@ import { useRef, useEffect, useState } from 'preact/hooks'
 import { t } from '../../i18n'
 import { useCanvasDocumentSession } from '../../app/document-session/use-canvas-document-session'
 import { CanvasToolbar } from '../canvas/CanvasToolbar'
-import { CompassOverlay } from '../canvas/CompassOverlay'
 import { ZoomControls } from '../canvas/ZoomControls'
 import { DisplayLegend } from '../canvas/DisplayLegend'
 import {
@@ -138,7 +137,6 @@ export function CanvasPanel() {
               )}
             </div>
             <div ref={rulerOverlayRef} className={styles.rulerOverlay} />
-            {hasDesign && <CompassOverlay />}
             {locationNotice.visible && (
               <div
                 className={styles.basemapFeedback}

@@ -32,7 +32,11 @@ export interface WorldMapBounds {
 }
 
 interface WorldMapLibreApi extends MapLibreApi {
-  NavigationControl?: new (options?: { visualizePitch?: boolean }) => unknown
+  NavigationControl?: new (options?: {
+    visualizePitch?: boolean
+    showCompass?: boolean
+    showZoom?: boolean
+  }) => unknown
   Marker?: new (options: { element: HTMLElement }) => WorldMapMarker
   LngLatBounds?: new () => WorldMapBounds
 }
@@ -55,15 +59,19 @@ export function createWorldMapLibreMap(
     zoom: options.zoom,
     attributionControl: { compact: true },
     interactive: true,
-    pitchWithRotate: true,
-    dragRotate: true,
-    touchZoomRotate: true,
+    pitchWithRotate: false,
+    dragRotate: false,
+    touchZoomRotate: false,
   }) as unknown as WorldMapLibreMap
 
   try {
     const NavigationControl = (maplibre as WorldMapLibreApi).NavigationControl
     if (NavigationControl) {
-      map.addControl(new NavigationControl({ visualizePitch: false }), 'top-right')
+      map.addControl(new NavigationControl({
+        visualizePitch: false,
+        showCompass: false,
+        showZoom: true,
+      }), 'top-right')
     }
   } catch (error) {
     map.remove()

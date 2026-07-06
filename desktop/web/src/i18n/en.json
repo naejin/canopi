@@ -213,8 +213,6 @@
       "rulers": "Rulers",
       "rulersDesc": "Toggle horizontal and vertical rulers",
       "scaleBar": "Scale Bar",
-      "compass": "Compass",
-      "north": "N",
       "gridSize": "Grid Size",
       "zoom": "Zoom",
       "minimap": "Minimap",

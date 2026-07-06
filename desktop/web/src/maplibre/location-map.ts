@@ -27,7 +27,11 @@ export interface LocationMapLibreMap extends MapLibreMapInstance {
 }
 
 interface LocationNavigationControlApi extends MapLibreApi {
-  NavigationControl?: new (options?: { visualizePitch?: boolean }) => unknown
+  NavigationControl?: new (options?: {
+    visualizePitch?: boolean
+    showCompass?: boolean
+    showZoom?: boolean
+  }) => unknown
 }
 
 export interface LocationMapLibreOptions {
@@ -48,15 +52,19 @@ export function createLocationMapLibreMap(
     zoom: options.zoom,
     attributionControl: { compact: true },
     interactive: true,
-    pitchWithRotate: true,
-    dragRotate: true,
-    touchZoomRotate: true,
+    pitchWithRotate: false,
+    dragRotate: false,
+    touchZoomRotate: false,
   }) as unknown as LocationMapLibreMap
 
   try {
     const NavigationControl = (maplibre as LocationNavigationControlApi).NavigationControl
     if (NavigationControl) {
-      map.addControl(new NavigationControl({ visualizePitch: false }), 'bottom-right')
+      map.addControl(new NavigationControl({
+        visualizePitch: false,
+        showCompass: false,
+        showZoom: true,
+      }), 'bottom-right')
     }
   } catch (error) {
     map.remove()

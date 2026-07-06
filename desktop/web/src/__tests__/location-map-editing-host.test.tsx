@@ -193,6 +193,16 @@ describe('Location map editing host', () => {
     await vi.waitFor(() => expect(currentHost().pin.visible).toBe(true))
     await flushMapHost()
 
+    expect(maplibreMock.mapConstructor.mock.calls[0]?.[0]).toMatchObject({
+      pitchWithRotate: false,
+      dragRotate: false,
+      touchZoomRotate: false,
+    })
+    expect(maplibreMock.navigationControlConstructor).toHaveBeenCalledWith({
+      visualizePitch: false,
+      showCompass: false,
+      showZoom: true,
+    })
     expect(currentHost().pin).toMatchObject({ visible: true, x: 120, y: 80, clamped: false })
 
     act(() => {
