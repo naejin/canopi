@@ -488,7 +488,6 @@ describe('frontend boundary sources', () => {
       readSource('../components/plant-db/PlantRow.tsx'),
       readSource('../components/plant-db/PlantCard.tsx'),
       readSource('../components/plant-db/ViewModeToggle.tsx'),
-      readSource('../components/plant-detail/RelationshipList.tsx'),
     ]
 
     for (const source of sources) {

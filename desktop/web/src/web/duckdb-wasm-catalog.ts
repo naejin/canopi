@@ -198,6 +198,7 @@ function parseNameRow(row: Record<string, unknown>): ReducedSpeciesNameRow {
     common_name: requiredString(row.common_name, 'name.common_name'),
     normalized_name: requiredString(row.normalized_name, 'name.normalized_name'),
     is_primary: booleanValue(row.is_primary),
+    display_order: numberValue(row.display_order),
   }
 }
 
@@ -273,6 +274,15 @@ function stringArray(value: unknown): string[] {
 
 function booleanValue(value: unknown): boolean {
   return value === true || value === 1 || value === 'true'
+}
+
+function numberValue(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string') {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return 0
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

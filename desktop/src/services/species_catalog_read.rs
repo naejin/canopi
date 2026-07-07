@@ -2,8 +2,7 @@ use std::collections::HashMap;
 
 use common_types::species::{
     CommonNameEntry, DynamicFilterOptions, FilterOptions, FlowerColorResolution, PaginatedResult,
-    Relationship, SpeciesDetail, SpeciesExternalLink, SpeciesImage, SpeciesListItem,
-    SpeciesSearchRequest,
+    SpeciesDetail, SpeciesExternalLink, SpeciesImage, SpeciesListItem, SpeciesSearchRequest,
 };
 use rusqlite::Connection;
 
@@ -16,7 +15,6 @@ mod flower;
 mod list_items;
 mod list_projection;
 mod media;
-mod relationships;
 mod search;
 
 #[cfg(test)]
@@ -60,13 +58,6 @@ impl<'conn> SpeciesCatalogRead<'conn> {
         locale: &str,
     ) -> Result<Vec<SpeciesDetail>, String> {
         detail::read_detail_projections(self.conn, canonical_names, locale)
-    }
-
-    pub(crate) fn relationships_for_canonical_name(
-        &self,
-        canonical_name: &str,
-    ) -> Result<Vec<Relationship>, String> {
-        relationships::read_projection(self.conn, canonical_name)
     }
 
     pub(crate) fn common_names_for_canonical_names(
@@ -189,9 +180,9 @@ mod tests {
         .unwrap();
         conn.execute(
             "INSERT INTO species_common_names (
-                id, species_id, language, common_name, source, is_primary
-             )
-             VALUES ('cn-10', 's7', 'en', 'Common fig', 'fixture', 1)",
+	                id, species_id, language, common_name, is_primary, display_order
+	             )
+	             VALUES ('cn-10', 's7', 'en', 'Common fig', 1, 0)",
             [],
         )
         .unwrap();
@@ -263,8 +254,6 @@ mod tests {
         assert_eq!(detail.climate_zones.as_deref(), Some("Tempéré"));
         assert_eq!(detail.uses.len(), 1);
         assert_eq!(detail.uses[0].use_category, "Medicinal");
-        assert_eq!(detail.relationships.len(), 1);
-        assert_eq!(detail.relationships[0].related_canonical_name, "Pear");
     }
 
     #[test]
@@ -277,17 +266,6 @@ mod tests {
 
         assert_eq!(french_detail.common_name, None);
         assert_eq!(english_detail.common_name.as_deref(), Some("Plum"));
-    }
-
-    #[test]
-    fn relationship_projection_resolves_from_canonical_name() {
-        let conn = test_support::test_conn();
-        let catalog = SpeciesCatalogRead::new(&conn);
-        let rows = catalog.relationships_for_canonical_name("Apple").unwrap();
-
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].related_canonical_name, "Pear");
-        assert_eq!(rows[0].relationship_type, "companion");
     }
 
     #[test]
@@ -334,25 +312,19 @@ mod tests {
              );
              CREATE TABLE species_common_names (
                  id TEXT PRIMARY KEY,
-                 species_id TEXT NOT NULL,
-                 language TEXT NOT NULL,
-                 common_name TEXT NOT NULL,
-                 source TEXT,
-                 is_primary INTEGER DEFAULT 1
-             );
+	                 species_id TEXT NOT NULL,
+	                 language TEXT NOT NULL,
+	                 common_name TEXT NOT NULL,
+	                 is_primary INTEGER DEFAULT 1,
+	                 display_order INTEGER NOT NULL DEFAULT 0
+	             );
              CREATE TABLE species_uses (
                  id TEXT PRIMARY KEY,
                  species_id TEXT NOT NULL,
                  use_category TEXT NOT NULL,
                  use_description TEXT
              );
-             CREATE TABLE species_relationships (
-                 id TEXT PRIMARY KEY,
-                 species_id TEXT NOT NULL,
-                 related_species_slug TEXT NOT NULL,
-                 relationship_type TEXT NOT NULL
-             );
-             CREATE TABLE translated_values (
+	             CREATE TABLE translated_values (
                  id TEXT PRIMARY KEY,
                  field_name TEXT NOT NULL,
                  value_en TEXT NOT NULL,
@@ -398,14 +370,6 @@ mod tests {
             [],
         )
         .unwrap();
-        conn.execute(
-            "INSERT INTO species_relationships (
-                 id, species_id, related_species_slug, relationship_type
-             )
-             VALUES ('rel-1', 'sp-1', 'pear', 'companion')",
-            [],
-        )
-        .unwrap();
         for (id, field, value_en, value_fr) in [
             ("t1", "growth_rate", "Slow", "Lent"),
             ("t2", "flower_color", "Blue", "Bleu"),
@@ -435,7 +399,6 @@ mod tests {
             include_str!("species_catalog_read/list_items.rs"),
             include_str!("species_catalog_read/list_projection.rs"),
             include_str!("species_catalog_read/media.rs"),
-            include_str!("species_catalog_read/relationships.rs"),
             include_str!("species_catalog_read/search.rs"),
         ];
 

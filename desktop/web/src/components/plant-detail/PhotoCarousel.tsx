@@ -3,11 +3,6 @@ import { t } from '../../i18n';
 import { createPlantMediaController } from '../../app/plant-detail';
 import styles from './PhotoCarousel.module.css';
 
-const IMAGE_SOURCE_DISPLAY: Record<string, string> = {
-  wikidata_p18: 'Wikimedia Commons',
-  inaturalist: 'iNaturalist',
-};
-
 interface Props {
   canonicalName: string;
 }
@@ -23,7 +18,6 @@ export function PhotoCarousel({ canonicalName }: Props) {
 
   const images = media.images.value;
   const currentIndex = media.currentIndex.value;
-  const currentImage = images[currentIndex];
 
   // No images available
   if (!media.loading.value && images.length === 0) {
@@ -77,13 +71,6 @@ export function PhotoCarousel({ canonicalName }: Props) {
           </div>
         ) : (
           <div className={styles.loading} />
-        )}
-
-        {/* Source badge */}
-        {currentImage?.source && media.imageReady.value && (
-          <span className={styles.sourceBadge}>
-            {IMAGE_SOURCE_DISPLAY[currentImage.source] ?? currentImage.source}
-          </span>
         )}
 
         {/* Nav arrows (only if multiple images) */}

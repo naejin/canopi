@@ -4,7 +4,6 @@ import { plantDbUnavailableMessage } from './plant-db-errors';
 import type {
   SpeciesListItem,
   SpeciesDetail,
-  Relationship,
   SpeciesSearchRequest,
   FilterOptions,
   PaginatedResult,
@@ -40,13 +39,6 @@ export async function getSpeciesDetail(
 ): Promise<SpeciesDetail> {
   if (isDegraded()) throw new Error(plantDbUnavailableMessage(plantDbStatus.value));
   return invoke('get_species_detail', { canonicalName, locale });
-}
-
-export async function getSpeciesRelationships(
-  canonicalName: string,
-): Promise<Relationship[]> {
-  if (isDegraded()) return [];
-  return invoke('get_species_relationships', { canonicalName });
 }
 
 export async function getFilterOptions(): Promise<FilterOptions> {

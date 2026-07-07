@@ -35,7 +35,7 @@ class PrepareDbSearchEntryIndexTests(unittest.TestCase):
                 language TEXT NOT NULL,
                 common_name TEXT NOT NULL,
                 is_primary INTEGER NOT NULL DEFAULT 0,
-                source TEXT
+                display_order INTEGER NOT NULL DEFAULT 0
             )
         """)
         conn.executemany(
@@ -48,14 +48,14 @@ class PrepareDbSearchEntryIndexTests(unittest.TestCase):
         conn.executemany(
             """
             INSERT INTO species_common_names (
-                species_id, language, common_name, is_primary, source
+                species_id, language, common_name, is_primary, display_order
             ) VALUES (?, ?, ?, ?, ?)
             """,
             [
-                ("malus", "fr", "Pommier", 1, "curated"),
-                ("melissa", "fr", "Mélisse", 1, "curated"),
-                ("melissa", "fr", "Mélisse officinale", 0, "curated"),
-                ("melissa", "en", "Lemon balm", 1, "curated"),
+                ("malus", "fr", "Pommier", 1, 0),
+                ("melissa", "fr", "Mélisse", 1, 0),
+                ("melissa", "fr", "Mélisse officinale", 0, 1),
+                ("melissa", "en", "Lemon balm", 1, 0),
             ],
         )
 
@@ -64,7 +64,7 @@ class PrepareDbSearchEntryIndexTests(unittest.TestCase):
 
         french_entries = conn.execute(
             """
-            SELECT species_id, common_name, normalized_name, is_display_name
+            SELECT species_id, common_name, normalized_name, is_display_name, display_order
             FROM species_search_name_entries
             WHERE language = 'fr'
             ORDER BY species_id, common_name
@@ -79,8 +79,8 @@ class PrepareDbSearchEntryIndexTests(unittest.TestCase):
             """
         ).fetchall()
 
-        self.assertIn(("melissa", "Mélisse", "melisse", 1), french_entries)
-        self.assertIn(("melissa", "Mélisse officinale", "melisse officinale", 0), french_entries)
+        self.assertIn(("melissa", "Mélisse", "melisse", 1, 0), french_entries)
+        self.assertIn(("melissa", "Mélisse officinale", "melisse officinale", 0, 1), french_entries)
         self.assertIn(("melissa", "melisse", 0), french_tokens)
         self.assertNotIn(("malus", "Apple", "apple", 1), french_entries)
 

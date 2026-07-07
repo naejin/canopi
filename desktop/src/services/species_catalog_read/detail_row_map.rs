@@ -38,9 +38,7 @@ pub(super) fn map_detail_row(row: &Row<'_>) -> rusqlite::Result<(String, Species
         match_confidence: cursor.read("match_confidence")?,
         tnrs_taxonomic_status: cursor.read("tnrs_taxonomic_status")?,
         match_score: cursor.read("match_score")?,
-        source: cursor.read("source")?,
         enriched_at: cursor.read("enriched_at")?,
-        enrichment_provenance: cursor.read("enrichment_provenance")?,
         height_min_m: cursor.read("height_min_m")?,
         height_max_m: cursor.read("height_max_m")?,
         width_max_m: cursor.read("width_max_m")?,
@@ -179,17 +177,10 @@ pub(super) fn map_detail_row(row: &Row<'_>) -> rusqlite::Result<(String, Species
         ellenberg_reaction: cursor.read("ellenberg_reaction")?,
         ellenberg_nitrogen: cursor.read("ellenberg_nitrogen")?,
         ellenberg_salt: cursor.read("ellenberg_salt")?,
-        classification_source: cursor.read("classification_source")?,
-        model_version: cursor.read("model_version")?,
-        prompt_version: cursor.read("prompt_version")?,
-        classified_at: cursor.read("classified_at")?,
-        validation_flags: cursor.read("validation_flags")?,
         overall_confidence: cursor.read("overall_confidence")?,
-        validation_flag_count: cursor.read("validation_flag_count")?,
         data_quality_tier: cursor.read("data_quality_tier")?,
         wood_density_g_cm3: cursor.read("wood_density_g_cm3")?,
         photosynthesis_pathway: cursor.read("photosynthesis_pathway")?,
-        relationships: vec![],
     };
 
     Ok((species_id, detail))

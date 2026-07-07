@@ -2,8 +2,8 @@ use tauri::State;
 
 use common_types::species::{
     CommonNameEntry, DynamicFilterOptions, FilterOptions, FlowerColorResolution, PaginatedResult,
-    Relationship, Sort, SpeciesDetail, SpeciesExternalLink, SpeciesFilter, SpeciesImage,
-    SpeciesListItem, SpeciesSearchRequest,
+    Sort, SpeciesDetail, SpeciesExternalLink, SpeciesFilter, SpeciesImage, SpeciesListItem,
+    SpeciesSearchRequest,
 };
 
 /// Search species with optional full-text and structured filters.
@@ -75,15 +75,6 @@ pub fn get_species_detail(
     locale: String,
 ) -> Result<SpeciesDetail, String> {
     crate::services::plant_browser::get_species_detail(&plant_db, &user_db, canonical_name, locale)
-}
-
-/// Returns companion/antagonist relationships for a species.
-#[tauri::command]
-pub fn get_species_relationships(
-    plant_db: tauri::State<'_, crate::db::PlantDb>,
-    canonical_name: String,
-) -> Result<Vec<Relationship>, String> {
-    crate::services::species_catalog::get_species_relationships(&plant_db, canonical_name)
 }
 
 /// Batch lookup: returns common names for a list of canonical names in the given locale.

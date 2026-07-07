@@ -25,7 +25,7 @@ DEFAULT_OUTPUT_DIR = REPO_ROOT / "desktop/web/public/canopi-catalog"
 
 UI_LOCALES = ["en", "fr", "es", "pt", "it", "zh", "de", "ja", "ko", "nl", "ru"]
 CLOUDFLARE_PAGES_MAX_ASSET_BYTES = 25 * 1024 * 1024
-MIN_EXPORT_SCHEMA_VERSION = 11
+MIN_EXPORT_SCHEMA_VERSION = 14
 
 SPECIES_FIELDS = [
     "id",
@@ -37,7 +37,7 @@ SPECIES_FIELDS = [
     "growth_form",
     "life_cycles",
 ]
-NAME_FIELDS = ["species_id", "language", "common_name", "normalized_name", "is_primary"]
+NAME_FIELDS = ["species_id", "language", "common_name", "normalized_name", "is_primary", "display_order"]
 IMAGE_FIELDS = ["species_id", "url", "source", "source_page_url", "credit", "license"]
 EXCLUDED_DETAIL_FIELDS = [
     "edibility",
@@ -206,13 +206,17 @@ def write_name_assets(conn: sqlite3.Connection, output_dir: Path) -> dict[str, d
             if has_common_names:
                 rows = conn.execute(
                     """
-                    SELECT scn.species_id, scn.language, scn.common_name,
-                           COALESCE(scn.is_primary, 0) AS is_primary
+                    SELECT scn.species_id,
+                           scn.language,
+                           scn.common_name,
+                           COALESCE(scn.is_primary, 0) AS is_primary,
+                           scn.display_order
                     FROM species_common_names scn
                     JOIN species s ON s.id = scn.species_id
                     WHERE scn.language = ?
                       AND scn.common_name != s.canonical_name
-                    ORDER BY scn.species_id, scn.is_primary DESC,
+                    ORDER BY scn.species_id, scn.display_order,
+                             scn.is_primary DESC,
                              LENGTH(scn.common_name), scn.common_name
                     """,
                     (locale,),
@@ -227,6 +231,7 @@ def write_name_assets(conn: sqlite3.Connection, output_dir: Path) -> dict[str, d
                         "common_name": row["common_name"],
                         "normalized_name": normalized_name,
                         "is_primary": bool(row["is_primary"]),
+                        "display_order": int(row["display_order"] or 0),
                     })
         assets[locale] = asset_entry(output_dir, path)
     return assets
@@ -244,9 +249,11 @@ def write_image_assets(
     species_with_images: set[str] = set()
     try:
         if table_exists(conn, "species_images"):
+            image_columns = table_columns(conn, "species_images")
+            source_expr = "source" if "source" in image_columns else "NULL AS source"
             rows = conn.execute(
-                """
-                SELECT species_id, url, source
+                f"""
+                SELECT species_id, url, {source_expr}
                 FROM species_images
                 WHERE url IS NOT NULL AND url != ''
                 ORDER BY species_id, sort_order, id
@@ -277,7 +284,7 @@ def write_image_assets(
                 if not urls:
                     continue
                 species_with_images.add(species_id)
-                write_image_row(files, species_id, urls[0], "species.image_urls", shard_count)
+                write_image_row(files, species_id, urls[0], None, shard_count)
     finally:
         close_files(files)
     return asset_entries(output_dir, images_dir.glob("*.jsonl"))

@@ -20,11 +20,10 @@ function createDetail(canonicalName: string, commonName: string | null = null) {
   return {
     canonical_name: canonicalName,
     locked: false,
-    common_name: commonName,
-    uses: [],
-    relationships: [],
-  } as unknown as import('../types/species').SpeciesDetail
-}
+	    common_name: commonName,
+	    uses: [],
+	  } as unknown as import('../types/species').SpeciesDetail
+	}
 
 describe('plant detail controller', () => {
   beforeEach(() => {

@@ -218,12 +218,6 @@ export type ProblemReportSensitiveAttachments = {
 	current_design?: string | null,
 };
 
-export type Relationship = {
-	related_canonical_name: string,
-	relationship_type: string,
-	description: string | null,
-};
-
 export type SavedObjectStamp = {
 	id: string,
 	name: string,
@@ -280,9 +274,7 @@ export type SpeciesDetail = {
 	match_confidence: string | null,
 	tnrs_taxonomic_status: string | null,
 	match_score: number | null,
-	source: string | null,
 	enriched_at: string | null,
-	enrichment_provenance: string | null,
 	height_min_m: number | null,
 	height_max_m: number | null,
 	width_max_m: number | null,
@@ -421,17 +413,10 @@ export type SpeciesDetail = {
 	ellenberg_reaction: number | null,
 	ellenberg_nitrogen: number | null,
 	ellenberg_salt: number | null,
-	classification_source: string | null,
-	model_version: string | null,
-	prompt_version: string | null,
-	classified_at: string | null,
-	validation_flags: string | null,
 	overall_confidence: number | null,
-	validation_flag_count: number | null,
 	data_quality_tier: string | null,
 	wood_density_g_cm3: number | null,
 	photosynthesis_pathway: string | null,
-	relationships: Relationship[],
 };
 
 export type SpeciesExternalLink = {
@@ -460,7 +445,6 @@ export type SpeciesImage = {
 	id: string,
 	species_id: string,
 	url: string,
-	source: string | null,
 	sort_order: number,
 };
 

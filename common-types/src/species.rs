@@ -34,13 +34,11 @@ pub struct SpeciesDetail {
     pub taxonomic_order: Option<String>,
     pub taxonomic_class: Option<String>,
     pub is_hybrid: Option<bool>,
-    // Match / provenance
+    // Match quality
     pub match_confidence: Option<String>,
     pub tnrs_taxonomic_status: Option<String>,
     pub match_score: Option<f32>,
-    pub source: Option<String>,
     pub enriched_at: Option<String>,
-    pub enrichment_provenance: Option<String>,
     // Dimensions
     pub height_min_m: Option<f32>,
     pub height_max_m: Option<f32>,
@@ -195,20 +193,12 @@ pub struct SpeciesDetail {
     pub ellenberg_reaction: Option<f32>,
     pub ellenberg_nitrogen: Option<f32>,
     pub ellenberg_salt: Option<f32>,
-    // Classification / ML
-    pub classification_source: Option<String>,
-    pub model_version: Option<String>,
-    pub prompt_version: Option<String>,
-    pub classified_at: Option<String>,
-    pub validation_flags: Option<String>,
+    // Classification confidence
     pub overall_confidence: Option<f32>,
-    pub validation_flag_count: Option<i32>,
     // Science
     pub data_quality_tier: Option<String>,
     pub wood_density_g_cm3: Option<f32>,
     pub photosynthesis_pathway: Option<String>,
-    // Relations
-    pub relationships: Vec<Relationship>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -225,18 +215,10 @@ pub struct SpeciesUse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct Relationship {
-    pub related_canonical_name: String,
-    pub relationship_type: String,
-    pub description: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct SpeciesImage {
     pub id: String,
     pub species_id: String,
     pub url: String,
-    pub source: Option<String>,
     pub sort_order: i32,
 }
 

@@ -138,9 +138,12 @@ fn secondary_common_name_sql(locale_placeholder: &str) -> String {
                  AND scn.language = {locale_placeholder}
                  AND scn.common_name != bcn_loc.common_name
                  AND scn.common_name != s.canonical_name
-               ORDER BY (scn.source = 'llm') DESC, scn.is_primary DESC, LENGTH(scn.common_name) ASC
-               LIMIT 1
-             )
+	               ORDER BY scn.display_order ASC,
+	                        scn.is_primary DESC,
+	                        LENGTH(scn.common_name) ASC,
+	                        scn.common_name ASC
+	               LIMIT 1
+	             )
              ELSE NULL
         END"
     )

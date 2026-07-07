@@ -39,33 +39,27 @@ pub(crate) fn test_conn() -> Connection {
             common_name TEXT NOT NULL,
             PRIMARY KEY (species_id, language)
         );
-        CREATE TABLE species_common_names (
-            id TEXT PRIMARY KEY,
-            species_id TEXT NOT NULL,
-            language TEXT NOT NULL,
-            common_name TEXT NOT NULL,
-            source TEXT,
-            is_primary INTEGER DEFAULT 1
-        );
-        CREATE TABLE species_images (
-            id TEXT PRIMARY KEY,
-            species_id TEXT NOT NULL,
-            url TEXT NOT NULL,
-            source TEXT,
-            sort_order INTEGER NOT NULL
-        );
+	        CREATE TABLE species_common_names (
+	            id TEXT PRIMARY KEY,
+	            species_id TEXT NOT NULL,
+	            language TEXT NOT NULL,
+	            common_name TEXT NOT NULL,
+	            is_primary INTEGER DEFAULT 1,
+	            display_order INTEGER NOT NULL DEFAULT 0
+	        );
+	        CREATE TABLE species_images (
+	            id TEXT PRIMARY KEY,
+	            species_id TEXT NOT NULL,
+	            url TEXT NOT NULL,
+	            sort_order INTEGER NOT NULL
+	        );
         CREATE TABLE species_external_links (
             id TEXT PRIMARY KEY,
             species_id TEXT NOT NULL,
             link_type TEXT NOT NULL,
             url TEXT NOT NULL
         );
-        CREATE TABLE species_relationships (
-            id TEXT PRIMARY KEY,
-            species_id TEXT NOT NULL,
-            related_species_slug TEXT NOT NULL,
-            relationship_type TEXT NOT NULL
-        );",
+	        ",
     )
     .unwrap();
 
@@ -147,29 +141,30 @@ pub(crate) fn test_conn() -> Connection {
     ] {
         conn.execute(
             "INSERT INTO species_common_names (
-                id, species_id, language, common_name, source, is_primary
+                id, species_id, language, common_name, is_primary, display_order
              )
-             VALUES (?1, ?2, ?3, ?4, 'fixture', ?5)",
-            (id, species_id, language, common_name, is_primary),
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            (
+                id,
+                species_id,
+                language,
+                common_name,
+                is_primary,
+                if is_primary == 0 { 1 } else { 0 },
+            ),
         )
         .unwrap();
     }
 
     conn.execute(
-        "INSERT INTO species_images (id, species_id, url, source, sort_order)
-         VALUES ('img-1', 's1', 'https://example.test/apple.jpg', 'fixture', 1)",
+        "INSERT INTO species_images (id, species_id, url, sort_order)
+         VALUES ('img-1', 's1', 'https://example.test/apple.jpg', 1)",
         [],
     )
     .unwrap();
     conn.execute(
         "INSERT INTO species_external_links (id, species_id, link_type, url)
          VALUES ('link-1', 's1', 'pfaf', 'https://example.test/apple')",
-        [],
-    )
-    .unwrap();
-    conn.execute(
-        "INSERT INTO species_relationships (id, species_id, related_species_slug, relationship_type)
-         VALUES ('rel-1', 's1', 'pear', 'companion')",
         [],
     )
     .unwrap();

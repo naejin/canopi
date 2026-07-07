@@ -12,7 +12,6 @@ import {
 import { AttributeGrid } from './AttributeGrid';
 import { UsesSection } from './UsesSection';
 import { RiskDistributionSection } from './RiskDistributionSection';
-import { RelationshipList } from './RelationshipList';
 import { CollapsibleSection } from './CollapsibleSection';
 import { PhotoCarousel } from './PhotoCarousel';
 import { Attr, BoolChip, NumAttr, formatPrecipRange } from './section-helpers';
@@ -74,7 +73,7 @@ export function PlantDetailCard({ canonicalName }: Props) {
             aria-label={t('plantDetail.back')}
             title={t('plantDetail.back')}
           >
-            ‹
+            ›
           </button>
           <div className={styles.headerInfo}>
             <span className={styles.botanicalName}>{canonicalName}</span>
@@ -101,7 +100,7 @@ export function PlantDetailCard({ canonicalName }: Props) {
             aria-label={t('plantDetail.back')}
             title={t('plantDetail.back')}
           >
-            ‹
+            ›
           </button>
           <div className={styles.headerInfo}>
             <span className={styles.botanicalName}>{canonicalName}</span>
@@ -193,8 +192,6 @@ export function PlantDetailCard({ canonicalName }: Props) {
     || d.mating_system !== null || d.self_fertile !== null
     || d.reproductive_type !== null || d.clonal_growth_form !== null || d.storage_organ !== null;
 
-  const hasRelated = d.relationships.length > 0;
-
   const hasIdentity = d.taxonomic_order !== null || d.taxonomic_class !== null || d.is_hybrid !== null;
 
   // ── Derived values ───────────────────────────────────────────────────────
@@ -224,7 +221,7 @@ export function PlantDetailCard({ canonicalName }: Props) {
           aria-label={t('plantDetail.back')}
           title={t('plantDetail.back')}
         >
-          ‹
+          ›
         </button>
 
         <div className={styles.headerInfo}>
@@ -545,16 +542,7 @@ export function PlantDetailCard({ canonicalName }: Props) {
           </CollapsibleSection>
         )}
 
-        {/* 13. RELATED SPECIES */}
-        {hasRelated && (
-          <CollapsibleSection id="related" icon="⇄" titleKey="plantDetail.relatedSpecies"
-            accentClass={styles.sectionRelated} expanded={expanded.value} onToggle={toggle}
-            titleSuffix={` (${d.relationships.length})`}>
-            <RelationshipList relationships={d.relationships} />
-          </CollapsibleSection>
-        )}
-
-        {/* 15. IDENTITY (taxonomy — reference) */}
+        {/* 13. IDENTITY (taxonomy — reference) */}
         {hasIdentity && (
           <CollapsibleSection id="identity" icon="¶" titleKey="plantDetail.identity"
             accentClass={styles.sectionIdentity} expanded={expanded.value} onToggle={toggle}>

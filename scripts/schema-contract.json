@@ -1,7 +1,7 @@
 {
-  "schema_version": 10,
-  "min_export_schema_version": 11,
-  "description": "Maps canopi-data export columns to canopi-core.db species table. Update this file when canopi-data changes column names. v10: generated species_search_name_entries/species_search_name_entry_tokens and idx_species_id added for candidate-first Species Catalog Search.",
+  "schema_version": 11,
+  "min_export_schema_version": 14,
+  "description": "Maps canopi-data export columns to canopi-core.db species table. Update this file when canopi-data changes column names. v11: canopi-data export v14 minimum, provenance/audit columns removed, unused supporting tables omitted from the prepared DB, and generated species_search_name_entries uses display_order for Common Name ranking.",
   "columns": [
     {"name": "id", "type": "TEXT", "required": true},
     {"name": "slug", "type": "TEXT", "required": true},
@@ -15,9 +15,7 @@
     {"name": "match_confidence", "type": "TEXT"},
     {"name": "tnrs_taxonomic_status", "type": "TEXT"},
     {"name": "match_score", "type": "REAL"},
-    {"name": "source", "type": "TEXT"},
     {"name": "enriched_at", "type": "TEXT"},
-    {"name": "enrichment_provenance", "type": "TEXT"},
 
     {"name": "height_min_m", "type": "REAL"},
     {"name": "height_max_m", "type": "REAL"},
@@ -175,24 +173,14 @@
     {"name": "data_quality_tier", "type": "TEXT"},
     {"name": "wood_density_g_cm3", "type": "REAL"},
     {"name": "photosynthesis_pathway", "type": "TEXT"},
-    {"name": "classification_source", "type": "TEXT"},
-    {"name": "model_version", "type": "TEXT"},
-    {"name": "prompt_version", "type": "TEXT"},
-    {"name": "classified_at", "type": "TEXT"},
-    {"name": "validation_flags", "type": "TEXT"},
-    {"name": "overall_confidence", "type": "REAL"},
-    {"name": "validation_flag_count", "type": "INTEGER"}
+    {"name": "overall_confidence", "type": "REAL"}
   ],
   "supporting_tables": [
     "species_common_names",
-    "species_relationships",
     "species_uses",
     "species_images",
     "species_external_links",
-    "species_text_translations",
-    "synonym_lookup",
     "translated_values",
-    "species_distributions",
     "species_climate_zones"
   ],
   "indexes": {
@@ -228,11 +216,8 @@
     ],
     "species_common_names": [
       {"name": "idx_cn_species_lang", "columns": "species_id, language"},
-      {"name": "idx_cn_primary", "columns": "species_id, language, is_primary"}
-    ],
-    "species_relationships": [
-      {"name": "idx_rel_species", "columns": "species_id"},
-      {"name": "idx_rel_related", "columns": "related_species_slug"}
+      {"name": "idx_cn_primary", "columns": "species_id, language, is_primary"},
+      {"name": "idx_cn_display_order", "columns": "species_id, language, display_order"}
     ],
     "species_uses": [
       {"name": "idx_uses_species", "columns": "species_id"}
@@ -242,12 +227,6 @@
     ],
     "species_external_links": [
       {"name": "idx_extlink_species", "columns": "species_id"}
-    ],
-    "synonym_lookup": [
-      {"name": "idx_synonym_canonical", "columns": "canonical_id"}
-    ],
-    "species_distributions": [
-      {"name": "idx_dist_species_type", "columns": "species_id, distribution_type"}
     ],
     "species_climate_zones": [
       {"name": "idx_cz_species_zone", "columns": "species_id, climate_zone"}
