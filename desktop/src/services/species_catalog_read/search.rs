@@ -186,7 +186,7 @@ mod tests {
                 common_name TEXT NOT NULL,
                 language TEXT NOT NULL,
                 is_primary INTEGER NOT NULL DEFAULT 0,
-                source TEXT
+                display_order INTEGER NOT NULL DEFAULT 0
             );
 
             INSERT INTO species (
@@ -204,9 +204,9 @@ mod tests {
                 (1, 'fr', 'Lavande Alpha');
 
             INSERT INTO species_common_names VALUES
-                (1, 'Lavandula alpha', 'fr', 1, 'test'),
-                (1, 'Lavande Alpha', 'fr', 0, 'test'),
-                (1, 'Lavande vraie', 'fr', 0, 'test');
+                (1, 'Lavandula alpha', 'fr', 1, 0),
+                (1, 'Lavande Alpha', 'fr', 0, 1),
+                (1, 'Lavande vraie', 'fr', 0, 2);
 
             INSERT INTO species_search_text (
                 species_rowid, canonical_name, common_names, family_genus, uses_text, other_text
@@ -301,7 +301,7 @@ mod tests {
                 common_name TEXT NOT NULL,
                 language TEXT NOT NULL,
                 is_primary INTEGER NOT NULL DEFAULT 0,
-                source TEXT
+                display_order INTEGER NOT NULL DEFAULT 0
             );
 
             INSERT INTO species (
@@ -326,33 +326,33 @@ mod tests {
                 ('moluccella-laevis', 'Moluccella laevis', 'moluccella-laevis', 'Bells of Ireland', 'Lamiaceae', 'Moluccella', 0.9, 7, 10, 'Medium', 'Low', 0, 0, 0.4);
 
             INSERT INTO species_common_names VALUES
-                ('linum-usitatissimum', 'Common flax', 'en', 1, 'test'),
-                ('linum-usitatissimum', 'Lin commun', 'fr', 1, 'test'),
-                ('linum-bienne', 'Pale flax', 'en', 1, 'test'),
-                ('linum-bienne', 'Lin bisannuel', 'fr', 1, 'test'),
-                ('linum-leonii', 'Leon flax', 'en', 1, 'test'),
-                ('linum-leonii', 'Lin de Léon', 'fr', 1, 'test'),
-                ('linum-communis', 'False flax', 'en', 1, 'test'),
-                ('linum-communis', 'Faux lin', 'fr', 1, 'test'),
-                ('communia-linensis', 'Commun flax', 'en', 1, 'test'),
-                ('communia-linensis', 'Commun Lin', 'fr', 1, 'test'),
-                ('fallback-lin', 'Lin fallback', 'en', 1, 'test'),
-                ('lindleya-mespiloides', 'Lindleya', 'en', 1, 'test'),
-                ('malus-domestica', 'Apple', 'en', 1, 'test'),
-                ('malus-domestica', 'Pommier', 'fr', 1, 'test'),
-                ('mentha-suaveolens', 'Apple mint', 'en', 1, 'test'),
-                ('melissa-officinalis', 'Lemon balm', 'en', 1, 'test'),
-                ('melissa-officinalis', 'Mélisse', 'fr', 1, 'test'),
-                ('clinopodium-alpinum', 'Alpine savory', 'en', 1, 'test'),
-                ('clinopodium-alpinum', 'Mélisse alpine', 'fr', 1, 'test'),
-                ('clinopodium-nepeta', 'Lesser calamint', 'en', 1, 'test'),
-                ('clinopodium-nepeta', 'Mélisse des champs', 'fr', 1, 'test'),
-                ('viola-melissifolia', 'Violet', 'en', 1, 'test'),
-                ('viola-melissifolia', 'Violette à feuilles de mélisse', 'fr', 1, 'test'),
-                ('moluccella-laevis', 'Bells of Ireland', 'en', 1, 'test'),
-                ('moluccella-laevis', 'Clochette d''Irlande', 'fr', 1, 'test'),
-                ('moluccella-laevis', 'Moluque verte', 'fr', 0, 'llm'),
-                ('moluccella-laevis', 'Mélisse des Moluques', 'fr', 0, 'test');
+                ('linum-usitatissimum', 'Common flax', 'en', 1, 0),
+                ('linum-usitatissimum', 'Lin commun', 'fr', 1, 0),
+                ('linum-bienne', 'Pale flax', 'en', 1, 0),
+                ('linum-bienne', 'Lin bisannuel', 'fr', 1, 0),
+                ('linum-leonii', 'Leon flax', 'en', 1, 0),
+                ('linum-leonii', 'Lin de Léon', 'fr', 1, 0),
+                ('linum-communis', 'False flax', 'en', 1, 0),
+                ('linum-communis', 'Faux lin', 'fr', 1, 0),
+                ('communia-linensis', 'Commun flax', 'en', 1, 0),
+                ('communia-linensis', 'Commun Lin', 'fr', 1, 0),
+                ('fallback-lin', 'Lin fallback', 'en', 1, 0),
+                ('lindleya-mespiloides', 'Lindleya', 'en', 1, 0),
+                ('malus-domestica', 'Apple', 'en', 1, 0),
+                ('malus-domestica', 'Pommier', 'fr', 1, 0),
+                ('mentha-suaveolens', 'Apple mint', 'en', 1, 0),
+                ('melissa-officinalis', 'Lemon balm', 'en', 1, 0),
+                ('melissa-officinalis', 'Mélisse', 'fr', 1, 0),
+                ('clinopodium-alpinum', 'Alpine savory', 'en', 1, 0),
+                ('clinopodium-alpinum', 'Mélisse alpine', 'fr', 1, 0),
+                ('clinopodium-nepeta', 'Lesser calamint', 'en', 1, 0),
+                ('clinopodium-nepeta', 'Mélisse des champs', 'fr', 1, 0),
+                ('viola-melissifolia', 'Violet', 'en', 1, 0),
+                ('viola-melissifolia', 'Violette à feuilles de mélisse', 'fr', 1, 0),
+                ('moluccella-laevis', 'Bells of Ireland', 'en', 1, 0),
+                ('moluccella-laevis', 'Clochette d''Irlande', 'fr', 1, 0),
+                ('moluccella-laevis', 'Moluque verte', 'fr', 0, 1),
+                ('moluccella-laevis', 'Mélisse des Moluques', 'fr', 0, 2);
 
             INSERT INTO best_common_names VALUES
                 ('linum-usitatissimum', 'en', 'Common flax'),
@@ -473,7 +473,7 @@ mod tests {
                 normalized_name TEXT NOT NULL,
                 is_display_name INTEGER NOT NULL DEFAULT 0,
                 is_primary INTEGER NOT NULL DEFAULT 0,
-                source_rank INTEGER NOT NULL DEFAULT 0,
+	                display_order INTEGER NOT NULL DEFAULT 0,
                 name_length INTEGER NOT NULL
             );
             CREATE TABLE species_search_name_entry_tokens (
@@ -493,7 +493,7 @@ mod tests {
 
             INSERT INTO species_search_name_entries (
                 entry_id, species_id, language, entry_kind, common_name, normalized_name,
-                is_display_name, is_primary, source_rank, name_length
+	                is_display_name, is_primary, display_order, name_length
             ) VALUES
                 (1, 'melissa-officinalis', 'fr', 'common_name', 'Mélisse', 'melisse', 1, 1, 1, 7),
                 (2, 'clinopodium-alpinum', 'fr', 'common_name', 'Mélisse alpine', 'melisse alpine', 1, 1, 1, 14),
@@ -1462,7 +1462,7 @@ mod tests {
                 common_name TEXT NOT NULL,
                 language TEXT NOT NULL,
                 is_primary INTEGER NOT NULL DEFAULT 0,
-                source TEXT
+	                display_order INTEGER NOT NULL DEFAULT 0
             );",
         )
         .unwrap();

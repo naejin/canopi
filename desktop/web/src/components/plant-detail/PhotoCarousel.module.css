@@ -74,24 +74,6 @@
   opacity: 0.6;
 }
 
-/* ── Source badge — sits on the photo ────────────────────────────────────── */
-
-.sourceBadge {
-  position: absolute;
-  bottom: var(--space-2);
-  right: var(--space-2);
-  font-size: 9px;
-  font-weight: 400;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--color-bg);
-  background: var(--color-text);
-  opacity: 0.55;
-  padding: 1px 5px;
-  border-radius: var(--radius-sm);
-  pointer-events: none;
-}
-
 /* ── Nav arrows — clean chevrons, no circle background ───────────────────── */
 
 .navBtn {

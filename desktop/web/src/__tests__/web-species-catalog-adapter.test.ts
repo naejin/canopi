@@ -285,6 +285,7 @@ function catalogFixture(): ReducedSpeciesCatalogData {
         common_name: 'Pommier',
         normalized_name: 'pommier',
         is_primary: true,
+        display_order: 0,
       },
       {
         species_id: 'species-apple',
@@ -292,6 +293,7 @@ function catalogFixture(): ReducedSpeciesCatalogData {
         common_name: 'Pomme commune',
         normalized_name: 'pomme commune',
         is_primary: false,
+        display_order: 1,
       },
       {
         species_id: 'species-balm',
@@ -299,6 +301,7 @@ function catalogFixture(): ReducedSpeciesCatalogData {
         common_name: 'Melisse',
         normalized_name: 'melisse',
         is_primary: true,
+        display_order: 0,
       },
       {
         species_id: 'species-peach',
@@ -306,6 +309,7 @@ function catalogFixture(): ReducedSpeciesCatalogData {
         common_name: 'Pecher',
         normalized_name: 'pecher',
         is_primary: true,
+        display_order: 0,
       },
     ],
     images: [

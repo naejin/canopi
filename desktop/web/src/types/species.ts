@@ -7,7 +7,6 @@ export type {
   FilterValue,
   FlowerColorResolution,
   PaginatedResult,
-  Relationship,
   Sort,
   SpeciesDetail,
   SpeciesExternalLink,

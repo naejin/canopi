@@ -1,6 +1,4 @@
-use common_types::species::{
-    Relationship, SpeciesDetail, SpeciesExternalLink, SpeciesImage, SpeciesUse,
-};
+use common_types::species::{SpeciesDetail, SpeciesExternalLink, SpeciesImage, SpeciesUse};
 use rusqlite::{Connection, OptionalExtension};
 
 use super::common_names::{get_common_name, translate_composite_value, translate_value};
@@ -68,7 +66,6 @@ pub fn get_detail(
     translate_projected_text_fields(conn, &mut detail, locale)?;
 
     detail.uses = load_uses(conn, &species_id, locale)?;
-    detail.relationships = get_relationships(conn, &species_id)?;
 
     Ok(detail)
 }
@@ -97,36 +94,6 @@ pub(super) fn read_detail_projections(
     Ok(results)
 }
 
-pub fn get_relationships(conn: &Connection, species_id: &str) -> Result<Vec<Relationship>, String> {
-    let mut stmt = conn
-        .prepare(
-            "SELECT s.canonical_name, sr.relationship_type
-             FROM species_relationships sr
-             JOIN species s ON s.slug = sr.related_species_slug
-             WHERE sr.species_id = ?1
-             ORDER BY sr.relationship_type, s.canonical_name",
-        )
-        .map_err(|e| format!("Failed to prepare relationships query: {e}"))?;
-
-    Ok(stmt
-        .query_map([species_id], |row| {
-            Ok(Relationship {
-                related_canonical_name: row.get(0)?,
-                relationship_type: row.get(1)?,
-                description: None,
-            })
-        })
-        .map_err(|e| format!("Failed to fetch relationships: {e}"))?
-        .filter_map(|result| match result {
-            Ok(item) => Some(item),
-            Err(error) => {
-                tracing::warn!("Skipped relationship row: {error}");
-                None
-            }
-        })
-        .collect())
-}
-
 pub fn resolve_species_id(
     conn: &Connection,
     canonical_name: &str,
@@ -150,10 +117,10 @@ pub fn get_species_images(
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, species_id, url, source, sort_order
-             FROM species_images
-             WHERE species_id = ?1
-             ORDER BY sort_order",
+            "SELECT id, species_id, url, sort_order
+	             FROM species_images
+	             WHERE species_id = ?1
+	             ORDER BY sort_order",
         )
         .map_err(|e| format!("Failed to prepare species images query: {e}"))?;
 
@@ -163,8 +130,7 @@ pub fn get_species_images(
                 id: row.get(0)?,
                 species_id: row.get(1)?,
                 url: row.get(2)?,
-                source: row.get(3)?,
-                sort_order: row.get(4)?,
+                sort_order: row.get(3)?,
             })
         })
         .map_err(|e| format!("Failed to fetch species images: {e}"))?

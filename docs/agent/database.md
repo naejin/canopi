@@ -8,8 +8,8 @@ Use this guide when changing SQLite schema contracts, plant search, filters, spe
 - `prepare-db.py` reads from the contract. Update the contract when canopi-data changes column names.
 - Runtime schema validation lives in `desktop/src/db/schema_contract.rs`.
 - Startup warns on schema drift but does not block app startup.
-- Plant DB schema version is `PRAGMA user_version = 10` for the current core DB.
-- canopi-data export schema version is tracked in the contract.
+- Plant DB schema version is `PRAGMA user_version = 11` for the current core DB.
+- canopi-data export schema version is tracked in the contract; the current minimum export schema is v14.
 - Species table name is `species`.
 - `prepare-db.py` builds `species` with `CREATE TABLE AS`; keep `idx_species_id` in the schema contract because search hydration joins ranked ids back through `species.id`.
 - User DB migrations also use `PRAGMA user_version`; check before adding migrations.
@@ -35,7 +35,7 @@ When canopi-data removes or adds columns, update atomically:
 3. `common-types/src/species.rs`: update shared structs.
 4. `desktop/src/services/species_catalog_read/detail_projection.rs` and `detail_row_map.rs`: update projection columns and row mapping order.
 5. Backend test fixtures.
-6. `scripts/prepare-db.py`: update search index generation if FTS columns change.
+6. `scripts/prepare-db.py`: update search index generation if FTS columns or Common Name ranking fields change.
 7. Frontend generated bindings if shared types changed.
 
 ## Query Builder And Filters
@@ -80,7 +80,7 @@ When canopi-data removes or adds columns, update atomically:
 ## FTS5 Search
 
 - `species_search_fts` has weighted columns: canonical name, common names, family/genus, uses text, and other text.
-- `species_search_common_name_tokens` stores normalized Common Name tokens by species and language; generated `species_search_name_entries` and `species_search_name_entry_tokens` store selected-language Common Name rows plus `__canonical__` and `__taxonomy__` rows for fast active search. Runtime relevance uses the generated entry index when present and falls back to FTS for older DB assets.
+- `species_search_common_name_tokens` stores normalized Common Name tokens by species and language for non-indexed search plans; generated `species_search_name_entries` and `species_search_name_entry_tokens` store selected-language Common Name rows plus `__canonical__` and `__taxonomy__` rows for fast active search. Runtime relevance uses the generated entry index when present.
 - Query-side Common Name tokenization must stay aligned with `scripts/prepare-db.py` `common_name_tokens()`: split on Unicode word tokens, fold diacritics/case, and only plan token-table joins for relevance-ordered pages.
 - Use the full FTS table name in `MATCH`, not an alias.
 - Strip all FTS metacharacters before building MATCH queries.
@@ -109,7 +109,8 @@ When canopi-data removes or adds columns, update atomically:
 ## Common Names
 
 - Common name lookup order is selected-language `best_common_names`, then selected-language `species_common_names`, then `species.common_name` only when the selected language is English.
-- `best_common_names` uses `is_primary`, then shortest non-canonical fallback.
+- `species_common_names.display_order` from canopi-data v14 is the authoritative Common Name rank.
+- `best_common_names` uses `display_order`, then `is_primary`, then shortest non-canonical fallback.
 - `get_locale_best_common_name` returns locale-specific best name without fallback.
 - Search list rows include secondary names for disambiguation and may include a selected-language Matched Common Name to explain an active text search match.
 - Cross-workflow backend callers should share Species Catalog read behavior through `desktop/src/services/species_catalog_read.rs` and its projection modules instead of reaching directly into `plant_db` lookup helpers from unrelated services.
@@ -123,6 +124,8 @@ When canopi-data removes or adds columns, update atomically:
 - The canopi-data changelog lives at `~/projects/canopi-data/data/exports/changelog.md`.
 - Regenerate with `python3 scripts/prepare-db.py --export-path ~/projects/canopi-data/data/exports/<latest>.db`.
 - Omitting `--export-path` auto-discovers the latest export.
+- The prepared desktop DB intentionally omits export tables that the app does not query, including `species_relationships`, `species_distributions`, `species_text_translations`, and `synonym_lookup`.
+- canopi-data v14 removed provenance/audit columns from exported Species and `source` columns from supporting tables; do not reintroduce app dependencies on those columns.
 - Stop the Tauri app before regenerating; finalization can hit DB locks.
 - There is no `sqlite3` CLI on this system by default. Use Python `sqlite3` for DB inspection.
 

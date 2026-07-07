@@ -400,13 +400,13 @@ mod tests {
                 common_name TEXT NOT NULL,
                 PRIMARY KEY (species_id, language)
             );
-            CREATE TABLE species_common_names (
-                species_id TEXT NOT NULL,
-                common_name TEXT NOT NULL,
-                language TEXT NOT NULL,
-                is_primary INTEGER NOT NULL DEFAULT 0,
-                source TEXT
-            );
+	            CREATE TABLE species_common_names (
+	                species_id TEXT NOT NULL,
+	                common_name TEXT NOT NULL,
+	                language TEXT NOT NULL,
+	                is_primary INTEGER NOT NULL DEFAULT 0,
+	                display_order INTEGER NOT NULL DEFAULT 0
+	            );
 
             INSERT INTO species (
                 id, canonical_name, slug, common_name, family, genus,
@@ -420,12 +420,12 @@ mod tests {
                 ('sp-1', 'fr', 'Pommier'),
                 ('sp-2', 'fr', 'Lavande');
 
-            INSERT INTO species_common_names VALUES
-                ('sp-1', 'Apple', 'en', 1, 'test'),
-                ('sp-1', 'Pommier', 'fr', 1, 'test'),
-                ('sp-1', 'Pomme', 'fr', 0, 'test'),
-                ('sp-2', 'Lavender', 'en', 1, 'test'),
-                ('sp-2', 'Lavande', 'fr', 1, 'test');
+	            INSERT INTO species_common_names VALUES
+	                ('sp-1', 'Apple', 'en', 1, 0),
+	                ('sp-1', 'Pommier', 'fr', 1, 0),
+	                ('sp-1', 'Pomme', 'fr', 0, 1),
+	                ('sp-2', 'Lavender', 'en', 1, 0),
+	                ('sp-2', 'Lavande', 'fr', 1, 0);
 
             INSERT INTO species_search_text (
                 species_rowid, canonical_name, common_names, family_genus, uses_text, other_text

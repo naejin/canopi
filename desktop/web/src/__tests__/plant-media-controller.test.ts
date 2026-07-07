@@ -27,10 +27,10 @@ describe('plant media controller', () => {
   })
 
   it('loads cached asset urls and prewarms adjacent images', async () => {
-    const loadImages = vi.fn().mockResolvedValue([
-      { url: 'https://example.com/a.jpg', source: 'Example A' },
-      { url: 'https://example.com/b.jpg', source: 'Example B' },
-    ])
+	    const loadImages = vi.fn().mockResolvedValue([
+	      { url: 'https://example.com/a.jpg' },
+	      { url: 'https://example.com/b.jpg' },
+	    ])
     const loadCachedImagePath = vi.fn().mockImplementation(async (url: string) => `/cache/${url.split('/').pop()}`)
     const toAssetUrl = vi.fn((path: string) => `asset://${path}`)
     const controller = createPlantMediaController({ loadImages, loadCachedImagePath, toAssetUrl })
@@ -46,9 +46,9 @@ describe('plant media controller', () => {
 
   it('falls back to the remote image url and ignores stale cache-path responses', async () => {
     const firstImage = createDeferred<string>()
-    const loadImages = vi.fn()
-      .mockResolvedValueOnce([{ url: 'https://example.com/a.jpg', source: 'Example A' }])
-      .mockResolvedValueOnce([{ url: 'https://example.com/b.jpg', source: 'Example B' }])
+	    const loadImages = vi.fn()
+	      .mockResolvedValueOnce([{ url: 'https://example.com/a.jpg' }])
+	      .mockResolvedValueOnce([{ url: 'https://example.com/b.jpg' }])
     const loadCachedImagePath = vi.fn().mockImplementation((url: string) => {
       if (url.endsWith('a.jpg')) return firstImage.promise
       return Promise.reject(new Error('cache miss'))
@@ -70,9 +70,9 @@ describe('plant media controller', () => {
   })
 
   it('switches from cached asset to remote url and then to placeholder on image errors', async () => {
-    const loadImages = vi.fn().mockResolvedValue([
-      { url: 'https://example.com/a.jpg', source: 'Example A' },
-    ])
+	    const loadImages = vi.fn().mockResolvedValue([
+	      { url: 'https://example.com/a.jpg' },
+	    ])
     const loadCachedImagePath = vi.fn().mockResolvedValue('/cache/a.jpg')
     const controller = createPlantMediaController({
       loadImages,
@@ -96,9 +96,9 @@ describe('plant media controller', () => {
 
   it('ignores in-flight image responses after disposal', async () => {
     const deferredPath = createDeferred<string>()
-    const loadImages = vi.fn().mockResolvedValue([
-      { url: 'https://example.com/a.jpg', source: 'Example A' },
-    ])
+	    const loadImages = vi.fn().mockResolvedValue([
+	      { url: 'https://example.com/a.jpg' },
+	    ])
     const loadCachedImagePath = vi.fn().mockReturnValue(deferredPath.promise)
     const controller = createPlantMediaController({
       loadImages,

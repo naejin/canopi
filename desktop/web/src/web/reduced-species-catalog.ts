@@ -26,6 +26,7 @@ export interface ReducedSpeciesNameRow {
   readonly common_name: string
   readonly normalized_name: string
   readonly is_primary: boolean
+  readonly display_order: number
 }
 
 export interface ReducedSpeciesImageRow {
@@ -269,6 +270,7 @@ function compareSpeciesRows(left: ReducedSpeciesRow, right: ReducedSpeciesRow): 
 }
 
 function compareNameRows(left: ReducedSpeciesNameRow, right: ReducedSpeciesNameRow): number {
+  if (left.display_order !== right.display_order) return left.display_order - right.display_order
   if (left.is_primary !== right.is_primary) return left.is_primary ? -1 : 1
   if (left.common_name.length !== right.common_name.length) {
     return left.common_name.length - right.common_name.length

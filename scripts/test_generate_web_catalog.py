@@ -87,6 +87,7 @@ class GenerateWebCatalogTests(unittest.TestCase):
                 "common_name": "Pommier",
                 "normalized_name": "pommier",
                 "is_primary": True,
+                "display_order": 0,
             }])
             japanese_names = read_jsonl(output_dir / manifest["assets"]["names"]["ja"]["path"])
             self.assertEqual(japanese_names, [])
@@ -97,7 +98,7 @@ class GenerateWebCatalogTests(unittest.TestCase):
                 {
                     "species_id": "species-apple",
                     "url": "https://example.test/apple-primary.jpg",
-                    "source": "wikidata_p18",
+                    "source": None,
                     "source_page_url": None,
                     "credit": None,
                     "license": None,
@@ -105,7 +106,7 @@ class GenerateWebCatalogTests(unittest.TestCase):
             )
             self.assertEqual(
                 next(row for row in image_rows if row["species_id"] == "species-balm")["source"],
-                "species.image_urls",
+                None,
             )
 
     def test_asset_size_check_fails_for_oversized_assets(self):
@@ -121,7 +122,7 @@ class GenerateWebCatalogTests(unittest.TestCase):
 def create_export_fixture(path: Path):
     conn = sqlite3.connect(path)
     conn.execute("CREATE TABLE _metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
-    conn.execute("INSERT INTO _metadata (key, value) VALUES ('schema_version', '11')")
+    conn.execute("INSERT INTO _metadata (key, value) VALUES ('schema_version', '14')")
     conn.execute("""
         CREATE TABLE species (
             id TEXT PRIMARY KEY,
@@ -151,8 +152,8 @@ def create_export_fixture(path: Path):
             species_id TEXT NOT NULL,
             language TEXT NOT NULL,
             common_name TEXT NOT NULL,
-            source TEXT,
-            is_primary INTEGER NOT NULL DEFAULT 0
+            is_primary INTEGER NOT NULL DEFAULT 0,
+            display_order INTEGER NOT NULL DEFAULT 0
         )
     """)
     conn.execute("""
@@ -160,8 +161,7 @@ def create_export_fixture(path: Path):
             id TEXT PRIMARY KEY,
             species_id TEXT NOT NULL,
             climate_zone TEXT NOT NULL,
-            confidence REAL NOT NULL,
-            source TEXT
+            confidence REAL NOT NULL
         )
     """)
     conn.execute("""
@@ -169,7 +169,6 @@ def create_export_fixture(path: Path):
             id TEXT PRIMARY KEY,
             species_id TEXT NOT NULL,
             url TEXT NOT NULL,
-            source TEXT NOT NULL,
             sort_order INTEGER DEFAULT 0
         )
     """)
@@ -230,34 +229,34 @@ def create_export_fixture(path: Path):
     conn.executemany(
         """
         INSERT INTO species_common_names (
-            id, species_id, language, common_name, source, is_primary
+            id, species_id, language, common_name, is_primary, display_order
         ) VALUES (?, ?, ?, ?, ?, ?)
         """,
         [
-            ("cn-apple-en", "species-apple", "en", "Apple", "curated", 1),
-            ("cn-apple-fr", "species-apple", "fr", "Pommier", "curated", 1),
-            ("cn-balm-en", "species-balm", "en", "Lemon balm", "curated", 1),
+            ("cn-apple-en", "species-apple", "en", "Apple", 1, 0),
+            ("cn-apple-fr", "species-apple", "fr", "Pommier", 1, 0),
+            ("cn-balm-en", "species-balm", "en", "Lemon balm", 1, 0),
         ],
     )
     conn.executemany(
         """
         INSERT INTO species_climate_zones (
-            id, species_id, climate_zone, confidence, source
-        ) VALUES (?, ?, ?, ?, ?)
+            id, species_id, climate_zone, confidence
+        ) VALUES (?, ?, ?, ?)
         """,
         [
-            ("cz-apple-1", "species-apple", "Temperate", 0.95, "fixture"),
-            ("cz-apple-2", "species-apple", "Boreal", 0.8, "fixture"),
+            ("cz-apple-1", "species-apple", "Temperate", 0.95),
+            ("cz-apple-2", "species-apple", "Boreal", 0.8),
         ],
     )
     conn.executemany(
         """
-        INSERT INTO species_images (id, species_id, url, source, sort_order)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO species_images (id, species_id, url, sort_order)
+        VALUES (?, ?, ?, ?)
         """,
         [
-            ("img-apple-secondary", "species-apple", "https://example.test/apple-secondary.jpg", "wikidata_p18", 1),
-            ("img-apple-primary", "species-apple", "https://example.test/apple-primary.jpg", "wikidata_p18", 0),
+            ("img-apple-secondary", "species-apple", "https://example.test/apple-secondary.jpg", 1),
+            ("img-apple-primary", "species-apple", "https://example.test/apple-primary.jpg", 0),
         ],
     )
     conn.commit()

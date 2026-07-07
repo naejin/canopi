@@ -416,7 +416,7 @@ fn indexed_name_search_cte_broad(
                    e.normalized_name,
                    e.is_display_name,
                    e.is_primary,
-                   e.source_rank,
+	                   e.display_order,
                    e.name_length,
                    {token_position_sum} AS token_position_sum
             FROM {first_token} nt0
@@ -635,7 +635,7 @@ fn indexed_name_entry_matches_cte(
                    e.normalized_name,
                    e.is_display_name,
                    e.is_primary,
-                   e.source_rank,
+	                   e.display_order,
                    e.name_length,
                    {token_position_sum} AS token_position_sum
             FROM {first_token} nt0
@@ -811,7 +811,7 @@ fn indexed_matched_common_name_sql(
                 ELSE 2
               END,
               entry.is_primary DESC,
-              entry.source_rank ASC,
+	              entry.display_order ASC,
               entry.name_length ASC,
               entry.common_name ASC
             LIMIT 1

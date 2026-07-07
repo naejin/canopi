@@ -45,7 +45,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .register::<common_types::species::FlowerColorResolution>()
         .register::<common_types::species::PaginatedResult<common_types::species::SpeciesListItem>>(
         )
-        .register::<common_types::species::Relationship>()
         .register::<common_types::species::Sort>()
         .register::<common_types::species::SpeciesDetail>()
         .register::<common_types::species::SpeciesExternalLink>()

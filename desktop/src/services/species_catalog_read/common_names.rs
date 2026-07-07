@@ -30,9 +30,11 @@ pub fn get_common_name(conn: &Connection, species_id: &str, locale: &str) -> Opt
     let primary_local: Option<String> = conn
         .query_row(
             "SELECT common_name FROM species_common_names
-             WHERE species_id = ?1 AND language = ?2 AND is_primary = 1
-             ORDER BY LENGTH(common_name) ASC
-             LIMIT 1",
+	             WHERE species_id = ?1 AND language = ?2 AND is_primary = 1
+	             ORDER BY display_order ASC,
+	                      LENGTH(common_name) ASC,
+	                      common_name ASC
+	             LIMIT 1",
             [species_id, locale],
             |row| row.get(0),
         )
@@ -71,10 +73,13 @@ pub fn get_locale_common_names(
     let mut stmt = conn
         .prepare(
             "SELECT common_name, is_primary
-             FROM species_common_names
-             WHERE species_id = ?1 AND language = ?2
-             ORDER BY is_primary DESC, LENGTH(common_name) ASC
-             LIMIT 10",
+	             FROM species_common_names
+	             WHERE species_id = ?1 AND language = ?2
+	             ORDER BY display_order ASC,
+	                      is_primary DESC,
+	                      LENGTH(common_name) ASC,
+	                      common_name ASC
+	             LIMIT 10",
         )
         .map_err(|e| format!("Failed to prepare locale common names query: {e}"))?;
 

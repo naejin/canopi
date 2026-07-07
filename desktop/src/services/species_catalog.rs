@@ -1,20 +1,12 @@
 use std::collections::HashMap;
 
 use common_types::species::{
-    CommonNameEntry, DynamicFilterOptions, FilterOptions, FlowerColorResolution, Relationship,
-    SpeciesDetail, SpeciesExternalLink, SpeciesImage,
+    CommonNameEntry, DynamicFilterOptions, FilterOptions, FlowerColorResolution, SpeciesDetail,
+    SpeciesExternalLink, SpeciesImage,
 };
 
 use crate::db::{self, PlantDb};
 use crate::services::species_catalog_read::SpeciesCatalogRead;
-
-pub fn get_species_relationships(
-    plant_db: &PlantDb,
-    canonical_name: String,
-) -> Result<Vec<Relationship>, String> {
-    let conn = db::require_plant_db(plant_db)?;
-    SpeciesCatalogRead::new(&conn).relationships_for_canonical_name(&canonical_name)
-}
 
 pub fn get_common_names(
     plant_db: &PlantDb,

@@ -61,7 +61,6 @@ pub fn run() {
             commands::settings::set_settings,
             commands::species::search_species,
             commands::species::get_species_detail,
-            commands::species::get_species_relationships,
             commands::species::get_common_names,
             commands::species::get_species_batch,
             commands::species::get_flower_color_batch,

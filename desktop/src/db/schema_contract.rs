@@ -1,4 +1,4 @@
-pub(crate) const EXPECTED_PLANT_SCHEMA_VERSION: i32 = 10;
+pub(crate) const EXPECTED_PLANT_SCHEMA_VERSION: i32 = 11;
 
 #[cfg(test)]
 pub(crate) const REQUIRED_APP_TRANSLATION_FIELDS: &[&str] = &[
