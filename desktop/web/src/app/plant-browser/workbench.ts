@@ -27,6 +27,7 @@ export { DYNAMIC_OPTIONS_BACKEND_MISMATCH_ERROR }
 export type ViewMode = 'list' | 'card'
 
 type FilterOptionsAdapter = () => Promise<FilterOptions | null>
+type SupportedFilterFieldsAdapter = () => Promise<readonly string[] | null>
 type FavoriteItemsAdapter = (locale: string) => Promise<SpeciesListItem[]>
 type RecentlyViewedAdapter = (locale: string, limit: number) => Promise<SpeciesListItem[]>
 type ToggleFavoriteAdapter = (canonicalName: string) => Promise<boolean>
@@ -123,6 +124,7 @@ export interface SpeciesCatalogWorkbenchOptions {
   readonly search?: PlantSearchAdapter
   readonly loadDynamicFilterOptions?: DynamicFilterOptionsAdapter
   readonly getFilterOptions?: FilterOptionsAdapter
+  readonly getSupportedFilterFields?: SupportedFilterFieldsAdapter
   readonly getFavorites?: FavoriteItemsAdapter
   readonly getRecentlyViewed?: RecentlyViewedAdapter
   readonly toggleFavorite?: ToggleFavoriteAdapter
@@ -152,6 +154,7 @@ export function createSpeciesCatalogWorkbench({
   search = missingSearchAdapter,
   loadDynamicFilterOptions = emptyDynamicFilterOptionsAdapter,
   getFilterOptions: getFilterOptionsAdapter = emptyFilterOptionsAdapter,
+  getSupportedFilterFields: getSupportedFilterFieldsAdapter,
   getFavorites: getFavoritesAdapter = emptyFavoriteItemsAdapter,
   getRecentlyViewed: getRecentlyViewedAdapter = emptyRecentlyViewedAdapter,
   toggleFavorite: toggleFavoriteAdapter = emptyToggleFavoriteAdapter,
@@ -169,6 +172,9 @@ export function createSpeciesCatalogWorkbench({
     textDebounceMs,
   })
   const filterOptions = signal<FilterOptions | null>(null)
+  const supportedFilterFields = signal<ReadonlySet<string> | null>(
+    getSupportedFilterFieldsAdapter ? new Set() : null,
+  )
   const viewMode = signal<ViewMode>('list')
   const selectedCanonicalName = signal<string | null>(null)
   const detail = signal<SpeciesCatalogDetailView>({
@@ -182,7 +188,13 @@ export function createSpeciesCatalogWorkbench({
   const favoriteItemsLoading = signal(false)
   const favoriteItemsRevision = signal(0)
   const recentlyViewed = signal<SpeciesListItem[]>([])
-  const stripControls = plantFilterCatalog.stripControls()
+  const allStripControls = plantFilterCatalog.stripControls()
+  const stripControls = computed(() => {
+    const supported = supportedFilterFields.value
+    return supported === null
+      ? allStripControls
+      : allStripControls.filter((control) => supported.has(control.filterKey))
+  })
 
   const hasActiveFilters = computed(() => {
     const intent = plantSearchSession.intent.value
@@ -202,7 +214,7 @@ export function createSpeciesCatalogWorkbench({
     filters: plantSearchSession.intent.value.filters,
     hasActive: hasActiveFilters.value,
     activeCount: activeFilterCount.value,
-    controls: stripControls,
+    controls: stripControls.value,
   }))
 
   const favorites = computed<SpeciesCatalogFavoritesView>(() => ({
@@ -225,6 +237,9 @@ export function createSpeciesCatalogWorkbench({
   let favoriteItemsGeneration = 0
   let sidebarListsGeneration = 0
   let detailGeneration = 0
+  let filterOptionsLoaded = false
+  let supportedFilterFieldsLoaded = getSupportedFilterFieldsAdapter === undefined
+  let filterMetadataPromise: Promise<void> | null = null
   let controllerUsers = 0
   let disposeSearchSession: (() => void) | null = null
 
@@ -239,11 +254,43 @@ export function createSpeciesCatalogWorkbench({
   }
 
   async function loadFilterOptions(): Promise<void> {
-    if (filterOptions.value !== null) return
+    if (filterOptionsLoaded && supportedFilterFieldsLoaded) return
+    filterMetadataPromise ??= Promise.all([
+      loadFilterOptionsProjection(),
+      loadSupportedFilterFieldProjection(),
+    ]).then(([nextOptions, nextSupportedFields]) => {
+      batch(() => {
+        filterOptions.value = nextOptions
+        if (nextSupportedFields !== null) {
+          supportedFilterFields.value = new Set(nextSupportedFields)
+        }
+      })
+    }).finally(() => {
+      filterMetadataPromise = null
+    })
+    return filterMetadataPromise
+  }
+
+  async function loadFilterOptionsProjection(): Promise<FilterOptions | null> {
     try {
-      filterOptions.value = await getFilterOptionsAdapter()
+      const nextOptions = await getFilterOptionsAdapter()
+      filterOptionsLoaded = true
+      return nextOptions
     } catch {
       // Non-fatal: the filter strip can still render without option rows.
+      return null
+    }
+  }
+
+  async function loadSupportedFilterFieldProjection(): Promise<readonly string[] | null> {
+    if (!getSupportedFilterFieldsAdapter) return null
+    try {
+      const nextSupportedFields = await getSupportedFilterFieldsAdapter()
+      supportedFilterFieldsLoaded = true
+      return nextSupportedFields
+    } catch {
+      // Non-fatal for desktop; Web keeps the initially empty supported set.
+      return []
     }
   }
 

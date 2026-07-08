@@ -2,22 +2,25 @@ import { useEffect, useState } from 'preact/hooks'
 import { locale } from '../app/settings/state'
 import { speciesCatalogWorkbench } from '../app/plant-browser'
 import { writePlantStampDragData } from '../canvas/plant-stamp-source'
-import type { SpeciesCatalogDetailView } from '../app/plant-browser/workbench'
+import type {
+  SpeciesCatalogDetailView,
+  SpeciesCatalogFilterStripView,
+} from '../app/plant-browser/workbench'
 import { t } from '../i18n'
-import type { SpeciesFilter, SpeciesListItem } from '../types/species'
+import type { FilterOptions, SpeciesFilter, SpeciesListItem } from '../types/species'
+import type { StripChoiceField, StripControlField } from '../app/plant-browser'
+import { toggleArrayValue } from '../components/plant-db/filter-utils'
 import styles from './WebSpeciesCatalogPanel.module.css'
 
 interface WebSpeciesCatalogPanelProps {
   readonly mode: 'catalog' | 'favorites'
 }
 
-type ArrayFilterKey = 'climate_zones' | 'habit' | 'life_cycle'
-
 export function WebSpeciesCatalogPanel({ mode }: WebSpeciesCatalogPanelProps) {
   const currentLocale = locale.value
   const intent = speciesCatalogWorkbench.intent.value
   const results = speciesCatalogWorkbench.results.value
-  const filterOptions = speciesCatalogWorkbench.filterStrip.value.options
+  const filterStrip = speciesCatalogWorkbench.filterStrip.value
   const favoritesView = speciesCatalogWorkbench.favorites.value
   const sidebar = speciesCatalogWorkbench.sidebar.value
   const detailView = speciesCatalogWorkbench.detail.value
@@ -60,26 +63,7 @@ export function WebSpeciesCatalogPanel({ mode }: WebSpeciesCatalogPanelProps) {
       </header>
 
       {isCatalog && (
-        <div className={styles.filters}>
-          <FilterSelect
-            field="climate_zones"
-            value={firstFilterValue(intent.filters.climate_zones)}
-            values={filterOptions?.climate_zones ?? []}
-            label={t('filters.climateZone')}
-          />
-          <FilterSelect
-            field="habit"
-            value={firstFilterValue(intent.filters.habit)}
-            values={filterOptions?.habits ?? []}
-            label={t('filters.field.habit')}
-          />
-          <FilterSelect
-            field="life_cycle"
-            value={firstFilterValue(intent.filters.life_cycle)}
-            values={filterOptions?.life_cycles ?? []}
-            label={t('filters.lifecycle')}
-          />
-        </div>
+        <WebFilterRegion filterStrip={filterStrip} />
       )}
 
       <WebSpeciesDetail view={detailView} />
@@ -113,6 +97,127 @@ export function WebSpeciesCatalogPanel({ mode }: WebSpeciesCatalogPanelProps) {
         </div>
       )}
     </section>
+  )
+}
+
+function WebFilterRegion({
+  filterStrip,
+}: {
+  readonly filterStrip: SpeciesCatalogFilterStripView
+}) {
+  const controls = filterStrip.controls.filter((control): control is StripChoiceField => (
+    control.kind === 'choice' && (filterStrip.options?.[control.optionsKey] ?? []).length > 0
+  ))
+
+  if (controls.length === 0) return null
+
+  return (
+    <div className={styles.filterRegion}>
+      <div className={styles.filterRows}>
+        {controls.map((control) => (
+          <WebFilterControl
+            key={control.filterKey}
+            control={control}
+            filters={filterStrip.filters}
+            options={filterStrip.options}
+          />
+        ))}
+      </div>
+      {filterStrip.hasActive && (
+        <div className={styles.activeFilters}>
+          <WebActiveFilterChips
+            controls={controls}
+            filters={filterStrip.filters}
+          />
+          <button
+            type="button"
+            className={styles.clearFiltersButton}
+            data-testid="web-species-clear-filters"
+            onClick={() => { speciesCatalogWorkbench.clearFilters() }}
+          >
+            {t('filters.clearAll')}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function WebFilterControl({
+  control,
+  filters,
+  options,
+}: {
+  readonly control: StripChoiceField
+  readonly filters: SpeciesFilter
+  readonly options: FilterOptions | null
+}) {
+  const values = options?.[control.optionsKey] ?? []
+  if (values.length === 0) return null
+  const activeValues = (filters[control.filterKey] as string[] | null) ?? []
+
+  return (
+    <div className={styles.filterRow} data-testid={`web-species-filter-${control.filterKey}`}>
+      <span className={styles.filterLabel}>{t(control.labelI18nKey, control.fallbackLabel)}</span>
+      <div className={styles.filterChoices}>
+        {values.map((value) => {
+          const active = activeValues.includes(value)
+          return (
+            <button
+              key={value}
+              type="button"
+              className={`${styles.filterChip} ${active ? styles.filterChipActive : ''}`}
+              aria-pressed={active}
+              data-testid={`web-species-filter-${control.filterKey}-${value}`}
+              onClick={() => {
+                speciesCatalogWorkbench.patchFilters({
+                  [control.filterKey]: toggleArrayValue(filters[control.filterKey] as string[] | null, value),
+                } as Partial<SpeciesFilter>)
+              }}
+            >
+              {translateChoiceValue(control, value)}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function WebActiveFilterChips({
+  controls,
+  filters,
+}: {
+  readonly controls: readonly StripControlField[]
+  readonly filters: SpeciesFilter
+}) {
+  const chips = controls.flatMap((control) => {
+    if (control.kind !== 'choice') return []
+    const values = filters[control.filterKey] as string[] | null
+    return (values ?? []).map((value) => ({ control, value }))
+  })
+
+  if (chips.length === 0) return null
+
+  return (
+    <div className={styles.activeChips} aria-label={t('filters.activeFilters', 'Active filters')}>
+      {chips.map(({ control, value }) => (
+        <button
+          key={`${control.filterKey}-${value}`}
+          type="button"
+          className={styles.activeChip}
+          data-testid={`web-species-active-filter-${control.filterKey}-${value}`}
+          onClick={() => {
+            speciesCatalogWorkbench.patchFilters({
+              [control.filterKey]: toggleArrayValue(filters[control.filterKey] as string[] | null, value),
+            } as Partial<SpeciesFilter>)
+          }}
+        >
+          {translateChoiceValue(control, value)}
+          <span aria-hidden="true">×</span>
+        </button>
+      ))}
+    </div>
   )
 }
 
@@ -199,35 +304,6 @@ function Field({
       <span className={styles.detailFieldLabel}>{label}</span>
       <span className={styles.detailFieldValue}>{values.join(' · ')}</span>
     </div>
-  )
-}
-
-function FilterSelect({
-  field,
-  value,
-  values,
-  label,
-}: {
-  readonly field: ArrayFilterKey
-  readonly value: string
-  readonly values: readonly string[]
-  readonly label: string
-}) {
-  return (
-    <select
-      className={styles.select}
-      value={value}
-      aria-label={label}
-      data-testid={`web-species-filter-${field}`}
-      onChange={(event) => {
-        patchArrayFilter(field, event.currentTarget.value)
-      }}
-    >
-      <option value="">{label}</option>
-      {values.map((option) => (
-        <option key={option} value={option}>{translateFilterValue(field, option)}</option>
-      ))}
-    </select>
   )
 }
 
@@ -354,16 +430,6 @@ function SpeciesRow({ item }: { readonly item: SpeciesListItem }) {
   )
 }
 
-function patchArrayFilter(field: ArrayFilterKey, value: string): void {
-  speciesCatalogWorkbench.patchFilters({
-    [field]: value ? [value] : null,
-  } as Partial<SpeciesFilter>)
-}
-
-function firstFilterValue(values: readonly string[] | null): string {
-  return values?.[0] ?? ''
-}
-
 function metadataLabel(item: SpeciesListItem): string {
   return [
     ...item.climate_zones,
@@ -375,13 +441,8 @@ function compact(values: readonly (string | null | undefined)[]): string[] {
   return values.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
 }
 
-function translateFilterValue(field: ArrayFilterKey, value: string): string {
-  const prefix = field === 'climate_zones'
-    ? 'filters.climateZone_'
-    : field === 'life_cycle'
-      ? 'filters.lifeCycle_'
-      : 'filters.habit_'
-  const key = `${prefix}${value}`
+function translateChoiceValue(control: StripChoiceField, value: string): string {
+  const key = `${control.valueI18nPrefix}${value}`
   const translated = t(key)
   return translated === key ? value : translated
 }

@@ -9,6 +9,11 @@ import type {
 import type { SpeciesCatalogDetail } from '../app/plant-browser/workbench'
 import type { BrowserAppDataStore } from './browser-app-data'
 
+export type WebSupportedFilterOptionsKey = keyof Pick<
+  FilterOptions,
+  'climate_zones' | 'habits' | 'life_cycles' | 'sun_tolerances' | 'soil_tolerances' | 'growth_rates'
+>
+
 export interface ReducedSpeciesRow {
   readonly id: string
   readonly slug: string
@@ -54,6 +59,7 @@ export interface ReducedSpeciesCatalogReader {
     locale: string,
     favoriteNames: ReadonlySet<string>,
   ): Promise<SpeciesListItem[]>
+  getSupportedFilterFields(): Promise<readonly string[]>
   getFilterOptions(): Promise<FilterOptions>
   getDynamicFilterOptions(fields: readonly string[], locale: string): Promise<DynamicFilterOptions[]>
   getSpeciesDetail(canonicalName: string, locale: string): Promise<SpeciesCatalogDetail | null>
@@ -61,6 +67,7 @@ export interface ReducedSpeciesCatalogReader {
 
 export interface ReducedSpeciesCatalogAdapters {
   search(request: SpeciesSearchRequest): Promise<PaginatedResult<SpeciesListItem>>
+  getSupportedFilterFields(): Promise<readonly string[]>
   getFilterOptions(): Promise<FilterOptions>
   loadDynamicFilterOptions(fields: string[], locale: string): Promise<DynamicFilterOptions[]>
   getFavorites(locale: string): Promise<SpeciesListItem[]>
@@ -105,6 +112,10 @@ export function createReducedSpeciesCatalogAdapters({
 
     getFilterOptions() {
       return reader.getFilterOptions()
+    },
+
+    getSupportedFilterFields() {
+      return reader.getSupportedFilterFields()
     },
 
     loadDynamicFilterOptions(fields, locale) {
@@ -192,6 +203,10 @@ export function createInMemoryReducedSpeciesCatalogReader(
 
     async getFilterOptions() {
       return filterOptions
+    },
+
+    async getSupportedFilterFields() {
+      return []
     },
 
     async getDynamicFilterOptions(fields, _locale) {

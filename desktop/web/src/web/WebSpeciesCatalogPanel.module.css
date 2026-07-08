@@ -34,8 +34,7 @@
   white-space: nowrap;
 }
 
-.searchInput,
-.select {
+.searchInput {
   width: 100%;
   min-height: var(--control-size-md);
   border: 1px solid var(--color-border);
@@ -44,29 +43,87 @@
   color: var(--color-text);
   font: inherit;
   font-size: var(--text-sm);
-}
-
-.searchInput {
   padding: 0 var(--space-2);
 }
 
-.searchInput:focus,
-.select:focus {
+.searchInput:focus {
   border-color: var(--color-border-strong);
   outline: none;
 }
 
-.filters {
+.filterRegion {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-2);
   padding: var(--space-3);
   border-bottom: 1px solid var(--color-border);
   background: var(--color-bg);
 }
 
-.select {
+.filterRows {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.filterRow {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.filterLabel {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.filterChoices,
+.activeChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--space-1) - 1px);
+}
+
+.filterChip,
+.activeChip,
+.clearFiltersButton {
+  min-height: var(--control-size-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   padding: 0 var(--space-2);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.filterChip:hover,
+.filterChip:focus-visible,
+.activeChip:hover,
+.activeChip:focus-visible,
+.clearFiltersButton:hover,
+.clearFiltersButton:focus-visible {
+  border-color: var(--color-border-strong);
+  outline: none;
+}
+
+.filterChipActive,
+.activeChip {
+  border-color: var(--color-primary);
+  background: var(--color-control-hover);
+}
+
+.activeFilters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.activeChip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
 }
 
 .list,
@@ -286,10 +343,4 @@
 .retryButton:focus-visible {
   border-color: var(--color-border-strong);
   outline: none;
-}
-
-@media (max-width: 820px) {
-  .filters {
-    grid-template-columns: 1fr;
-  }
 }

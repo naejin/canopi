@@ -32,7 +32,7 @@ const mockWorkbench = vi.hoisted(() => ({
       filters: emptyFilters(),
       hasActive: false,
       activeCount: 0,
-      controls: [],
+      controls: supportedFilterControls(),
     },
   },
   favorites: {
@@ -63,6 +63,7 @@ const mockWorkbench = vi.hoisted(() => ({
   loadFavorites: vi.fn(async () => {}),
   setSearchText: vi.fn(),
   patchFilters: vi.fn(),
+  clearFilters: vi.fn(),
   retrySearch: vi.fn(),
   selectSpecies: vi.fn(),
   closeSpeciesDetail: vi.fn(),
@@ -93,7 +94,7 @@ describe('Web Edition Species Catalog panel', () => {
     container.remove()
   })
 
-  it('renders catalog search and limited v1 filters through the Species Catalog Workbench', async () => {
+  it('renders catalog search and supported filters through the Species Catalog Workbench', async () => {
     await act(async () => {
       render(<WebSpeciesCatalogPanel mode="catalog" />, container)
     })
@@ -111,10 +112,14 @@ describe('Web Edition Species Catalog panel', () => {
     })
     expect(mockWorkbench.setSearchText).toHaveBeenCalledWith('apple')
 
-    const climate = requiredElement<HTMLSelectElement>('[data-testid="web-species-filter-climate_zones"]')
+    expect(container.querySelector('[data-testid="web-species-filter-woody"]')).toBeNull()
+    expect(container.textContent).not.toContain('Woody')
+
+    const climate = requiredElement<HTMLButtonElement>(
+      '[data-testid="web-species-filter-climate_zones-Temperate"]',
+    )
     await act(async () => {
-      climate.value = 'Temperate'
-      climate.dispatchEvent(new Event('change', { bubbles: true }))
+      climate.click()
     })
     expect(mockWorkbench.patchFilters).toHaveBeenCalledWith({ climate_zones: ['Temperate'] })
 
@@ -132,6 +137,45 @@ describe('Web Edition Species Catalog panel', () => {
       requiredElement<HTMLButtonElement>('[data-testid="web-species-load-more"]').click()
     })
     expect(mockWorkbench.loadNextPage).toHaveBeenCalledOnce()
+  })
+
+  it('renders active Web filter chips and clears them through Workbench patches', async () => {
+    const filters = {
+      ...emptyFilters(),
+      climate_zones: ['Temperate'],
+    }
+    mockWorkbench.intent.value = {
+      text: '',
+      filters,
+      extraFilters: [],
+      sort: 'Name',
+      locale: 'en',
+    }
+    mockWorkbench.filterStrip.value = {
+      ...mockWorkbench.filterStrip.value,
+      filters,
+      hasActive: true,
+      activeCount: 1,
+    }
+
+    await act(async () => {
+      render(<WebSpeciesCatalogPanel mode="catalog" />, container)
+    })
+
+    const activeChip = requiredElement<HTMLButtonElement>(
+      '[data-testid="web-species-active-filter-climate_zones-Temperate"]',
+    )
+    expect(activeChip.textContent).toContain('Temperate')
+
+    await act(async () => {
+      activeChip.click()
+    })
+    expect(mockWorkbench.patchFilters).toHaveBeenCalledWith({ climate_zones: null })
+
+    await act(async () => {
+      requiredElement<HTMLButtonElement>('[data-testid="web-species-clear-filters"]').click()
+    })
+    expect(mockWorkbench.clearFilters).toHaveBeenCalledOnce()
   })
 
   it('renders browser-local favorites and recently viewed Species', async () => {
@@ -357,7 +401,7 @@ function resetWorkbench(): void {
     filters: emptyFilters(),
     hasActive: false,
     activeCount: 0,
-    controls: [],
+    controls: supportedFilterControls(),
   }
   mockWorkbench.favorites.value = {
     items: [makeSpeciesListItem('Prunus persica', 'Peach', true)],
@@ -376,6 +420,41 @@ function resetWorkbench(): void {
   }
   mockWorkbench.mount.mockReturnValue(vi.fn())
   mockWorkbench.isSearchLoading.mockReturnValue(false)
+}
+
+function supportedFilterControls() {
+  return [
+    {
+      kind: 'choice',
+      filterKey: 'climate_zones',
+      labelI18nKey: 'filters.climateZone',
+      fallbackLabel: 'Climate zone',
+      optionsKey: 'climate_zones',
+      valueI18nPrefix: 'filters.climateZone_',
+      color: '--color-sun',
+      source: 'schema',
+    },
+    {
+      kind: 'choice',
+      filterKey: 'habit',
+      labelI18nKey: 'filters.field.habit',
+      fallbackLabel: 'Habit',
+      optionsKey: 'habits',
+      valueI18nPrefix: 'filters.habit_',
+      color: '--color-family',
+      source: 'schema',
+    },
+    {
+      kind: 'choice',
+      filterKey: 'life_cycle',
+      labelI18nKey: 'filters.lifecycle',
+      fallbackLabel: 'Life cycle',
+      optionsKey: 'life_cycles',
+      valueI18nPrefix: 'filters.lifeCycle_',
+      color: '--color-family',
+      source: 'adapter',
+    },
+  ] as const
 }
 
 function emptyFilters(): SpeciesFilter {

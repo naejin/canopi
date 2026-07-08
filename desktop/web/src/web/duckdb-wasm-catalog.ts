@@ -6,6 +6,7 @@ import {
   type ReducedSpeciesImageRow,
   type ReducedSpeciesNameRow,
   type ReducedSpeciesRow,
+  type WebSupportedFilterOptionsKey,
 } from './reduced-species-catalog'
 import type { SpeciesCatalogDetail } from '../app/plant-browser/workbench'
 import type {
@@ -20,11 +21,23 @@ interface CatalogAssetEntry {
   readonly path: string
 }
 
+interface WebSupportedFilterPredicate {
+  readonly kind: 'json_array_any' | 'text_any'
+  readonly columns: readonly string[]
+}
+
+interface WebSupportedFilter {
+  readonly key: string
+  readonly optionsKey: WebSupportedFilterOptionsKey
+  readonly predicate: WebSupportedFilterPredicate
+}
+
 interface WebCatalogManifest {
   readonly asset_format: 'ndjson' | 'parquet'
   readonly duckdb?: {
     readonly reader?: string
   }
+  readonly supportedFilters: readonly WebSupportedFilter[]
   readonly assets: {
     readonly species: readonly CatalogAssetEntry[]
     readonly names: Readonly<Record<string, CatalogAssetEntry>>
@@ -88,6 +101,10 @@ export function createDuckDbReducedSpeciesCatalogReader(
       return (await reader()).getFilterOptions()
     },
 
+    async getSupportedFilterFields(): Promise<readonly string[]> {
+      return (await reader()).getSupportedFilterFields()
+    },
+
     async getDynamicFilterOptions(
       fields: readonly string[],
       locale: string,
@@ -130,6 +147,7 @@ async function loadDuckDbCatalogReader(
 
 class DuckDbParquetReducedSpeciesCatalogReader implements ReducedSpeciesCatalogReader {
   private readonly registeredLocaleAssets = new Set<string>()
+  private filterOptionsPromise: Promise<FilterOptions> | null = null
   private imageAssetsRegistered = false
 
   constructor(
@@ -149,11 +167,16 @@ class DuckDbParquetReducedSpeciesCatalogReader implements ReducedSpeciesCatalogR
     const speciesTable = readParquetSql(this.manifest.assets.species.map((asset) => asset.path))
     const namesTable = localeNamesSql(this.manifest, request.locale)
     const normalizedSearchText = normalizeSearchText(request.text)
+    const whereSql = speciesWhereSql({
+      normalizedSearchText,
+      filters: request.filters,
+      supportedFilters: this.manifest.supportedFilters,
+    })
     const rowsTable = await this.connection.query(`
       ${speciesProjectionSql({
         speciesTable,
         namesTable,
-        whereSql: searchWhereSql(normalizedSearchText),
+        whereSql,
         normalizedSearchText,
       })}
       LIMIT ${limit}
@@ -161,7 +184,7 @@ class DuckDbParquetReducedSpeciesCatalogReader implements ReducedSpeciesCatalogR
     `)
     const rows = tableRows(rowsTable).map(parseSpeciesProjection)
     const totalEstimate = request.include_total
-      ? await this.countSpecies(speciesTable, namesTable, normalizedSearchText)
+      ? await this.countSpecies(speciesTable, namesTable, whereSql)
       : 0
     const nextOffset = offset + rows.length
     const hasNextPage = request.include_total
@@ -203,22 +226,25 @@ class DuckDbParquetReducedSpeciesCatalogReader implements ReducedSpeciesCatalogR
   }
 
   async getFilterOptions(): Promise<FilterOptions> {
-    return {
-      families: [],
-      growth_rates: [],
-      climate_zones: [],
-      habits: [],
-      life_cycles: [],
-      sun_tolerances: [],
-      soil_tolerances: [],
-    }
+    this.filterOptionsPromise ??= this.loadFilterOptions()
+    return this.filterOptionsPromise
+  }
+
+  async getSupportedFilterFields(): Promise<readonly string[]> {
+    return this.manifest.supportedFilters.map((filter) => filter.key)
   }
 
   async getDynamicFilterOptions(
-    _fields: readonly string[],
+    fields: readonly string[],
     _locale: string,
   ): Promise<DynamicFilterOptions[]> {
-    return []
+    const supportedByKey = new Map(this.manifest.supportedFilters.map((filter) => [filter.key, filter]))
+    const options = await this.getFilterOptions()
+    return fields.flatMap((field): DynamicFilterOptions[] => {
+      const supported = supportedByKey.get(field)
+      if (!supported) return []
+      return [categoricalDynamicFilterOptions(field, filterOptionValues(options, supported.optionsKey))]
+    })
   }
 
   async getSpeciesDetail(
@@ -248,21 +274,37 @@ class DuckDbParquetReducedSpeciesCatalogReader implements ReducedSpeciesCatalogR
   private async countSpecies(
     speciesTable: string,
     namesTable: string,
-    normalizedSearchText: string,
+    whereSql: string,
   ): Promise<number> {
     const countTable = await this.connection.query(`
       WITH locale_names AS (
         SELECT species_id,
-               common_name,
                normalized_name
         FROM ${namesTable}
       )
       SELECT COUNT(*) AS total_count
       FROM ${speciesTable} s
-      ${searchWhereSql(normalizedSearchText)}
+      ${whereSql}
     `)
     const countRow = tableRows(countTable)[0]
     return numberValue(countRow?.total_count)
+  }
+
+  private async loadFilterOptions(): Promise<FilterOptions> {
+    const speciesTable = readParquetSql(this.manifest.assets.species.map((asset) => asset.path))
+    const columns = supportedFilterColumns(this.manifest.supportedFilters)
+    if (columns.length === 0) return emptyFilterOptions()
+    const rowsTable = await this.connection.query(`
+      SELECT ${columns.map((column) => `s.${column}`).join(', ')}
+      FROM ${speciesTable} s
+    `)
+    const rows = tableRows(rowsTable)
+    const options = emptyFilterOptions()
+    for (const filter of this.manifest.supportedFilters) {
+      const values = rows.flatMap((row) => valuesForSupportedFilterRow(row, filter))
+      options[filter.optionsKey] = sortedUnique(values)
+    }
+    return options
   }
 
   private async ensureLocaleNameAsset(locale: string): Promise<void> {
@@ -508,11 +550,32 @@ function speciesProjectionSql({
   `
 }
 
-function searchWhereSql(normalizedSearchText: string): string {
+function speciesWhereSql({
+  normalizedSearchText,
+  filters,
+  supportedFilters,
+}: {
+  readonly normalizedSearchText: string
+  readonly filters: SpeciesSearchRequest['filters']
+  readonly supportedFilters: readonly WebSupportedFilter[]
+}): string {
+  const predicates = [
+    searchPredicateSql(normalizedSearchText),
+    ...supportedFilters.flatMap((filter) => {
+      const values = stringFilterValues(filters[filter.key as keyof typeof filters])
+      return values.length === 0 ? [] : [supportedFilterPredicateSql(filter, values)]
+    }),
+  ].filter((predicate) => predicate.length > 0)
+
+  return predicates.length > 0 ? `WHERE ${predicates.join('\n  AND ')}` : ''
+}
+
+function searchPredicateSql(normalizedSearchText: string): string {
   if (!normalizedSearchText) return ''
   const pattern = quoteSqlString(`%${normalizedSearchText}%`)
   return `
-    WHERE LOWER(s.canonical_name) LIKE ${pattern}
+    (
+       LOWER(s.canonical_name) LIKE ${pattern}
        OR LOWER(COALESCE(s.common_name, '')) LIKE ${pattern}
        OR EXISTS (
          SELECT 1
@@ -520,11 +583,94 @@ function searchWhereSql(normalizedSearchText: string): string {
          WHERE search_names.species_id = s.id
            AND search_names.normalized_name LIKE ${pattern}
        )
+    )
   `
+}
+
+function supportedFilterPredicateSql(
+  filter: WebSupportedFilter,
+  values: readonly string[],
+): string {
+  switch (filter.predicate.kind) {
+    case 'json_array_any':
+      return `(${filter.predicate.columns.flatMap((column) => (
+        values.map((value) => (
+          `CAST(s.${column} AS VARCHAR) LIKE ${quoteSqlString(jsonArrayLikePattern(value))} ESCAPE '\\'`
+        ))
+      )).join(' OR ')})`
+    case 'text_any':
+      return `(${filter.predicate.columns.map((column) => (
+        `COALESCE(s.${column}, '') IN (${values.map(quoteSqlString).join(', ')})`
+      )).join(' OR ')})`
+  }
+}
+
+function jsonArrayLikePattern(value: string): string {
+  return `%${escapeLikeLiteral(JSON.stringify(value))}%`
+}
+
+function escapeLikeLiteral(value: string): string {
+  return value
+    .split('\\').join('\\\\')
+    .split('%').join('\\%')
+    .split('_').join('\\_')
+}
+
+function stringFilterValues(value: unknown): readonly string[] {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0)
+    : []
 }
 
 function quoteSqlString(value: string): string {
   return `'${value.split("'").join("''")}'`
+}
+
+function emptyFilterOptions(): FilterOptions {
+  return {
+    families: [],
+    growth_rates: [],
+    climate_zones: [],
+    habits: [],
+    life_cycles: [],
+    sun_tolerances: [],
+    soil_tolerances: [],
+  }
+}
+
+function supportedFilterColumns(filters: readonly WebSupportedFilter[]): string[] {
+  return sortedUnique(filters.flatMap((filter) => filter.predicate.columns))
+}
+
+function valuesForSupportedFilterRow(
+  row: Record<string, unknown>,
+  filter: WebSupportedFilter,
+): string[] {
+  switch (filter.predicate.kind) {
+    case 'json_array_any':
+      return filter.predicate.columns.flatMap((column) => stringArray(row[column]))
+    case 'text_any':
+      return filter.predicate.columns.flatMap((column) => compact([nullableString(row[column])]))
+  }
+}
+
+function filterOptionValues(
+  options: FilterOptions,
+  key: WebSupportedFilterOptionsKey,
+): readonly string[] {
+  return options[key]
+}
+
+function categoricalDynamicFilterOptions(
+  field: string,
+  values: readonly string[],
+): DynamicFilterOptions {
+  return {
+    field,
+    field_type: 'categorical',
+    values: values.map((value) => ({ value, label: value })),
+    range: null,
+  }
 }
 
 function tableRows(table: { toArray(): unknown[] }): readonly Record<string, unknown>[] {
@@ -605,6 +751,9 @@ function parseManifest(value: unknown): WebCatalogManifest {
   return {
     asset_format: value.asset_format,
     duckdb: isRecord(value.duckdb) ? { reader: optionalString(value.duckdb.reader) ?? undefined } : undefined,
+    supportedFilters: Array.isArray(value.supported_filters)
+      ? value.supported_filters.map(parseSupportedFilter)
+      : [],
     assets: {
       species: assets.species.map(parseAssetEntry),
       names: Object.fromEntries(
@@ -613,6 +762,51 @@ function parseManifest(value: unknown): WebCatalogManifest {
       images: assets.images.map(parseAssetEntry),
     },
   }
+}
+
+function parseSupportedFilter(value: unknown): WebSupportedFilter {
+  if (!isRecord(value) || typeof value.key !== 'string') {
+    throw new Error('Invalid Web Edition Species Catalog supported filter.')
+  }
+  if (typeof value.options_key !== 'string' || !isSupportedFilterOptionsKey(value.options_key)) {
+    throw new Error(`Invalid Web Edition Species Catalog supported filter options key for ${value.key}.`)
+  }
+  if (!isRecord(value.predicate) || !Array.isArray(value.predicate.columns)) {
+    throw new Error(`Invalid Web Edition Species Catalog supported filter predicate for ${value.key}.`)
+  }
+  if (value.predicate.kind !== 'json_array_any' && value.predicate.kind !== 'text_any') {
+    throw new Error(`Invalid Web Edition Species Catalog supported filter predicate kind for ${value.key}.`)
+  }
+  const columns = value.predicate.columns.map(parseSafeSqlColumn)
+  if (columns.length === 0) {
+    throw new Error(`Invalid Web Edition Species Catalog supported filter columns for ${value.key}.`)
+  }
+  return {
+    key: value.key,
+    optionsKey: value.options_key,
+    predicate: {
+      kind: value.predicate.kind,
+      columns,
+    },
+  }
+}
+
+function isSupportedFilterOptionsKey(value: string): value is WebSupportedFilterOptionsKey {
+  return [
+    'climate_zones',
+    'habits',
+    'life_cycles',
+    'sun_tolerances',
+    'soil_tolerances',
+    'growth_rates',
+  ].includes(value)
+}
+
+function parseSafeSqlColumn(value: unknown): string {
+  if (typeof value !== 'string' || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
+    throw new Error('Invalid Web Edition Species Catalog supported filter column.')
+  }
+  return value
 }
 
 function parseAssetEntry(value: unknown): CatalogAssetEntry {
@@ -751,6 +945,15 @@ function normalizeSearchText(text: string): string {
     .replace(/[\u0300-\u036f]/g, '')
     .toLocaleLowerCase()
     .trim()
+}
+
+function sortedUnique(values: readonly string[]): string[] {
+  return [...new Set(values.filter((value) => value.trim().length > 0))]
+    .sort((left, right) => left.localeCompare(right, 'en', { sensitivity: 'base' }))
+}
+
+function compact(values: readonly (string | null | undefined)[]): string[] {
+  return values.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

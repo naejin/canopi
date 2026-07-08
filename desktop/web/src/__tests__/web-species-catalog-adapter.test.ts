@@ -164,6 +164,32 @@ describe('Web Edition reduced Species Catalog adapter', () => {
     expect(selected).toEqual(['Malus domestica'])
   })
 
+  it('limits Workbench filter controls to the Web-supported catalog projection', async () => {
+    const workbench = createSpeciesCatalogWorkbench({
+      search: async () => ({ items: [], next_cursor: null, total_estimate: 0 }),
+      getSupportedFilterFields: async () => ['climate_zones', 'habit', 'life_cycle'],
+      getFilterOptions: async () => ({
+        families: [],
+        growth_rates: [],
+        climate_zones: ['Temperate'],
+        habits: ['Tree'],
+        life_cycles: ['Perennial'],
+        sun_tolerances: ['full_sun'],
+        soil_tolerances: [],
+      }),
+    })
+
+    await workbench.loadFilterOptions()
+
+    expect(workbench.filterStrip.value.controls.map((control) => control.filterKey)).toEqual([
+      'climate_zones',
+      'habit',
+      'life_cycle',
+    ])
+    expect(workbench.filterStrip.value.controls.map((control) => control.filterKey)).not.toContain('woody')
+    expect(workbench.filterStrip.value.controls.map((control) => control.filterKey)).not.toContain('sun_tolerances')
+  })
+
   it('loads reduced Species detail when a Species is selected', async () => {
     const detail = {
       canonical_name: 'Malus domestica',

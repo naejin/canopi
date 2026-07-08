@@ -39,6 +39,39 @@ class GenerateWebCatalogTests(unittest.TestCase):
             self.assertEqual(manifest["duckdb"]["reader"], "read_parquet")
             self.assertEqual(manifest["locales"], generator.UI_LOCALES)
             self.assertEqual(
+                manifest["supported_filters"],
+                [
+                    {
+                        "key": "climate_zones",
+                        "options_key": "climate_zones",
+                        "predicate": {
+                            "kind": "json_array_any",
+                            "columns": ["climate_zones"],
+                        },
+                    },
+                    {
+                        "key": "habit",
+                        "options_key": "habits",
+                        "predicate": {
+                            "kind": "text_any",
+                            "columns": ["habit", "growth_form"],
+                        },
+                    },
+                    {
+                        "key": "life_cycle",
+                        "options_key": "life_cycles",
+                        "predicate": {
+                            "kind": "json_array_any",
+                            "columns": ["life_cycles"],
+                        },
+                    },
+                ],
+            )
+            self.assertNotIn(
+                "woody",
+                [field["key"] for field in manifest["supported_filters"]],
+            )
+            self.assertEqual(
                 manifest["schema"]["species_fields"],
                 [
                     "id",

@@ -39,6 +39,32 @@ SPECIES_FIELDS = [
 ]
 NAME_FIELDS = ["species_id", "language", "common_name", "normalized_name", "is_primary", "display_order"]
 IMAGE_FIELDS = ["species_id", "url", "source", "source_page_url", "credit", "license"]
+WEB_SUPPORTED_FILTERS = [
+    {
+        "key": "climate_zones",
+        "options_key": "climate_zones",
+        "predicate": {
+            "kind": "json_array_any",
+            "columns": ["climate_zones"],
+        },
+    },
+    {
+        "key": "habit",
+        "options_key": "habits",
+        "predicate": {
+            "kind": "text_any",
+            "columns": ["habit", "growth_form"],
+        },
+    },
+    {
+        "key": "life_cycle",
+        "options_key": "life_cycles",
+        "predicate": {
+            "kind": "json_array_any",
+            "columns": ["life_cycles"],
+        },
+    },
+]
 EXCLUDED_DETAIL_FIELDS = [
     "edibility",
     "hardiness",
@@ -360,6 +386,7 @@ def build_manifest(
             "max_asset_bytes": max_asset_bytes,
         },
         "locales": UI_LOCALES,
+        "supported_filters": WEB_SUPPORTED_FILTERS,
         "schema": {
             "species_fields": SPECIES_FIELDS,
             "name_fields": NAME_FIELDS,

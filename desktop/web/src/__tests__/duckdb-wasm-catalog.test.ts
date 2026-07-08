@@ -147,6 +147,107 @@ describe('DuckDB-WASM reduced Species Catalog reader', () => {
     })
   })
 
+  it('projects supported filters and applies them to Parquet searches', async () => {
+    const queries: string[] = []
+    const connection = {
+      query: vi.fn(async (sql: string) => {
+        queries.push(sql)
+        if (sql.includes('SELECT s.climate_zones')) {
+          return table([
+            {
+              climate_zones: '["Temperate","Boreal"]',
+              habit: 'Tree',
+              growth_form: 'Woody',
+              life_cycles: '["Perennial"]',
+            },
+            {
+              climate_zones: '["Mediterranean"]',
+              habit: 'Herbaceous',
+              growth_form: 'Forb',
+              life_cycles: '["Annual"]',
+            },
+          ])
+        }
+        return table([
+          {
+            id: 'species-apple',
+            slug: 'malus-domestica',
+            canonical_name: 'Malus domestica',
+            common_name: 'Apple',
+            climate_zones: '["Temperate"]',
+            habit: 'Tree',
+            growth_form: 'Tree',
+            life_cycles: '["Perennial"]',
+          },
+        ])
+      }),
+      close: vi.fn(async () => {}),
+    }
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
+      fetchJson: async () => ({
+        asset_format: 'parquet',
+        duckdb: { reader: 'read_parquet' },
+        supported_filters: [
+          {
+            key: 'climate_zones',
+            options_key: 'climate_zones',
+            predicate: { kind: 'json_array_any', columns: ['climate_zones'] },
+          },
+          {
+            key: 'habit',
+            options_key: 'habits',
+            predicate: { kind: 'text_any', columns: ['habit', 'growth_form'] },
+          },
+          {
+            key: 'life_cycle',
+            options_key: 'life_cycles',
+            predicate: { kind: 'json_array_any', columns: ['life_cycles'] },
+          },
+        ],
+        assets: {
+          species: [{ path: 'species/species-0000.parquet' }],
+          names: {},
+          images: [],
+        },
+      }),
+      createDatabase: async () => ({
+        connect: vi.fn(async () => connection),
+        registerFileURL: vi.fn(async () => {}),
+        terminate: vi.fn(async () => {}),
+      }),
+    })
+
+    await expect(reader.getSupportedFilterFields()).resolves.toEqual([
+      'climate_zones',
+      'habit',
+      'life_cycle',
+    ])
+    await expect(reader.getFilterOptions()).resolves.toMatchObject({
+      climate_zones: ['Boreal', 'Mediterranean', 'Temperate'],
+      habits: ['Forb', 'Herbaceous', 'Tree', 'Woody'],
+      life_cycles: ['Annual', 'Perennial'],
+      sun_tolerances: [],
+    })
+
+    await reader.searchSpecies(searchRequest({
+      filters: {
+        ...createEmptySpeciesFilter(),
+        climate_zones: ['Temperate'],
+        habit: ['Tree'],
+        life_cycle: ['Perennial'],
+        woody: true,
+      },
+    }), new Set())
+
+    const searchSql = queries.at(-1) ?? ''
+    expect(searchSql).toContain(`CAST(s.climate_zones AS VARCHAR) LIKE '%"Temperate"%'`)
+    expect(searchSql).toContain(`COALESCE(s.habit, '') IN ('Tree')`)
+    expect(searchSql).toContain(`COALESCE(s.growth_form, '') IN ('Tree')`)
+    expect(searchSql).toContain(`CAST(s.life_cycles AS VARCHAR) LIKE '%"Perennial"%'`)
+    expect(searchSql).not.toContain('woody')
+  })
+
   it('hydrates reduced Species detail and one hero image from Parquet assets', async () => {
     const queries: string[] = []
     const connection = {
