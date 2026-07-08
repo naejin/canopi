@@ -150,6 +150,31 @@ describe('Web Edition packaging', () => {
     }
   })
 
+  it('fails when the generated catalog manifest is not Parquet-backed', async () => {
+      const workspace = createWorkspace()
+    try {
+      const dist = joinPath(workspace, 'dist-web')
+      const out = joinPath(workspace, 'artifacts')
+      fsWithWriteAndTemp.mkdirSync(dist, { recursive: true })
+      fsWithWriteAndTemp.writeFileSync(joinPath(dist, 'web.html'), '<script></script>')
+      writeCatalogFixture(dist, (manifest) => {
+        manifest.asset_format = 'ndjson'
+      })
+
+      const { packageWebEdition } = await loadPackager()
+
+      await expect(packageWebEdition({
+        distRoot: dist,
+        artifactRoot: out,
+        version: '0.9.1',
+        commit: 'abcdef1',
+        maxAssetBytes: 1024,
+      })).rejects.toThrow(/catalog.*must use Parquet/i)
+    } finally {
+      fsWithWriteAndTemp.rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+
   it('fails when a generated catalog asset checksum does not match its manifest entry', async () => {
       const workspace = createWorkspace()
     try {

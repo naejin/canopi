@@ -76,6 +76,32 @@ describe('DuckDB-WASM reduced Species Catalog reader', () => {
     expect(database.terminate).not.toHaveBeenCalled()
   })
 
+  it('rejects legacy NDJSON catalog manifests in the production Web reader', async () => {
+    const createDatabase = vi.fn(async () => ({
+      connect: vi.fn(async () => ({
+        query: vi.fn(async () => table([])),
+        close: vi.fn(async () => {}),
+      })),
+      registerFileURL: vi.fn(async () => {}),
+      terminate: vi.fn(async () => {}),
+    }))
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
+      fetchJson: async () => ({
+        asset_format: 'ndjson',
+        assets: {
+          species: [{ path: 'species/species-0000.jsonl' }],
+          names: {},
+          images: [],
+        },
+      }),
+      createDatabase,
+    })
+
+    await expect(reader.searchSpecies(searchRequest(), new Set())).rejects.toThrow(/Parquet/i)
+    expect(createDatabase).not.toHaveBeenCalled()
+  })
+
   it('uses only the active locale name shard for localized display and matching', async () => {
     const queries: string[] = []
     const connection = {

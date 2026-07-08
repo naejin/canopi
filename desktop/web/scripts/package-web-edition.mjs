@@ -134,6 +134,9 @@ function validateCatalogArtifact(distRoot, maxAssetBytes) {
     );
   }
   const catalogManifest = JSON.parse(readFileSync(catalogManifestPath, "utf8"));
+  if (catalogManifest.asset_format !== "parquet") {
+    throw new Error("Web Edition Species Catalog manifest must use Parquet assets for production packaging.");
+  }
   if (!Array.isArray(catalogManifest.supported_filters) || catalogManifest.supported_filters.length === 0) {
     throw new Error("Web Edition Species Catalog manifest is missing supported-filter metadata.");
   }

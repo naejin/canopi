@@ -1,10 +1,7 @@
 import * as duckdb from '@duckdb/duckdb-wasm'
 import {
-  createInMemoryReducedSpeciesCatalogReader,
-  type ReducedSpeciesCatalogData,
   type ReducedSpeciesCatalogReader,
   type ReducedSpeciesImageRow,
-  type ReducedSpeciesNameRow,
   type ReducedSpeciesRow,
   type WebSupportedFilterOptionsKey,
 } from './reduced-species-catalog'
@@ -33,7 +30,7 @@ interface WebSupportedFilter {
 }
 
 interface WebCatalogManifest {
-  readonly asset_format: 'ndjson' | 'parquet'
+  readonly asset_format: 'parquet'
   readonly duckdb?: {
     readonly reader?: string
   }
@@ -129,16 +126,12 @@ async function loadDuckDbCatalogReader(
 
   try {
     await registerCatalogAssets(database, catalogBaseUrl, manifest)
-    if (manifest.asset_format === 'parquet') {
-      return new DuckDbParquetReducedSpeciesCatalogReader(
-        database,
-        connection,
-        catalogBaseUrl,
-        manifest,
-      )
-    }
-    const catalogData = await readCatalogData(connection, manifest)
-    return createInMemoryReducedSpeciesCatalogReader(catalogData)
+    return new DuckDbParquetReducedSpeciesCatalogReader(
+      database,
+      connection,
+      catalogBaseUrl,
+      manifest,
+    )
   } catch (error) {
     await closeDuckDb(database, connection)
     throw error
@@ -400,8 +393,6 @@ async function registerCatalogAssets(
 ): Promise<void> {
   const assets = [
     ...manifest.assets.species,
-    ...(manifest.asset_format === 'parquet' ? [] : Object.values(manifest.assets.names)),
-    ...(manifest.asset_format === 'parquet' ? [] : manifest.assets.images),
   ]
   await Promise.all(assets.map((asset) => (
     database.registerFileURL(
@@ -411,33 +402,6 @@ async function registerCatalogAssets(
       false,
     )
   )))
-}
-
-async function readCatalogData(
-  connection: DuckDbCatalogConnection,
-  manifest: WebCatalogManifest,
-): Promise<ReducedSpeciesCatalogData> {
-  const speciesTable = await connection.query(readNdjsonSql(
-    manifest.assets.species.map((asset) => asset.path),
-  ))
-  const namesTable = await connection.query(readNdjsonSql(
-    Object.values(manifest.assets.names).map((asset) => asset.path),
-  ))
-  const imagesTable = await connection.query(readNdjsonSql(
-    manifest.assets.images.map((asset) => asset.path),
-  ))
-
-  return {
-    species: tableRows(speciesTable).map(parseSpeciesRow),
-    names: tableRows(namesTable).map(parseNameRow),
-    images: tableRows(imagesTable).map(parseImageRow),
-  }
-}
-
-function readNdjsonSql(paths: readonly string[]): string {
-  if (paths.length === 0) return 'SELECT * FROM (SELECT NULL) WHERE FALSE'
-  if (paths.length === 1) return `SELECT * FROM read_ndjson_auto(${quoteSqlString(paths[0] ?? '')})`
-  return `SELECT * FROM read_ndjson_auto([${paths.map(quoteSqlString).join(', ')}])`
 }
 
 function readParquetSql(paths: readonly string[]): string {
@@ -697,17 +661,6 @@ function parseSpeciesRow(row: Record<string, unknown>): ReducedSpeciesRow {
   }
 }
 
-function parseNameRow(row: Record<string, unknown>): ReducedSpeciesNameRow {
-  return {
-    species_id: requiredString(row.species_id, 'name.species_id'),
-    language: requiredString(row.language, 'name.language'),
-    common_name: requiredString(row.common_name, 'name.common_name'),
-    normalized_name: requiredString(row.normalized_name, 'name.normalized_name'),
-    is_primary: booleanValue(row.is_primary),
-    display_order: numberValue(row.display_order),
-  }
-}
-
 function parseImageRow(row: Record<string, unknown>): ReducedSpeciesImageRow {
   return {
     species_id: requiredString(row.species_id, 'image.species_id'),
@@ -736,12 +689,12 @@ function parseSpeciesProjection(row: Record<string, unknown>): SpeciesProjection
 function parseManifest(value: unknown): WebCatalogManifest {
   if (
     !isRecord(value) ||
-    (value.asset_format !== 'ndjson' && value.asset_format !== 'parquet') ||
+    value.asset_format !== 'parquet' ||
     !isRecord(value.assets)
   ) {
-    throw new Error('Invalid Web Edition Species Catalog manifest.')
+    throw new Error('Invalid Web Edition Species Catalog manifest: production Web catalogs must use Parquet assets.')
   }
-  if (value.asset_format === 'parquet' && isRecord(value.duckdb) && value.duckdb.reader !== 'read_parquet') {
+  if (isRecord(value.duckdb) && value.duckdb.reader !== 'read_parquet') {
     throw new Error('Invalid Web Edition Species Catalog DuckDB reader.')
   }
   const assets = value.assets
@@ -858,10 +811,6 @@ function stringArray(value: unknown): string[] {
       : []
   }
   return []
-}
-
-function booleanValue(value: unknown): boolean {
-  return value === true || value === 1 || value === 'true'
 }
 
 function numberValue(value: unknown): number {
