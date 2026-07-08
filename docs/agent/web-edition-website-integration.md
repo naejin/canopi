@@ -68,6 +68,7 @@ The manifest includes:
 - `basePath`, which must be `/app/`
 - `spaFallback`, currently `/app/* -> /app/index.html` with status `200`
 - Cloudflare Pages-style size/file-count limits
+- `catalog`, with `canopi-catalog/manifest.json`, generated asset format, supported filter keys, and required catalog file paths
 - every packaged file path, byte count, and SHA-256 checksum
 
 Production should use a versioned Web Edition release asset from the Canopi app release, not a copied source tree and not committed generated `/app` assets.

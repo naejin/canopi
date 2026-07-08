@@ -17,6 +17,8 @@ const WEB_BASE_PATH = "/app/";
 const CLOUDFLARE_PAGES_MAX_ASSET_BYTES = 25 * 1024 * 1024;
 const CLOUDFLARE_PAGES_FREE_MAX_FILES = 20_000;
 const MANIFEST_NAME = "canopi-web-edition-manifest.json";
+const CATALOG_MANIFEST_PATH = "canopi-catalog/manifest.json";
+const FORBIDDEN_DUCKDB_WASM_RE = /(?:^|\/)duckdb-.*\.wasm$/i;
 
 const scriptRoot = import.meta.url.startsWith("file:")
   ? dirname(fileURLToPath(import.meta.url))
@@ -61,6 +63,8 @@ export async function packageWebEdition(options = {}) {
       ].join("\n"),
     );
   }
+  validateNoRawDuckDbWasm(distRoot, sourceFiles);
+  const catalog = validateCatalogArtifact(distRoot, maxAssetBytes);
 
   const artifactName = `canopi-web-edition-v${sanitizeVersion(version)}-${sanitizeCommit(commit)}`;
   const artifactDir = resolve(artifactRoot, artifactName);
@@ -99,6 +103,7 @@ export async function packageWebEdition(options = {}) {
       cloudflarePagesMaxAssetBytes: maxAssetBytes,
       cloudflarePagesMaxFiles: maxFileCount,
     },
+    catalog,
     files: manifestFiles,
   };
 
@@ -110,6 +115,131 @@ export async function packageWebEdition(options = {}) {
     archivePath,
     manifestPath: resolve(artifactDir, MANIFEST_NAME),
   };
+}
+
+function validateNoRawDuckDbWasm(distRoot, sourceFiles) {
+  const violation = sourceFiles
+    .map((filePath) => toPortablePath(relative(distRoot, filePath)))
+    .find((relativePath) => FORBIDDEN_DUCKDB_WASM_RE.test(relativePath));
+  if (violation) {
+    throw new Error(`${violation} must not bundle DuckDB raw WASM; use CDN-selected DuckDB-WASM bundles.`);
+  }
+}
+
+function validateCatalogArtifact(distRoot, maxAssetBytes) {
+  const catalogManifestPath = resolve(distRoot, CATALOG_MANIFEST_PATH);
+  if (!existsSync(catalogManifestPath)) {
+    throw new Error(
+      `Web Edition build is missing generated Species Catalog manifest at ${CATALOG_MANIFEST_PATH}. Run npm run generate:web-catalog before npm run package:web.`,
+    );
+  }
+  const catalogManifest = JSON.parse(readFileSync(catalogManifestPath, "utf8"));
+  if (!Array.isArray(catalogManifest.supported_filters) || catalogManifest.supported_filters.length === 0) {
+    throw new Error("Web Edition Species Catalog manifest is missing supported-filter metadata.");
+  }
+  const catalogRoot = dirname(catalogManifestPath);
+  const catalogMaxAssetBytes = stricterCatalogMaxAssetBytes(catalogManifest, maxAssetBytes);
+  const assets = catalogAssetEntries(catalogManifest);
+  if (assets.length === 0) {
+    throw new Error("Web Edition Species Catalog manifest does not list required catalog assets.");
+  }
+  for (const asset of assets) {
+    validateCatalogAssetEntry(catalogRoot, asset, catalogMaxAssetBytes);
+  }
+  return {
+    manifestPath: CATALOG_MANIFEST_PATH,
+    assetFormat: typeof catalogManifest.asset_format === "string" ? catalogManifest.asset_format : null,
+    supportedFilters: catalogManifest.supported_filters.flatMap((filter) => (
+      filter && typeof filter.key === "string" ? [filter.key] : []
+    )),
+    files: assets.map((asset) => `canopi-catalog/${asset.path}`),
+  };
+}
+
+function stricterCatalogMaxAssetBytes(catalogManifest, maxAssetBytes) {
+  const catalogLimit = catalogManifest.cloudflare_pages?.max_asset_bytes;
+  return Number.isFinite(catalogLimit) && catalogLimit > 0
+    ? Math.min(maxAssetBytes, catalogLimit)
+    : maxAssetBytes;
+}
+
+function catalogAssetEntries(catalogManifest) {
+  const assets = catalogManifest.assets;
+  if (!assets || typeof assets !== "object") {
+    throw new Error("Web Edition Species Catalog manifest does not list required catalog assets.");
+  }
+  const species = parseCatalogAssetList("species", assets.species);
+  const names = assets.names && typeof assets.names === "object"
+    ? Object.values(assets.names).map((entry) => parseCatalogAssetEntry("names", entry))
+    : [];
+  const images = parseCatalogAssetList("images", assets.images);
+  if (species.length === 0 || names.length === 0 || images.length === 0) {
+    throw new Error("Web Edition Species Catalog manifest does not list required catalog assets.");
+  }
+  return [...species, ...names, ...images];
+}
+
+function parseCatalogAssetList(kind, value) {
+  return Array.isArray(value)
+    ? value.map((entry) => parseCatalogAssetEntry(kind, entry))
+    : [];
+}
+
+function parseCatalogAssetEntry(kind, value) {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    typeof value.path !== "string" ||
+    !Number.isFinite(value.bytes) ||
+    typeof value.sha256 !== "string"
+  ) {
+    throw new Error(`Invalid Web Edition Species Catalog ${kind} asset manifest entry.`);
+  }
+  return {
+    path: value.path,
+    bytes: value.bytes,
+    sha256: value.sha256,
+  };
+}
+
+function validateCatalogAssetEntry(catalogRoot, asset, maxAssetBytes) {
+  const assetPath = resolveCatalogAssetPath(catalogRoot, asset.path);
+  if (!existsSync(assetPath)) {
+    throw new Error(`Web Edition Species Catalog asset is missing: ${asset.path}`);
+  }
+  const bytes = statSync(assetPath).size;
+  if (bytes > maxAssetBytes) {
+    throw new Error(
+      `Web Edition Species Catalog asset ${asset.path} exceeds the Cloudflare Pages per-asset limit of ${maxAssetBytes} bytes.`,
+    );
+  }
+  if (bytes !== asset.bytes) {
+    throw new Error(
+      `Web Edition Species Catalog byte count mismatch for ${asset.path}: manifest ${asset.bytes}, actual ${bytes}.`,
+    );
+  }
+  const sha256 = sha256File(assetPath);
+  if (sha256 !== asset.sha256) {
+    throw new Error(
+      `Web Edition Species Catalog checksum mismatch for ${asset.path}: manifest ${asset.sha256}, actual ${sha256}.`,
+    );
+  }
+}
+
+function resolveCatalogAssetPath(catalogRoot, assetPath) {
+  if (assetPath.startsWith("/") || assetPath.split("/").includes("..")) {
+    throw new Error(`Unsafe Web Edition Species Catalog asset path: ${assetPath}`);
+  }
+  const resolved = resolve(catalogRoot, assetPath);
+  const relativePath = relative(catalogRoot, resolved);
+  if (relativePath.startsWith("..") || relativePath === "") {
+    throw new Error(`Unsafe Web Edition Species Catalog asset path: ${assetPath}`);
+  }
+  return resolved;
+}
+
+function sha256File(filePath) {
+  return createHash("sha256").update(readFileSync(filePath)).digest("hex");
 }
 
 function readPackageVersion(root) {
