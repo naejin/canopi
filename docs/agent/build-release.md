@@ -26,6 +26,9 @@ cd desktop/web && npm run build:web
 # Web Edition versioned release artifact
 cd desktop/web && npm run package:web
 
+# Web Edition root-subdomain release artifact
+cd desktop/web && npm run package:web:root
+
 # Reduced Web Edition Species Catalog assets
 cd desktop/web && npm run generate:web-catalog
 
@@ -55,11 +58,12 @@ cargo build --release
 
 - Web Edition source belongs in this repository, not in `canopi-website`. Implement it as a separate browser Vite entry/build that reuses shared frontend modules behind browser-specific shell and adapter seams.
 - The Web Edition local build command is `cd desktop/web && npm run build:web`. It emits `desktop/web/dist-web/` and runs the browser-boundary scanner; keep `dist-web/` uncommitted.
-- The Web Edition artifact command is `cd desktop/web && npm run package:web`. It builds the web entry, scans browser chunks, and emits a versioned directory plus `.tar.gz` under `desktop/web/dist-web-artifacts/`; keep that output uncommitted.
+- The default Web Edition artifact command is `cd desktop/web && npm run package:web`. It builds the web entry for `/app/`, scans browser chunks, and emits a versioned directory plus `.tar.gz` under `desktop/web/dist-web-artifacts/`; keep that output uncommitted.
+- The dedicated root-subdomain artifact command is `cd desktop/web && npm run package:web:root`. It sets `CANOPI_WEB_BASE_PATH=/` before Vite emits assets and packages a root-base artifact named `canopi-web-edition-root-v<version>-<commit>.tar.gz` with `basePath: "/"` and SPA fallback `/* -> /index.html`. Use this artifact for `https://web.projectcanopi.com/`; do not deploy the default `/app/` artifact at a domain root.
 - The Web Edition Species Catalog command is `cd desktop/web && npm run generate:web-catalog`. It should emit ignored DuckDB-queryable Parquet catalog shards under `desktop/web/public/canopi-catalog/`; run it from a checkout with local canopi-data exports when catalog assets are needed for packaging or adapter testing. The current Parquet migration must keep the existing Web Edition data scope while making search/filter execution faster and keeping Web Edition Plant Detail reduced.
 - The Canopi website should publish the built Web Edition artifact under a route such as `/app/`; it should not import Canopi app source as an Astro component package, workspace dependency, submodule, or copied component tree. See `docs/adr/0012-web-edition-static-app-bundle.md`.
 - Do not commit generated Web Edition `/app` assets to `canopi-website` long term. The production website deploy should download the versioned Web Edition release asset from the Canopi app release tag and verify its manifest/checksums before publishing it under `/app/`. A local script may copy from a sibling Canopi checkout for preview/dev only.
-- The web build uses the `/app/` base path. The package manifest records the required SPA fallback: serve `/app/*` as `/app/index.html` with status `200`. It also records a catalog summary with `canopi-catalog/manifest.json`, the generated catalog asset format, supported filter keys, and required catalog file paths.
+- The web build uses the `/app/` base path by default. `CANOPI_WEB_BASE_PATH=/` is the only supported override for root-subdomain artifacts. The package manifest records the matching SPA fallback: `/app/* -> /app/index.html` for default artifacts or `/* -> /index.html` for root artifacts. It also records a catalog summary with `canopi-catalog/manifest.json`, the generated catalog asset format, supported filter keys, and required catalog file paths.
 - Web Edition uses compile-time browser adapters, not runtime feature flags in shared modules. Web Edition build checks should reject Tauri-only imports in browser chunks and fail if any generated app, WASM, worker, catalog, template, or image-metadata asset exceeds the Cloudflare Pages per-asset limit. Design Template catalog/import adapters are selected through `#design-template-catalog` and `#design-template-import-workflow`; static template assets and any allowed static asset origins are configured in `desktop/web/src/web/static-design-templates.ts`. See `docs/adr/0021-web-edition-compile-time-adapters.md`.
 - Keep web catalog and DuckDB-WASM assets sharded/compressed enough for Cloudflare Pages limits; do not hide oversized files inside the website build. As of Cloudflare Pages docs last checked 2026-07-04, a single Pages asset is limited to 25 MiB and Free-plan sites contain up to 20,000 files. `npm run package:web` enforces those conservative limits, verifies required catalog and supported-filter metadata assets, rejects raw `duckdb-*.wasm` files, and scans emitted chunks for Tauri runtime markers such as `__TAURI_INTERNALS__`.
 - Web Edition DuckDB-WASM should load DuckDB's own worker/WASM through CDN-selected bundles instead of self-hosting the npm package's raw WASM files in `dist-web`.

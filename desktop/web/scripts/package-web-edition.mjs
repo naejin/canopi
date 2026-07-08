@@ -13,7 +13,8 @@ import { basename, dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { gzipSync } from "node:zlib";
 
-const WEB_BASE_PATH = "/app/";
+const DEFAULT_WEB_BASE_PATH = "/app/";
+const WEB_BASE_PATH_ENV = "CANOPI_WEB_BASE_PATH";
 const CLOUDFLARE_PAGES_MAX_ASSET_BYTES = 25 * 1024 * 1024;
 const CLOUDFLARE_PAGES_FREE_MAX_FILES = 20_000;
 const MANIFEST_NAME = "canopi-web-edition-manifest.json";
@@ -33,6 +34,7 @@ export async function packageWebEdition(options = {}) {
   const commit = options.commit ?? readGitCommit(repoRoot);
   const maxAssetBytes = options.maxAssetBytes ?? CLOUDFLARE_PAGES_MAX_ASSET_BYTES;
   const maxFileCount = options.maxFileCount ?? CLOUDFLARE_PAGES_FREE_MAX_FILES;
+  const basePath = normalizeWebBasePath(options.basePath ?? process.env[WEB_BASE_PATH_ENV]);
 
   if (!existsSync(distRoot)) {
     throw new Error(`Missing Web Edition build output at ${distRoot}. Run npm run build:web first.`);
@@ -64,9 +66,10 @@ export async function packageWebEdition(options = {}) {
     );
   }
   validateNoRawDuckDbWasm(distRoot, sourceFiles);
+  validateBuiltBasePath(distRoot, sourceFiles, basePath);
   const catalog = validateCatalogArtifact(distRoot, maxAssetBytes);
 
-  const artifactName = `canopi-web-edition-v${sanitizeVersion(version)}-${sanitizeCommit(commit)}`;
+  const artifactName = webEditionArtifactName(version, commit, basePath);
   const artifactDir = resolve(artifactRoot, artifactName);
   const archivePath = resolve(artifactRoot, `${artifactName}.tar.gz`);
 
@@ -93,12 +96,8 @@ export async function packageWebEdition(options = {}) {
     name: "Canopi Web Edition",
     version,
     commit,
-    basePath: WEB_BASE_PATH,
-    spaFallback: {
-      source: "/app/*",
-      destination: "/app/index.html",
-      status: 200,
-    },
+    basePath,
+    spaFallback: spaFallbackForBasePath(basePath),
     limits: {
       cloudflarePagesMaxAssetBytes: maxAssetBytes,
       cloudflarePagesMaxFiles: maxFileCount,
@@ -129,6 +128,53 @@ export async function packageWebEdition(options = {}) {
   };
 }
 
+function normalizeWebBasePath(value) {
+  const rawValue = value ?? DEFAULT_WEB_BASE_PATH;
+  if (typeof rawValue !== "string") {
+    throw new Error(`${WEB_BASE_PATH_ENV} must be a string base path.`);
+  }
+  const basePath = rawValue.trim();
+  if (basePath.length === 0) {
+    throw new Error(`${WEB_BASE_PATH_ENV} must not be empty.`);
+  }
+  if (basePath === "/") return "/";
+  if (!basePath.startsWith("/")) {
+    throw new Error(`${WEB_BASE_PATH_ENV} must be "/" or an absolute path such as "/app/".`);
+  }
+  return basePath.endsWith("/") ? basePath : `${basePath}/`;
+}
+
+function spaFallbackForBasePath(basePath) {
+  if (basePath === "/") {
+    return {
+      source: "/*",
+      destination: "/index.html",
+      status: 200,
+    };
+  }
+  const routeBase = basePath.slice(0, -1);
+  return {
+    source: `${routeBase}/*`,
+    destination: `${routeBase}/index.html`,
+    status: 200,
+  };
+}
+
+function webEditionArtifactName(version, commit, basePath) {
+  const baseSuffix = basePath === DEFAULT_WEB_BASE_PATH
+    ? ""
+    : `-${artifactBasePathSlug(basePath)}`;
+  return `canopi-web-edition${baseSuffix}-v${sanitizeVersion(version)}-${sanitizeCommit(commit)}`;
+}
+
+function artifactBasePathSlug(basePath) {
+  if (basePath === "/") return "root";
+  const slug = basePath
+    .replace(/^\/+|\/+$/g, "")
+    .replace(/[^0-9A-Za-z._-]/g, "-");
+  return slug.length > 0 ? slug : "root";
+}
+
 function validateNoRawDuckDbWasm(distRoot, sourceFiles) {
   const violation = sourceFiles
     .map((filePath) => toPortablePath(relative(distRoot, filePath)))
@@ -136,6 +182,37 @@ function validateNoRawDuckDbWasm(distRoot, sourceFiles) {
   if (violation) {
     throw new Error(`${violation} must not bundle DuckDB raw WASM; use CDN-selected DuckDB-WASM bundles.`);
   }
+}
+
+function validateBuiltBasePath(distRoot, sourceFiles, basePath) {
+  const htmlFiles = sourceFiles.filter((filePath) => filePath.endsWith(".html"));
+  for (const htmlFile of htmlFiles) {
+    const html = readFileSync(htmlFile, "utf8");
+    const relativePath = toPortablePath(relative(distRoot, htmlFile));
+    for (const assetPath of localAbsoluteHtmlAssetPaths(html)) {
+      if (basePath === "/") {
+        if (assetPath.startsWith(DEFAULT_WEB_BASE_PATH)) {
+          throw new Error(
+            `Rebuild with ${WEB_BASE_PATH_ENV}=/ before packaging root-base artifacts; ${relativePath} still references ${assetPath}.`,
+          );
+        }
+      } else if (!assetPath.startsWith(basePath)) {
+        throw new Error(
+          `Rebuild with ${WEB_BASE_PATH_ENV}=${basePath} before packaging; ${relativePath} references ${assetPath}.`,
+        );
+      }
+    }
+  }
+}
+
+function localAbsoluteHtmlAssetPaths(html) {
+  const paths = [];
+  const assetReferencePattern = /\b(?:src|href)=["'](\/[^"']*)["']/gi;
+  for (const match of html.matchAll(assetReferencePattern)) {
+    const assetPath = match[1];
+    if (assetPath && !assetPath.startsWith("//")) paths.push(assetPath);
+  }
+  return paths;
 }
 
 function validateCatalogArtifact(distRoot, maxAssetBytes) {
@@ -400,6 +477,7 @@ function parseArgs(args) {
     commit: values.get("--commit"),
     maxAssetBytes: values.has("--max-asset-bytes") ? Number(values.get("--max-asset-bytes")) : undefined,
     maxFileCount: values.has("--max-file-count") ? Number(values.get("--max-file-count")) : undefined,
+    basePath: values.get("--base-path"),
   };
 }
 

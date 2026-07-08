@@ -73,6 +73,15 @@ The manifest includes:
 
 Production should use a versioned Web Edition release asset from the Canopi app release, not a copied source tree and not committed generated `/app` assets.
 
+For the dedicated `https://web.projectcanopi.com/` subdomain, use the explicit root-base app artifact instead:
+
+```bash
+cd /home/daylon/projects/canopi/desktop/web
+npm run package:web:root
+```
+
+That command builds before packaging with `CANOPI_WEB_BASE_PATH=/` and emits an archive named `canopi-web-edition-root-v<version>-<commit>.tar.gz`. Its manifest must record `basePath: "/"` and `spaFallback` `/* -> /index.html`, and the archive root should contain `index.html`, `canopi-web-edition-manifest.json`, assets, and catalog files directly. Do not install a root-base artifact into `dist/app/`, and do not deploy the default `/app/` artifact at a domain root.
+
 ## Catalog And Performance Boundary
 
 The Canopi app artifact owns Species Catalog filtering, search, DuckDB-WASM integration, catalog asset format, catalog sharding, supported-filter metadata, and performance tuning. The intended app-side catalog format is DuckDB-queryable Parquet shards with generated locale/search and current Web Edition filter metadata assets. The website implementation must only publish those static files exactly as verified from the artifact.
