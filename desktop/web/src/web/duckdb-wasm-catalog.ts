@@ -68,6 +68,16 @@ interface DuckDbReducedSpeciesCatalogReaderOptions {
   readonly createDatabase?: () => Promise<DuckDbCatalogDatabase>
 }
 
+interface NormalizedSearchText {
+  readonly text: string
+  readonly tokens: readonly string[]
+}
+
+const EMPTY_SEARCH_TEXT: NormalizedSearchText = {
+  text: '',
+  tokens: [],
+}
+
 export function createDuckDbReducedSpeciesCatalogReader(
   options: DuckDbReducedSpeciesCatalogReaderOptions = {},
 ): ReducedSpeciesCatalogReader {
@@ -159,9 +169,9 @@ class DuckDbParquetReducedSpeciesCatalogReader implements ReducedSpeciesCatalogR
     const limit = Math.max(0, request.limit)
     const speciesTable = readParquetSql(this.manifest.assets.species.map((asset) => asset.path))
     const namesTable = localeNamesSql(this.manifest, request.locale)
-    const normalizedSearchText = normalizeSearchText(request.text)
+    const searchText = normalizeSearchText(request.text)
     const whereSql = speciesWhereSql({
-      normalizedSearchText,
+      searchText,
       filters: request.filters,
       supportedFilters: this.manifest.supportedFilters,
     })
@@ -170,7 +180,7 @@ class DuckDbParquetReducedSpeciesCatalogReader implements ReducedSpeciesCatalogR
         speciesTable,
         namesTable,
         whereSql,
-        normalizedSearchText,
+        searchText,
       })}
       LIMIT ${limit}
       OFFSET ${offset}
@@ -205,7 +215,7 @@ class DuckDbParquetReducedSpeciesCatalogReader implements ReducedSpeciesCatalogR
         speciesTable,
         namesTable,
         whereSql: `WHERE s.canonical_name IN (${canonicalNames.map(quoteSqlString).join(', ')})`,
-        normalizedSearchText: '',
+        searchText: EMPTY_SEARCH_TEXT,
       })}
     `)
     const rowsByName = new Map(tableRows(rowsTable).map((row) => {
@@ -252,7 +262,7 @@ class DuckDbParquetReducedSpeciesCatalogReader implements ReducedSpeciesCatalogR
         speciesTable,
         namesTable,
         whereSql: `WHERE s.canonical_name = ${quoteSqlString(canonicalName)}`,
-        normalizedSearchText: '',
+        searchText: EMPTY_SEARCH_TEXT,
       })}
       LIMIT 1
     `)
@@ -442,16 +452,17 @@ function speciesProjectionSql({
   speciesTable,
   namesTable,
   whereSql,
-  normalizedSearchText,
+  searchText,
 }: {
   readonly speciesTable: string
   readonly namesTable: string
   readonly whereSql: string
-  readonly normalizedSearchText: string
+  readonly searchText: NormalizedSearchText
 }): string {
-  const matchPredicate = normalizedSearchText
-    ? `normalized_name LIKE ${quoteSqlString(`%${normalizedSearchText}%`)}`
+  const matchPredicate = searchText.text
+    ? nameMatchCondition('normalized_name', searchText)
     : 'FALSE'
+  const matchedNameTier = activeSearchNameTierSql('normalized_name', searchText)
   return `
     WITH locale_names AS (
       SELECT species_id,
@@ -463,10 +474,14 @@ function speciesProjectionSql({
     ),
     primary_names AS (
       SELECT species_id,
-             common_name
+             common_name,
+             normalized_name,
+             display_order
       FROM (
         SELECT species_id,
                common_name,
+               normalized_name,
+               display_order,
                ROW_NUMBER() OVER (
                  PARTITION BY species_id
                  ORDER BY TRY_CAST(display_order AS INTEGER),
@@ -480,13 +495,16 @@ function speciesProjectionSql({
     ),
     matched_names AS (
       SELECT species_id,
-             common_name
+             common_name,
+             match_tier
       FROM (
         SELECT species_id,
                common_name,
+               ${matchedNameTier} AS match_tier,
                ROW_NUMBER() OVER (
                  PARTITION BY species_id
-                 ORDER BY TRY_CAST(display_order AS INTEGER),
+                 ORDER BY ${matchedNameTier},
+                          TRY_CAST(display_order AS INTEGER),
                           CASE WHEN CAST(is_primary AS VARCHAR) IN ('true', '1') THEN 0 ELSE 1 END,
                           LENGTH(common_name),
                           common_name
@@ -510,21 +528,21 @@ function speciesProjectionSql({
     LEFT JOIN primary_names ON primary_names.species_id = s.id
     LEFT JOIN matched_names ON matched_names.species_id = s.id
     ${whereSql}
-    ORDER BY s.canonical_name, s.id
+    ${speciesOrderBySql(searchText)}
   `
 }
 
 function speciesWhereSql({
-  normalizedSearchText,
+  searchText,
   filters,
   supportedFilters,
 }: {
-  readonly normalizedSearchText: string
+  readonly searchText: NormalizedSearchText
   readonly filters: SpeciesSearchRequest['filters']
   readonly supportedFilters: readonly WebSupportedFilter[]
 }): string {
   const predicates = [
-    searchPredicateSql(normalizedSearchText),
+    searchPredicateSql(searchText),
     ...supportedFilters.flatMap((filter) => {
       const values = stringFilterValues(filters[filter.key as keyof typeof filters])
       return values.length === 0 ? [] : [supportedFilterPredicateSql(filter, values)]
@@ -534,21 +552,62 @@ function speciesWhereSql({
   return predicates.length > 0 ? `WHERE ${predicates.join('\n  AND ')}` : ''
 }
 
-function searchPredicateSql(normalizedSearchText: string): string {
-  if (!normalizedSearchText) return ''
-  const pattern = quoteSqlString(`%${normalizedSearchText}%`)
+function searchPredicateSql(searchText: NormalizedSearchText): string {
+  if (!searchText.text) return ''
   return `
     (
-       LOWER(s.canonical_name) LIKE ${pattern}
-       OR LOWER(COALESCE(s.common_name, '')) LIKE ${pattern}
+       ${nameMatchCondition('LOWER(s.canonical_name)', searchText)}
+       OR ${nameMatchCondition("LOWER(COALESCE(s.common_name, ''))", searchText)}
        OR EXISTS (
          SELECT 1
          FROM locale_names search_names
          WHERE search_names.species_id = s.id
-           AND search_names.normalized_name LIKE ${pattern}
+           AND ${nameMatchCondition('search_names.normalized_name', searchText)}
        )
     )
   `
+}
+
+function speciesOrderBySql(searchText: NormalizedSearchText): string {
+  if (!searchText.text) return 'ORDER BY s.canonical_name, s.id'
+  const primaryName = 'primary_names.normalized_name'
+  return `ORDER BY CASE
+      WHEN ${primaryName} = ${quoteSqlString(searchText.text)} THEN 0
+      WHEN ${primaryName} LIKE ${quoteLikePrefixPattern(searchText.text)} ESCAPE '\\' THEN 1
+      WHEN ${allTokenContainsCondition(primaryName, searchText)} THEN 2
+      WHEN matched_names.species_id IS NOT NULL THEN 3
+      WHEN ${nameMatchCondition('LOWER(s.canonical_name)', searchText)} THEN 4
+      ELSE 5
+    END,
+    COALESCE(matched_names.match_tier, 2147483647),
+    TRY_CAST(primary_names.display_order AS INTEGER),
+    COALESCE(LENGTH(primary_names.common_name), 2147483647),
+    s.canonical_name,
+    s.id`
+}
+
+function activeSearchNameTierSql(column: string, searchText: NormalizedSearchText): string {
+  if (!searchText.text) return '2147483647'
+  return `CASE
+    WHEN ${column} = ${quoteSqlString(searchText.text)} THEN 0
+    WHEN ${column} LIKE ${quoteLikePrefixPattern(searchText.text)} ESCAPE '\\' THEN 1
+    WHEN ${allTokenContainsCondition(column, searchText)} THEN 2
+    ELSE 3
+  END`
+}
+
+function nameMatchCondition(column: string, searchText: NormalizedSearchText): string {
+  const containsSearchText = `${column} LIKE ${quoteLikeContainsPattern(searchText.text)} ESCAPE '\\'`
+  if (searchText.tokens.length <= 1) return `(${containsSearchText})`
+  return `(${containsSearchText}
+       OR ${allTokenContainsCondition(column, searchText)})`
+}
+
+function allTokenContainsCondition(column: string, searchText: NormalizedSearchText): string {
+  if (searchText.tokens.length === 0) return 'FALSE'
+  return searchText.tokens
+    .map((token) => `${column} LIKE ${quoteLikeContainsPattern(token)} ESCAPE '\\'`)
+    .join(' AND ')
 }
 
 function supportedFilterPredicateSql(
@@ -588,6 +647,14 @@ function stringFilterValues(value: unknown): readonly string[] {
 
 function quoteSqlString(value: string): string {
   return `'${value.split("'").join("''")}'`
+}
+
+function quoteLikeContainsPattern(value: string): string {
+  return quoteSqlString(`%${escapeLikeLiteral(value)}%`)
+}
+
+function quoteLikePrefixPattern(value: string): string {
+  return quoteSqlString(`${escapeLikeLiteral(value)}%`)
 }
 
 function emptyFilterOptions(): FilterOptions {
@@ -888,12 +955,20 @@ function speciesProjectionToDetail(
   }
 }
 
-function normalizeSearchText(text: string): string {
-  return text
+function normalizeSearchText(text: string): NormalizedSearchText {
+  const normalized = text
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLocaleLowerCase()
-    .trim()
+  const tokens = [...new Set(
+    Array.from(normalized.matchAll(/[\p{Letter}\p{Number}_]+/gu), (match) => match[0]),
+  )]
+  return tokens.length === 0
+    ? EMPTY_SEARCH_TEXT
+    : {
+        text: tokens.join(' '),
+        tokens,
+      }
 }
 
 function sortedUnique(values: readonly string[]): string[] {

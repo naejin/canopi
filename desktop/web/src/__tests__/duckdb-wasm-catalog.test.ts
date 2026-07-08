@@ -173,6 +173,139 @@ describe('DuckDB-WASM reduced Species Catalog reader', () => {
     })
   })
 
+  it('orders active text searches by selected-locale Common Name relevance tiers', async () => {
+    const queries: string[] = []
+    const connection = {
+      query: vi.fn(async (sql: string) => {
+        queries.push(sql)
+        return table([
+          {
+            id: 'species-apple',
+            slug: 'malus-domestica',
+            canonical_name: 'Malus domestica',
+            common_name: 'Apple',
+            localized_common_name: 'Pommier',
+            matched_common_name: 'Pomme commune',
+            climate_zones: '["Temperate"]',
+            habit: 'Tree',
+            growth_form: 'Tree',
+            life_cycles: '["Perennial"]',
+          },
+        ])
+      }),
+      close: vi.fn(async () => {}),
+    }
+    const database = {
+      connect: vi.fn(async () => connection),
+      registerFileURL: vi.fn(async () => {}),
+      terminate: vi.fn(async () => {}),
+    }
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
+      fetchJson: async () => ({
+        asset_format: 'parquet',
+        duckdb: { reader: 'read_parquet' },
+        assets: {
+          species: [{ path: 'species/species-0000.parquet' }],
+          names: {
+            en: { path: 'names/names-en.parquet' },
+            fr: { path: 'names/names-fr.parquet' },
+          },
+          images: [],
+        },
+      }),
+      createDatabase: async () => database,
+    })
+
+    await reader.searchSpecies(searchRequest({
+      text: 'pomme commune',
+      locale: 'fr',
+      limit: 10,
+    }), new Set())
+
+    const searchSql = queries.at(-1) ?? ''
+    expect(searchSql).toContain('ORDER BY CASE')
+    expect(searchSql).toContain("WHEN primary_names.normalized_name = 'pomme commune' THEN 0")
+    expect(searchSql).toContain("WHEN primary_names.normalized_name LIKE 'pomme commune%' ESCAPE '\\' THEN 1")
+    expect(searchSql).toContain("WHEN primary_names.normalized_name LIKE '%pomme%' ESCAPE '\\'")
+    expect(searchSql).toContain("AND primary_names.normalized_name LIKE '%commune%' ESCAPE '\\'")
+    expect(searchSql).toContain('WHEN matched_names.species_id IS NOT NULL THEN 3')
+    expect(searchSql).toContain('matched_names.match_tier')
+    expect(searchSql).toContain('s.canonical_name,')
+    expect(searchSql).toContain('s.id')
+    expect(database.registerFileURL).toHaveBeenCalledWith(
+      'names/names-fr.parquet',
+      'https://cdn.example.test/app/canopi-catalog/names/names-fr.parquet',
+      expect.anything(),
+      false,
+    )
+    expect(database.registerFileURL).not.toHaveBeenCalledWith(
+      'names/names-en.parquet',
+      expect.anything(),
+      expect.anything(),
+      false,
+    )
+  })
+
+  it('keeps canonical ordering for empty browse and filter-only searches', async () => {
+    const queries: string[] = []
+    const connection = {
+      query: vi.fn(async (sql: string) => {
+        queries.push(sql)
+        return table([
+          {
+            id: 'species-apple',
+            slug: 'malus-domestica',
+            canonical_name: 'Malus domestica',
+            common_name: 'Apple',
+            climate_zones: '["Temperate"]',
+            habit: 'Tree',
+            growth_form: 'Tree',
+            life_cycles: '["Perennial"]',
+          },
+        ])
+      }),
+      close: vi.fn(async () => {}),
+    }
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://cdn.example.test/app/canopi-catalog/'),
+      fetchJson: async () => ({
+        asset_format: 'parquet',
+        duckdb: { reader: 'read_parquet' },
+        supported_filters: [
+          {
+            key: 'habit',
+            options_key: 'habits',
+            predicate: { kind: 'text_any', columns: ['habit', 'growth_form'] },
+          },
+        ],
+        assets: {
+          species: [{ path: 'species/species-0000.parquet' }],
+          names: { fr: { path: 'names/names-fr.parquet' } },
+          images: [],
+        },
+      }),
+      createDatabase: async () => ({
+        connect: vi.fn(async () => connection),
+        registerFileURL: vi.fn(async () => {}),
+        terminate: vi.fn(async () => {}),
+      }),
+    })
+
+    await reader.searchSpecies(searchRequest({
+      text: '',
+      locale: 'fr',
+      filters: {
+        ...createEmptySpeciesFilter(),
+        habit: ['Tree'],
+      },
+    }), new Set())
+
+    const searchSql = queries.at(-1) ?? ''
+    expect(searchSql).toContain('ORDER BY s.canonical_name, s.id')
+    expect(searchSql).not.toContain('ORDER BY CASE')
+  })
+
   it('projects supported filters and applies them to Parquet searches', async () => {
     const queries: string[] = []
     const connection = {
