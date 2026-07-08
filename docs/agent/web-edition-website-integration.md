@@ -57,6 +57,7 @@ The packaged archive root contains:
 
 - `index.html`, repackaged from the Vite `web.html` entry.
 - Vite assets built with base path `/app/`.
+- Static Web Edition Species Catalog assets under their built app-relative paths, including any catalog, locale/search, filter metadata, or image metadata shards emitted by the Canopi app build.
 - `canopi-web-edition-manifest.json`.
 
 The manifest includes:
@@ -70,6 +71,22 @@ The manifest includes:
 - every packaged file path, byte count, and SHA-256 checksum
 
 Production should use a versioned Web Edition release asset from the Canopi app release, not a copied source tree and not committed generated `/app` assets.
+
+## Catalog And Performance Boundary
+
+The Canopi app artifact owns Species Catalog filtering, search, DuckDB-WASM integration, catalog asset format, catalog sharding, supported-filter metadata, and performance tuning. The intended app-side catalog format is DuckDB-queryable Parquet shards with generated locale/search and current Web Edition filter metadata assets. The website implementation must only publish those static files exactly as verified from the artifact.
+
+Do not recreate, optimize, or route around the Web Edition Species Catalog in `canopi-website`:
+
+- Do not import Canopi app source, generated filter metadata, catalog generators, DuckDB adapters, Preact components, or Vite config.
+- Do not run search or filtering through Astro, Workers, Pages Functions, R2, KV, D1, a custom API route, or a website-side generated index.
+- Do not split catalog files out of the versioned artifact, rename catalog paths, rewrite catalog URLs, or serve catalog requests through the SPA fallback.
+- Do not add service workers, app-managed precache, PWA install prompts, or offline-first catalog caching as a performance workaround.
+- Do not self-host raw `duckdb-*.wasm` files unless a later Canopi app release explicitly includes them and the artifact manifest passes the Cloudflare asset-size gate.
+
+The current Cloudflare Pages constraints to preserve are the Free-plan site file limit and the per-asset file-size limit. As of the Cloudflare Pages limits page last checked on July 8, 2026, Free-plan Pages sites can contain up to 20,000 files and a single Pages asset can be at most 25 MiB. The website install script should enforce the artifact manifest's stricter recorded limits if they are lower than Cloudflare's current limits.
+
+The intended app-side performance direction is DuckDB-WASM querying generated Parquet catalog shards directly, behind the Web Edition Species Catalog Workbench and without expanding the current Web catalog data scope. That is app-repo work. Website work is reliable artifact installation, direct static serving, cache headers, and smoke checks.
 
 ## Recommended Website Implementation
 
@@ -100,8 +117,12 @@ Recommended script behavior:
 5. Fail unless `manifest.basePath === '/app/'`.
 6. Fail unless `manifest.spaFallback.source === '/app/*'` and `manifest.spaFallback.destination === '/app/index.html'`.
 7. Verify every manifest file has the expected byte count and SHA-256.
-8. Replace `dist/app/` atomically enough for local builds: remove only `dist/app/`, then copy the verified extracted artifact root there.
-9. Fail if `dist/app/index.html` is missing.
+8. Verify no packaged file exceeds the manifest's max asset size. If the manifest does not expose a stricter limit, fail above 25 MiB.
+9. Verify the artifact file count stays within the manifest's file-count limit. If the manifest does not expose a stricter limit, fail above 20,000 files.
+10. Verify required catalog, locale/search, and supported-filter metadata paths listed by the artifact manifest exist before copying. Do not treat missing catalog files as optional.
+11. Replace `dist/app/` atomically enough for local builds: remove only `dist/app/`, then copy the verified extracted artifact root there.
+12. Fail if `dist/app/index.html` is missing.
+13. Fail if `dist/app/canopi-web-edition-manifest.json` is missing.
 
 Do not commit `dist/app/`, `dist/`, downloaded archives, or temp extraction directories.
 
@@ -169,7 +190,8 @@ The website should not try to add missing app features around the artifact. As o
 - No Problem Report flow.
 - No Site Adaptation flow.
 - No service worker, PWA install prompt, or offline-first cache.
-- Species Catalog, Favorites, plant placement drag/drop, Plant Color, and Plant Symbol are implemented inside the Web Edition artifact.
+- Species Catalog search/filter behavior, catalog search performance, Favorites, plant placement drag/drop, Plant Color, and Plant Symbol are implemented inside the Web Edition artifact.
+- Web Edition Plant Detail remains reduced regardless of Species Catalog filter UI or performance changes.
 
 If product wants any of those to change, change the Canopi app repo first and ship a new Web Edition artifact.
 
@@ -198,6 +220,7 @@ Then verify:
 - `/app/` serves the Web Edition.
 - Reloading `/app/anything` returns the Web Edition shell through the `/app/*` fallback.
 - App asset requests under `/app/assets/` return `200`, not the marketing homepage.
+- Catalog asset requests under `/app/canopi-catalog/` or the catalog paths listed in the app manifest return the asset bytes directly, not `/app/index.html`.
 
 ## Browser Smoke Checks
 
@@ -211,18 +234,24 @@ Minimum checks:
 4. Confirm the right rail has Canvas, Plant Database, and Favorites, but no Location button.
 5. Create a new design.
 6. Open Plant Database.
-7. Drag a species row to the canvas and confirm a plant appears.
-8. Select the placed plant.
-9. Confirm Plant Color and Plant Symbol controls are enabled and change the selected plant.
-10. Favorite a species, open Favorites, and drag it to the canvas.
-11. Use Download `.canopi` and confirm a file download is triggered.
-12. Reload `/app/` and confirm browser-local recovery/autosave does not crash the app.
+7. Confirm the Plant Database search field, desktop-style filter strip, and active chips are visible.
+8. Exercise at least one backed strip filter, then confirm results update without console errors.
+9. If the artifact exposes backed More Filters fields, exercise one More Filters field and confirm results update without console errors.
+10. Search for a two-character Species query and confirm results update without freezing the app.
+11. Drag a species row to the canvas and confirm a plant appears.
+12. Select the placed plant.
+13. Confirm Plant Color and Plant Symbol controls are enabled and change the selected plant.
+14. Favorite a species, open Favorites, and drag it to the canvas.
+15. Use Download `.canopi` and confirm a file download is triggered.
+16. Reload `/app/` and confirm browser-local recovery/autosave does not crash the app.
 
 Also check the browser console and network panel for:
 
 - no missing JS/CSS/assets
 - no request for Tauri IPC
 - no 404 for catalog assets
+- no catalog asset request served with the Web Edition `index.html` response
+- no catalog asset exceeding Cloudflare Pages file-size limits
 - no failed `/app/` base-path requests
 
 ## Cache Headers
@@ -240,9 +269,12 @@ If the website adds `public/_headers`, use conservative rules:
 
 /app/assets/*
   Cache-Control: public, max-age=31536000, immutable
+
+/app/canopi-catalog/*
+  Cache-Control: public, max-age=31536000, immutable
 ```
 
-Only mark hashed static assets immutable. Keep `index.html` and the manifest revalidatable so a release can roll forward without users being pinned to an old entry HTML.
+Only mark hashed or versioned static assets immutable. Keep `index.html` and the manifest revalidatable so a release can roll forward without users being pinned to an old entry HTML. If a future artifact emits catalog files without content-hashed names, prefer `Cache-Control: public, max-age=3600` for `/app/canopi-catalog/*` until the app artifact provides versioned paths.
 
 ## Acceptance Criteria
 
@@ -250,8 +282,10 @@ Only mark hashed static assets immutable. Keep `index.html` and the manifest rev
 - The deployed artifact is installed under `dist/app/` during build/deploy.
 - `dist/app/canopi-web-edition-manifest.json` is verified before deploy.
 - `public/_redirects` includes `/app/* /app/index.html 200`.
+- Catalog files from the Web Edition artifact are copied under `/app/` and are served directly rather than through the SPA fallback.
+- The install script enforces manifest checksums, per-asset byte limits, file-count limits, and required catalog plus supported-filter metadata asset presence.
 - Header and/or hero link users to `/app/`.
 - All new website copy is localized across the existing 11 translation files.
 - `npm run build:with-web` passes with a local artifact.
 - `npm run preview` serves both the marketing site and `/app/`.
-- Browser smoke checks pass for app load, direct reload, Plant Database drag/drop, Favorites drag/drop, Plant Color, Plant Symbol, and `.canopi` download.
+- Browser smoke checks pass for app load, direct reload, Plant Database search/filter behavior, catalog asset network responses, Plant Database drag/drop, Favorites drag/drop, Plant Color, Plant Symbol, and `.canopi` download.
