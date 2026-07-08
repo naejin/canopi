@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Generate reduced Web Edition Species Catalog assets.
 
-The output is newline-delimited JSON that DuckDB-WASM can load with
-read_ndjson_auto(). Keeping generation in the Python standard library avoids a
-native DuckDB dependency in the repository while still producing DuckDB-loadable
-static assets for the browser adapter.
+The primary Species rows are emitted as small uncompressed Parquet shards that
+DuckDB-WASM can query with read_parquet(). Keeping generation in the Python
+standard library avoids a native DuckDB or PyArrow dependency in the repository
+while still producing DuckDB-queryable static assets for the browser adapter.
 """
 
 import argparse
@@ -144,7 +144,7 @@ def write_species_assets(
 ) -> list[dict[str, Any]]:
     species_dir = output_dir / "species"
     species_dir.mkdir(parents=True, exist_ok=True)
-    files = open_shard_files(species_dir, "species", shard_count)
+    shards: list[list[dict[str, Any]]] = [[] for _ in range(shard_count)]
     species_columns = table_columns(conn, "species")
     select_columns = [
         "id",
@@ -161,38 +161,42 @@ def write_species_assets(
         "climate_zones",
     ]
     select_sql = ", ".join(select_expr(species_columns, column) for column in select_columns)
-    try:
-        rows = conn.execute(
-            f"""
-            SELECT {select_sql}
-            FROM species
-            ORDER BY canonical_name, id
-            """
+    rows = conn.execute(
+        f"""
+        SELECT {select_sql}
+        FROM species
+        ORDER BY canonical_name, id
+        """
+    )
+    for row in rows:
+        species_id = row["id"]
+        payload = {
+            "id": species_id,
+            "slug": row["slug"],
+            "canonical_name": row["canonical_name"],
+            "common_name": row["common_name"],
+            "climate_zones": climate_zones.get(species_id) or parse_list_field(row["climate_zones"]),
+            "habit": row["habit"],
+            "growth_form": first_present(
+                row["growth_form_type"],
+                row["growth_form_shape"],
+                row["growth_habit"],
+            ),
+            "life_cycles": life_cycles_from_flags(
+                row["is_annual"],
+                row["is_biennial"],
+                row["is_perennial"],
+            ),
+        }
+        shards[shard_index(species_id, shard_count)].append(payload)
+
+    for index, shard_rows in enumerate(shards):
+        write_simple_parquet(
+            species_dir / f"species-{index:04d}.parquet",
+            SPECIES_FIELDS,
+            shard_rows,
         )
-        for row in rows:
-            species_id = row["id"]
-            payload = {
-                "id": species_id,
-                "slug": row["slug"],
-                "canonical_name": row["canonical_name"],
-                "common_name": row["common_name"],
-                "climate_zones": climate_zones.get(species_id) or parse_list_field(row["climate_zones"]),
-                "habit": row["habit"],
-                "growth_form": first_present(
-                    row["growth_form_type"],
-                    row["growth_form_shape"],
-                    row["growth_habit"],
-                ),
-                "life_cycles": life_cycles_from_flags(
-                    row["is_annual"],
-                    row["is_biennial"],
-                    row["is_perennial"],
-                ),
-            }
-            write_jsonl(files[shard_index(species_id, shard_count)], payload)
-    finally:
-        close_files(files)
-    return asset_entries(output_dir, species_dir.glob("*.jsonl"))
+    return asset_entries(output_dir, species_dir.glob("*.parquet"))
 
 
 def write_name_assets(conn: sqlite3.Connection, output_dir: Path) -> dict[str, dict[str, Any]]:
@@ -336,7 +340,12 @@ def build_manifest(
 ) -> dict[str, Any]:
     return {
         "version": 1,
-        "asset_format": "ndjson",
+        "asset_format": "parquet",
+        "asset_formats": {
+            "species": "parquet",
+            "names": "ndjson",
+            "images": "ndjson",
+        },
         "source": {
             "export_file": export_path.name,
             "export_schema_version": export_schema_version,
@@ -352,7 +361,7 @@ def build_manifest(
             "excluded_detail_fields": EXCLUDED_DETAIL_FIELDS,
         },
         "duckdb": {
-            "reader": "read_ndjson_auto",
+            "reader": "read_parquet",
             "tables": {
                 "web_species": [asset["path"] for asset in species_assets],
                 "web_species_names": [asset["path"] for asset in name_assets.values()],
@@ -406,6 +415,226 @@ def write_json(path: Path, value: Any) -> None:
 def write_jsonl(handle: Any, value: dict[str, Any]) -> None:
     handle.write(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
     handle.write("\n")
+
+
+def write_simple_parquet(path: Path, columns: list[str], rows: list[dict[str, Any]]) -> None:
+    """Write a minimal uncompressed Parquet file with required UTF-8 columns.
+
+    The reduced Web catalog schema is deliberately narrow. Lists are encoded as
+    JSON strings so the browser reader can parse them back to arrays while
+    DuckDB can still project columns from Parquet row groups.
+    """
+    body = bytearray(b"PAR1")
+    column_chunks: list[dict[str, Any]] = []
+
+    for column in columns:
+        offset = len(body)
+        values = b"".join(plain_byte_array(parquet_cell(row.get(column))) for row in rows)
+        page_header = parquet_data_page_header(num_values=len(rows), data_size=len(values))
+        page = page_header + values
+        body.extend(page)
+        column_chunks.append({
+            "path": [column],
+            "num_values": len(rows),
+            "data_page_offset": offset,
+            "total_size": len(page),
+        })
+
+    footer = parquet_file_metadata(
+        columns=columns,
+        column_chunks=column_chunks,
+        num_rows=len(rows),
+    )
+    body.extend(footer)
+    body.extend(len(footer).to_bytes(4, "little", signed=False))
+    body.extend(b"PAR1")
+    path.write_bytes(bytes(body))
+
+
+def parquet_cell(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, (list, tuple)):
+        return json.dumps(list(value), ensure_ascii=False, separators=(",", ":"))
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value)
+
+
+def plain_byte_array(value: str) -> bytes:
+    data = value.encode("utf-8")
+    return len(data).to_bytes(4, "little", signed=False) + data
+
+
+def parquet_data_page_header(*, num_values: int, data_size: int) -> bytes:
+    data_page_header = thrift_struct([
+        thrift_i32_field(1, num_values),
+        thrift_i32_field(2, 0),  # PLAIN
+        thrift_i32_field(3, 3),  # RLE
+        thrift_i32_field(4, 3),  # RLE
+    ])
+    return thrift_struct([
+        thrift_i32_field(1, 0),  # DATA_PAGE
+        thrift_i32_field(2, data_size),
+        thrift_i32_field(3, data_size),
+        thrift_struct_field(5, data_page_header),
+    ])
+
+
+def parquet_file_metadata(
+    *,
+    columns: list[str],
+    column_chunks: list[dict[str, Any]],
+    num_rows: int,
+) -> bytes:
+    schema = [
+        parquet_schema_element(name="schema", num_children=len(columns)),
+        *[
+            parquet_schema_element(
+                name=column,
+                type_id=6,  # BYTE_ARRAY
+                repetition_type=0,  # REQUIRED
+                converted_type=0,  # UTF8
+            )
+            for column in columns
+        ],
+    ]
+    row_groups = []
+    if column_chunks:
+        row_groups.append(thrift_struct([
+            thrift_list_field(1, 12, [parquet_column_chunk(chunk) for chunk in column_chunks]),
+            thrift_i64_field(2, sum(int(chunk["total_size"]) for chunk in column_chunks)),
+            thrift_i64_field(3, num_rows),
+        ]))
+
+    return thrift_struct([
+        thrift_i32_field(1, 1),
+        thrift_list_field(2, 12, schema),
+        thrift_i64_field(3, num_rows),
+        thrift_list_field(4, 12, row_groups),
+        thrift_binary_field(6, "canopi generate-web-catalog"),
+    ])
+
+
+def parquet_schema_element(
+    *,
+    name: str,
+    type_id: int | None = None,
+    repetition_type: int | None = None,
+    num_children: int | None = None,
+    converted_type: int | None = None,
+) -> bytes:
+    fields = []
+    if type_id is not None:
+        fields.append(thrift_i32_field(1, type_id))
+    if repetition_type is not None:
+        fields.append(thrift_i32_field(3, repetition_type))
+    fields.append(thrift_binary_field(4, name))
+    if num_children is not None:
+        fields.append(thrift_i32_field(5, num_children))
+    if converted_type is not None:
+        fields.append(thrift_i32_field(6, converted_type))
+    return thrift_struct(fields)
+
+
+def parquet_column_chunk(chunk: dict[str, Any]) -> bytes:
+    return thrift_struct([
+        thrift_i64_field(2, int(chunk["data_page_offset"])),
+        thrift_struct_field(3, parquet_column_metadata(chunk)),
+    ])
+
+
+def parquet_column_metadata(chunk: dict[str, Any]) -> bytes:
+    total_size = int(chunk["total_size"])
+    return thrift_struct([
+        thrift_i32_field(1, 6),  # BYTE_ARRAY
+        thrift_list_field(2, 5, [0]),  # PLAIN
+        thrift_list_field(3, 8, chunk["path"]),
+        thrift_i32_field(4, 0),  # UNCOMPRESSED
+        thrift_i64_field(5, int(chunk["num_values"])),
+        thrift_i64_field(6, total_size),
+        thrift_i64_field(7, total_size),
+        thrift_i64_field(9, int(chunk["data_page_offset"])),
+    ])
+
+
+THRIFT_STOP = 0
+THRIFT_I32 = 5
+THRIFT_I64 = 6
+THRIFT_BINARY = 8
+THRIFT_LIST = 9
+THRIFT_STRUCT = 12
+
+
+def thrift_struct(fields: list[tuple[int, int, bytes]]) -> bytes:
+    output = bytearray()
+    previous_field_id = 0
+    for field_id, field_type, payload in fields:
+        delta = field_id - previous_field_id
+        if 0 < delta <= 15:
+            output.append((delta << 4) | field_type)
+        else:
+            output.append(field_type)
+            output.extend(varint(zigzag(field_id)))
+        output.extend(payload)
+        previous_field_id = field_id
+    output.append(THRIFT_STOP)
+    return bytes(output)
+
+
+def thrift_i32_field(field_id: int, value: int) -> tuple[int, int, bytes]:
+    return (field_id, THRIFT_I32, varint(zigzag(value)))
+
+
+def thrift_i64_field(field_id: int, value: int) -> tuple[int, int, bytes]:
+    return (field_id, THRIFT_I64, varint(zigzag(value)))
+
+
+def thrift_binary_field(field_id: int, value: str) -> tuple[int, int, bytes]:
+    data = value.encode("utf-8")
+    return (field_id, THRIFT_BINARY, varint(len(data)) + data)
+
+
+def thrift_struct_field(field_id: int, value: bytes) -> tuple[int, int, bytes]:
+    return (field_id, THRIFT_STRUCT, value)
+
+
+def thrift_list_field(field_id: int, element_type: int, values: list[Any]) -> tuple[int, int, bytes]:
+    payload = bytearray()
+    if len(values) < 15:
+        payload.append((len(values) << 4) | element_type)
+    else:
+        payload.append((15 << 4) | element_type)
+        payload.extend(varint(len(values)))
+
+    for value in values:
+        if element_type == THRIFT_STRUCT:
+            payload.extend(value)
+        elif element_type == THRIFT_BINARY:
+            data = str(value).encode("utf-8")
+            payload.extend(varint(len(data)))
+            payload.extend(data)
+        elif element_type == THRIFT_I32:
+            payload.extend(varint(zigzag(int(value))))
+        else:
+            raise ValueError(f"Unsupported compact thrift list element type {element_type}.")
+    return (field_id, THRIFT_LIST, bytes(payload))
+
+
+def zigzag(value: int) -> int:
+    return (value << 1) ^ (value >> 63)
+
+
+def varint(value: int) -> bytes:
+    output = bytearray()
+    while True:
+        byte = value & 0x7F
+        value >>= 7
+        if value:
+            output.append(byte | 0x80)
+        else:
+            output.append(byte)
+            return bytes(output)
 
 
 def asset_entries(output_dir: Path, paths: Any) -> list[dict[str, Any]]:

@@ -35,8 +35,8 @@ class GenerateWebCatalogTests(unittest.TestCase):
                 max_asset_bytes=25 * 1024 * 1024,
             )
 
-            self.assertEqual(manifest["asset_format"], "ndjson")
-            self.assertEqual(manifest["duckdb"]["reader"], "read_ndjson_auto")
+            self.assertEqual(manifest["asset_format"], "parquet")
+            self.assertEqual(manifest["duckdb"]["reader"], "read_parquet")
             self.assertEqual(manifest["locales"], generator.UI_LOCALES)
             self.assertEqual(
                 manifest["schema"]["species_fields"],
@@ -53,14 +53,22 @@ class GenerateWebCatalogTests(unittest.TestCase):
             )
             self.assertEqual(
                 sorted(asset["path"] for asset in manifest["assets"]["species"]),
-                ["species/species-0000.jsonl", "species/species-0001.jsonl"],
+                ["species/species-0000.parquet", "species/species-0001.parquet"],
             )
+            for asset in manifest["assets"]["species"]:
+                species_asset = output_dir / asset["path"]
+                self.assertEqual(species_asset.read_bytes()[:4], b"PAR1")
+                self.assertEqual(species_asset.read_bytes()[-4:], b"PAR1")
             self.assertEqual(
                 sorted(manifest["assets"]["names"].keys()),
                 sorted(generator.UI_LOCALES),
             )
 
-            species_rows = read_manifest_rows(output_dir, manifest["assets"]["species"])
+            species_rows = read_manifest_rows(
+                output_dir,
+                manifest["assets"]["species"],
+                fields=manifest["schema"]["species_fields"],
+            )
             apple = next(row for row in species_rows if row["slug"] == "malus-domestica")
             self.assertEqual(apple["canonical_name"], "Malus domestica")
             self.assertEqual(apple["common_name"], "Apple")
@@ -263,10 +271,16 @@ def create_export_fixture(path: Path):
     conn.close()
 
 
-def read_manifest_rows(output_dir: Path, assets):
+def read_manifest_rows(output_dir: Path, assets, fields=None):
     rows = []
     for asset in assets:
-        rows.extend(read_jsonl(output_dir / asset["path"]))
+        path = output_dir / asset["path"]
+        if path.suffix == ".parquet":
+            if fields is None:
+                raise AssertionError("Parquet test reads require schema fields.")
+            rows.extend(read_simple_parquet_rows(path, fields))
+        else:
+            rows.extend(read_jsonl(path))
     return rows
 
 
@@ -276,6 +290,89 @@ def read_jsonl(path: Path):
         for line in path.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
+
+
+def read_simple_parquet_rows(path: Path, fields):
+    data = path.read_bytes()
+    if data[:4] != b"PAR1" or data[-4:] != b"PAR1":
+        raise AssertionError(f"{path} is not framed as Parquet")
+    rows = None
+    offset = 4
+    columns = []
+    for field in fields:
+        header = parse_page_header(data, offset)
+        offset = header["end"]
+        values = []
+        for _ in range(header["num_values"]):
+            size = int.from_bytes(data[offset:offset + 4], "little")
+            offset += 4
+            values.append(data[offset:offset + size].decode("utf-8"))
+            offset += size
+        columns.append((field, values))
+        rows = header["num_values"] if rows is None else rows
+    result = [dict() for _ in range(rows or 0)]
+    for field, values in columns:
+        for index, value in enumerate(values):
+            if field in ("climate_zones", "life_cycles"):
+                result[index][field] = json.loads(value or "[]")
+            else:
+                result[index][field] = value or None
+    return result
+
+
+def parse_page_header(data: bytes, offset: int):
+    header_end, fields = parse_compact_struct(data, offset)
+    compressed_size = fields[3]
+    data_page = fields[5]
+    return {
+        "end": header_end,
+        "compressed_size": compressed_size,
+        "num_values": data_page[1],
+    }
+
+
+def parse_compact_struct(data: bytes, offset: int):
+    fields = {}
+    field_id = 0
+    while True:
+        header = data[offset]
+        offset += 1
+        field_type = header & 0x0F
+        if field_type == 0:
+            return offset, fields
+        delta = header >> 4
+        if delta == 0:
+            field_id, offset = read_compact_int(data, offset)
+        else:
+            field_id += delta
+        if field_type in (5, 6):
+            value, offset = read_compact_int(data, offset)
+        elif field_type == 8:
+            size, offset = read_varint(data, offset)
+            value = data[offset:offset + size].decode("utf-8")
+            offset += size
+        elif field_type == 12:
+            offset, value = parse_compact_struct(data, offset)
+        else:
+            raise AssertionError(f"Unsupported compact field type {field_type}")
+        fields[field_id] = value
+
+
+def read_compact_int(data: bytes, offset: int):
+    raw, offset = read_varint(data, offset)
+    return ((raw >> 1) ^ -(raw & 1)), offset
+
+
+def read_varint(data: bytes, offset: int):
+    shift = 0
+    value = 0
+    while True:
+        byte = data[offset]
+        offset += 1
+        value |= (byte & 0x7F) << shift
+        if byte & 0x80 == 0:
+            return value, offset
+        shift += 7
 
 
 if __name__ == "__main__":

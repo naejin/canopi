@@ -3,6 +3,7 @@ import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { locale } from '../app/settings/state'
 import { readPlantStampDragData } from '../canvas/plant-stamp-source'
+import type { PlantSearchResultState } from '../app/plant-browser/search-session'
 import type { SpeciesFilter, SpeciesListItem } from '../types/species'
 
 const mockWorkbench = vi.hoisted(() => ({
@@ -15,7 +16,7 @@ const mockWorkbench = vi.hoisted(() => ({
       committedRevision: 1,
       status: 'idle',
       error: null,
-    },
+    } as PlantSearchResultState,
   },
   filterStrip: {
     value: {
@@ -62,6 +63,7 @@ const mockWorkbench = vi.hoisted(() => ({
   loadFavorites: vi.fn(async () => {}),
   setSearchText: vi.fn(),
   patchFilters: vi.fn(),
+  retrySearch: vi.fn(),
   selectSpecies: vi.fn(),
   closeSpeciesDetail: vi.fn(),
   toggleFavorite: vi.fn(async () => {}),
@@ -163,6 +165,31 @@ describe('Web Edition Species Catalog panel', () => {
       stratum: null,
       width_max_m: null,
     })
+  })
+
+  it('surfaces catalog load failures with a retry action', async () => {
+    mockWorkbench.results.value = {
+      items: [],
+      nextCursor: null,
+      totalEstimate: 0,
+      committedRevision: 1,
+      status: 'error',
+      error: 'Failed to load Web Edition Species Catalog manifest.',
+    }
+
+    await act(async () => {
+      render(<WebSpeciesCatalogPanel mode="catalog" />, container)
+    })
+
+    expect(requiredElement<HTMLElement>('[role="alert"]').textContent).toContain(
+      'Failed to load Web Edition Species Catalog manifest.',
+    )
+
+    await act(async () => {
+      requiredElement<HTMLButtonElement>('[data-testid="web-species-retry"]').click()
+    })
+
+    expect(mockWorkbench.retrySearch).toHaveBeenCalledOnce()
   })
 
   it('writes desktop Plant Stamp drag payloads from favorites and recently viewed rows', async () => {

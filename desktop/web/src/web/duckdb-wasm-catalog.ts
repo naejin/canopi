@@ -21,7 +21,10 @@ interface CatalogAssetEntry {
 }
 
 interface WebCatalogManifest {
-  readonly asset_format: string
+  readonly asset_format: 'ndjson' | 'parquet'
+  readonly duckdb?: {
+    readonly reader?: string
+  }
   readonly assets: {
     readonly species: readonly CatalogAssetEntry[]
     readonly names: Readonly<Record<string, CatalogAssetEntry>>
@@ -29,9 +32,30 @@ interface WebCatalogManifest {
   }
 }
 
+interface DuckDbQueryTable {
+  toArray(): unknown[]
+}
+
+interface DuckDbCatalogConnection {
+  query(sql: string): DuckDbQueryTable | Promise<DuckDbQueryTable>
+  close(): void | Promise<void>
+}
+
+interface DuckDbCatalogDatabase {
+  connect(): DuckDbCatalogConnection | Promise<DuckDbCatalogConnection>
+  registerFileURL(
+    name: string,
+    url: string,
+    protocol: unknown,
+    directIO: boolean,
+  ): void | Promise<void>
+  terminate(): void | Promise<void>
+}
+
 interface DuckDbReducedSpeciesCatalogReaderOptions {
   readonly catalogBaseUrl?: URL
   readonly fetchJson?: (url: URL) => Promise<unknown>
+  readonly createDatabase?: () => Promise<DuckDbCatalogDatabase>
 }
 
 export function createDuckDbReducedSpeciesCatalogReader(
@@ -83,20 +107,142 @@ async function loadDuckDbCatalogReader(
   const catalogBaseUrl = options.catalogBaseUrl ?? defaultCatalogBaseUrl()
   const fetchJson = options.fetchJson ?? fetchCatalogJson
   const manifest = parseManifest(await fetchJson(new URL('manifest.json', catalogBaseUrl)))
-  const database = await instantiateDuckDb()
-  const connection = await database.connect()
+  const database = await (options.createDatabase ?? instantiateDuckDb)()
+  const connection = await Promise.resolve(database.connect())
 
   try {
     await registerCatalogAssets(database, catalogBaseUrl, manifest)
+    if (manifest.asset_format === 'parquet') {
+      return new DuckDbParquetReducedSpeciesCatalogReader(connection, manifest)
+    }
     const catalogData = await readCatalogData(connection, manifest)
     return createInMemoryReducedSpeciesCatalogReader(catalogData)
-  } finally {
+  } catch (error) {
+    await closeDuckDb(database, connection)
+    throw error
+  }
+}
+
+class DuckDbParquetReducedSpeciesCatalogReader implements ReducedSpeciesCatalogReader {
+  constructor(
+    private readonly connection: DuckDbCatalogConnection,
+    private readonly manifest: WebCatalogManifest,
+  ) {}
+
+  async searchSpecies(
+    request: SpeciesSearchRequest,
+    favoriteNames: ReadonlySet<string>,
+  ): Promise<PaginatedResult<SpeciesListItem>> {
+    const offset = cursorToOffset(request.cursor)
+    const limit = Math.max(0, request.limit)
+    const speciesTable = readParquetSql(this.manifest.assets.species.map((asset) => asset.path))
+    const rowsTable = await this.connection.query(`
+      SELECT id,
+             slug,
+             canonical_name,
+             common_name,
+             climate_zones,
+             habit,
+             growth_form,
+             life_cycles
+      FROM ${speciesTable}
+      ORDER BY canonical_name, id
+      LIMIT ${limit}
+      OFFSET ${offset}
+    `)
+    const rows = tableRows(rowsTable).map(parseSpeciesRow)
+    const totalEstimate = request.include_total
+      ? await this.countSpecies(speciesTable)
+      : 0
+    const nextOffset = offset + rows.length
+    const hasNextPage = request.include_total
+      ? nextOffset < totalEstimate
+      : rows.length === limit && limit > 0
+
+    return {
+      items: rows.map((row) => speciesRowToListItem(row, favoriteNames)),
+      next_cursor: hasNextPage ? `offset:${nextOffset}` : null,
+      total_estimate: totalEstimate,
+    }
+  }
+
+  async listSpeciesByCanonicalNames(
+    canonicalNames: readonly string[],
+    _locale: string,
+    favoriteNames: ReadonlySet<string>,
+  ): Promise<SpeciesListItem[]> {
+    if (canonicalNames.length === 0) return []
+    const speciesTable = readParquetSql(this.manifest.assets.species.map((asset) => asset.path))
+    const rowsTable = await this.connection.query(`
+      SELECT id,
+             slug,
+             canonical_name,
+             common_name,
+             climate_zones,
+             habit,
+             growth_form,
+             life_cycles
+      FROM ${speciesTable}
+      WHERE canonical_name IN (${canonicalNames.map(quoteSqlString).join(', ')})
+    `)
+    const rowsByName = new Map(tableRows(rowsTable).map((row) => {
+      const species = parseSpeciesRow(row)
+      return [species.canonical_name, species]
+    }))
+    return canonicalNames.flatMap((canonicalName) => {
+      const row = rowsByName.get(canonicalName)
+      return row ? [speciesRowToListItem(row, favoriteNames)] : []
+    })
+  }
+
+  async getFilterOptions(): Promise<FilterOptions> {
+    return {
+      families: [],
+      growth_rates: [],
+      climate_zones: [],
+      habits: [],
+      life_cycles: [],
+      sun_tolerances: [],
+      soil_tolerances: [],
+    }
+  }
+
+  async getDynamicFilterOptions(
+    _fields: readonly string[],
+    _locale: string,
+  ): Promise<DynamicFilterOptions[]> {
+    return []
+  }
+
+  async getSpeciesDetail(
+    _canonicalName: string,
+    _locale: string,
+  ): Promise<SpeciesCatalogDetail | null> {
+    return null
+  }
+
+  private async countSpecies(speciesTable: string): Promise<number> {
+    const countTable = await this.connection.query(`
+      SELECT COUNT(*) AS total_count
+      FROM ${speciesTable}
+    `)
+    const countRow = tableRows(countTable)[0]
+    return numberValue(countRow?.total_count)
+  }
+}
+
+async function closeDuckDb(
+  database: DuckDbCatalogDatabase,
+  connection: DuckDbCatalogConnection,
+): Promise<void> {
+  try {
     await connection.close()
+  } finally {
     await database.terminate()
   }
 }
 
-async function instantiateDuckDb(): Promise<duckdb.AsyncDuckDB> {
+async function instantiateDuckDb(): Promise<DuckDbCatalogDatabase> {
   const bundle = await duckdb.selectBundle(duckdb.getJsDelivrBundles())
   if (bundle.mainWorker === null) {
     throw new Error('DuckDB-WASM did not provide a browser worker bundle.')
@@ -117,7 +263,7 @@ async function instantiateDuckDb(): Promise<duckdb.AsyncDuckDB> {
 }
 
 async function registerCatalogAssets(
-  database: duckdb.AsyncDuckDB,
+  database: DuckDbCatalogDatabase,
   catalogBaseUrl: URL,
   manifest: WebCatalogManifest,
 ): Promise<void> {
@@ -137,7 +283,7 @@ async function registerCatalogAssets(
 }
 
 async function readCatalogData(
-  connection: duckdb.AsyncDuckDBConnection,
+  connection: DuckDbCatalogConnection,
   manifest: WebCatalogManifest,
 ): Promise<ReducedSpeciesCatalogData> {
   const speciesTable = await connection.query(readNdjsonSql(
@@ -161,6 +307,12 @@ function readNdjsonSql(paths: readonly string[]): string {
   if (paths.length === 0) return 'SELECT * FROM (SELECT NULL) WHERE FALSE'
   if (paths.length === 1) return `SELECT * FROM read_ndjson_auto(${quoteSqlString(paths[0] ?? '')})`
   return `SELECT * FROM read_ndjson_auto([${paths.map(quoteSqlString).join(', ')}])`
+}
+
+function readParquetSql(paths: readonly string[]): string {
+  if (paths.length === 0) return '(SELECT * FROM (SELECT NULL) WHERE FALSE)'
+  if (paths.length === 1) return `read_parquet(${quoteSqlString(paths[0] ?? '')})`
+  return `read_parquet([${paths.map(quoteSqlString).join(', ')}])`
 }
 
 function quoteSqlString(value: string): string {
@@ -214,8 +366,15 @@ function parseImageRow(row: Record<string, unknown>): ReducedSpeciesImageRow {
 }
 
 function parseManifest(value: unknown): WebCatalogManifest {
-  if (!isRecord(value) || value.asset_format !== 'ndjson' || !isRecord(value.assets)) {
+  if (
+    !isRecord(value) ||
+    (value.asset_format !== 'ndjson' && value.asset_format !== 'parquet') ||
+    !isRecord(value.assets)
+  ) {
     throw new Error('Invalid Web Edition Species Catalog manifest.')
+  }
+  if (value.asset_format === 'parquet' && isRecord(value.duckdb) && value.duckdb.reader !== 'read_parquet') {
+    throw new Error('Invalid Web Edition Species Catalog DuckDB reader.')
   }
   const assets = value.assets
   if (!Array.isArray(assets.species) || !isRecord(assets.names) || !Array.isArray(assets.images)) {
@@ -223,6 +382,7 @@ function parseManifest(value: unknown): WebCatalogManifest {
   }
   return {
     asset_format: value.asset_format,
+    duckdb: isRecord(value.duckdb) ? { reader: optionalString(value.duckdb.reader) ?? undefined } : undefined,
     assets: {
       species: assets.species.map(parseAssetEntry),
       names: Object.fromEntries(
@@ -263,6 +423,18 @@ function nullableString(value: unknown): string | null {
 
 function stringArray(value: unknown): string[] {
   if (Array.isArray(value)) return value.filter((entry): entry is string => typeof entry === 'string')
+  if (typeof value === 'string') {
+    const text = value.trim()
+    if (!text) return []
+    try {
+      const parsed = JSON.parse(text) as unknown
+      if (Array.isArray(parsed)) {
+        return parsed.filter((entry): entry is string => typeof entry === 'string')
+      }
+    } catch {
+      return []
+    }
+  }
   if (isRecord(value) && 'toArray' in value && typeof value.toArray === 'function') {
     const array = value.toArray() as unknown
     return Array.isArray(array)
@@ -283,6 +455,43 @@ function numberValue(value: unknown): number {
     if (Number.isFinite(parsed)) return parsed
   }
   return 0
+}
+
+function optionalString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value : null
+}
+
+function cursorToOffset(cursor: string | null): number {
+  if (cursor === null) return 0
+  const match = /^offset:(\d+)$/.exec(cursor)
+  return match ? Number(match[1]) : 0
+}
+
+function speciesRowToListItem(
+  row: ReducedSpeciesRow,
+  favoriteNames: ReadonlySet<string>,
+): SpeciesListItem {
+  return {
+    canonical_name: row.canonical_name,
+    slug: row.slug,
+    common_name: row.common_name,
+    common_name_2: null,
+    matched_common_name: null,
+    is_name_fallback: row.common_name === null,
+    family: null,
+    genus: null,
+    height_max_m: null,
+    hardiness_zone_min: null,
+    hardiness_zone_max: null,
+    growth_rate: null,
+    stratum: null,
+    climate_zones: [...row.climate_zones],
+    life_cycles: [...row.life_cycles],
+    edibility_rating: null,
+    medicinal_rating: null,
+    width_max_m: null,
+    is_favorite: favoriteNames.has(row.canonical_name),
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

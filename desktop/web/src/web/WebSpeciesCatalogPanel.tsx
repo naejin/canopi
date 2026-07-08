@@ -249,7 +249,19 @@ function SpeciesList({
   }
 
   if (error !== null && items.length === 0) {
-    return <div className={styles.error} role="alert">{error}</div>
+    return (
+      <div className={styles.error} role="alert">
+        <span>{error}</span>
+        <button
+          type="button"
+          className={styles.retryButton}
+          onClick={() => { speciesCatalogWorkbench.retrySearch() }}
+          data-testid="web-species-retry"
+        >
+          {t('plantDb.retry')}
+        </button>
+      </div>
+    )
   }
 
   if (items.length === 0) {
