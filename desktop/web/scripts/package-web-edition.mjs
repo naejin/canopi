@@ -106,8 +106,20 @@ export async function packageWebEdition(options = {}) {
     catalog,
     files: manifestFiles,
   };
+  const artifactFileCount = manifestFiles.length + 1;
+  if (artifactFileCount > maxFileCount) {
+    throw new Error(
+      `Web Edition artifact contains ${artifactFileCount} files, above the Cloudflare Pages file limit ${maxFileCount}.`,
+    );
+  }
+  const manifestJson = `${JSON.stringify(manifest, null, 2)}\n`;
+  if (Buffer.byteLength(manifestJson) > maxAssetBytes) {
+    throw new Error(
+      `${MANIFEST_NAME} exceeds the Cloudflare Pages per-asset limit of ${maxAssetBytes} bytes.`,
+    );
+  }
 
-  writeFileSync(resolve(artifactDir, MANIFEST_NAME), `${JSON.stringify(manifest, null, 2)}\n`);
+  writeFileSync(resolve(artifactDir, MANIFEST_NAME), manifestJson);
   writeFileSync(archivePath, createTarGz(artifactDir));
 
   return {

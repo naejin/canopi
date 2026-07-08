@@ -40,7 +40,7 @@ describe('Web Edition packaging', () => {
         artifactRoot: out,
         version: '0.9.1',
         commit: 'abcdef1',
-        maxAssetBytes: 1024,
+        maxAssetBytes: 8192,
       })
 
       const artifactDir = joinPath(out, 'canopi-web-edition-v0.9.1-abcdef1')
@@ -298,6 +298,31 @@ describe('Web Edition packaging', () => {
         maxAssetBytes: 1024,
         maxFileCount: 4,
       })).rejects.toThrow(/above the Cloudflare Pages file limit 4/i)
+    } finally {
+      fsWithWriteAndTemp.rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+
+  it('counts the artifact manifest against the Cloudflare Pages file-count limit', async () => {
+    const workspace = createWorkspace()
+    try {
+      const dist = joinPath(workspace, 'dist-web')
+      const out = joinPath(workspace, 'artifacts')
+      fsWithWriteAndTemp.mkdirSync(joinPath(dist, 'assets'), { recursive: true })
+      fsWithWriteAndTemp.writeFileSync(joinPath(dist, 'web.html'), '<script type="module" src="/app/assets/web.js"></script>\n')
+      fsWithWriteAndTemp.writeFileSync(joinPath(dist, 'assets', 'web.js'), "console.log('web')\n")
+      writeCatalogFixture(dist)
+
+      const { packageWebEdition } = await loadPackager()
+
+      await expect(packageWebEdition({
+        distRoot: dist,
+        artifactRoot: out,
+        version: '0.9.1',
+        commit: 'abcdef1',
+        maxAssetBytes: 8192,
+        maxFileCount: 6,
+      })).rejects.toThrow(/contains 7 files.*Cloudflare Pages file limit 6/i)
     } finally {
       fsWithWriteAndTemp.rmSync(workspace, { recursive: true, force: true })
     }
