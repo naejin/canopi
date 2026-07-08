@@ -69,6 +69,9 @@ npm run build:web
 # Web Edition release artifact, from desktop/web
 npm run package:web
 
+# Web Edition root-subdomain artifact, from desktop/web
+npm run package:web:root
+
 # Frontend tests
 cd desktop/web && npm test
 

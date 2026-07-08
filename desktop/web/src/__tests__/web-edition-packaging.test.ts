@@ -81,6 +81,82 @@ describe('Web Edition packaging', () => {
     }
   })
 
+  it('creates an explicit root-base artifact without an app wrapper directory', async () => {
+    const workspace = createWorkspace()
+    try {
+      const dist = joinPath(workspace, 'dist-web')
+      const out = joinPath(workspace, 'artifacts')
+      fsWithWriteAndTemp.mkdirSync(joinPath(dist, 'assets'), { recursive: true })
+      fsWithWriteAndTemp.writeFileSync(joinPath(dist, 'web.html'), '<script type="module" src="/assets/web.js"></script>\n')
+      fsWithWriteAndTemp.writeFileSync(joinPath(dist, 'assets', 'web.js'), "console.log('web')\n")
+      writeCatalogFixture(dist)
+
+      const { packageWebEdition } = await loadPackager()
+      await packageWebEdition({
+        distRoot: dist,
+        artifactRoot: out,
+        version: '0.9.1',
+        commit: 'abcdef1',
+        maxAssetBytes: 8192,
+        basePath: '/',
+      })
+
+      const artifactDir = joinPath(out, 'canopi-web-edition-root-v0.9.1-abcdef1')
+      const manifestPath = joinPath(artifactDir, 'canopi-web-edition-manifest.json')
+      const manifest = JSON.parse(fsWithWriteAndTemp.readFileSync(manifestPath, 'utf8')) as {
+        basePath: string
+        spaFallback: { source: string; destination: string; status: number }
+        files: Array<{ path: string }>
+      }
+
+      expect(fsWithWriteAndTemp.existsSync(joinPath(artifactDir, 'index.html'))).toBe(true)
+      expect(fsWithWriteAndTemp.existsSync(joinPath(out, 'canopi-web-edition-root-v0.9.1-abcdef1.tar.gz'))).toBe(true)
+      expect(fsWithWriteAndTemp.existsSync(joinPath(artifactDir, 'app'))).toBe(false)
+      expect(fsWithWriteAndTemp.readFileSync(joinPath(artifactDir, 'index.html'), 'utf8')).not.toContain('/app/')
+      expect(manifest.basePath).toBe('/')
+      expect(manifest.spaFallback).toEqual({
+        source: '/*',
+        destination: '/index.html',
+        status: 200,
+      })
+      expect(manifest.files.map((file) => file.path).sort()).toEqual([
+        'assets/web.js',
+        'canopi-catalog/images/images-0000.parquet',
+        'canopi-catalog/manifest.json',
+        'canopi-catalog/names/names-en.parquet',
+        'canopi-catalog/species/species-0000.parquet',
+        'index.html',
+      ])
+    } finally {
+      fsWithWriteAndTemp.rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects root-base packaging when the build output still targets /app/', async () => {
+    const workspace = createWorkspace()
+    try {
+      const dist = joinPath(workspace, 'dist-web')
+      const out = joinPath(workspace, 'artifacts')
+      fsWithWriteAndTemp.mkdirSync(joinPath(dist, 'assets'), { recursive: true })
+      fsWithWriteAndTemp.writeFileSync(joinPath(dist, 'web.html'), '<script type="module" src="/app/assets/web.js"></script>\n')
+      fsWithWriteAndTemp.writeFileSync(joinPath(dist, 'assets', 'web.js'), "console.log('web')\n")
+      writeCatalogFixture(dist)
+
+      const { packageWebEdition } = await loadPackager()
+
+      await expect(packageWebEdition({
+        distRoot: dist,
+        artifactRoot: out,
+        version: '0.9.1',
+        commit: 'abcdef1',
+        maxAssetBytes: 8192,
+        basePath: '/',
+      })).rejects.toThrow(/CANOPI_WEB_BASE_PATH=\/.*\/app\//i)
+    } finally {
+      fsWithWriteAndTemp.rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+
   it('fails when a generated asset exceeds the Cloudflare Pages per-asset limit', async () => {
       const workspace = createWorkspace()
     try {
@@ -391,6 +467,7 @@ async function loadPackager(): Promise<{
     commit: string
     maxAssetBytes: number
     maxFileCount?: number
+    basePath?: string
   }): Promise<void>
 }> {
   return await import(toFileUrl(scriptPath)) as {
@@ -401,6 +478,7 @@ async function loadPackager(): Promise<{
       commit: string
       maxAssetBytes: number
       maxFileCount?: number
+      basePath?: string
     }): Promise<void>
   }
 }

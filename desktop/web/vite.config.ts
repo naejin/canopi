@@ -3,8 +3,14 @@ import preact from "@preact/preset-vite";
 import { fileURLToPath, URL } from "node:url";
 import { resolveWebEditionDevHtmlUrl } from "./src/web/dev-entry";
 
+const DEFAULT_WEB_EDITION_BASE_PATH = "/app/";
+const WEB_EDITION_BASE_PATH_ENV = "CANOPI_WEB_BASE_PATH";
+
 export default defineConfig(({ mode }) => {
   const isWebEdition = mode === 'web';
+  const webEditionBasePath = isWebEdition
+    ? resolveWebEditionBasePath(process.env[WEB_EDITION_BASE_PATH_ENV])
+    : undefined;
   const platformAdapter = fileURLToPath(new URL(
     isWebEdition ? './src/platform/browser.ts' : './src/platform/desktop.ts',
     import.meta.url,
@@ -33,7 +39,7 @@ export default defineConfig(({ mode }) => {
       preact(),
       webEditionDevEntryPlugin(isWebEdition),
     ],
-    base: isWebEdition ? "/app/" : undefined,
+    base: webEditionBasePath,
     resolve: {
       alias: {
         '#platform': platformAdapter,
@@ -67,6 +73,18 @@ export default defineConfig(({ mode }) => {
     },
   };
 });
+
+function resolveWebEditionBasePath(value: string | undefined): string {
+  const basePath = (value ?? DEFAULT_WEB_EDITION_BASE_PATH).trim();
+  if (basePath.length === 0) {
+    throw new Error(`${WEB_EDITION_BASE_PATH_ENV} must not be empty.`);
+  }
+  if (basePath === "/") return "/";
+  if (!basePath.startsWith("/")) {
+    throw new Error(`${WEB_EDITION_BASE_PATH_ENV} must be "/" or an absolute path such as "/app/".`);
+  }
+  return basePath.endsWith("/") ? basePath : `${basePath}/`;
+}
 
 function webEditionDevEntryPlugin(enabled: boolean): Plugin {
   return {
