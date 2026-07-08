@@ -63,6 +63,10 @@ class GenerateWebCatalogTests(unittest.TestCase):
                 sorted(manifest["assets"]["names"].keys()),
                 sorted(generator.UI_LOCALES),
             )
+            self.assertEqual(
+                manifest["assets"]["names"]["fr"]["path"],
+                "names/names-fr.parquet",
+            )
 
             species_rows = read_manifest_rows(
                 output_dir,
@@ -88,7 +92,11 @@ class GenerateWebCatalogTests(unittest.TestCase):
             ]:
                 self.assertNotIn(field, forbidden)
 
-            french_names = read_jsonl(output_dir / manifest["assets"]["names"]["fr"]["path"])
+            french_names = read_manifest_rows(
+                output_dir,
+                [manifest["assets"]["names"]["fr"]],
+                fields=manifest["schema"]["name_fields"],
+            )
             self.assertEqual(french_names, [{
                 "species_id": "species-apple",
                 "language": "fr",
@@ -97,7 +105,11 @@ class GenerateWebCatalogTests(unittest.TestCase):
                 "is_primary": True,
                 "display_order": 0,
             }])
-            japanese_names = read_jsonl(output_dir / manifest["assets"]["names"]["ja"]["path"])
+            japanese_names = read_manifest_rows(
+                output_dir,
+                [manifest["assets"]["names"]["ja"]],
+                fields=manifest["schema"]["name_fields"],
+            )
             self.assertEqual(japanese_names, [])
 
             image_rows = read_manifest_rows(output_dir, manifest["assets"]["images"])
@@ -315,6 +327,10 @@ def read_simple_parquet_rows(path: Path, fields):
         for index, value in enumerate(values):
             if field in ("climate_zones", "life_cycles"):
                 result[index][field] = json.loads(value or "[]")
+            elif field == "is_primary":
+                result[index][field] = value == "true"
+            elif field == "display_order":
+                result[index][field] = int(value or "0")
             else:
                 result[index][field] = value or None
     return result

@@ -113,7 +113,12 @@ async function loadDuckDbCatalogReader(
   try {
     await registerCatalogAssets(database, catalogBaseUrl, manifest)
     if (manifest.asset_format === 'parquet') {
-      return new DuckDbParquetReducedSpeciesCatalogReader(connection, manifest)
+      return new DuckDbParquetReducedSpeciesCatalogReader(
+        database,
+        connection,
+        catalogBaseUrl,
+        manifest,
+      )
     }
     const catalogData = await readCatalogData(connection, manifest)
     return createInMemoryReducedSpeciesCatalogReader(catalogData)
@@ -124,8 +129,12 @@ async function loadDuckDbCatalogReader(
 }
 
 class DuckDbParquetReducedSpeciesCatalogReader implements ReducedSpeciesCatalogReader {
+  private readonly registeredLocaleAssets = new Set<string>()
+
   constructor(
+    private readonly database: DuckDbCatalogDatabase,
     private readonly connection: DuckDbCatalogConnection,
+    private readonly catalogBaseUrl: URL,
     private readonly manifest: WebCatalogManifest,
   ) {}
 
@@ -133,26 +142,25 @@ class DuckDbParquetReducedSpeciesCatalogReader implements ReducedSpeciesCatalogR
     request: SpeciesSearchRequest,
     favoriteNames: ReadonlySet<string>,
   ): Promise<PaginatedResult<SpeciesListItem>> {
+    await this.ensureLocaleNameAsset(request.locale)
     const offset = cursorToOffset(request.cursor)
     const limit = Math.max(0, request.limit)
     const speciesTable = readParquetSql(this.manifest.assets.species.map((asset) => asset.path))
+    const namesTable = localeNamesSql(this.manifest, request.locale)
+    const normalizedSearchText = normalizeSearchText(request.text)
     const rowsTable = await this.connection.query(`
-      SELECT id,
-             slug,
-             canonical_name,
-             common_name,
-             climate_zones,
-             habit,
-             growth_form,
-             life_cycles
-      FROM ${speciesTable}
-      ORDER BY canonical_name, id
+      ${speciesProjectionSql({
+        speciesTable,
+        namesTable,
+        whereSql: searchWhereSql(normalizedSearchText),
+        normalizedSearchText,
+      })}
       LIMIT ${limit}
       OFFSET ${offset}
     `)
-    const rows = tableRows(rowsTable).map(parseSpeciesRow)
+    const rows = tableRows(rowsTable).map(parseSpeciesProjection)
     const totalEstimate = request.include_total
-      ? await this.countSpecies(speciesTable)
+      ? await this.countSpecies(speciesTable, namesTable, normalizedSearchText)
       : 0
     const nextOffset = offset + rows.length
     const hasNextPage = request.include_total
@@ -160,7 +168,7 @@ class DuckDbParquetReducedSpeciesCatalogReader implements ReducedSpeciesCatalogR
       : rows.length === limit && limit > 0
 
     return {
-      items: rows.map((row) => speciesRowToListItem(row, favoriteNames)),
+      items: rows.map((row) => speciesProjectionToListItem(row, favoriteNames)),
       next_cursor: hasNextPage ? `offset:${nextOffset}` : null,
       total_estimate: totalEstimate,
     }
@@ -168,30 +176,28 @@ class DuckDbParquetReducedSpeciesCatalogReader implements ReducedSpeciesCatalogR
 
   async listSpeciesByCanonicalNames(
     canonicalNames: readonly string[],
-    _locale: string,
+    locale: string,
     favoriteNames: ReadonlySet<string>,
   ): Promise<SpeciesListItem[]> {
     if (canonicalNames.length === 0) return []
+    await this.ensureLocaleNameAsset(locale)
     const speciesTable = readParquetSql(this.manifest.assets.species.map((asset) => asset.path))
+    const namesTable = localeNamesSql(this.manifest, locale)
     const rowsTable = await this.connection.query(`
-      SELECT id,
-             slug,
-             canonical_name,
-             common_name,
-             climate_zones,
-             habit,
-             growth_form,
-             life_cycles
-      FROM ${speciesTable}
-      WHERE canonical_name IN (${canonicalNames.map(quoteSqlString).join(', ')})
+      ${speciesProjectionSql({
+        speciesTable,
+        namesTable,
+        whereSql: `WHERE s.canonical_name IN (${canonicalNames.map(quoteSqlString).join(', ')})`,
+        normalizedSearchText: '',
+      })}
     `)
     const rowsByName = new Map(tableRows(rowsTable).map((row) => {
-      const species = parseSpeciesRow(row)
-      return [species.canonical_name, species]
+      const species = parseSpeciesProjection(row)
+      return [species.row.canonical_name, species]
     }))
     return canonicalNames.flatMap((canonicalName) => {
       const row = rowsByName.get(canonicalName)
-      return row ? [speciesRowToListItem(row, favoriteNames)] : []
+      return row ? [speciesProjectionToListItem(row, favoriteNames)] : []
     })
   }
 
@@ -221,13 +227,38 @@ class DuckDbParquetReducedSpeciesCatalogReader implements ReducedSpeciesCatalogR
     return null
   }
 
-  private async countSpecies(speciesTable: string): Promise<number> {
+  private async countSpecies(
+    speciesTable: string,
+    namesTable: string,
+    normalizedSearchText: string,
+  ): Promise<number> {
     const countTable = await this.connection.query(`
+      WITH locale_names AS (
+        SELECT species_id,
+               common_name,
+               normalized_name
+        FROM ${namesTable}
+      )
       SELECT COUNT(*) AS total_count
-      FROM ${speciesTable}
+      FROM ${speciesTable} s
+      ${searchWhereSql(normalizedSearchText)}
     `)
     const countRow = tableRows(countTable)[0]
     return numberValue(countRow?.total_count)
+  }
+
+  private async ensureLocaleNameAsset(locale: string): Promise<void> {
+    if (this.registeredLocaleAssets.has(locale)) return
+    const asset = this.manifest.assets.names[locale]
+    if (asset) {
+      await this.database.registerFileURL(
+        asset.path,
+        new URL(asset.path, this.catalogBaseUrl).toString(),
+        duckdb.DuckDBDataProtocol.HTTP,
+        false,
+      )
+    }
+    this.registeredLocaleAssets.add(locale)
   }
 }
 
@@ -269,8 +300,8 @@ async function registerCatalogAssets(
 ): Promise<void> {
   const assets = [
     ...manifest.assets.species,
-    ...Object.values(manifest.assets.names),
-    ...manifest.assets.images,
+    ...(manifest.asset_format === 'parquet' ? [] : Object.values(manifest.assets.names)),
+    ...(manifest.asset_format === 'parquet' ? [] : manifest.assets.images),
   ]
   await Promise.all(assets.map((asset) => (
     database.registerFileURL(
@@ -313,6 +344,113 @@ function readParquetSql(paths: readonly string[]): string {
   if (paths.length === 0) return '(SELECT * FROM (SELECT NULL) WHERE FALSE)'
   if (paths.length === 1) return `read_parquet(${quoteSqlString(paths[0] ?? '')})`
   return `read_parquet([${paths.map(quoteSqlString).join(', ')}])`
+}
+
+function localeNamesSql(manifest: WebCatalogManifest, locale: string): string {
+  const asset = manifest.assets.names[locale]
+  return asset ? readParquetSql([asset.path]) : emptyLocaleNamesSql()
+}
+
+function emptyLocaleNamesSql(): string {
+  return `(
+    SELECT NULL::VARCHAR AS species_id,
+           NULL::VARCHAR AS common_name,
+           NULL::VARCHAR AS normalized_name,
+           NULL::VARCHAR AS is_primary,
+           NULL::VARCHAR AS display_order
+    WHERE FALSE
+  )`
+}
+
+function speciesProjectionSql({
+  speciesTable,
+  namesTable,
+  whereSql,
+  normalizedSearchText,
+}: {
+  readonly speciesTable: string
+  readonly namesTable: string
+  readonly whereSql: string
+  readonly normalizedSearchText: string
+}): string {
+  const matchPredicate = normalizedSearchText
+    ? `normalized_name LIKE ${quoteSqlString(`%${normalizedSearchText}%`)}`
+    : 'FALSE'
+  return `
+    WITH locale_names AS (
+      SELECT species_id,
+             common_name,
+             normalized_name,
+             is_primary,
+             display_order
+      FROM ${namesTable}
+    ),
+    primary_names AS (
+      SELECT species_id,
+             common_name
+      FROM (
+        SELECT species_id,
+               common_name,
+               ROW_NUMBER() OVER (
+                 PARTITION BY species_id
+                 ORDER BY TRY_CAST(display_order AS INTEGER),
+                          CASE WHEN CAST(is_primary AS VARCHAR) IN ('true', '1') THEN 0 ELSE 1 END,
+                          LENGTH(common_name),
+                          common_name
+               ) AS rank
+        FROM locale_names
+      )
+      WHERE rank = 1
+    ),
+    matched_names AS (
+      SELECT species_id,
+             common_name
+      FROM (
+        SELECT species_id,
+               common_name,
+               ROW_NUMBER() OVER (
+                 PARTITION BY species_id
+                 ORDER BY TRY_CAST(display_order AS INTEGER),
+                          CASE WHEN CAST(is_primary AS VARCHAR) IN ('true', '1') THEN 0 ELSE 1 END,
+                          LENGTH(common_name),
+                          common_name
+               ) AS rank
+        FROM locale_names
+        WHERE ${matchPredicate}
+      )
+      WHERE rank = 1
+    )
+    SELECT s.id,
+           s.slug,
+           s.canonical_name,
+           s.common_name,
+           primary_names.common_name AS localized_common_name,
+           matched_names.common_name AS matched_common_name,
+           s.climate_zones,
+           s.habit,
+           s.growth_form,
+           s.life_cycles
+    FROM ${speciesTable} s
+    LEFT JOIN primary_names ON primary_names.species_id = s.id
+    LEFT JOIN matched_names ON matched_names.species_id = s.id
+    ${whereSql}
+    ORDER BY s.canonical_name, s.id
+  `
+}
+
+function searchWhereSql(normalizedSearchText: string): string {
+  if (!normalizedSearchText) return ''
+  const pattern = quoteSqlString(`%${normalizedSearchText}%`)
+  return `
+    WHERE LOWER(s.canonical_name) LIKE ${pattern}
+       OR LOWER(COALESCE(s.common_name, '')) LIKE ${pattern}
+       OR EXISTS (
+         SELECT 1
+         FROM locale_names search_names
+         WHERE search_names.species_id = s.id
+           AND search_names.normalized_name LIKE ${pattern}
+       )
+  `
 }
 
 function quoteSqlString(value: string): string {
@@ -362,6 +500,20 @@ function parseImageRow(row: Record<string, unknown>): ReducedSpeciesImageRow {
     source_page_url: nullableString(row.source_page_url),
     credit: nullableString(row.credit),
     license: nullableString(row.license),
+  }
+}
+
+interface SpeciesProjection {
+  readonly row: ReducedSpeciesRow
+  readonly localizedCommonName: string | null
+  readonly matchedCommonName: string | null
+}
+
+function parseSpeciesProjection(row: Record<string, unknown>): SpeciesProjection {
+  return {
+    row: parseSpeciesRow(row),
+    localizedCommonName: nullableString(row.localized_common_name),
+    matchedCommonName: nullableString(row.matched_common_name),
   }
 }
 
@@ -450,6 +602,7 @@ function booleanValue(value: unknown): boolean {
 
 function numberValue(value: unknown): number {
   if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'bigint' && value <= BigInt(Number.MAX_SAFE_INTEGER)) return Number(value)
   if (typeof value === 'string') {
     const parsed = Number(value)
     if (Number.isFinite(parsed)) return parsed
@@ -467,17 +620,19 @@ function cursorToOffset(cursor: string | null): number {
   return match ? Number(match[1]) : 0
 }
 
-function speciesRowToListItem(
-  row: ReducedSpeciesRow,
+function speciesProjectionToListItem(
+  projection: SpeciesProjection,
   favoriteNames: ReadonlySet<string>,
 ): SpeciesListItem {
+  const row = projection.row
+  const commonName = projection.localizedCommonName ?? row.common_name
   return {
     canonical_name: row.canonical_name,
     slug: row.slug,
-    common_name: row.common_name,
+    common_name: commonName,
     common_name_2: null,
-    matched_common_name: null,
-    is_name_fallback: row.common_name === null,
+    matched_common_name: projection.matchedCommonName,
+    is_name_fallback: commonName === null,
     family: null,
     genus: null,
     height_max_m: null,
@@ -492,6 +647,14 @@ function speciesRowToListItem(
     width_max_m: null,
     is_favorite: favoriteNames.has(row.canonical_name),
   }
+}
+
+function normalizeSearchText(text: string): string {
+  return text
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase()
+    .trim()
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

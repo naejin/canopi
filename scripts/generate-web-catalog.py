@@ -205,38 +205,39 @@ def write_name_assets(conn: sqlite3.Connection, output_dir: Path) -> dict[str, d
     assets: dict[str, dict[str, Any]] = {}
     has_common_names = table_exists(conn, "species_common_names")
     for locale in UI_LOCALES:
-        path = names_dir / f"names-{locale}.jsonl"
-        with path.open("w", encoding="utf-8") as handle:
-            if has_common_names:
-                rows = conn.execute(
-                    """
-                    SELECT scn.species_id,
-                           scn.language,
-                           scn.common_name,
-                           COALESCE(scn.is_primary, 0) AS is_primary,
-                           scn.display_order
-                    FROM species_common_names scn
-                    JOIN species s ON s.id = scn.species_id
-                    WHERE scn.language = ?
-                      AND scn.common_name != s.canonical_name
-                    ORDER BY scn.species_id, scn.display_order,
-                             scn.is_primary DESC,
-                             LENGTH(scn.common_name), scn.common_name
-                    """,
-                    (locale,),
-                )
-                for row in rows:
-                    normalized_name = normalize_search_name(row["common_name"] or "")
-                    if not normalized_name:
-                        continue
-                    write_jsonl(handle, {
-                        "species_id": row["species_id"],
-                        "language": row["language"],
-                        "common_name": row["common_name"],
-                        "normalized_name": normalized_name,
-                        "is_primary": bool(row["is_primary"]),
-                        "display_order": int(row["display_order"] or 0),
-                    })
+        path = names_dir / f"names-{locale}.parquet"
+        locale_rows = []
+        if has_common_names:
+            rows = conn.execute(
+                """
+                SELECT scn.species_id,
+                       scn.language,
+                       scn.common_name,
+                       COALESCE(scn.is_primary, 0) AS is_primary,
+                       scn.display_order
+                FROM species_common_names scn
+                JOIN species s ON s.id = scn.species_id
+                WHERE scn.language = ?
+                  AND scn.common_name != s.canonical_name
+                ORDER BY scn.species_id, scn.display_order,
+                         scn.is_primary DESC,
+                         LENGTH(scn.common_name), scn.common_name
+                """,
+                (locale,),
+            )
+            for row in rows:
+                normalized_name = normalize_search_name(row["common_name"] or "")
+                if not normalized_name:
+                    continue
+                locale_rows.append({
+                    "species_id": row["species_id"],
+                    "language": row["language"],
+                    "common_name": row["common_name"],
+                    "normalized_name": normalized_name,
+                    "is_primary": bool(row["is_primary"]),
+                    "display_order": int(row["display_order"] or 0),
+                })
+        write_simple_parquet(path, NAME_FIELDS, locale_rows)
         assets[locale] = asset_entry(output_dir, path)
     return assets
 
@@ -343,7 +344,7 @@ def build_manifest(
         "asset_format": "parquet",
         "asset_formats": {
             "species": "parquet",
-            "names": "ndjson",
+            "names": "parquet",
             "images": "ndjson",
         },
         "source": {
