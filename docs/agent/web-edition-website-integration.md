@@ -69,7 +69,7 @@ The manifest includes:
 - `spaFallback`, currently `/app/* -> /app/index.html` with status `200`
 - Cloudflare Pages-style size/file-count limits
 - `catalog`, with `canopi-catalog/manifest.json`, generated asset format, supported filter keys, and required catalog file paths
-- every packaged file path, byte count, and SHA-256 checksum
+- every payload file path, byte count, and SHA-256 checksum. The artifact manifest file itself is packaged alongside the payload files and counts against the file-count and per-asset limits even though it is not listed in `manifest.files`.
 
 Production should use a versioned Web Edition release asset from the Canopi app release, not a copied source tree and not committed generated `/app` assets.
 
@@ -117,13 +117,14 @@ Recommended script behavior:
 4. Read `canopi-web-edition-manifest.json`.
 5. Fail unless `manifest.basePath === '/app/'`.
 6. Fail unless `manifest.spaFallback.source === '/app/*'` and `manifest.spaFallback.destination === '/app/index.html'`.
-7. Verify every manifest file has the expected byte count and SHA-256.
-8. Verify no packaged file exceeds the manifest's max asset size. If the manifest does not expose a stricter limit, fail above 25 MiB.
-9. Verify the artifact file count stays within the manifest's file-count limit. If the manifest does not expose a stricter limit, fail above 20,000 files.
+7. Verify every manifest-listed payload file has the expected byte count and SHA-256.
+8. Verify no packaged file, including `canopi-web-edition-manifest.json`, exceeds the manifest's max asset size. If the manifest does not expose a stricter limit, fail above 25 MiB.
+9. Verify the actual extracted file count, including `canopi-web-edition-manifest.json`, stays within the manifest's file-count limit. If the manifest does not expose a stricter limit, fail above 20,000 files.
 10. Verify required catalog, locale/search, and supported-filter metadata paths listed by the artifact manifest exist before copying. Do not treat missing catalog files as optional.
-11. Replace `dist/app/` atomically enough for local builds: remove only `dist/app/`, then copy the verified extracted artifact root there.
-12. Fail if `dist/app/index.html` is missing.
-13. Fail if `dist/app/canopi-web-edition-manifest.json` is missing.
+11. Reject unlisted extracted files; the archive may contain only manifest-listed payload files plus `canopi-web-edition-manifest.json`.
+12. Replace `dist/app/` atomically enough for local builds: remove only `dist/app/`, then copy the verified extracted artifact root there.
+13. Fail if `dist/app/index.html` is missing.
+14. Fail if `dist/app/canopi-web-edition-manifest.json` is missing.
 
 Do not commit `dist/app/`, `dist/`, downloaded archives, or temp extraction directories.
 
@@ -284,7 +285,7 @@ Only mark hashed or versioned static assets immutable. Keep `index.html` and the
 - `dist/app/canopi-web-edition-manifest.json` is verified before deploy.
 - `public/_redirects` includes `/app/* /app/index.html 200`.
 - Catalog files from the Web Edition artifact are copied under `/app/` and are served directly rather than through the SPA fallback.
-- The install script enforces manifest checksums, per-asset byte limits, file-count limits, and required catalog plus supported-filter metadata asset presence.
+- The install script enforces manifest checksums, actual file-set membership, per-asset byte limits, file-count limits including `canopi-web-edition-manifest.json`, and required catalog plus supported-filter metadata asset presence.
 - Header and/or hero link users to `/app/`.
 - All new website copy is localized across the existing 11 translation files.
 - `npm run build:with-web` passes with a local artifact.
