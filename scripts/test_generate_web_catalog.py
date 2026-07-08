@@ -112,7 +112,15 @@ class GenerateWebCatalogTests(unittest.TestCase):
             )
             self.assertEqual(japanese_names, [])
 
-            image_rows = read_manifest_rows(output_dir, manifest["assets"]["images"])
+            self.assertEqual(
+                sorted(asset["path"] for asset in manifest["assets"]["images"]),
+                ["images/images-0000.parquet", "images/images-0001.parquet"],
+            )
+            image_rows = read_manifest_rows(
+                output_dir,
+                manifest["assets"]["images"],
+                fields=manifest["schema"]["image_fields"],
+            )
             self.assertEqual(
                 next(row for row in image_rows if row["species_id"] == "species-apple"),
                 {

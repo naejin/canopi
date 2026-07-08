@@ -130,6 +130,7 @@ async function loadDuckDbCatalogReader(
 
 class DuckDbParquetReducedSpeciesCatalogReader implements ReducedSpeciesCatalogReader {
   private readonly registeredLocaleAssets = new Set<string>()
+  private imageAssetsRegistered = false
 
   constructor(
     private readonly database: DuckDbCatalogDatabase,
@@ -221,10 +222,27 @@ class DuckDbParquetReducedSpeciesCatalogReader implements ReducedSpeciesCatalogR
   }
 
   async getSpeciesDetail(
-    _canonicalName: string,
-    _locale: string,
+    canonicalName: string,
+    locale: string,
   ): Promise<SpeciesCatalogDetail | null> {
-    return null
+    await this.ensureLocaleNameAsset(locale)
+    const speciesTable = readParquetSql(this.manifest.assets.species.map((asset) => asset.path))
+    const namesTable = localeNamesSql(this.manifest, locale)
+    const rowsTable = await this.connection.query(`
+      ${speciesProjectionSql({
+        speciesTable,
+        namesTable,
+        whereSql: `WHERE s.canonical_name = ${quoteSqlString(canonicalName)}`,
+        normalizedSearchText: '',
+      })}
+      LIMIT 1
+    `)
+    const projection = tableRows(rowsTable).map(parseSpeciesProjection)[0]
+    if (!projection) return null
+
+    await this.ensureImageAssets()
+    const image = await this.loadHeroImage(projection.row.id)
+    return speciesProjectionToDetail(projection, image)
   }
 
   private async countSpecies(
@@ -259,6 +277,46 @@ class DuckDbParquetReducedSpeciesCatalogReader implements ReducedSpeciesCatalogR
       )
     }
     this.registeredLocaleAssets.add(locale)
+  }
+
+  private async ensureImageAssets(): Promise<void> {
+    if (this.imageAssetsRegistered) return
+    await Promise.all(this.manifest.assets.images.map((asset) => (
+      this.database.registerFileURL(
+        asset.path,
+        new URL(asset.path, this.catalogBaseUrl).toString(),
+        duckdb.DuckDBDataProtocol.HTTP,
+        false,
+      )
+    )))
+    this.imageAssetsRegistered = true
+  }
+
+  private async loadHeroImage(speciesId: string): Promise<ReducedSpeciesImageRow | null> {
+    const imagesTable = this.manifest.assets.images.length > 0
+      ? readParquetSql(this.manifest.assets.images.map((asset) => asset.path))
+      : emptyImagesSql()
+    const imageTable = await this.connection.query(`
+      WITH web_species_images AS (
+        SELECT species_id,
+               url,
+               source,
+               source_page_url,
+               credit,
+               license
+        FROM ${imagesTable}
+      )
+      SELECT species_id,
+             url,
+             source,
+             source_page_url,
+             credit,
+             license
+      FROM web_species_images
+      WHERE species_id = ${quoteSqlString(speciesId)}
+      LIMIT 1
+    `)
+    return tableRows(imageTable).map(parseImageRow)[0] ?? null
   }
 }
 
@@ -358,6 +416,18 @@ function emptyLocaleNamesSql(): string {
            NULL::VARCHAR AS normalized_name,
            NULL::VARCHAR AS is_primary,
            NULL::VARCHAR AS display_order
+    WHERE FALSE
+  )`
+}
+
+function emptyImagesSql(): string {
+  return `(
+    SELECT NULL::VARCHAR AS species_id,
+           NULL::VARCHAR AS url,
+           NULL::VARCHAR AS source,
+           NULL::VARCHAR AS source_page_url,
+           NULL::VARCHAR AS credit,
+           NULL::VARCHAR AS license
     WHERE FALSE
   )`
 }
@@ -646,6 +716,32 @@ function speciesProjectionToListItem(
     medicinal_rating: null,
     width_max_m: null,
     is_favorite: favoriteNames.has(row.canonical_name),
+  }
+}
+
+function speciesProjectionToDetail(
+  projection: SpeciesProjection,
+  image: ReducedSpeciesImageRow | null,
+): SpeciesCatalogDetail {
+  const row = projection.row
+  const commonName = projection.localizedCommonName ?? row.common_name
+  return {
+    canonical_name: row.canonical_name,
+    common_name: commonName,
+    common_names: [...new Set([commonName].filter((name): name is string => name !== null))],
+    climate_zones: [...row.climate_zones],
+    habit: row.habit,
+    growth_form: row.growth_form,
+    life_cycles: [...row.life_cycles],
+    image: image === null
+      ? null
+      : {
+          url: image.url,
+          source: image.source,
+          source_page_url: image.source_page_url,
+          credit: image.credit,
+          license: image.license,
+        },
   }
 }
 

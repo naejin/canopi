@@ -250,67 +250,72 @@ def write_image_assets(
 ) -> list[dict[str, Any]]:
     images_dir = output_dir / "images"
     images_dir.mkdir(parents=True, exist_ok=True)
-    files = open_shard_files(images_dir, "images", shard_count)
+    shards: list[list[dict[str, Any]]] = [[] for _ in range(shard_count)]
     species_with_images: set[str] = set()
-    try:
-        if table_exists(conn, "species_images"):
-            image_columns = table_columns(conn, "species_images")
-            source_expr = "source" if "source" in image_columns else "NULL AS source"
-            rows = conn.execute(
-                f"""
-                SELECT species_id, url, {source_expr}
-                FROM species_images
-                WHERE url IS NOT NULL AND url != ''
-                ORDER BY species_id, sort_order, id
-                """
-            )
-            for row in rows:
-                species_id = row["species_id"]
-                if species_id in species_with_images:
-                    continue
-                species_with_images.add(species_id)
-                write_image_row(files, species_id, row["url"], row["source"], shard_count)
+    if table_exists(conn, "species_images"):
+        image_columns = table_columns(conn, "species_images")
+        source_expr = "source" if "source" in image_columns else "NULL AS source"
+        rows = conn.execute(
+            f"""
+            SELECT species_id, url, {source_expr}
+            FROM species_images
+            WHERE url IS NOT NULL AND url != ''
+            ORDER BY species_id, sort_order, id
+            """
+        )
+        for row in rows:
+            species_id = row["species_id"]
+            if species_id in species_with_images:
+                continue
+            species_with_images.add(species_id)
+            append_image_row(shards, species_id, row["url"], row["source"], shard_count)
 
-        species_columns = table_columns(conn, "species")
-        if "image_urls" in species_columns:
-            rows = conn.execute(
-                """
-                SELECT id, image_urls
-                FROM species
-                WHERE image_urls IS NOT NULL AND image_urls != ''
-                ORDER BY id
-                """
-            )
-            for row in rows:
-                species_id = row["id"]
-                if species_id in species_with_images:
-                    continue
-                urls = parse_list_field(row["image_urls"])
-                if not urls:
-                    continue
-                species_with_images.add(species_id)
-                write_image_row(files, species_id, urls[0], None, shard_count)
-    finally:
-        close_files(files)
-    return asset_entries(output_dir, images_dir.glob("*.jsonl"))
+    species_columns = table_columns(conn, "species")
+    if "image_urls" in species_columns:
+        rows = conn.execute(
+            """
+            SELECT id, image_urls
+            FROM species
+            WHERE image_urls IS NOT NULL AND image_urls != ''
+            ORDER BY id
+            """
+        )
+        for row in rows:
+            species_id = row["id"]
+            if species_id in species_with_images:
+                continue
+            urls = parse_list_field(row["image_urls"])
+            if not urls:
+                continue
+            species_with_images.add(species_id)
+            append_image_row(shards, species_id, urls[0], None, shard_count)
+
+    for index, shard_rows in enumerate(shards):
+        write_simple_parquet(
+            images_dir / f"images-{index:04d}.parquet",
+            IMAGE_FIELDS,
+            shard_rows,
+        )
+    return asset_entries(output_dir, images_dir.glob("*.parquet"))
 
 
-def write_image_row(
-    files: list[Any],
+def append_image_row(
+    shards: list[list[dict[str, Any]]],
     species_id: str,
     url: str,
     source: str | None,
     shard_count: int,
 ) -> None:
-    write_jsonl(files[shard_index(species_id, shard_count)], {
-        "species_id": species_id,
-        "url": url,
-        "source": source,
-        "source_page_url": None,
-        "credit": None,
-        "license": None,
-    })
-
+    shards[shard_index(species_id, shard_count)].append(
+        {
+            "species_id": species_id,
+            "url": url,
+            "source": source,
+            "source_page_url": None,
+            "credit": None,
+            "license": None,
+        }
+    )
 
 def load_climate_zones(conn: sqlite3.Connection) -> dict[str, list[str]]:
     if not table_exists(conn, "species_climate_zones"):
@@ -345,7 +350,7 @@ def build_manifest(
         "asset_formats": {
             "species": "parquet",
             "names": "parquet",
-            "images": "ndjson",
+            "images": "parquet",
         },
         "source": {
             "export_file": export_path.name,
